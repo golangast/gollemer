@@ -1,50 +1,46 @@
-# gollemer
+# gollemer: LLM-focused Toolkit
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/golangast/gollemer)](https://goreportcard.com/report/github.com/golangast/gollemer)
 [![GoDoc](https://img.shields.io/badge/godoc-reference-blue.svg)](https://pkg.go.dev/github.com/golangast/gollemer)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/golangast/gollemer)](https://github.com/golangast/gollemer)
 ![GitHub top language](https://img.shields.io/github/languages/top/golangast/gollemer)
 [![GitHub license](https://img.shields.io/github/license/golangast/gollemer)](https://github.com/golangast/gollemer/blob/main/LICENSE)
-[![GitHub stars](https://img.shields.io/github/stars/golangast/gollemer)](https://github.com/golangast/gollemer/stargazers)
-[![GitHub commit activity](https://img.shields.io/github/commit-activity/m/golangast/gollemer)](https://github.com/golangast/gollemer/graphs/commit-activity)
+[![GitHub stars](https://img.shields.io/github/stars/golangast/gollemer)](#)
+[![GitHub commit activity](https://img.shields.io/github/commit-activity/m/golangast/gollemer)](#)
 ![GitHub repo size](https://img.shields.io/github/repo-size/golangast/gollemer)
 ![Status](https://img.shields.io/badge/Status-Beta-red)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](http://makeapullrequest.com)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/golangast/gollemer/graphs/commit-activity)
-[![saythanks](https://img.shields.io/badge/say-thanks-ff69b4.svg)](https://saythanks.io/to/golangast)
 
-A versatile, high-performance Natural Language Processing (NLP) toolkit written entirely in **Go** (Golang). The project provides a command-line utility for training and utilizing foundational NLP models, including **Word2Vec** embeddings, a sophisticated **Mixture of Experts (MoE)** model, and a practical **Intent Classifier**.
+`gollemer` is a versatile toolkit primarily focused on integrating and utilizing Large Language Model (LLM) concepts within a high-performance Go environment. This project explores advanced NLP architectures like Mixture of Experts (MoE) and Intent Classification, laying the groundwork for sophisticated semantic understanding and command generation.
 
-> **Note:** This project is currently in a beta stage and is under active development. The API and functionality are subject to change. Accuracy is not the primary focus at this stage, as the main goal is to explore and implement these NLP models in Go.
+> **Note:** This project is currently in a beta stage and is under active development. The API and functionality are subject to change.
 
 ## Table of Contents
 
-- [🌐 Project Website](https://golangast.github.io/gollemer/)
-- [✨ Key Features](#-key-features)
+- [✨ Key LLM-focused Features](#-key-llm-focused-features)
 - [🚀 Getting Started](#-getting-started)
   - [Prerequisites](#prerequisites)
   - [Installation](#installation)
   - [Building from Source](#building-from-source)
-- [🛠️ Usage](#️-usage)
-  - [Training Models](#1-training-models)
+- [🛠️ Usage: LLM-related Commands](#️-usage-llm-related-commands)
+  - [Training LLM Components](#1-training-llm-components)
   - [Running MoE Inference](#2-running-moe-inference)
-- [⚙️ Project Structure](#️-project-structure)
-- [📊 Data & Configuration](#-data--configuration)
-- [🗺️ Roadmap](#️-roadmap)
-- [Future Direction: Semantic Parsing and Reasoning](#future-direction-semantic-parsing-and-reasoning)
+  - [LLM-driven Workflow Generation and Execution](#3-llm-driven-workflow-generation-and-execution)
+- [🧩 Integrating `gollemer` LLM Components into Your Projects](#-integrating-gollemer-llm-components-into-your-projects)
+- [🗺️ Roadmap for LLM Capabilities](#️-roadmap-for-llm-capabilities)
 - [🤝 Contributing](#-contributing)
 - [📜 License](#-license)
-- [🙏 Special Thanks](#-special-thanks)
-- [Why Go?](#why-go)
+- [Why Go for LLMs?](#why-go-for-llms)
 
-## ✨ Key Features
+## ✨ Key LLM-focused Features
 
-The application is structured as a dispatcher that runs specialized modules for various NLP tasks:
+`gollemer` provides core components and utilities for building and experimenting with LLM-like functionalities:
 
-*   **Word2Vec Training**: Generate high-quality distributed word representations (embeddings) from a text corpus.
-*   **Mixture of Experts (MoE) Architecture**: Train a powerful MoE model, designed for improved performance, scalability, and handling of complex sequential or structural data.
-*   **Intent Classification**: Develop a model for accurately categorizing user queries into predefined semantic intents.
-*   **Efficient Execution**: Built in Go, leveraging its performance and concurrency features for fast training and inference.
+*   **Mixture of Experts (MoE) Architecture**: Implementation of an MoE model, designed for improved performance, scalability, and handling of complex sequential or structural data, a common technique in large language models.
+*   **Intent Classification**: Develop a model for accurately categorizing user queries into predefined semantic intents, crucial for understanding user commands in LLM applications.
+*   **Semantic Parsing Foundation**: The project is designed with a future direction towards advanced semantic parsing, aiming to translate natural language into structured, executable workflows.
+*   **Efficient Go Implementation**: Leveraging Go's performance and concurrency features for fast training and inference of LLM components, suitable for production-grade applications.
 
 ## 🚀 Getting Started
 
@@ -71,31 +67,30 @@ go build .
 
 This will create an `gollemer` executable in the current directory.
 
-## 🛠️ Usage
+## 🛠️ Usage: LLM-related Commands
 
 The main executable (`gollemer` or `main.go`) controls all operations using specific command-line flags. All commands should be run from the root directory of the project.
 
-### 1. Training Models
+### 1. Training LLM Components
 
-Use the respective flags to initiate the training process. Each flag executes a separate module located in the `cmd/` directory.
+Use the respective flags to initiate the training process for LLM-related components. Each flag executes a separate module located in the `cmd/` directory.
 
-| Model                 | Flag                      | Command                               |
-| :-------------------- | :------------------------ | :------------------------------------ |
-| **Word2Vec**          | `--train-word2vec`        | `go run main.go --train-word2vec`     |
-| **Mixture of Experts (MoE)** | `--train-moe`             | `go run main.go --train-moe`          |
-| **Intent Classifier** | `--train-intent-classifier` | `go run main.go --train-intent-classifier` |
+| LLM Component            | Flag                      | Command                                      |
+| :----------------------- | :------------------------ | :------------------------------------------- |
+| **Mixture of Experts (MoE)** | `--train-moe`             | `go run main.go --train-moe`                 |
+| **Intent Classifier**    | `--train-intent-classifier` | `go run main.go --train-intent-classifier`   |
 
 ### 2. Running MoE Inference
 
-To run predictions using a previously trained MoE model, use the `--moe_inference` flag and pass the input query string.
+To run predictions using a previously trained MoE model, use the `--moe_inference` flag and pass the input query string. This demonstrates a practical application of a foundational LLM technique.
 
 | Action          | Flag              | Command Example                                                              |
 | :---------------- | :---------------- | :--------------------------------------------------------------------------- |
 | **MoE Inference** | `--moe_inference` | `go run main.go --moe_inference "schedule a meeting with John for tomorrow at 2pm"` |
 
-### 3. Running Workflow Generation and Execution
+### 3. LLM-driven Workflow Generation and Execution
 
-The `example/main.go` program demonstrates how to parse a natural language query, generate a workflow, and execute it. This showcases the core capabilities of the `gollemer` for understanding and acting upon user commands.
+The `example/main.go` program demonstrates how `gollemer` can parse a natural language query using its internal semantic understanding components (drawing inspiration from LLM principles), generate a workflow, and execute it. This showcases the core capabilities for understanding and acting upon user commands.
 
 To run the example, use the following command with a query:
 
@@ -121,179 +116,39 @@ Node ID: Filesystem::File-jill-0, Operation: CREATE, Resource Type: Filesystem::
 Node ID: file-createfile-0, Operation: WRITE_FILE, Resource Type: , Resource Name: , Properties: map[], Command: , Dependencies: [Filesystem::File-jill-0]
 ```
 
-## 🧩 Integrating `gollemer` into Your Projects
+## 🧩 Integrating `gollemer` LLM Components into Your Projects
 
-This project is more than just command-line tools. It's a collection of Go packages. You can use these packages in your own Go projects.
+`gollemer` is designed to be a collection of reusable Go packages. You can integrate its LLM-related components into your own Go projects for tasks requiring semantic understanding, intent recognition, or MoE-based predictions.
 
-Example usage is in the /example folder.
+Example usage is in the `/example` folder, showcasing how to leverage the parser and workflow executor. The `neural/moe` and `neural/nnu/intent` packages are key entry points for LLM-focused integration.
 
-```go
-package main
+## 🗺️ Roadmap for LLM Capabilities
 
-import (
-	"bufio"
-	"flag"
-	"fmt"
-	"log"
-	"os"
-	"strings"
+This project is under active development with a strong focus on enhancing its LLM capabilities:
 
-	"gollemer/neural/parser"
-	"gollemer/neural/workflow"
-)
-
-var (
-	query = flag.String("query", "", "Natural language query for the parser")
-)
-
-func main() {
-	flag.Parse()
-
-	// Create parser and executor instances
-	p := parser.NewParser()
-	executor := workflow.NewExecutor()
-
-	// Process initial query from flag, if provided
-	if *query != "" {
-		processAndExecuteQuery(*query, p, executor)
-	}
-
-	// Start interactive loop
-	reader := bufio.NewReader(os.Stdin)
-	for {
-		fmt.Print("\nEnter a query (e.g., \"create folder jack with a go webserver jill\"): ")
-		input, _ := reader.ReadString('\n')
-		input = strings.TrimSpace(input)
-
-		if input == "exit" || input == "quit" {
-			break
-		}
-
-		if input != "" {
-			processAndExecuteQuery(input, p, executor)
-		}
-	}
-}
-
-func processAndExecuteQuery(q string, p *parser.Parser, executor *workflow.Executor) {
-	log.Printf("Processing query: \"%s\"", q)
-
-	// Parse the query into a workflow
-	// The parser now handles semantic validation and inference internally.
-	wf, err := p.Parse(q)
-	if err != nil {
-		log.Printf("Error parsing query: %v", err)
-		return
-	}
-
-	fmt.Println("\n--- Generated Workflow (after inference and validation) ---")
-	for _, node := range wf.Nodes {
-		fmt.Printf("Node ID: %s, Operation: %s, Resource Type: %s, Resource Name: %s, Properties: %v, Command: %s, Dependencies: %v\n",
-			node.ID, node.Operation, node.Resource.Type, node.Resource.Name, node.Resource.Properties, node.Command, node.Dependencies)
-	}
-
-	// Execute the generated workflow
-	if err := executor.ExecuteWorkflow(wf); err != nil {
-		log.Printf("Error executing workflow: %v", err)
-		return
-	}
-}
-
-```
-
-
-The `neural/` and `tagger/` directories contain the reusable components. Import them as needed.
-
-## ⚙️ Project Structure
-
-
-The project is a collection of tools. Its structure reflects this.
-
-```
-gollemer/
-├── main.go         # Dispatches to common tools.
-├── go.mod          # Go module definition.
-├── cmd/            # Each subdirectory is a command-line tool.
-│   ├── train_word2vec/ # Example: Word2Vec training.
-│   └── moe_inference/  # Example: MoE inference.
-├── neural/         # Core neural network code.
-├── tagger/         # NLP tagging components.
-├── trainingdata/   # Sample data for training.
-└── gob_models/     # Saved models.
-```
-
-## 📊 Data & Configuration
-
-*   **Data Structure**: Training modules look for data files in the `trainingdata/` directory. For example, `intent_data.json` is used for intent classification training.
-*   **Configuration**: Model hyperparameters (learning rate, epochs, vector size, etc.) are currently hardcoded within their respective training modules in the `cmd/` directory. This is an area for future improvement.
-*   **Model Output**: Trained models are saved as `.gob` files to the `gob_models/` directory by default.
-
-## 🗺️ Roadmap
-
-This project is under active development. Here are some of the planned features and improvements:
-
-- [ ] Implement comprehensive unit and integration tests.
-- [ ] Add more NLP tasks (e.g., Named Entity Recognition, Part-of-Speech tagging).
-- [ ] Externalize model configurations from code into files (e.g., YAML, JSON).
-- [ ] Improve model accuracy and performance.
-- [ ] Enhance documentation with more examples and API references.
-- [ ] Create a more user-friendly command-line interface.
-
-## Future Direction: List of commands that it can generate.
-
-### 1. Abstraction: Semantic Parsing and Ontology Mapping 🧠
-Instead of merely tagging words, the NLP layer would generate an Abstract Semantic Graph (ASG) or Structured Object that represents the complete meaning, including implicit details, constraints, and dependencies.
-
-**Current NLP Output (Intent Recognition):**
-
-| Identified Elements | Values in Query |
-| --- | --- |
-| Parent Intent | webserver_creation |
-| Child Intent | create |
-| Object Types | folder, webserver |
-| Names | jack, jill |
-
-
-### 2. Intelligent Capabilities Added by this Abstraction
-This abstraction provides the foundation for truly intelligent command generation:
-
-**A. Reasoning and Inference**
-The new layer can handle implicit and contextual details (Reasoning).
-*Example Query:* "Make 'jill' in 'jack' and expose the service publicly."
-*Inference:* The system automatically infers that a "publicly exposed service" implies setting the webserver's port to be publicly accessible and potentially generating an extra LoadBalancer resource (if using a cloud execution backend).
-
-**B. Dependency Resolution**
-The NLP can identify causal and temporal relationships (Dependency).
-*Example Query:* "Set up my Go server, but only after you create the database."
-*Semantic Output:* The output graph would establish a `depends_on` relationship between the `Deployment::GoWebserver` and the `Data::PostgreSQL` resource, ensuring the command executor runs them in the correct sequence.
-
+-   [ ] **Advanced Semantic Parsing**: Deepening the ability to translate complex natural language into Abstract Semantic Graphs (ASG) or Structured Objects, moving beyond keyword matching to true contextual understanding.
+-   [ ] **Integration with External LLMs**: Exploring interfaces for `gollemer` to interact with and leverage external large language models (e.g., via APIs) for enhanced reasoning and generation tasks.
+-   [ ] **Generative Capabilities**: Implementing modules for text generation, summarization, or code generation based on learned patterns and semantic understanding.
+-   [ ] **Improved Contextual Understanding**: Enhancing models to maintain and utilize conversational context for more natural and accurate interactions.
+-   [ ] **Expanded Training Data**: Curating and integrating larger, more diverse datasets specifically tailored for LLM training within the Go ecosystem.
+-   [ ] **Modular LLM Architecture**: Further modularizing the LLM components to allow for easier experimentation with different architectures (e.g., transformers, attention mechanisms).
+-   [ ] **Comprehensive Benchmarking**: Establishing benchmarks to measure the performance and accuracy of `gollemer`'s LLM components against industry standards.
 
 ## 🤝 Contributing
 
-We welcome contributions! Please feel free to open issues for bug reports or feature requests, or submit pull requests for any enhancements.
-
-1.  Fork the repository.
-2.  Create a new branch (`git checkout -b feature/AmazingFeature`).
-3.  Commit your changes (`git commit -m '''Add AmazingFeature'''`).
-4.  Push to the branch (`git push origin feature/AmazingFeature`).
-5.  Open a Pull Request.
-
-> **Note on Tests:** There is currently a lack of automated tests. Contributions in this area are highly encouraged and appreciated!
+We welcome contributions! Please feel free to open issues for bug reports or feature requests, or submit pull requests for any enhancements, especially those related to LLM capabilities.
 
 ## 📜 License
 
 This project is licensed under the **GNU General Public License v3.0**. See the [LICENSE](LICENSE) file for details.
 
-## 🙏 Special Thanks
+## Why Go for LLMs?
 
-*   [The Go Team and contributors](https://github.com/golang/go/graphs/contributors) for creating and maintaining Go.
+Go is an excellent choice for developing LLM-focused toolkits due to:
 
-## Why Go?
-
-Go is a great choice for this project for several reasons:
-
-*   **Stability:** The language has a strong compatibility promise. What you learn now will be useful for a long time. ([Go 1 Compatibility Promise](https://go.dev/doc/go1compat))
-*   **Simplicity and Readability:** Go's simple syntax makes it easy to read and maintain code.
-*   **Performance:** Go is a compiled language with excellent performance, which is crucial for NLP tasks.
-*   **Concurrency:** Go's built-in concurrency features make it easy to write concurrent code for data processing and model training.
-*   **Strong Community and Ecosystem:** Go has a growing community and a rich ecosystem of libraries and tools. ([Go User Community](https://go.dev/wiki/GoUsers))
+*   **Performance**: Go's compilation to native code and efficient garbage collection deliver the speed critical for demanding NLP and LLM workloads.
+*   **Concurrency**: Go's goroutines and channels simplify the implementation of concurrent data processing and parallel model training/inference, essential for scaling LLM applications.
+*   **Memory Efficiency**: Go provides fine-grained control over memory, which is vital when working with the large models and datasets characteristic of LLMs.
+*   **Reliability**: Go's strong typing and robust standard library contribute to building stable and maintainable LLM systems.
+*   **Deployment**: Go binaries are statically linked, making deployment of LLM services straightforward and portable across different environments.
+*   **Developer Experience**: Go's simplicity, fast compilation times, and excellent tooling enhance developer productivity when building complex LLM systems.
