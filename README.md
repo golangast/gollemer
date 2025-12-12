@@ -1,16 +1,16 @@
-# nlptagger
+# gollemer
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/golangast/nlptagger)](https://goreportcard.com/report/github.com/golangast/nlptagger)
-[![GoDoc](https://img.shields.io/badge/godoc-reference-blue.svg)](https://pkg.go.dev/github.com/golangast/nlptagger)
-[![Go Version](https://img.shields.io/github/go-mod/go-version/golangast/nlptagger)](https://github.com/golangast/nlptagger)
-![GitHub top language](https://img.shields.io/github/languages/top/golangast/nlptagger)
-[![GitHub license](https://img.shields.io/github/license/golangast/nlptagger)](https://github.com/golangast/nlptagger/blob/main/LICENSE)
-[![GitHub stars](https://img.shields.io/github/stars/golangast/nlptagger)](https://github.com/golangast/nlptagger/stargazers)
-[![GitHub commit activity](https://img.shields.io/github/commit-activity/m/golangast/nlptagger)](https://github.com/golangast/nlptagger/graphs/commit-activity)
-![GitHub repo size](https://img.shields.io/github/repo-size/golangast/nlptagger)
+[![Go Report Card](https://goreportcard.com/badge/github.com/golangast/gollemer)](https://goreportcard.com/report/github.com/golangast/gollemer)
+[![GoDoc](https://img.shields.io/badge/godoc-reference-blue.svg)](https://pkg.go.dev/github.com/golangast/gollemer)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/golangast/gollemer)](https://github.com/golangast/gollemer)
+![GitHub top language](https://img.shields.io/github/languages/top/golangast/gollemer)
+[![GitHub license](https://img.shields.io/github/license/golangast/gollemer)](https://github.com/golangast/gollemer/blob/main/LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/golangast/gollemer)](https://github.com/golangast/gollemer/stargazers)
+[![GitHub commit activity](https://img.shields.io/github/commit-activity/m/golangast/gollemer)](https://github.com/golangast/gollemer/graphs/commit-activity)
+![GitHub repo size](https://img.shields.io/github/repo-size/golangast/gollemer)
 ![Status](https://img.shields.io/badge/Status-Beta-red)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](http://makeapullrequest.com)
-[![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/golangast/nlptagger/graphs/commit-activity)
+[![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://github.com/golangast/gollemer/graphs/commit-activity)
 [![saythanks](https://img.shields.io/badge/say-thanks-ff69b4.svg)](https://saythanks.io/to/golangast)
 
 A versatile, high-performance Natural Language Processing (NLP) toolkit written entirely in **Go** (Golang). The project provides a command-line utility for training and utilizing foundational NLP models, including **Word2Vec** embeddings, a sophisticated **Mixture of Experts (MoE)** model, and a practical **Intent Classifier**.
@@ -19,7 +19,7 @@ A versatile, high-performance Natural Language Processing (NLP) toolkit written 
 
 ## Table of Contents
 
-- [🌐 Project Website](https://golangast.github.io/nlptagger/)
+- [🌐 Project Website](https://golangast.github.io/gollemer/)
 - [✨ Key Features](#-key-features)
 - [🚀 Getting Started](#-getting-started)
   - [Prerequisites](#prerequisites)
@@ -57,8 +57,8 @@ You need a working **Go environment** (version 1.25 or higher is recommended) in
 1.  **Clone the repository:**
 
     ```bash
-    git clone https://github.com/golangast/nlptagger.git
-    cd nlptagger
+    git clone https://github.com/golangast/gollemer.git
+    cd gollemer
     ```
 
 ### Building from Source
@@ -69,11 +69,11 @@ You can build the executable from the root of the project directory:
 go build .
 ```
 
-This will create an `nlptagger` executable in the current directory.
+This will create an `gollemer` executable in the current directory.
 
 ## 🛠️ Usage
 
-The main executable (`nlptagger` or `main.go`) controls all operations using specific command-line flags. All commands should be run from the root directory of the project.
+The main executable (`gollemer` or `main.go`) controls all operations using specific command-line flags. All commands should be run from the root directory of the project.
 
 ### 1. Training Models
 
@@ -95,7 +95,7 @@ To run predictions using a previously trained MoE model, use the `--moe_inferenc
 
 ### 3. Running Workflow Generation and Execution
 
-The `example/main.go` program demonstrates how to parse a natural language query, generate a workflow, and execute it. This showcases the core capabilities of the `nlptagger` for understanding and acting upon user commands.
+The `example/main.go` program demonstrates how to parse a natural language query, generate a workflow, and execute it. This showcases the core capabilities of the `gollemer` for understanding and acting upon user commands.
 
 To run the example, use the following command with a query:
 
@@ -121,7 +121,7 @@ Node ID: Filesystem::File-jill-0, Operation: CREATE, Resource Type: Filesystem::
 Node ID: file-createfile-0, Operation: WRITE_FILE, Resource Type: , Resource Name: , Properties: map[], Command: , Dependencies: [Filesystem::File-jill-0]
 ```
 
-## 🧩 Integrating `nlptagger` into Your Projects
+## 🧩 Integrating `gollemer` into Your Projects
 
 This project is more than just command-line tools. It's a collection of Go packages. You can use these packages in your own Go projects.
 
@@ -138,8 +138,8 @@ import (
 	"os"
 	"strings"
 
-	"nlptagger/neural/parser"
-	"nlptagger/neural/workflow"
+	"gollemer/neural/parser"
+	"gollemer/neural/workflow"
 )
 
 var (
@@ -210,7 +210,7 @@ The `neural/` and `tagger/` directories contain the reusable components. Import 
 The project is a collection of tools. Its structure reflects this.
 
 ```
-nlptagger/
+gollemer/
 ├── main.go         # Dispatches to common tools.
 ├── go.mod          # Go module definition.
 ├── cmd/            # Each subdirectory is a command-line tool.
