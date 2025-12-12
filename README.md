@@ -3,6 +3,14 @@
 ![status beta](https://img.shields.io/badge/Status-Beta-red)
 <img src="https://img.shields.io/github/license/golangast/gollemer.svg"><img src="https://img.shields.io/github/stars/golangast/gollemer.svg">[![Website shields.io](https://img.shields.io/website-up-down-green-red/http/shields.io.svg)](http://endrulats.com)[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](http://makeapullrequest.com)[![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://GitHub.com/Naereen/StrapDown.js/graphs/commit-activity)[![GitHub go.mod Go version of a Go module](https://img.shields.io/github/go-mod/go-version/gomods/athens.svg)](https://github.com/golangast/gollemer)[![GoDoc reference example](https://img.shields.io/badge/godoc-reference-blue.svg)](https://pkg.go.dev/github.com/golangast/gollemer/gollemerer)[![GoReportCard example](https://goreportcard.com/badge/github.com/golangast/gollemer)](https://goreportcard.com/report/github.com/golangast/gollemer)[![saythanks](https://img.shields.io/badge/say-thanks-ff69b4.svg)](https://saythanks.io/to/golangast)
 
+
+### Beta
+This project is in beta and changes daily.  I once in a while upload youtube [videos](https://www.youtube.com/watch?v=8paxWwPt4-A&list=PL_sE11fwtBT-0GqVHEX-tYTBzAIGHelQ6) talking about it's changes.
+
+
+
+
+
 This project provides a command-line utility for interacting with Large Language Model (LLM) functionalities, enabling natural language interaction for various tasks.
 ### Installation
 
