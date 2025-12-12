@@ -1,0 +1,23 @@
+{
+  "project": {
+    "name": "MyCommerceApi",
+    "database": {
+      "type": "sqlite",
+      "connection_string": "commerce.db"
+    }
+  },
+  "data_models": [
+    {
+      "source": "feeds/customers-100.csv",
+      "struct_name": "Customer",
+      "endpoints": [
+        "GET /api/v1/customers",
+        "POST /api/v1/customers"
+      ],
+      "field_overrides": {
+        "Customer Id": { "type": "string", "primary_key": true },
+        "Index": { "type": "int" }
+      }
+    }
+  ]
+}

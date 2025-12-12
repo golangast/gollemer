@@ -3,6 +3,7 @@ package nn
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
 
 	. "github.com/zendrulat/nlptagger/neural/tensor"
@@ -11,6 +12,35 @@ import (
 func init() {
 	log.SetOutput(os.Stderr)
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
+}
+
+// applyDropout applies dropout to a tensor during training.
+// During training, randomly sets dropoutRate fraction of values to 0 and scales remaining by 1/(1-dropoutRate).
+// During inference (training=false), returns the tensor unchanged.
+func applyDropout(tensor *Tensor, dropoutRate float64, training bool) *Tensor {
+	if !training || dropoutRate == 0.0 {
+		return tensor
+	}
+
+	// Create dropout mask
+	mask := NewTensor(tensor.Shape, make([]float64, len(tensor.Data)), false)
+	scale := 1.0 / (1.0 - dropoutRate)
+
+	for i := range mask.Data {
+		if rand.Float64() < dropoutRate {
+			mask.Data[i] = 0.0
+		} else {
+			mask.Data[i] = scale
+		}
+	}
+
+	// Apply mask
+	output := NewTensor(tensor.Shape, make([]float64, len(tensor.Data)), tensor.RequiresGrad)
+	for i := range output.Data {
+		output.Data[i] = tensor.Data[i] * mask.Data[i]
+	}
+
+	return output
 }
 
 // LSTMCell represents a single LSTM cell.
@@ -24,11 +54,11 @@ type LSTMCell struct {
 	Bf, Bi, Bc, Bo *Tensor
 
 	// Stored for backward pass
-	InputTensor *Tensor
-	PrevHidden  *Tensor
-	PrevCell    *Tensor
+	InputTensor    *Tensor
+	PrevHidden     *Tensor
+	PrevCell       *Tensor
 	ft, it, ct, ot *Tensor
-	cct         *Tensor
+	cct            *Tensor
 }
 
 // NewLSTMCell creates a new LSTMCell.
@@ -414,10 +444,13 @@ func (c *LSTMCell) Backward(gradHt, gradCt *Tensor) error {
 
 // LSTM represents a multi-layer LSTM.
 type LSTM struct {
-	InputSize  int
-	HiddenSize int
-	NumLayers  int
-	Cells      [][]*LSTMCell
+	InputSize     int
+	HiddenSize    int
+	NumLayers     int
+	Cells         [][]*LSTMCell
+	timeStepCells [][]*LSTMCell // Stores cells for each timestep for BPTT
+	DropoutRate   float64       // Dropout rate between layers (0.0 = no dropout)
+	Training      bool          // Whether model is in training mode (dropout active)
 }
 
 // NewLSTM creates a new LSTM.
@@ -457,59 +490,188 @@ func (l *LSTM) Parameters() []*Tensor {
 // Forward performs the forward pass of the LSTM.
 func (l *LSTM) Forward(inputs ...*Tensor) (*Tensor, *Tensor, error) {
 	if len(inputs) != 3 {
-		return nil, nil, fmt.Errorf("LSTM.Forward expects 3 inputs (input, prevHidden, prevCell), got %d", len(inputs))
+		return nil, nil, fmt.Errorf("LSTM.Forward expects 3 inputs (input, initialHidden, initialCell), got %d", len(inputs))
 	}
-	input, initialHidden, initialCell := inputs[0], inputs[1], inputs[2] // Renamed for clarity
+	input, initialHidden, initialCell := inputs[0], inputs[1], inputs[2]
 
-	var currentHidden, currentCell *Tensor = initialHidden, initialCell // Initialize with initial states
-	var layerOutput *Tensor = input                                    // Input to the first layer
+	if len(input.Shape) == 3 { // Sequence input
+		batchSize := input.Shape[0]
+		sequenceLength := input.Shape[1]
 
-	for i := 0; i < l.NumLayers; i++ {
-		// For the first layer, layerInput is the original input.
-		// For subsequent layers, layerInput is the output (ht) of the previous layer.
-		if i > 0 {
-			layerOutput = currentHidden
+		// Initialize timeStepCells for BPTT
+		l.timeStepCells = make([][]*LSTMCell, l.NumLayers)
+		for i := range l.timeStepCells {
+			l.timeStepCells[i] = make([]*LSTMCell, sequenceLength)
 		}
 
-		ht, ct, err := l.Cells[i][0].Forward(layerOutput, currentHidden, currentCell)
-		if err != nil {
-			log.Printf("LSTMCell.Forward in LSTM.Forward failed: %+v", err)
-			return nil, nil, err
+		layerInput := input
+		var lastCellState *Tensor
+
+		for i := 0; i < l.NumLayers; i++ {
+			h, c := initialHidden, initialCell
+			if i > 0 {
+				h = NewTensor([]int{batchSize, l.HiddenSize}, make([]float64, batchSize*l.HiddenSize), false)
+				c = NewTensor([]int{batchSize, l.HiddenSize}, make([]float64, batchSize*l.HiddenSize), false)
+			}
+
+			outputs := make([]*Tensor, sequenceLength)
+			for t := 0; t < sequenceLength; t++ {
+				timeStepInput, err := layerInput.Slice(1, t, t+1)
+				if err != nil {
+					return nil, nil, fmt.Errorf("slicing input failed: %w", err)
+				}
+				timeStepInput, err = timeStepInput.Squeeze(1)
+				if err != nil {
+					return nil, nil, fmt.Errorf("squeezing input failed: %w", err)
+				}
+
+				// Create a new cell for this timestep with shared weights
+				cellForTimeStep := *l.Cells[i][0] // Copy struct, pointers to weights are shared
+				l.timeStepCells[i][t] = &cellForTimeStep
+
+				h, c, err = l.timeStepCells[i][t].Forward(timeStepInput, h, c)
+				if err != nil {
+					return nil, nil, fmt.Errorf("LSTMCell forward failed: %w", err)
+				}
+				outputs[t] = h
+			}
+
+			lastCellState = c
+
+			// Manual stack since Stack function is not available
+			stackedOutputData := make([]float64, batchSize*sequenceLength*l.HiddenSize)
+			for t, ht := range outputs {
+				for b := 0; b < batchSize; b++ {
+					copy(stackedOutputData[(b*sequenceLength+t)*l.HiddenSize:(b*sequenceLength+t+1)*l.HiddenSize], ht.Data[b*l.HiddenSize:(b+1)*l.HiddenSize])
+				}
+			}
+			stackedOutput := NewTensor([]int{batchSize, sequenceLength, l.HiddenSize}, stackedOutputData, true)
+
+			if i < l.NumLayers-1 {
+				layerInput = applyDropout(stackedOutput, l.DropoutRate, l.Training)
+			} else {
+				// Also store the full layerInput in the cell for the backward pass to find it.
+				for t := 0; t < sequenceLength; t++ {
+					l.timeStepCells[i][t].InputTensor.Creator = layerInput
+				}
+				return stackedOutput, lastCellState, nil
+			}
 		}
-		currentHidden = ht
-		currentCell = ct
+		return nil, nil, fmt.Errorf("LSTM forward loop finished without returning") // Should not happen
+	} else if len(input.Shape) == 2 { // Single time step
+		var currentHidden, currentCell *Tensor = initialHidden, initialCell
+		var layerOutput *Tensor = input
+
+		for i := 0; i < l.NumLayers; i++ {
+			if i > 0 {
+				layerOutput = currentHidden
+				if i < l.NumLayers {
+					layerOutput = applyDropout(layerOutput, l.DropoutRate, l.Training)
+				}
+			}
+
+			ht, ct, err := l.Cells[i][0].Forward(layerOutput, currentHidden, currentCell)
+			if err != nil {
+				log.Printf("LSTMCell.Forward in LSTM.Forward failed: %+v", err)
+				return nil, nil, err
+			}
+			currentHidden = ht
+			currentCell = ct
+		}
+		return currentHidden, currentCell, nil
+	} else {
+		return nil, nil, fmt.Errorf("LSTM.Forward expects a 2D or 3D input tensor, got %d dimensions", len(input.Shape))
 	}
-	return currentHidden, currentCell, nil // Return the final hidden and cell states
 }
 
 // Backward performs the backward pass for the entire LSTM layer.
 func (l *LSTM) Backward(gradNextHidden, gradNextCell *Tensor) error {
+	// If timeStepCells is not populated, it means forward was not called on a sequence.
+	// Fallback to the simple, single-step backward pass.
+	if len(l.timeStepCells) == 0 {
+		gradH := gradNextHidden
+		gradC := gradNextCell
+		var err error
+		for i := l.NumLayers - 1; i >= 0; i-- {
+			cell := l.Cells[i][0]
+			err = cell.Backward(gradH, gradC)
+			if err != nil {
+				return fmt.Errorf("failed to backpropagate through LSTM cell in layer %d: %w", i, err)
+			}
+			if i > 0 {
+				if cell.InputTensor.Grad == nil || cell.PrevHidden.Grad == nil {
+					return fmt.Errorf("gradient not computed for input or hidden state in layer %d", i)
+				}
+				gradH, err = cell.InputTensor.Grad.Add(cell.PrevHidden.Grad)
+				if err != nil {
+					return err
+				}
+				gradC = cell.PrevCell.Grad
+			}
+		}
+		return nil
+	}
+
+	// --- Backpropagation Through Time (BPTT) ---
 	gradH := gradNextHidden
 	gradC := gradNextCell
-	var err error
 
 	for i := l.NumLayers - 1; i >= 0; i-- {
-		cell := l.Cells[i][0] // Assuming one cell per layer
+		sequenceLength := len(l.timeStepCells[i])
+		layerInputTensor := l.timeStepCells[i][0].InputTensor.Creator.(*Tensor)
 
-		// The backward pass for the cell computes gradients for its inputs.
-		err = cell.Backward(gradH, gradC)
-		if err != nil {
-			return fmt.Errorf("failed to backpropagate through LSTM cell in layer %d: %w", i, err)
+		if layerInputTensor.Grad == nil {
+			layerInputTensor.Grad = NewTensor(layerInputTensor.Shape, make([]float64, len(layerInputTensor.Data)), false)
 		}
 
-		// The input to this layer (for i>0) was the hidden state of the previous layer.
-		// The gradient for the output of the previous layer is the sum of the gradients
-		// for the 'input' and 'prevHidden' of this layer's cell.
-		if i > 0 {
-			// cell.InputTensor.Grad is grad for layerOutput
-			// cell.PrevHidden.Grad is grad for currentHidden
-			// cell.PrevCell.Grad is grad for currentCell
-			gradH, err = cell.InputTensor.Grad.Add(cell.PrevHidden.Grad)
-			if err != nil {
-				return err
+		// Initialize gradients from future (t+1)
+		gradHFromFuture := NewTensor(gradH.Shape, make([]float64, len(gradH.Data)), false)
+		gradCFromFuture := NewTensor(gradC.Shape, make([]float64, len(gradC.Data)), false)
+
+		for t := sequenceLength - 1; t >= 0; t-- {
+			cell := l.timeStepCells[i][t]
+
+			// Total gradient for ht = (grad from layer above) + (grad from h_{t+1})
+			var totalGradH, totalGradC *Tensor
+			var err error
+			if t == sequenceLength-1 {
+				totalGradH, err = gradH.Add(gradHFromFuture)
+				if err != nil {
+					return err
+				}
+				totalGradC, err = gradC.Add(gradCFromFuture)
+				if err != nil {
+					return err
+				}
+			} else {
+				totalGradH = gradHFromFuture
+				totalGradC = gradCFromFuture
 			}
-			gradC = cell.PrevCell.Grad
+
+			err = cell.Backward(totalGradH, totalGradC)
+			if err != nil {
+				return fmt.Errorf("BPTT: cell.Backward at t=%d, layer=%d failed: %w", t, i, err)
+			}
+
+			// Gradients for the previous time step are now available
+			gradHFromFuture = cell.PrevHidden.Grad
+			gradCFromFuture = cell.PrevCell.Grad
+
+			// Accumulate gradient for the input of this layer
+			// The input to the cell was a slice, so its gradient must be manually added
+			// to the correct position in the full input gradient tensor for this layer.
+			if cell.InputTensor.Grad != nil {
+				offset := t * cell.InputTensor.Shape[0] * cell.InputTensor.Shape[1]
+				for j, gradVal := range cell.InputTensor.Grad.Data {
+					layerInputTensor.Grad.Data[offset+j] += gradVal
+				}
+			}
 		}
+
+		// The gradient for the input of this layer becomes the gradH for the layer below.
+		gradH = layerInputTensor.Grad
+		// There is no cell state gradient between layers.
+		gradC = NewTensor(gradC.Shape, make([]float64, len(gradC.Data)), false)
 	}
 	return nil
 }

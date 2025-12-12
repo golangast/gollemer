@@ -1,0 +1,787 @@
+[
+  {
+    "query": "create folder test",
+    "semantic_output": {
+      "operation": "Create",
+      "target_resource": {
+        "type": "Filesystem::Folder",
+        "name": "test",
+        "properties": {
+          "path": "./"
+        }
+      },
+      "context": {
+        "user_role": "admin"
+      }
+    },
+    "flat_output": "operation:Create type:Filesystem_Folder name:test path:./ user_role:admin",
+    "semantic_roles": {
+      "operation": "create",
+      "operation_confidence": 0.95,
+      "resources": [
+        {
+          "type": "FILESYSTEM",
+          "name": "test",
+          "resource_type": "Folder",
+          "path": "./"
+        }
+      ],
+      "arguments": [
+        {
+          "role": "NAME",
+          "value": "test",
+          "confidence": 0.9
+        }
+      ],
+      "modifiers": [],
+      "relations": [
+        {
+          "source": "create",
+          "target": "test",
+          "relation_type": "ACTS_ON",
+          "weight": 1.0
+        },
+        {
+          "source": "test",
+          "target": "NAME:test",
+          "relation_type": "HAS_PROPERTY",
+          "weight": 0.85
+        }
+      ]
+    },
+    "abstract_semantic_graph": {
+      "root_operation": "create",
+      "nodes": {
+        "node_1": {
+          "id": "node_1",
+          "type": "OPERATION",
+          "label": "CREATE",
+          "value": "create",
+          "properties": {
+            "main_verb": true,
+            "executability": "primary"
+          }
+        },
+        "node_2": {
+          "id": "node_2",
+          "type": "RESOURCE",
+          "label": "test",
+          "value": "test",
+          "properties": {
+            "resource_type": "FILESYSTEM",
+            "canonical_path": "./",
+            "resource_category": "filesystem_object"
+          }
+        },
+        "node_3": {
+          "id": "node_3",
+          "type": "ARGUMENT",
+          "label": "NAME:test",
+          "value": "test",
+          "properties": {
+            "argument_role": "NAME",
+            "arg_type": "identifier"
+          }
+        }
+      },
+      "edges": [
+        {
+          "source_id": "node_1",
+          "target_id": "node_2",
+          "relation_type": "ACTS_ON",
+          "weight": 1.0
+        },
+        {
+          "source_id": "node_1",
+          "target_id": "node_3",
+          "relation_type": "HAS_ARGUMENT",
+          "weight": 0.9
+        },
+        {
+          "source_id": "node_2",
+          "target_id": "node_3",
+          "relation_type": "HAS_PROPERTY",
+          "weight": 0.85
+        }
+      ],
+      "metadata": {
+        "operation": "create",
+        "resource_count": 1,
+        "argument_count": 1,
+        "constraint_count": 0,
+        "total_nodes": 3,
+        "total_edges": 3
+      }
+    },
+    "execution_plan": {
+      "operation": "create",
+      "target_resources": [
+        {
+          "id": "node_2",
+          "name": "test",
+          "type": "FILESYSTEM",
+          "path": "./",
+          "properties": {
+            "NAME": "test"
+          }
+        }
+      ],
+      "arguments": {
+        "NAME": "test"
+      },
+      "constraints": [],
+      "execution_order": ["node_1", "node_2", "node_3"]
+    }
+  },
+  {
+    "query": "delete file important.txt recursively",
+    "semantic_output": {
+      "operation": "Delete",
+      "target_resource": {
+        "type": "Filesystem::File",
+        "name": "important.txt",
+        "properties": {
+          "path": "./"
+        }
+      },
+      "context": {
+        "user_role": "admin"
+      }
+    },
+    "flat_output": "operation:Delete type:Filesystem_File name:important.txt path:./ user_role:admin modifier:recursively",
+    "semantic_roles": {
+      "operation": "delete",
+      "operation_confidence": 0.95,
+      "resources": [
+        {
+          "type": "FILESYSTEM",
+          "name": "important.txt",
+          "resource_type": "File",
+          "path": "./"
+        }
+      ],
+      "arguments": [
+        {
+          "role": "NAME",
+          "value": "important.txt",
+          "confidence": 0.92
+        }
+      ],
+      "modifiers": [
+        {
+          "value": "recursively",
+          "confidence": 0.88
+        }
+      ],
+      "relations": [
+        {
+          "source": "delete",
+          "target": "important.txt",
+          "relation_type": "ACTS_ON",
+          "weight": 1.0
+        },
+        {
+          "source": "recursively",
+          "target": "delete",
+          "relation_type": "MODIFIES",
+          "weight": 0.8
+        }
+      ]
+    },
+    "abstract_semantic_graph": {
+      "root_operation": "delete",
+      "nodes": {
+        "node_1": {
+          "id": "node_1",
+          "type": "OPERATION",
+          "label": "DELETE",
+          "value": "delete",
+          "properties": {
+            "main_verb": true,
+            "executability": "primary"
+          }
+        },
+        "node_2": {
+          "id": "node_2",
+          "type": "RESOURCE",
+          "label": "important.txt",
+          "value": "important.txt",
+          "properties": {
+            "resource_type": "FILESYSTEM",
+            "canonical_path": "./",
+            "resource_category": "filesystem_object"
+          }
+        },
+        "node_3": {
+          "id": "node_3",
+          "type": "ARGUMENT",
+          "label": "NAME:important.txt",
+          "value": "important.txt",
+          "properties": {
+            "argument_role": "NAME",
+            "arg_type": "identifier"
+          }
+        },
+        "node_4": {
+          "id": "node_4",
+          "type": "CONSTRAINT",
+          "label": "recursively",
+          "value": "recursively",
+          "properties": {
+            "constraint_type": "MODIFIER",
+            "applies_to": "operation"
+          }
+        }
+      },
+      "edges": [
+        {
+          "source_id": "node_1",
+          "target_id": "node_2",
+          "relation_type": "ACTS_ON",
+          "weight": 1.0
+        },
+        {
+          "source_id": "node_1",
+          "target_id": "node_3",
+          "relation_type": "HAS_ARGUMENT",
+          "weight": 0.9
+        },
+        {
+          "source_id": "node_2",
+          "target_id": "node_3",
+          "relation_type": "HAS_PROPERTY",
+          "weight": 0.85
+        },
+        {
+          "source_id": "node_4",
+          "target_id": "node_1",
+          "relation_type": "MODIFIES",
+          "weight": 0.8
+        }
+      ],
+      "metadata": {
+        "operation": "delete",
+        "resource_count": 1,
+        "argument_count": 1,
+        "constraint_count": 1,
+        "total_nodes": 4,
+        "total_edges": 4
+      }
+    },
+    "execution_plan": {
+      "operation": "delete",
+      "target_resources": [
+        {
+          "id": "node_2",
+          "name": "important.txt",
+          "type": "FILESYSTEM",
+          "path": "./",
+          "properties": {
+            "NAME": "important.txt"
+          }
+        }
+      ],
+      "arguments": {
+        "NAME": "important.txt"
+      },
+      "constraints": ["recursively"],
+      "execution_order": ["node_4", "node_1", "node_2", "node_3"]
+    }
+  },
+  {
+    "query": "copy file from /source to /destination",
+    "semantic_output": {
+      "operation": "Copy",
+      "target_resource": {
+        "type": "Filesystem::File",
+        "name": "unknown",
+        "properties": {
+          "path": "/source"
+        }
+      },
+      "context": {
+        "user_role": "admin"
+      }
+    },
+    "flat_output": "operation:Copy type:Filesystem_File source:/source destination:/destination user_role:admin",
+    "semantic_roles": {
+      "operation": "copy",
+      "operation_confidence": 0.94,
+      "resources": [
+        {
+          "type": "FILESYSTEM",
+          "name": "unknown",
+          "resource_type": "File",
+          "path": "/source"
+        }
+      ],
+      "arguments": [
+        {
+          "role": "PATH",
+          "value": "/source",
+          "confidence": 0.9
+        },
+        {
+          "role": "DESTINATION",
+          "value": "/destination",
+          "confidence": 0.9
+        }
+      ],
+      "modifiers": [],
+      "relations": [
+        {
+          "source": "copy",
+          "target": "unknown",
+          "relation_type": "ACTS_ON",
+          "weight": 1.0
+        },
+        {
+          "source": "copy",
+          "target": "PATH:/source",
+          "relation_type": "HAS_ARGUMENT",
+          "weight": 0.9
+        },
+        {
+          "source": "copy",
+          "target": "DESTINATION:/destination",
+          "relation_type": "HAS_ARGUMENT",
+          "weight": 0.9
+        }
+      ]
+    },
+    "abstract_semantic_graph": {
+      "root_operation": "copy",
+      "nodes": {
+        "node_1": {
+          "id": "node_1",
+          "type": "OPERATION",
+          "label": "COPY",
+          "value": "copy",
+          "properties": {
+            "main_verb": true,
+            "executability": "primary"
+          }
+        },
+        "node_2": {
+          "id": "node_2",
+          "type": "RESOURCE",
+          "label": "unknown",
+          "value": "unknown",
+          "properties": {
+            "resource_type": "FILESYSTEM",
+            "canonical_path": "/source",
+            "resource_category": "filesystem_object"
+          }
+        },
+        "node_3": {
+          "id": "node_3",
+          "type": "ARGUMENT",
+          "label": "PATH:/source",
+          "value": "/source",
+          "properties": {
+            "argument_role": "PATH",
+            "arg_type": "location"
+          }
+        },
+        "node_4": {
+          "id": "node_4",
+          "type": "ARGUMENT",
+          "label": "DESTINATION:/destination",
+          "value": "/destination",
+          "properties": {
+            "argument_role": "DESTINATION",
+            "arg_type": "location"
+          }
+        }
+      },
+      "edges": [
+        {
+          "source_id": "node_1",
+          "target_id": "node_2",
+          "relation_type": "ACTS_ON",
+          "weight": 1.0
+        },
+        {
+          "source_id": "node_1",
+          "target_id": "node_3",
+          "relation_type": "HAS_ARGUMENT",
+          "weight": 0.9
+        },
+        {
+          "source_id": "node_1",
+          "target_id": "node_4",
+          "relation_type": "HAS_ARGUMENT",
+          "weight": 0.9
+        },
+        {
+          "source_id": "node_2",
+          "target_id": "node_3",
+          "relation_type": "HAS_PROPERTY",
+          "weight": 0.85
+        }
+      ],
+      "metadata": {
+        "operation": "copy",
+        "resource_count": 1,
+        "argument_count": 2,
+        "constraint_count": 0,
+        "total_nodes": 4,
+        "total_edges": 4
+      }
+    },
+    "execution_plan": {
+      "operation": "copy",
+      "target_resources": [
+        {
+          "id": "node_2",
+          "name": "unknown",
+          "type": "FILESYSTEM",
+          "path": "/source",
+          "properties": {
+            "PATH": "/source"
+          }
+        }
+      ],
+      "arguments": {
+        "PATH": "/source",
+        "DESTINATION": "/destination"
+      },
+      "constraints": [],
+      "execution_order": ["node_1", "node_2", "node_3", "node_4"]
+    }
+  },
+  {
+    "query": "move directory data in /home to /backup",
+    "semantic_output": {
+      "operation": "Move",
+      "target_resource": {
+        "type": "Filesystem::Folder",
+        "name": "data",
+        "properties": {
+          "path": "/home"
+        }
+      },
+      "context": {
+        "user_role": "admin"
+      }
+    },
+    "flat_output": "operation:Move type:Filesystem_Folder name:data path:/home destination:/backup user_role:admin",
+    "semantic_roles": {
+      "operation": "move",
+      "operation_confidence": 0.93,
+      "resources": [
+        {
+          "type": "FILESYSTEM",
+          "name": "data",
+          "resource_type": "Folder",
+          "path": "/home"
+        }
+      ],
+      "arguments": [
+        {
+          "role": "NAME",
+          "value": "data",
+          "confidence": 0.91
+        },
+        {
+          "role": "PATH",
+          "value": "/home",
+          "confidence": 0.89
+        },
+        {
+          "role": "DESTINATION",
+          "value": "/backup",
+          "confidence": 0.88
+        }
+      ],
+      "modifiers": [],
+      "relations": [
+        {
+          "source": "move",
+          "target": "data",
+          "relation_type": "ACTS_ON",
+          "weight": 1.0
+        }
+      ]
+    },
+    "abstract_semantic_graph": {
+      "root_operation": "move",
+      "nodes": {
+        "node_1": {
+          "id": "node_1",
+          "type": "OPERATION",
+          "label": "MOVE",
+          "value": "move",
+          "properties": {
+            "main_verb": true,
+            "executability": "primary"
+          }
+        },
+        "node_2": {
+          "id": "node_2",
+          "type": "RESOURCE",
+          "label": "data",
+          "value": "data",
+          "properties": {
+            "resource_type": "FILESYSTEM",
+            "canonical_path": "/home",
+            "resource_category": "filesystem_object"
+          }
+        },
+        "node_3": {
+          "id": "node_3",
+          "type": "ARGUMENT",
+          "label": "NAME:data",
+          "value": "data",
+          "properties": {
+            "argument_role": "NAME",
+            "arg_type": "identifier"
+          }
+        },
+        "node_4": {
+          "id": "node_4",
+          "type": "ARGUMENT",
+          "label": "PATH:/home",
+          "value": "/home",
+          "properties": {
+            "argument_role": "PATH",
+            "arg_type": "location"
+          }
+        },
+        "node_5": {
+          "id": "node_5",
+          "type": "ARGUMENT",
+          "label": "DESTINATION:/backup",
+          "value": "/backup",
+          "properties": {
+            "argument_role": "DESTINATION",
+            "arg_type": "location"
+          }
+        }
+      },
+      "edges": [
+        {
+          "source_id": "node_1",
+          "target_id": "node_2",
+          "relation_type": "ACTS_ON",
+          "weight": 1.0
+        },
+        {
+          "source_id": "node_1",
+          "target_id": "node_3",
+          "relation_type": "HAS_ARGUMENT",
+          "weight": 0.9
+        },
+        {
+          "source_id": "node_1",
+          "target_id": "node_4",
+          "relation_type": "HAS_ARGUMENT",
+          "weight": 0.9
+        },
+        {
+          "source_id": "node_1",
+          "target_id": "node_5",
+          "relation_type": "HAS_ARGUMENT",
+          "weight": 0.9
+        },
+        {
+          "source_id": "node_2",
+          "target_id": "node_3",
+          "relation_type": "HAS_PROPERTY",
+          "weight": 0.85
+        },
+        {
+          "source_id": "node_2",
+          "target_id": "node_4",
+          "relation_type": "HAS_PROPERTY",
+          "weight": 0.85
+        }
+      ],
+      "metadata": {
+        "operation": "move",
+        "resource_count": 1,
+        "argument_count": 3,
+        "constraint_count": 0,
+        "total_nodes": 5,
+        "total_edges": 6
+      }
+    },
+    "execution_plan": {
+      "operation": "move",
+      "target_resources": [
+        {
+          "id": "node_2",
+          "name": "data",
+          "type": "FILESYSTEM",
+          "path": "/home",
+          "properties": {
+            "NAME": "data",
+            "PATH": "/home"
+          }
+        }
+      ],
+      "arguments": {
+        "NAME": "data",
+        "PATH": "/home",
+        "DESTINATION": "/backup"
+      },
+      "constraints": [],
+      "execution_order": ["node_1", "node_2", "node_3", "node_4", "node_5"]
+    }
+  },
+  {
+    "query": "list files in directory with verbose output",
+    "semantic_output": {
+      "operation": "List",
+      "target_resource": {
+        "type": "Filesystem::Folder",
+        "name": "directory",
+        "properties": {
+          "path": "./"
+        }
+      },
+      "context": {
+        "user_role": "admin"
+      }
+    },
+    "flat_output": "operation:List type:Filesystem_Folder path:./ user_role:admin modifier:verbose",
+    "semantic_roles": {
+      "operation": "list",
+      "operation_confidence": 0.96,
+      "resources": [
+        {
+          "type": "FILESYSTEM",
+          "name": "directory",
+          "resource_type": "Folder",
+          "path": "./"
+        }
+      ],
+      "arguments": [
+        {
+          "role": "PATH",
+          "value": "./",
+          "confidence": 0.92
+        }
+      ],
+      "modifiers": [
+        {
+          "value": "verbose",
+          "confidence": 0.85
+        }
+      ],
+      "relations": [
+        {
+          "source": "list",
+          "target": "directory",
+          "relation_type": "ACTS_ON",
+          "weight": 1.0
+        },
+        {
+          "source": "verbose",
+          "target": "list",
+          "relation_type": "MODIFIES",
+          "weight": 0.8
+        }
+      ]
+    },
+    "abstract_semantic_graph": {
+      "root_operation": "list",
+      "nodes": {
+        "node_1": {
+          "id": "node_1",
+          "type": "OPERATION",
+          "label": "LIST",
+          "value": "list",
+          "properties": {
+            "main_verb": true,
+            "executability": "primary"
+          }
+        },
+        "node_2": {
+          "id": "node_2",
+          "type": "RESOURCE",
+          "label": "directory",
+          "value": "directory",
+          "properties": {
+            "resource_type": "FILESYSTEM",
+            "canonical_path": "./",
+            "resource_category": "filesystem_object"
+          }
+        },
+        "node_3": {
+          "id": "node_3",
+          "type": "ARGUMENT",
+          "label": "PATH:./",
+          "value": "./",
+          "properties": {
+            "argument_role": "PATH",
+            "arg_type": "location"
+          }
+        },
+        "node_4": {
+          "id": "node_4",
+          "type": "CONSTRAINT",
+          "label": "verbose",
+          "value": "verbose",
+          "properties": {
+            "constraint_type": "MODIFIER",
+            "applies_to": "operation"
+          }
+        }
+      },
+      "edges": [
+        {
+          "source_id": "node_1",
+          "target_id": "node_2",
+          "relation_type": "ACTS_ON",
+          "weight": 1.0
+        },
+        {
+          "source_id": "node_1",
+          "target_id": "node_3",
+          "relation_type": "HAS_ARGUMENT",
+          "weight": 0.9
+        },
+        {
+          "source_id": "node_2",
+          "target_id": "node_3",
+          "relation_type": "HAS_PROPERTY",
+          "weight": 0.85
+        },
+        {
+          "source_id": "node_4",
+          "target_id": "node_1",
+          "relation_type": "MODIFIES",
+          "weight": 0.8
+        }
+      ],
+      "metadata": {
+        "operation": "list",
+        "resource_count": 1,
+        "argument_count": 1,
+        "constraint_count": 1,
+        "total_nodes": 4,
+        "total_edges": 4
+      }
+    },
+    "execution_plan": {
+      "operation": "list",
+      "target_resources": [
+        {
+          "id": "node_2",
+          "name": "directory",
+          "type": "FILESYSTEM",
+          "path": "./",
+          "properties": {
+            "PATH": "./"
+          }
+        }
+      ],
+      "arguments": {
+        "PATH": "./"
+      },
+      "constraints": ["verbose"],
+      "execution_order": ["node_4", "node_1", "node_2", "node_3"]
+    }
+  }
+]

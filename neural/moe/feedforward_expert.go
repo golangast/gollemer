@@ -1,20 +1,18 @@
 package moe
 
 import (
-	
 	"fmt"
+
 	"github.com/zendrulat/nlptagger/neural/nn"
 	"github.com/zendrulat/nlptagger/neural/tensor"
 )
-
-
 
 // FeedForwardExpert is a simple feed-forward neural network that implements the Expert interface.
 type FeedForwardExpert struct {
 	Layer1 *nn.Linear
 	Layer2 *nn.Linear
 	// Stored for backward pass
-	inputTensor *tensor.Tensor
+	inputTensor        *tensor.Tensor
 	intermediateOutput *tensor.Tensor
 }
 
@@ -81,7 +79,15 @@ func (e *FeedForwardExpert) Backward(grad *tensor.Tensor) error {
 		return fmt.Errorf("expert layer 1 backward failed: %w", err)
 	}
 
-
+	// Copy the gradient from Layer1's input to our inputTensor
+	// This is necessary because Layer1 sets gradients on its own stored input,
+	// not on the expert's inputTensor reference
+	if e.inputTensor != nil && len(e.Layer1.Inputs()) > 0 {
+		layer1Input := e.Layer1.Inputs()[0]
+		if layer1Input != nil && layer1Input.Grad != nil {
+			e.inputTensor.Grad = layer1Input.Grad
+		}
+	}
 
 	return nil
 }

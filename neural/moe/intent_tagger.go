@@ -117,27 +117,27 @@ func (m *IntentTagger) Parameters() []*tensor.Tensor {
 
 // Backward performs the backward pass for the IntentTagger model.
 func (m *IntentTagger) Backward(intentGrad, tagGrads *tensor.Tensor) error {
-    // Backward pass for the heads
-    if err := m.IntentHead.Backward(intentGrad); err != nil {
-        return fmt.Errorf("intent head backward failed: %w", err)
-    }
-    if err := m.TagHead.Backward(tagGrads); err != nil {
-        return fmt.Errorf("tag head backward failed: %w", err)
-    }
+	// Backward pass for the heads
+	if err := m.IntentHead.Backward(intentGrad); err != nil {
+		return fmt.Errorf("intent head backward failed: %w", err)
+	}
+	if err := m.TagHead.Backward(tagGrads); err != nil {
+		return fmt.Errorf("tag head backward failed: %w", err)
+	}
 
-    // Combine gradients for the encoder
-    tagEncoderGrad := m.TagHead.Inputs()[0].Grad
+	// Combine gradients for the encoder
+	tagEncoderGrad := m.TagHead.Inputs()[0].Grad
 
-    // Backward pass for the encoder
-    if err := m.Encoder.Backward(tagEncoderGrad); err != nil {
-        return fmt.Errorf("MoE encoder backward failed: %w", err)
-    }
+	// Backward pass for the encoder - it now returns the input gradient
+	embeddingGrad, err := m.Encoder.Backward(tagEncoderGrad)
+	if err != nil {
+		return fmt.Errorf("MoE encoder backward failed: %w", err)
+	}
 
-    // Backward pass for the embedding layer
-    embeddingGrad := m.Encoder.Inputs()[0].Grad
-    if err := m.Embedding.Backward(embeddingGrad); err != nil {
-        return fmt.Errorf("embedding layer backward failed: %w", err)
-    }
+	// Backward pass for the embedding layer using the returned gradient
+	if err := m.Embedding.Backward(embeddingGrad); err != nil {
+		return fmt.Errorf("embedding layer backward failed: %w", err)
+	}
 
-    return nil
+	return nil
 }
