@@ -4,14 +4,15 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
-	"log"
 	"math"
 	"runtime"
 	"sync"
+	"sync/atomic"
+	"unsafe"
 )
 
 func init() {
-	log.SetFlags(0)
+	// log.SetFlags(0) // Removed log package, so this line is commented out or removed.
 }
 
 // Next moves the iterator to the next element.
@@ -1089,9 +1090,7 @@ func (t *Tensor) Backward(grad *Tensor) error {
 	if t.Grad == nil {
 		t.Grad = NewTensor(t.Shape, make([]float64, len(t.Data)), false)
 	}
-	for i := range grad.Data {
-		t.Grad.Data[i] = grad.Data[i]
-	}
+	copy(t.Grad.Data, grad.Data)
 
 	for i := len(topo) - 1; i >= 0; i-- {
 		v := topo[i]
@@ -1800,6 +1799,30 @@ func (t *Tensor) SetSlice(axis, index int, src *Tensor) error {
 	return nil
 }
 
+// Squeeze removes a dimension of size 1 from the shape of a tensor.
+func (t *Tensor) Squeeze(axis int) (*Tensor, error) {
+	if axis < 0 || axis >= len(t.Shape) {
+		return nil, fmt.Errorf("axis %d out of bounds for tensor with shape %v", axis, t.Shape)
+	}
+
+	if t.Shape[axis] != 1 {
+		// Return a copy of the original tensor if the dimension to squeeze is not 1
+		return t.Clone(), nil
+	}
+
+	newShape := make([]int, 0, len(t.Shape)-1)
+	for i, dim := range t.Shape {
+		if i != axis {
+			newShape = append(newShape, dim)
+		}
+	}
+	if len(newShape) == 0 {
+		newShape = []int{1}
+	}
+
+	return t.Reshape(newShape)
+}
+
 // Concat concatenates a slice of tensors along a specified axis.
 // All tensors must have the same shape except for the dimension along the concatenation axis.
 func Concat(tensors []*Tensor, axis int) (*Tensor, error) {
@@ -2101,4 +2124,73 @@ func (t *Tensor) Argmax(axis int) (*Tensor, error) {
 	}
 
 	return NewTensor(newShape, newData, false), nil
+}
+
+// Gather gathers slices from the tensor along the specified axis according to indices.
+// Currently supports gathering along axis 0 for 2D tensors or flattening higher dims.
+// For MoE, we typically gather from [batch*seq, dim] using indices.
+func (t *Tensor) Gather(indices []int) (*Tensor, error) {
+	// Assume t is 2D [rows, cols]
+	if len(t.Shape) != 2 {
+		return nil, fmt.Errorf("Gather currently only supports 2D tensors, got shape %v", t.Shape)
+	}
+	rows := t.Shape[0]
+	cols := t.Shape[1]
+
+	newShape := []int{len(indices), cols}
+	newData := make([]float64, len(indices)*cols)
+
+	for i, idx := range indices {
+		if idx < 0 || idx >= rows {
+			return nil, fmt.Errorf("gather index %d out of bounds for tensor with %d rows", idx, rows)
+		}
+		copy(newData[i*cols:(i+1)*cols], t.Data[idx*cols:(idx+1)*cols])
+	}
+
+	resultTensor := NewTensor(newShape, newData, t.RequiresGrad)
+	if resultTensor.RequiresGrad {
+		resultTensor.Creator = &GatherOperation{Input: t, Indices: indices}
+	}
+	return resultTensor, nil
+}
+
+// GatherOperation represents the gather operation for backward pass.
+type GatherOperation struct {
+	Input   *Tensor
+	Indices []int
+}
+
+func (op *GatherOperation) Inputs() []*Tensor {
+	return []*Tensor{op.Input}
+}
+
+func (op *GatherOperation) Backward(grad *Tensor) error {
+	if !op.Input.RequiresGrad {
+		return nil
+	}
+	if op.Input.Grad == nil {
+		op.Input.Grad = NewTensor(op.Input.Shape, make([]float64, len(op.Input.Data)), false)
+	}
+
+	// ScatterAdd the gradients back to the input
+	cols := op.Input.Shape[1]
+	for i, idx := range op.Indices {
+		// grad row i corresponds to input row idx
+		gradRow := grad.Data[i*cols : (i+1)*cols]
+		inputGradRow := op.Input.Grad.Data[idx*cols : (idx+1)*cols]
+		for j := 0; j < cols; j++ {
+			AtomicAddFloat64(&inputGradRow[j], gradRow[j])
+		}
+	}
+	return nil
+}
+
+func AtomicAddFloat64(val *float64, delta float64) {
+	for {
+		old := math.Float64bits(*val)
+		new := math.Float64bits(math.Float64frombits(old) + delta)
+		if atomic.CompareAndSwapUint64((*uint64)(unsafe.Pointer(val)), old, new) {
+			return
+		}
+	}
 }

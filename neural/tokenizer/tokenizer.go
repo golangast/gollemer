@@ -3,7 +3,7 @@ package tokenizer
 import (
 	"errors"
 	"fmt"
-	
+
 	"strings"
 	"unicode"
 
@@ -161,32 +161,18 @@ func TokenizeAndConvertToIDs(text string, vocab *vocab.Vocabulary, maxLen int) (
 		if token != "" {
 			tokenIDs = append(tokenIDs, vocab.GetTokenID(token))
 		}
+	}
 
-	} // This closes the 'for i < len(runes)' loop.
-
-	// Add the End of Sentence (EOS) token ID at the end (moved outside the loop)
-	// Assuming EOS is handled by convention or added during training
-	// For now, we'll just add a placeholder if needed.
-	// if vocab.EndOfSentenceID != -1 {
-	// 	tokenIDs = append(tokenIDs, vocab.EndOfSentenceID)
-	// }
-
-	// Padding or Truncating the sequence to maxLen (moved outside the loop)
 	if maxLen != -1 { // Only apply padding/truncation if maxLen is not -1
 		if len(tokenIDs) > maxLen {
 			tokenIDs = tokenIDs[:maxLen]
 		} else if len(tokenIDs) < maxLen {
-			// Assuming PaddingTokenID is handled by convention (e.g., vocab.GetTokenID("[PAD]"))
-			// if vocab.PaddingTokenID != -1 {
-				paddingSize := maxLen - len(tokenIDs)
-				padding := make([]int, paddingSize)
-				for i := range padding {
-					padding[i] = vocab.GetTokenID("<pad>") // Use GetTokenID for <pad>
-				}
-				tokenIDs = append(tokenIDs, padding...)
-			// } else {
-			// 	
-			// }
+			paddingSize := maxLen - len(tokenIDs)
+			padding := make([]int, paddingSize)
+			for i := range padding {
+				padding[i] = vocab.GetTokenID("<pad>") // Use GetTokenID for <pad>
+			}
+			tokenIDs = append(tokenIDs, padding...)
 		}
 	}
 

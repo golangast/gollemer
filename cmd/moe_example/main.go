@@ -6,12 +6,9 @@ import (
 	"math/rand"
 	"time"
 
-	
 	. "github.com/zendrulat/nlptagger/neural/moe"
 	. "github.com/zendrulat/nlptagger/neural/tensor"
 )
-
-
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
@@ -63,7 +60,7 @@ func main() {
 
 	// Backward pass
 	fmt.Println("\nPerforming backward pass...")
-	err = moeLayer.Backward(gradTensor)
+	_, err = moeLayer.Backward(gradTensor)
 	if err != nil {
 		log.Fatalf("MoE Layer backward pass failed: %v", err)
 	}

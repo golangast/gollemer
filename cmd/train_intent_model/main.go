@@ -8,11 +8,9 @@ import (
 	"os"
 	"strings"
 
-	moemodel "github.com/zendrulat/nlptagger/neural/moe/model"
-	. "github.com/zendrulat/nlptagger/neural/nn"
-	. "github.com/zendrulat/nlptagger/neural/tensor"
-	"github.com/zendrulat/nlptagger/neural/tokenizer"
-	mainvocab "github.com/zendrulat/nlptagger/neural/nnu/vocab"
+	"github.com/zendrulat/nlptagger/neural/tokenizer"	
+	"github.com/zendrulat/nlptagger/neural/vacob"
+
 )
 
 // IntentTrainingExample represents a single training example with a query and its intents.
@@ -120,8 +118,8 @@ func main() {
 		parentIntentVocab.Size(),
 		childIntentVocab.Size(),
 		sentenceVocab.Size(),
-		2, // numExperts
-		1, // k
+		2,  // numExperts
+		1,  // k
 		32, // maxSeqLength
 	)
 	if err != nil {
@@ -237,8 +235,8 @@ func trainIntentModelBatch(model *moemodel.MoEClassificationModel, optimizer Opt
 		return 0, fmt.Errorf("model forward pass failed: %w", err)
 	}
 
-	parentLoss, parentGrad := CrossEntropyLoss(parentLogits, parentIntentIDs, -1)
-	childLoss, childGrad := CrossEntropyLoss(childLogits, childIntentIDs, -1)
+	parentLoss, parentGrad := CrossEntropyLoss(parentLogits, parentIntentIDs, -1, 0.0)
+	childLoss, childGrad := CrossEntropyLoss(childLogits, childIntentIDs, -1, 0.0)
 	sentenceLoss, sentenceGrad := SequenceCrossEntropyLoss(sentenceLogits, targetSentenceIDsBatch, sentenceVocab.PaddingTokenID)
 
 	totalLoss := parentLoss + childLoss + sentenceLoss

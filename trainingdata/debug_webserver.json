@@ -1,0 +1,87 @@
+[
+    {
+        "query": "create webserver named jill",
+        "semantic_output": {
+            "operation": "Create",
+            "target_resource": {
+                "type": "Webserver",
+                "name": "jill",
+                "properties": {
+                    "port": "8080",
+                    "runtime": "go"
+                }
+            },
+            "context": {
+                "user_role": "admin"
+            }
+        }
+    },
+    {
+        "query": "create a webserver named jill",
+        "semantic_output": {
+            "operation": "Create",
+            "target_resource": {
+                "type": "Webserver",
+                "name": "jill",
+                "properties": {
+                    "port": "8080",
+                    "runtime": "go"
+                }
+            },
+            "context": {
+                "user_role": "admin"
+            }
+        }
+    },
+    {
+        "query": "make a webserver named jill",
+        "semantic_output": {
+            "operation": "Create",
+            "target_resource": {
+                "type": "Webserver",
+                "name": "jill",
+                "properties": {
+                    "port": "8080",
+                    "runtime": "go"
+                }
+            },
+            "context": {
+                "user_role": "admin"
+            }
+        }
+    },
+    {
+        "query": "create webserver jill",
+        "semantic_output": {
+            "operation": "Create",
+            "target_resource": {
+                "type": "Webserver",
+                "name": "jill",
+                "properties": {
+                    "port": "8080",
+                    "runtime": "go"
+                }
+            },
+            "context": {
+                "user_role": "admin"
+            }
+        }
+    },
+    {
+        "query": "generate webserver named jill",
+        "semantic_output": {
+            "operation": "Create",
+            "target_resource": {
+                "type": "Webserver",
+                "name": "jill",
+                "properties": {
+                    "port": "8080",
+                    "runtime": "go"
+                }
+            },
+            "context": {
+                "user_role": "admin"
+            }
+        }
+    }
+]

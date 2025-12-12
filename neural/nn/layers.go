@@ -4,11 +4,37 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
+	. "github.com/zendrulat/nlptagger/neural/tensor"
 	"math"
 	"math/rand"
-
-	. "github.com/zendrulat/nlptagger/neural/tensor"
 )
+
+// weightIterator efficiently iterates over a flat weight array as a 2D matrix.
+type weightIterator struct {
+	data      []float64
+	inputDim  int
+	outputDim int
+	row       int
+	col       int
+	totalSize int
+}
+
+func (wi *weightIterator) Next() bool {
+	wi.col++
+	if wi.col >= wi.outputDim {
+		wi.col = 0
+		wi.row++
+	}
+	return wi.row < wi.inputDim
+}
+
+func (wi *weightIterator) GetIndex() int {
+	return wi.row*wi.outputDim + wi.col
+}
+
+func newWeightIterator(data []float64, inputDim, outputDim int) *weightIterator {
+	return &weightIterator{data: data, inputDim: inputDim, outputDim: outputDim, row: 0, col: -1, totalSize: inputDim * outputDim}
+}
 
 func init() {
 	gob.Register(&Linear{})
@@ -28,9 +54,15 @@ func NewLinear(inputDim, outputDim int) (*Linear, error) {
 	// He initialization
 	stdDev := math.Sqrt(2.0 / float64(inputDim))
 	weightsData := make([]float64, inputDim*outputDim)
-	for i := range weightsData {
-		weightsData[i] = rand.NormFloat64() * stdDev
+	unroll := 4
+	wi := newWeightIterator(weightsData, inputDim, outputDim)
+	for wi.Next() {
+		for u := 0; u < unroll && wi.Next(); u++ {
+			idx := wi.GetIndex()
+			weightsData[idx] = rand.NormFloat64() * stdDev
+		}
 	}
+
 	weights := NewTensor([]int{inputDim, outputDim}, weightsData, true)
 	weights.RequiresGrad = true
 
@@ -40,6 +72,17 @@ func NewLinear(inputDim, outputDim int) (*Linear, error) {
 	biases.RequiresGrad = true
 
 	return &Linear{Weights: weights, Biases: biases}, nil
+}
+
+// UpdateWeightsUnrolled applies a function to each weight using an unroll factor for speed.
+func (l *Linear) UpdateWeightsUnrolled(updateFn func(idx int, val float64) float64, unroll int) {
+	wi := newWeightIterator(l.Weights.Data, l.Weights.Shape[0], l.Weights.Shape[1])
+	for wi.Next() {
+		for u := 0; u < unroll && wi.Next(); u++ {
+			idx := wi.GetIndex()
+			l.Weights.Data[idx] = updateFn(idx, l.Weights.Data[idx])
+		}
+	}
 }
 
 // Parameters returns all learnable parameters of the layer.
@@ -205,7 +248,10 @@ func (l *Linear) Backward(grad *Tensor) error {
 		lastDimSize := grad.Shape[len(grad.Shape)-1]
 		for i := 0; i < len(grad.Data); i++ {
 			biasIndex := i % lastDimSize
-			l.Biases.Grad.Data[biasIndex] += grad.Data[i]
+			// Bounds check to prevent index out of range
+			if biasIndex < len(l.Biases.Grad.Data) {
+				l.Biases.Grad.Data[biasIndex] += grad.Data[i]
+			}
 		}
 	}
 
@@ -1286,7 +1332,7 @@ type MultiHeadCrossAttention struct {
 }
 
 // NewMultiHeadCrossAttention creates a new MultiHeadCrossAttention layer.
-func NewMultiHeadCrossAttention(dimModel, numQHeads, numKVHeads int) (*MultiHeadCrossAttention, error) {
+func NewMultiHeadCrossAttention(dimModel, queryDim, kvDim, numQHeads, numKVHeads int) (*MultiHeadCrossAttention, error) {
 	if dimModel%numQHeads != 0 {
 		return nil, fmt.Errorf("dimModel (%d) must be divisible by numQHeads (%d)", dimModel, numQHeads)
 	}
@@ -1295,19 +1341,19 @@ func NewMultiHeadCrossAttention(dimModel, numQHeads, numKVHeads int) (*MultiHead
 	}
 	dimKVHeads := dimModel / numKVHeads
 
-	queryLinear, err := NewLinear(dimModel, dimModel) // Input dim is dimModel (from decoder), output dim is dimModel (for q)
+	queryLinear, err := NewLinear(queryDim, dimModel) // Input dim is queryDim, output dim is dimModel
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cross-attention query linear layer: %w", err)
 	}
-	keyLinear, err := NewLinear(dimModel, dimModel) // Input dim is dimModel (from encoder), output dim is dimModel (for k)
+	keyLinear, err := NewLinear(kvDim, dimModel) // Input dim is kvDim, output dim is dimModel
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cross-attention key linear layer: %w", err)
 	}
-	valueLinear, err := NewLinear(dimModel, dimModel) // Input dim is dimModel (from encoder), output dim is dimModel (for v)
+	valueLinear, err := NewLinear(kvDim, dimModel) // Input dim is kvDim, output dim is dimModel
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cross-attention value linear layer: %w", err)
 	}
-	outputLinear, err := NewLinear(dimModel, dimModel) // Input dim is dimModel, output dim is dimModel
+	outputLinear, err := NewLinear(dimModel, queryDim) // Input dim is dimModel, output is queryDim
 	if err != nil {
 		return nil, fmt.Errorf("failed to create cross-attention output linear layer: %w", err)
 	}
@@ -1862,7 +1908,7 @@ func (mha *MultiHeadCrossAttention) Forward(inputs ...*Tensor) (*Tensor, error) 
 	mha.v = vTransposed
 
 	// Calculate attention scores: Q @ K^T
-	// K^T shape: [batch_size, num_kv_heads, head_dim, kv_seq_length]
+	// K^T will have shape [batch_size, num_heads, head_dim, kv_seq_length]
 	kT_Transposed, err := kTransposed.Transpose(len(kTransposed.Shape)-2, len(kTransposed.Shape)-1)
 	if err != nil {
 		return nil, fmt.Errorf("failed to transpose key tensor for cross-attention multiplication: %w", err)
