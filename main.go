@@ -197,12 +197,7 @@ func runLLM() {
 		// fmt.Printf("Tagged Tokens: %v\n", taggedData.Tokens)
 		// fmt.Printf("NER Tags: %v\n", taggedData.NerTag)
 
-		hasQuestionWord := false
-		hasVerb := false
-		var objectTypeParts []string
-		hasPrepositionIn := false
-		var command string
-
+		var targetDirectory string
 		for i, token := range taggedData.Tokens {
 			if i < len(taggedData.NerTag) {
 				switch taggedData.NerTag[i] {
@@ -219,8 +214,12 @@ func runLLM() {
 				case "OBJECT_TYPE":
 					objectTypeParts = append(objectTypeParts, token)
 				case "PREPOSITION":
-					if token == "in" {
+					if token == "in" || token == "into" {
 						hasPrepositionIn = true
+						if i+1 < len(taggedData.Tokens) {
+							// Assuming the token after "in" or "into" is the directory name
+							targetDirectory = taggedData.Tokens[i+1]
+						}
 					}
 				}
 			}
@@ -244,6 +243,7 @@ func runLLM() {
 		fmt.Printf("Command: %s\n", command)
 		fmt.Printf("FileName: %s\n", fileName)
 		fmt.Printf("HasDirectoryToken: %t\n", hasDirectoryToken)
+		fmt.Printf("TargetDirectory: %s\n", targetDirectory) // New debug info
 		fmt.Println("--------------------")
 
 		contains := func(s []string, e string) bool {
@@ -257,11 +257,15 @@ func runLLM() {
 
 		if command == "create" && contains(objectTypeParts, "file") {
 			if fileName != "" {
-				err := os.WriteFile(fileName, []byte(""), 0644)
+				filePath := fileName
+				if targetDirectory != "" {
+					filePath = filepath.Join(targetDirectory, fileName)
+				}
+				err := os.WriteFile(filePath, []byte(""), 0644)
 				if err != nil {
-					predictedSentence = fmt.Sprintf("I couldn't create the file %s: %v", fileName, err)
+					predictedSentence = fmt.Sprintf("I couldn't create the file %s: %v", filePath, err)
 				} else {
-					predictedSentence = fmt.Sprintf("I have created the file %s.", fileName)
+					predictedSentence = fmt.Sprintf("I have created the file %s.", filePath)
 				}
 			} else {
 				predictedSentence = "You need to provide a name for the file."
@@ -269,11 +273,15 @@ func runLLM() {
 		} else if command == "create" && contains(objectTypeParts, "folder") {
 			folderName := findName(taggedData)
 			if folderName != "" {
-				err := os.Mkdir(folderName, 0755)
+				folderPath := folderName
+				if targetDirectory != "" {
+					folderPath = filepath.Join(targetDirectory, folderName)
+				}
+				err := os.MkdirAll(folderPath, 0755) // Use MkdirAll to create parent directories if needed
 				if err != nil {
-					predictedSentence = fmt.Sprintf("I couldn't create the folder %s: %v", folderName, err)
+					predictedSentence = fmt.Sprintf("I couldn't create the folder %s: %v", folderPath, err)
 				} else {
-					predictedSentence = fmt.Sprintf("I have created the folder %s.", folderName)
+					predictedSentence = fmt.Sprintf("I have created the folder %s.", folderPath)
 				}
 			} else {
 				predictedSentence = "You need to provide a name for the folder."
