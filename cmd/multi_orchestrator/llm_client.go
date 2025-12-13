@@ -5,9 +5,10 @@ import (
 	"strings"
 
 	"github.com/golangast/gollemer/neural/moe"
-	mainvocab "github.com/golangast/gollemerneural/nnu/vocab"
-	"github.com/golangast/gollemerneural/tensor"
-	"github.com/golangast/gollemerneural/tokenizer"
+	mainvocab "github.com/golangast/gollemer/neural/nnu/vocab"
+	"github.com/golangast/gollemer/neural/tensor"
+	"github.com/golangast/gollemer/neural/tokenizer"
+	"github.com/golangast/gollemer/tagger/tag"
 )
 
 // LLMClient handles interaction with the MoE model
@@ -104,7 +105,7 @@ func (c *LLMClient) Query(input string) (string, error) {
 	// Greedy search decode
 	sosID := c.semanticOutputVocabulary.GetTokenID("<s>")
 	eosID := c.semanticOutputVocabulary.GetTokenID("</s>")
-	predictedIDs, err := c.model.GreedySearchDecode(contextVector, 160, sosID, eosID, 1.2)
+	predictedIDs, err := c.model.GreedySearchDecode(contextVector, maxSeqLength, sosID, eosID, 1.2, 0, tag.Tag{})
 	if err != nil {
 		return "", fmt.Errorf("greedy search decode failed: %w", err)
 	}

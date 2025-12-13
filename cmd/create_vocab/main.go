@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/golangast/gollemer/neural/nnu/vocab"
-	"github.com/golangast/gollemerneural/tokenizer"
+	"github.com/golangast/gollemer/neural/tokenizer"
 )
 
 type IntentTrainingExample struct {

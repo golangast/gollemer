@@ -9,7 +9,7 @@ import (
 	"strings" // Added for string manipulation
 
 	"github.com/golangast/gollemer/neural/nn/ner"
-	"github.com/golangast/gollemerneural/semantic"
+	"github.com/golangast/gollemer/neural/semantic"
 )
 
 var (

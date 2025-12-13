@@ -10,10 +10,10 @@ import (
 	"strings"
 
 	moemodel "github.com/golangast/gollemer/neural/moe/model"
-	"github.com/golangast/gollemerneural/nn"
-	mainvocab "github.com/golangast/gollemerneural/nnu/vocab"
-	"github.com/golangast/gollemerneural/tensor"
-	"github.com/golangast/gollemerneural/tokenizer"
+	"github.com/golangast/gollemer/neural/nn"
+	mainvocab "github.com/golangast/gollemer/neural/nnu/vocab"
+	"github.com/golangast/gollemer/neural/tensor"
+	"github.com/golangast/gollemer/neural/tokenizer"
 )
 
 // TrainingExample represents a single training example with input text and parent/child intents.

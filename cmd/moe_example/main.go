@@ -7,7 +7,7 @@ import (
 	"time"
 
 	. "github.com/golangast/gollemer/neural/moe"
-	. "github.com/golangast/gollemerneural/tensor"
+	. "github.com/golangast/gollemer/neural/tensor"
 )
 
 func main() {

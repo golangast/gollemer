@@ -8,7 +8,7 @@ import (
 	"os"
 
 	"github.com/golangast/gollemer/neural/semantic"
-	"github.com/golangast/gollemerneural/tokenizer"
+	"github.com/golangast/gollemer/neural/tokenizer"
 )
 
 // IntentTrainingExample represents a single training example from the old format.

@@ -7,10 +7,9 @@ import (
 	"os"
 	"strings"
 
-	"gollemer/neural/semantic"
-	"gollemertagger/tag"
-
+	"github.com/golangast/gollemer/neural/semantic"
 	"github.com/golangast/gollemer/tagger"
+	"github.com/golangast/gollemer/tagger/tag"
 )
 
 // IntentTrainingExample represents a single training example compatible with train_moe
@@ -141,7 +140,7 @@ func main() {
 			// Map to SemanticOutput
 			semanticOutput := semantic.SemanticOutput{
 				Operation: childIntent,
-				TargetResource: semantic.Resource{
+				TargetResource: &semantic.Resource{
 					Type: parentIntent,
 					Name: "unknown", // Placeholder
 				},
