@@ -2,8 +2,9 @@ package semantic
 
 import (
 	"fmt"
-	. "github.com/zendrulat/nlptagger/neural/tensor"
 	"math"
+
+	. "github.com/golangast/gollemer/neural/tensor"
 )
 
 // StructuredSemanticLoss computes loss for structured semantic graph outputs

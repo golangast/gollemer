@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/zendrulat/nlptagger/neural/semantic"
-	"github.com/zendrulat/nlptagger/neural/tokenizer"
-	"github.com/zendrulat/nlptagger/neural/workflow"
-	"github.com/zendrulat/nlptagger/tagger/nertagger"
-	"github.com/zendrulat/nlptagger/tagger/postagger"
+	"github.com/golangast/gollemer/neural/semantic"
+	"github.com/golangast/gollemer/neural/tokenizer"
+	"github.com/golangast/gollemer/neural/workflow"
+	"github.com/golangast/gollemer/tagger/nertagger"
+	"github.com/golangast/gollemer/tagger/postagger"
 )
 
 // Parser struct holds the necessary components for parsing.

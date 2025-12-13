@@ -5,7 +5,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/zendrulat/nlptagger/tagger"
+	"github.com/golangast/gollemer/tagger"
 )
 
 // Entity represents a recognized entity with its type and value.

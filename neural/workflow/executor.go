@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/zendrulat/nlptagger/neural/semantic"
+	"github.com/golangast/gollemer/neural/semantic"
 )
 
 // Executor is responsible for executing the nodes in a workflow.

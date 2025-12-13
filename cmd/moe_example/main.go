@@ -6,8 +6,8 @@ import (
 	"math/rand"
 	"time"
 
-	. "github.com/zendrulat/nlptagger/neural/moe"
-	. "github.com/zendrulat/nlptagger/neural/tensor"
+	. "github.com/golangast/gollemer/neural/moe"
+	. "github.com/golangast/gollemerneural/tensor"
 )
 
 func main() {

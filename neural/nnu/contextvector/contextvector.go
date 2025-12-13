@@ -6,9 +6,9 @@ package contextvector
 import (
 	"strings"
 
-	"github.com/zendrulat/nlptagger/neural/nn/g"
-	"github.com/zendrulat/nlptagger/neural/nnu"
-	"github.com/zendrulat/nlptagger/neural/nnu/word2vec"
+	"github.com/golangast/gollemer/neural/nn/g"
+	"github.com/golangast/gollemer/neural/nnu"
+	"github.com/golangast/gollemer/neural/nnu/word2vec"
 )
 
 // GetContextVector calculates the context vector for a sentence.

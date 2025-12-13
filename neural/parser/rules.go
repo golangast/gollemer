@@ -5,7 +5,7 @@ import (
 	"log"
 	"strings"
 
-	"github.com/zendrulat/nlptagger/neural/semantic"
+	"github.com/golangast/gollemer/neural/semantic"
 )
 
 // Helper to get resource name from token and type
@@ -35,10 +35,10 @@ func getResourceName(tokens []string, nerTags []string, idx int, objType string)
 type ParsingRule struct {
 	Name    string
 	Pattern []string // A sequence of NER tags or specific tokens to match
-	Action  func(tokens, posTags, nerTags []string, i int, output *semantic.SemanticOutput, 
-		fileResource **semantic.Resource, folderResource **semantic.Resource, 
-		webserverResource **semantic.Resource, lastFolderResource **semantic.Resource, 
-		lastProcessedResource **semantic.Resource, expectingDependencyTarget *bool, 
+	Action  func(tokens, posTags, nerTags []string, i int, output *semantic.SemanticOutput,
+		fileResource **semantic.Resource, folderResource **semantic.Resource,
+		webserverResource **semantic.Resource, lastFolderResource **semantic.Resource,
+		lastProcessedResource **semantic.Resource, expectingDependencyTarget *bool,
 		expectingDependencySource *bool, dependencyType *string) (bool, int, error) // Function to apply if pattern matches, returns (applied, tokensConsumed, error)
 }
 
@@ -59,15 +59,15 @@ func (pre *ParsingRuleEngine) RegisterRule(rule ParsingRule) {
 
 // ApplyRules attempts to apply the registered rules to the given tokens and tags.
 // It returns true if a rule was applied, the number of tokens consumed by the rule, and an error if one occurred.
-func (pre *ParsingRuleEngine) ApplyRules(tokens, posTags, nerTags []string, i int, output *semantic.SemanticOutput, 
-	fileResource **semantic.Resource, folderResource **semantic.Resource, 
-	webserverResource **semantic.Resource, lastFolderResource **semantic.Resource, 
-	lastProcessedResource **semantic.Resource, expectingDependencyTarget *bool, 
+func (pre *ParsingRuleEngine) ApplyRules(tokens, posTags, nerTags []string, i int, output *semantic.SemanticOutput,
+	fileResource **semantic.Resource, folderResource **semantic.Resource,
+	webserverResource **semantic.Resource, lastFolderResource **semantic.Resource,
+	lastProcessedResource **semantic.Resource, expectingDependencyTarget *bool,
 	expectingDependencySource *bool, dependencyType *string) (bool, int, error) {
 	for _, rule := range pre.rules {
 		if pre.matchPattern(tokens, nerTags, posTags, i, rule.Pattern) {
-			applied, tokensConsumed, err := rule.Action(tokens, posTags, nerTags, i, output, 
-				fileResource, folderResource, webserverResource, lastFolderResource, 
+			applied, tokensConsumed, err := rule.Action(tokens, posTags, nerTags, i, output,
+				fileResource, folderResource, webserverResource, lastFolderResource,
 				lastProcessedResource, expectingDependencyTarget, expectingDependencySource, dependencyType)
 			if err != nil {
 				return false, 0, fmt.Errorf("rule '%s' failed: %w", rule.Name, err)
@@ -162,7 +162,7 @@ func (pre *ParsingRuleEngine) RegisterDefaultParsingRules() {
 					*lastFolderResource = *folderResource
 					output.TargetResource = *folderResource // Set as target for now, will be adjusted by parent-child rules
 					log.Printf("CreateFolder rule applied. folderName: %s, folderResource: %+v", folderName, **folderResource)
-					return true, 2, nil                   // Consumed "folder" and "name"
+					return true, 2, nil // Consumed "folder" and "name"
 				}
 			}
 			return false, 0, nil

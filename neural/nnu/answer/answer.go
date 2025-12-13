@@ -6,9 +6,9 @@ import (
 	"log"
 	"math"
 
-	"github.com/zendrulat/nlptagger/neural/nnu"
-	"github.com/zendrulat/nlptagger/neural/nnu/rag"
-	"github.com/zendrulat/nlptagger/neural/nnu/word2vec"
+	"github.com/golangast/gollemer/neural/nnu"
+	"github.com/golangast/gollemer/neural/nnu/rag"
+	"github.com/golangast/gollemer/neural/nnu/word2vec"
 )
 
 // AnswerQuestion takes a user query, a trained RAG model, documents, and a Word2Vec model,

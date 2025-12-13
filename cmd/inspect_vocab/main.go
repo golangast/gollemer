@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/zendrulat/nlptagger/neural/nnu/vocab"
+	"github.com/golangast/gollemer/neural/nnu/vocab"
 )
 
 func main() {

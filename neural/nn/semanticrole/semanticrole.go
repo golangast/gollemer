@@ -11,8 +11,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/zendrulat/nlptagger/neural/nn/semanticrole/bilstm_model"
-	"github.com/zendrulat/nlptagger/neural/nnu/word2vec"
+	"github.com/golangast/gollemer/neural/nn/semanticrole/bilstm_model"
+	"github.com/golangast/gollemer/neural/nnu/word2vec"
 )
 
 // CreateRoleMap creates a role map from training data

@@ -1,6 +1,6 @@
 package nertagger
 
-import "github.com/zendrulat/nlptagger/tagger/tag"
+import "github.com/golangast/gollemer/tagger/tag"
 
 func TagTokens(tokens []string, posTags []string) []string {
 	return RefactoredTagTokens(tokens, posTags)

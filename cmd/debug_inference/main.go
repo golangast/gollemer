@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"log"
 
-	"nlptagger/neural/nnu/vocab"
-	"nlptagger/neural/semantic"
-	"nlptagger/neural/tokenizer"
+	"gollemer/neural/nnu/vocab"
+	"gollemerneural/semantic"
+	"gollemerneural/tokenizer"
 )
 
 func main() {

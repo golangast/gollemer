@@ -8,7 +8,7 @@ import (
 	"math/rand"
 	"time"
 
-	. "github.com/zendrulat/nlptagger/neural/tensor"
+	. "github.com/golangast/gollemer/neural/tensor"
 )
 
 const tenThousand = 10000.0

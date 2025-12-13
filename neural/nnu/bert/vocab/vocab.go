@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strings"
 
-	mainvocab "github.com/zendrulat/nlptagger/neural/nnu/vocab"
+	mainvocab "github.com/golangast/gollemer/neural/nnu/vocab"
 )
 
 // SetupVocabulary attempts to load a vocabulary from vocabPath, and if it fails,
@@ -187,9 +187,9 @@ func addWordsFromSoftwareCommands(filePath string, wordSet map[string]bool) {
 	defer file.Close()
 
 	var data []struct {
-		Query   string            
-		Intent  string            
-		Entities map[string]string 
+		Query    string
+		Intent   string
+		Entities map[string]string
 	}
 	if err := json.NewDecoder(file).Decode(&data); err != nil {
 		log.Printf("Warning: could not decode software commands data from %s: %v", filePath, err)

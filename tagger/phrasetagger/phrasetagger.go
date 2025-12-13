@@ -1,7 +1,7 @@
 package phrasetagger
 
 import (
-	"github.com/zendrulat/nlptagger/tagger/tag"
+	"github.com/golangast/gollemer/tagger/tag"
 )
 
 // PhraseTagger is a struct that holds any necessary state for phrase tagging.

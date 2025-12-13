@@ -3,7 +3,7 @@ package workflow
 import (
 	"fmt"
 
-	"github.com/zendrulat/nlptagger/neural/semantic"
+	"github.com/golangast/gollemer/neural/semantic"
 )
 
 // OperationType defines the type of operation a node represents.
@@ -20,15 +20,15 @@ const (
 
 // Node represents a single step in the workflow (a node in the DAG).
 type Node struct {
-	ID           string                   `json:"id"`
-	Operation    OperationType            `json:"operation"`
-	Resource     semantic.Resource        `json:"resource"`
-	Command      string                   `json:"command,omitempty"`      // For EXECUTE operations
-	FilePath     string                   `json:"filepath,omitempty"`     // For WRITE_FILE operations
-	Content      string                   `json:"content,omitempty"`      // For WRITE_FILE operations
-	Directory    string                   `json:"directory,omitempty"`    // Directory to execute command in
-	Dependencies []string                 `json:"dependencies,omitempty"` // IDs of nodes this node depends on
-	Context      semantic.Context         `json:"context,omitempty"`
+	ID           string            `json:"id"`
+	Operation    OperationType     `json:"operation"`
+	Resource     semantic.Resource `json:"resource"`
+	Command      string            `json:"command,omitempty"`      // For EXECUTE operations
+	FilePath     string            `json:"filepath,omitempty"`     // For WRITE_FILE operations
+	Content      string            `json:"content,omitempty"`      // For WRITE_FILE operations
+	Directory    string            `json:"directory,omitempty"`    // Directory to execute command in
+	Dependencies []string          `json:"dependencies,omitempty"` // IDs of nodes this node depends on
+	Context      semantic.Context  `json:"context,omitempty"`
 }
 
 // Workflow represents a Directed Acyclic Graph (DAG) of operations.

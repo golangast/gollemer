@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/zendrulat/nlptagger/neural/nn"
-	"github.com/zendrulat/nlptagger/neural/nnu/bert"
-	"github.com/zendrulat/nlptagger/neural/tensor"
+	"github.com/golangast/gollemer/neural/nn"
+	"github.com/golangast/gollemer/neural/nnu/bert"
+	"github.com/golangast/gollemer/neural/tensor"
 )
 
 func init() {
@@ -24,16 +24,16 @@ type DecoderStepState struct {
 
 // MoEClassificationModel is a wrapper around the MoELayer to make it a trainable model.
 type MoEClassificationModel struct {
-	Embedding             *nn.Embedding
-	BertModel             *bert.BertModel
-	ParentClassifier      *nn.Linear
-	ChildClassifier       *nn.Linear
-	SentenceEmbedding     *nn.Embedding
+	Embedding               *nn.Embedding
+	BertModel               *bert.BertModel
+	ParentClassifier        *nn.Linear
+	ChildClassifier         *nn.Linear
+	SentenceEmbedding       *nn.Embedding
 	SentenceDecoderTemplate *nn.LSTMCell
-	SentenceClassifier    *nn.Linear
-	BertConfig            bert.BertConfig
-	pooledOutput          *tensor.Tensor // Add this field
-	decoderStates         []*DecoderStepState
+	SentenceClassifier      *nn.Linear
+	BertConfig              bert.BertConfig
+	pooledOutput            *tensor.Tensor // Add this field
+	decoderStates           []*DecoderStepState
 }
 
 func NewMoEClassificationModel(vocabSize, embeddingDim, numParentClasses, numChildClasses, sentenceVocabSize, numExperts, k, maxSeqLength int) (*MoEClassificationModel, error) {
@@ -71,14 +71,14 @@ func NewMoEClassificationModel(vocabSize, embeddingDim, numParentClasses, numChi
 	}
 
 	return &MoEClassificationModel{
-		Embedding:             embedding,
-		BertModel:             bertModel,
-		ParentClassifier:      parentClassifier,
-		ChildClassifier:       childClassifier,
-		SentenceEmbedding:     sentenceEmbedding,
+		Embedding:               embedding,
+		BertModel:               bertModel,
+		ParentClassifier:        parentClassifier,
+		ChildClassifier:         childClassifier,
+		SentenceEmbedding:       sentenceEmbedding,
 		SentenceDecoderTemplate: sentenceDecoderTemplate,
-		SentenceClassifier:    sentenceClassifier,
-		BertConfig:            bertConfig,
+		SentenceClassifier:      sentenceClassifier,
+		BertConfig:              bertConfig,
 	}, nil
 }
 
@@ -286,7 +286,6 @@ func (m *MoEClassificationModel) Parameters() []*tensor.Tensor {
 	params = append(params, m.SentenceClassifier.Parameters()...)
 	return params
 }
-
 
 // Description prints a summary of the MoEClassificationModel's architecture.
 func (m *MoEClassificationModel) Description() {

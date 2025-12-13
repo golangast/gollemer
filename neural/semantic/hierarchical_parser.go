@@ -3,7 +3,7 @@ package semantic
 import (
 	"strings"
 
-	"github.com/zendrulat/nlptagger/neural/nn/ner"
+	"github.com/golangast/gollemer/neural/nn/ner"
 )
 
 // HierarchicalParser parses complex queries into hierarchical command trees

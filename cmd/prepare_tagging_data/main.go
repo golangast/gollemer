@@ -7,8 +7,8 @@ import (
 	"log"
 	"os"
 
-	"github.com/zendrulat/nlptagger/neural/semantic"
-	"github.com/zendrulat/nlptagger/neural/tokenizer"
+	"github.com/golangast/gollemer/neural/semantic"
+	"github.com/golangast/gollemerneural/tokenizer"
 )
 
 // IntentTrainingExample represents a single training example from the old format.

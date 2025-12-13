@@ -1,4 +1,4 @@
-module github.com/zendrulat/nlptagger
+module github.com/golangast/gollemer
 
 go 1.24.5
 

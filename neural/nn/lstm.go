@@ -6,7 +6,7 @@ import (
 	"math/rand"
 	"os"
 
-	. "github.com/zendrulat/nlptagger/neural/tensor"
+	. "github.com/golangast/gollemer/neural/tensor"
 )
 
 func init() {
@@ -320,38 +320,69 @@ func (c *LSTMCell) Backward(gradHt, gradCt *Tensor) error {
 	}
 
 	// 6. Accumulate gradients for weights and biases
-	if c.Wf.Grad == nil { c.Wf.Grad = NewTensor(c.Wf.Shape, nil, false) }
+	if c.Wf.Grad == nil {
+		c.Wf.Grad = NewTensor(c.Wf.Shape, nil, false)
+	}
 	c.Wf.Grad, err = c.Wf.Grad.Add(gradWf)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
-	if c.Wi.Grad == nil { c.Wi.Grad = NewTensor(c.Wi.Shape, nil, false) }
+	if c.Wi.Grad == nil {
+		c.Wi.Grad = NewTensor(c.Wi.Shape, nil, false)
+	}
 	c.Wi.Grad, err = c.Wi.Grad.Add(gradWi)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
-	if c.Wc.Grad == nil { c.Wc.Grad = NewTensor(c.Wc.Shape, nil, false) }
+	if c.Wc.Grad == nil {
+		c.Wc.Grad = NewTensor(c.Wc.Shape, nil, false)
+	}
 	c.Wc.Grad, err = c.Wc.Grad.Add(gradWc)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
-	if c.Wo.Grad == nil { c.Wo.Grad = NewTensor(c.Wo.Shape, nil, false) }
+	if c.Wo.Grad == nil {
+		c.Wo.Grad = NewTensor(c.Wo.Shape, nil, false)
+	}
 	c.Wo.Grad, err = c.Wo.Grad.Add(gradWo)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
-	if c.Bf.Grad == nil { c.Bf.Grad = NewTensor(c.Bf.Shape, nil, false) }
+	if c.Bf.Grad == nil {
+		c.Bf.Grad = NewTensor(c.Bf.Shape, nil, false)
+	}
 	c.Bf.Grad, err = c.Bf.Grad.Add(gradBf)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
-	if c.Bi.Grad == nil { c.Bi.Grad = NewTensor(c.Bi.Shape, nil, false) }
+	if c.Bi.Grad == nil {
+		c.Bi.Grad = NewTensor(c.Bi.Shape, nil, false)
+	}
 	c.Bi.Grad, err = c.Bi.Grad.Add(gradBi)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
-	if c.Bc.Grad == nil { c.Bc.Grad = NewTensor(c.Bc.Shape, nil, false) }
+	if c.Bc.Grad == nil {
+		c.Bc.Grad = NewTensor(c.Bc.Shape, nil, false)
+	}
 	c.Bc.Grad, err = c.Bc.Grad.Add(gradBc)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
-	if c.Bo.Grad == nil { c.Bo.Grad = NewTensor(c.Bo.Shape, nil, false) }
+	if c.Bo.Grad == nil {
+		c.Bo.Grad = NewTensor(c.Bo.Shape, nil, false)
+	}
 	c.Bo.Grad, err = c.Bo.Grad.Add(gradBo)
-	if err != nil { return err }
-
+	if err != nil {
+		return err
+	}
 
 	// 7. Gradients for combined input
 	transposedWf, err := c.Wf.Transpose(0, 1)

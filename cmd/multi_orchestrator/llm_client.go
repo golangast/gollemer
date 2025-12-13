@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/zendrulat/nlptagger/neural/moe"
-	mainvocab "github.com/zendrulat/nlptagger/neural/nnu/vocab"
-	"github.com/zendrulat/nlptagger/neural/tensor"
-	"github.com/zendrulat/nlptagger/neural/tokenizer"
+	"github.com/golangast/gollemer/neural/moe"
+	mainvocab "github.com/golangast/gollemerneural/nnu/vocab"
+	"github.com/golangast/gollemerneural/tensor"
+	"github.com/golangast/gollemerneural/tokenizer"
 )
 
 // LLMClient handles interaction with the MoE model

@@ -8,11 +8,11 @@ import (
 	"math/rand"
 	"os"
 
-	"github.com/zendrulat/nlptagger/neural/nn"
-	vocab "github.com/zendrulat/nlptagger/neural/nnu/vocab"
-	"github.com/zendrulat/nlptagger/neural/tensor"
-	"github.com/zendrulat/nlptagger/tagger/nertagger"
-	"github.com/zendrulat/nlptagger/tagger/postagger"
+	"github.com/golangast/gollemer/neural/nn"
+	vocab "github.com/golangast/gollemer/neural/nnu/vocab"
+	"github.com/golangast/gollemer/neural/tensor"
+	"github.com/golangast/gollemer/tagger/nertagger"
+	"github.com/golangast/gollemer/tagger/postagger"
 )
 
 // Embedding layer for token embeddings.

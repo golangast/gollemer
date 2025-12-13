@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/zendrulat/nlptagger/tagger/dependencyrelation"
-	"github.com/zendrulat/nlptagger/tagger/nertagger"
-	"github.com/zendrulat/nlptagger/tagger/phrasetagger"
-	"github.com/zendrulat/nlptagger/tagger/postagger"
-	"github.com/zendrulat/nlptagger/tagger/tag"
+	"github.com/golangast/gollemer/tagger/dependencyrelation"
+	"github.com/golangast/gollemer/tagger/nertagger"
+	"github.com/golangast/gollemer/tagger/phrasetagger"
+	"github.com/golangast/gollemer/tagger/postagger"
+	"github.com/golangast/gollemer/tagger/tag"
 )
 
 const (

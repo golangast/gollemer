@@ -10,11 +10,11 @@ import (
 	"os"
 	"sort"
 
-	"github.com/zendrulat/nlptagger/neural/nn"
-	mainvocab "github.com/zendrulat/nlptagger/neural/nnu/vocab"
-	"github.com/zendrulat/nlptagger/neural/nnu/word2vec"
-	"github.com/zendrulat/nlptagger/neural/tensor"
-	"github.com/zendrulat/nlptagger/tagger/tag"
+	"github.com/golangast/gollemer/neural/nn"
+	mainvocab "github.com/golangast/gollemer/neural/nnu/vocab"
+	"github.com/golangast/gollemer/neural/nnu/word2vec"
+	"github.com/golangast/gollemer/neural/tensor"
+	"github.com/golangast/gollemer/tagger/tag"
 )
 
 func init() {

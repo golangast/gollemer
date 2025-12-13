@@ -5,19 +5,22 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/zendrulat/nlptagger/neural/moe"
-	mainvocab "github.com/zendrulat/nlptagger/neural/nnu/vocab"
-	"github.com/zendrulat/nlptagger/neural/tensor"
-	"github.com/zendrulat/nlptagger/neural/tokenizer"
-	"github.com/zendrulat/nlptagger/tagger/nertagger"
-	"github.com/zendrulat/nlptagger/tagger/postagger"
-	"github.com/zendrulat/nlptagger/tagger/tag"
 	"log"
 	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/goalngast/gollemer/tagger/postagger"
+
+	"github.com/golangast/gollemer/neural/moe"
+	mainvocab "github.com/golangast/gollemer/neural/nnu/vocab"
+	"github.com/golangast/gollemer/neural/tensor"
+	"github.com/golangast/gollemer/neural/tokenizer"
+	"github.com/golangast/gollemer/tagger/nertagger"
+	"github.com/golangast/gollemer/tagger/postaggbrcom/golangast/gollemer/neural/tokenizer"
+	"github.com/golangast/gollemer/tagger/tag"
 )
 
 func main() {
@@ -203,6 +206,11 @@ func runLLM() {
 		}
 
 		// --- Start of new logic ---
+
+		fmt.Println("--- DEBUG INFO ---")
+		fmt.Printf("Tagged Tokens: %v\n", taggedData.Tokens)
+		fmt.Printf("NER Tags: %v\n", taggedData.NerTag)
+
 		var definitions = map[string]string{
 			"webserver":      "a software application that serves files or content over a network.",
 			"database":       "an organized collection of data, generally stored and accessed electronically from a computer system.",
@@ -250,7 +258,25 @@ func runLLM() {
 			}
 		}
 
+		fmt.Printf("ObjectTypeParts: %v\n", objectTypeParts)
+		fmt.Printf("ObjectType: %s\n", objectType)
+		fmt.Printf("HasQuestionWord: %t\n", hasQuestionWord)
+		fmt.Printf("HasPrepositionIn: %t\n", hasPrepositionIn)
+		fmt.Printf("Command: %s\n", command)
+		fmt.Printf("FileName: %s\n", fileName)
+		fmt.Printf("HasDirectoryToken: %t\n", hasDirectoryToken)
+		fmt.Println("--------------------")
+
 		contains := func(s []string, e string) bool {
+			for _, a := range s {
+				if a == e {
+					return true
+				}
+			}
+			return false
+		}
+
+		contains = func(s []string, e string) bool {
 			for _, a := range s {
 				if a == e {
 					return true
@@ -325,7 +351,7 @@ func runLLM() {
 				}
 				predictedSentence = strings.Join(fileNames, "\n")
 			}
-		} else if (objectType == "folder" || objectType == "directory" || (objectType == "folder" && hasDirectoryToken)) && hasQuestionWord {
+		} else if hasQuestionWord && hasDirectoryToken && hasPrepositionIn {
 			cwd, err := os.Getwd()
 			if err != nil {
 				predictedSentence = "I'm sorry, I couldn't determine the current directory."

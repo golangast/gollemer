@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/zendrulat/nlptagger/tagger/stem"
-	"github.com/zendrulat/nlptagger/tagger/tag"
+	"github.com/golangast/gollemer/tagger/stem"
+	"github.com/golangast/gollemer/tagger/tag"
 )
 
 var posTags = map[string]string{
@@ -50,9 +50,9 @@ var posTags = map[string]string{
 	`\b(?:to|from|in|on|at|by|with|about|against|between|into|through|during|before|after|above|below|under|over)\b`: "IN", // Preposition
 	`\b(?:[Oo]h|[Aa]h|[Ww]ow|[Uu]h|[Hh]uh|[Yy]eah|[Nn]o|[Pp]lease|[Tt]hanks)\b`:                                      "UH", // Interjection
 	`\b\w+\.\w+\b`: ".",
-	`[\(\)]`:   "-LRB-", // Left/Right Round Bracket
-	`[\{\}]`:   "-LCB-", // Left/Right Curly Bracket
-	`[\[\]]`:   "-LSB-", // Left/Right Square Bracket
+	`[\(\)]`:       "-LRB-", // Left/Right Round Bracket
+	`[\{\}]`:       "-LCB-", // Left/Right Curly Bracket
+	`[\[\]]`:       "-LSB-", // Left/Right Square Bracket
 	// Dates (very basic)
 	`\b(?:\d{1,2}/\d{1,2}/\d{2,4})\b`: "DATE",
 	// Times (basic)
@@ -163,7 +163,7 @@ func TagTokens(tokens []string) []string {
 	t = NounCheck(t)
 
 	if len(t.PosTag) > len(tokens) {
-			t.PosTag = t.PosTag[:len(tokens)]
+		t.PosTag = t.PosTag[:len(tokens)]
 	}
 
 	return t.PosTag

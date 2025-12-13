@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unicode"
 
-	vocab "github.com/zendrulat/nlptagger/neural/nnu/vocab"
+	vocab "github.com/golangast/gollemer/neural/nnu/vocab"
 )
 
 // Tokenizer represents a basic tokenizer for the MoE package.

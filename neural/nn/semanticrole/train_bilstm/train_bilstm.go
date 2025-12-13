@@ -10,9 +10,9 @@ import (
 	"os"
 	"sort"
 
-	"github.com/zendrulat/nlptagger/neural/nn/semanticrole"
-	"github.com/zendrulat/nlptagger/neural/nn/semanticrole/bilstm_model"
-	"github.com/zendrulat/nlptagger/neural/nnu/word2vec"
+	"github.com/golangast/gollemer/neural/nn/semanticrole"
+	"github.com/golangast/gollemer/neural/nn/semanticrole/bilstm_model"
+	"github.com/golangast/gollemer/neural/nnu/word2vec"
 )
 
 func LoadRoleData(filePath string) ([]semanticrole.SentenceRoleData, error) {

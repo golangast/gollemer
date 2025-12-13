@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/zendrulat/nlptagger/internal/config"
+	"github.com/golangast/gollemer/internal/config"
 )
 
 // ParseDSL parses a series of DSL commands and returns a ProjectConfig

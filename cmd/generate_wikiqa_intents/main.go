@@ -7,9 +7,10 @@ import (
 	"os"
 	"strings"
 
-	"nlptagger/neural/semantic"
-	"nlptagger/tagger"
-	"nlptagger/tagger/tag"
+	"gollemer/neural/semantic"
+	"gollemertagger/tag"
+
+	"github.com/golangast/gollemer/tagger"
 )
 
 // IntentTrainingExample represents a single training example compatible with train_moe

@@ -14,8 +14,8 @@ The `multi_orchestrator` has been enhanced with **semantic understanding** capab
 ```go
 import (
     "encoding/json"
-    "github.com/zendrulat/nlptagger/neural/nn/ner"
-    "github.com/zendrulat/nlptagger/neural/semantic"
+    "github.com/golangast/gollemer/neural/nn/ner"
+    "github.com/golangast/gollemer/neural/semantic"
 )
 ```
 

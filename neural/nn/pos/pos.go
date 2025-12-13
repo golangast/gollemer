@@ -4,8 +4,8 @@ package pos
 import (
 	"fmt"
 
-	"github.com/zendrulat/nlptagger/neural/nnu"
-	"github.com/zendrulat/nlptagger/tagger/tag"
+	"github.com/golangast/gollemer/neural/nnu"
+	"github.com/golangast/gollemer/tagger/tag"
 )
 
 // Forward pass https://wiki.pathmind.com/neural-network

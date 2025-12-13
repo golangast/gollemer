@@ -4,7 +4,7 @@ import (
 	"flag"
 	"log"
 
-	"github.com/zendrulat/nlptagger/neural/nnu/word2vec"
+	"github.com/golangast/gollemer/neural/nnu/word2vec"
 )
 
 var (

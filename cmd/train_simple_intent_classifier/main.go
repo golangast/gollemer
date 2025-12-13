@@ -8,11 +8,11 @@ import (
 	"os"
 	"strings"
 
-	. "nlptagger/neural/nn"
-	"nlptagger/neural/nnu/intent"
-	mainvocab "nlptagger/neural/nnu/vocab"
-	. "nlptagger/neural/tensor"
-	"nlptagger/neural/tokenizer"
+	. "gollemer/neural/nn"
+	"gollemerneural/nnu/intent"
+	mainvocab "gollemerneural/nnu/vocab"
+	. "gollemerneural/tensor"
+	"gollemerneural/tokenizer"
 )
 
 // IntentTrainingExample represents a single training example with a query and its intents.

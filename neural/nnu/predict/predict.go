@@ -15,13 +15,13 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/zendrulat/nlptagger/neural/nn/dr"
-	"github.com/zendrulat/nlptagger/neural/nn/ner"
-	"github.com/zendrulat/nlptagger/neural/nn/phrase"
-	"github.com/zendrulat/nlptagger/neural/nn/pos"
-	"github.com/zendrulat/nlptagger/neural/nnu"
-	"github.com/zendrulat/nlptagger/neural/nnu/gobs"
-	"github.com/zendrulat/nlptagger/tagger/tag"
+	"github.com/golangast/gollemer/neural/nn/dr"
+	"github.com/golangast/gollemer/neural/nn/ner"
+	"github.com/golangast/gollemer/neural/nn/phrase"
+	"github.com/golangast/gollemer/neural/nn/pos"
+	"github.com/golangast/gollemer/neural/nnu"
+	"github.com/golangast/gollemer/neural/nnu/gobs"
+	"github.com/golangast/gollemer/tagger/tag"
 )
 
 // VocabConfidence holds the vocabularies and the average confidence score.

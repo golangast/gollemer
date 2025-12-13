@@ -1,10 +1,11 @@
 package moe
 
 import (
-	"github.com/zendrulat/nlptagger/neural/tensor"
-	"github.com/zendrulat/nlptagger/tagger/tag"
 	"log"
 	"testing"
+
+	"github.com/golangast/gollemer/neural/tensor"
+	"github.com/golangast/gollemer/tagger/tag"
 )
 
 func TestGreedySearchDecode(t *testing.T) {
