@@ -197,7 +197,13 @@ func runLLM() {
 		// fmt.Printf("Tagged Tokens: %v\n", taggedData.Tokens)
 		// fmt.Printf("NER Tags: %v\n", taggedData.NerTag)
 
-		var targetDirectory string
+		hasQuestionWord := false
+		hasVerb := false
+		var objectTypeParts []string
+		hasPrepositionIn := false
+		var command string
+		var targetDirectory string // Declare targetDirectory here
+
 		for i, token := range taggedData.Tokens {
 			if i < len(taggedData.NerTag) {
 				switch taggedData.NerTag[i] {
