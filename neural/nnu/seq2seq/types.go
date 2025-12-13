@@ -4,9 +4,9 @@ import "encoding/json"
 
 // GeneralResponse represents the common structure for all intent outputs.
 type GeneralResponse struct {
-	Intent   string          `json:"intent"`
-	Entities json.RawMessage `json:"entities,omitempty"` // Use RawMessage for flexible entity parsing
-	Description string       `json:"description,omitempty"` // For intents like "describe_book"
+	Intent      string          `json:"intent"`
+	Entities    json.RawMessage `json:"entities,omitempty"`    // Use RawMessage for flexible entity parsing
+	Description string          `json:"description,omitempty"` // For intents like "describe_book"
 }
 
 // GenerateWebserverEntities represents entities for "generate_webserver" intent.

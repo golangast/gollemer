@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	fmt.Println("=== Advanced Context System Demo ===\n")
+	fmt.Println("=== Advanced Context System Demo ===")
 
 	// 1. VFS + Roles
 	fmt.Println("1. VFS Tree with Semantic Roles")

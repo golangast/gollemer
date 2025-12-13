@@ -1,7 +1,6 @@
 package semantic
 
-import (
-)
+import ()
 
 // ValidateResource applies policy and security checks to a resource.
 func ValidateResource(resource *Resource, context Context) error {

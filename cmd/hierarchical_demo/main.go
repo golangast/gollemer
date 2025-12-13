@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	fmt.Println("=== Hierarchical Project Scaffolding Demo ===\n")
+	fmt.Println("=== Hierarchical Project Scaffolding Demo ===")
 
 	// Test cases for hierarchical commands
 	testCases := []string{

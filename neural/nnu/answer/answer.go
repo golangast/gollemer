@@ -109,7 +109,7 @@ func interpretOutputAsAnswer(predictedOutput []float64, docs rag.RagDocuments, s
 		log.Printf("Warning: Invalid predicted indices: start=%d, end=%d for document length %d", startIndex, endIndex, len(docContent))
 		return "Could not find a specific answer in the documents.", "", nil // Or return an error
 	}
-	answer := docContent[startIndex : endIndex+1] // Extract the span
+	// answer := docContent[startIndex : endIndex+1] // Extract the span
 	// Define your threshold
 
 	vocab := sw2v.Vocabulary // Or wherever your vocabulary is
@@ -149,6 +149,6 @@ func interpretOutputAsAnswer(predictedOutput []float64, docs rag.RagDocuments, s
 		return "No", answerWord, nil
 	}
 
-	return answer, answerWord, nil
+
 
 }

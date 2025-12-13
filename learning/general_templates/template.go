@@ -1,4 +1,4 @@
-package main
+package general_templates
 
 import (
 	"os"
