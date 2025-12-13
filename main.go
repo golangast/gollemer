@@ -12,14 +12,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/goalngast/gollemer/tagger/postagger"
-
 	"github.com/golangast/gollemer/neural/moe"
 	mainvocab "github.com/golangast/gollemer/neural/nnu/vocab"
 	"github.com/golangast/gollemer/neural/tensor"
 	"github.com/golangast/gollemer/neural/tokenizer"
 	"github.com/golangast/gollemer/tagger/nertagger"
-	"github.com/golangast/gollemer/tagger/postaggbrcom/golangast/gollemer/neural/tokenizer"
+	"github.com/golangast/gollemer/tagger/postagger"
 	"github.com/golangast/gollemer/tagger/tag"
 )
 

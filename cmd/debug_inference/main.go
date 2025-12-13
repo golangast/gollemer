@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"log"
 
-	"gollemer/neural/nnu/vocab"
-	"gollemerneural/semantic"
-	"gollemerneural/tokenizer"
+	"github.com/golangast/gollemer/neural/nnu/vocab"
+	"github.com/golangast/gollemer/neural/semantic"
+	"github.com/golangast/gollemer/neural/tokenizer"
 )
 
 func main() {
@@ -26,13 +26,13 @@ func main() {
 	// Create an expected semantic output for "add folder kim with file main.go"
 	expectedOutput := semantic.SemanticOutput{
 		Operation: "Create",
-		TargetResource: semantic.TargetResource{
+		TargetResource: &semantic.Resource{
 			Type: "Filesystem::Folder",
 			Name: "kim",
 			Properties: map[string]interface{}{
 				"path": "./",
 			},
-			Children: []semantic.TargetResource{
+			Children: []semantic.Resource{
 				{
 					Type: "Filesystem::File",
 					Name: "main.go",

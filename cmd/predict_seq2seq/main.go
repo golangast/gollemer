@@ -6,8 +6,8 @@ import (
 	"log"
 
 	"github.com/golangast/gollemer/neural/nnu/seq2seq"
-	"github.com/golangast/gollemerneural/nnu/vocab"
-	"github.com/golangast/gollemerneural/tokenizer"
+	"github.com/golangast/gollemer/neural/nnu/vocab"
+	"github.com/golangast/gollemer/neural/tokenizer"
 )
 
 func main() {

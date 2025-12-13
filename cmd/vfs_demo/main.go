@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"gollemer/neural/semantic"
+	"github.com/golangast/gollemer/neural/semantic"
 )
 
 func main() {

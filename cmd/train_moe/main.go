@@ -16,12 +16,13 @@ import (
 	"syscall"
 
 	"github.com/golangast/gollemer/neural/moe"
-	"github.com/golangast/gollemerneural/nn"
-	mainvocab "github.com/golangast/gollemerneural/nnu/vocab"
-	"github.com/golangast/gollemerneural/nnu/word2vec"
-	"github.com/golangast/gollemerneural/semantic"
-	. "github.com/golangast/gollemerneural/tensor"
-	"github.com/golangast/gollemerneural/tokenizer"
+	"github.com/golangast/gollemer/neural/nn"
+	mainvocab "github.com/golangast/gollemer/neural/nnu/vocab"
+	"github.com/golangast/gollemer/neural/nnu/word2vec"
+	"github.com/golangast/gollemer/neural/semantic"
+	. "github.com/golangast/gollemer/neural/tensor"
+	"github.com/golangast/gollemer/neural/tokenizer"
+	"github.com/golangast/gollemer/tagger/tag"
 )
 
 // IntentTrainingExample represents a single training example with a query and its intents.
@@ -500,7 +501,7 @@ func trainIntentMoEBatchEnhanced(intentMoEModel *moe.IntentMoE, optimizer nn.Opt
 			continue
 		}
 
-		predIDs, err := intentMoEModel.GreedySearchDecode(ctxSlice, maxSequenceLength, semanticOutputVocab.BosID, semanticOutputVocab.EosID, 1.0, 100) // topK=100
+		predIDs, err := intentMoEModel.GreedySearchDecode(ctxSlice, maxSequenceLength, semanticOutputVocab.BosID, semanticOutputVocab.EosID, 1.0, 100, tag.Tag{}) // topK=100
 		if err != nil {
 			continue
 		}

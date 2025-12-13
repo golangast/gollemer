@@ -9,10 +9,10 @@ import (
 	"os"
 
 	"github.com/golangast/gollemer/neural/moe"
-	. "github.com/golangast/gollemerneural/nn"
-	mainvocab "github.com/golangast/gollemerneural/nnu/vocab"
-	tensor "github.com/golangast/gollemerneural/tensor"
-	"github.com/golangast/gollemerneural/tokenizer"
+	. "github.com/golangast/gollemer/neural/nn"
+	mainvocab "github.com/golangast/gollemer/neural/nnu/vocab"
+	tensor "github.com/golangast/gollemer/neural/tensor"
+	"github.com/golangast/gollemer/neural/tokenizer"
 )
 
 // TaggedTrainingExample represents a single training example for the tagger model.
@@ -159,7 +159,7 @@ func trainTaggerBatch(model *moe.IntentTagger, optimizer Optimizer, batch Tagged
 	}
 
 	// Calculate intent loss
-	intentLoss, intentGrad := CrossEntropyLoss(intentLogits, targetIntentIDs, -1) // No padding for intents
+	intentLoss, intentGrad := tensor.CrossEntropyLoss(intentLogits, targetIntentIDs, -1, 0.0) // No padding for intents
 
 	// Calculate tag loss
 	tagLoss := 0.0
@@ -169,7 +169,7 @@ func trainTaggerBatch(model *moe.IntentTagger, optimizer Optimizer, batch Tagged
 		for i := 0; i < batchSize; i++ {
 			targets[i] = targetTagIDsBatch[i*maxSequenceLength+t]
 		}
-		loss, grad := CrossEntropyLoss(tagLogits[t], targets, tagVocab.PaddingTokenID)
+		loss, grad := tensor.CrossEntropyLoss(tagLogits[t], targets, tagVocab.PaddingTokenID, 0.0)
 		tagLoss += loss
 		tagGrads[t] = grad
 	}
@@ -177,7 +177,8 @@ func trainTaggerBatch(model *moe.IntentTagger, optimizer Optimizer, batch Tagged
 	totalLoss := intentLoss + tagLoss
 
 	// Backward pass
-	tagGradsTensor, err := tensor.Stack(tagGrads, 1)
+	// Combine tagGrads into a single tensor for the TagHead.Backward
+	tagGradsTensor, err := tensor.Concat(tagGrads, 0) // Concatenate along batch dimension
 	if err != nil {
 		return 0, fmt.Errorf("failed to stack tag gradients: %w", err)
 	}

@@ -17,11 +17,11 @@ import (
 	"time"
 
 	"github.com/golangast/gollemer/internal/config"
-	"github.com/golangast/gollemerinternal/csvgen"
-	"github.com/golangast/gollemerinternal/dsl"
-	"github.com/golangast/gollemerinternal/sqlite_db"
-	"github.com/golangast/gollemerneural/nn/ner"
-	"github.com/golangast/gollemerneural/semantic"
+	"github.com/golangast/gollemer/internal/csvgen"
+	"github.com/golangast/gollemer/internal/dsl"
+	"github.com/golangast/gollemer/internal/sqlite_db"
+	"github.com/golangast/gollemer/neural/nn/ner"
+	"github.com/golangast/gollemer/neural/semantic"
 )
 
 // Simple task result struct
@@ -1138,7 +1138,7 @@ func writeGoServerWithDB(dbName string) error {
 		"	\"html/template\"\n" +
 		"	\"log\"\n" +
 		"	\"net/http\"\n\n" +
-		"	\"github.com/golangast/gollemerinternal/sqlite_db\"\n" +
+		"	\"github.com/golangast/gollemer/internal/sqlite_db\"\n" +
 		")\n\n" +
 		"func helloHandler(w http.ResponseWriter, r *http.Request) {\n" +
 		"	fmt.Fprintln(w, \"Hello, World!\")\n" +

@@ -9,6 +9,11 @@ import (
 	"strings"
 
 	"github.com/golangast/gollemer/neural/tokenizer"
+	mainvocab "github.com/golangast/gollemer/neural/nnu/vocab"
+	"github.com/golangast/gollemer/neural/moe"
+	"github.com/golangast/gollemer/neural/nn"
+	"github.com/golangast/gollemer/neural/tensor"
+	"github.com/golangast/gollemer/neural/nnu/word2vec"
 )
 
 // IntentTrainingExample represents a single training example with a query and its intents.
@@ -109,17 +114,42 @@ func main() {
 	log.Printf("Child intent vocabulary size: %d", childIntentVocab.Size())
 	log.Printf("Sentence vocabulary size: %d", sentenceVocab.Size())
 
-	// Create model
-	model, err := moemodel.NewMoEClassificationModel(
-		queryVocab.Size(),
-		64, // embeddingDim
-		parentIntentVocab.Size(),
-		childIntentVocab.Size(),
-		sentenceVocab.Size(),
-		2,  // numExperts
-		1,  // k
-		32, // maxSeqLength
-	)
+	// Load Word2Vec model (assuming it's needed for embeddings)
+	word2vecModel, err := word2vec.LoadModel("gob_models/word2vec_model.gob")
+	if err != nil {
+		log.Fatalf("Failed to load Word2Vec model: %v", err)
+	}
+
+	// Model hyperparameters
+	embeddingDim := 128
+	hiddenSize := 256
+	maxAttentionHeads := 4
+	numLayers := 2
+	dropoutRate := 0.1
+
+	// 1. Embedding
+	embedding := nn.NewEmbedding(queryVocab.Size(), embeddingDim)
+	embedding.LoadPretrainedWeights(word2vecModel.WordVectors)
+
+	// 2. Simple RNN Encoder (replacing MoE in this example, adjust if actual MoE is desired)
+	encoder, err := moe.NewSimpleRNNEncoder(embeddingDim, hiddenSize, numLayers)
+	if err != nil {
+		log.Fatalf("Failed to create SimpleRNNEncoder: %v", err)
+	}
+
+	// 3. RNN Decoder with increased capacity and dropout
+	decoder, err := moe.NewRNNDecoder(embeddingDim, sentenceVocab.Size(), hiddenSize, maxAttentionHeads, numLayers, dropoutRate)
+	if err != nil {
+		log.Fatalf("Failed to create decoder: %v", err)
+	}
+
+	// 4. Create IntentMoE model
+	model := &moe.IntentMoE{
+		Embedding:         embedding,
+		Encoder:           encoder,
+		Decoder:           decoder,
+		SentenceVocabSize: sentenceVocab.Size(),
+	}
 	if err != nil {
 		log.Fatalf("Failed to create new MoE model: %v", err)
 	}
@@ -129,7 +159,13 @@ func main() {
 
 	// Save the trained model
 	log.Printf("Saving MoE Classification model to %s", modelSavePath)
-	err = moemodel.SaveMoEClassificationModelToGOB(model, modelSavePath)
+	outputFile, err := os.Create(modelSavePath)
+	if err != nil {
+		log.Fatalf("Failed to create model file %s: %v", modelSavePath, err)
+	}
+	defer outputFile.Close()
+
+	err = moe.SaveIntentMoEModelToGOB(model, outputFile)
 	if err != nil {
 		log.Fatalf("Failed to save MoE model: %v", err)
 	}
@@ -138,8 +174,8 @@ func main() {
 }
 
 // TrainIntentModel trains the MoEClassificationModel for intent classification.
-func TrainIntentModel(model *moemodel.MoEClassificationModel, data *IntentTrainingData, queryVocab, parentIntentVocab, childIntentVocab, sentenceVocab *mainvocab.Vocabulary, epochs int, learningRate float64, batchSize int, maxSeqLength int) {
-	optimizer := NewOptimizer(model.Parameters(), learningRate, 5.0)
+func TrainIntentModel(model *moe.IntentMoE, data *IntentTrainingData, queryVocab, parentIntentVocab, childIntentVocab, sentenceVocab *mainvocab.Vocabulary, epochs int, learningRate float64, batchSize int, maxSeqLength int) {
+	optimizer := nn.NewOptimizer(model.Parameters(), learningRate, 5.0)
 
 	for epoch := 0; epoch < epochs; epoch++ {
 		log.Printf("Epoch %d/%d", epoch+1, epochs)
@@ -168,7 +204,7 @@ func TrainIntentModel(model *moemodel.MoEClassificationModel, data *IntentTraini
 }
 
 // trainIntentModelBatch performs a single training step on a batch of intent data.
-func trainIntentModelBatch(model *moemodel.MoEClassificationModel, optimizer Optimizer, batch IntentTrainingData, queryVocab, parentIntentVocab, childIntentVocab, sentenceVocab *mainvocab.Vocabulary, maxSeqLength int) (float64, error) {
+func trainIntentModelBatch(model *moe.IntentMoE, optimizer nn.Optimizer, batch IntentTrainingData, queryVocab, parentIntentVocab, childIntentVocab, sentenceVocab *mainvocab.Vocabulary, maxSeqLength int) (float64, error) {
 	optimizer.ZeroGrad()
 
 	batchSize := len(batch)
@@ -225,26 +261,30 @@ func trainIntentModelBatch(model *moemodel.MoEClassificationModel, optimizer Opt
 		childIntentIDs[i] = childIntentVocab.GetTokenID(example.ChildIntent)
 	}
 
-	inputTensor := NewTensor([]int{batchSize, maxSeqLength}, convertIntsToFloat64s(inputIDsBatch), false)
-	targetSentenceTensor := NewTensor([]int{batchSize, maxSeqLength}, convertIntsToFloat64s(targetSentenceIDsBatch), false)
+	inputTensor := tensor.NewTensor([]int{batchSize, maxSeqLength}, convertIntsToFloat64s(inputIDsBatch), false)
+	targetSentenceTensor := tensor.NewTensor([]int{batchSize, maxSeqLength}, convertIntsToFloat64s(targetSentenceIDsBatch), false)
 
-	parentLogits, childLogits, sentenceLogits, err := model.Forward(inputTensor, targetSentenceTensor)
+	sentenceLogits, _, err := model.Forward(0.0, inputTensor, targetSentenceTensor)
 	if err != nil {
 		return 0, fmt.Errorf("model forward pass failed: %w", err)
 	}
 
-	parentLoss, parentGrad := CrossEntropyLoss(parentLogits, parentIntentIDs, -1, 0.0)
-	childLoss, childGrad := CrossEntropyLoss(childLogits, childIntentIDs, -1, 0.0)
-	sentenceLoss, sentenceGrad := SequenceCrossEntropyLoss(sentenceLogits, targetSentenceIDsBatch, sentenceVocab.PaddingTokenID)
+	sentenceLoss := 0.0
+	sentenceGrads := make([]*tensor.Tensor, maxSeqLength-1)
 
-	totalLoss := parentLoss + childLoss + sentenceLoss
-
-	// Backward pass
-	if parentGrad == nil || childGrad == nil {
-		log.Printf("Skipping backward pass due to nil gradient")
-		return totalLoss, nil
+	for t := 0; t < maxSeqLength-1; t++ {
+		targets := make([]int, batchSize)
+		for i := 0; i < batchSize; i++ {
+			targets[i] = int(targetSentenceIDsBatch[i*maxSeqLength+t+1])
+		}
+		loss, grad := tensor.CrossEntropyLoss(sentenceLogits[t], targets, sentenceVocab.PaddingTokenID, 0.1)
+		sentenceLoss += loss
+		sentenceGrads[t] = grad
 	}
-	err = model.Backward(parentGrad, childGrad, sentenceGrad)
+
+	totalLoss := sentenceLoss
+
+	err = model.Backward(sentenceGrads...)
 	if err != nil {
 		return 0, fmt.Errorf("model backward pass failed: %w", err)
 	}
@@ -262,7 +302,7 @@ func convertIntsToFloat64s(input []int) []float64 {
 	return output
 }
 
-func SequenceCrossEntropyLoss(predictions *Tensor, targets []int, paddingID int) (float64, *Tensor) {
+func SequenceCrossEntropyLoss(predictions *tensor.Tensor, targets []int, paddingID int) (float64, *tensor.Tensor) {
 	batchSize := predictions.Shape[0]
 	seqLen := predictions.Shape[1]
 	vocabSize := predictions.Shape[2]
@@ -304,7 +344,7 @@ func SequenceCrossEntropyLoss(predictions *Tensor, targets []int, paddingID int)
 	}
 
 	avgLoss := totalLoss / float64(numTokens)
-	gradTensor := NewTensor(logSoftmax.Shape, grad, true)
+	gradTensor := tensor.NewTensor(logSoftmax.Shape, grad, true)
 
 	return avgLoss, gradTensor
 }

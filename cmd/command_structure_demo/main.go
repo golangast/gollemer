@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/golangast/gollemer/neural/nn/ner"
-	"github.com/golangast/gollemerneural/semantic"
+	"github.com/golangast/gollemer/neural/semantic"
 )
 
 func main() {
