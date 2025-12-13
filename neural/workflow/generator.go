@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/zendrulat/nlptagger/neural/semantic"
+	"github.com/golangast/gollemer/neural/semantic"
 )
 
 // GenerateWorkflow takes a SemanticOutput and converts it into a Workflow DAG.

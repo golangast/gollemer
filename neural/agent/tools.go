@@ -3,7 +3,7 @@ package agent
 import (
 	"fmt"
 
-	"github.com/zendrulat/nlptagger/neural/semantic"
+	"github.com/golangast/gollemer/neural/semantic"
 )
 
 // CreateFolderTool creates folders in the VFS

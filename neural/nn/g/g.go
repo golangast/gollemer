@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/zendrulat/nlptagger/tagger"
+	"github.com/golangast/gollemer/tagger"
 )
 
 type ANN struct {

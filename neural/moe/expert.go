@@ -1,7 +1,7 @@
 package moe
 
 import (
-	"github.com/zendrulat/nlptagger/neural/tensor"
+	"github.com/golangast/gollemer/neural/tensor"
 )
 
 // Expert is an interface for an expert network in a Mixture of Experts model.
@@ -25,4 +25,3 @@ type Expert interface {
 	// SetMode sets the mode of the expert (training or inference).
 	SetMode(training bool)
 }
-

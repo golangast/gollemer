@@ -9,11 +9,11 @@ import (
 	"os"
 	"strings"
 
-	moemodel "github.com/zendrulat/nlptagger/neural/moe/model"
-	"github.com/zendrulat/nlptagger/neural/nn"
-	mainvocab "github.com/zendrulat/nlptagger/neural/nnu/vocab"
-	"github.com/zendrulat/nlptagger/neural/tensor"
-	"github.com/zendrulat/nlptagger/neural/tokenizer"
+	moemodel "github.com/golangast/gollemer/neural/moe/model"
+	"github.com/golangast/gollemerneural/nn"
+	mainvocab "github.com/golangast/gollemerneural/nnu/vocab"
+	"github.com/golangast/gollemerneural/tensor"
+	"github.com/golangast/gollemerneural/tokenizer"
 )
 
 // TrainingExample represents a single training example with input text and parent/child intents.

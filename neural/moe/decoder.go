@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"math/rand"
 
-	"github.com/zendrulat/nlptagger/neural/nn"
-	. "github.com/zendrulat/nlptagger/neural/tensor"
+	"github.com/golangast/gollemer/neural/nn"
+	. "github.com/golangast/gollemer/neural/tensor"
 )
 
 func init() {

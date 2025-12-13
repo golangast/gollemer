@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/zendrulat/nlptagger/internal/config"
+	"github.com/golangast/gollemer/internal/config"
 )
 
 // ApplyConfigOverrides updates the schema based on the configuration

@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/zendrulat/nlptagger/neural/semantic"
+	"github.com/golangast/gollemer/neural/semantic"
 )
 
 // RealFilesystemTool writes files to the actual filesystem

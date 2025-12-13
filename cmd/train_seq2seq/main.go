@@ -9,11 +9,11 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/zendrulat/nlptagger/neural/nn"
-	"github.com/zendrulat/nlptagger/neural/nnu/seq2seq"
-	"github.com/zendrulat/nlptagger/neural/nnu/vocab"
-	"github.com/zendrulat/nlptagger/neural/tensor"
-	"github.com/zendrulat/nlptagger/neural/tokenizer"
+	"github.com/golangast/gollemer/neural/nn"
+	"github.com/golangast/gollemerneural/nnu/seq2seq"
+	"github.com/golangast/gollemerneural/nnu/vocab"
+	"github.com/golangast/gollemerneural/tensor"
+	"github.com/golangast/gollemerneural/tokenizer"
 )
 
 // CommandData represents the structure of each entry in software_commands.json

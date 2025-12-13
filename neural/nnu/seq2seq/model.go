@@ -6,10 +6,10 @@ import (
 	"log"
 	"os"
 
-	"github.com/zendrulat/nlptagger/neural/nn"
-	"github.com/zendrulat/nlptagger/neural/tensor"
-	"github.com/zendrulat/nlptagger/neural/tokenizer"
-	"github.com/zendrulat/nlptagger/neural/nnu/vocab"
+	"github.com/golangast/gollemer/neural/nn"
+	"github.com/golangast/gollemer/neural/nnu/vocab"
+	"github.com/golangast/gollemer/neural/tensor"
+	"github.com/golangast/gollemer/neural/tokenizer"
 )
 
 // SerializableSeq2Seq is a struct for saving and loading the model.
@@ -151,11 +151,11 @@ func (d *Decoder) Parameters() []*tensor.Tensor { // Changed here
 
 // Seq2Seq represents the complete Encoder-Decoder model.
 type Seq2Seq struct {
-	Encoder *Encoder
-	Decoder *Decoder
-	Tokenizer *tokenizer.Tokenizer // For encoding/decoding text
-	OutputVocab *vocab.Vocabulary // Vocabulary for the output descriptions
-	HiddenDim int
+	Encoder     *Encoder
+	Decoder     *Decoder
+	Tokenizer   *tokenizer.Tokenizer // For encoding/decoding text
+	OutputVocab *vocab.Vocabulary    // Vocabulary for the output descriptions
+	HiddenDim   int
 }
 
 // NewSeq2Seq creates a new Seq2Seq model.
@@ -169,11 +169,11 @@ func NewSeq2Seq(inputVocabSize, outputVocabSize, embeddingDim, hiddenDim int, to
 		return nil, err
 	}
 	return &Seq2Seq{
-		Encoder: encoder,
-		Decoder: decoder,
-		Tokenizer: tok,
+		Encoder:     encoder,
+		Decoder:     decoder,
+		Tokenizer:   tok,
 		OutputVocab: outVocab,
-		HiddenDim: hiddenDim,
+		HiddenDim:   hiddenDim,
 	}, nil
 }
 
@@ -214,7 +214,7 @@ func (m *Seq2Seq) Forward(inputIDs, targetIDs *tensor.Tensor) (*tensor.Tensor, e
 		decoderInputData := make([]float64, batchSize)
 		for b := 0; b < batchSize; b++ {
 			// Assuming targetIDs is [batch_size, seq_len]
-			decoderInputData[b] = targetIDs.Data[b*targetSeqLen + t]
+			decoderInputData[b] = targetIDs.Data[b*targetSeqLen+t]
 		}
 		decoderInput := tensor.NewTensor([]int{batchSize, 1}, decoderInputData, true)
 

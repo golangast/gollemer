@@ -12,7 +12,7 @@ import (
 
 	// Package word2vec implements a basic Word2Vec model for creating word embeddings.
 
-	"github.com/zendrulat/nlptagger/neural/nn/g"
+	"github.com/golangast/gollemer/neural/nn/g"
 )
 
 const (

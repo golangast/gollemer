@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/zendrulat/nlptagger/neural/semantic"
+	"github.com/golangast/gollemer/neural/semantic"
 )
 
 // AgentConfig holds configuration for the agent

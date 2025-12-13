@@ -4,13 +4,13 @@ package calc
 import (
 	"log"
 
-	"github.com/zendrulat/nlptagger/neural/nn/dr"
-	"github.com/zendrulat/nlptagger/neural/nn/ner"
-	"github.com/zendrulat/nlptagger/neural/nn/phrase"
-	"github.com/zendrulat/nlptagger/neural/nn/pos"
-	"github.com/zendrulat/nlptagger/neural/nnu"
-	"github.com/zendrulat/nlptagger/neural/nnu/predict"
-	"github.com/zendrulat/nlptagger/tagger/tag"
+	"github.com/golangast/gollemer/neural/nn/dr"
+	"github.com/golangast/gollemer/neural/nn/ner"
+	"github.com/golangast/gollemer/neural/nn/phrase"
+	"github.com/golangast/gollemer/neural/nn/pos"
+	"github.com/golangast/gollemer/neural/nnu"
+	"github.com/golangast/gollemer/neural/nnu/predict"
+	"github.com/golangast/gollemer/tagger/tag"
 )
 
 func CalculateError(targetTag string, outputs []float64, trainingData []tag.Tag, nn *nnu.SimpleNN) ([]float64, map[string]int, map[string]int, map[string]int, map[string]int) {

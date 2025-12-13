@@ -8,7 +8,7 @@ The `multi_orchestrator` now **understands natural language** instead of just ma
 
 ### 1. Build
 ```bash
-cd /home/zendrulat/code/nlptagger
+cd /home/golangast/code/gollemer
 go build ./cmd/multi_orchestrator
 ```
 

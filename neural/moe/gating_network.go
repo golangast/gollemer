@@ -1,18 +1,17 @@
 package moe
 
 import (
-	
 	"fmt"
-	"github.com/zendrulat/nlptagger/neural/nn"
-	"github.com/zendrulat/nlptagger/neural/tensor"
-)
 
+	"github.com/golangast/gollemer/neural/nn"
+	"github.com/golangast/gollemer/neural/tensor"
+)
 
 // GatingNetwork (Router) determines which experts to activate for a given input.
 type GatingNetwork struct {
 	Linear *nn.Linear
 	// Stored for backward pass
-	inputTensor *tensor.Tensor
+	inputTensor  *tensor.Tensor
 	outputTensor *tensor.Tensor
 }
 

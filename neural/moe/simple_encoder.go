@@ -3,8 +3,8 @@ package moe
 import (
 	"fmt"
 
-	"github.com/zendrulat/nlptagger/neural/nn"
-	. "github.com/zendrulat/nlptagger/neural/tensor"
+	"github.com/golangast/gollemer/neural/nn"
+	. "github.com/golangast/gollemer/neural/tensor"
 )
 
 // SimpleRNNEncoder is a simple LSTM-based encoder that replaces the MoE layer.

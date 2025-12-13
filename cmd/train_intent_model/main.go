@@ -8,9 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/zendrulat/nlptagger/neural/tokenizer"	
-	"github.com/zendrulat/nlptagger/neural/vacob"
-
+	"github.com/golangast/gollemer/neural/tokenizer"
 )
 
 // IntentTrainingExample represents a single training example with a query and its intents.

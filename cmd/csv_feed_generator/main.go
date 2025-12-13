@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/zendrulat/nlptagger/internal/config"
-	"github.com/zendrulat/nlptagger/internal/csvgen"
+	"github.com/golangast/gollemer/internal/config"
+	"github.com/golangast/gollemer/internal/csvgen"
 )
 
 func main() {

@@ -3,8 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/zendrulat/nlptagger/neural/nnu/vocab"
 	"os"
+
+	"github.com/golangast/gollemer/neural/nnu/vocab"
 )
 
 func main() {

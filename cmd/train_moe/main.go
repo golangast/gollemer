@@ -4,13 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/zendrulat/nlptagger/neural/moe"
-	"github.com/zendrulat/nlptagger/neural/nn"
-	mainvocab "github.com/zendrulat/nlptagger/neural/nnu/vocab"
-	"github.com/zendrulat/nlptagger/neural/nnu/word2vec"
-	"github.com/zendrulat/nlptagger/neural/semantic"
-	. "github.com/zendrulat/nlptagger/neural/tensor"
-	"github.com/zendrulat/nlptagger/neural/tokenizer"
 	"io"
 	"log"
 	"math"
@@ -21,6 +14,14 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+
+	"github.com/golangast/gollemer/neural/moe"
+	"github.com/golangast/gollemerneural/nn"
+	mainvocab "github.com/golangast/gollemerneural/nnu/vocab"
+	"github.com/golangast/gollemerneural/nnu/word2vec"
+	"github.com/golangast/gollemerneural/semantic"
+	. "github.com/golangast/gollemerneural/tensor"
+	"github.com/golangast/gollemerneural/tokenizer"
 )
 
 // IntentTrainingExample represents a single training example with a query and its intents.

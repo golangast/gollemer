@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/zendrulat/nlptagger/neural/nn/ner"
-	"github.com/zendrulat/nlptagger/neural/semantic"
+	"github.com/golangast/gollemer/neural/nn/ner"
+	"github.com/golangast/gollemerneural/semantic"
 )
 
 func main() {

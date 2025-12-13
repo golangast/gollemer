@@ -7,7 +7,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/zendrulat/nlptagger/neural/tokenizer"
+	"github.com/golangast/gollemer/neural/tokenizer"
 )
 
 type IntentTrainingExample struct {

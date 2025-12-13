@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"nlptagger/neural/nn/ner"
-	"nlptagger/neural/nnu"
-	"nlptagger/neural/nnu/word2vec"
-	"nlptagger/tagger/tag"
+	"gollemer/neural/nn/ner"
+	"gollemerneural/nnu"
+	"gollemerneural/nnu/word2vec"
+	"gollemertagger/tag"
 )
 
 // SemanticData represents the structure of semantic_output_data.json

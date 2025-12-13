@@ -3,8 +3,8 @@ package moe
 import (
 	"fmt"
 
-	"github.com/zendrulat/nlptagger/neural/nn"
-	"github.com/zendrulat/nlptagger/neural/tensor"
+	"github.com/golangast/gollemer/neural/nn"
+	"github.com/golangast/gollemer/neural/tensor"
 )
 
 // FeedForwardExpert is a simple feed-forward neural network that implements the Expert interface.

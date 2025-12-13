@@ -1,6 +1,6 @@
 package dependencyrelation
 
-import "github.com/zendrulat/nlptagger/tagger/tag"
+import "github.com/golangast/gollemer/tagger/tag"
 
 var (
 	DRToID = map[string]int{

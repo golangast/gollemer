@@ -3,7 +3,7 @@ package neural
 import (
 	"fmt"
 
-	"github.com/zendrulat/nlptagger/neural/semantic"
+	"github.com/golangast/gollemer/neural/semantic"
 )
 
 // SemanticRole represents the parsed semantic role from a query.

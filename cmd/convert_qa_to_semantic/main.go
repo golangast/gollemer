@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/zendrulat/nlptagger/neural/semantic"
+	"github.com/golangast/gollemer/neural/semantic"
 )
 
 // QAEntry represents a single Q&A entry from the TSV file

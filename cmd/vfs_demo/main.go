@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"nlptagger/neural/semantic"
+	"gollemer/neural/semantic"
 )
 
 func main() {

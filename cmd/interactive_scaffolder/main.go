@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/zendrulat/nlptagger/neural/agent"
+	"github.com/golangast/gollemer/neural/agent"
 )
 
 func main() {

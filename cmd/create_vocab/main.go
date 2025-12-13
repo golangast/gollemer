@@ -9,8 +9,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/zendrulat/nlptagger/neural/nnu/vocab"
-	"github.com/zendrulat/nlptagger/neural/tokenizer"
+	"github.com/golangast/gollemer/neural/nnu/vocab"
+	"github.com/golangast/gollemerneural/tokenizer"
 )
 
 type IntentTrainingExample struct {

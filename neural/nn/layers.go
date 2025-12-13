@@ -4,9 +4,10 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
-	. "github.com/zendrulat/nlptagger/neural/tensor"
 	"math"
 	"math/rand"
+
+	. "github.com/golangast/gollemer/neural/tensor"
 )
 
 // weightIterator efficiently iterates over a flat weight array as a 2D matrix.
