@@ -21,6 +21,16 @@ import (
 	"github.com/golangast/gollemer/tagger/tag"
 )
 
+// contains is a helper function to check if a string is in a slice of strings.
+func contains(s []string, e string) bool {
+	for _, a := range s {
+		if a == e {
+			return true
+		}
+	}
+	return false
+}
+
 func main() {
 	trainWord2Vec := flag.Bool("train-word2vec", false, "Train the Word2Vec model")
 	trainMoE := flag.Bool("train-moe", false, "Train the MoE model")
@@ -127,6 +137,11 @@ func runLLM() {
 
 	reader := bufio.NewReader(os.Stdin)
 
+	// Declare parsing-related variables once at the top of runLLM
+	var objectType string
+	var fileName string
+	var hasDirectoryToken bool
+
 	for {
 		fmt.Print("> ")
 		query, _ := reader.ReadString('\n')
@@ -206,12 +221,15 @@ func runLLM() {
 
 		// Try to explicitly identify the command if it's the first token
 		if len(taggedData.Tokens) > 0 {
-			if strings.ToLower(taggedData.Tokens[0]) == "create" {
+			token := strings.ToLower(taggedData.Tokens[0])
+			if token == "create" || token == "add" {
 				command = "create"
-			} else if strings.ToLower(taggedData.Tokens[0]) == "list" {
+			} else if token == "list" {
 				command = "list"
-			} else if strings.ToLower(taggedData.Tokens[0]) == "go" {
+			} else if token == "go" {
 				command = "go"
+			} else if token == "delete" || token == "remove" {
+				command = "delete"
 			}
 		}
 
@@ -239,8 +257,8 @@ func runLLM() {
 			}
 		}
 
-		objectType := strings.Join(objectTypeParts, " ")
-		fileName := findName(taggedData)
+		objectType = strings.Join(objectTypeParts, " ")
+		fileName = findName(taggedData)
 
 		// Heuristic: If fileName is still empty, and objectType is "file",
 		// check for tokens that look like filenames (e.g., ends with .go)
@@ -253,7 +271,7 @@ func runLLM() {
 			}
 		}
 
-		var hasDirectoryToken bool
+		hasDirectoryToken = false
 		for _, t := range taggedData.Tokens {
 			if t == "directory" {
 				hasDirectoryToken = true
@@ -270,15 +288,6 @@ func runLLM() {
 		fmt.Printf("HasDirectoryToken: %t\n", hasDirectoryToken)
 		fmt.Printf("TargetDirectory: %s\n", targetDirectory) // New debug info
 		fmt.Println("--------------------")
-
-		contains := func(s []string, e string) bool {
-			for _, a := range s {
-				if a == e {
-					return true
-				}
-			}
-			return false
-		}
 
 		if command == "create" && contains(objectTypeParts, "file") {
 			if fileName != "" {
@@ -310,6 +319,135 @@ func runLLM() {
 				}
 			} else {
 				predictedSentence = "You need to provide a name for the folder."
+			}
+		} else if command == "delete" && (contains(objectTypeParts, "folder") || contains(objectTypeParts, "directory")) {
+			folderName := findName(taggedData)
+			if folderName != "" {
+				err := os.RemoveAll(folderName)
+				if err != nil {
+					predictedSentence = fmt.Sprintf("I couldn't delete the folder %s: %v", folderName, err)
+				} else {
+					predictedSentence = fmt.Sprintf("I have deleted the folder %s.", folderName)
+				}
+			} else {
+				predictedSentence = "You need to provide a name for the folder."
+			}
+		} else if command == "delete" && contains(objectTypeParts, "file") {
+			if fileName != "" {
+				err := os.Remove(fileName)
+				if err != nil {
+					predictedSentence = fmt.Sprintf("I couldn't delete the file %s: %v", fileName, err)
+				} else {
+					predictedSentence = fmt.Sprintf("I have deleted the file %s.", fileName)
+				}
+			} else {
+				predictedSentence = "You need to provide a name for the file."
+			}
+		} else if command == "create" && contains(objectTypeParts, "webserver") {
+			serverName := findName(taggedData)
+			if serverName == "" {
+				predictedSentence = "You need to provide a name for the webserver."
+			} else {
+				serverPath := serverName
+				var pathError bool
+				if targetDirectory != "" {
+					info, err := os.Stat(targetDirectory)
+					if err == nil && !info.IsDir() {
+						predictedSentence = fmt.Sprintf("I can't create a directory inside '%s' because it's a file.", targetDirectory)
+						pathError = true
+					} else {
+						serverPath = filepath.Join(targetDirectory, serverName)
+					}
+				}
+
+				if !pathError {
+					err := os.MkdirAll(serverPath, 0755)
+					if err != nil {
+						predictedSentence = fmt.Sprintf("I couldn't create the webserver directory %s: %v", serverPath, err)
+					} else {
+						mainGoPath := filepath.Join(serverPath, "main.go")
+						mainGoContent := `package main
+
+import (
+	"fmt"
+	"log"
+	"net/http"
+)
+
+func handler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "Hello, World!")
+}
+
+func main() {
+	http.HandleFunc("/", handler)
+	log.Fatal(http.ListenAndServe(":8080", nil))
+}
+`
+						err = os.WriteFile(mainGoPath, []byte(mainGoContent), 0644)
+						if err != nil {
+							predictedSentence = fmt.Sprintf("I created the directory %s, but couldn't create main.go: %v", serverPath, err)
+						} else {
+							// Create go.mod file
+							goModPath := filepath.Join(serverPath, "go.mod")
+							goModContent := fmt.Sprintf("module %s\n\ngo 1.21.0\n", serverName)
+							err = os.WriteFile(goModPath, []byte(goModContent), 0644)
+							if err != nil {
+								predictedSentence = fmt.Sprintf("I created the webserver file in %s, but couldn't create go.mod: %v", serverPath, err)
+							} else {
+								predictedSentence = fmt.Sprintf("I have created a webserver named %s.", serverName)
+							}
+						}
+					}
+				}
+			}
+		} else if command == "create" && contains(objectTypeParts, "handler") {
+			handlerName := findName(taggedData)
+			if handlerName == "" {
+				// If findName fails, try to get the last word as the handler name
+				if len(words) > 0 {
+					lastWord := words[len(words)-1]
+					// check if the last word is not a keyword
+					if lastWord != "handler" && lastWord != "code" {
+						handlerName = lastWord
+					}
+				}
+			}
+
+			if handlerName == "" {
+				predictedSentence = "You need to provide a name for the handler."
+			} else {
+				handlerFileName := handlerName + ".go"
+				handlerPath := handlerFileName
+				var pathError bool
+				if targetDirectory != "" {
+					info, err := os.Stat(targetDirectory)
+					if err == nil && !info.IsDir() {
+						predictedSentence = fmt.Sprintf("I can't create a file inside '%s' because it's a file.", targetDirectory)
+						pathError = true
+					} else {
+						handlerPath = filepath.Join(targetDirectory, handlerFileName)
+					}
+				}
+
+				if !pathError {
+					handlerContent := fmt.Sprintf(`package main
+
+import (
+	"fmt"
+	"net/http"
+)
+
+func %s(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "Hello from %s handler!")
+}
+`, handlerName, handlerName)
+					err := os.WriteFile(handlerPath, []byte(handlerContent), 0644)
+					if err != nil {
+						predictedSentence = fmt.Sprintf("I couldn't create the handler file %s: %v", handlerPath, err)
+					} else {
+						predictedSentence = fmt.Sprintf("I have created the handler file %s.", handlerPath)
+					}
+				}
 			}
 		} else if command == "go" && (contains(taggedData.Tokens, "in") || contains(taggedData.Tokens, "into")) {
 			folderName := findName(taggedData)
