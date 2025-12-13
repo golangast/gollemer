@@ -126,8 +126,6 @@ func runLLM() {
 	model.SentenceVocab = semanticOutputVocabulary
 
 	reader := bufio.NewReader(os.Stdin)
-	fmt.Println("LLM Interaction Mode. Type 'exit' to quit.")
-	fmt.Println("-----------------------------------------")
 
 	for {
 		fmt.Print("> ")
@@ -195,16 +193,9 @@ func runLLM() {
 
 		// --- Start of new logic ---
 
-		fmt.Println("--- DEBUG INFO ---")
-		fmt.Printf("Tagged Tokens: %v\n", taggedData.Tokens)
-		fmt.Printf("NER Tags: %v\n", taggedData.NerTag)
-
-		var definitions = map[string]string{
-			"webserver":      "a software application that serves files or content over a network.",
-			"database":       "an organized collection of data, generally stored and accessed electronically from a computer system.",
-			"handler":        "a function that processes a request and returns a response.",
-			"data structure": "a particular way of organizing data in a computer so that it can be used effectively.",
-		}
+		// fmt.Println("--- DEBUG INFO ---")
+		// fmt.Printf("Tagged Tokens: %v\n", taggedData.Tokens)
+		// fmt.Printf("NER Tags: %v\n", taggedData.NerTag)
 
 		hasQuestionWord := false
 		hasVerb := false
@@ -330,7 +321,7 @@ func runLLM() {
 				}
 				predictedSentence = strings.Join(fileNames, "\n")
 			}
-		} else if hasQuestionWord && hasDirectoryToken && hasPrepositionIn {
+		} else if hasQuestionWord && hasDirectoryToken {
 			cwd, err := os.Getwd()
 			if err != nil {
 				predictedSentence = "I'm sorry, I couldn't determine the current directory."
@@ -359,12 +350,6 @@ func runLLM() {
 				}
 			} else {
 				predictedSentence = fmt.Sprintf("I couldn't find the file %s.", fileName)
-			}
-		} else if hasQuestionWord && hasVerb && len(objectTypeParts) > 0 && fileName == "" {
-			if definition, ok := definitions[objectType]; ok {
-				predictedSentence = fmt.Sprintf("A %s is %s", objectType, definition)
-			} else {
-				predictedSentence = fmt.Sprintf("I'm sorry, I don't have a definition for %s.", objectType)
 			}
 		}
 		// --- End of new logic ---
