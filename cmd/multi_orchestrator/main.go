@@ -695,9 +695,10 @@ func main() {
 			fmt.Println("   1. create_handler")
 			fmt.Println("   2. create_database")
 			fmt.Println("   3. delete_file")
-			fmt.Println("   4. create_file")
-			fmt.Println("   5. delete_project")
-			fmt.Println("   6. Define Custom / Alias")
+			fmt.Println("   4. delete_folder")
+			fmt.Println("   5. create_file")
+			fmt.Println("   6. delete_project")
+			fmt.Println("   7. Define Custom / Alias")
 			fmt.Print("   > ")
 
 			choice, _ := reader.ReadString('\n')
@@ -718,10 +719,13 @@ func main() {
 			case "3", "delete_file":
 				parsedGoal.Intent = semantic.IntentDeleteFile
 				err = nil
-			case "4", "create_file":
+			case "4", "delete_folder":
+				parsedGoal.Intent = semantic.IntentDeleteFolder
+				err = nil
+			case "5", "create_file":
 				parsedGoal.Intent = semantic.IntentCreateFile
 				err = nil
-			case "5", "delete_project":
+			case "6", "delete_project":
 				// We can handle this by setting the goal string to "delete project" and restarting loop
 				// But we are deep in the loop. Let's just execute the logic manually here or rely on entities.
 				// The easiest way is to set a flag or just execute it.
@@ -736,7 +740,7 @@ func main() {
 				}
 				fmt.Println("Project files deleted successfully.")
 				continue
-			case "6", "custom", "alias":
+			case "7", "custom", "alias":
 				// Manual Input Flow
 				fmt.Print("   Enter Intent Name (e.g., 'my_action'): ")
 				customIntent, _ := reader.ReadString('\n')
@@ -758,7 +762,7 @@ func main() {
 				// Check if this is a known executable intent
 				isKnown := false
 				switch parsedGoal.Intent {
-				case semantic.IntentAddFeature, semantic.IntentDeleteFile, "create_handler", "create_database":
+				case semantic.IntentAddFeature, semantic.IntentDeleteFile, semantic.IntentDeleteFolder, "create_handler", "create_database":
 					isKnown = true
 				}
 
@@ -806,33 +810,46 @@ func main() {
 			// Continue with fallback logic below
 		}
 
-		// Handle Delete File specifically
-		if parsedGoal != nil && parsedGoal.Intent == semantic.IntentDeleteFile {
-			fileName := parsedGoal.Entities["file"]
-			if fileName == "" {
-				fileName = parsedGoal.Entities["source_file"]
+		// Handle Delete File or Folder
+		if parsedGoal != nil && (parsedGoal.Intent == semantic.IntentDeleteFile || parsedGoal.Intent == semantic.IntentDeleteFolder) {
+			var itemToDelete string
+			var itemType string
+
+			if parsedGoal.Intent == semantic.IntentDeleteFile {
+				itemToDelete = parsedGoal.Entities["file"]
+				if itemToDelete == "" {
+					itemToDelete = parsedGoal.Entities["source_file"]
+				}
+				itemType = "file"
+			} else {
+				itemToDelete = parsedGoal.Entities["folder"]
+				if itemToDelete == "" {
+					itemToDelete = parsedGoal.Entities["directory"]
+				}
+				itemType = "folder"
 			}
-			// Fallback: try to find a file entity in the map values if key is generic
-			if fileName == "" {
+
+			// Fallback: try to find a file/folder entity in the map values if key is generic
+			if itemToDelete == "" {
 				for k, v := range parsedGoal.Entities {
-					if strings.Contains(k, "file") {
-						fileName = v
+					if strings.Contains(k, itemType) {
+						itemToDelete = v
 						break
 					}
 				}
 			}
 
-			if fileName != "" {
-				fmt.Printf("Deleting file: %s\n", fileName)
-				path := filepath.Join("generated_projects/project", fileName)
-				if err := os.Remove(path); err != nil {
-					fmt.Printf("Failed to delete file: %v\n", err)
+			if itemToDelete != "" {
+				fmt.Printf("Deleting %s: %s\n", itemType, itemToDelete)
+				path := filepath.Join("generated_projects/project", itemToDelete)
+				if err := os.RemoveAll(path); err != nil {
+					fmt.Printf("Failed to delete %s: %v\n", itemType, err)
 				} else {
-					fmt.Println("File deleted successfully.")
+					fmt.Printf("%s deleted successfully.\n", strings.Title(itemType))
 				}
 				continue // Skip generation
 			} else {
-				fmt.Println("⚠️ Intent is delete_file but no file entity found.")
+				fmt.Printf("⚠️ Intent is %s but no %s entity found.\n", parsedGoal.Intent, itemType)
 			}
 		}
 
