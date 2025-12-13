@@ -197,58 +197,61 @@ func runLLM() {
 		// fmt.Printf("Tagged Tokens: %v\n", taggedData.Tokens)
 		// fmt.Printf("NER Tags: %v\n", taggedData.NerTag)
 
-		        var command string
-				// Try to explicitly identify the command if it's the first token
-				if len(taggedData.Tokens) > 0 {
-					if strings.ToLower(taggedData.Tokens[0]) == "create" {
-						command = "create"
-					} else if strings.ToLower(taggedData.Tokens[0]) == "list" {
-						command = "list"
-					} else if strings.ToLower(taggedData.Tokens[0]) == "go" {
-						command = "go"
+		hasQuestionWord := false
+		hasVerb := false
+		var objectTypeParts []string
+		hasPrepositionIn := false
+		var command string
+		var targetDirectory string // Declare targetDirectory here
+
+		// Try to explicitly identify the command if it's the first token
+		if len(taggedData.Tokens) > 0 {
+			if strings.ToLower(taggedData.Tokens[0]) == "create" {
+				command = "create"
+			} else if strings.ToLower(taggedData.Tokens[0]) == "list" {
+				command = "list"
+			} else if strings.ToLower(taggedData.Tokens[0]) == "go" {
+				command = "go"
+			}
+		}
+
+		for i, token := range taggedData.Tokens {
+			if i < len(taggedData.NerTag) {
+				switch taggedData.NerTag[i] {
+				case "QUESTION_WORD":
+					if token == "what" {
+						hasQuestionWord = true
 					}
-				}
-		
-				var targetDirectory string
-				for i, token := range taggedData.Tokens {
-					if i < len(taggedData.NerTag) {
-						switch taggedData.NerTag[i] {
-						case "QUESTION_WORD":
-							if token == "what" {
-								hasQuestionWord = true
-							}
-						case "VERB":
-							if token == "is" {
-								hasVerb = true
-							}
-						case "OBJECT_TYPE":
-							objectTypeParts = append(objectTypeParts, token)
-						case "PREPOSITION":
-							if token == "in" || token == "into" {
-								hasPrepositionIn = true
-								if i+1 < len(taggedData.Tokens) {
-									targetDirectory = taggedData.Tokens[i+1]
-								}
-							}
+				case "VERB":
+					if token == "is" {
+						hasVerb = true
+					}
+				case "OBJECT_TYPE":
+					objectTypeParts = append(objectTypeParts, token)
+				case "PREPOSITION":
+					if token == "in" || token == "into" {
+						hasPrepositionIn = true
+						if i+1 < len(taggedData.Tokens) {
+							targetDirectory = taggedData.Tokens[i+1]
 						}
 					}
 				}
-		
-				objectType := strings.Join(objectTypeParts, " ")
-				fileName := findName(taggedData)
-		
-				// Heuristic: If fileName is still empty, and objectType is "file",
-				// check for tokens that look like filenames (e.g., ends with .go)
-				if fileName == "" && contains(objectTypeParts, "file") {
-					for _, token := range taggedData.Tokens {
-						if strings.HasSuffix(token, ".go") || strings.HasSuffix(token, ".txt") || strings.HasSuffix(token, ".md") {
-							fileName = token
-							break
-						}
-					}
-				}
+			}
+		}
+
 		objectType := strings.Join(objectTypeParts, " ")
 		fileName := findName(taggedData)
+
+		// Heuristic: If fileName is still empty, and objectType is "file",
+		// check for tokens that look like filenames (e.g., ends with .go)
+		if fileName == "" && contains(objectTypeParts, "file") {
+			for _, token := range taggedData.Tokens {
+				if strings.HasSuffix(token, ".go") || strings.HasSuffix(token, ".txt") || strings.HasSuffix(token, ".md") {
+					fileName = token
+					break
+				}
+			}
+		}
 
 		var hasDirectoryToken bool
 		for _, t := range taggedData.Tokens {
