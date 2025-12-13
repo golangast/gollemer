@@ -143,16 +143,6 @@ func runLLM() {
 		posTags := postagger.TagTokens(words)
 		taggedData := nertagger.Nertagger(tag.Tag{Tokens: words, PosTag: posTags})
 
-		fmt.Println("\n--- Part-of-Speech & Named Entity Recognition ---")
-		for i := range taggedData.Tokens {
-			nerTag := "O" // Default to Outside of any entity
-			if i < len(taggedData.NerTag) && taggedData.NerTag[i] != "" {
-				nerTag = taggedData.NerTag[i]
-			}
-			fmt.Printf("Word: %-15s POS: %-10s NER: %s\n", taggedData.Tokens[i], taggedData.PosTag[i], nerTag)
-		}
-		fmt.Println("-----------------------------------------------------")
-
 		// Encode the query
 		tokenIDs, err := tok.Encode(query)
 		if err != nil {
@@ -211,7 +201,7 @@ func runLLM() {
 
 		var definitions = map[string]string{
 			"webserver":      "a software application that serves files or content over a network.",
-				"database":       "an organized collection of data, generally stored and accessed electronically from a computer system.",
+			"database":       "an organized collection of data, generally stored and accessed electronically from a computer system.",
 			"handler":        "a function that processes a request and returns a response.",
 			"data structure": "a particular way of organizing data in a computer so that it can be used effectively.",
 		}
