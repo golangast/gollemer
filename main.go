@@ -306,7 +306,7 @@ func runLLM() {
 				}
 				predictedSentence = strings.Join(fileNames, "\n")
 			}
-		} else if hasQuestionWord && (contains(objectTypeParts, "files") || contains(objectTypeParts, "file") || contains(objectTypeParts, "folder")) {
+		} else if hasQuestionWord && (contains(objectTypeParts, "files") || contains(objectTypeParts, "file") || contains(objectTypeParts, "folder") || contains(objectTypeParts, "folders")) {
 			entries, err := os.ReadDir(".")
 			if err != nil {
 				predictedSentence = "I'm sorry, I couldn't list the files."
