@@ -8,12 +8,12 @@ import (
 	"os"
 	"strings"
 
-	"github.com/golangast/gollemer/neural/tokenizer"
-	mainvocab "github.com/golangast/gollemer/neural/nnu/vocab"
 	"github.com/golangast/gollemer/neural/moe"
 	"github.com/golangast/gollemer/neural/nn"
-	"github.com/golangast/gollemer/neural/tensor"
+	mainvocab "github.com/golangast/gollemer/neural/nnu/vocab"
 	"github.com/golangast/gollemer/neural/nnu/word2vec"
+	"github.com/golangast/gollemer/neural/tensor"
+	"github.com/golangast/gollemer/neural/tokenizer"
 )
 
 // IntentTrainingExample represents a single training example with a query and its intents.

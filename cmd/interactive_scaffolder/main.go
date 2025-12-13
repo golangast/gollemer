@@ -12,7 +12,7 @@ import (
 func main() {
 	fmt.Println("=== Advanced NLP Project Scaffolder (Goal-Driven) ===")
 	fmt.Println("Intelligent project manager with memory, goals, and context")
-	fmt.Println("Commands: 'goal <desc>', 'work [-auto]', 'status', 'goals', 'resume <id>', 'tree', 'exit'\n")
+	fmt.Println("Commands: 'goal <desc>', 'work [-auto]', 'status', 'goals', 'resume <id>', 'tree', 'exit'")
 
 	// Initialize Agent
 	config := agent.AgentConfig{

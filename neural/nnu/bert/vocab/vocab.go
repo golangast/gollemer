@@ -165,7 +165,7 @@ func parseTrainingData(filePath string) ([]struct {
 			Query  string
 			Intent string
 		}{Query: currentQuery, Intent: currentIntent})
-		log.Printf("Appended final training example: Query=\"%%s\", Intent=\"%%s\"", currentQuery, currentIntent)
+		log.Printf("Appended final training example: Query=\"%s\", Intent=\"%s\"", currentQuery, currentIntent)
 	}
 
 	if err := scanner.Err(); err != nil {
