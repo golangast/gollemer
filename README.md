@@ -43,6 +43,7 @@ Use the respective flags to initiate the training process. Each flag executes a 
 | **Word2Vec** | `--train-word2vec` | `go run main.go --train-word2vec` |
 | **Mixture of Experts (MoE)** | `--train-moe` | `go run main.go --train-moe` |
 
+<video src="https://github.com/golangast/gollemer/mov/mov.mp4" controls width="700" height="700"></video>
 
 
 ### 2\. Help / No Action
