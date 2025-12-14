@@ -43,7 +43,11 @@ Use the respective flags to initiate the training process. Each flag executes a 
 | **Word2Vec** | `--train-word2vec` | `go run main.go --train-word2vec` |
 | **Mixture of Experts (MoE)** | `--train-moe` | `go run main.go --train-moe` |
 
-<video src="https://github.com/golangast/gollemer/mov/mov.mp4" controls width="700" height="700"></video>
+<p align="center">
+  <video src="YOUR_GH_ASSET_URL" width="600" controls></video>
+</p>
+
+<video src="https://github.com/golangast/gollemer/blob/main/mov/mov.mp4" controls width="700" height="700"></video>
 
 
 ### 2\. Help / No Action
