@@ -425,6 +425,14 @@ func main() {
 				predictedSentence = "You need to provide a name for the folder."
 			}
 		} else if command == "create" && objectType == "database" { // New block for database creation
+			if fileName == "" { // If findName didn't catch it, try to find it directly after "database"
+				for i, token := range taggedData.Tokens {
+					if strings.ToLower(token) == "database" && i+1 < len(taggedData.Tokens) {
+						fileName = taggedData.Tokens[i+1]
+						break
+					}
+				}
+			}
 		            var db *sql.DB
 		            var err error
 		            if fileName != "" {
