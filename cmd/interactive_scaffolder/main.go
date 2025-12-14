@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/golangast/gollemer/neural/agent"
@@ -27,6 +28,40 @@ func main() {
 	var currentGoal *agent.Goal
 
 	scanner := bufio.NewScanner(os.Stdin)
+
+	// Ask user to select a project
+	goals, err := ag.ListGoals()
+	if err != nil {
+		fmt.Printf("Error listing goals: %v\n", err)
+	}
+
+	if len(goals) > 0 {
+		fmt.Println("\nSelect a project to resume:")
+		for i, g := range goals {
+			fmt.Printf("%d: %s (%s)\n", i+1, g.Description, g.ID)
+		}
+		fmt.Print("Enter number to resume, or press Enter to start a new goal: ")
+
+		if scanner.Scan() {
+			choiceStr := strings.TrimSpace(scanner.Text())
+			if choiceStr != "" {
+				choice, err := strconv.Atoi(choiceStr)
+				if err == nil && choice > 0 && choice <= len(goals) {
+					selectedGoal := goals[choice-1]
+					goal, err := ag.GetGoal(selectedGoal.ID)
+					if err != nil {
+						fmt.Printf("Error loading goal: %v\n", err)
+					} else {
+						currentGoal = goal
+						fmt.Printf("Resumed goal: %s\n", goal.Description)
+						fmt.Println(ag.GetGoalStatus(goal))
+					}
+				} else {
+					fmt.Println("Invalid selection.")
+				}
+			}
+		}
+	}
 
 	for {
 		if currentGoal != nil {
