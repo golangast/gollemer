@@ -61,7 +61,11 @@ $ go run main.go
 To run the LLM utility, use the following command from the project root:
 
 ```bash
-go run . -llm "Your natural language command or query here"
+//run the command
+go run . -llm 
+
+then type in your command (create file named jim)
+"Your natural language command or query here"
 ```
 
 Replace `"Your natural language command or query here"` with the specific input you want the LLM to process.
@@ -72,15 +76,14 @@ Here are some examples of commands you can use with the LLM utility:
 
 *   **Information Query:**
     ```bash
-    go run . -llm "What is a webserver?"
+    //run commands
+    go run . -llm 
+    
+    "create a webserver jim"
     ```
 
-*   **File System Operation:**
-    ```bash
-    go run . -llm "create a file named main.go"
-    ```
 
-This utility allows you to interact with the system using natural language, leveraging the power of Large Language Models.
+
 
 
 ## Special thanks
