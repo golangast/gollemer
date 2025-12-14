@@ -1,14 +1,37 @@
 # gollemer: LLM Command-line Utility
 
 ![status beta](https://img.shields.io/badge/Status-Beta-red)
-<img src="https://img.shields.io/github/license/golangast/gollemer.svg"><img src="https://img.shields.io/github/stars/golangast/gollemer.svg">[![Website shields.io](https://img.shields.io/website-up-down-green-red/http/shields.io.svg)](http://endrulats.com)[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](http://makeapullrequest.com)[![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg)](https://GitHub.com/Naereen/StrapDown.js/graphs/commit-activity)[![GitHub go.mod Go version of a Go module](https://img.shields.io/github/go-mod/go-version/gomods/athens.svg)](https://github.com/golangast/gollemer)[![GoDoc reference example](https://img.shields.io/badge/godoc-reference-blue.svg)](https://pkg.go.dev/github.com/golangast/gollemer/gollemerer)[![GoReportCard example](https://goreportcard.com/badge/github.com/golangast/gollemer)](https://goreportcard.com/report/github.com/golangast/gollemer)[![saythanks](https://img.shields.io/badge/say-thanks-ff69b4.svg)](https://saythanks.io/to/golangast)
-
+<img src="https://img.shields.io/github/license/golangast/gollemer.svg"><img src="https://img.shields.io/github/stars/golangast/gollemer.svg">
 
 ### Beta
-This project is in beta and changes daily.  I once in a while upload youtube [videos](https://www.youtube.com/watch?v=8paxWwPt4-A&list=PL_sE11fwtBT-0GqVHEX-tYTBzAIGHelQ6) talking about it's changes.
-
+This project is in beta and changes daily. I once in a while upload youtube [videos](https://www.youtube.com/watch?v=8paxWwPt4-A&list=PL_sE11fwtBT-0GqVHEX-tYTBzAIGHelQ6) talking about its changes.
 
 This project provides a command-line utility for interacting with Large Language Model (LLM) functionalities, enabling natural language interaction for various tasks.
+
+## 🏛️ Architecture Overview
+
+The `gollemer` CLI processes natural language user input through an LLM interface, which then dispatches commands to a robust command processor. This processor leverages a sophisticated Natural Language Processing (NLP) pipeline for understanding user intent and entities. Based on this understanding, it orchestrates either code generation tasks or direct file system operations.
+
+```
++-------------------+       +--------------------+       +---------------------+
+|   User Input      | ----> |  LLM Interface     | ----> |  Command Processor  |
+| (Natural Language)|       | (Text/Voice)       |       |                     |
++-------------------+       +--------------------+       +----------+----------+
+                                                                     |
+                                                                     v
++---------------------+    +--------------------+    +-----------------------+
+|  NLP Pipeline       | <--| Intent Classifier  |    |  Code Generation      |
+| (Intent, NER,        |    | (MoE Model)        |    |  (Templates, DB, etc.)|
+| Semantic Parsing)   |    +--------------------+    +-----------------------+
++----------+----------+
+           |
+           v
++-------------------------+
+|  File System Operations |
+| (Create, Delete, List)  |
++-------------------------+
+```
+
 ### Installation
 
 1.  **Clone the repository:**
@@ -19,15 +42,11 @@ This project provides a command-line utility for interacting with Large Language
     cd gollemer
 
     go mod tidy
-
-
     ```
-
------
 
 ## 🛠️ Usage
 
-You may need to retrain the model before using the llm mode.
+You may need to retrain the model before using the LLM mode.
 
 The main executable (`main.go`) controls all operations using specific command-line flags. All commands should be run from the root directory of the project.
 
@@ -46,6 +65,8 @@ Use the respective flags to initiate the training process. Each flag executes a 
 </p>
 
 ### 2. LLM Interactive Mode
+
+The LLM Interactive Mode allows you to interact with the `gollemer` CLI using natural language. The system's underlying NLP pipeline (detailed further in `docs/index.html`) interprets your commands to perform tasks such as file system operations and code generation.
 
 To run the LLM utility in interactive mode, use the following command from the project root:
 
@@ -87,7 +108,6 @@ $ go run main.go
 
 ## Special thanks
 * [Go Team because they are gods](https://github.com/golang/go/graphs/contributors)
-
 
 ## Why Go?
 * The language is done since 1.0.https://youtu.be/rFejpH_tAHM there are little features that get added after 10 years but whatever you learn now will forever be useful.
