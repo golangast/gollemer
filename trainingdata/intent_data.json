@@ -404,5 +404,40 @@
     "child_intent": "create_folder_with_file",
     "description": "Creates a new folder with a file inside.",
     "sentence": "intent:CREATE, resource_type:Filesystem_Folder, resource_name:handler, directory:jim, child_file_name:handler.go"
+  },
+  {
+    "query": "go into computer",
+    "parent_intent": "project_management",
+    "child_intent": "go_to",
+    "description": "Navigates to a project.",
+    "sentence": "intent:NAVIGATE, resource_type:Project, resource_name:computer"
+  },
+  {
+    "query": "go to my project",
+    "parent_intent": "project_management",
+    "child_intent": "go_to",
+    "description": "Navigates to a project.",
+    "sentence": "intent:NAVIGATE, resource_type:Project, resource_name:my project"
+  },
+  {
+    "query": "open the workspace",
+    "parent_intent": "project_management",
+    "child_intent": "go_to",
+    "description": "Navigates to a project.",
+    "sentence": "intent:NAVIGATE, resource_type:Project, resource_name:workspace"
+  },
+  {
+    "query": "remember your projects",
+    "parent_intent": "project_management",
+    "child_intent": "remember",
+    "description": "Scans for projects and remembers them.",
+    "sentence": "intent:REMEMBER, resource_type:Project"
+  },
+  {
+    "query": "scan for projects",
+    "parent_intent": "project_management",
+    "child_intent": "remember",
+    "description": "Scans for projects and remembers them.",
+    "sentence": "intent:REMEMBER, resource_type:Project"
   }
 ]

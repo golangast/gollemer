@@ -136,6 +136,18 @@ func (ic *IntentClassifier) Classify(query string) IntentType {
 		}
 	}
 
+	// Check for go_to_project intent
+	if containsAny(query, []string{"go into", "go to", "open", "cd"}) &&
+		containsAny(query, []string{"computer", "project", "workspace"}) {
+		return GoToProject
+	}
+
+	// Check for remember_projects intent
+	if containsAny(query, []string{"remember", "scan for"}) &&
+		containsAny(query, []string{"projects", "workspaces"}) {
+		return RememberProjects
+	}
+
 	return IntentUnknown
 }
 

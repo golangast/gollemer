@@ -29,7 +29,35 @@ func contains(s []string, e string) bool {
 	return false
 }
 
+func findProjectRoot() (string, error) {
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("failed to get current working directory: %v", err)
+	}
+
+	for {
+		goModPath := filepath.Join(currentDir, "go.mod")
+		if _, err := os.Stat(goModPath); err == nil {
+			return currentDir, nil // Found go.mod, this is the project root
+		}
+
+		parentDir := filepath.Dir(currentDir)
+		if parentDir == currentDir {
+			// Reached the filesystem root without finding go.mod
+			return "", fmt.Errorf("go.mod not found in current directory or any parent directories")
+		}
+		currentDir = parentDir
+	}
+}
+
 func main() {
+	// Initialize absoluteLastDirConfigPath based on the project root
+	projectRoot, err := findProjectRoot()
+	if err != nil {
+		log.Fatalf("Failed to find project root: %v", err)
+	}
+	absoluteLastDirConfigPath = filepath.Join(projectRoot, "last_dir.txt")
+
 	trainWord2Vec := flag.Bool("train-word2vec", false, "Train the Word2Vec model")
 	trainMoE := flag.Bool("train-moe", false, "Train the MoE model")
 	trainIntentClassifier := flag.Bool("train-intent-classifier", false, "Train the intent classification model")
@@ -37,14 +65,6 @@ func main() {
 	serveFlag := flag.Bool("serve", false, "Run in web server mode")
 
 	flag.Parse()
-
-	// Initialize absoluteLastDirConfigPath
-	ex, err := os.Executable()
-	if err != nil {
-		log.Fatalf("Failed to get executable path: %v", err)
-	}
-	exPath := filepath.Dir(ex)
-	absoluteLastDirConfigPath = filepath.Join(exPath, "last_dir.txt")
 
 	if *runLLMFlag {
 		runLLM()
@@ -452,7 +472,12 @@ func runLLM() {
 				predictedSentence = fmt.Sprintf("I couldn't change the directory to %s: %v", targetDirectory, err)
 			} else {
 				predictedSentence = fmt.Sprintf("Changed directory to %s.", targetDirectory)
-				saveLastDirectory(targetDirectory) // Save the successfully changed directory
+				currentAbsDir, err := os.Getwd()
+				if err != nil {
+					log.Printf("Error getting current absolute directory after chdir: %v", err)
+				} else {
+					saveLastDirectory(currentAbsDir) // Save the absolute path
+				}
 			}
 		} else if query == "pwd" {
 			cwd, err := os.Getwd()

@@ -21,6 +21,8 @@ const (
 	IntentRenameFolder         IntentType = "rename_folder"
 	IntentAddFeature           IntentType = "add_feature"
 	IntentModifyCode           IntentType = "modify_code"
+	GoToProject                IntentType = "go_to_project"
+	RememberProjects           IntentType = "remember_projects"
 	IntentUnknown              IntentType = "unknown"
 )
 
