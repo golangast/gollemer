@@ -8,9 +8,6 @@
 This project is in beta and changes daily.  I once in a while upload youtube [videos](https://www.youtube.com/watch?v=8paxWwPt4-A&list=PL_sE11fwtBT-0GqVHEX-tYTBzAIGHelQ6) talking about it's changes.
 
 
-
-
-
 This project provides a command-line utility for interacting with Large Language Model (LLM) functionalities, enabling natural language interaction for various tasks.
 ### Installation
 
@@ -76,16 +73,8 @@ Here are the commands you can use in the interactive LLM mode:
 | **Delete File** | Deletes a specified file. | `delete file old.txt` |
 | **Print Working Directory** | Prints the current working directory. | `pwd` |
 
-### 3. Web Server Mode
 
-To run the application in web server mode, use the following command from the project root:
-
-```bash
-go run . -serve
-```
-This will start a web server, typically on port `8080`, and register any handlers defined in `main.go`.
-
-### 4. Help / No Action
+### 3. Help / No Action
 
 If no flags are provided, the application will prompt the user to specify an action:
 
