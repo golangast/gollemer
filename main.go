@@ -38,6 +38,14 @@ func main() {
 
 	flag.Parse()
 
+	// Initialize absoluteLastDirConfigPath
+	ex, err := os.Executable()
+	if err != nil {
+		log.Fatalf("Failed to get executable path: %v", err)
+	}
+	exPath := filepath.Dir(ex)
+	absoluteLastDirConfigPath = filepath.Join(exPath, "last_dir.txt")
+
 	if *runLLMFlag {
 		runLLM()
 	} else if *serveFlag {
@@ -70,26 +78,198 @@ func startWebServer() {
 }
 
 func findName(taggedData tag.Tag) string {
+
+
+
 	// First, look for a FILENAME tag
+
+
+
 	for i, tag := range taggedData.NerTag {
+
+
+
 		if tag == "FILENAME" {
+
+
+
 			return taggedData.Tokens[i]
+
+
+
 		}
+
+
+
 	}
+
+
+
 	// Fallback for "named"
+
+
+
 	for i, token := range taggedData.Tokens {
+
+
+
 		if token == "named" && i+1 < len(taggedData.Tokens) {
+
+
+
 			return taggedData.Tokens[i+1]
+
+
+
 		}
+
+
+
 	}
+
+
+
 	// Fallback for NAME tag
+
+
+
 	for i, tag := range taggedData.NerTag {
+
+
+
 		if tag == "NAME" {
+
+
+
 			return taggedData.Tokens[i]
+
+
+
 		}
+
+
+
 	}
+
+
+
 	return ""
+
+
+
 }
+
+
+
+
+
+var absoluteLastDirConfigPath string // Global variable for the absolute path to last_dir.txt
+
+
+
+
+
+
+
+
+
+
+
+func saveLastDirectory(dirPath string) {
+
+
+
+
+
+	err := os.WriteFile(absoluteLastDirConfigPath, []byte(dirPath), 0644)
+
+
+
+
+
+	if err != nil {
+
+
+
+
+
+		log.Printf("Error saving last directory to %s: %v", absoluteLastDirConfigPath, err)
+
+
+
+
+
+	}
+
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+func loadLastDirectory() (string, error) {
+
+
+
+
+
+	content, err := os.ReadFile(absoluteLastDirConfigPath)
+
+
+
+
+
+	if err != nil {
+
+
+
+
+
+		return "", fmt.Errorf("error reading last directory from %s: %v", absoluteLastDirConfigPath, err)
+
+
+
+
+
+	}
+
+
+
+
+
+	return strings.TrimSpace(string(content)), nil
+
+
+
+
+
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 func createTableWithFields(dbFileName, tableName string, fields map[string]string) error {
 	db, err := sql.Open("sqlite", dbFileName)
@@ -126,6 +306,19 @@ func createTableWithFields(dbFileName, tableName string, fields map[string]strin
 
 func runLLM() {
 	reader := bufio.NewReader(os.Stdin)
+
+	// Load last directory on startup
+	lastDir, err := loadLastDirectory()
+	if err == nil {
+		err := os.Chdir(lastDir)
+		if err != nil {
+			log.Printf("Could not change to last saved directory '%s': %v. Starting in current directory.", lastDir, err)
+		} else {
+			fmt.Printf("Changed to last saved directory: %s\n", lastDir)
+		}
+	} else {
+		log.Printf("No last directory found or error reading: %v. Starting in current directory.", err)
+	}
 
 	for {
 		fmt.Print("/ʕ◔ϖ◔ʔ/> ")
@@ -259,6 +452,7 @@ func runLLM() {
 				predictedSentence = fmt.Sprintf("I couldn't change the directory to %s: %v", targetDirectory, err)
 			} else {
 				predictedSentence = fmt.Sprintf("Changed directory to %s.", targetDirectory)
+				saveLastDirectory(targetDirectory) // Save the successfully changed directory
 			}
 		} else if query == "pwd" {
 			cwd, err := os.Getwd()
