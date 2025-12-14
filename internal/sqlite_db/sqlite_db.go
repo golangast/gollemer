@@ -30,7 +30,7 @@ func InitDB(dataSourceName string) (*sql.DB, error) {
 	}
 
 	// Create messages table
-	createTableSQL := `CREATE TABLE IF NOT EXISTS messages (
+	createMessagesTableSQL := `CREATE TABLE IF NOT EXISTS messages (
 		"id" INTEGER PRIMARY KEY AUTOINCREMENT,
 		"role" TEXT NOT NULL,
 		"content" TEXT NOT NULL,
@@ -38,10 +38,22 @@ func InitDB(dataSourceName string) (*sql.DB, error) {
 		"commit_hash" TEXT
 	);`
 
-	_, err = db.Exec(createTableSQL)
+	_, err = db.Exec(createMessagesTableSQL)
 	if err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to create messages table: %w", err)
+	}
+
+	createUsersTableSQL := `CREATE TABLE IF NOT EXISTS users (
+		"id" INTEGER PRIMARY KEY AUTOINCREMENT,
+		"name" TEXT NOT NULL,
+		"age" INTEGER NOT NULL
+	);`
+
+	_, err = db.Exec(createUsersTableSQL)
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to create users table: %w", err)
 	}
 
 	log.Printf("SQLite database initialized at %s", dataSourceName)
