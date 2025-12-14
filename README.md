@@ -44,8 +44,7 @@ Use the respective flags to initiate the training process. Each flag executes a 
 | **Mixture of Experts (MoE)** | `--train-moe` | `go run main.go --train-moe` |
 
 <p align="center">
-<img src="[URL_OR_PATH_TO_GIF.gif](https://github.com/golangast/gollemer/blob/main/mov/mov.gif)" alt="Description" width="700" height="auto" />
-
+    <img  width="auto" height="auto" style="width:60%;" src="./mov/mov.gif" alt="Alt text" title="Optional title">
 </p>
 
 
