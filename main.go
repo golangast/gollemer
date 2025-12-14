@@ -91,6 +91,39 @@ func findName(taggedData tag.Tag) string {
 	return ""
 }
 
+func createTableWithFields(dbFileName, tableName string, fields map[string]string) error {
+	db, err := sql.Open("sqlite", dbFileName)
+	if err != nil {
+		return fmt.Errorf("couldn't open the database file %s: %v", dbFileName, err)
+	}
+	defer db.Close()
+
+	sqlStatement := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (\n", tableName)
+	columns := []string{}
+	for fieldName, fieldType := range fields {
+		sqlType := ""
+		switch strings.ToLower(fieldType) {
+		case "string":
+			sqlType = "TEXT"
+		case "int":
+			sqlType = "INTEGER"
+		// Add more type mappings as needed
+		default:
+			sqlType = "TEXT" // Default to TEXT for unknown types
+		}
+		columns = append(columns, fmt.Sprintf("\t%s %s", strings.ToLower(fieldName), sqlType))
+	}
+	sqlStatement += strings.Join(columns, ",\n")
+	sqlStatement += "\n);"
+
+	_, err = db.Exec(sqlStatement)
+	if err != nil {
+		return fmt.Errorf("couldn't create the table '%s' in %s: %v", tableName, dbFileName, err)
+	}
+	return nil
+}
+
+
 func runLLM() {
 	reader := bufio.NewReader(os.Stdin)
 
@@ -447,6 +480,48 @@ func main() {
 					} else {
 						db.Close()
 						predictedSentence = fmt.Sprintf("I have created the database file %s using the program's command.", dbFileName)
+
+						// Check if "with the fields" is present to create a table
+						if strings.Contains(strings.ToLower(query), "with the fields") {
+							queryParts := strings.Fields(query)
+							fieldStartIndex := -1
+							for i, part := range queryParts {
+								if strings.ToLower(part) == "fields" && i > 0 && strings.ToLower(queryParts[i-1]) == "the" && i > 1 && strings.ToLower(queryParts[i-2]) == "with" {
+									fieldStartIndex = i
+									break
+								}
+							}
+
+							if fieldStartIndex != -1 {
+								fields := make(map[string]string) // fieldName -> fieldType
+								for i := fieldStartIndex + 1; i < len(queryParts); {
+									if strings.ToLower(queryParts[i]) == "and" { // Skip "and"
+										i++
+										continue
+									}
+									if i+1 < len(queryParts) {
+										fieldName := queryParts[i]
+										fieldType := queryParts[i+1]
+										fields[fieldName] = fieldType
+										i += 2 // Move past fieldName and fieldType
+									} else {
+										log.Printf("Incomplete field definition found in query: %s", query)
+										break
+									}
+								}
+
+								if len(fields) > 0 {
+									err = createTableWithFields(dbFileName, fileName, fields) // Use fileName as tableName
+									if err != nil {
+										predictedSentence += fmt.Sprintf(" But couldn't create the table '%s' in %s: %v", fileName, dbFileName, err)
+									} else {
+										predictedSentence += fmt.Sprintf(" And created table '%s' with the specified fields.", fileName)
+									}
+								} else {
+									predictedSentence += fmt.Sprintf(" But no valid fields were provided to create a table.")
+								}
+							}
+						}
 					}
 				}
 			} else {
@@ -454,11 +529,9 @@ func main() {
 			}
 
 		} else if command == "create" && objectType == "data structure" {
-			var db *sql.DB
 			var err error
 			var dbFileName string
-			var columns []string
-			var sqlStatement string
+			// Removed unused variable declarations: var db *sql.DB, var columns []string, var sqlStatement string
 			var tableName string
 			var structFileName string
 			var structContent string
@@ -534,36 +607,9 @@ func main() {
 			}
 			predictedSentence = fmt.Sprintf("I have created the Go struct '%s' in %s.", structName, structFileName)
 
-			// Generate SQL CREATE TABLE statement
-			tableName = strings.ToLower(structName) // Lowercase for table name
-			sqlStatement = fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (\n", tableName)
-			columns = []string{}
-			for fieldName, fieldType := range fields {
-				sqlType := ""
-				switch fieldType {
-				case "string":
-					sqlType = "TEXT"
-				case "int":
-					sqlType = "INTEGER"
-				// Add more type mappings as needed
-				default:
-					sqlType = "TEXT" // Default to TEXT for unknown types
-				}
-				columns = append(columns, fmt.Sprintf("\t%s %s", strings.ToLower(fieldName), sqlType))
-			}
-			sqlStatement += strings.Join(columns, ",\n")
-			sqlStatement += "\n);"
-
-			// Update jim.db with the new table
-			dbFileName = "jim.db" // Assuming jim.db is the target database
-			db, err = sql.Open("sqlite", dbFileName)
-			if err != nil {
-				predictedSentence += fmt.Sprintf(" And couldn't open the database file %s to create the table: %v", dbFileName, err)
-				goto endOfDataStructureCreation
-			}
-			defer db.Close()
-
-			_, err = db.Exec(sqlStatement)
+			// Use the helper function to create the table
+			dbFileName = "jim.db" // This is still hardcoded for now
+			err = createTableWithFields(dbFileName, tableName, fields)
 			if err != nil {
 				predictedSentence += fmt.Sprintf(" But couldn't create the table '%s' in %s: %v", tableName, dbFileName, err)
 				goto endOfDataStructureCreation
