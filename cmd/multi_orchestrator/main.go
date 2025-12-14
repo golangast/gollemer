@@ -294,171 +294,150 @@ func main() {
 	customIntents := NewCustomIntentRegistry("generated_projects/custom_intents.json")
 	fmt.Printf("📚 Loaded %d custom intent(s)\n", len(customIntents.Intents))
 
-		if err := loadProjects(); err != nil {
+	if err := loadProjects(); err != nil {
 
-			fmt.Printf("Failed to load projects: %v\n", err)
+		fmt.Printf("Failed to load projects: %v\n", err)
 
-		}
+	}
 
-	
+	// Initialize LLM Client
 
-		// Initialize LLM Client
+	var llmClient *LLMClient
 
-		var llmClient *LLMClient
+	if *useLLM {
 
-		if *useLLM {
+		// Note: Paths are relative to the project root where the command is run
 
-			// Note: Paths are relative to the project root where the command is run
+		llmClient, err = NewLLMClient(
 
-			llmClient, err = NewLLMClient(
+			"gob_models/query_vocabulary.gob",
 
-				"gob_models/query_vocabulary.gob",
+			"gob_models/semantic_output_vocabulary.gob",
 
-				"gob_models/semantic_output_vocabulary.gob",
+			"gob_models/moe_classification_model.gob",
+		)
 
-				"gob_models/moe_classification_model.gob",
+		if err != nil {
 
-			)
+			fmt.Printf("⚠️  LLM Client not available: %v\n", err)
 
-			if err != nil {
-
-				fmt.Printf("⚠️  LLM Client not available: %v\n", err)
-
-				fmt.Println("    (Q&A features will be disabled. Ensure 'gob_models' are present)")
-
-			} else {
-
-				fmt.Println("🧠 LLM Client initialized. You can ask questions directly!")
-
-			}
+			fmt.Println("    (Q&A features will be disabled. Ensure 'gob_models' are present)")
 
 		} else {
 
-			fmt.Println("ℹ️  LLM features disabled (use -llm to enable)")
+			fmt.Println("🧠 LLM Client initialized. You can ask questions directly!")
 
 		}
 
-	
+	} else {
 
-		// DSL State
+		fmt.Println("ℹ️  LLM features disabled (use -llm to enable)")
 
-		var dslCommands []string
+	}
 
-	
+	// DSL State
 
-		for {
+	var dslCommands []string
 
-			fmt.Print("\n🤖 Multi-Orchestrator (with NLP Understanding)\n")
+	for {
 
-			fmt.Print("Commands: 'delete project', 'show history', 'revert <id/hash/command>', 'generate feeds', 'exit'\n")
+		fmt.Print("\n🤖 Multi-Orchestrator (with NLP Understanding)\n")
 
-			fmt.Print("DSL: 'MODEL ...', 'ENDPOINT ...', 'GENERATE DSL', 'CLEAR DSL'\n")
+		fmt.Print("Commands: 'delete project', 'show history', 'revert <id/hash/command>', 'generate feeds', 'exit'\n")
 
-			fmt.Print("Or describe what you want in natural language (e.g., 'create a webserver with authentication handler')\n> ")
+		fmt.Print("DSL: 'MODEL ...', 'ENDPOINT ...', 'GENERATE DSL', 'CLEAR DSL'\n")
 
-			goal, _ := reader.ReadString('\n')
+		fmt.Print("Or describe what you want in natural language (e.g., 'create a webserver with authentication handler')\n> ")
 
-			goal = strings.TrimSpace(goal)
+		goal, _ := reader.ReadString('\n')
 
-	
+		goal = strings.TrimSpace(goal)
 
-			if goal == "exit" {
+		if goal == "exit" {
 
-				fmt.Println("Exiting multi-orchestrator.")
+			fmt.Println("Exiting multi-orchestrator.")
 
-				break
+			break
+
+		}
+
+		// Handle Q&A with LLM
+
+		// Check if the input is a natural language question for the LLM
+
+		isQuestion := false
+
+		if strings.HasSuffix(goal, "?") {
+
+			isQuestion = true
+
+		} else {
+
+			loweredGoal := strings.ToLower(goal)
+
+			for _, trigger := range qaTriggers {
+
+				if strings.HasPrefix(loweredGoal, trigger) {
+
+					isQuestion = true
+
+					break
+
+				}
 
 			}
 
-	
+		}
 
-			// Handle Q&A with LLM
+		if isQuestion && llmClient != nil {
 
-			// Check if the input is a natural language question for the LLM
+			fmt.Println("🤔 Asking the MoE model...")
 
-			isQuestion := false
+			query := goal
 
-			if strings.HasSuffix(goal, "?") {
+			// Remove "ask" prefix if present for cleaner query, but keep others
 
-				isQuestion = true
+			if strings.HasPrefix(strings.ToLower(goal), "ask ") {
+
+				query = strings.TrimPrefix(goal, "ask ")
+
+				query = strings.TrimPrefix(query, "Ask ")
+
+			}
+
+			response, err := llmClient.Query(query)
+
+			if err != nil {
+
+				fmt.Printf("❌ LLM Query failed: %v\n", err)
 
 			} else {
 
-				loweredGoal := strings.ToLower(goal)
+				// Try to parse JSON response to extract answer
 
-				for _, trigger := range qaTriggers {
+				var semanticOutput semantic.SemanticOutput
 
-					if strings.HasPrefix(loweredGoal, trigger) {
+				if err := json.Unmarshal([]byte(response), &semanticOutput); err == nil {
 
-						isQuestion = true
+					// Successfully parsed JSON - extract answer
 
-						break
+					if semanticOutput.TargetResource != nil && semanticOutput.TargetResource.Properties != nil {
 
-					}
+						if answer, ok := semanticOutput.TargetResource.Properties["answer"].(string); ok {
 
-				}
+							fmt.Printf("\n💡 Answer: %s\n\n", answer)
 
-			}
+							// Also show topic if available
 
-	
+							if topic, ok := semanticOutput.TargetResource.Properties["topic"].(string); ok {
 
-			if isQuestion && llmClient != nil {
-
-				fmt.Println("🤔 Asking the MoE model...")
-
-				query := goal
-
-				// Remove "ask" prefix if present for cleaner query, but keep others
-
-				if strings.HasPrefix(strings.ToLower(goal), "ask ") {
-
-					query = strings.TrimPrefix(goal, "ask ")
-
-					query = strings.TrimPrefix(query, "Ask ")
-
-				}
-
-	
-
-				response, err := llmClient.Query(query)
-
-				if err != nil {
-
-					fmt.Printf("❌ LLM Query failed: %v\n", err)
-
-				} else {
-
-					// Try to parse JSON response to extract answer
-
-					var semanticOutput semantic.SemanticOutput
-
-					if err := json.Unmarshal([]byte(response), &semanticOutput); err == nil {
-
-						// Successfully parsed JSON - extract answer
-
-						if semanticOutput.TargetResource != nil && semanticOutput.TargetResource.Properties != nil {
-
-							if answer, ok := semanticOutput.TargetResource.Properties["answer"].(string); ok {
-
-								fmt.Printf("\n💡 Answer: %s\n\n", answer)
-
-								// Also show topic if available
-
-								if topic, ok := semanticOutput.TargetResource.Properties["topic"].(string); ok {
-
-									fmt.Printf("📚 Topic: %s\n", topic)
-
-								}
-
-							} else {
-
-								// Fallback: show full response
-
-								fmt.Printf("\n🤖 Model Response:\n%s\n\n", response)
+								fmt.Printf("📚 Topic: %s\n", topic)
 
 							}
 
 						} else {
+
+							// Fallback: show full response
 
 							fmt.Printf("\n🤖 Model Response:\n%s\n\n", response)
 
@@ -466,201 +445,183 @@ func main() {
 
 					} else {
 
-						// Not JSON or parsing failed - show as-is
-
 						fmt.Printf("\n🤖 Model Response:\n%s\n\n", response)
 
 					}
 
-				}
-
-				continue
-
-			}
-
-	
-
-			// Use semantic parsing instead of naive keyword matching
-
-			parsedGoal, err := parseGoalWithSemantics(goal)
-
-	
-
-			if parsedGoal.Intent == semantic.GoToProject {
-
-				projectName, ok := parsedGoal.Entities["project"]
-
-				if !ok {
-
-					// Fallback to the last word in the query
-
-					words := strings.Fields(goal)
-
-					projectName = words[len(words)-1]
-
-				}
-
-	
-
-				if path, ok := projects[projectName]; ok {
-
-					fmt.Printf("Navigating to project: %s\n", projectName)
-
-					fmt.Printf("cd %s\n", path)
-
 				} else {
 
-					fmt.Printf("Project not found: %s\n", projectName)
+					// Not JSON or parsing failed - show as-is
+
+					fmt.Printf("\n🤖 Model Response:\n%s\n\n", response)
 
 				}
 
-				continue
+			}
+
+			continue
+
+		}
+
+		// Use semantic parsing instead of naive keyword matching
+
+		parsedGoal, err := parseGoalWithSemantics(goal)
+
+		if parsedGoal.Intent == semantic.GoToProject {
+
+			projectName, ok := parsedGoal.Entities["project"]
+
+			if !ok {
+
+				// Fallback to the last word in the query
+
+				words := strings.Fields(goal)
+
+				projectName = words[len(words)-1]
 
 			}
 
-	
+			if path, ok := projects[projectName]; ok {
 
-			if parsedGoal.Intent == semantic.RememberProjects {
+				fmt.Printf("Navigating to project: %s\n", projectName)
 
-				fmt.Println("Remembering projects...")
+				fmt.Printf("cd %s\n", path)
 
-				newProjects := make(map[string]string)
+			} else {
 
-				err := filepath.Walk("computer/cmd", func(path string, info os.FileInfo, err error) error {
+				fmt.Printf("Project not found: %s\n", projectName)
 
-					if err != nil {
+			}
 
-						return err
+			continue
 
-					}
+		}
 
-					if info.IsDir() && path != "computer/cmd" {
+		if parsedGoal.Intent == semantic.RememberProjects {
 
-						projectName := filepath.Base(path)
+			fmt.Println("Remembering projects...")
 
-						newProjects[projectName] = path
+			newProjects := make(map[string]string)
 
-					}
-
-					return nil
-
-				})
+			err := filepath.Walk("computer/cmd", func(path string, info os.FileInfo, err error) error {
 
 				if err != nil {
 
-					fmt.Printf("Failed to scan for projects: %v\n", err)
-
-					continue
+					return err
 
 				}
 
-	
+				if info.IsDir() && path != "computer/cmd" {
 
-				data, err := json.MarshalIndent(newProjects, "", "  ")
+					projectName := filepath.Base(path)
 
-				if err != nil {
-
-					fmt.Printf("Failed to marshal projects: %v\n", err)
-
-					continue
+					newProjects[projectName] = path
 
 				}
 
-	
+				return nil
 
-				if err := os.WriteFile("generated_projects/projects.json", data, 0644); err != nil {
+			})
 
-					fmt.Printf("Failed to save projects: %v\n", err)
+			if err != nil {
 
-					continue
-
-				}
-
-	
-
-				projects = newProjects
-
-				fmt.Printf("Remembered %d projects.\n", len(projects))
+				fmt.Printf("Failed to scan for projects: %v\n", err)
 
 				continue
 
 			}
 
-	
+			data, err := json.MarshalIndent(newProjects, "", "  ")
 
-			// Handle DSL Commands
+			if err != nil {
 
-			goalUpper := strings.ToUpper(goal)
-
-			if strings.HasPrefix(goalUpper, "MODEL ") || strings.HasPrefix(goalUpper, "ENDPOINT ") {
-
-				dslCommands = append(dslCommands, goal)
-
-				fmt.Printf("✅ DSL command added (%d pending). Type 'GENERATE DSL' to execute.\n", len(dslCommands))
+				fmt.Printf("Failed to marshal projects: %v\n", err)
 
 				continue
 
 			}
 
-	
+			if err := os.WriteFile("generated_projects/projects.json", data, 0644); err != nil {
 
-			if goalUpper == "CLEAR DSL" {
-
-				dslCommands = []string{}
-
-				fmt.Println("🧹 DSL commands cleared.")
+				fmt.Printf("Failed to save projects: %v\n", err)
 
 				continue
 
 			}
 
-			if goalUpper == "GENERATE DSL" {
+			projects = newProjects
 
-				if len(dslCommands) == 0 {
+			fmt.Printf("Remembered %d projects.\n", len(projects))
 
-					fmt.Println("⚠️  No DSL commands to generate.")
+			continue
 
-					continue
+		}
 
-				}
+		// Handle DSL Commands
 
-	
+		goalUpper := strings.ToUpper(goal)
 
-				fmt.Println("🏗️  Parsing DSL commands...")
+		if strings.HasPrefix(goalUpper, "MODEL ") || strings.HasPrefix(goalUpper, "ENDPOINT ") {
 
-				cfg, err := dsl.ParseDSL(dslCommands)
+			dslCommands = append(dslCommands, goal)
 
-				if err != nil {
+			fmt.Printf("✅ DSL command added (%d pending). Type 'GENERATE DSL' to execute.\n", len(dslCommands))
 
-					fmt.Printf("❌ Error parsing DSL: %v\n", err)
+			continue
 
-					continue
+		}
 
-				}
+		if goalUpper == "CLEAR DSL" {
 
-	
+			dslCommands = []string{}
 
-				outputDir := "generated_projects/project"
+			fmt.Println("🧹 DSL commands cleared.")
 
-				fmt.Printf("🚀 Generating project from DSL into %s...\n", outputDir)
+			continue
 
-				if err := csvgen.GenerateFromConfig(cfg, outputDir); err != nil {
+		}
 
-					fmt.Printf("❌ Error generating from DSL: %v\n", err)
+		if goalUpper == "GENERATE DSL" {
 
-				} else {
+			if len(dslCommands) == 0 {
 
-					fmt.Println("✅ Successfully generated project from DSL!")
-
-					dslCommands = []string{} // Clear after success
-
-				}
+				fmt.Println("⚠️  No DSL commands to generate.")
 
 				continue
 
 			}
 
-	
+			fmt.Println("🏗️  Parsing DSL commands...")
+
+			cfg, err := dsl.ParseDSL(dslCommands)
+
+			if err != nil {
+
+				fmt.Printf("❌ Error parsing DSL: %v\n", err)
+
+				continue
+
+			}
+
+			outputDir := "generated_projects/project"
+
+			fmt.Printf("🚀 Generating project from DSL into %s...\n", outputDir)
+
+			if err := csvgen.GenerateFromConfig(cfg, outputDir); err != nil {
+
+				fmt.Printf("❌ Error generating from DSL: %v\n", err)
+
+			} else {
+
+				fmt.Println("✅ Successfully generated project from DSL!")
+
+				dslCommands = []string{} // Clear after success
+
+			}
+
+			continue
+
+		}
 
 		// Handle CSV feed generation
 		goalLowerForFeeds := strings.ToLower(goal)
@@ -933,7 +894,7 @@ func main() {
 		}
 
 		// Use semantic parsing instead of naive keyword matching
-		parsedGoal, err := parseGoalWithSemantics(goal)
+		parsedGoal, err = parseGoalWithSemantics(goal)
 
 		if parsedGoal.Intent == semantic.GoToProject {
 			projectName, ok := parsedGoal.Entities["computer"]

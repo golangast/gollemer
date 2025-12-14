@@ -11,9 +11,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time" // Added time import
 
 	_ "modernc.org/sqlite" // Pure Go SQLite driver
 
+	"github.com/golangast/gollemer/colors"
 	"github.com/golangast/gollemer/tagger/nertagger"
 	"github.com/golangast/gollemer/tagger/postagger"
 	"github.com/golangast/gollemer/tagger/tag"
@@ -99,197 +101,73 @@ func startWebServer() {
 
 func findName(taggedData tag.Tag) string {
 
-
-
 	// First, look for a FILENAME tag
 
-
-
 	for i, tag := range taggedData.NerTag {
-
-
 
 		if tag == "FILENAME" {
 
-
-
 			return taggedData.Tokens[i]
-
-
 
 		}
 
-
-
 	}
-
-
 
 	// Fallback for "named"
 
-
-
 	for i, token := range taggedData.Tokens {
-
-
 
 		if token == "named" && i+1 < len(taggedData.Tokens) {
 
-
-
 			return taggedData.Tokens[i+1]
-
-
 
 		}
 
-
-
 	}
-
-
 
 	// Fallback for NAME tag
 
-
-
 	for i, tag := range taggedData.NerTag {
-
-
 
 		if tag == "NAME" {
 
-
-
 			return taggedData.Tokens[i]
-
-
 
 		}
 
-
-
 	}
-
-
 
 	return ""
 
-
-
 }
-
-
-
-
 
 var absoluteLastDirConfigPath string // Global variable for the absolute path to last_dir.txt
 
-
-
-
-
-
-
-
-
-
-
 func saveLastDirectory(dirPath string) {
-
-
-
-
 
 	err := os.WriteFile(absoluteLastDirConfigPath, []byte(dirPath), 0644)
 
-
-
-
-
 	if err != nil {
-
-
-
-
 
 		log.Printf("Error saving last directory to %s: %v", absoluteLastDirConfigPath, err)
 
-
-
-
-
 	}
 
-
-
-
-
 }
-
-
-
-
-
-
-
-
-
-
 
 func loadLastDirectory() (string, error) {
 
-
-
-
-
 	content, err := os.ReadFile(absoluteLastDirConfigPath)
-
-
-
-
 
 	if err != nil {
 
-
-
-
-
 		return "", fmt.Errorf("error reading last directory from %s: %v", absoluteLastDirConfigPath, err)
-
-
-
-
 
 	}
 
-
-
-
-
 	return strings.TrimSpace(string(content)), nil
 
-
-
-
-
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 func createTableWithFields(dbFileName, tableName string, fields map[string]string) error {
 	db, err := sql.Open("sqlite", dbFileName)
@@ -323,8 +201,11 @@ func createTableWithFields(dbFileName, tableName string, fields map[string]strin
 	return nil
 }
 
-
 func runLLM() {
+	cmd := exec.Command("clear")
+	cmd.Stdout = os.Stdout
+	cmd.Run()
+
 	reader := bufio.NewReader(os.Stdin)
 
 	// Load last directory on startup
@@ -332,21 +213,22 @@ func runLLM() {
 	if err == nil {
 		err := os.Chdir(lastDir)
 		if err != nil {
-			log.Printf("Could not change to last saved directory '%s': %v. Starting in current directory.", lastDir, err)
-		} else {
-			fmt.Printf("Changed to last saved directory: %s\n", lastDir)
 		}
-	} else {
-		log.Printf("No last directory found or error reading: %v. Starting in current directory.", err)
 	}
 
 	for {
-		fmt.Print("/ʕ◔ϖ◔ʔ/> ")
+		colors.ColorizeCol("red", "magenta", "/ʕ◔ϖ◔ʔ/> ")
+
 		query, _ := reader.ReadString('\n')
 		query = strings.TrimSpace(query)
 
 		if query == "exit" {
 			break
+		} else if query == "clear" {
+			cmd := exec.Command("clear")
+			cmd.Stdout = os.Stdout
+			cmd.Run()
+			continue
 		}
 
 		// --- Tagging ---
@@ -685,11 +567,11 @@ func main() {
 					}
 				}
 			}
-		            var db *sql.DB
-		            var err error
-		            if fileName != "" {
-		                dbFileName := fileName + ".db"
-		                db, err = sql.Open("sqlite", dbFileName)
+			var db *sql.DB
+			var err error
+			if fileName != "" {
+				dbFileName := fileName + ".db"
+				db, err = sql.Open("sqlite", dbFileName)
 				if err != nil {
 					predictedSentence = fmt.Sprintf("I couldn't open the database file %s: %v", dbFileName, err)
 				} else {
@@ -878,8 +760,8 @@ func main() {
 			fmt.Printf("TargetDirectory: %s\n", targetDirectory) // New debug info
 			fmt.Println("--------------------")
 		}
+		colors.AnimatedOutput("blue", "red", predictedSentence, 1*time.Second)
+		fmt.Println("\n")
 
-		// Print the output
-		fmt.Println(predictedSentence)
 	}
 }
