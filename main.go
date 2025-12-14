@@ -206,8 +206,18 @@ func runLLM() {
 				break
 			}
 		}
-		if command == "go" && targetDirectory == "" && len(taggedData.Tokens) > 1 {
-			targetDirectory = taggedData.Tokens[1]
+		// New logic to find the target directory more robustly
+		if command == "go" {
+			// Find the last token that is not a common command word or preposition
+			// Iterate backwards from the end of the tokens
+			for i := len(taggedData.Tokens) - 1; i >= 0; i-- {
+				token := strings.ToLower(taggedData.Tokens[i])
+				// Exclude command words and prepositions
+				if token != "go" && token != "to" && token != "project" && token != "folder" && token != "directory" && token != "cd" {
+					targetDirectory = taggedData.Tokens[i]
+					break
+				}
+			}
 		}
 
 		if command == "go" && targetDirectory != "" {
