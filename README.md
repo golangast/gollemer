@@ -34,7 +34,7 @@ You may need to retrain the model before using the llm mode.
 
 The main executable (`main.go`) controls all operations using specific command-line flags. All commands should be run from the root directory of the project.
 
-### 1\. Training Models
+### 1. Training Models
 
 Use the respective flags to initiate the training process. Each flag executes a separate module located in the `cmd/` directory.
 
@@ -42,53 +42,59 @@ Use the respective flags to initiate the training process. Each flag executes a 
 | :--- | :--- | :--- |
 | **Word2Vec** | `--train-word2vec` | `go run main.go --train-word2vec` |
 | **Mixture of Experts (MoE)** | `--train-moe` | `go run main.go --train-moe` |
+| **Intent Classifier** | `--train-intent-classifier` | `go run main.go --train-intent-classifier` |
 
 <p align="center">
     <img  width="auto" height="auto" style="width:60%;" src="./mov/mov.gif" alt="Alt text" title="Optional title">
 </p>
 
+### 2. LLM Interactive Mode
 
+To run the LLM utility in interactive mode, use the following command from the project root:
 
-### 2\. Help / No Action
+```bash
+go run . -llm
+```
+
+Once in interactive mode, you can type natural language commands directly. The CLI will attempt to understand your intent and execute the corresponding action.
+
+#### LLM Interactive Mode Commands
+
+Here are the commands you can use in the interactive LLM mode:
+
+| Command | Description | Example Prompt |
+| :------ | :---------- | :------------- |
+| **Change Directory** | Navigates to a specified directory. The `gollemer` remembers the last directory you navigated to. | `go to myproject` <br> `cd src` |
+| **List Directory Contents** | Lists files, folders, or both in the current directory or a specified path. | `list all files` <br> `list folders` <br> `ls` |
+| **Create Folder** | Creates a new directory. | `create folder mydata` <br> `create folder temp in /tmp` |
+| **Create File** | Creates a new empty file. | `create file README.md` <br> `create file test.txt in src` |
+| **Create Handler** | Generates a new Go HTTP handler function and registers it in `main.go`. | `create handler MyHandler with url /myapi` |
+| **Create Webserver** | Scaffolds a new Go web server project in `cmd/<name>/main.go`. | `create webserver MyServer` |
+| **Create Database** | Creates a SQLite database file and optionally a table with specified fields. | `create database myappdb` <br> `create database myappdb with the fields name string and age int` |
+| **Create Data Structure** | Creates a Go struct file and a corresponding table in a SQLite database (`jim.db`). | `create data structure User with field Name string and Age int` |
+| **Delete Folder** | Deletes a specified directory. | `delete folder temp` |
+| **Delete File** | Deletes a specified file. | `delete file old.txt` |
+| **Print Working Directory** | Prints the current working directory. | `pwd` |
+
+### 3. Web Server Mode
+
+To run the application in web server mode, use the following command from the project root:
+
+```bash
+go run . -serve
+```
+This will start a web server, typically on port `8080`, and register any handlers defined in `main.go`.
+
+### 4. Help / No Action
 
 If no flags are provided, the application will prompt the user to specify an action:
 
 ```
 $ go run main.go
-2025/10/05 07:35:00 No action specified. Use -train-word2vec, -train-moe, -train-intent-classifier, or -moe_inference <query>.
+2025/10/05 07:35:00 No action specified. Use -train-word2vec, -train-moe, -train-intent-classifier, or -llm.
 ```
 
 -----
-
-## Usage
-
-To run the LLM utility, use the following command from the project root:
-
-```bash
-//run the command
-go run . -llm 
-
-then type in your command (create file named jim)
-"Your natural language command or query here"
-```
-
-Replace `"Your natural language command or query here"` with the specific input you want the LLM to process.
-
-## Examples
-
-Here are some examples of commands you can use with the LLM utility:
-
-*   **Information Query:**
-    ```bash
-    //run commands
-    go run . -llm 
-    
-    "create a webserver jim"
-    ```
-
-
-
-
 
 ## Special thanks
 * [Go Team because they are gods](https://github.com/golang/go/graphs/contributors)
