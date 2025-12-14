@@ -24,7 +24,7 @@ var posTags = map[string]string{
 	`\b(?:what(?:ever)?|which(?:ever)?|whose|that)\b`: "WDT", //Wh-determiner
 	`\b(?:containing|holding|including)\b`:            "VBG", // Present Participle Verbs
 	`\b(?:and|or|but|nor|for|yet|so)\b`:               "CC",
-	`\b(?:with|of|in|on|at|by|for|from|to|through|over|under|around|between|among|across|near|behind|beside|against|along|up|down|inside|outside)\b`: "IN", // Prepositions
+	`\b(?:with|of|in|on|at|by|for|from|to|through|over|under|around|between|among|across|near|behind|beside|against|along|up|down|inside|outside|into)\b`: "IN", // Prepositions
 	`\b(?:[Aa]n?|[Tt]he)\b`:              "DET", // Article
 	`\b(?:a|an|the)\b`:                   "DET", // Determiners
 	`\bwebserver\b`:                      "NN",

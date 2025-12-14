@@ -21,7 +21,7 @@ func init() {
 		{regexp.MustCompile(`\b(what|where|when|who|why|how)\b`), "QUESTION_WORD"},
 		{regexp.MustCompile(`\b(is|am|are|was|were|be|being|been)\b`), "VERB"},
 		{regexp.MustCompile(`[a-zA-Z0-9_.-]+\.[a-zA-Z0-9_.-]+`), "FILENAME"},
-		{regexp.MustCompile(`\b(in|on|to|from|for)\b`), "PREPOSITION"},
+		{regexp.MustCompile(`\b(in|on|to|from|for|into)\b`), "PREPOSITION"},
 		{regexp.MustCompile(`\b(the|a|an)\b`), "DETERMINER"},
 		{regexp.MustCompile(`\bnamed\b`), "NAME_PREFIX"},
 		{regexp.MustCompile(`[a-zA-Z0-9_./-]+`), "PATH"},
