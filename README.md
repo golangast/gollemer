@@ -61,7 +61,7 @@ Use the respective flags to initiate the training process. Each flag executes a 
 | **Intent Classifier** | `--train-intent-classifier` | `go run main.go --train-intent-classifier` |
 
 <p align="center">
-    <img  width="auto" height="auto" style="width:60%;" src="./mov/mov.gif" alt="Alt text" title="Optional title">
+    <img style="zoom:5"  width="100%" height="2000" style="width:60%;" src="./mov/mov.gif" alt="Alt text" title="Optional title">
 </p>
 
 ### 2. LLM Interactive Mode
