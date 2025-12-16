@@ -16,6 +16,7 @@ import (
 	_ "modernc.org/sqlite" // Pure Go SQLite driver
 
 	"github.com/golangast/gollemer/colors"
+	"github.com/golangast/gollemer/internal/sqlite_db"
 	"github.com/golangast/gollemer/tagger/nertagger"
 	"github.com/golangast/gollemer/tagger/postagger"
 	"github.com/golangast/gollemer/tagger/tag"
@@ -201,10 +202,54 @@ func createTableWithFields(dbFileName, tableName string, fields map[string]strin
 	return nil
 }
 
+func registerHandlerURL(handlerName, handlerURL string) (string, error) {
+	log.Printf("Attempting to register handler '%s' with URL '%s'", handlerName, handlerURL)
+
+	mainGoContent, err := os.ReadFile("main.go")
+	if err != nil {
+		log.Printf("Error reading main.go: %v", err)
+		return "", fmt.Errorf("could not read main.go: %w", err)
+	}
+	log.Println("Successfully read main.go")
+
+	newHandleFunc := fmt.Sprintf("\thttp.HandleFunc(\"%s\", %sHandler)\n\t// HANDLER_REGISTRATIONS_GO_HERE", handlerURL, strings.Title(handlerName))
+	log.Printf("New HandleFunc string: %s", newHandleFunc)
+
+	if !strings.Contains(string(mainGoContent), fmt.Sprintf("http.HandleFunc(\"%s\", %sHandler)", handlerURL, strings.Title(handlerName))) {
+		log.Println("Handler not already registered. Proceeding with replacement.")
+		updatedMainGoContent := strings.Replace(string(mainGoContent), "// HANDLER_REGISTRATIONS_GO_HERE", newHandleFunc, 1)
+
+		if updatedMainGoContent == string(mainGoContent) {
+			log.Println("Warning: Replacement did not change the content of main.go. The placeholder might be missing.")
+		} else {
+			log.Println("Replacement successful. Content of main.go has been updated in memory.")
+		}
+
+		err = os.WriteFile("main.go", []byte(updatedMainGoContent), 0644)
+		if err != nil {
+			log.Printf("Error writing to main.go: %v", err)
+			return "", fmt.Errorf("could not write to main.go: %w", err)
+		}
+		log.Println("Successfully wrote updated content to main.go")
+		return fmt.Sprintf("And registered it to URL '%s'.", handlerURL), nil
+	}
+
+	log.Println("Handler already registered.")
+	return fmt.Sprintf("The URL '%s' for handler '%s' is already registered.", handlerURL, handlerName), nil
+}
+
 func runLLM() {
 	cmd := exec.Command("clear")
 	cmd.Stdout = os.Stdout
 	cmd.Run()
+
+	// Initialize database once
+	dbFileName := "gollemer.db"
+	db, err := sqlite_db.InitDB(dbFileName)
+	if err != nil {
+		log.Fatalf("Failed to initialize database: %v", err)
+	}
+	defer db.Close()
 
 	reader := bufio.NewReader(os.Stdin)
 
@@ -252,7 +297,7 @@ func runLLM() {
 			token := strings.ToLower(taggedData.Tokens[0])
 			if token == "create" || token == "add" || token == "put" {
 				command = "create"
-			} else if token == "list" || token == "ls" {
+			} else if token == "list" || token == "ls" || token == "show" {
 				command = "list"
 			} else if token == "go" || token == "cd" {
 				command = "go"
@@ -361,7 +406,7 @@ func runLLM() {
 					saveLastDirectory(currentAbsDir) // Save the absolute path
 				}
 			}
-		} else if query == "pwd" {
+		} else if query == "pwd" || (hasDirectoryToken && command == "") {
 			cwd, err := os.Getwd()
 			if err != nil {
 				predictedSentence = "I'm sorry, I couldn't determine the current directory."
@@ -374,23 +419,23 @@ func runLLM() {
 				predictedSentence = fmt.Sprintf("I couldn't list the contents of the directory: %v", err)
 			} else {
 				var items []string
+				showFiles := contains(objectTypeParts, "file") || contains(objectTypeParts, "files")
+				showFolders := contains(objectTypeParts, "folder") || contains(objectTypeParts, "folders")
+
 				for _, file := range files {
 					isDir := file.IsDir()
-					if contains(objectTypeParts, "folder") || contains(objectTypeParts, "folders") {
-						if isDir {
-							items = append(items, file.Name())
-						}
-					} else if contains(objectTypeParts, "file") || contains(objectTypeParts, "files") {
-						if !isDir {
-							items = append(items, file.Name())
-						}
-					} else {
+					// If no specific type is requested, or if both are requested, show everything.
+					if (!showFiles && !showFolders) || (showFiles && showFolders) {
+						items = append(items, file.Name())
+					} else if showFiles && !isDir {
+						items = append(items, file.Name())
+					} else if showFolders && isDir {
 						items = append(items, file.Name())
 					}
 				}
 				predictedSentence = "Here are the contents of the directory:\n" + strings.Join(items, "\n")
 			}
-		} else if command == "create" && objectType == "handler" {
+		} else if command == "create" && strings.Contains(objectType, "handler") {
 			handlerName := ""
 			for i, token := range taggedData.Tokens {
 				if strings.ToLower(token) == "handler" && i+1 < len(taggedData.Tokens) {
@@ -401,63 +446,43 @@ func runLLM() {
 			if handlerName == "" {
 				predictedSentence = "You need to provide a name for the handler."
 			} else {
-				handlerContent := `
+				handlerContent := `package main
+
+import (
+	"fmt"
+	"net/http"
+)
+
 // ` + strings.Title(handlerName) + `Handler is a sample handler function.
 func ` + strings.Title(handlerName) + `Handler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Executing ` + strings.Title(handlerName) + `Handler! Request URL: %s\n", r.URL.Path)
 }
 `
-				filePath := handlerName + ".go" // Default file path if targetFile is not specified.
-				if targetFile != "" {
-					filePath = targetFile
-				}
+				filePath := handlerName + ".go"
 
-				existingContentBytes, err := os.ReadFile(filePath)
-				handlerExists := false
-				if err == nil { // File exists
-					handlerExists = strings.Contains(string(existingContentBytes), "func "+strings.Title(handlerName)+"Handler(w http.ResponseWriter, r *http.Request)")
-				}
-
-				if !handlerExists {
-					var fileContentToAppend string
-					if err == nil { // File exists, append to it
-						fileContentToAppend = string(existingContentBytes) + handlerContent
-					} else { // File does not exist, create new
-						fileContentToAppend = handlerContent
-					}
-
-					err = os.WriteFile(filePath, []byte(fileContentToAppend), 0644)
-					if err != nil {
-						predictedSentence = fmt.Sprintf("I couldn't write to the target file %s: %v", filePath, err)
-						goto endOfCreateHandler
-					}
-					predictedSentence = fmt.Sprintf("I have added the handler '%s' to %s.", handlerName, filePath)
+				// Check if the handler file already exists
+				if _, err := os.Stat(filePath); err == nil {
+					predictedSentence = fmt.Sprintf("The handler file '%s' already exists.", filePath)
 				} else {
-					predictedSentence = fmt.Sprintf("The handler '%s' already exists in %s.", handlerName, filePath)
-				}
-
-				if filePath == "main.go" && handlerURL != "" {
-					mainGoContent, err := os.ReadFile("main.go")
+					err = os.WriteFile(filePath, []byte(handlerContent), 0644)
 					if err != nil {
-						log.Printf("Error reading main.go to update startWebServer: %v", err)
+						predictedSentence = fmt.Sprintf("I couldn't write to the handler file %s: %v", filePath, err)
 						goto endOfCreateHandler
 					}
-					newHandleFunc := fmt.Sprintf("\thttp.HandleFunc(\"%s\", %sHandler)\n\t// HANDLER_REGISTRATIONS_GO_HERE", handlerURL, strings.Title(handlerName))
-					if !strings.Contains(string(mainGoContent), fmt.Sprintf("http.HandleFunc(\"%s\", %sHandler)", handlerURL, strings.Title(handlerName))) {
-						updatedMainGoContent := strings.Replace(string(mainGoContent), "// HANDLER_REGISTRATIONS_GO_HERE", newHandleFunc, 1)
-						err = os.WriteFile("main.go", []byte(updatedMainGoContent), 0644)
-						if err != nil {
-							log.Printf("Error writing main.go to update startWebServer: %v", err)
-						} else {
-							predictedSentence += fmt.Sprintf(" And registered it to URL '%s'.", handlerURL)
-						}
+					predictedSentence = fmt.Sprintf("I have created the handler '%s' in %s.", handlerName, filePath)
+				}
+
+				if targetFile == "main.go" && handlerURL != "" {
+					registrationMsg, err := registerHandlerURL(handlerName, handlerURL)
+					if err != nil {
+						log.Printf("Error registering handler URL: %v", err)
 					} else {
-						predictedSentence += fmt.Sprintf(" The URL '%s' for handler '%s' is already registered.", handlerURL, handlerName)
+						predictedSentence += " " + registrationMsg
 					}
 				}
 			}
 		endOfCreateHandler:
-		} else if command == "create" && objectType == "file" { // New block for generic file creation
+		} else if command == "create" && strings.Contains(objectType, "file") { // New block for generic file creation
 			if fileName != "" {
 				filePath := fileName
 				if targetDirectory != "" {
@@ -472,9 +497,12 @@ func ` + strings.Title(handlerName) + `Handler(w http.ResponseWriter, r *http.Re
 			} else {
 				predictedSentence = "You need to provide a name for the file."
 			}
-		} else if command == "create" && objectType == "webserver" {
+		} else if command == "create" && strings.Contains(objectType, "webserver") {
 			if fileName != "" {
 				serverDir := filepath.Join("cmd", fileName)
+				if targetDirectory != "" {
+					serverDir = filepath.Join(targetDirectory, "cmd", fileName)
+				}
 				err := os.MkdirAll(serverDir, 0755)
 				if err != nil {
 					predictedSentence = fmt.Sprintf("I couldn't create the webserver directory %s: %v", serverDir, err)
@@ -501,48 +529,13 @@ func main() {
 					if err != nil {
 						predictedSentence = fmt.Sprintf("I couldn't create the webserver file %s: %v", filepath.Join(serverDir, "main.go"), err)
 					} else {
-						predictedSentence = fmt.Sprintf("I have created the webserver '%s' in cmd/%s/main.go.", fileName, fileName)
+						predictedSentence = fmt.Sprintf("I have created the webserver '%s' in %s/main.go.", fileName, serverDir)
 					}
 				}
 			} else {
 				predictedSentence = "You need to provide a name for the webserver."
 			}
-		} else if command == "create" && objectType == "webserver" {
-			if fileName != "" {
-				serverDir := filepath.Join("cmd", fileName)
-				err := os.MkdirAll(serverDir, 0755)
-				if err != nil {
-					predictedSentence = fmt.Sprintf("I couldn't create the webserver directory %s: %v", serverDir, err)
-				} else {
-					serverContent := `package main
-
-import (
-	"fmt"
-	"log"
-	"net/http"
-)
-
-func handler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Hello from the %s webserver!", "` + fileName + `")
-}
-
-func main() {
-	http.HandleFunc("/", handler)
-	log.Println("Starting webserver on :8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
-}
-`
-					err = os.WriteFile(filepath.Join(serverDir, "main.go"), []byte(serverContent), 0644)
-					if err != nil {
-						predictedSentence = fmt.Sprintf("I couldn't create the webserver file %s: %v", filepath.Join(serverDir, "main.go"), err)
-					} else {
-						predictedSentence = fmt.Sprintf("I have created the webserver '%s' in cmd/%s/main.go.", fileName, fileName)
-					}
-				}
-			} else {
-				predictedSentence = "You need to provide a name for the webserver."
-			}
-		} else if command == "create" && objectType == "folder" { // New block for folder creation
+		} else if command == "create" && strings.Contains(objectType, "folder") { // New block for folder creation
 			folderName := findName(taggedData)
 			if folderName != "" {
 				folderPath := folderName
@@ -632,22 +625,20 @@ func main() {
 		} else if command == "create" && objectType == "data structure" {
 			var err error
 			var dbFileName string
-			// Removed unused variable declarations: var db *sql.DB, var columns []string, var sqlStatement string
 			var tableName string
 			var structFileName string
 			var structContent string
 			var fieldKeywordFound bool
-			var fieldStartIndex int // New declaration
+			var fieldStartIndex int
+			var withTheFieldsIndex int = -1
 
-			// Extract struct name and fields from the query
 			queryParts := strings.Fields(query)
 			structName := ""
-			fields := make(map[string]string) // fieldName -> fieldType
+			fields := make(map[string]string)
 
-			// Find struct name (e.g., "jim" from "add a data structure jim")
 			for i, part := range queryParts {
 				if part == "structure" && i+1 < len(queryParts) {
-					structName = strings.Title(queryParts[i+1]) // Capitalize for Go struct name
+					structName = strings.Title(queryParts[i+1])
 					break
 				}
 			}
@@ -656,22 +647,23 @@ func main() {
 				predictedSentence = "You need to provide a name for the data structure."
 				goto endOfDataStructureCreation
 			}
-			fileName = structName // Set fileName for data structure
 
-			// Parse fields (e.g., "field name string field age int" or "field name string and age int")
-			fieldKeywordFound = false
-			fieldStartIndex = -1
-			for i, part := range queryParts {
-				if part == "field" {
-					fieldStartIndex = i
+			// Look for "with fields" or "with the fields"
+			for i := 0; i < len(queryParts)-1; i++ {
+				if queryParts[i] == "with" && queryParts[i+1] == "fields" {
+					withTheFieldsIndex = i + 2
+					break
+				}
+				if i+2 < len(queryParts) && queryParts[i] == "with" && queryParts[i+1] == "the" && queryParts[i+2] == "fields" {
+					withTheFieldsIndex = i + 3
 					break
 				}
 			}
 
-			if fieldStartIndex != -1 {
+			if withTheFieldsIndex != -1 {
 				fieldKeywordFound = true
-				for i := fieldStartIndex + 1; i < len(queryParts); {
-					if queryParts[i] == "and" || queryParts[i] == "field" { // CRITICAL FIX
+				for i := withTheFieldsIndex; i < len(queryParts); {
+					if queryParts[i] == "and" {
 						i++
 						continue
 					}
@@ -679,7 +671,52 @@ func main() {
 						fieldName := queryParts[i]
 						fieldType := queryParts[i+1]
 						fields[fieldName] = fieldType
-						i += 2 // Move past fieldName and fieldType
+						i += 2
+					} else {
+						predictedSentence = "Incomplete field definition found."
+						goto endOfDataStructureCreation
+					}
+				}
+			} else {
+				// Look for "field"
+				for i, part := range queryParts {
+					if part == "field" {
+						fieldStartIndex = i
+						break
+					}
+				}
+
+				if fieldStartIndex != -1 {
+					fieldKeywordFound = true
+					for i := fieldStartIndex + 1; i < len(queryParts); {
+						if queryParts[i] == "and" || queryParts[i] == "field" {
+							i++
+							continue
+						}
+						if i+1 < len(queryParts) {
+							fieldName := queryParts[i]
+							fieldType := queryParts[i+1]
+							fields[fieldName] = fieldType
+							i += 2
+						} else {
+							predictedSentence = "Incomplete field definition found."
+							goto endOfDataStructureCreation
+						}
+					}
+				}
+			}
+
+			if !fieldKeywordFound || len(fields) == 0 {
+				fmt.Println("Please provide the fields for the data structure (e.g., 'name string age int'):")
+				fieldQuery, _ := reader.ReadString('\n')
+				fieldQuery = strings.TrimSpace(fieldQuery)
+				fieldParts := strings.Fields(fieldQuery)
+				for i := 0; i < len(fieldParts); {
+					if i+1 < len(fieldParts) {
+						fieldName := fieldParts[i]
+						fieldType := fieldParts[i+1]
+						fields[fieldName] = fieldType
+						i += 2
 					} else {
 						predictedSentence = "Incomplete field definition found."
 						goto endOfDataStructureCreation
@@ -687,19 +724,12 @@ func main() {
 				}
 			}
 
-			if !fieldKeywordFound || len(fields) == 0 {
-				predictedSentence = "You need to provide fields for the data structure."
-				goto endOfDataStructureCreation
-			}
-
-			// Generate Go Struct
 			structContent = fmt.Sprintf("package main\n\ntype %s struct {\n", structName)
 			for fieldName, fieldType := range fields {
 				structContent += fmt.Sprintf("\t%s %s\n", strings.Title(fieldName), fieldType)
 			}
 			structContent += "}\n"
 
-			// Write Go file (jim.go)
 			structFileName = strings.ToLower(structName) + ".go"
 			err = os.WriteFile(structFileName, []byte(structContent), 0644)
 			if err != nil {
@@ -708,8 +738,8 @@ func main() {
 			}
 			predictedSentence = fmt.Sprintf("I have created the Go struct '%s' in %s.", structName, structFileName)
 
-			// Use the helper function to create the table
-			dbFileName = "jim.db" // This is still hardcoded for now
+			tableName = strings.ToLower(structName)
+			dbFileName = tableName + ".db"
 			err = createTableWithFields(dbFileName, tableName, fields)
 			if err != nil {
 				predictedSentence += fmt.Sprintf(" But couldn't create the table '%s' in %s: %v", tableName, dbFileName, err)

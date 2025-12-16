@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	_ "github.com/glebarez/sqlite" // Pure Go SQLite driver
+	_ "modernc.org/sqlite" // Pure Go SQLite driver
 )
 
 // InitDB initializes an SQLite database at the given path.
@@ -23,7 +23,6 @@ func InitDB(dataSourceName string) (*sql.DB, error) {
 		}
 	}
 
-	// The driver name for github.com/glebarez/sqlite is "sqlite" or "sqlite3"
 	db, err := sql.Open("sqlite", dataSourceName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)

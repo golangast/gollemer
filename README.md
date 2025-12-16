@@ -4,7 +4,7 @@
 <img src="https://img.shields.io/github/license/golangast/gollemer.svg"><img src="https://img.shields.io/github/stars/golangast/gollemer.svg">
 
 ### Beta
-This project is in beta and changes daily. I once in a while upload youtube [videos](https://www.youtube.com/watch?v=8paxWwPt4-A&list=PL_sE11fwtBT-0GqVHEX-tYTBzAIGHelQ6) talking about its changes.
+This project is in beta and changes daily. I once in a while upload youtube [videos](https://youtu.be/KMI8-UXmfi4) talking about its changes.
 
 This project provides a command-line utility for interacting with Large Language Model (LLM) functionalities, enabling natural language interaction for various tasks.
 
