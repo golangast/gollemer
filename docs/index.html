@@ -4,7 +4,164 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Multi-Orchestrator with NLP Understanding</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --background-color: #ecf0f1;
+            --card-background: #ffffff;
+            --text-color: #34495e;
+            --heading-color: #2c3e50;
+            --border-radius: 8px;
+            --box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            line-height: 1.8;
+            margin: 0;
+            padding: 0;
+            background: var(--background-color);
+            color: var(--text-color);
+        }
+
+        header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: #fff;
+            padding: 4rem 2rem;
+            text-align: center;
+            border-bottom-left-radius: var(--border-radius);
+            border-bottom-right-radius: var(--border-radius);
+        }
+
+        header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 700;
+        }
+
+        header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        main {
+            padding: 2rem;
+            margin: 0 auto;
+            max-width: 900px;
+        }
+
+        section {
+            background: var(--card-background);
+            margin: 2rem 0;
+            padding: 2rem;
+            border-radius: var(--border-radius);
+            box-shadow: var(--box-shadow);
+            transition: transform 0.2s;
+        }
+
+        section:hover {
+            transform: translateY(-5px);
+        }
+
+        h2 {
+            color: var(--heading-color);
+            border-bottom: 3px solid var(--secondary-color);
+            padding-bottom: 0.5rem;
+            margin-bottom: 1.5rem;
+            font-size: 2em;
+        }
+
+        .comparison-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+
+        .before, .after {
+            background: #f9f9f9;
+            padding: 1.5rem;
+            border-radius: var(--border-radius);
+            border-left: 5px solid var(--secondary-color);
+        }
+
+        .after {
+            border-left-color: #2ecc71;
+        }
+
+        pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 1.5rem;
+            border-radius: var(--border-radius);
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: 'Fira Code', 'Courier New', monospace;
+            font-size: 0.95em;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        code {
+            font-family: inherit;
+        }
+
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+
+        ul li {
+            padding-left: 1.5rem;
+            position: relative;
+            margin-bottom: 0.5rem;
+        }
+
+        ul li::before {
+            content: '✓';
+            color: var(--secondary-color);
+            position: absolute;
+            left: 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1.5rem;
+        }
+
+        th, td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background-color: var(--primary-color);
+            color: white;
+            font-weight: 600;
+        }
+
+        tbody tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        tbody tr:hover {
+            background-color: #f1f1f1;
+        }
+
+        a {
+            color: var(--secondary-color);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        a:hover {
+            color: #2980b9;
+        }
+    </style>
 </head>
 <body>
     <header>
@@ -85,13 +242,13 @@
         <section id="features">
             <h2>Features</h2>
             <ul>
-                <li>✅ <strong>Natural Language Understanding</strong> - Write commands as you would speak them</li>
-                <li>✅ <strong>Intent Detection</strong> - Automatically determines what you want to do</li>
-                <li>✅ <strong>Entity Extraction</strong> - Intelligently extracts names, types, and parameters</li>
-                <li>✅ <strong>Fallback Support</strong> - Falls back to keyword matching if semantic parsing fails</li>
-                <li>✅ <strong>Semantic Output</strong> - Generates structured JSON representation of commands</li>
-                <li>✅ <strong>Git Integration</strong> - Tracks changes with automatic commits</li>
-                <li>✅ <strong>History & Revert</strong> - View command history and revert to previous states</li>
+                <li><strong>Natural Language Understanding</strong> - Write commands as you would speak them</li>
+                <li><strong>Intent Detection</strong> - Automatically determines what you want to do</li>
+                <li><strong>Entity Extraction</strong> - Intelligently extracts names, types, and parameters</li>
+                <li><strong>Fallback Support</strong> - Falls back to keyword matching if semantic parsing fails</li>
+                <li><strong>Semantic Output</strong> - Generates structured JSON representation of commands</li>
+                <li><strong>Git Integration</strong> - Tracks changes with automatic commits</li>
+                <li><strong>History & Revert</strong> - View command history and revert to previous states</li>
             </ul>
         </section>
 
@@ -191,10 +348,6 @@ go run . -llm
 > delete folder my_project
             </code></pre>
         </section>
-
     </main>
-
-
-    <script src="script.js"></script>
 </body>
 </html>
