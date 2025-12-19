@@ -62,23 +62,29 @@ go run . -llm
 
 Once in interactive mode, you can type natural language commands directly. The CLI will attempt to understand your intent and execute the corresponding action.
 
+
+   
 #### LLM Interactive Mode Commands
 
 Here are the commands you can use in the interactive LLM mode:
 
 | Command | Description | Example Prompt |
-| :------ | :---------- | :------------- |
-| **Change Directory** | Navigates to a specified directory. The `gollemer` remembers the last directory you navigated to. | `go to myproject` <br> `cd src` |
-| **List Directory Contents** | Lists files, folders, or both in the current directory or a specified path. | `list all files` <br> `list folders` <br> `ls` |
-| **Create Folder** | Creates a new directory. | `create folder mydata` <br> `create folder temp in /tmp` |
-| **Create File** | Creates a new empty file. | `create file README.md` <br> `create file test.txt in src` |
-| **Create Handler** | Generates a new Go HTTP handler function and registers it in `main.go`. | `create handler MyHandler with url /myapi` |
-| **Create Webserver** | Scaffolds a new Go web server project in `cmd/<name>/main.go`. | `create webserver MyServer` |
-| **Create Database** | Creates a SQLite database file and optionally a table with specified fields. | `create database myappdb` <br> `create database myappdb with the fields name string and age int` |
-| **Create Data Structure** | Creates a Go struct file and a corresponding table in a SQLite database (`jim.db`). | `create data structure User with field Name string and Age int` |
-| **Delete Folder** | Deletes a specified directory. | `delete folder temp` |
+| :--- | :--- | :--- |
+| **Change Directory** | Navigates to a specified directory. Aliases: `go to`, `cd`. The last visited directory is remembered. | `go to myproject`<br>`cd src` |
+| **List Contents** | Lists files, folders, or both in the current or a specified directory. Aliases: `ls`, `list`. | `list all files`<br>`list folders in /tmp`<br>`ls` |
+| **Create Folder** | Creates a new directory. Aliases: `create directory`. | `create folder mydata`<br>`create directory temp in /tmp` |
+| **Create File** | Creates a new empty file. | `create file README.md`<br>`create file test.txt in src` |
+| **Create Handler**| Generates a new Go HTTP handler function. Can be registered to a webserver's `main.go` file with a specific URL. | `create handler MyHandler`<br>`create handler Auth with url /auth in main.go`|
+| **Create Webserver**| Scaffolds a new Go web server project in `cmd/<name>/main.go`. | `create webserver MyServer` |
+| **Create Database**| Creates a SQLite database file and optionally a table with specified fields. | `create database myappdb`<br>`create database users with the fields name string and age int`|
+| **Create Data Structure**| Creates a Go struct, a corresponding SQLite database and table, and `Create`/`Update`/`Delete` HTTP handlers. | `create data structure User with field Name string and Age int` |
+| **Delete Folder** | Deletes a specified directory and its contents. Aliases: `delete directory`. | `delete folder temp` |
 | **Delete File** | Deletes a specified file. | `delete file old.txt` |
-| **Print Working Directory** | Prints the current working directory. | `pwd` |
+| **Run Webserver** | Builds and runs a specified webserver from the `cmd/` directory. | `run webserver MyServer` |
+| **Stop Webserver**| (Currently disabled) Stops a running webserver. This is handled by the webserver itself. | `stop webserver MyServer` |
+| **Print Directory**| Prints the current working directory. Aliases: `pwd`. | `pwd` |
+| **Clear Screen** | Clears the terminal screen. Aliases: `clear`. | `clear` |
+| **Exit** | Exits the interactive LLM mode. Aliases: `exit`. | `exit` |
 
 ### 2. Individual Command Modules
 
