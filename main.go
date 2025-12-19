@@ -692,6 +692,17 @@ func main() {
 			
 															// Build the jim webserver executable
 															log.Printf("DEBUG: Building webserver %s...", webserverName)
+			
+															// Add missing sqlite dependency
+															getCmd := exec.Command("go", "get", "modernc.org/sqlite")
+															getCmd.Dir = jimSourcePath
+															getOutput, getErr := getCmd.CombinedOutput()
+															if getErr != nil {
+																predictedSentence = fmt.Sprintf("Failed to get sqlite dependency for webserver %s: %v\nOutput:\n%s", webserverName, getErr, string(getOutput))
+																goto endOfRunWebserver
+															}
+															log.Printf("DEBUG: Successfully got sqlite dependency for webserver %s", webserverName)
+			
 															buildCmd := exec.Command("go", "build", "-o", jimExecutablePath, ".")
 															buildCmd.Dir = jimSourcePath // Build from the webserver's source directory
 															buildOutput, buildErr := buildCmd.CombinedOutput()
