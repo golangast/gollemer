@@ -1,11 +1,8 @@
-module github.com/golangast/gollemer
+module jim
 
-go 1.24.5
+go 1.25.5
 
-require (
-	github.com/golang-jwt/jwt/v5 v5.3.0
-	modernc.org/sqlite v1.40.1
-)
+require modernc.org/sqlite v1.40.1
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
