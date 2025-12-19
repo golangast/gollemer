@@ -46,27 +46,13 @@ The `gollemer` CLI processes natural language user input through an LLM interfac
 
 ## 🛠️ Usage
 
-You may need to retrain the model before using the LLM mode.
+The main executable (`main.go`) provides an interactive LLM mode. However, the project also includes numerous individual modules for specific tasks like model training, data processing, and running demos. These modules are located in the `cmd/` directory and can be run directly.
 
-The main executable (`main.go`) controls all operations using specific command-line flags. All commands should be run from the root directory of the project.
+All commands should be run from the root directory of the project.
 
-### 1. Training Models
+### 1. LLM Interactive Mode
 
-Use the respective flags to initiate the training process. Each flag executes a separate module located in the `cmd/` directory.
-
-| Model | Flag | Command |
-| :--- | :--- | :--- |
-| **Word2Vec** | `--train-word2vec` | `go run main.go --train-word2vec` |
-| **Mixture of Experts (MoE)** | `--train-moe` | `go run main.go --train-moe` |
-| **Intent Classifier** | `--train-intent-classifier` | `go run main.go --train-intent-classifier` |
-
-<p align="center">
-    <img style="zoom:2"  width="100%" height="auto" style="width:60%;" src="./mov/mov.gif" alt="Alt text" title="Optional title">
-</p>
-
-### 2. LLM Interactive Mode
-
-The LLM Interactive Mode allows you to interact with the `gollemer` CLI using natural language. The system's underlying NLP pipeline (detailed further in `docs/index.html`) interprets your commands to perform tasks such as file system operations and code generation.
+The LLM Interactive Mode allows you to interact with the `gollemer` CLI using natural language.
 
 To run the LLM utility in interactive mode, use the following command from the project root:
 
@@ -94,6 +80,63 @@ Here are the commands you can use in the interactive LLM mode:
 | **Delete File** | Deletes a specified file. | `delete file old.txt` |
 | **Print Working Directory** | Prints the current working directory. | `pwd` |
 
+### 2. Individual Command Modules
+
+The following modules in the `cmd/` directory can be run individually.
+
+#### Training Commands
+
+| Command | Description |
+| :--- | :--- |
+| `go run ./cmd/train_intent_classifier` | Trains the intent classification model. |
+| `go run ./cmd/train_intent_model` | Trains the intent model. |
+| `go run ./cmd/train_moe` | Trains the Mixture of Experts (MoE) model. |
+| `go run ./cmd/train_ner` | Trains the Named Entity Recognition (NER) model. |
+| `go run ./cmd/train_seq2seq` | Trains a sequence-to-sequence model. |
+| `go run ./cmd/train_simple_intent_classifier` | Trains a simpler intent classification model. |
+| `go run ./cmd/train_tagger` | Trains a generic tagger model. |
+| `go run ./cmd/train_word2vec` | Trains the Word2Vec model. |
+
+#### Data Generation & Handling
+
+| Command | Description |
+| :--- | :--- |
+| `go run ./cmd/convert_qa_to_semantic` | Converts question-answering data to a semantic format. |
+| `go run ./cmd/create_vocab` | Creates a vocabulary file. |
+| `go run ./cmd/csv_feed_generator` | Generates a CSV feed from a data source. |
+| `go run ./cmd/generate_training_data` | Generates training data. |
+| `go run ./cmd/generate_wikiqa_intents` | Generates intents from the WikiQA dataset. |
+| `go run ./cmd/inspect_vocab` | Inspects a vocabulary file. |
+| `go run ./cmd/prepare_tagging_data` | Prepares data for tagging models. |
+| `go run ./cmd/transform_intents_to_seq2seq`| Transforms intent data into a sequence-to-sequence format. |
+
+#### Inference & Prediction
+
+| Command | Description |
+| :--- | :--- |
+| `go run ./cmd/debug_inference` | Runs inference in debug mode. |
+| `go run ./cmd/moe_inference` | Runs inference with the MoE model. |
+| `go run ./cmd/predict_seq2seq` | Makes predictions with a sequence-to-sequence model. |
+
+#### Demos & Examples
+
+| Command | Description |
+| :--- | :--- |
+| `go run ./cmd/advanced_demo` | Runs an advanced demonstration. |
+| `go run ./cmd/command_structure_demo` | Demonstrates the command structure. |
+| `go run ./cmd/hierarchical_demo` | Runs a demonstration of hierarchical intents. |
+| `go run ./cmd/moe_example` | Shows an example of the MoE model. |
+| `go run ./cmd/vfs_demo` | A demo of the virtual file system. |
+
+#### Utilities
+
+| Command | Description |
+| :--- | :--- |
+| `go run ./cmd/check_token_length` | Checks the token length of inputs. |
+| `go run ./cmd/create_handler` | Creates a new request handler. |
+| `go run ./cmd/delete_item` | Deletes an item. |
+| `go run ./cmd/interactive_scaffolder` | Starts an interactive scaffolding tool. |
+| `go run ./cmd/multi_orchestrator` | Runs the multi-command orchestrator. |
 
 ### 3. Help / No Action
 
