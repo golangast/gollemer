@@ -6,13 +6,13 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time" // Added time import
-	"net/http"
 
 	_ "modernc.org/sqlite" // Pure Go SQLite driver
 
@@ -227,45 +227,32 @@ func createTableWithFields(dbFileName, tableName string, fields map[string]strin
 }
 
 func registerHandlerURL(handlerName, handlerURL, mainGoPath string) (string, error) {
-	fmt.Printf("Attempting to register handler '%s' with URL '%s' in file '%s'\n", handlerName, handlerURL, mainGoPath)
-
 	mainGoContent, err := os.ReadFile(mainGoPath)
 	if err != nil {
-		fmt.Printf("Error reading %s: %v\n", mainGoPath, err)
 		return "", fmt.Errorf("could not read %s: %w", mainGoPath, err)
 	}
-	fmt.Printf("Successfully read %s\n", mainGoPath)
 
-	newHandleFunc := fmt.Sprintf("\thttp.HandleFunc(\"%s\", %sHandler)\n\t// HANDLER_REGISTRATIONS_GO_HERE", handlerURL, handlerName)
-	fmt.Printf("New HandleFunc string: %s\n", newHandleFunc)
-
-	if !strings.Contains(string(mainGoContent), fmt.Sprintf("http.HandleFunc(\"%s\", %sHandler)", handlerURL, handlerName)) {
-		fmt.Println("Handler not already registered. Proceeding with replacement.")
-		updatedMainGoContent := strings.Replace(string(mainGoContent), "// HANDLER_REGISTRATIONS_GO_HERE", newHandleFunc, 1)
+	registration := fmt.Sprintf("http.HandleFunc(\"%s\", %sHandler)", handlerURL, handlerName)
+	if !strings.Contains(string(mainGoContent), registration) {
+		newHandleFunc := fmt.Sprintf("\thttp.HandleFunc(\"%s\", %sHandler)\n\t// HANDLER_REGISTRATIONS_GO_HERE", handlerURL, handlerName)
+		updatedMainGoContent := strings.Replace(string(mainGoContent), "// HANDLER_REGISTRATIONS_GO_HERE", newHandleFunc, 1) // Expect unindented placeholder
 
 		if updatedMainGoContent == string(mainGoContent) {
-			fmt.Printf("Warning: Replacement did not change the content of %s. The placeholder might be missing.\n", mainGoPath)
-		} else {
-			fmt.Printf("Replacement successful. Content of %s has been updated in memory.\n", mainGoPath)
+			return "", fmt.Errorf("placeholder '\\t// HANDLER_REGISTRATIONS_GO_HERE' not found in %s", mainGoPath)
 		}
 
 		err = os.WriteFile(mainGoPath, []byte(updatedMainGoContent), 0644)
 		if err != nil {
-			fmt.Printf("Error writing to %s: %v\n", mainGoPath, err)
 			return "", fmt.Errorf("could not write to %s: %w", mainGoPath, err)
 		}
 		goImports(mainGoPath)
-		fmt.Printf("Successfully wrote updated content to %s\n", mainGoPath)
 		return fmt.Sprintf("And registered it to URL '%s' in %s.", handlerURL, mainGoPath), nil
 	}
 
-	fmt.Println("Handler already registered.")
 	return fmt.Sprintf("The URL '%s' for handler '%s' is already registered in %s.", handlerURL, handlerName, mainGoPath), nil
 }
 
 func registerHandlerWithPackage(packageName, packageImportPath, handlerName, handlerURL, mainGoPath string) (string, error) {
-	fmt.Printf("Attempting to register handler '%s' with URL '%s' in file '%s'\n", handlerName, handlerURL, mainGoPath)
-
 	contentBytes, err := os.ReadFile(mainGoPath)
 	if err != nil {
 		return "", fmt.Errorf("could not read %s: %w", mainGoPath, err)
@@ -284,7 +271,7 @@ func registerHandlerWithPackage(packageName, packageImportPath, handlerName, han
 	handlerRegistration := fmt.Sprintf("http.HandleFunc(\"%s\", %s)", handlerURL, handlerFqn)
 	if !strings.Contains(content, handlerRegistration) {
 		newHandleFunc := fmt.Sprintf("\thttp.HandleFunc(\"%s\", %s)\n\t// HANDLER_REGISTRATIONS_GO_HERE", handlerURL, handlerFqn)
-		content = strings.Replace(content, "// HANDLER_REGISTRATIONS_GO_HERE", newHandleFunc, 1)
+		content = strings.Replace(content, "// HANDLER_REGISTRATIONS_GO_HERE", newHandleFunc, 1) // Expect unindented placeholder
 	}
 
 	if content == originalContent {
@@ -372,7 +359,6 @@ func runLLM() {
 		hasPrepositionIn := false
 		var command string
 		var targetDirectory string // Declare targetDirectory here
-		var targetFile string      // New variable
 		var predictedSentence string
 		var handlerURL string // New variable to store the handler URL
 		
@@ -387,8 +373,10 @@ func runLLM() {
 					command = "go"
 				} else if token == "delete" || token == "remove" {
 					command = "delete"
-				} else if token == "run" {
+				} else if token == "run" || token == "start" {
 					command = "run"
+				} else if token == "stop" {
+					command = "stop"
 				}
 			}
 
@@ -408,7 +396,6 @@ func runLLM() {
 							foundTarget := false
 							for j := i + 1; j < len(taggedData.Tokens); j++ {
 								if strings.Contains(taggedData.Tokens[j], ".") { // Prioritize file
-									targetFile = taggedData.Tokens[j]
 									foundTarget = true
 									break
 								}
@@ -436,6 +423,8 @@ func runLLM() {
 			} else if strings.Contains(strings.ToLower(query), "data structure") {
 				objectType = "data structure"
 				objectTypeParts = []string{} // Clear objectTypeParts to prevent interference
+			} else if strings.Contains(strings.ToLower(query), "webserver") || strings.Contains(strings.ToLower(query), "websever") {
+				objectType = "webserver"
 			} else {
 				objectType = strings.Join(objectTypeParts, " ")
 			}
@@ -576,18 +565,16 @@ func ` + strings.Title(handlerName) + `Handler(w http.ResponseWriter, r *http.Re
 						}
 						goImports(filePath)
 						predictedSentence = fmt.Sprintf("I have created the handler '%s' in %s.", handlerName, filePath)
-					}
-
-					if targetFile != "" && strings.HasSuffix(targetFile, ".go") && handlerURL != "" {
-						registrationMsg, err := registerHandlerURL(strings.Title(handlerName), handlerURL, targetFile)
+						// Always attempt to register the handler in the current project's main.go
+						currentProjectMainGo := filepath.Join(".", "main.go")
+						registrationMsg, err := registerHandlerURL(strings.Title(handlerName), handlerURL, currentProjectMainGo)
 						if err != nil {
-							log.Printf("Error registering handler URL in %s: %v", targetFile, err)
-							predictedSentence += fmt.Sprintf(" I tried to register the handler in %s but failed: %v", targetFile, err)
+							log.Printf("Error registering handler URL in %s: %v", currentProjectMainGo, err)
+							predictedSentence += fmt.Sprintf(" I tried to register the handler in %s but failed: %v", currentProjectMainGo, err)
 						} else {
 							predictedSentence += " " + registrationMsg
 						}
-					}
-				}
+					}				}
 			endOfCreateHandler:
 			} else if command == "create" && strings.Contains(objectType, "file") { // New block for generic file creation
 				if fileName != "" {
@@ -617,16 +604,58 @@ func ` + strings.Title(handlerName) + `Handler(w http.ResponseWriter, r *http.Re
 						serverContent := `package main
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
+
+	_ "modernc.org/sqlite"
 )
+
+func InitDB(filepath string) *sql.DB {
+	db, err := sql.Open("sqlite", filepath)
+	if err != nil {
+		log.Fatalf("Error opening database: %v", err)
+	}
+	if err = db.Ping(); err != nil {
+		log.Fatalf("Error connecting to database: %v", err)
+	}
+
+	createTableSQL := ` + "`" + `
+	CREATE TABLE IF NOT EXISTS webservers (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT,
+		status TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);` + "`" + `
+
+	_, err = db.Exec(createTableSQL)
+	if err != nil {
+		log.Fatalf("Error creating table 'webservers': %v", err)
+	}
+
+	// Seed data if empty
+	var count int
+	err = db.QueryRow("SELECT COUNT(*) FROM webservers WHERE name = ?", "` + fileName + `").Scan(&count)
+	if err == nil && count == 0 {
+		_, _ = db.Exec("INSERT INTO webservers (name, status) VALUES (?, ?)", "` + fileName + `", "running")
+	}
+
+	return db
+}
 
 func handler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Hello from the %s webserver!", "` + fileName + `")
 }
 
 func main() {
+	cwd, _ := os.Getwd()
+	dbPath := filepath.Join(cwd, "` + fileName + `.db")
+	db := InitDB(dbPath)
+	defer db.Close()
+
 	http.HandleFunc("/", handler)
 	// HANDLER_REGISTRATIONS_GO_HERE
 	log.Println("Starting webserver on :8080")
@@ -655,10 +684,10 @@ func main() {
 				} else {
 					predictedSentence = "You need to provide a name for the webserver."
 				}
-			            } else if command == "run" && strings.Contains(objectType, "webserver") {
+			            } else if (command == "run" || command == "start") && strings.Contains(objectType, "webserver") {
 							webserverName := ""
 							for i, token := range taggedData.Tokens {
-								if strings.ToLower(token) == "webserver" && i+1 < len(taggedData.Tokens) {
+								if (strings.ToLower(token) == "webserver" || strings.ToLower(token) == "websever") && i+1 < len(taggedData.Tokens) {
 									webserverName = taggedData.Tokens[i+1]
 									break
 								}
@@ -671,7 +700,46 @@ func main() {
 								predictedSentence = "You need to provide a name for the webserver to run."
 							} else {
 								// Path to the jim webserver's main package
-								jimSourcePath := filepath.Join(projectRoot, "jim", "cmd", webserverName)
+								jimSourcePath := filepath.Join(projectRoot, "cmd", webserverName)
+
+								// If not found in cmd/, check root or nested structure
+								if _, err := os.Stat(jimSourcePath); os.IsNotExist(err) {
+									altPath := filepath.Join(projectRoot, webserverName)
+									if _, err := os.Stat(altPath); err == nil {
+										// Check nested: project/jill/cmd/jill
+										nestedPath := filepath.Join(altPath, "cmd", webserverName)
+										if _, err := os.Stat(nestedPath); err == nil {
+											jimSourcePath = nestedPath
+										} else {
+											nestedCmd := filepath.Join(altPath, "cmd")
+											if _, err := os.Stat(filepath.Join(nestedCmd, "main.go")); err == nil {
+												jimSourcePath = nestedCmd
+											} else if _, err := os.Stat(filepath.Join(altPath, "main.go")); err == nil {
+												jimSourcePath = altPath
+											}
+										}
+									}
+
+									// If still not found, check current working directory
+									if _, err := os.Stat(jimSourcePath); os.IsNotExist(err) {
+										cwd, _ := os.Getwd()
+										// Check if we are currently IN the webserver directory
+										if strings.EqualFold(filepath.Base(cwd), webserverName) {
+											if _, err := os.Stat(filepath.Join(cwd, "main.go")); err == nil {
+												jimSourcePath = cwd
+											}
+										}
+										if jimSourcePath != cwd {
+											localPath := filepath.Join(cwd, webserverName)
+											if _, err := os.Stat(filepath.Join(localPath, "main.go")); err == nil {
+												jimSourcePath = localPath
+											} else if _, err := os.Stat(filepath.Join(cwd, "cmd", webserverName)); err == nil {
+												jimSourcePath = filepath.Join(cwd, "cmd", webserverName)
+											}
+										}
+									}
+								}
+
 								log.Printf("DEBUG: Jim Webserver Source Path: %s", jimSourcePath)
 			
 								// Check if jimSourcePath exists
@@ -722,6 +790,10 @@ func main() {
 									if err != nil {
 										predictedSentence = fmt.Sprintf("I couldn't run the webserver %s: %v", webserverName, err)
 									} else {
+										pidFile := filepath.Join(buildOutputDir, webserverName+".pid")
+										if err := SavePid(runCmd.Process.Pid, pidFile); err != nil {
+											log.Printf("Failed to save PID file: %v", err)
+										}
 										predictedSentence = fmt.Sprintf("I have started the webserver %s. PID: %d", webserverName, runCmd.Process.Pid)
 			
 										// --- Verification step ---
@@ -746,11 +818,29 @@ func main() {
 								endOfRunWebserver: // Label for goto
 							}
 						} else if command == "stop" && strings.Contains(objectType, "webserver") {
-							// Existing stop logic will also need to be updated to stop the built executable if needed,
-							// or simply removed if the /stop endpoint is the only way to stop it.
-							// For now, I will comment it out as the jim server only stops with its /stop endpoint
-							// and this orchestrator should not directly try to stop it.
-							predictedSentence = "The webserver can only be stopped by navigating to its /stop endpoint (e.g., http://localhost:8080/stop)."
+							webserverName := ""
+							for i, token := range taggedData.Tokens {
+								if strings.ToLower(token) == "webserver" && i+1 < len(taggedData.Tokens) {
+									webserverName = taggedData.Tokens[i+1]
+									break
+								}
+							}
+							if webserverName == "" {
+								webserverName = fileName
+							}
+
+							if webserverName == "" {
+								predictedSentence = "You need to provide a name for the webserver to stop."
+							} else {
+								buildOutputDir := filepath.Join(projectRoot, "bin")
+								pidFile := filepath.Join(buildOutputDir, webserverName+".pid")
+								err := StopWebserver(pidFile)
+								if err != nil {
+									predictedSentence = fmt.Sprintf("Failed to stop webserver %s: %v", webserverName, err)
+								} else {
+									predictedSentence = fmt.Sprintf("Stopped webserver %s.", webserverName)
+								}
+							}
 						} else if command == "create" && strings.Contains(objectType, "folder") { // New block for folder creation
 				folderName := findName(taggedData)
 				if folderName != "" {
@@ -851,6 +941,8 @@ func main() {
 				var err1 error
 				var deleteRegMsg string
 				var err2 error
+				var showRegMsg string
+				var err3 error
 				var mainGoPath string
 				var packageFileContent string
 				var deleteHandlerContent string
@@ -858,10 +950,12 @@ func main() {
 				var lowercaseName string
 				var packageName string
 				var structDef string
+				var showHandlerContent string
 				var structFields []string
 				var structFieldExecs []string
 				var sortedFieldNames []string
-				var dbPathForHandler string
+				var selectColumns []string
+				var scanFields []string
 				var modulePath, projectRoot, cwd, relativeDir, packageImportPath string
 
 				queryParts := strings.Fields(query)
@@ -982,12 +1076,51 @@ func main() {
 			}
 			sort.Strings(sortedFieldNames)
 
+			// Show Handler construction
+			selectColumns = []string{"id"}
+			scanFields = []string{"&u.ID"}
+			for _, fieldName := range sortedFieldNames {
+				selectColumns = append(selectColumns, strings.ToLower(fieldName))
+				scanFields = append(scanFields, "&u."+strings.Title(fieldName))
+			}
+
+
+			showHandlerContent = fmt.Sprintf(`
+func Show%sHandler(w http.ResponseWriter, r *http.Request) {
+	cwd, _ := os.Getwd()
+	dbPath := filepath.Join(cwd, "%s", "%s.db")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+
+	rows, err := db.Query("SELECT %s FROM %s")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	results := make([]%s, 0)
+	for rows.Next() {
+		var u %s
+		if err := rows.Scan(%s); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		results = append(results, u)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(results)
+}`, structName, dirName, lowercaseName, strings.Join(selectColumns, ", "), lowercaseName, structName, structName, strings.Join(scanFields, ", "))
+
 			for _, fieldName := range sortedFieldNames {
 				structFields = append(structFields, fmt.Sprintf("%s = ?", strings.ToLower(fieldName)))
 				structFieldExecs = append(structFieldExecs, "u."+strings.Title(fieldName))
 			}
-
-			dbPathForHandler = lowercaseName + ".db"
 
 			// Update Handler
 			updateHandlerContent = fmt.Sprintf(`
@@ -1006,7 +1139,9 @@ func Update%sHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db, err := sql.Open("sqlite", "%s")
+	cwd, _ := os.Getwd()
+	dbPath := filepath.Join(cwd, "%s", "%s.db")
+	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -1026,7 +1161,7 @@ func Update%sHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fmt.Fprintf(w, "%s with ID %%s updated successfully", id)
-}`, structName, lowercaseName, structName, dbPathForHandler, lowercaseName, strings.Join(structFields, ", "), strings.Join(structFieldExecs, ", "))
+}`, structName, lowercaseName, structName, dirName, lowercaseName, lowercaseName, strings.Join(structFields, ", "), strings.Join(structFieldExecs, ", "))
 
 			// Delete Handler
 			deleteHandlerContent = fmt.Sprintf(`
@@ -1038,7 +1173,9 @@ func Delete%sHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	id := parts[len(parts)-1]
 
-	db, err := sql.Open("sqlite", "%s")
+	cwd, _ := os.Getwd()
+	dbPath := filepath.Join(cwd, "%s", "%s.db")
+	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -1057,7 +1194,7 @@ func Delete%sHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fmt.Fprintf(w, "%s with ID %%s deleted successfully", id)
-}`, structName, lowercaseName, dbPathForHandler, lowercaseName)
+}`, structName, lowercaseName, dirName, lowercaseName, lowercaseName)
 
 			// Combine all parts into one file
 							packageFileContent = fmt.Sprintf(`package %s
@@ -1066,6 +1203,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 
 	_ "modernc.org/sqlite"
@@ -1074,7 +1213,8 @@ import (
 %s
 %s
 %s
-`, packageName, structDef, updateHandlerContent, deleteHandlerContent)
+%s
+`, packageName, structDef, showHandlerContent, updateHandlerContent, deleteHandlerContent)
 
 			// Write the package file
 			structFileName = filepath.Join(dirName, lowercaseName+".go")
@@ -1117,9 +1257,16 @@ import (
 
 			// The new package is in a subdirectory named lowercaseName
 			packageImportPath = filepath.Join(modulePath, relativeDir, lowercaseName)
+			packageImportPath = filepath.ToSlash(packageImportPath)
 
 			// Register Handlers in main.go
 			mainGoPath = "main.go"
+			showRegMsg, err3 = registerHandlerWithPackage(packageName, packageImportPath, "Show"+structName, "/show/"+lowercaseName+"/", mainGoPath)
+			if err3 != nil {
+				predictedSentence += " " + err3.Error()
+			} else {
+				predictedSentence += " " + showRegMsg
+			}
 			updateRegMsg, err1 = registerHandlerWithPackage(packageName, packageImportPath, "Update"+structName, "/update/"+lowercaseName+"/", mainGoPath)
 			if err1 != nil {
 				predictedSentence += " " + err1.Error()
@@ -1135,6 +1282,80 @@ import (
 
 			endOfDataStructureCreation:
 				;
+		} else if command == "delete" && objectType == "data structure" {
+			queryParts := strings.Fields(query)
+			structName := ""
+			for i, part := range queryParts {
+				if part == "structure" && i+1 < len(queryParts) {
+					structName = strings.Title(queryParts[i+1])
+					break
+				}
+			}
+
+			if structName == "" {
+				predictedSentence = "You need to provide the name of the data structure to delete."
+			} else {
+				lowercaseName := strings.ToLower(structName)
+				dirName := lowercaseName
+
+				// Remove the directory
+				err := os.RemoveAll(dirName)
+				if err != nil {
+					predictedSentence = fmt.Sprintf("I couldn't delete the directory %s: %v", dirName, err)
+				} else {
+					predictedSentence = fmt.Sprintf("I have deleted the data structure '%s' (directory '%s').", structName, dirName)
+
+					// Remove handlers from main.go
+					mainGoPath := "main.go"
+					contentBytes, err := os.ReadFile(mainGoPath)
+					if err != nil {
+						predictedSentence += fmt.Sprintf(" However, I couldn't read %s to remove handlers: %v", mainGoPath, err)
+					} else {
+						lines := strings.Split(string(contentBytes), "\n")
+						var newLines []string
+						urlsToRemove := []string{
+							fmt.Sprintf("\"/show/%s/\"", lowercaseName),
+							fmt.Sprintf("\"/update/%s/\"", lowercaseName),
+							fmt.Sprintf("\"/delete/%s/\"", lowercaseName),
+						}
+
+						importSuffix := fmt.Sprintf("/%s\"", lowercaseName)
+						handlersRemoved := 0
+						importsRemoved := 0
+						for _, line := range lines {
+							keep := true
+							for _, url := range urlsToRemove {
+								if strings.Contains(line, url) {
+									keep = false
+									handlersRemoved++
+									break
+								}
+							}
+							if keep {
+								if strings.Contains(line, importSuffix) {
+									keep = false
+									importsRemoved++
+								}
+							}
+							if keep {
+								newLines = append(newLines, line)
+							}
+						}
+
+						if handlersRemoved > 0 || importsRemoved > 0 {
+							err = os.WriteFile(mainGoPath, []byte(strings.Join(newLines, "\n")), 0644)
+							if err != nil {
+								predictedSentence += fmt.Sprintf(" But I failed to update %s: %v", mainGoPath, err)
+							} else {
+								goImports(mainGoPath) // This will remove the unused import
+								predictedSentence += fmt.Sprintf(" And removed %d handler registration(s) and %d import(s) from %s.", handlersRemoved, importsRemoved, mainGoPath)
+							}
+						} else {
+							predictedSentence += " I didn't find any handler registrations to remove in main.go."
+						}
+					}
+				}
+			}
 		} else if command == "delete" && (contains(objectTypeParts, "folder") || contains(objectTypeParts, "directory")) {
 			folderName := findName(taggedData)
 			if folderName != "" {

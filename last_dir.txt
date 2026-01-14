@@ -1,1 +1,1 @@
-/home/zendrulat/code/gollemer/jim/cmd/jim
+/home/zendrulat/code/gollemer/jj/cmd/jim
