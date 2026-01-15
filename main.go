@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"database/sql"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -226,6 +227,66 @@ func createTableWithFields(dbFileName, tableName string, fields map[string]strin
 	return nil
 }
 
+func deleteColumnFromTable(dbFileName, tableName, columnToDelete string, remainingFields map[string]string) error {
+	db, err := sql.Open("sqlite", dbFileName)
+	if err != nil {
+		return fmt.Errorf("couldn't open the database file %s: %v", dbFileName, err)
+	}
+	defer db.Close()
+
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("could not begin transaction: %w", err)
+	}
+
+	// 1. Create a new temporary table
+	tempTableName := tableName + "_temp_gollemer"
+	columns := []string{"id INTEGER PRIMARY KEY AUTOINCREMENT"}
+	var fieldNames []string
+	for fieldName, fieldType := range remainingFields {
+		sqlType := "TEXT"
+		switch strings.ToLower(fieldType) {
+		case "string":
+			sqlType = "TEXT"
+		case "int":
+			sqlType = "INTEGER"
+		}
+		columns = append(columns, fmt.Sprintf("%s %s", strings.ToLower(fieldName), sqlType))
+		fieldNames = append(fieldNames, strings.ToLower(fieldName))
+	}
+	sort.Strings(fieldNames)
+
+	createSQL := fmt.Sprintf("CREATE TABLE %s (%s)", tempTableName, strings.Join(columns, ", "))
+	if _, err := tx.Exec(createSQL); err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to create temp table: %w", err)
+	}
+
+	// 2. Copy data from the old table to the new table
+	columnList := "id, " + strings.Join(fieldNames, ", ")
+	insertSQL := fmt.Sprintf("INSERT INTO %s (%s) SELECT %s FROM %s", tempTableName, columnList, columnList, tableName)
+	if _, err := tx.Exec(insertSQL); err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to copy data to temp table: %w", err)
+	}
+
+	// 3. Drop the old table
+	dropSQL := fmt.Sprintf("DROP TABLE %s", tableName)
+	if _, err := tx.Exec(dropSQL); err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to drop old table: %w", err)
+	}
+
+	// 4. Rename the new table
+	renameSQL := fmt.Sprintf("ALTER TABLE %s RENAME TO %s", tempTableName, tableName)
+	if _, err := tx.Exec(renameSQL); err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to rename temp table: %w", err)
+	}
+
+	return tx.Commit()
+}
+
 func registerHandlerURL(handlerName, handlerURL, mainGoPath string) (string, error) {
 	mainGoContent, err := os.ReadFile(mainGoPath)
 	if err != nil {
@@ -296,6 +357,91 @@ func goImports(filename string) {
 	}
 }
 
+// GollemerMoEClient implements the MoEClient interface using the existing NLP pipeline.
+type GollemerMoEClient struct{}
+
+func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
+	lowerInput := strings.ToLower(input)
+
+	// Heuristic Intent Detection based on existing keywords
+	if strings.Contains(lowerInput, "create") {
+		if strings.Contains(lowerInput, "webserver") {
+			return "create_webserver", 0.9
+		}
+		if strings.Contains(lowerInput, "handler") {
+			return "create_handler", 0.9
+		}
+		if strings.Contains(lowerInput, "database") {
+			return "create_database", 0.9
+		}
+		if strings.Contains(lowerInput, "file") {
+			return "create_file", 0.8
+		}
+		if strings.Contains(lowerInput, "folder") || strings.Contains(lowerInput, "directory") {
+			return "create_folder", 0.8
+		}
+	}
+	return "", 0.0
+}
+
+func (c *GollemerMoEClient) ExtractEntities(input string, intent string) map[string]interface{} {
+	words := strings.Fields(input)
+	posTags := postagger.TagTokens(words)
+	taggedData := nertagger.Nertagger(tag.Tag{Tokens: words, PosTag: posTags})
+
+	entities := make(map[string]interface{})
+
+	// Extract Name using existing findName logic
+	name := findName(taggedData)
+	if name != "" {
+		entities["name"] = name
+	}
+
+	// Extract URL (specific to handlers)
+	for i, token := range taggedData.Tokens {
+		if strings.ToLower(token) == "url" && i > 0 && strings.ToLower(taggedData.Tokens[i-1]) == "with" && i+1 < len(taggedData.Tokens) {
+			entities["url"] = taggedData.Tokens[i+1]
+		}
+	}
+
+	// Extract Path (for files/folders)
+	for i, token := range taggedData.Tokens {
+		if (strings.ToLower(token) == "in" || strings.ToLower(token) == "into") && i+1 < len(taggedData.Tokens) {
+			entities["path"] = taggedData.Tokens[i+1]
+		}
+	}
+
+	// Extract Fields (for database)
+	if strings.Contains(input, "fields") {
+		fields := make(map[string]string)
+		parts := strings.Fields(input)
+		startIdx := -1
+
+		// Find "fields" keyword
+		for i, p := range parts {
+			if strings.ToLower(p) == "fields" {
+				startIdx = i + 1
+				break
+			}
+		}
+
+		if startIdx != -1 {
+			for i := startIdx; i < len(parts)-1; i += 2 {
+				if strings.ToLower(parts[i]) == "and" {
+					i-- // Adjust for "and"
+					continue
+				}
+				fields[parts[i]] = parts[i+1]
+			}
+		}
+		if len(fields) > 0 {
+			entities["tables"] = fields
+		}
+	}
+
+	return entities
+}
+
 func runLLM() {
 	projectRoot, err := findProjectRoot()
 	if err != nil {
@@ -332,6 +478,9 @@ func runLLM() {
 		log.Printf("DEBUG: No last directory loaded. Current Working Directory: %s", currentAbsDir)
 	}
 
+	// Initialize Hybrid Intent Resolver with our local MoE client
+	resolver := NewHybridIntentResolver(&GollemerMoEClient{})
+
 	for {
 		colors.ColorizeCol("red", "magenta", "/ʕ◔ϖ◔ʔ/> ")
 
@@ -345,6 +494,14 @@ func runLLM() {
 			cmd.Stdout = os.Stdout
 			cmd.Run()
 			continue
+		}
+
+		// --- New Intent Layer Logic ---
+		// This recursively fills the data layer using the MoE client
+		intentData := resolver.Resolve(query, nil)
+		if intentData.Intent != "" {
+			jsonOutput, _ := json.MarshalIndent(intentData, "", "  ")
+			fmt.Println(string(jsonOutput))
 		}
 
 		// --- Tagging ---
@@ -369,7 +526,7 @@ func runLLM() {
 					command = "create"
 				} else if token == "list" || token == "ls" || token == "show" {
 					command = "list"
-				} else if token == "go" || token == "cd" {
+				} else if token == "go" || token == "cd" || token == "change" || token == "move" {
 					command = "go"
 				} else if token == "delete" || token == "remove" {
 					command = "delete"
@@ -479,7 +636,7 @@ func runLLM() {
 					for i := len(taggedData.Tokens) - 1; i >= 0; i-- {
 						token := strings.ToLower(taggedData.Tokens[i])
 						// Exclude command words and prepositions
-						if token != "go" && token != "to" && token != "project" && token != "folder" && token != "directory" && token != "cd" {
+						if token != "go" && token != "to" && token != "project" && token != "folder" && token != "directory" && token != "cd" && token != "change" && token != "move" {
 							targetDirectory = taggedData.Tokens[i]
 							break
 						}
@@ -488,6 +645,9 @@ func runLLM() {
 			}
 
 			if command == "go" && targetDirectory != "" {
+				if targetDirectory == "root" {
+					targetDirectory = "/"
+				}
 				err := os.Chdir(targetDirectory)
 				if err != nil {
 					predictedSentence = fmt.Sprintf("I couldn't change the directory to %s: %v", targetDirectory, err)
@@ -945,18 +1105,9 @@ func main() {
 				var err3 error
 				var mainGoPath string
 				var packageFileContent string
-				var deleteHandlerContent string
-				var updateHandlerContent string
+				var modulePath, projectRoot, cwd, relativeDir, packageImportPath string
 				var lowercaseName string
 				var packageName string
-				var structDef string
-				var showHandlerContent string
-				var structFields []string
-				var structFieldExecs []string
-				var sortedFieldNames []string
-				var selectColumns []string
-				var scanFields []string
-				var modulePath, projectRoot, cwd, relativeDir, packageImportPath string
 
 				queryParts := strings.Fields(query)
 				structName := ""
@@ -964,7 +1115,11 @@ func main() {
 
 				for i, part := range queryParts {
 					if part == "structure" && i+1 < len(queryParts) {
-						structName = strings.Title(queryParts[i+1])
+						if strings.ToLower(queryParts[i+1]) == "named" && i+2 < len(queryParts) {
+							structName = strings.Title(queryParts[i+2])
+						} else {
+							structName = strings.Title(queryParts[i+1])
+						}
 						break
 					}
 				}
@@ -1058,163 +1213,9 @@ func main() {
 				}
 
 				// --- Start of new generation logic ---
+				packageFileContent = generateDataStructurePackageContent(structName, fields)
 				lowercaseName = strings.ToLower(structName)
 				packageName = lowercaseName
-
-				// Struct Definition
-			structDef = fmt.Sprintf("type %s struct {\n", structName)
-			structDef += "\tID int `json:\"id\"`\n"
-			for fieldName, fieldType := range fields {
-				structDef += fmt.Sprintf("\t%s %s `json:\"%s\"`\n", strings.Title(fieldName), fieldType, fieldName)
-			}
-			structDef += "}\n\n"
-
-			// Handler field construction
-			sortedFieldNames = make([]string, 0, len(fields))
-			for k := range fields {
-				sortedFieldNames = append(sortedFieldNames, k)
-			}
-			sort.Strings(sortedFieldNames)
-
-			// Show Handler construction
-			selectColumns = []string{"id"}
-			scanFields = []string{"&u.ID"}
-			for _, fieldName := range sortedFieldNames {
-				selectColumns = append(selectColumns, strings.ToLower(fieldName))
-				scanFields = append(scanFields, "&u."+strings.Title(fieldName))
-			}
-
-
-			showHandlerContent = fmt.Sprintf(`
-func Show%sHandler(w http.ResponseWriter, r *http.Request) {
-	cwd, _ := os.Getwd()
-	dbPath := filepath.Join(cwd, "%s", "%s.db")
-	db, err := sql.Open("sqlite", dbPath)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer db.Close()
-
-	rows, err := db.Query("SELECT %s FROM %s")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
-
-	results := make([]%s, 0)
-	for rows.Next() {
-		var u %s
-		if err := rows.Scan(%s); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		results = append(results, u)
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(results)
-}`, structName, dirName, lowercaseName, strings.Join(selectColumns, ", "), lowercaseName, structName, structName, strings.Join(scanFields, ", "))
-
-			for _, fieldName := range sortedFieldNames {
-				structFields = append(structFields, fmt.Sprintf("%s = ?", strings.ToLower(fieldName)))
-				structFieldExecs = append(structFieldExecs, "u."+strings.Title(fieldName))
-			}
-
-			// Update Handler
-			updateHandlerContent = fmt.Sprintf(`
-func Update%sHandler(w http.ResponseWriter, r *http.Request) {
-	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) < 4 { // e.g. /update/user/123
-		http.Error(w, "Invalid URL, expecting /update/%s/{id}", http.StatusBadRequest)
-		return
-	}
-	id := parts[len(parts)-1]
-
-	var u %s
-	err := json.NewDecoder(r.Body).Decode(&u)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	cwd, _ := os.Getwd()
-	dbPath := filepath.Join(cwd, "%s", "%s.db")
-	db, err := sql.Open("sqlite", dbPath)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer db.Close()
-
-	stmt, err := db.Prepare("UPDATE %s SET %s WHERE id = ?")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	_, err = stmt.Exec(%s, id)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	fmt.Fprintf(w, "%s with ID %%s updated successfully", id)
-}`, structName, lowercaseName, structName, dirName, lowercaseName, lowercaseName, strings.Join(structFields, ", "), strings.Join(structFieldExecs, ", "))
-
-			// Delete Handler
-			deleteHandlerContent = fmt.Sprintf(`
-func Delete%sHandler(w http.ResponseWriter, r *http.Request) {
-	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) < 4 { // e.g. /delete/user/123
-		http.Error(w, "Invalid URL, expecting /delete/%s/{id}", http.StatusBadRequest)
-		return
-	}
-	id := parts[len(parts)-1]
-
-	cwd, _ := os.Getwd()
-	dbPath := filepath.Join(cwd, "%s", "%s.db")
-	db, err := sql.Open("sqlite", dbPath)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer db.Close()
-
-	stmt, err := db.Prepare("DELETE FROM %s WHERE id = ?")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	_, err = stmt.Exec(id)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	fmt.Fprintf(w, "%s with ID %%s deleted successfully", id)
-}`, structName, lowercaseName, dirName, lowercaseName, lowercaseName)
-
-			// Combine all parts into one file
-							packageFileContent = fmt.Sprintf(`package %s
-import (
-	"database/sql"
-	"encoding/json"
-	"fmt"
-	"net/http"
-	"os"
-	"path/filepath"
-	"strings"
-
-	_ "modernc.org/sqlite"
-)
-
-%s
-%s
-%s
-%s
-`, packageName, structDef, showHandlerContent, updateHandlerContent, deleteHandlerContent)
 
 			// Write the package file
 			structFileName = filepath.Join(dirName, lowercaseName+".go")
@@ -1287,7 +1288,11 @@ import (
 			structName := ""
 			for i, part := range queryParts {
 				if part == "structure" && i+1 < len(queryParts) {
-					structName = strings.Title(queryParts[i+1])
+					if strings.ToLower(queryParts[i+1]) == "named" && i+2 < len(queryParts) {
+						structName = strings.Title(queryParts[i+2])
+					} else {
+						structName = strings.Title(queryParts[i+1])
+					}
 					break
 				}
 			}
@@ -1295,6 +1300,74 @@ import (
 			if structName == "" {
 				predictedSentence = "You need to provide the name of the data structure to delete."
 			} else {
+				var fieldToDelete string
+				for i, part := range queryParts {
+					if part == "field" && i+1 < len(queryParts) {
+						fieldToDelete = queryParts[i+1]
+						break
+					}
+				}
+
+				if fieldToDelete != "" {
+					lowercaseName := strings.ToLower(structName)
+					dirName := lowercaseName
+					structFileName := filepath.Join(dirName, lowercaseName+".go")
+
+					content, err := os.ReadFile(structFileName)
+					if err != nil {
+						predictedSentence = fmt.Sprintf("Could not read file %s: %v", structFileName, err)
+					} else {
+						fields := make(map[string]string)
+						lines := strings.Split(string(content), "\n")
+						inStruct := false
+						for _, line := range lines {
+							trimmed := strings.TrimSpace(line)
+							if strings.HasPrefix(trimmed, fmt.Sprintf("type %s struct {", structName)) {
+								inStruct = true
+								continue
+							}
+							if inStruct {
+								if trimmed == "}" {
+									break
+								}
+								parts := strings.Fields(trimmed)
+								if len(parts) >= 2 {
+									fName := parts[0]
+									if fName == "ID" {
+										continue
+									}
+									fType := parts[1]
+									fields[strings.ToLower(fName)] = fType
+								}
+							}
+						}
+
+						if _, exists := fields[strings.ToLower(fieldToDelete)]; exists {
+							// Field exists, proceed with deletion.
+							delete(fields, strings.ToLower(fieldToDelete))
+
+							// 1. Update the database table
+							dbFileName := filepath.Join(dirName, lowercaseName+".db")
+							tableName := lowercaseName
+							err = deleteColumnFromTable(dbFileName, tableName, fieldToDelete, fields)
+							if err != nil {
+								predictedSentence = fmt.Sprintf("I failed to delete column '%s' from database table '%s': %v. The Go struct was not modified.", fieldToDelete, tableName, err)
+							} else {
+								// 2. Update the Go source file
+								newContent := generateDataStructurePackageContent(structName, fields)
+								err = os.WriteFile(structFileName, []byte(newContent), 0644)
+								if err != nil {
+									predictedSentence = fmt.Sprintf("I updated the database, but failed to update the Go file %s: %v. Please check for inconsistencies.", structFileName, err)
+								} else {
+									goImports(structFileName)
+									predictedSentence = fmt.Sprintf("I have deleted the field '%s' from data structure '%s' and updated the database.", fieldToDelete, structName)
+								}
+							}
+						} else {
+							predictedSentence = fmt.Sprintf("Field '%s' not found in data structure '%s'.", fieldToDelete, structName)
+						}
+					}
+				} else {
 				lowercaseName := strings.ToLower(structName)
 				dirName := lowercaseName
 
@@ -1355,6 +1428,7 @@ import (
 						}
 					}
 				}
+				}
 			}
 		} else if command == "delete" && (contains(objectTypeParts, "folder") || contains(objectTypeParts, "directory")) {
 			folderName := findName(taggedData)
@@ -1402,4 +1476,165 @@ import (
 		fmt.Println("\n")
 
 	}
+}
+
+func generateDataStructurePackageContent(structName string, fields map[string]string) string {
+	lowercaseName := strings.ToLower(structName)
+	packageName := lowercaseName
+	dirName := lowercaseName
+
+	// Struct Definition
+	structDef := fmt.Sprintf("type %s struct {\n", structName)
+	structDef += "\tID int `json:\"id\"`\n"
+
+	sortedFieldNames := make([]string, 0, len(fields))
+	for k := range fields {
+		sortedFieldNames = append(sortedFieldNames, k)
+	}
+	sort.Strings(sortedFieldNames)
+
+	for _, fieldName := range sortedFieldNames {
+		structDef += fmt.Sprintf("\t%s %s `json:\"%s\"`\n", strings.Title(fieldName), fields[fieldName], fieldName)
+	}
+	structDef += "}\n\n"
+
+	// Show Handler construction
+	selectColumns := []string{"id"}
+	scanFields := []string{"&u.ID"}
+	for _, fieldName := range sortedFieldNames {
+		selectColumns = append(selectColumns, strings.ToLower(fieldName))
+		scanFields = append(scanFields, "&u."+strings.Title(fieldName))
+	}
+
+	showHandlerContent := fmt.Sprintf(`
+func Show%sHandler(w http.ResponseWriter, r *http.Request) {
+	cwd, _ := os.Getwd()
+	dbPath := filepath.Join(cwd, "%s", "%s.db")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+
+	rows, err := db.Query("SELECT %s FROM %s")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	results := make([]%s, 0)
+	for rows.Next() {
+		var u %s
+		if err := rows.Scan(%s); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		results = append(results, u)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(results)
+}`, structName, dirName, lowercaseName, strings.Join(selectColumns, ", "), lowercaseName, structName, structName, strings.Join(scanFields, ", "))
+
+	var structFields []string
+	var structFieldExecs []string
+	for _, fieldName := range sortedFieldNames {
+		structFields = append(structFields, fmt.Sprintf("%s = ?", strings.ToLower(fieldName)))
+		structFieldExecs = append(structFieldExecs, "u."+strings.Title(fieldName))
+	}
+
+	updateHandlerContent := fmt.Sprintf(`
+func Update%sHandler(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 4 { // e.g. /update/user/123
+		http.Error(w, "Invalid URL, expecting /update/%s/{id}", http.StatusBadRequest)
+		return
+	}
+	id := parts[len(parts)-1]
+
+	var u %s
+	err := json.NewDecoder(r.Body).Decode(&u)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	cwd, _ := os.Getwd()
+	dbPath := filepath.Join(cwd, "%s", "%s.db")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+
+	stmt, err := db.Prepare("UPDATE %s SET %s WHERE id = ?")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	_, err = stmt.Exec(%s, id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Fprintf(w, "%s with ID %%s updated successfully", id)
+}`, structName, lowercaseName, structName, dirName, lowercaseName, lowercaseName, strings.Join(structFields, ", "), strings.Join(structFieldExecs, ", "))
+
+	deleteHandlerContent := fmt.Sprintf(`
+func Delete%sHandler(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 4 { // e.g. /delete/user/123
+		http.Error(w, "Invalid URL, expecting /delete/%s/{id}", http.StatusBadRequest)
+		return
+	}
+	id := parts[len(parts)-1]
+
+	cwd, _ := os.Getwd()
+	dbPath := filepath.Join(cwd, "%s", "%s.db")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer db.Close()
+
+	stmt, err := db.Prepare("DELETE FROM %s WHERE id = ?")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	_, err = stmt.Exec(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	fmt.Fprintf(w, "%s with ID %%s deleted successfully", id)
+}`, structName, lowercaseName, dirName, lowercaseName, lowercaseName)
+
+	packageFileContent := fmt.Sprintf(`package %s
+import (
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+
+	_ "modernc.org/sqlite"
+)
+
+%s
+%s
+%s
+%s
+`, packageName, structDef, showHandlerContent, updateHandlerContent, deleteHandlerContent)
+
+	return packageFileContent
 }
