@@ -57,6 +57,12 @@ The `gollemer` CLI processes natural language user input through an LLM interfac
            |
            v
 +-------------------------+
+| Recursive Intent Layer  |
+| (Hybrid JSON Data Fill) |
++----------+----------+
+           |
+           v
++-------------------------+
 |  File System Operations |
 | (Create, Delete, List)  |
 +-------------------------+
