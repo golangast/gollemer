@@ -31,21 +31,41 @@
         header {
             background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
             color: #fff;
-            padding: 4rem 2rem;
+            padding: 6rem 2rem;
             text-align: center;
-            border-bottom-left-radius: var(--border-radius);
-            border-bottom-right-radius: var(--border-radius);
+            margin-bottom: 0;
         }
 
         header h1 {
-            margin: 0;
-            font-size: 2.5em;
+            margin: 0 0 1rem 0;
+            font-size: 3.5em;
             font-weight: 700;
+            letter-spacing: -1px;
         }
 
         header p {
-            font-size: 1.2em;
+            font-size: 1.5em;
             opacity: 0.9;
+            max-width: 600px;
+            margin: 0 auto 2rem auto;
+        }
+
+        .cta-button {
+            display: inline-block;
+            background: #fff;
+            color: var(--primary-color);
+            padding: 12px 30px;
+            border-radius: 50px;
+            font-weight: bold;
+            font-size: 1.1em;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        .cta-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+            color: var(--secondary-color);
         }
 
         main {
@@ -106,24 +126,6 @@
 
         code {
             font-family: inherit;
-        }
-
-        ul {
-            list-style-type: none;
-            padding: 0;
-        }
-
-        ul li {
-            padding-left: 1.5rem;
-            position: relative;
-            margin-bottom: 0.5rem;
-        }
-
-        ul li::before {
-            content: '✓';
-            color: var(--secondary-color);
-            position: absolute;
-            left: 0;
         }
 
         table {
@@ -220,12 +222,166 @@
             line-height: 1;
             letter-spacing: 4px;
         }
+
+        /* Feature Cards */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+
+        .feature-card {
+            background: #f8f9fa;
+            padding: 1.5rem;
+            border-radius: var(--border-radius);
+            border: 1px solid #eee;
+            transition: transform 0.2s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--secondary-color);
+        }
+
+        .feature-card h3 {
+            color: var(--primary-color);
+            margin-top: 0.5rem;
+        }
+
+        .feature-card .icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+        }
+
+        footer {
+            background: var(--primary-color);
+            color: #fff;
+            text-align: center;
+            padding: 2rem;
+            margin-top: 4rem;
+        }
+
+        /* --- New Interactive Elements --- */
+
+        /* Scroll Reveal Animation */
+        .reveal {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: all 0.6s ease-out;
+        }
+        .reveal.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* NLP Playground */
+        .nlp-playground {
+            background: #f8f9fa;
+            padding: 2rem;
+            border-radius: var(--border-radius);
+            margin-top: 2rem;
+            border: 2px dashed #cbd5e0;
+        }
+        .nlp-input {
+            width: 100%;
+            padding: 15px;
+            font-size: 1.1em;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            font-family: 'Fira Code', monospace;
+            box-sizing: border-box;
+        }
+        .nlp-input:focus {
+            border-color: var(--secondary-color);
+            outline: none;
+        }
+        .nlp-result {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+            min-height: 60px;
+        }
+        .nlp-tag {
+            background: white;
+            padding: 10px 15px;
+            border-radius: 6px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            font-family: 'Fira Code', monospace;
+            font-size: 0.9em;
+            border-left: 4px solid var(--secondary-color);
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes popIn { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        .nlp-tag strong {
+            color: var(--primary-color);
+            display: block;
+            font-size: 0.75em;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+            opacity: 0.7;
+        }
+
+        /* Interactive Terminal */
+        #terminal-window {
+            background: #1e1e1e;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+            overflow: hidden;
+            font-family: 'Fira Code', monospace;
+            text-align: left;
+            margin-top: 1rem;
+        }
+        .terminal-header {
+            background: #2d2d2d;
+            padding: 10px 15px;
+            display: flex;
+            gap: 8px;
+            border-bottom: 1px solid #333;
+        }
+        .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+        .red { background: #ff5f56; }
+        .yellow { background: #ffbd2e; }
+        .green { background: #27c93f; }
+        
+        .terminal-body {
+            padding: 20px;
+            height: 350px;
+            overflow-y: auto;
+            color: #f8f8f2;
+            font-size: 0.95em;
+            cursor: text;
+        }
+        .terminal-line { margin-bottom: 8px; line-height: 1.5; word-break: break-all; }
+        .command-line { display: flex; align-items: center; }
+        .prompt { color: #2ecc71; margin-right: 10px; font-weight: bold; flex-shrink: 0; }
+        .cmd-input {
+            background: transparent;
+            border: none;
+            color: #fff;
+            font-family: inherit;
+            font-size: inherit;
+            flex-grow: 1;
+            outline: none;
+            padding: 0;
+            margin: 0;
+        }
+        .highlight { color: #f1c40f; }
+        .response-success { color: #2ecc71; }
+        .response-error { color: #e74c3c; }
+        .response-info { color: #3498db; }
+
+        .terminal-body::-webkit-scrollbar { width: 8px; }
+        .terminal-body::-webkit-scrollbar-track { background: #1e1e1e; }
+        .terminal-body::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
     </style>
 </head>
 <body>
     <header>
-        <h1>Multi-Orchestrator with NLP Understanding</h1>
-        <p>Your smart assistant for code generation.</p>
+        <h1>Multi-Orchestrator</h1>
+        <p>Your smart assistant for code generation with NLP understanding.</p>
+        <a href="#usage" class="cta-button">Get Started</a>
     </header>
 
     <nav>
@@ -248,7 +404,7 @@
             <div class="comparison-container">
                 <div class="before">
                     <h3>Before (Keyword-based)</h3>
-                    <p>The orchestrator would only recognize specific keywords:</p>
+                    <p>The orchestrator would only recognize specific keywords.</p>
                     <ul>
                         <li>"create webserver"</li>
                         <li>"create handler"</li>
@@ -257,7 +413,7 @@
                 </div>
                 <div class="after">
                     <h3>After (Semantic Understanding)</h3>
-                    <p>Now you can write naturally, and the orchestrator will understand your intent:</p>
+                    <p>Now you can write naturally, and the orchestrator will understand your intent.</p>
                     <ul>
                         <li>"I want to build a webserver with an authentication handler"</li>
                         <li>"Make me a Go server that has JWT support"</li>
@@ -305,19 +461,47 @@
 | (Code Generation) |
 +-------------------+
             </code></pre>
+            
+            <div class="nlp-playground">
+                <h3>⚡ Interactive NLP Demo</h3>
+                <p>Experience the semantic understanding engine. Type a natural language command below:</p>
+                <input type="text" class="nlp-input" id="nlp-demo-input" placeholder="e.g., Create a webserver named Apollo with a login handler" autocomplete="off">
+                <div class="nlp-result" id="nlp-demo-output">
+                    <!-- Results will appear here -->
+                    <span style="color: #888; font-style: italic; align-self: center;">Waiting for input...</span>
+                </div>
+            </div>
         </section>
 
         <section id="features">
             <h2>Features</h2>
-            <ul>
-                <li><strong>Natural Language Understanding</strong> - Write commands as you would speak them</li>
-                <li><strong>Intent Detection</strong> - Automatically determines what you want to do</li>
-                <li><strong>Entity Extraction</strong> - Intelligently extracts names, types, and parameters</li>
-                <li><strong>Fallback Support</strong> - Falls back to keyword matching if semantic parsing fails</li>
-                <li><strong>Semantic Output</strong> - Generates structured JSON representation of commands</li>
-                <li><strong>Git Integration</strong> - Tracks changes with automatic commits</li>
-                <li><strong>History & Revert</strong> - View command history and revert to previous states</li>
-            </ul>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="icon">🧠</div>
+                    <h3>Natural Language</h3>
+                    <p>Write commands as you would speak them. No strict syntax required.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon">🎯</div>
+                    <h3>Intent Detection</h3>
+                    <p>Automatically determines what you want to do using advanced NLP.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon">🔍</div>
+                    <h3>Entity Extraction</h3>
+                    <p>Intelligently extracts names, types, and parameters from your text.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon">🛡️</div>
+                    <h3>Fallback Support</h3>
+                    <p>Gracefully falls back to keyword matching if semantic parsing fails.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="icon">💾</div>
+                    <h3>Git Integration</h3>
+                    <p>Tracks changes with automatic commits, history, and revert capabilities.</p>
+                </div>
+            </div>
         </section>
 
         <section id="additional-tools">
@@ -414,23 +598,51 @@
 
         <section id="usage">
             <h2>Example Usage</h2>
-            <pre><code># Run the multi-orchestrator (this will eventually be a direct LLM interface)
-go run . -llm
-
-# Inside LLM mode, you can type commands like:
-> create file my_new_file.txt
-> create folder my_project
-> create webserver my_api
-> go to my_project
-> list files
-> pwd
-> delete folder my_project
-            </code></pre>
+            <p>Try the interactive terminal simulator below. You can type commands like <code>help</code>, <code>ls</code>, or <code>create webserver</code>.</p>
+            
+            <div id="terminal-window">
+                <div class="terminal-header">
+                    <span class="dot red"></span>
+                    <span class="dot yellow"></span>
+                    <span class="dot green"></span>
+                </div>
+                <div class="terminal-body" id="terminal-output">
+                    <div class="terminal-line">Welcome to Gollemer Interactive Shell v1.0</div>
+                    <div class="terminal-line">Type <span class="highlight">'help'</span> to see available commands.</div>
+                    <br>
+                    <div class="command-line" id="active-command-line">
+                        <span class="prompt">➜ ~</span>
+                        <input type="text" class="cmd-input" id="terminal-input" autocomplete="off" spellcheck="false">
+                    </div>
+                </div>
+            </div>
         </section>
     </main>
 
+    <footer>
+        <p>&copy; 2026 Gollemer Multi-Orchestrator. All rights reserved.</p>
+    </footer>
+
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            
+            // --- 1. Scroll Reveal Animation ---
+            const revealElements = document.querySelectorAll('section, .feature-card, .comparison-container');
+            
+            const revealObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('active');
+                        revealObserver.unobserve(entry.target); // Only animate once
+                    }
+                });
+            }, { threshold: 0.15 });
+
+            revealElements.forEach(el => {
+                el.classList.add('reveal');
+                revealObserver.observe(el);
+            });
+
             // Smooth Scrolling for Nav
             document.querySelectorAll('nav a').forEach(anchor => {
                 anchor.addEventListener('click', function (e) {
@@ -454,29 +666,127 @@ go run . -llm
                 });
             }
 
-            // Terminal Typing Effect
-            const usageCode = document.querySelector('#usage code');
-            if (usageCode) {
-                const text = usageCode.textContent;
-                usageCode.textContent = ''; // Clear initial text
-                
-                let i = 0;
-                const typeWriter = () => {
-                    if (i < text.length) {
-                        usageCode.textContent += text.charAt(i);
-                        i++;
-                        setTimeout(typeWriter, 15); // Typing speed
-                    }
-                };
+            // --- 2. NLP Playground Logic ---
+            const nlpInput = document.getElementById('nlp-demo-input');
+            const nlpOutput = document.getElementById('nlp-demo-output');
 
-                // Start typing when scrolled into view
-                const observer = new IntersectionObserver((entries) => {
-                    if (entries[0].isIntersecting) {
-                        typeWriter();
-                        observer.disconnect(); // Run once
+            if (nlpInput && nlpOutput) {
+                nlpInput.addEventListener('input', (e) => {
+                    const text = e.target.value.toLowerCase();
+                    nlpOutput.innerHTML = '';
+
+                    if (text.length === 0) {
+                        nlpOutput.innerHTML = '<span style="color: #888; font-style: italic; align-self: center;">Waiting for input...</span>';
+                        return;
+                    }
+
+                    // Simulated NLP Logic
+                    let intent = 'UNKNOWN';
+                    let entities = [];
+
+                    if (text.includes('create') || text.includes('make') || text.includes('generate')) {
+                        if (text.includes('webserver') || text.includes('server')) intent = 'CREATE_WEBSERVER';
+                        else if (text.includes('handler') || text.includes('endpoint')) intent = 'CREATE_HANDLER';
+                        else if (text.includes('database') || text.includes('db')) intent = 'CREATE_DATABASE';
+                        else if (text.includes('file')) intent = 'CREATE_FILE';
+                        else intent = 'CREATE_GENERIC';
+                    } else if (text.includes('delete') || text.includes('remove')) {
+                        intent = 'DELETE_ITEM';
+                    } else if (text.includes('list') || text.includes('show')) {
+                        intent = 'LIST_DIRECTORY';
+                    }
+
+                    // Simple Entity Extraction (Capitalized words or words after 'named')
+                    const words = e.target.value.split(' ');
+                    words.forEach((word, i) => {
+                        if (word.length > 0 && word[0] === word[0].toUpperCase() && i > 0) {
+                            // Very naive proper noun detection
+                            entities.push({ type: 'Name', value: word.replace(/[^a-zA-Z0-9]/g, '') });
+                        }
+                        if (['named', 'called', 'file', 'folder'].includes(words[i-1]?.toLowerCase())) {
+                             entities.push({ type: 'Target', value: word.replace(/[^a-zA-Z0-9.]/g, '') });
+                        }
+                    });
+
+                    // Render Tags
+                    const createTag = (label, value) => {
+                        const div = document.createElement('div');
+                        div.className = 'nlp-tag';
+                        div.innerHTML = `<strong>${label}</strong>${value}`;
+                        return div;
+                    };
+
+                    nlpOutput.appendChild(createTag('Intent', intent));
+                    
+                    // Remove duplicate entities
+                    const uniqueEntities = [...new Map(entities.map(item => [item.value, item])).values()];
+                    
+                    uniqueEntities.forEach(ent => {
+                        nlpOutput.appendChild(createTag(`Entity: ${ent.type}`, ent.value));
+                    });
+                });
+            }
+
+            // --- 3. Interactive Terminal Emulator ---
+            const termInput = document.getElementById('terminal-input');
+            const termOutput = document.getElementById('terminal-output');
+            const activeCmdLine = document.getElementById('active-command-line');
+
+            if (termInput && termOutput) {
+                // Focus input when clicking anywhere in terminal
+                document.getElementById('terminal-window').addEventListener('click', () => {
+                    termInput.focus();
+                });
+
+                termInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        const command = termInput.value.trim();
+                        
+                        // 1. Move current input to history (static text)
+                        const historyLine = document.createElement('div');
+                        historyLine.className = 'terminal-line';
+                        historyLine.innerHTML = `<span class="prompt">➜ ~</span> ${command}`;
+                        termOutput.insertBefore(historyLine, activeCmdLine);
+
+                        // 2. Process Command
+                        const responseLine = document.createElement('div');
+                        responseLine.className = 'terminal-line';
+                        
+                        const lowerCmd = command.toLowerCase();
+                        
+                        if (lowerCmd === 'help') {
+                            responseLine.innerHTML = `<span class="response-info">Available commands:</span> help, ls, pwd, clear, create [webserver|file|folder], whoami`;
+                        } else if (lowerCmd === 'ls' || lowerCmd === 'list') {
+                            responseLine.innerHTML = `docs/&nbsp;&nbsp;src/&nbsp;&nbsp;cmd/&nbsp;&nbsp;go.mod&nbsp;&nbsp;README.md&nbsp;&nbsp;main.go`;
+                        } else if (lowerCmd === 'pwd') {
+                            responseLine.innerHTML = `/home/user/gollemer`;
+                        } else if (lowerCmd === 'whoami') {
+                            responseLine.innerHTML = `gollemer-admin`;
+                        } else if (lowerCmd === 'clear') {
+                            // Remove all previous siblings of activeCmdLine
+                            while (termOutput.firstChild && termOutput.firstChild !== activeCmdLine) {
+                                termOutput.removeChild(termOutput.firstChild);
+                            }
+                            responseLine.style.display = 'none'; // No response needed
+                        } else if (lowerCmd.startsWith('create webserver')) {
+                            responseLine.innerHTML = `<span class="response-success">✔ Scaffolding new webserver... Done.</span><br>Created cmd/server/main.go`;
+                        } else if (lowerCmd.startsWith('create')) {
+                            responseLine.innerHTML = `<span class="response-success">✔ Resource created successfully.</span>`;
+                        } else if (command === '') {
+                            responseLine.style.display = 'none';
+                        } else {
+                            responseLine.innerHTML = `<span class="response-error">Command not found: ${command}</span>. Type 'help' for assistance.`;
+                        }
+
+                        if (responseLine.style.display !== 'none') {
+                            termOutput.insertBefore(responseLine, activeCmdLine);
+                        }
+
+                        // 3. Reset Input and Scroll
+                        termInput.value = '';
+                        termOutput.scrollTop = termOutput.scrollHeight;
                     }
                 });
-                observer.observe(document.querySelector('#usage'));
             }
         });
     </script>
