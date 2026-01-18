@@ -226,7 +226,7 @@ Distributed under the GPL-3.0 License. See `LICENSE` for more information.
 
 ## Contact
 
-Discord: [https://discord.gg/3CHFDCvG](https://discord.gg/3CHFDCvG)
+Discord: [https://discord.gg/uaQuWReBTf](https://discord.gg/uaQuWReBTf)
 
 Project Link: [https://github.com/golangast/gollemer](https://github.com/golangast/gollemer)
 

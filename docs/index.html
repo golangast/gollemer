@@ -161,6 +161,65 @@
         a:hover {
             color: #2980b9;
         }
+
+        /* Interactive Elements */
+        nav {
+            background: var(--primary-color);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            padding: 1rem;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        nav a {
+            color: #fff;
+            margin: 0 15px;
+            font-weight: 500;
+            opacity: 0.8;
+        }
+
+        nav a:hover {
+            opacity: 1;
+            color: var(--secondary-color);
+        }
+
+        .search-box {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 1.5rem;
+            border: 2px solid #ddd;
+            border-radius: var(--border-radius);
+            font-size: 1rem;
+            font-family: inherit;
+            box-sizing: border-box;
+            transition: border-color 0.3s;
+        }
+
+        .search-box:focus {
+            border-color: var(--secondary-color);
+            outline: none;
+        }
+
+        /* Terminal Window Effect */
+        #usage pre {
+            position: relative;
+            padding-top: 45px;
+            background: #1e1e1e;
+            border: 1px solid #333;
+        }
+
+        #usage pre::before {
+            content: '● ● ●';
+            position: absolute;
+            top: 12px;
+            left: 15px;
+            color: #5f5f5f;
+            font-size: 20px;
+            line-height: 1;
+            letter-spacing: 4px;
+        }
     </style>
 </head>
 <body>
@@ -168,6 +227,15 @@
         <h1>Multi-Orchestrator with NLP Understanding</h1>
         <p>Your smart assistant for code generation.</p>
     </header>
+
+    <nav>
+        <a href="#overview">Overview</a>
+        <a href="#comparison">Comparison</a>
+        <a href="#how-it-works">How It Works</a>
+        <a href="#features">Features</a>
+        <a href="#llm-commands">Commands</a>
+        <a href="#usage">Usage</a>
+    </nav>
 
     <main>
         <section id="overview">
@@ -265,6 +333,7 @@
         <section id="llm-commands">
             <h2>LLM Interactive Mode Commands</h2>
             <p>Once in interactive mode (`go run . -llm`), you can use the following natural language commands. With the new NLP understanding, you are not limited to strict keywords; you can express your intent naturally:</p>
+            <input type="text" id="cmd-search" class="search-box" placeholder="Type to filter commands (e.g., 'database', 'create')...">
             <table>
                 <thead>
                     <tr>
@@ -359,5 +428,57 @@ go run . -llm
             </code></pre>
         </section>
     </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Smooth Scrolling for Nav
+            document.querySelectorAll('nav a').forEach(anchor => {
+                anchor.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    const targetId = this.getAttribute('href');
+                    document.querySelector(targetId).scrollIntoView({
+                        behavior: 'smooth'
+                    });
+                });
+            });
+
+            // Command Table Search/Filter
+            const searchInput = document.getElementById('cmd-search');
+            if (searchInput) {
+                searchInput.addEventListener('input', (e) => {
+                    const term = e.target.value.toLowerCase();
+                    document.querySelectorAll('#llm-commands tbody tr').forEach(row => {
+                        const text = row.innerText.toLowerCase();
+                        row.style.display = text.includes(term) ? '' : 'none';
+                    });
+                });
+            }
+
+            // Terminal Typing Effect
+            const usageCode = document.querySelector('#usage code');
+            if (usageCode) {
+                const text = usageCode.textContent;
+                usageCode.textContent = ''; // Clear initial text
+                
+                let i = 0;
+                const typeWriter = () => {
+                    if (i < text.length) {
+                        usageCode.textContent += text.charAt(i);
+                        i++;
+                        setTimeout(typeWriter, 15); // Typing speed
+                    }
+                };
+
+                // Start typing when scrolled into view
+                const observer = new IntersectionObserver((entries) => {
+                    if (entries[0].isIntersecting) {
+                        typeWriter();
+                        observer.disconnect(); // Run once
+                    }
+                });
+                observer.observe(document.querySelector('#usage'));
+            }
+        });
+    </script>
 </body>
 </html>
