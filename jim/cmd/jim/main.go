@@ -1,0 +1,73 @@
+package main
+
+import (
+	"jim/users"
+	"database/sql"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"path/filepath"
+
+	_ "modernc.org/sqlite"
+)
+
+func InitDB(filepath string) *sql.DB {
+	db, err := sql.Open("sqlite", filepath)
+	if err != nil {
+		log.Fatalf("Error opening database: %v", err)
+	}
+	if err = db.Ping(); err != nil {
+		log.Fatalf("Error connecting to database: %v", err)
+	}
+
+	createTableSQL := `
+	CREATE TABLE IF NOT EXISTS webservers (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT,
+		status TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);`
+
+	_, err = db.Exec(createTableSQL)
+	if err != nil {
+		log.Fatalf("Error creating table 'webservers': %v", err)
+	}
+
+	// Seed data if empty
+	var count int
+	err = db.QueryRow("SELECT COUNT(*) FROM webservers WHERE name = ?", "jim").Scan(&count)
+	if err == nil && count == 0 {
+		_, _ = db.Exec("INSERT INTO webservers (name, status) VALUES (?, ?)", "jim", "running")
+	}
+
+	return db
+}
+
+func handler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "Hello from the %s webserver!", "jim")
+}
+
+func logRequest(h http.HandlerFunc) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        log.Printf("Request: %s %s", r.Method, r.URL.Path)
+        h(w, r)
+    }
+}
+
+func main() {
+	cwd, _ := os.Getwd()
+	dbPath := filepath.Join(cwd, "jim.db")
+	db := InitDB(dbPath)
+	defer db.Close()
+
+	http.HandleFunc("/", logRequest(handler))
+	http.HandleFunc("/show/users/", logRequest(users.ShowUsersHandler))
+	http.HandleFunc("/update/users/", logRequest(users.UpdateUsersHandler))
+	http.HandleFunc("/delete/users/", logRequest(users.DeleteUsersHandler))
+	http.HandleFunc("/create/users/", logRequest(users.CreateUsersHandler))
+	http.HandleFunc("/create/users/form", logRequest(users.CreateUsersFormHandler))
+	// HANDLER_REGISTRATIONS_GO_HERE
+	log.Println("Starting webserver on :8080")
+	log.Fatal(http.ListenAndServe(":8080", nil))
+}
