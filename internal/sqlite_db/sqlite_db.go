@@ -3,7 +3,6 @@ package sqlite_db
 import (
 	"database/sql"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 
@@ -55,7 +54,6 @@ func InitDB(dataSourceName string) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to create users table: %w", err)
 	}
 
-	log.Printf("SQLite database initialized at %s", dataSourceName)
 	return db, nil
 }
 
