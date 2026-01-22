@@ -7,12 +7,14 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time" // Added time import
 
@@ -35,6 +37,7 @@ var paramTriggers = map[string]string{
 	"with":   "attribute",
 	"in":     "target",
 	"into":   "target",
+	"to":     "target",
 	"using":   "source",
 	"usering": "source",
 	"from":    "source",
@@ -114,6 +117,7 @@ func main() {
 	trainWord2Vec := flag.Bool("train-word2vec", false, "Train the Word2Vec model")
 	trainMoE := flag.Bool("train-moe", false, "Train the MoE model")
 	trainIntentClassifier := flag.Bool("train-intent-classifier", false, "Train the intent classification model")
+	trainNER := flag.Bool("train-ner", false, "Train the Named Entity Recognition model")
 	runLLMFlag := flag.Bool("llm", false, "Run in interactive LLM mode")
 
 	flag.Parse()
@@ -126,8 +130,10 @@ func main() {
 		runModule("cmd/train_moe")
 	} else if *trainIntentClassifier {
 		runModule("cmd/train_intent_classifier")
+	} else if *trainNER {
+		runModule("cmd/train_ner")
 	} else {
-		log.Println("No action specified. Use -train-word2vec, -train-moe, -train-intent-classifier, or -llm.")
+		log.Println("No action specified. Use -train-word2vec, -train-moe, -train-intent-classifier, -train-ner, or -llm.")
 	}
 }
 
@@ -381,22 +387,33 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 
 	// Heuristic Intent Detection based on existing keywords
 	if strings.Contains(lowerInput, "create") {
-		if strings.Contains(lowerInput, "webserver") {
-			return "create_webserver", 0.9
+		targets := map[string]struct {
+			intent string
+			score  float64
+		}{
+			"webserver": {"create_webserver", 0.9},
+			"handler":   {"create_handler", 0.9},
+			"database":  {"create_database", 0.9},
+			"file":      {"create_file", 0.8},
+			"folder":    {"create_folder", 0.8},
+			"directory": {"create_folder", 0.8},
 		}
-		if strings.Contains(lowerInput, "handler") {
-			return "create_handler", 0.9
-		}
-		if strings.Contains(lowerInput, "database") {
-			return "create_database", 0.9
-		}
-		if strings.Contains(lowerInput, "file") {
-			return "create_file", 0.8
-		}
-		if strings.Contains(lowerInput, "folder") || strings.Contains(lowerInput, "directory") {
-			return "create_folder", 0.8
+
+		// Check in priority order
+		for _, key := range []string{"webserver", "handler", "database", "file", "folder", "directory"} {
+			if strings.Contains(lowerInput, key) {
+				return targets[key].intent, targets[key].score
+			}
 		}
 	}
+
+	if strings.Contains(lowerInput, "move") && !strings.Contains(lowerInput, "remove") {
+		if strings.Contains(lowerInput, "file") {
+			return "move_file", 0.9
+		}
+		return "move_file", 0.8
+	}
+
 	return "", 0.0
 }
 
@@ -422,8 +439,13 @@ func (c *GollemerMoEClient) ExtractEntities(input string, intent string) map[str
 
 	// Extract Path (for files/folders)
 	for i, token := range taggedData.Tokens {
-		if (strings.ToLower(token) == "in" || strings.ToLower(token) == "into") && i+1 < len(taggedData.Tokens) {
-			entities["path"] = taggedData.Tokens[i+1]
+		if (strings.ToLower(token) == "in" || strings.ToLower(token) == "into" || strings.ToLower(token) == "to") && i+1 < len(taggedData.Tokens) {
+			val := taggedData.Tokens[i+1]
+			if (strings.ToLower(val) == "folder" || strings.ToLower(val) == "directory") && i+2 < len(taggedData.Tokens) {
+				entities["path"] = taggedData.Tokens[i+2]
+			} else {
+				entities["path"] = val
+			}
 		}
 	}
 
@@ -458,6 +480,47 @@ func (c *GollemerMoEClient) ExtractEntities(input string, intent string) map[str
 	return entities
 }
 
+// generateDirectoryTree creates a string representation of a directory tree.
+func generateDirectoryTree(path string, prefix string, currentDepth int, maxDepth int) (string, error) {
+	if maxDepth != -1 && currentDepth >= maxDepth {
+		return "", nil
+	}
+
+	var builder strings.Builder
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return "", err
+	}
+
+	var visibleEntries []os.DirEntry
+	for _, entry := range entries {
+		if !strings.HasPrefix(entry.Name(), ".") {
+			visibleEntries = append(visibleEntries, entry)
+		}
+	}
+
+	for i, entry := range visibleEntries {
+		connector := "├── "
+		newPrefix := prefix + "│   "
+		if i == len(visibleEntries)-1 {
+			connector = "└── "
+			newPrefix = prefix + "    "
+		}
+
+		builder.WriteString(prefix + connector + entry.Name() + "\n")
+
+		if entry.IsDir() {
+			subTree, err := generateDirectoryTree(filepath.Join(path, entry.Name()), newPrefix, currentDepth+1, maxDepth)
+			if err != nil {
+				builder.WriteString(newPrefix + "└── [error reading dir]\n")
+			} else {
+				builder.WriteString(subTree)
+			}
+		}
+	}
+	return builder.String(), nil
+}
+
 func runLLM() {
 	projectRoot, err := findProjectRoot()
 	if err != nil {
@@ -487,10 +550,10 @@ func runLLM() {
 	if err == nil {
 		err := os.Chdir(lastDir)
 		if err != nil {
-			log.Printf("DEBUG: Error changing to last directory %s: %v", lastDir, err)
+			log.Printf("Current directory %s: %v", lastDir, err)
 		} else {
 			currentAbsDir, _ := os.Getwd()
-			log.Printf("DEBUG: Changed to last directory: %s", currentAbsDir)
+			log.Printf("Current directory: %s", currentAbsDir)
 		}
 	} else {
 		currentAbsDir, _ := os.Getwd()
@@ -500,11 +563,17 @@ func runLLM() {
 	// Initialize Hybrid Intent Resolver with our local MoE client
 	resolver := NewHybridIntentResolver(&GollemerMoEClient{})
 
+	var commandHistory []string
+
 	for {
 		colors.ColorizeCol("red", "magenta", "/ʕ◔ϖ◔ʔ/> ")
 
 		query, _ := reader.ReadString('\n')
 		query = strings.TrimSpace(query)
+
+		if query != "" {
+			commandHistory = append(commandHistory, query)
+		}
 
 		if query == "exit" {
 			break
@@ -520,25 +589,6 @@ func runLLM() {
 				fmt.Println("No learning path set. Defaulting to 'learningfolder' in project root.")
 			}
 			continue
-		} else if query == "help" {
-			fmt.Println("--- Knowledge Base ---")
-			fmt.Println("Known Commands:")
-			var cmds []string
-			for k := range kb.KnownCommands {
-				cmds = append(cmds, k)
-			}
-			sort.Strings(cmds)
-			fmt.Println(strings.Join(cmds, ", "))
-
-			fmt.Println("\nKnown Objects:")
-			var objs []string
-			for k := range kb.KnownObjects {
-				objs = append(objs, k)
-			}
-			sort.Strings(objs)
-			fmt.Println(strings.Join(objs, ", "))
-			fmt.Println("----------------------")
-			continue
 		} else if strings.HasPrefix(query, "learn ") {
 			parts := strings.Fields(query)
 			if len(parts) >= 3 && parts[1] == "object" {
@@ -548,29 +598,58 @@ func runLLM() {
 				fmt.Printf("Knowledge Base updated: '%s' is now a known object.\n", newObject)
 			} else if len(parts) >= 3 && parts[1] == "from" {
 				targetFolder := parts[2]
-				entries, err := os.ReadDir(targetFolder)
-				if err != nil {
-					fmt.Printf("Error reading directory '%s': %v\n", targetFolder, err)
-				} else {
-					absPath, err := filepath.Abs(targetFolder)
-					if err == nil {
-						kb.LearningPath = absPath
-					}
-					count := 0
-					for _, entry := range entries {
-						if !entry.IsDir() {
-							name := entry.Name()
-							ext := filepath.Ext(name)
-							baseName := strings.TrimSuffix(name, ext)
-							baseName = strings.ToLower(baseName)
-							if baseName != "" && !kb.KnownObjects[baseName] {
-								kb.KnownObjects[baseName] = true
-								count++
-							}
+				finalPath := targetFolder
+
+				// Try to resolve path relative to CWD or Project Root
+				absPath, err := filepath.Abs(targetFolder)
+				if err == nil {
+					if _, err := os.Stat(absPath); err == nil {
+						finalPath = absPath
+					} else if projectRoot != "" {
+						projRelPath := filepath.Join(projectRoot, targetFolder)
+						if _, err := os.Stat(projRelPath); err == nil {
+							finalPath = projRelPath
 						}
 					}
+				}
+				kb.LearningPath = finalPath
+
+				count := 0
+				totalFound := 0
+				err = filepath.WalkDir(finalPath, func(path string, d fs.DirEntry, err error) error {
+					if err != nil {
+						fmt.Printf("Warning: skipping %s due to error: %v\n", path, err)
+						return nil
+					}
+					if d.IsDir() {
+						return nil
+					}
+
+					name := d.Name()
+					ext := strings.ToLower(filepath.Ext(name))
+					validExts := map[string]bool{
+						".html": true, ".tpl": true, ".go": true, ".txt": true, ".md": true, ".json": true, ".sql": true,
+					}
+					if !validExts[ext] {
+						return nil
+					}
+
+					totalFound++
+					baseName := strings.TrimSuffix(name, filepath.Ext(name))
+					baseName = strings.ToLower(baseName)
+					if baseName != "" && !kb.KnownObjects[baseName] {
+						kb.KnownObjects[baseName] = true
+						fmt.Printf("DEBUG: Learned object '%s' from file '%s'\n", baseName, path)
+						count++
+					}
+					return nil
+				})
+
+				if err != nil {
+					fmt.Printf("Error walking directory '%s': %v\n", finalPath, err)
+				} else {
 					kb.Save()
-					fmt.Printf("Learned %d new objects from folder '%s'.\n", count, targetFolder)
+					fmt.Printf("Found %d matching files. Learned %d new objects from folder '%s'.\n", totalFound, count, finalPath)
 				}
 			} else {
 				fmt.Println("Usage: learn object <word> OR learn from <folder>")
@@ -614,26 +693,48 @@ func runLLM() {
 			targetDirectory = val
 		}
 		
-			// Try to explicitly identify the command if it's the first token
+			// Try to explicitly identify the command using Intent Analysis (MoE) or Tags
 			// Only if intent.Command wasn't already found by the KB parser
-			if command == "" && len(taggedData.Tokens) > 0 {
-				token := strings.ToLower(taggedData.Tokens[0])
-				if token == "create" || token == "add" || token == "put" {
+			if command == "" {
+				// 1. Try MoE Intent
+				if intentData.Intent != "" {
+					parts := strings.Split(intentData.Intent, "_")
+					if len(parts) > 0 {
+						command = parts[0]
+					}
+				}
+
+				// 2. Try POS/NER Tags for a VERB if still empty
+				if command == "" {
+					for i, tag := range taggedData.NerTag {
+						if tag == "VERB" && i < len(taggedData.Tokens) {
+							command = strings.ToLower(taggedData.Tokens[i])
+							break
+						}
+					}
+				}
+
+				// 3. Fallback to first token heuristic if still empty
+				if command == "" && len(taggedData.Tokens) > 0 {
+					command = strings.ToLower(taggedData.Tokens[0])
+				}
+
+				// Normalize command aliases
+				switch command {
+				case "add", "put", "make", "generate":
 					command = "create"
-				} else if token == "list" || token == "ls" || token == "show" {
+				case "ls", "show":
 					command = "list"
-				} else if token == "go" || token == "cd" || token == "change" || token == "move" {
+				case "cd", "change":
 					command = "go"
-				} else if token == "delete" || token == "remove" {
+				case "remove":
 					command = "delete"
-				} else if token == "run" || token == "start" {
+				case "start":
 					command = "run"
-				} else if token == "stop" {
-					command = "stop"
-				} else if token == "update" {
-					command = "update"
-				} else if token == "verify" || token == "check" || token == "test" {
+				case "check", "test":
 					command = "verify"
+				case "search":
+					command = "grep"
 				}
 			}
 
@@ -650,7 +751,7 @@ func runLLM() {
 							objectTypeParts = append(objectTypeParts, token)
 						}
 					case "PREPOSITION":
-						if token == "in" || token == "into" {
+						if token == "in" || token == "into" || token == "to" {
 							hasPrepositionIn = true
 							foundTarget := false
 							for j := i + 1; j < len(taggedData.Tokens); j++ {
@@ -666,10 +767,16 @@ func runLLM() {
 										break
 									}
 								}
-								if targetDirectory == "" && i+1 < len(taggedData.Tokens) {
-									candidate := taggedData.Tokens[i+1]
-									if candidate != "the" && candidate != "a" && candidate != "an" {
-										targetDirectory = candidate
+								if targetDirectory == "" {
+									for k := i + 1; k < len(taggedData.Tokens); k++ {
+										t := strings.ToLower(taggedData.Tokens[k])
+										if t == "the" || t == "a" || t == "an" || t == "folder" || t == "directory" {
+											continue
+										}
+										if t != "it" {
+											targetDirectory = taggedData.Tokens[k]
+										}
+										break
 									}
 								}
 							}
@@ -705,7 +812,7 @@ func runLLM() {
 			// check for tokens that look like filenames (e.g., ends with .go)
 			if fileName == "" && contains(objectTypeParts, "file") {
 				for _, token := range taggedData.Tokens {
-					if strings.HasSuffix(token, ".go") || strings.HasSuffix(token, ".txt") || strings.HasSuffix(token, ".md") {
+					if strings.HasSuffix(token, ".go") || strings.HasSuffix(token, ".txt") || strings.HasSuffix(token, ".md") || strings.HasSuffix(token, ".html") {
 						fileName = token
 						break
 					}
@@ -779,6 +886,32 @@ func runLLM() {
 				} else {
 					handled = false
 				}
+			case "move":
+				sourceFile := fileName
+				destDir := targetDirectory
+
+				if sourceFile == "" {
+					predictedSentence = "Please specify a file to move."
+					break
+				}
+				if destDir == "" {
+					predictedSentence = "Please specify a destination directory."
+					break
+				}
+
+				if _, err := os.Stat(destDir); os.IsNotExist(err) {
+					predictedSentence = fmt.Sprintf("Destination directory '%s' does not exist.", destDir)
+					break
+				}
+
+				destFile := filepath.Join(destDir, filepath.Base(sourceFile))
+
+				err := os.Rename(sourceFile, destFile)
+				if err != nil {
+					predictedSentence = fmt.Sprintf("I couldn't move the file '%s' to '%s': %v", sourceFile, destDir, err)
+				} else {
+					predictedSentence = fmt.Sprintf("I have moved the file '%s' to '%s'.", sourceFile, destDir)
+				}
 			case "list":
 				if strings.Contains(objectType, "handler") {
 					targetPath := "main.go"
@@ -843,9 +976,224 @@ func runLLM() {
 						predictedSentence = "Here are the contents of the directory:\n" + strings.Join(items, "\n")
 					}
 				}
+			case "tree":
+				target := "."
+				if targetDirectory != "" {
+					target = targetDirectory
+				}
+
+				maxDepth := -1
+				for i, token := range taggedData.Tokens {
+					if (token == "-d" || token == "depth" || token == "-L") && i+1 < len(taggedData.Tokens) {
+						if d, err := strconv.Atoi(taggedData.Tokens[i+1]); err == nil {
+							maxDepth = d
+						}
+					}
+				}
+
+				treeView, err := generateDirectoryTree(target, "", 0, maxDepth)
+				if err != nil {
+					predictedSentence = fmt.Sprintf("I couldn't generate a tree for '%s': %v", target, err)
+				} else {
+					predictedSentence = fmt.Sprintf("Directory tree for '%s':\n%s", target, treeView)
+				}
+			case "grep":
+				searchTerm := ""
+				if val, ok := intent.Params["target"]; ok {
+					searchTerm = val
+				}
+
+				if searchTerm == "" {
+					for i, token := range taggedData.Tokens {
+						if (token == "grep" || token == "search") && i+1 < len(taggedData.Tokens) {
+							if taggedData.Tokens[i+1] == "for" && i+2 < len(taggedData.Tokens) {
+								searchTerm = taggedData.Tokens[i+2]
+							} else {
+								searchTerm = taggedData.Tokens[i+1]
+							}
+							break
+						}
+					}
+				}
+
+				if searchTerm == "" {
+					predictedSentence = "Please provide text to search for."
+				} else {
+					target := "."
+					if targetDirectory != "" {
+						target = targetDirectory
+					}
+
+					var results []string
+					err := filepath.Walk(target, func(path string, info os.FileInfo, err error) error {
+						if err != nil {
+							return nil
+						}
+						if !info.IsDir() && !strings.Contains(path, string(os.PathSeparator)+".") {
+							content, err := os.ReadFile(path)
+							if err == nil {
+								if strings.Contains(string(content), searchTerm) {
+									lines := strings.Split(string(content), "\n")
+									for i, line := range lines {
+										if strings.Contains(line, searchTerm) {
+											trimmed := strings.TrimSpace(line)
+											if len(trimmed) > 80 {
+												trimmed = trimmed[:80] + "..."
+											}
+											results = append(results, fmt.Sprintf("%s:%d: %s", path, i+1, trimmed))
+										}
+									}
+								}
+							}
+						}
+						return nil
+					})
+
+					if err != nil {
+						predictedSentence = fmt.Sprintf("Error searching: %v", err)
+					} else if len(results) == 0 {
+						predictedSentence = fmt.Sprintf("No matches found for '%s' in '%s'.", searchTerm, target)
+					} else {
+						output := strings.Join(results, "\n")
+						if len(results) > 20 {
+							output = strings.Join(results[:20], "\n") + fmt.Sprintf("\n... and %d more matches.", len(results)-20)
+						}
+						predictedSentence = fmt.Sprintf("Found matches for '%s':\n%s", searchTerm, output)
+					}
+				}
+			case "history":
+				limit := 10
+				for _, token := range taggedData.Tokens {
+					if val, err := strconv.Atoi(token); err == nil && val > 0 {
+						limit = val
+					}
+				}
+				if limit > len(commandHistory) {
+					limit = len(commandHistory)
+				}
+				var historyLines []string
+				for i := len(commandHistory) - limit; i < len(commandHistory); i++ {
+					historyLines = append(historyLines, fmt.Sprintf("%d  %s", i+1, commandHistory[i]))
+				}
+				predictedSentence = strings.Join(historyLines, "\n")
+			case "help":
+				var sb strings.Builder
+				sb.WriteString("--- Available Commands ---\n")
+				descriptions := map[string]string{
+					"create":  "Create objects (file, folder, webserver, handler, database, structure, form).",
+					"delete":  "Delete objects (file, folder, structure).",
+					"move":    "Move a file to a different directory.",
+					"go":      "Change directory (e.g., 'go into cmd').",
+					"list":    "List directory contents or registered handlers.",
+					"tree":    "Visualize directory structure (supports -d <depth>).",
+					"cat":     "Read file contents.",
+					"grep":    "Search for text in files.",
+					"run":     "Start a webserver.",
+					"stop":    "Stop a webserver.",
+					"verify":  "Check webserver status.",
+					"update":  "Update components (e.g., form handlers).",
+					"history": "Show command history.",
+					"learn":   "Teach the system new objects or learn from a folder.",
+					"clear":   "Clear the terminal screen.",
+					"exit":    "Exit the program.",
+				}
+				var keys []string
+				for k := range descriptions {
+					keys = append(keys, k)
+				}
+				sort.Strings(keys)
+				for _, cmd := range keys {
+					sb.WriteString(fmt.Sprintf("%-10s : %s\n", cmd, descriptions[cmd]))
+				}
+				sb.WriteString("\n--- Known Objects ---\n")
+				var objs []string
+				for k := range kb.KnownObjects {
+					objs = append(objs, k)
+				}
+				sort.Strings(objs)
+				sb.WriteString(strings.Join(objs, ", "))
+				sb.WriteString("\n---------------------")
+				predictedSentence = sb.String()
 			case "create":
 				log.Printf("DEBUG: Entering create command. ObjectType: '%s', TargetDirectory: '%s'", objectType, targetDirectory)
-				if strings.Contains(objectType, "handler") {
+
+				// 1. Template System Check
+				// Check if the objectType matches a file in the learning folder
+				learningPath := kb.LearningPath
+				if learningPath == "" {
+					learningPath = filepath.Join(projectRoot, "learningfolder")
+				}
+				// Fallback to current directory's learningfolder if project root one doesn't exist
+				if _, err := os.Stat(learningPath); os.IsNotExist(err) {
+					cwd, _ := os.Getwd()
+					localLearningPath := filepath.Join(cwd, "learningfolder")
+					if _, err := os.Stat(localLearningPath); err == nil {
+						learningPath = localLearningPath
+					}
+				}
+
+				templateFound := false
+				if _, err := os.Stat(learningPath); err == nil {
+					_ = filepath.WalkDir(learningPath, func(path string, d fs.DirEntry, err error) error {
+						if templateFound {
+							return nil
+						}
+						if err != nil || d.IsDir() {
+							return nil
+						}
+
+						name := d.Name()
+						ext := filepath.Ext(name)
+						baseName := strings.TrimSuffix(name, ext)
+						// Exact match on the object name (case-insensitive)
+						match := strings.EqualFold(baseName, objectType)
+						if !match {
+							// Check relative path for "template/head" style matching
+							relPath, _ := filepath.Rel(learningPath, path)
+							relPathNoExt := strings.TrimSuffix(relPath, ext)
+							normalizedObjType := strings.ReplaceAll(objectType, " ", string(os.PathSeparator))
+							if strings.EqualFold(relPathNoExt, normalizedObjType) {
+								match = true
+							}
+						}
+
+						if match {
+							templateFound = true
+							log.Printf("DEBUG: Found template match. ObjectType: '%s', File: '%s'", objectType, path)
+
+							destName := fileName
+							if destName == "" {
+								destName = baseName // Default to template name if no name provided
+							}
+							// If dest doesn't have ext, append template's ext
+							if filepath.Ext(destName) == "" {
+								destName += ext
+							}
+
+							destPath := destName
+							if targetDirectory != "" {
+								destPath = filepath.Join(targetDirectory, destName)
+							}
+
+							content, err := os.ReadFile(path)
+							if err != nil {
+								predictedSentence = fmt.Sprintf("I found the template '%s' but couldn't read it: %v", name, err)
+							} else {
+								err = os.WriteFile(destPath, content, 0644)
+								if err != nil {
+									predictedSentence = fmt.Sprintf("I couldn't create the file %s from template: %v", destPath, err)
+								} else {
+									predictedSentence = fmt.Sprintf("I have created '%s' using the learned template '%s'.", destPath, name)
+								}
+							}
+						}
+						return nil
+					})
+				}
+
+				if templateFound {
+					// Template handled, skip other checks
+				} else if strings.Contains(objectType, "handler") {
 					handlerName := ""
 					for i, token := range taggedData.Tokens {
 						if strings.ToLower(token) == "handler" && i+1 < len(taggedData.Tokens) {
@@ -899,17 +1247,69 @@ func ` + strings.Title(handlerName) + `Handler(w http.ResponseWriter, r *http.Re
 						if targetDirectory != "" {
 							filePath = filepath.Join(targetDirectory, fileName)
 						}
-						err := os.WriteFile(filePath, []byte(""), 0644)
+
+						var content []byte
+						var source string
+
+						// 1. Check if file exists in current directory
+						if _, err := os.Stat(fileName); err == nil {
+							content, err = os.ReadFile(fileName)
+							if err == nil {
+								source = "current directory"
+							}
+						}
+
+						// 2. If not, check learning folder
+						if source == "" {
+							learningPath := kb.LearningPath
+							if learningPath == "" {
+								learningPath = filepath.Join(projectRoot, "learningfolder")
+							}
+							// Fallback to local learningfolder
+							if _, err := os.Stat(learningPath); os.IsNotExist(err) {
+								cwd, _ := os.Getwd()
+								localLearningPath := filepath.Join(cwd, "learningfolder")
+								if _, err := os.Stat(localLearningPath); err == nil {
+									learningPath = localLearningPath
+								}
+							}
+
+							if _, err := os.Stat(learningPath); err == nil {
+								_ = filepath.WalkDir(learningPath, func(path string, d fs.DirEntry, err error) error {
+									if source != "" {
+										return nil
+									}
+									if err != nil || d.IsDir() {
+										return nil
+									}
+									if strings.EqualFold(d.Name(), fileName) {
+										content, err = os.ReadFile(path)
+										if err == nil {
+											source = "learning folder"
+										}
+									}
+									return nil
+								})
+							}
+						}
+
+						err := os.WriteFile(filePath, content, 0644)
 						if err != nil {
 							predictedSentence = fmt.Sprintf("I couldn't create the file %s: %v", filePath, err)
 						} else {
-							predictedSentence = fmt.Sprintf("I have created the file %s.", filePath)
+							if source != "" {
+								predictedSentence = fmt.Sprintf("I have created the file %s using content from %s.", filePath, source)
+							} else {
+								predictedSentence = fmt.Sprintf("I have created the empty file %s.", filePath)
+							}
 						}
 					} else {
 						predictedSentence = "You need to provide a name for the file."
 					}
 				} else if strings.Contains(objectType, "webserver") {
-					if fileName != "" {
+					if fileName == "" {
+						predictedSentence = "You need to provide a name for the webserver."
+					} else {
 						serverDir := filepath.Join("cmd", fileName)
 						if targetDirectory != "" {
 							serverDir = filepath.Join(targetDirectory, "cmd", fileName)
@@ -1000,8 +1400,22 @@ func main() {
 							}
 						}
 					}
-				} else if strings.Contains(objectType, "folder") { // New block for folder creation
-					folderName := findName(taggedData)
+				}
+				} else if strings.Contains(objectType, "folder") || strings.Contains(objectType, "directory") { // New block for folder creation
+					log.Printf("DEBUG: Creating folder. Name: '%s'", fileName)
+					folderName := fileName
+					
+					// Prefer explicit name after "folder" to avoid picking up filenames elsewhere in sentence
+					for i, token := range taggedData.Tokens {
+						if (strings.ToLower(token) == "folder" || strings.ToLower(token) == "directory") && i+1 < len(taggedData.Tokens) {
+							candidate := taggedData.Tokens[i+1]
+							if !contains([]string{"with", "in", "named", "and", "that", "which", "containing"}, strings.ToLower(candidate)) {
+								folderName = candidate
+							}
+							break
+						}
+					}
+
 					if folderName != "" {
 						folderPath := folderName
 						if targetDirectory != "" {
@@ -1016,7 +1430,7 @@ func main() {
 					} else {
 						predictedSentence = "You need to provide a name for the folder."
 					}
-				} else if objectType == "database" { // New block for database creation
+				} else if strings.Contains(objectType, "database") { // New block for database creation
 					if fileName == "" { // If findName didn't catch it, try to find it directly after "database"
 						for i, token := range taggedData.Tokens {
 							if strings.ToLower(token) == "database" && i+1 < len(taggedData.Tokens) {
@@ -1759,7 +2173,7 @@ func FormHandler(w http.ResponseWriter, r *http.Request) {
 				} else {
 					handled = false
 				}
-			}
+			
 			case "run", "start":
 				if strings.Contains(objectType, "webserver") {
 					webserverName := ""
@@ -2735,7 +3149,7 @@ type KnowledgeBase struct {
 func NewKnowledgeBase() *KnowledgeBase {
 	return &KnowledgeBase{
 		KnownCommands: map[string]bool{
-			"create": true, "make": true, "generate": true, "add": true, "put": true,
+			"create": true, "make": true, "generate": true, "add": true, "put": true, "copy": true,
 			"delete": true, "remove": true,
 			"list": true, "ls": true, "show": true,
 			"go": true, "cd": true, "change": true, "move": true,
@@ -2744,6 +3158,10 @@ func NewKnowledgeBase() *KnowledgeBase {
 			"update": true,
 			"verify": true, "check": true, "test": true,
 			"cat": true, "read": true,
+			"tree": true,
+			"grep": true, "search": true,
+			"history": true,
+			"help": true,
 		},
 		KnownObjects: map[string]bool{
 			"user": true, "file": true, "database": true, "folder": true, "directory": true,
@@ -2789,10 +3207,22 @@ func parse(input string, kb *KnowledgeBase) Intent {
 		if paramKey, isTrigger := paramTriggers[word]; isTrigger {
 			if i+1 < len(parts) {
 				value := parts[i+1]
+				nextIndex := i + 1
+
+				// Skip "folder" or "directory" if it appears after a trigger like "into"
+				if (strings.ToLower(value) == "folder" || strings.ToLower(value) == "directory") && i+2 < len(parts) {
+					consumed[i+1] = true
+					value = parts[i+2]
+					nextIndex = i + 2
+				}
+
+				if strings.ToLower(value) == "it" {
+					continue
+				}
 				intent.Params[paramKey] = value
 				consumed[i] = true
-				consumed[i+1] = true
-				i++
+				consumed[nextIndex] = true
+				i = nextIndex
 			}
 		}
 	}
@@ -2805,8 +3235,12 @@ func parse(input string, kb *KnowledgeBase) Intent {
 		lower := strings.ToLower(word)
 
 		if intent.Command == "" && kb.KnownCommands[lower] {
-			if lower == "make" || lower == "generate" || lower == "add" || lower == "put" {
+			if lower == "make" || lower == "generate" || lower == "add" || lower == "put" || lower == "copy" {
 				lower = "create"
+			} else if lower == "ls" || lower == "show" {
+				lower = "list"
+			} else if lower == "cd" || lower == "change" {
+				lower = "go"
 			}
 			intent.Command = lower
 			continue
