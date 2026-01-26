@@ -224,7 +224,45 @@ func %s(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Hello from %s!")
 }
 `, strings.Title(strings.TrimSuffix(fileName, ".go")), strings.Title(strings.TrimSuffix(fileName, ".go")), fileName)
+			} else if strings.Contains(strings.ToLower(component), "wasm") || strings.Contains(strings.ToLower(path), "wasm") {
+				// Generate WASM component boilerplate
+				structName := strings.Title(strings.TrimSuffix(fileName, ".go"))
+				properties["content"] = fmt.Sprintf(`package ui
+
+import "syscall/js"
+
+type %s struct {
+	el js.Value
+}
+
+func New%s() *%s {
+	return &%s{}
+}
+
+func (c *%s) Render() js.Value {
+	document := js.Global().Get("document")
+	div := document.Call("createElement", "div")
+	div.Set("className", "%s-component")
+	div.Set("innerText", "%s WASM Component")
+	return div
+}
+`, structName, structName, structName, structName, structName, strings.ToLower(structName), structName)
 			}
+		}
+	}
+
+	// Special handling for colors
+	if strings.Contains(strings.ToLower(fileName), "color") || strings.Contains(strings.ToLower(path), "color") {
+		if strings.HasSuffix(fileName, ".css") {
+			properties["content"] = `
+:root {
+    --primary: #6366f1;
+    --secondary: #ec4899;
+    --accent: #f59e0b;
+    --bg-dark: #0f172a;
+    --text-white: #f8fafc;
+}
+`
 		}
 	}
 
