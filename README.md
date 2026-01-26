@@ -233,3 +233,6 @@ Project Link: [https://github.com/golangast/gollemer](https://github.com/golanga
 ## Acknowledgements
 
 * [Go Team](https://github.com/golang/go/graphs/contributors)
+
+
+GOOS=js GOARCH=wasm go build -o wasm/main.wasm ./wasm/wasm.go      

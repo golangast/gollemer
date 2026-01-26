@@ -31,13 +31,13 @@ const kbFilename = "knowledge.json"
 
 // paramTriggers maps words like "named" to the key "name".
 var paramTriggers = map[string]string{
-	"named":  "name",
-	"called": "name",
-	"for":    "target",
-	"with":   "attribute",
-	"in":     "target",
-	"into":   "target",
-	"to":     "target",
+	"named":   "name",
+	"called":  "name",
+	"for":     "target",
+	"with":    "attribute",
+	"in":      "target",
+	"into":    "target",
+	"to":      "target",
 	"using":   "source",
 	"usering": "source",
 	"from":    "source",
@@ -144,6 +144,34 @@ func runModule(path string) {
 	err := cmd.Run()
 	if err != nil {
 		log.Fatalf("Failed to run module %s: %v", path, err)
+	}
+}
+
+func buildWasm(wasmDir string) {
+	if _, err := os.Stat(wasmDir); os.IsNotExist(err) {
+		return
+	}
+
+	fmt.Printf("🏗️  Building WASM in %s...\n", wasmDir)
+	// Check for wasm.go or main.go
+	wasmFile := "wasm.go"
+	if _, err := os.Stat(filepath.Join(wasmDir, "wasm.go")); os.IsNotExist(err) {
+		if _, err := os.Stat(filepath.Join(wasmDir, "main.go")); err == nil {
+			wasmFile = "main.go"
+		} else {
+			fmt.Printf("⚠️  No wasm.go or main.go found in %s, skipping.\n", wasmDir)
+			return
+		}
+	}
+
+	cmd := exec.Command("go", "build", "-o", "main.wasm", wasmFile)
+	cmd.Dir = wasmDir
+	cmd.Env = append(os.Environ(), "GOOS=js", "GOARCH=wasm")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Printf("❌ WASM build failed in %s: %v\n%s\n", wasmDir, err, string(output))
+	} else {
+		fmt.Printf("✅ WASM build successful: %s/main.wasm updated.\n", wasmDir)
 	}
 }
 
@@ -369,13 +397,14 @@ func registerHandlerWithPackage(packageName, packageImportPath, handlerName, han
 	return fmt.Sprintf("And registered it to URL '%s' in %s.", handlerURL, mainGoPath), nil
 }
 
-
 func goImports(filename string) {
 	cmd := exec.Command("goimports", "-w", filename)
 	err := cmd.Run()
 	if err != nil {
 		// Log the error but don't fail, as goimports might not be installed.
-		log.Printf("goimports failed for %s: %v. Please ensure goimports is installed and in your PATH. You can install it by running: 'go install golang.org/x/tools/cmd/goimports@latest'", filename, err)
+		if !strings.Contains(err.Error(), "executable file not found") {
+			log.Printf("goimports failed for %s: %v", filename, err)
+		}
 	}
 }
 
@@ -384,25 +413,49 @@ type GollemerMoEClient struct{}
 
 func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 	lowerInput := strings.ToLower(input)
+	words := strings.Fields(lowerInput)
 
-	// Heuristic Intent Detection based on existing keywords
-	if strings.Contains(lowerInput, "create") {
-		targets := map[string]struct {
-			intent string
-			score  float64
-		}{
-			"webserver": {"create_webserver", 0.9},
-			"handler":   {"create_handler", 0.9},
-			"database":  {"create_database", 0.9},
-			"file":      {"create_file", 0.8},
-			"folder":    {"create_folder", 0.8},
-			"directory": {"create_folder", 0.8},
+	// Heuristic Intent Detection
+	if strings.Contains(lowerInput, "create") || strings.Contains(lowerInput, "make") || strings.Contains(lowerInput, "add") || strings.Contains(lowerInput, "generate") {
+		targets := map[string]string{
+			"webserver": "create_webserver",
+			"page":      "create_page",
+			"handler":   "create_handler",
+			"database":  "create_database",
+			"file":      "create_file",
+			"folder":    "create_folder",
+			"directory": "create_folder",
+			"form":      "create_form",
 		}
 
-		// Check in priority order
-		for _, key := range []string{"webserver", "handler", "database", "file", "folder", "directory"} {
+		// Proximity search: find which target is closest to the creation verb
+		verbIdx := -1
+		for i, w := range words {
+			if w == "create" || w == "make" || w == "add" || w == "generate" {
+				verbIdx = i
+				break
+			}
+		}
+
+		if verbIdx != -1 {
+			// Look ahead for the object
+			for i := verbIdx + 1; i < len(words); i++ {
+				w := words[i]
+				// Check for plural variations
+				singular := strings.TrimSuffix(w, "s")
+				if intent, ok := targets[w]; ok {
+					return intent, 0.95
+				}
+				if intent, ok := targets[singular]; ok {
+					return intent, 0.9
+				}
+			}
+		}
+
+		// Fallback to priority scan if proximity fails
+		for _, key := range []string{"page", "handler", "database", "webserver", "file", "folder", "directory", "form"} {
 			if strings.Contains(lowerInput, key) {
-				return targets[key].intent, targets[key].score
+				return targets[key], 0.8
 			}
 		}
 	}
@@ -426,6 +479,29 @@ func (c *GollemerMoEClient) ExtractEntities(input string, intent string) map[str
 
 	// Extract Name using existing findName logic
 	name := findName(taggedData)
+
+	// Improvement for "page" name: look for words between "page" and "in/to/for/wasm/webserver"
+	if intent == "create_page" {
+		lowerInput := strings.ToLower(input)
+		pageIdx := strings.Index(lowerInput, "page")
+		if pageIdx != -1 {
+			remaining := input[pageIdx+4:]
+			// Find end marker
+			endMarkers := []string{" in ", " to ", " for ", " with ", " wasm ", " webserver "}
+			endIdx := len(remaining)
+			for _, marker := range endMarkers {
+				mIdx := strings.Index(strings.ToLower(remaining), marker)
+				if mIdx != -1 && mIdx < endIdx {
+					endIdx = mIdx
+				}
+			}
+			candidate := strings.TrimSpace(remaining[:endIdx])
+			if candidate != "" {
+				name = candidate
+			}
+		}
+	}
+
 	if name != "" {
 		entities["name"] = name
 	}
@@ -439,12 +515,19 @@ func (c *GollemerMoEClient) ExtractEntities(input string, intent string) map[str
 
 	// Extract Path (for files/folders)
 	for i, token := range taggedData.Tokens {
-		if (strings.ToLower(token) == "in" || strings.ToLower(token) == "into" || strings.ToLower(token) == "to") && i+1 < len(taggedData.Tokens) {
-			val := taggedData.Tokens[i+1]
-			if (strings.ToLower(val) == "folder" || strings.ToLower(val) == "directory") && i+2 < len(taggedData.Tokens) {
-				entities["path"] = taggedData.Tokens[i+2]
-			} else {
-				entities["path"] = val
+		lowerToken := strings.ToLower(token)
+		if (lowerToken == "in" || lowerToken == "into" || lowerToken == "to") && i+1 < len(taggedData.Tokens) {
+			// Skip noise words like articles and "folder"/"directory" keywords
+			j := i + 1
+			for ; j < len(taggedData.Tokens); j++ {
+				t := strings.ToLower(taggedData.Tokens[j])
+				if t == "the" || t == "a" || t == "an" || t == "folder" || t == "directory" {
+					continue
+				}
+				break
+			}
+			if j < len(taggedData.Tokens) {
+				entities["path"] = taggedData.Tokens[j]
 			}
 		}
 	}
@@ -521,6 +604,13 @@ func generateDirectoryTree(path string, prefix string, currentDepth int, maxDept
 	return builder.String(), nil
 }
 
+type ConversationState struct {
+	ActiveIntent string
+	Parameters   map[string]string
+	Missing      []string
+	IsActive     bool
+}
+
 func runLLM() {
 	projectRoot, err := findProjectRoot()
 	if err != nil {
@@ -564,6 +654,7 @@ func runLLM() {
 	resolver := NewHybridIntentResolver(&GollemerMoEClient{})
 
 	var commandHistory []string
+	var sessionState ConversationState
 
 	for {
 		colors.ColorizeCol("red", "magenta", "/ʕ◔ϖ◔ʔ/> ")
@@ -591,6 +682,7 @@ func runLLM() {
 			continue
 		} else if strings.HasPrefix(query, "learn ") {
 			parts := strings.Fields(query)
+			hasMore := false
 			if len(parts) >= 3 && parts[1] == "object" {
 				newObject := strings.ToLower(parts[2])
 				kb.KnownObjects[newObject] = true
@@ -654,12 +746,70 @@ func runLLM() {
 			} else {
 				fmt.Println("Usage: learn object <word> OR learn from <folder>")
 			}
-			continue
+
+			// Check for chained commands (e.g., "and create header")
+			if len(parts) > 3 && strings.ToLower(parts[3]) == "and" {
+				query = strings.Join(parts[4:], " ")
+				hasMore = true
+				fmt.Printf("Continuing with: %s\n", query)
+			}
+
+			if !hasMore {
+				continue
+			}
+		}
+
+		// --- Session Logic ---
+		isSessionFilled := false
+		if sessionState.IsActive {
+			if len(sessionState.Missing) > 0 {
+				field := sessionState.Missing[0]
+				sessionState.Parameters[field] = query
+				sessionState.Missing = sessionState.Missing[1:]
+				fmt.Printf("DEBUG: Filled slot '%s' with '%s'\n", field, query)
+			}
+
+			if len(sessionState.Missing) > 0 {
+				fmt.Printf("You need to provide a %s.\n", sessionState.Missing[0])
+				continue
+			}
+			isSessionFilled = true
+			sessionState.IsActive = false
 		}
 
 		// --- New Intent Layer Logic ---
 		// This recursively fills the data layer using the MoE client
 		intentData := resolver.Resolve(query, nil)
+
+		if isSessionFilled {
+			intentData.Intent = sessionState.ActiveIntent
+			// Convert map[string]string to map[string]interface{}
+			params := make(map[string]interface{})
+			for k, v := range sessionState.Parameters {
+				params[k] = v
+			}
+			intentData.Parameters = params
+			sessionState.ActiveIntent = ""
+			sessionState.Parameters = nil
+		} else if len(intentData.Missing) > 0 {
+			sessionState.IsActive = true
+			sessionState.ActiveIntent = intentData.Intent
+			// Convert map[string]interface{} to map[string]string
+			params := make(map[string]string)
+			for k, v := range intentData.Parameters {
+				if str, ok := v.(string); ok {
+					params[k] = str
+				}
+			}
+			sessionState.Parameters = params
+			if sessionState.Parameters == nil {
+				sessionState.Parameters = make(map[string]string)
+			}
+			sessionState.Missing = intentData.Missing
+			fmt.Printf("You need to provide a %s.\n", sessionState.Missing[0])
+			continue
+		}
+
 		if intentData.Intent != "" {
 			jsonOutput, _ := json.MarshalIndent(intentData, "", "  ")
 			fmt.Println(string(jsonOutput))
@@ -671,7 +821,7 @@ func runLLM() {
 		taggedData := nertagger.Nertagger(tag.Tag{Tokens: words, PosTag: posTags})
 
 		// --- Start of new logic ---
-		
+
 		// 1. Parse with KnowledgeBase
 		intent := parse(query, kb)
 
@@ -687,524 +837,548 @@ func runLLM() {
 		var targetDirectory string
 		var predictedSentence string
 		var handlerURL string // New variable to store the handler URL
-		
+
 		// Initialize variables from Intent Params if available
 		if val, ok := intent.Params["target"]; ok {
 			targetDirectory = val
 		}
-		
-			// Try to explicitly identify the command using Intent Analysis (MoE) or Tags
-			// Only if intent.Command wasn't already found by the KB parser
+		if targetDirectory == "" && len(intentData.Parameters) > 0 {
+			if val, ok := intentData.Parameters["path"]; ok {
+				if str, ok := val.(string); ok {
+					targetDirectory = str
+				}
+			}
+		}
+
+		// Try to explicitly identify the command using Intent Analysis (MoE) or Tags
+		// Only if intent.Command wasn't already found by the KB parser
+		if command == "" {
+			// 1. Try MoE Intent
+			if intentData.Intent != "" {
+				parts := strings.Split(intentData.Intent, "_")
+				if len(parts) > 0 {
+					command = parts[0]
+				}
+				if len(parts) > 1 && intent.ObjectType == "" {
+					intent.ObjectType = parts[1]
+					intent.ObjectTypeParts = append(intent.ObjectTypeParts, parts[1])
+				}
+			}
+
+			// 2. Try POS/NER Tags for a VERB if still empty
 			if command == "" {
-				// 1. Try MoE Intent
-				if intentData.Intent != "" {
-					parts := strings.Split(intentData.Intent, "_")
-					if len(parts) > 0 {
-						command = parts[0]
-					}
-				}
-
-				// 2. Try POS/NER Tags for a VERB if still empty
-				if command == "" {
-					for i, tag := range taggedData.NerTag {
-						if tag == "VERB" && i < len(taggedData.Tokens) {
-							command = strings.ToLower(taggedData.Tokens[i])
-							break
-						}
-					}
-				}
-
-				// 3. Fallback to first token heuristic if still empty
-				if command == "" && len(taggedData.Tokens) > 0 {
-					command = strings.ToLower(taggedData.Tokens[0])
-				}
-
-				// Normalize command aliases
-				switch command {
-				case "add", "put", "make", "generate":
-					command = "create"
-				case "ls", "show":
-					command = "list"
-				case "cd", "change":
-					command = "go"
-				case "remove":
-					command = "delete"
-				case "start":
-					command = "run"
-				case "check", "test":
-					command = "verify"
-				case "search":
-					command = "grep"
-				}
-			}
-
-			for i, token := range taggedData.Tokens {
-				if i < len(taggedData.NerTag) {
-					switch taggedData.NerTag[i] {
-					case "QUESTION_WORD":
-						if token == "what" {
-							hasQuestionWord = true
-						}
-					case "VERB":
-					case "OBJECT_TYPE":
-						if !contains(objectTypeParts, token) {
-							objectTypeParts = append(objectTypeParts, token)
-						}
-					case "PREPOSITION":
-						if token == "in" || token == "into" || token == "to" {
-							hasPrepositionIn = true
-							foundTarget := false
-							for j := i + 1; j < len(taggedData.Tokens); j++ {
-								if strings.Contains(taggedData.Tokens[j], ".") { // Prioritize file
-									foundTarget = true
-									break
-								}
-							}
-							if !foundTarget { // If no file, look for directory
-								for j := i + 1; j < len(taggedData.Tokens) && targetDirectory == ""; j++ {
-									if taggedData.NerTag[j] == "NAME" || strings.Contains(taggedData.Tokens[j], "/") || strings.Contains(taggedData.Tokens[j], "\\") {
-										targetDirectory = taggedData.Tokens[j]
-										break
-									}
-								}
-								if targetDirectory == "" {
-									for k := i + 1; k < len(taggedData.Tokens); k++ {
-										t := strings.ToLower(taggedData.Tokens[k])
-										if t == "the" || t == "a" || t == "an" || t == "folder" || t == "directory" {
-											continue
-										}
-										if t != "it" {
-											targetDirectory = taggedData.Tokens[k]
-										}
-										break
-									}
-								}
-							}
-						}
-					}
-				}
-				// Check for "with url /<path>" pattern
-				if strings.ToLower(token) == "url" && i > 0 && strings.ToLower(taggedData.Tokens[i-1]) == "with" && i+1 < len(taggedData.Tokens) && strings.HasPrefix(taggedData.Tokens[i+1], "/") {
-					handlerURL = taggedData.Tokens[i+1]
-				}
-			}
-
-			var objectType string = intent.ObjectType
-			
-			// Fallback logic for specific complex types or if KB missed it
-			if strings.Contains(strings.ToLower(query), "handler") {
-				objectType = "handler"
-			} else if strings.Contains(strings.ToLower(query), "data structure") {
-				objectType = "data structure"
-				objectTypeParts = []string{} // Clear objectTypeParts to prevent interference
-			} else if strings.Contains(strings.ToLower(query), "webserver") || strings.Contains(strings.ToLower(query), "websever") {
-				objectType = "webserver"
-			} else if objectType == "" {
-				objectType = strings.Join(objectTypeParts, " ")
-			}
-
-			fileName := intent.Params["name"]
-			if fileName == "" {
-				fileName = findName(taggedData)
-			}
-
-			// Heuristic: If fileName is still empty, and objectType is "file",
-			// check for tokens that look like filenames (e.g., ends with .go)
-			if fileName == "" && contains(objectTypeParts, "file") {
-				for _, token := range taggedData.Tokens {
-					if strings.HasSuffix(token, ".go") || strings.HasSuffix(token, ".txt") || strings.HasSuffix(token, ".md") || strings.HasSuffix(token, ".html") {
-						fileName = token
+				for i, tag := range taggedData.NerTag {
+					if tag == "VERB" && i < len(taggedData.Tokens) {
+						command = strings.ToLower(taggedData.Tokens[i])
 						break
 					}
 				}
 			}
 
-			if hasQuestionWord && (contains(objectTypeParts, "folder") || contains(objectTypeParts, "folders") || contains(objectTypeParts, "file") || contains(objectTypeParts, "files")) {
-				command = "list"
+			// 3. Fallback to first token heuristic if still empty
+			if command == "" && len(taggedData.Tokens) > 0 {
+				command = strings.ToLower(taggedData.Tokens[0])
 			}
 
-			hasDirectoryToken := false
-			for _, t := range taggedData.Tokens {
-				if t == "directory" {
-					hasDirectoryToken = true
-					break
-				}
+			// Normalize command aliases
+			switch command {
+			case "add", "put", "make", "generate":
+				command = "create"
+			case "ls", "show":
+				command = "list"
+			case "cd", "change":
+				command = "go"
+			case "remove":
+				command = "delete"
+			case "start":
+				command = "run"
+			case "check", "test":
+				command = "verify"
+			case "search":
+				command = "grep"
 			}
-			// New logic to find the target directory more robustly
-			if command == "go" {
-				// Special handling for "go to webserver <name>"
-				if contains(taggedData.Tokens, "webserver") {
-					for i, token := range taggedData.Tokens {
-						if strings.ToLower(token) == "webserver" && i+1 < len(taggedData.Tokens) {
-							// Find next non-keyword token
-							for j := i + 1; j < len(taggedData.Tokens); j++ {
-								nextToken := strings.ToLower(taggedData.Tokens[j])
-								if nextToken != "folder" && nextToken != "directory" {
-									targetDirectory = filepath.Join("cmd", taggedData.Tokens[j])
+		}
+
+		for i, token := range taggedData.Tokens {
+			if i < len(taggedData.NerTag) {
+				switch taggedData.NerTag[i] {
+				case "QUESTION_WORD":
+					if token == "what" {
+						hasQuestionWord = true
+					}
+				case "VERB":
+				case "OBJECT_TYPE":
+					if !contains(objectTypeParts, token) {
+						objectTypeParts = append(objectTypeParts, token)
+					}
+				case "PREPOSITION":
+					if token == "in" || token == "into" || token == "to" {
+						hasPrepositionIn = true
+						foundTarget := false
+						for j := i + 1; j < len(taggedData.Tokens); j++ {
+							if strings.Contains(taggedData.Tokens[j], ".") { // Prioritize file
+								foundTarget = true
+								break
+							}
+						}
+						if !foundTarget { // If no file, look for directory
+							for j := i + 1; j < len(taggedData.Tokens) && targetDirectory == ""; j++ {
+								t := strings.ToLower(taggedData.Tokens[j])
+								if t == "the" || t == "a" || t == "an" || t == "folder" || t == "directory" {
+									continue
+								}
+								if taggedData.NerTag[j] == "NAME" || strings.Contains(taggedData.Tokens[j], "/") || strings.Contains(taggedData.Tokens[j], "\\") {
+									targetDirectory = taggedData.Tokens[j]
 									break
 								}
 							}
-							if targetDirectory != "" {
-								break
+							if targetDirectory == "" {
+								for k := i + 1; k < len(taggedData.Tokens); k++ {
+									t := strings.ToLower(taggedData.Tokens[k])
+									if t == "the" || t == "a" || t == "an" || t == "folder" || t == "directory" {
+										continue
+									}
+									if t != "it" {
+										targetDirectory = taggedData.Tokens[k]
+									}
+									break
+								}
 							}
 						}
 					}
 				}
+			}
+			// Check for "with url /<path>" pattern
+			if strings.ToLower(token) == "url" && i > 0 && strings.ToLower(taggedData.Tokens[i-1]) == "with" && i+1 < len(taggedData.Tokens) && strings.HasPrefix(taggedData.Tokens[i+1], "/") {
+				handlerURL = taggedData.Tokens[i+1]
+			}
+		}
 
-				// Fallback to original logic if no webserver navigation found
-				if targetDirectory == "" {
-					for i := len(taggedData.Tokens) - 1; i >= 0; i-- {
-						token := strings.ToLower(taggedData.Tokens[i])
-						// Exclude command words and prepositions
-						if token != "go" && token != "to" && token != "project" && token != "folder" && token != "directory" && token != "cd" && token != "change" && token != "move" {
-							targetDirectory = taggedData.Tokens[i]
+		var objectType string = intent.ObjectType
+
+		// Fallback logic for specific complex types or if KB missed it
+		if strings.Contains(strings.ToLower(query), "handler") {
+			objectType = "handler"
+		} else if strings.Contains(strings.ToLower(query), "data structure") {
+			objectType = "data structure"
+			objectTypeParts = []string{} // Clear objectTypeParts to prevent interference
+		} else if strings.Contains(strings.ToLower(query), "webserver") || strings.Contains(strings.ToLower(query), "websever") {
+			objectType = "webserver"
+		} else if objectType == "" {
+			objectType = strings.Join(objectTypeParts, " ")
+		}
+
+		fileName := intent.Params["name"]
+		if fileName == "" && len(intentData.Parameters) > 0 {
+			if val, ok := intentData.Parameters["name"].(string); ok {
+				fileName = val
+			}
+		}
+		if fileName == "" {
+			fileName = findName(taggedData)
+		}
+
+		// Heuristic: If fileName is still empty, and objectType is "file",
+		// check for tokens that look like filenames (e.g., ends with .go)
+		if fileName == "" && contains(objectTypeParts, "file") {
+			for _, token := range taggedData.Tokens {
+				if strings.HasSuffix(token, ".go") || strings.HasSuffix(token, ".txt") || strings.HasSuffix(token, ".md") || strings.HasSuffix(token, ".html") {
+					fileName = token
+					break
+				}
+			}
+		}
+
+		if hasQuestionWord && (contains(objectTypeParts, "folder") || contains(objectTypeParts, "folders") || contains(objectTypeParts, "file") || contains(objectTypeParts, "files")) {
+			command = "list"
+		}
+
+		hasDirectoryToken := false
+		for _, t := range taggedData.Tokens {
+			if t == "directory" {
+				hasDirectoryToken = true
+				break
+			}
+		}
+		// New logic to find the target directory more robustly
+		if command == "go" {
+			// Special handling for "go to webserver <name>"
+			if contains(taggedData.Tokens, "webserver") {
+				for i, token := range taggedData.Tokens {
+					if strings.ToLower(token) == "webserver" && i+1 < len(taggedData.Tokens) {
+						// Find next non-keyword token
+						for j := i + 1; j < len(taggedData.Tokens); j++ {
+							nextToken := strings.ToLower(taggedData.Tokens[j])
+							if nextToken != "folder" && nextToken != "directory" {
+								targetDirectory = filepath.Join("cmd", taggedData.Tokens[j])
+								break
+							}
+						}
+						if targetDirectory != "" {
 							break
 						}
 					}
 				}
 			}
 
-			handled := true
-			switch command {
-			case "go":
-				if targetDirectory != "" {
-					if targetDirectory == "root" {
-						targetDirectory = "/"
+			// Fallback to original logic if no webserver navigation found
+			if targetDirectory == "" {
+				for i := len(taggedData.Tokens) - 1; i >= 0; i-- {
+					token := strings.ToLower(taggedData.Tokens[i])
+					// Exclude command words and prepositions
+					if token != "go" && token != "to" && token != "project" && token != "folder" && token != "directory" && token != "cd" && token != "change" && token != "move" {
+						targetDirectory = taggedData.Tokens[i]
+						break
 					}
-					err := os.Chdir(targetDirectory)
-					if err != nil {
-						predictedSentence = fmt.Sprintf("I couldn't change the directory to %s: %v", targetDirectory, err)
-					} else {
-						predictedSentence = fmt.Sprintf("Changed directory to %s.", targetDirectory)
-						currentAbsDir, err := os.Getwd()
-						if err != nil {
-							log.Printf("Error getting current absolute directory after chdir: %v", err)
-						} else {
-							saveLastDirectory(currentAbsDir) // Save the absolute path
-						}
-					}
-				} else {
-					handled = false
 				}
-			case "move":
-				sourceFile := fileName
-				destDir := targetDirectory
+			}
+		}
 
-				if sourceFile == "" {
-					predictedSentence = "Please specify a file to move."
-					break
+		handled := true
+		switch command {
+		case "go":
+			if targetDirectory != "" {
+				if targetDirectory == "root" {
+					targetDirectory = "/"
 				}
-				if destDir == "" {
-					predictedSentence = "Please specify a destination directory."
-					break
-				}
-
-				if _, err := os.Stat(destDir); os.IsNotExist(err) {
-					predictedSentence = fmt.Sprintf("Destination directory '%s' does not exist.", destDir)
-					break
-				}
-
-				destFile := filepath.Join(destDir, filepath.Base(sourceFile))
-
-				err := os.Rename(sourceFile, destFile)
+				err := os.Chdir(targetDirectory)
 				if err != nil {
-					predictedSentence = fmt.Sprintf("I couldn't move the file '%s' to '%s': %v", sourceFile, destDir, err)
+					predictedSentence = fmt.Sprintf("I couldn't change the directory to %s: %v", targetDirectory, err)
 				} else {
-					predictedSentence = fmt.Sprintf("I have moved the file '%s' to '%s'.", sourceFile, destDir)
+					predictedSentence = fmt.Sprintf("Changed directory to %s.", targetDirectory)
+					currentAbsDir, err := os.Getwd()
+					if err != nil {
+						log.Printf("Error getting current absolute directory after chdir: %v", err)
+					} else {
+						saveLastDirectory(currentAbsDir) // Save the absolute path
+					}
 				}
-			case "list":
-				if strings.Contains(objectType, "handler") {
-					targetPath := "main.go"
-					if targetDirectory != "" {
-						possiblePath := filepath.Join(targetDirectory, "main.go")
+			} else {
+				handled = false
+			}
+		case "move":
+			sourceFile := fileName
+			destDir := targetDirectory
+
+			if sourceFile == "" {
+				predictedSentence = "Please specify a file to move."
+				break
+			}
+			if destDir == "" {
+				predictedSentence = "Please specify a destination directory."
+				break
+			}
+
+			if _, err := os.Stat(destDir); os.IsNotExist(err) {
+				predictedSentence = fmt.Sprintf("Destination directory '%s' does not exist.", destDir)
+				break
+			}
+
+			destFile := filepath.Join(destDir, filepath.Base(sourceFile))
+
+			err := os.Rename(sourceFile, destFile)
+			if err != nil {
+				predictedSentence = fmt.Sprintf("I couldn't move the file '%s' to '%s': %v", sourceFile, destDir, err)
+			} else {
+				predictedSentence = fmt.Sprintf("I have moved the file '%s' to '%s'.", sourceFile, destDir)
+			}
+		case "list":
+			if strings.Contains(objectType, "handler") {
+				targetPath := "main.go"
+				if targetDirectory != "" {
+					possiblePath := filepath.Join(targetDirectory, "main.go")
+					if _, err := os.Stat(possiblePath); err == nil {
+						targetPath = possiblePath
+					} else {
+						baseName := filepath.Base(targetDirectory)
+						possiblePath = filepath.Join(targetDirectory, "cmd", baseName, "main.go")
 						if _, err := os.Stat(possiblePath); err == nil {
 							targetPath = possiblePath
-						} else {
-							baseName := filepath.Base(targetDirectory)
-							possiblePath = filepath.Join(targetDirectory, "cmd", baseName, "main.go")
-							if _, err := os.Stat(possiblePath); err == nil {
-								targetPath = possiblePath
-							}
 						}
-					}
-
-					content, err := os.ReadFile(targetPath)
-					if err != nil {
-						predictedSentence = fmt.Sprintf("I couldn't read %s to list handlers. Please ensure you are in a webserver directory or specify one.", targetPath)
-					} else {
-						lines := strings.Split(string(content), "\n")
-						var handlers []string
-						for _, line := range lines {
-							trimmed := strings.TrimSpace(line)
-							if strings.HasPrefix(trimmed, "http.HandleFunc(") {
-								args := strings.TrimPrefix(trimmed, "http.HandleFunc(")
-								args = strings.TrimSuffix(args, ")")
-								parts := strings.SplitN(args, ",", 2)
-								if len(parts) == 2 {
-									path := strings.TrimSpace(parts[0])
-									path = strings.Trim(path, "\"")
-									funcName := strings.TrimSpace(parts[1])
-									handlers = append(handlers, fmt.Sprintf("%s -> %s", path, funcName))
-								}
-							}
-						}
-						if len(handlers) > 0 {
-							predictedSentence = fmt.Sprintf("Registered Handlers in %s:\n%s", targetPath, strings.Join(handlers, "\n"))
-						} else {
-							predictedSentence = fmt.Sprintf("No handlers found registered via http.HandleFunc in %s.", targetPath)
-						}
-					}
-				} else {
-					files, err := os.ReadDir(".")
-					if err != nil {
-						predictedSentence = fmt.Sprintf("I couldn't list the contents of the directory: %v", err)
-					} else {
-						var items []string
-						showFiles := contains(objectTypeParts, "file") || contains(objectTypeParts, "files")
-						showFolders := contains(objectTypeParts, "folder") || contains(objectTypeParts, "folders")
-
-						for _, file := range files {
-							isDir := file.IsDir()
-							if (!showFiles && !showFolders) || (showFiles && showFolders) {
-								items = append(items, file.Name())
-							} else if showFiles && !isDir {
-								items = append(items, file.Name())
-							} else if showFolders && isDir {
-								items = append(items, file.Name())
-							}
-						}
-						predictedSentence = "Here are the contents of the directory:\n" + strings.Join(items, "\n")
 					}
 				}
-			case "tree":
+
+				content, err := os.ReadFile(targetPath)
+				if err != nil {
+					predictedSentence = fmt.Sprintf("I couldn't read %s to list handlers. Please ensure you are in a webserver directory or specify one.", targetPath)
+				} else {
+					lines := strings.Split(string(content), "\n")
+					var handlers []string
+					for _, line := range lines {
+						trimmed := strings.TrimSpace(line)
+						if strings.HasPrefix(trimmed, "http.HandleFunc(") {
+							args := strings.TrimPrefix(trimmed, "http.HandleFunc(")
+							args = strings.TrimSuffix(args, ")")
+							parts := strings.SplitN(args, ",", 2)
+							if len(parts) == 2 {
+								path := strings.TrimSpace(parts[0])
+								path = strings.Trim(path, "\"")
+								funcName := strings.TrimSpace(parts[1])
+								handlers = append(handlers, fmt.Sprintf("%s -> %s", path, funcName))
+							}
+						}
+					}
+					if len(handlers) > 0 {
+						predictedSentence = fmt.Sprintf("Registered Handlers in %s:\n%s", targetPath, strings.Join(handlers, "\n"))
+					} else {
+						predictedSentence = fmt.Sprintf("No handlers found registered via http.HandleFunc in %s.", targetPath)
+					}
+				}
+			} else {
+				files, err := os.ReadDir(".")
+				if err != nil {
+					predictedSentence = fmt.Sprintf("I couldn't list the contents of the directory: %v", err)
+				} else {
+					var items []string
+					showFiles := contains(objectTypeParts, "file") || contains(objectTypeParts, "files")
+					showFolders := contains(objectTypeParts, "folder") || contains(objectTypeParts, "folders")
+
+					for _, file := range files {
+						isDir := file.IsDir()
+						if (!showFiles && !showFolders) || (showFiles && showFolders) {
+							items = append(items, file.Name())
+						} else if showFiles && !isDir {
+							items = append(items, file.Name())
+						} else if showFolders && isDir {
+							items = append(items, file.Name())
+						}
+					}
+					predictedSentence = "Here are the contents of the directory:\n" + strings.Join(items, "\n")
+				}
+			}
+		case "tree":
+			target := "."
+			if targetDirectory != "" {
+				target = targetDirectory
+			}
+
+			maxDepth := -1
+			for i, token := range taggedData.Tokens {
+				if (token == "-d" || token == "depth" || token == "-L") && i+1 < len(taggedData.Tokens) {
+					if d, err := strconv.Atoi(taggedData.Tokens[i+1]); err == nil {
+						maxDepth = d
+					}
+				}
+			}
+
+			treeView, err := generateDirectoryTree(target, "", 0, maxDepth)
+			if err != nil {
+				predictedSentence = fmt.Sprintf("I couldn't generate a tree for '%s': %v", target, err)
+			} else {
+				predictedSentence = fmt.Sprintf("Directory tree for '%s':\n%s", target, treeView)
+			}
+		case "grep":
+			searchTerm := ""
+			if val, ok := intent.Params["target"]; ok {
+				searchTerm = val
+			}
+
+			if searchTerm == "" {
+				for i, token := range taggedData.Tokens {
+					if (token == "grep" || token == "search") && i+1 < len(taggedData.Tokens) {
+						if taggedData.Tokens[i+1] == "for" && i+2 < len(taggedData.Tokens) {
+							searchTerm = taggedData.Tokens[i+2]
+						} else {
+							searchTerm = taggedData.Tokens[i+1]
+						}
+						break
+					}
+				}
+			}
+
+			if searchTerm == "" {
+				predictedSentence = "Please provide text to search for."
+			} else {
 				target := "."
 				if targetDirectory != "" {
 					target = targetDirectory
 				}
 
-				maxDepth := -1
-				for i, token := range taggedData.Tokens {
-					if (token == "-d" || token == "depth" || token == "-L") && i+1 < len(taggedData.Tokens) {
-						if d, err := strconv.Atoi(taggedData.Tokens[i+1]); err == nil {
-							maxDepth = d
-						}
+				var results []string
+				err := filepath.Walk(target, func(path string, info os.FileInfo, err error) error {
+					if err != nil {
+						return nil
 					}
-				}
-
-				treeView, err := generateDirectoryTree(target, "", 0, maxDepth)
-				if err != nil {
-					predictedSentence = fmt.Sprintf("I couldn't generate a tree for '%s': %v", target, err)
-				} else {
-					predictedSentence = fmt.Sprintf("Directory tree for '%s':\n%s", target, treeView)
-				}
-			case "grep":
-				searchTerm := ""
-				if val, ok := intent.Params["target"]; ok {
-					searchTerm = val
-				}
-
-				if searchTerm == "" {
-					for i, token := range taggedData.Tokens {
-						if (token == "grep" || token == "search") && i+1 < len(taggedData.Tokens) {
-							if taggedData.Tokens[i+1] == "for" && i+2 < len(taggedData.Tokens) {
-								searchTerm = taggedData.Tokens[i+2]
-							} else {
-								searchTerm = taggedData.Tokens[i+1]
-							}
-							break
-						}
-					}
-				}
-
-				if searchTerm == "" {
-					predictedSentence = "Please provide text to search for."
-				} else {
-					target := "."
-					if targetDirectory != "" {
-						target = targetDirectory
-					}
-
-					var results []string
-					err := filepath.Walk(target, func(path string, info os.FileInfo, err error) error {
-						if err != nil {
-							return nil
-						}
-						if !info.IsDir() && !strings.Contains(path, string(os.PathSeparator)+".") {
-							content, err := os.ReadFile(path)
-							if err == nil {
-								if strings.Contains(string(content), searchTerm) {
-									lines := strings.Split(string(content), "\n")
-									for i, line := range lines {
-										if strings.Contains(line, searchTerm) {
-											trimmed := strings.TrimSpace(line)
-											if len(trimmed) > 80 {
-												trimmed = trimmed[:80] + "..."
-											}
-											results = append(results, fmt.Sprintf("%s:%d: %s", path, i+1, trimmed))
+					if !info.IsDir() && !strings.Contains(path, string(os.PathSeparator)+".") {
+						content, err := os.ReadFile(path)
+						if err == nil {
+							if strings.Contains(string(content), searchTerm) {
+								lines := strings.Split(string(content), "\n")
+								for i, line := range lines {
+									if strings.Contains(line, searchTerm) {
+										trimmed := strings.TrimSpace(line)
+										if len(trimmed) > 80 {
+											trimmed = trimmed[:80] + "..."
 										}
+										results = append(results, fmt.Sprintf("%s:%d: %s", path, i+1, trimmed))
 									}
 								}
 							}
 						}
+					}
+					return nil
+				})
+
+				if err != nil {
+					predictedSentence = fmt.Sprintf("Error searching: %v", err)
+				} else if len(results) == 0 {
+					predictedSentence = fmt.Sprintf("No matches found for '%s' in '%s'.", searchTerm, target)
+				} else {
+					output := strings.Join(results, "\n")
+					if len(results) > 20 {
+						output = strings.Join(results[:20], "\n") + fmt.Sprintf("\n... and %d more matches.", len(results)-20)
+					}
+					predictedSentence = fmt.Sprintf("Found matches for '%s':\n%s", searchTerm, output)
+				}
+			}
+		case "history":
+			limit := 10
+			for _, token := range taggedData.Tokens {
+				if val, err := strconv.Atoi(token); err == nil && val > 0 {
+					limit = val
+				}
+			}
+			if limit > len(commandHistory) {
+				limit = len(commandHistory)
+			}
+			var historyLines []string
+			for i := len(commandHistory) - limit; i < len(commandHistory); i++ {
+				historyLines = append(historyLines, fmt.Sprintf("%d  %s", i+1, commandHistory[i]))
+			}
+			predictedSentence = strings.Join(historyLines, "\n")
+		case "help":
+			var sb strings.Builder
+			sb.WriteString("--- Available Commands ---\n")
+			descriptions := map[string]string{
+				"create":  "Create objects (file, folder, webserver, handler, database, structure, form).",
+				"delete":  "Delete objects (file, folder, structure).",
+				"move":    "Move a file to a different directory.",
+				"go":      "Change directory (e.g., 'go into cmd').",
+				"list":    "List directory contents or registered handlers.",
+				"tree":    "Visualize directory structure (supports -d <depth>).",
+				"cat":     "Read file contents.",
+				"grep":    "Search for text in files.",
+				"run":     "Start a webserver.",
+				"stop":    "Stop a webserver.",
+				"verify":  "Check webserver status.",
+				"update":  "Update components (e.g., form handlers).",
+				"history": "Show command history.",
+				"learn":   "Teach the system new objects or learn from a folder.",
+				"clear":   "Clear the terminal screen.",
+				"exit":    "Exit the program.",
+			}
+			var keys []string
+			for k := range descriptions {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			for _, cmd := range keys {
+				sb.WriteString(fmt.Sprintf("%-10s : %s\n", cmd, descriptions[cmd]))
+			}
+			sb.WriteString("\n--- Known Objects ---\n")
+			var objs []string
+			for k := range kb.KnownObjects {
+				objs = append(objs, k)
+			}
+			sort.Strings(objs)
+			sb.WriteString(strings.Join(objs, ", "))
+			sb.WriteString("\n---------------------")
+			predictedSentence = sb.String()
+		case "create":
+			log.Printf("DEBUG: Entering create command. ObjectType: '%s', TargetDirectory: '%s'", objectType, targetDirectory)
+
+			// 1. Template System Check
+			// Check if the objectType matches a file in the learning folder
+			learningPath := kb.LearningPath
+			if learningPath == "" {
+				learningPath = filepath.Join(projectRoot, "learningfolder")
+			}
+			// Fallback to current directory's learningfolder if project root one doesn't exist
+			if _, err := os.Stat(learningPath); os.IsNotExist(err) {
+				cwd, _ := os.Getwd()
+				localLearningPath := filepath.Join(cwd, "learningfolder")
+				if _, err := os.Stat(localLearningPath); err == nil {
+					learningPath = localLearningPath
+				}
+			}
+
+			templateFound := false
+			if _, err := os.Stat(learningPath); err == nil {
+				_ = filepath.WalkDir(learningPath, func(path string, d fs.DirEntry, err error) error {
+					if templateFound {
 						return nil
-					})
-
-					if err != nil {
-						predictedSentence = fmt.Sprintf("Error searching: %v", err)
-					} else if len(results) == 0 {
-						predictedSentence = fmt.Sprintf("No matches found for '%s' in '%s'.", searchTerm, target)
-					} else {
-						output := strings.Join(results, "\n")
-						if len(results) > 20 {
-							output = strings.Join(results[:20], "\n") + fmt.Sprintf("\n... and %d more matches.", len(results)-20)
-						}
-						predictedSentence = fmt.Sprintf("Found matches for '%s':\n%s", searchTerm, output)
 					}
-				}
-			case "history":
-				limit := 10
-				for _, token := range taggedData.Tokens {
-					if val, err := strconv.Atoi(token); err == nil && val > 0 {
-						limit = val
+					if err != nil || d.IsDir() {
+						return nil
 					}
-				}
-				if limit > len(commandHistory) {
-					limit = len(commandHistory)
-				}
-				var historyLines []string
-				for i := len(commandHistory) - limit; i < len(commandHistory); i++ {
-					historyLines = append(historyLines, fmt.Sprintf("%d  %s", i+1, commandHistory[i]))
-				}
-				predictedSentence = strings.Join(historyLines, "\n")
-			case "help":
-				var sb strings.Builder
-				sb.WriteString("--- Available Commands ---\n")
-				descriptions := map[string]string{
-					"create":  "Create objects (file, folder, webserver, handler, database, structure, form).",
-					"delete":  "Delete objects (file, folder, structure).",
-					"move":    "Move a file to a different directory.",
-					"go":      "Change directory (e.g., 'go into cmd').",
-					"list":    "List directory contents or registered handlers.",
-					"tree":    "Visualize directory structure (supports -d <depth>).",
-					"cat":     "Read file contents.",
-					"grep":    "Search for text in files.",
-					"run":     "Start a webserver.",
-					"stop":    "Stop a webserver.",
-					"verify":  "Check webserver status.",
-					"update":  "Update components (e.g., form handlers).",
-					"history": "Show command history.",
-					"learn":   "Teach the system new objects or learn from a folder.",
-					"clear":   "Clear the terminal screen.",
-					"exit":    "Exit the program.",
-				}
-				var keys []string
-				for k := range descriptions {
-					keys = append(keys, k)
-				}
-				sort.Strings(keys)
-				for _, cmd := range keys {
-					sb.WriteString(fmt.Sprintf("%-10s : %s\n", cmd, descriptions[cmd]))
-				}
-				sb.WriteString("\n--- Known Objects ---\n")
-				var objs []string
-				for k := range kb.KnownObjects {
-					objs = append(objs, k)
-				}
-				sort.Strings(objs)
-				sb.WriteString(strings.Join(objs, ", "))
-				sb.WriteString("\n---------------------")
-				predictedSentence = sb.String()
-			case "create":
-				log.Printf("DEBUG: Entering create command. ObjectType: '%s', TargetDirectory: '%s'", objectType, targetDirectory)
 
-				// 1. Template System Check
-				// Check if the objectType matches a file in the learning folder
-				learningPath := kb.LearningPath
-				if learningPath == "" {
-					learningPath = filepath.Join(projectRoot, "learningfolder")
-				}
-				// Fallback to current directory's learningfolder if project root one doesn't exist
-				if _, err := os.Stat(learningPath); os.IsNotExist(err) {
-					cwd, _ := os.Getwd()
-					localLearningPath := filepath.Join(cwd, "learningfolder")
-					if _, err := os.Stat(localLearningPath); err == nil {
-						learningPath = localLearningPath
+					name := d.Name()
+					ext := filepath.Ext(name)
+					baseName := strings.TrimSuffix(name, ext)
+					// Exact match on the object name (case-insensitive)
+					match := strings.EqualFold(baseName, objectType)
+					if !match {
+						// Check relative path for "template/head" style matching
+						relPath, _ := filepath.Rel(learningPath, path)
+						relPathNoExt := strings.TrimSuffix(relPath, ext)
+						normalizedObjType := strings.ReplaceAll(objectType, " ", string(os.PathSeparator))
+						if strings.EqualFold(relPathNoExt, normalizedObjType) {
+							match = true
+						}
 					}
-				}
 
-				templateFound := false
-				if _, err := os.Stat(learningPath); err == nil {
-					_ = filepath.WalkDir(learningPath, func(path string, d fs.DirEntry, err error) error {
-						if templateFound {
-							return nil
-						}
-						if err != nil || d.IsDir() {
-							return nil
-						}
+					if match {
+						templateFound = true
+						log.Printf("DEBUG: Found template match. ObjectType: '%s', File: '%s'", objectType, path)
 
-						name := d.Name()
-						ext := filepath.Ext(name)
-						baseName := strings.TrimSuffix(name, ext)
-						// Exact match on the object name (case-insensitive)
-						match := strings.EqualFold(baseName, objectType)
-						if !match {
-							// Check relative path for "template/head" style matching
-							relPath, _ := filepath.Rel(learningPath, path)
-							relPathNoExt := strings.TrimSuffix(relPath, ext)
-							normalizedObjType := strings.ReplaceAll(objectType, " ", string(os.PathSeparator))
-							if strings.EqualFold(relPathNoExt, normalizedObjType) {
-								match = true
-							}
+						destName := fileName
+						if destName == "" {
+							destName = baseName // Default to template name if no name provided
+						}
+						// If dest doesn't have ext, append template's ext
+						if filepath.Ext(destName) == "" {
+							destName += ext
 						}
 
-						if match {
-							templateFound = true
-							log.Printf("DEBUG: Found template match. ObjectType: '%s', File: '%s'", objectType, path)
+						destPath := destName
+						if targetDirectory != "" {
+							destPath = filepath.Join(targetDirectory, destName)
+						}
 
-							destName := fileName
-							if destName == "" {
-								destName = baseName // Default to template name if no name provided
-							}
-							// If dest doesn't have ext, append template's ext
-							if filepath.Ext(destName) == "" {
-								destName += ext
-							}
-
-							destPath := destName
+						content, err := os.ReadFile(path)
+						if err != nil {
+							predictedSentence = fmt.Sprintf("I found the template '%s' but couldn't read it: %v", name, err)
+						} else {
+							// Ensure the target directory exists
 							if targetDirectory != "" {
-								destPath = filepath.Join(targetDirectory, destName)
+								os.MkdirAll(targetDirectory, 0755)
 							}
-
-							content, err := os.ReadFile(path)
+							err = os.WriteFile(destPath, content, 0644)
 							if err != nil {
-								predictedSentence = fmt.Sprintf("I found the template '%s' but couldn't read it: %v", name, err)
+								predictedSentence = fmt.Sprintf("I couldn't create the file %s from template: %v", destPath, err)
 							} else {
-								err = os.WriteFile(destPath, content, 0644)
-								if err != nil {
-									predictedSentence = fmt.Sprintf("I couldn't create the file %s from template: %v", destPath, err)
-								} else {
-									predictedSentence = fmt.Sprintf("I have created '%s' using the learned template '%s'.", destPath, name)
-								}
+								predictedSentence = fmt.Sprintf("I have created '%s' using the learned template '%s'.", destPath, name)
 							}
-						}
-						return nil
-					})
-				}
-
-				if templateFound {
-					// Template handled, skip other checks
-				} else if strings.Contains(objectType, "handler") {
-					handlerName := ""
-					for i, token := range taggedData.Tokens {
-						if strings.ToLower(token) == "handler" && i+1 < len(taggedData.Tokens) {
-							handlerName = taggedData.Tokens[i+1]
-							break
 						}
 					}
-					if handlerName == "" {
-						predictedSentence = "You need to provide a name for the handler."
-					} else {
-						handlerContent := `package main
+					return nil
+				})
+			}
+
+			if templateFound {
+				// Template handled, skip other checks
+			} else if strings.Contains(objectType, "handler") {
+				handlerName := ""
+				for i, token := range taggedData.Tokens {
+					if strings.ToLower(token) == "handler" && i+1 < len(taggedData.Tokens) {
+						handlerName = taggedData.Tokens[i+1]
+						break
+					}
+				}
+				if handlerName == "" {
+					predictedSentence = "You need to provide a name for the handler."
+				} else {
+					handlerContent := `package main
 
 import (
 	"fmt"
@@ -1216,109 +1390,385 @@ func ` + strings.Title(handlerName) + `Handler(w http.ResponseWriter, r *http.Re
 	fmt.Fprintf(w, "Executing ` + strings.Title(handlerName) + `Handler! Request URL: %s\n", r.URL.Path)
 }
 `
-						filePath := handlerName + ".go"
+					filePath := handlerName + ".go"
 
-						// Check if the handler file already exists
-						if _, err := os.Stat(filePath); err == nil {
-							predictedSentence = fmt.Sprintf("The handler file '%s' already exists.", filePath)
+					// Check if the handler file already exists
+					if _, err := os.Stat(filePath); err == nil {
+						predictedSentence = fmt.Sprintf("The handler file '%s' already exists.", filePath)
+					} else {
+						err = os.WriteFile(filePath, []byte(handlerContent), 0644)
+						if err != nil {
+							predictedSentence = fmt.Sprintf("I couldn't write to the handler file %s: %v", filePath, err)
+							goto endOfCreateHandler
+						}
+						goImports(filePath)
+						predictedSentence = fmt.Sprintf("I have created the handler '%s' in %s.", handlerName, filePath)
+						// Always attempt to register the handler in the current project's main.go
+						currentProjectMainGo := filepath.Join(".", "main.go")
+						registrationMsg, err := registerHandlerURL(strings.Title(handlerName), handlerURL, currentProjectMainGo)
+						if err != nil {
+							log.Printf("Error registering handler URL in %s: %v", currentProjectMainGo, err)
+							predictedSentence += fmt.Sprintf(" I tried to register the handler in %s but failed: %v", currentProjectMainGo, err)
 						} else {
-							err = os.WriteFile(filePath, []byte(handlerContent), 0644)
-							if err != nil {
-								predictedSentence = fmt.Sprintf("I couldn't write to the handler file %s: %v", filePath, err)
-								goto endOfCreateHandler
-							}
-							goImports(filePath)
-							predictedSentence = fmt.Sprintf("I have created the handler '%s' in %s.", handlerName, filePath)
-							// Always attempt to register the handler in the current project's main.go
-							currentProjectMainGo := filepath.Join(".", "main.go")
-							registrationMsg, err := registerHandlerURL(strings.Title(handlerName), handlerURL, currentProjectMainGo)
-							if err != nil {
-								log.Printf("Error registering handler URL in %s: %v", currentProjectMainGo, err)
-								predictedSentence += fmt.Sprintf(" I tried to register the handler in %s but failed: %v", currentProjectMainGo, err)
-							} else {
-								predictedSentence += " " + registrationMsg
+							predictedSentence += " " + registrationMsg
+						}
+					}
+				}
+			endOfCreateHandler:
+			} else if strings.Contains(objectType, "component") {
+				componentName := fileName
+				if componentName == "" {
+					componentName = "Component"
+				}
+				componentName = strings.Title(componentName)
+
+				wasmUIDir := filepath.Join(projectRoot, "learningfolder", "wasm", "ui")
+				if _, err := os.Stat(wasmUIDir); os.IsNotExist(err) {
+					os.MkdirAll(wasmUIDir, 0755)
+				}
+
+				content := fmt.Sprintf(`package ui
+
+import "syscall/js"
+
+type %s struct {
+	el js.Value
+}
+
+func New%s() *%s {
+	return &%s{}
+}
+
+func (c *%s) Render() js.Value {
+	document := js.Global().Get("document")
+	div := document.Call("createElement", "div")
+	div.Set("className", "%s-component")
+	div.Set("innerText", "%s Component")
+	return div
+}
+`, componentName, componentName, componentName, componentName, componentName, strings.ToLower(componentName), componentName)
+
+				filePath := filepath.Join(wasmUIDir, strings.ToLower(componentName)+".go")
+				err := os.WriteFile(filePath, []byte(content), 0644)
+				if err != nil {
+					predictedSentence = fmt.Sprintf("I couldn't create the component file %s: %v", filePath, err)
+				} else {
+					predictedSentence = fmt.Sprintf("I have created the WASM component '%s' in %s.", componentName, filePath)
+					buildWasm(filepath.Join(projectRoot, "learningfolder", "wasm"))
+				}
+			} else if strings.Contains(objectType, "page") {
+				pageName := fileName
+				if pageName == "" {
+					pageName = "NewPage"
+				}
+				// Sanitize pageName for Go (TitleCase and no spaces)
+				cleanName := ""
+				for _, part := range strings.Fields(pageName) {
+					cleanName += strings.Title(strings.ToLower(part))
+				}
+				snakeName := strings.ReplaceAll(strings.ToLower(pageName), " ", "_")
+
+				// Dynamic Discovery of WASM Dir
+				var wasmDir string
+
+				// 1. Try to find a webserver mentioned in the query
+				webserverName := ""
+				for i, token := range taggedData.Tokens {
+					if (strings.ToLower(token) == "webserver" || strings.ToLower(token) == "websever") && i+1 < len(taggedData.Tokens) {
+						webserverName = taggedData.Tokens[i+1]
+						break
+					}
+				}
+
+				if webserverName != "" {
+					candidates := []string{
+						filepath.Join(projectRoot, webserverName, "cmd", webserverName),
+						filepath.Join(projectRoot, "cmd", webserverName),
+						filepath.Join(projectRoot, webserverName),
+						filepath.Join(projectRoot, webserverName, "cmd"),
+					}
+					for _, p := range candidates {
+						if _, err := os.Stat(filepath.Join(p, "wasm")); err == nil {
+							wasmDir = filepath.Join(p, "wasm")
+							break
+						}
+					}
+				}
+
+				// 2. Try CWD first if targetDirectory is provided
+				if wasmDir == "" && targetDirectory != "" {
+					cwd, _ := os.Getwd()
+
+					// Special case: If we are already in the target directory (e.g. 'wasm')
+					if strings.EqualFold(filepath.Base(cwd), targetDirectory) {
+						wasmDir = cwd
+					} else {
+						// Try relative to CWD
+						relToCwd := filepath.Join(cwd, targetDirectory)
+						if _, err := os.Stat(relToCwd); err == nil {
+							wasmDir = relToCwd
+						} else {
+							// Try relative to project root
+							relToRoot := filepath.Join(projectRoot, targetDirectory)
+							if _, err := os.Stat(relToRoot); err == nil {
+								wasmDir = relToRoot
 							}
 						}
 					}
-				endOfCreateHandler:
-				} else if strings.Contains(objectType, "file") { // New block for generic file creation
-					if fileName != "" {
-						filePath := fileName
-						if targetDirectory != "" {
-							filePath = filepath.Join(targetDirectory, fileName)
+				}
+
+				// 3. Fallback: Search upwards from CWD for any 'wasm' folder
+				if wasmDir == "" {
+					search, _ := os.Getwd()
+					for {
+						check := filepath.Join(search, "wasm")
+						// If we ARE in a wasm folder, use it
+						if strings.EqualFold(filepath.Base(search), "wasm") {
+							wasmDir = search
+							break
 						}
-
-						var content []byte
-						var source string
-
-						// 1. Check if file exists in current directory
-						if _, err := os.Stat(fileName); err == nil {
-							content, err = os.ReadFile(fileName)
-							if err == nil {
-								source = "current directory"
-							}
+						// Otherwise check if there is a wasm subfolder here
+						if info, err := os.Stat(check); err == nil && info.IsDir() {
+							wasmDir = check
+							break
 						}
+						parent := filepath.Dir(search)
+						if parent == search || strings.Contains(parent, projectRoot) == false {
+							break
+						}
+						search = parent
+					}
+				}
 
-						// 2. If not, check learning folder
-						if source == "" {
-							learningPath := kb.LearningPath
-							if learningPath == "" {
-								learningPath = filepath.Join(projectRoot, "learningfolder")
-							}
-							// Fallback to local learningfolder
-							if _, err := os.Stat(learningPath); os.IsNotExist(err) {
-								cwd, _ := os.Getwd()
-								localLearningPath := filepath.Join(cwd, "learningfolder")
-								if _, err := os.Stat(localLearningPath); err == nil {
-									learningPath = localLearningPath
+				// 4. Final Fallback to learningfolder
+				if wasmDir == "" {
+					wasmDir = filepath.Join(projectRoot, "learningfolder", "wasm")
+				}
+
+				wasmPagesDir := filepath.Join(wasmDir, "pages")
+				if _, err := os.Stat(wasmPagesDir); os.IsNotExist(err) {
+					os.MkdirAll(wasmPagesDir, 0755)
+				}
+
+				// Determine module name for imports
+				materialImport := "github.com/golangast/gollemer/learningfolder/wasm/ui/material"
+				searchDir := wasmDir
+				for {
+					if _, err := os.Stat(filepath.Join(searchDir, "go.mod")); err == nil {
+						if modContent, err := os.ReadFile(filepath.Join(searchDir, "go.mod")); err == nil {
+							lines := strings.Split(string(modContent), "\n")
+							for _, line := range lines {
+								if strings.HasPrefix(line, "module ") {
+									moduleRoot := strings.TrimSpace(strings.TrimPrefix(line, "module "))
+									rel, _ := filepath.Rel(searchDir, wasmDir)
+									materialImport = filepath.Join(moduleRoot, rel, "ui", "material")
+									break
 								}
 							}
-
-							if _, err := os.Stat(learningPath); err == nil {
-								_ = filepath.WalkDir(learningPath, func(path string, d fs.DirEntry, err error) error {
-									if source != "" {
-										return nil
-									}
-									if err != nil || d.IsDir() {
-										return nil
-									}
-									if strings.EqualFold(d.Name(), fileName) {
-										content, err = os.ReadFile(path)
-										if err == nil {
-											source = "learning folder"
-										}
-									}
-									return nil
-								})
-							}
 						}
-
-						err := os.WriteFile(filePath, content, 0644)
-						if err != nil {
-							predictedSentence = fmt.Sprintf("I couldn't create the file %s: %v", filePath, err)
-						} else {
-							if source != "" {
-								predictedSentence = fmt.Sprintf("I have created the file %s using content from %s.", filePath, source)
-							} else {
-								predictedSentence = fmt.Sprintf("I have created the empty file %s.", filePath)
-							}
-						}
-					} else {
-						predictedSentence = "You need to provide a name for the file."
+						break
 					}
-				} else if strings.Contains(objectType, "webserver") {
-					if fileName == "" {
-						predictedSentence = "You need to provide a name for the webserver."
+					parent := filepath.Dir(searchDir)
+					if parent == searchDir {
+						break
+					}
+					searchDir = parent
+				}
+
+				content := fmt.Sprintf(`package pages
+
+import (
+	"syscall/js"
+
+	"%s"
+)
+
+func Render%s() js.Value {
+	document := js.Global().Get("document")
+	container := document.Call("createElement", "div")
+	container.Set("className", "%s-page")
+	container.Set("style", "padding: 4rem 2rem; max-width: 800px; margin: 0 auto; min-height: 80vh;")
+
+	heading := document.Call("createElement", "h1")
+	heading.Set("innerText", "%s")
+	heading.Set("className", "mat-h1")
+	container.Call("appendChild", heading)
+
+	sub := document.Call("createElement", "p")
+	sub.Set("innerText", "Welcome to the %s page.")
+	sub.Set("className", "mat-body-1")
+	container.Call("appendChild", sub)
+
+	// Add a button to use the material package and avoid 'unused import' error
+	btn := material.NewButton("Action", "primary", func() {
+		js.Global().Call("alert", "Action triggered on %s page!")
+	})
+	container.Call("appendChild", btn.Render())
+
+	return container
+}
+`, materialImport, cleanName, snakeName, pageName, pageName)
+
+				filePath := filepath.Join(wasmPagesDir, snakeName+".go")
+				err := os.WriteFile(filePath, []byte(content), 0644)
+				if err != nil {
+					predictedSentence = fmt.Sprintf("I couldn't create the page file %s: %v", filePath, err)
+				} else {
+					// Verify file creation (Recursive Reasoning / Validation)
+					if _, checkErr := os.Stat(filePath); checkErr == nil {
+						predictedSentence = fmt.Sprintf("I have verified the creation of WASM page '%s' in %s.", pageName, filePath)
 					} else {
-						serverDir := filepath.Join("cmd", fileName)
-						if targetDirectory != "" {
-							serverDir = filepath.Join(targetDirectory, "cmd", fileName)
+						predictedSentence = fmt.Sprintf("File write reported success, but I couldn't find %s on disk. Please check permissions.", filePath)
+						goto endOfCreatePage
+					}
+
+					// --- Integration 1: Router ---
+					wasmGoPath := filepath.Join(wasmDir, "wasm.go")
+					if content, err := os.ReadFile(wasmGoPath); err == nil {
+						sContent := string(content)
+						routeKey := "#" + snakeName
+						routeValue := "pages.Render" + cleanName
+						if !strings.Contains(sContent, routeKey) {
+							registration := fmt.Sprintf("\t\t\t\"%s\": %s,\n", routeKey, routeValue)
+							// Smart insertion: Look for the Routes map definition
+							if idx := strings.LastIndex(sContent, "},"); idx != -1 {
+								sContent = sContent[:idx] + registration + sContent[idx:]
+								os.WriteFile(wasmGoPath, []byte(sContent), 0644)
+								predictedSentence += " Registered route in wasm.go."
+							}
 						}
-						err := os.MkdirAll(serverDir, 0755)
-						if err != nil {
-							predictedSentence = fmt.Sprintf("I couldn't create the webserver directory %s: %v", serverDir, err)
+					}
+
+					// --- Integration 2: Navigation ---
+					headerPath := filepath.Join(wasmDir, "ui", "header.go")
+					if content, err := os.ReadFile(headerPath); err == nil {
+						sContent := string(content)
+						navLink := fmt.Sprintf("{\"%s\", \"#%s\"}", strings.Title(pageName), snakeName)
+						if !strings.Contains(sContent, navLink) {
+							// Find the end of the links slice
+							sliceMarker := "},"
+							if idx := strings.LastIndex(sContent, sliceMarker); idx != -1 {
+								// We want to insert it before the closing brace of the slice
+								// By finding the LAST '},' which usually ends the last item in a slice literal
+								insertIdx := idx + len(sliceMarker)
+								sContent = sContent[:insertIdx] + "\n\t\t" + navLink + "," + sContent[insertIdx:]
+								os.WriteFile(headerPath, []byte(sContent), 0644)
+								predictedSentence += " Updated navigation in header.go."
+							}
+						}
+					}
+
+					buildWasm(wasmDir)
+				}
+			endOfCreatePage:
+			} else if strings.Contains(objectType, "colors") {
+				cssPath := filepath.Join(projectRoot, "learningfolder", "assets", "style", "style.css")
+				if _, err := os.Stat(cssPath); err == nil {
+					// Append some new color variables as an example or update them
+					colorsUpdate := `
+:root {
+    --primary: #6366f1;
+    --secondary: #ec4899;
+    --accent: #f59e0b;
+    --success: #10b981;
+    --danger: #ef4444;
+}
+`
+					existing, _ := os.ReadFile(cssPath)
+					if !strings.Contains(string(existing), "--secondary") {
+						f, _ := os.OpenFile(cssPath, os.O_APPEND|os.O_WRONLY, 0644)
+						f.WriteString(colorsUpdate)
+						f.Close()
+						predictedSentence = "I have updated the colors in style.css."
+					} else {
+						predictedSentence = "Colors are already defined in style.css."
+					}
+					buildWasm(filepath.Join(projectRoot, "learningfolder", "wasm")) // Still build WASM to refresh
+				} else {
+					predictedSentence = "I couldn't find style.css to update colors."
+				}
+			} else if strings.Contains(objectType, "file") { // New block for generic file creation
+				if fileName != "" {
+					filePath := fileName
+					if targetDirectory != "" {
+						filePath = filepath.Join(targetDirectory, fileName)
+					}
+
+					var content []byte
+					var source string
+
+					// 1. Check if file exists in current directory
+					if _, err := os.Stat(fileName); err == nil {
+						content, err = os.ReadFile(fileName)
+						if err == nil {
+							source = "current directory"
+						}
+					}
+
+					// 2. If not, check learning folder
+					if source == "" {
+						learningPath := kb.LearningPath
+						if learningPath == "" {
+							learningPath = filepath.Join(projectRoot, "learningfolder")
+						}
+						// Fallback to local learningfolder
+						if _, err := os.Stat(learningPath); os.IsNotExist(err) {
+							cwd, _ := os.Getwd()
+							localLearningPath := filepath.Join(cwd, "learningfolder")
+							if _, err := os.Stat(localLearningPath); err == nil {
+								learningPath = localLearningPath
+							}
+						}
+
+						if _, err := os.Stat(learningPath); err == nil {
+							_ = filepath.WalkDir(learningPath, func(path string, d fs.DirEntry, err error) error {
+								if source != "" {
+									return nil
+								}
+								if err != nil || d.IsDir() {
+									return nil
+								}
+								if strings.EqualFold(d.Name(), fileName) {
+									content, err = os.ReadFile(path)
+									if err == nil {
+										source = "learning folder"
+									}
+								}
+								return nil
+							})
+						}
+					}
+
+					// Ensure the target directory exists
+					if targetDirectory != "" {
+						os.MkdirAll(targetDirectory, 0755)
+					}
+					err := os.WriteFile(filePath, content, 0644)
+					if err != nil {
+						predictedSentence = fmt.Sprintf("I couldn't create the file %s: %v", filePath, err)
+					} else {
+						if source != "" {
+							predictedSentence = fmt.Sprintf("I have created the file %s using content from %s.", filePath, source)
 						} else {
-							serverContent := `package main
+							predictedSentence = fmt.Sprintf("I have created the empty file %s.", filePath)
+						}
+					}
+				} else {
+					predictedSentence = "You need to provide a name for the file."
+				}
+			} else if strings.Contains(objectType, "webserver") {
+				if fileName == "" {
+					predictedSentence = "You need to provide a name for the webserver."
+				} else {
+					serverDir := filepath.Join("cmd", fileName)
+					if targetDirectory != "" {
+						serverDir = filepath.Join(targetDirectory, "cmd", fileName)
+					}
+					err := os.MkdirAll(serverDir, 0755)
+					if err != nil {
+						predictedSentence = fmt.Sprintf("I couldn't create the webserver directory %s: %v", serverDir, err)
+					} else {
+						serverContent := `package main
 
 import (
 	"database/sql"
@@ -1401,170 +1851,196 @@ func main() {
 						}
 					}
 				}
-				} else if strings.Contains(objectType, "folder") || strings.Contains(objectType, "directory") { // New block for folder creation
-					log.Printf("DEBUG: Creating folder. Name: '%s'", fileName)
-					folderName := fileName
-					
-					// Prefer explicit name after "folder" to avoid picking up filenames elsewhere in sentence
+			} else if strings.Contains(objectType, "folder") || strings.Contains(objectType, "directory") { // New block for folder creation
+				log.Printf("DEBUG: Creating folder. Name: '%s'", fileName)
+				folderName := fileName
+
+				// Prefer explicit name after "folder" to avoid picking up filenames elsewhere in sentence
+				for i, token := range taggedData.Tokens {
+					if (strings.ToLower(token) == "folder" || strings.ToLower(token) == "directory") && i+1 < len(taggedData.Tokens) {
+						candidate := taggedData.Tokens[i+1]
+						if !contains([]string{"with", "in", "named", "and", "that", "which", "containing"}, strings.ToLower(candidate)) {
+							folderName = candidate
+						}
+						break
+					}
+				}
+
+				if folderName != "" {
+					folderPath := folderName
+					if targetDirectory != "" {
+						folderPath = filepath.Join(targetDirectory, folderName)
+					}
+					err := os.MkdirAll(folderPath, 0755) // Use MkdirAll to create parent directories if needed
+					if err != nil {
+						predictedSentence = fmt.Sprintf("I couldn't create the folder %s: %v", folderPath, err)
+					} else {
+						predictedSentence = fmt.Sprintf("I have created the folder %s.", folderPath)
+					}
+				} else {
+					predictedSentence = "You need to provide a name for the folder."
+				}
+			} else if strings.Contains(objectType, "database") { // New block for database creation
+				if fileName == "" { // If findName didn't catch it, try to find it directly after "database"
 					for i, token := range taggedData.Tokens {
-						if (strings.ToLower(token) == "folder" || strings.ToLower(token) == "directory") && i+1 < len(taggedData.Tokens) {
-							candidate := taggedData.Tokens[i+1]
-							if !contains([]string{"with", "in", "named", "and", "that", "which", "containing"}, strings.ToLower(candidate)) {
-								folderName = candidate
-							}
+						if strings.ToLower(token) == "database" && i+1 < len(taggedData.Tokens) {
+							fileName = taggedData.Tokens[i+1]
 							break
 						}
 					}
-
-					if folderName != "" {
-						folderPath := folderName
-						if targetDirectory != "" {
-							folderPath = filepath.Join(targetDirectory, folderName)
-						}
-						err := os.MkdirAll(folderPath, 0755) // Use MkdirAll to create parent directories if needed
-						if err != nil {
-							predictedSentence = fmt.Sprintf("I couldn't create the folder %s: %v", folderPath, err)
-						} else {
-							predictedSentence = fmt.Sprintf("I have created the folder %s.", folderPath)
-						}
+				}
+				var db *sql.DB
+				var err error
+				if fileName != "" {
+					dbFileName := fileName + ".db"
+					db, err = sql.Open("sqlite", dbFileName)
+					if err != nil {
+						predictedSentence = fmt.Sprintf("I couldn't open the database file %s: %v", dbFileName, err)
 					} else {
-						predictedSentence = "You need to provide a name for the folder."
-					}
-				} else if strings.Contains(objectType, "database") { // New block for database creation
-					if fileName == "" { // If findName didn't catch it, try to find it directly after "database"
-						for i, token := range taggedData.Tokens {
-							if strings.ToLower(token) == "database" && i+1 < len(taggedData.Tokens) {
-								fileName = taggedData.Tokens[i+1]
-								break
-							}
-						}
-					}
-					var db *sql.DB
-					var err error
-					if fileName != "" {
-						dbFileName := fileName + ".db"
-						db, err = sql.Open("sqlite", dbFileName)
+						err = db.Ping() // This should force file creation
 						if err != nil {
-							predictedSentence = fmt.Sprintf("I couldn't open the database file %s: %v", dbFileName, err)
+							predictedSentence = fmt.Sprintf("I couldn't connect to the database file %s: %v", dbFileName, err)
 						} else {
-							err = db.Ping() // This should force file creation
-							if err != nil {
-								predictedSentence = fmt.Sprintf("I couldn't connect to the database file %s: %v", dbFileName, err)
-							} else {
-								db.Close()
-								predictedSentence = fmt.Sprintf("I have created the database file %s using the program's command.", dbFileName)
+							db.Close()
+							predictedSentence = fmt.Sprintf("I have created the database file %s using the program's command.", dbFileName)
 
-								// Check if "with the fields" is present to create a table
-								if strings.Contains(strings.ToLower(query), "with the fields") {
-									queryParts := strings.Fields(query)
-									fieldStartIndex := -1
-									for i, part := range queryParts {
-										if strings.ToLower(part) == "fields" && i > 0 && strings.ToLower(queryParts[i-1]) == "the" && i > 1 && strings.ToLower(queryParts[i-2]) == "with" {
-											fieldStartIndex = i
+							// Check if "with the fields" is present to create a table
+							if strings.Contains(strings.ToLower(query), "with the fields") {
+								queryParts := strings.Fields(query)
+								fieldStartIndex := -1
+								for i, part := range queryParts {
+									if strings.ToLower(part) == "fields" && i > 0 && strings.ToLower(queryParts[i-1]) == "the" && i > 1 && strings.ToLower(queryParts[i-2]) == "with" {
+										fieldStartIndex = i
+										break
+									}
+								}
+
+								if fieldStartIndex != -1 {
+									fields := make(map[string]string) // fieldName -> fieldType
+									for i := fieldStartIndex + 1; i < len(queryParts); {
+										if strings.ToLower(queryParts[i]) == "and" { // Skip "and"
+											i++
+											continue
+										}
+										if i+1 < len(queryParts) {
+											fieldName := queryParts[i]
+											fieldType := queryParts[i+1]
+											fields[fieldName] = fieldType
+											i += 2 // Move past fieldName and fieldType
+										} else {
+											log.Printf("Incomplete field definition found in query: %s", query)
 											break
 										}
 									}
 
-									if fieldStartIndex != -1 {
-										fields := make(map[string]string) // fieldName -> fieldType
-										for i := fieldStartIndex + 1; i < len(queryParts); {
-											if strings.ToLower(queryParts[i]) == "and" { // Skip "and"
-												i++
-												continue
-											}
-											if i+1 < len(queryParts) {
-												fieldName := queryParts[i]
-												fieldType := queryParts[i+1]
-												fields[fieldName] = fieldType
-												i += 2 // Move past fieldName and fieldType
-											} else {
-												log.Printf("Incomplete field definition found in query: %s", query)
-												break
-											}
-										}
-
-										if len(fields) > 0 {
-											err = createTableWithFields(dbFileName, fileName, fields) // Use fileName as tableName
-											if err != nil {
-												predictedSentence += fmt.Sprintf(" But couldn't create the table '%s' in %s: %v", fileName, dbFileName, err)
-											} else {
-												predictedSentence += fmt.Sprintf(" And created table '%s' with the specified fields.", fileName)
-											}
+									if len(fields) > 0 {
+										err = createTableWithFields(dbFileName, fileName, fields) // Use fileName as tableName
+										if err != nil {
+											predictedSentence += fmt.Sprintf(" But couldn't create the table '%s' in %s: %v", fileName, dbFileName, err)
 										} else {
-											predictedSentence += " But no valid fields were provided to create a table."
+											predictedSentence += fmt.Sprintf(" And created table '%s' with the specified fields.", fileName)
 										}
+									} else {
+										predictedSentence += " But no valid fields were provided to create a table."
 									}
 								}
 							}
 						}
-					} else {
-						predictedSentence = "You need to provide a name for the database."
 					}
+				} else {
+					predictedSentence = "You need to provide a name for the database."
+				}
 
-				} else if objectType == "data structure" {
-					var err error
-					var dbFileName string
-					var tableName string
-					var structFileName string
-					var fieldKeywordFound bool
-					var fieldStartIndex int
-					var withTheFieldsIndex int = -1
-					var dirName string
-					var updateRegMsg string
-					var err1 error
-					var deleteRegMsg string
-					var err2 error
-					var showRegMsg string
-					var err3 error
-					var mainGoPath string
-					var packageFileContent string
-					var modulePath, projectRoot, cwd, relativeDir, packageImportPath string
-					var lowercaseName string
-					var packageName string
+			} else if objectType == "data structure" {
+				var err error
+				var dbFileName string
+				var tableName string
+				var structFileName string
+				var fieldKeywordFound bool
+				var fieldStartIndex int
+				var withTheFieldsIndex int = -1
+				var dirName string
+				var updateRegMsg string
+				var err1 error
+				var deleteRegMsg string
+				var err2 error
+				var showRegMsg string
+				var err3 error
+				var mainGoPath string
+				var packageFileContent string
+				var modulePath, projectRoot, cwd, relativeDir, packageImportPath string
+				var lowercaseName string
+				var packageName string
 
-					queryParts := strings.Fields(query)
-					structName := ""
-					fields := make(map[string]string)
+				queryParts := strings.Fields(query)
+				structName := ""
+				fields := make(map[string]string)
 
+				for i, part := range queryParts {
+					if part == "structure" && i+1 < len(queryParts) {
+						if strings.ToLower(queryParts[i+1]) == "named" && i+2 < len(queryParts) {
+							structName = strings.Title(queryParts[i+2])
+						} else {
+							structName = strings.Title(queryParts[i+1])
+						}
+						break
+					}
+				}
+
+				if structName == "" {
+					predictedSentence = "You need to provide a name for the data structure."
+					goto endOfDataStructureCreation
+				}
+
+				// Create a directory for the data structure's database
+				dirName = strings.ToLower(structName)
+				if err := os.MkdirAll(dirName, 0755); err != nil {
+					predictedSentence = fmt.Sprintf("I couldn't create the directory %s: %v", dirName, err)
+					goto endOfDataStructureCreation
+				}
+
+				// Look for "with fields" or "with the fields"
+				for i := 0; i < len(queryParts)-1; i++ {
+					if queryParts[i] == "with" && queryParts[i+1] == "fields" {
+						withTheFieldsIndex = i + 2
+						break
+					}
+					if i+2 < len(queryParts) && queryParts[i] == "with" && queryParts[i+1] == "the" && queryParts[i+2] == "fields" {
+						withTheFieldsIndex = i + 3
+						break
+					}
+				}
+
+				if withTheFieldsIndex != -1 {
+					fieldKeywordFound = true
+					for i := withTheFieldsIndex; i < len(queryParts); {
+						if queryParts[i] == "and" {
+							i++
+							continue
+						}
+						if i+1 < len(queryParts) {
+							fieldName := queryParts[i]
+							fieldType := queryParts[i+1]
+							fields[fieldName] = fieldType
+							i += 2
+						} else {
+							predictedSentence = "Incomplete field definition found."
+							goto endOfDataStructureCreation
+						}
+					}
+				} else {
+					// Look for "field"
 					for i, part := range queryParts {
-						if part == "structure" && i+1 < len(queryParts) {
-							if strings.ToLower(queryParts[i+1]) == "named" && i+2 < len(queryParts) {
-								structName = strings.Title(queryParts[i+2])
-							} else {
-								structName = strings.Title(queryParts[i+1])
-							}
+						if part == "field" {
+							fieldStartIndex = i
 							break
 						}
 					}
 
-					if structName == "" {
-						predictedSentence = "You need to provide a name for the data structure."
-						goto endOfDataStructureCreation
-					}
-
-					// Create a directory for the data structure's database
-					dirName = strings.ToLower(structName)
-					if err := os.MkdirAll(dirName, 0755); err != nil {
-						predictedSentence = fmt.Sprintf("I couldn't create the directory %s: %v", dirName, err)
-						goto endOfDataStructureCreation
-					}
-
-					// Look for "with fields" or "with the fields"
-					for i := 0; i < len(queryParts)-1; i++ {
-						if queryParts[i] == "with" && queryParts[i+1] == "fields" {
-							withTheFieldsIndex = i + 2
-							break
-						}
-						if i+2 < len(queryParts) && queryParts[i] == "with" && queryParts[i+1] == "the" && queryParts[i+2] == "fields" {
-							withTheFieldsIndex = i + 3
-							break
-						}
-					}
-
-					if withTheFieldsIndex != -1 {
+					if fieldStartIndex != -1 {
 						fieldKeywordFound = true
-						for i := withTheFieldsIndex; i < len(queryParts); {
-							if queryParts[i] == "and" {
+						for i := fieldStartIndex + 1; i < len(queryParts); {
+							if queryParts[i] == "and" || queryParts[i] == "field" {
 								i++
 								continue
 							}
@@ -1578,281 +2054,254 @@ func main() {
 								goto endOfDataStructureCreation
 							}
 						}
-					} else {
-						// Look for "field"
-						for i, part := range queryParts {
-							if part == "field" {
-								fieldStartIndex = i
-								break
-							}
-						}
+					}
+				}
 
-						if fieldStartIndex != -1 {
-							fieldKeywordFound = true
-							for i := fieldStartIndex + 1; i < len(queryParts); {
-								if queryParts[i] == "and" || queryParts[i] == "field" {
-									i++
-									continue
+				if !fieldKeywordFound || len(fields) == 0 {
+					fmt.Println("Please provide the fields for the data structure (e.g., 'name string age int'):")
+					fieldQuery, _ := reader.ReadString('\n')
+					fieldQuery = strings.TrimSpace(fieldQuery)
+					fieldParts := strings.Fields(fieldQuery)
+					for i := 0; i < len(fieldParts); {
+						if i+1 < len(fieldParts) {
+							fieldName := fieldParts[i]
+							fieldType := fieldParts[i+1]
+							fields[fieldName] = fieldType
+							i += 2
+						} else {
+							predictedSentence = "Incomplete field definition found."
+							goto endOfDataStructureCreation
+						}
+					}
+				}
+
+				// --- Start of new generation logic ---
+				packageFileContent = generateDataStructurePackageContent(structName, fields)
+				lowercaseName = strings.ToLower(structName)
+				packageName = lowercaseName
+
+				// Write the package file
+				structFileName = filepath.Join(dirName, lowercaseName+".go")
+				err = os.WriteFile(structFileName, []byte(packageFileContent), 0644)
+				if err != nil {
+					predictedSentence = fmt.Sprintf("I couldn't create the Go package file %s: %v", structFileName, err)
+					goto endOfDataStructureCreation
+				}
+				goImports(structFileName)
+				predictedSentence = fmt.Sprintf("I have created the Go package '%s' in %s.", packageName, structFileName)
+
+				// Create database table
+				tableName = lowercaseName
+				dbFileName = filepath.Join(dirName, tableName+".db")
+				err = createTableWithFields(dbFileName, tableName, fields)
+				if err != nil {
+					predictedSentence += fmt.Sprintf(" But couldn't create the table '%s' in %s: %v", tableName, dbFileName, err)
+					goto endOfDataStructureCreation
+				}
+				predictedSentence += fmt.Sprintf(" And created the database '%s' with table '%s'.", dbFileName, tableName)
+
+				// --- Find module path and project root for import path calculation ---
+				modulePath, projectRoot, err = findGoModInfo()
+				if err != nil {
+					predictedSentence = fmt.Sprintf("Could not find go.mod info: %v", err)
+					goto endOfDataStructureCreation
+				}
+
+				cwd, err = os.Getwd()
+				if err != nil {
+					predictedSentence = fmt.Sprintf("Could not get current working directory: %v", err)
+					goto endOfDataStructureCreation
+				}
+
+				relativeDir, err = filepath.Rel(projectRoot, cwd)
+				if err != nil {
+					predictedSentence = fmt.Sprintf("Could not calculate relative path: %v", err)
+					goto endOfDataStructureCreation
+				}
+
+				// The new package is in a subdirectory named lowercaseName
+				packageImportPath = filepath.Join(modulePath, relativeDir, lowercaseName)
+				packageImportPath = filepath.ToSlash(packageImportPath)
+
+				// Register Handlers in main.go
+				mainGoPath = "main.go"
+				showRegMsg, err3 = registerHandlerWithPackage(packageName, packageImportPath, "Show"+structName, "/show/"+lowercaseName+"/", mainGoPath)
+				if err3 != nil {
+					predictedSentence += " " + err3.Error()
+				} else {
+					predictedSentence += " " + showRegMsg
+				}
+				updateRegMsg, err1 = registerHandlerWithPackage(packageName, packageImportPath, "Update"+structName, "/update/"+lowercaseName+"/", mainGoPath)
+				if err1 != nil {
+					predictedSentence += " " + err1.Error()
+				} else {
+					predictedSentence += " " + updateRegMsg
+				}
+				deleteRegMsg, err2 = registerHandlerWithPackage(packageName, packageImportPath, "Delete"+structName, "/delete/"+lowercaseName+"/", mainGoPath)
+				if err2 != nil {
+					predictedSentence += " " + err2.Error()
+				} else {
+					predictedSentence += " " + deleteRegMsg
+				}
+
+			endOfDataStructureCreation:
+			} else if strings.Contains(objectType, "form") {
+				log.Println("DEBUG: Starting form creation logic")
+				sourceParam := intent.Params["source"]
+				learningPath := kb.LearningPath
+				if learningPath == "" {
+					learningPath = filepath.Join(projectRoot, "learningfolder")
+				}
+				// Fallback to current directory's learningfolder if project root one doesn't exist
+				if _, err := os.Stat(learningPath); os.IsNotExist(err) {
+					cwd, _ := os.Getwd()
+					localLearningPath := filepath.Join(cwd, "learningfolder")
+					if _, err := os.Stat(localLearningPath); err == nil {
+						learningPath = localLearningPath
+					}
+				}
+				var htmlContent string
+				var goHandlerContent string
+				handlerName := "FormHandler"
+				var learnedFilesList string
+				useLearning := false
+
+				if _, err := os.Stat(learningPath); err == nil {
+					files, _ := os.ReadDir(learningPath)
+					if len(files) > 0 {
+						useLearning = true
+					}
+				}
+
+				if sourceParam != "" {
+					log.Printf("DEBUG: Attempting to generate form from source: %s", sourceParam)
+					lowerName := strings.ToLower(sourceParam)
+					candidates := []string{
+						filepath.Join(projectRoot, lowerName, lowerName+".go"),
+						filepath.Join(projectRoot, "cmd", lowerName, lowerName+".go"),
+						filepath.Join(projectRoot, "internal", lowerName, lowerName+".go"),
+						lowerName + ".go",
+					}
+					// Add singular variations if plural
+					var singular string
+					if strings.HasSuffix(lowerName, "s") {
+						singular = strings.TrimSuffix(lowerName, "s")
+						candidates = append(candidates,
+							filepath.Join(projectRoot, singular, singular+".go"),
+							filepath.Join(projectRoot, "cmd", singular, singular+".go"),
+							filepath.Join(projectRoot, "internal", singular, singular+".go"),
+						)
+					}
+					// Add search in subdirectories (depth 1) for project/app/pkg/struct.go style
+					entries, _ := os.ReadDir(projectRoot)
+					for _, entry := range entries {
+						if entry.IsDir() && !strings.HasPrefix(entry.Name(), ".") {
+							candidates = append(candidates, filepath.Join(projectRoot, entry.Name(), lowerName, lowerName+".go"))
+							if singular != "" {
+								candidates = append(candidates, filepath.Join(projectRoot, entry.Name(), lowerName, singular+".go"))
+							}
+							candidates = append(candidates, filepath.Join(projectRoot, entry.Name(), "pkg", lowerName, lowerName+".go"))
+						}
+					}
+
+					var structContent string
+					for _, path := range candidates {
+						if content, err := os.ReadFile(path); err == nil {
+							structContent = string(content)
+							log.Printf("DEBUG: Found struct file at %s", path)
+							break
+						}
+					}
+
+					if structContent != "" {
+						fields := make(map[string]string)
+						lines := strings.Split(structContent, "\n")
+						inStruct := false
+						for _, line := range lines {
+							trimmed := strings.TrimSpace(line)
+							if strings.HasPrefix(trimmed, "type ") && strings.Contains(trimmed, " struct {") {
+								inStruct = true
+								continue
+							}
+							if inStruct {
+								if trimmed == "}" {
+									break
 								}
-								if i+1 < len(queryParts) {
-									fieldName := queryParts[i]
-									fieldType := queryParts[i+1]
-									fields[fieldName] = fieldType
-									i += 2
-								} else {
-									predictedSentence = "Incomplete field definition found."
-									goto endOfDataStructureCreation
-								}
-							}
-						}
-					}
-
-					if !fieldKeywordFound || len(fields) == 0 {
-						fmt.Println("Please provide the fields for the data structure (e.g., 'name string age int'):")
-						fieldQuery, _ := reader.ReadString('\n')
-						fieldQuery = strings.TrimSpace(fieldQuery)
-						fieldParts := strings.Fields(fieldQuery)
-						for i := 0; i < len(fieldParts); {
-							if i+1 < len(fieldParts) {
-								fieldName := fieldParts[i]
-								fieldType := fieldParts[i+1]
-								fields[fieldName] = fieldType
-								i += 2
-							} else {
-								predictedSentence = "Incomplete field definition found."
-								goto endOfDataStructureCreation
-							}
-						}
-					}
-
-					// --- Start of new generation logic ---
-					packageFileContent = generateDataStructurePackageContent(structName, fields)
-					lowercaseName = strings.ToLower(structName)
-					packageName = lowercaseName
-
-					// Write the package file
-					structFileName = filepath.Join(dirName, lowercaseName+".go")
-					err = os.WriteFile(structFileName, []byte(packageFileContent), 0644)
-					if err != nil {
-						predictedSentence = fmt.Sprintf("I couldn't create the Go package file %s: %v", structFileName, err)
-						goto endOfDataStructureCreation
-					}
-					goImports(structFileName)
-					predictedSentence = fmt.Sprintf("I have created the Go package '%s' in %s.", packageName, structFileName)
-
-					// Create database table
-					tableName = lowercaseName
-					dbFileName = filepath.Join(dirName, tableName+".db")
-					err = createTableWithFields(dbFileName, tableName, fields)
-					if err != nil {
-						predictedSentence += fmt.Sprintf(" But couldn't create the table '%s' in %s: %v", tableName, dbFileName, err)
-						goto endOfDataStructureCreation
-					}
-					predictedSentence += fmt.Sprintf(" And created the database '%s' with table '%s'.", dbFileName, tableName)
-
-					// --- Find module path and project root for import path calculation ---
-					modulePath, projectRoot, err = findGoModInfo()
-					if err != nil {
-						predictedSentence = fmt.Sprintf("Could not find go.mod info: %v", err)
-						goto endOfDataStructureCreation
-					}
-
-					cwd, err = os.Getwd()
-					if err != nil {
-						predictedSentence = fmt.Sprintf("Could not get current working directory: %v", err)
-						goto endOfDataStructureCreation
-					}
-
-					relativeDir, err = filepath.Rel(projectRoot, cwd)
-					if err != nil {
-						predictedSentence = fmt.Sprintf("Could not calculate relative path: %v", err)
-						goto endOfDataStructureCreation
-					}
-
-					// The new package is in a subdirectory named lowercaseName
-					packageImportPath = filepath.Join(modulePath, relativeDir, lowercaseName)
-					packageImportPath = filepath.ToSlash(packageImportPath)
-
-					// Register Handlers in main.go
-					mainGoPath = "main.go"
-					showRegMsg, err3 = registerHandlerWithPackage(packageName, packageImportPath, "Show"+structName, "/show/"+lowercaseName+"/", mainGoPath)
-					if err3 != nil {
-						predictedSentence += " " + err3.Error()
-					} else {
-						predictedSentence += " " + showRegMsg
-					}
-					updateRegMsg, err1 = registerHandlerWithPackage(packageName, packageImportPath, "Update"+structName, "/update/"+lowercaseName+"/", mainGoPath)
-					if err1 != nil {
-						predictedSentence += " " + err1.Error()
-					} else {
-						predictedSentence += " " + updateRegMsg
-					}
-					deleteRegMsg, err2 = registerHandlerWithPackage(packageName, packageImportPath, "Delete"+structName, "/delete/"+lowercaseName+"/", mainGoPath)
-					if err2 != nil {
-						predictedSentence += " " + err2.Error()
-					} else {
-						predictedSentence += " " + deleteRegMsg
-					}
-
-				endOfDataStructureCreation:
-					;
-				} else if strings.Contains(objectType, "form") {
-					log.Println("DEBUG: Starting form creation logic")
-					sourceParam := intent.Params["source"]
-					learningPath := kb.LearningPath
-					if learningPath == "" {
-						learningPath = filepath.Join(projectRoot, "learningfolder")
-					}
-					// Fallback to current directory's learningfolder if project root one doesn't exist
-					if _, err := os.Stat(learningPath); os.IsNotExist(err) {
-						cwd, _ := os.Getwd()
-						localLearningPath := filepath.Join(cwd, "learningfolder")
-						if _, err := os.Stat(localLearningPath); err == nil {
-							learningPath = localLearningPath
-						}
-					}
-					var htmlContent string
-					var goHandlerContent string
-					handlerName := "FormHandler"
-					var learnedFilesList string
-					useLearning := false
-
-					if _, err := os.Stat(learningPath); err == nil {
-						files, _ := os.ReadDir(learningPath)
-						if len(files) > 0 {
-							useLearning = true
-						}
-					}
-
-					if sourceParam != "" {
-						log.Printf("DEBUG: Attempting to generate form from source: %s", sourceParam)
-						lowerName := strings.ToLower(sourceParam)
-						candidates := []string{
-							filepath.Join(projectRoot, lowerName, lowerName+".go"),
-							filepath.Join(projectRoot, "cmd", lowerName, lowerName+".go"),
-							filepath.Join(projectRoot, "internal", lowerName, lowerName+".go"),
-							lowerName + ".go",
-						}
-						// Add singular variations if plural
-						var singular string
-						if strings.HasSuffix(lowerName, "s") {
-							singular = strings.TrimSuffix(lowerName, "s")
-							candidates = append(candidates,
-								filepath.Join(projectRoot, singular, singular+".go"),
-								filepath.Join(projectRoot, "cmd", singular, singular+".go"),
-								filepath.Join(projectRoot, "internal", singular, singular+".go"),
-							)
-						}
-						// Add search in subdirectories (depth 1) for project/app/pkg/struct.go style
-						entries, _ := os.ReadDir(projectRoot)
-						for _, entry := range entries {
-							if entry.IsDir() && !strings.HasPrefix(entry.Name(), ".") {
-								candidates = append(candidates, filepath.Join(projectRoot, entry.Name(), lowerName, lowerName+".go"))
-								if singular != "" {
-									candidates = append(candidates, filepath.Join(projectRoot, entry.Name(), lowerName, singular+".go"))
-								}
-								candidates = append(candidates, filepath.Join(projectRoot, entry.Name(), "pkg", lowerName, lowerName+".go"))
-							}
-						}
-
-						var structContent string
-						for _, path := range candidates {
-							if content, err := os.ReadFile(path); err == nil {
-								structContent = string(content)
-								log.Printf("DEBUG: Found struct file at %s", path)
-								break
-							}
-						}
-
-						if structContent != "" {
-							fields := make(map[string]string)
-							lines := strings.Split(structContent, "\n")
-							inStruct := false
-							for _, line := range lines {
-								trimmed := strings.TrimSpace(line)
-								if strings.HasPrefix(trimmed, "type ") && strings.Contains(trimmed, " struct {") {
-									inStruct = true
-									continue
-								}
-								if inStruct {
-									if trimmed == "}" {
-										break
+								parts := strings.Fields(trimmed)
+								if len(parts) >= 2 {
+									fName := parts[0]
+									if fName != "ID" {
+										fields[fName] = parts[1]
 									}
-									parts := strings.Fields(trimmed)
-									if len(parts) >= 2 {
-										fName := parts[0]
-										if fName != "ID" {
-											fields[fName] = parts[1]
+								}
+							}
+						}
+						if len(fields) > 0 {
+							htmlContent = fmt.Sprintf("<h1>Create %s</h1><form method='POST'>", strings.Title(sourceParam))
+							for fName, fType := range fields {
+								inputType := "text"
+								if fType == "int" || fType == "int64" || fType == "float64" {
+									inputType = "number"
+								}
+								htmlContent += fmt.Sprintf("<label>%s</label><input name='%s' type='%s' /><br/>", fName, strings.ToLower(fName), inputType)
+							}
+							htmlContent += "<button>Submit</button></form>"
+						}
+					}
+				}
+
+				if htmlContent == "" && goHandlerContent == "" && useLearning {
+					log.Printf("DEBUG: Learning from files in %s", learningPath)
+					files, _ := os.ReadDir(learningPath)
+					var learnedFiles []string
+					for _, file := range files {
+						if !file.IsDir() {
+							learnedFiles = append(learnedFiles, file.Name())
+							content, err := os.ReadFile(filepath.Join(learningPath, file.Name()))
+							if err == nil {
+								if strings.HasSuffix(file.Name(), ".html") {
+									htmlContent = string(content)
+								} else if strings.HasSuffix(file.Name(), ".go") {
+									fileContent := string(content)
+									lines := strings.Split(fileContent, "\n")
+									capture := false
+									braceCount := 0
+									for _, line := range lines {
+										if goHandlerContent != "" && !capture {
+											break
 										}
-									}
-								}
-							}
-							if len(fields) > 0 {
-								htmlContent = fmt.Sprintf("<h1>Create %s</h1><form method='POST'>", strings.Title(sourceParam))
-								for fName, fType := range fields {
-									inputType := "text"
-									if fType == "int" || fType == "int64" || fType == "float64" {
-										inputType = "number"
-									}
-									htmlContent += fmt.Sprintf("<label>%s</label><input name='%s' type='%s' /><br/>", fName, strings.ToLower(fName), inputType)
-								}
-								htmlContent += "<button>Submit</button></form>"
-							}
-						}
-					}
-
-					if htmlContent == "" && goHandlerContent == "" && useLearning {
-						log.Printf("DEBUG: Learning from files in %s", learningPath)
-						files, _ := os.ReadDir(learningPath)
-						var learnedFiles []string
-						for _, file := range files {
-							if !file.IsDir() {
-								learnedFiles = append(learnedFiles, file.Name())
-								content, err := os.ReadFile(filepath.Join(learningPath, file.Name()))
-								if err == nil {
-									if strings.HasSuffix(file.Name(), ".html") {
-										htmlContent = string(content)
-									} else if strings.HasSuffix(file.Name(), ".go") {
-										fileContent := string(content)
-										lines := strings.Split(fileContent, "\n")
-										capture := false
-										braceCount := 0
-										for _, line := range lines {
-											if goHandlerContent != "" && !capture {
-												break
-											}
-											if strings.HasPrefix(strings.TrimSpace(line), "func ") && strings.Contains(line, "Handler") {
-												capture = true
-												parts := strings.Fields(line)
-												if len(parts) >= 2 {
-													namePart := parts[1]
-													if idx := strings.Index(namePart, "("); idx != -1 {
-														handlerName = namePart[:idx]
-													}
+										if strings.HasPrefix(strings.TrimSpace(line), "func ") && strings.Contains(line, "Handler") {
+											capture = true
+											parts := strings.Fields(line)
+											if len(parts) >= 2 {
+												namePart := parts[1]
+												if idx := strings.Index(namePart, "("); idx != -1 {
+													handlerName = namePart[:idx]
 												}
 											}
-											if capture {
-												goHandlerContent += line + "\n"
-												braceCount += strings.Count(line, "{")
-												braceCount -= strings.Count(line, "}")
-												if braceCount == 0 && strings.Contains(line, "}") {
-													capture = false
-												}
+										}
+										if capture {
+											goHandlerContent += line + "\n"
+											braceCount += strings.Count(line, "{")
+											braceCount -= strings.Count(line, "}")
+											if braceCount == 0 && strings.Contains(line, "}") {
+												capture = false
 											}
 										}
 									}
 								}
 							}
 						}
-						if len(learnedFiles) > 0 {
-							learnedFilesList = strings.Join(learnedFiles, ", ")
-							fmt.Printf("Learning from files: %s\n", learnedFilesList)
-							if htmlContent == "" && goHandlerContent == "" {
-								fmt.Println("Warning: Learning folder found, but no suitable .html or .go handler content was extracted.")
-							}
+					}
+					if len(learnedFiles) > 0 {
+						learnedFilesList = strings.Join(learnedFiles, ", ")
+						fmt.Printf("Learning from files: %s\n", learnedFilesList)
+						if htmlContent == "" && goHandlerContent == "" {
+							fmt.Println("Warning: Learning folder found, but no suitable .html or .go handler content was extracted.")
 						}
-					} else if htmlContent == "" && goHandlerContent == "" && strings.Contains(query, "database") {
-						goHandlerContent = `
+					}
+				} else if htmlContent == "" && goHandlerContent == "" && strings.Contains(query, "database") {
+					goHandlerContent = `
 func FormHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		err := r.ParseForm()
@@ -1880,40 +2329,40 @@ func FormHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 `
-					}
+				}
 
-					targetWebserverPath := ""
-					// 0. Check targetDirectory if specified
-					if targetDirectory != "" {
-						// Check direct path
-						path := filepath.Join(targetDirectory, "main.go")
-						if _, err := os.Stat(path); err == nil {
-							targetWebserverPath = path
-						} else {
-							// Check for cmd/ inside targetDirectory
-							cmdDir := filepath.Join(targetDirectory, "cmd")
-							if _, err := os.Stat(cmdDir); err == nil {
-								entries, _ := os.ReadDir(cmdDir)
-								for _, entry := range entries {
-									if entry.IsDir() {
-										path := filepath.Join(cmdDir, entry.Name(), "main.go")
-										if _, err := os.Stat(path); err == nil {
-											targetWebserverPath = path
-											break
-										}
+				targetWebserverPath := ""
+				// 0. Check targetDirectory if specified
+				if targetDirectory != "" {
+					// Check direct path
+					path := filepath.Join(targetDirectory, "main.go")
+					if _, err := os.Stat(path); err == nil {
+						targetWebserverPath = path
+					} else {
+						// Check for cmd/ inside targetDirectory
+						cmdDir := filepath.Join(targetDirectory, "cmd")
+						if _, err := os.Stat(cmdDir); err == nil {
+							entries, _ := os.ReadDir(cmdDir)
+							for _, entry := range entries {
+								if entry.IsDir() {
+									path := filepath.Join(cmdDir, entry.Name(), "main.go")
+									if _, err := os.Stat(path); err == nil {
+										targetWebserverPath = path
+										break
 									}
 								}
 							}
 						}
 					}
+				}
 
-					// 1. Check current directory for a webserver main.go
-					if targetWebserverPath == "" {
-						if targetDirectory != "" {
-							log.Printf("DEBUG: Webserver not found in target directory '%s'. Falling back to search.", targetDirectory)
-						}
-						log.Println("DEBUG: Checking current directory for main.go")
-						if _, err := os.Stat("main.go"); err == nil {
+				// 1. Check current directory for a webserver main.go
+				if targetWebserverPath == "" {
+					if targetDirectory != "" {
+						log.Printf("DEBUG: Webserver not found in target directory '%s'. Falling back to search.", targetDirectory)
+					}
+					log.Println("DEBUG: Checking current directory for main.go")
+					if _, err := os.Stat("main.go"); err == nil {
 						content, _ := os.ReadFile("main.go")
 						sContent := string(content)
 						// Avoid modifying the assistant itself
@@ -1924,69 +2373,68 @@ func FormHandler(w http.ResponseWriter, r *http.Request) {
 							}
 						}
 					}
-					}
+				}
 
-					// 2. If not found, check cmd/ directory for any webserver
-					if targetWebserverPath == "" {
-						cmdDir := filepath.Join(projectRoot, "cmd")
-						entries, _ := os.ReadDir(cmdDir)
-						for _, entry := range entries {
-							if entry.IsDir() {
-								path := filepath.Join(cmdDir, entry.Name(), "main.go")
-								if _, err := os.Stat(path); err == nil {
-									content, _ := os.ReadFile(path)
-									if strings.Contains(string(content), "http.ListenAndServe") || strings.Contains(string(content), "\"net/http\"") {
-										targetWebserverPath = path
-										break
-									}
+				// 2. If not found, check cmd/ directory for any webserver
+				if targetWebserverPath == "" {
+					cmdDir := filepath.Join(projectRoot, "cmd")
+					entries, _ := os.ReadDir(cmdDir)
+					for _, entry := range entries {
+						if entry.IsDir() {
+							path := filepath.Join(cmdDir, entry.Name(), "main.go")
+							if _, err := os.Stat(path); err == nil {
+								content, _ := os.ReadFile(path)
+								if strings.Contains(string(content), "http.ListenAndServe") || strings.Contains(string(content), "\"net/http\"") {
+									targetWebserverPath = path
+									break
 								}
 							}
 						}
 					}
+				}
 
-					// 3. If still not found, check for nested structures like project/jim/cmd/jim/main.go
-					if targetWebserverPath == "" {
-						entries, _ := os.ReadDir(projectRoot)
-						for _, entry := range entries {
-							log.Printf("DEBUG: Checking project root entry: %s", entry.Name())
-							if entry.IsDir() && entry.Name() != "cmd" && entry.Name() != "bin" && !strings.HasPrefix(entry.Name(), ".") {
-								// Check project/jim/main.go
-								path := filepath.Join(projectRoot, entry.Name(), "main.go")
-								if _, err := os.Stat(path); err == nil {
-									content, _ := os.ReadFile(path)
-									if strings.Contains(string(content), "http.ListenAndServe") || strings.Contains(string(content), "\"net/http\"") {
-										targetWebserverPath = path
-										break
-									}
+				// 3. If still not found, check for nested structures like project/jim/cmd/jim/main.go
+				if targetWebserverPath == "" {
+					entries, _ := os.ReadDir(projectRoot)
+					for _, entry := range entries {
+						log.Printf("DEBUG: Checking project root entry: %s", entry.Name())
+						if entry.IsDir() && entry.Name() != "cmd" && entry.Name() != "bin" && !strings.HasPrefix(entry.Name(), ".") {
+							// Check project/jim/main.go
+							path := filepath.Join(projectRoot, entry.Name(), "main.go")
+							if _, err := os.Stat(path); err == nil {
+								content, _ := os.ReadFile(path)
+								if strings.Contains(string(content), "http.ListenAndServe") || strings.Contains(string(content), "\"net/http\"") {
+									targetWebserverPath = path
+									break
 								}
+							}
 
-								if targetWebserverPath == "" {
-									nestedCmdDir := filepath.Join(projectRoot, entry.Name(), "cmd")
-									if _, err := os.Stat(nestedCmdDir); err == nil {
-										log.Printf("DEBUG: Checking nested cmd dir: %s", nestedCmdDir)
-										// Check project/jim/cmd/main.go
-										path := filepath.Join(nestedCmdDir, "main.go")
-										if _, err := os.Stat(path); err == nil {
-											content, _ := os.ReadFile(path)
-											if strings.Contains(string(content), "http.ListenAndServe") || strings.Contains(string(content), "\"net/http\"") {
-												targetWebserverPath = path
-												break
-											}
+							if targetWebserverPath == "" {
+								nestedCmdDir := filepath.Join(projectRoot, entry.Name(), "cmd")
+								if _, err := os.Stat(nestedCmdDir); err == nil {
+									log.Printf("DEBUG: Checking nested cmd dir: %s", nestedCmdDir)
+									// Check project/jim/cmd/main.go
+									path := filepath.Join(nestedCmdDir, "main.go")
+									if _, err := os.Stat(path); err == nil {
+										content, _ := os.ReadFile(path)
+										if strings.Contains(string(content), "http.ListenAndServe") || strings.Contains(string(content), "\"net/http\"") {
+											targetWebserverPath = path
+											break
 										}
+									}
 
-										// Check project/jim/cmd/*/main.go
-										if targetWebserverPath == "" {
-											nestedEntries, _ := os.ReadDir(nestedCmdDir)
-											for _, nestedEntry := range nestedEntries {
-												if nestedEntry.IsDir() {
-													log.Printf("DEBUG: Checking nested entry in cmd: %s", nestedEntry.Name())
-													path := filepath.Join(nestedCmdDir, nestedEntry.Name(), "main.go")
-													if _, err := os.Stat(path); err == nil {
-														content, _ := os.ReadFile(path)
-														if strings.Contains(string(content), "http.ListenAndServe") || strings.Contains(string(content), "\"net/http\"") {
-															targetWebserverPath = path
-															break
-														}
+									// Check project/jim/cmd/*/main.go
+									if targetWebserverPath == "" {
+										nestedEntries, _ := os.ReadDir(nestedCmdDir)
+										for _, nestedEntry := range nestedEntries {
+											if nestedEntry.IsDir() {
+												log.Printf("DEBUG: Checking nested entry in cmd: %s", nestedEntry.Name())
+												path := filepath.Join(nestedCmdDir, nestedEntry.Name(), "main.go")
+												if _, err := os.Stat(path); err == nil {
+													content, _ := os.ReadFile(path)
+													if strings.Contains(string(content), "http.ListenAndServe") || strings.Contains(string(content), "\"net/http\"") {
+														targetWebserverPath = path
+														break
 													}
 												}
 											}
@@ -1994,410 +2442,412 @@ func FormHandler(w http.ResponseWriter, r *http.Request) {
 									}
 								}
 							}
-							if targetWebserverPath != "" {
-								break
-							}
+						}
+						if targetWebserverPath != "" {
+							break
 						}
 					}
+				}
 
-					// 4. Hard fallback for common structure if still not found
-					if targetWebserverPath == "" {
-						fallback := filepath.Join(projectRoot, "jim", "cmd", "jim", "main.go")
-						if _, err := os.Stat(fallback); err == nil {
-							targetWebserverPath = fallback
-						}
+				// 4. Hard fallback for common structure if still not found
+				if targetWebserverPath == "" {
+					fallback := filepath.Join(projectRoot, "jim", "cmd", "jim", "main.go")
+					if _, err := os.Stat(fallback); err == nil {
+						targetWebserverPath = fallback
 					}
+				}
 
-						if targetWebserverPath == "" {
-							log.Printf("DEBUG: Could not find webserver. targetDirectory='%s', projectRoot='%s'", targetDirectory, projectRoot)
-							predictedSentence = "I couldn't find a target webserver (main.go with net/http) in the current directory or in cmd/."
-						} else {
-								log.Printf("DEBUG: Found target webserver at %s", targetWebserverPath)
-								newHandlerCode := ""
-								if goHandlerContent != "" {
-									newHandlerCode = "\n" + goHandlerContent
-								} else if htmlContent != "" {
-									newHandlerCode = fmt.Sprintf(`
+				if targetWebserverPath == "" {
+					log.Printf("DEBUG: Could not find webserver. targetDirectory='%s', projectRoot='%s'", targetDirectory, projectRoot)
+					predictedSentence = "I couldn't find a target webserver (main.go with net/http) in the current directory or in cmd/."
+				} else {
+					log.Printf("DEBUG: Found target webserver at %s", targetWebserverPath)
+					newHandlerCode := ""
+					if goHandlerContent != "" {
+						newHandlerCode = "\n" + goHandlerContent
+					} else if htmlContent != "" {
+						newHandlerCode = fmt.Sprintf(`
 func FormHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	fmt.Fprint(w, `+"`"+`%s`+"`"+`)
 }
 `, htmlContent)
-								} else {
-									newHandlerCode = `
+					} else {
+						newHandlerCode = `
 func FormHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "<h1>Generated Form</h1><form><input type='text'/><button>Submit</button></form>")
 }
 `
-								}
+					}
 
-								// Try to find module root to create forms/ package
-								absTargetWebserverPath, absErr := filepath.Abs(targetWebserverPath)
-								if absErr != nil {
-									absTargetWebserverPath = targetWebserverPath
-								}
-								webserverDir := filepath.Dir(absTargetWebserverPath)
-								moduleRoot := ""
-								moduleName := ""
-								searchDir := webserverDir
-								for {
-									if _, err := os.Stat(filepath.Join(searchDir, "go.mod")); err == nil {
-										moduleRoot = searchDir
-										modContent, _ := os.ReadFile(filepath.Join(searchDir, "go.mod"))
-										lines := strings.Split(string(modContent), "\n")
-										for _, line := range lines {
-											if strings.HasPrefix(line, "module ") {
-												moduleName = strings.TrimSpace(strings.TrimPrefix(line, "module "))
-												break
-											}
-										}
-										break
-									}
-									parent := filepath.Dir(searchDir)
-									if parent == searchDir {
-										break
-									}
-									searchDir = parent
-								}
-
-								if moduleRoot != "" && moduleName != "" {
-									// Create forms directory
-									formsDir := filepath.Join(moduleRoot, "forms")
-									if err := os.MkdirAll(formsDir, 0755); err != nil {
-										predictedSentence = fmt.Sprintf("Failed to create forms directory: %v", err)
-									} else {
-										formGoPath := filepath.Join(formsDir, "form.go")
-										pkgContent := "package forms\n\nimport (\n\t\"fmt\"\n\t\"net/http\"\n)\n"
-										fullContent := pkgContent + newHandlerCode
-
-										if err := os.WriteFile(formGoPath, []byte(fullContent), 0644); err != nil {
-											predictedSentence = fmt.Sprintf("Failed to write form.go: %v", err)
-										} else {
-											goImports(formGoPath)
-											importPath := moduleName + "/forms"
-											regName := strings.TrimSuffix(handlerName, "Handler")
-											regMsg, err := registerHandlerWithPackage("forms", importPath, regName, "/form", targetWebserverPath)
-
-											verifyMsg := ""
-											if _, err := os.Stat(formsDir); err == nil {
-												if _, err := os.Stat(formGoPath); err == nil {
-													verifyMsg = " Verified forms folder and form.go exist."
-												} else {
-													verifyMsg = " Verified forms folder exists, but form.go is missing."
-												}
-
-												// Verify forms package builds
-												buildCmd := exec.Command("go", "build", ".")
-												buildCmd.Dir = formsDir
-												if out, err := buildCmd.CombinedOutput(); err != nil {
-													log.Printf("DEBUG: Forms package build failed: %s", strings.TrimSpace(string(out)))
-													verifyMsg += fmt.Sprintf(" Warning: forms package failed to build: %s", strings.TrimSpace(string(out)))
-												} else {
-													log.Printf("DEBUG: Forms package built successfully.")
-													verifyMsg += " Verified forms package builds."
-												}
-
-												// Verify main package builds (integration check)
-												mainBuildCmd := exec.Command("go", "build", ".")
-												mainBuildCmd.Dir = webserverDir
-												if out, err := mainBuildCmd.CombinedOutput(); err != nil {
-													log.Printf("DEBUG: Webserver build failed: %s", strings.TrimSpace(string(out)))
-													verifyMsg += fmt.Sprintf(" Warning: Webserver failed to build after update: %s", strings.TrimSpace(string(out)))
-												} else {
-													log.Printf("DEBUG: Webserver built successfully.")
-													verifyMsg += " Verified webserver builds."
-												}
-											} else {
-												verifyMsg = fmt.Sprintf(" Warning: Could not verify forms folder exists: %v", err)
-											}
-
-											if err != nil {
-												predictedSentence = fmt.Sprintf("Created form in %s but failed to register: %v%s", formGoPath, err, verifyMsg)
-											} else {
-												predictedSentence = fmt.Sprintf("Created form in %s. %s%s", formGoPath, regMsg, verifyMsg)
-											}
-										}
-									}
-								} else {
-									// Fallback: Append to main.go if module root not found
-									mainContentBytes, err := os.ReadFile(targetWebserverPath)
-									if err != nil {
-										predictedSentence = fmt.Sprintf("Could not read target main.go: %v", err)
-									} else {
-										mainContent := string(mainContentBytes)
-										if strings.Contains(mainContent, "func "+handlerName) {
-											predictedSentence = fmt.Sprintf("Handler %s already exists in %s.", handlerName, targetWebserverPath)
-										} else {
-											mainContent += newHandlerCode
-											regLine := fmt.Sprintf("\thttp.HandleFunc(\"/form\", %s)", handlerName)
-											if strings.Contains(mainContent, "// HANDLER_REGISTRATIONS_GO_HERE") {
-												lines := strings.Split(mainContent, "\n")
-												for i, line := range lines {
-													if strings.Contains(line, "// HANDLER_REGISTRATIONS_GO_HERE") {
-														indent := line[:strings.Index(line, "// HANDLER_REGISTRATIONS_GO_HERE")]
-														lines[i] = indent + regLine + "\n" + line
-														break
-													}
-												}
-												mainContent = strings.Join(lines, "\n")
-											} else if idx := strings.LastIndex(mainContent, "http.ListenAndServe"); idx != -1 {
-												mainContent = mainContent[:idx] + regLine + "\n\t" + mainContent[idx:]
-											} else if idx := strings.Index(mainContent, "func main() {"); idx != -1 {
-												// Fallback: Insert at the beginning of main function
-												insertionPoint := idx + len("func main() {")
-												mainContent = mainContent[:insertionPoint] + "\n" + regLine + mainContent[insertionPoint:]
-											}
-
-											err = os.WriteFile(targetWebserverPath, []byte(mainContent), 0644)
-											if err != nil {
-												predictedSentence = fmt.Sprintf("Failed to update main.go: %v", err)
-											} else {
-												log.Printf("DEBUG: Successfully wrote form handler to %s", targetWebserverPath)
-												goImports(targetWebserverPath)
-												sourceMsg := "learningfolder"
-												if learnedFilesList != "" {
-													sourceMsg = fmt.Sprintf("files (%s)", learnedFilesList)
-												}
-												predictedSentence = fmt.Sprintf("I have added the form handler to %s based on %s.", targetWebserverPath, sourceMsg)
-
-												// Verify the file content
-												checkContent, err := os.ReadFile(targetWebserverPath)
-												if err == nil && strings.Contains(string(checkContent), "func "+handlerName) {
-													predictedSentence += " I checked the file and confirmed the handler is there."
-												}
-											}
-										}
-									}
+					// Try to find module root to create forms/ package
+					absTargetWebserverPath, absErr := filepath.Abs(targetWebserverPath)
+					if absErr != nil {
+						absTargetWebserverPath = targetWebserverPath
+					}
+					webserverDir := filepath.Dir(absTargetWebserverPath)
+					moduleRoot := ""
+					moduleName := ""
+					searchDir := webserverDir
+					for {
+						if _, err := os.Stat(filepath.Join(searchDir, "go.mod")); err == nil {
+							moduleRoot = searchDir
+							modContent, _ := os.ReadFile(filepath.Join(searchDir, "go.mod"))
+							lines := strings.Split(string(modContent), "\n")
+							for _, line := range lines {
+								if strings.HasPrefix(line, "module ") {
+									moduleName = strings.TrimSpace(strings.TrimPrefix(line, "module "))
+									break
 								}
 							}
-				} else {
-					handled = false
-				}
-			
-			case "run", "start":
-				if strings.Contains(objectType, "webserver") {
-					webserverName := ""
-					for i, token := range taggedData.Tokens {
-						if (strings.ToLower(token) == "webserver" || strings.ToLower(token) == "websever") && i+1 < len(taggedData.Tokens) {
-							webserverName = taggedData.Tokens[i+1]
 							break
 						}
-					}
-					if webserverName == "" {
-						webserverName = fileName
-					}
-
-					if webserverName == "" {
-						predictedSentence = "You need to provide a name for the webserver to run."
-					} else {
-						// Path to the jim webserver's main package
-						jimSourcePath := filepath.Join(projectRoot, "cmd", webserverName)
-
-						// If not found in cmd/, check root or nested structure
-						if _, err := os.Stat(jimSourcePath); os.IsNotExist(err) {
-							altPath := filepath.Join(projectRoot, webserverName)
-							if _, err := os.Stat(altPath); err == nil {
-								// Check nested: project/jill/cmd/jill
-								nestedPath := filepath.Join(altPath, "cmd", webserverName)
-								if _, err := os.Stat(nestedPath); err == nil {
-									jimSourcePath = nestedPath
-								} else {
-									nestedCmd := filepath.Join(altPath, "cmd")
-									if _, err := os.Stat(filepath.Join(nestedCmd, "main.go")); err == nil {
-										jimSourcePath = nestedCmd
-									} else if _, err := os.Stat(filepath.Join(altPath, "main.go")); err == nil {
-										jimSourcePath = altPath
-									}
-								}
-							}
-
-							// If still not found, check current working directory
-							if _, err := os.Stat(jimSourcePath); os.IsNotExist(err) {
-								cwd, _ := os.Getwd()
-								// Check if we are currently IN the webserver directory
-								if strings.EqualFold(filepath.Base(cwd), webserverName) {
-									if _, err := os.Stat(filepath.Join(cwd, "main.go")); err == nil {
-										jimSourcePath = cwd
-									}
-								}
-								if jimSourcePath != cwd {
-									localPath := filepath.Join(cwd, webserverName)
-									if _, err := os.Stat(filepath.Join(localPath, "main.go")); err == nil {
-										jimSourcePath = localPath
-									} else if _, err := os.Stat(filepath.Join(cwd, "cmd", webserverName)); err == nil {
-										jimSourcePath = filepath.Join(cwd, "cmd", webserverName)
-									}
-								}
-							}
+						parent := filepath.Dir(searchDir)
+						if parent == searchDir {
+							break
 						}
+						searchDir = parent
+					}
 
-						log.Printf("DEBUG: Jim Webserver Source Path: %s", jimSourcePath)
-
-						// Check if jimSourcePath exists
-						if _, err := os.Stat(jimSourcePath); err != nil {
-							if os.IsNotExist(err) {
-								predictedSentence = fmt.Sprintf("I couldn't find a webserver named '%s' at path '%s'.", webserverName, jimSourcePath)
-							} else {
-								predictedSentence = fmt.Sprintf("Error checking webserver directory '%s': %v", jimSourcePath, err)
-							}
+					if moduleRoot != "" && moduleName != "" {
+						// Create forms directory
+						formsDir := filepath.Join(moduleRoot, "forms")
+						if err := os.MkdirAll(formsDir, 0755); err != nil {
+							predictedSentence = fmt.Sprintf("Failed to create forms directory: %v", err)
 						} else {
-							// Define the output path for the built executable
-							buildOutputDir := filepath.Join(projectRoot, "bin")
-							if err := os.MkdirAll(buildOutputDir, 0755); err != nil {
-								predictedSentence = fmt.Sprintf("Failed to create build directory %s: %v", buildOutputDir, err)
-								goto endOfRunWebserver
-							}
-							jimExecutablePath := filepath.Join(buildOutputDir, webserverName)
+							formGoPath := filepath.Join(formsDir, "form.go")
+							pkgContent := "package forms\n\nimport (\n\t\"fmt\"\n\t\"net/http\"\n)\n"
+							fullContent := pkgContent + newHandlerCode
 
-							// Build the jim webserver executable
-							log.Printf("DEBUG: Building webserver %s...", webserverName)
-
-							// Add missing sqlite dependency
-							getCmd := exec.Command("go", "get", "modernc.org/sqlite")
-							getCmd.Dir = jimSourcePath
-							getOutput, getErr := getCmd.CombinedOutput()
-							if getErr != nil {
-								predictedSentence = fmt.Sprintf("Failed to get sqlite dependency for webserver %s: %v\nOutput:\n%s", webserverName, getErr, string(getOutput))
-								goto endOfRunWebserver
-							}
-							log.Printf("DEBUG: Successfully got sqlite dependency for webserver %s", webserverName)
-
-							buildCmd := exec.Command("go", "build", "-o", jimExecutablePath, ".")
-							buildCmd.Dir = jimSourcePath // Build from the webserver's source directory
-							buildOutput, buildErr := buildCmd.CombinedOutput()
-							if buildErr != nil {
-								predictedSentence = fmt.Sprintf("Failed to build webserver %s: %v\nBuild Output:\n%s", webserverName, buildErr, string(buildOutput))
-								goto endOfRunWebserver
-							}
-							log.Printf("DEBUG: Webserver %s built successfully to %s", webserverName, jimExecutablePath)
-
-							// Run the built executable
-							runCmd := exec.Command(jimExecutablePath, "-llm") // No "run webserver jim" arguments needed now
-							runCmd.Dir = projectRoot  // Running from project root
-							runCmd.Stdout = os.Stdout // Redirect stdout
-							runCmd.Stderr = os.Stderr // Redirect stderr
-
-							err := runCmd.Start()
-							if err != nil {
-								predictedSentence = fmt.Sprintf("I couldn't run the webserver %s: %v", webserverName, err)
+							if err := os.WriteFile(formGoPath, []byte(fullContent), 0644); err != nil {
+								predictedSentence = fmt.Sprintf("Failed to write form.go: %v", err)
 							} else {
-								pidFile := filepath.Join(buildOutputDir, webserverName+".pid")
-								if err := SavePid(runCmd.Process.Pid, pidFile); err != nil {
-									log.Printf("Failed to save PID file: %v", err)
-								}
-								predictedSentence = fmt.Sprintf("I have started the webserver %s. PID: %d", webserverName, runCmd.Process.Pid)
+								goImports(formGoPath)
+								importPath := moduleName + "/forms"
+								regName := strings.TrimSuffix(handlerName, "Handler")
+								regMsg, err := registerHandlerWithPackage("forms", importPath, regName, "/form", targetWebserverPath)
 
-								// --- Verification step ---
-								log.Printf("DEBUG: Waiting for webserver to start...")
-								time.Sleep(2 * time.Second) // Give the server a moment to start
-
-								resp, err := http.Get("http://localhost:8080/")
-								if err != nil {
-									log.Printf("WARNING: Webserver verification failed: %v", err)
-									predictedSentence += " However, I could not verify that the webserver is running."
-								} else {
-									defer resp.Body.Close()
-									if resp.StatusCode == http.StatusOK {
-										predictedSentence += " And I have verified that the webserver is running."
-
-										// Check /form endpoint
-										respForm, errForm := http.Get("http://localhost:8080/form")
-										if errForm == nil {
-											if respForm.StatusCode == http.StatusOK {
-												predictedSentence += " The /form endpoint is also accessible."
-											}
-											respForm.Body.Close()
-										}
+								verifyMsg := ""
+								if _, err := os.Stat(formsDir); err == nil {
+									if _, err := os.Stat(formGoPath); err == nil {
+										verifyMsg = " Verified forms folder and form.go exist."
 									} else {
-										log.Printf("WARNING: Webserver returned status code %d during verification.", resp.StatusCode)
-										predictedSentence += fmt.Sprintf(" However, the webserver returned status code %d during verification.", resp.StatusCode)
+										verifyMsg = " Verified forms folder exists, but form.go is missing."
+									}
+
+									// Verify forms package builds
+									buildCmd := exec.Command("go", "build", ".")
+									buildCmd.Dir = formsDir
+									if out, err := buildCmd.CombinedOutput(); err != nil {
+										log.Printf("DEBUG: Forms package build failed: %s", strings.TrimSpace(string(out)))
+										verifyMsg += fmt.Sprintf(" Warning: forms package failed to build: %s", strings.TrimSpace(string(out)))
+									} else {
+										log.Printf("DEBUG: Forms package built successfully.")
+										verifyMsg += " Verified forms package builds."
+									}
+
+									// Verify main package builds (integration check)
+									mainBuildCmd := exec.Command("go", "build", ".")
+									mainBuildCmd.Dir = webserverDir
+									if out, err := mainBuildCmd.CombinedOutput(); err != nil {
+										log.Printf("DEBUG: Webserver build failed: %s", strings.TrimSpace(string(out)))
+										verifyMsg += fmt.Sprintf(" Warning: Webserver failed to build after update: %s", strings.TrimSpace(string(out)))
+									} else {
+										log.Printf("DEBUG: Webserver built successfully.")
+										verifyMsg += " Verified webserver builds."
+									}
+								} else {
+									verifyMsg = fmt.Sprintf(" Warning: Could not verify forms folder exists: %v", err)
+								}
+
+								if err != nil {
+									predictedSentence = fmt.Sprintf("Created form in %s but failed to register: %v%s", formGoPath, err, verifyMsg)
+								} else {
+									predictedSentence = fmt.Sprintf("Created form in %s. %s%s", formGoPath, regMsg, verifyMsg)
+								}
+							}
+						}
+					} else {
+						// Fallback: Append to main.go if module root not found
+						mainContentBytes, err := os.ReadFile(targetWebserverPath)
+						if err != nil {
+							predictedSentence = fmt.Sprintf("Could not read target main.go: %v", err)
+						} else {
+							mainContent := string(mainContentBytes)
+							if strings.Contains(mainContent, "func "+handlerName) {
+								predictedSentence = fmt.Sprintf("Handler %s already exists in %s.", handlerName, targetWebserverPath)
+							} else {
+								mainContent += newHandlerCode
+								regLine := fmt.Sprintf("\thttp.HandleFunc(\"/form\", %s)", handlerName)
+								if strings.Contains(mainContent, "// HANDLER_REGISTRATIONS_GO_HERE") {
+									lines := strings.Split(mainContent, "\n")
+									for i, line := range lines {
+										if strings.Contains(line, "// HANDLER_REGISTRATIONS_GO_HERE") {
+											indent := line[:strings.Index(line, "// HANDLER_REGISTRATIONS_GO_HERE")]
+											lines[i] = indent + regLine + "\n" + line
+											break
+										}
+									}
+									mainContent = strings.Join(lines, "\n")
+								} else if idx := strings.LastIndex(mainContent, "http.ListenAndServe"); idx != -1 {
+									mainContent = mainContent[:idx] + regLine + "\n\t" + mainContent[idx:]
+								} else if idx := strings.Index(mainContent, "func main() {"); idx != -1 {
+									// Fallback: Insert at the beginning of main function
+									insertionPoint := idx + len("func main() {")
+									mainContent = mainContent[:insertionPoint] + "\n" + regLine + mainContent[insertionPoint:]
+								}
+
+								err = os.WriteFile(targetWebserverPath, []byte(mainContent), 0644)
+								if err != nil {
+									predictedSentence = fmt.Sprintf("Failed to update main.go: %v", err)
+								} else {
+									log.Printf("DEBUG: Successfully wrote form handler to %s", targetWebserverPath)
+									goImports(targetWebserverPath)
+									sourceMsg := "learningfolder"
+									if learnedFilesList != "" {
+										sourceMsg = fmt.Sprintf("files (%s)", learnedFilesList)
+									}
+									predictedSentence = fmt.Sprintf("I have added the form handler to %s based on %s.", targetWebserverPath, sourceMsg)
+
+									// Verify the file content
+									checkContent, err := os.ReadFile(targetWebserverPath)
+									if err == nil && strings.Contains(string(checkContent), "func "+handlerName) {
+										predictedSentence += " I checked the file and confirmed the handler is there."
 									}
 								}
 							}
 						}
-					endOfRunWebserver: // Label for goto
 					}
-				} else {
-					handled = false
 				}
-			case "update":
-				if strings.Contains(objectType, "form") {
-					learningPath := kb.LearningPath
-					if learningPath == "" {
-						learningPath = filepath.Join(projectRoot, "learningfolder")
+			} else {
+				handled = false
+			}
+
+		case "run", "start":
+			if strings.Contains(objectType, "webserver") {
+				webserverName := ""
+				for i, token := range taggedData.Tokens {
+					if (strings.ToLower(token) == "webserver" || strings.ToLower(token) == "websever") && i+1 < len(taggedData.Tokens) {
+						webserverName = taggedData.Tokens[i+1]
+						break
 					}
-					// Fallback to current directory's learningfolder if project root one doesn't exist
-					if _, err := os.Stat(learningPath); os.IsNotExist(err) {
+				}
+				if webserverName == "" {
+					webserverName = fileName
+				}
+
+				if webserverName == "" {
+					predictedSentence = "You need to provide a name for the webserver to run."
+				} else {
+					// Path to the jim webserver's main package
+					var jimSourcePath string
+
+					// Search for the webserver source directory with prioritization
+					candidates := []string{
+						filepath.Join(projectRoot, webserverName, "cmd", webserverName),
+						filepath.Join(projectRoot, "cmd", webserverName),
+						filepath.Join(projectRoot, webserverName),
+						filepath.Join(projectRoot, webserverName, "cmd"),
+					}
+
+					for _, p := range candidates {
+						if _, err := os.Stat(filepath.Join(p, "main.go")); err == nil {
+							// If we find one with a wasm or template folder, it's a strong candidate
+							if _, errW := os.Stat(filepath.Join(p, "wasm")); errW == nil {
+								jimSourcePath = p
+								break
+							}
+							if _, errT := os.Stat(filepath.Join(p, "template")); errT == nil {
+								jimSourcePath = p
+								break
+							}
+							if jimSourcePath == "" {
+								jimSourcePath = p
+							}
+						}
+					}
+
+					// Fallback to checking the current directory if still not found
+					if jimSourcePath == "" {
 						cwd, _ := os.Getwd()
-						localLearningPath := filepath.Join(cwd, "learningfolder")
-						if _, err := os.Stat(localLearningPath); err == nil {
-							learningPath = localLearningPath
-						}
-					}
-					var htmlContent string
-					var goHandlerContent string
-					handlerName := "FormHandler"
-					var learnedFilesList string
-					useLearning := false
-
-					if _, err := os.Stat(learningPath); err == nil {
-						files, _ := os.ReadDir(learningPath)
-						if len(files) > 0 {
-							useLearning = true
+						if strings.EqualFold(filepath.Base(cwd), webserverName) {
+							if _, err := os.Stat(filepath.Join(cwd, "main.go")); err == nil {
+								jimSourcePath = cwd
+							}
 						}
 					}
 
-					if useLearning {
-						files, _ := os.ReadDir(learningPath)
-						var learnedFiles []string
-						for _, file := range files {
-							if !file.IsDir() {
-								learnedFiles = append(learnedFiles, file.Name())
-								content, err := os.ReadFile(filepath.Join(learningPath, file.Name()))
-								if err == nil {
-									if strings.HasSuffix(file.Name(), ".html") {
-										htmlContent = string(content)
-									} else if strings.HasSuffix(file.Name(), ".go") {
-										fileContent := string(content)
-										lines := strings.Split(fileContent, "\n")
-										capture := false
-										braceCount := 0
-										for _, line := range lines {
-											if goHandlerContent != "" && !capture {
-												break
-											}
-											if strings.HasPrefix(strings.TrimSpace(line), "func ") && strings.Contains(line, "Handler") {
-												capture = true
-												parts := strings.Fields(line)
-												if len(parts) >= 2 {
-													namePart := parts[1]
-													if idx := strings.Index(namePart, "("); idx != -1 {
-														handlerName = namePart[:idx]
-													}
+					log.Printf("DEBUG: Jim Webserver Source Path: %s", jimSourcePath)
+
+					// Check if jimSourcePath exists
+					if _, err := os.Stat(jimSourcePath); err != nil {
+						if os.IsNotExist(err) {
+							predictedSentence = fmt.Sprintf("I couldn't find a webserver named '%s' at path '%s'.", webserverName, jimSourcePath)
+						} else {
+							predictedSentence = fmt.Sprintf("Error checking webserver directory '%s': %v", jimSourcePath, err)
+						}
+					} else {
+						// Define the output path for the built executable
+						buildOutputDir := filepath.Join(projectRoot, "bin")
+						if err := os.MkdirAll(buildOutputDir, 0755); err != nil {
+							predictedSentence = fmt.Sprintf("Failed to create build directory %s: %v", buildOutputDir, err)
+							goto endOfRunWebserver
+						}
+						jimExecutablePath := filepath.Join(buildOutputDir, webserverName)
+
+						// Build the jim webserver executable
+						log.Printf("DEBUG: Building webserver %s...", webserverName)
+
+						// Add missing sqlite dependency
+						getCmd := exec.Command("go", "get", "modernc.org/sqlite")
+						getCmd.Dir = jimSourcePath
+						getOutput, getErr := getCmd.CombinedOutput()
+						if getErr != nil {
+							predictedSentence = fmt.Sprintf("Failed to get sqlite dependency for webserver %s: %v\nOutput:\n%s", webserverName, getErr, string(getOutput))
+							goto endOfRunWebserver
+						}
+						log.Printf("DEBUG: Successfully got sqlite dependency for webserver %s", webserverName)
+
+						buildCmd := exec.Command("go", "build", "-o", jimExecutablePath, ".")
+						buildCmd.Dir = jimSourcePath // Build from the webserver's source directory
+						buildOutput, buildErr := buildCmd.CombinedOutput()
+						if buildErr != nil {
+							predictedSentence = fmt.Sprintf("Failed to build webserver %s: %v\nBuild Output:\n%s", webserverName, buildErr, string(buildOutput))
+							goto endOfRunWebserver
+						}
+						log.Printf("DEBUG: Webserver %s built successfully to %s", webserverName, jimExecutablePath)
+
+						// Build WASM if it exists in the webserver source or project defaults
+						buildWasm(filepath.Join(jimSourcePath, "wasm"))
+						buildWasm(filepath.Join(projectRoot, "learningfolder", "wasm"))
+
+						// Run the built executable
+						runCmd := exec.Command(jimExecutablePath, "-llm") // No "run webserver jim" arguments needed now
+						runCmd.Dir = jimSourcePath                        // Running from webserver source to find local assets
+						runCmd.Stdout = os.Stdout                         // Redirect stdout
+						runCmd.Stderr = os.Stderr                         // Redirect stderr
+
+						err := runCmd.Start()
+						if err != nil {
+							predictedSentence = fmt.Sprintf("I couldn't run the webserver %s: %v", webserverName, err)
+						} else {
+							pidFile := filepath.Join(buildOutputDir, webserverName+".pid")
+							if err := SavePid(runCmd.Process.Pid, pidFile); err != nil {
+								log.Printf("Failed to save PID file: %v", err)
+							}
+							predictedSentence = fmt.Sprintf("I have started the webserver %s. PID: %d", webserverName, runCmd.Process.Pid)
+
+							// --- Verification step ---
+							log.Printf("DEBUG: Waiting for webserver to start...")
+							time.Sleep(2 * time.Second) // Give the server a moment to start
+
+							resp, err := http.Get("http://localhost:8080/")
+							if err != nil {
+								log.Printf("WARNING: Webserver verification failed: %v", err)
+								predictedSentence += " However, I could not verify that the webserver is running."
+							} else {
+								defer resp.Body.Close()
+								if resp.StatusCode == http.StatusOK {
+									predictedSentence += " And I have verified that the webserver is running."
+
+									// Check /form endpoint
+									respForm, errForm := http.Get("http://localhost:8080/form")
+									if errForm == nil {
+										if respForm.StatusCode == http.StatusOK {
+											predictedSentence += " The /form endpoint is also accessible."
+										}
+										respForm.Body.Close()
+									}
+								} else {
+									log.Printf("WARNING: Webserver returned status code %d during verification.", resp.StatusCode)
+									predictedSentence += fmt.Sprintf(" However, the webserver returned status code %d during verification.", resp.StatusCode)
+								}
+							}
+						}
+					}
+				endOfRunWebserver: // Label for goto
+				}
+			} else {
+				handled = false
+			}
+		case "update":
+			if strings.Contains(objectType, "form") {
+				learningPath := kb.LearningPath
+				if learningPath == "" {
+					learningPath = filepath.Join(projectRoot, "learningfolder")
+				}
+				// Fallback to current directory's learningfolder if project root one doesn't exist
+				if _, err := os.Stat(learningPath); os.IsNotExist(err) {
+					cwd, _ := os.Getwd()
+					localLearningPath := filepath.Join(cwd, "learningfolder")
+					if _, err := os.Stat(localLearningPath); err == nil {
+						learningPath = localLearningPath
+					}
+				}
+				var htmlContent string
+				var goHandlerContent string
+				handlerName := "FormHandler"
+				var learnedFilesList string
+				useLearning := false
+
+				if _, err := os.Stat(learningPath); err == nil {
+					files, _ := os.ReadDir(learningPath)
+					if len(files) > 0 {
+						useLearning = true
+					}
+				}
+
+				if useLearning {
+					files, _ := os.ReadDir(learningPath)
+					var learnedFiles []string
+					for _, file := range files {
+						if !file.IsDir() {
+							learnedFiles = append(learnedFiles, file.Name())
+							content, err := os.ReadFile(filepath.Join(learningPath, file.Name()))
+							if err == nil {
+								if strings.HasSuffix(file.Name(), ".html") {
+									htmlContent = string(content)
+								} else if strings.HasSuffix(file.Name(), ".go") {
+									fileContent := string(content)
+									lines := strings.Split(fileContent, "\n")
+									capture := false
+									braceCount := 0
+									for _, line := range lines {
+										if goHandlerContent != "" && !capture {
+											break
+										}
+										if strings.HasPrefix(strings.TrimSpace(line), "func ") && strings.Contains(line, "Handler") {
+											capture = true
+											parts := strings.Fields(line)
+											if len(parts) >= 2 {
+												namePart := parts[1]
+												if idx := strings.Index(namePart, "("); idx != -1 {
+													handlerName = namePart[:idx]
 												}
 											}
-											if capture {
-												goHandlerContent += line + "\n"
-												braceCount += strings.Count(line, "{")
-												braceCount -= strings.Count(line, "}")
-												if braceCount == 0 && strings.Contains(line, "}") {
-													capture = false
-												}
+										}
+										if capture {
+											goHandlerContent += line + "\n"
+											braceCount += strings.Count(line, "{")
+											braceCount -= strings.Count(line, "}")
+											if braceCount == 0 && strings.Contains(line, "}") {
+												capture = false
 											}
 										}
 									}
 								}
 							}
 						}
-						if len(learnedFiles) > 0 {
-							learnedFilesList = strings.Join(learnedFiles, ", ")
-							fmt.Printf("Learning from files: %s\n", learnedFilesList)
-							if htmlContent == "" && goHandlerContent == "" {
-								fmt.Println("Warning: Learning folder found, but no suitable .html or .go handler content was extracted.")
-							}
+					}
+					if len(learnedFiles) > 0 {
+						learnedFilesList = strings.Join(learnedFiles, ", ")
+						fmt.Printf("Learning from files: %s\n", learnedFilesList)
+						if htmlContent == "" && goHandlerContent == "" {
+							fmt.Println("Warning: Learning folder found, but no suitable .html or .go handler content was extracted.")
 						}
-					} else if strings.Contains(query, "database") {
-						goHandlerContent = `
+					}
+				} else if strings.Contains(query, "database") {
+					goHandlerContent = `
 func FormHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		err := r.ParseForm()
@@ -2425,36 +2875,36 @@ func FormHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 `
-					}
+				}
 
-					targetWebserverPath := ""
-					// 0. Check targetDirectory if specified
-					if targetDirectory != "" {
-						// Check direct path
-						path := filepath.Join(targetDirectory, "main.go")
-						if _, err := os.Stat(path); err == nil {
-							targetWebserverPath = path
-						} else {
-							// Check for cmd/ inside targetDirectory
-							cmdDir := filepath.Join(targetDirectory, "cmd")
-							if _, err := os.Stat(cmdDir); err == nil {
-								entries, _ := os.ReadDir(cmdDir)
-								for _, entry := range entries {
-									if entry.IsDir() {
-										path := filepath.Join(cmdDir, entry.Name(), "main.go")
-										if _, err := os.Stat(path); err == nil {
-											targetWebserverPath = path
-											break
-										}
+				targetWebserverPath := ""
+				// 0. Check targetDirectory if specified
+				if targetDirectory != "" {
+					// Check direct path
+					path := filepath.Join(targetDirectory, "main.go")
+					if _, err := os.Stat(path); err == nil {
+						targetWebserverPath = path
+					} else {
+						// Check for cmd/ inside targetDirectory
+						cmdDir := filepath.Join(targetDirectory, "cmd")
+						if _, err := os.Stat(cmdDir); err == nil {
+							entries, _ := os.ReadDir(cmdDir)
+							for _, entry := range entries {
+								if entry.IsDir() {
+									path := filepath.Join(cmdDir, entry.Name(), "main.go")
+									if _, err := os.Stat(path); err == nil {
+										targetWebserverPath = path
+										break
 									}
 								}
 							}
 						}
 					}
+				}
 
-					// 1. Check current directory for a webserver main.go
-					if targetWebserverPath == "" {
-						if _, err := os.Stat("main.go"); err == nil {
+				// 1. Check current directory for a webserver main.go
+				if targetWebserverPath == "" {
+					if _, err := os.Stat("main.go"); err == nil {
 						content, _ := os.ReadFile("main.go")
 						sContent := string(content)
 						// Avoid modifying the assistant itself
@@ -2464,66 +2914,65 @@ func FormHandler(w http.ResponseWriter, r *http.Request) {
 							}
 						}
 					}
-					}
+				}
 
-					// 2. If not found, check cmd/ directory for any webserver
-					if targetWebserverPath == "" {
-						cmdDir := filepath.Join(projectRoot, "cmd")
-						entries, _ := os.ReadDir(cmdDir)
-						for _, entry := range entries {
-							if entry.IsDir() {
-								path := filepath.Join(cmdDir, entry.Name(), "main.go")
-								if _, err := os.Stat(path); err == nil {
-									content, _ := os.ReadFile(path)
-									if strings.Contains(string(content), "http.ListenAndServe") || strings.Contains(string(content), "\"net/http\"") {
-										targetWebserverPath = path
-										break
-									}
+				// 2. If not found, check cmd/ directory for any webserver
+				if targetWebserverPath == "" {
+					cmdDir := filepath.Join(projectRoot, "cmd")
+					entries, _ := os.ReadDir(cmdDir)
+					for _, entry := range entries {
+						if entry.IsDir() {
+							path := filepath.Join(cmdDir, entry.Name(), "main.go")
+							if _, err := os.Stat(path); err == nil {
+								content, _ := os.ReadFile(path)
+								if strings.Contains(string(content), "http.ListenAndServe") || strings.Contains(string(content), "\"net/http\"") {
+									targetWebserverPath = path
+									break
 								}
 							}
 						}
 					}
+				}
 
-					// 3. If still not found, check for nested structures like project/jim/cmd/jim/main.go
-					if targetWebserverPath == "" {
-						entries, _ := os.ReadDir(projectRoot)
-						for _, entry := range entries {
-							if entry.IsDir() && entry.Name() != "cmd" && entry.Name() != "bin" && !strings.HasPrefix(entry.Name(), ".") {
-								// Check project/jim/main.go
-								path := filepath.Join(projectRoot, entry.Name(), "main.go")
-								if _, err := os.Stat(path); err == nil {
-									content, _ := os.ReadFile(path)
-									if strings.Contains(string(content), "http.ListenAndServe") || strings.Contains(string(content), "\"net/http\"") {
-										targetWebserverPath = path
-										break
-									}
+				// 3. If still not found, check for nested structures like project/jim/cmd/jim/main.go
+				if targetWebserverPath == "" {
+					entries, _ := os.ReadDir(projectRoot)
+					for _, entry := range entries {
+						if entry.IsDir() && entry.Name() != "cmd" && entry.Name() != "bin" && !strings.HasPrefix(entry.Name(), ".") {
+							// Check project/jim/main.go
+							path := filepath.Join(projectRoot, entry.Name(), "main.go")
+							if _, err := os.Stat(path); err == nil {
+								content, _ := os.ReadFile(path)
+								if strings.Contains(string(content), "http.ListenAndServe") || strings.Contains(string(content), "\"net/http\"") {
+									targetWebserverPath = path
+									break
 								}
+							}
 
-								if targetWebserverPath == "" {
-									nestedCmdDir := filepath.Join(projectRoot, entry.Name(), "cmd")
-									if _, err := os.Stat(nestedCmdDir); err == nil {
-										// Check project/jim/cmd/main.go
-										path := filepath.Join(nestedCmdDir, "main.go")
-										if _, err := os.Stat(path); err == nil {
-											content, _ := os.ReadFile(path)
-											if strings.Contains(string(content), "http.ListenAndServe") || strings.Contains(string(content), "\"net/http\"") {
-												targetWebserverPath = path
-												break
-											}
+							if targetWebserverPath == "" {
+								nestedCmdDir := filepath.Join(projectRoot, entry.Name(), "cmd")
+								if _, err := os.Stat(nestedCmdDir); err == nil {
+									// Check project/jim/cmd/main.go
+									path := filepath.Join(nestedCmdDir, "main.go")
+									if _, err := os.Stat(path); err == nil {
+										content, _ := os.ReadFile(path)
+										if strings.Contains(string(content), "http.ListenAndServe") || strings.Contains(string(content), "\"net/http\"") {
+											targetWebserverPath = path
+											break
 										}
+									}
 
-										// Check project/jim/cmd/*/main.go
-										if targetWebserverPath == "" {
-											nestedEntries, _ := os.ReadDir(nestedCmdDir)
-											for _, nestedEntry := range nestedEntries {
-												if nestedEntry.IsDir() {
-													path := filepath.Join(nestedCmdDir, nestedEntry.Name(), "main.go")
-													if _, err := os.Stat(path); err == nil {
-														content, _ := os.ReadFile(path)
-														if strings.Contains(string(content), "http.ListenAndServe") || strings.Contains(string(content), "\"net/http\"") {
-															targetWebserverPath = path
-															break
-														}
+									// Check project/jim/cmd/*/main.go
+									if targetWebserverPath == "" {
+										nestedEntries, _ := os.ReadDir(nestedCmdDir)
+										for _, nestedEntry := range nestedEntries {
+											if nestedEntry.IsDir() {
+												path := filepath.Join(nestedCmdDir, nestedEntry.Name(), "main.go")
+												if _, err := os.Stat(path); err == nil {
+													content, _ := os.ReadFile(path)
+													if strings.Contains(string(content), "http.ListenAndServe") || strings.Contains(string(content), "\"net/http\"") {
+														targetWebserverPath = path
+														break
 													}
 												}
 											}
@@ -2531,339 +2980,340 @@ func FormHandler(w http.ResponseWriter, r *http.Request) {
 									}
 								}
 							}
-							if targetWebserverPath != "" {
-								break
-							}
+						}
+						if targetWebserverPath != "" {
+							break
 						}
 					}
+				}
 
-					if targetWebserverPath == "" {
-						predictedSentence = "I couldn't find a target webserver (main.go) in the current directory or in cmd/."
-					} else {
-								newHandlerCode := ""
-								if goHandlerContent != "" {
-									newHandlerCode = "\n" + goHandlerContent
-								} else if htmlContent != "" {
-									newHandlerCode = fmt.Sprintf(`
+				if targetWebserverPath == "" {
+					predictedSentence = "I couldn't find a target webserver (main.go) in the current directory or in cmd/."
+				} else {
+					newHandlerCode := ""
+					if goHandlerContent != "" {
+						newHandlerCode = "\n" + goHandlerContent
+					} else if htmlContent != "" {
+						newHandlerCode = fmt.Sprintf(`
 func FormHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	fmt.Fprint(w, `+"`"+`%s`+"`"+`)
 }
 `, htmlContent)
-								} else {
-									newHandlerCode = `
+					} else {
+						newHandlerCode = `
 func FormHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "<h1>Generated Form</h1><form><input type='text'/><button>Submit</button></form>")
 }
 `
-								}
-
-								mainContentBytes, err := os.ReadFile(targetWebserverPath)
-								if err != nil {
-									predictedSentence = fmt.Sprintf("Could not read target main.go: %v", err)
-								} else {
-									mainContent := string(mainContentBytes)
-									funcStart := "func " + handlerName
-									startIdx := strings.Index(mainContent, funcStart)
-
-									if startIdx != -1 {
-										braceCount := 0
-										endIdx := -1
-										started := false
-										for i := startIdx; i < len(mainContent); i++ {
-											if mainContent[i] == '{' {
-												braceCount++
-												started = true
-											} else if mainContent[i] == '}' {
-												braceCount--
-											}
-											if started && braceCount == 0 {
-												endIdx = i + 1
-												break
-											}
-										}
-
-										if endIdx != -1 {
-											mainContent = mainContent[:startIdx] + strings.TrimSpace(newHandlerCode) + mainContent[endIdx:]
-											sourceMsg := "learningfolder"
-											if learnedFilesList != "" {
-												sourceMsg = fmt.Sprintf("files (%s)", learnedFilesList)
-											}
-											predictedSentence = fmt.Sprintf("I have updated the handler %s in %s based on %s.", handlerName, targetWebserverPath, sourceMsg)
-										} else {
-											predictedSentence = fmt.Sprintf("Could not parse existing handler %s in %s to update it.", handlerName, targetWebserverPath)
-										}
-									} else {
-										mainContent += newHandlerCode
-										regLine := fmt.Sprintf("\thttp.HandleFunc(\"/form\", %s)", handlerName)
-										if strings.Contains(mainContent, "// HANDLER_REGISTRATIONS_GO_HERE") {
-											mainContent = strings.Replace(mainContent, "// HANDLER_REGISTRATIONS_GO_HERE", regLine+"\n\t// HANDLER_REGISTRATIONS_GO_HERE", 1)
-										} else if idx := strings.LastIndex(mainContent, "http.ListenAndServe"); idx != -1 {
-											mainContent = mainContent[:idx] + regLine + "\n\t" + mainContent[idx:]
-										} else if idx := strings.Index(mainContent, "func main() {"); idx != -1 {
-											// Fallback: Insert at the beginning of main function
-											insertionPoint := idx + len("func main() {")
-											mainContent = mainContent[:insertionPoint] + "\n" + regLine + mainContent[insertionPoint:]
-										}
-										predictedSentence = fmt.Sprintf("Handler %s did not exist, so I added it to %s.", handlerName, targetWebserverPath)
-									}
-
-									err = os.WriteFile(targetWebserverPath, []byte(mainContent), 0644)
-									if err != nil {
-										predictedSentence = fmt.Sprintf("Failed to update main.go: %v", err)
-									} else {
-										goImports(targetWebserverPath)
-									}
-								}
-							}
-				} else {
-					handled = false
-				}
-			case "stop":
-				if strings.Contains(objectType, "webserver") {
-					webserverName := ""
-					for i, token := range taggedData.Tokens {
-						if strings.ToLower(token) == "webserver" && i+1 < len(taggedData.Tokens) {
-							webserverName = taggedData.Tokens[i+1]
-							break
-						}
-					}
-					if webserverName == "" {
-						webserverName = fileName
 					}
 
-					if webserverName == "" {
-						predictedSentence = "You need to provide a name for the webserver to stop."
-					} else {
-						buildOutputDir := filepath.Join(projectRoot, "bin")
-						pidFile := filepath.Join(buildOutputDir, webserverName+".pid")
-						err := StopWebserver(pidFile)
-						if err != nil {
-							predictedSentence = fmt.Sprintf("Failed to stop webserver %s: %v", webserverName, err)
-						} else {
-							predictedSentence = fmt.Sprintf("Stopped webserver %s.", webserverName)
-						}
-					}
-				} else {
-					handled = false
-				}
-			case "delete":
-				if objectType == "data structure" {
-					queryParts := strings.Fields(query)
-					structName := ""
-					for i, part := range queryParts {
-						if part == "structure" && i+1 < len(queryParts) {
-							if strings.ToLower(queryParts[i+1]) == "named" && i+2 < len(queryParts) {
-								structName = strings.Title(queryParts[i+2])
-							} else {
-								structName = strings.Title(queryParts[i+1])
-							}
-							break
-						}
-					}
-
-					if structName == "" {
-						predictedSentence = "You need to provide the name of the data structure to delete."
-					} else {
-						var fieldToDelete string
-						for i, part := range queryParts {
-							if part == "field" && i+1 < len(queryParts) {
-								fieldToDelete = queryParts[i+1]
-								break
-							}
-						}
-
-						if fieldToDelete != "" {
-							lowercaseName := strings.ToLower(structName)
-							dirName := lowercaseName
-							structFileName := filepath.Join(dirName, lowercaseName+".go")
-
-							content, err := os.ReadFile(structFileName)
-							if err != nil {
-								predictedSentence = fmt.Sprintf("Could not read file %s: %v", structFileName, err)
-							} else {
-								fields := make(map[string]string)
-								lines := strings.Split(string(content), "\n")
-								inStruct := false
-								for _, line := range lines {
-									trimmed := strings.TrimSpace(line)
-									if strings.HasPrefix(trimmed, fmt.Sprintf("type %s struct {", structName)) {
-										inStruct = true
-										continue
-									}
-									if inStruct {
-										if trimmed == "}" {
-											break
-										}
-										parts := strings.Fields(trimmed)
-										if len(parts) >= 2 {
-											fName := parts[0]
-											if fName == "ID" {
-												continue
-											}
-											fType := parts[1]
-											fields[strings.ToLower(fName)] = fType
-										}
-									}
-								}
-
-								if _, exists := fields[strings.ToLower(fieldToDelete)]; exists {
-									// Field exists, proceed with deletion.
-									delete(fields, strings.ToLower(fieldToDelete))
-
-									// 1. Update the database table
-									dbFileName := filepath.Join(dirName, lowercaseName+".db")
-									tableName := lowercaseName
-									err = deleteColumnFromTable(dbFileName, tableName, fieldToDelete, fields)
-									if err != nil {
-										predictedSentence = fmt.Sprintf("I failed to delete column '%s' from database table '%s': %v. The Go struct was not modified.", fieldToDelete, tableName, err)
-									} else {
-										// 2. Update the Go source file
-										newContent := generateDataStructurePackageContent(structName, fields)
-										err = os.WriteFile(structFileName, []byte(newContent), 0644)
-										if err != nil {
-											predictedSentence = fmt.Sprintf("I updated the database, but failed to update the Go file %s: %v. Please check for inconsistencies.", structFileName, err)
-										} else {
-											goImports(structFileName)
-											predictedSentence = fmt.Sprintf("I have deleted the field '%s' from data structure '%s' and updated the database.", fieldToDelete, structName)
-										}
-									}
-								} else {
-									predictedSentence = fmt.Sprintf("Field '%s' not found in data structure '%s'.", fieldToDelete, structName)
-								}
-							}
-						} else {
-							lowercaseName := strings.ToLower(structName)
-							dirName := lowercaseName
-
-							// Remove the directory
-							err := os.RemoveAll(dirName)
-							if err != nil {
-								predictedSentence = fmt.Sprintf("I couldn't delete the directory %s: %v", dirName, err)
-							} else {
-								predictedSentence = fmt.Sprintf("I have deleted the data structure '%s' (directory '%s').", structName, dirName)
-
-								// Remove handlers from main.go
-								mainGoPath := "main.go"
-								contentBytes, err := os.ReadFile(mainGoPath)
-								if err != nil {
-									predictedSentence += fmt.Sprintf(" However, I couldn't read %s to remove handlers: %v", mainGoPath, err)
-								} else {
-									lines := strings.Split(string(contentBytes), "\n")
-									var newLines []string
-									urlsToRemove := []string{
-										fmt.Sprintf("\"/show/%s/\"", lowercaseName),
-										fmt.Sprintf("\"/update/%s/\"", lowercaseName),
-										fmt.Sprintf("\"/delete/%s/\"", lowercaseName),
-									}
-
-									importSuffix := fmt.Sprintf("/%s\"", lowercaseName)
-									handlersRemoved := 0
-									importsRemoved := 0
-									for _, line := range lines {
-										keep := true
-										for _, url := range urlsToRemove {
-											if strings.Contains(line, url) {
-												keep = false
-												handlersRemoved++
-												break
-											}
-										}
-										if keep {
-											if strings.Contains(line, importSuffix) {
-												keep = false
-												importsRemoved++
-											}
-										}
-										if keep {
-											newLines = append(newLines, line)
-										}
-									}
-
-									if handlersRemoved > 0 || importsRemoved > 0 {
-										err = os.WriteFile(mainGoPath, []byte(strings.Join(newLines, "\n")), 0644)
-										if err != nil {
-											predictedSentence += fmt.Sprintf(" But I failed to update %s: %v", mainGoPath, err)
-										} else {
-											goImports(mainGoPath) // This will remove the unused import
-											predictedSentence += fmt.Sprintf(" And removed %d handler registration(s) and %d import(s) from %s.", handlersRemoved, importsRemoved, mainGoPath)
-										}
-									} else {
-										predictedSentence += " I didn't find any handler registrations to remove in main.go."
-									}
-								}
-							}
-						}
-					}
-				} else if contains(objectTypeParts, "folder") || contains(objectTypeParts, "directory") {
-					folderName := findName(taggedData)
-					if folderName != "" {
-						err := os.RemoveAll(folderName)
-						if err != nil {
-							predictedSentence = fmt.Sprintf("I couldn't delete the folder %s: %v", folderName, err)
-						} else {
-							predictedSentence = fmt.Sprintf("I have deleted the folder %s.", folderName)
-						}
-					} else {
-						predictedSentence = "You need to provide a name for the folder."
-					}
-				} else if contains(objectTypeParts, "file") {
-					if fileName != "" {
-						err := os.Remove(fileName)
-						if err != nil {
-							predictedSentence = fmt.Sprintf("I couldn't delete the file %s: %v", fileName, err)
-						} else {
-							predictedSentence = fmt.Sprintf("I have deleted the file %s.", fileName)
-						}
-					} else {
-						predictedSentence = "You need to provide a name for the file."
-					}
-				} else {
-					handled = false
-				}
-			case "verify":
-				if strings.Contains(objectType, "form") {
-					targetPath := "main.go"
-					if targetDirectory != "" {
-						// Try to find main.go in target directory or subdirectories
-						possiblePath := filepath.Join(targetDirectory, "main.go")
-						if _, err := os.Stat(possiblePath); err == nil {
-							targetPath = possiblePath
-						} else {
-							// Check cmd/ inside targetDirectory
-							cmdDir := filepath.Join(targetDirectory, "cmd")
-							if _, err := os.Stat(cmdDir); err == nil {
-								entries, _ := os.ReadDir(cmdDir)
-								for _, entry := range entries {
-									if entry.IsDir() {
-										path := filepath.Join(cmdDir, entry.Name(), "main.go")
-										if _, err := os.Stat(path); err == nil {
-											targetPath = path
-											break
-										}
-									}
-								}
-							}
-						}
-					}
-
-					content, err := os.ReadFile(targetPath)
+					mainContentBytes, err := os.ReadFile(targetWebserverPath)
 					if err != nil {
-						predictedSentence = fmt.Sprintf("I couldn't read %s to verify the form. Please ensure you are in the correct directory or specify one with 'in <folder>'.", targetPath)
+						predictedSentence = fmt.Sprintf("Could not read target main.go: %v", err)
 					} else {
-						sContent := string(content)
-						foundHandler := strings.Contains(sContent, "func FormHandler")
-						foundReg := strings.Contains(sContent, "\"/form\"")
+						mainContent := string(mainContentBytes)
+						funcStart := "func " + handlerName
+						startIdx := strings.Index(mainContent, funcStart)
 
-						if foundHandler && foundReg {
-							predictedSentence = fmt.Sprintf("Verification Successful: Found 'FormHandler' and '/form' registration in %s.", targetPath)
-						} else if foundHandler {
-							predictedSentence = fmt.Sprintf("Partial Verification: Found 'FormHandler' in %s, but could not find the '/form' registration.", targetPath)
+						if startIdx != -1 {
+							braceCount := 0
+							endIdx := -1
+							started := false
+							for i := startIdx; i < len(mainContent); i++ {
+								if mainContent[i] == '{' {
+									braceCount++
+									started = true
+								} else if mainContent[i] == '}' {
+									braceCount--
+								}
+								if started && braceCount == 0 {
+									endIdx = i + 1
+									break
+								}
+							}
+
+							if endIdx != -1 {
+								mainContent = mainContent[:startIdx] + strings.TrimSpace(newHandlerCode) + mainContent[endIdx:]
+								sourceMsg := "learningfolder"
+								if learnedFilesList != "" {
+									sourceMsg = fmt.Sprintf("files (%s)", learnedFilesList)
+								}
+								predictedSentence = fmt.Sprintf("I have updated the handler %s in %s based on %s.", handlerName, targetWebserverPath, sourceMsg)
+							} else {
+								predictedSentence = fmt.Sprintf("Could not parse existing handler %s in %s to update it.", handlerName, targetWebserverPath)
+							}
 						} else {
-							predictedSentence = fmt.Sprintf("Verification Failed: Could not find 'FormHandler' in %s.", targetPath)
+							mainContent += newHandlerCode
+							regLine := fmt.Sprintf("\thttp.HandleFunc(\"/form\", %s)", handlerName)
+							if strings.Contains(mainContent, "// HANDLER_REGISTRATIONS_GO_HERE") {
+								mainContent = strings.Replace(mainContent, "// HANDLER_REGISTRATIONS_GO_HERE", regLine+"\n\t// HANDLER_REGISTRATIONS_GO_HERE", 1)
+							} else if idx := strings.LastIndex(mainContent, "http.ListenAndServe"); idx != -1 {
+								mainContent = mainContent[:idx] + regLine + "\n\t" + mainContent[idx:]
+							} else if idx := strings.Index(mainContent, "func main() {"); idx != -1 {
+								// Fallback: Insert at the beginning of main function
+								insertionPoint := idx + len("func main() {")
+								mainContent = mainContent[:insertionPoint] + "\n" + regLine + mainContent[insertionPoint:]
+							}
+							predictedSentence = fmt.Sprintf("Handler %s did not exist, so I added it to %s.", handlerName, targetWebserverPath)
+						}
+
+						err = os.WriteFile(targetWebserverPath, []byte(mainContent), 0644)
+						if err != nil {
+							predictedSentence = fmt.Sprintf("Failed to update main.go: %v", err)
+						} else {
+							goImports(targetWebserverPath)
 						}
 					}
+				}
+			} else {
+				handled = false
+			}
+		case "stop":
+			if strings.Contains(objectType, "webserver") {
+				webserverName := ""
+				for i, token := range taggedData.Tokens {
+					if strings.ToLower(token) == "webserver" && i+1 < len(taggedData.Tokens) {
+						webserverName = taggedData.Tokens[i+1]
+						break
+					}
+				}
+				if webserverName == "" {
+					webserverName = fileName
+				}
+
+				if webserverName == "" {
+					predictedSentence = "You need to provide a name for the webserver to stop."
 				} else {
+					buildOutputDir := filepath.Join(projectRoot, "bin")
+					pidFile := filepath.Join(buildOutputDir, webserverName+".pid")
+					err := StopWebserver(pidFile)
+					if err != nil {
+						predictedSentence = fmt.Sprintf("Failed to stop webserver %s: %v", webserverName, err)
+					} else {
+						predictedSentence = fmt.Sprintf("Stopped webserver %s.", webserverName)
+					}
+				}
+			} else {
+				handled = false
+			}
+		case "delete":
+			if objectType == "data structure" {
+				queryParts := strings.Fields(query)
+				structName := ""
+				for i, part := range queryParts {
+					if part == "structure" && i+1 < len(queryParts) {
+						if strings.ToLower(queryParts[i+1]) == "named" && i+2 < len(queryParts) {
+							structName = strings.Title(queryParts[i+2])
+						} else {
+							structName = strings.Title(queryParts[i+1])
+						}
+						break
+					}
+				}
+
+				if structName == "" {
+					predictedSentence = "You need to provide the name of the data structure to delete."
+				} else {
+					var fieldToDelete string
+					for i, part := range queryParts {
+						if part == "field" && i+1 < len(queryParts) {
+							fieldToDelete = queryParts[i+1]
+							break
+						}
+					}
+
+					if fieldToDelete != "" {
+						lowercaseName := strings.ToLower(structName)
+						dirName := lowercaseName
+						structFileName := filepath.Join(dirName, lowercaseName+".go")
+
+						content, err := os.ReadFile(structFileName)
+						if err != nil {
+							predictedSentence = fmt.Sprintf("Could not read file %s: %v", structFileName, err)
+						} else {
+							fields := make(map[string]string)
+							lines := strings.Split(string(content), "\n")
+							inStruct := false
+							for _, line := range lines {
+								trimmed := strings.TrimSpace(line)
+								if strings.HasPrefix(trimmed, fmt.Sprintf("type %s struct {", structName)) {
+									inStruct = true
+									continue
+								}
+								if inStruct {
+									if trimmed == "}" {
+										break
+									}
+									parts := strings.Fields(trimmed)
+									if len(parts) >= 2 {
+										fName := parts[0]
+										if fName == "ID" {
+											continue
+										}
+										fType := parts[1]
+										fields[strings.ToLower(fName)] = fType
+									}
+								}
+							}
+
+							if _, exists := fields[strings.ToLower(fieldToDelete)]; exists {
+								// Field exists, proceed with deletion.
+								delete(fields, strings.ToLower(fieldToDelete))
+
+								// 1. Update the database table
+								dbFileName := filepath.Join(dirName, lowercaseName+".db")
+								tableName := lowercaseName
+								err = deleteColumnFromTable(dbFileName, tableName, fieldToDelete, fields)
+								if err != nil {
+									predictedSentence = fmt.Sprintf("I failed to delete column '%s' from database table '%s': %v. The Go struct was not modified.", fieldToDelete, tableName, err)
+								} else {
+									// 2. Update the Go source file
+									newContent := generateDataStructurePackageContent(structName, fields)
+									err = os.WriteFile(structFileName, []byte(newContent), 0644)
+									if err != nil {
+										predictedSentence = fmt.Sprintf("I updated the database, but failed to update the Go file %s: %v. Please check for inconsistencies.", structFileName, err)
+									} else {
+										goImports(structFileName)
+										predictedSentence = fmt.Sprintf("I have deleted the field '%s' from data structure '%s' and updated the database.", fieldToDelete, structName)
+									}
+								}
+							} else {
+								predictedSentence = fmt.Sprintf("Field '%s' not found in data structure '%s'.", fieldToDelete, structName)
+							}
+						}
+					} else {
+						lowercaseName := strings.ToLower(structName)
+						dirName := lowercaseName
+
+						// Remove the directory
+						err := os.RemoveAll(dirName)
+						if err != nil {
+							predictedSentence = fmt.Sprintf("I couldn't delete the directory %s: %v", dirName, err)
+						} else {
+							predictedSentence = fmt.Sprintf("I have deleted the data structure '%s' (directory '%s').", structName, dirName)
+
+							// Remove handlers from main.go
+							mainGoPath := "main.go"
+							contentBytes, err := os.ReadFile(mainGoPath)
+							if err != nil {
+								predictedSentence += fmt.Sprintf(" However, I couldn't read %s to remove handlers: %v", mainGoPath, err)
+							} else {
+								lines := strings.Split(string(contentBytes), "\n")
+								var newLines []string
+								urlsToRemove := []string{
+									fmt.Sprintf("\"/show/%s/\"", lowercaseName),
+									fmt.Sprintf("\"/update/%s/\"", lowercaseName),
+									fmt.Sprintf("\"/delete/%s/\"", lowercaseName),
+								}
+
+								importSuffix := fmt.Sprintf("/%s\"", lowercaseName)
+								handlersRemoved := 0
+								importsRemoved := 0
+								for _, line := range lines {
+									keep := true
+									for _, url := range urlsToRemove {
+										if strings.Contains(line, url) {
+											keep = false
+											handlersRemoved++
+											break
+										}
+									}
+									if keep {
+										if strings.Contains(line, importSuffix) {
+											keep = false
+											importsRemoved++
+										}
+									}
+									if keep {
+										newLines = append(newLines, line)
+									}
+								}
+
+								if handlersRemoved > 0 || importsRemoved > 0 {
+									err = os.WriteFile(mainGoPath, []byte(strings.Join(newLines, "\n")), 0644)
+									if err != nil {
+										predictedSentence += fmt.Sprintf(" But I failed to update %s: %v", mainGoPath, err)
+									} else {
+										goImports(mainGoPath) // This will remove the unused import
+										predictedSentence += fmt.Sprintf(" And removed %d handler registration(s) and %d import(s) from %s.", handlersRemoved, importsRemoved, mainGoPath)
+									}
+								} else {
+									predictedSentence += " I didn't find any handler registrations to remove in main.go."
+								}
+							}
+						}
+					}
+				}
+			} else if contains(objectTypeParts, "folder") || contains(objectTypeParts, "directory") {
+				folderName := findName(taggedData)
+				if folderName != "" {
+					err := os.RemoveAll(folderName)
+					if err != nil {
+						predictedSentence = fmt.Sprintf("I couldn't delete the folder %s: %v", folderName, err)
+					} else {
+						predictedSentence = fmt.Sprintf("I have deleted the folder %s.", folderName)
+					}
+				} else {
+					predictedSentence = "You need to provide a name for the folder."
+				}
+			} else if contains(objectTypeParts, "file") {
+				if fileName != "" {
+					err := os.Remove(fileName)
+					if err != nil {
+						predictedSentence = fmt.Sprintf("I couldn't delete the file %s: %v", fileName, err)
+					} else {
+						predictedSentence = fmt.Sprintf("I have deleted the file %s.", fileName)
+					}
+				} else {
+					predictedSentence = "You need to provide a name for the file."
+				}
+			} else {
+				handled = false
+			}
+		case "verify":
+			if strings.Contains(objectType, "form") {
+				targetPath := "main.go"
+				if targetDirectory != "" {
+					// Try to find main.go in target directory or subdirectories
+					possiblePath := filepath.Join(targetDirectory, "main.go")
+					if _, err := os.Stat(possiblePath); err == nil {
+						targetPath = possiblePath
+					} else {
+						// Check cmd/ inside targetDirectory
+						cmdDir := filepath.Join(targetDirectory, "cmd")
+						if _, err := os.Stat(cmdDir); err == nil {
+							entries, _ := os.ReadDir(cmdDir)
+							for _, entry := range entries {
+								if entry.IsDir() {
+									path := filepath.Join(cmdDir, entry.Name(), "main.go")
+									if _, err := os.Stat(path); err == nil {
+										targetPath = path
+										break
+									}
+								}
+							}
+						}
+					}
+				}
+
+				content, err := os.ReadFile(targetPath)
+				if err != nil {
+					predictedSentence = fmt.Sprintf("I couldn't read %s to verify the form. Please ensure you are in the correct directory or specify one with 'in <folder>'.", targetPath)
+				} else {
+					sContent := string(content)
+					foundHandler := strings.Contains(sContent, "func FormHandler")
+					foundReg := strings.Contains(sContent, "\"/form\"")
+
+					if foundHandler && foundReg {
+						predictedSentence = fmt.Sprintf("Verification Successful: Found 'FormHandler' and '/form' registration in %s.", targetPath)
+					} else if foundHandler {
+						predictedSentence = fmt.Sprintf("Partial Verification: Found 'FormHandler' in %s, but could not find the '/form' registration.", targetPath)
+					} else {
+						predictedSentence = fmt.Sprintf("Verification Failed: Could not find 'FormHandler' in %s.", targetPath)
+					}
+				}
+			} else {
 				port := "8080" // Default port
 				baseURL := fmt.Sprintf("http://localhost:%s", port)
 
@@ -2899,73 +3349,72 @@ func FormHandler(w http.ResponseWriter, r *http.Request) {
 						predictedSentence += fmt.Sprintf(" However, I couldn't connect to the form endpoint at %s: %v", formURL, errForm)
 					}
 				}
-				}
-			case "cat", "read":
-				targetFile := fileName
-				if targetFile == "" {
-					// Fallback: try to find a token with a dot
-					for _, token := range taggedData.Tokens {
-						if strings.Contains(token, ".") {
-							targetFile = token
-							break
-						}
+			}
+		case "cat", "read":
+			targetFile := fileName
+			if targetFile == "" {
+				// Fallback: try to find a token with a dot
+				for _, token := range taggedData.Tokens {
+					if strings.Contains(token, ".") {
+						targetFile = token
+						break
 					}
-				}
-				if targetFile != "" {
-					content, err := os.ReadFile(targetFile)
-					if err != nil {
-						predictedSentence = fmt.Sprintf("I couldn't read the file %s: %v", targetFile, err)
-					} else {
-						predictedSentence = fmt.Sprintf("Content of %s:\n%s", targetFile, string(content))
-					}
-				} else {
-					predictedSentence = "Please specify a file to read."
-				}
-			default:
-				if query == "pwd" || (hasDirectoryToken && command == "") {
-					cwd, err := os.Getwd()
-					if err != nil {
-						predictedSentence = "I'm sorry, I couldn't determine the current directory."
-					} else {
-						predictedSentence = fmt.Sprintf("The current directory is: %s", cwd)
-					}
-				} else {
-					handled = false
 				}
 			}
-
-			if !handled {
-				if hasQuestionWord && hasDirectoryToken {
-					cwd, err := os.Getwd()
-					if err != nil {
-						predictedSentence = "I'm sorry, I couldn't determine the current directory."
-					} else {
-						predictedSentence = fmt.Sprintf("The current directory is: %s", cwd)
-					}
+			if targetFile != "" {
+				content, err := os.ReadFile(targetFile)
+				if err != nil {
+					predictedSentence = fmt.Sprintf("I couldn't read the file %s: %v", targetFile, err)
 				} else {
-					predictedSentence = "|ʕ>ϖ<ʔ|I'm sorry, I couldn't understand your request."
-					fmt.Printf("ObjectTypeParts: %v\n", objectTypeParts)
-					fmt.Printf("ObjectType: %s\n", objectType)
-					fmt.Printf("HasQuestionWord: %t\n", hasQuestionWord)
-					fmt.Printf("HasPrepositionIn: %t\n", hasPrepositionIn)
-					fmt.Printf("Command: %s\n", command)
-					fmt.Printf("FileName: %s\n", fileName)
-					fmt.Printf("HasDirectoryToken: %t\n", hasDirectoryToken)
-					fmt.Printf("TargetDirectory: %s\n", targetDirectory) // New debug info
-					fmt.Println("--------------------")
+					predictedSentence = fmt.Sprintf("Content of %s:\n%s", targetFile, string(content))
 				}
+			} else {
+				predictedSentence = "Please specify a file to read."
 			}
-
-			colors.AnimatedOutput("blue", "red", predictedSentence, 1*time.Second)
-			fmt.Println("\n")
+		default:
+			if query == "pwd" || (hasDirectoryToken && command == "") {
+				cwd, err := os.Getwd()
+				if err != nil {
+					predictedSentence = "I'm sorry, I couldn't determine the current directory."
+				} else {
+					predictedSentence = fmt.Sprintf("The current directory is: %s", cwd)
+				}
+			} else {
+				handled = false
+			}
 		}
+
+		if !handled {
+			if hasQuestionWord && hasDirectoryToken {
+				cwd, err := os.Getwd()
+				if err != nil {
+					predictedSentence = "I'm sorry, I couldn't determine the current directory."
+				} else {
+					predictedSentence = fmt.Sprintf("The current directory is: %s", cwd)
+				}
+			} else {
+				predictedSentence = "|ʕ>ϖ<ʔ|I'm sorry, I couldn't understand your request."
+				fmt.Printf("ObjectTypeParts: %v\n", objectTypeParts)
+				fmt.Printf("ObjectType: %s\n", objectType)
+				fmt.Printf("HasQuestionWord: %t\n", hasQuestionWord)
+				fmt.Printf("HasPrepositionIn: %t\n", hasPrepositionIn)
+				fmt.Printf("Command: %s\n", command)
+				fmt.Printf("FileName: %s\n", fileName)
+				fmt.Printf("HasDirectoryToken: %t\n", hasDirectoryToken)
+				fmt.Printf("TargetDirectory: %s\n", targetDirectory) // New debug info
+				fmt.Println("--------------------")
+			}
+		}
+
+		colors.AnimatedOutput("blue", "red", predictedSentence, 1*time.Second)
+		fmt.Println("\n")
 	}
+}
 
+// --- KnowledgeBase and Inference Logic ---
 
-	// --- KnowledgeBase and Inference Logic ---
+// Intent represents the state of the command understanding.
 
-	// Intent represents the state of the command understanding.
-	
 func generateDataStructurePackageContent(structName string, fields map[string]string) string {
 	lowercaseName := strings.ToLower(structName)
 	packageName := lowercaseName
@@ -3071,7 +3520,7 @@ func Update%sHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fmt.Fprintf(w, "%s with ID %%s updated successfully", id)
-}`, structName, lowercaseName, structName, dirName, lowercaseName, lowercaseName, strings.Join(structFields, ", "), strings.Join(structFieldExecs, ", "))
+}`, structName, lowercaseName, structName, dirName, lowercaseName, lowercaseName, strings.Join(structFields, ", "), strings.Join(structFieldExecs, ", "), structName)
 
 	deleteHandlerContent := fmt.Sprintf(`
 func Delete%sHandler(w http.ResponseWriter, r *http.Request) {
@@ -3103,7 +3552,7 @@ func Delete%sHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fmt.Fprintf(w, "%s with ID %%s deleted successfully", id)
-}`, structName, lowercaseName, dirName, lowercaseName, lowercaseName)
+}`, structName, lowercaseName, dirName, lowercaseName, lowercaseName, structName)
 
 	packageFileContent := fmt.Sprintf(`package %s
 import (
@@ -3154,14 +3603,14 @@ func NewKnowledgeBase() *KnowledgeBase {
 			"list": true, "ls": true, "show": true,
 			"go": true, "cd": true, "change": true, "move": true,
 			"run": true, "start": true,
-			"stop": true,
+			"stop":   true,
 			"update": true,
 			"verify": true, "check": true, "test": true,
 			"cat": true, "read": true,
 			"tree": true,
 			"grep": true, "search": true,
 			"history": true,
-			"help": true,
+			"help":    true,
 		},
 		KnownObjects: map[string]bool{
 			"user": true, "file": true, "database": true, "folder": true, "directory": true,
@@ -3209,11 +3658,18 @@ func parse(input string, kb *KnowledgeBase) Intent {
 				value := parts[i+1]
 				nextIndex := i + 1
 
-				// Skip "folder" or "directory" if it appears after a trigger like "into"
-				if (strings.ToLower(value) == "folder" || strings.ToLower(value) == "directory") && i+2 < len(parts) {
-					consumed[i+1] = true
-					value = parts[i+2]
-					nextIndex = i + 2
+				// Skip noise words like "the", "a", "an", "folder", "directory"
+				for nextIndex < len(parts) {
+					v := strings.ToLower(parts[nextIndex])
+					if v == "the" || v == "a" || v == "an" || v == "folder" || v == "directory" {
+						consumed[nextIndex] = true
+						nextIndex++
+						if nextIndex < len(parts) {
+							value = parts[nextIndex]
+						}
+						continue
+					}
+					break
 				}
 
 				if strings.ToLower(value) == "it" {
