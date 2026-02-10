@@ -1,5 +1,7 @@
 # Changelog
 
+ - 2026-01-19 v1.44.3: Resolves [issue 243](https://gitlab.com/cznic/sqlite/-/issues/243).
+
  - 2026-01-18 v1.44.2: Upgrade to  [SQLite 3.51.2](https://sqlite.org/releaselog/3_51_2.html).
 
  - 2026-01-13 v1.44.0: Upgrade to SQLite 3.51.1.

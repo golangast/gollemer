@@ -1,1 +1,1 @@
-/home/zendrulat/code/gollemer/jim/cmd/jim/wasm
+/home/zendrulat/code/gollemer/jim

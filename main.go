@@ -148,23 +148,80 @@ func runModule(path string) {
 }
 
 func buildWasm(wasmDir string) {
+	if wasmDir == "" {
+		wasmDir = "."
+	}
 	if _, err := os.Stat(wasmDir); os.IsNotExist(err) {
 		return
 	}
 
-	fmt.Printf("🏗️  Building WASM in %s...\n", wasmDir)
-	// Check for wasm.go or main.go
-	wasmFile := "wasm.go"
-	if _, err := os.Stat(filepath.Join(wasmDir, "wasm.go")); os.IsNotExist(err) {
-		if _, err := os.Stat(filepath.Join(wasmDir, "main.go")); err == nil {
-			wasmFile = "main.go"
+	// 1. Ensure wasm_exec.js exists
+	goroot, err := exec.Command("go", "env", "GOROOT").Output()
+	if err == nil {
+		gorootPath := strings.TrimSpace(string(goroot))
+		// Try multiple locations for wasm_exec.js
+		srcs := []string{
+			filepath.Join(gorootPath, "misc", "wasm", "wasm_exec.js"),
+			filepath.Join(gorootPath, "lib", "wasm", "wasm_exec.js"),
+		}
+		
+		var src string
+		for _, s := range srcs {
+			if _, err := os.Stat(s); err == nil {
+				src = s
+				break
+			}
+		}
+
+		if src != "" {
+			dst := filepath.Join(wasmDir, "wasm_exec.js")
+			content, err := os.ReadFile(src)
+			if err == nil {
+				err = os.WriteFile(dst, content, 0644)
+				if err == nil {
+					fmt.Printf("✅ Copied wasm_exec.js to %s\n", wasmDir)
+				} else {
+					fmt.Printf("⚠️  Failed to write wasm_exec.js to %s: %v\n", wasmDir, err)
+				}
+			} else {
+				fmt.Printf("⚠️  Failed to read wasm_exec.js from %s: %v\n", src, err)
+			}
 		} else {
-			fmt.Printf("⚠️  No wasm.go or main.go found in %s, skipping.\n", wasmDir)
-			return
+			fmt.Printf("⚠️  Could not find wasm_exec.js in GOROOT (%s)\n", gorootPath)
 		}
 	}
 
-	cmd := exec.Command("go", "build", "-o", "main.wasm", wasmFile)
+	fmt.Printf("🏗️  Building WASM in %s...\n", wasmDir)
+	// Check for wasm.go or main.go, or in a wasm/ subdirectory
+	wasmFile := ""
+	candidates := []string{
+		"wasm.go",
+		"main.go",
+		filepath.Join("wasm", "main.go"),
+		filepath.Join("wasm", "wasm.go"),
+	}
+
+	for _, c := range candidates {
+		if _, err := os.Stat(filepath.Join(wasmDir, c)); err == nil {
+			wasmFile = c
+			break
+		}
+	}
+
+	if wasmFile == "" {
+		fmt.Printf("⚠️  No wasm file found in %s (checked %v), skipping.\n", wasmDir, candidates)
+		return
+	}
+
+	// Determine if we should use -mod=mod
+	args := []string{"build"}
+	gowork, _ := exec.Command("go", "env", "GOWORK").Output()
+	if strings.TrimSpace(string(gowork)) == "" || strings.TrimSpace(string(gowork)) == "off" {
+		args = append(args, "-mod=mod")
+	}
+	args = append(args, "-o", "main.wasm", wasmFile)
+
+	cmd := exec.Command("go", args...)
 	cmd.Dir = wasmDir
 	cmd.Env = append(os.Environ(), "GOOS=js", "GOARCH=wasm")
 	output, err := cmd.CombinedOutput()
@@ -175,7 +232,7 @@ func buildWasm(wasmDir string) {
 	}
 }
 
-func findName(taggedData tag.Tag) string {
+func findName(taggedData tag.Tag, kb *KnowledgeBase) string {
 
 	// First, look for a FILENAME tag
 
@@ -193,7 +250,7 @@ func findName(taggedData tag.Tag) string {
 
 	for i, token := range taggedData.Tokens {
 
-		if token == "named" && i+1 < len(taggedData.Tokens) {
+		if (token == "named" || token == "called") && i+1 < len(taggedData.Tokens) {
 
 			return taggedData.Tokens[i+1]
 
@@ -202,15 +259,27 @@ func findName(taggedData tag.Tag) string {
 	}
 
 	// Fallback for NAME tag
-
 	for i, tag := range taggedData.NerTag {
-
 		if tag == "NAME" {
-
 			return taggedData.Tokens[i]
-
 		}
-
+	}
+	
+	// Final heuristic fallback: first non-keyword after a known Object Type token
+	objectTypeKeywords := map[string]bool{
+		"handler": true, "webserver": true, "page": true, "file": true, 
+		"folder": true, "database": true, "structure": true, "component": true,
+	}
+	for i, token := range taggedData.Tokens {
+		lower := strings.ToLower(token)
+		if (objectTypeKeywords[lower] || (kb != nil && kb.KnownObjects[lower])) && i+1 < len(taggedData.Tokens) {
+			candidate := taggedData.Tokens[i+1]
+			lowerC := strings.ToLower(candidate)
+			// Ensure it's not another keyword or preposition
+			if !objectTypeKeywords[lowerC] && lowerC != "with" && lowerC != "the" && lowerC != "named" {
+				return candidate
+			}
+		}
 	}
 
 	return ""
@@ -243,6 +312,56 @@ func loadLastDirectory() (string, error) {
 
 	return strings.TrimSpace(string(content)), nil
 
+}
+
+// findClosestObject uses Levenshtein distance to find the nearest known object.
+func findClosestObject(target string, known map[string]bool) (string, int) {
+	closest := ""
+	minDist := 999
+
+	for obj := range known {
+		dist := levenshteinDistance(target, obj)
+		if dist < minDist {
+			minDist = dist
+			closest = obj
+		}
+	}
+	return closest, minDist
+}
+
+func levenshteinDistance(s1, s2 string) int {
+	s1Raw := []rune(s1)
+	s2Raw := []rune(s2)
+	len1 := len(s1Raw)
+	len2 := len(s2Raw)
+
+	column := make([]int, len1+1)
+	for y := 1; y <= len1; y++ {
+		column[y] = y
+	}
+
+	for x := 1; x <= len2; x++ {
+		column[0] = x
+		lastkey := x - 1
+		for y := 1; y <= len1; y++ {
+			oldkey := column[y]
+			var incr int
+			if s1Raw[y-1] != s2Raw[x-1] {
+				incr = 1
+			}
+
+			column[y] = min(column[y]+1, min(column[0]+1, lastkey+incr))
+			lastkey = oldkey
+		}
+	}
+	return column[len1]
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func createTableWithFields(dbFileName, tableName string, fields map[string]string) error {
@@ -343,14 +462,41 @@ func registerHandlerURL(handlerName, handlerURL, mainGoPath string) (string, err
 		return "", fmt.Errorf("could not read %s: %w", mainGoPath, err)
 	}
 
+	if handlerURL == "" {
+		handlerURL = "/" + strings.ToLower(handlerName)
+	}
+
 	registration := fmt.Sprintf("http.HandleFunc(\"%s\", %sHandler)", handlerURL, handlerName)
 	if !strings.Contains(string(mainGoContent), registration) {
-		newHandleFunc := fmt.Sprintf("\thttp.HandleFunc(\"%s\", %sHandler)\n\t// HANDLER_REGISTRATIONS_GO_HERE", handlerURL, handlerName)
-		updatedMainGoContent := strings.Replace(string(mainGoContent), "// HANDLER_REGISTRATIONS_GO_HERE", newHandleFunc, 1) // Expect unindented placeholder
-
-		if updatedMainGoContent == string(mainGoContent) {
-			return "", fmt.Errorf("placeholder '\\t// HANDLER_REGISTRATIONS_GO_HERE' not found in %s", mainGoPath)
+		// Detect the placeholder with any indentation
+		placeholder := "// HANDLER_REGISTRATIONS_GO_HERE"
+		lines := strings.Split(string(mainGoContent), "\n")
+		var updatedLines []string
+		found := false
+		for _, line := range lines {
+			if strings.Contains(line, placeholder) {
+				// preserve indentation
+				indent := ""
+				for _, char := range line {
+					if char == ' ' || char == '\t' {
+						indent += string(char)
+					} else {
+						break
+					}
+				}
+				updatedLines = append(updatedLines, fmt.Sprintf("%shttp.HandleFunc(\"%s\", %sHandler)", indent, handlerURL, handlerName))
+				updatedLines = append(updatedLines, line) // Keep the placeholder for future registrations
+				found = true
+			} else {
+				updatedLines = append(updatedLines, line)
+			}
 		}
+
+		if !found {
+			return "", fmt.Errorf("placeholder '%s' not found in %s", placeholder, mainGoPath)
+		}
+
+		updatedMainGoContent := strings.Join(updatedLines, "\n")
 
 		err = os.WriteFile(mainGoPath, []byte(updatedMainGoContent), 0644)
 		if err != nil {
@@ -409,30 +555,56 @@ func goImports(filename string) {
 }
 
 // GollemerMoEClient implements the MoEClient interface using the existing NLP pipeline.
-type GollemerMoEClient struct{}
+type GollemerMoEClient struct {
+	KB *KnowledgeBase
+}
 
 func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 	lowerInput := strings.ToLower(input)
 	words := strings.Fields(lowerInput)
 
-	// Heuristic Intent Detection
-	if strings.Contains(lowerInput, "create") || strings.Contains(lowerInput, "make") || strings.Contains(lowerInput, "add") || strings.Contains(lowerInput, "generate") {
+	// Heuristic Intent Detection with Semantic Variations
+	createVerbs := []string{"create", "make", "add", "generate", "initialize", "init", "new", "setup", "start"}
+	isCreating := false
+	for _, v := range createVerbs {
+		if strings.Contains(lowerInput, v) {
+			isCreating = true
+			break
+		}
+	}
+
+	if isCreating {
 		targets := map[string]string{
 			"webserver": "create_webserver",
+			"site":      "create_webserver",
+			"project":   "create_webserver",
+			"app":       "create_webserver",
 			"page":      "create_page",
+			"view":      "create_page",
+			"homepage":  "create_page",
 			"handler":   "create_handler",
-			"database":  "create_database",
-			"file":      "create_file",
-			"folder":    "create_folder",
-			"directory": "create_folder",
-			"form":      "create_form",
+			"endpoint":  "create_handler",
+			"route":     "create_handler",
+			"database":       "create_database",
+			"db":             "create_database",
+			"file":           "create_file",
+			"folder":         "create_folder",
+			"directory":      "create_folder",
+			"form":           "create_form",
+			"structure":      "create_structure",
+			"data structure": "create_structure",
 		}
 
 		// Proximity search: find which target is closest to the creation verb
 		verbIdx := -1
 		for i, w := range words {
-			if w == "create" || w == "make" || w == "add" || w == "generate" {
-				verbIdx = i
+			for _, v := range createVerbs {
+				if w == v {
+					verbIdx = i
+					break
+				}
+			}
+			if verbIdx != -1 {
 				break
 			}
 		}
@@ -450,13 +622,47 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 					return intent, 0.9
 				}
 			}
+			
+			// Look behind if ahead failed (e.g. "myapp site initialize")
+			for i := verbIdx - 1; i >= 0; i-- {
+				w := words[i]
+				singular := strings.TrimSuffix(w, "s")
+				if intent, ok := targets[w]; ok {
+					return intent, 0.85
+				}
+				if intent, ok := targets[singular]; ok {
+					return intent, 0.8
+				}
+			}
 		}
 
-		// Fallback to priority scan if proximity fails
-		for _, key := range []string{"page", "handler", "database", "webserver", "file", "folder", "directory", "form"} {
+		// Fallback to priority scan if priority nouns are present even if proximity fails
+		for _, key := range []string{"webserver", "site", "project", "page", "handler", "database", "file", "folder", "form"} {
 			if strings.Contains(lowerInput, key) {
-				return targets[key], 0.8
+				return targets[key], 0.75
 			}
+		}
+
+		// --- NEW: Heuristic for Learned Objects ---
+		// If we are "creating" but none of our hardcoded nouns matched, check if any word is a KnownObject
+		for _, w := range words {
+			if c.KB != nil && c.KB.KnownObjects[w] {
+				return "create_object", 0.7 // Generic creation intent
+			}
+		}
+	}
+
+	// --- NEW: Command Inference ---
+	// If no command verb was found, but the first word is a known major Object, assume "create"
+	if lowerInput != "" {
+		firstWord := words[0]
+		majorObjects := map[string]string{
+			"webserver": "create_webserver", "site": "create_webserver",
+			"handler": "create_handler", "page": "create_page",
+			"database": "create_database", "structure": "create_structure",
+		}
+		if intent, ok := majorObjects[firstWord]; ok {
+			return intent, 0.6 // Lower confidence but gets the job done
 		}
 	}
 
@@ -478,7 +684,22 @@ func (c *GollemerMoEClient) ExtractEntities(input string, intent string) map[str
 	entities := make(map[string]interface{})
 
 	// Extract Name using existing findName logic
-	name := findName(taggedData)
+	name := findName(taggedData, c.KB)
+
+	// Improvement for "data structure" name extraction
+	if strings.Contains(strings.ToLower(input), "data structure") {
+		words := strings.Fields(input)
+		for i, w := range words {
+			if strings.ToLower(w) == "structure" && i > 0 && strings.ToLower(words[i-1]) == "data" {
+				if i+1 < len(words) {
+					candidate := words[i+1]
+					if strings.ToLower(candidate) != "to" && strings.ToLower(candidate) != "in" && strings.ToLower(candidate) != "with" {
+						name = candidate
+					}
+				}
+			}
+		}
+	}
 
 	// Improvement for "page" name: look for words between "page" and "in/to/for/wasm/webserver"
 	if intent == "create_page" {
@@ -508,8 +729,19 @@ func (c *GollemerMoEClient) ExtractEntities(input string, intent string) map[str
 
 	// Extract URL (specific to handlers)
 	for i, token := range taggedData.Tokens {
-		if strings.ToLower(token) == "url" && i > 0 && strings.ToLower(taggedData.Tokens[i-1]) == "with" && i+1 < len(taggedData.Tokens) {
-			entities["url"] = taggedData.Tokens[i+1]
+		lower := strings.ToLower(token)
+		if lower == "url" && i+1 < len(taggedData.Tokens) {
+			// Handle "url /users" or "url is /users"
+			val := taggedData.Tokens[i+1]
+			if val == "is" && i+2 < len(taggedData.Tokens) {
+				val = taggedData.Tokens[i+2]
+			}
+			if strings.HasPrefix(val, "/") {
+				entities["url"] = val
+			}
+		} else if strings.HasPrefix(token, "/") && !strings.Contains(token, ".") && (intent == "create_handler" || intent == "create_page") {
+			// Heuristic: if a token starts with / and it's a handler/page intent, it's likely the URL/Route
+			entities["url"] = token
 		}
 	}
 
@@ -605,10 +837,11 @@ func generateDirectoryTree(path string, prefix string, currentDepth int, maxDept
 }
 
 type ConversationState struct {
-	ActiveIntent string
-	Parameters   map[string]string
-	Missing      []string
-	IsActive     bool
+	ActiveIntent    string
+	Parameters      map[string]string
+	Missing         []string
+	IsActive        bool
+	SuggestedObject string // Added for smart suggestions
 }
 
 func runLLM() {
@@ -650,8 +883,8 @@ func runLLM() {
 		log.Printf("DEBUG: No last directory loaded. Current Working Directory: %s", currentAbsDir)
 	}
 
-	// Initialize Hybrid Intent Resolver with our local MoE client
-	resolver := NewHybridIntentResolver(&GollemerMoEClient{})
+	// Initialize Intent Resolver
+	resolver := NewHybridIntentResolver(&GollemerMoEClient{KB: kb})
 
 	var commandHistory []string
 	var sessionState ConversationState
@@ -822,23 +1055,22 @@ func runLLM() {
 
 		// --- Start of new logic ---
 
-		// 1. Parse with KnowledgeBase
+		// 1. Initial Parse with KnowledgeBase
 		intent := parse(query, kb)
+		intentData = resolver.Resolve(query, nil)
 
-		// 2. Inference if needed (Command understood, but ObjectType missing)
-		if intent.Command != "" && intent.ObjectType == "" {
-			intent = resolveIntent(reader, intent, kb)
-		}
-
-		hasQuestionWord := false
-		var objectTypeParts []string = intent.ObjectTypeParts
-		hasPrepositionIn := false
-		var command string = intent.Command
-		var targetDirectory string
-		var predictedSentence string
-		var handlerURL string // New variable to store the handler URL
-
-		// Initialize variables from Intent Params if available
+		var (
+			hasQuestionWord   bool
+			hasPrepositionIn  bool
+			hasDirectoryToken bool
+			command           string
+			objectType        string
+			fileName          string
+			targetDirectory   string
+			predictedSentence string
+			handlerURL        string
+		)
+		objectTypeParts := intent.ObjectTypeParts
 		if val, ok := intent.Params["target"]; ok {
 			targetDirectory = val
 		}
@@ -849,15 +1081,17 @@ func runLLM() {
 				}
 			}
 		}
-
 		// Try to explicitly identify the command using Intent Analysis (MoE) or Tags
-		// Only if intent.Command wasn't already found by the KB parser
-		if command == "" {
-			// 1. Try MoE Intent
-			if intentData.Intent != "" {
+		// Only if intent.Command wasn't already found by the KB parser, or if we need more info
+		if command == "" || intent.ObjectType == "" {
+			// 2. High Confidence MoE Override
+			if intentData.Intent != "" && intentData.Confidence > 0.8 {
 				parts := strings.Split(intentData.Intent, "_")
 				if len(parts) > 0 {
 					command = parts[0]
+					if intent.Command == "" {
+						intent.Command = command
+					}
 				}
 				if len(parts) > 1 && intent.ObjectType == "" {
 					intent.ObjectType = parts[1]
@@ -882,7 +1116,7 @@ func runLLM() {
 
 			// Normalize command aliases
 			switch command {
-			case "add", "put", "make", "generate":
+			case "add", "put", "make", "generate", "initialize", "init", "setup", "new":
 				command = "create"
 			case "ls", "show":
 				command = "list"
@@ -898,7 +1132,6 @@ func runLLM() {
 				command = "grep"
 			}
 		}
-
 		for i, token := range taggedData.Tokens {
 			if i < len(taggedData.NerTag) {
 				switch taggedData.NerTag[i] {
@@ -954,28 +1187,49 @@ func runLLM() {
 			}
 		}
 
-		var objectType string = intent.ObjectType
+		// 2. Inference & Sync Logic
+		if intent.Command == "" || intent.ObjectType == "" {
+			intent = resolveIntent(reader, intent, kb)
+		}
+
+		command = intent.Command
+		objectType = intent.ObjectType
+		fileName = intent.Params["name"]
+		if fileName == "" {
+			fileName = findName(taggedData, kb)
+		}
+
+		// Normalize Object Type synonyms
+		if objectType == "site" || objectType == "project" || objectType == "app" {
+			objectType = "webserver"
+		} else if objectType == "view" {
+			objectType = "page"
+		} else if objectType == "endpoint" || objectType == "route" {
+			objectType = "handler"
+		} else if objectType == "db" {
+			objectType = "database"
+		}
 
 		// Fallback logic for specific complex types or if KB missed it
-		if strings.Contains(strings.ToLower(query), "handler") {
+		if strings.Contains(strings.ToLower(query), "handler") && !strings.Contains(objectType, "database") {
 			objectType = "handler"
-		} else if strings.Contains(strings.ToLower(query), "data structure") {
+		} else if strings.Contains(strings.ToLower(query), "data structure") && !strings.Contains(objectType, "database") {
 			objectType = "data structure"
 			objectTypeParts = []string{} // Clear objectTypeParts to prevent interference
-		} else if strings.Contains(strings.ToLower(query), "webserver") || strings.Contains(strings.ToLower(query), "websever") {
+		} else if (strings.Contains(strings.ToLower(query), "webserver") || strings.Contains(strings.ToLower(query), "websever")) && !strings.Contains(objectType, "database") {
 			objectType = "webserver"
 		} else if objectType == "" {
 			objectType = strings.Join(objectTypeParts, " ")
 		}
 
-		fileName := intent.Params["name"]
+		fileName = intent.Params["name"]
 		if fileName == "" && len(intentData.Parameters) > 0 {
 			if val, ok := intentData.Parameters["name"].(string); ok {
 				fileName = val
 			}
 		}
 		if fileName == "" {
-			fileName = findName(taggedData)
+			fileName = findName(taggedData, kb)
 		}
 
 		// Heuristic: If fileName is still empty, and objectType is "file",
@@ -993,7 +1247,7 @@ func runLLM() {
 			command = "list"
 		}
 
-		hasDirectoryToken := false
+		hasDirectoryToken = false
 		for _, t := range taggedData.Tokens {
 			if t == "directory" {
 				hasDirectoryToken = true
@@ -1035,6 +1289,7 @@ func runLLM() {
 		}
 
 		handled := true
+		fmt.Printf("DEBUG: SWITCH START. command='%s', objectType='%s'\n", command, objectType)
 		switch command {
 		case "go":
 			if targetDirectory != "" {
@@ -1248,34 +1503,30 @@ func runLLM() {
 			predictedSentence = strings.Join(historyLines, "\n")
 		case "help":
 			var sb strings.Builder
-			sb.WriteString("--- Available Commands ---\n")
-			descriptions := map[string]string{
-				"create":  "Create objects (file, folder, webserver, handler, database, structure, form).",
-				"delete":  "Delete objects (file, folder, structure).",
-				"move":    "Move a file to a different directory.",
-				"go":      "Change directory (e.g., 'go into cmd').",
-				"list":    "List directory contents or registered handlers.",
-				"tree":    "Visualize directory structure (supports -d <depth>).",
-				"cat":     "Read file contents.",
-				"grep":    "Search for text in files.",
-				"run":     "Start a webserver.",
-				"stop":    "Stop a webserver.",
-				"verify":  "Check webserver status.",
-				"update":  "Update components (e.g., form handlers).",
-				"history": "Show command history.",
-				"learn":   "Teach the system new objects or learn from a folder.",
-				"clear":   "Clear the terminal screen.",
-				"exit":    "Exit the program.",
-			}
-			var keys []string
-			for k := range descriptions {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-			for _, cmd := range keys {
-				sb.WriteString(fmt.Sprintf("%-10s : %s\n", cmd, descriptions[cmd]))
-			}
-			sb.WriteString("\n--- Known Objects ---\n")
+			sb.WriteString("--- ʕ◔ϖ◔ʔ Gollemer Help ---\n\n")
+			
+			sb.WriteString("Categorized Commands:\n")
+			sb.WriteString("  [📁 Navigation]  go <dir>, list, tree, pwd\n")
+			sb.WriteString("  [🛠️  Files]       create file <name>, create folder <name>, delete <name>, move <file> to <dir>, cat, grep\n")
+			sb.WriteString("  [🌐 Web]         create webserver <name>, create handler <name>, create page <name>, run, stop, verify\n")
+			sb.WriteString("  [🧠 Learning]    learn from <dir>, learn object <word>, show learning path\n")
+			sb.WriteString("  [⚙️  System]      history, clear, exit\n\n")
+
+			sb.WriteString("Examples:\n")
+			sb.WriteString("  - \"create webserver myapp\"        : Initialize a new Go web project\n")
+			sb.WriteString("  - \"create handler login with url /login\" : Append a new handler to main.go\n")
+			sb.WriteString("  - \"create page dashboard\"         : Generate a new WASM frontend page\n")
+			sb.WriteString("  - \"learn from learningfolder\"     : Teach Gollemer templates from a directory\n")
+			sb.WriteString("  - \"create home\"                   : Uses home.html template if learned\n")
+			sb.WriteString("  - \"tree -d 2\"                     : Show directory tree up to 2 levels deep\n\n")
+
+			sb.WriteString("Learning System & AI Features:\n")
+			sb.WriteString("  [🔍 Semantic]   Understand synonyms: 'site', 'app', 'view', 'endpoint'\n")
+			sb.WriteString("  [📡 Discovery]  Background scanner alerts you to new template patterns\n")
+			sb.WriteString("  [💡 Smart]      Suggests close matches if you make a typo (using Levenshtein)\n")
+			sb.WriteString("  [📁 Learning]   Use 'learn from <dir>' to teach Gollemer local templates\n\n")
+
+			sb.WriteString("--- Known Objects (Templates) ---\n")
 			var objs []string
 			for k := range kb.KnownObjects {
 				objs = append(objs, k)
@@ -1303,70 +1554,188 @@ func runLLM() {
 			}
 
 			templateFound := false
+			// --- Smart Suggestions Logic ---
+			if _, ok := kb.KnownObjects[strings.ToLower(objectType)]; !ok && objectType != "" {
+				closest, distance := findClosestObject(objectType, kb.KnownObjects)
+				if distance > 0 && distance < 4 { // Threshold for "close enough"
+					colors.ColorizeCol("yellow", "white", fmt.Sprintf("I don't know how to create '%s', but I found a similar object '%s'. Use that? (y/n) ", objectType, closest))
+					resp, _ := reader.ReadString('\n')
+					if strings.TrimSpace(strings.ToLower(resp)) == "y" {
+						objectType = closest
+					}
+				}
+			}
+
 			if _, err := os.Stat(learningPath); err == nil {
-				_ = filepath.WalkDir(learningPath, func(path string, d fs.DirEntry, err error) error {
-					if templateFound {
-						return nil
+				// 1a. Check for directory-based template first (multi-file)
+				templateDir := filepath.Join(learningPath, ".templates", objectType)
+				if info, err := os.Stat(templateDir); err == nil && info.IsDir() {
+					templateFound = true
+					log.Printf("DEBUG: Found multi-file template directory: '%s'", templateDir)
+
+					destDir := targetDirectory
+					if destDir == "" {
+						destDir = "."
 					}
-					if err != nil || d.IsDir() {
-						return nil
-					}
+					os.MkdirAll(destDir, 0755)
 
-					name := d.Name()
-					ext := filepath.Ext(name)
-					baseName := strings.TrimSuffix(name, ext)
-					// Exact match on the object name (case-insensitive)
-					match := strings.EqualFold(baseName, objectType)
-					if !match {
-						// Check relative path for "template/head" style matching
-						relPath, _ := filepath.Rel(learningPath, path)
-						relPathNoExt := strings.TrimSuffix(relPath, ext)
-						normalizedObjType := strings.ReplaceAll(objectType, " ", string(os.PathSeparator))
-						if strings.EqualFold(relPathNoExt, normalizedObjType) {
-							match = true
+					err = filepath.WalkDir(templateDir, func(path string, d fs.DirEntry, err error) error {
+						if err != nil {
+							return err
 						}
-					}
-
-					if match {
-						templateFound = true
-						log.Printf("DEBUG: Found template match. ObjectType: '%s', File: '%s'", objectType, path)
-
-						destName := fileName
-						if destName == "" {
-							destName = baseName // Default to template name if no name provided
+						rel, _ := filepath.Rel(templateDir, path)
+						if rel == "." {
+							return nil
 						}
-						// If dest doesn't have ext, append template's ext
-						if filepath.Ext(destName) == "" {
-							destName += ext
+						targetPath := filepath.Join(destDir, rel)
+						if d.IsDir() {
+							return os.MkdirAll(targetPath, 0755)
 						}
-
-						destPath := destName
-						if targetDirectory != "" {
-							destPath = filepath.Join(targetDirectory, destName)
-						}
-
 						content, err := os.ReadFile(path)
 						if err != nil {
-							predictedSentence = fmt.Sprintf("I found the template '%s' but couldn't read it: %v", name, err)
-						} else {
-							// Ensure the target directory exists
-							if targetDirectory != "" {
-								os.MkdirAll(targetDirectory, 0755)
-							}
-							err = os.WriteFile(destPath, content, 0644)
-							if err != nil {
-								predictedSentence = fmt.Sprintf("I couldn't create the file %s from template: %v", destPath, err)
-							} else {
-								predictedSentence = fmt.Sprintf("I have created '%s' using the learned template '%s'.", destPath, name)
-							}
+							return err
+						}
+						return os.WriteFile(targetPath, content, 0644)
+					})
+
+					if err != nil {
+						predictedSentence = fmt.Sprintf("I found the multi-file template '%s' but failed to copy it: %v", objectType, err)
+					} else {
+						predictedSentence = fmt.Sprintf("I have created the '%s' object with all its components in '%s'.", objectType, destDir)
+						if strings.Contains(strings.ToLower(destDir), "wasm") || strings.Contains(strings.ToLower(objectType), "wasm") {
+							buildWasm(destDir)
 						}
 					}
-					return nil
-				})
+				}
+
+				if !templateFound {
+					// 1b. Original single-file template logic
+					_ = filepath.WalkDir(learningPath, func(path string, d fs.DirEntry, err error) error {
+						if templateFound {
+							return nil
+						}
+						if err != nil || d.IsDir() {
+							return nil
+						}
+
+						name := d.Name()
+						ext := filepath.Ext(name)
+						baseName := strings.TrimSuffix(name, ext)
+						// Exact match on the object name (case-insensitive)
+						match := strings.EqualFold(baseName, objectType)
+						if !match {
+							// Check relative path for "template/head" style matching
+							relPath, _ := filepath.Rel(learningPath, path)
+							relPathNoExt := strings.TrimSuffix(relPath, ext)
+							normalizedObjType := strings.ReplaceAll(objectType, " ", string(os.PathSeparator))
+							if strings.EqualFold(relPathNoExt, normalizedObjType) {
+								match = true
+							}
+						}
+
+						if match {
+							templateFound = true
+							log.Printf("DEBUG: Found template match. ObjectType: '%s', File: '%s'", objectType, path)
+
+							destName := fileName
+							if destName == "" {
+								destName = baseName // Default to template name if no name provided
+							}
+							// If dest doesn't have ext, append template's ext
+							if filepath.Ext(destName) == "" {
+								destName += ext
+							}
+
+							destPath := destName
+							if targetDirectory != "" {
+								destPath = filepath.Join(targetDirectory, destName)
+							}
+
+							content, err := os.ReadFile(path)
+							if err != nil {
+								predictedSentence = fmt.Sprintf("I found the template '%s' but couldn't read it: %v", name, err)
+							} else {
+								// Ensure the target directory exists
+								if targetDirectory != "" {
+									os.MkdirAll(targetDirectory, 0755)
+								}
+								err = os.WriteFile(destPath, content, 0644)
+								if err != nil {
+									predictedSentence = fmt.Sprintf("I couldn't create the file %s from template: %v", destPath, err)
+								} else {
+									predictedSentence = fmt.Sprintf("I have created '%s' using the learned template '%s'.", destPath, name)
+									if targetDirectory != "" && (strings.Contains(strings.ToLower(targetDirectory), "wasm") || strings.Contains(strings.ToLower(destPath), "wasm")) {
+										buildWasm(targetDirectory)
+									}
+								}
+							}
+						}
+						return nil
+					})
+				}
 			}
 
 			if templateFound {
 				// Template handled, skip other checks
+			} else if strings.HasSuffix(strings.ToLower(strings.TrimSpace(targetDirectory)), ".db") {
+				fmt.Println("DEBUG: Matched .db suffix block")
+				// Creating a table in an existing database
+				dbFileName := targetDirectory
+				tableName := objectType
+				structName := tableName
+
+				// Try to find the struct file
+				structFile := structName + ".go"
+				if _, err := os.Stat(structFile); os.IsNotExist(err) {
+					// Try lowercase
+					structFile = strings.ToLower(structName) + ".go"
+				}
+
+				if _, err := os.Stat(structFile); os.IsNotExist(err) {
+					predictedSentence = fmt.Sprintf("I want to create table '%s' in '%s', but I couldn't find a data structure file '%s' to define the fields.", tableName, dbFileName, structFile)
+				} else {
+					content, err := os.ReadFile(structFile)
+					if err != nil {
+						predictedSentence = fmt.Sprintf("I found '%s' but couldn't read it: %v", structFile, err)
+					} else {
+						// Parse fields from struct
+						fields := make(map[string]string)
+						lines := strings.Split(string(content), "\n")
+						inStruct := false
+						for _, line := range lines {
+							trimmed := strings.TrimSpace(line)
+							if strings.HasPrefix(trimmed, "type ") && strings.Contains(trimmed, " struct {") {
+								inStruct = true
+								continue
+							}
+							if inStruct {
+								if trimmed == "}" {
+									break
+								}
+								parts := strings.Fields(trimmed)
+								if len(parts) >= 2 {
+									fName := parts[0]
+									fType := parts[1]
+									// Skip ID if it's auto-increment usually
+									if strings.ToLower(fName) != "id" {
+										fields[fName] = fType
+									}
+								}
+							}
+						}
+
+						if len(fields) > 0 {
+							err = createTableWithFields(dbFileName, tableName, fields)
+							if err != nil {
+								predictedSentence = fmt.Sprintf("Failed to create table '%s' in '%s': %v", tableName, dbFileName, err)
+							} else {
+								predictedSentence = fmt.Sprintf("Created table '%s' in '%s' using fields from '%s'.", tableName, dbFileName, structFile)
+							}
+						} else {
+							predictedSentence = fmt.Sprintf("I couldn't find any fields in '%s' to create the table.", structFile)
+						}
+					}
+				}
 			} else if strings.Contains(objectType, "handler") {
 				handlerName := ""
 				for i, token := range taggedData.Tokens {
@@ -1394,23 +1763,109 @@ func ` + strings.Title(handlerName) + `Handler(w http.ResponseWriter, r *http.Re
 
 					// Check if the handler file already exists
 					if _, err := os.Stat(filePath); err == nil {
-						predictedSentence = fmt.Sprintf("The handler file '%s' already exists.", filePath)
+						// Logic: If it exists, check if it's already a handler or if we should use a different name
+						filePath = handlerName + "_handler.go"
+						log.Printf("DEBUG: %s.go exists, using %s instead", handlerName, filePath)
+					}
+					
+					err = os.WriteFile(filePath, []byte(handlerContent), 0644)
+					if err != nil {
+						predictedSentence = fmt.Sprintf("I couldn't write to the handler file %s: %v", filePath, err)
+						goto endOfCreateHandler
+					}
+					goImports(filePath)
+					predictedSentence = fmt.Sprintf("I have created the handler '%s' in %s.", handlerName, filePath)
+					
+					// Always attempt to register the handler in the current project's main.go
+					currentProjectMainGo := filepath.Join(".", "main.go")
+					registrationMsg, err := registerHandlerURL(strings.Title(handlerName), handlerURL, currentProjectMainGo)
+					if err != nil {
+						log.Printf("Error registering handler URL in %s: %v", currentProjectMainGo, err)
+						predictedSentence += fmt.Sprintf(" I tried to register the handler in %s but failed: %v", currentProjectMainGo, err)
 					} else {
-						err = os.WriteFile(filePath, []byte(handlerContent), 0644)
-						if err != nil {
-							predictedSentence = fmt.Sprintf("I couldn't write to the handler file %s: %v", filePath, err)
-							goto endOfCreateHandler
+						predictedSentence += " " + registrationMsg
+					}
+
+					// --- Integration: Auto-create WASM Page if requested ---
+					if strings.Contains(strings.ToLower(query), "wasm") || strings.Contains(strings.ToLower(query), "page") || strings.Contains(strings.ToLower(query), "frontend") {
+						// Copy of the logic from 'create page' for seamless integration
+						pageName := handlerName
+						cleanName := strings.Title(strings.ToLower(pageName))
+						snakeName := strings.ReplaceAll(strings.ToLower(pageName), " ", "_")
+
+						// Find WASM dir (simplified search)
+						var wasmDir string
+						search, _ := os.Getwd()
+						for {
+							if strings.EqualFold(filepath.Base(search), "wasm") {
+								wasmDir = search
+								break
+							}
+							if info, err := os.Stat(filepath.Join(search, "wasm")); err == nil && info.IsDir() {
+								wasmDir = filepath.Join(search, "wasm")
+								break
+							}
+							parent := filepath.Dir(search)
+							if parent == search {
+								break
+							}
+							search = parent
 						}
-						goImports(filePath)
-						predictedSentence = fmt.Sprintf("I have created the handler '%s' in %s.", handlerName, filePath)
-						// Always attempt to register the handler in the current project's main.go
-						currentProjectMainGo := filepath.Join(".", "main.go")
-						registrationMsg, err := registerHandlerURL(strings.Title(handlerName), handlerURL, currentProjectMainGo)
-						if err != nil {
-							log.Printf("Error registering handler URL in %s: %v", currentProjectMainGo, err)
-							predictedSentence += fmt.Sprintf(" I tried to register the handler in %s but failed: %v", currentProjectMainGo, err)
-						} else {
-							predictedSentence += " " + registrationMsg
+
+						if wasmDir != "" {
+							wasmPagesDir := filepath.Join(wasmDir, "pages")
+							os.MkdirAll(wasmPagesDir, 0755)
+
+							// Default material import (heuristically found in learningfolder if not local)
+							materialImport := "github.com/golangast/gollemer/jim/wasm/ui/material"
+
+							content := fmt.Sprintf(`package pages
+
+import (
+	"syscall/js"
+	"%s"
+)
+
+func Render%s() js.Value {
+	document := js.Global().Get("document")
+	container := document.Call("createElement", "div")
+	container.Set("style", "padding: 4rem 2rem; max-width: 800px; margin: 0 auto; min-height: 80vh;")
+
+	heading := document.Call("createElement", "h1")
+	heading.Set("innerText", "%s")
+	container.Call("appendChild", heading)
+
+	// Add a button to use the material package
+	btn := material.NewButton("Interact", "primary", func() {
+		js.Global().Call("alert", "WASM Page %s is live!")
+	})
+	container.Call("appendChild", btn.Render())
+
+	return container
+}
+`, materialImport, cleanName, cleanName, cleanName)
+
+							pagePath := filepath.Join(wasmPagesDir, snakeName+".go")
+							if err := os.WriteFile(pagePath, []byte(content), 0644); err == nil {
+								predictedSentence += fmt.Sprintf(" Verified twin WASM page created in %s.", pagePath)
+
+								// Register route in wasm.go
+								wasmGoPath := filepath.Join(wasmDir, "wasm.go")
+								if wContent, err := os.ReadFile(wasmGoPath); err == nil {
+									sWContent := string(wContent)
+									routeKey := "#" + snakeName
+									routeValue := "pages.Render" + cleanName
+									if !strings.Contains(sWContent, routeKey) {
+										registration := fmt.Sprintf("\t\t\t\"%s\": %s,\n", routeKey, routeValue)
+										if idx := strings.LastIndex(sWContent, "},"); idx != -1 {
+											sWContent = sWContent[:idx] + registration + sWContent[idx:]
+											os.WriteFile(wasmGoPath, []byte(sWContent), 0644)
+											predictedSentence += " Registered WASM route."
+										}
+									}
+								}
+								buildWasm(wasmDir)
+							}
 						}
 					}
 				}
@@ -1752,6 +2207,9 @@ func Render%s() js.Value {
 						} else {
 							predictedSentence = fmt.Sprintf("I have created the empty file %s.", filePath)
 						}
+						if targetDirectory != "" && (strings.Contains(strings.ToLower(targetDirectory), "wasm") || strings.Contains(strings.ToLower(filePath), "wasm")) {
+							buildWasm(targetDirectory)
+						}
 					}
 				} else {
 					predictedSentence = "You need to provide a name for the file."
@@ -1851,6 +2309,80 @@ func main() {
 						}
 					}
 				}
+			} else if strings.Contains(objectType, "structure") || strings.Contains(objectType, "data structure") {
+				structName := fileName
+				if structName == "" {
+					// Try to find name after "structure" or "named"
+					for i, token := range taggedData.Tokens {
+						if (strings.ToLower(token) == "structure" || strings.ToLower(token) == "named") && i+1 < len(taggedData.Tokens) {
+							structName = taggedData.Tokens[i+1]
+							break
+						}
+					}
+				}
+
+				if structName == "" {
+					predictedSentence = "You need to provide a name for the data structure."
+				} else {
+					// capitalize for Go exported struct
+					goStructName := ""
+					for _, part := range strings.Split(structName, "_") {
+						if part != "" {
+							goStructName += strings.ToUpper(part[:1]) + part[1:]
+						}
+					}
+
+					var structBody strings.Builder
+					structBody.WriteString(fmt.Sprintf("package main\n\n// %s represents a data structure.\ntype %s struct {\n", goStructName, goStructName))
+
+					// Parse fields: "with the fields name string age int"
+					if strings.Contains(strings.ToLower(query), "with the fields") {
+						queryParts := strings.Fields(query)
+						fieldStartIndex := -1
+						for i, part := range queryParts {
+							if strings.ToLower(part) == "fields" && i > 0 && strings.ToLower(queryParts[i-1]) == "the" && i > 1 && strings.ToLower(queryParts[i-2]) == "with" {
+								fieldStartIndex = i
+								break
+							}
+						}
+
+						if fieldStartIndex != -1 {
+							for i := fieldStartIndex + 1; i < len(queryParts); {
+								if strings.ToLower(queryParts[i]) == "and" || strings.ToLower(queryParts[i]) == "with" {
+									i++
+									continue
+								}
+								if i+1 < len(queryParts) {
+									fieldName := queryParts[i]
+									fieldType := queryParts[i+1]
+									
+									// capitalize field name
+									goFieldName := strings.ToUpper(fieldName[:1]) + fieldName[1:]
+									
+									structBody.WriteString(fmt.Sprintf("\t%s %s `json:\"%s\"` \n", goFieldName, fieldType, fieldName))
+									i += 2
+								} else {
+									break
+								}
+							}
+						}
+					}
+					structBody.WriteString("}\n")
+
+					filePath := structName + ".go"
+					if targetDirectory != "" {
+						filePath = filepath.Join(targetDirectory, filePath)
+						os.MkdirAll(targetDirectory, 0755)
+					}
+
+					err := os.WriteFile(filePath, []byte(structBody.String()), 0644)
+					if err != nil {
+						predictedSentence = fmt.Sprintf("I couldn't create the structure file %s: %v", filePath, err)
+					} else {
+						goImports(filePath)
+						predictedSentence = fmt.Sprintf("I have created the data structure '%s' in %s.", goStructName, filePath)
+					}
+				}
 			} else if strings.Contains(objectType, "folder") || strings.Contains(objectType, "directory") { // New block for folder creation
 				log.Printf("DEBUG: Creating folder. Name: '%s'", fileName)
 				folderName := fileName
@@ -1876,6 +2408,9 @@ func main() {
 						predictedSentence = fmt.Sprintf("I couldn't create the folder %s: %v", folderPath, err)
 					} else {
 						predictedSentence = fmt.Sprintf("I have created the folder %s.", folderPath)
+						if strings.Contains(strings.ToLower(folderName), "wasm") || strings.Contains(strings.ToLower(folderPath), "wasm") {
+							buildWasm(folderPath)
+						}
 					}
 				} else {
 					predictedSentence = "You need to provide a name for the folder."
@@ -1944,6 +2479,67 @@ func main() {
 										predictedSentence += " But no valid fields were provided to create a table."
 									}
 								}
+							} else if strings.Contains(strings.ToLower(query), "using the data structure") || strings.Contains(strings.ToLower(query), "using data structure") {
+								// Extract struct name
+								parts := strings.Fields(query)
+								var structName string
+								for i, p := range parts {
+									if (strings.ToLower(p) == "structure") && i+1 < len(parts) {
+										structName = parts[i+1]
+										break
+									}
+								}
+
+								if structName != "" {
+									// Try to find the struct file
+									structFile := structName + ".go"
+									if _, err := os.Stat(structFile); os.IsNotExist(err) {
+										// Try lowercase
+										structFile = strings.ToLower(structName) + ".go"
+									}
+
+									content, err := os.ReadFile(structFile)
+									if err != nil {
+										predictedSentence += fmt.Sprintf(" But I couldn't read the data structure file '%s': %v", structFile, err)
+									} else {
+										// Parse fields from struct
+										fields := make(map[string]string)
+										lines := strings.Split(string(content), "\n")
+										inStruct := false
+										for _, line := range lines {
+											trimmed := strings.TrimSpace(line)
+											if strings.HasPrefix(trimmed, "type ") && strings.Contains(trimmed, " struct {") {
+												inStruct = true
+												continue
+											}
+											if inStruct {
+												if trimmed == "}" {
+													break
+												}
+												parts := strings.Fields(trimmed)
+												if len(parts) >= 2 {
+													fName := parts[0]
+													fType := parts[1]
+													// Skip ID if it's auto-increment usually, but createTableWithFields handles ID separately
+													if strings.ToLower(fName) != "id" {
+														fields[fName] = fType
+													}
+												}
+											}
+										}
+
+										if len(fields) > 0 {
+											err = createTableWithFields(dbFileName, fileName, fields)
+											if err != nil {
+												predictedSentence += fmt.Sprintf(" But couldn't create the table '%s' in %s using struct '%s': %v", fileName, dbFileName, structName, err)
+											} else {
+												predictedSentence += fmt.Sprintf(" And created table '%s' using fields from data structure '%s'.", fileName, structName)
+											}
+										} else {
+											predictedSentence += fmt.Sprintf(" But I couldn't find any fields in data structure '%s'.", structName)
+										}
+									}
+								}
 							}
 						}
 					}
@@ -1993,7 +2589,13 @@ func main() {
 				}
 
 				// Create a directory for the data structure's database
-				dirName = strings.ToLower(structName)
+				if targetDirectory != "" {
+					dirName = targetDirectory
+					packageName = filepath.Base(dirName)
+				} else {
+					dirName = strings.ToLower(structName)
+					packageName = dirName
+				}
 				if err := os.MkdirAll(dirName, 0755); err != nil {
 					predictedSentence = fmt.Sprintf("I couldn't create the directory %s: %v", dirName, err)
 					goto endOfDataStructureCreation
@@ -2076,9 +2678,8 @@ func main() {
 				}
 
 				// --- Start of new generation logic ---
-				packageFileContent = generateDataStructurePackageContent(structName, fields)
+				packageFileContent = generateDataStructurePackageContent(structName, packageName, dirName, fields)
 				lowercaseName = strings.ToLower(structName)
-				packageName = lowercaseName
 
 				// Write the package file
 				structFileName = filepath.Join(dirName, lowercaseName+".go")
@@ -2119,8 +2720,8 @@ func main() {
 					goto endOfDataStructureCreation
 				}
 
-				// The new package is in a subdirectory named lowercaseName
-				packageImportPath = filepath.Join(modulePath, relativeDir, lowercaseName)
+				// The new package is in a subdirectory named dirName
+				packageImportPath = filepath.Join(modulePath, relativeDir, dirName)
 				packageImportPath = filepath.ToSlash(packageImportPath)
 
 				// Register Handlers in main.go
@@ -2624,10 +3225,11 @@ func FormHandler(w http.ResponseWriter, r *http.Request) {
 			}
 
 		case "run", "start":
-			if strings.Contains(objectType, "webserver") {
+			if strings.Contains(objectType, "webserver") || contains(objectTypeParts, "file") {
 				webserverName := ""
 				for i, token := range taggedData.Tokens {
-					if (strings.ToLower(token) == "webserver" || strings.ToLower(token) == "websever") && i+1 < len(taggedData.Tokens) {
+					tokenLower := strings.ToLower(token)
+					if (tokenLower == "webserver" || tokenLower == "websever" || tokenLower == "file") && i+1 < len(taggedData.Tokens) {
 						webserverName = taggedData.Tokens[i+1]
 						break
 					}
@@ -2636,46 +3238,64 @@ func FormHandler(w http.ResponseWriter, r *http.Request) {
 					webserverName = fileName
 				}
 
+				// --- Intent Guessing: Handle runs targeting a specific main.go file ---
+				var jimSourcePath string
+				if strings.HasSuffix(webserverName, ".go") {
+					absPath, err := filepath.Abs(webserverName)
+					if err == nil {
+						if info, err := os.Stat(absPath); err == nil && !info.IsDir() {
+							jimSourcePath = filepath.Dir(absPath)
+							// If the file is main.go, infer the webserver name from the directory
+							if strings.ToLower(filepath.Base(absPath)) == "main.go" {
+								webserverName = filepath.Base(jimSourcePath)
+							} else {
+								webserverName = strings.TrimSuffix(filepath.Base(absPath), ".go")
+							}
+							log.Printf("   [INTENT] Guessed webserver '%s' from file path.", webserverName)
+						}
+					}
+				}
+
 				if webserverName == "" {
 					predictedSentence = "You need to provide a name for the webserver to run."
 				} else {
 					// Path to the jim webserver's main package
-					var jimSourcePath string
+					// (Removed redundant declaration as it's now handled by the intent guessing above)
 
-					// Search for the webserver source directory with prioritization
-					candidates := []string{
-						filepath.Join(projectRoot, webserverName, "cmd", webserverName),
-						filepath.Join(projectRoot, "cmd", webserverName),
-						filepath.Join(projectRoot, webserverName),
-						filepath.Join(projectRoot, webserverName, "cmd"),
-					}
-
-					for _, p := range candidates {
-						if _, err := os.Stat(filepath.Join(p, "main.go")); err == nil {
-							// If we find one with a wasm or template folder, it's a strong candidate
-							if _, errW := os.Stat(filepath.Join(p, "wasm")); errW == nil {
-								jimSourcePath = p
-								break
-							}
-							if _, errT := os.Stat(filepath.Join(p, "template")); errT == nil {
-								jimSourcePath = p
-								break
-							}
-							if jimSourcePath == "" {
-								jimSourcePath = p
-							}
-						}
-					}
-
-					// Fallback to checking the current directory if still not found
-					if jimSourcePath == "" {
+						// Prioritized Search: 
+						// 1. Current Working Directory (if name matches)
+						// 2. Project root directory with name (e.g. ./jim)
+						// 3. cmd/ subdirectory (e.g. ./cmd/jim)
 						cwd, _ := os.Getwd()
+						candidates := []string{}
+						
 						if strings.EqualFold(filepath.Base(cwd), webserverName) {
-							if _, err := os.Stat(filepath.Join(cwd, "main.go")); err == nil {
-								jimSourcePath = cwd
+							candidates = append(candidates, cwd)
+						}
+						
+						candidates = append(candidates, []string{
+							filepath.Join(projectRoot, webserverName),
+							filepath.Join(projectRoot, "cmd", webserverName),
+							filepath.Join(projectRoot, webserverName, "cmd", webserverName),
+							filepath.Join(projectRoot, webserverName, "cmd"),
+						}...)
+
+						for _, p := range candidates {
+							if _, err := os.Stat(filepath.Join(p, "main.go")); err == nil {
+								// If we find one with a wasm or template folder, it's a strong candidate
+								if _, errW := os.Stat(filepath.Join(p, "wasm")); errW == nil {
+									jimSourcePath = p
+									break
+								}
+								if _, errT := os.Stat(filepath.Join(p, "template")); errT == nil {
+									jimSourcePath = p
+									break
+								}
+								if jimSourcePath == "" {
+									jimSourcePath = p
+								}
 							}
 						}
-					}
 
 					log.Printf("DEBUG: Jim Webserver Source Path: %s", jimSourcePath)
 
@@ -2717,51 +3337,73 @@ func FormHandler(w http.ResponseWriter, r *http.Request) {
 						}
 						log.Printf("DEBUG: Webserver %s built successfully to %s", webserverName, jimExecutablePath)
 
-						// Build WASM if it exists in the webserver source or project defaults
+						// --- Build WASM if relevant ---
 						buildWasm(filepath.Join(jimSourcePath, "wasm"))
 						buildWasm(filepath.Join(projectRoot, "learningfolder", "wasm"))
 
-						// Run the built executable
-						runCmd := exec.Command(jimExecutablePath, "-llm") // No "run webserver jim" arguments needed now
-						runCmd.Dir = jimSourcePath                        // Running from webserver source to find local assets
-						runCmd.Stdout = os.Stdout                         // Redirect stdout
-						runCmd.Stderr = os.Stderr                         // Redirect stderr
-
-						err := runCmd.Start()
-						if err != nil {
-							predictedSentence = fmt.Sprintf("I couldn't run the webserver %s: %v", webserverName, err)
-						} else {
-							pidFile := filepath.Join(buildOutputDir, webserverName+".pid")
-							if err := SavePid(runCmd.Process.Pid, pidFile); err != nil {
-								log.Printf("Failed to save PID file: %v", err)
+						// --- Categorize: Webserver vs CLI Script ---
+						isWebserver := false
+						mainFile := filepath.Join(jimSourcePath, "main.go")
+						if content, err := os.ReadFile(mainFile); err == nil {
+							sContent := string(content)
+							if strings.Contains(sContent, "http.ListenAndServe") || strings.Contains(sContent, "\"net/http\"") {
+								isWebserver = true
 							}
-							predictedSentence = fmt.Sprintf("I have started the webserver %s. PID: %d", webserverName, runCmd.Process.Pid)
+						}
 
-							// --- Verification step ---
-							log.Printf("DEBUG: Waiting for webserver to start...")
-							time.Sleep(2 * time.Second) // Give the server a moment to start
+						if isWebserver {
+							// Run as Webserver (Asynchronous + Verification)
+							runCmd := exec.Command(jimExecutablePath, "-llm")
+							runCmd.Dir = jimSourcePath
+							runCmd.Stdout = os.Stdout
+							runCmd.Stderr = os.Stderr
 
-							resp, err := http.Get("http://localhost:8080/")
+							err := runCmd.Start()
 							if err != nil {
-								log.Printf("WARNING: Webserver verification failed: %v", err)
-								predictedSentence += " However, I could not verify that the webserver is running."
+								predictedSentence = fmt.Sprintf("I couldn't run the webserver %s: %v", webserverName, err)
 							} else {
-								defer resp.Body.Close()
-								if resp.StatusCode == http.StatusOK {
-									predictedSentence += " And I have verified that the webserver is running."
-
-									// Check /form endpoint
-									respForm, errForm := http.Get("http://localhost:8080/form")
-									if errForm == nil {
-										if respForm.StatusCode == http.StatusOK {
-											predictedSentence += " The /form endpoint is also accessible."
-										}
-										respForm.Body.Close()
-									}
-								} else {
-									log.Printf("WARNING: Webserver returned status code %d during verification.", resp.StatusCode)
-									predictedSentence += fmt.Sprintf(" However, the webserver returned status code %d during verification.", resp.StatusCode)
+								pidFile := filepath.Join(buildOutputDir, webserverName+".pid")
+								if err := SavePid(runCmd.Process.Pid, pidFile); err != nil {
+									log.Printf("Failed to save PID file: %v", err)
 								}
+								predictedSentence = fmt.Sprintf("I have started the webserver %s. PID: %d", webserverName, runCmd.Process.Pid)
+
+								// --- Verification step ---
+								log.Printf("DEBUG: Waiting for webserver to start...")
+								time.Sleep(2 * time.Second)
+
+								resp, err := http.Get("http://localhost:8080/")
+								if err != nil {
+									log.Printf("WARNING: Webserver verification failed: %v", err)
+									predictedSentence += " However, I could not verify that the webserver is running."
+								} else {
+									defer resp.Body.Close()
+									if resp.StatusCode == http.StatusOK {
+										predictedSentence += " And I have verified that the webserver is running."
+										respForm, errForm := http.Get("http://localhost:8080/form")
+										if errForm == nil {
+											if respForm.StatusCode == http.StatusOK {
+												predictedSentence += " The /form endpoint is also accessible."
+											}
+											respForm.Body.Close()
+										}
+									} else {
+										predictedSentence += fmt.Sprintf(" However, the webserver returned status code %d during verification.", resp.StatusCode)
+									}
+								}
+							}
+						} else {
+							// Run as CLI Script (Synchronous)
+							log.Printf("   [INTENT] Detected CLI script, running synchronously...")
+							runCmd := exec.Command(jimExecutablePath)
+							runCmd.Dir = jimSourcePath
+							runCmd.Stdout = os.Stdout
+							runCmd.Stderr = os.Stderr
+							err := runCmd.Run()
+							if err != nil {
+								predictedSentence = fmt.Sprintf("Program '%s' finished with error: %v", webserverName, err)
+							} else {
+								predictedSentence = fmt.Sprintf("Program '%s' executed successfully.", webserverName)
 							}
 						}
 					}
@@ -3066,7 +3708,18 @@ func FormHandler(w http.ResponseWriter, r *http.Request) {
 						}
 					}
 				}
+			} else if objectType != "" {
+				fmt.Println("DEBUG: Matched fallback block")
+				msg, ok := handleGenericCreate(objectType, fileName, targetDirectory, handlerURL, kb)
+				fmt.Printf("DEBUG: handleGenericCreate returned ok=%t\n", ok)
+				if ok {
+					predictedSentence = msg
+					handled = true
+				} else {
+					handled = false
+				}
 			} else {
+				fmt.Println("DEBUG: Matched final else in create")
 				handled = false
 			}
 		case "stop":
@@ -3169,7 +3822,7 @@ func FormHandler(w http.ResponseWriter, r *http.Request) {
 									predictedSentence = fmt.Sprintf("I failed to delete column '%s' from database table '%s': %v. The Go struct was not modified.", fieldToDelete, tableName, err)
 								} else {
 									// 2. Update the Go source file
-									newContent := generateDataStructurePackageContent(structName, fields)
+									newContent := generateDataStructurePackageContent(structName, lowercaseName, dirName, fields)
 									err = os.WriteFile(structFileName, []byte(newContent), 0644)
 									if err != nil {
 										predictedSentence = fmt.Sprintf("I updated the database, but failed to update the Go file %s: %v. Please check for inconsistencies.", structFileName, err)
@@ -3246,7 +3899,7 @@ func FormHandler(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 			} else if contains(objectTypeParts, "folder") || contains(objectTypeParts, "directory") {
-				folderName := findName(taggedData)
+				folderName := findName(taggedData, kb)
 				if folderName != "" {
 					err := os.RemoveAll(folderName)
 					if err != nil {
@@ -3415,10 +4068,8 @@ func FormHandler(w http.ResponseWriter, r *http.Request) {
 
 // Intent represents the state of the command understanding.
 
-func generateDataStructurePackageContent(structName string, fields map[string]string) string {
+func generateDataStructurePackageContent(structName, packageName, dirName string, fields map[string]string) string {
 	lowercaseName := strings.ToLower(structName)
-	packageName := lowercaseName
-	dirName := lowercaseName
 
 	// Struct Definition
 	structDef := fmt.Sprintf("type %s struct {\n", structName)
@@ -3618,6 +4269,7 @@ func NewKnowledgeBase() *KnowledgeBase {
 		},
 		StopWords: map[string]bool{
 			"a": true, "an": true, "the": true, "please": true, "this": true,
+			"me": true, "my": true, "i": true, "new": true, "to": true, "for": true, "and": true, "it": true,
 		},
 	}
 }
@@ -3713,8 +4365,6 @@ func parse(input string, kb *KnowledgeBase) Intent {
 
 // resolveIntent attempts to find the missing object type in the remaining words.
 func resolveIntent(r *bufio.Reader, intent Intent, kb *KnowledgeBase) Intent {
-	fmt.Println("   ... Attempting recursive inference ...")
-
 	parts := strings.Fields(intent.RawInput)
 	var candidate string
 
@@ -3736,7 +4386,7 @@ func resolveIntent(r *bufio.Reader, intent Intent, kb *KnowledgeBase) Intent {
 		if lower == intent.Command || kb.KnownCommands[lower] {
 			continue
 		}
-		if kb.StopWords[lower] {
+		if kb.StopWords[lower] || lower == "named" || lower == "called" {
 			continue
 		}
 		candidate = lower
@@ -3744,6 +4394,7 @@ func resolveIntent(r *bufio.Reader, intent Intent, kb *KnowledgeBase) Intent {
 	}
 
 	if candidate != "" {
+		fmt.Println("   ... Attempting recursive inference ...")
 		fmt.Printf("   [INFERENCE] I detected the unknown token '%s'.\n", candidate)
 		fmt.Printf("   [CONFIRMATION] Did you mean to create a '%s'? (y/n): ", candidate)
 		resp, _ := r.ReadString('\n')
@@ -3754,9 +4405,64 @@ func resolveIntent(r *bufio.Reader, intent Intent, kb *KnowledgeBase) Intent {
 			kb.KnownObjects[candidate] = true
 			fmt.Printf("   [LEARNING] Knowledge updated: '%s' is now a known object type.\n", candidate)
 			kb.Save()
+			
+			// If we haven't identified a command yet, assume "create"
+			if intent.Command == "" {
+				intent.Command = "create"
+			}
 			return intent
 		}
 	}
-	// If inference fails, we return the intent as-is and let the legacy logic or error handler deal with it.
 	return intent
+}
+
+func handleGenericCreate(objectType, fileName, targetDirectory, handlerURL string, kb *KnowledgeBase) (string, bool) {
+	log.Printf("DEBUG: Using heuristic fallback for unknown objectType: '%s'", objectType)
+
+	// 1. If it looks like a handler (has a URL)
+	if handlerURL != "" {
+		handlerName := fileName
+		if handlerName == "" {
+			handlerName = objectType
+		}
+
+		handlerContent := fmt.Sprintf("package main\n\nimport \"net/http\"\n\n// %s is a generic handler for %s\nfunc %s(w http.ResponseWriter, r *http.Request) {\n\tw.Write([]byte(\"Generic implementation for %s\"))\n}\n", strings.Title(handlerName), objectType, strings.Title(handlerName), objectType)
+		filePath := handlerName + ".go"
+		if targetDirectory != "" {
+			filePath = filepath.Join(targetDirectory, filePath)
+			os.MkdirAll(targetDirectory, 0755)
+		}
+		os.WriteFile(filePath, []byte(handlerContent), 0644)
+		goImports(filePath)
+
+		mainPath := "main.go"
+		if targetDirectory != "" {
+			if _, err := os.Stat(filepath.Join(targetDirectory, "main.go")); err == nil {
+				mainPath = filepath.Join(targetDirectory, "main.go")
+			}
+		}
+		regMsg, _ := registerHandlerURL(strings.Title(handlerName), handlerURL, mainPath)
+		return fmt.Sprintf("I don't have a specialized handler for '%s', but since you provided a URL, I've generated a backend handler for it. %s", objectType, regMsg), true
+	}
+
+	// 2. If a name is provided, create a Go skeleton
+	if fileName != "" {
+		content := fmt.Sprintf("// %s implementation for the %s object\npackage main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"Executing %s (%s logic)\")\n}\n", strings.Title(fileName), objectType, fileName, objectType)
+		filePath := fileName + ".go"
+		if targetDirectory != "" {
+			filePath = filepath.Join(targetDirectory, filePath)
+			os.MkdirAll(targetDirectory, 0755)
+		}
+		os.WriteFile(filePath, []byte(content), 0644)
+		goImports(filePath)
+		return fmt.Sprintf("I identified '%s' as a new object type. I've created a basic Go skeleton '%s.go' for you.", objectType, fileName), true
+	}
+
+	// 3. Just a folder
+	folderPath := objectType
+	if targetDirectory != "" {
+		folderPath = filepath.Join(targetDirectory, folderPath)
+	}
+	os.MkdirAll(folderPath, 0755)
+	return fmt.Sprintf("I don't know how to implement '%s' yet, so I've created a work directory for it in /%s.", objectType, folderPath), true
 }

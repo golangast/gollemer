@@ -1,7 +1,0 @@
-echo ". $HOME/.asdf/asdf.sh" >> ~/.bashrc
-
-source ~/.bashrc
-
-asdf plugin add golang
-
-asdf local golang 1.26rc2
