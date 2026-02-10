@@ -2,6 +2,7 @@ package moe
 
 import (
 	"fmt"
+	"math"
 	"runtime"
 	"sort"
 	"sync"
@@ -24,6 +25,7 @@ type MoELayer struct {
 	gateOutputs        *Tensor // Output of the gating network (probabilities)
 	LoadBalancingLoss  float64 // Load balancing loss
 	Training           bool    // training mode
+	GRPOEnabled        bool    // whether to use Training-Free GRPO (Group Relative Policy Optimization) for expert selection
 }
 
 // NewMoELayer creates a new MoELayer.
@@ -54,6 +56,7 @@ func NewMoELayer(inputDim, numExperts, k int, expertBuilder func(int) (Expert, e
 		GatingNetwork: gatingNetwork,
 		Experts:       experts,
 		K:             k,
+		GRPOEnabled:   true, // Default to true for Training-Free GRPO
 		// InputDim:      inputDim, // Initialize InputDim
 	}, nil
 }
@@ -82,17 +85,59 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 		return nil, fmt.Errorf("moe layer gating network forward failed: %w", err)
 	}
 
+	numExperts := len(moe.Experts)
+	batchSize := input.Shape[0]
+	seqLength := input.Shape[1]
+	embeddingDim := input.Shape[2]
+
+	// Apply Training-Free GRPO if enabled
+	var scoresTensor *Tensor
+	if moe.GRPOEnabled {
+		// Treat experts for each token as a group
+		// Calculate mean and std of logits across experts for each token
+		grpoLogits := make([]float64, len(gateLogits.Data))
+		for i := 0; i < batchSize*seqLength; i++ {
+			tokenLogits := gateLogits.Data[i*numExperts : (i+1)*numExperts]
+			
+			// Calculate Mean
+			sum := 0.0
+			for _, val := range tokenLogits {
+				sum += val
+			}
+			mean := sum / float64(numExperts)
+
+			// Calculate StdDev
+			sqDiffSum := 0.0
+			for _, val := range tokenLogits {
+				diff := val - mean
+				sqDiffSum += diff * diff
+			}
+			std := math.Sqrt(sqDiffSum / float64(numExperts))
+			if std < 1e-8 {
+				std = 1.0 // Prevent division by zero
+			}
+
+			// Advantage = (Logit - Mean) / Std
+			for j := 0; j < numExperts; j++ {
+				grpoLogits[i*numExperts+j] = (tokenLogits[j] - mean) / std
+			}
+		}
+		scoresTensor = NewTensor(gateLogits.Shape, grpoLogits, gateLogits.RequiresGrad)
+		if gateLogits.RequiresGrad {
+			// We skip backprop complexity for GRPO normalization in "Training-Free" mode if it's meant for inference
+			// But for completeness, we could link it. For now, we'll just use the data.
+			scoresTensor.Creator = gateLogits.Creator
+		}
+	} else {
+		scoresTensor = gateLogits
+	}
+
 	// Apply softmax to get probabilities
-	gateOutputs, err := gateLogits.Softmax(len(gateLogits.Shape) - 1)
+	gateOutputs, err := scoresTensor.Softmax(len(scoresTensor.Shape) - 1)
 	if err != nil {
 		return nil, fmt.Errorf("gating network softmax failed: %w", err)
 	}
 	moe.gateOutputs = gateOutputs
-
-	batchSize := input.Shape[0]
-	seqLength := input.Shape[1]
-	embeddingDim := input.Shape[2]
-	numExperts := len(moe.Experts)
 
 	moe.selectedExperts = make([][]int, batchSize*seqLength)
 	moe.expertTokenIndices = make([][]int, numExperts)
@@ -107,7 +152,7 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 	tokenExpertRelativeIndices := make([][]int, batchSize*seqLength)
 
 	for i := 0; i < batchSize*seqLength; i++ {
-		scores := gateOutputs.Data[i*numExperts : (i+1)*numExperts]
+		scores := scoresTensor.Data[i*numExperts : (i+1)*numExperts]
 		topKIndices := make([]int, numExperts)
 		for j := range topKIndices {
 			topKIndices[j] = j

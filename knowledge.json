@@ -39,6 +39,7 @@
     "home": true,
     "main": true,
     "structure": true,
+    "data structure": true,
     "user": true,
     "webserver": true
   },

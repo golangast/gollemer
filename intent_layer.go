@@ -84,6 +84,11 @@ func NewHybridIntentResolver(moe MoEClient) *HybridIntentResolver {
 				Fields:   map[string]string{"name": "string", "source": "string"},
 				Required: []string{"name"},
 			},
+			"create_structure": {
+				Name:     "create_structure",
+				Fields:   map[string]string{"name": "string", "fields": "list"},
+				Required: []string{"name"},
+			},
 		},
 	}
 }
