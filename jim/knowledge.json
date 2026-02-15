@@ -44,6 +44,7 @@
     "main": true,
     "structure": true,
     "user": true,
+    "wasm": true,
     "webserver": true,
     "what": true
   },

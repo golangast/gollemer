@@ -553,6 +553,21 @@
                         <td>`create handler MyHandler with url /myapi` <br> `add a login endpoint`</td>
                     </tr>
                     <tr>
+                        <td><strong>Create Page</strong></td>
+                        <td>Generates a new WASM frontend page and registers it.</td>
+                        <td>`create page dashboard` <br> `add a view named settings`</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Create Component</strong></td>
+                        <td>Creates a reusable WASM UI component.</td>
+                        <td>`create component Button` <br> `new ui component Card`</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Create Form</strong></td>
+                        <td>Generates an HTML form and handler, optionally from a struct or learning data.</td>
+                        <td>`create form from User` <br> `add a form for contact`</td>
+                    </tr>
+                    <tr>
                         <td><strong>Create Webserver</strong></td>
                         <td>Scaffolds a new Go web server project in `cmd/<name>/main.go`.</td>
                         <td>`create webserver MyServer` <br> `build a new API server`</td>
@@ -591,6 +606,41 @@
                         <td><strong>Print Working Directory</strong></td>
                         <td>Prints the current working directory.</td>
                         <td>`pwd` <br> `where am I?`</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Tree</strong></td>
+                        <td>Displays the directory tree structure. Supports depth limit.</td>
+                        <td>`tree` <br> `tree -d 2`</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Grep / Search</strong></td>
+                        <td>Searches for text patterns in files within the current directory.</td>
+                        <td>`grep "TODO"` <br> `search for "func main"`</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Read File</strong></td>
+                        <td>Reads and displays the contents of a file.</td>
+                        <td>`cat main.go` <br> `read config.json`</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Run / Start</strong></td>
+                        <td>Starts a webserver or executes a file.</td>
+                        <td>`run webserver MyServer` <br> `start main.go`</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Stop</strong></td>
+                        <td>Stops a running webserver.</td>
+                        <td>`stop webserver MyServer`</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Verify</strong></td>
+                        <td>Checks if a webserver is running and endpoints are accessible.</td>
+                        <td>`verify webserver` <br> `check status`</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Learn</strong></td>
+                        <td>Ingests templates or objects from a specified directory to the Knowledge Base.</td>
+                        <td>`learn from ./templates` <br> `learn object navbar`</td>
                     </tr>
                 </tbody>
             </table>
