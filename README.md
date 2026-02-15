@@ -60,3 +60,6 @@ Closes the Gollemer application.
 
 #### 9. 💬 Interactive Mode
 Returns to the main prompt, allowing you to enter natural language commands directly.
+
+#### 10. ⚙️ Model Configuration
+View and update the file paths for the AI models (Word2Vec, MoE, NER) and vocabularies used by Gollemer.
