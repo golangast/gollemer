@@ -9,10 +9,12 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -22,12 +24,30 @@ import (
 
 	"github.com/golangast/gollemer/colors"
 	"github.com/golangast/gollemer/internal/sqlite_db"
+	"github.com/golangast/gollemer/neural/moe"
+	neuralnn "github.com/golangast/gollemer/neural/nn"
+	mainvocab "github.com/golangast/gollemer/neural/nnu/vocab"
+	"github.com/golangast/gollemer/neural/nnu/word2vec"
 	"github.com/golangast/gollemer/tagger/nertagger"
 	"github.com/golangast/gollemer/tagger/postagger"
 	"github.com/golangast/gollemer/tagger/tag"
 )
 
 const kbFilename = "knowledge.json"
+
+// intentIcons maps intents to their visual representation.
+var intentIcons = map[string]string{
+	"create_webserver": "🌐 [Webserver]",
+	"create_handler":   "🔌 [Handler]",
+	"create_database":  "🗄️  [Database]",
+	"create_file":      "📄 [File]",
+	"create_folder":    "📁 [Folder]",
+	"create_page":      "🖥️  [Page]",
+	"create_form":      "📝 [Form]",
+	"create_structure": "🏗️  [Structure]",
+	"move_file":        "🚚 [Move]",
+	"create_object":    "🔨 [Object]",
+}
 
 // paramTriggers maps words like "named" to the key "name".
 var paramTriggers = map[string]string{
@@ -796,12 +816,21 @@ func (c *GollemerMoEClient) ExtractEntities(input string, intent string) map[str
 }
 
 // generateDirectoryTree creates a string representation of a directory tree.
-func generateDirectoryTree(path string, prefix string, currentDepth int, maxDepth int) (string, error) {
-	if maxDepth != -1 && currentDepth >= maxDepth {
-		return "", nil
+func generateDirectoryTree(path string, prefix string, currentDepth int, maxDepth int, highlightPath string) (string, error) {
+	var builder strings.Builder
+
+	if currentDepth == 0 {
+		if absPath, err := filepath.Abs(path); err == nil {
+			builder.WriteString(fmt.Sprintf("📂 \033[36m%s\033[0m\n", absPath))
+		} else {
+			builder.WriteString(fmt.Sprintf("📂 \033[36m%s\033[0m\n", path))
+		}
 	}
 
-	var builder strings.Builder
+	if maxDepth != -1 && currentDepth >= maxDepth {
+		return builder.String(), nil
+	}
+
 	entries, err := os.ReadDir(path)
 	if err != nil {
 		return "", err
@@ -822,10 +851,21 @@ func generateDirectoryTree(path string, prefix string, currentDepth int, maxDept
 			newPrefix = prefix + "    "
 		}
 
-		builder.WriteString(prefix + connector + entry.Name() + "\n")
+		entryName := entry.Name()
+		fullPath := filepath.Join(path, entryName)
+
+		if highlightPath != "" {
+			absEntry, _ := filepath.Abs(fullPath)
+			absHighlight, _ := filepath.Abs(highlightPath)
+			if absEntry == absHighlight {
+				entryName = "\033[32m" + entryName + "\033[0m"
+			}
+		}
+
+		builder.WriteString(prefix + connector + entryName + "\n")
 
 		if entry.IsDir() {
-			subTree, err := generateDirectoryTree(filepath.Join(path, entry.Name()), newPrefix, currentDepth+1, maxDepth)
+			subTree, err := generateDirectoryTree(fullPath, newPrefix, currentDepth+1, maxDepth, highlightPath)
 			if err != nil {
 				builder.WriteString(newPrefix + "└── [error reading dir]\n")
 			} else {
@@ -842,6 +882,43 @@ type ConversationState struct {
 	Missing         []string
 	IsActive        bool
 	SuggestedObject string // Added for smart suggestions
+}
+
+type TutorialState struct {
+	Active bool
+	Step   int
+}
+
+func printIntro() {
+	fmt.Println("--- Welcome to Gollemer! ʕ◔ϖ◔ʔ ---")
+	fmt.Println("It looks like this is your first time running Gollemer.")
+	fmt.Println("\n💡 TIP: Type 'tutorial' to start an interactive guide!\n")
+	fmt.Println("💡 TIP: Type 'menu' for an easy-to-use options menu!\n")
+	fmt.Println("Here is a quick guide to get you started:")
+	fmt.Println("")
+	fmt.Println("1. Commands:")
+	fmt.Println("   You can use natural language to interact with your project.")
+	fmt.Println("   - Navigation: 'go to cmd', 'list files', 'tree'")
+	fmt.Println("   - File Ops:   'create file main.go', 'delete folder tmp'")
+	fmt.Println("   - Web Dev:    'create webserver MyApp', 'create handler Login', 'run webserver'")
+	fmt.Println("   - System:     'clear', 'exit', 'history'")
+	fmt.Println("")
+	fmt.Println("2. The Learning System (How & Why):")
+	fmt.Println("   Gollemer learns from your code to automate repetitive tasks.")
+	fmt.Println("   - HOW: It scans a 'learningfolder' for templates (files like 'navbar.html', 'auth.go').")
+	fmt.Println("          If it finds 'navbar.html', it learns the 'navbar' object.")
+	fmt.Println("   - WHY: So you can say 'create navbar' and it generates the code for you instantly,")
+	fmt.Println("          using your own preferred style and structure.")
+	fmt.Println("")
+	fmt.Println("3. Customizing Learning:")
+	fmt.Println("   You have full control over what Gollemer learns.")
+	fmt.Println("   - Add/Edit files in the 'learningfolder' to teach it new objects.")
+	fmt.Println("   - Change the source folder: 'learn from ./my-templates'")
+	fmt.Println("   - Teach specific words: 'learn object widget'")
+	fmt.Println("")
+	fmt.Println("Type 'help' at any time to see this information again.")
+	fmt.Println("----------------------------------------")
+	fmt.Println("")
 }
 
 func runLLM() {
@@ -866,6 +943,12 @@ func runLLM() {
 	// Load KnowledgeBase
 	kb := LoadKnowledgeBase()
 
+	if kb.FirstRun {
+		printIntro()
+		kb.FirstRun = false
+		kb.Save()
+	}
+
 	reader := bufio.NewReader(os.Stdin)
 
 	// Load last directory on startup
@@ -888,6 +971,7 @@ func runLLM() {
 
 	var commandHistory []string
 	var sessionState ConversationState
+	var tutorialState TutorialState
 
 	for {
 		colors.ColorizeCol("red", "magenta", "/ʕ◔ϖ◔ʔ/> ")
@@ -905,6 +989,526 @@ func runLLM() {
 			cmd := exec.Command("clear")
 			cmd.Stdout = os.Stdout
 			cmd.Run()
+			continue
+		}
+
+		if query == "menu" {
+			fmt.Println("\n--- 📋 Main Menu ---")
+			fmt.Println("1. 🚀 Start a New Project (Webserver)")
+			fmt.Println("2. ➕ Add a Feature (Handler, Page, Database)")
+			fmt.Println("3. 📂 Manage Files (Create, Delete, Move)")
+			fmt.Println("4. ▶️  Run Project")
+			fmt.Println("5. 🧠 Learning & Training")
+			fmt.Println("6. 🎓 Tutorial")
+			fmt.Println("7. ❓ Help")
+			fmt.Println("8. 🚪 Exit")
+			fmt.Print("\nSelect an option (1-8): ")
+
+			choice, _ := reader.ReadString('\n')
+			choice = strings.TrimSpace(choice)
+
+			switch choice {
+			case "1":
+				fmt.Print("Enter name for your new webserver: ")
+				name, _ := reader.ReadString('\n')
+				name = strings.TrimSpace(name)
+				if name != "" {
+					query = "create webserver " + name
+				} else {
+					continue
+				}
+			case "2":
+				fmt.Println("\nWhat do you want to add?")
+				fmt.Println("a. Handler (Backend logic)")
+				fmt.Println("b. Page (Frontend view)")
+				fmt.Println("c. Database (Storage)")
+				fmt.Print("Select (a/b/c): ")
+				sub, _ := reader.ReadString('\n')
+				sub = strings.TrimSpace(sub)
+				if sub == "a" {
+					fmt.Print("Handler Name: ")
+					n, _ := reader.ReadString('\n')
+					query = "create handler " + strings.TrimSpace(n)
+				} else if sub == "b" {
+					fmt.Print("Page Name: ")
+					n, _ := reader.ReadString('\n')
+					query = "create page " + strings.TrimSpace(n)
+				} else if sub == "c" {
+					fmt.Print("Database Name: ")
+					n, _ := reader.ReadString('\n')
+					query = "create database " + strings.TrimSpace(n)
+				} else {
+					continue
+				}
+			case "3":
+				fmt.Println("\nWhat file operation?")
+				fmt.Println("a. Create File")
+				fmt.Println("b. Create Folder")
+				fmt.Print("Select (a/b): ")
+				sub, _ := reader.ReadString('\n')
+				sub = strings.TrimSpace(sub)
+				if sub == "a" {
+					fmt.Print("File Name: ")
+					n, _ := reader.ReadString('\n')
+					query = "create file " + strings.TrimSpace(n)
+				} else if sub == "b" {
+					fmt.Print("Folder Name: ")
+					n, _ := reader.ReadString('\n')
+					query = "create folder " + strings.TrimSpace(n)
+				} else {
+					continue
+				}
+			case "4":
+				fmt.Print("Enter webserver name to run (or press enter for current): ")
+				n, _ := reader.ReadString('\n')
+				n = strings.TrimSpace(n)
+				if n != "" {
+					query = "run webserver " + n
+				} else {
+					query = "run webserver"
+				}
+			case "5":
+				fmt.Println("\n--- 🧠 Learning & Training ---")
+				if kb.LearningPath != "" {
+					fmt.Printf("Current Learning Path: %s\n", kb.LearningPath)
+				}
+				fmt.Println("1. Show Learning Status (Data & Vocab)")
+				fmt.Println("2. Change Learning Source (Folder)")
+				fmt.Println("3. Teach New Object Word")
+				fmt.Println("4. Run Training Commands")
+				fmt.Print("Select (1-4): ")
+				sub, _ := reader.ReadString('\n')
+				sub = strings.TrimSpace(sub)
+				if sub == "1" {
+					fmt.Println("\n--- 📊 Learning Status ---")
+					fmt.Printf("Knowledge Base: %s\n", kbFilename)
+					if kb.LearningPath != "" {
+						fmt.Printf("Templates Source: %s\n", kb.LearningPath)
+					} else {
+						fmt.Println("Templates Source: ./learningfolder (Default)")
+					}
+
+					fmt.Println("\n[Training Data & Vocab]")
+					models := []string{
+						"gob_models/word2vec.model",
+						"gob_models/word2vec_model.gob",
+						"gob_models/moe_classification_model.gob",
+						"gob_models/ner_model.gob",
+						"gob_models/query_vocabulary.gob",
+						"gob_models/semantic_output_vocabulary.gob",
+					}
+					for _, m := range models {
+						fullPath := filepath.Join(projectRoot, m)
+						if _, err := os.Stat(fullPath); err == nil {
+							fmt.Printf("  ✅ %s\n", m)
+						} else {
+							fmt.Printf("  ❌ %s (Not found)\n", m)
+						}
+					}
+
+					fmt.Println("\n[Metrics]")
+					qVocabPath := filepath.Join(projectRoot, "gob_models/query_vocabulary.gob")
+					if qVocab, err := mainvocab.LoadVocabulary(qVocabPath); err == nil {
+						fmt.Printf("  📝 Query Vocabulary: %d words\n", len(qVocab.WordToToken))
+					} else {
+						fmt.Printf("  ⚠️  Could not load Query Vocabulary: %v\n", err)
+					}
+
+					sVocabPath := filepath.Join(projectRoot, "gob_models/semantic_output_vocabulary.gob")
+					if sVocab, err := mainvocab.LoadVocabulary(sVocabPath); err == nil {
+						fmt.Printf("  📝 Semantic Output Vocabulary: %d tokens\n", len(sVocab.WordToToken))
+					} else {
+						fmt.Printf("  ⚠️  Could not load Semantic Vocabulary: %v\n", err)
+					}
+
+					continue
+				} else if sub == "2" {
+					fmt.Print("Enter path to learning folder (e.g., ./templates): ")
+					path, _ := reader.ReadString('\n')
+					query = "learn from " + strings.TrimSpace(path)
+				} else if sub == "3" {
+					fmt.Print("Enter object name to learn: ")
+					obj, _ := reader.ReadString('\n')
+					query = "learn object " + strings.TrimSpace(obj)
+				} else if sub == "4" {
+					fmt.Println("\n--- 🏋️ Run Training ---")
+					fmt.Println("1. Train Word2Vec")
+					fmt.Println("2. Train MoE")
+					fmt.Println("3. Train Intent Classifier")
+					fmt.Println("4. Train NER")
+					fmt.Println("5. Custom Training Module")
+					fmt.Println("6. Visualize Neural Network")
+					fmt.Println("7. Visualize Word2Vec Model")
+					fmt.Println("8. Search Word Neighbors")
+					fmt.Println("9. Visualize Word Relationship")
+					fmt.Println("10. Visualize Word Distribution (2D Plot)")
+					fmt.Println("11. Inspect Model Weights")
+					fmt.Println("12. Visualize Attention Mechanism")
+					fmt.Println("13. Visualize Word Similarity (One vs List)")
+					fmt.Print("Select (1-13): ")
+					trainSub, _ := reader.ReadString('\n')
+					trainSub = strings.TrimSpace(trainSub)
+
+					var cmdPath string
+					switch trainSub {
+					case "1":
+						cmdPath = "cmd/train_word2vec"
+					case "2":
+						cmdPath = "cmd/train_moe"
+					case "3":
+						cmdPath = "cmd/train_intent_classifier"
+					case "4":
+						cmdPath = "cmd/train_ner"
+					case "5":
+						cmdPath = "cmd/train_custom" // Ensure this directory exists with a main.go
+					case "6":
+						modelPath := filepath.Join(projectRoot, "gob_models/moe_classification_model.gob")
+						if _, err := os.Stat(modelPath); os.IsNotExist(err) {
+							fmt.Printf("❌ Model file not found at %s\n", modelPath)
+						} else {
+							nn, err := moe.LoadIntentMoEModelFromGOB(modelPath)
+							if err != nil {
+								fmt.Printf("❌ Failed to load model: %v\n", err)
+							} else {
+								fmt.Println("\n--- 🕸️ Neural Network Architecture ---")
+								fmt.Println("")
+								fmt.Println("       [ Input Query ]")
+								fmt.Println("             ⬇")
+								fmt.Println("  ╔═══════════════════════╗")
+								if nn.Embedding != nil {
+									fmt.Printf("  ║    Embedding Layer    ║  Dimension: %d\n", nn.Embedding.DimModel)
+								} else {
+									fmt.Println("  ║    Embedding Layer    ║")
+								}
+								fmt.Println("  ╚═══════════════════════╝")
+								fmt.Println("             ⬇")
+								fmt.Println("  ╔═══════════════════════╗")
+								encoderType := fmt.Sprintf("%T", nn.Encoder)
+								if strings.Contains(encoderType, "SimpleRNNEncoder") {
+									encoderType = "Simple RNN"
+								}
+								fmt.Printf("  ║        Encoder        ║  Type: %s\n", encoderType)
+								fmt.Println("  ╚═══════════════════════╝")
+								fmt.Println("             ⬇")
+								fmt.Println("  ╔═══════════════════════╗")
+								if nn.Decoder != nil && nn.Decoder.LSTM != nil {
+									fmt.Printf("  ║        Decoder        ║  Hidden Size: %d\n", nn.Decoder.LSTM.HiddenSize)
+								} else {
+									fmt.Println("  ║        Decoder        ║")
+								}
+								fmt.Println("  ╚═══════════════════════╝")
+								fmt.Println("             ⬇")
+								fmt.Println("  ╔═══════════════════════╗")
+								fmt.Printf("  ║     Output Vocab      ║  Size: %d\n", nn.SentenceVocabSize)
+								fmt.Println("  ╚═══════════════════════╝")
+								fmt.Println("             ⬇")
+								fmt.Println("      [ Predicted Intent ]")
+								fmt.Println("")
+								fmt.Println("---------------------------------------")
+							}
+						}
+						continue
+					case "7":
+						modelPath := filepath.Join(projectRoot, "gob_models/word2vec.model")
+						if _, err := os.Stat(modelPath); os.IsNotExist(err) {
+							modelPath = filepath.Join(projectRoot, "gob_models/word2vec_model.gob")
+						}
+						if _, err := os.Stat(modelPath); os.IsNotExist(err) {
+							fmt.Printf("❌ Word2Vec model file not found.\n")
+						} else {
+							sw2v, err := word2vec.LoadModel(modelPath)
+							if err != nil {
+								fmt.Printf("❌ Failed to load Word2Vec model: %v\n", err)
+							} else {
+								fmt.Println("\n--- 🔤 Word2Vec Model Visualization ---")
+								fmt.Printf("Vector Size: %d\n", sw2v.VectorSize)
+								fmt.Printf("Vocabulary Count: %d words\n", len(sw2v.Vocabulary))
+								fmt.Println("---------------------------------------")
+							}
+						}
+						continue
+					case "8":
+						modelPath := filepath.Join(projectRoot, "gob_models/word2vec.model")
+						if _, err := os.Stat(modelPath); os.IsNotExist(err) {
+							modelPath = filepath.Join(projectRoot, "gob_models/word2vec_model.gob")
+						}
+						if _, err := os.Stat(modelPath); os.IsNotExist(err) {
+							fmt.Printf("❌ Word2Vec model file not found.\n")
+						} else {
+							sw2v, err := word2vec.LoadModel(modelPath)
+							if err != nil {
+								fmt.Printf("❌ Failed to load Word2Vec model: %v\n", err)
+							} else {
+								fmt.Print("Enter word to find neighbors for: ")
+								targetWord, _ := reader.ReadString('\n')
+								targetWord = strings.TrimSpace(targetWord)
+
+								if targetIdx, ok := sw2v.Vocabulary[targetWord]; !ok {
+									fmt.Printf("❌ Word '%s' not found in vocabulary.\n", targetWord)
+								} else {
+									targetVec := sw2v.WordVectors[targetIdx]
+									type result struct {
+										Word  string
+										Score float64
+									}
+									var results []result
+									for word, idx := range sw2v.Vocabulary {
+										if word == targetWord {
+											continue
+										}
+										if vec, ok := sw2v.WordVectors[idx]; ok {
+											score := cosineSimilarity(targetVec, vec)
+											results = append(results, result{word, score})
+										}
+									}
+									sort.Slice(results, func(i, j int) bool {
+										return results[i].Score > results[j].Score
+									})
+
+									fmt.Printf("\n--- Neighbors for '%s' ---\n", targetWord)
+									limit := 10
+									if len(results) < limit {
+										limit = len(results)
+									}
+									for i := 0; i < limit; i++ {
+										fmt.Printf("  %d. %s (%.4f)\n", i+1, results[i].Word, results[i].Score)
+									}
+									fmt.Println("---------------------------")
+								}
+							}
+						}
+						continue
+					case "9":
+						modelPath := filepath.Join(projectRoot, "gob_models/word2vec.model")
+						if _, err := os.Stat(modelPath); os.IsNotExist(err) {
+							modelPath = filepath.Join(projectRoot, "gob_models/word2vec_model.gob")
+						}
+						if _, err := os.Stat(modelPath); os.IsNotExist(err) {
+							fmt.Printf("❌ Word2Vec model file not found.\n")
+						} else {
+							sw2v, err := word2vec.LoadModel(modelPath)
+							if err != nil {
+								fmt.Printf("❌ Failed to load Word2Vec model: %v\n", err)
+							} else {
+								fmt.Print("Enter first word: ")
+								word1, _ := reader.ReadString('\n')
+								word1 = strings.TrimSpace(word1)
+
+								fmt.Print("Enter second word: ")
+								word2, _ := reader.ReadString('\n')
+								word2 = strings.TrimSpace(word2)
+
+								idx1, ok1 := sw2v.Vocabulary[word1]
+								idx2, ok2 := sw2v.Vocabulary[word2]
+
+								if !ok1 {
+									fmt.Printf("❌ Word '%s' not found in vocabulary.\n", word1)
+								} else if !ok2 {
+									fmt.Printf("❌ Word '%s' not found in vocabulary.\n", word2)
+								} else {
+									vec1 := sw2v.WordVectors[idx1]
+									vec2 := sw2v.WordVectors[idx2]
+									similarity := cosineSimilarity(vec1, vec2)
+									fmt.Printf("\n--- Relationship: '%s' <-> '%s' ---\n", word1, word2)
+									fmt.Printf("Cosine Similarity: %.4f\n", similarity)
+									fmt.Println("---------------------------------------")
+								}
+							}
+						}
+						continue
+					case "10":
+						modelPath := filepath.Join(projectRoot, "gob_models/word2vec.model")
+						if _, err := os.Stat(modelPath); os.IsNotExist(err) {
+							modelPath = filepath.Join(projectRoot, "gob_models/word2vec_model.gob")
+						}
+						if _, err := os.Stat(modelPath); os.IsNotExist(err) {
+							fmt.Printf("❌ Word2Vec model file not found.\n")
+						} else {
+							sw2v, err := word2vec.LoadModel(modelPath)
+							if err != nil {
+								fmt.Printf("❌ Failed to load Word2Vec model: %v\n", err)
+							} else {
+								fmt.Println("Generating 2D visualization (HTML)...")
+
+								// Limit to N words for visualization to keep it performant
+								limit := 500
+								count := 0
+								var words []string
+								var vectors [][]float64
+
+								for w, idx := range sw2v.Vocabulary {
+									if count >= limit {
+										break
+									}
+									if idx < len(sw2v.WordVectors) {
+										words = append(words, w)
+										vectors = append(vectors, sw2v.WordVectors[idx])
+										count++
+									}
+								}
+
+								// Generate HTML
+								htmlContent := generateWordVizHTML(words, vectors)
+								outputPath := filepath.Join(projectRoot, "word_distribution.html")
+								if err := os.WriteFile(outputPath, []byte(htmlContent), 0644); err != nil {
+									fmt.Printf("❌ Failed to write HTML file: %v\n", err)
+								} else {
+									fmt.Printf("✅ Visualization generated at: %s\n", outputPath)
+									fmt.Println("   Open this file in your web browser to view the plot.")
+								}
+							}
+						}
+						continue
+					case "11":
+						modelPath := filepath.Join(projectRoot, "gob_models/moe_classification_model.gob")
+						if _, err := os.Stat(modelPath); os.IsNotExist(err) {
+							fmt.Printf("❌ Model file not found at %s\n", modelPath)
+						} else {
+							nn, err := moe.LoadIntentMoEModelFromGOB(modelPath)
+							if err != nil {
+								fmt.Printf("❌ Failed to load model: %v\n", err)
+							} else {
+								fmt.Println("\n--- ⚖️  Model Weights Inspection ---")
+								fmt.Println("1. Embedding Layer")
+								fmt.Println("2. Encoder")
+								fmt.Println("3. Decoder")
+								fmt.Print("Select component (1-3): ")
+								compSub, _ := reader.ReadString('\n')
+								compSub = strings.TrimSpace(compSub)
+
+								switch compSub {
+								case "1":
+									if nn.Embedding != nil {
+										fmt.Println("--- Embedding Layer ---")
+										inspectStruct(nn.Embedding, "  ")
+									} else {
+										fmt.Println("Embedding layer is nil.")
+									}
+								case "2":
+									fmt.Println("--- Encoder ---")
+									inspectStruct(nn.Encoder, "  ")
+								case "3":
+									fmt.Println("--- Decoder ---")
+									inspectStruct(nn.Decoder, "  ")
+								}
+							}
+						}
+						continue
+					case "12":
+						modelPath := filepath.Join(projectRoot, "gob_models/moe_classification_model.gob")
+						if _, err := os.Stat(modelPath); os.IsNotExist(err) {
+							fmt.Printf("❌ Model file not found at %s\n", modelPath)
+						} else {
+							nnModel, err := moe.LoadIntentMoEModelFromGOB(modelPath)
+							if err != nil {
+								fmt.Printf("❌ Failed to load model: %v\n", err)
+							} else {
+								fmt.Println("\n--- 👁️ Attention Mechanism Visualization ---")
+								findAndVisualizeAttention(nnModel)
+							}
+						}
+						continue
+					case "13":
+						modelPath := filepath.Join(projectRoot, "gob_models/word2vec.model")
+						if _, err := os.Stat(modelPath); os.IsNotExist(err) {
+							modelPath = filepath.Join(projectRoot, "gob_models/word2vec_model.gob")
+						}
+						if _, err := os.Stat(modelPath); os.IsNotExist(err) {
+							fmt.Printf("❌ Word2Vec model file not found.\n")
+						} else {
+							sw2v, err := word2vec.LoadModel(modelPath)
+							if err != nil {
+								fmt.Printf("❌ Failed to load Word2Vec model: %v\n", err)
+							} else {
+								fmt.Print("Enter target word: ")
+								targetWord, _ := reader.ReadString('\n')
+								targetWord = strings.TrimSpace(targetWord)
+
+								fmt.Print("Enter list of words to compare (comma separated): ")
+								listStr, _ := reader.ReadString('\n')
+								listStr = strings.TrimSpace(listStr)
+								compareWords := strings.Split(listStr, ",")
+
+								targetIdx, ok := sw2v.Vocabulary[targetWord]
+								if !ok {
+									fmt.Printf("❌ Target word '%s' not found in vocabulary.\n", targetWord)
+								} else {
+									targetVec := sw2v.WordVectors[targetIdx]
+									fmt.Printf("\n--- Similarity with '%s' ---\n", targetWord)
+
+									type simResult struct {
+										Word  string
+										Score float64
+									}
+									var results []simResult
+
+									for _, w := range compareWords {
+										w = strings.TrimSpace(w)
+										if w == "" {
+											continue
+										}
+										idx, ok := sw2v.Vocabulary[w]
+										if !ok {
+											fmt.Printf("  %s: [Not in vocab]\n", w)
+											continue
+										}
+										vec := sw2v.WordVectors[idx]
+										score := cosineSimilarity(targetVec, vec)
+										results = append(results, simResult{Word: w, Score: score})
+									}
+
+									sort.Slice(results, func(i, j int) bool {
+										return results[i].Score > results[j].Score
+									})
+
+									for _, res := range results {
+										fmt.Printf("  %s: %.4f\n", res.Word, res.Score)
+									}
+									fmt.Println("---------------------------------------")
+								}
+							}
+						}
+						continue
+					}
+
+					if cmdPath != "" {
+						fmt.Printf("Running %s...\n", cmdPath)
+						c := exec.Command("go", "run", "./"+cmdPath)
+						c.Dir = projectRoot
+						c.Stdout = os.Stdout
+						c.Stderr = os.Stderr
+						if err := c.Run(); err != nil {
+							fmt.Printf("Error running training: %v\n", err)
+						} else {
+							fmt.Println("Training completed.")
+						}
+					}
+					continue
+				} else {
+					continue
+				}
+			case "6":
+				tutorialState.Active = true
+				tutorialState.Step = 1
+				colors.AnimatedOutput("green", "black", "--- Tutorial Mode Started ---\nWelcome to the Gollemer tutorial! I will guide you through the basics.\nStep 1: Let's start by creating a project folder.\nTry typing: 'create folder myproject'", 1*time.Second)
+				fmt.Println("\n")
+				continue
+			case "7":
+				query = "help"
+			case "8":
+				os.Exit(0)
+			default:
+				fmt.Println("Invalid option.")
+				continue
+			}
+			fmt.Printf("Executing: %s\n", query)
+		}
+
+		if query == "tutorial" {
+			tutorialState.Active = true
+			tutorialState.Step = 1
+			colors.AnimatedOutput("green", "black", "--- Tutorial Mode Started ---\nWelcome to the Gollemer tutorial! I will guide you through the basics.\nStep 1: Let's start by creating a project folder.\nTry typing: 'create folder myproject'", 1*time.Second)
+			fmt.Println("\n")
 			continue
 		} else if query == "show learning path" {
 			if kb.LearningPath != "" {
@@ -1044,8 +1648,11 @@ func runLLM() {
 		}
 
 		if intentData.Intent != "" {
-			jsonOutput, _ := json.MarshalIndent(intentData, "", "  ")
-			fmt.Println(string(jsonOutput))
+			if icon, ok := intentIcons[intentData.Intent]; ok {
+				fmt.Printf("   %s\n", icon)
+			} else {
+				fmt.Printf("   ✨ %s\n", intentData.Intent)
+			}
 		}
 
 		// --- Tagging ---
@@ -1289,7 +1896,6 @@ func runLLM() {
 		}
 
 		handled := true
-		fmt.Printf("DEBUG: SWITCH START. command='%s', objectType='%s'\n", command, objectType)
 		switch command {
 		case "go":
 			if targetDirectory != "" {
@@ -1336,6 +1942,9 @@ func runLLM() {
 				predictedSentence = fmt.Sprintf("I couldn't move the file '%s' to '%s': %v", sourceFile, destDir, err)
 			} else {
 				predictedSentence = fmt.Sprintf("I have moved the file '%s' to '%s'.", sourceFile, destDir)
+				if tree, err := generateDirectoryTree(".", "", 0, 2, destFile); err == nil {
+					predictedSentence += "\n\n" + tree
+				}
 			}
 		case "list":
 			if strings.Contains(objectType, "handler") {
@@ -1416,7 +2025,7 @@ func runLLM() {
 				}
 			}
 
-			treeView, err := generateDirectoryTree(target, "", 0, maxDepth)
+			treeView, err := generateDirectoryTree(target, "", 0, maxDepth, "")
 			if err != nil {
 				predictedSentence = fmt.Sprintf("I couldn't generate a tree for '%s': %v", target, err)
 			} else {
@@ -1512,6 +2121,15 @@ func runLLM() {
 			sb.WriteString("  [🧠 Learning]    learn from <dir>, learn object <word>, show learning path\n")
 			sb.WriteString("  [⚙️  System]      history, clear, exit\n\n")
 
+			sb.WriteString("The Learning System (How & Why):\n")
+			sb.WriteString("  Gollemer learns from your code to automate repetitive tasks.\n")
+			sb.WriteString("  - HOW: It scans a 'learningfolder' for templates (files like 'navbar.html', 'auth.go').\n")
+			sb.WriteString("         If it finds 'navbar.html', it learns the 'navbar' object.\n")
+			sb.WriteString("  - WHY: So you can say 'create navbar' and it generates the code for you instantly,\n")
+			sb.WriteString("         using your own preferred style and structure.\n")
+			sb.WriteString("  - CUSTOMIZE: You have full control. Add/Edit files in 'learningfolder' or change\n")
+			sb.WriteString("               the source using 'learn from <dir>'.\n\n")
+
 			sb.WriteString("Examples:\n")
 			sb.WriteString("  - \"create webserver myapp\"        : Initialize a new Go web project\n")
 			sb.WriteString("  - \"create handler login with url /login\" : Append a new handler to main.go\n")
@@ -1536,7 +2154,6 @@ func runLLM() {
 			sb.WriteString("\n---------------------")
 			predictedSentence = sb.String()
 		case "create":
-			log.Printf("DEBUG: Entering create command. ObjectType: '%s', TargetDirectory: '%s'", objectType, targetDirectory)
 
 			// 1. Template System Check
 			// Check if the objectType matches a file in the learning folder
@@ -1571,7 +2188,6 @@ func runLLM() {
 				templateDir := filepath.Join(learningPath, ".templates", objectType)
 				if info, err := os.Stat(templateDir); err == nil && info.IsDir() {
 					templateFound = true
-					log.Printf("DEBUG: Found multi-file template directory: '%s'", templateDir)
 
 					destDir := targetDirectory
 					if destDir == "" {
@@ -1602,6 +2218,9 @@ func runLLM() {
 						predictedSentence = fmt.Sprintf("I found the multi-file template '%s' but failed to copy it: %v", objectType, err)
 					} else {
 						predictedSentence = fmt.Sprintf("I have created the '%s' object with all its components in '%s'.", objectType, destDir)
+						if tree, err := generateDirectoryTree(".", "", 0, 2, destDir); err == nil {
+							predictedSentence += "\n\n" + tree
+						}
 						if strings.Contains(strings.ToLower(destDir), "wasm") || strings.Contains(strings.ToLower(objectType), "wasm") {
 							buildWasm(destDir)
 						}
@@ -1635,7 +2254,6 @@ func runLLM() {
 
 						if match {
 							templateFound = true
-							log.Printf("DEBUG: Found template match. ObjectType: '%s', File: '%s'", objectType, path)
 
 							destName := fileName
 							if destName == "" {
@@ -1664,6 +2282,9 @@ func runLLM() {
 									predictedSentence = fmt.Sprintf("I couldn't create the file %s from template: %v", destPath, err)
 								} else {
 									predictedSentence = fmt.Sprintf("I have created '%s' using the learned template '%s'.", destPath, name)
+									if tree, err := generateDirectoryTree(".", "", 0, 2, destPath); err == nil {
+										predictedSentence += "\n\n" + tree
+									}
 									if targetDirectory != "" && (strings.Contains(strings.ToLower(targetDirectory), "wasm") || strings.Contains(strings.ToLower(destPath), "wasm")) {
 										buildWasm(targetDirectory)
 									}
@@ -1678,7 +2299,6 @@ func runLLM() {
 			if templateFound {
 				// Template handled, skip other checks
 			} else if strings.HasSuffix(strings.ToLower(strings.TrimSpace(targetDirectory)), ".db") {
-				fmt.Println("DEBUG: Matched .db suffix block")
 				// Creating a table in an existing database
 				dbFileName := targetDirectory
 				tableName := objectType
@@ -1765,7 +2385,6 @@ func ` + strings.Title(handlerName) + `Handler(w http.ResponseWriter, r *http.Re
 					if _, err := os.Stat(filePath); err == nil {
 						// Logic: If it exists, check if it's already a handler or if we should use a different name
 						filePath = handlerName + "_handler.go"
-						log.Printf("DEBUG: %s.go exists, using %s instead", handlerName, filePath)
 					}
 					
 					err = os.WriteFile(filePath, []byte(handlerContent), 0644)
@@ -1775,6 +2394,9 @@ func ` + strings.Title(handlerName) + `Handler(w http.ResponseWriter, r *http.Re
 					}
 					goImports(filePath)
 					predictedSentence = fmt.Sprintf("I have created the handler '%s' in %s.", handlerName, filePath)
+					if tree, err := generateDirectoryTree(".", "", 0, 2, filePath); err == nil {
+						predictedSentence += "\n\n" + tree
+					}
 					
 					// Always attempt to register the handler in the current project's main.go
 					currentProjectMainGo := filepath.Join(".", "main.go")
@@ -1909,6 +2531,9 @@ func (c *%s) Render() js.Value {
 					predictedSentence = fmt.Sprintf("I couldn't create the component file %s: %v", filePath, err)
 				} else {
 					predictedSentence = fmt.Sprintf("I have created the WASM component '%s' in %s.", componentName, filePath)
+					if tree, err := generateDirectoryTree(".", "", 0, 2, filePath); err == nil {
+						predictedSentence += "\n\n" + tree
+					}
 					buildWasm(filepath.Join(projectRoot, "learningfolder", "wasm"))
 				}
 			} else if strings.Contains(objectType, "page") {
@@ -2072,6 +2697,9 @@ func Render%s() js.Value {
 					// Verify file creation (Recursive Reasoning / Validation)
 					if _, checkErr := os.Stat(filePath); checkErr == nil {
 						predictedSentence = fmt.Sprintf("I have verified the creation of WASM page '%s' in %s.", pageName, filePath)
+						if tree, err := generateDirectoryTree(".", "", 0, 2, filePath); err == nil {
+							predictedSentence += "\n\n" + tree
+						}
 					} else {
 						predictedSentence = fmt.Sprintf("File write reported success, but I couldn't find %s on disk. Please check permissions.", filePath)
 						goto endOfCreatePage
@@ -2207,6 +2835,9 @@ func Render%s() js.Value {
 						} else {
 							predictedSentence = fmt.Sprintf("I have created the empty file %s.", filePath)
 						}
+						if tree, err := generateDirectoryTree(".", "", 0, 2, filePath); err == nil {
+							predictedSentence += "\n\n" + tree
+						}
 						if targetDirectory != "" && (strings.Contains(strings.ToLower(targetDirectory), "wasm") || strings.Contains(strings.ToLower(filePath), "wasm")) {
 							buildWasm(targetDirectory)
 						}
@@ -2296,6 +2927,9 @@ func main() {
 						} else {
 							goImports(mainGoPath)
 							predictedSentence = fmt.Sprintf("I have created the webserver '%s' in %s.", fileName, mainGoPath)
+							if tree, err := generateDirectoryTree(".", "", 0, 2, serverDir); err == nil {
+								predictedSentence += "\n\n" + tree
+							}
 
 							// --- Add go mod init ---
 							modCmd := exec.Command("go", "mod", "init", fileName)
@@ -2381,10 +3015,12 @@ func main() {
 					} else {
 						goImports(filePath)
 						predictedSentence = fmt.Sprintf("I have created the data structure '%s' in %s.", goStructName, filePath)
+						if tree, err := generateDirectoryTree(".", "", 0, 2, filePath); err == nil {
+							predictedSentence += "\n\n" + tree
+						}
 					}
 				}
 			} else if strings.Contains(objectType, "folder") || strings.Contains(objectType, "directory") { // New block for folder creation
-				log.Printf("DEBUG: Creating folder. Name: '%s'", fileName)
 				folderName := fileName
 
 				// Prefer explicit name after "folder" to avoid picking up filenames elsewhere in sentence
@@ -2408,6 +3044,9 @@ func main() {
 						predictedSentence = fmt.Sprintf("I couldn't create the folder %s: %v", folderPath, err)
 					} else {
 						predictedSentence = fmt.Sprintf("I have created the folder %s.", folderPath)
+						if tree, err := generateDirectoryTree(".", "", 0, 2, folderPath); err == nil {
+							predictedSentence += "\n\n" + tree
+						}
 						if strings.Contains(strings.ToLower(folderName), "wasm") || strings.Contains(strings.ToLower(folderPath), "wasm") {
 							buildWasm(folderPath)
 						}
@@ -2438,6 +3077,9 @@ func main() {
 						} else {
 							db.Close()
 							predictedSentence = fmt.Sprintf("I have created the database file %s using the program's command.", dbFileName)
+							if tree, err := generateDirectoryTree(".", "", 0, 2, dbFileName); err == nil {
+								predictedSentence += "\n\n" + tree
+							}
 
 							// Check if "with the fields" is present to create a table
 							if strings.Contains(strings.ToLower(query), "with the fields") {
@@ -2690,6 +3332,9 @@ func main() {
 				}
 				goImports(structFileName)
 				predictedSentence = fmt.Sprintf("I have created the Go package '%s' in %s.", packageName, structFileName)
+				if tree, err := generateDirectoryTree(".", "", 0, 2, structFileName); err == nil {
+					predictedSentence += "\n\n" + tree
+				}
 
 				// Create database table
 				tableName = lowercaseName
@@ -3165,6 +3810,9 @@ func FormHandler(w http.ResponseWriter, r *http.Request) {
 									predictedSentence = fmt.Sprintf("Created form in %s but failed to register: %v%s", formGoPath, err, verifyMsg)
 								} else {
 									predictedSentence = fmt.Sprintf("Created form in %s. %s%s", formGoPath, regMsg, verifyMsg)
+									if tree, err := generateDirectoryTree(".", "", 0, 2, formGoPath); err == nil {
+										predictedSentence += "\n\n" + tree
+									}
 								}
 							}
 						}
@@ -3209,6 +3857,9 @@ func FormHandler(w http.ResponseWriter, r *http.Request) {
 										sourceMsg = fmt.Sprintf("files (%s)", learnedFilesList)
 									}
 									predictedSentence = fmt.Sprintf("I have added the form handler to %s based on %s.", targetWebserverPath, sourceMsg)
+									if tree, err := generateDirectoryTree(".", "", 0, 2, targetWebserverPath); err == nil {
+										predictedSentence += "\n\n" + tree
+									}
 
 									// Verify the file content
 									checkContent, err := os.ReadFile(targetWebserverPath)
@@ -3709,9 +4360,7 @@ func FormHandler(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 			} else if objectType != "" {
-				fmt.Println("DEBUG: Matched fallback block")
 				msg, ok := handleGenericCreate(objectType, fileName, targetDirectory, handlerURL, kb)
-				fmt.Printf("DEBUG: handleGenericCreate returned ok=%t\n", ok)
 				if ok {
 					predictedSentence = msg
 					handled = true
@@ -3719,7 +4368,6 @@ func FormHandler(w http.ResponseWriter, r *http.Request) {
 					handled = false
 				}
 			} else {
-				fmt.Println("DEBUG: Matched final else in create")
 				handled = false
 			}
 		case "stop":
@@ -3845,6 +4493,9 @@ func FormHandler(w http.ResponseWriter, r *http.Request) {
 							predictedSentence = fmt.Sprintf("I couldn't delete the directory %s: %v", dirName, err)
 						} else {
 							predictedSentence = fmt.Sprintf("I have deleted the data structure '%s' (directory '%s').", structName, dirName)
+							if tree, err := generateDirectoryTree(".", "", 0, 2, ""); err == nil {
+								predictedSentence += "\n\n" + tree
+							}
 
 							// Remove handlers from main.go
 							mainGoPath := "main.go"
@@ -3906,6 +4557,9 @@ func FormHandler(w http.ResponseWriter, r *http.Request) {
 						predictedSentence = fmt.Sprintf("I couldn't delete the folder %s: %v", folderName, err)
 					} else {
 						predictedSentence = fmt.Sprintf("I have deleted the folder %s.", folderName)
+						if tree, err := generateDirectoryTree(".", "", 0, 2, ""); err == nil {
+							predictedSentence += "\n\n" + tree
+						}
 					}
 				} else {
 					predictedSentence = "You need to provide a name for the folder."
@@ -3917,6 +4571,9 @@ func FormHandler(w http.ResponseWriter, r *http.Request) {
 						predictedSentence = fmt.Sprintf("I couldn't delete the file %s: %v", fileName, err)
 					} else {
 						predictedSentence = fmt.Sprintf("I have deleted the file %s.", fileName)
+						if tree, err := generateDirectoryTree(".", "", 0, 2, ""); err == nil {
+							predictedSentence += "\n\n" + tree
+						}
 					}
 				} else {
 					predictedSentence = "You need to provide a name for the file."
@@ -4059,7 +4716,42 @@ func FormHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		colors.AnimatedOutput("blue", "red", predictedSentence, 1*time.Second)
+		fgColor := "green"
+		bgColor := "black"
+
+		if tutorialState.Active {
+			if tutorialState.Step == 1 {
+				if command == "create" && (strings.Contains(objectType, "folder") || strings.Contains(objectType, "directory")) {
+					tutorialState.Step = 2
+					predictedSentence += "\n\n[Tutorial] Great job! You created a folder. Now, let's create a file inside it.\nStep 2: Create a file. Try typing: 'create file hello.txt'"
+				} else {
+					predictedSentence += "\n\n[Tutorial] Hint: We are on Step 1. Try creating a folder using 'create folder <name>'."
+				}
+			} else if tutorialState.Step == 2 {
+				if command == "create" && strings.Contains(objectType, "file") {
+					tutorialState.Step = 3
+					predictedSentence += "\n\n[Tutorial] Excellent! You've created a file. Now for the fun part.\nStep 3: Create a webserver. Try typing: 'create webserver myserver'"
+				} else {
+					predictedSentence += "\n\n[Tutorial] Hint: We are on Step 2. Try creating a file using 'create file <name>'."
+				}
+			} else if tutorialState.Step == 3 {
+				if command == "create" && strings.Contains(objectType, "webserver") {
+					tutorialState.Step = 4
+					predictedSentence += "\n\n[Tutorial] Fantastic! You've created a webserver. Now, let's run it.\nStep 4: Run the webserver. Try typing: 'run webserver <name>'"
+				} else {
+					predictedSentence += "\n\n[Tutorial] Hint: We are on Step 3. Try creating a webserver using 'create webserver <name>'."
+				}
+			} else if tutorialState.Step == 4 {
+				if (command == "run" || command == "start") && strings.Contains(objectType, "webserver") {
+					tutorialState.Active = false
+					predictedSentence += "\n\n[Tutorial] Awesome! Your webserver is running. You have completed the basic tutorial!\nYou can now explore other commands like 'create handler', 'stop webserver', or 'help'."
+				} else {
+					predictedSentence += "\n\n[Tutorial] Hint: We are on Step 4. Try running the webserver using 'run webserver <name>'."
+				}
+			}
+		}
+
+		colors.AnimatedOutput(fgColor, bgColor, predictedSentence, 1*time.Second)
 		fmt.Println("\n")
 	}
 }
@@ -4244,6 +4936,7 @@ type KnowledgeBase struct {
 	KnownObjects  map[string]bool `json:"known_objects"`
 	StopWords     map[string]bool `json:"stop_words"`
 	LearningPath  string          `json:"learning_path"`
+	FirstRun      bool            `json:"first_run"`
 }
 
 func NewKnowledgeBase() *KnowledgeBase {
@@ -4271,6 +4964,7 @@ func NewKnowledgeBase() *KnowledgeBase {
 			"a": true, "an": true, "the": true, "please": true, "this": true,
 			"me": true, "my": true, "i": true, "new": true, "to": true, "for": true, "and": true, "it": true,
 		},
+		FirstRun: true,
 	}
 }
 
@@ -4283,6 +4977,22 @@ func LoadKnowledgeBase() *KnowledgeBase {
 	if err := json.Unmarshal(data, &kb); err != nil {
 		return NewKnowledgeBase()
 	}
+
+	// Ensure built-in commands and stop words are always present
+	defaults := NewKnowledgeBase()
+	if kb.KnownCommands == nil {
+		kb.KnownCommands = make(map[string]bool)
+	}
+	for k := range defaults.KnownCommands {
+		kb.KnownCommands[k] = true
+	}
+	if kb.StopWords == nil {
+		kb.StopWords = make(map[string]bool)
+	}
+	for k := range defaults.StopWords {
+		kb.StopWords[k] = true
+	}
+
 	return &kb
 }
 
@@ -4363,6 +5073,173 @@ func parse(input string, kb *KnowledgeBase) Intent {
 	return intent
 }
 
+func cosineSimilarity(a, b []float64) float64 {
+	if len(a) != len(b) {
+		return 0
+	}
+	var dot, magA, magB float64
+	for i := 0; i < len(a); i++ {
+		dot += a[i] * b[i]
+		magA += a[i] * a[i]
+		magB += b[i] * b[i]
+	}
+	if magA == 0 || magB == 0 {
+		return 0
+	}
+	return dot / (math.Sqrt(magA) * math.Sqrt(magB))
+}
+
+func generateWordVizHTML(words []string, vectors [][]float64) string {
+	wordsJSON, _ := json.Marshal(words)
+	vectorsJSON, _ := json.Marshal(vectors)
+
+	return fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head>
+    <title>Word2Vec 2D Visualization</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pca-js@1.0.0/pca.min.js"></script>
+    <style>body { margin: 0; font-family: sans-serif; }</style>
+</head>
+<body>
+    <div id="myDiv" style="width: 100%%; height: 100vh;"></div>
+    <script>
+        var words = %s;
+        var rawVectors = %s;
+
+        var x = [];
+        var y = [];
+
+        if (rawVectors.length > 0 && rawVectors[0].length > 2) {
+            var vectors = PCA.getEigenVectors(rawVectors);
+            var adData = PCA.computeAdjustedData(rawVectors, vectors[0], vectors[1]);
+            x = adData.formattedAdjustedData[0];
+            y = adData.formattedAdjustedData[1];
+        } else {
+             for (var i = 0; i < rawVectors.length; i++) {
+                 x.push(rawVectors[i][0]);
+                 y.push(rawVectors[i][1]);
+             }
+        }
+
+        var trace = {
+            x: x, y: y, mode: 'markers+text', type: 'scatter',
+            text: words, textposition: 'top center', marker: { size: 8 }
+        };
+        var layout = { title: 'Word Vector Distribution (PCA Reduced)', hovermode: 'closest' };
+        Plotly.newPlot('myDiv', [trace], layout);
+    </script>
+</body>
+</html>`, string(wordsJSON), string(vectorsJSON))
+}
+
+func inspectStruct(v interface{}, indent string) {
+	val := reflect.ValueOf(v)
+	if !val.IsValid() {
+		fmt.Println(indent + "<nil>")
+		return
+	}
+	if val.Kind() == reflect.Ptr || val.Kind() == reflect.Interface {
+		if val.IsNil() {
+			fmt.Println(indent + "<nil>")
+			return
+		}
+		val = val.Elem()
+	}
+	if val.Kind() != reflect.Struct {
+		fmt.Printf("%s%v\n", indent, val)
+		return
+	}
+
+	typ := val.Type()
+	for i := 0; i < val.NumField(); i++ {
+		field := val.Field(i)
+		fieldType := typ.Field(i)
+
+		if fieldType.PkgPath != "" {
+			continue // Skip unexported fields
+		}
+
+		fmt.Printf("%s%s (%s): ", indent, fieldType.Name, fieldType.Type)
+
+		if field.Kind() == reflect.Slice {
+			fmt.Printf("Slice with %d elements\n", field.Len())
+			if field.Len() > 0 && field.Type().Elem().Kind() == reflect.Float64 {
+				count := 5
+				if field.Len() < 5 {
+					count = field.Len()
+				}
+				fmt.Printf("%s  Sample: %v...\n", indent, field.Slice(0, count).Interface())
+			}
+		} else if field.Kind() == reflect.Struct || (field.Kind() == reflect.Ptr && field.Elem().Kind() == reflect.Struct) {
+			fmt.Println("")
+			if len(indent) < 10 {
+				inspectStruct(field.Interface(), indent+"  ")
+			} else {
+				fmt.Println(indent + "  ...")
+			}
+		} else {
+			fmt.Printf("%v\n", field)
+		}
+	}
+}
+
+func findAndVisualizeAttention(v interface{}) {
+	val := reflect.ValueOf(v)
+	if !val.IsValid() {
+		return
+	}
+	if val.Kind() == reflect.Ptr || val.Kind() == reflect.Interface {
+		if val.IsNil() {
+			return
+		}
+		val = val.Elem()
+	}
+
+	if val.Type() == reflect.TypeOf(neuralnn.MultiHeadAttention{}) {
+		mha := val.Interface().(neuralnn.MultiHeadAttention)
+		fmt.Printf("\nFound MultiHeadAttention Layer:\n")
+		fmt.Printf("  Heads: %d, Model Dim: %d\n", mha.NumHeads, mha.DimModel)
+		if mha.Wq != nil {
+			fmt.Printf("  Query Weights: %v\n", mha.Wq.Shape)
+		}
+		f := val.FieldByName("attentionWeights")
+		if f.IsValid() && !f.IsNil() {
+			fmt.Println("  Last Attention Weights: [Present in memory]")
+		} else {
+			fmt.Println("  Last Attention Weights: [Not present]")
+		}
+		return
+	}
+
+	if val.Type() == reflect.TypeOf(neuralnn.MultiHeadCrossAttention{}) {
+		mhca := val.Interface().(neuralnn.MultiHeadCrossAttention)
+		fmt.Printf("\nFound MultiHeadCrossAttention Layer:\n")
+		fmt.Printf("  Q Heads: %d, KV Heads: %d, Model Dim: %d\n", mhca.NumQHeads, mhca.NumKVHeads, mhca.DimModel)
+		f := val.FieldByName("attentionWeights")
+		if f.IsValid() && !f.IsNil() {
+			fmt.Println("  Last Attention Weights: [Present in memory]")
+		} else {
+			fmt.Println("  Last Attention Weights: [Not present]")
+		}
+		return
+	}
+
+	if val.Kind() == reflect.Struct {
+		for i := 0; i < val.NumField(); i++ {
+			field := val.Field(i)
+			// Only traverse exported fields to avoid panic
+			if field.CanInterface() {
+				findAndVisualizeAttention(field.Interface())
+			}
+		}
+	} else if val.Kind() == reflect.Slice {
+		for i := 0; i < val.Len(); i++ {
+			findAndVisualizeAttention(val.Index(i).Interface())
+		}
+	}
+}
+
 // resolveIntent attempts to find the missing object type in the remaining words.
 func resolveIntent(r *bufio.Reader, intent Intent, kb *KnowledgeBase) Intent {
 	parts := strings.Fields(intent.RawInput)
@@ -4417,7 +5294,6 @@ func resolveIntent(r *bufio.Reader, intent Intent, kb *KnowledgeBase) Intent {
 }
 
 func handleGenericCreate(objectType, fileName, targetDirectory, handlerURL string, kb *KnowledgeBase) (string, bool) {
-	log.Printf("DEBUG: Using heuristic fallback for unknown objectType: '%s'", objectType)
 
 	// 1. If it looks like a handler (has a URL)
 	if handlerURL != "" {
