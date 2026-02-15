@@ -389,6 +389,7 @@
         <a href="#comparison">Comparison</a>
         <a href="#how-it-works">How It Works</a>
         <a href="#features">Features</a>
+        <a href="#learning-system">Learning System</a>
         <a href="#llm-commands">Commands</a>
         <a href="#usage">Usage</a>
     </nav>
@@ -500,6 +501,28 @@
                     <div class="icon">💾</div>
                     <h3>Git Integration</h3>
                     <p>Tracks changes with automatic commits, history, and revert capabilities.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="learning-system">
+            <h2>The Learning System</h2>
+            <p>Gollemer features a powerful <strong>Learning System</strong> that allows it to adapt to your specific coding style. The <code>learningfolder</code> serves as a repository for your custom templates and code snippets.</p>
+            <p>By scanning this folder, Gollemer "learns" new objects based on filenames. This empowers you to automate repetitive coding tasks—instead of writing the same boilerplate, you just ask Gollemer to create the object.</p>
+            
+            <div class="comparison-container">
+                <div class="before">
+                    <h3>1. Setup (The Object)</h3>
+                    <p>You place a file in <code>learningfolder/</code>, for example <code>navbar.html</code>:</p>
+                    <pre><code>&lt;nav&gt;
+  &lt;h1&gt;My App&lt;/h1&gt;
+&lt;/nav&gt;</code></pre>
+                </div>
+                <div class="after">
+                    <h3>2. The Outcome</h3>
+                    <p>After running <code>learn from learningfolder</code>, you can simply type:</p>
+                    <p><code>create navbar named TopMenu</code></p>
+                    <p>Gollemer instantly generates <code>TopMenu.html</code> with your code.</p>
                 </div>
             </div>
         </section>

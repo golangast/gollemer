@@ -6,7 +6,7 @@
 
 > An LLM-powered command-line utility to streamline your development workflow.
 
-This project is in beta and changes daily. I once in a while upload youtube [videos](https://youtu.be/KMI8-UXmfi4) talking about its changes.
+This project is in beta and changes daily. I once in a while upload youtube [videos](https://www.youtube.com/watch?v=2jSaDi0wm5Y) talking about its changes.
 
 ## Table of Contents
 
@@ -141,6 +141,33 @@ Here are the commands you can use in the interactive LLM mode:
 | **Clear Screen** | Clears the terminal screen. Aliases: `clear`. | `clear` |
 | **Exit** | Exits the interactive LLM mode. Aliases: `exit`. | `exit` |
 
+### The Learning System
+
+Gollemer features a powerful **Learning System** that allows it to adapt to your specific coding style and requirements without you having to write code manually every time.
+
+The `learningfolder` is a special directory used to pull code templates from. By populating this folder with your code snippets (objects), you teach Gollemer new capabilities.
+
+*   **How it works**: When you run `learn from ./learningfolder`, Gollemer scans the files. If it sees a file named `navbar.html`, it learns the "navbar" object.
+*   **The Power**: You define complex logic or UI components once. Afterward, you simply command Gollemer to create them, and it handles the implementation details instantly.
+
+#### Example Scenario
+
+**1. Setup (What you do once):**
+You create a file `learningfolder/navbar.html` with your standard navigation code.
+
+**2. Teach Gollemer:**
+```bash
+> learn from learningfolder
+```
+
+**3. Usage (What you do anytime):**
+```bash
+> create navbar named TopMenu
+```
+
+**4. Outcome:**
+Gollemer understands "navbar" from the file name, pulls the code from `learningfolder/navbar.html`, and generates `TopMenu.html` with that exact content in your project.
+
 ### Individual Command Modules
 
 The following modules in the `cmd/` directory can be run individually.
@@ -203,8 +230,7 @@ The following modules in the `cmd/` directory can be run individually.
 
 Check out these videos to see `gollemer` in action:
 
-*   [YouTube: gollemer LLM Command-line Utility](https://www.youtube.com/watch?v=KMI8-UXmfi4)
-*   [Local Demo Video](mov/mov.webm) (Note: This is a local file and will not play on GitHub)
+*   [YouTube: gollemer LLM Command-line Utility](https://www.youtube.com/watch?v=2jSaDi0wm5Y)
 
 ## Roadmap
 
@@ -227,8 +253,6 @@ Distributed under the GPL-3.0 License. See `LICENSE` for more information.
 ## Contact
 
 Discord: [https://discord.gg/uaQuWReBTf](https://discord.gg/uaQuWReBTf)
-
-Project Link: [https://github.com/golangast/gollemer](https://github.com/golangast/gollemer)
 
 ## Acknowledgements
 
