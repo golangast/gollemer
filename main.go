@@ -1010,7 +1010,8 @@ func runLLM() {
 			fmt.Println("7. ❓ Help")
 			fmt.Println("8. 🚪 Exit")
 			fmt.Println("9. 💬 Interactive Mode")
-			fmt.Print("\nSelect an option (1-9): ")
+			fmt.Println("10. ⚙️ Model Configuration")
+			fmt.Print("\nSelect an option (1-10): ")
 
 			choice, _ := reader.ReadString('\n')
 			choice = strings.TrimSpace(choice)
@@ -1097,32 +1098,29 @@ func runLLM() {
 					}
 
 					fmt.Println("\n[Training Data & Vocab]")
-					models := []string{
-						"gob_models/word2vec.model",
-						"gob_models/word2vec_model.gob",
-						"gob_models/moe_classification_model.gob",
-						"gob_models/ner_model.gob",
-						"gob_models/query_vocabulary.gob",
-						"gob_models/semantic_output_vocabulary.gob",
-					}
-					for _, m := range models {
-						fullPath := filepath.Join(projectRoot, m)
+					checkPath := func(name, path string) {
+						fullPath := filepath.Join(projectRoot, path)
 						if _, err := os.Stat(fullPath); err == nil {
-							fmt.Printf("  ✅ %s\n", m)
+							fmt.Printf("  ✅ %s: %s\n", name, path)
 						} else {
-							fmt.Printf("  ❌ %s (Not found)\n", m)
+							fmt.Printf("  ❌ %s: %s (Not found)\n", name, path)
 						}
 					}
+					checkPath("Word2Vec", kb.ModelConfig.Word2VecPath)
+					checkPath("MoE", kb.ModelConfig.MoEPath)
+					checkPath("NER", kb.ModelConfig.NERPath)
+					checkPath("Query Vocab", kb.ModelConfig.QueryVocabPath)
+					checkPath("Semantic Vocab", kb.ModelConfig.SemanticVocabPath)
 
 					fmt.Println("\n[Metrics]")
-					qVocabPath := filepath.Join(projectRoot, "gob_models/query_vocabulary.gob")
+					qVocabPath := filepath.Join(projectRoot, kb.ModelConfig.QueryVocabPath)
 					if qVocab, err := mainvocab.LoadVocabulary(qVocabPath); err == nil {
 						fmt.Printf("  📝 Query Vocabulary: %d words\n", len(qVocab.WordToToken))
 					} else {
 						fmt.Printf("  ⚠️  Could not load Query Vocabulary: %v\n", err)
 					}
 
-					sVocabPath := filepath.Join(projectRoot, "gob_models/semantic_output_vocabulary.gob")
+					sVocabPath := filepath.Join(projectRoot, kb.ModelConfig.SemanticVocabPath)
 					if sVocab, err := mainvocab.LoadVocabulary(sVocabPath); err == nil {
 						fmt.Printf("  📝 Semantic Output Vocabulary: %d tokens\n", len(sVocab.WordToToken))
 					} else {
@@ -1170,7 +1168,7 @@ func runLLM() {
 					case "5":
 						cmdPath = "cmd/train_custom" // Ensure this directory exists with a main.go
 					case "6":
-						modelPath := filepath.Join(projectRoot, "gob_models/moe_classification_model.gob")
+						modelPath := filepath.Join(projectRoot, kb.ModelConfig.MoEPath)
 						if _, err := os.Stat(modelPath); os.IsNotExist(err) {
 							fmt.Printf("❌ Model file not found at %s\n", modelPath)
 						} else {
@@ -1217,10 +1215,7 @@ func runLLM() {
 						}
 						continue
 					case "7":
-						modelPath := filepath.Join(projectRoot, "gob_models/word2vec.model")
-						if _, err := os.Stat(modelPath); os.IsNotExist(err) {
-							modelPath = filepath.Join(projectRoot, "gob_models/word2vec_model.gob")
-						}
+						modelPath := filepath.Join(projectRoot, kb.ModelConfig.Word2VecPath)
 						if _, err := os.Stat(modelPath); os.IsNotExist(err) {
 							fmt.Printf("❌ Word2Vec model file not found.\n")
 						} else {
@@ -1236,10 +1231,7 @@ func runLLM() {
 						}
 						continue
 					case "8":
-						modelPath := filepath.Join(projectRoot, "gob_models/word2vec.model")
-						if _, err := os.Stat(modelPath); os.IsNotExist(err) {
-							modelPath = filepath.Join(projectRoot, "gob_models/word2vec_model.gob")
-						}
+						modelPath := filepath.Join(projectRoot, kb.ModelConfig.Word2VecPath)
 						if _, err := os.Stat(modelPath); os.IsNotExist(err) {
 							fmt.Printf("❌ Word2Vec model file not found.\n")
 						} else {
@@ -1287,10 +1279,7 @@ func runLLM() {
 						}
 						continue
 					case "9":
-						modelPath := filepath.Join(projectRoot, "gob_models/word2vec.model")
-						if _, err := os.Stat(modelPath); os.IsNotExist(err) {
-							modelPath = filepath.Join(projectRoot, "gob_models/word2vec_model.gob")
-						}
+						modelPath := filepath.Join(projectRoot, kb.ModelConfig.Word2VecPath)
 						if _, err := os.Stat(modelPath); os.IsNotExist(err) {
 							fmt.Printf("❌ Word2Vec model file not found.\n")
 						} else {
@@ -1325,10 +1314,7 @@ func runLLM() {
 						}
 						continue
 					case "10":
-						modelPath := filepath.Join(projectRoot, "gob_models/word2vec.model")
-						if _, err := os.Stat(modelPath); os.IsNotExist(err) {
-							modelPath = filepath.Join(projectRoot, "gob_models/word2vec_model.gob")
-						}
+						modelPath := filepath.Join(projectRoot, kb.ModelConfig.Word2VecPath)
 						if _, err := os.Stat(modelPath); os.IsNotExist(err) {
 							fmt.Printf("❌ Word2Vec model file not found.\n")
 						} else {
@@ -1368,7 +1354,7 @@ func runLLM() {
 						}
 						continue
 					case "11":
-						modelPath := filepath.Join(projectRoot, "gob_models/moe_classification_model.gob")
+						modelPath := filepath.Join(projectRoot, kb.ModelConfig.MoEPath)
 						if _, err := os.Stat(modelPath); os.IsNotExist(err) {
 							fmt.Printf("❌ Model file not found at %s\n", modelPath)
 						} else {
@@ -1403,7 +1389,7 @@ func runLLM() {
 						}
 						continue
 					case "12":
-						modelPath := filepath.Join(projectRoot, "gob_models/moe_classification_model.gob")
+						modelPath := filepath.Join(projectRoot, kb.ModelConfig.MoEPath)
 						if _, err := os.Stat(modelPath); os.IsNotExist(err) {
 							fmt.Printf("❌ Model file not found at %s\n", modelPath)
 						} else {
@@ -1417,10 +1403,7 @@ func runLLM() {
 						}
 						continue
 					case "13":
-						modelPath := filepath.Join(projectRoot, "gob_models/word2vec.model")
-						if _, err := os.Stat(modelPath); os.IsNotExist(err) {
-							modelPath = filepath.Join(projectRoot, "gob_models/word2vec_model.gob")
-						}
+						modelPath := filepath.Join(projectRoot, kb.ModelConfig.Word2VecPath)
 						if _, err := os.Stat(modelPath); os.IsNotExist(err) {
 							fmt.Printf("❌ Word2Vec model file not found.\n")
 						} else {
@@ -1509,6 +1492,58 @@ func runLLM() {
 			case "9":
 				inMenuMode = false
 				fmt.Println("Returning to interactive mode...")
+				continue
+			case "10":
+				fmt.Println("\n--- ⚙️ Model Configuration ---")
+				fmt.Printf("1. Word2Vec Model: %s\n", kb.ModelConfig.Word2VecPath)
+				fmt.Printf("2. MoE Model: %s\n", kb.ModelConfig.MoEPath)
+				fmt.Printf("3. Query Vocab: %s\n", kb.ModelConfig.QueryVocabPath)
+				fmt.Printf("4. Semantic Vocab: %s\n", kb.ModelConfig.SemanticVocabPath)
+				fmt.Printf("5. NER Model: %s\n", kb.ModelConfig.NERPath)
+				fmt.Println("6. Back to Main Menu")
+				fmt.Print("Select an item to change (1-6): ")
+
+				confChoice, _ := reader.ReadString('\n')
+				confChoice = strings.TrimSpace(confChoice)
+
+				var fieldName string
+				switch confChoice {
+				case "1":
+					fieldName = "Word2Vec Model"
+				case "2":
+					fieldName = "MoE Model"
+				case "3":
+					fieldName = "Query Vocab"
+				case "4":
+					fieldName = "Semantic Vocab"
+				case "5":
+					fieldName = "NER Model"
+				case "6":
+					continue
+				default:
+					fmt.Println("Invalid option.")
+					continue
+				}
+
+				fmt.Printf("Enter new path for %s: ", fieldName)
+				newPath, _ := reader.ReadString('\n')
+				newPath = strings.TrimSpace(newPath)
+				if newPath != "" {
+					switch confChoice {
+					case "1":
+						kb.ModelConfig.Word2VecPath = newPath
+					case "2":
+						kb.ModelConfig.MoEPath = newPath
+					case "3":
+						kb.ModelConfig.QueryVocabPath = newPath
+					case "4":
+						kb.ModelConfig.SemanticVocabPath = newPath
+					case "5":
+						kb.ModelConfig.NERPath = newPath
+					}
+					kb.Save()
+					fmt.Println("Configuration saved.")
+				}
 				continue
 			default:
 				fmt.Println("Invalid option.")
@@ -4943,6 +4978,14 @@ type Intent struct {
 	Params          map[string]string
 }
 
+type ModelConfig struct {
+	Word2VecPath      string `json:"word2vec_path"`
+	MoEPath           string `json:"moe_path"`
+	QueryVocabPath    string `json:"query_vocab_path"`
+	SemanticVocabPath string `json:"semantic_vocab_path"`
+	NERPath           string `json:"ner_path"`
+}
+
 // KnowledgeBase acts as the memory for the session.
 type KnowledgeBase struct {
 	KnownCommands map[string]bool `json:"known_commands"`
@@ -4950,6 +4993,7 @@ type KnowledgeBase struct {
 	StopWords     map[string]bool `json:"stop_words"`
 	LearningPath  string          `json:"learning_path"`
 	FirstRun      bool            `json:"first_run"`
+	ModelConfig   ModelConfig     `json:"model_config"`
 }
 
 func NewKnowledgeBase() *KnowledgeBase {
@@ -4978,6 +5022,13 @@ func NewKnowledgeBase() *KnowledgeBase {
 			"me": true, "my": true, "i": true, "new": true, "to": true, "for": true, "and": true, "it": true,
 		},
 		FirstRun: true,
+		ModelConfig: ModelConfig{
+			Word2VecPath:      "gob_models/word2vec.model",
+			MoEPath:           "gob_models/moe_classification_model.gob",
+			QueryVocabPath:    "gob_models/query_vocabulary.gob",
+			SemanticVocabPath: "gob_models/semantic_output_vocabulary.gob",
+			NERPath:           "gob_models/ner_model.gob",
+		},
 	}
 }
 
@@ -5004,6 +5055,10 @@ func LoadKnowledgeBase() *KnowledgeBase {
 	}
 	for k := range defaults.StopWords {
 		kb.StopWords[k] = true
+	}
+
+	if kb.ModelConfig.Word2VecPath == "" {
+		kb.ModelConfig = defaults.ModelConfig
 	}
 
 	return &kb
