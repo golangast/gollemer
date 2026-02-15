@@ -1,0 +1,288 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+    /* Core Palette - Deep Space & Electric Indigo */
+    --primary: #6366f1;
+    --primary-glow: rgba(99, 102, 241, 0.4);
+    --secondary: #8b5cf6;
+    --accent: #f472b6;
+    --background: #000000;
+    --surface: #0a0a0a;
+    --surface-light: #171717;
+    --text: #ffffff;
+    --text-muted: #a3a3a3;
+    --border: rgba(255, 255, 255, 0.1);
+
+    /* Transitions */
+    --transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background-color: var(--background);
+    color: var(--text);
+    overflow-x: hidden;
+    line-height: 1.6;
+}
+
+h1,
+h2,
+h3,
+h4,
+.mat-header-logo {
+    font-family: 'Outfit', sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 2rem;
+    width: 100%;
+}
+
+section {
+    padding: 8rem 0;
+}
+
+/* --- Premium Background Effects --- */
+body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background:
+        radial-gradient(circle at 0% 0%, rgba(99, 102, 241, 0.1) 0%, transparent 50%),
+        radial-gradient(circle at 100% 100%, rgba(244, 114, 182, 0.1) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: -1;
+}
+
+/* --- Navigation / Header --- */
+.mat-header {
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    height: 90px;
+    display: flex;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+}
+
+.mat-header-wrapper {
+    max-width: 1400px;
+    margin: 0 auto;
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 2rem;
+}
+
+.mat-header-logo {
+    font-size: 1.75rem;
+    background: linear-gradient(135deg, #fff, #a5b4fc);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    cursor: pointer;
+}
+
+.mat-header-nav {
+    display: flex;
+    gap: 3rem;
+}
+
+.mat-header-nav-link {
+    color: var(--text-muted);
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 0.95rem;
+    transition: var(--transition);
+}
+
+.mat-header-nav-link:hover {
+    color: #fff;
+    transform: translateY(-1px);
+}
+
+.mat-header-avatar {
+    width: 44px;
+    height: 44px;
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    box-shadow: 0 4px 15px var(--primary-glow);
+}
+
+/* --- Hero / Parallax --- */
+.mat-parallax-container {
+    position: relative;
+    width: 100%;
+    height: 100vh;
+    min-height: 700px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.mat-parallax-bg {
+    position: absolute;
+    top: -5%;
+    left: 0;
+    width: 100%;
+    height: 110%;
+    z-index: 0;
+}
+
+.mat-parallax-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    filter: brightness(0.3) saturate(1.2) contrast(1.1);
+}
+
+.mat-parallax-content {
+    position: relative;
+    z-index: 1;
+    color: white;
+    text-align: center;
+    max-width: 1000px;
+    padding: 4rem 2rem;
+}
+
+.mat-parallax-content h1 {
+    font-size: clamp(3.5rem, 10vw, 6.5rem);
+    margin-bottom: 2rem;
+    line-height: 1;
+    background: linear-gradient(to bottom, #fff, #94a3b8);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+/* --- Content Modules --- */
+.mat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 2.5rem;
+}
+
+.mat-card {
+    background: var(--surface);
+    border-radius: 32px;
+    padding: 3rem;
+    border: 1px solid var(--border);
+    transition: var(--transition);
+}
+
+.mat-card:hover {
+    transform: translateY(-12px);
+    border-color: var(--primary);
+    box-shadow: 0 40px 80px -20px rgba(0, 0, 0, 0.8);
+}
+
+.feature-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 4rem;
+}
+
+.feature-item {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.feature-icon {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+}
+
+/* --- Buttons --- */
+.mat-btn {
+    padding: 1.25rem 3rem;
+    border-radius: 16px;
+    font-weight: 700;
+    font-size: 1.1rem;
+    cursor: pointer;
+    transition: var(--transition);
+    border: none;
+    text-decoration: none;
+}
+
+.mat-btn-primary {
+    background: var(--primary);
+    color: #fff;
+    box-shadow: 0 10px 20px var(--primary-glow);
+}
+
+.mat-btn-primary:hover {
+    transform: translateY(-3px) scale(1.05);
+    background: var(--primary-hover);
+    box-shadow: 0 15px 30px var(--primary-glow);
+}
+
+.mat-btn-outline {
+    background: transparent;
+    border: 2px solid var(--border);
+    color: #fff;
+}
+
+.mat-btn-outline:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: #fff;
+    transform: translateY(-3px);
+}
+
+/* --- Utilities --- */
+.text-muted {
+    color: var(--text-muted);
+}
+
+/* --- Responsive Breakpoints --- */
+@media (max-width: 1024px) {
+    .mat-header-nav {
+        display: none;
+    }
+}
+
+@media (max-width: 768px) {
+    section {
+        padding: 4rem 0;
+    }
+
+    .container {
+        padding: 0 1.5rem;
+    }
+
+    .mat-parallax-container {
+        height: 80vh;
+        min-height: 500px;
+    }
+
+    .mat-grid,
+    .feature-list {
+        grid-template-columns: 1fr;
+    }
+
+    .mat-card {
+        padding: 2rem;
+    }
+}
