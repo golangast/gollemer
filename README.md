@@ -1,262 +1,59 @@
-# Gollemer: LLM Command-line Utility
-
-[![Status](https://img.shields.io/badge/Status-Beta-red)](https://github.com/golangast/gollemer)
-[![GitHub License](https://img.shields.io/github/license/golangast/gollemer)](https://github.com/golangast/gollemer/blob/main/LICENSE)
-[![GitHub Stars](https://img.shields.io/github/stars/golangast/gollemer)](https://github.com/golangast/gollemer)
-
-> An LLM-powered command-line utility to streamline your development workflow.
-
-This project is in beta and changes daily. I once in a while upload youtube [videos](https://www.youtube.com/watch?v=2jSaDi0wm5Y) talking about its changes.
-
-## Table of Contents
-
-- [Gollemer: LLM Command-line Utility](#gollemer-llm-command-line-utility)
-  - [Table of Contents](#table-of-contents)
-  - [About The Project](#about-the-project)
-    - [Architecture Overview](#architecture-overview)
-  - [Built With](#built-with)
-  - [Getting Started](#getting-started)
-    - [Prerequisites](#prerequisites)
-    - [Installation](#installation)
-  - [Usage](#usage)
-    - [LLM Interactive Mode](#llm-interactive-mode)
-      - [LLM Interactive Mode Commands](#llm-interactive-mode-commands)
-    - [Individual Command Modules](#individual-command-modules)
-      - [Training Commands](#training-commands)
-      - [Data Generation \& Handling](#data-generation--handling)
-      - [Inference \& Prediction](#inference--prediction)
-      - [Demos \& Examples](#demos--examples)
-      - [Utilities](#utilities)
-  - [Demos](#demos)
-  - [Roadmap](#roadmap)
-  - [Contributing](#contributing)
-  - [License](#license)
-  - [Contact](#contact)
-  - [Acknowledgements](#acknowledgements)
-
-## About The Project
-
-`gollemer` is a command-line utility that leverages the power of Large Language Models (LLMs) to provide a natural language interface for various development tasks. From scaffolding projects to managing files and training machine learning models, `gollemer` aims to make your workflow more intuitive and efficient.
-
-### Architecture Overview
-
-The `gollemer` CLI processes natural language user input through an LLM interface, which then dispatches commands to a robust command processor. This processor leverages a sophisticated Natural Language Processing (NLP) pipeline for understanding user intent and entities. Based on this understanding, it orchestrates either code generation tasks or direct file system operations.
-
-```
-+-------------------+       +--------------------+       +---------------------+
-|   User Input      | ----> |  LLM Interface     | ----> |  Command Processor  |
-| (Natural Language)|       | (Text/Voice)       |       |                     |
-+-------------------+       +--------------------+       +----------+----------+
-                                                                     |
-                                                                     v
-+---------------------+    +--------------------+    +-----------------------+
-|  NLP Pipeline       | <--| Intent Classifier  |    |  Code Generation      |
-| (Intent, NER,        |    | (MoE Model)        |    |  (Templates, DB, etc.)|
-| Semantic Parsing)   |    +--------------------+    +-----------------------+
-+----------+----------+
-           |
-           v
-+-------------------------+
-| Recursive Intent Layer  |
-| (Hybrid JSON Data Fill) |
-+----------+----------+
-           |
-           v
-+-------------------------+
-|  File System Operations |
-| (Create, Delete, List)  |
-+-------------------------+
-```
-
-## Built With
-
-* [Go](https://golang.org/)
-* [SQLite](https://www.sqlite.org/index.html)
-* [ModernC SQLite Driver](https://modernc.org/sqlite/)
-
-## Getting Started
-
-To get a local copy up and running follow these simple steps.
-
-### Prerequisites
-
-* Go 1.18 or later
-* `goimports` tool
-  ```sh
-  go install golang.org/x/tools/cmd/goimports@latest
-  ```
-
-### Installation
-
-1. Clone the repo
-   ```sh
-   git clone https://github.com/golangast/gollemer.git
-   ```
-2. Change into the project directory
-    ```sh
-    cd gollemer
-    ```
-3. Tidy the modules
-    ```sh
-    go mod tidy
-    ```
-
-## Usage
-
-The main executable (`main.go`) provides an interactive LLM mode. However, the project also includes numerous individual modules for specific tasks like model training, data processing, and running demos. These modules are located in the `cmd/` directory and can be run directly.
-
-All commands should be run from the root directory of the project.
-
-### LLM Interactive Mode
-
-The LLM Interactive Mode allows you to interact with the `gollemer` CLI using natural language.
-
-To run the LLM utility in interactive mode, use the following command from the project root:
-
-```bash
-go run . -llm
-```
-
-Once in interactive mode, you can type natural language commands directly. The CLI will attempt to understand your intent and execute the corresponding action.
-
-#### LLM Interactive Mode Commands
-
-Here are the commands you can use in the interactive LLM mode:
-
-| Command | Description | Example Prompt |
-| :--- | :--- | :--- |
-| **Change Directory** | Navigates to a specified directory. Aliases: `go to`, `cd`. The last visited directory is remembered. | `go to myproject`<br>`cd src` |
-| **List Contents** | Lists files, folders, or both in the current or a specified directory. Aliases: `ls`, `list`. | `list all files`<br>`list folders in /tmp`<br>`ls` |
-| **Create Folder** | Creates a new directory. Aliases: `create directory`. | `create folder mydata`<br>`create directory temp in /tmp` |
-| **Create File** | Creates a new empty file. | `create file README.md`<br>`create file test.txt in src` |
-| **Create Handler**| Generates a new Go HTTP handler function. Can be registered to a webserver's `main.go` file with a specific URL. | `create handler MyHandler`<br>`create handler Auth with url /auth in main.go`|
-| **Create Webserver**| Scaffolds a new Go web server project in `cmd/<name>/main.go`. | `create webserver MyServer` |
-| **Create Database**| Creates a SQLite database file and optionally a table with specified fields. | `create database myappdb`<br>`create database users with the fields name string and age int`|
-| **Create Data Structure**| Creates a Go struct, a corresponding SQLite database and table, and `Create`/`Update`/`Delete` HTTP handlers. | `create data structure User with field Name string and Age int` |
-| **Delete Folder** | Deletes a specified directory and its contents. Aliases: `delete directory`. | `delete folder temp` |
-| **Delete File** | Deletes a specified file. | `delete file old.txt` |
-| **Run Webserver** | Builds and runs a specified webserver from the `cmd/` directory. | `run webserver MyServer` |
-| **Stop Webserver**| (Currently disabled) Stops a running webserver. This is handled by the webserver itself. | `stop webserver MyServer` |
-| **Print Directory**| Prints the current working directory. Aliases: `pwd`. | `pwd` |
-| **Clear Screen** | Clears the terminal screen. Aliases: `clear`. | `clear` |
-| **Exit** | Exits the interactive LLM mode. Aliases: `exit`. | `exit` |
-
-### The Learning System
-
-Gollemer features a powerful **Learning System** that allows it to adapt to your specific coding style and requirements without you having to write code manually every time.
-
-The `learningfolder` is a special directory used to pull code templates from. By populating this folder with your code snippets (objects), you teach Gollemer new capabilities.
-
-*   **How it works**: When you run `learn from ./learningfolder`, Gollemer scans the files. If it sees a file named `navbar.html`, it learns the "navbar" object.
-*   **The Power**: You define complex logic or UI components once. Afterward, you simply command Gollemer to create them, and it handles the implementation details instantly.
-
-#### Example Scenario
-
-**1. Setup (What you do once):**
-You create a file `learningfolder/navbar.html` with your standard navigation code.
-
-**2. Teach Gollemer:**
-```bash
-> learn from learningfolder
-```
-
-**3. Usage (What you do anytime):**
-```bash
-> create navbar named TopMenu
-```
-
-**4. Outcome:**
-Gollemer understands "navbar" from the file name, pulls the code from `learningfolder/navbar.html`, and generates `TopMenu.html` with that exact content in your project.
-
-### Individual Command Modules
-
-The following modules in the `cmd/` directory can be run individually.
-
-#### Training Commands
-
-| Command | Description |
-| :--- | :--- |
-| `go run ./cmd/train_intent_classifier` | Trains the intent classification model. |
-| `go run ./cmd/train_intent_model` | Trains the intent model. |
-| `go run ./cmd/train_moe` | Trains the Mixture of Experts (MoE) model. |
-| `go run ./cmd/train_ner` | Trains the Named Entity Recognition (NER) model. |
-| `go run ./cmd/train_seq2seq` | Trains a sequence-to-sequence model. |
-| `go run ./cmd/train_simple_intent_classifier` | Trains a simpler intent classification model. |
-| `go run ./cmd/train_tagger` | Trains a generic tagger model. |
-| `go run ./cmd/train_word2vec` | Trains the Word2Vec model. |
-
-#### Data Generation & Handling
-
-| Command | Description |
-| :--- | :--- |
-| `go run ./cmd/convert_qa_to_semantic` | Converts question-answering data to a semantic format. |
-| `go run ./cmd/create_vocab` | Creates a vocabulary file. |
-| `go run ./cmd/csv_feed_generator` | Generates a CSV feed from a data source. |
-| `go run ./cmd/generate_training_data` | Generates training data. |
-| `go run ./cmd/generate_wikiqa_intents` | Generates intents from the WikiQA dataset. |
-| `go run ./cmd/inspect_vocab` | Inspects a vocabulary file. |
-| `go run ./cmd/prepare_tagging_data` | Prepares data for tagging models. |
-| `go run ./cmd/transform_intents_to_seq2seq`| Transforms intent data into a sequence-to-sequence format. |
-
-#### Inference & Prediction
-
-| Command | Description |
-| :--- | :--- |
-| `go run ./cmd/debug_inference` | Runs inference in debug mode. |
-| `go run ./cmd/moe_inference` | Runs inference with the MoE model. |
-| `go run ./cmd/predict_seq2seq` | Makes predictions with a sequence-to-sequence model. |
-
-#### Demos & Examples
-
-| Command | Description |
-| :--- | :--- |
-| `go run ./cmd/advanced_demo` | Runs an advanced demonstration. |
-| `go run ./cmd/command_structure_demo` | Demonstrates the command structure. |
-| `go run ./cmd/hierarchical_demo` | Runs a demonstration of hierarchical intents. |
-| `go run ./cmd/moe_example` | Shows an example of the MoE model. |
-| `go run ./cmd/vfs_demo` | A demo of the virtual file system. |
-
-#### Utilities
-
-| Command | Description |
-| :--- | :--- |
-| `go run ./cmd/check_token_length` | Checks the token length of inputs. |
-| `go run ./cmd/create_handler` | Creates a new request handler. |
-| `go run ./cmd/delete_item` | Deletes an item. |
-| `go run ./cmd/interactive_scaffolder` | Starts an interactive scaffolding tool. |
-| `go run ./cmd/multi_orchestrator` | Runs the multi-command orchestrator. |
-
-## Demos
-
-Check out these videos to see `gollemer` in action:
-
-*   [YouTube: gollemer LLM Command-line Utility](https://www.youtube.com/watch?v=2jSaDi0wm5Y)
-
-## Roadmap
-
-See the [open issues](https://github.com/golangast/gollemer/issues) for a list of proposed features (and known issues).
-
-## Contributing
-
-Contributions are what make the open source community such an amazing place to be learn, inspire, and create. Any contributions you make are **greatly appreciated**.
-
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-## License
-
-Distributed under the GPL-3.0 License. See `LICENSE` for more information.
-
-## Contact
-
-Discord: [https://discord.gg/uaQuWReBTf](https://discord.gg/uaQuWReBTf)
-
-## Acknowledgements
-
-* [Go Team](https://github.com/golang/go/graphs/contributors)
-
-
-GOOS=js GOARCH=wasm go build -o wasm/main.wasm ./wasm/wasm.go      
+# Gollemer
+
+Gollemer is an intelligent coding assistant and project orchestrator designed to help you build Go applications, specifically focusing on web servers and WASM frontends.
+
+## Interactive Menu System
+
+Gollemer includes a comprehensive interactive menu to guide you through project creation, management, and AI training. You can access this menu by typing `menu` in the Gollemer shell.
+
+### Main Menu Options
+
+#### 1. 🚀 Start a New Project (Webserver)
+Initializes a new Go webserver project.
+- **Action:** Prompts for a project name.
+- **Result:** Creates a directory with `main.go` (including SQLite setup and a basic handler) and initializes `go.mod`.
+
+#### 2. ➕ Add a Feature
+Adds components to your existing project.
+- **a. Handler (Backend logic):** Creates a new Go handler function and registers it in your `main.go`.
+- **b. Page (Frontend view):** Generates a WASM-compatible Go page using the internal UI framework and registers it in the WASM router.
+- **c. Database (Storage):** Creates a new SQLite database file or adds tables if fields are specified.
+
+#### 3. 📂 Manage Files
+Basic file system operations within your project context.
+- **a. Create File:** Creates a new file (can use templates if learned).
+- **b. Create Folder:** Creates a new directory.
+
+#### 4. ▶️ Run Project
+Builds and runs your application.
+- **Action:** Prompts for the webserver name (defaults to current context).
+- **Result:** Compiles the Go code, builds any WASM components, and starts the server.
+
+#### 5. 🧠 Learning & Training
+Manage the AI and learning capabilities of Gollemer.
+- **1. Show Learning Status:** Displays loaded models, vocabulary sizes, and the current learning source path.
+- **2. Change Learning Source:** Updates the directory Gollemer scans for templates and code patterns.
+- **3. Teach New Object Word:** Manually adds a new noun/object to the knowledge base.
+- **4. Run Training Commands:** Access advanced model training and visualization tools:
+    1. Train Word2Vec
+    2. Train MoE (Mixture of Experts)
+    3. Train Intent Classifier
+    4. Train NER (Named Entity Recognition)
+    5. Custom Training Module
+    6. Visualize Neural Network
+    7. Visualize Word2Vec Model
+    8. Search Word Neighbors
+    9. Visualize Word Relationship
+    10. Visualize Word Distribution (2D Plot)
+    11. Inspect Model Weights
+    12. Visualize Attention Mechanism
+    13. Visualize Word Similarity (One vs List)
+
+#### 6. 🎓 Tutorial
+Starts an interactive, step-by-step tutorial that guides you through creating a folder, a file, a webserver, and running it.
+
+#### 7. ❓ Help
+Displays the general help text with command syntax and examples.
+
+#### 8. 🚪 Exit
+Closes the Gollemer application.
