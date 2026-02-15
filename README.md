@@ -57,3 +57,6 @@ Displays the general help text with command syntax and examples.
 
 #### 8. 🚪 Exit
 Closes the Gollemer application.
+
+#### 9. 💬 Interactive Mode
+Returns to the main prompt, allowing you to enter natural language commands directly.

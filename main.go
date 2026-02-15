@@ -973,11 +973,17 @@ func runLLM() {
 	var sessionState ConversationState
 	var tutorialState TutorialState
 
-	for {
-		colors.ColorizeCol("red", "magenta", "/ʕ◔ϖ◔ʔ/> ")
+	inMenuMode := false
 
-		query, _ := reader.ReadString('\n')
-		query = strings.TrimSpace(query)
+	for {
+		var query string
+		if inMenuMode {
+			query = "menu"
+		} else {
+			colors.ColorizeCol("red", "magenta", "/ʕ◔ϖ◔ʔ/> ")
+			query, _ = reader.ReadString('\n')
+			query = strings.TrimSpace(query)
+		}
 
 		if query != "" {
 			commandHistory = append(commandHistory, query)
@@ -993,6 +999,7 @@ func runLLM() {
 		}
 
 		if query == "menu" {
+			inMenuMode = true
 			fmt.Println("\n--- 📋 Main Menu ---")
 			fmt.Println("1. 🚀 Start a New Project (Webserver)")
 			fmt.Println("2. ➕ Add a Feature (Handler, Page, Database)")
@@ -1002,7 +1009,8 @@ func runLLM() {
 			fmt.Println("6. 🎓 Tutorial")
 			fmt.Println("7. ❓ Help")
 			fmt.Println("8. 🚪 Exit")
-			fmt.Print("\nSelect an option (1-8): ")
+			fmt.Println("9. 💬 Interactive Mode")
+			fmt.Print("\nSelect an option (1-9): ")
 
 			choice, _ := reader.ReadString('\n')
 			choice = strings.TrimSpace(choice)
@@ -1490,6 +1498,7 @@ func runLLM() {
 			case "6":
 				tutorialState.Active = true
 				tutorialState.Step = 1
+				inMenuMode = false
 				colors.AnimatedOutput("green", "black", "--- Tutorial Mode Started ---\nWelcome to the Gollemer tutorial! I will guide you through the basics.\nStep 1: Let's start by creating a project folder.\nTry typing: 'create folder myproject'", 1*time.Second)
 				fmt.Println("\n")
 				continue
@@ -1497,6 +1506,10 @@ func runLLM() {
 				query = "help"
 			case "8":
 				os.Exit(0)
+			case "9":
+				inMenuMode = false
+				fmt.Println("Returning to interactive mode...")
+				continue
 			default:
 				fmt.Println("Invalid option.")
 				continue
