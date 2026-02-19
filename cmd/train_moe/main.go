@@ -691,14 +691,9 @@ func convertW2VVocab(w2vVocab map[string]int) *mainvocab.Vocabulary {
 	return vocab
 }
 
-func BuildVocabularies(dataPath string) (*mainvocab.Vocabulary, *mainvocab.Vocabulary, error) {
+func BuildVocabularies(semanticTrainingData *IntentTrainingData) (*mainvocab.Vocabulary, *mainvocab.Vocabulary, error) {
 	queryVocabulary := mainvocab.NewVocabulary()
 	semanticOutputVocabulary := mainvocab.NewVocabulary()
-
-	semanticTrainingData, err := LoadIntentTrainingData(dataPath)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to load semantic training data from %s: %w", dataPath, err)
-	}
 
 	for _, pair := range *semanticTrainingData {
 		// Use the same tokenizer logic as during inference to build the vocabulary
@@ -767,6 +762,33 @@ func main() {
 		}
 	}
 
+	// Load Intent training data
+	semanticTrainingData, err := LoadIntentTrainingData(semanticTrainingDataPath)
+	if err != nil {
+		log.Fatalf("Failed to load semantic training data from %s: %v", semanticTrainingDataPath, err)
+	}
+	log.Printf("Loaded %d training examples from %s.", len(*semanticTrainingData), semanticTrainingDataPath)
+
+	// Load WikiQA training data if available
+	const wikiQATrainingDataPath = "./trainingdata/generated_wikiqa_intents.json"
+	if _, err := os.Stat(wikiQATrainingDataPath); err == nil {
+		wikiQATrainingData, err := LoadIntentTrainingData(wikiQATrainingDataPath)
+		if err == nil {
+			*semanticTrainingData = append(*semanticTrainingData, *wikiQATrainingData...)
+			log.Printf("Merged %d WikiQA examples. Total: %d", len(*wikiQATrainingData), len(*semanticTrainingData))
+		}
+	}
+
+	// Load Q&A training data if available
+	const qaTrainingDataPath = "./trainingdata/qa_semantic_output.json"
+	if _, err := os.Stat(qaTrainingDataPath); err == nil {
+		qaTrainingData, err := LoadIntentTrainingData(qaTrainingDataPath)
+		if err == nil {
+			*semanticTrainingData = append(*semanticTrainingData, *qaTrainingData...)
+			log.Printf("Merged %d Q&A examples. Total: %d", len(*qaTrainingData), len(*semanticTrainingData))
+		}
+	}
+
 	// Try to load other vocabularies first
 	semanticOutputVocabulary, err := mainvocab.LoadVocabulary(semanticOutputVocabularySavePath)
 	if err != nil {
@@ -775,7 +797,7 @@ func main() {
 
 	if semanticOutputVocabulary == nil {
 		log.Println("Building vocabularies from scratch...")
-		_, semanticOutputVocabulary, err = BuildVocabularies(semanticTrainingDataPath)
+		_, semanticOutputVocabulary, err = BuildVocabularies(semanticTrainingData)
 		if err != nil {
 			log.Fatalf("Failed to build vocabularies: %v", err)
 		}
@@ -783,44 +805,6 @@ func main() {
 
 	log.Printf("Query Vocabulary (after load/create): Size=%d", len(queryVocabulary.WordToToken))
 	log.Printf("Semantic Output Vocabulary (after load/create): Size=%d", len(semanticOutputVocabulary.WordToToken))
-
-	// Load Intent training data
-	semanticTrainingData, err := LoadIntentTrainingData(semanticTrainingDataPath)
-	if err != nil {
-		log.Fatalf("Failed to load semantic training data from %s: %v", semanticTrainingDataPath, err)
-	}
-	log.Printf("Loaded %d training examples from %s.", len(*semanticTrainingData), semanticTrainingDataPath)
-
-	// TEMPORARILY DISABLED: Load only small dataset for debugging
-	/*
-		// Load WikiQA training data
-		const wikiQATrainingDataPath = "./trainingdata/generated_wikiqa_intents.json"
-		wikiQATrainingData, err := LoadIntentTrainingData(wikiQATrainingDataPath)
-		if err != nil {
-			log.Printf("Warning: Failed to load WikiQA training data from %s: %v. Proceeding without it.", wikiQATrainingDataPath, err)
-		} else {
-			log.Printf("Loaded %d training examples from %s.", len(*wikiQATrainingData), wikiQATrainingDataPath)
-			// Use full WikiQA dataset for better generalization
-			// Merge datasets
-			*semanticTrainingData = append(*semanticTrainingData, *wikiQATrainingData...)
-			log.Printf("Total training examples after merging WikiQA: %d", len(*semanticTrainingData))
-		}
-
-		// Load Q&A training data from converted TSV
-		const qaTrainingDataPath = "./trainingdata/qa_semantic_output.json"
-		qaTrainingData, err := LoadIntentTrainingData(qaTrainingDataPath)
-		if err != nil {
-			log.Printf("Warning: Failed to load Q&A training data from %s: %v. Proceeding without it.", qaTrainingDataPath, err)
-		} else {
-			log.Printf("Loaded %d Q&A training examples from %s.", len(*qaTrainingData), qaTrainingDataPath)
-			// Use full Q&A dataset for better generalization
-			// Merge Q&A dataset
-			*semanticTrainingData = append(*semanticTrainingData, *qaTrainingData...)
-			log.Printf("Total training examples after merging Q&A: %d", len(*semanticTrainingData))
-		}
-	*/
-
-	log.Printf("Training on small dataset only: %d examples", len(*semanticTrainingData))
 
 	// After vocabularies are fully populated, determine vocab sizes and create/load model
 	inputVocabSize := len(queryVocabulary.WordToToken)
