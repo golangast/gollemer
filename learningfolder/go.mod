@@ -1,4 +1,4 @@
-module github.com/golangast/gollemer/learningfolder
+module github.com/golangast/gollemer
 
 go 1.24.0
 

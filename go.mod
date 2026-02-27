@@ -1,6 +1,6 @@
 module github.com/golangast/gollemer
 
-go 1.26rc2
+go 1.26
 
 require (
 	github.com/Masterminds/sprig/v3 v3.3.0
