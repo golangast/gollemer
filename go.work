@@ -1,6 +1,5 @@
-go 1.26rc2
+go 1.26
 
 use (
 	.
-	./learningfolder
 )
