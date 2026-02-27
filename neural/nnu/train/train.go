@@ -6,7 +6,8 @@ package train
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
+
 	"log"
 	"math"
 	"math/rand/v2"
@@ -60,7 +61,7 @@ func prepareInputData(tagData tag.Tag, nn *nnu.SimpleNN) []float64 {
 			tokenIndex = nn.TokenVocab["UNK"]
 		}
 
-		for j := 0; j < tokenVocabSize; j++ {
+		for j := range tokenVocabSize {
 			if tokenIndex == j {
 				nn.Inputs[(i)*tokenVocabSize+j] = 1
 			}
@@ -268,7 +269,7 @@ func JsonModelTrain(sw2v *word2vec.SimpleWord2Vec, md *nnu.SimpleNN) (ContextRel
 	sw2v.Ann.AddWordVectors(word2vec.ConvertToMap(sw2v.WordVectors, md.TokenVocab)) // Populate the index BEFORE the loop
 	// 1. Build Vocabulary
 	for _, sentence := range md.PSentences {
-		for _, word := range strings.Fields(sentence) {
+		for word := range strings.FieldsSeq(sentence) {
 			if _, ok := sw2v.Vocabulary[word]; !ok {
 				sw2v.Vocabulary[word] = len(sw2v.Vocabulary)
 				sw2v.WordVectors[len(sw2v.Vocabulary)-1] = make([]float64, sw2v.VectorSize)
@@ -436,7 +437,7 @@ func LoadTrainingDataFromJSON(filePath string) (*TrainingDataJSON, error) {
 		return nil, err
 	}
 
-	data, err := ioutil.ReadAll(file)
+	data, err := io.ReadAll(file)
 	if err != nil {
 		return nil, err
 	}
@@ -531,7 +532,7 @@ func prepareMLMInput(nn *nnu.SimpleNN, sentence []string, tokenVocab map[string]
 	maskedIndicesSentence := make(map[int]bool)
 
 	// Populate sentenceIndices
-	for i := 0; i < len(sentence); i++ {
+	for i := range sentence {
 		word := sentence[i]
 		if index, ok := tokenVocab[word]; ok && index != 0 {
 			sentenceIndices[i] = float64(index)

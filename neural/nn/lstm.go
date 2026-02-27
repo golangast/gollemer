@@ -36,9 +36,7 @@ func applyDropout(tensor *Tensor, dropoutRate float64, training bool) *Tensor {
 
 	// Apply mask
 	output := NewTensor(tensor.Shape, make([]float64, len(tensor.Data)), tensor.RequiresGrad)
-	for i := range output.Data {
-		output.Data[i] = tensor.Data[i] * mask.Data[i]
-	}
+	MulVectors(tensor.Data, mask.Data, output.Data)
 
 	return output
 }
@@ -112,14 +110,64 @@ func (c *LSTMCell) Forward(inputs ...*Tensor) (*Tensor, *Tensor, error) {
 	c.PrevHidden = prevHidden
 	c.PrevCell = prevCell
 
-	// Concatenate input and previous hidden state
-	combined, err := Concat([]*Tensor{input, prevHidden}, 1)
+	// Instead of Concat, we perform two MatMuls or slice the weight matrix.
+	// W = [W_input; W_hidden]
+	// ft = sigmoid(input @ Wf_in + prevHidden @ Wf_hid + Bf)
+
+	inputSize := c.InputSize
+
+	// Slice weights for input and hidden parts without copying (using Reshape might be tricky here,
+	// but since we know the layout, we can just use the MatMul on slices if MatMul supported it).
+	// For now, to keep it simple and safe, we'll continue using the combined MatMul but
+	// we'll optimize the Concat out by using a pre-allocated buffer or just doing two MatMuls.
+	// Two MatMuls is cleaner for now.
+
+	wf_in, err := c.Wf.Slice(0, 0, inputSize)
+	if err != nil {
+		return nil, nil, err
+	}
+	wf_hid, err := c.Wf.Slice(0, inputSize, c.Wf.Shape[0])
+	if err != nil {
+		return nil, nil, err
+	}
+
+	wi_in, err := c.Wi.Slice(0, 0, inputSize)
+	if err != nil {
+		return nil, nil, err
+	}
+	wi_hid, err := c.Wi.Slice(0, inputSize, c.Wi.Shape[0])
+	if err != nil {
+		return nil, nil, err
+	}
+
+	wc_in, err := c.Wc.Slice(0, 0, inputSize)
+	if err != nil {
+		return nil, nil, err
+	}
+	wc_hid, err := c.Wc.Slice(0, inputSize, c.Wc.Shape[0])
+	if err != nil {
+		return nil, nil, err
+	}
+
+	wo_in, err := c.Wo.Slice(0, 0, inputSize)
+	if err != nil {
+		return nil, nil, err
+	}
+	wo_hid, err := c.Wo.Slice(0, inputSize, c.Wo.Shape[0])
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// Forget gate
-	ft, err := combined.MatMul(c.Wf)
+	f_in, err := input.MatMul(wf_in)
+	if err != nil {
+		return nil, nil, err
+	}
+	f_hid, err := prevHidden.MatMul(wf_hid)
+	if err != nil {
+		return nil, nil, err
+	}
+	ft, err := f_in.Add(f_hid)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -134,7 +182,15 @@ func (c *LSTMCell) Forward(inputs ...*Tensor) (*Tensor, *Tensor, error) {
 	c.ft = ft
 
 	// Input gate
-	it, err := combined.MatMul(c.Wi)
+	i_in, err := input.MatMul(wi_in)
+	if err != nil {
+		return nil, nil, err
+	}
+	i_hid, err := prevHidden.MatMul(wi_hid)
+	if err != nil {
+		return nil, nil, err
+	}
+	it, err := i_in.Add(i_hid)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -149,7 +205,15 @@ func (c *LSTMCell) Forward(inputs ...*Tensor) (*Tensor, *Tensor, error) {
 	c.it = it
 
 	// Candidate cell state
-	cct, err := combined.MatMul(c.Wc)
+	cc_in, err := input.MatMul(wc_in)
+	if err != nil {
+		return nil, nil, err
+	}
+	cc_hid, err := prevHidden.MatMul(wc_hid)
+	if err != nil {
+		return nil, nil, err
+	}
+	cct, err := cc_in.Add(cc_hid)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -163,23 +227,16 @@ func (c *LSTMCell) Forward(inputs ...*Tensor) (*Tensor, *Tensor, error) {
 	}
 	c.cct = cct
 
-	// New cell state
-	ct, err := ft.Mul(prevCell)
-	if err != nil {
-		return nil, nil, err
-	}
-	it_cct, err := it.Mul(cct)
-	if err != nil {
-		return nil, nil, err
-	}
-	ct, err = ct.Add(it_cct)
-	if err != nil {
-		return nil, nil, err
-	}
-	c.ct = ct
-
 	// Output gate
-	ot, err := combined.MatMul(c.Wo)
+	o_in, err := input.MatMul(wo_in)
+	if err != nil {
+		return nil, nil, err
+	}
+	o_hid, err := prevHidden.MatMul(wo_hid)
+	if err != nil {
+		return nil, nil, err
+	}
+	ot, err := o_in.Add(o_hid)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -193,7 +250,24 @@ func (c *LSTMCell) Forward(inputs ...*Tensor) (*Tensor, *Tensor, error) {
 	}
 	c.ot = ot
 
-	// New hidden state
+	// Cell state
+	// ct = ft * prev_c + it * cct
+	term1, err := ft.Mul(prevCell)
+	if err != nil {
+		return nil, nil, err
+	}
+	term2, err := it.Mul(cct)
+	if err != nil {
+		return nil, nil, err
+	}
+	ct, err := term1.Add(term2)
+	if err != nil {
+		return nil, nil, err
+	}
+	c.ct = ct
+
+	// Hidden state
+	// ht = ot * tanh(ct)
 	ct_tanh, err := ct.Tanh()
 	if err != nil {
 		return nil, nil, fmt.Errorf("LSTMCell.Forward: Tanh operation failed: %w", err)
@@ -321,68 +395,44 @@ func (c *LSTMCell) Backward(gradHt, gradCt *Tensor) error {
 
 	// 6. Accumulate gradients for weights and biases
 	if c.Wf.Grad == nil {
-		c.Wf.Grad = NewTensor(c.Wf.Shape, nil, false)
+		c.Wf.Grad = NewTensor(c.Wf.Shape, make([]float64, len(c.Wf.Data)), false)
 	}
-	c.Wf.Grad, err = c.Wf.Grad.Add(gradWf)
-	if err != nil {
-		return err
-	}
+	AddAccumulate(c.Wf.Grad.Data, gradWf.Data)
 
 	if c.Wi.Grad == nil {
-		c.Wi.Grad = NewTensor(c.Wi.Shape, nil, false)
+		c.Wi.Grad = NewTensor(c.Wi.Shape, make([]float64, len(c.Wi.Data)), false)
 	}
-	c.Wi.Grad, err = c.Wi.Grad.Add(gradWi)
-	if err != nil {
-		return err
-	}
+	AddAccumulate(c.Wi.Grad.Data, gradWi.Data)
 
 	if c.Wc.Grad == nil {
-		c.Wc.Grad = NewTensor(c.Wc.Shape, nil, false)
+		c.Wc.Grad = NewTensor(c.Wc.Shape, make([]float64, len(c.Wc.Data)), false)
 	}
-	c.Wc.Grad, err = c.Wc.Grad.Add(gradWc)
-	if err != nil {
-		return err
-	}
+	AddAccumulate(c.Wc.Grad.Data, gradWc.Data)
 
 	if c.Wo.Grad == nil {
-		c.Wo.Grad = NewTensor(c.Wo.Shape, nil, false)
+		c.Wo.Grad = NewTensor(c.Wo.Shape, make([]float64, len(c.Wo.Data)), false)
 	}
-	c.Wo.Grad, err = c.Wo.Grad.Add(gradWo)
-	if err != nil {
-		return err
-	}
+	AddAccumulate(c.Wo.Grad.Data, gradWo.Data)
 
 	if c.Bf.Grad == nil {
-		c.Bf.Grad = NewTensor(c.Bf.Shape, nil, false)
+		c.Bf.Grad = NewTensor(c.Bf.Shape, make([]float64, len(c.Bf.Data)), false)
 	}
-	c.Bf.Grad, err = c.Bf.Grad.Add(gradBf)
-	if err != nil {
-		return err
-	}
+	AddAccumulate(c.Bf.Grad.Data, gradBf.Data)
 
 	if c.Bi.Grad == nil {
-		c.Bi.Grad = NewTensor(c.Bi.Shape, nil, false)
+		c.Bi.Grad = NewTensor(c.Bi.Shape, make([]float64, len(c.Bi.Data)), false)
 	}
-	c.Bi.Grad, err = c.Bi.Grad.Add(gradBi)
-	if err != nil {
-		return err
-	}
+	AddAccumulate(c.Bi.Grad.Data, gradBi.Data)
 
 	if c.Bc.Grad == nil {
-		c.Bc.Grad = NewTensor(c.Bc.Shape, nil, false)
+		c.Bc.Grad = NewTensor(c.Bc.Shape, make([]float64, len(c.Bc.Data)), false)
 	}
-	c.Bc.Grad, err = c.Bc.Grad.Add(gradBc)
-	if err != nil {
-		return err
-	}
+	AddAccumulate(c.Bc.Grad.Data, gradBc.Data)
 
 	if c.Bo.Grad == nil {
-		c.Bo.Grad = NewTensor(c.Bo.Shape, nil, false)
+		c.Bo.Grad = NewTensor(c.Bo.Shape, make([]float64, len(c.Bo.Data)), false)
 	}
-	c.Bo.Grad, err = c.Bo.Grad.Add(gradBo)
-	if err != nil {
-		return err
-	}
+	AddAccumulate(c.Bo.Grad.Data, gradBo.Data)
 
 	// 7. Gradients for combined input
 	transposedWf, err := c.Wf.Transpose(0, 1)
@@ -487,7 +537,7 @@ type LSTM struct {
 // NewLSTM creates a new LSTM.
 func NewLSTM(inputSize, hiddenSize, numLayers int) (*LSTM, error) {
 	cells := make([][]*LSTMCell, numLayers)
-	for i := 0; i < numLayers; i++ {
+	for i := range numLayers {
 		layerInputSize := inputSize
 		if i > 0 {
 			layerInputSize = hiddenSize
@@ -545,31 +595,89 @@ func (l *LSTM) Forward(inputs ...*Tensor) (*Tensor, *Tensor, error) {
 				c = NewTensor([]int{batchSize, l.HiddenSize}, make([]float64, batchSize*l.HiddenSize), false)
 			}
 
-			outputs := make([]*Tensor, sequenceLength)
-			for t := 0; t < sequenceLength; t++ {
-				timeStepInput, err := layerInput.Slice(1, t, t+1)
-				if err != nil {
-					return nil, nil, fmt.Errorf("slicing input failed: %w", err)
-				}
-				timeStepInput, err = timeStepInput.Squeeze(1)
-				if err != nil {
-					return nil, nil, fmt.Errorf("squeezing input failed: %w", err)
-				}
+			// Pre-projection optimization:
+			// Combine input-part weights for all 4 gates into one large matrix
+			cell0 := l.Cells[i][0]
+			inSize := layerInput.Shape[2]
 
-				// Create a new cell for this timestep with shared weights
-				cellForTimeStep := *l.Cells[i][0] // Copy struct, pointers to weights are shared
+			wf_in, _ := cell0.Wf.Slice(0, 0, inSize)
+			wi_in, _ := cell0.Wi.Slice(0, 0, inSize)
+			wc_in, _ := cell0.Wc.Slice(0, 0, inSize)
+			wo_in, _ := cell0.Wo.Slice(0, 0, inSize)
+			w_in_all, _ := Concat([]*Tensor{wf_in, wi_in, wc_in, wo_in}, 1)
+
+			b_all, _ := Concat([]*Tensor{cell0.Bf, cell0.Bi, cell0.Bc, cell0.Bo}, 0)
+
+			// Combine hidden-part weights once per layer
+			wf_hid, _ := cell0.Wf.Slice(0, inSize, cell0.Wf.Shape[0])
+			wi_hid, _ := cell0.Wi.Slice(0, inSize, cell0.Wi.Shape[0])
+			wc_hid, _ := cell0.Wc.Slice(0, inSize, cell0.Wc.Shape[0])
+			wo_hid, _ := cell0.Wo.Slice(0, inSize, cell0.Wo.Shape[0])
+			w_hid_all, _ := Concat([]*Tensor{wf_hid, wi_hid, wc_hid, wo_hid}, 1)
+
+			// Project the entire input sequence once
+			reshapedInput, _ := layerInput.Reshape([]int{batchSize * sequenceLength, inSize})
+			inputProjAll, err := reshapedInput.MatMul(w_in_all)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to pre-project input: %w", err)
+			}
+			inputProjAll, _ = inputProjAll.AddWithBroadcast(b_all)
+
+			// Transpose inputProjAll to [sequenceLength, batchSize, 4 * hiddenSize]
+			inputProjAll3D, _ := inputProjAll.Reshape([]int{batchSize, sequenceLength, 4 * l.HiddenSize})
+			inputProjTrans, _ := inputProjAll3D.Transpose(0, 1)
+
+			outputs := make([]*Tensor, sequenceLength)
+			for t := range sequenceLength {
+				// Use pre-computed input projection view (zero-copy)
+				projTData := inputProjTrans.Data[t*batchSize*4*l.HiddenSize : (t+1)*batchSize*4*l.HiddenSize]
+				projT := NewTensor([]int{batchSize, 4 * l.HiddenSize}, projTData, false)
+
+				// Create a new cell for this timestep with shared weights for BPTT
+				cellForTimeStep := *cell0
 				l.timeStepCells[i][t] = &cellForTimeStep
 
-				h, c, err = l.timeStepCells[i][t].Forward(timeStepInput, h, c)
-				if err != nil {
-					return nil, nil, fmt.Errorf("LSTMCell forward failed: %w", err)
-				}
+				// Compute hidden projection
+				hidProjAll, _ := h.MatMul(w_hid_all)
+
+				// total gates = input_precomputed + hidden_projection
+				gatesAll, _ := projT.Add(hidProjAll)
+
+				// Split gatesAll into ft, it, cct, ot
+				ft, _ := gatesAll.Slice(1, 0, l.HiddenSize)
+				it, _ := gatesAll.Slice(1, l.HiddenSize, 2*l.HiddenSize)
+				cct, _ := gatesAll.Slice(1, 2*l.HiddenSize, 3*l.HiddenSize)
+				ot, _ := gatesAll.Slice(1, 3*l.HiddenSize, 4*l.HiddenSize)
+
+				ft, _ = ft.Sigmoid()
+				it, _ = it.Sigmoid()
+				cct, _ = cct.Tanh()
+				ot, _ = ot.Sigmoid()
+
+				cellForTimeStep.ft = ft
+				cellForTimeStep.it = it
+				cellForTimeStep.cct = cct
+				cellForTimeStep.ot = ot
+				cellForTimeStep.InputTensor = NewTensor([]int{batchSize, inSize}, nil, false)
+				cellForTimeStep.PrevHidden = h
+				cellForTimeStep.PrevCell = c
+
+				// ct = ft * c + it * cct
+				term1, _ := ft.Mul(c)
+				term2, _ := it.Mul(cct)
+				c, _ = term1.Add(term2)
+				cellForTimeStep.ct = c
+
+				// ht = ot * tanh(ct)
+				ct_tanh, _ := c.Tanh()
+				h, _ = ot.Mul(ct_tanh)
+
 				outputs[t] = h
 			}
 
 			lastCellState = c
 
-			// Manual stack since Stack function is not available
+			// Manual stack along dimension 1 to create [batchSize, sequenceLength, l.HiddenSize]
 			stackedOutputData := make([]float64, batchSize*sequenceLength*l.HiddenSize)
 			for t, ht := range outputs {
 				for b := 0; b < batchSize; b++ {
@@ -578,13 +686,14 @@ func (l *LSTM) Forward(inputs ...*Tensor) (*Tensor, *Tensor, error) {
 			}
 			stackedOutput := NewTensor([]int{batchSize, sequenceLength, l.HiddenSize}, stackedOutputData, true)
 
+			// Store the full layerInput in the cell for the backward pass to find it
+			for t := range sequenceLength {
+				l.timeStepCells[i][t].InputTensor.Creator = layerInput
+			}
+
 			if i < l.NumLayers-1 {
 				layerInput = applyDropout(stackedOutput, l.DropoutRate, l.Training)
 			} else {
-				// Also store the full layerInput in the cell for the backward pass to find it.
-				for t := 0; t < sequenceLength; t++ {
-					l.timeStepCells[i][t].InputTensor.Creator = layerInput
-				}
 				return stackedOutput, lastCellState, nil
 			}
 		}
@@ -655,28 +764,41 @@ func (l *LSTM) Backward(gradNextHidden, gradNextCell *Tensor) error {
 			layerInputTensor.Grad = NewTensor(layerInputTensor.Shape, make([]float64, len(layerInputTensor.Data)), false)
 		}
 
-		// Initialize gradients from future (t+1)
-		gradHFromFuture := NewTensor(gradH.Shape, make([]float64, len(gradH.Data)), false)
-		gradCFromFuture := NewTensor(gradC.Shape, make([]float64, len(gradC.Data)), false)
+		// Initialize gradients from future (t+1) as 2D tensors [batchSize, hiddenSize]
+		batchSize := gradH.Shape[0]
+		gradHFromFuture := NewTensor([]int{batchSize, l.HiddenSize}, make([]float64, batchSize*l.HiddenSize), false)
+		gradCFromFuture := NewTensor([]int{batchSize, l.HiddenSize}, make([]float64, batchSize*l.HiddenSize), false)
 
 		for t := sequenceLength - 1; t >= 0; t-- {
 			cell := l.timeStepCells[i][t]
 
 			// Total gradient for ht = (grad from layer above) + (grad from h_{t+1})
-			var totalGradH, totalGradC *Tensor
-			var err error
+			// Get incoming gradient for this time step
+			var currentStepGradH *Tensor
+			if len(gradH.Shape) == 3 {
+				// Input gradH is [batchSize, sequenceLength, hiddenSize]
+				shSlice, _ := gradH.Slice(1, t, t+1)
+				currentStepGradH, _ = shSlice.Squeeze(1)
+			} else if t == sequenceLength-1 {
+				// Input gradH is [batchSize, hiddenSize], only applies to last step
+				currentStepGradH = gradH
+			} else {
+				// No incoming gradient for this middle step (e.g. if only last step used)
+				currentStepGradH = NewTensor(gradHFromFuture.Shape, make([]float64, len(gradHFromFuture.Data)), false)
+			}
+
+			totalGradH, err := currentStepGradH.Add(gradHFromFuture)
+			if err != nil {
+				return err
+			}
+			
+			// For cell state, normally only gradNextCell (last step) is provided
+			totalGradC := gradCFromFuture
 			if t == sequenceLength-1 {
-				totalGradH, err = gradH.Add(gradHFromFuture)
-				if err != nil {
-					return err
-				}
 				totalGradC, err = gradC.Add(gradCFromFuture)
 				if err != nil {
 					return err
 				}
-			} else {
-				totalGradH = gradHFromFuture
-				totalGradC = gradCFromFuture
 			}
 
 			err = cell.Backward(totalGradH, totalGradC)
@@ -684,17 +806,18 @@ func (l *LSTM) Backward(gradNextHidden, gradNextCell *Tensor) error {
 				return fmt.Errorf("BPTT: cell.Backward at t=%d, layer=%d failed: %w", t, i, err)
 			}
 
-			// Gradients for the previous time step are now available
+			// Gradients for the previous time step
 			gradHFromFuture = cell.PrevHidden.Grad
 			gradCFromFuture = cell.PrevCell.Grad
 
 			// Accumulate gradient for the input of this layer
-			// The input to the cell was a slice, so its gradient must be manually added
-			// to the correct position in the full input gradient tensor for this layer.
 			if cell.InputTensor.Grad != nil {
-				offset := t * cell.InputTensor.Shape[0] * cell.InputTensor.Shape[1]
-				for j, gradVal := range cell.InputTensor.Grad.Data {
-					layerInputTensor.Grad.Data[offset+j] += gradVal
+				batchSize := cell.InputTensor.Shape[0]
+				inputSize := cell.InputTensor.Shape[1]
+				for b := 0; b < batchSize; b++ {
+					outOffset := (b*sequenceLength + t) * inputSize
+					inOffset := b * inputSize
+					AddAccumulate(layerInputTensor.Grad.Data[outOffset:outOffset+inputSize], cell.InputTensor.Grad.Data[inOffset:inOffset+inputSize])
 				}
 			}
 		}
@@ -705,4 +828,23 @@ func (l *LSTM) Backward(gradNextHidden, gradNextCell *Tensor) error {
 		gradC = NewTensor(gradC.Shape, make([]float64, len(gradC.Data)), false)
 	}
 	return nil
+}
+
+func (l *LSTM) GetInputGrad() *Tensor {
+	if len(l.timeStepCells) > 0 && len(l.timeStepCells[0]) > 0 {
+		creator := l.timeStepCells[0][0].InputTensor.Creator
+		if creator != nil {
+			if t, ok := creator.(*Tensor); ok {
+				return t.Grad
+			}
+		}
+	}
+	return nil
+}
+
+func (l *LSTM) GetCellState(layer, timestep int) *Tensor {
+	if layer >= len(l.timeStepCells) || timestep >= len(l.timeStepCells[layer]) {
+		return nil
+	}
+	return l.timeStepCells[layer][timestep].ct
 }

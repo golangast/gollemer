@@ -7,29 +7,29 @@ import (
 
 // GraphNode represents a node in the Abstract Semantic Graph
 type GraphNode struct {
-	ID           string                 `json:"id"`
-	NodeType     string                 `json:"type"`         // "OPERATION", "RESOURCE", "ARGUMENT", "CONSTRAINT"
-	Label        string                 `json:"label"`        // Human-readable label
-	Value        string                 `json:"value"`        // Actual value
-	Properties   map[string]interface{} `json:"properties"`   // Node-specific properties
-	Dependencies []string               `json:"dependencies"` // IDs of dependent nodes
+	ID           string         `json:"id"`
+	NodeType     string         `json:"type"`         // "OPERATION", "RESOURCE", "ARGUMENT", "CONSTRAINT"
+	Label        string         `json:"label"`        // Human-readable label
+	Value        string         `json:"value"`        // Actual value
+	Properties   map[string]any `json:"properties"`   // Node-specific properties
+	Dependencies []string       `json:"dependencies"` // IDs of dependent nodes
 }
 
 // GraphEdge represents an edge/relation in the ASG
 type GraphEdge struct {
-	SourceID     string                 `json:"source_id"`
-	TargetID     string                 `json:"target_id"`
-	RelationType string                 `json:"relation_type"`
-	Weight       float64                `json:"weight"`
-	Properties   map[string]interface{} `json:"properties"`
+	SourceID     string         `json:"source_id"`
+	TargetID     string         `json:"target_id"`
+	RelationType string         `json:"relation_type"`
+	Weight       float64        `json:"weight"`
+	Properties   map[string]any `json:"properties"`
 }
 
 // AbstractSemanticGraph represents the complete semantic graph for a query
 type AbstractSemanticGraph struct {
-	Nodes    map[string]*GraphNode  `json:"nodes"`
-	Edges    []*GraphEdge           `json:"edges"`
-	Root     *GraphNode             `json:"root_node"`
-	Metadata map[string]interface{} `json:"metadata"`
+	Nodes    map[string]*GraphNode `json:"nodes"`
+	Edges    []*GraphEdge          `json:"edges"`
+	Root     *GraphNode            `json:"root_node"`
+	Metadata map[string]any        `json:"metadata"`
 }
 
 // ASGGenerator generates Abstract Semantic Graphs from semantic roles
@@ -62,7 +62,7 @@ func (ag *ASGGenerator) GenerateFromSemanticRoles(
 	asg := &AbstractSemanticGraph{
 		Nodes:    make(map[string]*GraphNode),
 		Edges:    make([]*GraphEdge, 0),
-		Metadata: make(map[string]interface{}),
+		Metadata: make(map[string]any),
 	}
 
 	// Create root operation node
@@ -72,7 +72,7 @@ func (ag *ASGGenerator) GenerateFromSemanticRoles(
 		NodeType: "OPERATION",
 		Label:    strings.ToTitle(operation),
 		Value:    operation,
-		Properties: map[string]interface{}{
+		Properties: map[string]any{
 			"main_verb": true,
 		},
 		Dependencies: make([]string, 0),
@@ -92,7 +92,7 @@ func (ag *ASGGenerator) GenerateFromSemanticRoles(
 			NodeType: "RESOURCE",
 			Label:    resName,
 			Value:    resName,
-			Properties: map[string]interface{}{
+			Properties: map[string]any{
 				"resource_type":  resType,
 				"canonical_path": resource["path"],
 			},
@@ -107,7 +107,7 @@ func (ag *ASGGenerator) GenerateFromSemanticRoles(
 			TargetID:     resNodeID,
 			RelationType: "ACTS_ON",
 			Weight:       1.0,
-			Properties:   make(map[string]interface{}),
+			Properties:   make(map[string]any),
 		})
 
 		opNode.Dependencies = append(opNode.Dependencies, resNodeID)
@@ -124,7 +124,7 @@ func (ag *ASGGenerator) GenerateFromSemanticRoles(
 			NodeType: "ARGUMENT",
 			Label:    fmt.Sprintf("%s: %s", argRole, argValue),
 			Value:    argValue,
-			Properties: map[string]interface{}{
+			Properties: map[string]any{
 				"argument_role": argRole,
 			},
 			Dependencies: make([]string, 0),
@@ -137,7 +137,7 @@ func (ag *ASGGenerator) GenerateFromSemanticRoles(
 			TargetID:     argNodeID,
 			RelationType: "HAS_ARGUMENT",
 			Weight:       0.9,
-			Properties: map[string]interface{}{
+			Properties: map[string]any{
 				"arg_type": argRole,
 			},
 		})
@@ -150,7 +150,7 @@ func (ag *ASGGenerator) GenerateFromSemanticRoles(
 					TargetID:     argNodeID,
 					RelationType: "HAS_PROPERTY",
 					Weight:       0.85,
-					Properties: map[string]interface{}{
+					Properties: map[string]any{
 						"property_name": argRole,
 					},
 				})
@@ -169,7 +169,7 @@ func (ag *ASGGenerator) GenerateFromSemanticRoles(
 			NodeType: "CONSTRAINT",
 			Label:    modValue,
 			Value:    modValue,
-			Properties: map[string]interface{}{
+			Properties: map[string]any{
 				"constraint_type": "MODIFIER",
 			},
 			Dependencies: make([]string, 0),
@@ -182,7 +182,7 @@ func (ag *ASGGenerator) GenerateFromSemanticRoles(
 			TargetID:     opNodeID,
 			RelationType: "MODIFIES",
 			Weight:       0.8,
-			Properties: map[string]interface{}{
+			Properties: map[string]any{
 				"affects_operation": true,
 			},
 		})
@@ -202,8 +202,8 @@ func (ag *ASGGenerator) GenerateFromSemanticRoles(
 }
 
 // GenerateExecutionPlan converts ASG into an executable workflow
-func (ag *ASGGenerator) GenerateExecutionPlan(asg *AbstractSemanticGraph) map[string]interface{} {
-	plan := make(map[string]interface{})
+func (ag *ASGGenerator) GenerateExecutionPlan(asg *AbstractSemanticGraph) map[string]any {
+	plan := make(map[string]any)
 
 	if asg.Root == nil {
 		return plan
@@ -213,17 +213,17 @@ func (ag *ASGGenerator) GenerateExecutionPlan(asg *AbstractSemanticGraph) map[st
 	plan["operation"] = asg.Root.Value
 
 	// Target resources (objects being operated on)
-	targetResources := make([]map[string]interface{}, 0)
+	targetResources := make([]map[string]any, 0)
 	for nodeID, node := range asg.Nodes {
 		if node.NodeType == "RESOURCE" {
-			resource := make(map[string]interface{})
+			resource := make(map[string]any)
 			resource["id"] = nodeID
 			resource["name"] = node.Value
 			resource["type"] = node.Properties["resource_type"]
 			resource["path"] = node.Properties["canonical_path"]
 
 			// Find properties of this resource
-			properties := make(map[string]interface{})
+			properties := make(map[string]any)
 			for _, edge := range asg.Edges {
 				if edge.TargetID == nodeID && edge.RelationType == "HAS_PROPERTY" {
 					if propNode, exists := asg.Nodes[edge.SourceID]; exists {
@@ -244,7 +244,7 @@ func (ag *ASGGenerator) GenerateExecutionPlan(asg *AbstractSemanticGraph) map[st
 	}
 
 	// Arguments/options
-	arguments := make(map[string]interface{})
+	arguments := make(map[string]any)
 	for _, node := range asg.Nodes {
 		if node.NodeType == "ARGUMENT" {
 			argRole := node.Properties["argument_role"]

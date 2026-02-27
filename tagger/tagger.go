@@ -51,7 +51,7 @@ func filterString(tag tag.Tag, filters []string) string {
 	if len(tag.Tokens) == 0 {
 		return ""
 	}
-	str := ""
+	var str strings.Builder
 	for i, token := range tag.Tokens {
 		filtered := false
 		for _, filter := range filters {
@@ -61,10 +61,10 @@ func filterString(tag tag.Tag, filters []string) string {
 			}
 		}
 		if !filtered {
-			str += token + " "
+			str.WriteString(token + " ")
 		}
 	}
 	//fmt.Println("end sentence ", str)
-	return strings.TrimSpace(str)
+	return strings.TrimSpace(str.String())
 
 }

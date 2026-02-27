@@ -429,10 +429,8 @@ func LoadRagModelFromGOB(filePath string) (*nnu.SimpleNN, error) {
 		return loadedNN, nil
 
 	} else {
-		fmt.Println("Error checking file:", err)
+		return nil, fmt.Errorf("error checking file: %w", err)
 	}
-	return nil, nil
-
 }
 
 // RagForwardPass performs a forward pass through the neural network,
@@ -545,7 +543,7 @@ func RagTraining(nn *nnu.SimpleNN, docs RagDocuments, trainingData map[string][]
 	// You will need to generate query embeddings for the queries in your training data.
 
 	// The `sw2v` parameter is required to generate query embeddings.
-	for epoch := 0; epoch < epochs; epoch++ {
+	for epoch := range epochs {
 		fmt.Println("Epoch:", epoch+1)
 		for queryString, targetOutput := range trainingData {
 			// Generate query embedding

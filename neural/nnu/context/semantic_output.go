@@ -9,12 +9,12 @@ type SemanticOutput struct {
 
 // TargetResource represents the target resource in the semantic output.
 type TargetResource struct {
-	Type        string                 `json:"type"`
-	Name        string                 `json:"name"`
-	Properties  map[string]interface{} `json:"properties"`
-	Directory   string                 `json:"directory,omitempty"`
-	Destination string                 `json:"destination,omitempty"`
-	Children    []TargetResource       `json:"children,omitempty"`
+	Type        string           `json:"type"`
+	Name        string           `json:"name"`
+	Properties  map[string]any   `json:"properties"`
+	Directory   string           `json:"directory,omitempty"`
+	Destination string           `json:"destination,omitempty"`
+	Children    []TargetResource `json:"children,omitempty"`
 }
 
 // Context represents the context in the semantic output.

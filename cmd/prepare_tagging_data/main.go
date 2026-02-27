@@ -88,7 +88,7 @@ func main() {
 			entityTokens := tokenizer.Tokenize(entityValue)
 			for i := 0; i <= len(tokens)-len(entityTokens); i++ {
 				match := true
-				for j := 0; j < len(entityTokens); j++ {
+				for j := range entityTokens {
 					if tokens[i+j] != entityTokens[j] {
 						match = false
 						break

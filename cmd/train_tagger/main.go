@@ -88,15 +88,12 @@ func TrainTaggerModel(model *moe.IntentTagger, data *TaggedTrainingData, epochs 
 
 	optimizer := NewOptimizer(model.Parameters(), learningRate, 1.0) // Using a clip value of 1.0
 
-	for epoch := 0; epoch < epochs; epoch++ {
+	for epoch := range epochs {
 		log.Printf("Epoch %d/%d", epoch+1, epochs)
 		totalLoss := 0.0
 		numBatches := 0
 		for i := 0; i < len(*data); i += batchSize {
-			end := i + batchSize
-			if end > len(*data) {
-				end = len(*data)
-			}
+			end := min(i+batchSize, len(*data))
 			batch := (*data)[i:end]
 
 			loss, err := trainTaggerBatch(model, optimizer, batch, queryVocab, intentVocab, tagVocab, queryTokenizer, maxSequenceLength)
@@ -164,9 +161,9 @@ func trainTaggerBatch(model *moe.IntentTagger, optimizer Optimizer, batch Tagged
 	// Calculate tag loss
 	tagLoss := 0.0
 	tagGrads := make([]*tensor.Tensor, maxSequenceLength)
-	for t := 0; t < maxSequenceLength; t++ {
+	for t := range maxSequenceLength {
 		targets := make([]int, batchSize)
-		for i := 0; i < batchSize; i++ {
+		for i := range batchSize {
 			targets[i] = targetTagIDsBatch[i*maxSequenceLength+t]
 		}
 		loss, grad := tensor.CrossEntropyLoss(tagLogits[t], targets, tagVocab.PaddingTokenID, 0.0)

@@ -9,17 +9,17 @@ import (
 
 // VFSNode represents a node in the virtual file system
 type VFSNode struct {
-	Name         string                 // Node name (e.g., "main.go", "src")
-	Path         string                 // Full path from root
-	Type         string                 // "file" or "folder"
-	Role         string                 // Semantic role: "entrypoint", "handler", "config", etc.
-	Content      string                 // File content (empty for folders)
-	Properties   map[string]interface{} // Additional properties
-	Parent       *VFSNode               // Parent node
-	Children     map[string]*VFSNode    // Child nodes (for folders)
-	Dependencies []string               // Files this node depends on
-	CreatedAt    time.Time              // Creation timestamp
-	ModifiedAt   time.Time              // Last modification timestamp
+	Name         string              // Node name (e.g., "main.go", "src")
+	Path         string              // Full path from root
+	Type         string              // "file" or "folder"
+	Role         string              // Semantic role: "entrypoint", "handler", "config", etc.
+	Content      string              // File content (empty for folders)
+	Properties   map[string]any      // Additional properties
+	Parent       *VFSNode            // Parent node
+	Children     map[string]*VFSNode // Child nodes (for folders)
+	Dependencies []string            // Files this node depends on
+	CreatedAt    time.Time           // Creation timestamp
+	ModifiedAt   time.Time           // Last modification timestamp
 }
 
 // VFSTree represents the virtual file system
@@ -39,7 +39,7 @@ func NewVFSTree() *VFSTree {
 		Type:       "folder",
 		Role:       "root",
 		Children:   make(map[string]*VFSNode),
-		Properties: make(map[string]interface{}),
+		Properties: make(map[string]any),
 		CreatedAt:  time.Now(),
 		ModifiedAt: time.Now(),
 	}
@@ -87,7 +87,7 @@ func (vfs *VFSTree) CreateFolder(path string, role string) (*VFSNode, error) {
 		Type:       "folder",
 		Role:       role,
 		Children:   make(map[string]*VFSNode),
-		Properties: make(map[string]interface{}),
+		Properties: make(map[string]any),
 		Parent:     parent,
 		CreatedAt:  time.Now(),
 		ModifiedAt: time.Now(),
@@ -134,7 +134,7 @@ func (vfs *VFSTree) CreateFile(path string, role string, content string) (*VFSNo
 		Type:       "file",
 		Role:       role,
 		Content:    content,
-		Properties: make(map[string]interface{}),
+		Properties: make(map[string]any),
 		Parent:     parent,
 		Children:   nil,
 		CreatedAt:  time.Now(),

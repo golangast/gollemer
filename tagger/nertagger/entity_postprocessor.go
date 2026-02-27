@@ -207,20 +207,20 @@ func ExtractCleanParameters(tokens []string, posTags []string, paramTriggers map
 // ========== DEBUG/ANALYSIS FUNCTIONS ==========
 
 // AnalyzeSentence provides detailed analysis of a sentence for debugging
-func AnalyzeSentence(tokens []string, posTags []string) map[string]interface{} {
+func AnalyzeSentence(tokens []string, posTags []string) map[string]any {
 	parser := NewSemanticParser(tokens, posTags)
 	tree, srl := parser.Parse()
 	postProcessor := NewEntityPostProcessor(tokens, posTags)
 
-	analysis := map[string]interface{}{
-		"tokens":          tokens,
-		"pos_tags":        posTags,
-		"predicate":       srl.Predicate,
-		"predicate_idx":   srl.PredIdx,
-		"dependency_tree": map[string]interface{}{
-			"edges":   tree.Edges,
-			"parents": tree.Parent,
-			"leaf_nodes": tree.ExtractLeafNodes(),
+	analysis := map[string]any{
+		"tokens":        tokens,
+		"pos_tags":      posTags,
+		"predicate":     srl.Predicate,
+		"predicate_idx": srl.PredIdx,
+		"dependency_tree": map[string]any{
+			"edges":        tree.Edges,
+			"parents":      tree.Parent,
+			"leaf_nodes":   tree.ExtractLeafNodes(),
 			"entity_heads": tree.FindEntityHeads(),
 		},
 		"semantic_roles": map[string][]string{},

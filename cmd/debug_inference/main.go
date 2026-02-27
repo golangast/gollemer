@@ -29,7 +29,7 @@ func main() {
 		TargetResource: &semantic.Resource{
 			Type: "Filesystem::Folder",
 			Name: "kim",
-			Properties: map[string]interface{}{
+			Properties: map[string]any{
 				"path": "./",
 			},
 			Children: []semantic.Resource{

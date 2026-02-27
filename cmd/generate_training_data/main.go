@@ -16,17 +16,17 @@ type SemanticOutput struct {
 
 // TargetResource represents the resource being operated on
 type TargetResource struct {
-	Type       string                 `json:"type"`
-	Name       string                 `json:"name"`
-	Properties map[string]interface{} `json:"properties"`
-	Children   []ChildResource        `json:"children,omitempty"`
+	Type       string          `json:"type"`
+	Name       string          `json:"name"`
+	Properties map[string]any  `json:"properties"`
+	Children   []ChildResource `json:"children,omitempty"`
 }
 
 // ChildResource represents a child resource
 type ChildResource struct {
-	Type       string                 `json:"type"`
-	Name       string                 `json:"name"`
-	Properties map[string]interface{} `json:"properties"`
+	Type       string         `json:"type"`
+	Name       string         `json:"name"`
+	Properties map[string]any `json:"properties"`
 }
 
 // Context represents the execution context
@@ -107,7 +107,7 @@ func generateCreateFolderExamples() []TrainingExample {
 					TargetResource: TargetResource{
 						Type: "Filesystem::Folder",
 						Name: name,
-						Properties: map[string]interface{}{
+						Properties: map[string]any{
 							"path": path,
 						},
 					},
@@ -127,7 +127,7 @@ func generateCreateFolderExamples() []TrainingExample {
 				TargetResource: TargetResource{
 					Type: "Filesystem::Folder",
 					Name: name,
-					Properties: map[string]interface{}{
+					Properties: map[string]any{
 						"path": path,
 					},
 				},
@@ -173,7 +173,7 @@ func generateCreateFileExamples() []TrainingExample {
 					TargetResource: TargetResource{
 						Type: "Filesystem::File",
 						Name: name,
-						Properties: map[string]interface{}{
+						Properties: map[string]any{
 							"path": path,
 						},
 					},
@@ -212,7 +212,7 @@ func generateDeleteExamples() []TrainingExample {
 				TargetResource: TargetResource{
 					Type: res.resType,
 					Name: res.name,
-					Properties: map[string]interface{}{
+					Properties: map[string]any{
 						"path": "./",
 					},
 				},
@@ -248,7 +248,7 @@ func generateReadExamples() []TrainingExample {
 				TargetResource: TargetResource{
 					Type: "Filesystem::Folder",
 					Name: q.name,
-					Properties: map[string]interface{}{
+					Properties: map[string]any{
 						"path": q.path,
 					},
 				},
@@ -283,7 +283,7 @@ func generateUpdateExamples() []TrainingExample {
 				TargetResource: TargetResource{
 					Type: u.resType,
 					Name: u.name,
-					Properties: map[string]interface{}{
+					Properties: map[string]any{
 						"path": "./",
 					},
 				},
@@ -306,14 +306,14 @@ func generateNestedExamples() []TrainingExample {
 			TargetResource: TargetResource{
 				Type: "Filesystem::Folder",
 				Name: "project",
-				Properties: map[string]interface{}{
+				Properties: map[string]any{
 					"path": "./",
 				},
 				Children: []ChildResource{
 					{
 						Type: "Filesystem::File",
 						Name: "main.go",
-						Properties: map[string]interface{}{
+						Properties: map[string]any{
 							"path": "./project",
 						},
 					},
@@ -331,14 +331,14 @@ func generateNestedExamples() []TrainingExample {
 			TargetResource: TargetResource{
 				Type: "Filesystem::Folder",
 				Name: "myapp",
-				Properties: map[string]interface{}{
+				Properties: map[string]any{
 					"path": "./",
 				},
 				Children: []ChildResource{
 					{
 						Type: "Deployment::GoWebserver",
 						Name: "api",
-						Properties: map[string]interface{}{
+						Properties: map[string]any{
 							"port":    8080,
 							"runtime": "go",
 							"source":  "boilerplate_v1",

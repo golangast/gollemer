@@ -17,23 +17,23 @@ const (
 	O_PREFIX IOBTagType = "O"  // Outside entity
 
 	// Entity types for IOB tagging
-	B_ACTION     = "B-ACTION"
-	I_ACTION     = "I-ACTION"
-	B_TYPE       = "B-TYPE"
-	I_TYPE       = "I-TYPE"
-	B_NAME       = "B-NAME"
-	I_NAME       = "I-NAME"
-	B_ATTRIBUTE  = "B-ATTRIBUTE"
-	I_ATTRIBUTE  = "I-ATTRIBUTE"
-	B_TARGET     = "B-TARGET"
-	I_TARGET     = "I-TARGET"
-	B_SOURCE     = "B-SOURCE"
-	I_SOURCE     = "I-SOURCE"
-	B_URL        = "B-URL"
-	I_URL        = "I-URL"
-	B_PATH       = "B-PATH"
-	I_PATH       = "I-PATH"
-	O_TAG        = "O"
+	B_ACTION    = "B-ACTION"
+	I_ACTION    = "I-ACTION"
+	B_TYPE      = "B-TYPE"
+	I_TYPE      = "I-TYPE"
+	B_NAME      = "B-NAME"
+	I_NAME      = "I-NAME"
+	B_ATTRIBUTE = "B-ATTRIBUTE"
+	I_ATTRIBUTE = "I-ATTRIBUTE"
+	B_TARGET    = "B-TARGET"
+	I_TARGET    = "I-TARGET"
+	B_SOURCE    = "B-SOURCE"
+	I_SOURCE    = "I-SOURCE"
+	B_URL       = "B-URL"
+	I_URL       = "I-URL"
+	B_PATH      = "B-PATH"
+	I_PATH      = "I-PATH"
+	O_TAG       = "O"
 )
 
 // iobRule defines patterns for IOB entity recognition
@@ -228,8 +228,8 @@ func (t *IOBTagger) extendEntities() {
 		currentTag := t.iobTags[i]
 
 		// If current token is B-*, prepare for continuation
-		if strings.HasPrefix(currentTag, "B-") {
-			lastEntityType = strings.TrimPrefix(currentTag, "B-")
+		if after, ok := strings.CutPrefix(currentTag, "B-"); ok {
+			lastEntityType = after
 			lastWasEntity = true
 			continue
 		}
@@ -364,7 +364,7 @@ func ParseIOBTags(tokens []string, iobTags []string) map[string][]EntitySpan {
 	var currentEntity string
 	var currentStart int
 
-	for i := 0; i < len(iobTags); i++ {
+	for i := range iobTags {
 		tag := iobTags[i]
 
 		if strings.HasPrefix(tag, "B-") {
@@ -382,8 +382,8 @@ func ParseIOBTags(tokens []string, iobTags []string) map[string][]EntitySpan {
 			// Start new entity
 			currentEntity = strings.TrimPrefix(tag, "B-")
 			currentStart = i
-		} else if strings.HasPrefix(tag, "I-") {
-			entityType := strings.TrimPrefix(tag, "I-")
+		} else if after, ok := strings.CutPrefix(tag, "I-"); ok {
+			entityType := after
 			// Verify continuity
 			if currentEntity != entityType {
 				// This shouldn't happen in well-formed IOB, but handle it
@@ -440,13 +440,13 @@ func ValidateIOBSequence(tags []string) bool {
 			continue
 		}
 
-		if strings.HasPrefix(tag, "B-") {
-			lastType = strings.TrimPrefix(tag, "B-")
+		if after, ok := strings.CutPrefix(tag, "B-"); ok {
+			lastType = after
 			continue
 		}
 
-		if strings.HasPrefix(tag, "I-") {
-			currentType := strings.TrimPrefix(tag, "I-")
+		if after, ok := strings.CutPrefix(tag, "I-"); ok {
+			currentType := after
 			// I- must follow B- of the same type, or another I- of the same type
 			if lastType != currentType {
 				// Check previous tag

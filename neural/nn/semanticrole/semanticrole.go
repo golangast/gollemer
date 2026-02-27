@@ -7,7 +7,8 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
+
 	"os"
 	"strings"
 
@@ -163,7 +164,7 @@ func LoadRoleData(filePath string) ([]SentenceRoleData, error) {
 	}
 	defer file.Close()
 
-	data, err := ioutil.ReadAll(file)
+	data, err := io.ReadAll(file)
 	if err != nil {
 		return nil, err
 	}

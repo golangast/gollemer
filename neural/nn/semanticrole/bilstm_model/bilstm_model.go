@@ -324,7 +324,7 @@ func (m *BiLSTMModel) Forward(tokenIds []int) [][]float64 {
 	backwardHidden := make([]float64, m.HiddenSize)
 	backwardCell := make([]float64, m.HiddenSize)
 
-	for t := 0; t < sequenceLength; t++ {
+	for t := range sequenceLength {
 		forwardHidden, forwardCell = m.lstmStep(t, tokenIds, m.ForwardLSTMWeights, &m.ForwardLSTMState, forwardHidden, forwardCell)
 	}
 
@@ -332,7 +332,7 @@ func (m *BiLSTMModel) Forward(tokenIds []int) [][]float64 {
 		backwardHidden, backwardCell = m.lstmStep(t, tokenIds, m.BackwardLSTMWeights, &m.BackwardLSTMState, backwardHidden, backwardCell)
 	}
 
-	for t := 0; t < sequenceLength; t++ {
+	for t := range sequenceLength {
 		hiddenStates[t] = append(m.ForwardLSTMState.HiddenStates[t], m.BackwardLSTMState.HiddenStates[t]...)
 	}
 	return hiddenStates
@@ -352,7 +352,7 @@ func (m *BiLSTMModel) computeHiddenStates(tokenIds []int) (forwardHiddenStates, 
 		defer wg.Done()
 		forwardHidden := make([]float64, m.HiddenSize)
 		forwardCell := make([]float64, m.HiddenSize)
-		for t := 0; t < sequenceLength; t++ {
+		for t := range sequenceLength {
 			forwardHidden, forwardCell = m.lstmStep(t, tokenIds, m.ForwardLSTMWeights, &m.ForwardLSTMState, forwardHidden, forwardCell)
 			forwardHiddenStates[t] = make([]float64, m.HiddenSize)
 			copy(forwardHiddenStates[t], forwardHidden)
@@ -375,7 +375,7 @@ func (m *BiLSTMModel) computeHiddenStates(tokenIds []int) (forwardHiddenStates, 
 func combineHiddenStates(forwardHiddenStates, backwardHiddenStates [][]float64) [][]float64 {
 	sequenceLength := len(forwardHiddenStates)
 	combinedHiddenStates := make([][]float64, sequenceLength)
-	for t := 0; t < sequenceLength; t++ {
+	for t := range sequenceLength {
 		combinedHiddenStates[t] = combineSingleTimeStepHiddenStates(forwardHiddenStates[t], backwardHiddenStates[t])
 	}
 	return combinedHiddenStates

@@ -7,7 +7,8 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
+
 	"log"
 	"os"
 	"strings"
@@ -208,7 +209,7 @@ func LoadTrainingDataJSON(filePath string) (*TrainingDataJSON, error) {
 		return nil, err
 	}
 
-	data, err := ioutil.ReadAll(file)
+	data, err := io.ReadAll(file)
 	if err != nil {
 		return nil, err
 	}

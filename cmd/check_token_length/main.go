@@ -11,8 +11,8 @@ import (
 )
 
 type IntentTrainingExample struct {
-	Query          string      `json:"query"`
-	SemanticOutput interface{} `json:"semantic_output"`
+	Query          string `json:"query"`
+	SemanticOutput any    `json:"semantic_output"`
 }
 
 type IntentTrainingData []IntentTrainingExample

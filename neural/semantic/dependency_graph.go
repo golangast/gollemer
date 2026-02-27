@@ -1,5 +1,7 @@
 package semantic
 
+import "strings"
+
 import "fmt"
 
 // DependencyType represents the type of dependency relationship
@@ -142,17 +144,17 @@ func (dg *DependencyGraph) hasCycleUtil(file string, visited, recStack map[strin
 
 // Summary returns a string representation of the dependency graph
 func (dg *DependencyGraph) Summary() string {
-	var result string
+	var result strings.Builder
 
-	result += "Dependency Graph:\n"
+	result.WriteString("Dependency Graph:\n")
 	for file, deps := range dg.outgoing {
 		if len(deps) > 0 {
-			result += fmt.Sprintf("  %s depends on:\n", file)
+			result.WriteString(fmt.Sprintf("  %s depends on:\n", file))
 			for _, dep := range deps {
-				result += fmt.Sprintf("    - %s (%s)\n", dep.TargetFile, dep.Type)
+				result.WriteString(fmt.Sprintf("    - %s (%s)\n", dep.TargetFile, dep.Type))
 			}
 		}
 	}
 
-	return result
+	return result.String()
 }

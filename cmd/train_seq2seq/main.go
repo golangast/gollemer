@@ -4,7 +4,8 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"os"
+
 	"log"
 	"math/rand"
 	"time"
@@ -95,12 +96,9 @@ func main() {
 		totalLoss := 0.0
 		numBatches := (len(data) + *batchSize - 1) / *batchSize
 
-		for i := 0; i < numBatches; i++ {
+		for i := range numBatches {
 			start := i * *batchSize
-			end := (i + 1) * *batchSize
-			if end > len(data) {
-				end = len(data)
-			}
+			end := min((i+1)**batchSize, len(data))
 			batch := data[start:end]
 
 			// Prepare batch tensors
@@ -143,7 +141,7 @@ func main() {
 }
 
 func loadTrainingData(filePath string) ([]CommandData, error) {
-	fileContent, err := ioutil.ReadFile(filePath)
+	fileContent, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}

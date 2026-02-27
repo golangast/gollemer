@@ -2,6 +2,7 @@ package semantic
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -50,13 +51,13 @@ func NewSemanticRoleLabeler() *SemanticRoleLabeler {
 }
 
 // ExtractRoles performs SRL on a query string
-func (srl *SemanticRoleLabeler) ExtractRoles(queryText string) (map[string]interface{}, error) {
+func (srl *SemanticRoleLabeler) ExtractRoles(queryText string) (map[string]any, error) {
 	if queryText == "" {
 		return nil, fmt.Errorf("empty query text")
 	}
 
 	tokens := strings.Fields(strings.ToLower(queryText))
-	result := make(map[string]interface{})
+	result := make(map[string]any)
 
 	// Extract operation
 	operation := srl.extractOperation(tokens)
@@ -104,23 +105,20 @@ func (srl *SemanticRoleLabeler) extractResources(tokens []string, queryText stri
 
 	for i, token := range tokens {
 		for resType, keywords := range srl.ResourceTypes {
-			for _, keyword := range keywords {
-				if token == keyword {
-					// Next token is likely the resource name
-					var name string
-					if i+1 < len(tokens) && !srl.StopWords[tokens[i+1]] {
-						name = tokens[i+1]
-					} else {
-						name = token
-					}
-
-					resources = append(resources, map[string]string{
-						"type": resType,
-						"name": name,
-						"path": "./",
-					})
-					break
+			if slices.Contains(keywords, token) {
+				// Next token is likely the resource name
+				var name string
+				if i+1 < len(tokens) && !srl.StopWords[tokens[i+1]] {
+					name = tokens[i+1]
+				} else {
+					name = token
 				}
+
+				resources = append(resources, map[string]string{
+					"type": resType,
+					"name": name,
+					"path": "./",
+				})
 			}
 		}
 	}

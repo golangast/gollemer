@@ -90,8 +90,6 @@ func (e *Embedding) SetInput(input *Tensor) {
 // grad is the gradient from the subsequent layer.
 func (e *Embedding) Backward(grad *Tensor) error {
 	if grad == nil || grad.Data == nil {
-		log.Printf("Embedding.Backward: Incoming grad is nil or has no data. Returning.\n")
-		// No gradient to propagate
 		return nil
 	}
 
@@ -111,7 +109,6 @@ func (e *Embedding) Backward(grad *Tensor) error {
 
 	// Ensure gradient for weights is initialized
 	if e.Weight.Grad == nil {
-		log.Printf("Embedding.Backward: Initializing e.Weight.Grad.\n")
 		e.Weight.Grad = NewTensor(e.Weight.Shape, make([]float64, len(e.Weight.Data)), false)
 		e.Weight.Grad.RequiresGrad = false
 	}
@@ -125,8 +122,8 @@ func (e *Embedding) Backward(grad *Tensor) error {
 
 	// Iterate through the incoming gradient (which has the shape of the output from forward)
 	gradFlatIndex := 0
-	for i := 0; i < batchSize; i++ {
-		for j := 0; j < seqLength; j++ {
+	for i := range batchSize {
+		for j := range seqLength {
 			tokenID := e.inputTokenIDs[i*seqLength+j]
 			if tokenID < 0 || tokenID >= vocabSize {
 				// Should not happen if forward passed without error, but add a check
@@ -139,7 +136,7 @@ func (e *Embedding) Backward(grad *Tensor) error {
 			embeddingGradStart := tokenID * dimModel
 			gradVectorStart := gradFlatIndex // Current position in flattened grad data
 
-			for k := 0; k < dimModel; k++ {
+			for k := range dimModel {
 				if embeddingGradStart+k >= len(e.Weight.Grad.Data) || gradVectorStart+k >= len(grad.Data) {
 					return fmt.Errorf("gradient data index out of bounds during Embedding backward accumulation")
 				}
@@ -249,8 +246,8 @@ func NewPositionalEmbedding(maxSequenceLength, dimModel int) *PositionalEmbeddin
 	// Placeholder: Create a dummy position embeddings tensor
 	positionEmbeddingsData := make([]float64, maxSequenceLength*dimModel)
 	// Initialize with sinusoidal positional embeddings
-	for pos := 0; pos < maxSequenceLength; pos++ {
-		for i := 0; i < dimModel; i++ {
+	for pos := range maxSequenceLength {
+		for i := range dimModel {
 			if i%2 == 0 {
 				positionEmbeddingsData[pos*dimModel+i] = math.Sin(float64(pos) / math.Pow(tenThousand, float64(i)/float64(dimModel)))
 			} else {
@@ -289,8 +286,8 @@ func (pe *PositionalEmbedding) Forward(inputTensor *Tensor) (*Tensor, error) {
 	outputData := make([]float64, len(inputTensor.Data))
 	copy(outputData, inputTensor.Data) // Start with the input tensor data
 
-	for b := 0; b < batchSize; b++ {
-		for s := 0; s < seqLength; s++ {
+	for b := range batchSize {
+		for s := range seqLength {
 			// Add a check to prevent out-of-bounds access on positional embeddings
 			if s >= pe.MaxSequenceLength {
 				// Depending on the model's design, you might want to log a warning,
@@ -303,7 +300,7 @@ func (pe *PositionalEmbedding) Forward(inputTensor *Tensor) (*Tensor, error) {
 			posEmbOffset := s * dimModel
 
 			// Add positional embedding for position 's'
-			for d := 0; d < dimModel; d++ {
+			for d := range dimModel {
 				outputData[outputOffset+d] += pe.PositionEmbeddings.Data[posEmbOffset+d]
 			}
 		}
@@ -319,11 +316,4 @@ func (pe *PositionalEmbedding) Forward(inputTensor *Tensor) (*Tensor, error) {
 func init() {
 	gob.Register(&Embedding{})
 	rand.Seed(time.Now().UnixNano())
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

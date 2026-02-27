@@ -2,6 +2,7 @@ package semantic
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -122,13 +123,7 @@ func buildPath(entities map[string]string) string {
 
 	if folder, ok := entities["folder"]; ok && folder != "" {
 		// Only add if not already in pathParts
-		alreadyAdded := false
-		for _, part := range pathParts {
-			if part == folder {
-				alreadyAdded = true
-				break
-			}
-		}
+		alreadyAdded := slices.Contains(pathParts, folder)
 		if !alreadyAdded {
 			pathParts = append(pathParts, folder)
 		}
@@ -158,7 +153,7 @@ func fillCreateFolder(entities map[string]string) SemanticOutput {
 		TargetResource: &Resource{
 			Type: "Filesystem::Folder",
 			Name: folderName,
-			Properties: map[string]interface{}{
+			Properties: map[string]any{
 				"path": path,
 			},
 		},
@@ -201,7 +196,7 @@ func fillCreateFile(entities map[string]string) SemanticOutput {
 
 	path := buildPath(entities)
 
-	properties := map[string]interface{}{
+	properties := map[string]any{
 		"path": path,
 	}
 
@@ -315,7 +310,7 @@ func fillCreateFolderWithFile(entities map[string]string) SemanticOutput {
 	path := buildPath(entities)
 
 	// Create child file with optional code_type property
-	childProps := make(map[string]interface{})
+	childProps := make(map[string]any)
 	if codeType, ok := entities["code_type"]; ok {
 		childProps["code_type"] = codeType
 	}
@@ -334,7 +329,7 @@ func fillCreateFolderWithFile(entities map[string]string) SemanticOutput {
 			Type:     "Filesystem::Folder",
 			Name:     folderName,
 			Children: children,
-			Properties: map[string]interface{}{
+			Properties: map[string]any{
 				"path": path,
 			},
 		},
@@ -361,7 +356,7 @@ func fillDeleteFile(entities map[string]string) SemanticOutput {
 		TargetResource: &Resource{
 			Type: "Filesystem::File",
 			Name: fileName,
-			Properties: map[string]interface{}{
+			Properties: map[string]any{
 				"path": path,
 			},
 		},
@@ -388,7 +383,7 @@ func fillDeleteFolder(entities map[string]string) SemanticOutput {
 		TargetResource: &Resource{
 			Type: "Filesystem::Folder",
 			Name: folderName,
-			Properties: map[string]interface{}{
+			Properties: map[string]any{
 				"path": path,
 			},
 		},
@@ -415,7 +410,7 @@ func fillReadFile(entities map[string]string) SemanticOutput {
 		TargetResource: &Resource{
 			Type: "Filesystem::File",
 			Name: fileName,
-			Properties: map[string]interface{}{
+			Properties: map[string]any{
 				"path": path,
 			},
 		},
@@ -449,7 +444,7 @@ func fillRenameFile(entities map[string]string) SemanticOutput {
 		TargetResource: &Resource{
 			Type: "Filesystem::File",
 			Name: sourceFile,
-			Properties: map[string]interface{}{
+			Properties: map[string]any{
 				"new_name": newName,
 			},
 		},
@@ -479,7 +474,7 @@ func fillRenameFolder(entities map[string]string) SemanticOutput {
 		TargetResource: &Resource{
 			Type: "Filesystem::Folder",
 			Name: sourceFolder,
-			Properties: map[string]interface{}{
+			Properties: map[string]any{
 				"new_name": newName,
 			},
 		},
@@ -506,7 +501,7 @@ func fillAddFeature(entities map[string]string) SemanticOutput {
 		location = "./"
 	}
 
-	properties := map[string]interface{}{
+	properties := map[string]any{
 		"feature":  featureName,
 		"location": location,
 	}
@@ -547,7 +542,7 @@ func fillMoveFile(entities map[string]string) SemanticOutput {
 		TargetResource: &Resource{
 			Type: "Filesystem::File",
 			Name: sourceFile,
-			Properties: map[string]interface{}{
+			Properties: map[string]any{
 				"destination": destFolder,
 			},
 		},
@@ -577,7 +572,7 @@ func fillMoveFolder(entities map[string]string) SemanticOutput {
 		TargetResource: &Resource{
 			Type: "Filesystem::Folder",
 			Name: sourceFolder,
-			Properties: map[string]interface{}{
+			Properties: map[string]any{
 				"destination": destFolder,
 			},
 		},
@@ -599,7 +594,7 @@ func fillModifyCode(entities map[string]string) SemanticOutput {
 		location = "./"
 	}
 
-	properties := map[string]interface{}{
+	properties := map[string]any{
 		"location": location,
 	}
 
@@ -636,7 +631,7 @@ func FillFromStructuredCommand(cmd *StructuredCommand) SemanticOutput {
 	resourceType := objectTypeToResourceType(cmd.ObjectType)
 
 	// Build properties
-	properties := make(map[string]interface{})
+	properties := make(map[string]any)
 	if cmd.Path != "" {
 		properties["path"] = cmd.Path
 	} else {
@@ -674,7 +669,7 @@ func FillFromStructuredCommand(cmd *StructuredCommand) SemanticOutput {
 	// Handle secondary operations (nested resources)
 	if cmd.HasSecondaryOperation() {
 		childType := objectTypeToResourceType(cmd.ArgumentType)
-		childProps := make(map[string]interface{})
+		childProps := make(map[string]any)
 
 		// Copy relevant properties to child
 		if codeType, ok := cmd.Properties["code_type"]; ok {
@@ -725,7 +720,7 @@ func FillFromHierarchicalCommand(cmd *HierarchicalCommand) SemanticOutput {
 	resourceType := objectTypeToResourceType(cmd.ObjectType)
 
 	// Build properties
-	properties := make(map[string]interface{})
+	properties := make(map[string]any)
 	if cmd.Path != "" {
 		properties["path"] = cmd.Path
 	} else {
@@ -769,7 +764,7 @@ func FillFromHierarchicalCommand(cmd *HierarchicalCommand) SemanticOutput {
 func hierarchicalCommandToResource(cmd *HierarchicalCommand) Resource {
 	resourceType := objectTypeToResourceType(cmd.ObjectType)
 
-	properties := make(map[string]interface{})
+	properties := make(map[string]any)
 
 	// Add content if present (for files with boilerplate)
 	if content, ok := cmd.Properties["content"]; ok {

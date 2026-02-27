@@ -28,7 +28,7 @@ func (ge *GoalEngine) CreateGoal(description string) *Goal {
 		Milestones:  make([]*Milestone, 0),
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
-		Metadata:    make(map[string]interface{}),
+		Metadata:    make(map[string]any),
 	}
 }
 
@@ -60,14 +60,14 @@ func (ge *GoalEngine) DecomposeGoal(goal *Goal) error {
 				Description: fmt.Sprintf("Create project folder '%s'", projectName),
 				Status:      StatusPending,
 				Tool:        "create_folder",
-				Args:        map[string]interface{}{"name": projectName},
+				Args:        map[string]any{"name": projectName},
 			},
 			{
 				ID:          ge.generateTaskID(),
 				Description: fmt.Sprintf("Generate code from '%s' template", templateName),
 				Status:      StatusPending,
 				Tool:        "apply_template",
-				Args: map[string]interface{}{
+				Args: map[string]any{
 					"template": templateName,
 					"folder":   projectName,
 				},
@@ -82,7 +82,7 @@ func (ge *GoalEngine) DecomposeGoal(goal *Goal) error {
 				Description: "Verify README exists",
 				Status:      StatusPending,
 				Tool:        "verify_files",
-				Args: map[string]interface{}{
+				Args: map[string]any{
 					"folder": projectName,
 					"files":  []string{"README.md", "main.go"},
 				},
@@ -98,7 +98,7 @@ func (ge *GoalEngine) DecomposeGoal(goal *Goal) error {
 				Description: "Generate handlers code",
 				Status:      StatusPending,
 				Tool:        "apply_template",
-				Args: map[string]interface{}{
+				Args: map[string]any{
 					"template": "handlers",
 					"folder":   projectName,
 				},
@@ -113,7 +113,7 @@ func (ge *GoalEngine) DecomposeGoal(goal *Goal) error {
 				Description: fmt.Sprintf("Delete project folder '%s'", projectName),
 				Status:      StatusPending,
 				Tool:        "delete_folder",
-				Args:        map[string]interface{}{"name": projectName},
+				Args:        map[string]any{"name": projectName},
 			},
 		}
 		milestones = append(milestones, ge.createMilestone(goal.ID, "Project Deletion", deleteTasks, nil))
@@ -125,14 +125,14 @@ func (ge *GoalEngine) DecomposeGoal(goal *Goal) error {
 				Description: fmt.Sprintf("Create project folder '%s'", projectName),
 				Status:      StatusPending,
 				Tool:        "create_folder",
-				Args:        map[string]interface{}{"name": projectName},
+				Args:        map[string]any{"name": projectName},
 			},
 			{
 				ID:          ge.generateTaskID(),
 				Description: fmt.Sprintf("Generate code from '%s' template", templateName),
 				Status:      StatusPending,
 				Tool:        "apply_template",
-				Args: map[string]interface{}{
+				Args: map[string]any{
 					"template": templateName,
 					"folder":   projectName,
 				},
@@ -230,7 +230,7 @@ func (ge *GoalEngine) createMilestone(goalID, description string, tasks []*Subta
 		Dependencies: dependencies,
 		CreatedAt:    time.Now(),
 		UpdatedAt:    time.Now(),
-		Metadata:     make(map[string]interface{}),
+		Metadata:     make(map[string]any),
 	}
 	return milestone
 }
@@ -256,8 +256,8 @@ func (ge *GoalEngine) inferToolFromDescription(description string) string {
 }
 
 // Infer arguments from task description
-func (ge *GoalEngine) inferArgsFromDescription(description string) map[string]interface{} {
-	args := make(map[string]interface{})
+func (ge *GoalEngine) inferArgsFromDescription(description string) map[string]any {
+	args := make(map[string]any)
 	lower := strings.ToLower(description)
 
 	if strings.Contains(lower, "go.mod") {

@@ -129,9 +129,9 @@ func (m *MoEClassificationModel) Forward(inputs ...*tensor.Tensor) (*tensor.Tens
 	allLstmOutputs := make([]*tensor.Tensor, targetSeqLen)
 	m.decoderStates = make([]*DecoderStepState, targetSeqLen)
 
-	for t := 0; t < targetSeqLen; t++ {
+	for t := range targetSeqLen {
 		decoderInputData := make([]float64, batchSize)
-		for b := 0; b < batchSize; b++ {
+		for b := range batchSize {
 			decoderInputData[b] = targetSentenceIDs.Data[b*targetSeqLen+t]
 		}
 		decoderInput := tensor.NewTensor([]int{batchSize, 1}, decoderInputData, true)
@@ -178,7 +178,7 @@ func (m *MoEClassificationModel) Forward(inputs ...*tensor.Tensor) (*tensor.Tens
 
 	// Concatenate all lstmOutputs
 	concatenatedLstmOutputsData := make([]float64, batchSize*targetSeqLen*m.BertConfig.HiddenSize)
-	for t := 0; t < targetSeqLen; t++ {
+	for t := range targetSeqLen {
 		copy(concatenatedLstmOutputsData[t*batchSize*m.BertConfig.HiddenSize:(t+1)*batchSize*m.BertConfig.HiddenSize], allLstmOutputs[t].Data)
 	}
 	concatenatedLstmOutputs := tensor.NewTensor([]int{batchSize * targetSeqLen, m.BertConfig.HiddenSize}, concatenatedLstmOutputsData, true)

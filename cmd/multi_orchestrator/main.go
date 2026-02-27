@@ -976,8 +976,8 @@ func main() {
 				entitiesStr, _ := reader.ReadString('\n')
 				entitiesStr = strings.TrimSpace(entitiesStr)
 				if entitiesStr != "" {
-					pairs := strings.Split(entitiesStr, ",")
-					for _, pair := range pairs {
+					pairs := strings.SplitSeq(entitiesStr, ",")
+					for pair := range pairs {
 						kv := strings.SplitN(pair, "=", 2)
 						if len(kv) == 2 {
 							parsedGoal.Entities[strings.TrimSpace(kv[0])] = strings.TrimSpace(kv[1])
@@ -1143,8 +1143,8 @@ func main() {
 			// Extract custom database name if present
 			if strings.Contains(goal, "database") {
 				// Look for .db file pattern
-				parts := strings.Fields(goal)
-				for _, part := range parts {
+				parts := strings.FieldsSeq(goal)
+				for part := range parts {
 					if strings.HasSuffix(part, ".db") {
 						customDBName = "database/" + part
 						break
@@ -1161,9 +1161,7 @@ func main() {
 		var shouldCreateDatabase bool
 		var generatedFromSemantic bool
 
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			var err error
 			out := "Go server written"
 
@@ -1256,29 +1254,25 @@ func main() {
 				out = ""
 			}
 			results <- TaskResult{Name: "Coder", Output: out, Err: err}
-		}()
+		})
 
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			err := writeDockerfile(customDBName)
 			out := "Dockerfile written"
 			if err != nil {
 				out = ""
 			}
 			results <- TaskResult{Name: "DevOps", Output: out, Err: err}
-		}()
+		})
 
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			err := writeReadme()
 			out := "README written"
 			if err != nil {
 				out = ""
 			}
 			results <- TaskResult{Name: "Readme", Output: out, Err: err}
-		}()
+		})
 
 		wg.Wait()
 		close(results)

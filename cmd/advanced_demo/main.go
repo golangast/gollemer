@@ -27,7 +27,7 @@ func main() {
 	engine := semantic.NewBlueprintEngine()
 
 	// Execute webserver blueprint with custom parameters
-	params := map[string]interface{}{
+	params := map[string]any{
 		"ServerName": "MyAPI",
 		"Port":       3000,
 	}
@@ -86,7 +86,7 @@ func main() {
 	vfs.ChangeDirectory("/myproject/src")
 
 	// Generate code with blueprint
-	handlerParams := map[string]interface{}{
+	handlerParams := map[string]any{
 		"HandlerName": "UserHandler",
 	}
 	handlerCode, _ := engine.Execute("handler", handlerParams)

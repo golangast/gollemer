@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"math"
 	"math/rand"
@@ -384,6 +384,35 @@ func (nn *SimpleNN) ForwardPass(inputs []float64) []float64 {
 	return outputs
 }
 
+// weightsRowIterator implements the Iterator pattern for iterating over rows of weights.
+// This is more efficient for matrix operations than the scalar iterator.
+type weightsRowIterator struct {
+	matrix [][]float64
+	row    int
+	rows   int
+}
+
+// newWeightsRowIterator creates a new iterator for traversing the weights row by row.
+func newWeightsRowIterator(matrix [][]float64) *weightsRowIterator {
+	return &weightsRowIterator{
+		matrix: matrix,
+		row:    -1,
+		rows:   len(matrix),
+	}
+}
+
+// Next advances the iterator to the next row.
+func (wi *weightsRowIterator) Next() bool {
+	wi.row++
+	return wi.row < wi.rows
+}
+
+// GetRow returns the slice of weights for the current row.
+// Returning a slice allows for contiguous memory access, which is crucial for SIMD/Cache performance.
+func (wi *weightsRowIterator) GetRow() []float64 {
+	return wi.matrix[wi.row]
+}
+
 // calculateHiddenLayerOutputs calculates the outputs of the hidden layer neurons.
 //
 // Parameters:
@@ -405,27 +434,39 @@ func (nn *SimpleNN) calculateHiddenLayerOutputs() []float64 {
 		return []float64{}
 	}
 
-	var sum float64
-	for i := 0; i < nn.HiddenSize; i++ {
-		if nn.WeightsIH == nil || len(nn.WeightsIH) == 0 {
-			return []float64{}
+	// UnrollFactor defines how many operations we process per loop iteration.
+	// 4 is a common sweet spot for float64 (4 * 64bit = 256bit, fitting in AVX registers).
+	const unrollFactor = 4
+	iter := newWeightsRowIterator(nn.WeightsIH)
+
+	for iter.Next() {
+		i := iter.row
+		if i >= nn.HiddenSize {
+			break
 		}
 
-		if len(nn.HiddenBiases) > i {
+		var sum float64
+		if i < len(nn.HiddenBiases) {
 			sum = nn.HiddenBiases[i]
-		} else {
-			sum = 0.0
 		}
 
-		for j := 0; j < len(inputs); j++ {
-			// check for out of bounds
-			if i >= len(nn.WeightsIH) || i < 0 || j >= len(nn.WeightsIH[i]) || j < 0 {
-				continue // Skip this iteration
-			}
-			sum += nn.WeightsIH[i][j] * inputs[j]
+		weights := iter.GetRow()
+		n := len(weights)
+		if len(inputs) < n {
+			n = len(inputs)
+		}
+
+		k := 0
+		for ; k <= n-unrollFactor; k += unrollFactor {
+			sum += weights[k] * inputs[k]
+			sum += weights[k+1] * inputs[k+1]
+			sum += weights[k+2] * inputs[k+2]
+			sum += weights[k+3] * inputs[k+3]
+		}
+		for ; k < n; k++ {
+			sum += weights[k] * inputs[k]
 		}
 		hiddenOutputs[i] = nn.Sigmoid(sum)
-
 	}
 	return hiddenOutputs
 }
@@ -444,13 +485,42 @@ func (nn *SimpleNN) calculateOutputLayerOutputs(hiddenOutputs []float64) []float
 		// Return an empty slice if hiddenOutputs is empty.
 		return []float64{}
 	}
-	for i := 0; i < nn.OutputSize; i++ {
+
+	const unrollFactor = 4
+	iter := newWeightsRowIterator(nn.WeightsHO)
+
+	for iter.Next() {
+		i := iter.row
+		if i >= nn.OutputSize {
+			break
+		}
+
 		sum := nn.OutputBiases[i] // Initialize the sum with the bias of the current output neuron.
-		for j := 0; j < nn.HiddenSize; j++ {
-			sum += nn.WeightsHO[i][j] * hiddenOutputs[j] // Accumulate the weighted sum from hidden layer outputs.
+		weights := iter.GetRow()
+		n := len(weights)
+		if len(hiddenOutputs) < n {
+			n = len(hiddenOutputs)
+		}
+		k := 0
+		for ; k <= n-unrollFactor; k += unrollFactor {
+			sum += weights[k] * hiddenOutputs[k]
+			sum += weights[k+1] * hiddenOutputs[k+1]
+			sum += weights[k+2] * hiddenOutputs[k+2]
+			sum += weights[k+3] * hiddenOutputs[k+3]
+		}
+		for ; k < n; k++ {
+			sum += weights[k] * hiddenOutputs[k]
 		}
 		outputs[i] = nn.Sigmoid(sum) // Apply the sigmoid activation function to the sum.
 	}
+	return outputs
+}
+
+// ForwardPassMasked performs a forward pass through the network using masked inputs.
+// It calculates the output of the neural network based on the masked input data.
+func ForwardPassMasked(nn *SimpleNN) []float64 {
+	hiddenOutputs := nn.calculateHiddenLayerOutputs()
+	outputs := nn.calculateOutputLayerOutputs(hiddenOutputs)
 	return outputs
 }
 
@@ -476,16 +546,6 @@ func (nn *SimpleNN) ForwardPassMasked() ([]float64, error) {
 	return outputs, nil
 }
 
-// ForwardPassMasked performs a forward pass through the network using masked inputs. It
-// calculates the output of the neural network based on the masked input data.
-func ForwardPassMasked(nn *SimpleNN) []float64 {
-	// Check for empty masked inputs and handle the error
-
-	hiddenOutputs := nn.calculateHiddenLayerOutputs()
-	outputs := nn.calculateOutputLayerOutputs(hiddenOutputs)
-
-	return outputs
-}
 func LoadTrainingDataJSON(filePath string) (*TrainingDataJSON, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -494,7 +554,7 @@ func LoadTrainingDataJSON(filePath string) (*TrainingDataJSON, error) {
 	defer file.Close()
 
 	// Read all data from the file
-	data, err := ioutil.ReadAll(file)
+	data, err := io.ReadAll(file)
 	if err != nil {
 		return nil, err
 	}
@@ -629,14 +689,12 @@ func (nn *SimpleNN) NewOutputWeightIterator() *OutputWeightIterator {
 // Next moves the iterator to the next weight.
 // It returns true if there are more weights, false otherwise.
 func (it *OutputWeightIterator) Next() bool {
-	if it.i < it.nn.OutputSize && it.j < it.nn.HiddenSize {
-		it.j++
-		if it.j >= it.nn.HiddenSize {
-			it.j = 0
-			it.i++
-		}
+	it.j++
+	if it.j >= it.nn.HiddenSize {
+		it.j = 0
+		it.i++
 	}
-	return false
+	return it.i < it.nn.OutputSize
 }
 
 // Current returns the current indices (i, j) and the weight value.
@@ -666,20 +724,23 @@ func (nn *SimpleNN) NewHiddenBiasIterator() *HiddenBiasIterator {
 // Next moves the iterator to the next bias.
 // It returns true if there are more biases, false otherwise.
 func (it *HiddenBiasIterator) Next() bool {
-	it.i++
-	// The check if there are more biases should be after the increment
-	// to correctly handle the last element.
-	return it.i < it.nn.HiddenSize
+	if it.i < it.nn.HiddenSize {
+		it.i++
+		return true
+	}
+	return false
 }
 
 // Current returns the current index (i) and the bias value.
 func (it *HiddenBiasIterator) Current() (int, float64) {
-	return it.i, it.nn.HiddenBiases[it.i]
+	currentIndex := it.i - 1
+	return currentIndex, it.nn.HiddenBiases[currentIndex]
 }
 
 // Update sets the value of the current bias.
 func (it *HiddenBiasIterator) Update(value float64) {
-	it.nn.HiddenBiases[it.i] = value
+	currentIndex := it.i - 1
+	it.nn.HiddenBiases[currentIndex] = value
 }
 
 // OutputBiasIterator iterates over the output layer biases.

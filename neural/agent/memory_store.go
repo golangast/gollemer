@@ -11,30 +11,30 @@ import (
 
 // Message represents a conversation turn
 type Message struct {
-	Role      string                 `json:"role"` // "user" or "assistant" or "system"
-	Content   string                 `json:"content"`
-	Timestamp time.Time              `json:"timestamp"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+	Role      string         `json:"role"` // "user" or "assistant" or "system"
+	Content   string         `json:"content"`
+	Timestamp time.Time      `json:"timestamp"`
+	Metadata  map[string]any `json:"metadata,omitempty"`
 }
 
 // KnowledgeItem represents a piece of stored knowledge
 type KnowledgeItem struct {
-	Key       string                 `json:"key"`
-	Content   string                 `json:"content"`
-	Embedding []float32              `json:"embedding,omitempty"` // For vector search later
-	Tags      []string               `json:"tags,omitempty"`
-	CreatedAt time.Time              `json:"created_at"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+	Key       string         `json:"key"`
+	Content   string         `json:"content"`
+	Embedding []float32      `json:"embedding,omitempty"` // For vector search later
+	Tags      []string       `json:"tags,omitempty"`
+	CreatedAt time.Time      `json:"created_at"`
+	Metadata  map[string]any `json:"metadata,omitempty"`
 }
 
 // Action represents a logged agent action
 type Action struct {
-	Type      string                 `json:"type"` // "plan_created", "tool_executed", etc.
-	Data      interface{}            `json:"data"`
-	Timestamp time.Time              `json:"timestamp"`
-	Success   bool                   `json:"success"`
-	Error     string                 `json:"error,omitempty"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+	Type      string         `json:"type"` // "plan_created", "tool_executed", etc.
+	Data      any            `json:"data"`
+	Timestamp time.Time      `json:"timestamp"`
+	Success   bool           `json:"success"`
+	Error     string         `json:"error,omitempty"`
+	Metadata  map[string]any `json:"metadata,omitempty"`
 }
 
 // ActionFilters for querying action history
@@ -114,7 +114,7 @@ func (ims *InMemoryStore) AppendMessage(role string, content string) error {
 		Role:      role,
 		Content:   content,
 		Timestamp: time.Now(),
-		Metadata:  make(map[string]interface{}),
+		Metadata:  make(map[string]any),
 	}
 
 	ims.conversations = append(ims.conversations, message)
@@ -140,10 +140,7 @@ func (ims *InMemoryStore) GetConversationHistory(limit int) ([]Message, error) {
 		limit = len(ims.conversations)
 	}
 
-	start := len(ims.conversations) - limit
-	if start < 0 {
-		start = 0
-	}
+	start := max(len(ims.conversations)-limit, 0)
 
 	return ims.conversations[start:], nil
 }
@@ -172,7 +169,7 @@ func (ims *InMemoryStore) StoreKnowledge(key string, content string, tags []stri
 		Content:   content,
 		Tags:      tags,
 		CreatedAt: time.Now(),
-		Metadata:  make(map[string]interface{}),
+		Metadata:  make(map[string]any),
 	}
 
 	ims.knowledge[key] = item
@@ -285,7 +282,7 @@ func (ims *InMemoryStore) save() error {
 	}
 
 	// Prepare data structure
-	data := map[string]interface{}{
+	data := map[string]any{
 		"conversations": ims.conversations,
 		"knowledge":     ims.knowledge,
 		"actions":       ims.actions,
@@ -324,7 +321,7 @@ func (ims *InMemoryStore) Load() error {
 	}
 
 	// Unmarshal
-	var data map[string]interface{}
+	var data map[string]any
 	if err := json.Unmarshal(jsonData, &data); err != nil {
 		return fmt.Errorf("failed to unmarshal data: %w", err)
 	}

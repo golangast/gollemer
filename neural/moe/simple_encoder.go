@@ -47,11 +47,7 @@ func (e *SimpleRNNEncoder) Forward(inputs ...*Tensor) (*Tensor, error) {
 	e.inputTensor = input
 
 	batchSize := input.Shape[0]
-	sequenceLength := input.Shape[1]
-
-	// Initialize history for BPTT
-	e.hiddenStates = make([]*Tensor, sequenceLength)
-	e.cellStates = make([]*Tensor, sequenceLength)
+	// sequenceLength := input.Shape[1]
 
 	// Create initial hidden and cell states (zeros)
 	h := NewTensor([]int{batchSize, e.HiddenDim}, make([]float64, batchSize*e.HiddenDim), true)
@@ -59,64 +55,33 @@ func (e *SimpleRNNEncoder) Forward(inputs ...*Tensor) (*Tensor, error) {
 	e.initialState = h
 	e.initialCell = c
 
-	for t := 0; t < sequenceLength; t++ {
-		timeStepInput, err := input.Slice(1, t, t+1)
-		if err != nil {
-			return nil, fmt.Errorf("slicing input for encoder at t=%d failed: %w", t, err)
-		}
-		timeStepInput, err = timeStepInput.Squeeze(1)
-		if err != nil {
-			return nil, fmt.Errorf("squeezing input for encoder at t=%d failed: %w", t, err)
-		}
-
-		// We need to call the LSTM logic layer by layer for a single time step
-		layerInput := timeStepInput
-		for i := 0; i < e.NumLayers; i++ {
-			// Manually set cell state for single-step backward
-			e.LSTM.Cells[i][0].InputTensor = layerInput
-			e.LSTM.Cells[i][0].PrevHidden = h
-			e.LSTM.Cells[i][0].PrevCell = c
-
-			h, c, err = e.LSTM.Cells[i][0].Forward(layerInput, h, c)
-			if err != nil {
-				return nil, fmt.Errorf("encoder LSTM cell forward at t=%d, layer=%d failed: %w", t, i, err)
-			}
-			layerInput = h // Input to next layer is hidden state of current layer
-		}
-		e.hiddenStates[t] = h
-		e.cellStates[t] = c
-	}
-
-	// Stack all hidden states along a new dimension to create [batchSize, sequenceLength, hiddenDim]
-	// Reshape each hidden state from [batchSize, hiddenDim] to [batchSize, 1, hiddenDim]
-	var allHiddenStates []*Tensor
-	for _, h := range e.hiddenStates {
-		reshaped, err := h.Reshape([]int{batchSize, 1, e.HiddenDim})
-		if err != nil {
-			return nil, fmt.Errorf("failed to reshape hidden state for concatenation: %w", err)
-		}
-		allHiddenStates = append(allHiddenStates, reshaped)
-	}
-
-	// Concatenate along dimension 1 to get [batchSize, sequenceLength, hiddenDim]
-	contextVector, err := Concat(allHiddenStates, 1)
+	// Use built-in sequence handling in LSTM
+	contextVector, _, err := e.LSTM.Forward(input, h, c)
 	if err != nil {
-		return nil, fmt.Errorf("failed to concatenate hidden states: %w", err)
+		return nil, fmt.Errorf("SimpleRNNEncoder LSTM forward failed: %w", err)
 	}
 
-	contextVector.RequiresGrad = true
 	return contextVector, nil
 }
 
 // Backward performs the backward pass of the SimpleRNNEncoder.
-func (e *SimpleRNNEncoder) Backward(grad *Tensor) (*Tensor, error) {
+func (e *SimpleRNNEncoder) Backward(grad *Tensor) error {
 	if grad == nil || grad.Data == nil {
-		return nil, nil
+		return nil
 	}
 
-	// For now, return nil to skip backward pass through the encoder
-	// The LSTM cells will handle their own backpropagation
-	return nil, nil
+	// Create zero gradient for cell state
+	batchSize := grad.Shape[0]
+	zeroGradCell := NewTensor([]int{batchSize, e.HiddenDim}, make([]float64, batchSize*e.HiddenDim), false)
+
+	// Perform BPTT through LSTM
+	err := e.LSTM.Backward(grad, zeroGradCell)
+	if err != nil {
+		return fmt.Errorf("SimpleRNNEncoder LSTM backward failed: %w", err)
+	}
+
+	// Gradient is stored in inputTensor.Grad
+	return nil
 }
 
 // Parameters returns all learnable parameters.

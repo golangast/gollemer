@@ -84,7 +84,7 @@ func main() {
 			TargetResource: &semantic.Resource{
 				Type: "qa_pair",
 				Name: entry.ArticleTitle,
-				Properties: map[string]interface{}{
+				Properties: map[string]any{
 					"question":   entry.Question,
 					"answer":     entry.Answer,
 					"topic":      entry.ArticleTitle,

@@ -63,3 +63,14 @@ Returns to the main prompt, allowing you to enter natural language commands dire
 
 #### 10. ⚙️ Model Configuration
 View and update the file paths for the AI models (Word2Vec, MoE, NER) and vocabularies used by Gollemer.
+## Performance Optimization
+
+Gollemer now supports SIMD (Single Instruction, Multiple Data) acceleration for neural network operations (Matrix Multiplication, Vector Addition, etc.) using the experimental `simd/archsimd` package.
+
+To enable SIMD acceleration, you must build and run Gollemer with the `simd` experiment flag enabled:
+
+```bash
+GOEXPERIMENT=simd go run main.go
+```
+
+This can significantly speed up training and inference, especially for the MoE and Word2Vec models.

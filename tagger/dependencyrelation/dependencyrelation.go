@@ -293,7 +293,7 @@ func PredictDependencies(t tag.Tag) (tag.Tag, error) {
 
 				// Add padding to t.Dependencies
 				if diff > 0 {
-					for i := 0; i < diff; i++ {
+					for range diff {
 						t.Dependencies = append(t.Dependencies, tag.Dependency{Relation: " "}) // Correctly append
 					}
 				} else {

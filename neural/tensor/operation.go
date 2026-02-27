@@ -20,18 +20,18 @@ func Softmax(tensor *Tensor) *Tensor {
 
 	for i := 0; i < len(tensor.Data); i += lastDim {
 		maxVal := math.Inf(-1)
-		for j := 0; j < lastDim; j++ {
+		for j := range lastDim {
 			if tensor.Data[i+j] > maxVal {
 				maxVal = tensor.Data[i+j]
 			}
 		}
 
 		sumExp := 0.0
-		for j := 0; j < lastDim; j++ {
+		for j := range lastDim {
 			sumExp += math.Exp(tensor.Data[i+j] - maxVal)
 		}
 
-		for j := 0; j < lastDim; j++ {
+		for j := range lastDim {
 			output.Data[i+j] = math.Exp(tensor.Data[i+j]-maxVal) / sumExp
 		}
 	}

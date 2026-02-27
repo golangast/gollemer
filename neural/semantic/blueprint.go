@@ -3,6 +3,7 @@ package semantic
 import (
 	"bytes"
 	"fmt"
+	"maps"
 	"strings"
 	"text/template"
 )
@@ -20,10 +21,10 @@ type Blueprint struct {
 
 // BlueprintParam represents a template parameter
 type BlueprintParam struct {
-	Name         string      // Parameter name
-	Type         string      // "string", "int", "bool"
-	DefaultValue interface{} // Default value if not provided
-	Description  string      // Parameter description
+	Name         string // Parameter name
+	Type         string // "string", "int", "bool"
+	DefaultValue any    // Default value if not provided
+	Description  string // Parameter description
 }
 
 // BlueprintFile represents an additional file created by a blueprint
@@ -167,7 +168,7 @@ func (be *BlueprintEngine) GetBlueprint(name string) (*Blueprint, bool) {
 }
 
 // Execute renders a blueprint with parameters
-func (be *BlueprintEngine) Execute(blueprintName string, params map[string]interface{}) (string, error) {
+func (be *BlueprintEngine) Execute(blueprintName string, params map[string]any) (string, error) {
 	bp, exists := be.GetBlueprint(blueprintName)
 	if !exists {
 		return "", fmt.Errorf("blueprint '%s' not found", blueprintName)
@@ -191,7 +192,7 @@ func (be *BlueprintEngine) Execute(blueprintName string, params map[string]inter
 }
 
 // ExecuteFile renders a blueprint file with parameters
-func (be *BlueprintEngine) ExecuteFile(bp *Blueprint, file BlueprintFile, params map[string]interface{}) (string, error) {
+func (be *BlueprintEngine) ExecuteFile(bp *Blueprint, file BlueprintFile, params map[string]any) (string, error) {
 	// Merge with defaults
 	finalParams := be.mergeWithDefaults(bp, params)
 
@@ -210,8 +211,8 @@ func (be *BlueprintEngine) ExecuteFile(bp *Blueprint, file BlueprintFile, params
 }
 
 // mergeWithDefaults merges provided params with blueprint defaults
-func (be *BlueprintEngine) mergeWithDefaults(bp *Blueprint, params map[string]interface{}) map[string]interface{} {
-	result := make(map[string]interface{})
+func (be *BlueprintEngine) mergeWithDefaults(bp *Blueprint, params map[string]any) map[string]any {
+	result := make(map[string]any)
 
 	// Start with defaults
 	for _, param := range bp.Parameters {
@@ -219,17 +220,15 @@ func (be *BlueprintEngine) mergeWithDefaults(bp *Blueprint, params map[string]in
 	}
 
 	// Override with provided values
-	for key, value := range params {
-		result[key] = value
-	}
+	maps.Copy(result, params)
 
 	return result
 }
 
 // ExtractParameters parses parameters from a query string
 // Example: "create server named MyAPI on port 3000" → {ServerName: "MyAPI", Port: 3000}
-func (be *BlueprintEngine) ExtractParameters(query string, bp *Blueprint) map[string]interface{} {
-	params := make(map[string]interface{})
+func (be *BlueprintEngine) ExtractParameters(query string, bp *Blueprint) map[string]any {
+	params := make(map[string]any)
 
 	words := splitWords(query)
 

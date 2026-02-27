@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/rand/v2"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 
@@ -136,7 +137,7 @@ func (sw2v *SimpleWord2Vec) InitializeWeights() {
 			sw2v.Weights[i][j] = rand.Float64() //Example random initialization
 		}
 		// Initialize biases with random values or other initialization strategy
-		for j := 0; j < 1; j++ {
+		for j := range 1 {
 			sw2v.Biases[i][j] = rand.Float64()
 		}
 	}
@@ -192,7 +193,7 @@ func (sw2v *SimpleWord2Vec) ForwardPass(words []string) []float64 {
 		newHiddenState := make([]float64, sw2v.VectorSize)
 		for i := 0; i < sw2v.VectorSize; i++ {
 			weightedSum := 0.0
-			for j := 0; j < len(inputVector); j++ {
+			for j := range inputVector {
 				if i%sw2v.HiddenSize == j%sw2v.HiddenSize {
 					weightedSum += sw2v.Weights[i%sw2v.HiddenSize][j] * inputVector[j]
 				}
@@ -254,12 +255,7 @@ func (sw2v *SimpleWord2Vec) Backpropagate(output, context []float64, learningRat
 
 // contains checks if a string slice contains a specific string.
 func contains(slice []string, str string) bool {
-	for _, s := range slice {
-		if s == str {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(slice, str)
 }
 
 // Helper function to calculate the sum of squares of a slice
@@ -334,8 +330,8 @@ func (sw2v *SimpleWord2Vec) Train(trainingData []string) {
 		sw2v.Vocabulary = make(map[string]int)
 		wordCounts := make(map[string]int)
 		for _, sentence := range trainingData {
-			words := strings.Fields(sentence)
-			for _, word := range words {
+			words := strings.FieldsSeq(sentence)
+			for word := range words {
 				wordCounts[word]++
 			}
 		}

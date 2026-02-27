@@ -2,6 +2,7 @@ package ner
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 )
 
@@ -15,9 +16,9 @@ type SemanticOutput struct {
 			Path string `json:"path"`
 		} `json:"properties"`
 		Children []struct {
-			Type       string                 `json:"type"`
-			Name       string                 `json:"name"`
-			Properties map[string]interface{} `json:"properties"`
+			Type       string         `json:"type"`
+			Name       string         `json:"name"`
+			Properties map[string]any `json:"properties"`
 		} `json:"children"`
 	} `json:"target_resource"`
 	Context struct {
@@ -243,16 +244,13 @@ func (r *RuleBasedNER) extractWithPatterns() []Entity {
 	for i := 0; i < len(r.queryWords)-1; i++ {
 		if r.queryWords[i+1] == "file" {
 			word := r.queryWords[i]
-			for _, ft := range fileTypes {
-				if word == ft {
-					entities = append(entities, Entity{
-						Word:  word,
-						Type:  EntityTypeFileType,
-						Start: i,
-						End:   i,
-					})
-					break
-				}
+			if slices.Contains(fileTypes, word) {
+				entities = append(entities, Entity{
+					Word:  word,
+					Type:  EntityTypeFileType,
+					Start: i,
+					End:   i,
+				})
 			}
 		}
 	}
@@ -293,23 +291,20 @@ func (r *RuleBasedNER) extractWithPatterns() []Entity {
 
 		// Check for "word code" pattern (e.g., "handler code")
 		if i < len(r.queryWords)-1 && r.queryWords[i+1] == "code" {
-			for _, keyword := range codeTypeKeywords {
-				if word == keyword {
-					// Mark both words as CODE_TYPE
-					entities = append(entities, Entity{
-						Word:  word,
-						Type:  EntityTypeCodeType,
-						Start: i,
-						End:   i,
-					})
-					entities = append(entities, Entity{
-						Word:  "code",
-						Type:  EntityTypeCodeType,
-						Start: i + 1,
-						End:   i + 1,
-					})
-					break
-				}
+			if slices.Contains(codeTypeKeywords, word) {
+				// Mark both words as CODE_TYPE
+				entities = append(entities, Entity{
+					Word:  word,
+					Type:  EntityTypeCodeType,
+					Start: i,
+					End:   i,
+				})
+				entities = append(entities, Entity{
+					Word:  "code",
+					Type:  EntityTypeCodeType,
+					Start: i + 1,
+					End:   i + 1,
+				})
 			}
 		}
 	}
@@ -332,16 +327,13 @@ func (r *RuleBasedNER) extractWithPatterns() []Entity {
 	}
 	for i, word := range r.queryWords {
 		cleanWord := strings.Trim(word, "\"',.;:")
-		for _, feature := range featureKeywords {
-			if cleanWord == feature {
-				entities = append(entities, Entity{
-					Word:  word,
-					Type:  EntityTypeFeatureName,
-					Start: i,
-					End:   i,
-				})
-				break
-			}
+		if slices.Contains(featureKeywords, cleanWord) {
+			entities = append(entities, Entity{
+				Word:  word,
+				Type:  EntityTypeFeatureName,
+				Start: i,
+				End:   i,
+			})
 		}
 	}
 
@@ -366,16 +358,13 @@ func (r *RuleBasedNER) extractWithPatterns() []Entity {
 	}
 	for i, word := range r.queryWords {
 		cleanWord := strings.Trim(word, "\"',.;:")
-		for _, component := range componentKeywords {
-			if cleanWord == component {
-				entities = append(entities, Entity{
-					Word:  word,
-					Type:  EntityTypeComponentName,
-					Start: i,
-					End:   i,
-				})
-				break
-			}
+		if slices.Contains(componentKeywords, cleanWord) {
+			entities = append(entities, Entity{
+				Word:  word,
+				Type:  EntityTypeComponentName,
+				Start: i,
+				End:   i,
+			})
 		}
 	}
 

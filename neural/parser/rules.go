@@ -156,9 +156,9 @@ func (pre *ParsingRuleEngine) RegisterDefaultParsingRules() {
 			if strings.ToLower(tokens[i]) == "folder" {
 				folderName := getResourceName(tokens, nerTags, i, "folder")
 				if folderName != "" {
-					*folderResource = &semantic.Resource{Type: "Filesystem::Folder", Name: folderName, Properties: map[string]interface{}{"permissions": 0755}}
+					*folderResource = &semantic.Resource{Type: "Filesystem::Folder", Name: folderName, Properties: map[string]any{"permissions": 0755}}
 					*lastFolderResource = *folderResource
-					*folderResource = &semantic.Resource{Type: "Filesystem::Folder", Name: folderName, Properties: map[string]interface{}{"permissions": 0755}}
+					*folderResource = &semantic.Resource{Type: "Filesystem::Folder", Name: folderName, Properties: map[string]any{"permissions": 0755}}
 					*lastFolderResource = *folderResource
 					output.TargetResource = *folderResource // Set as target for now, will be adjusted by parent-child rules
 					log.Printf("CreateFolder rule applied. folderName: %s, folderResource: %+v", folderName, **folderResource)
@@ -214,7 +214,7 @@ func (pre *ParsingRuleEngine) RegisterDefaultParsingRules() {
 						output.TargetResource.Directory = folderName
 					} else {
 						// If no target resource yet, create a folder resource and set it as target.
-						*folderResource = &semantic.Resource{Type: "Filesystem::Folder", Name: folderName, Properties: map[string]interface{}{"permissions": 0755}}
+						*folderResource = &semantic.Resource{Type: "Filesystem::Folder", Name: folderName, Properties: map[string]any{"permissions": 0755}}
 						output.TargetResource = *folderResource
 					}
 					return true, 3, nil // Consumed "in", "folder" and "name"

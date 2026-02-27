@@ -5,10 +5,14 @@
     "cd": true,
     "change": true,
     "check": true,
+    "copy": true,
     "create": true,
     "delete": true,
     "generate": true,
     "go": true,
+    "grep": true,
+    "help": true,
+    "history": true,
     "list": true,
     "ls": true,
     "make": true,
@@ -17,6 +21,7 @@
     "read": true,
     "remove": true,
     "run": true,
+    "search": true,
     "show": true,
     "start": true,
     "stop": true,
@@ -41,8 +46,11 @@
     "head": true,
     "help": true,
     "home": true,
+    "how": true,
     "jim": true,
+    "jimmy": true,
     "main": true,
+    "moe": true,
     "structure": true,
     "user": true,
     "webserver": true,
@@ -51,10 +59,25 @@
   "stop_words": {
     "a": true,
     "an": true,
+    "and": true,
+    "for": true,
+    "i": true,
+    "it": true,
+    "me": true,
+    "my": true,
+    "new": true,
     "please": true,
     "the": true,
-    "this": true
+    "this": true,
+    "to": true
   },
   "learning_path": "/home/zendrulat/code/gollemer/learningfolder",
-  "first_run": false
+  "first_run": false,
+  "model_config": {
+    "word2vec_path": "gob_models/word2vec_model.gob",
+    "moe_path": "gob_models/moe_classification_model.gob",
+    "query_vocab_path": "gob_models/query_vocabulary.gob",
+    "semantic_vocab_path": "gob_models/seq2seq_output_vocab.gob",
+    "ner_path": "gob_models/ner_model.gob"
+  }
 }

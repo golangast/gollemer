@@ -12,18 +12,18 @@ type ToolSchema struct {
 
 // ParameterDef describes a single parameter
 type ParameterDef struct {
-	Type        string      `json:"type"` // "string", "number", "boolean", "array", "object"
-	Description string      `json:"description"`
-	Enum        []string    `json:"enum,omitempty"`
-	Default     interface{} `json:"default,omitempty"`
+	Type        string   `json:"type"` // "string", "number", "boolean", "array", "object"
+	Description string   `json:"description"`
+	Enum        []string `json:"enum,omitempty"`
+	Default     any      `json:"default,omitempty"`
 }
 
 // ToolResult represents the outcome of tool execution
 type ToolResult struct {
-	Success  bool                   `json:"success"`
-	Output   string                 `json:"output"`
-	Error    error                  `json:"error,omitempty"`
-	Metadata map[string]interface{} `json:"metadata,omitempty"`
+	Success  bool           `json:"success"`
+	Output   string         `json:"output"`
+	Error    error          `json:"error,omitempty"`
+	Metadata map[string]any `json:"metadata,omitempty"`
 }
 
 // Tool interface for all executable tools
@@ -31,7 +31,7 @@ type Tool interface {
 	Name() string
 	Description() string
 	Schema() ToolSchema
-	Execute(args map[string]interface{}) (ToolResult, error)
+	Execute(args map[string]any) (ToolResult, error)
 }
 
 // ToolRegistry manages available tools
@@ -90,7 +90,7 @@ func (tr *ToolRegistry) HasTool(name string) bool {
 }
 
 // Execute runs a tool by name with given arguments
-func (tr *ToolRegistry) Execute(toolName string, args map[string]interface{}) (ToolResult, error) {
+func (tr *ToolRegistry) Execute(toolName string, args map[string]any) (ToolResult, error) {
 	tool, err := tr.GetTool(toolName)
 	if err != nil {
 		return ToolResult{

@@ -486,7 +486,7 @@ func (tr *TemplateRegistry) GetTemplate(name string) (*CodeTemplate, bool) {
 }
 
 // RenderTemplate renders a template with given parameters
-func (tr *TemplateRegistry) RenderTemplate(templateName string, params map[string]interface{}) (map[string]string, error) {
+func (tr *TemplateRegistry) RenderTemplate(templateName string, params map[string]any) (map[string]string, error) {
 	template, exists := tr.GetTemplate(templateName)
 	if !exists {
 		return nil, fmt.Errorf("template not found: %s", templateName)
@@ -510,7 +510,7 @@ func (tr *TemplateRegistry) RenderTemplate(templateName string, params map[strin
 }
 
 // renderString performs simple string replacement for template variables
-func renderString(template string, params map[string]interface{}) string {
+func renderString(template string, params map[string]any) string {
 	result := template
 	for key, value := range params {
 		placeholder := fmt.Sprintf("{{.%s}}", key)

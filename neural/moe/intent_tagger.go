@@ -25,7 +25,7 @@ func NewIntentTagger(vocabSize, embeddingDim, numExperts, intentVocabSize, tagVo
 	}
 
 	// Initialize the MoE encoder
-	encoder, err := NewMoELayer(embeddingDim, numExperts, 1, expertBuilder)
+	encoder, err := NewMoELayer(embeddingDim, embeddingDim, numExperts, 1, expertBuilder)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create MoE encoder: %w", err)
 	}
@@ -85,7 +85,7 @@ func (m *IntentTagger) Forward(inputs ...*tensor.Tensor) (*tensor.Tensor, []*ten
 	hiddenSize := encodedSequence.Shape[2]
 
 	tagLogits := make([]*tensor.Tensor, seqLength)
-	for t := 0; t < seqLength; t++ {
+	for t := range seqLength {
 		// Get the output for the current time step
 		timeStepOutput, err := encodedSequence.Slice(1, t, t+1)
 		if err != nil {
@@ -129,14 +129,17 @@ func (m *IntentTagger) Backward(intentGrad, tagGrads *tensor.Tensor) error {
 	tagEncoderGrad := m.TagHead.Inputs()[0].Grad
 
 	// Backward pass for the encoder - it now returns the input gradient
-	embeddingGrad, err := m.Encoder.Backward(tagEncoderGrad)
+	err := m.Encoder.Backward(tagEncoderGrad)
 	if err != nil {
 		return fmt.Errorf("MoE encoder backward failed: %w", err)
 	}
 
 	// Backward pass for the embedding layer using the returned gradient
-	if err := m.Embedding.Backward(embeddingGrad); err != nil {
-		return fmt.Errorf("embedding layer backward failed: %w", err)
+	if len(m.Encoder.Inputs()) > 0 {
+		embeddingGrad := m.Encoder.Inputs()[0].Grad
+		if err := m.Embedding.Backward(embeddingGrad); err != nil {
+			return fmt.Errorf("embedding layer backward failed: %w", err)
+		}
 	}
 
 	return nil
