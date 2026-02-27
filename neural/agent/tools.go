@@ -40,7 +40,7 @@ func (cft *CreateFolderTool) Schema() ToolSchema {
 	}
 }
 
-func (cft *CreateFolderTool) Execute(args map[string]interface{}) (ToolResult, error) {
+func (cft *CreateFolderTool) Execute(args map[string]any) (ToolResult, error) {
 	name, ok := args["name"].(string)
 	if !ok || name == "" {
 		return ToolResult{
@@ -102,7 +102,7 @@ func (cft *CreateFileTool) Schema() ToolSchema {
 	}
 }
 
-func (cft *CreateFileTool) Execute(args map[string]interface{}) (ToolResult, error) {
+func (cft *CreateFileTool) Execute(args map[string]any) (ToolResult, error) {
 	name, ok := args["name"].(string)
 	if !ok || name == "" {
 		return ToolResult{
@@ -170,7 +170,7 @@ func (att *ApplyTemplateTool) Schema() ToolSchema {
 	}
 }
 
-func (att *ApplyTemplateTool) Execute(args map[string]interface{}) (ToolResult, error) {
+func (att *ApplyTemplateTool) Execute(args map[string]any) (ToolResult, error) {
 	template, ok := args["template"].(string)
 	if !ok || template == "" {
 		return ToolResult{
@@ -197,7 +197,7 @@ func (att *ApplyTemplateTool) Execute(args map[string]interface{}) (ToolResult, 
 	}
 
 	// Extract parameters (simple for now)
-	params := make(map[string]interface{})
+	params := make(map[string]any)
 
 	// Generate main content
 	mainContent, _ := att.blueprint.Execute(template, params)
@@ -217,7 +217,7 @@ func (att *ApplyTemplateTool) Execute(args map[string]interface{}) (ToolResult, 
 	return ToolResult{
 		Success: true,
 		Output:  fmt.Sprintf("Applied template '%s' to %s", template, folder),
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"files_created": len(bp.Files) + 1,
 		},
 	}, nil
@@ -255,7 +255,7 @@ func (ect *ExecuteCommandTool) Schema() ToolSchema {
 	}
 }
 
-func (ect *ExecuteCommandTool) Execute(args map[string]interface{}) (ToolResult, error) {
+func (ect *ExecuteCommandTool) Execute(args map[string]any) (ToolResult, error) {
 	command, ok := args["command"].(string)
 	if !ok || command == "" {
 		return ToolResult{

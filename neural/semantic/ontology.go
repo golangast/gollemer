@@ -18,14 +18,14 @@ type TemporalDependency struct {
 
 // Resource represents a single entity or component in the system.
 type Resource struct {
-	Type        string                 `json:"type"`
-	Name        string                 `json:"name"`
-	Content     string                 `json:"content,omitempty"` // Add this line
-	Properties  map[string]interface{} `json:"properties"`
-	Children    []Resource             `json:"children,omitempty"`
-	DependsOn   []string               `json:"depends_on,omitempty"`
-	Directory   string                 `json:"directory,omitempty"` // Add this line
-	Destination string                 `json:"destination,omitempty"`
+	Type        string         `json:"type"`
+	Name        string         `json:"name"`
+	Content     string         `json:"content,omitempty"` // Add this line
+	Properties  map[string]any `json:"properties"`
+	Children    []Resource     `json:"children,omitempty"`
+	DependsOn   []string       `json:"depends_on,omitempty"`
+	Directory   string         `json:"directory,omitempty"` // Add this line
+	Destination string         `json:"destination,omitempty"`
 }
 
 // Context provides additional information about the request environment.

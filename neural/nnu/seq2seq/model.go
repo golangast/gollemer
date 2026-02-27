@@ -54,7 +54,7 @@ func (e *Encoder) Forward(inputIDs *tensor.Tensor) (*tensor.Tensor, *tensor.Tens
 	hidden := tensor.NewTensor([]int{batchSize, hiddenSize}, make([]float64, batchSize*hiddenSize), true)
 	cell := tensor.NewTensor([]int{batchSize, hiddenSize}, make([]float64, batchSize*hiddenSize), true)
 
-	for t := 0; t < seqLength; t++ {
+	for t := range seqLength {
 		// Get the input for the current time step
 		timeStepInput, err := embedded.Slice(1, t, t+1)
 		if err != nil {
@@ -209,10 +209,10 @@ func (m *Seq2Seq) Forward(inputIDs, targetIDs *tensor.Tensor) (*tensor.Tensor, e
 	decoderCell := encoderCell
 
 	// Teacher forcing: feed target token as next input
-	for t := 0; t < targetSeqLen; t++ {
+	for t := range targetSeqLen {
 		// Get current input token for decoder (targetIDs[:, t])
 		decoderInputData := make([]float64, batchSize)
-		for b := 0; b < batchSize; b++ {
+		for b := range batchSize {
 			// Assuming targetIDs is [batch_size, seq_len]
 			decoderInputData[b] = targetIDs.Data[b*targetSeqLen+t]
 		}
@@ -227,8 +227,8 @@ func (m *Seq2Seq) Forward(inputIDs, targetIDs *tensor.Tensor) (*tensor.Tensor, e
 		// Store prediction
 		// prediction is [batch_size, output_vocab_size]
 		// decoderOutputs is [batch_size, target_seq_len, output_vocab_size]
-		for b := 0; b < batchSize; b++ {
-			for v_idx := 0; v_idx < outputVocabSize; v_idx++ {
+		for b := range batchSize {
+			for v_idx := range outputVocabSize {
 				decoderOutputs.Set([]int{b, t, v_idx}, prediction.Get([]int{b, v_idx}))
 			}
 		}
@@ -268,7 +268,7 @@ func (m *Seq2Seq) Predict(query string, maxLen int) (string, error) {
 	outputTokens := []int{}
 	currentInputTokenID := float64(m.OutputVocab.BosID)
 
-	for t := 0; t < maxLen; t++ {
+	for t := range maxLen {
 		decoderInput := tensor.NewTensor([]int{1, 1}, []float64{currentInputTokenID}, true)
 
 		prediction, hidden, cell, err := m.Decoder.Forward(decoderInput, decoderHidden, decoderCell)

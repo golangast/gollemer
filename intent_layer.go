@@ -7,11 +7,11 @@ import (
 // IntentDataLayer represents the structured state of the user's intent and data.
 // It tracks the intent, parameters, and what is currently missing.
 type IntentDataLayer struct {
-	Intent     string                 `json:"intent"`
-	Confidence float64                `json:"confidence"`
-	Parameters map[string]interface{} `json:"parameters"`
-	Missing    []string               `json:"missing"`
-	IsComplete bool                   `json:"is_complete"`
+	Intent     string         `json:"intent"`
+	Confidence float64        `json:"confidence"`
+	Parameters map[string]any `json:"parameters"`
+	Missing    []string       `json:"missing"`
+	IsComplete bool           `json:"is_complete"`
 }
 
 // ToJSON returns the JSON representation of the data layer.
@@ -33,7 +33,7 @@ type MoEClient interface {
 	// PredictIntent uses the MoE model to classify the intent from input.
 	PredictIntent(input string) (string, float64)
 	// ExtractEntities uses the NER/NLP pipeline to find parameters for the given intent.
-	ExtractEntities(input string, intent string) map[string]interface{}
+	ExtractEntities(input string, intent string) map[string]any
 }
 
 // HybridIntentResolver implements the recursive intent resolution using MoE.
@@ -97,7 +97,7 @@ func NewHybridIntentResolver(moe MoEClient) *HybridIntentResolver {
 func (r *HybridIntentResolver) Resolve(input string, current *IntentDataLayer) *IntentDataLayer {
 	if current == nil {
 		current = &IntentDataLayer{
-			Parameters: make(map[string]interface{}),
+			Parameters: make(map[string]any),
 		}
 	}
 	return r.resolveRecursive(input, current, 0)

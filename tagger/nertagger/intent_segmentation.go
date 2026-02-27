@@ -2,6 +2,7 @@ package nertagger
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -12,8 +13,8 @@ type IntentSegment struct {
 	RawText      string            // Original text of this segment
 	Tokens       []string          // Tokenized version
 	Actions      []string          // All verbs identified in this segment
-	Entities     map[string]string  // Entity name -> type mapping
-	Parameters   map[string]string  // Parameter key -> value
+	Entities     map[string]string // Entity name -> type mapping
+	Parameters   map[string]string // Parameter key -> value
 	Priority     int               // Execution order
 	Dependencies []int             // Indices of IntentSegments this depends on
 }
@@ -28,11 +29,11 @@ type IntentSegmenter struct {
 
 // ActionRegistry tracks action verbs and their types
 type ActionRegistry struct {
-	CreationActions map[string]bool
-	DeletionActions map[string]bool
-	MovementActions map[string]bool
+	CreationActions     map[string]bool
+	DeletionActions     map[string]bool
+	MovementActions     map[string]bool
 	ModificationActions map[string]bool
-	QueryActions    map[string]bool
+	QueryActions        map[string]bool
 }
 
 // NewActionRegistry creates a registry of known action verbs
@@ -228,7 +229,7 @@ func (is *IntentSegmenter) identifyDependencies() {
 		for _, action := range is.segments[i].Actions {
 			if registry.GetActionType(action) == "MOVE" {
 				// Look for prior CREATE actions
-				for j := 0; j < i; j++ {
+				for j := range i {
 					for _, priorAction := range is.segments[j].Actions {
 						if registry.GetActionType(priorAction) == "CREATE" {
 							is.segments[i].Dependencies = append(is.segments[i].Dependencies, j)
@@ -244,11 +245,11 @@ func (is *IntentSegmenter) identifyDependencies() {
 
 // SlotConstraint defines rules for parameter extraction
 type SlotConstraint struct {
-	SlotName           string
-	IsRequired         bool
-	AllowedTypes       []string // e.g., "FILENAME", "DIRNAME", "PATH"
-	ValidationRules    []func(string) bool
-	PriorityRank       int // Lower = higher priority
+	SlotName        string
+	IsRequired      bool
+	AllowedTypes    []string // e.g., "FILENAME", "DIRNAME", "PATH"
+	ValidationRules []func(string) bool
+	PriorityRank    int // Lower = higher priority
 }
 
 // SlotConstraintValidator validates and prioritizes entity assignments
@@ -337,10 +338,8 @@ func (scv *SlotConstraintValidator) AssignSlots(actionType string, entities []st
 
 // is_allowed_type checks if an entity type is in the allowed list
 func is_allowed_type(entityType string, allowedTypes []string) bool {
-	for _, allowed := range allowedTypes {
-		if entityType == allowed {
-			return true
-		}
+	if slices.Contains(allowedTypes, entityType) {
+		return true
 	}
 	return len(allowedTypes) == 0 // If no restrictions, allow any
 }
@@ -349,7 +348,7 @@ func is_allowed_type(entityType string, allowedTypes []string) bool {
 
 // VerbCounter counts and tracks actions in a sentence
 type VerbCounter struct {
-	registry    *ActionRegistry
+	registry     *ActionRegistry
 	actionCounts map[string]int // Action type -> count
 }
 
@@ -388,12 +387,12 @@ func (vc *VerbCounter) HasMultipleActions() bool {
 // Task represents a single executable action
 type Task struct {
 	ID          int
-	Action      string      // "CREATE", "MOVE", "DELETE", etc.
-	Target      string      // Primary entity
-	Destination string      // Where/what it's going
+	Action      string // "CREATE", "MOVE", "DELETE", etc.
+	Target      string // Primary entity
+	Destination string // Where/what it's going
 	Parameters  map[string]string
-	DependsOn   []int       // IDs of tasks that must complete first
-	Status      string      // "PENDING", "RUNNING", "COMPLETED", "FAILED"
+	DependsOn   []int  // IDs of tasks that must complete first
+	Status      string // "PENDING", "RUNNING", "COMPLETED", "FAILED"
 }
 
 // TaskGraph represents a DAG of dependent tasks
@@ -477,17 +476,17 @@ func (e *CycleError) Error() string {
 
 // SegmentToTaskConverter converts intent segments into a task graph
 type SegmentToTaskConverter struct {
-	segments   []IntentSegment
-	actionReg  *ActionRegistry
-	validator  *SlotConstraintValidator
+	segments  []IntentSegment
+	actionReg *ActionRegistry
+	validator *SlotConstraintValidator
 }
 
 // NewSegmentToTaskConverter creates a converter
 func NewSegmentToTaskConverter(segments []IntentSegment) *SegmentToTaskConverter {
 	return &SegmentToTaskConverter{
-		segments:   segments,
-		actionReg:  NewActionRegistry(),
-		validator:  NewSlotConstraintValidator(),
+		segments:  segments,
+		actionReg: NewActionRegistry(),
+		validator: NewSlotConstraintValidator(),
 	}
 }
 

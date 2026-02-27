@@ -22,6 +22,7 @@ func init() {
 	gob.Register(&RNNDecoder{})
 	gob.Register(&MoELayer{})
 	gob.Register(&FeedForwardExpert{})
+	gob.Register(&LinearExpert{})
 	gob.Register(&GatingNetwork{})
 	gob.Register(&SimpleRNNEncoder{})
 	gob.Register(&nn.Linear{})
@@ -63,7 +64,7 @@ func sampleFromLogits(logits *tensor.Tensor, temperature float64, topK int, topP
 	}
 
 	scaledLogits := make([]float64, vocabSize)
-	for i := 0; i < vocabSize; i++ {
+	for i := range vocabSize {
 		scaledLogits[i] = logitsData[i] / temperature
 	}
 
@@ -77,11 +78,11 @@ func sampleFromLogits(logits *tensor.Tensor, temperature float64, topK int, topP
 
 	expSum := 0.0
 	probs := make([]float64, vocabSize)
-	for i := 0; i < vocabSize; i++ {
+	for i := range vocabSize {
 		probs[i] = math.Exp(scaledLogits[i] - maxLogit)
 		expSum += probs[i]
 	}
-	for i := 0; i < vocabSize; i++ {
+	for i := range vocabSize {
 		probs[i] /= expSum
 	}
 
@@ -93,7 +94,7 @@ func sampleFromLogits(logits *tensor.Tensor, temperature float64, topK int, topP
 			prob  float64
 		}
 		pairs := make([]indexProb, vocabSize)
-		for i := 0; i < vocabSize; i++ {
+		for i := range vocabSize {
 			pairs[i] = indexProb{index: i, prob: probs[i]}
 		}
 
@@ -104,10 +105,10 @@ func sampleFromLogits(logits *tensor.Tensor, temperature float64, topK int, topP
 
 		// Zero out probabilities outside top-k
 		topKIndices := make(map[int]bool)
-		for i := 0; i < topK; i++ {
+		for i := range topK {
 			topKIndices[pairs[i].index] = true
 		}
-		for i := 0; i < vocabSize; i++ {
+		for i := range vocabSize {
 			if !topKIndices[i] {
 				probs[i] = 0.0
 			}
@@ -115,11 +116,11 @@ func sampleFromLogits(logits *tensor.Tensor, temperature float64, topK int, topP
 
 		// Renormalize
 		probSum := 0.0
-		for i := 0; i < vocabSize; i++ {
+		for i := range vocabSize {
 			probSum += probs[i]
 		}
 		if probSum > 0 {
-			for i := 0; i < vocabSize; i++ {
+			for i := range vocabSize {
 				probs[i] /= probSum
 			}
 		}
@@ -133,7 +134,7 @@ func sampleFromLogits(logits *tensor.Tensor, temperature float64, topK int, topP
 			prob  float64
 		}
 		pairs := make([]indexProb, vocabSize)
-		for i := 0; i < vocabSize; i++ {
+		for i := range vocabSize {
 			pairs[i] = indexProb{index: i, prob: probs[i]}
 		}
 
@@ -145,7 +146,7 @@ func sampleFromLogits(logits *tensor.Tensor, temperature float64, topK int, topP
 		// Find cumulative probability cutoff
 		cumProb := 0.0
 		cutoffIdx := vocabSize
-		for i := 0; i < vocabSize; i++ {
+		for i := range vocabSize {
 			cumProb += pairs[i].prob
 			if cumProb >= topP {
 				cutoffIdx = i + 1
@@ -158,7 +159,7 @@ func sampleFromLogits(logits *tensor.Tensor, temperature float64, topK int, topP
 		for i := 0; i < cutoffIdx; i++ {
 			nucleusIndices[pairs[i].index] = true
 		}
-		for i := 0; i < vocabSize; i++ {
+		for i := range vocabSize {
 			if !nucleusIndices[i] {
 				probs[i] = 0.0
 			}
@@ -166,11 +167,11 @@ func sampleFromLogits(logits *tensor.Tensor, temperature float64, topK int, topP
 
 		// Renormalize
 		probSum := 0.0
-		for i := 0; i < vocabSize; i++ {
+		for i := range vocabSize {
 			probSum += probs[i]
 		}
 		if probSum > 0 {
-			for i := 0; i < vocabSize; i++ {
+			for i := range vocabSize {
 				probs[i] /= probSum
 			}
 		}
@@ -179,7 +180,7 @@ func sampleFromLogits(logits *tensor.Tensor, temperature float64, topK int, topP
 	// Sample from the probability distribution
 	r := rand.Float64()
 	cumProb := 0.0
-	for i := 0; i < vocabSize; i++ {
+	for i := range vocabSize {
 		cumProb += probs[i]
 		if r <= cumProb {
 			return i, nil
@@ -193,8 +194,9 @@ func sampleFromLogits(logits *tensor.Tensor, temperature float64, topK int, topP
 // Encoder interface for different encoder types (MoE, SimpleRNN, etc.)
 type Encoder interface {
 	Forward(...*tensor.Tensor) (*tensor.Tensor, error)
-	Backward(*tensor.Tensor) (*tensor.Tensor, error)
+	Backward(*tensor.Tensor) error
 
+	Inputs() []*tensor.Tensor
 	Parameters() []*tensor.Tensor
 	SetMode(bool)
 }
@@ -226,7 +228,7 @@ func NewIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, childVoc
 
 	// Initialize the MoE encoder
 	// Assuming k=1 (select top 1 expert) for simplicity, adjust as needed
-	encoder, err := NewMoELayer(embeddingDim, numExperts, 1, expertBuilder)
+	encoder, err := NewMoELayer(embeddingDim, embeddingDim, numExperts, 1, expertBuilder)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create MoE encoder: %w", err)
 	}
@@ -245,6 +247,46 @@ func NewIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, childVoc
 			SentenceVocab:     nil, // Set this after construction
 		},
 		nil
+}
+
+// NewHybridIntentMoE creates a new IntentMoE model using the Hybrid LLM-GNN Encoder.
+func NewHybridIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, childVocabSize, sentenceVocabSize, maxAttentionHeads int, word2vecModel *word2vec.SimpleWord2Vec) (*IntentMoE, error) {
+	if word2vecModel != nil {
+		vocabSize = word2vecModel.VocabSize
+	}
+	embedding := nn.NewEmbedding(vocabSize, embeddingDim)
+	if word2vecModel != nil {
+		embedding.LoadPretrainedWeights(word2vecModel.WordVectors)
+	}
+
+	// 1. Create the inner LLM Encoder (MoE Layer)
+	expertBuilder := func(expertIdx int) (Expert, error) {
+		return NewFeedForwardExpert(embeddingDim, embeddingDim, embeddingDim)
+	}
+	llmEncoder, err := NewMoELayer(embeddingDim, embeddingDim, numExperts, 1, expertBuilder)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create inner MoE encoder: %w", err)
+	}
+
+	// 2. Wrap it with HybridLLMGNNEncoder
+	hybridEncoder, err := NewHybridLLMGNNEncoder(llmEncoder, embeddingDim)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create HybridLLMGNNEncoder: %w", err)
+	}
+
+	// 3. Initialize Decoder
+	decoder, err := NewRNNDecoder(embeddingDim, sentenceVocabSize, embeddingDim, maxAttentionHeads, 1, 0.0)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create RNN decoder: %w", err)
+	}
+
+	return &IntentMoE{
+		Encoder:           hybridEncoder,
+		Decoder:           decoder,
+		Embedding:         embedding,
+		SentenceVocabSize: sentenceVocabSize,
+		SentenceVocab:     nil,
+	}, nil
 }
 
 // Forward performs the forward pass of the IntentMoE model.
@@ -288,18 +330,19 @@ func (m *IntentMoE) Backward(grads ...*tensor.Tensor) error {
 	contextVectorGrad := m.Decoder.InitialHiddenState.Grad
 
 	// Backpropagate through the encoder
-	embeddingGrad, err := m.Encoder.Backward(contextVectorGrad)
+	err := m.Encoder.Backward(contextVectorGrad)
 	if err != nil {
 		return fmt.Errorf("MoE encoder backward failed: %w", err)
 	}
 
-	// The encoder's backward pass sets gradients on its inputs
-	// For SimpleRNN, we don't need the embedding gradient explicitly
-	// For MoE, the gradient is stored in the input tensor
-	// We can skip the embedding backward for now since the encoder handles it
-	// The embedding layer's backward pass is now implicitly handled by the encoder's backward
-	if err := m.Embedding.Backward(embeddingGrad); err != nil {
-		return fmt.Errorf("embedding layer backward failed: %w", err)
+	// Get the gradient for the embedding layer from the encoder's input
+	if len(m.Encoder.Inputs()) > 0 {
+		embeddingGrad := m.Encoder.Inputs()[0].Grad
+		if embeddingGrad != nil {
+			if err := m.Embedding.Backward(embeddingGrad); err != nil {
+				return fmt.Errorf("embedding layer backward failed: %w", err)
+			}
+		}
 	}
 
 	return nil
@@ -350,7 +393,7 @@ func (m *IntentMoE) GreedySearchDecode(contextVector *tensor.Tensor, maxLen, sos
 	hiddenState := initialHidden
 	cellState := tensor.NewTensor([]int{batchSize, hiddenSize}, make([]float64, batchSize*hiddenSize), false)
 
-	for i := 0; i < maxLen; i++ {
+	for range maxLen {
 		outputLogits, newHidden, newCell, err := m.Decoder.DecodeStep(decoderInputIDs, hiddenState, cellState, contextVector)
 		if err != nil {
 			return nil, fmt.Errorf("decoder step failed: %w", err)
@@ -507,7 +550,7 @@ func (m *IntentMoE) SampleDecode(contextVector *tensor.Tensor, maxLen, sosToken,
 	hiddenState := initialHidden
 	cellState := tensor.NewTensor([]int{batchSize, hiddenSize}, make([]float64, batchSize*hiddenSize), false)
 
-	for i := 0; i < maxLen; i++ {
+	for i := range maxLen {
 		outputLogits, newHidden, newCell, err := m.Decoder.DecodeStep(decoderInputIDs, hiddenState, cellState, contextVector)
 		if err != nil {
 			return nil, fmt.Errorf("decoder step failed: %w", err)

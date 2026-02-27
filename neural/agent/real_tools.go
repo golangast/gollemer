@@ -48,7 +48,7 @@ func (rft *RealFilesystemTool) Schema() ToolSchema {
 	}
 }
 
-func (rft *RealFilesystemTool) Execute(args map[string]interface{}) (ToolResult, error) {
+func (rft *RealFilesystemTool) Execute(args map[string]any) (ToolResult, error) {
 	folder, ok := args["folder"].(string)
 	if !ok || folder == "" {
 		return ToolResult{
@@ -94,7 +94,7 @@ func (rft *RealFilesystemTool) Execute(args map[string]interface{}) (ToolResult,
 	return ToolResult{
 		Success: true,
 		Output:  fmt.Sprintf("Wrote %d files to %s", filesWritten, targetDir),
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"files_written": filesWritten,
 			"target_dir":    targetDir,
 		},
@@ -143,7 +143,7 @@ func (rat *RealApplyTemplateTool) Schema() ToolSchema {
 	}
 }
 
-func (rat *RealApplyTemplateTool) Execute(args map[string]interface{}) (ToolResult, error) {
+func (rat *RealApplyTemplateTool) Execute(args map[string]any) (ToolResult, error) {
 	template, ok := args["template"].(string)
 	if !ok || template == "" {
 		return ToolResult{
@@ -161,7 +161,7 @@ func (rat *RealApplyTemplateTool) Execute(args map[string]interface{}) (ToolResu
 	}
 
 	// Render template
-	params := map[string]interface{}{
+	params := map[string]any{
 		"ProjectName": folder,
 		"GoVersion":   "1.21",
 	}
@@ -211,7 +211,7 @@ func (rat *RealApplyTemplateTool) Execute(args map[string]interface{}) (ToolResu
 	return ToolResult{
 		Success: true,
 		Output:  fmt.Sprintf("Applied template '%s' to %s: created %s", template, targetDir, strings.Join(fileList, ", ")),
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"files_created": filesWritten,
 			"template":      template,
 			"target_dir":    targetDir,
@@ -258,7 +258,7 @@ func (ret *RealExecuteCommandTool) Schema() ToolSchema {
 	}
 }
 
-func (ret *RealExecuteCommandTool) Execute(args map[string]interface{}) (ToolResult, error) {
+func (ret *RealExecuteCommandTool) Execute(args map[string]any) (ToolResult, error) {
 	command, ok := args["command"].(string)
 	if !ok || command == "" {
 		return ToolResult{
@@ -298,7 +298,7 @@ func (ret *RealExecuteCommandTool) Execute(args map[string]interface{}) (ToolRes
 	return ToolResult{
 		Success: true,
 		Output:  fmt.Sprintf("Executed: %s\n%s", command, string(output)),
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"command": command,
 			"workdir": workdir,
 		},
@@ -341,7 +341,7 @@ func (vft *VerifyFilesTool) Schema() ToolSchema {
 	}
 }
 
-func (vft *VerifyFilesTool) Execute(args map[string]interface{}) (ToolResult, error) {
+func (vft *VerifyFilesTool) Execute(args map[string]any) (ToolResult, error) {
 	folder, ok := args["folder"].(string)
 	if !ok || folder == "" {
 		return ToolResult{
@@ -350,7 +350,7 @@ func (vft *VerifyFilesTool) Execute(args map[string]interface{}) (ToolResult, er
 		}, nil
 	}
 
-	filesInterface, ok := args["files"].([]interface{})
+	filesInterface, ok := args["files"].([]any)
 	if !ok {
 		// Try string array
 		filesSlice, ok := args["files"].([]string)
@@ -360,7 +360,7 @@ func (vft *VerifyFilesTool) Execute(args map[string]interface{}) (ToolResult, er
 				Error:   fmt.Errorf("files must be an array"),
 			}, nil
 		}
-		filesInterface = make([]interface{}, len(filesSlice))
+		filesInterface = make([]any, len(filesSlice))
 		for i, f := range filesSlice {
 			filesInterface[i] = f
 		}
@@ -386,7 +386,7 @@ func (vft *VerifyFilesTool) Execute(args map[string]interface{}) (ToolResult, er
 			Success: true, // Success means verification ran, not that all files exist
 			Output: fmt.Sprintf("Verified: %d found, %d missing. Found: %s. Missing: %s",
 				len(found), len(missing), strings.Join(found, ", "), strings.Join(missing, ", ")),
-			Metadata: map[string]interface{}{
+			Metadata: map[string]any{
 				"found":   found,
 				"missing": missing,
 			},
@@ -396,7 +396,7 @@ func (vft *VerifyFilesTool) Execute(args map[string]interface{}) (ToolResult, er
 	return ToolResult{
 		Success: true,
 		Output:  fmt.Sprintf("All %d files verified: %s", len(found), strings.Join(found, ", ")),
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"found": found,
 		},
 	}, nil
@@ -436,7 +436,7 @@ func (rdt *RealDeleteFolderTool) Schema() ToolSchema {
 	}
 }
 
-func (rdt *RealDeleteFolderTool) Execute(args map[string]interface{}) (ToolResult, error) {
+func (rdt *RealDeleteFolderTool) Execute(args map[string]any) (ToolResult, error) {
 	folder, ok := args["name"].(string)
 	if !ok || folder == "" {
 		return ToolResult{

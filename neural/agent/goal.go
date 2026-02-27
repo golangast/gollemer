@@ -27,32 +27,32 @@ const (
 
 // Goal represents a high-level objective for the agent to work toward
 type Goal struct {
-	ID                 string                 `json:"id"`
-	Description        string                 `json:"description"`
-	AcceptanceCriteria []string               `json:"acceptance_criteria,omitempty"`
-	Status             GoalStatus             `json:"status"`
-	Progress           float64                `json:"progress"` // 0.0 to 1.0
-	Milestones         []*Milestone           `json:"milestones"`
-	CreatedAt          time.Time              `json:"created_at"`
-	UpdatedAt          time.Time              `json:"updated_at"`
-	CompletedAt        *time.Time             `json:"completed_at,omitempty"`
-	BlockReason        string                 `json:"block_reason,omitempty"`
-	Metadata           map[string]interface{} `json:"metadata,omitempty"`
+	ID                 string         `json:"id"`
+	Description        string         `json:"description"`
+	AcceptanceCriteria []string       `json:"acceptance_criteria,omitempty"`
+	Status             GoalStatus     `json:"status"`
+	Progress           float64        `json:"progress"` // 0.0 to 1.0
+	Milestones         []*Milestone   `json:"milestones"`
+	CreatedAt          time.Time      `json:"created_at"`
+	UpdatedAt          time.Time      `json:"updated_at"`
+	CompletedAt        *time.Time     `json:"completed_at,omitempty"`
+	BlockReason        string         `json:"block_reason,omitempty"`
+	Metadata           map[string]any `json:"metadata,omitempty"`
 }
 
 // Milestone represents a major checkpoint within a goal
 type Milestone struct {
-	ID           string                 `json:"id"`
-	GoalID       string                 `json:"goal_id"`
-	Description  string                 `json:"description"`
-	Tasks        []*Subtask             `json:"tasks"`
-	Status       MilestoneStatus        `json:"status"`
-	Progress     float64                `json:"progress"`               // 0.0 to 1.0
-	Dependencies []string               `json:"dependencies,omitempty"` // IDs of prerequisite milestones
-	CreatedAt    time.Time              `json:"created_at"`
-	UpdatedAt    time.Time              `json:"updated_at"`
-	CompletedAt  *time.Time             `json:"completed_at,omitempty"`
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+	ID           string          `json:"id"`
+	GoalID       string          `json:"goal_id"`
+	Description  string          `json:"description"`
+	Tasks        []*Subtask      `json:"tasks"`
+	Status       MilestoneStatus `json:"status"`
+	Progress     float64         `json:"progress"`               // 0.0 to 1.0
+	Dependencies []string        `json:"dependencies,omitempty"` // IDs of prerequisite milestones
+	CreatedAt    time.Time       `json:"created_at"`
+	UpdatedAt    time.Time       `json:"updated_at"`
+	CompletedAt  *time.Time      `json:"completed_at,omitempty"`
+	Metadata     map[string]any  `json:"metadata,omitempty"`
 }
 
 // IsComplete checks if the goal is completed

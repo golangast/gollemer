@@ -6,7 +6,7 @@ import (
 	"go/format"
 	"go/parser"
 	"go/token"
-	"io/ioutil"
+
 	"os"
 	"strings"
 )
@@ -57,7 +57,7 @@ func %sHandler(w http.ResponseWriter, r *http.Request) {
 }
 `, capitalizedHandlerName, capitalizedHandlerName)
 
-	return ioutil.WriteFile(fileName, []byte(content), 0644)
+	return os.WriteFile(fileName, []byte(content), 0644)
 }
 
 func addHandlerToMain(handlerName, urlPath string) error {
@@ -148,7 +148,6 @@ func addHandlerToMain(handlerName, urlPath string) error {
 	} else {
 		mainFunc.Body.List = append(mainFunc.Body.List, newCall)
 	}
-
 
 write_file:
 	// Write the modified AST back to the file

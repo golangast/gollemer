@@ -76,8 +76,8 @@ func main() {
 	sentenceVocabulary := mainvocab.NewVocabulary()
 
 	for _, example := range *trainingData {
-		words := strings.Fields(example.Sentence)
-		for _, word := range words {
+		words := strings.FieldsSeq(example.Sentence)
+		for word := range words {
 			queryVocabulary.AddToken(word)
 			sentenceVocabulary.AddToken(word) // Also add to sentence vocab
 		}
@@ -124,17 +124,14 @@ func main() {
 
 	const batchSize = 32 // Define batch size
 
-	for epoch := 0; epoch < 100; epoch++ { // Increased epochs for better learning
+	for epoch := range 100 { // Increased epochs for better learning
 		// Shuffle training data for each epoch (optional but good practice)
 		// rand.Shuffle(len(*trainingData), func(i, j int) {
 		// 	(*trainingData)[i], (*trainingData)[j] = (*trainingData)[j], (*trainingData)[i]
 		// })
 
 		for i := 0; i < len(*trainingData); i += batchSize {
-			batchEnd := i + batchSize
-			if batchEnd > len(*trainingData) {
-				batchEnd = len(*trainingData)
-			}
+			batchEnd := min(i+batchSize, len(*trainingData))
 			batch := (*trainingData)[i:batchEnd]
 
 			// Prepare batch inputs and targets

@@ -110,7 +110,7 @@ func (ssl *StructuredSemanticLoss) computeOperationLoss(
 		// logits shape: [batchSize, vocabSize]
 		vocabSize := logits.Shape[1]
 
-		for i := 0; i < batchSize; i++ {
+		for i := range batchSize {
 			targetID := targets[i]
 
 			// Skip padding

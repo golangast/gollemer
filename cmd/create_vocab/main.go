@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+
 	"log"
 	"os"
 	"strings"
@@ -30,7 +30,7 @@ func main() {
 	tokenVocab := vocab.NewVocabulary()
 
 	// Process intent_data.json
-	intentFile, err := ioutil.ReadFile(intentDataPath)
+	intentFile, err := os.ReadFile(intentDataPath)
 	if err != nil {
 		log.Fatalf("Failed to read intent training data: %v", err)
 	}

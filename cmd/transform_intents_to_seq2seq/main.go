@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 )
 
@@ -25,7 +25,7 @@ func main() {
 	outputFilePath := "trainingdata/wikiqa_seq2seq_training.json"
 
 	// Read the input JSON file
-	inputBytes, err := ioutil.ReadFile(inputFilePath)
+	inputBytes, err := os.ReadFile(inputFilePath)
 	if err != nil {
 		fmt.Printf("Error reading input file %s: %v\n", inputFilePath, err)
 		return
@@ -56,7 +56,7 @@ func main() {
 	}
 
 	// Write the output JSON to file
-	err = ioutil.WriteFile(outputFilePath, outputBytes, 0644)
+	err = os.WriteFile(outputFilePath, outputBytes, 0644)
 	if err != nil {
 		fmt.Printf("Error writing output file %s: %v\n", outputFilePath, err)
 		return

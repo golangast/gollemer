@@ -307,9 +307,7 @@ func (t *Tensor) Add(other *Tensor) (*Tensor, error) {
 	}
 
 	resultData := make([]float64, len(t.Data))
-	for i := range t.Data {
-		resultData[i] = t.Data[i] + other.Data[i]
-	}
+	addVectors(t.Data, other.Data, resultData)
 
 	resultTensor := NewTensor(t.Shape, resultData, t.RequiresGrad || other.RequiresGrad)
 
@@ -339,18 +337,14 @@ func (op *AddOperation) Backward(grad *Tensor) error {
 		if op.A.Grad == nil {
 			op.A.Grad = NewTensor(op.A.Shape, make([]float64, len(op.A.Data)), false)
 		}
-		for i := range grad.Data {
-			op.A.Grad.Data[i] += grad.Data[i]
-		}
+		addAccumulate(op.A.Grad.Data, grad.Data)
 	}
 
 	if op.B.RequiresGrad {
 		if op.B.Grad == nil {
 			op.B.Grad = NewTensor(op.B.Shape, make([]float64, len(op.B.Data)), false)
 		}
-		for i := range grad.Data {
-			op.B.Grad.Data[i] += grad.Data[i]
-		}
+		addAccumulate(op.B.Grad.Data, grad.Data)
 	}
 
 	return nil
@@ -386,36 +380,45 @@ func (t *Tensor) MatMul(other *Tensor) (*Tensor, error) {
 		resultCols := colsB
 		resultData := make([]float64, resultRows*resultCols)
 
-		var wg sync.WaitGroup
-		numWorkers := runtime.NumCPU() // Get number of CPU cores
-		if numWorkers == 0 {
-			numWorkers = 1 // Ensure at least one worker
+		otherT, err := other.Transpose(0, 1)
+		if err != nil {
+			return nil, err
 		}
 
-		rowsPerWorker := (resultRows + numWorkers - 1) / numWorkers
-
-		for i := 0; i < numWorkers; i++ {
-			startRow := i * rowsPerWorker
-			endRow := (i + 1) * rowsPerWorker
-			if endRow > resultRows {
-				endRow = resultRows
+		// Use goroutines only for larger matrices to avoid overhead
+		numWorkers := runtime.NumCPU()
+		if resultRows*resultCols < 100000 || numWorkers <= 1 {
+			it := NewMatMulIterator(resultRows, resultCols)
+			for it.Next() {
+				
+				flat, i, j := it.Current()
+				rowA := t.Data[i*colsA : (i+1)*colsA]
+				rowB := otherT.Data[j*colsA : (j+1)*colsA]
+				resultData[flat] = dotProduct(rowA, rowB)
 			}
-
-			wg.Add(1)
-			go func(start, end int) {
-				defer wg.Done()
-				for i := start; i < end; i++ {
-					for j := 0; j < resultCols; j++ {
-						sum := 0.0
-						for k := 0; k < colsA; k++ {
-							sum += t.Data[i*colsA+k] * other.Data[k*colsB+j]
-						}
-						resultData[i*resultCols+j] = sum
-					}
+		} else {
+			var wg sync.WaitGroup
+			rowsPerWorker := (resultRows + numWorkers - 1) / numWorkers
+			for i := 0; i < numWorkers; i++ {
+				startRow := i * rowsPerWorker
+				endRow := min((i+1)*rowsPerWorker, resultRows)
+				if startRow >= endRow {
+					break
 				}
-			}(startRow, endRow)
+				wg.Add(1)
+				go func(start, end int) {
+					defer wg.Done()
+					for i := start; i < end; i++ {
+						rowA := t.Data[i*colsA : (i+1)*colsA]
+						for j := 0; j < resultCols; j++ {
+							rowB := otherT.Data[j*colsA : (j+1)*colsA]
+							resultData[i*resultCols+j] = dotProduct(rowA, rowB)
+						}
+					}
+				}(startRow, endRow)
+			}
+			wg.Wait()
 		}
-		wg.Wait()
 
 		resultTensor := NewTensor([]int{resultRows, resultCols}, resultData, t.RequiresGrad || other.RequiresGrad)
 		if resultTensor.RequiresGrad {
@@ -446,24 +449,58 @@ func (t *Tensor) MatMul(other *Tensor) (*Tensor, error) {
 		resultData := make([]float64, batchSize*numHeads*resultRows*resultCols)
 		resultShape := []int{batchSize, numHeads, resultRows, resultCols}
 
-		// Iterate over batches and heads
-		for b := 0; b < batchSize; b++ {
-			for h := 0; h < numHeads; h++ {
-				// Extract 2D slices for current batch and head
-				tOffset := b*numHeads*rowsA*colsA + h*rowsA*colsA
-				otherOffset := b*numHeads*rowsB*colsB + h*rowsB*colsB
-				resultOffset := b*numHeads*resultRows*resultCols + h*resultRows*resultCols
+		otherT, err := other.Transpose(2, 3)
+		if err != nil {
+			return nil, err
+		}
 
-				for i := 0; i < resultRows; i++ {
-					for j := 0; j < resultCols; j++ {
-						sum := 0.0
-						for k := 0; k < colsA; k++ {
-							sum += t.Data[tOffset+i*colsA+k] * other.Data[otherOffset+k*colsB+j]
+		// Parallelize across batches and heads
+		numWorkers := runtime.NumCPU()
+		totalSlices := batchSize * numHeads
+		if totalSlices*resultRows*resultCols < 1000 || numWorkers <= 1 {
+			for b := 0; b < batchSize; b++ {
+				for h := 0; h < numHeads; h++ {
+					tOffset := b*numHeads*rowsA*colsA + h*rowsA*colsA
+					otherOffset := b*numHeads*rowsB*colsB + h*rowsB*colsB
+					resultOffset := b*numHeads*resultRows*resultCols + h*resultRows*resultCols
+					for i := 0; i < resultRows; i++ {
+						rowA := t.Data[tOffset+i*colsA : tOffset+(i+1)*colsA]
+						for j := 0; j < resultCols; j++ {
+							rowB := otherT.Data[otherOffset+j*colsA : otherOffset+(j+1)*colsA]
+							resultData[resultOffset+i*resultCols+j] = dotProduct(rowA, rowB)
 						}
-						resultData[resultOffset+i*resultCols+j] = sum
 					}
 				}
 			}
+		} else {
+			var wg sync.WaitGroup
+			slicesPerWorker := (totalSlices + numWorkers - 1) / numWorkers
+			for w := 0; w < numWorkers; w++ {
+				startSlice := w * slicesPerWorker
+				endSlice := min((w+1)*slicesPerWorker, totalSlices)
+				if startSlice >= endSlice {
+					break
+				}
+				wg.Add(1)
+				go func(start, end int) {
+					defer wg.Done()
+					for s := start; s < end; s++ {
+						b := s / numHeads
+						h := s % numHeads
+						tOffset := b*numHeads*rowsA*colsA + h*rowsA*colsA
+						otherOffset := b*numHeads*rowsB*colsB + h*rowsB*colsB
+						resultOffset := b*numHeads*resultRows*resultCols + h*resultRows*resultCols
+						for i := 0; i < resultRows; i++ {
+							rowA := t.Data[tOffset+i*colsA : tOffset+(i+1)*colsA]
+							for j := 0; j < resultCols; j++ {
+								rowB := otherT.Data[otherOffset+j*colsA : otherOffset+(j+1)*colsA]
+								resultData[resultOffset+i*resultCols+j] = dotProduct(rowA, rowB)
+							}
+						}
+					}
+				}(startSlice, endSlice)
+			}
+			wg.Wait()
 		}
 
 		resultTensor := NewTensor(resultShape, resultData, t.RequiresGrad || other.RequiresGrad)
@@ -502,9 +539,7 @@ func (op *MatmulOperation) Backward(grad *Tensor) error {
 			if op.A.Grad == nil {
 				op.A.Grad = NewTensor(op.A.Shape, make([]float64, len(op.A.Data)), false)
 			}
-			for i := range gradA.Data {
-				op.A.Grad.Data[i] += gradA.Data[i]
-			}
+			addAccumulate(op.A.Grad.Data, gradA.Data)
 		}
 
 		// dL/dB = A^T * grad
@@ -520,9 +555,7 @@ func (op *MatmulOperation) Backward(grad *Tensor) error {
 			if op.B.Grad == nil {
 				op.B.Grad = NewTensor(op.B.Shape, make([]float64, len(op.B.Data)), false)
 			}
-			for i := range gradB.Data {
-				op.B.Grad.Data[i] += gradB.Data[i]
-			}
+			addAccumulate(op.B.Grad.Data, gradB.Data)
 		}
 		return nil
 	}
@@ -542,9 +575,7 @@ func (op *MatmulOperation) Backward(grad *Tensor) error {
 			if op.A.Grad == nil {
 				op.A.Grad = NewTensor(op.A.Shape, make([]float64, len(op.A.Data)), false)
 			}
-			for i := range gradA.Data {
-				op.A.Grad.Data[i] += gradA.Data[i]
-			}
+			addAccumulate(op.A.Grad.Data, gradA.Data)
 		}
 
 		// dL/dB = A^T * grad
@@ -560,9 +591,7 @@ func (op *MatmulOperation) Backward(grad *Tensor) error {
 			if op.B.Grad == nil {
 				op.B.Grad = NewTensor(op.B.Shape, make([]float64, len(op.B.Data)), false)
 			}
-			for i := range gradB.Data {
-				op.B.Grad.Data[i] += gradB.Data[i]
-			}
+			addAccumulate(op.B.Grad.Data, gradB.Data)
 		}
 		return nil
 	}
@@ -622,7 +651,7 @@ func (t *Tensor) Transpose(axis1, axis2 int) (*Tensor, error) {
 
 		// Convert new N-dimensional coordinates to flat index for new tensor
 		newFlatIndex := 0
-		for dim := 0; dim < len(newShape); dim++ {
+		for dim := range newShape {
 			newFlatIndex += newCoords[dim] * newStrides[dim]
 		}
 		newData[newFlatIndex] = t.Data[i]
@@ -649,7 +678,7 @@ func (t *Tensor) AddWithBroadcast(other *Tensor) (*Tensor, error) {
 		paddedOtherShape[i] = 1
 	}
 
-	for i := 0; i < maxDims; i++ {
+	for i := range maxDims {
 		dimT := paddedTShape[i]
 		dimOther := paddedOtherShape[i]
 
@@ -671,25 +700,45 @@ func (t *Tensor) AddWithBroadcast(other *Tensor) (*Tensor, error) {
 	resultData := make([]float64, resultSize)
 
 	// Perform element-wise addition with broadcasting
-	for i := 0; i < resultSize; i++ {
-		coords := getCoords(i, resultShape, stridesResult)
-
-		// Get indices for t
-		idxT := 0
-		for dim := 0; dim < maxDims; dim++ {
-			if paddedTShape[dim] != 1 {
-				idxT += coords[dim] * stridesT[dim]
+	// Optimization for common broadcasting cases (e.g., adding bias to batch)
+	lastDimMatch := true
+	if len(other.Shape) <= len(t.Shape) {
+		for i := 0; i < len(other.Shape); i++ {
+			if other.Shape[len(other.Shape)-1-i] != t.Shape[len(t.Shape)-1-i] {
+				lastDimMatch = false
+				break
 			}
 		}
+	} else {
+		lastDimMatch = false
+	}
 
-		// Get indices for other
-		idxOther := 0
-		for dim := 0; dim < maxDims; dim++ {
-			if paddedOtherShape[dim] != 1 {
-				idxOther += coords[dim] * stridesOther[dim]
-			}
+	if lastDimMatch && len(other.Shape) > 0 {
+		otherSize := len(other.Data)
+		for i := 0; i < resultSize; i += otherSize {
+			addVectors(t.Data[i:i+otherSize], other.Data, resultData[i:i+otherSize])
 		}
-		resultData[i] = t.Data[idxT] + other.Data[idxOther]
+	} else if resultSize == len(t.Data) && len(other.Data) == 1 {
+		// Optimization for scalar broadcasting
+		addScalar(t.Data, other.Data[0], resultData)
+	} else {
+		// Generic slow broadcast
+		for i := 0; i < resultSize; i++ {
+			coords := getCoords(i, resultShape, stridesResult)
+			idxT := 0
+			for dim := 0; dim < maxDims; dim++ {
+				if paddedTShape[dim] != 1 {
+					idxT += coords[dim] * stridesT[dim]
+				}
+			}
+			idxOther := 0
+			for dim := 0; dim < maxDims; dim++ {
+				if paddedOtherShape[dim] != 1 {
+					idxOther += coords[dim] * stridesOther[dim]
+				}
+			}
+			resultData[i] = t.Data[idxT] + other.Data[idxOther]
+		}
 	}
 
 	resultTensor := NewTensor(resultShape, resultData, t.RequiresGrad || other.RequiresGrad)
@@ -699,6 +748,120 @@ func (t *Tensor) AddWithBroadcast(other *Tensor) (*Tensor, error) {
 	}
 
 	return resultTensor, nil
+}
+
+// MulWithBroadcast performs element-wise multiplication with broadcasting.
+func (t *Tensor) MulWithBroadcast(other *Tensor) (*Tensor, error) {
+	// Determine the output shape after broadcasting
+	maxDims := max(len(t.Shape), len(other.Shape))
+	resultShape := make([]int, maxDims)
+
+	// Pad shapes with 1s on the left to make them the same length
+	paddedTShape := make([]int, maxDims)
+	copy(paddedTShape[maxDims-len(t.Shape):], t.Shape)
+	for i := 0; i < maxDims-len(t.Shape); i++ {
+		paddedTShape[i] = 1
+	}
+
+	paddedOtherShape := make([]int, maxDims)
+	copy(paddedOtherShape[maxDims-len(other.Shape):], other.Shape)
+	for i := 0; i < maxDims-len(other.Shape); i++ {
+		paddedOtherShape[i] = 1
+	}
+
+	for i := range maxDims {
+		dimT := paddedTShape[i]
+		dimOther := paddedOtherShape[i]
+
+		if dimT != dimOther && dimT != 1 && dimOther != 1 {
+			return nil, fmt.Errorf("unsupported shapes for MulWithBroadcast operation: %v and %v", t.Shape, other.Shape)
+		}
+		resultShape[i] = max(dimT, dimOther)
+	}
+
+	// Calculate strides for efficient indexing
+	stridesT := calculateStrides(paddedTShape)
+	stridesOther := calculateStrides(paddedOtherShape)
+	stridesResult := calculateStrides(resultShape)
+
+	resultSize := 1
+	for _, dim := range resultShape {
+		resultSize *= dim
+	}
+	resultData := make([]float64, resultSize)
+
+	// Perform element-wise multiplication with broadcasting
+	// Optimization for common broadcasting cases (e.g., scaling by a vector)
+	// For now, using generic slow broadcast for correctness
+	for i := 0; i < resultSize; i++ {
+		coords := getCoords(i, resultShape, stridesResult)
+		idxT := 0
+		for dim := 0; dim < maxDims; dim++ {
+			if paddedTShape[dim] != 1 {
+				idxT += coords[dim] * stridesT[dim]
+			}
+		}
+		idxOther := 0
+		for dim := 0; dim < maxDims; dim++ {
+			if paddedOtherShape[dim] != 1 {
+				idxOther += coords[dim] * stridesOther[dim]
+			}
+		}
+		resultData[i] = t.Data[idxT] * other.Data[idxOther]
+	}
+
+	resultTensor := NewTensor(resultShape, resultData, t.RequiresGrad || other.RequiresGrad)
+
+	if resultTensor.RequiresGrad {
+		resultTensor.Creator = &MulWithBroadcastOperation{t, other}
+	}
+
+	return resultTensor, nil
+}
+
+type MulWithBroadcastOperation struct {
+	A *Tensor
+	B *Tensor
+}
+
+func (op *MulWithBroadcastOperation) Inputs() []*Tensor {
+	return []*Tensor{op.A, op.B}
+}
+
+func (op *MulWithBroadcastOperation) Backward(grad *Tensor) error {
+	// dL/dA = sum_over_broadcast_dims(dL/dC * B)
+	if op.A.RequiresGrad {
+		if op.A.Grad == nil {
+			op.A.Grad = NewTensor(op.A.Shape, make([]float64, len(op.A.Data)), false)
+		}
+		// Multiply grad by B (broadcasted to grad shape)
+		term, err := grad.MulWithBroadcast(op.B)
+		if err != nil {
+			return err
+		}
+		// Sum result to A's shape
+		gradA := sumTo(term, op.A.Shape)
+		for i := range op.A.Grad.Data {
+			op.A.Grad.Data[i] += gradA.Data[i]
+		}
+	}
+	// dL/dB = sum_over_broadcast_dims(dL/dC * A)
+	if op.B.RequiresGrad {
+		if op.B.Grad == nil {
+			op.B.Grad = NewTensor(op.B.Shape, make([]float64, len(op.B.Data)), false)
+		}
+		// Multiply grad by A (broadcasted to grad shape)
+		term, err := grad.MulWithBroadcast(op.A)
+		if err != nil {
+			return err
+		}
+		// Sum result to B's shape
+		gradB := sumTo(term, op.B.Shape)
+		for i := range op.B.Grad.Data {
+			op.B.Grad.Data[i] += gradB.Data[i]
+		}
+	}
+	return nil
 }
 
 type AddWithBroadcastOperation struct {
@@ -783,28 +946,31 @@ func sumAlongAxis(t *Tensor, axis int) *Tensor {
 	}
 	newData := make([]float64, newSize)
 
-	strides := calculateStrides(t.Shape)
-	newStrides := calculateStrides(newShape)
+	// Calculate the number of elements before and after the axis
+	outerSize := 1
+	for i := 0; i < axis; i++ {
+		outerSize *= t.Shape[i]
+	}
+	axisDimSize := t.Shape[axis]
+	innerSize := 1
+	for i := axis + 1; i < len(t.Shape); i++ {
+		innerSize *= t.Shape[i]
+	}
 
-	for i := 0; i < len(t.Data); i++ {
-		oldCoords := getCoords(i, t.Shape, strides)
-
-		newCoords := make([]int, 0, len(newShape))
-		for j, coord := range oldCoords {
-			if j != axis {
-				newCoords = append(newCoords, coord)
-			}
+	// Optimization for summing over the last dimension or with SIMD-friendly access
+	if axis == len(t.Shape)-1 {
+		for i := 0; i < outerSize; i++ {
+			start := i * axisDimSize
+			newData[i] = sumVector(t.Data[start : start+axisDimSize])
 		}
-
-		newIndex := 0
-		if len(newCoords) > 0 {
-			for j, coord := range newCoords {
-				newIndex += coord * newStrides[j]
+	} else {
+		// General case: sum across strides
+		for i := 0; i < outerSize; i++ {
+			for k := 0; k < axisDimSize; k++ {
+				sourceOffset := i*axisDimSize*innerSize + k*innerSize
+				targetOffset := i * innerSize
+				addAccumulate(newData[targetOffset:targetOffset+innerSize], t.Data[sourceOffset:sourceOffset+innerSize])
 			}
-		}
-
-		if newIndex < len(newData) {
-			newData[newIndex] += t.Data[i]
 		}
 	}
 
@@ -826,19 +992,11 @@ func calculateStrides(shape []int) []int {
 func getCoords(flatIndex int, shape, strides []int) []int {
 	coords := make([]int, len(shape))
 	tempIdx := flatIndex
-	for dim := 0; dim < len(shape); dim++ {
+	for dim := range shape {
 		coords[dim] = tempIdx / strides[dim]
 		tempIdx %= strides[dim]
 	}
 	return coords
-}
-
-// Helper function for max
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 // Reshape returns a new Tensor with the same data but a new shape.
@@ -880,11 +1038,7 @@ func (op *ReshapeOperation) Backward(grad *Tensor) error {
 		if op.Input.Grad == nil {
 			op.Input.Grad = NewTensor(op.Input.Shape, make([]float64, len(op.Input.Data)), false)
 		}
-		// The gradient of reshape is just reshaping the gradient back.
-		// The data is the same, so we can just add the gradients.
-		for i := range grad.Data {
-			op.Input.Grad.Data[i] += grad.Data[i]
-		}
+		addAccumulate(op.Input.Grad.Data, grad.Data)
 	}
 	return nil
 }
@@ -923,7 +1077,7 @@ func (t *Tensor) Softmax(axis int) (*Tensor, error) {
 		for j := 0; j < innerSize; j++ {
 			// Find the maximum value in the slice along the axis for numerical stability
 			maxVal := -math.MaxFloat64
-			for k := 0; k < axisDimSize; k++ {
+			for k := range axisDimSize {
 				idx := i*axisDimSize*innerSize + k*innerSize + j
 				if t.Data[idx] > maxVal {
 					maxVal = t.Data[idx]
@@ -931,7 +1085,7 @@ func (t *Tensor) Softmax(axis int) (*Tensor, error) {
 			}
 
 			sumExp := 0.0
-			for k := 0; k < axisDimSize; k++ {
+			for k := range axisDimSize {
 				idx := i*axisDimSize*innerSize + k*innerSize + j
 				expVal := math.Exp(t.Data[idx] - maxVal) // Subtract max for stability
 				outputData[idx] = expVal
@@ -939,7 +1093,7 @@ func (t *Tensor) Softmax(axis int) (*Tensor, error) {
 			}
 
 			// Normalize by the sum
-			for k := 0; k < axisDimSize; k++ {
+			for k := range axisDimSize {
 				idx := i*axisDimSize*innerSize + k*innerSize + j
 				outputData[idx] /= sumExp
 			}
@@ -985,19 +1139,34 @@ func (op *SoftmaxOperation) Backward(grad *Tensor) error {
 		innerSize *= op.Input.Shape[i]
 	}
 
-	for i := 0; i < outerSize; i++ {
-		for j := 0; j < innerSize; j++ {
-			// Calculate sum_k(dL/dy_k * y_k) for the current slice
-			sum_dL_dy_y := 0.0
+	// Optimization for common cases (last dimension)
+	if resolvedAxis == len(op.Input.Shape)-1 {
+		for i := 0; i < outerSize; i++ {
+			start := i * axisDimSize
+			g := grad.Data[start : start+axisDimSize]
+			y := op.Output.Data[start : start+axisDimSize]
+			
+			sum_dL_dy_y := DotProduct(g, y)
+			
+			ig := op.Input.Grad.Data[start : start+axisDimSize]
 			for k := 0; k < axisDimSize; k++ {
-				idx := i*axisDimSize*innerSize + k*innerSize + j
-				sum_dL_dy_y += grad.Data[idx] * op.Output.Data[idx]
+				ig[k] += y[k] * (g[k] - sum_dL_dy_y)
 			}
+		}
+	} else {
+		// General case
+		for i := 0; i < outerSize; i++ {
+			for j := 0; j < innerSize; j++ {
+				sum_dL_dy_y := 0.0
+				for k := 0; k < axisDimSize; k++ {
+					idx := i*axisDimSize*innerSize + k*innerSize + j
+					sum_dL_dy_y += grad.Data[idx] * op.Output.Data[idx]
+				}
 
-			// Calculate dL/dx_i for the current slice
-			for k := 0; k < axisDimSize; k++ {
-				idx := i*axisDimSize*innerSize + k*innerSize + j
-				op.Input.Grad.Data[idx] += op.Output.Data[idx] * (grad.Data[idx] - sum_dL_dy_y)
+				for k := 0; k < axisDimSize; k++ {
+					idx := i*axisDimSize*innerSize + k*innerSize + j
+					op.Input.Grad.Data[idx] += op.Output.Data[idx] * (grad.Data[idx] - sum_dL_dy_y)
+				}
 			}
 		}
 	}
@@ -1169,7 +1338,7 @@ func (t *Tensor) Slice(axis, start, end int) (*Tensor, error) {
 		// Convert flat index in new tensor to N-dimensional coordinates
 		newCoords := make([]int, len(newShape))
 		tempIdx := i
-		for dim := 0; dim < len(newShape); dim++ {
+		for dim := range newShape {
 			newCoords[dim] = tempIdx / newStrides[dim]
 			tempIdx %= newStrides[dim]
 		}
@@ -1236,9 +1405,7 @@ func (op *SliceOperation) Backward(grad *Tensor) error {
 
 func (t *Tensor) DivScalar(val float64) (*Tensor, error) {
 	resultData := make([]float64, len(t.Data))
-	for i, v := range t.Data {
-		resultData[i] = v / val
-	}
+	divScalar(t.Data, val, resultData)
 
 	resultTensor := NewTensor(t.Shape, resultData, t.RequiresGrad)
 	if resultTensor.RequiresGrad {
@@ -1264,18 +1431,14 @@ func (op *DivScalarOperation) Backward(grad *Tensor) error {
 	if op.Input.Grad == nil {
 		op.Input.Grad = NewTensor(op.Input.Shape, make([]float64, len(op.Input.Data)), false)
 	}
-	for i := range grad.Data {
-		op.Input.Grad.Data[i] += grad.Data[i] / op.Scalar
-	}
+	divAccumulate(op.Input.Grad.Data, grad.Data, op.Scalar)
 	return nil
 }
 
 // MulScalar performs element-wise multiplication by a scalar.
 func (t *Tensor) MulScalar(val float64) (*Tensor, error) {
 	resultData := make([]float64, len(t.Data))
-	for i, v := range t.Data {
-		resultData[i] = v * val
-	}
+	mulScalar(t.Data, val, resultData)
 
 	resultTensor := NewTensor(t.Shape, resultData, t.RequiresGrad)
 	if resultTensor.RequiresGrad {
@@ -1301,9 +1464,7 @@ func (op *MulScalarOperation) Backward(grad *Tensor) error {
 	if op.Input.Grad == nil {
 		op.Input.Grad = NewTensor(op.Input.Shape, make([]float64, len(op.Input.Data)), false)
 	}
-	for i := range grad.Data {
-		op.Input.Grad.Data[i] += grad.Data[i] * op.Scalar
-	}
+	mulScalarAccumulate(op.Input.Grad.Data, grad.Data, op.Scalar)
 	return nil
 }
 
@@ -1515,9 +1676,7 @@ func (t *Tensor) Mul(other *Tensor) (*Tensor, error) {
 	}
 
 	resultData := make([]float64, len(t.Data))
-	for i := range t.Data {
-		resultData[i] = t.Data[i] * other.Data[i]
-	}
+	mulVectors(t.Data, other.Data, resultData)
 
 	resultTensor := NewTensor(t.Shape, resultData, t.RequiresGrad || other.RequiresGrad)
 
@@ -1544,9 +1703,7 @@ func (op *MulOperation) Backward(grad *Tensor) error {
 		if op.A.Grad == nil {
 			op.A.Grad = NewTensor(op.A.Shape, make([]float64, len(op.A.Data)), false)
 		}
-		for i := range grad.Data {
-			op.A.Grad.Data[i] += grad.Data[i] * op.B.Data[i]
-		}
+		mulAccumulate(op.A.Grad.Data, grad.Data, op.B.Data)
 	}
 
 	// dL/dB = grad * A
@@ -1554,9 +1711,7 @@ func (op *MulOperation) Backward(grad *Tensor) error {
 		if op.B.Grad == nil {
 			op.B.Grad = NewTensor(op.B.Shape, make([]float64, len(op.B.Data)), false)
 		}
-		for i := range grad.Data {
-			op.B.Grad.Data[i] += grad.Data[i] * op.A.Data[i]
-		}
+		mulAccumulate(op.B.Grad.Data, grad.Data, op.A.Data)
 	}
 	return nil
 }
@@ -1730,37 +1885,7 @@ func (t *Tensor) OneMinusSquareTanh(inputTensor *Tensor) (*Tensor, error) {
 // but the specified axis will have a size of 1.
 // Example: tensor [2, 3, 4], GetSlice(0, 1) -> returns a tensor of shape [1, 3, 4]
 func (t *Tensor) GetSlice(axis, index int) (*Tensor, error) {
-	if axis < 0 || axis >= len(t.Shape) {
-		return nil, fmt.Errorf("axis %d out of bounds for tensor with shape %v", axis, t.Shape)
-	}
-	if index < 0 || index >= t.Shape[axis] {
-		return nil, fmt.Errorf("index %d out of bounds for axis %d with size %d", index, axis, t.Shape[axis])
-	}
-
-	newShape := make([]int, len(t.Shape))
-	copy(newShape, t.Shape)
-	newShape[axis] = 1 // The slice will have a size of 1 along this axis
-
-	// Calculate the size of the slice
-	sliceSize := 1
-	for _, dim := range newShape {
-		sliceSize *= dim
-	}
-	newData := make([]float64, sliceSize)
-
-	// Calculate strides for the original tensor
-	strides := calculateStrides(t.Shape)
-
-	// Calculate the starting flat index for the slice
-	startFlatIndex := index * strides[axis]
-
-	// Copy data for the slice
-	// This is a simplified copy. A more robust implementation would handle arbitrary dimensions.
-	// For now, assuming the slice is contiguous in memory after the startFlatIndex.
-	// This might need adjustment based on how the tensor data is actually laid out.
-	copy(newData, t.Data[startFlatIndex:startFlatIndex+sliceSize])
-
-	return NewTensor(newShape, newData, t.RequiresGrad), nil
+	return t.Slice(axis, index, index+1)
 }
 
 // SetSlice sets a slice of the tensor along the specified axis with data from another tensor.
@@ -1851,10 +1976,34 @@ func Concat(tensors []*Tensor, axis int) (*Tensor, error) {
 	newShape[axis] = concatDimSize
 
 	newData := make([]float64, totalSize)
-	currentOffset := 0
-	for _, t := range tensors {
-		copy(newData[currentOffset:], t.Data)
-		currentOffset += len(t.Data)
+	
+	if axis == 0 {
+		// Optimization for axis 0
+		currentOffset := 0
+		for _, t := range tensors {
+			copy(newData[currentOffset:], t.Data)
+			currentOffset += len(t.Data)
+		}
+	} else {
+		// Generic approach for any axis
+		outStrides := calculateStrides(newShape)
+		currentAxisOffset := 0
+		for _, t := range tensors {
+			tStrides := calculateStrides(t.Shape)
+			for i := 0; i < len(t.Data); i++ {
+				coords := getCoords(i, t.Shape, tStrides)
+				outCoords := make([]int, len(newShape))
+				copy(outCoords, coords)
+				outCoords[axis] += currentAxisOffset
+				
+				outIdx := 0
+				for dim := range newShape {
+					outIdx += outCoords[dim] * outStrides[dim]
+				}
+				newData[outIdx] = t.Data[i]
+			}
+			currentAxisOffset += t.Shape[axis]
+		}
 	}
 
 	resultTensor := NewTensor(newShape, newData, false)
@@ -2178,7 +2327,7 @@ func (op *GatherOperation) Backward(grad *Tensor) error {
 		// grad row i corresponds to input row idx
 		gradRow := grad.Data[i*cols : (i+1)*cols]
 		inputGradRow := op.Input.Grad.Data[idx*cols : (idx+1)*cols]
-		for j := 0; j < cols; j++ {
+		for j := range cols {
 			AtomicAddFloat64(&inputGradRow[j], gradRow[j])
 		}
 	}
@@ -2193,4 +2342,9 @@ func AtomicAddFloat64(val *float64, delta float64) {
 			return
 		}
 	}
+}
+
+func dotProduct(a, b []float64) float64 {
+	// Force usage of vectorized implementation (SIMD if available)
+	return vecDot(a, b)
 }

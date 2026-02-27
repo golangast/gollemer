@@ -19,16 +19,16 @@ const (
 
 // Subtask represents an individual executable step in a plan
 type Subtask struct {
-	ID          string                 `json:"id"`
-	Description string                 `json:"description"`
-	Status      SubtaskStatus          `json:"status"`
-	Tool        string                 `json:"tool"`       // Tool name to execute
-	Args        map[string]interface{} `json:"args"`       // Tool arguments
-	DependsOn   []string               `json:"depends_on"` // IDs of prerequisite subtasks
-	Result      interface{}            `json:"result,omitempty"`
-	Error       string                 `json:"error,omitempty"`
-	StartTime   time.Time              `json:"start_time,omitempty"`
-	EndTime     time.Time              `json:"end_time,omitempty"`
+	ID          string         `json:"id"`
+	Description string         `json:"description"`
+	Status      SubtaskStatus  `json:"status"`
+	Tool        string         `json:"tool"`       // Tool name to execute
+	Args        map[string]any `json:"args"`       // Tool arguments
+	DependsOn   []string       `json:"depends_on"` // IDs of prerequisite subtasks
+	Result      any            `json:"result,omitempty"`
+	Error       string         `json:"error,omitempty"`
+	StartTime   time.Time      `json:"start_time"`
+	EndTime     time.Time      `json:"end_time"`
 }
 
 // IsReady checks if all dependencies are satisfied
@@ -49,13 +49,13 @@ func (st *Subtask) IsReady(plan *Plan) bool {
 
 // Plan represents a decomposed workflow with multiple subtasks
 type Plan struct {
-	ID        string                 `json:"id"`
-	Goal      string                 `json:"goal"`
-	Subtasks  []*Subtask             `json:"subtasks"`
-	Reasoning string                 `json:"reasoning"` // Chain-of-Thought explanation
-	CreatedAt time.Time              `json:"created_at"`
-	UpdatedAt time.Time              `json:"updated_at"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+	ID        string         `json:"id"`
+	Goal      string         `json:"goal"`
+	Subtasks  []*Subtask     `json:"subtasks"`
+	Reasoning string         `json:"reasoning"` // Chain-of-Thought explanation
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	Metadata  map[string]any `json:"metadata,omitempty"`
 }
 
 // GetSubtask retrieves a subtask by ID
@@ -134,7 +134,7 @@ func (pe *PlanningEngine) DecomposeGoal(userRequest string) (*Plan, error) {
 		Subtasks:  make([]*Subtask, 0),
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
-		Metadata:  make(map[string]interface{}),
+		Metadata:  make(map[string]any),
 	}
 
 	// Simple rule-based decomposition for now
@@ -166,7 +166,7 @@ func (pe *PlanningEngine) ruleBasedDecomposition(request string) ([]*Subtask, st
 			Description: "Create project root folder",
 			Status:      StatusPending,
 			Tool:        "create_folder",
-			Args: map[string]interface{}{
+			Args: map[string]any{
 				"name": pe.extractProjectName(request),
 			},
 			DependsOn: []string{},
@@ -179,7 +179,7 @@ func (pe *PlanningEngine) ruleBasedDecomposition(request string) ([]*Subtask, st
 				Description: fmt.Sprintf("Apply %s template", projectType),
 				Status:      StatusPending,
 				Tool:        "apply_template",
-				Args: map[string]interface{}{
+				Args: map[string]any{
 					"template": projectType,
 					"folder":   pe.extractProjectName(request),
 				},
@@ -194,7 +194,7 @@ func (pe *PlanningEngine) ruleBasedDecomposition(request string) ([]*Subtask, st
 				Description: "Add authentication module",
 				Status:      StatusPending,
 				Tool:        "add_feature",
-				Args: map[string]interface{}{
+				Args: map[string]any{
 					"feature": "auth",
 					"folder":  pe.extractProjectName(request),
 				},
@@ -208,7 +208,7 @@ func (pe *PlanningEngine) ruleBasedDecomposition(request string) ([]*Subtask, st
 				Description: "Add database integration",
 				Status:      StatusPending,
 				Tool:        "add_feature",
-				Args: map[string]interface{}{
+				Args: map[string]any{
 					"feature": "database",
 					"folder":  pe.extractProjectName(request),
 				},
@@ -227,7 +227,7 @@ func (pe *PlanningEngine) ruleBasedDecomposition(request string) ([]*Subtask, st
 			Description: fmt.Sprintf("Create folder '%s'", folderName),
 			Status:      StatusPending,
 			Tool:        "create_folder",
-			Args: map[string]interface{}{
+			Args: map[string]any{
 				"name": folderName,
 			},
 			DependsOn: []string{},
@@ -239,7 +239,7 @@ func (pe *PlanningEngine) ruleBasedDecomposition(request string) ([]*Subtask, st
 				Description: fmt.Sprintf("Create file '%s' in '%s'", fileName, folderName),
 				Status:      StatusPending,
 				Tool:        "create_file",
-				Args: map[string]interface{}{
+				Args: map[string]any{
 					"name":   fileName,
 					"folder": folderName,
 				},
@@ -254,7 +254,7 @@ func (pe *PlanningEngine) ruleBasedDecomposition(request string) ([]*Subtask, st
 			Description: request,
 			Status:      StatusPending,
 			Tool:        "execute_command",
-			Args: map[string]interface{}{
+			Args: map[string]any{
 				"command": request,
 			},
 			DependsOn: []string{},
@@ -305,8 +305,8 @@ func (pe *PlanningEngine) extractFolderName(request string) string {
 }
 
 func (pe *PlanningEngine) extractFileName(request string) string {
-	words := strings.Fields(request)
-	for _, word := range words {
+	words := strings.FieldsSeq(request)
+	for word := range words {
 		if strings.Contains(word, ".") {
 			return word
 		}

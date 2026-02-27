@@ -1,5 +1,7 @@
 package semantic
 
+import "strings"
+
 // HierarchicalCommand represents a command that can have multiple nested children
 // This extends StructuredCommand to support complex project scaffolding
 type HierarchicalCommand struct {
@@ -48,26 +50,27 @@ func (hc *HierarchicalCommand) String() string {
 }
 
 func (hc *HierarchicalCommand) stringWithIndent(indent int) string {
-	prefix := ""
-	for i := 0; i < indent; i++ {
-		prefix += "  "
+	var prefix strings.Builder
+	for range indent {
+		prefix.WriteString("  ")
 	}
 
-	result := prefix + string(hc.Action) + " " + string(hc.ObjectType)
+	var result strings.Builder
+	result.WriteString(prefix.String() + string(hc.Action) + " " + string(hc.ObjectType))
 	if hc.Name != "" {
-		result += " " + hc.Name
+		result.WriteString(" " + hc.Name)
 	}
 	if hc.Template != "" {
-		result += " (template: " + hc.Template + ")"
+		result.WriteString(" (template: " + hc.Template + ")")
 	}
 
 	if hc.HasChildren() {
 		for _, child := range hc.Children {
-			result += "\n" + child.stringWithIndent(indent+1)
+			result.WriteString("\n" + child.stringWithIndent(indent+1))
 		}
 	}
 
-	return result
+	return result.String()
 }
 
 // ToStructuredCommand converts to legacy StructuredCommand (for backward compatibility)

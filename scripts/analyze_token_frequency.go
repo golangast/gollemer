@@ -1,9 +1,10 @@
+//go:build ignore
+
 package main
 
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"sort"
 )
@@ -45,7 +46,7 @@ func main() {
 	}
 	path := os.Args[1]
 
-	file, err := ioutil.ReadFile(path)
+	file, err := os.ReadFile(path)
 	if err != nil {
 		fmt.Printf("Error reading file: %v\n", err)
 		os.Exit(1)

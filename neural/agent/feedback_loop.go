@@ -35,6 +35,7 @@ type FeedbackLoop struct {
 	currentIteration int
 	policy           PolicyValidator
 	observations     []Observation
+	toolUsage        map[string]int
 }
 
 // NewFeedbackLoop creates a new feedback loop
@@ -48,6 +49,7 @@ func NewFeedbackLoop(maxIterations int) *FeedbackLoop {
 		currentIteration: 0,
 		policy:           NewDefaultPolicy(),
 		observations:     make([]Observation, 0),
+		toolUsage:        make(map[string]int),
 	}
 }
 
@@ -55,6 +57,10 @@ func NewFeedbackLoop(maxIterations int) *FeedbackLoop {
 func (fl *FeedbackLoop) Evaluate(obs Observation, plan *Plan) (FeedbackDecision, error) {
 	fl.currentIteration++
 	fl.observations = append(fl.observations, obs)
+	if fl.toolUsage == nil {
+		fl.toolUsage = make(map[string]int)
+	}
+	fl.toolUsage[obs.ToolName]++
 
 	decision := FeedbackDecision{
 		ShouldContinue: true,
@@ -67,6 +73,7 @@ func (fl *FeedbackLoop) Evaluate(obs Observation, plan *Plan) (FeedbackDecision,
 		decision.ShouldContinue = false
 		decision.ErrorMessage = fmt.Sprintf("max iterations (%d) reached", fl.maxIterations)
 		decision.Critique = "Agent may be stuck in a loop. Consider breaking down the goal differently."
+		fl.LogToolUsage()
 		return decision, nil
 	}
 
@@ -103,6 +110,7 @@ func (fl *FeedbackLoop) Evaluate(obs Observation, plan *Plan) (FeedbackDecision,
 func (fl *FeedbackLoop) Reset() {
 	fl.currentIteration = 0
 	fl.observations = make([]Observation, 0)
+	fl.toolUsage = make(map[string]int)
 }
 
 // generateCritique creates a self-assessment of what went wrong
@@ -167,6 +175,14 @@ func (fl *FeedbackLoop) shouldRetry(obs Observation) bool {
 // GetObservations returns all recorded observations
 func (fl *FeedbackLoop) GetObservations() []Observation {
 	return fl.observations
+}
+
+// LogToolUsage prints the distribution of tool usage to help diagnose expert balance
+func (fl *FeedbackLoop) LogToolUsage() {
+	fmt.Println("Tool Usage (Expert Balance):")
+	for tool, count := range fl.toolUsage {
+		fmt.Printf("  %s: %d\n", tool, count)
+	}
 }
 
 // DefaultPolicy implements basic safety constraints

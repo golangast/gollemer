@@ -91,14 +91,14 @@ func main() {
 	}
 
 	for _, example := range *trainingData {
-		words := strings.Fields(strings.ToLower(example.Query))
-		for _, word := range words {
+		words := strings.FieldsSeq(strings.ToLower(example.Query))
+		for word := range words {
 			queryVocab.AddToken(word)
 		}
 		parentIntentVocab.AddToken(example.ParentIntent)
 		childIntentVocab.AddToken(example.ChildIntent)
-		sentenceWords := strings.Fields(strings.ToLower(example.Sentence))
-		for _, word := range sentenceWords {
+		sentenceWords := strings.FieldsSeq(strings.ToLower(example.Sentence))
+		for word := range sentenceWords {
 			sentenceVocab.AddToken(word)
 		}
 	}
@@ -177,16 +177,13 @@ func main() {
 func TrainIntentModel(model *moe.IntentMoE, data *IntentTrainingData, queryVocab, parentIntentVocab, childIntentVocab, sentenceVocab *mainvocab.Vocabulary, epochs int, learningRate float64, batchSize int, maxSeqLength int) {
 	optimizer := nn.NewOptimizer(model.Parameters(), learningRate, 5.0)
 
-	for epoch := 0; epoch < epochs; epoch++ {
+	for epoch := range epochs {
 		log.Printf("Epoch %d/%d", epoch+1, epochs)
 		totalLoss := 0.0
 		numBatches := 0
 
 		for i := 0; i < len(*data); i += batchSize {
-			end := i + batchSize
-			if end > len(*data) {
-				end = len(*data)
-			}
+			end := min(i+batchSize, len(*data))
 			batch := (*data)[i:end]
 
 			loss, err := trainIntentModelBatch(model, optimizer, batch, queryVocab, parentIntentVocab, childIntentVocab, sentenceVocab, maxSeqLength)
@@ -274,7 +271,7 @@ func trainIntentModelBatch(model *moe.IntentMoE, optimizer nn.Optimizer, batch I
 
 	for t := 0; t < maxSeqLength-1; t++ {
 		targets := make([]int, batchSize)
-		for i := 0; i < batchSize; i++ {
+		for i := range batchSize {
 			targets[i] = int(targetSentenceIDsBatch[i*maxSeqLength+t+1])
 		}
 		loss, grad := tensor.CrossEntropyLoss(sentenceLogits[t], targets, sentenceVocab.PaddingTokenID, 0.1)
@@ -329,7 +326,7 @@ func SequenceCrossEntropyLoss(predictions *tensor.Tensor, targets []int, padding
 		predictedLogProb := logSoftmax.Data[i*vocabSize+targetID]
 		totalLoss -= predictedLogProb
 
-		for j := 0; j < vocabSize; j++ {
+		for j := range vocabSize {
 			prob := logSoftmax.Data[i*vocabSize+j]
 			if j == targetID {
 				grad[i*vocabSize+j] = prob - 1

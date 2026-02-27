@@ -3,7 +3,8 @@ package main
 import (
 	"encoding/gob"
 	"encoding/json"
-	"io/ioutil"
+	"io"
+
 	"log"
 	"math/rand"
 	"os"
@@ -69,7 +70,7 @@ func main() {
 			// Find the name in the query tokens
 			for i := 0; i <= len(tokens)-len(nameTokens); i++ {
 				match := true
-				for j := 0; j < len(nameTokens); j++ {
+				for j := range nameTokens {
 					if strings.Trim(tokens[i+j], "',.") != nameTokens[j] { // Simple trim for punctuation
 						match = false
 						break
@@ -141,7 +142,7 @@ func main() {
 
 	// 4. Train Loop
 	epochs := 5 // Increased epochs
-	for epoch := 0; epoch < epochs; epoch++ {
+	for epoch := range epochs {
 		totalError := 0.0
 		for _, example := range trainingData {
 			// Word2Vec input
@@ -207,7 +208,7 @@ func loadSemanticData(path string) ([]SemanticData, error) {
 		return nil, err
 	}
 	defer file.Close()
-	bytes, err := ioutil.ReadAll(file)
+	bytes, err := io.ReadAll(file)
 	if err != nil {
 		return nil, err
 	}

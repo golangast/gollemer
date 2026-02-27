@@ -68,7 +68,7 @@ func cosineSimilarity(vec1, vec2 []float64) float64 {
 	mag1 := 0.0
 	mag2 := 0.0
 
-	for i := 0; i < len(vec1); i++ {
+	for i := range vec1 {
 		dotProduct += vec1[i] * vec2[i]
 		mag1 += vec1[i] * vec1[i]
 		mag2 += vec2[i] * vec2[i]
@@ -216,8 +216,8 @@ func (e *BertEmbeddings) Forward(inputIDs, tokenTypeIDs, posTagIDs, nerTagIDs *t
 
 	// Create position IDs tensor for the current batch
 	posData := make([]float64, batchSize*seqLength)
-	for b := 0; b < batchSize; b++ {
-		for s := 0; s < seqLength; s++ {
+	for b := range batchSize {
+		for s := range seqLength {
 			posData[b*seqLength+s] = float64(s)
 		}
 	}
@@ -1045,7 +1045,7 @@ func (m *BertModel) Backward(grad *tensor.Tensor) error {
 	// Assuming the [CLS] token is always at index 0 of the sequence dimension
 	batchSize := clsTokenGrad.Shape[0]
 	hiddenSize := clsTokenGrad.Shape[2]
-	for b := 0; b < batchSize; b++ {
+	for b := range batchSize {
 		// Copy clsTokenGrad.Data[b*1*hiddenSize : (b+1)*1*hiddenSize]
 		// to encoderGrad.Data[b*m.encoderOutput.Shape[1]*hiddenSize : b*m.encoderOutput.Shape[1]*hiddenSize + hiddenSize]
 		copy(encoderGrad.Data[b*m.encoderOutput.Shape[1]*hiddenSize:b*m.encoderOutput.Shape[1]*hiddenSize+hiddenSize],

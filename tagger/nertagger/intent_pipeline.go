@@ -9,11 +9,11 @@ import (
 
 // IntentPipeline orchestrates the full intent processing workflow
 type IntentPipeline struct {
-	text              string
-	segmenter         *IntentSegmenter
-	verbCounter       *VerbCounter
-	postProcessor     *EntityPostProcessor
-	converter         *SegmentToTaskConverter
+	text               string
+	segmenter          *IntentSegmenter
+	verbCounter        *VerbCounter
+	postProcessor      *EntityPostProcessor
+	converter          *SegmentToTaskConverter
 	prepositionMatcher *PrepositionMatcher
 }
 
@@ -203,26 +203,26 @@ func HasMultipleActions(tokens []string) bool {
 }
 
 // SegmentedIntentAnalysis provides detailed breakdown of intent segmentation
-func SegmentedIntentAnalysis(text string) map[string]interface{} {
+func SegmentedIntentAnalysis(text string) map[string]any {
 	segmenter := NewIntentSegmenter(text)
 	segments := segmenter.Segment()
 
-	analysis := map[string]interface{}{
+	analysis := map[string]any{
 		"original_text": text,
 		"segment_count": len(segments),
-		"segments":      make([]map[string]interface{}, 0),
+		"segments":      make([]map[string]any, 0),
 	}
 
 	for i, seg := range segments {
-		segData := map[string]interface{}{
-			"index":       i,
-			"text":        seg.RawText,
-			"tokens":      seg.Tokens,
-			"actions":     seg.Actions,
-			"priority":    seg.Priority,
-			"depends_on":  seg.Dependencies,
+		segData := map[string]any{
+			"index":      i,
+			"text":       seg.RawText,
+			"tokens":     seg.Tokens,
+			"actions":    seg.Actions,
+			"priority":   seg.Priority,
+			"depends_on": seg.Dependencies,
 		}
-		analysis["segments"] = append(analysis["segments"].([]map[string]interface{}), segData)
+		analysis["segments"] = append(analysis["segments"].([]map[string]any), segData)
 	}
 
 	return analysis
@@ -237,7 +237,7 @@ func ValidateTaskDependencies(graph *TaskGraph) (bool, []string) {
 	for id, task := range graph.Tasks {
 		for _, depID := range task.DependsOn {
 			if _, ok := graph.Tasks[depID]; !ok {
-				errors = append(errors, 
+				errors = append(errors,
 					"Task "+string(rune(id))+" depends on non-existent task "+string(rune(depID)))
 			}
 		}

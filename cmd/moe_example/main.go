@@ -28,7 +28,7 @@ func main() {
 	}
 
 	// Create the MoE Layer
-	moeLayer, err := NewMoELayer(inputDim, numExperts, k, expertBuilder)
+	moeLayer, err := NewMoELayer(inputDim, outputDim,numExperts, k, expertBuilder)
 	if err != nil {
 		log.Fatalf("Failed to create MoE Layer: %v", err)
 	}
@@ -51,6 +51,9 @@ func main() {
 	fmt.Printf("Output Tensor Shape: %v\n", output.Shape)
 	fmt.Printf("Output Tensor Data (first 5): %v\n", output.Data[:min(5, len(output.Data))])
 
+	// Visualize expert utilization
+	moeLayer.VisualizeUtilization()
+
 	// Create a dummy gradient for backward pass
 	gradData := make([]float64, len(output.Data))
 	for i := range gradData {
@@ -60,7 +63,7 @@ func main() {
 
 	// Backward pass
 	fmt.Println("\nPerforming backward pass...")
-	_, err = moeLayer.Backward(gradTensor)
+	err = moeLayer.Backward(gradTensor)
 	if err != nil {
 		log.Fatalf("MoE Layer backward pass failed: %v", err)
 	}
@@ -80,11 +83,4 @@ func main() {
 	fmt.Printf("Input Tensor Grad (first 5): %v\n", inputTensor.Grad.Data[:min(5, len(inputTensor.Grad.Data))])
 
 	fmt.Println("MoE Layer example finished successfully.")
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }

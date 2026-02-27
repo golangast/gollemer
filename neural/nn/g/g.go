@@ -5,7 +5,10 @@ package g
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"maps"
+	"os"
+	"slices"
+
 	"math"
 	"math/rand/v2"
 	"sort"
@@ -38,9 +41,8 @@ func NewANN(vectorSize int, metric string) (*ANN, error) {
 }
 
 func (ann *ANN) AddWordVectors(vocabulary map[string][]float64) {
-	for word, vector := range vocabulary {
-		ann.Index[word] = vector // Directly assign to the map
-	}
+	// Directly assign to the map
+	maps.Copy(ann.Index, vocabulary)
 }
 
 func (ann *ANN) NearestNeighbors(sentence string, vector []float64, k int) ([]Neighbor, error) {
@@ -67,11 +69,8 @@ func (ann *ANN) NearestNeighbors(sentence string, vector []float64, k int) ([]Ne
 		var contains bool = false
 
 		if len(sentenceWords) > 0 {
-			for _, wordInSentence := range sentenceWords {
-				if wordInSentence == word {
-					contains = true
-					break
-				}
+			if slices.Contains(sentenceWords, word) {
+				contains = true
 			}
 
 			if contains {
@@ -159,7 +158,7 @@ func CosineSimilarity(v1, v2 []float64) float64 {
 	magV1 := 0.0
 	magV2 := 0.0
 
-	for i := 0; i < len(v1); i++ {
+	for i := range v1 {
 		dotProduct += v1[i] * v2[i]
 		magV1 += math.Pow(v1[i], 2)
 		magV2 += math.Pow(v2[i], 2)
@@ -241,7 +240,7 @@ type TrainingData struct {
 
 func LoadTrainingData(filepath string) ([]TrainingData, error) {
 	// Load data
-	fileContent, err := ioutil.ReadFile(filepath)
+	fileContent, err := os.ReadFile(filepath)
 	if err != nil {
 		return nil, err
 	}

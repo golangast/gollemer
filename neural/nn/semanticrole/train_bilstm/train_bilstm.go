@@ -71,7 +71,7 @@ func Train_bilstm() {
 	model.InitializeOutputLayer(hiddenSize)
 
 	// Training loop with SentenceRoleData
-	for epoch := 0; epoch < epochs; epoch++ { // start of epoch
+	for range epochs { // start of epoch
 
 		// Shuffle training data
 		rand.Shuffle(len(trainingData), func(i, j int) {
@@ -189,7 +189,7 @@ func TrainWithActiveLearning(iterations, batchSize int, samplingMethod string) {
 	fmt.Printf("Role Map: %v\n", roleMap)
 
 	// 5. Active learning loop
-	for iteration := 0; iteration < iterations; iteration++ {
+	for iteration := range iterations {
 		fmt.Printf("Active Learning Iteration %d\n", iteration+1)
 
 		// a. Train model on labeled data
@@ -241,7 +241,7 @@ func TrainWithActiveLearning(iterations, batchSize int, samplingMethod string) {
 // Helper function to train the model (similar to Train_bilstm's core logic)
 func trainModel(model *bilstm_model.BiLSTMModel, trainingData []semanticrole.SentenceRoleData, word2vecModel *word2vec.SimpleWord2Vec, roleMap map[string]int) {
 	// Training loop (similar to the original Train_bilstm, but adapted for the function signature)
-	for epoch := 0; epoch < epochs; epoch++ {
+	for epoch := range epochs {
 		fmt.Printf("  Epoch %d\n", epoch+1)
 		rand.Shuffle(len(trainingData), func(i, j int) {
 			trainingData[i], trainingData[j] = trainingData[j], trainingData[i]
@@ -375,7 +375,7 @@ func getTopIndices(scores []float64, topN int) []int {
 		return pairs[i].score > pairs[j].score
 	})
 	topIndices := make([]int, topN)
-	for i := 0; i < topN; i++ {
+	for i := range topN {
 		topIndices[i] = pairs[i].index
 	}
 	return topIndices

@@ -11,10 +11,12 @@ import (
 	"log"
 	"math"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -28,6 +30,7 @@ import (
 	neuralnn "github.com/golangast/gollemer/neural/nn"
 	mainvocab "github.com/golangast/gollemer/neural/nnu/vocab"
 	"github.com/golangast/gollemer/neural/nnu/word2vec"
+	"github.com/golangast/gollemer/neural/tensor"
 	"github.com/golangast/gollemer/tagger/nertagger"
 	"github.com/golangast/gollemer/tagger/postagger"
 	"github.com/golangast/gollemer/tagger/tag"
@@ -65,12 +68,7 @@ var paramTriggers = map[string]string{
 
 // contains is a helper function to check if a string is in a slice of strings.
 func contains(s []string, e string) bool {
-	for _, a := range s {
-		if a == e {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(s, e)
 }
 
 func findProjectRoot() (string, error) {
@@ -109,10 +107,10 @@ func findGoModInfo() (modulePath string, projectRoot string, err error) {
 			if readErr != nil {
 				return "", "", fmt.Errorf("failed to read go.mod file: %v", readErr)
 			}
-			lines := strings.Split(string(content), "\n")
-			for _, line := range lines {
-				if strings.HasPrefix(line, "module ") {
-					return strings.TrimSpace(strings.TrimPrefix(line, "module ")), dir, nil
+			lines := strings.SplitSeq(string(content), "\n")
+			for line := range lines {
+				if after, ok := strings.CutPrefix(line, "module "); ok {
+					return strings.TrimSpace(after), dir, nil
 				}
 			}
 			return "", "", fmt.Errorf("module path not found in go.mod")
@@ -127,6 +125,12 @@ func findGoModInfo() (modulePath string, projectRoot string, err error) {
 }
 
 func main() {
+	// Add this to start the pprof server
+	go func() {
+		log.Println("Starting pprof server on :6060")
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
+
 	// Initialize absoluteLastDirConfigPath based on the project root
 	projectRoot, err := findProjectRoot()
 	if err != nil {
@@ -184,7 +188,7 @@ func buildWasm(wasmDir string) {
 			filepath.Join(gorootPath, "misc", "wasm", "wasm_exec.js"),
 			filepath.Join(gorootPath, "lib", "wasm", "wasm_exec.js"),
 		}
-		
+
 		var src string
 		for _, s := range srcs {
 			if _, err := os.Stat(s); err == nil {
@@ -284,10 +288,10 @@ func findName(taggedData tag.Tag, kb *KnowledgeBase) string {
 			return taggedData.Tokens[i]
 		}
 	}
-	
+
 	// Final heuristic fallback: first non-keyword after a known Object Type token
 	objectTypeKeywords := map[string]bool{
-		"handler": true, "webserver": true, "page": true, "file": true, 
+		"handler": true, "webserver": true, "page": true, "file": true,
 		"folder": true, "database": true, "structure": true, "component": true,
 	}
 	for i, token := range taggedData.Tokens {
@@ -375,13 +379,6 @@ func levenshteinDistance(s1, s2 string) int {
 		}
 	}
 	return column[len1]
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 func createTableWithFields(dbFileName, tableName string, fields map[string]string) error {
@@ -496,15 +493,15 @@ func registerHandlerURL(handlerName, handlerURL, mainGoPath string) (string, err
 		for _, line := range lines {
 			if strings.Contains(line, placeholder) {
 				// preserve indentation
-				indent := ""
+				var indent strings.Builder
 				for _, char := range line {
 					if char == ' ' || char == '\t' {
-						indent += string(char)
+						indent.WriteString(string(char))
 					} else {
 						break
 					}
 				}
-				updatedLines = append(updatedLines, fmt.Sprintf("%shttp.HandleFunc(\"%s\", %sHandler)", indent, handlerURL, handlerName))
+				updatedLines = append(updatedLines, fmt.Sprintf("%shttp.HandleFunc(\"%s\", %sHandler)", indent.String(), handlerURL, handlerName))
 				updatedLines = append(updatedLines, line) // Keep the placeholder for future registrations
 				found = true
 			} else {
@@ -576,10 +573,108 @@ func goImports(filename string) {
 
 // GollemerMoEClient implements the MoEClient interface using the existing NLP pipeline.
 type GollemerMoEClient struct {
-	KB *KnowledgeBase
+	KB    *KnowledgeBase
+	Model *moe.IntentMoE
+	W2V   *word2vec.SimpleWord2Vec
 }
 
 func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
+	if c.Model != nil && c.W2V != nil {
+		lowerInput := strings.ToLower(input)
+		words := strings.Fields(lowerInput)
+
+		// 1. Tokenize Input
+		var tokenIDs []int
+		for _, w := range words {
+			if id, ok := c.W2V.Vocabulary[w]; ok {
+				tokenIDs = append(tokenIDs, id)
+			} else {
+				// Use UNK or skip? If UNK is present, use it.
+				// For now, let's assume we skip unknown words to match simple processing
+				// or use 0 if that's UNK.
+				// Let's check if "UNK" is in vocab
+				if unkID, ok := c.W2V.Vocabulary["UNK"]; ok {
+					tokenIDs = append(tokenIDs, unkID)
+				}
+			}
+		}
+
+		if len(tokenIDs) == 0 {
+			// No known tokens, fallback
+		} else {
+			// 2. Create Input Tensor
+			inputTensor := tensor.NewTensor([]int{1, len(tokenIDs)}, make([]float64, len(tokenIDs)), false)
+			for i, id := range tokenIDs {
+				inputTensor.Data[i] = float64(id)
+			}
+
+			// 3. Get Embeddings
+			embeddings, err := c.Model.Embedding.Forward(inputTensor)
+			if err != nil {
+				log.Printf("Embedding forward failed: %v", err)
+			} else {
+				// 4. Run Hybrid Encoder (GNN)
+				contextVector, err := c.Model.Encoder.Forward(embeddings)
+				if err != nil {
+					log.Printf("Hybrid Encoder forward failed: %v", err)
+				} else {
+					// 5. Decode Intent Statement
+					// We need POS tagging for entity replacement in decoding
+					posTags := postagger.TagTokens(words)
+					taggedData := nertagger.Nertagger(tag.Tag{Tokens: words, PosTag: posTags})
+
+					// Assume "maxLen" for intent is small, e.g., 5-10 tokens
+					// Assuming SOS=1, EOS=2 (need to verify standard tokens but let's guess standard)
+					// But we should check sentence vocab if available.
+					// IntentMoE stores SentenceVocab. If nil, we can't decode easily.
+					// NewHybridIntentMoE sets SentenceVocab to nil initially.
+					// If it's nil, we can't map IDs back to words.
+					// So let's check if c.Model.SentenceVocab is set.
+					if c.Model.SentenceVocab != nil {
+						// Decode
+						outputIDs, err := c.Model.GreedySearchDecode(
+							contextVector,
+							10, // maxLen
+							c.Model.SentenceVocab.BosID,
+							c.Model.SentenceVocab.EosID,
+							1.0, // repetitionPenalty
+							1,   // topK
+							taggedData,
+						)
+
+						if err != nil {
+							log.Printf("Greedy decode failed: %v", err)
+						} else {
+							// Convert IDs to String
+							var decodedWords []string
+							for _, id := range outputIDs {
+								w := c.Model.SentenceVocab.GetWord(id)
+								if w != "EOS" && w != "PAD" && w != "BOS" {
+									decodedWords = append(decodedWords, w)
+								}
+							}
+							predictedSentence := strings.Join(decodedWords, " ")
+							// Check if predicted sentence is a known intent
+							// The model might output "create webserver named foo"
+							// We need to extract the intent part.
+							// Usually the first words are the intent command + object.
+							if strings.HasPrefix(predictedSentence, "create webserver") {
+								return "create_webserver", 0.99
+							}
+							if strings.HasPrefix(predictedSentence, "create handler") {
+								return "create_handler", 0.99
+							}
+							// ... (add other known intents)
+							// If model works well, we trust it.
+							// For now, let's just log it and fall through to heuristic if not matched.
+							log.Printf("Hybrid Model Prediction: %s", predictedSentence)
+						}
+					}
+				}
+			}
+		}
+	}
+
 	lowerInput := strings.ToLower(input)
 	words := strings.Fields(lowerInput)
 
@@ -595,16 +690,16 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 
 	if isCreating {
 		targets := map[string]string{
-			"webserver": "create_webserver",
-			"site":      "create_webserver",
-			"project":   "create_webserver",
-			"app":       "create_webserver",
-			"page":      "create_page",
-			"view":      "create_page",
-			"homepage":  "create_page",
-			"handler":   "create_handler",
-			"endpoint":  "create_handler",
-			"route":     "create_handler",
+			"webserver":      "create_webserver",
+			"site":           "create_webserver",
+			"project":        "create_webserver",
+			"app":            "create_webserver",
+			"page":           "create_page",
+			"view":           "create_page",
+			"homepage":       "create_page",
+			"handler":        "create_handler",
+			"endpoint":       "create_handler",
+			"route":          "create_handler",
 			"database":       "create_database",
 			"db":             "create_database",
 			"file":           "create_file",
@@ -618,11 +713,8 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 		// Proximity search: find which target is closest to the creation verb
 		verbIdx := -1
 		for i, w := range words {
-			for _, v := range createVerbs {
-				if w == v {
-					verbIdx = i
-					break
-				}
+			if slices.Contains(createVerbs, w) {
+				verbIdx = i
 			}
 			if verbIdx != -1 {
 				break
@@ -642,7 +734,7 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 					return intent, 0.9
 				}
 			}
-			
+
 			// Look behind if ahead failed (e.g. "myapp site initialize")
 			for i := verbIdx - 1; i >= 0; i-- {
 				w := words[i]
@@ -696,12 +788,12 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 	return "", 0.0
 }
 
-func (c *GollemerMoEClient) ExtractEntities(input string, intent string) map[string]interface{} {
+func (c *GollemerMoEClient) ExtractEntities(input string, intent string) map[string]any {
 	words := strings.Fields(input)
 	posTags := postagger.TagTokens(words)
 	taggedData := nertagger.Nertagger(tag.Tag{Tokens: words, PosTag: posTags})
 
-	entities := make(map[string]interface{})
+	entities := make(map[string]any)
 
 	// Extract Name using existing findName logic
 	name := findName(taggedData, c.KB)
@@ -892,8 +984,8 @@ type TutorialState struct {
 func printIntro() {
 	fmt.Println("--- Welcome to Gollemer! ʕ◔ϖ◔ʔ ---")
 	fmt.Println("It looks like this is your first time running Gollemer.")
-	fmt.Println("\n💡 TIP: Type 'tutorial' to start an interactive guide!\n")
-	fmt.Println("💡 TIP: Type 'menu' for an easy-to-use options menu!\n")
+	fmt.Println("\n💡 TIP: Type 'tutorial' to start an interactive guide!")
+	fmt.Println("💡 TIP: Type 'menu' for an easy-to-use options menu!")
 	fmt.Println("Here is a quick guide to get you started:")
 	fmt.Println("")
 	fmt.Println("1. Commands:")
@@ -966,8 +1058,83 @@ func runLLM() {
 		log.Printf("DEBUG: No last directory loaded. Current Working Directory: %s", currentAbsDir)
 	}
 
+	// Try to load Word2Vec model to inform the MoE model
+	var w2vModel *word2vec.SimpleWord2Vec
+	if kb.ModelConfig.Word2VecPath != "" {
+		loadedW2V, err := word2vec.LoadModel(kb.ModelConfig.Word2VecPath)
+		if err == nil {
+			w2vModel = loadedW2V
+			log.Printf("Loaded Word2Vec model from %s", kb.ModelConfig.Word2VecPath)
+		} else {
+			log.Printf("Could not load Word2Vec model (using defaults): %v", err)
+			// Create a default/dummy model so we can still run the architecture
+			w2vModel = &word2vec.SimpleWord2Vec{
+				Vocabulary:  make(map[string]int),
+				VocabSize:   0,
+				VectorSize:  64,
+				WordVectors: make(map[int][]float64),
+			}
+			// Add basic tokens
+			basics := []string{"create", "webserver", "UNK", "<pad>", "<s>", "</s>"}
+			for i, w := range basics {
+				w2vModel.Vocabulary[w] = i
+				w2vModel.WordVectors[i] = make([]float64, 64) // Zero vectors
+			}
+			w2vModel.VocabSize = len(basics)
+			log.Println("Initialized default dummy Word2Vec model")
+		}
+	}
+
+	// Initialize Hybrid Intent MoE Model
+	vocabSize := 2000
+	embeddingDim := 64
+	if w2vModel != nil {
+		vocabSize = w2vModel.VocabSize
+		embeddingDim = w2vModel.VectorSize
+	}
+
+	// Create the Hybrid Intent MoE model using the new function
+	intentModel, err := moe.NewHybridIntentMoE(
+		vocabSize,
+		embeddingDim,
+		4,    // numExperts
+		100,  // parentVocabSize (placeholder)
+		100,  // childVocabSize (placeholder)
+		1000, // sentenceVocabSize (placeholder for decoder output)
+		4,    // maxAttentionHeads
+		w2vModel,
+	)
+	if err != nil {
+		log.Printf("Failed to initialize Hybrid Intent MoE model: %v", err)
+	} else {
+		log.Println("Initialized Hybrid Intent MoE model with HybridLLMGNNEncoder")
+
+		// Setup Sentence Vocab for decoding if it's nil
+		if intentModel.SentenceVocab == nil {
+			// Create a minimal vocab for output decoding
+			v := mainvocab.NewVocabulary()
+			v.AddToken("create")
+			v.AddToken("webserver")
+			v.AddToken("handler")
+			v.AddToken("page")
+			v.AddToken("database")
+			v.AddToken("<s>")
+			v.AddToken("</s>")
+			v.BosID = v.GetTokenID("<s>")
+			v.EosID = v.GetTokenID("</s>")
+
+			// Map W2V tokens if available
+			if w2vModel != nil {
+				for w := range w2vModel.Vocabulary {
+					v.AddToken(w)
+				}
+			}
+			intentModel.SentenceVocab = v
+		}
+	}
+
 	// Initialize Intent Resolver
-	resolver := NewHybridIntentResolver(&GollemerMoEClient{KB: kb})
+	resolver := NewHybridIntentResolver(&GollemerMoEClient{KB: kb, Model: intentModel, W2V: w2vModel})
 
 	var commandHistory []string
 	var sessionState ConversationState
@@ -1266,11 +1433,8 @@ func runLLM() {
 									})
 
 									fmt.Printf("\n--- Neighbors for '%s' ---\n", targetWord)
-									limit := 10
-									if len(results) < limit {
-										limit = len(results)
-									}
-									for i := 0; i < limit; i++ {
+									limit := min(len(results), 10)
+									for i := range limit {
 										fmt.Printf("  %d. %s (%.4f)\n", i+1, results[i].Word, results[i].Score)
 									}
 									fmt.Println("---------------------------")
@@ -1483,7 +1647,6 @@ func runLLM() {
 				tutorialState.Step = 1
 				inMenuMode = false
 				colors.AnimatedOutput("green", "black", "--- Tutorial Mode Started ---\nWelcome to the Gollemer tutorial! I will guide you through the basics.\nStep 1: Let's start by creating a project folder.\nTry typing: 'create folder myproject'", 1*time.Second)
-				fmt.Println("\n")
 				continue
 			case "7":
 				query = "help"
@@ -1556,7 +1719,6 @@ func runLLM() {
 			tutorialState.Active = true
 			tutorialState.Step = 1
 			colors.AnimatedOutput("green", "black", "--- Tutorial Mode Started ---\nWelcome to the Gollemer tutorial! I will guide you through the basics.\nStep 1: Let's start by creating a project folder.\nTry typing: 'create folder myproject'", 1*time.Second)
-			fmt.Println("\n")
 			continue
 		} else if query == "show learning path" {
 			if kb.LearningPath != "" {
@@ -1669,7 +1831,7 @@ func runLLM() {
 		if isSessionFilled {
 			intentData.Intent = sessionState.ActiveIntent
 			// Convert map[string]string to map[string]interface{}
-			params := make(map[string]interface{})
+			params := make(map[string]any)
 			for k, v := range sessionState.Parameters {
 				params[k] = v
 			}
@@ -1902,13 +2064,7 @@ func runLLM() {
 			command = "list"
 		}
 
-		hasDirectoryToken = false
-		for _, t := range taggedData.Tokens {
-			if t == "directory" {
-				hasDirectoryToken = true
-				break
-			}
-		}
+		hasDirectoryToken = slices.Contains(taggedData.Tokens, "directory")
 		// New logic to find the target directory more robustly
 		if command == "go" {
 			// Special handling for "go to webserver <name>"
@@ -2018,8 +2174,8 @@ func runLLM() {
 					var handlers []string
 					for _, line := range lines {
 						trimmed := strings.TrimSpace(line)
-						if strings.HasPrefix(trimmed, "http.HandleFunc(") {
-							args := strings.TrimPrefix(trimmed, "http.HandleFunc(")
+						if after, ok := strings.CutPrefix(trimmed, "http.HandleFunc("); ok {
+							args := after
 							args = strings.TrimSuffix(args, ")")
 							parts := strings.SplitN(args, ",", 2)
 							if len(parts) == 2 {
@@ -2161,7 +2317,7 @@ func runLLM() {
 		case "help":
 			var sb strings.Builder
 			sb.WriteString("--- ʕ◔ϖ◔ʔ Gollemer Help ---\n\n")
-			
+
 			sb.WriteString("Categorized Commands:\n")
 			sb.WriteString("  [📁 Navigation]  go <dir>, list, tree, pwd\n")
 			sb.WriteString("  [🛠️  Files]       create file <name>, create folder <name>, delete <name>, move <file> to <dir>, cat, grep\n")
@@ -2434,7 +2590,7 @@ func ` + strings.Title(handlerName) + `Handler(w http.ResponseWriter, r *http.Re
 						// Logic: If it exists, check if it's already a handler or if we should use a different name
 						filePath = handlerName + "_handler.go"
 					}
-					
+
 					err = os.WriteFile(filePath, []byte(handlerContent), 0644)
 					if err != nil {
 						predictedSentence = fmt.Sprintf("I couldn't write to the handler file %s: %v", filePath, err)
@@ -2445,7 +2601,7 @@ func ` + strings.Title(handlerName) + `Handler(w http.ResponseWriter, r *http.Re
 					if tree, err := generateDirectoryTree(".", "", 0, 2, filePath); err == nil {
 						predictedSentence += "\n\n" + tree
 					}
-					
+
 					// Always attempt to register the handler in the current project's main.go
 					currentProjectMainGo := filepath.Join(".", "main.go")
 					registrationMsg, err := registerHandlerURL(strings.Title(handlerName), handlerURL, currentProjectMainGo)
@@ -2591,7 +2747,7 @@ func (c *%s) Render() js.Value {
 				}
 				// Sanitize pageName for Go (TitleCase and no spaces)
 				cleanName := ""
-				for _, part := range strings.Fields(pageName) {
+				for part := range strings.FieldsSeq(pageName) {
 					cleanName += strings.Title(strings.ToLower(part))
 				}
 				snakeName := strings.ReplaceAll(strings.ToLower(pageName), " ", "_")
@@ -2684,10 +2840,10 @@ func (c *%s) Render() js.Value {
 				for {
 					if _, err := os.Stat(filepath.Join(searchDir, "go.mod")); err == nil {
 						if modContent, err := os.ReadFile(filepath.Join(searchDir, "go.mod")); err == nil {
-							lines := strings.Split(string(modContent), "\n")
-							for _, line := range lines {
-								if strings.HasPrefix(line, "module ") {
-									moduleRoot := strings.TrimSpace(strings.TrimPrefix(line, "module "))
+							lines := strings.SplitSeq(string(modContent), "\n")
+							for line := range lines {
+								if after, ok := strings.CutPrefix(line, "module "); ok {
+									moduleRoot := strings.TrimSpace(after)
 									rel, _ := filepath.Rel(searchDir, wasmDir)
 									materialImport = filepath.Join(moduleRoot, rel, "ui", "material")
 									break
@@ -2729,8 +2885,8 @@ func Render%s() js.Value {
 
 	// Add a button to use the material package and avoid 'unused import' error
 	btn := material.NewButton("Action", "primary", func() {
-		js.Global().Call("alert", "Action triggered on %s page!")
 	})
+
 	container.Call("appendChild", btn.Render())
 
 	return container
@@ -3008,7 +3164,7 @@ func main() {
 				} else {
 					// capitalize for Go exported struct
 					goStructName := ""
-					for _, part := range strings.Split(structName, "_") {
+					for part := range strings.SplitSeq(structName, "_") {
 						if part != "" {
 							goStructName += strings.ToUpper(part[:1]) + part[1:]
 						}
@@ -3037,10 +3193,10 @@ func main() {
 								if i+1 < len(queryParts) {
 									fieldName := queryParts[i]
 									fieldType := queryParts[i+1]
-									
+
 									// capitalize field name
 									goFieldName := strings.ToUpper(fieldName[:1]) + fieldName[1:]
-									
+
 									structBody.WriteString(fmt.Sprintf("\t%s %s `json:\"%s\"` \n", goFieldName, fieldType, fieldName))
 									i += 2
 								} else {
@@ -3478,8 +3634,8 @@ func main() {
 					}
 					// Add singular variations if plural
 					var singular string
-					if strings.HasSuffix(lowerName, "s") {
-						singular = strings.TrimSuffix(lowerName, "s")
+					if before, ok := strings.CutSuffix(lowerName, "s"); ok {
+						singular = before
 						candidates = append(candidates,
 							filepath.Join(projectRoot, singular, singular+".go"),
 							filepath.Join(projectRoot, "cmd", singular, singular+".go"),
@@ -3569,8 +3725,8 @@ func main() {
 											parts := strings.Fields(line)
 											if len(parts) >= 2 {
 												namePart := parts[1]
-												if idx := strings.Index(namePart, "("); idx != -1 {
-													handlerName = namePart[:idx]
+												if before, _, ok := strings.Cut(namePart, "("); ok {
+													handlerName = before
 												}
 											}
 										}
@@ -3787,10 +3943,10 @@ func FormHandler(w http.ResponseWriter, r *http.Request) {
 						if _, err := os.Stat(filepath.Join(searchDir, "go.mod")); err == nil {
 							moduleRoot = searchDir
 							modContent, _ := os.ReadFile(filepath.Join(searchDir, "go.mod"))
-							lines := strings.Split(string(modContent), "\n")
-							for _, line := range lines {
-								if strings.HasPrefix(line, "module ") {
-									moduleName = strings.TrimSpace(strings.TrimPrefix(line, "module "))
+							lines := strings.SplitSeq(string(modContent), "\n")
+							for line := range lines {
+								if after, ok := strings.CutPrefix(line, "module "); ok {
+									moduleName = strings.TrimSpace(after)
 									break
 								}
 							}
@@ -3961,40 +4117,40 @@ func FormHandler(w http.ResponseWriter, r *http.Request) {
 					// Path to the jim webserver's main package
 					// (Removed redundant declaration as it's now handled by the intent guessing above)
 
-						// Prioritized Search: 
-						// 1. Current Working Directory (if name matches)
-						// 2. Project root directory with name (e.g. ./jim)
-						// 3. cmd/ subdirectory (e.g. ./cmd/jim)
-						cwd, _ := os.Getwd()
-						candidates := []string{}
-						
-						if strings.EqualFold(filepath.Base(cwd), webserverName) {
-							candidates = append(candidates, cwd)
-						}
-						
-						candidates = append(candidates, []string{
-							filepath.Join(projectRoot, webserverName),
-							filepath.Join(projectRoot, "cmd", webserverName),
-							filepath.Join(projectRoot, webserverName, "cmd", webserverName),
-							filepath.Join(projectRoot, webserverName, "cmd"),
-						}...)
+					// Prioritized Search:
+					// 1. Current Working Directory (if name matches)
+					// 2. Project root directory with name (e.g. ./jim)
+					// 3. cmd/ subdirectory (e.g. ./cmd/jim)
+					cwd, _ := os.Getwd()
+					candidates := []string{}
 
-						for _, p := range candidates {
-							if _, err := os.Stat(filepath.Join(p, "main.go")); err == nil {
-								// If we find one with a wasm or template folder, it's a strong candidate
-								if _, errW := os.Stat(filepath.Join(p, "wasm")); errW == nil {
-									jimSourcePath = p
-									break
-								}
-								if _, errT := os.Stat(filepath.Join(p, "template")); errT == nil {
-									jimSourcePath = p
-									break
-								}
-								if jimSourcePath == "" {
-									jimSourcePath = p
-								}
+					if strings.EqualFold(filepath.Base(cwd), webserverName) {
+						candidates = append(candidates, cwd)
+					}
+
+					candidates = append(candidates, []string{
+						filepath.Join(projectRoot, webserverName),
+						filepath.Join(projectRoot, "cmd", webserverName),
+						filepath.Join(projectRoot, webserverName, "cmd", webserverName),
+						filepath.Join(projectRoot, webserverName, "cmd"),
+					}...)
+
+					for _, p := range candidates {
+						if _, err := os.Stat(filepath.Join(p, "main.go")); err == nil {
+							// If we find one with a wasm or template folder, it's a strong candidate
+							if _, errW := os.Stat(filepath.Join(p, "wasm")); errW == nil {
+								jimSourcePath = p
+								break
+							}
+							if _, errT := os.Stat(filepath.Join(p, "template")); errT == nil {
+								jimSourcePath = p
+								break
+							}
+							if jimSourcePath == "" {
+								jimSourcePath = p
 							}
 						}
+					}
 
 					log.Printf("DEBUG: Jim Webserver Source Path: %s", jimSourcePath)
 
@@ -4108,6 +4264,33 @@ func FormHandler(w http.ResponseWriter, r *http.Request) {
 					}
 				endOfRunWebserver: // Label for goto
 				}
+			} else if strings.Contains(objectType, "moe") || strings.Contains(strings.ToLower(query), "train") {
+				cmdPath := ""
+				if strings.Contains(strings.ToLower(query), "moe") {
+					cmdPath = "cmd/train_moe"
+				} else if strings.Contains(strings.ToLower(query), "word2vec") {
+					cmdPath = "cmd/train_word2vec"
+				} else if strings.Contains(strings.ToLower(query), "intent") {
+					cmdPath = "cmd/train_intent_classifier"
+				} else if strings.Contains(strings.ToLower(query), "ner") {
+					cmdPath = "cmd/train_ner"
+				}
+
+				if cmdPath != "" {
+					fmt.Printf("Running %s...\n", cmdPath)
+					c := exec.Command("go", "run", "./"+cmdPath)
+					c.Dir = projectRoot
+					c.Stdout = os.Stdout
+					c.Stderr = os.Stderr
+					if err := c.Run(); err != nil {
+						predictedSentence = fmt.Sprintf("Error running training: %v", err)
+					} else {
+						predictedSentence = "Training completed."
+					}
+				} else {
+					predictedSentence = "I'm not sure which model you want to train. Try 'run moe training' or 'run word2vec training'."
+					handled = false
+				}
 			} else {
 				handled = false
 			}
@@ -4162,8 +4345,8 @@ func FormHandler(w http.ResponseWriter, r *http.Request) {
 											parts := strings.Fields(line)
 											if len(parts) >= 2 {
 												namePart := parts[1]
-												if idx := strings.Index(namePart, "("); idx != -1 {
-													handlerName = namePart[:idx]
+												if before, _, ok := strings.Cut(namePart, "("); ok {
+													handlerName = before
 												}
 											}
 										}
@@ -4800,7 +4983,6 @@ func FormHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		colors.AnimatedOutput(fgColor, bgColor, predictedSentence, 1*time.Second)
-		fmt.Println("\n")
 	}
 }
 
@@ -4812,8 +4994,9 @@ func generateDataStructurePackageContent(structName, packageName, dirName string
 	lowercaseName := strings.ToLower(structName)
 
 	// Struct Definition
-	structDef := fmt.Sprintf("type %s struct {\n", structName)
-	structDef += "\tID int `json:\"id\"`\n"
+	var structDef strings.Builder
+	structDef.WriteString(fmt.Sprintf("type %s struct {\n", structName))
+	structDef.WriteString("\tID int `json:\"id\"`\n")
 
 	sortedFieldNames := make([]string, 0, len(fields))
 	for k := range fields {
@@ -4822,9 +5005,9 @@ func generateDataStructurePackageContent(structName, packageName, dirName string
 	sort.Strings(sortedFieldNames)
 
 	for _, fieldName := range sortedFieldNames {
-		structDef += fmt.Sprintf("\t%s %s `json:\"%s\"`\n", strings.Title(fieldName), fields[fieldName], fieldName)
+		structDef.WriteString(fmt.Sprintf("\t%s %s `json:\"%s\"`\n", strings.Title(fieldName), fields[fieldName], fieldName))
 	}
-	structDef += "}\n\n"
+	structDef.WriteString("}\n\n")
 
 	// Show Handler construction
 	selectColumns := []string{"id"}
@@ -4962,7 +5145,7 @@ import (
 %s
 %s
 %s
-`, packageName, structDef, showHandlerContent, updateHandlerContent, deleteHandlerContent)
+`, packageName, structDef.String(), showHandlerContent, updateHandlerContent, deleteHandlerContent)
 
 	return packageFileContent
 }
@@ -5023,10 +5206,10 @@ func NewKnowledgeBase() *KnowledgeBase {
 		},
 		FirstRun: true,
 		ModelConfig: ModelConfig{
-			Word2VecPath:      "gob_models/word2vec.model",
+			Word2VecPath:      "gob_models/word2vec_model.gob",
 			MoEPath:           "gob_models/moe_classification_model.gob",
 			QueryVocabPath:    "gob_models/query_vocabulary.gob",
-			SemanticVocabPath: "gob_models/semantic_output_vocabulary.gob",
+			SemanticVocabPath: "gob_models/seq2seq_output_vocab.gob",
 			NERPath:           "gob_models/ner_model.gob",
 		},
 	}
@@ -5146,7 +5329,7 @@ func cosineSimilarity(a, b []float64) float64 {
 		return 0
 	}
 	var dot, magA, magB float64
-	for i := 0; i < len(a); i++ {
+	for i := range a {
 		dot += a[i] * b[i]
 		magA += a[i] * a[i]
 		magB += b[i] * b[i]
@@ -5201,13 +5384,13 @@ func generateWordVizHTML(words []string, vectors [][]float64) string {
 </html>`, string(wordsJSON), string(vectorsJSON))
 }
 
-func inspectStruct(v interface{}, indent string) {
+func inspectStruct(v any, indent string) {
 	val := reflect.ValueOf(v)
 	if !val.IsValid() {
 		fmt.Println(indent + "<nil>")
 		return
 	}
-	if val.Kind() == reflect.Ptr || val.Kind() == reflect.Interface {
+	if val.Kind() == reflect.Pointer || val.Kind() == reflect.Interface {
 		if val.IsNil() {
 			fmt.Println(indent + "<nil>")
 			return
@@ -5233,13 +5416,10 @@ func inspectStruct(v interface{}, indent string) {
 		if field.Kind() == reflect.Slice {
 			fmt.Printf("Slice with %d elements\n", field.Len())
 			if field.Len() > 0 && field.Type().Elem().Kind() == reflect.Float64 {
-				count := 5
-				if field.Len() < 5 {
-					count = field.Len()
-				}
+				count := min(field.Len(), 5)
 				fmt.Printf("%s  Sample: %v...\n", indent, field.Slice(0, count).Interface())
 			}
-		} else if field.Kind() == reflect.Struct || (field.Kind() == reflect.Ptr && field.Elem().Kind() == reflect.Struct) {
+		} else if field.Kind() == reflect.Struct || (field.Kind() == reflect.Pointer && field.Elem().Kind() == reflect.Struct) {
 			fmt.Println("")
 			if len(indent) < 10 {
 				inspectStruct(field.Interface(), indent+"  ")
@@ -5252,24 +5432,24 @@ func inspectStruct(v interface{}, indent string) {
 	}
 }
 
-func findAndVisualizeAttention(v interface{}) {
+func findAndVisualizeAttention(v any) {
 	val := reflect.ValueOf(v)
 	if !val.IsValid() {
 		return
 	}
-	if val.Kind() == reflect.Ptr || val.Kind() == reflect.Interface {
+	if val.Kind() == reflect.Pointer || val.Kind() == reflect.Interface {
 		if val.IsNil() {
 			return
 		}
 		val = val.Elem()
 	}
 
-	if val.Type() == reflect.TypeOf(neuralnn.MultiHeadAttention{}) {
+	if val.Type() == reflect.TypeFor[neuralnn.MultiHeadAttention]() {
 		mha := val.Interface().(neuralnn.MultiHeadAttention)
 		fmt.Printf("\nFound MultiHeadAttention Layer:\n")
 		fmt.Printf("  Heads: %d, Model Dim: %d\n", mha.NumHeads, mha.DimModel)
-		if mha.Wq != nil {
-			fmt.Printf("  Query Weights: %v\n", mha.Wq.Shape)
+		if mha.QueryLinear != nil {
+			fmt.Printf("  Query Weights Shape: %v\n", mha.QueryLinear.Weights.Shape)
 		}
 		f := val.FieldByName("attentionWeights")
 		if f.IsValid() && !f.IsNil() {
@@ -5280,7 +5460,7 @@ func findAndVisualizeAttention(v interface{}) {
 		return
 	}
 
-	if val.Type() == reflect.TypeOf(neuralnn.MultiHeadCrossAttention{}) {
+	if val.Type() == reflect.TypeFor[neuralnn.MultiHeadCrossAttention]() {
 		mhca := val.Interface().(neuralnn.MultiHeadCrossAttention)
 		fmt.Printf("\nFound MultiHeadCrossAttention Layer:\n")
 		fmt.Printf("  Q Heads: %d, KV Heads: %d, Model Dim: %d\n", mhca.NumQHeads, mhca.NumKVHeads, mhca.DimModel)
@@ -5294,8 +5474,7 @@ func findAndVisualizeAttention(v interface{}) {
 	}
 
 	if val.Kind() == reflect.Struct {
-		for i := 0; i < val.NumField(); i++ {
-			field := val.Field(i)
+		for _, field := range val.Fields() {
 			// Only traverse exported fields to avoid panic
 			if field.CanInterface() {
 				findAndVisualizeAttention(field.Interface())
@@ -5314,7 +5493,7 @@ func resolveIntent(r *bufio.Reader, intent Intent, kb *KnowledgeBase) Intent {
 	var candidate string
 
 	consumed := make(map[int]bool)
-	for i := 0; i < len(parts); i++ {
+	for i := range parts {
 		if _, isTrigger := paramTriggers[strings.ToLower(parts[i])]; isTrigger {
 			consumed[i] = true
 			if i+1 < len(parts) {
@@ -5350,7 +5529,7 @@ func resolveIntent(r *bufio.Reader, intent Intent, kb *KnowledgeBase) Intent {
 			kb.KnownObjects[candidate] = true
 			fmt.Printf("   [LEARNING] Knowledge updated: '%s' is now a known object type.\n", candidate)
 			kb.Save()
-			
+
 			// If we haven't identified a command yet, assume "create"
 			if intent.Command == "" {
 				intent.Command = "create"

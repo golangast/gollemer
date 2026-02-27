@@ -82,8 +82,8 @@ func main() {
 	}
 
 	for _, example := range *trainingData {
-		words := strings.Fields(strings.ToLower(example.Query))
-		for _, word := range words {
+		words := strings.FieldsSeq(strings.ToLower(example.Query))
+		for word := range words {
 			queryVocab.AddToken(word)
 		}
 		parentIntentVocab.AddToken(example.ParentIntent)
@@ -128,16 +128,13 @@ func main() {
 func TrainIntentModel(model *intent.SimpleIntentClassifier, data *IntentTrainingData, queryVocab, parentIntentVocab, childIntentVocab *mainvocab.Vocabulary, epochs int, learningRate float64, batchSize int, maxSeqLength int) {
 	optimizer := NewOptimizer(model.Parameters(), learningRate, 5.0)
 
-	for epoch := 0; epoch < epochs; epoch++ {
+	for epoch := range epochs {
 		log.Printf("Epoch %d/%d", epoch+1, epochs)
 		totalLoss := 0.0
 		numBatches := 0
 
 		for i := 0; i < len(*data); i += batchSize {
-			end := i + batchSize
-			if end > len(*data) {
-				end = len(*data)
-			}
+			end := min(i+batchSize, len(*data))
 			batch := (*data)[i:end]
 
 			loss, err := trainIntentModelBatch(model, optimizer, batch, queryVocab, parentIntentVocab, childIntentVocab, maxSeqLength)

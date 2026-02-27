@@ -216,28 +216,30 @@ func (a *Agent) ProcessGoal(userGoal string) error {
 func (a *Agent) GetConversationSummary(limit int) string {
 	messages, _ := a.Memory.GetConversationHistory(limit)
 
-	summary := "Recent Conversation:\n"
+	var summary strings.Builder
+	summary.WriteString("Recent Conversation:\n")
 	for _, msg := range messages {
-		summary += fmt.Sprintf("[%s] %s\n", msg.Role, msg.Content)
+		summary.WriteString(fmt.Sprintf("[%s] %s\n", msg.Role, msg.Content))
 	}
 
-	return summary
+	return summary.String()
 }
 
 // GetActionSummary returns recent action history
 func (a *Agent) GetActionSummary(limit int) string {
 	actions, _ := a.Memory.GetActionHistory(ActionFilters{Limit: limit})
 
-	summary := "Recent Actions:\n"
+	var summary strings.Builder
+	summary.WriteString("Recent Actions:\n")
 	for _, action := range actions {
 		status := "✓"
 		if !action.Success {
 			status = "✗"
 		}
-		summary += fmt.Sprintf("%s [%s] %s\n", status, action.Type, action.Timestamp.Format("15:04:05"))
+		summary.WriteString(fmt.Sprintf("%s [%s] %s\n", status, action.Type, action.Timestamp.Format("15:04:05")))
 	}
 
-	return summary
+	return summary.String()
 }
 
 // ===== Goal-Driven Development Methods =====

@@ -53,22 +53,21 @@ func (ln *LayerNorm) Forward(input *Tensor) (*Tensor, error) {
 	batchSize := input.Shape[0]
 	ln.input = input
 
-	// Calculate mean and variance for each sample
+	// Calculate mean and variance for each sample using SIMD
 	mean := NewTensor([]int{batchSize}, make([]float64, batchSize), false)
 	variance := NewTensor([]int{batchSize}, make([]float64, batchSize), false)
 
-	for i := 0; i < batchSize; i++ {
-		// Calculate mean
-		sum := 0.0
-		for j := 0; j < ln.NormalizedShape; j++ {
-			sum += input.Data[i*ln.NormalizedShape+j]
-		}
-		mean.Data[i] = sum / float64(ln.NormalizedShape)
+	for i := range batchSize {
+		start := i * ln.NormalizedShape
+		data := input.Data[start : start+ln.NormalizedShape]
+		
+		m := SumVector(data) / float64(ln.NormalizedShape)
+		mean.Data[i] = m
 
-		// Calculate variance
+		// Variance: sum((x - m)^2) / n
 		varSum := 0.0
-		for j := 0; j < ln.NormalizedShape; j++ {
-			diff := input.Data[i*ln.NormalizedShape+j] - mean.Data[i]
+		for _, val := range data {
+			diff := val - m
 			varSum += diff * diff
 		}
 		variance.Data[i] = varSum / float64(ln.NormalizedShape)
@@ -77,23 +76,29 @@ func (ln *LayerNorm) Forward(input *Tensor) (*Tensor, error) {
 	ln.mean = mean
 	ln.variance = variance
 
-	// Normalize
+	// Normalize, Scale and Shift in one pass if possible, or use optimized vectors
 	normalized := NewTensor(input.Shape, make([]float64, len(input.Data)), input.RequiresGrad)
-	for i := 0; i < batchSize; i++ {
+	output := NewTensor(input.Shape, make([]float64, len(input.Data)), input.RequiresGrad)
+	
+	for i := range batchSize {
+		start := i * ln.NormalizedShape
 		std := math.Sqrt(variance.Data[i] + ln.Eps)
-		for j := 0; j < ln.NormalizedShape; j++ {
-			normalized.Data[i*ln.NormalizedShape+j] = (input.Data[i*ln.NormalizedShape+j] - mean.Data[i]) / std
-		}
+		m := mean.Data[i]
+		
+		// Vectorized normalization
+		normData := normalized.Data[start : start+ln.NormalizedShape]
+		inData := input.Data[start : start+ln.NormalizedShape]
+		
+		// (x - m) / std
+		AddScalar(inData, -m, normData)
+		DivScalar(normData, std, normData)
+		
+		// Scale and shift: y = gamma * norm + beta
+		outData := output.Data[start : start+ln.NormalizedShape]
+		MulVectors(ln.Gamma.Data, normData, outData)
+		AddVectors(outData, ln.Beta.Data, outData)
 	}
 	ln.normalized = normalized
-
-	// Scale and shift
-	output := NewTensor(input.Shape, make([]float64, len(input.Data)), input.RequiresGrad)
-	for i := 0; i < batchSize; i++ {
-		for j := 0; j < ln.NormalizedShape; j++ {
-			output.Data[i*ln.NormalizedShape+j] = ln.Gamma.Data[j]*normalized.Data[i*ln.NormalizedShape+j] + ln.Beta.Data[j]
-		}
-	}
 
 	return output, nil
 }
@@ -114,7 +119,7 @@ func (ln *LayerNorm) Backward(gradOutput *Tensor) error {
 	}
 
 	// Gradient w.r.t. gamma and beta
-	for i := 0; i < batchSize; i++ {
+	for i := range batchSize {
 		for j := 0; j < ln.NormalizedShape; j++ {
 			ln.Gamma.Grad.Data[j] += gradOutput.Data[i*ln.NormalizedShape+j] * ln.normalized.Data[i*ln.NormalizedShape+j]
 			ln.Beta.Grad.Data[j] += gradOutput.Data[i*ln.NormalizedShape+j]
@@ -122,7 +127,7 @@ func (ln *LayerNorm) Backward(gradOutput *Tensor) error {
 	}
 
 	// Gradient w.r.t. input (simplified version)
-	for i := 0; i < batchSize; i++ {
+	for i := range batchSize {
 		std := math.Sqrt(ln.variance.Data[i] + ln.Eps)
 		for j := 0; j < ln.NormalizedShape; j++ {
 			ln.input.Grad.Data[i*ln.NormalizedShape+j] += gradOutput.Data[i*ln.NormalizedShape+j] * ln.Gamma.Data[j] / std
@@ -130,6 +135,11 @@ func (ln *LayerNorm) Backward(gradOutput *Tensor) error {
 	}
 
 	return nil
+}
+
+// Input returns the input tensor of the LayerNorm operation
+func (ln *LayerNorm) Input() *Tensor {
+	return ln.input
 }
 
 // Parameters returns the learnable parameters of LayerNorm

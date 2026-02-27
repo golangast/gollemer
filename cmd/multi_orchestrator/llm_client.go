@@ -91,7 +91,7 @@ func (c *LLMClient) Query(input string) (string, error) {
 
 	// Create a dummy target tensor for inference (required by Forward signature)
 	dummyTargetTokenIDs := make([]float64, maxSeqLength)
-	for i := 0; i < maxSeqLength; i++ {
+	for i := range maxSeqLength {
 		dummyTargetTokenIDs[i] = float64(c.semanticOutputVocabulary.PaddingTokenID) // Fixed: use correct vocab
 	}
 	dummyTargetTensor := tensor.NewTensor([]int{1, maxSeqLength}, dummyTargetTokenIDs, false)

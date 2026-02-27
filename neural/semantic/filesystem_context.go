@@ -11,7 +11,7 @@ type FilesystemContext struct {
 	CurrentDirectory string
 
 	// Map of all known files: filepath -> properties
-	Files map[string]map[string]interface{}
+	Files map[string]map[string]any
 
 	// Map of all known folders: folderpath -> children
 	Folders map[string][]string
@@ -24,7 +24,7 @@ type FilesystemContext struct {
 func NewFilesystemContext() *FilesystemContext {
 	return &FilesystemContext{
 		CurrentDirectory: "./",
-		Files:            make(map[string]map[string]interface{}),
+		Files:            make(map[string]map[string]any),
 		Folders:          make(map[string][]string),
 	}
 }

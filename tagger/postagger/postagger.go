@@ -422,7 +422,7 @@ func padMissingvalues(t tag.Tag) []string {
 		return t.PosTag // No need to pad if PosTag is equal or longer than Tokens
 	}
 	padding := make([]string, diff)
-	for i := 0; i < diff; i++ {
+	for i := range diff {
 		// Try to match token against patterns
 		for pattern, tag := range posTags { // Iterate over POS tag patterns
 			if regexp.MustCompile(pattern).MatchString(t.Tokens[len(t.PosTag)+i]) {

@@ -7,7 +7,8 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
+
 	"log"
 	"math"
 	"math/rand/v2"
@@ -193,7 +194,7 @@ func CalculateOriginalLoss(nn *nnu.SimpleNN, predictedOutput []float64, targetOu
 		fmt.Printf("Lengths do not match: predictedOutput = %v nn.Targets= %v", len(predictedOutput), len(nn.Targets))
 	}
 	loss := 0.0
-	for i := 0; i < len(predictedOutput); i++ {
+	for i := range predictedOutput {
 		diff := predictedOutput[i] - nn.Targets[i]
 		loss += diff * diff
 	}
@@ -392,7 +393,7 @@ func LoadTrainingDataFromJSON(filePath string) (*TrainingDataJSON, error) {
 		return nil, err
 	}
 
-	data, err := ioutil.ReadAll(file)
+	data, err := io.ReadAll(file)
 	if err != nil {
 		return nil, err
 	}

@@ -89,8 +89,8 @@ func BuildVocabulary(trainingDataPath, softwareCommandsPath string) *mainvocab.V
 // tokenizeAndAddWords tokenizes the input text and adds the tokens to the word set.
 func tokenizeAndAddWords(text string, wordSet map[string]bool) {
 	// Simple whitespace tokenizer; can be replaced with a more sophisticated one if needed
-	tokens := strings.Fields(text)
-	for _, token := range tokens {
+	tokens := strings.FieldsSeq(text)
+	for token := range tokens {
 		cleanedToken := strings.Trim(token, ".,!?\"'()[]{}:;`")
 		if cleanedToken != "" {
 			wordSet[cleanedToken] = true
