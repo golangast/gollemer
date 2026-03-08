@@ -1275,13 +1275,13 @@ func StartChat(model *moe.IntentMoE, w2v *word2vec.SimpleWord2Vec) {
 		if sentiment < -0.5 {
 			isApologetic = true
 			fmt.Println("🤖 [System Note: Bot is in 'Apologetic Mode']")
-			for _, layer := range moe.ActiveLayers {
-				// Manually add a bias to the router's logits for Expert 7
-				// This makes it 5x more likely to be chosen for this specific turn
-				if len(layer.RouterBias) > 7 {
-					layer.RouterBias[7] += 2.0
-				}
-			}
+			// for _, layer := range moe.ActiveLayers {
+			// 	// Manually add a bias to the router's logits for Expert 7
+			// 	// This makes it 5x more likely to be chosen for this specific turn
+			// 	if len(layer.RouterBias) > 7 {
+			// 		layer.RouterBias[7] += 2.0
+			// 	}
+			// }
 		}
 
 		// 1. Build the full "story" so far
@@ -1328,11 +1328,11 @@ func StartChat(model *moe.IntentMoE, w2v *word2vec.SimpleWord2Vec) {
 
 		// Reset Emotional Steering
 		if isApologetic {
-			for _, layer := range moe.ActiveLayers {
-				if len(layer.RouterBias) > 7 {
-					layer.RouterBias[7] -= 2.0
-				}
-			}
+			// for _, layer := range moe.ActiveLayers {
+			// 	if len(layer.RouterBias) > 7 {
+			// 		layer.RouterBias[7] -= 2.0
+			// 	}
+			// }
 		}
 
 		// Cleanup memory for the next turn
@@ -1405,11 +1405,11 @@ func (b *MoEChatBot) Reply(input string) string {
 	if sentiment < -0.5 {
 		isApologetic = true
 		// fmt.Println("🤖 [System Note: Bot is in 'Apologetic Mode']")
-		for _, layer := range moe.ActiveLayers {
-			if len(layer.RouterBias) > 7 {
-				layer.RouterBias[7] += 2.0
-			}
-		}
+		// for _, layer := range moe.ActiveLayers {
+		// 	if len(layer.RouterBias) > 7 {
+		// 		layer.RouterBias[7] += 2.0
+		// 	}
+		// }
 	}
 
 	// 1. Build the full "story" so far
@@ -1450,11 +1450,11 @@ func (b *MoEChatBot) Reply(input string) string {
 
 	// Reset Emotional Steering
 	if isApologetic {
-		for _, layer := range moe.ActiveLayers {
-			if len(layer.RouterBias) > 7 {
-				layer.RouterBias[7] -= 2.0
-			}
-		}
+		// for _, layer := range moe.ActiveLayers {
+		// 	if len(layer.RouterBias) > 7 {
+		// 		layer.RouterBias[7] -= 2.0
+		// 	}
+		// }
 	}
 
 	// Cleanup memory for the next turn
@@ -1477,11 +1477,11 @@ func (b *MoEChatBot) StreamReply(userInput string) <-chan string {
 		isApologetic := false
 		if sentiment < -0.5 {
 			isApologetic = true
-			for _, layer := range moe.ActiveLayers {
-				if len(layer.RouterBias) > 7 {
-					layer.RouterBias[7] += 2.0
-				}
-			}
+			// for _, layer := range moe.ActiveLayers {
+			// 	if len(layer.RouterBias) > 7 {
+			// 		layer.RouterBias[7] += 2.0
+			// 	}
+			// }
 		}
 
 		// 1. Build the full "story" so far
@@ -1530,11 +1530,11 @@ func (b *MoEChatBot) StreamReply(userInput string) <-chan string {
 
 		// Reset Emotional Steering
 		if isApologetic {
-			for _, layer := range moe.ActiveLayers {
-				if len(layer.RouterBias) > 7 {
-					layer.RouterBias[7] -= 2.0
-				}
-			}
+			// for _, layer := range moe.ActiveLayers {
+			// 	if len(layer.RouterBias) > 7 {
+			// 		layer.RouterBias[7] -= 2.0
+			// 	}
+			// }
 		}
 
 		// Cleanup
