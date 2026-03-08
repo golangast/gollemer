@@ -3,6 +3,7 @@ package nertagger
 import (
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/golangast/gollemer/tagger/tag"
 )
@@ -43,7 +44,10 @@ type iobRule struct {
 	triggerWords map[string]bool // Words that can trigger continuation
 }
 
-var iobRules []iobRule
+var (
+	iobRules     []iobRule
+	iobRulesOnce sync.Once
+)
 
 // initIOBRules initializes the IOB pattern matching rules
 func initIOBRules() {
@@ -136,9 +140,7 @@ type IOBTagger struct {
 
 // NewIOBTagger creates a new IOB tagger
 func NewIOBTagger(tokens []string, posTags []string) *IOBTagger {
-	if len(iobRules) == 0 {
-		initIOBRules()
-	}
+	iobRulesOnce.Do(initIOBRules)
 
 	tagger := &IOBTagger{
 		tokens:       tokens,

@@ -4,7 +4,6 @@ import (
 	"encoding/gob"
 	"fmt"
 	"io"
-	"log"
 	"math"
 	"math/rand"
 	"os"
@@ -191,6 +190,37 @@ func sampleFromLogits(logits *tensor.Tensor, temperature float64, topK int, topP
 	return vocabSize - 1, nil
 }
 
+// ApplyRepetitionPenalty penalizes tokens that have already been generated.
+// Logits are the raw output of the model, generatedIDs are tokens already picked.
+// Penalty is typically 1.1 or 1.2 (for multiplicative) or a flat subtraction.
+func ApplyRepetitionPenalty(logits *tensor.Tensor, generatedIDs []int, penalty float64) {
+	if penalty == 1.0 {
+		return
+	}
+
+	// Track seen tokens in a map for O(1) lookup
+	seen := make(map[int]bool)
+	for _, id := range generatedIDs {
+		seen[id] = true
+	}
+
+	for id := range seen {
+		// Only penalize valid token IDs
+		if id < 0 || id >= len(logits.Data) {
+			continue
+		}
+
+		// For Logits (pre-softmax):
+		// If positive, divide by penalty to reduce score.
+		// If negative, multiply by penalty to make it MORE negative.
+		if logits.Data[id] > 0 {
+			logits.Data[id] /= penalty
+		} else {
+			logits.Data[id] *= penalty
+		}
+	}
+}
+
 // Encoder interface for different encoder types (MoE, SimpleRNN, etc.)
 type Encoder interface {
 	Forward(...*tensor.Tensor) (*tensor.Tensor, error)
@@ -327,7 +357,17 @@ func (m *IntentMoE) Backward(grads ...*tensor.Tensor) error {
 	if err := m.Decoder.Backward(sentenceGrads); err != nil {
 		return fmt.Errorf("decoder backward failed: %w", err)
 	}
-	contextVectorGrad := m.Decoder.InitialHiddenState.Grad
+	// CRITICAL FIX: Use the full context vector sequence gradient (accumulates from all attention steps)
+	if m.Decoder.contextVector == nil {
+		return fmt.Errorf("decoder context vector is nil in backward")
+	}
+	if m.Decoder.contextVector.Grad == nil {
+		// If no gradients reached the context vector (e.g. zero attention), 
+		// initialize to zeros so the encoder backward can still proceed.
+		m.Decoder.contextVector.Grad = tensor.NewTensor(m.Decoder.contextVector.Shape, make([]float64, len(m.Decoder.contextVector.Data)), false)
+	}
+	contextVectorGrad := m.Decoder.contextVector.Grad
+
 
 	// Backpropagate through the encoder
 	err := m.Encoder.Backward(contextVectorGrad)
@@ -357,7 +397,13 @@ func (m *IntentMoE) Parameters() []*tensor.Tensor {
 	return params
 }
 
-func (m *IntentMoE) GreedySearchDecode(contextVector *tensor.Tensor, maxLen, sosToken, eosToken int, repetitionPenalty float64, topK int, taggedData tag.Tag) ([]int, error) {
+// GreedySearchDecode performs greedy decoding (temperature=1.0).
+// This is a wrapper for backward compatibility.
+func (m *IntentMoE) GreedySearchDecode(contextVector *tensor.Tensor, maxLen, sosToken, eosToken int, repetitionPenalty, frequencyPenalty float64, topK int, taggedData tag.Tag) ([]int, error) {
+	return m.GreedySearchDecodeWithTemp(contextVector, maxLen, sosToken, eosToken, 1.0, repetitionPenalty, frequencyPenalty, topK, taggedData)
+}
+
+func (m *IntentMoE) GreedySearchDecodeWithTemp(contextVector *tensor.Tensor, maxLen, sosToken, eosToken int, temperature, repetitionPenalty, frequencyPenalty float64, topK int, taggedData tag.Tag) ([]int, error) {
 	var decodedIDs []int
 	decoderInputIDs := tensor.NewTensor([]int{1, 1}, []float64{float64(sosToken)}, false)
 
@@ -403,10 +449,17 @@ func (m *IntentMoE) GreedySearchDecode(contextVector *tensor.Tensor, maxLen, sos
 		cellState = newCell
 
 		// Apply repetition penalty: always divide logits for previously generated tokens
-		if repetitionPenalty != 1.0 {
+		ApplyRepetitionPenalty(outputLogits, decodedIDs, repetitionPenalty)
+
+		// Apply Frequency Penalty: subtract penalty * count from logits
+		if frequencyPenalty > 0.0 {
+			counts := make(map[int]int)
 			for _, id := range decodedIDs {
+				counts[id]++
+			}
+			for id, count := range counts {
 				if id < len(outputLogits.Data) {
-					outputLogits.Data[id] /= repetitionPenalty
+					outputLogits.Data[id] -= frequencyPenalty * float64(count)
 				}
 			}
 		}
@@ -417,7 +470,7 @@ func (m *IntentMoE) GreedySearchDecode(contextVector *tensor.Tensor, maxLen, sos
 			last2 := decodedIDs[len(decodedIDs)-2]
 			last3 := decodedIDs[len(decodedIDs)-3]
 			if last1 == last2 && last2 == last3 {
-				log.Printf("Stuck detector triggered for ID %d. Forcing change.\n", last1)
+				// log.Printf("Stuck detector triggered for ID %d. Forcing change.\n", last1)
 				// Set logit for this token to -infinity (or a very large negative number)
 				if last1 < len(outputLogits.Data) {
 					outputLogits.Data[last1] = -1e9
@@ -426,7 +479,7 @@ func (m *IntentMoE) GreedySearchDecode(contextVector *tensor.Tensor, maxLen, sos
 		}
 
 		// Use sampling/top-k decoding for diversity
-		sampledID, err := sampleFromLogits(outputLogits, 1.0, topK, 0.0)
+		sampledID, err := sampleFromLogits(outputLogits, temperature, topK, 0.0)
 		if err != nil {
 			return nil, fmt.Errorf("sampling failed: %w", err)
 		}
@@ -514,7 +567,7 @@ func (m *IntentMoE) GreedySearchDecode(contextVector *tensor.Tensor, maxLen, sos
 // temperature: controls randomness (0.0 = deterministic, 1.0 = normal, >1.0 = more random)
 // topK: if > 0, only sample from top K tokens
 // topP: if > 0.0 and < 1.0, only sample from tokens whose cumulative probability is <= topP
-func (m *IntentMoE) SampleDecode(contextVector *tensor.Tensor, maxLen, sosToken, eosToken int, temperature float64, topK int, topP float64, repetitionPenalty float64) ([]int, error) {
+func (m *IntentMoE) SampleDecode(contextVector *tensor.Tensor, maxLen, sosToken, eosToken int, temperature float64, topK int, topP float64, repetitionPenalty, frequencyPenalty float64) ([]int, error) {
 	var decodedIDs []int
 	decoderInputIDs := tensor.NewTensor([]int{1, 1}, []float64{float64(sosToken)}, false)
 
@@ -550,7 +603,7 @@ func (m *IntentMoE) SampleDecode(contextVector *tensor.Tensor, maxLen, sosToken,
 	hiddenState := initialHidden
 	cellState := tensor.NewTensor([]int{batchSize, hiddenSize}, make([]float64, batchSize*hiddenSize), false)
 
-	for i := range maxLen {
+	for range maxLen {
 		outputLogits, newHidden, newCell, err := m.Decoder.DecodeStep(decoderInputIDs, hiddenState, cellState, contextVector)
 		if err != nil {
 			return nil, fmt.Errorf("decoder step failed: %w", err)
@@ -560,14 +613,17 @@ func (m *IntentMoE) SampleDecode(contextVector *tensor.Tensor, maxLen, sosToken,
 		cellState = newCell
 
 		// Apply repetition penalty
-		if repetitionPenalty != 1.0 {
+		ApplyRepetitionPenalty(outputLogits, decodedIDs, repetitionPenalty)
+
+		// Apply Frequency Penalty
+		if frequencyPenalty > 0.0 {
+			counts := make(map[int]int)
 			for _, id := range decodedIDs {
+				counts[id]++
+			}
+			for id, count := range counts {
 				if id < len(outputLogits.Data) {
-					if outputLogits.Data[id] < 0 {
-						outputLogits.Data[id] *= repetitionPenalty
-					} else {
-						outputLogits.Data[id] /= repetitionPenalty
-					}
+					outputLogits.Data[id] -= frequencyPenalty * float64(count)
 				}
 			}
 		}
@@ -578,7 +634,7 @@ func (m *IntentMoE) SampleDecode(contextVector *tensor.Tensor, maxLen, sosToken,
 			return nil, fmt.Errorf("sampling failed: %w", err)
 		}
 
-		log.Printf("Step %d: Sampled ID %d (EOS: %d)\n", i, predictedID, eosToken) // Debug logging
+		// log.Printf("Step %d: Sampled ID %d (EOS: %d)\n", i, predictedID, eosToken) // Debug logging
 
 		if predictedID == eosToken {
 			break

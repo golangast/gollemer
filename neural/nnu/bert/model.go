@@ -218,7 +218,11 @@ func (e *BertEmbeddings) Forward(inputIDs, tokenTypeIDs, posTagIDs, nerTagIDs *t
 	posData := make([]float64, batchSize*seqLength)
 	for b := range batchSize {
 		for s := range seqLength {
-			posData[b*seqLength+s] = float64(s)
+			posIdx := s
+			if posIdx >= e.PositionEmbeddings.Weight.Shape[0] {
+				posIdx = e.PositionEmbeddings.Weight.Shape[0] - 1
+			}
+			posData[b*seqLength+s] = float64(posIdx)
 		}
 	}
 	positionIDs := tensor.NewTensor([]int{batchSize, seqLength}, posData, false)

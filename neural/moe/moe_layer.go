@@ -3,6 +3,7 @@ package moe
 import (
 	"fmt"
 	"math"
+	"math/rand"
 	"runtime"
 	"sort"
 	"strings"
@@ -13,6 +14,18 @@ import (
 
 // ActiveLayers tracks all MoE layers created, useful for monitoring utilization.
 var ActiveLayers []*MoELayer
+
+// MoEState holds the state of a single forward pass for BPTT.
+type MoEState struct {
+	inputTensor        *Tensor
+	input2D            *Tensor
+	expertOutputs      []*Tensor
+	expertTokenIndices [][]int
+	selectedExperts    [][]int
+	gateOutputs        *Tensor
+	expertProbSums     []float64
+	LoadBalancingLoss  float64
+}
 
 // MoELayer implements a Mixture of Experts layer.
 type MoELayer struct {
@@ -33,6 +46,21 @@ type MoELayer struct {
 	GRPOEnabled        bool    // whether to use Training-Free GRPO (Group Relative Policy Optimization) for expert selection
 	expertProbSums     []float64 // Sum of probabilities for each expert in the batch
 	LoadBalancingWeight float64   // Weight for the load balancing loss
+	CapacityFactor      float64   // Capacity factor to limit tokens per expert (e.g. 1.25)
+	RouterTemperature   float64   // Temperature for router softmax (default 1.0)
+	ExpertDropoutRate   float64   // Probability of dropping an expert during training (0.0 to 1.0)
+	stateStack          []MoEState
+}
+
+// safeAccumulate adds src to dst, ensuring we don't go out of bounds.
+func safeAccumulate(dst, src []float64) {
+	n := len(dst)
+	if len(src) < n {
+		n = len(src)
+	}
+	for i := 0; i < n; i++ {
+		dst[i] += src[i]
+	}
 }
 
 // NewMoELayer creates a new MoELayer.
@@ -63,10 +91,13 @@ func NewMoELayer(inputDim, outputDim, numExperts, k int, expertBuilder func(int)
 		GatingNetwork: gatingNetwork,
 		Experts:       experts,
 		K:             k,
-		GRPOEnabled:   true, // Default to true for Training-Free GRPO
+		GRPOEnabled:   false, // Default to false. True requires implementing GRPO backward pass.
 		InputDim:      inputDim,
 		OutputDim:     outputDim,
 		LoadBalancingWeight: 0.01, // Default weight
+		CapacityFactor:      1.25, // Default capacity factor
+		RouterTemperature:   0.8,  // Default temperature
+		ExpertDropoutRate:   0.1,  // Default dropout
 	}
 	ActiveLayers = append(ActiveLayers, layer)
 	return layer, nil
@@ -100,6 +131,53 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 	batchSize := input.Shape[0]
 	seqLength := input.Shape[1]
 	embeddingDim := input.Shape[2]
+
+	// Add Noisy Top-k Gating: Add Gaussian noise to logits during training
+	if moe.Training {
+		noiseStd := 2.0 / float64(len(moe.Experts))
+		for i := range gateLogits.Data {
+			gateLogits.Data[i] += rand.NormFloat64() * noiseStd
+		}
+	}
+
+	// Apply Temperature Scaling to logits
+	if moe.RouterTemperature != 1.0 && moe.RouterTemperature > 0 {
+		for i := range gateLogits.Data {
+			gateLogits.Data[i] /= moe.RouterTemperature
+		}
+	}
+
+	// Apply Expert Dropout during training
+	if moe.Training && moe.ExpertDropoutRate > 0 {
+		// Decide which experts to drop for this batch
+		droppedMask := make([]bool, numExperts)
+		activeCount := 0
+
+		for i := 0; i < numExperts; i++ {
+			if rand.Float64() < moe.ExpertDropoutRate {
+				droppedMask[i] = true
+			} else {
+				activeCount++
+			}
+		}
+
+		// Safety: Ensure at least K experts remain active
+		for i := 0; i < numExperts && activeCount < moe.K; i++ {
+			if droppedMask[i] {
+				droppedMask[i] = false
+				activeCount++
+			}
+		}
+
+		// Apply mask to logits (set to -infinity)
+		for i := 0; i < batchSize*seqLength; i++ {
+			for j := 0; j < numExperts; j++ {
+				if droppedMask[j] {
+					gateLogits.Data[i*numExperts+j] = -1e9
+				}
+			}
+		}
+	}
 
 	// Apply Training-Free GRPO if enabled
 	var scoresTensor *Tensor
@@ -162,11 +240,23 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 		loss += s * s
 	}
 	if batchSize*seqLength > 0 {
-		moe.LoadBalancingLoss = loss / float64(batchSize*seqLength)
+		// Target-normalized Load Balancing Loss: (numExperts / (batch*seq)^2) * sum(S_e^2)
+		// This evaluates to 1.0 if perfectly balanced, regardless of sequence length.
+		norm := float64(numExperts) / math.Pow(float64(batchSize*seqLength), 2)
+		moe.LoadBalancingLoss = loss * norm
+	}
+
+	// Calculate capacity limit per expert
+	capacity := int(math.Ceil(moe.CapacityFactor * float64(batchSize*seqLength) / float64(numExperts)))
+	if capacity < 1 {
+		capacity = 1
 	}
 
 	moe.selectedExperts = make([][]int, batchSize*seqLength)
 	moe.expertTokenIndices = make([][]int, numExperts)
+	for i := range moe.expertTokenIndices {
+		moe.expertTokenIndices[i] = make([]int, 0, capacity)
+	}
 
 	// Reshape input to 2D [batch*seq, dim] for gathering
 	input2D, err := input.Reshape([]int{batchSize * seqLength, embeddingDim})
@@ -177,9 +267,13 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 	// Store relative indices for scatter step
 	tokenExpertRelativeIndices := make([][]int, batchSize*seqLength)
 
+	// Pre-allocate indices buffers to reduce GC churn
+	allTopKIndices := make([]int, batchSize*seqLength*numExperts)
+	allRelativeIndices := make([]int, batchSize*seqLength*moe.K)
+
 	for i := 0; i < batchSize*seqLength; i++ {
 		scores := scoresTensor.Data[i*numExperts : (i+1)*numExperts]
-		topKIndices := make([]int, numExperts)
+		topKIndices := allTopKIndices[i*numExperts : (i+1)*numExperts]
 		for j := range topKIndices {
 			topKIndices[j] = j
 		}
@@ -189,8 +283,17 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 		selected := topKIndices[:moe.K]
 		moe.selectedExperts[i] = selected
 
-		tokenExpertRelativeIndices[i] = make([]int, len(selected))
+		tokenExpertRelativeIndices[i] = allRelativeIndices[i*moe.K : (i+1)*moe.K]
 		for j, expertIdx := range selected {
+			if expertIdx < 0 || expertIdx >= numExperts {
+				tokenExpertRelativeIndices[i][j] = -1
+				continue
+			}
+			// Enforce capacity limit
+			if len(moe.expertTokenIndices[expertIdx]) >= capacity {
+				tokenExpertRelativeIndices[i][j] = -1 // Drop token
+				continue
+			}
 			tokenExpertRelativeIndices[i][j] = len(moe.expertTokenIndices[expertIdx])
 			moe.expertTokenIndices[expertIdx] = append(moe.expertTokenIndices[expertIdx], i)
 		}
@@ -286,6 +389,9 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 
 					// Get expert output row
 					relativeRow := tokenExpertRelativeIndices[i][j]
+					if relativeRow == -1 {
+						continue // Token was dropped for this expert
+					}
 					expertRowStart := relativeRow * moe.OutputDim
 					expertRow := output.Data[expertRowStart : expertRowStart+moe.OutputDim]
 
@@ -299,6 +405,19 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 	wgScatter.Wait()
 	// fmt.Println("Finished scattering")
 
+	// Push state to stack for BPTT
+	state := MoEState{
+		inputTensor:        moe.inputTensor,
+		input2D:            input2D,
+		expertOutputs:      moe.expertOutputs,
+		expertTokenIndices: moe.expertTokenIndices,
+		selectedExperts:    moe.selectedExperts,
+		gateOutputs:        moe.gateOutputs,
+		expertProbSums:     moe.expertProbSums,
+		LoadBalancingLoss:  moe.LoadBalancingLoss,
+	}
+	moe.stateStack = append(moe.stateStack, state)
+
 	return finalOutput, nil
 }
 
@@ -309,23 +428,40 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 		return nil
 	}
 
+	// Pop state for BPTT
+	var input2D *Tensor
+	if len(moe.stateStack) > 0 {
+		state := moe.stateStack[len(moe.stateStack)-1]
+		moe.stateStack = moe.stateStack[:len(moe.stateStack)-1]
+
+		moe.inputTensor = state.inputTensor
+		input2D = state.input2D
+		moe.expertOutputs = state.expertOutputs
+		moe.expertTokenIndices = state.expertTokenIndices
+		moe.selectedExperts = state.selectedExperts
+		moe.gateOutputs = state.gateOutputs
+		moe.expertProbSums = state.expertProbSums
+		moe.LoadBalancingLoss = state.LoadBalancingLoss
+	}
+
 	// Remember if original grad was 2D (context vector) before reshaping/padding
 
 	// Handle 2D gradient from decoder by processing only the last time step
 	if len(grad.Shape) == 2 {
 		// The grad is for the context vector, which corresponds to the last element of the sequence.
 		// We will create a new grad tensor that has zeros everywhere except for the last time step.
-		batchSize := grad.Shape[0]
+		targetBatch := moe.inputTensor.Shape[0]
 		embeddingDim := grad.Shape[1]
 		seqLength := moe.inputTensor.Shape[1]
 
 		// Create fullGrad with correct size and shape
-		fullGradSize := batchSize * seqLength * embeddingDim
-		fullGradShape := []int{batchSize, seqLength, embeddingDim}
+		fullGradSize := targetBatch * seqLength * embeddingDim
+		fullGradShape := []int{targetBatch, seqLength, embeddingDim}
 		fullGrad := NewTensor(fullGradShape, make([]float64, fullGradSize), false)
 
 		// Copy gradient to last time step for each batch
-		for i := range batchSize {
+		minBatch := min(grad.Shape[0], targetBatch)
+		for i := range minBatch {
 			// Calculate the start index for the last time step of batch i
 			lastTimeStepStart := (i*seqLength + (seqLength - 1)) * embeddingDim
 			lastTimeStepEnd := lastTimeStepStart + embeddingDim
@@ -340,6 +476,29 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 			}
 		}
 		grad = fullGrad
+	}
+
+	// Ensure gradient shape matches input shape (specifically sequence length)
+	if moe.inputTensor != nil && len(grad.Shape) == 3 && len(moe.inputTensor.Shape) == 3 {
+		if grad.Shape[0] != moe.inputTensor.Shape[0] || grad.Shape[1] != moe.inputTensor.Shape[1] {
+			targetBatch := moe.inputTensor.Shape[0]
+			targetSeqLen := moe.inputTensor.Shape[1]
+			embeddingDim := grad.Shape[2]
+
+			newSize := targetBatch * targetSeqLen * embeddingDim
+			newGrad := NewTensor(moe.inputTensor.Shape, make([]float64, newSize), false)
+
+			minBatch := min(grad.Shape[0], targetBatch)
+			minSeq := min(grad.Shape[1], targetSeqLen)
+
+			for b := 0; b < minBatch; b++ {
+				srcStart := b * grad.Shape[1] * embeddingDim
+				dstStart := b * targetSeqLen * embeddingDim
+				copySize := minSeq * embeddingDim
+				copy(newGrad.Data[dstStart:dstStart+copySize], grad.Data[srcStart:srcStart+copySize])
+			}
+			grad = newGrad
+		}
 	}
 
 	// Get dimensions from the gradient tensor (which may have been converted from 2D)
@@ -405,7 +564,11 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 			// We need to create a weightedBatchedGrad
 			weightedBatchedGradData := make([]float64, len(batchedGrad.Data))
 			for k, tokenIdx := range tokenIndices {
-				weight := moe.gateOutputs.Data[tokenIdx*numExperts+expertIdx]
+				gateIdx := tokenIdx*numExperts + expertIdx
+				if gateIdx < 0 || gateIdx >= len(moe.gateOutputs.Data) {
+					continue
+				}
+				weight := moe.gateOutputs.Data[gateIdx]
 				for j := range embeddingDim {
 					weightedBatchedGradData[k*embeddingDim+j] = batchedGrad.Data[k*embeddingDim+j] * weight
 				}
@@ -432,11 +595,14 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 
 			if moe.inputTensor.RequiresGrad {
 				expertInputs := moe.Experts[expertIdx].Inputs()
+				if len(expertInputs) == 0 {
+					return
+				}
 				if len(expertInputs) > 0 {
 					gatheredInput := expertInputs[0]
 					// Trigger backward on the gathered input to scatter gradients to input2D (and then to inputTensor)
 					// Note: gatheredInput.Creator is the GatherOperation.
-					if gatheredInput.Creator != nil {
+					if gatheredInput.Creator != nil && gatheredInput.Grad != nil {
 						inputGradMutex.Lock()
 						err := gatheredInput.Creator.Backward(gatheredInput.Grad)
 						inputGradMutex.Unlock()
@@ -459,9 +625,19 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 
 			for k, tokenIdx := range tokenIndices {
 				// Re-fetch grad for token
-				gradForTokenData := gradReshaped.Data[tokenIdx*embeddingDim : (tokenIdx+1)*embeddingDim]
+				startIdx := tokenIdx * embeddingDim
+				endIdx := (tokenIdx + 1) * embeddingDim
+				if startIdx >= len(gradReshaped.Data) || endIdx > len(gradReshaped.Data) {
+					continue
+				}
+				gradForTokenData := gradReshaped.Data[startIdx:endIdx]
 
-				expertOutRow := expertOutput.Data[k*embeddingDim : (k+1)*embeddingDim]
+				expertRowStart := k * embeddingDim
+				expertRowEnd := (k + 1) * embeddingDim
+				if expertRowStart >= len(expertOutput.Data) || expertRowEnd > len(expertOutput.Data) {
+					continue
+				}
+				expertOutRow := expertOutput.Data[expertRowStart:expertRowEnd]
 
 				gradForGateProb := 0.0
 				for j := range embeddingDim {
@@ -472,7 +648,10 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 				// gateGradReshaped is [batch*seq, numExperts].
 				// Each expert writes to a DIFFERENT column (expertIdx).
 				// So this IS thread-safe.
-				gateGradReshaped.Data[tokenIdx*numExperts+expertIdx] += gradForGateProb
+				gateGradIdx := tokenIdx*numExperts + expertIdx
+				if gateGradIdx >= 0 && gateGradIdx < len(gateGradReshaped.Data) {
+					gateGradReshaped.Data[gateGradIdx] += gradForGateProb
+				}
 			}
 
 		}(i, indices)
@@ -486,10 +665,10 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 
 	// Add load balancing loss gradient
 	if moe.LoadBalancingWeight > 0 && len(moe.expertProbSums) == numExperts && batchSize*seqLength > 0 {
-		normFactor := 1.0 / float64(batchSize*seqLength)
+		// d(numExperts/(N^2) * sum(S_j^2)) / d(p_ij) = (numExperts/(N^2)) * 2 * S_j
+		normFactor := float64(numExperts) / math.Pow(float64(batchSize*seqLength), 2)
 		for i := 0; i < batchSize*seqLength; i++ {
 			for j := 0; j < numExperts; j++ {
-				// Gradient of (1/N * sum(S_e^2)) w.r.t p_{i,j} is (1/N) * 2 * S_j
 				grad := moe.LoadBalancingWeight * 2 * moe.expertProbSums[j] * normFactor
 				gateGradReshaped.Data[i*numExperts+j] += grad
 			}
@@ -542,21 +721,6 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 	// So we can find input2D from there.
 
 	if moe.inputTensor.RequiresGrad {
-		var input2D *Tensor
-		// Find input2D from one of the experts
-		for _, expert := range moe.Experts {
-			inputs := expert.Inputs()
-			if len(inputs) > 0 {
-				if inputs[0].Creator != nil { // Check if Creator exists
-					gatherOp, ok := inputs[0].Creator.(*GatherOperation)
-					if ok {
-						input2D = gatherOp.Input
-						break
-					}
-				}
-			}
-		}
-
 		if input2D != nil && input2D.Grad != nil {
 			// Propagate from input2D to inputTensor
 			// input2D was created from inputTensor via Reshape.
@@ -565,17 +729,18 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 			if moe.inputTensor.Grad == nil {
 				moe.inputTensor.Grad = NewTensor(moe.inputTensor.Shape, make([]float64, len(moe.inputTensor.Data)), false)
 			}
-			for i := range input2D.Grad.Data {
-				moe.inputTensor.Grad.Data[i] += input2D.Grad.Data[i]
-			}
+			safeAccumulate(moe.inputTensor.Grad.Data, input2D.Grad.Data)
 		}
 	}
 
 	// Finally, backpropagate through the gating network with the accumulated gateGrad.
 	// Workaround: GatingNetwork.Backward (Linear.Backward) seems to cause moe.inputTensor.Grad to become nil
-	// in some cases, even though it shouldn't. We save the gradient pointer and restore it if needed.
-	// Since Linear.Backward updates the gradient in place, savedGrad will point to the updated data.
-	savedGrad := moe.inputTensor.Grad
+	// or overwritten in some cases. We explicitly copy the expert gradients to preserve them.
+	var expertGrads []float64
+	if moe.inputTensor.Grad != nil {
+		expertGrads = make([]float64, len(moe.inputTensor.Grad.Data))
+		copy(expertGrads, moe.inputTensor.Grad.Data)
+	}
 
 	// Convert probability gradients to logit gradients (Softmax Backward)
 	logitsGrad := NewTensor(gateGradReshaped.Shape, make([]float64, len(gateGradReshaped.Data)), false)
@@ -598,19 +763,44 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 				p := moe.gateOutputs.Data[offset : offset+numExperts]
 				dp := gateGradReshaped.Data[offset : offset+numExperts]
 				out := logitsGrad.Data[offset : offset+numExperts]
-				SoftmaxBackwardRow(p, dp, out)
+
+				sumDP := 0.0
+				for k := 0; k < numExperts; k++ {
+					sumDP += dp[k] * p[k]
+				}
+				for k := 0; k < numExperts; k++ {
+					out[k] = p[k] * (dp[k] - sumDP)
+				}
 			}
 		}(start, end)
 	}
 	wgSoftmax.Wait()
+
+	// Apply Temperature Scaling to gradients (dL/dx = dL/dy * 1/T)
+	if moe.RouterTemperature != 1.0 && moe.RouterTemperature > 0 {
+		for i := range logitsGrad.Data {
+			logitsGrad.Data[i] /= moe.RouterTemperature
+		}
+	}
+
+	// Router-Fast approach: Scale gradients for router to make it learn faster
+	routerGradientScale := 5.0
+	for i := range logitsGrad.Data {
+		logitsGrad.Data[i] *= routerGradientScale
+	}
 
 	err = moe.GatingNetwork.Backward(logitsGrad)
 	if err != nil {
 		return err
 	}
 
-	if moe.inputTensor.Grad == nil && savedGrad != nil {
-		moe.inputTensor.Grad = savedGrad
+	// Restore/Accumulate expert gradients
+	if expertGrads != nil {
+		if moe.inputTensor.Grad == nil {
+			moe.inputTensor.Grad = NewTensor(moe.inputTensor.Shape, expertGrads, false)
+		} else {
+			safeAccumulate(moe.inputTensor.Grad.Data, expertGrads)
+		}
 	}
 
 	// Gradient is stored in moe.inputTensor.Grad
@@ -637,6 +827,12 @@ func (moe *MoELayer) GetOutputShape() []int {
 	return moe.inputTensor.Shape
 }
 
+// GetSelectedExperts returns the indices of experts selected for each token in the last forward pass.
+// The returned slice has length batchSize * seqLength.
+func (moe *MoELayer) GetSelectedExperts() [][]int {
+	return moe.selectedExperts
+}
+
 // ClearState clears the internal state of the layer to free memory.
 func (moe *MoELayer) ClearState() {
 	moe.inputTensor = nil
@@ -645,6 +841,7 @@ func (moe *MoELayer) ClearState() {
 	moe.selectedExperts = nil
 	moe.gateOutputs = nil
 	moe.expertProbSums = nil
+	moe.stateStack = nil
 }
 
 // UtilizationStats returns a map of expert index to the number of tokens it processed in the last forward pass.
@@ -669,7 +866,7 @@ func (moe *MoELayer) VisualizeUtilization() {
 		total += count
 	}
 
-	fmt.Println("Expert Utilization:")
+	fmt.Printf("Expert Utilization (Capacity Factor: %.2f):\n", moe.CapacityFactor)
 	var keys []int
 	for k := range stats {
 		keys = append(keys, k)

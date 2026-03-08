@@ -10,6 +10,7 @@ import (
 type Optimizer interface {
 	Step()
 	ZeroGrad()
+	ClipGradients()
 }
 
 // Adam represents the Adam optimizer.
@@ -40,6 +41,32 @@ func NewOptimizer(parameters []*Tensor, learningRate float64, clipValue float64)
 	}
 }
 
+// ClipGradients scales the gradients of all parameters if their total L2 norm exceeds clipValue.
+func (o *Adam) ClipGradients() {
+	if o.clipValue <= 0 {
+		return
+	}
+	totalNorm := 0.0
+	for _, p := range o.parameters {
+		if p.Grad != nil {
+			for _, g := range p.Grad.Data {
+				totalNorm += g * g
+			}
+		}
+	}
+	totalNorm = math.Sqrt(totalNorm)
+	if totalNorm > o.clipValue {
+		scale := o.clipValue / totalNorm
+		for _, p := range o.parameters {
+			if p.Grad != nil {
+				for i := range p.Grad.Data {
+					p.Grad.Data[i] *= scale
+				}
+			}
+		}
+	}
+}
+
 // Step performs a single optimization step.
 func (o *Adam) Step() {
 	o.t++
@@ -67,11 +94,6 @@ func (o *Adam) Step() {
 		for ; i <= len(param)-unrollFactor; i += unrollFactor {
 			// Unroll 1
 			g1 := grad[i]
-			if g1 > o.clipValue {
-				g1 = o.clipValue
-			} else if g1 < -o.clipValue {
-				g1 = -o.clipValue
-			}
 			m[i] = o.beta1*m[i] + (1-o.beta1)*g1
 			v[i] = o.beta2*v[i] + (1-o.beta2)*(g1*g1)
 			mHat1 := m[i] / biasCorrection1
@@ -80,11 +102,6 @@ func (o *Adam) Step() {
 
 			// Unroll 2
 			g2 := grad[i+1]
-			if g2 > o.clipValue {
-				g2 = o.clipValue
-			} else if g2 < -o.clipValue {
-				g2 = -o.clipValue
-			}
 			m[i+1] = o.beta1*m[i+1] + (1-o.beta1)*g2
 			v[i+1] = o.beta2*v[i+1] + (1-o.beta2)*(g2*g2)
 			mHat2 := m[i+1] / biasCorrection1
@@ -93,11 +110,6 @@ func (o *Adam) Step() {
 
 			// Unroll 3
 			g3 := grad[i+2]
-			if g3 > o.clipValue {
-				g3 = o.clipValue
-			} else if g3 < -o.clipValue {
-				g3 = -o.clipValue
-			}
 			m[i+2] = o.beta1*m[i+2] + (1-o.beta1)*g3
 			v[i+2] = o.beta2*v[i+2] + (1-o.beta2)*(g3*g3)
 			mHat3 := m[i+2] / biasCorrection1
@@ -106,11 +118,6 @@ func (o *Adam) Step() {
 
 			// Unroll 4
 			g4 := grad[i+3]
-			if g4 > o.clipValue {
-				g4 = o.clipValue
-			} else if g4 < -o.clipValue {
-				g4 = -o.clipValue
-			}
 			m[i+3] = o.beta1*m[i+3] + (1-o.beta1)*g4
 			v[i+3] = o.beta2*v[i+3] + (1-o.beta2)*(g4*g4)
 			mHat4 := m[i+3] / biasCorrection1
@@ -119,11 +126,6 @@ func (o *Adam) Step() {
 
 			// Unroll 5
 			g5 := grad[i+4]
-			if g5 > o.clipValue {
-				g5 = o.clipValue
-			} else if g5 < -o.clipValue {
-				g5 = -o.clipValue
-			}
 			m[i+4] = o.beta1*m[i+4] + (1-o.beta1)*g5
 			v[i+4] = o.beta2*v[i+4] + (1-o.beta2)*(g5*g5)
 			mHat5 := m[i+4] / biasCorrection1
@@ -132,11 +134,6 @@ func (o *Adam) Step() {
 
 			// Unroll 6
 			g6 := grad[i+5]
-			if g6 > o.clipValue {
-				g6 = o.clipValue
-			} else if g6 < -o.clipValue {
-				g6 = -o.clipValue
-			}
 			m[i+5] = o.beta1*m[i+5] + (1-o.beta1)*g6
 			v[i+5] = o.beta2*v[i+5] + (1-o.beta2)*(g6*g6)
 			mHat6 := m[i+5] / biasCorrection1
@@ -145,11 +142,6 @@ func (o *Adam) Step() {
 
 			// Unroll 7
 			g7 := grad[i+6]
-			if g7 > o.clipValue {
-				g7 = o.clipValue
-			} else if g7 < -o.clipValue {
-				g7 = -o.clipValue
-			}
 			m[i+6] = o.beta1*m[i+6] + (1-o.beta1)*g7
 			v[i+6] = o.beta2*v[i+6] + (1-o.beta2)*(g7*g7)
 			mHat7 := m[i+6] / biasCorrection1
@@ -158,11 +150,6 @@ func (o *Adam) Step() {
 
 			// Unroll 8
 			g8 := grad[i+7]
-			if g8 > o.clipValue {
-				g8 = o.clipValue
-			} else if g8 < -o.clipValue {
-				g8 = -o.clipValue
-			}
 			m[i+7] = o.beta1*m[i+7] + (1-o.beta1)*g8
 			v[i+7] = o.beta2*v[i+7] + (1-o.beta2)*(g8*g8)
 			mHat8 := m[i+7] / biasCorrection1
@@ -173,12 +160,6 @@ func (o *Adam) Step() {
 		// Handle remaining elements
 		for ; i < len(param); i++ {
 			gradI := grad[i]
-			// Clip gradients
-			if gradI > o.clipValue {
-				gradI = o.clipValue
-			} else if gradI < -o.clipValue {
-				gradI = -o.clipValue
-			}
 
 			// Update biased first and second moment estimates
 			m[i] = o.beta1*m[i] + (1-o.beta1)*gradI
