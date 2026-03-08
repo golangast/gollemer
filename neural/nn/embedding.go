@@ -61,11 +61,17 @@ func (e *Embedding) LoadPretrainedWeights(weights map[int][]float64) {
 			continue // Or handle error
 		}
 		offset := tokenID * e.DimModel
-		if len(vector) != e.DimModel {
-			continue // Or handle error
-		}
-		copy(e.Weight.Data[offset:offset+e.DimModel], vector)
+		// Copy as much as possible, up to the minimum of the two dimensions
+		copyLen := min(len(vector), e.DimModel)
+		copy(e.Weight.Data[offset:offset+copyLen], vector[:copyLen])
 	}
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // Parameters returns all learnable parameters of the layer.
@@ -137,7 +143,7 @@ func (e *Embedding) Backward(grad *Tensor) error {
 			gradVectorStart := gradFlatIndex // Current position in flattened grad data
 
 			for k := range dimModel {
-				if embeddingGradStart+k >= len(e.Weight.Grad.Data) || gradVectorStart+k >= len(grad.Data) {
+				if embeddingGradStart+k >= len(e.Weight.Grad.Data) || gradVectorStart+k >= len(grad.Data) || embeddingGradStart+k < 0 || gradVectorStart+k < 0 {
 					return fmt.Errorf("gradient data index out of bounds during Embedding backward accumulation")
 				}
 				e.Weight.Grad.Data[embeddingGradStart+k] += grad.Data[gradVectorStart+k] // Accumulate gradient

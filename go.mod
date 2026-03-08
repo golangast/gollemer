@@ -1,12 +1,11 @@
 module github.com/golangast/gollemer
 
-go 1.26
+go 1.25.0
 
 require (
 	github.com/Masterminds/sprig/v3 v3.3.0
-	github.com/golang-jwt/jwt/v5 v5.3.0
-	github.com/golangast/gollemer/learningfolder v0.0.0-20260126125922-05d2e02a5d93
-	modernc.org/sqlite v1.44.3
+	github.com/golang-jwt/jwt/v5 v5.3.1
+	modernc.org/sqlite v1.46.1
 )
 
 require (

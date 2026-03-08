@@ -4,7 +4,7 @@ import (
 	"syscall/js"
 	"time"
 
-	"github.com/golangast/gollemer/jim/wasm/ui/material"
+	"github.com/golangast/gollemer/learningfolder/wasm/ui/material"
 )
 
 func RenderComponents() js.Value {

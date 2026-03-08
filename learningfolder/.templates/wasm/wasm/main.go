@@ -3,10 +3,10 @@ package main
 import (
 	"syscall/js"
 
-	"github.com/golangast/gollemer/jim/wasm/core"
-	"github.com/golangast/gollemer/jim/wasm/lib"
-	"github.com/golangast/gollemer/jim/wasm/pages"
-	"github.com/golangast/gollemer/jim/wasm/ui"
+	"github.com/golangast/gollemer/learningfolder/wasm/core"
+	"github.com/golangast/gollemer/learningfolder/wasm/lib"
+	"github.com/golangast/gollemer/learningfolder/wasm/pages"
+	"github.com/golangast/gollemer/learningfolder/wasm/ui"
 )
 
 func main() {

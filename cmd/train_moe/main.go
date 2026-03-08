@@ -4,6 +4,7 @@ import (
 	"encoding/gob"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -490,7 +491,7 @@ func trainIntentMoEBatchEnhanced(intentMoEModel *moe.IntentMoE, optimizer nn.Opt
 	inputTensor := NewTensor([]int{batchSize, maxSequenceLength}, inputIDsBatch, false)
 	semanticOutputTensor := NewTensor([]int{batchSize, maxSequenceLength}, semanticOutputIDsBatch, false)
 
-	scheduledSamplingProb := math.Min(0.5, float64(epoch+1)/float64(totalEpochs*4))
+	scheduledSamplingProb := math.Min(0.5, float64(epoch+1)/float64(totalEpochs*2))
 
 	semanticOutputLogits, contextVector, err := intentMoEModel.Forward(scheduledSamplingProb, inputTensor, semanticOutputTensor)
 	if err != nil {
@@ -519,7 +520,7 @@ func trainIntentMoEBatchEnhanced(intentMoEModel *moe.IntentMoE, optimizer nn.Opt
 			continue
 		}
 
-		predIDs, err := intentMoEModel.GreedySearchDecode(ctxSlice, maxSequenceLength, semanticOutputVocab.BosID, semanticOutputVocab.EosID, 1.0, 100, tag.Tag{}) // topK=100
+		predIDs, err := intentMoEModel.GreedySearchDecode(ctxSlice, maxSequenceLength, semanticOutputVocab.BosID, semanticOutputVocab.EosID, 1.0, 0.0, 100, tag.Tag{}) // topK=100
 		if err != nil {
 			continue
 		}
@@ -604,8 +605,8 @@ func trainIntentMoEBatch(intentMoEModel *moe.IntentMoE, optimizer nn.Optimizer, 
 	tForward := time.Now()
 
 	// Calculate scheduled sampling probability: gradually increase from 0% to 50%
-	// Formula: min(0.5, epoch / (totalEpochs * 4)) - Slower increase
-	scheduledSamplingProb := math.Min(0.5, float64(epoch+1)/float64(totalEpochs*8))
+	// Formula: min(0.5, (epoch + 1) / (totalEpochs * 2)) - Faster increase to force model recovery
+	scheduledSamplingProb := math.Min(0.5, float64(epoch+1)/float64(totalEpochs*2))
 
 	// Forward pass through the IntentMoE model with scheduled sampling
 	semanticOutputLogits, _, err := intentMoEModel.Forward(scheduledSamplingProb, inputTensor, semanticOutputTensor)
@@ -666,11 +667,28 @@ func trainIntentMoEBatch(intentMoEModel *moe.IntentMoE, optimizer nn.Optimizer, 
 			}(t)
 		}
 		wg.Wait()
+		
+		// Normalize by number of timesteps to be consistent with vectorized path
+		if len(semanticOutputLogits) > 0 {
+			div := float64(len(semanticOutputLogits))
+			semanticOutputLoss /= div
+			for t := range semanticOutputGrads {
+				for i := range semanticOutputGrads[t].Data {
+					semanticOutputGrads[t].Data[i] /= div
+				}
+			}
+		}
 	}
 
 	// Combine losses with entropy regularization weight
 	entropyWeight := 0.01 // Small weight to not dominate main loss
-	totalLoss := semanticOutputLoss + entropyWeight*entropyLoss
+
+	lbLoss := 0.0
+	if moeEnc, ok := intentMoEModel.Encoder.(*moe.MoEEncoder); ok {
+		lbLoss = moeEnc.Layer.LoadBalancingLoss * moeEnc.Layer.LoadBalancingWeight
+	}
+
+	totalLoss := semanticOutputLoss + entropyWeight*entropyLoss + lbLoss
 
 	lossTime := time.Since(tLoss)
 	tBackward := time.Now()
@@ -685,7 +703,7 @@ func trainIntentMoEBatch(intentMoEModel *moe.IntentMoE, optimizer nn.Optimizer, 
 	tOptim := time.Now()
 
 	// Clip gradients to prevent exploding gradients
-	clipGradients(intentMoEModel.Parameters(), 10.0)
+	clipGradients(intentMoEModel.Parameters(), 1.0)
 
 	optimizer.Step()
 
@@ -809,7 +827,6 @@ func BuildVocabularies(semanticTrainingData *IntentTrainingData) (*mainvocab.Voc
 }
 
 func main() {
-	const trainingDataPath = "./trainingdata/intent_data.json"
 	const semanticTrainingDataPath = "./trainingdata/semantic_output_data_flat.json"
 	const word2vecModelPath = "gob_models/word2vec_model.gob"
 
@@ -828,8 +845,14 @@ func main() {
 	}()
 
 	// Define training parameters
-	epochs := 5           // Reasonable for full dataset
-	learningRate := 0.01 // Further reduced learning rate
+	dryRun := flag.Bool("dry-run", false, "Run a quick test with 100 examples for 5 epochs")
+	flagLR := flag.Float64("lr", 0.00001, "Learning rate for training (default 1e-5)")
+	flagEpochs := flag.Int("epochs", 50, "Number of epochs to train (default 50)")
+
+	flag.Parse()
+
+	epochs := *flagEpochs
+	learningRate := *flagLR
 	batchSize := 8        // Reduced to avoid OOM
 	semanticOutputVocabularySavePath := "gob_models/semantic_output_vocabulary.gob"
 
@@ -839,24 +862,54 @@ func main() {
 		log.Fatalf("Failed to load Word2Vec model: %v", err)
 	}
 
-	// Create query vocabulary from word2vec model
-	queryVocabulary := convertW2VVocab(word2vecModel.Vocabulary)
-
-	// Add missing tokens from our specific domain
-	extraTokens := []string{"jill", "webserver", "jack", "go", "8080", "create", "named", "jim", "test", "data", "handler"}
-	for _, token := range extraTokens {
-		if _, exists := queryVocabulary.WordToToken[token]; !exists {
-			queryVocabulary.AddToken(token)
-			log.Printf("Added extra token to query vocab: %s", token)
-		}
-	}
-
 	// Load Intent training data
 	semanticTrainingData, err := LoadIntentTrainingData(semanticTrainingDataPath)
 	if err != nil {
 		log.Fatalf("Failed to load semantic training data from %s: %v", semanticTrainingDataPath, err)
 	}
 	log.Printf("Loaded %d training examples from %s.", len(*semanticTrainingData), semanticTrainingDataPath)
+
+	if *dryRun {
+		log.Println("🏃 DRY RUN ENABLED: Using only 100 examples and 5 epochs.")
+		epochs = 5
+		if len(*semanticTrainingData) > 100 {
+			subset := (*semanticTrainingData)[:100]
+			*semanticTrainingData = subset
+		}
+	}
+
+	// Create query vocabulary from word2vec model
+	queryVocabulary := convertW2VVocab(word2vecModel.Vocabulary)
+
+	// Frequency-based Vocabulary Pruning for domain tokens
+	log.Println("Pruning noisy domain tokens...")
+	tokenCounts := make(map[string]int)
+	for _, example := range *semanticTrainingData {
+		for _, tok := range tokenizer.Tokenize(strings.ToLower(example.Query)) {
+			tokenCounts[tok]++
+		}
+	}
+
+	// Add missing tokens from our specific domain IF they appear enough or are known special tokens
+	extraTokens := []string{"jill", "webserver", "jack", "go", "8080", "create", "named", "jim", "test", "data", "handler"}
+	for _, token := range extraTokens {
+		if _, exists := queryVocabulary.WordToToken[token]; !exists {
+			queryVocabulary.AddToken(token)
+		}
+	}
+
+	// Prune tokens that are NOT in Word2Vec and have very low frequency
+	missCount := 0
+	for tok, count := range tokenCounts {
+		if _, exists := word2vecModel.Vocabulary[tok]; !exists {
+			if count < 2 { // Prune singleton tokens that are also Word2Vec misses
+				missCount++
+				continue
+			}
+			queryVocabulary.AddToken(tok)
+		}
+	}
+	log.Printf("Pruned %d low-frequency 'garbage' tokens missing from Word2Vec.", missCount)
 
 	// Balance data: Oversample semantic data to match WikiQA scale
 	log.Println("Balancing dataset (Oversampling semantic data)...")
@@ -887,6 +940,26 @@ func main() {
 		}
 	}
 
+	// Load Conversational training data
+	const conversationalDataPath = "./trainingdata/conversational_intents.json"
+	if _, err := os.Stat(conversationalDataPath); err == nil {
+		convData, err := LoadIntentTrainingData(conversationalDataPath)
+		if err == nil {
+			*semanticTrainingData = append(*semanticTrainingData, *convData...)
+			log.Printf("Merged %d Conversational examples. Total: %d", len(*convData), len(*semanticTrainingData))
+		}
+	}
+
+	// Load Help training data
+	const helpDataPath = "./trainingdata/help_intents.json"
+	if _, err := os.Stat(helpDataPath); err == nil {
+		helpData, err := LoadIntentTrainingData(helpDataPath)
+		if err == nil {
+			*semanticTrainingData = append(*semanticTrainingData, *helpData...)
+			log.Printf("Merged %d Help examples. Total: %d", len(*helpData), len(*semanticTrainingData))
+		}
+	}
+
 	// Try to load other vocabularies first
 	semanticOutputVocabulary, err := mainvocab.LoadVocabulary(semanticOutputVocabularySavePath)
 	if err != nil {
@@ -910,7 +983,6 @@ func main() {
 	embeddingDim := word2vecModel.VectorSize // Match Word2Vec dimension
 	numExperts := 4          // Increased back to 4
 	maxSequenceLength := 50 // Reduced to 50
-	maxAttentionHeads := 4   // Increased back to 4
 
 	log.Printf("Query Vocabulary Size: %d", inputVocabSize)
 	log.Printf("Semantic Output Vocabulary Size: %d", semanticOutputVocabSize)
@@ -967,6 +1039,17 @@ func main() {
 		if word2vecModel != nil && word2vecModel.VectorSize == embeddingDim {
 			log.Printf("Loading pretrained Word2Vec weights (dim=%d)...", embeddingDim)
 			embedding.LoadPretrainedWeights(word2vecModel.WordVectors)
+
+			// Fix Word2Vec Misses: Re-initialize UNK embedding with noise
+			if unkID, ok := queryVocabulary.WordToToken["UNK"]; ok {
+				log.Printf("Re-initializing UNK token (ID %d) with random noise...", unkID)
+				limit := math.Sqrt(6.0 / float64(inputVocabSize+embeddingDim))
+				start := unkID * embeddingDim
+				end := start + embeddingDim
+				for j := start; j < end; j++ {
+					embedding.Weight.Data[j] = (rand.Float64() * 2 * limit) - limit
+				}
+			}
 		} else if word2vecModel != nil {
 			log.Printf("Word2Vec model vector size %d does not match embedding dim %d. Skipping loading pretrained weights.", word2vecModel.VectorSize, embeddingDim)
 		}
@@ -978,8 +1061,13 @@ func main() {
 			log.Fatalf("Failed to create MoEEncoder: %v", err)
 		}
 
+		// Adjust MoE settings for training
+		encoder.Layer.LoadBalancingWeight = 0.5
+		encoder.Layer.CapacityFactor = 1.5
+		encoder.Layer.RouterTemperature = 1.0
+
 		// 3. RNN Decoder with increased capacity and dropout
-		decoder, err := moe.NewRNNDecoder(embeddingDim, semanticOutputVocabSize, hiddenSize, maxAttentionHeads, numLayers, dropoutRate)
+		decoder, err := moe.NewRNNDecoder(hiddenSize, semanticOutputVocabSize, hiddenSize, maxAttentionHeads, numLayers, dropoutRate)
 		if err != nil {
 			log.Fatalf("Failed to create decoder: %v", err)
 		}
@@ -992,6 +1080,16 @@ func main() {
 			SentenceVocabSize: semanticOutputVocabSize,
 		}
 	}
+
+	// Adjust MoE settings for training to prevent token dropping and encourage diversity
+	for _, layer := range moe.ActiveLayers {
+		layer.CapacityFactor = 1.2       // Increased to prevents tokens being dropped (Suggested 1.0+)
+		layer.LoadBalancingWeight = 2.5  // Increased to force router to distribute tokens more evenly (Suggested 2.0-2.5)
+		layer.RouterTemperature = 1.2    // Higher temp for softer routing, helping underutilized experts (Suggested 1.0-1.2)
+		layer.ExpertDropoutRate = 0.1    // Keep noise enabled
+		layer.SetMode(true)              // Enable training mode (noise)
+	}
+	log.Println("🔧 Adjusted MoE: Capacity=1.2, LB=2.5, Temp=1.2, Dropout=0.1")
 
 	// Training Loop
 	// epochs = 5 // Removed redundant assignment
@@ -1037,7 +1135,7 @@ func main() {
 	runtime.GC()
 
 	// Train the model
-	checkpointInterval := 50 // Save every 50 batches
+	checkpointInterval := 500 // Save every 500 batches
 	err = TrainIntentMoEModel(intentMoEModel, tokenizedData, epochs, learningRate, batchSize, maxSequenceLength, semanticOutputVocabulary, modelSavePath, checkpointInterval)
 	if err != nil {
 		log.Fatalf("Failed to train IntentMoE model: %v", err)

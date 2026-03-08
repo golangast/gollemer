@@ -3,7 +3,7 @@ package pages
 import (
 	"syscall/js"
 
-	"github.com/golangast/gollemer/jim/wasm/ui/material"
+	"github.com/golangast/gollemer/learningfolder/wasm/ui/material"
 )
 
 func RenderHelp() js.Value {

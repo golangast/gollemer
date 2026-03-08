@@ -2,10 +2,7 @@ package context
 
 import (
 	"fmt"
-	"slices"
 	"strings"
-
-	"github.com/golangast/gollemer/tagger"
 )
 
 // Entity represents a recognized entity with its type and value.
@@ -18,6 +15,7 @@ type Entity struct {
 type ConversationContext struct {
 	MaxTurns        int
 	TurnHistory     []string   // Raw text of past user inputs
+	ResponseHistory []string   // Raw text of past system responses
 	LastIntents     []string   // Last N predicted intents
 	LastEntities    [][]Entity // Last N sets of recognized entities
 	CurrentIntent   string     // The most recently predicted intent
@@ -27,10 +25,11 @@ type ConversationContext struct {
 // NewConversationContext initializes a new ConversationContext with a specified history size.
 func NewConversationContext(maxTurns int) *ConversationContext {
 	return &ConversationContext{
-		MaxTurns:     maxTurns,
-		TurnHistory:  make([]string, 0, maxTurns),
-		LastIntents:  make([]string, 0, maxTurns),
-		LastEntities: make([][]Entity, 0, maxTurns),
+		MaxTurns:        maxTurns,
+		TurnHistory:     make([]string, 0, maxTurns),
+		ResponseHistory: make([]string, 0, maxTurns),
+		LastIntents:     make([]string, 0, maxTurns),
+		LastEntities:    make([][]Entity, 0, maxTurns),
 	}
 }
 
@@ -52,6 +51,35 @@ func (cc *ConversationContext) AddTurn(intent string, entities []Entity, rawText
 	}
 }
 
+// AddResponse adds the system's response to the conversation context.
+func (cc *ConversationContext) AddResponse(response string) {
+	cc.ResponseHistory = append(cc.ResponseHistory, response)
+	if len(cc.ResponseHistory) > cc.MaxTurns {
+		cc.ResponseHistory = cc.ResponseHistory[1:]
+	}
+}
+
+// GetConversationHistory returns the full conversation history formatted as a string.
+func (cc *ConversationContext) GetConversationHistory() string {
+	var sb strings.Builder
+	turns := len(cc.TurnHistory)
+	responses := len(cc.ResponseHistory)
+	maxLen := turns
+	if responses > maxLen {
+		maxLen = responses
+	}
+
+	for i := 0; i < maxLen; i++ {
+		if i < turns {
+			sb.WriteString("Human: " + cc.TurnHistory[i] + "\n")
+		}
+		if i < responses {
+			sb.WriteString("AI: " + cc.ResponseHistory[i] + "\n")
+		}
+	}
+	return sb.String()
+}
+
 // GetLastIntent retrieves the most recent intent from the history.
 func (cc *ConversationContext) GetLastIntent() string {
 	if len(cc.LastIntents) > 0 {
@@ -68,33 +96,71 @@ func (cc *ConversationContext) GetLastEntities() []Entity {
 	return nil
 }
 
-// ResolveCoReference attempts to resolve co-references in the input text based on the conversation context.
+// GetLastResponse retrieves the most recent system response from the history.
+func (cc *ConversationContext) GetLastResponse() string {
+	if len(cc.ResponseHistory) > 0 {
+		return cc.ResponseHistory[len(cc.ResponseHistory)-1]
+	}
+	return ""
+}
+
+// ResolveCoReference attempts to resolve simple pronominal co-references in the input text.
+// For example, if the last command was "create handler login" and the current command is "delete it",
+// this function should resolve "it" to "login".
 func (cc *ConversationContext) ResolveCoReference(inputText string) string {
-	resolvedText := inputText
-	lowerInput := strings.ToLower(inputText)
+	tokens := strings.Fields(inputText)
+	resolvedTokens := make([]string, len(tokens))
+	copy(resolvedTokens, tokens)
 
-	taggedEntities := tagger.Tagging(lowerInput)
+	// Simple pronoun resolution for now
+	pronouns := map[string]bool{
+		"it":   true,
+		"that": true,
+		"this": true,
+		"them": true,
+	}
 
-	// Iterate through each pronoun to see if it's in the input
-	for _, pronoun := range taggedEntities.Tokens {
-		if slices.Contains(taggedEntities.PosTag, "PRP") || taggedEntities.IsName {
-			// if strings.Contains(lowerInput, pronoun) {
-			// If a pronoun is found, search backwards through the conversation history for an entity to replace it with.
-			for i := len(cc.LastEntities) - 1; i >= 0; i-- {
-				entities := cc.LastEntities[i]
-				if len(entities) > 0 {
-					// A simple strategy: replace the pronoun with the value of the first entity found.
-					// This can be improved with more sophisticated entity-type matching.
-					replacementEntity := entities[0]
-					resolvedText = strings.Replace(resolvedText, pronoun, replacementEntity.Value, 1)
-					fmt.Printf("Resolved '%s' to '%s'. New text: '%s'\n", pronoun, replacementEntity.Value, resolvedText)
-					// After a successful replacement, we update lowerInput to avoid multiple replacements of the same pronoun.
-					// lowerInput = strings.ToLower(resolvedText)
-					break // Move to the next pronoun
-				}
+	for i, token := range tokens {
+		lowerToken := strings.ToLower(token)
+		if pronouns[lowerToken] {
+			// Found a pronoun, now look for an antecedent in previous turns
+			antecedent := cc.findAntecedent()
+			if antecedent != "" {
+				fmt.Printf("Context: Resolved pronoun '%s' to '%s'\n", token, antecedent)
+				resolvedTokens[i] = antecedent
+				// Once resolved, we can stop for this pronoun to avoid multiple replacements.
+				// A more advanced system would handle multiple pronouns.
 			}
 		}
 	}
 
-	return resolvedText
+	return strings.Join(resolvedTokens, " ")
+}
+
+// findAntecedent searches backwards in the context for the most likely entity.
+func (cc *ConversationContext) findAntecedent() string {
+	// Search backwards through the history of entities
+	for i := len(cc.LastEntities) - 1; i >= 0; i-- {
+		entities := cc.LastEntities[i]
+
+		// Prioritize specific, named entities over generic component types.
+		var bestCandidate string
+
+		for _, entity := range entities {
+			// Prefer entities that are likely to be nouns/names.
+			switch entity.Type {
+			case "handler_name", "database_name", "project_name", "file", "folder", "name", "FILENAME", "NAME":
+				return entity.Value // Return the first high-priority entity found
+			case "component", "feature":
+				if bestCandidate == "" {
+					bestCandidate = entity.Value
+				}
+			}
+		}
+
+		if bestCandidate != "" {
+			return bestCandidate
+		}
+	}
+	return "" // No suitable antecedent found
 }

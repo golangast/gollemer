@@ -103,6 +103,9 @@ func (c *LSTMCell) Forward(inputs ...*Tensor) (*Tensor, *Tensor, error) {
 	if len(inputs) != 3 {
 		return nil, nil, fmt.Errorf("LSTMCell.Forward expects 3 inputs (input, prevHidden, prevCell), got %d", len(inputs))
 	}
+	if inputs[0] == nil || inputs[1] == nil || inputs[2] == nil {
+		return nil, nil, fmt.Errorf("LSTMCell.Forward received nil input tensor(s)")
+	}
 	input, prevHidden, prevCell := inputs[0], inputs[1], inputs[2]
 
 	// Store inputs for backward pass
@@ -397,42 +400,42 @@ func (c *LSTMCell) Backward(gradHt, gradCt *Tensor) error {
 	if c.Wf.Grad == nil {
 		c.Wf.Grad = NewTensor(c.Wf.Shape, make([]float64, len(c.Wf.Data)), false)
 	}
-	AddAccumulate(c.Wf.Grad.Data, gradWf.Data)
+	safeAccumulate(c.Wf.Grad.Data, gradWf.Data)
 
 	if c.Wi.Grad == nil {
 		c.Wi.Grad = NewTensor(c.Wi.Shape, make([]float64, len(c.Wi.Data)), false)
 	}
-	AddAccumulate(c.Wi.Grad.Data, gradWi.Data)
+	safeAccumulate(c.Wi.Grad.Data, gradWi.Data)
 
 	if c.Wc.Grad == nil {
 		c.Wc.Grad = NewTensor(c.Wc.Shape, make([]float64, len(c.Wc.Data)), false)
 	}
-	AddAccumulate(c.Wc.Grad.Data, gradWc.Data)
+	safeAccumulate(c.Wc.Grad.Data, gradWc.Data)
 
 	if c.Wo.Grad == nil {
 		c.Wo.Grad = NewTensor(c.Wo.Shape, make([]float64, len(c.Wo.Data)), false)
 	}
-	AddAccumulate(c.Wo.Grad.Data, gradWo.Data)
+	safeAccumulate(c.Wo.Grad.Data, gradWo.Data)
 
 	if c.Bf.Grad == nil {
 		c.Bf.Grad = NewTensor(c.Bf.Shape, make([]float64, len(c.Bf.Data)), false)
 	}
-	AddAccumulate(c.Bf.Grad.Data, gradBf.Data)
+	safeAccumulate(c.Bf.Grad.Data, gradBf.Data)
 
 	if c.Bi.Grad == nil {
 		c.Bi.Grad = NewTensor(c.Bi.Shape, make([]float64, len(c.Bi.Data)), false)
 	}
-	AddAccumulate(c.Bi.Grad.Data, gradBi.Data)
+	safeAccumulate(c.Bi.Grad.Data, gradBi.Data)
 
 	if c.Bc.Grad == nil {
 		c.Bc.Grad = NewTensor(c.Bc.Shape, make([]float64, len(c.Bc.Data)), false)
 	}
-	AddAccumulate(c.Bc.Grad.Data, gradBc.Data)
+	safeAccumulate(c.Bc.Grad.Data, gradBc.Data)
 
 	if c.Bo.Grad == nil {
 		c.Bo.Grad = NewTensor(c.Bo.Shape, make([]float64, len(c.Bo.Data)), false)
 	}
-	AddAccumulate(c.Bo.Grad.Data, gradBo.Data)
+	safeAccumulate(c.Bo.Grad.Data, gradBo.Data)
 
 	// 7. Gradients for combined input
 	transposedWf, err := c.Wf.Transpose(0, 1)
@@ -658,7 +661,10 @@ func (l *LSTM) Forward(inputs ...*Tensor) (*Tensor, *Tensor, error) {
 				cellForTimeStep.it = it
 				cellForTimeStep.cct = cct
 				cellForTimeStep.ot = ot
-				cellForTimeStep.InputTensor = NewTensor([]int{batchSize, inSize}, nil, false)
+				// Extract input for this timestep to allow Backward to compute weight gradients
+				inputSlice, _ := layerInput.Slice(1, t, t+1)
+				inputT, _ := inputSlice.Reshape([]int{batchSize, inSize})
+				cellForTimeStep.InputTensor = inputT
 				cellForTimeStep.PrevHidden = h
 				cellForTimeStep.PrevCell = c
 
@@ -699,6 +705,9 @@ func (l *LSTM) Forward(inputs ...*Tensor) (*Tensor, *Tensor, error) {
 		}
 		return nil, nil, fmt.Errorf("LSTM forward loop finished without returning") // Should not happen
 	} else if len(input.Shape) == 2 { // Single time step
+		// Clear timeStepCells to ensure Backward uses the single-step path
+		l.timeStepCells = nil
+
 		var currentHidden, currentCell *Tensor = initialHidden, initialCell
 		var layerOutput *Tensor = input
 
@@ -817,7 +826,11 @@ func (l *LSTM) Backward(gradNextHidden, gradNextCell *Tensor) error {
 				for b := 0; b < batchSize; b++ {
 					outOffset := (b*sequenceLength + t) * inputSize
 					inOffset := b * inputSize
-					AddAccumulate(layerInputTensor.Grad.Data[outOffset:outOffset+inputSize], cell.InputTensor.Grad.Data[inOffset:inOffset+inputSize])
+					if outOffset >= 0 && outOffset+inputSize <= len(layerInputTensor.Grad.Data) && inOffset >= 0 && inOffset+inputSize <= len(cell.InputTensor.Grad.Data) {
+						safeAccumulate(layerInputTensor.Grad.Data[outOffset:outOffset+inputSize], cell.InputTensor.Grad.Data[inOffset:inOffset+inputSize])
+					} else {
+						// Skip invalid indices to prevent panic
+					}
 				}
 			}
 		}
@@ -847,4 +860,9 @@ func (l *LSTM) GetCellState(layer, timestep int) *Tensor {
 		return nil
 	}
 	return l.timeStepCells[layer][timestep].ct
+}
+
+// ClearState clears the internal state of the LSTM.
+func (l *LSTM) ClearState() {
+	l.timeStepCells = nil
 }

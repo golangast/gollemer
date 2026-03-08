@@ -680,3 +680,29 @@ func GenerateExampleTrainingData(docs []RagDocument, sw2v *word2vec.SimpleWord2V
 
 	return trainingData, nil
 }
+
+// SaveRagDocuments saves RagDocuments to a GOB file.
+func SaveRagDocuments(docs RagDocuments, filePath string) error {
+	file, err := os.Create(filePath)
+	if err != nil {
+		return fmt.Errorf("error creating gob file: %w", err)
+	}
+	defer file.Close()
+
+	encoder := gob.NewEncoder(file)
+	return encoder.Encode(docs)
+}
+
+// LoadRagDocuments loads RagDocuments from a GOB file.
+func LoadRagDocuments(filePath string) (RagDocuments, error) {
+	var docs RagDocuments
+	file, err := os.Open(filePath)
+	if err != nil {
+		return docs, fmt.Errorf("error opening gob file: %w", err)
+	}
+	defer file.Close()
+
+	decoder := gob.NewDecoder(file)
+	err = decoder.Decode(&docs)
+	return docs, err
+}

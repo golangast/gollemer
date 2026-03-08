@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"syscall/js"
 
-	"github.com/golangast/gollemer/jim/wasm/lib"
-	"github.com/golangast/gollemer/jim/wasm/ui/material"
+	"github.com/golangast/gollemer/learningfolder/wasm/lib"
+	"github.com/golangast/gollemer/learningfolder/wasm/ui/material"
 )
 
 func RenderSprig() js.Value {

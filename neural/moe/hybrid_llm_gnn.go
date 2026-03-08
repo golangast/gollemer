@@ -3,7 +3,7 @@ package moe
 import (
 	"encoding/gob"
 	"fmt"
-
+	"log"
 	"github.com/golangast/gollemer/neural/nn"
 	"github.com/golangast/gollemer/neural/tensor"
 )
@@ -91,12 +91,21 @@ func (e *HybridLLMGNNEncoder) Forward(inputs ...*tensor.Tensor) (*tensor.Tensor,
 		return nil, fmt.Errorf("HybridLLMGNNEncoder GNN failed: %w", err)
 	}
 
+	// 4. Residual Connection: X = X + GNN(X)
+	// This preserves the original token identity while adding neighborhood context.
+	residualOut, err := llmOut.Add(gnnOut)
+	if err != nil {
+		// If shape mismatch (e.g. projection happened in GNN), fallback to GNN output
+		log.Printf("⚠️ Residual connection failed (shape mismatch?): %v. Using GNN output only.", err)
+		residualOut = gnnOut
+	}
+
 	// Store for backward
 	e.llmOutput = llmOut
 	e.gnnOutput = gnnOut
 	e.adj = adj
 
-	return gnnOut, nil
+	return residualOut, nil
 }
 
 func (e *HybridLLMGNNEncoder) Backward(grad *tensor.Tensor) error {
@@ -107,16 +116,39 @@ func (e *HybridLLMGNNEncoder) Backward(grad *tensor.Tensor) error {
 		e.llmOutput.Grad = tensor.NewTensor(e.llmOutput.Shape, make([]float64, len(e.llmOutput.Data)), false)
 	}
 
-	// 1. Backward through GNN
-	// This updates e.llmOutput.Grad
+	// 1. Backward through GNN branch
+	// This updates e.llmOutput.Grad via the inner GCNLayer
 	err := e.GNNLayer.Backward(grad)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed GNN branch backward: %w", err)
 	}
 
-	// 2. Backward through LLM Encoder using the gradient on its output
+	// 2. Backward through Residual branch
+	// d(X + GNN(X))/dX = 1 + dGNN(X)/dX
+	// So we add the incoming gradient directly to llmOutput.Grad
+	if e.llmOutput.RequiresGrad {
+		if e.llmOutput.Grad == nil {
+			e.llmOutput.Grad = tensor.NewTensor(e.llmOutput.Shape, make([]float64, len(e.llmOutput.Data)), false)
+		}
+		// Explicitly accumulate the residual gradient
+		for i := range grad.Data {
+			e.llmOutput.Grad.Data[i] += grad.Data[i]
+		}
+	}
+
+	// 3. Backward through LLM Encoder using the total gradient on its output
 	return e.LLMEncoder.Backward(e.llmOutput.Grad)
 }
+
+func (e *HybridLLMGNNEncoder) ClearState() {
+	e.llmOutput = nil
+	e.gnnOutput = nil
+	e.adj = nil
+	if moeEnc, ok := e.LLMEncoder.(*MoELayer); ok {
+		moeEnc.ClearState()
+	}
+}
+
 
 func (e *HybridLLMGNNEncoder) Parameters() []*tensor.Tensor {
 	params := e.LLMEncoder.Parameters()

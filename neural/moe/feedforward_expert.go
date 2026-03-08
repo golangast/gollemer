@@ -13,7 +13,8 @@ type FeedForwardExpert struct {
 	Layer2 *nn.Linear
 	// Stored for backward pass
 	inputTensor        *tensor.Tensor
-	intermediateOutput *tensor.Tensor
+	activationOutput   *tensor.Tensor // Output after ReLU
+	intermediateOutput *tensor.Tensor // Output before ReLU
 }
 
 // NewFeedForwardExpert creates a new FeedForwardExpert.
@@ -40,18 +41,41 @@ func NewFeedForwardExpert(inputDim, hiddenDim, outputDim int) (*FeedForwardExper
 func (e *FeedForwardExpert) Forward(input *tensor.Tensor) (*tensor.Tensor, error) {
 	e.inputTensor = input
 
-	// Layer 1: Linear -> ReLU (assuming ReLU is applied implicitly or as part of a custom activation)
-	// For simplicity, let's just use linear layers for now. Add activation functions if needed.
+	// Layer 1: Linear -> ReLU
 	output1, err := e.Layer1.Forward(input)
 	if err != nil {
 		return nil, fmt.Errorf("expert layer 1 forward failed: %w", err)
 	}
 	e.intermediateOutput = output1 // Store for backward pass
 
+	activationOutput, err := output1.ReLU()
+	if err != nil {
+		return nil, fmt.Errorf("expert activation ReLU failed: %w", err)
+	}
+	e.activationOutput = activationOutput
+
 	// Layer 2: Linear
-	output2, err := e.Layer2.Forward(output1)
+	output2, err := e.Layer2.Forward(activationOutput)
 	if err != nil {
 		return nil, fmt.Errorf("expert layer 2 forward failed: %w", err)
+	}
+
+	// Residual Connection: Output = X + MLP(X)
+	// This only works if input dimension matches output dimension (standard for Transformers)
+	if len(input.Shape) == len(output2.Shape) {
+		dimsMatch := true
+		for i := range input.Shape {
+			if input.Shape[i] != output2.Shape[i] {
+				dimsMatch = false
+				break
+			}
+		}
+		if dimsMatch {
+			residualOut, err := input.Add(output2)
+			if err == nil {
+				return residualOut, nil
+			}
+		}
 	}
 
 	return output2, nil
@@ -69,8 +93,16 @@ func (e *FeedForwardExpert) Backward(grad *tensor.Tensor) error {
 		return fmt.Errorf("expert layer 2 backward failed: %w", err)
 	}
 
+	// Backpropagate through ReLU
+	if e.activationOutput == nil || e.activationOutput.Grad == nil {
+		return fmt.Errorf("expert activation output or its gradient is nil in backward")
+	}
+	err = e.activationOutput.Creator.Backward(e.activationOutput.Grad)
+	if err != nil {
+		return fmt.Errorf("expert activation backward failed: %w", err)
+	}
+
 	// Backpropagate through Layer1
-	// The gradient for Layer1 is the gradient of its output, which is e.intermediateOutput.Grad
 	if e.intermediateOutput == nil || e.intermediateOutput.Grad == nil {
 		return fmt.Errorf("expert intermediate output or its gradient is nil in backward")
 	}
@@ -79,13 +111,28 @@ func (e *FeedForwardExpert) Backward(grad *tensor.Tensor) error {
 		return fmt.Errorf("expert layer 1 backward failed: %w", err)
 	}
 
+	// Propagate residual gradient (Identity branch)
+	// d(X + MLP(X))/dX = 1 + dMLP(X)/dX
+	// So we add the incoming gradient directly to our input gradient
+	if e.inputTensor != nil && grad != nil {
+		if e.inputTensor.Grad == nil {
+			e.inputTensor.Grad = tensor.NewTensor(e.inputTensor.Shape, make([]float64, len(e.inputTensor.Data)), false)
+		}
+		for i := range grad.Data {
+			e.inputTensor.Grad.Data[i] += grad.Data[i]
+		}
+	}
+
 	// Copy the gradient from Layer1's input to our inputTensor
 	// This is necessary because Layer1 sets gradients on its own stored input,
 	// not on the expert's inputTensor reference
 	if e.inputTensor != nil && len(e.Layer1.Inputs()) > 0 {
 		layer1Input := e.Layer1.Inputs()[0]
 		if layer1Input != nil && layer1Input.Grad != nil {
-			e.inputTensor.Grad = layer1Input.Grad
+			// MUST accumulate gradients, not assign, or we lose residual identity gradients!
+			for i := range e.inputTensor.Grad.Data {
+				e.inputTensor.Grad.Data[i] += layer1Input.Grad.Data[i]
+			}
 		}
 	}
 
