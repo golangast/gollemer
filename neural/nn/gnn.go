@@ -31,6 +31,14 @@ func (l *GCNLayer) Parameters() []*tensor.Tensor {
 	return l.Linear.Parameters()
 }
 
+func (l *GCNLayer) ClearState() {
+	l.adj = nil
+	l.linearOut = nil
+	if l.Linear != nil {
+		l.Linear.ClearState()
+	}
+}
+
 // Forward performs the forward pass.
 // inputs: [batch_size, num_nodes, in_features] or [num_nodes, in_features]
 // adj: [num_nodes, num_nodes] (Adjacency matrix, usually normalized)

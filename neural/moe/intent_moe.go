@@ -46,12 +46,12 @@ func init() {
 	gob.Register(&tensor.SplitOperation{})
 }
 
-// sampleFromLogits samples a token ID from logits using temperature, top-k, and top-p sampling.
-func sampleFromLogits(logits *tensor.Tensor, temperature float64, topK int, topP float64) (int, error) {
+// SampleFromLogits samples a token ID from logits using temperature, top-k, and top-p sampling.
+func SampleFromLogits(logits *tensor.Tensor, temperature float64, topK int, topP float64) (int, error) {
 	// logits shape: [batchSize, vocabSize]
 	// We assume batchSize = 1 for inference
 	if logits.Shape[0] != 1 {
-		return 0, fmt.Errorf("sampleFromLogits expects batch size 1, got %d", logits.Shape[0])
+		return 0, fmt.Errorf("SampleFromLogits expects batch size 1, got %d", logits.Shape[0])
 	}
 
 	vocabSize := logits.Shape[1]
@@ -229,6 +229,7 @@ type Encoder interface {
 	Inputs() []*tensor.Tensor
 	Parameters() []*tensor.Tensor
 	SetMode(bool)
+	ClearState()
 }
 
 // IntentMoE represents a Mixture of Experts model for intent classification.
@@ -322,11 +323,15 @@ func NewHybridIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, ch
 // Forward performs the forward pass of the IntentMoE model.
 // scheduledSamplingProb: probability of using model predictions instead of ground truth (0.0 for inference)
 func (m *IntentMoE) Forward(scheduledSamplingProb float64, inputs ...*tensor.Tensor) ([]*tensor.Tensor, *tensor.Tensor, error) {
-	if len(inputs) != 2 {
-		return nil, nil, fmt.Errorf("IntentMoE.Forward expects 2 inputs (query token IDs, target token IDs), got %d", len(inputs))
+	if len(inputs) < 2 {
+		return nil, nil, fmt.Errorf("IntentMoE.Forward expects at least 2 inputs (query token IDs, target token IDs), got %d", len(inputs))
 	}
 	queryTokenIDs := inputs[0]
 	targetTokenIDs := inputs[1]
+	var inputMask *tensor.Tensor
+	if len(inputs) >= 3 {
+		inputMask = inputs[2]
+	}
 
 	// Pass token IDs through embedding layer
 	queryEmbeddings, err := m.Embedding.Forward(queryTokenIDs)
@@ -340,8 +345,8 @@ func (m *IntentMoE) Forward(scheduledSamplingProb float64, inputs ...*tensor.Ten
 		return nil, nil, fmt.Errorf("MoE encoder forward failed: %w", err)
 	}
 
-	// Decoder forward pass with scheduled sampling
-	sentenceLogits, err := m.Decoder.Forward(contextVector, targetTokenIDs, scheduledSamplingProb)
+	// Decoder forward pass with scheduled sampling & mask
+	sentenceLogits, err := m.Decoder.Forward(contextVector, targetTokenIDs, scheduledSamplingProb, inputMask)
 	if err != nil {
 		return nil, nil, fmt.Errorf("decoder forward failed: %w", err)
 	}
@@ -479,7 +484,7 @@ func (m *IntentMoE) GreedySearchDecodeWithTemp(contextVector *tensor.Tensor, max
 		}
 
 		// Use sampling/top-k decoding for diversity
-		sampledID, err := sampleFromLogits(outputLogits, temperature, topK, 0.0)
+		sampledID, err := SampleFromLogits(outputLogits, temperature, topK, 0.0)
 		if err != nil {
 			return nil, fmt.Errorf("sampling failed: %w", err)
 		}
@@ -629,7 +634,7 @@ func (m *IntentMoE) SampleDecode(contextVector *tensor.Tensor, maxLen, sosToken,
 		}
 
 		// Sample from the logits with temperature, top-k, and top-p
-		predictedID, err := sampleFromLogits(outputLogits, temperature, topK, topP)
+		predictedID, err := SampleFromLogits(outputLogits, temperature, topK, topP)
 		if err != nil {
 			return nil, fmt.Errorf("sampling failed: %w", err)
 		}
@@ -646,6 +651,19 @@ func (m *IntentMoE) SampleDecode(contextVector *tensor.Tensor, maxLen, sosToken,
 	}
 
 	return decodedIDs, nil
+}
+
+// ClearState clears the intermediate states of all model components to free memory.
+func (m *IntentMoE) ClearState() {
+	if m.Embedding != nil {
+		m.Embedding.ClearState()
+	}
+	if m.Encoder != nil {
+		m.Encoder.ClearState()
+	}
+	if m.Decoder != nil {
+		m.Decoder.ClearState()
+	}
 }
 
 // SaveIntentMoEModelToGOB saves the IntentMoE to a file in Gob format.

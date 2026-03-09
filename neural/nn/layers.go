@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"log"
 	"math/rand"
 
 	. "github.com/golangast/gollemer/neural/tensor"
@@ -103,6 +104,11 @@ func (l *Linear) Parameters() []*Tensor {
 // Input returns the input tensor of the Linear operation.
 func (l *Linear) Input() *Tensor {
 	return l.input
+}
+
+// ClearState clears the intermediate states to free memory.
+func (l *Linear) ClearState() {
+	l.input = nil
 }
 
 // Forward performs the forward pass of the Linear layer.
@@ -664,6 +670,23 @@ func (mha *MultiHeadAttention) Parameters() []*Tensor {
 	return params
 }
 
+// ClearState clears the intermediate states to free memory.
+func (mha *MultiHeadAttention) ClearState() {
+	mha.attentionOutput = nil
+	mha.inputTensor = nil
+	mha.q = nil
+	mha.k = nil
+	mha.v = nil
+	mha.attentionScores = nil
+	mha.attentionWeights = nil
+	mha.attentionOutputBeforeConcat = nil
+	
+	if mha.QueryLinear != nil { mha.QueryLinear.ClearState() }
+	if mha.KeyLinear != nil { mha.KeyLinear.ClearState() }
+	if mha.ValueLinear != nil { mha.ValueLinear.ClearState() }
+	if mha.OutputLinear != nil { mha.OutputLinear.ClearState() }
+}
+
 // Backward performs the backward pass for multi-head self-attention.
 // grad is the gradient from the output of the attention layer (after the final linear layer).
 func (mha *MultiHeadAttention) Backward(grad *Tensor) error {
@@ -1111,6 +1134,14 @@ type MultiHeadCrossAttention struct {
 	Wo              *Linear // This seems to be a duplicate of OutputLinear based on its usage
 }
 
+func (m *MultiHeadCrossAttention) Query() *Tensor { return m.queryTensor }
+func (m *MultiHeadCrossAttention) Key() *Tensor   { return m.keyTensor }
+func (m *MultiHeadCrossAttention) Value() *Tensor { return m.valueTensor }
+
+func (m *MultiHeadCrossAttention) SetInput(q *Tensor) {
+	m.queryTensor = q
+}
+
 // NewMultiHeadCrossAttention creates a new MultiHeadCrossAttention layer.
 func NewMultiHeadCrossAttention(dimModel, queryDim, kvDim, numQHeads, numKVHeads int) (*MultiHeadCrossAttention, error) {
 	if dimModel%numQHeads != 0 {
@@ -1160,6 +1191,25 @@ func (mha *MultiHeadCrossAttention) Parameters() []*Tensor {
 	return params
 }
 
+// ClearState clears the intermediate states to free memory.
+func (mha *MultiHeadCrossAttention) ClearState() {
+	mha.attentionOutput = nil
+	mha.queryTensor = nil
+	mha.keyTensor = nil
+	mha.valueTensor = nil
+	mha.q = nil
+	mha.k = nil
+	mha.v = nil
+	mha.attentionScores = nil
+	mha.attentionWeights = nil
+	mha.attentionOutputBeforeConcat = nil
+	
+	if mha.QueryLinear != nil { mha.QueryLinear.ClearState() }
+	if mha.KeyLinear != nil { mha.KeyLinear.ClearState() }
+	if mha.ValueLinear != nil { mha.ValueLinear.ClearState() }
+	if mha.OutputLinear != nil { mha.OutputLinear.ClearState() }
+}
+
 // Inputs returns the input tensors of the MultiHeadCrossAttention operation.
 func (mha *MultiHeadCrossAttention) Inputs() []*Tensor {
 	// Return the original input tensors: query, key, and value
@@ -1192,6 +1242,13 @@ func (mha *MultiHeadCrossAttention) Backward(grad *Tensor) error {
 		err := mha.OutputLinear.Backward(mha.attentionOutput.Grad)
 		if err != nil {
 			return err
+		}
+		// Since we added a residual (output + query), the gradient flows back to query too
+		if mha.queryTensor != nil && mha.queryTensor.RequiresGrad {
+			if mha.queryTensor.Grad == nil {
+				mha.queryTensor.Grad = NewTensor(mha.queryTensor.Shape, make([]float64, len(mha.queryTensor.Data)), false)
+			}
+			safeAccumulate(mha.queryTensor.Grad.Data, mha.attentionOutput.Grad.Data)
 		}
 	}
 
@@ -1532,13 +1589,40 @@ func (mha *MultiHeadCrossAttention) Forward(inputs ...*Tensor) (*Tensor, error) 
 		return nil, fmt.Errorf("failed to scale cross-attention scores: %w", err)
 	}
 
-	// Apply mask (if provided) - Simplified, just add large negative to masked positions
+	// Apply mask (if provided) - Optimized for common attention mask shape [Batch, 1, 1, KVSeq]
 	if mask != nil {
-		maskedAttentionScores, err := scaledAttentionScores.AddWithBroadcast(mask)
-		if err != nil {
-			return nil, fmt.Errorf("failed to apply mask to cross-attention scores: %w", err)
+		if len(mask.Shape) == 4 && mask.Shape[1] == 1 && mask.Shape[2] == 1 && mask.Shape[0] == scaledAttentionScores.Shape[0] && mask.Shape[3] == scaledAttentionScores.Shape[3] {
+			// Fast path for [B, 1, 1, S] broadcast
+			resultData := make([]float64, len(scaledAttentionScores.Data))
+			kvSeq := scaledAttentionScores.Shape[3]
+			qSeq := scaledAttentionScores.Shape[2]
+			heads := scaledAttentionScores.Shape[1]
+			batchSize := scaledAttentionScores.Shape[0]
+			
+			for b := 0; b < batchSize; b++ {
+				mOffset := b * kvSeq
+				for h := 0; h < heads; h++ {
+					for q := 0; q < qSeq; q++ {
+						offset := ((b * heads + h) * qSeq + q) * kvSeq
+						for k := 0; k < kvSeq; k++ {
+							resultData[offset+k] = scaledAttentionScores.Data[offset+k] + mask.Data[mOffset+k]
+						}
+					}
+				}
+			}
+			maskedScores := NewTensor(scaledAttentionScores.Shape, resultData, scaledAttentionScores.RequiresGrad || mask.RequiresGrad)
+			if maskedScores.RequiresGrad {
+				maskedScores.Creator = &AddWithBroadcastOperation{scaledAttentionScores, mask}
+			}
+			scaledAttentionScores = maskedScores
+		} else {
+			// Fallback to generic broadcast
+			maskedAttentionScores, err := scaledAttentionScores.AddWithBroadcast(mask)
+			if err != nil {
+				return nil, fmt.Errorf("failed to apply mask to cross-attention scores: %w", err)
+			}
+			scaledAttentionScores = maskedAttentionScores
 		}
-		scaledAttentionScores = maskedAttentionScores
 	}
 
 	// Apply Softmax to get attention weights
@@ -1574,6 +1658,12 @@ func (mha *MultiHeadCrossAttention) Forward(inputs ...*Tensor) (*Tensor, error) 
 	output, err := mha.OutputLinear.Forward(contextLayerReshaped)
 	if err != nil {
 		return nil, fmt.Errorf("cross-attention output linear failed: %w", err)
+	}
+
+	// NEW: Residual Connection
+	output, err = output.Add(query)
+	if err != nil {
+		log.Printf("⚠️ MHCA Residual connection failed: %v", err)
 	}
 
 	// Store the final output tensor

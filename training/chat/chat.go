@@ -8,6 +8,7 @@ import (
 	"math"
 	"math/rand"
 	randv1 "math/rand"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -18,6 +19,10 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	"github.com/golangast/gollemer/neural/moe"
 	neuralnn "github.com/golangast/gollemer/neural/nn"
 	mainvocab "github.com/golangast/gollemer/neural/nnu/vocab"
@@ -25,10 +30,30 @@ import (
 	"github.com/golangast/gollemer/neural/tensor"
 )
 
-// batchItem holds a pre-tokenized training pair ready for the forward pass.
-type batchItem struct {
-	input  *tensor.Tensor
-	target *tensor.Tensor
+var (
+	expertUtilization = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "moe_expert_usage_total",
+			Help: "The total number of tokens processed by each expert.",
+		},
+		[]string{"layer", "expert_id"},
+	)
+
+	tokenLatency = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "moe_token_generation_latency_ms",
+			Help:    "Time taken to generate a single token.",
+			Buckets: prometheus.LinearBuckets(10, 10, 10), // 10ms to 100ms
+		},
+	)
+)
+
+// Batch holds a pre-tokenized training batch.
+type Batch struct {
+	Input     *tensor.Tensor // Shape: [BatchSize, MaxInputLen]
+	Target    *tensor.Tensor // Shape: [BatchSize, MaxTargetLen]
+	Mask      []float64      // To tell the loss function to ignore <pad>
+	InputMask *tensor.Tensor // Attention mask (0.0 for real, -1e9 for pad)
 }
 
 func TrainChat(projectRoot string) {
@@ -103,27 +128,19 @@ func TrainChat(projectRoot string) {
 	}
 
 	if intentModel == nil {
-		var err error
 		// Increased Embedding to 256, Hidden to 512
-		intentModel, err = moe.NewHybridIntentMoE(
-			vocabSize,
-			256,      // embeddingDim: doubled for better semantic resolution
-			8,        // numExperts: doubled to allow more specialized "topic" experts
-			512, 512, // hidden layers
-			10000,
-			8, // maxAttentionHeads: increased for complex query parsing
-			w2v,
+		// Upgrade decoder: 2 layers, 256 hidden size, 256 embedding
+		// Wait, vocab size is now SentenceVocab size!
+		log.Println("🚀 Initializing fresh MoE (256d Embedding, 256d Hidden, 8 Experts, 2-Layer Decoder)")
+		
+		intentModel, _ = moe.NewHybridIntentMoE(
+			10000,    // placeholder, will resize
+			256, 
+			8, 
+			512, 512, 10000, 8, w2v,
 		)
-		if err != nil {
-			log.Fatalf("Failed to initialize MoE model: %v", err)
-		}
-
-		// Upgrade decoder: 512 Hidden Size, 2 Layers, higher Dropout
-		// This gives the RNN enough "memory" to track sentence state over 10+ tokens.
-		intentModel.Decoder, _ = moe.NewRNNDecoder(256, 10000, 512, 8, 2, 0.2)
-
-		log.Println("🚀 Initialized High-Capacity MoE (256d Embedding, 512d Hidden, 8 Experts)")
-
+		intentModel.Decoder, _ = moe.NewRNNDecoder(256, 10000, 256, 8, 2, 0.1)
+		
 		log.Println("🛠️ Applying Xavier Initialization to all parameters...")
 		for _, param := range intentModel.Parameters() {
 			InitializeXavier(param)
@@ -132,13 +149,13 @@ func TrainChat(projectRoot string) {
 
 	// Adjust MoE settings for training to prevent token dropping and encourage diversity
 	for _, layer := range moe.ActiveLayers {
-		layer.CapacityFactor = 1.0         // Tighter routing: forces experts to specialize
-		layer.LoadBalancingWeight = 0.01   // Small regularizer — must NOT dominate loss
-		layer.RouterTemperature = 0.7     // Sharper routing encourages expert specialization
-		layer.ExpertDropoutRate = 0.25    // Higher dropout forces expert diversification
+		layer.CapacityFactor = 1.5          // Increased from 1.25
+		layer.LoadBalancingWeight = 0.1    // Increased from 0.05
+		layer.RouterTemperature = 1.0     // Normal temperature
+		layer.ExpertDropoutRate = 0.1     // Reduced dropout to prevent UNK collapse
 		layer.SetMode(true)               // Enable training mode (noise)
 	}
-	log.Println("🔧 Adjusted MoE: Capacity=1.0, LBWeight=0.01, Temp=0.7, Dropout=0.25")
+	log.Println("🔧 Adjusted MoE: Capacity=1.25, LBWeight=0.05, Temp=0.7, Dropout=0.1")
 
 	// Try to load vocab if nil
 	vocabPath := filepath.Join(projectRoot, "gob_models/seq2seq_output_vocab.gob")
@@ -187,11 +204,65 @@ func TrainChat(projectRoot string) {
 		return
 	}
 
+	// Expand Word2Vec vocabulary with missing words from chat data
+	maxID := 0
+	for _, id := range w2v.Vocabulary {
+		if id > maxID {
+			maxID = id
+		}
+	}
+
+	addedCount := 0
+	for _, pair := range chatPairs {
+		tokens := cleanTokenize(pair.Q)
+		for _, t := range tokens {
+			if _, ok := w2v.Vocabulary[t]; !ok {
+				maxID++
+				w2v.Vocabulary[t] = maxID
+				// Initialize random vector
+				vec := make([]float64, w2v.VectorSize)
+				limit := math.Sqrt(6.0 / float64(w2v.VectorSize))
+				for i := range vec {
+					vec[i] = (rand.Float64() * 2 * limit) - limit
+				}
+				w2v.WordVectors[maxID] = vec
+				addedCount++
+			}
+		}
+	}
+	w2v.VocabSize = len(w2v.Vocabulary)
+	if addedCount > 0 {
+		log.Printf("✨ Expanded Word2Vec vocab with %d new words from training data. Total: %d", addedCount, w2v.VocabSize)
+	}
+
+	// Resize Encoder Embedding if Vocabulary has grown (now using SentenceVocab for both)
+	currentVocabSize := intentModel.SentenceVocab.Size()
+	if intentModel.Embedding.VocabSize != currentVocabSize {
+		log.Printf("Resizing Encoder Embedding from %d to %d", intentModel.Embedding.VocabSize, currentVocabSize)
+		newEmb := neuralnn.NewEmbedding(currentVocabSize, 256)
+		
+		// Fill with Word2Vec weights where possible
+		for i := 0; i < currentVocabSize; i++ {
+			word := intentModel.SentenceVocab.GetWord(i)
+			if id, ok := w2v.Vocabulary[word]; ok {
+				vec := w2v.WordVectors[id]
+				start := i * 256
+				copy(newEmb.Weight.Data[start:], vec)
+			}
+		}
+		intentModel.Embedding = newEmb
+	}
+
 	// Shuffle and Split
 	rand.Shuffle(len(chatPairs), func(i, j int) { chatPairs[i], chatPairs[j] = chatPairs[j], chatPairs[i] })
 	splitIdx := int(float64(len(chatPairs)) * 0.9)
 	trainPairs := chatPairs[:splitIdx]
 	valPairs := chatPairs[splitIdx:]
+
+	// Use all available training data
+	trainPairs = trainPairs[:min(len(trainPairs), len(trainPairs))]
+	log.Printf("DEBUG: Training on %d pairs", len(trainPairs))
+
 	fmt.Printf("Data Split: %d Training, %d Validation\n", len(trainPairs), len(valPairs))
 
 	// Check W2V coverage
@@ -227,6 +298,7 @@ func TrainChat(projectRoot string) {
 		intentModel.SentenceVocab.PaddingTokenID = intentModel.SentenceVocab.GetTokenID("<pad>")
 		intentModel.SentenceVocab.AddToken("<s>")
 		intentModel.SentenceVocab.AddToken("</s>")
+		intentModel.SentenceVocab.AddToken("UNK")
 		intentModel.SentenceVocab.BosID = intentModel.SentenceVocab.GetTokenID("<s>")
 		intentModel.SentenceVocab.EosID = intentModel.SentenceVocab.GetTokenID("</s>")
 	}
@@ -236,57 +308,37 @@ func TrainChat(projectRoot string) {
 	log.Printf("Token 0: %s", intentModel.SentenceVocab.GetWord(0))
 	log.Printf("Token 1: %s", intentModel.SentenceVocab.GetWord(1))
 
-	// Add response tokens to vocab with frequency filtering to remove single-occurrence garbage
-	tokenCounts := make(map[string]int)
+	// Add EVERY word from the training data to the SentenceVocab
 	for _, pair := range chatPairs {
-		for _, t := range cleanTokenize(pair.A) {
-			tokenCounts[t]++
-		}
-	}
-
-	prunedCount := 0
-	for t, count := range tokenCounts {
-		// Only add tokens that appear at least twice OR are in Word2Vec
-		_, inW2V := w2v.Vocabulary[t]
-		if count >= 3 || inW2V {
+		// Tokenize both Question and Answer
+		for _, t := range cleanTokenize(pair.Q + " " + pair.A) {
 			intentModel.SentenceVocab.AddToken(t)
-		} else {
-			prunedCount++
 		}
 	}
-	log.Printf("✂️ Vocabulary Pruning: Kept %d tokens, Pruned %d single-occurrence noisy tokens.", intentModel.SentenceVocab.Size(), prunedCount)
+	log.Printf("✅ Final SentenceVocab Size: %d", intentModel.SentenceVocab.Size())
 
-	// Resize Decoder if Vocabulary has grown
-	currentVocabSize := intentModel.SentenceVocab.Size()
-	if intentModel.Decoder.Embedding.VocabSize != currentVocabSize {
-		log.Printf("Resizing Decoder Embedding/Output from %d to %d", intentModel.Decoder.Embedding.VocabSize, currentVocabSize)
+	// Ensure UNK is in vocab and get its ID
+	unkID := intentModel.SentenceVocab.GetTokenID("UNK")
+	if unkID == -1 {
+		intentModel.SentenceVocab.AddToken("UNK")
+		unkID = intentModel.SentenceVocab.GetTokenID("UNK")
+		log.Printf("Manually added UNK token, new ID: %d", unkID)
+	}
 
-		// 1. Resize Embedding
-		oldEmbedding := intentModel.Decoder.Embedding
-		newEmbedding := neuralnn.NewEmbedding(currentVocabSize, oldEmbedding.DimModel)
+	// Resize Decoder if Vocabulary has grown (OR if architecture changed: LayerNorm needs to be 512)
+	currentVocabSize = intentModel.SentenceVocab.Size()
+	// Always force a resize if LayerNorm is the old size (256) to handle the architecture upgrade
+	needsResize := intentModel.Decoder.Embedding.VocabSize != currentVocabSize
+	if intentModel.Decoder.LayerNorm != nil && intentModel.Decoder.LayerNorm.NormalizedShape != (intentModel.Decoder.LSTM.HiddenSize + intentModel.Decoder.Embedding.DimModel) {
+		needsResize = true
+		log.Printf("Forcing decoder resize due to architecture upgrade (LayerNorm %d -> %d)", 
+			intentModel.Decoder.LayerNorm.NormalizedShape, 
+			intentModel.Decoder.LSTM.HiddenSize + intentModel.Decoder.Embedding.DimModel)
+	}
 
-		// Copy existing weights to preserve prior learning
-		minVocab := min(oldEmbedding.VocabSize, currentVocabSize)
-		dim := oldEmbedding.DimModel
-		for i := 0; i < minVocab; i++ {
-			copy(newEmbedding.Weight.Data[i*dim:(i+1)*dim], oldEmbedding.Weight.Data[i*dim:(i+1)*dim])
-		}
-		intentModel.Decoder.Embedding = newEmbedding
-
-		// 2. Resize Output Layer
-		newOutput, err := neuralnn.NewLinear(intentModel.Decoder.LSTM.HiddenSize, currentVocabSize)
-		if err != nil {
-			log.Fatalf("Failed to resize output layer: %v", err)
-		}
-
-		// Initialize with small variance to prevent loss explosion
-		limit := math.Sqrt(6.0 / float64(intentModel.Decoder.LSTM.HiddenSize+currentVocabSize))
-		for i := range newOutput.Weights.Data {
-			newOutput.Weights.Data[i] = (rand.Float64() * 2 * limit) - limit
-		}
-
-		intentModel.Decoder.OutputLayer = newOutput
-		intentModel.Decoder.OutputVocabSize = currentVocabSize
+	if needsResize {
+		log.Printf("Resizing Decoder from Vocab %d to %d", intentModel.Decoder.Embedding.VocabSize, currentVocabSize)
+		intentModel.Decoder.ResizeOutputLayer(currentVocabSize)
 		intentModel.SentenceVocabSize = currentVocabSize
 	}
 
@@ -294,15 +346,17 @@ func TrainChat(projectRoot string) {
 	DetachModel(intentModel)
 
 	// Use Iterator pattern to save memory and speed up training
-	iterator := NewChatDataIterator(trainPairs, w2v, intentModel.SentenceVocab)
+	iterator := NewChatDataIterator(trainPairs, w2v, intentModel.SentenceVocab, unkID)
 
 	// Training Loop
-	epochs := 30 // Increased epochs for better convergence and generalization
+	// Training Loop
+	epochs := 30 // Full training sequence
+	const batchSize = 12 // Changed from 16
 	// 1e-4 avoids the gradient explosion zone seen at 4e-4 after epoch 2.
 	// Adam's adaptive moments handle the rest; we apply hard decay + clipping on top.
-	learningRate := 0.0001
-	const minLR = 5e-6    // Floor to prevent LR from collapsing
-	optimizer := neuralnn.NewOptimizer(intentModel.Parameters(), learningRate, 1.0) // clipValue=1.0 for tighter gradient control
+	learningRate := 0.00002 // Reduced learning rate further for stability given the constant clipping
+	const minLR = 5e-6     // Floor to prevent LR from collapsing
+	optimizer := neuralnn.NewOptimizer(intentModel.Parameters(), learningRate, 5.0) // Increased clipValue to 5.0 for better encoder updates
 
 	// Early stopping state
 	patienceLimit := 4    // Stop if no improvement for this many epochs
@@ -312,7 +366,7 @@ func TrainChat(projectRoot string) {
 	randv1.Seed(time.Now().UnixNano())
 
 	globalStep := 0
-	warmupSteps := 500
+	warmupSteps := 1000 // Slower start
 
 	// Track expert metrics over the epoch
 	epochUtilization := make(map[string]int)
@@ -324,15 +378,31 @@ func TrainChat(projectRoot string) {
 	lastEpochLoss := math.MaxFloat64
 	plateauCount := 0
 
+	// Define these before the loop - moderated penalties
+	unkWeight := 0.01
+	unkPenalty := 2.0
+	log.Println("🔧 Using Weighted CrossEntropy (unkWeight=0.01, penalty=2.0)")
+
 	fmt.Printf("Training on %d pairs for %d epochs (patience=%d)...\n", len(chatPairs), epochs, patienceLimit)
+
+	// Mute the UNK token in the output layer to prevent it from being a "safe" prediction
+	MuteUNKToken(intentModel, unkID)
 
 	for epoch := 0; epoch < epochs; epoch++ {
 		epochStartTime := time.Now()
-		// Increase Router Temperature after Epoch 10 to force specialization
-		if epoch >= 10 {
+		// Force diverse routing for the first 2 epochs to break out of mode collapse
+		if epoch < 2 {
 			for _, layer := range moe.ActiveLayers {
-				layer.RouterTemperature = 1.2
+				layer.RouterTemperature = 2.0 // Increased from 1.5
 			}
+			if epoch == 0 {
+				log.Println("🔥 Forcing diverse routing with high temperature (2.0) for first 2 epochs.")
+			}
+		} else if epoch == 2 { // Reset to normal after warmup
+			for _, layer := range moe.ActiveLayers {
+				layer.RouterTemperature = 0.7
+			}
+			log.Println("🌡️ Resetting router temperature to normal (0.7).")
 		}
 
 		// (LB weight decay removed — LB weight is now small enough that it doesn't need decay)
@@ -346,18 +416,17 @@ func TrainChat(projectRoot string) {
 		}
 
 		// Prefetch tokenization: start a background goroutine that pre-produces
-		// batchItem structs into a buffered channel while the main goroutine
+		// Batch structs into a buffered channel while the main goroutine
 		// is busy with forward/backward. Buffer=64 keeps the main loop fed.
-		prefetchCh := make(chan batchItem, 64)
+		prefetchCh := make(chan Batch, 4) // Reduced buffer size to save memory
 		go func() {
 			for iterator.HasNext() {
-				inp, tgt := iterator.Next()
-				prefetchCh <- batchItem{inp, tgt}
+				prefetchCh <- iterator.NextBatch(batchSize)
 			}
 			close(prefetchCh)
 		}()
 
-		for item := range prefetchCh {
+		for batch := range prefetchCh {
 			// Learning Rate Warmup
 			if globalStep < warmupSteps {
 				startLR := 1e-7
@@ -368,19 +437,10 @@ func TrainChat(projectRoot string) {
 			}
 			globalStep++
 
-		
-
-			inputTensor := item.input
-			targetTensor := item.target
+			inputTensor := batch.Input
+			targetTensor := batch.Target
 
 			if targetTensor.Shape[1] < 2 {
-				continue
-			}
-
-			// Slice targetTensor for decoder input (remove last token, e.g. EOS)
-			decoderInput, err := targetTensor.Slice(1, 0, targetTensor.Shape[1]-1)
-			if err != nil {
-				log.Printf("Slice error: %v", err)
 				continue
 			}
 
@@ -390,10 +450,12 @@ func TrainChat(projectRoot string) {
 			// Teacher Forcing Schedule:
 			var samplingProb float64
 			if epoch >= 2 {
-				// Linear climb: 5% at epoch 2, up to 35% max
-				samplingProb = math.Min(0.35, float64(epoch-2)*0.05)
+				// Start sampling earlier to help the model learn to recover from its own mistakes
+				samplingProb = math.Min(0.25, float64(epoch-2)*0.05)
 			}
-			logits, _, err := intentModel.Forward(samplingProb, inputTensor, decoderInput)
+			// Slicing happens inside model.Decoder.Forward
+			// Now passing 3 inputs: Input, Target, InputMask
+			logits, _, err := intentModel.Forward(samplingProb, inputTensor, targetTensor, batch.InputMask)
 			if err != nil {
 				log.Printf("Forward error: %v", err)
 				continue
@@ -413,30 +475,36 @@ func TrainChat(projectRoot string) {
 				// Vectorized 3D loss
 				l := logits[0]
 				// Target for loss is the sequence shifted by 1 (ignoring BOS at index 0)
-				targetSeqLen := targetTensor.Shape[1] - 1
-				targets := make([]int, targetSeqLen)
-				for t := 0; t < targetSeqLen; t++ {
-					targets[t] = int(targetTensor.Data[t+1])
+				currentBatchSize := targetTensor.Shape[0]
+				seqLen := targetTensor.Shape[1]
+				targetSeqLen := seqLen - 1
+				targets := make([]int, currentBatchSize*targetSeqLen)
+				for b := 0; b < currentBatchSize; b++ {
+					for t := 0; t < targetSeqLen; t++ {
+						targets[b*targetSeqLen+t] = int(targetTensor.Data[b*seqLen+t+1])
+					}
 				}
 
-				loss, grad := tensor.CrossEntropyLoss(l, targets, intentModel.SentenceVocab.PaddingTokenID, labelSmoothing)
+				// NEW: Use the weighted version
+				loss, grad := WeightedCrossEntropy(l, targets, intentModel.SentenceVocab.PaddingTokenID, unkID, unkWeight, unkPenalty, labelSmoothing)
 				if grad == nil {
 					grad = tensor.NewTensor(l.Shape, make([]float64, len(l.Data)), false)
 				}
-
-				// CrossEntropyLoss already normalizes by active (non-pad) tokens,
-				// so no additional length factor is needed.
-
 				batchLoss = loss
 				grads = []*tensor.Tensor{grad}
 			} else {
 				// Sequence of logits (Step-by-step path used for scheduled sampling)
 				grads = make([]*tensor.Tensor, len(logits))
+				currentBatchSize := targetTensor.Shape[0]
+				seqLen := targetTensor.Shape[1]
 				var stepLossTotal float64
 				for t, logit := range logits {
 					// Target for this step is AIDs[t+1]
-					targets := []int{int(targetTensor.Data[t+1])}
-					l, g := tensor.CrossEntropyLoss(logit, targets, intentModel.SentenceVocab.PaddingTokenID, labelSmoothing)
+					targets := make([]int, currentBatchSize)
+					for b := 0; b < currentBatchSize; b++ {
+						targets[b] = int(targetTensor.Data[b*seqLen+t+1])
+					}
+					l, g := WeightedCrossEntropy(logit, targets, intentModel.SentenceVocab.PaddingTokenID, unkID, unkWeight, unkPenalty, labelSmoothing)
 					if g == nil {
 						g = tensor.NewTensor(logit.Shape, make([]float64, len(logit.Data)), false)
 					}
@@ -451,6 +519,12 @@ func TrainChat(projectRoot string) {
 						grads[t].Data[i] /= div
 					}
 				}
+			}
+
+			// Check for NaN/Inf loss immediately
+			if math.IsNaN(batchLoss) || math.IsInf(batchLoss, 0) {
+				log.Printf("⚠️ Batch %d loss is NaN/Inf. Skipping batch to prevent model corruption.", batches)
+				continue
 			}
 
 			// Add MoE Load Balancing Loss to the logged batchLoss for monitoring
@@ -500,7 +574,7 @@ func TrainChat(projectRoot string) {
 					}
 					gradNorm = math.Sqrt(gradNorm)
 
-					const clipValue = 1.0
+					const clipValue = 5.0
 					if gradNorm > clipValue {
 						scale := clipValue / (gradNorm + 1e-6) // Safety epsilon
 						for _, p := range params {
@@ -513,7 +587,7 @@ func TrainChat(projectRoot string) {
 						gradNorm = clipValue // Update for logging
 					}
 
-					if batches%100 == 0 {
+					if batches%20 == 0 {
 						log.Printf("Batch %d | Grad Norm: %.4f | LR: %.6f", batches, gradNorm, learningRate)
 					}
 
@@ -538,12 +612,10 @@ func TrainChat(projectRoot string) {
 			}
 
 
-			// Memory safety: Clear computation graph every 10 batches
-			if batches%10 == 0 {
-				DetachModel(intentModel)
-			}
-			// Trigger GC less frequently (every 500 batches)
-			if batches%500 == 0 {
+			// Memory safety: Clear computation graph every batch
+			DetachModel(intentModel)
+			// Trigger GC less frequently (every 100 batches)
+			if batches%100 == 0 {
 				runtime.GC()
 			}
 		}
@@ -592,7 +664,10 @@ func TrainChat(projectRoot string) {
 			}
 		}
 		DetachModel(intentModel)
-		avgLoss := totalLoss / float64(batches)
+		avgLoss := 0.0
+		if batches > 0 {
+			avgLoss = totalLoss / float64(batches)
+		}
 		fmt.Printf("Epoch %d: Avg Loss %.4f in %.1fs\n", epoch+1, avgLoss, time.Since(epochStartTime).Seconds())
 
 		// Validation
@@ -623,11 +698,21 @@ func TrainChat(projectRoot string) {
 		logEpochHistory(projectRoot, epoch+1, avgLoss, epochLBLoss/float64(batches), learningRate)
 
 		// Sanity checks: diverse test prompts to monitor generation quality
-		runTestSentence("greeting", "how are you", intentModel, w2v)
-		runTestSentence("weather", "is it raining today", intentModel, w2v)
-		runTestSentence("weekend", "any plans for the weekend", intentModel, w2v)
-		runTestSentence("feeling", "i feel tired today", intentModel, w2v)
-		runTestSentence("hobby", "what do you like to do", intentModel, w2v)
+		testPrompts := []struct{ label, prompt string }{
+			{"greeting", "how are you"},
+			{"weather", "is it raining today"},
+			{"weekend", "any plans for the weekend"},
+			{"feeling", "i feel tired today"},
+			{"hobby", "what do you like to do"},
+		}
+		for _, tp := range testPrompts {
+			tokens := cleanTokenize(tp.prompt)
+			if len(tokens) == 0 {
+				log.Printf("⚠️ Skip empty prompt: %s", tp.prompt)
+				continue
+			}
+			runTestSentence(tp.label, tp.prompt, intentModel, w2v)
+		}
 
 		// Save model at the end of each epoch, overwriting the main file.
 		f, err := os.Create(moePath)
@@ -685,65 +770,163 @@ func TrainChat(projectRoot string) {
 	}
 }
 
-// runTestSentence is a helper to run test questions during training
-func runTestSentence(label string, sentence string, model *moe.IntentMoE, w2v *word2vec.SimpleWord2Vec) {
-	testTokens := cleanTokenize(sentence)
-	testIDs := make([]float64, len(testTokens))
-	for i, t := range testTokens {
-		testIDs[i] = lookupW2V(t, w2v)
+// StrictGenerate forces the model to generate a response without using UNK or PAD tokens.
+func StrictGenerate(model *moe.IntentMoE, input string, w2v *word2vec.SimpleWord2Vec, maxLen int) string {
+	// Ensure model is in evaluation mode
+	for _, layer := range moe.ActiveLayers {
+		layer.SetMode(false)
 	}
-	testInput := tensor.NewTensor([]int{1, len(testIDs)}, testIDs, false)
-	testEmb, _ := model.Embedding.Forward(testInput)
-	testCtx, _ := model.Encoder.Forward(testEmb)
-	// Use Beam Search with Repetition and Length Penalties
-	testOutIDs := BeamSearchDecode(model, testCtx, 5, 50)
-	var testWords []string
-	for _, id := range testOutIDs {
-		w := model.SentenceVocab.GetWord(id)
-		if w != "<s>" && w != "</s>" && w != "<pad>" {
-			testWords = append(testWords, w)
+	defer func() {
+		for _, layer := range moe.ActiveLayers {
+			layer.SetMode(true)
+		}
+	}()
+
+	// 1. Tokenize and Vectorize Input
+	tokens := cleanTokenize(input)
+	if len(tokens) == 0 {
+		log.Printf("⚠️ Skip empty prompt: %s", input)
+		return ""
+	}
+	inputIDs := make([]float64, len(tokens))
+	for i, t := range tokens {
+		inputIDs[i] = float64(lookupVocab(t, model.SentenceVocab))
+	}
+	inputTensor := tensor.NewTensor([]int{1, len(inputIDs)}, inputIDs, false)
+
+	// 2. Get Encoder Context
+	emb, err := model.Embedding.Forward(inputTensor)
+	if err != nil {
+		log.Printf("StrictGenerate Error (Embedding): %v", err)
+		return ""
+	}
+	ctx, err := model.Encoder.Forward(emb)
+	if err != nil {
+		log.Printf("StrictGenerate Error (Encoder): %v", err)
+		return ""
+	}
+	if ctx.Shape[1] == 0 {
+		log.Printf("StrictGenerate Error: encoder produced empty sequence")
+		return ""
+	}
+
+	// 3. Prepare Decoder States
+	batchSize := 1
+	hiddenSize := model.Decoder.LSTM.HiddenSize
+	
+	// Initial hidden state from context mean
+	hiddenState, err := ctx.Mean(1)
+	if err != nil {
+		log.Printf("StrictGenerate Error (Initial Hidden): %v", err)
+		return ""
+	}
+	
+	// Projection if needed (copying logic from Decoder.Forward)
+	if hiddenState.Shape[1] != hiddenSize {
+		if hiddenState.Shape[1] > hiddenSize {
+			hiddenState, _ = hiddenState.Slice(1, 0, hiddenSize)
+		} else {
+			padding := tensor.NewTensor([]int{batchSize, hiddenSize - hiddenState.Shape[1]}, make([]float64, batchSize*(hiddenSize-hiddenState.Shape[1])), false)
+			hiddenState, _ = tensor.Concat([]*tensor.Tensor{hiddenState, padding}, 1)
 		}
 	}
-	fmt.Printf("   🧪 Test '%s': %s\n", sentence, strings.Join(testWords, " "))
+	cellState := tensor.NewTensor([]int{batchSize, hiddenSize}, make([]float64, batchSize*hiddenSize), false)
+
+	// 4. Start Sequence with <s> (BOS)
+	resIDs := []int{model.SentenceVocab.BosID}
+	currentTokenID := model.SentenceVocab.BosID
+
+	for i := 0; i < maxLen; i++ {
+		inputT := tensor.NewTensor([]int{1, 1}, []float64{float64(currentTokenID)}, false)
+
+		// Step-by-step decoding
+		logits, nextHidden, nextCell, err := model.Decoder.DecodeStep(inputT, hiddenState, cellState, ctx)
+		if err != nil {
+			log.Printf("StrictGenerate Error (DecodeStep): %v", err)
+			break
+		}
+		hiddenState = nextHidden
+		cellState = nextCell
+
+		// 5. Apply Repetition Penalty (NEW)
+		// This prevents the model from getting stuck repeating the same token (like ".")
+		moe.ApplyRepetitionPenalty(logits, resIDs, 1.5)
+
+		// 6. Mute UNK and <pad>
+		logits.Data[model.SentenceVocab.PaddingTokenID] = -1e9
+		unkID := model.SentenceVocab.GetTokenID("UNK")
+		if unkID != -1 {
+			logits.Data[unkID] = -1e9
+		}
+
+		// 7. Pick Best Word using Sampling (Diversity)
+		// temperature 0.8, top-k 20
+		bestID, err := moe.SampleFromLogits(logits, 0.8, 20, 0)
+		if err != nil {
+			log.Printf("StrictGenerate Error (Sampling): %v", err)
+			break
+		}
+
+		if bestID == model.SentenceVocab.EosID {
+			break
+		}
+
+		resIDs = append(resIDs, bestID)
+		currentTokenID = bestID
+	}
+
+	// Convert IDs back to words
+	var result []string
+	for _, id := range resIDs[1:] { // Skip the BOS token
+		word := model.SentenceVocab.GetWord(id)
+		// Final check to not include special tokens in the final string
+		if word != "<s>" && word != "</s>" && word != "<pad>" && word != "UNK" {
+			result = append(result, word)
+		}
+	}
+
+	return strings.Join(result, " ")
 }
 
-// lookupW2V tries to find a word2vec ID for a token using a cascade of fallbacks
-// to recover from the ~22% UNK miss rate observed in training:
-//  1. Exact match
-//  2. Strip trailing punctuation (e.g. "you." → "you")
-//  3. Stem prefix: first 5 chars (e.g. "feeling" → "feeli"... then 4 chars)
-//  4. Fall back to UNK
-func lookupW2V(token string, w2v *word2vec.SimpleWord2Vec) float64 {
-	if id, ok := w2v.Vocabulary[token]; ok {
-		return float64(id)
+// runTestSentence is a helper to run test questions during training
+func runTestSentence(label, input string, model *moe.IntentMoE, w2v *word2vec.SimpleWord2Vec) {
+	// 1. Generate the response using Strict Mode
+	// This ignores UNK (1) and &lt;pad&gt; (0)
+	response := StrictGenerate(model, input, w2v, 20)
+
+	// 2. Clean up the output
+	response = strings.TrimSpace(response)
+	if response == "" {
+		response = "[Still Silent]"
 	}
-	// Lowercase match
-	lower := strings.ToLower(token)
-	if id, ok := w2v.Vocabulary[lower]; ok {
-		return float64(id)
+
+	// 3. Log the result
+	log.Printf("🧪 Test '%s' (%s): %s", input, label, response)
+}
+
+// lookupVocab tries to find a token ID in the given vocabulary with fallbacks.
+func lookupVocab(token string, vocab *mainvocab.Vocabulary) int {
+	token = strings.ToLower(strings.TrimSpace(token))
+	id := vocab.GetTokenID(token)
+	if id != -1 && (id != 0 || token == "<pad>") {
+		return id
 	}
 	// Try stripping trailing punctuation
 	stripped := strings.TrimRight(token, ".,!?;:'\"")
 	if stripped != token {
-		if id, ok := w2v.Vocabulary[stripped]; ok {
-			return float64(id)
-		}
-		// Stripped + Lowercase
-		lowerStripped := strings.ToLower(stripped)
-		if id, ok := w2v.Vocabulary[lowerStripped]; ok {
-			return float64(id)
+		id = vocab.GetTokenID(stripped)
+		if id != -1 && (id != 0 || stripped == "<pad>") {
+			return id
 		}
 	}
-	// Prefix stem: try first 5, then 4 characters
-	for _, prefixLen := range []int{5, 4} {
-		if len(stripped) > prefixLen {
-			if id, ok := w2v.Vocabulary[stripped[:prefixLen]]; ok {
-				return float64(id)
-			}
-		}
-	}
-	// Final fallback: UNK
-	if id, ok := w2v.Vocabulary["UNK"]; ok {
+	// Fall back to UNK
+	return vocab.GetTokenID("UNK")
+}
+
+// lookupW2V is deprecated in favor of lookupVocab but kept for backward compatibility if needed.
+func lookupW2V(token string, w2v *word2vec.SimpleWord2Vec) float64 {
+	token = strings.ToLower(strings.TrimSpace(token))
+	if id, ok := w2v.Vocabulary[token]; ok {
 		return float64(id)
 	}
 	return 0
@@ -783,16 +966,18 @@ type ChatDataIterator struct {
 	pairs []struct{ Q, A string }
 	w2v   *word2vec.SimpleWord2Vec
 	vocab *mainvocab.Vocabulary
+	unkID int
 	idx   int
 }
 
-func NewChatDataIterator(pairs []struct{ Q, A string }, w2v *word2vec.SimpleWord2Vec, vocab *mainvocab.Vocabulary) *ChatDataIterator {
+func NewChatDataIterator(pairs []struct{ Q, A string }, w2v *word2vec.SimpleWord2Vec, vocab *mainvocab.Vocabulary, unkID int) *ChatDataIterator {
 	// Shuffle pairs for better training
 	rand.Shuffle(len(pairs), func(i, j int) { pairs[i], pairs[j] = pairs[j], pairs[i] })
 	return &ChatDataIterator{
 		pairs: pairs,
 		w2v:   w2v,
 		vocab: vocab,
+		unkID: unkID,
 		idx:   0,
 	}
 }
@@ -805,11 +990,11 @@ func (it *ChatDataIterator) Next() (*tensor.Tensor, *tensor.Tensor) {
 	pair := it.pairs[it.idx]
 	it.idx++
 
-	// Query Tokenization (W2V) — use cascaded lookup to reduce the 22% UNK rate
+	// Query Tokenization (now also using SentenceVocab!) — use cascaded lookup to reduce the 22% UNK rate
 	qTokens := cleanTokenize(pair.Q)
 	qIDs := make([]float64, len(qTokens))
 	for i, t := range qTokens {
-		qIDs[i] = lookupW2VIter(t, it.w2v)
+		qIDs[i] = float64(lookupVocab(t, it.vocab))
 	}
 
 	// Safety check: If a query is empty after cleaning,
@@ -824,7 +1009,12 @@ func (it *ChatDataIterator) Next() (*tensor.Tensor, *tensor.Tensor) {
 	aIDs[0] = float64(it.vocab.BosID)
 	idx := 1
 	for _, t := range aTokens {
-		aIDs[idx] = float64(it.vocab.GetTokenID(t))
+		id := it.vocab.GetTokenID(t)
+		if id == -1 || (id == 0 && t != "<pad>") {
+			aIDs[idx] = float64(it.unkID)
+		} else {
+			aIDs[idx] = float64(id)
+		}
 		idx++
 	}
 	aIDs[idx] = float64(it.vocab.EosID)
@@ -834,40 +1024,62 @@ func (it *ChatDataIterator) Next() (*tensor.Tensor, *tensor.Tensor) {
 	return inputTensor, targetTensor
 }
 
-// lookupW2VIter is the same cascade lookup used by the iterator.
-// Defined as a method-style helper to avoid duplicating the logic.
-func lookupW2VIter(token string, w2v *word2vec.SimpleWord2Vec) float64 {
-	if id, ok := w2v.Vocabulary[token]; ok {
-		return float64(id)
-	}
-	// Lowercase match
-	lower := strings.ToLower(token)
-	if id, ok := w2v.Vocabulary[lower]; ok {
-		return float64(id)
-	}
-	stripped := strings.TrimRight(token, ".,!?;:'\"")
-	if stripped != token {
-		if id, ok := w2v.Vocabulary[stripped]; ok {
-			return float64(id)
+func (it *ChatDataIterator) NextBatch(batchSize int) Batch {
+	var inputs [][]float64
+	var targets [][]float64
+	maxIn, maxOut := 0, 0
+
+	for i := 0; i < batchSize && it.HasNext(); i++ {
+		inp, tgt := it.Next()
+		inputs = append(inputs, inp.Data)
+		targets = append(targets, tgt.Data)
+		if len(inp.Data) > maxIn {
+			maxIn = len(inp.Data)
 		}
-		// Stripped + Lowercase
-		lowerStripped := strings.ToLower(stripped)
-		if id, ok := w2v.Vocabulary[lowerStripped]; ok {
-			return float64(id)
+		if len(tgt.Data) > maxOut {
+			maxOut = len(tgt.Data)
 		}
 	}
-	for _, prefixLen := range []int{5, 4} {
-		if len(stripped) > prefixLen {
-			if id, ok := w2v.Vocabulary[stripped[:prefixLen]]; ok {
-				return float64(id)
+
+	paddedIn := make([]float64, len(inputs)*maxIn)
+	paddedOut := make([]float64, len(targets)*maxOut)
+	mask := make([]float64, len(targets)*maxOut)
+	inputLogitMask := make([]float64, len(inputs)*maxIn) // For attention: 0 for real, -1e9 for pad
+	padID := float64(it.vocab.PaddingTokenID)
+
+	for i := range inputs {
+		for j := 0; j < maxIn; j++ {
+			if j < len(inputs[i]) {
+				paddedIn[i*maxIn+j] = inputs[i][j]
+				inputLogitMask[i*maxIn+j] = 0.0
+			} else {
+				paddedIn[i*maxIn+j] = padID
+				inputLogitMask[i*maxIn+j] = -1e9
+			}
+		}
+		for j := 0; j < maxOut; j++ {
+			if j < len(targets[i]) {
+				paddedOut[i*maxOut+j] = targets[i][j]
+				mask[i*maxOut+j] = 1.0
+			} else {
+				paddedOut[i*maxOut+j] = padID
+				mask[i*maxOut+j] = 0.0
 			}
 		}
 	}
-	if id, ok := w2v.Vocabulary["UNK"]; ok {
-		return float64(id)
+
+	// Reshape InputMask for attention: [Batch, 1, 1, SeqLen]
+	inputMaskTensor := tensor.NewTensor([]int{len(inputs), 1, 1, maxIn}, inputLogitMask, false)
+
+	return Batch{
+		Input:     tensor.NewTensor([]int{len(inputs), maxIn}, paddedIn, false),
+		Target:    tensor.NewTensor([]int{len(targets), maxOut}, paddedOut, false),
+		Mask:      mask,
+		InputMask: inputMaskTensor,
 	}
-	return 0
 }
+
+
 
 func (it *ChatDataIterator) Reset() {
 	it.idx = 0
@@ -888,18 +1100,8 @@ func DetachModel(model *moe.IntentMoE) {
 			param.Operation = nil
 		}
 	}
-	// Clear encoder state
-	if model.Encoder != nil {
-		if hybrid, ok := model.Encoder.(*moe.HybridLLMGNNEncoder); ok {
-			hybrid.ClearState()
-		} else if moeEnc, ok := model.Encoder.(*moe.MoELayer); ok {
-			moeEnc.ClearState()
-		}
-	}
-	// Clear decoder state
-	if model.Decoder != nil {
-		model.Decoder.ClearState()
-	}
+	// Clear all intermediate tensors and cached states across all layers
+	model.ClearState()
 }
 
 func visualizeExpertUtilization() {
@@ -1075,37 +1277,64 @@ func ValidateChat(model *moe.IntentMoE, valPairs []struct{ Q, A string }, w2v *w
 	var totalLoss float64
 	var tokenCount int
 
+	// Ensure we have the UNK ID for validation
+	unkID := model.SentenceVocab.GetTokenID("UNK")
+	if unkID == -1 {
+		unkID = 0 // Fallback
+	}
+
 	for _, pair := range valPairs {
-		// Tokenize as usual
+		// Tokenize
 		qTokens := cleanTokenize(pair.Q)
-		qIDs := make([]float64, len(qTokens))
+		qIDs := make([]float64, max(1, len(qTokens)))
+		qMask := make([]float64, len(qIDs)) // [1, 1, 1, Seq]
 		for i, t := range qTokens {
-			qIDs[i] = lookupW2V(t, w2v)
+			id := lookupVocab(t, model.SentenceVocab)
+			qIDs[i] = float64(id)
+			qMask[i] = 0.0
+		}
+		if len(qTokens) == 0 {
+			qIDs[0] = 0 // Pad
+			qMask[0] = -1e9
 		}
 
 		aTokens := cleanTokenize(pair.A)
 		aIDs := make([]float64, len(aTokens)+2)
 		aIDs[0] = float64(model.SentenceVocab.BosID)
 		for i, t := range aTokens {
-			aIDs[i+1] = float64(model.SentenceVocab.GetTokenID(t))
+			id := model.SentenceVocab.GetTokenID(t)
+			if id == -1 || (id == 0 && t != "<pad>") {
+				aIDs[i+1] = float64(unkID)
+			} else {
+				aIDs[i+1] = float64(id)
+			}
 		}
 		aIDs[len(aIDs)-1] = float64(model.SentenceVocab.EosID)
 
 		inputT := tensor.NewTensor([]int{1, len(qIDs)}, qIDs, false)
 		targetT := tensor.NewTensor([]int{1, len(aIDs)}, aIDs, false)
+		maskT := tensor.NewTensor([]int{1, 1, 1, len(qIDs)}, qMask, false)
 
-		// Forward pass without teacher forcing (samplingProb = 0)
-		decIn, _ := targetT.Slice(1, 0, targetT.Shape[1]-1)
-		logits, _, _ := model.Forward(0.0, inputT, decIn)
+		// Forward pass (samplingProb = 0)
+		logits, _, err := model.Forward(0.0, inputT, targetT, maskT)
+		if err != nil {
+			log.Printf("ValidateChat: Forward failed: %v", err)
+			continue
+		}
 
-		// Calculate Loss (vectorized)
+		if len(logits) == 0 {
+			continue
+		}
+
+		// Calculate Weighted Loss (consistent with training)
 		targetSeqLen := targetT.Shape[1] - 1
 		targets := make([]int, targetSeqLen)
 		for t := 0; t < targetSeqLen; t++ {
 			targets[t] = int(targetT.Data[t+1])
 		}
 
-		loss, _ := tensor.CrossEntropyLoss(logits[0], targets, model.SentenceVocab.PaddingTokenID, 0.0)
+		// unkWeight and unkPenalty from training
+		loss, _ := WeightedCrossEntropy(logits[0], targets, model.SentenceVocab.PaddingTokenID, unkID, 0.01, 2.0, 0.0)
 		totalLoss += loss
 		tokenCount++
 
@@ -1119,6 +1348,117 @@ func ValidateChat(model *moe.IntentMoE, valPairs []struct{ Q, A string }, w2v *w
 	avgLoss := totalLoss / float64(tokenCount)
 	perplexity := math.Exp(avgLoss)
 	return perplexity
+}
+
+func MuteUNKToken(model *moe.IntentMoE, unkID int) {
+	// Access the Output Layer weights
+	outLayer := model.Decoder.OutputLayer
+
+	// Shape is [HiddenSize, VocabSize]
+	if len(outLayer.Weights.Shape) != 2 {
+		log.Printf("⚠️ MuteUNKToken: OutputLayer weights are not 2D, skipping. Shape: %v", outLayer.Weights.Shape)
+		return
+	}
+	hiddenSize := outLayer.Weights.Shape[0]
+	vocabSize := outLayer.Weights.Shape[1]
+
+	log.Printf("🛠️  Muting UNK token (ID %d) in output layer of size %dx%d...", unkID, hiddenSize, vocabSize)
+
+	if unkID >= vocabSize {
+		log.Printf("⚠️ MuteUNKToken: UNK ID %d is out of bounds for vocab size %d", unkID, vocabSize)
+		return
+	}
+
+	for h := 0; h < hiddenSize; h++ {
+		// We set the weights for the UNK index to a very low number
+		// -100.0 effectively removes its probability during softmax even with high variance logits
+		idx := h*vocabSize + unkID
+		if idx < len(outLayer.Weights.Data) {
+			outLayer.Weights.Data[idx] = -100.0
+		}
+	}
+}
+
+func WeightedCrossEntropy(logits *tensor.Tensor, targets []int, padID int, unkID int, unkWeight float64, unkPenalty float64, labelSmoothing float64) (float64, *tensor.Tensor) {
+	// Flatten batch and sequence dimensions to handle 3D tensors [Batch, Seq, Vocab]
+	vocabSize := logits.Shape[len(logits.Shape)-1]
+	numClasses := vocabSize
+	numRows := len(logits.Data) / numClasses
+	grad := tensor.NewTensor(logits.Shape, make([]float64, len(logits.Data)), false)
+
+	var totalLoss float64
+	var count float64
+	softmax := make([]float64, numClasses) // Pre-allocate softmax buffer
+
+	for i := 0; i < numRows; i++ {
+		if i >= len(targets) {
+			break
+		}
+		targetID := targets[i]
+
+		// 1. Skip Padding
+		if targetID == padID {
+			continue
+		}
+
+		offset := i * numClasses
+		row := logits.Data[offset : offset+numClasses]
+
+		// 2. Softmax
+		maxLogit := row[0]
+		for _, v := range row {
+			if v > maxLogit {
+				maxLogit = v
+			}
+		}
+		sumExp := 0.0
+		for j, v := range row {
+			softmax[j] = math.Exp(v - maxLogit)
+			sumExp += softmax[j]
+		}
+		invSumExp := 1.0 / sumExp
+
+		// 3. Loss
+		prob := softmax[targetID] * invSumExp
+		loss := -math.Log(prob + 1e-12)
+
+		currentWeight := 1.0
+		if targetID == unkID {
+			currentWeight = unkWeight
+		}
+
+		totalLoss += loss * currentWeight
+		count++
+
+		// 4. Gradient
+		for j := 0; j < numClasses; j++ {
+			sj := softmax[j] * invSumExp
+			targetProb := 0.0
+			if j == targetID {
+				targetProb = 1.0
+			}
+			if labelSmoothing > 0 {
+				targetProb = targetProb*(1.0-labelSmoothing) + (labelSmoothing / float64(numClasses))
+			}
+
+			g := (sj - targetProb) * currentWeight
+			// Penalize predicting UNK when it's not the target
+			if j == unkID && targetID != unkID {
+				g *= unkPenalty
+			}
+			grad.Data[offset+j] = g
+		}
+	}
+
+	if count > 0 {
+		avgLoss := totalLoss / count
+		// Normalize gradients by the same count factor
+		for i := range grad.Data {
+			grad.Data[i] /= count
+		}
+		return avgLoss, grad
+	}
+	return 0, grad
 }
 
 type Hypothesis struct {
@@ -1170,7 +1510,11 @@ func BeamSearchDecode(model *moe.IntentMoE, ctx *tensor.Tensor, beamSize int, ma
 
 			// Standard Forward Pass to get Logits
 			inputT := tensor.NewTensor([]int{1, len(b.IDs)}, convertToFloat(b.IDs), false)
-			logits, _, _ := model.Forward(0.0, nil, inputT)
+			// The context `ctx` from the encoder must be passed to the decoder at each step.
+			logits, err := model.Decoder.Forward(ctx, inputT, 0.0)
+			if err != nil {
+				continue // Skip beam if it fails
+			}
 
 			// Get Log-Probabilities
 			probs := tensor.Softmax(logits[len(logits)-1])
@@ -1192,6 +1536,106 @@ func BeamSearchDecode(model *moe.IntentMoE, ctx *tensor.Tensor, beamSize int, ma
 					} else {
 						logProbs.Data[i] /= repetitionPenalty
 					}
+				}
+			}
+
+			// Prevent EOS at step 0 to avoid empty responses
+			if step == 0 && model.SentenceVocab.EosID < len(logProbs.Data) {
+				logProbs.Data[model.SentenceVocab.EosID] = -math.MaxFloat64
+			}
+
+			topKIndices, topKProbs := getTopK(logProbs, beamSize)
+
+			for i := 0; i < len(topKIndices); i++ {
+				newIDs := append([]int{}, b.IDs...)
+				newIDs = append(newIDs, topKIndices[i])
+				candidates = append(candidates, Hypothesis{
+					IDs:   newIDs,
+					Score: b.Score + topKProbs[i],
+				})
+			}
+		}
+
+		sort.Slice(candidates, func(i, j int) bool {
+			// Normalize score by length^alpha
+			scoreI := candidates[i].Score / math.Pow(float64(len(candidates[i].IDs)), alpha)
+			scoreJ := candidates[j].Score / math.Pow(float64(len(candidates[j].IDs)), alpha)
+			return scoreI > scoreJ
+		})
+
+		if len(candidates) > beamSize {
+			beams = candidates[:beamSize]
+		} else {
+			beams = candidates
+		}
+	}
+	if len(beams) == 0 {
+		return []int{}
+	}
+	return beams[0].IDs
+}
+
+// BeamSearchDecodeFiltered is a modified version of BeamSearchDecode that filters out specified token IDs.
+func BeamSearchDecodeFiltered(model *moe.IntentMoE, ctx *tensor.Tensor, beamSize int, maxLen int, filteredIDs []int) []int {
+	const repetitionPenalty = 1.2 // 1.0 = no penalty, 2.0 = very aggressive
+	const alpha = 0.7             // Length penalty coefficient
+	const temperature = 1.5       // Flatten distribution to encourage non-UNK tokens
+
+	beams := []Hypothesis{{IDs: []int{model.SentenceVocab.BosID}, Score: 0.0}}
+
+	// Create a map for quick lookup of filtered IDs
+	filterMap := make(map[int]bool)
+	for _, id := range filteredIDs {
+		filterMap[id] = true
+	}
+
+	for step := 0; step < maxLen; step++ {
+		candidates := []Hypothesis{}
+
+		for _, b := range beams {
+			if len(b.IDs) > 0 && b.IDs[len(b.IDs)-1] == model.SentenceVocab.EosID {
+				candidates = append(candidates, b)
+				continue
+			}
+
+			// Standard Forward Pass to get Logits
+			inputT := tensor.NewTensor([]int{1, len(b.IDs)}, convertToFloat(b.IDs), false)
+			// The context `ctx` from the encoder must be passed to the decoder at each step.
+			logits, err := model.Decoder.Forward(ctx, inputT, 0.0)
+			if err != nil {
+				continue // Skip beam if it fails
+			}
+
+			lastLogit := logits[len(logits)-1]
+			ApplyTemperature(lastLogit.Data, temperature)
+
+			// Get Log-Probabilities
+			probs := tensor.Softmax(lastLogit)
+			logProbs := tensor.NewTensor(probs.Shape, make([]float64, len(probs.Data)), false)
+			for i, p := range probs.Data {
+				logProbs.Data[i] = math.Log(p + 1e-9)
+			}
+
+			// --- APPLY PENALTY ---
+			seen := make(map[int]bool)
+			for _, id := range b.IDs {
+				seen[id] = true
+			}
+
+			for i := 0; i < len(logProbs.Data); i++ {
+				if seen[i] {
+					if logProbs.Data[i] < 0 {
+						logProbs.Data[i] *= repetitionPenalty
+					} else {
+						logProbs.Data[i] /= repetitionPenalty
+					}
+				}
+			}
+
+			// --- NEW: FILTER OUT UNWANTED TOKENS ---
+			for id := range filterMap {
+				if id < len(logProbs.Data) {
+					logProbs.Data[id] = -math.MaxFloat64 // Set to a very low value to avoid being picked
 				}
 			}
 
@@ -1252,6 +1696,14 @@ func (s *ChatSession) GetContextualPrompt(systemPrompt string) string {
 }
 
 func StartChat(model *moe.IntentMoE, w2v *word2vec.SimpleWord2Vec) {
+	// Start Prometheus metrics server on port 2112
+	go func() {
+		http.Handle("/metrics", promhttp.Handler())
+		http.ListenAndServe(":2112", nil)
+	}()
+
+	fmt.Println("📈 Metrics available at http://localhost:2112/metrics")
+
 	session := &ChatSession{MaxHistory: 3}
 	// 1. Define the "Core Identity"
 	// Keep it short so it doesn't eat up the RNN's memory (hidden state)
@@ -1308,7 +1760,7 @@ func StartChat(model *moe.IntentMoE, w2v *word2vec.SimpleWord2Vec) {
 
 		// 4. Beam Search Decoding
 		// We use BeamSize 5, MaxLen 50, and Repetition Penalty 1.2
-		outIDs := BeamSearchDecode(model, ctx, 5, 50)
+		outIDs := BeamSearchDecodeFiltered(model, ctx, 5, 50, []int{model.SentenceVocab.GetTokenID("UNK")})
 
 		// 5. Convert IDs back to Words
 		var response []string
@@ -1433,7 +1885,7 @@ func (b *MoEChatBot) Reply(input string) string {
 	ctx, _ := b.model.Encoder.Forward(emb)
 
 	// 4. Beam Search Decoding
-	outIDs := BeamSearchDecode(b.model, ctx, 5, 50)
+	outIDs := BeamSearchDecodeFiltered(b.model, ctx, 5, 50, []int{b.model.SentenceVocab.GetTokenID("UNK")})
 
 	// 5. Convert IDs back to Words
 	var response []string
@@ -1507,8 +1959,28 @@ func (b *MoEChatBot) StreamReply(userInput string) <-chan string {
 		var responseTokens []string
 
 		for i := 0; i < 50; i++ {
+			startToken := time.Now()
+
 			decInputT := tensor.NewTensor([]int{1, len(currIDs)}, currIDs, false)
 			logits, _, _ := b.model.Forward(0.0, nil, decInputT)
+
+			// 2. LOG THE EXPERTS: Capture the routing decisions for this token
+			for layerIdx, layer := range moe.ActiveLayers {
+				// We peek at the last routing decision made by the Gating Network
+				selected := layer.GetSelectedExperts()
+				if len(selected) > 0 {
+					if last := selected[len(selected)-1]; len(last) > 0 {
+						winner := last[0]
+						expertUtilization.WithLabelValues(
+							fmt.Sprintf("%d", layerIdx),
+							fmt.Sprintf("%d", winner),
+						).Inc()
+					}
+				}
+			}
+
+			// 3. Measure Latency
+			tokenLatency.Observe(float64(time.Since(startToken).Milliseconds()))
 
 			lastLogit := logits[len(logits)-1]
 			nextID := b.sampleNextToken(lastLogit)
@@ -1598,4 +2070,16 @@ func StressTestBot(model *moe.IntentMoE, w2v *word2vec.SimpleWord2Vec) {
 	fmt.Printf("Total Time:      %v\n", totalTime)
 	fmt.Printf("Total Messages:  %d\n", totalMsgs)
 	fmt.Printf("Throughput:      %.2f msgs/sec\n", float64(totalMsgs)/totalTime.Seconds())
+}
+
+// ApplyTemperature scales the logits by the temperature.
+// temperature > 1.0 makes the model more creative/risky
+// temperature < 1.0 makes it more confident/repetitive
+func ApplyTemperature(logits []float64, temperature float64) {
+	if temperature == 1.0 {
+		return
+	}
+	for i := range logits {
+		logits[i] /= temperature
+	}
 }

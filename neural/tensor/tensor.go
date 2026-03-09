@@ -2053,28 +2053,26 @@ func (t *Tensor) Sum(axis int) (*Tensor, error) {
 	}
 	newData := make([]float64, newSize)
 
-	strides := calculateStrides(t.Shape)
-	newStrides := calculateStrides(newShape)
+	// Efficient Sum calculation: O(N) with direct indexing
+	// We treat the shape as [prefix, axis_dim, suffix]
+	prefix := 1
+	for i := 0; i < axis; i++ {
+		prefix *= t.Shape[i]
+	}
+	axisDim := t.Shape[axis]
+	suffix := 1
+	for i := axis + 1; i < len(t.Shape); i++ {
+		suffix *= t.Shape[i]
+	}
 
-	for i := 0; i < len(t.Data); i++ {
-		oldCoords := getCoords(i, t.Shape, strides)
-
-		newCoords := make([]int, 0, len(newShape))
-		for j, coord := range oldCoords {
-			if j != axis {
-				newCoords = append(newCoords, coord)
+	for p := 0; p < prefix; p++ {
+		pOffset := p * axisDim * suffix
+		pResultOffset := p * suffix
+		for a := 0; a < axisDim; a++ {
+			aOffset := a * suffix
+			for s := 0; s < suffix; s++ {
+				newData[pResultOffset+s] += t.Data[pOffset+aOffset+s]
 			}
-		}
-
-		newIndex := 0
-		if len(newCoords) > 0 {
-			for j, coord := range newCoords {
-				newIndex += coord * newStrides[j]
-			}
-		}
-
-		if newIndex < len(newData) {
-			newData[newIndex] += t.Data[i]
 		}
 	}
 
