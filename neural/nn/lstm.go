@@ -856,10 +856,59 @@ func (l *LSTM) GetInputGrad() *Tensor {
 }
 
 func (l *LSTM) GetCellState(layer, timestep int) *Tensor {
-	if layer >= len(l.timeStepCells) || timestep >= len(l.timeStepCells[layer]) {
+	if layer < 0 || layer >= l.NumLayers || l.timeStepCells == nil || timestep < 0 || timestep >= len(l.timeStepCells[0]) {
 		return nil
 	}
 	return l.timeStepCells[layer][timestep].ct
+}
+
+func (l *LSTM) SetCellState(hidden, cell *Tensor) {
+	for i := 0; i < l.NumLayers; i++ {
+		l.Cells[i][0].PrevHidden = hidden
+		l.Cells[i][0].PrevCell = cell
+	}
+}
+
+func (l *LSTM) BackwardStep(gradH, gradC *Tensor, timestep int) error {
+	if l.timeStepCells == nil || timestep < 0 || timestep >= len(l.timeStepCells[0]) {
+		return fmt.Errorf("invalid timestep for BackwardStep")
+	}
+
+	currentGradH := gradH
+	currentGradC := gradC
+
+	// Backprop through layers at this timestep
+	for layer := l.NumLayers - 1; layer >= 0; layer-- {
+		cell := l.timeStepCells[layer][timestep]
+		err := cell.Backward(currentGradH, currentGradC)
+		if err != nil {
+			return err
+		}
+		currentGradH = cell.InputTensor.Grad
+		currentGradC = cell.PrevCell.Grad
+	}
+	return nil
+}
+
+func (l *LSTM) GetPrevHiddenGrad() *Tensor {
+	if l.timeStepCells == nil || len(l.timeStepCells[0]) == 0 {
+		return nil
+	}
+	return l.timeStepCells[0][0].PrevHidden.Grad
+}
+
+func (l *LSTM) GetPrevCellGrad() *Tensor {
+	if l.timeStepCells == nil || len(l.timeStepCells[0]) == 0 {
+		return nil
+	}
+	return l.timeStepCells[0][0].PrevCell.Grad
+}
+
+func (l *LSTM) GetInputGradStep(t int) *Tensor {
+	if l.timeStepCells == nil || t < 0 || t >= len(l.timeStepCells[0]) {
+		return nil
+	}
+	return l.timeStepCells[0][t].InputTensor.Grad
 }
 
 // ClearState clears the internal state of the LSTM.

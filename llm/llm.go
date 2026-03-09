@@ -4588,15 +4588,17 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 
 		// 1. Tokenize Input
 		var tokenIDs []int
-		for _, w := range words {
-			if id, ok := c.W2V.Vocabulary[w]; ok {
-				tokenIDs = append(tokenIDs, id)
-			} else {
-				// Use UNK or skip? If UNK is present, use it.
-				// For now, let's assume we skip unknown words to match simple processing
-				// or use 0 if that's UNK.
-				// Let's check if "UNK" is in vocab
-				if unkID, ok := c.W2V.Vocabulary["UNK"]; ok {
+		if c.Model.SentenceVocab != nil {
+			for _, w := range words {
+				// Use SentenceVocab which matches the Embedding layer's size
+				tokenIDs = append(tokenIDs, c.Model.SentenceVocab.GetTokenID(w))
+			}
+		} else {
+			// Fallback to W2V (only if model wasn't resized to sentence vocab)
+			for _, w := range words {
+				if id, ok := c.W2V.Vocabulary[w]; ok {
+					tokenIDs = append(tokenIDs, id)
+				} else if unkID, ok := c.W2V.Vocabulary["UNK"]; ok {
 					tokenIDs = append(tokenIDs, unkID)
 				}
 			}

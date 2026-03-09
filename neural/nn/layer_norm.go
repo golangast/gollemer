@@ -41,17 +41,21 @@ func NewLayerNorm(normalizedShape int) *LayerNorm {
 }
 
 // Forward performs the forward pass of LayerNorm
-// Input shape: [batchSize, normalizedShape]
+// Input shape: [batchSize, (optional seqLen), normalizedShape]
 func (ln *LayerNorm) Forward(input *Tensor) (*Tensor, error) {
-	if len(input.Shape) != 2 {
-		return nil, fmt.Errorf("LayerNorm expects 2D input, got shape %v", input.Shape)
+	if len(input.Shape) < 2 {
+		return nil, fmt.Errorf("LayerNorm expects at least 2D input, got shape %v", input.Shape)
 	}
-	if input.Shape[1] != ln.NormalizedShape {
-		return nil, fmt.Errorf("LayerNorm expects last dimension %d, got %d", ln.NormalizedShape, input.Shape[1])
+	if input.Shape[len(input.Shape)-1] != ln.NormalizedShape {
+		return nil, fmt.Errorf("LayerNorm expects last dimension %d, got %d", ln.NormalizedShape, input.Shape[len(input.Shape)-1])
 	}
 
-	batchSize := input.Shape[0]
 	ln.input = input
+	numRows := 1
+	for i := 0; i < len(input.Shape)-1; i++ {
+		numRows *= input.Shape[i]
+	}
+	batchSize := numRows // Total number of vectors to normalize
 
 	// Calculate mean and variance for each sample using SIMD
 	mean := NewTensor([]int{batchSize}, make([]float64, batchSize), false)
@@ -105,7 +109,11 @@ func (ln *LayerNorm) Forward(input *Tensor) (*Tensor, error) {
 
 // Backward performs the backward pass of LayerNorm
 func (ln *LayerNorm) Backward(gradOutput *Tensor) error {
-	batchSize := ln.input.Shape[0]
+	numRows := 1
+	for i := 0; i < len(ln.input.Shape)-1; i++ {
+		numRows *= ln.input.Shape[i]
+	}
+	batchSize := numRows
 
 	// Initialize gradients
 	if ln.Gamma.Grad == nil {

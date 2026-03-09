@@ -102,6 +102,17 @@ func (e *SimpleRNNEncoder) SetMode(training bool) {
 	e.LSTM.Training = training
 }
 
+func (e *SimpleRNNEncoder) ClearState() {
+	e.inputTensor = nil
+	e.hiddenStates = nil
+	e.cellStates = nil
+	e.initialState = nil
+	e.initialCell = nil
+	if e.LSTM != nil {
+		e.LSTM.ClearState()
+	}
+}
+
 // GetOutputShape returns the output shape (context vector shape).
 func (e *SimpleRNNEncoder) GetOutputShape() []int {
 	if e.inputTensor != nil {

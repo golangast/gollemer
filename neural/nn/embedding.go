@@ -79,6 +79,12 @@ func (e *Embedding) Parameters() []*Tensor {
 	return []*Tensor{e.Weight}
 }
 
+// ClearState clears the intermediate states to free memory.
+func (e *Embedding) ClearState() {
+	e.inputTensor = nil
+	e.inputTokenIDs = nil
+}
+
 // SetInput sets the input tensor for the backward pass.
 // This is useful when the embedding layer is reused in a loop (e.g. RNN).
 func (e *Embedding) SetInput(input *Tensor) {
@@ -183,6 +189,11 @@ func (pe *PositionalEmbedding) Parameters() []*Tensor {
 		return []*Tensor{pe.PositionEmbeddings}
 	}
 	return []*Tensor{}
+}
+
+// ClearState clears the intermediate states to free memory.
+func (pe *PositionalEmbedding) ClearState() {
+	pe.inputTensor = nil
 }
 
 // Inputs returns the input tensors of the Embedding operation.

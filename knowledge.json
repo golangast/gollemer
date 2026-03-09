@@ -46,15 +46,13 @@
     "head": true,
     "help": true,
     "home": true,
-    "how": true,
     "jim": true,
     "jimmy": true,
     "main": true,
     "moe": true,
     "structure": true,
     "user": true,
-    "webserver": true,
-    "what": true
+    "webserver": true
   },
   "stop_words": {
     "a": true,
