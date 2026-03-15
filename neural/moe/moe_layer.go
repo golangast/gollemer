@@ -349,7 +349,14 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 				continue
 			}
 			// Enforce capacity limit
-			if len(moe.expertTokenIndices[expertIdx]) >= capacity {
+			// Dynamic Capacity Stretching: If confidence is very high (>0.8), allow extra capacity
+			currentConf := gateOutputs.Data[i*numExperts+expertIdx]
+			stretchedCapacity := capacity
+			if currentConf > 0.8 {
+				stretchedCapacity = int(float64(capacity) * 1.5) // Stretch by 50%
+			}
+
+			if len(moe.expertTokenIndices[expertIdx]) >= stretchedCapacity {
 				tokenExpertRelativeIndices[i][j] = -1 // Drop token
 				continue
 			}

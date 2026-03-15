@@ -361,16 +361,16 @@ func (m *IntentMoE) EvolutionaryReset(stagnantExpertID int, layerIdx int) {
 		return
 	}
 
-	// 3. Clone and Mutate
-	fmt.Printf("🧬 Expert %d (L%d) evolved from Expert %d\n", stagnantExpertID, layerIdx, winnerID)
+	// 3. Clone and Mutate with Gaussian Jitter
+	fmt.Printf("🧬 Expert %d (L%d) evolved from Expert %d (Gaussian Jitter 0.01)\n", stagnantExpertID, layerIdx, winnerID)
 	for i := range stagnantParams {
 		wp := winnerParams[i]
 		sp := stagnantParams[i]
 
 		for j := range sp.Data {
-			// Mutation: Winner's weight + 10% random jitter
-			mutation := (rand.Float64()*0.2 - 0.1) * wp.Data[j]
-			sp.Data[j] = wp.Data[j] + mutation
+			// Add tiny Gaussian jitter (0.01 std dev) to break symmetry
+			jitter := rand.NormFloat64() * 0.01
+			sp.Data[j] = wp.Data[j] + jitter
 		}
 		// Zero out the gradients for the new expert
 		if sp.Grad != nil {
@@ -379,6 +379,22 @@ func (m *IntentMoE) EvolutionaryReset(stagnantExpertID int, layerIdx int) {
 			}
 		}
 	}
+}
+
+// PerformGlobalWeightSurgery prunes weak weights across all experts in the model.
+func (m *IntentMoE) PerformGlobalWeightSurgery(threshold float64) int {
+    totalKills := 0
+    for _, layer := range ActiveLayers {
+        for _, expert := range layer.Experts {
+            totalKills += PerformWeightSurgery(expert, threshold)
+        }
+    }
+    if m.Decoder.OutputMoE != nil {
+        for _, expert := range m.Decoder.OutputMoE.Experts {
+            totalKills += PerformWeightSurgery(expert, threshold)
+        }
+    }
+    return totalKills
 }
 
 // NewHybridIntentMoE creates a new IntentMoE model using the Hybrid LLM-GNN Encoder.
