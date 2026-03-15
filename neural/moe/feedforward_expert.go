@@ -163,3 +163,16 @@ func (e *FeedForwardExpert) Description() string {
 func (e *FeedForwardExpert) SetMode(training bool) {
 	// No specific behavior for training/inference in this simple expert
 }
+
+// ClearState clears the expert's internal states.
+func (e *FeedForwardExpert) ClearState() {
+	e.inputTensor = nil
+	e.activationOutput = nil
+	e.intermediateOutput = nil
+	if e.Layer1 != nil {
+		e.Layer1.ClearState()
+	}
+	if e.Layer2 != nil {
+		e.Layer2.ClearState()
+	}
+}

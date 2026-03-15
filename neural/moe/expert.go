@@ -24,4 +24,7 @@ type Expert interface {
 
 	// SetMode sets the mode of the expert (training or inference).
 	SetMode(training bool)
+
+	// ClearState clears the expert's internal states.
+	ClearState()
 }

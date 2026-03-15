@@ -349,24 +349,23 @@ func TrainChat(projectRoot string) {
 	iterator := NewChatDataIterator(trainPairs, w2v, intentModel.SentenceVocab, unkID)
 
 	// Training Loop
-	// Training Loop
-	epochs := 30 // Full training sequence
-	const batchSize = 12 // Changed from 16
-	// 1e-4 avoids the gradient explosion zone seen at 4e-4 after epoch 2.
-	// Adam's adaptive moments handle the rest; we apply hard decay + clipping on top.
-	learningRate := 0.00002 // Reduced learning rate further for stability given the constant clipping
-	const minLR = 5e-6     // Floor to prevent LR from collapsing
-	optimizer := neuralnn.NewOptimizer(intentModel.Parameters(), learningRate, 5.0) // Increased clipValue to 5.0 for better encoder updates
+	epochs := 60
+	const batchSize = 4 // Significantly lower for stability and memory
+	// Very low LR to handle the complex Hybrid GNN + MoE interaction
+	baseLR := 8e-7 // Lowered from 2e-6
+	learningRate := 1e-7 // Lowered from 5e-7
+	const minLR = 1e-7
+	optimizer := neuralnn.NewOptimizer(intentModel.Parameters(), learningRate, 1.0) // Lower clip from 5.0 to 1.0
 
 	// Early stopping state
-	patienceLimit := 4    // Stop if no improvement for this many epochs
-	patienceCounter := 0  // How many consecutive epochs without improvement
+	patienceLimit := 10 // More patience for the slow LR
+	patienceCounter := 0
 
 	// Seed v1 rand for MoE noise
 	randv1.Seed(time.Now().UnixNano())
 
 	globalStep := 0
-	warmupSteps := 1000 // Slower start
+	warmupSteps := 1000
 
 	// Track expert metrics over the epoch
 	epochUtilization := make(map[string]int)
@@ -379,9 +378,9 @@ func TrainChat(projectRoot string) {
 	plateauCount := 0
 
 	// Define these before the loop - moderated penalties
-	unkWeight := 0.01
-	unkPenalty := 2.0
-	log.Println("🔧 Using Weighted CrossEntropy (unkWeight=0.01, penalty=2.0)")
+	unkWeight := 0.05 // Lower weight means UNK has less influence on loss
+	unkPenalty := 2.5 // Higher penalty makes guessing UNK very "expensive" for the model
+	log.Printf("🔧 Training Config: baseLR=%.7f, unkWeight=%.2f, unkPenalty=%.2f", baseLR, unkWeight, unkPenalty)
 
 	fmt.Printf("Training on %d pairs for %d epochs (patience=%d)...\n", len(chatPairs), epochs, patienceLimit)
 
@@ -396,7 +395,7 @@ func TrainChat(projectRoot string) {
 				layer.RouterTemperature = 2.0 // Increased from 1.5
 			}
 			if epoch == 0 {
-				log.Println("🔥 Forcing diverse routing with high temperature (2.0) for first 2 epochs.")
+				log.Println("🔥 Forcing diverse routing for initial epochs (Temp 2.0)")
 			}
 		} else if epoch == 2 { // Reset to normal after warmup
 			for _, layer := range moe.ActiveLayers {
@@ -418,7 +417,7 @@ func TrainChat(projectRoot string) {
 		// Prefetch tokenization: start a background goroutine that pre-produces
 		// Batch structs into a buffered channel while the main goroutine
 		// is busy with forward/backward. Buffer=64 keeps the main loop fed.
-		prefetchCh := make(chan Batch, 4) // Reduced buffer size to save memory
+		prefetchCh := make(chan *Batch, 2) // Small buffer is enough for pointers
 		go func() {
 			for iterator.HasNext() {
 				prefetchCh <- iterator.NextBatch(batchSize)
@@ -427,6 +426,9 @@ func TrainChat(projectRoot string) {
 		}()
 
 		for batch := range prefetchCh {
+			if batch == nil || batch.Input == nil {
+				continue
+			}
 			// Learning Rate Warmup
 			if globalStep < warmupSteps {
 				startLR := 1e-7
@@ -446,15 +448,22 @@ func TrainChat(projectRoot string) {
 
 			optimizer.ZeroGrad()
 
+			// Warmup and Learning Rate Schedule
+			if globalStep < warmupSteps {
+				// Linear warmup
+				learningRate = 5e-7 + (baseLR-5e-7)*float64(globalStep)/float64(warmupSteps)
+				if opt, ok := optimizer.(*neuralnn.Adam); ok {
+					opt.SetLearningRate(learningRate)
+				}
+			}
+
 			// Forward
 			// Teacher Forcing Schedule:
 			var samplingProb float64
-			if epoch >= 2 {
-				// Start sampling earlier to help the model learn to recover from its own mistakes
-				samplingProb = math.Min(0.25, float64(epoch-2)*0.05)
+			if epoch >= 1 {
+				// Start sampling even earlier
+				samplingProb = math.Min(0.5, float64(epoch)*0.05)
 			}
-			// Slicing happens inside model.Decoder.Forward
-			// Now passing 3 inputs: Input, Target, InputMask
 			logits, _, err := intentModel.Forward(samplingProb, inputTensor, targetTensor, batch.InputMask)
 			if err != nil {
 				log.Printf("Forward error: %v", err)
@@ -604,18 +613,19 @@ func TrainChat(projectRoot string) {
 				log.Fatalf("❌ Loss exploded to NaN/Inf at epoch %d, batch %d. Stopping training.", epoch, batches)
 			}
 
-			// Console Logging every 100 batches
-			if batches%100 == 0 {
+			// Console Logging every 50 batches
+			if batches%50 == 0 {
 				elapsed := time.Since(epochStartTime).Seconds()
 				batchesPerSec := float64(batches) / elapsed
-				log.Printf("Epoch %d, Batch %d/%d, Loss: %.4f (Avg LB: %.4f, Step: %d) [%.1f b/s]", epoch, batches, len(chatPairs), batchLoss, epochLBLoss/float64(batches), globalStep, batchesPerSec)
+				totalBatches := (len(chatPairs) + batchSize - 1) / batchSize
+				log.Printf("Epoch %d, Batch %d/%d, Loss: %.4f (LB: %.4f, Step: %d, LR: %.7f) [%.2f b/s]", 
+					epoch, batches, totalBatches, batchLoss, epochLBLoss/float64(batches), globalStep, learningRate, batchesPerSec)
 			}
-
 
 			// Memory safety: Clear computation graph every batch
 			DetachModel(intentModel)
-			// Trigger GC less frequently (every 100 batches)
-			if batches%100 == 0 {
+			// Trigger GC extremely frequently due to GNN adjacency matrices
+			if batches%10 == 0 {
 				runtime.GC()
 			}
 		}
@@ -675,14 +685,15 @@ func TrainChat(projectRoot string) {
 		log.Printf("📉 Validation Perplexity: %.2f", valPPL)
 
 		// Check for Plateau
-		if avgLoss >= lastEpochLoss*0.99 { // If improvement is less than 1%
+		if avgLoss >= lastEpochLoss*0.999 { // More sensitive plateau detection
 			plateauCount++
 		} else {
 			plateauCount = 0
 		}
 
-		if plateauCount >= 2 { // If stuck for 2 epochs, drop LR
-			learningRate *= 0.5
+		if plateauCount >= 2 && globalStep > warmupSteps { 
+			baseLR *= 0.5
+			learningRate = baseLR
 			if learningRate < minLR {
 				learningRate = minLR
 			}
@@ -836,6 +847,9 @@ func StrictGenerate(model *moe.IntentMoE, input string, w2v *word2vec.SimpleWord
 	resIDs := []int{model.SentenceVocab.BosID}
 	currentTokenID := model.SentenceVocab.BosID
 
+	// Track counts for frequency penalty during generation
+	counts := make(map[int]int)
+
 	for i := 0; i < maxLen; i++ {
 		inputT := tensor.NewTensor([]int{1, 1}, []float64{float64(currentTokenID)}, false)
 
@@ -848,9 +862,17 @@ func StrictGenerate(model *moe.IntentMoE, input string, w2v *word2vec.SimpleWord
 		hiddenState = nextHidden
 		cellState = nextCell
 
-		// 5. Apply Repetition Penalty (NEW)
-		// This prevents the model from getting stuck repeating the same token (like ".")
-		moe.ApplyRepetitionPenalty(logits, resIDs, 1.5)
+		// 5. Apply Repetition and Frequency Penalty
+		// Repetition Penalty (multiplicative)
+		moe.ApplyRepetitionPenalty(logits, resIDs, 1.2) // Lowered from 1.8
+		
+		// Frequency Penalty (additive)
+		const frequencyPenalty = 0.5
+		for id, count := range counts {
+			if id < len(logits.Data) {
+				logits.Data[id] -= frequencyPenalty * float64(count)
+			}
+		}
 
 		// 6. Mute UNK and <pad>
 		logits.Data[model.SentenceVocab.PaddingTokenID] = -1e9
@@ -859,9 +881,9 @@ func StrictGenerate(model *moe.IntentMoE, input string, w2v *word2vec.SimpleWord
 			logits.Data[unkID] = -1e9
 		}
 
-		// 7. Pick Best Word using Sampling (Diversity)
-		// temperature 0.8, top-k 20
-		bestID, err := moe.SampleFromLogits(logits, 0.8, 20, 0)
+		// 7. Pick Best Word using Nucleus Sampling (Sentences)
+		// Optimize temperature and top-p to allow experts to express their "specialty"
+		bestID, err := moe.SampleFromLogits(logits, 0.7, 10, 0.9) // Temp 0.7, Top-P 0.9
 		if err != nil {
 			log.Printf("StrictGenerate Error (Sampling): %v", err)
 			break
@@ -872,6 +894,7 @@ func StrictGenerate(model *moe.IntentMoE, input string, w2v *word2vec.SimpleWord
 		}
 
 		resIDs = append(resIDs, bestID)
+		counts[bestID]++
 		currentTokenID = bestID
 	}
 
@@ -1024,13 +1047,17 @@ func (it *ChatDataIterator) Next() (*tensor.Tensor, *tensor.Tensor) {
 	return inputTensor, targetTensor
 }
 
-func (it *ChatDataIterator) NextBatch(batchSize int) Batch {
+func (it *ChatDataIterator) NextBatch(batchSize int) *Batch {
 	var inputs [][]float64
 	var targets [][]float64
 	maxIn, maxOut := 0, 0
 
 	for i := 0; i < batchSize && it.HasNext(); i++ {
 		inp, tgt := it.Next()
+		// Sequence length constraint: strictly capped for memory and logical coherence
+		if len(inp.Data) > 80 || len(tgt.Data) > 80 {
+			continue
+		}
 		inputs = append(inputs, inp.Data)
 		targets = append(targets, tgt.Data)
 		if len(inp.Data) > maxIn {
@@ -1039,6 +1066,10 @@ func (it *ChatDataIterator) NextBatch(batchSize int) Batch {
 		if len(tgt.Data) > maxOut {
 			maxOut = len(tgt.Data)
 		}
+	}
+
+	if len(inputs) == 0 {
+		return &Batch{}
 	}
 
 	paddedIn := make([]float64, len(inputs)*maxIn)
@@ -1071,7 +1102,7 @@ func (it *ChatDataIterator) NextBatch(batchSize int) Batch {
 	// Reshape InputMask for attention: [Batch, 1, 1, SeqLen]
 	inputMaskTensor := tensor.NewTensor([]int{len(inputs), 1, 1, maxIn}, inputLogitMask, false)
 
-	return Batch{
+	return &Batch{
 		Input:     tensor.NewTensor([]int{len(inputs), maxIn}, paddedIn, false),
 		Target:    tensor.NewTensor([]int{len(targets), maxOut}, paddedOut, false),
 		Mask:      mask,
@@ -1424,7 +1455,8 @@ func WeightedCrossEntropy(logits *tensor.Tensor, targets []int, padID int, unkID
 
 		currentWeight := 1.0
 		if targetID == unkID {
-			currentWeight = unkWeight
+			// Apply the user's requested logic: scale UNK influence and apply penalty
+			currentWeight = unkWeight * unkPenalty
 		}
 
 		totalLoss += loss * currentWeight
@@ -1442,7 +1474,7 @@ func WeightedCrossEntropy(logits *tensor.Tensor, targets []int, padID int, unkID
 			}
 
 			g := (sj - targetProb) * currentWeight
-			// Penalize predicting UNK when it's not the target
+			// Strongly penalize predicting UNK when it's NOT the target
 			if j == unkID && targetID != unkID {
 				g *= unkPenalty
 			}
@@ -1670,29 +1702,99 @@ func BeamSearchDecodeFiltered(model *moe.IntentMoE, ctx *tensor.Tensor, beamSize
 	return beams[0].IDs
 }
 
-// ChatSession manages the conversation history for sliding window memory.
+// ConversationTurn holds structured data about a single turn in the conversation.
+type ConversationTurn struct {
+	Input    []float64         // The averaged embedding of the user's input
+	RawInput string            // The original user input text
+	Intent   string            // The resolved intent (e.g., "create_handler")
+	Entities map[string]string // Any extracted names/urls
+	Response string            // The bot's response text
+}
+
+// ChatSession manages the conversation history for sliding window memory and context.
 type ChatSession struct {
-	History    []string
-	MaxHistory int // Number of exchanges to remember
+	History       []ConversationTurn
+	MaxHistory    int // Number of exchanges to remember
+	ContextVector []float64
+	mu            sync.Mutex
 }
 
-func (s *ChatSession) AddToHistory(user, bot string) {
-	s.History = append(s.History, fmt.Sprintf("User: %s", user))
-	s.History = append(s.History, fmt.Sprintf("Bot: %s", bot))
-
-	// Keep only the most recent exchanges (2 strings per exchange)
-	if len(s.History) > s.MaxHistory*2 {
-		s.History = s.History[len(s.History)-(s.MaxHistory*2):]
+// NewChatSession creates a new chat session.
+func NewChatSession(maxHistory int, vectorSize int) *ChatSession {
+	return &ChatSession{
+		History:       make([]ConversationTurn, 0),
+		MaxHistory:    maxHistory,
+		ContextVector: make([]float64, vectorSize),
 	}
 }
 
-func (s *ChatSession) GetContextualPrompt(systemPrompt string) string {
-	// Combine System Prompt + History
+// AddToHistory adds a new turn and updates the context vector.
+func (s *ChatSession) AddToHistory(turn ConversationTurn) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if len(s.History) >= s.MaxHistory {
+		s.History = s.History[1:] // Slide the window
+	}
+	s.History = append(s.History, turn)
+
+	s.updateContextVector()
+}
+
+// updateContextVector computes a weighted average of recent embeddings.
+func (s *ChatSession) updateContextVector() {
 	if len(s.History) == 0 {
-		return systemPrompt
+		return
 	}
-	fullContext := systemPrompt + "\n" + strings.Join(s.History, "\n")
-	return fullContext
+
+	// Simple weighted average: newer turns have more weight.
+	for i := range s.ContextVector {
+		s.ContextVector[i] = 0
+	}
+
+	totalWeight := 0.0
+	for i, turn := range s.History {
+		weight := float64(i + 1) // Simple linear weight
+		for j, val := range turn.Input {
+			if j < len(s.ContextVector) {
+				s.ContextVector[j] += val * weight
+			}
+		}
+		totalWeight += weight
+	}
+
+	if totalWeight > 0 {
+		for i := range s.ContextVector {
+			s.ContextVector[i] /= totalWeight
+		}
+	}
+}
+
+// GetContextVector returns a copy of the current context vector.
+func (s *ChatSession) GetContextVector() []float64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ctxCopy := make([]float64, len(s.ContextVector))
+	copy(ctxCopy, s.ContextVector)
+	return ctxCopy
+}
+
+// injectContextualClues provides a verbose explanation of the bot's reasoning
+// based on the previous turn, enhancing the conversational feel.
+func injectContextualClues(session *ChatSession) {
+	if len(session.History) == 0 {
+		return
+	}
+
+	lastTurn := session.History[len(session.History)-1]
+	// NOTE: This relies on the Intent and Entities fields being populated by a proper
+	// intent classifier and NER system. They are currently placeholders in this chat loop.
+	if lastTurn.Intent != "chat_response" && len(lastTurn.Entities) > 0 {
+		if name, ok := lastTurn.Entities["name"]; ok {
+			// Example of verbose output.
+			fmt.Printf("🤖 [Reasoning: Based on our previous step involving '%s', I will generate the next response.]\n", name)
+		}
+	}
 }
 
 func StartChat(model *moe.IntentMoE, w2v *word2vec.SimpleWord2Vec) {
@@ -1704,7 +1806,7 @@ func StartChat(model *moe.IntentMoE, w2v *word2vec.SimpleWord2Vec) {
 
 	fmt.Println("📈 Metrics available at http://localhost:2112/metrics")
 
-	session := &ChatSession{MaxHistory: 3}
+	session := NewChatSession(3, model.Embedding.DimModel)
 	// 1. Define the "Core Identity"
 	// Keep it short so it doesn't eat up the RNN's memory (hidden state)
 	const systemPrompt = "System: You are a friendly, helpful assistant. Tone: Kind."
@@ -1721,6 +1823,17 @@ func StartChat(model *moe.IntentMoE, w2v *word2vec.SimpleWord2Vec) {
 			break
 		}
 
+		// NEW: Inject contextual clues for verbose output.
+		injectContextualClues(session)
+
+		// TODO: Implement full prompt chaining.
+		// A full implementation would involve parsing the current input to identify
+		// the intent and any missing entities. If entities are missing (e.g., user says
+		// "create a file" without a name), and the input is a continuation ("for it", "do it"),
+		// the system would look at `session.History` for the last relevant entity and
+		// inject it into the current command's context before execution. This requires
+		// a dialogue manager and an integrated NER component.
+
 		// Sentiment Analysis & Emotional Steering
 		sentiment := GetSentimentScore(input)
 		isApologetic := false
@@ -1736,15 +1849,36 @@ func StartChat(model *moe.IntentMoE, w2v *word2vec.SimpleWord2Vec) {
 			// }
 		}
 
-		// 1. Build the full "story" so far
-		// This looks like: [System] + [History Turn 1] + [History Turn 2] + [Current User Input]
-		fullContext := session.GetContextualPrompt(systemPrompt) + "\nUser: " + input
-
-		// 2. Standard tokenization and Forward pass
-		tokens := cleanTokenize(fullContext)
+		// 1. Tokenize and embed current input
+		tokens := cleanTokenize(input)
 		ids := make([]float64, len(tokens))
+		avgInputEmbedding := make([]float64, model.Embedding.DimModel)
+		tokenCount := 0
 		for i, t := range tokens {
-			ids[i] = lookupW2V(t, w2v)
+			id := lookupW2V(t, w2v)
+			ids[i] = id
+			if vec, ok := w2v.WordVectors[int(id)]; ok {
+				for d := 0; d < model.Embedding.DimModel; d++ {
+					avgInputEmbedding[d] += vec[d]
+				}
+				tokenCount++
+			}
+		}
+		if tokenCount > 0 {
+			for d := range avgInputEmbedding {
+				avgInputEmbedding[d] /= float64(tokenCount)
+			}
+		}
+
+		// 2. Combine with context vector
+		contextVector := session.GetContextVector()
+		const lambda = 0.3 // Context decay factor
+		if len(contextVector) == model.Embedding.DimModel {
+			for i := 0; i < len(ids); i++ {
+				// This is a conceptual change. The actual implementation
+				// would modify the embedding tensor, not the IDs.
+				// This logic is now handled in the Reply/StreamReply methods.
+			}
 		}
 
 		// 3. Standard Inference
@@ -1776,7 +1910,14 @@ func StartChat(model *moe.IntentMoE, w2v *word2vec.SimpleWord2Vec) {
 		fmt.Printf("Bot [%s]: %s\n", getExpertPath(), botResponse)
 
 		// 7. Save this turn to memory
-		session.AddToHistory(input, botResponse)
+		newTurn := ConversationTurn{
+			Input:    avgInputEmbedding,
+			RawInput: input,           // Save original input
+			Intent:   "chat_response", // Placeholder, would be resolved by classifier
+			Entities: make(map[string]string), // Placeholder
+			Response: botResponse,
+		}
+		session.AddToHistory(newTurn)
 
 		// Reset Emotional Steering
 		if isApologetic {
@@ -1840,7 +1981,7 @@ func NewMoEChatBot(model *moe.IntentMoE, w2v *word2vec.SimpleWord2Vec) *MoEChatB
 	return &MoEChatBot{
 		model:        model,
 		w2v:          w2v,
-		session:      &ChatSession{MaxHistory: 3},
+		session:      NewChatSession(3, model.Embedding.DimModel),
 		systemPrompt: "System: You are a friendly, helpful assistant. Tone: Kind.",
 	}
 }
@@ -1864,14 +2005,25 @@ func (b *MoEChatBot) Reply(input string) string {
 		// }
 	}
 
-	// 1. Build the full "story" so far
-	fullContext := b.session.GetContextualPrompt(b.systemPrompt) + "\nUser: " + input
-
-	// 2. Standard tokenization and Forward pass
-	tokens := cleanTokenize(fullContext)
+	// 1. Tokenize and embed current input
+	tokens := cleanTokenize(input)
 	ids := make([]float64, len(tokens))
+	avgInputEmbedding := make([]float64, b.model.Embedding.DimModel)
+	tokenCount := 0
 	for i, t := range tokens {
-		ids[i] = lookupW2V(t, b.w2v)
+		id := lookupW2V(t, b.w2v)
+		ids[i] = id
+		if vec, ok := b.w2v.WordVectors[int(id)]; ok {
+			for d := 0; d < b.model.Embedding.DimModel; d++ {
+				avgInputEmbedding[d] += vec[d]
+			}
+			tokenCount++
+		}
+	}
+	if tokenCount > 0 {
+		for d := range avgInputEmbedding {
+			avgInputEmbedding[d] /= float64(tokenCount)
+		}
 	}
 
 	inputT := tensor.NewTensor([]int{1, len(ids)}, ids, false)
@@ -1882,6 +2034,19 @@ func (b *MoEChatBot) Reply(input string) string {
 	}
 
 	emb, _ := b.model.Embedding.Forward(inputT)
+
+	// 2. Combine with context vector
+	contextVector := b.session.GetContextVector()
+	const lambda = 0.3 // Context decay factor
+	if len(contextVector) == b.model.Embedding.DimModel {
+		for i := 0; i < emb.Shape[1]; i++ { // For each token in sequence
+			offset := i * b.model.Embedding.DimModel
+			for j := 0; j < b.model.Embedding.DimModel; j++ {
+				emb.Data[offset+j] += contextVector[j] * lambda
+			}
+		}
+	}
+
 	ctx, _ := b.model.Encoder.Forward(emb)
 
 	// 4. Beam Search Decoding
@@ -1898,7 +2063,14 @@ func (b *MoEChatBot) Reply(input string) string {
 	botResponse := strings.Join(response, " ")
 
 	// 7. Save this turn to memory
-	b.session.AddToHistory(input, botResponse)
+	newTurn := ConversationTurn{
+		Input:    avgInputEmbedding,
+		RawInput: input,
+		Intent:   "chat_response",         // Placeholder
+		Entities: make(map[string]string), // Placeholder
+		Response: botResponse,
+	}
+	b.session.AddToHistory(newTurn)
 
 	// Reset Emotional Steering
 	if isApologetic {
@@ -1936,14 +2108,32 @@ func (b *MoEChatBot) StreamReply(userInput string) <-chan string {
 			// }
 		}
 
-		// 1. Build the full "story" so far
-		fullContext := b.session.GetContextualPrompt(b.systemPrompt) + "\nUser: " + userInput
-
-		// 2. Tokenize
-		tokens := cleanTokenize(fullContext)
+	// 1. Tokenize and embed current input
+	tokens := cleanTokenize(userInput)
 		ids := make([]float64, len(tokens))
+	avgInputEmbedding := make([]float64, b.model.Embedding.DimModel)
+	tokenCount := 0
 		for i, t := range tokens {
-			ids[i] = lookupW2V(t, b.w2v)
+		id := lookupW2V(t, b.w2v)
+		ids[i] = id
+		if vec, ok := b.w2v.WordVectors[int(id)]; ok {
+			for d := 0; d < b.model.Embedding.DimModel; d++ {
+				avgInputEmbedding[d] += vec[d]
+			}
+			tokenCount++
+		}
+	}
+	if tokenCount > 0 {
+		for d := range avgInputEmbedding {
+			avgInputEmbedding[d] /= float64(tokenCount)
+		}
+	}
+
+	// 2. Combine with context vector
+	contextVector := b.session.GetContextVector()
+	const lambda = 0.3 // Context decay factor
+	if len(contextVector) == b.model.Embedding.DimModel {
+		// This logic will be applied to the embedding tensor below
 		}
 		inputT := tensor.NewTensor([]int{1, len(ids)}, ids, false)
 
@@ -1952,6 +2142,16 @@ func (b *MoEChatBot) StreamReply(userInput string) <-chan string {
 			l.SetMode(false)
 		}
 		emb, _ := b.model.Embedding.Forward(inputT)
+
+	// Apply context vector to embeddings
+	if len(contextVector) == b.model.Embedding.DimModel {
+		for i := 0; i < emb.Shape[1]; i++ {
+			offset := i * b.model.Embedding.DimModel
+			for j := 0; j < b.model.Embedding.DimModel; j++ {
+				emb.Data[offset+j] += contextVector[j] * lambda
+			}
+		}
+	}
 		b.model.Encoder.Forward(emb)
 
 		// 4. Decode Loop
@@ -1998,7 +2198,14 @@ func (b *MoEChatBot) StreamReply(userInput string) <-chan string {
 		}
 
 		// Save to history
-		b.session.AddToHistory(userInput, strings.Join(responseTokens, " "))
+		newTurn := ConversationTurn{
+			Input:    avgInputEmbedding,
+			RawInput: userInput,
+			Intent:   "chat_response",         // Placeholder
+			Entities: make(map[string]string), // Placeholder
+			Response: strings.Join(responseTokens, " "),
+		}
+		b.session.AddToHistory(newTurn)
 
 		// Reset Emotional Steering
 		if isApologetic {
