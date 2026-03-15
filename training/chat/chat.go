@@ -867,13 +867,28 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 				}
 			}()
 
-			// Add Diversity Loss (Shannon Entropy) to discourage flat distributions
+			// Add Diversity Losses to discourage monopolies and flat distributions
 			var divLoss float64
 			for _, logit := range logits {
 				probs := tensor.Softmax(logit)
 				divLoss += moe.CalculateDiversityLoss(probs)
 			}
 			batchLoss += divLoss / float64(len(logits))
+
+			// Add Usage Variance Loss
+			var usageVariance float64
+			for _, layer := range moe.ActiveLayers {
+				stats := layer.UtilizationStats()
+				tokensThisLayer := 0
+				for _, c := range stats { tokensThisLayer += c }
+				usageVariance += moe.CalculateUsageVariance(stats, len(layer.Experts), tokensThisLayer)
+			}
+			batchLoss += usageVariance
+
+			// Add Sparsity Penalty (L1) to encourage cleaner experts
+			const sparseLambda = 0.0001
+			sparsityLoss := moe.CalculateSparsityPenalty(intentModel.Parameters(), sparseLambda)
+			batchLoss += sparsityLoss
 			
 			// Clear intermediate states to free memory
 			intentModel.ClearState()
@@ -894,6 +909,13 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 				totalBatches := (len(chatPairs) + batchSize - 1) / batchSize
 				log.Printf("Epoch %d, Batch %d/%d, Loss: %.4f (LB: %.4f, Step: %d, LR: %.7f) [%.2f b/s]", 
 					epoch, batches, totalBatches, batchLoss, epochLBLoss/float64(batches), globalStep, learningRate, batchesPerSec)
+				
+				// 🧩 Periodically print a Heatmap for the first expert of each layer
+				if batches % 200 == 0 {
+					for i, layer := range moe.ActiveLayers {
+						moe.PrintExpertHeatmap(fmt.Sprintf("L%d E0", i), layer.Experts[0], 0.05)
+					}
+				}
 			}
 
 			// Memory safety: Clear computation graph every batch
@@ -1170,10 +1192,18 @@ func StrictGenerate(model *moe.IntentMoE, input string, w2v *word2vec.SimpleWord
 			break
 		}
 		newHiddenNorm := nextHidden.L2Norm()
-		fmt.Printf("🔍 Step %d | Context Influence: %.4f | Expert: E%d\n", i, math.Abs(newHiddenNorm-oldHiddenNorm), expertID)
-
+		
+		// Update states
 		hiddenState = nextHidden
 		cellState = nextCell
+
+		// Diagnostic: Context Influence and Expert
+		// The previous oldHiddenNorm and newHiddenNorm were for the *current* step's input.
+		// This diagnostic is for the *change* in hidden state after the step.
+		// So, oldHiddenNorm should be the state *before* the update, and newHiddenNorm *after*.
+		// The variables were already declared above, so remove the `:=`
+		fmt.Printf("🔍 Step %d | Context Influence: %.4f | Expert: E%d\n", i, math.Abs(newHiddenNorm-oldHiddenNorm), expertID)
+
 
 		// 5. Apply Repetition and Frequency Penalty
 		// Repetition Penalty (multiplicative)
@@ -1199,10 +1229,25 @@ func StrictGenerate(model *moe.IntentMoE, input string, w2v *word2vec.SimpleWord
 			logits.Data[idx] *= 5.0
 		}
 
-		// 7. Pick Best Word (Sharper temp 0.2)
-		bestID, err := moe.SampleFromLogits(logits, 0.2, 1, 1.0) 
+		// 7. Temperature Decay: Start sharp, get even sharper (Theme lock)
+		// initial 0.2, decays 10% each step, min 0.05
+		decayedTemp := 0.2 * math.Pow(0.90, float64(i))
+		if decayedTemp < 0.05 {
+			decayedTemp = 0.05
+		}
+
+		// 7. Pick Best Word (Sharper temp with decay)
+		bestID, err := moe.SampleFromLogits(logits, decayedTemp, 1, 1.0) 
 		if err != nil {
 			log.Printf("StrictGenerate Error (Sampling): %v", err)
+			break
+		}
+
+		// 8. Early Stopping: If even the best choice is "noise"
+		probs := tensor.Softmax(logits) // Declare probs here so it's available for both checks
+		topProb := probs.Data[bestID]
+		if i > 2 && topProb < 0.01 { // threshold 1%
+			log.Printf("🛑 Early stop at step %d: Low confidence (%.2f%%)", i, topProb*100)
 			break
 		}
 
@@ -1215,7 +1260,6 @@ func StrictGenerate(model *moe.IntentMoE, input string, w2v *word2vec.SimpleWord
 		currentTokenID = bestID
 
 		// Top-K Diagnostic summary
-		probs := tensor.Softmax(logits)
 		topIndices, topValues := getTopK(probs, 5)
 		fmt.Printf("🔍 Step %d | Top Choices:\n", i)
 		for k := 0; k < 5; k++ {
@@ -1223,7 +1267,7 @@ func StrictGenerate(model *moe.IntentMoE, input string, w2v *word2vec.SimpleWord
 			fmt.Printf("   [%d] %-12s (%.2f%%)\n", k+1, word, topValues[k]*100)
 		}
 
-		// 2. Record the word and the expert that produced it
+		// Record the word and the expert that produced it
 		word := model.SentenceVocab.GetWord(bestID)
 		path = append(path, fmt.Sprintf("%s(E%d)", word, expertID))
 	}
@@ -2920,6 +2964,20 @@ type OneCycle struct {
     MinLR       float64
     TotalSteps  int
     CurrentStep int
+}
+
+// CalculateCosineDecay implements a cosine learning rate decay.
+func CalculateCosineDecay(step int, totalSteps int, startLR float64, minLR float64) float64 {
+    if step >= totalSteps {
+        return minLR
+    }
+    // Calculate progress (0.0 to 1.0)
+    progress := float64(step) / float64(totalSteps)
+    
+    // Cosine decay formula
+    cosOut := 0.5 * (1.0 + math.Cos(math.Pi*progress))
+    
+    return minLR + (startLR-minLR)*cosOut
 }
 
 func (oc *OneCycle) GetNextLR() float64 {
