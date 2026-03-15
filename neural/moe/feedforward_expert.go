@@ -118,8 +118,11 @@ func (e *FeedForwardExpert) Backward(grad *tensor.Tensor) error {
 		if e.inputTensor.Grad == nil {
 			e.inputTensor.Grad = tensor.NewTensor(e.inputTensor.Shape, make([]float64, len(e.inputTensor.Data)), false)
 		}
-		for i := range grad.Data {
-			e.inputTensor.Grad.Data[i] += grad.Data[i]
+		// Only accumulate if shapes match (residual connection only applies when input == output dim)
+		if len(grad.Data) == len(e.inputTensor.Grad.Data) {
+			for i := range grad.Data {
+				e.inputTensor.Grad.Data[i] += grad.Data[i]
+			}
 		}
 	}
 

@@ -265,7 +265,7 @@ func NewIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, childVoc
 	}
 
 	// Initialize the RNN Decoder (legacy code - using defaults: 1 layer, no dropout)
-	decoder, err := NewRNNDecoder(embeddingDim, sentenceVocabSize, embeddingDim, maxAttentionHeads, 1, 0.0)
+	decoder, err := NewRNNDecoder(embeddingDim, sentenceVocabSize, embeddingDim, maxAttentionHeads, 1, 0.0, numExperts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create RNN decoder: %w", err)
 	}
@@ -306,7 +306,7 @@ func NewHybridIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, ch
 	}
 
 	// 3. Initialize Decoder
-	decoder, err := NewRNNDecoder(embeddingDim, sentenceVocabSize, embeddingDim, maxAttentionHeads, 1, 0.0)
+	decoder, err := NewRNNDecoder(embeddingDim, sentenceVocabSize, embeddingDim, maxAttentionHeads, 1, 0.0, numExperts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create RNN decoder: %w", err)
 	}
@@ -343,6 +343,32 @@ func (m *IntentMoE) Forward(scheduledSamplingProb float64, inputs ...*tensor.Ten
 	contextVector, err := m.Encoder.Forward(queryEmbeddings)
 	if err != nil {
 		return nil, nil, fmt.Errorf("MoE encoder forward failed: %w", err)
+	}
+
+	// Normalize context vector to prevent exploding values from propagating to the decoder.
+	// This is a hard normalization: scale each token's embedding to have L2 norm <= 1.0 across the feature dim.
+	{
+		bSz := contextVector.Shape[0]
+		sLen := contextVector.Shape[1]
+		dim := contextVector.Shape[2]
+		const ctxNormThreshold = 5.0
+		for b := 0; b < bSz; b++ {
+			for s := 0; s < sLen; s++ {
+				offset := (b*sLen + s) * dim
+				norm := 0.0
+				for d := 0; d < dim; d++ {
+					v := contextVector.Data[offset+d]
+					norm += v * v
+				}
+				norm = math.Sqrt(norm + 1e-8)
+				if norm > ctxNormThreshold {
+					scale := ctxNormThreshold / norm
+					for d := 0; d < dim; d++ {
+						contextVector.Data[offset+d] *= scale
+					}
+				}
+			}
+		}
 	}
 
 	// Decoder forward pass with scheduled sampling & mask
