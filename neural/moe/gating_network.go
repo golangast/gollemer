@@ -9,22 +9,22 @@ import (
 
 // GatingNetwork (Router) determines which experts to activate for a given input.
 type GatingNetwork struct {
-	Linear *nn.Linear
+	Linear    *nn.Linear
+	LayerNorm *nn.LayerNorm
 	// Stored for backward pass
 	inputTensor  *tensor.Tensor
+	logitsTensor *tensor.Tensor
 	outputTensor *tensor.Tensor
 }
 
 // NewGatingNetwork creates a new GatingNetwork.
-// inputDim is the dimension of the input to the gating network.
-// numExperts is the number of experts in the MoE layer.
 func NewGatingNetwork(inputDim, numExperts int) (*GatingNetwork, error) {
 	linear, err := nn.NewLinear(inputDim, numExperts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create linear layer for gating network: %w", err)
 	}
-	return &GatingNetwork{Linear: linear},
-		nil
+	ln := nn.NewLayerNorm(numExperts)
+	return &GatingNetwork{Linear: linear, LayerNorm: ln}, nil
 }
 
 // Forward performs the forward pass of the GatingNetwork.
@@ -89,106 +89,102 @@ func (gn *GatingNetwork) Forward(inputs ...*tensor.Tensor) (*tensor.Tensor, erro
 	}
 
 	logits := tensor.NewTensor(logitsShape, logitsData, input.RequiresGrad || gn.Linear.Weights.RequiresGrad)
-	if logits.RequiresGrad {
-		logits.Creator = gn
+	gn.logitsTensor = logits
+
+	// Apply LayerNorm for stability
+	normalized, err := gn.LayerNorm.Forward(logits)
+	if err != nil {
+		return nil, fmt.Errorf("layer norm forward failed: %w", err)
 	}
 
-	gn.outputTensor = logits
-	return logits, nil
+	if normalized.RequiresGrad {
+		normalized.Creator = gn
+	}
+
+	gn.outputTensor = normalized
+	return normalized, nil
 }
 
-// Backward performs the backward pass for the GatingNetwork.
-// It uses computeRouterGradSIMD to accumulate weight and input gradients in a
-// SIMD-vectorised manner (or the pure-Go fallback when SIMD is unavailable).
 func (gn *GatingNetwork) Backward(grad *tensor.Tensor) error {
 	if grad == nil || grad.Data == nil {
 		return nil
 	}
 
-	if gn.outputTensor.Grad == nil {
-		gn.outputTensor.Grad = tensor.NewTensor(grad.Shape, make([]float64, len(grad.Data)), false)
+	// 1. Backward through LayerNorm
+	err := gn.LayerNorm.Backward(grad)
+	if err != nil {
+		return fmt.Errorf("layer norm backward failed: %w", err)
 	}
-	// Accumulate the incoming gradient onto the stored output gradient.
-	for i := range grad.Data {
-		gn.outputTensor.Grad.Data[i] += grad.Data[i]
+	
+	lnGrad := gn.logitsTensor.Grad // Gradient from LayerNorm
+	if lnGrad == nil {
+		return nil
 	}
 
-	// ── Backpropagate through the SIMD router logit computation ──────────
-	// We need:
-	//   dW[k][e]     += input[token][k] * grad[token][e]   (weight gradient)
-	//   dInput[token][k] += W[k][e] * grad[token][e]       (input gradient)
-
+	// 2. Backward through Linear (using SIMD)
 	numExperts := gn.Linear.Weights.Shape[1]
 	inputDim := gn.Linear.Weights.Shape[0]
 
-	var numTokens int
-	switch len(gn.inputTensor.Shape) {
-	case 2:
-		numTokens = gn.inputTensor.Shape[0]
-	case 3:
-		numTokens = gn.inputTensor.Shape[0] * gn.inputTensor.Shape[1]
+	numTokens := 1
+	for _, s := range gn.inputTensor.Shape[:len(gn.inputTensor.Shape)-1] {
+		numTokens *= s
 	}
 
 	// Ensure weight and input gradient tensors exist.
+	var dWeightsOut []float64
+	var dInputOut []float64
+
 	if gn.Linear.Weights.RequiresGrad {
 		if gn.Linear.Weights.Grad == nil {
-			gn.Linear.Weights.Grad = tensor.NewTensor(
-				gn.Linear.Weights.Shape,
-				make([]float64, len(gn.Linear.Weights.Data)),
-				false,
-			)
+			gn.Linear.Weights.Grad = tensor.NewTensor(gn.Linear.Weights.Shape, make([]float64, len(gn.Linear.Weights.Data)), false)
 		}
+		dWeightsOut = gn.Linear.Weights.Grad.Data
+	} else {
+		dWeightsOut = make([]float64, len(gn.Linear.Weights.Data)) // Discard
 	}
+
 	if gn.inputTensor.RequiresGrad {
 		if gn.inputTensor.Grad == nil {
-			gn.inputTensor.Grad = tensor.NewTensor(
-				gn.inputTensor.Shape,
-				make([]float64, len(gn.inputTensor.Data)),
-				false,
-			)
+			gn.inputTensor.Grad = tensor.NewTensor(gn.inputTensor.Shape, make([]float64, len(gn.inputTensor.Data)), false)
 		}
+		dInputOut = gn.inputTensor.Grad.Data
+	} else {
+		dInputOut = make([]float64, len(gn.inputTensor.Data)) // Discard
 	}
 
-	// Accumulate weight gradients.
-	if gn.Linear.Weights.RequiresGrad {
-		computeRouterGradSIMD(
-			gn.inputTensor.Data,
-			gn.Linear.Weights.Data,
-			gn.outputTensor.Grad.Data,
-			gn.Linear.Weights.Grad.Data,
-			gn.inputTensor.Grad.Data, // may be nil-safe because we pre-allocated above
-			numTokens, numExperts, inputDim,
-		)
-	}
+	// Accumulate weight and input gradients using SIMD.
+	computeRouterGradSIMD(
+		gn.inputTensor.Data,
+		gn.Linear.Weights.Data,
+		lnGrad.Data,
+		dWeightsOut,
+		dInputOut,
+		numTokens, numExperts, inputDim,
+	)
 
-	// Bias gradient: sum over all tokens for each expert.
+	// Bias gradient
 	if gn.Linear.Biases != nil && gn.Linear.Biases.RequiresGrad {
 		if gn.Linear.Biases.Grad == nil {
-			gn.Linear.Biases.Grad = tensor.NewTensor(
-				gn.Linear.Biases.Shape,
-				make([]float64, len(gn.Linear.Biases.Data)),
-				false,
-			)
+			gn.Linear.Biases.Grad = tensor.NewTensor(gn.Linear.Biases.Shape, make([]float64, len(gn.Linear.Biases.Data)), false)
 		}
 		for t := 0; t < numTokens; t++ {
 			base := t * numExperts
 			for e := 0; e < numExperts; e++ {
-				gn.Linear.Biases.Grad.Data[e] += gn.outputTensor.Grad.Data[base+e]
+				gn.Linear.Biases.Grad.Data[e] += lnGrad.Data[base+e]
 			}
 		}
 	}
 
-	// Clear output gradient (consumed).
-	if gn.outputTensor != nil {
-		gn.outputTensor.Grad = nil
-	}
-
+	// Clear intermediate gradients
+	gn.logitsTensor.Grad = nil
 	return nil
 }
 
 // Parameters returns all learnable parameters of the GatingNetwork.
 func (gn *GatingNetwork) Parameters() []*tensor.Tensor {
-	return gn.Linear.Parameters()
+	params := gn.Linear.Parameters()
+	params = append(params, gn.LayerNorm.Parameters()...)
+	return params
 }
 
 // Inputs returns the input tensors of the GatingNetwork's last forward operation.

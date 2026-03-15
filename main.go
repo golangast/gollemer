@@ -28,6 +28,7 @@ func main() {
 	runLLMFlag := flag.Bool("llm", false, "Run in interactive LLM mode")
 	trainChatFlag := flag.Bool("train-chat", false, "Train the Chat RAG model from human_chat.txt")
 	rebalancePtr := flag.Bool("rebalance", false, "Rebalance MoE expert weights before training")
+	overfitPtr := flag.Bool("overfit", false, "Train on single batch specifically for debugging")
 
 	flag.Parse()
 	switch {
@@ -42,7 +43,7 @@ func main() {
 	case *trainNER:
 		runModule("cmd/train_ner")
 	case *trainChatFlag:
-		chat.TrainChat(projectRoot, *rebalancePtr)
+		chat.TrainChat(projectRoot, *rebalancePtr, *overfitPtr)
 	default:
 		log.Println("No action specified. Use -train-word2vec, -train-moe, -train-intent-classifier, -train-ner, -train-chat, or -llm.")
 	}

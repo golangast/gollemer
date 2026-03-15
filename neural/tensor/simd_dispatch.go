@@ -127,3 +127,19 @@ func ScaleGradients(grads []float64, maxNorm float64) {
 func MaxSlice(a []float64) float64 {
 	return vecMaxSlice(a)
 }
+
+func AdamWUpdate(weights, grads, m, v []float64, lr, beta1, beta2, eps, weightDecay float64, t int) {
+	vecAdamWUpdate(weights, grads, m, v, lr, beta1, beta2, eps, weightDecay, t)
+}
+
+func ClipWeights(data []float64, maxVal float64) {
+	vecClipWeights(data, maxVal)
+}
+
+func TopKZero(data []float64, k int) {
+	vecTopKZero(data, k)
+}
+
+func LeakyReLUVectors(data []float64, alpha float64) {
+	vecLeakyReLU(data, alpha)
+}

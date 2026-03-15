@@ -5,6 +5,7 @@ package tensor
 import (
 	"math"
 	"simd/archsimd"
+	"sort"
 )
 
 func IsSIMDEnabled() bool {
@@ -282,4 +283,147 @@ func vecMaxSlice(data []float64) float64 {
 		}
 	}
 	return maxVal
+}
+
+func vecAdamWUpdate(weights, grads, m, v []float64, lr, beta1, beta2, eps, weightDecay float64, t int) {
+	n := len(weights)
+	biasCorrection1 := 1.0 - math.Pow(beta1, float64(t))
+	biasCorrection2 := 1.0 - math.Pow(beta2, float64(t))
+	
+	vB1 := archsimd.BroadcastFloat64x4(beta1)
+	vB1Inv := archsimd.BroadcastFloat64x4(1.0 - beta1)
+	vB2 := archsimd.BroadcastFloat64x4(beta2)
+	vB2Inv := archsimd.BroadcastFloat64x4(1.0 - beta2)
+	vBC1 := archsimd.BroadcastFloat64x4(biasCorrection1)
+	vBC2 := archsimd.BroadcastFloat64x4(biasCorrection2)
+
+	i := 0
+	for ; i+4 <= n; i += 4 {
+		w := archsimd.LoadFloat64x4Slice(weights[i:])
+		g := archsimd.LoadFloat64x4Slice(grads[i:])
+		mv := archsimd.LoadFloat64x4Slice(m[i:])
+		vv := archsimd.LoadFloat64x4Slice(v[i:])
+
+		// m = beta1 * m + (1 - beta1) * grad
+		mv = vB1.Mul(mv).Add(vB1Inv.Mul(g))
+		mv.StoreSlice(m[i:])
+
+		// v = beta2 * v + (1 - beta2) * grad^2
+		vv = vB2.Mul(vv).Add(vB2Inv.Mul(g.Mul(g)))
+		vv.StoreSlice(v[i:])
+
+		// mHat / (sqrt(vHat) + eps)
+		mHat := mv.Div(vBC1)
+		vHat := vv.Div(vBC2)
+		
+		// Approximate sqrt using a loop or wait for archsimd.Sqrt? 
+		// For now, let's use a small helper or process element-wise for the final step 
+		// if archsimd doesn't have Sqrt. 
+		// Actually, archsimd Float64x4 has Sqrt! (verified in typical SIMD libraries, let's assume it does or check)
+		// Wait, I should verify if Sqrt exists.
+		
+		var mH, vH [4]float64
+		mHat.Store(&mH)
+		vHat.Store(&vH)
+		
+		var wData [4]float64
+		w.Store(&wData)
+		
+		for j := 0; j < 4; j++ {
+			update := mH[j] / (math.Sqrt(vH[j]) + eps)
+			// AdamW: w = w - lr * update - lr * weightDecay * w
+			wData[j] -= lr * (update + weightDecay*wData[j])
+		}
+		newW := archsimd.LoadFloat64x4Slice(wData[:])
+		newW.StoreSlice(weights[i:])
+	}
+	
+	// Fallback
+	for ; i < n; i++ {
+		m[i] = beta1*m[i] + (1.0-beta1)*grads[i]
+		v[i] = beta2*v[i] + (1.0-beta2)*grads[i]*grads[i]
+		mHat := m[i] / biasCorrection1
+		vHat := v[i] / biasCorrection2
+		weights[i] -= lr * (mHat/(math.Sqrt(vHat)+eps) + weightDecay*weights[i])
+	}
+}
+
+func vecClipWeights(data []float64, maxVal float64) {
+	n := len(data)
+	vMax := archsimd.BroadcastFloat64x4(maxVal)
+	vMin := archsimd.BroadcastFloat64x4(-maxVal)
+	i := 0
+	for ; i+4 <= n; i += 4 {
+		v := archsimd.LoadFloat64x4Slice(data[i:])
+		// v = min(maxVal, max(-maxVal, v))
+		v = v.Min(vMax).Max(vMin)
+		v.StoreSlice(data[i:])
+	}
+	for ; i < n; i++ {
+		if data[i] > maxVal {
+			data[i] = maxVal
+		} else if data[i] < -maxVal {
+			data[i] = -maxVal
+		}
+	}
+}
+
+func vecTopKZero(data []float64, k int) {
+	n := len(data)
+	if k >= n || k <= 0 {
+		return
+	}
+	
+	// Find threshold (generic logic)
+	sorted := make([]float64, n)
+	copy(sorted, data)
+	sort.Float64s(sorted)
+	threshold := sorted[n-k]
+	
+	// Zero out anything below threshold (SIMD)
+	i := 0
+	for ; i+4 <= n; i += 4 {
+		v := archsimd.LoadFloat64x4Slice(data[i:])
+		// mask = v >= threshold
+		// We can use a trick: if v < threshold, v = 0
+		// archsimd doesn't have a direct "Select" or "Masked Store" for float64x4 easily 
+		// depending on the version. Let's use element-wise but we can still use the threshold.
+		// Actually, I'll use a SIMD-like approach or just a fast loop if Select is missing.
+		
+		d := [4]float64{}
+		v.Store(&d)
+		for j := 0; j < 4; j++ {
+			if d[j] < threshold {
+				d[j] = 0
+			}
+		}
+		newV := archsimd.LoadFloat64x4Slice(d[:])
+		newV.StoreSlice(data[i:])
+	}
+	for ; i < n; i++ {
+		if data[i] < threshold {
+			data[i] = 0
+		}
+	}
+}
+
+func vecLeakyReLU(data []float64, alpha float64) {
+	n := len(data)
+	vAlpha := archsimd.BroadcastFloat64x4(alpha)
+	vZero := archsimd.BroadcastFloat64x4(0.0)
+	i := 0
+	for ; i+4 <= n; i += 4 {
+		v := archsimd.LoadFloat64x4Slice(data[i:])
+		// v_pos = max(0, v)
+		// v_neg = min(0, v) * alpha
+		vPos := v.Max(vZero)
+		vNeg := v.Min(vZero).Mul(vAlpha)
+		res := vPos.Add(vNeg)
+		res.StoreSlice(data[i:])
+	}
+	for ; i < n; i++ {
+		if data[i] < 0 {
+			data[i] *= alpha
+		}
+	}
 }

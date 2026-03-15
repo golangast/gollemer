@@ -16,12 +16,14 @@ func init() {
 type HybridLLMGNNEncoder struct {
 	LLMEncoder   Encoder // Can be MoELayer or simple Encoder
 	GNNLayer     *nn.GCNLayer
+	LayerNorm    *nn.LayerNorm
 	EmbeddingDim int
 
 	// Intermediate tensors for backward
-	llmOutput *tensor.Tensor
-	gnnOutput *tensor.Tensor
-	adj       *tensor.Tensor
+	llmOutput    *tensor.Tensor
+	gnnOutput    *tensor.Tensor
+	adj          *tensor.Tensor
+	residualOut  *tensor.Tensor
 }
 
 func NewHybridLLMGNNEncoder(llmEncoder Encoder, embeddingDim int) (*HybridLLMGNNEncoder, error) {
@@ -29,9 +31,11 @@ func NewHybridLLMGNNEncoder(llmEncoder Encoder, embeddingDim int) (*HybridLLMGNN
 	if err != nil {
 		return nil, err
 	}
+	ln := nn.NewLayerNorm(embeddingDim)
 	return &HybridLLMGNNEncoder{
 		LLMEncoder:   llmEncoder,
 		GNNLayer:     gnn,
+		LayerNorm:    ln,
 		EmbeddingDim: embeddingDim,
 	}, nil
 }
@@ -99,12 +103,19 @@ func (e *HybridLLMGNNEncoder) Forward(inputs ...*tensor.Tensor) (*tensor.Tensor,
 		residualOut = gnnOut
 	}
 
+	// 5. Final Normalization for context stability
+	normed, err := e.LayerNorm.Forward(residualOut)
+	if err != nil {
+		return residualOut, nil
+	}
+
 	// Store for backward
 	e.llmOutput = llmOut
 	e.gnnOutput = gnnOut
 	e.adj = adj
+	e.residualOut = normed
 
-	return residualOut, nil
+	return normed, nil
 }
 
 func (e *HybridLLMGNNEncoder) Backward(grad *tensor.Tensor) error {
@@ -116,29 +127,36 @@ func (e *HybridLLMGNNEncoder) Backward(grad *tensor.Tensor) error {
 		return nil // Nothing to backprop
 	}
 
-	// 1. Backward through GNN branch
-	// This updates e.llmOutput.Grad via the inner GCNLayer
-	err := e.GNNLayer.Backward(grad)
+	// 1. Backward through LayerNorm
+	err := e.LayerNorm.Backward(grad)
+	if err != nil {
+		return fmt.Errorf("failed LayerNorm branch backward: %w", err)
+	}
+
+	gradToPropagate := e.LayerNorm.Input().Grad
+	if gradToPropagate == nil {
+		gradToPropagate = grad
+	}
+
+	// 2. Backward through GNN branch
+	err = e.GNNLayer.Backward(gradToPropagate)
 	if err != nil {
 		return fmt.Errorf("failed GNN branch backward: %w", err)
 	}
 
-	// 2. Backward through Residual branch
-	// d(X + GNN(X))/dX = 1 + dGNN(X)/dX
-	// So we add the incoming gradient directly to llmOutput.Grad
+	// 3. Backward through Residual branch
 	if e.llmOutput.RequiresGrad {
 		if e.llmOutput.Grad == nil {
 			e.llmOutput.Grad = tensor.NewTensor(e.llmOutput.Shape, make([]float64, len(e.llmOutput.Data)), false)
 		}
-		// Explicitly accumulate the residual gradient
-		for i := range grad.Data {
+		for i := range gradToPropagate.Data {
 			if i < len(e.llmOutput.Grad.Data) {
-				e.llmOutput.Grad.Data[i] += grad.Data[i]
+				e.llmOutput.Grad.Data[i] += gradToPropagate.Data[i]
 			}
 		}
 	}
 
-	// 3. Backward through LLM Encoder using the total gradient on its output
+	// 4. Backward through LLM Encoder
 	return e.LLMEncoder.Backward(e.llmOutput.Grad)
 }
 
@@ -146,11 +164,15 @@ func (e *HybridLLMGNNEncoder) ClearState() {
 	e.llmOutput = nil
 	e.gnnOutput = nil
 	e.adj = nil
+	e.residualOut = nil
 	if e.GNNLayer != nil {
 		e.GNNLayer.ClearState()
 	}
-	if moeEnc, ok := e.LLMEncoder.(*MoELayer); ok {
-		moeEnc.ClearState()
+	if e.LayerNorm != nil {
+		e.LayerNorm.ClearState()
+	}
+	if e.LLMEncoder != nil {
+		e.LLMEncoder.ClearState()
 	}
 }
 
@@ -158,6 +180,7 @@ func (e *HybridLLMGNNEncoder) ClearState() {
 func (e *HybridLLMGNNEncoder) Parameters() []*tensor.Tensor {
 	params := e.LLMEncoder.Parameters()
 	params = append(params, e.GNNLayer.Parameters()...)
+	params = append(params, e.LayerNorm.Parameters()...)
 	return params
 }
 

@@ -44,6 +44,9 @@ func init() {
 	gob.Register(&tensor.MulOperation{})
 	gob.Register(&tensor.SumOperation{})
 	gob.Register(&tensor.SplitOperation{})
+	gob.Register(&MoEStack{})
+	gob.Register(&HybridLLMGNNEncoder{})
+	gob.Register(&nn.LayerNorm{})
 }
 
 // SampleFromLogits samples a token ID from logits using temperature, top-k, and top-p sampling.
@@ -87,32 +90,8 @@ func SampleFromLogits(logits *tensor.Tensor, temperature float64, topK int, topP
 
 	// Apply top-k filtering if specified
 	if topK > 0 && topK < vocabSize {
-		// Create index-probability pairs
-		type indexProb struct {
-			index int
-			prob  float64
-		}
-		pairs := make([]indexProb, vocabSize)
-		for i := range vocabSize {
-			pairs[i] = indexProb{index: i, prob: probs[i]}
-		}
-
-		// Sort by probability descending
-		sort.Slice(pairs, func(i, j int) bool {
-			return pairs[i].prob > pairs[j].prob
-		})
-
-		// Zero out probabilities outside top-k
-		topKIndices := make(map[int]bool)
-		for i := range topK {
-			topKIndices[pairs[i].index] = true
-		}
-		for i := range vocabSize {
-			if !topKIndices[i] {
-				probs[i] = 0.0
-			}
-		}
-
+		tensor.TopKZero(probs, topK)
+		
 		// Renormalize
 		probSum := 0.0
 		for i := range vocabSize {
@@ -232,6 +211,12 @@ type Encoder interface {
 	ClearState()
 }
 
+// ExpertStat holds performance metrics for a specific expert.
+type ExpertStat struct {
+	LossSum    float64
+	TokenCount int
+}
+
 // IntentMoE represents a Mixture of Experts model for intent classification.
 type IntentMoE struct {
 	Encoder           Encoder // Changed to interface to support different encoder types
@@ -239,6 +224,9 @@ type IntentMoE struct {
 	Embedding         *nn.Embedding
 	SentenceVocabSize int
 	SentenceVocab     *mainvocab.Vocabulary
+	
+	// Diagnostics and Monitoring
+	ExpertStats map[string]*ExpertStat // Key: "layerID:expertID"
 }
 
 // NewIntentMoE creates a new IntentMoE model.
@@ -271,13 +259,126 @@ func NewIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, childVoc
 	}
 
 	return &IntentMoE{
-			Encoder:           encoder,
-			Decoder:           decoder,
-			Embedding:         embedding,
-			SentenceVocabSize: sentenceVocabSize,
-			SentenceVocab:     nil, // Set this after construction
-		},
-		nil
+		Encoder:           encoder,
+		Decoder:           decoder,
+		Embedding:         embedding,
+		SentenceVocabSize: sentenceVocabSize,
+		SentenceVocab:     mainvocab.NewVocabulary(), // Should be set by caller
+		ExpertStats:       make(map[string]*ExpertStat),
+	}, nil
+}
+
+// TrackExpertPerformance updates the average loss handled by an expert.
+func (m *IntentMoE) TrackExpertPerformance(layerID, expertID int, loss float64) {
+	key := fmt.Sprintf("%d:%d", layerID, expertID)
+	if m.ExpertStats == nil {
+		m.ExpertStats = make(map[string]*ExpertStat)
+	}
+	if _, ok := m.ExpertStats[key]; !ok {
+		m.ExpertStats[key] = &ExpertStat{}
+	}
+	m.ExpertStats[key].LossSum += loss
+	m.ExpertStats[key].TokenCount++
+}
+
+// GetBestExpert finds the expert with the lowest average loss in a given layer.
+func (m *IntentMoE) GetBestExpert(layerID int) int {
+	bestID := 0
+	minLoss := math.MaxFloat64
+	found := false
+
+	// Iterate through experts to find the one with the best performance
+	// This assumes numExperts can be determined from the stats keys
+	for key, stats := range m.ExpertStats {
+		var lID, eID int
+		fmt.Sscanf(key, "%d:%d", &lID, &eID)
+		if lID == layerID && stats.TokenCount > 0 {
+			avgLoss := stats.LossSum / float64(stats.TokenCount)
+			if avgLoss < minLoss {
+				minLoss = avgLoss
+				bestID = eID
+				found = true
+			}
+		}
+	}
+
+	if !found {
+		return rand.Intn(8) // Fallback to random if no stats yet
+	}
+	return bestID
+}
+
+// PrintExpertHealthReport prints a summary of expert performance.
+func (m *IntentMoE) PrintExpertHealthReport() {
+	if m.ExpertStats == nil || len(m.ExpertStats) == 0 {
+		fmt.Println("🏥 No Expert Stats available yet.")
+		return
+	}
+	fmt.Println("\n🏥 --- Expert Health Report ---")
+	// Sort keys for consistent output
+	keys := make([]string, 0, len(m.ExpertStats))
+	for k := range m.ExpertStats {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		stats := m.ExpertStats[key]
+		avgLoss := 0.0
+		if stats.TokenCount > 0 {
+			avgLoss = stats.LossSum / float64(stats.TokenCount)
+		}
+		fmt.Printf("Layer:Expert %s: Avg Loss: %7.4f | Tokens Handled: %d\n", key, avgLoss, stats.TokenCount)
+	}
+}
+
+// EvolutionaryReset clones the best expert in a layer to replace a stagnant one.
+func (m *IntentMoE) EvolutionaryReset(stagnantExpertID int, layerIdx int) {
+	// 1. Find the "Winner" in this layer
+	winnerID := m.GetBestExpert(layerIdx)
+	if winnerID == stagnantExpertID {
+		// If winner is stagnant, just random reset (shouldn't happen with proper stats)
+		return
+	}
+
+	// 2. Locate the MoE Layer
+	var targetLayer *MoELayer
+	if layerIdx < len(ActiveLayers) {
+		targetLayer = ActiveLayers[layerIdx]
+	} else if m.Decoder.OutputMoE != nil {
+		targetLayer = m.Decoder.OutputMoE
+	} else {
+		return
+	}
+
+	winnerExpert := targetLayer.Experts[winnerID]
+	stagnantExpert := targetLayer.Experts[stagnantExpertID]
+
+	winnerParams := winnerExpert.Parameters()
+	stagnantParams := stagnantExpert.Parameters()
+
+	if len(winnerParams) != len(stagnantParams) {
+		return
+	}
+
+	// 3. Clone and Mutate
+	fmt.Printf("🧬 Expert %d (L%d) evolved from Expert %d\n", stagnantExpertID, layerIdx, winnerID)
+	for i := range stagnantParams {
+		wp := winnerParams[i]
+		sp := stagnantParams[i]
+
+		for j := range sp.Data {
+			// Mutation: Winner's weight + 10% random jitter
+			mutation := (rand.Float64()*0.2 - 0.1) * wp.Data[j]
+			sp.Data[j] = wp.Data[j] + mutation
+		}
+		// Zero out the gradients for the new expert
+		if sp.Grad != nil {
+			for j := range sp.Grad.Data {
+				sp.Grad.Data[j] = 0
+			}
+		}
+	}
 }
 
 // NewHybridIntentMoE creates a new IntentMoE model using the Hybrid LLM-GNN Encoder.
@@ -290,14 +391,20 @@ func NewHybridIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, ch
 		embedding.LoadPretrainedWeights(word2vecModel.WordVectors)
 	}
 
-	// 1. Create the inner LLM Encoder (MoE Layer)
+	// 1. Create the inner LLM Encoder (MoE Stack with 2 layers)
 	expertBuilder := func(expertIdx int) (Expert, error) {
-		return NewFeedForwardExpert(embeddingDim, embeddingDim, embeddingDim)
+		return NewFeedForwardExpert(embeddingDim, embeddingDim*2, embeddingDim)
 	}
-	llmEncoder, err := NewMoELayer(embeddingDim, embeddingDim, numExperts, 1, expertBuilder)
+	l0, err := NewMoELayer(embeddingDim, embeddingDim, numExperts, 1, expertBuilder)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create inner MoE encoder: %w", err)
+		return nil, fmt.Errorf("failed to create MoE Layer 0: %w", err)
 	}
+	l1, err := NewMoELayer(embeddingDim, embeddingDim, numExperts, 1, expertBuilder)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create MoE Layer 1: %w", err)
+	}
+	
+	llmEncoder := NewMoEStack(l0, l1)
 
 	// 2. Wrap it with HybridLLMGNNEncoder
 	hybridEncoder, err := NewHybridLLMGNNEncoder(llmEncoder, embeddingDim)

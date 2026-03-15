@@ -216,11 +216,13 @@ func (l *Linear) Backward(grad *Tensor) error {
 		if err != nil {
 			return fmt.Errorf("linear layer backward: failed to transpose input (2D): %w", err)
 		}
-		dWeights, err := inputTranspose.MatMul(grad)
-		if err != nil {
-			return fmt.Errorf("linear layer backward: failed to calculate dLoss/dWeights (2D): %w", err)
+		if l.Weights.RequiresGrad {
+			dWeights, err := inputTranspose.MatMul(grad)
+			if err != nil {
+				return fmt.Errorf("linear layer backward: failed to calculate dLoss/dWeights (2D): %w", err)
+			}
+			AddAccumulate(l.Weights.Grad.Data, dWeights.Data)
 		}
-		AddAccumulate(l.Weights.Grad.Data, dWeights.Data)
 
 	case 3:
 		// Input is 3D [batch_size, sequence_length, input_dim]
@@ -241,11 +243,13 @@ func (l *Linear) Backward(grad *Tensor) error {
 			return fmt.Errorf("linear layer backward: failed to transpose reshaped input (3D): %w", err)
 		}
 
-		dWeights, err := inputTranspose.MatMul(reshapedGrad)
-		if err != nil {
-			return fmt.Errorf("linear layer backward: failed to calculate dLoss/dWeights (3D): %w", err)
+		if l.Weights.RequiresGrad {
+			dWeights, err := inputTranspose.MatMul(reshapedGrad)
+			if err != nil {
+				return fmt.Errorf("linear layer backward: failed to calculate dLoss/dWeights (3D): %w", err)
+			}
+			safeAccumulate(l.Weights.Grad.Data, dWeights.Data)
 		}
-		safeAccumulate(l.Weights.Grad.Data, dWeights.Data)
 
 	default:
 		return fmt.Errorf("linear layer backward only supports 2D or 3D input, got %d dimensions", len(l.input.Shape))

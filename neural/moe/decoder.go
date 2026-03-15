@@ -470,6 +470,14 @@ func (d *RNNDecoder) DecodeStep(inputToken *Tensor, prevHiddenState, prevCellSta
 		return nil, nil, nil, err
 	}
 
+	// --- [Diagnostic Probe] ---
+	// Check for Hidden State signal collapse using SIMD dot product (magnitude squared)
+	hMag := DotProduct(hiddenState.Data, hiddenState.Data)
+	if hMag < 1e-6 {
+		fmt.Printf("⚠️ [Decoder Diagnostic] Signal Collapse! Hidden State Magnitude: %.8f\n", hMag)
+	}
+	// --- [/Diagnostic Probe] ---
+
 	// 3. Attention
 	hiddenQuery, _ := hiddenState.Reshape([]int{batchSize, 1, hiddenSize})
 	attentionOutput, err := d.Attention.Forward(hiddenQuery, contextVector, contextVector, attentionMask)
