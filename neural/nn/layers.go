@@ -230,6 +230,10 @@ func (l *Linear) Backward(grad *Tensor) error {
 		outputDim := l.Weights.Shape[1]
 
 		reshapedInput := NewTensor([]int{batchSize * seqLength, inputDim}, l.input.Data, false)
+		// Safety check: ensure grad.Data has enough elements for the reshaped shape
+		if len(grad.Data) < batchSize*seqLength*outputDim {
+			return fmt.Errorf("linear layer backward (3D): grad data length %d is too small for shape [%d, %d]", len(grad.Data), batchSize*seqLength, outputDim)
+		}
 		reshapedGrad := NewTensor([]int{batchSize * seqLength, outputDim}, grad.Data, false)
 
 		inputTranspose, err = reshapedInput.Transpose(0, 1)
@@ -290,6 +294,10 @@ func (l *Linear) Backward(grad *Tensor) error {
 			outputDim := grad.Shape[2]
 			inputDim := l.Weights.Shape[0]
 
+			// Safety check: ensure grad.Data has enough elements for the reshaped shape
+			if len(grad.Data) < batchSize*seqLength*outputDim {
+				return fmt.Errorf("linear layer backward (3D res): grad data length %d is too small for shape [%d, %d]", len(grad.Data), batchSize*seqLength, outputDim)
+			}
 			reshapedGrad := NewTensor([]int{batchSize * seqLength, outputDim}, grad.Data, false)
 
 			dInput2D, err := reshapedGrad.MatMul(weightsTranspose)
@@ -371,8 +379,11 @@ func (l *LayerNormalization) Backward(grad *Tensor) error {
 	numElementsToNormalize := len(l.normalizedInput.Data) / lastDimSize
 
 	// Ensure gradients are initialized
-	if l.inputTensor != nil && l.inputTensor.RequiresGrad { // Assuming inputTensor is stored in the struct
+	if l.inputTensor != nil && l.inputTensor.RequiresGrad {
 		if l.inputTensor.Grad == nil {
+			l.inputTensor.Grad = NewTensor(l.inputTensor.Shape, make([]float64, len(l.inputTensor.Data)), false)
+		} else if len(l.inputTensor.Grad.Data) != len(l.inputTensor.Data) {
+			// Fix for zombie/mismatched gradients from previous batches
 			l.inputTensor.Grad = NewTensor(l.inputTensor.Shape, make([]float64, len(l.inputTensor.Data)), false)
 		}
 	}
@@ -1289,22 +1300,20 @@ func (mha *MultiHeadCrossAttention) Backward(grad *Tensor) error {
 		return fmt.Errorf("MHCA backward: gradAttentionWeights size mismatch: %d vs %d", len(gradAttentionWeights.Data), len(mha.attentionWeights.Data))
 	}
 
-	if mha.attentionWeights.RequiresGrad {
-		if mha.attentionWeights.Grad == nil {
-			mha.attentionWeights.Grad = NewTensor(mha.attentionWeights.Shape, make([]float64, len(mha.attentionWeights.Data)), false)
-		}
-		safeAccumulate(mha.attentionWeights.Grad.Data, gradAttentionWeights.Data)
+	// Always store attentionWeights.Grad for the softmax backward below.
+	if mha.attentionWeights.Grad == nil {
+		mha.attentionWeights.Grad = NewTensor(mha.attentionWeights.Shape, make([]float64, len(mha.attentionWeights.Data)), false)
 	}
+	safeAccumulate(mha.attentionWeights.Grad.Data, gradAttentionWeights.Data)
 
 	attentionWeightsTransposed, _ := mha.attentionWeights.Transpose(2, 3)
 	gradV_per_head, _ := attentionWeightsTransposed.MatMul(gradBeforeConcat)
 
-	if mha.v.RequiresGrad {
-		if mha.v.Grad == nil {
-			mha.v.Grad = NewTensor(mha.v.Shape, make([]float64, len(mha.v.Data)), false)
-		}
-		safeAccumulate(mha.v.Grad.Data, gradV_per_head.Data)
+	// Always store gradV — required to propagate back to ValueLinear and context vector.
+	if mha.v.Grad == nil {
+		mha.v.Grad = NewTensor(mha.v.Shape, make([]float64, len(mha.v.Data)), false)
 	}
+	safeAccumulate(mha.v.Grad.Data, gradV_per_head.Data)
 
 	// 3. Backprop through Softmax: dL/dS[i] = P[i]*(dL/dP[i] - dot(dL/dP, P))
 	// Uses SIMD-accelerated SoftmaxBackwardRow.
@@ -1387,12 +1396,12 @@ func (mha *MultiHeadCrossAttention) Backward(grad *Tensor) error {
 	if err != nil {
 		return fmt.Errorf("MHCA backward: gradQ MatMul failed: %w", err)
 	}
-	if mha.q.RequiresGrad {
-		if mha.q.Grad == nil {
-			mha.q.Grad = NewTensor(mha.q.Shape, make([]float64, len(mha.q.Data)), false)
-		}
-		safeAccumulate(mha.q.Grad.Data, gradQ_per_head.Data)
+	// Always store gradQ — required to propagate back to QueryLinear and the decoder hidden state.
+	if mha.q.Grad == nil {
+		mha.q.Grad = NewTensor(mha.q.Shape, make([]float64, len(mha.q.Data)), false)
 	}
+	safeAccumulate(mha.q.Grad.Data, gradQ_per_head.Data)
+
 
 	gradScoresMHCATransposed, _ := gradAttentionScoresMHCA.Transpose(2, 3)
 	
@@ -1444,40 +1453,67 @@ func (mha *MultiHeadCrossAttention) Backward(grad *Tensor) error {
 	if err != nil {
 		return fmt.Errorf("MHCA backward: gradK MatMul failed: %w", err)
 	}
-	if mha.k.RequiresGrad {
-		if mha.k.Grad == nil {
-			mha.k.Grad = NewTensor(mha.k.Shape, make([]float64, len(mha.k.Data)), false)
+	// Always store gradK — required to propagate back to KeyLinear and context vector.
+	if mha.k.Grad == nil {
+		mha.k.Grad = NewTensor(mha.k.Shape, make([]float64, len(mha.k.Data)), false)
+	}
+	safeAccumulate(mha.k.Grad.Data, gradK_per_head.Data)
+
+	// 6. Combine gradients, backprop to Linear layers, and then propagate to
+	//    the original keyTensor and valueTensor (the encoder context vector).
+	qGradTransposed, _ := mha.q.Grad.Transpose(1, 2)
+	gradQCombined, _ := qGradTransposed.Reshape([]int{batchSize, querySeqLen, dimModel})
+	if err = mha.QueryLinear.Backward(gradQCombined); err != nil {
+		return err
+	}
+	// Propagate query grad back to queryTensor (decoder hidden state).
+	if mha.queryTensor != nil {
+		if mha.queryTensor.Grad == nil {
+			mha.queryTensor.Grad = NewTensor(mha.queryTensor.Shape, make([]float64, len(mha.queryTensor.Data)), false)
 		}
-		safeAccumulate(mha.k.Grad.Data, gradK_per_head.Data)
+		if mha.QueryLinear.Input() != nil && mha.QueryLinear.Input().Grad != nil {
+			qlg := mha.QueryLinear.Input().Grad
+			if len(qlg.Data) == len(mha.queryTensor.Grad.Data) {
+				safeAccumulate(mha.queryTensor.Grad.Data, qlg.Data)
+			}
+		}
 	}
 
-	// 6. Combine gradients and backprop to Linear layers
-	if mha.q.Grad != nil {
-		qGradTransposed, _ := mha.q.Grad.Transpose(1, 2)
-		gradQCombined, _ := qGradTransposed.Reshape([]int{batchSize, querySeqLen, dimModel})
-		err = mha.QueryLinear.Backward(gradQCombined)
-		if err != nil {
-			return err
+	kvSeqLen := mha.k.Shape[2]
+	kGradTransposed, _ := mha.k.Grad.Transpose(1, 2)
+	gradKCombined, _ := kGradTransposed.Reshape([]int{batchSize, kvSeqLen, dimModel})
+	if err = mha.KeyLinear.Backward(gradKCombined); err != nil {
+		return err
+	}
+	// Propagate key grad back to keyTensor (encoder context vector).
+	if mha.keyTensor != nil {
+		if mha.keyTensor.Grad == nil {
+			mha.keyTensor.Grad = NewTensor(mha.keyTensor.Shape, make([]float64, len(mha.keyTensor.Data)), false)
+		}
+		if mha.KeyLinear.Input() != nil && mha.KeyLinear.Input().Grad != nil {
+			klg := mha.KeyLinear.Input().Grad
+			if len(klg.Data) == len(mha.keyTensor.Grad.Data) {
+				safeAccumulate(mha.keyTensor.Grad.Data, klg.Data)
+			}
 		}
 	}
 
-	if mha.k.Grad != nil {
-		kvSeqLen := mha.k.Shape[2]
-		kGradTransposed, _ := mha.k.Grad.Transpose(1, 2)
-		gradKCombined, _ := kGradTransposed.Reshape([]int{batchSize, kvSeqLen, dimModel})
-		err = mha.KeyLinear.Backward(gradKCombined)
-		if err != nil {
-			return err
-		}
+	vkvSeqLen := mha.v.Shape[2]
+	vGradTransposed, _ := mha.v.Grad.Transpose(1, 2)
+	gradVCombined, _ := vGradTransposed.Reshape([]int{batchSize, vkvSeqLen, dimModel})
+	if err = mha.ValueLinear.Backward(gradVCombined); err != nil {
+		return err
 	}
-
-	if mha.v.Grad != nil {
-		kvSeqLen := mha.v.Shape[2]
-		vGradTransposed, _ := mha.v.Grad.Transpose(1, 2)
-		gradVCombined, _ := vGradTransposed.Reshape([]int{batchSize, kvSeqLen, dimModel})
-		err = mha.ValueLinear.Backward(gradVCombined)
-		if err != nil {
-			return err
+	// Propagate value grad back to valueTensor (encoder context vector).
+	if mha.valueTensor != nil {
+		if mha.valueTensor.Grad == nil {
+			mha.valueTensor.Grad = NewTensor(mha.valueTensor.Shape, make([]float64, len(mha.valueTensor.Data)), false)
+		}
+		if mha.ValueLinear.Input() != nil && mha.ValueLinear.Input().Grad != nil {
+			vlg := mha.ValueLinear.Input().Grad
+			if len(vlg.Data) == len(mha.valueTensor.Grad.Data) {
+				safeAccumulate(mha.valueTensor.Grad.Data, vlg.Data)
+			}
 		}
 	}
 

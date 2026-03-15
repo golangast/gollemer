@@ -61,24 +61,23 @@ func (e *HybridLLMGNNEncoder) Forward(inputs ...*tensor.Tensor) (*tensor.Tensor,
 	seqLen := llmOut.Shape[1]
 
 	// Create Adjacency Matrix: [batch, seq_len, seq_len]
-	// A[i][j] = 1 if |i-j| <= 1 else 0 (Window size 1) = Chain graph
+	// Increased window size to 2 (sees 2 left, 2 right) for better sentence context
 	adjData := make([]float64, batchSize*seqLen*seqLen)
-	for b := range batchSize {
-		for i := range seqLen {
-			for j := range seqLen {
-				// Self-loop + neighbors
-				if i == j || i == j-1 || i == j+1 {
-					// Normalize by degree (approx 3 or 2)
-					degree := 3.0
-					if i == 0 || i == seqLen-1 {
-						degree = 2.0
-					}
-					if seqLen == 1 {
-						degree = 1.0
-					}
-					// Row-normalize D^-1 A
-					adjData[b*seqLen*seqLen+i*seqLen+j] = 1.0 / degree
-				}
+	
+	for b := 0; b < batchSize; b++ {
+		batchOffset := b * seqLen * seqLen
+		for i := 0; i < seqLen; i++ {
+			rowOffset := batchOffset + i*seqLen
+			
+			// Count neighbors for degree normalization
+			neighbors := 0
+			for j := max(0, i-2); j <= min(seqLen-1, i+2); j++ {
+				neighbors++
+			}
+			degree := float64(neighbors)
+			
+			for j := max(0, i-2); j <= min(seqLen-1, i+2); j++ {
+				adjData[rowOffset+j] = 1.0 / degree
 			}
 		}
 	}

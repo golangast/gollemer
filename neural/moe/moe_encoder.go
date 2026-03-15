@@ -102,3 +102,10 @@ func (l *LinearExpert) Description() string {
 func (l *LinearExpert) Forward(input *tensor.Tensor) (*tensor.Tensor, error) {
 	return l.Linear.Forward(input)
 }
+
+// ClearState implements the Expert interface.
+func (l *LinearExpert) ClearState() {
+	if l.Linear != nil {
+		l.Linear.ClearState()
+	}
+}

@@ -39,6 +39,7 @@ type RNNDecoder struct {
 	combinedInputs   []*Tensor // Combined inputs to LSTM at each timestep
 	decoderInputs    []*Tensor // Decoder inputs at each timestep
 	contextVector    *Tensor   // Context vector from encoder (saved for backward pass)
+	attentionMask    *Tensor   // Attention mask from forward (saved for backward pass)
 }
 
 // NewRNNDecoder creates a new RNNDecoder.
@@ -99,6 +100,7 @@ func (d *RNNDecoder) Forward(contextVector, targetSequence *Tensor, scheduledSam
 	maxSequenceLength := targetSequence.Shape[1]
 	hiddenSize := d.LSTM.HiddenSize
 	d.contextVector = contextVector
+	d.attentionMask = attentionMask
 
 	// Calculate initial hidden state from context (using Mean over sequence dimension)
 	// This ensures autograd connectivity back to the contextVector.
@@ -248,124 +250,120 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
 		return nil
 	}
 
-	numSteps := len(grads)
 	batchSize := grads[0].Shape[0]
 	hiddenSize := d.LSTM.HiddenSize
 	embeddingDim := d.Embedding.DimModel
 
-	// Vectorized Backward Detection
+	var allGrads *Tensor
 	if len(grads) == 1 && len(grads[0].Shape) == 3 {
-		allGrads := grads[0]
-
-		// 1. Output Layer Backward
-		if err := d.OutputLayer.Backward(allGrads); err != nil {
-			return err
+		allGrads = grads[0]
+	} else {
+		// --- Re-vectorization path for scheduled sampling or step-by-step grads ---
+		// 1. Stack gradients into [batchSize, seqLen, vocabSize]
+		reshapedGrads := make([]*Tensor, len(grads))
+		for i, g := range grads {
+			reshapedGrads[i], _ = g.Reshape([]int{batchSize, 1, d.OutputVocabSize})
 		}
-		normedGrad := d.OutputLayer.Input().Grad
-
-		// 2. LayerNorm Backward
-		if err := d.LayerNorm.Backward(normedGrad); err != nil {
-			return err
-		}
-		combinedGrad := d.LayerNorm.Input().Grad
-
-		// 3. Split Combined [Hidden, Attention]
-		splits, err := Split(combinedGrad, 2, []int{hiddenSize, embeddingDim})
+		var err error
+		allGrads, err = Concat(reshapedGrads, 1)
 		if err != nil {
-			return err
-		}
-		hiddenGradFromOutput := splits[0]
-		attentionGrad := splits[1]
-
-		// 3. Attention Backward (Query is LSTM Hidden)
-		if err := d.Attention.Backward(attentionGrad); err != nil {
-			return err
-		}
-		hiddenGradFromAttention := d.Attention.Query().Grad
-
-		// 4. Combine Hidden Gradients
-		totalHiddenGrad := hiddenGradFromOutput
-		if hiddenGradFromAttention != nil {
-			var err error
-			totalHiddenGrad, err = hiddenGradFromOutput.Add(hiddenGradFromAttention)
-			if err != nil {
-				return err
-			}
+			return fmt.Errorf("failed to concat gradients for vectorized backward: %w", err)
 		}
 
-		// 5. LSTM Backward
-		zeroCellGrad := NewTensor(d.InitialCellState.Shape, make([]float64, len(d.InitialCellState.Data)), false)
-		if err := d.LSTM.Backward(totalHiddenGrad, zeroCellGrad); err != nil {
-			return err
+		// 2. Re-construct the sequence logic to set up vectorized states
+		// This is MUCH faster than the step-by-step backward loop.
+		
+		// 2a. Re-construct decoder inputs sequence
+		allInputs, err := Concat(d.decoderInputs, 1)
+		if err != nil {
+			return fmt.Errorf("failed to concat decoder inputs: %w", err)
+		}
+		allEmbedded, _ := d.Embedding.Forward(allInputs)
+		
+		// 2b. Re-run LSTM sequence forward to populate timeStepCells for BPTT
+		// Use the already-stored initial hidden state and a zero cell state.
+		allHidden, _, err := d.LSTM.Forward(allEmbedded, d.InitialHiddenState, initialCell(batchSize, hiddenSize))
+		if err != nil {
+			return fmt.Errorf("LSTM forward failed during backward re-vectorization: %w", err)
+		}
+		
+		// 2c. Re-run Attention forward to populate query/key/value states for the whole sequence
+		allAttention, err := d.Attention.Forward(allHidden, d.contextVector, d.contextVector, d.attentionMask)
+		if err != nil {
+			return fmt.Errorf("attention forward failed during backward re-vectorization: %w", err)
 		}
 
-		// 6. Embedding Backward
-		inputGrad := d.LSTM.GetInputGrad()
+		// 2d. Re-run Concat, LayerNorm, and OutputLayer forward to populate their internal states
+		// This is CRITICAL to ensure that d.OutputLayer.input and d.LayerNorm.inputTensor
+		// match the current sequence length, avoiding 'zombie' tensors that cause MatMul panics.
+		combined, err := Concat([]*Tensor{allHidden, allAttention}, 2)
+		if err != nil {
+			return fmt.Errorf("concat failed during backward re-vectorization: %w", err)
+		}
+		normed, err := d.LayerNorm.Forward(combined)
+		if err != nil {
+			return fmt.Errorf("layer norm failed during backward re-vectorization: %w", err)
+		}
+		_, err = d.OutputLayer.Forward(normed)
+		if err != nil {
+			return fmt.Errorf("output layer failed during backward re-vectorization: %w", err)
+		}
+	}
+
+	// --- Optimized Vectorized Backward Path ---
+	// 1. Output Layer Backward
+	if err := d.OutputLayer.Backward(allGrads); err != nil {
+		return fmt.Errorf("output layer backward failed: %w", err)
+	}
+	normedGrad := d.OutputLayer.Input().Grad
+
+	// 2. LayerNorm Backward
+	if err := d.LayerNorm.Backward(normedGrad); err != nil {
+		return fmt.Errorf("layer norm backward failed: %w", err)
+	}
+	combinedGrad := d.LayerNorm.Input().Grad
+
+	// 3. Split Combined [Hidden, Attention]
+	splits, err := Split(combinedGrad, 2, []int{hiddenSize, embeddingDim})
+	if err != nil {
+		return fmt.Errorf("combined grad split failed: %w", err)
+	}
+	hiddenGradFromOutput := splits[0]
+	attentionGrad := splits[1]
+
+	// 4. Attention Backward (Query is LSTM Hidden)
+	if err := d.Attention.Backward(attentionGrad); err != nil {
+		return fmt.Errorf("attention backward failed: %w", err)
+	}
+	hiddenGradFromAttention := d.Attention.Query().Grad
+
+	// 5. Combine Hidden Gradients
+	totalHiddenGrad := hiddenGradFromOutput
+	if hiddenGradFromAttention != nil {
+		totalHiddenGrad, err = hiddenGradFromOutput.Add(hiddenGradFromAttention)
+		if err != nil {
+			return fmt.Errorf("failed to add hidden gradients: %w", err)
+		}
+	}
+
+	// 6. LSTM Backward (Sequence Path)
+	// No next hidden/cell grad from future here as the decoder is the end of the chain.
+	zeroCellGrad := NewTensor(initialCell(batchSize, hiddenSize).Shape, make([]float64, batchSize*hiddenSize), false)
+	if err := d.LSTM.Backward(totalHiddenGrad, zeroCellGrad); err != nil {
+		return fmt.Errorf("LSTM backward failed: %w", err)
+	}
+
+	// 7. Embedding Backward
+	inputGrad := d.LSTM.GetInputGrad()
+	if inputGrad != nil {
 		return d.Embedding.Backward(inputGrad)
 	}
 
-	// Loop-based Backward (for scheduled sampling)
-	nextHiddenGrad := NewTensor([]int{batchSize, hiddenSize}, make([]float64, batchSize*hiddenSize), false)
-	nextCellGrad := NewTensor([]int{batchSize, hiddenSize}, make([]float64, batchSize*hiddenSize), false)
-
-	for t := numSteps - 1; t >= 0; t-- {
-		// 1. Output Layer
-		if err := d.OutputLayer.Backward(grads[t]); err != nil {
-			return err
-		}
-		normedGrad := d.OutputLayer.Input().Grad
-
-		// 2. LayerNorm
-		if err := d.LayerNorm.Backward(normedGrad); err != nil {
-			return err
-		}
-		combinedGrad := d.LayerNorm.Input().Grad // [batch, 1, hiddenSize+inputDim]
-
-		// 3. Split Combined
-		splits, _ := Split(combinedGrad, 2, []int{hiddenSize, embeddingDim})
-		hGrad, aGrad := splits[0], splits[1]
-
-		// 3. Attention
-		reshapedQuery, _ := d.hiddenStates[t].Reshape([]int{batchSize, 1, hiddenSize})
-		d.Attention.SetInput(reshapedQuery)
-		if err := d.Attention.Backward(aGrad); err != nil {
-			return err
-		}
-
-		// 4. LSTM Hidden Grad = hGrad + attention's Query Grad + future Hidden Grad
-		hGradReshaped, _ := hGrad.Reshape([]int{batchSize, hiddenSize})
-		
-		totalHGrad := hGradReshaped
-		if d.Attention.Query().Grad != nil {
-			queryGrad, _ := d.Attention.Query().Grad.Reshape([]int{batchSize, hiddenSize})
-			totalHGrad, _ = totalHGrad.Add(queryGrad)
-		}
-		
-		if nextHiddenGrad != nil {
-			totalHGrad, _ = totalHGrad.Add(nextHiddenGrad)
-		}
-
-		// 5. LSTM
-		if t > 0 {
-			d.LSTM.SetCellState(d.hiddenStates[t-1], d.cellStates[t-1])
-		} else {
-			d.LSTM.SetCellState(d.InitialHiddenState, d.InitialCellState)
-		}
-		if err := d.LSTM.BackwardStep(totalHGrad, nextCellGrad, t); err != nil {
-			return err
-		}
-
-		nextHiddenGrad = d.LSTM.GetPrevHiddenGrad()
-		nextCellGrad = d.LSTM.GetPrevCellGrad()
-
-		// 6. Embedding
-		embGrad := d.LSTM.GetInputGradStep(t)
-		d.Embedding.SetInput(d.decoderInputs[t])
-		reshapedEmbGrad, _ := embGrad.Reshape([]int{batchSize, 1, embeddingDim})
-		d.Embedding.Backward(reshapedEmbGrad)
-	}
-
 	return nil
+}
+
+func initialCell(batchSize, hiddenSize int) *Tensor {
+	return NewTensor([]int{batchSize, hiddenSize}, make([]float64, batchSize*hiddenSize), false)
 }
 
 // DecodeStep performs a single decoding step.

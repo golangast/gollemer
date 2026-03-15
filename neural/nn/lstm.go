@@ -915,3 +915,30 @@ func (l *LSTM) GetInputGradStep(t int) *Tensor {
 func (l *LSTM) ClearState() {
 	l.timeStepCells = nil
 }
+
+// GetSingleStepInputGrad returns the input gradient from the bottom LSTM layer
+// after a single-step (2D input) backward pass.
+func (l *LSTM) GetSingleStepInputGrad() *Tensor {
+	if len(l.Cells) == 0 || len(l.Cells[0]) == 0 {
+		return nil
+	}
+	return l.Cells[0][0].InputTensor.Grad
+}
+
+// GetSingleStepPrevHiddenGrad returns the previous-hidden gradient from the
+// bottom LSTM layer after a single-step backward pass.
+func (l *LSTM) GetSingleStepPrevHiddenGrad() *Tensor {
+	if len(l.Cells) == 0 || len(l.Cells[0]) == 0 {
+		return nil
+	}
+	return l.Cells[0][0].PrevHidden.Grad
+}
+
+// GetSingleStepPrevCellGrad returns the previous-cell gradient from the
+// bottom LSTM layer after a single-step backward pass.
+func (l *LSTM) GetSingleStepPrevCellGrad() *Tensor {
+	if len(l.Cells) == 0 || len(l.Cells[0]) == 0 {
+		return nil
+	}
+	return l.Cells[0][0].PrevCell.Grad
+}

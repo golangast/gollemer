@@ -228,22 +228,15 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 	}
 	moe.gateOutputs = gateOutputs
 
-	// Calculate Load Balancing Loss
+	// 4. Sum gating probabilities early (used for LoadBalancingLoss later)
+	numTokens := batchSize * seqLength
 	moe.expertProbSums = make([]float64, numExperts)
-	for i := 0; i < batchSize*seqLength; i++ {
-		for j := 0; j < numExperts; j++ {
-			moe.expertProbSums[j] += gateOutputs.Data[i*numExperts+j]
+	if numTokens > 0 {
+		for i := 0; i < numTokens; i++ {
+			for j := 0; j < numExperts; j++ {
+				moe.expertProbSums[j] += gateOutputs.Data[i*numExperts+j]
+			}
 		}
-	}
-	loss := 0.0
-	for _, s := range moe.expertProbSums {
-		loss += s * s
-	}
-	if batchSize*seqLength > 0 {
-		// Target-normalized Load Balancing Loss: (numExperts / (batch*seq)^2) * sum(S_e^2)
-		// This evaluates to 1.0 if perfectly balanced, regardless of sequence length.
-		norm := float64(numExperts) / math.Pow(float64(batchSize*seqLength), 2)
-		moe.LoadBalancingLoss = loss * norm
 	}
 
 	// Calculate capacity limit per expert
@@ -297,6 +290,23 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 			tokenExpertRelativeIndices[i][j] = len(moe.expertTokenIndices[expertIdx])
 			moe.expertTokenIndices[expertIdx] = append(moe.expertTokenIndices[expertIdx], i)
 		}
+	}
+
+	// 5. Finalize Load Balancing Loss
+	if numTokens > 0 {
+		var lbLoss float64
+		for i := 0; i < numExperts; i++ {
+			// fi: fraction of tokens dispatched to expert i
+			fi := float64(len(moe.expertTokenIndices[i])) / float64(numTokens)
+			// Pi: mean probability of allocating a token to expert i
+			Pi := moe.expertProbSums[i] / float64(numTokens)
+
+			lbLoss += fi * Pi
+		}
+		// Normalized by numExperts to keep the scale consistent
+		moe.LoadBalancingLoss = lbLoss * float64(numExperts)
+	} else {
+		moe.LoadBalancingLoss = 0
 	}
 
 	moe.expertOutputs = make([]*Tensor, numExperts)
@@ -842,6 +852,13 @@ func (moe *MoELayer) ClearState() {
 	moe.gateOutputs = nil
 	moe.expertProbSums = nil
 	moe.stateStack = nil
+
+	// Clear state for all experts
+	for _, expert := range moe.Experts {
+		if expert != nil {
+			expert.ClearState()
+		}
+	}
 }
 
 // UtilizationStats returns a map of expert index to the number of tokens it processed in the last forward pass.

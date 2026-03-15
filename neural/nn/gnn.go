@@ -120,12 +120,23 @@ func (l *GCNLayer) Backward(grad *tensor.Tensor) error {
 	if len(grad.Shape) == 3 {
 		// reshape to 4D for matmul
 		b, n, f := grad.Shape[0], grad.Shape[1], grad.Shape[2]
-		grad4D, _ := grad.Reshape([]int{b, 1, n, f})
-		adjT4D, _ := adjT.Reshape([]int{b, 1, n, n})
+		grad4D, err := grad.Reshape([]int{b, 1, n, f})
+		if err != nil {
+			return fmt.Errorf("GCN backward grad reshape failed: %w", err)
+		}
+		adjT4D, err := adjT.Reshape([]int{b, 1, n, n})
+		if err != nil {
+			return fmt.Errorf("GCN backward adjT reshape failed: %w", err)
+		}
 		
 		res4D, err := adjT4D.MatMul(grad4D)
-		if err != nil { return err }
-		dLinearOut, _ = res4D.Reshape([]int{b, n, f})
+		if err != nil {
+			return fmt.Errorf("GCN backward matmul failed: %w", err)
+		}
+		dLinearOut, err = res4D.Reshape([]int{b, n, f})
+		if err != nil {
+			return fmt.Errorf("GCN backward res reshape failed: %w", err)
+		}
 	} else {
 		dLinearOut, err = adjT.MatMul(grad)
 		if err != nil { return err }
