@@ -200,24 +200,36 @@ func TrainChat(projectRoot string, rebalanceRequested bool) {
 		// hiddenSize=256 must match encoder output dim for cross-attention; attentionHeads=4
 		intentModel.Decoder, _ = moe.NewRNNDecoder(256, 5000, 256, 4, 1, 0.1, 1)
 
-		// Decoder LSTM hiddenSize for bias initialization
-		const decoderHiddenSize = 256
-
-		log.Println("🛠️ Applying Smart Initialization (Orthogonal for LSTM weights, Xavier for rest)...")
+		// Phase 1: Xavier-initialize ALL parameters as a safe baseline.
+		log.Println("🛠️ Phase 1: Xavier init for all parameters...")
 		for _, param := range intentModel.Parameters() {
-			if param == nil || len(param.Shape) == 0 {
-				continue
-			}
-			switch {
-			case isLSTMBias(param, decoderHiddenSize):
-				// Forget-gate bias trick: set bias for forget gate to 1.0
-				InitializeLSTMBias(param, decoderHiddenSize)
-			case isLSTMWeight(param):
-				// Orthogonal initialization for LSTM weight matrices (gain 0.8)
-				InitializeOrthogonal(param, 0.8)
-			default:
+			if param != nil && len(param.Shape) > 0 {
 				InitializeXavier(param)
 			}
+		}
+
+		// Phase 2: Override LSTM tensors by directly accessing the named cell fields.
+		// tensor.Tensor has no Name field, so this direct struct access is the only
+		// reliable way to distinguish Wf (forget weight) from Wi/Wc/Wo, and Bf
+		// (forget bias, which should be 1.0) from the other three gate biases (0.0).
+		log.Println("🛠️ Phase 2: Orthogonal init for LSTM weights + Forget-gate bias trick...")
+		if intentModel.Decoder != nil && intentModel.Decoder.LSTM != nil {
+			for _, layer := range intentModel.Decoder.LSTM.Cells {
+				for _, cell := range layer {
+					// All four gate weight matrices → Orthogonal init (gain 0.8)
+					InitializeOrthogonal(cell.Wf, 0.8)
+					InitializeOrthogonal(cell.Wi, 0.8)
+					InitializeOrthogonal(cell.Wc, 0.8)
+					InitializeOrthogonal(cell.Wo, 0.8)
+					// Input, cell, output gate biases → 0
+					for i := range cell.Bi.Data { cell.Bi.Data[i] = 0 }
+					for i := range cell.Bc.Data { cell.Bc.Data[i] = 0 }
+					for i := range cell.Bo.Data { cell.Bo.Data[i] = 0 }
+					// Forget gate bias → 1.0 (the key trick for stable long-range gradients)
+					for i := range cell.Bf.Data { cell.Bf.Data[i] = 1.0 }
+				}
+			}
+			log.Printf("✅ Applied Orthogonal+ForgetBias(1.0) init to %d Decoder LSTM layer(s)", len(intentModel.Decoder.LSTM.Cells))
 		}
 	}
 
