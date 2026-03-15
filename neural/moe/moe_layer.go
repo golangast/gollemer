@@ -55,7 +55,18 @@ type MoELayer struct {
 	ExpertDropoutRate   float64   // Probability of dropping an expert during training (0.0 to 1.0)
 	TopExpertIDs        []int     // The #1 expert chosen for each token in the last batch (diagnostic)
 	RouterZLoss         float64   // Penalty for large router logits to keep them stable
-	stateStack          []MoEState
+	stateStack             []MoEState
+	AccumulatedUtilization []int // Tracks token assignments across steps/batches
+}
+
+// ResetUtilizationStats clears the accumulated utilization counters.
+func (moe *MoELayer) ResetUtilizationStats() {
+	if moe.AccumulatedUtilization == nil || len(moe.AccumulatedUtilization) != len(moe.Experts) {
+		moe.AccumulatedUtilization = make([]int, len(moe.Experts))
+	}
+	for i := range moe.AccumulatedUtilization {
+		moe.AccumulatedUtilization[i] = 0
+	}
 }
 
 // safeAccumulate adds src to dst, ensuring we don't go out of bounds.
@@ -139,6 +150,14 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 	moe.RouterZLoss = CalculateRouterZLoss(gateLogits)
 	moe.gateLogits = gateLogits // Store raw logits for BPTT
 
+	// --- [Diagnostic] ---
+	// Check input health to debug "Ghost Town" layers
+	inputNorm := math.Sqrt(simdDotProductF64(input.Data, input.Data))
+	if inputNorm < 1e-6 {
+		fmt.Printf("⚠️ [MoELayer Diagnostic] Signal Collapse! Input L2 Norm: %.6f\n", inputNorm)
+	}
+	// --- [/Diagnostic] ---
+
 	numExperts := len(moe.Experts)
 	batchSize := input.Shape[0]
 	seqLength := input.Shape[1]
@@ -154,9 +173,7 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 
 	// Apply Temperature Scaling to logits
 	if moe.RouterTemperature != 1.0 && moe.RouterTemperature > 0 {
-		for i := range gateLogits.Data {
-			gateLogits.Data[i] /= moe.RouterTemperature
-		}
+		simdScaleF64(gateLogits.Data, 1.0/moe.RouterTemperature)
 	}
 
 	// Apply Expert Dropout during training
@@ -311,9 +328,7 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 		}
 		// Re-normalize remaining weights to sum to 1.0 for numerical stability
 		if rowSum > 1e-12 {
-			for j := 0; j < numExperts; j++ {
-				gateOutputs.Data[i*numExperts+j] /= rowSum
-			}
+			simdScaleF64(gateOutputs.Data[i*numExperts:(i+1)*numExperts], 1.0/rowSum)
 		}
 
 		tokenExpertRelativeIndices[i] = allRelativeIndices[i*moe.K : (i+1)*moe.K]
@@ -329,6 +344,12 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 			}
 			tokenExpertRelativeIndices[i][j] = len(moe.expertTokenIndices[expertIdx])
 			moe.expertTokenIndices[expertIdx] = append(moe.expertTokenIndices[expertIdx], i)
+			
+			// Track stats
+			if moe.AccumulatedUtilization == nil || len(moe.AccumulatedUtilization) != numExperts {
+				moe.AccumulatedUtilization = make([]int, numExperts)
+			}
+			moe.AccumulatedUtilization[expertIdx]++
 		}
 	}
 
@@ -449,10 +470,9 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 					}
 					expertRowStart := relativeRow * moe.OutputDim
 					expertRow := output.Data[expertRowStart : expertRowStart+moe.OutputDim]
+					outRow := finalOutput.Data[outStart : outStart+moe.OutputDim]
 
-					for k := range moe.OutputDim {
-						finalOutput.Data[outStart+k] += expertRow[k] * weight
-					}
+					simdAddScalarMulF64(outRow, expertRow, weight)
 				}
 			}
 		}(startToken, endToken)
@@ -628,9 +648,7 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 					continue
 				}
 				weight := moe.gateOutputs.Data[gateIdx]
-				for j := range embeddingDim {
-					weightedBatchedGradData[k*embeddingDim+j] = batchedGrad.Data[k*embeddingDim+j] * weight
-				}
+				simdMulScalarF64(weightedBatchedGradData[k*embeddingDim:(k+1)*embeddingDim], batchedGrad.Data[k*embeddingDim:(k+1)*embeddingDim], weight)
 			}
 			weightedBatchedGrad := NewTensor(batchedGrad.Shape, weightedBatchedGradData, false)
 
@@ -698,10 +716,7 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 				}
 				expertOutRow := expertOutput.Data[expertRowStart:expertRowEnd]
 
-				gradForGateProb := 0.0
-				for j := range embeddingDim {
-					gradForGateProb += gradForTokenData[j] * expertOutRow[j]
-				}
+				gradForGateProb := simdDotProductF64(gradForTokenData, expertOutRow)
 
 				// This write is safe?
 				// gateGradReshaped is [batch*seq, numExperts].
@@ -823,13 +838,8 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 				dp := gateGradReshaped.Data[offset : offset+numExperts]
 				out := logitsGrad.Data[offset : offset+numExperts]
 
-				sumDP := 0.0
-				for k := 0; k < numExperts; k++ {
-					sumDP += dp[k] * p[k]
-				}
-				for k := 0; k < numExperts; k++ {
-					out[k] = p[k] * (dp[k] - sumDP)
-				}
+				sumDP := simdDotProductF64(dp, p)
+				simdSoftmaxBackwardRowF64(out, p, dp, sumDP)
 			}
 		}(start, end)
 	}
@@ -837,9 +847,7 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 
 	// Apply Temperature Scaling to gradients (dL/dx = dL/dy * 1/T)
 	if moe.RouterTemperature != 1.0 && moe.RouterTemperature > 0 {
-		for i := range logitsGrad.Data {
-			logitsGrad.Data[i] /= moe.RouterTemperature
-		}
+		simdScaleF64(logitsGrad.Data, 1.0/moe.RouterTemperature)
 	}
 
 	// 4. Add Router Z-Loss Gradient (dL_z / d_logits)
@@ -926,11 +934,14 @@ func (moe *MoELayer) ClearState() {
 // This is useful for checking if all experts are active.
 func (moe *MoELayer) UtilizationStats() map[int]int {
 	stats := make(map[int]int)
-	if moe.expertTokenIndices == nil {
+	if moe.AccumulatedUtilization == nil {
+		for i := range moe.Experts {
+			stats[i] = 0
+		}
 		return stats
 	}
-	for i, indices := range moe.expertTokenIndices {
-		stats[i] = len(indices)
+	for i, count := range moe.AccumulatedUtilization {
+		stats[i] = count
 	}
 	return stats
 }
@@ -968,10 +979,7 @@ func CalculateRouterZLoss(routerLogits *Tensor) float64 {
 	if routerLogits == nil || len(routerLogits.Data) == 0 {
 		return 0
 	}
-	var sumSq float64
-	for _, val := range routerLogits.Data {
-		sumSq += val * val
-	}
+	sumSq := simdDotProductF64(routerLogits.Data, routerLogits.Data)
 	// Multiply by a small coefficient (e.g., 1e-4) as suggested by PaLM/ST-MoE
 	return (sumSq / float64(len(routerLogits.Data))) * 0.0001
 }

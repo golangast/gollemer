@@ -10,4 +10,5 @@ export GOGC=20
 export GOMAXPROCS=2
 
 # 3. Start the run with Rebalance and Curriculum
-go run main.go -train-chat -rebalance
+# go run main.go -train-chat -rebalance
+GOEXPERIMENT=simd go run main.go -train-chat -rebalance

@@ -538,6 +538,9 @@ func TrainChat(projectRoot string, rebalanceRequested bool) {
 		for k := range epochUtilization {
 			epochUtilization[k] = 0
 		}
+		for _, l := range moe.ActiveLayers {
+			l.ResetUtilizationStats()
+		}
 
 		// Prefetch tokenization: start a background goroutine that pre-produces
 		// Batch structs into a buffered channel while the main goroutine
@@ -751,9 +754,7 @@ func TrainChat(projectRoot string, rebalanceRequested bool) {
 						scale := clipValue / (gradNorm + 1e-6) // Safety epsilon
 						for _, p := range params {
 							if p.Grad != nil {
-								for i := range p.Grad.Data {
-									p.Grad.Data[i] *= scale
-								}
+								tensor.MulScalar(p.Grad.Data, scale, p.Grad.Data)
 							}
 						}
 						gradNorm = clipValue // Update for logging
