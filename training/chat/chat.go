@@ -7,7 +7,6 @@ import (
 	"log"
 	"math"
 	"math/rand"
-	randv1 "math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -121,7 +120,7 @@ func VerifyModelIntegrity(m *moe.IntentMoE) {
     }
 }
 
-func TrainChat(projectRoot string, rebalanceRequested bool) {
+func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 	fmt.Println("--- 🗣️  Training Chat Model ---")
 
 	// Pre-declare helper to find MoE layers
@@ -130,14 +129,24 @@ func TrainChat(projectRoot string, rebalanceRequested bool) {
 		if m == nil {
 			return layers
 		}
-		// Check Encoder
-		if ml, ok := m.Encoder.(*moe.MoELayer); ok {
-			layers = append(layers, ml)
-		} else if hybrid, ok := m.Encoder.(*moe.HybridLLMGNNEncoder); ok {
-			if ml, ok := hybrid.LLMEncoder.(*moe.MoELayer); ok {
+		
+		// Helper to extract from Encoder
+		extractLayers := func(enc moe.Encoder) {
+			if ml, ok := enc.(*moe.MoELayer); ok {
 				layers = append(layers, ml)
+			} else if stack, ok := enc.(*moe.MoEStack); ok {
+				layers = append(layers, stack.Layers...)
+			} else if hybrid, ok := enc.(*moe.HybridLLMGNNEncoder); ok {
+				if ml, ok := hybrid.LLMEncoder.(*moe.MoELayer); ok {
+					layers = append(layers, ml)
+				} else if stack, ok := hybrid.LLMEncoder.(*moe.MoEStack); ok {
+					layers = append(layers, stack.Layers...)
+				}
 			}
 		}
+
+		extractLayers(m.Encoder)
+
 		// Check Decoder's OutputMoE
 		if m.Decoder != nil && m.Decoder.OutputMoE != nil {
 			layers = append(layers, m.Decoder.OutputMoE)
@@ -232,6 +241,10 @@ func TrainChat(projectRoot string, rebalanceRequested bool) {
 			log.Printf("✅ Applied Orthogonal+ForgetBias(1.0) init to %d Decoder LSTM layer(s)", len(intentModel.Decoder.LSTM.Cells))
 		}
 	}
+
+	// Ensure ActiveLayers is synced with the model we are actually using
+	moe.ActiveLayers = findMoELayers(intentModel)
+	log.Printf("📡 Total Active MoE Layers: %d", len(moe.ActiveLayers))
 
 	// 2. Health Check
 	if !ValidateModelHealth(intentModel) {
@@ -395,11 +408,7 @@ func TrainChat(projectRoot string, rebalanceRequested bool) {
 	trainPairs := chatPairs[:splitIdx]
 	valPairs := chatPairs[splitIdx:]
 
-	// Use all available training data
-	trainPairs = trainPairs[:min(len(trainPairs), len(trainPairs))]
-	log.Printf("DEBUG: Training on %d pairs", len(trainPairs))
-
-	fmt.Printf("Data Split: %d Training, %d Validation\n", len(trainPairs), len(valPairs))
+	fmt.Printf("Data Split Pre-Limit: %d Training, %d Validation\n", len(trainPairs), len(valPairs))
 
 	// Word2Vec coverage check
 	hit := 0
@@ -447,6 +456,13 @@ func TrainChat(projectRoot string, rebalanceRequested bool) {
 	trainPairs = chatPairs[:trainCount]
 	valPairs = chatPairs[trainCount:]
 
+	if overfitMode {
+		trainPairs = trainPairs[:min(1, len(trainPairs))]
+		log.Println("🎯 OVERFIT MODE ACTIVE: Training on single example only.")
+	}
+	
+	log.Printf("Final Train Set Size: %d", len(trainPairs))
+
 	// Use Iterator pattern to save memory and speed up training
 	iterator := NewChatDataIterator(trainPairs, w2v, intentModel.SentenceVocab, unkID)
 
@@ -467,13 +483,18 @@ func TrainChat(projectRoot string, rebalanceRequested bool) {
 	optimizer := neuralnn.NewOptimizer(intentModel.Parameters(), initialLR, 1.0)
 
 	// Learning rate settings
-	baseLR := 1e-6 // Used as peak LR for cosine decay
-	learningRate := baseLR
-	peakLR := 0.0005 // Reduced from 0.05 − logs showed LR climbing to 0.04 which is unstable
-	warmupSteps := 1000 // Extended from 300 for a gentler warmup on a sensitive model
+	var learningRate float64
+	peakLR := 0.0001    // Reduced to 1e-4 for better stability
 	const weightDecay = 0.0001
-	const unkPenalty = 5.0
+	
+	// OneCycle Scheduler
+	scheduler := &OneCycle{
+		MaxLR:      peakLR,
+		MinLR:      peakLR * 0.01,
+		TotalSteps: epochs * (len(trainPairs) / batchSize),
+	}
 
+	const unkPenalty = 5.0
 	// Early stopping and metrics state
 	patienceLimit := 10
 	patienceCounter := 0
@@ -484,6 +505,44 @@ func TrainChat(projectRoot string, rebalanceRequested bool) {
 	bestPPL := math.MaxFloat64
 	lastEpochLoss := math.MaxFloat64
 	plateauCount := 0
+
+	// --- [Curriculum & Data Integrity] ---
+	type Curriculum struct {
+		MaxSequenceLen  int
+		MinPPLThreshold float64
+		GrowthFactor    int
+	}
+	curriculum := Curriculum{
+		MaxSequenceLen:  10,  // Start with short sentences
+		MinPPLThreshold: 500, // If PPL < 500, level up
+		GrowthFactor:    5,
+	}
+
+	inspectData := func(batch *Batch) {
+		if globalStep%100 != 0 { return }
+		fmt.Println("🔍 [Data Integrity Check]")
+		for i := 0; i < min(2, batch.Input.Shape[0]); i++ {
+			// Check first few tokens of the sequence
+			sumSq := 0.0
+			n := 1
+			if len(batch.Input.Shape) > 1 {
+				n = batch.Input.Shape[1]
+			}
+			
+			for d := 0; d < min(32, n); d++ {
+				idx := i*n + d
+				if idx < len(batch.Input.Data) {
+					v := batch.Input.Data[idx]
+					sumSq += v * v
+				}
+			}
+			norm := math.Sqrt(sumSq)
+			if norm < 0.1 { // Token IDs shouldn't be zero unless it's a very strange vocab
+				fmt.Printf("⚠️ Sequence %d: Potential SIGNAL LOSS (Token IDs near zero)\n", i)
+			}
+		}
+	}
+	// --------------------------------------
 
 	// Cross-Entropy Weights setup
 	lossWeights := make([]float64, intentModel.SentenceVocab.Size())
@@ -514,15 +573,15 @@ func TrainChat(projectRoot string, rebalanceRequested bool) {
 			log.Println("🔄 Shuffled training data for this epoch")
 		}
 
-		// Force diverse routing for the first 2 epochs to break out of mode collapse
-		if epoch < 2 {
+		// Force diverse routing for the first 4 epochs to break out of mode collapse
+		if epoch < 4 {
 			for _, layer := range moe.ActiveLayers {
-				layer.RouterTemperature = 2.0 // Increased from 1.5
+				layer.RouterTemperature = 2.0 
 			}
 			if epoch == 0 {
 				log.Println("🔥 Forcing diverse routing for initial epochs (Temp 2.0)")
 			}
-		} else if epoch == 2 { // Reset to normal after warmup
+		} else if epoch == 4 { // Reset to normal after warmup
 			for _, layer := range moe.ActiveLayers {
 				layer.RouterTemperature = 0.7
 			}
@@ -541,6 +600,12 @@ func TrainChat(projectRoot string, rebalanceRequested bool) {
 		for _, l := range moe.ActiveLayers {
 			l.ResetUtilizationStats()
 		}
+		
+		var lastBatchLoss float64
+		iterator.MaxLen = curriculum.MaxSequenceLen
+		if overfitMode {
+			iterator.MaxLen = 512 // Don't filter the single sample we are trying to overfit!
+		}
 
 		// Prefetch tokenization: start a background goroutine that pre-produces
 		// Batch structs into a buffered channel while the main goroutine
@@ -558,6 +623,10 @@ func TrainChat(projectRoot string, rebalanceRequested bool) {
 				continue
 			}
 			optimizer.ZeroGrad()
+			inspectData(batch)
+			if overfitMode && globalStep%10 == 0 {
+				log.Printf("🎯 [Overfit] Step %d starting...", globalStep)
+			}
 
 			// Memory Management
 			if globalStep%100 == 0 {
@@ -592,11 +661,10 @@ func TrainChat(projectRoot string, rebalanceRequested bool) {
 			}
 
 			var lr float64
-			if globalStep < warmupSteps {
-				lr = (float64(globalStep) / float64(warmupSteps)) * peakLR
+			if overfitMode {
+				lr = peakLR
 			} else {
-				// User's specific cosine schedule
-				lr = peakLR * math.Max(0.1, math.Cos(float64(globalStep)/2000.0))
+				lr = scheduler.GetNextLR()
 			}
 			optimizer.SetLearningRate(lr)
 			learningRate = lr 
@@ -699,6 +767,10 @@ func TrainChat(projectRoot string, rebalanceRequested bool) {
 				continue
 			}
 
+			if overfitMode && globalStep%10 == 0 {
+				log.Printf("🎯 [Overfit] Step %d | Final Loss: %.6f", globalStep, batchLoss)
+			}
+
 			// Add MoE Load Balancing Loss and Router Z-Loss
 			var currentBatchLB float64
 			var batchZLoss float64
@@ -738,7 +810,7 @@ func TrainChat(projectRoot string, rebalanceRequested bool) {
 
 					// AdamW handles weight decay now
 
-					// 2. Gradient Norm Calculation & Clipping (The Shield)
+					// 2. Gradient Norm Calculation & Clipping (Dynamic)
 					gradNorm := 0.0
 					for _, p := range params {
 						if p.Grad != nil {
@@ -749,24 +821,62 @@ func TrainChat(projectRoot string, rebalanceRequested bool) {
 					}
 					gradNorm = math.Sqrt(gradNorm)
 
-					const clipValue = 1.0 // Lowered from 5.0 for stability
+					// Dynamic Clipping: "Boost" mode if plateaued
+					clipValue := 1.0
+					lossDiff := math.Abs(lastBatchLoss - batchLoss)
+					if batches > 0 && lossDiff < 0.001 {
+						clipValue = 2.5 // "Jolt" the weights
+					}
+
 					if gradNorm > clipValue {
-						scale := clipValue / (gradNorm + 1e-6) // Safety epsilon
+						scale := clipValue / (gradNorm + 1e-6)
 						for _, p := range params {
 							if p.Grad != nil {
 								tensor.MulScalar(p.Grad.Data, scale, p.Grad.Data)
 							}
 						}
-						gradNorm = clipValue // Update for logging
+						gradNorm = clipValue
+					}
+					lastBatchLoss = batchLoss
+
+					// 3. Track Expert Performance
+					for layerIdx, layer := range moe.ActiveLayers {
+						selected := layer.GetSelectedExperts() // [TokenIdx][K]
+						for _, tokensExperts := range selected {
+							for _, expertID := range tokensExperts {
+								intentModel.TrackExpertPerformance(layerIdx, expertID, batchLoss)
+							}
+						}
 					}
 
 					if batches%20 == 0 {
 						log.Printf("Batch %d | Grad Norm: %.4f | LR: %.6f", batches, gradNorm, learningRate)
 					}
 
+					// Loss Protection
+					if math.IsNaN(batchLoss) || math.IsInf(batchLoss, 0) {
+						return
+					}
+
+					// Grad Flow Monitor
+					if globalStep % 100 == 0 {
+						MonitorGradientFlow(intentModel)
+					}
+
 					optimizer.Step()
 				}
 			}()
+
+			// Add Diversity Loss (Shannon Entropy) to discourage flat distributions
+			var divLoss float64
+			for _, logit := range logits {
+				probs := tensor.Softmax(logit)
+				divLoss += moe.CalculateDiversityLoss(probs)
+			}
+			batchLoss += divLoss / float64(len(logits))
+			
+			// Clear intermediate states to free memory
+			intentModel.ClearState()
 
 			// Update metrics
 			totalLoss += batchLoss
@@ -815,25 +925,20 @@ func TrainChat(projectRoot string, rebalanceRequested bool) {
 				}
 				bar := strings.Repeat("#", int(percent/2))
 				fmt.Printf("  Expert %d: %8d (%5.1f%%) %s\n", i, count, percent, bar)
-				// Expert Reset Logic: Reset weights if expert processes NO tokens for > 2 epochs
+				// Expert Reset Logic: Reset weights if expert processes NO tokens for > 5 epochs
 				if count == 0 {
 					expertStagnation[key]++
 				} else {
 					expertStagnation[key] = 0
 				}
-				if expertStagnation[key] >= 2 {
-					log.Printf("♻️ Expert %d in Layer %d has been stagnant for %d epochs. Resetting weights...", i, layerIdx, expertStagnation[key])
-					for _, param := range layer.Experts[i].Parameters() {
-						fanIn := param.Shape[0]
-						fanOut := 0
-						if len(param.Shape) > 1 {
-							fanOut = param.Shape[1]
-						}
-						limit := math.Sqrt(6.0 / float64(fanIn+fanOut))
-						for j := range param.Data {
-							param.Data[j] = (randv1.Float64() * 2 * limit) - limit
-						}
-					}
+				if expertStagnation[key] >= 5 {
+					log.Printf("🧬 Expert %d in Layer %d has been stagnant for %d epochs. Performing Evolutionary Reset...", i, layerIdx, expertStagnation[key])
+					moe.PrintExpertWeightHistogram(fmt.Sprintf("Pre-Reset L%d E%d", layerIdx, i), layer.Experts[i])
+					
+					// Use Evolutionary Reset (Clone and Mutate Winner)
+					intentModel.EvolutionaryReset(i, layerIdx)
+					
+					moe.PrintExpertWeightHistogram(fmt.Sprintf("Post-Reset L%d E%d", layerIdx, i), layer.Experts[i])
 					expertStagnation[key] = 0
 				}
 
@@ -862,6 +967,13 @@ func TrainChat(projectRoot string, rebalanceRequested bool) {
 		valPPL := ValidateChat(intentModel, valPairs, nil)
 		log.Printf("📉 Validation Perplexity: %.2f", valPPL)
 
+		// Curriculum Update
+		if float32(valPPL) < float32(curriculum.MinPPLThreshold) {
+			curriculum.MaxSequenceLen += curriculum.GrowthFactor
+			curriculum.MinPPLThreshold *= 0.8 // Tighten req for next jump
+			log.Printf("🚀 CURRICULUM LEVEL UP: Max Sequence Length is now %d", curriculum.MaxSequenceLen)
+		}
+
 		// Check for Plateau
 		if avgLoss >= lastEpochLoss*0.999 { // More sensitive plateau detection
 			plateauCount++
@@ -878,6 +990,7 @@ func TrainChat(projectRoot string, rebalanceRequested bool) {
 
 		// Log History
 		logEpochHistory(projectRoot, epoch+1, avgLoss, epochLBLoss/float64(batches), learningRate)
+		ExportUtilizationCSV(epoch+1, globalStep)
 
 		// Sanity checks: diverse test prompts to monitor generation quality
 		testPrompts := []struct{ label, prompt string }{
@@ -1000,6 +1113,12 @@ func StrictGenerate(model *moe.IntentMoE, input string, w2v *word2vec.SimpleWord
 		log.Printf("StrictGenerate Error (Encoder): %v", err)
 		return ""
 	}
+
+	// 🔍 Diagnostic: Importance Map for first layer in the stack
+	if len(moe.ActiveLayers) > 0 {
+		PrintImportanceMap(model.SentenceVocab, tokens, moe.ActiveLayers[0])
+		moe.PrintLayerWeightHistogram("Encoder Layer 0", moe.ActiveLayers[0])
+	}
 	if ctx.Shape[1] == 0 {
 		log.Printf("StrictGenerate Error: encoder produced empty sequence")
 		return ""
@@ -1075,8 +1194,13 @@ func StrictGenerate(model *moe.IntentMoE, input string, w2v *word2vec.SimpleWord
 			logits.Data[unkID] = -1e9
 		}
 
-		// 7. Pick Best Word using Greedy Search for debugging
-		bestID, err := moe.SampleFromLogits(logits, 0.1, 1, 1.0) // Temp 0.1, Top-K 1, Top-P 1.0
+		// 6b. Softmax Sharpening: Boost contrast before sampling
+		for idx := range logits.Data {
+			logits.Data[idx] *= 5.0
+		}
+
+		// 7. Pick Best Word (Sharper temp 0.2)
+		bestID, err := moe.SampleFromLogits(logits, 0.2, 1, 1.0) 
 		if err != nil {
 			log.Printf("StrictGenerate Error (Sampling): %v", err)
 			break
@@ -1200,19 +1324,21 @@ type ChatDataIterator struct {
 	pairs []struct{ Q, A string }
 	w2v   *word2vec.SimpleWord2Vec
 	vocab *mainvocab.Vocabulary
-	unkID int
-	idx   int
+	unkID  int
+	idx    int
+	MaxLen int
 }
 
 func NewChatDataIterator(pairs []struct{ Q, A string }, w2v *word2vec.SimpleWord2Vec, vocab *mainvocab.Vocabulary, unkID int) *ChatDataIterator {
 	// Shuffle pairs for better training
 	rand.Shuffle(len(pairs), func(i, j int) { pairs[i], pairs[j] = pairs[j], pairs[i] })
 	return &ChatDataIterator{
-		pairs: pairs,
-		w2v:   w2v,
-		vocab: vocab,
-		unkID: unkID,
-		idx:   0,
+		pairs:  pairs,
+		w2v:    w2v,
+		vocab:  vocab,
+		unkID:  unkID,
+		idx:    0,
+		MaxLen: 80, // Default cap
 	}
 }
 
@@ -1224,17 +1350,15 @@ func (it *ChatDataIterator) Next() (*tensor.Tensor, *tensor.Tensor) {
 	pair := it.pairs[it.idx]
 	it.idx++
 
-	// Query Tokenization (now also using SentenceVocab!) — use cascaded lookup to reduce the 22% UNK rate
+	// Query Tokenization (now also using SentenceVocab!)
 	qTokens := cleanTokenize(pair.Q)
 	qIDs := make([]float64, len(qTokens))
 	for i, t := range qTokens {
 		qIDs[i] = float64(lookupVocab(t, it.vocab))
 	}
 
-	// Safety check: If a query is empty after cleaning,
-	// provide a "padding" token so the model doesn't crash on a 0-width tensor.
 	if len(qIDs) == 0 {
-		qIDs = []float64{0} // Assuming 0 is pad or UNK
+		qIDs = []float64{0}
 	}
 
 	// Response Tokenization (SentenceVocab)
@@ -1265,8 +1389,8 @@ func (it *ChatDataIterator) NextBatch(batchSize int) *Batch {
 
 	for i := 0; i < batchSize && it.HasNext(); i++ {
 		inp, tgt := it.Next()
-		// Sequence length constraint: strictly capped for memory and logical coherence
-		if len(inp.Data) > 80 || len(tgt.Data) > 80 {
+		// Sequence length constraint: respects curriculum limit
+		if len(inp.Data) > it.MaxLen || len(tgt.Data) > it.MaxLen {
 			continue
 		}
 		inputs = append(inputs, inp.Data)
@@ -2724,4 +2848,144 @@ func ApplyTemperature(logits []float64, temperature float64) {
 	for i := range logits {
 		logits[i] /= temperature
 	}
+}
+
+// ExportUtilizationCSV writes current expert utilization to a persistent log.
+func ExportUtilizationCSV(epoch, step int) {
+	filename := "moe_utilization.csv"
+	var f *os.File
+	var err error
+	
+	if _, statErr := os.Stat(filename); os.IsNotExist(statErr) {
+		f, err = os.Create(filename)
+		if err == nil {
+			f.WriteString("epoch,step,layer,expert,count\n")
+		}
+	} else {
+		f, err = os.OpenFile(filename, os.O_APPEND|os.O_WRONLY, 0644)
+	}
+	
+	if err != nil {
+		log.Printf("⚠️ Failed to open utilization log: %v", err)
+		return
+	}
+	defer f.Close()
+
+	for lIdx, layer := range moe.ActiveLayers {
+		stats := layer.UtilizationStats()
+		for eIdx, count := range stats {
+			f.WriteString(fmt.Sprintf("%d,%d,%d,%d,%d\n", epoch, step, lIdx, eIdx, count))
+		}
+	}
+}
+
+// CompareCheckpoints calculates the Mean Absolute Deviation (MAD) between two saved models.
+func CompareCheckpoints(pathA, pathB string) {
+	modelA, err := moe.LoadIntentMoEModelFromGOB(pathA)
+	if err != nil {
+		log.Printf("Error loading A: %v", err)
+		return
+	}
+	modelB, err := moe.LoadIntentMoEModelFromGOB(pathB)
+	if err != nil {
+		log.Printf("Error loading B: %v", err)
+		return
+	}
+
+	fmt.Println("📊 --- Weight Delta Analysis (MAD) ---")
+	paramsA := modelA.Parameters()
+	paramsB := modelB.Parameters()
+	
+	if len(paramsA) != len(paramsB) {
+		fmt.Printf("❌ Param count mismatch: %d vs %d\n", len(paramsA), len(paramsB))
+		return
+	}
+
+	for i := range paramsA {
+		pA := paramsA[i]
+		pB := paramsB[i]
+		
+		totalDelta := 0.0
+		for j := range pA.Data {
+			totalDelta += math.Abs(pA.Data[j] - pB.Data[j])
+		}
+		avgDelta := totalDelta / float64(len(pA.Data))
+		fmt.Printf("Param %d (Size %v) MAD: %e\n", i, pA.Shape, avgDelta)
+	}
+}
+
+// OneCycle implements a cyclic learning rate policy.
+type OneCycle struct {
+    MaxLR       float64
+    MinLR       float64
+    TotalSteps  int
+    CurrentStep int
+}
+
+func (oc *OneCycle) GetNextLR() float64 {
+    oc.CurrentStep++
+    pct := float64(oc.CurrentStep) / float64(oc.TotalSteps)
+    
+    // Phase 1: Ramp up (first 30% of training)
+    if pct < 0.3 {
+        return oc.MinLR + (oc.MaxLR-oc.MinLR)*(pct/0.3)
+    }
+    
+    // Phase 2: Cool down (remaining 70%)
+    decayPct := (pct - 0.3) / 0.7
+    return oc.MaxLR * math.Max(0.01, 1.0 - decayPct)
+}
+
+// MonitorGradientFlow compares the L2 norm of gradients across model layers.
+func MonitorGradientFlow(model *moe.IntentMoE) {
+    var layer0Norm, layer1Norm float64
+    activeLayers := moe.ActiveLayers
+    if len(activeLayers) < 2 {
+        return
+    }
+
+    // Calculate Norm for Layer 0 Experts
+    for _, expert := range activeLayers[0].Experts {
+        for _, p := range expert.Parameters() {
+            if p.Grad != nil {
+                layer0Norm += p.Grad.L2Norm()
+            }
+        }
+    }
+
+    // Calculate Norm for Layer 1 Experts
+    for _, expert := range activeLayers[1].Experts {
+        for _, p := range expert.Parameters() {
+            if p.Grad != nil {
+                layer1Norm += p.Grad.L2Norm()
+            }
+        }
+    }
+
+    ratio := layer1Norm / (layer0Norm + 1e-10)
+    fmt.Printf("📉 Grad Flow Ratio (L1/L0): %.4f | L1 Strength: %.6f\n", ratio, layer1Norm)
+
+    if ratio < 0.1 && layer0Norm > 1e-5 {
+        fmt.Println("⚠️  WARNING: Vanishing Gradients detected in Layer 1. Consider increasing Residual Weight.")
+    }
+}
+
+// PrintImportanceMap visualizes which experts are handling which tokens.
+func PrintImportanceMap(vocab *mainvocab.Vocabulary, tokens []string, layer *moe.MoELayer) {
+    fmt.Println("\n🧠 --- Token -> Expert Mapping ---")
+    // Use the stored selected experts for the last sequence in the batch
+    selected := layer.GetSelectedExperts() // [TokenIdx][K]
+    if len(selected) == 0 {
+        return
+    }
+
+    for i, token := range tokens {
+        if i >= len(selected) {
+            break
+        }
+        expertID := selected[i][0] // Take the top-1 expert
+
+        // Visual Heatmap (stub, as we don't have per-token softmax weights readily available here without re-running)
+        fmt.Printf("%-15s [E%d] %s\n", token, expertID, strings.Repeat("█", 5))
+    }
 }

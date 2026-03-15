@@ -158,3 +158,11 @@ func (ln *LayerNorm) Input() *Tensor {
 func (ln *LayerNorm) Parameters() []*Tensor {
 	return []*Tensor{ln.Gamma, ln.Beta}
 }
+
+// ClearState clears the intermediate tensors used for backward pass
+func (ln *LayerNorm) ClearState() {
+	ln.input = nil
+	ln.normalized = nil
+	ln.mean = nil
+	ln.variance = nil
+}

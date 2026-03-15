@@ -98,6 +98,24 @@ func (c *LSTMCell) Parameters() []*Tensor {
 	return []*Tensor{c.Wf, c.Wi, c.Wc, c.Wo, c.Bf, c.Bi, c.Bc, c.Bo}
 }
 
+// SetForgetGateBias sets the bias for the forget gate.
+func (c *LSTMCell) SetForgetGateBias(val float64) {
+	if c.Bf != nil {
+		for i := range c.Bf.Data {
+			c.Bf.Data[i] = val
+		}
+	}
+}
+
+// SetForgetGateBias sets the forget gate bias for all cells in the LSTM.
+func (l *LSTM) SetForgetGateBias(val float64) {
+	for _, layer := range l.Cells {
+		for _, cell := range layer {
+			cell.SetForgetGateBias(val)
+		}
+	}
+}
+
 // Forward performs the forward pass of the LSTMCell.
 func (c *LSTMCell) Forward(inputs ...*Tensor) (*Tensor, *Tensor, error) {
 	if len(inputs) != 3 {
@@ -397,45 +415,61 @@ func (c *LSTMCell) Backward(gradHt, gradCt *Tensor) error {
 	}
 
 	// 6. Accumulate gradients for weights and biases
-	if c.Wf.Grad == nil {
-		c.Wf.Grad = NewTensor(c.Wf.Shape, make([]float64, len(c.Wf.Data)), false)
+	if c.Wf.RequiresGrad {
+		if c.Wf.Grad == nil {
+			c.Wf.Grad = NewTensor(c.Wf.Shape, make([]float64, len(c.Wf.Data)), false)
+		}
+		safeAccumulate(c.Wf.Grad.Data, gradWf.Data)
 	}
-	safeAccumulate(c.Wf.Grad.Data, gradWf.Data)
 
-	if c.Wi.Grad == nil {
-		c.Wi.Grad = NewTensor(c.Wi.Shape, make([]float64, len(c.Wi.Data)), false)
+	if c.Wi.RequiresGrad {
+		if c.Wi.Grad == nil {
+			c.Wi.Grad = NewTensor(c.Wi.Shape, make([]float64, len(c.Wi.Data)), false)
+		}
+		safeAccumulate(c.Wi.Grad.Data, gradWi.Data)
 	}
-	safeAccumulate(c.Wi.Grad.Data, gradWi.Data)
 
-	if c.Wc.Grad == nil {
-		c.Wc.Grad = NewTensor(c.Wc.Shape, make([]float64, len(c.Wc.Data)), false)
+	if c.Wc.RequiresGrad {
+		if c.Wc.Grad == nil {
+			c.Wc.Grad = NewTensor(c.Wc.Shape, make([]float64, len(c.Wc.Data)), false)
+		}
+		safeAccumulate(c.Wc.Grad.Data, gradWc.Data)
 	}
-	safeAccumulate(c.Wc.Grad.Data, gradWc.Data)
 
-	if c.Wo.Grad == nil {
-		c.Wo.Grad = NewTensor(c.Wo.Shape, make([]float64, len(c.Wo.Data)), false)
+	if c.Wo.RequiresGrad {
+		if c.Wo.Grad == nil {
+			c.Wo.Grad = NewTensor(c.Wo.Shape, make([]float64, len(c.Wo.Data)), false)
+		}
+		safeAccumulate(c.Wo.Grad.Data, gradWo.Data)
 	}
-	safeAccumulate(c.Wo.Grad.Data, gradWo.Data)
 
-	if c.Bf.Grad == nil {
-		c.Bf.Grad = NewTensor(c.Bf.Shape, make([]float64, len(c.Bf.Data)), false)
+	if c.Bf.RequiresGrad {
+		if c.Bf.Grad == nil {
+			c.Bf.Grad = NewTensor(c.Bf.Shape, make([]float64, len(c.Bf.Data)), false)
+		}
+		safeAccumulate(c.Bf.Grad.Data, gradBf.Data)
 	}
-	safeAccumulate(c.Bf.Grad.Data, gradBf.Data)
 
-	if c.Bi.Grad == nil {
-		c.Bi.Grad = NewTensor(c.Bi.Shape, make([]float64, len(c.Bi.Data)), false)
+	if c.Bi.RequiresGrad {
+		if c.Bi.Grad == nil {
+			c.Bi.Grad = NewTensor(c.Bi.Shape, make([]float64, len(c.Bi.Data)), false)
+		}
+		safeAccumulate(c.Bi.Grad.Data, gradBi.Data)
 	}
-	safeAccumulate(c.Bi.Grad.Data, gradBi.Data)
 
-	if c.Bc.Grad == nil {
-		c.Bc.Grad = NewTensor(c.Bc.Shape, make([]float64, len(c.Bc.Data)), false)
+	if c.Bc.RequiresGrad {
+		if c.Bc.Grad == nil {
+			c.Bc.Grad = NewTensor(c.Bc.Shape, make([]float64, len(c.Bc.Data)), false)
+		}
+		safeAccumulate(c.Bc.Grad.Data, gradBc.Data)
 	}
-	safeAccumulate(c.Bc.Grad.Data, gradBc.Data)
 
-	if c.Bo.Grad == nil {
-		c.Bo.Grad = NewTensor(c.Bo.Shape, make([]float64, len(c.Bo.Data)), false)
+	if c.Bo.RequiresGrad {
+		if c.Bo.Grad == nil {
+			c.Bo.Grad = NewTensor(c.Bo.Shape, make([]float64, len(c.Bo.Data)), false)
+		}
+		safeAccumulate(c.Bo.Grad.Data, gradBo.Data)
 	}
-	safeAccumulate(c.Bo.Grad.Data, gradBo.Data)
 
 	// 7. Gradients for combined input
 	transposedWf, err := c.Wf.Transpose(0, 1)

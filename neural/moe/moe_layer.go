@@ -28,6 +28,7 @@ type MoEState struct {
 	LoadBalancingLoss  float64
 	RouterZLoss         float64
 	gateLogits         *Tensor
+	lastOutput         *Tensor
 }
 
 // MoELayer implements a Mixture of Experts layer.
@@ -57,6 +58,7 @@ type MoELayer struct {
 	RouterZLoss         float64   // Penalty for large router logits to keep them stable
 	stateStack             []MoEState
 	AccumulatedUtilization []int // Tracks token assignments across steps/batches
+	ResidualScale          *Tensor   // Learned scale for the expert output in residual connection
 }
 
 // ResetUtilizationStats clears the accumulated utilization counters.
@@ -115,6 +117,7 @@ func NewMoELayer(inputDim, outputDim, numExperts, k int, expertBuilder func(int)
 		CapacityFactor:      1.25, // Default capacity factor
 		RouterTemperature:   0.8,  // Default temperature
 		ExpertDropoutRate:   0.1,  // Default dropout
+		ResidualScale:       NewTensor([]int{1}, []float64{1.0}, true), // Default to 1.0
 	}
 	ActiveLayers = append(ActiveLayers, layer)
 	return layer, nil
@@ -125,6 +128,9 @@ func (moe *MoELayer) Parameters() []*Tensor {
 	params := moe.GatingNetwork.Parameters()
 	for _, expert := range moe.Experts {
 		params = append(params, expert.Parameters()...)
+	}
+	if moe.ResidualScale != nil {
+		params = append(params, moe.ResidualScale)
 	}
 	return params
 }
@@ -163,18 +169,23 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 	seqLength := input.Shape[1]
 	embeddingDim := input.Shape[2]
 
-	// Add Noisy Top-k Gating: Add Gaussian noise to logits during training
+	// Add Router Jitter: Add noise to logits during training to encourage exploration.
+	// Standard jitter range is 0.95 to 1.05 (multiplicative)
 	if moe.Training {
-		noiseStd := 2.0 / float64(len(moe.Experts))
 		for i := range gateLogits.Data {
-			gateLogits.Data[i] += rand.NormFloat64() * noiseStd
+			// +/- 5% multiplicative noise
+			noise := 1.0 + (rand.Float64()*0.1 - 0.05) 
+			gateLogits.Data[i] *= noise
 		}
 	}
 
 	// Apply Temperature Scaling to logits
-	if moe.RouterTemperature != 1.0 && moe.RouterTemperature > 0 {
-		simdScaleF64(gateLogits.Data, 1.0/moe.RouterTemperature)
+	// Default to 0.5 sharpening as requested ("divide by 0.5")
+	routerScale := 1.0 / 0.5
+	if moe.RouterTemperature > 0 {
+		routerScale = 1.0 / moe.RouterTemperature
 	}
+	simdScaleF64(gateLogits.Data, routerScale)
 
 	// Apply Expert Dropout during training
 	if moe.Training && moe.ExpertDropoutRate > 0 {
@@ -364,8 +375,9 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 
 			lbLoss += fi * Pi
 		}
-		// Normalized by numExperts to keep the scale consistent
-		moe.LoadBalancingLoss = lbLoss * float64(numExperts)
+		// Final scaling (e.g., 0.01) prevents it from distracting from the main goal
+		// Multiply by numExperts to keep the loss scale independent of expert count
+		moe.LoadBalancingLoss = lbLoss * float64(numExperts) * 0.01
 	} else {
 		moe.LoadBalancingLoss = 0
 	}
@@ -492,6 +504,7 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 		LoadBalancingLoss:  moe.LoadBalancingLoss,
 		RouterZLoss:        moe.RouterZLoss,
 		gateLogits:         moe.gateLogits,
+		lastOutput:         finalOutput,
 	}
 	moe.stateStack = append(moe.stateStack, state)
 
@@ -1117,4 +1130,10 @@ func (moe *MoELayer) SetExpertFreeze(expertID int, freeze bool) {
 		}
 		fmt.Printf("❄️ Expert %d Freeze State: %v\n", expertID, freeze)
 	}
+}
+
+
+// GetStateStack returns the internal state stack for BPTT.
+func (moe *MoELayer) GetStateStack() []MoEState {
+	return moe.stateStack
 }

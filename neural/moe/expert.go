@@ -27,4 +27,7 @@ type Expert interface {
 
 	// ClearState clears the expert's internal states.
 	ClearState()
+
+	// ClipWeights bounds the expert's learnable parameters.
+	ClipWeights(maxVal float64)
 }

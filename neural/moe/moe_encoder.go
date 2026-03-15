@@ -109,3 +109,12 @@ func (l *LinearExpert) ClearState() {
 		l.Linear.ClearState()
 	}
 }
+// ClipWeights implements the Expert interface.
+func (l *LinearExpert) ClipWeights(maxVal float64) {
+	if l.Linear != nil && l.Linear.Weights != nil {
+		tensor.ClipWeights(l.Linear.Weights.Data, maxVal)
+	}
+	if l.Linear != nil && l.Linear.Biases != nil {
+		tensor.ClipWeights(l.Linear.Biases.Data, maxVal)
+	}
+}

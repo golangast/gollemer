@@ -175,3 +175,19 @@ func (e *FeedForwardExpert) ClearState() {
 		e.Layer2.ClearState()
 	}
 }
+
+// ClipWeights bounds the expert's learnable parameters.
+func (e *FeedForwardExpert) ClipWeights(maxVal float64) {
+	if e.Layer1 != nil {
+		tensor.ClipWeights(e.Layer1.Weights.Data, maxVal)
+		if e.Layer1.Biases != nil {
+			tensor.ClipWeights(e.Layer1.Biases.Data, maxVal)
+		}
+	}
+	if e.Layer2 != nil {
+		tensor.ClipWeights(e.Layer2.Weights.Data, maxVal)
+		if e.Layer2.Biases != nil {
+			tensor.ClipWeights(e.Layer2.Biases.Data, maxVal)
+		}
+	}
+}
