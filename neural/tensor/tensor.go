@@ -1865,6 +1865,17 @@ func (op *ReLUOperation) Backward(grad *Tensor) error {
 	return nil
 }
 
+// Clip clamps the tensor values between min and max in-place.
+func (t *Tensor) Clip(min, max float64) {
+	for i := 0; i < len(t.Data); i++ {
+		if t.Data[i] < min {
+			t.Data[i] = min
+		} else if t.Data[i] > max {
+			t.Data[i] = max
+		}
+	}
+}
+
 
 // SigmoidOperation represents the sigmoid operation for backward pass.
 type SigmoidOperation struct {
@@ -2760,4 +2771,50 @@ func (t *Tensor) SampleTopP(p float64) (int, error) {
 	}
 
 	return pairs[0].Index, nil // Fallback
+}
+
+// L2Norm returns the L2 norm of the tensor's data.
+func (t *Tensor) L2Norm() float64 {
+	if t == nil {
+		return 0
+	}
+	var sum float64
+	for _, v := range t.Data {
+		sum += v * v
+	}
+	return math.Sqrt(sum)
+}
+
+// MultiplyScalar multiplies each element in the tensor by a scalar.
+func (t *Tensor) MultiplyScalar(s float64) *Tensor {
+	if t == nil {
+		return nil
+	}
+	newData := make([]float64, len(t.Data))
+	for i, v := range t.Data {
+		newData[i] = v * s
+	}
+	return NewTensor(t.Shape, newData, false)
+}
+
+// Scale is an alias for MultiplyScalar.
+func (t *Tensor) Scale(s float64) *Tensor {
+	return t.MultiplyScalar(s)
+}
+
+// Expand broadcasts the current tensor to a larger shape by repeating data.
+func (t *Tensor) Expand(shape []int) *Tensor {
+	if t == nil {
+		return nil
+	}
+	totalSize := 1
+	for _, s := range shape {
+		totalSize *= s
+	}
+	newData := make([]float64, totalSize)
+	// Repeat data sequentially to fill the new shape
+	for i := 0; i < totalSize; i++ {
+		newData[i] = t.Data[i%len(t.Data)]
+	}
+	return NewTensor(shape, newData, false)
 }

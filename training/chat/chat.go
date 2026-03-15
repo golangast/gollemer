@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -56,23 +57,90 @@ type Batch struct {
 	InputMask *tensor.Tensor // Attention mask (0.0 for real, -1e9 for pad)
 }
 
-func TrainChat(projectRoot string) {
+func ValidateModelHealth(model *moe.IntentMoE) bool {
+	fmt.Println("🔍 Performing Pre-Flight Health Check...")
+	isHealthy := true
+
+	for i, param := range model.Parameters() {
+		maxVal := -1e18
+		minVal := 1e18
+		nanCount := 0
+		
+		for _, v := range param.Data {
+			if math.IsNaN(v) || math.IsInf(v, 0) {
+				nanCount++
+			}
+			if v > maxVal { maxVal = v }
+			if v < minVal { minVal = v }
+		}
+
+		// Check for NaNs
+		if nanCount > 0 {
+			fmt.Printf("❌ Param %d: Found %d NaN/Inf values!\n", i, nanCount)
+			isHealthy = false
+		}
+
+		// Check for Weight Saturation
+		if maxVal > 100.0 || minVal < -100.0 {
+			fmt.Printf("⚠️  Param %d: High saturation detected (Range: %.2f to %.2f)\n", i, minVal, maxVal)
+		}
+	}
+
+	if isHealthy {
+		fmt.Println("✅ Model weights are within safe numerical bounds.")
+	}
+	return isHealthy
+}
+
+func InspectRouterWeights(model *moe.IntentMoE) {
+	fmt.Println("🔬 Inspecting Router Integrity...")
+	for i, layer := range moe.ActiveLayers {
+		weightSum := 0.0
+		for _, v := range layer.GatingNetwork.Linear.Weights.Data {
+			weightSum += math.Abs(v)
+		}
+		
+		if weightSum == 0 {
+			fmt.Printf("🚨 LAYER %d ALERT: Router weights are all ZEROS! (Inference will pin to E0)\n", i)
+		} else {
+			fmt.Printf("✅ Layer %d: Router weight magnitude is %.4f\n", i, weightSum)
+		}
+	}
+}
+
+func VerifyModelIntegrity(m *moe.IntentMoE) {
+    if m.Decoder != nil && m.Decoder.OutputMoE != nil {
+        w := m.Decoder.OutputMoE.GatingNetwork.Linear.Weights.Data
+        sum := 0.0
+        for _, v := range w { sum += math.Abs(v) }
+        if sum == 0 {
+            fmt.Println("🚨 CRITICAL: Decoder Router is empty! Resetting weights...")
+            // Initialize with small random values to break the E0 tie
+            for i := range w { w[i] = (rand.Float64() - 0.5) * 0.1 }
+        }
+    }
+}
+
+func TrainChat(projectRoot string, rebalanceRequested bool) {
 	fmt.Println("--- 🗣️  Training Chat Model ---")
 
 	// Pre-declare helper to find MoE layers
-	var findMoELayers func(m *moe.IntentMoE) []*moe.MoELayer
-	findMoELayers = func(m *moe.IntentMoE) []*moe.MoELayer {
+	findMoELayers := func(m *moe.IntentMoE) []*moe.MoELayer {
 		var layers []*moe.MoELayer
 		if m == nil {
 			return layers
 		}
 		// Check Encoder
-		if layer, ok := m.Encoder.(*moe.MoELayer); ok {
-			layers = append(layers, layer)
+		if ml, ok := m.Encoder.(*moe.MoELayer); ok {
+			layers = append(layers, ml)
 		} else if hybrid, ok := m.Encoder.(*moe.HybridLLMGNNEncoder); ok {
-			if layer, ok := hybrid.LLMEncoder.(*moe.MoELayer); ok {
-				layers = append(layers, layer)
+			if ml, ok := hybrid.LLMEncoder.(*moe.MoELayer); ok {
+				layers = append(layers, ml)
 			}
+		}
+		// Check Decoder's OutputMoE
+		if m.Decoder != nil && m.Decoder.OutputMoE != nil {
+			layers = append(layers, m.Decoder.OutputMoE)
 		}
 		return layers
 	}
@@ -93,22 +161,12 @@ func TrainChat(projectRoot string) {
 	}
 	defer file.Close()
 
-	// 3. Load or Initialize MoE Model
-	vocabSize := 2000
-	embeddingDim := 256 // Increased Capacity
-	if w2v != nil {
-		vocabSize = w2v.VocabSize
-		// embeddingDim = w2v.VectorSize // Keep 128 even if w2v is 64, we will pad/randomly init the rest
-	}
-
 	// Reset ActiveLayers to ensure we track only the current model's layers and prevent leaks
 	moe.ActiveLayers = nil
 
 	var intentModel *moe.IntentMoE
 	moePath := filepath.Join(projectRoot, "gob_models/moe_classification_model.gob")
 	bestMoePath := filepath.Join(projectRoot, "gob_models/moe_classification_model_best.gob")
-
-	
 
 	if _, err := os.Stat(moePath); err == nil {
 		if loaded, err := moe.LoadIntentMoEModelFromGOB(moePath); err == nil {
@@ -120,42 +178,80 @@ func TrainChat(projectRoot string) {
 			if len(moe.ActiveLayers) > 0 {
 				log.Printf("📡 Re-registered %d MoE layers from loaded model", len(moe.ActiveLayers))
 			}
-			// Update embeddingDim to match loaded model to prevent index errors
-			embeddingDim = intentModel.Embedding.DimModel
+			
+			InspectRouterWeights(intentModel)
+			VerifyModelIntegrity(intentModel)
 		} else {
 			log.Printf("⚠️  Failed to load existing MoE model: %v. Starting fresh.", err)
 		}
 	}
 
 	if intentModel == nil {
-		// Increased Embedding to 256, Hidden to 512
-		// Upgrade decoder: 2 layers, 256 hidden size, 256 embedding
-		// Wait, vocab size is now SentenceVocab size!
-		log.Println("🚀 Initializing fresh MoE (256d Embedding, 256d Hidden, 8 Experts, 2-Layer Decoder)")
-		
+		log.Println("🚀 Initializing compact MoE (256d Encoder, 128d Decoder, 8 Encoder Experts, Linear Output)")
+		// IMPORTANT: Pass nil for w2v here to avoid allocating a 60k+ word embedding table.
+		// W2V weights are injected selectively after the SentenceVocab is built.
 		intentModel, _ = moe.NewHybridIntentMoE(
-			10000,    // placeholder, will resize
-			256, 
-			8, 
-			512, 512, 10000, 8, w2v,
+			5000,    // small placeholder, will be resized later
+			256,
+			8,
+			512, 512, 5000, 4, nil, // nil w2v = no huge allocation, 4 attention heads
 		)
-		intentModel.Decoder, _ = moe.NewRNNDecoder(256, 10000, 256, 8, 2, 0.1)
-		
-		log.Println("🛠️ Applying Xavier Initialization to all parameters...")
+		// numExperts=1 → single Linear output layer (vastly cheaper than 8 MoE experts with 4112 output dim)
+		// hiddenSize=256 must match encoder output dim for cross-attention; attentionHeads=4
+		intentModel.Decoder, _ = moe.NewRNNDecoder(256, 5000, 256, 4, 1, 0.1, 1)
+
+		// Decoder LSTM hiddenSize for bias initialization
+		const decoderHiddenSize = 256
+
+		log.Println("🛠️ Applying Smart Initialization (Orthogonal for LSTM weights, Xavier for rest)...")
 		for _, param := range intentModel.Parameters() {
-			InitializeXavier(param)
+			if param == nil || len(param.Shape) == 0 {
+				continue
+			}
+			switch {
+			case isLSTMBias(param, decoderHiddenSize):
+				// Forget-gate bias trick: set bias for forget gate to 1.0
+				InitializeLSTMBias(param, decoderHiddenSize)
+			case isLSTMWeight(param):
+				// Orthogonal initialization for LSTM weight matrices (gain 0.8)
+				InitializeOrthogonal(param, 0.8)
+			default:
+				InitializeXavier(param)
+			}
 		}
 	}
 
-	// Adjust MoE settings for training to prevent token dropping and encourage diversity
+	// 2. Health Check
+	if !ValidateModelHealth(intentModel) {
+		log.Println("⚠️ Model health check failed. Attempting to recover with rebalance...")
+		rebalanceRequested = true
+	}
+
+	if rebalanceRequested {
+		log.Println("⚖️ Manual Rebalance Triggered: Normalizing Expert weight distributions...")
+		// Assuming we want to rebalance all MoE layers found
+		for _, layer := range findMoELayers(intentModel) {
+			layer.RebalanceExperts()
+		}
+	}
+
+	// Adjust MoE settings for training
 	for _, layer := range moe.ActiveLayers {
 		layer.CapacityFactor = 1.5          // Increased from 1.25
-		layer.LoadBalancingWeight = 0.1    // Increased from 0.05
+		layer.LoadBalancingWeight = 0.15   // Increased for more aggressive balance
 		layer.RouterTemperature = 1.0     // Normal temperature
 		layer.ExpertDropoutRate = 0.1     // Reduced dropout to prevent UNK collapse
 		layer.SetMode(true)               // Enable training mode (noise)
 	}
-	log.Println("🔧 Adjusted MoE: Capacity=1.25, LBWeight=0.05, Temp=0.7, Dropout=0.1")
+	log.Println("🔧 Adjusted MoE: Capacity=1.5, LBWeight=0.15, Temp=1.0, Dropout=0.1")
+	
+	// Initial Router Shake: If starting fresh or rebalancing, increase temperature briefly
+	if rebalanceRequested {
+		for _, layer := range findMoELayers(intentModel) {
+			layer.RouterTemperature = 2.5 // "Shake" the router
+		}
+		log.Println("🔥 Initial Router Temperature set to 2.5 for exploration")
+	}
 
 	// Try to load vocab if nil
 	vocabPath := filepath.Join(projectRoot, "gob_models/seq2seq_output_vocab.gob")
@@ -235,7 +331,34 @@ func TrainChat(projectRoot string) {
 		log.Printf("✨ Expanded Word2Vec vocab with %d new words from training data. Total: %d", addedCount, w2v.VocabSize)
 	}
 
-	// Resize Encoder Embedding if Vocabulary has grown (now using SentenceVocab for both)
+	// --- ENSURE SENTENCEVOCAB EXISTS AND POPULATE IT FIRST ---
+	if intentModel.SentenceVocab == nil {
+		intentModel.SentenceVocab = mainvocab.NewVocabulary()
+		intentModel.SentenceVocab.AddToken("<pad>")
+		intentModel.SentenceVocab.PaddingTokenID = intentModel.SentenceVocab.GetTokenID("<pad>")
+		intentModel.SentenceVocab.AddToken("<s>")
+		intentModel.SentenceVocab.AddToken("</s>")
+		intentModel.SentenceVocab.AddToken("UNK")
+		intentModel.SentenceVocab.BosID = intentModel.SentenceVocab.GetTokenID("<s>")
+		intentModel.SentenceVocab.EosID = intentModel.SentenceVocab.GetTokenID("</s>")
+	}
+
+	// Add EVERY word from the training data to the SentenceVocab
+	for _, pair := range chatPairs {
+		for _, t := range cleanTokenize(pair.Q + " " + pair.A) {
+			intentModel.SentenceVocab.AddToken(t)
+		}
+	}
+	log.Printf("✅ Final SentenceVocab Size: %d", intentModel.SentenceVocab.Size())
+
+	// Ensure UNK is in vocab and get its ID
+	unkID := intentModel.SentenceVocab.GetTokenID("UNK")
+	if unkID == -1 {
+		intentModel.SentenceVocab.AddToken("UNK")
+		unkID = intentModel.SentenceVocab.GetTokenID("UNK")
+	}
+
+	// Resize Encoder Embedding if Vocabulary has grown
 	currentVocabSize := intentModel.SentenceVocab.Size()
 	if intentModel.Embedding.VocabSize != currentVocabSize {
 		log.Printf("Resizing Encoder Embedding from %d to %d", intentModel.Embedding.VocabSize, currentVocabSize)
@@ -246,8 +369,9 @@ func TrainChat(projectRoot string) {
 			word := intentModel.SentenceVocab.GetWord(i)
 			if id, ok := w2v.Vocabulary[word]; ok {
 				vec := w2v.WordVectors[id]
-				start := i * 256
-				copy(newEmb.Weight.Data[start:], vec)
+				if i*256 < len(newEmb.Weight.Data) {
+					copy(newEmb.Weight.Data[i*256:], vec)
+				}
 			}
 		}
 		intentModel.Embedding = newEmb
@@ -265,7 +389,7 @@ func TrainChat(projectRoot string) {
 
 	fmt.Printf("Data Split: %d Training, %d Validation\n", len(trainPairs), len(valPairs))
 
-	// Check W2V coverage
+	// Word2Vec coverage check
 	hit := 0
 	miss := 0
 	for _, pair := range chatPairs {
@@ -279,51 +403,6 @@ func TrainChat(projectRoot string) {
 		}
 	}
 	log.Printf("Word2Vec Coverage: %d hits, %d misses (%.2f%%)", hit, miss, float64(hit)/float64(hit+miss)*100)
-
-	// Fix Word2Vec Misses: Re-initialize UNK embedding with noise
-	if unkID, ok := w2v.Vocabulary["UNK"]; ok {
-		log.Printf("Re-initializing UNK token (ID %d) with random noise...", unkID)
-		limit := math.Sqrt(6.0 / float64(vocabSize+embeddingDim))
-		start := unkID * embeddingDim
-		end := start + embeddingDim
-		for j := start; j < end; j++ {
-			intentModel.Embedding.Weight.Data[j] = (rand.Float64() * 2 * limit) - limit
-		}
-	}
-
-	// Ensure SentenceVocab exists and populate it
-	if intentModel.SentenceVocab == nil {
-		intentModel.SentenceVocab = mainvocab.NewVocabulary()
-		intentModel.SentenceVocab.AddToken("<pad>")
-		intentModel.SentenceVocab.PaddingTokenID = intentModel.SentenceVocab.GetTokenID("<pad>")
-		intentModel.SentenceVocab.AddToken("<s>")
-		intentModel.SentenceVocab.AddToken("</s>")
-		intentModel.SentenceVocab.AddToken("UNK")
-		intentModel.SentenceVocab.BosID = intentModel.SentenceVocab.GetTokenID("<s>")
-		intentModel.SentenceVocab.EosID = intentModel.SentenceVocab.GetTokenID("</s>")
-	}
-
-	// Debug: Print some vocab info to verify initialization
-	log.Printf("SentenceVocab Size: %d", intentModel.SentenceVocab.Size())
-	log.Printf("Token 0: %s", intentModel.SentenceVocab.GetWord(0))
-	log.Printf("Token 1: %s", intentModel.SentenceVocab.GetWord(1))
-
-	// Add EVERY word from the training data to the SentenceVocab
-	for _, pair := range chatPairs {
-		// Tokenize both Question and Answer
-		for _, t := range cleanTokenize(pair.Q + " " + pair.A) {
-			intentModel.SentenceVocab.AddToken(t)
-		}
-	}
-	log.Printf("✅ Final SentenceVocab Size: %d", intentModel.SentenceVocab.Size())
-
-	// Ensure UNK is in vocab and get its ID
-	unkID := intentModel.SentenceVocab.GetTokenID("UNK")
-	if unkID == -1 {
-		intentModel.SentenceVocab.AddToken("UNK")
-		unkID = intentModel.SentenceVocab.GetTokenID("UNK")
-		log.Printf("Manually added UNK token, new ID: %d", unkID)
-	}
 
 	// Resize Decoder if Vocabulary has grown (OR if architecture changed: LayerNorm needs to be 512)
 	currentVocabSize = intentModel.SentenceVocab.Size()
@@ -345,42 +424,67 @@ func TrainChat(projectRoot string) {
 	// Clear any stale state from the loaded model
 	DetachModel(intentModel)
 
+	// Curriculum sort
+	sort.Slice(chatPairs, func(i, j int) bool {
+		return len(cleanTokenize(chatPairs[i].A)) < len(cleanTokenize(chatPairs[j].A))
+	})
+	log.Println("🎓 Curriculum active: Training starts with shortest sentences.")
+
+	// Split data
+	trainCount := int(float64(len(chatPairs)) * 0.95)
+	trainPairs = chatPairs[:trainCount]
+	valPairs = chatPairs[trainCount:]
+
 	// Use Iterator pattern to save memory and speed up training
 	iterator := NewChatDataIterator(trainPairs, w2v, intentModel.SentenceVocab, unkID)
 
+	// Free Word2Vec model from memory — it's no longer needed after the iterator and embeddings are built.
+	log.Printf("🗑️  Freeing Word2Vec model from memory (%d vectors)...", w2v.VocabSize)
+	w2v.WordVectors = nil
+	w2v.Vocabulary = nil
+	runtime.GC()
+	debug.FreeOSMemory()
+	log.Println("✅ Word2Vec memory freed.")
+
 	// Training Loop
 	epochs := 60
-	const batchSize = 4 // Significantly lower for stability and memory
-	// Very low LR to handle the complex Hybrid GNN + MoE interaction
-	baseLR := 8e-7 // Lowered from 2e-6
-	learningRate := 1e-7 // Lowered from 5e-7
-	const minLR = 1e-7
-	optimizer := neuralnn.NewOptimizer(intentModel.Parameters(), learningRate, 1.0) // Lower clip from 5.0 to 1.0
+	const batchSize = 2 // Reduced from 4 to limit memory usage during backward pass
+	
+	// Optimizer initialization
+	const initialLR = 5e-7
+	optimizer := neuralnn.NewOptimizer(intentModel.Parameters(), initialLR, 1.0)
 
-	// Early stopping state
-	patienceLimit := 10 // More patience for the slow LR
+	// Learning rate settings
+	baseLR := 1e-6 // Used as peak LR for cosine decay
+	learningRate := baseLR
+	peakLR := 0.0005 // Reduced from 0.05 − logs showed LR climbing to 0.04 which is unstable
+	warmupSteps := 1000 // Extended from 300 for a gentler warmup on a sensitive model
+	const weightDecay = 0.0001
+	const unkPenalty = 5.0
+
+	// Early stopping and metrics state
+	patienceLimit := 10
 	patienceCounter := 0
-
-	// Seed v1 rand for MoE noise
-	randv1.Seed(time.Now().UnixNano())
-
 	globalStep := 0
-	warmupSteps := 1000
-
-	// Track expert metrics over the epoch
 	epochUtilization := make(map[string]int)
 	epochLBLoss := 0.0
 	expertStagnation := make(map[string]int)
 	bestPPL := math.MaxFloat64
-
-	// State variables before the Epoch loop
 	lastEpochLoss := math.MaxFloat64
 	plateauCount := 0
 
-	// Define these before the loop - moderated penalties
-	unkWeight := 0.05 // Lower weight means UNK has less influence on loss
-	unkPenalty := 2.5 // Higher penalty makes guessing UNK very "expensive" for the model
-	log.Printf("🔧 Training Config: baseLR=%.7f, unkWeight=%.2f, unkPenalty=%.2f", baseLR, unkWeight, unkPenalty)
+	// Cross-Entropy Weights setup
+	lossWeights := make([]float64, intentModel.SentenceVocab.Size())
+	for i := range lossWeights {
+		lossWeights[i] = 1.0
+	}
+	lossWeights[unkID] = 0.01
+	lossWeights[intentModel.SentenceVocab.PaddingTokenID] = 0.0
+
+	// Set weight decay on the optimizer
+	if opt, ok := optimizer.(*neuralnn.Adam); ok {
+		opt.WeightDecay = weightDecay
+	}
 
 	fmt.Printf("Training on %d pairs for %d epochs (patience=%d)...\n", len(chatPairs), epochs, patienceLimit)
 
@@ -389,6 +493,15 @@ func TrainChat(projectRoot string) {
 
 	for epoch := 0; epoch < epochs; epoch++ {
 		epochStartTime := time.Now()
+		
+		// Curriculum shuffle logic
+		if epoch > 2 {
+			rand.Shuffle(len(trainPairs), func(i, j int) { 
+				trainPairs[i], trainPairs[j] = trainPairs[j], trainPairs[i] 
+			})
+			log.Println("🔄 Shuffled training data for this epoch")
+		}
+
 		// Force diverse routing for the first 2 epochs to break out of mode collapse
 		if epoch < 2 {
 			for _, layer := range moe.ActiveLayers {
@@ -429,31 +542,66 @@ func TrainChat(projectRoot string) {
 			if batch == nil || batch.Input == nil {
 				continue
 			}
-			// Learning Rate Warmup
-			if globalStep < warmupSteps {
-				startLR := 1e-7
-				lr := startLR + (learningRate-startLR)*float64(globalStep)/float64(warmupSteps)
-				if opt, ok := optimizer.(*neuralnn.Adam); ok {
-					opt.SetLearningRate(lr)
+			optimizer.ZeroGrad()
+
+			// Memory Management
+			if globalStep%100 == 0 {
+				runtime.GC()
+				debug.FreeOSMemory()
+			}
+
+			// 🛡️ ENCODER WEIGHT DAMPENING: Every 10 steps, clip any encoder
+			// parameter whose L2 norm exceeds 50 back to norm 10.
+			// This is a "soft fix" that runs in addition to the context-vector
+			// normalization inside Forward(), providing a second line of defence.
+			if globalStep%10 == 0 {
+				for _, p := range intentModel.Encoder.Parameters() {
+					norm := 0.0
+					for _, v := range p.Data {
+						norm += v * v
+					}
+					norm = math.Sqrt(norm)
+					if norm > 50.0 {
+						scale := 10.0 / norm
+						for i := range p.Data {
+							p.Data[i] *= scale
+						}
+					}
 				}
 			}
-			globalStep++
 
 			inputTensor := batch.Input
 			targetTensor := batch.Target
-
 			if targetTensor.Shape[1] < 2 {
 				continue
 			}
 
-			optimizer.ZeroGrad()
-
-			// Warmup and Learning Rate Schedule
+			var lr float64
 			if globalStep < warmupSteps {
-				// Linear warmup
-				learningRate = 5e-7 + (baseLR-5e-7)*float64(globalStep)/float64(warmupSteps)
-				if opt, ok := optimizer.(*neuralnn.Adam); ok {
-					opt.SetLearningRate(learningRate)
+				lr = (float64(globalStep) / float64(warmupSteps)) * peakLR
+			} else {
+				// User's specific cosine schedule
+				lr = peakLR * math.Max(0.1, math.Cos(float64(globalStep)/2000.0))
+			}
+			optimizer.SetLearningRate(lr)
+			learningRate = lr 
+
+			// 🛑 CIRCUIT BREAKER: Every 500 Batches
+			if globalStep%500 == 0 && globalStep > 0 {
+				fmt.Println("\n🛑 Running Circuit Breaker Check...")
+				check := GenerateTokens(intentModel, "how are you", 10)
+				if isCollapsed(check, intentModel.SentenceVocab) {
+					fmt.Println("🚨 Punctuation Loop Detected! Scaling LR down and shaking experts...")
+					peakLR *= 0.2
+					for _, layer := range moe.ActiveLayers {
+						layer.RouterTemperature = 1.8 // Shake up experts
+					}
+					// Also reset optimizer moments for the next steps
+					if opt, ok := optimizer.(*neuralnn.Adam); ok {
+						opt.SetLearningRate(peakLR * 0.1)
+					}
+				} else {
+					fmt.Println("✅ Diversity Check Passed.")
 				}
 			}
 
@@ -494,8 +642,8 @@ func TrainChat(projectRoot string) {
 					}
 				}
 
-				// NEW: Use the weighted version
-				loss, grad := WeightedCrossEntropy(l, targets, intentModel.SentenceVocab.PaddingTokenID, unkID, unkWeight, unkPenalty, labelSmoothing)
+				// Use the weighted version with the pre-defined weight slice
+				loss, grad := WeightedCrossEntropy(l, targets, lossWeights, labelSmoothing)
 				if grad == nil {
 					grad = tensor.NewTensor(l.Shape, make([]float64, len(l.Data)), false)
 				}
@@ -513,7 +661,7 @@ func TrainChat(projectRoot string) {
 					for b := 0; b < currentBatchSize; b++ {
 						targets[b] = int(targetTensor.Data[b*seqLen+t+1])
 					}
-					l, g := WeightedCrossEntropy(logit, targets, intentModel.SentenceVocab.PaddingTokenID, unkID, unkWeight, unkPenalty, labelSmoothing)
+					l, g := WeightedCrossEntropy(logit, targets, lossWeights, labelSmoothing)
 					if g == nil {
 						g = tensor.NewTensor(logit.Shape, make([]float64, len(logit.Data)), false)
 					}
@@ -536,10 +684,13 @@ func TrainChat(projectRoot string) {
 				continue
 			}
 
-			// Add MoE Load Balancing Loss to the logged batchLoss for monitoring
+			// Add MoE Load Balancing Loss and Router Z-Loss
 			var currentBatchLB float64
+			var batchZLoss float64
 			for layerIdx, l := range moe.ActiveLayers {
 				currentBatchLB += l.LoadBalancingLoss * l.LoadBalancingWeight
+				batchZLoss += l.RouterZLoss // Coefficient 1e-4 is baked into CalculateRouterZLoss
+				
 				// Track aggregate utilization
 				stats := l.UtilizationStats()
 				for expIdx, count := range stats {
@@ -547,7 +698,15 @@ func TrainChat(projectRoot string) {
 					epochUtilization[key] += count
 				}
 			}
-			batchLoss += currentBatchLB
+			// Factor in decoder MoE if present
+			if intentModel.Decoder.OutputMoE != nil {
+				currentBatchLB += intentModel.Decoder.OutputMoE.LoadBalancingLoss * intentModel.Decoder.OutputMoE.LoadBalancingWeight
+				batchZLoss += intentModel.Decoder.OutputMoE.RouterZLoss
+			}
+
+			// Final total loss used for gradients
+			totalGradLoss := batchLoss + currentBatchLB + batchZLoss
+			batchLoss = totalGradLoss // Updated for logging
 			epochLBLoss += currentBatchLB
 
 			// Backward
@@ -562,15 +721,7 @@ func TrainChat(projectRoot string) {
 				} else {
 					params := intentModel.Parameters()
 
-					// 1. Weight Decay (Penalty) to prevent weights from growing too large
-					const weightDecay = 1e-4
-					for _, p := range params {
-						if p.Grad != nil {
-							for i := range p.Grad.Data {
-								p.Grad.Data[i] += weightDecay * p.Data[i]
-							}
-						}
-					}
+					// AdamW handles weight decay now
 
 					// 2. Gradient Norm Calculation & Clipping (The Shield)
 					gradNorm := 0.0
@@ -583,7 +734,7 @@ func TrainChat(projectRoot string) {
 					}
 					gradNorm = math.Sqrt(gradNorm)
 
-					const clipValue = 5.0
+					const clipValue = 1.0 // Lowered from 5.0 for stability
 					if gradNorm > clipValue {
 						scale := clipValue / (gradNorm + 1e-6) // Safety epsilon
 						for _, p := range params {
@@ -628,6 +779,7 @@ func TrainChat(projectRoot string) {
 			if batches%10 == 0 {
 				runtime.GC()
 			}
+			globalStep++
 		}
 		// End of Epoch: log final batch count, print utilization, clear computation graph.
 		if batches > 0 {
@@ -671,6 +823,15 @@ func TrainChat(projectRoot string) {
 					}
 					expertStagnation[key] = 0
 				}
+
+				// Dominant Expert Freezing: If one expert does > 40% of the work, freeze it to force others to learn
+				usage := percent / 100.0
+				if usage > 0.40 {
+					fmt.Printf("⚠️ Layer %d Expert %d is dominant (%.1f%%). Freezing for next epoch.\n", layerIdx, i, usage*100)
+					layer.SetExpertFreeze(i, true)
+				} else {
+					layer.SetExpertFreeze(i, false) // Unfreeze if balanced
+				}
 			}
 		}
 		DetachModel(intentModel)
@@ -679,9 +840,13 @@ func TrainChat(projectRoot string) {
 			avgLoss = totalLoss / float64(batches)
 		}
 		fmt.Printf("Epoch %d: Avg Loss %.4f in %.1fs\n", epoch+1, avgLoss, time.Since(epochStartTime).Seconds())
+		
+		// End of epoch memory cleanup
+		runtime.GC()
+		debug.FreeOSMemory()
 
 		// Validation
-		valPPL := ValidateChat(intentModel, valPairs, w2v)
+		valPPL := ValidateChat(intentModel, valPairs, nil)
 		log.Printf("📉 Validation Perplexity: %.2f", valPPL)
 
 		// Check for Plateau
@@ -691,16 +856,9 @@ func TrainChat(projectRoot string) {
 			plateauCount = 0
 		}
 
-		if plateauCount >= 2 && globalStep > warmupSteps { 
-			baseLR *= 0.5
-			learningRate = baseLR
-			if learningRate < minLR {
-				learningRate = minLR
-			}
-			if opt, ok := optimizer.(*neuralnn.Adam); ok {
-				opt.SetLearningRate(learningRate)
-			}
-			log.Printf("📉 Plateau detected. LR dropped to %f", learningRate)
+		if plateauCount >= 2 && globalStep > 200 { 
+			peakLR *= 0.5
+			log.Printf("📉 Learning rate plateau detected. Reducing peakLR to %.8f", peakLR)
 			plateauCount = 0
 		}
 		lastEpochLoss = avgLoss
@@ -722,7 +880,7 @@ func TrainChat(projectRoot string) {
 				log.Printf("⚠️ Skip empty prompt: %s", tp.prompt)
 				continue
 			}
-			runTestSentence(tp.label, tp.prompt, intentModel, w2v)
+			runTestSentence(tp.label, tp.prompt, intentModel, nil)
 		}
 
 		// Save model at the end of each epoch, overwriting the main file.
@@ -783,13 +941,26 @@ func TrainChat(projectRoot string) {
 
 // StrictGenerate forces the model to generate a response without using UNK or PAD tokens.
 func StrictGenerate(model *moe.IntentMoE, input string, w2v *word2vec.SimpleWord2Vec, maxLen int) string {
-	// Ensure model is in evaluation mode
+	// 1. Enter Eval Mode and set Router Temperature for stability
+	oldTemps := make(map[*moe.MoELayer]float64)
 	for _, layer := range moe.ActiveLayers {
 		layer.SetMode(false)
+		oldTemps[layer] = layer.RouterTemperature
+		layer.RouterTemperature = 0.8 // Force decisive routing for stable generation
 	}
+	if model.Decoder.OutputMoE != nil {
+		oldTemps[model.Decoder.OutputMoE] = model.Decoder.OutputMoE.RouterTemperature
+		model.Decoder.OutputMoE.RouterTemperature = 0.1
+	}
+
 	defer func() {
-		for _, layer := range moe.ActiveLayers {
+		for layer, temp := range oldTemps {
 			layer.SetMode(true)
+			layer.RouterTemperature = temp
+		}
+		if model.Decoder.OutputMoE != nil {
+			model.Decoder.OutputMoE.SetMode(true)
+			model.Decoder.OutputMoE.RouterTemperature = oldTemps[model.Decoder.OutputMoE]
 		}
 	}()
 
@@ -825,13 +996,15 @@ func StrictGenerate(model *moe.IntentMoE, input string, w2v *word2vec.SimpleWord
 	batchSize := 1
 	hiddenSize := model.Decoder.LSTM.HiddenSize
 	
-	// Initial hidden state from context mean
-	hiddenState, err := ctx.Mean(1)
+	// Initial hidden state from the last token of the context (condensed intent)
+	lastIdx := ctx.Shape[1] - 1
+	hiddenState, err := ctx.Slice(1, lastIdx, lastIdx+1)
 	if err != nil {
 		log.Printf("StrictGenerate Error (Initial Hidden): %v", err)
 		return ""
 	}
-	
+	hiddenState, _ = hiddenState.Reshape([]int{batchSize, ctx.Shape[2]})
+
 	// Projection if needed (copying logic from Decoder.Forward)
 	if hiddenState.Shape[1] != hiddenSize {
 		if hiddenState.Shape[1] > hiddenSize {
@@ -850,15 +1023,23 @@ func StrictGenerate(model *moe.IntentMoE, input string, w2v *word2vec.SimpleWord
 	// Track counts for frequency penalty during generation
 	counts := make(map[int]int)
 
+	var path []string
+	ctxNorm := ctx.L2Norm()
+	fmt.Printf("📡 Encoder Context Strength: %.4f\n", ctxNorm)
+
 	for i := 0; i < maxLen; i++ {
 		inputT := tensor.NewTensor([]int{1, 1}, []float64{float64(currentTokenID)}, false)
 
-		// Step-by-step decoding
-		logits, nextHidden, nextCell, err := model.Decoder.DecodeStep(inputT, hiddenState, cellState, ctx)
+		oldHiddenNorm := hiddenState.L2Norm()
+		// 1. Step-by-step decoding with expert tracking
+		logits, nextHidden, nextCell, expertID, err := model.Decoder.DecodeStepWithExpert(inputT, hiddenState, cellState, ctx)
 		if err != nil {
 			log.Printf("StrictGenerate Error (DecodeStep): %v", err)
 			break
 		}
+		newHiddenNorm := nextHidden.L2Norm()
+		fmt.Printf("🔍 Step %d | Context Influence: %.4f | Expert: E%d\n", i, math.Abs(newHiddenNorm-oldHiddenNorm), expertID)
+
 		hiddenState = nextHidden
 		cellState = nextCell
 
@@ -881,9 +1062,8 @@ func StrictGenerate(model *moe.IntentMoE, input string, w2v *word2vec.SimpleWord
 			logits.Data[unkID] = -1e9
 		}
 
-		// 7. Pick Best Word using Nucleus Sampling (Sentences)
-		// Optimize temperature and top-p to allow experts to express their "specialty"
-		bestID, err := moe.SampleFromLogits(logits, 0.7, 10, 0.9) // Temp 0.7, Top-P 0.9
+		// 7. Pick Best Word using Greedy Search for debugging
+		bestID, err := moe.SampleFromLogits(logits, 0.1, 1, 1.0) // Temp 0.1, Top-K 1, Top-P 1.0
 		if err != nil {
 			log.Printf("StrictGenerate Error (Sampling): %v", err)
 			break
@@ -896,6 +1076,19 @@ func StrictGenerate(model *moe.IntentMoE, input string, w2v *word2vec.SimpleWord
 		resIDs = append(resIDs, bestID)
 		counts[bestID]++
 		currentTokenID = bestID
+
+		// Top-K Diagnostic summary
+		probs := tensor.Softmax(logits)
+		topIndices, topValues := getTopK(probs, 5)
+		fmt.Printf("🔍 Step %d | Top Choices:\n", i)
+		for k := 0; k < 5; k++ {
+			word := model.SentenceVocab.GetWord(topIndices[k])
+			fmt.Printf("   [%d] %-12s (%.2f%%)\n", k+1, word, topValues[k]*100)
+		}
+
+		// 2. Record the word and the expert that produced it
+		word := model.SentenceVocab.GetWord(bestID)
+		path = append(path, fmt.Sprintf("%s(E%d)", word, expertID))
 	}
 
 	// Convert IDs back to words
@@ -906,6 +1099,11 @@ func StrictGenerate(model *moe.IntentMoE, input string, w2v *word2vec.SimpleWord
 		if word != "<s>" && word != "</s>" && word != "<pad>" && word != "UNK" {
 			result = append(result, word)
 		}
+	}
+
+	// 3. Print the diagnostic expert path
+	if len(path) > 0 {
+		fmt.Printf("\n🧠 Expert Path: %s\n", strings.Join(path, " -> "))
 	}
 
 	return strings.Join(result, " ")
@@ -1129,10 +1327,16 @@ func DetachModel(model *moe.IntentMoE) {
 			param.Creator = nil
 			param.Mask = nil
 			param.Operation = nil
+			// Temporary tensors used in forward pass are NOT parameters.
+			// model.ClearState() will handle them.
 		}
 	}
 	// Clear all intermediate tensors and cached states across all layers
 	model.ClearState()
+	// Optionally clear decoder MoE if it exists and is not in ActiveLayers
+	if model.Decoder.OutputMoE != nil {
+		model.Decoder.OutputMoE.ClearState()
+	}
 }
 
 func visualizeExpertUtilization() {
@@ -1237,30 +1441,28 @@ func analyzeExpertSpecialization(model *moe.IntentMoE, w2v *word2vec.SimpleWord2
 }
 
 func cleanTokenize(text string) []string {
+	text = strings.ToLower(text)
 	var tokens []string
-	var currentToken strings.Builder
+	var currentWord strings.Builder
+
 	for _, r := range text {
-		if unicode.IsSpace(r) {
-			if currentToken.Len() > 0 {
-				tokens = append(tokens, strings.ToLower(currentToken.String()))
-				currentToken.Reset()
+		if unicode.IsLetter(r) || unicode.IsNumber(r) || r == '\'' {
+			currentWord.WriteRune(r)
+		} else {
+			// Save the word built so far
+			if currentWord.Len() > 0 {
+				tokens = append(tokens, currentWord.String())
+				currentWord.Reset()
 			}
-		} else if unicode.IsPunct(r) || unicode.IsSymbol(r) {
-			if r == '\'' && currentToken.Len() > 0 {
-				currentToken.WriteRune(r)
-			} else {
-				if currentToken.Len() > 0 {
-					tokens = append(tokens, strings.ToLower(currentToken.String()))
-					currentToken.Reset()
-				}
+			// If it's punctuation (and not whitespace), make it a token
+			if unicode.IsPunct(r) || r == '?' || r == '!' {
 				tokens = append(tokens, string(r))
 			}
-		} else {
-			currentToken.WriteRune(r)
 		}
 	}
-	if currentToken.Len() > 0 {
-		tokens = append(tokens, strings.ToLower(currentToken.String()))
+	// Catch trailing word
+	if currentWord.Len() > 0 {
+		tokens = append(tokens, currentWord.String())
 	}
 	return tokens
 }
@@ -1292,6 +1494,107 @@ func InitializeXavier(p *tensor.Tensor) {
 		// Uniform distribution between -limit and +limit
 		p.Data[i] = (rand.Float64() * 2 * limit) - limit
 	}
+}
+
+// InitializeOrthogonal fills param with an orthonormal row basis using the Gram-Schmidt
+// process, then scales by gain. This is the recommended initializer for LSTM weight
+// matrices and prevents vanishing/exploding gradients from the start.
+func InitializeOrthogonal(param *tensor.Tensor, gain float64) {
+	if param == nil || len(param.Shape) < 2 {
+		InitializeXavier(param)
+		return
+	}
+
+	// 1. Fill with random normal distribution
+	for i := range param.Data {
+		param.Data[i] = rand.NormFloat64()
+	}
+
+	rows := param.Shape[0]
+	cols := len(param.Data) / rows
+	if cols == 0 {
+		return
+	}
+
+	// 2. Gram-Schmidt orthogonalization
+	for i := 0; i < rows; i++ {
+		rowI := param.Data[i*cols : (i+1)*cols]
+		for j := 0; j < i; j++ {
+			rowJ := param.Data[j*cols : (j+1)*cols]
+			// Compute dot product of rowI and rowJ
+			dot := 0.0
+			for k := range rowI {
+				dot += rowI[k] * rowJ[k]
+			}
+			// Subtract projection: rowI -= dot * rowJ
+			for k := range rowI {
+				rowI[k] -= dot * rowJ[k]
+			}
+		}
+		// Normalize the row
+		norm := 0.0
+		for _, v := range rowI {
+			norm += v * v
+		}
+		norm = math.Sqrt(norm + 1e-8)
+		for k := range rowI {
+			rowI[k] = (rowI[k] / norm) * gain
+		}
+	}
+}
+
+// InitializeLSTMBias zeros the bias tensor then sets the forget-gate chunk to 1.0.
+// The LSTM gates are ordered [f, i, c, o]; the forget gate is the 2nd chunk (index hiddenSize..2*hiddenSize).
+// Setting it to 1.0 at init allows the LSTM to pass gradients back unimpeded from the beginning.
+func InitializeLSTMBias(param *tensor.Tensor, hiddenSize int) {
+	if param == nil {
+		return
+	}
+	// Zero everything first
+	for i := range param.Data {
+		param.Data[i] = 0
+	}
+	// Set Forget Gate bias to 1.0 — the 2nd gate in the [f, i, c, o] ordering
+	forgetStart := hiddenSize
+	forgetEnd := 2 * hiddenSize
+	if forgetEnd > len(param.Data) {
+		forgetEnd = len(param.Data)
+	}
+	for i := forgetStart; i < forgetEnd; i++ {
+		param.Data[i] = 1.0
+	}
+	// For BiLSTM: if bias is the backward pass (second half), set that forget gate too
+	if len(param.Data) == 8*hiddenSize {
+		backwardForgetStart := 5 * hiddenSize
+		backwardForgetEnd := 6 * hiddenSize
+		for i := backwardForgetStart; i < backwardForgetEnd; i++ {
+			param.Data[i] = 1.0
+		}
+	}
+}
+
+// isLSTMWeight returns true when the tensor looks like an LSTM gate weight matrix
+// (i.e. 2D and the shorter dim is consistent with LSTM gate structure).
+// The LSTMCell stores separate Wf/Wi/Wc/Wo matrices shaped [inputSize+hiddenSize, hiddenSize].
+func isLSTMWeight(param *tensor.Tensor) bool {
+	if param == nil || len(param.Shape) != 2 {
+		return false
+	}
+	// Heuristic: LSTM weight matrices are square or have a larger first dimension
+	// (inputSize + hiddenSize > hiddenSize). They are never 1-row (bias) tensors.
+	return param.Shape[0] > 1 && param.Shape[1] > 1
+}
+
+// isLSTMBias returns true when the tensor looks like an LSTM gate bias vector.
+// The LSTMCell stores separate 1D or [1, hiddenSize] bias tensors.
+func isLSTMBias(param *tensor.Tensor, hiddenSize int) bool {
+	if param == nil {
+		return false
+	}
+	size := len(param.Data)
+	// LSTM bias is exactly hiddenSize elements (one bias per gate, 4 gates total if stacked)
+	// or hiddenSize for individual gate biases (Bf/Bi/Bc/Bo each [1, hiddenSize]).
+	return size == hiddenSize || size == 4*hiddenSize || size == 8*hiddenSize
 }
 
 func ValidateChat(model *moe.IntentMoE, valPairs []struct{ Q, A string }, w2v *word2vec.SimpleWord2Vec) float64 {
@@ -1353,19 +1656,20 @@ func ValidateChat(model *moe.IntentMoE, valPairs []struct{ Q, A string }, w2v *w
 			continue
 		}
 
-		if len(logits) == 0 {
-			continue
-		}
-
-		// Calculate Weighted Loss (consistent with training)
+		// Calculate Loss with proper targets for evaluation
 		targetSeqLen := targetT.Shape[1] - 1
 		targets := make([]int, targetSeqLen)
 		for t := 0; t < targetSeqLen; t++ {
 			targets[t] = int(targetT.Data[t+1])
 		}
 
-		// unkWeight and unkPenalty from training
-		loss, _ := WeightedCrossEntropy(logits[0], targets, model.SentenceVocab.PaddingTokenID, unkID, 0.01, 2.0, 0.0)
+		// Recreate loss weights for validation context
+		valWeights := make([]float64, model.SentenceVocab.Size())
+		for i := range valWeights { valWeights[i] = 1.0 }
+		valWeights[unkID] = 0.01
+		valWeights[model.SentenceVocab.PaddingTokenID] = 0.0
+
+		loss, _ := WeightedCrossEntropy(logits[0], targets, valWeights, 0.0)
 		totalLoss += loss
 		tokenCount++
 
@@ -1384,10 +1688,10 @@ func ValidateChat(model *moe.IntentMoE, valPairs []struct{ Q, A string }, w2v *w
 func MuteUNKToken(model *moe.IntentMoE, unkID int) {
 	// Access the Output Layer weights
 	outLayer := model.Decoder.OutputLayer
-
-	// Shape is [HiddenSize, VocabSize]
-	if len(outLayer.Weights.Shape) != 2 {
-		log.Printf("⚠️ MuteUNKToken: OutputLayer weights are not 2D, skipping. Shape: %v", outLayer.Weights.Shape)
+	if outLayer == nil {
+		if model.Decoder.OutputMoE != nil {
+			log.Println("ℹ️  MuteUNKToken: Decoder uses MoE output. UNK muting will be handled during generation via logit filtering.")
+		}
 		return
 	}
 	hiddenSize := outLayer.Weights.Shape[0]
@@ -1410,7 +1714,7 @@ func MuteUNKToken(model *moe.IntentMoE, unkID int) {
 	}
 }
 
-func WeightedCrossEntropy(logits *tensor.Tensor, targets []int, padID int, unkID int, unkWeight float64, unkPenalty float64, labelSmoothing float64) (float64, *tensor.Tensor) {
+func WeightedCrossEntropy(logits *tensor.Tensor, targets []int, weights []float64, labelSmoothing float64) (float64, *tensor.Tensor) {
 	// Flatten batch and sequence dimensions to handle 3D tensors [Batch, Seq, Vocab]
 	vocabSize := logits.Shape[len(logits.Shape)-1]
 	numClasses := vocabSize
@@ -1427,8 +1731,8 @@ func WeightedCrossEntropy(logits *tensor.Tensor, targets []int, padID int, unkID
 		}
 		targetID := targets[i]
 
-		// 1. Skip Padding
-		if targetID == padID {
+		// 1. Skip if weight is 0 (Padding)
+		if weights[targetID] == 0.0 {
 			continue
 		}
 
@@ -1453,11 +1757,7 @@ func WeightedCrossEntropy(logits *tensor.Tensor, targets []int, padID int, unkID
 		prob := softmax[targetID] * invSumExp
 		loss := -math.Log(prob + 1e-12)
 
-		currentWeight := 1.0
-		if targetID == unkID {
-			// Apply the user's requested logic: scale UNK influence and apply penalty
-			currentWeight = unkWeight * unkPenalty
-		}
+		currentWeight := weights[targetID]
 
 		totalLoss += loss * currentWeight
 		count++
@@ -1474,10 +1774,6 @@ func WeightedCrossEntropy(logits *tensor.Tensor, targets []int, padID int, unkID
 			}
 
 			g := (sj - targetProb) * currentWeight
-			// Strongly penalize predicting UNK when it's NOT the target
-			if j == unkID && targetID != unkID {
-				g *= unkPenalty
-			}
 			grad.Data[offset+j] = g
 		}
 	}
@@ -1491,6 +1787,132 @@ func WeightedCrossEntropy(logits *tensor.Tensor, targets []int, padID int, unkID
 		return avgLoss, grad
 	}
 	return 0, grad
+}
+
+func isCollapsed(tokens []string, vocab *mainvocab.Vocabulary) bool {
+	if len(tokens) < 5 {
+		return false
+	}
+
+	// Count occurrences of the top token
+	counts := make(map[string]int)
+	maxCount := 0
+	for _, t := range tokens {
+		counts[t]++
+		if counts[t] > maxCount {
+			maxCount = counts[t]
+		}
+	}
+
+	// If more than 60% of the response is the same token (usually '.' or 'UNK')
+	ratio := float64(maxCount) / float64(len(tokens))
+	return ratio > 0.60
+}
+
+func GenerateTokens(model *moe.IntentMoE, input string, maxLen int) []string {
+	// Quiet version for circuit breaker
+	tokens := cleanTokenize(input)
+	if len(tokens) == 0 {
+		return nil
+	}
+	inputIDs := make([]float64, len(tokens))
+	for i, t := range tokens {
+		inputIDs[i] = float64(lookupVocab(t, model.SentenceVocab))
+	}
+	inputTensor := tensor.NewTensor([]int{1, len(inputIDs)}, inputIDs, false)
+
+	emb, _ := model.Embedding.Forward(inputTensor)
+	ctx, _ := model.Encoder.Forward(emb)
+	if ctx.Shape[1] == 0 {
+		return nil
+	}
+
+	batchSize := 1
+	hiddenSize := model.Decoder.LSTM.HiddenSize
+	lastIdx := ctx.Shape[1] - 1
+	hiddenState, _ := ctx.Slice(1, lastIdx, lastIdx+1)
+	hiddenState, _ = hiddenState.Reshape([]int{batchSize, ctx.Shape[2]})
+
+	if hiddenState.Shape[1] != hiddenSize {
+		if hiddenState.Shape[1] > hiddenSize {
+			hiddenState, _ = hiddenState.Slice(1, 0, hiddenSize)
+		} else {
+			padding := tensor.NewTensor([]int{batchSize, hiddenSize - hiddenState.Shape[1]}, make([]float64, batchSize*(hiddenSize-hiddenState.Shape[1])), false)
+			hiddenState, _ = tensor.Concat([]*tensor.Tensor{hiddenState, padding}, 1)
+		}
+	}
+	cellState := tensor.NewTensor([]int{batchSize, hiddenSize}, make([]float64, batchSize*hiddenSize), false)
+
+	resIDs := []int{model.SentenceVocab.BosID}
+	currentTokenID := model.SentenceVocab.BosID
+
+	for i := 0; i < maxLen; i++ {
+		inputT := tensor.NewTensor([]int{1, 1}, []float64{float64(currentTokenID)}, false)
+		logits, nextHidden, nextCell, _, err := model.Decoder.DecodeStepWithExpert(inputT, hiddenState, cellState, ctx)
+		if err != nil {
+			break
+		}
+		hiddenState = nextHidden
+		cellState = nextCell
+
+		// Mute UNK and PAD
+		logits.Data[model.SentenceVocab.PaddingTokenID] = -1e9
+		unkID := model.SentenceVocab.GetTokenID("UNK")
+		if unkID != -1 {
+			logits.Data[unkID] = -1e9
+		}
+
+		bestID, _ := moe.SampleFromLogits(logits, 0.1, 1, 1.0)
+		if bestID == model.SentenceVocab.EosID {
+			break
+		}
+		resIDs = append(resIDs, bestID)
+		currentTokenID = bestID
+	}
+
+	var result []string
+	for _, id := range resIDs[1:] {
+		result = append(result, model.SentenceVocab.GetWord(id))
+	}
+	return result
+}
+
+func getContextVector(model *moe.IntentMoE, query string) *tensor.Tensor {
+	tokens := cleanTokenize(query)
+	ids := make([]float64, len(tokens))
+	for i, t := range tokens {
+		ids[i] = float64(lookupVocab(t, model.SentenceVocab))
+	}
+	if len(ids) == 0 {
+		ids = []float64{0}
+	}
+	input := tensor.NewTensor([]int{1, len(ids)}, ids, false)
+	emb, _ := model.Embedding.Forward(input)
+	ctx, _ := model.Encoder.Forward(emb)
+	// Return the sequence-mean for similarity checks
+	v, _ := ctx.Mean(1)
+	return v
+}
+
+func DiagnosticEncoderSimilarity(model *moe.IntentMoE, q1, q2 string) {
+	v1 := getContextVector(model, q1)
+	v2 := getContextVector(model, q2)
+
+	// Calculate Cosine Similarity
+	dot := 0.0
+	for i := range v1.Data {
+		dot += v1.Data[i] * v2.Data[i]
+	}
+	norm1 := v1.L2Norm()
+	norm2 := v2.L2Norm()
+	similarity := dot / (norm1 * norm2)
+
+	fmt.Printf("📊 Similarity ['%s' vs '%s']: %.4f\n", q1, q2, similarity)
+	if similarity > 0.98 {
+		fmt.Println("⚠️  CRITICAL: Vectors are too similar! The Encoder is collapsing.")
+	} else {
+		fmt.Println("✅ Encoder is successfully differentiating between these intents.")
+	}
 }
 
 type Hypothesis struct {

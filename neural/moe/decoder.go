@@ -19,8 +19,10 @@ type RNNDecoder struct {
 	LSTM *nn.LSTM
 	// Layer normalization after LSTM
 	LayerNorm *nn.LayerNorm
-	// Linear layer to project LSTM output to vocabulary size
+	// Linear layer to project LSTM output to vocabulary size (used if not using MoE)
 	OutputLayer *nn.Linear
+	// MoE Layer for output projection (optional)
+	OutputMoE *MoELayer
 	// Output vocabulary size
 	OutputVocabSize int
 	// Embedding layer for the decoder input
@@ -43,7 +45,7 @@ type RNNDecoder struct {
 }
 
 // NewRNNDecoder creates a new RNNDecoder.
-func NewRNNDecoder(inputDim, outputVocabSize, hiddenSize, maxAttentionHeads, numLayers int, dropoutRate float64) (*RNNDecoder, error) {
+func NewRNNDecoder(inputDim, outputVocabSize, hiddenSize, maxAttentionHeads, numLayers int, dropoutRate float64, numExperts int) (*RNNDecoder, error) {
 	// LSTM input dimension will be embeddingDim (context comes in via cross-attention after LSTM)
 	lstmInputDim := inputDim
 
@@ -58,10 +60,24 @@ func NewRNNDecoder(inputDim, outputVocabSize, hiddenSize, maxAttentionHeads, num
 	// Create layer normalization for the combined [hidden + attention] vector
 	layerNorm := nn.NewLayerNorm(hiddenSize + inputDim)
 
-	// Combine hidden (hiddenSize) and attention (inputDim)
-	outputLayer, err := nn.NewLinear(hiddenSize+inputDim, outputVocabSize)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create output linear layer for decoder: %w", err)
+	// Create output layer
+	var outputLayer *nn.Linear
+	var outputMoE *MoELayer
+	
+	if numExperts > 1 {
+		expertBuilder := func(expertIdx int) (Expert, error) {
+			return NewFeedForwardExpert(hiddenSize+inputDim, (hiddenSize+inputDim)*2, outputVocabSize)
+		}
+		moeLayer, err := NewMoELayer(hiddenSize+inputDim, outputVocabSize, numExperts, 1, expertBuilder)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create MoE output layer: %w", err)
+		}
+		outputMoE = moeLayer
+	} else {
+		outputLayer, err = nn.NewLinear(hiddenSize+inputDim, outputVocabSize)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create output linear layer: %w", err)
+		}
 	}
 
 	embedding := nn.NewEmbedding(outputVocabSize, inputDim)
@@ -72,15 +88,15 @@ func NewRNNDecoder(inputDim, outputVocabSize, hiddenSize, maxAttentionHeads, num
 	}
 
 	return &RNNDecoder{
-			LSTM:              lstm,
-			LayerNorm:         layerNorm,
-			OutputLayer:       outputLayer,
-			OutputVocabSize:   outputVocabSize,
-			Embedding:         embedding,
-			MaxAttentionHeads: maxAttentionHeads,
-			Attention:         attention,
-		},
-		nil
+		LSTM:              lstm,
+		LayerNorm:         layerNorm,
+		OutputLayer:       outputLayer,
+		OutputMoE:         outputMoE,
+		OutputVocabSize:   outputVocabSize,
+		Embedding:         embedding,
+		MaxAttentionHeads: maxAttentionHeads,
+		Attention:         attention,
+	}, nil
 }
 
 // Forward performs the forward pass of the RNNDecoder.
@@ -123,9 +139,17 @@ func (d *RNNDecoder) Forward(contextVector, targetSequence *Tensor, scheduledSam
 	hiddenState := initialHidden
 	cellState := NewTensor([]int{batchSize, hiddenSize}, make([]float64, batchSize*hiddenSize), false)
 
+	// Context Injection Multiplier
+	const contextMultiplier = 2.0
+	ctxMean, _ := contextVector.Mean(1)
+	ctxMeanReshaped, _ := ctxMean.Reshape([]int{batchSize, 1, contextVector.Shape[2]})
+
 	if scheduledSamplingProb == 0.0 {
 		fullInput, _ := targetSequence.Slice(1, 0, maxSequenceLength-1)
 		allEmbedded, _ := d.Embedding.Forward(fullInput)
+
+		// Reinforced Context Injection
+		allEmbedded, _ = allEmbedded.AddWithBroadcast(ctxMeanReshaped.Scale(contextMultiplier))
 
 		// 1. LSTM first
 		allHidden, lastCell, err := d.LSTM.Forward(allEmbedded, initialHidden, cellState)
@@ -152,7 +176,12 @@ func (d *RNNDecoder) Forward(contextVector, targetSequence *Tensor, scheduledSam
 			return nil, err
 		}
 
-		allLogits, err := d.OutputLayer.Forward(normed)
+		var allLogits *Tensor
+		if d.OutputMoE != nil {
+			allLogits, err = d.OutputMoE.Forward(normed)
+		} else {
+			allLogits, err = d.OutputLayer.Forward(normed)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -176,6 +205,10 @@ func (d *RNNDecoder) Forward(contextVector, targetSequence *Tensor, scheduledSam
 	for t := 0; t < maxSequenceLength-1; t++ {
 		d.decoderInputs = append(d.decoderInputs, decoderInput)
 		embeddedInput, _ := d.Embedding.Forward(decoderInput)
+		
+		// Reinforced Context Injection
+		embeddedInput, _ = embeddedInput.Add(ctxMeanReshaped.Scale(contextMultiplier))
+		
 		d.embeddedInputs = append(d.embeddedInputs, embeddedInput)
 
 		// 1. LSTM
@@ -200,7 +233,12 @@ func (d *RNNDecoder) Forward(contextVector, targetSequence *Tensor, scheduledSam
 		d.combinedInputs = append(d.combinedInputs, combined)
 
 		normed, _ := d.LayerNorm.Forward(combined)
-		outputLogits, _ := d.OutputLayer.Forward(normed)
+		var outputLogits *Tensor
+		if d.OutputMoE != nil {
+			outputLogits, _ = d.OutputMoE.Forward(normed)
+		} else {
+			outputLogits, _ = d.OutputLayer.Forward(normed)
+		}
 		resLogits, _ := outputLogits.Reshape([]int{batchSize, d.OutputVocabSize})
 		outputs = append(outputs, resLogits)
 
@@ -304,18 +342,32 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
 		if err != nil {
 			return fmt.Errorf("layer norm failed during backward re-vectorization: %w", err)
 		}
-		_, err = d.OutputLayer.Forward(normed)
+		if d.OutputMoE != nil {
+			_, err = d.OutputMoE.Forward(normed)
+		} else {
+			_, err = d.OutputLayer.Forward(normed)
+		}
 		if err != nil {
-			return fmt.Errorf("output layer failed during backward re-vectorization: %w", err)
+			return fmt.Errorf("output layer forward failed during backward re-vectorization: %w", err)
 		}
 	}
 
 	// --- Optimized Vectorized Backward Path ---
 	// 1. Output Layer Backward
-	if err := d.OutputLayer.Backward(allGrads); err != nil {
-		return fmt.Errorf("output layer backward failed: %w", err)
+	var normedGrad *Tensor
+	if d.OutputMoE != nil {
+		if err := d.OutputMoE.Backward(allGrads); err != nil {
+			return fmt.Errorf("output MoE backward failed: %w", err)
+		}
+		if len(d.OutputMoE.Inputs()) > 0 {
+			normedGrad = d.OutputMoE.Inputs()[0].Grad
+		}
+	} else if d.OutputLayer != nil {
+		if err := d.OutputLayer.Backward(allGrads); err != nil {
+			return fmt.Errorf("output layer backward failed: %w", err)
+		}
+		normedGrad = d.OutputLayer.Input().Grad
 	}
-	normedGrad := d.OutputLayer.Input().Grad
 
 	// 2. LayerNorm Backward
 	if err := d.LayerNorm.Backward(normedGrad); err != nil {
@@ -354,10 +406,35 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
 	}
 
 	// 7. Embedding Backward
-	inputGrad := d.LSTM.GetInputGrad()
-	if inputGrad != nil {
-		return d.Embedding.Backward(inputGrad)
-	}
+	inputGrad := d.LSTM.GetInputGrad() // This is the grad for (Embedded + ContextMean)
+if inputGrad != nil {
+    // Since we used Add(ctxMean), the gradient flows 1:1 to both branches
+    
+    // Branch A: To Embedding
+    if err := d.Embedding.Backward(inputGrad); err != nil {
+        return err
+    }
+    
+    // Branch B: To Context Vector (via Mean and Multiplier)
+    const contextMultiplier = 2.0
+    // 1. Sum over decoder sequence dimension to get grad for ctxMean
+    // inputGrad shape [Batch, T, Dim], we want [Batch, Dim]
+    gradCtxMean, _ := inputGrad.Sum(1) 
+    
+    // 2. Distribute back to encoder sequence dimension
+    // ctxMean = sum(contextVector) / S, so dL/dv_i = (dL/dctxMean) / S
+    encSeqLen := d.contextVector.Shape[1]
+    distGrad := gradCtxMean.Scale(contextMultiplier / float64(encSeqLen))
+    
+    // expandedGrad shape [Batch, encSeqLen, Dim]
+    expandedGrad := distGrad.Expand([]int{batchSize, encSeqLen, embeddingDim})
+    
+    if d.contextVector.Grad == nil {
+        d.contextVector.Grad = expandedGrad
+    } else {
+        d.contextVector.Grad, _ = d.contextVector.Grad.Add(expandedGrad)
+    }
+}
 
 	return nil
 }
@@ -375,11 +452,16 @@ func (d *RNNDecoder) DecodeStep(inputToken *Tensor, prevHiddenState, prevCellSta
 	batchSize := inputToken.Shape[0]
 	hiddenSize := d.LSTM.HiddenSize
 
-	// 1. Embed
 	embeddedInput, err := d.Embedding.Forward(inputToken)
 	if err != nil {
 		return nil, nil, nil, err
 	}
+
+	// Reinforced Context Injection
+	const contextMultiplier = 2.0
+	ctxMean, _ := contextVector.Mean(1)
+	ctxMeanReshaped, _ := ctxMean.Reshape([]int{batchSize, 1, contextVector.Shape[2]})
+	embeddedInput, _ = embeddedInput.AddWithBroadcast(ctxMeanReshaped.Scale(contextMultiplier))
 
 	// 2. LSTM
 	reshapedIn, _ := embeddedInput.Reshape([]int{batchSize, embeddedInput.Shape[2]})
@@ -398,13 +480,36 @@ func (d *RNNDecoder) DecodeStep(inputToken *Tensor, prevHiddenState, prevCellSta
 	// 4. Combined
 	combined, _ := Concat([]*Tensor{hiddenQuery, attentionOutput}, 2)
 	normed, _ := d.LayerNorm.Forward(combined)
-	outputLogits, err := d.OutputLayer.Forward(normed)
+	
+	var outputLogits *Tensor
+	if d.OutputMoE != nil {
+		outputLogits, err = d.OutputMoE.Forward(normed)
+	} else {
+		outputLogits, err = d.OutputLayer.Forward(normed)
+	}
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
 	resLogits, _ := outputLogits.Reshape([]int{batchSize, d.OutputVocabSize})
 	return resLogits, hiddenState, cellState, nil
+}
+
+// DecodeStepWithExpert is like DecodeStep but also returns the ID of the top expert used.
+func (d *RNNDecoder) DecodeStepWithExpert(input *Tensor, prevHiddenState, prevCellState, contextVector *Tensor) (*Tensor, *Tensor, *Tensor, int, error) {
+	logits, h, c, err := d.DecodeStep(input, prevHiddenState, prevCellState, contextVector)
+	if err != nil {
+		return nil, nil, nil, 0, err
+	}
+	
+	expertID := -1 // Use -1 as default to detect if MoE was skipped or failed
+	if d.OutputMoE != nil && len(d.OutputMoE.TopExpertIDs) > 0 {
+		expertID = d.OutputMoE.TopExpertIDs[0]
+	} else if d.OutputLayer != nil {
+		expertID = 0 // Standard layer acts as Expert 0
+	}
+	
+	return logits, h, c, expertID, nil
 }
 
 // Parameters returns all learnable parameters of the RNNDecoder.
@@ -415,7 +520,12 @@ func (d *RNNDecoder) Parameters() []*Tensor {
 	if d.LayerNorm != nil {
 		params = append(params, d.LayerNorm.Parameters()...)
 	}
-	params = append(params, d.OutputLayer.Parameters()...)
+	if d.OutputLayer != nil {
+		params = append(params, d.OutputLayer.Parameters()...)
+	}
+	if d.OutputMoE != nil {
+		params = append(params, d.OutputMoE.Parameters()...)
+	}
 	params = append(params, d.Attention.Parameters()...)
 	return params
 }
@@ -443,25 +553,30 @@ func (d *RNNDecoder) ResizeOutputLayer(newSize int) {
 	}
 
 	// 2. Resize Output Layer (Linear)
-	oldOutput := d.OutputLayer
-	d.OutputLayer, _ = nn.NewLinear(inputDim, newSize)
-	// Copy old weights [InputDim, VocabSize]
-	// In row-major format, weights are [inputDim * newSize]
-	// Column i represents weights for token i.
-	for i := 0; i < inputDim; i++ {
-		for j := 0; j < copyLimit; j++ {
-			oldIdx := i*oldVocabSize + j
-			newIdx := i*newSize + j
-			if oldIdx < len(oldOutput.Weights.Data) && newIdx < len(d.OutputLayer.Weights.Data) {
-				d.OutputLayer.Weights.Data[newIdx] = oldOutput.Weights.Data[oldIdx]
+	if d.OutputLayer != nil {
+		oldOutput := d.OutputLayer
+		d.OutputLayer, _ = nn.NewLinear(inputDim, newSize)
+		// Copy old weights [InputDim, VocabSize]
+		// In row-major format, weights are [inputDim * newSize]
+		// Column i represents weights for token i.
+		for i := 0; i < inputDim; i++ {
+			for j := 0; j < copyLimit; j++ {
+				oldIdx := i*oldVocabSize + j
+				newIdx := i*newSize + j
+				if oldIdx < len(oldOutput.Weights.Data) && newIdx < len(d.OutputLayer.Weights.Data) {
+					d.OutputLayer.Weights.Data[newIdx] = oldOutput.Weights.Data[oldIdx]
+				}
 			}
 		}
-	}
-	// Copy old biases
-	if oldOutput.Biases != nil && d.OutputLayer.Biases != nil {
-		for j := 0; j < copyLimit; j++ {
-			d.OutputLayer.Biases.Data[j] = oldOutput.Biases.Data[j]
+		// Copy old biases
+		if oldOutput.Biases != nil && d.OutputLayer.Biases != nil {
+			for j := 0; j < copyLimit; j++ {
+				d.OutputLayer.Biases.Data[j] = oldOutput.Biases.Data[j]
+			}
 		}
+	} else if d.OutputMoE != nil {
+		d.OutputMoE.ResizeExperts(newSize)
+		fmt.Printf("✅ Resized all %d Decoder Experts to %d\n", len(d.OutputMoE.Experts), newSize)
 	}
 
 	// 3. Resize LayerNorm only if dimensions changed

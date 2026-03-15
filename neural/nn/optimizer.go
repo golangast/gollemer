@@ -11,6 +11,7 @@ type Optimizer interface {
 	Step()
 	ZeroGrad()
 	ClipGradients()
+	SetLearningRate(lr float64)
 }
 
 // Adam represents the Adam optimizer.
@@ -24,6 +25,7 @@ type Adam struct {
 	m            map[*Tensor]*Tensor // 1st moment vector
 	v            map[*Tensor]*Tensor // 2nd moment vector
 	clipValue    float64
+	WeightDecay  float64
 }
 
 // NewOptimizer creates a new Adam optimizer.
@@ -38,6 +40,7 @@ func NewOptimizer(parameters []*Tensor, learningRate float64, clipValue float64)
 		m:            make(map[*Tensor]*Tensor),
 		v:            make(map[*Tensor]*Tensor),
 		clipValue:    clipValue,
+		WeightDecay:  0.0001, // Default weight decay
 	}
 }
 
@@ -98,7 +101,8 @@ func (o *Adam) Step() {
 			v[i] = o.beta2*v[i] + (1-o.beta2)*(g1*g1)
 			mHat1 := m[i] / biasCorrection1
 			vHat1 := v[i] / biasCorrection2
-			param[i] -= o.learningRate * mHat1 / (math.Sqrt(vHat1) + o.epsilon)
+			// Apply decoupled weight decay (AdamW)
+			param[i] -= o.learningRate * (mHat1/(math.Sqrt(vHat1)+o.epsilon) + o.WeightDecay*param[i])
 
 			// Unroll 2
 			g2 := grad[i+1]
@@ -106,7 +110,7 @@ func (o *Adam) Step() {
 			v[i+1] = o.beta2*v[i+1] + (1-o.beta2)*(g2*g2)
 			mHat2 := m[i+1] / biasCorrection1
 			vHat2 := v[i+1] / biasCorrection2
-			param[i+1] -= o.learningRate * mHat2 / (math.Sqrt(vHat2) + o.epsilon)
+			param[i+1] -= o.learningRate * (mHat2/(math.Sqrt(vHat2)+o.epsilon) + o.WeightDecay*param[i+1])
 
 			// Unroll 3
 			g3 := grad[i+2]
@@ -114,7 +118,7 @@ func (o *Adam) Step() {
 			v[i+2] = o.beta2*v[i+2] + (1-o.beta2)*(g3*g3)
 			mHat3 := m[i+2] / biasCorrection1
 			vHat3 := v[i+2] / biasCorrection2
-			param[i+2] -= o.learningRate * mHat3 / (math.Sqrt(vHat3) + o.epsilon)
+			param[i+2] -= o.learningRate * (mHat3/(math.Sqrt(vHat3)+o.epsilon) + o.WeightDecay*param[i+2])
 
 			// Unroll 4
 			g4 := grad[i+3]
@@ -122,7 +126,7 @@ func (o *Adam) Step() {
 			v[i+3] = o.beta2*v[i+3] + (1-o.beta2)*(g4*g4)
 			mHat4 := m[i+3] / biasCorrection1
 			vHat4 := v[i+3] / biasCorrection2
-			param[i+3] -= o.learningRate * mHat4 / (math.Sqrt(vHat4) + o.epsilon)
+			param[i+3] -= o.learningRate * (mHat4/(math.Sqrt(vHat4)+o.epsilon) + o.WeightDecay*param[i+3])
 
 			// Unroll 5
 			g5 := grad[i+4]
@@ -130,7 +134,7 @@ func (o *Adam) Step() {
 			v[i+4] = o.beta2*v[i+4] + (1-o.beta2)*(g5*g5)
 			mHat5 := m[i+4] / biasCorrection1
 			vHat5 := v[i+4] / biasCorrection2
-			param[i+4] -= o.learningRate * mHat5 / (math.Sqrt(vHat5) + o.epsilon)
+			param[i+4] -= o.learningRate * (mHat5/(math.Sqrt(vHat5)+o.epsilon) + o.WeightDecay*param[i+4])
 
 			// Unroll 6
 			g6 := grad[i+5]
@@ -138,7 +142,7 @@ func (o *Adam) Step() {
 			v[i+5] = o.beta2*v[i+5] + (1-o.beta2)*(g6*g6)
 			mHat6 := m[i+5] / biasCorrection1
 			vHat6 := v[i+5] / biasCorrection2
-			param[i+5] -= o.learningRate * mHat6 / (math.Sqrt(vHat6) + o.epsilon)
+			param[i+5] -= o.learningRate * (mHat6/(math.Sqrt(vHat6)+o.epsilon) + o.WeightDecay*param[i+5])
 
 			// Unroll 7
 			g7 := grad[i+6]
@@ -146,7 +150,7 @@ func (o *Adam) Step() {
 			v[i+6] = o.beta2*v[i+6] + (1-o.beta2)*(g7*g7)
 			mHat7 := m[i+6] / biasCorrection1
 			vHat7 := v[i+6] / biasCorrection2
-			param[i+6] -= o.learningRate * mHat7 / (math.Sqrt(vHat7) + o.epsilon)
+			param[i+6] -= o.learningRate * (mHat7/(math.Sqrt(vHat7)+o.epsilon) + o.WeightDecay*param[i+6])
 
 			// Unroll 8
 			g8 := grad[i+7]
@@ -154,7 +158,7 @@ func (o *Adam) Step() {
 			v[i+7] = o.beta2*v[i+7] + (1-o.beta2)*(g8*g8)
 			mHat8 := m[i+7] / biasCorrection1
 			vHat8 := v[i+7] / biasCorrection2
-			param[i+7] -= o.learningRate * mHat8 / (math.Sqrt(vHat8) + o.epsilon)
+			param[i+7] -= o.learningRate * (mHat8/(math.Sqrt(vHat8)+o.epsilon) + o.WeightDecay*param[i+7])
 		}
 
 		// Handle remaining elements
@@ -168,7 +172,7 @@ func (o *Adam) Step() {
 			// Compute bias-corrected estimates and update parameters
 			mHat := m[i] / biasCorrection1
 			vHat := v[i] / biasCorrection2
-			param[i] -= o.learningRate * mHat / (math.Sqrt(vHat) + o.epsilon)
+			param[i] -= o.learningRate * (mHat/(math.Sqrt(vHat)+o.epsilon) + o.WeightDecay*param[i])
 		}
 	}
 }

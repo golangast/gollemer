@@ -27,6 +27,7 @@ func main() {
 	trainNER := flag.Bool("train-ner", false, "Train the Named Entity Recognition model")
 	runLLMFlag := flag.Bool("llm", false, "Run in interactive LLM mode")
 	trainChatFlag := flag.Bool("train-chat", false, "Train the Chat RAG model from human_chat.txt")
+	rebalancePtr := flag.Bool("rebalance", false, "Rebalance MoE expert weights before training")
 
 	flag.Parse()
 	switch {
@@ -41,7 +42,7 @@ func main() {
 	case *trainNER:
 		runModule("cmd/train_ner")
 	case *trainChatFlag:
-		chat.TrainChat(projectRoot)
+		chat.TrainChat(projectRoot, *rebalancePtr)
 	default:
 		log.Println("No action specified. Use -train-word2vec, -train-moe, -train-intent-classifier, -train-ner, -train-chat, or -llm.")
 	}
