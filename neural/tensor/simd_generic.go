@@ -1,8 +1,9 @@
-//go:build !simd
+//go:build !goexperiment.simd
 
 package tensor
 
 import (
+	"math"
 	"os"
 	"strings"
 )
@@ -93,10 +94,39 @@ func vecDot(a, b []float64) float64 {
 	return sum
 }
 
-// vecSoftmaxBackwardRow computes out[i] = p[i] * (dp[i] - dot(dp, p)) for one row.
 func vecSoftmaxBackwardRow(p, dp, out []float64) {
 	dot := vecDot(dp, p)
 	for i := range p {
 		out[i] = p[i] * (dp[i] - dot)
 	}
+}
+
+func vecReLU(data []float64) {
+	for i := range data {
+		if data[i] < 0 {
+			data[i] = 0
+		}
+	}
+}
+
+func vecScaleGradients(grads []float64, maxNorm float64) {
+	sumSq := vecDot(grads, grads)
+	norm := math.Sqrt(sumSq)
+	if norm > maxNorm {
+		scaleFactor := maxNorm / (norm + 1e-8)
+		vecMulScalar(grads, scaleFactor, grads)
+	}
+}
+
+func vecMaxSlice(data []float64) float64 {
+	if len(data) == 0 {
+		return 0
+	}
+	maxVal := data[0]
+	for _, v := range data {
+		if v > maxVal {
+			maxVal = v
+		}
+	}
+	return maxVal
 }

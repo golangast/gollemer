@@ -115,3 +115,15 @@ func SoftmaxBackwardRow(p, dp, out []float64) {
 		out[i] = p[i] * (dp[i] - dot)
 	}
 }
+
+func ReLUVector(a []float64) {
+	vecReLU(a)
+}
+
+func ScaleGradients(grads []float64, maxNorm float64) {
+	vecScaleGradients(grads, maxNorm)
+}
+
+func MaxSlice(a []float64) float64 {
+	return vecMaxSlice(a)
+}

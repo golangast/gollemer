@@ -857,6 +857,23 @@ func (t *Tensor) Transpose(axis1, axis2 int) (*Tensor, error) {
 
 	newData := make([]float64, len(t.Data))
 
+	// Optimized path for 2D transpose (most common case)
+	if len(t.Shape) == 2 && ((axis1 == 0 && axis2 == 1) || (axis1 == 1 && axis2 == 0)) {
+		rows := t.Shape[0]
+		cols := t.Shape[1]
+		const blockSize = 32
+		for r := 0; r < rows; r += blockSize {
+			for c := 0; c < cols; c += blockSize {
+				for rb := r; rb < r+blockSize && rb < rows; rb++ {
+					for cb := c; cb < c+blockSize && cb < cols; cb++ {
+						newData[cb*rows+rb] = t.Data[rb*cols+cb]
+					}
+				}
+			}
+		}
+		return NewTensor(newShape, newData, false), nil
+	}
+
 	// Create strides for original and new shape
 	oldStrides := make([]int, len(t.Shape))
 	newStrides := make([]int, len(t.Shape))
@@ -1363,6 +1380,26 @@ func (t *Tensor) Softmax(axis int) (*Tensor, error) {
 	// Iterate through the tensor to apply softmax
 	for i := 0; i < outerSize; i++ {
 		for j := 0; j < innerSize; j++ {
+			if innerSize == 1 {
+				// Fast path for last dimension (common case)
+				start := i * axisDimSize
+				slice := t.Data[start : start+axisDimSize]
+				maxVal := MaxSlice(slice)
+				
+				outSlice := outputData[start:start+axisDimSize]
+				sumExp := 0.0
+				for k, val := range slice {
+					expVal := math.Exp(val - maxVal)
+					outSlice[k] = expVal
+					sumExp += expVal
+				}
+				
+				if sumExp != 0 {
+					MulScalar(outSlice, 1.0/sumExp, outSlice)
+				}
+				continue
+			}
+
 			// Find the maximum value in the slice along the axis for numerical stability
 			maxVal := -math.MaxFloat64
 			for k := 0; k < axisDimSize; k++ {
@@ -1381,9 +1418,11 @@ func (t *Tensor) Softmax(axis int) (*Tensor, error) {
 			}
 
 			// Normalize by the sum
-			for k := 0; k < axisDimSize; k++ {
-				idx := i*axisDimSize*innerSize + k*innerSize + j
-				outputData[idx] /= sumExp
+			if sumExp != 0 {
+				for k := 0; k < axisDimSize; k++ {
+					idx := i*axisDimSize*innerSize + k*innerSize + j
+					outputData[idx] /= sumExp
+				}
 			}
 		}
 	}
@@ -1827,13 +1866,8 @@ func (t *Tensor) Sigmoid() (*Tensor, error) {
 // ReLU applies the Rectified Linear Unit function element-wise to the tensor.
 func (t *Tensor) ReLU() (*Tensor, error) {
 	resultData := make([]float64, len(t.Data))
-	for i, val := range t.Data {
-		if val > 0 {
-			resultData[i] = val
-		} else {
-			resultData[i] = 0
-		}
-	}
+	copy(resultData, t.Data)
+	ReLUVector(resultData)
 
 	resultTensor := NewTensor(t.Shape, resultData, t.RequiresGrad)
 	if resultTensor.RequiresGrad {
@@ -2686,14 +2720,7 @@ func AtomicAddFloat64(val *float64, delta float64) {
 }
 
 func dotProduct(a, b []float64) float64 {
-	if len(a) != len(b) {
-		panic("dotProduct: slice lengths differ")
-	}
-	var sum float64
-	for i := 0; i < len(a); i++ {
-		sum += a[i] * b[i]
-	}
-	return sum
+	return DotProduct(a, b)
 }
 
 // ApplyTemperature scales the tensor elements by 1/temperature.
@@ -2702,9 +2729,7 @@ func (t *Tensor) ApplyTemperature(temperature float64) {
 		return
 	}
 	invTemp := 1.0 / temperature
-	for i := range t.Data {
-		t.Data[i] *= invTemp
-	}
+	MulScalar(t.Data, invTemp, t.Data)
 }
 
 // ApplyRepetitionPenalty applies a penalty to the logits of tokens that have already appeared.

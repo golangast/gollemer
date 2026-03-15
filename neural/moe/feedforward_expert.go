@@ -120,9 +120,7 @@ func (e *FeedForwardExpert) Backward(grad *tensor.Tensor) error {
 		}
 		// Only accumulate if shapes match (residual connection only applies when input == output dim)
 		if len(grad.Data) == len(e.inputTensor.Grad.Data) {
-			for i := range grad.Data {
-				e.inputTensor.Grad.Data[i] += grad.Data[i]
-			}
+			tensor.AddAccumulate(e.inputTensor.Grad.Data, grad.Data)
 		}
 	}
 
@@ -133,9 +131,7 @@ func (e *FeedForwardExpert) Backward(grad *tensor.Tensor) error {
 		layer1Input := e.Layer1.Inputs()[0]
 		if layer1Input != nil && layer1Input.Grad != nil {
 			// MUST accumulate gradients, not assign, or we lose residual identity gradients!
-			for i := range e.inputTensor.Grad.Data {
-				e.inputTensor.Grad.Data[i] += layer1Input.Grad.Data[i]
-			}
+			tensor.AddAccumulate(e.inputTensor.Grad.Data, layer1Input.Grad.Data)
 		}
 	}
 
