@@ -125,29 +125,8 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 
 	// Pre-declare helper to find MoE layers
 	findMoELayers := func(m *moe.IntentMoE) []*moe.MoELayer {
-		var layers []*moe.MoELayer
-		if m == nil {
-			return layers
-		}
-		
-		// Helper to extract from Encoder
-		extractLayers := func(enc moe.Encoder) {
-			if ml, ok := enc.(*moe.MoELayer); ok {
-				layers = append(layers, ml)
-			} else if stack, ok := enc.(*moe.MoEStack); ok {
-				layers = append(layers, stack.Layers...)
-			} else if hybrid, ok := enc.(*moe.HybridLLMGNNEncoder); ok {
-				if ml, ok := hybrid.LLMEncoder.(*moe.MoELayer); ok {
-					layers = append(layers, ml)
-				} else if stack, ok := hybrid.LLMEncoder.(*moe.MoEStack); ok {
-					layers = append(layers, stack.Layers...)
-				}
-			}
-		}
-
-		extractLayers(m.Encoder)
-
-		// Check Decoder's OutputMoE
+		if m == nil { return nil }
+		layers := m.Encoder.GetMoELayers()
 		if m.Decoder != nil && m.Decoder.OutputMoE != nil {
 			layers = append(layers, m.Decoder.OutputMoE)
 		}
@@ -209,36 +188,49 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 		// hiddenSize=256 must match encoder output dim for cross-attention; attentionHeads=4
 		intentModel.Decoder, _ = moe.NewRNNDecoder(256, 5000, 256, 4, 1, 0.1, 1)
 
-		// Phase 1: Xavier-initialize ALL parameters as a safe baseline.
-		log.Println("🛠️ Phase 1: Xavier init for all parameters...")
-		for _, param := range intentModel.Parameters() {
-			if param != nil && len(param.Shape) > 0 {
-				InitializeXavier(param)
+		// Phase 1: Robust initialization
+		log.Println("🛠️ Phase 1: Robust init (He for experts, Orthogonal/High-Scale for router)...")
+		allLayers := findMoELayers(intentModel)
+		for _, layer := range allLayers {
+			// Experts -> He Normal (variance-scaled)
+			for _, expert := range layer.Experts {
+				for _, p := range expert.Parameters() {
+					InitializeHeNormal(p)
+				}
 			}
+			// Router -> Sharp initial gating with anti-monopoly nudge
+			InitializeRouterGating(layer.GatingNetwork.Linear.Weights, layer.GatingNetwork.Linear.Biases)
 		}
 
-		// Phase 2: Override LSTM tensors by directly accessing the named cell fields.
-		// tensor.Tensor has no Name field, so this direct struct access is the only
-		// reliable way to distinguish Wf (forget weight) from Wi/Wc/Wo, and Bf
-		// (forget bias, which should be 1.0) from the other three gate biases (0.0).
+		// Phase 2: LSTM Specialized Init
 		log.Println("🛠️ Phase 2: Orthogonal init for LSTM weights + Forget-gate bias trick...")
 		if intentModel.Decoder != nil && intentModel.Decoder.LSTM != nil {
 			for _, layer := range intentModel.Decoder.LSTM.Cells {
 				for _, cell := range layer {
-					// All four gate weight matrices → Orthogonal init (gain 0.8)
 					InitializeOrthogonal(cell.Wf, 0.8)
 					InitializeOrthogonal(cell.Wi, 0.8)
 					InitializeOrthogonal(cell.Wc, 0.8)
 					InitializeOrthogonal(cell.Wo, 0.8)
-					// Input, cell, output gate biases → 0
 					for i := range cell.Bi.Data { cell.Bi.Data[i] = 0 }
 					for i := range cell.Bc.Data { cell.Bc.Data[i] = 0 }
 					for i := range cell.Bo.Data { cell.Bo.Data[i] = 0 }
-					// Forget gate bias → 1.0 (the key trick for stable long-range gradients)
 					for i := range cell.Bf.Data { cell.Bf.Data[i] = 1.0 }
 				}
 			}
-			log.Printf("✅ Applied Orthogonal+ForgetBias(1.0) init to %d Decoder LSTM layer(s)", len(intentModel.Decoder.LSTM.Cells))
+		}
+
+		// Phase 3: Embedding Signal Boost
+		log.Println("⚡ Phase 3: Boosting Embedding signals by 1.2x for better expert contrast...")
+		for i := range intentModel.Embedding.Weight.Data {
+			intentModel.Embedding.Weight.Data[i] *= 1.2
+		}
+
+		// Phase 4: Residual Signal Boost (Vanishing Gradient Shield)
+		log.Println("⚡ Phase 4: Setting base ResidualScale to 1.5x for stronger identity flow...")
+		for _, layer := range findMoELayers(intentModel) {
+			if layer.ResidualScale != nil {
+				layer.ResidualScale.Data[0] = 1.5
+			}
 		}
 	}
 
@@ -479,12 +471,12 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 	const batchSize = 2 // Reduced from 4 to limit memory usage during backward pass
 	
 	// Optimizer initialization
-	const initialLR = 5e-7
-	optimizer := neuralnn.NewOptimizer(intentModel.Parameters(), initialLR, 1.0)
+	const initialLR = 5e-6  // Increased from 5e-7
+	optimizer := neuralnn.NewOptimizer(intentModel.Parameters(), initialLR, 1.5) // Increased initial momentum
 
 	// Learning rate settings
 	var learningRate float64
-	peakLR := 0.0001    // Reduced to 1e-4 for better stability
+	peakLR := 0.0008    // Increased from 1e-4 for faster escapes
 	const weightDecay = 0.0001
 	
 	// OneCycle Scheduler
@@ -499,12 +491,19 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 	patienceLimit := 10
 	patienceCounter := 0
 	globalStep := 0
-	epochUtilization := make(map[string]int)
 	epochLBLoss := 0.0
-	expertStagnation := make(map[string]int)
 	bestPPL := math.MaxFloat64
 	lastEpochLoss := math.MaxFloat64
 	plateauCount := 0
+
+	// Reduce-on-Plateau LR scheduler: halves LR after 3 consecutive epochs
+	// without PPL improvement, preventing spikes when new experts activate.
+	lrScheduler := &moe.LRScheduler{
+		CurrentLR:      peakLR,
+		DecayFactor:    0.5,
+		Patience:       3,
+		MinLR:          1e-7,
+	}
 
 	// --- [Curriculum & Data Integrity] ---
 	type Curriculum struct {
@@ -560,7 +559,7 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 	fmt.Printf("Training on %d pairs for %d epochs (patience=%d)...\n", len(chatPairs), epochs, patienceLimit)
 
 	// Mute the UNK token in the output layer to prevent it from being a "safe" prediction
-	MuteUNKToken(intentModel, unkID)
+	// MuteUNKToken(intentModel, unkID) (Disabled: causing loss instability)
 
 	for epoch := 0; epoch < epochs; epoch++ {
 		epochStartTime := time.Now()
@@ -593,10 +592,7 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 		totalLoss := 0.0
 		batches := 0
 		epochLBLoss = 0.0
-		// Reset aggregate utilization for this epoch
-		for k := range epochUtilization {
-			epochUtilization[k] = 0
-		}
+		// Reset utilization for each layer
 		for _, l := range moe.ActiveLayers {
 			l.ResetUtilizationStats()
 		}
@@ -774,16 +770,9 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 			// Add MoE Load Balancing Loss and Router Z-Loss
 			var currentBatchLB float64
 			var batchZLoss float64
-			for layerIdx, l := range moe.ActiveLayers {
+			for _, l := range moe.ActiveLayers {
 				currentBatchLB += l.LoadBalancingLoss * l.LoadBalancingWeight
 				batchZLoss += l.RouterZLoss // Coefficient 1e-4 is baked into CalculateRouterZLoss
-				
-				// Track aggregate utilization
-				stats := l.UtilizationStats()
-				for expIdx, count := range stats {
-					key := fmt.Sprintf("%d:%d", layerIdx, expIdx)
-					epochUtilization[key] += count
-				}
 			}
 			// Factor in decoder MoE if present
 			if intentModel.Decoder.OutputMoE != nil {
@@ -920,10 +909,7 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 
 			// Memory safety: Clear computation graph every batch
 			DetachModel(intentModel)
-			// Trigger GC extremely frequently due to GNN adjacency matrices
-			if batches%10 == 0 {
-				runtime.GC()
-			}
+			
 			globalStep++
 		}
 		// End of Epoch: log final batch count, print utilization, clear computation graph.
@@ -932,47 +918,57 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 		}
 		// Visualize Aggregate Utilization
 		fmt.Printf("--- 📊 Aggregate Expert Utilization (Epoch %d) ---\n", epoch+1)
-		for layerIdx, layer := range moe.ActiveLayers {
+		InspectExpertStats(intentModel)
+		
+		// Collect all MoE layers (Encoder + Decoder)
+		allLayers := intentModel.Encoder.GetMoELayers()
+		if intentModel.Decoder.OutputMoE != nil {
+			allLayers = append(allLayers, intentModel.Decoder.OutputMoE)
+		}
+
+		for layerIdx, layer := range allLayers {
 			fmt.Printf("Layer %d Expert Utilization (Capacity Factor: %.2f):\n", layerIdx, layer.CapacityFactor)
 			totalTokens := 0
 			for i := 0; i < len(layer.Experts); i++ {
-				totalTokens += epochUtilization[fmt.Sprintf("%d:%d", layerIdx, i)]
+				// Use the layer's internal accumulated utilization
+				totalTokens += layer.AccumulatedUtilization[i]
 			}
+
 			for i := 0; i < len(layer.Experts); i++ {
-				key := fmt.Sprintf("%d:%d", layerIdx, i)
-				count := epochUtilization[key]
+				count := layer.AccumulatedUtilization[i]
 				percent := 0.0
 				if totalTokens > 0 {
 					percent = float64(count) / float64(totalTokens) * 100
 				}
 				bar := strings.Repeat("#", int(percent/2))
 				fmt.Printf("  Expert %d: %8d (%5.1f%%) %s\n", i, count, percent, bar)
-				// Expert Reset Logic: Reset weights if expert processes NO tokens for > 5 epochs
-				if count == 0 {
-					expertStagnation[key]++
-				} else {
-					expertStagnation[key] = 0
-				}
-				if expertStagnation[key] >= 5 {
-					log.Printf("🧬 Expert %d in Layer %d has been stagnant for %d epochs. Performing Evolutionary Reset...", i, layerIdx, expertStagnation[key])
-					moe.PrintExpertWeightHistogram(fmt.Sprintf("Pre-Reset L%d E%d", layerIdx, i), layer.Experts[i])
-					
-					// Use Evolutionary Reset (Clone and Mutate Winner)
-					intentModel.EvolutionaryReset(i, layerIdx)
-					
-					moe.PrintExpertWeightHistogram(fmt.Sprintf("Post-Reset L%d E%d", layerIdx, i), layer.Experts[i])
-					expertStagnation[key] = 0
-				}
 
-				// Dominant Expert Freezing: If one expert does > 40% of the work, freeze it to force others to learn
-				usage := percent / 100.0
+				// Use internal stagnation counters and call automated reset
+				// (The layer's internal metrics are updated in Forward)
+			}
+			
+			// Automated Evolutionary Reset based on the layer's internal tracking
+			layer.EvolutionaryReset(5) // stagnationThreshold=5 epochs
+			
+			// Dominant Expert Freezing: If one expert does > 40% of the work, freeze it
+			for i := 0; i < len(layer.Experts); i++ {
+				count := layer.AccumulatedUtilization[i]
+				usage := 0.0
+				if totalTokens > 0 {
+					usage = float64(count) / float64(totalTokens)
+				}
 				if usage > 0.40 {
 					fmt.Printf("⚠️ Layer %d Expert %d is dominant (%.1f%%). Freezing for next epoch.\n", layerIdx, i, usage*100)
 					layer.SetExpertFreeze(i, true)
 				} else {
-					layer.SetExpertFreeze(i, false) // Unfreeze if balanced
+					// We only unfreeze if it's not already frozen by another mechanism
+					// For now, simple toggling
+					layer.SetExpertFreeze(i, false) 
 				}
 			}
+			
+			// Reset utilization for the next epoch
+			layer.ResetUtilizationStats()
 		}
 		DetachModel(intentModel)
 		avgLoss := 0.0
@@ -989,6 +985,17 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 		valPPL := ValidateChat(intentModel, valPairs, nil)
 		log.Printf("📉 Validation Perplexity: %.2f", valPPL)
 
+		// Reduce-on-Plateau: update scheduler and adjust peakLR if PPL stagnates.
+		// This prevents the massive perplexity spikes caused by large gradient
+		// updates when newly awakened experts (e.g. E6, E7) are still unstable.
+		newLR := lrScheduler.Update(valPPL)
+		if newLR != peakLR {
+			peakLR = newLR
+			scheduler.MaxLR = peakLR
+			scheduler.MinLR = peakLR * 0.01
+			log.Printf("💹 LR Scheduler reduced peakLR to %.8f", peakLR)
+		}
+
 		// Curriculum Update
 		if float32(valPPL) < float32(curriculum.MinPPLThreshold) {
 			curriculum.MaxSequenceLen += curriculum.GrowthFactor
@@ -996,7 +1003,7 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 			log.Printf("🚀 CURRICULUM LEVEL UP: Max Sequence Length is now %d", curriculum.MaxSequenceLen)
 		}
 
-		// Check for Plateau
+		// Check for Plateau (using avgLoss as secondary signal)
 		if avgLoss >= lastEpochLoss*0.999 { // More sensitive plateau detection
 			plateauCount++
 		} else {
@@ -1032,14 +1039,9 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 		}
 
 		// Save model at the end of each epoch, overwriting the main file.
-		f, err := os.Create(moePath)
-		if err != nil {
-			log.Printf("⚠️  Failed to create model file for epoch %d: %v", epoch+1, err)
+		if err := moe.SaveIntentMoEModelToGOB(intentModel, moePath); err != nil {
+			log.Printf("⚠️  Failed to save MoE model for epoch %d: %v", epoch+1, err)
 		} else {
-			if err := moe.SaveIntentMoEModelToGOB(intentModel, f); err != nil {
-				log.Printf("⚠️  Failed to save MoE model for epoch %d: %v", epoch+1, err)
-			}
-			f.Close()
 			fmt.Printf("💾 Overwrote model checkpoint to %s after epoch %d\n", moePath, epoch+1)
 		}
 
@@ -1047,14 +1049,9 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 		if valPPL < bestPPL {
 			bestPPL = valPPL
 			patienceCounter = 0
-			bf, err := os.Create(bestMoePath)
-			if err != nil {
-				log.Printf("⚠️  Failed to create best model file: %v", err)
+			if err := moe.SaveIntentMoEModelToGOB(intentModel, bestMoePath); err != nil {
+				log.Printf("⚠️  Failed to save best MoE model: %v", err)
 			} else {
-				if err := moe.SaveIntentMoEModelToGOB(intentModel, bf); err != nil {
-					log.Printf("⚠️  Failed to save best MoE model: %v", err)
-				}
-				bf.Close()
 				fmt.Printf("🏆 New Best Model! PPL: %.2f (Saved to %s)\n", bestPPL, bestMoePath)
 			}
 		} else {
@@ -1135,6 +1132,8 @@ func StrictGenerate(model *moe.IntentMoE, input string, w2v *word2vec.SimpleWord
 		log.Printf("StrictGenerate Error (Encoder): %v", err)
 		return ""
 	}
+	// Normalize context vector to match training scale
+	ctx = model.NormalizeContextVector(ctx)
 
 	// 🔍 Diagnostic: Importance Map for first layer in the stack
 	if len(moe.ActiveLayers) > 0 {
@@ -1305,6 +1304,60 @@ func runTestSentence(label, input string, model *moe.IntentMoE, w2v *word2vec.Si
 	// 3. Log the result
 	log.Printf("🧪 Test '%s' (%s): %s", input, label, response)
 }
+
+// LogTopPredictions analyzes the model output for a test prompt.
+// It shows what the model is "thinking" even if it's not confident yet,
+// by printing the top-3 candidates from the raw logit vector.
+// This is useful for diagnosing [Still Silent] outputs during training.
+func LogTopPredictions(model *moe.IntentMoE, testName string, logits *tensor.Tensor) {
+	if model.SentenceVocab == nil || logits == nil {
+		return
+	}
+
+	type prediction struct {
+		token string
+		prob  float64
+	}
+
+	// 1. Convert logits to probabilities via softmax
+	vocabSize := logits.Shape[len(logits.Shape)-1]
+	logitsFlat := logits.Data[len(logits.Data)-vocabSize:] // Use last row if batch/seq dim
+	maxL := logitsFlat[0]
+	for _, v := range logitsFlat {
+		if v > maxL {
+			maxL = v
+		}
+	}
+	sum := 0.0
+	probs := make([]float64, vocabSize)
+	for i, v := range logitsFlat {
+		probs[i] = math.Exp(v - maxL)
+		sum += probs[i]
+	}
+	for i := range probs {
+		probs[i] /= sum
+	}
+
+	// 2. Collect and sort predictions
+	results := make([]prediction, vocabSize)
+	for i, p := range probs {
+		results[i] = prediction{
+			token: model.SentenceVocab.GetWord(i),
+			prob:  p,
+		}
+	}
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].prob > results[j].prob
+	})
+
+	// 3. Print top 3 contenders
+	fmt.Printf("🧪 Test '%s':\n", testName)
+	for i := 0; i < 3 && i < len(results); i++ {
+		fmt.Printf("   [%d] %-12s (%.4f%%)\n", i+1, results[i].token, results[i].prob*100)
+	}
+	fmt.Println("-----------------------------------")
+}
+
 
 // lookupVocab tries to find a token ID in the given vocabulary with fallbacks.
 func lookupVocab(token string, vocab *mainvocab.Vocabulary) int {
@@ -1677,6 +1730,95 @@ func InitializeXavier(p *tensor.Tensor) {
 	}
 }
 
+// InitializeHeNormal implements Kaiming/He Normal initialization.
+func InitializeHeNormal(p *tensor.Tensor) {
+	if p == nil || len(p.Shape) == 0 {
+		return
+	}
+	fanIn := float64(p.Shape[0])
+	scale := math.Sqrt(2.0 / fanIn)
+	for i := range p.Data {
+		p.Data[i] = rand.NormFloat64() * scale
+	}
+}
+
+// InitializeRouterGating sets up router weights with a high scale and applies an anti-monopoly nudge.
+func InitializeRouterGating(weights, biases *tensor.Tensor) {
+	if weights == nil {
+		return
+	}
+	// Use 0.5 scale as requested to ensure softmax entropy
+	scale := 0.5
+	for i := range weights.Data {
+		weights.Data[i] = (rand.Float64()*2.0 - 1.0) * scale
+	}
+
+	// TRICK: Set a small positive bias for all experts but Expert 3
+	// to "nudge" the model toward diversity from the start.
+	if biases != nil {
+		for i := range biases.Data {
+			// If we have at least 4 experts, nudge expert 3 (0-indexed) down
+			if i == 3 && len(biases.Data) > 3 {
+				biases.Data[i] = -0.2
+			} else {
+				biases.Data[i] = 0.1
+			}
+		}
+	}
+}
+
+// InspectExpertStats calculates min, max, mean, and stdDev for all experts.
+func InspectExpertStats(model *moe.IntentMoE) {
+	fmt.Println("\n🔍 --- Expert Parameter Inspection ---")
+	allLayers := model.Encoder.GetMoELayers()
+	if model.Decoder.OutputMoE != nil {
+		allLayers = append(allLayers, model.Decoder.OutputMoE)
+	}
+
+	for lIdx, layer := range allLayers {
+		fmt.Printf("Layer %d:\n", lIdx)
+		for i, expert := range layer.Experts {
+			params := expert.Parameters()
+			var sum float64
+			var sumSq float64
+			var minVal, maxVal float64 = 1e9, -1e9
+			count := 0
+			for _, p := range params {
+				for _, v := range p.Data {
+					sum += v
+					sumSq += v * v
+					if v < minVal {
+						minVal = v
+					}
+					if v > maxVal {
+						maxVal = v
+					}
+					count++
+				}
+			}
+			if count == 0 {
+				continue
+			}
+			mean := sum / float64(count)
+			variance := (sumSq / float64(count)) - (mean * mean)
+			if variance < 0 {
+				variance = 0
+			}
+			stdDev := math.Sqrt(variance)
+
+			status := "Healthy"
+			if stdDev < 0.01 {
+				status = "⚠️  CLUMPED"
+			}
+			if math.IsNaN(stdDev) {
+				status = "❌ NAN"
+			}
+
+			fmt.Printf("  Expert %d: Range [%.3f, %.3f] StdDev %.4f (%s)\n", i, minVal, maxVal, stdDev, status)
+		}
+	}
+}
+
 // InitializeOrthogonal fills param with an orthonormal row basis using the Gram-Schmidt
 // process, then scales by gain. This is the recommended initializer for LSTM weight
 // matrices and prevents vanishing/exploding gradients from the start.
@@ -2004,9 +2146,11 @@ func GenerateTokens(model *moe.IntentMoE, input string, maxLen int) []string {
 
 	emb, _ := model.Embedding.Forward(inputTensor)
 	ctx, _ := model.Encoder.Forward(emb)
-	if ctx.Shape[1] == 0 {
+	if ctx == nil || ctx.Shape[1] == 0 {
 		return nil
 	}
+	// Normalize context vector to match training scale
+	ctx = model.NormalizeContextVector(ctx)
 
 	batchSize := 1
 	hiddenSize := model.Decoder.LSTM.HiddenSize

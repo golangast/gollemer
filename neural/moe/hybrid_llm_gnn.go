@@ -191,3 +191,7 @@ func (e *HybridLLMGNNEncoder) Inputs() []*tensor.Tensor {
 func (e *HybridLLMGNNEncoder) SetMode(training bool) {
 	e.LLMEncoder.SetMode(training)
 }
+
+func (e *HybridLLMGNNEncoder) GetMoELayers() []*MoELayer {
+	return e.LLMEncoder.GetMoELayers()
+}

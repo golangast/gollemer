@@ -120,3 +120,7 @@ func (e *SimpleRNNEncoder) GetOutputShape() []int {
 	}
 	return []int{1, 1, e.HiddenDim}
 }
+
+func (e *SimpleRNNEncoder) GetMoELayers() []*MoELayer {
+	return nil
+}

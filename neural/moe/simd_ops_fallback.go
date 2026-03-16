@@ -2,6 +2,10 @@
 
 package moe
 
+import (
+	"math/rand"
+)
+
 // computeRouterLogitsSIMD is the pure-Go fallback used when the
 // GOEXPERIMENT=simd build flag is NOT set. It produces identical results
 // to the SIMD version but without hardware vectorisation.
@@ -114,5 +118,44 @@ func simdMaxSliceF64(data []float64) float64 {
 func simdSubScalarF64(data []float64, scalar float64) {
 	for i := range data {
 		data[i] -= scalar
+	}
+}
+
+// simdSquareOfSumsLossF64 fallback
+func simdSquareOfSumsLossF64(counts []int, total int, weight float64) float64 {
+	if total == 0 {
+		return 0
+	}
+	tInv := 1.0 / float64(total)
+	var sumSq float64
+	for _, c := range counts {
+		f := float64(c) * tInv
+		sumSq += f * f
+	}
+	return sumSq * weight
+}
+
+// simdSquareOfSumsGradF64 fallback
+func simdSquareOfSumsGradF64(gradData []float64, probSums []float64, numTokens, numExperts int, weight float64) {
+	if numTokens == 0 {
+		return
+	}
+	factor := (weight * 2.0) / (float64(numTokens) * float64(numTokens))
+	for t := 0; t < numTokens; t++ {
+		base := t * numExperts
+		for e := 0; e < numExperts; e++ {
+			gradData[base+e] += probSums[e] * factor
+		}
+	}
+}
+
+func simdAddJitterF64(dst, src []float64, jitterStdDev float64) {
+	n := len(dst)
+	if len(src) < n {
+		n = len(src)
+	}
+	for i := 0; i < n; i++ {
+		jitter := 1.0 + (rand.NormFloat64() * jitterStdDev)
+		dst[i] = src[i] * jitter
 	}
 }

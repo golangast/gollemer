@@ -1,9 +1,9 @@
 package moe
 
 import (
+	"bufio"
 	"encoding/gob"
 	"fmt"
-	"io"
 	"math"
 	"math/rand"
 	"os"
@@ -209,12 +209,22 @@ type Encoder interface {
 	Parameters() []*tensor.Tensor
 	SetMode(bool)
 	ClearState()
+	GetMoELayers() []*MoELayer
 }
 
 // ExpertStat holds performance metrics for a specific expert.
 type ExpertStat struct {
 	LossSum    float64
 	TokenCount int
+}
+
+// ModelMetadata persists the training state across reloads.
+type ModelMetadata struct {
+	BestPerplexity   float64
+	LastEpoch        int
+	StagnantCounters map[string]int
+	FrozenStates     map[string]bool
+	LearningRate     float64
 }
 
 // IntentMoE represents a Mixture of Experts model for intent classification.
@@ -227,6 +237,7 @@ type IntentMoE struct {
 	
 	// Diagnostics and Monitoring
 	ExpertStats map[string]*ExpertStat // Key: "layerID:expertID"
+	Metadata    ModelMetadata
 }
 
 // NewIntentMoE creates a new IntentMoE model.
@@ -361,23 +372,32 @@ func (m *IntentMoE) EvolutionaryReset(stagnantExpertID int, layerIdx int) {
 		return
 	}
 
-	// 3. Clone and Mutate with Gaussian Jitter
-	fmt.Printf("🧬 Expert %d (L%d) evolved from Expert %d (Gaussian Jitter 0.01)\n", stagnantExpertID, layerIdx, winnerID)
+	// 3. Clone and Mutate with High-Variance Gaussian Jitter (0.15)
+	fmt.Printf("🧬 Expert %d (L%d) evolved from Expert %d (SIMD Jitter 0.15 + Gating Reset)\n", stagnantExpertID, layerIdx, winnerID)
 	for i := range stagnantParams {
 		wp := winnerParams[i]
 		sp := stagnantParams[i]
-
-		for j := range sp.Data {
-			// Add tiny Gaussian jitter (0.01 std dev) to break symmetry
-			jitter := rand.NormFloat64() * 0.01
-			sp.Data[j] = wp.Data[j] + jitter
-		}
+		// Use SIMD-ready jitter function
+		simdAddJitterF64(sp.Data, wp.Data, 0.15)
+		
 		// Zero out the gradients for the new expert
 		if sp.Grad != nil {
 			for j := range sp.Grad.Data {
 				sp.Grad.Data[j] = 0
 			}
 		}
+	}
+
+	// 4. Reset the Router's view of this expert
+	// Weights are [inputDim, numExperts]. Expert j is the j-th column: W[k][j] = Data[k*numExperts + j]
+	numExperts := targetLayer.GatingNetwork.Linear.Weights.Shape[1]
+	inputDim := targetLayer.GatingNetwork.Linear.Weights.Shape[0]
+	gatingData := targetLayer.GatingNetwork.Linear.Weights.Data
+	for k := 0; k < inputDim; k++ {
+		gatingData[k*numExperts+stagnantExpertID] = (rand.Float64()*0.02) - 0.01
+	}
+	if targetLayer.GatingNetwork.Linear.Biases != nil {
+		targetLayer.GatingNetwork.Linear.Biases.Data[stagnantExpertID] = 0
 	}
 }
 
@@ -443,6 +463,41 @@ func NewHybridIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, ch
 	}, nil
 }
 
+// NormalizeContextVector returns a normalized copy of the context vector:
+// scale each token's embedding to have L2 norm <= threshold (default 5.0) across the feature dim.
+func (m *IntentMoE) NormalizeContextVector(cv *tensor.Tensor) *tensor.Tensor {
+	if cv == nil {
+		return nil
+	}
+	// Create a new tensor to avoid mutating original for backprop
+	contextVector := tensor.NewTensor(cv.Shape, make([]float64, len(cv.Data)), cv.RequiresGrad)
+	copy(contextVector.Data, cv.Data)
+	contextVector.Creator = cv.Creator
+
+	bSz := contextVector.Shape[0]
+	sLen := contextVector.Shape[1]
+	dim := contextVector.Shape[2]
+	const ctxNormThreshold = 5.0
+	for b := 0; b < bSz; b++ {
+		for s := 0; s < sLen; s++ {
+			offset := (b*sLen + s) * dim
+			norm := 0.0
+			for d := 0; d < dim; d++ {
+				v := contextVector.Data[offset+d]
+				norm += v * v
+			}
+			norm = math.Sqrt(norm + 1e-8)
+			if norm > ctxNormThreshold {
+				scale := ctxNormThreshold / norm
+				for d := 0; d < dim; d++ {
+					contextVector.Data[offset+d] *= scale
+				}
+			}
+		}
+	}
+	return contextVector
+}
+
 // Forward performs the forward pass of the IntentMoE model.
 // scheduledSamplingProb: probability of using model predictions instead of ground truth (0.0 for inference)
 func (m *IntentMoE) Forward(scheduledSamplingProb float64, inputs ...*tensor.Tensor) ([]*tensor.Tensor, *tensor.Tensor, error) {
@@ -469,30 +524,7 @@ func (m *IntentMoE) Forward(scheduledSamplingProb float64, inputs ...*tensor.Ten
 	}
 
 	// Normalize context vector to prevent exploding values from propagating to the decoder.
-	// This is a hard normalization: scale each token's embedding to have L2 norm <= 1.0 across the feature dim.
-	{
-		bSz := contextVector.Shape[0]
-		sLen := contextVector.Shape[1]
-		dim := contextVector.Shape[2]
-		const ctxNormThreshold = 5.0
-		for b := 0; b < bSz; b++ {
-			for s := 0; s < sLen; s++ {
-				offset := (b*sLen + s) * dim
-				norm := 0.0
-				for d := 0; d < dim; d++ {
-					v := contextVector.Data[offset+d]
-					norm += v * v
-				}
-				norm = math.Sqrt(norm + 1e-8)
-				if norm > ctxNormThreshold {
-					scale := ctxNormThreshold / norm
-					for d := 0; d < dim; d++ {
-						contextVector.Data[offset+d] *= scale
-					}
-				}
-			}
-		}
-	}
+	contextVector = m.NormalizeContextVector(contextVector)
 
 	// Decoder forward pass with scheduled sampling & mask
 	sentenceLogits, err := m.Decoder.Forward(contextVector, targetTokenIDs, scheduledSamplingProb, inputMask)
@@ -593,7 +625,7 @@ func (m *IntentMoE) GreedySearchDecodeWithTemp(contextVector *tensor.Tensor, max
 	hiddenState := initialHidden
 	cellState := tensor.NewTensor([]int{batchSize, hiddenSize}, make([]float64, batchSize*hiddenSize), false)
 
-	for range maxLen {
+	for step := 0; step < maxLen; step++ {
 		outputLogits, newHidden, newCell, err := m.Decoder.DecodeStep(decoderInputIDs, hiddenState, cellState, contextVector)
 		if err != nil {
 			return nil, fmt.Errorf("decoder step failed: %w", err)
@@ -602,10 +634,16 @@ func (m *IntentMoE) GreedySearchDecodeWithTemp(contextVector *tensor.Tensor, max
 		hiddenState = newHidden
 		cellState = newCell
 
-		// Apply repetition penalty: always divide logits for previously generated tokens
+		// Suppress EOS for the first 3 steps — forces the model to generate
+		// at least some words even before it's fully trained.
+		if step < 3 && eosToken >= 0 && eosToken < len(outputLogits.Data) {
+			outputLogits.Data[eosToken] = -1e9
+		}
+
+		// Apply repetition penalty
 		ApplyRepetitionPenalty(outputLogits, decodedIDs, repetitionPenalty)
 
-		// Apply Frequency Penalty: subtract penalty * count from logits
+		// Apply Frequency Penalty
 		if frequencyPenalty > 0.0 {
 			counts := make(map[int]int)
 			for _, id := range decodedIDs {
@@ -624,8 +662,6 @@ func (m *IntentMoE) GreedySearchDecodeWithTemp(contextVector *tensor.Tensor, max
 			last2 := decodedIDs[len(decodedIDs)-2]
 			last3 := decodedIDs[len(decodedIDs)-3]
 			if last1 == last2 && last2 == last3 {
-				// log.Printf("Stuck detector triggered for ID %d. Forcing change.\n", last1)
-				// Set logit for this token to -infinity (or a very large negative number)
 				if last1 < len(outputLogits.Data) {
 					outputLogits.Data[last1] = -1e9
 				}
@@ -638,6 +674,44 @@ func (m *IntentMoE) GreedySearchDecodeWithTemp(contextVector *tensor.Tensor, max
 			return nil, fmt.Errorf("sampling failed: %w", err)
 		}
 		predictedID := sampledID
+
+		// Diagnostic: log top-3 predictions for the first step
+		if step == 0 && m.SentenceVocab != nil {
+			type pred struct {
+				id   int
+				prob float64
+			}
+			vocabSize := len(outputLogits.Data)
+			preds := make([]pred, vocabSize)
+			maxL := outputLogits.Data[0]
+			for i := 1; i < vocabSize; i++ {
+				if outputLogits.Data[i] > maxL {
+					maxL = outputLogits.Data[i]
+				}
+			}
+			sum := 0.0
+			for i, v := range outputLogits.Data {
+				preds[i] = pred{i, math.Exp(v - maxL)}
+				sum += preds[i].prob
+			}
+			for i := range preds {
+				preds[i].prob /= sum
+			}
+			sort.Slice(preds, func(a, b int) bool { return preds[a].prob > preds[b].prob })
+			top := 3
+			if len(preds) < top {
+				top = len(preds)
+			}
+			fmt.Printf("🔍 [Decoder Step 0] Top predictions:\n")
+			for k := 0; k < top; k++ {
+				word := m.SentenceVocab.GetWord(preds[k].id)
+				special := ""
+				if preds[k].id == eosToken {
+					special = " ← EOS (suppressed)"
+				}
+				fmt.Printf("   [%d] %-14s (%.2f%%)%s\n", k+1, word, preds[k].prob*100, special)
+			}
+		}
 
 		if predictedID == eosToken {
 			break
@@ -815,10 +889,19 @@ func (m *IntentMoE) ClearState() {
 	}
 }
 
-// SaveIntentMoEModelToGOB saves the IntentMoE to a file in Gob format.
-func SaveIntentMoEModelToGOB(model *IntentMoE, writer io.Writer) error {
+// SaveIntentMoEModelToGOB saves the IntentMoE to a file in Gob format using buffered I/O.
+func SaveIntentMoEModelToGOB(model *IntentMoE, path string) error {
+	file, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("failed to create model file: %w", err)
+	}
+	defer file.Close()
+
+	writer := bufio.NewWriter(file)
+	defer writer.Flush()
+
 	encoder := gob.NewEncoder(writer)
-	err := encoder.Encode(model)
+	err = encoder.Encode(model)
 	if err != nil {
 		return fmt.Errorf("failed to encode IntentMoE model to Gob: %w", err)
 	}
@@ -834,7 +917,8 @@ func LoadIntentMoEModelFromGOB(filePath string) (*IntentMoE, error) {
 	}
 	defer file.Close()
 
-	decoder := gob.NewDecoder(file)
+	reader := bufio.NewReader(file)
+	decoder := gob.NewDecoder(reader)
 	var loadedModel IntentMoE
 	err = decoder.Decode(&loadedModel)
 	if err != nil {

@@ -71,11 +71,13 @@ func NewKnowledgeBase() *KnowledgeBase {
 		StopWords: map[string]bool{
 			"a": true, "an": true, "the": true, "please": true, "this": true,
 			"me": true, "my": true, "i": true, "new": true, "to": true, "for": true, "and": true, "it": true,
+			"how": true, "are": true, "is": true, "was": true, "were": true, "you": true, "your": true,
+			"what": true, "when": true, "where": true, "why": true, "who": true, "which": true,
 		},
 		FirstRun: true,
 		ModelConfig: ModelConfig{
 			Word2VecPath:      "gob_models/word2vec_model.gob",
-			MoEPath:           "gob_models/moe_classification_model.gob",
+			MoEPath:           "gob_models/moe_classification_model_best.gob",
 			QueryVocabPath:    "gob_models/query_vocabulary.gob",
 			SemanticVocabPath: "gob_models/seq2seq_output_vocab.gob",
 			NERPath:           "gob_models/ner_model.gob",

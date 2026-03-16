@@ -3,6 +3,7 @@
 package moe
 
 import (
+	"math/rand"
 	"simd/archsimd"
 )
 
@@ -399,5 +400,78 @@ func simdSubScalarF64(data []float64, scalar float64) {
 	}
 	for ; i < n; i++ {
 		data[i] -= scalar
+	}
+}
+
+// simdSquareOfSumsLossF64 computes sum((counts[i]/total)^2) * weight.
+func simdSquareOfSumsLossF64(counts []int, total int, weight float64) float64 {
+	if total == 0 {
+		return 0
+	}
+	tInv := 1.0 / float64(total)
+	var sumSq float64
+	for _, c := range counts {
+		f := float64(c) * tInv
+		sumSq += f * f
+	}
+	return sumSq * weight
+}
+
+// simdSquareOfSumsGradF64 accumulates the gradient of the Square of Sums loss:
+// grad[token][expert] += weight * 2 * probSums[expert] / (totalTokens^2)
+func simdSquareOfSumsGradF64(gradData []float64, probSums []float64, numTokens, numExperts int, weight float64) {
+	if numTokens == 0 {
+		return
+	}
+	factor := (weight * 2.0) / (float64(numTokens) * float64(numTokens))
+	
+	// Pre-calculate per-expert gradient values
+	expertGrads := make([]float64, numExperts)
+	for i := 0; i < numExperts; i++ {
+		expertGrads[i] = probSums[i] * factor
+	}
+
+	// Use SIMD to add these values to every token's gradient row
+	vGrads := make([]archsimd.Float64x4, (numExperts+3)/4)
+	for i := 0; i < numExperts; i += 4 {
+		end := i + 4
+		if end > numExperts {
+			end = numExperts
+		}
+		var buf [4]float64
+		copy(buf[:], expertGrads[i:end])
+		vGrads[i/4] = archsimd.LoadFloat64x4(&buf)
+	}
+
+	for t := 0; t < numTokens; t++ {
+		base := t * numExperts
+		for i := 0; i < numExperts; i += 4 {
+			end := i + 4
+			if end > numExperts {
+				// Scalar tail for this row
+				for k := i; k < numExperts; k++ {
+					gradData[base+k] += expertGrads[k]
+				}
+				break
+			}
+			vg := archsimd.LoadFloat64x4Slice(gradData[base+i:])
+			vg = vg.Add(vGrads[i/4])
+			vg.StoreSlice(gradData[base+i:])
+		}
+	}
+}
+
+// simdAddJitterF64 performs dst[i] = src[i] * (1 + jitter[i])
+func simdAddJitterF64(dst, src []float64, jitterStdDev float64) {
+	n := len(dst)
+	if len(src) < n {
+		n = len(src)
+	}
+	for i := 0; i < n; i++ {
+		// rand.NormFloat64 is not easily SIMD-able without a specialized generator,
+		// but we can at least vectorise the multiplication part.
+		// For now, let's keep it simple or use a pre-filled noise buffer if performance is critical.
+		jitter := 1.0 + (rand.NormFloat64() * jitterStdDev)
+		dst[i] = src[i] * jitter
 	}
 }
