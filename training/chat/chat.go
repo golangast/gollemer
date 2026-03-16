@@ -255,7 +255,7 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 	// Adjust MoE settings for training
 	for _, layer := range moe.ActiveLayers {
 		layer.CapacityFactor = 1.5          // Increased from 1.25
-		layer.LoadBalancingWeight = 0.15   // Increased for more aggressive balance
+		layer.LoadBalancingWeight = 0.05   // Reduced to let CrossEntropy lead more
 		layer.RouterTemperature = 1.0     // Normal temperature
 		layer.ExpertDropoutRate = 0.1     // Reduced dropout to prevent UNK collapse
 		layer.SetMode(true)               // Enable training mode (noise)
@@ -472,7 +472,7 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 	
 	// Optimizer initialization
 	const initialLR = 5e-6  // Increased from 5e-7
-	optimizer := neuralnn.NewOptimizer(intentModel.Parameters(), initialLR, 1.5) // Increased initial momentum
+	optimizer := neuralnn.NewOptimizer(intentModel.Parameters(), initialLR, 1.5) // 1.5 is the Gradient Clip Value
 
 	// Learning rate settings
 	var learningRate float64
@@ -550,6 +550,7 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 	}
 	lossWeights[unkID] = 0.01
 	lossWeights[intentModel.SentenceVocab.PaddingTokenID] = 0.0
+	lossWeights[intentModel.SentenceVocab.EosID] = 0.1 // Discourage silence/premature EOS
 
 	// Set weight decay on the optimizer
 	if opt, ok := optimizer.(*neuralnn.Adam); ok {
@@ -856,28 +857,8 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 				}
 			}()
 
-			// Add Diversity Losses to discourage monopolies and flat distributions
-			var divLoss float64
-			for _, logit := range logits {
-				probs := tensor.Softmax(logit)
-				divLoss += moe.CalculateDiversityLoss(probs)
-			}
-			batchLoss += divLoss / float64(len(logits))
-
-			// Add Usage Variance Loss
-			var usageVariance float64
-			for _, layer := range moe.ActiveLayers {
-				stats := layer.UtilizationStats()
-				tokensThisLayer := 0
-				for _, c := range stats { tokensThisLayer += c }
-				usageVariance += moe.CalculateUsageVariance(stats, len(layer.Experts), tokensThisLayer)
-			}
-			batchLoss += usageVariance
-
-			// Add Sparsity Penalty (L1) to encourage cleaner experts
-			const sparseLambda = 0.0001
-			sparsityLoss := moe.CalculateSparsityPenalty(intentModel.Parameters(), sparseLambda)
-			batchLoss += sparsityLoss
+			// (Diversity, usage variance, and sparsity losses removed from training path for log clarity. 
+			// Cross-entropy and Router state losses are primary.)
 			
 			// Clear intermediate states to free memory
 			intentModel.ClearState()
@@ -1091,11 +1072,11 @@ func StrictGenerate(model *moe.IntentMoE, input string, w2v *word2vec.SimpleWord
 	for _, layer := range moe.ActiveLayers {
 		layer.SetMode(false)
 		oldTemps[layer] = layer.RouterTemperature
-		layer.RouterTemperature = 0.8 // Force decisive routing for stable generation
+		layer.RouterTemperature = 1.1 // Slightly higher for exploration during generation
 	}
 	if model.Decoder.OutputMoE != nil {
 		oldTemps[model.Decoder.OutputMoE] = model.Decoder.OutputMoE.RouterTemperature
-		model.Decoder.OutputMoE.RouterTemperature = 0.1
+		model.Decoder.OutputMoE.RouterTemperature = 1.1
 	}
 
 	defer func() {
@@ -1148,12 +1129,12 @@ func StrictGenerate(model *moe.IntentMoE, input string, w2v *word2vec.SimpleWord
 	// 3. Prepare Decoder States
 	batchSize := 1
 	hiddenSize := model.Decoder.LSTM.HiddenSize
-	
-	// Initial hidden state from the last token of the context (condensed intent)
-	lastIdx := ctx.Shape[1] - 1
-	hiddenState, err := ctx.Slice(1, lastIdx, lastIdx+1)
+
+	// Initial hidden state from CONTEXT MEAN (matching RNNDecoder.Forward logic)
+	// This ensures consistency between training and generation.
+	hiddenState, err := ctx.Mean(1)
 	if err != nil {
-		log.Printf("StrictGenerate Error (Initial Hidden): %v", err)
+		log.Printf("StrictGenerate Error (Initial Hidden Mean): %v", err)
 		return ""
 	}
 	hiddenState, _ = hiddenState.Reshape([]int{batchSize, ctx.Shape[2]})
@@ -1178,7 +1159,7 @@ func StrictGenerate(model *moe.IntentMoE, input string, w2v *word2vec.SimpleWord
 
 	var path []string
 	ctxNorm := ctx.L2Norm()
-	fmt.Printf("📡 Encoder Context Strength: %.4f\n", ctxNorm)
+	fmt.Printf("📡 Encoder Context Strength: %.4f | Vector[0:3]: %.4f, %.4f, %.4f\n", ctxNorm, ctx.Data[0], ctx.Data[1], ctx.Data[2])
 
 	for i := 0; i < maxLen; i++ {
 		inputT := tensor.NewTensor([]int{1, 1}, []float64{float64(currentTokenID)}, false)
@@ -1202,6 +1183,13 @@ func StrictGenerate(model *moe.IntentMoE, input string, w2v *word2vec.SimpleWord
 		// So, oldHiddenNorm should be the state *before* the update, and newHiddenNorm *after*.
 		// The variables were already declared above, so remove the `:=`
 		fmt.Printf("🔍 Step %d | Context Influence: %.4f | Expert: E%d\n", i, math.Abs(newHiddenNorm-oldHiddenNorm), expertID)
+		
+		// [Diagnostic] Log Top-3 predictions for Step 0 to debug "Still Silent"
+		if i == 0 {
+			LogTopPredictions(model, "Step 0 Generation", logits)
+			// Mute EOS at Step 0 to force generation
+			logits.Data[model.SentenceVocab.EosID] = -1e9
+		}
 
 
 		// 5. Apply Repetition and Frequency Penalty

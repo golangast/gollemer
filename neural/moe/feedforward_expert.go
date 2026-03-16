@@ -97,9 +97,26 @@ func (e *FeedForwardExpert) Backward(grad *tensor.Tensor) error {
 	if e.activationOutput == nil || e.activationOutput.Grad == nil {
 		return fmt.Errorf("expert activation output or its gradient is nil in backward")
 	}
-	err = e.activationOutput.Creator.Backward(e.activationOutput.Grad)
-	if err != nil {
-		return fmt.Errorf("expert activation backward failed: %w", err)
+	
+	// Explicit check for "Dead ReLU" during backprop
+	// If the activation was <= 0, we zero out the gradient for that element.
+	// This mirrors the behavior of ReLUBackward but ensures we handle silent experts.
+	if e.intermediateOutput != nil {
+		if e.intermediateOutput.Grad == nil {
+			e.intermediateOutput.Grad = tensor.NewTensor(e.intermediateOutput.Shape, make([]float64, len(e.intermediateOutput.Data)), false)
+		}
+		for i := range e.intermediateOutput.Data {
+			if e.intermediateOutput.Data[i] <= 0 {
+				e.intermediateOutput.Grad.Data[i] = 0
+			} else if i < len(e.activationOutput.Grad.Data) {
+				e.intermediateOutput.Grad.Data[i] += e.activationOutput.Grad.Data[i]
+			}
+		}
+	} else {
+		err = e.activationOutput.Creator.Backward(e.activationOutput.Grad)
+		if err != nil {
+			return fmt.Errorf("expert activation backward failed: %w", err)
+		}
 	}
 
 	// Backpropagate through Layer1
@@ -124,16 +141,9 @@ func (e *FeedForwardExpert) Backward(grad *tensor.Tensor) error {
 		}
 	}
 
-	// Copy the gradient from Layer1's input to our inputTensor
-	// This is necessary because Layer1 sets gradients on its own stored input,
-	// not on the expert's inputTensor reference
-	if e.inputTensor != nil && len(e.Layer1.Inputs()) > 0 {
-		layer1Input := e.Layer1.Inputs()[0]
-		if layer1Input != nil && layer1Input.Grad != nil {
-			// MUST accumulate gradients, not assign, or we lose residual identity gradients!
-			tensor.AddAccumulate(e.inputTensor.Grad.Data, layer1Input.Grad.Data)
-		}
-	}
+	// NOTE: Layer1.Backward already updated e.inputTensor.Grad because linearOut.Backward
+	// accumulates gradients into its input's Grad. 
+	// We do NOT need to copy it manually or add it again.
 
 	return nil
 }

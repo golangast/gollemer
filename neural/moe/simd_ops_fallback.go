@@ -80,6 +80,28 @@ func simdMulScalarF64(dst, src []float64, scalar float64) {
 	}
 }
 
+// updateWeightsSIMD fallback
+func updateWeightsSIMD(weights, gradients, inputs []float32, delta float32) {
+	n := len(inputs)
+	if len(gradients) < n {
+		n = len(gradients)
+	}
+	for i := 0; i < n; i++ {
+		gradients[i] += inputs[i] * delta
+	}
+}
+
+// updateWeightsSIMDF64 fallback
+func updateWeightsSIMDF64(gradients, inputs []float64, delta float64) {
+	n := len(inputs)
+	if len(gradients) < n {
+		n = len(gradients)
+	}
+	for i := 0; i < n; i++ {
+		gradients[i] += inputs[i] * delta
+	}
+}
+
 func simdDotProductF64(a, b []float64) float64 {
 	var dot float64
 	for i := range a {

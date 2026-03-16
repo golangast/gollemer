@@ -91,6 +91,69 @@ func simdMulAccumulateF32(dst, a, b []float32) {
 	}
 }
 
+// updateWeightsSIMD performs a vectorized weight gradient update.
+// This is the implementation requested to optimize the inner loop of the backward pass.
+// weights is unused in this specific snippet but provided for signature compatibility.
+func updateWeightsSIMD(weights, gradients, inputs []float32, delta float32) {
+	deltaVec := archsimd.BroadcastFloat32x8(delta)
+	n := len(inputs)
+	if len(gradients) < n {
+		n = len(gradients)
+	}
+
+	i := 0
+	// Process 8 elements at a time (AVX2)
+	for ; i+8 <= n; i += 8 {
+		inputVec := archsimd.LoadFloat32x8Slice(inputs[i:])
+		gradVec := inputVec.Mul(deltaVec) // Multiply input by scalar delta
+		
+		existingGrad := archsimd.LoadFloat32x8Slice(gradients[i:])
+		newGrad := existingGrad.Add(gradVec) // Add new grad contribution to existing
+		newGrad.StoreSlice(gradients[i:])
+	}
+
+	// Process 4 elements at a time (SSE)
+	deltaVec4 := archsimd.BroadcastFloat32x4(delta)
+	for ; i+4 <= n; i += 4 {
+		inputVec4 := archsimd.LoadFloat32x4Slice(inputs[i:])
+		gradVec4 := inputVec4.Mul(deltaVec4)
+		
+		existingGrad4 := archsimd.LoadFloat32x4Slice(gradients[i:])
+		newGrad4 := existingGrad4.Add(gradVec4)
+		newGrad4.StoreSlice(gradients[i:])
+	}
+
+	// Scalar tail
+	for ; i < n; i++ {
+		gradients[i] += inputs[i] * delta
+	}
+}
+
+// updateWeightsSIMDF64 performs a vectorized weight gradient update for float64.
+func updateWeightsSIMDF64(gradients, inputs []float64, delta float64) {
+	deltaVec := archsimd.BroadcastFloat64x4(delta)
+	n := len(inputs)
+	if len(gradients) < n {
+		n = len(gradients)
+	}
+
+	i := 0
+	// Process 4 elements at a time (AVX/AVX2)
+	for ; i+4 <= n; i += 4 {
+		inputVec := archsimd.LoadFloat64x4Slice(inputs[i:])
+		gradVec := inputVec.Mul(deltaVec)
+		
+		existingGrad := archsimd.LoadFloat64x4Slice(gradients[i:])
+		newGrad := existingGrad.Add(gradVec)
+		newGrad.StoreSlice(gradients[i:])
+	}
+
+	// Scalar tail
+	for ; i < n; i++ {
+		gradients[i] += inputs[i] * delta
+	}
+}
+
 // computeRouterLogitsSIMD computes router logits for all (token, expert) pairs
 // using SIMD-accelerated float32 dot products. Weights are stored in row-major
 // order as [numExperts][inputDim] in float64; they are converted to float32 per
