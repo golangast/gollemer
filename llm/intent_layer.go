@@ -107,9 +107,8 @@ func NewHybridIntentResolver(moe MoEClient) *HybridIntentResolver {
 				Required: []string{"command"},
 			},
 			"chat_response": {
-				Name:     "chat_response",
-				Fields:   map[string]string{"response": "string"},
-				Required: []string{"response"},
+				Name:   "chat_response",
+				Fields: map[string]string{"response": "string"},
 			},
 		},
 	}

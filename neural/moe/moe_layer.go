@@ -59,6 +59,9 @@ type MoELayer struct {
 	stateStack             []MoEState
 	AccumulatedUtilization []int // Tracks token assignments across steps/batches
 	ResidualScale          *Tensor   // Learned scale for the expert output in residual connection
+	ExpertFrozen           []bool    // Toggles whether an expert's weights can be updated
+	StagnationCounters     []int     // Counts consecutive steps/epochs with low utilization
+	ExpertGradMultiplier   []float64 // Boosts gradients for experts recovering from freeze
 }
 
 // ResetUtilizationStats clears the accumulated utilization counters.
@@ -118,6 +121,12 @@ func NewMoELayer(inputDim, outputDim, numExperts, k int, expertBuilder func(int)
 		RouterTemperature:   0.8,  // Default temperature
 		ExpertDropoutRate:   0.1,  // Default dropout
 		ResidualScale:       NewTensor([]int{1}, []float64{1.0}, true), // Default to 1.0
+		ExpertFrozen:        make([]bool, numExperts),
+		StagnationCounters:  make([]int, numExperts),
+		ExpertGradMultiplier: make([]float64, numExperts),
+	}
+	for i := range layer.ExpertGradMultiplier {
+		layer.ExpertGradMultiplier[i] = 1.0
 	}
 	ActiveLayers = append(ActiveLayers, layer)
 	return layer, nil
@@ -170,12 +179,11 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 	embeddingDim := input.Shape[2]
 
 	// Add Router Jitter: Add noise to logits during training to encourage exploration.
-	// Standard jitter range is 0.95 to 1.05 (multiplicative)
+	// Reduced noise to 0.01 as requested for "kickstarting" cold experts.
 	if moe.Training {
 		for i := range gateLogits.Data {
-			// +/- 5% multiplicative noise
-			noise := 1.0 + (rand.Float64()*0.1 - 0.05) 
-			gateLogits.Data[i] *= noise
+			noise := (rand.Float64() - 0.5) * 0.01 
+			gateLogits.Data[i] += noise
 		}
 	}
 
@@ -186,6 +194,29 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 		routerScale = 1.0 / moe.RouterTemperature
 	}
 	simdScaleF64(gateLogits.Data, routerScale)
+
+	// --- [Penalty Mask for Over-Used Experts] ---
+	// Aggressive Penalty for Dominant Experts (Router Level)
+	// Subtract from the logit to make this expert less attractive if over-utilized
+	if moe.Training {
+		var totalTokensProcessed int
+		for _, u := range moe.AccumulatedUtilization {
+			totalTokensProcessed += u
+		}
+		if totalTokensProcessed > 1000 { // Only apply after some warmup
+			avgTokens := float64(totalTokensProcessed) / float64(numExperts)
+			for i := 0; i < batchSize*seqLength; i++ {
+				for j := 0; j < numExperts; j++ {
+					usage := float64(moe.AccumulatedUtilization[j])
+					if usage > avgTokens {
+						// log(usage/avg) is the penalty strength
+						penalty := math.Log(usage/avgTokens) * 1.0 // 1.0 coefficient for strong nudge
+						gateLogits.Data[i*numExperts+j] -= penalty
+					}
+				}
+			}
+		}
+	}
 
 	// Apply Expert Dropout during training
 	if moe.Training && moe.ExpertDropoutRate > 0 {
@@ -320,8 +351,45 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 		// Record the #1 expert for each token in the batch
 		moe.TopExpertIDs[i] = topKIndices[0]
 
-		selected := topKIndices[:moe.K]
+		// --- Hard top-K assignment with Overflow ---
+		// We try to pick the best experts, but if they are full, we spill over to the next best
+		// to ensure Expert Curiosity and stop the "Expert 3 Bottleneck".
+		selected := make([]int, 0, moe.K)
+		assignedCount := 0
+		tokenRelativeIndices := allRelativeIndices[i*moe.K : (i+1)*moe.K]
+		
+		for _, expertIdx := range topKIndices {
+			if assignedCount >= moe.K {
+				break
+			}
+
+			stretchedCapacity := capacity
+			// If router confidence is extremely high, allow some stretch
+			if gateOutputs.Data[i*numExperts+expertIdx] > 0.8 {
+				stretchedCapacity = int(float64(capacity) * 1.5)
+			}
+
+			if len(moe.expertTokenIndices[expertIdx]) < stretchedCapacity {
+				tokenRelativeIndices[assignedCount] = len(moe.expertTokenIndices[expertIdx])
+				moe.expertTokenIndices[expertIdx] = append(moe.expertTokenIndices[expertIdx], i)
+				selected = append(selected, expertIdx)
+				assignedCount++
+				
+				// Track stats
+				if moe.AccumulatedUtilization == nil {
+					moe.AccumulatedUtilization = make([]int, numExperts)
+				}
+				moe.AccumulatedUtilization[expertIdx]++
+			}
+		}
+		
+		// Pad with -1 if we couldn't find enough capacity (unlikely but safe)
+		for j := assignedCount; j < moe.K; j++ {
+			tokenRelativeIndices[j] = -1
+		}
+
 		moe.selectedExperts[i] = selected
+		tokenExpertRelativeIndices[i] = tokenRelativeIndices
 
 		// --- Hard Top-K: Zero out non-selected probabilities and re-normalize ---
 		// This forces the model to ignore noise from "unskilled" experts.
@@ -341,50 +409,17 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 		if rowSum > 1e-12 {
 			simdScaleF64(gateOutputs.Data[i*numExperts:(i+1)*numExperts], 1.0/rowSum)
 		}
-
-		tokenExpertRelativeIndices[i] = allRelativeIndices[i*moe.K : (i+1)*moe.K]
-		for j, expertIdx := range selected {
-			if expertIdx < 0 || expertIdx >= numExperts {
-				tokenExpertRelativeIndices[i][j] = -1
-				continue
-			}
-			// Enforce capacity limit
-			// Dynamic Capacity Stretching: If confidence is very high (>0.8), allow extra capacity
-			currentConf := gateOutputs.Data[i*numExperts+expertIdx]
-			stretchedCapacity := capacity
-			if currentConf > 0.8 {
-				stretchedCapacity = int(float64(capacity) * 1.5) // Stretch by 50%
-			}
-
-			if len(moe.expertTokenIndices[expertIdx]) >= stretchedCapacity {
-				tokenExpertRelativeIndices[i][j] = -1 // Drop token
-				continue
-			}
-			tokenExpertRelativeIndices[i][j] = len(moe.expertTokenIndices[expertIdx])
-			moe.expertTokenIndices[expertIdx] = append(moe.expertTokenIndices[expertIdx], i)
-			
-			// Track stats
-			if moe.AccumulatedUtilization == nil || len(moe.AccumulatedUtilization) != numExperts {
-				moe.AccumulatedUtilization = make([]int, numExperts)
-			}
-			moe.AccumulatedUtilization[expertIdx]++
-		}
 	}
 
-	// 6. Finalize Load Balancing Loss
+	// 6. Finalize Load Balancing Loss (ST-MoE / Switch Transformer Style)
 	if numTokens > 0 {
-		var lbLoss float64
-		for i := 0; i < numExperts; i++ {
-			// fi: fraction of tokens dispatched to expert i
-			fi := float64(len(moe.expertTokenIndices[i])) / float64(numTokens)
-			// Pi: mean probability of allocating a token to expert i
-			Pi := moe.expertProbSums[i] / float64(numTokens)
-
-			lbLoss += fi * Pi
+		moe.LoadBalancingLoss = 0
+		for e := 0; e < numExperts; e++ {
+			fraction := float64(len(moe.expertTokenIndices[e])) / float64(numTokens)
+			meanProb := moe.expertProbSums[e] / float64(numTokens)
+			moe.LoadBalancingLoss += fraction * meanProb
 		}
-		// Final scaling (e.g., 0.01) prevents it from distracting from the main goal
-		// Multiply by numExperts to keep the loss scale independent of expert count
-		moe.LoadBalancingLoss = lbLoss * float64(numExperts) * 0.01
+		moe.LoadBalancingLoss *= float64(numExperts)
 	} else {
 		moe.LoadBalancingLoss = 0
 	}
@@ -683,6 +718,22 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 				return
 			}
 
+			// --- [Expert Grad Multiplier (Jump Start)] ---
+			// Apply a multiplier to experts recovering from freeze or stagnation
+			if moe.ExpertGradMultiplier != nil && moe.ExpertGradMultiplier[expertIdx] > 1.0 {
+				params := moe.Experts[expertIdx].Parameters()
+				for _, p := range params {
+					if p.Grad != nil {
+						simdScaleF64(p.Grad.Data, moe.ExpertGradMultiplier[expertIdx])
+					}
+				}
+				// Decay multiplier toward 1.0 (50 steps to normalization @ 0.98 decay)
+				moe.ExpertGradMultiplier[expertIdx] *= 0.98
+				if moe.ExpertGradMultiplier[expertIdx] < 1.02 {
+					moe.ExpertGradMultiplier[expertIdx] = 1.0
+				}
+			}
+
 			// Accumulate input gradients
 			// The expert's input was created via Gather.
 			// So expert.Inputs()[0].Grad contains the gradients w.r.t the gathered input.
@@ -757,16 +808,11 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 		return firstErr
 	}
 
-	// Add load balancing loss gradient
+	// Add load balancing (Square of Sums) loss gradient
 	if moe.LoadBalancingWeight > 0 && len(moe.expertProbSums) == numExperts && batchSize*seqLength > 0 {
-		// d(numExperts/(N^2) * sum(S_j^2)) / d(p_ij) = (numExperts/(N^2)) * 2 * S_j
-		normFactor := float64(numExperts) / math.Pow(float64(batchSize*seqLength), 2)
-		for i := 0; i < batchSize*seqLength; i++ {
-			for j := 0; j < numExperts; j++ {
-				grad := moe.LoadBalancingWeight * 2 * moe.expertProbSums[j] * normFactor
-				gateGradReshaped.Data[i*numExperts+j] += grad
-			}
-		}
+		// Differentiable penalty: d(2.0 * sum(mean_prob_j^2)) / d(p_ij)
+		// which is calculated using our SIMD helper.
+		simdSquareOfSumsGradF64(gateGradReshaped.Data, moe.expertProbSums, batchSize*seqLength, numExperts, moe.LoadBalancingWeight*2.0)
 	}
 
 	// The input gradients have been accumulated into input2D.Grad by the GatherOperation.Backward calls.
@@ -864,6 +910,33 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 		}(start, end)
 	}
 	wgSoftmax.Wait()
+
+	// --- [Auxiliary Loss Gradient (Manual Inject)] ---
+	// dL/dP_ie = lambda * (N/T) * f_e
+	// We add this to gateGradReshaped before the softmax backward if it's w.r.t probabilities
+	// OR we add it to logitsGrad. Usually it's w.r.t. probabilities.
+	// But the user's SIMD pseudocode adds it to gateGrads (which I named gateGradReshaped).
+	// 6. Finalize Load Balancing Loss Gradient
+	numTokens := batchSize * seqLength
+	if moe.LoadBalancingWeight > 0 && numTokens > 0 {
+		numExperts := len(moe.Experts)
+		T := float64(numTokens)
+		N := float64(numExperts)
+		scalar := moe.LoadBalancingWeight * (N / (T * T))
+
+		scaledFractions := make([]float64, numExperts)
+		for e := 0; e < numExperts; e++ {
+			scaledFractions[e] = float64(len(moe.expertTokenIndices[e])) * scalar
+		}
+
+		// Prepare 2D view for UpdateRouterGrads
+		gateGrads2D := make([][]float64, numTokens)
+		for i := 0; i < numTokens; i++ {
+			gateGrads2D[i] = gateGradReshaped.Data[i*numExperts : (i+1)*numExperts]
+		}
+
+		moe.UpdateRouterGrads(gateGrads2D, scaledFractions)
+	}
 
 	// Apply Temperature Scaling to gradients (dL/dx = dL/dy * 1/T)
 	if moe.RouterTemperature != 1.0 && moe.RouterTemperature > 0 {
@@ -1004,6 +1077,12 @@ func CalculateRouterZLoss(routerLogits *Tensor) float64 {
 	return (sumSq / float64(len(routerLogits.Data))) * 0.0001
 }
 
+// CalculateSquareOfSumsLoss implements an aggressive diversity penalty to break monopolies.
+// This calculates sum((count_i/total)^2) which rewards equal distribution.
+func CalculateSquareOfSumsLoss(usageCounts []int, totalTokens int) float64 {
+	// Weight heavily (e.g. 2.0) as requested to break stalemates
+	return simdSquareOfSumsLossF64(usageCounts, totalTokens, 2.0)
+}
 // RebalanceExperts ensures all experts have a similar weight magnitude (L2 Norm).
 // This prevents one expert from becoming a "gravity well" for the router.
 func (moe *MoELayer) RebalanceExperts() {
@@ -1064,6 +1143,80 @@ func (moe *MoELayer) RebalanceExperts() {
 	fmt.Println("👉 Router weights reset to small random values.")
 }
 
+// EvolutionaryReset identifies stagnant experts and replaces them with a slightly
+// mutated clone of the most successful active expert.
+func (moe *MoELayer) EvolutionaryReset(stagnationThreshold int) {
+	numExperts := len(moe.Experts)
+	if numExperts < 2 {
+		return
+	}
+
+	// 1. Identify the "Best" Expert (highest utilization in this epoch/window)
+	bestExpertIdx := -1
+	maxUsage := -1
+	for i, usage := range moe.AccumulatedUtilization {
+		if usage > maxUsage {
+			maxUsage = usage
+			bestExpertIdx = i
+		}
+	}
+
+	if bestExpertIdx == -1 || maxUsage == 0 {
+		return // No data to reset from
+	}
+
+	// 2. Identify and Reset Stagnant Experts
+	for i := 0; i < numExperts; i++ {
+		if i == bestExpertIdx {
+			moe.StagnationCounters[i] = 0
+			continue
+		}
+
+		// If usage is extremely low (e.g., < 1% of total tokens), increment counter
+		totalTokens := 0
+		for _, u := range moe.AccumulatedUtilization {
+			totalTokens += u
+		}
+		
+		isStagnant := moe.AccumulatedUtilization[i] < (totalTokens / (numExperts * 10))
+		if isStagnant {
+			moe.StagnationCounters[i]++
+		} else {
+			moe.StagnationCounters[i] = 0
+		}
+
+		if moe.StagnationCounters[i] >= stagnationThreshold {
+			fmt.Printf("🧬 [Evolutionary Reset] Expert %d stagnant for %d cycles. Cloning Expert %d...\n", i, moe.StagnationCounters[i], bestExpertIdx)
+			
+			// CLONE: Copy weights from bestExpert to stagnant expert with Jitter
+			sourceParams := moe.Experts[bestExpertIdx].Parameters()
+			targetParams := moe.Experts[i].Parameters()
+			
+			for pIdx := range sourceParams {
+				if pIdx >= len(targetParams) {
+					continue
+				}
+				// Use 15% Gaussian jitter as requested to encourage specialization
+				simdAddJitterF64(targetParams[pIdx].Data, sourceParams[pIdx].Data, 0.15)
+			}
+
+			// RESET ROUTER: Clear the router's bias against this expert and set small random weights
+			// Router weights are [inputDim, numExperts]. Expert i is the i-th column.
+			inputDim := moe.GatingNetwork.Linear.Weights.Shape[0]
+			for k := 0; k < inputDim; k++ {
+				// Reset weight from all input dimensions to this expert
+				moe.GatingNetwork.Linear.Weights.Data[k*numExperts+i] = (rand.Float64()*2 - 1) * 0.05
+			}
+			
+			if moe.GatingNetwork.Linear.Biases != nil {
+				moe.GatingNetwork.Linear.Biases.Data[i] = 0
+			}
+
+			moe.StagnationCounters[i] = 0
+		}
+	}
+}
+
 // ResizeExperts resizes the output dimension of all experts.
 func (moe *MoELayer) ResizeExperts(newOutputDim int) {
 	fmt.Printf("🔧 Resizing %d MoE Experts to new OutputDim: %d\n", len(moe.Experts), newOutputDim)
@@ -1122,25 +1275,57 @@ func (moe *MoELayer) SetExpertFreeze(expertID int, freeze bool) {
 	if expertID < 0 || expertID >= len(moe.Experts) {
 		return
 	}
-	
-	// Type assert to access the underlying parameters
-	if ff, ok := moe.Experts[expertID].(*FeedForwardExpert); ok {
-		ff.Layer2.Weights.RequiresGrad = !freeze
-		if ff.Layer2.Biases != nil {
-			ff.Layer2.Biases.RequiresGrad = !freeze
-		}
-		if ff.Layer1 != nil {
-			ff.Layer1.Weights.RequiresGrad = !freeze
-			if ff.Layer1.Biases != nil {
-				ff.Layer1.Biases.RequiresGrad = !freeze
-			}
-		}
-		fmt.Printf("❄️ Expert %d Freeze State: %v\n", expertID, freeze)
+	// If unfreezing, set a jump-start multiplier
+	if !freeze && moe.ExpertFrozen[expertID] {
+		moe.ExpertGradMultiplier[expertID] = 2.5 // Initial boost
+		fmt.Printf("🚀 Expert %d UNROZEN: Applying 2.5x Gradient Jump-Start\n", expertID)
 	}
+
+	moe.ExpertFrozen[expertID] = freeze
+	
+	// Set RequiresGrad for all parameters of the expert
+	params := moe.Experts[expertID].Parameters()
+	for _, p := range params {
+		p.RequiresGrad = !freeze
+	}
+	fmt.Printf("❄️ Expert %d Freeze State: %v\n", expertID, freeze)
 }
 
 
 // GetStateStack returns the internal state stack for BPTT.
 func (moe *MoELayer) GetStateStack() []MoEState {
 	return moe.stateStack
+}
+
+// GetMoELayers returns the layer itself.
+func (moe *MoELayer) GetMoELayers() []*MoELayer {
+	return []*MoELayer{moe}
+}
+
+// UpdateRouterGrads handles the load balancing penalty in pure Go.
+func (moe *MoELayer) UpdateRouterGrads(gateGrads [][]float64, scaledFractions []float64) {
+	numExperts := len(scaledFractions)
+
+	for i := range gateGrads {
+		// This slice capture helps the compiler eliminate bounds checks in the inner loop
+		grads := gateGrads[i]
+		if len(grads) < numExperts {
+			continue
+		}
+
+		// Loop unrolling: process 4 experts at a time
+		// This encourages the Go compiler to use AVX registers automatically
+		e := 0
+		for ; e <= numExperts-4; e += 4 {
+			grads[e]   += scaledFractions[e]
+			grads[e+1] += scaledFractions[e+1]
+			grads[e+2] += scaledFractions[e+2]
+			grads[e+3] += scaledFractions[e+3]
+		}
+
+		// Handle the tail
+		for ; e < numExperts; e++ {
+			grads[e] += scaledFractions[e]
+		}
+	}
 }

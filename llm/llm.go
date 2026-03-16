@@ -910,7 +910,7 @@ case "a":
 			intentData.Parameters = params
 			sessionState.ActiveIntent = ""
 			sessionState.Parameters = nil
-		} else if len(intentData.Missing) > 0 {
+		} else if len(intentData.Missing) > 0 && intentData.Intent != "chat_response" {
 			sessionState.IsActive = true
 			sessionState.ActiveIntent = intentData.Intent
 			// Convert map[string]interface{} to map[string]string
@@ -946,13 +946,16 @@ case "a":
 
 		// 1. Initial Parse with KnowledgeBase
 		intent := parse(query, kb)
-		intentData = resolver.Resolve(query, nil)
+		// NOTE: intentData was already resolved at line 901 or 903/session logic.
+		// We do NOT call resolver.Resolve again here as it would overwrite session results.
 
 		if intentData.Intent == "chat_response" {
-			if resp, ok := intentData.Parameters["response"].(string); ok {
+			if resp, ok := intentData.Parameters["response"].(string); ok && resp != "" {
 				colors.AnimatedOutput("cyan", "black", resp, 1*time.Second)
-				continue
+			} else {
+				fmt.Println(" |ʕ•ϖ•ʔ| I'm not sure how to respond to that yet.")
 			}
+			continue
 		}
 
 		var (
@@ -1090,8 +1093,16 @@ case "a":
 		}
 
 		// 2. Inference & Sync Logic
-		if intent.Command == "" || intent.ObjectType == "" {
-			intent = resolveIntent(reader, intent, kb)
+		// Skip recursive inference if we already have a high-confidence intent from MoE
+		// or if it's a chat response.
+		if (intent.Command == "" || intent.ObjectType == "") && 
+		   (intentData == nil || intentData.Confidence < 0.8 || intentData.Intent == "chat_response") {
+			// If it's a chat response, don't try to force it into a command
+			if intentData != nil && intentData.Intent == "chat_response" {
+				// skip resolveIntent
+			} else {
+				intent = resolveIntent(reader, intent, kb)
+			}
 		}
 
 		command = intent.Command
@@ -4623,6 +4634,9 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 				if err != nil {
 					log.Printf("Hybrid Encoder forward failed: %v", err)
 				} else {
+					// CRITICAL: Normalize context vector to match training scale
+					contextVector = c.Model.NormalizeContextVector(contextVector)
+
 					// 5. Decode Intent Statement
 					// We need POS tagging for entity replacement in decoding
 					posTags := postagger.TagTokens(words)
@@ -4636,15 +4650,18 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 					// If it's nil, we can't map IDs back to words.
 					// So let's check if c.Model.SentenceVocab is set.
 					if c.Model.SentenceVocab != nil {
-						// Decode
-						outputIDs, err := c.Model.GreedySearchDecode(
+						// Use temperature sampling (topK=50) so the decoder generates real words.
+						// topK=1 was causing EOS to win on step 0 every time (model too young).
+						// temperature=0.4 sharpens the distribution to commit to the best tokens.
+						outputIDs, err := c.Model.GreedySearchDecodeWithTemp(
 							contextVector,
-							50, // maxLen
+							20,  // maxLen — keep responses short
 							c.Model.SentenceVocab.BosID,
 							c.Model.SentenceVocab.EosID,
-							1.2, // repetitionPenalty (Suggested > 1.0 to discourage repetition)
-							0.5, // frequencyPenalty
-							1,   // topK
+							0.4, // temperature — sharpen distribution to commit more
+							1.2, // repetitionPenalty
+							0.3, // frequencyPenalty
+							50,  // topK — sample from top-50 tokens
 							taggedData,
 						)
 
@@ -4653,18 +4670,29 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 						} else {
 							// Convert IDs to String
 							var decodedWords []string
+							if len(outputIDs) == 0 {
+								log.Printf("⚠️ Decoder returned 0 tokens. Model may need more training.")
+							}
 							for _, id := range outputIDs {
 								w := c.Model.SentenceVocab.GetWord(id)
-								if w != "EOS" && w != "PAD" && w != "BOS" {
+								// Filter out special tokens
+								if w != "</s>" && w != "<s>" && w != "<pad>" && w != "UNK" && w != "" &&
+								   w != "EOS" && w != "BOS" && w != "PAD" {
 									decodedWords = append(decodedWords, w)
 								}
 							}
 							predictedSentence := strings.Join(decodedWords, " ")
 							rawModelOutput = predictedSentence
+
+							// ── Confidence Gate ─────────────────────────────────────────────
+							// If output is completely empty, it's low confidence.
+							// Otherwise, if we have a "RAW" output that doesn't look like noise, we let it through.
+							isLowConfidence := len(outputIDs) == 0
+							if !isLowConfidence {
+							// ─────────────────────────────────────────────────────────────────
+
+
 							// Check if predicted sentence is a known intent
-							// The model might output "create webserver named foo"
-							// We need to extract the intent part.
-							// Usually the first words are the intent command + object.
 							if strings.HasPrefix(predictedSentence, "create webserver") {
 								return "create_webserver", 0.99
 							}
@@ -4683,14 +4711,13 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 							if strings.HasPrefix(predictedSentence, "help_command") {
 								return "help_command", 0.95
 							}
-							// ... (add other known intents)
-							// If model works well, we trust it.
-							// If it doesn't match a command, treat it as a chat response
+							// If model output doesn't match a command, treat as chat
 							if !strings.HasPrefix(predictedSentence, "create") && !strings.HasPrefix(predictedSentence, "status") {
 								c.lastMoEPrediction = predictedSentence
 								return "chat_response", 0.80
 							}
 							log.Printf("Hybrid Model Prediction: %s", predictedSentence)
+						} // end if !isLowConfidence
 						}
 					}
 				}

@@ -139,3 +139,7 @@ func (s *MoEStack) ClearState() {
 		l.ClearState()
 	}
 }
+
+func (s *MoEStack) GetMoELayers() []*MoELayer {
+	return s.Layers
+}

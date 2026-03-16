@@ -186,9 +186,13 @@ func (d *RNNDecoder) Forward(contextVector, targetSequence *Tensor, scheduledSam
 			return nil, err
 		}
 
-		d.hiddenStates = make([]*Tensor, maxSequenceLength-1)
+		// Store states for backward pass
+		d.hiddenStates = []*Tensor{allHidden}
 		d.InitialHiddenState = initialHidden
 		d.InitialCellState = cellState
+		d.attentionOutputs = []*Tensor{allAttention}
+		d.combinedInputs = []*Tensor{combined}
+		
 		return []*Tensor{allLogits}, nil
 	}
 
@@ -318,8 +322,13 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
 		}
 		allEmbedded, _ := d.Embedding.Forward(allInputs)
 		
+		// 2a. Re-apply Reinforced Context Injection to match Forward pass for correct BPTT
+		const contextMultiplier = 2.0
+		ctxMean, _ := d.contextVector.Mean(1)
+		ctxMeanReshaped, _ := ctxMean.Reshape([]int{batchSize, 1, d.contextVector.Shape[2]})
+		allEmbedded, _ = allEmbedded.AddWithBroadcast(ctxMeanReshaped.Scale(contextMultiplier))
+
 		// 2b. Re-run LSTM sequence forward to populate timeStepCells for BPTT
-		// Use the already-stored initial hidden state and a zero cell state.
 		allHidden, _, err := d.LSTM.Forward(allEmbedded, d.InitialHiddenState, initialCell(batchSize, hiddenSize))
 		if err != nil {
 			return fmt.Errorf("LSTM forward failed during backward re-vectorization: %w", err)
@@ -417,14 +426,22 @@ if inputGrad != nil {
     
     // Branch B: To Context Vector (via Mean and Multiplier)
     const contextMultiplier = 2.0
-    // 1. Sum over decoder sequence dimension to get grad for ctxMean
-    // inputGrad shape [Batch, T, Dim], we want [Batch, Dim]
-    gradCtxMean, _ := inputGrad.Sum(1) 
+    // 1. Sum over decoder sequence dimension to get grad for ctxMean from the LSTM inputs
+    gradCtxMeanFromInputs, _ := inputGrad.Sum(1) 
     
-    // 2. Distribute back to encoder sequence dimension
+    // 2. Scale by multiplier (y = x + k*z => dz = k*dy)
+    gradCtxMean := gradCtxMeanFromInputs.Scale(contextMultiplier)
+
+    // 3. Add gradients from the initial hidden state (which came from context mean but NO multiplier)
+    initialHiddenGrad := d.LSTM.GetPrevHiddenGrad()
+    if initialHiddenGrad != nil {
+        gradCtxMean, _ = gradCtxMean.Add(initialHiddenGrad)
+    }
+
+    // 4. Distribute back to encoder sequence dimension
     // ctxMean = sum(contextVector) / S, so dL/dv_i = (dL/dctxMean) / S
     encSeqLen := d.contextVector.Shape[1]
-    distGrad := gradCtxMean.Scale(contextMultiplier / float64(encSeqLen))
+    distGrad := gradCtxMean.Scale(1.0 / float64(encSeqLen))
     
     // expandedGrad shape [Batch, encSeqLen, Dim]
     expandedGrad := distGrad.Expand([]int{batchSize, encSeqLen, embeddingDim})
