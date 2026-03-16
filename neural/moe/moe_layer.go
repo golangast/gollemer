@@ -808,12 +808,7 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 		return firstErr
 	}
 
-	// Add load balancing (Square of Sums) loss gradient
-	if moe.LoadBalancingWeight > 0 && len(moe.expertProbSums) == numExperts && batchSize*seqLength > 0 {
-		// Differentiable penalty: d(2.0 * sum(mean_prob_j^2)) / d(p_ij)
-		// which is calculated using our SIMD helper.
-		simdSquareOfSumsGradF64(gateGradReshaped.Data, moe.expertProbSums, batchSize*seqLength, numExperts, moe.LoadBalancingWeight*2.0)
-	}
+	// [Removed redundant redundant LB gradient here as it is handled below]
 
 	// The input gradients have been accumulated into input2D.Grad by the GatherOperation.Backward calls.
 	// Now we need to propagate them from input2D to inputTensor.
@@ -885,6 +880,30 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 	// Convert probability gradients to logit gradients (Softmax Backward)
 	logitsGrad := NewTensor(gateGradReshaped.Shape, make([]float64, len(gateGradReshaped.Data)), false)
 
+	// --- [Auxiliary Loss Gradient (Manual Inject) BEFORE Softmax Backward] ---
+	// dL/dP_ie = lambda * (N/T) * f_e
+	// We add this to gateGradReshaped before the softmax backward so it affects training.
+	numTokens := batchSize * seqLength
+	if moe.LoadBalancingWeight > 0 && numTokens > 0 {
+		numExperts := len(moe.Experts)
+		T := float64(numTokens)
+		N := float64(numExperts)
+		scalar := moe.LoadBalancingWeight * (N / (T * T))
+
+		scaledFractions := make([]float64, numExperts)
+		for e := 0; e < numExperts; e++ {
+			scaledFractions[e] = float64(len(moe.expertTokenIndices[e])) * scalar
+		}
+
+		// Prepare 2D view for UpdateRouterGrads
+		gateGrads2D := make([][]float64, numTokens)
+		for i := 0; i < numTokens; i++ {
+			gateGrads2D[i] = gateGradReshaped.Data[i*numExperts : (i+1)*numExperts]
+		}
+
+		moe.UpdateRouterGrads(gateGrads2D, scaledFractions)
+	}
+
 	// Parallelize softmax backward
 	var wgSoftmax sync.WaitGroup
 	numWorkers := runtime.NumCPU()
@@ -910,33 +929,6 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 		}(start, end)
 	}
 	wgSoftmax.Wait()
-
-	// --- [Auxiliary Loss Gradient (Manual Inject)] ---
-	// dL/dP_ie = lambda * (N/T) * f_e
-	// We add this to gateGradReshaped before the softmax backward if it's w.r.t probabilities
-	// OR we add it to logitsGrad. Usually it's w.r.t. probabilities.
-	// But the user's SIMD pseudocode adds it to gateGrads (which I named gateGradReshaped).
-	// 6. Finalize Load Balancing Loss Gradient
-	numTokens := batchSize * seqLength
-	if moe.LoadBalancingWeight > 0 && numTokens > 0 {
-		numExperts := len(moe.Experts)
-		T := float64(numTokens)
-		N := float64(numExperts)
-		scalar := moe.LoadBalancingWeight * (N / (T * T))
-
-		scaledFractions := make([]float64, numExperts)
-		for e := 0; e < numExperts; e++ {
-			scaledFractions[e] = float64(len(moe.expertTokenIndices[e])) * scalar
-		}
-
-		// Prepare 2D view for UpdateRouterGrads
-		gateGrads2D := make([][]float64, numTokens)
-		for i := 0; i < numTokens; i++ {
-			gateGrads2D[i] = gateGradReshaped.Data[i*numExperts : (i+1)*numExperts]
-		}
-
-		moe.UpdateRouterGrads(gateGrads2D, scaledFractions)
-	}
 
 	// Apply Temperature Scaling to gradients (dL/dx = dL/dy * 1/T)
 	if moe.RouterTemperature != 1.0 && moe.RouterTemperature > 0 {
