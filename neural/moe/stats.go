@@ -7,6 +7,12 @@ import (
 	"github.com/golangast/gollemer/neural/tensor"
 )
 
+// MoEStats holds utilization statistics for a batch to calculate auxiliary loss.
+type MoEStats struct {
+	RouterProbSum []float64 // Sum of probabilities for each expert
+	ExpertCounts  []float64 // Hard count of how many times each expert was chosen
+}
+
 // PrintExpertWeightHistogram prints a detailed visual distribution of expert weights.
 func PrintExpertWeightHistogram(label string, expert Expert) {
 	params := expert.Parameters()

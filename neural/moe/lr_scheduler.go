@@ -29,3 +29,11 @@ func (s *LRScheduler) Update(currentPPL float64) float64 {
 	}
 	return s.CurrentLR
 }
+
+// ApplyStepDecay reduces the learning rate by a factor every N epochs.
+func ApplyStepDecay(currentLR float64, epoch int, stepSize int, gamma float64) float64 {
+	if epoch > 0 && epoch%stepSize == 0 {
+		return currentLR * gamma
+	}
+	return currentLR
+}

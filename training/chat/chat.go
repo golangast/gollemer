@@ -3,6 +3,7 @@ package chat
 import (
 	"bufio"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"log"
 	"math"
@@ -141,13 +142,29 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 	}
 	fmt.Println("✅ Loaded Word2Vec model")
 
-	// 2. Read human_chat.txt
-	chatPath := filepath.Join(projectRoot, "trainingdata/human_chat.txt")
-	file, err := os.Open(chatPath)
+	// 2. Read conversing.json
+	chatPath := filepath.Join(projectRoot, "trainingdata/conversing.json")
+	jsonData, err := os.ReadFile(chatPath)
 	if err != nil {
-		log.Fatalf("Failed to open chat data: %v", err)
+		log.Fatalf("Failed to read conversing.json: %v", err)
 	}
-	defer file.Close()
+
+	var jsonPairs []struct {
+		Prompt   string `json:"prompt"`
+		Response string `json:"response"`
+	}
+	if err := json.Unmarshal(jsonData, &jsonPairs); err != nil {
+		log.Fatalf("Failed to unmarshal conversing.json: %v", err)
+	}
+
+	var chatPairs []struct{ Q, A string }
+	for _, p := range jsonPairs {
+		// Train harder on this data by upsampling it 10x
+		// This ensures the model's "Personality" from conversing.json as standard.
+		for k := 0; k < 10; k++ {
+			chatPairs = append(chatPairs, struct{ Q, A string }{p.Prompt, p.Response})
+		}
+	}
 
 	// Reset ActiveLayers to ensure we track only the current model's layers and prevent leaks
 	moe.ActiveLayers = nil
@@ -284,32 +301,6 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 		for _, param := range intentModel.Parameters() {
 			param.RequiresGrad = true
 		}
-	}
-
-	scanner := bufio.NewScanner(file)
-	var chatPairs []struct{ Q, A string }
-
-	var lastLine string
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
-			continue
-		}
-
-		// Extract content after "Human X:"
-		content := line
-		if idx := strings.Index(line, ":"); idx != -1 {
-			content = strings.TrimSpace(line[idx+1:])
-		}
-
-		if lastLine != "" {
-			chatPairs = append(chatPairs, struct{ Q, A string }{lastLine, content})
-		}
-		lastLine = content
-	}
-
-	if err := scanner.Err(); err != nil {
-		log.Fatalf("Error reading chat data: %v", err)
 	}
 
 	if len(chatPairs) == 0 {
@@ -750,10 +741,10 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 				}
 				// Normalize step-by-step path by volume (consistent with vectorized path)
 				div := float64(len(logits))
-				batchLoss = stepLossTotal / div
+				batchLoss = (stepLossTotal / div) * 2.0 // Boost focus on conversational personality
 				for t := range grads {
 					for i := range grads[t].Data {
-						grads[t].Data[i] /= div
+						grads[t].Data[i] /= (div / 2.0) // Propagate the boost to gradients
 					}
 				}
 			}
@@ -768,23 +759,60 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 				log.Printf("🎯 [Overfit] Step %d | Final Loss: %.6f", globalStep, batchLoss)
 			}
 
-			// Add MoE Load Balancing Loss and Router Z-Loss
-			var currentBatchLB float64
-			var batchZLoss float64
-			for _, l := range moe.ActiveLayers {
-				currentBatchLB += l.LoadBalancingLoss * l.LoadBalancingWeight
-				batchZLoss += l.RouterZLoss // Coefficient 1e-4 is baked into CalculateRouterZLoss
+			// 7. Calculate MoE Stats for auxiliary loss as requested
+			// This provides a second perspective on expert utilization.
+			numExperts := 8
+			if len(moe.ActiveLayers) > 0 {
+				numExperts = len(moe.ActiveLayers[0].Experts)
 			}
-			// Factor in decoder MoE if present
+			
+			batchStats := moe.MoEStats{
+				RouterProbSum: make([]float64, numExperts),
+				ExpertCounts:  make([]float64, numExperts),
+			}
+			
+			totalTokensInBatch := 0
+			var batchZLoss float64
+			
+			// Collect from encoder layers
+			for _, layer := range moe.ActiveLayers {
+				batchZLoss += layer.RouterZLoss
+				if layer.ExpertProbSums != nil {
+					for i, val := range layer.ExpertProbSums {
+						if i < numExperts { batchStats.RouterProbSum[i] += val }
+					}
+				}
+				for i, indices := range layer.ExpertTokenIndices {
+					count := len(indices)
+					if i < numExperts { batchStats.ExpertCounts[i] += float64(count) }
+					totalTokensInBatch += count
+				}
+			}
+			
+			// Collect from decoder MoE if present
 			if intentModel.Decoder.OutputMoE != nil {
-				currentBatchLB += intentModel.Decoder.OutputMoE.LoadBalancingLoss * intentModel.Decoder.OutputMoE.LoadBalancingWeight
-				batchZLoss += intentModel.Decoder.OutputMoE.RouterZLoss
+				l := intentModel.Decoder.OutputMoE
+				batchZLoss += l.RouterZLoss
+				if l.ExpertProbSums != nil {
+					for i, val := range l.ExpertProbSums {
+						if i < numExperts { batchStats.RouterProbSum[i] += val }
+					}
+				}
+				for i, indices := range l.ExpertTokenIndices {
+					count := len(indices)
+					if i < numExperts { batchStats.ExpertCounts[i] += float64(count) }
+					totalTokensInBatch += count
+				}
 			}
 
-			// Final total loss used for gradients
-			totalGradLoss := batchLoss + currentBatchLB + batchZLoss
-			batchLoss = totalGradLoss // Updated for logging
-			epochLBLoss += currentBatchLB
+			// Balancing coefficient as requested
+			lambda := 0.1
+			lbLoss := intentModel.ComputeAuxiliaryLoss(batchStats, totalTokensInBatch, numExperts)
+
+			// Final total loss used for gradients and logging
+			totalGradLoss := batchLoss + (lambda * lbLoss) + batchZLoss
+			batchLoss = totalGradLoss 
+			epochLBLoss += (lambda * lbLoss)
 
 			// Backward
 			func() {
@@ -972,10 +1000,17 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 		newLR := lrScheduler.Update(valPPL)
 		if newLR != peakLR {
 			peakLR = newLR
-			scheduler.MaxLR = peakLR
-			scheduler.MinLR = peakLR * 0.01
-			log.Printf("💹 LR Scheduler reduced peakLR to %.8f", peakLR)
 		}
+
+		// Apply simple Step Decay every 5 epochs as well
+		oldPeakLR := peakLR
+		peakLR = moe.ApplyStepDecay(peakLR, epoch+1, 5, 0.5)
+		if peakLR != oldPeakLR {
+			log.Printf("📉 Step Decay applied: peakLR %.8f -> %.8f", oldPeakLR, peakLR)
+		}
+
+		scheduler.MaxLR = peakLR
+		scheduler.MinLR = peakLR * 0.01
 
 		// Curriculum Update
 		if float32(valPPL) < float32(curriculum.MinPPLThreshold) {
@@ -1009,6 +1044,11 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 			{"weekend", "any plans for the weekend"},
 			{"feeling", "i feel tired today"},
 			{"hobby", "what do you like to do"},
+			{"identity", "what is your name"},
+			{"creator", "who created you"},
+			{"tech", "how does MoE work"},
+			{"system", "can you run on Linux"},
+			{"joke", "tell me a joke"},
 		}
 		for _, tp := range testPrompts {
 			tokens := cleanTokenize(tp.prompt)

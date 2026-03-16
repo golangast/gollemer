@@ -279,6 +279,22 @@ func NewIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, childVoc
 	}, nil
 }
 
+// ComputeAuxiliaryLoss computes the penalty for expert imbalance in the MoE layers.
+func (m *IntentMoE) ComputeAuxiliaryLoss(stats MoEStats, batchSize int, numExperts int) float64 {
+	var auxLoss float64
+	
+	// N * sum(fi * Pi)
+	// fi = fraction of tokens sent to expert i
+	// Pi = mean probability assigned to expert i
+	for i := 0; i < numExperts; i++ {
+		fi := stats.ExpertCounts[i] / float64(batchSize)
+		pi := stats.RouterProbSum[i] / float64(batchSize)
+		auxLoss += fi * pi
+	}
+	
+	return auxLoss * float64(numExperts)
+}
+
 // TrackExpertPerformance updates the average loss handled by an expert.
 func (m *IntentMoE) TrackExpertPerformance(layerID, expertID int, loss float64) {
 	key := fmt.Sprintf("%d:%d", layerID, expertID)
