@@ -2,6 +2,7 @@ package moe
 
 import (
 	"fmt"
+	"math/rand"
 
 	"github.com/golangast/gollemer/neural/nn"
 	"github.com/golangast/gollemer/neural/tensor"
@@ -11,6 +12,7 @@ import (
 type GatingNetwork struct {
 	Linear    *nn.Linear
 	LayerNorm *nn.LayerNorm
+	Training  bool // training mode for noise injection
 	// Stored for backward pass
 	inputTensor  *tensor.Tensor
 	logitsTensor *tensor.Tensor
@@ -25,6 +27,15 @@ func NewGatingNetwork(inputDim, numExperts int) (*GatingNetwork, error) {
 	}
 	ln := nn.NewLayerNorm(numExperts)
 	return &GatingNetwork{Linear: linear, LayerNorm: ln}, nil
+}
+
+// generateNoise creates Gaussian noise for exploration.
+func (gn *GatingNetwork) generateNoise(size int, stddev float64) []float64 {
+	noise := make([]float64, size)
+	for i := range noise {
+		noise[i] = rand.NormFloat64() * stddev
+	}
+	return noise
 }
 
 // Forward performs the forward pass of the GatingNetwork.
@@ -85,6 +96,14 @@ func (gn *GatingNetwork) Forward(inputs ...*tensor.Tensor) (*tensor.Tensor, erro
 			for e := 0; e < numExperts; e++ {
 				logitsData[base+e] += biasData[e]
 			}
+		}
+	}
+
+	// Add noise during training to encourage exploration (Expert Curiosity)
+	if gn.Training {
+		noise := gn.generateNoise(len(logitsData), 0.01)
+		for i := range logitsData {
+			logitsData[i] += noise[i]
 		}
 	}
 

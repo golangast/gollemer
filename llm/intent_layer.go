@@ -110,6 +110,14 @@ func NewHybridIntentResolver(moe MoEClient) *HybridIntentResolver {
 				Name:   "chat_response",
 				Fields: map[string]string{"response": "string"},
 			},
+			"time_query": {
+				Name:   "time_query",
+				Fields: map[string]string{},
+			},
+			"weather_query": {
+				Name:   "weather_query",
+				Fields: map[string]string{"location": "string"},
+			},
 		},
 	}
 }

@@ -21,10 +21,10 @@ type MoEState struct {
 	inputTensor        *Tensor
 	input2D            *Tensor
 	expertOutputs      []*Tensor
-	expertTokenIndices [][]int
-	selectedExperts    [][]int
+	ExpertTokenIndices [][]int
+	SelectedExperts    [][]int
 	gateOutputs        *Tensor
-	expertProbSums     []float64
+	ExpertProbSums     []float64
 	LoadBalancingLoss  float64
 	RouterZLoss         float64
 	gateLogits         *Tensor
@@ -43,13 +43,13 @@ type MoELayer struct {
 	inputTensor        *Tensor
 	gateLogits         *Tensor // Raw logits for Z-loss gradient
 	expertOutputs      []*Tensor
-	expertTokenIndices [][]int // Indices of tokens assigned to each expert
-	selectedExperts    [][]int // Indices of selected experts for each input in the batch
+	ExpertTokenIndices [][]int // Indices of tokens assigned to each expert
+	SelectedExperts    [][]int // Indices of selected experts for each input in the batch
 	gateOutputs        *Tensor // Output of the gating network (probabilities)
 	LoadBalancingLoss  float64 // Load balancing loss
 	Training           bool    // training mode
 	GRPOEnabled        bool    // whether to use Training-Free GRPO (Group Relative Policy Optimization) for expert selection
-	expertProbSums     []float64 // Sum of probabilities for each expert in the batch
+	ExpertProbSums     []float64 // Sum of probabilities for each expert in the batch
 	LoadBalancingWeight float64   // Weight for the load balancing loss
 	CapacityFactor      float64   // Capacity factor to limit tokens per expert (e.g. 1.25)
 	RouterTemperature   float64   // Temperature for router softmax (default 1.0)
@@ -178,14 +178,8 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 	seqLength := input.Shape[1]
 	embeddingDim := input.Shape[2]
 
-	// Add Router Jitter: Add noise to logits during training to encourage exploration.
-	// Reduced noise to 0.01 as requested for "kickstarting" cold experts.
-	if moe.Training {
-		for i := range gateLogits.Data {
-			noise := (rand.Float64() - 0.5) * 0.01 
-			gateLogits.Data[i] += noise
-		}
-	}
+	// Noise injection (Expert Curiosity) is now handled inside GatingNetwork.Forward
+	// to ensure consistent Gaussian jitter before TopK selection.
 
 	// Apply Temperature Scaling to logits
 	// Default to 0.5 sharpening as requested ("divide by 0.5")
@@ -301,11 +295,11 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 
 	// 4. Sum gating probabilities early (used for LoadBalancingLoss later)
 	numTokens := batchSize * seqLength
-	moe.expertProbSums = make([]float64, numExperts)
+	moe.ExpertProbSums = make([]float64, numExperts)
 	if numTokens > 0 {
 		for i := 0; i < numTokens; i++ {
 			for j := 0; j < numExperts; j++ {
-				moe.expertProbSums[j] += gateOutputs.Data[i*numExperts+j]
+				moe.ExpertProbSums[j] += gateOutputs.Data[i*numExperts+j]
 			}
 		}
 	}
@@ -318,10 +312,10 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 		capacity = 1
 	}
 
-	moe.selectedExperts = make([][]int, batchSize*seqLength)
-	moe.expertTokenIndices = make([][]int, numExperts)
-	for i := range moe.expertTokenIndices {
-		moe.expertTokenIndices[i] = make([]int, 0, capacity)
+	moe.SelectedExperts = make([][]int, batchSize*seqLength)
+	moe.ExpertTokenIndices = make([][]int, numExperts)
+	for i := range moe.ExpertTokenIndices {
+		moe.ExpertTokenIndices[i] = make([]int, 0, capacity)
 	}
 
 	// Reshape input to 2D [batch*seq, dim] for gathering
@@ -369,9 +363,9 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 				stretchedCapacity = int(float64(capacity) * 1.5)
 			}
 
-			if len(moe.expertTokenIndices[expertIdx]) < stretchedCapacity {
-				tokenRelativeIndices[assignedCount] = len(moe.expertTokenIndices[expertIdx])
-				moe.expertTokenIndices[expertIdx] = append(moe.expertTokenIndices[expertIdx], i)
+			if len(moe.ExpertTokenIndices[expertIdx]) < stretchedCapacity {
+				tokenRelativeIndices[assignedCount] = len(moe.ExpertTokenIndices[expertIdx])
+				moe.ExpertTokenIndices[expertIdx] = append(moe.ExpertTokenIndices[expertIdx], i)
 				selected = append(selected, expertIdx)
 				assignedCount++
 				
@@ -388,7 +382,7 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 			tokenRelativeIndices[j] = -1
 		}
 
-		moe.selectedExperts[i] = selected
+		moe.SelectedExperts[i] = selected
 		tokenExpertRelativeIndices[i] = tokenRelativeIndices
 
 		// --- Hard Top-K: Zero out non-selected probabilities and re-normalize ---
@@ -411,15 +405,22 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 		}
 	}
 
-	// 6. Finalize Load Balancing Loss (ST-MoE / Switch Transformer Style)
+	// 6. Finalize Load Balancing Loss
 	if numTokens > 0 {
-		moe.LoadBalancingLoss = 0
+		// Calculate standard Switch Transformer loss
+		stLoss := 0.0
 		for e := 0; e < numExperts; e++ {
-			fraction := float64(len(moe.expertTokenIndices[e])) / float64(numTokens)
-			meanProb := moe.expertProbSums[e] / float64(numTokens)
-			moe.LoadBalancingLoss += fraction * meanProb
+			fraction := float64(len(moe.ExpertTokenIndices[e])) / float64(numTokens)
+			meanProb := moe.ExpertProbSums[e] / float64(numTokens)
+			stLoss += fraction * meanProb
 		}
-		moe.LoadBalancingLoss *= float64(numExperts)
+		stLoss *= float64(numExperts)
+
+		// Calculate more aggressive Auxiliary Loss (CV^2 of Importance)
+		auxLoss := CalculateAuxLoss(moe.gateOutputs.Data, numExperts)
+
+		// Combine them (equal weight for now, or favor AuxLoss)
+		moe.LoadBalancingLoss = 0.5*stLoss + 0.5*auxLoss
 	} else {
 		moe.LoadBalancingLoss = 0
 	}
@@ -432,7 +433,7 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 	// fmt.Println("Starting parallel expert execution (Forward)")
 	// Run experts in parallel
 	for i := range numExperts {
-		indices := moe.expertTokenIndices[i]
+		indices := moe.ExpertTokenIndices[i]
 		if len(indices) == 0 {
 			continue
 		}
@@ -505,7 +506,7 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 		go func(start, end int) {
 			defer wgScatter.Done()
 			for i := start; i < end; i++ {
-				selected := moe.selectedExperts[i]
+				selected := moe.SelectedExperts[i]
 				outStart := i * moe.OutputDim
 
 				for j, expertIdx := range selected {
@@ -539,10 +540,10 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 		inputTensor:        moe.inputTensor,
 		input2D:            input2D,
 		expertOutputs:      moe.expertOutputs,
-		expertTokenIndices: moe.expertTokenIndices,
-		selectedExperts:    moe.selectedExperts,
+		ExpertTokenIndices: moe.ExpertTokenIndices,
+		SelectedExperts:    moe.SelectedExperts,
 		gateOutputs:        moe.gateOutputs,
-		expertProbSums:     moe.expertProbSums,
+		ExpertProbSums:     moe.ExpertProbSums,
 		LoadBalancingLoss:  moe.LoadBalancingLoss,
 		RouterZLoss:        moe.RouterZLoss,
 		gateLogits:         moe.gateLogits,
@@ -569,10 +570,10 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 		moe.inputTensor = state.inputTensor
 		input2D = state.input2D
 		moe.expertOutputs = state.expertOutputs
-		moe.expertTokenIndices = state.expertTokenIndices
-		moe.selectedExperts = state.selectedExperts
+		moe.ExpertTokenIndices = state.ExpertTokenIndices
+		moe.SelectedExperts = state.SelectedExperts
 		moe.gateOutputs = state.gateOutputs
-		moe.expertProbSums = state.expertProbSums
+		moe.ExpertProbSums = state.ExpertProbSums
 		moe.LoadBalancingLoss = state.LoadBalancingLoss
 		moe.RouterZLoss = state.RouterZLoss
 		moe.gateLogits = state.gateLogits
@@ -660,7 +661,7 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 	// fmt.Println("Starting parallel expert execution (Backward)")
 	// Prepare gradients for each expert
 	// We need to group gradients exactly as we grouped inputs in Forward
-	// moe.expertTokenIndices has the mapping
+	// moe.ExpertTokenIndices has the mapping
 
 	var wg sync.WaitGroup
 	var errMutex sync.Mutex
@@ -669,7 +670,7 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 
 	// Run experts backward in parallel
 	for i := range numExperts {
-		indices := moe.expertTokenIndices[i]
+		indices := moe.ExpertTokenIndices[i]
 		if len(indices) == 0 {
 			continue
 		}
@@ -881,18 +882,31 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 	logitsGrad := NewTensor(gateGradReshaped.Shape, make([]float64, len(gateGradReshaped.Data)), false)
 
 	// --- [Auxiliary Loss Gradient (Manual Inject) BEFORE Softmax Backward] ---
-	// dL/dP_ie = lambda * (N/T) * f_e
-	// We add this to gateGradReshaped before the softmax backward so it affects training.
+	// Combined Loss: 0.5 * SwitchTransformerLoss + 0.5 * CV^2_Importance
+	// dST/dP_ie = (N/T^2) * n_e
+	// dCV2/dP_ie = (2N/T^2) * (I_e - T/N)
 	numTokens := batchSize * seqLength
 	if moe.LoadBalancingWeight > 0 && numTokens > 0 {
 		numExperts := len(moe.Experts)
 		T := float64(numTokens)
 		N := float64(numExperts)
-		scalar := moe.LoadBalancingWeight * (N / (T * T))
-
+		
+		// Base scalar (N/T^2) * Weight
+		baseScalar := moe.LoadBalancingWeight * (N / (T * T))
+		
 		scaledFractions := make([]float64, numExperts)
 		for e := 0; e < numExperts; e++ {
-			scaledFractions[e] = float64(len(moe.expertTokenIndices[e])) * scalar
+			// n_e is the number of tokens assigned to expert e
+			n_e := float64(len(moe.ExpertTokenIndices[e]))
+			// I_e is the sum of probabilities for expert e
+			I_e := moe.ExpertProbSums[e]
+			
+			// Gradient from ST loss: 0.5 * (N/T^2) * n_e
+			stGrad := 0.5 * n_e * baseScalar
+			// Gradient from CV^2 Importance loss: 0.5 * (2N/T^2) * (I_e - T/N)
+			auxGrad := 0.5 * 2.0 * (I_e - T/N) * baseScalar
+			
+			scaledFractions[e] = stGrad + auxGrad
 		}
 
 		// Prepare 2D view for UpdateRouterGrads
@@ -981,6 +995,9 @@ func (moe *MoELayer) Inputs() []*Tensor {
 // SetMode sets the mode for the MoELayer and all its experts.
 func (moe *MoELayer) SetMode(training bool) {
 	moe.Training = training
+	if moe.GatingNetwork != nil {
+		moe.GatingNetwork.Training = training
+	}
 	for _, expert := range moe.Experts {
 		expert.SetMode(training)
 	}
@@ -993,17 +1010,17 @@ func (moe *MoELayer) GetOutputShape() []int {
 // GetSelectedExperts returns the indices of experts selected for each token in the last forward pass.
 // The returned slice has length batchSize * seqLength.
 func (moe *MoELayer) GetSelectedExperts() [][]int {
-	return moe.selectedExperts
+	return moe.SelectedExperts
 }
 
 // ClearState clears the internal state of the layer to free memory.
 func (moe *MoELayer) ClearState() {
 	moe.inputTensor = nil
 	moe.expertOutputs = nil
-	moe.expertTokenIndices = nil
-	moe.selectedExperts = nil
+	moe.ExpertTokenIndices = nil
+	moe.SelectedExperts = nil
 	moe.gateOutputs = nil
-	moe.expertProbSums = nil
+	moe.ExpertProbSums = nil
 	moe.stateStack = nil
 	moe.gateLogits = nil
 
@@ -1074,6 +1091,44 @@ func CalculateRouterZLoss(routerLogits *Tensor) float64 {
 func CalculateSquareOfSumsLoss(usageCounts []int, totalTokens int) float64 {
 	// Weight heavily (e.g. 2.0) as requested to break stalemates
 	return simdSquareOfSumsLossF64(usageCounts, totalTokens, 2.0)
+}
+
+// CalculateAuxLoss computes the load balancing loss (CV^2 of importance) to prevent expert starvation.
+func CalculateAuxLoss(gateProbs []float64, numExperts int) float64 {
+	if len(gateProbs) == 0 || numExperts == 0 {
+		return 0
+	}
+	numTokens := len(gateProbs) / numExperts
+
+	// 1. Calculate Importance (Sum of probabilities per expert)
+	importance := make([]float64, numExperts)
+	for i := 0; i < numTokens; i++ {
+		for j := 0; j < numExperts; j++ {
+			importance[j] += gateProbs[i*numExperts+j]
+		}
+	}
+
+	// 2. Compute the coefficient of variation (CV) squared
+	var sumImp float64
+	for _, imp := range importance {
+		sumImp += imp
+	}
+
+	meanImp := sumImp / float64(numExperts)
+	if meanImp == 0 {
+		return 0
+	}
+
+	var variance float64
+	for _, imp := range importance {
+		diff := imp - meanImp
+		variance += diff * diff
+	}
+	variance /= float64(numExperts)
+
+	// CV^2 = Variance / Mean^2
+	// Higher CV means more imbalance.
+	return variance / (meanImp * meanImp)
 }
 // RebalanceExperts ensures all experts have a similar weight magnitude (L2 Norm).
 // This prevents one expert from becoming a "gravity well" for the router.

@@ -3,6 +3,7 @@ package llm
 import (
 	"bufio"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
@@ -183,7 +184,9 @@ func RunLLM() {
 	}
 
 	// Initialize Intent Resolver
-	resolver := NewHybridIntentResolver(&GollemerMoEClient{KB: kb, Model: intentModel, W2V: w2vModel})
+	client := &GollemerMoEClient{KB: kb, Model: intentModel, W2V: w2vModel}
+	client.LoadChatBank(filepath.Join(projectRoot, "trainingdata/conversing.json"))
+	resolver := NewHybridIntentResolver(client)
 
 	var commandHistory []string
 	var sessionState ConversationState
@@ -955,6 +958,11 @@ case "a":
 			} else {
 				fmt.Println(" |ʕ•ϖ•ʔ| I'm not sure how to respond to that yet.")
 			}
+			continue
+		} else if intentData.Intent == "time_query" {
+			now := time.Now()
+			timeStr := fmt.Sprintf("The current time is %s.", now.Format("3:04 PM"))
+			colors.AnimatedOutput("cyan", "black", timeStr, 1*time.Second)
 			continue
 		}
 
@@ -4584,115 +4592,153 @@ func registerHandlerWithPackage(packageName, packageImportPath, handlerName, han
 
 // GollemerMoEClient implements the MoEClient interface using the existing NLP pipeline.
 type GollemerMoEClient struct {
-	KB    *KnowledgeBase
-	Model *moe.IntentMoE
-	W2V   *word2vec.SimpleWord2Vec
+	KB                *KnowledgeBase
+	Model             *moe.IntentMoE
+	W2V               *word2vec.SimpleWord2Vec
+	ChatBank          []ChatPair
 	lastMoEPrediction string
 }
 
+type ChatPair struct {
+	Q string `json:"prompt"`
+	A string `json:"response"`
+}
+
+func (c *GollemerMoEClient) LoadChatBank(path string) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		log.Printf("⚠️  Could not load ChatBank from %s: %v", path, err)
+		return
+	}
+	var pairs []ChatPair
+	if err := json.Unmarshal(data, &pairs); err != nil {
+		log.Printf("⚠️  Failed to parse ChatBank JSON: %v", err)
+		return
+	}
+	c.ChatBank = pairs
+	log.Printf("✅ Loaded %d prompts into ChatBank for fallback retrieval", len(c.ChatBank))
+}
+
+func (c *GollemerMoEClient) RetrieveChatResponse(input string) (string, float64) {
+	if len(c.ChatBank) == 0 || c.W2V == nil {
+		return "", 0
+	}
+
+	bestScore := -1.0
+	bestResponse := ""
+
+	inputEmbed := c.getSentenceEmbedding(input)
+	if inputEmbed == nil {
+		return "", 0
+	}
+
+	for _, pair := range c.ChatBank {
+		pairEmbed := c.getSentenceEmbedding(pair.Q)
+		if pairEmbed == nil {
+			continue
+		}
+		score := cosineSimilarity(inputEmbed, pairEmbed)
+		if score > bestScore {
+			bestScore = score
+			bestResponse = pair.A
+		}
+	}
+
+	return bestResponse, bestScore
+}
+
+func (c *GollemerMoEClient) getSentenceEmbedding(text string) []float64 {
+	words := cleanTokenize(text)
+	if len(words) == 0 {
+		return nil
+	}
+	embedding := make([]float64, c.W2V.VectorSize)
+	count := 0
+	for _, w := range words {
+		if id, ok := c.W2V.Vocabulary[w]; ok {
+			vec := c.W2V.WordVectors[id]
+			for i, v := range vec {
+				embedding[i] += v
+			}
+			count++
+		}
+	}
+	if count > 0 {
+		for i := range embedding {
+			embedding[i] /= float64(count)
+		}
+		return embedding
+	}
+	return nil
+}
+
+
 func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 	var rawModelOutput string
+	lowerInput := strings.ToLower(input)
+	words := strings.Fields(lowerInput)
 
+	// ── 0. Instant Heuristics for Dynamic Queries ───────────────────
+	if (strings.Contains(lowerInput, "time") || strings.Contains(lowerInput, "clock")) && 
+	   (strings.Contains(lowerInput, "what") || strings.Contains(lowerInput, "know") || strings.Contains(lowerInput, "tell")) {
+		return "time_query", 0.95
+	}
+	if strings.Contains(lowerInput, "weather") {
+		return "weather_query", 0.90
+	}
+
+	// ── 1. High-Confidence Retrieval Fallback ───────────────────────
+	// Check if this query is almost identical to something in our conversing.json
+	retrievedResp, retrievedScore := c.RetrieveChatResponse(input)
+	if retrievedScore > 0.88 {
+		c.lastMoEPrediction = retrievedResp
+		return "chat_response", retrievedScore
+	}
+
+	// ── 2. Neural Model Logic (For complex or unique inputs) ────────
 	if c.Model != nil && c.W2V != nil {
-		lowerInput := strings.ToLower(input)
-		words := cleanTokenize(lowerInput)
-
-		// 1. Tokenize Input
+		cleanWords := cleanTokenize(lowerInput)
 		var tokenIDs []int
-		if c.Model.SentenceVocab != nil {
-			for _, w := range words {
-				// Use SentenceVocab which matches the Embedding layer's size
+		for _, w := range cleanWords {
+			if c.Model.SentenceVocab != nil {
 				tokenIDs = append(tokenIDs, c.Model.SentenceVocab.GetTokenID(w))
-			}
-		} else {
-			// Fallback to W2V (only if model wasn't resized to sentence vocab)
-			for _, w := range words {
-				if id, ok := c.W2V.Vocabulary[w]; ok {
-					tokenIDs = append(tokenIDs, id)
-				} else if unkID, ok := c.W2V.Vocabulary["UNK"]; ok {
-					tokenIDs = append(tokenIDs, unkID)
-				}
+			} else if id, ok := c.W2V.Vocabulary[w]; ok {
+				tokenIDs = append(tokenIDs, id)
 			}
 		}
 
-		if len(tokenIDs) == 0 {
-			// No known tokens, fallback
-		} else {
-			// 2. Create Input Tensor
+		if len(tokenIDs) > 0 {
 			inputTensor := tensor.NewTensor([]int{1, len(tokenIDs)}, make([]float64, len(tokenIDs)), false)
 			for i, id := range tokenIDs {
 				inputTensor.Data[i] = float64(id)
 			}
 
-			// 3. Get Embeddings
 			embeddings, err := c.Model.Embedding.Forward(inputTensor)
-			if err != nil {
-				log.Printf("Embedding forward failed: %v", err)
-			} else {
-				// 4. Run Hybrid Encoder (GNN)
+			if err == nil {
 				contextVector, err := c.Model.Encoder.Forward(embeddings)
-				if err != nil {
-					log.Printf("Hybrid Encoder forward failed: %v", err)
-				} else {
-					// CRITICAL: Normalize context vector to match training scale
+				if err == nil {
 					contextVector = c.Model.NormalizeContextVector(contextVector)
+					posTags := postagger.TagTokens(cleanWords)
+					taggedData := nertagger.Nertagger(tag.Tag{Tokens: cleanWords, PosTag: posTags})
 
-					// 5. Decode Intent Statement
-					// We need POS tagging for entity replacement in decoding
-					posTags := postagger.TagTokens(words)
-					taggedData := nertagger.Nertagger(tag.Tag{Tokens: words, PosTag: posTags})
-
-					// Assume "maxLen" for intent is small, e.g., 5-10 tokens
-					// Assuming SOS=1, EOS=2 (need to verify standard tokens but let's guess standard)
-					// But we should check sentence vocab if available.
-					// IntentMoE stores SentenceVocab. If nil, we can't decode easily.
-					// NewHybridIntentMoE sets SentenceVocab to nil initially.
-					// If it's nil, we can't map IDs back to words.
-					// So let's check if c.Model.SentenceVocab is set.
 					if c.Model.SentenceVocab != nil {
-						// Use temperature sampling (topK=50) so the decoder generates real words.
-						// topK=1 was causing EOS to win on step 0 every time (model too young).
-						// temperature=0.4 sharpens the distribution to commit to the best tokens.
 						outputIDs, err := c.Model.GreedySearchDecodeWithTemp(
-							contextVector,
-							20,  // maxLen — keep responses short
-							c.Model.SentenceVocab.BosID,
-							c.Model.SentenceVocab.EosID,
-							0.4, // temperature — sharpen distribution to commit more
-							1.2, // repetitionPenalty
-							0.3, // frequencyPenalty
-							50,  // topK — sample from top-50 tokens
-							taggedData,
+							contextVector, 20,
+							c.Model.SentenceVocab.BosID, c.Model.SentenceVocab.EosID,
+							0.4, 1.2, 0.3, 50, taggedData,
 						)
-
-						if err != nil {
-							log.Printf("Greedy decode failed: %v", err)
-						} else {
-							// Convert IDs to String
+						if err == nil && len(outputIDs) > 0 {
 							var decodedWords []string
-							if len(outputIDs) == 0 {
-								log.Printf("⚠️ Decoder returned 0 tokens. Model may need more training.")
-							}
 							for _, id := range outputIDs {
 								w := c.Model.SentenceVocab.GetWord(id)
-								// Filter out special tokens
-								if w != "</s>" && w != "<s>" && w != "<pad>" && w != "UNK" && w != "" &&
-								   w != "EOS" && w != "BOS" && w != "PAD" {
+								if w != "</s>" && w != "<s>" && w != "<pad>" && w != "UNK" && w != "" {
 									decodedWords = append(decodedWords, w)
 								}
 							}
 							predictedSentence := strings.Join(decodedWords, " ")
 							rawModelOutput = predictedSentence
 
-							// ── Confidence Gate ─────────────────────────────────────────────
-							// If output is completely empty, it's low confidence.
-							// Otherwise, if we have a "RAW" output that doesn't look like noise, we let it through.
-							isLowConfidence := len(outputIDs) == 0
-							if !isLowConfidence {
-							// ─────────────────────────────────────────────────────────────────
-
-
-							// Check if predicted sentence is a known intent
+							// Semantic Mapping of Predicted Sentence
 							if strings.HasPrefix(predictedSentence, "create webserver") {
 								return "create_webserver", 0.99
 							}
@@ -4702,22 +4748,15 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 							if strings.HasPrefix(predictedSentence, "status_query") {
 								return "status_query", 0.95
 							}
-							if strings.HasPrefix(predictedSentence, "identity_query") {
-								return "identity_query", 0.95
-							}
 							if strings.HasPrefix(predictedSentence, "greeting") {
 								return "greeting", 0.95
 							}
-							if strings.HasPrefix(predictedSentence, "help_command") {
-								return "help_command", 0.95
-							}
-							// If model output doesn't match a command, treat as chat
+							
+							// If neural model is confident enough (>0.8), return its response
 							if !strings.HasPrefix(predictedSentence, "create") && !strings.HasPrefix(predictedSentence, "status") {
 								c.lastMoEPrediction = predictedSentence
 								return "chat_response", 0.80
 							}
-							log.Printf("Hybrid Model Prediction: %s", predictedSentence)
-						} // end if !isLowConfidence
 						}
 					}
 				}
@@ -4725,10 +4764,7 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 		}
 	}
 
-	lowerInput := strings.ToLower(input)
-	words := strings.Fields(lowerInput)
-
-	// Heuristic Intent Detection with Semantic Variations
+	// ── 3. Rule-Based Keyword Heuristics ────────────────────────────
 	createVerbs := []string{"create", "make", "add", "generate", "initialize", "init", "new", "setup", "start"}
 	isCreating := false
 	for _, v := range createVerbs {
@@ -4740,103 +4776,31 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 
 	if isCreating {
 		targets := map[string]string{
-			"webserver":      "create_webserver",
-			"site":           "create_webserver",
-			"project":        "create_webserver",
-			"app":            "create_webserver",
-			"page":           "create_page",
-			"view":           "create_page",
-			"homepage":       "create_page",
-			"handler":        "create_handler",
-			"endpoint":       "create_handler",
-			"route":          "create_handler",
-			"database":       "create_database",
-			"db":             "create_database",
-			"file":           "create_file",
-			"folder":         "create_folder",
-			"directory":      "create_folder",
-			"form":           "create_form",
-			"structure":      "create_structure",
-			"data structure": "create_structure",
+			"webserver": "create_webserver", "site": "create_webserver", "project": "create_webserver",
+			"page": "create_page", "view": "create_page", "handler": "create_handler", "route": "create_handler",
+			"database": "create_database", "db": "create_database", "file": "create_file", "folder": "create_folder",
+			"directory": "create_folder", "form": "create_form", "structure": "create_structure",
 		}
-
-		// Proximity search: find which target is closest to the creation verb
-		verbIdx := -1
-		for i, w := range words {
-			if slices.Contains(createVerbs, w) {
-				verbIdx = i
-			}
-			if verbIdx != -1 {
-				break
-			}
-		}
-
-		if verbIdx != -1 {
-			// Look ahead for the object
-			for i := verbIdx + 1; i < len(words); i++ {
-				w := words[i]
-				// Check for plural variations
-				singular := strings.TrimSuffix(w, "s")
-				if intent, ok := targets[w]; ok {
-					return intent, 0.95
-				}
-				if intent, ok := targets[singular]; ok {
-					return intent, 0.9
-				}
-			}
-
-			// Look behind if ahead failed (e.g. "myapp site initialize")
-			for i := verbIdx - 1; i >= 0; i-- {
-				w := words[i]
-				singular := strings.TrimSuffix(w, "s")
-				if intent, ok := targets[w]; ok {
-					return intent, 0.85
-				}
-				if intent, ok := targets[singular]; ok {
-					return intent, 0.8
-				}
-			}
-		}
-
-		// Fallback to priority scan if priority nouns are present even if proximity fails
 		for _, key := range []string{"webserver", "site", "project", "page", "handler", "database", "file", "folder", "form"} {
 			if strings.Contains(lowerInput, key) {
 				return targets[key], 0.75
 			}
 		}
-
-		// --- NEW: Heuristic for Learned Objects ---
-		// If we are "creating" but none of our hardcoded nouns matched, check if any word is a KnownObject
-		for _, w := range words {
-			if c.KB != nil && c.KB.KnownObjects[w] {
-				return "create_object", 0.7 // Generic creation intent
-			}
-		}
 	}
 
-	// --- NEW: Command Inference ---
-	// If no command verb was found, but the first word is a known major Object, assume "create"
-	if lowerInput != "" {
-		firstWord := words[0]
-		majorObjects := map[string]string{
-			"webserver": "create_webserver", "site": "create_webserver",
-			"handler": "create_handler", "page": "create_page",
-			"database": "create_database", "structure": "create_structure",
-		}
-		if intent, ok := majorObjects[firstWord]; ok {
-			return intent, 0.6 // Lower confidence but gets the job done
-		}
-	}
-
-	if strings.Contains(lowerInput, "move") && !strings.Contains(lowerInput, "remove") {
-		if strings.Contains(lowerInput, "file") {
-			return "move_file", 0.9
-		}
-		return "move_file", 0.8
+	// Final Fallbacks
+	if retrievedResp != "" && retrievedScore > 0.5 {
+		c.lastMoEPrediction = retrievedResp
+		return "chat_response", retrievedScore
 	}
 
 	if rawModelOutput != "" {
 		return fmt.Sprintf("RAW: %s", rawModelOutput), 0.1
+	}
+
+	if lowerInput != "" {
+		c.lastMoEPrediction = "I'm not sure how to respond to that yet. I'm still learning!"
+		return "chat_response", 0.05
 	}
 
 	return "", 0.0
