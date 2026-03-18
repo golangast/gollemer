@@ -121,6 +121,41 @@ func VerifyModelIntegrity(m *moe.IntentMoE) {
     }
 }
 
+// ThawScheduler manages which experts receive gradients per epoch stage.
+// This forces the router to find new paths when dominant experts are frozen.
+type ThawScheduler struct {
+	TotalExperts int
+	Stages       map[int][]int // Epoch threshold -> slice of expert IDs to freeze
+}
+
+// NewThawScheduler creates a scheduler for 8-expert MoE with 3 training phases:
+//  - Epochs 1-15:  Freeze E0 (the "Crutch") — forces router to explore E1-E7
+//  - Epochs 16-30: Freeze E0,E1,E2 — forces high-index expert learning
+//  - Epoch 31+:    Full Thaw — refinement phase, all experts learn
+func NewThawScheduler(numExperts int) *ThawScheduler {
+	return &ThawScheduler{
+		TotalExperts: numExperts,
+		Stages: map[int][]int{
+			1:  {0},          // Freeze E0
+			16: {0, 1, 2},    // Freeze E0-E2
+			31: {},           // Full Thaw
+		},
+	}
+}
+
+// GetFrozenExperts returns which expert IDs should have gradients zeroed for the given epoch.
+func (s *ThawScheduler) GetFrozenExperts(epoch int) []int {
+	current := []int{}
+	maxEpoch := 0
+	for e, frozen := range s.Stages {
+		if epoch >= e && e >= maxEpoch {
+			maxEpoch = e
+			current = frozen
+		}
+	}
+	return current
+}
+
 func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 	fmt.Println("--- 🗣️  Training Chat Model ---")
 
@@ -142,29 +177,67 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 	}
 	fmt.Println("✅ Loaded Word2Vec model")
 
-	// 2. Read conversing.json
-	chatPath := filepath.Join(projectRoot, "trainingdata/conversing.json")
-	jsonData, err := os.ReadFile(chatPath)
+	var chatPairs []struct{ Q, A, Intent string }
+	
+	// 2. Read conversing.csv (fallback or additional data)
+	chatPath := filepath.Join(projectRoot, "trainingdata/conversing.csv")
+	csvFile, err := os.Open(chatPath)
 	if err != nil {
-		log.Fatalf("Failed to read conversing.json: %v", err)
+		log.Printf("⚠️  Failed to read conversing.csv: %v. Trying json...", err)
+		// Try falling back to json if csv doesn't exist
+		jsonPath := filepath.Join(projectRoot, "trainingdata/conversing.json")
+		jsonData, err := os.ReadFile(jsonPath)
+		if err != nil {
+			log.Fatalf("Critical: Could not find trainingdata/conversing.csv or conversing.json!")
+		}
+		var jsonPairs []struct {
+			Prompt   string `json:"prompt"`
+			Response string `json:"response"`
+		}
+		if err := json.Unmarshal(jsonData, &jsonPairs); err != nil {
+			log.Fatalf("Failed to unmarshal conversing.json: %v", err)
+		}
+		for _, p := range jsonPairs {
+			for k := 0; k < 10; k++ {
+				chatPairs = append(chatPairs, struct{ Q, A, Intent string }{p.Prompt, p.Response, "json_fallback"})
+			}
+		}
+		// Skip CSV processing if we loaded JSON
+		goto skipCSV
 	}
+	defer csvFile.Close()
 
-	var jsonPairs []struct {
-		Prompt   string `json:"prompt"`
-		Response string `json:"response"`
-	}
-	if err := json.Unmarshal(jsonData, &jsonPairs); err != nil {
-		log.Fatalf("Failed to unmarshal conversing.json: %v", err)
-	}
+	{
+		reader := csv.NewReader(csvFile)
+		records, err := reader.ReadAll()
+		if err != nil {
+			log.Fatalf("Failed to read conversing.csv: %v", err)
+		}
 
-	var chatPairs []struct{ Q, A string }
-	for _, p := range jsonPairs {
-		// Train harder on this data by upsampling it 10x
-		// This ensures the model's "Personality" from conversing.json as standard.
-		for k := 0; k < 10; k++ {
-			chatPairs = append(chatPairs, struct{ Q, A string }{p.Prompt, p.Response})
+		for i, record := range records {
+			if i == 0 && strings.Contains(strings.ToLower(record[0]), "intent") {
+				continue // Skip header
+			}
+			if len(record) >= 3 {
+				// Intent = record[0], Pattern = record[1], Response = record[2]
+				q := strings.Trim(record[1], "\" ")
+				a := strings.Trim(record[2], "\" ")
+				intent := strings.Trim(record[0], "\" ")
+				if q == "" || a == "" {
+					continue
+				}
+
+				// Train harder on this data by upsampling it 10x
+				for k := 0; k < 10; k++ {
+					chatPairs = append(chatPairs, struct{ Q, A, Intent string }{q, a, intent})
+				}
+			}
 		}
 	}
+	log.Printf("📊 Loaded %d training pairs from conversing.csv", len(chatPairs))
+
+skipCSV:
+
 
 	// Reset ActiveLayers to ensure we track only the current model's layers and prevent leaks
 	moe.ActiveLayers = nil
@@ -385,13 +458,47 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 		intentModel.Embedding = newEmb
 	}
 
+	// --- [Balanced Mixing Strategy] ---
+	// Separate into Help (Technical) and Social/General
+	var helpPairs, socialPairs []struct{ Q, A, Intent string }
+	for _, p := range chatPairs {
+		isHelp := strings.HasPrefix(p.Intent, "go_") || 
+		          strings.HasPrefix(p.Intent, "ml_") || 
+				  strings.HasPrefix(p.Intent, "moe_") || 
+				  strings.HasPrefix(p.Intent, "nlp_") || 
+				  strings.HasPrefix(p.Intent, "math_") || 
+				  strings.HasPrefix(p.Intent, "system_") || 
+				  strings.HasPrefix(p.Intent, "gollemer_")
+		if isHelp {
+			helpPairs = append(helpPairs, p)
+		} else {
+			socialPairs = append(socialPairs, p)
+		}
+	}
+	
+	log.Printf("⚖️ Data Distribution: Help=%d, Social=%d", len(helpPairs), len(socialPairs))
+	
+	// Create balanced set (50/50 mix)
+	balancedPairs := make([]struct{ Q, A, Intent string }, 0, len(chatPairs))
+	maxLen := max(len(helpPairs), len(socialPairs))
+	for i := 0; i < maxLen; i++ {
+		if i < len(helpPairs) {
+			balancedPairs = append(balancedPairs, helpPairs[i])
+		}
+		if i < len(socialPairs) {
+			balancedPairs = append(balancedPairs, socialPairs[i])
+		}
+	}
+	chatPairs = balancedPairs
+	// ------------------------------------
+
 	// Shuffle and Split
 	rand.Shuffle(len(chatPairs), func(i, j int) { chatPairs[i], chatPairs[j] = chatPairs[j], chatPairs[i] })
 	splitIdx := int(float64(len(chatPairs)) * 0.9)
 	trainPairs := chatPairs[:splitIdx]
 	valPairs := chatPairs[splitIdx:]
 
-	fmt.Printf("Data Split Pre-Limit: %d Training, %d Validation\n", len(trainPairs), len(valPairs))
+	fmt.Printf("Data Split Pre-Limit (Balanced): %d Training, %d Validation\n", len(trainPairs), len(valPairs))
 
 	// Word2Vec coverage check
 	hit := 0
@@ -467,7 +574,7 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 
 	// Learning rate settings
 	var learningRate float64
-	peakLR := 0.0008    // Increased from 1e-4 for faster escapes
+	peakLR := 0.00008    // Decreased by 10x as requested (was 0.0008)
 	const weightDecay = 0.0001
 	
 	// OneCycle Scheduler
@@ -503,7 +610,7 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 		GrowthFactor    int
 	}
 	curriculum := Curriculum{
-		MaxSequenceLen:  10,  // Start with short sentences
+		MaxSequenceLen:  64,  // Increased from 10 to allow conversing.csv responses
 		MinPPLThreshold: 500, // If PPL < 500, level up
 		GrowthFactor:    5,
 	}
@@ -550,12 +657,40 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 
 	fmt.Printf("Training on %d pairs for %d epochs (patience=%d)...\n", len(chatPairs), epochs, patienceLimit)
 
-	// Mute the UNK token in the output layer to prevent it from being a "safe" prediction
-	// MuteUNKToken(intentModel, unkID) (Disabled: causing loss instability)
+	// ThawScheduler: manages which experts are frozen per epoch stage.
+	thawScheduler := NewThawScheduler(8)
+
+	// TrainingLogger: CSV log for long-term trend analysis.
+	logPath := filepath.Join(projectRoot, "training_log.csv")
+	trainingLogger, logErr := NewTrainingLogger(logPath)
+	if logErr != nil {
+		log.Printf("⚠️  Could not create training logger: %v", logErr)
+	} else {
+		log.Printf("📊 Training CSV log: %s", logPath)
+		defer trainingLogger.Close()
+	}
+
+	// Periodic checkpoints directory (kept separate from best-model checkpoints)
+	checkpointDir := filepath.Join(projectRoot, "checkpoints")
 
 	for epoch := 0; epoch < epochs; epoch++ {
 		epochStartTime := time.Now()
-		
+
+		// Determine frozen experts for this epoch via ThawScheduler
+		frozenExperts := thawScheduler.GetFrozenExperts(epoch + 1)
+		frozenSet := make(map[int]bool, len(frozenExperts))
+		for _, id := range frozenExperts {
+			frozenSet[id] = true
+		}
+		prevFrozen := thawScheduler.GetFrozenExperts(epoch)
+		if epoch == 0 || len(frozenExperts) != len(prevFrozen) {
+			if len(frozenExperts) > 0 {
+				log.Printf("❄️  ThawScheduler Epoch %d: Freezing experts %v (grads zeroed)", epoch+1, frozenExperts)
+			} else {
+				log.Printf("🌡️  ThawScheduler Epoch %d: Full Thaw — all experts active", epoch+1)
+			}
+		}
+
 		// Curriculum shuffle logic
 		if epoch > 2 {
 			rand.Shuffle(len(trainPairs), func(i, j int) { 
@@ -867,6 +1002,26 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 						}
 					}
 
+					// 4. THE FREEZE: Zero out gradients for frozen experts before optimizer step.
+					// This lets the router still PICK them, but they won't LEARN anything,
+					// eventually making them the "wrong" choice and forcing exploration.
+					if len(frozenSet) > 0 {
+						for _, layer := range moe.ActiveLayers {
+							for expertID, isFrozen := range frozenSet {
+								if !isFrozen || expertID >= len(layer.Experts) {
+									continue
+								}
+								for _, p := range layer.Experts[expertID].Parameters() {
+									if p.Grad != nil {
+										for j := range p.Grad.Data {
+											p.Grad.Data[j] = 0.0
+										}
+									}
+								}
+							}
+						}
+					}
+
 					if batches%20 == 0 {
 						log.Printf("Batch %d | Grad Norm: %.4f | LR: %.6f", batches, gradNorm, learningRate)
 					}
@@ -959,6 +1114,23 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 			// Automated Evolutionary Reset based on the layer's internal tracking
 			layer.EvolutionaryReset(5) // stagnationThreshold=5 epochs
 			
+			// After utilization tracking: detect and reset stagnant experts
+			// Stagnant = used <1% of the time and not in frozen set (already being forced to learn)
+			totalTokensFlt := float64(totalTokens)
+			if totalTokensFlt > 0 {
+				for i := 0; i < len(layer.Experts); i++ {
+					if frozenSet[i] {
+						continue // Skip: deliberately frozen by ThawScheduler
+					}
+					usage := float64(layer.AccumulatedUtilization[i]) / totalTokensFlt
+					if usage < 0.01 && epoch > 5 { // Only after warmup (5 epochs)
+						fmt.Printf("♻️  Layer %d Expert %d is stagnant (%.2f%% usage). Triggering Evolutionary Reset...\n",
+							layerIdx, i, usage*100)
+						intentModel.EvolutionaryReset(i, layerIdx)
+					}
+				}
+			}
+
 			// Dominant Expert Freezing: If one expert does > 40% of the work, freeze it
 			for i := 0; i < len(layer.Experts); i++ {
 				count := layer.AccumulatedUtilization[i]
@@ -1066,6 +1238,19 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 			fmt.Printf("💾 Overwrote model checkpoint to %s after epoch %d\n", moePath, epoch+1)
 		}
 
+		// Periodic checkpoint: save a numbered snapshot every 5 epochs
+		SavePeriodicCheckpoint(intentModel, checkpointDir, epoch+1, 5)
+
+		// CSV Logger: capture all metrics for this epoch
+		if trainingLogger != nil {
+			utils := CollectUtilisationFractions()
+			lbAvg := 0.0
+			if batches > 0 {
+				lbAvg = epochLBLoss / float64(batches)
+			}
+			trainingLogger.LogEpoch(epoch+1, avgLoss, lbAvg, valPPL, learningRate, utils, frozenExperts)
+		}
+
 		// Save Best Model if loss improved, otherwise track patience
 		if valPPL < bestPPL {
 			bestPPL = valPPL
@@ -1093,6 +1278,12 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
 	}
 
 	fmt.Printf("✅ Trained on %d chat pairs\n", len(chatPairs))
+
+	// Print the expert MVP/slacker report from the CSV log
+	if trainingLogger != nil {
+		trainingLogger.Close()
+		GenerateProgressReport(logPath)
+	}
 
 	// Analyze expert specialization
 	analyzeExpertSpecialization(intentModel, w2v)
@@ -1251,20 +1442,8 @@ func StrictGenerate(model *moe.IntentMoE, input string, w2v *word2vec.SimpleWord
 			logits.Data[unkID] = -1e9
 		}
 
-		// 6b. Softmax Sharpening: Boost contrast before sampling
-		for idx := range logits.Data {
-			logits.Data[idx] *= 5.0
-		}
-
-		// 7. Temperature Decay: Start sharp, get even sharper (Theme lock)
-		// initial 0.2, decays 10% each step, min 0.05
-		decayedTemp := 0.2 * math.Pow(0.90, float64(i))
-		if decayedTemp < 0.05 {
-			decayedTemp = 0.05
-		}
-
-		// 7. Pick Best Word (Sharper temp with decay)
-		bestID, err := moe.SampleFromLogits(logits, decayedTemp, 1, 1.0) 
+		// 7. Pick Best Word (Fixed Temp/Top-P as requested)
+		bestID, err := moe.SampleFromLogits(logits, 0.8, 1, 0.9) 
 		if err != nil {
 			log.Printf("StrictGenerate Error (Sampling): %v", err)
 			break
@@ -1446,7 +1625,7 @@ func logEpochHistory(projectRoot string, epoch int, loss float64, lbLoss float64
 // ChatDataIterator implements the Iterator pattern for training data.
 // It tokenizes data on-the-fly to save memory and supports shuffling.
 type ChatDataIterator struct {
-	pairs []struct{ Q, A string }
+	pairs []struct{ Q, A, Intent string }
 	w2v   *word2vec.SimpleWord2Vec
 	vocab *mainvocab.Vocabulary
 	unkID  int
@@ -1454,7 +1633,7 @@ type ChatDataIterator struct {
 	MaxLen int
 }
 
-func NewChatDataIterator(pairs []struct{ Q, A string }, w2v *word2vec.SimpleWord2Vec, vocab *mainvocab.Vocabulary, unkID int) *ChatDataIterator {
+func NewChatDataIterator(pairs []struct{ Q, A, Intent string }, w2v *word2vec.SimpleWord2Vec, vocab *mainvocab.Vocabulary, unkID int) *ChatDataIterator {
 	// Shuffle pairs for better training
 	rand.Shuffle(len(pairs), func(i, j int) { pairs[i], pairs[j] = pairs[j], pairs[i] })
 	return &ChatDataIterator{
@@ -1948,7 +2127,7 @@ func isLSTMBias(param *tensor.Tensor, hiddenSize int) bool {
 	return size == hiddenSize || size == 4*hiddenSize || size == 8*hiddenSize
 }
 
-func ValidateChat(model *moe.IntentMoE, valPairs []struct{ Q, A string }, w2v *word2vec.SimpleWord2Vec) float64 {
+func ValidateChat(model *moe.IntentMoE, valPairs []struct{ Q, A, Intent string }, w2v *word2vec.SimpleWord2Vec) float64 {
 	// 1. Enter Eval Mode (Disable Dropout/Noise)
 	for _, layer := range moe.ActiveLayers {
 		layer.SetMode(false)
