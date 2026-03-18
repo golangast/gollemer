@@ -2,6 +2,7 @@ package moe
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 
 	"github.com/golangast/gollemer/neural/nn"
@@ -10,13 +11,15 @@ import (
 
 // GatingNetwork (Router) determines which experts to activate for a given input.
 type GatingNetwork struct {
-	Linear    *nn.Linear
-	LayerNorm *nn.LayerNorm
-	Training  bool // training mode for noise injection
+	Linear       *nn.Linear
+	NoiseLinear  *nn.Linear // For Noisy Top-K gating
+	LayerNorm    *nn.LayerNorm
+	Training     bool // training mode for noise injection
 	// Stored for backward pass
-	inputTensor  *tensor.Tensor
-	logitsTensor *tensor.Tensor
-	outputTensor *tensor.Tensor
+	inputTensor       *tensor.Tensor
+	logitsTensor      *tensor.Tensor
+	noiseLogitsTensor *tensor.Tensor
+	outputTensor      *tensor.Tensor
 }
 
 // NewGatingNetwork creates a new GatingNetwork.
@@ -25,8 +28,12 @@ func NewGatingNetwork(inputDim, numExperts int) (*GatingNetwork, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create linear layer for gating network: %w", err)
 	}
+	noiseLinear, err := nn.NewLinear(inputDim, numExperts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create noise linear layer: %w", err)
+	}
 	ln := nn.NewLayerNorm(numExperts)
-	return &GatingNetwork{Linear: linear, LayerNorm: ln}, nil
+	return &GatingNetwork{Linear: linear, NoiseLinear: noiseLinear, LayerNorm: ln}, nil
 }
 
 // generateNoise creates Gaussian noise for exploration.
@@ -99,11 +106,57 @@ func (gn *GatingNetwork) Forward(inputs ...*tensor.Tensor) (*tensor.Tensor, erro
 		}
 	}
 
-	// Add noise during training to encourage exploration (Expert Curiosity)
+	// --- [Noisy Top-K Gating Implementation] ---
+	var noiseLogitsData []float64
 	if gn.Training {
-		noise := gn.generateNoise(len(logitsData), 0.01)
-		for i := range logitsData {
-			logitsData[i] += noise[i]
+		// Lazy initialize NoiseLinear for models loaded from older checkpoints
+		if gn.NoiseLinear == nil {
+			nl, err := nn.NewLinear(inputDim, numExperts)
+			if err == nil {
+				gn.NoiseLinear = nl
+			}
+		}
+
+		if gn.NoiseLinear != nil {
+			noiseLogitsData = make([]float64, numTokens*numExperts)
+			computeRouterLogitsSIMD(
+				inputFlat,
+				gn.NoiseLinear.Weights.Data,
+				numTokens, numExperts, inputDim,
+				noiseLogitsData,
+			)
+			if gn.NoiseLinear.Biases != nil {
+				biasData := gn.NoiseLinear.Biases.Data
+				for t := 0; t < numTokens; t++ {
+					base := t * numExperts
+					for e := 0; e < numExperts; e++ {
+						noiseLogitsData[base+e] += biasData[e]
+					}
+				}
+			}
+
+			// Inject Gaussian noise scaled by softplus(noiseLogits)
+			for i := range logitsData {
+				// Softplus: ln(1 + e^x) to keep noise magnitude positive
+				x := noiseLogitsData[i]
+				var sigma float64
+				if x > 20 {
+					sigma = x // Avoid exp overflow
+				} else {
+					sigma = math.Log(1.0 + math.Exp(x))
+				}
+				
+				// N(0, 1) * sigma
+				logitsData[i] += rand.NormFloat64() * sigma
+			}
+			
+			gn.noiseLogitsTensor = tensor.NewTensor(logitsShape, noiseLogitsData, input.RequiresGrad || gn.NoiseLinear.Weights.RequiresGrad)
+		} else {
+			// Fallback: simple fixed noise if NoiseLinear failed to init
+			noise := gn.generateNoise(len(logitsData), 0.02)
+			for i := range logitsData {
+				logitsData[i] += noise[i]
+			}
 		}
 	}
 
@@ -194,6 +247,41 @@ func (gn *GatingNetwork) Backward(grad *tensor.Tensor) error {
 		}
 	}
 
+	// 3. Backward through NoiseLinear (Approximation: using same gradient as main linear)
+	if gn.Training && gn.noiseLogitsTensor != nil {
+		var dnWeightsOut []float64
+		if gn.NoiseLinear.Weights.RequiresGrad {
+			if gn.NoiseLinear.Weights.Grad == nil {
+				gn.NoiseLinear.Weights.Grad = tensor.NewTensor(gn.NoiseLinear.Weights.Shape, make([]float64, len(gn.NoiseLinear.Weights.Data)), false)
+			}
+			dnWeightsOut = gn.NoiseLinear.Weights.Grad.Data
+		} else {
+			dnWeightsOut = make([]float64, len(gn.NoiseLinear.Weights.Data))
+		}
+
+		// Simplified: Noise weights also learn from the gating gradient to control exploration magnitude
+		computeRouterGradSIMD(
+			gn.inputTensor.Data,
+			gn.NoiseLinear.Weights.Data,
+			lnGrad.Data,
+			dnWeightsOut,
+			make([]float64, len(gn.inputTensor.Data)), // already computed input grad above
+			numTokens, numExperts, inputDim,
+		)
+
+		if gn.NoiseLinear.Biases != nil && gn.NoiseLinear.Biases.RequiresGrad {
+			if gn.NoiseLinear.Biases.Grad == nil {
+				gn.NoiseLinear.Biases.Grad = tensor.NewTensor(gn.NoiseLinear.Biases.Shape, make([]float64, len(gn.NoiseLinear.Biases.Data)), false)
+			}
+			for t := 0; t < numTokens; t++ {
+				base := t * numExperts
+				for e := 0; e < numExperts; e++ {
+					gn.NoiseLinear.Biases.Grad.Data[e] += lnGrad.Data[base+e]
+				}
+			}
+		}
+	}
+
 	// Clear intermediate gradients
 	gn.logitsTensor.Grad = nil
 	return nil
@@ -202,6 +290,9 @@ func (gn *GatingNetwork) Backward(grad *tensor.Tensor) error {
 // Parameters returns all learnable parameters of the GatingNetwork.
 func (gn *GatingNetwork) Parameters() []*tensor.Tensor {
 	params := gn.Linear.Parameters()
+	if gn.NoiseLinear != nil {
+		params = append(params, gn.NoiseLinear.Parameters()...)
+	}
 	params = append(params, gn.LayerNorm.Parameters()...)
 	return params
 }

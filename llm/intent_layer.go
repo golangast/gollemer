@@ -165,6 +165,10 @@ func (r *HybridIntentResolver) resolveRecursive(input string, layer *IntentDataL
 					layer.Parameters[k] = v
 					stateChanged = true
 				}
+			} else if k == "response" {
+				// Special Case: Allow "response" for hybrid chat intents that don't have explicit schemas
+				layer.Parameters[k] = v
+				stateChanged = true
 			}
 		}
 	}

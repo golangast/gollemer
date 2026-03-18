@@ -3,6 +3,7 @@ package llm
 import (
 	"bufio"
 	"database/sql"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -185,7 +186,7 @@ func RunLLM() {
 
 	// Initialize Intent Resolver
 	client := &GollemerMoEClient{KB: kb, Model: intentModel, W2V: w2vModel}
-	client.LoadChatBank(filepath.Join(projectRoot, "trainingdata/conversing.json"))
+	client.LoadChatBank(filepath.Join(projectRoot, "trainingdata/conversing.csv"))
 	resolver := NewHybridIntentResolver(client)
 
 	var commandHistory []string
@@ -932,7 +933,23 @@ case "a":
 			continue
 		}
 
-		if intentData.Intent != "" {
+		// Suppress intent display for chat-like responses or generic system responses
+		isChatty := intentData.Intent == "chat_response" || 
+			strings.HasPrefix(intentData.Intent, "Social_") || 
+			strings.HasPrefix(intentData.Intent, "System_") || 
+			intentData.Intent == "gollemer_start" || 
+			intentData.Intent == "gollemer_ai" ||
+			strings.HasPrefix(intentData.Intent, "go_") || 
+			strings.HasPrefix(intentData.Intent, "ml_") || 
+			strings.HasPrefix(intentData.Intent, "nlp_") || 
+			strings.HasPrefix(intentData.Intent, "moe_") || 
+			strings.HasPrefix(intentData.Intent, "lifestyle_") || 
+			strings.HasPrefix(intentData.Intent, "cooking_") || 
+			strings.HasPrefix(intentData.Intent, "photography_") || 
+			strings.HasPrefix(intentData.Intent, "robotics_") || 
+			strings.HasPrefix(intentData.Intent, "math_")
+
+		if intentData.Intent != "" && !isChatty {
 			if icon, ok := intentIcons[intentData.Intent]; ok {
 				fmt.Printf("   %s\n", icon)
 			} else {
@@ -952,9 +969,24 @@ case "a":
 		// NOTE: intentData was already resolved at line 901 or 903/session logic.
 		// We do NOT call resolver.Resolve again here as it would overwrite session results.
 
-		if intentData.Intent == "chat_response" {
-			if resp, ok := intentData.Parameters["response"].(string); ok && resp != "" {
+		if isChatty || (intentData.Parameters != nil && intentData.Parameters["response"] != nil) {
+			resp := ""
+			if intentData.Parameters != nil {
+				if r, ok := intentData.Parameters["response"].(string); ok {
+					resp = r
+				}
+			}
+			// Final fallback to retrieving direct from client if param wasn't set (e.g. schema filter)
+			if resp == "" && resolver != nil && resolver.MoE != nil {
+				if client, ok := resolver.MoE.(*GollemerMoEClient); ok {
+					resp = client.lastMoEPrediction
+				}
+			}
+
+			if resp != "" {
 				colors.AnimatedOutput("cyan", "black", resp, 1*time.Second)
+				// Record to History to enable conversation flow/memory
+				client.PushHistory(query, resp, intentData.Intent)
 			} else {
 				fmt.Println(" |ʕ•ϖ•ʔ| I'm not sure how to respond to that yet.")
 			}
@@ -1043,6 +1075,8 @@ case "a":
 				command = "greeting"
 			case "status":
 				command = "status"
+			case "pwd":
+				command = "pwd"
 			}
 		}
 		for i, token := range taggedData.Tokens {
@@ -4052,6 +4086,13 @@ case '{':
 			predictedSentence = "Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'."
 		case "status":
 			predictedSentence = "I am functioning within normal parameters. Ready for your next command!"
+		case "pwd":
+			cwd, err := os.Getwd()
+			if err != nil {
+				predictedSentence = "I'm sorry, I couldn't determine the current directory."
+			} else {
+				predictedSentence = fmt.Sprintf("The current directory is: %s", cwd)
+			}
 		default:
 			if query == "pwd" || (hasDirectoryToken && command == "") {
 				cwd, err := os.Getwd()
@@ -4124,6 +4165,8 @@ case 1:
 		}
 
 		colors.AnimatedOutput(fgColor, bgColor, predictedSentence, 1*time.Second)
+		// Record command result into History for flow and memory
+		client.PushHistory(query, predictedSentence, intentData.Intent)
 	}
 }
 
@@ -4596,12 +4639,21 @@ type GollemerMoEClient struct {
 	Model             *moe.IntentMoE
 	W2V               *word2vec.SimpleWord2Vec
 	ChatBank          []ChatPair
+	History           []ChatPair
 	lastMoEPrediction string
 }
 
+func (c *GollemerMoEClient) PushHistory(q, a, intent string) {
+	c.History = append(c.History, ChatPair{Q: q, A: a, Intent: intent})
+	if len(c.History) > 10 { // Keep last 10 turns
+		c.History = c.History[1:]
+	}
+}
+
 type ChatPair struct {
-	Q string `json:"prompt"`
-	A string `json:"response"`
+	Q      string `json:"prompt"`
+	A      string `json:"response"`
+	Intent string `json:"intent"`
 }
 
 func (c *GollemerMoEClient) LoadChatBank(path string) {
@@ -4610,26 +4662,89 @@ func (c *GollemerMoEClient) LoadChatBank(path string) {
 		log.Printf("⚠️  Could not load ChatBank from %s: %v", path, err)
 		return
 	}
+
 	var pairs []ChatPair
-	if err := json.Unmarshal(data, &pairs); err != nil {
-		log.Printf("⚠️  Failed to parse ChatBank JSON: %v", err)
+	// Try JSON first if it doesn't look like a CSV header or if extension is .json
+	if !strings.HasSuffix(strings.ToLower(path), ".csv") {
+		if err := json.Unmarshal(data, &pairs); err == nil {
+			c.ChatBank = pairs
+			log.Printf("✅ Loaded %d prompts into ChatBank from JSON", len(c.ChatBank))
+			return
+		}
+	}
+
+	// Try CSV parsing
+	reader := csv.NewReader(strings.NewReader(string(data)))
+	records, err := reader.ReadAll()
+	if err != nil {
+		log.Printf("⚠️  Error parsing CSV from %s: %v", path, err)
 		return
 	}
+
+	for i, record := range records {
+		if i == 0 && strings.Contains(strings.ToLower(record[0]), "intent") {
+			continue // Skip header
+		}
+		if len(record) >= 3 {
+			// Pattern is record[1], Response is record[2]
+			q := strings.Trim(record[1], "\" ")
+			a := strings.Trim(record[2], "\" ")
+			intent := strings.Trim(record[0], "\" ")
+			if q != "" && a != "" {
+				pairs = append(pairs, ChatPair{Q: q, A: a, Intent: intent})
+			}
+		}
+	}
+
 	c.ChatBank = pairs
-	log.Printf("✅ Loaded %d prompts into ChatBank for fallback retrieval", len(c.ChatBank))
+	log.Printf("✅ Loaded %d prompts into ChatBank from CSV", len(c.ChatBank))
 }
 
-func (c *GollemerMoEClient) RetrieveChatResponse(input string) (string, float64) {
+func (c *GollemerMoEClient) RetrieveChatResponse(input string) (string, string, float64) {
 	if len(c.ChatBank) == 0 || c.W2V == nil {
-		return "", 0
+		return "", "", 0
 	}
 
 	bestScore := -1.0
 	bestResponse := ""
+	bestIntent := ""
 
+	// 1. Identify context
+	var lastTurnIntent string
+	var lastTurnQA string
+	if len(c.History) > 0 {
+		last := c.History[len(c.History)-1]
+		lastTurnIntent = last.Intent
+		lastTurnQA = last.Q + " " + last.A
+	}
+
+	// 2. Identify if continuation
+	isCont := false
+	lowered := strings.ToLower(input)
+	contWords := []string{"then", "next", "now", "after", "else", "more", "further", "follow", "what now", "how about", "anything"}
+	// Continuation queries are often very short AND contain specific markers
+	hasContWord := false
+	for _, cw := range contWords {
+		if strings.Contains(lowered, cw) {
+			hasContWord = true
+			break
+		}
+	}
+
+	if hasContWord || (len(strings.Fields(input)) < 3 && !isCreatingCommand(input)) {
+		isCont = true
+	}
+
+	// 3. Embed current input
 	inputEmbed := c.getSentenceEmbedding(input)
 	if inputEmbed == nil {
-		return "", 0
+		return "", "", 0
+	}
+
+	// 4. Embed history (last turn context)
+	var historyEmbed []float64
+	if lastTurnQA != "" {
+		historyEmbed = c.getSentenceEmbedding(lastTurnQA)
 	}
 
 	for _, pair := range c.ChatBank {
@@ -4637,14 +4752,44 @@ func (c *GollemerMoEClient) RetrieveChatResponse(input string) (string, float64)
 		if pairEmbed == nil {
 			continue
 		}
+
 		score := cosineSimilarity(inputEmbed, pairEmbed)
+
+		// 5. Aggressive Context Reinforcement for continuations
+		if isCont && historyEmbed != nil {
+			histScore := cosineSimilarity(historyEmbed, pairEmbed)
+			// If it's a short continuation like "then what?", the history should dominate
+			// because the input itself has very little semantic weight.
+			score = 0.2*score + 0.8*histScore
+		}
+
+		// 6. Topic Bias: Boost if it stays in the same intent family
+		if lastTurnIntent != "" {
+			lastParts := strings.Split(lastTurnIntent, "_")
+			currParts := strings.Split(pair.Intent, "_")
+			if len(lastParts) > 0 && len(currParts) > 0 && lastParts[0] == currParts[0] {
+				// Significant boost for keeping the same category (e.g., gollemer_start)
+				score *= 1.3
+			}
+		}
+
+		// 7. Repetition Penalty
+		for i := len(c.History) - 1; i >= 0; i-- {
+			if c.History[i].A == pair.A {
+				recencyWeight := float64(i+1) / float64(len(c.History))
+				score *= (0.4 + (0.3 * (1.0 - recencyWeight))) // Heavy penalty (0.4 to 0.7)
+				break
+			}
+		}
+
 		if score > bestScore {
 			bestScore = score
 			bestResponse = pair.A
+			bestIntent = pair.Intent
 		}
 	}
 
-	return bestResponse, bestScore
+	return bestResponse, bestIntent, bestScore
 }
 
 func (c *GollemerMoEClient) getSentenceEmbedding(text string) []float64 {
@@ -4674,9 +4819,8 @@ func (c *GollemerMoEClient) getSentenceEmbedding(text string) []float64 {
 
 
 func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
-	var rawModelOutput string
+	c.lastMoEPrediction = "" // Clear previous turn's chat prediction
 	lowerInput := strings.ToLower(input)
-	words := strings.Fields(lowerInput)
 
 	// ── 0. Instant Heuristics for Dynamic Queries ───────────────────
 	if (strings.Contains(lowerInput, "time") || strings.Contains(lowerInput, "clock")) && 
@@ -4686,12 +4830,34 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 	if strings.Contains(lowerInput, "weather") {
 		return "weather_query", 0.90
 	}
+	if lowerInput == "pwd" || (strings.Contains(lowerInput, "directory") && (strings.Contains(lowerInput, "where") || strings.Contains(lowerInput, "what") || strings.Contains(lowerInput, "current"))) {
+		return "pwd_query", 0.99
+	}
+	if strings.Contains(lowerInput, "who are you") || strings.Contains(lowerInput, "your name") || lowerInput == "identity" {
+		return "identity_query", 0.99
+	}
+	if lowerInput == "hi" || lowerInput == "hello" || lowerInput == "hey" || lowerInput == "greeting" {
+		return "greeting_query", 0.99
+	}
+
+	if lowerInput == "help" || strings.HasPrefix(lowerInput, "help ") {
+		return "help_command", 0.99
+	}
+
+	// ── 0.5. Primary Command Heuristics ────────────────────────────
+	// We check for "create", "list", etc. early to prevent ChatBank from hijacking them
+	if intent, score := c.checkCommandHeuristics(lowerInput); score > 0.8 {
+		return intent, score
+	}
 
 	// ── 1. High-Confidence Retrieval Fallback ───────────────────────
 	// Check if this query is almost identical to something in our conversing.json
-	retrievedResp, retrievedScore := c.RetrieveChatResponse(input)
+	retrievedResp, retrievedIntent, retrievedScore := c.RetrieveChatResponse(input)
 	if retrievedScore > 0.88 {
 		c.lastMoEPrediction = retrievedResp
+		if retrievedIntent != "" {
+			return retrievedIntent, retrievedScore
+		}
 		return "chat_response", retrievedScore
 	}
 
@@ -4736,7 +4902,6 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 								}
 							}
 							predictedSentence := strings.Join(decodedWords, " ")
-							rawModelOutput = predictedSentence
 
 							// Semantic Mapping of Predicted Sentence
 							if strings.HasPrefix(predictedSentence, "create webserver") {
@@ -4764,11 +4929,20 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 		}
 	}
 
-	// ── 3. Rule-Based Keyword Heuristics ────────────────────────────
-	createVerbs := []string{"create", "make", "add", "generate", "initialize", "init", "new", "setup", "start"}
+	if lowerInput != "" {
+		c.lastMoEPrediction = "I'm not sure how to respond to that yet. I'm still learning!"
+		return "chat_response", 0.05
+	}
+
+	return "", 0.0
+}
+
+func (c *GollemerMoEClient) checkCommandHeuristics(lowerInput string) (string, float64) {
+	createVerbs := []string{"create", "make", "add", "generate", "initialize", "init", "new", "setup"}
 	isCreating := false
 	for _, v := range createVerbs {
-		if strings.Contains(lowerInput, v) {
+		// Use word boundary check or prefix to avoid false positives
+		if strings.HasPrefix(lowerInput, v+" ") || strings.Contains(lowerInput, " "+v+" ") {
 			isCreating = true
 			break
 		}
@@ -4781,29 +4955,31 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 			"database": "create_database", "db": "create_database", "file": "create_file", "folder": "create_folder",
 			"directory": "create_folder", "form": "create_form", "structure": "create_structure",
 		}
-		for _, key := range []string{"webserver", "site", "project", "page", "handler", "database", "file", "folder", "form"} {
+		for key, intent := range targets {
 			if strings.Contains(lowerInput, key) {
-				return targets[key], 0.75
+				return intent, 0.95 // High confidence for explicit command-keyword pair
 			}
 		}
+		// If it's just "create <something>", return a generic high-score to enter command mode
+		return "create_generic", 0.81
 	}
 
-	// Final Fallbacks
-	if retrievedResp != "" && retrievedScore > 0.5 {
-		c.lastMoEPrediction = retrievedResp
-		return "chat_response", retrievedScore
-	}
-
-	if rawModelOutput != "" {
-		return fmt.Sprintf("RAW: %s", rawModelOutput), 0.1
-	}
-
-	if lowerInput != "" {
-		c.lastMoEPrediction = "I'm not sure how to respond to that yet. I'm still learning!"
-		return "chat_response", 0.05
+	if strings.HasPrefix(lowerInput, "list ") || lowerInput == "list" || strings.HasPrefix(lowerInput, "ls ") || lowerInput == "ls" {
+		return "list_query", 0.85
 	}
 
 	return "", 0.0
+}
+
+func isCreatingCommand(input string) bool {
+	l := strings.ToLower(input)
+	createVerbs := []string{"create", "make", "add", "generate", "init", "new", "setup", "list", "ls", "go", "cd", "delete", "remove", "grep", "search"}
+	for _, v := range createVerbs {
+		if strings.HasPrefix(l, v) {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *GollemerMoEClient) ExtractEntities(input string, intent string) map[string]any {
@@ -4813,7 +4989,7 @@ func (c *GollemerMoEClient) ExtractEntities(input string, intent string) map[str
 
 	entities := make(map[string]any)
 
-	if intent == "chat_response" && c.lastMoEPrediction != "" {
+	if (intent == "chat_response" || strings.HasPrefix(intent, "Social_") || strings.HasPrefix(intent, "System_") || strings.HasPrefix(intent, "gollemer_")) && c.lastMoEPrediction != "" {
 		entities["response"] = c.lastMoEPrediction
 		return entities
 	}

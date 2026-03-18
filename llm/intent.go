@@ -63,6 +63,7 @@ func NewKnowledgeBase() *KnowledgeBase {
 			"grep": true, "search": true,
 			"history": true,
 			"help":    true,
+			"pwd":     true,
 		},
 		KnownObjects: map[string]bool{
 			"user": true, "file": true, "database": true, "folder": true, "directory": true,
