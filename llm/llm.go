@@ -41,6 +41,7 @@ func RunLLM() {
 		log.Fatalf("Failed to find project root: %v", err)
 	}
 	log.Printf("DEBUG: Project Root: %s", projectRoot)
+	absoluteLastDirConfigPath = filepath.Join(projectRoot, "last_dir.txt")
 
 	cmd := exec.Command("clear")
 	cmd.Stdout = os.Stdout
@@ -722,7 +723,7 @@ case "a":
 				tutorialState.Active = true
 				tutorialState.Step = 1
 				inMenuMode = false
-				colors.AnimatedOutput("green", "black", "--- Tutorial Mode Started ---\nWelcome to the Gollemer tutorial! I will guide you through the basics.\nStep 1: Let's start by creating a project folder.\nTry typing: 'create folder myproject'", 1*time.Second)
+				colors.AnimatedOutput("green", "black", "--- Tutorial Mode Started ---\nWelcome to the Gollemer tutorial! I will guide you through the basics.\nStep 1: Let's start by creating a project folder.\nType 'pwd' to know the folder you are in.\nThen once you are in the desired directory try typing: 'create folder myproject'", 1*time.Second)
 				continue
 			case "7":
 				query = "help"
@@ -794,7 +795,7 @@ case "a":
 		if query == "tutorial" {
 			tutorialState.Active = true
 			tutorialState.Step = 1
-			colors.AnimatedOutput("green", "black", "--- Tutorial Mode Started ---\nWelcome to the Gollemer tutorial! I will guide you through the basics.\nStep 1: Let's start by creating a project folder.\nTry typing: 'create folder myproject'", 1*time.Second)
+			colors.AnimatedOutput("green", "black", "--- Tutorial Mode Started ---\nWelcome to the Gollemer tutorial! I will guide you through the basics.\nStep 1: Let's start by creating a project folder.\nType 'pwd' to know the folder you are in.\nThen once you are in the desired directory try typing: 'create folder myproject'", 1*time.Second)
 			continue
 		} else if query == "show learning path" {
 			if kb.LearningPath != "" {
@@ -939,7 +940,7 @@ case "a":
 			strings.HasPrefix(intentData.Intent, "System_") || 
 			strings.HasPrefix(intentData.Intent, "gollemer_") || 
 			strings.HasPrefix(intentData.Intent, "golleutils_") ||
-			strings.HasPrefix(intentData.Intent, "go_") || 
+			(strings.HasPrefix(intentData.Intent, "go_") && intentData.Intent != "go_query") || 
 			strings.HasPrefix(intentData.Intent, "ml_") || 
 			strings.HasPrefix(intentData.Intent, "nlp_") || 
 			strings.HasPrefix(intentData.Intent, "moe_") || 
@@ -969,27 +970,28 @@ case "a":
 		// NOTE: intentData was already resolved at line 901 or 903/session logic.
 		// We do NOT call resolver.Resolve again here as it would overwrite session results.
 
-		if isChatty || (intentData.Parameters != nil && intentData.Parameters["response"] != nil) {
-			resp := ""
-			if intentData.Parameters != nil {
-				if r, ok := intentData.Parameters["response"].(string); ok {
-					resp = r
-				}
+		resp := ""
+		if intentData.Parameters != nil {
+			if r, ok := intentData.Parameters["response"].(string); ok {
+				resp = r
 			}
-			// Final fallback to retrieving direct from client if param wasn't set (e.g. schema filter)
-			if resp == "" && resolver != nil && resolver.MoE != nil {
-				if client, ok := resolver.MoE.(*GollemerMoEClient); ok {
-					resp = client.lastMoEPrediction
-				}
+		}
+		// Final fallback to retrieving direct from client if param wasn't set (e.g. schema filter)
+		if resp == "" && resolver != nil && resolver.MoE != nil {
+			if client, ok := resolver.MoE.(*GollemerMoEClient); ok {
+				resp = client.lastMoEPrediction
 			}
+		}
 
-			if resp != "" {
-				colors.AnimatedOutput("cyan", "black", resp, 1*time.Second)
-				// Record to History to enable conversation flow/memory
-				client.PushHistory(query, resp, intentData.Intent)
-			} else {
-				fmt.Println(" |ʕ•ϖ•ʔ| I'm not sure how to respond to that yet.")
-			}
+		if resp != "" {
+			colors.AnimatedOutput("cyan", "black", resp, 1*time.Second)
+			// Record to History to enable conversation flow/memory
+			client.PushHistory(query, resp, intentData.Intent)
+		} else if isChatty && !isCreatingCommand(query) {
+			fmt.Println(" |ʕ•ϖ•ʔ| I'm not sure how to respond to that yet.")
+		}
+
+		if isChatty && !isCreatingCommand(query) {
 			continue
 		} else if intentData.Intent == "time_query" {
 			now := time.Now()
@@ -1077,6 +1079,10 @@ case "a":
 				command = "status"
 			case "pwd":
 				command = "pwd"
+			case "dir", "directory", "folders":
+				command = "list"
+			case "tree":
+				command = "tree"
 			}
 		}
 		for i, token := range taggedData.Tokens {
@@ -1230,7 +1236,7 @@ case "site", "project", "app":
 				for i := len(taggedData.Tokens) - 1; i >= 0; i-- {
 					token := strings.ToLower(taggedData.Tokens[i])
 					// Exclude command words and prepositions
-					if token != "go" && token != "to" && token != "project" && token != "folder" && token != "directory" && token != "cd" && token != "change" && token != "move" {
+					if token != "go" && token != "to" && token != "into" && token != "project" && token != "folder" && token != "directory" && token != "cd" && token != "change" && token != "move" {
 						targetDirectory = taggedData.Tokens[i]
 						break
 					}
@@ -1487,6 +1493,8 @@ case "site", "project", "app":
 				sb.WriteString("--- ʕ◔ϖ◔ʔ Gollemer Help ---\n\n")
 
 				sb.WriteString("Categorized Commands:\n")
+				sb.WriteString("  [Menu]          menu\n")
+				sb.WriteString("  [Tutorial]      tutorial\n")
 				sb.WriteString("  [📁 Navigation]  go <dir>, list, tree, pwd\n")
 				sb.WriteString("  [🛠️  Files]       create file <name>, create folder <name>, delete <name>, move <file> to <dir>, cat, grep\n")
 				sb.WriteString("  [🌐 Web]         create webserver <name>, create handler <name>, create page <name>, run, stop, verify\n")
@@ -3298,11 +3306,22 @@ func FormHandler(w http.ResponseWriter, r *http.Request) {
 					}
 
 					candidates = append(candidates, []string{
+						filepath.Join(cwd, webserverName),
+						filepath.Join(cwd, "cmd", webserverName),
 						filepath.Join(projectRoot, webserverName),
 						filepath.Join(projectRoot, "cmd", webserverName),
 						filepath.Join(projectRoot, webserverName, "cmd", webserverName),
 						filepath.Join(projectRoot, webserverName, "cmd"),
 					}...)
+
+					// Also check for subdirectories of the current directory if it's a project folder
+					entries, _ := os.ReadDir(cwd)
+					for _, entry := range entries {
+						if entry.IsDir() && !strings.HasPrefix(entry.Name(), ".") {
+							candidates = append(candidates, filepath.Join(cwd, entry.Name(), "cmd", webserverName))
+							candidates = append(candidates, filepath.Join(cwd, entry.Name(), webserverName))
+						}
+					}
 
 					for _, p := range candidates {
 						if _, err := os.Stat(filepath.Join(p, "main.go")); err == nil {
@@ -3324,7 +3343,9 @@ func FormHandler(w http.ResponseWriter, r *http.Request) {
 					log.Printf("DEBUG: Jim Webserver Source Path: %s", jimSourcePath)
 
 					// Check if jimSourcePath exists
-					if _, err := os.Stat(jimSourcePath); err != nil {
+					if jimSourcePath == "" {
+						predictedSentence = fmt.Sprintf("I couldn't find a webserver named '%s'. Try specifying the directory or check if main.go exists in cmd/%s/.", webserverName, webserverName)
+					} else if _, err := os.Stat(jimSourcePath); err != nil {
 						if os.IsNotExist(err) {
 							predictedSentence = fmt.Sprintf("I couldn't find a webserver named '%s' at path '%s'.", webserverName, jimSourcePath)
 						} else {
@@ -4138,7 +4159,7 @@ case '{':
 case 1:
 				if command == "create" && (strings.Contains(objectType, "folder") || strings.Contains(objectType, "directory")) {
 					tutorialState.Step = 2
-					predictedSentence += "\n\n[Tutorial] Great job! You created a folder. Now, let's create a file inside it.\nStep 2: Create a file. Try typing: 'create file hello.txt'"
+					predictedSentence += "\n\n[Tutorial] Great job! You created a folder. Now, let's create a file inside it.\nStep 2: Create a file. Try typing: 'go into folder [name]' and then 'create file main.go'"
 				} else {
 					predictedSentence += "\n\n[Tutorial] Hint: We are on Step 1. Try creating a folder using 'create folder <name>'."
 				}
@@ -4711,6 +4732,9 @@ func (c *GollemerMoEClient) RetrieveChatResponse(input string) (string, string, 
 	bestResponse := ""
 	bestIntent := ""
 
+	input = strings.TrimSpace(strings.ToLower(input))
+	inputWords := cleanTokenize(input)
+
 	// 1. Identify context
 	var lastTurnIntent string
 	var lastTurnQA string
@@ -4722,18 +4746,16 @@ func (c *GollemerMoEClient) RetrieveChatResponse(input string) (string, string, 
 
 	// 2. Identify if continuation
 	isCont := false
-	lowered := strings.ToLower(input)
 	contWords := []string{"then", "next", "now", "after", "else", "more", "further", "follow", "what now", "how about", "anything"}
-	// Continuation queries are often very short AND contain specific markers
-	hasContWord := false
 	for _, cw := range contWords {
-		if strings.Contains(lowered, cw) {
-			hasContWord = true
+		if strings.Contains(input, cw) {
+			hasContWord := true
+			_ = hasContWord
+			isCont = true
 			break
 		}
 	}
-
-	if hasContWord || (len(strings.Fields(input)) < 3 && !isCreatingCommand(input)) {
+	if !isCont && (len(inputWords) < 3 && !isCreatingCommand(input)) {
 		isCont = true
 	}
 
@@ -4750,9 +4772,16 @@ func (c *GollemerMoEClient) RetrieveChatResponse(input string) (string, string, 
 	}
 
 	for _, pair := range c.ChatBank {
-		pairEmbed := c.getSentenceEmbedding(pair.Q)
+		pairQ := strings.TrimSpace(strings.ToLower(pair.Q))
+		pairEmbed := c.getSentenceEmbedding(pairQ)
 		if pairEmbed == nil {
 			continue
+		}
+
+		// --- [Fix: Exact Match Boost] ---
+		// If the query is an exact match, it should ALWAYS win over similar embeddings.
+		if input == pairQ {
+			return pair.A, pair.Intent, 1.0
 		}
 
 		score := cosineSimilarity(inputEmbed, pairEmbed)
@@ -4760,8 +4789,6 @@ func (c *GollemerMoEClient) RetrieveChatResponse(input string) (string, string, 
 		// 5. Aggressive Context Reinforcement for continuations
 		if isCont && historyEmbed != nil {
 			histScore := cosineSimilarity(historyEmbed, pairEmbed)
-			// If it's a short continuation like "then what?", the history should dominate
-			// because the input itself has very little semantic weight.
 			score = 0.2*score + 0.8*histScore
 		}
 
@@ -4770,8 +4797,7 @@ func (c *GollemerMoEClient) RetrieveChatResponse(input string) (string, string, 
 			lastParts := strings.Split(lastTurnIntent, "_")
 			currParts := strings.Split(pair.Intent, "_")
 			if len(lastParts) > 0 && len(currParts) > 0 && lastParts[0] == currParts[0] {
-				// Significant boost for keeping the same category (e.g., gollemer_start)
-				score *= 1.3
+				score *= 1.25 // Significant category boost
 			}
 		}
 
@@ -4779,7 +4805,7 @@ func (c *GollemerMoEClient) RetrieveChatResponse(input string) (string, string, 
 		for i := len(c.History) - 1; i >= 0; i-- {
 			if c.History[i].A == pair.A {
 				recencyWeight := float64(i+1) / float64(len(c.History))
-				score *= (0.4 + (0.3 * (1.0 - recencyWeight))) // Heavy penalty (0.4 to 0.7)
+				score *= (0.4 + (0.3 * (1.0 - recencyWeight)))
 				break
 			}
 		}
@@ -4846,9 +4872,27 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 		return "help_command", 0.99
 	}
 	if strings.Contains(lowerInput, "what") && strings.Contains(lowerInput, "do") && strings.Contains(lowerInput, "i") {
+		c.lastMoEPrediction = "Welcome! You can start by typing 'menu' to see all options, or 'tutorial' for a guided walk-through."
 		return "gollemer_logic", 0.99
 	}
 	if strings.Contains(lowerInput, "how") && strings.Contains(lowerInput, "use") && strings.Contains(lowerInput, "this") {
+		c.lastMoEPrediction = "You can enter natural language commands like 'make a handler' or use the 'menu' to navigate visually."
+		return "gollemer_logic", 0.99
+	}
+	if strings.Contains(lowerInput, "how") && strings.Contains(lowerInput, "begin") {
+		c.lastMoEPrediction = "Welcome! Start by typing 'create webserver' or 'menu' to see what we can build together."
+		return "gollemer_start", 0.99
+	}
+	if strings.Contains(lowerInput, "where") && (strings.Contains(lowerInput, "begin") || strings.Contains(lowerInput, "start")) {
+		c.lastMoEPrediction = "The best way to start is by initializing a new workspace and adding a few files to your learningfolder."
+		return "gollemer_start", 0.99
+	}
+	if strings.Contains(lowerInput, "first step") || strings.Contains(lowerInput, "now what") || strings.Contains(lowerInput, "next step") {
+		c.lastMoEPrediction = "Your first step should be to run 'init' or 'menu' to scaffold your first Go project."
+		return "gollemer_logic", 0.99
+	}
+	if strings.Contains(lowerInput, "what can you do") || strings.Contains(lowerInput, "what do you do") {
+		c.lastMoEPrediction = "I help you write Go code, manage your project files, and train NLP models. Type 'menu' to start."
 		return "gollemer_logic", 0.99
 	}
 
@@ -4947,46 +4991,78 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 
 func (c *GollemerMoEClient) checkCommandHeuristics(lowerInput string) (string, float64) {
 	createVerbs := []string{"create", "make", "add", "generate", "initialize", "init", "new", "setup"}
-	isCreating := false
 	for _, v := range createVerbs {
-		// Use word boundary check or prefix to avoid false positives
-		if strings.HasPrefix(lowerInput, v+" ") || strings.Contains(lowerInput, " "+v+" ") {
-			isCreating = true
-			break
-		}
-	}
-
-	if isCreating {
-		targets := map[string]string{
-			"webserver": "create_webserver", "site": "create_webserver", "project": "create_webserver",
-			"page": "create_page", "view": "create_page", "handler": "create_handler", "route": "create_handler",
-			"database": "create_database", "db": "create_database", "file": "create_file", "folder": "create_folder",
-			"directory": "create_folder", "form": "create_form", "structure": "create_structure",
-		}
-		for key, intent := range targets {
-			if strings.Contains(lowerInput, key) {
-				return intent, 0.95 // High confidence for explicit command-keyword pair
+		// Matches "init", "init project", "create", "create server", etc.
+		if lowerInput == v || strings.HasPrefix(lowerInput, v+" ") {
+			isCreating := true
+			_ = isCreating
+			// If it's just the verb (e.g. "init"), return a high-confidence generic create intent
+			c.lastMoEPrediction = "I am on it! I'll generate the new resources for you right away."
+			if lowerInput == v {
+				return "create_generic", 0.95
 			}
+			return c.handleCreateCommand(lowerInput) // Helper to find specific object
 		}
-		// If it's just "create <something>", return a generic high-score to enter command mode
-		return "create_generic", 0.81
 	}
 
 	if strings.HasPrefix(lowerInput, "list ") || lowerInput == "list" || strings.HasPrefix(lowerInput, "ls ") || lowerInput == "ls" {
-		return "list_query", 0.85
+		c.lastMoEPrediction = "Checking the directory for you... here is what I found:"
+		return "list_query", 0.99
+	}
+	if strings.HasPrefix(lowerInput, "go ") || lowerInput == "go" || strings.HasPrefix(lowerInput, "cd ") || lowerInput == "cd" || strings.HasPrefix(lowerInput, "goto ") {
+		return "go_query", 0.99
+	}
+	if strings.HasPrefix(lowerInput, "cat ") || strings.HasPrefix(lowerInput, "read ") {
+		return "cat_query", 0.99
+	}
+	if strings.HasPrefix(lowerInput, "run ") || lowerInput == "run" || strings.HasPrefix(lowerInput, "start ") || lowerInput == "start" {
+		c.lastMoEPrediction = "Launching the application! 🚀 Hang tight."
+		return "run_webserver", 0.99
+	}
+	if lowerInput == "pwd" || lowerInput == "history" || lowerInput == "clear" || lowerInput == "cls" {
+		return lowerInput + "_query", 0.99
 	}
 
 	return "", 0.0
 }
 
+func (c *GollemerMoEClient) handleCreateCommand(lowerInput string) (string, float64) {
+	targets := map[string]string{
+		"webserver": "create_webserver", "site": "create_webserver", "project": "create_webserver",
+		"page": "create_page", "view": "create_page", "handler": "create_handler", "route": "create_handler",
+		"database": "create_database", "db": "create_database", "file": "create_file", "folder": "create_folder",
+		"directory": "create_folder", "form": "create_form", "structure": "create_structure",
+	}
+	for key, intent := range targets {
+		if strings.Contains(lowerInput, key) {
+			return intent, 0.95 // High confidence for explicit command-keyword pair
+		}
+	}
+	// If it's just "create <something>", return a generic high-score to enter command mode
+	return "create_generic", 0.81
+}
+
 func isCreatingCommand(input string) bool {
 	l := strings.ToLower(input)
-	createVerbs := []string{"create", "make", "add", "generate", "init", "new", "setup", "list", "ls", "go", "cd", "delete", "remove", "grep", "search"}
+	createVerbs := []string{"create", "make", "add", "generate", "init", "new", "setup", "list", "ls", "go", "cd", "delete", "remove", "grep", "search", "run", "start", "cat", "read", "tree", "dir", "directory", "folders", "history", "pwd"}
+	
+	// Check for direct prefixes first
 	for _, v := range createVerbs {
 		if strings.HasPrefix(l, v) {
 			return true
 		}
 	}
+	
+	// Check for keyword presence (e.g. "what are the folders")
+	words := strings.Fields(l)
+	for _, word := range words {
+		for _, v := range createVerbs {
+			if word == v {
+				return true
+			}
+		}
+	}
+	
 	return false
 }
 

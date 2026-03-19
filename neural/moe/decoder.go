@@ -248,8 +248,22 @@ func (d *RNNDecoder) Forward(contextVector, targetSequence *Tensor, scheduledSam
 
 		if t < maxSequenceLength-2 {
 			if rand.Float64() < scheduledSamplingProb {
-				argmax, _ := resLogits.Argmax(1)
-				decoderInput, _ = argmax.Reshape([]int{batchSize, 1})
+				// Use Nucleus (Top-P) Sampling instead of Argmax to avoid "garbage" noise
+				// Sampling is done per batch item.
+				nextTokens := make([]float64, batchSize)
+				for b := 0; b < batchSize; b++ {
+					// Slice out logits for this batch item
+					itemLogits, _ := resLogits.Slice(0, b, b+1)
+					// Use 0.8 temperature and 0.9 top-P for high-quality diversity
+					sampledID, err := SampleFromLogits(itemLogits, 0.8, 0, 0.9)
+					if err != nil {
+						// Fallback to argmax if sampling fails
+						argmax, _ := itemLogits.Argmax(1)
+						sampledID = int(argmax.Data[0])
+					}
+					nextTokens[b] = float64(sampledID)
+				}
+				decoderInput = NewTensor([]int{batchSize, 1}, nextTokens, false)
 			} else {
 				decoderInput, _ = targetSequence.Slice(1, t+1, t+2)
 			}
