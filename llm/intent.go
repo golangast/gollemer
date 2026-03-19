@@ -44,7 +44,7 @@ type KnowledgeBase struct {
 var paramTriggers = map[string]string{
 	"named": "name", "called": "name", "port": "port", "at": "port", "url": "url", "on": "url",
 	"method": "method", "using": "method", "source": "source", "from": "source", "path": "path",
-	"in": "path", "tables": "tables", "fields": "fields", "columns": "fields",
+	"in": "path", "into": "path", "tables": "tables", "fields": "fields", "columns": "fields",
 }
 
 func NewKnowledgeBase() *KnowledgeBase {
@@ -73,6 +73,7 @@ func NewKnowledgeBase() *KnowledgeBase {
 			"a": true, "an": true, "the": true, "please": true, "this": true,
 			"me": true, "my": true, "i": true, "new": true, "to": true, "for": true, "and": true, "it": true,
 			"how": true, "are": true, "is": true, "was": true, "were": true, "you": true, "your": true,
+			"in": true, "into": true,
 			"what": true, "when": true, "where": true, "why": true, "who": true, "which": true,
 		},
 		FirstRun: true,

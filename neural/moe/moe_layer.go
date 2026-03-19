@@ -62,6 +62,7 @@ type MoELayer struct {
 	ExpertFrozen           []bool    // Toggles whether an expert's weights can be updated
 	StagnationCounters     []int     // Counts consecutive steps/epochs with low utilization
 	ExpertGradMultiplier   []float64 // Boosts gradients for experts recovering from freeze
+	DiversityLoss          float64   // Penalty for experts being too similar
 }
 
 // ResetUtilizationStats clears the accumulated utilization counters.
@@ -419,10 +420,16 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 		// Calculate more aggressive Auxiliary Loss (CV^2 of Importance)
 		auxLoss := CalculateAuxLoss(moe.gateOutputs.Data, numExperts)
 
-		// Combine them (equal weight for now, or favor AuxLoss)
-		moe.LoadBalancingLoss = 0.5*stLoss + 0.5*auxLoss
+		// 3. Diversity Loss (Pearson Correlation/Cosine Similarity Penalty)
+		// Ensures experts learn different things for the same input.
+		divLoss := moe.CalculateDiversityLoss()
+		moe.DiversityLoss = divLoss
+
+		// Combine them (stLoss, auxLoss, and divLoss)
+		moe.LoadBalancingLoss = 0.4*stLoss + 0.4*auxLoss + 0.2*divLoss
 	} else {
 		moe.LoadBalancingLoss = 0
+		moe.DiversityLoss = 0
 	}
 
 	moe.expertOutputs = make([]*Tensor, numExperts)
@@ -1373,6 +1380,139 @@ func (moe *MoELayer) UpdateRouterGrads(gateGrads [][]float64, scaledFractions []
 		// Handle the tail
 		for ; e < numExperts; e++ {
 			grads[e] += scaledFractions[e]
+		}
+	}
+}
+// CalculateDiversityLoss computes the cosine similarity between the outputs of the top-2 experts
+// selected for each token and averages it over the batch.
+func (moe *MoELayer) CalculateDiversityLoss() float64 {
+	if moe.K < 2 {
+		return 0
+	}
+
+	numTokens := len(moe.SelectedExperts)
+	if numTokens == 0 {
+		return 0
+	}
+
+	var totalSimilarity float64
+	var count int
+
+	// For each token, compare the top-2 experts
+	for i := 0; i < numTokens; i++ {
+		selected := moe.SelectedExperts[i]
+		if len(selected) < 2 {
+			continue
+		}
+
+		expertA := selected[0]
+		expertB := selected[1]
+
+		// Get the tokens' outputs from each expert
+		outA := moe.expertOutputs[expertA]
+		outB := moe.expertOutputs[expertB]
+
+		if outA == nil || outB == nil {
+			continue
+		}
+
+		// Find the relative index of this token for each expert
+		// In Forward, we store the relative index in tokenExpertRelativeIndices.
+		// Since we didn't store it in the struct, we can find it by searching.
+		// Or better, we can modify Forward to store it if needed.
+		// For now, let's look at ExpertTokenIndices.
+		
+		relIdxA := -1
+		for idx, tIdx := range moe.ExpertTokenIndices[expertA] {
+			if tIdx == i {
+				relIdxA = idx
+				break
+			}
+		}
+		
+		relIdxB := -1
+		for idx, tIdx := range moe.ExpertTokenIndices[expertB] {
+			if tIdx == i {
+				relIdxB = idx
+				break
+			}
+		}
+
+		if relIdxA == -1 || relIdxB == -1 {
+			continue
+		}
+
+		// Calculate cosine similarity between the two expert outputs for this token
+		rowA := outA.Data[relIdxA*moe.OutputDim : (relIdxA+1)*moe.OutputDim]
+		rowB := outB.Data[relIdxB*moe.OutputDim : (relIdxB+1)*moe.OutputDim]
+
+		sim := CosineSimilarity(rowA, rowB)
+		// We only care about positive correlation (experts being too similar)
+		if sim > 0 {
+			totalSimilarity += sim
+		}
+		count++
+	}
+
+	if count == 0 {
+		return 0
+	}
+	return totalSimilarity / float64(count)
+}
+
+// CosineSimilarity calculates the cosine similarity between two vectors.
+func CosineSimilarity(a, b []float64) float64 {
+	if len(a) != len(b) || len(a) == 0 {
+		return 0
+	}
+	var dot, normA, normB float64
+	for i := range a {
+		dot += a[i] * b[i]
+		normA += a[i] * a[i]
+		normB += b[i] * b[i]
+	}
+	if normA <= 0 || normB <= 0 {
+		return 0
+	}
+	return dot / (math.Sqrt(normA) * math.Sqrt(normB))
+}
+
+// UpdateExpertMultipliers adjusts the gradient multipliers based on expert utilization.
+// Transitions an expert from "Recovery Mode" to "Standard Mode" once it proves it can handle a fair share of the load.
+func (moe *MoELayer) UpdateExpertMultipliers() {
+	const (
+		TargetUsage = 0.125 // 1/8 experts = 12.5% ideal
+		MaxMult     = 2.5
+		MinMult     = 1.0
+		DecayRate   = 0.85
+		LowUsageThreshold = 0.02
+		HealthyUsageThreshold = 0.10
+	)
+
+	numExperts := len(moe.Experts)
+	totalTokens := 0
+	for _, count := range moe.AccumulatedUtilization {
+		totalTokens += count
+	}
+
+	if totalTokens == 0 {
+		return
+	}
+
+	for i := 0; i < numExperts; i++ {
+		utilization := float64(moe.AccumulatedUtilization[i]) / float64(totalTokens)
+
+		// If utilization is healthy (>10%), start decaying the boost
+		if utilization > HealthyUsageThreshold && moe.ExpertGradMultiplier[i] > MinMult {
+			moe.ExpertGradMultiplier[i] *= DecayRate
+			if moe.ExpertGradMultiplier[i] < MinMult {
+				moe.ExpertGradMultiplier[i] = MinMult
+			}
+			fmt.Printf("🚀 Expert %d (L) stabilized: New Multiplier %.2f (Usage: %.2f%%)\n", 
+				i, moe.ExpertGradMultiplier[i], utilization*100)
+		} else if utilization < LowUsageThreshold {
+			// If it's still "Dead", keep the boost high
+			moe.ExpertGradMultiplier[i] = MaxMult
 		}
 	}
 }

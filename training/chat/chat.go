@@ -724,7 +724,6 @@ skipCSV:
 			l.ResetUtilizationStats()
 		}
 		
-		var lastBatchLoss float64
 		iterator.MaxLen = curriculum.MaxSequenceLen
 		if overfitMode {
 			iterator.MaxLen = 512 // Don't filter the single sample we are trying to overfit!
@@ -733,7 +732,8 @@ skipCSV:
 		// Prefetch tokenization: start a background goroutine that pre-produces
 		// Batch structs into a buffered channel while the main goroutine
 		// is busy with forward/backward. Buffer=64 keeps the main loop fed.
-		prefetchCh := make(chan *Batch, 2) // Small buffer is enough for pointers
+		// Prefetch tokenization
+		prefetchCh := make(chan *Batch, 2)
 		go func() {
 			for iterator.HasNext() {
 				prefetchCh <- iterator.NextBatch(batchSize)
@@ -741,11 +741,14 @@ skipCSV:
 			close(prefetchCh)
 		}()
 
+		accumulationSteps := 64 // Effective batch size = 2 * 64 = 128
+		optimizer.ZeroGrad() // Initial zero out for accumulation
+
 		for batch := range prefetchCh {
 			if batch == nil || batch.Input == nil {
 				continue
 			}
-			optimizer.ZeroGrad()
+			// optimizer.ZeroGrad() // Removed for accumulation
 			inspectData(batch)
 			if overfitMode && globalStep%10 == 0 {
 				log.Printf("🎯 [Overfit] Step %d starting...", globalStep)
@@ -949,50 +952,18 @@ skipCSV:
 			batchLoss = totalGradLoss 
 			epochLBLoss += (lambda * lbLoss)
 
-			// Backward
+			// Backward pass with Gradient Accumulation
 			func() {
 				defer func() {
 					if r := recover(); r != nil {
 						log.Printf("⚠️ Recovered from panic in Backward pass (batch skipped): %v", r)
 					}
 				}()
+
 				if err := intentModel.Backward(grads...); err != nil {
 					log.Printf("Backward failed: %v", err)
 				} else {
-					params := intentModel.Parameters()
-
-					// AdamW handles weight decay now
-
-					// 2. Gradient Norm Calculation & Clipping (Dynamic)
-					gradNorm := 0.0
-					for _, p := range params {
-						if p.Grad != nil {
-							for _, g := range p.Grad.Data {
-								gradNorm += g * g
-							}
-						}
-					}
-					gradNorm = math.Sqrt(gradNorm)
-
-					// Dynamic Clipping: "Boost" mode if plateaued
-					clipValue := 1.0
-					lossDiff := math.Abs(lastBatchLoss - batchLoss)
-					if batches > 0 && lossDiff < 0.001 {
-						clipValue = 2.5 // "Jolt" the weights
-					}
-
-					if gradNorm > clipValue {
-						scale := clipValue / (gradNorm + 1e-6)
-						for _, p := range params {
-							if p.Grad != nil {
-								tensor.MulScalar(p.Grad.Data, scale, p.Grad.Data)
-							}
-						}
-						gradNorm = clipValue
-					}
-					lastBatchLoss = batchLoss
-
-					// 3. Track Expert Performance
+					// 1. Track Expert Performance (Every Batch)
 					for layerIdx, layer := range moe.ActiveLayers {
 						selected := layer.GetSelectedExperts() // [TokenIdx][K]
 						for _, tokensExperts := range selected {
@@ -1002,9 +973,8 @@ skipCSV:
 						}
 					}
 
-					// 4. THE FREEZE: Zero out gradients for frozen experts before optimizer step.
-					// This lets the router still PICK them, but they won't LEARN anything,
-					// eventually making them the "wrong" choice and forcing exploration.
+					// 2. Zero out gradients for frozen experts (Every Batch)
+					// This prevents them from accumulating any learning signal.
 					if len(frozenSet) > 0 {
 						for _, layer := range moe.ActiveLayers {
 							for expertID, isFrozen := range frozenSet {
@@ -1022,21 +992,34 @@ skipCSV:
 						}
 					}
 
-					if batches%20 == 0 {
-						log.Printf("Batch %d | Grad Norm: %.4f | LR: %.6f", batches, gradNorm, learningRate)
-					}
+					// 3. Update weights every 'accumulationSteps' batches
+					if (globalStep+1)%accumulationSteps == 0 {
+						params := intentModel.Parameters()
+						gradNorm := 0.0
+						for _, p := range params {
+							if p.Grad != nil {
+								for _, g := range p.Grad.Data {
+									gradNorm += g * g
+								}
+							}
+						}
+						gradNorm = math.Sqrt(gradNorm)
 
-					// Loss Protection
-					if math.IsNaN(batchLoss) || math.IsInf(batchLoss, 0) {
-						return
-					}
+						clipValue := 1.0
+						if gradNorm > clipValue {
+							scale := clipValue / (gradNorm + 1e-6)
+							for _, p := range params {
+								if p.Grad != nil {
+									tensor.MulScalar(p.Grad.Data, scale, p.Grad.Data)
+								}
+							}
+							gradNorm = clipValue
+						}
 
-					// Grad Flow Monitor
-					if globalStep % 100 == 0 {
-						MonitorGradientFlow(intentModel)
+						optimizer.Step()
+						optimizer.ZeroGrad()
+						log.Printf("📥 [Step %d] Weights updated via Gradient Accumulation (Norm: %.4f)", globalStep, gradNorm)
 					}
-
-					optimizer.Step()
 				}
 			}()
 
@@ -1148,6 +1131,9 @@ skipCSV:
 				}
 			}
 			
+			// Update expert multipliers based on utilization
+			layer.UpdateExpertMultipliers()
+
 			// Reset utilization for the next epoch
 			layer.ResetUtilizationStats()
 		}
