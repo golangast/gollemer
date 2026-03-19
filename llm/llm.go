@@ -937,8 +937,8 @@ case "a":
 		isChatty := intentData.Intent == "chat_response" || 
 			strings.HasPrefix(intentData.Intent, "Social_") || 
 			strings.HasPrefix(intentData.Intent, "System_") || 
-			intentData.Intent == "gollemer_start" || 
-			intentData.Intent == "gollemer_ai" ||
+			strings.HasPrefix(intentData.Intent, "gollemer_") || 
+			strings.HasPrefix(intentData.Intent, "golleutils_") ||
 			strings.HasPrefix(intentData.Intent, "go_") || 
 			strings.HasPrefix(intentData.Intent, "ml_") || 
 			strings.HasPrefix(intentData.Intent, "nlp_") || 
@@ -1457,7 +1457,9 @@ case "site", "project", "app":
 			specificCommand := ""
 			if val, ok := intentData.Parameters["command"]; ok {
 				if str, ok := val.(string); ok {
-					specificCommand = str
+					if str != "help" && str != "me" {
+						specificCommand = str
+					}
 				}
 			}
 
@@ -4840,8 +4842,14 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 		return "greeting_query", 0.99
 	}
 
-	if lowerInput == "help" || strings.HasPrefix(lowerInput, "help ") {
+	if lowerInput == "help" || strings.HasPrefix(lowerInput, "help ") || lowerInput == "help me" {
 		return "help_command", 0.99
+	}
+	if strings.Contains(lowerInput, "what") && strings.Contains(lowerInput, "do") && strings.Contains(lowerInput, "i") {
+		return "gollemer_logic", 0.99
+	}
+	if strings.Contains(lowerInput, "how") && strings.Contains(lowerInput, "use") && strings.Contains(lowerInput, "this") {
+		return "gollemer_logic", 0.99
 	}
 
 	// ── 0.5. Primary Command Heuristics ────────────────────────────
