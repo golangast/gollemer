@@ -2,6 +2,7 @@ package colors
 
 import (
 	"fmt"
+	"os"
 	"time"
 )
 
@@ -128,4 +129,30 @@ func ColorizeCol(ForegroundColor, BackgroundColor, line string) {
 func ColorizeOutPut(ForegroundColor, BackgroundColor, line string) {
 	Colorize(ForegroundColor, BackgroundColor, line, " ", false)
 	fmt.Printf("\x1b[0m\n") // Ensure reset and newline after Output
+}
+
+// Typewriter prints a message with a typing effect.
+func Typewriter(message string, delay time.Duration) {
+	for _, char := range message {
+		fmt.Printf("%c", char)
+		os.Stdout.Sync()
+		time.Sleep(delay)
+		if char == '.' || char == '!' || char == '?' {
+			time.Sleep(200 * time.Millisecond)
+		}
+	}
+	fmt.Println()
+}
+
+// ShowMascot immediately prints the mascot.
+func ShowMascot() {
+	cyan := fgColors["cyan"]
+	reset := "\x1b[0m"
+	fmt.Printf("\x1b[%dm/ʕ◔ϖ◔ʔ/ > %s", cyan, reset)
+}
+
+// MascotSpeak combines ShowMascot and Typewriter.
+func MascotSpeak(msg string) {
+	ShowMascot()
+	Typewriter(msg, 30*time.Millisecond)
 }

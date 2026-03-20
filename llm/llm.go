@@ -71,11 +71,7 @@ func RunLLM() {
 	if err == nil {
 		err := os.Chdir(lastDir)
 		if err != nil {
-			log.Printf("Current directory %s: %v", lastDir, err)
-		} else {
-			currentAbsDir, _ := os.Getwd()
-			log.Printf("Current directory: %s", currentAbsDir)
-		}
+		} 
 	} else {
 		currentAbsDir, _ := os.Getwd()
 		log.Printf("DEBUG: No last directory loaded. Current Working Directory: %s", currentAbsDir)
@@ -87,7 +83,6 @@ func RunLLM() {
 		loadedW2V, err := word2vec.LoadModel(kb.ModelConfig.Word2VecPath)
 		if err == nil {
 			w2vModel = loadedW2V
-			log.Printf("Loaded Word2Vec model from %s", kb.ModelConfig.Word2VecPath)
 		} else {
 			log.Printf("Could not load Word2Vec model (using defaults): %v", err)
 			// Create a default/dummy model so we can still run the architecture
@@ -125,10 +120,7 @@ func RunLLM() {
 			loadedModel, err := moe.LoadIntentMoEModelFromGOB(modelPath)
 			if err == nil {
 				intentModel = loadedModel
-				log.Printf("✅ Loaded trained Hybrid Intent MoE model from %s", modelPath)
-			} else {
-				log.Printf("⚠️ Failed to load model from %s: %v", modelPath, err)
-			}
+			} 
 		}
 	}
 
@@ -187,6 +179,13 @@ func RunLLM() {
 
 	// Initialize Intent Resolver
 	client := &GollemerMoEClient{KB: kb, Model: intentModel, W2V: w2vModel}
+	if w2vModel != nil && w2vModel.VocabSize > 0 {
+		client.CommandAnchors = map[string][]float64{
+			"create_file":    client.getSentenceEmbedding("create a new file or scaffold code"),
+			"START_TRAINING": client.getSentenceEmbedding("start training the model or run the training cycle"),
+			"MENU":           client.getSentenceEmbedding("show the main menu with options"),
+		}
+	}
 	client.LoadChatBank(filepath.Join(projectRoot, "trainingdata/conversing.csv"))
 	resolver := NewHybridIntentResolver(client)
 
@@ -201,13 +200,35 @@ func RunLLM() {
 		if inMenuMode {
 			query = "menu"
 		} else {
-			colors.ColorizeCol("red", "magenta", "/ʕ◔ϖ◔ʔ/> ")
+			colors.ShowMascot()
 			query, _ = reader.ReadString('\n')
 			query = strings.TrimSpace(query)
 		}
 
 		if query != "" {
 			commandHistory = append(commandHistory, query)
+		}
+
+		// 1. Check if we are waiting for a Y/N confirmation
+		if sessionState.WaitingForConfirm {
+			lowerQuery := strings.ToLower(query)
+			if lowerQuery == "y" || lowerQuery == "yes" {
+				// Execute pending action
+				query = sessionState.PendingAction + " " + sessionState.PendingData
+				sessionState.WaitingForConfirm = false
+				sessionState.PendingAction = ""
+				sessionState.PendingData = ""
+				// Continue to process this "confirmed" query
+			} else if lowerQuery == "n" || lowerQuery == "no" {
+				colors.MascotSpeak("No problem! I won't do that. What else can I help you with?")
+				sessionState.WaitingForConfirm = false
+				sessionState.PendingAction = ""
+				sessionState.PendingData = ""
+				continue
+			} else {
+				colors.MascotSpeak("Please answer with 'y' or 'n'. Should I proceed?")
+				continue
+			}
 		}
 
 		if query == "exit" {
@@ -233,7 +254,15 @@ func RunLLM() {
 			fmt.Println("9. 💬 Interactive Mode")
 			fmt.Println("10. ⚙️ Model Configuration")
 			fmt.Println("11. 🧪 Test Model")
-			fmt.Print("\nSelect an option (1-11): ")
+			
+			// Proactive context-aware advice (Interactive Menu Bridge)
+			if lastDir != "" {
+				fmt.Printf("\n💡 Tip: You're currently in %s. I can help you scaffold a new file here!\n", filepath.Base(lastDir))
+			} else {
+				fmt.Println("\n💡 Tip: You haven't initialized a project yet. Type '1' or 'create' to start a new webserver.")
+			}
+
+			fmt.Print("\n/ʕ◔ϖ◔ʔ/ > Select an option (1-11): ")
 
 			choice, _ := reader.ReadString('\n')
 			choice = strings.TrimSpace(choice)
@@ -265,9 +294,7 @@ func RunLLM() {
 				name = strings.TrimSpace(name)
 				if name != "" {
 					query = "create webserver " + name
-				} else {
-					continue
-				}
+				} 
 			case "2":
 				fmt.Println("\nWhat do you want to add?")
 				fmt.Println("a. Handler (Backend logic)")
@@ -904,6 +931,27 @@ case "a":
 		// --- New Intent Layer Logic ---
 		// This recursively fills the data layer using the MoE client
 		intentData := resolver.Resolve(query, nil)
+
+		// 2. "Soft State" Prompting (Example: CREATE_FILE)
+		if intentData.Intent == "create_file" && !sessionState.WaitingForConfirm && !sessionState.IsActive {
+			filename := ""
+			if fn, ok := intentData.Parameters["name"].(string); ok {
+				filename = fn
+			}
+			if filename != "" {
+				sessionState.WaitingForConfirm = true
+				sessionState.PendingAction = "create file"
+				sessionState.PendingData = filename
+				colors.MascotSpeak(fmt.Sprintf("I noticed you mentioned %s. Should I scaffold that file for you?", filename) + " (y/n)")
+				continue
+			}
+		} else if intentData.Intent == "START_TRAINING" && !sessionState.WaitingForConfirm {
+			sessionState.WaitingForConfirm = true
+			sessionState.PendingAction = "train moe"
+			sessionState.PendingData = ""
+			colors.MascotSpeak("It sounds like you want to start a training run. Should I begin that process for you? (y/n)")
+			continue
+		}
 
 		if isSessionFilled {
 			intentData.Intent = sessionState.ActiveIntent
@@ -4664,6 +4712,7 @@ type GollemerMoEClient struct {
 	ChatBank          []ChatPair
 	History           []ChatPair
 	lastMoEPrediction string
+	CommandAnchors    map[string][]float64
 }
 
 func (c *GollemerMoEClient) PushHistory(q, a, intent string) {
@@ -4720,7 +4769,6 @@ func (c *GollemerMoEClient) LoadChatBank(path string) {
 	}
 
 	c.ChatBank = pairs
-	log.Printf("✅ Loaded %d prompts into ChatBank from CSV", len(c.ChatBank))
 }
 
 func (c *GollemerMoEClient) RetrieveChatResponse(input string) (string, string, float64) {
@@ -4981,8 +5029,31 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 		}
 	}
 
+	// ── 3. Weighted Keyword "Fuzzy" Match ────────────────────────────
+	if len(c.CommandAnchors) > 0 && c.W2V != nil {
+		userVec := c.getSentenceEmbedding(lowerInput)
+		if userVec != nil {
+			bestMatch := ""
+			maxSim := 0.75 // Threshold: only act if we are 75% sure
+			for intent, anchorVec := range c.CommandAnchors {
+				if anchorVec == nil {
+					continue
+				}
+				sim := cosineSimilarity(userVec, anchorVec)
+				if sim > maxSim {
+					maxSim = sim
+					bestMatch = intent
+				}
+			}
+			if bestMatch != "" {
+				// If it's a high match but not 100%, we'll return it and let the controller handle it
+				return bestMatch, maxSim
+			}
+		}
+	}
+
 	if lowerInput != "" {
-		c.lastMoEPrediction = "I'm not sure how to respond to that yet. I'm still learning!"
+		c.lastMoEPrediction = "I'm picking up some signal, but I'm not sure what you need. Want to see the menu?"
 		return "chat_response", 0.05
 	}
 
@@ -5202,11 +5273,14 @@ func (c *GollemerMoEClient) ExtractEntities(input string, intent string) map[str
 
 
 type ConversationState struct {
-	ActiveIntent    string
-	Parameters      map[string]string
-	Missing         []string
-	IsActive        bool
-	SuggestedObject string // Added for smart suggestions
+	ActiveIntent      string
+	Parameters        map[string]string
+	Missing           []string
+	IsActive          bool
+	SuggestedObject   string // Added for smart suggestions
+	WaitingForConfirm bool
+	PendingAction     string
+	PendingData       string
 }
 
 type TutorialState struct {
