@@ -9,10 +9,12 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -28,6 +30,9 @@ import (
 	mainvocab "github.com/golangast/gollemer/neural/nnu/vocab"
 	"github.com/golangast/gollemer/neural/nnu/word2vec"
 	"github.com/golangast/gollemer/neural/tensor"
+	"github.com/golangast/gollemer/internal/ui"
+	"github.com/golangast/gollemer/internal/discovery"
+	"github.com/golangast/gollemer/internal/watcher"
 	"github.com/golangast/gollemer/tagger/nertagger"
 	"github.com/golangast/gollemer/tagger/postagger"
 	"github.com/golangast/gollemer/tagger/tag"
@@ -195,12 +200,53 @@ func RunLLM() {
 
 	inMenuMode := false
 
+	mascot := ui.NewMascot()
+
+	// Initialize Tutorial State
+	if step, active := sqlite_db.GetCurrentStep(db); active {
+		tutorialState.Step = step
+		tutorialState.Active = active
+		mascot.Say(ui.Happy, "Welcome back! Ready to continue from Tutorial Step " + strconv.Itoa(step) + "?")
+	}
+	
+	// Start Background Awareness
+	client.StartBackgroundWatcher(mascot, projectRoot)
+	
+	// Discovery state monitoring
+	projectCtx := discovery.ScanProject()
+	lastDirState := &discovery.FolderState{}
+	
+	// Initial expert advice with balance
+	initialMsg := discovery.GetExpertAdvice(projectCtx)
+	personal := discovery.LoadPersonalQuests()
+	now := time.Now()
+	if now.Hour() >= 18 && len(personal) > 0 {
+		task := personal[rand.Intn(len(personal))]
+		initialMsg = fmt.Sprintf("Great progress on the code, but don't forget your side quest: '%s'. Want to wrap up for the day?", task)
+	}
+	mascot.Speak(ui.MoodHappy, initialMsg)
+
 	for {
+		sessionState.JustConfirmed = false
 		var query string
 		if inMenuMode {
 			query = "menu"
 		} else {
-			colors.ShowMascot()
+			// Periodic Proactive Scan
+			if discovery.QuickCheck(".", lastDirState) {
+				newCtx := discovery.ScanProject()
+				if newCtx.IsGollemer != projectCtx.IsGollemer || newCtx.HasModel != projectCtx.HasModel {
+					projectCtx = newCtx
+					advice := discovery.GetExpertAdvice(projectCtx)
+					mascot.Speak(ui.MoodThink, "Wait, I noticed something changed! " + advice)
+				}
+			}
+
+			mood := ui.MoodIdle
+			if sessionState.WaitingForConfirm {
+				mood = ui.MoodWaiting
+			}
+			mascot.ShowMascot(mood)
 			query, _ = reader.ReadString('\n')
 			query = strings.TrimSpace(query)
 		}
@@ -216,17 +262,18 @@ func RunLLM() {
 				// Execute pending action
 				query = sessionState.PendingAction + " " + sessionState.PendingData
 				sessionState.WaitingForConfirm = false
+				sessionState.JustConfirmed = true
 				sessionState.PendingAction = ""
 				sessionState.PendingData = ""
 				// Continue to process this "confirmed" query
 			} else if lowerQuery == "n" || lowerQuery == "no" {
-				colors.MascotSpeak("No problem! I won't do that. What else can I help you with?")
+				mascot.Speak(ui.MoodHappy, "No problem! I won't do that. What else can I help you with?")
 				sessionState.WaitingForConfirm = false
 				sessionState.PendingAction = ""
 				sessionState.PendingData = ""
 				continue
 			} else {
-				colors.MascotSpeak("Please answer with 'y' or 'n'. Should I proceed?")
+				mascot.Speak(ui.MoodWaiting, "Please answer with 'y' or 'n'. Should I proceed?")
 				continue
 			}
 		}
@@ -237,6 +284,28 @@ func RunLLM() {
 			cmd := exec.Command("clear")
 			cmd.Stdout = os.Stdout
 			cmd.Run()
+			continue
+		} else if query == "doctor" || query == "fix system" {
+			client.RunDoctor(mascot)
+			continue
+		} else if query == "commit" || query == "push changes" {
+			client.MascotCommit(mascot, reader)
+			continue
+		} else if query == "quests" || query == "quest log" {
+			quests := discovery.ScanQuests()
+			if len(quests) == 0 {
+				mascot.Speak(ui.MoodHappy, "The code is pristine! No TODOs in sight. Ready for new features?")
+			} else {
+				mascot.Speak(ui.MoodThink, fmt.Sprintf("I found %d active quests in the codebase:", len(quests)))
+				for i, q := range quests {
+					if i > 4 { break }
+					fmt.Printf("  [%d] %s (in %s:%d)\n", i+1, q.Text, q.File, q.Line)
+				}
+				if len(quests) > 5 {
+					fmt.Printf("  ...and %d more hidden in the shadows.\n", len(quests)-5)
+				}
+				mascot.Speak(ui.MoodWaiting, "Which one should we tackle first?")
+			}
 			continue
 		}
 
@@ -929,11 +998,22 @@ case "a":
 		}
 
 		// --- New Intent Layer Logic ---
-		// This recursively fills the data layer using the MoE client
+		// Start "Thinking" Animation in background
+		stopAnim := make(chan bool)
+		if query != "" && !inMenuMode {
+			go mascot.Spin([]string{"◡ϖ◡", "⊙ϖ⊙", "◠ϖ◠", "⊙ϖ⊙"}, "Thinking", stopAnim)
+		}
+
 		intentData := resolver.Resolve(query, nil)
 
+		if query != "" && !inMenuMode {
+			stopAnim <- true
+			// Small sleep to ensure the animation clears from the console correctly
+			time.Sleep(50 * time.Millisecond)
+		}
+
 		// 2. "Soft State" Prompting (Example: CREATE_FILE)
-		if intentData.Intent == "create_file" && !sessionState.WaitingForConfirm && !sessionState.IsActive {
+		if intentData.Intent == "create_file" && !sessionState.WaitingForConfirm && !sessionState.IsActive && !sessionState.JustConfirmed {
 			filename := ""
 			if fn, ok := intentData.Parameters["name"].(string); ok {
 				filename = fn
@@ -942,14 +1022,14 @@ case "a":
 				sessionState.WaitingForConfirm = true
 				sessionState.PendingAction = "create file"
 				sessionState.PendingData = filename
-				colors.MascotSpeak(fmt.Sprintf("I noticed you mentioned %s. Should I scaffold that file for you?", filename) + " (y/n)")
+				mascot.Speak(ui.MoodWaiting, fmt.Sprintf("I noticed you mentioned %s. Should I scaffold that file for you?", filename))
 				continue
 			}
 		} else if intentData.Intent == "START_TRAINING" && !sessionState.WaitingForConfirm {
 			sessionState.WaitingForConfirm = true
 			sessionState.PendingAction = "train moe"
 			sessionState.PendingData = ""
-			colors.MascotSpeak("It sounds like you want to start a training run. Should I begin that process for you? (y/n)")
+			mascot.Speak(ui.MoodWaiting, "It sounds like you want to start a training run. Should I begin that process for you?")
 			continue
 		}
 
@@ -1032,11 +1112,11 @@ case "a":
 		}
 
 		if resp != "" {
-			colors.AnimatedOutput("cyan", "black", resp, 1*time.Second)
+			mascot.Speak(ui.MoodIdle, resp)
 			// Record to History to enable conversation flow/memory
 			client.PushHistory(query, resp, intentData.Intent)
 		} else if isChatty && !isCreatingCommand(query) {
-			fmt.Println(" |ʕ•ϖ•ʔ| I'm not sure how to respond to that yet.")
+			mascot.Speak(ui.MoodThink, "I'm picking up some signal, but I'm not sure what you need. Want to see the menu?")
 		}
 
 		if isChatty && !isCreatingCommand(query) {
@@ -1044,7 +1124,7 @@ case "a":
 		} else if intentData.Intent == "time_query" {
 			now := time.Now()
 			timeStr := fmt.Sprintf("The current time is %s.", now.Format("3:04 PM"))
-			colors.AnimatedOutput("cyan", "black", timeStr, 1*time.Second)
+			mascot.Speak(ui.MoodHappy, timeStr)
 			continue
 		}
 
@@ -1827,12 +1907,29 @@ func ` + strings.Title(handlerName) + `Handler(w http.ResponseWriter, r *http.Re
 						predictedSentence += "\n\n" + tree
 					}
 
-					// Always attempt to register the handler in the current project's main.go
 					currentProjectMainGo := filepath.Join(".", "main.go")
 					registrationMsg, err := registerHandlerURL(strings.Title(handlerName), handlerURL, currentProjectMainGo)
 					if err != nil {
-						log.Printf("Error registering handler URL in %s: %v", currentProjectMainGo, err)
-						predictedSentence += fmt.Sprintf(" I tried to register the handler in %s but failed: %v", currentProjectMainGo, err)
+						if strings.Contains(err.Error(), "placeholder") {
+							mascot.Say(ui.Shocked, "I hit a snag! I can't find the registration tag in main.go.")
+							fmt.Printf("%s >> Should I inject '// HANDLER_REGISTRATIONS_GO_HERE' for you? (y/n): %s", ui.ColorCyan, ui.ColorReset)
+							var input string
+							fmt.Scanln(&input)
+							if strings.ToLower(input) == "y" || strings.ToLower(input) == "yes" {
+								mascot.Say(ui.Fixing, "Injecting placeholder tag now...")
+								if err := InjectPlaceholder(currentProjectMainGo); err != nil {
+									mascot.Say(ui.Disturbed, "I failed to fix it: " + err.Error())
+								} else {
+									mascot.Say(ui.Happy, "Fixed! Retrying registration...")
+									registrationMsg, err = registerHandlerURL(strings.Title(handlerName), handlerURL, currentProjectMainGo)
+									if err == nil {
+										predictedSentence += " " + registrationMsg
+									}
+								}
+							}
+						} else {
+							predictedSentence += fmt.Sprintf(" I tried to register the handler in %s but failed: %v", currentProjectMainGo, err)
+						}
 					} else {
 						predictedSentence += " " + registrationMsg
 					}
@@ -2278,9 +2375,9 @@ func Render%s() js.Value {
 				if fileName == "" {
 					predictedSentence = "You need to provide a name for the webserver."
 				} else {
-					serverDir := filepath.Join("cmd", fileName)
+					serverDir := fileName
 					if targetDirectory != "" {
-						serverDir = filepath.Join(targetDirectory, "cmd", fileName)
+						serverDir = filepath.Join(targetDirectory, fileName)
 					}
 					err := os.MkdirAll(serverDir, 0755)
 					if err != nil {
@@ -3390,17 +3487,18 @@ func FormHandler(w http.ResponseWriter, r *http.Request) {
 
 					log.Printf("DEBUG: Jim Webserver Source Path: %s", jimSourcePath)
 
-					// Check if jimSourcePath exists
+					// Prioritized Resolver (search & rescue)
+					if jimSourcePath == "" {
+						resolved, err := client.ResolveServerPath(webserverName)
+						if err == nil {
+							jimSourcePath = resolved
+						}
+					}
+
 					if jimSourcePath == "" {
 						predictedSentence = fmt.Sprintf("I couldn't find a webserver named '%s'. Try specifying the directory or check if main.go exists in cmd/%s/.", webserverName, webserverName)
-					} else if _, err := os.Stat(jimSourcePath); err != nil {
-						if os.IsNotExist(err) {
-							predictedSentence = fmt.Sprintf("I couldn't find a webserver named '%s' at path '%s'.", webserverName, jimSourcePath)
-						} else {
-							predictedSentence = fmt.Sprintf("Error checking webserver directory '%s': %v", jimSourcePath, err)
-						}
 					} else {
-						// Define the output path for the built executable
+						// Define output path
 						buildOutputDir := filepath.Join(projectRoot, "bin")
 						if err := os.MkdirAll(buildOutputDir, 0755); err != nil {
 							predictedSentence = fmt.Sprintf("Failed to create build directory %s: %v", buildOutputDir, err)
@@ -4204,9 +4302,11 @@ case '{':
 
 		if tutorialState.Active {
 			switch tutorialState.Step {
-case 1:
+			case 1:
 				if command == "create" && (strings.Contains(objectType, "folder") || strings.Contains(objectType, "directory")) {
 					tutorialState.Step = 2
+					sqlite_db.SyncStep(db, tutorialState.Step, true)
+					mascot.DrawHUD(tutorialState.Step, 4)
 					predictedSentence += "\n\n[Tutorial] Great job! You created a folder. Now, let's create a file inside it.\nStep 2: Create a file. Try typing: 'go into folder [name]' and then 'create file main.go'"
 				} else {
 					predictedSentence += "\n\n[Tutorial] Hint: We are on Step 1. Try creating a folder using 'create folder <name>'."
@@ -4214,6 +4314,8 @@ case 1:
 			case 2:
 				if command == "create" && strings.Contains(objectType, "file") {
 					tutorialState.Step = 3
+					sqlite_db.SyncStep(db, tutorialState.Step, true)
+					mascot.DrawHUD(tutorialState.Step, 4)
 					predictedSentence += "\n\n[Tutorial] Excellent! You've created a file. Now for the fun part.\nStep 3: Create a webserver. Try typing: 'create webserver myserver'"
 				} else {
 					predictedSentence += "\n\n[Tutorial] Hint: We are on Step 2. Try creating a file using 'create file <name>'."
@@ -4221,14 +4323,22 @@ case 1:
 			case 3:
 				if command == "create" && strings.Contains(objectType, "webserver") {
 					tutorialState.Step = 4
+					sqlite_db.SyncStep(db, tutorialState.Step, true)
+					mascot.DrawHUD(tutorialState.Step, 4)
 					predictedSentence += "\n\n[Tutorial] Fantastic! You've created a webserver. Now, let's run it.\nStep 4: Run the webserver. Try typing: 'run webserver <name>'"
 				} else {
 					predictedSentence += "\n\n[Tutorial] Hint: We are on Step 3. Try creating a webserver using 'create webserver <name>'."
 				}
 			case 4:
 				if (command == "run" || command == "start") && strings.Contains(objectType, "webserver") {
-					tutorialState.Active = false
-					predictedSentence += "\n\n[Tutorial] Awesome! Your webserver is running. You have completed the basic tutorial!\nYou can now explore other commands like 'create handler', 'stop webserver', or 'help'."
+					// Pulse / Heartbeat check for Step 4
+					if client.WaitForPulse(":8080", 5*time.Second, mascot) {
+						tutorialState.Active = false
+						sqlite_db.SyncStep(db, 5, false)
+						predictedSentence += "\n\n[Tutorial] Awesome! Your webserver is running. You have completed the basic tutorial!\nNow go into the folder and you can now explore other commands like 'create handler', 'stop webserver', or 'help'."
+					} else {
+						predictedSentence += "\n\n[Tutorial] I started it, but I don't hear a heartbeat on :8080 yet. Is it still building?"
+					}
 				} else {
 					predictedSentence += "\n\n[Tutorial] Hint: We are on Step 4. Try running the webserver using 'run webserver <name>'."
 				}
@@ -4654,7 +4764,7 @@ func registerHandlerURL(handlerName, handlerURL, mainGoPath string) (string, err
 		}
 
 		if !found {
-			return "", fmt.Errorf("placeholder '%s' not found in %s", placeholder, mainGoPath)
+			return "", fmt.Errorf("placeholder '%s' not found in %s. Tip: Place it inside func main() to enable auto-registration.", placeholder, mainGoPath)
 		}
 
 		updatedMainGoContent := strings.Join(updatedLines, "\n")
@@ -4667,7 +4777,31 @@ func registerHandlerURL(handlerName, handlerURL, mainGoPath string) (string, err
 		return fmt.Sprintf("And registered it to URL '%s' in %s.", handlerURL, mainGoPath), nil
 	}
 
-	return fmt.Sprintf("The URL '%s' for handler '%s' is already registered in %s.", handlerURL, handlerName, mainGoPath), nil
+	return "Handler already registered.", nil
+}
+
+// InjectPlaceholder looks for the main function and injects the handler registration tag
+func InjectPlaceholder(path string) error {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	// 1. Check if it's already there to avoid duplicates
+	if strings.Contains(string(content), "// HANDLER_REGISTRATIONS_GO_HERE") {
+		return nil
+	}
+
+	// 2. Look for the main function signature
+	re := regexp.MustCompile(`func main\(\) \{`)
+	if !re.Match(content) {
+		return fmt.Errorf("could not find func main in %s", path)
+	}
+
+	insertion := "func main() {\n\t// HANDLER_REGISTRATIONS_GO_HERE"
+	newContent := re.ReplaceAllString(string(content), insertion)
+
+	return os.WriteFile(path, []byte(newContent), 0644)
 }
 
 func registerHandlerWithPackage(packageName, packageImportPath, handlerName, handlerURL, mainGoPath string) (string, error) {
@@ -5281,6 +5415,7 @@ type ConversationState struct {
 	WaitingForConfirm bool
 	PendingAction     string
 	PendingData       string
+	JustConfirmed     bool
 }
 
 type TutorialState struct {
@@ -5350,4 +5485,156 @@ func cleanTokenize(text string) []string {
 		tokens = append(tokens, strings.ToLower(currentToken.String()))
 	}
 	return tokens
+}
+
+
+// --- Diagnostic & Repair Methods ---
+
+func (c *GollemerMoEClient) ResolveServerPath(name string) (string, error) {
+	cwd, _ := os.Getwd()
+	projectRoot, _ := FindProjectRoot()
+
+	paths := []string{
+		name,
+		filepath.Join(cwd, name),
+		filepath.Join("cmd", name),
+		filepath.Join(projectRoot, name),
+		filepath.Join(projectRoot, "cmd", name),
+		filepath.Join(cwd, "..", name), // In case user is inside 'cmd'
+	}
+
+	for _, p := range paths {
+		target := filepath.Join(p, "main.go")
+		if _, err := os.Stat(target); err == nil {
+			abs, _ := filepath.Abs(p)
+			return abs, nil
+		}
+	}
+	return "", fmt.Errorf("webserver '%s' not found", name)
+}
+
+func (c *GollemerMoEClient) WaitForPulse(address string, timeout time.Duration, mascot *ui.Mascot) bool {
+	client := http.Client{Timeout: 1 * time.Second}
+	deadline := time.Now().Add(timeout)
+
+	mascot.Say(ui.Think, "Checking for a pulse on "+address+"...")
+
+	for time.Now().Before(deadline) {
+		resp, err := client.Get("http://localhost" + address)
+		if err == nil {
+			resp.Body.Close()
+			return true
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	return false
+}
+
+func (c *GollemerMoEClient) RunDoctor(m *ui.Mascot) {
+	m.Say(ui.Think, "Initiating full system diagnostic... 🩺")
+
+	// 1. Scan for misplaced webservers
+	misplaced := c.ScanForRootServers()
+	for _, s := range misplaced {
+		m.ProposeMove(s, func() error {
+			return c.MoveToCmd(s, m)
+		})
+	}
+
+	// 2. Check for missing anchor tags in main project root
+	mainFiles := []string{"main.go"}
+	for _, f := range mainFiles {
+		if _, err := os.Stat(f); err == nil {
+			content, _ := os.ReadFile(f)
+			if !strings.Contains(string(content), "// HANDLER_REGISTRATIONS_GO_HERE") {
+				m.ConfirmRepair("Missing handler anchor in "+f, func() error {
+					return InjectPlaceholder(f)
+				})
+			}
+		}
+	}
+
+	m.Say(ui.Happy, "Diagnostics complete. Project is healthy!")
+}
+
+func (c *GollemerMoEClient) ScanForRootServers() []string {
+	var misplaced []string
+	entries, _ := os.ReadDir(".")
+	ignore := map[string]bool{"cmd": true, "internal": true, "vendor": true, "trainingdata": true, "learningfolder": true, "pkg": true}
+
+	for _, entry := range entries {
+		if entry.IsDir() && !ignore[entry.Name()] && !strings.HasPrefix(entry.Name(), ".") {
+			mainPath := filepath.Join(entry.Name(), "main.go")
+			if _, err := os.Stat(mainPath); err == nil {
+				misplaced = append(misplaced, entry.Name())
+			}
+		}
+	}
+	return misplaced
+}
+
+func (c *GollemerMoEClient) MoveToCmd(name string, m *ui.Mascot) error {
+	targetDir := filepath.Join("cmd", name)
+	if err := os.MkdirAll("cmd", 0755); err != nil {
+		return err
+	}
+	if err := os.Rename(name, targetDir); err != nil {
+		return err
+	}
+	// Tidy
+	cmd := exec.Command("go", "mod", "tidy")
+	cmd.Dir = targetDir
+	return cmd.Run()
+}
+
+func (c *GollemerMoEClient) StartBackgroundWatcher(m *ui.Mascot, projectRoot string) {
+	w := watcher.NewWorkspace()
+	// Initial baseline
+	w.Scan(projectRoot)
+
+	ticker := time.NewTicker(2500 * time.Millisecond)
+	go func() {
+		for range ticker.C {
+			changes := w.Scan(projectRoot)
+			for path, status := range changes {
+				// Record for velocity and suggest commits
+				m.RecordActivity(path, 0)
+				// Whisper a reaction
+				m.ReactToFileChange(path, status)
+			}
+		}
+	}()
+}
+
+func (c *GollemerMoEClient) MascotCommit(m *ui.Mascot, reader *bufio.Reader) {
+	suggestion := m.SuggestCommit()
+	
+	fmt.Printf("\n%s/ʕ◕‿◕ʔ/ > \"I've been watching your pulse, Zachary. I suggest this commit message: '%s'\"%s\n", ui.ColorCyan, suggestion, ui.ColorReset)
+	fmt.Print(">> Press Enter to use, or type a new message (or 'c' to cancel): ")
+	
+	input, _ := reader.ReadString('\n')
+	input = strings.TrimSpace(input)
+
+	if strings.ToLower(input) == "c" {
+		m.Say(ui.Neutral, "Commit cancelled. Let's keep refining!")
+		return
+	}
+
+	finalMessage := suggestion
+	if input != "" {
+		finalMessage = input
+	}
+
+	m.Say(ui.Thinking, "Executing git commit...")
+	
+	// Execute Git Commit
+	cmd := exec.Command("git", "commit", "-am", finalMessage)
+	output, err := cmd.CombinedOutput()
+	
+	if err != nil {
+		m.Say(ui.Disturbed, "Git hit a snag: " + strings.TrimSpace(string(output)))
+		return
+	}
+	
+	m.Say(ui.Happy, "Success! Changes pushed to the timeline. Velocity: " + strconv.Itoa(m.GetVelocity()) + " pulses/hr.")
 }

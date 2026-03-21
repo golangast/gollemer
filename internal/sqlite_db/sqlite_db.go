@@ -54,6 +54,19 @@ func InitDB(dataSourceName string) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to create users table: %w", err)
 	}
 
+	createTutorialTableSQL := `CREATE TABLE IF NOT EXISTS tutorial_metadata (
+		id INTEGER PRIMARY KEY CHECK (id = 1),
+		current_step INTEGER DEFAULT 0,
+		is_active BOOLEAN DEFAULT FALSE,
+		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);`
+
+	_, err = db.Exec(createTutorialTableSQL)
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to create tutorial_metadata table: %w", err)
+	}
+
 	return db, nil
 }
 
@@ -138,4 +151,28 @@ func GetMessages(db *sql.DB) ([]Message, error) {
 	}
 
 	return messages, nil
+}
+
+// SyncStep updates the database with the current tutorial progress
+func SyncStep(db *sql.DB, step int, isActive bool) error {
+	query := `
+		INSERT INTO tutorial_metadata (id, current_step, is_active, updated_at)
+		VALUES (1, ?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT(id) DO UPDATE SET 
+			current_step = excluded.current_step,
+			is_active = excluded.is_active,
+			updated_at = CURRENT_TIMESTAMP`
+	_, err := db.Exec(query, step, isActive)
+	return err
+}
+
+// GetCurrentStep retrieves the user's progress
+func GetCurrentStep(db *sql.DB) (int, bool) {
+	var step int
+	var active bool
+	err := db.QueryRow("SELECT current_step, is_active FROM tutorial_metadata WHERE id = 1").Scan(&step, &active)
+	if err != nil {
+		return 0, false
+	}
+	return step, active
 }
