@@ -119,8 +119,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	inputFile := filepath.Join(projectDir, "trainingdata", "semantic_output_data.json")
-	outputFile := filepath.Join(projectDir, "trainingdata", "semantic_output_data_flat.json")
+	inputFile := filepath.Join(projectDir, "data/training/trainingdata", "semantic_output_data.json")
+	outputFile := filepath.Join(projectDir, "data/training/trainingdata", "semantic_output_data_flat.json")
 
 	if _, err := os.Stat(inputFile); os.IsNotExist(err) {
 		fmt.Printf("Error: Input file not found: %s\n", inputFile)

@@ -7,12 +7,12 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/golangast/gollemer/neural/nnu/vocab"
+	"github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
 )
 
 func main() {
-	vocabPath := "gob_models/sentence_vocabulary.gob"
-	outputPath := "gob_models/sentence_vocab.json"
+	vocabPath := "data/models/gob_models/sentence_vocabulary.gob"
+	outputPath := "data/models/gob_models/sentence_vocab.json"
 	v, err := vocab.LoadVocabulary(vocabPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to load vocab: %v\n", err)
