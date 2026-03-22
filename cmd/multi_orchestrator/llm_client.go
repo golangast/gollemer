@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/golangast/gollemer/neural/moe"
+	"github.com/golangast/gollemer/internal/moe"
 	mainvocab "github.com/golangast/gollemer/neural/nnu/vocab"
 	"github.com/golangast/gollemer/neural/tensor"
 	"github.com/golangast/gollemer/neural/tokenizer"
@@ -48,6 +48,15 @@ func NewLLMClient(vocabPath, outputVocabPath, modelPath string) (*LLMClient, err
 	model, err := moe.LoadIntentMoEModelFromGOB(modelPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load MoE model: %w", err)
+	}
+
+	// Dynamic Vocab Synchronization: Resize model layers if they don't match the loaded vocab files
+	if vocabulary.Size() > model.Embedding.VocabSize {
+		model.ResizeEmbeddings(vocabulary.Size())
+	}
+	if semanticOutputVocabulary.Size() > model.SentenceVocabSize {
+		model.Decoder.ResizeOutputLayer(semanticOutputVocabulary.Size())
+		model.SentenceVocabSize = semanticOutputVocabulary.Size()
 	}
 
 	return &LLMClient{
@@ -105,7 +114,7 @@ func (c *LLMClient) Query(input string) (string, error) {
 	// Greedy search decode
 	sosID := c.semanticOutputVocabulary.GetTokenID("<s>")
 	eosID := c.semanticOutputVocabulary.GetTokenID("</s>")
-	predictedIDs, err := c.model.GreedySearchDecode(contextVector, maxSeqLength, sosID, eosID, 1.2, 0, tag.Tag{})
+	predictedIDs, err := c.model.GreedySearchDecode(contextVector, maxSeqLength, sosID, eosID, 1.2, 0.0, 100, tag.Tag{})
 	if err != nil {
 		return "", fmt.Errorf("greedy search decode failed: %w", err)
 	}

@@ -78,7 +78,7 @@ func NewKnowledgeBase() *KnowledgeBase {
 		},
 		FirstRun: true,
 		ModelConfig: ModelConfig{
-			Word2VecPath:      "gob_models/word2vec_model.gob",
+			Word2VecPath:      "/gob_models/word2vec_model.gob",
 			MoEPath:           "gob_models/moe_classification_model_best.gob",
 			QueryVocabPath:    "gob_models/query_vocabulary.gob",
 			SemanticVocabPath: "gob_models/seq2seq_output_vocab.gob",

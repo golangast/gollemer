@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/golangast/gollemer/llm"
-	"github.com/golangast/gollemer/neural/moe"
+	"github.com/golangast/gollemer/internal/moe"
 )
 
 func main() {

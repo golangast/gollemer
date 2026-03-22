@@ -25,21 +25,21 @@ import (
 	_ "modernc.org/sqlite"
 
 	"github.com/golangast/gollemer/colors"
+	"github.com/golangast/gollemer/internal/discovery"
+	"github.com/golangast/gollemer/internal/moe"
 	"github.com/golangast/gollemer/internal/sqlite_db"
-	"github.com/golangast/gollemer/neural/moe"
+	"github.com/golangast/gollemer/internal/ui"
+	"github.com/golangast/gollemer/internal/watcher"
 	mainvocab "github.com/golangast/gollemer/neural/nnu/vocab"
 	"github.com/golangast/gollemer/neural/nnu/word2vec"
 	"github.com/golangast/gollemer/neural/tensor"
-	"github.com/golangast/gollemer/internal/ui"
-	"github.com/golangast/gollemer/internal/discovery"
-	"github.com/golangast/gollemer/internal/watcher"
 	"github.com/golangast/gollemer/tagger/nertagger"
 	"github.com/golangast/gollemer/tagger/postagger"
 	"github.com/golangast/gollemer/tagger/tag"
 )
 
 func RunLLM() {
-	
+	mascot := ui.NewMascot()
 
 	projectRoot, err := FindProjectRoot()
 	if err != nil {
@@ -64,6 +64,7 @@ func RunLLM() {
 	kb := LoadKnowledgeBase()
 
 	if kb.FirstRun {
+		mascot.WelcomeSequence()
 		printIntro()
 		kb.FirstRun = false
 		kb.Save()
@@ -88,8 +89,10 @@ func RunLLM() {
 		loadedW2V, err := word2vec.LoadModel(kb.ModelConfig.Word2VecPath)
 		if err == nil {
 			w2vModel = loadedW2V
+						log.Printf("Could not load Word2Vec model (using defaults): %v", err)
+			log.Println("Initialized default dummy Word2Vec model")
+
 		} else {
-			log.Printf("Could not load Word2Vec model (using defaults): %v", err)
 			// Create a default/dummy model so we can still run the architecture
 			w2vModel = &word2vec.SimpleWord2Vec{
 				Vocabulary:  make(map[string]int),
@@ -104,7 +107,6 @@ func RunLLM() {
 				w2vModel.WordVectors[i] = make([]float64, 64) // Zero vectors
 			}
 			w2vModel.VocabSize = len(basics)
-			log.Println("Initialized default dummy Word2Vec model")
 		}
 	}
 
@@ -200,8 +202,6 @@ func RunLLM() {
 
 	inMenuMode := false
 
-	mascot := ui.NewMascot()
-
 	// Initialize Tutorial State
 	if step, active := sqlite_db.GetCurrentStep(db); active {
 		tutorialState.Step = step
@@ -209,8 +209,9 @@ func RunLLM() {
 		mascot.Say(ui.Happy, "Welcome back! Ready to continue from Tutorial Step " + strconv.Itoa(step) + "?")
 	}
 	
-	// Start Background Awareness
-	client.StartBackgroundWatcher(mascot, projectRoot)
+	// Start Background Awareness (Disabled as requested)
+	// client.StartBackgroundWatcher(mascot, projectRoot)
+	mascot.AuditProjectSize(projectRoot)
 	
 	// Discovery state monitoring
 	projectCtx := discovery.ScanProject()
@@ -227,6 +228,7 @@ func RunLLM() {
 	mascot.Speak(ui.MoodHappy, initialMsg)
 
 	for {
+		mascot.WellnessCheck()
 		sessionState.JustConfirmed = false
 		var query string
 		if inMenuMode {
@@ -279,7 +281,7 @@ func RunLLM() {
 		}
 
 		if query == "exit" {
-			break
+			mascot.Shutdown(projectRoot)
 		} else if query == "clear" {
 			cmd := exec.Command("clear")
 			cmd.Stdout = os.Stdout
@@ -287,6 +289,9 @@ func RunLLM() {
 			continue
 		} else if query == "doctor" || query == "fix system" {
 			client.RunDoctor(mascot)
+			continue
+		} else if query == "audit" || query == "scan project" {
+			client.RunAudit(mascot)
 			continue
 		} else if query == "commit" || query == "push changes" {
 			client.MascotCommit(mascot, reader)
@@ -307,6 +312,15 @@ func RunLLM() {
 				mascot.Speak(ui.MoodWaiting, "Which one should we tackle first?")
 			}
 			continue
+		} else if query == "profile" || query == "show profile" || query == "project status" {
+			name := detectWebserverName(projectRoot)
+			if name == "" {
+				name = filepath.Base(projectRoot)
+			}
+			cwd, _ := os.Getwd()
+			_ = ScanAndSaveProfile(name, cwd, db)
+			ShowProjectProfile(name, db, mascot)
+			continue
 		}
 
 		if query == "menu" {
@@ -323,6 +337,8 @@ func RunLLM() {
 			fmt.Println("9. 💬 Interactive Mode")
 			fmt.Println("10. ⚙️ Model Configuration")
 			fmt.Println("11. 🧪 Test Model")
+			fmt.Println("12. 🔍 Run Audit")
+			fmt.Println("13. 📄 Project Profile")
 			
 			// Proactive context-aware advice (Interactive Menu Bridge)
 			if lastDir != "" {
@@ -357,13 +373,22 @@ func RunLLM() {
 					fmt.Println("No query entered.")
 				}
 				continue
+			case "13":
+				name := detectWebserverName(projectRoot)
+				if name == "" {
+					name = filepath.Base(projectRoot)
+				}
+				cwd, _ := os.Getwd()
+				_ = ScanAndSaveProfile(name, cwd, db)
+				ShowProjectProfile(name, db, mascot)
+				continue
+			case "12":
+				client.RunAudit(mascot)
+				continue
 			case "1":
-				fmt.Print("Enter name for your new webserver: ")
-				name, _ := reader.ReadString('\n')
-				name = strings.TrimSpace(name)
-				if name != "" {
-					query = "create webserver " + name
-				} 
+				choice := mascot.AskArchitecture()
+				mascot.ScaffoldProject(choice)
+				continue
 			case "2":
 				fmt.Println("\nWhat do you want to add?")
 				fmt.Println("a. Handler (Backend logic)")
@@ -816,10 +841,7 @@ case "a":
 					continue
 				}
 			case "6":
-				tutorialState.Active = true
-				tutorialState.Step = 1
-				inMenuMode = false
-				colors.AnimatedOutput("green", "black", "--- Tutorial Mode Started ---\nWelcome to the Gollemer tutorial! I will guide you through the basics.\nStep 1: Let's start by creating a project folder.\nType 'pwd' to know the folder you are in.\nThen once you are in the desired directory try typing: 'create folder myproject'", 1*time.Second)
+				mascot.RunMoETutorial()
 				continue
 			case "7":
 				query = "help"
@@ -1155,6 +1177,9 @@ case "a":
 		if command == "" || intent.ObjectType == "" {
 			// 2. High Confidence MoE Override
 			if intentData.Intent != "" && intentData.Confidence > 0.8 {
+				if intentData.Intent == "webserver_identity_query" {
+				command = "webserver_identity_query"
+			} else {
 				parts := strings.Split(intentData.Intent, "_")
 				if len(parts) > 0 {
 					command = parts[0]
@@ -1165,6 +1190,7 @@ case "a":
 				if len(parts) > 1 && intent.ObjectType == "" {
 					intent.ObjectType = parts[1]
 					intent.ObjectTypeParts = append(intent.ObjectTypeParts, parts[1])
+				}
 				}
 			}
 
@@ -1281,7 +1307,9 @@ case "a":
 			}
 		}
 
-		command = intent.Command
+		if command == "" {
+			command = intent.Command
+		}
 		objectType = intent.ObjectType
 		fileName = intent.Params["name"]
 		if fileName == "" {
@@ -1704,6 +1732,9 @@ case "site", "project", "app":
 					}
 					os.MkdirAll(destDir, 0755)
 
+					// Try to find current module name to update imports
+					currentMod, _, _ := findGoModInfo()
+
 					err = filepath.WalkDir(templateDir, func(path string, d fs.DirEntry, err error) error {
 						if err != nil {
 							return err
@@ -1716,11 +1747,21 @@ case "site", "project", "app":
 						if d.IsDir() {
 							return os.MkdirAll(targetPath, 0755)
 						}
-						content, err := os.ReadFile(path)
+						contentBytes, err := os.ReadFile(path)
 						if err != nil {
 							return err
 						}
-						return os.WriteFile(targetPath, content, 0644)
+						
+						finalContent := string(contentBytes)
+						if currentMod != "" && strings.HasSuffix(path, ".go") {
+							// Update imports: Replace fixed learningfolder path with current module path
+							oldPath := "github.com/golangast/gollemer/learningfolder"
+							if strings.Contains(finalContent, oldPath) {
+								finalContent = strings.ReplaceAll(finalContent, oldPath, currentMod)
+							}
+						}
+
+						return os.WriteFile(targetPath, []byte(finalContent), 0644)
 					})
 
 					if err != nil {
@@ -1778,7 +1819,7 @@ case "site", "project", "app":
 								destPath = filepath.Join(targetDirectory, destName)
 							}
 
-							content, err := os.ReadFile(path)
+							contentBytes, err := os.ReadFile(path)
 							if err != nil {
 								predictedSentence = fmt.Sprintf("I found the template '%s' but couldn't read it: %v", name, err)
 							} else {
@@ -1786,7 +1827,17 @@ case "site", "project", "app":
 								if targetDirectory != "" {
 									os.MkdirAll(targetDirectory, 0755)
 								}
-								err = os.WriteFile(destPath, content, 0644)
+								
+								finalContent := string(contentBytes)
+								currentMod, _, _ := findGoModInfo()
+								if currentMod != "" && strings.HasSuffix(path, ".go") {
+									oldPath := "github.com/golangast/gollemer/learningfolder"
+									if strings.Contains(finalContent, oldPath) {
+										finalContent = strings.ReplaceAll(finalContent, oldPath, currentMod)
+									}
+								}
+
+								err = os.WriteFile(destPath, []byte(finalContent), 0644)
 								if err != nil {
 									predictedSentence = fmt.Sprintf("I couldn't create the file %s from template: %v", destPath, err)
 								} else {
@@ -3434,6 +3485,10 @@ func FormHandler(w http.ResponseWriter, r *http.Request) {
 				}
 
 				if webserverName == "" {
+					webserverName = detectWebserverName(projectRoot)
+				}
+
+				if webserverName == "" {
 					predictedSentence = "You need to provide a name for the webserver to run."
 				} else {
 					// Path to the jim webserver's main package
@@ -3614,7 +3669,7 @@ func FormHandler(w http.ResponseWriter, r *http.Request) {
 
 				if cmdPath != "" {
 					fmt.Printf("Running %s...\n", cmdPath)
-					c := exec.Command("go", "run", "./"+cmdPath)
+					c := exec.Command("go", "build", "-o./"+cmdPath)
 					c.Dir = projectRoot
 					c.Stdout = os.Stdout
 					c.Stderr = os.Stderr
@@ -4262,6 +4317,13 @@ case '{':
 			} else {
 				predictedSentence = fmt.Sprintf("The current directory is: %s", cwd)
 			}
+		case "webserver_identity_query":
+			name := detectWebserverName(projectRoot)
+			if name != "" {
+				predictedSentence = fmt.Sprintf("The detected webserver is: %s", name)
+			} else {
+				predictedSentence = "I couldn't detect a specific webserver in this context. Try 'list' to see what's here."
+			}
 		default:
 			if query == "pwd" || (hasDirectoryToken && command == "") {
 				cwd, err := os.Getwd()
@@ -4306,7 +4368,8 @@ case '{':
 				if command == "create" && (strings.Contains(objectType, "folder") || strings.Contains(objectType, "directory")) {
 					tutorialState.Step = 2
 					sqlite_db.SyncStep(db, tutorialState.Step, true)
-					mascot.DrawHUD(tutorialState.Step, 4)
+					loc, _ := mascot.CalculateProjectSize(projectRoot)
+					mascot.DrawHUD(tutorialState.Step, 4, loc)
 					predictedSentence += "\n\n[Tutorial] Great job! You created a folder. Now, let's create a file inside it.\nStep 2: Create a file. Try typing: 'go into folder [name]' and then 'create file main.go'"
 				} else {
 					predictedSentence += "\n\n[Tutorial] Hint: We are on Step 1. Try creating a folder using 'create folder <name>'."
@@ -4315,7 +4378,8 @@ case '{':
 				if command == "create" && strings.Contains(objectType, "file") {
 					tutorialState.Step = 3
 					sqlite_db.SyncStep(db, tutorialState.Step, true)
-					mascot.DrawHUD(tutorialState.Step, 4)
+					loc, _ := mascot.CalculateProjectSize(projectRoot)
+					mascot.DrawHUD(tutorialState.Step, 4, loc)
 					predictedSentence += "\n\n[Tutorial] Excellent! You've created a file. Now for the fun part.\nStep 3: Create a webserver. Try typing: 'create webserver myserver'"
 				} else {
 					predictedSentence += "\n\n[Tutorial] Hint: We are on Step 2. Try creating a file using 'create file <name>'."
@@ -4324,7 +4388,8 @@ case '{':
 				if command == "create" && strings.Contains(objectType, "webserver") {
 					tutorialState.Step = 4
 					sqlite_db.SyncStep(db, tutorialState.Step, true)
-					mascot.DrawHUD(tutorialState.Step, 4)
+					loc, _ := mascot.CalculateProjectSize(projectRoot)
+					mascot.DrawHUD(tutorialState.Step, 4, loc)
 					predictedSentence += "\n\n[Tutorial] Fantastic! You've created a webserver. Now, let's run it.\nStep 4: Run the webserver. Try typing: 'run webserver <name>'"
 				} else {
 					predictedSentence += "\n\n[Tutorial] Hint: We are on Step 3. Try creating a webserver using 'create webserver <name>'."
@@ -5046,6 +5111,10 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 	if strings.Contains(lowerInput, "who are you") || strings.Contains(lowerInput, "your name") || lowerInput == "identity" {
 		return "identity_query", 0.99
 	}
+	if (strings.Contains(lowerInput, "webserver") || strings.Contains(lowerInput, "app")) &&
+		(strings.Contains(lowerInput, "name") || strings.Contains(lowerInput, "identify") || strings.Contains(lowerInput, "what") || strings.Contains(lowerInput, "which")) {
+		return "webserver_identity_query", 0.99
+	}
 	if lowerInput == "hi" || lowerInput == "hello" || lowerInput == "hey" || lowerInput == "greeting" {
 		return "greeting_query", 0.99
 	}
@@ -5223,6 +5292,9 @@ func (c *GollemerMoEClient) checkCommandHeuristics(lowerInput string) (string, f
 	if strings.HasPrefix(lowerInput, "run ") || lowerInput == "run" || strings.HasPrefix(lowerInput, "start ") || lowerInput == "start" {
 		c.lastMoEPrediction = "Launching the application! 🚀 Hang tight."
 		return "run_webserver", 0.99
+	}
+	if lowerInput == "profile" || strings.HasPrefix(lowerInput, "show profile") || strings.HasPrefix(lowerInput, "project status") {
+		return "profile_query", 0.99
 	}
 	if lowerInput == "pwd" || lowerInput == "history" || lowerInput == "clear" || lowerInput == "cls" {
 		return lowerInput + "_query", 0.99
@@ -5557,6 +5629,32 @@ func (c *GollemerMoEClient) RunDoctor(m *ui.Mascot) {
 	m.Say(ui.Happy, "Diagnostics complete. Project is healthy!")
 }
 
+func (c *GollemerMoEClient) RunAudit(m *ui.Mascot) {
+	// The user wants to audit the current project folder specifically
+	scanRoot := "."
+	m.Say(ui.Think, "Performing a deep architectural audit of the current directory... 🔍")
+	m.AuditProjectSize(scanRoot)
+
+	// In a directory-specific audit, we walk Go files and run the checkers
+	filepath.Walk(scanRoot, func(path string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".go") || strings.Contains(path, "vendor") || strings.Contains(path, "wasm") {
+			return nil
+		}
+		
+		// Run file-level diagnostics
+		m.AnalyzeComplexity(path)
+		return nil
+	})
+
+	// Run global scanners once on the current directory root
+	m.HuntDeadCode(scanRoot)
+	m.AuditGlobalState(scanRoot)
+	m.SimulateRaceConditions(scanRoot)
+	m.AuditMemoryLeaks(scanRoot)
+
+	m.Say(ui.Happy, "Audit complete. I've highlighted potential issues in the current workspace.")
+}
+
 func (c *GollemerMoEClient) ScanForRootServers() []string {
 	var misplaced []string
 	entries, _ := os.ReadDir(".")
@@ -5609,7 +5707,7 @@ func (c *GollemerMoEClient) StartBackgroundWatcher(m *ui.Mascot, projectRoot str
 func (c *GollemerMoEClient) MascotCommit(m *ui.Mascot, reader *bufio.Reader) {
 	suggestion := m.SuggestCommit()
 	
-	fmt.Printf("\n%s/ʕ◕‿◕ʔ/ > \"I've been watching your pulse, Zachary. I suggest this commit message: '%s'\"%s\n", ui.ColorCyan, suggestion, ui.ColorReset)
+	fmt.Printf("\n%s/ʕ◕‿◕ʔ/ > \"I've been watching your pulse. I suggest this commit message: '%s'\"%s\n", ui.ColorCyan, suggestion, ui.ColorReset)
 	fmt.Print(">> Press Enter to use, or type a new message (or 'c' to cancel): ")
 	
 	input, _ := reader.ReadString('\n')
@@ -5638,3 +5736,217 @@ func (c *GollemerMoEClient) MascotCommit(m *ui.Mascot, reader *bufio.Reader) {
 	
 	m.Say(ui.Happy, "Success! Changes pushed to the timeline. Velocity: " + strconv.Itoa(m.GetVelocity()) + " pulses/hr.")
 }
+
+func detectWebserverName(projectRoot string) string {
+	cwd, _ := os.Getwd()
+	// 1. Check CWD
+	if _, err := os.Stat("main.go"); err == nil {
+		content, _ := os.ReadFile("main.go")
+		if strings.Contains(string(content), "net/http") {
+			return filepath.Base(cwd)
+		}
+	}
+	// 2. Check cmd/
+	cmdDir := filepath.Join(projectRoot, "cmd")
+	entries, _ := os.ReadDir(cmdDir)
+	var servers []string
+	for _, e := range entries {
+		if e.IsDir() {
+			if _, err := os.Stat(filepath.Join(cmdDir, e.Name(), "main.go")); err == nil {
+				servers = append(servers, e.Name())
+			}
+		}
+	}
+	if len(servers) == 1 {
+		return servers[0]
+	}
+	// 3. Check project root if it has main.go
+	if _, err := os.Stat(filepath.Join(projectRoot, "main.go")); err == nil {
+		content, _ := os.ReadFile(filepath.Join(projectRoot, "main.go"))
+		if strings.Contains(string(content), "net/http") {
+			return filepath.Base(projectRoot)
+		}
+	}
+	return ""
+}
+
+// ScanAndSaveProfile scans the project directory and updates the database profile.
+func ScanAndSaveProfile(projectName string, projectPath string, db *sql.DB) error {
+	if projectName == "" || projectPath == "" {
+		return fmt.Errorf("invalid project name or path")
+	}
+
+	profile := sqlite_db.ProjectProfile{
+		Name: projectName,
+		Path: projectPath,
+	}
+
+	var routes []sqlite_db.ProjectRoute
+	var databases []string
+
+	err := filepath.WalkDir(projectPath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			// Skip hidden dirs and common non-source dirs
+			name := d.Name()
+			if strings.HasPrefix(name, ".") || name == "vendor" || name == "node_modules" || name == "bin" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		profile.FilesCount++
+		ext := filepath.Ext(path)
+		
+		// Database check
+		if ext == ".db" || ext == ".sqlite" || ext == ".sqlite3" {
+			databases = append(databases, path)
+		}
+
+		// LOC and Routes check for .go files
+		if ext == ".go" {
+			content, err := os.ReadFile(path)
+			if err == nil {
+				lines := strings.Split(string(content), "\n")
+				profile.TotalLOC += len(lines)
+
+				// Basic route detection
+				for _, line := range lines {
+					if strings.Contains(line, "http.HandleFunc(") || strings.Contains(line, ".HandleFunc(") {
+						// Try to extract route
+						re := regexp.MustCompile(`HandleFunc\("([^"]+)"`)
+						matches := re.FindStringSubmatch(line)
+						if len(matches) > 1 {
+							routes = append(routes, sqlite_db.ProjectRoute{
+								Route: matches[1],
+							})
+						} else {
+							// Try alternate format HandleFunc(pattern, ...)
+							re2 := regexp.MustCompile(`HandleFunc\(\s*"([^"]+)"`)
+							matches2 := re2.FindStringSubmatch(line)
+							if len(matches2) > 1 {
+								routes = append(routes, sqlite_db.ProjectRoute{
+									Route: matches2[1],
+								})
+							}
+						}
+					}
+				}
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	profile.RoutesCount = len(routes)
+	profile.DbCount = len(databases)
+
+	// Save to DB
+	pID, err := sqlite_db.UpsertProjectProfile(db, profile)
+	if err != nil {
+		return err
+	}
+
+	// Update details
+	sqlite_db.ClearProjectDetails(db, pID)
+	for _, r := range routes {
+		sqlite_db.AddProjectRoute(db, pID, r.Route, "GET/POST", "Handler") // Simplified
+	}
+	for _, dPath := range databases {
+		sqlite_db.AddProjectDatabase(db, pID, dPath, "SQLite")
+	}
+
+	return nil
+}
+
+// ShowProjectProfile prints a personable and visually rich summary of the project.
+func ShowProjectProfile(projectName string, db *sql.DB, mascot *ui.Mascot) {
+	p, err := sqlite_db.GetProjectProfile(db, projectName)
+	if err != nil {
+		mascot.Speak(ui.MoodWaiting, fmt.Sprintf("I tried to peek into the heart of '%s', but I couldn't find its profile. Is it a secret project?", projectName))
+		return
+	}
+
+	// p already contains counts, so we only fetch details if we need to list them below.
+
+	fmt.Println()
+	colors.ColorizeCol("cyan", "black", "  ┌────────────────────────────────────────────────────────────┐")
+	colors.ColorizeCol("cyan", "black", fmt.Sprintf("  │                 %s PROJECT PROFILE: %-22s │", "📄", strings.ToUpper(p.Name)))
+	colors.ColorizeCol("cyan", "black", "  ├────────────────────────────────────────────────────────────┤")
+	
+	// Scale Bar
+	locStr := fmt.Sprintf("%d LOC", p.TotalLOC)
+	barLen := 20
+	filled := (p.TotalLOC / 500) // 1 hash per 500 lines
+	if filled > barLen { filled = barLen }
+	bar := "[" + strings.Repeat("#", filled) + strings.Repeat("-", barLen-filled) + "]"
+	
+	colors.ColorizeCol("white", "black", fmt.Sprintf("  │ Scale:    %-22s %-25s │", bar, locStr))
+	colors.ColorizeCol("white", "black", fmt.Sprintf("  │ Files:    %-49d │", p.FilesCount))
+	
+	routeStr := "No routes detected"
+	if p.RoutesCount > 0 {
+		routeStr = fmt.Sprintf("%d active routes", p.RoutesCount)
+	}
+	colors.ColorizeCol("white", "black", fmt.Sprintf("  │ Network:  %-49s │", routeStr))
+	
+	dbStr := "No databases found"
+	if p.DbCount > 0 {
+		dbStr = fmt.Sprintf("%d connected (SQLite)", p.DbCount)
+	}
+	colors.ColorizeCol("white", "black", fmt.Sprintf("  │ Storage:  %-49s │", dbStr))
+	
+	colors.ColorizeCol("cyan", "black", "  ├────────────────────────────────────────────────────────────┤")
+	colors.ColorizeCol("white", "black", fmt.Sprintf("  │ Path: %-52s │", p.Path))
+	colors.ColorizeCol("cyan", "black", "  └────────────────────────────────────────────────────────────┘")
+
+	// Gopher's Analysis & Suggestions
+	analysis := getMascotAnalysis(p)
+	if len(analysis) > 0 {
+		mascot.Speak(ui.MoodHappy, "I've been analyzing our structure. Here are some thoughts on how we can level up:")
+		for _, tip := range analysis {
+			colors.ColorizeOutPut("byellow", "black", "  " + tip)
+			time.Sleep(100 * time.Millisecond)
+		}
+	} else {
+		mascot.Speak(ui.MoodHappy, "Everything looks perfectly balanced! You've got a very clean foundation here.")
+	}
+	fmt.Println()
+}
+
+// getMascotAnalysis generates intuitive improvement suggestions based on the project profile.
+func getMascotAnalysis(p *sqlite_db.ProjectProfile) []string {
+	var advice []string
+
+	// 1. Architecture Complexity
+	if p.TotalLOC > 1500 && p.FilesCount < 4 {
+		advice = append(advice, "💡 Architecture: Our main package is growing fast! Consider splitting logic into sub-folders like '/pkg' or '/internal'.")
+	}
+
+	// 2. Network vs Persistence
+	if p.RoutesCount > 5 && p.DbCount == 0 {
+		advice = append(advice, "💡 Persistence: We have quite a few routes but no database. Want to add SQLite for permanent storage?")
+	}
+
+	// 3. Frontend / WASM
+	// Check if this looks like a webserver but might need a frontend
+	if p.RoutesCount > 0 && !strings.Contains(strings.ToLower(p.Path), "wasm") {
+		advice = append(advice, "💡 Frontend: I see a backend forming! We could add a Go-WebAssembly frontend to make it interactive.")
+	}
+
+	// 4. Testing
+	// This would need more scanning, but we could add it to ScanAndSaveProfile later
+	
+	// 5. General Scale
+	if p.TotalLOC < 100 {
+		advice = append(advice, "💡 Next Step: We're just starting. How about we scaffold a new API handler or a middleware?")
+	}
+
+	return advice
+}
+

@@ -9,7 +9,7 @@ import (
 	"os"
 	"strings"
 
-	moemodel "github.com/golangast/gollemer/neural/moe/model"
+	moemodel "github.com/golangast/gollemer/internal/moe/model"
 	"github.com/golangast/gollemer/neural/nn"
 	mainvocab "github.com/golangast/gollemer/neural/nnu/vocab"
 	"github.com/golangast/gollemer/neural/tensor"
