@@ -6,7 +6,7 @@ import (
 	"log"
 	"math"
 
-	"github.com/golangast/gollemer/neural/moe"
+	"github.com/golangast/gollemer/internal/moe"
 )
 
 func main() {

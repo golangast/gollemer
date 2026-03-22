@@ -6,7 +6,7 @@ import (
 	"math/rand"
 	"time"
 
-	. "github.com/golangast/gollemer/neural/moe"
+	. "github.com/golangast/gollemer/internal/moe"
 	. "github.com/golangast/gollemer/neural/tensor"
 )
 

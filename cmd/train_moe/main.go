@@ -19,7 +19,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/golangast/gollemer/neural/moe"
+	"github.com/golangast/gollemer/internal/moe"
 	"github.com/golangast/gollemer/neural/nn"
 	mainvocab "github.com/golangast/gollemer/neural/nnu/vocab"
 	"github.com/golangast/gollemer/neural/nnu/word2vec"
@@ -1004,6 +1004,17 @@ func main() {
 			intentMoEModel = nil
 		} else {
 			log.Println("Successfully loaded existing model.")
+			
+			// Dynamic Resizing for Vocab Growth
+			if inputVocabSize > intentMoEModel.Embedding.VocabSize {
+				log.Printf("Resizing model embeddings: %d -> %d", intentMoEModel.Embedding.VocabSize, inputVocabSize)
+				intentMoEModel.ResizeEmbeddings(inputVocabSize)
+			}
+			if semanticOutputVocabSize > intentMoEModel.SentenceVocabSize {
+				log.Printf("Resizing model output layer: %d -> %d", intentMoEModel.SentenceVocabSize, semanticOutputVocabSize)
+				intentMoEModel.Decoder.ResizeOutputLayer(semanticOutputVocabSize)
+				intentMoEModel.SentenceVocabSize = semanticOutputVocabSize
+			}
 		}
 	}
 
@@ -1012,10 +1023,10 @@ func main() {
 		log.Printf("Creating a new IntentMoE model. (SIMD Enabled: %v)", IsSIMDEnabled())
 		// Model hyperparameters - INCREASED CAPACITY
 		// embeddingDim is set above based on W2V model
-		hiddenSize := 512     // Increased from 256 for more capacity
-		maxAttentionHeads = 4 // Keep at 4
-		numLayers := 2        // Original size
-		dropoutRate := 0.1    // Keep at 0.1
+		hiddenSize := 512              // Increased from 256 for more capacity
+		maxAttentionHeads := 4         // Keep at 4
+		numLayers := 2                 // Original size
+		dropoutRate := 0.1             // Keep at 0.1
 
 		// 1. Embedding
 		embedding := nn.NewEmbedding(inputVocabSize, embeddingDim)
@@ -1067,7 +1078,7 @@ func main() {
 		encoder.Layer.RouterTemperature = 1.0
 
 		// 3. RNN Decoder with increased capacity and dropout
-		decoder, err := moe.NewRNNDecoder(hiddenSize, semanticOutputVocabSize, hiddenSize, maxAttentionHeads, numLayers, dropoutRate)
+		decoder, err := moe.NewRNNDecoder(hiddenSize, semanticOutputVocabSize, hiddenSize, maxAttentionHeads, numLayers, dropoutRate, numExperts)
 		if err != nil {
 			log.Fatalf("Failed to create decoder: %v", err)
 		}
@@ -1147,12 +1158,7 @@ func main() {
 
 	// Save the trained model
 	fmt.Printf("Saving IntentMoE model to %s\n", modelSavePath)
-	modelFile, err := os.Create(modelSavePath)
-	if err != nil {
-		log.Fatalf("Failed to create model file: %v", err)
-	}
-	defer modelFile.Close()
-	err = moe.SaveIntentMoEModelToGOB(intentMoEModel, modelFile)
+	err = moe.SaveIntentMoEModelToGOB(intentMoEModel, modelSavePath)
 	if err != nil {
 		log.Fatalf("Failed to save IntentMoE model: %v", err)
 	}
@@ -1173,12 +1179,7 @@ func main() {
 func saveCheckpoint(model *moe.IntentMoE, basePath string, epoch, batch int) error {
 	filename := fmt.Sprintf("%s.epoch%d.batch%d", basePath, epoch+1, batch)
 	log.Printf("Saving checkpoint to %s...", filename)
-	f, err := os.Create(filename)
-	if err != nil {
-		return fmt.Errorf("failed to create checkpoint file: %w", err)
-	}
-	defer f.Close()
-	return moe.SaveIntentMoEModelToGOB(model, f)
+	return moe.SaveIntentMoEModelToGOB(model, filename)
 }
 
 // DetachModel removes the computation graph (gradients and creators) from the model parameters

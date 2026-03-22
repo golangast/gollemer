@@ -76,6 +76,24 @@ func main() {
 		log.Fatalf("Error reading WikiQA training data: %v", err)
 	}
 
+	// Process conversing.csv
+	convFile, err := os.Open("trainingdata/conversing.csv")
+	if err == nil {
+		defer convFile.Close()
+		scanner = bufio.NewScanner(convFile)
+		for scanner.Scan() {
+			line := scanner.Text()
+			parts := strings.Split(line, ",")
+			if len(parts) >= 2 {
+				pattern := strings.Trim(parts[1], "\"")
+				tokens := tokenizer.Tokenize(pattern)
+				for _, token := range tokens {
+					tokenVocab.AddToken(token)
+				}
+			}
+		}
+	}
+
 	// Save the updated vocabulary
 	err = tokenVocab.Save(vocabPath)
 	if err != nil {

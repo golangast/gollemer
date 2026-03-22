@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/golangast/gollemer/neural/moe"
+	"github.com/golangast/gollemer/internal/moe"
 	"github.com/golangast/gollemer/neural/nn"
 	mainvocab "github.com/golangast/gollemer/neural/nnu/vocab"
 	"github.com/golangast/gollemer/neural/nnu/word2vec"

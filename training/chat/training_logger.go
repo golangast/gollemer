@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strconv"
 
-	moe "github.com/golangast/gollemer/neural/moe"
+	moe "github.com/golangast/gollemer/internal/moe"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -48,15 +48,14 @@ func ScanProject() ProjectContext {
 
 func GetExpertAdvice(ctx ProjectContext) string {
 	switch {
-	case ctx.IsGollemer && !ctx.HasModel:
-		return "I see the MoE architecture, but no trained weights! Should we **start a training run**?"
+	
 	case ctx.IsGollemer && ctx.HasModel:
 		return "Model weights detected. Want to **run an inference test** on a sample sentence?"
 	case !ctx.IsGollemer:
 		if _, err := os.Stat("go.mod"); err != nil {
 			return "I don't see a `go.mod` here. Should we `go mod init` a new project?"
 		}
-		return "This doesn't look like a Gollemer project yet. Should I **initialize the NLP structure** for you?"
+		return "This doesn't look like a Gollemer project yet."
 	default:
 		return "Ready to code! What's the focus for this session?"
 	}

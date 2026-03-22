@@ -67,6 +67,52 @@ func InitDB(dataSourceName string) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to create tutorial_metadata table: %w", err)
 	}
 
+	// Project Profile Tables
+	createProjectProfilesTableSQL := `CREATE TABLE IF NOT EXISTS project_profiles (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT UNIQUE NOT NULL,
+		path TEXT NOT NULL,
+		files_count INTEGER,
+		routes_count INTEGER,
+		db_count INTEGER,
+		total_loc INTEGER,
+		last_visited TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+		description TEXT
+	);`
+	_, err = db.Exec(createProjectProfilesTableSQL)
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to create project_profiles table: %w", err)
+	}
+
+	createProjectRoutesTableSQL := `CREATE TABLE IF NOT EXISTS project_routes (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		project_id INTEGER,
+		route TEXT,
+		method TEXT,
+		handler TEXT,
+		FOREIGN KEY(project_id) REFERENCES project_profiles(id) ON DELETE CASCADE
+	);`
+	_, err = db.Exec(createProjectRoutesTableSQL)
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to create project_routes table: %w", err)
+	}
+
+	createProjectDatabasesTableSQL := `CREATE TABLE IF NOT EXISTS project_databases (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		project_id INTEGER,
+		db_path TEXT,
+		db_type TEXT,
+		FOREIGN KEY(project_id) REFERENCES project_profiles(id) ON DELETE CASCADE
+	);`
+	_, err = db.Exec(createProjectDatabasesTableSQL)
+	if err != nil {
+		db.Close()
+		return nil, fmt.Errorf("failed to create project_databases table: %w", err)
+	}
+
 	return db, nil
 }
 
@@ -176,3 +222,129 @@ func GetCurrentStep(db *sql.DB) (int, bool) {
 	}
 	return step, active
 }
+
+// ProjectProfile represents a project's metadata.
+type ProjectProfile struct {
+	ID          int
+	Name        string
+	Path        string
+	FilesCount  int
+	RoutesCount int
+	DbCount     int
+	TotalLOC    int
+	LastVisited string
+	CreatedAt   string
+	Description string
+}
+
+// ProjectRoute represents a route in a project.
+type ProjectRoute struct {
+	ID        int
+	ProjectID int
+	Route     string
+	Method    string
+	Handler   string
+}
+
+// ProjectDatabase represents a database in a project.
+type ProjectDatabase struct {
+	ID        int
+	ProjectID int
+	DBPath    string
+	DBType    string
+}
+
+// UpsertProjectProfile saves or updates a project profile.
+func UpsertProjectProfile(db *sql.DB, profile ProjectProfile) (int64, error) {
+	query := `
+		INSERT INTO project_profiles (name, path, files_count, routes_count, db_count, total_loc, last_visited, description)
+		VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+		ON CONFLICT(name) DO UPDATE SET
+			path = excluded.path,
+			files_count = excluded.files_count,
+			routes_count = excluded.routes_count,
+			db_count = excluded.db_count,
+			total_loc = excluded.total_loc,
+			last_visited = CURRENT_TIMESTAMP,
+			description = excluded.description`
+	
+	_, err := db.Exec(query, profile.Name, profile.Path, profile.FilesCount, profile.RoutesCount, profile.DbCount, profile.TotalLOC, profile.Description)
+	if err != nil {
+		return 0, err
+	}
+	
+	// Get ID
+	var id int64
+	err = db.QueryRow("SELECT id FROM project_profiles WHERE name = ?", profile.Name).Scan(&id)
+	return id, err
+}
+
+// ClearProjectDetails removes routes and databases for a project to refresh them.
+func ClearProjectDetails(db *sql.DB, projectID int64) error {
+	_, err := db.Exec("DELETE FROM project_routes WHERE project_id = ?", projectID)
+	if err != nil {
+		return err
+	}
+	_, err = db.Exec("DELETE FROM project_databases WHERE project_id = ?", projectID)
+	return err
+}
+
+// AddProjectRoute adds a route to a project.
+func AddProjectRoute(db *sql.DB, projectID int64, route, method, handler string) error {
+	_, err := db.Exec("INSERT INTO project_routes (project_id, route, method, handler) VALUES (?, ?, ?, ?)", projectID, route, method, handler)
+	return err
+}
+
+// AddProjectDatabase adds a database info to a project.
+func AddProjectDatabase(db *sql.DB, projectID int64, dbPath, dbType string) error {
+	_, err := db.Exec("INSERT INTO project_databases (project_id, db_path, db_type) VALUES (?, ?, ?)", projectID, dbPath, dbType)
+	return err
+}
+
+// GetProjectProfile retrieves a project profile by name.
+func GetProjectProfile(db *sql.DB, name string) (*ProjectProfile, error) {
+	query := `SELECT id, name, path, files_count, routes_count, db_count, total_loc, last_visited, created_at, description FROM project_profiles WHERE name = ?`
+	var p ProjectProfile
+	err := db.QueryRow(query, name).Scan(&p.ID, &p.Name, &p.Path, &p.FilesCount, &p.RoutesCount, &p.DbCount, &p.TotalLOC, &p.LastVisited, &p.CreatedAt, &p.Description)
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+// GetProjectRoutes retrieves all routes for a project.
+func GetProjectRoutes(db *sql.DB, projectID int) ([]ProjectRoute, error) {
+	rows, err := db.Query("SELECT id, project_id, route, method, handler FROM project_routes WHERE project_id = ?", projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var routes []ProjectRoute
+	for rows.Next() {
+		var r ProjectRoute
+		if err := rows.Scan(&r.ID, &r.ProjectID, &r.Route, &r.Method, &r.Handler); err != nil {
+			return nil, err
+		}
+		routes = append(routes, r)
+	}
+	return routes, nil
+}
+
+// GetProjectDatabases retrieves all databases for a project.
+func GetProjectDatabases(db *sql.DB, projectID int) ([]ProjectDatabase, error) {
+	rows, err := db.Query("SELECT id, project_id, db_path, db_type FROM project_databases WHERE project_id = ?", projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var databases []ProjectDatabase
+	for rows.Next() {
+		var d ProjectDatabase
+		if err := rows.Scan(&d.ID, &d.ProjectID, &d.DBPath, &d.DBType); err != nil {
+			return nil, err
+		}
+		databases = append(databases, d)
+	}
+	return databases, nil
+}
+

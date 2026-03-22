@@ -8,7 +8,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/golangast/gollemer/neural/moe"
+	"github.com/golangast/gollemer/internal/moe"
 	. "github.com/golangast/gollemer/neural/nn"
 	mainvocab "github.com/golangast/gollemer/neural/nnu/vocab"
 	tensor "github.com/golangast/gollemer/neural/tensor"
