@@ -4,23 +4,38 @@ Gollemer is an intelligent coding assistant and project orchestrator designed to
 
 ---
 
-## 💬 Conversational AI — How It Works
+## ⚡ Quick Start
 
-Gollemer communicates with you through a dual-mode conversational system. It can:
-1. **Understand developer commands** — "create a handler called Login with URL /login"
-2. **Hold general conversation** — "how are you?", "what do you think about Go?"
+### 1. Installation
+Clone the repository and ensure you have Go 1.22+ installed:
+```bash
+git clone github.com/golangast/gollemer
+cd gollemer
+go mod tidy
+```
 
-Both modes run through the same neural pipeline: Word2Vec embeddings → MoE Encoder → Intent Classifier → (if chat) RNN Decoder for response generation.
+### 2. Launching the Assistant
+To start your journey with the AI mascot, run the following command:
+```bash
+go run cmd/gollemer/main.go -llm
+```
+
+### 3. Training the AI
+To train the Mixture-of-Experts (MoE) classifier or the conversational chat model, use the provided training script:
+```bash
+bash scripts/train.sh
+```
 
 ---
 
-## 🛠️ Essential Commands
+## 💬 Essential Commands
 
-Gollemer is built for action. Here are the primary commands you can use in the LLM shell (`go run cmd/gollemer/main.go -llm`).
+Gollemer is built for action. Here are the primary commands you can use in the LLM shell.
 
 ### 📁 Project Scaffolding
 | Command | Example | Description |
 |---|---|---|
+| `menu` | `menu` | Opens the interactive command menu for all features. |
 | `create webserver` | `create webserver myapp` | Scaffolds a complete Go project folder with SQLite and HTTP setup. |
 | `create handler` | `add handler Login at /login` | Generates a new handler function and registers the route in `main.go`. |
 | `create page` | `create page index` | Generates a WASM-ready Go frontend page in the assets folder. |
@@ -48,17 +63,19 @@ Gollemer is built for action. Here are the primary commands you can use in the L
 
 ---
 
-## 🎓 Interactive Tutorial
+## 🛠️ Performance & Advanced Usage
 
+### ⚙️ SIMD Acceleration
+To enable experimental **SIMD acceleration** for neural operations:
+```bash
+GOEXPERIMENT=simd go run cmd/gollemer/main.go -llm
+```
+
+### 🎓 Interactive Tutorial
 Gollemer features a built-in interactive tutorial that guides you through the entire workflow of building a web application.
-
 - **To Start:** Type `tutorial` at the prompt.
-- **Workflow:** Gollemer will guide you through:
-    1. Creating a folder.
-    2. Scaffolding a webserver.
-    3. Adding logic.
-    4. Running and testing your server.
-- **Persistence:** Your tutorial progress is saved in `data/db/gollemer.db`, so you can resume even after restarting the app.
+- **Workflow:** Guides you from folder creation to running a full webserver.
+- **Persistence:** Progress is saved in `data/db/gollemer.db`.
 
 ---
 
@@ -81,34 +98,6 @@ Gollemer follows a clean, industry-standard directory layout:
 │   └── db/             # Project profiles and tutorial state (SQLite)
 ├── examples/           # Tutorial content and sample projects
 └── logs/               # Training logs and profiling data
-```
-
----
-
-## 🧠 Neural Architecture
-
-Gollemer's conversational brain is an **encoder-decoder Seq2Seq architecture** with a Mixture-of-Experts encoder.
-
-### 🔀 MoE Encoder — Sparse Mixture of Experts
-The encoder uses a **Sparse MoE Layer** with 8 specialized experts. Each token is routed to the **top-2** most relevant experts using a noisy gating network, ensuring both specialization and discovery.
-
-### 📡 RNN Decoder — Seq2Seq Response Generation
-For conversational replies, a 2-layer LSTM decoder with **Cross-Attention** generates tokens by attending to the encoder's context vector.
-
----
-
-## 🗣️ Training & Models
-
-You can train the AI components using the following commands:
-
-- **Train Chat:** `go run cmd/gollemer/main.go -train-chat` (Seq2Seq conversation)
-- **Train MoE:** `go run cmd/gollemer/main.go -train-moe` (Intent classification)
-- **Train Word2Vec:** `go run cmd/gollemer/main.go -train-word2vec` (Word embeddings)
-
-### ⚙️ Performance
-Gollemer supports **SIMD acceleration** for neural operations. To enable it:
-```bash
-GOEXPERIMENT=simd go run cmd/gollemer/main.go -llm
 ```
 
 ---
