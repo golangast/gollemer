@@ -1,0 +1,25 @@
+# Binaries
+bin/
+gollemer
+main
+
+# Debug and Profiling
+logs/*.prof
+logs/*.csv
+*.prof
+*.test
+
+# Data (except templates/essential config)
+data/db/*.db
+data/models/*.gob
+data/models/checkpoints/
+
+# Other
+.gollemer_stats
+last_dir.txt
+vendor/
+.vibe/
+.agent/
+.tool-versions
+docker-compose.yml
+prometheus.yml

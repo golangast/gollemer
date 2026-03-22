@@ -6,7 +6,7 @@ echo "========================================="
 
 # 1. Clean up old models to ensure consistency
 echo "🧹 Cleaning up old GOB models..."
-rm -f gob_models/*.gob
+rm -f data/models/gob_models/*.gob
 
 # 2. Re-create vocabularies
 echo "🏋️ Training Word2Vec model..."
@@ -24,4 +24,4 @@ go run cmd/train_moe/main.go -epochs 1 -dry-run
 
 echo ""
 echo "✅ NLP Structure Initialized Successfully!"
-echo "Checkpoints saved in gob_models/"
+echo "Checkpoints saved in data/models/gob_models/"

@@ -168,7 +168,7 @@ cellState   = zeros
 
 ## 🗣️ Chat Training (`go run main.go -train-chat`)
 
-The chat model is trained on `trainingdata/human_chat.txt` — a curated dataset of human conversation pairs.
+The chat model is trained on `data/training/trainingdata/human_chat.txt` — a curated dataset of human conversation pairs.
 
 ### Training Data Format
 
@@ -242,9 +242,9 @@ A healthy training run shows all experts being used. If Expert 7 dominates, incr
 
 | File | Description |
 |---|---|
-| `gob_models/moe_classification_model.gob` | Latest checkpoint (saved every epoch) |
-| `gob_models/moe_classification_model_best.gob` | Best validation perplexity checkpoint |
-| `gob_models/seq2seq_output_vocab.gob` | Vocabulary used by the decoder output layer |
+| `data/models/gob_models/moe_classification_model.gob` | Latest checkpoint (saved every epoch) |
+| `data/models/gob_models/moe_classification_model_best.gob` | Best validation perplexity checkpoint |
+| `data/models/gob_models/seq2seq_output_vocab.gob` | Vocabulary used by the decoder output layer |
 
 ---
 
@@ -377,13 +377,13 @@ This can significantly speed up training and inference, especially for the MoE a
 
 | File | Purpose |
 |---|---|
-| `gob_models/word2vec_model.gob` | Pre-trained word embeddings (~61K vocabulary) |
-| `gob_models/moe_classification_model.gob` | Main MoE model (encoder + decoder) |
-| `gob_models/moe_classification_model_best.gob` | Best checkpoint by validation perplexity |
-| `gob_models/seq2seq_output_vocab.gob` | Decoder output vocabulary (SentenceVocab) |
-| `gob_models/ner_model.gob` | Named Entity Recognition model |
-| `gob_models/query_vocabulary.gob` | Input token vocabulary (Word2Vec-mapped) |
-| `trainingdata/human_chat.txt` | Conversational training data (Q/A pairs) |
+| `data/models/gob_models/word2vec_model.gob` | Pre-trained word embeddings (~61K vocabulary) |
+| `data/models/gob_models/moe_classification_model.gob` | Main MoE model (encoder + decoder) |
+| `data/models/gob_models/moe_classification_model_best.gob` | Best checkpoint by validation perplexity |
+| `data/models/gob_models/seq2seq_output_vocab.gob` | Decoder output vocabulary (SentenceVocab) |
+| `data/models/gob_models/ner_model.gob` | Named Entity Recognition model |
+| `data/models/gob_models/query_vocabulary.gob` | Input token vocabulary (Word2Vec-mapped) |
+| `data/training/trainingdata/human_chat.txt` | Conversational training data (Q/A pairs) |
 | `knowledge.json` | Known commands, objects, and model config paths |
 
 ---
