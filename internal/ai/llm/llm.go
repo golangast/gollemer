@@ -321,6 +321,10 @@ func RunLLM() {
 			_ = ScanAndSaveProfile(name, cwd, db)
 			ShowProjectProfile(name, db, mascot)
 			continue
+		} else if query == "watch" || query == "monitor" || query == "guard" {
+			client.StartBackgroundWatcher(mascot, projectRoot)
+			mascot.Speak(ui.MoodHappy, "I'm on guard duty! I'll watch the workspace for changes and let you know if I see anything interesting.")
+			continue
 		}
 
 		if query == "menu" {
@@ -4439,6 +4443,7 @@ var intentIcons = map[string]string{
 	"create_object":    "🔨 [Object]",
 	"stop":             "🛑 [Stop]",
 	"run_webserver":    "🚀 [Run]",
+	"watch":            "👁️  [Watch]",
 }
 
 
@@ -5309,6 +5314,9 @@ func (c *GollemerMoEClient) checkCommandHeuristics(lowerInput string) (string, f
 	if strings.HasPrefix(lowerInput, "stop ") || lowerInput == "stop" || strings.HasPrefix(lowerInput, "kill ") || lowerInput == "kill" || strings.HasPrefix(lowerInput, "terminate ") {
 		return "stop", 0.99
 	}
+	if lowerInput == "watch" || lowerInput == "monitor" || lowerInput == "guard" {
+		return "watch", 0.99
+	}
 	if lowerInput == "pwd" || lowerInput == "history" || lowerInput == "clear" || lowerInput == "cls" {
 		return lowerInput + "_query", 0.99
 	}
@@ -5334,7 +5342,7 @@ func (c *GollemerMoEClient) handleCreateCommand(lowerInput string) (string, floa
 
 func isCreatingCommand(input string) bool {
 	l := strings.ToLower(input)
-	createVerbs := []string{"create", "make", "add", "generate", "init", "new", "setup", "list", "ls", "go", "cd", "delete", "remove", "grep", "search", "run", "start", "cat", "read", "tree", "dir", "directory", "folders", "history", "pwd", "stop", "kill", "terminate"}
+	createVerbs := []string{"create", "make", "add", "generate", "init", "new", "setup", "list", "ls", "go", "cd", "delete", "remove", "grep", "search", "run", "start", "cat", "read", "tree", "dir", "directory", "folders", "history", "pwd", "stop", "kill", "terminate", "watch", "monitor", "guard"}
 	
 	// Check for direct prefixes first
 	for _, v := range createVerbs {
