@@ -112,7 +112,7 @@ func IntentToAction(intent IntentType) CommandAction {
 		return ActionRead
 	case IntentModifyCode:
 		return ActionModify
-	case IntentAddFeature:
+	case IntentAddFeature, IntentAddHandler:
 		return ActionAdd
 	default:
 		return ""
@@ -128,7 +128,7 @@ func IntentToObjectType(intent IntentType) ObjectType {
 		return ObjectFolder
 	case IntentModifyCode:
 		return ObjectCode
-	case IntentAddFeature:
+	case IntentAddFeature, IntentAddHandler:
 		return ObjectComponent
 	default:
 		return ""

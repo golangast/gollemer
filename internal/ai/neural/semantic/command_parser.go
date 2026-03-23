@@ -115,8 +115,20 @@ func (cp *CommandParser) BuildCommand(intent IntentType, entities map[string]str
 		}
 	}
 
+	// For IntentAddHandler, map file to url property
+	if intent == IntentAddHandler {
+		if url, ok := entities["file"]; ok {
+			if cmd.Properties == nil {
+				cmd.Properties = make(map[string]string)
+			}
+			cmd.Properties["url"] = url
+		}
+	}
+
 	// Set properties
-	cmd.Properties = make(map[string]string)
+	if cmd.Properties == nil {
+		cmd.Properties = make(map[string]string)
+	}
 	for key, value := range entities {
 		// Skip already-mapped entities
 		if key == "file" || key == "folder" || key == "source_file" || key == "source_folder" ||

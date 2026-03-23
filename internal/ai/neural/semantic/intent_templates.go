@@ -21,6 +21,7 @@ const (
 	IntentRenameFile           IntentType = "rename_file"
 	IntentRenameFolder         IntentType = "rename_folder"
 	IntentAddFeature           IntentType = "add_feature"
+	IntentAddHandler           IntentType = "add_handler"
 	IntentModifyCode           IntentType = "modify_code"
 	GoToProject                IntentType = "go_to_project"
 	RememberProjects           IntentType = "remember_projects"
@@ -92,6 +93,11 @@ func GetTemplates() map[IntentType]Template {
 			Intent:    IntentAddFeature,
 			Operation: "AddFeature",
 			Fill:      fillAddFeature,
+		},
+		IntentAddHandler: {
+			Intent:    IntentAddHandler,
+			Operation: "Add",
+			Fill:      fillAddHandler,
 		},
 		IntentModifyCode: {
 			Intent:    IntentModifyCode,
@@ -484,6 +490,50 @@ func fillRenameFolder(entities map[string]string) SemanticOutput {
 	}
 }
 
+// fillAddHandler fills template for adding an HTTP handler
+func fillAddHandler(entities map[string]string) SemanticOutput {
+	handlerName := entities["handler"]
+	if handlerName == "" {
+		handlerName = entities["name"]
+	}
+	if handlerName == "" {
+		handlerName = "jim"
+	}
+
+	url := entities["url"]
+	if url == "" {
+		url = "/jim"
+	}
+
+	properties := map[string]any{
+		"handler": handlerName,
+		"url":     url,
+		"content": fmt.Sprintf(`package main
+
+import (
+	"fmt"
+	"net/http"
+)
+
+func %s(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "Hello from %s!")
+}
+`, handlerName, handlerName),
+	}
+
+	return SemanticOutput{
+		Operation: "Add",
+		TargetResource: &Resource{
+			Type:       "Code::Component",
+			Name:       handlerName,
+			Properties: properties,
+		},
+		Context: Context{
+			UserRole: "admin",
+		},
+	}
+}
+
 // fillAddFeature fills template for adding a feature to a component
 func fillAddFeature(entities map[string]string) SemanticOutput {
 	featureName := entities["feature"]
@@ -656,6 +706,20 @@ func FillFromStructuredCommand(cmd *StructuredCommand) SemanticOutput {
 	case ActionAdd:
 		if feature, ok := cmd.Properties["feature"]; ok {
 			properties["feature"] = feature
+		}
+		// Special handling for handlers
+		if cmd.ObjectType == ObjectComponent && strings.Contains(strings.ToLower(cmd.Name), "handler") {
+			properties["content"] = fmt.Sprintf(`package main
+
+import (
+	"fmt"
+	"net/http"
+)
+
+func %s(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "Hello from %s!")
+}
+`, cmd.Name, cmd.Name)
 		}
 	}
 
