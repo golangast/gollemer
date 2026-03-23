@@ -38,7 +38,7 @@ func (ee *EntityExtractor) Extract(words []string, entityMap map[int]ner.EntityT
 	stopWords := map[string]bool{
 		"of": true, "the": true, "a": true, "an": true,
 		"at": true, "by": true, "for": true, "from": true,
-		"on": true, "with": true, "in": true,
+		"on": true, "with": true, "in": true, "named": true,
 	}
 
 	// Check if there is a database component in the query

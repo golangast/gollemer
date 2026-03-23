@@ -52,6 +52,12 @@ func (ic *IntentClassifier) Classify(query string) IntentType {
 		return IntentAddFeature
 	}
 
+	// Check for add_handler intent
+	if (containsAny(query, []string{"add", "create", "new"}) && strings.Contains(query, "handler")) ||
+		(strings.Contains(query, "handler") && containsAny(query, []string{"with url", "at url"})) {
+		return IntentAddHandler
+	}
+
 	// Check for database creation
 	if containsAny(query, []string{"add", "create", "make", "new"}) &&
 		containsAny(query, []string{"database", "db", "sql", "sqlite"}) {

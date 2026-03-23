@@ -11,7 +11,7 @@ import (
 
 func main() {
 	// Example query demonstrating structured command parsing
-	query := "create folder jime with file Jill.go"
+	query := "create folder jjim with file Jill.go"
 
 	fmt.Println("=== Structured Command Parser Demo ===")
 	fmt.Printf("Query: %s\n\n", query)
@@ -61,6 +61,7 @@ func main() {
 		"delete file temp.txt",
 		"move file main.go to src",
 		"rename folder old to new",
+		"add handler jjim with url /jim",
 	}
 
 	for _, tc := range testCases {

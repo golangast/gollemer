@@ -365,6 +365,36 @@ func (r *RuleBasedNER) extractWithPatterns() []Entity {
 				Start: i,
 				End:   i,
 			})
+
+			// Check for component name following the keyword (e.g., "handler jjim" or "handler named jake")
+			if cleanWord == "handler" && i < len(r.queryWords)-1 {
+				nextIdx := i + 1
+				// Skip "named" if present
+				if strings.Trim(r.queryWords[nextIdx], "\"',.;:") == "named" && i < len(r.queryWords)-2 {
+					nextIdx++
+				}
+				nextWord := strings.Trim(r.queryWords[nextIdx], "\"',.;:")
+				if nextWord != "with" && nextWord != "at" && !slices.Contains(operations, nextWord) {
+					entities = append(entities, Entity{
+						Word:  r.queryWords[nextIdx],
+						Type:  EntityTypeComponentName,
+						Start: nextIdx,
+						End:   nextIdx,
+					})
+				}
+			}
+		}
+	}
+
+	// Pattern 7: URL property detection
+	for i, word := range r.queryWords {
+		if (word == "url" || word == "path") && i < len(r.queryWords)-1 {
+			entities = append(entities, Entity{
+				Word:  r.queryWords[i+1],
+				Type:  EntityTypeFileName, // Use FILE_NAME for path/url identifier
+				Start: i + 1,
+				End:   i + 1,
+			})
 		}
 	}
 

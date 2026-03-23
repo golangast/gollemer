@@ -259,9 +259,21 @@ func handleGenericCreate(objectType, fileName, targetDirectory, handlerURL strin
 		if handlerName == "" {
 			handlerName = objectType
 		}
+		// Strip existing "Handler" suffix to avoid doubling
+		cleanName := strings.TrimSuffix(strings.Title(handlerName), "Handler")
 
-		handlerContent := fmt.Sprintf("package main\n\nimport \"net/http\"\n\n// %%s is a generic handler for %%s\nfunc %%s(w http.ResponseWriter, r *http.Request) {\n\tw.Write([]byte(\"Generic implementation for %%s\"))\n}\n", strings.Title(handlerName), objectType, strings.Title(handlerName), objectType)
-		filePath := handlerName + ".go"
+		// Build file content with string concatenation (no fmt.Sprintf) to avoid format-verb bugs
+		handlerContent := "package main\n\n" +
+			"import (\n" +
+			"\t\"fmt\"\n" +
+			"\t\"net/http\"\n" +
+			")\n\n" +
+			"// " + cleanName + "Handler handles requests for " + handlerURL + "\n" +
+			"func " + cleanName + "Handler(w http.ResponseWriter, r *http.Request) {\n" +
+			"\tfmt.Fprintf(w, \"Hello from the " + cleanName + " handler!\")\n" +
+			"}\n"
+
+		filePath := strings.ToLower(cleanName) + ".go"
 		if targetDirectory != "" {
 			filePath = filepath.Join(targetDirectory, filePath)
 			os.MkdirAll(targetDirectory, 0755)
@@ -275,8 +287,8 @@ func handleGenericCreate(objectType, fileName, targetDirectory, handlerURL strin
 				mainPath = filepath.Join(targetDirectory, "main.go")
 			}
 		}
-		regMsg, _ := registerHandlerURL(strings.Title(handlerName), handlerURL, mainPath)
-		return fmt.Sprintf("I don't have a specialized handler for '%%s', but since you provided a URL, I've generated a backend handler for it. %%s", objectType, regMsg), true
+		regMsg, _ := registerHandlerURL(cleanName, handlerURL, mainPath)
+		return fmt.Sprintf("I created '%sHandler' and registered it at '%s'. %s", cleanName, handlerURL, regMsg), true
 	}
 
 	// 2. If a name is provided, create a Go skeleton
