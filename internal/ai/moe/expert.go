@@ -30,4 +30,7 @@ type Expert interface {
 
 	// ClipWeights bounds the expert's learnable parameters.
 	ClipWeights(maxVal float64)
+
+	// EvolutionaryReset re-initializes the expert based on a winner's weights (Genetic Mutation).
+	EvolutionaryReset(winner Expert, jitterScale float64)
 }

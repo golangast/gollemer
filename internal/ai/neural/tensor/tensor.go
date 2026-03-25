@@ -2811,6 +2811,27 @@ func (t *Tensor) L2Norm() float64 {
 	return math.Sqrt(sum)
 }
 
+// AddJitter injects small random noise into the tensor's data.
+func (t *Tensor) AddJitter(scale float64) {
+	if t == nil { return }
+	for i := range t.Data {
+		t.Data[i] += (rand.Float64()*2 - 1.0) * scale
+	}
+}
+
+// ApplyJitter is an alias for AddJitter for consistency with requested API.
+func (t *Tensor) ApplyJitter(scale float64) {
+	t.AddJitter(scale)
+}
+
+// CopyFrom copies data from another tensor into this one.
+func (t *Tensor) CopyFrom(other *Tensor) {
+	if t == nil || other == nil { return }
+	if len(t.Data) == len(other.Data) {
+		copy(t.Data, other.Data)
+	}
+}
+
 // MultiplyScalar multiplies each element in the tensor by a scalar.
 func (t *Tensor) MultiplyScalar(s float64) *Tensor {
 	if t == nil {

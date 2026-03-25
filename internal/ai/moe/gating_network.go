@@ -14,6 +14,7 @@ type GatingNetwork struct {
 	NoiseLinear  *nn.Linear // For Noisy Top-K gating
 	LayerNorm    *nn.LayerNorm
 	Training     bool // training mode for noise injection
+	DiversityCoefficient float64
 	// Stored for backward pass
 	inputTensor       *tensor.Tensor
 	logitsTensor      *tensor.Tensor
@@ -67,6 +68,20 @@ func (gn *GatingNetwork) Forward(inputs ...*tensor.Tensor) (*tensor.Tensor, erro
 	input := inputs[0]
 	gn.inputTensor = input
 
+	// 🛡️ The Stability Floor (Prevent division by zero and Expert Collapse)
+	inputNorm := input.L2Norm()
+	if inputNorm < 1e-8 {
+		// Inject a tiny bit of jitter to "wake up" the signal if it has collapsed
+		input.AddJitter(1e-6)
+		inputNorm = 1e-8
+	}
+
+	// Work with the stable, normalized signal for gating
+	scaledInput := input
+	if inputNorm != 1.0 {
+		scaledInput = input.Scale(1.0 / inputNorm)
+	}
+
 	// Determine dimensions.
 	numExperts := gn.Linear.Weights.Shape[1] // [inputDim, numExperts]
 	inputDim := gn.Linear.Weights.Shape[0]
@@ -75,17 +90,17 @@ func (gn *GatingNetwork) Forward(inputs ...*tensor.Tensor) (*tensor.Tensor, erro
 	var logitsShape []int
 	var inputFlat []float64
 
-	switch len(input.Shape) {
+	switch len(scaledInput.Shape) {
 	case 2:
 		// [batchSize, inputDim]
-		numTokens = input.Shape[0]
+		numTokens = scaledInput.Shape[0]
 		logitsShape = []int{numTokens, numExperts}
-		inputFlat = input.Data
+		inputFlat = scaledInput.Data
 	case 3:
 		// [batchSize, seqLength, inputDim]
-		numTokens = input.Shape[0] * input.Shape[1]
-		logitsShape = []int{input.Shape[0], input.Shape[1], numExperts}
-		inputFlat = input.Data
+		numTokens = scaledInput.Shape[0] * scaledInput.Shape[1]
+		logitsShape = []int{scaledInput.Shape[0], scaledInput.Shape[1], numExperts}
+		inputFlat = scaledInput.Data
 	default:
 		return nil, fmt.Errorf("GatingNetwork.Forward: unsupported input shape %v", input.Shape)
 	}
@@ -261,6 +276,47 @@ func (gn *GatingNetwork) Parameters() []*tensor.Tensor {
 	}
 	params = append(params, gn.LayerNorm.Parameters()...)
 	return params
+}
+
+// CalculateDiversityLoss calculates the load balancing penalty based on routing distribution.
+// It punishes the network if it starts relying too heavily on a few experts (Alpha Dominance).
+func (gn *GatingNetwork) CalculateDiversityLoss() float64 {
+	if gn.outputTensor == nil {
+		return 0
+	}
+
+	numTokens := gn.outputTensor.Shape[0]
+	if len(gn.outputTensor.Shape) > 2 {
+		numTokens *= gn.outputTensor.Shape[1]
+	}
+	numExperts := gn.outputTensor.Shape[len(gn.outputTensor.Shape)-1]
+
+	// 1. Calculate the average usage of each expert across the batch
+	avgUsage := make([]float64, numExperts)
+	for t := 0; t < numTokens; t++ {
+		base := t * numExperts
+		for e := 0; e < numExperts; e++ {
+			avgUsage[e] += gn.outputTensor.Data[base+e]
+		}
+	}
+
+	// 2. Normalize by token count
+	var totalLoss float64
+	targetUsage := 1.0 / float64(numExperts)
+
+	for e := 0; e < numExperts; e++ {
+		avgUsage[e] /= float64(numTokens)
+		
+		// 3. Penalty = (Actual Usage - Target Usage)^2
+		diff := avgUsage[e] - targetUsage
+		totalLoss += diff * diff
+	}
+
+	coeff := gn.DiversityCoefficient
+	if coeff == 0 {
+		coeff = 0.25 // Default "Anti-Lazy" coefficient
+	}
+	return totalLoss * coeff
 }
 
 // Inputs returns the input tensors of the GatingNetwork's last forward operation.

@@ -22,6 +22,11 @@ rm -f data/models/gob_models/moe_classification_model.gob
 rm -f data/models/gob_models/moe_classification_model_best.gob
 
 # --- 3. Audit & Trend Analysis ---
+HAS_JQ=false
+if command -v jq >/dev/null 2>&1; then HAS_JQ=true; fi
+HAS_BC=false
+if command -v bc >/dev/null 2>&1; then HAS_BC=true; fi
+
 echo "🔍 Scanning Gollemer Evolution & Commitment Trends..."
 printf "| %-15s | %-7s | %-12s | %-7s |\n" "File" "Steps" "Commitment" "Trend"
 echo "|-----------------|---------|--------------|---------|"
@@ -35,26 +40,34 @@ for f in $(ls $CHECKPOINT_DIR/*.gob 2>/dev/null | sort); do
     go run cmd/inspect/inspect_model.go --export "$f" > /dev/null
     JSON_FILE="${f}.json"
     
-    if [ -f "$JSON_FILE" ]; then
+    if [ -f "$JSON_FILE" ] && [ "$HAS_JQ" = true ]; then
         STEPS=$(jq '.total_steps' "$JSON_FILE")
         IQ=$(jq '.commitment_pct' "$JSON_FILE")
+        TREND="↔️  -"
         
-        if (( $(echo "$IQ > $PREV_IQ" | bc -l) )); then
-            TREND="🚀 ↑"
-        elif (( $(echo "$IQ < $PREV_IQ" | bc -l) )); then
-            TREND="⚠️  ↓"
+        if [ "$HAS_BC" = true ]; then
+            if (( $(echo "$IQ > $PREV_IQ" | bc -l) )); then TREND="🚀 ↑"
+            elif (( $(echo "$IQ < $PREV_IQ" | bc -l) )); then TREND="⚠️  ↓"
+            fi
+            if (( $(echo "$IQ > $BEST_SCORE" | bc -l) )); then
+                BEST_SCORE=$IQ; BEST_FILE=$f
+            fi
         else
-            TREND="↔️  -"
-        fi
-
-        if (( $(echo "$IQ > $BEST_SCORE" | bc -l) )); then
-            BEST_SCORE=$IQ
-            BEST_FILE=$f
+            # Fallback to awk for float math
+            if awk "BEGIN {exit !($IQ > $PREV_IQ)}"; then TREND="🚀 ↑"
+            elif awk "BEGIN {exit !($IQ < $PREV_IQ)}"; then TREND="⚠️  ↓"
+            fi
+            if awk "BEGIN {exit !($IQ > $BEST_SCORE)}"; then
+                BEST_SCORE=$IQ; BEST_FILE=$f
+            fi
         fi
 
         printf "| %-15s | %-7s | %-12s | %-7s |\n" "$(basename "$f")" "$STEPS" "${IQ}%" "$TREND"
         PREV_IQ=$IQ
         mv "$JSON_FILE" "./research_logs/"
+    else
+        printf "| %-15s | %-7s | %-12s | %-7s |\n" "$(basename "$f")" "???" "???" "???"
+        [ -f "$JSON_FILE" ] && rm "$JSON_FILE"
     fi
 done
 
@@ -73,7 +86,14 @@ fi
 # --- 5. The Gatekeeper: Promotion & ChromeOS Notification ---
 THRESHOLD=2.0
 if [ -n "$BEST_FILE" ]; then
-    if (( $(echo "$BEST_SCORE >= $THRESHOLD" | bc -l) )); then
+    IS_PROMOTABLE=false
+    if [ "$HAS_BC" = true ]; then
+        if (( $(echo "$BEST_SCORE >= $THRESHOLD" | bc -l) )); then IS_PROMOTABLE=true; fi
+    else
+        if awk "BEGIN {exit !($BEST_SCORE >= $THRESHOLD)}"; then IS_PROMOTABLE=true; fi
+    fi
+
+    if [ "$IS_PROMOTABLE" = true ]; then
         echo "🎖️  Threshold Met ($BEST_SCORE% >= $THRESHOLD%). Promoting..."
         cp "$BEST_FILE" "data/models/gob_models/moe_classification_model_best.gob"
         ln -sf "$(pwd)/data/models/gob_models/moe_classification_model_best.gob" "data/models/gob_models/moe_active.gob"
@@ -92,7 +112,6 @@ echo -e "\n🚀 Starting Gollemer Training..."
 GOEXPERIMENT=simd go run cmd/gollemer/main.go \
     -train-chat \
     -rebalance \
-    -overfit \
     -auto-heal \
     -wd 0.01 \
     -lr 0.001
@@ -101,4 +120,32 @@ GOEXPERIMENT=simd go run cmd/gollemer/main.go \
 echo -e "\a"
 if command -v notify-send >/dev/null 2>&1; then
     notify-send "Gollemer AI" "Training Session Complete." --urgency=critical
+fi
+
+# --- 8. Stability & Diversity Audit ---
+echo -e "\n📊 Generating MoE Stability Report..."
+LOG_FILE="logs/training.csv"
+
+if [ -f "$LOG_FILE" ]; then
+    # Grab the last 5 entries to check for "Alpha Dominance"
+    # We look for Experts holding > 45% of the signal
+    DOMINANCE=$(tail -n 5 "$LOG_FILE" | awk -F',' '{if($4 > 0.45) print $1}' | wc -l)
+    
+    # Calculate a simple Diversity Score (0-100)
+    # 100 = Perfectly balanced usage across all 8 experts
+    # 0 = Only one expert doing all the work
+    DIVERSITY_SCORE="N/A"
+    if [ "$HAS_JQ" = true ]; then
+        DIVERSITY_SCORE=$(tail -n 1 "$LOG_FILE" | jq '.diversity_score' 2>/dev/null || echo "N/A")
+    fi
+
+    echo "--------------------------------------------------"
+    if [ "$DOMINANCE" -gt 3 ]; then
+        echo "⚠️  CRITICAL: High Alpha Dominance detected ($DOMINANCE/5 recent epochs)."
+        echo "💡 Advice: Increase -diversity-coeff or check for Data Leaks (LICENSE echoes)."
+    else
+        echo "✨ Stability: Healthy Expert Distribution."
+    fi
+    echo "📈 Current Diversity Score: $DIVERSITY_SCORE%"
+    echo "--------------------------------------------------"
 fi

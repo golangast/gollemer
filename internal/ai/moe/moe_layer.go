@@ -438,31 +438,6 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 		}
 	}
 
-	// 6. Finalize Load Balancing Loss
-	if numTokens > 0 {
-		// Calculate standard Switch Transformer loss
-		stLoss := 0.0
-		for e := 0; e < numExperts; e++ {
-			fraction := float64(len(moe.ExpertTokenIndices[e])) / float64(numTokens)
-			meanProb := moe.ExpertProbSums[e] / float64(numTokens)
-			stLoss += fraction * meanProb
-		}
-		stLoss *= float64(numExperts)
-
-		// Calculate more aggressive Auxiliary Loss (CV^2 of Importance)
-		auxLoss := CalculateAuxLoss(moe.gateOutputs.Data, numExperts)
-
-		// 3. Diversity Loss (Pearson Correlation/Cosine Similarity Penalty)
-		// Ensures experts learn different things for the same input.
-		divLoss := moe.CalculateDiversityLoss()
-		moe.DiversityLoss = divLoss
-
-		// Combine them (stLoss, auxLoss, and divLoss)
-		moe.LoadBalancingLoss = 0.4*stLoss + 0.4*auxLoss + 0.2*divLoss
-	} else {
-		moe.LoadBalancingLoss = 0
-		moe.DiversityLoss = 0
-	}
 
 	moe.expertOutputs = make([]*Tensor, numExperts)
 	var wg sync.WaitGroup
@@ -573,6 +548,34 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 	}
 	wgScatter.Wait()
 	// fmt.Println("Finished scattering")
+	// Finalize Load Balancing Loss (Metrics now that expert outputs are ready)
+	if numTokens > 0 {
+		// Calculate standard Switch Transformer loss
+		stLoss := 0.0
+		for e := 0; e < numExperts; e++ {
+			fraction := float64(len(moe.ExpertTokenIndices[e])) / float64(numTokens)
+			meanProb := moe.ExpertProbSums[e] / float64(numTokens)
+			stLoss += fraction * meanProb
+		}
+		stLoss *= float64(numExperts)
+
+		// Calculate more aggressive Auxiliary Loss (CV^2 of Importance)
+		auxLoss := CalculateAuxLoss(moe.gateOutputs.Data, numExperts)
+
+		// 3. Diversity Loss (Pearson Correlation/Cosine Similarity Penalty)
+		// Ensures experts learn different things for the same input.
+		divLoss := moe.CalculateDiversityLoss()
+		moe.DiversityLoss = divLoss
+
+		// 4. Router Load Balancing Diversity (Entropy-Based)
+		routerDivLoss := moe.GatingNetwork.CalculateDiversityLoss()
+
+		// Combine them (stLoss, auxLoss, divLoss, and routerDivLoss)
+		moe.LoadBalancingLoss = 0.3*stLoss + 0.3*auxLoss + 0.2*divLoss + 0.2*routerDivLoss
+	} else {
+		moe.LoadBalancingLoss = 0
+		moe.DiversityLoss = 0
+	}
 
 	// Push state to stack for BPTT
 	state := MoEState{
