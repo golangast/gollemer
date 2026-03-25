@@ -2,7 +2,6 @@ package moe
 
 import (
 	"fmt"
-	"math"
 	"math/rand"
 
 	"github.com/golangast/gollemer/internal/ai/neural/nn"
@@ -117,57 +116,13 @@ func (gn *GatingNetwork) Forward(inputs ...*tensor.Tensor) (*tensor.Tensor, erro
 		}
 	}
 
-	// --- [Noisy Top-K Gating Implementation] ---
-	var noiseLogitsData []float64
+	// 1. Gumbel-Softmax Noise for Expert Exploration (Break Expert Collusions)
 	if gn.Training {
-		// Lazy initialize NoiseLinear for models loaded from older checkpoints
-		if gn.NoiseLinear == nil {
-			nl, err := nn.NewLinear(inputDim, numExperts)
-			if err == nil {
-				gn.NoiseLinear = nl
-			}
-		}
-
-		if gn.NoiseLinear != nil {
-			noiseLogitsData = make([]float64, numTokens*numExperts)
-			computeRouterLogitsSIMD(
-				inputFlat,
-				gn.NoiseLinear.Weights.Data,
-				numTokens, numExperts, inputDim,
-				noiseLogitsData,
-			)
-			if gn.NoiseLinear.Biases != nil {
-				biasData := gn.NoiseLinear.Biases.Data
-				for t := 0; t < numTokens; t++ {
-					base := t * numExperts
-					for e := 0; e < numExperts; e++ {
-						noiseLogitsData[base+e] += biasData[e]
-					}
-				}
-			}
-
-			// Inject Gaussian noise scaled by softplus(noiseLogits)
-			for i := range logitsData {
-				// Softplus: ln(1 + e^x) to keep noise magnitude positive
-				x := noiseLogitsData[i]
-				var sigma float64
-				if x > 20 {
-					sigma = x // Avoid exp overflow
-				} else {
-					sigma = math.Log(1.0 + math.Exp(x))
-				}
-				
-				// N(0, 1) * sigma
-				logitsData[i] += rand.NormFloat64() * sigma
-			}
-			
-			gn.noiseLogitsTensor = tensor.NewTensor(logitsShape, noiseLogitsData, input.RequiresGrad || gn.NoiseLinear.Weights.RequiresGrad)
-		} else {
-			// Fallback: simple fixed noise if NoiseLinear failed to init
-			noise := gn.generateNoise(len(logitsData), 0.02)
-			for i := range logitsData {
-				logitsData[i] += noise[i]
-			}
+		// This forces the model to occasionally "miss" its favorite expert
+		// and explore others.
+		for i := range logitsData {
+			// Tiny random noise (0.1 magnitude)
+			logitsData[i] += rand.Float64() * 0.1
 		}
 	}
 

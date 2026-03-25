@@ -33,6 +33,8 @@ func init() {
 	gob.Register(&moe.MoEEncoder{})
 }
 
+var autoHealFlag *bool
+
 // IntentTrainingExample represents a single training example with a query and its intents.
 type IntentTrainingExample struct {
 	Query          string                  `json:"query"`
@@ -49,14 +51,8 @@ type TokenizedTrainingExample struct {
 	SemanticOutputIDs []float64
 }
 
+// TokenizedTrainingExample represents a pre-tokenized training example.
 // EnhancedTrainingExample includes SRL and ASG annotations
-type EnhancedTrainingExample struct {
-	Query         string                          `json:"query"`
-	FlatOutput    string                          `json:"flat_output"`
-	SemanticRoles map[string]any                  `json:"semantic_roles"`
-	ASG           *semantic.AbstractSemanticGraph `json:"abstract_semantic_graph"`
-	ExecutionPlan map[string]any                  `json:"execution_plan"`
-}
 
 // TokenizeTrainingData pre-tokenizes the training data in parallel.
 func TokenizeTrainingData(data *IntentTrainingData, queryTokenizer, semanticOutputTokenizer *tokenizer.Tokenizer, queryVocab, semanticOutputVocab *mainvocab.Vocabulary, maxLen int) ([]TokenizedTrainingExample, error) {
@@ -251,6 +247,8 @@ func TrainIntentMoEModel(model *moe.IntentMoE, data []TokenizedTrainingExample, 
 
 	optimizer := nn.NewOptimizer(model.Parameters(), learningRate, 1.0) // Using a clip value of 1.0
 
+	trainer := &moe.Trainer{CollapseCount: 0}
+
 	// Learning rate scheduling parameters
 	baseLR := learningRate
 	minLR := learningRate / 10.0 // 0.00001
@@ -259,20 +257,40 @@ func TrainIntentMoEModel(model *moe.IntentMoE, data []TokenizedTrainingExample, 
 	warmupSteps := totalBatches * 2 // Warmup for first 2 epochs
 	currentStep := 0
 
+	trainer := &Trainer{CollapseCount: 0}
+	bestPerplexity := 0.0
+	
+	startTime := time.Now()
+	var totalTokens int64
+	var totalDuration time.Duration
+
+	// Get Profile (In a real app this would come from flags)
+	profile := nn.GetProfile("standard")
+	if adamOpt, ok := optimizer.(*nn.Adam); ok {
+		adamOpt.Lambda = profile.Lambda
+		adamOpt.ClipThreshold = profile.ClipThreshold
+	}
+
 	for epoch := range epochs {
+		epochStartTime := time.Now()
 		// Calculate scheduled sampling probability for logging
 		scheduledSamplingProb := math.Min(0.5, float64(epoch+1)/float64(epochs*8))
-		log.Printf("Epoch %d/%d (Scheduled Sampling: %.1f%%)", epoch+1, epochs, scheduledSamplingProb*100)
+		log.Printf("Epoch %d/%d (Scheduled Sampling: %.1f%%) | Profile: %s", epoch+1, epochs, scheduledSamplingProb*100, profile.Name)
 		totalLoss := 0.0
 		numBatches := 0
+		
+		// Per-epoch expert counts for health check
+		l0Counts := make([]int, 0)
+		l1Counts := make([]int, 0)
+
 		// Create batches for training
 		for i := 0; i < len(data); i += batchSize {
 			batchStartTime := time.Now()
 			end := min(i+batchSize, len(data))
 			batch := data[i:end]
 
-			// Update learning rate with scheduling
-			currentLR := calculateLearningRate(currentStep, totalSteps, warmupSteps, baseLR, minLR)
+			// Update learning rate with scheduling (includes Warmup)
+			currentLR := calculateLearningRate(currentStep, totalSteps, profile.WarmupSteps, profile.LR, profile.LR/10.0)
 			if adamOpt, ok := optimizer.(*nn.Adam); ok {
 				adamOpt.SetLearningRate(currentLR)
 			}
@@ -281,41 +299,86 @@ func TrainIntentMoEModel(model *moe.IntentMoE, data []TokenizedTrainingExample, 
 			loss, err := trainIntentMoEBatch(model, optimizer, batch, maxSequenceLength, epoch, epochs, semanticOutputVocab, numBatches)
 			if err != nil {
 				log.Printf("Error training batch: %v", err)
-				continue // Or handle error more strictly
+				continue 
 			}
 			totalLoss += loss
-			
 			numBatches++
+			
+			// Track tokens
+			for _, ex := range batch {
+				totalTokens += int64(len(ex.QueryIDs) + len(ex.SemanticOutputIDs))
+			}
 
 			// Checkpointing
 			if checkpointInterval > 0 && numBatches%checkpointInterval == 0 {
-				if err := saveCheckpoint(model, checkpointPath, epoch, numBatches); err != nil {
+				totalDuration = time.Since(startTime)
+				if err := saveCheckpoint(model, checkpointPath, epoch, numBatches, currentStep, profile, totalTokens, totalDuration); err != nil {
 					log.Printf("Failed to save checkpoint: %v", err)
 				}
 			}
 
-			// Log gradient norms every batch for debugging
+			// Log gradient norms and handle fine-grained utilization tracking
 			if numBatches%5 == 0 {
 				gradNorm := computeGradientNorm(model.Parameters())
 				percent := float64(numBatches) / float64(totalBatches) * 100
 				log.Printf("Batch %d/%d (%.1f%%): Loss=%.2f, GradNorm=%.4f, LR=%.6f, Time=%v", numBatches, totalBatches, percent, loss, gradNorm, currentLR, time.Since(batchStartTime))
 
-				for i, layer := range moe.ActiveLayers {
-					label := fmt.Sprintf("MoE Layer %d (Batch %d)", i, numBatches)
+				for idx, layer := range moe.ActiveLayers {
+					label := fmt.Sprintf("MoE Layer %d (Batch %d)", idx, numBatches)
 					layer.ValidateHealth(label)
-					layer.VisualizeUtilization()
+					
+					// Update counts for epoch-level stats
+					stats := layer.UtilizationStats()
+					if idx == 0 {
+						if len(l0Counts) == 0 { l0Counts = make([]int, len(stats)) }
+						for k, v := range stats { l0Counts[k] = v }
+					} else if idx == 1 {
+						if len(l1Counts) == 0 { l1Counts = make([]int, len(stats)) }
+						for k, v := range stats { l1Counts[k] = v }
+					}
 				}
-				// runtime.GC() // Removed explicit GC for performance
+			}
+		}
+
+		if numBatches > 0 {
+			avgLoss := float32(totalLoss / float64(numBatches))
+			perplexity := math.Exp(float64(avgLoss))
+			epochDuration := time.Since(epochStartTime)
+			totalDuration = time.Since(startTime)
+			
+			log.Printf("Epoch %d Result: Loss=%.4f, Perplexity=%.2f, Time=%v", epoch+1, avgLoss, perplexity, epochDuration)
+			
+			// --- [Health Metrics] ---
+			moe.LogWeightStretch(model)
+			moe.CheckSaturation(model, epoch)
+
+			// --- [Health Log] ---
+			os.MkdirAll("data/logs", 0755)
+			if len(l0Counts) > 0 {
+				moe.LogExpertHealth("data/logs/expert_health.csv", epoch, 0, l0Counts)
 			}
 
-			// if numBatches == 1 && memProfileFile != nil {
-			// 	if err := pprof.WriteHeapProfile(memProfileFile); err != nil {
-			// 		log.Printf("could not write memory profile for batch 1: %v", err)
-			// 	}
-			// }
-		}
-		if numBatches > 0 {
-			log.Printf("Epoch %d, Average Loss: %f", epoch+1, totalLoss/float64(numBatches))
+			// --- [Autonomous AutoHeal System] ---
+			stats := moe.TrainingStats{
+				Epoch:          epoch,
+				CurrentLoss:    avgLoss,
+				Perplexity:     perplexity,
+				BestPerplexity: bestPerplexity,
+				Layer0Counts:   l0Counts,
+				MaxDominance:   moe.GetMaxUtilization(l0Counts),
+				StepConfidence: 0.25, 
+			}
+
+			if *autoHealFlag {
+				trainer.SaveGoldenCheckpoint(model, stats, currentStep, profile, totalTokens, totalDuration)
+				trainer.AutoHeal(model, optimizer.(*nn.Adam), stats)
+			}
+			
+			if bestPerplexity == 0 || perplexity < bestPerplexity {
+				bestPerplexity = perplexity
+				// Save Golden Checkpoint
+				saveCheckpoint(model, checkpointPath+".best", epoch, numBatches, currentStep, profile, totalTokens, totalDuration)
+			}
 		}
 		if epoch == 0 {
 			pprof.StopCPUProfile()
@@ -847,13 +910,19 @@ func main() {
 
 	// Define training parameters
 	dryRun := flag.Bool("dry-run", false, "Run a quick test with 100 examples for 5 epochs")
-	flagLR := flag.Float64("lr", 0.00001, "Learning rate for training (default 1e-5)")
+	flagLR := flag.Float64("lr", 0.00001, "Learning rate (ignored if profile is set)")
 	flagEpochs := flag.Int("epochs", 50, "Number of epochs to train (default 50)")
+	autoHealFlag = flag.Bool("auto-heal", false, "Enable autonomous model recovery")
+	profileName := flag.String("profile", "standard", "Training profile: stable, aggressive, standard")
 
 	flag.Parse()
 
+	profile := nn.GetProfile(*profileName)
 	epochs := *flagEpochs
-	learningRate := *flagLR
+	learningRate := profile.LR
+	if *flagLR != 0.00001 {
+		learningRate = *flagLR
+	}
 	batchSize := 8        // Reduced to avoid OOM
 	semanticOutputVocabularySavePath := "data/models/gob_models/semantic_output_vocabulary.gob"
 
@@ -1176,11 +1245,22 @@ func main() {
 	}
 }
 
-// saveCheckpoint saves the model state to a file.
-func saveCheckpoint(model *moe.IntentMoE, basePath string, epoch, batch int) error {
+// saveCheckpoint saves the model state and metadata to a Checkpoint file.
+func saveCheckpoint(model *moe.IntentMoE, basePath string, epoch, batch, currentStep int, profile nn.TrainingProfile, tokens int64, duration time.Duration) error {
 	filename := fmt.Sprintf("%s.epoch%d.batch%d", basePath, epoch+1, batch)
 	log.Printf("Saving checkpoint to %s...", filename)
-	return moe.SaveIntentMoEModelToGOB(model, filename)
+	
+	ckpt := &moe.Checkpoint{
+		Model:           model,
+		StepCount:       currentStep,
+		LastProfile:     profile,
+		Commitment:      model.CalculateCommitment(),
+		TokensProcessed: tokens,
+		TotalDuration:   duration,
+		Version:         "gollemer-v1.2-simd",
+	}
+
+	return moe.SaveIntentMoECheckpoint(ckpt, filename)
 }
 
 // DetachModel removes the computation graph (gradients and creators) from the model parameters

@@ -156,7 +156,7 @@ func (s *ThawScheduler) GetFrozenExperts(epoch int) []int {
 	return current
 }
 
-func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool) {
+func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool, initialLR float64, weightDecay float64, autoHeal bool) {
 	fmt.Println("--- 🗣️  Training Chat Model ---")
 
 	// Pre-declare helper to find MoE layers
@@ -569,13 +569,10 @@ skipCSV:
 	const batchSize = 2 // Reduced from 4 to limit memory usage during backward pass
 	
 	// Optimizer initialization
-	const initialLR = 5e-6  // Increased from 5e-7
 	optimizer := neuralnn.NewOptimizer(intentModel.Parameters(), initialLR, 1.5) // 1.5 is the Gradient Clip Value
 
 	// Learning rate settings
-	var learningRate float64
-	peakLR := 0.00008    // Decreased by 10x as requested (was 0.0008)
-	const weightDecay = 0.0001
+	peakLR := initialLR
 	
 	// OneCycle Scheduler
 	scheduler := &OneCycle{
@@ -594,8 +591,28 @@ skipCSV:
 	lastEpochLoss := math.MaxFloat64
 	plateauCount := 0
 
-	// Reduce-on-Plateau LR scheduler: halves LR after 3 consecutive epochs
-	// without PPL improvement, preventing spikes when new experts activate.
+	// Set weight decay on the optimizer
+	if opt, ok := optimizer.(*neuralnn.Adam); ok {
+		opt.Lambda = weightDecay
+	}
+
+	trainer := &moe.Trainer{CollapseCount: 0}
+	startTime := time.Now()
+	var totalTokens int64
+	var totalDuration time.Duration
+	var learningRate float64
+	profile := neuralnn.GetProfile("standard") // Or create one from flags
+
+	// Cross-Entropy Weights setup
+	lossWeights := make([]float64, intentModel.SentenceVocab.Size())
+	for i := range lossWeights {
+		lossWeights[i] = 1.0
+	}
+	lossWeights[unkID] = 0.01
+	lossWeights[intentModel.SentenceVocab.PaddingTokenID] = 0.0
+	lossWeights[intentModel.SentenceVocab.EosID] = 0.1 // Discourage silence/premature EOS
+
+	// Reduce-on-Plateau LR scheduler
 	lrScheduler := &moe.LRScheduler{
 		CurrentLR:      peakLR,
 		DecayFactor:    0.5,
@@ -619,13 +636,11 @@ skipCSV:
 		if globalStep%100 != 0 { return }
 		fmt.Println("🔍 [Data Integrity Check]")
 		for i := 0; i < min(2, batch.Input.Shape[0]); i++ {
-			// Check first few tokens of the sequence
 			sumSq := 0.0
 			n := 1
 			if len(batch.Input.Shape) > 1 {
 				n = batch.Input.Shape[1]
 			}
-			
 			for d := 0; d < min(32, n); d++ {
 				idx := i*n + d
 				if idx < len(batch.Input.Data) {
@@ -634,26 +649,12 @@ skipCSV:
 				}
 			}
 			norm := math.Sqrt(sumSq)
-			if norm < 0.1 { // Token IDs shouldn't be zero unless it's a very strange vocab
+			if norm < 0.1 {
 				fmt.Printf("⚠️ Sequence %d: Potential SIGNAL LOSS (Token IDs near zero)\n", i)
 			}
 		}
 	}
 	// --------------------------------------
-
-	// Cross-Entropy Weights setup
-	lossWeights := make([]float64, intentModel.SentenceVocab.Size())
-	for i := range lossWeights {
-		lossWeights[i] = 1.0
-	}
-	lossWeights[unkID] = 0.01
-	lossWeights[intentModel.SentenceVocab.PaddingTokenID] = 0.0
-	lossWeights[intentModel.SentenceVocab.EosID] = 0.1 // Discourage silence/premature EOS
-
-	// Set weight decay on the optimizer
-	if opt, ok := optimizer.(*neuralnn.Adam); ok {
-		opt.WeightDecay = weightDecay
-	}
 
 	fmt.Printf("Training on %d pairs for %d epochs (patience=%d)...\n", len(chatPairs), epochs, patienceLimit)
 
@@ -1148,13 +1149,53 @@ skipCSV:
 		runtime.GC()
 		debug.FreeOSMemory()
 
+		// Update total duration
+		totalDuration = time.Since(startTime)
+
 		// Validation
 		valPPL := ValidateChat(intentModel, valPairs, nil)
 		log.Printf("📉 Validation Perplexity: %.2f", valPPL)
 
-		// Reduce-on-Plateau: update scheduler and adjust peakLR if PPL stagnates.
-		// This prevents the massive perplexity spikes caused by large gradient
-		// updates when newly awakened experts (e.g. E6, E7) are still unstable.
+		// --- [AutoHeal & Health Tracking] ---
+		// Find max dominance from the first encoder layer as a proxy for model health
+		maxUsage := 0.0
+		var l0Counts []int
+		if len(allLayers) > 0 {
+			l0 := allLayers[0]
+			usage := l0.AccumulatedUtilization
+			l0Counts = make([]int, len(usage))
+			copy(l0Counts, usage)
+			total := 0
+			maxC := 0
+			for _, c := range usage {
+				total += c
+				if c > maxC { maxC = c }
+			}
+			if total > 0 {
+				maxUsage = float64(maxC) / float64(total)
+			}
+		}
+
+		stats := moe.TrainingStats{
+			Epoch:          epoch,
+			CurrentLoss:    float32(avgLoss),
+			Perplexity:     valPPL,
+			BestPerplexity: bestPPL,
+			Layer0Counts:   l0Counts,
+			MaxDominance:   float32(maxUsage),
+			StepConfidence: 0.25, // Placeholder
+		}
+
+		if autoHeal {
+			trainer.AutoHeal(intentModel, optimizer.(*neuralnn.Adam), stats)
+		}
+		
+		// Log Metrics
+		moe.LogWeightStretch(intentModel)
+		moe.CheckSaturation(intentModel, epoch)
+		// --------------------------------------
+
+		// Reduce-on-Plateau: update scheduler and adjust peakLR
 		newLR := lrScheduler.Update(valPPL)
 		if newLR != peakLR {
 			peakLR = newLR
@@ -1170,13 +1211,6 @@ skipCSV:
 		scheduler.MaxLR = peakLR
 		scheduler.MinLR = peakLR * 0.01
 
-		// Curriculum Update
-		if float32(valPPL) < float32(curriculum.MinPPLThreshold) {
-			curriculum.MaxSequenceLen += curriculum.GrowthFactor
-			curriculum.MinPPLThreshold *= 0.8 // Tighten req for next jump
-			log.Printf("🚀 CURRICULUM LEVEL UP: Max Sequence Length is now %d", curriculum.MaxSequenceLen)
-		}
-
 		// Check for Plateau (using avgLoss as secondary signal)
 		if avgLoss >= lastEpochLoss*0.999 { // More sensitive plateau detection
 			plateauCount++
@@ -1191,60 +1225,44 @@ skipCSV:
 		}
 		lastEpochLoss = avgLoss
 
+		// Curriculum Update
+		if float32(valPPL) < float32(curriculum.MinPPLThreshold) {
+			curriculum.MaxSequenceLen += curriculum.GrowthFactor
+			curriculum.MinPPLThreshold *= 0.8 
+			log.Printf("🚀 CURRICULUM LEVEL UP: Max Sequence Length is now %d", curriculum.MaxSequenceLen)
+		}
+
 		// Log History
 		logEpochHistory(projectRoot, epoch+1, avgLoss, epochLBLoss/float64(batches), learningRate)
 		ExportUtilizationCSV(epoch+1, globalStep)
 
-		// Sanity checks: diverse test prompts to monitor generation quality
-		testPrompts := []struct{ label, prompt string }{
-			{"greeting", "how are you"},
-			{"weather", "is it raining today"},
-			{"weekend", "any plans for the weekend"},
-			{"feeling", "i feel tired today"},
-			{"hobby", "what do you like to do"},
-			{"identity", "what is your name"},
-			{"creator", "who created you"},
-			{"tech", "how does MoE work"},
-			{"system", "can you run on Linux"},
-			{"joke", "tell me a joke"},
-		}
-		for _, tp := range testPrompts {
-			tokens := cleanTokenize(tp.prompt)
-			if len(tokens) == 0 {
-				log.Printf("⚠️ Skip empty prompt: %s", tp.prompt)
-				continue
-			}
-			runTestSentence(tp.label, tp.prompt, intentModel, nil)
+		// periodic snapshots
+		ckpt := &moe.Checkpoint{
+			Model:           intentModel,
+			StepCount:       globalStep,
+			LastProfile:     profile,
+			Commitment:      intentModel.CalculateCommitment(),
+			TokensProcessed: totalTokens,
+			TotalDuration:   totalDuration,
+			Version:         "gollemer-chat-v1.2",
 		}
 
-		// Save model at the end of each epoch, overwriting the main file.
-		if err := moe.SaveIntentMoEModelToGOB(intentModel, moePath); err != nil {
-			log.Printf("⚠️  Failed to save MoE model for epoch %d: %v", epoch+1, err)
-		} else {
-			fmt.Printf("💾 Overwrote model checkpoint to %s after epoch %d\n", moePath, epoch+1)
-		}
+		// overwriting the main file for compatibility
+		moe.SaveIntentMoECheckpoint(ckpt, moePath)
+		
+		// numbered checkpoint
+		numberedPath := filepath.Join(checkpointDir, fmt.Sprintf("epoch_%03d.gob", epoch+1))
+		moe.SaveIntentMoECheckpoint(ckpt, numberedPath)
 
-		// Periodic checkpoint: save a numbered snapshot every 5 epochs
-		SavePeriodicCheckpoint(intentModel, checkpointDir, epoch+1, 5)
-
-		// CSV Logger: capture all metrics for this epoch
-		if trainingLogger != nil {
-			utils := CollectUtilisationFractions()
-			lbAvg := 0.0
-			if batches > 0 {
-				lbAvg = epochLBLoss / float64(batches)
-			}
-			trainingLogger.LogEpoch(epoch+1, avgLoss, lbAvg, valPPL, learningRate, utils, frozenExperts)
-		}
-
-		// Save Best Model if loss improved, otherwise track patience
+		// Save Best Model
 		if valPPL < bestPPL {
 			bestPPL = valPPL
 			patienceCounter = 0
-			if err := moe.SaveIntentMoEModelToGOB(intentModel, bestMoePath); err != nil {
+			if err := moe.SaveIntentMoECheckpoint(ckpt, bestMoePath); err != nil {
 				log.Printf("⚠️  Failed to save best MoE model: %v", err)
 			} else {
 				fmt.Printf("🏆 New Best Model! PPL: %.2f (Saved to %s)\n", bestPPL, bestMoePath)
+				trainer.SaveGoldenCheckpoint(intentModel, stats, globalStep, profile, totalTokens, totalDuration)
 			}
 		} else {
 			patienceCounter++
