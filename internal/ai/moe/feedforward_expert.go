@@ -201,3 +201,35 @@ func (e *FeedForwardExpert) ClipWeights(maxVal float64) {
 		}
 	}
 }
+
+// EvolutionaryReset performs a "Genetic Mutation" on the expert.
+func (e *FeedForwardExpert) EvolutionaryReset(winner Expert, jitterScale float64) {
+	wExpert, ok := winner.(*FeedForwardExpert)
+	if !ok {
+		return // Cannot mutate from different expert type
+	}
+
+	// 1. Copy weights from the winner
+	e.Layer1.Weights.CopyFrom(wExpert.Layer1.Weights)
+	e.Layer2.Weights.CopyFrom(wExpert.Layer2.Weights)
+
+	if e.Layer1.Biases != nil && wExpert.Layer1.Biases != nil {
+		e.Layer1.Biases.CopyFrom(wExpert.Layer1.Biases)
+	}
+	if e.Layer2.Biases != nil && wExpert.Layer2.Biases != nil {
+		e.Layer2.Biases.CopyFrom(wExpert.Layer2.Biases)
+	}
+
+	// 2. Apply Jitter to "mutate"
+	e.Layer1.Weights.ApplyJitter(jitterScale)
+	e.Layer2.Weights.ApplyJitter(jitterScale)
+
+	// 3. Normalized Re-Centering (Ensure non-zero signal)
+	if e.Layer1.Weights.L2Norm() < 1e-4 {
+		e.Layer1.Weights.Scale(1.2)
+	}
+
+	// 4. Reset optimizer-related data (handled by Trainer usually, but we clear Gradients here)
+	e.Layer1.Weights.ZeroGrad()
+	e.Layer2.Weights.ZeroGrad()
+}

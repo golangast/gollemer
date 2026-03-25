@@ -116,10 +116,36 @@ func (l *LinearExpert) ClearState() {
 }
 // ClipWeights implements the Expert interface.
 func (l *LinearExpert) ClipWeights(maxVal float64) {
-	if l.Linear != nil && l.Linear.Weights != nil {
+	if l.Linear == nil { return }
+	if l.Linear.Weights != nil {
 		tensor.ClipWeights(l.Linear.Weights.Data, maxVal)
 	}
-	if l.Linear != nil && l.Linear.Biases != nil {
+	if l.Linear.Biases != nil {
 		tensor.ClipWeights(l.Linear.Biases.Data, maxVal)
 	}
+}
+
+// EvolutionaryReset performs a "Genetic Mutation" on the LinearExpert.
+func (l *LinearExpert) EvolutionaryReset(winner Expert, jitterScale float64) {
+	wExpert, ok := winner.(*LinearExpert)
+	if !ok {
+		return // Cannot mutate from different expert type
+	}
+
+	// 1. Copy weights from the winner
+	l.Linear.Weights.CopyFrom(wExpert.Linear.Weights)
+	if l.Linear.Biases != nil && wExpert.Linear.Biases != nil {
+		l.Linear.Biases.CopyFrom(wExpert.Linear.Biases)
+	}
+
+	// 2. Apply Jitter to "mutate"
+	l.Linear.Weights.ApplyJitter(jitterScale)
+
+	// 3. Normalized Re-Centering (Ensure non-zero signal)
+	if l.Linear.Weights.L2Norm() < 1e-4 {
+		l.Linear.Weights.Scale(1.2)
+	}
+
+	// 4. Reset gradients
+	l.Linear.Weights.ZeroGrad()
 }

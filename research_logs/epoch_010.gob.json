@@ -1,0 +1,15 @@
+{
+  "StepCount": 10,
+  "Version": "gollemer-chat-v1.2",
+  "Commitment": 0.9361005440071405,
+  "TokensProcessed": 0,
+  "TotalDuration": "7m32.101720762s",
+  "LastProfile": {
+    "Name": "Standard",
+    "LR": 0.001,
+    "Lambda": 0.01,
+    "ClipThreshold": 1,
+    "HealThreshold": 0.85,
+    "WarmupSteps": 200
+  }
+}
