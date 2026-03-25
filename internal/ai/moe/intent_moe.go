@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"os"
 	"sort"
+	"time"
 
 	"github.com/golangast/gollemer/internal/ai/neural/nn"
 	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
@@ -848,6 +849,38 @@ func (m *IntentMoE) ClearState() {
 	}
 }
 
+// Checkpoint wraps the model and its training metadata for persistence.
+type Checkpoint struct {
+	Model           *IntentMoE
+	StepCount       int
+	LastProfile     nn.TrainingProfile
+	Commitment      float64
+	TokensProcessed int64
+	TotalDuration   time.Duration
+	Version         string
+}
+
+// CalculateCommitment calculates the "Intelligence" metric (% of weights > 0.40).
+func (m *IntentMoE) CalculateCommitment() float64 {
+	var highCount int
+	var totalWeight int
+	
+	params := m.Parameters()
+	for _, p := range params {
+		totalWeight += len(p.Data)
+		for _, w := range p.Data {
+			if math.Abs(w) > 0.40 {
+				highCount++
+			}
+		}
+	}
+	
+	if totalWeight == 0 {
+		return 0
+	}
+	return (float64(highCount) / float64(totalWeight)) * 100
+}
+
 // ResizeEmbeddings adjusts the embedding layer to match a new vocabulary size.
 func (m *IntentMoE) ResizeEmbeddings(newVocabSize int) {
 	if m.Embedding == nil {
@@ -868,7 +901,50 @@ func (m *IntentMoE) ResizeEmbeddings(newVocabSize int) {
 	m.Embedding = newEmb
 }
 
-// SaveIntentMoEModelToGOB saves the IntentMoE to a file in Gob format using buffered I/O.
+// SaveIntentMoECheckpoint saves the IntentMoE and its metadata to a file.
+func SaveIntentMoECheckpoint(ckpt *Checkpoint, path string) error {
+	file, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("failed to create checkpoint file: %w", err)
+	}
+	defer file.Close()
+
+	writer := bufio.NewWriter(file)
+	defer writer.Flush()
+
+	encoder := gob.NewEncoder(writer)
+	err = encoder.Encode(ckpt)
+	if err != nil {
+		return fmt.Errorf("failed to encode checkpoint to Gob: %w", err)
+	}
+
+	return nil
+}
+
+// LoadIntentMoECheckpoint loads a Checkpoint from a file.
+func LoadIntentMoECheckpoint(filePath string) (*Checkpoint, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("error opening checkpoint gob file: %w", err)
+	}
+	defer file.Close()
+
+	reader := bufio.NewReader(file)
+	decoder := gob.NewDecoder(reader)
+	var ckpt Checkpoint
+	err = decoder.Decode(&ckpt)
+	if err != nil {
+		return nil, fmt.Errorf("error decoding checkpoint from gob: %w", err)
+	}
+
+	if ckpt.Model == nil {
+		return nil, fmt.Errorf("loaded checkpoint has a nil Model")
+	}
+
+	return &ckpt, nil
+}
+
+// SaveIntentMoEModelToGOB saves the IntentMoE to a file (legacy format).
 func SaveIntentMoEModelToGOB(model *IntentMoE, path string) error {
 	file, err := os.Create(path)
 	if err != nil {
@@ -880,19 +956,14 @@ func SaveIntentMoEModelToGOB(model *IntentMoE, path string) error {
 	defer writer.Flush()
 
 	encoder := gob.NewEncoder(writer)
-	err = encoder.Encode(model)
-	if err != nil {
-		return fmt.Errorf("failed to encode IntentMoE model to Gob: %w", err)
-	}
-
-	return nil
+	return encoder.Encode(model)
 }
 
-// LoadIntentMoEModelFromGOB loads a IntentMoE from a file in Gob format.
+// LoadIntentMoEModelFromGOB loads a IntentMoE from a legacy GOB file.
 func LoadIntentMoEModelFromGOB(filePath string) (*IntentMoE, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("error opening IntentMoE model gob file: %w", err)
+		return nil, fmt.Errorf("error opening gob file: %w", err)
 	}
 	defer file.Close()
 
@@ -901,16 +972,7 @@ func LoadIntentMoEModelFromGOB(filePath string) (*IntentMoE, error) {
 	var loadedModel IntentMoE
 	err = decoder.Decode(&loadedModel)
 	if err != nil {
-		return nil, fmt.Errorf("error decoding IntentMoE model from gob: %w", err)
+		return nil, fmt.Errorf("error decoding model from gob: %w", err)
 	}
-
-	if loadedModel.Encoder == nil {
-		return nil, fmt.Errorf("loaded IntentMoE model has a nil Encoder after decoding")
-	}
-
-	if loadedModel.Decoder == nil {
-		return nil, fmt.Errorf("loaded IntentMoE model's Decoder has a nil Decoder after decoding")
-	}
-
 	return &loadedModel, nil
 }

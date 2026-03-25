@@ -1,49 +1,84 @@
 package main
 
 import (
+	"encoding/gob"
+	"encoding/json"
+	"flag"
 	"fmt"
-	"log"
-	"math"
-
+	"os"
 	"github.com/golangast/gollemer/internal/ai/moe"
-	"github.com/golangast/gollemer/internal/ai/neural/tensor"
+	"github.com/golangast/gollemer/internal/ai/neural/nn"
 )
 
+// Minimal version of Checkpoint for headers
+type CheckpointHeader struct {
+	StepCount       int
+	Version         string
+	Commitment      float64
+	TokensProcessed int64
+	TotalDuration   string
+	LastProfile     nn.TrainingProfile
+}
+
 func main() {
-	modelPath := "data/models/gob_models/moe_classification_model.gob"
-	model, err := moe.LoadIntentMoEModelFromGOB(modelPath)
+	exportFlag := flag.Bool("export", false, "Export metadata to JSON")
+	flag.Parse()
+
+	if flag.NArg() < 1 {
+		fmt.Println("Usage: go run inspect_model.go [--export] <path_to_gob>")
+		return
+	}
+
+	path := flag.Arg(0)
+	file, err := os.Open(path)
 	if err != nil {
-		log.Fatalf("Failed to load model: %v", err)
+		fmt.Printf("❌ Error opening file: %v\n", err)
+		return
+	}
+	defer file.Close()
+
+	var ckpt moe.Checkpoint
+	decoder := gob.NewDecoder(file)
+	err = decoder.Decode(&ckpt)
+	if err != nil {
+		fmt.Printf("❌ Error decoding checkpoint: %v\n", err)
+		return
 	}
 
-	fmt.Printf("🏗️ Inspecting Model Environment: %s\n", modelPath)
+	fmt.Println("------------------------------------------")
+	fmt.Printf("📂 Model Checkpoint: %s\n", path)
+	fmt.Printf("🆔 Version:         %s\n", ckpt.Version)
+	fmt.Printf("🔢 Total Steps:     %d\n", ckpt.StepCount)
+	fmt.Printf("🛠️  Last Profile:    %s\n", ckpt.LastProfile.Name)
+	fmt.Printf("📉 Learning Rate:   %.6f\n", ckpt.LastProfile.LR)
+	fmt.Printf("⚖️  Weight Decay:    %.6f (Lambda)\n", ckpt.LastProfile.Lambda)
+	fmt.Printf("🧠 Commitment:      %.2f%%\n", ckpt.Commitment)
+	fmt.Printf("⌛ Duration:        %v\n", ckpt.TotalDuration)
+	fmt.Printf("⚡ Throughput:      %.2f tokens/sec\n", float64(ckpt.TokensProcessed)/ckpt.TotalDuration.Seconds())
+	fmt.Println("------------------------------------------")
 
-	// Check Embedding Layer
-	emb := model.Embedding
-	if emb == nil {
-		fmt.Println("❌ Embedding Layer: Missing")
-	} else {
-		norm := math.Sqrt(tensor.DotProduct(emb.Weight.Data, emb.Weight.Data))
-		fmt.Printf("✅ Embedding Layer: VocabSize=%d, Dim=%d, Full L2 Norm=%.6f\n", emb.VocabSize, emb.DimModel, norm)
-		
-		// Check first few token embeddings
-		for i := 0; i < 5; i++ {
-			row := emb.Weight.Data[i*emb.DimModel : (i+1)*emb.DimModel]
-			rowNorm := math.Sqrt(tensor.DotProduct(row, row))
-			fmt.Printf("   Token %d Norm: %.6f\n", i, rowNorm)
+	if *exportFlag {
+		jsonPath := path + ".json"
+		report := CheckpointHeader{
+			StepCount:       ckpt.StepCount,
+			Version:         ckpt.Version,
+			Commitment:      ckpt.Commitment,
+			TokensProcessed: ckpt.TokensProcessed,
+			TotalDuration:   ckpt.TotalDuration.String(),
+			LastProfile:     ckpt.LastProfile,
 		}
-	}
 
-	// Check Encoder
-	fmt.Printf("✅ Encoder structure: %T\n", model.Encoder)
-	if moeEnc, ok := model.Encoder.(*moe.MoEEncoder); ok {
-		params := moeEnc.Layer.Parameters()
-		paramNorm := 0.0
-		for _, p := range params {
-			paramNorm += tensor.DotProduct(p.Data, p.Data)
+		jsonData, err := json.MarshalIndent(report, "", "  ")
+		if err != nil {
+			fmt.Printf("❌ Error marshaling JSON: %v\n", err)
+			return
 		}
-		fmt.Printf("✅ MoE Layer: NumExperts=%d, Parameter Norm=%.6f\n", len(moeEnc.Layer.Experts), math.Sqrt(paramNorm))
-	}
 
-	fmt.Println("\n🚀 Model Inspection Complete!")
+		err = os.WriteFile(jsonPath, jsonData, 0644)
+		if err != nil {
+			fmt.Printf("❌ Error saving JSON: %v\n", err)
+			return
+		}
+		fmt.Printf("📊 Report exported to: %s\n", jsonPath)
+	}
 }

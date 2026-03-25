@@ -12,43 +12,75 @@ type Optimizer interface {
 	ZeroGrad()
 	ClipGradients()
 	SetLearningRate(lr float64)
+	GetLearningRate() float64
+}
+
+// TrainingProfile represents a preset for training hyperparameters.
+type TrainingProfile struct {
+	Name           string
+	LR             float64
+	Lambda         float64 // Weight Decay
+	ClipThreshold  float64 // Gradient Clipping
+	HealThreshold  float64 // When to reset experts (e.g., 0.85)
+	WarmupSteps    int     // Steps before applying full LR
+}
+
+func GetProfile(name string) TrainingProfile {
+	switch name {
+	case "aggressive":
+		return TrainingProfile{
+			Name: "Aggressive", LR: 2e-3, Lambda: 0.005, 
+			ClipThreshold: 2.0, HealThreshold: 0.70, WarmupSteps: 100,
+		}
+	case "stable":
+		return TrainingProfile{
+			Name: "Stable", LR: 5e-4, Lambda: 0.01, 
+			ClipThreshold: 1.0, HealThreshold: 0.90, WarmupSteps: 500,
+		}
+	default:
+		// Default "Standard" profile
+		return TrainingProfile{
+			Name: "Standard", LR: 1e-3, Lambda: 0.01, 
+			ClipThreshold: 1.0, HealThreshold: 0.85, WarmupSteps: 200,
+		}
+	}
 }
 
 // Adam represents the Adam optimizer.
 type Adam struct {
-	parameters   []*Tensor
-	learningRate float64
-	beta1        float64
-	beta2        float64
-	epsilon      float64
-	t            int
-	m            map[*Tensor]*Tensor // 1st moment vector
-	v            map[*Tensor]*Tensor // 2nd moment vector
-	clipValue    float64
-	WeightDecay  float64
-	RouterLR     float64 // Different learning rate for router parameters
+	parameters    []*Tensor
+	learningRate  float64
+	beta1         float64
+	beta2         float64
+	epsilon       float64
+	t             int
+	m             map[*Tensor]*Tensor // 1st moment vector
+	v             map[*Tensor]*Tensor // 2nd moment vector
+	ClipThreshold float64
+	Lambda        float64 // Weight decay (Lambda)
+	RouterLR      float64 // Different learning rate for router parameters
 }
 
 // NewOptimizer creates a new Adam optimizer.
-func NewOptimizer(parameters []*Tensor, learningRate float64, clipValue float64) Optimizer {
+func NewOptimizer(parameters []*Tensor, learningRate float64, clipThreshold float64) Optimizer {
 	return &Adam{
-		parameters:   parameters,
-		learningRate: learningRate,
-		beta1:        0.9,
-		beta2:        0.999,
-		epsilon:      1e-8,
-		t:            0,
-		m:            make(map[*Tensor]*Tensor),
-		v:            make(map[*Tensor]*Tensor),
-		clipValue:    clipValue,
-		WeightDecay:  0.0001, // Default weight decay
-		RouterLR:     learningRate / 10.0, // Default to slower LR for routers
+		parameters:    parameters,
+		learningRate:  learningRate,
+		beta1:         0.9,
+		beta2:         0.999,
+		epsilon:       1e-8,
+		t:             0,
+		m:             make(map[*Tensor]*Tensor),
+		v:             make(map[*Tensor]*Tensor),
+		ClipThreshold: clipThreshold,
+		Lambda:        0.01, // Default weight decay
+		RouterLR:      learningRate / 10.0, // Default to slower LR for routers
 	}
 }
 
-// ClipGradients scales the gradients of all parameters if their total L2 norm exceeds clipValue.
+// ClipGradients scales the gradients of all parameters if their total L2 norm exceeds ClipThreshold.
 func (o *Adam) ClipGradients() {
-	if o.clipValue <= 0 {
+	if o.ClipThreshold <= 0 {
 		return
 	}
 	totalNorm := 0.0
@@ -60,13 +92,12 @@ func (o *Adam) ClipGradients() {
 		}
 	}
 	totalNorm = math.Sqrt(totalNorm)
-	if totalNorm > o.clipValue {
-		scale := o.clipValue / totalNorm
+	if totalNorm > o.ClipThreshold {
+		scale := o.ClipThreshold / totalNorm
 		for _, p := range o.parameters {
 			if p.Grad != nil {
-				for i := range p.Grad.Data {
-					p.Grad.Data[i] *= scale
-				}
+				// Use SIMD-accelerated scalar multiplication for consistent global scaling
+				MulScalar(p.Grad.Data, scale, p.Grad.Data)
 			}
 		}
 	}
@@ -96,7 +127,7 @@ func (o *Adam) Step() {
 			lr = o.RouterLR
 		}
 
-		AdamWUpdate(param, grad, m, v, lr, o.beta1, o.beta2, o.epsilon, o.WeightDecay, o.t)
+		AdamWUpdate(param, grad, m, v, lr, o.beta1, o.beta2, o.epsilon, o.Lambda, o.t)
 	}
 }
 
@@ -110,4 +141,19 @@ func (o *Adam) ZeroGrad() {
 // SetLearningRate updates the learning rate of the optimizer
 func (o *Adam) SetLearningRate(lr float64) {
 	o.learningRate = lr
+}
+
+// GetLearningRate returns the current learning rate
+func (o *Adam) GetLearningRate() float64 {
+	return o.learningRate
+}
+
+// SetRouterLR updates the router-specific learning rate
+func (o *Adam) SetRouterLR(lr float64) {
+	o.RouterLR = lr
+}
+
+// GetRouterLR returns the current router learning rate
+func (o *Adam) GetRouterLR() float64 {
+	return o.RouterLR
 }

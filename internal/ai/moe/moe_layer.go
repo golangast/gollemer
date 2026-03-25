@@ -132,6 +132,32 @@ func NewMoELayer(inputDim, outputDim, numExperts, k int, expertBuilder func(int)
 	ActiveLayers = append(ActiveLayers, layer)
 	return layer, nil
 }
+
+// ResetRouterWeights targets the gating mechanism to break "Expert Dominance."
+func (moe *MoELayer) ResetRouterWeights() {
+	if moe.GatingNetwork == nil {
+		return
+	}
+	
+	weights := moe.GatingNetwork.Linear.Weights
+	inputDim := weights.Shape[0]
+	numExperts := weights.Shape[1]
+
+	// Use a very small Xavier initialization to start with high uncertainty (Max Entropy)
+	stdDev := math.Sqrt(2.0 / float64(inputDim + numExperts)) * 0.1 
+
+	for i := range weights.Data {
+		weights.Data[i] = rand.NormFloat64() * stdDev
+	}
+	
+	if moe.GatingNetwork.Linear.Biases != nil {
+		for i := range moe.GatingNetwork.Linear.Biases.Data {
+			moe.GatingNetwork.Linear.Biases.Data[i] = 0
+		}
+	}
+
+	fmt.Printf("🚀 Router Gating Weights Reset for %T: Forcing Exploration.\n", moe)
+}
  
 // ValidateHealth triggers a health check based on accumulated utilization.
 func (moe *MoELayer) ValidateHealth(label string) {

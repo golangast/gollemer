@@ -4,8 +4,139 @@ import (
 	"fmt"
 	"math"
 	"strings" // Added for strings.Repeat
+	"encoding/csv"
+	"os"
+	"strconv"
+	"time"
 	"github.com/golangast/gollemer/internal/ai/neural/tensor"
 )
+
+// GetMaxUtilization calculates the dominance of the most used expert.
+func GetMaxUtilization(counts []int) float32 {
+	if len(counts) == 0 {
+		return 0
+	}
+
+	total := 0
+	max := 0
+	for _, c := range counts {
+		total += c
+		if c > max {
+			max = c
+		}
+	}
+
+	if total == 0 {
+		return 0
+	}
+
+	// Return the percentage of the most dominant expert
+	return float32(max) / float32(total)
+}
+
+// LogExpertHealth saves the current utilization state to a CSV file.
+func LogExpertHealth(filename string, epoch int, layerID int, counts []int) {
+	file, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		fmt.Println("Error opening log file:", err)
+		return
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	// Calculate percentages
+	total := 0
+	for _, c := range counts {
+		total += c
+	}
+
+	// Prepare row: Timestamp, Epoch, Layer, E0%, E1%, ..., EN%, MaxDominance
+	row := []string{
+		time.Now().Format("2006-01-02 15:04:05"),
+		strconv.Itoa(epoch),
+		strconv.Itoa(layerID),
+	}
+
+	maxDom := 0.0
+	for _, c := range counts {
+		perc := 0.0
+		if total > 0 {
+			perc = float64(c) / float64(total)
+		}
+		row = append(row, fmt.Sprintf("%.4f", perc))
+		if perc > maxDom {
+			maxDom = perc
+		}
+	}
+	row = append(row, fmt.Sprintf("%.4f", maxDom))
+
+	writer.Write(row)
+}
+
+// LogWeightStretch visualizes the "Commitment Level" of the model weights.
+func LogWeightStretch(m *IntentMoE) {
+	var highCommit, active, timid int
+	params := m.Parameters()
+	total := 0
+	for _, p := range params {
+		total += len(p.Data)
+		for _, w := range p.Data {
+			absW := math.Abs(w)
+			if absW > 0.50 {
+				highCommit++ // The "Confidence" Zone
+			} else if absW > 0.20 {
+				active++     // The "Learning" Zone
+			} else {
+				timid++      // The "Noise" Zone
+			}
+		}
+	}
+
+	percentHigh := (float32(highCommit) / float32(total)) * 100
+	percentActive := (float32(active) / float32(total)) * 100
+
+	fmt.Printf("⚖️  Weight Stretch: [High: %.2f%%] [Active: %.2f%%] [Timid: %d units]\n", 
+		percentHigh, percentActive, timid)
+	
+	// Auto-Heal Trigger suggestion logic
+	if percentHigh < 0.1 {
+		fmt.Println("📢 Suggestion: Increase Weight Decay. Weights are too clustered near zero.")
+	}
+}
+
+// CheckSaturation calculates Max weight and L2 norm to detect training divergence.
+func CheckSaturation(m *IntentMoE, epoch int) {
+	var maxWeight float64
+	var sumSq float64
+	params := m.Parameters()
+	total := 0
+	for _, p := range params {
+		total += len(p.Data)
+		for _, w := range p.Data {
+			absW := math.Abs(w)
+			if absW > maxWeight {
+				maxWeight = absW
+			}
+			sumSq += w * w
+		}
+	}
+	
+	l2Norm := math.Sqrt(sumSq) / float64(total)
+
+	// 🚩 ALERT: Weight Saturation detected
+	if maxWeight > 2.0 {
+		fmt.Printf("⚠️  SATURATION WARNING: Max Weight reached %.2f!\n", maxWeight)
+		fmt.Println("👉 Recommendation: Lower LR or increase Weight Decay immediately to prevent divergence.")
+	}
+
+	// ❄️ ALERT: Vanishing Gradient detected
+	if l2Norm < 1e-5 && epoch > 2 {
+		fmt.Printf("❄️  FREEZE WARNING: L2 Norm is critically low (%.2e).\n", l2Norm)
+		fmt.Println("👉 Recommendation: Model is 'stuck'. Increase LR or check activation functions.")
+	}
+}
 
 // MoEStats holds utilization statistics for a batch to calculate auxiliary loss.
 type MoEStats struct {
