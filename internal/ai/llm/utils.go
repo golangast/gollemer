@@ -181,11 +181,21 @@ func findName(taggedData tag.Tag, kb *KnowledgeBase) string {
 		}
 	}
 
-	// Final heuristic fallback: first non-keyword after a known Object Type token
 	objectTypeKeywords := map[string]bool{
 		"handler": true, "webserver": true, "page": true, "file": true,
-		"folder": true, "database": true, "structure": true, "component": true,
+		"folder": true, "directory": true, "database": true, "structure": true, "component": true,
 	}
+
+	// Context-aware fallback: If there is exactly one word and it's not a known command/object/stopword, 
+	// it's almost certainly the 'name' or target we were asking for.
+	if len(taggedData.Tokens) == 1 {
+		t := strings.ToLower(taggedData.Tokens[0])
+		if !objectTypeKeywords[t] && (kb == nil || (!kb.KnownObjects[t] && !kb.KnownCommands[t] && !kb.StopWords[t])) {
+			return taggedData.Tokens[0]
+		}
+	}
+
+	// Final heuristic fallback: first non-keyword after a known Object Type token
 	for i, token := range taggedData.Tokens {
 		lower := strings.ToLower(token)
 		if (objectTypeKeywords[lower] || (kb != nil && kb.KnownObjects[lower])) && i+1 < len(taggedData.Tokens) {
@@ -283,10 +293,15 @@ func cleanTokenize(text string) []string {
 					tokens = append(tokens, strings.ToLower(currentToken.String()))
 					currentToken.Reset()
 				}
-				tokens = append(tokens, string(r))
+				// Skip non-ASCII symbols to keep the model context clean
+				if r < 128 {
+					tokens = append(tokens, string(r))
+				}
 			}
 		} else {
-			currentToken.WriteRune(r)
+			if r < 128 || unicode.IsLetter(r) { // Allow UTF-8 letters but keep symbols clean
+				currentToken.WriteRune(r)
+			}
 		}
 	}
 	if currentToken.Len() > 0 {

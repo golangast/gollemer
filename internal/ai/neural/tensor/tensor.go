@@ -109,6 +109,7 @@ type Tensor struct {
 	Creator      Operation `gob:"-"` // Exclude Creator from gob serialization
 	RequiresGrad bool
 	Operation    Operation `gob:"-"` // Exclude Operation from gob serialization
+	IsRouter     bool      // Flag for differential learning rates
 }
 
 // GobEncode implements the gob.GobEncoder interface.

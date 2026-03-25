@@ -13,6 +13,7 @@ type ConversationState struct {
 	Parameters        map[string]string
 	Missing           []string
 	IsActive          bool
+	CurrentIntent     *IntentDataLayer
 	SuggestedObject   string
 	WaitingForConfirm bool
 	PendingAction     string

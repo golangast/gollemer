@@ -213,6 +213,14 @@ func (r *Runner) Run() {
 		query, _ := r.Reader.ReadString('\n')
 		query = strings.TrimSpace(query)
 
+		// --- Strip Mascot Prefix if present (e.g., copied from logs or mimicry) ---
+		if strings.HasPrefix(query, "/") && strings.Contains(query, "/ >") {
+			parts := strings.SplitN(query, "/ >", 2)
+			if len(parts) == 2 {
+				query = strings.TrimSpace(parts[1])
+			}
+		}
+
 		if query == "" {
 			continue
 		}
@@ -262,6 +270,28 @@ func (r *Runner) handleInput(query string) {
 	if query == "watch" || query == "monitor" || query == "guard" {
 		r.Client.StartBackgroundWatcher(r.Mascot, r.ProjectRoot)
 		r.Mascot.Speak(ui.MoodHappy, "I'm on guard duty! I'll watch the workspace for changes.")
+		return
+	}
+	if query == "tutorial" || query == "start tutorial" {
+		if r.TutorialState.Active {
+			r.Mascot.Speak(ui.MoodHappy, fmt.Sprintf("Resuming tutorial from Step %d. "+tutorialStepHint(r.TutorialState.Step), r.TutorialState.Step))
+			return
+		}
+		r.TutorialState.Step = 1
+		r.TutorialState.Active = true
+		sqlite_db.SyncStep(r.DB, 1, true)
+		loc, _ := r.Mascot.CalculateProjectSize(r.ProjectRoot)
+		r.Mascot.DrawHUD(1, 4, loc)
+		r.Mascot.Speak(ui.Happy, "Tutorial started! Let's kick things off.\n\nStep 1: Create a folder. Try: 'create folder mynews'")
+		return
+	}
+	if query == "restart tutorial" {
+		r.TutorialState.Step = 1
+		r.TutorialState.Active = true
+		sqlite_db.SyncStep(r.DB, 1, true)
+		loc, _ := r.Mascot.CalculateProjectSize(r.ProjectRoot)
+		r.Mascot.DrawHUD(1, 4, loc)
+		r.Mascot.Speak(ui.Happy, "Tutorial restarted from Step 1!\n\nStep 1: Create a folder. Try: 'create folder mynews'")
 		return
 	}
 	r.handleInteractiveQuery(query)

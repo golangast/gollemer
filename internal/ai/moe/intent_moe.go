@@ -50,6 +50,7 @@ func init() {
 }
 
 // SampleFromLogits samples a token ID from logits using temperature, top-k, and top-p sampling.
+// Updated to use the user's suggested top-K-only normalization for more stable inference.
 func SampleFromLogits(logits *tensor.Tensor, temperature float64, topK int, topP float64) (int, error) {
 	// logits shape: [batchSize, vocabSize]
 	// We assume batchSize = 1 for inference
@@ -65,108 +66,50 @@ func SampleFromLogits(logits *tensor.Tensor, temperature float64, topK int, topP
 		temperature = 1.0 // Default to 1.0 if invalid
 	}
 
-	scaledLogits := make([]float64, vocabSize)
+	type tokenLogit struct {
+		index int
+		value float64
+	}
+
+	candidates := make([]tokenLogit, vocabSize)
 	for i := range vocabSize {
-		scaledLogits[i] = logitsData[i] / temperature
+		candidates[i] = tokenLogit{i, logitsData[i] / temperature}
 	}
 
-	// Convert to probabilities using softmax
-	maxLogit := scaledLogits[0]
-	for i := 1; i < vocabSize; i++ {
-		if scaledLogits[i] > maxLogit {
-			maxLogit = scaledLogits[i]
-		}
+	// Sort descending
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].value > candidates[j].value
+	})
+
+	// Handle top-K truncation
+	k := topK
+	if k <= 0 || k > vocabSize {
+		k = vocabSize
 	}
 
-	expSum := 0.0
-	probs := make([]float64, vocabSize)
-	for i := range vocabSize {
-		probs[i] = math.Exp(scaledLogits[i] - maxLogit)
-		expSum += probs[i]
-	}
-	for i := range vocabSize {
-		probs[i] /= expSum
-	}
+	topKCandidates := candidates[:k]
 
-	// Apply top-k filtering if specified
-	if topK > 0 && topK < vocabSize {
-		tensor.TopKZero(probs, topK)
-		
-		// Renormalize
-		probSum := 0.0
-		for i := range vocabSize {
-			probSum += probs[i]
-		}
-		if probSum > 0 {
-			for i := range vocabSize {
-				probs[i] /= probSum
-			}
-		}
+	// Find max logit for numerical stability
+	maxLogit := topKCandidates[0].value
+	
+	// Compute sum of exponents for top-K only
+	var sumExp float64
+	for _, c := range topKCandidates {
+		sumExp += math.Exp(c.value - maxLogit)
 	}
 
-	// Apply top-p (nucleus) filtering if specified
-	if topP > 0.0 && topP < 1.0 {
-		// Create index-probability pairs
-		type indexProb struct {
-			index int
-			prob  float64
-		}
-		pairs := make([]indexProb, vocabSize)
-		for i := range vocabSize {
-			pairs[i] = indexProb{index: i, prob: probs[i]}
-		}
-
-		// Sort by probability descending
-		sort.Slice(pairs, func(i, j int) bool {
-			return pairs[i].prob > pairs[j].prob
-		})
-
-		// Find cumulative probability cutoff
-		cumProb := 0.0
-		cutoffIdx := vocabSize
-		for i := range vocabSize {
-			cumProb += pairs[i].prob
-			if cumProb >= topP {
-				cutoffIdx = i + 1
-				break
-			}
-		}
-
-		// Zero out probabilities outside nucleus
-		nucleusIndices := make(map[int]bool)
-		for i := 0; i < cutoffIdx; i++ {
-			nucleusIndices[pairs[i].index] = true
-		}
-		for i := range vocabSize {
-			if !nucleusIndices[i] {
-				probs[i] = 0.0
-			}
-		}
-
-		// Renormalize
-		probSum := 0.0
-		for i := range vocabSize {
-			probSum += probs[i]
-		}
-		if probSum > 0 {
-			for i := range vocabSize {
-				probs[i] /= probSum
-			}
-		}
-	}
-
-	// Sample from the probability distribution
+	// Sample from the truncated distribution
 	r := rand.Float64()
-	cumProb := 0.0
-	for i := range vocabSize {
-		cumProb += probs[i]
-		if r <= cumProb {
-			return i, nil
+	var cumulative float64
+	for _, c := range topKCandidates {
+		prob := math.Exp(c.value-maxLogit) / sumExp
+		cumulative += prob
+		if r < cumulative {
+			return c.index, nil
 		}
 	}
 
-	// Fallback: return the last token (should rarely happen)
-	return vocabSize - 1, nil
+	return topKCandidates[0].index, nil
 }
 
 // ApplyRepetitionPenalty penalizes tokens that have already been generated.

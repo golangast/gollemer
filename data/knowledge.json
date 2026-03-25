@@ -76,7 +76,7 @@
     "word2vec_path": "data/models/gob_models/word2vec_model.gob",
     "moe_path": "data/models/gob_models/moe_classification_model_best.gob",
     "query_vocab_path": "data/models/gob_models/query_vocabulary.gob",
-    "semantic_vocab_path": "data/models/gob_models/seq2seq_output_vocab.gob",
+    "semantic_vocab_path": "data/models/gob_models/semantic_output_vocabulary.gob",
     "ner_path": "data/models/gob_models/ner_model.gob"
   }
 }

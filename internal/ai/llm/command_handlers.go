@@ -202,3 +202,19 @@ func (r *Runner) handleTutorialLogic(command, objectType, predictedSentence stri
 	}
 	return predictedSentence
 }
+
+// tutorialStepHint returns a reminder string for the current tutorial step.
+func tutorialStepHint(step int) string {
+	switch step {
+	case 1:
+		return "Step 1: Create a folder. Try: 'create folder mynews'"
+	case 2:
+		return "Step 2: Create a file inside it. Try: 'create file mynews/hello.go'"
+	case 3:
+		return "Step 3: Create a webserver. Try: 'create webserver myserver'"
+	case 4:
+		return "Step 4: Run the webserver. Try: 'run webserver myserver'"
+	default:
+		return "Keep going! Type 'help' to see available commands."
+	}
+}

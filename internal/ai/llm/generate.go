@@ -291,9 +291,24 @@ func handleGenericCreate(objectType, fileName, targetDirectory, handlerURL strin
 		return fmt.Sprintf("I created '%sHandler' and registered it at '%s'. %s", cleanName, handlerURL, regMsg), true
 	}
 
-	// 2. If a name is provided, create a Go skeleton
+	// 2. If a name is provided, create a folder (for folder/directory) or a Go skeleton
 	if fileName != "" {
-		content := fmt.Sprintf("// %%s implementation for the %%s object\npackage main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"Executing %%s (%%s logic)\")\n}\n", strings.Title(fileName), objectType, fileName, objectType)
+		if strings.Contains(objectType, "folder") || strings.Contains(objectType, "directory") {
+			// It's a folder creation: just mkdir
+			folderPath := fileName
+			if targetDirectory != "" {
+				folderPath = filepath.Join(targetDirectory, fileName)
+			}
+			if err := os.MkdirAll(folderPath, 0755); err != nil {
+				return fmt.Sprintf("I couldn't create the folder '%s': %v", folderPath, err), false
+			}
+			return fmt.Sprintf("I created the folder '%s' for you.", folderPath), true
+		}
+
+		// Otherwise create a Go skeleton file
+		content := "// " + strings.Title(fileName) + " implementation for the " + objectType + " object\n" +
+			"package main\n\nimport \"fmt\"\n\nfunc main() {\n" +
+			"\tfmt.Println(\"Executing " + fileName + " (" + objectType + " logic)\")\n}\n"
 		filePath := fileName + ".go"
 		if targetDirectory != "" {
 			filePath = filepath.Join(targetDirectory, filePath)
@@ -301,16 +316,16 @@ func handleGenericCreate(objectType, fileName, targetDirectory, handlerURL strin
 		}
 		os.WriteFile(filePath, []byte(content), 0644)
 		goImports(filePath)
-		return fmt.Sprintf("I identified '%%s' as a new object type. I've created a basic Go skeleton '%%s.go' for you.", objectType, fileName), true
+		return fmt.Sprintf("I created the Go file '%s.go' for you.", fileName), true
 	}
 
-	// 3. Just a folder
+	// 3. Just a type name with no explicit file/folder name — create a work directory
 	folderPath := objectType
 	if targetDirectory != "" {
 		folderPath = filepath.Join(targetDirectory, folderPath)
 	}
 	os.MkdirAll(folderPath, 0755)
-	return fmt.Sprintf("I don't know how to implement '%%s' yet, so I've created a work directory for it in /%%s.", objectType, folderPath), true
+	return fmt.Sprintf("I created a work directory '%s' for you.", folderPath), true
 }
 
 func goImports(path string) {

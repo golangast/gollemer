@@ -190,3 +190,40 @@ func PrintExpertHeatmap(label string, expert Expert, threshold float64) {
         fmt.Println(rowStr)
     }
 }
+// ValidateExpertHealth checks if the Router is distributing tokens across all experts.
+// 'counts' is the slice of how many tokens each expert received in the last epoch.
+func ValidateExpertHealth(layerName string, counts []int) {
+	totalTokens := 0
+	for _, c := range counts {
+		totalTokens += c
+	}
+
+	if totalTokens == 0 {
+		fmt.Printf("--- Health Check: %s [No Data] ---\n", layerName)
+		return
+	}
+
+	fmt.Printf("--- Health Check: %s ---\n", layerName)
+	
+	var entropy float64
+	numExperts := len(counts)
+
+	for i, c := range counts {
+		utilization := float64(c) / float64(totalTokens)
+		fmt.Printf("   Expert %d: [%.2f%% utilization]\n", i, utilization*100)
+		
+		if utilization > 0 {
+			entropy -= utilization * math.Log2(utilization)
+		}
+	}
+
+	// Max possible entropy is log2(numExperts)
+	maxEntropy := math.Log2(float64(numExperts))
+	healthScore := (entropy / (maxEntropy + 1e-10)) * 100
+
+	fmt.Printf("Overall Layer Health Score: %.2f%%\n", healthScore)
+	if healthScore < 50.0 {
+		fmt.Println("⚠️ WARNING: Expert Collapse detected. Increase Auxiliary Loss weight.")
+	}
+	fmt.Println("-------------------------------")
+}

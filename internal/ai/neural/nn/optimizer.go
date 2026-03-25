@@ -26,6 +26,7 @@ type Adam struct {
 	v            map[*Tensor]*Tensor // 2nd moment vector
 	clipValue    float64
 	WeightDecay  float64
+	RouterLR     float64 // Different learning rate for router parameters
 }
 
 // NewOptimizer creates a new Adam optimizer.
@@ -41,6 +42,7 @@ func NewOptimizer(parameters []*Tensor, learningRate float64, clipValue float64)
 		v:            make(map[*Tensor]*Tensor),
 		clipValue:    clipValue,
 		WeightDecay:  0.0001, // Default weight decay
+		RouterLR:     learningRate / 10.0, // Default to slower LR for routers
 	}
 }
 
@@ -89,7 +91,12 @@ func (o *Adam) Step() {
 		grad := p.Grad.Data
 		param := p.Data
 		
-		AdamWUpdate(param, grad, m, v, o.learningRate, o.beta1, o.beta2, o.epsilon, o.WeightDecay, o.t)
+		lr := o.learningRate
+		if p.IsRouter {
+			lr = o.RouterLR
+		}
+
+		AdamWUpdate(param, grad, m, v, lr, o.beta1, o.beta2, o.epsilon, o.WeightDecay, o.t)
 	}
 }
 
