@@ -33,6 +33,17 @@ func NewGatingNetwork(inputDim, numExperts int) (*GatingNetwork, error) {
 		return nil, fmt.Errorf("failed to create noise linear layer: %w", err)
 	}
 	ln := nn.NewLayerNorm(numExperts)
+	
+	// Set IsRouter flag for differential learning rates
+	linear.Weights.IsRouter = true
+	if linear.Biases != nil {
+		linear.Biases.IsRouter = true
+	}
+	noiseLinear.Weights.IsRouter = true
+	if noiseLinear.Biases != nil {
+		noiseLinear.Biases.IsRouter = true
+	}
+	
 	return &GatingNetwork{Linear: linear, NoiseLinear: noiseLinear, LayerNorm: ln}, nil
 }
 

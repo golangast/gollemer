@@ -301,7 +301,8 @@ func TrainIntentMoEModel(model *moe.IntentMoE, data []TokenizedTrainingExample, 
 				log.Printf("Batch %d/%d (%.1f%%): Loss=%.2f, GradNorm=%.4f, LR=%.6f, Time=%v", numBatches, totalBatches, percent, loss, gradNorm, currentLR, time.Since(batchStartTime))
 
 				for i, layer := range moe.ActiveLayers {
-					fmt.Printf("Layer %d ", i)
+					label := fmt.Sprintf("MoE Layer %d (Batch %d)", i, numBatches)
+					layer.ValidateHealth(label)
 					layer.VisualizeUtilization()
 				}
 				// runtime.GC() // Removed explicit GC for performance

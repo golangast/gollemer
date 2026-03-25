@@ -174,6 +174,7 @@ func (r *HybridIntentResolver) resolveRecursive(input string, layer *IntentDataL
 	}
 
 	// 3. Validate against Schema to determine what is missing
+	layer.IsComplete = true // Default to complete if no schema exists or no missing fields
 	if schema, ok := r.Schemas[layer.Intent]; ok {
 		layer.Missing = []string{}
 		allRequiredPresent := true

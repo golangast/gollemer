@@ -132,6 +132,14 @@ func NewMoELayer(inputDim, outputDim, numExperts, k int, expertBuilder func(int)
 	ActiveLayers = append(ActiveLayers, layer)
 	return layer, nil
 }
+ 
+// ValidateHealth triggers a health check based on accumulated utilization.
+func (moe *MoELayer) ValidateHealth(label string) {
+	if moe.AccumulatedUtilization == nil {
+		return
+	}
+	ValidateExpertHealth(label, moe.AccumulatedUtilization)
+}
 
 // Parameters returns all learnable parameters of the MoELayer.
 func (moe *MoELayer) Parameters() []*Tensor {
@@ -299,9 +307,7 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 	moe.ExpertProbSums = make([]float64, numExperts)
 	if numTokens > 0 {
 		for i := 0; i < numTokens; i++ {
-			for j := 0; j < numExperts; j++ {
-				moe.ExpertProbSums[j] += gateOutputs.Data[i*numExperts+j]
-			}
+			AddAccumulate(moe.ExpertProbSums, gateOutputs.Data[i*numExperts:(i+1)*numExperts])
 		}
 	}
 

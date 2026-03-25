@@ -231,6 +231,12 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 		return "greeting_query", 0.99
 	}
 
+	// --- 0.2. Common Coding Queries ---
+	if strings.Contains(lowerInput, "better at go") || strings.Contains(lowerInput, "learn go") || strings.Contains(lowerInput, "go tutorial") {
+		c.lastMoEPrediction = "The best way to get better at Go is to build projects! Start with a simple webserver or try the 'tutorial' command here."
+		return "gollemer_logic", 0.99
+	}
+
 	if lowerInput == "help" || strings.HasPrefix(lowerInput, "help ") || lowerInput == "help me" {
 		return "help_command", 0.99
 	}

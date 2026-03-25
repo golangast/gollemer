@@ -81,7 +81,7 @@ func NewKnowledgeBase() *KnowledgeBase {
 			Word2VecPath:      "data/models/gob_models/word2vec_model.gob",
 			MoEPath:           "data/models/gob_models/moe_classification_model_best.gob",
 			QueryVocabPath:    "data/models/gob_models/query_vocabulary.gob",
-			SemanticVocabPath: "data/models/gob_models/seq2seq_output_vocab.gob",
+			SemanticVocabPath: "data/models/gob_models/semantic_output_vocabulary.gob",
 			NERPath:           "data/models/gob_models/ner_model.gob",
 		},
 	}
@@ -245,6 +245,13 @@ func parse(input string, kb *KnowledgeBase) Intent {
 			intent.ObjectType = lower
 			intent.ObjectTypeParts = append(intent.ObjectTypeParts, lower)
 			continue
+		}
+
+		// Capture the first unrecognised, non-stopword token as the "name" param
+		// (e.g. "create folder news" -> name="news").
+		if intent.Params["name"] == "" && intent.ObjectType != "" &&
+			!kb.StopWords[lower] && !kb.KnownCommands[lower] && !kb.KnownObjects[lower] {
+			intent.Params["name"] = word
 		}
 	}
 	return intent
