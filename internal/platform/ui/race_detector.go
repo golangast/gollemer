@@ -34,7 +34,7 @@ func (m *Mascot) SimulateRaceConditions(root string) {
 						if id, ok := bn.(*ast.Ident); ok {
 							if id.Obj != nil && id.Obj.Kind == ast.Var {
 								// In a real implementation, we would check if it's protected by a mutex
-								m.Say(Alert, fmt.Sprintf("Goroutine captures variable '%s'. Adding a sync.RWMutex here will prevent 100% of potential data corruption!", id.Name))
+								m.Say(Alert, fmt.Sprintf("Goroutine captures variable '%s'. Adding a sync.RWMutex here will prevent 100%% of potential data corruption!", id.Name))
 							}
 						}
 						return true

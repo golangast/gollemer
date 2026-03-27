@@ -3,6 +3,9 @@ package moe
 import (
 	"fmt"
 
+	"math/rand"
+	"time"
+
 	"github.com/golangast/gollemer/internal/ai/neural/nn"
 	"github.com/golangast/gollemer/internal/ai/neural/tensor"
 )
@@ -26,7 +29,11 @@ func NewMoEEncoder(inputSize, hiddenSize, numLayers, numExperts int) (*MoEEncode
 		if err != nil {
 			return nil, err
 		}
-		return &LinearExpert{Linear: lin}, nil
+		return &LinearExpert{
+			Linear:        lin,
+			ActivationEMA: 0.125,
+			Decay:         0.99,
+		}, nil
 	}
 
 	// Create MoELayer with Top-K=2 (standard for MoE)
@@ -86,6 +93,8 @@ func (m *MoEEncoder) GetMoELayers() []*MoELayer {
 // LinearExpert wraps nn.Linear to satisfy the Expert interface.
 type LinearExpert struct {
 	*nn.Linear
+	ActivationEMA float64
+	Decay         float64
 }
 
 // SetMode implements the Expert interface.
@@ -148,4 +157,35 @@ func (l *LinearExpert) EvolutionaryReset(winner Expert, jitterScale float64) {
 
 	// 4. Reset gradients
 	l.Linear.Weights.ZeroGrad()
+}
+
+// Shake performs an in-place noise injection to all weights of the expert.
+func (l *LinearExpert) Shake(intensity float64) {
+	if l.Linear == nil || l.Linear.Weights == nil {
+		return
+	}
+	// Use a local seed to avoid global mutex contention in rand
+	src := rand.NewSource(time.Now().UnixNano())
+	r := rand.New(src)
+
+	weights := l.Linear.Weights.Data
+	for i := range weights {
+		noise := (r.Float64() - 0.5) * intensity
+		weights[i] += noise
+	}
+}
+
+// IsStagnant returns true if the expert's relevance is below a minimal threshold.
+func (l *LinearExpert) IsStagnant() bool {
+	return l.ActivationEMA < 0.01
+}
+
+// UpdateHealth updates the ActivationEMA based on usage.
+func (l *LinearExpert) UpdateHealth(wasUsed bool) {
+	var current float64 = 0.0
+	if wasUsed {
+		current = 1.0
+	}
+	// EMA = (Current * (1 - Decay)) + (Previous * Decay)
+	l.ActivationEMA = (current * (1.0 - l.Decay)) + (l.ActivationEMA * l.Decay)
 }

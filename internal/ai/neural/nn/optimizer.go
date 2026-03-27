@@ -1,6 +1,7 @@
 package nn
 
 import (
+	"fmt"
 	"math"
 
 	. "github.com/golangast/gollemer/internal/ai/neural/tensor"
@@ -156,4 +157,66 @@ func (o *Adam) SetRouterLR(lr float64) {
 // GetRouterLR returns the current router learning rate
 func (o *Adam) GetRouterLR() float64 {
 	return o.RouterLR
+}
+
+// CoolingOptimizer wraps an existing Optimizer to provide a recovery period
+type CoolingOptimizer struct {
+	Base       Optimizer // Your SIMD AdamW / SGD
+	Cooldown   int       // Remaining steps in cooldown
+	IsActive   bool
+	OriginalLR float64   // To store where we should be post-recovery
+}
+
+// Step executes the base optimizer but overrides LR if cooling
+func (o *CoolingOptimizer) Step() {
+	if o.IsActive {
+		o.Cooldown--
+		if o.Cooldown <= 0 {
+			o.IsActive = false
+			fmt.Printf("❄️ Recovery period over. Experts stabilized. Resuming LR: %.6f\n", o.OriginalLR)
+			o.Base.SetLearningRate(o.OriginalLR)
+		}
+	}
+	o.Base.Step()
+}
+
+// ZeroGrad resets the gradients of all parameters.
+func (o *CoolingOptimizer) ZeroGrad() {
+	o.Base.ZeroGrad()
+}
+
+// ClipGradients scales the gradients of all parameters.
+func (o *CoolingOptimizer) ClipGradients() {
+	o.Base.ClipGradients()
+}
+
+// SetLearningRate updates the learning rate of the optimizer
+func (o *CoolingOptimizer) SetLearningRate(lr float64) {
+	if o.IsActive {
+		// During cooling, we don't allow permanent LR updates to the base,
+		// but we store it as the original LR for when we finish cooling.
+		o.OriginalLR = lr
+	} else {
+		o.Base.SetLearningRate(lr)
+	}
+}
+
+// GetLearningRate returns the current learning rate
+func (o *CoolingOptimizer) GetLearningRate() float64 {
+	return o.Base.GetLearningRate()
+}
+
+// Trigger enters the cooling state
+func (o *CoolingOptimizer) Trigger(steps int, reduction float64) {
+	if !o.IsActive {
+		o.OriginalLR = o.Base.GetLearningRate()
+	}
+	
+	o.IsActive = true
+	o.Cooldown = steps
+	
+	// Drop the LR immediately to allow "shaken" weights to settle
+	current := o.Base.GetLearningRate()
+	o.Base.SetLearningRate(current * reduction)
+	fmt.Printf("📉 Circuit Breaker: Cooling for %d steps at LR %f (Was: %f)\n", steps, current*reduction, current)
 }

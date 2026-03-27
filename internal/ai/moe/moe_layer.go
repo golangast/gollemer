@@ -577,6 +577,12 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 		moe.DiversityLoss = 0
 	}
 
+	// Update Expert Health (EMA)
+	for i, expert := range moe.Experts {
+		wasUsed := len(moe.ExpertTokenIndices[i]) > 0
+		expert.UpdateHealth(wasUsed)
+	}
+
 	// Push state to stack for BPTT
 	state := MoEState{
 		inputTensor:        moe.inputTensor,
@@ -1548,6 +1554,35 @@ func (moe *MoELayer) UpdateExpertMultipliers() {
 		} else if utilization < LowUsageThreshold {
 			// If it's still "Dead", keep the boost high
 			moe.ExpertGradMultiplier[i] = MaxMult
+		}
+	}
+}
+
+// ShakeExperts performs an in-place noise injection to all stagnant experts.
+func (moe *MoELayer) ShakeExperts(intensity float64, loopCount int) {
+	// Scale noise by the number of consecutive loops detected
+	// This ensures we shake harder if the model is truly stuck
+	adjustedIntensity := intensity * math.Log1p(float64(loopCount))
+	if adjustedIntensity < intensity {
+		adjustedIntensity = intensity
+	}
+
+	for i, expert := range moe.Experts {
+		// Use both expert-internal stagnation check and MoE-level usage counters
+		stagnancyScore := 0
+		if moe.StagnationCounters != nil {
+			stagnancyScore = moe.StagnationCounters[i]
+		}
+
+		if expert.IsStagnant() || stagnancyScore > 5 {
+			fmt.Printf("🌊 Expert %d is stagnant (Score: %d). Shaking at intensity %.4f to break circuit...\n", 
+				i, stagnancyScore, adjustedIntensity)
+			expert.Shake(adjustedIntensity)
+			
+			// Reset stagnation after shake to see if it recovers
+			if moe.StagnationCounters != nil {
+				moe.StagnationCounters[i] = 0
+			}
 		}
 	}
 }

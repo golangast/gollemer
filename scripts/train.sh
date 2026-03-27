@@ -7,6 +7,7 @@ cd "$PROJECT_ROOT"
 # Setup Go environment for Chromebook performance
 export GOGC=20
 export GOMAXPROCS=2
+export GO_CMD="/usr/local/go/bin/go"
 export GOEXPERIMENT=simd
 
 # Ensure critical directories exist
@@ -37,14 +38,28 @@ BEST_FILE=""
 CHECKPOINT_DIR="data/models/checkpoints"
 
 for f in $(ls $CHECKPOINT_DIR/*.gob 2>/dev/null | sort); do
-    go run cmd/inspect/inspect_model.go --export "$f" > /dev/null
+    $GO_CMD run cmd/inspect/inspect_model.go --export "$f" > /dev/null
     JSON_FILE="${f}.json"
     
-    if [ -f "$JSON_FILE" ] && [ "$HAS_JQ" = true ]; then
-        STEPS=$(jq '.total_steps' "$JSON_FILE")
-        IQ=$(jq '.commitment_pct' "$JSON_FILE")
-        TREND="↔️  -"
+    if [ -f "$JSON_FILE" ]; then
+        # Use sed as fallback if jq is missing
+        if [ "$HAS_JQ" = true ]; then
+            STEPS=$(jq '.StepCount' "$JSON_FILE" 2>/dev/null)
+            IQ_RAW=$(jq '.Commitment' "$JSON_FILE" 2>/dev/null)
+        else
+            STEPS=$(grep -o '"StepCount": *[0-9]*' "$JSON_FILE" | cut -d':' -f2)
+            IQ_RAW=$(grep -o '"Commitment": *[0-9.]*' "$JSON_FILE" | cut -d':' -f2)
+        fi
         
+        IQ_RAW=$(echo "$IQ_RAW" | sed 's/[^0-9.]//g')
+        STEPS=$(echo "$STEPS" | sed 's/[^0-9]//g')
+        [ -z "$IQ_RAW" ] && IQ_RAW="0.0"
+        [ -z "$STEPS" ] && STEPS="0"
+        
+        # Convert to percentage (IQ = IQ_RAW * 100)
+        IQ=$(awk "BEGIN {printf \"%.2f\", $IQ_RAW * 100}")
+
+        TREND="↔️  -"
         if [ "$HAS_BC" = true ]; then
             if (( $(echo "$IQ > $PREV_IQ" | bc -l) )); then TREND="🚀 ↑"
             elif (( $(echo "$IQ < $PREV_IQ" | bc -l) )); then TREND="⚠️  ↓"
@@ -98,7 +113,7 @@ if [ -n "$BEST_FILE" ]; then
         cp "$BEST_FILE" "data/models/gob_models/moe_classification_model_best.gob"
         ln -sf "$(pwd)/data/models/gob_models/moe_classification_model_best.gob" "data/models/gob_models/moe_active.gob"
         
-        # 🔔 ChromeOS Desktop Notification
+        # �� ChromeOS Desktop Notification
         if command -v notify-send >/dev/null 2>&1; then
             notify-send "Gollemer AI" "Best Model Promoted! IQ: ${BEST_SCORE}%" --icon=utilities-terminal
         fi
@@ -109,7 +124,7 @@ fi
 
 # --- 6. Launch Training ---
 echo -e "\n🚀 Starting Gollemer Training..."
-GOEXPERIMENT=simd go run cmd/gollemer/main.go \
+GOEXPERIMENT=simd $GO_CMD run cmd/gollemer/main.go \
     -train-chat \
     -rebalance \
     -auto-heal \
@@ -128,12 +143,8 @@ LOG_FILE="logs/training.csv"
 
 if [ -f "$LOG_FILE" ]; then
     # Grab the last 5 entries to check for "Alpha Dominance"
-    # We look for Experts holding > 45% of the signal
     DOMINANCE=$(tail -n 5 "$LOG_FILE" | awk -F',' '{if($4 > 0.45) print $1}' | wc -l)
     
-    # Calculate a simple Diversity Score (0-100)
-    # 100 = Perfectly balanced usage across all 8 experts
-    # 0 = Only one expert doing all the work
     DIVERSITY_SCORE="N/A"
     if [ "$HAS_JQ" = true ]; then
         DIVERSITY_SCORE=$(tail -n 1 "$LOG_FILE" | jq '.diversity_score' 2>/dev/null || echo "N/A")
@@ -142,10 +153,36 @@ if [ -f "$LOG_FILE" ]; then
     echo "--------------------------------------------------"
     if [ "$DOMINANCE" -gt 3 ]; then
         echo "⚠️  CRITICAL: High Alpha Dominance detected ($DOMINANCE/5 recent epochs)."
-        echo "💡 Advice: Increase -diversity-coeff or check for Data Leaks (LICENSE echoes)."
+        echo "💡 Advice: Increase -diversity-coeff or check for Data Leaks."
     else
         echo "✨ Stability: Healthy Expert Distribution."
     fi
     echo "📈 Current Diversity Score: $DIVERSITY_SCORE%"
     echo "--------------------------------------------------"
 fi
+echo "🧹 Cleaning old Gollemer artifacts..."
+rm -f static/main.wasm gollemer_server
+
+echo "🚀 Building WASM Dashboard..."
+GOOS=js GOARCH=wasm $GO_CMD build -o static/main.wasm ./examples/learningfolder/wasm
+
+echo "⚙️ Compiling Go Server (EMA + Cooling + SIMD)..."
+$GO_CMD build -o gollemer_server ./examples/learningfolder
+
+echo "🌐 System Live at http://localhost:5500"
+./gollemer_server --ema_alpha=0.001 --shake_threshold=0.01
+
+# --- Functions ---
+function bench() {
+    go test -bench=. -benchmem ./...
+}
+function profile-cpu() {
+    go test -bench=BenchmarkSparseMoE -cpuprofile=cpu.out
+    go tool pprof -http=:8080 cpu.out
+}
+function check-race() {
+    go test -race -v ./...
+}
+function clean() {
+    rm -f *.out *.test cpu.prof mem.prof
+}

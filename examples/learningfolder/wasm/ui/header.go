@@ -1,3 +1,6 @@
+//go:build js && wasm
+
+
 package ui
 
 import "syscall/js"

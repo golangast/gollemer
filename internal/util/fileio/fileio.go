@@ -3,11 +3,11 @@ package fileio
 import (
 	"fmt"
 	"os"
-	"path/filepath"
+	"os/exec"
 	"strings"
 )
 
-// goImports formats the Go file at the given path.
+// GoImports formats the Go file at the given path.
 func GoImports(filePath string) {
 	cmd := exec.Command("goimports", "-w", filePath)
 	cmd.Stdout = os.Stdout
@@ -26,7 +26,7 @@ func RegisterHandlerURL(handlerName, url, mainPath string) (string, error) {
 	var newLines []string
 	inserted := false
 
-	for _, line := range lines {
+	for line := range lines {
 		newLines = append(newLines, line)
 		if !inserted && strings.Contains(line, "func main() {") {
 			newLines = append(newLines, fmt.Sprintf(`	http.HandleFunc("%s", %s)`,

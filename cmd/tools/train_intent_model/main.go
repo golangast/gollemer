@@ -137,8 +137,8 @@ func main() {
 		log.Fatalf("Failed to create SimpleRNNEncoder: %v", err)
 	}
 
-	// 3. RNN Decoder with increased capacity and dropout
-	decoder, err := moe.NewRNNDecoder(embeddingDim, sentenceVocab.Size(), hiddenSize, maxAttentionHeads, numLayers, dropoutRate)
+	// 3. RNN Decoder with increased capacity and dropout (numExperts=1 for legacy decoder)
+	decoder, err := moe.NewRNNDecoder(embeddingDim, sentenceVocab.Size(), hiddenSize, maxAttentionHeads, numLayers, dropoutRate, 1)
 	if err != nil {
 		log.Fatalf("Failed to create decoder: %v", err)
 	}
@@ -165,7 +165,7 @@ func main() {
 	}
 	defer outputFile.Close()
 
-	err = moe.SaveIntentMoEModelToGOB(model, outputFile)
+	err = moe.SaveIntentMoEModelToGOB(model, modelSavePath)
 	if err != nil {
 		log.Fatalf("Failed to save MoE model: %v", err)
 	}

@@ -57,6 +57,38 @@ type Batch struct {
 	InputMask *tensor.Tensor // Attention mask (0.0 for real, -1e9 for pad)
 }
 
+// TrainingMetric defines a data structure for monitoring training health, compatible with WASM dashboards.
+type TrainingMetric struct {
+	Step             int       `json:"step"`
+	Loss             float64   `json:"loss"`
+	LoadBalanceLoss  float64   `json:"lb_loss"`
+	LearningRate     float64   `json:"lr"`
+	ActiveExperts    []int     `json:"active_experts"` // IDs of experts used in this batch
+	IsCooling        bool      `json:"is_cooling"`     // Flag for the CoolingOptimizer state
+	CircuitBreaker   bool      `json:"circuit_breaker"` // True if a shake was triggered
+	Temperature      float64   `json:"temperature"`     // Current ThawScheduler temperature
+	ThawedExpertCount int      `json:"thawed_count"`    // Number of active clusters/experts
+}
+
+// IsStuck checks for "stuttering" or punctuation loops in the generated tokens.
+func IsStuck(tokens []string, threshold float64) bool {
+	if len(tokens) < 10 {
+		return false
+	}
+
+	// Check for "stuttering" - e.g., the same token repeating
+	repeatCount := 0
+	last := tokens[len(tokens)-1]
+	for i := len(tokens) - 2; i >= max(0, len(tokens)-10); i-- {
+		if tokens[i] == last {
+			repeatCount++
+		}
+	}
+
+	// If more than 60% (or specific threshold) of recent tokens are the same
+	return float64(repeatCount) >= threshold
+}
+
 func ValidateModelHealth(model *moe.IntentMoE) bool {
 	fmt.Println("🔍 Performing Pre-Flight Health Check...")
 	isHealthy := true
@@ -121,40 +153,7 @@ func VerifyModelIntegrity(m *moe.IntentMoE) {
     }
 }
 
-// ThawScheduler manages which experts receive gradients per epoch stage.
-// This forces the router to find new paths when dominant experts are frozen.
-type ThawScheduler struct {
-	TotalExperts int
-	Stages       map[int][]int // Epoch threshold -> slice of expert IDs to freeze
-}
-
-// NewThawScheduler creates a scheduler for 8-expert MoE with 3 training phases:
-//  - Epochs 1-15:  Freeze E0 (the "Crutch") — forces router to explore E1-E7
-//  - Epochs 16-30: Freeze E0,E1,E2 — forces high-index expert learning
-//  - Epoch 31+:    Full Thaw — refinement phase, all experts learn
-func NewThawScheduler(numExperts int) *ThawScheduler {
-	return &ThawScheduler{
-		TotalExperts: numExperts,
-		Stages: map[int][]int{
-			1:  {0},          // Freeze E0
-			16: {0, 1, 2},    // Freeze E0-E2
-			31: {},           // Full Thaw
-		},
-	}
-}
-
-// GetFrozenExperts returns which expert IDs should have gradients zeroed for the given epoch.
-func (s *ThawScheduler) GetFrozenExperts(epoch int) []int {
-	current := []int{}
-	maxEpoch := 0
-	for e, frozen := range s.Stages {
-		if epoch >= e && e >= maxEpoch {
-			maxEpoch = e
-			current = frozen
-		}
-	}
-	return current
-}
+// Old ThawScheduler removed in favor of step-based CosineDecay scheduler in internal/ai/training/chat/thaw_scheduler.go
 
 func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool, initialLR float64, weightDecay float64, autoHeal bool) {
 	fmt.Println("--- 🗣️  Training Chat Model ---")
@@ -568,9 +567,12 @@ skipCSV:
 	epochs := 60
 	const batchSize = 2 // Reduced from 4 to limit memory usage during backward pass
 	
-	// Optimizer initialization
-	optimizer := neuralnn.NewOptimizer(intentModel.Parameters(), initialLR, 1.5) // 1.5 is the Gradient Clip Value
-
+	// Optimizer initialization (Wrapped with Cooling Safety)
+	baseOptimizer := neuralnn.NewOptimizer(intentModel.Parameters(), initialLR, 1.5) // 1.5 is the Gradient Clip Value
+	optimizer := &neuralnn.CoolingOptimizer{
+		Base: baseOptimizer,
+	}
+	
 	// Learning rate settings
 	peakLR := initialLR
 	
@@ -581,7 +583,6 @@ skipCSV:
 		TotalSteps: epochs * (len(trainPairs) / batchSize),
 	}
 
-	const unkPenalty = 5.0
 	// Early stopping and metrics state
 	patienceLimit := 10
 	patienceCounter := 0
@@ -591,9 +592,9 @@ skipCSV:
 	lastEpochLoss := math.MaxFloat64
 	plateauCount := 0
 
-	// Set weight decay on the optimizer
-	if opt, ok := optimizer.(*neuralnn.Adam); ok {
-		opt.Lambda = weightDecay
+	// Set weight decay on the base optimizer if it's Adam
+	if adam, ok := optimizer.Base.(*neuralnn.Adam); ok {
+		adam.Lambda = weightDecay
 	}
 
 	trainer := &moe.Trainer{CollapseCount: 0}
@@ -658,8 +659,18 @@ skipCSV:
 
 	fmt.Printf("Training on %d pairs for %d epochs (patience=%d)...\n", len(chatPairs), epochs, patienceLimit)
 
-	// ThawScheduler: manages which experts are frozen per epoch stage.
-	thawScheduler := NewThawScheduler(8)
+	// New Step-based ThawScheduler: manages which experts are frozen per step based on Cosine Decay.
+	thawScheduler := &ThawScheduler{
+		MaxSteps:    epochs * (len(trainPairs) / batchSize),
+		StartTemp:   1.0,
+		MinTemp:     0.1,
+		LayerThresholds: []float64{
+			0.85, // Thaw Layer/Expert 1 early
+			0.60, // Thaw Layer/Expert 2
+			0.35, // Thaw Layer/Expert 3
+			0.15, // Thaw Layer/Expert 4
+		},
+	}
 
 	// TrainingLogger: CSV log for long-term trend analysis.
 	logPath := filepath.Join(projectRoot, "logs/training_log.csv")
@@ -676,21 +687,9 @@ skipCSV:
 
 	for epoch := 0; epoch < epochs; epoch++ {
 		epochStartTime := time.Now()
+		var currentFrozenSet map[int]bool
 
-		// Determine frozen experts for this epoch via ThawScheduler
-		frozenExperts := thawScheduler.GetFrozenExperts(epoch + 1)
-		frozenSet := make(map[int]bool, len(frozenExperts))
-		for _, id := range frozenExperts {
-			frozenSet[id] = true
-		}
-		prevFrozen := thawScheduler.GetFrozenExperts(epoch)
-		if epoch == 0 || len(frozenExperts) != len(prevFrozen) {
-			if len(frozenExperts) > 0 {
-				log.Printf("❄️  ThawScheduler Epoch %d: Freezing experts %v (grads zeroed)", epoch+1, frozenExperts)
-			} else {
-				log.Printf("🌡️  ThawScheduler Epoch %d: Full Thaw — all experts active", epoch+1)
-			}
-		}
+		// (Cosine Decay ThawScheduler now updates per step instead of per epoch)
 
 		// Curriculum shuffle logic
 		if epoch > 2 {
@@ -719,7 +718,6 @@ skipCSV:
 		iterator.Reset()
 		totalLoss := 0.0
 		batches := 0
-		epochLBLoss = 0.0
 		// Reset utilization for each layer
 		for _, l := range moe.ActiveLayers {
 			l.ResetUtilizationStats()
@@ -749,6 +747,29 @@ skipCSV:
 			if batch == nil || batch.Input == nil {
 				continue
 			}
+
+			// 🌡️ Step-based Thaw Prediction
+			currentTemp, thawedCount := thawScheduler.Next()
+			// Assume thawedCount (1-4) controls expert clusters (2 experts each)
+			// At thawedCount=0, at least 2 experts (E0, E1) are thawed for "Exploration"
+			numExpertsToThaw := (thawedCount + 1) * 2
+			if numExpertsToThaw > 8 { numExpertsToThaw = 8 }
+			
+			frozenExperts := []int{}
+			for i := numExpertsToThaw; i < 8; i++ {
+				frozenExperts = append(frozenExperts, i)
+			}
+			
+			frozenSet := make(map[int]bool, len(frozenExperts))
+			for _, id := range frozenExperts {
+				frozenSet[id] = true
+			}
+			currentFrozenSet = frozenSet
+
+			if globalStep%100 == 0 {
+				log.Printf("🌡️ Step %d: Temp=%.4f | Thawed Experts: %d/8", globalStep, currentTemp, numExpertsToThaw)
+			}
+
 			// optimizer.ZeroGrad() // Removed for accumulation
 			inspectData(batch)
 			if overfitMode && globalStep%10 == 0 {
@@ -797,21 +818,35 @@ skipCSV:
 			learningRate = lr 
 
 			// 🛑 CIRCUIT BREAKER: Every 500 Batches
+			isCircuitBreakerTriggered := false
+			var check []string
 			if globalStep%500 == 0 && globalStep > 0 {
 				fmt.Println("\n🛑 Running Circuit Breaker Check...")
-				check := GenerateTokens(intentModel, "how are you", 10)
-				if isCollapsed(check, intentModel.SentenceVocab) {
-					fmt.Println("🚨 Punctuation Loop Detected! Scaling LR down and shaking experts...")
-					peakLR *= 0.2
+				check = GenerateTokens(intentModel, "how are you", 10)
+				
+				// Use new IsStuck utility with 6-token repeat threshold
+				if IsStuck(check, 6.0) {
+					isCircuitBreakerTriggered = true
+					fmt.Println("🚨 Punctuation/Stutter Loop Detected! Shaking experts and cooling...")
+					
+					// 1. Shake stagnant experts (intensity 0.05, scaled by current loss plateau ideally)
 					for _, layer := range moe.ActiveLayers {
-						layer.RouterTemperature = 1.8 // Shake up experts
+						layer.ShakeExperts(0.05, globalStep/1000 + 1)
+						layer.RouterTemperature = 2.0 // Surge temperature to force exploration
 					}
-					// Also reset optimizer moments for the next steps
-					if opt, ok := optimizer.(*neuralnn.Adam); ok {
-						opt.SetLearningRate(peakLR * 0.1)
-					}
+					
+					// 2. Cooling Trigger: 250 steps, 20% of current LR
+					optimizer.Trigger(250, 0.2)
+					
+					fmt.Printf("❄️ System Cooling Initiated at Step %d\n", globalStep)
 				} else {
 					fmt.Println("✅ Diversity Check Passed.")
+					// Cool down the temperature slowly to normal if it was surging
+					for _, layer := range moe.ActiveLayers {
+						if layer.RouterTemperature > 0.7 {
+							layer.RouterTemperature *= 0.95
+						}
+					}
 				}
 			}
 
@@ -1034,6 +1069,38 @@ skipCSV:
 			totalLoss += batchLoss
 			batches++
 
+			// Dashboard Reporting (Go-to-WASM Bridge)
+			activeExperts := []int{}
+			for _, layer := range moe.ActiveLayers {
+				// Experts selected for each token in the current batch
+				selected := layer.GetSelectedExperts()
+				for _, experts := range selected {
+					activeExperts = append(activeExperts, experts...)
+				}
+			}
+
+			metric := &TrainingMetric{
+				Step:            globalStep,
+				Loss:            batchLoss,
+				LoadBalanceLoss: epochLBLoss / float64(batches),
+				LearningRate:    learningRate,
+				ActiveExperts:   activeExperts,
+				IsCooling:         optimizer.IsActive,
+				CircuitBreaker:    isCircuitBreakerTriggered,
+				Temperature:       currentTemp,
+				ThawedExpertCount: numExpertsToThaw,
+			}
+			metric.PushToJS()
+			if trainingLogger != nil {
+				trainingLogger.LogStep(*metric)
+			}
+			
+			// Save latest metric to file for dashboard polling
+			if globalStep%10 == 0 {
+				latestJson, _ := json.Marshal(metric)
+				os.WriteFile(filepath.Join(projectRoot, "logs/latest_metric.json"), latestJson, 0644)
+			}
+
 			// Loss Protection
 			if math.IsNaN(totalLoss) || math.IsInf(totalLoss, 0) {
 				log.Fatalf("❌ Loss exploded to NaN/Inf at epoch %d, batch %d. Stopping training.", epoch, batches)
@@ -1103,7 +1170,7 @@ skipCSV:
 			totalTokensFlt := float64(totalTokens)
 			if totalTokensFlt > 0 {
 				for i := 0; i < len(layer.Experts); i++ {
-					if frozenSet[i] {
+					if currentFrozenSet != nil && currentFrozenSet[i] {
 						continue // Skip: deliberately frozen by ThawScheduler
 					}
 					usage := float64(layer.AccumulatedUtilization[i]) / totalTokensFlt
@@ -1187,7 +1254,9 @@ skipCSV:
 		}
 
 		if autoHeal {
-			trainer.AutoHeal(intentModel, optimizer.(*neuralnn.Adam), stats)
+			if adam, ok := optimizer.Base.(*neuralnn.Adam); ok {
+				trainer.AutoHeal(intentModel, adam, stats)
+			}
 		}
 		
 		// Log Metrics
@@ -2248,6 +2317,15 @@ func MuteUNKToken(model *moe.IntentMoE, unkID int) {
 	}
 }
 
+// PunctuationWeights based on vocabulary mapping.
+// Penalize tokens that are "easy" exits to prevent punctuation loops.
+var PunctuationWeights = map[int]float64{
+	46: 0.05, // Period '.' - extremely low weight
+	44: 0.1,  // Comma ','
+	63: 0.1,  // Question mark '?'
+	32: 0.2,  // Space ' '
+}
+
 func WeightedCrossEntropy(logits *tensor.Tensor, targets []int, weights []float64, labelSmoothing float64) (float64, *tensor.Tensor) {
 	// Flatten batch and sequence dimensions to handle 3D tensors [Batch, Seq, Vocab]
 	vocabSize := logits.Shape[len(logits.Shape)-1]
@@ -2292,6 +2370,10 @@ func WeightedCrossEntropy(logits *tensor.Tensor, targets []int, weights []float6
 		loss := -math.Log(prob + 1e-12)
 
 		currentWeight := weights[targetID]
+		// Apply Punctuation Penalty
+		if puncWeight, ok := PunctuationWeights[targetID]; ok {
+			currentWeight *= puncWeight
+		}
 
 		totalLoss += loss * currentWeight
 		count++
