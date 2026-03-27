@@ -6,6 +6,7 @@ import (
 	"github.com/golangast/gollemer/examples/learningfolder/handler/createuser"
 	"github.com/golangast/gollemer/examples/learningfolder/handler/home"
 	"github.com/golangast/gollemer/examples/learningfolder/handler/loginemail"
+	"github.com/golangast/gollemer/examples/learningfolder/handler/metrics"
 	"github.com/golangast/gollemer/examples/learningfolder/handler/post"
 	"github.com/golangast/gollemer/examples/learningfolder/handler/profile"
 	"github.com/golangast/gollemer/examples/learningfolder/handler/userinput"
@@ -14,6 +15,7 @@ import (
 func RegisterRoutes(mux *http.ServeMux) {
 	// GET
 	mux.HandleFunc("GET /", home.Home)
+	mux.HandleFunc("GET /metrics", metrics.Metrics)
 	mux.HandleFunc("GET /usercreate", profile.Profile)
 	mux.HandleFunc("GET /loginemail/{email}/{sitetoken}", loginemail.LoginEmail)
 

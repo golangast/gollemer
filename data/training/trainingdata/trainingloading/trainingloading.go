@@ -1,6 +1,7 @@
 package trainingloading
 
 import (
+	"bufio"
 	"encoding/json"
 	"os"
 	"strings"

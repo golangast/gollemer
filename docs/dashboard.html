@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gollemer MoE Training Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code&family=Outfit:wght@400;700&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --secondary: #ec4899;
+            --bg-dark: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --text-main: #f8fafc;
+            --cooling-bg: #1e293b;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-main);
+            margin: 0;
+            padding: 2rem;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 2rem;
+            background: linear-gradient(to right, #818cf8, #f472b6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-align: center;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 1.5rem;
+        }
+
+        .card {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .cooling-active {
+            box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+            border-color: var(--primary);
+            background: rgba(15, 23, 42, 0.8);
+        }
+
+        /* Expert Grid Styling */
+        #expert-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            /* 2x4 Grid */
+            gap: 12px;
+            padding: 10px;
+            background: #0f172a;
+            /* Slate 900 */
+            border-radius: 12px;
+        }
+
+        .expert-cell {
+            height: 80px;
+            background: #1e293b;
+            border: 2px solid #334155;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.1s ease;
+            position: relative;
+            color: #94a3b8;
+            font-family: 'Fira Code', monospace;
+            font-weight: bold;
+        }
+
+        .active-pulse {
+            border-color: #fbbf24;
+            box-shadow: 0 0 15px rgba(251, 191, 36, 0.4);
+            background: #451a03;
+            color: #fbbf24;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-normal {
+            background: #059669;
+            color: #ecfdf5;
+        }
+
+        .status-cooling {
+            background: #2563eb;
+            color: #eff6ff;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.7;
+            }
+
+            100% {
+                opacity: 1;
+            }
+        }
+
+        .metrics-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .metric-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 0.5rem;
+        }
+
+        .metric-value {
+            font-family: 'Fira Code', monospace;
+            color: #38bdf8;
+            font-weight: bold;
+        }
+
+        #experts-heatmap {
+            height: 200px;
+            display: flex;
+            gap: 0.5rem;
+            align-items: flex-end;
+            padding: 1rem 0;
+        }
+
+        .expert-bar {
+            flex: 1;
+            background: var(--primary);
+            border-radius: 0.25rem 0.25rem 0 0;
+            min-height: 4px;
+            transition: height 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        .expert-bar:hover::after {
+            content: attr(data-usage);
+            position: absolute;
+            top: -25px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #fff;
+            color: #000;
+            padding: 2px 5px;
+            border-radius: 4px;
+            font-size: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Gollemer Training Dashboard</h1>
+
+        <div class="grid">
+            <div id="chart-container" class="card">
+                <canvas id="lossChart"></canvas>
+            </div>
+
+            <div class="metrics-panel">
+                <div class="card">
+                    <h3>Current Status</h3>
+                    <div id="status-display" class="status-badge status-normal">Stable</div>
+                    <div class="metric-item">
+                        <span>Step</span>
+                        <span id="metric-step" class="metric-value">0</span>
+                    </div>
+                    <div class="metric-item">
+                        <span>LR</span>
+                        <span id="metric-lr" class="metric-value">0.0000</span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>Expert Activation (8-Core MoE)</h3>
+                    <div id="expert-grid">
+                        <!-- Cells dynamically added -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const ctx = document.getElementById('lossChart').getContext('2d');
+        const lossChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                datasets: [{
+                    label: 'Training Loss',
+                    data: [],
+                    borderColor: '#6366f1',
+                    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: { type: 'linear', display: false },
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                        ticks: { color: 'rgba(255, 255, 255, 0.5)' }
+                    }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+
+        // Initialize Expert Grid Cells
+        const expertGrid = document.getElementById('expert-grid');
+        const NUM_EXPERTS = 8;
+        for (let i = 0; i < NUM_EXPERTS; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'expert-cell';
+            cell.id = `expert-${i}`;
+            cell.innerHTML = `<span>E${i}</span>`;
+            expertGrid.appendChild(cell);
+        }
+
+        // expertStates for ghosting effect
+        const expertStates = new Array(NUM_EXPERTS).fill(0);
+
+        window.updateDashboard = (data) => {
+            // 1. Update the Loss Chart
+            lossChart.data.datasets[0].data.push({ x: data.step, y: data.loss });
+            if (lossChart.data.datasets[0].data.length > 50) {
+                lossChart.data.datasets[0].data.shift();
+            }
+
+            // 2. Visual Cue for Cooling
+            const container = document.getElementById('chart-container');
+            const status = document.getElementById('status-display');
+
+            if (data.is_cooling) {
+                container.classList.add('cooling-active');
+                status.innerText = "❄️ Cooling";
+                status.className = "status-badge status-cooling";
+            } else {
+                container.classList.remove('cooling-active');
+                status.innerText = "⚡ Stable";
+                status.className = "status-badge status-normal";
+            }
+
+            // 3. Update Metrics
+            document.getElementById('metric-step').innerText = data.step;
+            document.getElementById('metric-lr').innerText = data.lr.toFixed(6);
+
+            // 4. Update Expert Heatmap with Decay & Persistence
+            // Decay existing states
+            expertStates.forEach((val, i) => expertStates[i] *= 0.9);
+
+            // Pulse currently active experts
+            if (data.experts) {
+                data.experts.forEach(id => {
+                    if (id < NUM_EXPERTS) {
+                        expertStates[id] = 1.0;
+                    }
+                });
+            }
+
+            // Update UI
+            expertStates.forEach((val, i) => {
+                const cell = document.getElementById(`expert-${i}`);
+                if (cell) {
+                    // Apply visual pulse
+                    if (val > 0.5) {
+                        cell.classList.add('active-pulse');
+                    } else {
+                        cell.classList.remove('active-pulse');
+                    }
+
+                    // Map value to background intensity
+                    const alpha = val.toFixed(2);
+                    cell.style.backgroundColor = `rgba(251, 191, 36, ${alpha * 0.3})`;
+                }
+            });
+
+            lossChart.update('none'); // Use 'none' for high-performance updates
+        };
+
+        // Polling logic to fetch metrics from the server
+        setInterval(async () => {
+            try {
+                // Try polling from origin (where the dashboard is served)
+                // If the dashboard is open as a file, this might need http://localhost:8080/metrics
+                const response = await fetch('/metrics');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (!data.error) {
+                        window.updateDashboard(data);
+                    }
+                }
+            } catch (err) {
+                // Fallback for local file testing if necessary
+            }
+        }, 1000);
+    </script>
+</body>
+
+</html>

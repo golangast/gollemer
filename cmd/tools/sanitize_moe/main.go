@@ -39,7 +39,7 @@ func main() {
 	}
 
 	for i, layer := range layers {
-		fmt.Printf("Layer %d (%s):\n", i, layer.GatingNetwork.Linear.Weights.Description())
+		fmt.Printf("Layer %d:\n", i)
 		analyzeLayer(layer)
 	}
 }

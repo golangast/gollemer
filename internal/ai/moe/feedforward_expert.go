@@ -2,6 +2,8 @@ package moe
 
 import (
 	"fmt"
+	"math/rand"
+	"time"
 
 	"github.com/golangast/gollemer/internal/ai/neural/nn"
 	"github.com/golangast/gollemer/internal/ai/neural/tensor"
@@ -9,12 +11,13 @@ import (
 
 // FeedForwardExpert is a simple feed-forward neural network that implements the Expert interface.
 type FeedForwardExpert struct {
-	Layer1 *nn.Linear
-	Layer2 *nn.Linear
-	// Stored for backward pass
+	Layer1             *nn.Linear
+	Layer2             *nn.Linear
 	inputTensor        *tensor.Tensor
-	activationOutput   *tensor.Tensor // Output after ReLU
-	intermediateOutput *tensor.Tensor // Output before ReLU
+	activationOutput   *tensor.Tensor
+	intermediateOutput *tensor.Tensor
+	ActivationEMA      float64
+	Decay              float64
 }
 
 // NewFeedForwardExpert creates a new FeedForwardExpert.
@@ -34,6 +37,8 @@ func NewFeedForwardExpert(inputDim, hiddenDim, outputDim int) (*FeedForwardExper
 	return &FeedForwardExpert{
 		Layer1: layer1,
 		Layer2: layer2,
+		ActivationEMA: 0.125, // Initial health (1/num_experts if 8)
+		Decay: 0.99,
 	}, nil
 }
 
@@ -232,4 +237,42 @@ func (e *FeedForwardExpert) EvolutionaryReset(winner Expert, jitterScale float64
 	// 4. Reset optimizer-related data (handled by Trainer usually, but we clear Gradients here)
 	e.Layer1.Weights.ZeroGrad()
 	e.Layer2.Weights.ZeroGrad()
+}
+
+// Shake performs an in-place noise injection to break loops.
+func (e *FeedForwardExpert) Shake(intensity float64) {
+	// We use a local seed to avoid global mutex contention in rand
+	src := rand.NewSource(time.Now().UnixNano())
+	r := rand.New(src)
+
+	// Apply noise to Layer 1 Weights
+	weights1 := e.Layer1.Weights.Data
+	for i := range weights1 {
+		noise := (r.Float64() - 0.5) * intensity
+		weights1[i] += noise
+	}
+
+	// Apply noise to Layer 2 Weights
+	weights2 := e.Layer2.Weights.Data
+	for i := range weights2 {
+		noise := (r.Float64() - 0.5) * intensity
+		weights2[i] += noise
+	}
+}
+
+// IsStagnant returns true if the expert's relevance is below a minimal threshold.
+func (e *FeedForwardExpert) IsStagnant() bool {
+	// If 8 experts, ideal health is 0.125. 
+	// Threshold of 0.01 means less than 1% utilization.
+	return e.ActivationEMA < 0.01
+}
+
+// UpdateHealth updates the ActivationEMA based on usage.
+func (e *FeedForwardExpert) UpdateHealth(wasUsed bool) {
+	var current float64 = 0.0
+	if wasUsed {
+		current = 1.0
+	}
+	// EMA = (Current * (1 - Decay)) + (Previous * Decay)
+	e.ActivationEMA = (current * (1.0 - e.Decay)) + (e.ActivationEMA * e.Decay)
 }

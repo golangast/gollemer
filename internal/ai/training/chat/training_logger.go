@@ -94,6 +94,24 @@ func (l *TrainingLogger) LogEpoch(epoch int, avgLoss, lbLoss, perplexity, lr flo
 	l.Writer.Flush()
 }
 
+// LogStep appends per-batch metrics to the CSV.
+func (l *TrainingLogger) LogStep(m TrainingMetric) {
+	// 1. Convert IsCooling to 0 or 1 for CSV
+	coolingBit := 0
+	if m.IsCooling {
+		coolingBit = 1
+	}
+
+	// 2. Append to log
+	_ = l.Writer.Write([]string{
+		fmt.Sprintf("%d", m.Step),
+		fmt.Sprintf("%.4f", m.Loss),
+		fmt.Sprintf("%.4f", m.LearningRate),
+		fmt.Sprintf("%d", coolingBit),
+	})
+	l.Writer.Flush()
+}
+
 // Close flushes and closes the underlying file.
 func (l *TrainingLogger) Close() {
 	l.Writer.Flush()

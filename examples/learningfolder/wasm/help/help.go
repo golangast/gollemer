@@ -1,5 +1,7 @@
 //go:build js && wasm
 
+
+
 package pages
 
 import (

@@ -1,3 +1,6 @@
+//go:build js && wasm
+
+
 package core
 
 import "syscall/js"

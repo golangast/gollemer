@@ -53,6 +53,13 @@ type TokenizedTrainingExample struct {
 
 // TokenizedTrainingExample represents a pre-tokenized training example.
 // EnhancedTrainingExample includes SRL and ASG annotations
+type EnhancedTrainingExample struct {
+	Query         string
+	FlatOutput    string
+	SemanticRoles map[string]any
+	ASG           *semantic.AbstractSemanticGraph
+	ExecutionPlan map[string]any
+}
 
 // TokenizeTrainingData pre-tokenizes the training data in parallel.
 func TokenizeTrainingData(data *IntentTrainingData, queryTokenizer, semanticOutputTokenizer *tokenizer.Tokenizer, queryVocab, semanticOutputVocab *mainvocab.Vocabulary, maxLen int) ([]TokenizedTrainingExample, error) {
@@ -257,7 +264,6 @@ func TrainIntentMoEModel(model *moe.IntentMoE, data []TokenizedTrainingExample, 
 	warmupSteps := totalBatches * 2 // Warmup for first 2 epochs
 	currentStep := 0
 
-	trainer := &Trainer{CollapseCount: 0}
 	bestPerplexity := 0.0
 	
 	startTime := time.Now()

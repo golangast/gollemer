@@ -33,4 +33,13 @@ type Expert interface {
 
 	// EvolutionaryReset re-initializes the expert based on a winner's weights (Genetic Mutation).
 	EvolutionaryReset(winner Expert, jitterScale float64)
+
+	// Shake performs an in-place noise injection to break loops.
+	Shake(intensity float64)
+
+	// IsStagnant returns true if the expert is not contributing significantly.
+	IsStagnant() bool
+
+	// UpdateHealth updates the expert's relevance metric (EMA).
+	UpdateHealth(wasUsed bool)
 }
