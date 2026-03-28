@@ -23,7 +23,7 @@ type MoEState struct {
 	expertOutputs      []*Tensor
 	ExpertTokenIndices [][]int
 	SelectedExperts    [][]int
-	gateOutputs        *Tensor
+	GateOutputs        *Tensor
 	ExpertProbSums     []float64
 	LoadBalancingLoss  float64
 	RouterZLoss         float64
@@ -45,7 +45,7 @@ type MoELayer struct {
 	expertOutputs      []*Tensor
 	ExpertTokenIndices [][]int // Indices of tokens assigned to each expert
 	SelectedExperts    [][]int // Indices of selected experts for each input in the batch
-	gateOutputs        *Tensor // Output of the gating network (probabilities)
+	GateOutputs        *Tensor // Output of the gating network (probabilities)
 	LoadBalancingLoss  float64 // Load balancing loss
 	Training           bool    // training mode
 	GRPOEnabled        bool    // whether to use Training-Free GRPO (Group Relative Policy Optimization) for expert selection
@@ -177,6 +177,11 @@ func (moe *MoELayer) Parameters() []*Tensor {
 		params = append(params, moe.ResidualScale)
 	}
 	return params
+}
+
+// SetGateTemperature updates the router softmax temperature.
+func (moe *MoELayer) SetGateTemperature(temp float64) {
+	moe.RouterTemperature = temp
 }
 
 // Forward performs the forward pass of the MoELayer.
@@ -322,18 +327,18 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 	}
 
 	// Apply softmax to get probabilities
-	gateOutputs, err := scoresTensor.Softmax(len(scoresTensor.Shape) - 1)
+	GateOutputs, err := scoresTensor.Softmax(len(scoresTensor.Shape) - 1)
 	if err != nil {
 		return nil, fmt.Errorf("gating network softmax failed: %w", err)
 	}
-	moe.gateOutputs = gateOutputs
+	moe.GateOutputs = GateOutputs
 
 	// 4. Sum gating probabilities early (used for LoadBalancingLoss later)
 	numTokens := batchSize * seqLength
 	moe.ExpertProbSums = make([]float64, numExperts)
 	if numTokens > 0 {
 		for i := 0; i < numTokens; i++ {
-			AddAccumulate(moe.ExpertProbSums, gateOutputs.Data[i*numExperts:(i+1)*numExperts])
+			AddAccumulate(moe.ExpertProbSums, GateOutputs.Data[i*numExperts:(i+1)*numExperts])
 		}
 	}
 
@@ -392,7 +397,7 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 
 			stretchedCapacity := capacity
 			// If router confidence is extremely high, allow some stretch
-			if gateOutputs.Data[i*numExperts+expertIdx] > 0.8 {
+			if GateOutputs.Data[i*numExperts+expertIdx] > 0.8 {
 				stretchedCapacity = int(float64(capacity) * 1.5)
 			}
 
@@ -428,13 +433,13 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 		for j := 0; j < numExperts; j++ {
 			idx := i*numExperts + j
 			if !expertMap[j] {
-				gateOutputs.Data[idx] = 0
+				GateOutputs.Data[idx] = 0
 			}
-			rowSum += gateOutputs.Data[idx]
+			rowSum += GateOutputs.Data[idx]
 		}
 		// Re-normalize remaining weights to sum to 1.0 for numerical stability
 		if rowSum > 1e-12 {
-			simdScaleF64(gateOutputs.Data[i*numExperts:(i+1)*numExperts], 1.0/rowSum)
+			simdScaleF64(GateOutputs.Data[i*numExperts:(i+1)*numExperts], 1.0/rowSum)
 		}
 	}
 
@@ -530,7 +535,7 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 					}
 
 					// Get weight
-					weight := gateOutputs.Data[i*numExperts+expertIdx]
+					weight := GateOutputs.Data[i*numExperts+expertIdx]
 
 					// Get expert output row
 					relativeRow := tokenExpertRelativeIndices[i][j]
@@ -560,7 +565,7 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 		stLoss *= float64(numExperts)
 
 		// Calculate more aggressive Auxiliary Loss (CV^2 of Importance)
-		auxLoss := CalculateAuxLoss(moe.gateOutputs.Data, numExperts)
+		auxLoss := CalculateAuxLoss(moe.GateOutputs.Data, numExperts)
 
 		// 3. Diversity Loss (Pearson Correlation/Cosine Similarity Penalty)
 		// Ensures experts learn different things for the same input.
@@ -590,7 +595,7 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 		expertOutputs:      moe.expertOutputs,
 		ExpertTokenIndices: moe.ExpertTokenIndices,
 		SelectedExperts:    moe.SelectedExperts,
-		gateOutputs:        moe.gateOutputs,
+		GateOutputs:        moe.GateOutputs,
 		ExpertProbSums:     moe.ExpertProbSums,
 		LoadBalancingLoss:  moe.LoadBalancingLoss,
 		RouterZLoss:        moe.RouterZLoss,
@@ -620,7 +625,7 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 		moe.expertOutputs = state.expertOutputs
 		moe.ExpertTokenIndices = state.ExpertTokenIndices
 		moe.SelectedExperts = state.SelectedExperts
-		moe.gateOutputs = state.gateOutputs
+		moe.GateOutputs = state.GateOutputs
 		moe.ExpertProbSums = state.ExpertProbSums
 		moe.LoadBalancingLoss = state.LoadBalancingLoss
 		moe.RouterZLoss = state.RouterZLoss
@@ -743,15 +748,15 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 			// dL/dExpertOutput = dL/dCombinedOutput * weight
 			// We need to multiply batchedGrad by the corresponding gate output weights.
 			// The batchedGrad is [numTokensForExpert, embeddingDim]
-			// The weights are moe.gateOutputs.Data[tokenIdx*numExperts+expertIdx]
+			// The weights are moe.GateOutputs.Data[tokenIdx*numExperts+expertIdx]
 			// We need to create a weightedBatchedGrad
 			weightedBatchedGradData := make([]float64, len(batchedGrad.Data))
 			for k, tokenIdx := range tokenIndices {
 				gateIdx := tokenIdx*numExperts + expertIdx
-				if gateIdx < 0 || gateIdx >= len(moe.gateOutputs.Data) {
+				if gateIdx < 0 || gateIdx >= len(moe.GateOutputs.Data) {
 					continue
 				}
-				weight := moe.gateOutputs.Data[gateIdx]
+				weight := moe.GateOutputs.Data[gateIdx]
 				simdMulScalarF64(weightedBatchedGradData[k*embeddingDim:(k+1)*embeddingDim], batchedGrad.Data[k*embeddingDim:(k+1)*embeddingDim], weight)
 			}
 			weightedBatchedGrad := NewTensor(batchedGrad.Shape, weightedBatchedGradData, false)
@@ -981,7 +986,7 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 			defer wgSoftmax.Done()
 			for i := s; i < e; i++ {
 				offset := i * numExperts
-				p := moe.gateOutputs.Data[offset : offset+numExperts]
+				p := moe.GateOutputs.Data[offset : offset+numExperts]
 				dp := gateGradReshaped.Data[offset : offset+numExperts]
 				out := logitsGrad.Data[offset : offset+numExperts]
 
@@ -1067,7 +1072,7 @@ func (moe *MoELayer) ClearState() {
 	moe.expertOutputs = nil
 	moe.ExpertTokenIndices = nil
 	moe.SelectedExperts = nil
-	moe.gateOutputs = nil
+	moe.GateOutputs = nil
 	moe.ExpertProbSums = nil
 	moe.stateStack = nil
 	moe.gateLogits = nil

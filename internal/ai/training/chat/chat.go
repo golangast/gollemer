@@ -29,6 +29,7 @@ import (
 	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
 	"github.com/golangast/gollemer/internal/ai/neural/nnu/word2vec"
 	"github.com/golangast/gollemer/internal/ai/neural/tensor"
+	"github.com/golangast/gollemer/internal/ai/train"
 )
 
 var (
@@ -592,9 +593,16 @@ skipCSV:
 	lastEpochLoss := math.MaxFloat64
 	plateauCount := 0
 
-	// Set weight decay on the base optimizer if it's Adam
 	if adam, ok := optimizer.Base.(*neuralnn.Adam); ok {
 		adam.Lambda = weightDecay
+	}
+
+	// 🌡️ Annealer Setup as requested
+	annealer := train.Annealer{
+		StartTemp: 1.0,
+		MinTemp:   0.1,
+		Decay:     0.95,
+		WarmUp:    4, // Match existing warmup logic
 	}
 
 	trainer := &moe.Trainer{CollapseCount: 0}
@@ -700,19 +708,9 @@ skipCSV:
 		}
 
 		// Force diverse routing for the first 4 epochs to break out of mode collapse
-		if epoch < 4 {
-			for _, layer := range moe.ActiveLayers {
-				layer.RouterTemperature = 2.0 
-			}
-			if epoch == 0 {
-				log.Println("🔥 Forcing diverse routing for initial epochs (Temp 2.0)")
-			}
-		} else if epoch == 4 { // Reset to normal after warmup
-			for _, layer := range moe.ActiveLayers {
-				layer.RouterTemperature = 0.7
-			}
-			log.Println("🌡️ Resetting router temperature to normal (0.7).")
-		}
+		currentEpochTemp := annealer.GetTemp(epoch)
+		intentModel.SetGateTemperature(currentEpochTemp)
+		log.Printf("🌡️ Epoch %d | Temperature: %.4f", epoch, currentEpochTemp)
 
 		// (LB weight decay removed — LB weight is now small enough that it doesn't need decay)
 		iterator.Reset()
@@ -933,55 +931,24 @@ skipCSV:
 				log.Printf("🎯 [Overfit] Step %d | Final Loss: %.6f", globalStep, batchLoss)
 			}
 
-			// 7. Calculate MoE Stats for auxiliary loss as requested
-			// This provides a second perspective on expert utilization.
-			numExperts := 8
-			if len(moe.ActiveLayers) > 0 {
-				numExperts = len(moe.ActiveLayers[0].Experts)
-			}
-			
-			batchStats := moe.MoEStats{
-				RouterProbSum: make([]float64, numExperts),
-				ExpertCounts:  make([]float64, numExperts),
-			}
-			
-			totalTokensInBatch := 0
-			var batchZLoss float64
-			
-			// Collect from encoder layers
-			for _, layer := range moe.ActiveLayers {
-				batchZLoss += layer.RouterZLoss
-				if layer.ExpertProbSums != nil {
-					for i, val := range layer.ExpertProbSums {
-						if i < numExperts { batchStats.RouterProbSum[i] += val }
-					}
-				}
-				for i, indices := range layer.ExpertTokenIndices {
-					count := len(indices)
-					if i < numExperts { batchStats.ExpertCounts[i] += float64(count) }
-					totalTokensInBatch += count
-				}
-			}
-			
-			// Collect from decoder MoE if present
+			// 7. Calculate MoE Stats for auxiliary loss and stability
+			currentBatchLayers := intentModel.Encoder.GetMoELayers()
 			if intentModel.Decoder.OutputMoE != nil {
-				l := intentModel.Decoder.OutputMoE
-				batchZLoss += l.RouterZLoss
-				if l.ExpertProbSums != nil {
-					for i, val := range l.ExpertProbSums {
-						if i < numExperts { batchStats.RouterProbSum[i] += val }
-					}
-				}
-				for i, indices := range l.ExpertTokenIndices {
-					count := len(indices)
-					if i < numExperts { batchStats.ExpertCounts[i] += float64(count) }
-					totalTokensInBatch += count
+				currentBatchLayers = append(currentBatchLayers, intentModel.Decoder.OutputMoE)
+			}
+			
+			lambda := 0.1
+			var batchZLoss float64
+			var lbLoss float64
+			for _, layer := range currentBatchLayers {
+				batchZLoss += layer.RouterZLoss
+				if layer.GateOutputs != nil {
+					lbLoss += moe.CalculateImportanceLossTensor(layer.GateOutputs)
 				}
 			}
-
-			// Balancing coefficient as requested
-			lambda := 0.1
-			lbLoss := intentModel.ComputeAuxiliaryLoss(batchStats, totalTokensInBatch, numExperts)
+			if len(currentBatchLayers) > 0 {
+				lbLoss /= float64(len(currentBatchLayers))
+			}
 
 			// Final total loss used for gradients and logging
 			totalGradLoss := batchLoss + (lambda * lbLoss) + batchZLoss

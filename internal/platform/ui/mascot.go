@@ -8,7 +8,6 @@ import (
 	"go/format"
 	"go/parser"
 	"go/token"
-	"math/rand"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -84,23 +83,8 @@ func NewMascot() *Mascot {
 // Speak handles the typewriter effect with variable timing for a more human feel
 func (m *Mascot) Speak(exp any, message string) {
 	face := m.toFace(exp)
-	fmt.Printf("%s/ʕ%sʔ/ > %s", m.Color, face, ColorReset)
-	
-	for _, char := range message {
-		fmt.Printf("%c", char)
-		os.Stdout.Sync()
-		
-		// Randomize delay slightly for a "human" feel
-		delay := 20 + rand.Intn(15)
-		time.Sleep(time.Duration(delay) * time.Millisecond)
-
-		if char == ',' {
-			time.Sleep(100 * time.Millisecond) // Short pause for breath
-		} else if char == '.' || char == '!' || char == '?' {
-			time.Sleep(300 * time.Millisecond) // Longer pause for thought
-		}
-	}
-	fmt.Println()
+	fmt.Printf("%s/ʕ%sʔ/ > %s%s\n", m.Color, face, ColorReset, message)
+	os.Stdout.Sync()
 }
 
 // ShowMascot immediately prints the mascot.

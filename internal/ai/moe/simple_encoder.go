@@ -124,3 +124,7 @@ func (e *SimpleRNNEncoder) GetOutputShape() []int {
 func (e *SimpleRNNEncoder) GetMoELayers() []*MoELayer {
 	return nil
 }
+
+func (e *SimpleRNNEncoder) SetGateTemperature(temp float64) {
+	// No-op: SimpleRNNEncoder does not use MoE layers
+}

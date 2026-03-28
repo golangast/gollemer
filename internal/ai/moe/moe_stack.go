@@ -143,3 +143,10 @@ func (s *MoEStack) ClearState() {
 func (s *MoEStack) GetMoELayers() []*MoELayer {
 	return s.Layers
 }
+
+// SetGateTemperature updates the temperature for all layers in the stack.
+func (s *MoEStack) SetGateTemperature(temp float64) {
+	for _, l := range s.Layers {
+		l.SetGateTemperature(temp)
+	}
+}

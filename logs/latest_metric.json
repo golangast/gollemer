@@ -1,1 +1,1 @@
-{"step":680,"loss":7.585606975034474,"lb_loss":0.11152543979140297,"lr":0.000022113518758085384,"active_experts":[],"is_cooling":false,"circuit_breaker":false,"temperature":0.9999700780286298,"thawed_count":2}
+{"step":310,"loss":8.889300244808428,"lb_loss":0.17723202390541004,"lr":0.000015532018111254853,"active_experts":[],"is_cooling":false,"circuit_breaker":false,"temperature":0.9999937594830589,"thawed_count":2}
