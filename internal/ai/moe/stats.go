@@ -358,3 +358,110 @@ func ValidateExpertHealth(layerName string, counts []int) {
 	}
 	fmt.Println("-------------------------------")
 }
+
+// CalculateImportanceLoss computes the penalty for unbalanced expert usage.
+// probs: A 2D slice [batch_size][num_experts] from the router's softmax.
+func CalculateImportanceLoss(probs [][]float64) float64 {
+	if len(probs) == 0 {
+		return 0
+	}
+	batchSize := float64(len(probs))
+	numExperts := len(probs[0])
+	
+	// Sum probabilities for each expert across the batch
+	expertSums := make([]float64, numExperts)
+	for _, sample := range probs {
+		for i, p := range sample {
+			expertSums[i] += p
+		}
+	}
+
+	// Calculate the mean probability per expert
+	var loss float64
+	for _, sum := range expertSums {
+		meanProb := sum / batchSize
+		loss += meanProb * meanProb
+	}
+
+	return loss * float64(numExperts)
+}
+
+// LogUtilization prints a visual bar chart of how much each expert is used.
+func LogUtilization(gateProbs [][]float64) {
+	if len(gateProbs) == 0 {
+		return
+	}
+	numExperts := len(gateProbs[0])
+	counts := make([]float64, numExperts)
+
+	// Count "hard" selections (which expert had the highest prob)
+	for _, sample := range gateProbs {
+		maxIdx := 0
+		for i, p := range sample {
+			if p > sample[maxIdx] {
+				maxIdx = i
+			}
+		}
+		counts[maxIdx]++
+	}
+
+	fmt.Printf("\n--- Expert Utilization (Batch) ---\n")
+	for i, count := range counts {
+		percentage := (count / float64(len(gateProbs))) * 100
+		bar := strings.Repeat("█", int(percentage/2)) // 1 block per 2%
+		fmt.Printf("Expert %d: [%-50s] %.1f%%\n", i, bar, percentage)
+	}
+}
+
+// CalculateImportanceLossTensor is a version of CalculateImportanceLoss that takes a Tensor.
+func CalculateImportanceLossTensor(probs *tensor.Tensor) float64 {
+	if probs == nil || len(probs.Data) == 0 {
+		return 0
+	}
+	numExperts := probs.Shape[len(probs.Shape)-1]
+	numTokens := len(probs.Data) / numExperts
+	
+	expertSums := make([]float64, numExperts)
+	for t := 0; t < numTokens; t++ {
+		base := t * numExperts
+		for e := 0; e < numExperts; e++ {
+			expertSums[e] += probs.Data[base+e]
+		}
+	}
+
+	var loss float64
+	for _, sum := range expertSums {
+		meanProb := sum / float64(numTokens)
+		loss += meanProb * meanProb
+	}
+
+	return loss * float64(numExperts)
+}
+
+// LogUtilizationTensor is a version of LogUtilization that takes a Tensor.
+func LogUtilizationTensor(gateProbs *tensor.Tensor) {
+	if gateProbs == nil || len(gateProbs.Data) == 0 {
+		return
+	}
+	numExperts := gateProbs.Shape[len(gateProbs.Shape)-1]
+	numTokens := len(gateProbs.Data) / numExperts
+	counts := make([]float64, numExperts)
+
+	for t := 0; t < numTokens; t++ {
+		base := t * numExperts
+		maxIdx := 0
+		for e := 1; e < numExperts; e++ {
+			if gateProbs.Data[base+e] > gateProbs.Data[base+maxIdx] {
+				maxIdx = e
+			}
+		}
+		counts[maxIdx]++
+	}
+
+	fmt.Printf("\n--- Expert Utilization (Batch Tensor) ---\n")
+	for i, count := range counts {
+		percentage := (count / float64(numTokens)) * 100
+		bar := strings.Repeat("█", int(percentage/2)) // 1 block per 2%
+		fmt.Printf("Expert %d: [%-50s] %.1f%%\n", i, bar, percentage)
+	}
+}

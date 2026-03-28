@@ -234,3 +234,22 @@ func CrossEntropyLoss(logits *Tensor, targetIDs []int, padID int, labelSmoothing
 
 	return loss, grad
 }
+
+// ArgMax returns the index and confidence (max value) of the highest probability in the tensor.
+func ArgMax(tensor *Tensor) (int, float64) {
+	if tensor == nil || len(tensor.Data) == 0 {
+		return -1, 0.0
+	}
+
+	maxIdx := 0
+	maxVal := tensor.Data[0]
+
+	for i, val := range tensor.Data {
+		if val > maxVal {
+			maxVal = val
+			maxIdx = i
+		}
+	}
+
+	return maxIdx, maxVal
+}

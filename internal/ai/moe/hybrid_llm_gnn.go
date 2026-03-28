@@ -195,3 +195,10 @@ func (e *HybridLLMGNNEncoder) SetMode(training bool) {
 func (e *HybridLLMGNNEncoder) GetMoELayers() []*MoELayer {
 	return e.LLMEncoder.GetMoELayers()
 }
+
+// SetGateTemperature updates the temperature for the inner LLM encoder.
+func (e *HybridLLMGNNEncoder) SetGateTemperature(temp float64) {
+	if e.LLMEncoder != nil {
+		e.LLMEncoder.SetGateTemperature(temp)
+	}
+}

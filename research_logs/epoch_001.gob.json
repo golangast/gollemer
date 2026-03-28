@@ -1,9 +1,9 @@
 {
   "StepCount": 3092,
   "Version": "gollemer-chat-v1.2",
-  "Commitment": 0.9349028352240425,
+  "Commitment": 0.9350200023876064,
   "TokensProcessed": 0,
-  "TotalDuration": "49m5.738163505s",
+  "TotalDuration": "36m53.102310773s",
   "LastProfile": {
     "Name": "Standard",
     "LR": 0.001,

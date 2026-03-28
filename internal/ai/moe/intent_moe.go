@@ -154,6 +154,7 @@ type Encoder interface {
 	SetMode(bool)
 	ClearState()
 	GetMoELayers() []*MoELayer
+	SetGateTemperature(float64)
 }
 
 // ExpertStat holds performance metrics for a specific expert.
@@ -541,6 +542,16 @@ func (m *IntentMoE) Parameters() []*tensor.Tensor {
 	params = append(params, m.Encoder.Parameters()...)
 	params = append(params, m.Decoder.Parameters()...)
 	return params
+}
+
+// SetGateTemperature updates the temperature for all MoE layers in the model.
+func (m *IntentMoE) SetGateTemperature(temp float64) {
+	if m.Encoder != nil {
+		m.Encoder.SetGateTemperature(temp)
+	}
+	if m.Decoder != nil && m.Decoder.OutputMoE != nil {
+		m.Decoder.OutputMoE.RouterTemperature = temp
+	}
 }
 
 // GreedySearchDecode performs greedy decoding (temperature=1.0).

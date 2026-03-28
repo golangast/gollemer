@@ -20,5 +20,4 @@ else
 fi
 
 # 4. Open the environment
-# We'll just print a welcome message as the "IDE" part is the current workspace
-echo -e "\n/ʕ●‿●ʔ/ > System Online. Welcome back, Zachary!"
+echo -e "\nHi, welcome to gollemer!"

@@ -94,7 +94,6 @@ func (r *Runner) Init() {
 	if step, active := sqlite_db.GetCurrentStep(r.DB); active {
 		r.TutorialState.Step = step
 		r.TutorialState.Active = active
-		r.Mascot.Say(ui.Happy, "Welcome back! Ready to continue from Tutorial Step "+fmt.Sprint(step)+"?")
 	}
 
 	r.Mascot.AuditProjectSize(r.ProjectRoot)
@@ -184,6 +183,9 @@ func (r *Runner) Run() {
 	lastDirState := &discovery.FolderState{}
 
 	initialMsg := discovery.GetExpertAdvice(projectCtx)
+	if initialMsg == "Ready to code! What's the focus for this session?" {
+		initialMsg = "Hi, welcome to gollemer!"
+	}
 	r.Mascot.Speak(ui.MoodHappy, initialMsg)
 
 	for {
@@ -274,7 +276,7 @@ func (r *Runner) handleInput(query string) {
 	}
 	if query == "tutorial" || query == "start tutorial" {
 		if r.TutorialState.Active {
-			r.Mascot.Speak(ui.MoodHappy, fmt.Sprintf("Resuming tutorial from Step %d. "+tutorialStepHint(r.TutorialState.Step), r.TutorialState.Step))
+			r.Mascot.Speak(ui.MoodHappy, fmt.Sprintf("Hi, welcome to gollemer! Resuming tutorial from Step %d. (Type 'reset' to start over)", r.TutorialState.Step))
 			return
 		}
 		r.TutorialState.Step = 1
@@ -282,16 +284,16 @@ func (r *Runner) handleInput(query string) {
 		sqlite_db.SyncStep(r.DB, 1, true)
 		loc, _ := r.Mascot.CalculateProjectSize(r.ProjectRoot)
 		r.Mascot.DrawHUD(1, 4, loc)
-		r.Mascot.Speak(ui.Happy, "Tutorial started! Let's kick things off.\n\nStep 1: Create a folder. Try: 'create folder mynews'")
+		r.Mascot.Speak(ui.Happy, "Hi, welcome to gollemer! Tutorial started.\n\nStep 1: Create a folder. Try: 'create folder mynews'")
 		return
 	}
-	if query == "restart tutorial" {
+	if query == "restart tutorial" || query == "restart" || query == "reset tutorial" || query == "reset" || query == "clear tutorial" || query == "clear progress" {
 		r.TutorialState.Step = 1
 		r.TutorialState.Active = true
 		sqlite_db.SyncStep(r.DB, 1, true)
 		loc, _ := r.Mascot.CalculateProjectSize(r.ProjectRoot)
 		r.Mascot.DrawHUD(1, 4, loc)
-		r.Mascot.Speak(ui.Happy, "Tutorial restarted from Step 1!\n\nStep 1: Create a folder. Try: 'create folder mynews'")
+		r.Mascot.Speak(ui.Happy, "Hi, welcome to gollemer! Tutorial cleared and restarted from Step 1.\n\nStep 1: Create a folder. Try: 'create folder mynews'")
 		return
 	}
 	r.handleInteractiveQuery(query)

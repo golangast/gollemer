@@ -171,7 +171,16 @@ $GO_CMD build -o gollemer_server ./examples/learningfolder
 
 echo "🌐 System Live at http://localhost:5500"
 ./gollemer_server --ema_alpha=0.001 --shake_threshold=0.01
+# Step 2: Calculate decayed temperature for the current epoch
+# Formula: TEMP = START_TEMP * (DECAY_RATE ^ EPOCH)
+START_TEMP=1.0
+DECAY_RATE=0.95
+CURRENT_TEMP=$(echo "scale=4; $START_TEMP * ($DECAY_RATE ^ $EPOCH)" | bc -l)
 
+echo "--- Starting Epoch $EPOCH with Temperature: $CURRENT_TEMP ---"
+
+# Pass the calculated temperature into your Go binary
+./gollemer train --data="./data/train.bin" --temp=$CURRENT_TEMP
 # --- Functions ---
 function bench() {
     go test -bench=. -benchmem ./...

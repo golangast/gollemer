@@ -1,1 +1,1 @@
-/home/zendrulat/code/gollemer/examples/tutorial/jim
+/home/zendrulat/code/gollemer/mynews
