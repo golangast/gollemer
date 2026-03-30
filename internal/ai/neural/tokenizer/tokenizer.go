@@ -159,7 +159,17 @@ func TokenizeAndConvertToIDs(text string, vocab *vocab.Vocabulary, maxLen int) (
 		}
 		token := string(runes[start:i])
 		if token != "" {
-			tokenIDs = append(tokenIDs, vocab.GetTokenID(token))
+			// Sub-word Fallback: If word is missing, try to break it into prefixes if they exist
+			id := vocab.GetTokenID(token)
+			if id == vocab.UnkID && len(token) > 4 {
+				// Simple split for now: first 3 characters + rest
+				p1 := token[:3]
+				p2 := token[3:]
+				tokenIDs = append(tokenIDs, vocab.GetTokenID(p1))
+				tokenIDs = append(tokenIDs, vocab.GetTokenID(p2))
+			} else {
+				tokenIDs = append(tokenIDs, id)
+			}
 		}
 	}
 

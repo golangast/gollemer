@@ -156,7 +156,7 @@ func VerifyModelIntegrity(m *moe.IntentMoE) {
 
 // Old ThawScheduler removed in favor of step-based CosineDecay scheduler in internal/ai/training/chat/thaw_scheduler.go
 
-func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool, initialLR float64, weightDecay float64, autoHeal bool) {
+func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool, initialLR float64, weightDecay float64, autoHeal bool, maxGradNorm float64) {
 	fmt.Println("--- 🗣️  Training Chat Model ---")
 
 	// Pre-declare helper to find MoE layers
@@ -238,6 +238,22 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool, in
 
 skipCSV:
 
+	// --- Pre-compute the final vocabulary size from training data ---
+	// This lets us initialize a fresh model at the correct size, avoiding
+	// the expensive ResizeOutputLayer call that is the primary OOM source.
+	tmpVocab := mainvocab.NewVocabulary()
+	tmpVocab.AddToken("<pad>")
+	tmpVocab.AddToken("<s>")
+	tmpVocab.AddToken("</s>")
+	tmpVocab.AddToken("UNK")
+	for _, pair := range chatPairs {
+		for _, t := range cleanTokenize(pair.Q + " " + pair.A) {
+			tmpVocab.AddToken(t)
+		}
+	}
+	precomputedVocabSize := tmpVocab.Size()
+	tmpVocab = nil // free immediately
+	log.Printf("📐 Pre-computed final vocab size: %d", precomputedVocabSize)
 
 	// Reset ActiveLayers to ensure we track only the current model's layers and prevent leaks
 	moe.ActiveLayers = nil
@@ -259,24 +275,40 @@ skipCSV:
 			
 			InspectRouterWeights(intentModel)
 			VerifyModelIntegrity(intentModel)
-		} else {
-			log.Printf("⚠️  Failed to load existing MoE model: %v. Starting fresh.", err)
+
+			// Memory Safety: If the loaded model is too large, it's prone to OOM.
+			// GPT-3 Small size (768d) is the upper limit for this system.
+			if intentModel.EmbeddingDim > 768 {
+				log.Printf("⚠️  Legacy %dd model detected (Extreme OOM Risk). Forcing fresh 768d start.", intentModel.EmbeddingDim)
+				intentModel = nil
+			}
 		}
 	}
 
 	if intentModel == nil {
-		log.Println("🚀 Initializing compact MoE (256d Encoder, 128d Decoder, 8 Encoder Experts, Linear Output)")
-		// IMPORTANT: Pass nil for w2v here to avoid allocating a 60k+ word embedding table.
-		// W2V weights are injected selectively after the SentenceVocab is built.
-		intentModel, _ = moe.NewHybridIntentMoE(
-			5000,    // small placeholder, will be resized later
-			256,
-			8,
-			512, 512, 5000, 4, nil, // nil w2v = no huge allocation, 4 attention heads
+		log.Println("🚀 Initializing high-capacity 768d MoE Transformer (4 Experts, 2-Layer Decoder)")
+		// Use the pre-computed final vocab size so we never need to call
+		// ResizeOutputLayer for a fresh model — this is the main OOM fix.
+		freshVocab := precomputedVocabSize
+		if freshVocab < 100 {
+			freshVocab = 8000 // sanity floor if pre-computation didn't run
+		}
+		log.Printf("🔢 Initializing decoder with final vocab size: %d", freshVocab)
+		// Restoring 768d: 4 experts + 2-layer Decoder to match user request (GPT-3 small config dim)
+		var err error
+		intentModel, err = moe.NewHybridIntentMoE(
+			freshVocab, // encoder vocab at final size
+			768,
+			4, // 4 experts is safer for memory than 8
+			768, 768, freshVocab, 12, nil,
 		)
-		// numExperts=1 → single Linear output layer (vastly cheaper than 8 MoE experts with 4112 output dim)
-		// hiddenSize=256 must match encoder output dim for cross-attention; attentionHeads=4
-		intentModel.Decoder, _ = moe.NewRNNDecoder(256, 5000, 256, 4, 1, 0.1, 1)
+		if err != nil {
+			log.Fatalf("Failed to create MoE model: %v", err)
+		}
+
+		// Ensure 2-Layer Decoder is consistent with the architecture capacity.
+		// Using 1 expert in the output layer to save ~600MB RAM on this constrained system.
+		intentModel.Decoder, _ = moe.NewRNNDecoder(768, freshVocab, 768, 12, 2, 0.1, 1)
 
 		// Phase 1: Robust initialization
 		log.Println("🛠️ Phase 1: Robust init (He for experts, Orthogonal/High-Scale for router)...")
@@ -309,19 +341,8 @@ skipCSV:
 			}
 		}
 
-		// Phase 3: Embedding Signal Boost
-		log.Println("⚡ Phase 3: Boosting Embedding signals by 1.2x for better expert contrast...")
-		for i := range intentModel.Embedding.Weight.Data {
-			intentModel.Embedding.Weight.Data[i] *= 1.2
-		}
-
-		// Phase 4: Residual Signal Boost (Vanishing Gradient Shield)
-		log.Println("⚡ Phase 4: Setting base ResidualScale to 1.5x for stronger identity flow...")
-		for _, layer := range findMoELayers(intentModel) {
-			if layer.ResidualScale != nil {
-				layer.ResidualScale.Data[0] = 1.5
-			}
-		}
+		// Signal Boosts removed for numerical stability (preventing 37M gradient norm)
+		log.Println("⚡ Phase 3 & 4: Manual Signal Boosting disabled for stability.")
 	}
 
 	// Ensure ActiveLayers is synced with the model we are actually using
@@ -442,21 +463,48 @@ skipCSV:
 	// Resize Encoder Embedding if Vocabulary has grown
 	currentVocabSize := intentModel.SentenceVocab.Size()
 	if intentModel.Embedding.VocabSize != currentVocabSize {
-		log.Printf("Resizing Encoder Embedding from %d to %d", intentModel.Embedding.VocabSize, currentVocabSize)
-		newEmb := neuralnn.NewEmbedding(currentVocabSize, 256)
+		log.Printf("Resizing Encoder Embedding from %d to %d (Dim: %d)", intentModel.Embedding.VocabSize, currentVocabSize, intentModel.EmbeddingDim)
+		newEmb := neuralnn.NewEmbedding(currentVocabSize, intentModel.EmbeddingDim)
 		
 		// Fill with Word2Vec weights where possible
 		for i := 0; i < currentVocabSize; i++ {
 			word := intentModel.SentenceVocab.GetWord(i)
 			if id, ok := w2v.Vocabulary[word]; ok {
 				vec := w2v.WordVectors[id]
-				if i*256 < len(newEmb.Weight.Data) {
-					copy(newEmb.Weight.Data[i*256:], vec)
+				if len(vec) == intentModel.EmbeddingDim {
+					copy(newEmb.Weight.Data[i*intentModel.EmbeddingDim:], vec)
+				} else {
+					// Handle dimension mismatch gracefully
+					copyLen := min(len(vec), intentModel.EmbeddingDim)
+					copy(newEmb.Weight.Data[i*intentModel.EmbeddingDim:], vec[:copyLen])
 				}
 			}
 		}
 		intentModel.Embedding = newEmb
 	}
+
+	// Move Word2Vec coverage check here before we free it
+	hit := 0
+	miss := 0
+	for _, pair := range chatPairs {
+		tokens := cleanTokenize(pair.Q)
+		for _, t := range tokens {
+			if _, ok := w2v.Vocabulary[t]; ok {
+				hit++
+			} else {
+				miss++
+			}
+		}
+	}
+	log.Printf("Word2Vec Coverage: %d hits, %d misses (%.2f%%)", hit, miss, float64(hit)/float64(hit+miss)*100)
+
+	// Free Word2Vec model from memory — it's no longer needed for weights
+	log.Printf("🗑️  Freeing Word2Vec vectors from memory (%d vectors)...", w2v.VocabSize)
+	w2v.WordVectors = nil
+	// We keep w2v.Vocabulary if needed for other things, but most of them should move to SentenceVocab
+	runtime.GC()
+	debug.FreeOSMemory()
+	log.Println("✅ Word2Vec heavy vectors freed.")
 
 	// --- [Balanced Mixing Strategy] ---
 	// Separate into Help (Technical) and Social/General
@@ -500,24 +548,11 @@ skipCSV:
 
 	fmt.Printf("Data Split Pre-Limit (Balanced): %d Training, %d Validation\n", len(trainPairs), len(valPairs))
 
-	// Word2Vec coverage check
-	hit := 0
-	miss := 0
-	for _, pair := range chatPairs {
-		tokens := cleanTokenize(pair.Q)
-		for _, t := range tokens {
-			if _, ok := w2v.Vocabulary[t]; ok {
-				hit++
-			} else {
-				miss++
-			}
-		}
-	}
-	log.Printf("Word2Vec Coverage: %d hits, %d misses (%.2f%%)", hit, miss, float64(hit)/float64(hit+miss)*100)
+	// Word2Vec coverage already reported above
 
-	// Resize Decoder if Vocabulary has grown (OR if architecture changed: LayerNorm needs to be 512)
+	// Resize Decoder if Vocabulary has grown (OR if architecture changed: total dim is now 1536)
 	currentVocabSize = intentModel.SentenceVocab.Size()
-	// Always force a resize if LayerNorm is the old size (256) to handle the architecture upgrade
+	// Always force a resize if LayerNorm is the old size (e.g., 512) to handle the architecture upgrade
 	needsResize := intentModel.Decoder.Embedding.VocabSize != currentVocabSize
 	if intentModel.Decoder.LayerNorm != nil && intentModel.Decoder.LayerNorm.NormalizedShape != (intentModel.Decoder.LSTM.HiddenSize + intentModel.Decoder.Embedding.DimModel) {
 		needsResize = true
@@ -554,22 +589,25 @@ skipCSV:
 	log.Printf("Final Train Set Size: %d", len(trainPairs))
 
 	// Use Iterator pattern to save memory and speed up training
-	iterator := NewChatDataIterator(trainPairs, w2v, intentModel.SentenceVocab, unkID)
+	iterator := NewChatDataIterator(trainPairs, intentModel.SentenceVocab, unkID)
+	if overfitMode {
+		iterator.MaxLen = 768 // Match high-capacity architecture
+	}
 
-	// Free Word2Vec model from memory — it's no longer needed after the iterator and embeddings are built.
-	log.Printf("🗑️  Freeing Word2Vec model from memory (%d vectors)...", w2v.VocabSize)
-	w2v.WordVectors = nil
+	// Extra cleanup
 	w2v.Vocabulary = nil
 	runtime.GC()
 	debug.FreeOSMemory()
-	log.Println("✅ Word2Vec memory freed.")
 
 	// Training Loop
 	epochs := 60
-	const batchSize = 2 // Reduced from 4 to limit memory usage during backward pass
+	const batchSize = 1 // Emergency reduction to 1 for 512d OOM safety
 	
-	// Optimizer initialization (Wrapped with Cooling Safety)
-	baseOptimizer := neuralnn.NewOptimizer(intentModel.Parameters(), initialLR, 1.5) // 1.5 is the Gradient Clip Value
+	// Optimizer initialization (Wrapped with Cooling Safety).
+	// ClipThreshold is set to 0 (disabled) inside Adam because we perform a single,
+	// authoritative global-L2 clip via train.ClipParamGrads before calling Step().
+	// Having two clips at different thresholds silently overrides maxGradNorm.
+	baseOptimizer := neuralnn.NewOptimizer(intentModel.Parameters(), initialLR, 0)
 	optimizer := &neuralnn.CoolingOptimizer{
 		Base: baseOptimizer,
 	}
@@ -590,8 +628,6 @@ skipCSV:
 	globalStep := 0
 	epochLBLoss := 0.0
 	bestPPL := math.MaxFloat64
-	lastEpochLoss := math.MaxFloat64
-	plateauCount := 0
 
 	if adam, ok := optimizer.Base.(*neuralnn.Adam); ok {
 		adam.Lambda = weightDecay
@@ -605,7 +641,23 @@ skipCSV:
 		WarmUp:    4, // Match existing warmup logic
 	}
 
+	// Plateau & Stagnancy Tracker Setup
+	pConfig := train.PlateauConfig{
+		Patience:  3,
+		Cooldown:  2,
+		Factor:    0.5,
+		TempDecay: 0.95,
+		MinLR:     1e-6,
+	}
+	pState := train.PlateauState{BestPPL: 1000.0} // Initial PPL estimate
+	stTracker := &train.StagnancyTracker{Epsilon: 1e-5}
+	currentEpochTemp := 1.0
+
 	trainer := &moe.Trainer{CollapseCount: 0}
+	// ExpertMonitor: session-level dispatch counter reset every epoch.
+	// Tracks which experts actually receive tokens and computes load imbalance.
+	numExperts := len(moe.ActiveLayers[0].Experts)
+	epochMonitor := moe.NewExpertMonitor(numExperts)
 	startTime := time.Now()
 	var totalTokens int64
 	var totalDuration time.Duration
@@ -668,15 +720,20 @@ skipCSV:
 	fmt.Printf("Training on %d pairs for %d epochs (patience=%d)...\n", len(chatPairs), epochs, patienceLimit)
 
 	// New Step-based ThawScheduler: manages which experts are frozen per step based on Cosine Decay.
+	// FIX: Lowered LayerThresholds significantly — the model is at Step 20k / Epoch 6 and only
+	// had 2/8 experts active. Old thresholds (0.85, 0.60, 0.35, 0.15) were too conservative.
+	// With a StartTemp=1.0 -> MinTemp=0.1 cosine decay, temperature is ~0.97 at Step 20k,
+	// which means the model is still very early in its thaw arc. The new thresholds ensure
+	// all 8 experts are active by ~30% of total training steps.
 	thawScheduler := &ThawScheduler{
 		MaxSteps:    epochs * (len(trainPairs) / batchSize),
-		StartTemp:   1.0,
-		MinTemp:     0.1,
+		StartTemp:   2.5,
+		MinTemp:     1.2,
 		LayerThresholds: []float64{
-			0.85, // Thaw Layer/Expert 1 early
-			0.60, // Thaw Layer/Expert 2
-			0.35, // Thaw Layer/Expert 3
-			0.15, // Thaw Layer/Expert 4
+			2.4, // Thaw Cluster 0 (2 experts) immediately
+			2.0, // Thaw Cluster 1 (4 experts)
+			1.7, // Thaw Cluster 2 (6 experts)
+			1.4, // Thaw Cluster 3 (All 8 experts)
 		},
 	}
 
@@ -692,6 +749,9 @@ skipCSV:
 
 	// Periodic checkpoints directory (kept separate from best-model checkpoints)
 	checkpointDir := filepath.Join(projectRoot, "data/models/checkpoints")
+	if err := os.MkdirAll(checkpointDir, 0755); err != nil {
+		log.Printf("⚠️  Warning: Could not create checkpoint directory: %v", err)
+	}
 
 	for epoch := 0; epoch < epochs; epoch++ {
 		epochStartTime := time.Now()
@@ -708,7 +768,7 @@ skipCSV:
 		}
 
 		// Force diverse routing for the first 4 epochs to break out of mode collapse
-		currentEpochTemp := annealer.GetTemp(epoch)
+		currentEpochTemp = annealer.GetTemp(epoch)
 		intentModel.SetGateTemperature(currentEpochTemp)
 		log.Printf("🌡️ Epoch %d | Temperature: %.4f", epoch, currentEpochTemp)
 
@@ -716,10 +776,11 @@ skipCSV:
 		iterator.Reset()
 		totalLoss := 0.0
 		batches := 0
-		// Reset utilization for each layer
+		// Reset utilization for each layer and the session monitor
 		for _, l := range moe.ActiveLayers {
 			l.ResetUtilizationStats()
 		}
+		epochMonitor.Reset() // Start fresh dispatch counts for this epoch
 		
 		iterator.MaxLen = curriculum.MaxSequenceLen
 		if overfitMode {
@@ -738,7 +799,8 @@ skipCSV:
 			close(prefetchCh)
 		}()
 
-		accumulationSteps := 64 // Effective batch size = 2 * 64 = 128
+		maxGradNorm := 10.0      // Relaxed from 5.0 to detect true explosions vs normal heavy lifting
+		accumulationSteps := 16 // Reduced from 64: prevents gradient explosion during accumulation
 		optimizer.ZeroGrad() // Initial zero out for accumulation
 
 		for batch := range prefetchCh {
@@ -820,7 +882,16 @@ skipCSV:
 			var check []string
 			if globalStep%500 == 0 && globalStep > 0 {
 				fmt.Println("\n🛑 Running Circuit Breaker Check...")
+				// Critical Memory Safety: Generation is memory-hungry; clear existing garbage first.
+				runtime.GC()
+				debug.FreeOSMemory()
+				
 				check = GenerateTokens(intentModel, "how are you", 10)
+				
+				// Reset model states populated during generation to free memory immediately.
+				intentModel.ClearState()
+				runtime.GC()
+				debug.FreeOSMemory()
 				
 				// Use new IsStuck utility with 6-token repeat threshold
 				if IsStuck(check, 6.0) {
@@ -913,10 +984,10 @@ skipCSV:
 				}
 				// Normalize step-by-step path by volume (consistent with vectorized path)
 				div := float64(len(logits))
-				batchLoss = (stepLossTotal / div) * 2.0 // Boost focus on conversational personality
+				batchLoss = stepLossTotal / div // Removed 2x boost — it was amplifying gradients
 				for t := range grads {
 					for i := range grads[t].Data {
-						grads[t].Data[i] /= (div / 2.0) // Propagate the boost to gradients
+						grads[t].Data[i] /= div // Propagate the normalized loss to gradients
 					}
 				}
 			}
@@ -937,7 +1008,7 @@ skipCSV:
 				currentBatchLayers = append(currentBatchLayers, intentModel.Decoder.OutputMoE)
 			}
 			
-			lambda := 0.1
+			lambda := 0.25
 			var batchZLoss float64
 			var lbLoss float64
 			for _, layer := range currentBatchLayers {
@@ -998,30 +1069,78 @@ skipCSV:
 					// 3. Update weights every 'accumulationSteps' batches
 					if (globalStep+1)%accumulationSteps == 0 {
 						params := intentModel.Parameters()
-						gradNorm := 0.0
+						// --- Global L2 Gradient Clipping via train.ClipParamGrads ---
+						// 1. First normalize accumulated grads by accumulation steps so the
+						//    clip threshold applies to the effective single-sample gradient magnitude.
+						accScale := 1.0 / float64(accumulationSteps)
 						for _, p := range params {
 							if p.Grad != nil {
-								for _, g := range p.Grad.Data {
-									gradNorm += g * g
+								for i := range p.Grad.Data {
+									p.Grad.Data[i] *= accScale
 								}
 							}
 						}
-						gradNorm = math.Sqrt(gradNorm)
+						// 2. Clip on the normalized gradient
+						paramGrads := make([][]float64, 0, len(params))
+						for _, p := range params {
+							if p.Grad != nil {
+								paramGrads = append(paramGrads, p.Grad.Data)
+							}
+						}
+						rawNorm, clipped := train.ClipParamGrads(paramGrads, maxGradNorm)
+						gradNorm := rawNorm
+						if clipped {
+							gradNorm = maxGradNorm
+							
+							// Stability Probe: Identify the parameter contributing most to the norm
+							if rawNorm > 50000.0 {
+								maxParamNorm := 0.0
+								hotParamName := "unknown"
+								totalParams := len(params)
+								for i, p := range params {
+									if p.Grad != nil {
+										pn := 0.0
+										for _, g := range p.Grad.Data { pn += g * g }
+										pn = math.Sqrt(pn)
+										if pn > maxParamNorm {
+											maxParamNorm = pn
+											// Heuristic to guess component
+											component := "Expert/Inner"
+											if p.IsRouter { component = "Router/Gating" }
+											if i < 3 { component = "Embedding/Encoder" }
+											if i > totalParams-15 { component = "Decoder/Projection" }
+											
+											hotParamName = fmt.Sprintf("%s [idx=%d, size=%d]", component, i, len(p.Data))
+										}
+									}
+								}
+								log.Printf("🔥 [Stability Alert] Top Magnitude: %s | Norm: %.2f (Total Raw Norm: %.2f)", hotParamName, maxParamNorm, rawNorm)
+							}
+						}
 
-						clipValue := 1.0
-						if gradNorm > clipValue {
-							scale := clipValue / (gradNorm + 1e-6)
-							for _, p := range params {
-								if p.Grad != nil {
-									tensor.MulScalar(p.Grad.Data, scale, p.Grad.Data)
+						// --- SWP: Update Stagnancy Masks ---
+						for _, p := range params {
+							if p.Grad != nil && p.RequiresGrad {
+								if len(p.AccGrads) == 0 {
+									p.AccGrads = make([]float64, len(p.Data))
 								}
+								p.TimidMask = stTracker.CalculateTimidMask(p.AccGrads, p.Grad.Data)
 							}
-							gradNorm = clipValue
 						}
+
+						// Dynamic LR update using Cosine Decay with 10% Warmup
+						totalSteps := epochs * (len(trainPairs) / batchSize)
+						currentLR := getLR(globalStep, totalSteps, peakLR)
+						optimizer.SetLearningRate(currentLR)
 
 						optimizer.Step()
 						optimizer.ZeroGrad()
-						log.Printf("📥 [Step %d] Weights updated via Gradient Accumulation (Norm: %.4f)", globalStep, gradNorm)
+
+						clipIndicator := ""
+						if clipped {
+							clipIndicator = fmt.Sprintf(" [CLIPPED: raw=%.2f]", rawNorm)
+						}
+						log.Printf("📥 [Step %d] Weights updated | Norm: %.4f%s | LR: %.8f", globalStep, gradNorm, clipIndicator, currentLR)
 					}
 				}
 			}()
@@ -1031,6 +1150,12 @@ skipCSV:
 			
 			// Clear intermediate states to free memory
 			intentModel.ClearState()
+			
+			// Critical Memory Safety for 768d on 4GB systems:
+			// Force GC periodically when intermediate tensors might have fragmented the heap.
+			if batches % 4 == 0 {
+				runtime.GC()
+			}
 
 			// Update metrics
 			totalLoss += batchLoss
@@ -1043,6 +1168,7 @@ skipCSV:
 				selected := layer.GetSelectedExperts()
 				for _, experts := range selected {
 					activeExperts = append(activeExperts, experts...)
+					epochMonitor.LogSelections(experts) // Feed into ExpertMonitor
 				}
 			}
 
@@ -1082,16 +1208,99 @@ skipCSV:
 					epoch, batches, totalBatches, batchLoss, epochLBLoss/float64(batches), globalStep, learningRate, batchesPerSec)
 				
 				// 🧩 Periodically print a Heatmap for the first expert of each layer
-				if batches % 200 == 0 {
+				if batches%200 == 0 {
 					for i, layer := range moe.ActiveLayers {
 						moe.PrintExpertHeatmap(fmt.Sprintf("L%d E0", i), layer.Experts[0], 0.05)
+					}
+				}
+
+				// 💾 PERIODIC SAVING: Every 250 batches, save the model to disk.
+				if batches > 0 && batches%250 == 0 {
+					log.Printf("💾 [CHECKPOINT] Starting periodic save at Step %d (Batch %d)...", globalStep, batches)
+					fmt.Printf("💾 Periodic Saving: Step %d (Batch %d)\n", globalStep, batches)
+					
+					// Use a separate path for periodic savings to avoid overwriting best_model
+					periodicPath := filepath.Join(checkpointDir, "latest_periodic.gob")
+					
+					// Use Checkpoint struct for full metadata
+					ckpt := &moe.Checkpoint{
+						Model:           intentModel,
+						StepCount:       globalStep,
+						LastProfile:     profile,
+						Commitment:      intentModel.CalculateCommitment(),
+						TokensProcessed: totalTokens,
+						TotalDuration:   totalDuration,
+						Version:         "gollemer-chat-v1.2-periodic",
+					}
+
+					if err := moe.SaveIntentMoECheckpoint(ckpt, periodicPath); err != nil {
+						log.Printf("⚠️  Failed to save periodic checkpoint: %v", err)
+						fmt.Printf("⚠️  Periodic Save ERROR: %v\n", err)
+					} else {
+						log.Printf("💾 [CHECKPOINT] SUCCESS: Model saved to %s", periodicPath)
+						fmt.Printf("💾 Periodic Save COMPLETE: %s\n", periodicPath)
 					}
 				}
 			}
 
 			// Memory safety: Clear computation graph every batch
 			DetachModel(intentModel)
-			
+
+			if globalStep > 0 && globalStep%500 == 0 {
+				log.Printf("🧪 Periodic Generation Check [Step %d]", globalStep)
+				s1, e1 := runTestSentence("Identity", "Who are you?", intentModel)
+				s2, e2 := runTestSentence("Help", "How can you help?", intentModel)
+				avgScore := (s1 + s2) / 2.0
+				
+				// 🧩 Expert Diversity Analysis
+				expertCounts := make(map[int]int)
+				for _, eid := range append(e1, e2...) {
+					expertCounts[eid]++
+				}
+				mostUsed := -1
+				maxC := 0
+				for eid, count := range expertCounts {
+					if count > maxC {
+						maxC = count
+						mostUsed = eid
+					}
+				}
+				totalTokens := len(e1) + len(e2)
+				dominance := 0.0
+				if totalTokens > 0 {
+					dominance = float64(maxC) / float64(totalTokens)
+				}
+
+				// 🚀 Closed-Loop Adaptive Control
+				if avgScore < 8.0 {
+					currentEpochTemp += 0.05
+					intentModel.SetGateTemperature(currentEpochTemp)
+					log.Printf("⚠️  Low Quality (%.1f) -> 🌡️  Increasing Temperature to %.4f", avgScore, currentEpochTemp)
+				} else if avgScore > 13.0 {
+					peakLR *= 0.8
+					log.Printf("🏆  High Quality (%.1f) -> 📉  Slowing Learning Rate to %.8f", avgScore, peakLR)
+				}
+
+				if dominance > 0.8 && totalTokens > 3 {
+					log.Printf("⚖️  Expert Collapse Detected (E%d = %.1f%%) -> 🎲 Shaking Routers to force exploration", mostUsed, dominance*100)
+					intentModel.ShakeRouters(0.08)
+					currentEpochTemp += 0.1
+					intentModel.SetGateTemperature(currentEpochTemp)
+
+					if dominance > 0.95 && globalStep > 800 {
+						log.Printf("🏴‍☠️  MUTINY: Expert %d is too dominant. Reducing its router weights to zero to force other experts to wake up...", mostUsed)
+						intentModel.PruneExpertRouter(mostUsed)
+					}
+				}
+
+				// 🛡️ Load Balance Governor: Prevents LB loss from breaking training
+				avgLBLoss := epochLBLoss / float64(batches)
+				if avgLBLoss > 1.5 {
+					log.Printf("🛑 LB Loss Alert (%.2f) -> Reducing LR to prevent divergence", avgLBLoss)
+					peakLR *= 0.7
+				}
+			}
+
 			globalStep++
 		}
 		// End of Epoch: log final batch count, print utilization, clear computation graph.
@@ -1178,6 +1387,10 @@ skipCSV:
 			avgLoss = totalLoss / float64(batches)
 		}
 		fmt.Printf("Epoch %d: Avg Loss %.4f in %.1fs\n", epoch+1, avgLoss, time.Since(epochStartTime).Seconds())
+		// Print ExpertMonitor report: imbalance + per-expert counts
+		epochMonitor.Report()
+		log.Printf("⚖️  [Epoch %d] Load Imbalance (MSE): %.4f | Max Skew: %.1f%%",
+			epoch+1, epochMonitor.LoadLoss(), epochMonitor.MaxImbalance()*100)
 		
 		// End of epoch memory cleanup
 		runtime.GC()
@@ -1187,8 +1400,12 @@ skipCSV:
 		totalDuration = time.Since(startTime)
 
 		// Validation
-		valPPL := ValidateChat(intentModel, valPairs, nil)
+		valPPL := ValidateChat(intentModel, valPairs)
 		log.Printf("📉 Validation Perplexity: %.2f", valPPL)
+		
+		// 🧪 Generation Validation
+		runTestSentence("Identity", "Who are you?", intentModel)
+		runTestSentence("Help", "How can you help me today?", intentModel)
 
 		// --- [AutoHeal & Health Tracking] ---
 		// Find max dominance from the first encoder layer as a proxy for model health
@@ -1247,19 +1464,23 @@ skipCSV:
 		scheduler.MaxLR = peakLR
 		scheduler.MinLR = peakLR * 0.01
 
-		// Check for Plateau (using avgLoss as secondary signal)
-		if avgLoss >= lastEpochLoss*0.999 { // More sensitive plateau detection
-			plateauCount++
-		} else {
-			plateauCount = 0
+		// ⚖️ Plateau Monitor (as requested)
+		plateauMsg := pState.Update(valPPL, pConfig, &peakLR, &currentEpochTemp)
+		log.Printf("⚖️ Plateau Monitor: %s", plateauMsg)
+
+		// ⚡ [SWP Trigger] Nudging "Timid" units if training has flatlined
+		if pState.BadEpochs >= 5 {
+			log.Printf("⚡ [SWP Trigger] Plateau severe (%d epochs). Nudging stagnant weights to reclaim gradient velocity...", pState.BadEpochs)
+			params := intentModel.Parameters()
+			for _, p := range params {
+				if p.TimidMask != nil {
+					train.PerturbStagnantWeights(p.Data, p.TimidMask, 0.005)
+					optimizer.ResetStagnantMoments(p)
+				}
+			}
+			pState.BadEpochs = 0 // Reset after perturbation to monitor fresh trajectory
 		}
 
-		if plateauCount >= 2 && globalStep > 200 { 
-			peakLR *= 0.5
-			log.Printf("📉 Learning rate plateau detected. Reducing peakLR to %.8f", peakLR)
-			plateauCount = 0
-		}
-		lastEpochLoss = avgLoss
 
 		// Curriculum Update
 		if float32(valPPL) < float32(curriculum.MinPPLThreshold) {
@@ -1326,7 +1547,7 @@ skipCSV:
 	}
 
 	// Analyze expert specialization
-	analyzeExpertSpecialization(intentModel, w2v)
+	analyzeExpertSpecialization(intentModel)
 
 	// 5. Save Vocabulary
 	if err := intentModel.SentenceVocab.Save(vocabPath); err != nil {
@@ -1337,7 +1558,7 @@ skipCSV:
 }
 
 // StrictGenerate forces the model to generate a response without using UNK or PAD tokens.
-func StrictGenerate(model *moe.IntentMoE, input string, w2v *word2vec.SimpleWord2Vec, maxLen int) string {
+func StrictGenerate(model *moe.IntentMoE, input string, maxLen int) string {
 	// 1. Enter Eval Mode and set Router Temperature for stability
 	oldTemps := make(map[*moe.MoELayer]float64)
 	for _, layer := range moe.ActiveLayers {
@@ -1536,11 +1757,115 @@ func StrictGenerate(model *moe.IntentMoE, input string, w2v *word2vec.SimpleWord
 	return strings.Join(result, " ")
 }
 
+// StrictGenerateWithExperts is a variant of StrictGenerate that also returns the expert IDs used.
+func StrictGenerateWithExperts(model *moe.IntentMoE, input string, maxLen int) (string, []int) {
+	// 1. Enter Eval Mode and set Router Temperature for stability
+	oldTemps := make(map[*moe.MoELayer]float64)
+	for _, layer := range moe.ActiveLayers {
+		layer.SetMode(false)
+		oldTemps[layer] = layer.RouterTemperature
+		layer.RouterTemperature = 1.1 
+	}
+	if model.Decoder.OutputMoE != nil {
+		oldTemps[model.Decoder.OutputMoE] = model.Decoder.OutputMoE.RouterTemperature
+		model.Decoder.OutputMoE.RouterTemperature = 1.1
+	}
+
+	defer func() {
+		for layer, temp := range oldTemps {
+			layer.SetMode(true)
+			layer.RouterTemperature = temp
+		}
+		if model.Decoder.OutputMoE != nil {
+			model.Decoder.OutputMoE.SetMode(true)
+			model.Decoder.OutputMoE.RouterTemperature = oldTemps[model.Decoder.OutputMoE]
+		}
+	}()
+
+	tokens := cleanTokenize(input)
+	if len(tokens) == 0 { return "", nil }
+	inputIDs := make([]float64, len(tokens))
+	for i, t := range tokens {
+		inputIDs[i] = float64(lookupVocab(t, model.SentenceVocab))
+	}
+	inputTensor := tensor.NewTensor([]int{1, len(inputIDs)}, inputIDs, false)
+
+	emb, err := model.Embedding.Forward(inputTensor)
+	if err != nil { return "", nil }
+	ctx, err := model.Encoder.Forward(emb)
+	if err != nil { return "", nil }
+	ctx = model.NormalizeContextVector(ctx)
+
+	batchSize := 1
+	hiddenSize := model.Decoder.LSTM.HiddenSize
+	hiddenState, _ := ctx.Mean(1)
+	hiddenState, _ = hiddenState.Reshape([]int{batchSize, ctx.Shape[2]})
+
+	if hiddenState.Shape[1] != hiddenSize {
+		if hiddenState.Shape[1] > hiddenSize {
+			hiddenState, _ = hiddenState.Slice(1, 0, hiddenSize)
+		} else {
+			padding := tensor.NewTensor([]int{batchSize, hiddenSize - hiddenState.Shape[1]}, make([]float64, batchSize*(hiddenSize-hiddenState.Shape[1])), false)
+			hiddenState, _ = tensor.Concat([]*tensor.Tensor{hiddenState, padding}, 1)
+		}
+	}
+	cellState := tensor.NewTensor([]int{batchSize, hiddenSize}, make([]float64, batchSize*hiddenSize), false)
+
+	resIDs := []int{model.SentenceVocab.BosID}
+	var usedExpertIDs []int
+	currentTokenID := model.SentenceVocab.BosID
+	counts := make(map[int]int)
+
+	for i := 0; i < maxLen; i++ {
+		inputT := tensor.NewTensor([]int{1, 1}, []float64{float64(currentTokenID)}, false)
+		logits, nextHidden, nextCell, expertID, err := model.Decoder.DecodeStepWithExpert(inputT, hiddenState, cellState, ctx)
+		if err != nil { break }
+		hiddenState = nextHidden
+		cellState = nextCell
+		usedExpertIDs = append(usedExpertIDs, expertID)
+
+		// 🛠️ Add extra noise if we are in a MUTINY aftermath (Temp > 1.2)
+		if model.Encoder.GetMoELayers()[0].RouterTemperature > 1.2 {
+			for idx := range logits.Data {
+				logits.Data[idx] += (rand.Float64()*2 - 1) * 0.15
+			}
+		}
+
+		moe.ApplyRepetitionPenalty(logits, resIDs, 2.5) // Harsh penalty for validation
+		logits.Data[model.SentenceVocab.PaddingTokenID] = -1e9
+		unkID := model.SentenceVocab.GetTokenID("UNK")
+		if unkID != -1 { logits.Data[unkID] = -1e9 }
+
+		bestID, err := moe.SampleFromLogits(logits, 0.8, 1, 0.9) 
+		if err != nil { break }
+
+		if i == 0 {
+			logits.Data[model.SentenceVocab.EosID] = -1e9
+		}
+		if bestID == model.SentenceVocab.EosID { break }
+
+		resIDs = append(resIDs, bestID)
+		counts[bestID]++
+		currentTokenID = bestID
+	}
+
+	var result []string
+	for _, id := range resIDs[1:] {
+		word := model.SentenceVocab.GetWord(id)
+		if word != "<s>" && word != "</s>" && word != "<pad>" && word != "UNK" {
+			result = append(result, word)
+		}
+	}
+	return strings.Join(result, " "), usedExpertIDs
+}
+
 // runTestSentence is a helper to run test questions during training
-func runTestSentence(label, input string, model *moe.IntentMoE, w2v *word2vec.SimpleWord2Vec) {
+func runTestSentence(label, input string, model *moe.IntentMoE) (float64, []int) {
 	// 1. Generate the response using Strict Mode
-	// This ignores UNK (1) and &lt;pad&gt; (0)
-	response := StrictGenerate(model, input, w2v, 20)
+	// (Internally it already logs the expert path)
+	// We need to capture the expert IDs from the decoder steps.
+	// We'll modify StrictGenerate to return used expert IDs.
+	response, expertIDs := StrictGenerateWithExperts(model, input, 20)
 
 	// 2. Clean up the output
 	response = strings.TrimSpace(response)
@@ -1548,8 +1873,13 @@ func runTestSentence(label, input string, model *moe.IntentMoE, w2v *word2vec.Si
 		response = "[Still Silent]"
 	}
 
-	// 3. Log the result
-	log.Printf("🧪 Test '%s' (%s): %s", input, label, response)
+	// 3. Score the sentence quality
+	score := scoreSentenceHeuristic(response)
+
+	// 4. Log the result with the performance score
+	log.Printf("🧪 Test '%s' (%s): %s [Quality Score: %.1f]", input, label, response, score)
+	
+	return score, expertIDs
 }
 
 // LogTopPredictions analyzes the model output for a test prompt.
@@ -1600,7 +1930,10 @@ func LogTopPredictions(model *moe.IntentMoE, testName string, logits *tensor.Ten
 	// 3. Print top 3 contenders
 	fmt.Printf("🧪 Test '%s':\n", testName)
 	for i := 0; i < 3 && i < len(results); i++ {
-		fmt.Printf("   [%d] %-12s (%.4f%%)\n", i+1, results[i].token, results[i].prob*100)
+		displayToken := results[i].token
+		if displayToken == "" { displayToken = "<empty>" }
+		if displayToken == " " { displayToken = "[SPACE]" }
+		fmt.Printf("   [%d] %-12s (%.4f%%)\n", i+1, displayToken, results[i].prob*100)
 	}
 	fmt.Println("-----------------------------------")
 }
@@ -1666,19 +1999,17 @@ func logEpochHistory(projectRoot string, epoch int, loss float64, lbLoss float64
 // It tokenizes data on-the-fly to save memory and supports shuffling.
 type ChatDataIterator struct {
 	pairs []struct{ Q, A, Intent string }
-	w2v   *word2vec.SimpleWord2Vec
 	vocab *mainvocab.Vocabulary
 	unkID  int
 	idx    int
 	MaxLen int
 }
 
-func NewChatDataIterator(pairs []struct{ Q, A, Intent string }, w2v *word2vec.SimpleWord2Vec, vocab *mainvocab.Vocabulary, unkID int) *ChatDataIterator {
+func NewChatDataIterator(pairs []struct{ Q, A, Intent string }, vocab *mainvocab.Vocabulary, unkID int) *ChatDataIterator {
 	// Shuffle pairs for better training
 	rand.Shuffle(len(pairs), func(i, j int) { pairs[i], pairs[j] = pairs[j], pairs[i] })
 	return &ChatDataIterator{
 		pairs:  pairs,
-		w2v:    w2v,
 		vocab:  vocab,
 		unkID:  unkID,
 		idx:    0,
@@ -1804,7 +2135,6 @@ func DetachModel(model *moe.IntentMoE) {
 	}
 	for _, param := range model.Parameters() {
 		if param != nil {
-			param.Grad = nil
 			param.Creator = nil
 			param.Mask = nil
 			param.Operation = nil
@@ -1827,7 +2157,7 @@ func visualizeExpertUtilization() {
 	}
 }
 
-func analyzeExpertSpecialization(model *moe.IntentMoE, w2v *word2vec.SimpleWord2Vec) {
+func analyzeExpertSpecialization(model *moe.IntentMoE) {
 	fmt.Println("\n--- 🧠 Expert Specialization Analysis ---")
 	
 	for layerIdx, layer := range moe.ActiveLayers {
@@ -1859,11 +2189,7 @@ func analyzeExpertSpecialization(model *moe.IntentMoE, w2v *word2vec.SimpleWord2
 			tokens := cleanTokenize(s)
 			ids := make([]float64, len(tokens))
 			for i, t := range tokens {
-				if id, ok := w2v.Vocabulary[t]; ok {
-					ids[i] = float64(id)
-				} else if id, ok := w2v.Vocabulary["UNK"]; ok {
-					ids[i] = float64(id)
-				}
+				ids[i] = float64(lookupVocab(t, model.SentenceVocab))
 			}
 			input := tensor.NewTensor([]int{1, len(ids)}, ids, false)
 			emb, _ := model.Embedding.Forward(input)
@@ -2167,7 +2493,7 @@ func isLSTMBias(param *tensor.Tensor, hiddenSize int) bool {
 	return size == hiddenSize || size == 4*hiddenSize || size == 8*hiddenSize
 }
 
-func ValidateChat(model *moe.IntentMoE, valPairs []struct{ Q, A, Intent string }, w2v *word2vec.SimpleWord2Vec) float64 {
+func ValidateChat(model *moe.IntentMoE, valPairs []struct{ Q, A, Intent string }) float64 {
 	// 1. Enter Eval Mode (Disable Dropout/Noise)
 	for _, layer := range moe.ActiveLayers {
 		layer.SetMode(false)
@@ -2804,7 +3130,7 @@ func injectContextualClues(session *ChatSession) {
 	}
 }
 
-func StartChat(model *moe.IntentMoE, w2v *word2vec.SimpleWord2Vec) {
+func StartChat(model *moe.IntentMoE) {
 	// Start Prometheus metrics server on port 2112
 	go func() {
 		http.Handle("/metrics", promhttp.Handler())
@@ -2862,9 +3188,12 @@ func StartChat(model *moe.IntentMoE, w2v *word2vec.SimpleWord2Vec) {
 		avgInputEmbedding := make([]float64, model.Embedding.DimModel)
 		tokenCount := 0
 		for i, t := range tokens {
-			id := lookupW2V(t, w2v)
-			ids[i] = id
-			if vec, ok := w2v.WordVectors[int(id)]; ok {
+			id := lookupVocab(t, model.SentenceVocab)
+			ids[i] = float64(id)
+			// Get actual embedding from the model's weights for the history history
+			if id >= 0 && id < model.Embedding.VocabSize {
+				start := id * model.Embedding.DimModel
+				vec := model.Embedding.Weight.Data[start : start+model.Embedding.DimModel]
 				for d := 0; d < model.Embedding.DimModel; d++ {
 					avgInputEmbedding[d] += vec[d]
 				}
@@ -2979,16 +3308,14 @@ func GetSentimentScore(input string) float64 {
 // MoEChatBot encapsulates the chatbot state and logic for concurrency.
 type MoEChatBot struct {
 	model        *moe.IntentMoE
-	w2v          *word2vec.SimpleWord2Vec
 	session      *ChatSession
 	systemPrompt string
 }
 
-func NewMoEChatBot(model *moe.IntentMoE, w2v *word2vec.SimpleWord2Vec) *MoEChatBot {
+func NewMoEChatBot(model *moe.IntentMoE) *MoEChatBot {
 	return &MoEChatBot{
 		model:        model,
-		w2v:          w2v,
-		session:      NewChatSession(3, model.Embedding.DimModel),
+		session:      NewChatSession(5, model.Embedding.DimModel),
 		systemPrompt: "System: You are a friendly, helpful assistant. Tone: Kind.",
 	}
 }
@@ -3018,9 +3345,11 @@ func (b *MoEChatBot) Reply(input string) string {
 	avgInputEmbedding := make([]float64, b.model.Embedding.DimModel)
 	tokenCount := 0
 	for i, t := range tokens {
-		id := lookupW2V(t, b.w2v)
-		ids[i] = id
-		if vec, ok := b.w2v.WordVectors[int(id)]; ok {
+		id := lookupVocab(t, b.model.SentenceVocab)
+		ids[i] = float64(id)
+		if id >= 0 && id < b.model.Embedding.VocabSize {
+			start := id * b.model.Embedding.DimModel
+			vec := b.model.Embedding.Weight.Data[start : start+b.model.Embedding.DimModel]
 			for d := 0; d < b.model.Embedding.DimModel; d++ {
 				avgInputEmbedding[d] += vec[d]
 			}
@@ -3117,13 +3446,15 @@ func (b *MoEChatBot) StreamReply(userInput string) <-chan string {
 
 	// 1. Tokenize and embed current input
 	tokens := cleanTokenize(userInput)
-		ids := make([]float64, len(tokens))
+	ids := make([]float64, len(tokens))
 	avgInputEmbedding := make([]float64, b.model.Embedding.DimModel)
 	tokenCount := 0
-		for i, t := range tokens {
-		id := lookupW2V(t, b.w2v)
-		ids[i] = id
-		if vec, ok := b.w2v.WordVectors[int(id)]; ok {
+	for i, t := range tokens {
+		id := lookupVocab(t, b.model.SentenceVocab)
+		ids[i] = float64(id)
+		if id >= 0 && id < b.model.Embedding.VocabSize {
+			start := id * b.model.Embedding.DimModel
+			vec := b.model.Embedding.Weight.Data[start : start+b.model.Embedding.DimModel]
 			for d := 0; d < b.model.Embedding.DimModel; d++ {
 				avgInputEmbedding[d] += vec[d]
 			}
@@ -3245,7 +3576,7 @@ func (b *MoEChatBot) sampleNextToken(logit *tensor.Tensor) int {
 	return bestID
 }
 
-func StressTestBot(model *moe.IntentMoE, w2v *word2vec.SimpleWord2Vec) {
+func StressTestBot(model *moe.IntentMoE) {
 	const numUsers = 50
 	const messagesPerUser = 5
 
@@ -3261,7 +3592,7 @@ func StressTestBot(model *moe.IntentMoE, w2v *word2vec.SimpleWord2Vec) {
 
 			// Each user gets their own "Stateful Bot" instance
 			// sharing the SAME underlying Model weights
-			userBot := NewMoEChatBot(model, w2v)
+			userBot := NewMoEChatBot(model)
 
 			for m := 0; m < messagesPerUser; m++ {
 				msg := fmt.Sprintf("User %d message %d: How are the experts doing?", userID, m)
@@ -3450,4 +3781,73 @@ func PrintImportanceMap(vocab *mainvocab.Vocabulary, tokens []string, layer *moe
         // Visual Heatmap (stub, as we don't have per-token softmax weights readily available here without re-running)
         fmt.Printf("%-15s [E%d] %s\n", token, expertID, strings.Repeat("█", 5))
     }
+}
+// getLR calculates the current learning rate for the training step using 
+// Cosine Decay with a 10% Warmup phase. This avoids early gradient explosions
+// and ensures smooth convergence towards the end of the session.
+func getLR(currentStep, totalSteps int, baseLR float64) float64 {
+	warmupSteps := totalSteps / 10 // 10% warmup
+	if warmupSteps == 0 {
+		warmupSteps = 1
+	}
+
+	if currentStep < warmupSteps {
+		// Linear Warmup: Scale LR from 0 up to the baseLR
+		return baseLR * float64(currentStep) / float64(warmupSteps)
+	}
+
+	// Cosine Decay: Scale LR from baseLR down towards zero
+	if currentStep >= totalSteps {
+		return baseLR * 0.01 // Maintain a very small floor LR
+	}
+
+	// Calculate progression through the decay phase (0.0 to 1.0)
+	progress := float64(currentStep-warmupSteps) / float64(totalSteps-warmupSteps)
+
+	// standard cosine decay formula: 0.5 * baseLR * (1 + cos(pi * progress))
+	return 0.5 * baseLR * (1 + math.Cos(math.Pi*progress))
+}
+
+// scoreSentenceHeuristic provides a numeric quality metric for validation sentences.
+func scoreSentenceHeuristic(text string) float64 {
+	if text == "[Still Silent]" || text == "" {
+		return 0
+	}
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return 0
+	}
+
+	score := 10.0
+
+	// 1. Length Penalty
+	if len(words) < 5 {
+		score -= 3.0
+	}
+
+	// 2. Repetition Penalty
+	seen := make(map[string]int)
+	for _, w := range words {
+		seen[w]++
+	}
+	repeatCost := 0.0
+	for _, count := range seen {
+		if count > 1 {
+			repeatCost += math.Pow(float64(count), 1.5)
+		}
+	}
+	score -= repeatCost * 0.5
+
+	// 3. Variety Reward
+	score += float64(len(seen)) * 0.2
+
+	// 4. Punctuation Reward
+	if strings.ContainsAny(text, ".!?") {
+		score += 2.0
+	}
+
+	if score < 0 {
+		score = 0
+	}
+	return score
 }

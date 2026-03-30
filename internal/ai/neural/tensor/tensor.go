@@ -104,8 +104,10 @@ type Operation interface {
 type Tensor struct {
 	Data         []float64
 	Shape        []int
-	Grad         *Tensor `gob:"-"` // Exclude Grad from gob serialization
+	Grad         *Tensor `gob:"-"`    // Exclude Grad from gob serialization
 	Mask         *Tensor
+	TimidMask    []bool    `gob:"-"` // Track stagnant weights per parameter
+	AccGrads     []float64 `gob:"-"` // Accumulated gradient velocity
 	Creator      Operation `gob:"-"` // Exclude Creator from gob serialization
 	RequiresGrad bool
 	Operation    Operation `gob:"-"` // Exclude Operation from gob serialization

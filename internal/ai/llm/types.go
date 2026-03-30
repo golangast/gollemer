@@ -26,3 +26,11 @@ type TutorialState struct {
 	Active bool
 	Step   int
 }
+
+// IntentObject tracks the parsed intent along with confidence and slot-filled entities.
+type IntentObject struct {
+	Action       string            `json:"action"`       // e.g., "commit"
+	Confidence   float64           `json:"confidence"`   // Probability from the classifier
+	Entities     map[string]string `json:"entities"`     // Slot-filled data (e.g., {"message": "init"})
+	ContextState string            `json:"context_state"` // e.g., "AwaitingPush"
+}

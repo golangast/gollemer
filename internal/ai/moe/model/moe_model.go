@@ -72,12 +72,36 @@ type MoEModel struct {
 	Tokenizer *tokenizer.Tokenizer
 	Cache     *KVCache
 	Config    MoEConfig
+	MockBigram map[int][]int
 }
 
 type MoEConfig struct {
 	MaxLen     int
 	HiddenSize int
 	Layers     int
+}
+
+// GenerationOptions defines parameters for text generation.
+type GenerationOptions struct {
+	MaxLen      int
+	Temperature float32
+	TopP        float32
+	TopK              int
+	Echo              bool
+	StopTokens        []int
+	RouterTemperature float32
+}
+
+// DefaultGenerationOptions returns the standard configuration for generation.
+func DefaultGenerationOptions() GenerationOptions {
+	return GenerationOptions{
+		MaxLen:            50,
+		Temperature:       1.0,
+		TopP:              0.9,
+		TopK:              40,
+		Echo:              true,
+		RouterTemperature: 1.0,
+	}
 }
 
 // NewMoEModel creates a new instance of the model.
@@ -87,23 +111,64 @@ func NewMoEModel(t *tokenizer.Tokenizer, config MoEConfig) *MoEModel {
 	kvHeads := 2
 	headDim := config.HiddenSize / qHeads
 
-	return &MoEModel{
+	m := &MoEModel{
 		Tokenizer: t,
 		Cache:     NewKVCache(config.Layers, qHeads, kvHeads, headDim, config.MaxLen),
 		Config:    config,
 	}
+	m.InitializeMockBigram()
+	return m
 }
 
-// Forward is a placeholder for the actual forward pass through MoE layers.
+// InitializeMockBigram populates the mock bigram model to make dummy generation more realistic.
+func (m *MoEModel) InitializeMockBigram() {
+	m.MockBigram = make(map[int][]int)
+	vocabWords := m.Tokenizer.Vocabulary.TokenToWord
+
+	for id1, w1 := range vocabWords {
+		for id2, w2 := range vocabWords {
+			
+			// Simple rules to favor certain transitions
+			isGood := false
+			lw1, lw2 := strings.ToLower(w1), strings.ToLower(w2)
+			
+			// Determiner -> Noun
+			if (lw1 == "the" || lw1 == "a") && !(lw2 == "the" || lw2 == "a") { isGood = true }
+			// Noun -> Verb
+			if (lw1 == "gollemer" || lw1 == "network" || lw1 == "system") && (lw2 == "is" || lw2 == "processes" || lw2 == "thinks") { isGood = true }
+			// Verb -> Adjective/Adverb/Preposition
+			if (lw1 == "is" || lw1 == "becomes") && (lw2 == "fast" || lw2 == "powerful" || lw2 == "smart") { isGood = true }
+			
+			if isGood {
+				m.MockBigram[id1] = append(m.MockBigram[id1], id2)
+			}
+		}
+	}
+}
+
 func (m *MoEModel) Forward(tokens []int) []float32 {
-	// In a real implementation, this would pass through embeddings,
-	// multiple MoE layers with GQA and RoPE, and finally a projection layer.
-	// For now, we return dummy logits of the vocabulary size.
 	vocabSize := m.Tokenizer.Vocabulary.Size()
 	logits := make([]float32, vocabSize)
-	for i := range logits {
-		logits[i] = rand.Float32() // Dummy predictions
+	
+	lastToken := -1
+	if len(tokens) > 0 {
+		lastToken = tokens[len(tokens)-1]
 	}
+
+	// 1. Base randomness
+	for i := range logits {
+		logits[i] = rand.Float32() * 0.1 // Lowered base randomness
+	}
+
+	// 2. Apply bigram bias
+	if lastToken != -1 {
+		if followers, ok := m.MockBigram[lastToken]; ok {
+			for _, id := range followers {
+				logits[id] += 2.0 // Strong boost to likely followers
+			}
+		}
+	}
+
 	return logits
 }
 
@@ -134,85 +199,132 @@ type TokenProb struct {
 	Prob float32
 }
 
-// SampleTopP performs Nucleus (Top-P) sampling.
-func (m *MoEModel) SampleTopP(probs []float32, p float32) int {
-	tokenProbs := make([]TokenProb, len(probs))
-	for i, prob := range probs {
+// Sample performs sampling using Temperature, Top-K, and Top-P (Nucleus) sampling.
+func (m *MoEModel) Sample(logits []float32, opts GenerationOptions) int {
+	// 1. Apply Temperature
+	if opts.Temperature != 1.0 && opts.Temperature > 0 {
+		for i := range logits {
+			logits[i] /= opts.Temperature
+		}
+	}
+
+	// 2. Softmax
+	SoftmaxSIMD(logits)
+
+	tokenProbs := make([]TokenProb, len(logits))
+	for i, prob := range logits {
 		tokenProbs[i] = TokenProb{ID: i, Prob: prob}
 	}
 
+	// Sort by probability descending
 	sort.Slice(tokenProbs, func(i, j int) bool {
 		return tokenProbs[i].Prob > tokenProbs[j].Prob
 	})
 
-	var cumulativeProb float32
-	cutoffIndex := len(tokenProbs) - 1
-	for i, tp := range tokenProbs {
-		cumulativeProb += tp.Prob
-		if cumulativeProb >= p {
-			cutoffIndex = i
-			break
+	// 3. Apply Top-K
+	if opts.TopK > 0 && opts.TopK < len(tokenProbs) {
+		tokenProbs = tokenProbs[:opts.TopK]
+	}
+
+	// 4. Apply Top-P (Nucleus)
+	if opts.TopP > 0 && opts.TopP < 1.0 {
+		var cumulativeProb float32
+		cutoffIndex := len(tokenProbs) - 1
+		for i, tp := range tokenProbs {
+			cumulativeProb += tp.Prob
+			if cumulativeProb >= opts.TopP {
+				cutoffIndex = i
+				break
+			}
 		}
+		tokenProbs = tokenProbs[:cutoffIndex+1]
 	}
 
-	nucleus := tokenProbs[:cutoffIndex+1]
-	var nucleusSum float32
-	for _, tp := range nucleus {
-		nucleusSum += tp.Prob
+	// 5. Sample from the filtered distribution
+	var totalProb float32
+	for _, tp := range tokenProbs {
+		totalProb += tp.Prob
 	}
 
-	r := rand.Float32() * nucleusSum
+	r := rand.Float32() * totalProb
 	var currentSum float32
-	for _, tp := range nucleus {
+	for _, tp := range tokenProbs {
 		currentSum += tp.Prob
 		if r <= currentSum {
 			return tp.ID
 		}
 	}
 
-	return nucleus[0].ID
+	return tokenProbs[0].ID
 }
 
 // GenerateWithStats handles the autoregressive generation with real-time TPS tracking.
-func (m *MoEModel) GenerateWithStats(prompt string) {
+func (m *MoEModel) GenerateWithStats(prompt string) string {
+	return m.GenerateCustom(prompt, DefaultGenerationOptions())
+}
+
+// GenerateCustom performs generation with specific options.
+func (m *MoEModel) GenerateCustom(prompt string, opts GenerationOptions) string {
 	tokens, _ := m.Tokenizer.Encode(prompt)
 	start := time.Now()
 	generatedCount := 0
+	var result strings.Builder
 
-	fmt.Printf("/ʕ◡ϖ◡ʔ/ > ")
+	if opts.Echo {
+		fmt.Printf("/ʕ◡ϖ◡ʔ/ > ")
+	}
 
-	for generatedCount < m.Config.MaxLen {
+	for generatedCount < opts.MaxLen {
 		logits := m.Forward(tokens)
-		
-		// 1. Softmax
-		SoftmaxSIMD(logits)
-		
-		// 2. Sample
-		nextToken := m.SampleTopP(logits, 0.9)
 
-		// 3. Decode and print
+		// Sample with options
+		nextToken := m.Sample(logits, opts)
+
+		// Decode and append
 		word, _ := m.Tokenizer.Decode([]int{nextToken})
-		fmt.Print(word)
+		result.WriteString(word)
 		if !strings.HasSuffix(word, " ") {
-			fmt.Print(" ")
+			result.WriteString(" ")
+		}
+
+		if opts.Echo {
+			fmt.Print(word)
+			if !strings.HasSuffix(word, " ") {
+				fmt.Print(" ")
+			}
+
+			// Calculate Stats
+			elapsed := time.Since(start).Seconds()
+			tps := 0.0
+			if elapsed > 0 {
+				tps = float64(generatedCount+1) / elapsed
+			}
+
+			// Update terminal status line
+			fmt.Printf("\033[s\033[K\n[ TPS: %.2f | Tokens: %d | Temp: %.1f | TopP: %.2f ]\033[u",
+				tps, generatedCount+1, opts.Temperature, opts.TopP)
 		}
 
 		tokens = append(tokens, nextToken)
 		generatedCount++
 
-		// Calculate Stats
-		elapsed := time.Since(start).Seconds()
-		tps := float64(generatedCount) / elapsed
-
-		// Update terminal status line
-		fmt.Printf("\033[s\033[K\n[ TPS: %.2f | Tokens: %d ]\033[u", tps, generatedCount)
-
-		// Check for EOS (Placeholder ID for demonstration)
-		if nextToken == 0 { // Assume 0 is EOS for now
+		// Check for EOS
+		isStop := false
+		for _, stopID := range opts.StopTokens {
+			if nextToken == stopID {
+				isStop = true
+				break
+			}
+		}
+		if isStop || nextToken == 0 { // 0 is assumed EOS
 			break
 		}
 	}
-	fmt.Println("\n— Done.")
+
+	if opts.Echo {
+		fmt.Println("\n— Done.")
+	}
+	return result.String()
 }
 
 // GQA-related methods as requested

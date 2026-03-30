@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	dimModel = flag.Int("dim", 64, "Dimension of the model")
+	dimModel = flag.Int("dim", 768, "Dimension of the model")
 )
 
 func main() {

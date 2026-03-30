@@ -1099,7 +1099,7 @@ func main() {
 		log.Printf("Creating a new IntentMoE model. (SIMD Enabled: %v)", IsSIMDEnabled())
 		// Model hyperparameters - INCREASED CAPACITY
 		// embeddingDim is set above based on W2V model
-		hiddenSize := 512              // Increased from 256 for more capacity
+		hiddenSize := 768              // Match embeddingDim for optimal capacity
 		maxAttentionHeads := 4         // Keep at 4
 		numLayers := 2                 // Original size
 		dropoutRate := 0.1             // Keep at 0.1
