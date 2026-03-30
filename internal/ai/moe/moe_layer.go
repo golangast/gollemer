@@ -1013,10 +1013,14 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 		}
 	}
 
-	// Router-Fast approach: Scale gradients for router to make it learn faster
-	routerGradientScale := 5.0
+	// Clamp router logit grads to prevent NaN/Inf from corrupting the gating network.
+	// NOTE: The previous routerGradientScale=5.0 was the primary source of the 2B gradient norm
+	// and has been removed. The Adam optimizer adaptively scales the effective LR for the router.
 	for i := range logitsGrad.Data {
-		logitsGrad.Data[i] *= routerGradientScale
+		v := logitsGrad.Data[i]
+		if v != v || v > 1e6 || v < -1e6 { // NaN or Inf guard
+			logitsGrad.Data[i] = 0
+		}
 	}
 
 	err = moe.GatingNetwork.Backward(logitsGrad)
@@ -1024,14 +1028,8 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 		return err
 	}
 
-	// Restore/Accumulate expert gradients
-	if expertGrads != nil {
-		if moe.inputTensor.Grad == nil {
-			moe.inputTensor.Grad = NewTensor(moe.inputTensor.Shape, expertGrads, false)
-		} else {
-			safeAccumulate(moe.inputTensor.Grad.Data, expertGrads)
-		}
-	}
+	// Expert gradients were already accumulated into moe.inputTensor.Grad via input2D.Grad
+	// in the loop above. Double accumulation removed to prevent gradient explosion.
 
 	// Gradient is stored in moe.inputTensor.Grad
 	return nil
@@ -1318,54 +1316,60 @@ func (moe *MoELayer) EvolutionaryReset(stagnationThreshold int) {
 }
 
 // ResizeExperts resizes the output dimension of all experts.
+// To minimize peak memory usage, each expert's old weights are explicitly
+// freed before allocating new ones, and the GC is hinted between iterations.
 func (moe *MoELayer) ResizeExperts(newOutputDim int) {
 	fmt.Printf("🔧 Resizing %d MoE Experts to new OutputDim: %d\n", len(moe.Experts), newOutputDim)
-	
+
 	for i, exp := range moe.Experts {
 		// Type assert to FeedForwardExpert
 		ff, ok := exp.(*FeedForwardExpert)
 		if !ok {
-			// Try to handle other expert types if added later
 			fmt.Printf("⚠️ Skip resizing expert %d: unexpected type\n", i)
 			continue
 		}
 
-		oldWeights := ff.Layer2.Weights
-		oldBiases := ff.Layer2.Biases
+		oldWeightsData := ff.Layer2.Weights.Data
+		oldBiasData := ff.Layer2.Biases.Data
 		oldVocabSize := ff.Layer2.Weights.Shape[1]
 		inputDim := ff.Layer2.Weights.Shape[0]
 
-		// Create new Linear layer
-		newLinear, _ := nn.NewLinear(inputDim, newOutputDim)
-
-		// Copy weights: [inputDim * vocabSize]
+		// Create new weight data inline without going through NewLinear
+		// so we avoid holding old and new Tensor objects simultaneously.
+		copidTo := newOutputDim
 		copyLimit := oldVocabSize
 		if newOutputDim < copyLimit {
 			copyLimit = newOutputDim
 		}
 
-		// Use a safe copy for weights
+		newWeightsData := make([]float64, inputDim*newOutputDim)
 		for row := 0; row < inputDim; row++ {
-			for col := 0; col < copyLimit; col++ {
-				oldIdx := row*oldVocabSize + col
-				newIdx := row*newOutputDim + col
-				if oldIdx < len(oldWeights.Data) && newIdx < len(newLinear.Weights.Data) {
-					newLinear.Weights.Data[newIdx] = oldWeights.Data[oldIdx]
-				}
-			}
+			oldStart := row * oldVocabSize
+			newStart := row * copidTo
+			copy(newWeightsData[newStart:newStart+copyLimit], oldWeightsData[oldStart:oldStart+copyLimit])
 		}
 
-		// Copy biases
-		if oldBiases != nil && newLinear.Biases != nil {
-			for col := 0; col < copyLimit; col++ {
-				if col < len(oldBiases.Data) && col < len(newLinear.Biases.Data) {
-					newLinear.Biases.Data[col] = oldBiases.Data[col]
-				}
-			}
+		newBiasData := make([]float64, newOutputDim)
+		for col := 0; col < copyLimit && col < len(oldBiasData); col++ {
+			newBiasData[col] = oldBiasData[col]
 		}
 
-		// Swap the old layer for the new resized one
+		// Explicitly nil old large slices BEFORE creating the new Tensor
+		// so both don't live in memory at the same time.
+		ff.Layer2.Weights.Data = nil
+		ff.Layer2.Biases.Data = nil
+		ff.Layer2.Weights = nil
+		ff.Layer2.Biases = nil
+		ff.Layer2 = nil
+		// Hint GC to reclaim old memory before next expert
+		runtime.GC()
+
+		newLinear, _ := nn.NewLinear(inputDim, newOutputDim)
+		newLinear.Weights.Data = newWeightsData
+		newLinear.Biases.Data = newBiasData
 		ff.Layer2 = newLinear
+
+		fmt.Printf("  ✓ Expert %d resized\n", i)
 	}
 	moe.OutputDim = newOutputDim
 }

@@ -14,6 +14,7 @@ type Optimizer interface {
 	ClipGradients()
 	SetLearningRate(lr float64)
 	GetLearningRate() float64
+	ResetStagnantMoments(t *Tensor)
 }
 
 // TrainingProfile represents a preset for training hyperparameters.
@@ -104,7 +105,26 @@ func (o *Adam) ClipGradients() {
 	}
 }
 
-// Step performs a single optimization step.
+// ResetStagnantMoments clears Adam moment vectors for weights identified as stagnant.
+// This prevents the search history from damping the effect of a nudge (perturbation).
+func (o *Adam) ResetStagnantMoments(t *Tensor) {
+	if t.TimidMask == nil {
+		return
+	}
+	m, okM := o.m[t]
+	v, okV := o.v[t]
+	if !okM || !okV {
+		return
+	}
+	for i, stagnant := range t.TimidMask {
+		if stagnant {
+			m.Data[i] = 0
+			v.Data[i] = 0
+		}
+	}
+}
+
+// Step performs a single optimization step, now with Timid-Aware LR boosting.
 func (o *Adam) Step() {
 	o.t++
 
@@ -128,7 +148,37 @@ func (o *Adam) Step() {
 			lr = o.RouterLR
 		}
 
-		AdamWUpdate(param, grad, m, v, lr, o.beta1, o.beta2, o.epsilon, o.Lambda, o.t)
+		// --- Timid Boost Integration ---
+		// If TimidMask exists for this tensor, we apply localized LR boosting.
+		// Note: This falls back to standard SIMD update if no mask is present.
+		if p.TimidMask != nil {
+			// Bias correction terms
+			b1t := 1.0 - math.Pow(o.beta1, float64(o.t))
+			b2t := 1.0 - math.Pow(o.beta2, float64(o.t))
+			
+			for i := range param {
+				// 1. Update moments
+				m[i] = o.beta1*m[i] + (1-o.beta1)*grad[i]
+				v[i] = o.beta2*v[i] + (1-o.beta2)*grad[i]*grad[i]
+				
+				// 2. Localized LR boost
+				effectiveLR := lr
+				if p.TimidMask[i] {
+					effectiveLR *= 3.0 // Kick stagnant weights harder
+				}
+				
+				// 3. AdamW Update: weight -= lr * (m_corrected / (sqrt(v_corrected) + eps) + lambda * weight)
+				mHat := m[i] / b1t
+				vHat := v[i] / b2t
+				denom := math.Sqrt(vHat) + o.epsilon
+				
+				update := (mHat / denom) + (o.Lambda * param[i])
+				param[i] -= effectiveLR * update
+			}
+		} else {
+			// Perform high-performance SIMD update when no mask is present
+			AdamWUpdate(param, grad, m, v, lr, o.beta1, o.beta2, o.epsilon, o.Lambda, o.t)
+		}
 	}
 }
 
@@ -139,9 +189,11 @@ func (o *Adam) ZeroGrad() {
 	}
 }
 
-// SetLearningRate updates the learning rate of the optimizer
+// SetLearningRate updates the main learning rate and proportionally scales the RouterLR.
 func (o *Adam) SetLearningRate(lr float64) {
 	o.learningRate = lr
+	// Keep RouterLR at 10% of the main learning rate to ensure stability in the MoE gating network.
+	o.RouterLR = lr * 0.1
 }
 
 // GetLearningRate returns the current learning rate
@@ -204,6 +256,11 @@ func (o *CoolingOptimizer) SetLearningRate(lr float64) {
 // GetLearningRate returns the current learning rate
 func (o *CoolingOptimizer) GetLearningRate() float64 {
 	return o.Base.GetLearningRate()
+}
+
+// ResetStagnantMoments delegates to the base optimizer.
+func (o *CoolingOptimizer) ResetStagnantMoments(t *Tensor) {
+	o.Base.ResetStagnantMoments(t)
 }
 
 // Trigger enters the cooling state

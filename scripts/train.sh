@@ -5,8 +5,8 @@ PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
 # Setup Go environment for Chromebook performance
-export GOGC=20
-export GOMAXPROCS=2
+export GOGC=10
+export GOMAXPROCS=1
 export GO_CMD="/usr/local/go/bin/go"
 export GOEXPERIMENT=simd
 
@@ -21,6 +21,13 @@ touch logs/training.csv
 rm -f data/models/gob_models/seq2seq_output_vocab.gob
 rm -f data/models/gob_models/moe_classification_model.gob
 rm -f data/models/gob_models/moe_classification_model_best.gob
+
+
+W2V_PATH="data/models/gob_models/word2vec_model.gob"
+if [ ! -f "$W2V_PATH" ]; then
+    echo "⚠️  Word2Vec Dictionary missing. Regenerating from data..."
+    GOEXPERIMENT=simd go run cmd/gollemer/main.go -train-word2vec
+fi
 
 # --- 3. Audit & Trend Analysis ---
 HAS_JQ=false
@@ -124,15 +131,60 @@ fi
 
 # --- 6. Launch Training ---
 echo -e "\n🚀 Starting Gollemer Training..."
+
+# Max Gradient Norm: controls global L2 clipping threshold.
+# Increase if norm is always exactly at the cap (over-clipped).
+# Decrease if loss is exploding or unstable.
+# Pass as first arg: ./scripts/train.sh 5.0
+# Training log (FRESH START for each audit)
+TRAIN_LOG="logs/training_full.log"
+rm -f "$TRAIN_LOG"
+
+# Hyperparameters
+LR=0.0005
+MAX_GRAD_NORM=${1:-10.0}
+# Dim 768 matches the requested GPT-3 Small configuration
+EMBEDDING_DIM=768
+NUM_EXPERTS=4
+ACCUMULATION_STEPS=16
+echo "📐 Max Gradient Norm: $MAX_GRAD_NORM"
+echo "📉 Adjusted LR for 768d stability: $LR"
+
 GOEXPERIMENT=simd $GO_CMD run cmd/gollemer/main.go \
     -train-chat \
     -rebalance \
     -auto-heal \
     -wd 0.01 \
-    -lr 0.001
+    -lr $LR \
+    -max_grad_norm=$MAX_GRAD_NORM 2>&1 | tee -a "$TRAIN_LOG"
 
-# --- 7. Completion Notification ---
-echo -e "\a"
+# --- 7. Stability Audit: scan the run for NaN / Inf signals ---
+echo -e "\n🔬 Scanning training log for stability issues..."
+if [ -s "$TRAIN_LOG" ] && grep -q "NaN\|Inf\|loss exploded" "$TRAIN_LOG"; then
+    echo "⚠️  STABILITY ISSUE DETECTED in $TRAIN_LOG"
+    echo "   → Possible causes:"
+    echo "     1. LR too high - try: ./scripts/train.sh $MAX_GRAD_NORM (lower --lr)"
+    echo "     2. Clip too loose - try: ./scripts/train.sh $(echo "$MAX_GRAD_NORM * 0.5" | awk '{printf "%.2f", $1}')"
+    echo "     3. Expert collapse - re-run with -rebalance"
+else
+    echo "✅ No NaN/Inf detected."
+fi
+
+# Check if clip fired on every step (over-clipping detector)
+CLIP_COUNT=$(grep "\[CLIPPED" "$TRAIN_LOG" 2>/dev/null | wc -l | xargs)
+TOTAL_STEPS=$(grep "Weights updated" "$TRAIN_LOG" 2>/dev/null | wc -l | xargs)
+
+if [ "${TOTAL_STEPS:-0}" -gt 0 ]; then
+    PERCENT=$(awk "BEGIN {print ($CLIP_COUNT * 100) / $TOTAL_STEPS}")
+    if [ "$CLIP_COUNT" -eq "$TOTAL_STEPS" ]; then
+        echo "⚠️  Gradient clip fired on ALL $TOTAL_STEPS update steps."
+    else
+        echo "📐 Clip fired on $CLIP_COUNT / $TOTAL_STEPS steps (${PERCENT}%). Target is < 30%."
+    fi
+else
+    echo "ℹ️  No update steps completed yet (too early to audit)."
+fi
+
 if command -v notify-send >/dev/null 2>&1; then
     notify-send "Gollemer AI" "Training Session Complete." --urgency=critical
 fi

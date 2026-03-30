@@ -1725,3 +1725,25 @@ func (mha *MultiHeadCrossAttention) Forward(inputs ...*Tensor) (*Tensor, error) 
 
 	return output, nil
 }
+
+// SetMode sets the attention layer to training or inference mode.
+func (mha *MultiHeadAttention) SetMode(training bool) {
+	if mha.QueryLinear != nil { mha.QueryLinear.SetMode(training) }
+	if mha.KeyLinear != nil { mha.KeyLinear.SetMode(training) }
+	if mha.ValueLinear != nil { mha.ValueLinear.SetMode(training) }
+	if mha.OutputLinear != nil { mha.OutputLinear.SetMode(training) }
+}
+
+// SetMode sets the cross-attention layer to training or inference mode.
+func (mhca *MultiHeadCrossAttention) SetMode(training bool) {
+	if mhca.QueryLinear != nil { mhca.QueryLinear.SetMode(training) }
+	if mhca.KeyLinear != nil { mhca.KeyLinear.SetMode(training) }
+	if mhca.ValueLinear != nil { mhca.ValueLinear.SetMode(training) }
+	if mhca.OutputLinear != nil { mhca.OutputLinear.SetMode(training) }
+}
+
+// SetMode sets the linear layer to training or inference mode.
+func (l *Linear) SetMode(training bool) {
+	// Linear layer doesn't have internal mode-specific behavior like dropout yet,
+// but we implement it for interface consistency.
+}

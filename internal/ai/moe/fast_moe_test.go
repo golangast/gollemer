@@ -56,8 +56,10 @@ func TestLoadBalancingLoss(t *testing.T) {
 }
 
 func BenchmarkLayerThroughput(b *testing.B) {
-	hiddenSize := 512
+	hiddenSize := 768
+	inputDim := 768
 	numExperts := 8
+	numTokens := 128
 	input := make([]float32, hiddenSize) // Mock input token
 
 	// Initialize Layers

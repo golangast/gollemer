@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"database/sql"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -122,11 +123,11 @@ func (r *Runner) initModels() {
 		}
 	}
 
-	vocabSize := 2000
-	embeddingDim := 64
+	vocabSize := 2547 // Final vocab size from TrainChat
+	embeddingDim := 768 // Match Transformer training
 	if r.W2V != nil {
 		vocabSize = r.W2V.VocabSize
-		embeddingDim = r.W2V.VectorSize
+		// If W2V was loaded, it may be 64d but the model should still be 768d
 	}
 
 	// Try to load trained MoE model
@@ -136,6 +137,7 @@ func (r *Runner) initModels() {
 			loadedModel, err := moe.LoadIntentMoEModelFromGOB(modelPath)
 			if err == nil {
 				r.IntentModel = loadedModel
+				log.Printf("✅ Loaded trained 768d MoE model for interactive LLM.")
 			}
 		}
 	}

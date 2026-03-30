@@ -113,6 +113,103 @@ func SampleFromLogits(logits *tensor.Tensor, temperature float64, topK int, topP
 	return topKCandidates[0].index, nil
 }
 
+// PredictNext performs a forward pass and samples the next token index using Top-K and temperature.
+func (m *IntentMoE) PredictNext(input *tensor.Tensor, k int, temp float64) (int, float64, error) {
+	// 1. Forward pass
+	// We assume a simplified forward call for single-token prediction
+	logits, _, err := m.Forward(0.0, input, nil, nil)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	// 2. Get the last logit vector if it's a sequence
+	var lastLogits *tensor.Tensor
+	if len(logits) > 0 {
+		lastLogits = logits[len(logits)-1]
+	} else {
+		return 0, 0, fmt.Errorf("PredictNext: no logits returned from forward pass")
+	}
+
+	// 3. Apply Temperature scaling
+	if temp <= 0 { temp = 1.0 }
+	for i := range lastLogits.Data {
+		lastLogits.Data[i] /= temp
+	}
+
+	// 4. Sample using Top-K logic
+	idx, err := SampleFromLogits(lastLogits, 1.0, k, 0.0)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	// 5. Get confidence (max probability after scaling)
+	probs := tensor.Softmax(lastLogits)
+	_, confidence := tensor.ArgMax(probs)
+
+	return idx, confidence, nil
+}
+
+// CalculateAccuracy evaluates the model on a dataset for Top-K precision.
+func (m *IntentMoE) CalculateAccuracy(inputs []*tensor.Tensor, targets []*tensor.Tensor, k int) float64 {
+	correct := 0
+	total := 0
+	
+	for i := range inputs {
+		input := inputs[i]
+		target := targets[i]
+		
+		// 1. Get logits from the forward pass (inference mode)
+		m.SetMode(false)
+		logits, _, err := m.Forward(0.0, input, nil, nil)
+		if err != nil || len(logits) == 0 {
+			continue
+		}
+		
+		// Use the last logit for classification accuracy
+		lastLogit := logits[len(logits)-1]
+		
+		// 2. Get the indices of the Top-K highest logits
+		topKIndices := getTopKIndices(lastLogit.Data, k)
+		
+		// 3. Check if the actual target (last token of sequence) is in that set
+		actualTarget := int(target.Data[len(target.Data)-1])
+		for _, idx := range topKIndices {
+			if idx == actualTarget {
+				correct++
+				break
+			}
+		}
+		total++
+	}
+	
+	if total == 0 { return 0 }
+	return float64(correct) / float64(total)
+}
+
+// getTopKIndices extracts top K indices from a logit slice without full sort overhead.
+func getTopKIndices(logits []float64, k int) []int {
+	type pair struct {
+		index int
+		val   float64
+	}
+	pairs := make([]pair, len(logits))
+	for i, v := range logits {
+		pairs[i] = pair{i, v}
+	}
+
+	sort.Slice(pairs, func(i, j int) bool {
+		return pairs[i].val > pairs[j].val
+	})
+
+	if k > len(logits) { k = len(logits) }
+	
+	indices := make([]int, k)
+	for i := 0; i < k; i++ {
+		indices[i] = pairs[i].index
+	}
+	return indices
+}
+
 // ApplyRepetitionPenalty penalizes tokens that have already been generated.
 // Logits are the raw output of the model, generatedIDs are tokens already picked.
 // Penalty is typically 1.1 or 1.2 (for multiplicative) or a flat subtraction.
@@ -179,6 +276,7 @@ type IntentMoE struct {
 	Embedding         *nn.Embedding
 	SentenceVocabSize int
 	SentenceVocab     *mainvocab.Vocabulary
+	EmbeddingDim      int // Persisted dimension (e.g., 768) for resizing logic
 	
 	// Diagnostics and Monitoring
 	ExpertStats map[string]*ExpertStat // Key: "layerID:expertID"
@@ -220,6 +318,7 @@ func NewIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, childVoc
 		Embedding:         embedding,
 		SentenceVocabSize: sentenceVocabSize,
 		SentenceVocab:     mainvocab.NewVocabulary(), // Should be set by caller
+		EmbeddingDim:      embeddingDim,
 		ExpertStats:       make(map[string]*ExpertStat),
 	}, nil
 }
@@ -419,6 +518,7 @@ func NewHybridIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, ch
 		Encoder:           hybridEncoder,
 		Decoder:           decoder,
 		Embedding:         embedding,
+		EmbeddingDim:      embeddingDim,
 		SentenceVocabSize: sentenceVocabSize,
 		SentenceVocab:     nil,
 	}, nil
@@ -542,6 +642,16 @@ func (m *IntentMoE) Parameters() []*tensor.Tensor {
 	params = append(params, m.Encoder.Parameters()...)
 	params = append(params, m.Decoder.Parameters()...)
 	return params
+}
+
+// SetMode sets the model to training or inference mode.
+func (m *IntentMoE) SetMode(training bool) {
+	if m.Encoder != nil {
+		m.Encoder.SetMode(training)
+	}
+	if m.Decoder != nil {
+		m.Decoder.SetMode(training)
+	}
 }
 
 // SetGateTemperature updates the temperature for all MoE layers in the model.
@@ -986,4 +1096,40 @@ func LoadIntentMoEModelFromGOB(filePath string) (*IntentMoE, error) {
 		return nil, fmt.Errorf("error decoding model from gob: %w", err)
 	}
 	return &loadedModel, nil
+}
+
+// PruneExpertRouter zeros out the routing probabilities for a specific expert to break a collapse.
+func (m *IntentMoE) PruneExpertRouter(expertID int) {
+	layers := m.Encoder.GetMoELayers()
+	if m.Decoder != nil && m.Decoder.OutputMoE != nil {
+		layers = append(layers, m.Decoder.OutputMoE)
+	}
+	for _, layer := range layers {
+		if layer.GatingNetwork != nil {
+			numExperts := layer.GatingNetwork.Linear.Weights.Shape[1]
+			inputDim := layer.GatingNetwork.Linear.Weights.Shape[0]
+			for k := 0; k < inputDim; k++ {
+				// Set the weight for this expert to a large negative number
+				layer.GatingNetwork.Linear.Weights.Data[k*numExperts+expertID] = -3.0
+			}
+		}
+	}
+}
+
+// ShakeRouters applies random noise to all gating networks to force exploration.
+func (m *IntentMoE) ShakeRouters(scale float64) {
+	layers := m.Encoder.GetMoELayers()
+	if m.Decoder != nil && m.Decoder.OutputMoE != nil {
+		layers = append(layers, m.Decoder.OutputMoE)
+	}
+	for _, layer := range layers {
+		if layer.GatingNetwork != nil {
+			params := layer.GatingNetwork.Linear.Parameters()
+			for _, p := range params {
+				for i := range p.Data {
+					p.Data[i] += (rand.Float64()*2 - 1) * scale
+				}
+			}
+		}
+	}
 }
