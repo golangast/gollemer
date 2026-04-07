@@ -6,24 +6,17 @@ import (
 	"math/rand"
 )
 
-// computeRouterLogitsSIMD is the pure-Go fallback used when the
-// GOEXPERIMENT=simd build flag is NOT set. It produces identical results
-// to the SIMD version but without hardware vectorisation.
-//
-// inputFlat is shaped [numTokens * inputDim] (float64).
-// routerWeightsData is shaped [inputDim * numExperts] (float64), column-major
-// (i.e. nn.Linear weight layout: W[k][expert] = routerWeightsData[k*numExperts+expert]).
-// logitsOut is shaped [numTokens * numExperts] (float64) and is overwritten.
+// computeRouterLogitsSIMD is the pure-Go fallback.
 func computeRouterLogitsSIMD(
-	inputFlat []float64,
-	routerWeightsData []float64,
+	inputFlat []float32,
+	routerWeightsData []float32,
 	numTokens, numExperts, inputDim int,
-	logitsOut []float64,
+	logitsOut []float32,
 ) {
 	for tokenIdx := 0; tokenIdx < numTokens; tokenIdx++ {
 		tokenBase := tokenIdx * inputDim
 		for expertIdx := 0; expertIdx < numExperts; expertIdx++ {
-			var dot float64
+			var dot float32
 			for k := 0; k < inputDim; k++ {
 				dot += inputFlat[tokenBase+k] * routerWeightsData[k*numExperts+expertIdx]
 			}
@@ -33,50 +26,29 @@ func computeRouterLogitsSIMD(
 }
 
 // computeRouterGradSIMD is the pure-Go fallback for the router gradient.
-// It accumulates weight gradients and input gradients for the router's
-// linear layer:
-//   dW[k][expertIdx] += inputFlat[token][k] * logitsGradFlat[token][expertIdx]
-//   dInputOut[token][k] += routerWeightsData[k][expertIdx] * logitsGradFlat[token][expertIdx]
 func computeRouterGradSIMD(
-	inputFlat []float64,
-	routerWeightsData []float64,
-	logitsGradFlat []float64,
-	dWeightsOut []float64,
-	dInputOut []float64,
+	inputFlat []float32,
+	routerWeightsData []float32,
+	logitsGradFlat []float32,
+	dWeightsOut []float32,
+	dInputOut []float32,
 	numTokens, numExperts, inputDim int,
+	scaleFactor float32,
 ) {
 	for tokenIdx := 0; tokenIdx < numTokens; tokenIdx++ {
 		tokenBase := tokenIdx * inputDim
 		for expertIdx := 0; expertIdx < numExperts; expertIdx++ {
-			gradVal := logitsGradFlat[tokenIdx*numExperts+expertIdx]
+			gradVal := logitsGradFlat[tokenIdx*numExperts+expertIdx] * scaleFactor
 			if gradVal == 0 {
 				continue
 			}
 			for k := 0; k < inputDim; k++ {
 				dWeightsOut[k*numExperts+expertIdx] += inputFlat[tokenBase+k] * gradVal
-				dInputOut[tokenBase+k] += routerWeightsData[k*numExperts+expertIdx] * gradVal
+				if dInputOut != nil {
+					dInputOut[tokenBase+k] += routerWeightsData[k*numExperts+expertIdx] * gradVal
+				}
 			}
 		}
-	}
-}
-
-// --- float64 operations for MoELayer ---
-
-func simdScaleF64(data []float64, factor float64) {
-	for i := range data {
-		data[i] *= factor
-	}
-}
-
-func simdAddScalarMulF64(dst, src []float64, scalar float64) {
-	for i := range dst {
-		dst[i] += src[i] * scalar
-	}
-}
-
-func simdMulScalarF64(dst, src []float64, scalar float64) {
-	for i := range dst {
-		dst[i] = src[i] * scalar
 	}
 }
 
@@ -91,32 +63,49 @@ func updateWeightsSIMD(weights, gradients, inputs []float32, delta float32) {
 	}
 }
 
-// updateWeightsSIMDF64 fallback
-func updateWeightsSIMDF64(gradients, inputs []float64, delta float64) {
-	n := len(inputs)
-	if len(gradients) < n {
-		n = len(gradients)
-	}
-	for i := 0; i < n; i++ {
-		gradients[i] += inputs[i] * delta
+// --- float32 operations for MoELayer ---
+
+func simdScaleF32(data []float32, factor float32) {
+	for i := range data {
+		data[i] *= factor
 	}
 }
 
-func simdDotProductF64(a, b []float64) float64 {
-	var dot float64
+func simdAddScalarMulF32(dst, src []float32, scalar float32) {
+	for i := range dst {
+		dst[i] += src[i] * scalar
+	}
+}
+
+func simdMulScalarF32(dst, src []float32, scalar float32) {
+	for i := range dst {
+		dst[i] = src[i] * scalar
+	}
+}
+
+func simdDotProductGenericF32(a, b []float32) float32 {
+	return simdDotProductF32(a, b)
+}
+
+func simdDotProductF32(a, b []float32) float32 {
+	var dot float32
 	for i := range a {
 		dot += a[i] * b[i]
 	}
 	return dot
 }
 
-func simdSoftmaxBackwardRowF64(out, p, dp []float64, sumDP float64) {
-	for k := range out {
-		out[k] = p[k] * (dp[k] - sumDP)
+func simdSoftmaxBackwardRowF32(p, dp, out []float32) {
+	var dot float32
+	for i := range p {
+		dot += p[i] * dp[i]
+	}
+	for i := range out {
+		out[i] = p[i] * (dp[i] - dot)
 	}
 }
 
-func simdReLUF64(data []float64) {
+func simdReLUF32(data []float32) {
 	for i := range data {
 		if data[i] < 0 {
 			data[i] = 0
@@ -124,7 +113,20 @@ func simdReLUF64(data []float64) {
 	}
 }
 
-func simdMaxSliceF64(data []float64) float64 {
+func simdSquareOfSumsLossF32(counts []int, total int, weight float32) float32 {
+	if total == 0 {
+		return 0
+	}
+	tInv := 1.0 / float32(total)
+	var sumSq float32
+	for _, c := range counts {
+		f := float32(c) * tInv
+		sumSq += f * f
+	}
+	return sumSq * weight
+}
+
+func simdMaxSliceF32(data []float32) float32 {
 	if len(data) == 0 {
 		return 0
 	}
@@ -137,47 +139,13 @@ func simdMaxSliceF64(data []float64) float64 {
 	return maxVal
 }
 
-func simdSubScalarF64(data []float64, scalar float64) {
-	for i := range data {
-		data[i] -= scalar
-	}
-}
-
-// simdSquareOfSumsLossF64 fallback
-func simdSquareOfSumsLossF64(counts []int, total int, weight float64) float64 {
-	if total == 0 {
-		return 0
-	}
-	tInv := 1.0 / float64(total)
-	var sumSq float64
-	for _, c := range counts {
-		f := float64(c) * tInv
-		sumSq += f * f
-	}
-	return sumSq * weight
-}
-
-// simdSquareOfSumsGradF64 fallback
-func simdSquareOfSumsGradF64(gradData []float64, probSums []float64, numTokens, numExperts int, weight float64) {
-	if numTokens == 0 {
-		return
-	}
-	factor := (weight * 2.0) / (float64(numTokens) * float64(numTokens))
-	for t := 0; t < numTokens; t++ {
-		base := t * numExperts
-		for e := 0; e < numExperts; e++ {
-			gradData[base+e] += probSums[e] * factor
-		}
-	}
-}
-
-func simdAddJitterF64(dst, src []float64, jitterStdDev float64) {
+func simdAddJitterF32(dst, src []float32, jitterStdDev float32) {
 	n := len(dst)
 	if len(src) < n {
 		n = len(src)
 	}
 	for i := 0; i < n; i++ {
-		jitter := 1.0 + (rand.NormFloat64() * jitterStdDev)
-		dst[i] = src[i] * jitter
+		jitter := 1.0 + (rand.NormFloat64() * float64(jitterStdDev))
+		dst[i] = src[i] * float32(jitter)
 	}
 }

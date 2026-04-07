@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+export CGO_ENABLED=0
 
 echo "🚀 Gollemer NLP Structure Initialization"
 echo "========================================="

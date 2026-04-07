@@ -9,8 +9,8 @@ import (
 type TrainingStats struct {
 	Epoch           int
 	CurrentLoss     float32
-	Perplexity      float64
-	BestPerplexity  float64
+	Perplexity      float32
+	BestPerplexity  float32
 	Layer0Counts    []int   // SIMD-accumulated expert hits for L0
 	MaxDominance    float32 // The utilization % of the most used expert
 	StepConfidence  float32 // Average probability of the Top-1 token
@@ -19,7 +19,7 @@ type TrainingStats struct {
 type Trainer struct {
 	BestModelPath string
 	CollapseCount int
-	LastSafeLR    float64
+	LastSafeLR    float32
 }
 
 func (t *Trainer) AutoHeal(m *IntentMoE, opt *nn.Adam, stats TrainingStats) {

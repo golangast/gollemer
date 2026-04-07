@@ -12,7 +12,7 @@ type IntentSample struct {
 }
 
 // Train provides a conceptual loop for training the MoE model on intent classification tasks.
-func (m *IntentMoE) Train(dataset []IntentSample, epochs int, lr float64) {
+func (m *IntentMoE) Train(dataset []IntentSample, epochs int, lr float32) {
 	// 1. Initialize Optimizer (Using Adam as a proxy for the user's requested NewAdamW)
 	optimizer := nn.NewOptimizer(m.Parameters(), lr, 1.0) // 1.0 is the clipping threshold
 

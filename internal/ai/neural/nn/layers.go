@@ -13,7 +13,7 @@ import (
 
 // weightIterator efficiently iterates over a flat weight array as a 2D matrix.
 type weightIterator struct {
-	data      []float64
+	data      []float32
 	inputDim  int
 	outputDim int
 	row       int
@@ -34,7 +34,7 @@ func (wi *weightIterator) GetIndex() int {
 	return wi.row*wi.outputDim + wi.col
 }
 
-func newWeightIterator(data []float64, inputDim, outputDim int) *weightIterator {
+func newWeightIterator(data []float32, inputDim, outputDim int) *weightIterator {
 	return &weightIterator{data: data, inputDim: inputDim, outputDim: outputDim, row: 0, col: -1, totalSize: inputDim * outputDim}
 }
 
@@ -45,7 +45,7 @@ func init() {
 }
 
 // safeAccumulate adds src to dst, ensuring we don't go out of bounds.
-func safeAccumulate(dst, src []float64) {
+func safeAccumulate(dst, src []float32) {
 	n := len(dst)
 	if len(src) < n {
 		n = len(src)
@@ -65,26 +65,26 @@ type Linear struct {
 // NewLinear creates a new Linear layer with random weights and zero biases.
 func NewLinear(inputDim, outputDim int) (*Linear, error) {
 	// He initialization
-	stdDev := math.Sqrt(2.0 / float64(inputDim))
-	weightsData := make([]float64, inputDim*outputDim)
+	stdDev := float32(math.Sqrt(2.0 / float64(inputDim)))
+	weightsData := make([]float32, inputDim*outputDim)
 	wi := newWeightIterator(weightsData, inputDim, outputDim)
 	for wi.Next() {
 		idx := wi.GetIndex()
-		weightsData[idx] = rand.NormFloat64() * stdDev
+		weightsData[idx] = float32(rand.NormFloat64()) * stdDev
 	}
 
 	weights := NewTensor([]int{inputDim, outputDim}, weightsData, true)
 	weights.RequiresGrad = true
 
 	// Biases are usually initialized to zero
-	biasesData := make([]float64, outputDim)
+	biasesData := make([]float32, outputDim)
 	biases := NewTensor([]int{outputDim}, biasesData, true)
 	biases.RequiresGrad = true
 
 	return &Linear{Weights: weights, Biases: biases}, nil
 }
 
-func (l *Linear) UpdateWeightsUnrolled(updateFn func(idx int, val float64) float64, unroll int) {
+func (l *Linear) UpdateWeightsUnrolled(updateFn func(idx int, val float32) float32, unroll int) {
 	wi := newWeightIterator(l.Weights.Data, l.Weights.Shape[0], l.Weights.Shape[1])
 	for wi.Next() {
 		idx := wi.GetIndex()
@@ -109,6 +109,16 @@ func (l *Linear) Input() *Tensor {
 // ClearState clears the intermediate states to free memory.
 func (l *Linear) ClearState() {
 	l.input = nil
+}
+
+// ToGPU moves the layer's parameters to the GPU.
+func (l *Linear) ToGPU() {
+	if l.Weights != nil {
+		l.Weights.ToGPU()
+	}
+	if l.Biases != nil {
+		l.Biases.ToGPU()
+	}
 }
 
 // Forward performs the forward pass of the Linear layer.
@@ -196,11 +206,11 @@ func (l *Linear) Backward(grad *Tensor) error {
 
 	// Ensure gradients are initialized for parameters that require them
 	if l.Weights.RequiresGrad && l.Weights.Grad == nil {
-		l.Weights.Grad = NewTensor(l.Weights.Shape, make([]float64, len(l.Weights.Data)), false)
+		l.Weights.Grad = NewTensor(l.Weights.Shape, make([]float32, len(l.Weights.Data)), false)
 	}
 	if l.Biases != nil && l.Biases.RequiresGrad {
 		if l.Biases.Grad == nil {
-			l.Biases.Grad = NewTensor(l.Biases.Shape, make([]float64, len(l.Biases.Data)), false)
+			l.Biases.Grad = NewTensor(l.Biases.Shape, make([]float32, len(l.Biases.Data)), false)
 		}
 	}
 
@@ -277,7 +287,7 @@ func (l *Linear) Backward(grad *Tensor) error {
 	// --- Calculate Gradient with respect to Input (dLoss/dInput) ---
 	if l.input.RequiresGrad {
 		if l.input.Grad == nil {
-			l.input.Grad = NewTensor(l.input.Shape, make([]float64, len(l.input.Data)), false)
+			l.input.Grad = NewTensor(l.input.Shape, make([]float32, len(l.input.Data)), false)
 		}
 
 		weightsTranspose, err := l.Weights.Transpose(0, 1)
@@ -332,7 +342,7 @@ func (l *Linear) Inputs() []*Tensor {
 type LayerNormalization struct {
 	Gamma           *Tensor // Scale parameter
 	Beta            *Tensor // Shift parameter
-	Epsilon         float64 // Small value to prevent division by zero
+	Epsilon         float32 // Small value to prevent division by zero
 	mean            *Tensor
 	invStdDev       *Tensor // Inverse standard deviation (1 / sqrt(variance + epsilon))
 	normalizedInput *Tensor // Input after normalization, before scaling and shifting
@@ -343,8 +353,8 @@ type LayerNormalization struct {
 // NewLayerNormalization creates a new LayerNormalization layer.
 func NewLayerNormalization(dimModel int) *LayerNormalization {
 	// Initialize gamma to ones and beta to zeros
-	gammaData := make([]float64, dimModel)
-	betaData := make([]float64, dimModel)
+	gammaData := make([]float32, dimModel)
+	betaData := make([]float32, dimModel)
 	for i := range gammaData {
 		gammaData[i] = 1.0 // Initialize gamma to 1s
 		betaData[i] = 0.0  // Initialize beta to 0s
@@ -362,6 +372,16 @@ func NewLayerNormalization(dimModel int) *LayerNormalization {
 // Parameters returns all learnable parameters of the layer.
 func (l *LayerNormalization) Parameters() []*Tensor {
 	return []*Tensor{l.Gamma, l.Beta}
+}
+
+// ToGPU moves the layer's parameters to the GPU.
+func (l *LayerNormalization) ToGPU() {
+	if l.Gamma != nil {
+		l.Gamma.ToGPU()
+	}
+	if l.Beta != nil {
+		l.Beta.ToGPU()
+	}
 }
 
 // Backward performs the backward pass for layer normalization.
@@ -385,20 +405,20 @@ func (l *LayerNormalization) Backward(grad *Tensor) error {
 	// Ensure gradients are initialized
 	if l.inputTensor != nil && l.inputTensor.RequiresGrad {
 		if l.inputTensor.Grad == nil {
-			l.inputTensor.Grad = NewTensor(l.inputTensor.Shape, make([]float64, len(l.inputTensor.Data)), false)
+			l.inputTensor.Grad = NewTensor(l.inputTensor.Shape, make([]float32, len(l.inputTensor.Data)), false)
 		} else if len(l.inputTensor.Grad.Data) != len(l.inputTensor.Data) {
 			// Fix for zombie/mismatched gradients from previous batches
-			l.inputTensor.Grad = NewTensor(l.inputTensor.Shape, make([]float64, len(l.inputTensor.Data)), false)
+			l.inputTensor.Grad = NewTensor(l.inputTensor.Shape, make([]float32, len(l.inputTensor.Data)), false)
 		}
 	}
 	if l.Gamma.RequiresGrad {
 		if l.Gamma.Grad == nil {
-			l.Gamma.Grad = NewTensor(l.Gamma.Shape, make([]float64, len(l.Gamma.Data)), false)
+			l.Gamma.Grad = NewTensor(l.Gamma.Shape, make([]float32, len(l.Gamma.Data)), false)
 		}
 	}
 	if l.Beta.RequiresGrad {
 		if l.Beta.Grad == nil {
-			l.Beta.Grad = NewTensor(l.Beta.Shape, make([]float64, len(l.Beta.Data)), false)
+			l.Beta.Grad = NewTensor(l.Beta.Shape, make([]float32, len(l.Beta.Data)), false)
 		}
 	}
 
@@ -417,7 +437,7 @@ func (l *LayerNormalization) Backward(grad *Tensor) error {
 	// dLoss/dGamma = Sum(grad * normalized_input) over all dims except the last one.
 	if l.Gamma.RequiresGrad {
 		if l.Gamma.Grad == nil {
-			l.Gamma.Grad = NewTensor(l.Gamma.Shape, make([]float64, len(l.Gamma.Data)), false)
+			l.Gamma.Grad = NewTensor(l.Gamma.Shape, make([]float32, len(l.Gamma.Data)), false)
 		}
 		// Sum (grad * normalizedInput) over all dimensions except the last one
 		for i := range numElementsToNormalize {
@@ -433,7 +453,7 @@ func (l *LayerNormalization) Backward(grad *Tensor) error {
 
 	// Calculate gradient with respect to normalized input
 	// dLoss/dNormalizedInput = grad * gamma (Scale)
-	dLoss_dNormalizedInputData := make([]float64, len(grad.Data))
+	dLoss_dNormalizedInputData := make([]float32, len(grad.Data))
 	for i := range numElementsToNormalize {
 		for j := range lastDimSize {
 			flatIndex := i*lastDimSize + j
@@ -455,12 +475,12 @@ func (l *LayerNormalization) Backward(grad *Tensor) error {
 
 	// Let's calculate dLoss/dStdDev and dLoss/dMean first.
 
-	dLoss_dStdDevData := make([]float64, numElementsToNormalize) // Gradients for std dev of each feature set
-	dLoss_dMeanData := make([]float64, numElementsToNormalize)   // Gradients for mean of each feature set
+	dLoss_dStdDevData := make([]float32, numElementsToNormalize) // Gradients for std dev of each feature set
+	dLoss_dMeanData := make([]float32, numElementsToNormalize)   // Gradients for mean of each feature set
 
 	for i := range numElementsToNormalize {
-		sum_dL_dNorm_x_minus_mean := 0.0
-		sum_dL_dNorm := 0.0 // Needed for dLoss/dMean calculation
+		sum_dL_dNorm_x_minus_mean := float32(0.0)
+		sum_dL_dNorm := float32(0.0) // Needed for dLoss/dMean calculation
 
 		for j := range lastDimSize {
 			flatIndex := i*lastDimSize + j
@@ -473,26 +493,26 @@ func (l *LayerNormalization) Backward(grad *Tensor) error {
 
 		// dLoss/dStdDev
 		stdDev := 1.0 / l.invStdDev.Data[i]
-		if math.IsNaN(stdDev) || math.IsInf(stdDev, 0) {
+		if math.IsNaN(float64(stdDev)) || math.IsInf(float64(stdDev), 0) {
 		}
 		dLoss_dStdDevData[i] = sum_dL_dNorm_x_minus_mean * (-1.0 / (stdDev * stdDev)) // Derivative of 1/std_dev is -1/std_dev^2
 		dLoss_dMeanData[i] = sum_dL_dNorm * (-l.invStdDev.Data[i])
 
-		if math.IsNaN(dLoss_dStdDevData[i]) || math.IsInf(dLoss_dStdDevData[i], 0) {
+		if math.IsNaN(float64(dLoss_dStdDevData[i])) || math.IsInf(float64(dLoss_dStdDevData[i]), 0) {
 		}
-		if math.IsNaN(dLoss_dMeanData[i]) || math.IsInf(dLoss_dMeanData[i], 0) {
+		if math.IsNaN(float64(dLoss_dMeanData[i])) || math.IsInf(float64(dLoss_dMeanData[i]), 0) {
 		}
 	}
 
 	if l.inputTensor.RequiresGrad {
 		if l.inputTensor.Grad == nil {
-			l.inputTensor.Grad = NewTensor(l.inputTensor.Shape, make([]float64, len(l.inputTensor.Data)), false)
+			l.inputTensor.Grad = NewTensor(l.inputTensor.Shape, make([]float32, len(l.inputTensor.Data)), false)
 		}
 		// Iterate over each feature vector (e.g., each token embedding in a sequence)
 		for i := range numElementsToNormalize {
 			// Pre-calculate sums for the current feature vector to avoid redundant computation.
-			sum_dL_dNorm := 0.0
-			sum_dL_dNorm_x_minus_mean := 0.0
+			sum_dL_dNorm := float32(0.0)
+			sum_dL_dNorm_x_minus_mean := float32(0.0)
 			for k := range lastDimSize {
 				flatIndex_k := i*lastDimSize + k
 				if flatIndex_k < len(dLoss_dNormalizedInputData) && flatIndex_k < len(l.inputTensor.Data) && i < len(l.mean.Data) {
@@ -510,8 +530,8 @@ func (l *LayerNormalization) Backward(grad *Tensor) error {
 					x_j_minus_mean_i := l.inputTensor.Data[flatIndex] - l.mean.Data[i]
 
 					// Calculate dLoss/dx_j
-					dL_dx_j := invStdDev_i * (dLoss_dNormalizedInputData[flatIndex] - sum_dL_dNorm/float64(lastDimSize) - x_j_minus_mean_i*invStdDev_i*invStdDev_i*sum_dL_dNorm_x_minus_mean/float64(lastDimSize))
-					if math.IsNaN(dL_dx_j) || math.IsInf(dL_dx_j, 0) {
+					dL_dx_j := invStdDev_i * (dLoss_dNormalizedInputData[flatIndex] - sum_dL_dNorm/float32(lastDimSize) - x_j_minus_mean_i*invStdDev_i*invStdDev_i*sum_dL_dNorm_x_minus_mean/float32(lastDimSize))
+					if math.IsNaN(float64(dL_dx_j)) || math.IsInf(float64(dL_dx_j), 0) {
 					}
 
 					l.inputTensor.Grad.Data[flatIndex] += dL_dx_j // Accumulate gradient
@@ -541,7 +561,7 @@ func (l *LayerNormalization) Forward(inputs ...*Tensor) (*Tensor, error) {
 	l.inputShape = input.Shape // Store input shape
 
 	for i, val := range input.Data {
-		if math.IsNaN(val) || math.IsInf(val, 0) {
+		if math.IsNaN(float64(val)) || math.IsInf(float64(val), 0) {
 			return nil, fmt.Errorf("input to LayerNormalization contains NaN or Inf at index %d", i)
 		}
 	}
@@ -568,35 +588,35 @@ func (l *LayerNormalization) Forward(inputs ...*Tensor) (*Tensor, error) {
 	lastDimSize := input.Shape[len(input.Shape)-1]
 	numElementsToNormalize := len(input.Data) / lastDimSize // Number of elements to calculate mean/variance over for each feature
 
-	meanData := make([]float64, numElementsToNormalize)
-	varianceData := make([]float64, numElementsToNormalize)
-	normalizedInputData := make([]float64, len(input.Data))
+	meanData := make([]float32, numElementsToNormalize)
+	varianceData := make([]float32, numElementsToNormalize)
+	normalizedInputData := make([]float32, len(input.Data))
 	meanShape := make([]int, len(input.Shape)-1)
 	copy(meanShape, input.Shape[:len(input.Shape)-1])
 
 	// Create the Tensor structs for intermediate values
 	l.mean = NewTensor(meanShape, meanData, false)                                     // Pass the data slice
-	l.invStdDev = NewTensor(meanShape, make([]float64, numElementsToNormalize), false) // Create data slice here
+	l.invStdDev = NewTensor(meanShape, make([]float32, numElementsToNormalize), false) // Create data slice here
 	l.normalizedInput = NewTensor(input.Shape, normalizedInputData, false)             // Pass the data slice
 	for i := range numElementsToNormalize {
 		// Calculate mean
-		sum := 0.0
+		sum := float32(0.0)
 		for j := range lastDimSize {
 			sum += input.Data[i*lastDimSize+j]
 		}
-		l.mean.Data[i] = sum / float64(lastDimSize) // Store mean in the tensor's data
+		l.mean.Data[i] = sum / float32(lastDimSize) // Store mean in the tensor's data
 
 		// Calculate variance
-		sumSqDiff := 0.0
+		sumSqDiff := float32(0.0)
 		for j := range lastDimSize {
 			diff := input.Data[i*lastDimSize+j] - l.mean.Data[i] // Use l.mean.Data
 			sumSqDiff += diff * diff
 		}
-		varianceData[i] = sumSqDiff / float64(lastDimSize)
+		varianceData[i] = sumSqDiff / float32(lastDimSize)
 
 		// Calculate normalized input
-		variance := math.Max(0, varianceData[i]) // Ensure variance is non-negative
-		invStdDev := 1.0 / math.Sqrt(variance+l.Epsilon)
+		variance := float32(math.Max(0, float64(varianceData[i]))) // Ensure variance is non-negative
+		invStdDev := float32(1.0 / math.Sqrt(float64(variance+l.Epsilon)))
 		l.invStdDev.Data[i] = invStdDev // Store inverse standard deviation in the tensor's data
 
 		for j := range lastDimSize {
@@ -605,7 +625,7 @@ func (l *LayerNormalization) Forward(inputs ...*Tensor) (*Tensor, error) {
 	}
 
 	// Scale and shift
-	outputData := make([]float64, len(input.Data))
+	outputData := make([]float32, len(input.Data))
 	for i := range numElementsToNormalize {
 		for j := range lastDimSize {
 			outputData[i*lastDimSize+j] = l.Gamma.Data[j]*l.normalizedInput.Data[i*lastDimSize+j] + l.Beta.Data[j] // Use l.normalizedInput.Data
@@ -685,6 +705,14 @@ func (mha *MultiHeadAttention) Parameters() []*Tensor {
 	return params
 }
 
+// ToGPU moves the layer's parameters to the GPU.
+func (mha *MultiHeadAttention) ToGPU() {
+	if mha.QueryLinear != nil { mha.QueryLinear.ToGPU() }
+	if mha.KeyLinear != nil { mha.KeyLinear.ToGPU() }
+	if mha.ValueLinear != nil { mha.ValueLinear.ToGPU() }
+	if mha.OutputLinear != nil { mha.OutputLinear.ToGPU() }
+}
+
 // ClearState clears the intermediate states to free memory.
 func (mha *MultiHeadAttention) ClearState() {
 	mha.attentionOutput = nil
@@ -713,7 +741,7 @@ func (mha *MultiHeadAttention) Backward(grad *Tensor) error {
 		return errors.New("mha.attentionOutput is nil in backward pass")
 	}
 	if mha.attentionOutput.Grad == nil {
-		mha.attentionOutput.Grad = NewTensor(grad.Shape, make([]float64, len(grad.Data)), false)
+		mha.attentionOutput.Grad = NewTensor(grad.Shape, make([]float32, len(grad.Data)), false)
 	}
 	safeAccumulate(mha.attentionOutput.Grad.Data, grad.Data)
 
@@ -763,7 +791,7 @@ func (mha *MultiHeadAttention) Backward(grad *Tensor) error {
 
 	if mha.attentionWeights.RequiresGrad {
 		if mha.attentionWeights.Grad == nil {
-			mha.attentionWeights.Grad = NewTensor(mha.attentionWeights.Shape, make([]float64, len(mha.attentionWeights.Data)), false)
+			mha.attentionWeights.Grad = NewTensor(mha.attentionWeights.Shape, make([]float32, len(mha.attentionWeights.Data)), false)
 		}
 		safeAccumulate(mha.attentionWeights.Grad.Data, gradAttentionWeights.Data)
 	}
@@ -773,7 +801,7 @@ func (mha *MultiHeadAttention) Backward(grad *Tensor) error {
 
 	if mha.v.RequiresGrad {
 		if mha.v.Grad == nil {
-			mha.v.Grad = NewTensor(mha.v.Shape, make([]float64, len(mha.v.Data)), false)
+			mha.v.Grad = NewTensor(mha.v.Shape, make([]float32, len(mha.v.Data)), false)
 		}
 		safeAccumulate(mha.v.Grad.Data, gradV_per_head.Data)
 	}
@@ -787,7 +815,7 @@ func (mha *MultiHeadAttention) Backward(grad *Tensor) error {
 		h0 := attScoresShape[1]
 		s0 := attScoresShape[2]
 		s1 := attScoresShape[3]
-		gradScoresData := make([]float64, len(mha.attentionWeights.Data))
+		gradScoresData := make([]float32, len(mha.attentionWeights.Data))
 		for b := range b0 {
 			for h := range h0 {
 				for i := range s0 {
@@ -803,8 +831,8 @@ func (mha *MultiHeadAttention) Backward(grad *Tensor) error {
 	}
 
 	// 4. Backprop through scaling
-	scale := 1.0 / math.Sqrt(float64(mha.HeadDim))
-	scaledGradScoresData := make([]float64, len(gradAttentionScores.Data))
+	scale := float32(1.0 / math.Sqrt(float64(mha.HeadDim)))
+	scaledGradScoresData := make([]float32, len(gradAttentionScores.Data))
 	MulScalar(gradAttentionScores.Data, scale, scaledGradScoresData)
 	gradAttentionScores = NewTensor(gradAttentionScores.Shape, scaledGradScoresData, false)
 
@@ -822,7 +850,7 @@ func (mha *MultiHeadAttention) Backward(grad *Tensor) error {
 		dim := mha.k.Shape[1]
 
 		if kSeq > 1 {
-			newData := make([]float64, b*kSeq*dim)
+			newData := make([]float32, b*kSeq*dim)
 			for i := 0; i < b; i++ {
 				srcStart := i * dim
 				if srcStart+dim > len(mha.k.Data) {
@@ -838,7 +866,7 @@ func (mha *MultiHeadAttention) Backward(grad *Tensor) error {
 			if len(gradAttentionScores.Shape) == 4 {
 				// Broadcast over heads: [b, h, kSeq, dim]
 				h := gradAttentionScores.Shape[1]
-				fullData := make([]float64, b*h*kSeq*dim)
+				fullData := make([]float32, b*h*kSeq*dim)
 				chunkSize := kSeq * dim
 				for i := 0; i < b; i++ {
 					srcChunk := newData[i*chunkSize : (i+1)*chunkSize]
@@ -859,7 +887,7 @@ func (mha *MultiHeadAttention) Backward(grad *Tensor) error {
 	}
 	if mha.q.RequiresGrad {
 		if mha.q.Grad == nil {
-			mha.q.Grad = NewTensor(mha.q.Shape, make([]float64, len(mha.q.Data)), false)
+			mha.q.Grad = NewTensor(mha.q.Shape, make([]float32, len(mha.q.Data)), false)
 		}
 		safeAccumulate(mha.q.Grad.Data, gradQ_per_head.Data)
 	}
@@ -879,7 +907,7 @@ func (mha *MultiHeadAttention) Backward(grad *Tensor) error {
 		dim := mha.q.Shape[1]
 
 		if qSeq > 1 {
-			newData := make([]float64, b*qSeq*dim)
+			newData := make([]float32, b*qSeq*dim)
 			for i := 0; i < b; i++ {
 				srcStart := i * dim
 				if srcStart+dim > len(mha.q.Data) {
@@ -895,7 +923,7 @@ func (mha *MultiHeadAttention) Backward(grad *Tensor) error {
 			if len(gradScoresTransposed.Shape) == 4 {
 				// Broadcast over heads: [b, h, qSeq, dim]
 				h := gradScoresTransposed.Shape[1]
-				fullData := make([]float64, b*h*qSeq*dim)
+				fullData := make([]float32, b*h*qSeq*dim)
 				chunkSize := qSeq * dim
 				for i := 0; i < b; i++ {
 					srcChunk := newData[i*chunkSize : (i+1)*chunkSize]
@@ -916,7 +944,7 @@ func (mha *MultiHeadAttention) Backward(grad *Tensor) error {
 	}
 	if mha.k.RequiresGrad {
 		if mha.k.Grad == nil {
-			mha.k.Grad = NewTensor(mha.k.Shape, make([]float64, len(mha.k.Data)), false)
+			mha.k.Grad = NewTensor(mha.k.Shape, make([]float32, len(mha.k.Data)), false)
 		}
 		safeAccumulate(mha.k.Grad.Data, gradK_per_head.Data)
 	}
@@ -1035,20 +1063,20 @@ func (mha *MultiHeadAttention) Forward(inputs ...*Tensor) (*Tensor, error) {
 		return nil, fmt.Errorf("failed to calculate attention scores (Q@K^T): %w", err)
 	}
 	for i, val := range attentionScores.Data {
-		if math.IsNaN(val) || math.IsInf(val, 0) {
+		if math.IsNaN(float64(val)) || math.IsInf(float64(val), 0) {
 			return nil, fmt.Errorf("attentionScores contains NaN or Inf at index %d", i)
 		}
 	}
 	mha.attentionScores = attentionScores // Store attention scores
 
 	// Gamma attention scores
-	scale := 1.0 / math.Sqrt(float64(mha.HeadDim))
+	scale := float32(1.0 / math.Sqrt(float64(mha.HeadDim)))
 	scaledAttentionScores, err := attentionScores.MulScalar(scale)
 	if err != nil {
 		return nil, fmt.Errorf("failed to scale attention scores: %w", err)
 	}
 	for i, val := range scaledAttentionScores.Data {
-		if math.IsNaN(val) || math.IsInf(val, 0) {
+		if math.IsNaN(float64(val)) || math.IsInf(float64(val), 0) {
 			return nil, fmt.Errorf("scaledAttentionScores contains NaN or Inf at index %d", i)
 		}
 	}
@@ -1206,6 +1234,14 @@ func (mha *MultiHeadCrossAttention) Parameters() []*Tensor {
 	return params
 }
 
+// ToGPU moves the layer's parameters to the GPU.
+func (mha *MultiHeadCrossAttention) ToGPU() {
+	if mha.QueryLinear != nil { mha.QueryLinear.ToGPU() }
+	if mha.KeyLinear != nil { mha.KeyLinear.ToGPU() }
+	if mha.ValueLinear != nil { mha.ValueLinear.ToGPU() }
+	if mha.OutputLinear != nil { mha.OutputLinear.ToGPU() }
+}
+
 // ClearState clears the intermediate states to free memory.
 func (mha *MultiHeadCrossAttention) ClearState() {
 	mha.attentionOutput = nil
@@ -1246,7 +1282,7 @@ func (mha *MultiHeadCrossAttention) Backward(grad *Tensor) error {
 		return errors.New("mha.attentionOutput is nil in backward pass")
 	}
 	if mha.attentionOutput.Grad == nil {
-		mha.attentionOutput.Grad = NewTensor(grad.Shape, make([]float64, len(grad.Data)), false)
+		mha.attentionOutput.Grad = NewTensor(grad.Shape, make([]float32, len(grad.Data)), false)
 	}
 	if len(mha.attentionOutput.Grad.Data) != len(grad.Data) {
 		return fmt.Errorf("MHCA backward: gradient data length mismatch: expected %d, got %d", len(mha.attentionOutput.Grad.Data), len(grad.Data))
@@ -1261,7 +1297,7 @@ func (mha *MultiHeadCrossAttention) Backward(grad *Tensor) error {
 		// Since we added a residual (output + query), the gradient flows back to query too
 		if mha.queryTensor != nil && mha.queryTensor.RequiresGrad {
 			if mha.queryTensor.Grad == nil {
-				mha.queryTensor.Grad = NewTensor(mha.queryTensor.Shape, make([]float64, len(mha.queryTensor.Data)), false)
+				mha.queryTensor.Grad = NewTensor(mha.queryTensor.Shape, make([]float32, len(mha.queryTensor.Data)), false)
 			}
 			safeAccumulate(mha.queryTensor.Grad.Data, mha.attentionOutput.Grad.Data)
 		}
@@ -1306,7 +1342,7 @@ func (mha *MultiHeadCrossAttention) Backward(grad *Tensor) error {
 
 	// Always store attentionWeights.Grad for the softmax backward below.
 	if mha.attentionWeights.Grad == nil {
-		mha.attentionWeights.Grad = NewTensor(mha.attentionWeights.Shape, make([]float64, len(mha.attentionWeights.Data)), false)
+		mha.attentionWeights.Grad = NewTensor(mha.attentionWeights.Shape, make([]float32, len(mha.attentionWeights.Data)), false)
 	}
 	safeAccumulate(mha.attentionWeights.Grad.Data, gradAttentionWeights.Data)
 
@@ -1315,7 +1351,7 @@ func (mha *MultiHeadCrossAttention) Backward(grad *Tensor) error {
 
 	// Always store gradV — required to propagate back to ValueLinear and context vector.
 	if mha.v.Grad == nil {
-		mha.v.Grad = NewTensor(mha.v.Shape, make([]float64, len(mha.v.Data)), false)
+		mha.v.Grad = NewTensor(mha.v.Shape, make([]float32, len(mha.v.Data)), false)
 	}
 	safeAccumulate(mha.v.Grad.Data, gradV_per_head.Data)
 
@@ -1328,7 +1364,7 @@ func (mha *MultiHeadCrossAttention) Backward(grad *Tensor) error {
 		h0 := attScoresShape[1]
 		s0 := attScoresShape[2]
 		s1 := attScoresShape[3]
-		gradScoresData := make([]float64, len(mha.attentionWeights.Data))
+		gradScoresData := make([]float32, len(mha.attentionWeights.Data))
 		for b := range b0 {
 			for h := range h0 {
 				for i := range s0 {
@@ -1344,8 +1380,8 @@ func (mha *MultiHeadCrossAttention) Backward(grad *Tensor) error {
 	}
 
 	// 4. Backprop through scaling
-	scale := 1.0 / math.Sqrt(float64(mha.Depth))
-	scaledGradScoresData := make([]float64, len(gradAttentionScoresMHCA.Data))
+	scale := float32(1.0 / math.Sqrt(float64(mha.Depth)))
+	scaledGradScoresData := make([]float32, len(gradAttentionScoresMHCA.Data))
 	MulScalar(gradAttentionScoresMHCA.Data, scale, scaledGradScoresData)
 	gradAttentionScoresMHCA = NewTensor(gradAttentionScoresMHCA.Shape, scaledGradScoresData, false)
 
@@ -1364,7 +1400,7 @@ func (mha *MultiHeadCrossAttention) Backward(grad *Tensor) error {
 
 		if kvSeq > 1 {
 			// Broadcast K
-			newData := make([]float64, b*kvSeq*dim)
+			newData := make([]float32, b*kvSeq*dim)
 			for i := 0; i < b; i++ {
 				srcStart := i * dim
 				if srcStart+dim > len(mha.k.Data) {
@@ -1380,7 +1416,7 @@ func (mha *MultiHeadCrossAttention) Backward(grad *Tensor) error {
 			if len(gradAttentionScoresMHCA.Shape) == 4 {
 				// Broadcast over heads: [b, h, kvSeq, dim]
 				h := gradAttentionScoresMHCA.Shape[1]
-				fullData := make([]float64, b*h*kvSeq*dim)
+				fullData := make([]float32, b*h*kvSeq*dim)
 				chunkSize := kvSeq * dim
 				for i := 0; i < b; i++ {
 					srcChunk := newData[i*chunkSize : (i+1)*chunkSize]
@@ -1402,7 +1438,7 @@ func (mha *MultiHeadCrossAttention) Backward(grad *Tensor) error {
 	}
 	// Always store gradQ — required to propagate back to QueryLinear and the decoder hidden state.
 	if mha.q.Grad == nil {
-		mha.q.Grad = NewTensor(mha.q.Shape, make([]float64, len(mha.q.Data)), false)
+		mha.q.Grad = NewTensor(mha.q.Shape, make([]float32, len(mha.q.Data)), false)
 	}
 	safeAccumulate(mha.q.Grad.Data, gradQ_per_head.Data)
 
@@ -1422,7 +1458,7 @@ func (mha *MultiHeadCrossAttention) Backward(grad *Tensor) error {
 		dim := mha.q.Shape[1]
 
 		if qSeq > 1 {
-			newData := make([]float64, b*qSeq*dim)
+			newData := make([]float32, b*qSeq*dim)
 			for i := 0; i < b; i++ {
 				srcStart := i * dim
 				if srcStart+dim > len(mha.q.Data) {
@@ -1438,7 +1474,7 @@ func (mha *MultiHeadCrossAttention) Backward(grad *Tensor) error {
 			if len(gradScoresMHCATransposed.Shape) == 4 {
 				// Broadcast over heads: [b, h, qSeq, dim]
 				h := gradScoresMHCATransposed.Shape[1]
-				fullData := make([]float64, b*h*qSeq*dim)
+				fullData := make([]float32, b*h*qSeq*dim)
 				chunkSize := qSeq * dim
 				for i := 0; i < b; i++ {
 					srcChunk := newData[i*chunkSize : (i+1)*chunkSize]
@@ -1459,7 +1495,7 @@ func (mha *MultiHeadCrossAttention) Backward(grad *Tensor) error {
 	}
 	// Always store gradK — required to propagate back to KeyLinear and context vector.
 	if mha.k.Grad == nil {
-		mha.k.Grad = NewTensor(mha.k.Shape, make([]float64, len(mha.k.Data)), false)
+		mha.k.Grad = NewTensor(mha.k.Shape, make([]float32, len(mha.k.Data)), false)
 	}
 	safeAccumulate(mha.k.Grad.Data, gradK_per_head.Data)
 
@@ -1473,7 +1509,7 @@ func (mha *MultiHeadCrossAttention) Backward(grad *Tensor) error {
 	// Propagate query grad back to queryTensor (decoder hidden state).
 	if mha.queryTensor != nil {
 		if mha.queryTensor.Grad == nil {
-			mha.queryTensor.Grad = NewTensor(mha.queryTensor.Shape, make([]float64, len(mha.queryTensor.Data)), false)
+			mha.queryTensor.Grad = NewTensor(mha.queryTensor.Shape, make([]float32, len(mha.queryTensor.Data)), false)
 		}
 		if mha.QueryLinear.Input() != nil && mha.QueryLinear.Input().Grad != nil {
 			qlg := mha.QueryLinear.Input().Grad
@@ -1492,7 +1528,7 @@ func (mha *MultiHeadCrossAttention) Backward(grad *Tensor) error {
 	// Propagate key grad back to keyTensor (encoder context vector).
 	if mha.keyTensor != nil {
 		if mha.keyTensor.Grad == nil {
-			mha.keyTensor.Grad = NewTensor(mha.keyTensor.Shape, make([]float64, len(mha.keyTensor.Data)), false)
+			mha.keyTensor.Grad = NewTensor(mha.keyTensor.Shape, make([]float32, len(mha.keyTensor.Data)), false)
 		}
 		if mha.KeyLinear.Input() != nil && mha.KeyLinear.Input().Grad != nil {
 			klg := mha.KeyLinear.Input().Grad
@@ -1511,7 +1547,7 @@ func (mha *MultiHeadCrossAttention) Backward(grad *Tensor) error {
 	// Propagate value grad back to valueTensor (encoder context vector).
 	if mha.valueTensor != nil {
 		if mha.valueTensor.Grad == nil {
-			mha.valueTensor.Grad = NewTensor(mha.valueTensor.Shape, make([]float64, len(mha.valueTensor.Data)), false)
+			mha.valueTensor.Grad = NewTensor(mha.valueTensor.Shape, make([]float32, len(mha.valueTensor.Data)), false)
 		}
 		if mha.ValueLinear.Input() != nil && mha.ValueLinear.Input().Grad != nil {
 			vlg := mha.ValueLinear.Input().Grad
@@ -1623,7 +1659,7 @@ func (mha *MultiHeadCrossAttention) Forward(inputs ...*Tensor) (*Tensor, error) 
 	mha.attentionScores = attentionScores // Store attention scores
 
 	// Scale attention scores
-	scale := 1.0 / math.Sqrt(float64(mha.DimModel/mha.NumQHeads)) // Scale by sqrt of head dim
+	scale := float32(1.0 / math.Sqrt(float64(mha.DimModel/mha.NumQHeads))) // Scale by sqrt of head dim
 	scaledAttentionScores, err := attentionScores.MulScalar(scale)
 	if err != nil {
 		return nil, fmt.Errorf("failed to scale cross-attention scores: %w", err)
@@ -1633,7 +1669,7 @@ func (mha *MultiHeadCrossAttention) Forward(inputs ...*Tensor) (*Tensor, error) 
 	if mask != nil {
 		if len(mask.Shape) == 4 && mask.Shape[1] == 1 && mask.Shape[2] == 1 && mask.Shape[0] == scaledAttentionScores.Shape[0] && mask.Shape[3] == scaledAttentionScores.Shape[3] {
 			// Fast path for [B, 1, 1, S] broadcast
-			resultData := make([]float64, len(scaledAttentionScores.Data))
+			resultData := make([]float32, len(scaledAttentionScores.Data))
 			kvSeq := scaledAttentionScores.Shape[3]
 			qSeq := scaledAttentionScores.Shape[2]
 			heads := scaledAttentionScores.Shape[1]

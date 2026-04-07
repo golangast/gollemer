@@ -12,7 +12,7 @@ type LayerNorm struct {
 	NormalizedShape int
 	Gamma           *Tensor // Learnable scale parameter
 	Beta            *Tensor // Learnable shift parameter
-	Eps             float64
+	Eps             float32
 
 	// Stored for backward pass
 	input      *Tensor
@@ -24,8 +24,8 @@ type LayerNorm struct {
 // NewLayerNorm creates a new LayerNorm module
 func NewLayerNorm(normalizedShape int) *LayerNorm {
 	// Initialize gamma to ones and beta to zeros
-	gamma := NewTensor([]int{normalizedShape}, make([]float64, normalizedShape), true)
-	beta := NewTensor([]int{normalizedShape}, make([]float64, normalizedShape), true)
+	gamma := NewTensor([]int{normalizedShape}, make([]float32, normalizedShape), true)
+	beta := NewTensor([]int{normalizedShape}, make([]float32, normalizedShape), true)
 
 	for i := range gamma.Data {
 		gamma.Data[i] = 1.0
@@ -58,34 +58,34 @@ func (ln *LayerNorm) Forward(input *Tensor) (*Tensor, error) {
 	batchSize := numRows // Total number of vectors to normalize
 
 	// Calculate mean and variance for each sample using SIMD
-	mean := NewTensor([]int{batchSize}, make([]float64, batchSize), false)
-	variance := NewTensor([]int{batchSize}, make([]float64, batchSize), false)
+	mean := NewTensor([]int{batchSize}, make([]float32, batchSize), false)
+	variance := NewTensor([]int{batchSize}, make([]float32, batchSize), false)
 
-	tmp := make([]float64, ln.NormalizedShape)
+	tmp := make([]float32, ln.NormalizedShape)
 
 	for i := range batchSize {
 		start := i * ln.NormalizedShape
 		data := input.Data[start : start+ln.NormalizedShape]
 		
-		m := SumVector(data) / float64(ln.NormalizedShape)
+		m := SumVector(data) / float32(ln.NormalizedShape)
 		mean.Data[i] = m
 
 		// Variance: sum((x - m)^2) / n
 		AddScalar(data, -m, tmp)
 		MulVectors(tmp, tmp, tmp)
-		variance.Data[i] = SumVector(tmp) / float64(ln.NormalizedShape)
+		variance.Data[i] = SumVector(tmp) / float32(ln.NormalizedShape)
 	}
 
 	ln.mean = mean
 	ln.variance = variance
 
 	// Normalize, Scale and Shift in one pass
-	output := NewTensor(input.Shape, make([]float64, len(input.Data)), input.RequiresGrad)
-	normalized := NewTensor(input.Shape, make([]float64, len(input.Data)), input.RequiresGrad)
+	output := NewTensor(input.Shape, make([]float32, len(input.Data)), input.RequiresGrad)
+	normalized := NewTensor(input.Shape, make([]float32, len(input.Data)), input.RequiresGrad)
 	
 	for i := range batchSize {
 		start := i * ln.NormalizedShape
-		std := math.Sqrt(variance.Data[i] + ln.Eps)
+		std := float32(math.Sqrt(float64(variance.Data[i] + ln.Eps)))
 		m := mean.Data[i]
 		
 		inData := input.Data[start : start+ln.NormalizedShape]
@@ -115,13 +115,13 @@ func (ln *LayerNorm) Backward(gradOutput *Tensor) error {
 
 	// Initialize gradients
 	if ln.Gamma.Grad == nil {
-		ln.Gamma.Grad = NewTensor(ln.Gamma.Shape, make([]float64, len(ln.Gamma.Data)), false)
+		ln.Gamma.Grad = NewTensor(ln.Gamma.Shape, make([]float32, len(ln.Gamma.Data)), false)
 	}
 	if ln.Beta.Grad == nil {
-		ln.Beta.Grad = NewTensor(ln.Beta.Shape, make([]float64, len(ln.Beta.Data)), false)
+		ln.Beta.Grad = NewTensor(ln.Beta.Shape, make([]float32, len(ln.Beta.Data)), false)
 	}
 	if ln.input.Grad == nil {
-		ln.input.Grad = NewTensor(ln.input.Shape, make([]float64, len(ln.input.Data)), false)
+		ln.input.Grad = NewTensor(ln.input.Shape, make([]float32, len(ln.input.Data)), false)
 	}
 
 	// Gradient w.r.t. gamma and beta
@@ -135,10 +135,10 @@ func (ln *LayerNorm) Backward(gradOutput *Tensor) error {
 	}
 
 	// Gradient w.r.t. input (simplified version)
-	tmp := make([]float64, ln.NormalizedShape)
+	tmp := make([]float32, ln.NormalizedShape)
 	for i := range batchSize {
 		start := i * ln.NormalizedShape
-		std := math.Sqrt(ln.variance.Data[i] + ln.Eps)
+		std := float32(math.Sqrt(float64(ln.variance.Data[i] + ln.Eps)))
 		gOut := gradOutput.Data[start : start+ln.NormalizedShape]
 		
 		MulVectors(gOut, ln.Gamma.Data, tmp)
@@ -157,6 +157,16 @@ func (ln *LayerNorm) Input() *Tensor {
 // Parameters returns the learnable parameters of LayerNorm
 func (ln *LayerNorm) Parameters() []*Tensor {
 	return []*Tensor{ln.Gamma, ln.Beta}
+}
+
+// ToGPU moves the parameters to the GPU.
+func (ln *LayerNorm) ToGPU() {
+	if ln.Gamma != nil {
+		ln.Gamma.ToGPU()
+	}
+	if ln.Beta != nil {
+		ln.Beta.ToGPU()
+	}
 }
 
 // ClearState clears the intermediate tensors used for backward pass

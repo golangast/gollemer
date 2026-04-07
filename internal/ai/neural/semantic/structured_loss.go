@@ -14,11 +14,11 @@ import (
 // 3. Argument role classification loss
 // 4. Graph structure validity loss
 type StructuredSemanticLoss struct {
-	OperationWeight float64 // Weight for operation classification (default: 0.4)
-	ResourceWeight  float64 // Weight for resource identification (default: 0.3)
-	ArgumentWeight  float64 // Weight for argument classification (default: 0.2)
-	StructureWeight float64 // Weight for graph structure validity (default: 0.1)
-	LabelSmoothing  float64 // Label smoothing factor for regularization
+	OperationWeight float32 // Weight for operation classification (default: 0.4)
+	ResourceWeight  float32 // Weight for resource identification (default: 0.3)
+	ArgumentWeight  float32 // Weight for argument classification (default: 0.2)
+	StructureWeight float32 // Weight for graph structure validity (default: 0.1)
+	LabelSmoothing  float32 // Label smoothing factor for regularization
 }
 
 // NewStructuredSemanticLoss creates a new loss function with default weights
@@ -43,10 +43,10 @@ func (ssl *StructuredSemanticLoss) ComputeLoss(
 	asgEdgeLogits *Tensor,
 	asgEdgeTargets []int,
 	paddingID int,
-) (float64, map[string]float64, error) {
+) (float32, map[string]float32, error) {
 
-	losses := make(map[string]float64)
-	totalLoss := 0.0
+	losses := make(map[string]float32)
+	var totalLoss float32 = 0.0
 
 	// 1. Operation classification loss
 	if operationLogits != nil && len(operationTargets) > 0 {
@@ -97,13 +97,13 @@ func (ssl *StructuredSemanticLoss) computeOperationLoss(
 	logits *Tensor,
 	targets []int,
 	paddingID int,
-) (float64, error) {
+) (float32, error) {
 	if logits == nil || len(targets) == 0 {
 		return 0.0, nil
 	}
 
 	// Use standard cross-entropy loss
-	loss := 0.0
+	var loss float32 = 0.0
 	batchSize := len(targets)
 
 	if len(logits.Shape) == 2 {
@@ -126,18 +126,18 @@ func (ssl *StructuredSemanticLoss) computeOperationLoss(
 			logit := logits.Data[i*vocabSize+targetID]
 
 			// Apply label smoothing
-			labelSmoothed := 1.0 - ssl.LabelSmoothing*(1.0/float64(vocabSize-1))
+			labelSmoothed := 1.0 - ssl.LabelSmoothing*(1.0/float32(vocabSize-1))
 
 			// Cross-entropy with label smoothing
 			loss -= labelSmoothed * logit
 
 			// Add regularization term
 			maxLogit := getMaxLogit(logits.Data, i*vocabSize, vocabSize)
-			loss += math.Log(computeSumExp(logits.Data, i*vocabSize, vocabSize) - maxLogit)
+			loss += float32(math.Log(float64(computeSumExp(logits.Data, i*vocabSize, vocabSize) - maxLogit)))
 		}
 	}
 
-	return loss / float64(batchSize), nil
+	return loss / float32(batchSize), nil
 }
 
 // computeResourceLoss calculates loss for resource identification
@@ -146,12 +146,12 @@ func (ssl *StructuredSemanticLoss) computeResourceLoss(
 	logits *Tensor,
 	targets []int,
 	paddingID int,
-) (float64, error) {
+) (float32, error) {
 	if logits == nil || len(targets) == 0 {
 		return 0.0, nil
 	}
 
-	loss := 0.0
+	var loss float32 = 0.0
 	count := 0
 
 	// For resource identification (sequence tagging style)
@@ -170,7 +170,7 @@ func (ssl *StructuredSemanticLoss) computeResourceLoss(
 
 		logit := logits.Data[idx+targetID]
 		loss -= logit
-		loss += math.Log(computeSumExp(logits.Data, idx, vocabSize))
+		loss += float32(math.Log(float64(computeSumExp(logits.Data, idx, vocabSize))))
 		count++
 	}
 
@@ -178,7 +178,7 @@ func (ssl *StructuredSemanticLoss) computeResourceLoss(
 		return 0.0, nil
 	}
 
-	return loss / float64(count), nil
+	return loss / float32(count), nil
 }
 
 // computeArgumentLoss calculates loss for argument role classification
@@ -186,12 +186,12 @@ func (ssl *StructuredSemanticLoss) computeArgumentLoss(
 	logits *Tensor,
 	targets []int,
 	paddingID int,
-) (float64, error) {
+) (float32, error) {
 	if logits == nil || len(targets) == 0 {
 		return 0.0, nil
 	}
 
-	loss := 0.0
+	var loss float32 = 0.0
 	count := 0
 
 	vocabSize := logits.Shape[len(logits.Shape)-1]
@@ -209,7 +209,7 @@ func (ssl *StructuredSemanticLoss) computeArgumentLoss(
 
 		logit := logits.Data[idx+targetID]
 		loss -= logit
-		loss += math.Log(computeSumExp(logits.Data, idx, vocabSize))
+		loss += float32(math.Log(float64(computeSumExp(logits.Data, idx, vocabSize))))
 		count++
 	}
 
@@ -217,7 +217,7 @@ func (ssl *StructuredSemanticLoss) computeArgumentLoss(
 		return 0.0, nil
 	}
 
-	return loss / float64(count), nil
+	return loss / float32(count), nil
 }
 
 // computeStructureLoss calculates loss for graph edge validity
@@ -226,13 +226,13 @@ func (ssl *StructuredSemanticLoss) computeStructureLoss(
 	logits *Tensor,
 	targets []int,
 	paddingID int,
-) (float64, error) {
+) (float32, error) {
 	if logits == nil || len(targets) == 0 {
 		return 0.0, nil
 	}
 
 	// For edge classification (valid/invalid relation types)
-	loss := 0.0
+	var loss float32 = 0.0
 	count := 0
 
 	vocabSize := logits.Shape[len(logits.Shape)-1]
@@ -250,7 +250,7 @@ func (ssl *StructuredSemanticLoss) computeStructureLoss(
 
 		logit := logits.Data[idx+targetID]
 		loss -= logit
-		loss += math.Log(computeSumExp(logits.Data, idx, vocabSize))
+		loss += float32(math.Log(float64(computeSumExp(logits.Data, idx, vocabSize))))
 		count++
 	}
 
@@ -259,8 +259,8 @@ func (ssl *StructuredSemanticLoss) computeStructureLoss(
 	}
 
 	// Apply structure penalty - invalid edges should have higher loss
-	structurePenalty := 0.1 * float64(len(targets)-count) / float64(len(targets))
-	return (loss / float64(count)) + structurePenalty, nil
+	var structurePenalty float32 = 0.1 * float32(len(targets)-count) / float32(len(targets))
+	return (loss / float32(count)) + structurePenalty, nil
 }
 
 // ValidateSemanticStructure checks if generated ASG is structurally valid
@@ -320,12 +320,12 @@ func (ssl *StructuredSemanticLoss) ValidateSemanticStructure(asg *AbstractSemant
 
 // Helper functions
 
-func getMaxLogit(data []float64, start, size int) float64 {
+func getMaxLogit(data []float32, start, size int) float32 {
 	if len(data) == 0 || start+size > len(data) {
 		return 0.0
 	}
 
-	maxVal := data[start]
+	var maxVal float32 = data[start]
 	for i := start + 1; i < start+size; i++ {
 		if data[i] > maxVal {
 			maxVal = data[i]
@@ -334,16 +334,16 @@ func getMaxLogit(data []float64, start, size int) float64 {
 	return maxVal
 }
 
-func computeSumExp(data []float64, start, size int) float64 {
+func computeSumExp(data []float32, start, size int) float32 {
 	if len(data) == 0 || start+size > len(data) {
 		return 0.0
 	}
 
 	maxVal := getMaxLogit(data, start, size)
-	sum := 0.0
+	var sum float32 = 0.0
 
 	for i := start; i < start+size; i++ {
-		sum += math.Exp(data[i] - maxVal)
+		sum += float32(math.Exp(float64(data[i] - maxVal)))
 	}
 
 	return sum + maxVal // Adding back maxVal for numerical stability
@@ -353,8 +353,8 @@ func computeSumExp(data []float64, start, size int) float64 {
 func (ssl *StructuredSemanticLoss) ComputeMetrics(
 	predictions *AbstractSemanticGraph,
 	ground_truth *AbstractSemanticGraph,
-) map[string]float64 {
-	metrics := make(map[string]float64)
+) map[string]float32 {
+	metrics := make(map[string]float32)
 
 	if predictions == nil || ground_truth == nil {
 		metrics["node_accuracy"] = 0.0
@@ -376,7 +376,7 @@ func (ssl *StructuredSemanticLoss) ComputeMetrics(
 	}
 
 	if totalNodes > 0 {
-		metrics["node_accuracy"] = float64(correctNodes) / float64(totalNodes)
+		metrics["node_accuracy"] = float32(correctNodes) / float32(totalNodes)
 	}
 
 	// Edge accuracy: percentage of correctly predicted edges
@@ -395,7 +395,7 @@ func (ssl *StructuredSemanticLoss) ComputeMetrics(
 	}
 
 	if totalEdges > 0 {
-		metrics["edge_accuracy"] = float64(correctEdges) / float64(totalEdges)
+		metrics["edge_accuracy"] = float32(correctEdges) / float32(totalEdges)
 	}
 
 	// Structure validity

@@ -10,13 +10,13 @@ import "math"
 //
 // Returns the raw norm before clipping and a bool indicating whether
 // clipping was applied, useful for logging.
-func ClipGradients(grads []float64, maxNorm float64) (rawNorm float64, clipped bool) {
-	var sumSq float64
+func ClipGradients(grads []float32, maxNorm float32) (rawNorm float32, clipped bool) {
+	var sumSq float32
 	for _, g := range grads {
 		sumSq += g * g
 	}
 
-	rawNorm = math.Sqrt(sumSq)
+	rawNorm = float32(math.Sqrt(float64(sumSq)))
 	if rawNorm > maxNorm {
 		scale := maxNorm / (rawNorm + 1e-6) // 1e-6 prevents div-by-zero
 		for i := range grads {
@@ -30,16 +30,16 @@ func ClipGradients(grads []float64, maxNorm float64) (rawNorm float64, clipped b
 // ClipParamGrads applies ClipGradients across a set of parameter gradient
 // slices, treating them as a single unified gradient vector.
 // This is the correct way to clip across the full model, not layer by layer.
-func ClipParamGrads(paramGrads [][]float64, maxNorm float64) (rawNorm float64, clipped bool) {
+func ClipParamGrads(paramGrads [][]float32, maxNorm float32) (rawNorm float32, clipped bool) {
 	// First pass: compute global L2 norm
-	var sumSq float64
+	var sumSq float32
 	for _, grads := range paramGrads {
 		for _, g := range grads {
 			sumSq += g * g
 		}
 	}
 
-	rawNorm = math.Sqrt(sumSq)
+	rawNorm = float32(math.Sqrt(float64(sumSq)))
 	if rawNorm > maxNorm {
 		scale := maxNorm / (rawNorm + 1e-6)
 		// Second pass: scale all grads uniformly

@@ -78,7 +78,7 @@ func BuildVocabularies(taggedDataPath string) (*mainvocab.Vocabulary, *mainvocab
 }
 
 // TrainTaggerModel trains the IntentTagger model.
-func TrainTaggerModel(model *moe.IntentTagger, data *TaggedTrainingData, epochs int, learningRate float64, batchSize int, queryVocab, intentVocab, tagVocab *mainvocab.Vocabulary, queryTokenizer *tokenizer.Tokenizer, maxSequenceLength int) error {
+func TrainTaggerModel(model *moe.IntentTagger, data *TaggedTrainingData, epochs int, learningRate float32, batchSize int, queryVocab, intentVocab, tagVocab *mainvocab.Vocabulary, queryTokenizer *tokenizer.Tokenizer, maxSequenceLength int) error {
 	if model == nil {
 		return errors.New("cannot train a nil model")
 	}
@@ -90,7 +90,7 @@ func TrainTaggerModel(model *moe.IntentTagger, data *TaggedTrainingData, epochs 
 
 	for epoch := range epochs {
 		log.Printf("Epoch %d/%d", epoch+1, epochs)
-		totalLoss := 0.0
+		var totalLoss float32 = 0.0
 		numBatches := 0
 		for i := 0; i < len(*data); i += batchSize {
 			end := min(i+batchSize, len(*data))
@@ -105,14 +105,14 @@ func TrainTaggerModel(model *moe.IntentTagger, data *TaggedTrainingData, epochs 
 			numBatches++
 		}
 		if numBatches > 0 {
-			log.Printf("Epoch %d, Average Loss: %f", epoch+1, totalLoss/float64(numBatches))
+			log.Printf("Epoch %d, Average Loss: %f", epoch+1, totalLoss/float32(numBatches))
 		}
 	}
 
 	return nil
 }
 
-func trainTaggerBatch(model *moe.IntentTagger, optimizer Optimizer, batch TaggedTrainingData, queryVocab, intentVocab, tagVocab *mainvocab.Vocabulary, queryTokenizer *tokenizer.Tokenizer, maxSequenceLength int) (float64, error) {
+func trainTaggerBatch(model *moe.IntentTagger, optimizer Optimizer, batch TaggedTrainingData, queryVocab, intentVocab, tagVocab *mainvocab.Vocabulary, queryTokenizer *tokenizer.Tokenizer, maxSequenceLength int) (float32, error) {
 	optimizer.ZeroGrad()
 
 	batchSize := len(batch)
@@ -147,7 +147,7 @@ func trainTaggerBatch(model *moe.IntentTagger, optimizer Optimizer, batch Tagged
 		copy(targetTagIDsBatch[i*maxSequenceLength:(i+1)*maxSequenceLength], tagIDs)
 	}
 
-	inputTensor := tensor.NewTensor([]int{batchSize, maxSequenceLength}, convertIntsToFloat64s(inputIDsBatch), false)
+	inputTensor := tensor.NewTensor([]int{batchSize, maxSequenceLength}, convertIntsToFloat32s(inputIDsBatch), false)
 
 	// Forward pass
 	intentLogits, tagLogits, err := model.Forward(inputTensor)
@@ -159,7 +159,7 @@ func trainTaggerBatch(model *moe.IntentTagger, optimizer Optimizer, batch Tagged
 	intentLoss, intentGrad := tensor.CrossEntropyLoss(intentLogits, targetIntentIDs, -1, 0.0) // No padding for intents
 
 	// Calculate tag loss
-	tagLoss := 0.0
+	var tagLoss float32 = 0.0
 	tagGrads := make([]*tensor.Tensor, maxSequenceLength)
 	for t := range maxSequenceLength {
 		targets := make([]int, batchSize)
@@ -221,10 +221,10 @@ func TokenizeAndConvertToIDs(text string, tokenizer *tokenizer.Tokenizer, vocabu
 	return tokenIDs, nil
 }
 
-func convertIntsToFloat64s(input []int) []float64 {
-	output := make([]float64, len(input))
+func convertIntsToFloat32s(input []int) []float32 {
+	output := make([]float32, len(input))
 	for i, v := range input {
-		output[i] = float64(v)
+		output[i] = float32(v)
 	}
 	return output
 }
@@ -250,7 +250,7 @@ func main() {
 
 	// Define training parameters
 	epochs := 200
-	learningRate := 0.001
+	var learningRate float32 = 0.001
 	batchSize := 32
 
 	// After vocabularies are fully populated, determine vocab sizes and create/load model

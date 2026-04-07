@@ -1,7 +1,0 @@
-global:
-  scrape_interval: 1s # Scrape frequently for real-time chat updates
-
-scrape_configs:
-  - job_name: 'gollemer_chat'
-    static_configs:
-      - targets: ['localhost:2112']

@@ -12,18 +12,18 @@ type Optimizer interface {
 	Step()
 	ZeroGrad()
 	ClipGradients()
-	SetLearningRate(lr float64)
-	GetLearningRate() float64
+	SetLearningRate(lr float32)
+	GetLearningRate() float32
 	ResetStagnantMoments(t *Tensor)
 }
 
 // TrainingProfile represents a preset for training hyperparameters.
 type TrainingProfile struct {
 	Name           string
-	LR             float64
-	Lambda         float64 // Weight Decay
-	ClipThreshold  float64 // Gradient Clipping
-	HealThreshold  float64 // When to reset experts (e.g., 0.85)
+	LR             float32
+	Lambda         float32 // Weight Decay
+	ClipThreshold  float32 // Gradient Clipping
+	HealThreshold  float32 // When to reset experts (e.g., 0.85)
 	WarmupSteps    int     // Steps before applying full LR
 }
 
@@ -51,20 +51,20 @@ func GetProfile(name string) TrainingProfile {
 // Adam represents the Adam optimizer.
 type Adam struct {
 	parameters    []*Tensor
-	learningRate  float64
-	beta1         float64
-	beta2         float64
-	epsilon       float64
+	learningRate  float32
+	beta1         float32
+	beta2         float32
+	epsilon       float32
 	t             int
 	m             map[*Tensor]*Tensor // 1st moment vector
 	v             map[*Tensor]*Tensor // 2nd moment vector
-	ClipThreshold float64
-	Lambda        float64 // Weight decay (Lambda)
-	RouterLR      float64 // Different learning rate for router parameters
+	ClipThreshold float32
+	Lambda        float32 // Weight decay (Lambda)
+	RouterLR      float32 // Different learning rate for router parameters
 }
 
 // NewOptimizer creates a new Adam optimizer.
-func NewOptimizer(parameters []*Tensor, learningRate float64, clipThreshold float64) Optimizer {
+func NewOptimizer(parameters []*Tensor, learningRate float32, clipThreshold float32) Optimizer {
 	return &Adam{
 		parameters:    parameters,
 		learningRate:  learningRate,
@@ -85,7 +85,7 @@ func (o *Adam) ClipGradients() {
 	if o.ClipThreshold <= 0 {
 		return
 	}
-	totalNorm := 0.0
+	totalNorm := float32(0.0)
 	for _, p := range o.parameters {
 		if p.Grad != nil {
 			for _, g := range p.Grad.Data {
@@ -93,7 +93,7 @@ func (o *Adam) ClipGradients() {
 			}
 		}
 	}
-	totalNorm = math.Sqrt(totalNorm)
+	totalNorm = float32(math.Sqrt(float64(totalNorm)))
 	if totalNorm > o.ClipThreshold {
 		scale := o.ClipThreshold / totalNorm
 		for _, p := range o.parameters {
@@ -108,7 +108,7 @@ func (o *Adam) ClipGradients() {
 // ResetStagnantMoments clears Adam moment vectors for weights identified as stagnant.
 // This prevents the search history from damping the effect of a nudge (perturbation).
 func (o *Adam) ResetStagnantMoments(t *Tensor) {
-	if t.TimidMask == nil {
+	if t.TimidMask() == nil {
 		return
 	}
 	m, okM := o.m[t]
@@ -116,7 +116,7 @@ func (o *Adam) ResetStagnantMoments(t *Tensor) {
 	if !okM || !okV {
 		return
 	}
-	for i, stagnant := range t.TimidMask {
+	for i, stagnant := range t.TimidMask() {
 		if stagnant {
 			m.Data[i] = 0
 			v.Data[i] = 0
@@ -134,8 +134,8 @@ func (o *Adam) Step() {
 		}
 
 		if _, ok := o.m[p]; !ok {
-			o.m[p] = NewTensor(p.Shape, make([]float64, len(p.Data)), false)
-			o.v[p] = NewTensor(p.Shape, make([]float64, len(p.Data)), false)
+			o.m[p] = NewTensor(p.Shape, make([]float32, len(p.Data)), false)
+			o.v[p] = NewTensor(p.Shape, make([]float32, len(p.Data)), false)
 		}
 
 		m := o.m[p].Data
@@ -151,11 +151,12 @@ func (o *Adam) Step() {
 		// --- Timid Boost Integration ---
 		// If TimidMask exists for this tensor, we apply localized LR boosting.
 		// Note: This falls back to standard SIMD update if no mask is present.
-		if p.TimidMask != nil {
+		if p.TimidMask() != nil {
 			// Bias correction terms
-			b1t := 1.0 - math.Pow(o.beta1, float64(o.t))
-			b2t := 1.0 - math.Pow(o.beta2, float64(o.t))
+			b1t := float32(1.0 - math.Pow(float64(o.beta1), float64(o.t)))
+			b2t := float32(1.0 - math.Pow(float64(o.beta2), float64(o.t)))
 			
+			mask := p.TimidMask()
 			for i := range param {
 				// 1. Update moments
 				m[i] = o.beta1*m[i] + (1-o.beta1)*grad[i]
@@ -163,14 +164,14 @@ func (o *Adam) Step() {
 				
 				// 2. Localized LR boost
 				effectiveLR := lr
-				if p.TimidMask[i] {
+				if mask[i] {
 					effectiveLR *= 3.0 // Kick stagnant weights harder
 				}
 				
 				// 3. AdamW Update: weight -= lr * (m_corrected / (sqrt(v_corrected) + eps) + lambda * weight)
 				mHat := m[i] / b1t
 				vHat := v[i] / b2t
-				denom := math.Sqrt(vHat) + o.epsilon
+				denom := float32(math.Sqrt(float64(vHat))) + o.epsilon
 				
 				update := (mHat / denom) + (o.Lambda * param[i])
 				param[i] -= effectiveLR * update
@@ -190,24 +191,24 @@ func (o *Adam) ZeroGrad() {
 }
 
 // SetLearningRate updates the main learning rate and proportionally scales the RouterLR.
-func (o *Adam) SetLearningRate(lr float64) {
+func (o *Adam) SetLearningRate(lr float32) {
 	o.learningRate = lr
 	// Keep RouterLR at 10% of the main learning rate to ensure stability in the MoE gating network.
 	o.RouterLR = lr * 0.1
 }
 
 // GetLearningRate returns the current learning rate
-func (o *Adam) GetLearningRate() float64 {
+func (o *Adam) GetLearningRate() float32 {
 	return o.learningRate
 }
 
 // SetRouterLR updates the router-specific learning rate
-func (o *Adam) SetRouterLR(lr float64) {
+func (o *Adam) SetRouterLR(lr float32) {
 	o.RouterLR = lr
 }
 
 // GetRouterLR returns the current router learning rate
-func (o *Adam) GetRouterLR() float64 {
+func (o *Adam) GetRouterLR() float32 {
 	return o.RouterLR
 }
 
@@ -216,7 +217,7 @@ type CoolingOptimizer struct {
 	Base       Optimizer // Your SIMD AdamW / SGD
 	Cooldown   int       // Remaining steps in cooldown
 	IsActive   bool
-	OriginalLR float64   // To store where we should be post-recovery
+	OriginalLR float32   // To store where we should be post-recovery
 }
 
 // Step executes the base optimizer but overrides LR if cooling
@@ -243,7 +244,7 @@ func (o *CoolingOptimizer) ClipGradients() {
 }
 
 // SetLearningRate updates the learning rate of the optimizer
-func (o *CoolingOptimizer) SetLearningRate(lr float64) {
+func (o *CoolingOptimizer) SetLearningRate(lr float32) {
 	if o.IsActive {
 		// During cooling, we don't allow permanent LR updates to the base,
 		// but we store it as the original LR for when we finish cooling.
@@ -254,7 +255,7 @@ func (o *CoolingOptimizer) SetLearningRate(lr float64) {
 }
 
 // GetLearningRate returns the current learning rate
-func (o *CoolingOptimizer) GetLearningRate() float64 {
+func (o *CoolingOptimizer) GetLearningRate() float32 {
 	return o.Base.GetLearningRate()
 }
 
@@ -264,7 +265,7 @@ func (o *CoolingOptimizer) ResetStagnantMoments(t *Tensor) {
 }
 
 // Trigger enters the cooling state
-func (o *CoolingOptimizer) Trigger(steps int, reduction float64) {
+func (o *CoolingOptimizer) Trigger(steps int, reduction float32) {
 	if !o.IsActive {
 		o.OriginalLR = o.Base.GetLearningRate()
 	}

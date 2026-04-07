@@ -66,7 +66,7 @@ func (e *HybridLLMGNNEncoder) Forward(inputs ...*tensor.Tensor) (*tensor.Tensor,
 
 	// Create Adjacency Matrix: [batch, seq_len, seq_len]
 	// Increased window size to 2 (sees 2 left, 2 right) for better sentence context
-	adjData := make([]float64, batchSize*seqLen*seqLen)
+	adjData := make([]float32, batchSize*seqLen*seqLen)
 	
 	for b := 0; b < batchSize; b++ {
 		batchOffset := b * seqLen * seqLen
@@ -78,7 +78,7 @@ func (e *HybridLLMGNNEncoder) Forward(inputs ...*tensor.Tensor) (*tensor.Tensor,
 			for j := max(0, i-2); j <= min(seqLen-1, i+2); j++ {
 				neighbors++
 			}
-			degree := float64(neighbors)
+			degree := float32(neighbors)
 			
 			for j := max(0, i-2); j <= min(seqLen-1, i+2); j++ {
 				adjData[rowOffset+j] = 1.0 / degree
@@ -147,7 +147,7 @@ func (e *HybridLLMGNNEncoder) Backward(grad *tensor.Tensor) error {
 	// 3. Backward through Residual branch
 	if e.llmOutput.RequiresGrad {
 		if e.llmOutput.Grad == nil {
-			e.llmOutput.Grad = tensor.NewTensor(e.llmOutput.Shape, make([]float64, len(e.llmOutput.Data)), false)
+			e.llmOutput.Grad = tensor.NewTensor(e.llmOutput.Shape, make([]float32, len(e.llmOutput.Data)), false)
 		}
 		for i := range gradToPropagate.Data {
 			if i < len(e.llmOutput.Grad.Data) {
@@ -197,8 +197,21 @@ func (e *HybridLLMGNNEncoder) GetMoELayers() []*MoELayer {
 }
 
 // SetGateTemperature updates the temperature for the inner LLM encoder.
-func (e *HybridLLMGNNEncoder) SetGateTemperature(temp float64) {
+func (e *HybridLLMGNNEncoder) SetGateTemperature(temp float32) {
 	if e.LLMEncoder != nil {
 		e.LLMEncoder.SetGateTemperature(temp)
+	}
+}
+
+// ToGPU moves the parameters to the GPU.
+func (e *HybridLLMGNNEncoder) ToGPU() {
+	if e.LLMEncoder != nil {
+		e.LLMEncoder.ToGPU()
+	}
+	if e.GNNLayer != nil {
+		e.GNNLayer.ToGPU()
+	}
+	if e.LayerNorm != nil {
+		e.LayerNorm.ToGPU()
 	}
 }

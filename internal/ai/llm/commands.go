@@ -79,7 +79,9 @@ func (r *Runner) handleInteractiveQuery(query string) {
 	
 	// 6. Response / Chat handling
 	resp := r.extractResponse(intentData)
-	hasCommand := intent.Command != "" || isCreatingCommand(query) || (intentData.Intent != "" && intentData.Intent != "chat_response")
+	// hasCommand is true only if there's a structural command to execute.
+	// Simple chat intents should not trigger executeCommand.
+	hasCommand := intent.Command != "" || isCreatingCommand(query)
 
 	if resp != "" {
 		r.Mascot.Speak(ui.MoodIdle, resp)
@@ -90,7 +92,7 @@ func (r *Runner) handleInteractiveQuery(query string) {
 	}
 
 	// 7. Success: Execution and State Cleanup
-	r.executeCommand(query, &intent, intentData)
+	r.executeCommand(query, &intent, intentData, resp)
 	r.SessionState.IsActive = false
 	r.SessionState.CurrentIntent = nil
 }
@@ -126,7 +128,7 @@ func (r *Runner) extractResponse(intentData *IntentDataLayer) string {
 	return r.Client.lastMoEPrediction
 }
 
-func (r *Runner) executeCommand(query string, intent *Intent, intentData *IntentDataLayer) {
+func (r *Runner) executeCommand(query string, intent *Intent, intentData *IntentDataLayer, chatResponse string) {
 	command := intent.Command
 	objectType := intent.ObjectType
 	fileName := intent.Params["name"]
@@ -290,7 +292,7 @@ func (r *Runner) executeCommand(query string, intent *Intent, intentData *Intent
 		}
 	}
 
-	if !handled {
+	if !handled && chatResponse == "" {
 		predictedSentence = "|ʕ>ϖ<ʔ| I'm sorry, I couldn't understand your request."
 	}
 

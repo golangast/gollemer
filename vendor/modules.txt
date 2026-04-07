@@ -20,6 +20,20 @@ github.com/Masterminds/sprig/v3
 # github.com/beorn7/perks v1.0.1
 ## explicit; go 1.11
 github.com/beorn7/perks/quantile
+# github.com/born-ml/born v0.7.14
+## explicit; go 1.25
+github.com/born-ml/born/autodiff
+github.com/born-ml/born/backend/cpu
+github.com/born-ml/born/internal/autodiff
+github.com/born-ml/born/internal/autodiff/ops
+github.com/born-ml/born/internal/backend/cpu
+github.com/born-ml/born/internal/nn
+github.com/born-ml/born/internal/optim
+github.com/born-ml/born/internal/serialization
+github.com/born-ml/born/internal/tensor
+github.com/born-ml/born/nn
+github.com/born-ml/born/optim
+github.com/born-ml/born/tensor
 # github.com/cespare/xxhash/v2 v2.3.0
 ## explicit; go 1.11
 github.com/cespare/xxhash/v2
@@ -122,6 +136,17 @@ golang.org/x/crypto/scrypt
 golang.org/x/sys/unix
 golang.org/x/sys/windows
 golang.org/x/sys/windows/registry
+# gonum.org/v1/gonum v0.17.0
+## explicit; go 1.24.0
+gonum.org/v1/gonum/blas
+gonum.org/v1/gonum/blas/blas32
+gonum.org/v1/gonum/blas/gonum
+gonum.org/v1/gonum/internal/asm/c128
+gonum.org/v1/gonum/internal/asm/c64
+gonum.org/v1/gonum/internal/asm/f32
+gonum.org/v1/gonum/internal/asm/f64
+gonum.org/v1/gonum/internal/cmplx64
+gonum.org/v1/gonum/internal/math32
 # google.golang.org/protobuf v1.36.8
 ## explicit; go 1.23
 google.golang.org/protobuf/encoding/protodelim

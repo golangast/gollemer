@@ -32,8 +32,9 @@ type Vector []float64
 type SimpleWord2Vec struct {
 	// Core word representation
 	Vocabulary   map[string]int
-	WordVectors  map[int][]float64
-	VectorSize   int
+	WordVectors    map[int][]float64
+	WordVectorsF32 map[int][]float32 // float32 version for NN layers
+	VectorSize     int
 	NgramVectors map[string][]float64
 	VocabSize    int
 
@@ -63,8 +64,21 @@ type SimpleWord2Vec struct {
 
 	// IndexToWord maps an index back to its corresponding word.
 	IndexToWord map[int]string
+}
 
-	// Consider if any new fields should be grouped here based on how they are used
+// SyncF32 populates WordVectorsF32 from WordVectors.
+func (sw2v *SimpleWord2Vec) SyncF32() {
+	if sw2v.WordVectors == nil {
+		return
+	}
+	sw2v.WordVectorsF32 = make(map[int][]float32)
+	for idx, vec := range sw2v.WordVectors {
+		f32vec := make([]float32, len(vec))
+		for i, v := range vec {
+			f32vec[i] = float32(v)
+		}
+		sw2v.WordVectorsF32[idx] = f32vec
+	}
 }
 
 // convertToMap converts WordVectors to a map[string][]float64.

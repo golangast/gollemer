@@ -34,9 +34,9 @@ func main() {
 	}
 
 	// Create dummy input tensor
-	inputData := make([]float64, batchSize*inputDim)
+	inputData := make([]float32, batchSize*inputDim)
 	for i := range inputData {
-		inputData[i] = rand.Float64() * 10 // Random input values
+		inputData[i] = float32(rand.Float64()) * 10 // Random input values
 	}
 	inputTensor := NewTensor([]int{batchSize, inputDim}, inputData, true) // requiresGrad = true for backprop
 
@@ -55,7 +55,7 @@ func main() {
 	moeLayer.VisualizeUtilization()
 
 	// Create a dummy gradient for backward pass
-	gradData := make([]float64, len(output.Data))
+	gradData := make([]float32, len(output.Data))
 	for i := range gradData {
 		gradData[i] = 1.0 // Simple gradient of ones
 	}

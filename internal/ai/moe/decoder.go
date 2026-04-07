@@ -46,7 +46,7 @@ type RNNDecoder struct {
 }
 
 // NewRNNDecoder creates a new RNNDecoder.
-func NewRNNDecoder(inputDim, outputVocabSize, hiddenSize, maxAttentionHeads, numLayers int, dropoutRate float64, numExperts int) (*RNNDecoder, error) {
+func NewRNNDecoder(inputDim, outputVocabSize, hiddenSize, maxAttentionHeads, numLayers int, dropoutRate float32, numExperts int) (*RNNDecoder, error) {
 	// LSTM input dimension will be embeddingDim (context comes in via cross-attention after LSTM)
 	lstmInputDim := inputDim
 
@@ -67,7 +67,7 @@ func NewRNNDecoder(inputDim, outputVocabSize, hiddenSize, maxAttentionHeads, num
 	
 	if numExperts > 1 {
 		expertBuilder := func(expertIdx int) (Expert, error) {
-			return NewFeedForwardExpert(hiddenSize+inputDim, (hiddenSize+inputDim)*2, outputVocabSize)
+			return NewBornExpert(hiddenSize+inputDim, (hiddenSize+inputDim)*2, outputVocabSize)
 		}
 		moeLayer, err := NewMoELayer(hiddenSize+inputDim, outputVocabSize, numExperts, 1, expertBuilder)
 		if err != nil {
@@ -101,7 +101,7 @@ func NewRNNDecoder(inputDim, outputVocabSize, hiddenSize, maxAttentionHeads, num
 }
 
 // Forward performs the forward pass of the RNNDecoder.
-func (d *RNNDecoder) Forward(contextVector, targetSequence *Tensor, scheduledSamplingProb float64, mask ...*Tensor) ([]*Tensor, error) {
+func (d *RNNDecoder) Forward(contextVector, targetSequence *Tensor, scheduledSamplingProb float32, mask ...*Tensor) ([]*Tensor, error) {
 	var attentionMask *Tensor
 	if len(mask) > 0 {
 		attentionMask = mask[0]
@@ -132,13 +132,13 @@ func (d *RNNDecoder) Forward(contextVector, targetSequence *Tensor, scheduledSam
 		if initialHidden.Shape[1] > hiddenSize {
 			initialHidden, _ = initialHidden.Slice(1, 0, hiddenSize)
 		} else {
-			padding := NewTensor([]int{batchSize, hiddenSize - initialHidden.Shape[1]}, make([]float64, batchSize*(hiddenSize-initialHidden.Shape[1])), false)
+			padding := NewTensor([]int{batchSize, hiddenSize - initialHidden.Shape[1]}, make([]float32, batchSize*(hiddenSize-initialHidden.Shape[1])), false)
 			initialHidden, _ = Concat([]*Tensor{initialHidden, padding}, 1)
 		}
 	}
 
 	hiddenState := initialHidden
-	cellState := NewTensor([]int{batchSize, hiddenSize}, make([]float64, batchSize*hiddenSize), false)
+	cellState := NewTensor([]int{batchSize, hiddenSize}, make([]float32, batchSize*hiddenSize), false)
 
 	// Context Injection Multiplier
 	const contextMultiplier = 2.0
@@ -212,7 +212,7 @@ func (d *RNNDecoder) Forward(contextVector, targetSequence *Tensor, scheduledSam
 		embeddedInput, _ := d.Embedding.Forward(decoderInput)
 		
 		// Reinforced Context Injection
-		embeddedInput, _ = embeddedInput.Add(ctxMeanReshaped.Scale(contextMultiplier))
+		embeddedInput, _ = embeddedInput.Add(ctxMeanReshaped.Scale(float32(contextMultiplier)))
 		
 		d.embeddedInputs = append(d.embeddedInputs, embeddedInput)
 
@@ -248,10 +248,10 @@ func (d *RNNDecoder) Forward(contextVector, targetSequence *Tensor, scheduledSam
 		outputs = append(outputs, resLogits)
 
 		if t < maxSequenceLength-2 {
-			if rand.Float64() < scheduledSamplingProb {
+			if rand.Float32() < scheduledSamplingProb {
 				// Use Nucleus (Top-P) Sampling instead of Argmax to avoid "garbage" noise
 				// Sampling is done per batch item.
-				nextTokens := make([]float64, batchSize)
+				nextTokens := make([]float32, batchSize)
 				for b := 0; b < batchSize; b++ {
 					// Slice out logits for this batch item
 					itemLogits, _ := resLogits.Slice(0, b, b+1)
@@ -262,7 +262,7 @@ func (d *RNNDecoder) Forward(contextVector, targetSequence *Tensor, scheduledSam
 						argmax, _ := itemLogits.Argmax(1)
 						sampledID = int(argmax.Data[0])
 					}
-					nextTokens[b] = float64(sampledID)
+					nextTokens[b] = float32(sampledID)
 				}
 				decoderInput = NewTensor([]int{batchSize, 1}, nextTokens, false)
 			} else {
@@ -341,7 +341,7 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
 		const contextMultiplier = 2.0
 		ctxMean, _ := d.contextVector.Mean(1)
 		ctxMeanReshaped, _ := ctxMean.Reshape([]int{batchSize, 1, d.contextVector.Shape[2]})
-		allEmbedded, _ = allEmbedded.AddWithBroadcast(ctxMeanReshaped.Scale(contextMultiplier))
+		allEmbedded, _ = allEmbedded.AddWithBroadcast(ctxMeanReshaped.Scale(float32(contextMultiplier)))
 
 		// 2b. Re-run LSTM sequence forward to populate timeStepCells for BPTT
 		allHidden, _, err := d.LSTM.Forward(allEmbedded, d.InitialHiddenState, initialCell(batchSize, hiddenSize))
@@ -424,7 +424,7 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
 
 	// 6. LSTM Backward (Sequence Path)
 	// No next hidden/cell grad from future here as the decoder is the end of the chain.
-	zeroCellGrad := NewTensor(initialCell(batchSize, hiddenSize).Shape, make([]float64, batchSize*hiddenSize), false)
+	zeroCellGrad := NewTensor(initialCell(batchSize, hiddenSize).Shape, make([]float32, batchSize*hiddenSize), false)
 	if err := d.LSTM.Backward(totalHiddenGrad, zeroCellGrad); err != nil {
 		return fmt.Errorf("LSTM backward failed: %w", err)
 	}
@@ -445,8 +445,8 @@ if inputGrad != nil {
     gradCtxMeanFromInputs, _ := inputGrad.Sum(1) 
     
     // 2. Scale by multiplier (y = x + k*z => dz = k*dy)
-    gradCtxMean := gradCtxMeanFromInputs.Scale(contextMultiplier)
-
+    gradCtxMean := gradCtxMeanFromInputs.Scale(float32(contextMultiplier))
+ 
     // 3. Add gradients from the initial hidden state (which came from context mean but NO multiplier)
     initialHiddenGrad := d.LSTM.GetPrevHiddenGrad()
     if initialHiddenGrad != nil {
@@ -456,7 +456,7 @@ if inputGrad != nil {
     // 4. Distribute back to encoder sequence dimension
     // ctxMean = sum(contextVector) / S, so dL/dv_i = (dL/dctxMean) / S
     encSeqLen := d.contextVector.Shape[1]
-    distGrad := gradCtxMean.Scale(1.0 / float64(encSeqLen))
+    distGrad := gradCtxMean.Scale(1.0 / float32(encSeqLen))
     
     // expandedGrad shape [Batch, encSeqLen, Dim]
     expandedGrad := distGrad.Expand([]int{batchSize, encSeqLen, embeddingDim})
@@ -472,7 +472,7 @@ if inputGrad != nil {
 }
 
 func initialCell(batchSize, hiddenSize int) *Tensor {
-	return NewTensor([]int{batchSize, hiddenSize}, make([]float64, batchSize*hiddenSize), false)
+	return NewTensor([]int{batchSize, hiddenSize}, make([]float32, batchSize*hiddenSize), false)
 }
 
 // DecodeStep performs a single decoding step.
@@ -506,7 +506,7 @@ func (d *RNNDecoder) DecodeStep(inputToken *Tensor, prevHiddenState, prevCellSta
 	// Check for Hidden State signal collapse using SIMD dot product (magnitude squared)
 	hMag := DotProduct(hiddenState.Data, hiddenState.Data)
 	if hMag < 1e-6 {
-		fmt.Printf("⚠️ [Decoder Diagnostic] Signal Collapse! Hidden State Magnitude: %.8f\n", hMag)
+		fmt.Printf("⚠️ [Decoder Diagnostic] Signal Collapse! Hidden State Magnitude: %.8f\n", float64(hMag))
 	}
 	// --- [/Diagnostic Probe] ---
 
@@ -586,7 +586,7 @@ func (d *RNNDecoder) ResizeOutputLayer(newSize int) {
 	}
 
 	// Build new embedding weight data inline before creating Tensor.
-	newEmbData := make([]float64, newSize*dimModel)
+	newEmbData := make([]float32, newSize*dimModel)
 	oldEmbData := d.Embedding.Weight.Data
 	for i := 0; i < copyLimit; i++ {
 		start := i * dimModel
@@ -610,14 +610,14 @@ func (d *RNNDecoder) ResizeOutputLayer(newSize int) {
 		oldLayerWeights := d.OutputLayer.Weights.Data
 		oldLayerBiases := d.OutputLayer.Biases.Data
 
-		newWeights := make([]float64, inputDim*newSize)
+		newWeights := make([]float32, inputDim*newSize)
 		for i := 0; i < inputDim; i++ {
 			oldStart := i * oldVocabSize
 			newStart := i * newSize
 			copy(newWeights[newStart:newStart+copyLimit], oldLayerWeights[oldStart:oldStart+copyLimit])
 		}
 
-		newBiases := make([]float64, newSize)
+		newBiases := make([]float32, newSize)
 		for j := 0; j < copyLimit && j < len(oldLayerBiases); j++ {
 			newBiases[j] = oldLayerBiases[j]
 		}
@@ -644,6 +644,28 @@ func (d *RNNDecoder) ResizeOutputLayer(newSize int) {
 	// --- 3. Resize LayerNorm only if dimensions changed ---
 	if d.LayerNorm == nil || d.LayerNorm.NormalizedShape != inputDim {
 		d.LayerNorm = nn.NewLayerNorm(inputDim)
+	}
+}
+
+// ToGPU moves the decoder's parameters to the GPU.
+func (d *RNNDecoder) ToGPU() {
+	if d.LSTM != nil {
+		d.LSTM.ToGPU()
+	}
+	if d.LayerNorm != nil {
+		d.LayerNorm.ToGPU()
+	}
+	if d.OutputLayer != nil {
+		d.OutputLayer.ToGPU()
+	}
+	if d.OutputMoE != nil {
+		d.OutputMoE.ToGPU()
+	}
+	if d.Embedding != nil {
+		d.Embedding.ToGPU()
+	}
+	if d.Attention != nil {
+		d.Attention.ToGPU()
 	}
 }
 // SetMode sets the decoder to training or inference mode.

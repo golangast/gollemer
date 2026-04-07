@@ -14,7 +14,7 @@ import (
 type CheckpointHeader struct {
 	StepCount       int
 	Version         string
-	Commitment      float64
+	Commitment      float32
 	TokensProcessed int64
 	TotalDuration   string
 	LastProfile     nn.TrainingProfile

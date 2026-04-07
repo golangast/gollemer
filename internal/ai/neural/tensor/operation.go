@@ -16,23 +16,23 @@ type EmbeddingLookupOperation struct {
 func Softmax(tensor *Tensor) *Tensor {
 	shape := tensor.Shape
 	lastDim := shape[len(shape)-1]
-	output := NewTensor(shape, make([]float64, len(tensor.Data)), false)
+	output := NewTensor(shape, make([]float32, len(tensor.Data)), false)
 
 	for i := 0; i < len(tensor.Data); i += lastDim {
-		maxVal := math.Inf(-1)
-		for j := range lastDim {
+		maxVal := float32(math.Inf(-1))
+		for j := 0; j < lastDim; j++ {
 			if tensor.Data[i+j] > maxVal {
 				maxVal = tensor.Data[i+j]
 			}
 		}
 
-		sumExp := 0.0
-		for j := range lastDim {
-			sumExp += math.Exp(tensor.Data[i+j] - maxVal)
+		var sumExp float64
+		for j := 0; j < lastDim; j++ {
+			sumExp += math.Exp(float64(tensor.Data[i+j] - maxVal))
 		}
 
-		for j := range lastDim {
-			output.Data[i+j] = math.Exp(tensor.Data[i+j]-maxVal) / sumExp
+		for j := 0; j < lastDim; j++ {
+			output.Data[i+j] = float32(math.Exp(float64(tensor.Data[i+j]-maxVal)) / sumExp)
 		}
 	}
 
@@ -42,7 +42,7 @@ func Softmax(tensor *Tensor) *Tensor {
 // CrossEntropyLoss calculates the cross-entropy loss with optional label smoothing.
 // labelSmoothing: value between 0.0 and 1.0. When > 0, distributes probability mass
 // from the target class to all classes to prevent overconfidence.
-func CrossEntropyLoss(logits *Tensor, targetIDs []int, padID int, labelSmoothing float64) (float64, *Tensor) {
+func CrossEntropyLoss(logits *Tensor, targetIDs []int, padID int, labelSmoothing float32) (float32, *Tensor) {
 	// Reshape logits to 2D if it's 3D (batch_size * seq_len, vocab_size)
 	originalShape := logits.Shape
 	var reshapedLogits *Tensor
@@ -66,19 +66,19 @@ func CrossEntropyLoss(logits *Tensor, targetIDs []int, padID int, labelSmoothing
 	}
 
 	probs := Softmax(reshapedLogits)
-	loss := 0.0
+	var loss float64
 	activeTokens := 0
-	epsilon := 1e-9 // Small value to avoid log(0)
+	epsilon := float32(1e-9) // Small value to avoid log(0)
 
-	grad := NewTensor(reshapedLogits.Shape, make([]float64, len(reshapedLogits.Data)), false)
+	grad := NewTensor(reshapedLogits.Shape, make([]float32, len(reshapedLogits.Data)), false)
 
 	// Calculate smoothed target distribution
 	// Exclude padID from sharing smoothing mass
-	smoothValue := labelSmoothing / float64(numClasses-1)
+	smoothValue := labelSmoothing / float32(numClasses-1)
 	if numClasses <= 1 {
 		smoothValue = 0
 	}
-	targetConfidence := 1.0 - labelSmoothing
+	targetConfidence := float32(1.0) - labelSmoothing
 
 	for i := 0; i < reshapedLogits.Shape[0]; i++ {
 		targetID := targetIDs[i]
@@ -96,7 +96,7 @@ func CrossEntropyLoss(logits *Tensor, targetIDs []int, padID int, labelSmoothing
 		for ; j <= numClasses-unrollFactor; j += unrollFactor {
 			// Unroll 1
 			p1 := probs.Data[baseIndex+j]
-			var t1 float64
+			var t1 float32
 			if j == targetID {
 				t1 = targetConfidence
 			} else if j == padID {
@@ -104,12 +104,12 @@ func CrossEntropyLoss(logits *Tensor, targetIDs []int, padID int, labelSmoothing
 			} else {
 				t1 = smoothValue
 			}
-			smoothedLoss -= t1 * math.Log(p1+epsilon)
+			smoothedLoss -= float64(t1) * math.Log(float64(p1+epsilon))
 			grad.Data[baseIndex+j] = p1 - t1
 
 			// Unroll 2
 			p2 := probs.Data[baseIndex+j+1]
-			var t2 float64
+			var t2 float32
 			if j+1 == targetID {
 				t2 = targetConfidence
 			} else if j+1 == padID {
@@ -117,12 +117,12 @@ func CrossEntropyLoss(logits *Tensor, targetIDs []int, padID int, labelSmoothing
 			} else {
 				t2 = smoothValue
 			}
-			smoothedLoss -= t2 * math.Log(p2+epsilon)
+			smoothedLoss -= float64(t2) * math.Log(float64(p2+epsilon))
 			grad.Data[baseIndex+j+1] = p2 - t2
 
 			// Unroll 3
 			p3 := probs.Data[baseIndex+j+2]
-			var t3 float64
+			var t3 float32
 			if j+2 == targetID {
 				t3 = targetConfidence
 			} else if j+2 == padID {
@@ -130,12 +130,12 @@ func CrossEntropyLoss(logits *Tensor, targetIDs []int, padID int, labelSmoothing
 			} else {
 				t3 = smoothValue
 			}
-			smoothedLoss -= t3 * math.Log(p3+epsilon)
+			smoothedLoss -= float64(t3) * math.Log(float64(p3+epsilon))
 			grad.Data[baseIndex+j+2] = p3 - t3
 
 			// Unroll 4
 			p4 := probs.Data[baseIndex+j+3]
-			var t4 float64
+			var t4 float32
 			if j+3 == targetID {
 				t4 = targetConfidence
 			} else if j+3 == padID {
@@ -143,12 +143,12 @@ func CrossEntropyLoss(logits *Tensor, targetIDs []int, padID int, labelSmoothing
 			} else {
 				t4 = smoothValue
 			}
-			smoothedLoss -= t4 * math.Log(p4+epsilon)
+			smoothedLoss -= float64(t4) * math.Log(float64(p4+epsilon))
 			grad.Data[baseIndex+j+3] = p4 - t4
 
 			// Unroll 5
 			p5 := probs.Data[baseIndex+j+4]
-			var t5 float64
+			var t5 float32
 			if j+4 == targetID {
 				t5 = targetConfidence
 			} else if j+4 == padID {
@@ -156,12 +156,12 @@ func CrossEntropyLoss(logits *Tensor, targetIDs []int, padID int, labelSmoothing
 			} else {
 				t5 = smoothValue
 			}
-			smoothedLoss -= t5 * math.Log(p5+epsilon)
+			smoothedLoss -= float64(t5) * math.Log(float64(p5+epsilon))
 			grad.Data[baseIndex+j+4] = p5 - t5
 
 			// Unroll 6
 			p6 := probs.Data[baseIndex+j+5]
-			var t6 float64
+			var t6 float32
 			if j+5 == targetID {
 				t6 = targetConfidence
 			} else if j+5 == padID {
@@ -169,12 +169,12 @@ func CrossEntropyLoss(logits *Tensor, targetIDs []int, padID int, labelSmoothing
 			} else {
 				t6 = smoothValue
 			}
-			smoothedLoss -= t6 * math.Log(p6+epsilon)
+			smoothedLoss -= float64(t6) * math.Log(float64(p6+epsilon))
 			grad.Data[baseIndex+j+5] = p6 - t6
 
 			// Unroll 7
 			p7 := probs.Data[baseIndex+j+6]
-			var t7 float64
+			var t7 float32
 			if j+6 == targetID {
 				t7 = targetConfidence
 			} else if j+6 == padID {
@@ -182,12 +182,12 @@ func CrossEntropyLoss(logits *Tensor, targetIDs []int, padID int, labelSmoothing
 			} else {
 				t7 = smoothValue
 			}
-			smoothedLoss -= t7 * math.Log(p7+epsilon)
+			smoothedLoss -= float64(t7) * math.Log(float64(p7+epsilon))
 			grad.Data[baseIndex+j+6] = p7 - t7
 
 			// Unroll 8
 			p8 := probs.Data[baseIndex+j+7]
-			var t8 float64
+			var t8 float32
 			if j+7 == targetID {
 				t8 = targetConfidence
 			} else if j+7 == padID {
@@ -195,14 +195,14 @@ func CrossEntropyLoss(logits *Tensor, targetIDs []int, padID int, labelSmoothing
 			} else {
 				t8 = smoothValue
 			}
-			smoothedLoss -= t8 * math.Log(p8+epsilon)
+			smoothedLoss -= float64(t8) * math.Log(float64(p8+epsilon))
 			grad.Data[baseIndex+j+7] = p8 - t8
 		}
 
 		// Handle remaining elements
 		for ; j < numClasses; j++ {
 			p := probs.Data[baseIndex+j]
-			var targetProb float64
+			var targetProb float32
 			if j == targetID {
 				targetProb = targetConfidence
 			} else if j == padID {
@@ -210,7 +210,7 @@ func CrossEntropyLoss(logits *Tensor, targetIDs []int, padID int, labelSmoothing
 			} else {
 				targetProb = smoothValue
 			}
-			smoothedLoss -= targetProb * math.Log(p+epsilon)
+			smoothedLoss -= float64(targetProb) * math.Log(float64(p+epsilon))
 			grad.Data[baseIndex+j] = p - targetProb
 		}
 		loss += smoothedLoss
@@ -219,7 +219,7 @@ func CrossEntropyLoss(logits *Tensor, targetIDs []int, padID int, labelSmoothing
 	if activeTokens > 0 {
 		loss /= float64(activeTokens)
 		for i := range grad.Data {
-			grad.Data[i] /= float64(activeTokens)
+			grad.Data[i] /= float32(activeTokens)
 		}
 	}
 
@@ -232,11 +232,11 @@ func CrossEntropyLoss(logits *Tensor, targetIDs []int, padID int, labelSmoothing
 		}
 	}
 
-	return loss, grad
+	return float32(loss), grad
 }
 
 // ArgMax returns the index and confidence (max value) of the highest probability in the tensor.
-func ArgMax(tensor *Tensor) (int, float64) {
+func ArgMax(tensor *Tensor) (int, float32) {
 	if tensor == nil || len(tensor.Data) == 0 {
 		return -1, 0.0
 	}

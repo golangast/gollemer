@@ -24,16 +24,8 @@ type MoEEncoder struct {
 // NewMoEEncoder creates a new Mixture of Experts Encoder.
 func NewMoEEncoder(inputSize, hiddenSize, numLayers, numExperts int) (*MoEEncoder, error) {
 	// Define expert builder using nn.Linear wrapped in LinearExpert
-	expertBuilder := func(i int) (Expert, error) {
-		lin, err := nn.NewLinear(inputSize, hiddenSize)
-		if err != nil {
-			return nil, err
-		}
-		return &LinearExpert{
-			Linear:        lin,
-			ActivationEMA: 0.125,
-			Decay:         0.99,
-		}, nil
+	expertBuilder := func(int) (Expert, error) {
+		return NewBornExpert(inputSize, hiddenSize, hiddenSize)
 	}
 
 	// Create MoELayer with Top-K=2 (standard for MoE)
@@ -90,11 +82,24 @@ func (m *MoEEncoder) GetMoELayers() []*MoELayer {
 	return []*MoELayer{m.Layer}
 }
 
+func (m *MoEEncoder) SetGateTemperature(temp float32) {
+	if m.Layer != nil {
+		m.Layer.SetGateTemperature(temp)
+	}
+}
+
+// ToGPU moves the encoder's parameters to the GPU.
+func (m *MoEEncoder) ToGPU() {
+	if m.Layer != nil {
+		m.Layer.ToGPU()
+	}
+}
+
 // LinearExpert wraps nn.Linear to satisfy the Expert interface.
 type LinearExpert struct {
 	*nn.Linear
-	ActivationEMA float64
-	Decay         float64
+	ActivationEMA float32
+	Decay         float32
 }
 
 // SetMode implements the Expert interface.
@@ -124,7 +129,7 @@ func (l *LinearExpert) ClearState() {
 	}
 }
 // ClipWeights implements the Expert interface.
-func (l *LinearExpert) ClipWeights(maxVal float64) {
+func (l *LinearExpert) ClipWeights(maxVal float32) {
 	if l.Linear == nil { return }
 	if l.Linear.Weights != nil {
 		tensor.ClipWeights(l.Linear.Weights.Data, maxVal)
@@ -134,8 +139,15 @@ func (l *LinearExpert) ClipWeights(maxVal float64) {
 	}
 }
 
+// ToGPU moves the expert's parameters to the GPU.
+func (l *LinearExpert) ToGPU() {
+	if l.Linear != nil {
+		l.Linear.ToGPU()
+	}
+}
+
 // EvolutionaryReset performs a "Genetic Mutation" on the LinearExpert.
-func (l *LinearExpert) EvolutionaryReset(winner Expert, jitterScale float64) {
+func (l *LinearExpert) EvolutionaryReset(winner Expert, jitterScale float32) {
 	wExpert, ok := winner.(*LinearExpert)
 	if !ok {
 		return // Cannot mutate from different expert type
@@ -160,7 +172,7 @@ func (l *LinearExpert) EvolutionaryReset(winner Expert, jitterScale float64) {
 }
 
 // Shake performs an in-place noise injection to all weights of the expert.
-func (l *LinearExpert) Shake(intensity float64) {
+func (l *LinearExpert) Shake(intensity float32) {
 	if l.Linear == nil || l.Linear.Weights == nil {
 		return
 	}
@@ -170,7 +182,7 @@ func (l *LinearExpert) Shake(intensity float64) {
 
 	weights := l.Linear.Weights.Data
 	for i := range weights {
-		noise := (r.Float64() - 0.5) * intensity
+		noise := (r.Float32() - 0.5) * intensity
 		weights[i] += noise
 	}
 }
@@ -182,10 +194,47 @@ func (l *LinearExpert) IsStagnant() bool {
 
 // UpdateHealth updates the ActivationEMA based on usage.
 func (l *LinearExpert) UpdateHealth(wasUsed bool) {
-	var current float64 = 0.0
+	var current float32 = 0.0
 	if wasUsed {
 		current = 1.0
 	}
 	// EMA = (Current * (1 - Decay)) + (Previous * Decay)
 	l.ActivationEMA = (current * (1.0 - l.Decay)) + (l.ActivationEMA * l.Decay)
+}
+
+// Resize updates the output dimension of the expert.
+func (l *LinearExpert) Resize(newOutputDim int) {
+	if l.Linear == nil {
+		return
+	}
+
+	oldWeightsData := l.Linear.Weights.Data
+	oldBiasData := l.Linear.Biases.Data
+	oldVocabSize := l.Linear.Weights.Shape[1]
+	inputDim := l.Linear.Weights.Shape[0]
+
+	copyLimit := oldVocabSize
+	if newOutputDim < copyLimit {
+		copyLimit = newOutputDim
+	}
+
+	newWeightsData := make([]float32, inputDim*newOutputDim)
+	for row := 0; row < inputDim; row++ {
+		oldStart := row * oldVocabSize
+		newStart := row * newOutputDim
+		copy(newWeightsData[newStart:newStart+copyLimit], oldWeightsData[oldStart:oldStart+copyLimit])
+	}
+
+	newBiasData := make([]float32, newOutputDim)
+	if oldBiasData != nil {
+		copy(newBiasData, oldBiasData[:min(len(oldBiasData), newOutputDim)])
+	}
+
+	// Replace linear layer with new dimensions
+	newLinear, _ := nn.NewLinear(inputDim, newOutputDim)
+	newLinear.Weights.Data = newWeightsData
+	if newLinear.Biases != nil {
+		newLinear.Biases.Data = newBiasData
+	}
+	l.Linear = newLinear
 }

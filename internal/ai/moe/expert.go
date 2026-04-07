@@ -29,17 +29,23 @@ type Expert interface {
 	ClearState()
 
 	// ClipWeights bounds the expert's learnable parameters.
-	ClipWeights(maxVal float64)
+	ClipWeights(maxVal float32)
 
 	// EvolutionaryReset re-initializes the expert based on a winner's weights (Genetic Mutation).
-	EvolutionaryReset(winner Expert, jitterScale float64)
+	EvolutionaryReset(winner Expert, jitterScale float32)
 
 	// Shake performs an in-place noise injection to break loops.
-	Shake(intensity float64)
+	Shake(intensity float32)
 
 	// IsStagnant returns true if the expert is not contributing significantly.
 	IsStagnant() bool
 
 	// UpdateHealth updates the expert's relevance metric (EMA).
 	UpdateHealth(wasUsed bool)
+
+	// ToGPU moves the expert's parameters to the GPU.
+	ToGPU()
+
+	// Resize updates the output dimension of the expert.
+	Resize(newOutputDim int)
 }

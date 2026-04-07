@@ -16,7 +16,7 @@ func TestGreedySearchDecode(t *testing.T) {
 	}
 
 	// Create a dummy context vector
-	contextVector := tensor.NewTensor([]int{1, 32, 128}, make([]float64, 32*128), false)
+	contextVector := tensor.NewTensor([]int{1, 32, 128}, make([]float32, 32*128), false)
 
 	// Call GreedySearchDecode
 	predictedIDs, err := model.GreedySearchDecode(contextVector, 32, 0, 1, 1.0, 0.0, 100, tag.Tag{})

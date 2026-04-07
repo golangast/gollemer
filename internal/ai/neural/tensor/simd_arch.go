@@ -12,26 +12,41 @@ func IsSIMDEnabled() bool {
 	return true
 }
 
-func vecAdd(a, b, res []float64) {
+func vecAdd(a, b, res []float32) {
 	n := len(a)
 	i := 0
-	for ; i+4 <= n; i += 4 {
-		va := archsimd.LoadFloat64x4Slice(a[i:])
-		vb := archsimd.LoadFloat64x4Slice(b[i:])
+	// Try 8-wide (AVX2)
+	for ; i+8 <= n; i += 8 {
+		va := archsimd.LoadFloat32x8Slice(a[i:])
+		vb := archsimd.LoadFloat32x8Slice(b[i:])
 		vr := va.Add(vb)
 		vr.StoreSlice(res[i:])
 	}
+	// Try 4-wide (SSE)
+	for ; i+4 <= n; i += 4 {
+		va := archsimd.LoadFloat32x4Slice(a[i:])
+		vb := archsimd.LoadFloat32x4Slice(b[i:])
+		vr := va.Add(vb)
+		vr.StoreSlice(res[i:])
+	}
+	// Tail
 	for ; i < n; i++ {
 		res[i] = a[i] + b[i]
 	}
 }
 
-func vecSub(a, b, res []float64) {
+func vecSub(a, b, res []float32) {
 	n := len(a)
 	i := 0
+	for ; i+8 <= n; i += 8 {
+		va := archsimd.LoadFloat32x8Slice(a[i:])
+		vb := archsimd.LoadFloat32x8Slice(b[i:])
+		vr := va.Sub(vb)
+		vr.StoreSlice(res[i:])
+	}
 	for ; i+4 <= n; i += 4 {
-		va := archsimd.LoadFloat64x4Slice(a[i:])
-		vb := archsimd.LoadFloat64x4Slice(b[i:])
+		va := archsimd.LoadFloat32x4Slice(a[i:])
+		vb := archsimd.LoadFloat32x4Slice(b[i:])
 		vr := va.Sub(vb)
 		vr.StoreSlice(res[i:])
 	}
@@ -40,12 +55,18 @@ func vecSub(a, b, res []float64) {
 	}
 }
 
-func vecMul(a, b, res []float64) {
+func vecMul(a, b, res []float32) {
 	n := len(a)
 	i := 0
+	for ; i+8 <= n; i += 8 {
+		va := archsimd.LoadFloat32x8Slice(a[i:])
+		vb := archsimd.LoadFloat32x8Slice(b[i:])
+		vr := va.Mul(vb)
+		vr.StoreSlice(res[i:])
+	}
 	for ; i+4 <= n; i += 4 {
-		va := archsimd.LoadFloat64x4Slice(a[i:])
-		vb := archsimd.LoadFloat64x4Slice(b[i:])
+		va := archsimd.LoadFloat32x4Slice(a[i:])
+		vb := archsimd.LoadFloat32x4Slice(b[i:])
 		vr := va.Mul(vb)
 		vr.StoreSlice(res[i:])
 	}
@@ -54,12 +75,18 @@ func vecMul(a, b, res []float64) {
 	}
 }
 
-func vecDiv(a, b, res []float64) {
+func vecDiv(a, b, res []float32) {
 	n := len(a)
 	i := 0
+	for ; i+8 <= n; i += 8 {
+		va := archsimd.LoadFloat32x8Slice(a[i:])
+		vb := archsimd.LoadFloat32x8Slice(b[i:])
+		vr := va.Div(vb)
+		vr.StoreSlice(res[i:])
+	}
 	for ; i+4 <= n; i += 4 {
-		va := archsimd.LoadFloat64x4Slice(a[i:])
-		vb := archsimd.LoadFloat64x4Slice(b[i:])
+		va := archsimd.LoadFloat32x4Slice(a[i:])
+		vb := archsimd.LoadFloat32x4Slice(b[i:])
 		vr := va.Div(vb)
 		vr.StoreSlice(res[i:])
 	}
@@ -68,13 +95,19 @@ func vecDiv(a, b, res []float64) {
 	}
 }
 
-func vecMulScalar(a []float64, scalar float64, res []float64) {
+func vecMulScalar(a []float32, scalar float32, res []float32) {
 	n := len(a)
-	vScalar := archsimd.BroadcastFloat64x4(scalar)
+	vScalar8 := archsimd.BroadcastFloat32x8(scalar)
+	vScalar4 := archsimd.BroadcastFloat32x4(scalar)
 	i := 0
+	for ; i+8 <= n; i += 8 {
+		va := archsimd.LoadFloat32x8Slice(a[i:])
+		vr := va.Mul(vScalar8)
+		vr.StoreSlice(res[i:])
+	}
 	for ; i+4 <= n; i += 4 {
-		va := archsimd.LoadFloat64x4Slice(a[i:])
-		vr := va.Mul(vScalar)
+		va := archsimd.LoadFloat32x4Slice(a[i:])
+		vr := va.Mul(vScalar4)
 		vr.StoreSlice(res[i:])
 	}
 	for ; i < n; i++ {
@@ -82,13 +115,19 @@ func vecMulScalar(a []float64, scalar float64, res []float64) {
 	}
 }
 
-func vecDivScalar(a []float64, scalar float64, res []float64) {
+func vecDivScalar(a []float32, scalar float32, res []float32) {
 	n := len(a)
-	vScalar := archsimd.BroadcastFloat64x4(scalar)
+	vScalar8 := archsimd.BroadcastFloat32x8(scalar)
+	vScalar4 := archsimd.BroadcastFloat32x4(scalar)
 	i := 0
+	for ; i+8 <= n; i += 8 {
+		va := archsimd.LoadFloat32x8Slice(a[i:])
+		vr := va.Div(vScalar8)
+		vr.StoreSlice(res[i:])
+	}
 	for ; i+4 <= n; i += 4 {
-		va := archsimd.LoadFloat64x4Slice(a[i:])
-		vr := va.Div(vScalar)
+		va := archsimd.LoadFloat32x4Slice(a[i:])
+		vr := va.Div(vScalar4)
 		vr.StoreSlice(res[i:])
 	}
 	for ; i < n; i++ {
@@ -96,13 +135,19 @@ func vecDivScalar(a []float64, scalar float64, res []float64) {
 	}
 }
 
-func vecAddScalar(a []float64, scalar float64, res []float64) {
+func vecAddScalar(a []float32, scalar float32, res []float32) {
 	n := len(a)
-	vScalar := archsimd.BroadcastFloat64x4(scalar)
+	vScalar8 := archsimd.BroadcastFloat32x8(scalar)
+	vScalar4 := archsimd.BroadcastFloat32x4(scalar)
 	i := 0
+	for ; i+8 <= n; i += 8 {
+		va := archsimd.LoadFloat32x8Slice(a[i:])
+		vr := va.Add(vScalar8)
+		vr.StoreSlice(res[i:])
+	}
 	for ; i+4 <= n; i += 4 {
-		va := archsimd.LoadFloat64x4Slice(a[i:])
-		vr := va.Add(vScalar)
+		va := archsimd.LoadFloat32x4Slice(a[i:])
+		vr := va.Add(vScalar4)
 		vr.StoreSlice(res[i:])
 	}
 	for ; i < n; i++ {
@@ -110,12 +155,18 @@ func vecAddScalar(a []float64, scalar float64, res []float64) {
 	}
 }
 
-func vecAddAccumulate(res, a []float64) {
+func vecAddAccumulate(res, a []float32) {
 	n := len(a)
 	i := 0
+	for ; i+8 <= n; i += 8 {
+		vr := archsimd.LoadFloat32x8Slice(res[i:])
+		va := archsimd.LoadFloat32x8Slice(a[i:])
+		vr = vr.Add(va)
+		vr.StoreSlice(res[i:])
+	}
 	for ; i+4 <= n; i += 4 {
-		vr := archsimd.LoadFloat64x4Slice(res[i:])
-		va := archsimd.LoadFloat64x4Slice(a[i:])
+		vr := archsimd.LoadFloat32x4Slice(res[i:])
+		va := archsimd.LoadFloat32x4Slice(a[i:])
 		vr = vr.Add(va)
 		vr.StoreSlice(res[i:])
 	}
@@ -124,13 +175,20 @@ func vecAddAccumulate(res, a []float64) {
 	}
 }
 
-func vecMulAccumulate(res, a, b []float64) {
+func vecMulAccumulate(res, a, b []float32) {
 	n := len(a)
 	i := 0
+	for ; i+8 <= n; i += 8 {
+		vr := archsimd.LoadFloat32x8Slice(res[i:])
+		va := archsimd.LoadFloat32x8Slice(a[i:])
+		vb := archsimd.LoadFloat32x8Slice(b[i:])
+		vr = vr.Add(va.Mul(vb))
+		vr.StoreSlice(res[i:])
+	}
 	for ; i+4 <= n; i += 4 {
-		vr := archsimd.LoadFloat64x4Slice(res[i:])
-		va := archsimd.LoadFloat64x4Slice(a[i:])
-		vb := archsimd.LoadFloat64x4Slice(b[i:])
+		vr := archsimd.LoadFloat32x4Slice(res[i:])
+		va := archsimd.LoadFloat32x4Slice(a[i:])
+		vb := archsimd.LoadFloat32x4Slice(b[i:])
 		vr = vr.Add(va.Mul(vb))
 		vr.StoreSlice(res[i:])
 	}
@@ -139,14 +197,21 @@ func vecMulAccumulate(res, a, b []float64) {
 	}
 }
 
-func vecDivAccumulate(res, a []float64, scalar float64) {
+func vecDivAccumulate(res, a []float32, scalar float32) {
 	n := len(a)
-	vScalar := archsimd.BroadcastFloat64x4(scalar)
+	vScalar8 := archsimd.BroadcastFloat32x8(scalar)
+	vScalar4 := archsimd.BroadcastFloat32x4(scalar)
 	i := 0
+	for ; i+8 <= n; i += 8 {
+		vr := archsimd.LoadFloat32x8Slice(res[i:])
+		va := archsimd.LoadFloat32x8Slice(a[i:])
+		vr = vr.Add(va.Div(vScalar8))
+		vr.StoreSlice(res[i:])
+	}
 	for ; i+4 <= n; i += 4 {
-		vr := archsimd.LoadFloat64x4Slice(res[i:])
-		va := archsimd.LoadFloat64x4Slice(a[i:])
-		vr = vr.Add(va.Div(vScalar))
+		vr := archsimd.LoadFloat32x4Slice(res[i:])
+		va := archsimd.LoadFloat32x4Slice(a[i:])
+		vr = vr.Add(va.Div(vScalar4))
 		vr.StoreSlice(res[i:])
 	}
 	for ; i < n; i++ {
@@ -154,14 +219,21 @@ func vecDivAccumulate(res, a []float64, scalar float64) {
 	}
 }
 
-func vecMulScalarAccumulate(res, a []float64, scalar float64) {
+func vecMulScalarAccumulate(res, a []float32, scalar float32) {
 	n := len(a)
-	vScalar := archsimd.BroadcastFloat64x4(scalar)
+	vScalar8 := archsimd.BroadcastFloat32x8(scalar)
+	vScalar4 := archsimd.BroadcastFloat32x4(scalar)
 	i := 0
+	for ; i+8 <= n; i += 8 {
+		vr := archsimd.LoadFloat32x8Slice(res[i:])
+		va := archsimd.LoadFloat32x8Slice(a[i:])
+		vr = vr.Add(va.Mul(vScalar8))
+		vr.StoreSlice(res[i:])
+	}
 	for ; i+4 <= n; i += 4 {
-		vr := archsimd.LoadFloat64x4Slice(res[i:])
-		va := archsimd.LoadFloat64x4Slice(a[i:])
-		vr = vr.Add(va.Mul(vScalar))
+		vr := archsimd.LoadFloat32x4Slice(res[i:])
+		va := archsimd.LoadFloat32x4Slice(a[i:])
+		vr = vr.Add(va.Mul(vScalar4))
 		vr.StoreSlice(res[i:])
 	}
 	for ; i < n; i++ {
@@ -169,56 +241,87 @@ func vecMulScalarAccumulate(res, a []float64, scalar float64) {
 	}
 }
 
-func vecSum(a []float64) float64 {
+func vecSum(a []float32) float32 {
 	n := len(a)
 	if n == 0 {
 		return 0
 	}
-	var acc archsimd.Float64x4
+	var acc8 archsimd.Float32x8
 	i := 0
-	for ; i+4 <= n; i += 4 {
-		va := archsimd.LoadFloat64x4Slice(a[i:])
-		acc = acc.Add(va)
+	for ; i+8 <= n; i += 8 {
+		va := archsimd.LoadFloat32x8Slice(a[i:])
+		acc8 = acc8.Add(va)
 	}
-	var buf [4]float64
-	acc.Store(&buf)
+	
+	// Horizontal reduction
+	lo8 := acc8.GetLo()
+	hi8 := acc8.GetHi()
+	acc4 := lo8.Add(hi8)
+	
+	for ; i+4 <= n; i += 4 {
+		va4 := archsimd.LoadFloat32x4Slice(a[i:])
+		acc4 = acc4.Add(va4)
+	}
+	
+	var buf [4]float32
+	acc4.Store(&buf)
 	sum := buf[0] + buf[1] + buf[2] + buf[3]
+	
 	for ; i < n; i++ {
 		sum += a[i]
 	}
 	return sum
 }
 
-func vecDot(a, b []float64) float64 {
+func vecDot(a, b []float32) float32 {
 	n := len(a)
 	if n == 0 {
 		return 0
 	}
-	var acc archsimd.Float64x4
+	var acc8 archsimd.Float32x8
 	i := 0
-	for ; i+4 <= n; i += 4 {
-		va := archsimd.LoadFloat64x4Slice(a[i:])
-		vb := archsimd.LoadFloat64x4Slice(b[i:])
-		acc = acc.Add(va.Mul(vb))
+	for ; i+8 <= n; i += 8 {
+		va := archsimd.LoadFloat32x8Slice(a[i:])
+		vb := archsimd.LoadFloat32x8Slice(b[i:])
+		acc8 = acc8.Add(va.Mul(vb))
 	}
-	var buf [4]float64
-	acc.Store(&buf)
+
+	lo8 := acc8.GetLo()
+	hi8 := acc8.GetHi()
+	acc4 := lo8.Add(hi8)
+	
+	for ; i+4 <= n; i += 4 {
+		va4 := archsimd.LoadFloat32x4Slice(a[i:])
+		vb4 := archsimd.LoadFloat32x4Slice(b[i:])
+		acc4 = acc4.Add(va4.Mul(vb4))
+	}
+	
+	var buf [4]float32
+	acc4.Store(&buf)
 	sum := buf[0] + buf[1] + buf[2] + buf[3]
+	
 	for ; i < n; i++ {
 		sum += a[i] * b[i]
 	}
 	return sum
 }
 
-func vecSoftmaxBackwardRow(p, dp, out []float64) {
+func vecSoftmaxBackwardRow(p, dp, out []float32) {
 	dot := vecDot(dp, p)
 	n := len(p)
-	vDot := archsimd.BroadcastFloat64x4(dot)
+	vDot8 := archsimd.BroadcastFloat32x8(dot)
+	vDot4 := archsimd.BroadcastFloat32x4(dot)
 	i := 0
+	for ; i+8 <= n; i += 8 {
+		vp := archsimd.LoadFloat32x8Slice(p[i:])
+		vdp := archsimd.LoadFloat32x8Slice(dp[i:])
+		vr := vp.Mul(vdp.Sub(vDot8))
+		vr.StoreSlice(out[i:])
+	}
 	for ; i+4 <= n; i += 4 {
-		vp := archsimd.LoadFloat64x4Slice(p[i:])
-		vdp := archsimd.LoadFloat64x4Slice(dp[i:])
-		vr := vp.Mul(vdp.Sub(vDot))
+		vp := archsimd.LoadFloat32x4Slice(p[i:])
+		vdp := archsimd.LoadFloat32x4Slice(dp[i:])
+		vr := vp.Mul(vdp.Sub(vDot4))
 		vr.StoreSlice(out[i:])
 	}
 	for ; i < n; i++ {
@@ -226,13 +329,19 @@ func vecSoftmaxBackwardRow(p, dp, out []float64) {
 	}
 }
 
-func vecReLU(data []float64) {
+func vecReLU(data []float32) {
 	n := len(data)
-	zeros := archsimd.BroadcastFloat64x4(0)
+	zeros8 := archsimd.BroadcastFloat32x8(0)
+	zeros4 := archsimd.BroadcastFloat32x4(0)
 	i := 0
+	for ; i+8 <= n; i += 8 {
+		v := archsimd.LoadFloat32x8Slice(data[i:])
+		v = v.Max(zeros8)
+		v.StoreSlice(data[i:])
+	}
 	for ; i+4 <= n; i += 4 {
-		v := archsimd.LoadFloat64x4Slice(data[i:])
-		v = v.Max(zeros)
+		v := archsimd.LoadFloat32x4Slice(data[i:])
+		v = v.Max(zeros4)
 		v.StoreSlice(data[i:])
 	}
 	for ; i < n; i++ {
@@ -242,35 +351,47 @@ func vecReLU(data []float64) {
 	}
 }
 
-func vecScaleGradients(grads []float64, maxNorm float64) {
+func vecScaleGradients(grads []float32, maxNorm float32) {
 	n := len(grads)
 	if n == 0 {
 		return
 	}
 	sumSq := vecDot(grads, grads)
-	norm := math.Sqrt(sumSq)
+	norm := float32(math.Sqrt(float64(sumSq)))
 	if norm > maxNorm {
 		scaleFactor := maxNorm / (norm + 1e-8)
 		vecMulScalar(grads, scaleFactor, grads)
 	}
 }
 
-func vecMaxSlice(data []float64) float64 {
+func vecMaxSlice(data []float32) float32 {
 	n := len(data)
 	if n == 0 {
 		return 0
 	}
 	maxVal := data[0]
 	i := 0
-	if n >= 4 {
-		vMax := archsimd.LoadFloat64x4Slice(data)
-		i = 4
-		for ; i+4 <= n; i += 4 {
-			v := archsimd.LoadFloat64x4Slice(data[i:])
+	if n >= 8 {
+		vMax := archsimd.LoadFloat32x8Slice(data)
+		i = 8
+		for ; i+8 <= n; i += 8 {
+			v := archsimd.LoadFloat32x8Slice(data[i:])
 			vMax = vMax.Max(v)
 		}
-		var buf [4]float64
-		vMax.Store(&buf)
+		// Reduce vMax to 4-wide
+		vMax4 := vMax.GetLo().Max(vMax.GetHi())
+		var buf [4]float32
+		vMax4.Store(&buf)
+		for _, v := range buf {
+			if v > maxVal {
+				maxVal = v
+			}
+		}
+	} else if n >= 4 {
+		vMax4 := archsimd.LoadFloat32x4Slice(data)
+		i = 4
+		var buf [4]float32
+		vMax4.Store(&buf)
 		for _, v := range buf {
 			if v > maxVal {
 				maxVal = v
@@ -285,24 +406,24 @@ func vecMaxSlice(data []float64) float64 {
 	return maxVal
 }
 
-func vecAdamWUpdate(weights, grads, m, v []float64, lr, beta1, beta2, eps, weightDecay float64, t int) {
+func vecAdamWUpdate(weights, grads, m, v []float32, lr, beta1, beta2, eps, weightDecay float32, t int) {
 	n := len(weights)
-	biasCorrection1 := 1.0 - math.Pow(beta1, float64(t))
-	biasCorrection2 := 1.0 - math.Pow(beta2, float64(t))
+	biasCorrection1 := float32(1.0 - math.Pow(float64(beta1), float64(t)))
+	biasCorrection2 := float32(1.0 - math.Pow(float64(beta2), float64(t)))
 	
-	vB1 := archsimd.BroadcastFloat64x4(beta1)
-	vB1Inv := archsimd.BroadcastFloat64x4(1.0 - beta1)
-	vB2 := archsimd.BroadcastFloat64x4(beta2)
-	vB2Inv := archsimd.BroadcastFloat64x4(1.0 - beta2)
-	vBC1 := archsimd.BroadcastFloat64x4(biasCorrection1)
-	vBC2 := archsimd.BroadcastFloat64x4(biasCorrection2)
+	vB1 := archsimd.BroadcastFloat32x8(beta1)
+	vB1Inv := archsimd.BroadcastFloat32x8(1.0 - beta1)
+	vB2 := archsimd.BroadcastFloat32x8(beta2)
+	vB2Inv := archsimd.BroadcastFloat32x8(1.0 - beta2)
+	vBC1 := archsimd.BroadcastFloat32x8(biasCorrection1)
+	vBC2 := archsimd.BroadcastFloat32x8(biasCorrection2)
 
 	i := 0
-	for ; i+4 <= n; i += 4 {
-		w := archsimd.LoadFloat64x4Slice(weights[i:])
-		g := archsimd.LoadFloat64x4Slice(grads[i:])
-		mv := archsimd.LoadFloat64x4Slice(m[i:])
-		vv := archsimd.LoadFloat64x4Slice(v[i:])
+	for ; i+8 <= n; i += 8 {
+		w := archsimd.LoadFloat32x8Slice(weights[i:])
+		g := archsimd.LoadFloat32x8Slice(grads[i:])
+		mv := archsimd.LoadFloat32x8Slice(m[i:])
+		vv := archsimd.LoadFloat32x8Slice(v[i:])
 
 		// m = beta1 * m + (1 - beta1) * grad
 		mv = vB1.Mul(mv).Add(vB1Inv.Mul(g))
@@ -316,25 +437,19 @@ func vecAdamWUpdate(weights, grads, m, v []float64, lr, beta1, beta2, eps, weigh
 		mHat := mv.Div(vBC1)
 		vHat := vv.Div(vBC2)
 		
-		// Approximate sqrt using a loop or wait for archsimd.Sqrt? 
-		// For now, let's use a small helper or process element-wise for the final step 
-		// if archsimd doesn't have Sqrt. 
-		// Actually, archsimd Float64x4 has Sqrt! (verified in typical SIMD libraries, let's assume it does or check)
-		// Wait, I should verify if Sqrt exists.
+		var mH, vH [8]float32
+		mHat.StoreSlice(mH[:])
+		vHat.StoreSlice(vH[:])
 		
-		var mH, vH [4]float64
-		mHat.Store(&mH)
-		vHat.Store(&vH)
+		var wData [8]float32
+		w.StoreSlice(wData[:])
 		
-		var wData [4]float64
-		w.Store(&wData)
-		
-		for j := 0; j < 4; j++ {
-			update := mH[j] / (math.Sqrt(vH[j]) + eps)
+		for j := 0; j < 8; j++ {
+			update := mH[j] / (float32(math.Sqrt(float64(vH[j]))) + eps)
 			// AdamW: w = w - lr * update - lr * weightDecay * w
 			wData[j] -= lr * (update + weightDecay*wData[j])
 		}
-		newW := archsimd.LoadFloat64x4Slice(wData[:])
+		newW := archsimd.LoadFloat32x8Slice(wData[:])
 		newW.StoreSlice(weights[i:])
 	}
 	
@@ -344,19 +459,18 @@ func vecAdamWUpdate(weights, grads, m, v []float64, lr, beta1, beta2, eps, weigh
 		v[i] = beta2*v[i] + (1.0-beta2)*grads[i]*grads[i]
 		mHat := m[i] / biasCorrection1
 		vHat := v[i] / biasCorrection2
-		weights[i] -= lr * (mHat/(math.Sqrt(vHat)+eps) + weightDecay*weights[i])
+		weights[i] -= lr * (mHat/(float32(math.Sqrt(float64(vHat)))+eps) + weightDecay*weights[i])
 	}
 }
 
-func vecClipWeights(data []float64, maxVal float64) {
+func vecClipWeights(data []float32, maxVal float32) {
 	n := len(data)
-	vMax := archsimd.BroadcastFloat64x4(maxVal)
-	vMin := archsimd.BroadcastFloat64x4(-maxVal)
+	vMax8 := archsimd.BroadcastFloat32x8(maxVal)
+	vMin8 := archsimd.BroadcastFloat32x8(-maxVal)
 	i := 0
-	for ; i+4 <= n; i += 4 {
-		v := archsimd.LoadFloat64x4Slice(data[i:])
-		// v = min(maxVal, max(-maxVal, v))
-		v = v.Min(vMax).Max(vMin)
+	for ; i+8 <= n; i += 8 {
+		v := archsimd.LoadFloat32x8Slice(data[i:])
+		v = v.Min(vMax8).Max(vMin8)
 		v.StoreSlice(data[i:])
 	}
 	for ; i < n; i++ {
@@ -368,36 +482,28 @@ func vecClipWeights(data []float64, maxVal float64) {
 	}
 }
 
-func vecTopKZero(data []float64, k int) {
+func vecTopKZero(data []float32, k int) {
 	n := len(data)
 	if k >= n || k <= 0 {
 		return
 	}
 	
-	// Find threshold (generic logic)
-	sorted := make([]float64, n)
+	sorted := make([]float32, n)
 	copy(sorted, data)
-	sort.Float64s(sorted)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
 	threshold := sorted[n-k]
 	
-	// Zero out anything below threshold (SIMD)
 	i := 0
-	for ; i+4 <= n; i += 4 {
-		v := archsimd.LoadFloat64x4Slice(data[i:])
-		// mask = v >= threshold
-		// We can use a trick: if v < threshold, v = 0
-		// archsimd doesn't have a direct "Select" or "Masked Store" for float64x4 easily 
-		// depending on the version. Let's use element-wise but we can still use the threshold.
-		// Actually, I'll use a SIMD-like approach or just a fast loop if Select is missing.
-		
-		d := [4]float64{}
-		v.Store(&d)
-		for j := 0; j < 4; j++ {
+	for ; i+8 <= n; i += 8 {
+		v := archsimd.LoadFloat32x8Slice(data[i:])
+		d := [8]float32{}
+		v.StoreSlice(d[:])
+		for j := 0; j < 8; j++ {
 			if d[j] < threshold {
 				d[j] = 0
 			}
 		}
-		newV := archsimd.LoadFloat64x4Slice(d[:])
+		newV := archsimd.LoadFloat32x8Slice(d[:])
 		newV.StoreSlice(data[i:])
 	}
 	for ; i < n; i++ {
@@ -407,17 +513,15 @@ func vecTopKZero(data []float64, k int) {
 	}
 }
 
-func vecLeakyReLU(data []float64, alpha float64) {
+func vecLeakyReLU(data []float32, alpha float32) {
 	n := len(data)
-	vAlpha := archsimd.BroadcastFloat64x4(alpha)
-	vZero := archsimd.BroadcastFloat64x4(0.0)
+	vAlpha8 := archsimd.BroadcastFloat32x8(alpha)
+	vZero8 := archsimd.BroadcastFloat32x8(0.0)
 	i := 0
-	for ; i+4 <= n; i += 4 {
-		v := archsimd.LoadFloat64x4Slice(data[i:])
-		// v_pos = max(0, v)
-		// v_neg = min(0, v) * alpha
-		vPos := v.Max(vZero)
-		vNeg := v.Min(vZero).Mul(vAlpha)
+	for ; i+8 <= n; i += 8 {
+		v := archsimd.LoadFloat32x8Slice(data[i:])
+		vPos := v.Max(vZero8)
+		vNeg := v.Min(vZero8).Mul(vAlpha8)
 		res := vPos.Add(vNeg)
 		res.StoreSlice(data[i:])
 	}
