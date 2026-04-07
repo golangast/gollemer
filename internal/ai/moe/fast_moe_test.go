@@ -41,13 +41,13 @@ func TestLoadBalancingLoss(t *testing.T) {
 	// Scenario A: Perfectly Unbalanced (All tokens to Expert 0)
 	countsUnbalanced := []int64{8, 0, 0, 0}
 	probsUnbalanced := []float32{0.9, 0.03, 0.03, 0.04}
-	
+
 	lossHigh := moe.CalculateAuxLoss(8, countsUnbalanced, probsUnbalanced)
 
 	// Scenario B: Perfectly Balanced (2 tokens per expert)
 	countsBalanced := []int64{2, 2, 2, 2}
 	probsBalanced := []float32{0.25, 0.25, 0.25, 0.25}
-	
+
 	lossLow := moe.CalculateAuxLoss(8, countsBalanced, probsBalanced)
 
 	if lossLow >= lossHigh {
@@ -57,9 +57,7 @@ func TestLoadBalancingLoss(t *testing.T) {
 
 func BenchmarkLayerThroughput(b *testing.B) {
 	hiddenSize := 768
-	inputDim := 768
 	numExperts := 8
-	numTokens := 128
 	input := make([]float32, hiddenSize) // Mock input token
 
 	// Initialize Layers

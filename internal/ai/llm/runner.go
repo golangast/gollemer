@@ -39,8 +39,10 @@ func NewRunner() (*Runner, error) {
 
 	projectRoot, err := FindProjectRoot()
 	if err != nil {
+		log.Printf("❌ Failed to find project root: %v", err)
 		return nil, fmt.Errorf("failed to find project root: %v", err)
 	}
+	log.Printf("✅ Detected Project Root: %s", projectRoot)
 
 	absoluteLastDirConfigPath = filepath.Join(projectRoot, "last_dir.txt")
 
@@ -59,6 +61,7 @@ func NewRunner() (*Runner, error) {
 		KB:          kb,
 		Reader:      bufio.NewReader(os.Stdin),
 	}
+	log.Printf("🔧 Initializing Gollemer Runner (Root: %s)", r.ProjectRoot)
 
 	return r, nil
 }
@@ -107,6 +110,7 @@ func (r *Runner) initModels() {
 		if err == nil {
 			r.W2V = loadedW2V
 		} else {
+			log.Printf("⚠️  Failed to load Word2Vec: %v", err)
 			// Create a default/dummy model
 			r.W2V = &word2vec.SimpleWord2Vec{
 				Vocabulary:  make(map[string]int),
@@ -130,15 +134,46 @@ func (r *Runner) initModels() {
 		// If W2V was loaded, it may be 64d but the model should still be 768d
 	}
 
-	// Try to load trained MoE model
+	// Try to load trained MoE model - prioritize the latest trained model or checkpoint
 	if r.KB.ModelConfig.MoEPath != "" {
-		modelPath := filepath.Join(r.ProjectRoot, r.KB.ModelConfig.MoEPath)
-		if _, err := os.Stat(modelPath); err == nil {
-			loadedModel, err := moe.LoadIntentMoEModelFromGOB(modelPath)
-			if err == nil {
-				r.IntentModel = loadedModel
-				log.Printf("✅ Loaded trained 768d MoE model for interactive LLM.")
+		paths := []string{
+			filepath.Join(r.ProjectRoot, "data/models/checkpoints/latest_periodic.gob"),
+			filepath.Join(r.ProjectRoot, "data/models/gob_models/moe_classification_model.gob"),
+			filepath.Join(r.ProjectRoot, "data/models/gob_models/golden_checkpoint.gob"),
+			filepath.Join(r.ProjectRoot, r.KB.ModelConfig.MoEPath),
+		}
+
+		for _, p := range paths {
+			if r.IntentModel != nil {
+				break
 			}
+			if _, err := os.Stat(p); err != nil {
+				continue
+			}
+
+			// Try as checkpoint first (compressed)
+			ckpt, err := moe.LoadIntentMoECheckpoint(p)
+			if err == nil && ckpt != nil && ckpt.Model != nil {
+				r.IntentModel = ckpt.Model
+				log.Printf("✅ Success: Loaded 768d MoE model from compressed Checkpoint: %s (Steps: %d)", filepath.Base(p), ckpt.StepCount)
+				break
+			} else if err != nil && !strings.Contains(err.Error(), "invalid header") {
+				log.Printf("❌ Error loading checkpoint %s: %v", filepath.Base(p), err)
+			}
+
+			// Try as raw GOB model (uncompressed)
+			loadedModel, err := moe.LoadIntentMoEModelFromGOB(p)
+			if err == nil && loadedModel != nil {
+				r.IntentModel = loadedModel
+				log.Printf("✅ Success: Loaded 768d MoE model from raw GOB: %s", filepath.Base(p))
+				break
+			} else if err != nil {
+				log.Printf("⚠️  Candidate %s failed (GOB): %v", filepath.Base(p), err)
+			}
+		}
+
+		if r.IntentModel == nil {
+			log.Printf("⚠️  No trained MoE weights could be loaded from any of the %d candidates.", len(paths))
 		}
 	}
 
@@ -155,6 +190,8 @@ func (r *Runner) initModels() {
 		)
 		if err == nil {
 			r.IntentModel = intentModel
+		} else {
+			log.Printf("❌ Failed to initialize new MoE model: %v", err)
 		}
 	}
 
@@ -186,9 +223,12 @@ func (r *Runner) Run() {
 
 	initialMsg := discovery.GetExpertAdvice(projectCtx)
 	if initialMsg == "Ready to code! What's the focus for this session?" {
-		initialMsg = "Hi, welcome to gollemer!"
+		// Suppress redundant greeting if we already did WelcomeSequence
+		initialMsg = ""
 	}
-	r.Mascot.Speak(ui.MoodHappy, initialMsg)
+	if initialMsg != "" {
+		r.Mascot.Speak(ui.MoodHappy, initialMsg)
+	}
 
 	for {
 		r.Mascot.WellnessCheck()

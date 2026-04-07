@@ -68,7 +68,7 @@ func (s *MoEStack) Backward(grad *tensor.Tensor) error {
 			// Gradient w.r.t. ResidualScale: dot(currGrad, layerOutput)
 			if layer.ResidualScale.RequiresGrad {
 				if layer.ResidualScale.Grad == nil {
-					layer.ResidualScale.Grad = tensor.NewTensor(layer.ResidualScale.Shape, make([]float64, 1), false)
+					layer.ResidualScale.Grad = tensor.NewTensor(layer.ResidualScale.Shape, make([]float32, 1), false)
 				}
 				
 				// Retrieve the output from the last forward pass stored in stateStack
@@ -77,7 +77,7 @@ func (s *MoEStack) Backward(grad *tensor.Tensor) error {
 					lastOutput := stack[len(stack)-1].lastOutput
 					
 					// dL/dScale = sum(currGrad * lastOutput)
-					var dScale float64
+					var dScale float32
 					for j := range currGrad.Data {
 						dScale += currGrad.Data[j] * lastOutput.Data[j]
 					}
@@ -97,7 +97,7 @@ func (s *MoEStack) Backward(grad *tensor.Tensor) error {
 		
 		input := layer.Inputs()[0]
 		if input.Grad == nil {
-			input.Grad = tensor.NewTensor(input.Shape, make([]float64, len(input.Data)), false)
+			input.Grad = tensor.NewTensor(input.Shape, make([]float32, len(input.Data)), false)
 		}
 		
 		// Accumulate residual gradient
@@ -145,8 +145,17 @@ func (s *MoEStack) GetMoELayers() []*MoELayer {
 }
 
 // SetGateTemperature updates the temperature for all layers in the stack.
-func (s *MoEStack) SetGateTemperature(temp float64) {
+func (s *MoEStack) SetGateTemperature(temp float32) {
 	for _, l := range s.Layers {
 		l.SetGateTemperature(temp)
+	}
+}
+
+// ToGPU moves all layers in the stack to the GPU.
+func (s *MoEStack) ToGPU() {
+	for _, l := range s.Layers {
+		if l != nil {
+			l.ToGPU()
+		}
 	}
 }

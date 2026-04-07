@@ -83,7 +83,7 @@ func LogWeightStretch(m *IntentMoE) {
 	for _, p := range params {
 		total += len(p.Data)
 		for _, w := range p.Data {
-			absW := math.Abs(w)
+			absW := float32(math.Abs(float64(w)))
 			if absW > 0.50 {
 				highCommit++ // The "Confidence" Zone
 			} else if absW > 0.20 {
@@ -108,14 +108,14 @@ func LogWeightStretch(m *IntentMoE) {
 
 // CheckSaturation calculates Max weight and L2 norm to detect training divergence.
 func CheckSaturation(m *IntentMoE, epoch int) {
-	var maxWeight float64
-	var sumSq float64
+	var maxWeight float32
+	var sumSq float32
 	params := m.Parameters()
 	total := 0
 	for _, p := range params {
 		total += len(p.Data)
 		for _, w := range p.Data {
-			absW := math.Abs(w)
+			absW := float32(math.Abs(float64(w)))
 			if absW > maxWeight {
 				maxWeight = absW
 			}
@@ -123,25 +123,25 @@ func CheckSaturation(m *IntentMoE, epoch int) {
 		}
 	}
 	
-	l2Norm := math.Sqrt(sumSq) / float64(total)
+	l2Norm := float32(math.Sqrt(float64(sumSq))) / float32(total)
 
 	// 🚩 ALERT: Weight Saturation detected
 	if maxWeight > 2.0 {
-		fmt.Printf("⚠️  SATURATION WARNING: Max Weight reached %.2f!\n", maxWeight)
+		fmt.Printf("⚠️  SATURATION WARNING: Max Weight reached %.2f!\n", float64(maxWeight))
 		fmt.Println("👉 Recommendation: Lower LR or increase Weight Decay immediately to prevent divergence.")
 	}
 
 	// ❄️ ALERT: Vanishing Gradient detected
 	if l2Norm < 1e-5 && epoch > 2 {
-		fmt.Printf("❄️  FREEZE WARNING: L2 Norm is critically low (%.2e).\n", l2Norm)
+		fmt.Printf("❄️  FREEZE WARNING: L2 Norm is critically low (%.2e).\n", float64(l2Norm))
 		fmt.Println("👉 Recommendation: Model is 'stuck'. Increase LR or check activation functions.")
 	}
 }
 
 // MoEStats holds utilization statistics for a batch to calculate auxiliary loss.
 type MoEStats struct {
-	RouterProbSum []float64 // Sum of probabilities for each expert
-	ExpertCounts  []float64 // Hard count of how many times each expert was chosen
+	RouterProbSum []float32 // Sum of probabilities for each expert
+	ExpertCounts  []int     // Hard count of how many times each expert was chosen
 }
 
 // PrintExpertWeightHistogram prints a detailed visual distribution of expert weights.
@@ -153,13 +153,13 @@ func PrintExpertWeightHistogram(label string, expert Expert) {
 
 	const numBins = 10
 	bins := make([]int, numBins)
-	minVal, maxVal := -1.0, 1.0
+	var minVal, maxVal float32 = -1.0, 1.0
 
 	var totalWeights int
 	for _, p := range params {
 		totalWeights += len(p.Data)
 		for _, w := range p.Data {
-			binIdx := int((w - minVal) / (maxVal - minVal) * float64(numBins))
+			binIdx := int((w - minVal) / (maxVal - minVal) * float32(numBins))
 			if binIdx >= 0 && binIdx < numBins {
 				bins[binIdx]++
 			}
@@ -172,8 +172,8 @@ func PrintExpertWeightHistogram(label string, expert Expert) {
 
 	fmt.Printf("\n📉 [%s] Weight Distribution (Total: %d):\n", label, totalWeights)
 	for i, count := range bins {
-		binStart := minVal + float64(i)*(maxVal-minVal)/float64(numBins)
-		binEnd := minVal + float64(i+1)*(maxVal-minVal)/float64(numBins)
+		binStart := minVal + float32(i)*(maxVal-minVal)/float32(numBins)
+		binEnd := minVal + float32(i+1)*(maxVal-minVal)/float32(numBins)
 		
 		barLen := (count * 40) / totalWeights // Scale to 40 chars
 		bar := strings.Repeat("█", barLen)
@@ -190,13 +190,13 @@ func PrintLayerWeightHistogram(label string, layer *MoELayer) {
 
 	const numBins = 10
 	bins := make([]int, numBins)
-	minVal, maxVal := -1.0, 1.0
+	var minVal, maxVal float32 = -1.0, 1.0
 
 	var totalWeights int
 	for _, p := range params {
 		totalWeights += len(p.Data)
 		for _, w := range p.Data {
-			binIdx := int((w - minVal) / (maxVal - minVal) * float64(numBins))
+			binIdx := int((w - minVal) / (maxVal - minVal) * float32(numBins))
 			if binIdx >= 0 && binIdx < numBins {
 				bins[binIdx]++
 			}
@@ -207,10 +207,10 @@ func PrintLayerWeightHistogram(label string, layer *MoELayer) {
 		return
 	}
 
-	fmt.Printf("\n� Layer [%s] Weight Distribution (Total: %d):\n", label, totalWeights)
+	fmt.Printf("\n Layer [%s] Weight Distribution (Total: %d):\n", label, totalWeights)
 	for i, count := range bins {
-		binStart := minVal + float64(i)*(maxVal-minVal)/float64(numBins)
-		binEnd := minVal + float64(i+1)*(maxVal-minVal)/float64(numBins)
+		binStart := minVal + float32(i)*(maxVal-minVal)/float32(numBins)
+		binEnd := minVal + float32(i+1)*(maxVal-minVal)/float32(numBins)
 		
 		barLen := (count * 40) / totalWeights
 		bar := strings.Repeat("█", barLen)
@@ -219,52 +219,52 @@ func PrintLayerWeightHistogram(label string, layer *MoELayer) {
 }
 
 // CalculateSparsityPenalty calculates the L1 norm of weights to encourage sparse connections.
-func CalculateSparsityPenalty(params []*tensor.Tensor, lambda float64) float64 {
-	var l1Loss float64
+func CalculateSparsityPenalty(params []*tensor.Tensor, lambda float32) float32 {
+	var l1Loss float32
 	for _, p := range params {
 		for _, w := range p.Data {
-			l1Loss += math.Abs(w)
+			l1Loss += float32(math.Abs(float64(w)))
 		}
 	}
 	return l1Loss * lambda
 }
 
 // CalculateDiversityLoss calculates the Shannon Entropy of probs to force sharp peaks.
-func CalculateDiversityLoss(probs *tensor.Tensor) float64 {
-	var entropy float64
-	epsilon := 1e-10 // Prevent log(0)
+func CalculateDiversityLoss(probs *tensor.Tensor) float32 {
+	var entropy float32
+	var epsilon float32 = 1e-10 // Prevent log(0)
 
 	for _, p := range probs.Data {
 		if p > epsilon {
-			entropy -= p * math.Log2(p)
+			entropy -= p * float32(math.Log2(float64(p)))
 		}
 	}
 	
 	// We want to MINIMIZE entropy to force sharp peaks.
 	// Scale by small factor (0.01) so it doesn't overwhelm Cross-Entropy loss.
-	return (entropy / float64(len(probs.Data))) * 0.01
+	return (entropy / float32(len(probs.Data))) * 0.01
 }
 
 // CalculateUsageVariance calculates the variance of expert usage to discourage monopolies.
-func CalculateUsageVariance(usageMap map[int]int, numExperts int, totalTokens int) float64 {
+func CalculateUsageVariance(usageMap map[int]int, numExperts int, totalTokens int) float32 {
     if numExperts == 0 || totalTokens == 0 {
         return 0
     }
-    targetUsage := float64(totalTokens) / float64(numExperts)
-    var variance float64
+    targetUsage := float32(totalTokens) / float32(numExperts)
+    var variance float32
 
     for i := 0; i < numExperts; i++ {
         count := usageMap[i]
-        diff := float64(count) - targetUsage
+        diff := float32(count) - targetUsage
         variance += diff * diff
     }
     
     // Normalize and scale
-    return (variance / float64(totalTokens)) * 0.01
+    return (variance / float32(totalTokens)) * 0.01
 }
 
 // PerformWeightSurgery kills weights that fall below the "signal" threshold.
-func PerformWeightSurgery(expert Expert, threshold float64) int {
+func PerformWeightSurgery(expert Expert, threshold float32) int {
     killCount := 0
     params := expert.Parameters()
     for _, p := range params {
@@ -279,14 +279,14 @@ func PerformWeightSurgery(expert Expert, threshold float64) int {
 }
 
 // PrintExpertHeatmap visualizes weight density as a text-based heat map.
-func PrintExpertHeatmap(label string, expert Expert, threshold float64) {
+func PrintExpertHeatmap(label string, expert Expert, threshold float32) {
     params := expert.Parameters()
     if len(params) == 0 {
         return
     }
 
     // Use the largest parameter (usually the weight matrix)
-    var weights []float64
+    var weights []float32
     maxLen := 0
     for _, p := range params {
         if len(p.Data) > maxLen {
@@ -301,7 +301,7 @@ func PrintExpertHeatmap(label string, expert Expert, threshold float64) {
         size = 64 // Cap size for logs
     }
     
-    fmt.Printf("\n🗺️ Sparsity Heatmap [%s] (Threshold: %0.3f)\n", label, threshold)
+    fmt.Printf("\n🗺️ Sparsity Heatmap [%s] (Threshold: %0.3f)\n", label, float32(threshold))
     
     for i := 0; i < size; i++ {
         rowStr := ""
@@ -361,15 +361,15 @@ func ValidateExpertHealth(layerName string, counts []int) {
 
 // CalculateImportanceLoss computes the penalty for unbalanced expert usage.
 // probs: A 2D slice [batch_size][num_experts] from the router's softmax.
-func CalculateImportanceLoss(probs [][]float64) float64 {
+func CalculateImportanceLoss(probs [][]float32) float32 {
 	if len(probs) == 0 {
 		return 0
 	}
-	batchSize := float64(len(probs))
+	batchSize := float32(len(probs))
 	numExperts := len(probs[0])
 	
 	// Sum probabilities for each expert across the batch
-	expertSums := make([]float64, numExperts)
+	expertSums := make([]float32, numExperts)
 	for _, sample := range probs {
 		for i, p := range sample {
 			expertSums[i] += p
@@ -377,22 +377,22 @@ func CalculateImportanceLoss(probs [][]float64) float64 {
 	}
 
 	// Calculate the mean probability per expert
-	var loss float64
+	var loss float32
 	for _, sum := range expertSums {
 		meanProb := sum / batchSize
 		loss += meanProb * meanProb
 	}
 
-	return loss * float64(numExperts)
+	return loss * float32(numExperts)
 }
 
 // LogUtilization prints a visual bar chart of how much each expert is used.
-func LogUtilization(gateProbs [][]float64) {
+func LogUtilization(gateProbs [][]float32) {
 	if len(gateProbs) == 0 {
 		return
 	}
 	numExperts := len(gateProbs[0])
-	counts := make([]float64, numExperts)
+	counts := make([]float32, numExperts)
 
 	// Count "hard" selections (which expert had the highest prob)
 	for _, sample := range gateProbs {
@@ -407,21 +407,21 @@ func LogUtilization(gateProbs [][]float64) {
 
 	fmt.Printf("\n--- Expert Utilization (Batch) ---\n")
 	for i, count := range counts {
-		percentage := (count / float64(len(gateProbs))) * 100
+		percentage := (count / float32(len(gateProbs))) * 100
 		bar := strings.Repeat("█", int(percentage/2)) // 1 block per 2%
-		fmt.Printf("Expert %d: [%-50s] %.1f%%\n", i, bar, percentage)
+		fmt.Printf("Expert %d: [%-50s] %.1f%%\n", i, bar, float64(percentage))
 	}
 }
 
 // CalculateImportanceLossTensor is a version of CalculateImportanceLoss that takes a Tensor.
-func CalculateImportanceLossTensor(probs *tensor.Tensor) float64 {
+func CalculateImportanceLossTensor(probs *tensor.Tensor) float32 {
 	if probs == nil || len(probs.Data) == 0 {
 		return 0
 	}
 	numExperts := probs.Shape[len(probs.Shape)-1]
 	numTokens := len(probs.Data) / numExperts
 	
-	expertSums := make([]float64, numExperts)
+	expertSums := make([]float32, numExperts)
 	for t := 0; t < numTokens; t++ {
 		base := t * numExperts
 		for e := 0; e < numExperts; e++ {
@@ -429,13 +429,13 @@ func CalculateImportanceLossTensor(probs *tensor.Tensor) float64 {
 		}
 	}
 
-	var loss float64
+	var loss float32
 	for _, sum := range expertSums {
-		meanProb := sum / float64(numTokens)
+		meanProb := sum / float32(numTokens)
 		loss += meanProb * meanProb
 	}
 
-	return loss * float64(numExperts)
+	return loss * float32(numExperts)
 }
 
 // LogUtilizationTensor is a version of LogUtilization that takes a Tensor.
@@ -445,7 +445,7 @@ func LogUtilizationTensor(gateProbs *tensor.Tensor) {
 	}
 	numExperts := gateProbs.Shape[len(gateProbs.Shape)-1]
 	numTokens := len(gateProbs.Data) / numExperts
-	counts := make([]float64, numExperts)
+	counts := make([]float32, numExperts)
 
 	for t := 0; t < numTokens; t++ {
 		base := t * numExperts
@@ -460,8 +460,8 @@ func LogUtilizationTensor(gateProbs *tensor.Tensor) {
 
 	fmt.Printf("\n--- Expert Utilization (Batch Tensor) ---\n")
 	for i, count := range counts {
-		percentage := (count / float64(numTokens)) * 100
+		percentage := (count / float32(numTokens)) * 100
 		bar := strings.Repeat("█", int(percentage/2)) // 1 block per 2%
-		fmt.Printf("Expert %d: [%-50s] %.1f%%\n", i, bar, percentage)
+		fmt.Printf("Expert %d: [%-50s] %.1f%%\n", i, bar, float64(percentage))
 	}
 }

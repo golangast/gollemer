@@ -3,16 +3,16 @@
 all: build
 
 build:
-	/usr/local/go/bin/go build -o bin/gollemer ./cmd/gollemer
+	go build -o bin/gollemer ./cmd/gollemer
 
 # Run your SIMD benchmarks to ensure no performance regression
 bench:
-	/usr/local/go/bin/go test -bench=. -benchmem ./internal/ai/moe/...
+	go test -bench=. -benchmem ./internal/ai/moe/...
 
 # Train and then immediately verify
 run:
-	/usr/local/go/bin/go run cmd/train/main.go
-	/usr/local/go/bin/go run cmd/verify/main.go
+	go run cmd/train/main.go
+	go run cmd/verify/main.go
 
 # Clean up binary checkpoints and artifacts
 clean:

@@ -1,14 +1,34 @@
 #!/bin/bash
 
-# --- 1. Environment & Path Setup ---
+## --- 1. Environment & Path Setup ---
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
-# Setup Go environment for Chromebook performance
-export GOGC=10
-export GOMAXPROCS=1
-export GO_CMD="/usr/local/go/bin/go"
+# Detect OS
+IS_WINDOWS=false
+case "$(uname -s)" in
+    CYGWIN*|MINGW*|MSYS*) IS_WINDOWS=true;;
+esac
+
+# Setup Go environment for pure Go performance
+export GO_CMD="go"
+export CGO_ENABLED=0
 export GOEXPERIMENT=simd
+
+
+# Use system 'go' if the hardcoded path doesn't exist
+GO_CMD="/usr/local/go/bin/go"
+if ! command -v "$GO_CMD" >/dev/null 2>&1; then
+    GO_CMD="go"
+fi
+export GO_CMD
+export GOEXPERIMENT=simd
+
+# Handle Extensions
+BIN_EXT=""
+if [ "$IS_WINDOWS" = true ]; then
+    BIN_EXT=".exe"
+fi
 
 # Ensure critical directories exist
 mkdir -p logs
@@ -26,7 +46,7 @@ rm -f data/models/gob_models/moe_classification_model_best.gob
 W2V_PATH="data/models/gob_models/word2vec_model.gob"
 if [ ! -f "$W2V_PATH" ]; then
     echo "⚠️  Word2Vec Dictionary missing. Regenerating from data..."
-    GOEXPERIMENT=simd go run cmd/gollemer/main.go -train-word2vec
+    GOEXPERIMENT=simd "$GO_CMD" run cmd/gollemer/main.go -train-word2vec
 fi
 
 # --- 3. Audit & Trend Analysis ---
@@ -45,7 +65,7 @@ BEST_FILE=""
 CHECKPOINT_DIR="data/models/checkpoints"
 
 for f in $(ls $CHECKPOINT_DIR/*.gob 2>/dev/null | sort); do
-    $GO_CMD run cmd/inspect/inspect_model.go --export "$f" > /dev/null
+    "$GO_CMD" run cmd/inspect/inspect_model.go --export "$f" > /dev/null
     JSON_FILE="${f}.json"
     
     if [ -f "$JSON_FILE" ]; then
@@ -105,7 +125,7 @@ if [ -n "$BEST_FILE" ]; then
     done
 fi
 
-# --- 5. The Gatekeeper: Promotion & ChromeOS Notification ---
+# --- 5. The Gatekeeper
 THRESHOLD=2.0
 if [ -n "$BEST_FILE" ]; then
     IS_PROMOTABLE=false
@@ -118,9 +138,14 @@ if [ -n "$BEST_FILE" ]; then
     if [ "$IS_PROMOTABLE" = true ]; then
         echo "🎖️  Threshold Met ($BEST_SCORE% >= $THRESHOLD%). Promoting..."
         cp "$BEST_FILE" "data/models/gob_models/moe_classification_model_best.gob"
-        ln -sf "$(pwd)/data/models/gob_models/moe_classification_model_best.gob" "data/models/gob_models/moe_active.gob"
         
-        # �� ChromeOS Desktop Notification
+        if [ "$IS_WINDOWS" = true ]; then
+             cp "data/models/gob_models/moe_classification_model_best.gob" "data/models/gob_models/moe_active.gob"
+        else
+             ln -sf "$(pwd)/data/models/gob_models/moe_classification_model_best.gob" "data/models/gob_models/moe_active.gob"
+        fi
+        
+        # 🔔 ChromeOS Desktop Notification
         if command -v notify-send >/dev/null 2>&1; then
             notify-send "Gollemer AI" "Best Model Promoted! IQ: ${BEST_SCORE}%" --icon=utilities-terminal
         fi
@@ -150,13 +175,7 @@ ACCUMULATION_STEPS=16
 echo "📐 Max Gradient Norm: $MAX_GRAD_NORM"
 echo "📉 Adjusted LR for 768d stability: $LR"
 
-GOEXPERIMENT=simd $GO_CMD run cmd/gollemer/main.go \
-    -train-chat \
-    -rebalance \
-    -auto-heal \
-    -wd 0.01 \
-    -lr $LR \
-    -max_grad_norm=$MAX_GRAD_NORM 2>&1 | tee -a "$TRAIN_LOG"
+# Removed redundant 'go run' block here. Training now handled by pre-built binary below.
 
 # --- 7. Stability Audit: scan the run for NaN / Inf signals ---
 echo -e "\n🔬 Scanning training log for stability issues..."
@@ -164,13 +183,12 @@ if [ -s "$TRAIN_LOG" ] && grep -q "NaN\|Inf\|loss exploded" "$TRAIN_LOG"; then
     echo "⚠️  STABILITY ISSUE DETECTED in $TRAIN_LOG"
     echo "   → Possible causes:"
     echo "     1. LR too high - try: ./scripts/train.sh $MAX_GRAD_NORM (lower --lr)"
-    echo "     2. Clip too loose - try: ./scripts/train.sh $(echo "$MAX_GRAD_NORM * 0.5" | awk '{printf "%.2f", $1}')"
+    echo "     2. Clip too loose - try: ./scripts/train.sh $(awk "BEGIN {print $MAX_GRAD_NORM * 0.5}")"
     echo "     3. Expert collapse - re-run with -rebalance"
 else
     echo "✅ No NaN/Inf detected."
 fi
 
-# Check if clip fired on every step (over-clipping detector)
 CLIP_COUNT=$(grep "\[CLIPPED" "$TRAIN_LOG" 2>/dev/null | wc -l | xargs)
 TOTAL_STEPS=$(grep "Weights updated" "$TRAIN_LOG" 2>/dev/null | wc -l | xargs)
 
@@ -213,26 +231,40 @@ if [ -f "$LOG_FILE" ]; then
     echo "--------------------------------------------------"
 fi
 echo "🧹 Cleaning old Gollemer artifacts..."
-rm -f static/main.wasm gollemer_server
+rm -f static/main.wasm "gollemer_server${BIN_EXT}" "gollemer${BIN_EXT}"
 
 echo "🚀 Building WASM Dashboard..."
-GOOS=js GOARCH=wasm $GO_CMD build -o static/main.wasm ./examples/learningfolder/wasm
+GOOS=js GOARCH=wasm "$GO_CMD" build -o static/main.wasm ./examples/learningfolder/wasm
 
 echo "⚙️ Compiling Go Server (EMA + Cooling + SIMD)..."
-$GO_CMD build -o gollemer_server ./examples/learningfolder
+"$GO_CMD" build -o "gollemer_server${BIN_EXT}" ./examples/learningfolder
 
-echo "🌐 System Live at http://localhost:5500"
-./gollemer_server --ema_alpha=0.001 --shake_threshold=0.01
+echo "⚙️ Compiling Main Gollemer binary..."
+"$GO_CMD" build -o "gollemer${BIN_EXT}" ./cmd/tools/train_moe
+
+# --- 9. Port Cleanup ---
+echo "🛑 Clearing port :8080..."
+if [ "$IS_WINDOWS" = true ]; then
+    # PowerShell-based cleanup is more reliable on Windows
+    powershell.exe -Command "Get-NetTCPConnection -LocalPort 8080 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }"
+else
+    fuser -k 8080/tcp 2>/dev/null
+fi
+
+echo "🌐 System Live at http://localhost:8080"
+"./gollemer_server${BIN_EXT}" --ema_alpha=0.001 --shake_threshold=0.01 & SERVER_PID=$!
+
 # Step 2: Calculate decayed temperature for the current epoch
 # Formula: TEMP = START_TEMP * (DECAY_RATE ^ EPOCH)
+EPOCH=${EPOCH:-1}
 START_TEMP=1.0
 DECAY_RATE=0.95
-CURRENT_TEMP=$(echo "scale=4; $START_TEMP * ($DECAY_RATE ^ $EPOCH)" | bc -l)
+CURRENT_TEMP=$(awk "BEGIN {print $START_TEMP * ($DECAY_RATE ^ $EPOCH)}")
 
 echo "--- Starting Epoch $EPOCH with Temperature: $CURRENT_TEMP ---"
 
-# Pass the calculated temperature into your Go binary
-./gollemer train --data="./data/train.bin" --temp=$CURRENT_TEMP
+# Run a single training epoch with the pre-built binary
+"./gollemer${BIN_EXT}" -train-chat -lr "$LR" -max_grad_norm="$MAX_GRAD_NORM" -batch-size 4 -acc-steps 16
 # --- Functions ---
 function bench() {
     go test -bench=. -benchmem ./...
@@ -246,4 +278,4 @@ function check-race() {
 }
 function clean() {
     rm -f *.out *.test cpu.prof mem.prof
-}
+}

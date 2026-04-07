@@ -9,21 +9,22 @@ import (
 type PlateauConfig struct {
 	Patience      int     // Epochs to wait before taking action
 	Cooldown      int     // Epochs to ignore after an action is taken
-	Factor        float64 // Multiplier to reduce the Learning Rate
-	TempDecay     float64 // Multiplier to reduce the Router Temperature
-	MinLR         float64 // Minimum allowable learning rate
+	Factor        float32 // Multiplier to reduce the Learning Rate
+	TempDecay     float32 // Multiplier to reduce the Router Temperature
+	MinLR         float32 // Minimum allowable learning rate
+	Threshold     float32 // Minimum relative improvement (e.g. 0.001)
 }
 
 // PlateauState tracks the training progress metrics for plateau detection.
 type PlateauState struct {
-	BestPPL       float64
+	BestPPL       float32
 	BadEpochs     int
 	CooldownTimer int
 }
 
 // Update evaluates the current Perplexity and adjusts LR/Temperature if progress has stalled.
 // It returns a status message describing the decision.
-func (s *PlateauState) Update(currentPPL float64, config PlateauConfig, currentLR *float64, currentTemp *float64) string {
+func (s *PlateauState) Update(currentPPL float32, config PlateauConfig, currentLR *float32, currentTemp *float32) string {
 	if s.CooldownTimer > 0 {
 		s.CooldownTimer--
 		return "⏳ Cooldown active (waiting for stabilization)"
@@ -39,11 +40,11 @@ func (s *PlateauState) Update(currentPPL float64, config PlateauConfig, currentL
 	if s.BadEpochs >= config.Patience {
 		// Response Action: Drop Learning Rate and reduce Gate Exploration (Temperature)
 		oldLR := *currentLR
-		*currentLR = math.Max(config.MinLR, (*currentLR * config.Factor))
+		*currentLR = float32(math.Max(float64(config.MinLR), float64(*currentLR*config.Factor)))
 		
 		// We decay the router temperature to encourage expert commitment on stagnation
 		oldTemp := *currentTemp
-		*currentTemp = math.Max(0.1, (*currentTemp * config.TempDecay))
+		*currentTemp = float32(math.Max(0.1, float64(*currentTemp*config.TempDecay)))
 		
 		s.BadEpochs = 0
 		s.CooldownTimer = config.Cooldown

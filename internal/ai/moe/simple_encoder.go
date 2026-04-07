@@ -50,8 +50,8 @@ func (e *SimpleRNNEncoder) Forward(inputs ...*Tensor) (*Tensor, error) {
 	// sequenceLength := input.Shape[1]
 
 	// Create initial hidden and cell states (zeros)
-	h := NewTensor([]int{batchSize, e.HiddenDim}, make([]float64, batchSize*e.HiddenDim), true)
-	c := NewTensor([]int{batchSize, e.HiddenDim}, make([]float64, batchSize*e.HiddenDim), true)
+	h := NewTensor([]int{batchSize, e.HiddenDim}, make([]float32, batchSize*e.HiddenDim), true)
+	c := NewTensor([]int{batchSize, e.HiddenDim}, make([]float32, batchSize*e.HiddenDim), true)
 	e.initialState = h
 	e.initialCell = c
 
@@ -72,7 +72,7 @@ func (e *SimpleRNNEncoder) Backward(grad *Tensor) error {
 
 	// Create zero gradient for cell state
 	batchSize := grad.Shape[0]
-	zeroGradCell := NewTensor([]int{batchSize, e.HiddenDim}, make([]float64, batchSize*e.HiddenDim), false)
+	zeroGradCell := NewTensor([]int{batchSize, e.HiddenDim}, make([]float32, batchSize*e.HiddenDim), false)
 
 	// Perform BPTT through LSTM
 	err := e.LSTM.Backward(grad, zeroGradCell)
@@ -125,6 +125,13 @@ func (e *SimpleRNNEncoder) GetMoELayers() []*MoELayer {
 	return nil
 }
 
-func (e *SimpleRNNEncoder) SetGateTemperature(temp float64) {
+func (e *SimpleRNNEncoder) SetGateTemperature(temp float32) {
 	// No-op: SimpleRNNEncoder does not use MoE layers
+}
+
+// ToGPU moves the parameters to the GPU.
+func (e *SimpleRNNEncoder) ToGPU() {
+	if e.LSTM != nil {
+		e.LSTM.ToGPU()
+	}
 }

@@ -16,8 +16,8 @@ type FeedForwardExpert struct {
 	inputTensor        *tensor.Tensor
 	activationOutput   *tensor.Tensor
 	intermediateOutput *tensor.Tensor
-	ActivationEMA      float64
-	Decay              float64
+	ActivationEMA      float32
+	Decay              float32
 }
 
 // NewFeedForwardExpert creates a new FeedForwardExpert.
@@ -88,7 +88,7 @@ func (e *FeedForwardExpert) Backward(grad *tensor.Tensor) error {
 	// Explicit check for "Dead ReLU" during backprop
 	if e.intermediateOutput != nil {
 		if e.intermediateOutput.Grad == nil {
-			e.intermediateOutput.Grad = tensor.NewTensor(e.intermediateOutput.Shape, make([]float64, len(e.intermediateOutput.Data)), false)
+			e.intermediateOutput.Grad = tensor.NewTensor(e.intermediateOutput.Shape, make([]float32, len(e.intermediateOutput.Data)), false)
 		}
 		for i := range e.intermediateOutput.Data {
 			if e.intermediateOutput.Data[i] <= 0 {
@@ -155,7 +155,7 @@ func (e *FeedForwardExpert) ClearState() {
 }
 
 // ClipWeights bounds the expert's learnable parameters.
-func (e *FeedForwardExpert) ClipWeights(maxVal float64) {
+func (e *FeedForwardExpert) ClipWeights(maxVal float32) {
 	if e.Layer1 != nil {
 		tensor.ClipWeights(e.Layer1.Weights.Data, maxVal)
 		if e.Layer1.Biases != nil {
@@ -171,7 +171,7 @@ func (e *FeedForwardExpert) ClipWeights(maxVal float64) {
 }
 
 // EvolutionaryReset performs a "Genetic Mutation" on the expert.
-func (e *FeedForwardExpert) EvolutionaryReset(winner Expert, jitterScale float64) {
+func (e *FeedForwardExpert) EvolutionaryReset(winner Expert, jitterScale float32) {
 	wExpert, ok := winner.(*FeedForwardExpert)
 	if !ok {
 		return // Cannot mutate from different expert type
@@ -203,7 +203,7 @@ func (e *FeedForwardExpert) EvolutionaryReset(winner Expert, jitterScale float64
 }
 
 // Shake performs an in-place noise injection to break loops.
-func (e *FeedForwardExpert) Shake(intensity float64) {
+func (e *FeedForwardExpert) Shake(intensity float32) {
 	// We use a local seed to avoid global mutex contention in rand
 	src := rand.NewSource(time.Now().UnixNano())
 	r := rand.New(src)
@@ -211,14 +211,14 @@ func (e *FeedForwardExpert) Shake(intensity float64) {
 	// Apply noise to Layer 1 Weights
 	weights1 := e.Layer1.Weights.Data
 	for i := range weights1 {
-		noise := (r.Float64() - 0.5) * intensity
+		noise := (r.Float32() - 0.5) * intensity
 		weights1[i] += noise
 	}
 
 	// Apply noise to Layer 2 Weights
 	weights2 := e.Layer2.Weights.Data
 	for i := range weights2 {
-		noise := (r.Float64() - 0.5) * intensity
+		noise := (r.Float32() - 0.5) * intensity
 		weights2[i] += noise
 	}
 }
@@ -232,10 +232,55 @@ func (e *FeedForwardExpert) IsStagnant() bool {
 
 // UpdateHealth updates the ActivationEMA based on usage.
 func (e *FeedForwardExpert) UpdateHealth(wasUsed bool) {
-	var current float64 = 0.0
+	var current float32 = 0.0
 	if wasUsed {
 		current = 1.0
 	}
 	// EMA = (Current * (1 - Decay)) + (Previous * Decay)
 	e.ActivationEMA = (current * (1.0 - e.Decay)) + (e.ActivationEMA * e.Decay)
+}
+
+// ToGPU moves the expert's parameters to the GPU.
+func (e *FeedForwardExpert) ToGPU() {
+	if e.Layer1 != nil {
+		e.Layer1.ToGPU()
+	}
+	if e.Layer2 != nil {
+		e.Layer2.ToGPU()
+	}
+}
+
+// Resize updates the output dimension of the expert.
+func (e *FeedForwardExpert) Resize(newOutputDim int) {
+	if e.Layer2 == nil {
+		return
+	}
+
+	oldWeightsData := e.Layer2.Weights.Data
+	oldBiasData := e.Layer2.Biases.Data
+	oldVocabSize := e.Layer2.Weights.Shape[1]
+	inputDim := e.Layer2.Weights.Shape[0]
+
+	copyLimit := oldVocabSize
+	if newOutputDim < copyLimit {
+		copyLimit = newOutputDim
+	}
+
+	newWeightsData := make([]float32, inputDim*newOutputDim)
+	for row := 0; row < inputDim; row++ {
+		oldStart := row * oldVocabSize
+		newStart := row * newOutputDim
+		copy(newWeightsData[newStart:newStart+copyLimit], oldWeightsData[oldStart:oldStart+copyLimit])
+	}
+
+	newBiasData := make([]float32, newOutputDim)
+	copy(newBiasData, oldBiasData[:min(len(oldBiasData), newOutputDim)])
+
+	// Replace layer 2 with new dimensions
+	newLayer, _ := nn.NewLinear(inputDim, newOutputDim)
+	newLayer.Weights.Data = newWeightsData
+	if newLayer.Biases != nil {
+		newLayer.Biases.Data = newBiasData
+	}
+	e.Layer2 = newLayer
 }

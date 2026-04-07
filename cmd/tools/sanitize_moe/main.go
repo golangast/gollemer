@@ -47,13 +47,13 @@ func main() {
 func analyzeLayer(m *moe.MoELayer) {
 	for i, expert := range m.Experts {
 		params := expert.Parameters()
-		var totalWeight float64
+		var totalWeight float32
 		var count int
 		hasNaN := false
 		
 		for _, p := range params {
 			for _, v := range p.Data {
-				if math.IsNaN(v) {
+				if math.IsNaN(float64(v)) {
 					hasNaN = true
 				}
 				totalWeight += v * v
@@ -61,7 +61,7 @@ func analyzeLayer(m *moe.MoELayer) {
 			}
 		}
 		
-		norm := math.Sqrt(totalWeight)
+		norm := math.Sqrt(float64(totalWeight))
 		status := "✅ OK"
 		if hasNaN {
 			status = "❌ NaN DETECTED"
@@ -72,12 +72,12 @@ func analyzeLayer(m *moe.MoELayer) {
 
 	// Analyze Router
 	rParams := m.GatingNetwork.Linear.Parameters()
-	var rWeight float64
+	var rWeight float32
 	for _, p := range rParams {
 		for _, v := range p.Data {
 			rWeight += v * v
 		}
 	}
-	fmt.Printf("  Router Norm: %.4f\n", math.Sqrt(rWeight))
+	fmt.Printf("  Router Norm: %.4f\n", math.Sqrt(float64(rWeight)))
 	fmt.Println()
 }

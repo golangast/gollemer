@@ -135,7 +135,7 @@ func main() {
 			batch := (*trainingData)[i:batchEnd]
 
 			// Prepare batch inputs and targets
-			var batchInputIDs [][]float64
+			var batchInputIDs [][]float32
 			var batchParentTargetIDs []int
 			var batchChildTargetIDs []int
 			var batchSentenceTargetIDs [][]int
@@ -143,9 +143,9 @@ func main() {
 
 			for _, example := range batch {
 				tokenIDs, _ := queryTokenizer.Encode(example.Sentence)
-				inputData := make([]float64, len(tokenIDs))
+				inputData := make([]float32, len(tokenIDs))
 				for i, id := range tokenIDs {
-					inputData[i] = float64(id)
+					inputData[i] = float32(id)
 				}
 				batchInputIDs = append(batchInputIDs, inputData)
 				batchParentTargetIDs = append(batchParentTargetIDs, parentIntentVocabulary.WordToToken[example.ParentIntent])
@@ -156,24 +156,24 @@ func main() {
 			}
 
 			// Pad sequences to maxSeqLength (64)
-			paddedInputData := make([]float64, currentBatchSize*model.BertConfig.MaxPositionEmbeddings)
+			paddedInputData := make([]float32, currentBatchSize*model.BertConfig.MaxPositionEmbeddings)
 			for rowIdx, seq := range batchInputIDs {
 				copy(paddedInputData[rowIdx*model.BertConfig.MaxPositionEmbeddings:], seq)
 				// Padding with 0s (assuming 0 is a valid padding token ID)
 				for k := len(seq); k < model.BertConfig.MaxPositionEmbeddings; k++ {
-					paddedInputData[rowIdx*model.BertConfig.MaxPositionEmbeddings+k] = float64(queryVocabulary.PaddingTokenID) // Use actual padding token ID
+					paddedInputData[rowIdx*model.BertConfig.MaxPositionEmbeddings+k] = float32(queryVocabulary.PaddingTokenID) // Use actual padding token ID
 				}
 			}
 
-			paddedSentenceData := make([]float64, currentBatchSize*model.BertConfig.MaxPositionEmbeddings)
+			paddedSentenceData := make([]float32, currentBatchSize*model.BertConfig.MaxPositionEmbeddings)
 			for rowIdx, seq := range batchSentenceTargetIDs {
-				floatSeq := make([]float64, len(seq))
+				floatSeq := make([]float32, len(seq))
 				for i, v := range seq {
-					floatSeq[i] = float64(v)
+					floatSeq[i] = float32(v)
 				}
 				copy(paddedSentenceData[rowIdx*model.BertConfig.MaxPositionEmbeddings:], floatSeq)
 				for k := len(seq); k < model.BertConfig.MaxPositionEmbeddings; k++ {
-					paddedSentenceData[rowIdx*model.BertConfig.MaxPositionEmbeddings+k] = float64(sentenceVocabulary.PaddingTokenID)
+					paddedSentenceData[rowIdx*model.BertConfig.MaxPositionEmbeddings+k] = float32(sentenceVocabulary.PaddingTokenID)
 				}
 			}
 

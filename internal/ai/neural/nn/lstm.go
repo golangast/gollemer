@@ -17,17 +17,17 @@ func init() {
 // applyDropout applies dropout to a tensor during training.
 // During training, randomly sets dropoutRate fraction of values to 0 and scales remaining by 1/(1-dropoutRate).
 // During inference (training=false), returns the tensor unchanged.
-func applyDropout(tensor *Tensor, dropoutRate float64, training bool) *Tensor {
+func applyDropout(tensor *Tensor, dropoutRate float32, training bool) *Tensor {
 	if !training || dropoutRate == 0.0 {
 		return tensor
 	}
-
+ 
 	// Create dropout mask
-	mask := NewTensor(tensor.Shape, make([]float64, len(tensor.Data)), false)
+	mask := NewTensor(tensor.Shape, make([]float32, len(tensor.Data)), false)
 	scale := 1.0 / (1.0 - dropoutRate)
 
 	for i := range mask.Data {
-		if rand.Float64() < dropoutRate {
+		if rand.Float32() < dropoutRate {
 			mask.Data[i] = 0.0
 		} else {
 			mask.Data[i] = scale
@@ -35,7 +35,7 @@ func applyDropout(tensor *Tensor, dropoutRate float64, training bool) *Tensor {
 	}
 
 	// Apply mask
-	output := NewTensor(tensor.Shape, make([]float64, len(tensor.Data)), tensor.RequiresGrad)
+	output := NewTensor(tensor.Shape, make([]float32, len(tensor.Data)), tensor.RequiresGrad)
 	MulVectors(tensor.Data, mask.Data, output.Data)
 
 	return output
@@ -98,8 +98,20 @@ func (c *LSTMCell) Parameters() []*Tensor {
 	return []*Tensor{c.Wf, c.Wi, c.Wc, c.Wo, c.Bf, c.Bi, c.Bc, c.Bo}
 }
 
+// ToGPU moves the layer's parameters to the GPU.
+func (c *LSTMCell) ToGPU() {
+	if c.Wf != nil { c.Wf.ToGPU() }
+	if c.Wi != nil { c.Wi.ToGPU() }
+	if c.Wc != nil { c.Wc.ToGPU() }
+	if c.Wo != nil { c.Wo.ToGPU() }
+	if c.Bf != nil { c.Bf.ToGPU() }
+	if c.Bi != nil { c.Bi.ToGPU() }
+	if c.Bc != nil { c.Bc.ToGPU() }
+	if c.Bo != nil { c.Bo.ToGPU() }
+}
+
 // SetForgetGateBias sets the bias for the forget gate.
-func (c *LSTMCell) SetForgetGateBias(val float64) {
+func (c *LSTMCell) SetForgetGateBias(val float32) {
 	if c.Bf != nil {
 		for i := range c.Bf.Data {
 			c.Bf.Data[i] = val
@@ -108,7 +120,7 @@ func (c *LSTMCell) SetForgetGateBias(val float64) {
 }
 
 // SetForgetGateBias sets the forget gate bias for all cells in the LSTM.
-func (l *LSTM) SetForgetGateBias(val float64) {
+func (l *LSTM) SetForgetGateBias(val float32) {
 	for _, layer := range l.Cells {
 		for _, cell := range layer {
 			cell.SetForgetGateBias(val)
@@ -417,56 +429,56 @@ func (c *LSTMCell) Backward(gradHt, gradCt *Tensor) error {
 	// 6. Accumulate gradients for weights and biases
 	if c.Wf.RequiresGrad {
 		if c.Wf.Grad == nil {
-			c.Wf.Grad = NewTensor(c.Wf.Shape, make([]float64, len(c.Wf.Data)), false)
+			c.Wf.Grad = NewTensor(c.Wf.Shape, make([]float32, len(c.Wf.Data)), false)
 		}
 		safeAccumulate(c.Wf.Grad.Data, gradWf.Data)
 	}
 
 	if c.Wi.RequiresGrad {
 		if c.Wi.Grad == nil {
-			c.Wi.Grad = NewTensor(c.Wi.Shape, make([]float64, len(c.Wi.Data)), false)
+			c.Wi.Grad = NewTensor(c.Wi.Shape, make([]float32, len(c.Wi.Data)), false)
 		}
 		safeAccumulate(c.Wi.Grad.Data, gradWi.Data)
 	}
 
 	if c.Wc.RequiresGrad {
 		if c.Wc.Grad == nil {
-			c.Wc.Grad = NewTensor(c.Wc.Shape, make([]float64, len(c.Wc.Data)), false)
+			c.Wc.Grad = NewTensor(c.Wc.Shape, make([]float32, len(c.Wc.Data)), false)
 		}
 		safeAccumulate(c.Wc.Grad.Data, gradWc.Data)
 	}
 
 	if c.Wo.RequiresGrad {
 		if c.Wo.Grad == nil {
-			c.Wo.Grad = NewTensor(c.Wo.Shape, make([]float64, len(c.Wo.Data)), false)
+			c.Wo.Grad = NewTensor(c.Wo.Shape, make([]float32, len(c.Wo.Data)), false)
 		}
 		safeAccumulate(c.Wo.Grad.Data, gradWo.Data)
 	}
 
 	if c.Bf.RequiresGrad {
 		if c.Bf.Grad == nil {
-			c.Bf.Grad = NewTensor(c.Bf.Shape, make([]float64, len(c.Bf.Data)), false)
+			c.Bf.Grad = NewTensor(c.Bf.Shape, make([]float32, len(c.Bf.Data)), false)
 		}
 		safeAccumulate(c.Bf.Grad.Data, gradBf.Data)
 	}
 
 	if c.Bi.RequiresGrad {
 		if c.Bi.Grad == nil {
-			c.Bi.Grad = NewTensor(c.Bi.Shape, make([]float64, len(c.Bi.Data)), false)
+			c.Bi.Grad = NewTensor(c.Bi.Shape, make([]float32, len(c.Bi.Data)), false)
 		}
 		safeAccumulate(c.Bi.Grad.Data, gradBi.Data)
 	}
 
 	if c.Bc.RequiresGrad {
 		if c.Bc.Grad == nil {
-			c.Bc.Grad = NewTensor(c.Bc.Shape, make([]float64, len(c.Bc.Data)), false)
+			c.Bc.Grad = NewTensor(c.Bc.Shape, make([]float32, len(c.Bc.Data)), false)
 		}
 		safeAccumulate(c.Bc.Grad.Data, gradBc.Data)
 	}
 
 	if c.Bo.RequiresGrad {
 		if c.Bo.Grad == nil {
-			c.Bo.Grad = NewTensor(c.Bo.Shape, make([]float64, len(c.Bo.Data)), false)
+			c.Bo.Grad = NewTensor(c.Bo.Shape, make([]float32, len(c.Bo.Data)), false)
 		}
 		safeAccumulate(c.Bo.Grad.Data, gradBo.Data)
 	}
@@ -531,7 +543,7 @@ func (c *LSTMCell) Backward(gradHt, gradCt *Tensor) error {
 	// 9. Accumulate gradients for inputs
 	if c.InputTensor.RequiresGrad {
 		if c.InputTensor.Grad == nil {
-			c.InputTensor.Grad = NewTensor(c.InputTensor.Shape, make([]float64, len(c.InputTensor.Data)), false)
+			c.InputTensor.Grad = NewTensor(c.InputTensor.Shape, make([]float32, len(c.InputTensor.Data)), false)
 		}
 		c.InputTensor.Grad, err = c.InputTensor.Grad.Add(gradInput)
 		if err != nil {
@@ -540,7 +552,7 @@ func (c *LSTMCell) Backward(gradHt, gradCt *Tensor) error {
 	}
 	if c.PrevHidden.RequiresGrad {
 		if c.PrevHidden.Grad == nil {
-			c.PrevHidden.Grad = NewTensor(c.PrevHidden.Shape, make([]float64, len(c.PrevHidden.Data)), false)
+			c.PrevHidden.Grad = NewTensor(c.PrevHidden.Shape, make([]float32, len(c.PrevHidden.Data)), false)
 		}
 		c.PrevHidden.Grad, err = c.PrevHidden.Grad.Add(gradPrevHidden)
 		if err != nil {
@@ -549,7 +561,7 @@ func (c *LSTMCell) Backward(gradHt, gradCt *Tensor) error {
 	}
 	if c.PrevCell.RequiresGrad {
 		if c.PrevCell.Grad == nil {
-			c.PrevCell.Grad = NewTensor(c.PrevCell.Shape, make([]float64, len(c.PrevCell.Data)), false)
+			c.PrevCell.Grad = NewTensor(c.PrevCell.Shape, make([]float32, len(c.PrevCell.Data)), false)
 		}
 		c.PrevCell.Grad, err = c.PrevCell.Grad.Add(gradPrevCell)
 		if err != nil {
@@ -567,7 +579,7 @@ type LSTM struct {
 	NumLayers     int
 	Cells         [][]*LSTMCell
 	timeStepCells [][]*LSTMCell // Stores cells for each timestep for BPTT
-	DropoutRate   float64       // Dropout rate between layers (0.0 = no dropout)
+	DropoutRate   float32       // Dropout rate between layers (0.0 = no dropout)
 	Training      bool          // Whether model is in training mode (dropout active)
 }
 
@@ -605,6 +617,15 @@ func (l *LSTM) Parameters() []*Tensor {
 	return params
 }
 
+// ToGPU moves all cells' parameters to the GPU.
+func (l *LSTM) ToGPU() {
+	for _, layer := range l.Cells {
+		for _, cell := range layer {
+			cell.ToGPU()
+		}
+	}
+}
+
 // Forward performs the forward pass of the LSTM.
 func (l *LSTM) Forward(inputs ...*Tensor) (*Tensor, *Tensor, error) {
 	if len(inputs) != 3 {
@@ -628,8 +649,8 @@ func (l *LSTM) Forward(inputs ...*Tensor) (*Tensor, *Tensor, error) {
 		for i := 0; i < l.NumLayers; i++ {
 			h, c := initialHidden, initialCell
 			if i > 0 {
-				h = NewTensor([]int{batchSize, l.HiddenSize}, make([]float64, batchSize*l.HiddenSize), false)
-				c = NewTensor([]int{batchSize, l.HiddenSize}, make([]float64, batchSize*l.HiddenSize), false)
+				h = NewTensor([]int{batchSize, l.HiddenSize}, make([]float32, batchSize*l.HiddenSize), false)
+				c = NewTensor([]int{batchSize, l.HiddenSize}, make([]float32, batchSize*l.HiddenSize), false)
 			}
 
 			// Pre-projection optimization:
@@ -718,7 +739,7 @@ func (l *LSTM) Forward(inputs ...*Tensor) (*Tensor, *Tensor, error) {
 			lastCellState = c
 
 			// Manual stack along dimension 1 to create [batchSize, sequenceLength, l.HiddenSize]
-			stackedOutputData := make([]float64, batchSize*sequenceLength*l.HiddenSize)
+			stackedOutputData := make([]float32, batchSize*sequenceLength*l.HiddenSize)
 			for t, ht := range outputs {
 				for b := 0; b < batchSize; b++ {
 					copy(stackedOutputData[(b*sequenceLength+t)*l.HiddenSize:(b*sequenceLength+t+1)*l.HiddenSize], ht.Data[b*l.HiddenSize:(b+1)*l.HiddenSize])
@@ -804,13 +825,13 @@ func (l *LSTM) Backward(gradNextHidden, gradNextCell *Tensor) error {
 		layerInputTensor := l.timeStepCells[i][0].InputTensor.Creator.(*Tensor)
 
 		if layerInputTensor.Grad == nil {
-			layerInputTensor.Grad = NewTensor(layerInputTensor.Shape, make([]float64, len(layerInputTensor.Data)), false)
+			layerInputTensor.Grad = NewTensor(layerInputTensor.Shape, make([]float32, len(layerInputTensor.Data)), false)
 		}
 
 		// Initialize gradients from future (t+1) as 2D tensors [batchSize, hiddenSize]
 		batchSize := gradH.Shape[0]
-		gradHFromFuture := NewTensor([]int{batchSize, l.HiddenSize}, make([]float64, batchSize*l.HiddenSize), false)
-		gradCFromFuture := NewTensor([]int{batchSize, l.HiddenSize}, make([]float64, batchSize*l.HiddenSize), false)
+		gradHFromFuture := NewTensor([]int{batchSize, l.HiddenSize}, make([]float32, batchSize*l.HiddenSize), false)
+		gradCFromFuture := NewTensor([]int{batchSize, l.HiddenSize}, make([]float32, batchSize*l.HiddenSize), false)
 
 		for t := sequenceLength - 1; t >= 0; t-- {
 			cell := l.timeStepCells[i][t]
@@ -827,7 +848,7 @@ func (l *LSTM) Backward(gradNextHidden, gradNextCell *Tensor) error {
 				currentStepGradH = gradH
 			} else {
 				// No incoming gradient for this middle step (e.g. if only last step used)
-				currentStepGradH = NewTensor(gradHFromFuture.Shape, make([]float64, len(gradHFromFuture.Data)), false)
+				currentStepGradH = NewTensor(gradHFromFuture.Shape, make([]float32, len(gradHFromFuture.Data)), false)
 			}
 
 			totalGradH, err := currentStepGradH.Add(gradHFromFuture)
@@ -872,7 +893,7 @@ func (l *LSTM) Backward(gradNextHidden, gradNextCell *Tensor) error {
 		// The gradient for the input of this layer becomes the gradH for the layer below.
 		gradH = layerInputTensor.Grad
 		// There is no cell state gradient between layers.
-		gradC = NewTensor(gradC.Shape, make([]float64, len(gradC.Data)), false)
+		gradC = NewTensor(gradC.Shape, make([]float32, len(gradC.Data)), false)
 	}
 	return nil
 }

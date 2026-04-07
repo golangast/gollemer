@@ -40,9 +40,9 @@ type PositionalEmbedding struct {
 func NewEmbedding(vocabSize, dimModel int) *Embedding {
 	// Initialize weights with appropriate shape [vocabSize, dimModel]
 	weightsShape := []int{vocabSize, dimModel}
-	weightsData := make([]float64, vocabSize*dimModel)
+	weightsData := make([]float32, vocabSize*dimModel)
 	for i := range weightsData {
-		weightsData[i] = (rand.Float64()*2 - 1) * 0.1 // Random between -0.1 and 0.1
+		weightsData[i] = (rand.Float32()*2 - 1) * 0.1 // Random between -0.1 and 0.1
 	}
 	weights := NewTensor(weightsShape, weightsData, true)
 	weights.RequiresGrad = true // Embedding weights require gradients
@@ -55,7 +55,7 @@ func NewEmbedding(vocabSize, dimModel int) *Embedding {
 }
 
 // LoadPretrainedWeights loads pretrained embedding weights.
-func (e *Embedding) LoadPretrainedWeights(weights map[int][]float64) {
+func (e *Embedding) LoadPretrainedWeights(weights map[int][]float32) {
 	for tokenID, vector := range weights {
 		if tokenID >= e.VocabSize {
 			continue // Or handle error
@@ -77,6 +77,13 @@ func min(a, b int) int {
 // Parameters returns all learnable parameters of the layer.
 func (e *Embedding) Parameters() []*Tensor {
 	return []*Tensor{e.Weight}
+}
+
+// ToGPU moves the layer's parameters to the GPU.
+func (e *Embedding) ToGPU() {
+	if e.Weight != nil {
+		e.Weight.ToGPU()
+	}
 }
 
 // ClearState clears the intermediate states to free memory.
@@ -121,7 +128,7 @@ func (e *Embedding) Backward(grad *Tensor) error {
 
 	// Ensure gradient for weights is initialized
 	if e.Weight.Grad == nil {
-		e.Weight.Grad = NewTensor(e.Weight.Shape, make([]float64, len(e.Weight.Data)), false)
+		e.Weight.Grad = NewTensor(e.Weight.Shape, make([]float32, len(e.Weight.Data)), false)
 		e.Weight.Grad.RequiresGrad = false
 	}
 
@@ -171,7 +178,7 @@ func (pe *PositionalEmbedding) Backward(grad *Tensor) error {
 
 	if pe.inputTensor != nil && pe.inputTensor.RequiresGrad {
 		if pe.inputTensor.Grad == nil {
-			pe.inputTensor.Grad = NewTensor(pe.inputTensor.Shape, make([]float64, len(pe.inputTensor.Data)), false)
+			pe.inputTensor.Grad = NewTensor(pe.inputTensor.Shape, make([]float32, len(pe.inputTensor.Data)), false)
 		}
 		for i := range grad.Data {
 			pe.inputTensor.Grad.Data[i] += grad.Data[i]
@@ -189,6 +196,13 @@ func (pe *PositionalEmbedding) Parameters() []*Tensor {
 		return []*Tensor{pe.PositionEmbeddings}
 	}
 	return []*Tensor{}
+}
+
+// ToGPU moves the layer's parameters to the GPU.
+func (pe *PositionalEmbedding) ToGPU() {
+	if pe.PositionEmbeddings != nil {
+		pe.PositionEmbeddings.ToGPU()
+	}
 }
 
 // ClearState clears the intermediate states to free memory.
@@ -232,7 +246,7 @@ func (e *Embedding) Forward(inputIDs *Tensor) (*Tensor, error) {
 	seqLength := inputIDs.Shape[1]
 
 	outputShape := []int{batchSize, seqLength, e.DimModel}
-	outputData := make([]float64, batchSize*seqLength*e.DimModel)
+	outputData := make([]float32, batchSize*seqLength*e.DimModel)
 
 	// Iterate over the flattened input IDs for efficiency and clarity.
 	for i, idAsFloat := range inputIDs.Data {
@@ -261,14 +275,14 @@ func (e *Embedding) Forward(inputIDs *Tensor) (*Tensor, error) {
 // It initializes the positional embeddings using a sinusoidal pattern.
 func NewPositionalEmbedding(maxSequenceLength, dimModel int) *PositionalEmbedding {
 	// Placeholder: Create a dummy position embeddings tensor
-	positionEmbeddingsData := make([]float64, maxSequenceLength*dimModel)
+	positionEmbeddingsData := make([]float32, maxSequenceLength*dimModel)
 	// Initialize with sinusoidal positional embeddings
 	for pos := range maxSequenceLength {
 		for i := range dimModel {
 			if i%2 == 0 {
-				positionEmbeddingsData[pos*dimModel+i] = math.Sin(float64(pos) / math.Pow(tenThousand, float64(i)/float64(dimModel)))
+				positionEmbeddingsData[pos*dimModel+i] = float32(math.Sin(float64(pos) / math.Pow(tenThousand, float64(i)/float64(dimModel))))
 			} else {
-				positionEmbeddingsData[pos*dimModel+i] = math.Cos(float64(pos) / math.Pow(tenThousand, float64(i-1)/float64(dimModel)))
+				positionEmbeddingsData[pos*dimModel+i] = float32(math.Cos(float64(pos) / math.Pow(tenThousand, float64(i-1)/float64(dimModel))))
 			}
 		}
 	}
@@ -300,7 +314,7 @@ func (pe *PositionalEmbedding) Forward(inputTensor *Tensor) (*Tensor, error) {
 	seqLength := inputTensor.Shape[1]
 	dimModel := inputTensor.Shape[2]
 
-	outputData := make([]float64, len(inputTensor.Data))
+	outputData := make([]float32, len(inputTensor.Data))
 	copy(outputData, inputTensor.Data) // Start with the input tensor data
 
 	for b := range batchSize {

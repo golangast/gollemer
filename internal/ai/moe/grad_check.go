@@ -9,8 +9,8 @@ import (
 // VerifyGradients performs numerical gradient checking on a model.
 // It compares the analytical gradients from Backward() with numerical approximations.
 func VerifyGradients(m *IntentMoE, inputIDs, targetIDs *tensor.Tensor) {
-	epsilon := 1e-4
-	tolerance := 1e-2
+	var epsilon float32 = 1e-4
+	var tolerance float32 = 1e-2
 
 	fmt.Println("🧪 --- Numerical Gradient Checker ---")
 
@@ -55,9 +55,9 @@ func VerifyGradients(m *IntentMoE, inputIDs, targetIDs *tensor.Tensor) {
 	// Note: For this to work perfectly, we must use the same loss function.
 	// Here we use Sum(Output) as a simple 'loss' for verification of the graph.
 	
-	fetchLoss := func() float64 {
+	fetchLoss := func() float32 {
 		l, _, _ := m.Forward(0.0, inputIDs, targetIDs)
-		sum := 0.0
+		var sum float32 = 0.0
 		for _, v := range l[stepIdx].Data {
 			sum += v
 		}
@@ -73,7 +73,7 @@ func VerifyGradients(m *IntentMoE, inputIDs, targetIDs *tensor.Tensor) {
 	numGrad := (lossPlus - lossMinus) / (2 * epsilon)
 
 	// 3. Compare
-	diff := math.Abs(simdGrad - numGrad)
+	diff := float32(math.Abs(float64(simdGrad - numGrad)))
 	if diff > tolerance {
 		fmt.Printf("❌ GRADIENT MISMATCH: SIMD: %f, Numerical: %f, Diff: %f\n", simdGrad, numGrad, diff)
 	} else {

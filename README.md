@@ -21,10 +21,26 @@ go run cmd/gollemer/main.go -llm
 ```
 
 ### 3. Training the AI
-To train the Mixture-of-Experts (MoE) classifier or the conversational chat model, use the provided training script:
+To train the Mixture-of-Experts (MoE) classifier or the conversational chat model:
 ```bash
+# On Linux/WSL
 bash scripts/train.sh
 ```
+
+### 4. GPU Acceleration & Windows Execution
+Gollemer now supports **native GPU acceleration** via WebGPU (Paragon V3). 
+
+On Windows, use the provided helper script to automatically configure the CGO environment and the local compiler:
+```powershell
+# Run the chat training on GPU
+.\run.ps1 -train-chat -gpu
+
+# Run with custom arguments
+.\run.ps1 -epochs 100 -lr 0.001 -gpu
+```
+
+> [!IMPORTANT]
+> **Windows Requirements**: GPU support requires `CGO_ENABLED=1` and a GCC compiler (provided in `.\tools\mingw64\`). Always use `run.ps1` to ensure the environment is correctly initialized.
 
 ---
 

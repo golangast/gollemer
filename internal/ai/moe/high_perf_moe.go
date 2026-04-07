@@ -6,11 +6,9 @@ import (
 	"math"
 	"math/rand"
 	"os"
-	"reflect"
 	"sort"
 	"sync"
 	"sync/atomic"
-	"syscall"
 	"unsafe"
 )
 
@@ -37,7 +35,7 @@ func SparseDotProduct(a, b []float32) float32 {
 
 	var sum0, sum1, sum2, sum3 float32
 	n := len(a)
-	
+
 	i := 0
 	for ; i <= n-4; i += 4 {
 		sum0 += a[i] * b[i]
@@ -61,7 +59,7 @@ func AtomicUpdate(addr *float32, delta float32) {
 		newVal := oldVal - delta
 		oldBits := math.Float32bits(oldVal)
 		newBits := math.Float32bits(newVal)
-		
+
 		if atomic.CompareAndSwapUint32((*uint32)(unsafe.Pointer(addr)), oldBits, newBits) {
 			break
 		}
@@ -109,9 +107,9 @@ func (e *SparseExpert) UpdateWeights(input []float32, errors []float32, lr float
 		offset := i * inputSize
 		for j := 0; j < inputSize; j++ {
 			grad := input[j] * err
-			AtomicUpdate(&e.Weights[offset+j], grad * lr)
+			AtomicUpdate(&e.Weights[offset+j], grad*lr)
 		}
-		AtomicUpdate(&e.Bias[i], err * lr)
+		AtomicUpdate(&e.Bias[i], err*lr)
 	}
 }
 
@@ -171,11 +169,11 @@ func (g *SparseGater) Forward(input []float32) ([]int, []float32) {
 		// 1. Prediction + Noise Scaling
 		cleanLogit := SparseDotProduct(input, g.Weights[i*inputDim:(i+1)*inputDim])
 		noiseLogit := SparseDotProduct(input, g.NoiseWeights[i*inputDim:(i+1)*inputDim])
-		
+
 		// Softplus ensures positive noise variance
 		noiseScale := float32(math.Log(1.0 + math.Exp(float64(noiseLogit))))
 		epsilon := float32(rand.NormFloat64())
-		
+
 		logits[i] = cleanLogit + epsilon*noiseScale
 	}
 
@@ -206,7 +204,7 @@ func (g *SparseGater) softmax(logits []float32) []float32 {
 			maxVal = v
 		}
 	}
-	
+
 	sum := float32(0)
 	scores := make([]float32, len(logits))
 	for i, v := range logits {
@@ -242,7 +240,7 @@ type SparseModel struct {
 // Predict performs one-shot inference using parallel experts.
 func (m *SparseModel) Predict(input []float32) ([]float32, []int) {
 	indices, scores := m.Gater.Forward(input)
-	
+
 	var wg sync.WaitGroup
 	results := make([][]float32, len(indices))
 
@@ -278,7 +276,7 @@ func (m *SparseModel) SaveCheckpoint(epoch int, loss float32) error {
 
 	binary.Write(f, binary.LittleEndian, int32(epoch))
 	binary.Write(f, binary.LittleEndian, loss)
-	
+
 	// Collect all weights for saving
 	// (Simplified for now: write Gater weights then all expert weights)
 	binary.Write(f, binary.LittleEndian, m.Gater.Weights)
@@ -337,33 +335,5 @@ func (m *SparseModel) Trace(sentence string, tokenizer interface {
 		color := colors[expertID%len(colors)]
 		fmt.Printf("%s%s[E%d]%s ", color, token, expertID, reset)
 	}
-	fmt.Println("\n")
-}
-
-// MmapWeights maps a weight file directly into RAM to avoid copies.
-func MmapWeights(filename string) ([]float32, *os.File, error) {
-	f, err := os.OpenFile(filename, os.O_RDONLY, 0)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	info, err := f.Stat()
-	if err != nil {
-		f.Close()
-		return nil, nil, err
-	}
-
-	size := info.Size()
-	data, err := syscall.Mmap(int(f.Fd()), 0, int(size), syscall.PROT_READ, syscall.MAP_SHARED)
-	if err != nil {
-		f.Close()
-		return nil, nil, err
-	}
-
-	// Use unsafe to convert []byte to []float32
-	header := *(*reflect.SliceHeader)(unsafe.Pointer(&data))
-	header.Len /= 4
-	header.Cap /= 4
-
-	return *(*[]float32)(unsafe.Pointer(&header)), f, nil
+	fmt.Println()
 }

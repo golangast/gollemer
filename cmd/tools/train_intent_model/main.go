@@ -129,7 +129,16 @@ func main() {
 
 	// 1. Embedding
 	embedding := nn.NewEmbedding(queryVocab.Size(), embeddingDim)
-	embedding.LoadPretrainedWeights(word2vecModel.WordVectors)
+	// Convert Word2Vec vectors to float32
+	f32Vectors := make(map[int][]float32)
+	for id, vec := range word2vecModel.WordVectors {
+		f32Vec := make([]float32, len(vec))
+		for i, v := range vec {
+			f32Vec[i] = float32(v)
+		}
+		f32Vectors[id] = f32Vec
+	}
+	embedding.LoadPretrainedWeights(f32Vectors)
 
 	// 2. Simple RNN Encoder (replacing MoE in this example, adjust if actual MoE is desired)
 	encoder, err := moe.NewSimpleRNNEncoder(embeddingDim, hiddenSize, numLayers)
@@ -138,7 +147,7 @@ func main() {
 	}
 
 	// 3. RNN Decoder with increased capacity and dropout (numExperts=1 for legacy decoder)
-	decoder, err := moe.NewRNNDecoder(embeddingDim, sentenceVocab.Size(), hiddenSize, maxAttentionHeads, numLayers, dropoutRate, 1)
+	decoder, err := moe.NewRNNDecoder(embeddingDim, sentenceVocab.Size(), hiddenSize, maxAttentionHeads, numLayers, float32(dropoutRate), 1)
 	if err != nil {
 		log.Fatalf("Failed to create decoder: %v", err)
 	}
@@ -174,12 +183,12 @@ func main() {
 }
 
 // TrainIntentModel trains the MoEClassificationModel for intent classification.
-func TrainIntentModel(model *moe.IntentMoE, data *IntentTrainingData, queryVocab, parentIntentVocab, childIntentVocab, sentenceVocab *mainvocab.Vocabulary, epochs int, learningRate float64, batchSize int, maxSeqLength int) {
+func TrainIntentModel(model *moe.IntentMoE, data *IntentTrainingData, queryVocab, parentIntentVocab, childIntentVocab, sentenceVocab *mainvocab.Vocabulary, epochs int, learningRate float32, batchSize int, maxSeqLength int) {
 	optimizer := nn.NewOptimizer(model.Parameters(), learningRate, 5.0)
 
 	for epoch := range epochs {
 		log.Printf("Epoch %d/%d", epoch+1, epochs)
-		totalLoss := 0.0
+		var totalLoss float32 = 0.0
 		numBatches := 0
 
 		for i := 0; i < len(*data); i += batchSize {
@@ -195,13 +204,13 @@ func TrainIntentModel(model *moe.IntentMoE, data *IntentTrainingData, queryVocab
 			numBatches++
 		}
 		if numBatches > 0 {
-			log.Printf("Epoch %d, Average Loss: %f", epoch+1, totalLoss/float64(numBatches))
+			log.Printf("Epoch %d, Average Loss: %f", epoch+1, totalLoss/float32(numBatches))
 		}
 	}
 }
 
 // trainIntentModelBatch performs a single training step on a batch of intent data.
-func trainIntentModelBatch(model *moe.IntentMoE, optimizer nn.Optimizer, batch IntentTrainingData, queryVocab, parentIntentVocab, childIntentVocab, sentenceVocab *mainvocab.Vocabulary, maxSeqLength int) (float64, error) {
+func trainIntentModelBatch(model *moe.IntentMoE, optimizer nn.Optimizer, batch IntentTrainingData, queryVocab, parentIntentVocab, childIntentVocab, sentenceVocab *mainvocab.Vocabulary, maxSeqLength int) (float32, error) {
 	optimizer.ZeroGrad()
 
 	batchSize := len(batch)
@@ -258,15 +267,15 @@ func trainIntentModelBatch(model *moe.IntentMoE, optimizer nn.Optimizer, batch I
 		childIntentIDs[i] = childIntentVocab.GetTokenID(example.ChildIntent)
 	}
 
-	inputTensor := tensor.NewTensor([]int{batchSize, maxSeqLength}, convertIntsToFloat64s(inputIDsBatch), false)
-	targetSentenceTensor := tensor.NewTensor([]int{batchSize, maxSeqLength}, convertIntsToFloat64s(targetSentenceIDsBatch), false)
+	inputTensor := tensor.NewTensor([]int{batchSize, maxSeqLength}, convertIntsToFloat32s(inputIDsBatch), false)
+	targetSentenceTensor := tensor.NewTensor([]int{batchSize, maxSeqLength}, convertIntsToFloat32s(targetSentenceIDsBatch), false)
 
 	sentenceLogits, _, err := model.Forward(0.0, inputTensor, targetSentenceTensor)
 	if err != nil {
 		return 0, fmt.Errorf("model forward pass failed: %w", err)
 	}
 
-	sentenceLoss := 0.0
+	var sentenceLoss float32 = 0.0
 	sentenceGrads := make([]*tensor.Tensor, maxSeqLength-1)
 
 	for t := 0; t < maxSeqLength-1; t++ {
@@ -291,15 +300,15 @@ func trainIntentModelBatch(model *moe.IntentMoE, optimizer nn.Optimizer, batch I
 	return totalLoss, nil
 }
 
-func convertIntsToFloat64s(input []int) []float64 {
-	output := make([]float64, len(input))
+func convertIntsToFloat32s(input []int) []float32 {
+	output := make([]float32, len(input))
 	for i, v := range input {
-		output[i] = float64(v)
+		output[i] = float32(v)
 	}
 	return output
 }
 
-func SequenceCrossEntropyLoss(predictions *tensor.Tensor, targets []int, paddingID int) (float64, *tensor.Tensor) {
+func SequenceCrossEntropyLoss(predictions *tensor.Tensor, targets []int, paddingID int) (float32, *tensor.Tensor) {
 	batchSize := predictions.Shape[0]
 	seqLen := predictions.Shape[1]
 	vocabSize := predictions.Shape[2]
@@ -310,10 +319,10 @@ func SequenceCrossEntropyLoss(predictions *tensor.Tensor, targets []int, padding
 
 	targetsFlat := targets
 
-	totalLoss := 0.0
+	var totalLoss float32 = 0.0
 	numTokens := 0
 
-	grad := make([]float64, len(logSoftmax.Data))
+	grad := make([]float32, len(logSoftmax.Data))
 
 	for i := 0; i < batchSize*seqLen; i++ {
 		targetID := targetsFlat[i]
@@ -340,7 +349,7 @@ func SequenceCrossEntropyLoss(predictions *tensor.Tensor, targets []int, padding
 		return 0.0, nil
 	}
 
-	avgLoss := totalLoss / float64(numTokens)
+	avgLoss := totalLoss / float32(numTokens)
 	gradTensor := tensor.NewTensor(logSoftmax.Shape, grad, true)
 
 	return avgLoss, gradTensor

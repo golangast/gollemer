@@ -19,6 +19,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/golangast/gollemer/internal/ai/llm"
 	"github.com/golangast/gollemer/internal/ai/moe"
 	"github.com/golangast/gollemer/internal/ai/neural/nn"
 	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
@@ -27,6 +28,7 @@ import (
 	. "github.com/golangast/gollemer/internal/ai/neural/tensor"
 	"github.com/golangast/gollemer/internal/ai/neural/tokenizer"
 	"github.com/golangast/gollemer/internal/ai/tagger/tag"
+	"github.com/golangast/gollemer/internal/ai/training/chat"
 )
 
 func init() {
@@ -34,6 +36,9 @@ func init() {
 }
 
 var autoHealFlag *bool
+
+// trainingStopped is closed by the signal handler so the training loop can exit cleanly.
+var trainingStopped = make(chan struct{})
 
 // IntentTrainingExample represents a single training example with a query and its intents.
 type IntentTrainingExample struct {
@@ -47,8 +52,8 @@ type IntentTrainingData []IntentTrainingExample
 
 // TokenizedTrainingExample represents a pre-tokenized training example.
 type TokenizedTrainingExample struct {
-	QueryIDs          []float64
-	SemanticOutputIDs []float64
+	QueryIDs          []float32
+	SemanticOutputIDs []float32
 }
 
 // TokenizedTrainingExample represents a pre-tokenized training example.
@@ -108,8 +113,8 @@ func TokenizeTrainingData(data *IntentTrainingData, queryTokenizer, semanticOutp
 				}
 
 				tokenizedData[i] = TokenizedTrainingExample{
-					QueryIDs:          convertIntsToFloat64s(qIDs),
-					SemanticOutputIDs: convertIntsToFloat64s(sIDs),
+					QueryIDs:          convertIntsToFloat32s(qIDs),
+					SemanticOutputIDs: convertIntsToFloat32s(sIDs),
 				}
 			}
 		}(start, end)
@@ -236,7 +241,7 @@ func TokenizeAndConvertToIDs(text string, tokenizer *tokenizer.Tokenizer, vocabu
 }
 
 // TrainIntentMoEModel trains the MoEClassificationModel.
-func TrainIntentMoEModel(model *moe.IntentMoE, data []TokenizedTrainingExample, epochs int, learningRate float64, batchSize int, maxSequenceLength int, semanticOutputVocab *mainvocab.Vocabulary, checkpointPath string, checkpointInterval int) error {
+func TrainIntentMoEModel(model *moe.IntentMoE, data []TokenizedTrainingExample, epochs int, learningRate float32, batchSize int, maxSequenceLength int, semanticOutputVocab *mainvocab.Vocabulary, checkpointPath string, checkpointInterval int, useGPU bool) error {
 	cpuProfileFile, err := os.Create("logs/cpu.prof")
 	if err != nil {
 		log.Fatal("could not create CPU profile: ", err)
@@ -257,15 +262,12 @@ func TrainIntentMoEModel(model *moe.IntentMoE, data []TokenizedTrainingExample, 
 	trainer := &moe.Trainer{CollapseCount: 0}
 
 	// Learning rate scheduling parameters
-	baseLR := learningRate
-	minLR := learningRate / 10.0 // 0.00001
 	totalBatches := (len(data) + batchSize - 1) / batchSize
 	totalSteps := epochs * totalBatches
-	warmupSteps := totalBatches * 2 // Warmup for first 2 epochs
 	currentStep := 0
 
 	bestPerplexity := 0.0
-	
+
 	startTime := time.Now()
 	var totalTokens int64
 	var totalDuration time.Duration
@@ -278,19 +280,35 @@ func TrainIntentMoEModel(model *moe.IntentMoE, data []TokenizedTrainingExample, 
 	}
 
 	for epoch := range epochs {
+		// Check for interrupt
+		select {
+		case <-trainingStopped:
+			log.Println("[!] Training interrupted. Stopping after current epoch.")
+			return nil
+		default:
+		}
+
 		epochStartTime := time.Now()
 		// Calculate scheduled sampling probability for logging
 		scheduledSamplingProb := math.Min(0.5, float64(epoch+1)/float64(epochs*8))
 		log.Printf("Epoch %d/%d (Scheduled Sampling: %.1f%%) | Profile: %s", epoch+1, epochs, scheduledSamplingProb*100, profile.Name)
-		totalLoss := 0.0
+		totalLoss := float64(0.0)
 		numBatches := 0
-		
+
 		// Per-epoch expert counts for health check
 		l0Counts := make([]int, 0)
 		l1Counts := make([]int, 0)
 
 		// Create batches for training
 		for i := 0; i < len(data); i += batchSize {
+			// Check for interrupt between batches
+			select {
+			case <-trainingStopped:
+				log.Println("[!] Interrupt detected mid-epoch. Breaking out to save.")
+				return nil
+			default:
+			}
+
 			batchStartTime := time.Now()
 			end := min(i+batchSize, len(data))
 			batch := data[i:end]
@@ -302,14 +320,14 @@ func TrainIntentMoEModel(model *moe.IntentMoE, data []TokenizedTrainingExample, 
 			}
 			currentStep++
 
-			loss, err := trainIntentMoEBatch(model, optimizer, batch, maxSequenceLength, epoch, epochs, semanticOutputVocab, numBatches)
+			loss, err := trainIntentMoEBatch(model, optimizer, batch, maxSequenceLength, epoch, epochs, semanticOutputVocab, numBatches, useGPU)
 			if err != nil {
 				log.Printf("Error training batch: %v", err)
-				continue 
+				continue
 			}
-			totalLoss += loss
+			totalLoss += float64(loss)
 			numBatches++
-			
+
 			// Track tokens
 			for _, ex := range batch {
 				totalTokens += int64(len(ex.QueryIDs) + len(ex.SemanticOutputIDs))
@@ -324,7 +342,7 @@ func TrainIntentMoEModel(model *moe.IntentMoE, data []TokenizedTrainingExample, 
 			}
 
 			// Log gradient norms and handle fine-grained utilization tracking
-			if numBatches%5 == 0 {
+			if true {
 				gradNorm := computeGradientNorm(model.Parameters())
 				percent := float64(numBatches) / float64(totalBatches) * 100
 				log.Printf("Batch %d/%d (%.1f%%): Loss=%.2f, GradNorm=%.4f, LR=%.6f, Time=%v", numBatches, totalBatches, percent, loss, gradNorm, currentLR, time.Since(batchStartTime))
@@ -332,15 +350,23 @@ func TrainIntentMoEModel(model *moe.IntentMoE, data []TokenizedTrainingExample, 
 				for idx, layer := range moe.ActiveLayers {
 					label := fmt.Sprintf("MoE Layer %d (Batch %d)", idx, numBatches)
 					layer.ValidateHealth(label)
-					
+
 					// Update counts for epoch-level stats
 					stats := layer.UtilizationStats()
 					if idx == 0 {
-						if len(l0Counts) == 0 { l0Counts = make([]int, len(stats)) }
-						for k, v := range stats { l0Counts[k] = v }
+						if len(l0Counts) == 0 {
+							l0Counts = make([]int, len(stats))
+						}
+						for k, v := range stats {
+							l0Counts[k] = v
+						}
 					} else if idx == 1 {
-						if len(l1Counts) == 0 { l1Counts = make([]int, len(stats)) }
-						for k, v := range stats { l1Counts[k] = v }
+						if len(l1Counts) == 0 {
+							l1Counts = make([]int, len(stats))
+						}
+						for k, v := range stats {
+							l1Counts[k] = v
+						}
 					}
 				}
 			}
@@ -351,9 +377,9 @@ func TrainIntentMoEModel(model *moe.IntentMoE, data []TokenizedTrainingExample, 
 			perplexity := math.Exp(float64(avgLoss))
 			epochDuration := time.Since(epochStartTime)
 			totalDuration = time.Since(startTime)
-			
+
 			log.Printf("Epoch %d Result: Loss=%.4f, Perplexity=%.2f, Time=%v", epoch+1, avgLoss, perplexity, epochDuration)
-			
+
 			// --- [Health Metrics] ---
 			moe.LogWeightStretch(model)
 			moe.CheckSaturation(model, epoch)
@@ -368,18 +394,18 @@ func TrainIntentMoEModel(model *moe.IntentMoE, data []TokenizedTrainingExample, 
 			stats := moe.TrainingStats{
 				Epoch:          epoch,
 				CurrentLoss:    avgLoss,
-				Perplexity:     perplexity,
-				BestPerplexity: bestPerplexity,
+				Perplexity:     float32(perplexity),
+				BestPerplexity: float32(bestPerplexity),
 				Layer0Counts:   l0Counts,
 				MaxDominance:   moe.GetMaxUtilization(l0Counts),
-				StepConfidence: 0.25, 
+				StepConfidence: 0.25,
 			}
 
 			if *autoHealFlag {
 				trainer.SaveGoldenCheckpoint(model, stats, currentStep, profile, totalTokens, totalDuration)
 				trainer.AutoHeal(model, optimizer.(*nn.Adam), stats)
 			}
-			
+
 			if bestPerplexity == 0 || perplexity < bestPerplexity {
 				bestPerplexity = perplexity
 				// Save Golden Checkpoint
@@ -409,8 +435,8 @@ func TrainIntentMoEModel(model *moe.IntentMoE, data []TokenizedTrainingExample, 
 
 // EnhancedTokenizedExample holds tokenized inputs plus original enhanced metadata
 type EnhancedTokenizedExample struct {
-	QueryIDs          []float64
-	SemanticOutputIDs []float64
+	QueryIDs          []float32
+	SemanticOutputIDs []float32
 	Enhanced          *EnhancedTrainingExample
 }
 
@@ -431,8 +457,8 @@ func TokenizeEnhancedTrainingData(data []EnhancedTrainingExample, semanticOutput
 		}
 
 		tokenized[i] = EnhancedTokenizedExample{
-			QueryIDs:          convertIntsToFloat64s(qIDs),
-			SemanticOutputIDs: convertIntsToFloat64s(sIDs),
+			QueryIDs:          convertIntsToFloat32s(qIDs),
+			SemanticOutputIDs: convertIntsToFloat32s(sIDs),
 			Enhanced:          &data[i],
 		}
 	}
@@ -441,7 +467,7 @@ func TokenizeEnhancedTrainingData(data []EnhancedTrainingExample, semanticOutput
 
 // TrainIntentMoEModelWithEnhancedData trains the model using enhanced examples (with SRL/ASG annotations).
 // This integrates StructuredSemanticLoss as an auxiliary structural penalty (non-differentiable at present).
-func TrainIntentMoEModelWithEnhancedData(model *moe.IntentMoE, enhancedData []EnhancedTrainingExample, epochs int, learningRate float64, batchSize int, maxSequenceLength int, semanticOutputVocab *mainvocab.Vocabulary) error {
+func TrainIntentMoEModelWithEnhancedData(model *moe.IntentMoE, enhancedData []EnhancedTrainingExample, epochs int, learningRate float32, batchSize int, maxSequenceLength int, semanticOutputVocab *mainvocab.Vocabulary, useGPU bool) error {
 	if model == nil {
 		return errors.New("cannot train a nil model")
 	}
@@ -516,13 +542,13 @@ func TrainIntentMoEModelWithEnhancedData(model *moe.IntentMoE, enhancedData []En
 			}
 			currentStep++
 
-			loss, err := trainIntentMoEBatchEnhanced(model, optimizer, batch, enhancedBatch, maxSequenceLength, epoch, epochs, semanticOutputVocab, semTok, ssl, srl, asgGen)
+			loss, err := trainIntentMoEBatchEnhanced(model, optimizer, batch, enhancedBatch, maxSequenceLength, epoch, epochs, semanticOutputVocab, semTok, ssl, srl, asgGen, useGPU)
 			if err != nil {
 				log.Printf("Error training enhanced batch: %v", err)
 				continue
 			}
-			totalLoss += loss
-			
+			totalLoss += float64(loss)
+
 			// Aggressively clear computation graph after each batch
 			DetachModel(model)
 			numBatches++
@@ -545,13 +571,13 @@ func TrainIntentMoEModelWithEnhancedData(model *moe.IntentMoE, enhancedData []En
 // and comparing ASG structure validity. Note: the structure penalty is non-differentiable
 // because it is computed after greedy decoding; it serves as a training signal but will not
 // produce gradients through the model predictions.
-func trainIntentMoEBatchEnhanced(intentMoEModel *moe.IntentMoE, optimizer nn.Optimizer, batch []TokenizedTrainingExample, enhancedBatch []EnhancedTokenizedExample, maxSequenceLength int, epoch, totalEpochs int, semanticOutputVocab *mainvocab.Vocabulary, semTok *tokenizer.Tokenizer, ssl *semantic.StructuredSemanticLoss, srl *semantic.SemanticRoleLabeler, asgGen *semantic.ASGGenerator) (float64, error) {
+func trainIntentMoEBatchEnhanced(intentMoEModel *moe.IntentMoE, optimizer nn.Optimizer, batch []TokenizedTrainingExample, enhancedBatch []EnhancedTokenizedExample, maxSequenceLength int, epoch, totalEpochs int, semanticOutputVocab *mainvocab.Vocabulary, semTok *tokenizer.Tokenizer, ssl *semantic.StructuredSemanticLoss, srl *semantic.SemanticRoleLabeler, asgGen *semantic.ASGGenerator, useGPU bool) (float32, error) {
 	optimizer.ZeroGrad()
 
 	batchSize := len(batch)
 
-	inputIDsBatch := make([]float64, batchSize*maxSequenceLength)
-	semanticOutputIDsBatch := make([]float64, batchSize*maxSequenceLength)
+	inputIDsBatch := make([]float32, batchSize*maxSequenceLength)
+	semanticOutputIDsBatch := make([]float32, batchSize*maxSequenceLength)
 
 	for i, example := range batch {
 		copy(inputIDsBatch[i*maxSequenceLength:(i+1)*maxSequenceLength], example.QueryIDs)
@@ -561,14 +587,19 @@ func trainIntentMoEBatchEnhanced(intentMoEModel *moe.IntentMoE, optimizer nn.Opt
 	inputTensor := NewTensor([]int{batchSize, maxSequenceLength}, inputIDsBatch, false)
 	semanticOutputTensor := NewTensor([]int{batchSize, maxSequenceLength}, semanticOutputIDsBatch, false)
 
-	scheduledSamplingProb := math.Min(0.5, float64(epoch+1)/float64(totalEpochs*2))
+	if useGPU {
+		inputTensor.ToGPU()
+		semanticOutputTensor.ToGPU()
+	}
+
+	scheduledSamplingProb := float32(math.Min(0.5, float64(epoch+1)/float64(totalEpochs*2)))
 
 	semanticOutputLogits, contextVector, err := intentMoEModel.Forward(scheduledSamplingProb, inputTensor, semanticOutputTensor)
 	if err != nil {
 		return 0, fmt.Errorf("IntentMoE model forward pass failed: %w", err)
 	}
 
-	semanticOutputLoss := 0.0
+	semanticOutputLoss := float32(0.0)
 	semanticOutputGrads := make([]*Tensor, maxSequenceLength-1)
 
 	targets := make([]int, batchSize)
@@ -582,7 +613,7 @@ func trainIntentMoEBatchEnhanced(intentMoEModel *moe.IntentMoE, optimizer nn.Opt
 	}
 
 	// Auxiliary: decode each example greedily, build ASG and compute structure validity
-	structurePenalty := 0.0
+	structurePenalty := float32(0.0)
 	for i := range batchSize {
 		// Slice context vector for the single example
 		ctxSlice, err := contextVector.Slice(0, i, i+1)
@@ -635,7 +666,7 @@ func trainIntentMoEBatchEnhanced(intentMoEModel *moe.IntentMoE, optimizer nn.Opt
 		structurePenalty += (1.0 - structVal) * 0.5 // weight 0.5 for structure penalty per-example
 	}
 
-	entropyWeight := 0.01
+	entropyWeight := float32(0.01)
 	totalLoss := semanticOutputLoss + entropyWeight*0.0 + structurePenalty
 
 	// Backward using token-level gradients (structurePenalty is non-differentiable)
@@ -653,14 +684,14 @@ func trainIntentMoEBatchEnhanced(intentMoEModel *moe.IntentMoE, optimizer nn.Opt
 }
 
 // trainIntentMoEBatch performs a single training step on a batch of data.
-func trainIntentMoEBatch(intentMoEModel *moe.IntentMoE, optimizer nn.Optimizer, batch []TokenizedTrainingExample, maxSequenceLength int, epoch, totalEpochs int, semanticOutputVocab *mainvocab.Vocabulary, batchIndex int) (float64, error) {
+func trainIntentMoEBatch(intentMoEModel *moe.IntentMoE, optimizer nn.Optimizer, batch []TokenizedTrainingExample, maxSequenceLength int, epoch, totalEpochs int, semanticOutputVocab *mainvocab.Vocabulary, batchIndex int, useGPU bool) (float32, error) {
 	start := time.Now()
 	optimizer.ZeroGrad()
 
 	batchSize := len(batch)
 
-	inputIDsBatch := make([]float64, batchSize*maxSequenceLength)
-	semanticOutputIDsBatch := make([]float64, batchSize*maxSequenceLength)
+	inputIDsBatch := make([]float32, batchSize*maxSequenceLength)
+	semanticOutputIDsBatch := make([]float32, batchSize*maxSequenceLength)
 
 	for i, example := range batch {
 		copy(inputIDsBatch[i*maxSequenceLength:(i+1)*maxSequenceLength], example.QueryIDs)
@@ -671,28 +702,35 @@ func trainIntentMoEBatch(intentMoEModel *moe.IntentMoE, optimizer nn.Optimizer, 
 	inputTensor := NewTensor([]int{batchSize, maxSequenceLength}, inputIDsBatch, false)
 	semanticOutputTensor := NewTensor([]int{batchSize, maxSequenceLength}, semanticOutputIDsBatch, false)
 
+	if useGPU {
+		inputTensor.ToGPU()
+		semanticOutputTensor.ToGPU()
+	}
+
 	prepTime := time.Since(start)
 	tForward := time.Now()
 
 	// Calculate scheduled sampling probability: gradually increase from 0% to 50%
 	// Formula: min(0.5, (epoch + 1) / (totalEpochs * 2)) - Faster increase to force model recovery
-	scheduledSamplingProb := math.Min(0.5, float64(epoch+1)/float64(totalEpochs*2))
+	scheduledSamplingProb := float32(math.Min(0.5, float64(epoch+1)/float64(totalEpochs*2)))
 
 	// Forward pass through the IntentMoE model with scheduled sampling
+	// fmt.Println("DEBUG: Starting Forward Pass...")
 	semanticOutputLogits, _, err := intentMoEModel.Forward(scheduledSamplingProb, inputTensor, semanticOutputTensor)
 	if err != nil {
 		return 0, fmt.Errorf("IntentMoE model forward pass failed: %w", err)
 	}
 	forwardTime := time.Since(tForward)
+	// fmt.Printf("DEBUG: Forward Pass Done (%v)\n", forwardTime)
 	tLoss := time.Now()
 
 	// Calculate loss for the semantic output
-	semanticOutputLoss := 0.0
+	semanticOutputLoss := float32(0.0)
 	// The decoder now produces maxSequenceLength-1 outputs in non-vectorized mode,
 	// or a single 3D tensor in vectorized mode.
 	var semanticOutputGrads []*Tensor
-	entropyLoss := 0.0
-	
+	entropyLoss := float32(0.0)
+
 	if len(semanticOutputLogits) == 1 && len(semanticOutputLogits[0].Shape) == 3 {
 		// Vectorized 3D loss path
 		logits3D := semanticOutputLogits[0]
@@ -703,10 +741,10 @@ func trainIntentMoEBatch(intentMoEModel *moe.IntentMoE, optimizer nn.Optimizer, 
 				allTargets[b*numSteps+t] = int(semanticOutputIDsBatch[b*maxSequenceLength+t+1])
 			}
 		}
-		
+
 		loss, grad3D := CrossEntropyLoss(logits3D, allTargets, semanticOutputVocab.PaddingTokenID, 0.1)
 		semanticOutputLoss = loss
-		
+
 		// For backward pass, we might need a slice of grads if the model expects it,
 		// but since we are in vectorized mode, we should update IntentMoE.Backward to handle 3D.
 		// For now, let's keep it as a single-element slice for the model's Backward to handle.
@@ -725,10 +763,12 @@ func trainIntentMoEBatch(intentMoEModel *moe.IntentMoE, optimizer nn.Optimizer, 
 				for i := 0; i < batchSize; i++ {
 					targets[i] = int(semanticOutputIDsBatch[i*maxSequenceLength+t+1])
 				}
+				// Ensure logits are on CPU for the loss function
+				semanticOutputLogits[t].ToCPU()
 				loss, grad := CrossEntropyLoss(semanticOutputLogits[t], targets, semanticOutputVocab.PaddingTokenID, 0.1)
 				if grad == nil {
 					// Handle case where loss function returns nil gradient (e.g. all padding)
-					grad = NewTensor(semanticOutputLogits[t].Shape, make([]float64, len(semanticOutputLogits[t].Data)), false)
+					grad = NewTensor(semanticOutputLogits[t].Shape, make([]float32, len(semanticOutputLogits[t].Data)), false)
 				}
 				lossMutex.Lock()
 				semanticOutputLoss += loss
@@ -737,10 +777,10 @@ func trainIntentMoEBatch(intentMoEModel *moe.IntentMoE, optimizer nn.Optimizer, 
 			}(t)
 		}
 		wg.Wait()
-		
+
 		// Normalize by number of timesteps to be consistent with vectorized path
 		if len(semanticOutputLogits) > 0 {
-			div := float64(len(semanticOutputLogits))
+			div := float32(len(semanticOutputLogits))
 			semanticOutputLoss /= div
 			for t := range semanticOutputGrads {
 				for i := range semanticOutputGrads[t].Data {
@@ -751,9 +791,9 @@ func trainIntentMoEBatch(intentMoEModel *moe.IntentMoE, optimizer nn.Optimizer, 
 	}
 
 	// Combine losses with entropy regularization weight
-	entropyWeight := 0.01 // Small weight to not dominate main loss
+	entropyWeight := float32(0.01) // Small weight to not dominate main loss
 
-	lbLoss := 0.0
+	lbLoss := float32(0.0)
 	if moeEnc, ok := intentMoEModel.Encoder.(*moe.MoEEncoder); ok {
 		lbLoss = moeEnc.Layer.LoadBalancingLoss * moeEnc.Layer.LoadBalancingWeight
 	}
@@ -803,7 +843,7 @@ func trainIntentMoEBatch(intentMoEModel *moe.IntentMoE, optimizer nn.Optimizer, 
 }
 
 // clipGradients scales the gradients of the model parameters if the norm exceeds maxNorm.
-func clipGradients(params []*Tensor, maxNorm float64) {
+func clipGradients(params []*Tensor, maxNorm float32) {
 	totalNorm := computeGradientNorm(params)
 	if totalNorm > maxNorm {
 		scale := maxNorm / totalNorm
@@ -818,8 +858,8 @@ func clipGradients(params []*Tensor, maxNorm float64) {
 }
 
 // computeGradientNorm calculates the L2 norm of all parameter gradients
-func computeGradientNorm(params []*Tensor) float64 {
-	totalNorm := 0.0
+func computeGradientNorm(params []*Tensor) float32 {
+	totalNorm := float32(0.0)
 	for _, param := range params {
 		if param.Grad != nil {
 			for _, g := range param.Grad.Data {
@@ -827,24 +867,29 @@ func computeGradientNorm(params []*Tensor) float64 {
 			}
 		}
 	}
-	return math.Sqrt(totalNorm)
+	return float32(math.Sqrt(float64(totalNorm)))
 }
 
 // calculateLearningRate computes the learning rate with warmup and cosine decay
-func calculateLearningRate(step, totalSteps, warmupSteps int, baseLR, minLR float64) float64 {
+// calculateLearningRate computes a cosine-decayed learning rate with linear warmup.
+func calculateLearningRate(step, totalSteps, warmupSteps int, baseLR, minLR float32) float32 {
 	if step < warmupSteps {
-		// Linear warmup
-		return minLR + (baseLR-minLR)*float64(step)/float64(warmupSteps)
+		return baseLR * float32(step) / float32(warmupSteps)
 	}
-	// Cosine decay after warmup
+	if step >= totalSteps {
+		return minLR
+	}
+
+	// Cosine decay
 	progress := float64(step-warmupSteps) / float64(totalSteps-warmupSteps)
-	return minLR + (baseLR-minLR)*0.5*(1+math.Cos(math.Pi*progress))
+	decay := 0.5 * (1.0 + math.Cos(math.Pi*progress))
+	return minLR + (baseLR-minLR)*float32(decay)
 }
 
-func convertIntsToFloat64s(input []int) []float64 {
-	output := make([]float64, len(input))
+func convertIntsToFloat32s(input []int) []float32 {
+	output := make([]float32, len(input))
 	for i, v := range input {
-		output[i] = float64(v)
+		output[i] = float32(v)
 	}
 	return output
 }
@@ -903,33 +948,48 @@ func main() {
 	// Seed random number generator
 	rand.Seed(time.Now().UnixNano())
 
-	// Set up a channel to listen for interrupt signals
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-	// Goroutine to handle graceful shutdown on signal
-	go func() {
-		<-sigChan // Block until a signal is received
-		log.Println("Received interrupt signal. Exiting.")
-		os.Exit(0) // Exit gracefully
-	}()
-
 	// Define training parameters
 	dryRun := flag.Bool("dry-run", false, "Run a quick test with 100 examples for 5 epochs")
 	flagLR := flag.Float64("lr", 0.00001, "Learning rate (ignored if profile is set)")
 	flagEpochs := flag.Int("epochs", 50, "Number of epochs to train (default 50)")
 	autoHealFlag = flag.Bool("auto-heal", false, "Enable autonomous model recovery")
 	profileName := flag.String("profile", "standard", "Training profile: stable, aggressive, standard")
+	runLLM := flag.Bool("llm", false, "Run the interactive LLM inference mode")
+
+	// Chat and training flags
+	trainChat := flag.Bool("train-chat", false, "Run chat-specific training")
+	rebalance := flag.Bool("rebalance", false, "Force expert rebalancing")
+	weightDecay := flag.Float64("wd", 0.0, "Weight decay")
+	maxGradNorm := flag.Float64("max_grad_norm", 1.0, "Maximum gradient norm")
+	overfit := flag.Bool("overfit", false, "Enable overfit mode for debugging")
+	gpu := flag.Bool("gpu", false, "Enable GPU acceleration")
+	flagBatchSize := flag.Int("batch-size", 8, "Batch size per step (default 8 for 8GB GPU RAM)")
+	flagAccSteps := flag.Int("acc-steps", 8, "Gradient accumulation steps (default 8, effective batch = batch*acc)")
 
 	flag.Parse()
 
+	// --llm: launch interactive inference mode and exit
+	if *runLLM {
+		llm.RunLLM()
+		return
+	}
+
+	if *gpu {
+		log.Println("Note: GPU acceleration is currently disabled in this build (Cgo-free). Operating on CPU...")
+	}
+
+	if *trainChat {
+		chat.TrainChat(".", *rebalance, *overfit, float32(*flagLR), float32(*weightDecay), *autoHealFlag, float32(*maxGradNorm), *gpu, *flagBatchSize, *flagAccSteps)
+		return
+	}
+
 	profile := nn.GetProfile(*profileName)
 	epochs := *flagEpochs
-	learningRate := profile.LR
+	learningRate := float32(profile.LR)
 	if *flagLR != 0.00001 {
-		learningRate = *flagLR
+		learningRate = float32(*flagLR)
 	}
-	batchSize := 8        // Reduced to avoid OOM
+	batchSize := 8 // Reduced to avoid OOM
 	semanticOutputVocabularySavePath := "data/models/gob_models/semantic_output_vocabulary.gob"
 
 	// Load Word2Vec model
@@ -1057,8 +1117,8 @@ func main() {
 	inputVocabSize := len(queryVocabulary.WordToToken)
 	semanticOutputVocabSize := len(semanticOutputVocabulary.WordToToken)
 	embeddingDim := word2vecModel.VectorSize // Match Word2Vec dimension
-	numExperts := 4          // Increased back to 4
-	maxSequenceLength := 50 // Reduced to 50
+	numExperts := 4                          // Increased back to 4
+	maxSequenceLength := 50                  // Reduced to 50
 
 	log.Printf("Query Vocabulary Size: %d", inputVocabSize)
 	log.Printf("Semantic Output Vocabulary Size: %d", semanticOutputVocabSize)
@@ -1080,7 +1140,7 @@ func main() {
 			intentMoEModel = nil
 		} else {
 			log.Println("Successfully loaded existing model.")
-			
+
 			// Dynamic Resizing for Vocab Growth
 			if inputVocabSize > intentMoEModel.Embedding.VocabSize {
 				log.Printf("Resizing model embeddings: %d -> %d", intentMoEModel.Embedding.VocabSize, inputVocabSize)
@@ -1094,47 +1154,57 @@ func main() {
 		}
 	}
 
+
 	if intentMoEModel == nil {
 		// Always create a new IntentMoE model for now to debug gob loading
 		log.Printf("Creating a new IntentMoE model. (SIMD Enabled: %v)", IsSIMDEnabled())
 		// Model hyperparameters - INCREASED CAPACITY
 		// embeddingDim is set above based on W2V model
-		hiddenSize := 768              // Match embeddingDim for optimal capacity
-		maxAttentionHeads := 4         // Keep at 4
-		numLayers := 2                 // Original size
-		dropoutRate := 0.1             // Keep at 0.1
+		hiddenSize := 768      // Match embeddingDim for optimal capacity
+		maxAttentionHeads := 4 // Keep at 4
+		numLayers := 2         // Original size
+		dropoutRate := 0.1     // Keep at 0.1
 
 		// 1. Embedding
 		embedding := nn.NewEmbedding(inputVocabSize, embeddingDim)
-		
+
 		// Always Initialize with Xavier/Glorot first to ensure unknown tokens are not zero
 		log.Println("Initializing embeddings with Xavier/Glorot...")
 		fanIn := inputVocabSize
 		fanOut := embeddingDim
-		limit := math.Sqrt(6.0 / float64(fanIn+fanOut))
-		
+		limit := float32(math.Sqrt(6.0 / float64(fanIn+fanOut)))
+
 		// Create initial weights map
-		initialWeights := make(map[int][]float64)
+		initialWeights := make(map[int][]float32)
 		for i := 0; i < inputVocabSize; i++ {
-			initialWeights[i] = make([]float64, embeddingDim)
+			initialWeights[i] = make([]float32, embeddingDim)
 			for j := 0; j < embeddingDim; j++ {
-				initialWeights[i][j] = (rand.Float64() * 2 * limit) - limit
+				initialWeights[i][j] = (rand.Float32() * 2 * limit) - limit
 			}
 		}
 		embedding.LoadPretrainedWeights(initialWeights)
 
 		if word2vecModel != nil && word2vecModel.VectorSize == embeddingDim {
 			log.Printf("Loading pretrained Word2Vec weights (dim=%d)...", embeddingDim)
-			embedding.LoadPretrainedWeights(word2vecModel.WordVectors)
+			// Convert float64 vectors to float32
+			f32Vectors := make(map[int][]float32)
+			for id, vec := range word2vecModel.WordVectors {
+				f32Vec := make([]float32, len(vec))
+				for i, v := range vec {
+					f32Vec[i] = float32(v)
+				}
+				f32Vectors[id] = f32Vec
+			}
+			embedding.LoadPretrainedWeights(f32Vectors)
 
 			// Fix Word2Vec Misses: Re-initialize UNK embedding with noise
 			if unkID, ok := queryVocabulary.WordToToken["UNK"]; ok {
 				log.Printf("Re-initializing UNK token (ID %d) with random noise...", unkID)
-				limit := math.Sqrt(6.0 / float64(inputVocabSize+embeddingDim))
+				limit := float32(math.Sqrt(6.0 / float64(inputVocabSize+embeddingDim)))
 				start := unkID * embeddingDim
 				end := start + embeddingDim
 				for j := start; j < end; j++ {
-					embedding.Weight.Data[j] = (rand.Float64() * 2 * limit) - limit
+					embedding.Weight.Data[j] = (rand.Float32() * 2 * limit) - limit
 				}
 			}
 		} else if word2vecModel != nil {
@@ -1142,11 +1212,12 @@ func main() {
 		}
 
 		// 2. MoE Encoder
-		log.Println("Using MoE Encoder")
+		log.Println("Creating MoE Encoder...")
 		encoder, err := moe.NewMoEEncoder(embeddingDim, hiddenSize, numLayers, numExperts)
 		if err != nil {
 			log.Fatalf("Failed to create MoEEncoder: %v", err)
 		}
+		log.Println("MoE Encoder created.")
 
 		// Adjust MoE settings for training
 		encoder.Layer.LoadBalancingWeight = 0.5
@@ -1154,10 +1225,12 @@ func main() {
 		encoder.Layer.RouterTemperature = 1.0
 
 		// 3. RNN Decoder with increased capacity and dropout
-		decoder, err := moe.NewRNNDecoder(hiddenSize, semanticOutputVocabSize, hiddenSize, maxAttentionHeads, numLayers, dropoutRate, numExperts)
+		log.Println("Creating RNN Decoder...")
+		decoder, err := moe.NewRNNDecoder(hiddenSize, semanticOutputVocabSize, hiddenSize, maxAttentionHeads, numLayers, float32(dropoutRate), numExperts)
 		if err != nil {
 			log.Fatalf("Failed to create decoder: %v", err)
 		}
+		log.Println("RNN Decoder created.")
 
 		// 4. Create IntentMoE model
 		intentMoEModel = &moe.IntentMoE{
@@ -1170,12 +1243,18 @@ func main() {
 
 	// Adjust MoE settings for training to prevent token dropping and encourage diversity
 	for _, layer := range moe.ActiveLayers {
-		layer.CapacityFactor = 1.2       // Increased to prevents tokens being dropped (Suggested 1.0+)
-		layer.LoadBalancingWeight = 2.5  // Increased to force router to distribute tokens more evenly (Suggested 2.0-2.5)
-		layer.RouterTemperature = 1.2    // Higher temp for softer routing, helping underutilized experts (Suggested 1.0-1.2)
-		layer.ExpertDropoutRate = 0.1    // Keep noise enabled
-		layer.SetMode(true)              // Enable training mode (noise)
+		layer.CapacityFactor = 1.2      // Increased to prevents tokens being dropped (Suggested 1.0+)
+		layer.LoadBalancingWeight = 2.5 // Increased to force router to distribute tokens more evenly (Suggested 2.0-2.5)
+		layer.RouterTemperature = 1.2   // Higher temp for softer routing, helping underutilized experts (Suggested 1.0-1.2)
+		layer.ExpertDropoutRate = 0.1   // Keep noise enabled
+		layer.SetMode(true)             // Enable training mode (noise)
 	}
+
+	if intentMoEModel != nil && *gpu {
+		log.Println("Moving new model to GPU...")
+		intentMoEModel.ToGPU()
+	}
+
 	log.Println("🔧 Adjusted MoE: Capacity=1.2, LB=2.5, Temp=1.2, Dropout=0.1")
 
 	// Training Loop
@@ -1221,9 +1300,21 @@ func main() {
 	// Force GC to free up memory from loading large JSON files before training
 	runtime.GC()
 
+	// Set up a channel to listen for interrupt signals.
+	// We close trainingStopped so the training loop exits cleanly and the
+	// final gob save still runs (no os.Exit).
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigChan
+		log.Println("[!] Interrupt received. Finishing current batch and saving...")
+		close(trainingStopped)
+	}()
+
 	// Train the model
 	checkpointInterval := 500 // Save every 500 batches
-	err = TrainIntentMoEModel(intentMoEModel, tokenizedData, epochs, learningRate, batchSize, maxSequenceLength, semanticOutputVocabulary, modelSavePath, checkpointInterval)
+	// Pass the gpu flag to the training loop
+	err = TrainIntentMoEModel(intentMoEModel, tokenizedData, epochs, learningRate, batchSize, maxSequenceLength, semanticOutputVocabulary, modelSavePath, checkpointInterval, *gpu)
 	if err != nil {
 		log.Fatalf("Failed to train IntentMoE model: %v", err)
 	}
@@ -1238,6 +1329,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to save IntentMoE model: %v", err)
 	}
+	log.Printf("[✓] Model saved to %s", modelSavePath)
 
 	// Save the vocabularies
 	queryVocabularySavePath := "data/models/gob_models/query_vocabulary.gob"
@@ -1249,13 +1341,14 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to save semantic output vocabulary: %v", err)
 	}
+	log.Printf("[✓] Vocabularies saved.")
 }
 
 // saveCheckpoint saves the model state and metadata to a Checkpoint file.
 func saveCheckpoint(model *moe.IntentMoE, basePath string, epoch, batch, currentStep int, profile nn.TrainingProfile, tokens int64, duration time.Duration) error {
 	filename := fmt.Sprintf("%s.epoch%d.batch%d", basePath, epoch+1, batch)
 	log.Printf("Saving checkpoint to %s...", filename)
-	
+
 	ckpt := &moe.Checkpoint{
 		Model:           model,
 		StepCount:       currentStep,
@@ -1269,18 +1362,14 @@ func saveCheckpoint(model *moe.IntentMoE, basePath string, epoch, batch, current
 	return moe.SaveIntentMoECheckpoint(ckpt, filename)
 }
 
-// DetachModel removes the computation graph (gradients and creators) from the model parameters
-// to ensure that only the weights are saved. This prevents serialization issues and reduces file size.
+// DetachModel removes the computation graph (creator and operation) from the model parameters
+// it preserves gradients unless they are explicitly cleared.
 func DetachModel(model *moe.IntentMoE) {
 	params := model.Parameters()
 	for _, param := range params {
-		param.Grad = nil
 		param.Creator = nil
 		param.Mask = nil
 		param.Operation = nil
-		// We keep RequiresGrad as is, or set it to false if we want to freeze the model.
-		// For saving, it doesn't strictly matter for gob if we don't save Creator,
-		// but setting Creator to nil is the key.
 	}
 
 	// Clear encoder state

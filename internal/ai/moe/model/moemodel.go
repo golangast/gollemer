@@ -91,9 +91,9 @@ func (m *MoEClassificationModel) Forward(inputs ...*tensor.Tensor) (*tensor.Tens
 
 	batchSize, seqLength := inputIDs.Shape[0], inputIDs.Shape[1]
 
-	tokenTypeIDs := tensor.NewTensor([]int{batchSize, seqLength}, make([]float64, batchSize*seqLength), false)
-	posTagIDs := tensor.NewTensor([]int{batchSize, seqLength}, make([]float64, batchSize*seqLength), false)
-	nerTagIDs := tensor.NewTensor([]int{batchSize, seqLength}, make([]float64, batchSize*seqLength), false)
+	tokenTypeIDs := tensor.NewTensor([]int{batchSize, seqLength}, make([]float32, batchSize*seqLength), false)
+	posTagIDs := tensor.NewTensor([]int{batchSize, seqLength}, make([]float32, batchSize*seqLength), false)
+	nerTagIDs := tensor.NewTensor([]int{batchSize, seqLength}, make([]float32, batchSize*seqLength), false)
 
 	bertOutput, err := m.BertModel.Forward(inputIDs, tokenTypeIDs, posTagIDs, nerTagIDs)
 	if err != nil {
@@ -124,13 +124,13 @@ func (m *MoEClassificationModel) Forward(inputs ...*tensor.Tensor) (*tensor.Tens
 	targetSeqLen := targetSentenceIDs.Shape[1]
 	sentenceVocabSize := m.SentenceClassifier.Weights.Shape[1]
 	decoderHidden := clsTokenOutputReshaped
-	decoderCell := tensor.NewTensor(decoderHidden.Shape, make([]float64, len(decoderHidden.Data)), true) // Initial cell state
+	decoderCell := tensor.NewTensor(decoderHidden.Shape, make([]float32, len(decoderHidden.Data)), true) // Initial cell state
 
 	allLstmOutputs := make([]*tensor.Tensor, targetSeqLen)
 	m.decoderStates = make([]*DecoderStepState, targetSeqLen)
 
 	for t := range targetSeqLen {
-		decoderInputData := make([]float64, batchSize)
+		decoderInputData := make([]float32, batchSize)
 		for b := range batchSize {
 			decoderInputData[b] = targetSentenceIDs.Data[b*targetSeqLen+t]
 		}
@@ -177,7 +177,7 @@ func (m *MoEClassificationModel) Forward(inputs ...*tensor.Tensor) (*tensor.Tens
 	}
 
 	// Concatenate all lstmOutputs
-	concatenatedLstmOutputsData := make([]float64, batchSize*targetSeqLen*m.BertConfig.HiddenSize)
+	concatenatedLstmOutputsData := make([]float32, batchSize*targetSeqLen*m.BertConfig.HiddenSize)
 	for t := range targetSeqLen {
 		copy(concatenatedLstmOutputsData[t*batchSize*m.BertConfig.HiddenSize:(t+1)*batchSize*m.BertConfig.HiddenSize], allLstmOutputs[t].Data)
 	}
@@ -214,8 +214,8 @@ func (m *MoEClassificationModel) Backward(parentGrad, childGrad, sentenceGrad *t
 	targetSeqLen := sentenceGrad.Shape[1]
 	hiddenSize := m.BertConfig.HiddenSize
 
-	gradDecoderHidden := tensor.NewTensor([]int{batchSize, hiddenSize}, make([]float64, batchSize*hiddenSize), true)
-	gradDecoderCell := tensor.NewTensor([]int{batchSize, hiddenSize}, make([]float64, batchSize*hiddenSize), true)
+	gradDecoderHidden := tensor.NewTensor([]int{batchSize, hiddenSize}, make([]float32, batchSize*hiddenSize), true)
+	gradDecoderCell := tensor.NewTensor([]int{batchSize, hiddenSize}, make([]float32, batchSize*hiddenSize), true)
 
 	for t := targetSeqLen - 1; t >= 0; t-- {
 		stepState := m.decoderStates[t]
@@ -257,7 +257,7 @@ func (m *MoEClassificationModel) Backward(parentGrad, childGrad, sentenceGrad *t
 	clsTokenGrad := m.ParentClassifier.Input().Grad
 	clsTokenGrad.Add(gradDecoderHidden) // Add gradient from decoder's initial hidden state
 
-	bertGrad := tensor.NewTensor([]int{clsTokenGrad.Shape[0], m.BertConfig.MaxPositionEmbeddings, m.BertConfig.HiddenSize}, make([]float64, clsTokenGrad.Shape[0]*m.BertConfig.MaxPositionEmbeddings*m.BertConfig.HiddenSize), false)
+	bertGrad := tensor.NewTensor([]int{clsTokenGrad.Shape[0], m.BertConfig.MaxPositionEmbeddings, m.BertConfig.HiddenSize}, make([]float32, clsTokenGrad.Shape[0]*m.BertConfig.MaxPositionEmbeddings*m.BertConfig.HiddenSize), false)
 
 	batchSize = clsTokenGrad.Shape[0]
 	hiddenSize = clsTokenGrad.Shape[1]

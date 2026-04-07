@@ -2,11 +2,14 @@ package moe
 
 import (
 	"bufio"
+	"compress/gzip"
 	"encoding/gob"
 	"fmt"
+	"log"
 	"math"
 	"math/rand"
 	"os"
+	"runtime"
 	"sort"
 	"time"
 
@@ -34,7 +37,7 @@ func init() {
 	gob.Register(&tensor.ConcatOperation{})
 	gob.Register(&tensor.DivScalarOperation{})
 	gob.Register(&tensor.AddOperation{})
-	gob.Register(&tensor.MatmulOperation{})
+	gob.Register(&tensor.MatMulOperation{})
 	gob.Register(&tensor.AddWithBroadcastOperation{})
 	gob.Register(&tensor.SoftmaxOperation{})
 	gob.Register(&tensor.MulScalarOperation{})
@@ -50,9 +53,22 @@ func init() {
 	gob.Register(&nn.LayerNorm{})
 }
 
+// ClearState clears the intermediate tensors used for backward pass
+func (m *IntentMoE) ClearState() {
+	if m.Encoder != nil {
+		m.Encoder.ClearState()
+	}
+	if m.Decoder != nil {
+		m.Decoder.ClearState()
+	}
+	if m.Embedding != nil {
+		m.Embedding.ClearState()
+	}
+}
+
 // SampleFromLogits samples a token ID from logits using temperature, top-k, and top-p sampling.
 // Updated to use the user's suggested top-K-only normalization for more stable inference.
-func SampleFromLogits(logits *tensor.Tensor, temperature float64, topK int, topP float64) (int, error) {
+func SampleFromLogits(logits *tensor.Tensor, temperature float32, topK int, topP float32) (int, error) {
 	// logits shape: [batchSize, vocabSize]
 	// We assume batchSize = 1 for inference
 	if logits.Shape[0] != 1 {
@@ -69,7 +85,7 @@ func SampleFromLogits(logits *tensor.Tensor, temperature float64, topK int, topP
 
 	type tokenLogit struct {
 		index int
-		value float64
+		value float32
 	}
 
 	candidates := make([]tokenLogit, vocabSize)
@@ -92,18 +108,18 @@ func SampleFromLogits(logits *tensor.Tensor, temperature float64, topK int, topP
 
 	// Find max logit for numerical stability
 	maxLogit := topKCandidates[0].value
-	
+
 	// Compute sum of exponents for top-K only
-	var sumExp float64
+	var sumExp float32
 	for _, c := range topKCandidates {
-		sumExp += math.Exp(c.value - maxLogit)
+		sumExp += float32(math.Exp(float64(c.value - maxLogit)))
 	}
 
 	// Sample from the truncated distribution
-	r := rand.Float64()
-	var cumulative float64
+	r := rand.Float32()
+	var cumulative float32
 	for _, c := range topKCandidates {
-		prob := math.Exp(c.value-maxLogit) / sumExp
+		prob := float32(math.Exp(float64(c.value-maxLogit))) / sumExp
 		cumulative += prob
 		if r < cumulative {
 			return c.index, nil
@@ -114,7 +130,7 @@ func SampleFromLogits(logits *tensor.Tensor, temperature float64, topK int, topP
 }
 
 // PredictNext performs a forward pass and samples the next token index using Top-K and temperature.
-func (m *IntentMoE) PredictNext(input *tensor.Tensor, k int, temp float64) (int, float64, error) {
+func (m *IntentMoE) PredictNext(input *tensor.Tensor, k int, temp float32) (int, float32, error) {
 	// 1. Forward pass
 	// We assume a simplified forward call for single-token prediction
 	logits, _, err := m.Forward(0.0, input, nil, nil)
@@ -131,7 +147,9 @@ func (m *IntentMoE) PredictNext(input *tensor.Tensor, k int, temp float64) (int,
 	}
 
 	// 3. Apply Temperature scaling
-	if temp <= 0 { temp = 1.0 }
+	if temp <= 0 {
+		temp = 1.0
+	}
 	for i := range lastLogits.Data {
 		lastLogits.Data[i] /= temp
 	}
@@ -150,27 +168,27 @@ func (m *IntentMoE) PredictNext(input *tensor.Tensor, k int, temp float64) (int,
 }
 
 // CalculateAccuracy evaluates the model on a dataset for Top-K precision.
-func (m *IntentMoE) CalculateAccuracy(inputs []*tensor.Tensor, targets []*tensor.Tensor, k int) float64 {
+func (m *IntentMoE) CalculateAccuracy(inputs []*tensor.Tensor, targets []*tensor.Tensor, k int) float32 {
 	correct := 0
 	total := 0
-	
+
 	for i := range inputs {
 		input := inputs[i]
 		target := targets[i]
-		
+
 		// 1. Get logits from the forward pass (inference mode)
 		m.SetMode(false)
 		logits, _, err := m.Forward(0.0, input, nil, nil)
 		if err != nil || len(logits) == 0 {
 			continue
 		}
-		
+
 		// Use the last logit for classification accuracy
 		lastLogit := logits[len(logits)-1]
-		
+
 		// 2. Get the indices of the Top-K highest logits
 		topKIndices := getTopKIndices(lastLogit.Data, k)
-		
+
 		// 3. Check if the actual target (last token of sequence) is in that set
 		actualTarget := int(target.Data[len(target.Data)-1])
 		for _, idx := range topKIndices {
@@ -181,16 +199,18 @@ func (m *IntentMoE) CalculateAccuracy(inputs []*tensor.Tensor, targets []*tensor
 		}
 		total++
 	}
-	
-	if total == 0 { return 0 }
-	return float64(correct) / float64(total)
+
+	if total == 0 {
+		return 0
+	}
+	return float32(correct) / float32(total)
 }
 
 // getTopKIndices extracts top K indices from a logit slice without full sort overhead.
-func getTopKIndices(logits []float64, k int) []int {
+func getTopKIndices(logits []float32, k int) []int {
 	type pair struct {
 		index int
-		val   float64
+		val   float32
 	}
 	pairs := make([]pair, len(logits))
 	for i, v := range logits {
@@ -201,8 +221,10 @@ func getTopKIndices(logits []float64, k int) []int {
 		return pairs[i].val > pairs[j].val
 	})
 
-	if k > len(logits) { k = len(logits) }
-	
+	if k > len(logits) {
+		k = len(logits)
+	}
+
 	indices := make([]int, k)
 	for i := 0; i < k; i++ {
 		indices[i] = pairs[i].index
@@ -213,7 +235,7 @@ func getTopKIndices(logits []float64, k int) []int {
 // ApplyRepetitionPenalty penalizes tokens that have already been generated.
 // Logits are the raw output of the model, generatedIDs are tokens already picked.
 // Penalty is typically 1.1 or 1.2 (for multiplicative) or a flat subtraction.
-func ApplyRepetitionPenalty(logits *tensor.Tensor, generatedIDs []int, penalty float64) {
+func ApplyRepetitionPenalty(logits *tensor.Tensor, generatedIDs []int, penalty float32) {
 	if penalty == 1.0 {
 		return
 	}
@@ -251,22 +273,23 @@ type Encoder interface {
 	SetMode(bool)
 	ClearState()
 	GetMoELayers() []*MoELayer
-	SetGateTemperature(float64)
+	SetGateTemperature(float32)
+	ToGPU()
 }
 
 // ExpertStat holds performance metrics for a specific expert.
 type ExpertStat struct {
-	LossSum    float64
+	LossSum    float32
 	TokenCount int
 }
 
 // ModelMetadata persists the training state across reloads.
 type ModelMetadata struct {
-	BestPerplexity   float64
+	BestPerplexity   float32
 	LastEpoch        int
 	StagnantCounters map[string]int
 	FrozenStates     map[string]bool
-	LearningRate     float64
+	LearningRate     float32
 }
 
 // IntentMoE represents a Mixture of Experts model for intent classification.
@@ -277,21 +300,34 @@ type IntentMoE struct {
 	SentenceVocabSize int
 	SentenceVocab     *mainvocab.Vocabulary
 	EmbeddingDim      int // Persisted dimension (e.g., 768) for resizing logic
-	
+
 	// Diagnostics and Monitoring
 	ExpertStats map[string]*ExpertStat // Key: "layerID:expertID"
 	Metadata    ModelMetadata
+}
+
+// ToGPU moves the entire model's parameters to the GPU.
+func (m *IntentMoE) ToGPU() {
+	if m.Encoder != nil {
+		m.Encoder.ToGPU()
+	}
+	if m.Decoder != nil {
+		m.Decoder.ToGPU()
+	}
+	if m.Embedding != nil {
+		m.Embedding.ToGPU()
+	}
 }
 
 // NewIntentMoE creates a new IntentMoE model.
 func NewIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, childVocabSize, sentenceVocabSize, maxAttentionHeads int, word2vecModel *word2vec.SimpleWord2Vec) (*IntentMoE, error) {
 	if word2vecModel != nil {
 		vocabSize = word2vecModel.VocabSize
-		// embeddingDim = word2vecModel.VectorSize // Commented out to allow explicit embeddingDim
+		word2vecModel.SyncF32()
 	}
 	embedding := nn.NewEmbedding(vocabSize, embeddingDim)
 	if word2vecModel != nil {
-		embedding.LoadPretrainedWeights(word2vecModel.WordVectors)
+		embedding.LoadPretrainedWeights(word2vecModel.WordVectorsF32)
 	}
 
 	// Define the expert builder function
@@ -324,23 +360,23 @@ func NewIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, childVoc
 }
 
 // ComputeAuxiliaryLoss computes the penalty for expert imbalance in the MoE layers.
-func (m *IntentMoE) ComputeAuxiliaryLoss(stats MoEStats, batchSize int, numExperts int) float64 {
-	var auxLoss float64
-	
+func (m *IntentMoE) ComputeAuxiliaryLoss(stats MoEStats, batchSize int, numExperts int) float32 {
+	var auxLoss float32
+
 	// N * sum(fi * Pi)
 	// fi = fraction of tokens sent to expert i
 	// Pi = mean probability assigned to expert i
 	for i := 0; i < numExperts; i++ {
-		fi := stats.ExpertCounts[i] / float64(batchSize)
-		pi := stats.RouterProbSum[i] / float64(batchSize)
+		fi := float32(stats.ExpertCounts[i]) / float32(batchSize)
+		pi := stats.RouterProbSum[i] / float32(batchSize)
 		auxLoss += fi * pi
 	}
-	
-	return auxLoss * float64(numExperts)
+
+	return auxLoss * float32(numExperts)
 }
 
 // TrackExpertPerformance updates the average loss handled by an expert.
-func (m *IntentMoE) TrackExpertPerformance(layerID, expertID int, loss float64) {
+func (m *IntentMoE) TrackExpertPerformance(layerID, expertID int, loss float32) {
 	key := fmt.Sprintf("%d:%d", layerID, expertID)
 	if m.ExpertStats == nil {
 		m.ExpertStats = make(map[string]*ExpertStat)
@@ -355,7 +391,7 @@ func (m *IntentMoE) TrackExpertPerformance(layerID, expertID int, loss float64) 
 // GetBestExpert finds the expert with the lowest average loss in a given layer.
 func (m *IntentMoE) GetBestExpert(layerID int) int {
 	bestID := 0
-	minLoss := math.MaxFloat64
+	minLoss := float32(math.MaxFloat32)
 	found := false
 
 	// Iterate through experts to find the one with the best performance
@@ -364,7 +400,7 @@ func (m *IntentMoE) GetBestExpert(layerID int) int {
 		var lID, eID int
 		fmt.Sscanf(key, "%d:%d", &lID, &eID)
 		if lID == layerID && stats.TokenCount > 0 {
-			avgLoss := stats.LossSum / float64(stats.TokenCount)
+			avgLoss := stats.LossSum / float32(stats.TokenCount)
 			if avgLoss < minLoss {
 				minLoss = avgLoss
 				bestID = eID
@@ -395,9 +431,9 @@ func (m *IntentMoE) PrintExpertHealthReport() {
 
 	for _, key := range keys {
 		stats := m.ExpertStats[key]
-		avgLoss := 0.0
+		avgLoss := float32(0.0)
 		if stats.TokenCount > 0 {
-			avgLoss = stats.LossSum / float64(stats.TokenCount)
+			avgLoss = stats.LossSum / float32(stats.TokenCount)
 		}
 		fmt.Printf("Layer:Expert %s: Avg Loss: %7.4f | Tokens Handled: %d\n", key, avgLoss, stats.TokenCount)
 	}
@@ -438,8 +474,8 @@ func (m *IntentMoE) EvolutionaryReset(stagnantExpertID int, layerIdx int) {
 		wp := winnerParams[i]
 		sp := stagnantParams[i]
 		// Use SIMD-ready jitter function
-		simdAddJitterF64(sp.Data, wp.Data, 0.15)
-		
+		simdAddJitterF32(sp.Data, wp.Data, 0.15)
+
 		// Zero out the gradients for the new expert
 		if sp.Grad != nil {
 			for j := range sp.Grad.Data {
@@ -454,7 +490,7 @@ func (m *IntentMoE) EvolutionaryReset(stagnantExpertID int, layerIdx int) {
 	inputDim := targetLayer.GatingNetwork.Linear.Weights.Shape[0]
 	gatingData := targetLayer.GatingNetwork.Linear.Weights.Data
 	for k := 0; k < inputDim; k++ {
-		gatingData[k*numExperts+stagnantExpertID] = (rand.Float64()*0.02) - 0.01
+		gatingData[k*numExperts+stagnantExpertID] = (rand.Float32() * 0.02) - 0.01
 	}
 	if targetLayer.GatingNetwork.Linear.Biases != nil {
 		targetLayer.GatingNetwork.Linear.Biases.Data[stagnantExpertID] = 0
@@ -462,45 +498,54 @@ func (m *IntentMoE) EvolutionaryReset(stagnantExpertID int, layerIdx int) {
 }
 
 // PerformGlobalWeightSurgery prunes weak weights across all experts in the model.
-func (m *IntentMoE) PerformGlobalWeightSurgery(threshold float64) int {
-    totalKills := 0
-    for _, layer := range ActiveLayers {
-        for _, expert := range layer.Experts {
-            totalKills += PerformWeightSurgery(expert, threshold)
-        }
-    }
-    if m.Decoder.OutputMoE != nil {
-        for _, expert := range m.Decoder.OutputMoE.Experts {
-            totalKills += PerformWeightSurgery(expert, threshold)
-        }
-    }
-    return totalKills
+func (m *IntentMoE) PerformGlobalWeightSurgery(threshold float32) int {
+	totalKills := 0
+	for _, layer := range m.Encoder.GetMoELayers() {
+		for _, expert := range layer.Experts {
+			totalKills += PerformWeightSurgery(expert, threshold)
+		}
+	}
+	if m.Decoder.OutputMoE != nil {
+		for _, expert := range m.Decoder.OutputMoE.Experts {
+			totalKills += PerformWeightSurgery(expert, threshold)
+		}
+	}
+	return totalKills
 }
 
 // NewHybridIntentMoE creates a new IntentMoE model using the Hybrid LLM-GNN Encoder.
 func NewHybridIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, childVocabSize, sentenceVocabSize, maxAttentionHeads int, word2vecModel *word2vec.SimpleWord2Vec) (*IntentMoE, error) {
 	if word2vecModel != nil {
 		vocabSize = word2vecModel.VocabSize
+		word2vecModel.SyncF32()
 	}
 	embedding := nn.NewEmbedding(vocabSize, embeddingDim)
 	if word2vecModel != nil {
-		embedding.LoadPretrainedWeights(word2vecModel.WordVectors)
+		embedding.LoadPretrainedWeights(word2vecModel.WordVectorsF32)
 	}
 
-	// 1. Create the inner LLM Encoder (MoE Stack with 2 layers)
-	expertBuilder := func(expertIdx int) (Expert, error) {
-		return NewFeedForwardExpert(embeddingDim, embeddingDim*2, embeddingDim)
+	// 1. Create the inner LLM Encoder (MoE Stack with 4 layers for deeper reasoning)
+	expertBuilder := func(int) (Expert, error) {
+		return NewBornExpert(embeddingDim, embeddingDim*4, embeddingDim)
 	}
-	l0, err := NewMoELayer(embeddingDim, embeddingDim, numExperts, 1, expertBuilder)
+	l0, err := NewMoELayer(embeddingDim, embeddingDim, numExperts, 2, expertBuilder)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create MoE Layer 0: %w", err)
 	}
-	l1, err := NewMoELayer(embeddingDim, embeddingDim, numExperts, 1, expertBuilder)
+	l1, err := NewMoELayer(embeddingDim, embeddingDim, numExperts, 2, expertBuilder)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create MoE Layer 1: %w", err)
 	}
-	
-	llmEncoder := NewMoEStack(l0, l1)
+	l2, err := NewMoELayer(embeddingDim, embeddingDim, numExperts, 2, expertBuilder)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create MoE Layer 2: %w", err)
+	}
+	l3, err := NewMoELayer(embeddingDim, embeddingDim, numExperts, 2, expertBuilder)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create MoE Layer 3: %w", err)
+	}
+
+	llmEncoder := NewMoEStack(l0, l1, l2, l3)
 
 	// 2. Wrap it with HybridLLMGNNEncoder
 	hybridEncoder, err := NewHybridLLMGNNEncoder(llmEncoder, embeddingDim)
@@ -509,7 +554,7 @@ func NewHybridIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, ch
 	}
 
 	// 3. Initialize Decoder
-	decoder, err := NewRNNDecoder(embeddingDim, sentenceVocabSize, embeddingDim, maxAttentionHeads, 1, 0.0, numExperts)
+	decoder, err := NewRNNDecoder(embeddingDim, sentenceVocabSize, embeddingDim, maxAttentionHeads, 4, 0.0, numExperts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create RNN decoder: %w", err)
 	}
@@ -530,8 +575,11 @@ func (m *IntentMoE) NormalizeContextVector(cv *tensor.Tensor) *tensor.Tensor {
 	if cv == nil {
 		return nil
 	}
+	// Sync to CPU as normalization logic relies on Data slice
+	cv.ToCPU()
+
 	// Create a new tensor to avoid mutating original for backprop
-	contextVector := tensor.NewTensor(cv.Shape, make([]float64, len(cv.Data)), cv.RequiresGrad)
+	contextVector := tensor.NewTensor(cv.Shape, make([]float32, len(cv.Data)), cv.RequiresGrad)
 	copy(contextVector.Data, cv.Data)
 	contextVector.Creator = cv.Creator
 
@@ -542,14 +590,14 @@ func (m *IntentMoE) NormalizeContextVector(cv *tensor.Tensor) *tensor.Tensor {
 	for b := 0; b < bSz; b++ {
 		for s := 0; s < sLen; s++ {
 			offset := (b*sLen + s) * dim
-			norm := 0.0
+			var norm float32
 			for d := 0; d < dim; d++ {
 				v := contextVector.Data[offset+d]
 				norm += v * v
 			}
-			norm = math.Sqrt(norm + 1e-8)
+			norm = float32(math.Sqrt(float64(norm + 1e-8)))
 			if norm > ctxNormThreshold {
-				scale := ctxNormThreshold / norm
+				scale := float32(ctxNormThreshold / norm)
 				for d := 0; d < dim; d++ {
 					contextVector.Data[offset+d] *= scale
 				}
@@ -561,7 +609,7 @@ func (m *IntentMoE) NormalizeContextVector(cv *tensor.Tensor) *tensor.Tensor {
 
 // Forward performs the forward pass of the IntentMoE model.
 // scheduledSamplingProb: probability of using model predictions instead of ground truth (0.0 for inference)
-func (m *IntentMoE) Forward(scheduledSamplingProb float64, inputs ...*tensor.Tensor) ([]*tensor.Tensor, *tensor.Tensor, error) {
+func (m *IntentMoE) Forward(scheduledSamplingProb float32, inputs ...*tensor.Tensor) ([]*tensor.Tensor, *tensor.Tensor, error) {
 	if len(inputs) < 2 {
 		return nil, nil, fmt.Errorf("IntentMoE.Forward expects at least 2 inputs (query token IDs, target token IDs), got %d", len(inputs))
 	}
@@ -609,12 +657,56 @@ func (m *IntentMoE) Backward(grads ...*tensor.Tensor) error {
 		return fmt.Errorf("decoder context vector is nil in backward")
 	}
 	if m.Decoder.contextVector.Grad == nil {
-		// If no gradients reached the context vector (e.g. zero attention), 
+		// If no gradients reached the context vector (e.g. zero attention),
 		// initialize to zeros so the encoder backward can still proceed.
-		m.Decoder.contextVector.Grad = tensor.NewTensor(m.Decoder.contextVector.Shape, make([]float64, len(m.Decoder.contextVector.Data)), false)
+		m.Decoder.contextVector.Grad = tensor.NewTensor(m.Decoder.contextVector.Shape, make([]float32, len(m.Decoder.contextVector.Data)), false)
 	}
-	contextVectorGrad := m.Decoder.contextVector.Grad
 
+	// This is a "local" clip that doesn't replace the global one but acts as a circuit breaker.
+	cvGrad := m.Decoder.contextVector.Grad
+	const cvClipThreshold = 10.0
+	var cvSumSq float32
+	for _, v := range cvGrad.Data {
+		cvSumSq += v * v
+	}
+	cvNorm := float32(math.Sqrt(float64(cvSumSq + 1e-8)))
+	if cvNorm > cvClipThreshold {
+		scale := float32(cvClipThreshold / cvNorm)
+		for i := range cvGrad.Data {
+			cvGrad.Data[i] *= scale
+		}
+	}
+
+	// 2. Account for NormalizeContextVector in the backward pass.
+	// Since we scaled tokens by ctxNormThreshold/norm during forward, we must
+	// scale their gradients by the same factor (first-order approximation).
+	if m.Encoder.Inputs() != nil {
+		// e.LLMEncoder.lastOutput is the un-normalized vector
+		// However, it's safer to just re-read the contextVector Data IF we stored it.
+		// For now, we apply the same normalization logic to the GRADIENT
+		// based on the contextVector itself.
+		dim := cvGrad.Shape[len(cvGrad.Shape)-1]
+		numTokens := len(cvGrad.Data) / dim
+		const ctxNormThreshold = 5.0
+		for i := 0; i < numTokens; i++ {
+			offset := i * dim
+			var norm float32
+			for d := 0; d < dim; d++ {
+				// Use the un-normalized data from forward
+				v := m.Decoder.contextVector.Data[offset+d]
+				norm += v * v
+			}
+			norm = float32(math.Sqrt(float64(norm + 1e-8)))
+			// If the token was at the boundary, suppress its gradient.
+			if norm >= float32(ctxNormThreshold-0.01) {
+				for d := 0; d < dim; d++ {
+					cvGrad.Data[offset+d] *= 0.5
+				}
+			}
+		}
+	}
+
+	contextVectorGrad := cvGrad
 
 	// Backpropagate through the encoder
 	err := m.Encoder.Backward(contextVectorGrad)
@@ -655,7 +747,7 @@ func (m *IntentMoE) SetMode(training bool) {
 }
 
 // SetGateTemperature updates the temperature for all MoE layers in the model.
-func (m *IntentMoE) SetGateTemperature(temp float64) {
+func (m *IntentMoE) SetGateTemperature(temp float32) {
 	if m.Encoder != nil {
 		m.Encoder.SetGateTemperature(temp)
 	}
@@ -666,13 +758,13 @@ func (m *IntentMoE) SetGateTemperature(temp float64) {
 
 // GreedySearchDecode performs greedy decoding (temperature=1.0).
 // This is a wrapper for backward compatibility.
-func (m *IntentMoE) GreedySearchDecode(contextVector *tensor.Tensor, maxLen, sosToken, eosToken int, repetitionPenalty, frequencyPenalty float64, topK int, taggedData tag.Tag) ([]int, error) {
+func (m *IntentMoE) GreedySearchDecode(contextVector *tensor.Tensor, maxLen, sosToken, eosToken int, repetitionPenalty, frequencyPenalty float32, topK int, taggedData tag.Tag) ([]int, error) {
 	return m.GreedySearchDecodeWithTemp(contextVector, maxLen, sosToken, eosToken, 1.0, repetitionPenalty, frequencyPenalty, topK, taggedData)
 }
 
-func (m *IntentMoE) GreedySearchDecodeWithTemp(contextVector *tensor.Tensor, maxLen, sosToken, eosToken int, temperature, repetitionPenalty, frequencyPenalty float64, topK int, taggedData tag.Tag) ([]int, error) {
+func (m *IntentMoE) GreedySearchDecodeWithTemp(contextVector *tensor.Tensor, maxLen, sosToken, eosToken int, temperature, repetitionPenalty, frequencyPenalty float32, topK int, taggedData tag.Tag) ([]int, error) {
 	var decodedIDs []int
-	decoderInputIDs := tensor.NewTensor([]int{1, 1}, []float64{float64(sosToken)}, false)
+	decoderInputIDs := tensor.NewTensor([]int{1, 1}, []float32{float32(sosToken)}, false)
 
 	// Take the first element of the batch
 	contextVector, err := contextVector.Slice(0, 0, 1)
@@ -695,7 +787,7 @@ func (m *IntentMoE) GreedySearchDecodeWithTemp(contextVector *tensor.Tensor, max
 				return nil, fmt.Errorf("failed to slice initial hidden state: %w", err)
 			}
 		} else if initialHidden.Shape[1] < hiddenSize {
-			padding := tensor.NewTensor([]int{batchSize, hiddenSize - initialHidden.Shape[1]}, make([]float64, batchSize*(hiddenSize-initialHidden.Shape[1])), false)
+			padding := tensor.NewTensor([]int{batchSize, hiddenSize - initialHidden.Shape[1]}, make([]float32, batchSize*(hiddenSize-initialHidden.Shape[1])), false)
 			initialHidden, err = tensor.Concat([]*tensor.Tensor{initialHidden, padding}, 1)
 			if err != nil {
 				return nil, fmt.Errorf("failed to pad initial hidden state: %w", err)
@@ -704,7 +796,7 @@ func (m *IntentMoE) GreedySearchDecodeWithTemp(contextVector *tensor.Tensor, max
 	}
 
 	hiddenState := initialHidden
-	cellState := tensor.NewTensor([]int{batchSize, hiddenSize}, make([]float64, batchSize*hiddenSize), false)
+	cellState := tensor.NewTensor([]int{batchSize, hiddenSize}, make([]float32, batchSize*hiddenSize), false)
 
 	for step := 0; step < maxLen; step++ {
 		outputLogits, newHidden, newCell, err := m.Decoder.DecodeStep(decoderInputIDs, hiddenState, cellState, contextVector)
@@ -732,7 +824,7 @@ func (m *IntentMoE) GreedySearchDecodeWithTemp(contextVector *tensor.Tensor, max
 			}
 			for id, count := range counts {
 				if id < len(outputLogits.Data) {
-					outputLogits.Data[id] -= frequencyPenalty * float64(count)
+					outputLogits.Data[id] -= frequencyPenalty * float32(count)
 				}
 			}
 		}
@@ -760,19 +852,19 @@ func (m *IntentMoE) GreedySearchDecodeWithTemp(contextVector *tensor.Tensor, max
 		if step == 0 && m.SentenceVocab != nil {
 			type pred struct {
 				id   int
-				prob float64
+				prob float32
 			}
 			vocabSize := len(outputLogits.Data)
 			preds := make([]pred, vocabSize)
-			maxL := outputLogits.Data[0]
-			for i := 1; i < vocabSize; i++ {
-				if outputLogits.Data[i] > maxL {
-					maxL = outputLogits.Data[i]
+			var maxL float32 = -1e10
+			for _, v := range outputLogits.Data {
+				if v > maxL {
+					maxL = v
 				}
 			}
-			sum := 0.0
+			var sum float32 = 0.0
 			for i, v := range outputLogits.Data {
-				preds[i] = pred{i, math.Exp(v - maxL)}
+				preds[i] = pred{i, float32(math.Exp(float64(v - maxL)))}
 				sum += preds[i].prob
 			}
 			for i := range preds {
@@ -799,8 +891,7 @@ func (m *IntentMoE) GreedySearchDecodeWithTemp(contextVector *tensor.Tensor, max
 		}
 
 		decodedIDs = append(decodedIDs, predictedID)
-
-		decoderInputIDs = tensor.NewTensor([]int{1, 1}, []float64{float64(predictedID)}, false)
+		decoderInputIDs = tensor.NewTensor([]int{1, 1}, []float32{float32(predictedID)}, false)
 	}
 
 	// Debug: print predicted token IDs and their mapped words
@@ -832,7 +923,6 @@ func (m *IntentMoE) GreedySearchDecodeWithTemp(contextVector *tensor.Tensor, max
 			"readme": true, "main": true, "go": true, "server.go": true, "repository.go": true, "test.go": true, "config.go": true,
 		}
 
-		// --- Start of added logic ---
 		keyToNer := map[string]string{
 			"type":            "OBJECT_TYPE",
 			"target_resource": "PATH",
@@ -853,7 +943,6 @@ func (m *IntentMoE) GreedySearchDecodeWithTemp(contextVector *tensor.Tensor, max
 				}
 			}
 		}
-		// --- End of added logic ---
 
 		var formatted []string
 		i := 0
@@ -876,9 +965,9 @@ func (m *IntentMoE) GreedySearchDecodeWithTemp(contextVector *tensor.Tensor, max
 // temperature: controls randomness (0.0 = deterministic, 1.0 = normal, >1.0 = more random)
 // topK: if > 0, only sample from top K tokens
 // topP: if > 0.0 and < 1.0, only sample from tokens whose cumulative probability is <= topP
-func (m *IntentMoE) SampleDecode(contextVector *tensor.Tensor, maxLen, sosToken, eosToken int, temperature float64, topK int, topP float64, repetitionPenalty, frequencyPenalty float64) ([]int, error) {
+func (m *IntentMoE) SampleDecode(contextVector *tensor.Tensor, maxLen, sosToken, eosToken int, temperature float32, topK int, topP float32, repetitionPenalty, frequencyPenalty float32) ([]int, error) {
 	var decodedIDs []int
-	decoderInputIDs := tensor.NewTensor([]int{1, 1}, []float64{float64(sosToken)}, false)
+	decoderInputIDs := tensor.NewTensor([]int{1, 1}, []float32{float32(sosToken)}, false)
 
 	// Take the first element of the batch
 	contextVector, err := contextVector.Slice(0, 0, 1)
@@ -901,7 +990,7 @@ func (m *IntentMoE) SampleDecode(contextVector *tensor.Tensor, maxLen, sosToken,
 				return nil, fmt.Errorf("failed to slice initial hidden state: %w", err)
 			}
 		} else if initialHidden.Shape[1] < hiddenSize {
-			padding := tensor.NewTensor([]int{batchSize, hiddenSize - initialHidden.Shape[1]}, make([]float64, batchSize*(hiddenSize-initialHidden.Shape[1])), false)
+			padding := tensor.NewTensor([]int{batchSize, hiddenSize - initialHidden.Shape[1]}, make([]float32, batchSize*(hiddenSize-initialHidden.Shape[1])), false)
 			initialHidden, err = tensor.Concat([]*tensor.Tensor{initialHidden, padding}, 1)
 			if err != nil {
 				return nil, fmt.Errorf("failed to pad initial hidden state: %w", err)
@@ -910,7 +999,7 @@ func (m *IntentMoE) SampleDecode(contextVector *tensor.Tensor, maxLen, sosToken,
 	}
 
 	hiddenState := initialHidden
-	cellState := tensor.NewTensor([]int{batchSize, hiddenSize}, make([]float64, batchSize*hiddenSize), false)
+	cellState := tensor.NewTensor([]int{batchSize, hiddenSize}, make([]float32, batchSize*hiddenSize), false)
 
 	for range maxLen {
 		outputLogits, newHidden, newCell, err := m.Decoder.DecodeStep(decoderInputIDs, hiddenState, cellState, contextVector)
@@ -932,7 +1021,7 @@ func (m *IntentMoE) SampleDecode(contextVector *tensor.Tensor, maxLen, sosToken,
 			}
 			for id, count := range counts {
 				if id < len(outputLogits.Data) {
-					outputLogits.Data[id] -= frequencyPenalty * float64(count)
+					outputLogits.Data[id] -= frequencyPenalty * float32(count)
 				}
 			}
 		}
@@ -943,31 +1032,16 @@ func (m *IntentMoE) SampleDecode(contextVector *tensor.Tensor, maxLen, sosToken,
 			return nil, fmt.Errorf("sampling failed: %w", err)
 		}
 
-		// log.Printf("Step %d: Sampled ID %d (EOS: %d)\n", i, predictedID, eosToken) // Debug logging
-
 		if predictedID == eosToken {
 			break
 		}
 
 		decodedIDs = append(decodedIDs, predictedID)
 
-		decoderInputIDs = tensor.NewTensor([]int{1, 1}, []float64{float64(predictedID)}, false)
+		decoderInputIDs = tensor.NewTensor([]int{1, 1}, []float32{float32(predictedID)}, false)
 	}
 
 	return decodedIDs, nil
-}
-
-// ClearState clears the intermediate states of all model components to free memory.
-func (m *IntentMoE) ClearState() {
-	if m.Embedding != nil {
-		m.Embedding.ClearState()
-	}
-	if m.Encoder != nil {
-		m.Encoder.ClearState()
-	}
-	if m.Decoder != nil {
-		m.Decoder.ClearState()
-	}
 }
 
 // Checkpoint wraps the model and its training metadata for persistence.
@@ -975,31 +1049,31 @@ type Checkpoint struct {
 	Model           *IntentMoE
 	StepCount       int
 	LastProfile     nn.TrainingProfile
-	Commitment      float64
+	Commitment      float32
 	TokensProcessed int64
 	TotalDuration   time.Duration
 	Version         string
 }
 
 // CalculateCommitment calculates the "Intelligence" metric (% of weights > 0.40).
-func (m *IntentMoE) CalculateCommitment() float64 {
+func (m *IntentMoE) CalculateCommitment() float32 {
 	var highCount int
 	var totalWeight int
-	
+
 	params := m.Parameters()
 	for _, p := range params {
 		totalWeight += len(p.Data)
 		for _, w := range p.Data {
-			if math.Abs(w) > 0.40 {
+			if float32(math.Abs(float64(w))) > 0.40 {
 				highCount++
 			}
 		}
 	}
-	
+
 	if totalWeight == 0 {
 		return 0
 	}
-	return (float64(highCount) / float64(totalWeight)) * 100
+	return (float32(highCount) / float32(totalWeight)) * 100
 }
 
 // ResizeEmbeddings adjusts the embedding layer to match a new vocabulary size.
@@ -1015,43 +1089,70 @@ func (m *IntentMoE) ResizeEmbeddings(newVocabSize int) {
 
 	oldEmb := m.Embedding
 	newEmb := nn.NewEmbedding(newVocabSize, oldEmb.DimModel)
-	
+
 	// Copy old weights
 	copy(newEmb.Weight.Data, oldEmb.Weight.Data)
-	
+
 	m.Embedding = newEmb
 }
 
-// SaveIntentMoECheckpoint saves the IntentMoE and its metadata to a file.
+// SaveIntentMoECheckpoint saves the IntentMoE and its metadata to a file with compression.
 func SaveIntentMoECheckpoint(ckpt *Checkpoint, path string) error {
-	file, err := os.Create(path)
+	// Create temporary file first to avoid corruption on crash
+	tempPath := path + ".tmp"
+	file, err := os.Create(tempPath)
 	if err != nil {
 		return fmt.Errorf("failed to create checkpoint file: %w", err)
 	}
-	defer file.Close()
 
-	writer := bufio.NewWriter(file)
-	defer writer.Flush()
+	// Use gzip for significant size reduction
+	gz := gzip.NewWriter(file)
+	writer := bufio.NewWriter(gz)
 
 	encoder := gob.NewEncoder(writer)
 	err = encoder.Encode(ckpt)
 	if err != nil {
-		return fmt.Errorf("failed to encode checkpoint to Gob: %w", err)
+		gz.Close()
+		file.Close()
+		os.Remove(tempPath)
+		return fmt.Errorf("failed to encode checkpoint: %w", err)
 	}
+
+	writer.Flush()
+	gz.Close()
+	file.Close()
+
+	// Atomic rename
+	if runtime.GOOS == "windows" {
+		_ = os.Remove(path)
+	}
+	if err := os.Rename(tempPath, path); err != nil {
+		return fmt.Errorf("failed to finalize checkpoint: %w", err)
+	}
+
+	// Get file size for logging
+	fi, _ := os.Stat(path)
+	log.Printf("✅ [CHECKPOINT] Saved model to %s (Size: %.2f MB)", path, float64(fi.Size())/(1024*1024))
 
 	return nil
 }
 
-// LoadIntentMoECheckpoint loads a Checkpoint from a file.
+// LoadIntentMoECheckpoint loads a Checkpoint from a compressed file.
 func LoadIntentMoECheckpoint(filePath string) (*Checkpoint, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("error opening checkpoint gob file: %w", err)
+		return nil, fmt.Errorf("error opening checkpoint file: %w", err)
 	}
 	defer file.Close()
 
-	reader := bufio.NewReader(file)
-	decoder := gob.NewDecoder(reader)
+	// Use gzip for decompression
+	gz, err := gzip.NewReader(file)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create gzip reader (is the file compressed?): %w", err)
+	}
+	defer gz.Close()
+
+	decoder := gob.NewDecoder(gz)
 	var ckpt Checkpoint
 	err = decoder.Decode(&ckpt)
 	if err != nil {
@@ -1117,7 +1218,7 @@ func (m *IntentMoE) PruneExpertRouter(expertID int) {
 }
 
 // ShakeRouters applies random noise to all gating networks to force exploration.
-func (m *IntentMoE) ShakeRouters(scale float64) {
+func (m *IntentMoE) ShakeRouters(scale float32) {
 	layers := m.Encoder.GetMoELayers()
 	if m.Decoder != nil && m.Decoder.OutputMoE != nil {
 		layers = append(layers, m.Decoder.OutputMoE)
@@ -1127,7 +1228,7 @@ func (m *IntentMoE) ShakeRouters(scale float64) {
 			params := layer.GatingNetwork.Linear.Parameters()
 			for _, p := range params {
 				for i := range p.Data {
-					p.Data[i] += (rand.Float64()*2 - 1) * scale
+					p.Data[i] += (rand.Float32()*2 - 1) * scale
 				}
 			}
 		}

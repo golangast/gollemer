@@ -157,7 +157,7 @@ func (c *GollemerMoEClient) RetrieveChatResponse(input string) (string, string, 
 			lastParts := strings.Split(lastTurnIntent, "_")
 			currParts := strings.Split(pair.Intent, "_")
 			if len(lastParts) > 0 && len(currParts) > 0 && lastParts[0] == currParts[0] {
-				score *= 1.25 // Significant category boost
+				score *= 1.05 // Subtle category boost
 			}
 		}
 
@@ -175,6 +175,10 @@ func (c *GollemerMoEClient) RetrieveChatResponse(input string) (string, string, 
 			bestResponse = pair.A
 			bestIntent = pair.Intent
 		}
+	}
+
+	if bestScore > 1.0 {
+		bestScore = 1.0
 	}
 
 	return bestResponse, bestIntent, bestScore
@@ -240,47 +244,19 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 	if lowerInput == "help" || strings.HasPrefix(lowerInput, "help ") || lowerInput == "help me" {
 		return "help_command", 0.99
 	}
-	if strings.Contains(lowerInput, "what") && strings.Contains(lowerInput, "do") && strings.Contains(lowerInput, "i") {
-		c.lastMoEPrediction = "Welcome! You can start by typing 'menu' to see all options, or 'tutorial' for a guided walk-through."
-		return "gollemer_logic", 0.99
-	}
-	if strings.Contains(lowerInput, "how") && strings.Contains(lowerInput, "use") && strings.Contains(lowerInput, "this") {
-		c.lastMoEPrediction = "You can enter natural language commands like 'make a handler' or use the 'menu' to navigate visually."
-		return "gollemer_logic", 0.99
-	}
-	if strings.Contains(lowerInput, "how") && strings.Contains(lowerInput, "begin") {
-		c.lastMoEPrediction = "Welcome! Start by typing 'create webserver' or 'menu' to see what we can build together."
-		return "gollemer_start", 0.99
-	}
-	if strings.Contains(lowerInput, "where") && (strings.Contains(lowerInput, "begin") || strings.Contains(lowerInput, "start")) {
-		c.lastMoEPrediction = "The best way to start is by initializing a new workspace and adding a few files to your learningfolder."
-		return "gollemer_start", 0.99
-	}
-	if strings.Contains(lowerInput, "first step") || strings.Contains(lowerInput, "now what") || strings.Contains(lowerInput, "next step") {
-		c.lastMoEPrediction = "Your first step should be to run 'init' or 'menu' to scaffold your first Go project."
-		return "gollemer_logic", 0.99
-	}
-	if strings.Contains(lowerInput, "what can you do") || strings.Contains(lowerInput, "what do you do") {
-		c.lastMoEPrediction = "I help you write Go code, manage your project files, and train NLP models. Type 'menu' to start."
-		return "gollemer_logic", 0.99
-	}
-
-	// --- 0.5. Primary Command Heuristics ---
+	// --- 1. Primary Command Heuristics ---
 	if intent, score := c.checkCommandHeuristics(lowerInput); score > 0.8 {
 		return intent, score
 	}
 
-	// --- 1. High-Confidence Retrieval Fallback ---
+	// --- 1. Combined Retrieval & Neural Logic ---
 	retrievedResp, retrievedIntent, retrievedScore := c.RetrieveChatResponse(input)
-	if retrievedScore > 0.88 {
-		c.lastMoEPrediction = retrievedResp
-		if retrievedIntent != "" {
-			return retrievedIntent, retrievedScore
-		}
-		return "chat_response", retrievedScore
-	}
+	log.Printf("🔍 Intent Retrieval Top Score: %.4f (%s)", retrievedScore, retrievedIntent)
 
-	// --- 2. Neural Model Logic ---
+	var neuralResponse string
+	var neuralIntent string
+	var neuralScore float64
+
 	if c.Model != nil && c.W2V != nil {
 		cleanWords := cleanTokenize(lowerInput)
 		var tokenIDs []int
@@ -293,9 +269,9 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 		}
 
 		if len(tokenIDs) > 0 {
-			inputTensor := tensor.NewTensor([]int{1, len(tokenIDs)}, make([]float64, len(tokenIDs)), false)
+			inputTensor := tensor.NewTensor([]int{1, len(tokenIDs)}, make([]float32, len(tokenIDs)), false)
 			for i, id := range tokenIDs {
-				inputTensor.Data[i] = float64(id)
+				inputTensor.Data[i] = float32(id)
 			}
 
 			embeddings, err := c.Model.Embedding.Forward(inputTensor)
@@ -320,30 +296,55 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 									decodedWords = append(decodedWords, w)
 								}
 							}
-							predictedSentence := strings.Join(decodedWords, " ")
-
-							if strings.HasPrefix(predictedSentence, "create webserver") {
-								return "create_webserver", 0.99
-							}
-							if strings.HasPrefix(predictedSentence, "create handler") {
-								return "create_handler", 0.99
-							}
-							if strings.HasPrefix(predictedSentence, "status_query") {
-								return "status_query", 0.95
-							}
-							if strings.HasPrefix(predictedSentence, "greeting") {
-								return "greeting", 0.95
-							}
-
-							if !strings.HasPrefix(predictedSentence, "create") && !strings.HasPrefix(predictedSentence, "status") {
-								c.lastMoEPrediction = predictedSentence
-								return "chat_response", 0.80
+							neuralResponse = strings.Join(decodedWords, " ")
+							if neuralResponse != "" {
+								log.Printf("🧠 Neural Model generated: %s", neuralResponse)
+								if strings.HasPrefix(neuralResponse, "create webserver") {
+									neuralIntent = "create_webserver"
+									neuralScore = 0.99
+								} else if strings.HasPrefix(neuralResponse, "create handler") {
+									neuralIntent = "create_handler"
+									neuralScore = 0.99
+								} else {
+									neuralIntent = "chat_response"
+									neuralScore = 0.91 // Strong base score for neural creativity
+								}
 							}
 						}
 					}
 				}
 			}
 		}
+	}
+
+	// --- 2. Winner Selection ---
+	// If the neural model gave us a functional command (e.g. create webserver), prioritize it.
+	if neuralIntent != "" && neuralIntent != "chat_response" {
+		return neuralIntent, neuralScore
+	}
+
+	// If retrieval is a near-exact match (e.g. greeting, specific FAQ), prioritize it.
+	retrievalThreshold := 0.96
+	// Stricter for questions to favor neural "thinking"
+	if strings.Contains(input, "?") {
+		retrievalThreshold = 0.99 
+	}
+
+	if retrievedScore >= retrievalThreshold {
+		c.lastMoEPrediction = retrievedResp
+		return retrievedIntent, retrievedScore
+	}
+
+	// Finally, favor neural response for anything else if it produced a sentence.
+	if neuralResponse != "" {
+		c.lastMoEPrediction = neuralResponse
+		return neuralIntent, neuralScore
+	}
+
+	// Ultimate fallback to best retrieval match even if below threshold
+	if retrievedScore > 0.8 {
+		c.lastMoEPrediction = retrievedResp
+		return retrievedIntent, retrievedScore
 	}
 
 	// --- 3. Weighted Keyword "Fuzzy" Match ---

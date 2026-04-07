@@ -3,15 +3,15 @@ package moe
 import "fmt"
 
 type LRScheduler struct {
-	CurrentLR      float64
-	DecayFactor    float64 // e.g., 0.5 (halves the LR)
+	CurrentLR      float32
+	DecayFactor    float32 // e.g., 0.5 (halves the LR)
 	Patience       int     // How many epochs to wait before dropping
 	FailCount      int
-	BestPerplexity float64
-	MinLR          float64
+	BestPerplexity float32
+	MinLR          float32
 }
 
-func (s *LRScheduler) Update(currentPPL float64) float64 {
+func (s *LRScheduler) Update(currentPPL float32) float32 {
 	if currentPPL < s.BestPerplexity || s.BestPerplexity == 0 {
 		s.BestPerplexity = currentPPL
 		s.FailCount = 0
@@ -31,7 +31,7 @@ func (s *LRScheduler) Update(currentPPL float64) float64 {
 }
 
 // ApplyStepDecay reduces the learning rate by a factor every N epochs.
-func ApplyStepDecay(currentLR float64, epoch int, stepSize int, gamma float64) float64 {
+func ApplyStepDecay(currentLR float32, epoch int, stepSize int, gamma float32) float32 {
 	if epoch > 0 && epoch%stepSize == 0 {
 		return currentLR * gamma
 	}

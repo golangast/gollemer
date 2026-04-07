@@ -51,8 +51,8 @@ func (e *Encoder) Forward(inputIDs *tensor.Tensor) (*tensor.Tensor, *tensor.Tens
 	seqLength := inputIDs.Shape[1]
 	hiddenSize := e.LSTM.HiddenSize
 
-	hidden := tensor.NewTensor([]int{batchSize, hiddenSize}, make([]float64, batchSize*hiddenSize), true)
-	cell := tensor.NewTensor([]int{batchSize, hiddenSize}, make([]float64, batchSize*hiddenSize), true)
+	hidden := tensor.NewTensor([]int{batchSize, hiddenSize}, make([]float32, batchSize*hiddenSize), true)
+	cell := tensor.NewTensor([]int{batchSize, hiddenSize}, make([]float32, batchSize*hiddenSize), true)
 
 	for t := range seqLength {
 		// Get the input for the current time step
@@ -211,7 +211,7 @@ func (m *Seq2Seq) Forward(inputIDs, targetIDs *tensor.Tensor) (*tensor.Tensor, e
 	// Teacher forcing: feed target token as next input
 	for t := range targetSeqLen {
 		// Get current input token for decoder (targetIDs[:, t])
-		decoderInputData := make([]float64, batchSize)
+		decoderInputData := make([]float32, batchSize)
 		for b := range batchSize {
 			// Assuming targetIDs is [batch_size, seq_len]
 			decoderInputData[b] = targetIDs.Data[b*targetSeqLen+t]
@@ -249,9 +249,9 @@ func (m *Seq2Seq) Predict(query string, maxLen int) (string, error) {
 	}
 
 	// Convert token IDs to tensor
-	inputTensorData := make([]float64, len(inputTokenIDs))
+	inputTensorData := make([]float32, len(inputTokenIDs))
 	for i, id := range inputTokenIDs {
-		inputTensorData[i] = float64(id)
+		inputTensorData[i] = float32(id)
 	}
 	inputTensor := tensor.NewTensor([]int{1, len(inputTokenIDs)}, inputTensorData, true)
 

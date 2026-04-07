@@ -31,6 +31,13 @@ func (l *GCNLayer) Parameters() []*tensor.Tensor {
 	return l.Linear.Parameters()
 }
 
+// ToGPU moves the parameters to the GPU.
+func (l *GCNLayer) ToGPU() {
+	if l.Linear != nil {
+		l.Linear.ToGPU()
+	}
+}
+
 func (l *GCNLayer) ClearState() {
 	l.adj = nil
 	l.linearOut = nil
