@@ -46,7 +46,7 @@ rm -f data/models/gob_models/moe_classification_model_best.gob
 W2V_PATH="data/models/gob_models/word2vec_model.gob"
 if [ ! -f "$W2V_PATH" ]; then
     echo "⚠️  Word2Vec Dictionary missing. Regenerating from data..."
-    GOEXPERIMENT=simd "$GO_CMD" run cmd/gollemer/main.go -train-word2vec
+    GOEXPERIMENT=simd "$GO_CMD" run cmd/tools/train_word2vec/main.go
 fi
 
 # --- 3. Audit & Trend Analysis ---

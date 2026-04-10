@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/golangast/gollemer/internal/ai/moe"
+	_ "github.com/gogpu/wgpu/hal/allbackends" // Ensure GPU backends are included in vendor
 )
 
 func main() {

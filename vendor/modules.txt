@@ -24,15 +24,15 @@ github.com/beorn7/perks/quantile
 ## explicit; go 1.25
 github.com/born-ml/born/autodiff
 github.com/born-ml/born/backend/cpu
+github.com/born-ml/born/backend/webgpu
 github.com/born-ml/born/internal/autodiff
 github.com/born-ml/born/internal/autodiff/ops
 github.com/born-ml/born/internal/backend/cpu
+github.com/born-ml/born/internal/backend/webgpu
 github.com/born-ml/born/internal/nn
-github.com/born-ml/born/internal/optim
 github.com/born-ml/born/internal/serialization
 github.com/born-ml/born/internal/tensor
 github.com/born-ml/born/nn
-github.com/born-ml/born/optim
 github.com/born-ml/born/tensor
 # github.com/cespare/xxhash/v2 v2.3.0
 ## explicit; go 1.11
@@ -49,9 +49,59 @@ github.com/gen2brain/beeep
 # github.com/go-ole/go-ole v1.3.0
 ## explicit; go 1.12
 github.com/go-ole/go-ole
+# github.com/go-webgpu/goffi v0.5.0
+## explicit; go 1.25
+github.com/go-webgpu/goffi/ffi
+github.com/go-webgpu/goffi/internal/arch
+github.com/go-webgpu/goffi/internal/arch/amd64
+github.com/go-webgpu/goffi/internal/arch/arm64
+github.com/go-webgpu/goffi/internal/dl
+github.com/go-webgpu/goffi/internal/fakecgo
+github.com/go-webgpu/goffi/internal/syscall
+github.com/go-webgpu/goffi/types
+# github.com/go-webgpu/webgpu v0.4.1
+## explicit; go 1.25
+github.com/go-webgpu/webgpu/wgpu
 # github.com/godbus/dbus/v5 v5.2.2
 ## explicit; go 1.20
 github.com/godbus/dbus/v5
+# github.com/gogpu/gputypes v0.4.0
+## explicit; go 1.25
+github.com/gogpu/gputypes
+# github.com/gogpu/naga v0.17.1
+## explicit; go 1.25
+github.com/gogpu/naga
+github.com/gogpu/naga/dxil
+github.com/gogpu/naga/dxil/internal/bitcode
+github.com/gogpu/naga/dxil/internal/container
+github.com/gogpu/naga/dxil/internal/emit
+github.com/gogpu/naga/dxil/internal/module
+github.com/gogpu/naga/glsl
+github.com/gogpu/naga/hlsl
+github.com/gogpu/naga/ir
+github.com/gogpu/naga/msl
+github.com/gogpu/naga/spirv
+github.com/gogpu/naga/wgsl
+# github.com/gogpu/wgpu v0.24.6
+## explicit; go 1.25.0
+github.com/gogpu/wgpu
+github.com/gogpu/wgpu/core
+github.com/gogpu/wgpu/hal
+github.com/gogpu/wgpu/hal/allbackends
+github.com/gogpu/wgpu/hal/dx12
+github.com/gogpu/wgpu/hal/dx12/d3d12
+github.com/gogpu/wgpu/hal/dx12/d3dcompile
+github.com/gogpu/wgpu/hal/dx12/dxgi
+github.com/gogpu/wgpu/hal/gles
+github.com/gogpu/wgpu/hal/gles/egl
+github.com/gogpu/wgpu/hal/gles/gl
+github.com/gogpu/wgpu/hal/gles/wgl
+github.com/gogpu/wgpu/hal/metal
+github.com/gogpu/wgpu/hal/software
+github.com/gogpu/wgpu/hal/software/raster
+github.com/gogpu/wgpu/hal/vulkan
+github.com/gogpu/wgpu/hal/vulkan/memory
+github.com/gogpu/wgpu/hal/vulkan/vk
 # github.com/golang-jwt/jwt/v5 v5.3.1
 ## explicit; go 1.21
 github.com/golang-jwt/jwt/v5

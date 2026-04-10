@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"runtime/debug"
 	"runtime/pprof"
 	"strings"
 	"sync"
@@ -942,6 +943,11 @@ func BuildVocabularies(semanticTrainingData *IntentTrainingData) (*mainvocab.Voc
 }
 
 func main() {
+	// Set a 10 GB soft memory limit to ensure aggressive Garbage Collection
+	// happens before Linux OOM-Killer kills the training process.
+	// (12 GB was too close to physical RAM ceiling on 16GB systems with a browser open.)
+	debug.SetMemoryLimit(10 * 1024 * 1024 * 1024)
+
 	const semanticTrainingDataPath = "./data/training/trainingdata/semantic_output_data_flat.json"
 	const word2vecModelPath = "data/models/gob_models/word2vec_model.gob"
 
@@ -963,8 +969,8 @@ func main() {
 	maxGradNorm := flag.Float64("max_grad_norm", 1.0, "Maximum gradient norm")
 	overfit := flag.Bool("overfit", false, "Enable overfit mode for debugging")
 	gpu := flag.Bool("gpu", false, "Enable GPU acceleration")
-	flagBatchSize := flag.Int("batch-size", 8, "Batch size per step (default 8 for 8GB GPU RAM)")
-	flagAccSteps := flag.Int("acc-steps", 8, "Gradient accumulation steps (default 8, effective batch = batch*acc)")
+	flagBatchSize := flag.Int("batch-size", 4, "Batch size per step (default 4 for 8GB GPU RAM/robust CPU limits)")
+	flagAccSteps := flag.Int("acc-steps", 16, "Gradient accumulation steps (default 16, effective batch = batch*acc)")
 
 	flag.Parse()
 
@@ -975,7 +981,7 @@ func main() {
 	}
 
 	if *gpu {
-		log.Println("Note: GPU acceleration is currently disabled in this build (Cgo-free). Operating on CPU...")
+		log.Println("🚀 GPU acceleration enabled (Paragon/WebGPU). Dispatching to AMD/Vulkan...")
 	}
 
 	if *trainChat {
@@ -989,7 +995,7 @@ func main() {
 	if *flagLR != 0.00001 {
 		learningRate = float32(*flagLR)
 	}
-	batchSize := 8 // Reduced to avoid OOM
+	batchSize := *flagBatchSize // Respect user flag to avoid OOM
 	semanticOutputVocabularySavePath := "data/models/gob_models/semantic_output_vocabulary.gob"
 
 	// Load Word2Vec model

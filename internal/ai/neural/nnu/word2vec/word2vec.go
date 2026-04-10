@@ -166,53 +166,29 @@ func (sw2v *SimpleWord2Vec) ForwardPass(words []string) []float64 {
 		if !ok {
 			wordIndex, ok = sw2v.Vocabulary[UNKToken]
 			if !ok {
-				fmt.Printf("Warning: Unknown word '%s' and no UNK token found\n", word)
 				continue
 			}
 		}
 
 		inputVector := sw2v.WordVectors[wordIndex]
 		if inputVector == nil {
-			fmt.Printf("Error: Word index %d not found in WordVectors for word '%s'\n", wordIndex, word)
 			continue
-		}
-		// Check if Weights and Biases are initialized correctly
-		if sw2v.Weights == nil || len(sw2v.Weights) != sw2v.HiddenSize {
-			fmt.Println("Error: sw2v.Weights is not initialized correctly")
-			return nil
-		}
-		for i := 0; i < sw2v.HiddenSize; i++ {
-			if len(sw2v.Weights[i]) != len(inputVector) {
-				fmt.Printf("Error: Mismatch in Weights dimension at index: %v\n", i)
-				return nil
-			}
-		}
-
-		if sw2v.Biases == nil || len(sw2v.Biases) != sw2v.HiddenSize {
-			fmt.Println("Error: sw2v.Biases is not initialized correctly")
-			return nil
-		}
-		for i := 0; i < sw2v.HiddenSize; i++ {
-			if len(sw2v.Biases[i]) != 1 {
-				fmt.Printf("Error: Bias dimension mismatch at index: %v\n", i)
-				return nil
-			}
-		}
-
-		if sw2v.HiddenSize <= 0 || sw2v.VectorSize <= 0 {
-			fmt.Println("Error: HiddenSize and VectorSize must be greater than zero.")
-			return nil
 		}
 
 		newHiddenState := make([]float64, sw2v.VectorSize)
 		for i := 0; i < sw2v.VectorSize; i++ {
 			weightedSum := 0.0
-			for j := range inputVector {
-				if i%sw2v.HiddenSize == j%sw2v.HiddenSize {
-					weightedSum += sw2v.Weights[i%sw2v.HiddenSize][j] * inputVector[j]
+			iMod := i % sw2v.HiddenSize
+			if sw2v.VectorSize == sw2v.HiddenSize {
+				weightedSum += sw2v.Weights[iMod][i] * inputVector[i]
+			} else {
+				for j := range inputVector {
+					if iMod == j%sw2v.HiddenSize {
+						weightedSum += sw2v.Weights[iMod][j] * inputVector[j]
+					}
 				}
 			}
-			weightedSum += sw2v.Biases[i%sw2v.HiddenSize][0]
+			weightedSum += sw2v.Biases[iMod][0]
 			weightedSum += hiddenState[i]
 
 			newHiddenState[i] = math.Tanh(weightedSum)
@@ -238,32 +214,19 @@ func (sw2v *SimpleWord2Vec) CalculateLoss(output, context []float64) float64 {
 
 // backpropagate performs backpropagation and updates weights and biases.
 func (sw2v *SimpleWord2Vec) Backpropagate(output, context []float64, learningRate float64) {
-	// Calculate gradients for weights and biases (replace with your gradient calculation)
-	weightGradients := make([][]float64, sw2v.HiddenSize)
-	biasGradients := make([][]float64, sw2v.HiddenSize)
+	maxGrad := 1.0
 	for i := 0; i < sw2v.HiddenSize; i++ {
-		weightGradients[i] = make([]float64, sw2v.VectorSize)
-		biasGradients[i] = make([]float64, 1)
-		for j := 0; j < sw2v.VectorSize; j++ {
-			weightGradients[i][j] = (output[i] - context[i]) // Example gradient
-		}
-		biasGradients[i][0] = (output[i] - context[i]) // Example gradient
-	}
-
-	// Clip gradients to prevent exploding gradients
-	maxGrad := 1.0 // Maximum gradient norm
-	for i := 0; i < sw2v.HiddenSize; i++ {
-		weightNorm := math.Sqrt(sumOfSquares(weightGradients[i]))
+		grad := output[i] - context[i]
+		weightNorm := math.Abs(grad) * math.Sqrt(float64(sw2v.VectorSize))
+		
+		scale := 1.0
 		if weightNorm > maxGrad {
-			scale := maxGrad / weightNorm
-			for j := 0; j < sw2v.VectorSize; j++ {
-				weightGradients[i][j] *= scale
-			}
+			scale = maxGrad / weightNorm
 		}
-		sw2v.Weights[i][0] -= learningRate * weightGradients[i][0]
-	}
-	for i := 0; i < sw2v.HiddenSize; i++ {
-		sw2v.Biases[i][0] -= learningRate * biasGradients[i][0]
+		
+		scaledGrad := grad * scale
+		sw2v.Weights[i][i] -= learningRate * scaledGrad
+		sw2v.Biases[i][0] -= learningRate * grad
 	}
 }
 
@@ -410,11 +373,15 @@ func (sw2v *SimpleWord2Vec) Train(trainingData []string) {
 		tokenizedTrainingData[i] = strings.Fields(sentence)
 	}
 
+	totalSents := len(tokenizedTrainingData)
 	for i := 0; i < sw2v.Epochs; i++ {
 		//totalLoss = 0
 		var learningRate = sw2v.LearningRate - sw2v.LearningRate*0.99*float64(i)/float64(sw2v.Epochs)
 
-		for _, words := range tokenizedTrainingData {
+		for sIdx, words := range tokenizedTrainingData {
+			if sIdx%500 == 0 && sIdx > 0 {
+				fmt.Printf("Epoch %d/%d: Processed %d/%d sentences (%.2f%%)\n", i+1, sw2v.Epochs, sIdx, totalSents, float64(sIdx)/float64(totalSents)*100.0)
+			}
 			if sw2v.UseCBOW {
 				for j, targetWord := range words {
 					_, ok := sw2v.Vocabulary[targetWord]
@@ -486,7 +453,7 @@ func (sw2v *SimpleWord2Vec) Train(trainingData []string) {
 				}
 			}
 		}
-
+		fmt.Printf("\rEpoch %d/%d: Completed %d/%d sentences (100.00%%)\n", i+1, sw2v.Epochs, totalSents, totalSents)
 		//fmt.Printf("Epoch %d, Loss: %f\n", i, totalLoss/float64(iterationCount+1))
 	}
 }

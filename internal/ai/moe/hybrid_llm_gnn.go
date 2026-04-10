@@ -215,3 +215,13 @@ func (e *HybridLLMGNNEncoder) ToGPU() {
 		e.LayerNorm.ToGPU()
 	}
 }
+
+func (e *HybridLLMGNNEncoder) SyncParameters() error {
+	if e.LLMEncoder != nil {
+		if err := e.LLMEncoder.SyncParameters(); err != nil {
+			return err
+		}
+	}
+	// GNN and LayerNorm are currently CPU-resident or handle their own sync during ToGPU/Forward
+	return nil
+}

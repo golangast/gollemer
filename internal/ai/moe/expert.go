@@ -48,4 +48,7 @@ type Expert interface {
 
 	// Resize updates the output dimension of the expert.
 	Resize(newOutputDim int)
+
+	// SyncParameters synchronizes parameters from CPU to GPU.
+	SyncParameters() error
 }

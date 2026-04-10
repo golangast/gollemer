@@ -1,6 +1,8 @@
 # Binaries
 bin/
 gollemer
+gollemer_server
+train_moe
 main
 
 # Debug and Profiling
@@ -9,10 +11,31 @@ logs/*.csv
 *.prof
 *.test
 
-# Data (except templates/essential config)
-data/db/*.db
+# Model files (too large for git — use external storage)
 data/models/*.gob
+data/models/gob_models/
 data/models/checkpoints/
+
+# Native libraries and WebGPU binaries
+lib/
+include/
+scripts/old_lib/
+*.so
+*.a
+*.zip
+*.wasm
+static/main.wasm
+
+# Databases
+*.db
+data/db/*.db
+jim.db
+
+# Logs and temp output
+out.log
+train_gpu_test.log
+logs/training_full.log
+scratch/
 
 # Other
 .gollemer_stats
@@ -23,3 +46,5 @@ vendor/
 .tool-versions
 docker-compose.yml
 prometheus.yml
+wgpu-linux-x86_64-release.zip
+wgpu-native-meta/

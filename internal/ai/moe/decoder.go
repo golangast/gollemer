@@ -668,6 +668,13 @@ func (d *RNNDecoder) ToGPU() {
 		d.Attention.ToGPU()
 	}
 }
+
+func (d *RNNDecoder) SyncParameters() error {
+	if d.OutputMoE != nil {
+		return d.OutputMoE.SyncParameters()
+	}
+	return nil
+}
 // SetMode sets the decoder to training or inference mode.
 func (d *RNNDecoder) SetMode(training bool) {
 	if d.LSTM != nil {

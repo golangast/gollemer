@@ -95,6 +95,13 @@ func (m *MoEEncoder) ToGPU() {
 	}
 }
 
+func (m *MoEEncoder) SyncParameters() error {
+	if m.Layer != nil {
+		return m.Layer.SyncParameters()
+	}
+	return nil
+}
+
 // LinearExpert wraps nn.Linear to satisfy the Expert interface.
 type LinearExpert struct {
 	*nn.Linear
@@ -144,6 +151,11 @@ func (l *LinearExpert) ToGPU() {
 	if l.Linear != nil {
 		l.Linear.ToGPU()
 	}
+}
+
+func (l *LinearExpert) SyncParameters() error {
+	// LinearExpert uses standard nn.Linear which doesn't require explicit GPU sync shadows
+	return nil
 }
 
 // EvolutionaryReset performs a "Genetic Mutation" on the LinearExpert.
