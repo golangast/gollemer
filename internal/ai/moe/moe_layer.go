@@ -193,6 +193,22 @@ func (moe *MoELayer) SetGateTemperature(temp float32) {
 	moe.RouterTemperature = temp
 }
 
+func (moe *MoELayer) SyncParameters() error {
+	if moe.GatingNetwork != nil {
+		if err := moe.GatingNetwork.SyncParameters(); err != nil {
+			return err
+		}
+	}
+	for _, expert := range moe.Experts {
+		if expert != nil {
+			if err := expert.SyncParameters(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // ToGPU moves the parameters to the GPU.
 func (moe *MoELayer) ToGPU() {
 	if moe.GatingNetwork != nil {

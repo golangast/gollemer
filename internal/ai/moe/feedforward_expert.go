@@ -250,6 +250,11 @@ func (e *FeedForwardExpert) ToGPU() {
 	}
 }
 
+// SyncParameters is a no-op for CPU-only FeedForwardExperts.
+func (e *FeedForwardExpert) SyncParameters() error {
+	return nil
+}
+
 // Resize updates the output dimension of the expert.
 func (e *FeedForwardExpert) Resize(newOutputDim int) {
 	if e.Layer2 == nil {

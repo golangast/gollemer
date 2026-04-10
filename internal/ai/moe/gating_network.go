@@ -371,3 +371,9 @@ func (gn *GatingNetwork) ToGPU() {
 		gn.LayerNorm.ToGPU()
 	}
 }
+
+func (gn *GatingNetwork) SyncParameters() error {
+	// GatingNetwork uses standard nn.Linear which currently targets direct GPU execution
+	// or CPU->GPU sync via ToGPU, so SyncParameters is a no-op for now.
+	return nil
+}

@@ -291,8 +291,8 @@ skipCSV:
 			VerifyModelIntegrity(intentModel)
 
 			// Architecture compatibility check: if dims don't match new config, force fresh start.
-			if intentModel.EmbeddingDim != 768 {
-				log.Printf("⚠️  Found %dd model — expected 768d. Forcing fresh 768d start for new hardware config.", intentModel.EmbeddingDim)
+			if intentModel.EmbeddingDim != 512 {
+				log.Printf("⚠️  Found %dd model — expected 512d. Forcing fresh 512d start for new hardware config.", intentModel.EmbeddingDim)
 				intentModel = nil
 			}
 		}
@@ -308,7 +308,7 @@ skipCSV:
 		if useGPU {
 			hwInfo += " + GPU (Paragon/WebGPU)"
 		}
-		log.Printf("🚀 Initializing high-capacity 768d MoE Transformer (16 Experts, 4-Layer Encoder, 4-Layer Decoder) for %s", hwInfo)
+		log.Printf("🚀 Initializing 512d MoE Transformer (8 Experts, 4-Layer Encoder, 4-Layer Decoder) for %s", hwInfo)
 		// Use the pre-computed final vocab size so we never need to call
 		// ResizeOutputLayer for a fresh model — this is the main OOM fix.
 		freshVocab := precomputedVocabSize
@@ -316,24 +316,27 @@ skipCSV:
 			freshVocab = 8000 // sanity floor if pre-computation didn't run
 		}
 		log.Printf("🔢 Initializing decoder with final vocab size: %d", freshVocab)
-		// 768d: 16 experts + 4-layer Encoder + 4-layer Decoder
+		// 512d: 8 experts + 4-layer Encoder + 4-layer Decoder
+		// Reduced from 768d/16-experts which was consuming 14GB+ anon-RSS and getting OOM-killed.
+		const modelDim = 512
+		const numModelExperts = 8
 		var err error
 		intentModel, err = moe.NewHybridIntentMoE(
-			freshVocab, // vocabSize
-			768,        // embeddingDim: optimized for faster CPU training on i5-12400F
-			16,         // numExperts
-			768,        // parentVocabSize (matching embeddingDim)
-			768,        // childVocabSize (matching embeddingDim)
-			freshVocab, // sentenceVocabSize
-			16,         // maxAttentionHeads
-			nil,        // word2vecModel
+			freshVocab,      // vocabSize
+			modelDim,        // embeddingDim
+			numModelExperts, // numExperts
+			modelDim,        // parentVocabSize
+			modelDim,        // childVocabSize
+			freshVocab,      // sentenceVocabSize
+			8,               // maxAttentionHeads (must divide modelDim evenly)
+			nil,             // word2vecModel
 		)
 		if err != nil {
 			log.Fatalf("Failed to create MoE model: %v", err)
 		}
 
-		// 4-Layer LSTM decoder with 4 output experts per layer.
-		intentModel.Decoder, _ = moe.NewRNNDecoder(768, freshVocab, 768, 16, 4, 0.1, 4)
+		// 4-Layer LSTM decoder with 8 output experts per layer.
+		intentModel.Decoder, _ = moe.NewRNNDecoder(modelDim, freshVocab, modelDim, 8, 4, 0.1, numModelExperts)
 
 		if useGPU {
 			fmt.Println("🚀 Moving fresh model to GPU...")
@@ -850,7 +853,8 @@ skipCSV:
 			close(prefetchCh)
 		}()
 
-		maxGradNorm := 5.0      // More aggressive clipping for stability
+		// Note: we use the maxGradNorm passed as an argument to TrainChat
+		// so the linuxtrain.sh flags are respected.
 		optimizer.ZeroGrad()   // Initial zero out for accumulation
 
 		for batch := range prefetchCh {
@@ -1229,9 +1233,10 @@ skipCSV:
 			// Clear intermediate states to free memory
 			intentModel.ClearState()
 
-			// Critical Memory Safety for 768d on 4GB systems:
-			// Force GC periodically when intermediate tensors might have fragmented the heap.
-			if batches%4 == 0 {
+			// Critical Memory Safety: GC every 32 batches is enough to reclaim intermediates
+			// without causing stop-the-world storms on every accumulation step.
+			// (Old value of batches%4 caused severe fragmentation on 16GB systems.)
+			if batches%32 == 0 {
 				runtime.GC()
 			}
 
@@ -1293,8 +1298,11 @@ skipCSV:
 				}
 			}
 
-			// 💾 PERIODIC SAVING: Every 10 batches, save the model to disk.
-			if batches > 0 && batches%10 == 0 {
+			// 💾 PERIODIC SAVING: Every 200 batches.
+			// Each save serialises the entire model, spiking RSS by ~1×model_size.
+			// We now save only ONE file (timestamped) and skip the duplicate latest_periodic copy
+			// to avoid holding two full serialised copies in memory simultaneously.
+			if batches > 0 && batches%200 == 0 {
 				log.Printf("💾 [CHECKPOINT] Starting periodic save at Step %d (Batch %d)...", globalStep, batches)
 				fmt.Printf("💾 Periodic Saving: Step %d (Batch %d)\n", globalStep, batches)
 
@@ -1318,9 +1326,13 @@ skipCSV:
 					fmt.Printf("⚠️  Periodic Save ERROR: %v\n", err)
 				}
 
-				// Also update "latest" symlink-equivalent (regular file)
-				latestPath := filepath.Join(checkpointDir, "latest_periodic.gob")
-				moe.SaveIntentMoECheckpoint(ckpt, latestPath)
+				// Nil the checkpoint immediately so the GC can reclaim the copy
+				// before the next batch allocates more intermediate tensors.
+				// NOTE: The duplicate save to latest_periodic.gob was removed — it was
+				// serialising a second full model copy, pushing peak RSS 2×model_size.
+				ckpt = nil
+				runtime.GC()
+				debug.FreeOSMemory()
 			}
 
 			// Memory safety: Clear computation graph. 
@@ -1390,6 +1402,7 @@ skipCSV:
 			}
 
 			globalStep++
+			intentModel.ClearState()
 		}
 		// End of Epoch: log final batch count, print utilization, clear computation graph.
 		if batches > 0 {
@@ -1427,7 +1440,7 @@ skipCSV:
 			}
 
 			// Automated Evolutionary Reset based on the layer's internal tracking
-			layer.EvolutionaryReset(5) // stagnationThreshold=5 epochs
+			layer.EvolutionaryReset(2) // stagnationThreshold=2 epochs (down from 5; epoch-1 saw L4/E3 collapse to 0.6%)
 
 			// After utilization tracking: detect and reset stagnant experts
 			// Stagnant = used <1% of the time and not in frozen set (already being forced to learn)
@@ -1598,6 +1611,22 @@ skipCSV:
 
 		// overwriting the main file for compatibility
 		moe.SaveIntentMoECheckpoint(ckpt, moePath)
+
+		// GC between saves to avoid doubling peak RSS (two concurrent serializations)
+		ckpt = nil
+		runtime.GC()
+		debug.FreeOSMemory()
+
+		// Rebuild ckpt for the numbered snapshot
+		ckpt = &moe.Checkpoint{
+			Model:           intentModel,
+			StepCount:       globalStep,
+			LastProfile:     profile,
+			Commitment:      intentModel.CalculateCommitment(),
+			TokensProcessed: totalTokens,
+			TotalDuration:   totalDuration,
+			Version:         "gollemer-chat-v1.2",
+		}
 
 		// numbered checkpoint
 		numberedPath := filepath.Join(checkpointDir, fmt.Sprintf("epoch_%03d.gob", epoch+1))

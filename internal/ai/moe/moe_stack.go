@@ -77,11 +77,13 @@ func (s *MoEStack) Backward(grad *tensor.Tensor) error {
 					lastOutput := stack[len(stack)-1].lastOutput
 					
 					// dL/dScale = sum(currGrad * lastOutput)
+					// Normalized by total volume to prevent scalar gradients from overwhelming weight matrices
+					normFactor := 1.0 / float32(len(currGrad.Data))
 					var dScale float32
 					for j := range currGrad.Data {
 						dScale += currGrad.Data[j] * lastOutput.Data[j]
 					}
-					layer.ResidualScale.Grad.Data[0] += dScale
+					layer.ResidualScale.Grad.Data[0] += dScale * normFactor
 				}
 			}
 		}
@@ -158,4 +160,15 @@ func (s *MoEStack) ToGPU() {
 			l.ToGPU()
 		}
 	}
+}
+
+func (s *MoEStack) SyncParameters() error {
+	for _, l := range s.Layers {
+		if l != nil {
+			if err := l.SyncParameters(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

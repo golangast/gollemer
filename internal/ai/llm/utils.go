@@ -359,6 +359,58 @@ var intentIcons = map[string]string{
 	"watch":            "👁️  [Watch]",
 }
 
+// isGarbageOutput returns true when a neural decoder response looks like the
+// low-confidence token soup an under-trained seq2seq model produces
+// (e.g. ". to . type to . deglaze to the to . boolean").
+// Rules:
+//   1. First token is a punctuation-only string (`.`, `-`,`,` …)
+//   2. More than 40% of tokens are stopwords or single-char punctuation
+//   3. Average word length falls below 2.5 characters
+func isGarbageOutput(response string) bool {
+	if response == "" {
+		return false
+	}
+	tokens := strings.Fields(response)
+	if len(tokens) == 0 {
+		return false
+	}
+
+	// Rule 1: leading punctuation
+	first := tokens[0]
+	if len(first) == 1 && !unicode.IsLetter(rune(first[0])) && !unicode.IsDigit(rune(first[0])) {
+		return true
+	}
+
+	// Common high-frequency garbage tokens the decoder emits when untrained
+	garbageSet := map[string]bool{
+		".": true, "-": true, ",": true, "to": true, "the": true,
+		"a": true, "of": true, "and": true, "in": true, "is": true,
+		"it": true, "i": true, "you": true, "that": true, "be": true,
+	}
+
+	garbageCount := 0
+	totalLen := 0
+	for _, t := range tokens {
+		totalLen += len(t)
+		if garbageSet[strings.ToLower(t)] {
+			garbageCount++
+		}
+	}
+
+	// Rule 2: >40% garbage tokens
+	if float64(garbageCount)/float64(len(tokens)) > 0.40 {
+		return true
+	}
+
+	// Rule 3: very short average word length
+	avgLen := float64(totalLen) / float64(len(tokens))
+	if avgLen < 2.5 {
+		return true
+	}
+
+	return false
+}
+
 func isCreatingCommand(input string) bool {
 	l := strings.ToLower(input)
 	keywords := []string{"create", "add", "new", "make", "generate", "setup", "init"}

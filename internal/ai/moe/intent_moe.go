@@ -66,6 +66,22 @@ func (m *IntentMoE) ClearState() {
 	}
 }
 
+// SyncParameters synchronizes the entire model's parameters to GPU.
+func (m *IntentMoE) SyncParameters() error {
+	if m.Encoder != nil {
+		if err := m.Encoder.SyncParameters(); err != nil {
+			return err
+		}
+	}
+	if m.Decoder != nil {
+		if err := m.Decoder.SyncParameters(); err != nil {
+			return err
+		}
+	}
+	// Note: Embedding is usually kept on CPU but we could sync if it were on GPU
+	return nil
+}
+
 // SampleFromLogits samples a token ID from logits using temperature, top-k, and top-p sampling.
 // Updated to use the user's suggested top-K-only normalization for more stable inference.
 func SampleFromLogits(logits *tensor.Tensor, temperature float32, topK int, topP float32) (int, error) {
@@ -275,6 +291,7 @@ type Encoder interface {
 	GetMoELayers() []*MoELayer
 	SetGateTemperature(float32)
 	ToGPU()
+	SyncParameters() error
 }
 
 // ExpertStat holds performance metrics for a specific expert.
@@ -317,6 +334,31 @@ func (m *IntentMoE) ToGPU() {
 	if m.Embedding != nil {
 		m.Embedding.ToGPU()
 	}
+
+	// 🌡️ GPU WARM-UP: Serial compilation of pipelines to prevent race conditions
+	// (Vulkan/vkCreateComputePipelines crash) during the first parallel batch.
+	m.warmup()
+}
+
+func (m *IntentMoE) warmup() {
+	if m.Encoder == nil {
+		return
+	}
+	layers := m.Encoder.GetMoELayers()
+	if len(layers) == 0 || len(layers[0].Experts) == 0 {
+		return
+	}
+
+	fmt.Println("🌡️  GPU Warm-up: Sequential pipeline compilation...")
+	// Create a small dummy tensor on GPU
+	dummyInput := tensor.NewTensor([]int{1, m.EmbeddingDim}, make([]float32, m.EmbeddingDim), false)
+	dummyInput.ToGPU()
+
+	// Trigger forward pass on one expert; internal caches will now be populated.
+	// We don't need to run all experts; once the shaders are cached in the shared 
+	// backend, subsequent parallel calls will find them in the RLock-protected map.
+	layers[0].Experts[0].Forward(dummyInput)
+	fmt.Println("✅ GPU Warm-up complete.")
 }
 
 // NewIntentMoE creates a new IntentMoE model.
@@ -484,8 +526,9 @@ func (m *IntentMoE) EvolutionaryReset(stagnantExpertID int, layerIdx int) {
 		}
 	}
 
-	// 4. Reset the Router's view of this expert
-	// Weights are [inputDim, numExperts]. Expert j is the j-th column: W[k][j] = Data[k*numExperts + j]
+
+// 4. Reset the Router's view of this expert
+// Weights are [inputDim, numExperts]. Expert j is the j-th column: W[k][j] = Data[k*numExperts + j]
 	numExperts := targetLayer.GatingNetwork.Linear.Weights.Shape[1]
 	inputDim := targetLayer.GatingNetwork.Linear.Weights.Shape[0]
 	gatingData := targetLayer.GatingNetwork.Linear.Weights.Data

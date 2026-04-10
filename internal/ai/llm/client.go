@@ -299,7 +299,13 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 							neuralResponse = strings.Join(decodedWords, " ")
 							if neuralResponse != "" {
 								log.Printf("🧠 Neural Model generated: %s", neuralResponse)
-								if strings.HasPrefix(neuralResponse, "create webserver") {
+								// Quality gate: discard garbage output before it can win selection.
+								// An untrained model produces sequences like ". to . type to . deglaze"
+								// which are worse than any retrieval answer.
+								if isGarbageOutput(neuralResponse) {
+									log.Printf("🗑️  Neural output rejected (quality gate): %s", neuralResponse)
+									neuralResponse = ""
+								} else if strings.HasPrefix(neuralResponse, "create webserver") {
 									neuralIntent = "create_webserver"
 									neuralScore = 0.99
 								} else if strings.HasPrefix(neuralResponse, "create handler") {
@@ -307,7 +313,7 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 									neuralScore = 0.99
 								} else {
 									neuralIntent = "chat_response"
-									neuralScore = 0.91 // Strong base score for neural creativity
+									neuralScore = 0.91
 								}
 							}
 						}
@@ -324,11 +330,10 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 	}
 
 	// If retrieval is a near-exact match (e.g. greeting, specific FAQ), prioritize it.
-	retrievalThreshold := 0.96
-	// Stricter for questions to favor neural "thinking"
-	if strings.Contains(input, "?") {
-		retrievalThreshold = 0.99 
-	}
+	// NOTE: The stricter 0.99 threshold for "?" queries was removed — it caused
+	// well-matched retrieval results (score ~0.988) to fall through to the
+	// garbage-generating neural decoder on an under-trained model.
+	const retrievalThreshold = 0.96
 
 	if retrievedScore >= retrievalThreshold {
 		c.lastMoEPrediction = retrievedResp

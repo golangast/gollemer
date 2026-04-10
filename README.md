@@ -17,14 +17,16 @@ go mod tidy
 ### 2. Launching the Assistant
 To start your journey with the AI mascot, run the following command:
 ```bash
-go run cmd/gollemer/main.go -llm
+CGO_ENABLED=0 go run cmd/tools/train_moe/main.go -llm
+
 ```
 
 ### 3. Training the AI
 To train the Mixture-of-Experts (MoE) classifier or the conversational chat model:
 ```bash
 # On Linux/WSL
-bash scripts/train.sh
+# Recommended stable run command
+./scripts/linuxtrain.sh --gpu --batch-size 4 --acc-steps 16 --epochs 50
 ```
 
 ### 4. GPU Acceleration & Windows Execution
@@ -35,8 +37,6 @@ On Windows, use the provided helper script to automatically configure the CGO en
 # Run the chat training on GPU
 .\run.ps1 -train-chat -gpu
 
-# Run with custom arguments
-.\run.ps1 -epochs 100 -lr 0.001 -gpu
 ```
 
 > [!IMPORTANT]

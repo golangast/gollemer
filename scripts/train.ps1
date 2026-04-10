@@ -32,7 +32,7 @@ foreach ($Model in $OldModels) {
 $W2VPath = "data/models/gob_models/word2vec_model.gob"
 if (-not (Test-Path $W2VPath)) {
     Write-Host "[WAIT] Word2Vec Dictionary missing. Regenerating from data..." -ForegroundColor Yellow
-    go run cmd/tools/train_moe/main.go -train-word2vec
+    go run cmd/tools/train_word2vec/main.go
 }
 
 # --- 3. Audit & Trend Analysis ---

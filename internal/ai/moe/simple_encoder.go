@@ -135,3 +135,8 @@ func (e *SimpleRNNEncoder) ToGPU() {
 		e.LSTM.ToGPU()
 	}
 }
+
+func (e *SimpleRNNEncoder) SyncParameters() error {
+	// SimpleRNNEncoder currently doesn't use GPU synchronization shadows
+	return nil
+}
