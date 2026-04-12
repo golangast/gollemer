@@ -281,6 +281,8 @@ echo "--- Starting Epoch $EPOCH with Temperature: $CURRENT_TEMP ---"
 GPU_FLAG=""
 if [ "$USE_GPU" = true ]; then
     GPU_FLAG="-gpu"
+    # GPU backend configuration for libgoffi/gogpu
+    # Optional: Set backend preferences if using direct GPU acceleration
     export WGPU_BACKEND_TYPE="vulkan"
     export WGPU_POWER_PREFERENCE="high-performance"
 fi
