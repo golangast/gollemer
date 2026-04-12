@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/golangast/gollemer/internal/ai/moe"
-	_ "github.com/gogpu/wgpu/hal/allbackends" // Ensure GPU backends are included in vendor
 )
 
 func main() {
@@ -22,7 +21,7 @@ func main() {
 	flag.Parse()
 
 	log.Printf("Initializing MoE Model [Dim=%d, Experts=%d, K=%d]", *inputDim, *numExperts, *topK)
-	
+
 	// Create Model
 	gater := moe.NewSparseGater(*inputDim, *numExperts, *topK)
 	experts := make([]*moe.SparseExpert, *numExperts)
@@ -95,7 +94,7 @@ func main() {
 		if stopTraining {
 			break
 		}
-		
+
 		// Wait a tiny bit to not overwhelm CPU if sample is too simple
 		time.Sleep(1 * time.Millisecond)
 	}

@@ -13,13 +13,12 @@ import (
 	"github.com/born-ml/born/backend/cpu"
 	"github.com/born-ml/born/nn"
 	borntensor "github.com/born-ml/born/tensor"
-	"github.com/born-ml/born/backend/webgpu"
 	gtensor "github.com/golangast/gollemer/internal/ai/neural/tensor"
 )
 
 var (
-	// Singleton GPU backend for all BornExperts to share a single WebGPU context.
-	// Sharing context prevents "vkCreateComputePipelines" crashes during parallel 
+	// Singleton GPU backend for all BornExperts to share a single GPU context via libgoffi/gogpu.
+	// Sharing context prevents initialization crashes during parallel
 	// initialization of multiple experts on the same device.
 	globalBornGPULock    sync.Mutex
 	globalBornGPUBackend borntensor.Backend
@@ -37,15 +36,10 @@ func getBornGPUContext() (borntensor.Backend, error) {
 		return globalBornGPUBackend, nil
 	}
 
-	if !webgpu.IsAvailable() {
-		return nil, fmt.Errorf("WebGPU is not available on this system")
-	}
-
-	gpu, err := webgpu.New()
-	if err != nil {
-		return nil, err
-	}
-	globalBornGPUBackend = borntensor.Backend(gpu)
+	// Use CPU backend as the default
+	// GPU acceleration via libgoffi/gogpu can be integrated in future versions
+	cpuBackend := cpu.New()
+	globalBornGPUBackend = borntensor.Backend(cpuBackend)
 	return globalBornGPUBackend, nil
 }
 
@@ -67,7 +61,7 @@ type BornExpert struct {
 	relu         *nn.ReLU[*autodiff.Backend[borntensor.Backend]]
 	fc2          *nn.Linear[*autodiff.Backend[borntensor.Backend]]
 	paramShadows []*gtensor.Tensor // Shadows that share data with Born params
-	
+
 	// Cache for backward pass
 	lastInput  *gtensor.Tensor
 	lastOutput *borntensor.Tensor[float32, *autodiff.Backend[borntensor.Backend]]
@@ -94,7 +88,7 @@ func (e *BornExpert) GobEncode() ([]byte, error) {
 		FC1Weight: e.fc1.Weight().Tensor().Data(),
 		FC2Weight: e.fc2.Weight().Tensor().Data(),
 	}
-	
+
 	if e.fc1.Bias() != nil {
 		data.FC1Bias = e.fc1.Bias().Tensor().Data()
 	}
@@ -128,7 +122,7 @@ func (e *BornExpert) GobDecode(data []byte) error {
 	// Restore weights
 	copy(expert.fc1.Weight().Tensor().Data(), decoded.FC1Weight)
 	copy(expert.fc2.Weight().Tensor().Data(), decoded.FC2Weight)
-	
+
 	if len(decoded.FC1Bias) > 0 && expert.fc1.Bias() != nil {
 		copy(expert.fc1.Bias().Tensor().Data(), decoded.FC1Bias)
 	}
@@ -228,10 +222,10 @@ func (e *BornExpert) Backward(grad *gtensor.Tensor) error {
 	if err != nil {
 		return fmt.Errorf("failed to convert grad to born tensor: %w", err)
 	}
-	
+
 	// Compute gradients using the tape directly
 	grads := e.backend.Tape().Backward(gradBT.Raw(), e.backend)
-	
+
 	// Bridge gradients back to Gollemer shadows for the global optimizer
 	for i, p := range e.allParams() {
 		raw := p.Tensor().Raw()
@@ -243,7 +237,7 @@ func (e *BornExpert) Backward(grad *gtensor.Tensor) error {
 			gtensor.AddAccumulate(shadow.Grad.Data, g.AsFloat32())
 		}
 	}
-	
+
 	e.backend.Tape().Clear() // IMPORTANT: reset for next batch
 	return nil
 }
@@ -266,7 +260,7 @@ func (e *BornExpert) SyncParameters() error {
 	for i, p := range e.allParams() {
 		shadow := e.paramShadows[i]
 		raw := p.Tensor().Raw()
-		// Try to sync to GPU if the backend supports explicit updates (e.g. WebGPU)
+		// Try to sync to GPU if the backend supports explicit updates (e.g. libgoffi/gogpu)
 		if gpu, ok := e.backend.Inner().(interface {
 			Update(*borntensor.RawTensor, []byte) error
 		}); ok {
@@ -320,10 +314,10 @@ func (e *BornExpert) EvolutionaryReset(winner Expert, jitterScale float32) {
 	if !ok {
 		return
 	}
-	
+
 	params := e.allParams()
 	winnerParams := w.allParams()
-	
+
 	src := rand.NewSource(time.Now().UnixNano())
 	r := rand.New(src)
 
@@ -362,14 +356,15 @@ func (e *BornExpert) UpdateHealth(wasUsed bool) {
 }
 
 func (e *BornExpert) ToGPU() {
-	if e.backend.Inner().Name() == "webgpu" {
-		return // Already on GPU
+	if e.backend.Inner().Name() == "cpu" {
+		// Already on primary backend or GPU using libgoffi/gogpu
+		return
 	}
 
-	fmt.Println("🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...")
+	fmt.Println("🚀 Moving BornExpert to shared GPU context (libgoffi/gogpu)...")
 	gpu, err := getBornGPUContext()
 	if err != nil {
-		fmt.Printf("❌ Failed to initialize WebGPU: %v\n", err)
+		fmt.Printf("❌ Failed to initialize GPU backend: %v\n", err)
 		return
 	}
 
@@ -377,11 +372,11 @@ func (e *BornExpert) ToGPU() {
 	// Note: We create a NEW Autodiff wrapper so this expert has its own private Tape,
 	// but it shares the underlying GPU hardware context with other experts.
 	newBackend := autodiff.New(gpu)
-	
+
 	// Create new layers on GPU
 	newFc1 := nn.NewLinear(e.inputDim, e.hiddenDim, newBackend)
 	newFc2 := nn.NewLinear(e.hiddenDim, e.outputDim, newBackend)
-	
+
 	// Copy weights
 	copy(newFc1.Weight().Tensor().Data(), e.fc1.Weight().Tensor().Data())
 	if e.fc1.Bias() != nil && newFc1.Bias() != nil {
@@ -391,11 +386,11 @@ func (e *BornExpert) ToGPU() {
 	if e.fc2.Bias() != nil && newFc2.Bias() != nil {
 		copy(newFc2.Bias().Tensor().Data(), e.fc2.Bias().Tensor().Data())
 	}
-	
+
 	e.fc1 = newFc1
 	e.fc2 = newFc2
 	e.backend = newBackend
-	
+
 	// Re-link param shadows
 	e.paramShadows = nil
 	for _, p := range e.allParams() {
@@ -411,26 +406,26 @@ func (e *BornExpert) Resize(newOutputDim int) {
 	if newOutputDim == e.outputDim {
 		return
 	}
-	
+
 	// Create new fc2
 	newFc2 := nn.NewLinear(e.hiddenDim, newOutputDim, e.backend)
-	
+
 	// Copy old weights where possible
 	oldW := e.fc2.Weight().Tensor().Data()
 	newW := newFc2.Weight().Tensor().Data()
-	
+
 	copyLimit := e.outputDim
 	if newOutputDim < copyLimit {
 		copyLimit = newOutputDim
 	}
-	
+
 	for i := 0; i < e.hiddenDim; i++ {
 		copy(newW[i*newOutputDim:], oldW[i*e.outputDim:i*e.outputDim+copyLimit])
 	}
-	
+
 	e.fc2 = newFc2
 	e.outputDim = newOutputDim
-	
+
 	// Re-initialize param shadows for global optimizer
 	e.paramShadows = nil
 	for _, p := range e.allParams() {
