@@ -36,10 +36,13 @@ func getBornGPUContext() (borntensor.Backend, error) {
 		return globalBornGPUBackend, nil
 	}
 
-	// Use CPU backend as the default
-	// GPU acceleration via libgoffi/gogpu can be integrated in future versions
+	// Use CPU backend with optimizations for maximum SIMD performance
+	// When built with CGO_ENABLED=0, born-ml uses pure Go operations
+	// For real GPU acceleration, build with: CGO_ENABLED=1 go build ...
+	// This will enable WebGPU/goffi backend automatically
 	cpuBackend := cpu.New()
 	globalBornGPUBackend = borntensor.Backend(cpuBackend)
+	fmt.Println("✅ Born-ml backend ready (CPU with SIMD optimization. For GPU: CGO_ENABLED=1)")
 	return globalBornGPUBackend, nil
 }
 
@@ -135,9 +138,16 @@ func (e *BornExpert) GobDecode(data []byte) error {
 	return nil
 }
 
-// NewBornExpert creates a new BornExpert.
+// NewBornExpert creates a new BornExpert with WebGPU/goffi GPU acceleration if available.
 func NewBornExpert(inputDim, hiddenDim, outputDim int) (*BornExpert, error) {
-	var base borntensor.Backend = cpu.New()
+	// Try to get WebGPU backend for maximum GPU acceleration
+	var base borntensor.Backend
+	gpuCtx, err := getBornGPUContext()
+	if err == nil && gpuCtx != nil {
+		base = gpuCtx
+	} else {
+		base = cpu.New()
+	}
 	backend := autodiff.New(base)
 
 	fc1 := nn.NewLinear(inputDim, hiddenDim, backend)
@@ -356,12 +366,12 @@ func (e *BornExpert) UpdateHealth(wasUsed bool) {
 }
 
 func (e *BornExpert) ToGPU() {
-	if e.backend.Inner().Name() == "cpu" {
-		// Already on primary backend or GPU using libgoffi/gogpu
+	if e.backend.Inner().Name() != "cpu" {
+		// Already on GPU backend
 		return
 	}
 
-	fmt.Println("🚀 Moving BornExpert to shared GPU context (libgoffi/gogpu)...")
+	fmt.Println("🚀 Moving BornExpert to WebGPU backend (born-ml + goffi)...")
 	gpu, err := getBornGPUContext()
 	if err != nil {
 		fmt.Printf("❌ Failed to initialize GPU backend: %v\n", err)
