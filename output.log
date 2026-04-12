@@ -1,0 +1,2173 @@
+2026/04/11 07:09:31 main.go:984: 🚀 GPU acceleration enabled (Paragon/Gogpu). Dispatching to AMD/Vulkan...
+--- 🗣️  Training Chat Model ---
+🚀 Using Global GPU Context for Chat Training...
+✅ Loaded Word2Vec model
+2026/04/11 07:09:32 chat.go:251: 📊 Loaded 1302 training pairs from conversing.csv
+2026/04/11 07:09:32 vocab.go:54: NewVocabulary: Initial size after adding <pad> and UNK: 2
+2026/04/11 07:09:32 chat.go:270: 📐 Pre-computed final vocab size: 2547
+2026/04/11 07:09:32 chat.go:311: 🚀 Initializing 512d MoE Transformer (8 Experts, 4-Layer Encoder, 4-Layer Decoder) for i5-12400F + 16GB RAM + GPU (Paragon/Gogpu)
+2026/04/11 07:09:32 chat.go:318: 🔢 Initializing decoder with final vocab size: 2547
+🚀 Moving fresh model to GPU...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🚀 Moving BornExpert to shared GPU context (Gogpu/Paragon)...
+🌡️  GPU Warm-up: Sequential pipeline compilation...
+DEBUG: vulkan: calling vkCreateShaderModule codeSize=1892
+DEBUG: getOrCreatePipeline name=transpose layout=0x2b236536ae00
+DEBUG: vulkan: calling vkCreateComputePipelines module=135647281823392 entryPoint=main
+DEBUG: memory mapped: handle=135647281776704 offset=0 ptr=0x7b5e90000000
+DEBUG: memory mapped: handle=135647281776704 offset=4194304 ptr=0x7b5e90400000
+DEBUG: WriteBuffer: mapping=0x7b5e90400000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647281776704 offset=8388608 ptr=0x7b5e90800000
+DEBUG: memory mapped: handle=135647281776704 offset=12582912 ptr=0x7b5e90c00000
+DEBUG: memory mapped: handle=135647281776704 offset=12845056 ptr=0x7b5e90c40000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: vulkan: calling vkCreateShaderModule codeSize=2880
+DEBUG: getOrCreatePipeline name=matmul layout=0x2b236536bb00
+DEBUG: vulkan: calling vkCreateComputePipelines module=135647281871712 entryPoint=main
+DEBUG: memory mapped: handle=135647281776704 offset=12584960 ptr=0x7b5e90c00800
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=2048
+DEBUG: memory mapped: handle=135647281776704 offset=16777216 ptr=0x7b5e91000000
+DEBUG: memory mapped: handle=135647281776704 offset=12591104 ptr=0x7b5e90c02000
+DEBUG: memory mapped: handle=135647281776704 offset=12583168 ptr=0x7b5e90c00100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=2064 dataLen=16
+DEBUG: vulkan: calling vkCreateShaderModule codeSize=1460
+DEBUG: getOrCreatePipeline name=add layout=0x2b23654068c0
+DEBUG: vulkan: calling vkCreateComputePipelines module=135647281920736 entryPoint=main
+DEBUG: memory mapped: handle=135647281776704 offset=12599296 ptr=0x7b5e90c04000
+DEBUG: memory mapped: handle=135647281776704 offset=12607488 ptr=0x7b5e90c06000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=2080 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=12615680 ptr=0x7b5e90c08000
+DEBUG: memory mapped: handle=135647281776704 offset=12583424 ptr=0x7b5e90c00200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=10272 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=0 ptr=0x7b5e90000000
+DEBUG: memory mapped: handle=135647281776704 offset=16777216 ptr=0x7b5e91000000
+DEBUG: WriteBuffer: mapping=0x7b5e91000000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647281776704 offset=20971520 ptr=0x7b5e91400000
+DEBUG: memory mapped: handle=135647281776704 offset=12582912 ptr=0x7b5e90c00000
+DEBUG: memory mapped: handle=135647281776704 offset=13107200 ptr=0x7b5e90c80000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=12623872 ptr=0x7b5e90c0a000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=25165824 ptr=0x7b5e91800000
+DEBUG: memory mapped: handle=135647281776704 offset=12584960 ptr=0x7b5e90c00800
+DEBUG: memory mapped: handle=135647281776704 offset=12583168 ptr=0x7b5e90c00100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=8208 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=12587008 ptr=0x7b5e90c01000
+DEBUG: memory mapped: handle=135647281776704 offset=12589056 ptr=0x7b5e90c01800
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=8224 dataLen=2048
+DEBUG: memory mapped: handle=135647281776704 offset=12599296 ptr=0x7b5e90c04000
+DEBUG: memory mapped: handle=135647281776704 offset=12583424 ptr=0x7b5e90c00200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=10272 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+✅ GPU Warm-up complete.
+2026/04/11 07:09:35 chat.go:347: 🛠️ Phase 1: Robust init (He for experts, Orthogonal/High-Scale for router)...
+2026/04/11 07:09:36 chat.go:361: 🛠️ Phase 2: Orthogonal init for LSTM weights + Forget-gate bias trick...
+2026/04/11 07:09:44 chat.go:386: ⚡ Phase 3 & 4: Manual Signal Boosting disabled for stability.
+2026/04/11 07:09:44 chat.go:391: 📡 Total Active MoE Layers: 5
+🔍 Performing Pre-Flight Health Check...
+✅ Model weights are within safe numerical bounds.
+2026/04/11 07:09:44 chat.go:415: 🔧 Adjusted MoE: Capacity=1.5, LBWeight=0.15, Temp=1.0, Dropout=0.1
+2026/04/11 07:09:44 chat.go:477: ✨ Expanded Word2Vec vocab with 171 new words from training data. Total: 61240
+2026/04/11 07:09:44 vocab.go:54: NewVocabulary: Initial size after adding <pad> and UNK: 2
+2026/04/11 07:09:44 chat.go:498: ✅ Final SentenceVocab Size: 2547
+2026/04/11 07:09:44 chat.go:542: Word2Vec Coverage: 4198 hits, 0 misses (100.00%)
+2026/04/11 07:09:44 chat.go:545: 🗑️  Freeing Word2Vec vectors from memory (61240 vectors)...
+2026/04/11 07:09:44 chat.go:550: ✅ Word2Vec heavy vectors freed.
+2026/04/11 07:09:44 chat.go:570: ⚖️ Data Distribution: Help=1208, Social=94
+Data Split Pre-Limit (Balanced): 1171 Training, 131 Validation
+2026/04/11 07:09:44 chat.go:620: 🎓 Curriculum active: Training starts with shortest sentences.
+2026/04/11 07:09:44 chat.go:632: Final Train Set Size: 1236
+Training on 1302 pairs for 60 epochs (patience=10)...
+2026/04/11 07:09:44 chat.go:792: 📊 Training CSV log: logs/training_log.csv
+2026/04/11 07:09:44 chat.go:803: 💾 [CHECKPOINT] Initial save at Step 0...
+2026/04/11 07:10:11 intent_moe.go:1178: ✅ [CHECKPOINT] Saved model to data/models/checkpoints/initial_0.gob (Size: 589.29 MB)
+2026/04/11 07:10:11 chat.go:827: 🌡️ Epoch 0 | Temperature: 1.0000
+2026/04/11 07:10:11 chat.go:2319: 🔄 Shuffled training data for new epoch
+2026/04/11 07:10:11 chat.go:886: 🌡️ Step 0: Temp=2.4975 | Thawed Experts: 8/16
+🔍 [Data Integrity Check]
+2026/04/11 07:10:11 chat.go:928: 🛡️ Dampened parameter 0 (Norm 65.95 -> 25.00)
+2026/04/11 07:10:11 chat.go:928: 🛡️ Dampened parameter 228 (Norm 63.80 -> 25.00)
+2026/04/11 07:10:11 chat.go:928: 🛡️ Dampened parameter 232 (Norm 63.83 -> 25.00)
+DEBUG: memory mapped: handle=135647281776704 offset=25165824 ptr=0x7b5e91800000
+DEBUG: memory mapped: handle=135647281776704 offset=29360128 ptr=0x7b5e91c00000
+DEBUG: WriteBuffer: mapping=0x7b5e91c00000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647281776704 offset=0 ptr=0x7b5e90000000
+DEBUG: memory mapped: handle=135647281776704 offset=12582912 ptr=0x7b5e90c00000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=12607488 ptr=0x7b5e90c06000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=6144
+DEBUG: memory mapped: handle=135647281776704 offset=4194304 ptr=0x7b5e90400000
+DEBUG: memory mapped: handle=135647281776704 offset=12615680 ptr=0x7b5e90c08000
+DEBUG: memory mapped: handle=135647281776704 offset=12583168 ptr=0x7b5e90c00100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6160 dataLen=16
+DEBUG: vulkan: calling vkCreateShaderModule codeSize=7160
+DEBUG: getOrCreatePipeline name=expand layout=0x2b23652c5840
+DEBUG: vulkan: calling vkCreateComputePipelines module=135647214004000 entryPoint=main
+DEBUG: memory mapped: handle=135647281776704 offset=12648448 ptr=0x7b5e90c10000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6176 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=12681216 ptr=0x7b5e90c18000
+DEBUG: memory mapped: handle=135647281776704 offset=12583424 ptr=0x7b5e90c00200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14368 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=12713984 ptr=0x7b5e90c20000
+DEBUG: memory mapped: handle=135647281776704 offset=12746752 ptr=0x7b5e90c28000
+DEBUG: memory mapped: handle=135647281776704 offset=12779520 ptr=0x7b5e90c30000
+DEBUG: memory mapped: handle=135647281776704 offset=12583680 ptr=0x7b5e90c00300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14448 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=4194304 ptr=0x7b5e90400000
+DEBUG: memory mapped: handle=135647281776704 offset=25165824 ptr=0x7b5e91800000
+DEBUG: WriteBuffer: mapping=0x7b5e91800000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647281776704 offset=8388608 ptr=0x7b5e90800000
+DEBUG: memory mapped: handle=135647281776704 offset=12582912 ptr=0x7b5e90c00000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=12648448 ptr=0x7b5e90c10000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=24576
+DEBUG: memory mapped: handle=135647281776704 offset=16777216 ptr=0x7b5e91000000
+DEBUG: memory mapped: handle=135647281776704 offset=12591104 ptr=0x7b5e90c02000
+DEBUG: memory mapped: handle=135647281776704 offset=12583168 ptr=0x7b5e90c00100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24592 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=12584960 ptr=0x7b5e90c00800
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24608 dataLen=2048
+DEBUG: memory mapped: handle=135647281776704 offset=12599296 ptr=0x7b5e90c04000
+DEBUG: memory mapped: handle=135647281776704 offset=12583424 ptr=0x7b5e90c00200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26656 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=12607488 ptr=0x7b5e90c06000
+DEBUG: memory mapped: handle=135647281776704 offset=12812288 ptr=0x7b5e90c38000
+DEBUG: memory mapped: handle=135647281776704 offset=12820480 ptr=0x7b5e90c3a000
+DEBUG: memory mapped: handle=135647281776704 offset=12583680 ptr=0x7b5e90c00300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26736 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=29360128 ptr=0x7b5e91c00000
+DEBUG: memory mapped: handle=135647281776704 offset=4194304 ptr=0x7b5e90400000
+DEBUG: WriteBuffer: mapping=0x7b5e90400000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647281776704 offset=16777216 ptr=0x7b5e91000000
+DEBUG: memory mapped: handle=135647281776704 offset=12607488 ptr=0x7b5e90c06000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=12812288 ptr=0x7b5e90c38000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=6144
+DEBUG: memory mapped: handle=135647281776704 offset=20971520 ptr=0x7b5e91400000
+DEBUG: memory mapped: handle=135647281776704 offset=12648448 ptr=0x7b5e90c10000
+DEBUG: memory mapped: handle=135647281776704 offset=12607744 ptr=0x7b5e90c06100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6160 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=12582912 ptr=0x7b5e90c00000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6176 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=12779520 ptr=0x7b5e90c30000
+DEBUG: memory mapped: handle=135647281776704 offset=12608000 ptr=0x7b5e90c06200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14368 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=12713984 ptr=0x7b5e90c20000
+DEBUG: memory mapped: handle=135647281776704 offset=12746752 ptr=0x7b5e90c28000
+DEBUG: memory mapped: handle=135647281776704 offset=13369344 ptr=0x7b5e90cc0000
+DEBUG: memory mapped: handle=135647281776704 offset=12608256 ptr=0x7b5e90c06300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14448 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=20971520 ptr=0x7b5e91400000
+DEBUG: memory mapped: handle=135647281776704 offset=25165824 ptr=0x7b5e91800000
+DEBUG: WriteBuffer: mapping=0x7b5e91800000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647281776704 offset=29360128 ptr=0x7b5e91c00000
+DEBUG: memory mapped: handle=135647281776704 offset=12607488 ptr=0x7b5e90c06000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=12812288 ptr=0x7b5e90c38000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=24576
+DEBUG: memory mapped: handle=135647281776704 offset=33554432 ptr=0x7b5e92000000
+DEBUG: memory mapped: handle=135647281776704 offset=12582912 ptr=0x7b5e90c00000
+DEBUG: memory mapped: handle=135647281776704 offset=12607744 ptr=0x7b5e90c06100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24592 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=12609536 ptr=0x7b5e90c06800
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24608 dataLen=2048
+DEBUG: memory mapped: handle=135647281776704 offset=13402112 ptr=0x7b5e90cc8000
+DEBUG: memory mapped: handle=135647281776704 offset=12608000 ptr=0x7b5e90c06200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26656 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=13410304 ptr=0x7b5e90cca000
+DEBUG: memory mapped: handle=135647281776704 offset=13418496 ptr=0x7b5e90ccc000
+DEBUG: memory mapped: handle=135647281776704 offset=13426688 ptr=0x7b5e90cce000
+DEBUG: memory mapped: handle=135647281776704 offset=12608256 ptr=0x7b5e90c06300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26736 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=4194304 ptr=0x7b5e90400000
+DEBUG: memory mapped: handle=135647281776704 offset=20971520 ptr=0x7b5e91400000
+DEBUG: WriteBuffer: mapping=0x7b5e91400000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647281776704 offset=33554432 ptr=0x7b5e92000000
+DEBUG: memory mapped: handle=135647281776704 offset=13410304 ptr=0x7b5e90cca000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=13418496 ptr=0x7b5e90ccc000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=6144
+DEBUG: memory mapped: handle=135647281776704 offset=37748736 ptr=0x7b5e92400000
+DEBUG: memory mapped: handle=135647281776704 offset=12812288 ptr=0x7b5e90c38000
+DEBUG: memory mapped: handle=135647281776704 offset=13410560 ptr=0x7b5e90cca100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6160 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=12607488 ptr=0x7b5e90c06000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6176 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=13369344 ptr=0x7b5e90cc0000
+DEBUG: memory mapped: handle=135647281776704 offset=13410816 ptr=0x7b5e90cca200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14368 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=12713984 ptr=0x7b5e90c20000
+DEBUG: memory mapped: handle=135647281776704 offset=12746752 ptr=0x7b5e90c28000
+DEBUG: memory mapped: handle=135647281776704 offset=13434880 ptr=0x7b5e90cd0000
+DEBUG: memory mapped: handle=135647281776704 offset=13411072 ptr=0x7b5e90cca300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14448 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=37748736 ptr=0x7b5e92400000
+DEBUG: memory mapped: handle=135647281776704 offset=4194304 ptr=0x7b5e90400000
+DEBUG: WriteBuffer: mapping=0x7b5e90400000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647281776704 offset=25165824 ptr=0x7b5e91800000
+DEBUG: memory mapped: handle=135647281776704 offset=13410304 ptr=0x7b5e90cca000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=13467648 ptr=0x7b5e90cd8000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=24576
+DEBUG: memory mapped: handle=135647281776704 offset=41943040 ptr=0x7b5e92800000
+DEBUG: memory mapped: handle=135647281776704 offset=12607488 ptr=0x7b5e90c06000
+DEBUG: memory mapped: handle=135647281776704 offset=13410560 ptr=0x7b5e90cca100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24592 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=13412352 ptr=0x7b5e90cca800
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24608 dataLen=2048
+DEBUG: memory mapped: handle=135647281776704 offset=13418496 ptr=0x7b5e90ccc000
+DEBUG: memory mapped: handle=135647281776704 offset=13410816 ptr=0x7b5e90cca200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26656 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=13426688 ptr=0x7b5e90cce000
+DEBUG: memory mapped: handle=135647281776704 offset=12713984 ptr=0x7b5e90c20000
+DEBUG: memory mapped: handle=135647281776704 offset=12722176 ptr=0x7b5e90c22000
+DEBUG: memory mapped: handle=135647281776704 offset=13411072 ptr=0x7b5e90cca300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26736 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=20971520 ptr=0x7b5e91400000
+DEBUG: memory mapped: handle=135647281776704 offset=37748736 ptr=0x7b5e92400000
+DEBUG: WriteBuffer: mapping=0x7b5e92400000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647281776704 offset=41943040 ptr=0x7b5e92800000
+DEBUG: memory mapped: handle=135647281776704 offset=13426688 ptr=0x7b5e90cce000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=12713984 ptr=0x7b5e90c20000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=6144
+DEBUG: memory mapped: handle=135647281776704 offset=46137344 ptr=0x7b5e92c00000
+DEBUG: memory mapped: handle=135647281776704 offset=12746752 ptr=0x7b5e90c28000
+DEBUG: memory mapped: handle=135647281776704 offset=13426944 ptr=0x7b5e90cce100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6160 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=13410304 ptr=0x7b5e90cca000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6176 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=13434880 ptr=0x7b5e90cd0000
+DEBUG: memory mapped: handle=135647281776704 offset=13427200 ptr=0x7b5e90cce200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14368 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=13467648 ptr=0x7b5e90cd8000
+DEBUG: memory mapped: handle=135647281776704 offset=13500416 ptr=0x7b5e90ce0000
+DEBUG: memory mapped: handle=135647281776704 offset=13533184 ptr=0x7b5e90ce8000
+DEBUG: memory mapped: handle=135647281776704 offset=13427456 ptr=0x7b5e90cce300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14448 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=46137344 ptr=0x7b5e92c00000
+DEBUG: memory mapped: handle=135647281776704 offset=20971520 ptr=0x7b5e91400000
+DEBUG: WriteBuffer: mapping=0x7b5e91400000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647281776704 offset=4194304 ptr=0x7b5e90400000
+DEBUG: memory mapped: handle=135647281776704 offset=13426688 ptr=0x7b5e90cce000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=13467648 ptr=0x7b5e90cd8000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=24576
+DEBUG: memory mapped: handle=135647281776704 offset=50331648 ptr=0x7b5e93000000
+DEBUG: memory mapped: handle=135647281776704 offset=13410304 ptr=0x7b5e90cca000
+DEBUG: memory mapped: handle=135647281776704 offset=13426944 ptr=0x7b5e90cce100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24592 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=13428736 ptr=0x7b5e90cce800
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24608 dataLen=2048
+DEBUG: memory mapped: handle=135647281776704 offset=13500416 ptr=0x7b5e90ce0000
+DEBUG: memory mapped: handle=135647281776704 offset=13427200 ptr=0x7b5e90cce200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26656 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=13508608 ptr=0x7b5e90ce2000
+DEBUG: memory mapped: handle=135647281776704 offset=13516800 ptr=0x7b5e90ce4000
+DEBUG: memory mapped: handle=135647281776704 offset=13524992 ptr=0x7b5e90ce6000
+DEBUG: memory mapped: handle=135647281776704 offset=13427456 ptr=0x7b5e90cce300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26736 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=37748736 ptr=0x7b5e92400000
+DEBUG: memory mapped: handle=135647281776704 offset=46137344 ptr=0x7b5e92c00000
+DEBUG: WriteBuffer: mapping=0x7b5e92c00000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647281776704 offset=50331648 ptr=0x7b5e93000000
+DEBUG: memory mapped: handle=135647281776704 offset=13508608 ptr=0x7b5e90ce2000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=13516800 ptr=0x7b5e90ce4000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=6144
+DEBUG: memory mapped: handle=135647281776704 offset=54525952 ptr=0x7b5e93400000
+DEBUG: memory mapped: handle=135647281776704 offset=13467648 ptr=0x7b5e90cd8000
+DEBUG: memory mapped: handle=135647281776704 offset=13508864 ptr=0x7b5e90ce2100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6160 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=13426688 ptr=0x7b5e90cce000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6176 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=13533184 ptr=0x7b5e90ce8000
+DEBUG: memory mapped: handle=135647281776704 offset=13509120 ptr=0x7b5e90ce2200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14368 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=12713984 ptr=0x7b5e90c20000
+DEBUG: memory mapped: handle=135647281776704 offset=13565952 ptr=0x7b5e90cf0000
+DEBUG: memory mapped: handle=135647281776704 offset=13598720 ptr=0x7b5e90cf8000
+DEBUG: memory mapped: handle=135647281776704 offset=13509376 ptr=0x7b5e90ce2300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14448 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=54525952 ptr=0x7b5e93400000
+DEBUG: memory mapped: handle=135647281776704 offset=37748736 ptr=0x7b5e92400000
+DEBUG: WriteBuffer: mapping=0x7b5e92400000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647281776704 offset=20971520 ptr=0x7b5e91400000
+DEBUG: memory mapped: handle=135647281776704 offset=13508608 ptr=0x7b5e90ce2000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=12713984 ptr=0x7b5e90c20000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=24576
+DEBUG: memory mapped: handle=135647281776704 offset=58720256 ptr=0x7b5e93800000
+DEBUG: memory mapped: handle=135647281776704 offset=13426688 ptr=0x7b5e90cce000
+DEBUG: memory mapped: handle=135647281776704 offset=13508864 ptr=0x7b5e90ce2100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24592 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=13510656 ptr=0x7b5e90ce2800
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24608 dataLen=2048
+DEBUG: memory mapped: handle=135647281776704 offset=13516800 ptr=0x7b5e90ce4000
+DEBUG: memory mapped: handle=135647281776704 offset=13509120 ptr=0x7b5e90ce2200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26656 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=13524992 ptr=0x7b5e90ce6000
+DEBUG: memory mapped: handle=135647281776704 offset=13565952 ptr=0x7b5e90cf0000
+DEBUG: memory mapped: handle=135647281776704 offset=13574144 ptr=0x7b5e90cf2000
+DEBUG: memory mapped: handle=135647281776704 offset=13509376 ptr=0x7b5e90ce2300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26736 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=46137344 ptr=0x7b5e92c00000
+DEBUG: memory mapped: handle=135647281776704 offset=54525952 ptr=0x7b5e93400000
+DEBUG: WriteBuffer: mapping=0x7b5e93400000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647281776704 offset=58720256 ptr=0x7b5e93800000
+DEBUG: memory mapped: handle=135647281776704 offset=13524992 ptr=0x7b5e90ce6000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=13565952 ptr=0x7b5e90cf0000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=6144
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=12713984 ptr=0x7b5e90c20000
+DEBUG: memory mapped: handle=135647281776704 offset=13525248 ptr=0x7b5e90ce6100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6160 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=13508608 ptr=0x7b5e90ce2000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6176 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=13598720 ptr=0x7b5e90cf8000
+DEBUG: memory mapped: handle=135647281776704 offset=13525504 ptr=0x7b5e90ce6200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14368 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=13631488 ptr=0x7b5e90d00000
+DEBUG: memory mapped: handle=135647281776704 offset=13664256 ptr=0x7b5e90d08000
+DEBUG: memory mapped: handle=135647281776704 offset=13697024 ptr=0x7b5e90d10000
+DEBUG: memory mapped: handle=135647281776704 offset=13525760 ptr=0x7b5e90ce6300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14448 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=46137344 ptr=0x7b5e92c00000
+DEBUG: WriteBuffer: mapping=0x7b5e92c00000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647281776704 offset=37748736 ptr=0x7b5e92400000
+DEBUG: memory mapped: handle=135647281776704 offset=13524992 ptr=0x7b5e90ce6000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=13565952 ptr=0x7b5e90cf0000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=24576
+DEBUG: memory mapped: handle=135647213937376 offset=0 ptr=0x7b5e80000000
+DEBUG: memory mapped: handle=135647281776704 offset=13508608 ptr=0x7b5e90ce2000
+DEBUG: memory mapped: handle=135647281776704 offset=13525248 ptr=0x7b5e90ce6100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24592 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=13527040 ptr=0x7b5e90ce6800
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24608 dataLen=2048
+DEBUG: memory mapped: handle=135647281776704 offset=13729792 ptr=0x7b5e90d18000
+DEBUG: memory mapped: handle=135647281776704 offset=13525504 ptr=0x7b5e90ce6200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26656 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=13737984 ptr=0x7b5e90d1a000
+DEBUG: memory mapped: handle=135647281776704 offset=13746176 ptr=0x7b5e90d1c000
+DEBUG: memory mapped: handle=135647281776704 offset=13754368 ptr=0x7b5e90d1e000
+DEBUG: memory mapped: handle=135647281776704 offset=13525760 ptr=0x7b5e90ce6300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26736 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=54525952 ptr=0x7b5e93400000
+DEBUG: WriteBuffer: mapping=0x7b5e93400000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647213937376 offset=0 ptr=0x7b5e80000000
+DEBUG: memory mapped: handle=135647281776704 offset=13737984 ptr=0x7b5e90d1a000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=13746176 ptr=0x7b5e90d1c000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=6144
+DEBUG: memory mapped: handle=135647213937376 offset=4194304 ptr=0x7b5e80400000
+DEBUG: memory mapped: handle=135647281776704 offset=13565952 ptr=0x7b5e90cf0000
+DEBUG: memory mapped: handle=135647281776704 offset=13738240 ptr=0x7b5e90d1a100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6160 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=13524992 ptr=0x7b5e90ce6000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6176 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=13697024 ptr=0x7b5e90d10000
+DEBUG: memory mapped: handle=135647281776704 offset=13738496 ptr=0x7b5e90d1a200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14368 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=13631488 ptr=0x7b5e90d00000
+DEBUG: memory mapped: handle=135647281776704 offset=13664256 ptr=0x7b5e90d08000
+DEBUG: memory mapped: handle=135647281776704 offset=13762560 ptr=0x7b5e90d20000
+DEBUG: memory mapped: handle=135647281776704 offset=13738752 ptr=0x7b5e90d1a300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14448 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=46137344 ptr=0x7b5e92c00000
+DEBUG: WriteBuffer: mapping=0x7b5e92c00000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647213937376 offset=4194304 ptr=0x7b5e80400000
+DEBUG: memory mapped: handle=135647281776704 offset=13737984 ptr=0x7b5e90d1a000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=13795328 ptr=0x7b5e90d28000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=24576
+DEBUG: memory mapped: handle=135647213937376 offset=8388608 ptr=0x7b5e80800000
+DEBUG: memory mapped: handle=135647281776704 offset=13524992 ptr=0x7b5e90ce6000
+DEBUG: memory mapped: handle=135647281776704 offset=13738240 ptr=0x7b5e90d1a100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24592 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=13740032 ptr=0x7b5e90d1a800
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24608 dataLen=2048
+DEBUG: memory mapped: handle=135647281776704 offset=13746176 ptr=0x7b5e90d1c000
+DEBUG: memory mapped: handle=135647281776704 offset=13738496 ptr=0x7b5e90d1a200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26656 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=13754368 ptr=0x7b5e90d1e000
+DEBUG: memory mapped: handle=135647281776704 offset=13631488 ptr=0x7b5e90d00000
+DEBUG: memory mapped: handle=135647281776704 offset=13639680 ptr=0x7b5e90d02000
+DEBUG: memory mapped: handle=135647281776704 offset=13738752 ptr=0x7b5e90d1a300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26736 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=54525952 ptr=0x7b5e93400000
+DEBUG: WriteBuffer: mapping=0x7b5e93400000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647213937376 offset=8388608 ptr=0x7b5e80800000
+DEBUG: memory mapped: handle=135647281776704 offset=13754368 ptr=0x7b5e90d1e000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=13631488 ptr=0x7b5e90d00000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=6144
+DEBUG: memory mapped: handle=135647213937376 offset=12582912 ptr=0x7b5e80c00000
+DEBUG: memory mapped: handle=135647281776704 offset=13664256 ptr=0x7b5e90d08000
+DEBUG: memory mapped: handle=135647281776704 offset=13754624 ptr=0x7b5e90d1e100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6160 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=13737984 ptr=0x7b5e90d1a000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6176 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=13762560 ptr=0x7b5e90d20000
+DEBUG: memory mapped: handle=135647281776704 offset=13754880 ptr=0x7b5e90d1e200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14368 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=13795328 ptr=0x7b5e90d28000
+DEBUG: memory mapped: handle=135647281776704 offset=13828096 ptr=0x7b5e90d30000
+DEBUG: memory mapped: handle=135647281776704 offset=13860864 ptr=0x7b5e90d38000
+DEBUG: memory mapped: handle=135647281776704 offset=13755136 ptr=0x7b5e90d1e300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14448 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=46137344 ptr=0x7b5e92c00000
+DEBUG: WriteBuffer: mapping=0x7b5e92c00000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647213937376 offset=12582912 ptr=0x7b5e80c00000
+DEBUG: memory mapped: handle=135647281776704 offset=13754368 ptr=0x7b5e90d1e000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=13795328 ptr=0x7b5e90d28000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=24576
+DEBUG: memory mapped: handle=135647213937376 offset=16777216 ptr=0x7b5e81000000
+DEBUG: memory mapped: handle=135647281776704 offset=13737984 ptr=0x7b5e90d1a000
+DEBUG: memory mapped: handle=135647281776704 offset=13754624 ptr=0x7b5e90d1e100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24592 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=13756416 ptr=0x7b5e90d1e800
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24608 dataLen=2048
+DEBUG: memory mapped: handle=135647281776704 offset=13828096 ptr=0x7b5e90d30000
+DEBUG: memory mapped: handle=135647281776704 offset=13754880 ptr=0x7b5e90d1e200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26656 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=13836288 ptr=0x7b5e90d32000
+DEBUG: memory mapped: handle=135647281776704 offset=13844480 ptr=0x7b5e90d34000
+DEBUG: memory mapped: handle=135647281776704 offset=13852672 ptr=0x7b5e90d36000
+DEBUG: memory mapped: handle=135647281776704 offset=13755136 ptr=0x7b5e90d1e300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26736 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=54525952 ptr=0x7b5e93400000
+DEBUG: WriteBuffer: mapping=0x7b5e93400000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647213937376 offset=16777216 ptr=0x7b5e81000000
+DEBUG: memory mapped: handle=135647281776704 offset=13836288 ptr=0x7b5e90d32000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=13844480 ptr=0x7b5e90d34000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=6144
+DEBUG: memory mapped: handle=135647213937376 offset=20971520 ptr=0x7b5e81400000
+DEBUG: memory mapped: handle=135647281776704 offset=13795328 ptr=0x7b5e90d28000
+DEBUG: memory mapped: handle=135647281776704 offset=13836544 ptr=0x7b5e90d32100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6160 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=13754368 ptr=0x7b5e90d1e000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6176 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=13860864 ptr=0x7b5e90d38000
+DEBUG: memory mapped: handle=135647281776704 offset=13836800 ptr=0x7b5e90d32200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14368 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=13631488 ptr=0x7b5e90d00000
+DEBUG: memory mapped: handle=135647281776704 offset=13893632 ptr=0x7b5e90d40000
+DEBUG: memory mapped: handle=135647281776704 offset=13926400 ptr=0x7b5e90d48000
+DEBUG: memory mapped: handle=135647281776704 offset=13837056 ptr=0x7b5e90d32300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14448 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=46137344 ptr=0x7b5e92c00000
+DEBUG: WriteBuffer: mapping=0x7b5e92c00000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647213937376 offset=20971520 ptr=0x7b5e81400000
+DEBUG: memory mapped: handle=135647281776704 offset=13836288 ptr=0x7b5e90d32000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=13631488 ptr=0x7b5e90d00000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=24576
+DEBUG: memory mapped: handle=135647213937376 offset=25165824 ptr=0x7b5e81800000
+DEBUG: memory mapped: handle=135647281776704 offset=13754368 ptr=0x7b5e90d1e000
+DEBUG: memory mapped: handle=135647281776704 offset=13836544 ptr=0x7b5e90d32100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24592 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=13838336 ptr=0x7b5e90d32800
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24608 dataLen=2048
+DEBUG: memory mapped: handle=135647281776704 offset=13844480 ptr=0x7b5e90d34000
+DEBUG: memory mapped: handle=135647281776704 offset=13836800 ptr=0x7b5e90d32200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26656 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=13852672 ptr=0x7b5e90d36000
+DEBUG: memory mapped: handle=135647281776704 offset=13893632 ptr=0x7b5e90d40000
+DEBUG: memory mapped: handle=135647281776704 offset=13901824 ptr=0x7b5e90d42000
+DEBUG: memory mapped: handle=135647281776704 offset=13837056 ptr=0x7b5e90d32300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26736 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=54525952 ptr=0x7b5e93400000
+DEBUG: WriteBuffer: mapping=0x7b5e93400000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647213937376 offset=25165824 ptr=0x7b5e81800000
+DEBUG: memory mapped: handle=135647281776704 offset=13852672 ptr=0x7b5e90d36000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=13893632 ptr=0x7b5e90d40000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=6144
+DEBUG: memory mapped: handle=135647213937376 offset=29360128 ptr=0x7b5e81c00000
+DEBUG: memory mapped: handle=135647281776704 offset=13631488 ptr=0x7b5e90d00000
+DEBUG: memory mapped: handle=135647281776704 offset=13852928 ptr=0x7b5e90d36100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6160 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=13836288 ptr=0x7b5e90d32000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6176 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=13926400 ptr=0x7b5e90d48000
+DEBUG: memory mapped: handle=135647281776704 offset=13853184 ptr=0x7b5e90d36200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14368 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=13959168 ptr=0x7b5e90d50000
+DEBUG: memory mapped: handle=135647281776704 offset=13991936 ptr=0x7b5e90d58000
+DEBUG: memory mapped: handle=135647281776704 offset=14024704 ptr=0x7b5e90d60000
+DEBUG: memory mapped: handle=135647281776704 offset=13853440 ptr=0x7b5e90d36300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14448 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=46137344 ptr=0x7b5e92c00000
+DEBUG: WriteBuffer: mapping=0x7b5e92c00000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647213937376 offset=29360128 ptr=0x7b5e81c00000
+DEBUG: memory mapped: handle=135647281776704 offset=13852672 ptr=0x7b5e90d36000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=13893632 ptr=0x7b5e90d40000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=24576
+DEBUG: memory mapped: handle=135647213937376 offset=33554432 ptr=0x7b5e82000000
+DEBUG: memory mapped: handle=135647281776704 offset=13836288 ptr=0x7b5e90d32000
+DEBUG: memory mapped: handle=135647281776704 offset=13852928 ptr=0x7b5e90d36100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24592 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=13854720 ptr=0x7b5e90d36800
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24608 dataLen=2048
+DEBUG: memory mapped: handle=135647281776704 offset=14057472 ptr=0x7b5e90d68000
+DEBUG: memory mapped: handle=135647281776704 offset=13853184 ptr=0x7b5e90d36200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26656 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=14065664 ptr=0x7b5e90d6a000
+DEBUG: memory mapped: handle=135647281776704 offset=14073856 ptr=0x7b5e90d6c000
+DEBUG: memory mapped: handle=135647281776704 offset=14082048 ptr=0x7b5e90d6e000
+DEBUG: memory mapped: handle=135647281776704 offset=13853440 ptr=0x7b5e90d36300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26736 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=54525952 ptr=0x7b5e93400000
+DEBUG: WriteBuffer: mapping=0x7b5e93400000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647213937376 offset=33554432 ptr=0x7b5e82000000
+DEBUG: memory mapped: handle=135647281776704 offset=14065664 ptr=0x7b5e90d6a000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14073856 ptr=0x7b5e90d6c000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=6144
+DEBUG: memory mapped: handle=135647213937376 offset=37748736 ptr=0x7b5e82400000
+DEBUG: memory mapped: handle=135647281776704 offset=13893632 ptr=0x7b5e90d40000
+DEBUG: memory mapped: handle=135647281776704 offset=14065920 ptr=0x7b5e90d6a100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6160 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=13852672 ptr=0x7b5e90d36000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6176 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=14024704 ptr=0x7b5e90d60000
+DEBUG: memory mapped: handle=135647281776704 offset=14066176 ptr=0x7b5e90d6a200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14368 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=13959168 ptr=0x7b5e90d50000
+DEBUG: memory mapped: handle=135647281776704 offset=13991936 ptr=0x7b5e90d58000
+DEBUG: memory mapped: handle=135647281776704 offset=14090240 ptr=0x7b5e90d70000
+DEBUG: memory mapped: handle=135647281776704 offset=14066432 ptr=0x7b5e90d6a300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14448 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=46137344 ptr=0x7b5e92c00000
+DEBUG: WriteBuffer: mapping=0x7b5e92c00000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647213937376 offset=37748736 ptr=0x7b5e82400000
+DEBUG: memory mapped: handle=135647281776704 offset=14065664 ptr=0x7b5e90d6a000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14123008 ptr=0x7b5e90d78000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=24576
+DEBUG: memory mapped: handle=135647213937376 offset=41943040 ptr=0x7b5e82800000
+DEBUG: memory mapped: handle=135647281776704 offset=13852672 ptr=0x7b5e90d36000
+DEBUG: memory mapped: handle=135647281776704 offset=14065920 ptr=0x7b5e90d6a100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24592 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14067712 ptr=0x7b5e90d6a800
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24608 dataLen=2048
+DEBUG: memory mapped: handle=135647281776704 offset=14073856 ptr=0x7b5e90d6c000
+DEBUG: memory mapped: handle=135647281776704 offset=14066176 ptr=0x7b5e90d6a200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26656 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=14082048 ptr=0x7b5e90d6e000
+DEBUG: memory mapped: handle=135647281776704 offset=13959168 ptr=0x7b5e90d50000
+DEBUG: memory mapped: handle=135647281776704 offset=13967360 ptr=0x7b5e90d52000
+DEBUG: memory mapped: handle=135647281776704 offset=14066432 ptr=0x7b5e90d6a300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26736 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=54525952 ptr=0x7b5e93400000
+DEBUG: WriteBuffer: mapping=0x7b5e93400000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647213937376 offset=41943040 ptr=0x7b5e82800000
+DEBUG: memory mapped: handle=135647281776704 offset=14082048 ptr=0x7b5e90d6e000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=13959168 ptr=0x7b5e90d50000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=6144
+DEBUG: memory mapped: handle=135647213937376 offset=46137344 ptr=0x7b5e82c00000
+DEBUG: memory mapped: handle=135647281776704 offset=13991936 ptr=0x7b5e90d58000
+DEBUG: memory mapped: handle=135647281776704 offset=14082304 ptr=0x7b5e90d6e100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6160 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14065664 ptr=0x7b5e90d6a000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6176 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=14090240 ptr=0x7b5e90d70000
+DEBUG: memory mapped: handle=135647281776704 offset=14082560 ptr=0x7b5e90d6e200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14368 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=14123008 ptr=0x7b5e90d78000
+DEBUG: memory mapped: handle=135647281776704 offset=14155776 ptr=0x7b5e90d80000
+DEBUG: memory mapped: handle=135647281776704 offset=14188544 ptr=0x7b5e90d88000
+DEBUG: memory mapped: handle=135647281776704 offset=14082816 ptr=0x7b5e90d6e300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14448 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=46137344 ptr=0x7b5e92c00000
+DEBUG: WriteBuffer: mapping=0x7b5e92c00000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647213937376 offset=46137344 ptr=0x7b5e82c00000
+DEBUG: memory mapped: handle=135647281776704 offset=14082048 ptr=0x7b5e90d6e000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14123008 ptr=0x7b5e90d78000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=24576
+DEBUG: memory mapped: handle=135647213937376 offset=50331648 ptr=0x7b5e83000000
+DEBUG: memory mapped: handle=135647281776704 offset=14065664 ptr=0x7b5e90d6a000
+DEBUG: memory mapped: handle=135647281776704 offset=14082304 ptr=0x7b5e90d6e100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24592 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14084096 ptr=0x7b5e90d6e800
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24608 dataLen=2048
+DEBUG: memory mapped: handle=135647281776704 offset=14155776 ptr=0x7b5e90d80000
+DEBUG: memory mapped: handle=135647281776704 offset=14082560 ptr=0x7b5e90d6e200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26656 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=14163968 ptr=0x7b5e90d82000
+DEBUG: memory mapped: handle=135647281776704 offset=14172160 ptr=0x7b5e90d84000
+DEBUG: memory mapped: handle=135647281776704 offset=14180352 ptr=0x7b5e90d86000
+DEBUG: memory mapped: handle=135647281776704 offset=14082816 ptr=0x7b5e90d6e300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26736 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=54525952 ptr=0x7b5e93400000
+DEBUG: WriteBuffer: mapping=0x7b5e93400000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647213937376 offset=50331648 ptr=0x7b5e83000000
+DEBUG: memory mapped: handle=135647281776704 offset=14163968 ptr=0x7b5e90d82000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14172160 ptr=0x7b5e90d84000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=6144
+DEBUG: memory mapped: handle=135647213937376 offset=54525952 ptr=0x7b5e83400000
+DEBUG: memory mapped: handle=135647281776704 offset=14123008 ptr=0x7b5e90d78000
+DEBUG: memory mapped: handle=135647281776704 offset=14164224 ptr=0x7b5e90d82100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6160 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14082048 ptr=0x7b5e90d6e000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6176 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=14188544 ptr=0x7b5e90d88000
+DEBUG: memory mapped: handle=135647281776704 offset=14164480 ptr=0x7b5e90d82200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14368 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=13959168 ptr=0x7b5e90d50000
+DEBUG: memory mapped: handle=135647281776704 offset=14221312 ptr=0x7b5e90d90000
+DEBUG: memory mapped: handle=135647281776704 offset=14254080 ptr=0x7b5e90d98000
+DEBUG: memory mapped: handle=135647281776704 offset=14164736 ptr=0x7b5e90d82300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14448 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=46137344 ptr=0x7b5e92c00000
+DEBUG: WriteBuffer: mapping=0x7b5e92c00000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647213937376 offset=54525952 ptr=0x7b5e83400000
+DEBUG: memory mapped: handle=135647281776704 offset=14163968 ptr=0x7b5e90d82000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=13959168 ptr=0x7b5e90d50000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=24576
+DEBUG: memory mapped: handle=135647213937376 offset=58720256 ptr=0x7b5e83800000
+DEBUG: memory mapped: handle=135647281776704 offset=14082048 ptr=0x7b5e90d6e000
+DEBUG: memory mapped: handle=135647281776704 offset=14164224 ptr=0x7b5e90d82100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24592 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14166016 ptr=0x7b5e90d82800
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24608 dataLen=2048
+DEBUG: memory mapped: handle=135647281776704 offset=14172160 ptr=0x7b5e90d84000
+DEBUG: memory mapped: handle=135647281776704 offset=14164480 ptr=0x7b5e90d82200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26656 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=14180352 ptr=0x7b5e90d86000
+DEBUG: memory mapped: handle=135647281776704 offset=14221312 ptr=0x7b5e90d90000
+DEBUG: memory mapped: handle=135647281776704 offset=14229504 ptr=0x7b5e90d92000
+DEBUG: memory mapped: handle=135647281776704 offset=14164736 ptr=0x7b5e90d82300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26736 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=54525952 ptr=0x7b5e93400000
+DEBUG: WriteBuffer: mapping=0x7b5e93400000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647213937376 offset=58720256 ptr=0x7b5e83800000
+DEBUG: memory mapped: handle=135647281776704 offset=14180352 ptr=0x7b5e90d86000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14221312 ptr=0x7b5e90d90000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=6144
+DEBUG: memory mapped: handle=135647213937376 offset=62914560 ptr=0x7b5e83c00000
+DEBUG: memory mapped: handle=135647281776704 offset=13959168 ptr=0x7b5e90d50000
+DEBUG: memory mapped: handle=135647281776704 offset=14180608 ptr=0x7b5e90d86100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6160 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14163968 ptr=0x7b5e90d82000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6176 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=14254080 ptr=0x7b5e90d98000
+DEBUG: memory mapped: handle=135647281776704 offset=14180864 ptr=0x7b5e90d86200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14368 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=14286848 ptr=0x7b5e90da0000
+DEBUG: memory mapped: handle=135647281776704 offset=14319616 ptr=0x7b5e90da8000
+DEBUG: memory mapped: handle=135647281776704 offset=14352384 ptr=0x7b5e90db0000
+DEBUG: memory mapped: handle=135647281776704 offset=14181120 ptr=0x7b5e90d86300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14448 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=46137344 ptr=0x7b5e92c00000
+DEBUG: WriteBuffer: mapping=0x7b5e92c00000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647213937376 offset=62914560 ptr=0x7b5e83c00000
+DEBUG: memory mapped: handle=135647281776704 offset=14180352 ptr=0x7b5e90d86000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14221312 ptr=0x7b5e90d90000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=24576
+DEBUG: memory mapped: handle=135647214150720 offset=0 ptr=0x7b5e7c000000
+DEBUG: memory mapped: handle=135647281776704 offset=14163968 ptr=0x7b5e90d82000
+DEBUG: memory mapped: handle=135647281776704 offset=14180608 ptr=0x7b5e90d86100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24592 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14182400 ptr=0x7b5e90d86800
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24608 dataLen=2048
+DEBUG: memory mapped: handle=135647281776704 offset=14385152 ptr=0x7b5e90db8000
+DEBUG: memory mapped: handle=135647281776704 offset=14180864 ptr=0x7b5e90d86200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26656 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=14393344 ptr=0x7b5e90dba000
+DEBUG: memory mapped: handle=135647281776704 offset=14401536 ptr=0x7b5e90dbc000
+DEBUG: memory mapped: handle=135647281776704 offset=14409728 ptr=0x7b5e90dbe000
+DEBUG: memory mapped: handle=135647281776704 offset=14181120 ptr=0x7b5e90d86300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26736 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=54525952 ptr=0x7b5e93400000
+DEBUG: WriteBuffer: mapping=0x7b5e93400000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647214150720 offset=0 ptr=0x7b5e7c000000
+DEBUG: memory mapped: handle=135647281776704 offset=14393344 ptr=0x7b5e90dba000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14401536 ptr=0x7b5e90dbc000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=6144
+DEBUG: memory mapped: handle=135647214150720 offset=4194304 ptr=0x7b5e7c400000
+DEBUG: memory mapped: handle=135647281776704 offset=14221312 ptr=0x7b5e90d90000
+DEBUG: memory mapped: handle=135647281776704 offset=14393600 ptr=0x7b5e90dba100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6160 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14180352 ptr=0x7b5e90d86000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6176 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=14352384 ptr=0x7b5e90db0000
+DEBUG: memory mapped: handle=135647281776704 offset=14393856 ptr=0x7b5e90dba200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14368 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=14286848 ptr=0x7b5e90da0000
+DEBUG: memory mapped: handle=135647281776704 offset=14319616 ptr=0x7b5e90da8000
+DEBUG: memory mapped: handle=135647281776704 offset=14417920 ptr=0x7b5e90dc0000
+DEBUG: memory mapped: handle=135647281776704 offset=14394112 ptr=0x7b5e90dba300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14448 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=46137344 ptr=0x7b5e92c00000
+DEBUG: WriteBuffer: mapping=0x7b5e92c00000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647214150720 offset=4194304 ptr=0x7b5e7c400000
+DEBUG: memory mapped: handle=135647281776704 offset=14393344 ptr=0x7b5e90dba000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14450688 ptr=0x7b5e90dc8000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=24576
+DEBUG: memory mapped: handle=135647214150720 offset=8388608 ptr=0x7b5e7c800000
+DEBUG: memory mapped: handle=135647281776704 offset=14180352 ptr=0x7b5e90d86000
+DEBUG: memory mapped: handle=135647281776704 offset=14393600 ptr=0x7b5e90dba100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24592 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14395392 ptr=0x7b5e90dba800
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24608 dataLen=2048
+DEBUG: memory mapped: handle=135647281776704 offset=14401536 ptr=0x7b5e90dbc000
+DEBUG: memory mapped: handle=135647281776704 offset=14393856 ptr=0x7b5e90dba200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26656 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=14409728 ptr=0x7b5e90dbe000
+DEBUG: memory mapped: handle=135647281776704 offset=14286848 ptr=0x7b5e90da0000
+DEBUG: memory mapped: handle=135647281776704 offset=14295040 ptr=0x7b5e90da2000
+DEBUG: memory mapped: handle=135647281776704 offset=14394112 ptr=0x7b5e90dba300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26736 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=54525952 ptr=0x7b5e93400000
+DEBUG: WriteBuffer: mapping=0x7b5e93400000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647214150720 offset=8388608 ptr=0x7b5e7c800000
+DEBUG: memory mapped: handle=135647281776704 offset=14409728 ptr=0x7b5e90dbe000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14286848 ptr=0x7b5e90da0000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=6144
+DEBUG: memory mapped: handle=135647214150720 offset=12582912 ptr=0x7b5e7cc00000
+DEBUG: memory mapped: handle=135647281776704 offset=14319616 ptr=0x7b5e90da8000
+DEBUG: memory mapped: handle=135647281776704 offset=14409984 ptr=0x7b5e90dbe100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6160 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14393344 ptr=0x7b5e90dba000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6176 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=14417920 ptr=0x7b5e90dc0000
+DEBUG: memory mapped: handle=135647281776704 offset=14410240 ptr=0x7b5e90dbe200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14368 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=14450688 ptr=0x7b5e90dc8000
+DEBUG: memory mapped: handle=135647281776704 offset=14483456 ptr=0x7b5e90dd0000
+DEBUG: memory mapped: handle=135647281776704 offset=14516224 ptr=0x7b5e90dd8000
+DEBUG: memory mapped: handle=135647281776704 offset=14410496 ptr=0x7b5e90dbe300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14448 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=46137344 ptr=0x7b5e92c00000
+DEBUG: WriteBuffer: mapping=0x7b5e92c00000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647214150720 offset=12582912 ptr=0x7b5e7cc00000
+DEBUG: memory mapped: handle=135647281776704 offset=14409728 ptr=0x7b5e90dbe000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14450688 ptr=0x7b5e90dc8000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=24576
+DEBUG: memory mapped: handle=135647214150720 offset=16777216 ptr=0x7b5e7d000000
+DEBUG: memory mapped: handle=135647281776704 offset=14393344 ptr=0x7b5e90dba000
+DEBUG: memory mapped: handle=135647281776704 offset=14409984 ptr=0x7b5e90dbe100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24592 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14411776 ptr=0x7b5e90dbe800
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24608 dataLen=2048
+DEBUG: memory mapped: handle=135647281776704 offset=14483456 ptr=0x7b5e90dd0000
+DEBUG: memory mapped: handle=135647281776704 offset=14410240 ptr=0x7b5e90dbe200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26656 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=14491648 ptr=0x7b5e90dd2000
+DEBUG: memory mapped: handle=135647281776704 offset=14499840 ptr=0x7b5e90dd4000
+DEBUG: memory mapped: handle=135647281776704 offset=14508032 ptr=0x7b5e90dd6000
+DEBUG: memory mapped: handle=135647281776704 offset=14410496 ptr=0x7b5e90dbe300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26736 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=54525952 ptr=0x7b5e93400000
+DEBUG: WriteBuffer: mapping=0x7b5e93400000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647214150720 offset=16777216 ptr=0x7b5e7d000000
+DEBUG: memory mapped: handle=135647281776704 offset=14491648 ptr=0x7b5e90dd2000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14495744 ptr=0x7b5e90dd3000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=4096
+DEBUG: memory mapped: handle=135647214150720 offset=20971520 ptr=0x7b5e7d400000
+DEBUG: memory mapped: handle=135647281776704 offset=14450688 ptr=0x7b5e90dc8000
+DEBUG: memory mapped: handle=135647281776704 offset=14491904 ptr=0x7b5e90dd2100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=4112 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14499840 ptr=0x7b5e90dd4000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=4128 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=14467072 ptr=0x7b5e90dcc000
+DEBUG: memory mapped: handle=135647281776704 offset=14492160 ptr=0x7b5e90dd2200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=12320 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=14516224 ptr=0x7b5e90dd8000
+DEBUG: memory mapped: handle=135647281776704 offset=14532608 ptr=0x7b5e90ddc000
+DEBUG: memory mapped: handle=135647281776704 offset=14286848 ptr=0x7b5e90da0000
+DEBUG: memory mapped: handle=135647281776704 offset=14492416 ptr=0x7b5e90dd2300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=12400 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=46137344 ptr=0x7b5e92c00000
+DEBUG: WriteBuffer: mapping=0x7b5e92c00000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647214150720 offset=20971520 ptr=0x7b5e7d400000
+DEBUG: memory mapped: handle=135647281776704 offset=14491648 ptr=0x7b5e90dd2000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14499840 ptr=0x7b5e90dd4000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=16384
+DEBUG: memory mapped: handle=135647214150720 offset=25165824 ptr=0x7b5e7d800000
+DEBUG: memory mapped: handle=135647281776704 offset=14495744 ptr=0x7b5e90dd3000
+DEBUG: memory mapped: handle=135647281776704 offset=14491904 ptr=0x7b5e90dd2100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16400 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14493696 ptr=0x7b5e90dd2800
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16416 dataLen=2048
+DEBUG: memory mapped: handle=135647281776704 offset=14409728 ptr=0x7b5e90dbe000
+DEBUG: memory mapped: handle=135647281776704 offset=14492160 ptr=0x7b5e90dd2200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=18464 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: memory mapped: handle=135647281776704 offset=14303232 ptr=0x7b5e90da4000
+DEBUG: memory mapped: handle=135647281776704 offset=14307328 ptr=0x7b5e90da5000
+DEBUG: memory mapped: handle=135647281776704 offset=14492416 ptr=0x7b5e90dd2300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=18544 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=54525952 ptr=0x7b5e93400000
+DEBUG: WriteBuffer: mapping=0x7b5e93400000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647214150720 offset=25165824 ptr=0x7b5e7d800000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14311424 ptr=0x7b5e90da6000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=6144
+DEBUG: memory mapped: handle=135647214150720 offset=29360128 ptr=0x7b5e7dc00000
+DEBUG: memory mapped: handle=135647281776704 offset=14516224 ptr=0x7b5e90dd8000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6160 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14499840 ptr=0x7b5e90dd4000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6176 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=14548992 ptr=0x7b5e90de0000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14368 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=14581760 ptr=0x7b5e90de8000
+DEBUG: memory mapped: handle=135647281776704 offset=14614528 ptr=0x7b5e90df0000
+DEBUG: memory mapped: handle=135647281776704 offset=14647296 ptr=0x7b5e90df8000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14448 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=46137344 ptr=0x7b5e92c00000
+DEBUG: WriteBuffer: mapping=0x7b5e92c00000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647214150720 offset=29360128 ptr=0x7b5e7dc00000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14581760 ptr=0x7b5e90de8000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=24576
+DEBUG: memory mapped: handle=135647214150720 offset=33554432 ptr=0x7b5e7e000000
+DEBUG: memory mapped: handle=135647281776704 offset=14499840 ptr=0x7b5e90dd4000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24592 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14415872 ptr=0x7b5e90dbf800
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24608 dataLen=2048
+DEBUG: memory mapped: handle=135647281776704 offset=14508032 ptr=0x7b5e90dd6000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26656 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=14614528 ptr=0x7b5e90df0000
+DEBUG: memory mapped: handle=135647281776704 offset=14622720 ptr=0x7b5e90df2000
+DEBUG: memory mapped: handle=135647281776704 offset=14630912 ptr=0x7b5e90df4000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26736 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=54525952 ptr=0x7b5e93400000
+DEBUG: WriteBuffer: mapping=0x7b5e93400000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647214150720 offset=33554432 ptr=0x7b5e7e000000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14639104 ptr=0x7b5e90df6000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=6144
+DEBUG: memory mapped: handle=135647214150720 offset=37748736 ptr=0x7b5e7e400000
+DEBUG: memory mapped: handle=135647281776704 offset=14581760 ptr=0x7b5e90de8000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6160 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14614528 ptr=0x7b5e90df0000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6176 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=14647296 ptr=0x7b5e90df8000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14368 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=14286848 ptr=0x7b5e90da0000
+DEBUG: memory mapped: handle=135647281776704 offset=14680064 ptr=0x7b5e90e00000
+DEBUG: memory mapped: handle=135647281776704 offset=14712832 ptr=0x7b5e90e08000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14448 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=46137344 ptr=0x7b5e92c00000
+DEBUG: WriteBuffer: mapping=0x7b5e92c00000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647214150720 offset=37748736 ptr=0x7b5e7e400000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14286848 ptr=0x7b5e90da0000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=24576
+DEBUG: memory mapped: handle=135647214150720 offset=41943040 ptr=0x7b5e7e800000
+DEBUG: memory mapped: handle=135647281776704 offset=14680064 ptr=0x7b5e90e00000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24592 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14415872 ptr=0x7b5e90dbf800
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24608 dataLen=2048
+DEBUG: memory mapped: handle=135647281776704 offset=14688256 ptr=0x7b5e90e02000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26656 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=14696448 ptr=0x7b5e90e04000
+DEBUG: memory mapped: handle=135647281776704 offset=14704640 ptr=0x7b5e90e06000
+DEBUG: memory mapped: handle=135647281776704 offset=14614528 ptr=0x7b5e90df0000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26736 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=54525952 ptr=0x7b5e93400000
+DEBUG: WriteBuffer: mapping=0x7b5e93400000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647214150720 offset=41943040 ptr=0x7b5e7e800000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14622720 ptr=0x7b5e90df2000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=6144
+DEBUG: memory mapped: handle=135647214150720 offset=46137344 ptr=0x7b5e7ec00000
+DEBUG: memory mapped: handle=135647281776704 offset=14286848 ptr=0x7b5e90da0000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6160 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14696448 ptr=0x7b5e90e04000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6176 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=14712832 ptr=0x7b5e90e08000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14368 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=14745600 ptr=0x7b5e90e10000
+DEBUG: memory mapped: handle=135647281776704 offset=14778368 ptr=0x7b5e90e18000
+DEBUG: memory mapped: handle=135647281776704 offset=14811136 ptr=0x7b5e90e20000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14448 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=46137344 ptr=0x7b5e92c00000
+DEBUG: WriteBuffer: mapping=0x7b5e92c00000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647214150720 offset=46137344 ptr=0x7b5e7ec00000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14614528 ptr=0x7b5e90df0000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=24576
+DEBUG: memory mapped: handle=135647214150720 offset=50331648 ptr=0x7b5e7f000000
+DEBUG: memory mapped: handle=135647281776704 offset=14696448 ptr=0x7b5e90e04000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24592 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14415872 ptr=0x7b5e90dbf800
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24608 dataLen=2048
+DEBUG: memory mapped: handle=135647281776704 offset=14704640 ptr=0x7b5e90e06000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26656 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=14843904 ptr=0x7b5e90e28000
+DEBUG: memory mapped: handle=135647281776704 offset=14852096 ptr=0x7b5e90e2a000
+DEBUG: memory mapped: handle=135647281776704 offset=14860288 ptr=0x7b5e90e2c000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26736 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=54525952 ptr=0x7b5e93400000
+DEBUG: WriteBuffer: mapping=0x7b5e93400000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647214150720 offset=50331648 ptr=0x7b5e7f000000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14868480 ptr=0x7b5e90e2e000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=6144
+DEBUG: memory mapped: handle=135647214150720 offset=54525952 ptr=0x7b5e7f400000
+DEBUG: memory mapped: handle=135647281776704 offset=14614528 ptr=0x7b5e90df0000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6160 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14843904 ptr=0x7b5e90e28000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6176 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=14811136 ptr=0x7b5e90e20000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14368 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=14745600 ptr=0x7b5e90e10000
+DEBUG: memory mapped: handle=135647281776704 offset=14778368 ptr=0x7b5e90e18000
+DEBUG: memory mapped: handle=135647281776704 offset=14876672 ptr=0x7b5e90e30000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14448 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=46137344 ptr=0x7b5e92c00000
+DEBUG: WriteBuffer: mapping=0x7b5e92c00000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647214150720 offset=54525952 ptr=0x7b5e7f400000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14843904 ptr=0x7b5e90e28000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=24576
+DEBUG: memory mapped: handle=135647214150720 offset=58720256 ptr=0x7b5e7f800000
+DEBUG: memory mapped: handle=135647281776704 offset=14909440 ptr=0x7b5e90e38000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24592 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14415872 ptr=0x7b5e90dbf800
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24608 dataLen=2048
+DEBUG: memory mapped: handle=135647281776704 offset=14917632 ptr=0x7b5e90e3a000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26656 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=14925824 ptr=0x7b5e90e3c000
+DEBUG: memory mapped: handle=135647281776704 offset=14934016 ptr=0x7b5e90e3e000
+DEBUG: memory mapped: handle=135647281776704 offset=14745600 ptr=0x7b5e90e10000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26736 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=54525952 ptr=0x7b5e93400000
+DEBUG: WriteBuffer: mapping=0x7b5e93400000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647214150720 offset=58720256 ptr=0x7b5e7f800000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14753792 ptr=0x7b5e90e12000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=6144
+DEBUG: memory mapped: handle=135647214150720 offset=62914560 ptr=0x7b5e7fc00000
+DEBUG: memory mapped: handle=135647281776704 offset=14843904 ptr=0x7b5e90e28000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6160 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14925824 ptr=0x7b5e90e3c000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6176 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=14876672 ptr=0x7b5e90e30000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14368 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=14778368 ptr=0x7b5e90e18000
+DEBUG: memory mapped: handle=135647281776704 offset=14942208 ptr=0x7b5e90e40000
+DEBUG: memory mapped: handle=135647281776704 offset=14974976 ptr=0x7b5e90e48000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14448 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=46137344 ptr=0x7b5e92c00000
+DEBUG: WriteBuffer: mapping=0x7b5e92c00000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=135647214150720 offset=62914560 ptr=0x7b5e7fc00000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14942208 ptr=0x7b5e90e40000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=24576
+DEBUG: memory mapped: handle=383761888 offset=0 ptr=0x7b5e78000000
+DEBUG: memory mapped: handle=135647281776704 offset=14925824 ptr=0x7b5e90e3c000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24592 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14415872 ptr=0x7b5e90dbf800
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24608 dataLen=2048
+DEBUG: memory mapped: handle=135647281776704 offset=14934016 ptr=0x7b5e90e3e000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26656 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=14745600 ptr=0x7b5e90e10000
+DEBUG: memory mapped: handle=135647281776704 offset=14753792 ptr=0x7b5e90e12000
+DEBUG: memory mapped: handle=135647281776704 offset=14761984 ptr=0x7b5e90e14000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26736 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=54525952 ptr=0x7b5e93400000
+DEBUG: WriteBuffer: mapping=0x7b5e93400000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=383761888 offset=0 ptr=0x7b5e78000000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14770176 ptr=0x7b5e90e16000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=6144
+DEBUG: memory mapped: handle=383761888 offset=4194304 ptr=0x7b5e78400000
+DEBUG: memory mapped: handle=135647281776704 offset=14778368 ptr=0x7b5e90e18000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6160 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14745600 ptr=0x7b5e90e10000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6176 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=14942208 ptr=0x7b5e90e40000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14368 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=14974976 ptr=0x7b5e90e48000
+DEBUG: memory mapped: handle=135647281776704 offset=15007744 ptr=0x7b5e90e50000
+DEBUG: memory mapped: handle=135647281776704 offset=15040512 ptr=0x7b5e90e58000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14448 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=46137344 ptr=0x7b5e92c00000
+DEBUG: WriteBuffer: mapping=0x7b5e92c00000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=383761888 offset=4194304 ptr=0x7b5e78400000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14974976 ptr=0x7b5e90e48000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=24576
+DEBUG: memory mapped: handle=383761888 offset=8388608 ptr=0x7b5e78800000
+DEBUG: memory mapped: handle=135647281776704 offset=15007744 ptr=0x7b5e90e50000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24592 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14415872 ptr=0x7b5e90dbf800
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24608 dataLen=2048
+DEBUG: memory mapped: handle=135647281776704 offset=15015936 ptr=0x7b5e90e52000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26656 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=15024128 ptr=0x7b5e90e54000
+DEBUG: memory mapped: handle=135647281776704 offset=15032320 ptr=0x7b5e90e56000
+DEBUG: memory mapped: handle=135647281776704 offset=14745600 ptr=0x7b5e90e10000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26736 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=54525952 ptr=0x7b5e93400000
+DEBUG: WriteBuffer: mapping=0x7b5e93400000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=383761888 offset=8388608 ptr=0x7b5e78800000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14753792 ptr=0x7b5e90e12000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=6144
+DEBUG: memory mapped: handle=383761888 offset=12582912 ptr=0x7b5e78c00000
+DEBUG: memory mapped: handle=135647281776704 offset=14974976 ptr=0x7b5e90e48000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6160 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15024128 ptr=0x7b5e90e54000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6176 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=15040512 ptr=0x7b5e90e58000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14368 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=15073280 ptr=0x7b5e90e60000
+DEBUG: memory mapped: handle=135647281776704 offset=15106048 ptr=0x7b5e90e68000
+DEBUG: memory mapped: handle=135647281776704 offset=15138816 ptr=0x7b5e90e70000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14448 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=46137344 ptr=0x7b5e92c00000
+DEBUG: WriteBuffer: mapping=0x7b5e92c00000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=383761888 offset=12582912 ptr=0x7b5e78c00000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14745600 ptr=0x7b5e90e10000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=24576
+DEBUG: memory mapped: handle=383761888 offset=16777216 ptr=0x7b5e79000000
+DEBUG: memory mapped: handle=135647281776704 offset=15024128 ptr=0x7b5e90e54000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24592 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14415872 ptr=0x7b5e90dbf800
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24608 dataLen=2048
+DEBUG: memory mapped: handle=135647281776704 offset=15032320 ptr=0x7b5e90e56000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26656 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=15171584 ptr=0x7b5e90e78000
+DEBUG: memory mapped: handle=135647281776704 offset=15179776 ptr=0x7b5e90e7a000
+DEBUG: memory mapped: handle=135647281776704 offset=15187968 ptr=0x7b5e90e7c000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26736 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=54525952 ptr=0x7b5e93400000
+DEBUG: WriteBuffer: mapping=0x7b5e93400000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=383761888 offset=16777216 ptr=0x7b5e79000000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15196160 ptr=0x7b5e90e7e000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=6144
+DEBUG: memory mapped: handle=383761888 offset=20971520 ptr=0x7b5e79400000
+DEBUG: memory mapped: handle=135647281776704 offset=14745600 ptr=0x7b5e90e10000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6160 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15171584 ptr=0x7b5e90e78000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6176 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=15138816 ptr=0x7b5e90e70000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14368 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=15073280 ptr=0x7b5e90e60000
+DEBUG: memory mapped: handle=135647281776704 offset=15106048 ptr=0x7b5e90e68000
+DEBUG: memory mapped: handle=135647281776704 offset=15204352 ptr=0x7b5e90e80000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14448 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=46137344 ptr=0x7b5e92c00000
+DEBUG: WriteBuffer: mapping=0x7b5e92c00000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=383761888 offset=20971520 ptr=0x7b5e79400000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15171584 ptr=0x7b5e90e78000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=24576
+DEBUG: memory mapped: handle=383761888 offset=25165824 ptr=0x7b5e79800000
+DEBUG: memory mapped: handle=135647281776704 offset=15237120 ptr=0x7b5e90e88000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24592 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14415872 ptr=0x7b5e90dbf800
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24608 dataLen=2048
+DEBUG: memory mapped: handle=135647281776704 offset=15245312 ptr=0x7b5e90e8a000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26656 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=15253504 ptr=0x7b5e90e8c000
+DEBUG: memory mapped: handle=135647281776704 offset=15261696 ptr=0x7b5e90e8e000
+DEBUG: memory mapped: handle=135647281776704 offset=15073280 ptr=0x7b5e90e60000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26736 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=54525952 ptr=0x7b5e93400000
+DEBUG: WriteBuffer: mapping=0x7b5e93400000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=383761888 offset=25165824 ptr=0x7b5e79800000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15081472 ptr=0x7b5e90e62000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=6144
+DEBUG: memory mapped: handle=383761888 offset=29360128 ptr=0x7b5e79c00000
+DEBUG: memory mapped: handle=135647281776704 offset=15171584 ptr=0x7b5e90e78000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6160 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15253504 ptr=0x7b5e90e8c000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6176 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=15204352 ptr=0x7b5e90e80000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14368 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=15106048 ptr=0x7b5e90e68000
+DEBUG: memory mapped: handle=135647281776704 offset=15269888 ptr=0x7b5e90e90000
+DEBUG: memory mapped: handle=135647281776704 offset=15302656 ptr=0x7b5e90e98000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14448 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=46137344 ptr=0x7b5e92c00000
+DEBUG: WriteBuffer: mapping=0x7b5e92c00000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=383761888 offset=29360128 ptr=0x7b5e79c00000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15269888 ptr=0x7b5e90e90000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=24576
+DEBUG: memory mapped: handle=383761888 offset=33554432 ptr=0x7b5e7a000000
+DEBUG: memory mapped: handle=135647281776704 offset=15253504 ptr=0x7b5e90e8c000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24592 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14415872 ptr=0x7b5e90dbf800
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24608 dataLen=2048
+DEBUG: memory mapped: handle=135647281776704 offset=15261696 ptr=0x7b5e90e8e000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26656 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=15073280 ptr=0x7b5e90e60000
+DEBUG: memory mapped: handle=135647281776704 offset=15081472 ptr=0x7b5e90e62000
+DEBUG: memory mapped: handle=135647281776704 offset=15089664 ptr=0x7b5e90e64000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26736 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=54525952 ptr=0x7b5e93400000
+DEBUG: WriteBuffer: mapping=0x7b5e93400000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=383761888 offset=33554432 ptr=0x7b5e7a000000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15097856 ptr=0x7b5e90e66000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=6144
+DEBUG: memory mapped: handle=383761888 offset=37748736 ptr=0x7b5e7a400000
+DEBUG: memory mapped: handle=135647281776704 offset=15106048 ptr=0x7b5e90e68000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6160 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15073280 ptr=0x7b5e90e60000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6176 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=15269888 ptr=0x7b5e90e90000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14368 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=15302656 ptr=0x7b5e90e98000
+DEBUG: memory mapped: handle=135647281776704 offset=15335424 ptr=0x7b5e90ea0000
+DEBUG: memory mapped: handle=135647281776704 offset=15368192 ptr=0x7b5e90ea8000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14448 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=46137344 ptr=0x7b5e92c00000
+DEBUG: WriteBuffer: mapping=0x7b5e92c00000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=383761888 offset=37748736 ptr=0x7b5e7a400000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15302656 ptr=0x7b5e90e98000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=24576
+DEBUG: memory mapped: handle=383761888 offset=41943040 ptr=0x7b5e7a800000
+DEBUG: memory mapped: handle=135647281776704 offset=15335424 ptr=0x7b5e90ea0000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24592 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14415872 ptr=0x7b5e90dbf800
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24608 dataLen=2048
+DEBUG: memory mapped: handle=135647281776704 offset=15343616 ptr=0x7b5e90ea2000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26656 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=15351808 ptr=0x7b5e90ea4000
+DEBUG: memory mapped: handle=135647281776704 offset=15360000 ptr=0x7b5e90ea6000
+DEBUG: memory mapped: handle=135647281776704 offset=15073280 ptr=0x7b5e90e60000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26736 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=54525952 ptr=0x7b5e93400000
+DEBUG: WriteBuffer: mapping=0x7b5e93400000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=383761888 offset=41943040 ptr=0x7b5e7a800000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15081472 ptr=0x7b5e90e62000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=6144
+DEBUG: memory mapped: handle=383761888 offset=46137344 ptr=0x7b5e7ac00000
+DEBUG: memory mapped: handle=135647281776704 offset=15302656 ptr=0x7b5e90e98000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6160 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15351808 ptr=0x7b5e90ea4000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6176 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=15368192 ptr=0x7b5e90ea8000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14368 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=15400960 ptr=0x7b5e90eb0000
+DEBUG: memory mapped: handle=135647281776704 offset=15433728 ptr=0x7b5e90eb8000
+DEBUG: memory mapped: handle=135647281776704 offset=15466496 ptr=0x7b5e90ec0000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14448 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=46137344 ptr=0x7b5e92c00000
+DEBUG: WriteBuffer: mapping=0x7b5e92c00000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=383761888 offset=46137344 ptr=0x7b5e7ac00000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15073280 ptr=0x7b5e90e60000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=24576
+DEBUG: memory mapped: handle=383761888 offset=50331648 ptr=0x7b5e7b000000
+DEBUG: memory mapped: handle=135647281776704 offset=15351808 ptr=0x7b5e90ea4000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24592 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14415872 ptr=0x7b5e90dbf800
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24608 dataLen=2048
+DEBUG: memory mapped: handle=135647281776704 offset=15360000 ptr=0x7b5e90ea6000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26656 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=15499264 ptr=0x7b5e90ec8000
+DEBUG: memory mapped: handle=135647281776704 offset=15507456 ptr=0x7b5e90eca000
+DEBUG: memory mapped: handle=135647281776704 offset=15515648 ptr=0x7b5e90ecc000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26736 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=54525952 ptr=0x7b5e93400000
+DEBUG: WriteBuffer: mapping=0x7b5e93400000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=383761888 offset=50331648 ptr=0x7b5e7b000000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15523840 ptr=0x7b5e90ece000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=6144
+DEBUG: memory mapped: handle=383761888 offset=54525952 ptr=0x7b5e7b400000
+DEBUG: memory mapped: handle=135647281776704 offset=15073280 ptr=0x7b5e90e60000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6160 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15499264 ptr=0x7b5e90ec8000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6176 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=15466496 ptr=0x7b5e90ec0000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14368 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=15400960 ptr=0x7b5e90eb0000
+DEBUG: memory mapped: handle=135647281776704 offset=15433728 ptr=0x7b5e90eb8000
+DEBUG: memory mapped: handle=135647281776704 offset=15532032 ptr=0x7b5e90ed0000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14448 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=46137344 ptr=0x7b5e92c00000
+DEBUG: WriteBuffer: mapping=0x7b5e92c00000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=383761888 offset=54525952 ptr=0x7b5e7b400000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15499264 ptr=0x7b5e90ec8000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=24576
+DEBUG: memory mapped: handle=383761888 offset=58720256 ptr=0x7b5e7b800000
+DEBUG: memory mapped: handle=135647281776704 offset=15564800 ptr=0x7b5e90ed8000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24592 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14415872 ptr=0x7b5e90dbf800
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24608 dataLen=2048
+DEBUG: memory mapped: handle=135647281776704 offset=15572992 ptr=0x7b5e90eda000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26656 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=15581184 ptr=0x7b5e90edc000
+DEBUG: memory mapped: handle=135647281776704 offset=15589376 ptr=0x7b5e90ede000
+DEBUG: memory mapped: handle=135647281776704 offset=15400960 ptr=0x7b5e90eb0000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26736 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=54525952 ptr=0x7b5e93400000
+DEBUG: WriteBuffer: mapping=0x7b5e93400000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=383761888 offset=58720256 ptr=0x7b5e7b800000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15409152 ptr=0x7b5e90eb2000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=6144
+DEBUG: memory mapped: handle=383761888 offset=62914560 ptr=0x7b5e7bc00000
+DEBUG: memory mapped: handle=135647281776704 offset=15499264 ptr=0x7b5e90ec8000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6160 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15581184 ptr=0x7b5e90edc000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6176 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=15532032 ptr=0x7b5e90ed0000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14368 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=15433728 ptr=0x7b5e90eb8000
+DEBUG: memory mapped: handle=135647281776704 offset=15597568 ptr=0x7b5e90ee0000
+DEBUG: memory mapped: handle=135647281776704 offset=15630336 ptr=0x7b5e90ee8000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14448 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=46137344 ptr=0x7b5e92c00000
+DEBUG: WriteBuffer: mapping=0x7b5e92c00000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=383761888 offset=62914560 ptr=0x7b5e7bc00000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15597568 ptr=0x7b5e90ee0000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=24576
+DEBUG: memory mapped: handle=383764480 offset=0 ptr=0x7b5e74000000
+DEBUG: memory mapped: handle=135647281776704 offset=15581184 ptr=0x7b5e90edc000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24592 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14415872 ptr=0x7b5e90dbf800
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24608 dataLen=2048
+DEBUG: memory mapped: handle=135647281776704 offset=15589376 ptr=0x7b5e90ede000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26656 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=15400960 ptr=0x7b5e90eb0000
+DEBUG: memory mapped: handle=135647281776704 offset=15409152 ptr=0x7b5e90eb2000
+DEBUG: memory mapped: handle=135647281776704 offset=15417344 ptr=0x7b5e90eb4000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26736 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=54525952 ptr=0x7b5e93400000
+DEBUG: WriteBuffer: mapping=0x7b5e93400000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=383764480 offset=0 ptr=0x7b5e74000000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15425536 ptr=0x7b5e90eb6000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=6144
+DEBUG: memory mapped: handle=383764480 offset=4194304 ptr=0x7b5e74400000
+DEBUG: memory mapped: handle=135647281776704 offset=15433728 ptr=0x7b5e90eb8000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6160 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15400960 ptr=0x7b5e90eb0000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6176 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=15597568 ptr=0x7b5e90ee0000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14368 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=15630336 ptr=0x7b5e90ee8000
+DEBUG: memory mapped: handle=135647281776704 offset=15663104 ptr=0x7b5e90ef0000
+DEBUG: memory mapped: handle=135647281776704 offset=15695872 ptr=0x7b5e90ef8000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14448 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=46137344 ptr=0x7b5e92c00000
+DEBUG: WriteBuffer: mapping=0x7b5e92c00000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=383764480 offset=4194304 ptr=0x7b5e74400000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15630336 ptr=0x7b5e90ee8000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=24576
+DEBUG: memory mapped: handle=383764480 offset=8388608 ptr=0x7b5e74800000
+DEBUG: memory mapped: handle=135647281776704 offset=15663104 ptr=0x7b5e90ef0000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24592 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14415872 ptr=0x7b5e90dbf800
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24608 dataLen=2048
+DEBUG: memory mapped: handle=135647281776704 offset=15671296 ptr=0x7b5e90ef2000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26656 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=15679488 ptr=0x7b5e90ef4000
+DEBUG: memory mapped: handle=135647281776704 offset=15687680 ptr=0x7b5e90ef6000
+DEBUG: memory mapped: handle=135647281776704 offset=15400960 ptr=0x7b5e90eb0000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26736 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=54525952 ptr=0x7b5e93400000
+DEBUG: WriteBuffer: mapping=0x7b5e93400000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=383764480 offset=8388608 ptr=0x7b5e74800000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15409152 ptr=0x7b5e90eb2000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=6144
+DEBUG: memory mapped: handle=383764480 offset=12582912 ptr=0x7b5e74c00000
+DEBUG: memory mapped: handle=135647281776704 offset=15630336 ptr=0x7b5e90ee8000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6160 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15679488 ptr=0x7b5e90ef4000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=6176 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=15695872 ptr=0x7b5e90ef8000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14368 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=15728640 ptr=0x7b5e90f00000
+DEBUG: memory mapped: handle=135647281776704 offset=15761408 ptr=0x7b5e90f08000
+DEBUG: memory mapped: handle=135647281776704 offset=15794176 ptr=0x7b5e90f10000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=14448 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647281776704 offset=62914560 ptr=0x7b5e93c00000
+DEBUG: memory mapped: handle=135647281776704 offset=46137344 ptr=0x7b5e92c00000
+DEBUG: WriteBuffer: mapping=0x7b5e92c00000 offset=0 dataLen=4194304
+DEBUG: memory mapped: handle=383764480 offset=12582912 ptr=0x7b5e74c00000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15400960 ptr=0x7b5e90eb0000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=24576
+DEBUG: memory mapped: handle=383764480 offset=16777216 ptr=0x7b5e75000000
+DEBUG: memory mapped: handle=135647281776704 offset=15679488 ptr=0x7b5e90ef4000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24592 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=14415872 ptr=0x7b5e90dbf800
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=24608 dataLen=2048
+DEBUG: memory mapped: handle=135647281776704 offset=15687680 ptr=0x7b5e90ef6000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26656 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=15826944 ptr=0x7b5e90f18000
+DEBUG: memory mapped: handle=135647281776704 offset=15835136 ptr=0x7b5e90f1a000
+DEBUG: memory mapped: handle=135647281776704 offset=15843328 ptr=0x7b5e90f1c000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=26736 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=383764480 offset=16777216 ptr=0x7b5e75000000
+DEBUG: memory mapped: handle=383764480 offset=25165824 ptr=0x7b5e75800000
+DEBUG: WriteBuffer: mapping=0x7b5e75800000 offset=0 dataLen=8388608
+DEBUG: memory mapped: handle=383764480 offset=33554432 ptr=0x7b5e76000000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15728640 ptr=0x7b5e90f00000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=36864
+DEBUG: memory mapped: handle=383764480 offset=41943040 ptr=0x7b5e76800000
+DEBUG: memory mapped: handle=135647281776704 offset=15859712 ptr=0x7b5e90f20000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=36880 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15851520 ptr=0x7b5e90f1e000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=36896 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=15990784 ptr=0x7b5e90f40000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=45088 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=16121856 ptr=0x7b5e90f60000
+DEBUG: memory mapped: handle=135647281776704 offset=16252928 ptr=0x7b5e90f80000
+DEBUG: memory mapped: handle=135647281776704 offset=16384000 ptr=0x7b5e90fa0000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=45168 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647348135408 offset=0 ptr=0x7b5e70000000
+DEBUG: memory mapped: handle=135647348135408 offset=33554432 ptr=0x7b5e72000000
+DEBUG: WriteBuffer: mapping=0x7b5e72000000 offset=0 dataLen=20865024
+DEBUG: memory mapped: handle=135647348134208 offset=0 ptr=0x7b5e6c000000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=16121856 ptr=0x7b5e90f60000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=73728
+DEBUG: memory mapped: handle=135647348134208 offset=33554432 ptr=0x7b5e6e000000
+DEBUG: memory mapped: handle=135647281776704 offset=16252928 ptr=0x7b5e90f80000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=73744 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15400960 ptr=0x7b5e90eb0000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=73760 dataLen=10188
+DEBUG: memory mapped: handle=135647281776704 offset=15728640 ptr=0x7b5e90f00000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=83952 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=16515072 ptr=0x7b5e90fc0000
+DEBUG: memory mapped: handle=135647281776704 offset=16646144 ptr=0x7b5e90fe0000
+DEBUG: memory mapped: handle=135647281776704 offset=46137344 ptr=0x7b5e92c00000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=84032 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=383764480 offset=41943040 ptr=0x7b5e76800000
+DEBUG: memory mapped: handle=383764480 offset=16777216 ptr=0x7b5e75000000
+DEBUG: WriteBuffer: mapping=0x7b5e75000000 offset=0 dataLen=8388608
+DEBUG: memory mapped: handle=383764480 offset=25165824 ptr=0x7b5e75800000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=16121856 ptr=0x7b5e90f60000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=49152
+DEBUG: memory mapped: handle=383764480 offset=50331648 ptr=0x7b5e77000000
+DEBUG: memory mapped: handle=135647281776704 offset=16384000 ptr=0x7b5e90fa0000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=49168 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15400960 ptr=0x7b5e90eb0000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=49184 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=46268416 ptr=0x7b5e92c20000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=57376 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=16515072 ptr=0x7b5e90fc0000
+DEBUG: memory mapped: handle=135647281776704 offset=16646144 ptr=0x7b5e90fe0000
+DEBUG: memory mapped: handle=135647281776704 offset=46399488 ptr=0x7b5e92c40000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=57456 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647348135408 offset=0 ptr=0x7b5e70000000
+DEBUG: memory mapped: handle=135647348135408 offset=33554432 ptr=0x7b5e72000000
+DEBUG: WriteBuffer: mapping=0x7b5e72000000 offset=0 dataLen=20865024
+DEBUG: memory mapped: handle=135647348134208 offset=33554432 ptr=0x7b5e6e000000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=16121856 ptr=0x7b5e90f60000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=98304
+DEBUG: memory mapped: handle=135647348138032 offset=0 ptr=0x7b5e68000000
+DEBUG: memory mapped: handle=135647281776704 offset=46137344 ptr=0x7b5e92c00000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=98320 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15400960 ptr=0x7b5e90eb0000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=98336 dataLen=10188
+DEBUG: memory mapped: handle=135647281776704 offset=46530560 ptr=0x7b5e92c60000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=108528 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=16515072 ptr=0x7b5e90fc0000
+DEBUG: memory mapped: handle=135647281776704 offset=16646144 ptr=0x7b5e90fe0000
+DEBUG: memory mapped: handle=135647281776704 offset=46661632 ptr=0x7b5e92c80000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=108608 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=383764480 offset=16777216 ptr=0x7b5e75000000
+DEBUG: memory mapped: handle=383764480 offset=41943040 ptr=0x7b5e76800000
+DEBUG: WriteBuffer: mapping=0x7b5e76800000 offset=0 dataLen=8388608
+DEBUG: memory mapped: handle=383764480 offset=50331648 ptr=0x7b5e77000000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=16121856 ptr=0x7b5e90f60000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=36864
+DEBUG: memory mapped: handle=383764480 offset=58720256 ptr=0x7b5e77800000
+DEBUG: memory mapped: handle=135647281776704 offset=46399488 ptr=0x7b5e92c40000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=36880 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15400960 ptr=0x7b5e90eb0000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=36896 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=46792704 ptr=0x7b5e92ca0000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=45088 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=16515072 ptr=0x7b5e90fc0000
+DEBUG: memory mapped: handle=135647281776704 offset=16646144 ptr=0x7b5e90fe0000
+DEBUG: memory mapped: handle=135647281776704 offset=46923776 ptr=0x7b5e92cc0000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=45168 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647348135408 offset=0 ptr=0x7b5e70000000
+DEBUG: memory mapped: handle=135647348135408 offset=33554432 ptr=0x7b5e72000000
+DEBUG: WriteBuffer: mapping=0x7b5e72000000 offset=0 dataLen=20865024
+DEBUG: memory mapped: handle=135647348138032 offset=0 ptr=0x7b5e68000000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=16121856 ptr=0x7b5e90f60000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=73728
+DEBUG: memory mapped: handle=135647348138032 offset=33554432 ptr=0x7b5e6a000000
+DEBUG: memory mapped: handle=135647281776704 offset=46661632 ptr=0x7b5e92c80000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=73744 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15400960 ptr=0x7b5e90eb0000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=73760 dataLen=10188
+DEBUG: memory mapped: handle=135647281776704 offset=47054848 ptr=0x7b5e92ce0000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=83952 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=16515072 ptr=0x7b5e90fc0000
+DEBUG: memory mapped: handle=135647281776704 offset=16646144 ptr=0x7b5e90fe0000
+DEBUG: memory mapped: handle=135647281776704 offset=47185920 ptr=0x7b5e92d00000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=84032 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=383764480 offset=41943040 ptr=0x7b5e76800000
+DEBUG: memory mapped: handle=383764480 offset=58720256 ptr=0x7b5e77800000
+DEBUG: WriteBuffer: mapping=0x7b5e77800000 offset=0 dataLen=8388608
+DEBUG: memory mapped: handle=383764480 offset=16777216 ptr=0x7b5e75000000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=16121856 ptr=0x7b5e90f60000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=49152
+DEBUG: memory mapped: handle=135647348135408 offset=0 ptr=0x7b5e70000000
+DEBUG: memory mapped: handle=135647281776704 offset=46923776 ptr=0x7b5e92cc0000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=49168 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15400960 ptr=0x7b5e90eb0000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=49184 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=47316992 ptr=0x7b5e92d20000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=57376 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=16515072 ptr=0x7b5e90fc0000
+DEBUG: memory mapped: handle=135647281776704 offset=16646144 ptr=0x7b5e90fe0000
+DEBUG: memory mapped: handle=135647281776704 offset=47448064 ptr=0x7b5e92d40000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=57456 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647348135408 offset=0 ptr=0x7b5e70000000
+DEBUG: memory mapped: handle=135647348135408 offset=33554432 ptr=0x7b5e72000000
+DEBUG: WriteBuffer: mapping=0x7b5e72000000 offset=0 dataLen=20865024
+DEBUG: memory mapped: handle=135647348138032 offset=33554432 ptr=0x7b5e6a000000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=16121856 ptr=0x7b5e90f60000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=98304
+DEBUG: memory mapped: handle=135646677044592 offset=0 ptr=0x7b5e98e1a000
+DEBUG: memory mapped: handle=135647281776704 offset=47185920 ptr=0x7b5e92d00000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=98320 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15400960 ptr=0x7b5e90eb0000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=98336 dataLen=10188
+DEBUG: memory mapped: handle=135647281776704 offset=47579136 ptr=0x7b5e92d60000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=108528 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=16515072 ptr=0x7b5e90fc0000
+DEBUG: memory mapped: handle=135647281776704 offset=16646144 ptr=0x7b5e90fe0000
+DEBUG: memory mapped: handle=135647281776704 offset=47710208 ptr=0x7b5e92d80000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=108608 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=383764480 offset=58720256 ptr=0x7b5e77800000
+DEBUG: memory mapped: handle=383764480 offset=41943040 ptr=0x7b5e76800000
+DEBUG: WriteBuffer: mapping=0x7b5e76800000 offset=0 dataLen=8388608
+DEBUG: memory mapped: handle=135647348135408 offset=0 ptr=0x7b5e70000000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15400960 ptr=0x7b5e90eb0000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=24576
+DEBUG: memory mapped: handle=135647348135408 offset=8388608 ptr=0x7b5e70800000
+DEBUG: memory mapped: handle=135647281776704 offset=16121856 ptr=0x7b5e90f60000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=24592 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=16187392 ptr=0x7b5e90f70000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=24608 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=47448064 ptr=0x7b5e92d40000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=32800 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=47513600 ptr=0x7b5e92d50000
+DEBUG: memory mapped: handle=135647281776704 offset=47841280 ptr=0x7b5e92da0000
+DEBUG: memory mapped: handle=135647281776704 offset=47906816 ptr=0x7b5e92db0000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=32880 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647348135408 offset=33554432 ptr=0x7b5e72000000
+DEBUG: memory mapped: handle=135645871739424 offset=0 ptr=0x7b5e98e1a000
+DEBUG: WriteBuffer: mapping=0x7b5e98e1a000 offset=0 dataLen=20865024
+DEBUG: memory mapped: handle=135645871738224 offset=0 ptr=0x7b5e66c1a000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=47513600 ptr=0x7b5e92d50000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=16 dataLen=49152
+DEBUG: memory mapped: handle=135645871742080 offset=0 ptr=0x7b5e65834000
+DEBUG: memory mapped: handle=135647281776704 offset=47841280 ptr=0x7b5e92da0000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=49168 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15400960 ptr=0x7b5e90eb0000
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=49184 dataLen=10188
+DEBUG: memory mapped: handle=135647281776704 offset=16187392 ptr=0x7b5e90f70000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=59376 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=47710208 ptr=0x7b5e92d80000
+DEBUG: memory mapped: handle=135647281776704 offset=47775744 ptr=0x7b5e92d90000
+DEBUG: memory mapped: handle=135647281776704 offset=16515072 ptr=0x7b5e90fc0000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c80000 offset=59456 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=383764480 offset=41943040 ptr=0x7b5e76800000
+DEBUG: memory mapped: handle=383764480 offset=58720256 ptr=0x7b5e77800000
+DEBUG: WriteBuffer: mapping=0x7b5e77800000 offset=0 dataLen=8388608
+DEBUG: memory mapped: handle=135647348135408 offset=8388608 ptr=0x7b5e70800000
+DEBUG: memory mapped: handle=135647281776704 offset=14413824 ptr=0x7b5e90dbf000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=0 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=47513600 ptr=0x7b5e92d50000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=16 dataLen=49152
+DEBUG: memory mapped: handle=135647348135408 offset=16777216 ptr=0x7b5e71000000
+DEBUG: memory mapped: handle=135647281776704 offset=47710208 ptr=0x7b5e92d80000
+DEBUG: memory mapped: handle=135647281776704 offset=14414080 ptr=0x7b5e90dbf100
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=49168 dataLen=16
+DEBUG: memory mapped: handle=135647281776704 offset=15400960 ptr=0x7b5e90eb0000
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=49184 dataLen=8192
+DEBUG: memory mapped: handle=135647281776704 offset=16646144 ptr=0x7b5e90fe0000
+DEBUG: memory mapped: handle=135647281776704 offset=14414336 ptr=0x7b5e90dbf200
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=57376 dataLen=80
+DEBUG: memory mapped: handle=135647281776704 offset=47972352 ptr=0x7b5e92dc0000
+DEBUG: memory mapped: handle=135647281776704 offset=48103424 ptr=0x7b5e92de0000
+DEBUG: memory mapped: handle=135647281776704 offset=48234496 ptr=0x7b5e92e00000
+DEBUG: memory mapped: handle=135647281776704 offset=14414592 ptr=0x7b5e90dbf300
+DEBUG: WriteBuffer: mapping=0x7b5e90c40000 offset=57456 dataLen=16
+DEBUG: memory mapped: handle=135647281849616 offset=0 ptr=0x7b5e88000000
+DEBUG: memory mapped: handle=135647348135408 offset=33554432 ptr=0x7b5e72000000
+DEBUG: memory mapped: handle=135646677044592 offset=0 ptr=0x7b5e98e1a000
+DEBUG: WriteBuffer: mapping=0x7b5e98e1a000 offset=0 dataLen=20865024
+unexpected fault address 0x7b5e98e1a000
+fatal error: fault
+[signal SIGSEGV: segmentation violation code=0x1 addr=0x7b5e98e1a000 pc=0x493435]
+
+goroutine 2285 gp=0x2b2383066000 m=11 mp=0x2b2365455008 [running]:
+runtime.throw({0x108c893?, 0x2b2365192050?})
+	/usr/local/go/src/runtime/panic.go:1229 +0x48 fp=0x2b2386e05578 sp=0x2b2386e05548 pc=0x48b068
+runtime.sigpanic()
+	/usr/local/go/src/runtime/signal_unix.go:945 +0x285 fp=0x2b2386e055d8 sp=0x2b2386e05578 pc=0x48d405
+runtime.memmove()
+	/usr/local/go/src/runtime/memmove_amd64.s:122 +0xd5 fp=0x2b2386e055e0 sp=0x2b2386e055d8 pc=0x493435
+github.com/gogpu/wgpu/hal/vulkan.copyToMappedMemory(...)
+	/home/a/go/gollemer/vendor/github.com/gogpu/wgpu/hal/vulkan/unsafe.go:28
+github.com/gogpu/wgpu/hal/vulkan.(*Queue).WriteBuffer(0x2b236529c210, {0x1100ac8?, 0x2b2386f51170?}, 0x0, {0x2b23c0a18000, 0x13e6000, 0x2b2386e056e0?})
+	/home/a/go/gollemer/vendor/github.com/gogpu/wgpu/hal/vulkan/queue.go:314 +0x194 fp=0x2b2386e05670 sp=0x2b2386e055e0 pc=0x8fa014
+github.com/gogpu/wgpu.(*stagingBelt).allocateOversized(0x2b23652ce1b0, 0x13e6000, {0x2b23c0a18000, 0x13e6000, 0x13e6000})
+	/home/a/go/gollemer/vendor/github.com/gogpu/wgpu/staging_belt.go:187 +0x1cc fp=0x2b2386e05730 sp=0x2b2386e05670 pc=0x7b0d0c
+github.com/gogpu/wgpu.(*stagingBelt).allocate(0x2b238288f0b0?, 0x79b780?, {0x2b23c0a18000?, 0x2b2386e05858?, 0x2b2386e058a0?})
+	/home/a/go/gollemer/vendor/github.com/gogpu/wgpu/staging_belt.go:131 +0x85 fp=0x2b2386e05850 sp=0x2b2386e05730 pc=0x7b0405
+github.com/gogpu/wgpu.(*pendingWrites).writeBuffer(0x2b236540a0a0, {0x1100ac8, 0x2b2386f510e0}, 0x84, 0x0, {0x2b23c0a18000?, 0x13e6000, 0x1?})
+	/home/a/go/gollemer/vendor/github.com/gogpu/wgpu/pending_writes.go:134 +0x125 fp=0x2b2386e05918 sp=0x2b2386e05850 pc=0x7ab1c5
+github.com/gogpu/wgpu.(*Queue).WriteBuffer(0x2b236536a400, 0x2b2386e0f8a8, 0x0, {0x2b23c0a18000, 0x13e6000, 0x13e6000})
+	/home/a/go/gollemer/vendor/github.com/gogpu/wgpu/queue.go:191 +0x96 fp=0x2b2386e05968 sp=0x2b2386e05918 pc=0x7ae476
+github.com/born-ml/born/internal/backend/gogpu.(*Backend).createBuffer(0x2b2365306000, {0x2b23c0a18000, 0x13e6000, 0x13e6000}, 0x426485?)
+	/home/a/go/gollemer/vendor/github.com/born-ml/born/internal/backend/gogpu/compute.go:105 +0x8c fp=0x2b2386e059d8 sp=0x2b2386e05968 pc=0x90300c
+github.com/born-ml/born/internal/backend/gogpu.(*Backend).createBufferFromTensor(0x2b2365306000, 0x108f6b3?)
+	/home/a/go/gollemer/vendor/github.com/born-ml/born/internal/backend/gogpu/lazy_compute.go:150 +0x57 fp=0x2b2386e05a18 sp=0x2b2386e059d8 pc=0x91d5f7
+github.com/born-ml/born/internal/backend/gogpu.(*Backend).runTransposeLazy(0x2b2365306000, 0x2b2383bfe300)
+	/home/a/go/gollemer/vendor/github.com/born-ml/born/internal/backend/gogpu/lazy_compute.go:491 +0x12e fp=0x2b2386e05c08 sp=0x2b2386e05a18 pc=0x91ff0e
+github.com/born-ml/born/internal/backend/gogpu.(*Backend).Transpose(0x2b2386e05c68?, 0x48d749?, {0x2b2386edfa80?, 0xefc1c0?, 0x2b2387048001?})
+	/home/a/go/gollemer/vendor/github.com/born-ml/born/internal/backend/gogpu/ops.go:199 +0x85 fp=0x2b2386e05c40 sp=0x2b2386e05c08 pc=0x926645
+github.com/born-ml/born/tensor.Backend.Transpose({0x111a658?, 0x2b2365306000?}, 0x734add?, {0x2b2386edfa80?, 0x2b2386e05d08?, 0x734797?})
+	<autogenerated>:1 +0x35 fp=0x2b2386e05c78 sp=0x2b2386e05c40 pc=0x744075
+github.com/born-ml/born/internal/autodiff.(*AutodiffBackend[...]).Transpose(0x1120980, 0x2b2383bfe300, {0x0, 0x0, 0x0})
+	/home/a/go/gollemer/vendor/github.com/born-ml/born/internal/autodiff/autodiff.go:230 +0xfa fp=0x2b2386e05cf0 sp=0x2b2386e05c78 pc=0xa2383a
+github.com/born-ml/born/internal/autodiff.(*AutodiffBackend[...]).Transpose(0x7b5f305362f8?, {0x0?, 0x2b2365455008?, 0x2b2386e259c0?})
+	/home/a/go/gollemer/vendor/github.com/born-ml/born/internal/autodiff/autodiff.go:217 +0x2b fp=0x2b2386e05d30 sp=0x2b2386e05cf0 pc=0xa3b5ab
+github.com/born-ml/born/internal/tensor.(*Tensor[...]).Transpose(0x2b2386edf600, {0x0?, 0x426485?, 0x20?})
+	/home/a/go/gollemer/vendor/github.com/born-ml/born/internal/tensor/ops.go:94 +0x31 fp=0x2b2386e05d78 sp=0x2b2386e05d30 pc=0xa32a11
+github.com/born-ml/born/internal/nn.(*Linear[...]).Forward(0x1113a80, 0x2b2386e259c0)
+	/home/a/go/gollemer/vendor/github.com/born-ml/born/internal/nn/linear.go:145 +0x71 fp=0x2b2386e05df8 sp=0x2b2386e05d78 pc=0xa24931
+github.com/golangast/gollemer/internal/ai/moe.(*BornExpert).Forward(0x2b23653796c0, 0x2b23852b7080?)
+	/home/a/go/gollemer/internal/ai/moe/born_expert.go:198 +0x245 fp=0x2b2386e05ef0 sp=0x2b2386e05df8 pc=0x9fe125
+github.com/golangast/gollemer/internal/ai/moe.(*MoELayer).Forward.func2(0x1, {0x2b2385572060?, 0x0?, 0x1c0?})
+	/home/a/go/gollemer/internal/ai/moe/moe_layer.go:516 +0x22c fp=0x2b2386e05fb0 sp=0x2b2386e05ef0 pc=0xa181cc
+github.com/golangast/gollemer/internal/ai/moe.(*MoELayer).Forward.gowrap1()
+	/home/a/go/gollemer/internal/ai/moe/moe_layer.go:532 +0x27 fp=0x2b2386e05fe0 sp=0x2b2386e05fb0 pc=0xa17f87
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x2b2386e05fe8 sp=0x2b2386e05fe0 pc=0x492bc1
+created by github.com/golangast/gollemer/internal/ai/moe.(*MoELayer).Forward in goroutine 1
+	/home/a/go/gollemer/internal/ai/moe/moe_layer.go:501 +0x147e
+
+goroutine 1 gp=0x2b23651941e0 m=nil [sync.WaitGroup.Wait]:
+runtime.gopark(0x2b2365441158?, 0x425a34?, 0x70?, 0x80?, 0x42540a?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x2b23654410f8 sp=0x2b23654410d8 pc=0x48b18e
+runtime.goparkunlock(...)
+	/usr/local/go/src/runtime/proc.go:468
+runtime.semacquire1(0x2b2381b90608, 0x0, 0x1, 0x0, 0x19)
+	/usr/local/go/src/runtime/sema.go:192 +0x232 fp=0x2b2365441160 sp=0x2b23654410f8 pc=0x46a032
+sync.runtime_SemacquireWaitGroup(0x2b2385578210?, 0xe0?)
+	/usr/local/go/src/runtime/sema.go:114 +0x2e fp=0x2b2365441198 sp=0x2b2365441160 pc=0x48c9ee
+sync.(*WaitGroup).Wait(0x2b2381b90600)
+	/usr/local/go/src/sync/waitgroup.go:206 +0x85 fp=0x2b23654411c0 sp=0x2b2365441198 pc=0x4a4b85
+github.com/golangast/gollemer/internal/ai/moe.(*MoELayer).Forward(0x2b23810ce180, {0x2b2365441940?, 0x2?, 0x2?})
+	/home/a/go/gollemer/internal/ai/moe/moe_layer.go:534 +0x14b2 fp=0x2b2365441690 sp=0x2b23654411c0 pc=0xa16d92
+github.com/golangast/gollemer/internal/ai/moe.(*RNNDecoder).Forward(0x2b23653321e0, 0x2b2381b804d0, 0x2b2365300f20, 0x0, {0x2b2365441a28?, 0x586120?, 0x2b23652c2000?})
+	/home/a/go/gollemer/internal/ai/moe/decoder.go:182 +0x1765 fp=0x2b2365441990 sp=0x2b2365441690 pc=0xa02625
+github.com/golangast/gollemer/internal/ai/moe.(*IntentMoE).Forward(0x2b23653795e0, 0x0, {0x2b23654433b0?, 0x2b2365442550?, 0x1?})
+	/home/a/go/gollemer/internal/ai/moe/intent_moe.go:682 +0x216 fp=0x2b2365441a40 sp=0x2b2365441990 pc=0xa0dd96
+github.com/golangast/gollemer/internal/ai/training/chat.TrainChat({0x10f2378, 0x1}, 0x0, 0x0, 0x3727c5ac, 0x0, 0x0, 0x3f800000, 0x1, 0x4, ...)
+	/home/a/go/gollemer/internal/ai/training/chat/chat.go:1006 +0x83e5 fp=0x2b2365443400 sp=0x2b2365441a40 pc=0xdef925
+main.main()
+	/home/a/go/gollemer/cmd/tools/train_moe/main.go:988 +0x966 fp=0x2b2365443f48 sp=0x2b2365443400 pc=0xe044a6
+runtime.main()
+	/usr/local/go/src/runtime/proc.go:290 +0x2d5 fp=0x2b2365443fe0 sp=0x2b2365443f48 pc=0x455b55
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x2b2365443fe8 sp=0x2b2365443fe0 pc=0x492bc1
+
+goroutine 2 gp=0x2b2365194d20 m=nil [force gc (idle)]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x2b236521afa8 sp=0x2b236521af88 pc=0x48b18e
+runtime.goparkunlock(...)
+	/usr/local/go/src/runtime/proc.go:468
+runtime.forcegchelper()
+	/usr/local/go/src/runtime/proc.go:375 +0xb3 fp=0x2b236521afe0 sp=0x2b236521afa8 pc=0x455e73
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x2b236521afe8 sp=0x2b236521afe0 pc=0x492bc1
+created by runtime.init.7 in goroutine 1
+	/usr/local/go/src/runtime/proc.go:363 +0x1a
+
+goroutine 3 gp=0x2b23651952c0 m=nil [GC sweep wait]:
+runtime.gopark(0x197ba01?, 0x0?, 0x0?, 0x0?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x2b236521b788 sp=0x2b236521b768 pc=0x48b18e
+runtime.goparkunlock(...)
+	/usr/local/go/src/runtime/proc.go:468
+runtime.bgsweep(0x2b2365244000)
+	/usr/local/go/src/runtime/mgcsweep.go:324 +0x151 fp=0x2b236521b7c8 sp=0x2b236521b788 pc=0x43e551
+runtime.gcenable.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:214 +0x17 fp=0x2b236521b7e0 sp=0x2b236521b7c8 pc=0x42f837
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x2b236521b7e8 sp=0x2b236521b7e0 pc=0x492bc1
+created by runtime.gcenable in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:214 +0x66
+
+goroutine 4 gp=0x2b23651954a0 m=nil [GC scavenge wait]:
+runtime.gopark(0x10000?, 0x6a1554?, 0x0?, 0x0?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x2b236521bf78 sp=0x2b236521bf58 pc=0x48b18e
+runtime.goparkunlock(...)
+	/usr/local/go/src/runtime/proc.go:468
+runtime.(*scavengerState).park(0x197dd40)
+	/usr/local/go/src/runtime/mgcscavenge.go:425 +0x49 fp=0x2b236521bfa8 sp=0x2b236521bf78 pc=0x43bfc9
+runtime.bgscavenge(0x2b2365244000)
+	/usr/local/go/src/runtime/mgcscavenge.go:658 +0x59 fp=0x2b236521bfc8 sp=0x2b236521bfa8 pc=0x43c559
+runtime.gcenable.gowrap2()
+	/usr/local/go/src/runtime/mgc.go:215 +0x17 fp=0x2b236521bfe0 sp=0x2b236521bfc8 pc=0x42f7f7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x2b236521bfe8 sp=0x2b236521bfe0 pc=0x492bc1
+created by runtime.gcenable in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:215 +0xa5
+
+goroutine 5 gp=0x2b2365195a40 m=nil [GOMAXPROCS updater (idle)]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x2b236521c788 sp=0x2b236521c768 pc=0x48b18e
+runtime.goparkunlock(...)
+	/usr/local/go/src/runtime/proc.go:468
+runtime.updateMaxProcsGoroutine()
+	/usr/local/go/src/runtime/proc.go:7095 +0xe7 fp=0x2b236521c7e0 sp=0x2b236521c788 pc=0x4644e7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x2b236521c7e8 sp=0x2b236521c7e0 pc=0x492bc1
+created by runtime.defaultGOMAXPROCSUpdateEnable in goroutine 1
+	/usr/local/go/src/runtime/proc.go:7083 +0x37
+
+goroutine 6 gp=0x2b236525a1e0 m=nil [finalizer wait]:
+runtime.gopark(0x0?, 0x10ee3a8?, 0x40?, 0xe0?, 0x1000000010?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x2b236522ae20 sp=0x2b236522ae00 pc=0x48b18e
+runtime.runFinalizers()
+	/usr/local/go/src/runtime/mfinal.go:210 +0x107 fp=0x2b236522afe0 sp=0x2b236522ae20 pc=0x42e7a7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x2b236522afe8 sp=0x2b236522afe0 pc=0x492bc1
+created by runtime.createfing in goroutine 1
+	/usr/local/go/src/runtime/mfinal.go:172 +0x3d
+
+goroutine 7 gp=0x2b236525a780 m=nil [cleanup wait]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x2b236521cf68 sp=0x2b236521cf48 pc=0x48b18e
+runtime.goparkunlock(...)
+	/usr/local/go/src/runtime/proc.go:468
+runtime.(*cleanupQueue).dequeue(0x197e220)
+	/usr/local/go/src/runtime/mcleanup.go:522 +0xd4 fp=0x2b236521cfa0 sp=0x2b236521cf68 pc=0x42ae14
+runtime.runCleanups()
+	/usr/local/go/src/runtime/mcleanup.go:718 +0x45 fp=0x2b236521cfe0 sp=0x2b236521cfa0 pc=0x42b485
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x2b236521cfe8 sp=0x2b236521cfe0 pc=0x492bc1
+created by runtime.(*cleanupQueue).createGs in goroutine 1
+	/usr/local/go/src/runtime/mcleanup.go:672 +0xa5
+
+goroutine 34 gp=0x2b236525a960 m=nil [GC worker (idle)]:
+runtime.gopark(0x3457782cd0e?, 0x1?, 0x26?, 0x42?, 0x41b817?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x2b236521d740 sp=0x2b236521d720 pc=0x48b18e
+runtime.gcBgMarkWorker(0x2b2365404070)
+	/usr/local/go/src/runtime/mgc.go:1791 +0xeb fp=0x2b236521d7c8 sp=0x2b236521d740 pc=0x43230b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:1695 +0x17 fp=0x2b236521d7e0 sp=0x2b236521d7c8 pc=0x4321f7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x2b236521d7e8 sp=0x2b236521d7e0 pc=0x492bc1
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 35 gp=0x2b236544a000 m=nil [GC worker (idle)]:
+runtime.gopark(0x3457782dbe2?, 0x0?, 0x0?, 0x0?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x2b2365216740 sp=0x2b2365216720 pc=0x48b18e
+runtime.gcBgMarkWorker(0x2b2365404070)
+	/usr/local/go/src/runtime/mgc.go:1791 +0xeb fp=0x2b23652167c8 sp=0x2b2365216740 pc=0x43230b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:1695 +0x17 fp=0x2b23652167e0 sp=0x2b23652167c8 pc=0x4321f7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x2b23652167e8 sp=0x2b23652167e0 pc=0x492bc1
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 36 gp=0x2b236544a1e0 m=nil [GC worker (idle)]:
+runtime.gopark(0x3457783e10e?, 0x3?, 0xc2?, 0x33?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x2b2365453740 sp=0x2b2365453720 pc=0x48b18e
+runtime.gcBgMarkWorker(0x2b2365404070)
+	/usr/local/go/src/runtime/mgc.go:1791 +0xeb fp=0x2b23654537c8 sp=0x2b2365453740 pc=0x43230b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:1695 +0x17 fp=0x2b23654537e0 sp=0x2b23654537c8 pc=0x4321f7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x2b23654537e8 sp=0x2b23654537e0 pc=0x492bc1
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 37 gp=0x2b236544a3c0 m=nil [GC worker (idle)]:
+runtime.gopark(0x345778557b7?, 0x1?, 0x17?, 0xe3?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x2b2365217740 sp=0x2b2365217720 pc=0x48b18e
+runtime.gcBgMarkWorker(0x2b2365404070)
+	/usr/local/go/src/runtime/mgc.go:1791 +0xeb fp=0x2b23652177c8 sp=0x2b2365217740 pc=0x43230b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:1695 +0x17 fp=0x2b23652177e0 sp=0x2b23652177c8 pc=0x4321f7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x2b23652177e8 sp=0x2b23652177e0 pc=0x492bc1
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 38 gp=0x2b236544a5a0 m=nil [GC worker (idle)]:
+runtime.gopark(0x3457785a0d0?, 0x3?, 0xf6?, 0x3?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x2b2365217f40 sp=0x2b2365217f20 pc=0x48b18e
+runtime.gcBgMarkWorker(0x2b2365404070)
+	/usr/local/go/src/runtime/mgc.go:1791 +0xeb fp=0x2b2365217fc8 sp=0x2b2365217f40 pc=0x43230b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:1695 +0x17 fp=0x2b2365217fe0 sp=0x2b2365217fc8 pc=0x4321f7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x2b2365217fe8 sp=0x2b2365217fe0 pc=0x492bc1
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 39 gp=0x2b236544a780 m=nil [GC worker (idle)]:
+runtime.gopark(0x34577840794?, 0x3?, 0x41?, 0x16?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x2b2365228f40 sp=0x2b2365228f20 pc=0x48b18e
+runtime.gcBgMarkWorker(0x2b2365404070)
+	/usr/local/go/src/runtime/mgc.go:1791 +0xeb fp=0x2b2365228fc8 sp=0x2b2365228f40 pc=0x43230b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:1695 +0x17 fp=0x2b2365228fe0 sp=0x2b2365228fc8 pc=0x4321f7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x2b2365228fe8 sp=0x2b2365228fe0 pc=0x492bc1
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 40 gp=0x2b236544a960 m=nil [GC worker (idle)]:
+runtime.gopark(0x3457785a435?, 0x3?, 0x35?, 0x72?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x2b2365218f40 sp=0x2b2365218f20 pc=0x48b18e
+runtime.gcBgMarkWorker(0x2b2365404070)
+	/usr/local/go/src/runtime/mgc.go:1791 +0xeb fp=0x2b2365218fc8 sp=0x2b2365218f40 pc=0x43230b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:1695 +0x17 fp=0x2b2365218fe0 sp=0x2b2365218fc8 pc=0x4321f7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x2b2365218fe8 sp=0x2b2365218fe0 pc=0x492bc1
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 41 gp=0x2b236544ab40 m=nil [GC worker (idle)]:
+runtime.gopark(0x33f3ff0e5db?, 0x3?, 0x6c?, 0x7?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x2b2365219740 sp=0x2b2365219720 pc=0x48b18e
+runtime.gcBgMarkWorker(0x2b2365404070)
+	/usr/local/go/src/runtime/mgc.go:1791 +0xeb fp=0x2b23652197c8 sp=0x2b2365219740 pc=0x43230b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:1695 +0x17 fp=0x2b23652197e0 sp=0x2b23652197c8 pc=0x4321f7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x2b23652197e8 sp=0x2b23652197e0 pc=0x492bc1
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 42 gp=0x2b236544ad20 m=nil [GC worker (idle)]:
+runtime.gopark(0x3457785581f?, 0x1?, 0x63?, 0xfc?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x2b236522bf40 sp=0x2b236522bf20 pc=0x48b18e
+runtime.gcBgMarkWorker(0x2b2365404070)
+	/usr/local/go/src/runtime/mgc.go:1791 +0xeb fp=0x2b236522bfc8 sp=0x2b236522bf40 pc=0x43230b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:1695 +0x17 fp=0x2b236522bfe0 sp=0x2b236522bfc8 pc=0x4321f7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x2b236522bfe8 sp=0x2b236522bfe0 pc=0x492bc1
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 43 gp=0x2b236544af00 m=nil [GC worker (idle)]:
+runtime.gopark(0x19aee00?, 0x1?, 0x50?, 0xc6?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x2b236548bf40 sp=0x2b236548bf20 pc=0x48b18e
+runtime.gcBgMarkWorker(0x2b2365404070)
+	/usr/local/go/src/runtime/mgc.go:1791 +0xeb fp=0x2b236548bfc8 sp=0x2b236548bf40 pc=0x43230b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:1695 +0x17 fp=0x2b236548bfe0 sp=0x2b236548bfc8 pc=0x4321f7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x2b236548bfe8 sp=0x2b236548bfe0 pc=0x492bc1
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 44 gp=0x2b236544b0e0 m=nil [GC worker (idle)]:
+runtime.gopark(0x3457782e76e?, 0x3?, 0x17?, 0xfd?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x2b236548ef40 sp=0x2b236548ef20 pc=0x48b18e
+runtime.gcBgMarkWorker(0x2b2365404070)
+	/usr/local/go/src/runtime/mgc.go:1791 +0xeb fp=0x2b236548efc8 sp=0x2b236548ef40 pc=0x43230b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:1695 +0x17 fp=0x2b236548efe0 sp=0x2b236548efc8 pc=0x4321f7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x2b236548efe8 sp=0x2b236548efe0 pc=0x492bc1
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 45 gp=0x2b236544b2c0 m=nil [GC worker (idle)]:
+runtime.gopark(0x34577855af9?, 0x1?, 0x6c?, 0xde?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x2b2365451740 sp=0x2b2365451720 pc=0x48b18e
+runtime.gcBgMarkWorker(0x2b2365404070)
+	/usr/local/go/src/runtime/mgc.go:1791 +0xeb fp=0x2b23654517c8 sp=0x2b2365451740 pc=0x43230b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:1695 +0x17 fp=0x2b23654517e0 sp=0x2b23654517c8 pc=0x4321f7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x2b23654517e8 sp=0x2b23654517e0 pc=0x492bc1
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 50 gp=0x2b236525b860 m=nil [chan send]:
+runtime.gopark(0x2b2365264580?, 0x2b23652da120?, 0x50?, 0xa1?, 0x2b2381aac120?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x2b236522df00 sp=0x2b236522dee0 pc=0x48b18e
+runtime.chansend(0x2b23652d0000, 0x2b236522dfc8, 0x1, 0x2b2399284400?)
+	/usr/local/go/src/runtime/chan.go:283 +0x3fc fp=0x2b236522df70 sp=0x2b236522df00 pc=0x41bc1c
+runtime.chansend1(0x2b2366080ac0?, 0x2b236544a1e0?)
+	/usr/local/go/src/runtime/chan.go:161 +0x17 fp=0x2b236522dfa0 sp=0x2b236522df70 pc=0x41b817
+github.com/golangast/gollemer/internal/ai/training/chat.TrainChat.func6()
+	/home/a/go/gollemer/internal/ai/training/chat/chat.go:851 +0x47 fp=0x2b236522dfe0 sp=0x2b236522dfa0 pc=0xdf4887
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x2b236522dfe8 sp=0x2b236522dfe0 pc=0x492bc1
+created by github.com/golangast/gollemer/internal/ai/training/chat.TrainChat in goroutine 1
+	/home/a/go/gollemer/internal/ai/training/chat/chat.go:849 +0x5698

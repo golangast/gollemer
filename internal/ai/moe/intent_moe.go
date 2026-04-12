@@ -336,7 +336,7 @@ func (m *IntentMoE) ToGPU() {
 	}
 
 	// 🌡️ GPU WARM-UP: Serial compilation of pipelines to prevent race conditions
-	// (Vulkan/vkCreateComputePipelines crash) during the first parallel batch.
+	// (Gogpu/vkCreateComputePipelines crash) during the first parallel batch.
 	m.warmup()
 }
 

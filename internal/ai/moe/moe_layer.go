@@ -485,57 +485,28 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 
 
 	moe.expertOutputs = make([]*Tensor, numExperts)
-	var wg sync.WaitGroup
-	var errMutex sync.Mutex
-	var firstErr error
-
-	// fmt.Println("Starting parallel expert execution (Forward)")
-	// Run experts in parallel
-	for i := range numExperts {
+	// Run experts sequentially to stabilize driver execution
+	for i := 0; i < numExperts; i++ {
 		indices := moe.ExpertTokenIndices[i]
 		if len(indices) == 0 {
 			continue
 		}
 
-		wg.Add(1)
-		go func(expertIdx int, tokenIndices []int) {
-			defer wg.Done()
+		// Gather inputs for this expert
+		batchedInput, err := input2D.Gather(indices)
+		if err != nil {
+			return nil, fmt.Errorf("failed to gather inputs for expert %d: %w", i, err)
+		}
 
-			// Gather inputs for this expert
-			batchedInput, err := input2D.Gather(tokenIndices)
-			if err != nil {
-				errMutex.Lock()
-				if firstErr == nil {
-					firstErr = fmt.Errorf("failed to gather inputs for expert %d: %w", expertIdx, err)
-				}
-				errMutex.Unlock()
-				return
-			}
-
-			// Forward pass
-			output, err := moe.Experts[expertIdx].Forward(batchedInput)
-			if err != nil {
-				errMutex.Lock()
-				if firstErr == nil {
-					firstErr = fmt.Errorf("expert %d forward failed: %w", expertIdx, err)
-				}
-				errMutex.Unlock()
-				return
-			}
-			
-			// --- Activation Clipping ---
-			// Clamps every value between -15.0 and 15.0 to prevent activation explosion.
-			output.Clip(-15.0, 15.0)
-			
-			moe.expertOutputs[expertIdx] = output
-			// fmt.Printf("Expert %d finished forward\n", expertIdx)
-		}(i, indices)
-	}
-	wg.Wait()
-	// fmt.Println("Finished parallel expert execution (Forward)")
-
-	if firstErr != nil {
-		return nil, firstErr
+		// Forward pass
+		output, err := moe.Experts[i].Forward(batchedInput)
+		if err != nil {
+			return nil, fmt.Errorf("expert %d forward failed: %w", i, err)
+		}
+		
+		// --- Activation Clipping ---
+		output.Clip(-15.0, 15.0)
+		moe.expertOutputs[i] = output
 	}
 
 	// Scatter results back to final output
@@ -1118,7 +1089,10 @@ func (moe *MoELayer) ClearState() {
 	moe.stateStack = nil
 	moe.gateLogits = nil
 
-	// Clear state for all experts
+	// Clear state for all experts and gating network
+	if moe.GatingNetwork != nil {
+		moe.GatingNetwork.ClearState()
+	}
 	for _, expert := range moe.Experts {
 		if expert != nil {
 			expert.ClearState()

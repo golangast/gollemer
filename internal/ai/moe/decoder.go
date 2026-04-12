@@ -289,6 +289,9 @@ func (d *RNNDecoder) ClearState() {
 	if d.LSTM != nil {
 		d.LSTM.ClearState()
 	}
+	if d.OutputMoE != nil {
+		d.OutputMoE.ClearState()
+	}
 	if d.Attention != nil {
 		d.Attention.ClearState()
 	}

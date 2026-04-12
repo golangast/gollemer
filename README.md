@@ -30,7 +30,7 @@ To train the Mixture-of-Experts (MoE) classifier or the conversational chat mode
 ```
 
 ### 4. GPU Acceleration & Windows Execution
-Gollemer now supports **native GPU acceleration** via WebGPU (Paragon V3). 
+Gollemer now supports **native GPU acceleration** via Gogpu (Gogpu V3). 
 
 On Windows, use the provided helper script to automatically configure the CGO environment and the local compiler:
 ```powershell

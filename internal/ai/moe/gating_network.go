@@ -351,6 +351,19 @@ func (gn *GatingNetwork) CalculateDiversityLoss() float32 {
 	return totalLoss * coeff
 }
 
+func (gn *GatingNetwork) ClearState() {
+	gn.inputTensor = nil
+	gn.logitsTensor = nil
+	gn.noiseLogitsTensor = nil
+	gn.outputTensor = nil
+	if gn.Linear != nil {
+		gn.Linear.ClearState()
+	}
+	if gn.NoiseLinear != nil {
+		gn.NoiseLinear.ClearState()
+	}
+}
+
 // Inputs returns the input tensors of the GatingNetwork's last forward operation.
 func (gn *GatingNetwork) Inputs() []*tensor.Tensor {
 	if gn.inputTensor != nil {

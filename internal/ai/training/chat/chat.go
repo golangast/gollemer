@@ -306,7 +306,7 @@ skipCSV:
 	if intentModel == nil {
 		hwInfo := "i5-12400F + 16GB RAM"
 		if useGPU {
-			hwInfo += " + GPU (Paragon/WebGPU)"
+			hwInfo += " + GPU (Gogpu)"
 		}
 		log.Printf("🚀 Initializing 512d MoE Transformer (8 Experts, 4-Layer Encoder, 4-Layer Decoder) for %s", hwInfo)
 		// Use the pre-computed final vocab size so we never need to call

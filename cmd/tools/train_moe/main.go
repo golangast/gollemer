@@ -981,7 +981,7 @@ func main() {
 	}
 
 	if *gpu {
-		log.Println("🚀 GPU acceleration enabled (Paragon/WebGPU). Dispatching to AMD/Vulkan...")
+		log.Println("🚀 GPU acceleration enabled (Gogpu). Dispatching to AMD/Gogpu...")
 	}
 
 	if *trainChat {
@@ -1019,6 +1019,9 @@ func main() {
 			*semanticTrainingData = subset
 		}
 	}
+
+	// GPU flag is honored; backend selection (software/vulkan/gles) is
+	// handled by the gogpu HAL registration. Do not override `--gpu` here.
 
 	// Create query vocabulary from word2vec model
 	queryVocabulary := convertW2VVocab(word2vecModel.Vocabulary)
@@ -1159,7 +1162,6 @@ func main() {
 			}
 		}
 	}
-
 
 	if intentMoEModel == nil {
 		// Always create a new IntentMoE model for now to debug gob loading
@@ -1371,16 +1373,14 @@ func saveCheckpoint(model *moe.IntentMoE, basePath string, epoch, batch, current
 // DetachModel removes the computation graph (creator and operation) from the model parameters
 // it preserves gradients unless they are explicitly cleared.
 func DetachModel(model *moe.IntentMoE) {
+	// Call unified ClearState first to release intermediate tensors and GPU tapes
+	model.ClearState()
+
 	params := model.Parameters()
 	for _, param := range params {
 		param.Creator = nil
 		param.Mask = nil
 		param.Operation = nil
-	}
-
-	// Clear encoder state
-	if enc, ok := model.Encoder.(*moe.MoEEncoder); ok {
-		enc.ClearState()
 	}
 
 	// Clear decoder state which might hold references to the computation graph

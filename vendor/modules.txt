@@ -24,10 +24,12 @@ github.com/beorn7/perks/quantile
 ## explicit; go 1.25
 github.com/born-ml/born/autodiff
 github.com/born-ml/born/backend/cpu
+github.com/born-ml/born/backend/gogpu
 github.com/born-ml/born/backend/webgpu
 github.com/born-ml/born/internal/autodiff
 github.com/born-ml/born/internal/autodiff/ops
 github.com/born-ml/born/internal/backend/cpu
+github.com/born-ml/born/internal/backend/gogpu
 github.com/born-ml/born/internal/backend/webgpu
 github.com/born-ml/born/internal/nn
 github.com/born-ml/born/internal/serialization

@@ -1,0 +1,358 @@
+2026/04/10 23:43:07 main.go:984: 🚀 GPU acceleration enabled (Paragon/WebGPU). Dispatching to AMD/Vulkan...
+--- 🗣️  Training Chat Model ---
+🚀 Using Global GPU Context for Chat Training...
+✅ Loaded Word2Vec model
+2026/04/10 23:43:08 chat.go:251: 📊 Loaded 1302 training pairs from conversing.csv
+2026/04/10 23:43:08 vocab.go:54: NewVocabulary: Initial size after adding <pad> and UNK: 2
+2026/04/10 23:43:08 chat.go:270: 📐 Pre-computed final vocab size: 2547
+2026/04/10 23:43:08 chat.go:311: 🚀 Initializing 512d MoE Transformer (8 Experts, 4-Layer Encoder, 4-Layer Decoder) for i5-12400F + 16GB RAM + GPU (Paragon/WebGPU)
+2026/04/10 23:43:08 chat.go:318: 🔢 Initializing decoder with final vocab size: 2547
+🚀 Moving fresh model to GPU...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🚀 Moving BornExpert to shared GPU context (WebGPU/Paragon)...
+🌡️  GPU Warm-up: Sequential pipeline compilation...
+SIGSEGV: segmentation violation
+PC=0x75e6ee13c2f4 m=5 sigcode=1 addr=0x240
+signal arrived during cgo execution
+
+goroutine 1 gp=0x253b5c38c1e0 m=5 mp=0x253b5c480008 [syscall]:
+runtime.cgocall(0x7b7d40, 0x253b7987d790)
+	/usr/local/go/src/runtime/cgocall.go:167 +0x4b fp=0x253b5c590c78 sp=0x253b5c590c40 pc=0x487f4b
+github.com/go-webgpu/goffi/internal/syscall.CallNFloat(0x75e6ee142c60, {0x75e7080e46c0, 0x0, 0x1, 0x253b7cefdb60, 0x0, 0x253b78d0f9f0}, {0x0, 0x0, 0x0, ...}, ...)
+	/home/a/go/gollemer/vendor/github.com/go-webgpu/goffi/internal/syscall/syscall_unix_amd64.go:78 +0x20b fp=0x253b5c590d70 sp=0x253b5c590c78 pc=0x7b7ceb
+github.com/go-webgpu/goffi/internal/arch/amd64.(*Implementation).Execute(0x1a429e0, 0x1a13a60, 0x253b5c5910d0?, 0x426485?, {0x253b7d2ff5f0, 0x6, 0x6})
+	/home/a/go/gollemer/vendor/github.com/go-webgpu/goffi/internal/arch/amd64/call_unix.go:129 +0x785 fp=0x253b5c591098 sp=0x253b5c590d70 pc=0x7b85c5
+github.com/go-webgpu/goffi/ffi.executeFunction(...)
+	/home/a/go/gollemer/vendor/github.com/go-webgpu/goffi/ffi/call.go:20
+github.com/go-webgpu/goffi/ffi.CallFunctionContext({0x1163900?, 0x1a429e0?}, 0x1a13a60, 0x75e6ee142c60, 0x253b78d0f9fc, {0x253b7d2ff5f0, 0x6, 0x6})
+	/home/a/go/gollemer/vendor/github.com/go-webgpu/goffi/ffi/ffi.go:229 +0xa7 fp=0x253b5c5910e0 sp=0x253b5c591098 pc=0x7bb0e7
+github.com/go-webgpu/goffi/ffi.CallFunction(...)
+	/home/a/go/gollemer/vendor/github.com/go-webgpu/goffi/ffi/ffi.go:267
+github.com/gogpu/wgpu/hal/vulkan/vk.(*Commands).CreateComputePipelines(0x253b78cf9808, 0x75e7080e46c0, 0x0, 0x1, 0x253b7cefdb60, 0x0, 0x253b78d0f9f0)
+	/home/a/go/gollemer/vendor/github.com/gogpu/wgpu/hal/vulkan/vk/commands_gen.go:1647 +0x265 fp=0x253b5c591190 sp=0x253b5c5910e0 pc=0x7c7b25
+github.com/gogpu/wgpu/hal/vulkan.vkCreateComputePipelines(...)
+	/home/a/go/gollemer/vendor/github.com/gogpu/wgpu/hal/vulkan/pipeline.go:475
+github.com/gogpu/wgpu/hal/vulkan.(*Device).CreateComputePipeline(0x253b5c50a090, 0x253b5c634c00)
+	/home/a/go/gollemer/vendor/github.com/gogpu/wgpu/hal/vulkan/pipeline.go:407 +0x2e5 fp=0x253b5c5912e8 sp=0x253b5c591190 pc=0x900765
+github.com/gogpu/wgpu.(*Device).CreateComputePipeline(0x253b78cc43e0, 0x253b5c5913c8)
+	/home/a/go/gollemer/vendor/github.com/gogpu/wgpu/device.go:419 +0x202 fp=0x253b5c5913a0 sp=0x253b5c5912e8 pc=0x7a0422
+github.com/born-ml/born/internal/backend/gogpu.(*Backend).createComputePipeline(0x253b5c60ec90?, 0x253b5c57f3b0?, {0x10e7524?, 0x9?})
+	/home/a/go/gollemer/vendor/github.com/born-ml/born/internal/backend/gogpu/gogpu_helpers.go:22 +0x45 fp=0x253b5c591408 sp=0x253b5c5913a0 pc=0x95c9a5
+github.com/born-ml/born/internal/backend/gogpu.(*Backend).getOrCreatePipeline(0x253b5c60ec60, {0x10eadb3, 0x9}, 0x253b7d6ff400)
+	/home/a/go/gollemer/vendor/github.com/born-ml/born/internal/backend/gogpu/compute.go:46 +0xe7 fp=0x253b5c591450 sp=0x253b5c591408 pc=0x94c707
+github.com/born-ml/born/internal/backend/gogpu.(*Backend).runTransposeLazy(0x253b5c60ec60, 0x253b78cd0540)
+	/home/a/go/gollemer/vendor/github.com/born-ml/born/internal/backend/gogpu/lazy_compute.go:488 +0xbb fp=0x253b5c591630 sp=0x253b5c591450 pc=0x96875b
+github.com/born-ml/born/internal/backend/gogpu.(*Backend).Transpose(0x253b5c591690?, 0x48d749?, {0x253b78d0f360?, 0xf48e40?, 0x8003b7cefd201?})
+	/home/a/go/gollemer/vendor/github.com/born-ml/born/internal/backend/gogpu/ops.go:199 +0x85 fp=0x253b5c591668 sp=0x253b5c591630 pc=0x96ec05
+github.com/born-ml/born/tensor.Backend.Transpose({0x117cbe8?, 0x253b5c60ec60?}, 0x253b7cefd320?, {0x253b78d0f360?, 0x45e8b1?, 0x253b5c591728?})
+	<autogenerated>:1 +0x35 fp=0x253b5c5916a0 sp=0x253b5c591668 pc=0x7434d5
+github.com/born-ml/born/internal/autodiff.(*AutodiffBackend[...]).Transpose(0x1183720, 0x253b78cd0540, {0x0, 0x0, 0x0})
+	/home/a/go/gollemer/vendor/github.com/born-ml/born/internal/autodiff/autodiff.go:230 +0xfa fp=0x253b5c591718 sp=0x253b5c5916a0 pc=0xa6bc3a
+github.com/born-ml/born/internal/autodiff.(*AutodiffBackend[...]).Transpose(0x253b78d0f340?, {0x0?, 0x253b5c591798?, 0x426485?})
+	/home/a/go/gollemer/vendor/github.com/born-ml/born/internal/autodiff/autodiff.go:217 +0x2b fp=0x253b5c591758 sp=0x253b5c591718 pc=0xa8346b
+github.com/born-ml/born/internal/tensor.(*Tensor[...]).Transpose(0x253b7d6fee40, {0x0?, 0x488a65?, 0x20?})
+	/home/a/go/gollemer/vendor/github.com/born-ml/born/internal/tensor/ops.go:94 +0x31 fp=0x253b5c5917a0 sp=0x253b5c591758 pc=0xa7aa51
+github.com/born-ml/born/internal/nn.(*Linear[...]).Forward(0x1175460, 0x253b7d6fee40)
+	/home/a/go/gollemer/vendor/github.com/born-ml/born/internal/nn/linear.go:145 +0x71 fp=0x253b5c591820 sp=0x253b5c5917a0 pc=0xa6cd31
+github.com/golangast/gollemer/internal/ai/moe.(*BornExpert).Forward.func1()
+	/home/a/go/gollemer/internal/ai/moe/born_expert.go:202 +0x38 fp=0x253b5c591858 sp=0x253b5c591820 pc=0xa468b8
+github.com/born-ml/born/internal/autodiff.(*AutodiffBackend[...]).NoGrad(0x1183720, 0x253b5c591940)
+	/home/a/go/gollemer/vendor/github.com/born-ml/born/internal/autodiff/autodiff.go:692 +0x8a fp=0x253b5c5918a0 sp=0x253b5c591858 pc=0xa69dea
+github.com/born-ml/born/autodiff.NoGrad[...](...)
+	/home/a/go/gollemer/vendor/github.com/born-ml/born/autodiff/autodiff.go:77
+github.com/golangast/gollemer/internal/ai/moe.(*BornExpert).Forward(0x253b5c640000, 0x253b5c38a050?)
+	/home/a/go/gollemer/internal/ai/moe/born_expert.go:201 +0x2cc fp=0x253b5c591998 sp=0x253b5c5918a0 pc=0xa466cc
+github.com/golangast/gollemer/internal/ai/moe.(*IntentMoE).warmup(0x253b5c641260)
+	/home/a/go/gollemer/internal/ai/moe/intent_moe.go:360 +0x1ad fp=0x253b5c591a28 sp=0x253b5c591998 pc=0xa545cd
+github.com/golangast/gollemer/internal/ai/moe.(*IntentMoE).ToGPU(0x253b5c641260)
+	/home/a/go/gollemer/internal/ai/moe/intent_moe.go:340 +0x65 fp=0x253b5c591a40 sp=0x253b5c591a28 pc=0xa54405
+github.com/golangast/gollemer/internal/ai/training/chat.TrainChat({0x1151f60, 0x1}, 0x0, 0x0, 0x3a03126f, 0x3c23d70a, 0x0, 0x40a00000, 0x1, 0x1, ...)
+	/home/a/go/gollemer/internal/ai/training/chat/chat.go:343 +0x1865 fp=0x253b5c593400 sp=0x253b5c591a40 pc=0xe30c65
+main.main()
+	/home/a/go/gollemer/cmd/tools/train_moe/main.go:988 +0x966 fp=0x253b5c593f48 sp=0x253b5c593400 pc=0xe4c366
+runtime.main()
+	/usr/local/go/src/runtime/proc.go:290 +0x2d5 fp=0x253b5c593fe0 sp=0x253b5c593f48 pc=0x455b55
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x253b5c593fe8 sp=0x253b5c593fe0 pc=0x492bc1
+
+goroutine 2 gp=0x253b5c38cd20 m=nil [force gc (idle)]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x253b5c412fa8 sp=0x253b5c412f88 pc=0x48b18e
+runtime.goparkunlock(...)
+	/usr/local/go/src/runtime/proc.go:468
+runtime.forcegchelper()
+	/usr/local/go/src/runtime/proc.go:375 +0xb3 fp=0x253b5c412fe0 sp=0x253b5c412fa8 pc=0x455e73
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x253b5c412fe8 sp=0x253b5c412fe0 pc=0x492bc1
+created by runtime.init.7 in goroutine 1
+	/usr/local/go/src/runtime/proc.go:363 +0x1a
+
+goroutine 3 gp=0x253b5c38d2c0 m=nil [GC sweep wait]:
+runtime.gopark(0x1a11b01?, 0x0?, 0x0?, 0x0?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x253b5c413788 sp=0x253b5c413768 pc=0x48b18e
+runtime.goparkunlock(...)
+	/usr/local/go/src/runtime/proc.go:468
+runtime.bgsweep(0x253b5c43c000)
+	/usr/local/go/src/runtime/mgcsweep.go:324 +0x151 fp=0x253b5c4137c8 sp=0x253b5c413788 pc=0x43e551
+runtime.gcenable.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:214 +0x17 fp=0x253b5c4137e0 sp=0x253b5c4137c8 pc=0x42f837
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x253b5c4137e8 sp=0x253b5c4137e0 pc=0x492bc1
+created by runtime.gcenable in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:214 +0x66
+
+goroutine 4 gp=0x253b5c38d4a0 m=nil [GC scavenge wait]:
+runtime.gopark(0x10000?, 0x1b91bf4?, 0x0?, 0x0?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x253b5c413f78 sp=0x253b5c413f58 pc=0x48b18e
+runtime.goparkunlock(...)
+	/usr/local/go/src/runtime/proc.go:468
+runtime.(*scavengerState).park(0x1a14b80)
+	/usr/local/go/src/runtime/mgcscavenge.go:425 +0x49 fp=0x253b5c413fa8 sp=0x253b5c413f78 pc=0x43bfc9
+runtime.bgscavenge(0x253b5c43c000)
+	/usr/local/go/src/runtime/mgcscavenge.go:658 +0x59 fp=0x253b5c413fc8 sp=0x253b5c413fa8 pc=0x43c559
+runtime.gcenable.gowrap2()
+	/usr/local/go/src/runtime/mgc.go:215 +0x17 fp=0x253b5c413fe0 sp=0x253b5c413fc8 pc=0x42f7f7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x253b5c413fe8 sp=0x253b5c413fe0 pc=0x492bc1
+created by runtime.gcenable in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:215 +0xa5
+
+goroutine 5 gp=0x253b5c38da40 m=nil [GOMAXPROCS updater (idle)]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x253b5c414788 sp=0x253b5c414768 pc=0x48b18e
+runtime.goparkunlock(...)
+	/usr/local/go/src/runtime/proc.go:468
+runtime.updateMaxProcsGoroutine()
+	/usr/local/go/src/runtime/proc.go:7095 +0xe7 fp=0x253b5c4147e0 sp=0x253b5c414788 pc=0x4644e7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x253b5c4147e8 sp=0x253b5c4147e0 pc=0x492bc1
+created by runtime.defaultGOMAXPROCSUpdateEnable in goroutine 1
+	/usr/local/go/src/runtime/proc.go:7083 +0x37
+
+goroutine 6 gp=0x253b5c4541e0 m=nil [finalizer wait]:
+runtime.gopark(0x465535?, 0x1c8?, 0x80?, 0x8d?, 0x253b5c412601?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x253b5c412620 sp=0x253b5c412600 pc=0x48b18e
+runtime.runFinalizers()
+	/usr/local/go/src/runtime/mfinal.go:210 +0x107 fp=0x253b5c4127e0 sp=0x253b5c412620 pc=0x42e7a7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x253b5c4127e8 sp=0x253b5c4127e0 pc=0x492bc1
+created by runtime.createfing in goroutine 1
+	/usr/local/go/src/runtime/mfinal.go:172 +0x3d
+
+goroutine 7 gp=0x253b5c454780 m=nil [cleanup wait]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x253b5c414f68 sp=0x253b5c414f48 pc=0x48b18e
+runtime.goparkunlock(...)
+	/usr/local/go/src/runtime/proc.go:468
+runtime.(*cleanupQueue).dequeue(0x1a15060)
+	/usr/local/go/src/runtime/mcleanup.go:522 +0xd4 fp=0x253b5c414fa0 sp=0x253b5c414f68 pc=0x42ae14
+runtime.runCleanups()
+	/usr/local/go/src/runtime/mcleanup.go:718 +0x45 fp=0x253b5c414fe0 sp=0x253b5c414fa0 pc=0x42b485
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x253b5c414fe8 sp=0x253b5c414fe0 pc=0x492bc1
+created by runtime.(*cleanupQueue).createGs in goroutine 1
+	/usr/local/go/src/runtime/mcleanup.go:672 +0xa5
+
+goroutine 9 gp=0x253b5c454960 m=nil [GC worker (idle)]:
+runtime.gopark(0x253b5c454960?, 0x253b5c4157a8?, 0x9d?, 0xc5?, 0x41b817?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x253b5c415740 sp=0x253b5c415720 pc=0x48b18e
+runtime.gcBgMarkWorker(0x253b5c3cc3f0)
+	/usr/local/go/src/runtime/mgc.go:1791 +0xeb fp=0x253b5c4157c8 sp=0x253b5c415740 pc=0x43230b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:1695 +0x17 fp=0x253b5c4157e0 sp=0x253b5c4157c8 pc=0x4321f7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x253b5c4157e8 sp=0x253b5c4157e0 pc=0x492bc1
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 10 gp=0x253b5c454b40 m=nil [GC worker (idle)]:
+runtime.gopark(0x0?, 0x0?, 0x0?, 0x0?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x253b5c415f40 sp=0x253b5c415f20 pc=0x48b18e
+runtime.gcBgMarkWorker(0x253b5c3cc3f0)
+	/usr/local/go/src/runtime/mgc.go:1791 +0xeb fp=0x253b5c415fc8 sp=0x253b5c415f40 pc=0x43230b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:1695 +0x17 fp=0x253b5c415fe0 sp=0x253b5c415fc8 pc=0x4321f7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x253b5c415fe8 sp=0x253b5c415fe0 pc=0x492bc1
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 11 gp=0x253b5c454d20 m=nil [GC worker (idle)]:
+runtime.gopark(0xd516543281b?, 0x0?, 0x0?, 0x0?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x253b5c40e740 sp=0x253b5c40e720 pc=0x48b18e
+runtime.gcBgMarkWorker(0x253b5c3cc3f0)
+	/usr/local/go/src/runtime/mgc.go:1791 +0xeb fp=0x253b5c40e7c8 sp=0x253b5c40e740 pc=0x43230b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:1695 +0x17 fp=0x253b5c40e7e0 sp=0x253b5c40e7c8 pc=0x4321f7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x253b5c40e7e8 sp=0x253b5c40e7e0 pc=0x492bc1
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 12 gp=0x253b5c454f00 m=nil [GC worker (idle)]:
+runtime.gopark(0xd5165442bfb?, 0x3?, 0x4e?, 0x8f?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x253b5c40ef40 sp=0x253b5c40ef20 pc=0x48b18e
+runtime.gcBgMarkWorker(0x253b5c3cc3f0)
+	/usr/local/go/src/runtime/mgc.go:1791 +0xeb fp=0x253b5c40efc8 sp=0x253b5c40ef40 pc=0x43230b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:1695 +0x17 fp=0x253b5c40efe0 sp=0x253b5c40efc8 pc=0x4321f7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x253b5c40efe8 sp=0x253b5c40efe0 pc=0x492bc1
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 13 gp=0x253b5c4550e0 m=nil [GC worker (idle)]:
+runtime.gopark(0xd516544bc24?, 0x1?, 0xeb?, 0x46?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x253b5c40f740 sp=0x253b5c40f720 pc=0x48b18e
+runtime.gcBgMarkWorker(0x253b5c3cc3f0)
+	/usr/local/go/src/runtime/mgc.go:1791 +0xeb fp=0x253b5c40f7c8 sp=0x253b5c40f740 pc=0x43230b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:1695 +0x17 fp=0x253b5c40f7e0 sp=0x253b5c40f7c8 pc=0x4321f7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x253b5c40f7e8 sp=0x253b5c40f7e0 pc=0x492bc1
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 14 gp=0x253b5c4552c0 m=nil [GC worker (idle)]:
+runtime.gopark(0xd5165438fbb?, 0x3?, 0x8d?, 0x5d?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x253b5c40ff40 sp=0x253b5c40ff20 pc=0x48b18e
+runtime.gcBgMarkWorker(0x253b5c3cc3f0)
+	/usr/local/go/src/runtime/mgc.go:1791 +0xeb fp=0x253b5c40ffc8 sp=0x253b5c40ff40 pc=0x43230b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:1695 +0x17 fp=0x253b5c40ffe0 sp=0x253b5c40ffc8 pc=0x4321f7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x253b5c40ffe8 sp=0x253b5c40ffe0 pc=0x492bc1
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 15 gp=0x253b5c4554a0 m=nil [GC worker (idle)]:
+runtime.gopark(0xd516542f8f8?, 0x3?, 0xb1?, 0x6?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x253b5c410740 sp=0x253b5c410720 pc=0x48b18e
+runtime.gcBgMarkWorker(0x253b5c3cc3f0)
+	/usr/local/go/src/runtime/mgc.go:1791 +0xeb fp=0x253b5c4107c8 sp=0x253b5c410740 pc=0x43230b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:1695 +0x17 fp=0x253b5c4107e0 sp=0x253b5c4107c8 pc=0x4321f7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x253b5c4107e8 sp=0x253b5c4107e0 pc=0x492bc1
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 16 gp=0x253b5c455680 m=nil [GC worker (idle)]:
+runtime.gopark(0xd5165304d33?, 0x3?, 0xb2?, 0x18?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x253b5c410f40 sp=0x253b5c410f20 pc=0x48b18e
+runtime.gcBgMarkWorker(0x253b5c3cc3f0)
+	/usr/local/go/src/runtime/mgc.go:1791 +0xeb fp=0x253b5c410fc8 sp=0x253b5c410f40 pc=0x43230b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:1695 +0x17 fp=0x253b5c410fe0 sp=0x253b5c410fc8 pc=0x4321f7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x253b5c410fe8 sp=0x253b5c410fe0 pc=0x492bc1
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 50 gp=0x253b5c455860 m=nil [GC worker (idle)]:
+runtime.gopark(0xd516542cc15?, 0x3?, 0x28?, 0x40?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x253b5c411740 sp=0x253b5c411720 pc=0x48b18e
+runtime.gcBgMarkWorker(0x253b5c3cc3f0)
+	/usr/local/go/src/runtime/mgc.go:1791 +0xeb fp=0x253b5c4117c8 sp=0x253b5c411740 pc=0x43230b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:1695 +0x17 fp=0x253b5c4117e0 sp=0x253b5c4117c8 pc=0x4321f7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x253b5c4117e8 sp=0x253b5c4117e0 pc=0x492bc1
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 51 gp=0x253b5c455a40 m=nil [GC worker (idle)]:
+runtime.gopark(0xd516543990f?, 0x3?, 0xda?, 0xa7?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x253b5c411f40 sp=0x253b5c411f20 pc=0x48b18e
+runtime.gcBgMarkWorker(0x253b5c3cc3f0)
+	/usr/local/go/src/runtime/mgc.go:1791 +0xeb fp=0x253b5c411fc8 sp=0x253b5c411f40 pc=0x43230b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:1695 +0x17 fp=0x253b5c411fe0 sp=0x253b5c411fc8 pc=0x4321f7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x253b5c411fe8 sp=0x253b5c411fe0 pc=0x492bc1
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 52 gp=0x253b5c455c20 m=nil [GC worker (idle)]:
+runtime.gopark(0xd5165435d6e?, 0x1?, 0x96?, 0xcf?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x253b5c59c740 sp=0x253b5c59c720 pc=0x48b18e
+runtime.gcBgMarkWorker(0x253b5c3cc3f0)
+	/usr/local/go/src/runtime/mgc.go:1791 +0xeb fp=0x253b5c59c7c8 sp=0x253b5c59c740 pc=0x43230b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:1695 +0x17 fp=0x253b5c59c7e0 sp=0x253b5c59c7c8 pc=0x4321f7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x253b5c59c7e8 sp=0x253b5c59c7e0 pc=0x492bc1
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:1695 +0x105
+
+goroutine 53 gp=0x253b5c5a0000 m=nil [GC worker (idle)]:
+runtime.gopark(0x1a45c60?, 0x1?, 0x9e?, 0x29?, 0x0?)
+	/usr/local/go/src/runtime/proc.go:462 +0xce fp=0x253b5c59cf40 sp=0x253b5c59cf20 pc=0x48b18e
+runtime.gcBgMarkWorker(0x253b5c3cc3f0)
+	/usr/local/go/src/runtime/mgc.go:1791 +0xeb fp=0x253b5c59cfc8 sp=0x253b5c59cf40 pc=0x43230b
+runtime.gcBgMarkStartWorkers.gowrap1()
+	/usr/local/go/src/runtime/mgc.go:1695 +0x17 fp=0x253b5c59cfe0 sp=0x253b5c59cfc8 pc=0x4321f7
+runtime.goexit({})
+	/usr/local/go/src/runtime/asm_amd64.s:1771 +0x1 fp=0x253b5c59cfe8 sp=0x253b5c59cfe0 pc=0x492bc1
+created by runtime.gcBgMarkStartWorkers in goroutine 1
+	/usr/local/go/src/runtime/mgc.go:1695 +0x105
+
+rax    0x5
+rbx    0x0
+rcx    0x75e7080c3ea0
+rdx    0x75e7267fba18
+rdi    0x0
+rsi    0x5
+rbp    0x75e7267f9f70
+rsp    0x75e7267f9f58
+r8     0x75e7267f9fd0
+r9     0x75e7267f9fd0
+r10    0x253b7cefdb78
+r11    0x0
+r12    0x75e7080e46c0
+r13    0x75e7267f9fd0
+r14    0x0
+r15    0x0
+rip    0x75e6ee13c2f4
+rflags 0x10246
+cs     0x33
+fs     0x0
+gs     0x0
