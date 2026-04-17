@@ -3,6 +3,8 @@ package tensor
 import (
 	"fmt"
 	"math"
+	"runtime"
+	"sync"
 )
 
 // EmbeddingLookupOperation represents an embedding lookup operation for autograd.
@@ -16,25 +18,49 @@ type EmbeddingLookupOperation struct {
 func Softmax(tensor *Tensor) *Tensor {
 	shape := tensor.Shape
 	lastDim := shape[len(shape)-1]
+	numRows := len(tensor.Data) / lastDim
 	output := NewTensor(shape, make([]float32, len(tensor.Data)), false)
 
-	for i := 0; i < len(tensor.Data); i += lastDim {
-		maxVal := float32(math.Inf(-1))
-		for j := 0; j < lastDim; j++ {
-			if tensor.Data[i+j] > maxVal {
-				maxVal = tensor.Data[i+j]
-			}
-		}
-
-		var sumExp float64
-		for j := 0; j < lastDim; j++ {
-			sumExp += math.Exp(float64(tensor.Data[i+j] - maxVal))
-		}
-
-		for j := 0; j < lastDim; j++ {
-			output.Data[i+j] = float32(math.Exp(float64(tensor.Data[i+j]-maxVal)) / sumExp)
-		}
+	numWorkers := runtime.NumCPU()
+	if numWorkers > 8 {
+		numWorkers = 8
 	}
+	rowsPerWorker := (numRows + numWorkers - 1) / numWorkers
+
+	var wg sync.WaitGroup
+	for w := 0; w < numWorkers; w++ {
+		start := w * rowsPerWorker
+		end := (w + 1) * rowsPerWorker
+		if start >= numRows {
+			break
+		}
+		if end > numRows {
+			end = numRows
+		}
+		wg.Add(1)
+		go func(s, e int) {
+			defer wg.Done()
+			for i := s; i < e; i++ {
+				offset := i * lastDim
+				maxVal := float32(math.Inf(-1))
+				for j := 0; j < lastDim; j++ {
+					if tensor.Data[offset+j] > maxVal {
+						maxVal = tensor.Data[offset+j]
+					}
+				}
+
+				var sumExp float64
+				for j := 0; j < lastDim; j++ {
+					sumExp += math.Exp(float64(tensor.Data[offset+j] - maxVal))
+				}
+
+				for j := 0; j < lastDim; j++ {
+					output.Data[offset+j] = float32(math.Exp(float64(tensor.Data[offset+j]-maxVal)) / sumExp)
+				}
+			}
+		}(start, end)
+	}
+	wg.Wait()
 
 	return output
 }
@@ -68,7 +94,6 @@ func CrossEntropyLoss(logits *Tensor, targetIDs []int, padID int, labelSmoothing
 	probs := Softmax(reshapedLogits)
 	var loss float64
 	activeTokens := 0
-	epsilon := float32(1e-9) // Small value to avoid log(0)
 
 	grad := NewTensor(reshapedLogits.Shape, make([]float32, len(reshapedLogits.Data)), false)
 
@@ -80,141 +105,65 @@ func CrossEntropyLoss(logits *Tensor, targetIDs []int, padID int, labelSmoothing
 	}
 	targetConfidence := float32(1.0) - labelSmoothing
 
-	for i := 0; i < reshapedLogits.Shape[0]; i++ {
-		targetID := targetIDs[i]
-		if targetID == padID {
-			continue
+		numWorkers := runtime.NumCPU()
+		if numWorkers > 8 {
+			numWorkers = 8
 		}
-		activeTokens++
+		rowsPerWorker := (reshapedLogits.Shape[0] + numWorkers - 1) / numWorkers
 
-		smoothedLoss := 0.0
-		unrollFactor := 8
-		j := 0
-		baseIndex := i * numClasses
-
-		// Unrolled loop
-		for ; j <= numClasses-unrollFactor; j += unrollFactor {
-			// Unroll 1
-			p1 := probs.Data[baseIndex+j]
-			var t1 float32
-			if j == targetID {
-				t1 = targetConfidence
-			} else if j == padID {
-				t1 = 0
-			} else {
-				t1 = smoothValue
+		var wg sync.WaitGroup
+		losses := make([]float64, numWorkers)
+		tokenCounts := make([]int, numWorkers)
+		
+		for w := 0; w < numWorkers; w++ {
+			start := w * rowsPerWorker
+			end := (w + 1) * rowsPerWorker
+			if start >= reshapedLogits.Shape[0] {
+				break
 			}
-			smoothedLoss -= float64(t1) * math.Log(float64(p1+epsilon))
-			grad.Data[baseIndex+j] = p1 - t1
-
-			// Unroll 2
-			p2 := probs.Data[baseIndex+j+1]
-			var t2 float32
-			if j+1 == targetID {
-				t2 = targetConfidence
-			} else if j+1 == padID {
-				t2 = 0
-			} else {
-				t2 = smoothValue
+			if end > reshapedLogits.Shape[0] {
+				end = reshapedLogits.Shape[0]
 			}
-			smoothedLoss -= float64(t2) * math.Log(float64(p2+epsilon))
-			grad.Data[baseIndex+j+1] = p2 - t2
 
-			// Unroll 3
-			p3 := probs.Data[baseIndex+j+2]
-			var t3 float32
-			if j+2 == targetID {
-				t3 = targetConfidence
-			} else if j+2 == padID {
-				t3 = 0
-			} else {
-				t3 = smoothValue
-			}
-			smoothedLoss -= float64(t3) * math.Log(float64(p3+epsilon))
-			grad.Data[baseIndex+j+2] = p3 - t3
+			wg.Add(1)
+			go func(workerID, s, e int) {
+				defer wg.Done()
+				var localLoss float64
+				localActive := 0
+				epsilon := float32(1e-9)
 
-			// Unroll 4
-			p4 := probs.Data[baseIndex+j+3]
-			var t4 float32
-			if j+3 == targetID {
-				t4 = targetConfidence
-			} else if j+3 == padID {
-				t4 = 0
-			} else {
-				t4 = smoothValue
-			}
-			smoothedLoss -= float64(t4) * math.Log(float64(p4+epsilon))
-			grad.Data[baseIndex+j+3] = p4 - t4
+				for i := s; i < e; i++ {
+					targetID := targetIDs[i]
+					if targetID == padID {
+						continue
+					}
+					localActive++
 
-			// Unroll 5
-			p5 := probs.Data[baseIndex+j+4]
-			var t5 float32
-			if j+4 == targetID {
-				t5 = targetConfidence
-			} else if j+4 == padID {
-				t5 = 0
-			} else {
-				t5 = smoothValue
-			}
-			smoothedLoss -= float64(t5) * math.Log(float64(p5+epsilon))
-			grad.Data[baseIndex+j+4] = p5 - t5
-
-			// Unroll 6
-			p6 := probs.Data[baseIndex+j+5]
-			var t6 float32
-			if j+5 == targetID {
-				t6 = targetConfidence
-			} else if j+5 == padID {
-				t6 = 0
-			} else {
-				t6 = smoothValue
-			}
-			smoothedLoss -= float64(t6) * math.Log(float64(p6+epsilon))
-			grad.Data[baseIndex+j+5] = p6 - t6
-
-			// Unroll 7
-			p7 := probs.Data[baseIndex+j+6]
-			var t7 float32
-			if j+6 == targetID {
-				t7 = targetConfidence
-			} else if j+6 == padID {
-				t7 = 0
-			} else {
-				t7 = smoothValue
-			}
-			smoothedLoss -= float64(t7) * math.Log(float64(p7+epsilon))
-			grad.Data[baseIndex+j+6] = p7 - t7
-
-			// Unroll 8
-			p8 := probs.Data[baseIndex+j+7]
-			var t8 float32
-			if j+7 == targetID {
-				t8 = targetConfidence
-			} else if j+7 == padID {
-				t8 = 0
-			} else {
-				t8 = smoothValue
-			}
-			smoothedLoss -= float64(t8) * math.Log(float64(p8+epsilon))
-			grad.Data[baseIndex+j+7] = p8 - t8
+					baseIndex := i * numClasses
+					for j := 0; j < numClasses; j++ {
+						p := probs.Data[baseIndex+j]
+						var t float32
+						if j == targetID {
+							t = targetConfidence
+						} else if j == padID {
+							t = 0
+						} else {
+							t = smoothValue
+						}
+						localLoss -= float64(t) * math.Log(float64(p+epsilon))
+						grad.Data[baseIndex+j] = p - t
+					}
+				}
+				losses[workerID] = localLoss
+				tokenCounts[workerID] = localActive
+			}(w, start, end)
 		}
+		wg.Wait()
 
-		// Handle remaining elements
-		for ; j < numClasses; j++ {
-			p := probs.Data[baseIndex+j]
-			var targetProb float32
-			if j == targetID {
-				targetProb = targetConfidence
-			} else if j == padID {
-				targetProb = 0
-			} else {
-				targetProb = smoothValue
-			}
-			smoothedLoss -= float64(targetProb) * math.Log(float64(p+epsilon))
-			grad.Data[baseIndex+j] = p - targetProb
+		for w := 0; w < numWorkers; w++ {
+			loss += losses[w]
+			activeTokens += tokenCounts[w]
 		}
-		loss += smoothedLoss
-	}
 
 	if activeTokens > 0 {
 		loss /= float64(activeTokens)
@@ -223,7 +172,6 @@ func CrossEntropyLoss(logits *Tensor, targetIDs []int, padID int, labelSmoothing
 		}
 	}
 
-	// Reshape grad back to original shape if it was reshaped
 	if len(originalShape) == 3 {
 		var err error
 		grad, err = grad.Reshape(originalShape)

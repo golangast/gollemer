@@ -111,7 +111,7 @@ func NewMoELayer(inputDim, outputDim, numExperts, k int, expertBuilder func(int)
 		} else {
 			// Default to BornExpert for high performance (Pure Go / Cgo-free)
 			hiddenDim := inputDim * 4 // Common multiplier
-			expert, err := NewBornExpert(inputDim, hiddenDim, outputDim)
+			expert, err := NewBornExpert(i, inputDim, hiddenDim, outputDim)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create born expert %d: %w", i, err)
 			}
@@ -194,16 +194,36 @@ func (moe *MoELayer) SetGateTemperature(temp float32) {
 }
 
 func (moe *MoELayer) SyncParameters() error {
+	var wg sync.WaitGroup
+	errCh := make(chan error, len(moe.Experts)+1)
+
 	if moe.GatingNetwork != nil {
-		if err := moe.GatingNetwork.SyncParameters(); err != nil {
-			return err
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := moe.GatingNetwork.SyncParameters(); err != nil {
+				errCh <- err
+			}
+		}()
 	}
+
 	for _, expert := range moe.Experts {
 		if expert != nil {
-			if err := expert.SyncParameters(); err != nil {
-				return err
-			}
+			wg.Add(1)
+			go func(ex Expert) {
+				defer wg.Done()
+				if err := ex.SyncParameters(); err != nil {
+					errCh <- err
+				}
+			}(expert)
+		}
+	}
+	
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		if err != nil {
+			return err
 		}
 	}
 	return nil
@@ -405,81 +425,100 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 	// Store relative indices for scatter step
 	tokenExpertRelativeIndices := make([][]int, batchSize*seqLength)
 
-	// Pre-allocate indices buffers to reduce GC churn
-	allTopKIndices := make([]int, batchSize*seqLength*numExperts)
-	allRelativeIndices := make([]int, batchSize*seqLength*moe.K)
 
-	moe.TopExpertIDs = make([]int, batchSize*seqLength)
-	for i := 0; i < batchSize*seqLength; i++ {
-		scores := scoresTensor.Data[i*numExperts : (i+1)*numExperts]
-		topKIndices := allTopKIndices[i*numExperts : (i+1)*numExperts]
-		for j := range topKIndices {
-			topKIndices[j] = j
+	// --- Optimized Expert Routing decision (Low Allocation) ---
+	var wgRoute sync.WaitGroup
+	numWorkersRoute := runtime.NumCPU()
+	if numWorkersRoute > 16 {
+		numWorkersRoute = 16
+	}
+	totalTokensRoute := batchSize * seqLength
+	tokensPerWorkerRoute := (totalTokensRoute + numWorkersRoute - 1) / numWorkersRoute
+
+	moe.TopExpertIDs = make([]int, totalTokensRoute)
+	allSelectedExperts := make([][]int, totalTokensRoute)
+
+	for w := 0; w < numWorkersRoute; w++ {
+		start := w * tokensPerWorkerRoute
+		end := min(start+tokensPerWorkerRoute, totalTokensRoute)
+		if start >= end {
+			break
 		}
-		sort.SliceStable(topKIndices, func(a, b int) bool {
-			return scores[topKIndices[a]] > scores[topKIndices[b]]
-		})
-		
-		// Record the #1 expert for each token in the batch
-		moe.TopExpertIDs[i] = topKIndices[0]
 
-		// --- Hard top-K assignment with Overflow ---
-		// We try to pick the best experts, but if they are full, we spill over to the next best
-		// to ensure Expert Curiosity and stop the "Expert 3 Bottleneck".
-		selected := make([]int, 0, moe.K)
-		assignedCount := 0
-		tokenRelativeIndices := allRelativeIndices[i*moe.K : (i+1)*moe.K]
+		wgRoute.Add(1)
+		go func(tokenStart, tokenEnd int) {
+			defer wgRoute.Done()
+			
+			
+			for i := tokenStart; i < tokenEnd; i++ {
+				scores := scoresTensor.Data[i*numExperts : (i+1)*numExperts]
+				
+				// Fast Top-K (manual for small K)
+				e1, e2 := -1, -1
+				v1, v2 := float32(-1e30), float32(-1e30)
+				
+				for j, score := range scores {
+					if score > v1 {
+						v2 = v1
+						e2 = e1
+						v1 = score
+						e1 = j
+					} else if score > v2 {
+						v2 = score
+						e2 = j
+					}
+				}
+				
+				moe.TopExpertIDs[i] = e1
+				selected := []int{e1}
+				if moe.K > 1 && e2 != -1 {
+					selected = append(selected, e2)
+				}
+				allSelectedExperts[i] = selected
+
+				// Re-normalize probabilities (in-place)
+				var rowSum float32
+				for j := 0; j < numExperts; j++ {
+					idx := i*numExperts + j
+					if j != e1 && (moe.K < 2 || j != e2) {
+						GateOutputs.Data[idx] = 0
+					}
+					rowSum += GateOutputs.Data[idx]
+				}
+				if rowSum > 1e-12 {
+					invSum := 1.0 / rowSum
+					for j := 0; j < numExperts; j++ {
+						GateOutputs.Data[i*numExperts+j] *= invSum
+					}
+				}
+			}
+		}(start, end)
+	}
+	wgRoute.Wait()
+
+	moe.SelectedExperts = allSelectedExperts
+	// Clear and re-fill ExpertTokenIndices sequentially to ensure correct relative indexing
+	for i := range moe.ExpertTokenIndices {
+		moe.ExpertTokenIndices[i] = moe.ExpertTokenIndices[i][:0]
+	}
+	
+	tokenExpertRelativeIndices = make([][]int, totalTokensRoute)
+	for i, selected := range allSelectedExperts {
+		tokenExpertRelativeIndices[i] = make([]int, moe.K)
+		// Initialize with -1
+		for j := range tokenExpertRelativeIndices[i] {
+			tokenExpertRelativeIndices[i][j] = -1
+		}
 		
-		for _, expertIdx := range topKIndices {
-			if assignedCount >= moe.K {
+		for j, expertIdx := range selected {
+			if j >= moe.K {
 				break
 			}
-
-			stretchedCapacity := capacity
-			// If router confidence is extremely high, allow some stretch
-			if GateOutputs.Data[i*numExperts+expertIdx] > 0.8 {
-				stretchedCapacity = int(float64(capacity) * 1.5)
-			}
-
-			if len(moe.ExpertTokenIndices[expertIdx]) < stretchedCapacity {
-				tokenRelativeIndices[assignedCount] = len(moe.ExpertTokenIndices[expertIdx])
+			// Assign tokens to experts while respecting capacity (sequentially for safety)
+			if len(moe.ExpertTokenIndices[expertIdx]) < capacity*2 { // permissive limit
+				tokenExpertRelativeIndices[i][j] = len(moe.ExpertTokenIndices[expertIdx])
 				moe.ExpertTokenIndices[expertIdx] = append(moe.ExpertTokenIndices[expertIdx], i)
-				selected = append(selected, expertIdx)
-				assignedCount++
-				
-				// Track stats
-				if moe.AccumulatedUtilization == nil {
-					moe.AccumulatedUtilization = make([]int, numExperts)
-				}
-				moe.AccumulatedUtilization[expertIdx]++
 			}
-		}
-		
-		// Pad with -1 if we couldn't find enough capacity (unlikely but safe)
-		for j := assignedCount; j < moe.K; j++ {
-			tokenRelativeIndices[j] = -1
-		}
-
-		moe.SelectedExperts[i] = selected
-		tokenExpertRelativeIndices[i] = tokenRelativeIndices
-
-		// --- Hard Top-K: Zero out non-selected probabilities and re-normalize ---
-		// This forces the model to ignore noise from "unskilled" experts.
-		var rowSum float32
-		expertMap := make(map[int]bool)
-		for _, idx := range selected {
-			expertMap[idx] = true
-		}
-		for j := 0; j < numExperts; j++ {
-			idx := i*numExperts + j
-			if !expertMap[j] {
-				GateOutputs.Data[idx] = 0
-			}
-			rowSum += GateOutputs.Data[idx]
-		}
-		// Re-normalize remaining weights to sum to 1.0 for numerical stability
-		if rowSum > 1e-12 {
-			simdScaleF32(GateOutputs.Data[i*numExperts:(i+1)*numExperts], 1.0/rowSum)
 		}
 	}
 

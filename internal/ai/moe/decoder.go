@@ -67,7 +67,7 @@ func NewRNNDecoder(inputDim, outputVocabSize, hiddenSize, maxAttentionHeads, num
 	
 	if numExperts > 1 {
 		expertBuilder := func(expertIdx int) (Expert, error) {
-			return NewBornExpert(hiddenSize+inputDim, (hiddenSize+inputDim)*2, outputVocabSize)
+			return NewBornExpert(expertIdx, hiddenSize+inputDim, (hiddenSize+inputDim)*2, outputVocabSize)
 		}
 		moeLayer, err := NewMoELayer(hiddenSize+inputDim, outputVocabSize, numExperts, 1, expertBuilder)
 		if err != nil {

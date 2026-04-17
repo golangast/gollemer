@@ -6,6 +6,9 @@ require (
 	github.com/Masterminds/sprig/v3 v3.3.0
 	github.com/born-ml/born v0.7.14
 	github.com/gen2brain/beeep v0.11.2
+	github.com/go-webgpu/webgpu v0.4.1
+	github.com/gogpu/gputypes v0.4.0
+	github.com/gogpu/wgpu v0.24.7
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/prometheus/client_golang v1.23.2
 	gonum.org/v1/gonum v0.17.0
@@ -24,7 +27,6 @@ require (
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/go-webgpu/goffi v0.5.0 // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
-	github.com/gogpu/gputypes v0.4.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/huandu/xstrings v1.5.0 // indirect
 	github.com/jackmordaunt/icns/v3 v3.0.1 // indirect
@@ -45,7 +47,7 @@ require (
 	github.com/tadvi/systray v0.0.0-20190226123456-11a2b8fa57af // indirect
 	go.yaml.in/yaml/v2 v2.4.2 // indirect
 	golang.org/x/crypto v0.26.0 // indirect
-	golang.org/x/sys v0.42.0 // indirect
+	golang.org/x/sys v0.43.0 // indirect
 	google.golang.org/protobuf v1.36.8 // indirect
 	modernc.org/libc v1.70.0 // indirect
 	modernc.org/mathutil v1.7.1 // indirect

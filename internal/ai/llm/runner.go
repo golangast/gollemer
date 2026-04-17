@@ -82,8 +82,18 @@ func (r *Runner) Init() {
 
 	r.initModels()
 
+	// Load social model if available
+	var socialModel *moe.IntentMoE
+	socialModelPath := filepath.Join(r.ProjectRoot, "data/models/gob_models/moe_social_model.gob")
+	if loaded, err := moe.LoadIntentMoEModelFromGOB(socialModelPath); err == nil {
+		socialModel = loaded
+		log.Printf("✅ Loaded social-only model from %s", socialModelPath)
+	} else {
+		log.Printf("⚠️  Social model not found at %s (training with -train-social to create it)", socialModelPath)
+	}
+
 	// Initialize Intent Resolver
-	r.Client = &GollemerMoEClient{KB: r.KB, Model: r.IntentModel, W2V: r.W2V}
+	r.Client = &GollemerMoEClient{KB: r.KB, Model: r.IntentModel, SocialModel: socialModel, W2V: r.W2V}
 	if r.W2V != nil && r.W2V.VocabSize > 0 {
 		r.Client.CommandAnchors = map[string][]float64{
 			"create_file":    r.Client.getSentenceEmbedding("create a new file or scaffold code"),
@@ -127,7 +137,7 @@ func (r *Runner) initModels() {
 		}
 	}
 
-	vocabSize := 2547 // Final vocab size from TrainChat
+	vocabSize := 2547   // Final vocab size from TrainChat
 	embeddingDim := 768 // Match Transformer training
 	if r.W2V != nil {
 		vocabSize = r.W2V.VocabSize

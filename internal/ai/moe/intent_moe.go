@@ -11,6 +11,7 @@ import (
 	"os"
 	"runtime"
 	"sort"
+	"sync"
 	"time"
 
 	"github.com/golangast/gollemer/internal/ai/neural/nn"
@@ -66,21 +67,42 @@ func (m *IntentMoE) ClearState() {
 	}
 }
 
-// SyncParameters synchronizes the entire model's parameters to GPU.
+// SyncParameters synchronizes the entire model's parameters to GPU in parallel.
 func (m *IntentMoE) SyncParameters() error {
+	var wg sync.WaitGroup
+	errCh := make(chan error, 3)
+
 	if m.Encoder != nil {
-		if err := m.Encoder.SyncParameters(); err != nil {
-			return err
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := m.Encoder.SyncParameters(); err != nil {
+				errCh <- err
+			}
+		}()
 	}
+
 	if m.Decoder != nil {
-		if err := m.Decoder.SyncParameters(); err != nil {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := m.Decoder.SyncParameters(); err != nil {
+				errCh <- err
+			}
+		}()
+	}
+
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		if err != nil {
 			return err
 		}
 	}
-	// Note: Embedding is usually kept on CPU but we could sync if it were on GPU
 	return nil
 }
+
+
 
 // SampleFromLogits samples a token ID from logits using temperature, top-k, and top-p sampling.
 // Updated to use the user's suggested top-K-only normalization for more stable inference.
@@ -568,8 +590,8 @@ func NewHybridIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, ch
 	}
 
 	// 1. Create the inner LLM Encoder (MoE Stack with 4 layers for deeper reasoning)
-	expertBuilder := func(int) (Expert, error) {
-		return NewBornExpert(embeddingDim, embeddingDim*4, embeddingDim)
+	expertBuilder := func(expertIdx int) (Expert, error) {
+		return NewBornExpert(expertIdx, embeddingDim, embeddingDim*4, embeddingDim)
 	}
 	l0, err := NewMoELayer(embeddingDim, embeddingDim, numExperts, 2, expertBuilder)
 	if err != nil {

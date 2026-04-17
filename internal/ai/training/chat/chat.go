@@ -20,16 +20,15 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-
 	"github.com/golangast/gollemer/internal/ai/moe"
 	neuralnn "github.com/golangast/gollemer/internal/ai/neural/nn"
 	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
 	"github.com/golangast/gollemer/internal/ai/neural/nnu/word2vec"
 	"github.com/golangast/gollemer/internal/ai/neural/tensor"
 	"github.com/golangast/gollemer/internal/ai/train"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var (
@@ -164,23 +163,37 @@ func VerifyModelIntegrity(m *moe.IntentMoE) {
 
 // Old ThawScheduler removed in favor of step-based CosineDecay scheduler in internal/ai/training/chat/thaw_scheduler.go
 
+// findMoELayers extracts all MoE layers from a model for inspection/initialization
+func findMoELayers(m *moe.IntentMoE) []*moe.MoELayer {
+	if m == nil {
+		return nil
+	}
+	layers := m.Encoder.GetMoELayers()
+	if m.Decoder != nil && m.Decoder.OutputMoE != nil {
+		layers = append(layers, m.Decoder.OutputMoE)
+	}
+	return layers
+}
+
+// toFloat32 converts string tokens to float32 IDs for tensor creation
+func toFloat32(tokens []string) []float32 {
+	result := make([]float32, len(tokens))
+	for i, t := range tokens {
+		// Map token to a simple hash value
+		hash := uint32(0)
+		for _, ch := range t {
+			hash = hash*31 + uint32(ch)
+		}
+		result[i] = float32(hash % 10000)
+	}
+	return result
+}
+
 func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool, initialLR float32, weightDecay float32, autoHeal bool, maxGradNorm float32, useGPU bool, batchSize int, accumulationSteps int) {
 	fmt.Println("--- 🗣️  Training Chat Model ---")
 
 	if useGPU {
 		fmt.Println("🚀 Using Global GPU Context for Chat Training...")
-	}
-
-	// Pre-declare helper to find MoE layers
-	findMoELayers := func(m *moe.IntentMoE) []*moe.MoELayer {
-		if m == nil {
-			return nil
-		}
-		layers := m.Encoder.GetMoELayers()
-		if m.Decoder != nil && m.Decoder.OutputMoE != nil {
-			layers = append(layers, m.Decoder.OutputMoE)
-		}
-		return layers
 	}
 
 	// 1. Load Word2Vec for embeddings
@@ -251,6 +264,43 @@ func TrainChat(projectRoot string, rebalanceRequested bool, overfitMode bool, in
 	log.Printf("📊 Loaded %d training pairs from conversing.csv", len(chatPairs))
 
 skipCSV:
+
+	// 3. Load human_chat.txt for social intent training
+	humanChatPath := filepath.Join(projectRoot, "data/training/trainingdata/human_chat.txt")
+	if humanChatData, err := os.ReadFile(humanChatPath); err == nil {
+		humanChatLines := strings.Split(string(humanChatData), "\n")
+		var currentQ, currentA string
+
+		for _, line := range humanChatLines {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+
+			// Parse "Human 1: ..." or "Human 2: ..."
+			if strings.HasPrefix(line, "Human 1:") {
+				if currentQ != "" && currentA != "" {
+					// Save the Q-A pair before starting new question
+					chatPairs = append(chatPairs, struct{ Q, A, Intent string }{currentQ, currentA, "social"})
+				}
+				currentQ = strings.TrimPrefix(line, "Human 1:")
+				currentQ = strings.TrimSpace(currentQ)
+				currentA = ""
+			} else if strings.HasPrefix(line, "Human 2:") {
+				currentA = strings.TrimPrefix(line, "Human 2:")
+				currentA = strings.TrimSpace(currentA)
+			}
+		}
+
+		// Don't forget the last pair
+		if currentQ != "" && currentA != "" {
+			chatPairs = append(chatPairs, struct{ Q, A, Intent string }{currentQ, currentA, "social"})
+		}
+
+		log.Printf("📊 Loaded social intent pairs from human_chat.txt (total: %d pairs)", len(chatPairs))
+	} else {
+		log.Printf("⚠️  human_chat.txt not found at %s, skipping social intent data", humanChatPath)
+	}
 
 	// --- Pre-compute the final vocabulary size from training data ---
 	// This lets us initialize a fresh model at the correct size, avoiding
@@ -613,6 +663,51 @@ skipCSV:
 	// Clear any stale state from the loaded model
 	DetachModel(intentModel)
 
+	// ═══════════════════════════════════════════════════════════════
+	// PHASE 0: MLM Pre-Training (Grammar Learning)
+	// Teaches the encoder and embeddings word co-occurrence patterns
+	// through fill-in-the-blank prediction before seq2seq training.
+	// ═══════════════════════════════════════════════════════════════
+	if !overfitMode {
+		mlmSentences := ExtractMLMSentences(chatPairs)
+		if len(mlmSentences) > 0 {
+			// Add [MASK] token to vocab before MLM (this may grow vocab by 1)
+			if intentModel.SentenceVocab.GetTokenID(MaskToken) == -1 {
+				intentModel.SentenceVocab.AddToken(MaskToken)
+				newVocabSize := intentModel.SentenceVocab.Size()
+				if newVocabSize != intentModel.Decoder.Embedding.VocabSize {
+					log.Printf("🔄 Resizing Decoder for [MASK] token: %d → %d", intentModel.Decoder.Embedding.VocabSize, newVocabSize)
+					intentModel.Decoder.ResizeOutputLayer(newVocabSize)
+					intentModel.SentenceVocabSize = newVocabSize
+				}
+			}
+
+			mlmLR := initialLR * 2.0 // MLM can use a higher LR since it's a simpler task
+			if mlmLR > 0.01 {
+				mlmLR = 0.01
+			}
+			mlmEpochs := 5
+
+			if err := RunMLMPreTraining(
+				intentModel,
+				mlmSentences,
+				mlmEpochs,
+				batchSize,
+				mlmLR,
+				maxGradNorm,
+				useGPU,
+				moePath, // Pass savePath
+			); err != nil {
+				log.Printf("⚠️ MLM Pre-Training failed (non-fatal): %v", err)
+			}
+
+			// Clear state and GC after MLM phase
+			DetachModel(intentModel)
+			runtime.GC()
+			debug.FreeOSMemory()
+		}
+	}
+
 	// Curriculum sort
 	sort.Slice(chatPairs, func(i, j int) bool {
 		return len(cleanTokenize(chatPairs[i].A)) < len(cleanTokenize(chatPairs[j].A))
@@ -855,7 +950,7 @@ skipCSV:
 
 		// Note: we use the maxGradNorm passed as an argument to TrainChat
 		// so the linuxtrain.sh flags are respected.
-		optimizer.ZeroGrad()   // Initial zero out for accumulation
+		optimizer.ZeroGrad() // Initial zero out for accumulation
 
 		for batch := range prefetchCh {
 			if batch == nil || batch.Input == nil {
@@ -1335,7 +1430,7 @@ skipCSV:
 				debug.FreeOSMemory()
 			}
 
-			// Memory safety: Clear computation graph. 
+			// Memory safety: Clear computation graph.
 			// We only clear gradients if we've just completed an accumulation cycle.
 			shouldClearGrads := (globalStep+1)%accumulationSteps == 0
 			if shouldClearGrads {
@@ -1676,6 +1771,390 @@ skipCSV:
 	} else {
 		fmt.Printf("💾 Saved vocabulary to %s\n", vocabPath)
 	}
+}
+
+// TrainSocialChat trains a specialized model ONLY on human_chat.txt for pure social conversations
+// It reuses TrainChat infrastructure but with social-only data
+func TrainSocialChat(projectRoot string, overfitMode bool, initialLR float32, weightDecay float32, autoHeal bool, maxGradNorm float32, useGPU bool, batchSize int, accumulationSteps int) {
+	log.Println("🎭 Starting SOCIAL-ONLY Chat Training (human_chat.txt only)")
+
+	var chatPairs []struct{ Q, A, Intent string }
+	var err error
+
+	// Load ONLY human_chat.txt for social training
+	humanChatPath := filepath.Join(projectRoot, "data/training/trainingdata/human_chat.txt")
+	if humanChatData, err := os.ReadFile(humanChatPath); err == nil {
+		humanChatLines := strings.Split(string(humanChatData), "\n")
+		var currentQ, currentA string
+
+		for _, line := range humanChatLines {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+
+			if strings.HasPrefix(line, "Human 1:") {
+				if currentQ != "" && currentA != "" {
+					chatPairs = append(chatPairs, struct{ Q, A, Intent string }{currentQ, currentA, "social"})
+				}
+				currentQ = strings.TrimPrefix(line, "Human 1:")
+				currentQ = strings.TrimSpace(currentQ)
+				currentA = ""
+			} else if strings.HasPrefix(line, "Human 2:") {
+				currentA = strings.TrimPrefix(line, "Human 2:")
+				currentA = strings.TrimSpace(currentA)
+			}
+		}
+
+		if currentQ != "" && currentA != "" {
+			chatPairs = append(chatPairs, struct{ Q, A, Intent string }{currentQ, currentA, "social"})
+		}
+
+		log.Printf("📊 Loaded %d social conversation pairs from human_chat.txt", len(chatPairs))
+	} else {
+		log.Fatalf("❌ human_chat.txt not found at %s", humanChatPath)
+	}
+
+	if len(chatPairs) == 0 {
+		log.Fatalf("❌ No social pairs loaded from human_chat.txt")
+	}
+
+	// Reuse TrainChat with social-only data by temporarily renaming model output
+	// Call TrainChat with the social data
+	oldChatPairs := chatPairs
+
+	// Pre-compute vocabulary
+	tmpVocab := mainvocab.NewVocabulary()
+	tmpVocab.AddToken("<pad>")
+	tmpVocab.AddToken("<s>")
+	tmpVocab.AddToken("</s>")
+	tmpVocab.AddToken("UNK")
+	for _, pair := range chatPairs {
+		for _, t := range cleanTokenize(pair.Q + " " + pair.A) {
+			tmpVocab.AddToken(t)
+		}
+	}
+	precomputedVocabSize := tmpVocab.Size()
+	tmpVocab = nil
+	runtime.GC()
+	log.Printf("📐 Pre-computed final vocab size: %d", precomputedVocabSize)
+
+	// 🏗️ Step 1: Model Loading or Initialization
+	var intentModel *moe.IntentMoE
+	socialModelPath := filepath.Join(projectRoot, "data/models/gob_models/moe_social_model.gob")
+	socialVocabPath := filepath.Join(projectRoot, "data/models/gob_models/social_vocabulary.gob")
+
+	if _, err := os.Stat(socialModelPath); err == nil {
+		log.Printf("📥 Resuming training: Loading existing social model from %s", socialModelPath)
+		intentModel, err = moe.LoadIntentMoEModelFromGOB(socialModelPath)
+		if err != nil {
+			log.Printf("⚠️ Failed to load existing model: %v. Starting fresh.", err)
+			intentModel = nil
+		}
+	}
+
+	if intentModel == nil {
+		const modelDim = 256
+		const numExperts = 4
+		freshVocab := precomputedVocabSize
+		if freshVocab < 100 {
+			freshVocab = 2000
+		}
+
+		log.Printf("🚀 Initializing fresh social model: 256d, %d experts", numExperts)
+		intentModel, err = moe.NewHybridIntentMoE(freshVocab, modelDim, numExperts, modelDim, modelDim, freshVocab, 8, nil)
+		if err != nil {
+			log.Fatalf("❌ Failed to create social model: %v", err)
+		}
+		intentModel.Decoder, _ = moe.NewRNNDecoder(modelDim, freshVocab, modelDim, 8, 4, 0.1, numExperts)
+
+		// Standard initialization for fresh model
+		allLayers := findMoELayers(intentModel)
+		for _, layer := range allLayers {
+			if layer.Experts != nil {
+				for _, expert := range layer.Experts {
+					for _, param := range expert.Parameters() {
+						InitializeHeNormal(param)
+					}
+				}
+			}
+		}
+	}
+
+	if useGPU {
+		intentModel.ToGPU()
+	}
+
+	// Shuffle and split
+	rand.Shuffle(len(chatPairs), func(i, j int) { chatPairs[i], chatPairs[j] = chatPairs[j], chatPairs[i] })
+	splitIdx := int(float64(len(chatPairs)) * 0.9)
+	trainPairs := chatPairs[:splitIdx]
+	valPairs := chatPairs[splitIdx:]
+
+	log.Printf("📂 Data: %d training, %d validation", len(trainPairs), len(valPairs))
+
+	if intentModel.SentenceVocab == nil || intentModel.SentenceVocab.Size() < 5 {
+		// Try to load from social_vocabulary.gob first
+		if v, err := mainvocab.LoadVocabulary(socialVocabPath); err == nil {
+			log.Printf("🔤 Loaded existing vocabulary from %s: %d tokens", socialVocabPath, v.Size())
+			intentModel.SentenceVocab = v
+		} else {
+			log.Println("🔤 Building fresh vocabulary from scratch...")
+			sentenceVocab := mainvocab.NewVocabulary()
+			sentenceVocab.AddToken("<pad>")
+			sentenceVocab.AddToken("<s>")
+			sentenceVocab.AddToken("</s>")
+			sentenceVocab.AddToken("UNK")
+
+			for _, pair := range trainPairs {
+				tokens := cleanTokenize(pair.Q + " " + pair.A)
+				for _, t := range tokens {
+					sentenceVocab.AddToken(t)
+				}
+			}
+			for _, pair := range valPairs {
+				tokens := cleanTokenize(pair.Q + " " + pair.A)
+				for _, t := range tokens {
+					sentenceVocab.AddToken(t)
+				}
+			}
+
+			intentModel.SentenceVocab = sentenceVocab
+			intentModel.SentenceVocabSize = sentenceVocab.Size()
+
+			// Set special token IDs
+			sentenceVocab.BosID = sentenceVocab.GetTokenID("<s>")
+			sentenceVocab.EosID = sentenceVocab.GetTokenID("</s>")
+			sentenceVocab.PaddingTokenID = sentenceVocab.GetTokenID("<pad>")
+			log.Printf("🔤 Built vocabulary: %d tokens (BOS=%d, EOS=%d, PAD=%d)", sentenceVocab.Size(), sentenceVocab.BosID, sentenceVocab.EosID, sentenceVocab.PaddingTokenID)
+		}
+	} else {
+		log.Printf("🔤 Using existing model vocabulary: %d tokens", intentModel.SentenceVocab.Size())
+	}
+
+	sentenceVocab := intentModel.SentenceVocab
+	// Set special token IDs (redundant but safe)
+	sentenceVocab.BosID = sentenceVocab.GetTokenID("<s>")
+	sentenceVocab.EosID = sentenceVocab.GetTokenID("</s>")
+	sentenceVocab.PaddingTokenID = sentenceVocab.GetTokenID("<pad>")
+
+	log.Printf("🔤 Vocabulary State: %d tokens (BOS=%d, EOS=%d, PAD=%d)", sentenceVocab.Size(), sentenceVocab.BosID, sentenceVocab.EosID, sentenceVocab.PaddingTokenID)
+
+	moe.ActiveLayers = findMoELayers(intentModel)
+
+	// Use iterator-based training (same as TrainChat)
+	epochs := 60
+	peakLR := initialLR
+	if peakLR == 0 {
+		peakLR = 0.0005
+	}
+
+	log.Printf("🎭 Training social model for %d epochs at peak LR=%.6f", epochs, peakLR)
+
+	// Create loss weights for vocabulary
+	lossWeights := make([]float32, intentModel.SentenceVocab.Size())
+	for i := range lossWeights {
+		lossWeights[i] = 1.0
+	}
+	unkID := intentModel.SentenceVocab.GetTokenID("UNK")
+	if unkID >= 0 {
+		lossWeights[unkID] = 0.01 // Reduce weight for unknown tokens
+	}
+	if intentModel.SentenceVocab.PaddingTokenID >= 0 {
+		lossWeights[intentModel.SentenceVocab.PaddingTokenID] = 0.0 // No loss for padding
+	}
+
+	// Create optimizer (Wrapped with Cooling Safety)
+	baseOptimizer := neuralnn.NewOptimizer(intentModel.Parameters(), peakLR, 1.0)
+	optimizer := &neuralnn.CoolingOptimizer{
+		Base: baseOptimizer,
+	}
+
+	globalStep := 0
+	totalSteps := epochs * len(trainPairs)
+
+	for epoch := 0; epoch < epochs; epoch++ {
+		// Stop if requested (checked via PROJECT_ROOT/.stop)
+		if _, err := os.Stat(filepath.Join(projectRoot, ".stop")); err == nil {
+			log.Println("🛑 Stop signal detected. Saving and exiting...")
+			os.Remove(filepath.Join(projectRoot, ".stop"))
+			break
+		}
+
+		iterator := NewChatDataIterator(trainPairs, intentModel.SentenceVocab, unkID)
+		epochLoss := float32(0)
+		batchNum := 0
+
+		for iterator.HasNext() {
+			batch := iterator.NextBatch(batchSize)
+			inputTensor, targetTensor := batch.Input, batch.Target
+			inputMask := batch.InputMask
+			if inputTensor == nil || targetTensor == nil {
+				continue
+			}
+
+			if useGPU {
+				inputTensor.ToGPU()
+				targetTensor.ToGPU()
+				if inputMask != nil {
+					inputMask.ToGPU()
+				}
+			}
+
+			if targetTensor.Shape[1] < 2 {
+				continue
+			}
+
+			// Forward pass
+			// Scheduled sampling gradually increases from teacher forcing (0%) to 30% model-generated
+			samplingProb := float32(math.Min(0.3, float64(epoch)*0.01))
+			logits, _, err := intentModel.Forward(samplingProb, inputTensor, targetTensor, inputMask)
+			if err != nil {
+				continue
+			}
+
+			// Compute loss
+			var batchLoss float32 = 0.0
+			var grads []*tensor.Tensor
+
+			if len(logits) == 1 && len(logits[0].Shape) == 3 {
+				l := logits[0]
+				currentBatchSize := targetTensor.Shape[0]
+				seqLen := targetTensor.Shape[1]
+				targetSeqLen := seqLen - 1
+				targets := make([]int, currentBatchSize*targetSeqLen)
+				for b := 0; b < currentBatchSize; b++ {
+					for t := 0; t < targetSeqLen; t++ {
+						targets[b*targetSeqLen+t] = int(targetTensor.Data[b*seqLen+t+1])
+					}
+				}
+				loss, grad := WeightedCrossEntropy(l.ToCPU(), targets, lossWeights, 0.0)
+				if grad == nil {
+					grad = tensor.NewTensor(l.Shape, make([]float32, len(l.Data)), false)
+				}
+				batchLoss = loss
+				grads = []*tensor.Tensor{grad}
+			} else {
+				grads = make([]*tensor.Tensor, len(logits))
+				currentBatchSize := targetTensor.Shape[0]
+				seqLen := targetTensor.Shape[1]
+				var stepLossTotal float32 = 0.0
+				for t, logit := range logits {
+					targets := make([]int, currentBatchSize)
+					for b := 0; b < currentBatchSize; b++ {
+						targets[b] = int(targetTensor.Data[b*seqLen+t+1])
+					}
+					l, g := WeightedCrossEntropy(logit.ToCPU(), targets, lossWeights, 0.0)
+					if g == nil {
+						g = tensor.NewTensor(logit.Shape, make([]float32, len(logit.Data)), false)
+					}
+					stepLossTotal += l
+					grads[t] = g
+				}
+				div := float32(len(logits))
+				batchLoss = stepLossTotal / div
+				for t := range grads {
+					for i := range grads[t].Data {
+						grads[t].Data[i] /= div
+					}
+				}
+			}
+
+			if !math.IsNaN(float64(batchLoss)) && !math.IsInf(float64(batchLoss), 0) {
+				// Backward pass
+				if err := intentModel.Backward(grads...); err == nil {
+					if (globalStep+1)%accumulationSteps == 0 {
+						params := intentModel.Parameters()
+						for _, p := range params {
+							if p.Grad != nil {
+								for i := range p.Grad.Data {
+									p.Grad.Data[i] /= float32(accumulationSteps)
+								}
+							}
+						}
+						// Build paramGrads for clipping
+						paramGrads := make([][]float32, 0, len(params))
+						for _, p := range params {
+							if p.Grad != nil {
+								paramGrads = append(paramGrads, p.Grad.Data)
+							}
+						}
+						train.ClipParamGrads(paramGrads, 1.0)
+
+						// Update LR using Cosine Decay
+						currentLR := getLR(globalStep, totalSteps, peakLR)
+						optimizer.SetLearningRate(currentLR)
+
+						optimizer.Step()
+						if useGPU {
+							for _, p := range params {
+								p.SyncToDevice()
+							}
+						}
+						optimizer.ZeroGrad()
+					}
+					epochLoss += batchLoss
+				}
+			}
+
+			batchNum++
+			globalStep++
+			if batchNum%1 == 0 {
+				avgLoss := epochLoss / float32(batchNum)
+				log.Printf("🎭 Epoch %d/%d | Batch %d | Loss: %.6f | LR: %.8f", epoch+1, epochs, batchNum, avgLoss, optimizer.GetLearningRate())
+			}
+
+			// 💾 SAVE PROGRESS MID-EPOCH (As requested)
+			if batchNum > 0 && batchNum%100 == 0 {
+				ckptPath := filepath.Join(projectRoot, fmt.Sprintf("data/models/gob_models/moe_social_model_step_%d.gob", globalStep))
+				log.Printf("💾 Saving periodic checkpoint at Step %d...", globalStep)
+				if err := moe.SaveIntentMoEModelToGOB(intentModel, ckptPath); err != nil {
+					log.Printf("❌ Mid-epoch save failed: %v", err)
+				}
+				// Also update the main social model file so restarts pick up latest progress
+				_ = moe.SaveIntentMoEModelToGOB(intentModel, socialModelPath)
+			}
+
+			DetachModel(intentModel)
+		}
+
+		log.Printf("✅ Epoch %d/%d completed | Avg Loss: %.6f", epoch+1, epochs, epochLoss/float32(batchNum))
+
+		// 🧪 TEST GENERATION: See if it's learning sentences
+		testPrompts := []string{"hello", "how are you", "what is your favorite movie"}
+		for _, p := range testPrompts {
+			response := StrictGenerate(intentModel, p, 20)
+			log.Printf("🧪 Test '%s': %s", p, response)
+		}
+
+		// Save checkpoint at the end of every epoch
+		checkpointPath := filepath.Join(projectRoot, fmt.Sprintf("data/models/gob_models/moe_social_model_epoch_%03d.gob", epoch+1))
+		if err := moe.SaveIntentMoEModelToGOB(intentModel, checkpointPath); err != nil {
+			log.Printf("❌ Failed to save checkpoint at epoch %d: %v", epoch+1, err)
+		} else {
+			log.Printf("💾 Saved checkpoint: Epoch %d/%d", epoch+1, epochs)
+		}
+		// Update latest main file
+		_ = moe.SaveIntentMoEModelToGOB(intentModel, socialModelPath)
+	}
+
+	// Save final social model
+	if err := moe.SaveIntentMoEModelToGOB(intentModel, socialModelPath); err != nil {
+		log.Printf("❌ Failed to save social model: %v", err)
+	} else {
+		fmt.Printf("💾 Saved final social model to %s\n", socialModelPath)
+	}
+
+	// Save social vocabulary
+	socialVocabPathFinal := filepath.Join(projectRoot, "data/models/gob_models/social_vocabulary.gob")
+	if err := intentModel.SentenceVocab.Save(socialVocabPathFinal); err != nil {
+		log.Printf("❌ Failed to save social vocabulary: %v", err)
+	} else {
+		fmt.Printf("💾 Saved social vocabulary to %s\n", socialVocabPathFinal)
+	}
+
+	log.Println("🎭 Social-only training complete!")
+	_ = oldChatPairs // Keep reference
 }
 
 // StrictGenerate forces the model to generate a response without using UNK or PAD tokens.

@@ -1,0 +1,701 @@
+package chat
+
+import (
+	"fmt"
+	"log"
+	"math"
+	"math/rand"
+	"os"
+	"runtime"
+	"runtime/debug"
+	"strings"
+	"time"
+
+	"github.com/golangast/gollemer/internal/ai/moe"
+	neuralnn "github.com/golangast/gollemer/internal/ai/neural/nn"
+	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
+	"github.com/golangast/gollemer/internal/ai/neural/tensor"
+	"github.com/golangast/gollemer/internal/ai/train"
+)
+
+// MaskToken is the special token used for masked language modeling.
+const MaskToken = "[MASK]"
+
+// MLMHead is a simple linear projection from encoder hidden size to vocabulary size.
+// It predicts the original token at masked positions.
+type MLMHead struct {
+	Linear *neuralnn.Linear
+}
+
+// NewMLMHead creates a new MLM prediction head.
+func NewMLMHead(hiddenSize, vocabSize int) (*MLMHead, error) {
+	linear, err := neuralnn.NewLinear(hiddenSize, vocabSize)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create MLM head: %w", err)
+	}
+	return &MLMHead{Linear: linear}, nil
+}
+
+// Forward projects encoder outputs to vocabulary logits.
+// Input shape: [batch, seq_len, hidden_size]
+// Output shape: [batch, seq_len, vocab_size]
+func (h *MLMHead) Forward(encoderOutput *tensor.Tensor) (*tensor.Tensor, error) {
+	return h.Linear.Forward(encoderOutput)
+}
+
+// Backward propagates gradients through the MLM head.
+func (h *MLMHead) Backward(grad *tensor.Tensor) error {
+	return h.Linear.Backward(grad)
+}
+
+// Parameters returns all learnable parameters.
+func (h *MLMHead) Parameters() []*tensor.Tensor {
+	return h.Linear.Parameters()
+}
+
+// ClearState clears intermediate computation state.
+func (h *MLMHead) ClearState() {
+	h.Linear.ClearState()
+}
+
+// MLMBatch holds a single MLM training batch.
+type MLMBatch struct {
+	// Input token IDs with some positions replaced by [MASK]
+	MaskedInput *tensor.Tensor // [batch, seq_len]
+	// Original token IDs (targets for prediction)
+	OriginalIDs *tensor.Tensor // [batch, seq_len]
+	// Boolean mask: 1.0 at masked positions, 0.0 elsewhere
+	MaskPositions *tensor.Tensor // [batch, seq_len]
+	// Attention mask for padding (0.0 for real, -1e9 for pad)
+	AttentionMask *tensor.Tensor // [batch, 1, 1, seq_len]
+}
+
+// MLMDataIterator creates MLM training batches from raw sentences.
+type MLMDataIterator struct {
+	sentences []string
+	vocab     *mainvocab.Vocabulary
+	maskID    int
+	padID     int
+	unkID     int
+	idx       int
+	maskProb  float32 // Probability of masking each token (default 0.15)
+	maxLen    int
+}
+
+// NewMLMDataIterator creates a new MLM data iterator.
+func NewMLMDataIterator(sentences []string, vocab *mainvocab.Vocabulary, maskProb float32) *MLMDataIterator {
+	// Ensure [MASK] token exists
+	if vocab.GetTokenID(MaskToken) == -1 {
+		vocab.AddToken(MaskToken)
+	}
+
+	maskID := vocab.GetTokenID(MaskToken)
+	padID := vocab.PaddingTokenID
+	unkID := vocab.GetTokenID("UNK")
+
+	rand.Shuffle(len(sentences), func(i, j int) {
+		sentences[i], sentences[j] = sentences[j], sentences[i]
+	})
+
+	return &MLMDataIterator{
+		sentences: sentences,
+		vocab:     vocab,
+		maskID:    maskID,
+		padID:     padID,
+		unkID:     unkID,
+		idx:       0,
+		maskProb:  maskProb,
+		maxLen:    64,
+	}
+}
+
+// HasNext returns true if there are more sentences to process.
+func (it *MLMDataIterator) HasNext() bool {
+	return it.idx < len(it.sentences)
+}
+
+// Reset reshuffles the data and resets the cursor.
+func (it *MLMDataIterator) Reset() {
+	it.idx = 0
+	rand.Shuffle(len(it.sentences), func(i, j int) {
+		it.sentences[i], it.sentences[j] = it.sentences[j], it.sentences[i]
+	})
+}
+
+// NextBatch creates the next MLM batch.
+// For each sentence:
+//  1. Tokenize into word IDs
+//  2. Randomly mask ~15% of tokens (not special tokens)
+//  3. The model must predict the original token at masked positions
+func (it *MLMDataIterator) NextBatch(batchSize int) *MLMBatch {
+	var allOriginal [][]float32
+	var allMasked [][]float32
+	var allMaskPos [][]float32
+	maxLen := 0
+
+	for i := 0; i < batchSize && it.HasNext(); i++ {
+		sentence := it.sentences[it.idx]
+		it.idx++
+
+		tokens := cleanTokenize(sentence)
+		if len(tokens) < 3 {
+			continue // Skip very short sentences — not enough context
+		}
+		if len(tokens) > it.maxLen {
+			tokens = tokens[:it.maxLen]
+		}
+
+		// Convert to IDs
+		originalIDs := make([]float32, len(tokens))
+		maskedIDs := make([]float32, len(tokens))
+		maskPositions := make([]float32, len(tokens))
+
+		for j, t := range tokens {
+			id := lookupVocab(t, it.vocab)
+			originalIDs[j] = float32(id)
+			maskedIDs[j] = float32(id)
+		}
+
+		// Apply masking: for each token, with probability maskProb:
+		//   80% → replace with [MASK]
+		//   10% → replace with random word
+		//   10% → keep original (but still predict it)
+		maskedCount := 0
+		for j := range tokens {
+			if rand.Float32() < it.maskProb {
+				maskPositions[j] = 1.0
+				maskedCount++
+				r := rand.Float32()
+				if r < 0.8 {
+					maskedIDs[j] = float32(it.maskID)
+				} else if r < 0.9 {
+					// Random token (avoid special tokens 0-3)
+					maskedIDs[j] = float32(rand.Intn(it.vocab.Size()-4) + 4)
+				}
+				// else: keep original (10% of the time)
+			}
+		}
+
+		// Ensure at least 1 token is masked per sentence
+		if maskedCount == 0 && len(tokens) > 0 {
+			pos := rand.Intn(len(tokens))
+			maskPositions[pos] = 1.0
+			maskedIDs[pos] = float32(it.maskID)
+		}
+
+		allOriginal = append(allOriginal, originalIDs)
+		allMasked = append(allMasked, maskedIDs)
+		allMaskPos = append(allMaskPos, maskPositions)
+
+		if len(tokens) > maxLen {
+			maxLen = len(tokens)
+		}
+	}
+
+	if len(allOriginal) == 0 {
+		return nil
+	}
+
+	actualBatch := len(allOriginal)
+	padID := float32(it.padID)
+
+	// Pad all sequences to maxLen
+	paddedOriginal := make([]float32, actualBatch*maxLen)
+	paddedMasked := make([]float32, actualBatch*maxLen)
+	paddedMaskPos := make([]float32, actualBatch*maxLen)
+	attentionMask := make([]float32, actualBatch*maxLen)
+
+	for i := 0; i < actualBatch; i++ {
+		for j := 0; j < maxLen; j++ {
+			if j < len(allOriginal[i]) {
+				paddedOriginal[i*maxLen+j] = allOriginal[i][j]
+				paddedMasked[i*maxLen+j] = allMasked[i][j]
+				paddedMaskPos[i*maxLen+j] = allMaskPos[i][j]
+				attentionMask[i*maxLen+j] = 0.0 // Real token
+			} else {
+				paddedOriginal[i*maxLen+j] = padID
+				paddedMasked[i*maxLen+j] = padID
+				paddedMaskPos[i*maxLen+j] = 0.0 // Don't predict padding
+				attentionMask[i*maxLen+j] = -1e9 // Mask padding in attention
+			}
+		}
+	}
+
+	return &MLMBatch{
+		MaskedInput:   tensor.NewTensor([]int{actualBatch, maxLen}, paddedMasked, false),
+		OriginalIDs:   tensor.NewTensor([]int{actualBatch, maxLen}, paddedOriginal, false),
+		MaskPositions: tensor.NewTensor([]int{actualBatch, maxLen}, paddedMaskPos, false),
+		AttentionMask: tensor.NewTensor([]int{actualBatch, 1, 1, maxLen}, attentionMask, false),
+	}
+}
+
+// MLMCrossEntropy computes the cross-entropy loss ONLY at masked positions.
+// logits: [batch, seq_len, vocab_size]
+// targets: original token IDs [batch * seq_len]
+// maskPositions: [batch * seq_len] — 1.0 at masked positions
+// Returns: (loss, gradient tensor with same shape as logits)
+func MLMCrossEntropy(logits *tensor.Tensor, targets []int, maskPositions []float32, vocabSize int) (float32, *tensor.Tensor) {
+	numPositions := len(targets)
+	grad := tensor.NewTensor(logits.Shape, make([]float32, len(logits.Data)), false)
+
+	var totalLoss float32
+	var count float32
+
+	softmax := make([]float32, vocabSize)
+
+	for i := 0; i < numPositions; i++ {
+		// Only compute loss at masked positions
+		if maskPositions[i] < 0.5 {
+			continue
+		}
+
+		targetID := targets[i]
+		if targetID < 0 || targetID >= vocabSize {
+			continue
+		}
+
+		offset := i * vocabSize
+		row := logits.Data[offset : offset+vocabSize]
+
+		// Softmax
+		maxLogit := row[0]
+		for _, v := range row {
+			if v > maxLogit {
+				maxLogit = v
+			}
+		}
+		var sumExp float32
+		for j, v := range row {
+			softmax[j] = float32(math.Exp(float64(v - maxLogit)))
+			sumExp += softmax[j]
+		}
+		invSumExp := float32(1.0) / sumExp
+
+		// Loss: -log(p(target))
+		prob := softmax[targetID] * invSumExp
+		loss := -float32(math.Log(float64(prob + 1e-12)))
+		totalLoss += loss
+		count++
+
+		// Gradient: softmax(j) - 1{j==target}
+		for j := 0; j < vocabSize; j++ {
+			sj := softmax[j] * invSumExp
+			targetProb := float32(0.0)
+			if j == targetID {
+				targetProb = 1.0
+			}
+			grad.Data[offset+j] = sj - targetProb
+		}
+	}
+
+	if count > 0 {
+		avgLoss := totalLoss / count
+		// Normalize gradients by count
+		invCount := float32(1.0) / count
+		for i := range grad.Data {
+			grad.Data[i] *= invCount
+		}
+		return avgLoss, grad
+	}
+	return 0, grad
+}
+
+// RunMLMPreTraining runs a pure MLM pre-training phase before the main seq2seq training.
+// This teaches the encoder and embeddings word co-occurrence patterns (grammar).
+func RunMLMPreTraining(
+	model *moe.IntentMoE,
+	sentences []string,
+	mlmEpochs int,
+	batchSize int,
+	learningRate float32,
+	maxGradNorm float32,
+	useGPU bool,
+	savePath string, // Added savePath
+) error {
+	log.Println("🎓 ═══════════════════════════════════════════════")
+	log.Println("🎓  PHASE 0: Masked Language Model Pre-Training")
+	log.Println("🎓  Teaching grammar through word prediction...")
+	log.Println("🎓 ═══════════════════════════════════════════════")
+
+	vocabSize := model.SentenceVocab.Size()
+	embeddingDim := model.EmbeddingDim
+
+	// Ensure [MASK] token exists in vocabulary
+	if model.SentenceVocab.GetTokenID(MaskToken) == -1 {
+		model.SentenceVocab.AddToken(MaskToken)
+		vocabSize = model.SentenceVocab.Size()
+		log.Printf("✅ Added [MASK] token to vocabulary (new size: %d)", vocabSize)
+	}
+
+	// Create MLM prediction head
+	mlmHead, err := NewMLMHead(embeddingDim, vocabSize)
+	if err != nil {
+		return fmt.Errorf("failed to create MLM head: %w", err)
+	}
+
+	// Initialize MLM head with He Normal
+	for _, p := range mlmHead.Parameters() {
+		InitializeHeNormal(p)
+		p.RequiresGrad = true
+	}
+
+	if useGPU {
+		mlmHead.Linear.ToGPU()
+	}
+
+	// Collect all trainable parameters (encoder + embedding + MLM head)
+	allParams := make([]*tensor.Tensor, 0)
+	allParams = append(allParams, model.Embedding.Parameters()...)
+	allParams = append(allParams, model.Encoder.Parameters()...)
+	allParams = append(allParams, mlmHead.Parameters()...)
+
+	optimizer := neuralnn.NewOptimizer(allParams, learningRate, 0)
+
+	// Create data iterator with 15% masking probability
+	iterator := NewMLMDataIterator(sentences, model.SentenceVocab, 0.15)
+	iterator.maxLen = 64
+
+	model.SetMode(true)
+
+	startTime := time.Now()
+	globalStep := 0
+
+	for epoch := 0; epoch < mlmEpochs; epoch++ {
+		iterator.Reset()
+		var epochLoss float32
+		batches := 0
+
+		for iterator.HasNext() {
+			batch := iterator.NextBatch(batchSize)
+			if batch == nil || batch.MaskedInput == nil {
+				continue
+			}
+
+			optimizer.ZeroGrad()
+
+			maskedInput := batch.MaskedInput
+			if useGPU {
+				maskedInput.ToGPU()
+			}
+
+			// 1. Embed the masked input tokens
+			embedded, err := model.Embedding.Forward(maskedInput)
+			if err != nil {
+				log.Printf("⚠️ MLM Embedding forward failed: %v", err)
+				continue
+			}
+
+			// 2. Encode with MoE encoder to learn contextual representations
+			encoderOutput, err := model.Encoder.Forward(embedded)
+			if err != nil {
+				log.Printf("⚠️ MLM Encoder forward failed: %v", err)
+				continue
+			}
+
+			// Normalize encoder output (same as training)
+			encoderOutput = model.NormalizeContextVector(encoderOutput)
+
+			// 3. Project to vocabulary with MLM head
+			logits, err := mlmHead.Forward(encoderOutput)
+			if err != nil {
+				log.Printf("⚠️ MLM Head forward failed: %v", err)
+				continue
+			}
+
+			// 4. Compute loss only at masked positions
+			logits.ToCPU()
+			batchSz := batch.OriginalIDs.Shape[0]
+			seqLen := batch.OriginalIDs.Shape[1]
+			targets := make([]int, batchSz*seqLen)
+			for j := 0; j < len(batch.OriginalIDs.Data) && j < len(targets); j++ {
+				targets[j] = int(batch.OriginalIDs.Data[j])
+			}
+
+			// Flatten logits to [batch*seq, vocab]
+			flatLogits, _ := logits.Reshape([]int{batchSz * seqLen, vocabSize})
+			loss, grad := MLMCrossEntropy(flatLogits, targets, batch.MaskPositions.Data, vocabSize)
+
+			if math.IsNaN(float64(loss)) || math.IsInf(float64(loss), 0) {
+				log.Printf("⚠️ MLM loss is NaN/Inf at step %d, skipping", globalStep)
+				model.ClearState()
+				mlmHead.ClearState()
+				continue
+			}
+
+			// 5. Reshape gradient back to [batch, seq, vocab]
+			grad3D, _ := grad.Reshape(logits.Shape)
+
+			// 6. Backward through MLM head
+			if err := mlmHead.Backward(grad3D); err != nil {
+				log.Printf("⚠️ MLM Head backward failed: %v", err)
+				continue
+			}
+
+			// Get gradient flowing to encoder output from MLM head
+			encoderGrad := mlmHead.Linear.Input().Grad
+			if encoderGrad == nil {
+				encoderGrad = tensor.NewTensor(encoderOutput.Shape, make([]float32, len(encoderOutput.Data)), false)
+			}
+
+			// 7. Backward through encoder
+			if err := model.Encoder.Backward(encoderGrad); err != nil {
+				log.Printf("⚠️ MLM Encoder backward failed: %v", err)
+				continue
+			}
+
+			// 8. Backward through embedding
+			if len(model.Encoder.Inputs()) > 0 {
+				embGrad := model.Encoder.Inputs()[0].Grad
+				if embGrad != nil {
+					model.Embedding.Backward(embGrad)
+				}
+			}
+
+			// 9. Clip gradients
+			paramGrads := make([][]float32, 0, len(allParams))
+			for _, p := range allParams {
+				if p.Grad != nil {
+					paramGrads = append(paramGrads, p.Grad.Data)
+				}
+			}
+			train.ClipParamGrads(paramGrads, maxGradNorm)
+
+			// 10. Update weights
+			optimizer.Step()
+			if useGPU {
+				for _, p := range allParams {
+					p.SyncToDevice()
+				}
+			}
+			optimizer.ZeroGrad()
+
+			// 11. Clear state
+			model.ClearState()
+			mlmHead.ClearState()
+			DetachMLMModel(model, mlmHead)
+
+			epochLoss += loss
+			batches++
+			globalStep++
+
+			if globalStep%50 == 0 {
+				elapsed := time.Since(startTime).Seconds()
+				perplexity := float32(math.Exp(float64(loss)))
+				log.Printf("🎓 [MLM] Step %d | Loss: %.4f | PPL: %.1f | LR: %.6f | %.1f steps/s",
+					globalStep, loss, perplexity, learningRate, float64(globalStep)/elapsed)
+
+				// Log a sample prediction at masked positions
+				logMLMPrediction(model, mlmHead, batch, vocabSize)
+			}
+
+			// 💾 PERIODIC SAVING: Every 500 steps during MLM
+			if globalStep > 0 && globalStep%500 == 0 && savePath != "" {
+				log.Printf("💾 [MLM CHECKPOINT] Saving progress at Step %d...", globalStep)
+				// Create a temporary checkpoint for storage
+				ckpt := &moe.Checkpoint{
+					Model:     model,
+					StepCount: globalStep,
+					Version:   "gollemer-mlm-pretrain",
+				}
+				if err := moe.SaveIntentMoECheckpoint(ckpt, savePath); err != nil {
+					log.Printf("⚠️  MLM periodic save failed: %v", err)
+				}
+				// Also save vocabulary
+				vocabPath := strings.Replace(savePath, ".gob", "_vocab.gob", 1)
+				model.SentenceVocab.Save(vocabPath)
+			}
+
+			// 🛑 CIRCUIT BREAKER/SIGNAL CHECK
+			if globalStep%100 == 0 {
+				// Check for stop signal file in current directory
+				if _, err := os.Stat(".stop"); err == nil {
+					log.Println("🛑 [MLM] Stop signal detected. Saving and exiting Phase 0...")
+					os.Remove(".stop")
+					return nil // Graceful exit from MLM
+				}
+			}
+
+			if globalStep%200 == 0 {
+				runtime.GC()
+				debug.FreeOSMemory()
+			}
+		}
+
+		avgLoss := float32(0)
+		if batches > 0 {
+			avgLoss = epochLoss / float32(batches)
+		}
+		perplexity := float32(math.Exp(float64(avgLoss)))
+		log.Printf("🎓 [MLM] Epoch %d/%d Complete | Avg Loss: %.4f | PPL: %.1f | Batches: %d",
+			epoch+1, mlmEpochs, avgLoss, perplexity, batches)
+
+		// Early stop if loss is very low (model has learned basic patterns)
+		if avgLoss < 1.0 && epoch >= 2 {
+			log.Printf("🎓 [MLM] Loss below 1.0 — grammar patterns learned. Moving to seq2seq training.")
+			break
+		}
+	}
+
+	log.Printf("🎓 ═══════════════════════════════════════════════")
+	log.Printf("🎓  MLM Pre-Training Complete (%d steps, %.1fs)", globalStep, time.Since(startTime).Seconds())
+	log.Printf("🎓  Encoder and embeddings now understand word context.")
+	log.Printf("🎓 ═══════════════════════════════════════════════")
+
+	// Free MLM head — it's no longer needed
+	mlmHead = nil
+	runtime.GC()
+
+	return nil
+}
+
+// logMLMPrediction prints a sample fill-in-the-blank prediction for diagnostics.
+func logMLMPrediction(model *moe.IntentMoE, mlmHead *MLMHead, batch *MLMBatch, vocabSize int) {
+	if model.SentenceVocab == nil || batch == nil {
+		return
+	}
+
+	// Look at the first sequence in the batch
+	seqLen := batch.MaskedInput.Shape[1]
+	if seqLen == 0 {
+		return
+	}
+
+	// Find a masked position
+	for j := 0; j < seqLen; j++ {
+		if batch.MaskPositions.Data[j] < 0.5 {
+			continue
+		}
+
+		// Get the original word
+		originalID := int(batch.OriginalIDs.Data[j])
+		originalWord := model.SentenceVocab.GetWord(originalID)
+
+		// Get surrounding context
+		var contextBefore, contextAfter string
+		if j > 0 {
+			contextBefore = model.SentenceVocab.GetWord(int(batch.OriginalIDs.Data[j-1]))
+		}
+		if j < seqLen-1 && batch.MaskPositions.Data[j+1] < 0.5 {
+			contextAfter = model.SentenceVocab.GetWord(int(batch.OriginalIDs.Data[j+1]))
+		}
+
+		// Run a quick forward to get prediction
+		singleInput := tensor.NewTensor([]int{1, seqLen}, batch.MaskedInput.Data[:seqLen], false)
+		emb, err := model.Embedding.Forward(singleInput)
+		if err != nil {
+			break
+		}
+		enc, err := model.Encoder.Forward(emb)
+		if err != nil {
+			break
+		}
+		enc = model.NormalizeContextVector(enc)
+		logits, err := mlmHead.Forward(enc)
+		if err != nil {
+			break
+		}
+		logits.ToCPU()
+
+		// Get top-3 predictions at the masked position
+		offset := j * vocabSize
+		if offset+vocabSize > len(logits.Data) {
+			break
+		}
+		row := logits.Data[offset : offset+vocabSize]
+
+		// Find max for softmax
+		maxVal := row[0]
+		for _, v := range row {
+			if v > maxVal {
+				maxVal = v
+			}
+		}
+		var sumExp float32
+		for _, v := range row {
+			sumExp += float32(math.Exp(float64(v - maxVal)))
+		}
+
+		// Top-3
+		type pred struct {
+			id   int
+			prob float32
+		}
+		top3 := make([]pred, 3)
+		for k := 0; k < 3; k++ {
+			top3[k] = pred{-1, -1}
+		}
+		for id, v := range row {
+			p := float32(math.Exp(float64(v-maxVal))) / sumExp
+			for k := 0; k < 3; k++ {
+				if p > top3[k].prob {
+					copy(top3[k+1:], top3[k:2])
+					top3[k] = pred{id, p}
+					break
+				}
+			}
+		}
+
+		predWords := make([]string, 3)
+		for k := 0; k < 3; k++ {
+			if top3[k].id >= 0 {
+				predWords[k] = fmt.Sprintf("%s(%.1f%%)", model.SentenceVocab.GetWord(top3[k].id), top3[k].prob*100)
+			}
+		}
+
+		correctMark := "❌"
+		if top3[0].id == originalID {
+			correctMark = "✅"
+		}
+
+		log.Printf("    🔍 '%s [___] %s' → Answer: '%s' | Predicted: %s %s",
+			contextBefore, contextAfter, originalWord, predWords[0], correctMark)
+
+		// Clear the forward pass state
+		model.ClearState()
+		mlmHead.ClearState()
+		break // Only show one example per check
+	}
+}
+
+// DetachMLMModel detaches computation graphs from model and MLM head.
+func DetachMLMModel(model *moe.IntentMoE, mlmHead *MLMHead) {
+	for _, p := range model.Parameters() {
+		if p != nil {
+			p.Creator = nil
+			p.Mask = nil
+			p.Operation = nil
+		}
+	}
+	if mlmHead != nil {
+		for _, p := range mlmHead.Parameters() {
+			if p != nil {
+				p.Creator = nil
+				p.Mask = nil
+				p.Operation = nil
+			}
+		}
+	}
+	model.ClearState()
+}
+
+// ExtractMLMSentences extracts unique sentences from training pairs for MLM pre-training.
+// It combines both questions and answers to maximize coverage of grammar patterns.
+func ExtractMLMSentences(pairs []struct{ Q, A, Intent string }) []string {
+	seen := make(map[string]bool)
+	var sentences []string
+
+	for _, pair := range pairs {
+		// Add both questions and answers as independent sentences
+		if pair.Q != "" && !seen[pair.Q] {
+			seen[pair.Q] = true
+			sentences = append(sentences, pair.Q)
+		}
+		if pair.A != "" && !seen[pair.A] {
+			seen[pair.A] = true
+			sentences = append(sentences, pair.A)
+		}
+	}
+
+	log.Printf("📝 Extracted %d unique sentences for MLM pre-training", len(sentences))
+	return sentences
+}

@@ -1,123 +1,102 @@
 # Gollemer
 
-Gollemer is an intelligent coding assistant and project orchestrator designed to help you build Go applications, specifically focusing on web servers and WASM frontends. It understands natural language and can hold a **real conversation** — powered by a custom-built, end-to-end trainable neural network written entirely in Go with no external ML dependencies.
+Gollemer is a high-performance **Mixture of Experts (MoE)** neural network framework and training pipeline written entirely in **Go**. It is designed for efficient conversational AI and intent classification without heavy external ML dependencies, featuring native GPU acceleration via WebGPU/Vulkan.
+
+---
+
+## 🚀 Key Features
+
+- **Mixture of Experts Architecture**: Efficient multi-expert routing for increased model capacity with low inference latency.
+- **Native GPU Acceleration**: High-performance training and inference powered by `goffi` + WebGPU/Vulkan (Linux-first).
+- **Two-Phase Training Pipeline**:
+  - **Phase 0: MLM Pre-training**: Masked Language Modeling (fill-in-the-blank) to teach fundamental grammar and word relationships.
+  - **Phase 1: Seq2Seq Fine-tuning**: Intent-based supervised training for conversational and technical tasks.
+- **Pure Go Core**: Built from the ground up in Go, leveraging goroutines for data pipelining and concurrency.
+- **No Python/C++ Dependencies**: Avoids the complexity of PyTorch, TensorFlow, or large C++ runtimes.
 
 ---
 
 ## ⚡ Quick Start
 
 ### 1. Installation
-Clone the repository and ensure you have Go 1.22+ installed:
+Ensure you have Go 1.22+ and a working C compiler (GCC) for GPU support.
+
 ```bash
-git clone github.com/golangast/gollemer
+git clone https://github.com/golangast/gollemer
 cd gollemer
 go mod tidy
 ```
 
-### 2. Launching the Assistant
-To start your journey with the AI mascot, run the following command:
+### 2. GPU Setup (Linux)
+Gollemer uses WebGPU via `wgpu-native`.
+
 ```bash
+# Install wgpu-native binaries
+./build_gpu.sh
+```
+
+### 3. Training the Model
+Gollemer features an automated training cycle that handles both grammar (MLM) and chat (Seq2Seq).
+
+```bash
+# Start the full training cycle (MLM followed by Seq2Seq)
+CGO_ENABLED=1 go run cmd/tools/train_moe/main.go -train-chat -gpu -batch-size 4 -acc-steps 16
+
+# Train a specialized Social model for natural conversation
+CGO_ENABLED=1 go run cmd/tools/train_moe/main.go -train-social -gpu -batch-size 4 -epochs 30
+```
+
+### 4. Running Inference
+Once trained, launch the interactive LLM shell to chat with the model.
+
+```bash
+# Run the interactive assistant
 CGO_ENABLED=0 go run cmd/tools/train_moe/main.go -llm
-
 ```
-
-### 3. Training the AI
-To train the Mixture-of-Experts (MoE) classifier or the conversational chat model:
-```bash
-# On Linux/WSL
-# Recommended stable run command
-./scripts/linuxtrain.sh --gpu --batch-size 4 --acc-steps 16 --epochs 50
-```
-
-### 4. GPU Acceleration & Windows Execution
-Gollemer now supports **native GPU acceleration** via WebGPU (Paragon V3). 
-
-On Windows, use the provided helper script to automatically configure the CGO environment and the local compiler:
-```powershell
-# Run the chat training on GPU
-.\run.ps1 -train-chat -gpu
-
-```
-
-> [!IMPORTANT]
-> **Windows Requirements**: GPU support requires `CGO_ENABLED=1` and a GCC compiler (provided in `.\tools\mingw64\`). Always use `run.ps1` to ensure the environment is correctly initialized.
 
 ---
 
-## 💬 Essential Commands
+## 🛠️ Advanced Usage
 
-Gollemer is built for action. Here are the primary commands you can use in the LLM shell.
+### GPU Benchmarking
+Test the raw throughput of the MoE implementation on your hardware using synthetic data.
 
-### 📁 Project Scaffolding
-| Command | Example | Description |
-|---|---|---|
-| `menu` | `menu` | Opens the interactive command menu for all features. |
-| `create webserver` | `create webserver myapp` | Scaffolds a complete Go project folder with SQLite and HTTP setup. |
-| `create handler` | `add handler Login at /login` | Generates a new handler function and registers the route in `main.go`. |
-| `create page` | `create page index` | Generates a WASM-ready Go frontend page in the assets folder. |
-| `create database` | `make db users` | Initializes an SQLite database file. |
-| `create folder` | `mkdir utils` | Creates a new directory. |
-| `create file` | `touch config.go` | Creates an empty file. |
-
-### 🚀 Life-Cycle Management
-| Command | Example | Description |
-|---|---|---|
-| `run webserver` | `run webserver jj` | Compiles and executes the specified webserver. |
-| `stop webserver` | `stop webserver jj` | Safely terminates a running webserver using its PID file. |
-| `watch` | `watch current folder` | Starts a real-time monitor that reacts to file changes and suggests commits. |
-| `tutorial` | `tutorial` | Starts an interactive, step-by-step guide (switches to `examples/tutorial`). |
-
-### 🔍 Discovery & Quality
-| Command | Example | Description |
-|---|---|---|
-| `audit` | `audit project` | Performs a deep structural scan for unused code, security leaks, and architecture health. |
-| `doctor` | `doctor` | Diagnoses and repairs project structure (misplaced files, missing registrations). |
-| `profile` | `show profile` | Displays detailed project health, size, last activity, and structural overview. |
-| `quests` | `quest log` | Scans all `.go` files for `TODO:` and `FIXME:` and presents them as a mission log. |
-| `list` | `ls cmd/` | Lists files and directories in the specified or current path. |
-| `grep` | `search for "func"` | Performs a recursive text search within the project. |
-
----
-
-## 🛠️ Performance & Advanced Usage
-
-### ⚙️ SIMD Acceleration
-To enable experimental **SIMD acceleration** for neural operations:
 ```bash
-GOEXPERIMENT=simd go run cmd/gollemer/main.go -llm
+# Build and run the benchmark
+go build -o bin/train_gpu ./cmd/train/main.go
+./bin/train_gpu -batch 256 -experts 8 -dim 256 -prefetch 4
 ```
 
-### 🎓 Interactive Tutorial
-Gollemer features a built-in interactive tutorial that guides you through the entire workflow of building a web application.
-- **To Start:** Type `tutorial` at the prompt.
-- **Workflow:** Guides you from folder creation to running a full webserver.
-- **Persistence:** Progress is saved in `data/db/gollemer.db`.
+### Configuration Flags
+| Flag | Description | Recommended |
+|---|---|---|
+| `-gpu` | Enable WebGPU/Vulkan acceleration | Required for speed |
+| `-batch-size` | Number of samples per training step | 4-8 for 8GB VRAM |
+| `-acc-steps` | Gradient accumulation steps | 8-16 |
+| `-lr` | Learning rate | 0.0001 |
+| `-epochs` | Number of training passes | 20-50 |
 
 ---
 
 ## 🏗️ Project Structure
 
-Gollemer follows a clean, industry-standard directory layout:
-
 ```text
 .
-├── cmd/                # Entry points for the application and tools
-│   ├── gollemer/       # Main assistant entry point
-│   └── tools/          # Neural training and visualization utilities
-├── internal/           # Private application logic
-│   ├── ai/             # Neural network (MoE, RNN, Word2Vec)
-│   ├── platform/       # Infrastructure (UI, DB, Watcher, Discovery)
-│   └── util/           # Common utilities (Colors, File IO)
-├── data/               # Persistent data and models
-│   ├── models/         # Trained .gob and checkpoint files
-│   ├── training/       # CSV and TXT training datasets
-│   └── db/             # Project profiles and tutorial state (SQLite)
-├── examples/           # Tutorial content and sample projects
-└── logs/               # Training logs and profiling data
+├── cmd/                # Entry points
+│   ├── train/          # GPU Benchmarking tool
+│   └── tools/
+│       └── train_moe/  # Main training and LLM entry point
+├── internal/           # Core Logic
+│   └── ai/             # MoE, RNN, MLM, and Optimizer implementations
+├── data/               # Assets
+│   ├── models/         # Saved .gob model weights
+│   └── training/       # Training datasets (CSV/TXT)
+├── build_gpu.sh        # GPU dependency setup script
+└── TRAINING_GUIDE.md   # Detailed training workflows
 ```
 
 ---
 
-## 🚪 Exit & Cleanup
-- **Exit:** Type `exit` to shut down the mascot and save your session.
-- **Halt:** `Ctrl+C` will terminate all background processes and the main loop.
+## 🚪 Exit
+- **Interactive Shell**: Type `exit` to shut down.
+- **Interrupt**: `Ctrl+C` terminates training or inference loops safely.
