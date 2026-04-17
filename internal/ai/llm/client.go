@@ -28,6 +28,7 @@ import (
 type GollemerMoEClient struct {
 	KB                *KnowledgeBase
 	Model             *moe.IntentMoE
+	SocialModel       *moe.IntentMoE // Specialized model for social conversations
 	W2V               *word2vec.SimpleWord2Vec
 	ChatBank          []ChatPair
 	History           []ChatPair
@@ -209,9 +210,65 @@ func (c *GollemerMoEClient) getSentenceEmbedding(text string) []float64 {
 	return nil
 }
 
+// isSocialIntent detects if a query is social/conversational rather than technical
+func isSocialIntent(input string) bool {
+	lowerInput := strings.ToLower(input)
+
+	// Social intent keywords
+	socialKeywords := []string{
+		"how are you", "how you doing", "how's it going", "what's up",
+		"favorite", "like", "love", "hate", "enjoy", "think", "feel", "opinion",
+		"holiday", "vacation", "weekend", "party", "friend", "family",
+		"weather", "beautiful", "fun", "interesting", "amazing", "cool",
+		"tell me about", "what do you think", "do you ever", "have you ever",
+		"personal", "life", "work", "hobby", "passion", "dream",
+		"meeting", "people", "connection", "relationship", "love", "dating",
+		"hope", "wish", "amazing", "wonderful", "boring", "difficult",
+	}
+
+	// Technical keywords (should NOT be treated as social)
+	technicalKeywords := []string{
+		"create", "file", "handler", "project", "function", "class",
+		"go", "code", "program", "run", "build", "deploy",
+		"database", "sql", "api", "server", "client", "network",
+		"import", "package", "module", "library", "framework",
+	}
+
+	// If it contains technical keywords, it's NOT social
+	for _, tech := range technicalKeywords {
+		if strings.Contains(lowerInput, tech) {
+			return false
+		}
+	}
+
+	// If it contains social keywords, it IS social
+	for _, social := range socialKeywords {
+		if strings.Contains(lowerInput, social) {
+			return true
+		}
+	}
+
+	// Default: if it's short and has no technical keywords, it might be social
+	if len(strings.Fields(lowerInput)) <= 3 && !strings.Contains(lowerInput, "list") {
+		return true
+	}
+
+	return false
+}
+
 func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 	c.lastMoEPrediction = "" // Clear previous turn's chat prediction
 	lowerInput := strings.ToLower(input)
+
+	// --- SOCIAL ROUTING: If it's a social query and we have a social model, use it ---
+	if isSocialIntent(input) && c.SocialModel != nil {
+		// Generate response using social model
+		response := c.GenerateSocialResponse(input)
+		if response != "" {
+			c.lastMoEPrediction = response
+		}
+		return "social_chat", 0.95
+	}
 
 	// --- 0. Instant Heuristics for Dynamic Queries ---
 	if (strings.Contains(lowerInput, "time") || strings.Contains(lowerInput, "clock")) &&
@@ -382,6 +439,67 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 	return "", 0.0
 }
 
+// GenerateSocialResponse uses the social model to generate a conversational response
+func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
+	if c.SocialModel == nil {
+		return "" // Fallback if no social model
+	}
+
+	// Generate using social model (max 50 tokens for conversational response)
+	maxLen := 50
+	cleanWords := strings.Fields(strings.ToLower(input))
+	var tokenIDs []int
+
+	if c.SocialModel.SentenceVocab != nil {
+		for _, w := range cleanWords {
+			tokenIDs = append(tokenIDs, c.SocialModel.SentenceVocab.GetTokenID(w))
+		}
+	}
+
+	if len(tokenIDs) > 0 {
+		inputTensor := tensor.NewTensor([]int{1, len(tokenIDs)}, make([]float32, len(tokenIDs)), false)
+		for i, id := range tokenIDs {
+			inputTensor.Data[i] = float32(id)
+		}
+
+		// Encode with social model
+		if embeddings, err := c.SocialModel.Embedding.Forward(inputTensor); err == nil {
+			if contextVector, err := c.SocialModel.Encoder.Forward(embeddings); err == nil {
+				contextVector = c.SocialModel.NormalizeContextVector(contextVector)
+
+				// Prepare NER and POS tagging
+				posTags := postagger.TagTokens(cleanWords)
+				taggedData := nertagger.Nertagger(tag.Tag{Tokens: cleanWords, PosTag: posTags})
+
+				// Decode using social model's decoder
+				if c.SocialModel.SentenceVocab != nil {
+					if outputIDs, err := c.SocialModel.GreedySearchDecodeWithTemp(
+						contextVector, maxLen,
+						c.SocialModel.SentenceVocab.BosID,
+						c.SocialModel.SentenceVocab.EosID,
+						0.4, 1.0, 0.3, 50, taggedData,
+					); err == nil && len(outputIDs) > 0 {
+						var decodedWords []string
+						for _, id := range outputIDs {
+							w := c.SocialModel.SentenceVocab.GetWord(id)
+							if w != "</s>" && w != "<s>" && w != "<pad>" && w != "UNK" && w != "" {
+								decodedWords = append(decodedWords, w)
+							}
+						}
+						response := strings.Join(decodedWords, " ")
+						if response != "" {
+							log.Printf("🎭 Social Model generated: %s", response)
+							return response
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return "" // No response generated
+}
+
 func (c *GollemerMoEClient) checkCommandHeuristics(lowerInput string) (string, float64) {
 	createVerbs := []string{"create", "make", "add", "generate", "initialize", "init", "new", "setup"}
 	for _, v := range createVerbs {
@@ -446,7 +564,7 @@ func (c *GollemerMoEClient) ExtractEntities(input string, intent string) map[str
 
 	entities := make(map[string]any)
 
-	if (intent == "chat_response" || strings.HasPrefix(intent, "Social_") || strings.HasPrefix(intent, "System_") || strings.HasPrefix(intent, "gollemer_")) && c.lastMoEPrediction != "" {
+	if (intent == "social_chat" || intent == "chat_response" || strings.HasPrefix(intent, "Social_") || strings.HasPrefix(intent, "System_") || strings.HasPrefix(intent, "gollemer_")) && c.lastMoEPrediction != "" {
 		entities["response"] = c.lastMoEPrediction
 		return entities
 	}
@@ -694,10 +812,10 @@ func (c *GollemerMoEClient) StartBackgroundWatcher(m *ui.Mascot, projectRoot str
 
 func (c *GollemerMoEClient) MascotCommit(m *ui.Mascot, reader *bufio.Reader) {
 	suggestion := m.SuggestCommit()
-	
+
 	fmt.Printf("\n%s/ʕ◕‿◕ʔ/ > \"I've been watching your pulse. I suggest this commit message: '%s'\"%s\n", ui.ColorCyan, suggestion, ui.ColorReset)
 	fmt.Print(">> Press Enter to use, or type a new message (or 'c' to cancel): ")
-	
+
 	input, _ := reader.ReadString('\n')
 	input = strings.TrimSpace(input)
 
@@ -712,14 +830,14 @@ func (c *GollemerMoEClient) MascotCommit(m *ui.Mascot, reader *bufio.Reader) {
 	}
 
 	m.Say(ui.Thinking, "Executing git commit...")
-	
+
 	cmd := exec.Command("git", "commit", "-am", finalMessage)
 	output, err := cmd.CombinedOutput()
-	
+
 	if err != nil {
-		m.Say(ui.Disturbed, "Git hit a snag: " + strings.TrimSpace(string(output)))
+		m.Say(ui.Disturbed, "Git hit a snag: "+strings.TrimSpace(string(output)))
 		return
 	}
-	
-	m.Say(ui.Happy, "Success! Changes pushed to the timeline. Velocity: " + strconv.Itoa(m.GetVelocity()) + " pulses/hr.")
+
+	m.Say(ui.Happy, "Success! Changes pushed to the timeline. Velocity: "+strconv.Itoa(m.GetVelocity())+" pulses/hr.")
 }

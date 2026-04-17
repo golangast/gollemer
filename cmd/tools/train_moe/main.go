@@ -971,6 +971,8 @@ func main() {
 	gpu := flag.Bool("gpu", false, "Enable GPU acceleration")
 	flagBatchSize := flag.Int("batch-size", 4, "Batch size per step (default 4 for 8GB GPU RAM/robust CPU limits)")
 	flagAccSteps := flag.Int("acc-steps", 16, "Gradient accumulation steps (default 16, effective batch = batch*acc)")
+	trainSocial := flag.Bool("train-social", false, "Train ONLY on human_chat.txt for pure social conversations")
+	flagNumExperts := flag.Int("num-experts", 8, "Number of experts in MoE layer (default 8, increase for GPU saturation)")
 
 	flag.Parse()
 
@@ -982,6 +984,11 @@ func main() {
 
 	if *gpu {
 		log.Println("🚀 GPU acceleration enabled (Paragon/WebGPU). Dispatching to AMD/Vulkan...")
+	}
+
+	if *trainSocial {
+		chat.TrainSocialChat(".", *overfit, float32(*flagLR), float32(*weightDecay), *autoHealFlag, float32(*maxGradNorm), *gpu, *flagBatchSize, *flagAccSteps)
+		return
 	}
 
 	if *trainChat {
@@ -1123,7 +1130,7 @@ func main() {
 	inputVocabSize := len(queryVocabulary.WordToToken)
 	semanticOutputVocabSize := len(semanticOutputVocabulary.WordToToken)
 	embeddingDim := word2vecModel.VectorSize // Match Word2Vec dimension
-	numExperts := 4                          // Increased back to 4
+	numExperts := *flagNumExperts            // Used from flag
 	maxSequenceLength := 50                  // Reduced to 50
 
 	log.Printf("Query Vocabulary Size: %d", inputVocabSize)
@@ -1159,7 +1166,6 @@ func main() {
 			}
 		}
 	}
-
 
 	if intentMoEModel == nil {
 		// Always create a new IntentMoE model for now to debug gob loading

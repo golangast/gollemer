@@ -3,6 +3,8 @@ package nn
 import (
 	"fmt"
 	"math"
+	"runtime"
+	"sync"
 
 	. "github.com/golangast/gollemer/internal/ai/neural/tensor"
 )
@@ -65,7 +67,7 @@ type Adam struct {
 
 // NewOptimizer creates a new Adam optimizer.
 func NewOptimizer(parameters []*Tensor, learningRate float32, clipThreshold float32) Optimizer {
-	return &Adam{
+	o := &Adam{
 		parameters:    parameters,
 		learningRate:  learningRate,
 		beta1:         0.9,
@@ -75,9 +77,15 @@ func NewOptimizer(parameters []*Tensor, learningRate float32, clipThreshold floa
 		m:             make(map[*Tensor]*Tensor),
 		v:             make(map[*Tensor]*Tensor),
 		ClipThreshold: clipThreshold,
-		Lambda:        0.01, // Default weight decay
-		RouterLR:      learningRate / 10.0, // Default to slower LR for routers
+		Lambda:        0.01,
+		RouterLR:      learningRate * 5.0,
 	}
+	// Pre-allocate moments to enable safe parallel updates
+	for _, p := range parameters {
+		o.m[p] = NewTensor(p.Shape, make([]float32, len(p.Data)), false)
+		o.v[p] = NewTensor(p.Shape, make([]float32, len(p.Data)), false)
+	}
+	return o
 }
 
 // ClipGradients scales the gradients of all parameters if their total L2 norm exceeds ClipThreshold.
@@ -128,66 +136,90 @@ func (o *Adam) ResetStagnantMoments(t *Tensor) {
 func (o *Adam) Step() {
 	o.t++
 
+	var wg sync.WaitGroup
+	// Use limited concurrency to avoid context switching overhead
+	numWorkers := runtime.NumCPU()
+	if numWorkers > 16 {
+		numWorkers = 16
+	}
+	
+	paramChan := make(chan *Tensor, len(o.parameters))
 	for _, p := range o.parameters {
-		if p.Grad == nil {
-			continue
-		}
-
-		if _, ok := o.m[p]; !ok {
-			o.m[p] = NewTensor(p.Shape, make([]float32, len(p.Data)), false)
-			o.v[p] = NewTensor(p.Shape, make([]float32, len(p.Data)), false)
-		}
-
-		m := o.m[p].Data
-		v := o.v[p].Data
-		grad := p.Grad.Data
-		param := p.Data
-		
-		lr := o.learningRate
-		if p.IsRouter {
-			lr = o.RouterLR
-		}
-
-		// --- Timid Boost Integration ---
-		// If TimidMask exists for this tensor, we apply localized LR boosting.
-		// Note: This falls back to standard SIMD update if no mask is present.
-		if p.TimidMask() != nil {
-			// Bias correction terms
-			b1t := float32(1.0 - math.Pow(float64(o.beta1), float64(o.t)))
-			b2t := float32(1.0 - math.Pow(float64(o.beta2), float64(o.t)))
-			
-			mask := p.TimidMask()
-			for i := range param {
-				// 1. Update moments
-				m[i] = o.beta1*m[i] + (1-o.beta1)*grad[i]
-				v[i] = o.beta2*v[i] + (1-o.beta2)*grad[i]*grad[i]
-				
-				// 2. Localized LR boost
-				effectiveLR := lr
-				if mask[i] {
-					effectiveLR *= 3.0 // Kick stagnant weights harder
-				}
-				
-				// 3. AdamW Update: weight -= lr * (m_corrected / (sqrt(v_corrected) + eps) + lambda * weight)
-				mHat := m[i] / b1t
-				vHat := v[i] / b2t
-				denom := float32(math.Sqrt(float64(vHat))) + o.epsilon
-				
-				update := (mHat / denom) + (o.Lambda * param[i])
-				param[i] -= effectiveLR * update
-			}
-		} else {
-			// Perform high-performance SIMD update when no mask is present
-			AdamWUpdate(param, grad, m, v, lr, o.beta1, o.beta2, o.epsilon, o.Lambda, o.t)
+		if p.Grad != nil {
+			paramChan <- p
 		}
 	}
+	close(paramChan)
+
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for p := range paramChan {
+				m := o.m[p].Data
+				v := o.v[p].Data
+				grad := p.Grad.Data
+				param := p.Data
+				
+				lr := o.learningRate
+				if p.IsRouter {
+					lr = o.RouterLR
+				}
+
+				if p.TimidMask() != nil {
+					b1t := float32(1.0 - math.Pow(float64(o.beta1), float64(o.t)))
+					b2t := float32(1.0 - math.Pow(float64(o.beta2), float64(o.t)))
+					
+					mask := p.TimidMask()
+					for i := range param {
+						m[i] = o.beta1*m[i] + (1-o.beta1)*grad[i]
+						v[i] = o.beta2*v[i] + (1-o.beta2)*grad[i]*grad[i]
+						
+						effectiveLR := lr
+						if mask[i] {
+							effectiveLR *= 3.0
+						}
+						
+						mHat := m[i] / b1t
+						vHat := v[i] / b2t
+						denom := float32(math.Sqrt(float64(vHat))) + o.epsilon
+						
+						update := (mHat / denom) + (o.Lambda * param[i])
+						param[i] -= effectiveLR * update
+					}
+				} else {
+					AdamWUpdate(param, grad, m, v, lr, o.beta1, o.beta2, o.epsilon, o.Lambda, o.t)
+				}
+			}
+		}()
+	}
+	wg.Wait()
 }
 
-// ZeroGrad resets the gradients of all parameters.
+// ZeroGrad resets the gradients of all parameters in parallel.
 func (o *Adam) ZeroGrad() {
-	for _, p := range o.parameters {
-		p.ZeroGrad()
+	var wg sync.WaitGroup
+	numWorkers := runtime.NumCPU()
+	if numWorkers > 16 {
+		numWorkers = 16
 	}
+
+	workCh := make(chan *Tensor, len(o.parameters))
+	for _, p := range o.parameters {
+		workCh <- p
+	}
+	close(workCh)
+
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for p := range workCh {
+				p.ZeroGrad()
+			}
+		}()
+	}
+	wg.Wait()
 }
 
 // SetLearningRate updates the main learning rate and proportionally scales the RouterLR.

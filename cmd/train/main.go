@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -19,9 +20,10 @@ func main() {
 	topK := flag.Int("k", 2, "Number of experts to activate")
 	lr := flag.Float64("lr", 0.01, "Learning rate")
 	batchSize := flag.Int("batch", 1, "Batch size for training")
+	prefetch := flag.Int("prefetch", 1, "GPU prefetch batches (for pipelining)")
 	flag.Parse()
 
-	log.Printf("Initializing MoE Model [Dim=%d, Experts=%d, K=%d, Batch=%d]", *inputDim, *numExperts, *topK, *batchSize)
+	log.Printf("Initializing MoE Model [Dim=%d, Experts=%d, K=%d, Batch=%d, Prefetch=%d]", *inputDim, *numExperts, *topK, *batchSize, *prefetch)
 
 	// Create Model
 	gater := moe.NewSparseGater(*inputDim, *numExperts, *topK)
@@ -41,24 +43,61 @@ func main() {
 		stopTraining = true
 	}()
 
-	// Training Loop (Sample Data)
-	log.Println("--- 🚀 Starting Gollemer Training ---")
+	// Training Loop with Goroutine Pipelining
+	// Data preparation and GPU compute run in parallel via go channels
+	log.Println("--- 🚀 Starting Gollemer Training (Goroutine-pipelined) ---")
 	startTime := time.Now()
+
+	// Channel for pipelined data (CPU prepares while GPU computes)
+	type SampleBatch struct {
+		inputs  [][]float32
+		targets [][]float32
+	}
+	dataCh := make(chan *SampleBatch, *prefetch) // Buffer prefetch batches
+
+	// Data generator goroutine (runs in parallel, generates batches continuously)
+	go func() {
+		defer close(dataCh)
+		for {
+			if stopTraining {
+				return
+			}
+
+			batch := &SampleBatch{
+				inputs:  make([][]float32, *batchSize),
+				targets: make([][]float32, *batchSize),
+			}
+
+			// Pre-generate batch data (CPU task, parallel with GPU)
+			for b := 0; b < *batchSize; b++ {
+				batch.inputs[b] = make([]float32, *inputDim)
+				batch.targets[b] = make([]float32, *inputDim)
+				for i := range batch.inputs[b] {
+					batch.inputs[b][i] = rand.Float32()
+					batch.targets[b][i] = batch.inputs[b][i] * 0.5
+				}
+			}
+
+			// Blocking send - wait for main training loop to consume batch
+			dataCh <- batch
+		}
+	}()
+
 	for epoch := 0; !stopTraining; epoch++ {
-		// Process batch of samples
+		batch, ok := <-dataCh
+		if !ok || batch == nil {
+			break
+		}
+
 		var batchLoss float32 = 0
 		batchExpertGrads := make(map[int]float32)
 
-		for b := 0; b < *batchSize; b++ {
-			// Sample data for demonstration
-			input := make([]float32, *inputDim)
-			target := make([]float32, *inputDim)
-			for i := range input {
-				input[i] = rand.Float32()
-				target[i] = input[i] * 0.5 // Linear task: halving
-			}
+		// Process pre-computed batch samples (GPU + expert dispatch)
+		for b := 0; b < len(batch.inputs); b++ {
+			input := batch.inputs[b]
+			target := batch.targets[b]
 
-			// 1. Forward Pass
+			// 1. Forward Pass through MoE with expert routing
 			prediction, indices := model.Predict(input)
 
 			// 2. Compute error
@@ -70,15 +109,27 @@ func main() {
 			}
 			batchLoss += sampleLoss / float32(*inputDim)
 
-			// 3. Accumulate gradients from active experts
-			for _, idx := range indices {
-				model.Experts[idx].UpdateWeights(input, errors, float32(*lr))
+			// 3. Parallel expert gradient updates via goroutines
+			// Each active expert processes gradients independently
+			var wg sync.WaitGroup
+			var gradMutex sync.Mutex
 
-				// Track gradient for gater
-				for _, e := range errors {
-					batchExpertGrads[idx] += e
-				}
+			for _, expertIdx := range indices {
+				wg.Add(1)
+				go func(idx int) {
+					defer wg.Done()
+					// Expert computation (GPU lock acquired inside)
+					model.Experts[idx].UpdateWeights(input, errors, float32(*lr))
+
+					// Track gradient for gater
+					gradMutex.Lock()
+					for _, e := range errors {
+						batchExpertGrads[idx] += e
+					}
+					gradMutex.Unlock()
+				}(expertIdx)
 			}
+			wg.Wait() // Wait for all active experts to finish
 		}
 
 		// Average loss across batch
@@ -89,7 +140,6 @@ func main() {
 		for idx, grad := range batchExpertGrads {
 			gaterGrad[idx] = grad / float32(*inputDim**batchSize)
 		}
-		// Create dummy input for gater update (first sample of batch)
 		dummyInput := make([]float32, *inputDim)
 		for i := range dummyInput {
 			dummyInput[i] = rand.Float32()

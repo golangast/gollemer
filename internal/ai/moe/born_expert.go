@@ -5,8 +5,8 @@ import (
 	"encoding/gob"
 	"fmt"
 	"math/rand"
-	"sync"
 	"time"
+	"sync"
 	"unsafe"
 
 	"github.com/born-ml/born/autodiff"
@@ -17,33 +17,18 @@ import (
 )
 
 var (
-	// Singleton GPU backend for all BornExperts to share a single GPU context via libgoffi/gogpu.
-	// Sharing context prevents initialization crashes during parallel
-	// initialization of multiple experts on the same device.
-	globalBornGPULock    sync.Mutex
-	globalBornGPUBackend borntensor.Backend
-
-	// Global execution lock to prevent parallel GPU calls that crash the Vulkan driver.
-	// This ensures that only one expert is executing a GPU kernel at a time.
-	globalBornGPUExecLock sync.Mutex
+	sharedBackend     *autodiff.Backend[borntensor.Backend]
+	sharedBackendOnce sync.Once
+	gpuBackend        *autodiff.Backend[borntensor.Backend]
+	gpuOnce           sync.Once
 )
 
-func getBornGPUContext() (borntensor.Backend, error) {
-	globalBornGPULock.Lock()
-	defer globalBornGPULock.Unlock()
-
-	if globalBornGPUBackend != nil {
-		return globalBornGPUBackend, nil
-	}
-
-	// Use CPU backend with optimizations for maximum SIMD performance
-	// When built with CGO_ENABLED=0, born-ml uses pure Go operations
-	// For real GPU acceleration, build with: CGO_ENABLED=1 go build ...
-	// This will enable WebGPU/goffi backend automatically
-	cpuBackend := cpu.New()
-	globalBornGPUBackend = borntensor.Backend(cpuBackend)
-	fmt.Println("✅ Born-ml backend ready (CPU with SIMD optimization. For GPU: CGO_ENABLED=1)")
-	return globalBornGPUBackend, nil
+func getSharedBackend() *autodiff.Backend[borntensor.Backend] {
+	sharedBackendOnce.Do(func() {
+		base := cpu.New()
+		sharedBackend = autodiff.New(borntensor.Backend(base))
+	})
+	return sharedBackend
 }
 
 func init() {
@@ -53,6 +38,7 @@ func init() {
 
 // BornExpert implements the Expert interface using the born-ml/born framework.
 type BornExpert struct {
+	ID         int
 	inputDim   int
 	hiddenDim  int
 	outputDim  int
@@ -71,6 +57,7 @@ type BornExpert struct {
 }
 
 type bornExpertData struct {
+	ID        int
 	InputDim  int
 	HiddenDim int
 	OutputDim int
@@ -84,6 +71,7 @@ type bornExpertData struct {
 // GobEncode handles custom serialization since born-ml structs contain non-serializable fields.
 func (e *BornExpert) GobEncode() ([]byte, error) {
 	data := bornExpertData{
+		ID:        e.ID,
 		InputDim:  e.inputDim,
 		HiddenDim: e.hiddenDim,
 		OutputDim: e.outputDim,
@@ -114,7 +102,7 @@ func (e *BornExpert) GobDecode(data []byte) error {
 	}
 
 	// Re-initialize the expert with decoded dimensions
-	expert, err := NewBornExpert(decoded.InputDim, decoded.HiddenDim, decoded.OutputDim)
+	expert, err := NewBornExpert(decoded.ID, decoded.InputDim, decoded.HiddenDim, decoded.OutputDim)
 	if err != nil {
 		return err
 	}
@@ -138,17 +126,14 @@ func (e *BornExpert) GobDecode(data []byte) error {
 	return nil
 }
 
-// NewBornExpert creates a new BornExpert with WebGPU/goffi GPU acceleration if available.
-func NewBornExpert(inputDim, hiddenDim, outputDim int) (*BornExpert, error) {
-	// Try to get WebGPU backend for maximum GPU acceleration
-	var base borntensor.Backend
-	gpuCtx, err := getBornGPUContext()
-	if err == nil && gpuCtx != nil {
-		base = gpuCtx
-	} else {
-		base = cpu.New()
-	}
-	backend := autodiff.New(base)
+// NewBornExpert creates a new BornExpert with its own independent CPU backend.
+// Each expert gets a separate backend so goroutines can run truly in parallel.
+func NewBornExpert(id, inputDim, hiddenDim, outputDim int) (*BornExpert, error) {
+	// Each expert gets its OWN CPU backend for true parallelism.
+	// The old code shared a single backend across all experts, causing
+	// goroutines to serialize on internal state contention.
+	base := cpu.New()
+	backend := autodiff.New(borntensor.Backend(base))
 
 	fc1 := nn.NewLinear(inputDim, hiddenDim, backend)
 	relu := nn.NewReLU[*autodiff.Backend[borntensor.Backend]]()
@@ -157,6 +142,7 @@ func NewBornExpert(inputDim, hiddenDim, outputDim int) (*BornExpert, error) {
 	backend.Tape().StartRecording() // Ensure operations are recorded for training
 
 	expert := &BornExpert{
+		ID:        id,
 		inputDim:  inputDim,
 		hiddenDim: hiddenDim,
 		outputDim: outputDim,
@@ -177,15 +163,12 @@ func NewBornExpert(inputDim, hiddenDim, outputDim int) (*BornExpert, error) {
 	return expert, nil
 }
 
+
 // Forward performs the forward pass, bridging Gollemer and Born-ML tensors.
 func (e *BornExpert) Forward(input *gtensor.Tensor) (*gtensor.Tensor, error) {
-	// Serialization Lock for GPU stability
-	globalBornGPUExecLock.Lock()
-	defer globalBornGPUExecLock.Unlock()
-
 	e.lastInput = input
 
-	// Bridge Gollemer tensor to Born tensor
+	// 🎨 Phase 1: Bridge Gollemer tensor to Born tensor (CPU-side preparation)
 	bt, err := borntensor.FromSlice(input.Data, borntensor.Shape(input.Shape), e.backend)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert input to born tensor: %w", err)
@@ -195,6 +178,7 @@ func (e *BornExpert) Forward(input *gtensor.Tensor) (*gtensor.Tensor, error) {
 		bt.RequireGrad() // Mark input for grad tracking in training
 	}
 
+	// ⚡ Phase 2: Expert Execution (each expert has its own backend — no contention)
 	var out *borntensor.Tensor[float32, *autodiff.Backend[borntensor.Backend]]
 	if e.isTraining {
 		h1 := e.fc1.Forward(bt)
@@ -209,16 +193,12 @@ func (e *BornExpert) Forward(input *gtensor.Tensor) (*gtensor.Tensor, error) {
 		})
 	}
 
-	// Bridge back to Gollemer tensor
+	// 🌍 Phase 3: Bridge back to Gollemer tensor (Download results)
 	return gtensor.NewTensor(out.Shape(), out.Data(), e.isTraining), nil
 }
 
 // Backward performs the backward pass.
 func (e *BornExpert) Backward(grad *gtensor.Tensor) error {
-	// Serialization Lock for GPU stability
-	globalBornGPUExecLock.Lock()
-	defer globalBornGPUExecLock.Unlock()
-
 	if !e.isTraining {
 		return nil // No-op if not in training mode
 	}
@@ -227,16 +207,16 @@ func (e *BornExpert) Backward(grad *gtensor.Tensor) error {
 		return fmt.Errorf("backward called before forward")
 	}
 
-	// Convert Gollemer gradient to Born tensor
+	// 🎨 Phase 1: Bridge Gollemer gradient to Born tensor
 	gradBT, err := borntensor.FromSlice(grad.Data, borntensor.Shape(grad.Shape), e.backend)
 	if err != nil {
 		return fmt.Errorf("failed to convert grad to born tensor: %w", err)
 	}
 
-	// Compute gradients using the tape directly
+	// ⚡ Phase 2: Compute gradients using the tape (each expert has its own tape)
 	grads := e.backend.Tape().Backward(gradBT.Raw(), e.backend)
 
-	// Bridge gradients back to Gollemer shadows for the global optimizer
+	// 🌍 Phase 3: Bridge gradients back to Gollemer shadows for the global optimizer
 	for i, p := range e.allParams() {
 		raw := p.Tensor().Raw()
 		if g, ok := grads[raw]; ok {
@@ -365,50 +345,8 @@ func (e *BornExpert) UpdateHealth(wasUsed bool) {
 	e.health = (current * (1.0 - decay)) + (e.health * decay)
 }
 
-func (e *BornExpert) ToGPU() {
-	if e.backend.Inner().Name() != "cpu" {
-		// Already on GPU backend
-		return
-	}
-
-	fmt.Println("🚀 Moving BornExpert to WebGPU backend (born-ml + goffi)...")
-	gpu, err := getBornGPUContext()
-	if err != nil {
-		fmt.Printf("❌ Failed to initialize GPU backend: %v\n", err)
-		return
-	}
-
-	// Migrate parameters to new backend
-	// Note: We create a NEW Autodiff wrapper so this expert has its own private Tape,
-	// but it shares the underlying GPU hardware context with other experts.
-	newBackend := autodiff.New(gpu)
-
-	// Create new layers on GPU
-	newFc1 := nn.NewLinear(e.inputDim, e.hiddenDim, newBackend)
-	newFc2 := nn.NewLinear(e.hiddenDim, e.outputDim, newBackend)
-
-	// Copy weights
-	copy(newFc1.Weight().Tensor().Data(), e.fc1.Weight().Tensor().Data())
-	if e.fc1.Bias() != nil && newFc1.Bias() != nil {
-		copy(newFc1.Bias().Tensor().Data(), e.fc1.Bias().Tensor().Data())
-	}
-	copy(newFc2.Weight().Tensor().Data(), e.fc2.Weight().Tensor().Data())
-	if e.fc2.Bias() != nil && newFc2.Bias() != nil {
-		copy(newFc2.Bias().Tensor().Data(), e.fc2.Bias().Tensor().Data())
-	}
-
-	e.fc1 = newFc1
-	e.fc2 = newFc2
-	e.backend = newBackend
-
-	// Re-link param shadows
-	e.paramShadows = nil
-	for _, p := range e.allParams() {
-		bt := p.Tensor()
-		shadow := gtensor.NewTensor(bt.Shape(), bt.Data(), true)
-		e.paramShadows = append(e.paramShadows, shadow)
-	}
-}
+// ToGPU is implemented in born_expert_gpu.go (with //go:build gpu)
+// and born_expert_nogpu.go (without the tag).
 
 func (e *BornExpert) Resize(newOutputDim int) {
 	// Resize is a complex operation in Born-ML due to fixed shapes in compiled kernels.
