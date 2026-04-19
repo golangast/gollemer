@@ -80,11 +80,33 @@ func NewOptimizer(parameters []*Tensor, learningRate float32, clipThreshold floa
 		Lambda:        0.01,
 		RouterLR:      learningRate * 5.0,
 	}
-	// Pre-allocate moments to enable safe parallel updates
+	// Pre-allocate moments in parallel to avoid startup hangs on large models
+	var wg sync.WaitGroup
+	paramChan := make(chan *Tensor, len(parameters))
 	for _, p := range parameters {
-		o.m[p] = NewTensor(p.Shape, make([]float32, len(p.Data)), false)
-		o.v[p] = NewTensor(p.Shape, make([]float32, len(p.Data)), false)
+		paramChan <- p
 	}
+	close(paramChan)
+
+	numWorkers := runtime.NumCPU()
+	if numWorkers > 16 { numWorkers = 16 }
+	
+	mu := sync.Mutex{}
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for p := range paramChan {
+				m := NewTensor(p.Shape, make([]float32, len(p.Data)), false)
+				v := NewTensor(p.Shape, make([]float32, len(p.Data)), false)
+				mu.Lock()
+				o.m[p] = m
+				o.v[p] = v
+				mu.Unlock()
+			}
+		}()
+	}
+	wg.Wait()
 	return o
 }
 

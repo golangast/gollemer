@@ -956,7 +956,7 @@ func main() {
 
 	// Define training parameters
 	dryRun := flag.Bool("dry-run", false, "Run a quick test with 100 examples for 5 epochs")
-	flagLR := flag.Float64("lr", 0.00001, "Learning rate (ignored if profile is set)")
+	flagLR := flag.Float64("lr", 0.0005, "Learning rate (ignored if profile is set)")
 	flagEpochs := flag.Int("epochs", 50, "Number of epochs to train (default 50)")
 	autoHealFlag = flag.Bool("auto-heal", false, "Enable autonomous model recovery")
 	profileName := flag.String("profile", "standard", "Training profile: stable, aggressive, standard")

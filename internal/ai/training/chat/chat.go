@@ -682,9 +682,12 @@ skipCSV:
 				}
 			}
 
-			mlmLR := initialLR * 2.0 // MLM can use a higher LR since it's a simpler task
-			if mlmLR > 0.01 {
-				mlmLR = 0.01
+			mlmLR := initialLR * 100.0 // MLM needs a much higher LR to learn word distributions quickly
+			if mlmLR < 0.002 {
+				mlmLR = 0.002 // Floor to ensure we actually learn something
+			}
+			if mlmLR > 0.05 {
+				mlmLR = 0.05
 			}
 			mlmEpochs := 5
 
@@ -1781,36 +1784,52 @@ func TrainSocialChat(projectRoot string, overfitMode bool, initialLR float32, we
 	var chatPairs []struct{ Q, A, Intent string }
 	var err error
 
-	// Load ONLY human_chat.txt for social training
+	// Load human_chat.txt for social training
 	humanChatPath := filepath.Join(projectRoot, "data/training/trainingdata/human_chat.txt")
 	if humanChatData, err := os.ReadFile(humanChatPath); err == nil {
 		humanChatLines := strings.Split(string(humanChatData), "\n")
-		var currentQ, currentA string
+		var conversation []string
 
 		for _, line := range humanChatLines {
 			line = strings.TrimSpace(line)
 			if line == "" {
+				// Empty line often separates conversations in this dataset
+				if len(conversation) > 1 {
+					// Add all consecutive pairs in this conversation block
+					for i := 0; i < len(conversation)-1; i++ {
+						q := conversation[i]
+						a := conversation[i+1]
+						// Strip prefixes for training
+						q = strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(q, "Human 1:"), "Human 2:"))
+						a = strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(a, "Human 1:"), "Human 2:"))
+						if q != "" && a != "" {
+							chatPairs = append(chatPairs, struct{ Q, A, Intent string }{q, a, "social"})
+						}
+					}
+				}
+				conversation = nil
 				continue
 			}
 
-			if strings.HasPrefix(line, "Human 1:") {
-				if currentQ != "" && currentA != "" {
-					chatPairs = append(chatPairs, struct{ Q, A, Intent string }{currentQ, currentA, "social"})
-				}
-				currentQ = strings.TrimPrefix(line, "Human 1:")
-				currentQ = strings.TrimSpace(currentQ)
-				currentA = ""
-			} else if strings.HasPrefix(line, "Human 2:") {
-				currentA = strings.TrimPrefix(line, "Human 2:")
-				currentA = strings.TrimSpace(currentA)
+			if strings.HasPrefix(line, "Human 1:") || strings.HasPrefix(line, "Human 2:") {
+				conversation = append(conversation, line)
 			}
 		}
 
-		if currentQ != "" && currentA != "" {
-			chatPairs = append(chatPairs, struct{ Q, A, Intent string }{currentQ, currentA, "social"})
+		// Handle last conversation if no trailing empty line
+		if len(conversation) > 1 {
+			for i := 0; i < len(conversation)-1; i++ {
+				q := conversation[i]
+				a := conversation[i+1]
+				q = strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(q, "Human 1:"), "Human 2:"))
+				a = strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(a, "Human 1:"), "Human 2:"))
+				if q != "" && a != "" {
+					chatPairs = append(chatPairs, struct{ Q, A, Intent string }{q, a, "social"})
+				}
+			}
 		}
 
-		log.Printf("📊 Loaded %d social conversation pairs from human_chat.txt", len(chatPairs))
+		log.Printf("📊 Loaded %d social conversation pairs (bidirectional) from human_chat.txt", len(chatPairs))
 	} else {
 		log.Fatalf("❌ human_chat.txt not found at %s", humanChatPath)
 	}
@@ -1829,8 +1848,11 @@ func TrainSocialChat(projectRoot string, overfitMode bool, initialLR float32, we
 	tmpVocab.AddToken("<s>")
 	tmpVocab.AddToken("</s>")
 	tmpVocab.AddToken("UNK")
+	tmpVocab.AddToken("[QUES]")
+	tmpVocab.AddToken("[ANS]")
 	for _, pair := range chatPairs {
-		for _, t := range cleanTokenize(pair.Q + " " + pair.A) {
+		// Include markers in vocab pre-computation
+		for _, t := range cleanTokenize(pair.Q + " " + pair.A + " [QUES] [ANS]") {
 			tmpVocab.AddToken(t)
 		}
 	}
@@ -1946,10 +1968,43 @@ func TrainSocialChat(projectRoot string, overfitMode bool, initialLR float32, we
 	epochs := 60
 	peakLR := initialLR
 	if peakLR == 0 {
-		peakLR = 0.0005
+		peakLR = 0.0005 // Standard peak for social grounding
 	}
-
+	
 	log.Printf("🎭 Training social model for %d epochs at peak LR=%.6f", epochs, peakLR)
+
+	// PHASE 0: MLM Pre-Training for Social Grammar
+	if !overfitMode {
+		mlmSentences := ExtractMLMSentences(trainPairs)
+		if len(mlmSentences) > 0 {
+			// Lowered from 500x to 50x to prevent word salad / weight explosion
+			mlmLR := peakLR * 50.0 
+			if mlmLR < 0.001 { mlmLR = 0.001 } 
+			if mlmLR > 0.01 { mlmLR = 0.01 } // Capped at 0.01 instead of 0.05
+			
+			// Ensure [MASK] token exists
+			if intentModel.SentenceVocab.GetTokenID(MaskToken) == -1 {
+				intentModel.SentenceVocab.AddToken(MaskToken)
+			}
+
+			// Increase capacity factor for MLM to ensure expert coverage during grammar learning
+			for _, layer := range moe.ActiveLayers {
+				layer.CapacityFactor = 2.0
+			}
+			
+			if err := RunMLMPreTraining(intentModel, mlmSentences, 20, batchSize, mlmLR, maxGradNorm, useGPU, socialModelPath); err != nil {
+				log.Printf("⚠️  Social MLM Pre-Training failed: %v", err)
+			}
+
+			// Restore capacity factor after MLM
+			for _, layer := range moe.ActiveLayers {
+				layer.CapacityFactor = 1.2
+				layer.LoadBalancingWeight = 0.2 // Stronger nudge to distribute experts
+				layer.RouterTemperature = 1.0   // Increase exploration
+			}
+			DetachModel(intentModel)
+		}
+	}
 
 	// Create loss weights for vocabulary
 	lossWeights := make([]float32, intentModel.SentenceVocab.Size())
@@ -2062,6 +2117,13 @@ func TrainSocialChat(projectRoot string, overfitMode bool, initialLR float32, we
 
 			if !math.IsNaN(float64(batchLoss)) && !math.IsInf(float64(batchLoss), 0) {
 				// Backward pass
+				if useGPU {
+					for _, g := range grads {
+						if g != nil {
+							g.ToGPU()
+						}
+					}
+				}
 				if err := intentModel.Backward(grads...); err == nil {
 					if (globalStep+1)%accumulationSteps == 0 {
 						params := intentModel.Parameters()
@@ -2091,18 +2153,22 @@ func TrainSocialChat(projectRoot string, overfitMode bool, initialLR float32, we
 								p.SyncToDevice()
 							}
 						}
+						
+						// Logging (moved before ZeroGrad)
+						batchNum++
+						globalStep++
+						if batchNum%1 == 0 {
+							avgLoss := epochLoss / float32(batchNum)
+							log.Printf("🎭 Epoch %d/%d | Batch %d | Loss: %.6f | LR: %.8f", epoch+1, epochs, batchNum, avgLoss, optimizer.GetLearningRate())
+						}
+
 						optimizer.ZeroGrad()
 					}
 					epochLoss += batchLoss
 				}
 			}
 
-			batchNum++
-			globalStep++
-			if batchNum%1 == 0 {
-				avgLoss := epochLoss / float32(batchNum)
-				log.Printf("🎭 Epoch %d/%d | Batch %d | Loss: %.6f | LR: %.8f", epoch+1, epochs, batchNum, avgLoss, optimizer.GetLearningRate())
-			}
+			// (Remove duplicate batchNum++ globalStep++ here)
 
 			// 💾 SAVE PROGRESS MID-EPOCH (As requested)
 			if batchNum > 0 && batchNum%100 == 0 {
@@ -2116,6 +2182,26 @@ func TrainSocialChat(projectRoot string, overfitMode bool, initialLR float32, we
 			}
 
 			DetachModel(intentModel)
+
+			// 🩺 MoE Health Check & Auto-Healing
+			if (globalStep+1)%100 == 0 {
+				for i, layer := range moe.ActiveLayers {
+					totalTokens := 0
+					for _, u := range layer.AccumulatedUtilization {
+						totalTokens += u
+					}
+					if totalTokens > 0 {
+						for e, u := range layer.AccumulatedUtilization {
+							usage := float32(u) / float32(totalTokens)
+							if usage > 0.80 {
+								log.Printf("🚨 Expert Collapse detected in Layer %d (Expert %d: %.1f%%). Resetting router...", i, e, usage*100)
+								layer.ResetRouterWeights()
+								layer.ResetUtilizationStats()
+							}
+						}
+					}
+				}
+			}
 		}
 
 		log.Printf("✅ Epoch %d/%d completed | Avg Loss: %.6f", epoch+1, epochs, epochLoss/float32(batchNum))
@@ -2164,7 +2250,7 @@ func StrictGenerate(model *moe.IntentMoE, input string, maxLen int) string {
 	for _, layer := range moe.ActiveLayers {
 		layer.SetMode(false)
 		oldTemps[layer] = layer.RouterTemperature
-		layer.RouterTemperature = 1.1 // Slightly higher for exploration during generation
+		layer.RouterTemperature = 1.1
 	}
 	if model.Decoder.OutputMoE != nil {
 		oldTemps[model.Decoder.OutputMoE] = model.Decoder.OutputMoE.RouterTemperature
@@ -2182,8 +2268,9 @@ func StrictGenerate(model *moe.IntentMoE, input string, maxLen int) string {
 		}
 	}()
 
-	// 1. Tokenize and Vectorize Input
-	tokens := cleanTokenize(input)
+	// Format input to match training: [Intent: social] [QUES] <input> [ANS]
+	formattedInput := "[Intent: social] [QUES] " + input + " [ANS]"
+	tokens := cleanTokenize(formattedInput)
 	if len(tokens) == 0 {
 		log.Printf("⚠️ Skip empty prompt: %s", input)
 		return ""
@@ -2313,7 +2400,7 @@ func StrictGenerate(model *moe.IntentMoE, input string, maxLen int) string {
 		// 8. Early Stopping: If even the best choice is "noise"
 		probs := tensor.Softmax(logits) // Declare probs here so it's available for both checks
 		topProb := probs.Data[bestID]
-		if i > 2 && topProb < 0.01 { // threshold 1%
+		if i > 2 && topProb < 0.0005 {
 			log.Printf("🛑 Early stop at step %d: Low confidence (%.2f%%)", i, topProb*100)
 			break
 		}
@@ -2382,7 +2469,9 @@ func StrictGenerateWithExperts(model *moe.IntentMoE, input string, maxLen int) (
 		}
 	}()
 
-	tokens := cleanTokenize(input)
+	// Format input to match training: [Intent: social] [QUES] <input> [ANS]
+	formattedInput := "[Intent: social] [QUES] " + input + " [ANS]"
+	tokens := cleanTokenize(formattedInput)
 	if len(tokens) == 0 {
 		return "", nil
 	}
@@ -2641,15 +2730,23 @@ func (it *ChatDataIterator) Next() (*tensor.Tensor, *tensor.Tensor) {
 	pair := it.pairs[it.idx]
 	it.idx++
 
-	// Query Tokenization (now also using SentenceVocab!)
-	qTokens := cleanTokenize(pair.Q)
+	// Inject Intent as a prefix to teach context: "[Intent: social] hello world"
+	intentPrefix := ""
+	if pair.Intent != "" {
+		intentPrefix = fmt.Sprintf("[Intent: %s]", pair.Intent)
+	}
+
+	// Query Tokenization with explicit [QUES] and [ANS] grounding
+	// We wrap the query so the model knows where the question ends and the answer starts.
+	queryText := intentPrefix + " [QUES] " + pair.Q + " [ANS]"
+	qTokens := cleanTokenize(queryText)
 	qIDs := make([]float32, len(qTokens))
 	for i, t := range qTokens {
 		qIDs[i] = float32(lookupVocab(t, it.vocab))
 	}
 
 	if len(qIDs) == 0 {
-		qIDs = []float32{0}
+		qIDs = []float32{float32(it.unkID)}
 	}
 
 	// Response Tokenization (SentenceVocab)
@@ -4390,7 +4487,7 @@ func PrintImportanceMap(vocab *mainvocab.Vocabulary, tokens []string, layer *moe
 // Cosine Decay with a 10% Warmup phase. This avoids early gradient explosions
 // and ensures smooth convergence towards the end of the session.
 func getLR(currentStep, totalSteps int, baseLR float32) float32 {
-	warmupSteps := totalSteps / 10 // 10% warmup
+	warmupSteps := totalSteps / 100 // 1% warmup for faster takeoff
 	if warmupSteps == 0 {
 		warmupSteps = 1
 	}

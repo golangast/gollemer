@@ -82,12 +82,23 @@ func (r *Runner) Init() {
 
 	r.initModels()
 
-	// Load social model if available
+	// Load social model if available (try checkpoint first, then raw GOB)
 	var socialModel *moe.IntentMoE
 	socialModelPath := filepath.Join(r.ProjectRoot, "data/models/gob_models/moe_social_model.gob")
-	if loaded, err := moe.LoadIntentMoEModelFromGOB(socialModelPath); err == nil {
-		socialModel = loaded
-		log.Printf("✅ Loaded social-only model from %s", socialModelPath)
+	if _, err := os.Stat(socialModelPath); err == nil {
+		// Try as checkpoint first (compressed)
+		if ckpt, err := moe.LoadIntentMoECheckpoint(socialModelPath); err == nil && ckpt.Model != nil {
+			socialModel = ckpt.Model
+			log.Printf("✅ Loaded social model from compressed checkpoint: %s", socialModelPath)
+		} else {
+			// Try as raw GOB model (uncompressed)
+			if loaded, err := moe.LoadIntentMoEModelFromGOB(socialModelPath); err == nil {
+				socialModel = loaded
+				log.Printf("✅ Loaded social-only model from raw GOB: %s", socialModelPath)
+			} else {
+				log.Printf("⚠️  Failed to load social model at %s (invalid format)", socialModelPath)
+			}
+		}
 	} else {
 		log.Printf("⚠️  Social model not found at %s (training with -train-social to create it)", socialModelPath)
 	}
