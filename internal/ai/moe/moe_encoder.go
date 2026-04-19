@@ -25,7 +25,7 @@ type MoEEncoder struct {
 func NewMoEEncoder(inputSize, hiddenSize, numLayers, numExperts int) (*MoEEncoder, error) {
 	// Define expert builder using nn.Linear wrapped in LinearExpert
 	expertBuilder := func(expertIdx int) (Expert, error) {
-		return NewBornExpert(expertIdx, inputSize, hiddenSize, hiddenSize)
+		return NewGoffiExpert(expertIdx, inputSize, hiddenSize, hiddenSize)
 	}
 
 	// Create MoELayer with Top-K=2 (standard for MoE)

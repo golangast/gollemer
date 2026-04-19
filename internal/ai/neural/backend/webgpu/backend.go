@@ -109,7 +109,7 @@ func New() (backend *Backend, err error) {
 		pipelines:   make(map[string]*wgpu.ComputePipeline),
 		adapterInfo: adapterInfo,
 		bufferPool:  NewBufferPool(device),
-		LazyMode:    true, // Default: lazy mode enabled for optimal performance
+		LazyMode:    false, // Forced false due to library mismatch
 	}
 
 	return b, nil
@@ -121,7 +121,7 @@ func New() (backend *Backend, err error) {
 // by eliminating unnecessary GPU→CPU transfers.
 // When disabled, operations immediately transfer results to CPU (slower).
 func (b *Backend) SetLazyMode(enabled bool) {
-	b.LazyMode = enabled
+	b.LazyMode = false // Always false
 }
 
 // queueCommand adds a command buffer to the pending queue for batch submission.

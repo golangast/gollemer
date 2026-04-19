@@ -170,7 +170,9 @@ type Tensor struct {
 	Operation    Operation `gob:"-"` // Exclude Operation from gob serialization
 	IsRouter     bool      // Flag for differential learning rates
 
-	needsSyncHost bool         `gob:"-"`
+	needsSyncHost bool `gob:"-"`
+	gpuData       interface{} `gob:"-"`
+	gpuSync       bool `gob:"-"`
 }
 
 // GobEncode implements the gob.GobEncoder interface.
@@ -289,28 +291,17 @@ func (t *Tensor) Clone() *Tensor {
 	}
 }
 
-// ToGPU is now implemented in gpu_init.go
-
+// ToGPU is now implemented in gpu_init_*.go
 // Release is a no-op in Cgo-free mode.
 func (t *Tensor) Release() {
 }
 
-// SyncToDevice is a no-op in Cgo-free mode.
-func (t *Tensor) SyncToDevice() {
-}
-
-// SyncToHost is a no-op in Cgo-free mode.
+// SyncToHost is now implemented in gpu_init_*.go
 func (t *Tensor) SyncToHost() {
 }
 
-// SetNeedsSyncHost is a no-op in Cgo-free mode.
+// SetNeedsSyncHost is now implemented in gpu_init_*.go
 func (t *Tensor) SetNeedsSyncHost(needs bool) {
-}
-
-// ToCPU is a no-op in Cgo-free mode.
-func (t *Tensor) ToCPU() *Tensor {
-	t.Device = CPU
-	return t
 }
 
 // ZeroGrad resets the gradient of the tensor to zeros.
@@ -413,6 +404,8 @@ func NewRowIterator(rows, cols int) *RowIterator {
 
 // Add performs element-wise addition of two tensors.
 func (t *Tensor) Add(other *Tensor) (*Tensor, error) {
+	t.ToCPU()
+	other.ToCPU()
 	// Check if shapes are compatible for element-wise addition (must be identical for now)
 	if !compareShapes(t.Shape, other.Shape) {
 		return nil, fmt.Errorf("mismatched shapes for Add operation: %v and %v", t.Shape, other.Shape)
@@ -488,16 +481,43 @@ func compareShapes(s1, s2 []int) bool {
 // MatMul performs matrix multiplication with another Tensor.
 // It supports 2D matrix multiplication and batched 4D matrix multiplication (batch, heads, rows, cols).
 func (t *Tensor) MatMul(other *Tensor) (*Tensor, error) {
-	// GPU Dispatch disabled (Cgo-free)
-
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Printf("PANIC in MatMul! t.Shape: %v, other.Shape: %v\n", t.Shape, other.Shape)
-			panic(r) // Re-panic after logging
+	// fmt.Fprintln(os.Stderr, "💓 MatMul Entry")
+	// 🎮 Try direct OpenCL/Goffi Compute via backend (GPU-native)
+	if t.Device == GPU || other.Device == GPU {
+		// If only one is on GPU, synchronize the other one to GPU as well
+		if t.Device != GPU { t.ToGPU() }
+		if other.Device != GPU { other.ToGPU() }
+		
+		if res, err := DispatchGPUMatMul(t, other); err == nil {
+			if res.RequiresGrad {
+				res.Creator = &MatMulOperation{t, other}
+			}
+			return res, nil
 		}
-	}()
+		// Fallback: If GPU dispatch fails, we must sync BOTH to Host before CPU fallbacks
+		t.ToCPU()
+		other.ToCPU()
+	}
 
-	// Case 1: 2D matrix multiplication
+	// Case 0: Goffi-based OpenBLAS Dispatch (No CGO, No Rust)
+	if len(t.Shape) == 2 && len(other.Shape) == 2 && t.Shape[1] == other.Shape[0] {
+		rowsA := t.Shape[0]
+		colsA := t.Shape[1]
+		colsB := other.Shape[1]
+
+		resultData := make([]float32, rowsA*colsB)
+		err := GoffiMatMul(t.Data, other.Data, resultData, rowsA, colsB, colsA)
+		if err == nil {
+			res := NewTensor([]int{rowsA, colsB}, resultData, t.RequiresGrad || other.RequiresGrad)
+			if res.RequiresGrad {
+				res.Creator = &MatMulOperation{t, other}
+			}
+			return res, nil
+		}
+		// Fallback to pure-Go SIMD if goffi fails
+	}
+
+	// Case 1: 2D matrix multiplication (Pure-Go Fallback)
 	if len(t.Shape) == 2 && len(other.Shape) == 2 {
 		if t.Shape[1] != other.Shape[0] {
 			return nil, fmt.Errorf("incompatible shapes for 2D matrix multiplication: %v and %v", t.Shape, other.Shape)
@@ -548,8 +568,7 @@ func (t *Tensor) MatMul(other *Tensor) (*Tensor, error) {
 		resultShape := []int{batchSize, numHeads, resultRows, resultCols}
 
 		totalSlices := batchSize * numHeads
-		// 🚀 Use Parallel Pure-Go SIMD across all CPU cores
-		// This is faster than CGO for the matrix sizes used in this MoE model.
+		// 🚀 Use Parallel Pure-Go Gonum across all CPU cores
 		var wg sync.WaitGroup
 		for s := 0; s < totalSlices; s++ {
 			wg.Add(1)
@@ -592,34 +611,25 @@ func (t *Tensor) MatMul(other *Tensor) (*Tensor, error) {
 		resultShape := []int{batchSize, rowsA, colsB}
 		resultData := make([]float32, batchSize*rowsA*colsB)
 
-		// 🚀 Use Gonum BLAS (blas32) for optimized CPU BatMul
+		// 🚀 Use Parallel Pure-Go Gonum across all CPU cores
+		var wg sync.WaitGroup
 		for b := 0; b < batchSize; b++ {
-			tOffset := b * rowsA * colsA
-			otherOffset := b * colsA * colsB
-			resultOffset := b * rowsA * colsB
+			wg.Add(1)
+			go func(b int) {
+				defer wg.Done()
+				tOffset := b * rowsA * colsA
+				otherOffset := b * colsA * colsB
+				resultOffset := b * rowsA * colsB
 
-			blas32.Gemm(blas.NoTrans, blas.NoTrans, 1,
-				blas32.General{
-					Rows:   rowsA,
-					Cols:   colsA,
-					Stride: colsA,
-					Data:   t.Data[tOffset : tOffset+rowsA*colsA],
-				},
-				blas32.General{
-					Rows:   colsA,
-					Cols:   colsB,
-					Stride: colsB,
-					Data:   other.Data[otherOffset : otherOffset+colsA*colsB],
-				},
-				0,
-				blas32.General{
-					Rows:   rowsA,
-					Cols:   colsB,
-					Stride: colsB,
-					Data:   resultData[resultOffset : resultOffset+rowsA*colsB],
-				},
-			)
+				blas32.Gemm(blas.NoTrans, blas.NoTrans, 1,
+					blas32.General{Rows: rowsA, Cols: colsA, Stride: colsA, Data: t.Data[tOffset : tOffset+rowsA*colsA]},
+					blas32.General{Rows: colsA, Cols: colsB, Stride: colsB, Data: other.Data[otherOffset : otherOffset+colsA*colsB]},
+					0,
+					blas32.General{Rows: rowsA, Cols: colsB, Stride: colsB, Data: resultData[resultOffset : resultOffset+rowsA*colsB]},
+				)
+			}(b)
 		}
+		wg.Wait()
 
 		resultTensor := NewTensor(resultShape, resultData, t.RequiresGrad || other.RequiresGrad)
 		if resultTensor.RequiresGrad {
@@ -961,7 +971,9 @@ func (t *Tensor) Transpose(axis1, axis2 int) (*Tensor, error) {
 				}
 			}
 		}
-		return NewTensor(newShape, newData, false), nil
+		res := NewTensor(newShape, newData, false)
+		if t.Device == GPU { res.ToGPU() }
+		return res, nil
 	}
 
 	// Create strides for original and new shape
@@ -1006,8 +1018,11 @@ func (t *Tensor) Transpose(axis1, axis2 int) (*Tensor, error) {
 		}
 		newData[newFlatIndex] = t.Data[i]
 	}
-
-	return NewTensor(newShape, newData, false), nil
+	res := NewTensor(newShape, newData, false)
+	if t.Device == GPU {
+		res.ToGPU()
+	}
+	return res, nil
 }
 
 func (t *Tensor) AddWithBroadcast(other *Tensor) (*Tensor, error) {
@@ -1403,9 +1418,13 @@ func (t *Tensor) Reshape(newShape []int) (*Tensor, error) {
 	// Create a new tensor with the new shape, sharing the underlying data array.
 	// This is efficient as it avoids copying large amounts of data.
 	resultTensor := &Tensor{
-		Data:         t.Data, // Share the underlying data array
-		Shape:        newShape,
-		RequiresGrad: t.RequiresGrad,
+		Data:          t.Data, // Share the underlying data array
+		Shape:         newShape,
+		RequiresGrad:  t.RequiresGrad,
+		Device:        t.Device,
+		gpuData:       t.gpuData,
+		gpuSync:       t.gpuSync,
+		needsSyncHost: t.needsSyncHost,
 	}
 	if resultTensor.RequiresGrad {
 		resultTensor.Creator = &ReshapeOperation{t, t.Shape}
@@ -1439,6 +1458,7 @@ func (op *ReshapeOperation) Backward(grad *Tensor) error {
 
 // Softmax applies the softmax function along a specified axis.
 func (t *Tensor) Softmax(axis int) (*Tensor, error) {
+	t.ToCPU()
 	if axis < 0 {
 		axis = len(t.Shape) + axis
 	}
@@ -1956,6 +1976,7 @@ func (t *Tensor) Sigmoid() (*Tensor, error) {
 
 // ReLU applies the Rectified Linear Unit function element-wise to the tensor.
 func (t *Tensor) ReLU() (*Tensor, error) {
+	t.ToCPU()
 	resultData := make([]float32, len(t.Data))
 	copy(resultData, t.Data)
 	ReLUVector(resultData)
@@ -2171,6 +2192,7 @@ func (op *MulOperation) Backward(grad *Tensor) error {
 
 // Sum returns the sum of all elements in a tensor along a given axis.
 func (t *Tensor) Sum(axis int) (*Tensor, error) {
+	t.ToCPU()
 	if axis < 0 || axis >= len(t.Shape) {
 		return nil, fmt.Errorf("axis %d out of bounds for tensor with shape %v", axis, t.Shape)
 	}
@@ -2271,6 +2293,7 @@ func (op *SumOperation) Backward(grad *Tensor) error {
 
 // Mean returns the mean of all elements in a tensor along a given axis.
 func (t *Tensor) Mean(axis int) (*Tensor, error) {
+	t.ToCPU()
 	if axis < 0 || axis >= len(t.Shape) {
 		return nil, fmt.Errorf("axis %d out of bounds for tensor with shape %v", axis, t.Shape)
 	}
@@ -2890,6 +2913,7 @@ func (t *Tensor) SampleTopP(p float32) (int, error) {
 
 // L2Norm returns the L2 norm of the tensor's data.
 func (t *Tensor) L2Norm() float32 {
+	t.ToCPU()
 	if t == nil {
 		return 0
 	}

@@ -229,8 +229,9 @@ func (l *Linear) Backward(grad *Tensor) error {
 		if l.Weights.RequiresGrad {
 			dWeights, err := inputTranspose.MatMul(grad)
 			if err != nil {
-				return fmt.Errorf("linear layer backward: failed to calculate dLoss/dWeights (2D): %w", err)
+				return fmt.Errorf("linear backward dWeights matmul failed: %w", err)
 			}
+			dWeights.ToCPU() // Ensure sync for AddAccumulate
 			AddAccumulate(l.Weights.Grad.Data, dWeights.Data)
 		}
 
@@ -241,12 +242,18 @@ func (l *Linear) Backward(grad *Tensor) error {
 		inputDim := l.input.Shape[2]
 		outputDim := l.Weights.Shape[1]
 
-		reshapedInput := NewTensor([]int{batchSize * seqLength, inputDim}, l.input.Data, false)
+		reshapedInput, err := l.input.Reshape([]int{batchSize * seqLength, inputDim})
+		if err != nil {
+			return err
+		}
 		// Safety check: ensure grad.Data has enough elements for the reshaped shape
 		if len(grad.Data) < batchSize*seqLength*outputDim {
 			return fmt.Errorf("linear layer backward (3D): grad data length %d is too small for shape [%d, %d]", len(grad.Data), batchSize*seqLength, outputDim)
 		}
-		reshapedGrad := NewTensor([]int{batchSize * seqLength, outputDim}, grad.Data, false)
+		reshapedGrad, err := grad.Reshape([]int{batchSize * seqLength, outputDim})
+		if err != nil {
+			return err
+		}
 
 		inputTranspose, err = reshapedInput.Transpose(0, 1)
 		if err != nil {
@@ -258,6 +265,7 @@ func (l *Linear) Backward(grad *Tensor) error {
 			if err != nil {
 				return fmt.Errorf("linear layer backward: failed to calculate dLoss/dWeights (3D): %w", err)
 			}
+			dWeights.ToCPU()
 			safeAccumulate(l.Weights.Grad.Data, dWeights.Data)
 		}
 
@@ -267,6 +275,7 @@ func (l *Linear) Backward(grad *Tensor) error {
 
 	// --- Calculate Gradient with respect to Bias (dLoss/dBias) ---
 	if l.Biases != nil && l.Biases.RequiresGrad {
+		grad.ToCPU() // Ensure grad is on CPU for bias accumulation loop
 		outputDim := l.Biases.Shape[0]
 		for i := 0; i < len(grad.Data); i += outputDim {
 			end := i + outputDim
@@ -302,6 +311,7 @@ func (l *Linear) Backward(grad *Tensor) error {
 			if err != nil {
 				return fmt.Errorf("linear layer backward: failed to calculate dLoss/dInput (2D): %w", err)
 			}
+			dInput.ToCPU()
 		case 3:
 			batchSize := grad.Shape[0]
 			seqLength := grad.Shape[1]
@@ -312,18 +322,25 @@ func (l *Linear) Backward(grad *Tensor) error {
 			if len(grad.Data) < batchSize*seqLength*outputDim {
 				return fmt.Errorf("linear layer backward (3D res): grad data length %d is too small for shape [%d, %d]", len(grad.Data), batchSize*seqLength, outputDim)
 			}
-			reshapedGrad := NewTensor([]int{batchSize * seqLength, outputDim}, grad.Data, false)
+			reshapedGrad, err := grad.Reshape([]int{batchSize * seqLength, outputDim})
+			if err != nil {
+				return err
+			}
 
 			dInput2D, err := reshapedGrad.MatMul(weightsTranspose)
 			if err != nil {
 				return fmt.Errorf("linear layer backward: failed to calculate dLoss/dInput (3D): %w", err)
 			}
-			dInput = NewTensor([]int{batchSize, seqLength, inputDim}, dInput2D.Data, false)
+			dInput2D.ToCPU()
+			dInput, err = dInput2D.Reshape([]int{batchSize, seqLength, inputDim})
+			if err != nil {
+				return err
+			}
 
 		default:
 			return fmt.Errorf("linear layer backward only supports 2D or 3D gradient, got %d dimensions", len(grad.Shape))
 		}
-
+		dInput.ToCPU()
 		safeAccumulate(l.input.Grad.Data, dInput.Data)
 	}
 
@@ -384,20 +401,21 @@ func (l *LayerNormalization) ToGPU() {
 	}
 }
 
-// Backward performs the backward pass for layer normalization.
-// grad is the gradient from the output (dLoss/dOutput).
 func (l *LayerNormalization) Backward(grad *Tensor) error {
 	if grad == nil || grad.Data == nil {
-		// No gradient to propagate
 		return nil
 	}
-
 	if l.normalizedInput == nil || l.invStdDev == nil || l.mean == nil {
-		panic("LayerNormalization backward called before forward (intermediate values are nil)")
+		return fmt.Errorf("LayerNormalization backward called before forward")
 	}
-	if l.Gamma == nil || l.Beta == nil {
-		panic("LayerNormalization scale or bias is nil in backward")
-	}
+
+	grad.ToCPU()
+	l.inputTensor.ToCPU()
+	l.normalizedInput.ToCPU()
+	l.invStdDev.ToCPU()
+	l.mean.ToCPU()
+	l.Gamma.ToCPU()
+	l.Beta.ToCPU()
 
 	lastDimSize := l.inputShape[len(l.inputShape)-1]
 	numElementsToNormalize := len(l.normalizedInput.Data) / lastDimSize
@@ -557,6 +575,9 @@ func (l *LayerNormalization) Forward(inputs ...*Tensor) (*Tensor, error) {
 		return nil, fmt.Errorf("LayerNormalization.Forward expects 1 input, got %d", len(inputs))
 	}
 	input := inputs[0]
+	input.ToCPU()
+	l.Gamma.ToCPU()
+	l.Beta.ToCPU()
 	l.inputTensor = input      // Store input for backward pass
 	l.inputShape = input.Shape // Store input shape
 

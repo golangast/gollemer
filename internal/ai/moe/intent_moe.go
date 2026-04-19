@@ -52,6 +52,7 @@ func init() {
 	gob.Register(&MoEStack{})
 	gob.Register(&HybridLLMGNNEncoder{})
 	gob.Register(&nn.LayerNorm{})
+	gob.Register(&GoffiExpert{})
 }
 
 // ClearState clears the intermediate tensors used for backward pass
@@ -114,6 +115,7 @@ func SampleFromLogits(logits *tensor.Tensor, temperature float32, topK int, topP
 	}
 
 	vocabSize := logits.Shape[1]
+	logits.ToCPU()
 	logitsData := logits.Data
 
 	// Apply temperature scaling
@@ -591,7 +593,7 @@ func NewHybridIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, ch
 
 	// 1. Create the inner LLM Encoder (MoE Stack with 4 layers for deeper reasoning)
 	expertBuilder := func(expertIdx int) (Expert, error) {
-		return NewBornExpert(expertIdx, embeddingDim, embeddingDim*4, embeddingDim)
+		return NewGoffiExpert(expertIdx, embeddingDim, embeddingDim*4, embeddingDim)
 	}
 	l0, err := NewMoELayer(embeddingDim, embeddingDim, numExperts, 2, expertBuilder)
 	if err != nil {
@@ -651,7 +653,7 @@ func (m *IntentMoE) NormalizeContextVector(cv *tensor.Tensor) *tensor.Tensor {
 	bSz := contextVector.Shape[0]
 	sLen := contextVector.Shape[1]
 	dim := contextVector.Shape[2]
-	const ctxNormThreshold = 5.0
+	const ctxNormThreshold = 8.0
 	for b := 0; b < bSz; b++ {
 		for s := 0; s < sLen; s++ {
 			offset := (b*sLen + s) * dim
@@ -752,7 +754,7 @@ func (m *IntentMoE) Backward(grads ...*tensor.Tensor) error {
 		// based on the contextVector itself.
 		dim := cvGrad.Shape[len(cvGrad.Shape)-1]
 		numTokens := len(cvGrad.Data) / dim
-		const ctxNormThreshold = 5.0
+		const ctxNormThreshold = 8.0
 		for i := 0; i < numTokens; i++ {
 			offset := i * dim
 			var norm float32
@@ -868,6 +870,7 @@ func (m *IntentMoE) GreedySearchDecodeWithTemp(contextVector *tensor.Tensor, max
 		if err != nil {
 			return nil, fmt.Errorf("decoder step failed: %w", err)
 		}
+		outputLogits.ToCPU()
 
 		hiddenState = newHidden
 		cellState = newCell

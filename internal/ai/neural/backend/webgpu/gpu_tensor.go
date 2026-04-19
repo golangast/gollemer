@@ -154,6 +154,11 @@ func (t *GPUTensor) Shape() tensor.Shape {
 	return t.shape
 }
 
+// Backend returns the WebGPU backend this tensor belongs to.
+func (t *GPUTensor) Backend() *Backend {
+	return t.backend
+}
+
 // DType returns the tensor's data type.
 func (t *GPUTensor) DType() tensor.DataType {
 	return t.dtype

@@ -1,0 +1,34 @@
+2026/04/18 08:32:11 chat.go:1782: 🎭 Starting SOCIAL-ONLY Chat Training (human_chat.txt only)
+2026/04/18 08:32:11 chat.go:1816: 📊 Loaded 1735 social conversation pairs from human_chat.txt
+2026/04/18 08:32:11 vocab.go:54: NewVocabulary: Initial size after adding <pad> and UNK: 2
+2026/04/18 08:32:11 chat.go:1843: 📐 Pre-computed final vocab size: 4080
+2026/04/18 08:32:11 chat.go:1851: 📥 Resuming training: Loading existing social model from data/models/gob_models/moe_social_model.gob
+2026/04/18 08:32:12 chat.go:1897: 📂 Data: 1561 training, 174 validation
+2026/04/18 08:32:12 chat.go:1935: 🔤 Using existing model vocabulary: 4080 tokens
+2026/04/18 08:32:12 chat.go:1944: 🔤 Vocabulary State: 4080 tokens (BOS=2, EOS=3, PAD=0)
+2026/04/18 08:32:12 chat.go:1955: 🎭 Training social model for 60 epochs at peak LR=0.000010
+2026/04/18 08:32:12 mlm_training.go:824: 📝 Extracted 2836 unique sentences for MLM pre-training
+2026/04/18 08:32:12 mlm_training.go:362: 🎓 ═══════════════════════════════════════════════
+2026/04/18 08:32:12 mlm_training.go:363: 🎓  PHASE 0: Masked Language Model Pre-Training
+2026/04/18 08:32:12 mlm_training.go:364: 🎓  Teaching grammar through word prediction...
+2026/04/18 08:32:12 mlm_training.go:365: 🎓 ═══════════════════════════════════════════════
+2026/04/18 08:32:12 mlm_training.go:420: 🎓 MLM: Starting epoch 1 with 2836 sentences (Batch Size: 64)
+2026/04/18 08:32:12 mlm_training.go:432: 🚀 MLM: First batch loaded (SeqLen: 32). Starting forward pass...
+🔍 Goffi: Initializing OpenBLAS...
+✅ Goffi: Loaded OpenBLAS from libopenblas.so
+✅ Goffi: Found cblas_sgemm symbol.
+✅ Goffi: SGEMM Call Interface prepared.
+✅ Goffi: Test MatMul Successful (1*5+2*7=19)
+⚠️ GoffiMatMul Warning: Result is exactly zero despite non-zero inputs (M=2048, N=256, K=4080, SampleA=0.0000, SampleB=-0.1438)
+⚠️ GoffiMatMul Warning: Result is exactly zero despite non-zero inputs (M=2048, N=256, K=256, SampleA=0.0000, SampleB=-0.0523)
+2026/04/18 08:32:24 mlm_training.go:567: ✅ MLM: First batch update complete. Convergence started.
+⚠️ GoffiMatMul Warning: Result is exactly zero despite non-zero inputs (M=2048, N=256, K=4080, SampleA=0.0000, SampleB=-0.1388)
+⚠️ GoffiMatMul Warning: Result is exactly zero despite non-zero inputs (M=2048, N=256, K=256, SampleA=0.0000, SampleB=-0.0573)
+⚠️ GoffiMatMul Warning: Result is exactly zero despite non-zero inputs (M=2048, N=256, K=4080, SampleA=0.0000, SampleB=-0.1388)
+⚠️ GoffiMatMul Warning: Result is exactly zero despite non-zero inputs (M=2048, N=256, K=256, SampleA=0.0000, SampleB=-0.0573)
+⚠️ GoffiMatMul Warning: Result is exactly zero despite non-zero inputs (M=2048, N=256, K=4080, SampleA=0.0000, SampleB=-0.1388)
+⚠️ GoffiMatMul Warning: Result is exactly zero despite non-zero inputs (M=2048, N=256, K=256, SampleA=0.0000, SampleB=-0.0573)
+⚠️ GoffiMatMul Warning: Result is exactly zero despite non-zero inputs (M=2048, N=256, K=4080, SampleA=0.0000, SampleB=-0.1388)
+⚠️ GoffiMatMul Warning: Result is exactly zero despite non-zero inputs (M=2048, N=256, K=256, SampleA=0.0000, SampleB=-0.0574)
+⚠️ GoffiMatMul Warning: Result is exactly zero despite non-zero inputs (M=1920, N=256, K=4080, SampleA=0.0000, SampleB=-0.1387)
+⚠️ GoffiMatMul Warning: Result is exactly zero despite non-zero inputs (M=1920, N=256, K=256, SampleA=0.0000, SampleB=-0.0574)

@@ -5,6 +5,7 @@ package webgpu
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math"
 	"unsafe"
 
@@ -22,18 +23,8 @@ import (
 // - Data stays on GPU until explicitly needed.
 // - Chained operations can be batched.
 func (b *Backend) createLazyResult(buffer *wgpu.Buffer, bufferSize uint64, shape tensor.Shape, dtype tensor.DataType) (*tensor.RawTensor, error) {
-	// Create lazy GPU data with backend reference for later readBuffer()
-	gpuData := tensor.NewLazyGPUData(unsafe.Pointer(buffer), bufferSize, b) //nolint:gosec // G103: Required for GPU buffer tracking
-
-	// Create lazy tensor - CPU buffer allocated but not filled
-	result, err := tensor.NewLazyRaw(shape, dtype, tensor.WebGPU, gpuData)
-	if err != nil {
-		// If tensor creation fails, release the GPU buffer
-		buffer.Release()
-		return nil, err
-	}
-
-	return result, nil
+	// Temporarily disabled due to missing born-ml/tensor features
+	return nil, fmt.Errorf("lazy mode currently unavailable")
 }
 
 // runBinaryOpLazy executes a binary element-wise operation and returns a LAZY tensor.
