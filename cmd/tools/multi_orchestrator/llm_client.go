@@ -45,7 +45,7 @@ func NewLLMClient(vocabPath, outputVocabPath, modelPath string) (*LLMClient, err
 	}
 
 	// Load the trained MoE model
-	model, err := moe.LoadIntentMoEModelFromGOB(modelPath)
+	model, err := moe.LoadIntentMoEModelWithFallback(modelPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load MoE model: %w", err)
 	}

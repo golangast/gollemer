@@ -11,6 +11,7 @@ import (
 	"unicode"
 
 	"github.com/golangast/gollemer/internal/ai/tagger/tag"
+	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
 )
 
 var absoluteLastDirConfigPath string // Global variable for the absolute path to last_dir.txt
@@ -37,7 +38,7 @@ func FindProjectRoot() (string, error) {
 			// Reached the filesystem root without finding go.mod
 			return "", fmt.Errorf("go.mod not found in current directory or any parent directories")
 		}
-	        currentDir = parentDir
+		currentDir = parentDir
 	}
 }
 
@@ -186,7 +187,7 @@ func findName(taggedData tag.Tag, kb *KnowledgeBase) string {
 		"folder": true, "directory": true, "database": true, "structure": true, "component": true,
 	}
 
-	// Context-aware fallback: If there is exactly one word and it's not a known command/object/stopword, 
+	// Context-aware fallback: If there is exactly one word and it's not a known command/object/stopword,
 	// it's almost certainly the 'name' or target we were asking for.
 	if len(taggedData.Tokens) == 1 {
 		t := strings.ToLower(taggedData.Tokens[0])
@@ -363,9 +364,9 @@ var intentIcons = map[string]string{
 // low-confidence token soup an under-trained seq2seq model produces
 // (e.g. ". to . type to . deglaze to the to . boolean").
 // Rules:
-//   1. First token is a punctuation-only string (`.`, `-`,`,` …)
-//   2. More than 40% of tokens are stopwords or single-char punctuation
-//   3. Average word length falls below 2.5 characters
+//  1. First token is a punctuation-only string (`.`, `-`,`,` …)
+//  2. More than 40% of tokens are stopwords or single-char punctuation
+//  3. Average word length falls below 2.5 characters
 func isGarbageOutput(response string) bool {
 	if response == "" {
 		return false
@@ -375,17 +376,24 @@ func isGarbageOutput(response string) bool {
 		return false
 	}
 
-	// Rule 1: leading punctuation
-	first := tokens[0]
-	if len(first) == 1 && !unicode.IsLetter(rune(first[0])) && !unicode.IsDigit(rune(first[0])) {
+	// Rule 1: leading punctuation - only reject if the WHOLE response is just punctuation
+	isAllPunct := true
+	for _, t := range tokens {
+		if len(t) > 1 || unicode.IsLetter(rune(t[0])) || unicode.IsDigit(rune(t[0])) {
+			isAllPunct = false
+			break
+		}
+	}
+	if isAllPunct {
 		return true
 	}
 
-	// Common high-frequency garbage tokens the decoder emits when untrained
+	// Common high-frequency garbage tokens - expanded to be more representative
 	garbageSet := map[string]bool{
 		".": true, "-": true, ",": true, "to": true, "the": true,
-		"a": true, "of": true, "and": true, "in": true, "is": true,
+		"a": true, "an": true, "of": true, "and": true, "is": true,
 		"it": true, "i": true, "you": true, "that": true, "be": true,
+		"in": true, "on": true, "at": true, "for": true, "with": true,
 	}
 
 	garbageCount := 0
@@ -397,14 +405,88 @@ func isGarbageOutput(response string) bool {
 		}
 	}
 
-	// Rule 2: >40% garbage tokens
-	if float64(garbageCount)/float64(len(tokens)) > 0.40 {
+	// Rule 2: >70% garbage tokens (loosen from 40%)
+	if float64(garbageCount)/float64(len(tokens)) > 0.70 {
 		return true
 	}
 
 	// Rule 3: very short average word length
 	avgLen := float64(totalLen) / float64(len(tokens))
-	if avgLen < 2.5 {
+	if avgLen < 1.5 { // Loosen from 2.5
+		return true
+	}
+
+	return false
+}
+
+// isLowQualitySocialResponse catches high-entropy "bag of words" outputs that
+// can pass isGarbageOutput but are still unusable in conversation.
+func isLowQualitySocialResponse(response string) bool {
+	if response == "" {
+		return false
+	}
+
+	rawTokens := strings.Fields(strings.ToLower(response))
+	if len(rawTokens) == 0 {
+		return false
+	}
+
+	pronouns := map[string]bool{
+		"i": true, "i'm": true, "im": true, "me": true, "my": true, "mine": true,
+		"you": true, "your": true, "yours": true, "we": true, "our": true, "ours": true,
+		"it": true, "its": true, "they": true, "them": true, "their": true,
+	}
+	functionWords := map[string]bool{
+		"a": true, "an": true, "the": true, "and": true, "or": true, "but": true,
+		"to": true, "of": true, "in": true, "on": true, "for": true, "with": true,
+		"is": true, "are": true, "am": true, "was": true, "were": true, "be": true,
+		"that": true, "this": true, "these": true, "those": true, "as": true, "at": true,
+	}
+
+	trimmedTokens := make([]string, 0, len(rawTokens))
+	unique := make(map[string]bool)
+	pronounCount := 0
+	functionCount := 0
+
+	for _, t := range rawTokens {
+		tt := strings.Trim(t, ".,!?;:\"'`()[]{}")
+		if tt == "" {
+			continue
+		}
+		trimmedTokens = append(trimmedTokens, tt)
+		unique[tt] = true
+		if pronouns[tt] {
+			pronounCount++
+		}
+		if functionWords[tt] {
+			functionCount++
+		}
+	}
+
+	if len(trimmedTokens) == 0 {
+		return true
+	}
+
+	// Check for repetitive tokens (stuck decoder)
+	for i := 0; i < len(trimmedTokens)-2; i++ {
+		if trimmedTokens[i] == trimmedTokens[i+1] && trimmedTokens[i+1] == trimmedTokens[i+2] {
+			return true // Triple repetition
+		}
+	}
+
+	tokenCount := len(trimmedTokens)
+	uniqueRatio := float64(len(unique)) / float64(tokenCount)
+	functionRatio := float64(functionCount) / float64(tokenCount)
+	punctuationCount := strings.Count(response, ".") + strings.Count(response, "!") + strings.Count(response, "?")
+
+	// Long, mostly-unique outputs with little linguistic glue are typically token soup.
+	// Tightened thresholds: 0.22 function ratio is a healthy minimum for social English.
+	if tokenCount >= 12 && uniqueRatio > 0.80 && functionRatio < 0.22 {
+		return true
+	}
+
+	// Long social responses should usually contain at least one pronoun and some sentence punctuation.
+	if tokenCount >= 15 && pronounCount == 0 && punctuationCount == 0 {
 		return true
 	}
 
@@ -421,3 +503,32 @@ func isCreatingCommand(input string) bool {
 	}
 	return false
 }
+
+// lookupVocab tries to find a token ID in the given vocabulary with fallbacks.
+func lookupVocab(token string, vocab *mainvocab.Vocabulary) int {
+	token = strings.ToLower(strings.TrimSpace(token))
+	id := vocab.GetTokenID(token)
+	
+	// If it's a real token (not UNK and not PAD unless specifically requested)
+	if id > 1 || (id == 0 && token == "<pad>") {
+		return id
+	}
+
+	// Try stripping punctuation
+	stripped := strings.Trim(token, ".,!?;:'\"")
+	if stripped != "" && stripped != token {
+		sid := vocab.GetTokenID(stripped)
+		if sid > 1 {
+			return sid
+		}
+	}
+
+	// Last resort: return UNK
+	if id == 1 && len(token) > 3 {
+		// Log rare words that trigger UNK for debugging
+		// log.Printf("🔍 [Vocab] Token '%s' mapped to UNK", token)
+	}
+	return id
+}
+
+

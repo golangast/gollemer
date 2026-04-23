@@ -140,3 +140,6 @@ func (e *SimpleRNNEncoder) SyncParameters() error {
 	// SimpleRNNEncoder currently doesn't use GPU synchronization shadows
 	return nil
 }
+
+func (e *SimpleRNNEncoder) RepairArchitecture() {
+}

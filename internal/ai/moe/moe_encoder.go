@@ -250,3 +250,9 @@ func (l *LinearExpert) Resize(newOutputDim int) {
 	}
 	l.Linear = newLinear
 }
+
+func (m *MoEEncoder) RepairArchitecture() {
+	if m.Layer != nil {
+		m.Layer.RepairArchitecture()
+	}
+}

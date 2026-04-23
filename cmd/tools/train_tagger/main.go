@@ -160,25 +160,40 @@ func trainTaggerBatch(model *moe.IntentTagger, optimizer Optimizer, batch Tagged
 
 	// Calculate tag loss
 	var tagLoss float32 = 0.0
-	tagGrads := make([]*tensor.Tensor, maxSequenceLength)
+	allTagGrads := make([]float32, batchSize*maxSequenceLength*tagVocab.Size())
+	
 	for t := range maxSequenceLength {
 		targets := make([]int, batchSize)
 		for i := range batchSize {
 			targets[i] = targetTagIDsBatch[i*maxSequenceLength+t]
 		}
-		loss, grad := tensor.CrossEntropyLoss(tagLogits[t], targets, tagVocab.PaddingTokenID, 0.0)
+		
+		// Slice the 3D tensor to get [batchSize, tagVocabSize] for timestep t
+		stepLogits, err := tagLogits.Slice(1, t, t+1)
+		if err != nil {
+			return 0, fmt.Errorf("failed to slice tag logits: %w", err)
+		}
+		// Reshape to 2D
+		stepLogits.Reshape([]int{batchSize, tagVocab.Size()})
+
+		loss, grad := tensor.CrossEntropyLoss(stepLogits, targets, tagVocab.PaddingTokenID, 0.0)
 		tagLoss += loss
-		tagGrads[t] = grad
+		
+		// Copy gradients into the flat buffer for the 3D gradient tensor [batchSize, maxSequenceLength, tagVocabSize]
+		vocabSize := tagVocab.Size()
+		for b := 0; b < batchSize; b++ {
+			for v := 0; v < vocabSize; v++ {
+				destIdx := b*(maxSequenceLength*vocabSize) + t*vocabSize + v
+				srcIdx := b*vocabSize + v
+				allTagGrads[destIdx] = grad.Data[srcIdx]
+			}
+		}
 	}
 
 	totalLoss := intentLoss + tagLoss
 
 	// Backward pass
-	// Combine tagGrads into a single tensor for the TagHead.Backward
-	tagGradsTensor, err := tensor.Concat(tagGrads, 0) // Concatenate along batch dimension
-	if err != nil {
-		return 0, fmt.Errorf("failed to stack tag gradients: %w", err)
-	}
+	tagGradsTensor := tensor.NewTensor([]int{batchSize, maxSequenceLength, tagVocab.Size()}, allTagGrads, false)
 
 	if err := model.Backward(intentGrad, tagGradsTensor); err != nil {
 		return 0, fmt.Errorf("model backward pass failed: %w", err)

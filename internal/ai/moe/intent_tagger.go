@@ -49,7 +49,7 @@ func NewIntentTagger(vocabSize, embeddingDim, numExperts, intentVocabSize, tagVo
 }
 
 // Forward performs the forward pass of the IntentTagger model.
-func (m *IntentTagger) Forward(inputs ...*tensor.Tensor) (*tensor.Tensor, []*tensor.Tensor, error) {
+func (m *IntentTagger) Forward(inputs ...*tensor.Tensor) (*tensor.Tensor, *tensor.Tensor, error) {
 	if len(inputs) != 1 {
 		return nil, nil, fmt.Errorf("IntentTagger.Forward expects 1 input (query token IDs), got %d", len(inputs))
 	}
@@ -79,27 +79,10 @@ func (m *IntentTagger) Forward(inputs ...*tensor.Tensor) (*tensor.Tensor, []*ten
 		return nil, nil, fmt.Errorf("intent head forward failed: %w", err)
 	}
 
-	// Tag head - apply to each token in the sequence
-	batchSize := encodedSequence.Shape[0]
-	seqLength := encodedSequence.Shape[1]
-	hiddenSize := encodedSequence.Shape[2]
-
-	tagLogits := make([]*tensor.Tensor, seqLength)
-	for t := range seqLength {
-		// Get the output for the current time step
-		timeStepOutput, err := encodedSequence.Slice(1, t, t+1)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to slice encoded sequence: %w", err)
-		}
-		// Reshape to (batchSize, hiddenSize)
-		timeStepOutput.Reshape([]int{batchSize, hiddenSize})
-
-		// Pass through the tag head
-		tagLogit, err := m.TagHead.Forward(timeStepOutput)
-		if err != nil {
-			return nil, nil, fmt.Errorf("tag head forward failed for time step %d: %w", t, err)
-		}
-		tagLogits[t] = tagLogit
+	// Tag head - vectorized apply to all tokens in the sequence
+	tagLogits, err := m.TagHead.Forward(encodedSequence)
+	if err != nil {
+		return nil, nil, fmt.Errorf("tag head forward failed: %w", err)
 	}
 
 	return intentLogits, tagLogits, nil

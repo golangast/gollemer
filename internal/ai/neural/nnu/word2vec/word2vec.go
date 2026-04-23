@@ -14,6 +14,7 @@ import (
 	// Package word2vec implements a basic Word2Vec model for creating word embeddings.
 
 	"github.com/golangast/gollemer/internal/ai/neural/nn/g"
+	"github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
 )
 
 const (
@@ -65,6 +66,19 @@ type SimpleWord2Vec struct {
 	// IndexToWord maps an index back to its corresponding word.
 	IndexToWord map[int]string
 }
+
+// ToVocabulary converts the Word2Vec vocabulary into a standard Vocabulary instance.
+func (sw2v *SimpleWord2Vec) ToVocabulary() *vocab.Vocabulary {
+	v := vocab.NewVocabulary()
+	// Add words from W2V to ensures IDs match
+	for i := 0; i < sw2v.VocabSize; i++ {
+		if word, ok := sw2v.IndexToWord[i]; ok {
+			v.AddToken(word)
+		}
+	}
+	return v
+}
+
 
 // SyncF32 populates WordVectorsF32 from WordVectors.
 func (sw2v *SimpleWord2Vec) SyncF32() {

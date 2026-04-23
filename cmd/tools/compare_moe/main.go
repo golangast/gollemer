@@ -19,11 +19,11 @@ func main() {
 		return
 	}
 
-	modelA, err := moe.LoadIntentMoEModelFromGOB(*pathA)
+	modelA, err := moe.LoadIntentMoEModelWithFallback(*pathA)
 	if err != nil {
 		log.Fatalf("Failed to load model A: %v", err)
 	}
-	modelB, err := moe.LoadIntentMoEModelFromGOB(*pathB)
+	modelB, err := moe.LoadIntentMoEModelWithFallback(*pathB)
 	if err != nil {
 		log.Fatalf("Failed to load model B: %v", err)
 	}

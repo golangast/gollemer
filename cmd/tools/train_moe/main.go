@@ -26,10 +26,11 @@ import (
 	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
 	"github.com/golangast/gollemer/internal/ai/neural/nnu/word2vec"
 	"github.com/golangast/gollemer/internal/ai/neural/semantic"
-	. "github.com/golangast/gollemer/internal/ai/neural/tensor"
 	"github.com/golangast/gollemer/internal/ai/neural/tokenizer"
 	"github.com/golangast/gollemer/internal/ai/tagger/tag"
 	"github.com/golangast/gollemer/internal/ai/training/chat"
+
+	. "github.com/golangast/gollemer/internal/ai/neural/tensor"
 )
 
 func init() {
@@ -703,9 +704,23 @@ func trainIntentMoEBatch(intentMoEModel *moe.IntentMoE, optimizer nn.Optimizer, 
 	inputTensor := NewTensor([]int{batchSize, maxSequenceLength}, inputIDsBatch, false)
 	semanticOutputTensor := NewTensor([]int{batchSize, maxSequenceLength}, semanticOutputIDsBatch, false)
 
+	// Create Input Mask: 1.0 for real tokens, 0.0 for padding
+	// Reshape for attention compatibility: [Batch, 1, 1, SeqLen]
+	inputMaskData := make([]float32, batchSize*maxSequenceLength)
+	padID := float32(0) // Default pad ID, should ideally come from vocab
+	for i, id := range inputIDsBatch {
+		if id != padID {
+			inputMaskData[i] = 1.0
+		} else {
+			inputMaskData[i] = 0.0
+		}
+	}
+	inputMask := NewTensor([]int{batchSize, 1, 1, maxSequenceLength}, inputMaskData, false)
+
 	if useGPU {
 		inputTensor.ToGPU()
 		semanticOutputTensor.ToGPU()
+		inputMask.ToGPU()
 	}
 
 	prepTime := time.Since(start)
@@ -715,9 +730,8 @@ func trainIntentMoEBatch(intentMoEModel *moe.IntentMoE, optimizer nn.Optimizer, 
 	// Formula: min(0.5, (epoch + 1) / (totalEpochs * 2)) - Faster increase to force model recovery
 	scheduledSamplingProb := float32(math.Min(0.5, float64(epoch+1)/float64(totalEpochs*2)))
 
-	// Forward pass through the IntentMoE model with scheduled sampling
-	// fmt.Println("DEBUG: Starting Forward Pass...")
-	semanticOutputLogits, _, err := intentMoEModel.Forward(scheduledSamplingProb, inputTensor, semanticOutputTensor)
+	// Forward pass through the IntentMoE model with scheduled sampling and MASK
+	semanticOutputLogits, _, err := intentMoEModel.Forward(scheduledSamplingProb, inputTensor, semanticOutputTensor, inputMask)
 	if err != nil {
 		return 0, fmt.Errorf("IntentMoE model forward pass failed: %w", err)
 	}
@@ -948,7 +962,7 @@ func main() {
 	// (12 GB was too close to physical RAM ceiling on 16GB systems with a browser open.)
 	debug.SetMemoryLimit(10 * 1024 * 1024 * 1024)
 
-	const semanticTrainingDataPath = "./data/training/trainingdata/semantic_output_data_flat.json"
+	const semanticTrainingDataPath = "./data/training/tiny_chat.json"
 	const word2vecModelPath = "data/models/gob_models/word2vec_model.gob"
 
 	// Seed random number generator
@@ -969,10 +983,11 @@ func main() {
 	maxGradNorm := flag.Float64("max_grad_norm", 1.0, "Maximum gradient norm")
 	overfit := flag.Bool("overfit", false, "Enable overfit mode for debugging")
 	gpu := flag.Bool("gpu", false, "Enable GPU acceleration")
-	flagBatchSize := flag.Int("batch-size", 4, "Batch size per step (default 4 for 8GB GPU RAM/robust CPU limits)")
-	flagAccSteps := flag.Int("acc-steps", 16, "Gradient accumulation steps (default 16, effective batch = batch*acc)")
+	flagBatchSize := flag.Int("batch-size", 4, "Batch size per step (default 4)")
+	flagAccSteps := flag.Int("acc-steps", 16, "Gradient accumulation steps (default 16)")
 	trainSocial := flag.Bool("train-social", false, "Train ONLY on human_chat.txt for pure social conversations")
-	flagNumExperts := flag.Int("num-experts", 8, "Number of experts in MoE layer (default 8, increase for GPU saturation)")
+	flagNumExperts := flag.Int("num-experts", 8, "Number of experts in MoE layer (default 8)")
+	sentencesFile := flag.String("sentences", "", "Path to custom sentences JSON for targeted training")
 
 	flag.Parse()
 
@@ -987,12 +1002,12 @@ func main() {
 	}
 
 	if *trainSocial {
-		chat.TrainSocialChat(".", *overfit, float32(*flagLR), float32(*weightDecay), *autoHealFlag, float32(*maxGradNorm), *gpu, *flagBatchSize, *flagAccSteps)
+		chat.TrainSocialChat(".", *sentencesFile, *overfit, float32(*flagLR), float32(*weightDecay), *autoHealFlag, float32(*maxGradNorm), *gpu, *flagBatchSize, *flagAccSteps)
 		return
 	}
 
 	if *trainChat {
-		chat.TrainChat(".", *rebalance, *overfit, float32(*flagLR), float32(*weightDecay), *autoHealFlag, float32(*maxGradNorm), *gpu, *flagBatchSize, *flagAccSteps)
+		chat.TrainChat(".", *sentencesFile, *rebalance, *overfit, float32(*flagLR), float32(*weightDecay), *autoHealFlag, float32(*maxGradNorm), *gpu, *flagBatchSize, *flagAccSteps)
 		return
 	}
 
@@ -1060,54 +1075,16 @@ func main() {
 	}
 	log.Printf("Pruned %d low-frequency 'garbage' tokens missing from Word2Vec.", missCount)
 
-	// Balance data: Oversample semantic data to match WikiQA scale
-	log.Println("Balancing dataset (Oversampling semantic data)...")
+	// Data balancing
+	log.Println("Balancing dataset...")
 	originalSemantic := *semanticTrainingData
-	// Reduced oversampling from 6x to 3x to mitigate overfitting
-	for i := 0; i < 1; i++ { // 2x total
+	for i := 0; i < 5; i++ { // 6x total
 		*semanticTrainingData = append(*semanticTrainingData, originalSemantic...)
 	}
 	log.Printf("Semantic training data size after balancing: %d", len(*semanticTrainingData))
 
-	// Load WikiQA training data if available
-	const wikiQATrainingDataPath = "./data/training/trainingdata/generated_wikiqa_intents.json"
-	if _, err := os.Stat(wikiQATrainingDataPath); err == nil {
-		wikiQATrainingData, err := LoadIntentTrainingData(wikiQATrainingDataPath)
-		if err == nil {
-			*semanticTrainingData = append(*semanticTrainingData, *wikiQATrainingData...)
-			log.Printf("Merged %d WikiQA examples. Total: %d", len(*wikiQATrainingData), len(*semanticTrainingData))
-		}
-	}
-
-	// Load Q&A training data if available
-	const qaTrainingDataPath = "./data/training/trainingdata/qa_semantic_output.json"
-	if _, err := os.Stat(qaTrainingDataPath); err == nil {
-		qaTrainingData, err := LoadIntentTrainingData(qaTrainingDataPath)
-		if err == nil {
-			*semanticTrainingData = append(*semanticTrainingData, *qaTrainingData...)
-			log.Printf("Merged %d Q&A examples. Total: %d", len(*qaTrainingData), len(*semanticTrainingData))
-		}
-	}
-
-	// Load Conversational training data
-	const conversationalDataPath = "./data/training/trainingdata/conversational_intents.json"
-	if _, err := os.Stat(conversationalDataPath); err == nil {
-		convData, err := LoadIntentTrainingData(conversationalDataPath)
-		if err == nil {
-			*semanticTrainingData = append(*semanticTrainingData, *convData...)
-			log.Printf("Merged %d Conversational examples. Total: %d", len(*convData), len(*semanticTrainingData))
-		}
-	}
-
-	// Load Help training data
-	const helpDataPath = "./data/training/trainingdata/help_intents.json"
-	if _, err := os.Stat(helpDataPath); err == nil {
-		helpData, err := LoadIntentTrainingData(helpDataPath)
-		if err == nil {
-			*semanticTrainingData = append(*semanticTrainingData, *helpData...)
-			log.Printf("Merged %d Help examples. Total: %d", len(*helpData), len(*semanticTrainingData))
-		}
-	}
+	// 🧹 OPERATION CLEAN SLATE: Skipping all external data sources (WikiQA, Help, etc.)
+	log.Println("🧹 OPERATION CLEAN SLATE: Using only user-specified tiny datasets.")
 
 	// Try to load other vocabularies first
 	semanticOutputVocabulary, err := mainvocab.LoadVocabulary(semanticOutputVocabularySavePath)
@@ -1147,7 +1124,7 @@ func main() {
 	// Try to load existing model first
 	if _, err := os.Stat(modelSavePath); err == nil {
 		log.Printf("Loading existing IntentMoE model from %s...", modelSavePath)
-		intentMoEModel, err = moe.LoadIntentMoEModelFromGOB(modelSavePath)
+		intentMoEModel, err = moe.LoadIntentMoEModelWithFallback(modelSavePath)
 		if err != nil {
 			log.Printf("Failed to load existing model: %v. Creating new one.", err)
 			intentMoEModel = nil
@@ -1354,6 +1331,27 @@ func main() {
 		log.Fatalf("Failed to save semantic output vocabulary: %v", err)
 	}
 	log.Printf("[✓] Vocabularies saved.")
+
+	// --- Automated Phase 2: Conversational Finetuning ---
+	// If we are not in interactive mode, automatically transition to chat training
+	// to ensure the model isn't just a classifier but also a coherent conversationalist.
+	if !*runLLM && !*trainChat && !*trainSocial {
+		log.Println("\n🏁 Phase 1 (Intent & MLM) Complete. Transitioning to Phase 2 (Conversational Finetuning)...")
+		log.Println("💡 This adds linguistic coherence to the model so it doesn't generate word salad.")
+		chat.TrainChat(
+			".",
+			*sentencesFile,
+			*rebalance,
+			*overfit,
+			float32(*flagLR),
+			float32(*weightDecay),
+			*autoHealFlag,
+			float32(*maxGradNorm),
+			*gpu,
+			*flagBatchSize,
+			*flagAccSteps,
+		)
+	}
 }
 
 // saveCheckpoint saves the model state and metadata to a Checkpoint file.

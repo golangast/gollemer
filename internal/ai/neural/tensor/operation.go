@@ -140,6 +140,15 @@ func CrossEntropyLoss(logits *Tensor, targetIDs []int, padID int, labelSmoothing
 					localActive++
 
 					baseIndex := i * numClasses
+					// Calculate row entropy for entropy maximization penalty
+					var rowEntropy float32
+					for j := 0; j < numClasses; j++ {
+						p := probs.Data[baseIndex+j]
+						if p > 1e-12 {
+							rowEntropy -= p * float32(math.Log(float64(p)))
+						}
+					}
+
 					for j := 0; j < numClasses; j++ {
 						p := probs.Data[baseIndex+j]
 						var t float32
@@ -151,7 +160,18 @@ func CrossEntropyLoss(logits *Tensor, targetIDs []int, padID int, labelSmoothing
 							t = smoothValue
 						}
 						localLoss -= float64(t) * math.Log(float64(p+epsilon))
-						grad.Data[baseIndex+j] = p - t
+						
+						// Basic CE gradient
+						g := p - t
+						
+						// Entropy maximization (negative of entropy gradient to maximize H)
+						// This helps break word salad loops in under-trained models.
+						const entropyWeight = float32(0.01)
+						if p > 1e-12 {
+							g -= entropyWeight * p * (rowEntropy + float32(math.Log(float64(p))))
+						}
+						
+						grad.Data[baseIndex+j] = g
 					}
 				}
 				losses[workerID] = localLoss

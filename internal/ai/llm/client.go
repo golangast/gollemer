@@ -266,8 +266,10 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 		response := c.GenerateSocialResponse(input)
 		if response != "" {
 			c.lastMoEPrediction = response
+			log.Printf("🧠 Neural Social Match: Using weights from moe_social_model.gob")
+			return "social_chat", 0.95
 		}
-		return "social_chat", 0.95
+		log.Printf("⚖️  Quality Gate: Social model output was too high-entropy (word salad); falling back to retrieval.")
 	}
 
 	// --- 0. Instant Heuristics for Dynamic Queries ---
@@ -315,11 +317,12 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 	var neuralScore float64
 
 	if c.Model != nil && c.W2V != nil {
-		cleanWords := cleanTokenize(lowerInput)
+		formattedInput := fmt.Sprintf("[Intent: social] [QUES] %s [ANS]", lowerInput)
+		cleanWords := cleanTokenize(formattedInput)
 		var tokenIDs []int
 		for _, w := range cleanWords {
 			if c.Model.SentenceVocab != nil {
-				tokenIDs = append(tokenIDs, c.Model.SentenceVocab.GetTokenID(w))
+				tokenIDs = append(tokenIDs, lookupVocab(w, c.Model.SentenceVocab))
 			} else if id, ok := c.W2V.Vocabulary[w]; ok {
 				tokenIDs = append(tokenIDs, id)
 			}
@@ -331,47 +334,41 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 				inputTensor.Data[i] = float32(id)
 			}
 
-			embeddings, err := c.Model.Embedding.Forward(inputTensor)
+			contextVector, err := c.Model.EncoderForward(inputTensor, nil)
 			if err == nil {
-				contextVector, err := c.Model.Encoder.Forward(embeddings)
-				if err == nil {
-					contextVector = c.Model.NormalizeContextVector(contextVector)
-					posTags := postagger.TagTokens(cleanWords)
-					taggedData := nertagger.Nertagger(tag.Tag{Tokens: cleanWords, PosTag: posTags})
+				contextVector = c.Model.NormalizeContextVector(contextVector)
+				posTags := postagger.TagTokens(cleanWords)
+				taggedData := nertagger.Nertagger(tag.Tag{Tokens: cleanWords, PosTag: posTags})
 
-					if c.Model.SentenceVocab != nil {
-						outputIDs, err := c.Model.GreedySearchDecodeWithTemp(
-							contextVector, 20,
-							c.Model.SentenceVocab.BosID, c.Model.SentenceVocab.EosID,
-							0.4, 1.2, 0.3, 50, taggedData,
-						)
-						if err == nil && len(outputIDs) > 0 {
-							var decodedWords []string
-							for _, id := range outputIDs {
-								w := c.Model.SentenceVocab.GetWord(id)
-								if w != "</s>" && w != "<s>" && w != "<pad>" && w != "UNK" && w != "" {
-									decodedWords = append(decodedWords, w)
-								}
+				if c.Model.SentenceVocab != nil {
+					outputIDs, err := c.Model.GreedySearchDecodeWithTemp(
+						contextVector, 20,
+						c.Model.SentenceVocab.BosID, c.Model.SentenceVocab.EosID,
+						0.4, 1.2, 0.3, 50, taggedData,
+					)
+					if err == nil && len(outputIDs) > 0 {
+						var decodedWords []string
+						for _, id := range outputIDs {
+							w := c.Model.SentenceVocab.GetWord(id)
+							if w != "</s>" && w != "<s>" && w != "<pad>" && w != "UNK" && w != "" {
+								decodedWords = append(decodedWords, w)
 							}
-							neuralResponse = strings.Join(decodedWords, " ")
-							if neuralResponse != "" {
-								log.Printf("🧠 Neural Model generated: %s", neuralResponse)
-								// Quality gate: discard garbage output before it can win selection.
-								// An untrained model produces sequences like ". to . type to . deglaze"
-								// which are worse than any retrieval answer.
-								if isGarbageOutput(neuralResponse) {
-									log.Printf("🗑️  Neural output rejected (quality gate): %s", neuralResponse)
-									neuralResponse = ""
-								} else if strings.HasPrefix(neuralResponse, "create webserver") {
-									neuralIntent = "create_webserver"
-									neuralScore = 0.99
-								} else if strings.HasPrefix(neuralResponse, "create handler") {
-									neuralIntent = "create_handler"
-									neuralScore = 0.99
-								} else {
-									neuralIntent = "chat_response"
-									neuralScore = 0.91
-								}
+						}
+						neuralResponse = strings.Join(decodedWords, " ")
+						if neuralResponse != "" {
+							log.Printf("🧠 Neural Model (moe_classification_model.gob) generated: %s", neuralResponse)
+							if isGarbageOutput(neuralResponse) {
+								log.Printf("⚖️  Quality Gate: Main model output rejected (structural incoherence).")
+								neuralResponse = ""
+							} else if strings.HasPrefix(neuralResponse, "create webserver") {
+								neuralIntent = "create_webserver"
+								neuralScore = 0.99
+							} else if strings.HasPrefix(neuralResponse, "create handler") {
+								neuralIntent = "create_handler"
+								neuralScore = 0.99
+							} else {
+								neuralIntent = "chat_response"
+								neuralScore = 0.91
 							}
 						}
 					}
@@ -381,29 +378,21 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 	}
 
 	// --- 2. Winner Selection ---
-	// If the neural model gave us a functional command (e.g. create webserver), prioritize it.
 	if neuralIntent != "" && neuralIntent != "chat_response" {
 		return neuralIntent, neuralScore
 	}
 
-	// If retrieval is a near-exact match (e.g. greeting, specific FAQ), prioritize it.
-	// NOTE: The stricter 0.99 threshold for "?" queries was removed — it caused
-	// well-matched retrieval results (score ~0.988) to fall through to the
-	// garbage-generating neural decoder on an under-trained model.
 	const retrievalThreshold = 0.96
-
 	if retrievedScore >= retrievalThreshold {
 		c.lastMoEPrediction = retrievedResp
 		return retrievedIntent, retrievedScore
 	}
 
-	// Finally, favor neural response for anything else if it produced a sentence.
 	if neuralResponse != "" {
 		c.lastMoEPrediction = neuralResponse
 		return neuralIntent, neuralScore
 	}
 
-	// Ultimate fallback to best retrieval match even if below threshold
 	if retrievedScore > 0.8 {
 		c.lastMoEPrediction = retrievedResp
 		return retrievedIntent, retrievedScore
@@ -439,65 +428,135 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 	return "", 0.0
 }
 
-// GenerateSocialResponse uses the social model to generate a conversational response
 func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 	if c.SocialModel == nil {
-		return "" // Fallback if no social model
+		return ""
 	}
 
-	// Generate using social model (max 50 tokens for conversational response)
-	maxLen := 50
-	cleanWords := strings.Fields(strings.ToLower(input))
-	var tokenIDs []int
-
-	if c.SocialModel.SentenceVocab != nil {
-		for _, w := range cleanWords {
-			tokenIDs = append(tokenIDs, c.SocialModel.SentenceVocab.GetTokenID(w))
-		}
+	// Use the same StrictGenerate-equivalent decoder path as training validation.
+	// GreedySearchDecodeWithTemp is a DIFFERENT decoder and produces word salad
+	// because it was never used during training. Match exactly what was trained.
+	model := c.SocialModel
+	if model.SentenceVocab == nil || model.Decoder == nil || model.Embedding == nil || model.Encoder == nil {
+		return ""
 	}
 
-	if len(tokenIDs) > 0 {
-		inputTensor := tensor.NewTensor([]int{1, len(tokenIDs)}, make([]float32, len(tokenIDs)), false)
-		for i, id := range tokenIDs {
-			inputTensor.Data[i] = float32(id)
+	// Format input to match training exactly: [QUES] <input> [ANS]
+	formattedInput := "[QUES] " + input + " [ANS]"
+	tokens := cleanTokenize(formattedInput)
+	if len(tokens) == 0 {
+		return ""
+	}
+
+	inputIDs := make([]float32, len(tokens))
+	for i, t := range tokens {
+		inputIDs[i] = float32(lookupVocab(t, model.SentenceVocab))
+	}
+	inputTensor := tensor.NewTensor([]int{1, len(inputIDs)}, inputIDs, false)
+
+	// Encode
+	emb, err := model.Embedding.Forward(inputTensor)
+	if err != nil {
+		log.Printf("GenerateSocialResponse Error (Embedding): %v", err)
+		return ""
+	}
+	ctx, err := model.Encoder.Forward(emb)
+	if err != nil {
+		log.Printf("GenerateSocialResponse Error (Encoder): %v", err)
+		return ""
+	}
+	ctx = model.NormalizeContextVector(ctx)
+	if ctx.Shape[1] == 0 {
+		return ""
+	}
+
+	// Init decoder hidden/cell state from encoder context mean
+	batchSize := 1
+	hiddenSize := model.Decoder.LSTM.HiddenSize
+	hiddenState, err := ctx.Mean(1)
+	if err != nil {
+		return ""
+	}
+	hiddenState, _ = hiddenState.Reshape([]int{batchSize, ctx.Shape[2]})
+	if hiddenState.Shape[1] != hiddenSize {
+		if hiddenState.Shape[1] > hiddenSize {
+			hiddenState, _ = hiddenState.Slice(1, 0, hiddenSize)
+		} else {
+			pad := tensor.NewTensor([]int{batchSize, hiddenSize - hiddenState.Shape[1]}, make([]float32, batchSize*(hiddenSize-hiddenState.Shape[1])), false)
+			hiddenState, _ = tensor.Concat([]*tensor.Tensor{hiddenState, pad}, 1)
+		}
+	}
+	cellState := tensor.NewTensor([]int{batchSize, hiddenSize}, make([]float32, batchSize*hiddenSize), false)
+
+	resIDs := []int{model.SentenceVocab.BosID}
+	currentTokenID := model.SentenceVocab.BosID
+	counts := make(map[int]int)
+	unkID := model.SentenceVocab.GetTokenID("UNK")
+	maxLen := 30
+
+	for i := 0; i < maxLen; i++ {
+		inputT := tensor.NewTensor([]int{1, 1}, []float32{float32(currentTokenID)}, false)
+		logits, nextHidden, nextCell, _, err := model.Decoder.DecodeStepWithExpert(inputT, hiddenState, cellState, ctx)
+		if err != nil {
+			break
+		}
+		hiddenState = nextHidden
+		cellState = nextCell
+
+		// Suppress EOS for first 5 tokens — same as StrictGenerate training validation
+		if i < 5 {
+			logits.Data[model.SentenceVocab.EosID] = -1e9
 		}
 
-		// Encode with social model
-		if embeddings, err := c.SocialModel.Embedding.Forward(inputTensor); err == nil {
-			if contextVector, err := c.SocialModel.Encoder.Forward(embeddings); err == nil {
-				contextVector = c.SocialModel.NormalizeContextVector(contextVector)
+		// Repetition penalty
+		moe.ApplyRepetitionPenalty(logits, resIDs, 1.2)
 
-				// Prepare NER and POS tagging
-				posTags := postagger.TagTokens(cleanWords)
-				taggedData := nertagger.Nertagger(tag.Tag{Tokens: cleanWords, PosTag: posTags})
-
-				// Decode using social model's decoder
-				if c.SocialModel.SentenceVocab != nil {
-					if outputIDs, err := c.SocialModel.GreedySearchDecodeWithTemp(
-						contextVector, maxLen,
-						c.SocialModel.SentenceVocab.BosID,
-						c.SocialModel.SentenceVocab.EosID,
-						0.4, 1.0, 0.3, 50, taggedData,
-					); err == nil && len(outputIDs) > 0 {
-						var decodedWords []string
-						for _, id := range outputIDs {
-							w := c.SocialModel.SentenceVocab.GetWord(id)
-							if w != "</s>" && w != "<s>" && w != "<pad>" && w != "UNK" && w != "" {
-								decodedWords = append(decodedWords, w)
-							}
-						}
-						response := strings.Join(decodedWords, " ")
-						if response != "" {
-							log.Printf("🎭 Social Model generated: %s", response)
-							return response
-						}
-					}
-				}
+		// Frequency penalty
+		const freqPenalty = 0.5
+		for id, count := range counts {
+			if id < len(logits.Data) {
+				logits.Data[id] -= freqPenalty * float32(count)
 			}
 		}
+
+		// Mute PAD and UNK
+		logits.Data[model.SentenceVocab.PaddingTokenID] = -1e9
+		if unkID != -1 {
+			logits.Data[unkID] = -1e9
+		}
+
+		bestID, err := moe.SampleFromLogits(logits, 0.8, 1, 0.9)
+		if err != nil {
+			break
+		}
+		if bestID == model.SentenceVocab.EosID {
+			break
+		}
+
+		resIDs = append(resIDs, bestID)
+		counts[bestID]++
+		currentTokenID = bestID
 	}
 
-	return "" // No response generated
+	// Decode tokens to words
+	var result []string
+	for _, id := range resIDs[1:] {
+		w := model.SentenceVocab.GetWord(id)
+		if w != "</s>" && w != "<s>" && w != "<pad>" && w != "UNK" && w != "" {
+			result = append(result, w)
+		}
+	}
+
+	response := strings.Join(result, " ")
+	if response == "" {
+		return ""
+	}
+	log.Printf("🎭 Social Model generated: %s", response)
+	if isGarbageOutput(response) || isLowQualitySocialResponse(response) {
+		log.Printf("🗑️  Social output rejected (quality gate): %s", response)
+		return ""
+	}
+	return response
 }
 
 func (c *GollemerMoEClient) checkCommandHeuristics(lowerInput string) (string, float64) {

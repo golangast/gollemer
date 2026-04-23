@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
+	"math"
 	"math/rand"
 	"time"
 	"sync"
@@ -224,7 +225,20 @@ func (e *BornExpert) Backward(grad *gtensor.Tensor) error {
 			if shadow.Grad == nil {
 				shadow.Grad = gtensor.NewTensor(shadow.Shape, make([]float32, len(shadow.Data)), false)
 			}
-			gtensor.AddAccumulate(shadow.Grad.Data, g.AsFloat32())
+			
+			gData := g.AsFloat32()
+			// 🛡️ LOCAL GRADIENT CLIPPING (EXPERT-LEVEL)
+			// This is the "Nuclear Option" against exploding experts.
+			const expertLocalClip = 2.0
+			var sumSq float32
+			for _, v := range gData { sumSq += v * v }
+			norm := float32(math.Sqrt(float64(sumSq + 1e-9)))
+			if norm > expertLocalClip {
+				scale := expertLocalClip / norm
+				for j := range gData { gData[j] *= scale }
+			}
+			
+			gtensor.AddAccumulate(shadow.Grad.Data, gData)
 		}
 	}
 

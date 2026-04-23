@@ -29,12 +29,15 @@ func NewSemanticRoleLabeler() *SemanticRoleLabeler {
 			"delete": true, "remove": true, "rm": true, "copy": true, "move": true, "mv": true,
 			"modify": true, "update": true, "change": true, "list": true, "show": true,
 			"run": true, "execute": true, "start": true, "stop": true, "read": true, "write": true,
+			"how": true, "what": true, "who": true, "greet": true, "say": true,
 		},
 		ResourceTypes: map[string][]string{
 			"FILESYSTEM": {"file", "folder", "directory", "dir", "path"},
 			"USER":       {"user", "admin", "guest"},
 			"PROCESS":    {"process", "job", "task", "application", "app"},
 			"DATABASE":   {"database", "db", "table", "schema"},
+			"AGENT":      {"you", "bot", "assistant", "gollemer"},
+			"WELLBEING":  {"status", "health", "feeling", "wellbeing"},
 		},
 		ArgumentPatterns: map[string][]string{
 			"PATH":     {"path", "at", "in", "to", "from"},
@@ -42,6 +45,8 @@ func NewSemanticRoleLabeler() *SemanticRoleLabeler {
 			"MODE":     {"with", "using", "mode"},
 			"OWNER":    {"for", "by", "owner"},
 			"PROPERTY": {"properties"},
+			"TONE":     {"tone", "vibe", "mood"},
+			"SOCIAL":   {"social", "talk", "chat"},
 		},
 		StopWords: map[string]bool{
 			"a": true, "an": true, "the": true, "and": true, "or": true, "is": true, "are": true,

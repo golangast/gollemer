@@ -134,16 +134,35 @@ func (ln *LayerNorm) Backward(gradOutput *Tensor) error {
 		AddAccumulate(ln.Beta.Grad.Data, gOut)
 	}
 
-	// Gradient w.r.t. input (simplified version)
-	tmp := make([]float32, ln.NormalizedShape)
+	// Gradient w.r.t. input (Full, mathematically correct version)
+	// dL/dx = (1 / (N * std)) * [N * dL/dnorm - sum(dL/dnorm) - norm * sum(dL/dnorm * norm)]
+	N := float32(ln.NormalizedShape)
 	for i := range batchSize {
 		start := i * ln.NormalizedShape
 		std := float32(math.Sqrt(float64(ln.variance.Data[i] + ln.Eps)))
 		gOut := gradOutput.Data[start : start+ln.NormalizedShape]
+		norm := ln.normalized.Data[start : start+ln.NormalizedShape]
 		
-		MulVectors(gOut, ln.Gamma.Data, tmp)
-		MulScalar(tmp, 1.0/std, tmp)
-		AddAccumulate(ln.input.Grad.Data[start:start+ln.NormalizedShape], tmp)
+		// 1. Calculate dL/dnorm = dL/dy * gamma
+		dL_dnorm := make([]float32, ln.NormalizedShape)
+		for j := 0; j < ln.NormalizedShape; j++ {
+			dL_dnorm[j] = gOut[j] * ln.Gamma.Data[j]
+		}
+
+		// 2. Calculate sum(dL/dnorm) and sum(dL/dnorm * norm)
+		var sum_dL_dnorm float32
+		var sum_dL_dnorm_norm float32
+		for j := 0; j < ln.NormalizedShape; j++ {
+			sum_dL_dnorm += dL_dnorm[j]
+			sum_dL_dnorm_norm += dL_dnorm[j] * norm[j]
+		}
+
+		// 3. Calculate dL/dx
+		inv_N_std := 1.0 / (N * std)
+		for j := 0; j < ln.NormalizedShape; j++ {
+			val := N*dL_dnorm[j] - sum_dL_dnorm - norm[j]*sum_dL_dnorm_norm
+			ln.input.Grad.Data[start+j] += val * inv_N_std
+		}
 	}
 
 	return nil

@@ -65,7 +65,8 @@ func (e *HybridLLMGNNEncoder) Forward(inputs ...*tensor.Tensor) (*tensor.Tensor,
 	seqLen := llmOut.Shape[1]
 
 	// Create Adjacency Matrix: [batch, seq_len, seq_len]
-	// Increased window size to 2 (sees 2 left, 2 right) for better sentence context
+	// Using Global Receptive Field with Distance Decay to solve "no context" issue.
+	// Every token now sees every other token, but closer neighbors have higher weight.
 	adjData := make([]float32, batchSize*seqLen*seqLen)
 	
 	for b := 0; b < batchSize; b++ {
@@ -73,15 +74,27 @@ func (e *HybridLLMGNNEncoder) Forward(inputs ...*tensor.Tensor) (*tensor.Tensor,
 		for i := 0; i < seqLen; i++ {
 			rowOffset := batchOffset + i*seqLen
 			
-			// Count neighbors for degree normalization
-			neighbors := 0
-			for j := max(0, i-2); j <= min(seqLen-1, i+2); j++ {
-				neighbors++
+			var rowSum float32
+			for j := 0; j < seqLen; j++ {
+				dist := float64(i - j)
+				if dist < 0 { dist = -dist }
+				
+				// Weight = 1.0 for local (dist <= 2), 0.2 for global (dist > 2)
+				// This allows global context flow while preserving local grammar.
+				weight := float32(0.2)
+				if dist <= 2 {
+					weight = 1.0
+				}
+				adjData[rowOffset+j] = weight
+				rowSum += weight
 			}
-			degree := float32(neighbors)
 			
-			for j := max(0, i-2); j <= min(seqLen-1, i+2); j++ {
-				adjData[rowOffset+j] = 1.0 / degree
+			// Normalize row to sum to 1.0
+			if rowSum > 0 {
+				invSum := 1.0 / rowSum
+				for j := 0; j < seqLen; j++ {
+					adjData[rowOffset+j] *= invSum
+				}
 			}
 		}
 	}
@@ -224,4 +237,10 @@ func (e *HybridLLMGNNEncoder) SyncParameters() error {
 	}
 	// GNN and LayerNorm are currently CPU-resident or handle their own sync during ToGPU/Forward
 	return nil
+}
+
+func (e *HybridLLMGNNEncoder) RepairArchitecture() {
+	if e.LLMEncoder != nil {
+		e.LLMEncoder.RepairArchitecture()
+	}
 }

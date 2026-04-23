@@ -9,8 +9,8 @@ import (
 // toward the end of training (cosine decay), preventing the model from getting 
 // stuck in local minima too early as often happens with step decay.
 func GetLR(currentStep, totalSteps int, baseLR float32) float32 {
-	// 10% of total steps for linear warmup
-	warmupSteps := totalSteps / 10 
+	// 2% of total steps for linear warmup (faster takeoff for smaller datasets)
+	warmupSteps := totalSteps / 50 
 	if warmupSteps == 0 { warmupSteps = 1 } // Safety floor
 	
 	if currentStep < warmupSteps {
