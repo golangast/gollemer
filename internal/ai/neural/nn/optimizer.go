@@ -77,8 +77,8 @@ func NewOptimizer(parameters []*Tensor, learningRate float32, clipThreshold floa
 		m:             make(map[*Tensor]*Tensor),
 		v:             make(map[*Tensor]*Tensor),
 		ClipThreshold: clipThreshold,
-		Lambda:        0.01,
-		RouterLR:      learningRate * 5.0,
+		Lambda:        0.001, // Reduced from 0.01 for better MLM convergence
+		RouterLR:      learningRate * 10.0, // Increased exploration for experts
 	}
 	// Pre-allocate moments in parallel to avoid startup hangs on large models
 	var wg sync.WaitGroup
@@ -244,11 +244,9 @@ func (o *Adam) ZeroGrad() {
 	wg.Wait()
 }
 
-// SetLearningRate updates the main learning rate and proportionally scales the RouterLR.
 func (o *Adam) SetLearningRate(lr float32) {
 	o.learningRate = lr
-	// Keep RouterLR at 10% of the main learning rate to ensure stability in the MoE gating network.
-	o.RouterLR = lr * 0.1
+	o.RouterLR = lr * 2.0 // Maintain higher router LR for exploration
 }
 
 // GetLearningRate returns the current learning rate

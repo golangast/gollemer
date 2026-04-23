@@ -15,7 +15,7 @@ func main() {
 	flag.Parse()
 
 	// Train Word2Vec model first
-	word2vecTrainingDataPath := "./data/training/trainingdata/WikiQA-train.txt"
+	word2vecTrainingDataPath := "./data/training/clean_corpus.txt"
 	word2vecModelSavePath := "data/models/gob_models/word2vec_model.gob"
 	word2vecVectorSize := *dimModel
 	word2vecEpochs := 1

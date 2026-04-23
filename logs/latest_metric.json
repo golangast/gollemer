@@ -1,1 +1,1 @@
-{"step":40,"loss":8.258376,"lb_loss":0.3462813,"lr":1.375312e-7,"active_experts":[0,1,6,5,5,5,0,2,5,4,1,6,4,0,4,0,5,2,6,1,2,1,4,1,5,6,0,0,4,4,0,6,0,2,2,2,5,0,2,5,2,2,4,2,0,5,0,5,5,0,4,4,5,2,0,5,2,1,2,4,4,6,4,6],"is_cooling":false,"circuit_breaker":false,"temperature":2.3995728,"thawed_count":8}
+{"step":40,"loss":7.034768,"lb_loss":10.951486,"lr":0.00003125,"active_experts":[6,7,2,2,4,5,7,6,0,2,2,5,7,2,4,2,5,4,5,7,0,6,4,7],"is_cooling":false,"circuit_breaker":false,"temperature":2.4480474,"thawed_count":2}

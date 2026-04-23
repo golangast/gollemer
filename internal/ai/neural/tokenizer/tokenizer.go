@@ -97,8 +97,8 @@ func Tokenize(text string) []string {
 			continue
 		}
 
-		// Handle JSON structural characters as single tokens
-		if strings.ContainsRune(`{}[],:"`, r) {
+		// Handle structural characters and punctuation as single tokens
+		if strings.ContainsRune(`{}[],:"?!.`, r) {
 			tokens = append(tokens, string(r))
 			i++
 			continue
@@ -106,7 +106,7 @@ func Tokenize(text string) []string {
 
 		// Handle other tokens (words, numbers, etc.)
 		start := i
-		for i < len(runes) && !unicode.IsSpace(runes[i]) && !strings.ContainsRune(`{}[],:"`, runes[i]) {
+		for i < len(runes) && !unicode.IsSpace(runes[i]) && !strings.ContainsRune(`{}[],:"?!.`, runes[i]) {
 			i++
 		}
 		token := string(runes[start:i])
@@ -145,8 +145,8 @@ func TokenizeAndConvertToIDs(text string, vocab *vocab.Vocabulary, maxLen int) (
 			continue
 		}
 
-		// Handle JSON structural characters as single tokens
-		if strings.ContainsRune(`{}[],:"`, r) {
+		// Handle structural characters and punctuation as single tokens
+		if strings.ContainsRune(`{}[],:"?!.`, r) {
 			tokenIDs = append(tokenIDs, vocab.GetTokenID(string(r)))
 			i++
 			continue

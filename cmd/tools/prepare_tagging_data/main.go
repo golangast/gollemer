@@ -7,14 +7,17 @@ import (
 	"log"
 	"os"
 
-	"github.com/golangast/gollemer/internal/ai/neural/semantic"
 	"github.com/golangast/gollemer/internal/ai/neural/tokenizer"
 )
 
-// IntentTrainingExample represents a single training example from the old format.
 type IntentTrainingExample struct {
-	Query          string                  `json:"query"`
-	SemanticOutput semantic.SemanticOutput `json:"semantic_output"`
+	Query          string `json:"query"`
+	SemanticOutput struct {
+		Social struct {
+			Intent    string `json:"intent"`
+			SubIntent string `json:"sub_intent"`
+		} `json:"social"`
+	} `json:"semantic_output"`
 }
 
 // IntentTrainingData represents the structure of the old intent training data JSON.
@@ -51,7 +54,7 @@ func LoadIntentTrainingData(filePath string) (*IntentTrainingData, error) {
 }
 
 func main() {
-	const intentDataPath = "data/training/trainingdata/semantic_output_data.json"
+	const intentDataPath = "data/training/tiny_chat.json"
 	const taggedDataPath = "data/training/trainingdata/tagged_training_data.json"
 
 	// Load the original training data
@@ -70,40 +73,9 @@ func main() {
 		}
 
 		// Extract intent
-		intent := example.SemanticOutput.Operation
-
-		// Create a map of entities to tag
-		entitiesToTag := make(map[string]string)
-		if example.SemanticOutput.TargetResource.Name != "" {
-			entitiesToTag[example.SemanticOutput.TargetResource.Name] = "resource_name"
-		}
-		if example.SemanticOutput.TargetResource.Type != "" {
-			// This is tricky because the type is not always in the query
-			// For now, we will only tag entities that are directly in the query.
-		}
-		// Add other entities from properties if they exist in the query
-
-		// Tag entities in the query
-		for entityValue, entityType := range entitiesToTag {
-			entityTokens := tokenizer.Tokenize(entityValue)
-			for i := 0; i <= len(tokens)-len(entityTokens); i++ {
-				match := true
-				for j := range entityTokens {
-					if tokens[i+j] != entityTokens[j] {
-						match = false
-						break
-					}
-				}
-
-				if match {
-					tags[i] = "B-" + entityType // Beginning of entity
-					for j := 1; j < len(entityTokens); j++ {
-						tags[i+j] = "I-" + entityType // Inside of entity
-					}
-					// To avoid tagging overlaps, we could break here
-					// but for now, we allow multiple tags if entities overlap.
-				}
-			}
+		intent := example.SemanticOutput.Social.Intent
+		if intent == "" {
+			intent = "social"
 		}
 
 		taggedExample := TaggedTrainingExample{

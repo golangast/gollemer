@@ -170,9 +170,9 @@ type Tensor struct {
 	Operation    Operation `gob:"-"` // Exclude Operation from gob serialization
 	IsRouter     bool      // Flag for differential learning rates
 
-	needsSyncHost bool `gob:"-"`
+	needsSyncHost bool        `gob:"-"`
 	gpuData       interface{} `gob:"-"`
-	gpuSync       bool `gob:"-"`
+	gpuSync       bool        `gob:"-"`
 }
 
 // GobEncode implements the gob.GobEncoder interface.
@@ -315,6 +315,18 @@ func (t *Tensor) ZeroGrad() {
 			}
 		}
 	}
+}
+
+// L2Norm calculates the L2 norm (Euclidean norm) of the tensor's data.
+func (t *Tensor) L2Norm() float32 {
+	if len(t.Data) == 0 {
+		return 0
+	}
+	var normSq float64
+	for _, v := range t.Data {
+		normSq += float64(v * v)
+	}
+	return float32(math.Sqrt(normSq))
 }
 
 // ClipGrad performs L2-norm based gradient clipping on the tensor's data.
@@ -485,9 +497,13 @@ func (t *Tensor) MatMul(other *Tensor) (*Tensor, error) {
 	// 🎮 Try direct OpenCL/Goffi Compute via backend (GPU-native)
 	if t.Device == GPU || other.Device == GPU {
 		// If only one is on GPU, synchronize the other one to GPU as well
-		if t.Device != GPU { t.ToGPU() }
-		if other.Device != GPU { other.ToGPU() }
-		
+		if t.Device != GPU {
+			t.ToGPU()
+		}
+		if other.Device != GPU {
+			other.ToGPU()
+		}
+
 		if res, err := DispatchGPUMatMul(t, other); err == nil {
 			if res.RequiresGrad {
 				res.Creator = &MatMulOperation{t, other}
@@ -972,7 +988,9 @@ func (t *Tensor) Transpose(axis1, axis2 int) (*Tensor, error) {
 			}
 		}
 		res := NewTensor(newShape, newData, false)
-		if t.Device == GPU { res.ToGPU() }
+		if t.Device == GPU {
+			res.ToGPU()
+		}
 		return res, nil
 	}
 
@@ -2909,19 +2927,6 @@ func (t *Tensor) SampleTopP(p float32) (int, error) {
 	}
 
 	return pairs[0].Index, nil // Fallback
-}
-
-// L2Norm returns the L2 norm of the tensor's data.
-func (t *Tensor) L2Norm() float32 {
-	t.ToCPU()
-	if t == nil {
-		return 0
-	}
-	var sum float64
-	for _, v := range t.Data {
-		sum += float64(v * v)
-	}
-	return float32(math.Sqrt(sum))
 }
 
 // AddJitter injects small random noise into the tensor's data.

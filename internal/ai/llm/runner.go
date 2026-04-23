@@ -89,18 +89,53 @@ func (r *Runner) Init() {
 		// Try as checkpoint first (compressed)
 		if ckpt, err := moe.LoadIntentMoECheckpoint(socialModelPath); err == nil && ckpt.Model != nil {
 			socialModel = ckpt.Model
+			socialModel.RepairArchitecture()
 			log.Printf("✅ Loaded social model from compressed checkpoint: %s", socialModelPath)
 		} else {
 			// Try as raw GOB model (uncompressed)
-			if loaded, err := moe.LoadIntentMoEModelFromGOB(socialModelPath); err == nil {
+			if loaded, err := moe.LoadIntentMoEModelWithFallback(socialModelPath); err == nil {
 				socialModel = loaded
+				socialModel.RepairArchitecture()
 				log.Printf("✅ Loaded social-only model from raw GOB: %s", socialModelPath)
+
+				// Quick weight health check
+				var weightSum float32
+				params := socialModel.Parameters()
+				for _, p := range params {
+					for _, d := range p.Data {
+						if d != 0 { weightSum += d }
+					}
+				}
+				log.Printf("📊 Social Model Health Check: Loaded %d parameters with active weight magnitude.", len(params))
 			} else {
 				log.Printf("⚠️  Failed to load social model at %s (invalid format)", socialModelPath)
 			}
 		}
 	} else {
 		log.Printf("⚠️  Social model not found at %s (training with -train-social to create it)", socialModelPath)
+	}
+
+	// Wire up SentenceVocab for social model - always attempt to load latest from disk
+	if socialModel != nil {
+		socialVocabCandidates := []string{
+			filepath.Join(r.ProjectRoot, "data/models/gob_models/moe_social_model_vocab.gob"),
+			filepath.Join(r.ProjectRoot, "data/models/gob_models/social_vocabulary.gob"),
+			filepath.Join(r.ProjectRoot, "data/models/gob_models/seq2seq_output_vocab.gob"),
+		}
+		for _, vocabPath := range socialVocabCandidates {
+			if _, err := os.Stat(vocabPath); err != nil {
+				continue
+			}
+			if v, err := mainvocab.LoadVocabulary(vocabPath); err == nil {
+				socialModel.SentenceVocab = v
+				log.Printf("✅ Wired SentenceVocab to social model from: %s (size=%d)", filepath.Base(vocabPath), v.Size())
+				break
+			}
+		}
+		if socialModel.SentenceVocab == nil || socialModel.SentenceVocab.Size() < 10 {
+			log.Printf("⚠️  Social model has no valid vocabulary (size=%v). Word salad is likely.", 
+				func() int { if socialModel.SentenceVocab == nil { return 0 }; return socialModel.SentenceVocab.Size() }())
+		}
 	}
 
 	// Initialize Intent Resolver
@@ -176,6 +211,7 @@ func (r *Runner) initModels() {
 			ckpt, err := moe.LoadIntentMoECheckpoint(p)
 			if err == nil && ckpt != nil && ckpt.Model != nil {
 				r.IntentModel = ckpt.Model
+				r.IntentModel.RepairArchitecture()
 				log.Printf("✅ Success: Loaded 768d MoE model from compressed Checkpoint: %s (Steps: %d)", filepath.Base(p), ckpt.StepCount)
 				break
 			} else if err != nil && !strings.Contains(err.Error(), "invalid header") {
@@ -183,10 +219,21 @@ func (r *Runner) initModels() {
 			}
 
 			// Try as raw GOB model (uncompressed)
-			loadedModel, err := moe.LoadIntentMoEModelFromGOB(p)
+			loadedModel, err := moe.LoadIntentMoEModelWithFallback(p)
 			if err == nil && loadedModel != nil {
+				loadedModel.RepairArchitecture()
 				r.IntentModel = loadedModel
 				log.Printf("✅ Success: Loaded 768d MoE model from raw GOB: %s", filepath.Base(p))
+
+				// Quick weight health check
+				var weightSum float32
+				params := r.IntentModel.Parameters()
+				for _, p := range params {
+					for _, d := range p.Data {
+						if d != 0 { weightSum += d }
+					}
+				}
+				log.Printf("📊 Model Health Check: Loaded %d parameters with active weight magnitude.", len(params))
 				break
 			} else if err != nil {
 				log.Printf("⚠️  Candidate %s failed (GOB): %v", filepath.Base(p), err)
@@ -217,10 +264,29 @@ func (r *Runner) initModels() {
 	}
 
 	if r.IntentModel != nil && r.IntentModel.SentenceVocab == nil {
-		vocabPath := filepath.Join(r.ProjectRoot, r.KB.ModelConfig.SemanticVocabPath)
-		if v, err := mainvocab.LoadVocabulary(vocabPath); err == nil {
-			r.IntentModel.SentenceVocab = v
-		} else {
+		// Priority order for vocab loading:
+		// 1. seq2seq_output_vocab.gob  — saved by TrainChat/TrainSocialChat (chat-trained)
+		// 2. semantic_output_vocabulary.gob — saved by main intent training (WikiQA/intent)
+		// 3. Tiny fallback built from W2V vocabulary
+		vocabCandidates := []string{
+			filepath.Join(r.ProjectRoot, "data/models/gob_models/seq2seq_output_vocab.gob"),
+			filepath.Join(r.ProjectRoot, r.KB.ModelConfig.SemanticVocabPath),
+		}
+		loaded := false
+		for _, vocabPath := range vocabCandidates {
+			if _, err := os.Stat(vocabPath); err != nil {
+				continue
+			}
+			if v, err := mainvocab.LoadVocabulary(vocabPath); err == nil {
+				r.IntentModel.SentenceVocab = v
+				log.Printf("✅ Loaded SentenceVocab from: %s (size=%d)", filepath.Base(vocabPath), v.Size())
+				loaded = true
+				break
+			} else {
+				log.Printf("⚠️  Failed to load vocab from %s: %v", filepath.Base(vocabPath), err)
+			}
+		}
+		if !loaded {
 			v := mainvocab.NewVocabulary()
 			tokens := []string{"create", "webserver", "handler", "page", "database", "<s>", "</s>"}
 			for _, t := range tokens {
@@ -234,6 +300,7 @@ func (r *Runner) initModels() {
 				}
 			}
 			r.IntentModel.SentenceVocab = v
+			log.Printf("⚠️  Using fallback SentenceVocab built from W2V (size=%d). Run -train-chat to generate a proper vocab.", v.Size())
 		}
 	}
 }

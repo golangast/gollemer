@@ -10,7 +10,7 @@ import (
 
 func TestGreedySearchDecode(t *testing.T) {
 	// Load the trained MoEClassificationModel model
-	model, err := LoadIntentMoEModelFromGOB("../../../data/models/gob_models/moe_classification_model.gob")
+	model, err := LoadIntentMoEModelWithFallback("../../../data/models/gob_models/moe_classification_model.gob")
 	if err != nil {
 		t.Skipf("Skipping: Model load failed (%v). Train the model first to match the new MoE structure.", err)
 	}

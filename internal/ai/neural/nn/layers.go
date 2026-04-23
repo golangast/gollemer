@@ -4,9 +4,12 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
-	"math"
 	"log"
+	"math"
 	"math/rand"
+
+	"gonum.org/v1/gonum/blas"
+	"gonum.org/v1/gonum/blas/blas32"
 
 	. "github.com/golangast/gollemer/internal/ai/neural/tensor"
 )
@@ -227,12 +230,19 @@ func (l *Linear) Backward(grad *Tensor) error {
 			return fmt.Errorf("linear layer backward: failed to transpose input (2D): %w", err)
 		}
 		if l.Weights.RequiresGrad {
-			dWeights, err := inputTranspose.MatMul(grad)
-			if err != nil {
-				return fmt.Errorf("linear backward dWeights matmul failed: %w", err)
-			}
-			dWeights.ToCPU() // Ensure sync for AddAccumulate
-			AddAccumulate(l.Weights.Grad.Data, dWeights.Data)
+			// Bypass Goffi: use blas32 directly for reliable gradient computation
+			m2 := inputTranspose.Shape[0]
+			k2 := inputTranspose.Shape[1]
+			n2 := grad.Shape[1]
+			dWeightsData2D := make([]float32, m2*n2)
+
+			blas32.Gemm(blas.NoTrans, blas.NoTrans, 1,
+				blas32.General{Rows: m2, Cols: k2, Stride: k2, Data: inputTranspose.Data},
+				blas32.General{Rows: k2, Cols: n2, Stride: n2, Data: grad.Data},
+				0,
+				blas32.General{Rows: m2, Cols: n2, Stride: n2, Data: dWeightsData2D},
+			)
+			AddAccumulate(l.Weights.Grad.Data, dWeightsData2D)
 		}
 
 	case 3:
@@ -261,12 +271,33 @@ func (l *Linear) Backward(grad *Tensor) error {
 		}
 
 		if l.Weights.RequiresGrad {
-			dWeights, err := inputTranspose.MatMul(reshapedGrad)
-			if err != nil {
-				return fmt.Errorf("linear layer backward: failed to calculate dLoss/dWeights (3D): %w", err)
+			// Use blas32.Gemm DIRECTLY to bypass Goffi (which silently returns zeros on large matmuls).
+			// dWeights = inputTranspose [inputDim, batch*seqLen] @ reshapedGrad [batch*seqLen, outputDim]
+			m := inputTranspose.Shape[0]  // inputDim
+			k := inputTranspose.Shape[1]  // batch*seqLen
+			n := reshapedGrad.Shape[1]    // outputDim
+			dWeightsData := make([]float32, m*n)
+
+			// Diagnostic: Trace the source of 50k gradients
+			inputNorm := inputTranspose.L2Norm()
+			gradNorm := reshapedGrad.L2Norm()
+			fmt.Printf("🔍 [Linear.Backward] [%d x %d] InputNorm: %.4f | GradNorm: %.4f | m=%d k=%d n=%d\n", m, n, inputNorm, gradNorm, m, k, n)
+
+			blas32.Gemm(blas.NoTrans, blas.NoTrans, 1,
+				blas32.General{Rows: m, Cols: k, Stride: k, Data: inputTranspose.Data},
+				blas32.General{Rows: k, Cols: n, Stride: n, Data: reshapedGrad.Data},
+				0,
+				blas32.General{Rows: m, Cols: n, Stride: n, Data: dWeightsData},
+			)
+
+			// Diagnostic: check dWeights magnitude
+			var dwSum float32
+			for _, v := range dWeightsData { dwSum += v * v }
+			if dwSum > 10.0 { // Only log large gradients
+				fmt.Printf("🔍 [Linear.Backward] [%d x %d] dWeights Norm: %.6f\n", m, n, math.Sqrt(float64(dwSum)))
 			}
-			dWeights.ToCPU()
-			safeAccumulate(l.Weights.Grad.Data, dWeights.Data)
+
+			safeAccumulate(l.Weights.Grad.Data, dWeightsData)
 		}
 
 	default:
@@ -307,11 +338,18 @@ func (l *Linear) Backward(grad *Tensor) error {
 		var dInput *Tensor
 		switch len(grad.Shape) {
 		case 2:
-			dInput, err = grad.MatMul(weightsTranspose)
-			if err != nil {
-				return fmt.Errorf("linear layer backward: failed to calculate dLoss/dInput (2D): %w", err)
-			}
-			dInput.ToCPU()
+			// Bypass Goffi: use blas32 directly
+			rows2 := grad.Shape[0]
+			cols2 := grad.Shape[1]
+			inDim2 := weightsTranspose.Shape[1]
+			dInputData2 := make([]float32, rows2*inDim2)
+			blas32.Gemm(blas.NoTrans, blas.NoTrans, 1,
+				blas32.General{Rows: rows2, Cols: cols2, Stride: cols2, Data: grad.Data},
+				blas32.General{Rows: cols2, Cols: inDim2, Stride: inDim2, Data: weightsTranspose.Data},
+				0,
+				blas32.General{Rows: rows2, Cols: inDim2, Stride: inDim2, Data: dInputData2},
+			)
+			dInput = NewTensor([]int{rows2, inDim2}, dInputData2, false)
 		case 3:
 			batchSize := grad.Shape[0]
 			seqLength := grad.Shape[1]
@@ -327,11 +365,19 @@ func (l *Linear) Backward(grad *Tensor) error {
 				return err
 			}
 
-			dInput2D, err := reshapedGrad.MatMul(weightsTranspose)
-			if err != nil {
-				return fmt.Errorf("linear layer backward: failed to calculate dLoss/dInput (3D): %w", err)
-			}
-			dInput2D.ToCPU()
+			// Use blas32.Gemm DIRECTLY to bypass Goffi (which silently returns zeros on large matmuls).
+			// dInput = reshapedGrad [batch*seqLen, outputDim] @ weightsTranspose [outputDim, inputDim]
+			bSL := reshapedGrad.Shape[0]    // batch*seqLen
+			oDim := reshapedGrad.Shape[1]   // outputDim
+			iDim := weightsTranspose.Shape[1] // inputDim
+			dInput2DData := make([]float32, bSL*iDim)
+			blas32.Gemm(blas.NoTrans, blas.NoTrans, 1,
+				blas32.General{Rows: bSL, Cols: oDim, Stride: oDim, Data: reshapedGrad.Data},
+				blas32.General{Rows: oDim, Cols: iDim, Stride: iDim, Data: weightsTranspose.Data},
+				0,
+				blas32.General{Rows: bSL, Cols: iDim, Stride: iDim, Data: dInput2DData},
+			)
+			dInput2D := NewTensor([]int{bSL, iDim}, dInput2DData, false)
 			dInput, err = dInput2D.Reshape([]int{batchSize, seqLength, inputDim})
 			if err != nil {
 				return err

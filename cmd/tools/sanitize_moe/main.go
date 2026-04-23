@@ -17,7 +17,7 @@ func main() {
 	}
 
 	modelPath := filepath.Join(projectRoot, "data/models/gob_models/moe_classification_model.gob")
-	model, err := moe.LoadIntentMoEModelFromGOB(modelPath)
+	model, err := moe.LoadIntentMoEModelWithFallback(modelPath)
 	if err != nil {
 		log.Fatalf("Failed to load MoE model: %v", err)
 	}

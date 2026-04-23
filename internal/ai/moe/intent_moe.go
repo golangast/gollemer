@@ -11,6 +11,7 @@ import (
 	"os"
 	"runtime"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -93,6 +94,12 @@ func (m *IntentMoE) SyncParameters() error {
 		}()
 	}
 
+	if m.EncoderNorm != nil {
+		// LayerNorm is CPU-only in this version's implementation (ToCPU calls inside)
+		// but we call ToGPU to ensure it's where it needs to be.
+		m.EncoderNorm.ToGPU()
+	}
+
 	wg.Wait()
 	close(errCh)
 	for err := range errCh {
@@ -102,8 +109,6 @@ func (m *IntentMoE) SyncParameters() error {
 	}
 	return nil
 }
-
-
 
 // SampleFromLogits samples a token ID from logits using temperature, top-k, and top-p sampling.
 // Updated to use the user's suggested top-K-only normalization for more stable inference.
@@ -276,30 +281,20 @@ func getTopKIndices(logits []float32, k int) []int {
 // Logits are the raw output of the model, generatedIDs are tokens already picked.
 // Penalty is typically 1.1 or 1.2 (for multiplicative) or a flat subtraction.
 func ApplyRepetitionPenalty(logits *tensor.Tensor, generatedIDs []int, penalty float32) {
-	if penalty == 1.0 {
+	if penalty <= 0 {
 		return
 	}
-
-	// Track seen tokens in a map for O(1) lookup
-	seen := make(map[int]bool)
+	counts := make(map[int]float32)
 	for _, id := range generatedIDs {
-		seen[id] = true
+		counts[id]++
 	}
-
-	for id := range seen {
-		// Only penalize valid token IDs
+	for id, count := range counts {
 		if id < 0 || id >= len(logits.Data) {
 			continue
 		}
 
-		// For Logits (pre-softmax):
-		// If positive, divide by penalty to reduce score.
-		// If negative, multiply by penalty to make it MORE negative.
-		if logits.Data[id] > 0 {
-			logits.Data[id] /= penalty
-		} else {
-			logits.Data[id] *= penalty
-		}
+		// Subtractive penalty is much more effective than multiplicative for logit suppression
+		logits.Data[id] -= penalty * count
 	}
 }
 
@@ -316,6 +311,7 @@ type Encoder interface {
 	SetGateTemperature(float32)
 	ToGPU()
 	SyncParameters() error
+	RepairArchitecture()
 }
 
 // ExpertStat holds performance metrics for a specific expert.
@@ -342,9 +338,18 @@ type IntentMoE struct {
 	SentenceVocab     *mainvocab.Vocabulary
 	EmbeddingDim      int // Persisted dimension (e.g., 768) for resizing logic
 
+	// Training Metadata for persistence
+	StepCount     int // Total training steps completed
+	TrainingPhase int // 0: Init, 1: MLM Done, 2: Seq2Seq Done
+
+	// Structural Guidance
+	Tagger *IntentTagger // Predicts intent and grammar tags (POS) to guide generation
+	Rules  *RuleBook     // Formal linguistic rules and grammar skeletons
+	
 	// Diagnostics and Monitoring
 	ExpertStats map[string]*ExpertStat // Key: "layerID:expertID"
 	Metadata    ModelMetadata
+	EncoderNorm *nn.LayerNormalization // Added for stability
 }
 
 // ToGPU moves the entire model's parameters to the GPU.
@@ -358,11 +363,278 @@ func (m *IntentMoE) ToGPU() {
 	if m.Embedding != nil {
 		m.Embedding.ToGPU()
 	}
+	if m.EncoderNorm != nil {
+		m.EncoderNorm.ToGPU()
+	}
 
 	// 🌡️ GPU WARM-UP: Serial compilation of pipelines to prevent race conditions
 	// (Vulkan/vkCreateComputePipelines crash) during the first parallel batch.
 	m.warmup()
 }
+
+// GuessIntent performs advanced intent detection on a query.
+// It uses a hybrid approach:
+// 1. Neural classification via the Tagger (if available).
+// 2. Heuristic keyword mapping for common social intents.
+func (m *IntentMoE) GuessIntent(query string) (string, string) {
+	q := strings.ToLower(query)
+	
+	// Advanced Weighted Scoring
+	scores := make(map[string]float32)
+	
+	// Social: Greeting Clues
+	if strings.Contains(q, "hello") || strings.Contains(q, "hi ") || strings.HasPrefix(q, "hi") { scores["social:greeting"] += 2.0 }
+	if strings.Contains(q, "hey") || strings.Contains(q, "morning") || strings.Contains(q, "evening") { scores["social:greeting"] += 1.5 }
+	
+	// Social: Identity Clues
+	if strings.Contains(q, "who are you") || strings.Contains(q, "your name") { scores["social:identity"] += 3.0 }
+	if strings.Contains(q, "what are you") || strings.Contains(q, "creator") { scores["social:identity"] += 2.0 }
+	
+	// Social: Status Check Clues
+	if strings.Contains(q, "how are you") || strings.Contains(q, "how you doing") { scores["social:status_check"] += 3.0 }
+	if strings.Contains(q, "how's it going") || strings.Contains(q, "everything ok") { scores["social:status_check"] += 2.5 }
+	
+	// Social: Entertainment Clues
+	if strings.Contains(q, "joke") || strings.Contains(q, "funny") || strings.Contains(q, "story") { scores["social:entertainment"] += 2.0 }
+	
+	// Neural Verification (if Tagger is available)
+	if m.Tagger != nil {
+		tokens := strings.Fields(q)
+		ids := make([]float32, len(tokens))
+		for i, t := range tokens {
+			id := m.SentenceVocab.GetTokenID(t)
+			if id < 0 { id = 1 }
+			ids[i] = float32(id)
+		}
+		input := tensor.NewTensor([]int{1, len(ids)}, ids, false)
+		// Assuming the tagger returns intent logits as the first output
+		intentLogits, _, _ := m.Tagger.Forward(input)
+		if intentLogits != nil {
+			// Find top intent from neural model
+			bestIdx := 0
+			bestVal := float32(-1e9)
+			for i, v := range intentLogits.Data {
+				if v > bestVal { bestVal = v; bestIdx = i }
+			}
+			// Boost the neural winner
+			neuralIntent := fmt.Sprintf("social:neural_%d", bestIdx) 
+			scores[neuralIntent] += 1.0 
+		}
+	}
+
+	// Pick winner
+	bestKey := "social:general"
+	maxScore := float32(0.5)
+	for k, s := range scores {
+		if s > maxScore {
+			maxScore = s
+			bestKey = k
+		}
+	}
+
+	parts := strings.Split(bestKey, ":")
+	return parts[0], parts[1]
+}
+
+// GenerateGuidedSentence attempts to generate a response that follows a grammatical skeleton.
+// It uses the Tagger to predict the 'shape' of the answer before filling in the words.
+func (m *IntentMoE) GenerateGuidedSentence(query string, maxLen int) (string, []string) {
+	parent, child := m.GuessIntent(query)
+	log.Printf("🔮 Sophisticated Intent Detection: [%s / %s]", parent, child)
+
+	rule, hasRule := m.Rules.GetRuleByIntent(parent, child)
+
+	// 1. Encode query
+	tokens := strings.Fields(strings.ToLower(query))
+	ids := make([]float32, len(tokens))
+	for i, t := range tokens {
+		id := m.SentenceVocab.GetTokenID(t)
+		if id < 0 { id = 1 }
+		ids[i] = float32(id)
+	}
+	inputT := tensor.NewTensor([]int{1, len(ids)}, ids, false)
+	
+	emb, _ := m.Embedding.Forward(inputT)
+	ctx, _ := m.Encoder.Forward(emb)
+	if m.EncoderNorm != nil {
+		ctx, _ = m.EncoderNorm.Forward(ctx)
+	}
+
+	// 2. Generate with "Hard Rule Enforcement"
+	var generated []string
+	var decodedIDs []int
+	
+	hidden := m.Decoder.InitialHiddenState
+	cell := m.Decoder.InitialCellState
+	currentID := m.SentenceVocab.BosID
+	if currentID < 0 { currentID = 0 }
+	
+	for i := 0; i < maxLen; i++ {
+		logits, nextH, nextC, err := m.Decoder.Step(currentID, ctx, hidden, cell)
+		if err != nil { break }
+		hidden = nextH
+		cell = nextC
+
+		// SENSITIVE PRUNING: Only allow words that match the grammar skeleton (if available)
+		if hasRule && i < len(rule.GrammarSkeleton) {
+			expectedType := rule.GrammarSkeleton[i]
+			for idx := 0; idx < len(logits.Data); idx++ {
+				word := m.SentenceVocab.GetWord(idx)
+				actualType := MapWordToGrammarType(word)
+				
+				// If word doesn't match the required structural category, penalize it (Soft Rule)
+				// We use a softer penalty (-5.0) to allow the model to deviate if it's very confident.
+				if actualType != expectedType && actualType != "OTHER" {
+					logits.Data[idx] -= 5.0 
+				}
+			}
+		}
+
+		// Apply Intent-Based Logit Boosting (Soft Rules)
+		m.applyIntentBoost(logits, parent, child)
+
+		// Apply Repetition Penalty (prevent "doing doing doing")
+		ApplyRepetitionPenalty(logits, decodedIDs, 1.5)
+
+		// Stuck Detector: Force diversity if immediate repetition is detected
+		if len(decodedIDs) >= 1 {
+			lastID := decodedIDs[len(decodedIDs)-1]
+			if lastID < len(logits.Data) {
+				logits.Data[lastID] -= 2.0 // Discourage immediate repeat
+			}
+		}
+
+		// Greedy choice
+		bestID := 0
+		bestVal := float32(-math.MaxFloat32)
+		for idx, val := range logits.Data {
+			if val > bestVal {
+				bestVal = val
+				bestID = idx
+			}
+		}
+
+		if bestID == m.SentenceVocab.EosID { break }
+		
+		word := m.SentenceVocab.GetWord(bestID)
+		generated = append(generated, word)
+		decodedIDs = append(decodedIDs, bestID)
+		currentID = bestID
+	}
+
+	return strings.Join(generated, " "), generated
+}
+
+func (m *IntentMoE) applyIntentBoost(logits *tensor.Tensor, parent, child string) {
+	// Simple boost for words that belong to the intent's typical vocabulary
+	// This is a 'soft' way to force the model out of word salad
+	for i := 0; i < len(logits.Data); i++ {
+		word := m.SentenceVocab.GetWord(i)
+		
+		// Boost common grammar markers subtly to nudge structure without overriding context
+		if isStructuralWord(word) {
+			logits.Data[i] += 0.2 // Reduced from 0.5
+		}
+
+		// Boost intent-specific words subtly
+		if parent == "social" {
+			if isSocialWord(word) { logits.Data[i] += 0.15 } // Reduced from 0.3
+			if child == "greeting" && isGreetingWord(word) { logits.Data[i] += 0.3 } // Reduced from 0.5
+			if child == "identity" && isIdentityWord(word) { logits.Data[i] += 0.3 } // Reduced from 0.5
+		}
+	}
+}
+
+func isStructuralWord(w string) bool {
+	switch strings.ToLower(w) {
+	case "i", "you", "is", "are", "am", "the", "a", "to", "and", "it", "that", "in", "for":
+		return true
+	}
+	return false
+}
+
+func isSocialWord(w string) bool {
+	switch strings.ToLower(w) {
+	case "good", "fine", "well", "great", "nice", "happy", "doing":
+		return true
+	}
+	return false
+}
+
+func isGreetingWord(w string) bool {
+	switch strings.ToLower(w) {
+	case "hello", "hi", "hey", "morning", "evening", "there":
+		return true
+	}
+	return false
+}
+
+func isIdentityWord(w string) bool {
+	switch strings.ToLower(w) {
+	case "name", "gollemer", "ai", "assistant", "model", "bot":
+		return true
+	}
+	return false
+}
+
+// CalculateGrammarLoss computes a penalty for sentences that violate the RuleBook's grammar skeletons.
+// It rewards the model for choosing the right *type* of word (Noun, Verb, etc.) in the right order.
+func (m *IntentMoE) CalculateGrammarLoss(generatedWords []string, parent, child string) float32 {
+	if m.Rules == nil { return 0 }
+	rule, ok := m.Rules.GetRuleByIntent(parent, child)
+	if !ok { return 0 }
+
+	skeleton := rule.GrammarSkeleton
+	if len(skeleton) == 0 { return 0 }
+
+	var penalty float32 = 0.0
+	maxCheck := len(generatedWords)
+	if len(skeleton) < maxCheck { maxCheck = len(skeleton) }
+	
+	for i := 0; i < maxCheck; i++ {
+		actualType := MapWordToGrammarType(generatedWords[i])
+		expectedType := skeleton[i]
+		
+		if actualType != expectedType {
+			// Penalty for wrong structural category (word salad prevention)
+			penalty += 0.5
+		}
+	}
+	
+	// Bonus for required keywords
+	for _, kw := range rule.RequiredKeywords {
+		found := false
+		for _, w := range generatedWords {
+			if strings.ToLower(w) == strings.ToLower(kw) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			penalty += 0.2 // penalty for missing essential content
+		}
+	}
+
+	return penalty
+}
+func (m *IntentMoE) EncoderForward(input *tensor.Tensor, mask *tensor.Tensor) (*tensor.Tensor, error) {
+	emb, err := m.Embedding.Forward(input)
+	if err != nil {
+		return nil, err
+	}
+	enc, err := m.Encoder.Forward(emb)
+	if err != nil {
+		return nil, err
+	}
+	if m.EncoderNorm != nil {
+		enc, err = m.EncoderNorm.Forward(enc)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return enc, nil
+}
+
 
 func (m *IntentMoE) warmup() {
 	if m.Encoder == nil {
@@ -379,7 +651,7 @@ func (m *IntentMoE) warmup() {
 	dummyInput.ToGPU()
 
 	// Trigger forward pass on one expert; internal caches will now be populated.
-	// We don't need to run all experts; once the shaders are cached in the shared 
+	// We don't need to run all experts; once the shaders are cached in the shared
 	// backend, subsequent parallel calls will find them in the RLock-protected map.
 	layers[0].Experts[0].Forward(dummyInput)
 	fmt.Println("✅ GPU Warm-up complete.")
@@ -550,9 +822,8 @@ func (m *IntentMoE) EvolutionaryReset(stagnantExpertID int, layerIdx int) {
 		}
 	}
 
-
-// 4. Reset the Router's view of this expert
-// Weights are [inputDim, numExperts]. Expert j is the j-th column: W[k][j] = Data[k*numExperts + j]
+	// 4. Reset the Router's view of this expert
+	// Weights are [inputDim, numExperts]. Expert j is the j-th column: W[k][j] = Data[k*numExperts + j]
 	numExperts := targetLayer.GatingNetwork.Linear.Weights.Shape[1]
 	inputDim := targetLayer.GatingNetwork.Linear.Weights.Shape[0]
 	gatingData := targetLayer.GatingNetwork.Linear.Weights.Data
@@ -621,13 +892,17 @@ func NewHybridIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, ch
 	}
 
 	// 3. Initialize Decoder
-	decoder, err := NewRNNDecoder(embeddingDim, sentenceVocabSize, embeddingDim, maxAttentionHeads, 4, 0.0, numExperts)
+	decoder, err := NewRNNDecoder(embeddingDim, sentenceVocabSize, embeddingDim, maxAttentionHeads, 1, 0.0, numExperts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create RNN decoder: %w", err)
 	}
 
+	// 4. Initialize EncoderNorm
+	encoderNorm := nn.NewLayerNormalization(embeddingDim)
+	
 	return &IntentMoE{
 		Encoder:           hybridEncoder,
+		EncoderNorm:       encoderNorm,
 		Decoder:           decoder,
 		Embedding:         embedding,
 		EmbeddingDim:      embeddingDim,
@@ -699,8 +974,13 @@ func (m *IntentMoE) Forward(scheduledSamplingProb float32, inputs ...*tensor.Ten
 		return nil, nil, fmt.Errorf("MoE encoder forward failed: %w", err)
 	}
 
-	// Normalize context vector to prevent exploding values from propagating to the decoder.
-	contextVector = m.NormalizeContextVector(contextVector)
+	// Normalize context vector using learned LayerNorm for maximum stability.
+	if m.EncoderNorm != nil {
+		contextVector, err = m.EncoderNorm.Forward(contextVector)
+		if err != nil {
+			return nil, nil, fmt.Errorf("encoder norm forward failed: %w", err)
+		}
+	}
 
 	// Decoder forward pass with scheduled sampling & mask
 	sentenceLogits, err := m.Decoder.Forward(contextVector, targetTokenIDs, scheduledSamplingProb, inputMask)
@@ -729,9 +1009,9 @@ func (m *IntentMoE) Backward(grads ...*tensor.Tensor) error {
 		m.Decoder.contextVector.Grad = tensor.NewTensor(m.Decoder.contextVector.Shape, make([]float32, len(m.Decoder.contextVector.Data)), false)
 	}
 
-	// This is a "local" clip that doesn't replace the global one but acts as a circuit breaker.
+	// Circuit breaker... (existing logic)
 	cvGrad := m.Decoder.contextVector.Grad
-	const cvClipThreshold = 10.0
+	const cvClipThreshold = 5.0 // Tightened for better stability
 	var cvSumSq float32
 	for _, v := range cvGrad.Data {
 		cvSumSq += v * v
@@ -744,35 +1024,14 @@ func (m *IntentMoE) Backward(grads ...*tensor.Tensor) error {
 		}
 	}
 
-	// 2. Account for NormalizeContextVector in the backward pass.
-	// Since we scaled tokens by ctxNormThreshold/norm during forward, we must
-	// scale their gradients by the same factor (first-order approximation).
-	if m.Encoder.Inputs() != nil {
-		// e.LLMEncoder.lastOutput is the un-normalized vector
-		// However, it's safer to just re-read the contextVector Data IF we stored it.
-		// For now, we apply the same normalization logic to the GRADIENT
-		// based on the contextVector itself.
-		dim := cvGrad.Shape[len(cvGrad.Shape)-1]
-		numTokens := len(cvGrad.Data) / dim
-		const ctxNormThreshold = 8.0
-		for i := 0; i < numTokens; i++ {
-			offset := i * dim
-			var norm float32
-			for d := 0; d < dim; d++ {
-				// Use the un-normalized data from forward
-				v := m.Decoder.contextVector.Data[offset+d]
-				norm += v * v
-			}
-			norm = float32(math.Sqrt(float64(norm + 1e-8)))
-			// If the token was at the boundary, suppress its gradient.
-			if norm >= float32(ctxNormThreshold-0.01) {
-				for d := 0; d < dim; d++ {
-					cvGrad.Data[offset+d] *= 0.5
-				}
-			}
+	// 2. Backpropagate through EncoderNorm
+	if m.EncoderNorm != nil {
+		if err := m.EncoderNorm.Backward(cvGrad); err != nil {
+			return fmt.Errorf("encoder norm backward failed: %w", err)
 		}
+		cvGrad = m.EncoderNorm.Inputs()[0].Grad
 	}
-
+	
 	contextVectorGrad := cvGrad
 
 	// Backpropagate through the encoder
@@ -799,6 +1058,9 @@ func (m *IntentMoE) Parameters() []*tensor.Tensor {
 	params := []*tensor.Tensor{}
 	params = append(params, m.Embedding.Parameters()...)
 	params = append(params, m.Encoder.Parameters()...)
+	if m.EncoderNorm != nil {
+		params = append(params, m.EncoderNorm.Parameters()...)
+	}
 	params = append(params, m.Decoder.Parameters()...)
 	return params
 }
@@ -1265,6 +1527,72 @@ func LoadIntentMoEModelFromGOB(filePath string) (*IntentMoE, error) {
 		return nil, fmt.Errorf("error decoding model from gob: %w", err)
 	}
 	return &loadedModel, nil
+}
+
+// LoadIntentMoEModelWithFallback attempts to load IntentMoE with format detection.
+// Tries gzip-compressed checkpoint format first, then falls back to raw gob legacy format.
+func LoadIntentMoEModelWithFallback(filePath string) (*IntentMoE, error) {
+	// Check file size first
+	fi, err := os.Stat(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("error checking model file: %w", err)
+	}
+	if fi.Size() == 0 {
+		return nil, fmt.Errorf("model file is empty: %s", filePath)
+	}
+
+	// Try gzip-compressed checkpoint format first
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("error opening model file: %w", err)
+	}
+	defer file.Close()
+
+	// Attempt gzip decompression
+	gz, err := gzip.NewReader(file)
+	if err == nil {
+		// File is gzip-compressed, try to decode as checkpoint
+		defer gz.Close()
+		decoder := gob.NewDecoder(gz)
+		var ckpt Checkpoint
+		err := decoder.Decode(&ckpt)
+		if err == nil && ckpt.Model != nil {
+			ckpt.Model.RepairArchitecture()
+			return ckpt.Model, nil
+		}
+		// If checkpoint decoding failed, fall through to raw gob attempt
+	}
+
+	// Fallback: try raw gob format (legacy)
+	file.Seek(0, 0)
+	reader := bufio.NewReader(file)
+	decoder := gob.NewDecoder(reader)
+	var loadedModel IntentMoE
+	err = decoder.Decode(&loadedModel)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load model in both gzip-checkpoint and raw-gob formats: %w", err)
+	}
+	
+	loadedModel.RepairArchitecture() // 🛠️ Fix missing LayerNorms on load
+	return &loadedModel, nil
+}
+
+// RepairArchitecture ensures the model has all necessary layers for the current version.
+// This allows older GOB checkpoints to be loaded and "upgraded" to the stable architecture.
+func (m *IntentMoE) RepairArchitecture() {
+	if m.EncoderNorm == nil {
+		m.EncoderNorm = nn.NewLayerNormalization(m.EmbeddingDim)
+	}
+	
+	// Delegate to encoder
+	if m.Encoder != nil {
+		m.Encoder.RepairArchitecture()
+	}
+
+	// Delegate to decoder
+	if m.Decoder != nil {
+		m.Decoder.RepairArchitecture()
+	}
 }
 
 // PruneExpertRouter zeros out the routing probabilities for a specific expert to break a collapse.

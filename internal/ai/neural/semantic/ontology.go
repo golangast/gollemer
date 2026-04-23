@@ -2,11 +2,12 @@ package semantic
 
 // SemanticOutput represents the structured output from the NLP layer.
 type SemanticOutput struct {
-	Operation            string               `json:"operation"`
-	Command              string               `json:"command,omitempty"` // Added Command field
-	TargetResource       *Resource            `json:"target_resource"`
-	Context              Context              `json:"context"`
+	Operation            string               `json:"operation,omitempty"`
+	Command              string               `json:"command,omitempty"`
+	TargetResource       *Resource            `json:"target_resource,omitempty"`
+	Context              Context              `json:"context,omitempty"`
 	ExplicitDependencies []TemporalDependency `json:"explicit_dependencies,omitempty"`
+	Social               *SocialInteraction   `json:"social,omitempty"`
 }
 
 // TemporalDependency represents an explicit temporal dependency between two resources.

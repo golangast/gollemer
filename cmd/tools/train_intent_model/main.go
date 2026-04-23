@@ -16,13 +16,15 @@ import (
 	"github.com/golangast/gollemer/internal/ai/neural/tokenizer"
 )
 
-// IntentTrainingExample represents a single training example with a query and its intents.
 type IntentTrainingExample struct {
-	Query        string `json:"query"`
-	ParentIntent string `json:"parent_intent"`
-	ChildIntent  string `json:"child_intent"`
-	Description  string `json:"description"`
-	Sentence     string `json:"sentence"`
+	Query          string `json:"query"`
+	SemanticOutput struct {
+		Social struct {
+			Intent    string `json:"intent"`
+			SubIntent string `json:"sub_intent"`
+		} `json:"social"`
+	} `json:"semantic_output"`
+	FlatOutput string `json:"flat_output"`
 }
 
 // IntentTrainingData represents the structure of the intent training data JSON.
@@ -52,7 +54,7 @@ func LoadIntentTrainingData(filePath string) (*IntentTrainingData, error) {
 
 func main() {
 	// Define paths
-	const trainingDataPath = "data/training/trainingdata/intent_data.json"
+	const trainingDataPath = "data/training/tiny_chat.json"
 	const queryVocabPath = "data/models/gob_models/query_vocabulary.gob"
 	const parentIntentVocabPath = "data/models/gob_models/parent_intent_vocabulary.gob"
 	const childIntentVocabPath = "data/models/gob_models/child_intent_vocabulary.gob"
@@ -91,14 +93,14 @@ func main() {
 	}
 
 	for _, example := range *trainingData {
-		words := strings.FieldsSeq(strings.ToLower(example.Query))
-		for word := range words {
+		words := tokenizer.Tokenize(strings.ToLower(example.Query))
+		for _, word := range words {
 			queryVocab.AddToken(word)
 		}
-		parentIntentVocab.AddToken(example.ParentIntent)
-		childIntentVocab.AddToken(example.ChildIntent)
-		sentenceWords := strings.FieldsSeq(strings.ToLower(example.Sentence))
-		for word := range sentenceWords {
+		parentIntentVocab.AddToken(example.SemanticOutput.Social.Intent)
+		childIntentVocab.AddToken(example.SemanticOutput.Social.SubIntent)
+		sentenceWords := tokenizer.Tokenize(strings.ToLower(example.FlatOutput))
+		for _, word := range sentenceWords {
 			sentenceVocab.AddToken(word)
 		}
 	}
@@ -147,7 +149,7 @@ func main() {
 	}
 
 	// 3. RNN Decoder with increased capacity and dropout (numExperts=1 for legacy decoder)
-	decoder, err := moe.NewRNNDecoder(embeddingDim, sentenceVocab.Size(), hiddenSize, maxAttentionHeads, numLayers, float32(dropoutRate), 1)
+	decoder, err := moe.NewRNNDecoder(hiddenSize, sentenceVocab.Size(), hiddenSize, maxAttentionHeads, numLayers, float32(dropoutRate), 1)
 	if err != nil {
 		log.Fatalf("Failed to create decoder: %v", err)
 	}
@@ -247,7 +249,10 @@ func trainIntentModelBatch(model *moe.IntentMoE, optimizer nn.Optimizer, batch I
 		}
 		copy(inputIDsBatch[i*maxSeqLength:(i+1)*maxSeqLength], tokenIDs)
 
-		sentenceTokenIDs, err := sentenceTokenizer.Encode(example.Sentence)
+		parentIntentIDs[i] = parentIntentVocab.GetTokenID(example.SemanticOutput.Social.Intent)
+		childIntentIDs[i] = childIntentVocab.GetTokenID(example.SemanticOutput.Social.SubIntent)
+		
+		sentenceTokenIDs, err := sentenceTokenizer.Encode(example.FlatOutput)
 		if err != nil {
 			return 0, fmt.Errorf("sentence tokenization failed for item %d: %w", i, err)
 		}
@@ -262,9 +267,6 @@ func trainIntentModelBatch(model *moe.IntentMoE, optimizer nn.Optimizer, batch I
 			sentenceTokenIDs = append(sentenceTokenIDs, padding...)
 		}
 		copy(targetSentenceIDsBatch[i*maxSeqLength:(i+1)*maxSeqLength], sentenceTokenIDs)
-
-		parentIntentIDs[i] = parentIntentVocab.GetTokenID(example.ParentIntent)
-		childIntentIDs[i] = childIntentVocab.GetTokenID(example.ChildIntent)
 	}
 
 	inputTensor := tensor.NewTensor([]int{batchSize, maxSeqLength}, convertIntsToFloat32s(inputIDsBatch), false)
@@ -276,16 +278,33 @@ func trainIntentModelBatch(model *moe.IntentMoE, optimizer nn.Optimizer, batch I
 	}
 
 	var sentenceLoss float32 = 0.0
-	sentenceGrads := make([]*tensor.Tensor, maxSeqLength-1)
+	var sentenceGrads []*tensor.Tensor
 
-	for t := 0; t < maxSeqLength-1; t++ {
-		targets := make([]int, batchSize)
-		for i := range batchSize {
-			targets[i] = int(targetSentenceIDsBatch[i*maxSeqLength+t+1])
+	if len(sentenceLogits) == 1 && len(sentenceLogits[0].Shape) == 3 {
+		// Vectorized 3D loss
+		logits := sentenceLogits[0]
+		// targets for the whole sequence (shifted by 1)
+		fullTargets := make([]int, batchSize*(maxSeqLength-1))
+		for i := 0; i < batchSize; i++ {
+			for t := 0; t < maxSeqLength-1; t++ {
+				fullTargets[i*(maxSeqLength-1)+t] = targetSentenceIDsBatch[i*maxSeqLength+t+1]
+			}
 		}
-		loss, grad := tensor.CrossEntropyLoss(sentenceLogits[t], targets, sentenceVocab.PaddingTokenID, 0.1)
-		sentenceLoss += loss
-		sentenceGrads[t] = grad
+		
+		loss, grad := tensor.CrossEntropyLoss(logits, fullTargets, sentenceVocab.PaddingTokenID, 0.1)
+		sentenceLoss = loss
+		sentenceGrads = []*tensor.Tensor{grad}
+	} else {
+		sentenceGrads = make([]*tensor.Tensor, maxSeqLength-1)
+		for t := 0; t < maxSeqLength-1; t++ {
+			targets := make([]int, batchSize)
+			for i := 0; i < batchSize; i++ {
+				targets[i] = int(targetSentenceIDsBatch[i*maxSeqLength+t+1])
+			}
+			loss, grad := tensor.CrossEntropyLoss(sentenceLogits[t], targets, sentenceVocab.PaddingTokenID, 0.1)
+			sentenceLoss += loss
+			sentenceGrads[t] = grad
+		}
 	}
 
 	totalLoss := sentenceLoss

@@ -518,6 +518,12 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 			if len(moe.ExpertTokenIndices[expertIdx]) < capacity*2 { // permissive limit
 				tokenExpertRelativeIndices[i][j] = len(moe.ExpertTokenIndices[expertIdx])
 				moe.ExpertTokenIndices[expertIdx] = append(moe.ExpertTokenIndices[expertIdx], i)
+				
+				// CRITICAL FIX: Track utilization for health monitoring and resets
+				if moe.AccumulatedUtilization == nil || len(moe.AccumulatedUtilization) != numExperts {
+					moe.AccumulatedUtilization = make([]int, numExperts)
+				}
+				moe.AccumulatedUtilization[expertIdx]++
 			}
 		}
 	}
@@ -1623,4 +1629,8 @@ func (moe *MoELayer) ShakeExperts(intensity float32, loopCount int) {
 			}
 		}
 	}
+}
+
+func (moe *MoELayer) RepairArchitecture() {
+	// MoELayer doesn't have internal norms yet (handled by Stack or IntentMoE)
 }
