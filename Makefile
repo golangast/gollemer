@@ -7,11 +7,20 @@ export CGO_ENABLED=0
 
 # Social Curriculum Training
 train: clean
-	@echo "🚀 Starting Social Curriculum Training..."
+	@echo "🚀 Starting Social Curriculum Training (Fresh Start)..."
 	go run cmd/tools/train_moe/main.go -train-social
 
-# Interactive LLM Chat
+train-social:
+	@echo "🚀 Resuming Social Curriculum Training..."
+	go run cmd/tools/train_moe/main.go -train-social
+
 llm:
+	@echo "🎮 Starting Gollemer LLM..."
+	go run cmd/tools/train_moe/main.go -llm
+
+
+# Interactive LLM Chat
+chat:
 	@echo "💬 Starting Interactive Chat..."
 	go run -mod=mod cmd/tools/train_moe/main.go -llm
 
