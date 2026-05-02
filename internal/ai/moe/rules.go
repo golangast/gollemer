@@ -55,6 +55,14 @@ func NewRuleBook() *RuleBook {
 		RequiredKeywords: []string{"doing", "well", "fine", "good", "great"},
 	}
 
+	// Rule: General Social
+	rb.Rules["social:social_chat"] = IntentRule{
+		ParentIntent: "social",
+		ChildIntent:  "social_chat",
+		GrammarSkeleton: []string{"PRON", "VERB", "OTHER"}, // Simple subject-verb structure
+		RequiredKeywords: []string{},
+	}
+
 	return rb
 }
 

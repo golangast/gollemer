@@ -1,25 +1,28 @@
-.PHONY: all build test bench train verify clean run
+# Gollemer Makefile
 
-all: build
+# Set environment variables for all commands
+export CGO_ENABLED=0
 
-build:
-	go build -o bin/gollemer ./cmd/gollemer
+.PHONY: train llm clean
 
-# Run your SIMD benchmarks to ensure no performance regression
-bench:
-	go test -bench=. -benchmem ./internal/ai/moe/...
+# Social Curriculum Training
+train: clean
+	@echo "🚀 Starting Social Curriculum Training..."
+	go run cmd/tools/train_moe/main.go -train-social
 
-# Train and then immediately verify
-run:
-	go run cmd/train/main.go
-	go run cmd/verify/main.go
+# Interactive LLM Chat
+llm:
+	@echo "💬 Starting Interactive Chat..."
+	go run -mod=mod cmd/tools/train_moe/main.go -llm
 
-# Clean up binary checkpoints and artifacts
+# Cleanup model state
 clean:
-	rm -rf checkpoints/*.bin
-	rm -f *.out *.test cpu.prof mem.prof
-	rm -f bin/gollemer
-
-# Launch the shell training script
-train:
-	bash scripts/train.sh
+	@echo "🧹 Cleaning old model state..."
+	rm -f data/models/gob_models/moe_social_model.gob
+	rm -f data/models/gob_models/social_vocabulary.gob
+	rm -f data/models/gob_models/moe_social_model_vocab.gob
+	rm -f data/models/gob_models/seq2seq_output_vocab.gob
+	rm -f data/models/gob_models/moe_classification_model.gob
+	rm -f data/models/gob_models/classification_vocabulary.gob
+	rm -f data/models/gob_models/moe_social_model_epoch_*.gob
+	rm -f data/models/gob_models/moe_social_model_step_*.gob

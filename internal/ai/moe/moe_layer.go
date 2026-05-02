@@ -126,10 +126,10 @@ func NewMoELayer(inputDim, outputDim, numExperts, k int, expertBuilder func(int)
 		GRPOEnabled:   false, // Default to false. True requires implementing GRPO backward pass.
 		InputDim:      inputDim,
 		OutputDim:     outputDim,
-		LoadBalancingWeight: 0.01, // Default weight
+		LoadBalancingWeight: 0.1, // Increased from 0.01 for tiny datasets
 		CapacityFactor:      1.25, // Default capacity factor
 		RouterTemperature:   0.8,  // Default temperature
-		ExpertDropoutRate:   0.1,  // Default dropout
+		ExpertDropoutRate:   0.3,  // Increased from 0.1 to force alternative expert learning
 		ResidualScale:       NewTensor([]int{1}, []float32{1.0}, true), // Default to 1.0
 		ExpertFrozen:        make([]bool, numExperts),
 		StagnationCounters:  make([]int, numExperts),
@@ -165,7 +165,35 @@ func (moe *MoELayer) ResetRouterWeights() {
 		}
 	}
 
-	fmt.Printf("🚀 Router Gating Weights Reset for %T: Forcing Exploration.\n", moe)
+	// 🛡️ Weight Clamping: Routers should never be "too certain"
+	moe.GatingNetwork.Linear.Weights.Clip(-2.5, 2.5)
+
+	fmt.Printf("🚀 Router Gating Weights Reset & Clamped for %T: Forcing Exploration.\n", moe)
+}
+
+// ResetExpertWeights re-initializes a specific expert's weights to break "Semantic Sink" behavior.
+func (moe *MoELayer) ResetExpertWeights(expertIdx int) {
+	if expertIdx < 0 || expertIdx >= len(moe.Experts) {
+		return
+	}
+	
+	expert := moe.Experts[expertIdx]
+	params := expert.Parameters()
+	for _, p := range params {
+		if p == nil { continue }
+		// Xavier Initialization
+		var fanIn int
+		if len(p.Shape) >= 2 {
+			fanIn = p.Shape[0]
+		} else {
+			fanIn = p.Shape[0]
+		}
+		stdDev := float32(math.Sqrt(1.0 / float64(fanIn)))
+		for i := range p.Data {
+			p.Data[i] = float32(rand.NormFloat64()) * stdDev
+		}
+	}
+	fmt.Printf("🔥 Expert E%d Weights Reset for %T: Breaking Semantic Sink.\n", expertIdx, moe)
 }
  
 // ValidateHealth triggers a health check based on accumulated utilization.
@@ -262,6 +290,13 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 
 	// 2. Calculate Router Z-Loss on RAW logits (Regularization)
 	// This prevents logits from exploding and keeps the router stable.
+	// 🛡️ NUMERICAL SAFETY: Check for NaNs in router logits
+	if len(gateLogits.Data) > 0 && math.IsNaN(float64(gateLogits.Data[0])) {
+		fmt.Printf("⚠️ [MoELayer] NaNs detected in gateLogits! Resetting to small random values.\n")
+		for i := range gateLogits.Data {
+			gateLogits.Data[i] = (rand.Float32() * 0.02) - 0.01
+		}
+	}
 	moe.RouterZLoss = CalculateRouterZLoss(gateLogits)
 	moe.gateLogits = gateLogits // Store raw logits for BPTT
 
@@ -291,23 +326,39 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 
 	// --- [Penalty Mask for Over-Used Experts] ---
 	// Aggressive Penalty for Dominant Experts (Router Level)
-	// Subtract from the logit to make this expert less attractive if over-utilized
 	if moe.Training {
 		var totalTokensProcessed int
 		for _, u := range moe.AccumulatedUtilization {
 			totalTokensProcessed += u
 		}
-		if totalTokensProcessed > 1000 { // Only apply after some warmup
+		if totalTokensProcessed > 200 { // Start earlier (was 1000)
 			avgTokens := float32(totalTokensProcessed) / float32(numExperts)
 			for i := 0; i < batchSize*seqLength; i++ {
 				for j := 0; j < numExperts; j++ {
 					usage := float32(moe.AccumulatedUtilization[j])
-					if usage > avgTokens {
-						// log(usage/avg) is the penalty strength
-						penalty := float32(math.Log(float64(usage/avgTokens))) * 1.0 // 1.0 coefficient for strong nudge
+					if usage > avgTokens*1.1 { // If 10% over average
+						// Apply exponential penalty to discourage this expert
+						ratio := usage / avgTokens
+						penalty := float32(math.Pow(float64(ratio), 2.0)) * 5.0
 						gateLogits.Data[i*numExperts+j] -= penalty
 					}
 				}
+			}
+		}
+		
+		// 🎲 RANDOM EXPERT SHUFFLE (Training Only)
+		// 15% of the time, zero out the top expert's logit to force model to learn alternatives
+		if rand.Float32() < 0.15 {
+			for i := 0; i < batchSize*seqLength; i++ {
+				maxIdx := 0
+				maxVal := gateLogits.Data[i*numExperts]
+				for j := 1; j < numExperts; j++ {
+					if gateLogits.Data[i*numExperts+j] > maxVal {
+						maxVal = gateLogits.Data[i*numExperts+j]
+						maxIdx = j
+					}
+				}
+				gateLogits.Data[i*numExperts+maxIdx] = -1e9 // Temporary dropout
 			}
 		}
 	}
@@ -391,6 +442,15 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 	if err != nil {
 		return nil, fmt.Errorf("gating network softmax failed: %w", err)
 	}
+	
+	// 🛡️ NUMERICAL SAFETY: Check for NaNs in softmax output
+	if len(GateOutputs.Data) > 0 && math.IsNaN(float64(GateOutputs.Data[0])) {
+		fmt.Printf("⚠️ [MoELayer] NaNs detected in GateOutputs! Recovering with uniform distribution.\n")
+		uniform := 1.0 / float32(numExperts)
+		for i := range GateOutputs.Data {
+			GateOutputs.Data[i] = uniform
+		}
+	}
 	moe.GateOutputs = GateOutputs
 
 	// 4. Sum gating probabilities early (used for LoadBalancingLoss later)
@@ -433,6 +493,11 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 		numWorkersRoute = 16
 	}
 	totalTokensRoute := batchSize * seqLength
+	// 🔍 Structural Diagnostic: Verify routing integrity
+	if moe.Training && totalTokensRoute > 0 && rand.Float32() < 0.001 {
+		fmt.Printf("🔍 [MoE Structural Check] K=%d | Logits[0]: %.4f\n", moe.K, gateLogits.Data[0])
+	}
+
 	tokensPerWorkerRoute := (totalTokensRoute + numWorkersRoute - 1) / numWorkersRoute
 
 	moe.TopExpertIDs = make([]int, totalTokensRoute)
@@ -458,13 +523,15 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 				v1, v2 := float32(-1e30), float32(-1e30)
 				
 				for j, score := range scores {
-					if score > v1 {
+					// 🎲 Tie-breaker jitter: Add a tiny random value to break the E0 monopoly on ties
+					jitteredScore := score + (rand.Float32() * 1e-6)
+					if jitteredScore > v1 {
 						v2 = v1
 						e2 = e1
-						v1 = score
+						v1 = jitteredScore
 						e1 = j
-					} else if score > v2 {
-						v2 = score
+					} else if jitteredScore > v2 {
+						v2 = jitteredScore
 						e2 = j
 					}
 				}
@@ -640,11 +707,11 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 	// fmt.Println("Finished scattering")
 	// Finalize Load Balancing Loss (Metrics now that expert outputs are ready)
 	if numTokens > 0 {
-		// Calculate standard Switch Transformer loss
+		// Calculate standard Switch Transformer loss (with stability epsilon)
 		stLoss := float32(0.0)
 		for e := 0; e < numExperts; e++ {
-			fraction := float32(len(moe.ExpertTokenIndices[e])) / float32(numTokens)
-			meanProb := moe.ExpertProbSums[e] / float32(numTokens)
+			fraction := float32(len(moe.ExpertTokenIndices[e])) / (float32(numTokens) + 1e-8)
+			meanProb := moe.ExpertProbSums[e] / (float32(numTokens) + 1e-8)
 			stLoss += fraction * meanProb
 		}
 		stLoss *= float32(numExperts)
@@ -1220,7 +1287,13 @@ func CalculateRouterZLoss(routerLogits *Tensor) float32 {
 	if routerLogits == nil || len(routerLogits.Data) == 0 {
 		return 0
 	}
-	sumSq := DotProduct(routerLogits.Data, routerLogits.Data)
+	sumSq := float32(0.0)
+	for _, v := range routerLogits.Data {
+		if math.IsNaN(float64(v)) || math.IsInf(float64(v), 0) {
+			continue
+		}
+		sumSq += v * v
+	}
 	// Multiply by a small coefficient (e.g., 1e-4) as suggested by PaLM/ST-MoE
 	return (sumSq / float32(len(routerLogits.Data))) * 0.0001
 }
@@ -1264,11 +1337,20 @@ func CalculateAuxLoss(gateProbs []float32, numExperts int) float32 {
 		variance += diff * diff
 	}
 	variance /= float32(numExperts)
-
-	// CV^2 = Variance / Mean^2
-	// Higher CV means more imbalance.
-	return variance / (meanImp * meanImp)
+	
+	// 🛡️ Denominator Stability Guard
+	denom := meanImp * meanImp
+	if denom < 1e-12 {
+		return 0.0
+	}
+	
+	res := variance / denom
+	if math.IsNaN(float64(res)) || math.IsInf(float64(res), 0) {
+		return 0.0
+	}
+	return res
 }
+
 // RebalanceExperts ensures all experts have a similar weight magnitude (L2 Norm).
 // This prevents one expert from becoming a "gravity well" for the router.
 func (moe *MoELayer) RebalanceExperts() {
@@ -1556,10 +1638,20 @@ func CosineSimilarity(a, b []float32) float32 {
 		normA += a[i] * a[i]
 		normB += b[i] * b[i]
 	}
-	if normA <= 0 || normB <= 0 {
+	if normA <= 0 || normB <= 0 || math.IsNaN(float64(normA)) || math.IsNaN(float64(normB)) {
 		return 0
 	}
-	return dot / float32(math.Sqrt(float64(normA))*math.Sqrt(float64(normB)))
+	
+	denom := float32(math.Sqrt(float64(normA))*math.Sqrt(float64(normB)))
+	if denom < 1e-12 {
+		return 0
+	}
+	
+	res := dot / denom
+	if math.IsNaN(float64(res)) {
+		return 0
+	}
+	return res
 }
 
 // UpdateExpertMultipliers adjusts the gradient multipliers based on expert utilization.

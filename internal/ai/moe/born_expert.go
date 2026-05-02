@@ -154,6 +154,18 @@ func NewBornExpert(id, inputDim, hiddenDim, outputDim int) (*BornExpert, error) 
 		fc2:       fc2,
 	}
 
+	// Initialize weights using Xavier/Glorot initialization for stability
+	// inputDim -> hiddenDim
+	limit1 := float32(math.Sqrt(6.0 / float64(inputDim+hiddenDim)))
+	for i := range fc1.Weight().Tensor().Data() {
+		fc1.Weight().Tensor().Data()[i] = (rand.Float32() * 2 * limit1) - limit1
+	}
+	// hiddenDim -> outputDim
+	limit2 := float32(math.Sqrt(6.0 / float64(hiddenDim+outputDim)))
+	for i := range fc2.Weight().Tensor().Data() {
+		fc2.Weight().Tensor().Data()[i] = (rand.Float32() * 2 * limit2) - limit2
+	}
+
 	// Initialize param shadows for global optimizer integration
 	for _, p := range expert.allParams() {
 		bt := p.Tensor()

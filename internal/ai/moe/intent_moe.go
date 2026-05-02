@@ -53,13 +53,22 @@ func init() {
 	gob.Register(&MoEStack{})
 	gob.Register(&HybridLLMGNNEncoder{})
 	gob.Register(&nn.LayerNorm{})
+	gob.Register(&nn.LayerNormalization{})
+	gob.Register(&nn.PositionalEmbedding{})
 	gob.Register(&GoffiExpert{})
+	gob.Register(&mainvocab.Vocabulary{})
 }
 
 // ClearState clears the intermediate tensors used for backward pass
 func (m *IntentMoE) ClearState() {
 	if m.Encoder != nil {
 		m.Encoder.ClearState()
+	}
+	if m.EncoderNorm != nil {
+		m.EncoderNorm.ClearState()
+	}
+	if m.EncoderPos != nil {
+		m.EncoderPos.ClearState()
 	}
 	if m.Decoder != nil {
 		m.Decoder.ClearState()
@@ -349,7 +358,8 @@ type IntentMoE struct {
 	// Diagnostics and Monitoring
 	ExpertStats map[string]*ExpertStat // Key: "layerID:expertID"
 	Metadata    ModelMetadata
-	EncoderNorm *nn.LayerNormalization // Added for stability
+	EncoderNorm *nn.LayerNorm          // Added for stability
+	EncoderPos  *nn.PositionalEmbedding // Added for word-order awareness
 }
 
 // ToGPU moves the entire model's parameters to the GPU.
@@ -365,6 +375,9 @@ func (m *IntentMoE) ToGPU() {
 	}
 	if m.EncoderNorm != nil {
 		m.EncoderNorm.ToGPU()
+	}
+	if m.EncoderPos != nil {
+		m.EncoderPos.ToGPU()
 	}
 
 	// 🌡️ GPU WARM-UP: Serial compilation of pipelines to prevent race conditions
@@ -438,6 +451,7 @@ func (m *IntentMoE) GuessIntent(query string) (string, string) {
 
 // GenerateGuidedSentence attempts to generate a response that follows a grammatical skeleton.
 // It uses the Tagger to predict the 'shape' of the answer before filling in the words.
+var verbose_thinking = false
 func (m *IntentMoE) GenerateGuidedSentence(query string, maxLen int) (string, []string) {
 	parent, child := m.GuessIntent(query)
 	log.Printf("🔮 Sophisticated Intent Detection: [%s / %s]", parent, child)
@@ -622,6 +636,15 @@ func (m *IntentMoE) EncoderForward(input *tensor.Tensor, mask *tensor.Tensor) (*
 	if err != nil {
 		return nil, err
 	}
+	
+	// Apply Positional Encoding if available (matching Forward logic)
+	if m.EncoderPos != nil {
+		emb, err = m.EncoderPos.Forward(emb)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	enc, err := m.Encoder.Forward(emb)
 	if err != nil {
 		return nil, err
@@ -634,6 +657,7 @@ func (m *IntentMoE) EncoderForward(input *tensor.Tensor, mask *tensor.Tensor) (*
 	}
 	return enc, nil
 }
+
 
 
 func (m *IntentMoE) warmup() {
@@ -897,18 +921,30 @@ func NewHybridIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, ch
 		return nil, fmt.Errorf("failed to create RNN decoder: %w", err)
 	}
 
-	// 4. Initialize EncoderNorm
-	encoderNorm := nn.NewLayerNormalization(embeddingDim)
+	// 4. Initialize EncoderNorm and Positional Encoding
+	encoderNorm := nn.NewLayerNorm(embeddingDim)
+	encoderPos := nn.NewPositionalEmbedding(128, embeddingDim)
 	
-	return &IntentMoE{
+	model := &IntentMoE{
 		Encoder:           hybridEncoder,
 		EncoderNorm:       encoderNorm,
+		EncoderPos:        encoderPos,
 		Decoder:           decoder,
 		Embedding:         embedding,
 		EmbeddingDim:      embeddingDim,
 		SentenceVocabSize: sentenceVocabSize,
 		SentenceVocab:     nil,
-	}, nil
+	}
+
+	// Ensure decoder starts with a reasonable multiplier if not already set
+	if decoder.ContextMultiplier == 0 {
+		decoder.ContextMultiplier = 15.0
+	}
+
+	// 🧬 Initialize ActiveLayers tracking for load-balancing
+	model.RebuildActiveLayers()
+
+	return model, nil
 }
 
 // NormalizeContextVector returns a normalized copy of the context vector:
@@ -968,6 +1004,14 @@ func (m *IntentMoE) Forward(scheduledSamplingProb float32, inputs ...*tensor.Ten
 		return nil, nil, fmt.Errorf("embedding layer forward failed: %w", err)
 	}
 
+	// Apply Positional Encoding to query embeddings for word-order awareness
+	if m.EncoderPos != nil {
+		queryEmbeddings, err = m.EncoderPos.Forward(queryEmbeddings)
+		if err != nil {
+			return nil, nil, fmt.Errorf("encoder positional embedding failed: %w", err)
+		}
+	}
+
 	// Encoder forward pass
 	contextVector, err := m.Encoder.Forward(queryEmbeddings)
 	if err != nil {
@@ -980,6 +1024,12 @@ func (m *IntentMoE) Forward(scheduledSamplingProb float32, inputs ...*tensor.Ten
 		if err != nil {
 			return nil, nil, fmt.Errorf("encoder norm forward failed: %w", err)
 		}
+	}
+
+	// 🔍 Diagnostic: Check for Signal Collapse
+	ctxNorm := contextVector.L2Norm()
+	if ctxNorm < 1e-8 {
+		fmt.Printf("⚠️ [IntentMoE] SIGNAL COLLAPSE DETECTED! Context Strength: %.8f\n", ctxNorm)
 	}
 
 	// Decoder forward pass with scheduled sampling & mask
@@ -1029,7 +1079,7 @@ func (m *IntentMoE) Backward(grads ...*tensor.Tensor) error {
 		if err := m.EncoderNorm.Backward(cvGrad); err != nil {
 			return fmt.Errorf("encoder norm backward failed: %w", err)
 		}
-		cvGrad = m.EncoderNorm.Inputs()[0].Grad
+		cvGrad = m.EncoderNorm.Input().Grad
 	}
 	
 	contextVectorGrad := cvGrad
@@ -1040,12 +1090,24 @@ func (m *IntentMoE) Backward(grads ...*tensor.Tensor) error {
 		return fmt.Errorf("MoE encoder backward failed: %w", err)
 	}
 
-	// Get the gradient for the embedding layer from the encoder's input
+	// 4. Backpropagate through Positional Encoding
 	if len(m.Encoder.Inputs()) > 0 {
-		embeddingGrad := m.Encoder.Inputs()[0].Grad
-		if embeddingGrad != nil {
-			if err := m.Embedding.Backward(embeddingGrad); err != nil {
-				return fmt.Errorf("embedding layer backward failed: %w", err)
+		gradBeforePos := m.Encoder.Inputs()[0].Grad
+		if gradBeforePos != nil {
+			if m.EncoderPos != nil {
+				if err := m.EncoderPos.Backward(gradBeforePos); err != nil {
+					return fmt.Errorf("encoder positional backward failed: %w", err)
+				}
+				if len(m.EncoderPos.Inputs()) > 0 {
+					gradBeforePos = m.EncoderPos.Inputs()[0].Grad
+				}
+			}
+
+			// 5. Backpropagate through the embedding layer
+			if gradBeforePos != nil {
+				if err := m.Embedding.Backward(gradBeforePos); err != nil {
+					return fmt.Errorf("embedding layer backward failed: %w", err)
+				}
 			}
 		}
 	}
@@ -1581,7 +1643,10 @@ func LoadIntentMoEModelWithFallback(filePath string) (*IntentMoE, error) {
 // This allows older GOB checkpoints to be loaded and "upgraded" to the stable architecture.
 func (m *IntentMoE) RepairArchitecture() {
 	if m.EncoderNorm == nil {
-		m.EncoderNorm = nn.NewLayerNormalization(m.EmbeddingDim)
+		m.EncoderNorm = nn.NewLayerNorm(m.EmbeddingDim)
+	}
+	if m.EncoderPos == nil {
+		m.EncoderPos = nn.NewPositionalEmbedding(128, m.EmbeddingDim)
 	}
 	
 	// Delegate to encoder
@@ -1593,6 +1658,30 @@ func (m *IntentMoE) RepairArchitecture() {
 	if m.Decoder != nil {
 		m.Decoder.RepairArchitecture()
 	}
+
+	// 🧬 REBUILD ACTIVE LAYERS
+	// Ensure all MoE layers (including loaded ones) are tracked for Load Balancing
+	m.RebuildActiveLayers()
+}
+
+func (m *IntentMoE) RebuildActiveLayers() {
+	// Clear current tracking
+	ActiveLayers = nil
+	
+	// Collect from encoder
+	if m.Encoder != nil {
+		layers := m.Encoder.GetMoELayers()
+		for _, l := range layers {
+			ActiveLayers = append(ActiveLayers, l)
+		}
+	}
+	
+	// Collect from decoder
+	if m.Decoder != nil && m.Decoder.OutputMoE != nil {
+		ActiveLayers = append(ActiveLayers, m.Decoder.OutputMoE)
+	}
+	
+	log.Printf("🧬 Rebuilt MoE tracking: %d layers registered for load-balancing.", len(ActiveLayers))
 }
 
 // PruneExpertRouter zeros out the routing probabilities for a specific expert to break a collapse.

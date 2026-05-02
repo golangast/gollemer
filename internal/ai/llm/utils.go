@@ -287,7 +287,10 @@ func cleanTokenize(text string) []string {
 				currentToken.Reset()
 			}
 		} else if unicode.IsPunct(r) || unicode.IsSymbol(r) {
-			if r == '\'' && currentToken.Len() > 0 {
+			if (r == '\'' || r == '_') && currentToken.Len() > 0 {
+				currentToken.WriteRune(r)
+			} else if r == '_' {
+				// Allow starting underscores for special tokens like __intent__
 				currentToken.WriteRune(r)
 			} else {
 				if currentToken.Len() > 0 {
@@ -405,14 +408,14 @@ func isGarbageOutput(response string) bool {
 		}
 	}
 
-	// Rule 2: >70% garbage tokens (loosen from 40%)
-	if float64(garbageCount)/float64(len(tokens)) > 0.70 {
+	// Rule 2: >60% garbage tokens (tighten from 70%)
+	if float64(garbageCount)/float64(len(tokens)) > 0.60 {
 		return true
 	}
 
 	// Rule 3: very short average word length
 	avgLen := float64(totalLen) / float64(len(tokens))
-	if avgLen < 1.5 { // Loosen from 2.5
+	if avgLen < 1.8 { // Tighten from 1.5
 		return true
 	}
 
@@ -439,8 +442,11 @@ func isLowQualitySocialResponse(response string) bool {
 	functionWords := map[string]bool{
 		"a": true, "an": true, "the": true, "and": true, "or": true, "but": true,
 		"to": true, "of": true, "in": true, "on": true, "for": true, "with": true,
-		"is": true, "are": true, "am": true, "was": true, "were": true, "be": true,
+		"is": true, "are": true, "am": true, "was": true, "were": true, "be": true, "been": true, "being": true,
 		"that": true, "this": true, "these": true, "those": true, "as": true, "at": true,
+		"what": true, "who": true, "where": true, "when": true, "why": true, "how": true,
+		"can": true, "could": true, "should": true, "would": true, "will": true, "shall": true,
+		"do": true, "does": true, "did": true, "done": true, "doing": true,
 	}
 
 	trimmedTokens := make([]string, 0, len(rawTokens))
@@ -481,7 +487,7 @@ func isLowQualitySocialResponse(response string) bool {
 
 	// Long, mostly-unique outputs with little linguistic glue are typically token soup.
 	// Tightened thresholds: 0.22 function ratio is a healthy minimum for social English.
-	if tokenCount >= 12 && uniqueRatio > 0.80 && functionRatio < 0.22 {
+	if tokenCount >= 12 && uniqueRatio > 0.85 && functionRatio < 0.22 {
 		return true
 	}
 

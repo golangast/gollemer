@@ -269,7 +269,7 @@ func (m *Seq2Seq) Predict(query string, maxLen int) (string, error) {
 	currentInputTokenID := float64(m.OutputVocab.BosID)
 
 	for t := range maxLen {
-		decoderInput := tensor.NewTensor([]int{1, 1}, []float64{currentInputTokenID}, true)
+		decoderInput := tensor.NewTensor([]int{1, 1}, []float32{float32(currentInputTokenID)}, true)
 
 		prediction, hidden, cell, err := m.Decoder.Forward(decoderInput, decoderHidden, decoderCell)
 		if err != nil {

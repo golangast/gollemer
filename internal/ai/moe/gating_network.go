@@ -1,15 +1,27 @@
+
+
 package moe
 
 import (
-	"fmt"
-	"math"
-	"math/rand"
+    "fmt"
+    "math"
+    "math/rand"
 
-	"github.com/golangast/gollemer/internal/ai/neural/nn"
-	"github.com/golangast/gollemer/internal/ai/neural/tensor"
+    "github.com/golangast/gollemer/internal/ai/neural/nn"
+    "github.com/golangast/gollemer/internal/ai/neural/tensor"
 )
 
-// GatingNetwork (Router) determines which experts to activate for a given input.
+// RouterNoiseFactor controls the magnitude of random noise added during routing.
+// Default is 1.5 to aggressively break expert monopoly.
+var RouterNoiseFactor float32 = 1.5
+
+// SetRouterNoiseFactor updates the global router noise magnitude.
+func SetRouterNoiseFactor(v float32) {
+    if v > 0 {
+        RouterNoiseFactor = v
+    }
+}
+
 type GatingNetwork struct {
 	Linear               *nn.Linear
 	NoiseLinear          *nn.Linear // For Noisy Top-K gating
@@ -142,16 +154,6 @@ func (gn *GatingNetwork) Forward(inputs ...*tensor.Tensor) (*tensor.Tensor, erro
 		}
 	}
 
-	// 1. Gumbel-Softmax Noise for Expert Exploration (Break Expert Collusions)
-	if gn.Training {
-		// This forces the model to occasionally "miss" its favorite expert
-		// and explore others.
-		for i := range logitsData {
-			// Zero-centered random noise ([-0.05, 0.05] magnitude)
-			logitsData[i] += (rand.Float32() - 0.5) * 0.1
-		}
-	}
-
 	logits := tensor.NewTensor(logitsShape, logitsData, input.RequiresGrad || gn.Linear.Weights.RequiresGrad)
 	gn.logitsTensor = logits
 
@@ -159,6 +161,19 @@ func (gn *GatingNetwork) Forward(inputs ...*tensor.Tensor) (*tensor.Tensor, erro
 	normalized, err := gn.LayerNorm.Forward(logits)
 	if err != nil {
 		return nil, fmt.Errorf("layer norm forward failed: %w", err)
+	}
+
+	// 🎲 NOISE INJECTION AFTER LAYERNORM (Crucial to break ties)
+	// We add noise here so LayerNorm doesn't wash it out or rescale it.
+	normData := normalized.Data
+	if gn.Training {
+		for i := range normData {
+			normData[i] += (rand.Float32() - 0.5) * RouterNoiseFactor
+		}
+	} else {
+		// Inference: NO Jitter for memorization tasks.
+		// If we need exploration during inference, we should use temperature/top-p on the output,
+		// not noise on the router.
 	}
 
 	if normalized.RequiresGrad {
@@ -322,24 +337,35 @@ func (gn *GatingNetwork) CalculateDiversityLoss() float32 {
 		numTokens *= gn.outputTensor.Shape[1]
 	}
 	numExperts := gn.outputTensor.Shape[len(gn.outputTensor.Shape)-1]
+	
+	if numTokens <= 0 {
+		return 0
+	}
 
-	// 1. Calculate the average usage of each expert across the batch
+	// 1. Convert logits to probabilities for fair loss calculation
+	// We use a temporary softmax here to get the current distribution
+	probs, err := gn.outputTensor.Softmax(len(gn.outputTensor.Shape) - 1)
+	if err != nil {
+		return 0
+	}
+
+	// 2. Calculate the average usage of each expert across the batch
 	avgUsage := make([]float32, numExperts)
 	for t := 0; t < numTokens; t++ {
 		base := t * numExperts
 		for e := 0; e < numExperts; e++ {
-			avgUsage[e] += gn.outputTensor.Data[base+e]
+			avgUsage[e] += probs.Data[base+e]
 		}
 	}
 
-	// 2. Normalize by token count
+	// 3. Normalize by token count
 	var totalLoss float32
 	targetUsage := float32(1.0 / float32(numExperts))
 
 	for e := 0; e < numExperts; e++ {
 		avgUsage[e] /= float32(numTokens)
 
-		// 3. Penalty = (Actual Usage - Target Usage)^2
+		// 4. Penalty = (Actual Usage - Target Usage)^2
 		diff := avgUsage[e] - targetUsage
 		totalLoss += diff * diff
 	}
@@ -348,7 +374,12 @@ func (gn *GatingNetwork) CalculateDiversityLoss() float32 {
 	if coeff == 0 {
 		coeff = 0.25 // Default "Anti-Lazy" coefficient
 	}
-	return totalLoss * coeff
+	
+	res := totalLoss * coeff
+	if math.IsNaN(float64(res)) || math.IsInf(float64(res), 0) {
+		return 0.0
+	}
+	return res
 }
 
 // Inputs returns the input tensors of the GatingNetwork's last forward operation.

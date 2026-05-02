@@ -103,10 +103,13 @@ func (r *Runner) Init() {
 				params := socialModel.Parameters()
 				for _, p := range params {
 					for _, d := range p.Data {
-						if d != 0 { weightSum += d }
+						if d != 0 {
+							weightSum += d
+						}
 					}
 				}
 				log.Printf("📊 Social Model Health Check: Loaded %d parameters with active weight magnitude.", len(params))
+				socialModel.RepairArchitecture()
 			} else {
 				log.Printf("⚠️  Failed to load social model at %s (invalid format)", socialModelPath)
 			}
@@ -118,8 +121,8 @@ func (r *Runner) Init() {
 	// Wire up SentenceVocab for social model - always attempt to load latest from disk
 	if socialModel != nil {
 		socialVocabCandidates := []string{
-			filepath.Join(r.ProjectRoot, "data/models/gob_models/moe_social_model_vocab.gob"),
 			filepath.Join(r.ProjectRoot, "data/models/gob_models/social_vocabulary.gob"),
+			filepath.Join(r.ProjectRoot, "data/models/gob_models/moe_social_model_vocab.gob"),
 			filepath.Join(r.ProjectRoot, "data/models/gob_models/seq2seq_output_vocab.gob"),
 		}
 		for _, vocabPath := range socialVocabCandidates {
@@ -133,13 +136,65 @@ func (r *Runner) Init() {
 			}
 		}
 		if socialModel.SentenceVocab == nil || socialModel.SentenceVocab.Size() < 10 {
-			log.Printf("⚠️  Social model has no valid vocabulary (size=%v). Word salad is likely.", 
-				func() int { if socialModel.SentenceVocab == nil { return 0 }; return socialModel.SentenceVocab.Size() }())
+			log.Printf("🔍 Attempting secondary vocab recovery for social model...")
+			for _, vocabPath := range socialVocabCandidates {
+				if _, err := os.Stat(vocabPath); err == nil {
+					if v, err := mainvocab.LoadVocabulary(vocabPath); err == nil {
+						socialModel.SentenceVocab = v
+						log.Printf("✅ Recovered SentenceVocab from: %s", filepath.Base(vocabPath))
+						break
+					}
+				}
+			}
 		}
+		if socialModel.SentenceVocab == nil || socialModel.SentenceVocab.Size() < 10 {
+			log.Printf("⚠️  Social model still has no valid vocabulary. Word salad is likely.")
+		} else {
+			log.Printf("✅ Verified social model vocabulary: %d tokens", socialModel.SentenceVocab.Size())
+		}
+
+		// 🧬 WIRE UP SOCIAL MODEL AS THE PRIMARY INTENT MODEL
+		// This ensures that the LLM client uses the newly trained social brain.
+		r.IntentModel = socialModel
+		log.Printf("🧠 Social Brain wired as primary Intent Model.")
+
+		// 🛡️ Apply Config from social_train.json
+		configPath := filepath.Join(r.ProjectRoot, "data/config/social_train.json")
+		config := moe.LoadSocialConfig(configPath)
+
+		if socialModel.Decoder != nil {
+			socialModel.Decoder.ContextMultiplier = config.ContextMultiplier
+			log.Printf("📡 Social Model Context Multiplier: %.2f", socialModel.Decoder.ContextMultiplier)
+		}
+
+		if config.RouterNoise > 0 {
+			moe.SetRouterNoiseFactor(config.RouterNoise)
+			log.Printf("🔀 Social Model Router Noise: %.2f", config.RouterNoise)
+		}
+
+		// Apply layer-specific settings
+		activeMoELayers := r.findMoELayers(socialModel)
+		for _, layer := range activeMoELayers {
+			if config.RouterTemperature > 0 {
+				layer.RouterTemperature = config.RouterTemperature
+			}
+			if config.LoadBalancingWeight > 0 {
+				layer.LoadBalancingWeight = config.LoadBalancingWeight
+			}
+			if config.ExpertDropout >= 0 {
+				layer.ExpertDropoutRate = config.ExpertDropout
+			}
+		}
+		log.Printf("⚙️  Applied MoE config to social model layers (Temp=%.2f, LBW=%.3f)", config.RouterTemperature, config.LoadBalancingWeight)
 	}
 
 	// Initialize Intent Resolver
-	r.Client = &GollemerMoEClient{KB: r.KB, Model: r.IntentModel, SocialModel: socialModel, W2V: r.W2V}
+	r.Client = &GollemerMoEClient{
+		Model:          r.IntentModel,
+		SocialModel:    r.IntentModel,
+		W2V:            r.W2V, // CRITICAL: wire W2V so getSentenceEmbedding doesn't nil-panic
+		CommandAnchors: map[string][]float64{},
+	}
 	if r.W2V != nil && r.W2V.VocabSize > 0 {
 		r.Client.CommandAnchors = map[string][]float64{
 			"create_file":    r.Client.getSentenceEmbedding("create a new file or scaffold code"),
@@ -148,6 +203,7 @@ func (r *Runner) Init() {
 		}
 	}
 	r.Client.LoadChatBank(filepath.Join(r.ProjectRoot, "data/training/trainingdata/conversing.csv"))
+
 	r.Resolver = NewHybridIntentResolver(r.Client)
 
 	// Initialize Tutorial State
@@ -230,7 +286,9 @@ func (r *Runner) initModels() {
 				params := r.IntentModel.Parameters()
 				for _, p := range params {
 					for _, d := range p.Data {
-						if d != 0 { weightSum += d }
+						if d != 0 {
+							weightSum += d
+						}
 					}
 				}
 				log.Printf("📊 Model Health Check: Loaded %d parameters with active weight magnitude.", len(params))
@@ -269,6 +327,7 @@ func (r *Runner) initModels() {
 		// 2. semantic_output_vocabulary.gob — saved by main intent training (WikiQA/intent)
 		// 3. Tiny fallback built from W2V vocabulary
 		vocabCandidates := []string{
+			filepath.Join(r.ProjectRoot, "data/models/gob_models/social_vocabulary.gob"),
 			filepath.Join(r.ProjectRoot, "data/models/gob_models/seq2seq_output_vocab.gob"),
 			filepath.Join(r.ProjectRoot, r.KB.ModelConfig.SemanticVocabPath),
 		}
@@ -287,8 +346,14 @@ func (r *Runner) initModels() {
 			}
 		}
 		if !loaded {
+			// CHECK IF THE MODEL ITSELF HAS A VOCAB BEFORE FALLBACK
+			if r.IntentModel != nil && r.IntentModel.SentenceVocab != nil && r.IntentModel.SentenceVocab.Size() > 10 {
+				log.Printf("✅ Using SentenceVocab embedded in the model (size=%d)", r.IntentModel.SentenceVocab.Size())
+				return
+			}
+
 			v := mainvocab.NewVocabulary()
-			tokens := []string{"create", "webserver", "handler", "page", "database", "<s>", "</s>"}
+			tokens := []string{"create", "webserver", "handler", "page", "database", "<s>", "</s>", "how", "are", "you", "my", "name", "is"}
 			for _, t := range tokens {
 				v.AddToken(t)
 			}
@@ -404,6 +469,10 @@ func (r *Runner) handleInput(query string) {
 		r.Mascot.Speak(ui.MoodHappy, "I'm on guard duty! I'll watch the workspace for changes.")
 		return
 	}
+	if query == "reset social router" || query == "fix router" {
+		r.Client.ResetSocialRouter(r.Mascot)
+		return
+	}
 	if query == "tutorial" || query == "start tutorial" {
 		if r.TutorialState.Active {
 			r.Mascot.Speak(ui.MoodHappy, fmt.Sprintf("Hi, welcome to gollemer! Resuming tutorial from Step %d. (Type 'reset' to start over)", r.TutorialState.Step))
@@ -427,4 +496,15 @@ func (r *Runner) handleInput(query string) {
 		return
 	}
 	r.handleInteractiveQuery(query)
+}
+
+func (r *Runner) findMoELayers(m *moe.IntentMoE) []*moe.MoELayer {
+	if m == nil {
+		return nil
+	}
+	layers := m.Encoder.GetMoELayers()
+	if m.Decoder != nil && m.Decoder.OutputMoE != nil {
+		layers = append(layers, m.Decoder.OutputMoE)
+	}
+	return layers
 }

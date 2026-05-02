@@ -62,6 +62,8 @@ type Adam struct {
 	v             map[*Tensor]*Tensor // 2nd moment vector
 	ClipThreshold float32
 	Lambda        float32 // Weight decay (Lambda)
+	HealThreshold float32 // When to reset experts (e.g., 0.85)
+	WarmupSteps   int     // Steps before applying full LR
 	RouterLR      float32 // Different learning rate for router parameters
 }
 
@@ -78,7 +80,7 @@ func NewOptimizer(parameters []*Tensor, learningRate float32, clipThreshold floa
 		v:             make(map[*Tensor]*Tensor),
 		ClipThreshold: clipThreshold,
 		Lambda:        0.001, // Reduced from 0.01 for better MLM convergence
-		RouterLR:      learningRate * 10.0, // Increased exploration for experts
+		RouterLR:      learningRate * 15.0, // Aggressive exploration for experts (15x)
 	}
 	// Pre-allocate moments in parallel to avoid startup hangs on large models
 	var wg sync.WaitGroup
@@ -212,6 +214,14 @@ func (o *Adam) Step() {
 				} else {
 					AdamWUpdate(param, grad, m, v, lr, o.beta1, o.beta2, o.epsilon, o.Lambda, o.t)
 				}
+
+				// 🛡️ Continuous Clamping for Routers to prevent "Expert Obsession"
+				if p.IsRouter {
+					for i := range param {
+						if param[i] > 2.5 { param[i] = 2.5 }
+						if param[i] < -2.5 { param[i] = -2.5 }
+					}
+				}
 			}
 		}()
 	}
@@ -246,7 +256,7 @@ func (o *Adam) ZeroGrad() {
 
 func (o *Adam) SetLearningRate(lr float32) {
 	o.learningRate = lr
-	o.RouterLR = lr * 2.0 // Maintain higher router LR for exploration
+	o.RouterLR = lr * 15.0 // Maintain higher router LR for exploration
 }
 
 // GetLearningRate returns the current learning rate

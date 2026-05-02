@@ -970,8 +970,8 @@ func main() {
 
 	// Define training parameters
 	dryRun := flag.Bool("dry-run", false, "Run a quick test with 100 examples for 5 epochs")
-	flagLR := flag.Float64("lr", 0.0005, "Learning rate (ignored if profile is set)")
-	flagEpochs := flag.Int("epochs", 50, "Number of epochs to train (default 50)")
+	flagLR := flag.Float64("lr", 0.0, "Initial learning rate (use 0.0 to defer to social_train.json)")
+	flagEpochs := flag.Int("epochs", 0, "Number of epochs to train (use 0 to defer to social_train.json)")
 	autoHealFlag = flag.Bool("auto-heal", false, "Enable autonomous model recovery")
 	profileName := flag.String("profile", "standard", "Training profile: stable, aggressive, standard")
 	runLLM := flag.Bool("llm", false, "Run the interactive LLM inference mode")
@@ -980,13 +980,13 @@ func main() {
 	trainChat := flag.Bool("train-chat", false, "Run chat-specific training")
 	rebalance := flag.Bool("rebalance", false, "Force expert rebalancing")
 	weightDecay := flag.Float64("wd", 0.0, "Weight decay")
-	maxGradNorm := flag.Float64("max_grad_norm", 1.0, "Maximum gradient norm")
+	maxGradNorm := flag.Float64("max_grad_norm", 0.0, "Maximum gradient norm (use 0.0 to defer to social_train.json)")
 	overfit := flag.Bool("overfit", false, "Enable overfit mode for debugging")
 	gpu := flag.Bool("gpu", false, "Enable GPU acceleration")
-	flagBatchSize := flag.Int("batch-size", 4, "Batch size per step (default 4)")
-	flagAccSteps := flag.Int("acc-steps", 16, "Gradient accumulation steps (default 16)")
+	flagBatchSize := flag.Int("batch-size", 0, "Batch size per step (use 0 to defer to social_train.json)")
+	flagAccSteps := flag.Int("acc-steps", 0, "Gradient accumulation steps (use 0 to defer to social_train.json)")
 	trainSocial := flag.Bool("train-social", false, "Train ONLY on human_chat.txt for pure social conversations")
-	flagNumExperts := flag.Int("num-experts", 8, "Number of experts in MoE layer (default 8)")
+	flagNumExperts := flag.Int("num-experts", 0, "Number of experts in MoE layer (use 0 to defer to social_train.json)")
 	sentencesFile := flag.String("sentences", "", "Path to custom sentences JSON for targeted training")
 
 	flag.Parse()
@@ -1002,7 +1002,7 @@ func main() {
 	}
 
 	if *trainSocial {
-		chat.TrainSocialChat(".", *sentencesFile, *overfit, float32(*flagLR), float32(*weightDecay), *autoHealFlag, float32(*maxGradNorm), *gpu, *flagBatchSize, *flagAccSteps)
+		chat.TrainSocialChat(".", *flagEpochs, *sentencesFile, *overfit, float32(*flagLR), float32(*weightDecay), *autoHealFlag, float32(*maxGradNorm), *gpu, *flagBatchSize, *flagAccSteps, *flagNumExperts)
 		return
 	}
 

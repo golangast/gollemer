@@ -100,3 +100,54 @@ go build -o bin/train_gpu ./cmd/train/main.go
 ## 🚪 Exit
 - **Interactive Shell**: Type `exit` to shut down.
 - **Interrupt**: `Ctrl+C` terminates training or inference loops safely.
+
+```json
+  /* Model Architecture 
+     Defines the "physical" limits of your MoE network.
+  */
+  "num_experts": 12, // The number of specialized FFN sub-networks.
+  // Why: More experts = better nuances but higher RAM/VRAM cost.
+  // Change when: Lower if you hit OOM; raise if the model can't differentiate complex intents.
+  "model_dim": 256, // Embedding and hidden layer vector size.
+  // Why: 256 is efficient for Go/CPU; fits well in cache.
+  // Change when: Raise (e.g. 512) for "deeper" logic; lower to 128 for ultra-fast inference.
+  /* Training Loop 
+     Controls how the weights are updated over time.
+  */
+  "epochs": 1200, // Iterations through the full dataset.
+  // Why: MoE requires high epochs for the router to stabilize expert selection.
+  // Change when: Increase if loss is still trending down; decrease if the model overfits.
+  "learning_rate": 0.0001, // The magnitude of weight updates (1e-4).
+  // Why: Prevents "gradient explosion" in custom Go implementations.
+  // Change when: Raise if training stalls; lower if the loss becomes 'NaN'.
+  "batch_size": 1, // Real-time samples processed per iteration.
+  // Why: Maximizes RAM efficiency on your 16GB setup.
+  // Change when: Raise if you have plenty of free RAM to speed up training.
+  "accumulate_steps": 4, // Virtual batching (Effective Batch = batch_size * accumulate_steps).
+  // Why: Provides gradient stability of a batch of 4 without the memory overhead.
+  // Change when: Increase if the loss curve is too "noisy" or jagged.
+  /* MoE Logic: Routing & Stability 
+     Crucial for ensuring the "Mixture" part of the MoE actually works.
+  */
+  "context_multiplier": 1.0, // Weight of the context window influence.
+  // Why: Adjusts how much previous tokens dictate current routing.
+  // Change when: Raise if the model loses the "thread" of long sentences.
+  "router_noise": 0.8, // Stochastic jitter added to expert selection.
+  // Why: Forces the router to explore all experts during training.
+  // Change when: Lower if the router is already balanced; raise if only 1 expert is active.
+  "expert_dropout": 0.3, // Randomly skips experts during a training pass.
+  // Why: Encourages redundancy and prevents "lazy" experts.
+  // Change when: Increase if the model is memorizing training data verbatim.
+  "collapse_threshold": 0.4, // The minimum usage rate for an expert before it's considered "dead".
+  // Why: Triggers your 'auto-heal' or reset logic for underutilized experts.
+  // Change when: Adjust based on how many experts you expect to be "generalists."
+  "label_smoothing": 0.1, // Distribution of probability across labels.
+  // Why: Softens hard targets to help the model generalize.
+  // Change when: Lower if the model is too "unsure" (flat probabilities).
+  "weight_decay": 0.0001, // L2 regularization penalty.
+  // Why: Prevents any single weight from becoming a "bottleneck" outlier.
+  // Change when: Increase if weights are ballooning; decrease if weights are too suppressed.
+  "max_grad_norm": 1.0, // Gradient clipping threshold.
+  // Why: Hard cap on update size to prevent mathematical instability in Go.
+  // Change when: Lower if you encounter frequent 'NaN' or '
+```

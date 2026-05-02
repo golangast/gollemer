@@ -40,19 +40,17 @@ func NewVocabulary() *Vocabulary {
 		WordToToken: make(map[string]int),
 		TokenToWord: []string{},
 	}
-	// Initialize special tokens
+	// Initialize special tokens with fixed IDs
 	v.AddToken("<pad>") // ID 0
-	v.PaddingTokenID = v.GetTokenID("<pad>")
-	v.AddToken("UNK") // ID 1
-	v.UnkID = v.GetTokenID("UNK")
-	v.BosID = -1 // No BOS token by default
-	v.EosID = -1 // No EOS token by default
+	v.PaddingTokenID = 0
+	v.AddToken("UNK")   // ID 1
+	v.UnkID = 1
+	v.AddToken("<s>")   // ID 2
+	v.BosID = 2
+	v.AddToken("</s>")  // ID 3
+	v.EosID = 3
 
-	if v.PaddingTokenID == -1 || v.UnkID == -1 {
-		panic("NewVocabulary: PaddingTokenID or UnkID is -1 after initialization")
-	}
-	log.Printf("NewVocabulary: Initial size after adding <pad> and UNK: %d", v.Size())
-
+	log.Printf("NewVocabulary: Initial size after adding <pad>, UNK, <s>, </s>: %d", v.Size())
 	return v
 }
 
@@ -175,31 +173,26 @@ func LoadVocabulary(filePath string) (*Vocabulary, error) {
 	defer file.Close()
 
 	decoder := gob.NewDecoder(file)
-	var vocabulary Vocabulary
-	err = decoder.Decode(&vocabulary)
+	var v Vocabulary
+	err = decoder.Decode(&v)
 	if err != nil {
 		return nil, err
 	}
 
-	// Ensure special tokens are correctly added and their IDs are set after loading
-	if vocabulary.GetTokenID("<pad>") == -1 {
-		vocabulary.AddToken("<pad>")
-	}
-	vocabulary.PaddingTokenID = vocabulary.GetTokenID("<pad>")
+	// 🛡️ Robust ID restoration (Avoid -1 or UNK mapping for special tokens)
+	v.PaddingTokenID = -1
+	if id, ok := v.WordToToken["<pad>"]; ok { v.PaddingTokenID = id } else { v.PaddingTokenID = v.AddToken("<pad>") }
+	
+	v.UnkID = -1
+	if id, ok := v.WordToToken["UNK"]; ok { v.UnkID = id } else { v.UnkID = v.AddToken("UNK") }
 
-	if vocabulary.GetTokenID("UNK") == -1 {
-		vocabulary.AddToken("UNK")
-	}
-	vocabulary.UnkID = vocabulary.GetTokenID("UNK")
+	v.BosID = -1
+	if id, ok := v.WordToToken["<s>"]; ok { v.BosID = id } else { v.BosID = v.AddToken("<s>") }
 
-	vocabulary.BosID = vocabulary.GetTokenID("<s>")
-	vocabulary.EosID = vocabulary.GetTokenID("</s>")
+	v.EosID = -1
+	if id, ok := v.WordToToken["</s>"]; ok { v.EosID = id } else { v.EosID = v.AddToken("</s>") }
 
-	if vocabulary.PaddingTokenID == -1 || vocabulary.UnkID == -1 {
-		panic("LoadVocabulary: PaddingTokenID or UnkID is -1 after loading")
-	}
-
-	return &vocabulary, nil
+	return &v, nil
 }
 
 // Function to load training data from a JSON file

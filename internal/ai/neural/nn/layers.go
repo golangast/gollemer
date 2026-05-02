@@ -4,7 +4,6 @@ import (
 	"encoding/gob"
 	"errors"
 	"fmt"
-	"log"
 	"math"
 	"math/rand"
 
@@ -271,17 +270,11 @@ func (l *Linear) Backward(grad *Tensor) error {
 		}
 
 		if l.Weights.RequiresGrad {
-			// Use blas32.Gemm DIRECTLY to bypass Goffi (which silently returns zeros on large matmuls).
 			// dWeights = inputTranspose [inputDim, batch*seqLen] @ reshapedGrad [batch*seqLen, outputDim]
 			m := inputTranspose.Shape[0]  // inputDim
 			k := inputTranspose.Shape[1]  // batch*seqLen
 			n := reshapedGrad.Shape[1]    // outputDim
 			dWeightsData := make([]float32, m*n)
-
-			// Diagnostic: Trace the source of 50k gradients
-			inputNorm := inputTranspose.L2Norm()
-			gradNorm := reshapedGrad.L2Norm()
-			fmt.Printf("🔍 [Linear.Backward] [%d x %d] InputNorm: %.4f | GradNorm: %.4f | m=%d k=%d n=%d\n", m, n, inputNorm, gradNorm, m, k, n)
 
 			blas32.Gemm(blas.NoTrans, blas.NoTrans, 1,
 				blas32.General{Rows: m, Cols: k, Stride: k, Data: inputTranspose.Data},
@@ -290,11 +283,14 @@ func (l *Linear) Backward(grad *Tensor) error {
 				blas32.General{Rows: m, Cols: n, Stride: n, Data: dWeightsData},
 			)
 
-			// Diagnostic: check dWeights magnitude
-			var dwSum float32
-			for _, v := range dWeightsData { dwSum += v * v }
-			if dwSum > 10.0 { // Only log large gradients
-				fmt.Printf("🔍 [Linear.Backward] [%d x %d] dWeights Norm: %.6f\n", m, n, math.Sqrt(float64(dwSum)))
+			// Per-layer gradient clipping to prevent explosion
+			var dwNorm float32
+			for _, v := range dWeightsData { dwNorm += v * v }
+			dwNorm = float32(math.Sqrt(float64(dwNorm)))
+			const maxGradNorm = float32(50.0)
+			if dwNorm > maxGradNorm {
+				scale := maxGradNorm / dwNorm
+				for i := range dWeightsData { dWeightsData[i] *= scale }
 			}
 
 			safeAccumulate(l.Weights.Grad.Data, dWeightsData)
@@ -1361,13 +1357,6 @@ func (mha *MultiHeadCrossAttention) Backward(grad *Tensor) error {
 		if err != nil {
 			return err
 		}
-		// Since we added a residual (output + query), the gradient flows back to query too
-		if mha.queryTensor != nil && mha.queryTensor.RequiresGrad {
-			if mha.queryTensor.Grad == nil {
-				mha.queryTensor.Grad = NewTensor(mha.queryTensor.Shape, make([]float32, len(mha.queryTensor.Data)), false)
-			}
-			safeAccumulate(mha.queryTensor.Grad.Data, mha.attentionOutput.Grad.Data)
-		}
 	}
 
 	batchSize := mha.attentionOutput.Grad.Shape[0]
@@ -1801,12 +1790,6 @@ func (mha *MultiHeadCrossAttention) Forward(inputs ...*Tensor) (*Tensor, error) 
 	output, err := mha.OutputLinear.Forward(contextLayerReshaped)
 	if err != nil {
 		return nil, fmt.Errorf("cross-attention output linear failed: %w", err)
-	}
-
-	// NEW: Residual Connection
-	output, err = output.Add(query)
-	if err != nil {
-		log.Printf("⚠️ MHCA Residual connection failed: %v", err)
 	}
 
 	// Store the final output tensor
