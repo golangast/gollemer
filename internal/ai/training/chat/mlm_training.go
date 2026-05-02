@@ -581,12 +581,23 @@ func RunMLMPreTraining(model *moe.IntentMoE, sentences []MLMSentence, mlmEpochs 
 			
 			if model.EncoderNorm != nil {
 				model.EncoderNorm.Backward(encoderGrad)
-				encoderGrad = model.EncoderNorm.Inputs()[0].Grad
+				encoderGrad = model.EncoderNorm.Input().Grad
 			}
 			train.ClipParamGrads([][]float32{encoderGrad.Data}, maxGradNorm)
 			model.Encoder.Backward(encoderGrad)
-			if len(model.Encoder.Inputs()) > 0 && model.Encoder.Inputs()[0].Grad != nil {
-				model.Embedding.Backward(model.Encoder.Inputs()[0].Grad)
+			
+			// Backpropagate through Positional Encoding
+			gradBeforePos := model.Encoder.Inputs()[0].Grad
+			if gradBeforePos != nil {
+				if model.EncoderPos != nil {
+					model.EncoderPos.Backward(gradBeforePos)
+					if len(model.EncoderPos.Inputs()) > 0 {
+						gradBeforePos = model.EncoderPos.Inputs()[0].Grad
+					}
+				}
+				if gradBeforePos != nil {
+					model.Embedding.Backward(gradBeforePos)
+				}
 			}
 			
 			// Clipping and Step

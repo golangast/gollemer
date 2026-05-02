@@ -6,13 +6,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/golangast/gollemer/internal/ai/moe"
 	"github.com/golangast/gollemer/internal/ai/neural/nnu/word2vec"
@@ -186,6 +190,9 @@ func (c *GollemerMoEClient) RetrieveChatResponse(input string) (string, string, 
 }
 
 func (c *GollemerMoEClient) getSentenceEmbedding(text string) []float64 {
+	if c.W2V == nil {
+		return nil
+	}
 	words := cleanTokenize(text)
 	if len(words) == 0 {
 		return nil
@@ -213,43 +220,66 @@ func (c *GollemerMoEClient) getSentenceEmbedding(text string) []float64 {
 // isSocialIntent detects if a query is social/conversational rather than technical
 func isSocialIntent(input string) bool {
 	lowerInput := strings.ToLower(input)
-
-	// Social intent keywords
-	socialKeywords := []string{
-		"how are you", "how you doing", "how's it going", "what's up",
-		"favorite", "like", "love", "hate", "enjoy", "think", "feel", "opinion",
-		"holiday", "vacation", "weekend", "party", "friend", "family",
-		"weather", "beautiful", "fun", "interesting", "amazing", "cool",
-		"tell me about", "what do you think", "do you ever", "have you ever",
-		"personal", "life", "work", "hobby", "passion", "dream",
-		"meeting", "people", "connection", "relationship", "love", "dating",
-		"hope", "wish", "amazing", "wonderful", "boring", "difficult",
-	}
-
-	// Technical keywords (should NOT be treated as social)
-	technicalKeywords := []string{
-		"create", "file", "handler", "project", "function", "class",
-		"go", "code", "program", "run", "build", "deploy",
-		"database", "sql", "api", "server", "client", "network",
-		"import", "package", "module", "library", "framework",
-	}
-
-	// If it contains technical keywords, it's NOT social
-	for _, tech := range technicalKeywords {
-		if strings.Contains(lowerInput, tech) {
-			return false
+	inputWords := strings.Fields(lowerInput)
+	wordMap := make(map[string]bool)
+	for _, w := range inputWords {
+		// Clean punctuation from words for better matching
+		w = strings.TrimFunc(w, func(r rune) bool {
+			return !unicode.IsLetter(r) && !unicode.IsNumber(r)
+		})
+		if w != "" {
+			wordMap[w] = true
 		}
 	}
 
-	// If it contains social keywords, it IS social
-	for _, social := range socialKeywords {
-		if strings.Contains(lowerInput, social) {
+	// Social intent keywords (full words or common phrases)
+	socialPhrases := []string{
+		"how are you", "how you doing", "how's it going", "what's up",
+		"tell me about", "what do you think", "do you ever", "have you ever",
+	}
+
+	for _, phrase := range socialPhrases {
+		if strings.Contains(lowerInput, phrase) {
 			return true
 		}
 	}
 
+	socialKeywords := []string{
+		"favorite", "like", "love", "hate", "enjoy", "think", "feel", "opinion",
+		"holiday", "vacation", "weekend", "party", "friend", "family",
+		"weather", "beautiful", "fun", "interesting", "amazing", "cool",
+		"personal", "life", "work", "hobby", "passion", "dream",
+		"meeting", "people", "connection", "relationship", "dating",
+		"hope", "wish", "wonderful", "boring", "difficult",
+		"hello", "hi", "hey", "goodbye", "bye", "thanks", "thank",
+		"joke", "story", "real", "sleep", "tired", "happy", "sad", "name",
+		"who", "what", "where", "how", "why", "can", "do", "you", "me",
+		"gollemer", "ai", "assistant",
+	}
+
+	for _, kw := range socialKeywords {
+		if wordMap[kw] {
+			return true
+		}
+	}
+
+	// Technical keywords (should NOT be treated as social)
+	technicalKeywords := []string{
+		"file", "handler", "project", "function", "class",
+		"code", "program", "build", "deploy", "run", "webserver",
+		"database", "sql", "api", "server", "client", "network",
+		"import", "package", "module", "library", "framework",
+		"struct", "interface", "channel", "routine", "pointer",
+	}
+
+	for _, tech := range technicalKeywords {
+		if wordMap[tech] {
+			return false
+		}
+	}
+
 	// Default: if it's short and has no technical keywords, it might be social
-	if len(strings.Fields(lowerInput)) <= 3 && !strings.Contains(lowerInput, "list") {
+	if len(inputWords) <= 3 && !strings.Contains(lowerInput, "list") {
 		return true
 	}
 
@@ -269,7 +299,26 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 			log.Printf("🧠 Neural Social Match: Using weights from moe_social_model.gob")
 			return "social_chat", 0.95
 		}
-		log.Printf("⚖️  Quality Gate: Social model output was too high-entropy (word salad); falling back to retrieval.")
+		log.Printf("⚖️  Quality Gate: Social model output was too high-entropy (word salad); trying retrieval fallback.")
+		// Retrieval fallback: search the ChatBank for a matching social response
+		if len(c.ChatBank) > 0 && c.W2V != nil {
+			retrievedResp, retrievedIntent, retrievedScore := c.RetrieveChatResponse(input)
+			if retrievedScore > 0.5 && retrievedResp != "" {
+				log.Printf("✅ Retrieval Fallback: score=%.4f intent=%s", retrievedScore, retrievedIntent)
+				c.lastMoEPrediction = retrievedResp
+				return "social_chat", retrievedScore
+			}
+		}
+	} else if isSocialIntent(input) && c.SocialModel == nil {
+		// No social model loaded — try retrieval directly for social queries
+		if len(c.ChatBank) > 0 && c.W2V != nil {
+			retrievedResp, retrievedIntent, retrievedScore := c.RetrieveChatResponse(input)
+			if retrievedScore > 0.5 && retrievedResp != "" {
+				log.Printf("✅ Social Retrieval (no neural model): score=%.4f intent=%s", retrievedScore, retrievedIntent)
+				c.lastMoEPrediction = retrievedResp
+				return "social_chat", retrievedScore
+			}
+		}
 	}
 
 	// --- 0. Instant Heuristics for Dynamic Queries ---
@@ -317,7 +366,7 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 	var neuralScore float64
 
 	if c.Model != nil && c.W2V != nil {
-		formattedInput := fmt.Sprintf("[Intent: social] [QUES] %s [ANS]", lowerInput)
+		formattedInput := fmt.Sprintf("__intent__ social : __ques__ %s __ans__", lowerInput)
 		cleanWords := cleanTokenize(formattedInput)
 		var tokenIDs []int
 		for _, w := range cleanWords {
@@ -432,37 +481,31 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 	if c.SocialModel == nil {
 		return ""
 	}
-
-	// Use the same StrictGenerate-equivalent decoder path as training validation.
-	// GreedySearchDecodeWithTemp is a DIFFERENT decoder and produces word salad
-	// because it was never used during training. Match exactly what was trained.
 	model := c.SocialModel
 	if model.SentenceVocab == nil || model.Decoder == nil || model.Embedding == nil || model.Encoder == nil {
 		return ""
 	}
 
-	// Format input to match training exactly: [QUES] <input> [ANS]
-	formattedInput := "[QUES] " + input + " [ANS]"
+	// ── Neural decoder path ─────────────────────────────────
+	// Use normalized input text as trained
+	lowerInput := strings.ToLower(input)
+	formattedInput := fmt.Sprintf("__intent__ social : __ques__ %s __ans__", lowerInput)
 	tokens := cleanTokenize(formattedInput)
 	if len(tokens) == 0 {
 		return ""
 	}
-
 	inputIDs := make([]float32, len(tokens))
 	for i, t := range tokens {
 		inputIDs[i] = float32(lookupVocab(t, model.SentenceVocab))
 	}
 	inputTensor := tensor.NewTensor([]int{1, len(inputIDs)}, inputIDs, false)
 
-	// Encode
 	emb, err := model.Embedding.Forward(inputTensor)
 	if err != nil {
-		log.Printf("GenerateSocialResponse Error (Embedding): %v", err)
 		return ""
 	}
 	ctx, err := model.Encoder.Forward(emb)
 	if err != nil {
-		log.Printf("GenerateSocialResponse Error (Encoder): %v", err)
 		return ""
 	}
 	ctx = model.NormalizeContextVector(ctx)
@@ -470,7 +513,54 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 		return ""
 	}
 
-	// Init decoder hidden/cell state from encoder context mean
+	// ─── 🧠 THINKING TRACE ────────────────────────────────────────────────────
+	fmt.Println("\n💭 [Thinking]")
+	fmt.Printf("   Input tokens  : %s\n", strings.Join(tokens, " "))
+	
+	if ctx.Shape[1] > 0 && ctx.Shape[2] > 0 {
+		type tokenScore struct {
+			tok   string
+			score float32
+		}
+		var scores []tokenScore
+		skip := map[string]bool{"__intent__": true, "__ques__": true, "__ans__": true, "social": true, ":": true}
+		for i, t := range tokens {
+			if skip[t] || i >= ctx.Shape[1] { continue }
+			start := i * ctx.Shape[2]
+			end := start + ctx.Shape[2]
+			if end > len(ctx.Data) { break }
+			var norm float32
+			for _, v := range ctx.Data[start:end] { norm += v * v }
+			norm = float32(math.Sqrt(float64(norm)))
+			scores = append(scores, tokenScore{t, norm})
+		}
+		sort.Slice(scores, func(i, j int) bool { return scores[i].score > scores[j].score })
+		top := scores
+		if len(top) > 3 { top = top[:3] }
+		var focusWords []string
+		for _, s := range top { focusWords = append(focusWords, fmt.Sprintf("%s(%.2f)", s.tok, s.score)) }
+		if len(focusWords) > 0 { fmt.Printf("   Encoder focus : %s\n", strings.Join(focusWords, ", ")) }
+	}
+
+	questionType := "statement"
+	switch {
+	case strings.HasPrefix(lowerInput, "how are") || strings.HasPrefix(lowerInput, "how do you feel"): questionType = "greeting/wellbeing"
+	case strings.HasPrefix(lowerInput, "how"): questionType = "how-question"
+	case strings.HasPrefix(lowerInput, "what"): questionType = "what-question"
+	case strings.HasPrefix(lowerInput, "who"): questionType = "who-question"
+	case strings.Contains(lowerInput, "hello") || strings.Contains(lowerInput, "hi"): questionType = "greeting"
+	case strings.Contains(lowerInput, "thank"): questionType = "gratitude"
+	}
+	fmt.Printf("   Question type  : %s\n", questionType)
+	
+	ctxNorm := ctx.L2Norm()
+	understanding := "weak"
+	if ctxNorm > 5.0 { understanding = "strong" } else if ctxNorm > 2.0 { understanding = "moderate" }
+	fmt.Printf("   Context signal : %.4f (%s)\n", ctxNorm, understanding)
+	fmt.Println("   Generating answer...")
+	fmt.Println()
+	// ─────────────────────────────────────────────────────────────────────────
+
 	batchSize := 1
 	hiddenSize := model.Decoder.LSTM.HiddenSize
 	hiddenState, err := ctx.Mean(1)
@@ -494,51 +584,102 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 	unkID := model.SentenceVocab.GetTokenID("UNK")
 	maxLen := 30
 
+	var expertPath []string
+
+
+	// 1. Enter Eval Mode and set Router Temperature for stability
+	oldTemps := make(map[*moe.MoELayer]float32)
+	layers := model.Encoder.GetMoELayers()
+	if model.Decoder.OutputMoE != nil {
+		layers = append(layers, model.Decoder.OutputMoE)
+	}
+
+	oldModes := make(map[*moe.MoELayer]bool)
+	for _, layer := range layers {
+		oldModes[layer] = layer.Training
+		layer.SetMode(false)
+		oldTemps[layer] = layer.RouterTemperature
+		// Use config temperature if available, otherwise default to 0.85
+		if layer.RouterTemperature <= 0 {
+			layer.RouterTemperature = 0.85
+		}
+	}
+
+	defer func() {
+		for _, layer := range layers {
+			layer.SetMode(oldModes[layer])
+			layer.RouterTemperature = oldTemps[layer]
+		}
+	}()
+
 	for i := 0; i < maxLen; i++ {
 		inputT := tensor.NewTensor([]int{1, 1}, []float32{float32(currentTokenID)}, false)
-		logits, nextHidden, nextCell, _, err := model.Decoder.DecodeStepWithExpert(inputT, hiddenState, cellState, ctx)
+		logits, nextHidden, nextCell, expertID, err := model.Decoder.DecodeStepWithExpert(inputT, hiddenState, cellState, ctx)
 		if err != nil {
 			break
 		}
+		
 		hiddenState = nextHidden
 		cellState = nextCell
 
-		// Suppress EOS for first 5 tokens — same as StrictGenerate training validation
-		if i < 5 {
+		if i < 6 { // Increased from 2 to force at least 6 tokens
 			logits.Data[model.SentenceVocab.EosID] = -1e9
 		}
-
-		// Repetition penalty
-		moe.ApplyRepetitionPenalty(logits, resIDs, 1.2)
-
-		// Frequency penalty
-		const freqPenalty = 0.5
+		
+		// Repetition Penalty (prevent "bag of words" cycling)
+		moe.ApplyRepetitionPenalty(logits, resIDs, 0.3) 
+		const freqPenalty = 0.01 
 		for id, count := range counts {
 			if id < len(logits.Data) {
 				logits.Data[id] -= freqPenalty * float32(count)
 			}
 		}
-
-		// Mute PAD and UNK
 		logits.Data[model.SentenceVocab.PaddingTokenID] = -1e9
 		if unkID != -1 {
 			logits.Data[unkID] = -1e9
 		}
-
-		bestID, err := moe.SampleFromLogits(logits, 0.8, 1, 0.9)
+		
+		// Tightened sampling: topK=3, temp=0.75 to reduce "word salad" noise
+		// Sharpen temperature (0.4) and reduce Top-P (0.85) to force more structured sentence generation.
+		// Higher temperature on a small dataset leads to 'Bag of Words' entropy.
+		// Increased sampling temperature to 0.8 as requested for more creative/diverse token selection
+		bestID, err := moe.SampleFromLogits(logits, 0.8, 5, 0.85)
 		if err != nil {
 			break
 		}
 		if bestID == model.SentenceVocab.EosID {
 			break
 		}
-
+		
+		expertIDs := expertID
+		expertStr := ""
+		for j, eid := range expertIDs {
+			if j > 0 { expertStr += "+" }
+			expertStr += fmt.Sprintf("E%d", eid)
+		}
+		word := model.SentenceVocab.GetWord(bestID)
+		expertPath = append(expertPath, fmt.Sprintf("%s(%s)", word, expertStr))
+		
 		resIDs = append(resIDs, bestID)
 		counts[bestID]++
 		currentTokenID = bestID
 	}
 
-	// Decode tokens to words
+		e6Count := 0
+		e2Count := 0
+		for _, p := range expertPath {
+			if strings.Contains(p, "(E6)") { e6Count++ }
+			if strings.Contains(p, "(E2)") { e2Count++ }
+		}
+		if e6Count > len(expertPath)*4/5 || e2Count > len(expertPath)*4/5 {
+			fmt.Printf("\n🚨 [Warning] Expert Monopoly detected (E6/E2 saturation). Router has collapsed.\n")
+		}
+
+	// Expert path is kept for logging only — suppress in production UI
+	if len(expertPath) > 0 {
+		log.Printf("🧠 Expert Path (inference): %s", strings.Join(expertPath, " -> "))
+	}
+
 	var result []string
 	for _, id := range resIDs[1:] {
 		w := model.SentenceVocab.GetWord(id)
@@ -546,18 +687,18 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 			result = append(result, w)
 		}
 	}
-
 	response := strings.Join(result, " ")
 	if response == "" {
 		return ""
 	}
-	log.Printf("🎭 Social Model generated: %s", response)
+	log.Printf("🎭 Neural Social Model generated: %s", response)
 	if isGarbageOutput(response) || isLowQualitySocialResponse(response) {
 		log.Printf("🗑️  Social output rejected (quality gate): %s", response)
 		return ""
 	}
 	return response
 }
+
 
 func (c *GollemerMoEClient) checkCommandHeuristics(lowerInput string) (string, float64) {
 	createVerbs := []string{"create", "make", "add", "generate", "initialize", "init", "new", "setup"}
@@ -776,6 +917,35 @@ func (c *GollemerMoEClient) WaitForPulse(address string, timeout time.Duration, 
 		time.Sleep(500 * time.Millisecond)
 	}
 	return false
+}
+
+func (c *GollemerMoEClient) ResetSocialRouter(m *ui.Mascot) {
+	if c.SocialModel == nil {
+		m.Say(ui.Neutral, "No social model loaded to reset.")
+		return
+	}
+	m.Say(ui.Think, "Resetting social model router weights to break expert monopoly... ⚡")
+	
+	layers := c.SocialModel.Encoder.GetMoELayers()
+	if c.SocialModel.Decoder.OutputMoE != nil {
+		layers = append(layers, c.SocialModel.Decoder.OutputMoE)
+	}
+
+	for _, layer := range layers {
+		if layer.GatingNetwork != nil && layer.GatingNetwork.Linear != nil {
+			// Re-initialize weights with small random values
+			data := layer.GatingNetwork.Linear.Weights.Data
+			for i := range data {
+				data[i] = (rand.Float32() - 0.5) * 0.1
+			}
+			if layer.GatingNetwork.Linear.Biases != nil {
+				for i := range layer.GatingNetwork.Linear.Biases.Data {
+					layer.GatingNetwork.Linear.Biases.Data[i] = 0
+				}
+			}
+		}
+	}
+	m.Say(ui.Happy, "Router weights reset. The model will now explore other experts during the next training/chat session.")
 }
 
 func (c *GollemerMoEClient) RunDoctor(m *ui.Mascot) {

@@ -3,6 +3,7 @@ package moe
 import (
 	"encoding/gob"
 	"fmt"
+	"math"
 	"math/rand"
 	"runtime"
 
@@ -46,6 +47,8 @@ type RNNDecoder struct {
 	decoderInputs    []*Tensor // Decoder inputs at each timestep
 	contextVector    *Tensor   // Context vector from encoder (saved for backward pass)
 	attentionMask    *Tensor   // Attention mask from forward (saved for backward pass)
+
+	ContextMultiplier float32 // Scale for reinforced context injection
 }
 
 // NewRNNDecoder creates a new RNNDecoder.
@@ -74,7 +77,7 @@ func NewRNNDecoder(inputDim, outputVocabSize, hiddenSize, maxAttentionHeads, num
 		expertBuilder := func(expertIdx int) (Expert, error) {
 			return NewBornExpert(expertIdx, hiddenSize+inputDim, (hiddenSize+inputDim)*2, outputVocabSize)
 		}
-		moeLayer, err := NewMoELayer(hiddenSize+inputDim, outputVocabSize, numExperts, 1, expertBuilder)
+		moeLayer, err := NewMoELayer(hiddenSize+inputDim, outputVocabSize, numExperts, 2, expertBuilder)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create MoE output layer: %w", err)
 		}
@@ -104,6 +107,7 @@ func NewRNNDecoder(inputDim, outputVocabSize, hiddenSize, maxAttentionHeads, num
 		Embedding:         embedding,
 		MaxAttentionHeads: maxAttentionHeads,
 		Attention:         attention,
+		ContextMultiplier: 10.0,
 	}, nil
 }
 
@@ -127,47 +131,14 @@ func (d *RNNDecoder) Forward(contextVector, targetSequence *Tensor, scheduledSam
 	d.contextVector = contextVector
 	d.attentionMask = attentionMask
 
-	// Calculate initial hidden state from context using MASKED MEAN.
+	// Calculate initial hidden state from context.
 	// This ensures the decoder doesn't start with "diluted" context from padding.
-	var initialHidden *Tensor
-	if attentionMask != nil {
-		// Calculate sum of embeddings for real tokens
-		// attentionMask is [batch, 1, 1, seqLen] or similar. We need it to be broadcastable to [batch, seqLen, dim]
-		dim := contextVector.Shape[2]
-		maskData := attentionMask.Data
-		
-		querySeqLen := contextVector.Shape[1]
-		initialHiddenData := make([]float32, batchSize*dim)
-		for b := 0; b < batchSize; b++ {
-			var count float32
-			for s := 0; s < querySeqLen; s++ {
-				m := maskData[b*querySeqLen+s] // Mask is [batch, querySeqLen] flattened (or broadcasted)
-				if m > 0 {
-					count += 1.0
-					offset := (b*querySeqLen + s) * dim
-					for d := 0; d < dim; d++ {
-						initialHiddenData[b*dim+d] += contextVector.Data[offset+d]
-					}
-				}
-			}
-			if count > 0 {
-				for d := 0; d < dim; d++ {
-					initialHiddenData[b*dim+d] /= count
-				}
-			}
-		}
-		initialHidden = NewTensor([]int{batchSize, dim}, initialHiddenData, contextVector.RequiresGrad)
-		initialHidden.Creator = contextVector.Creator
-	} else {
-		// Fallback to simple mean if no mask is provided
-		var err error
-		initialHidden, err = contextVector.Mean(1)
-		if err != nil {
-			return nil, fmt.Errorf("failed to calculate initial hidden state: %w", err)
-		}
-		dim := contextVector.Shape[2]
-		initialHidden, _ = initialHidden.Reshape([]int{batchSize, dim})
+	initialHidden, err := contextVector.Mean(1)
+	if err != nil {
+		return nil, fmt.Errorf("failed to calculate initial hidden state: %w", err)
 	}
+	dim := contextVector.Shape[2]
+	initialHidden, _ = initialHidden.Reshape([]int{batchSize, dim})
 
 	if initialHidden.Shape[1] != hiddenSize {
 		if initialHidden.Shape[1] > hiddenSize {
@@ -179,25 +150,35 @@ func (d *RNNDecoder) Forward(contextVector, targetSequence *Tensor, scheduledSam
 	}
 
 	hiddenState := initialHidden
-	cellState := NewTensor([]int{batchSize, hiddenSize}, make([]float32, batchSize*hiddenSize), false)
+	cellState, _ := initialHidden.Slice(0, 0, batchSize) // Start cell state with initial hidden too
+	if cellState.Shape[1] != hiddenSize {
+		// Padding/truncation for cell state if needed
+		if cellState.Shape[1] > hiddenSize {
+			cellState, _ = cellState.Slice(1, 0, hiddenSize)
+		} else {
+			padding := NewTensor([]int{batchSize, hiddenSize - cellState.Shape[1]}, make([]float32, batchSize*(hiddenSize-cellState.Shape[1])), false)
+			cellState, _ = Concat([]*Tensor{cellState, padding}, 1)
+		}
+	}
 
-	// Context Injection Multiplier
-	const contextMultiplier = 2.0
+	// Reinforced Context Injection (Normalized)
 	ctxMean, _ := d.contextVector.Mean(1)
-	ctxMeanReshaped, _ := ctxMean.Reshape([]int{batchSize, 1, contextVector.Shape[2]})
-
+	ctxMeanNorm := ctxMean.L2Norm()
+	// 🛡️ NUMERICAL STABILITY: Use larger epsilon and cap the scaling factor
+	// to prevent signal explosion when the context is weak (near zero).
+	const ctxEpsilon = 1e-5
+	if ctxMeanNorm > ctxEpsilon {
+		scale := 1.0 / ctxMeanNorm
+		if scale > 10.0 { scale = 10.0 } // Cap scaling factor
+		ctxMean = ctxMean.Scale(scale)
+	}
+	ctxMeanReshaped, _ := ctxMean.Reshape([]int{batchSize, 1, d.contextVector.Shape[2]})
+	
 	if scheduledSamplingProb == 0.0 {
 		fullInput, _ := targetSequence.Slice(1, 0, maxSequenceLength-1)
 		allEmbedded, _ := d.Embedding.Forward(fullInput)
-
-		// Reinforced Context Injection
-		allEmbedded, _ = allEmbedded.AddWithBroadcast(ctxMeanReshaped.Scale(contextMultiplier))
-		
-		// Apply InputNorm
-		normedEmbedded, err := d.InputNorm.Forward(allEmbedded)
-		if err != nil {
-			return nil, err
-		}
+		normedEmbedded, _ := d.InputNorm.Forward(allEmbedded)
+				normedEmbedded, _ = normedEmbedded.AddWithBroadcast(ctxMeanReshaped.Scale(d.ContextMultiplier))
 
 		// 1. LSTM first
 		allHidden, lastCell, err := d.LSTM.Forward(normedEmbedded, initialHidden, cellState)
@@ -263,17 +244,21 @@ func (d *RNNDecoder) Forward(contextVector, targetSequence *Tensor, scheduledSam
 	for t := 0; t < maxSequenceLength-1; t++ {
 		d.decoderInputs = append(d.decoderInputs, decoderInput)
 		embeddedInput, _ := d.Embedding.Forward(decoderInput)
-		
-		// Reinforced Context Injection
-		embeddedInput, _ = embeddedInput.Add(ctxMeanReshaped.Scale(float32(contextMultiplier)))
-		
 		d.embeddedInputs = append(d.embeddedInputs, embeddedInput)
-		
-		// Apply InputNorm
+
+		// Apply InputNorm first, then inject context as post-norm residual.
 		normedIn, _ := d.InputNorm.Forward(embeddedInput)
+		normedIn, _ = normedIn.AddWithBroadcast(ctxMeanReshaped.Scale(d.ContextMultiplier))
 
 		// 1. LSTM
 		reshapedIn, _ := normedIn.Reshape([]int{batchSize, embeddedInput.Shape[2]})
+		
+		// 🛡️ NUMERICAL SAFETY: Check for NaNs before LSTM
+		if len(reshapedIn.Data) > 0 && math.IsNaN(float64(reshapedIn.Data[0])) {
+			fmt.Printf("⚠️ [Decoder] NaNs detected in LSTM input at step %d! Resetting to zero.\n", t)
+			for i := range reshapedIn.Data { reshapedIn.Data[i] = 0 }
+		}
+		
 		hiddenState, cellState, err = d.LSTM.Forward(reshapedIn, hiddenState, cellState)
 		if err != nil {
 			return nil, err
@@ -397,13 +382,13 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
 		allEmbedded, _ := d.Embedding.Forward(allInputs)
 		
 		// 2a. Re-apply Reinforced Context Injection to match Forward pass for correct BPTT
-		const contextMultiplier = 2.0
 		ctxMean, _ := d.contextVector.Mean(1)
 		ctxMeanReshaped, _ := ctxMean.Reshape([]int{batchSize, 1, d.contextVector.Shape[2]})
-		allEmbedded, _ = allEmbedded.AddWithBroadcast(ctxMeanReshaped.Scale(float32(contextMultiplier)))
-        
-        // Re-run InputNorm
+		
+        // Re-run InputNorm FIRST
         allEmbedded, _ = d.InputNorm.Forward(allEmbedded)
+		// Then add context as post-norm residual
+		allEmbedded, _ = allEmbedded.AddWithBroadcast(ctxMeanReshaped.Scale(d.ContextMultiplier))
 
 		// 2b. Re-run LSTM sequence forward to populate timeStepCells for BPTT
 		allHidden, _, err := d.LSTM.Forward(allEmbedded, d.InitialHiddenState, initialCell(batchSize, hiddenSize))
@@ -500,47 +485,49 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
 		return fmt.Errorf("LSTM backward failed: %w", err)
 	}
 
-	// 8. InputNorm Backward
-	if err := d.InputNorm.Backward(d.LSTM.GetInputGrad()); err != nil {
+	// 8. InputNorm Backward (flows from LSTM input grad)
+	lstmInputGrad := d.LSTM.GetInputGrad()
+	if err := d.InputNorm.Backward(lstmInputGrad); err != nil {
 		return fmt.Errorf("input norm backward failed: %w", err)
 	}
-	inputGrad := d.InputNorm.Input().Grad // This is the grad for (Embedded + ContextMean)
-if inputGrad != nil {
-    // Since we used Add(ctxMean), the gradient flows 1:1 to both branches
-    
-    // Branch A: To Embedding
-    if err := d.Embedding.Backward(inputGrad); err != nil {
-        return err
-    }
-    
-    // Branch B: To Context Vector (via Mean and Multiplier)
-    const contextMultiplier = 2.0
-    // 1. Sum over decoder sequence dimension to get grad for ctxMean from the LSTM inputs
-    gradCtxMeanFromInputs, _ := inputGrad.Sum(1) 
-    
-    // 2. Scale by multiplier (y = x + k*z => dz = k*dy)
-    gradCtxMean := gradCtxMeanFromInputs.Scale(float32(contextMultiplier))
- 
-    // 3. Add gradients from the initial hidden state (which came from context mean but NO multiplier)
-    initialHiddenGrad := d.LSTM.GetPrevHiddenGrad()
-    if initialHiddenGrad != nil {
-        gradCtxMean, _ = gradCtxMean.Add(initialHiddenGrad)
-    }
+	
+	// 9. Embedding and Context Vector Gradients
+	if lstmInputGrad != nil {
+		// Branch A: To Embedding (flows through InputNorm)
+		if err := d.Embedding.Backward(d.InputNorm.Input().Grad); err != nil {
+			return err
+		}
 
-    // 4. Distribute back to encoder sequence dimension
-    // ctxMean = sum(contextVector) / S, so dL/dv_i = (dL/dctxMean) / S
-    encSeqLen := d.contextVector.Shape[1]
-    distGrad := gradCtxMean.Scale(1.0 / float32(encSeqLen))
-    
-    // expandedGrad shape [Batch, encSeqLen, Dim]
-    expandedGrad := distGrad.Expand([]int{batchSize, encSeqLen, embeddingDim})
-    
-    if d.contextVector.Grad == nil {
-        d.contextVector.Grad = expandedGrad
-    } else {
-        d.contextVector.Grad, _ = d.contextVector.Grad.Add(expandedGrad)
-    }
-}
+		// Branch B: To Context Vector (direct from LSTM input grad via Mean and Multiplier)
+		// 1. Sum over decoder sequence dimension to get grad for ctxMean from the LSTM inputs
+		gradCtxMeanFromInputs, _ := lstmInputGrad.Sum(1)
+
+		// 2. Scale by multiplier (y = x + k*z => dz = k*dy)
+		gradCtxMean := gradCtxMeanFromInputs.Scale(d.ContextMultiplier)
+
+		// 3. Add gradients from the initial hidden state (which came from context mean but NO multiplier)
+		// Note: Initial hidden state calculation in Forward was HT_0 = ctxMean
+		// so dL/dctxMean += dL/dHT_0
+		// GetPrevHiddenGrad returns dL/d(initialHidden)
+		initialHiddenGrad := d.LSTM.GetPrevHiddenGrad()
+		if initialHiddenGrad != nil {
+			gradCtxMean, _ = gradCtxMean.Add(initialHiddenGrad)
+		}
+
+		// 4. Distribute back to encoder sequence dimension
+		// ctxMean = sum(contextVector) / S, so dL/dv_i = (dL/dctxMean) / S
+		encSeqLen := d.contextVector.Shape[1]
+		distGrad := gradCtxMean.Scale(1.0 / float32(encSeqLen))
+
+		// expandedGrad shape [Batch, encSeqLen, Dim]
+		expandedGrad := distGrad.Expand([]int{batchSize, encSeqLen, embeddingDim})
+
+		if d.contextVector.Grad == nil {
+			d.contextVector.Grad = expandedGrad
+		} else {
+			d.contextVector.Grad, _ = d.contextVector.Grad.Add(expandedGrad)
+		}
+	}
 
 	return nil
 }
@@ -570,14 +557,19 @@ func (d *RNNDecoder) DecodeStep(inputToken *Tensor, prevHiddenState, prevCellSta
 		return nil, nil, nil, err
 	}
 
-	// Reinforced Context Injection
-	const contextMultiplier = 2.0
-	ctxMean, _ := contextVector.Mean(1)
-	ctxMeanReshaped, _ := ctxMean.Reshape([]int{batchSize, 1, contextVector.Shape[2]})
-	embeddedInput, _ = embeddedInput.AddWithBroadcast(ctxMeanReshaped.Scale(contextMultiplier))
-	
-	// Apply InputNorm
+	// Apply InputNorm first
 	normedIn, _ := d.InputNorm.Forward(embeddedInput)
+	// Reinforced Context Injection (Normalized Mean)
+	ctxMean, _ := contextVector.Mean(1)
+	ctxMeanNorm := ctxMean.L2Norm()
+	const ctxEpsilon = 1e-5
+	if ctxMeanNorm > ctxEpsilon {
+		scale := 1.0 / ctxMeanNorm
+		if scale > 10.0 { scale = 10.0 } // Cap scaling factor
+		ctxMean = ctxMean.Scale(scale)
+	}
+	ctxMeanReshaped, _ := ctxMean.Reshape([]int{batchSize, 1, contextVector.Shape[2]})
+	normedIn, _ = normedIn.AddWithBroadcast(ctxMeanReshaped.Scale(d.ContextMultiplier))
 
 	// 2. LSTM
 	reshapedIn, _ := normedIn.Reshape([]int{batchSize, embeddedInput.Shape[2]})
@@ -615,20 +607,20 @@ func (d *RNNDecoder) DecodeStep(inputToken *Tensor, prevHiddenState, prevCellSta
 }
 
 // DecodeStepWithExpert is like DecodeStep but also returns the ID of the top expert used.
-func (d *RNNDecoder) DecodeStepWithExpert(input *Tensor, prevHiddenState, prevCellState, contextVector *Tensor) (*Tensor, *Tensor, *Tensor, int, error) {
+func (d *RNNDecoder) DecodeStepWithExpert(input *Tensor, prevHiddenState, prevCellState, contextVector *Tensor) (*Tensor, *Tensor, *Tensor, []int, error) {
 	logits, h, c, err := d.DecodeStep(input, prevHiddenState, prevCellState, contextVector)
 	if err != nil {
-		return nil, nil, nil, 0, err
+		return nil, nil, nil, nil, err
 	}
 	
-	expertID := -1 // Use -1 as default to detect if MoE was skipped or failed
-	if d.OutputMoE != nil && len(d.OutputMoE.TopExpertIDs) > 0 {
-		expertID = d.OutputMoE.TopExpertIDs[0]
+	expertIDs := []int{}
+	if d.OutputMoE != nil && len(d.OutputMoE.SelectedExperts) > 0 {
+		expertIDs = d.OutputMoE.SelectedExperts[0]
 	} else if d.OutputLayer != nil {
-		expertID = 0 // Standard layer acts as Expert 0
+		expertIDs = []int{0}
 	}
 	
-	return logits, h, c, expertID, nil
+	return logits, h, c, expertIDs, nil
 }
 
 // Parameters returns all learnable parameters of the RNNDecoder.
@@ -806,13 +798,19 @@ func (d *RNNDecoder) Step(tokenID int, contextVector, prevHidden, prevCell *Tens
 	embedded, err := d.Embedding.Forward(inputT)
 	if err != nil { return nil, nil, nil, err }
 
-	// 2. Context Injection (Simple version for Step)
-	ctxMean, _ := contextVector.Mean(1)
-	ctxReshaped, _ := ctxMean.Reshape([]int{batchSize, 1, contextVector.Shape[2]})
-	embedded, _ = embedded.Add(ctxReshaped.Scale(2.0))
-
 	// 3. LSTM
 	normedIn, _ := d.InputNorm.Forward(embedded)
+	
+	// Reinforced Context Injection (Normalized Mean)
+	// Match Forward() and DecodeStep() logic: post-norm residual.
+	ctxMean, _ := contextVector.Mean(1)
+	ctxMeanNorm := ctxMean.L2Norm()
+	if ctxMeanNorm > 1e-8 {
+		ctxMean = ctxMean.Scale(1.0 / ctxMeanNorm)
+	}
+	ctxMeanReshaped, _ := ctxMean.Reshape([]int{batchSize, 1, contextVector.Shape[2]})
+	normedIn, _ = normedIn.AddWithBroadcast(ctxMeanReshaped.Scale(d.ContextMultiplier))
+
 	reshapedIn, _ := normedIn.Reshape([]int{batchSize, embedded.Shape[2]})
 	hidden, cell, err := d.LSTM.Forward(reshapedIn, prevHidden, prevCell)
 	if err != nil { return nil, nil, nil, err }

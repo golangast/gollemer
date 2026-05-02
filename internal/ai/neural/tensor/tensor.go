@@ -957,6 +957,31 @@ func (op *MatMulOperation) Backward(grad *Tensor) error {
 
 	return fmt.Errorf("MatMul backward only supports 2D or 4D tensors, got %d dimensions", len(op.A.Shape))
 }
+type TransposeOperation struct {
+	A     *Tensor
+	Axis1 int
+	Axis2 int
+}
+
+func (op *TransposeOperation) Inputs() []*Tensor {
+	return []*Tensor{op.A}
+}
+
+func (op *TransposeOperation) Backward(grad *Tensor) error {
+	// Gradient of transpose is transpose with swapped axes
+	revGrad, err := grad.Transpose(op.Axis1, op.Axis2)
+	if err != nil {
+		return err
+	}
+	if op.A.Grad == nil {
+		op.A.Grad = NewTensor(op.A.Shape, make([]float32, len(op.A.Data)), false)
+	}
+	for i, v := range revGrad.Data {
+		op.A.Grad.Data[i] += v
+	}
+	return nil
+}
+
 
 // Transpose transposes a tensor by swapping two specified axes.
 func (t *Tensor) Transpose(axis1, axis2 int) (*Tensor, error) {
@@ -987,7 +1012,10 @@ func (t *Tensor) Transpose(axis1, axis2 int) (*Tensor, error) {
 				}
 			}
 		}
-		res := NewTensor(newShape, newData, false)
+		res := NewTensor(newShape, newData, t.RequiresGrad)
+		if t.RequiresGrad {
+			res.Creator = &TransposeOperation{t, axis1, axis2}
+		}
 		if t.Device == GPU {
 			res.ToGPU()
 		}
@@ -1036,7 +1064,10 @@ func (t *Tensor) Transpose(axis1, axis2 int) (*Tensor, error) {
 		}
 		newData[newFlatIndex] = t.Data[i]
 	}
-	res := NewTensor(newShape, newData, false)
+	res := NewTensor(newShape, newData, t.RequiresGrad)
+	if t.RequiresGrad {
+		res.Creator = &TransposeOperation{t, axis1, axis2}
+	}
 	if t.Device == GPU {
 		res.ToGPU()
 	}
