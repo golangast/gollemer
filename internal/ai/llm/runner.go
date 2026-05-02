@@ -86,37 +86,18 @@ func (r *Runner) Init() {
 	var socialModel *moe.IntentMoE
 	socialModelPath := filepath.Join(r.ProjectRoot, "data/models/gob_models/moe_social_model.gob")
 	if _, err := os.Stat(socialModelPath); err == nil {
-		// Try as checkpoint first (compressed)
-		if ckpt, err := moe.LoadIntentMoECheckpoint(socialModelPath); err == nil && ckpt.Model != nil {
-			socialModel = ckpt.Model
+		if loaded, err := moe.LoadIntentMoEModelWithFallback(socialModelPath); err == nil && loaded != nil {
+			socialModel = loaded
 			socialModel.RepairArchitecture()
-			log.Printf("✅ Loaded social model from compressed checkpoint: %s", socialModelPath)
+			log.Printf("🎭 Social MoE Model loaded successfully from %s", socialModelPath)
 		} else {
-			// Try as raw GOB model (uncompressed)
-			if loaded, err := moe.LoadIntentMoEModelWithFallback(socialModelPath); err == nil {
-				socialModel = loaded
-				socialModel.RepairArchitecture()
-				log.Printf("✅ Loaded social-only model from raw GOB: %s", socialModelPath)
-
-				// Quick weight health check
-				var weightSum float32
-				params := socialModel.Parameters()
-				for _, p := range params {
-					for _, d := range p.Data {
-						if d != 0 {
-							weightSum += d
-						}
-					}
-				}
-				log.Printf("📊 Social Model Health Check: Loaded %d parameters with active weight magnitude.", len(params))
-				socialModel.RepairArchitecture()
-			} else {
-				log.Printf("⚠️  Failed to load social model at %s (invalid format)", socialModelPath)
-			}
+			log.Printf("⚠️  Failed to load social model at %s: %v", socialModelPath, err)
 		}
+
 	} else {
 		log.Printf("⚠️  Social model not found at %s (training with -train-social to create it)", socialModelPath)
 	}
+
 
 	// Wire up SentenceVocab for social model - always attempt to load latest from disk
 	if socialModel != nil {
@@ -255,46 +236,21 @@ func (r *Runner) initModels() {
 			filepath.Join(r.ProjectRoot, r.KB.ModelConfig.MoEPath),
 		}
 
+		// Try to load primary intent model using the robust fallback loader
 		for _, p := range paths {
-			if r.IntentModel != nil {
-				break
-			}
 			if _, err := os.Stat(p); err != nil {
 				continue
 			}
-
-			// Try as checkpoint first (compressed)
-			ckpt, err := moe.LoadIntentMoECheckpoint(p)
-			if err == nil && ckpt != nil && ckpt.Model != nil {
-				r.IntentModel = ckpt.Model
-				r.IntentModel.RepairArchitecture()
-				log.Printf("✅ Success: Loaded 768d MoE model from compressed Checkpoint: %s (Steps: %d)", filepath.Base(p), ckpt.StepCount)
-				break
-			} else if err != nil && !strings.Contains(err.Error(), "invalid header") {
-				log.Printf("❌ Error loading checkpoint %s: %v", filepath.Base(p), err)
-			}
-
-			// Try as raw GOB model (uncompressed)
-			loadedModel, err := moe.LoadIntentMoEModelWithFallback(p)
-			if err == nil && loadedModel != nil {
-				loadedModel.RepairArchitecture()
-				r.IntentModel = loadedModel
-				log.Printf("✅ Success: Loaded 768d MoE model from raw GOB: %s", filepath.Base(p))
-
-				// Quick weight health check
-				var weightSum float32
+			loaded, err := moe.LoadIntentMoEModelWithFallback(p)
+			if err == nil && loaded != nil {
+				loaded.RepairArchitecture()
+				r.IntentModel = loaded
+				log.Printf("✅ Success: Loaded primary MoE model from: %s", filepath.Base(p))
+				
+				// Weight health check
 				params := r.IntentModel.Parameters()
-				for _, p := range params {
-					for _, d := range p.Data {
-						if d != 0 {
-							weightSum += d
-						}
-					}
-				}
-				log.Printf("📊 Model Health Check: Loaded %d parameters with active weight magnitude.", len(params))
+				log.Printf("📊 Model Health Check: Loaded %d parameters.", len(params))
 				break
-			} else if err != nil {
-				log.Printf("⚠️  Candidate %s failed (GOB): %v", filepath.Base(p), err)
 			}
 		}
 

@@ -2188,9 +2188,13 @@ skipSocialLoad:
 
 	if intentModel == nil {
 		modelDim := config.ModelDim
+		if modelDim <= 0 {
+			modelDim = 768 // Standard Gollemer dimension
+		}
 		if numExperts <= 0 {
 			numExperts = config.NumExperts
 		}
+
 		freshVocab := precomputedVocabSize
 		if freshVocab < 100 {
 			freshVocab = 100 // Reduced from 2000 to prevent gradient dilution in tiny social models
@@ -2300,26 +2304,37 @@ skipSocialLoad:
 	}
 	_ = valPairs // validation not used in social training loop
 
+	// 🔤 Vocabulary Management: Load existing or build fresh
+	socialVocabPathFinal = filepath.Join(projectRoot, "data/models/gob_models/social_vocabulary.gob")
 	if intentModel.SentenceVocab == nil || intentModel.SentenceVocab.Size() < 5 {
-		// For the social model, build a small focused vocabulary from training data ONLY.
-		// Loading the 7700-token W2V vocab makes all logits near-uniform (0.013% each)
-		// on 13 training pairs — the output space is too large to learn from.
-		log.Println("🔤 Building compact social vocabulary from training data only...")
-		intentModel.SentenceVocab = mainvocab.NewVocabulary() // Now includes BOS/EOS/PAD/UNK (IDs 0-3)
-		intentModel.SentenceVocab.AddToken("__ques__")
-		intentModel.SentenceVocab.AddToken("__ans__")
-		intentModel.SentenceVocab.AddToken("__intent__")
-		intentModel.SentenceVocab.AddToken("social")
-		intentModel.SentenceVocab.AddToken(":")
-		for _, pair := range chatPairs {
-			for _, t := range cleanTokenize(strings.ToLower(pair.Q + " " + pair.A)) {
-				intentModel.SentenceVocab.AddToken(t)
+		if _, err := os.Stat(socialVocabPathFinal); err == nil {
+			log.Printf("📥 Loading existing social vocabulary from %s", socialVocabPathFinal)
+			v, err := mainvocab.LoadVocabulary(socialVocabPathFinal)
+			if err == nil {
+				intentModel.SentenceVocab = v
+				log.Printf("✅ Loaded vocabulary: %d tokens", v.Size())
 			}
 		}
-		log.Printf("✅ Compact social vocabulary: %d tokens", intentModel.SentenceVocab.Size())
+
+		if intentModel.SentenceVocab == nil || intentModel.SentenceVocab.Size() < 5 {
+			log.Println("🔤 Building compact social vocabulary from training data...")
+			intentModel.SentenceVocab = mainvocab.NewVocabulary() // Includes BOS/EOS/PAD/UNK
+			intentModel.SentenceVocab.AddToken("__ques__")
+			intentModel.SentenceVocab.AddToken("__ans__")
+			intentModel.SentenceVocab.AddToken("__intent__")
+			intentModel.SentenceVocab.AddToken("social")
+			intentModel.SentenceVocab.AddToken(":")
+			for _, pair := range chatPairs {
+				for _, t := range cleanTokenize(strings.ToLower(pair.Q + " " + pair.A)) {
+					intentModel.SentenceVocab.AddToken(t)
+				}
+			}
+			log.Printf("✅ Compact social vocabulary: %d tokens", intentModel.SentenceVocab.Size())
+		}
 	} else {
 		log.Printf("🔤 Using existing model vocabulary: %d tokens", intentModel.SentenceVocab.Size())
 	}
+
 
 	// Build deterministic list of new tokens to add
 	newTokensMap := make(map[string]bool)
@@ -2510,12 +2525,12 @@ skipSocialLoad:
 
 			// Scheduled sampling: start with 100% teacher forcing, then gradually introduce model predictions
 			samplingProb := float32(0.0)
-			if epoch > 200 { // Increased from config.SamplingStart to ensure base memorization
+			if !isTinyDataset && epoch > 400 { // Start later to ensure base memorization
 				// Linear ramp up
 				ramp := float32(0.02)
-				if isTinyDataset { ramp = 0.05 }
-				samplingProb = float32(math.Min(float64(config.SamplingMax), float64(epoch-200)*float64(ramp)))
+				samplingProb = float32(math.Min(float64(config.SamplingMax), float64(epoch-400)*float64(ramp)))
 			}
+
 			logits, _, err := intentModel.Forward(samplingProb, inputTensor, targetTensor, inputMask)
 			if err != nil {
 				continue
@@ -2902,23 +2917,36 @@ skipSocialLoad:
 				len(moe.ActiveLayers), config.LoadBalancingWeight, config.ExpertDropout, config.RouterTemperature)
 		}
 
-		// Save checkpoint at the end of every epoch
+		// Save checkpoint at the end of every epoch (compressed)
+		ckpt := &moe.Checkpoint{
+			Model:           intentModel,
+			StepCount:       globalStep,
+			Commitment:      intentModel.CalculateCommitment(),
+			Version:         "gollemer-social-v1.2",
+		}
 		checkpointPath := filepath.Join(projectRoot, fmt.Sprintf("data/models/gob_models/moe_social_model_epoch_%03d.gob", epoch+1))
-		if err := moe.SaveIntentMoEModelToGOB(intentModel, checkpointPath); err != nil {
+		if err := moe.SaveIntentMoECheckpoint(ckpt, checkpointPath); err != nil {
 			log.Printf("❌ Failed to save checkpoint at epoch %d: %v", epoch+1, err)
 		} else {
 			log.Printf("💾 Saved checkpoint: Epoch %d/%d", epoch+1, epochs)
 		}
-		// Update latest main file
-		_ = moe.SaveIntentMoEModelToGOB(intentModel, socialModelPath)
+		// Update latest main file (compressed)
+		_ = moe.SaveIntentMoECheckpoint(ckpt, socialModelPath)
 	}
 
-	// Save final social model
-	if err := moe.SaveIntentMoEModelToGOB(intentModel, socialModelPath); err != nil {
+	// Save final social model (compressed)
+	ckpt := &moe.Checkpoint{
+		Model:      intentModel,
+		StepCount:  globalStep,
+		Commitment: intentModel.CalculateCommitment(),
+		Version:    "gollemer-social-v1.2",
+	}
+	if err := moe.SaveIntentMoECheckpoint(ckpt, socialModelPath); err != nil {
 		log.Printf("❌ Failed to save social model: %v", err)
 	} else {
 		fmt.Printf("💾 Saved final social model to %s\n", socialModelPath)
 	}
+
 
 	// Save social vocabulary to all expected paths
 	socialVocabPathLegacy := filepath.Join(projectRoot, "data/models/gob_models/moe_social_model_vocab.gob")
