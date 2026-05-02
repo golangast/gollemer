@@ -77,6 +77,48 @@ Model stability is controlled via parameters in the training configuration:
 
 ---
 
+## ⚙️ Social Training Configuration
+
+The `data/config/social_train.json` file controls the behavior of the social curriculum training. Tuning these parameters is key to achieving stable and coherent conversational output.
+
+### Core Architecture
+| Property | Description | Recommendation |
+|---|---|---|
+| `"num_experts"` | Total number of specialized feed-forward sub-networks. | 8-12 for balanced performance. |
+| `"model_dim"` | Vector size for embeddings and hidden layers. | 256 for efficiency on CPU/GPU. |
+| `"k"` | Number of experts used per token. | Keep at `1` for maximum specialization. |
+
+### Training Dynamics
+| Property | Description | Rationale |
+|---|---|---|
+| `"epochs"` | Total passes through the dataset. | High values (1000+) help MoE stability. |
+| `"learning_rate"` | Magnitude of weight updates. | 0.001 - 0.0005 to avoid NaN loss. |
+| `"batch_size"` | Samples per iteration. | 1-4 depending on available VRAM. |
+| `"accumulate_steps"` | Virtual batching (Effective Batch = batch * steps). | Increase for smoother gradients. |
+| `"overfit_mode"` | Forces verbatim memorization of small datasets. | `true` for small conversational anchor sets. |
+
+### MoE Routing & Stability
+| Property | Description | Usage |
+|---|---|---|
+| `"context_multiplier"` | Strength of the signal from previous tokens. | 2.0 - 5.0 for deep conversational context. |
+| `"router_noise"` | Stochastic jitter added to expert selection. | 0.1 - 0.8 to force expert exploration. |
+| `"router_temperature"`| Sharpness of expert selection probability. | `1.0` for balanced; lower for "hard" routing. |
+| `"load_balancing_weight"` | Penalty for experts that monopolize tokens. | 0.01 - 0.1 to keep experts active. |
+| `"collapse_threshold"`| Usage rate below which an expert is reset. | 0.15; triggers `auto_heal` for dead experts. |
+| `"auto_heal"` | Automatically resets/re-randomizes dead experts. | `true` to maintain model health during training. |
+| `"capacity_factor"` | Limits token load per expert during routing. | 1.0 - 1.5; prevents expert saturation. |
+
+### Generation & Sampling
+| Property | Description | Usage |
+|---|---|---|
+| `"repetition_penalty"`| Penalizes tokens already present in the output. | 1.2 - 2.0 to prevent "word salad" loops. |
+| `"label_smoothing"` | Softens targets to prevent overconfidence. | 0.1 for generalization; 0 for strict recall. |
+| `"sampling_start_epoch"`| When to start using model output for training. | Epoch 50-100; lets model learn basics first. |
+| `"sampling_max_prob"`| Max probability of model self-sampling. | 0.3 - 0.5 to balance ground-truth vs feedback. |
+| `"verbose_thinking"` | Displays internal expert selection in logs. | `true` for debugging router behavior. |
+
+---
+
 ## 🏗️ Project Structure
 
 ```text
