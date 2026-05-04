@@ -372,6 +372,13 @@ func TrainIntentMoEModel(model *moe.IntentMoE, data []TokenizedTrainingExample, 
 					}
 				}
 			}
+
+			// Aggressively clear computation graph and intermediate state after each batch
+			model.ClearState()
+			model.Detach()
+			if numBatches%16 == 0 {
+				runtime.GC()
+			}
 		}
 
 		if numBatches > 0 {
@@ -552,12 +559,14 @@ func TrainIntentMoEModelWithEnhancedData(model *moe.IntentMoE, enhancedData []En
 			totalLoss += float64(loss)
 
 			// Aggressively clear computation graph after each batch
-			DetachModel(model)
+			enhancedBatch[0].Enhanced.ASG = nil // Free reference
+			model.ClearState()
+			model.Detach()
 			numBatches++
 			if numBatches%5 == 0 {
 				gradNorm := computeGradientNorm(model.Parameters())
 				log.Printf("Enhanced Batch %d: Loss=%.2f, GradNorm=%.4f, LR=%.6f", numBatches, loss, gradNorm, currentLR)
-				// runtime.GC() // Removed explicit GC for performance
+				runtime.GC()
 			}
 		}
 		if numBatches > 0 {
@@ -957,10 +966,15 @@ func BuildVocabularies(semanticTrainingData *IntentTrainingData) (*mainvocab.Voc
 }
 
 func main() {
-	// Set a 10 GB soft memory limit to ensure aggressive Garbage Collection
+	// Set a 4 GB soft memory limit to ensure aggressive Garbage Collection
 	// happens before Linux OOM-Killer kills the training process.
-	// (12 GB was too close to physical RAM ceiling on 16GB systems with a browser open.)
-	debug.SetMemoryLimit(10 * 1024 * 1024 * 1024)
+	// (System has 6.3GiB, so 4GiB is a safe ceiling for the heap.)
+	debug.SetMemoryLimit(4 * 1024 * 1024 * 1024)
+
+	// Set GC to 20% to force much more aggressive garbage collection.
+	// Default GOGC=100 means Go waits until heap doubles (2.3GB -> 4.6GB) before collecting.
+	// At 20%, GC fires every ~460MB of growth, keeping heap under control.
+	debug.SetGCPercent(20)
 
 	const semanticTrainingDataPath = "./data/training/tiny_chat.json"
 	const word2vecModelPath = "data/models/gob_models/word2vec_model.gob"
@@ -1310,7 +1324,7 @@ func main() {
 
 	// Detach the model from the computation graph to allow for clean serialization
 	log.Println("Detaching model from computation graph...")
-	DetachModel(intentMoEModel)
+	intentMoEModel.Detach()
 
 	// Save the trained model
 	fmt.Printf("Saving IntentMoE model to %s\n", modelSavePath)
@@ -1372,38 +1386,3 @@ func saveCheckpoint(model *moe.IntentMoE, basePath string, epoch, batch, current
 	return moe.SaveIntentMoECheckpoint(ckpt, filename)
 }
 
-// DetachModel removes the computation graph (creator and operation) from the model parameters
-// it preserves gradients unless they are explicitly cleared.
-func DetachModel(model *moe.IntentMoE) {
-	params := model.Parameters()
-	for _, param := range params {
-		param.Creator = nil
-		param.Mask = nil
-		param.Operation = nil
-	}
-
-	// Clear encoder state
-	if enc, ok := model.Encoder.(*moe.MoEEncoder); ok {
-		enc.ClearState()
-	}
-
-	// Clear decoder state which might hold references to the computation graph
-	if model.Decoder != nil {
-		model.Decoder.InitialHiddenState = nil
-		model.Decoder.InitialCellState = nil
-
-		// Clear LSTM cells state
-		if model.Decoder.LSTM != nil {
-			for _, layer := range model.Decoder.LSTM.Cells {
-				for _, cell := range layer {
-					cell.InputTensor = nil
-					cell.PrevHidden = nil
-					cell.PrevCell = nil
-				}
-			}
-		}
-	}
-
-	log.Println("Model detached from computation graph.")
-	runtime.GC() // Force garbage collection to free up memory before saving
-}

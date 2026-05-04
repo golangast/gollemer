@@ -702,7 +702,7 @@ skipCSV:
 	}
 
 	// Clear any stale state from the loaded model
-	DetachModel(intentModel)
+	intentModel.Detach()
 
 	// ═══════════════════════════════════════════════════════════════
 	// PHASE 0: MLM Pre-Training (Grammar Learning)
@@ -747,7 +747,7 @@ skipCSV:
 			}
 
 			// Clear state and GC after MLM phase
-			DetachModel(intentModel)
+			intentModel.Detach()
 			runtime.GC()
 			debug.FreeOSMemory()
 		}
@@ -1156,7 +1156,7 @@ skipCSV:
 				}
 
 				// Use the weighted version with the pre-defined weight slice
-				loss, grad := WeightedCrossEntropy(l.ToCPU(), targets, lossWeights, labelSmoothing)
+				loss, grad := WeightedCrossEntropy(l.ToCPU(), targets, lossWeights, labelSmoothing, 0.005)
 				if grad == nil {
 					grad = tensor.NewTensor(l.Shape, make([]float32, len(l.Data)), false)
 				}
@@ -1174,7 +1174,7 @@ skipCSV:
 					for b := 0; b < currentBatchSize; b++ {
 						targets[b] = int(targetTensor.Data[b*seqLen+t+1])
 					}
-					l, g := WeightedCrossEntropy(logit.ToCPU(), targets, lossWeights, labelSmoothing)
+					l, g := WeightedCrossEntropy(logit.ToCPU(), targets, lossWeights, labelSmoothing, 0.005)
 					if g == nil {
 						g = tensor.NewTensor(logit.Shape, make([]float32, len(logit.Data)), false)
 					}
@@ -1597,7 +1597,7 @@ skipCSV:
 			// Each save serialises the entire model, spiking RSS by ~1×model_size.
 			// We now save only ONE file (timestamped) and skip the duplicate latest_periodic copy
 			// to avoid holding two full serialised copies in memory simultaneously.
-			if batches > 0 && batches%200 == 0 {
+			if batches > 0 && batches%1000 == 0 {
 				log.Printf("💾 [CHECKPOINT] Starting periodic save at Step %d (Batch %d)...", globalStep, batches)
 				fmt.Printf("💾 Periodic Saving: Step %d (Batch %d)\n", globalStep, batches)
 
@@ -1641,7 +1641,7 @@ skipCSV:
 					p.Grad = nil
 				}
 			}
-			DetachModel(intentModel)
+			intentModel.Detach()
 
 			if globalStep > 0 && globalStep%100 == 0 {
 				log.Printf("═══════════════════════════════════════════════")
@@ -1802,7 +1802,7 @@ skipCSV:
 			// Reset utilization for the next epoch
 			layer.ResetUtilizationStats()
 		}
-		DetachModel(intentModel)
+		intentModel.Detach()
 		avgLoss := float32(0.0)
 		if batches > 0 {
 			avgLoss = totalLoss / float32(batches)
@@ -1945,44 +1945,63 @@ skipCSV:
 		ExportUtilizationCSV(epoch+1, globalStep)
 
 		// periodic snapshots
-		ckpt := &moe.Checkpoint{
-			Model:           intentModel,
-			StepCount:       globalStep,
-			LastProfile:     profile,
-			Commitment:      intentModel.CalculateCommitment(),
-			TokensProcessed: totalTokens,
-			TotalDuration:   totalDuration,
-			Version:         "gollemer-chat-v1.2",
-		}
+		if (epoch+1)%20 == 0 || epoch == 0 || epoch == epochs-1 {
+			ckpt := &moe.Checkpoint{
+				Model:           intentModel,
+				StepCount:       globalStep,
+				LastProfile:     profile,
+				Commitment:      intentModel.CalculateCommitment(),
+				TokensProcessed: totalTokens,
+				TotalDuration:   totalDuration,
+				Version:         "gollemer-chat-v1.2",
+			}
 
-		intentModel.StepCount = globalStep
-		intentModel.TrainingPhase = 2
-		moe.SaveIntentMoECheckpoint(ckpt, moePath)
+			intentModel.StepCount = globalStep
+			intentModel.TrainingPhase = 2
+			moe.SaveIntentMoECheckpoint(ckpt, moePath)
 
-		// GC between saves to avoid doubling peak RSS (two concurrent serializations)
-		ckpt = nil
-		runtime.GC()
-		debug.FreeOSMemory()
+			// GC between saves to avoid doubling peak RSS (two concurrent serializations)
+			ckpt = nil
+			runtime.GC()
+			debug.FreeOSMemory()
 
-		// Rebuild ckpt for the numbered snapshot
-		ckpt = &moe.Checkpoint{
-			Model:           intentModel,
-			StepCount:       globalStep,
-			LastProfile:     profile,
-			Commitment:      intentModel.CalculateCommitment(),
-			TokensProcessed: totalTokens,
-			TotalDuration:   totalDuration,
-			Version:         "gollemer-chat-v1.2",
-		}
+			// Rebuild ckpt for the numbered snapshot
+			ckpt = &moe.Checkpoint{
+				Model:           intentModel,
+				StepCount:       globalStep,
+				LastProfile:     profile,
+				Commitment:      intentModel.CalculateCommitment(),
+				TokensProcessed: totalTokens,
+				TotalDuration:   totalDuration,
+				Version:         "gollemer-chat-v1.2",
+			}
+			numberedPath := filepath.Join(checkpointDir, fmt.Sprintf("moe_classification_model_epoch_%03d.gob", epoch+1))
+			moe.SaveIntentMoECheckpoint(ckpt, numberedPath)
 
-		// numbered checkpoint
-		numberedPath := filepath.Join(checkpointDir, fmt.Sprintf("epoch_%03d.gob", epoch+1))
-		moe.SaveIntentMoECheckpoint(ckpt, numberedPath)
-
-		// Save Best Model
-		if valPPL < bestPPL {
+			// Check if this is the best model so far
+			if valPPL < bestPPL {
+				bestPPL = valPPL
+				patienceCounter = 0
+				if err := moe.SaveIntentMoECheckpoint(ckpt, bestMoePath); err != nil {
+					log.Printf("⚠️  Failed to save best MoE model: %v", err)
+				} else {
+					fmt.Printf("🏆 New Best Model! PPL: %.2f (Saved to %s)\n", bestPPL, bestMoePath)
+					trainer.SaveGoldenCheckpoint(intentModel, stats, globalStep, profile, totalTokens, totalDuration)
+				}
+			}
+		} else if valPPL < bestPPL {
+			// Even if not a 20-epoch periodic save, we should still save the BEST model if it improves.
 			bestPPL = valPPL
 			patienceCounter = 0
+			ckpt := &moe.Checkpoint{
+				Model:           intentModel,
+				StepCount:       globalStep,
+				LastProfile:     profile,
+				Commitment:      intentModel.CalculateCommitment(),
+				TokensProcessed: totalTokens,
+				TotalDuration:   totalDuration,
+				Version:         "gollemer-chat-v1.2-best",
+			}
 			if err := moe.SaveIntentMoECheckpoint(ckpt, bestMoePath); err != nil {
 				log.Printf("⚠️  Failed to save best MoE model: %v", err)
 			} else {
@@ -2038,6 +2057,7 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 	var err error
 	var humanChatPath string
 	var socialVocabPathFinal string
+	var conversingPath string
 
 	// Load custom data if provided
 	if customDataPath != "" {
@@ -2139,7 +2159,37 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 				lastQ = ""
 			}
 		}
-		log.Printf("📊 Loaded %d pairs from human_chat.txt", len(chatPairs))
+		var ms runtime.MemStats
+		runtime.ReadMemStats(&ms)
+		log.Printf("📊 Loaded %d pairs from human_chat.txt | Heap: %d MB", len(chatPairs), ms.Alloc/1024/1024)
+	}
+
+	// --- LOAD conversing.csv IF AVAILABLE ---
+	conversingPath = filepath.Join(projectRoot, "data/training/trainingdata/conversing.csv")
+	if _, err := os.Stat(conversingPath); err == nil {
+		f, err := os.Open(conversingPath)
+		if err == nil {
+			defer f.Close()
+			reader := csv.NewReader(f)
+			records, err := reader.ReadAll()
+			if err == nil {
+				for i, record := range records {
+					if i == 0 || len(record) < 2 { // Skip header or invalid lines
+						continue
+					}
+					q := record[0]
+					a := record[1]
+					intent := "social_chat"
+					if len(record) >= 3 {
+						intent = record[2]
+					}
+					if q != "" && a != "" {
+						chatPairs = append(chatPairs, struct{ Q, A, Intent string }{q, a, intent})
+					}
+				}
+			}
+			log.Printf("📊 Loaded total %d pairs after adding conversing.csv (Proper CSV parsing)", len(chatPairs))
+		}
 	}
 skipSocialLoad:
 	if len(chatPairs) == 0 {
@@ -2436,6 +2486,10 @@ skipSocialLoad:
 		}
 	} else {
 		log.Println("🎯 TINY DATASET: Standardizing all token weights to 1.0 for memorization.")
+		// For tiny datasets, disable anti-overfitting measures to allow perfect memorization
+		config.EntropyWeight = 0.0
+		config.LabelSmoothing = 0.0
+		log.Println("🛡️  Disabled EntropyWeight and LabelSmoothing for better memorization of tiny dataset.")
 	}
 
 	// Create optimizer (Wrapped with Cooling Safety)
@@ -2537,9 +2591,21 @@ skipSocialLoad:
 			}
 
 			// 🛡️ NUMERICAL SAFETY: Check for NaNs in logits
-			if len(logits) > 0 && len(logits[0].Data) > 0 {
-				if math.IsNaN(float64(logits[0].Data[0])) {
-					log.Println("🏴‍☠️ [CRITICAL] NaNs detected in logits. Triggering Emergency Stabilization...")
+			if len(logits) > 0 {
+				hasNaN := false
+				for _, l := range logits {
+					if l != nil {
+						for _, v := range l.Data {
+							if math.IsNaN(float64(v)) || math.IsInf(float64(v), 0) {
+								hasNaN = true
+								break
+							}
+						}
+					}
+					if hasNaN { break }
+				}
+				if hasNaN {
+					log.Println("🏴‍☠️ [CRITICAL] NaNs/Infs detected in logits. Triggering Emergency Stabilization...")
 					StabilizeParameters(intentModel, 1.0, 0.5) // Aggressive reset
 					continue
 				}
@@ -2560,7 +2626,7 @@ skipSocialLoad:
 						targets[b*targetSeqLen+t] = int(targetTensor.Data[b*seqLen+t+1])
 					}
 				}
-				loss, grad := WeightedCrossEntropy(l.ToCPU(), targets, lossWeights, config.LabelSmoothing)
+				loss, grad := WeightedCrossEntropy(l.ToCPU(), targets, lossWeights, config.LabelSmoothing, config.EntropyWeight)
 				if grad == nil {
 					grad = tensor.NewTensor(l.Shape, make([]float32, len(l.Data)), false)
 				}
@@ -2576,7 +2642,7 @@ skipSocialLoad:
 					for b := 0; b < currentBatchSize; b++ {
 						targets[b] = int(targetTensor.Data[b*seqLen+t+1])
 					}
-					l, g := WeightedCrossEntropy(logit.ToCPU(), targets, lossWeights, config.LabelSmoothing)
+					l, g := WeightedCrossEntropy(logit.ToCPU(), targets, lossWeights, config.LabelSmoothing, config.EntropyWeight)
 					if g == nil {
 						g = tensor.NewTensor(logit.Shape, make([]float32, len(logit.Data)), false)
 					}
@@ -2691,11 +2757,24 @@ skipSocialLoad:
 							}
 						}
 						optimizer.ZeroGrad()
+						// CRITICAL: Release computation graph tensors after each update
+						// Without this, every batch accumulates in-memory until the epoch ends (OOM).
+						intentModel.ClearState()
+					} else {
+						// Accumulation step: gradients accumulate in .Grad fields (safe),
+						// but intermediate activation tensors must be freed now.
+						intentModel.ClearState()
 					}
+				} else {
+					// Backward failed - still clear state to avoid graph accumulation
+					intentModel.ClearState()
 				}
 				epochLoss += batchLoss
 				batchNum++
 				globalStep++
+				if batchNum%32 == 0 {
+					runtime.GC()
+				}
 
 				if batchNum%10 == 0 {
 					avgLoss := epochLoss / float32(batchNum)
@@ -2729,8 +2808,9 @@ skipSocialLoad:
 
 		// (Remove duplicate batchNum++ globalStep++ here)
 
-		// 💾 SAVE PROGRESS MID-EPOCH (As requested)
-		if batchNum > 0 && batchNum%100 == 0 {
+		// 💾 SAVE PROGRESS MID-EPOCH (Reduced frequency)
+		if batchNum > 0 && batchNum%1000 == 0 {
+			intentModel.Detach()
 			ckptPath := filepath.Join(projectRoot, fmt.Sprintf("data/models/gob_models/moe_social_model_step_%d.gob", globalStep))
 			log.Printf("💾 Saving periodic checkpoint at Step %d...", globalStep)
 			if err := moe.SaveIntentMoEModelToGOB(intentModel, ckptPath); err != nil {
@@ -2745,7 +2825,7 @@ skipSocialLoad:
 			}
 		}
 
-		DetachModel(intentModel)
+		intentModel.Detach()
 
 		// 🩺 MoE Health Check & Auto-Healing (Monopoly Recovery)
 		if (globalStep+1)%100 == 0 { // Check every 100 steps
@@ -2814,6 +2894,7 @@ skipSocialLoad:
 		}
 		saladCount := 0
 		var epochScores []float32
+		var epochGrammarScores []float32
 		// After 100 epochs, we test against the FULL dataset as a Quality Gate
 		currentTestPrompts := testPrompts
 		isFullTest := epoch >= 100
@@ -2826,7 +2907,15 @@ skipSocialLoad:
 		}
 
 		for i, p := range currentTestPrompts {
-			response := StrictGenerate(intentModel, p, 25, config.RepetitionPenalty)
+			// Use shorter maxLen during early training to reduce inference memory.
+			// The KV cache in cross-attention grows with sequence length, so fewer steps = less RAM.
+			testMaxLen := 10
+			if isFullTest {
+				testMaxLen = 15
+			}
+			response := StrictGenerate(intentModel, p, testMaxLen, config.RepetitionPenalty)
+			// CRITICAL: Detach graph after each test to prevent memory accumulation
+			intentModel.Detach()
 
 			// 📊 Coherence Metric
 			words := strings.Split(response, " ")
@@ -2846,6 +2935,9 @@ skipSocialLoad:
 			// Use the more sophisticated heuristic for the progress bar
 			heuristicScore := scoreSentenceHeuristic(response)
 			epochScores = append(epochScores, heuristicScore)
+			
+			grammarScore := scoreGrammarHeuristic(response)
+			epochGrammarScores = append(epochGrammarScores, grammarScore)
 
 			status := "Coherent"
 			if heuristicScore < 10.0 { // Heuristic is out of 20.0
@@ -2858,6 +2950,9 @@ skipSocialLoad:
 				log.Printf("🧪 Test [%d]: %s [Score: %.2f | status: %s]", i, response, heuristicScore, status)
 			}
 		}
+		// Force GC after a large test block, then return memory to OS
+		runtime.GC()
+		debug.FreeOSMemory() // Return freed Go heap memory back to the OS immediately
 
 		// 🚨 Quality Gate Recovery: If it fails a single test during full test, or majority during sampled test
 		failureThreshold := len(currentTestPrompts) / 2
@@ -2867,12 +2962,20 @@ skipSocialLoad:
 
 		// 📊 PROGRESS TRACKING
 		targetScorePerSentence := float32(18.0) // Max expected heuristic score
+		targetGrammarPerSentence := float32(10.0) // Expected max grammar score
 		targetScore := targetScorePerSentence * float32(len(currentTestPrompts))
+		targetGrammarScore := targetGrammarPerSentence * float32(len(currentTestPrompts))
+		
 		currentTotalScore := float32(0.0)
 		for _, s := range epochScores {
 			currentTotalScore += s
 		}
-		drawSocialProgressBar(currentTotalScore, targetScore, epoch+1, epochs)
+		
+		currentTotalGrammar := float32(0.0)
+		for _, s := range epochGrammarScores {
+			currentTotalGrammar += s
+		}
+		drawSocialProgressBar(currentTotalScore, targetScore, currentTotalGrammar, targetGrammarScore, epoch+1, epochs)
 
 		if saladCount > failureThreshold && epoch > 150 && !isTinyDataset {
 			log.Printf("🚨 Quality Gate Failure (%d SALAD). Extending training and auto-tuning...", saladCount)
@@ -2917,23 +3020,28 @@ skipSocialLoad:
 				len(moe.ActiveLayers), config.LoadBalancingWeight, config.ExpertDropout, config.RouterTemperature)
 		}
 
-		// Save checkpoint at the end of every epoch (compressed)
-		ckpt := &moe.Checkpoint{
-			Model:           intentModel,
-			StepCount:       globalStep,
-			Commitment:      intentModel.CalculateCommitment(),
-			Version:         "gollemer-social-v1.2",
+		// 4. Save Checkpoint (Periodic)
+		if (epoch+1)%20 == 0 || epoch == 0 || epoch == epochs-1 {
+			// Detach before epoch save to free up memory for serialization
+			intentModel.Detach()
+			ckpt := &moe.Checkpoint{
+				Model:           intentModel,
+				StepCount:       globalStep,
+				Commitment:      intentModel.CalculateCommitment(),
+				Version:         "gollemer-social-v1.2",
+			}
+			checkpointPath := filepath.Join(projectRoot, fmt.Sprintf("data/models/gob_models/moe_social_model_epoch_%03d.gob", epoch+1))
+			if err := moe.SaveIntentMoECheckpoint(ckpt, checkpointPath); err != nil {
+				log.Printf("❌ Failed to save checkpoint at epoch %d: %v", epoch+1, err)
+			} else {
+				log.Printf("💾 Saved checkpoint: Epoch %d/%d", epoch+1, epochs)
+			}
+			// Update latest main file (compressed)
+			_ = moe.SaveIntentMoECheckpoint(ckpt, socialModelPath)
 		}
-		checkpointPath := filepath.Join(projectRoot, fmt.Sprintf("data/models/gob_models/moe_social_model_epoch_%03d.gob", epoch+1))
-		if err := moe.SaveIntentMoECheckpoint(ckpt, checkpointPath); err != nil {
-			log.Printf("❌ Failed to save checkpoint at epoch %d: %v", epoch+1, err)
-		} else {
-			log.Printf("💾 Saved checkpoint: Epoch %d/%d", epoch+1, epochs)
-		}
-		// Update latest main file (compressed)
-		_ = moe.SaveIntentMoECheckpoint(ckpt, socialModelPath)
 	}
 
+	intentModel.Detach()
 	// Save final social model (compressed)
 	ckpt := &moe.Checkpoint{
 		Model:      intentModel,
@@ -2966,6 +3074,9 @@ skipSocialLoad:
 func StrictGenerate(model *moe.IntentMoE, input string, maxLen int, repetitionPenalty float32) string {
 	// 1. Diagnostics: We keep Training=true for MoE layers during tests
 	// to see the REAL routing behavior (noise, dropout, penalties).
+	// CRITICAL: Disable gradient tracking to prevent stateStack bloat and graph memory leaks.
+	model.SetParamsRequiresGrad(false)
+
 	oldTemps := make(map[*moe.MoELayer]float32)
 	for _, layer := range moe.ActiveLayers {
 		layer.SetMode(true) // KEEP TRAINING MODE FOR DIVERSITY
@@ -2979,6 +3090,9 @@ func StrictGenerate(model *moe.IntentMoE, input string, maxLen int, repetitionPe
 	}
 
 	defer func() {
+		// Restore gradient tracking
+		model.SetParamsRequiresGrad(true)
+
 		for layer, temp := range oldTemps {
 			layer.SetMode(true)
 			layer.RouterTemperature = temp
@@ -3234,6 +3348,16 @@ func StrictGenerate(model *moe.IntentMoE, input string, maxLen int, repetitionPe
 			expertIDsStr += fmt.Sprintf("E%d", eid)
 		}
 		path = append(path, fmt.Sprintf("%s(%s)", word, expertIDsStr))
+
+		// CRITICAL: Free layer caches after each decode step.
+		// DecodeStep runs Attention/LSTM/LayerNorm forward and caches activations.
+		// Without clearing, 25 steps × N prompts accumulates 100s of MB.
+		model.ClearState()
+
+		// Trigger GC periodically to reclaim memory freed by ClearState.
+		if i%5 == 4 {
+			runtime.GC()
+		}
 	}
 
 	// Convert IDs back to words
@@ -3257,6 +3381,9 @@ func StrictGenerate(model *moe.IntentMoE, input string, maxLen int, repetitionPe
 // StrictGenerateWithExperts is a variant of StrictGenerate that also returns the expert IDs used.
 func StrictGenerateWithExperts(model *moe.IntentMoE, input string, maxLen int, repetitionPenalty float32) (string, []int) {
 	// 1. Enter Eval Mode and set Router Temperature for stability
+	// CRITICAL: Disable gradient tracking
+	model.SetParamsRequiresGrad(false)
+
 	oldTemps := make(map[*moe.MoELayer]float32)
 	for _, layer := range moe.ActiveLayers {
 		layer.SetMode(false)
@@ -3269,6 +3396,9 @@ func StrictGenerateWithExperts(model *moe.IntentMoE, input string, maxLen int, r
 	}
 
 	defer func() {
+		// Restore
+		model.SetParamsRequiresGrad(true)
+
 		for layer, temp := range oldTemps {
 			layer.SetMode(true)
 			layer.RouterTemperature = temp
@@ -3665,29 +3795,6 @@ func (it *ChatDataIterator) Reset() {
 	log.Println("🔄 Shuffled training data for new epoch")
 }
 
-// DetachModel removes the computation graph from the model parameters and clears internal states.
-func DetachModel(model *moe.IntentMoE) {
-	if model == nil {
-		return
-	}
-	for _, param := range model.Parameters() {
-		if param != nil {
-			param.Creator = nil
-			param.Mask = nil
-			param.Operation = nil
-			// Temporary tensors used in forward pass are NOT parameters.
-			// model.ClearState() will handle them.
-		}
-	}
-	// Clear all intermediate tensors and cached states across all layers
-	model.ClearState()
-	// Optionally clear decoder MoE if it exists and is not in ActiveLayers
-	if model.Decoder.OutputMoE != nil {
-		model.Decoder.OutputMoE.ClearState()
-	}
-	// Aggressively trigger GC to free up VRAM associated with intermediate tensors
-	runtime.GC()
-}
 
 func visualizeExpertUtilization() {
 	for i, layer := range moe.ActiveLayers {
@@ -4107,11 +4214,11 @@ func ValidateChat(model *moe.IntentMoE, valPairs []struct{ Q, A, Intent string }
 		valWeights[unkID] = 0.01
 		valWeights[model.SentenceVocab.PaddingTokenID] = 0.0
 
-		loss, _ := WeightedCrossEntropy(logits[0], targets, valWeights, 0.0)
+		loss, _ := WeightedCrossEntropy(logits[0], targets, valWeights, 0.0, 0.0)
 		totalLoss += float64(loss)
 		tokenCount++
 
-		DetachModel(model)
+		model.Detach()
 	}
 
 	if tokenCount == 0 {
@@ -4170,7 +4277,8 @@ func resolvePunctuationWeights(vocab *mainvocab.Vocabulary) {
 	}
 }
 
-func WeightedCrossEntropy(logits *tensor.Tensor, targets []int, weights []float32, labelSmoothing float32) (float32, *tensor.Tensor) {
+func WeightedCrossEntropy(logits *tensor.Tensor, targets []int, weights []float32, labelSmoothing float32, entropyWeight float32) (float32, *tensor.Tensor) {
+	fmt.Fprintf(os.Stderr, "💎 WeightedCrossEntropy: logits %v, targets %d\n", logits.Shape, len(targets))
 	// Flatten batch and sequence dimensions to handle 3D tensors [Batch, Seq, Vocab]
 	vocabSize := logits.Shape[len(logits.Shape)-1]
 	numClasses := vocabSize
@@ -4201,6 +4309,13 @@ func WeightedCrossEntropy(logits *tensor.Tensor, targets []int, weights []float3
 			if v > maxLogit {
 				maxLogit = v
 			}
+		}
+		// 🛡️ NUMERICAL SAFETY: Check if maxLogit is NaN/Inf
+		if math.IsNaN(float64(maxLogit)) || math.IsInf(float64(maxLogit), 0) {
+			if rand.Float32() < 0.01 {
+				log.Printf("⚠️ [WeightedCrossEntropy] NaNs detected in row %d! Skipping row.", i)
+			}
+			continue
 		}
 		var sumExp float32 = 0.0
 		for j, v := range row {
@@ -4233,8 +4348,7 @@ func WeightedCrossEntropy(logits *tensor.Tensor, targets []int, weights []float3
 		count++
 
 		// 4. Gradient
-		// Disable entropy maximization which was causing the model to output uniform noise (word salad)
-		const entropyWeight = float32(0.0)
+		// Use dynamic entropy weight to prevent peaky repetitions
 		var rowEntropy float32
 		for j := 0; j < numClasses; j++ {
 			sj := softmax[j] * invSumExp
@@ -4448,7 +4562,7 @@ func getTopK(t *tensor.Tensor, k int) ([]int, []float32) {
 }
 
 func BeamSearchDecode(model *moe.IntentMoE, ctx *tensor.Tensor, beamSize int, maxLen int) []int {
-	const repetitionPenalty = 1.2 // 1.0 = no penalty, 2.0 = very aggressive
+	const repetitionPenalty = 1.8 // 1.0 = no penalty, 2.0 = very aggressive
 	const alpha = 0.7             // Length penalty coefficient
 
 	beams := []Hypothesis{{IDs: []int{model.SentenceVocab.BosID}, Score: 0.0}}
@@ -4854,7 +4968,7 @@ func StartChat(model *moe.IntentMoE) {
 		}
 
 		// Cleanup memory for the next turn
-		DetachModel(model)
+		model.Detach()
 	}
 }
 
@@ -5007,7 +5121,7 @@ func (b *MoEChatBot) Reply(input string) string {
 	}
 
 	// Cleanup memory for the next turn
-	DetachModel(b.model)
+	b.model.Detach()
 
 	return botResponse
 }
@@ -5144,7 +5258,7 @@ func (b *MoEChatBot) StreamReply(userInput string) <-chan string {
 		}
 
 		// Cleanup
-		DetachModel(b.model)
+		b.model.Detach()
 	}()
 
 	return wordChan
@@ -5477,8 +5591,48 @@ func scoreSentenceHeuristic(text string) float32 {
 	return score
 }
 
+// scoreGrammarHeuristic evaluates basic POS structure using the 8 grammar roles
+func scoreGrammarHeuristic(text string) float32 {
+	if text == "[Still Silent]" || text == "" {
+		return 0
+	}
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return 0
+	}
+	var score float32 = 0.0
+
+	var lastPos string
+	for _, w := range words {
+		pos := moe.MapWordToGrammarType(w)
+		if pos != "OTHER" {
+			score += 1.0 // reward known vocabulary
+		}
+		// Penalty for consecutive identical parts of speech (e.g. VERB-VERB) unless it's AUX-VERB
+		if pos == lastPos && pos != "OTHER" {
+			score -= 2.0
+		}
+		// Basic syntactical rewards
+		if lastPos == "PRON" && pos == "VERB" {
+			score += 2.0
+		}
+		if lastPos == "VERB" && (pos == "ART" || pos == "NAME" || pos == "ADJ" || pos == "PRON") {
+			score += 1.5
+		}
+		lastPos = pos
+	}
+	if score < 0 {
+		return 0
+	}
+	if score > 15.0 {
+		return 15.0
+	}
+	return score
+}
+
+
 // drawSocialProgressBar renders a visual progress bar of how close the model is to "human-ready" coherence.
-func drawSocialProgressBar(current, target float32, epoch, totalEpochs int) {
+func drawSocialProgressBar(current, target, currentGrammar, targetGrammar float32, epoch, totalEpochs int) {
 	width := 50
 	progress := current / target
 	if progress > 1.0 {
@@ -5513,6 +5667,7 @@ func drawSocialProgressBar(current, target float32, epoch, totalEpochs int) {
 
 	fmt.Printf("\n%s╔══════════════════════════════════════════════════════════════════════════╗\033[0m\n", color)
 	fmt.Printf("%s║  BRAIN MATURATION: %-10s  [Epoch %4d/%4d]  Score: %5.1f/%5.1f  ║\033[0m\n", color, status, epoch, totalEpochs, current, target)
+	fmt.Printf("%s║  Grammar Score: %5.1f/%5.1f                                             ║\033[0m\n", color, currentGrammar, targetGrammar)
 	fmt.Printf("%s║  %s  ║\033[0m\n", color, bar)
 	fmt.Printf("%s╚══════════════════════════════════════════════════════════════════════════╝\033[0m\n\n", color)
 }

@@ -200,4 +200,9 @@ func (s *MoEStack) RepairArchitecture() {
 			s.Norms[i] = nn.NewLayerNormalization(l.InputDim)
 		}
 	}
+	for _, l := range s.Layers {
+		if l != nil {
+			l.RepairArchitecture()
+		}
+	}
 }
