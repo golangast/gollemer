@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"os"
 	"runtime"
 	"sort"
 	"sync"
@@ -155,6 +156,12 @@ type Operation interface {
 	Inputs() []*Tensor
 	Backward(grad *Tensor) error
 }
+
+var (
+	// goffiMatMulFailed tracks if the OpenBLAS FFI backend is unavailable or failing.
+	// This prevents redundant allocations and FFI calls in the MatMul fallback path.
+	goffiMatMulFailed bool
+)
 
 // Tensor represents a multi-dimensional array of float32 values.
 type Tensor struct {
@@ -504,6 +511,7 @@ func (t *Tensor) MatMul(other *Tensor) (*Tensor, error) {
 			other.ToGPU()
 		}
 
+		fmt.Fprintf(os.Stderr, "💎 MatMul GPU: %v x %v\n", t.Shape, other.Shape)
 		if res, err := DispatchGPUMatMul(t, other); err == nil {
 			if res.RequiresGrad {
 				res.Creator = &MatMulOperation{t, other}
@@ -516,10 +524,11 @@ func (t *Tensor) MatMul(other *Tensor) (*Tensor, error) {
 	}
 
 	// Case 0: Goffi-based OpenBLAS Dispatch (No CGO, No Rust)
-	if len(t.Shape) == 2 && len(other.Shape) == 2 && t.Shape[1] == other.Shape[0] {
+	if !goffiMatMulFailed && len(t.Shape) == 2 && len(other.Shape) == 2 && t.Shape[1] == other.Shape[0] {
 		rowsA := t.Shape[0]
 		colsA := t.Shape[1]
 		colsB := other.Shape[1]
+		fmt.Fprintf(os.Stderr, "💎 MatMul CPU (Goffi): %v x %v\n", t.Shape, other.Shape)
 
 		resultData := make([]float32, rowsA*colsB)
 		err := GoffiMatMul(t.Data, other.Data, resultData, rowsA, colsB, colsA)
@@ -530,7 +539,10 @@ func (t *Tensor) MatMul(other *Tensor) (*Tensor, error) {
 			}
 			return res, nil
 		}
-		// Fallback to pure-Go SIMD if goffi fails
+		
+		// Permanent fallback if Goffi is unavailable or failing
+		goffiMatMulFailed = true
+		fmt.Fprintf(os.Stderr, "⚠️ Goffi MatMul failed (%v), switching to Gonum fallback.\n", err)
 	}
 
 	// Case 1: 2D matrix multiplication (Pure-Go Fallback)
@@ -545,6 +557,7 @@ func (t *Tensor) MatMul(other *Tensor) (*Tensor, error) {
 
 		resultRows := rowsA
 		resultCols := colsB
+		fmt.Fprintf(os.Stderr, "💎 MatMul CPU (Gonum): %v x %v\n", t.Shape, other.Shape)
 		resultData := make([]float32, resultRows*resultCols)
 
 		// 🚀 Use Pure-Go SIMD for optimized CPU MatMul
@@ -580,31 +593,41 @@ func (t *Tensor) MatMul(other *Tensor) (*Tensor, error) {
 
 		resultRows := rowsA
 		resultCols := colsB
+		var ms runtime.MemStats
+		runtime.ReadMemStats(&ms)
+		fmt.Fprintf(os.Stderr, "💎 MatMul CPU (4D): %v x %v | Heap: %d MB\n", t.Shape, other.Shape, ms.Alloc/1024/1024)
 		resultData := make([]float32, batchSize*numHeads*resultRows*resultCols)
+		fmt.Fprintf(os.Stderr, "💎 MatMul CPU (4D) Allocated: %d elements\n", len(resultData))
 		resultShape := []int{batchSize, numHeads, resultRows, resultCols}
 
 		totalSlices := batchSize * numHeads
-		// 🚀 Use Parallel Pure-Go Gonum across all CPU cores
-		var wg sync.WaitGroup
 		for s := 0; s < totalSlices; s++ {
-			wg.Add(1)
-			go func(s int) {
-				defer wg.Done()
-				b := s / numHeads
-				h := s % numHeads
-				tOffset := (b*numHeads + h) * rowsA * colsA
-				otherOffset := (b*numHeads + h) * colsA * colsB
-				resultOffset := (b*numHeads + h) * resultRows * resultCols
+			b := s / numHeads
+			h := s % numHeads
+			tOffset := (b*numHeads + h) * rowsA * colsA
+			otherOffset := (b*numHeads + h) * colsA * colsB
+			resultOffset := (b*numHeads + h) * resultRows * resultCols
 
-				blas32.Gemm(blas.NoTrans, blas.NoTrans, 1,
-					blas32.General{Rows: rowsA, Cols: colsA, Stride: colsA, Data: t.Data[tOffset : tOffset+rowsA*colsA]},
-					blas32.General{Rows: colsA, Cols: colsB, Stride: colsB, Data: other.Data[otherOffset : otherOffset+colsA*colsB]},
-					0,
-					blas32.General{Rows: resultRows, Cols: resultCols, Stride: resultCols, Data: resultData[resultOffset : resultOffset+resultRows*resultCols]},
-				)
-			}(s)
+			if tOffset+rowsA*colsA > len(t.Data) {
+				return nil, fmt.Errorf("t.Data out of bounds in 4D MatMul: offset %d, size %d, len %d", tOffset, rowsA*colsA, len(t.Data))
+			}
+			if otherOffset+colsA*colsB > len(other.Data) {
+				return nil, fmt.Errorf("other.Data out of bounds in 4D MatMul: offset %d, size %d, len %d", otherOffset, colsA*colsB, len(other.Data))
+			}
+			if resultOffset+resultRows*resultCols > len(resultData) {
+				return nil, fmt.Errorf("resultData out of bounds in 4D MatMul: offset %d, size %d, len %d", resultOffset, resultRows*resultCols, len(resultData))
+			}
+
+			for i := 0; i < rowsA; i++ {
+				for j := 0; j < colsB; j++ {
+					var sum float32
+					for k := 0; k < colsA; k++ {
+						sum += t.Data[tOffset+i*colsA+k] * other.Data[otherOffset+k*colsB+j]
+					}
+					resultData[resultOffset+i*colsB+j] = sum
+				}
+			}
 		}
-		wg.Wait()
 
 		resultTensor := NewTensor(resultShape, resultData, t.RequiresGrad || other.RequiresGrad)
 		if resultTensor.RequiresGrad {
@@ -626,6 +649,7 @@ func (t *Tensor) MatMul(other *Tensor) (*Tensor, error) {
 
 		resultShape := []int{batchSize, rowsA, colsB}
 		resultData := make([]float32, batchSize*rowsA*colsB)
+		fmt.Fprintf(os.Stderr, "💎 MatMul CPU (3D): %v x %v\n", t.Shape, other.Shape)
 
 		// 🚀 Use Parallel Pure-Go Gonum across all CPU cores
 		var wg sync.WaitGroup
@@ -688,6 +712,7 @@ func (t *Tensor) MatMul(other *Tensor) (*Tensor, error) {
 
 		resultShape := []int{batchSize, rowsA, colsB}
 		resultData := make([]float32, batchSize*rowsA*colsB)
+		fmt.Fprintf(os.Stderr, "💎 MatMul CPU (3D x 2D): %v x %v\n", t.Shape, other.Shape)
 
 		otherT, err := other.Transpose(0, 1)
 		if err != nil {
@@ -789,6 +814,7 @@ func (op *MatMulOperation) Inputs() []*Tensor {
 }
 
 func (op *MatMulOperation) Backward(grad *Tensor) error {
+	fmt.Fprintf(os.Stderr, "💎 MatMul Backward: grad %v, A %v, B %v\n", grad.Shape, op.A.Shape, op.B.Shape)
 	// Handle 2D case
 	if len(op.A.Shape) == 2 {
 		// dL/dA = grad * B^T

@@ -433,6 +433,14 @@ func (l *LayerNormalization) Parameters() []*Tensor {
 	return []*Tensor{l.Gamma, l.Beta}
 }
 
+// ClearState clears intermediate tensors.
+func (l *LayerNormalization) ClearState() {
+	l.inputTensor = nil
+	l.normalizedInput = nil
+	l.mean = nil
+	l.invStdDev = nil
+}
+
 // ToGPU moves the layer's parameters to the GPU.
 func (l *LayerNormalization) ToGPU() {
 	if l.Gamma != nil {
@@ -554,13 +562,16 @@ func (l *LayerNormalization) Backward(grad *Tensor) error {
 		// dLoss/dStdDev
 		stdDev := 1.0 / l.invStdDev.Data[i]
 		if math.IsNaN(float64(stdDev)) || math.IsInf(float64(stdDev), 0) {
+			stdDev = 1e-5 // Fallback to avoid zero/NaN gradient
 		}
-		dLoss_dStdDevData[i] = sum_dL_dNorm_x_minus_mean * (-1.0 / (stdDev * stdDev)) // Derivative of 1/std_dev is -1/std_dev^2
+		dLoss_dStdDevData[i] = sum_dL_dNorm_x_minus_mean * (-1.0 / (stdDev * stdDev + 1e-9)) // Derivative of 1/std_dev is -1/std_dev^2
 		dLoss_dMeanData[i] = sum_dL_dNorm * (-l.invStdDev.Data[i])
 
 		if math.IsNaN(float64(dLoss_dStdDevData[i])) || math.IsInf(float64(dLoss_dStdDevData[i]), 0) {
+			dLoss_dStdDevData[i] = 0
 		}
 		if math.IsNaN(float64(dLoss_dMeanData[i])) || math.IsInf(float64(dLoss_dMeanData[i]), 0) {
+			dLoss_dMeanData[i] = 0
 		}
 	}
 

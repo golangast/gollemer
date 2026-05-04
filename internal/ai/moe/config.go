@@ -29,11 +29,12 @@ type SocialConfig struct {
 	CapacityFactor      float32 `json:"capacity_factor"`
 	K                   int     `json:"k"`
 	RepetitionPenalty   float32 `json:"repetition_penalty"`
+	EntropyWeight       float32 `json:"entropy_weight"`
 }
 
 func LoadSocialConfig(path string) SocialConfig {
 	defaultConfig := SocialConfig{
-		NumExperts:          8,
+		NumExperts:          16, // 8 GoffiExperts + 8 GrammarExperts (POS-role specialists)
 		ModelDim:            256,
 		Epochs:              1000,
 		LearningRate:        1e-3,

@@ -339,6 +339,9 @@ func (d *RNNDecoder) ClearState() {
 	if d.OutputLayer != nil {
 		d.OutputLayer.ClearState()
 	}
+	if d.OutputMoE != nil {
+		d.OutputMoE.ClearState()
+	}
 	if d.Embedding != nil {
 		d.Embedding.ClearState()
 	}
@@ -777,6 +780,9 @@ func (d *RNNDecoder) RepairArchitecture() {
 	}
 	if d.HiddenNorm == nil {
 		d.HiddenNorm = nn.NewLayerNorm(d.LSTM.HiddenSize)
+	}
+	if d.OutputMoE != nil {
+		d.OutputMoE.RepairArchitecture()
 	}
 }
 // Step performs a single step of decoding (used for inference and diagnostics)

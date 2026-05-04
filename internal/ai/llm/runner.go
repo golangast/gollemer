@@ -134,10 +134,11 @@ func (r *Runner) Init() {
 			log.Printf("✅ Verified social model vocabulary: %d tokens", socialModel.SentenceVocab.Size())
 		}
 
-		// 🧬 WIRE UP SOCIAL MODEL AS THE PRIMARY INTENT MODEL
-		// This ensures that the LLM client uses the newly trained social brain.
-		r.IntentModel = socialModel
-		log.Printf("🧠 Social Brain wired as primary Intent Model.")
+		// 🧬 WIRE UP SOCIAL MODEL
+		// We keep r.IntentModel as the primary classification brain,
+		// and use socialModel specifically for conversational turns.
+		// r.IntentModel = socialModel // REMOVED: Don't overwrite the classifier
+		log.Printf("🧠 Social Brain prepared for conversational duties.")
 
 		// 🛡️ Apply Config from social_train.json
 		configPath := filepath.Join(r.ProjectRoot, "data/config/social_train.json")
@@ -172,7 +173,7 @@ func (r *Runner) Init() {
 	// Initialize Intent Resolver
 	r.Client = &GollemerMoEClient{
 		Model:          r.IntentModel,
-		SocialModel:    r.IntentModel,
+		SocialModel:    socialModel,
 		W2V:            r.W2V, // CRITICAL: wire W2V so getSentenceEmbedding doesn't nil-panic
 		CommandAnchors: map[string][]float64{},
 	}

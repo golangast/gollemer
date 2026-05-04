@@ -534,7 +534,7 @@ func RunMLMPreTraining(model *moe.IntentMoE, sentences []MLMSentence, mlmEpochs 
 					
 					// Compute loss for this single row
 					rowLogits := tensor.NewTensor([]int{1, 20}, intentLogitsCPU.Data[b*20:(b+1)*20], false)
-					l, g := WeightedCrossEntropy(rowLogits, []int{batchIntents[b]}, intentWeights, 0.1)
+					l, g := WeightedCrossEntropy(rowLogits, []int{batchIntents[b]}, intentWeights, 0.1, 0.005)
 					intentLoss += l
 					for i := 0; i < 20; i++ {
 						intentGrad.Data[b*20+i] = g.Data[i]

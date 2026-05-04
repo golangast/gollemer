@@ -153,6 +153,18 @@ func (gn *GatingNetwork) Forward(inputs ...*tensor.Tensor) (*tensor.Tensor, erro
 			}
 		}
 	}
+	
+	// 🛡️ NUMERICAL SAFETY: Clip logits to prevent exp() from exploding in Softmax or LayerNorm
+	for i := range logitsData {
+		v := logitsData[i]
+		if math.IsNaN(float64(v)) || math.IsInf(float64(v), 0) {
+			// If we hit NaNs, reset this token's preference to small noise
+			logitsData[i] = (rand.Float32() * 0.02) - 0.01 
+		} else {
+			if v > 50.0 { logitsData[i] = 50.0 }
+			if v < -50.0 { logitsData[i] = -50.0 }
+		}
+	}
 
 	logits := tensor.NewTensor(logitsShape, logitsData, input.RequiresGrad || gn.Linear.Weights.RequiresGrad)
 	gn.logitsTensor = logits
@@ -382,6 +394,24 @@ func (gn *GatingNetwork) CalculateDiversityLoss() float32 {
 	return res
 }
 
+// ClearState clears all intermediate tensors.
+func (gn *GatingNetwork) ClearState() {
+	gn.inputTensor = nil
+	gn.logitsTensor = nil
+	gn.noiseLogitsTensor = nil
+	gn.outputTensor = nil
+	
+	if gn.Linear != nil {
+		gn.Linear.ClearState()
+	}
+	if gn.NoiseLinear != nil {
+		gn.NoiseLinear.ClearState()
+	}
+	if gn.LayerNorm != nil {
+		gn.LayerNorm.ClearState()
+	}
+}
+
 // Inputs returns the input tensors of the GatingNetwork's last forward operation.
 func (gn *GatingNetwork) Inputs() []*tensor.Tensor {
 	if gn.inputTensor != nil {
@@ -400,6 +430,16 @@ func (gn *GatingNetwork) ToGPU() {
 	}
 	if gn.LayerNorm != nil {
 		gn.LayerNorm.ToGPU()
+	}
+}
+
+func (gn *GatingNetwork) RepairArchitecture() {
+	if gn.Linear == nil || gn.Linear.Weights == nil {
+		return
+	}
+	numExperts := gn.Linear.Weights.Shape[1]
+	if gn.LayerNorm == nil || gn.LayerNorm.NormalizedShape != numExperts {
+		gn.LayerNorm = nn.NewLayerNorm(numExperts)
 	}
 }
 

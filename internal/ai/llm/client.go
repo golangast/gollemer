@@ -478,18 +478,32 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 }
 
 func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
+	log.Printf("📡 GenerateSocialResponse called with input: '%s'", input)
 	if c.SocialModel == nil {
 		return ""
 	}
 	model := c.SocialModel
 	if model.SentenceVocab == nil || model.Decoder == nil || model.Embedding == nil || model.Encoder == nil {
+		fmt.Printf("⚠️  DEBUG: Social model is incomplete: Vocab=%v, Decoder=%v, Embedding=%v, Encoder=%v\n", 
+			model.SentenceVocab != nil, model.Decoder != nil, model.Embedding != nil, model.Encoder != nil)
 		return ""
 	}
 
 	// ── Neural decoder path ─────────────────────────────────
 	// Use normalized input text as trained
 	lowerInput := strings.ToLower(input)
-	formattedInput := fmt.Sprintf("__intent__ social : __ques__ %s __ans__", lowerInput)
+	
+	// Match intent labels used during training in chat.go
+	intent := "social_chat"
+	if strings.Contains(lowerInput, "hello") || strings.Contains(lowerInput, "hi") {
+		intent = "greeting"
+	} else if strings.Contains(lowerInput, "your name") || strings.Contains(lowerInput, "who are you") {
+		intent = "identity"
+	} else if strings.Contains(lowerInput, "how are you") {
+		intent = "status_check"
+	}
+
+	formattedInput := fmt.Sprintf("__intent__ %s : __ques__ %s __ans__", intent, lowerInput)
 	tokens := cleanTokenize(formattedInput)
 	if len(tokens) == 0 {
 		return ""
@@ -561,32 +575,6 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 	fmt.Println()
 	// ─────────────────────────────────────────────────────────────────────────
 
-	batchSize := 1
-	hiddenSize := model.Decoder.LSTM.HiddenSize
-	hiddenState, err := ctx.Mean(1)
-	if err != nil {
-		return ""
-	}
-	hiddenState, _ = hiddenState.Reshape([]int{batchSize, ctx.Shape[2]})
-	if hiddenState.Shape[1] != hiddenSize {
-		if hiddenState.Shape[1] > hiddenSize {
-			hiddenState, _ = hiddenState.Slice(1, 0, hiddenSize)
-		} else {
-			pad := tensor.NewTensor([]int{batchSize, hiddenSize - hiddenState.Shape[1]}, make([]float32, batchSize*(hiddenSize-hiddenState.Shape[1])), false)
-			hiddenState, _ = tensor.Concat([]*tensor.Tensor{hiddenState, pad}, 1)
-		}
-	}
-	cellState := tensor.NewTensor([]int{batchSize, hiddenSize}, make([]float32, batchSize*hiddenSize), false)
-
-	resIDs := []int{model.SentenceVocab.BosID}
-	currentTokenID := model.SentenceVocab.BosID
-	counts := make(map[int]int)
-	unkID := model.SentenceVocab.GetTokenID("UNK")
-	maxLen := 30
-
-	var expertPath []string
-
-
 	// 1. Enter Eval Mode and set Router Temperature for stability
 	oldTemps := make(map[*moe.MoELayer]float32)
 	layers := model.Encoder.GetMoELayers()
@@ -599,7 +587,6 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 		oldModes[layer] = layer.Training
 		layer.SetMode(false)
 		oldTemps[layer] = layer.RouterTemperature
-		// Use config temperature if available, otherwise default to 0.85
 		if layer.RouterTemperature <= 0 {
 			layer.RouterTemperature = 0.85
 		}
@@ -612,88 +599,106 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 		}
 	}()
 
-	for i := 0; i < maxLen; i++ {
-		inputT := tensor.NewTensor([]int{1, 1}, []float32{float32(currentTokenID)}, false)
-		logits, nextHidden, nextCell, expertID, err := model.Decoder.DecodeStepWithExpert(inputT, hiddenState, cellState, ctx)
-		if err != nil {
-			break
-		}
-		
-		hiddenState = nextHidden
-		cellState = nextCell
-
-		if i < 6 { // Increased from 2 to force at least 6 tokens
-			logits.Data[model.SentenceVocab.EosID] = -1e9
-		}
-		
-		// Repetition Penalty (prevent "bag of words" cycling)
-		moe.ApplyRepetitionPenalty(logits, resIDs, 0.3) 
-		const freqPenalty = 0.01 
-		for id, count := range counts {
-			if id < len(logits.Data) {
-				logits.Data[id] -= freqPenalty * float32(count)
+	// ── Beam Search Decode ────────────────────────────────────────────────────
+	// beamWidth=4, temperature=0.7, repetitionPenalty=0.3, maxLen=30
+	resIDs, beamErr := model.BeamSearchDecode(
+		ctx,
+		40, // Increased from 30
+		model.SentenceVocab.BosID, model.SentenceVocab.EosID,
+		4,   // beam width
+		0.7, // temperature
+		2.0, // repetition penalty (increased from 0.3)
+	)
+	if beamErr != nil || len(resIDs) == 0 {
+		log.Printf("⚠️  BeamSearchDecode failed (%v), falling back to sampling", beamErr)
+		// Fallback: original sampling path
+		resIDs = nil
+		fbBatchSize := 1
+		fbHiddenSize := model.Decoder.LSTM.HiddenSize
+		fbHidden, _ := ctx.Mean(1)
+		fbHidden, _ = fbHidden.Reshape([]int{fbBatchSize, ctx.Shape[2]})
+		if fbHidden.Shape[1] != fbHiddenSize {
+			if fbHidden.Shape[1] > fbHiddenSize {
+				fbHidden, _ = fbHidden.Slice(1, 0, fbHiddenSize)
+			} else {
+				pad := tensor.NewTensor([]int{fbBatchSize, fbHiddenSize - fbHidden.Shape[1]}, make([]float32, fbBatchSize*(fbHiddenSize-fbHidden.Shape[1])), false)
+				fbHidden, _ = tensor.Concat([]*tensor.Tensor{fbHidden, pad}, 1)
 			}
 		}
-		logits.Data[model.SentenceVocab.PaddingTokenID] = -1e9
-		if unkID != -1 {
-			logits.Data[unkID] = -1e9
+		fbCell := tensor.NewTensor([]int{fbBatchSize, fbHiddenSize}, make([]float32, fbBatchSize*fbHiddenSize), false)
+		currentID := model.SentenceVocab.BosID
+		counts := make(map[int]int)
+		unkID := model.SentenceVocab.GetTokenID("UNK")
+		var expertPath []string
+
+		for i := 0; i < 30; i++ {
+			inputT := tensor.NewTensor([]int{1, 1}, []float32{float32(currentID)}, false)
+			logits, nextH, nextC, expertID, err := model.Decoder.DecodeStepWithExpert(inputT, fbHidden, fbCell, ctx)
+			if err != nil {
+				break
+			}
+			fbHidden = nextH
+			fbCell = nextC
+
+			if i < 6 {
+				logits.Data[model.SentenceVocab.EosID] = -1e9
+			}
+			moe.ApplyRepetitionPenalty(logits, resIDs, 0.3)
+			const freqPenalty = 0.01
+			for id, count := range counts {
+				if id < len(logits.Data) {
+					logits.Data[id] -= freqPenalty * float32(count)
+				}
+			}
+			logits.Data[model.SentenceVocab.PaddingTokenID] = -1e9
+			if unkID != -1 {
+				logits.Data[unkID] = -1e9
+			}
+			bestID, err := moe.SampleFromLogits(logits, 0.8, 5, 0.85)
+			if err != nil {
+				break
+			}
+			if bestID == model.SentenceVocab.EosID {
+				break
+			}
+			expertStr := ""
+			for j, eid := range expertID {
+				if j > 0 {
+					expertStr += "+"
+				}
+				expertStr += fmt.Sprintf("E%d", eid)
+			}
+			word := model.SentenceVocab.GetWord(bestID)
+			expertPath = append(expertPath, fmt.Sprintf("%s(%s)", word, expertStr))
+			resIDs = append(resIDs, bestID)
+			counts[bestID]++
+			currentID = bestID
 		}
-		
-		// Tightened sampling: topK=3, temp=0.75 to reduce "word salad" noise
-		// Sharpen temperature (0.4) and reduce Top-P (0.85) to force more structured sentence generation.
-		// Higher temperature on a small dataset leads to 'Bag of Words' entropy.
-		// Increased sampling temperature to 0.8 as requested for more creative/diverse token selection
-		bestID, err := moe.SampleFromLogits(logits, 0.8, 5, 0.85)
-		if err != nil {
-			break
+		if len(expertPath) > 0 {
+			log.Printf("🧠 Expert Path (inference/fallback): %s", strings.Join(expertPath, " -> "))
 		}
-		if bestID == model.SentenceVocab.EosID {
-			break
-		}
-		
-		expertIDs := expertID
-		expertStr := ""
-		for j, eid := range expertIDs {
-			if j > 0 { expertStr += "+" }
-			expertStr += fmt.Sprintf("E%d", eid)
-		}
-		word := model.SentenceVocab.GetWord(bestID)
-		expertPath = append(expertPath, fmt.Sprintf("%s(%s)", word, expertStr))
-		
-		resIDs = append(resIDs, bestID)
-		counts[bestID]++
-		currentTokenID = bestID
+	} else {
+		log.Printf("🎯 BeamSearchDecode produced %d tokens", len(resIDs))
 	}
 
-		e6Count := 0
-		e2Count := 0
-		for _, p := range expertPath {
-			if strings.Contains(p, "(E6)") { e6Count++ }
-			if strings.Contains(p, "(E2)") { e2Count++ }
-		}
-		if e6Count > len(expertPath)*4/5 || e2Count > len(expertPath)*4/5 {
-			fmt.Printf("\n🚨 [Warning] Expert Monopoly detected (E6/E2 saturation). Router has collapsed.\n")
-		}
-
-	// Expert path is kept for logging only — suppress in production UI
-	if len(expertPath) > 0 {
-		log.Printf("🧠 Expert Path (inference): %s", strings.Join(expertPath, " -> "))
-	}
-
+	log.Printf("🎯 BeamSearchDecode produced %d IDs: %v", len(resIDs), resIDs)
 	var result []string
-	for _, id := range resIDs[1:] {
+	for _, id := range resIDs {
 		w := model.SentenceVocab.GetWord(id)
-		if w != "</s>" && w != "<s>" && w != "<pad>" && w != "UNK" && w != "" {
+		log.Printf("   Token ID %d -> '%s'", id, w)
+		if w != "</s>" && w != "<s>" && w != "<pad>" && w != "UNK" && w != "" && 
+		   w != "__intent__" && w != "__ques__" && w != "__ans__" && w != "social" && w != ":" {
 			result = append(result, w)
 		}
 	}
 	response := strings.Join(result, " ")
 	if response == "" {
+		log.Printf("⚠️  Response became empty after filtering %d tokens", len(resIDs))
 		return ""
 	}
-	log.Printf("🎭 Neural Social Model generated: %s", response)
+	log.Printf("🎭 Neural Social Model generated: '%s'", response)
 	if isGarbageOutput(response) || isLowQualitySocialResponse(response) {
-		log.Printf("🗑️  Social output rejected (quality gate): %s", response)
+		log.Printf("🗑️  Social output rejected (quality gate): '%s'", response)
 		return ""
 	}
 	return response

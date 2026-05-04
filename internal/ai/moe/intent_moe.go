@@ -9,6 +9,7 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
@@ -57,6 +58,7 @@ func init() {
 	gob.Register(&nn.PositionalEmbedding{})
 	gob.Register(&GoffiExpert{})
 	gob.Register(&mainvocab.Vocabulary{})
+	gob.Register(&GrammarExpert{})
 }
 
 // ClearState clears the intermediate tensors used for backward pass
@@ -75,6 +77,50 @@ func (m *IntentMoE) ClearState() {
 	}
 	if m.Embedding != nil {
 		m.Embedding.ClearState()
+	}
+}
+
+// Detach removes the computation graph (creator and operation) from the model parameters.
+// This is critical before serialization or to free memory after a training batch.
+func (m *IntentMoE) Detach() {
+	params := m.Parameters()
+	for _, param := range params {
+		param.Creator = nil
+		param.Mask = nil
+		param.Operation = nil
+	}
+
+	// Clear state for all components
+	m.ClearState()
+
+	// Clear decoder specific state which might hold references to the computation graph
+	if m.Decoder != nil {
+		m.Decoder.InitialHiddenState = nil
+		m.Decoder.InitialCellState = nil
+
+		// Clear LSTM cells state
+		if m.Decoder.LSTM != nil {
+			for _, layer := range m.Decoder.LSTM.Cells {
+				for _, cell := range layer {
+					cell.InputTensor = nil
+					cell.PrevHidden = nil
+					cell.PrevCell = nil
+				}
+			}
+		}
+	}
+
+	runtime.GC()
+}
+
+// SetParamsRequiresGrad toggles the RequiresGrad flag for all model parameters.
+// This is useful for disabling gradient tracking during inference to save memory.
+func (m *IntentMoE) SetParamsRequiresGrad(requires bool) {
+	params := m.Parameters()
+	for _, param := range params {
+		if param != nil {
+			param.RequiresGrad = requires
+		}
 	}
 }
 
@@ -681,6 +727,273 @@ func (m *IntentMoE) warmup() {
 	fmt.Println("✅ GPU Warm-up complete.")
 }
 
+// appendGrammarExperts grows an existing MoELayer by 8 GrammarExperts (one per POS role).
+// The gating network weight matrix is widened to include columns for the new experts.
+func appendGrammarExperts(layer *MoELayer, embeddingDim int) error {
+	numGrammar := len(grammarRoles) // 8
+	startID := len(layer.Experts)
+
+	for i := 0; i < numGrammar; i++ {
+		ge, err := NewGrammarExpert(startID+i, i, embeddingDim, embeddingDim)
+		if err != nil {
+			return fmt.Errorf("grammar expert %d: %w", i, err)
+		}
+		layer.Experts = append(layer.Experts, ge)
+	}
+
+	// Widen the gating network weight matrix from [inputDim, oldN] -> [inputDim, oldN+8]
+	// New columns are initialised with small random values so the router can explore.
+	gn := layer.GatingNetwork
+	oldW := gn.Linear.Weights
+	inputDim := oldW.Shape[0]
+	oldN := oldW.Shape[1]
+	newN := oldN + numGrammar
+
+	newWData := make([]float32, inputDim*newN)
+	for row := 0; row < inputDim; row++ {
+		// Copy existing columns
+		copy(newWData[row*newN:row*newN+oldN], oldW.Data[row*oldN:(row+1)*oldN])
+		// New grammar-expert columns: small positive bias so router tries them
+		for col := oldN; col < newN; col++ {
+			newWData[row*newN+col] = (rand.Float32() - 0.5) * 0.02
+		}
+	}
+	newW := tensor.NewTensor([]int{inputDim, newN}, newWData, true)
+	gn.Linear.Weights = newW
+
+	// Widen bias if present
+	if gn.Linear.Biases != nil {
+		oldB := gn.Linear.Biases.Data
+		newBData := make([]float32, newN)
+		copy(newBData, oldB)
+		gn.Linear.Biases = tensor.NewTensor([]int{newN}, newBData, true)
+	}
+
+	// Widen NoiseLinear (used for exploration)
+	if gn.NoiseLinear != nil {
+		oldNW := gn.NoiseLinear.Weights
+		newNWData := make([]float32, inputDim*newN)
+		for row := 0; row < inputDim; row++ {
+			copy(newNWData[row*newN:row*newN+oldN], oldNW.Data[row*oldN:(row+1)*oldN])
+			for col := oldN; col < newN; col++ {
+				newNWData[row*newN+col] = (rand.Float32() - 0.5) * 0.02
+			}
+		}
+		gn.NoiseLinear.Weights = tensor.NewTensor([]int{inputDim, newN}, newNWData, true)
+
+		if gn.NoiseLinear.Biases != nil {
+			oldNB := gn.NoiseLinear.Biases.Data
+			newNBData := make([]float32, newN)
+			copy(newNBData, oldNB)
+			gn.NoiseLinear.Biases = tensor.NewTensor([]int{newN}, newNBData, true)
+		}
+	}
+
+	// Reinitialize LayerNorm for the new gating dimension
+	gn.LayerNorm = nn.NewLayerNorm(newN)
+
+	// Update frozen / stagnation / multiplier slices
+	layer.ExpertFrozen = append(layer.ExpertFrozen, make([]bool, numGrammar)...)
+	layer.StagnationCounters = append(layer.StagnationCounters, make([]int, numGrammar)...)
+	extra := make([]float32, numGrammar)
+	for i := range extra {
+		extra[i] = 1.0
+	}
+	layer.ExpertGradMultiplier = append(layer.ExpertGradMultiplier, extra...)
+
+	log.Printf("🔤 appended %d GrammarExperts to MoELayer (total experts: %d)", numGrammar, len(layer.Experts))
+	return nil
+}
+
+// beamCandidate holds a partial sequence for beam search.
+type beamCandidate struct {
+	ids        []int
+	logProb    float64 // cumulative log-probability
+	hiddenState *tensor.Tensor
+	cellState   *tensor.Tensor
+	finished   bool
+}
+
+// BeamSearchDecode generates a response using beam search to guarantee a
+// well-formed sentence.  It maintains `beamWidth` candidate sequences at each
+// step, expands each by the top-K next tokens, and returns the highest-scoring
+// completed sequence (one that ended with EOS or reached maxLen).
+//
+// This replaces the per-token sampling used in GenerateSocialResponse and
+// GreedySearchDecodeWithTemp, which frequently produce word-salad output on
+// small training sets.
+func (m *IntentMoE) BeamSearchDecode(
+	contextVector *tensor.Tensor,
+	maxLen, sosToken, eosToken, beamWidth int,
+	temperature float32,
+	repetitionPenalty float32,
+) ([]int, error) {
+	if beamWidth <= 0 {
+		beamWidth = 4
+	}
+	if temperature <= 0 {
+		temperature = 0.7
+	}
+
+	// Take first batch element
+	var err error
+	contextVector, err = contextVector.Slice(0, 0, 1)
+	if err != nil {
+		return nil, fmt.Errorf("BeamSearchDecode: slice context: %w", err)
+	}
+
+	batchSize := 1
+	hiddenSize := m.Decoder.LSTM.HiddenSize
+
+	initHidden, err := contextVector.Mean(1)
+	if err != nil {
+		return nil, fmt.Errorf("BeamSearchDecode: mean: %w", err)
+	}
+	initHidden, _ = initHidden.Reshape([]int{batchSize, contextVector.Shape[2]})
+	if initHidden.Shape[1] != hiddenSize {
+		if initHidden.Shape[1] > hiddenSize {
+			initHidden, _ = initHidden.Slice(1, 0, hiddenSize)
+		} else {
+			pad := tensor.NewTensor([]int{batchSize, hiddenSize - initHidden.Shape[1]}, make([]float32, batchSize*(hiddenSize-initHidden.Shape[1])), false)
+			initHidden, _ = tensor.Concat([]*tensor.Tensor{initHidden, pad}, 1)
+		}
+	}
+	initCell := tensor.NewTensor([]int{batchSize, hiddenSize}, make([]float32, batchSize*hiddenSize), false)
+
+	// Seed beam with BOS
+	beams := []*beamCandidate{
+		{
+			ids:         []int{sosToken},
+			logProb:     0.0,
+			hiddenState: initHidden,
+			cellState:   initCell,
+		},
+	}
+
+	completed := make([]*beamCandidate, 0, beamWidth)
+
+	for step := 0; step < maxLen && len(completed) < beamWidth; step++ {
+		var nextBeams []*beamCandidate
+
+		for _, cand := range beams {
+			if cand.finished {
+				completed = append(completed, cand)
+				continue
+			}
+
+			lastID := cand.ids[len(cand.ids)-1]
+			inputT := tensor.NewTensor([]int{1, 1}, []float32{float32(lastID)}, false)
+
+			logits, newHidden, newCell, err := m.Decoder.DecodeStep(inputT, cand.hiddenState, cand.cellState, contextVector)
+			if err != nil {
+				continue
+			}
+			logits.ToCPU()
+
+			// Suppress EOS for the first 3 steps
+			if step < 3 && eosToken >= 0 && eosToken < len(logits.Data) {
+				logits.Data[eosToken] = -1e9
+			}
+
+			// Repetition penalty
+			ApplyRepetitionPenalty(logits, cand.ids, repetitionPenalty)
+
+			// Temperature scaling
+			for i := range logits.Data {
+				logits.Data[i] /= temperature
+			}
+
+			// Log-softmax for numerical stability
+			vocabSize := len(logits.Data)
+			maxL := logits.Data[0]
+			for _, v := range logits.Data {
+				if v > maxL {
+					maxL = v
+				}
+			}
+			var sumExp float64
+			for _, v := range logits.Data {
+				sumExp += math.Exp(float64(v - maxL))
+			}
+			logSum := math.Log(sumExp) + float64(maxL)
+
+			// Pick top-beamWidth tokens
+			type scored struct {
+				id      int
+				logProb float64
+			}
+			topK := beamWidth * 2
+			if topK > vocabSize {
+				topK = vocabSize
+			}
+			tops := make([]scored, 0, topK)
+			for i, v := range logits.Data {
+				lp := float64(v) - logSum
+				tops = append(tops, scored{i, lp})
+			}
+			sort.Slice(tops, func(a, b int) bool { return tops[a].logProb > tops[b].logProb })
+			tops = tops[:topK]
+
+			for _, s := range tops {
+				newCand := &beamCandidate{
+					ids:         append(append([]int{}, cand.ids...), s.id),
+					logProb:     cand.logProb + s.logProb,
+					hiddenState: newHidden,
+					cellState:   newCell,
+					finished:    s.id == eosToken,
+				}
+				nextBeams = append(nextBeams, newCand)
+			}
+		}
+
+		// Prune: keep top-beamWidth by logProb / length (length-normalised)
+		sort.Slice(nextBeams, func(a, b int) bool {
+			lenA := float64(len(nextBeams[a].ids))
+			lenB := float64(len(nextBeams[b].ids))
+			if lenA < 1 {
+				lenA = 1
+			}
+			if lenB < 1 {
+				lenB = 1
+			}
+			return nextBeams[a].logProb/lenA > nextBeams[b].logProb/lenB
+		})
+		if len(nextBeams) > beamWidth {
+			nextBeams = nextBeams[:beamWidth]
+		}
+		beams = nextBeams
+	}
+
+	// Merge finished and remaining beams
+	completed = append(completed, beams...)
+	if len(completed) == 0 {
+		return nil, fmt.Errorf("BeamSearchDecode: no candidates generated")
+	}
+
+	// Pick best by length-normalised log-probability
+	sort.Slice(completed, func(a, b int) bool {
+		lenA := float64(len(completed[a].ids))
+		lenB := float64(len(completed[b].ids))
+		if lenA < 1 {
+			lenA = 1
+		}
+		if lenB < 1 {
+			lenB = 1
+		}
+		return completed[a].logProb/lenA > completed[b].logProb/lenB
+	})
+
+	best := completed[0].ids
+	// Strip BOS and EOS
+	var result []int
+	for _, id := range best {
+		if id != sosToken && id != eosToken {
+			result = append(result, id)
+		}
+	}
+	return result, nil
+}
+
 // NewIntentMoE creates a new IntentMoE model.
 func NewIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, childVocabSize, sentenceVocabSize, maxAttentionHeads int, word2vecModel *word2vec.SimpleWord2Vec) (*IntentMoE, error) {
 	if word2vecModel != nil {
@@ -905,6 +1218,17 @@ func NewHybridIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, ch
 	l3, err := NewMoELayer(embeddingDim, embeddingDim, numExperts, 2, expertBuilder)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create MoE Layer 3: %w", err)
+	}
+
+	// ── 8 Grammar Experts ──────────────────────────────────────────────────────
+	// Append one grammar expert per POS role to every encoder layer.
+	// They share the same dims so they slot cleanly into the existing gating network
+	// (which was already initialised for numExperts; we extend it by appending
+	// additional parameter columns below via appendGrammarExperts).
+	for _, layer := range []*MoELayer{l0, l1, l2, l3} {
+		if err := appendGrammarExperts(layer, embeddingDim); err != nil {
+			return nil, fmt.Errorf("failed to append grammar experts: %w", err)
+		}
 	}
 
 	llmEncoder := NewMoEStack(l0, l1, l2, l3)
@@ -1490,6 +1814,14 @@ func (m *IntentMoE) ResizeEmbeddings(newVocabSize int) {
 
 // SaveIntentMoECheckpoint saves the IntentMoE and its metadata to a file with compression.
 func SaveIntentMoECheckpoint(ckpt *Checkpoint, path string) error {
+	// 🧹 Pre-serialization GC to reduce OOM risk during large model encoding
+	runtime.GC()
+
+	// Ensure parent directory exists
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return fmt.Errorf("failed to create checkpoint directory: %w", err)
+	}
+
 	// Create temporary file first to avoid corruption on crash
 	tempPath := path + ".tmp"
 	file, err := os.Create(tempPath)
@@ -1560,6 +1892,14 @@ func LoadIntentMoECheckpoint(filePath string) (*Checkpoint, error) {
 
 // SaveIntentMoEModelToGOB saves the IntentMoE to a file (legacy format).
 func SaveIntentMoEModelToGOB(model *IntentMoE, path string) error {
+	// 🧹 Pre-serialization GC
+	runtime.GC()
+
+	// Ensure parent directory exists
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return fmt.Errorf("failed to create model directory: %w", err)
+	}
+
 	file, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("failed to create model file: %w", err)
@@ -1652,6 +1992,20 @@ func (m *IntentMoE) RepairArchitecture() {
 	// Delegate to encoder
 	if m.Encoder != nil {
 		m.Encoder.RepairArchitecture()
+		
+		// 🧬 AUTO-UPGRADE: Ensure all MoE layers have Grammar Experts (16 experts total)
+		if h, ok := m.Encoder.(*HybridLLMGNNEncoder); ok && h.LLMEncoder != nil {
+			if stack, ok := h.LLMEncoder.(*MoEStack); ok {
+				for _, layer := range stack.Layers {
+					if layer != nil && len(layer.Experts) < 16 {
+						log.Printf("🛠️ [MoE] Repairing layer: adding missing Grammar Experts (currently %d experts)...", len(layer.Experts))
+						if err := appendGrammarExperts(layer, m.EmbeddingDim); err != nil {
+							log.Printf("❌ Failed to append grammar experts: %v", err)
+						}
+					}
+				}
+			}
+		}
 	}
 
 	// Delegate to decoder
