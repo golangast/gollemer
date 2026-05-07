@@ -5,6 +5,7 @@ package tensor
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"sync"
 	"unsafe"
 
@@ -288,26 +289,45 @@ func (t *Tensor) openclUpload() {
 		})
 		t.gpuData = buf
 		t.Device = GPU
+
+		// 🛡️ Proactive Memory Management: Register a finalizer to ensure that
+		// when Go's GC collects this Tensor, the OpenCL buffer is also freed.
+		runtime.SetFinalizer(t, func(obj *Tensor) {
+			obj.Release()
+		})
 	}
 }
 
 func (t *Tensor) openclDownload() {
-	if t.gpuData == nil { return }
+	if t.gpuData == nil {
+		return
+	}
 	buf := t.gpuData.(uintptr)
 	size := uint64(len(t.Data) * 4)
 	ptr := uintptr(unsafe.Pointer(&t.Data[0]))
 	blocking := uint32(1)
 	offset := uint64(0)
 	var zero uintptr = 0
-	
+
 	ffi.CallFunction(&cifRWBuffer, procEnqueueReadBuffer, nil, []unsafe.Pointer{
 		unsafe.Pointer(&clQueue), unsafe.Pointer(&buf), unsafe.Pointer(&blocking),
 		unsafe.Pointer(&offset), unsafe.Pointer(&size), unsafe.Pointer(&ptr),
 		unsafe.Pointer(&zero), unsafe.Pointer(&zero), unsafe.Pointer(&zero),
 	})
-	
-	// Release
+
+	// Release the GPU buffer after successful download
+	t.openclRelease()
+}
+
+// openclRelease explicitly frees the OpenCL memory object.
+func (t *Tensor) openclRelease() {
+	if t.gpuData == nil {
+		return
+	}
+	buf := t.gpuData.(uintptr)
 	ffi.CallFunction(&cifRelease, procReleaseMemObject, nil, []unsafe.Pointer{unsafe.Pointer(&buf)})
 	t.gpuData = nil
 	t.Device = CPU
+	// Clear the finalizer since we've manually released it
+	runtime.SetFinalizer(t, nil)
 }

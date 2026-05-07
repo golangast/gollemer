@@ -348,8 +348,14 @@ func ApplyRepetitionPenalty(logits *tensor.Tensor, generatedIDs []int, penalty f
 			continue
 		}
 
-		// Subtractive penalty is much more effective than multiplicative for logit suppression
-		logits.Data[id] -= penalty * count
+		// Subtractive penalty is much more effective than multiplicative for logit suppression.
+		// We multiply by (1 + count) to increase penalty for frequent tokens,
+		// and add an extra boost if the token was the IMMEDIATE previous token.
+		p := penalty * count
+		if len(generatedIDs) > 0 && id == generatedIDs[len(generatedIDs)-1] {
+			p *= 2.0 // Double penalty for immediate repetition
+		}
+		logits.Data[id] -= p
 	}
 }
 
@@ -677,6 +683,28 @@ func (m *IntentMoE) CalculateGrammarLoss(generatedWords []string, parent, child 
 
 	return penalty
 }
+// CalculateSequenceSimilarity computes a reward [0-1] based on how many target words are present
+// in the generated output, regardless of exact position (captures core content match).
+func (m *IntentMoE) CalculateSequenceSimilarity(generatedWords, targetWords []string) float32 {
+	if len(targetWords) == 0 {
+		return 0
+	}
+	matches := 0
+	targetMap := make(map[string]int)
+	for _, w := range targetWords {
+		targetMap[strings.ToLower(w)]++
+	}
+
+	for _, w := range generatedWords {
+		lowW := strings.ToLower(w)
+		if count, ok := targetMap[lowW]; ok && count > 0 {
+			matches++
+			targetMap[lowW]--
+		}
+	}
+
+	return float32(matches) / float32(len(targetWords))
+}
 func (m *IntentMoE) EncoderForward(input *tensor.Tensor, mask *tensor.Tensor) (*tensor.Tensor, error) {
 	emb, err := m.Embedding.Forward(input)
 	if err != nil {
@@ -730,11 +758,22 @@ func (m *IntentMoE) warmup() {
 // appendGrammarExperts grows an existing MoELayer by 8 GrammarExperts (one per POS role).
 // The gating network weight matrix is widened to include columns for the new experts.
 func appendGrammarExperts(layer *MoELayer, embeddingDim int) error {
-	numGrammar := len(grammarRoles) // 8
+	numGrammar := len(GrammarRoles) // 8
 	startID := len(layer.Experts)
 
+	// Detect dimensions from the existing architecture to ensure specialized experts fit perfectly.
+	layerInputDim := embeddingDim
+	layerOutputDim := embeddingDim
+	if len(layer.Experts) > 0 {
+		// Use the dimensions of the existing experts
+		layerInputDim = layer.InputDim
+		layerOutputDim = layer.OutputDim
+	} else if layer.GatingNetwork != nil && layer.GatingNetwork.Linear.Weights != nil {
+		layerInputDim = layer.GatingNetwork.Linear.Weights.Shape[0]
+	}
+
 	for i := 0; i < numGrammar; i++ {
-		ge, err := NewGrammarExpert(startID+i, i, embeddingDim, embeddingDim)
+		ge, err := NewGrammarExpert(startID+i, i, layerInputDim, layerOutputDim)
 		if err != nil {
 			return fmt.Errorf("grammar expert %d: %w", i, err)
 		}
@@ -827,6 +866,7 @@ func (m *IntentMoE) BeamSearchDecode(
 	maxLen, sosToken, eosToken, beamWidth int,
 	temperature float32,
 	repetitionPenalty float32,
+	rule *IntentRule, // Optional structural guidance
 ) ([]int, error) {
 	if beamWidth <= 0 {
 		beamWidth = 4
@@ -894,9 +934,62 @@ func (m *IntentMoE) BeamSearchDecode(
 			if step < 3 && eosToken >= 0 && eosToken < len(logits.Data) {
 				logits.Data[eosToken] = -1e9
 			}
+			// Suppress SOS/BOS from ever appearing in decoded output
+			if sosToken >= 0 && sosToken < len(logits.Data) {
+				logits.Data[sosToken] = -1e9
+			}
 
 			// Repetition penalty
 			ApplyRepetitionPenalty(logits, cand.ids, repetitionPenalty)
+
+			// 🧬 STRUCTURAL GUIDANCE (Structural Grammar Penalty)
+			// If a rule is provided, we guide the beam towards the expected POS sequence.
+			if rule != nil && len(rule.GrammarSkeleton) > 0 {
+				// Determine current step index (excluding BOS)
+				ruleStep := len(cand.ids) - 1 
+				if ruleStep < len(rule.GrammarSkeleton) {
+					expectedType := rule.GrammarSkeleton[ruleStep]
+					for idx, v := range logits.Data {
+						if v < -1e8 { continue } // Skip already suppressed tokens
+						
+						word := m.SentenceVocab.GetWord(idx)
+						actualType := MapWordToGrammarType(word)
+						
+						// If word doesn't match the required structural category, penalize it.
+						// We use a softer penalty (-3.0) to allow model confidence to override.
+						if actualType != expectedType && actualType != "OTHER" {
+							logits.Data[idx] -= 3.0
+						}
+					}
+				}
+			}
+
+			// 🚫 N-gram blocking: suppress any token that would create a repeated bigram or trigram
+			n := len(cand.ids)
+			if n >= 2 {
+				lastTwo := [2]int{cand.ids[n-2], cand.ids[n-1]}
+				for tok := range logits.Data {
+					if cand.ids[n-1] == lastTwo[0] && tok == lastTwo[1] {
+						logits.Data[tok] = -1e9 // block repeated bigram
+					}
+				}
+			}
+			if n >= 4 {
+				// Block any token that would repeat the last trigram
+				last3 := [3]int{cand.ids[n-3], cand.ids[n-2], cand.ids[n-1]}
+				for i := 0; i < n-3; i++ {
+					if cand.ids[i] == last3[0] && cand.ids[i+1] == last3[1] && cand.ids[i+2] == last3[2] {
+						// The next token after this trigram occurrence should be blocked
+						if i+3 < n {
+							nextAfter := cand.ids[i+3]
+							if nextAfter >= 0 && nextAfter < len(logits.Data) {
+								logits.Data[nextAfter] = -1e9
+							}
+						}
+						break
+					}
+				}
+			}
 
 			// Temperature scaling
 			for i := range logits.Data {
@@ -1007,6 +1100,9 @@ func NewIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, childVoc
 
 	// Define the expert builder function
 	expertBuilder := func(expertIdx int) (Expert, error) {
+		if numExperts == 8 {
+			return NewGrammarExpert(expertIdx, expertIdx, embeddingDim, embeddingDim)
+		}
 		return NewFeedForwardExpert(embeddingDim, embeddingDim, embeddingDim) // Example: inputDim, hiddenDim, outputDim
 	}
 
@@ -1201,6 +1297,9 @@ func NewHybridIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, ch
 
 	// 1. Create the inner LLM Encoder (MoE Stack with 4 layers for deeper reasoning)
 	expertBuilder := func(expertIdx int) (Expert, error) {
+		if numExperts == 8 {
+			return NewGrammarExpert(expertIdx, expertIdx, embeddingDim, embeddingDim)
+		}
 		return NewGoffiExpert(expertIdx, embeddingDim, embeddingDim*4, embeddingDim)
 	}
 	l0, err := NewMoELayer(embeddingDim, embeddingDim, numExperts, 2, expertBuilder)
@@ -1225,9 +1324,11 @@ func NewHybridIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, ch
 	// They share the same dims so they slot cleanly into the existing gating network
 	// (which was already initialised for numExperts; we extend it by appending
 	// additional parameter columns below via appendGrammarExperts).
-	for _, layer := range []*MoELayer{l0, l1, l2, l3} {
-		if err := appendGrammarExperts(layer, embeddingDim); err != nil {
-			return nil, fmt.Errorf("failed to append grammar experts: %w", err)
+	if numExperts != 8 {
+		for _, layer := range []*MoELayer{l0, l1, l2, l3} {
+			if err := appendGrammarExperts(layer, embeddingDim); err != nil {
+				return nil, fmt.Errorf("failed to append grammar experts: %w", err)
+			}
 		}
 	}
 
@@ -1900,17 +2001,33 @@ func SaveIntentMoEModelToGOB(model *IntentMoE, path string) error {
 		return fmt.Errorf("failed to create model directory: %w", err)
 	}
 
-	file, err := os.Create(path)
+	tempPath := path + ".tmp"
+	file, err := os.Create(tempPath)
 	if err != nil {
 		return fmt.Errorf("failed to create model file: %w", err)
 	}
-	defer file.Close()
 
-	writer := bufio.NewWriter(file)
-	defer writer.Flush()
+	// Use gzip for compression (prevents OOM during large model serialization)
+	gz := gzip.NewWriter(file)
+	writer := bufio.NewWriter(gz)
 
 	encoder := gob.NewEncoder(writer)
-	return encoder.Encode(model)
+	err = encoder.Encode(model)
+	if err != nil {
+		gz.Close()
+		file.Close()
+		os.Remove(tempPath)
+		return fmt.Errorf("failed to encode model: %w", err)
+	}
+
+	writer.Flush()
+	gz.Close()
+	file.Close()
+
+	if runtime.GOOS == "windows" {
+		_ = os.Remove(path)
+	}
+	return os.Rename(tempPath, path)
 }
 
 // LoadIntentMoEModelFromGOB loads a IntentMoE from a legacy GOB file.
@@ -1993,14 +2110,33 @@ func (m *IntentMoE) RepairArchitecture() {
 	if m.Encoder != nil {
 		m.Encoder.RepairArchitecture()
 		
-		// 🧬 AUTO-UPGRADE: Ensure all MoE layers have Grammar Experts (16 experts total)
+		// 🧬 AUTO-UPGRADE: Ensure all MoE layers have Grammar Experts (typically 16 experts total if base was 8)
 		if h, ok := m.Encoder.(*HybridLLMGNNEncoder); ok && h.LLMEncoder != nil {
 			if stack, ok := h.LLMEncoder.(*MoEStack); ok {
 				for _, layer := range stack.Layers {
-					if layer != nil && len(layer.Experts) < 16 {
-						log.Printf("🛠️ [MoE] Repairing layer: adding missing Grammar Experts (currently %d experts)...", len(layer.Experts))
-						if err := appendGrammarExperts(layer, m.EmbeddingDim); err != nil {
-							log.Printf("❌ Failed to append grammar experts: %v", err)
+					if layer != nil {
+						hasGrammar := false
+						for _, ex := range layer.Experts {
+							if _, ok := ex.(*GrammarExpert); ok {
+								hasGrammar = true
+								break
+							}
+						}
+						// Only append if no grammar experts are present AND it looks like an old architecture
+						if !hasGrammar && len(layer.Experts) <= 8 {
+							log.Printf("🛠️ [MoE] Repairing layer: adding missing Grammar Experts (currently %d experts)...", len(layer.Experts))
+							if err := appendGrammarExperts(layer, m.EmbeddingDim); err != nil {
+								log.Printf("❌ Failed to append grammar experts: %v", err)
+							} else {
+								// 🧬 JUMPSTART: Seed the new experts with structural bias if vocab is available
+								if m.SentenceVocab != nil {
+									for _, ex := range layer.Experts {
+										if ge, ok := ex.(*GrammarExpert); ok {
+											ge.SeedGrammarBias(m.SentenceVocab.Size(), m.SentenceVocab.TokenToWord)
+										}
+									}
+								}
+							}
 						}
 					}
 				}
@@ -2011,6 +2147,35 @@ func (m *IntentMoE) RepairArchitecture() {
 	// Delegate to decoder
 	if m.Decoder != nil {
 		m.Decoder.RepairArchitecture()
+		
+		// 🧬 AUTO-UPGRADE: Decoder OutputMoE needs Grammar Experts too
+		if m.Decoder.OutputMoE != nil {
+			layer := m.Decoder.OutputMoE
+			hasGrammar := false
+			for _, ex := range layer.Experts {
+				if _, ok := ex.(*GrammarExpert); ok {
+					hasGrammar = true
+					break
+				}
+			}
+			if !hasGrammar && len(layer.Experts) <= 8 {
+				log.Printf("🛠️ [MoE] Repairing decoder: adding missing Grammar Experts (currently %d experts)...", len(layer.Experts))
+				// OutputMoE input dim is hiddenSize + inputDim (which is embeddingDim*2 in the hybrid case)
+				// But appendGrammarExperts uses layer.Experts[0].InputDim() to match dims.
+				if err := appendGrammarExperts(layer, m.EmbeddingDim); err != nil {
+					log.Printf("❌ Failed to append decoder grammar experts: %v", err)
+				} else {
+					// 🧬 JUMPSTART: Seed the new experts with structural bias if vocab is available
+					if m.SentenceVocab != nil {
+						for _, ex := range layer.Experts {
+							if ge, ok := ex.(*GrammarExpert); ok {
+								ge.SeedGrammarBias(m.SentenceVocab.Size(), m.SentenceVocab.TokenToWord)
+							}
+						}
+					}
+				}
+			}
+		}
 	}
 
 	// 🧬 REBUILD ACTIVE LAYERS

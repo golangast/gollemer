@@ -110,6 +110,9 @@ func (l *Linear) Input() *Tensor {
 
 // ClearState clears the intermediate states to free memory.
 func (l *Linear) ClearState() {
+	if l.input != nil {
+		l.input.Release()
+	}
 	l.input = nil
 }
 
@@ -328,6 +331,7 @@ func (l *Linear) Backward(grad *Tensor) error {
 
 		weightsTranspose, err := l.Weights.Transpose(0, 1)
 		if err != nil {
+			if inputTranspose != nil { inputTranspose.Release() }
 			return fmt.Errorf("linear layer backward: failed to transpose weights: %w", err)
 		}
 
@@ -354,10 +358,14 @@ func (l *Linear) Backward(grad *Tensor) error {
 
 			// Safety check: ensure grad.Data has enough elements for the reshaped shape
 			if len(grad.Data) < batchSize*seqLength*outputDim {
+				weightsTranspose.Release()
+				if inputTranspose != nil { inputTranspose.Release() }
 				return fmt.Errorf("linear layer backward (3D res): grad data length %d is too small for shape [%d, %d]", len(grad.Data), batchSize*seqLength, outputDim)
 			}
 			reshapedGrad, err := grad.Reshape([]int{batchSize * seqLength, outputDim})
 			if err != nil {
+				weightsTranspose.Release()
+				if inputTranspose != nil { inputTranspose.Release() }
 				return err
 			}
 
@@ -376,14 +384,27 @@ func (l *Linear) Backward(grad *Tensor) error {
 			dInput2D := NewTensor([]int{bSL, iDim}, dInput2DData, false)
 			dInput, err = dInput2D.Reshape([]int{batchSize, seqLength, inputDim})
 			if err != nil {
+				weightsTranspose.Release()
+				if inputTranspose != nil { inputTranspose.Release() }
+				dInput2D.Release()
 				return err
 			}
+			dInput2D.Release()
+			reshapedGrad.Release()
 
 		default:
+			weightsTranspose.Release()
+			if inputTranspose != nil { inputTranspose.Release() }
 			return fmt.Errorf("linear layer backward only supports 2D or 3D gradient, got %d dimensions", len(grad.Shape))
 		}
-		dInput.ToCPU()
+		
 		safeAccumulate(l.input.Grad.Data, dInput.Data)
+		dInput.Release()
+		weightsTranspose.Release()
+	}
+
+	if inputTranspose != nil {
+		inputTranspose.Release()
 	}
 
 	return nil
@@ -435,6 +456,18 @@ func (l *LayerNormalization) Parameters() []*Tensor {
 
 // ClearState clears intermediate tensors.
 func (l *LayerNormalization) ClearState() {
+	if l.inputTensor != nil {
+		l.inputTensor.Release()
+	}
+	if l.normalizedInput != nil {
+		l.normalizedInput.Release()
+	}
+	if l.mean != nil {
+		l.mean.Release()
+	}
+	if l.invStdDev != nil {
+		l.invStdDev.Release()
+	}
 	l.inputTensor = nil
 	l.normalizedInput = nil
 	l.mean = nil
@@ -789,6 +822,15 @@ func (mha *MultiHeadAttention) ToGPU() {
 
 // ClearState clears the intermediate states to free memory.
 func (mha *MultiHeadAttention) ClearState() {
+	if mha.attentionOutput != nil { mha.attentionOutput.Release() }
+	if mha.inputTensor != nil { mha.inputTensor.Release() }
+	if mha.q != nil { mha.q.Release() }
+	if mha.k != nil { mha.k.Release() }
+	if mha.v != nil { mha.v.Release() }
+	if mha.attentionScores != nil { mha.attentionScores.Release() }
+	if mha.attentionWeights != nil { mha.attentionWeights.Release() }
+	if mha.attentionOutputBeforeConcat != nil { mha.attentionOutputBeforeConcat.Release() }
+
 	mha.attentionOutput = nil
 	mha.inputTensor = nil
 	mha.q = nil
@@ -853,12 +895,23 @@ func (mha *MultiHeadAttention) Backward(grad *Tensor) error {
 	}
 	gradBeforeConcat, transpErr := gradReshaped.Transpose(1, 2)
 	if transpErr != nil {
+		weightsT.Release()
+		gradFlat.Release()
+		gradContextFlat.Release()
+		gradContext3D.Release()
+		gradReshaped.Release()
 		return fmt.Errorf("MHA backward: transpose grad failed: %w", transpErr)
 	}
+	weightsT.Release()
+	gradFlat.Release()
+	gradContextFlat.Release()
+	gradContext3D.Release()
+	gradReshaped.Release()
 
 	// 2. Backprop through MatMul(attentionWeights @ V)
 	vTransposed, _ := mha.v.Transpose(2, 3)
 	gradAttentionWeights, _ := gradBeforeConcat.MatMul(vTransposed)
+	vTransposed.Release()
 	if len(gradAttentionWeights.Data) != len(mha.attentionWeights.Data) {
 		return fmt.Errorf("MHA backward: gradAttentionWeights size mismatch: %d vs %d", len(gradAttentionWeights.Data), len(mha.attentionWeights.Data))
 	}
@@ -872,6 +925,7 @@ func (mha *MultiHeadAttention) Backward(grad *Tensor) error {
 
 	attentionWeightsTransposed, _ := mha.attentionWeights.Transpose(2, 3)
 	gradV_per_head, _ := attentionWeightsTransposed.MatMul(gradBeforeConcat)
+	attentionWeightsTransposed.Release()
 
 	if mha.v.RequiresGrad {
 		if mha.v.Grad == nil {
@@ -879,6 +933,7 @@ func (mha *MultiHeadAttention) Backward(grad *Tensor) error {
 		}
 		safeAccumulate(mha.v.Grad.Data, gradV_per_head.Data)
 	}
+	gradV_per_head.Release()
 
 	// 3. Backprop through Softmax: dL/dS[i] = P[i]*(dL/dP[i] - dot(dL/dP, P))
 	// Uses SIMD-accelerated SoftmaxBackwardRow from the tensor package.
@@ -903,6 +958,7 @@ func (mha *MultiHeadAttention) Backward(grad *Tensor) error {
 		}
 		gradAttentionScores = NewTensor(attScoresShape, gradScoresData, false)
 	}
+	gradAttentionWeights.Release()
 
 	// 4. Backprop through scaling
 	scale := float32(1.0 / math.Sqrt(float64(mha.HeadDim)))

@@ -27,6 +27,10 @@ func (t *Tensor) ToCPU() *Tensor {
 	return t
 }
 
+func (t *Tensor) Release() {
+	// CPU-only mode: no-op.
+}
+
 func (t *Tensor) SyncToDevice() {
 	// CPU-only mode: no-op.
 }

@@ -88,6 +88,9 @@ func (e *Embedding) ToGPU() {
 
 // ClearState clears the intermediate states to free memory.
 func (e *Embedding) ClearState() {
+	if e.inputTensor != nil {
+		e.inputTensor.Release()
+	}
 	e.inputTensor = nil
 	e.inputTokenIDs = nil
 }
@@ -207,6 +210,9 @@ func (pe *PositionalEmbedding) ToGPU() {
 
 // ClearState clears the intermediate states to free memory.
 func (pe *PositionalEmbedding) ClearState() {
+	if pe.inputTensor != nil {
+		pe.inputTensor.Release()
+	}
 	pe.inputTensor = nil
 }
 

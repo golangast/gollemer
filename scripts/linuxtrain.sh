@@ -23,7 +23,7 @@ done
 
 export GO_CMD="go"
 export GOEXPERIMENT=simd
-export GOMEMLIMIT=12000MiB
+export GOMEMLIMIT=4000MiB
 export GOGC=30
 
 

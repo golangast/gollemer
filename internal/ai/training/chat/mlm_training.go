@@ -776,7 +776,7 @@ func DetachMLMModel(model *moe.IntentMoE, mlmHead *MLMHead) {
 	model.ClearState()
 }
 
-func ExtractMLMSentences(pairs []struct{ Q, A, Intent string }) []MLMSentence {
+func ExtractMLMSentences(pairs []struct{ Q, A, Intent, Grammar string }) []MLMSentence {
 	seen := make(map[string]bool)
 	var sentences []MLMSentence
 	for _, pair := range pairs {

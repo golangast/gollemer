@@ -28,6 +28,7 @@ type MoEState struct {
 	RouterZLoss        float32
 	gateLogits         *Tensor
 	lastOutput         *Tensor
+	TargetRouting      []int // Ground truth expert IDs (0-7) for tokens in this pass
 }
 
 // MoELayer implements a Mixture of Experts layer.
@@ -62,6 +63,7 @@ type MoELayer struct {
 	StagnationCounters     []int     // Counts consecutive steps/epochs with low utilization
 	ExpertGradMultiplier   []float32 // Boosts gradients for experts recovering from freeze
 	DiversityLoss          float32   // Penalty for experts being too similar
+	TargetRouting          []int     // Ground truth expert IDs for each token (set before Forward)
 }
 
 // ResetUtilizationStats clears the accumulated utilization counters.
@@ -310,10 +312,15 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 	}
 	// --- [/Diagnostic] ---
 
+	embeddingDim := input.Shape[2]
 	numExperts := len(moe.Experts)
+
+	// 🧬 RE-SYNC: Ensure utilization tracking matches current expert count
+	if moe.AccumulatedUtilization == nil || len(moe.AccumulatedUtilization) != numExperts {
+		moe.ResetUtilizationStats()
+	}
 	batchSize := input.Shape[0]
 	seqLength := input.Shape[1]
-	embeddingDim := input.Shape[2]
 
 	// Noise injection (Expert Curiosity) is now handled inside GatingNetwork.Forward
 	// to ensure consistent Gaussian jitter before TopK selection.
@@ -433,10 +440,29 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 		if gateLogits.RequiresGrad {
 			// We skip backprop complexity for GRPO normalization in "Training-Free" mode if it's meant for inference
 			// But for completeness, we could link it. For now, we'll just use the data.
-			scoresTensor.Creator = gateLogits.Creator
+					scoresTensor.Creator = gateLogits.Creator
 		}
 	} else {
 		scoresTensor = gateLogits
+	}
+
+	// 🧬 STRUCTURAL ROUTING BIAS (Training Only)
+	// If ground-truth routing is provided (from POS tags), boost the target expert.
+	if moe.Training && len(moe.TargetRouting) > 0 {
+		numTokens := batchSize * seqLength
+		appliedCount := 0
+		for i := 0; i < numTokens && i < len(moe.TargetRouting); i++ {
+			target := moe.TargetRouting[i]
+			if target >= 0 && target < numExperts {
+				// Apply a strong structural prior (+8.0 logit boost)
+				// Reduced from +20.0 to allow some gradient learning for the router.
+				gateLogits.Data[i*numExperts+target] += 8.0
+				appliedCount++
+			}
+		}
+		if appliedCount > 0 && rand.Float32() < 0.01 {
+			fmt.Printf("🧬 [MoELayer] Applied Structural Routing Bias for %d tokens\n", appliedCount)
+		}
 	}
 
 	// Apply softmax to get probabilities
@@ -562,6 +588,30 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 		}(start, end)
 	}
 	wgRoute.Wait()
+
+	// 🧬 STAGNATION RECOVERY (Training Only)
+	if moe.Training {
+		batchUsed := make([]bool, numExperts)
+		for _, selected := range allSelectedExperts {
+			for _, eid := range selected {
+				if eid >= 0 && eid < numExperts {
+					batchUsed[eid] = true
+				}
+			}
+		}
+
+		for j := 0; j < numExperts; j++ {
+			if !batchUsed[j] {
+				moe.StagnationCounters[j] += totalTokensRoute
+				if moe.StagnationCounters[j] >= 500 { // Stagnant for 500 tokens
+					moe.ResetExpertWeights(j)
+					moe.StagnationCounters[j] = 0
+				}
+			} else {
+				moe.StagnationCounters[j] = 0
+			}
+		}
+	}
 
 	moe.SelectedExperts = allSelectedExperts
 	// Clear and re-fill ExpertTokenIndices sequentially to ensure correct relative indexing
@@ -767,6 +817,7 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 			RouterZLoss:        moe.RouterZLoss,
 			gateLogits:         moe.gateLogits,
 			lastOutput:         finalOutput,
+			TargetRouting:      moe.TargetRouting,
 		}
 		moe.stateStack = append(moe.stateStack, state)
 	}
@@ -797,6 +848,7 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 		moe.LoadBalancingLoss = state.LoadBalancingLoss
 		moe.RouterZLoss = state.RouterZLoss
 		moe.gateLogits = state.gateLogits
+		moe.TargetRouting = state.TargetRouting
 	}
 
 	// Remember if original grad was 2D (context vector) before reshaping/padding
@@ -1179,17 +1231,40 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 		}
 	}
 
-	// Clamp router logit grads to prevent NaN/Inf from corrupting the gating network.
-	// NOTE: Router gradients are particularly sensitive to sequence length scaling.
-	// 100.0 is a conservative ceiling to prevent numerical explosions.
-	for i := range logitsGrad.Data {
-		v := logitsGrad.Data[i]
-		if v != v { // NaN guard
-			logitsGrad.Data[i] = 0
-		} else if v > 100.0 {
-			logitsGrad.Data[i] = 100.0
-		} else if v < -100.0 {
-			logitsGrad.Data[i] = -100.0
+	// --- [STRUCTURAL GRAMMAR ROUTING LOSS] ---
+	// If TargetRouting is provided, we apply a direct Cross-Entropy gradient
+	// to the gate logits to force the router toward specific grammar experts.
+	if len(moe.TargetRouting) > 0 && len(logitsGrad.Data) > 0 {
+		// Logits gradient for Cross-Entropy + Softmax is (p_i - target_i)
+		// We add this to the existing gradient from the main loss.
+		numExperts := len(moe.Experts)
+		numTokens := len(moe.TargetRouting)
+		routingWeight := float32(5.0) // Strength of grammar guidance (increased for maximum focus)
+
+		for i := 0; i < numTokens; i++ {
+			targetIdx := moe.TargetRouting[i]
+			if targetIdx < 0 || targetIdx >= numExperts {
+				continue // Skip invalid or padding roles
+			}
+			
+			// Add (p_i - 1) to the target expert's logit grad, 
+			// and (p_j) to all other expert's logit grads.
+			for j := 0; j < numExperts; j++ {
+				gradIdx := i*numExperts + j
+				if gradIdx >= len(logitsGrad.Data) {
+					break
+				}
+				
+				p := moe.GateOutputs.Data[gradIdx]
+				var dLdz float32
+				if j == targetIdx {
+					dLdz = (p - 1.0)
+				} else {
+					dLdz = p
+				}
+				
+				logitsGrad.Data[gradIdx] += dLdz * routingWeight
+			}
 		}
 	}
 
@@ -1236,6 +1311,34 @@ func (moe *MoELayer) GetSelectedExperts() [][]int {
 
 // ClearState clears the internal state of the layer to free memory.
 func (moe *MoELayer) ClearState() {
+	if moe.GateOutputs != nil {
+		moe.GateOutputs.Release()
+	}
+	if moe.gateLogits != nil {
+		moe.gateLogits.Release()
+	}
+	for _, out := range moe.expertOutputs {
+		if out != nil {
+			out.Release()
+		}
+	}
+	for _, state := range moe.stateStack {
+		if state.input2D != nil {
+			state.input2D.Release()
+		}
+		if state.GateOutputs != nil {
+			state.GateOutputs.Release()
+		}
+		if state.gateLogits != nil {
+			state.gateLogits.Release()
+		}
+		for _, exOut := range state.expertOutputs {
+			if exOut != nil {
+				exOut.Release()
+			}
+		}
+	}
+
 	moe.inputTensor = nil
 	moe.expertOutputs = nil
 	moe.ExpertTokenIndices = nil
@@ -1244,6 +1347,7 @@ func (moe *MoELayer) ClearState() {
 	moe.ExpertProbSums = nil
 	moe.stateStack = nil
 	moe.gateLogits = nil
+	moe.TargetRouting = nil
 
 	// Clear state for all experts
 	for _, expert := range moe.Experts {

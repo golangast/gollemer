@@ -20,6 +20,13 @@ func (t *Tensor) ToCPU() *Tensor {
 	return t
 }
 
+// Release explicitly frees the GPU buffer.
+func (t *Tensor) Release() {
+	if t.Device == GPU {
+		t.openclRelease()
+	}
+}
+
 // SyncToDevice ensures the GPU data matches the host data.
 func (t *Tensor) SyncToDevice() {
 	if t.Device != GPU || t.gpuData == nil {

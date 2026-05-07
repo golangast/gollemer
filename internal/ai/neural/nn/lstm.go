@@ -94,6 +94,27 @@ func NewLSTMCell(inputSize, hiddenSize int) (*LSTMCell, error) {
 }
 
 // Parameters returns all learnable parameters of the LSTMCell.
+func (c *LSTMCell) ClearState() {
+	if c.InputTensor != nil { c.InputTensor.Release() }
+	if c.PrevHidden != nil { c.PrevHidden.Release() }
+	if c.PrevCell != nil { c.PrevCell.Release() }
+	if c.ft != nil { c.ft.Release() }
+	if c.it != nil { c.it.Release() }
+	if c.ct != nil { c.ct.Release() }
+	if c.ot != nil { c.ot.Release() }
+	if c.cct != nil { c.cct.Release() }
+
+	c.InputTensor = nil
+	c.PrevHidden = nil
+	c.PrevCell = nil
+	c.ft = nil
+	c.it = nil
+	c.ct = nil
+	c.ot = nil
+	c.cct = nil
+}
+
+// Parameters returns all learnable parameters of the LSTMCell.
 func (c *LSTMCell) Parameters() []*Tensor {
 	return []*Tensor{c.Wf, c.Wi, c.Wc, c.Wo, c.Bf, c.Bi, c.Bc, c.Bo}
 }
@@ -188,8 +209,15 @@ func (c *LSTMCell) Forward(inputs ...*Tensor) (*Tensor, *Tensor, error) {
 	}
 	wo_hid, err := c.Wo.Slice(0, inputSize, c.Wo.Shape[0])
 	if err != nil {
+		wf_in.Release(); wf_hid.Release(); wi_in.Release(); wi_hid.Release(); wc_in.Release(); wc_hid.Release(); wo_in.Release()
 		return nil, nil, err
 	}
+
+	// 🛡️ Proactive cleanup helper
+	cleanupSlices := func() {
+		wf_in.Release(); wf_hid.Release(); wi_in.Release(); wi_hid.Release(); wc_in.Release(); wc_hid.Release(); wo_in.Release(); wo_hid.Release()
+	}
+	defer cleanupSlices()
 
 	// Forget gate
 	f_in, err := input.MatMul(wf_in)
@@ -213,6 +241,8 @@ func (c *LSTMCell) Forward(inputs ...*Tensor) (*Tensor, *Tensor, error) {
 		return nil, nil, err
 	}
 	c.ft = ft
+	f_in.Release()
+	f_hid.Release()
 
 	// Input gate
 	i_in, err := input.MatMul(wi_in)
@@ -236,6 +266,9 @@ func (c *LSTMCell) Forward(inputs ...*Tensor) (*Tensor, *Tensor, error) {
 		return nil, nil, err
 	}
 	c.it = it
+	i_in.Release()
+	i_hid.Release()
+	// it (result) is stored in c.it, will be released in ClearState
 
 	// Candidate cell state
 	cc_in, err := input.MatMul(wc_in)
@@ -259,6 +292,8 @@ func (c *LSTMCell) Forward(inputs ...*Tensor) (*Tensor, *Tensor, error) {
 		return nil, nil, err
 	}
 	c.cct = cct
+	cc_in.Release()
+	cc_hid.Release()
 
 	// Output gate
 	o_in, err := input.MatMul(wo_in)
@@ -516,6 +551,7 @@ func (c *LSTMCell) Backward(gradHt, gradCt *Tensor) error {
 	if err != nil {
 		return err
 	}
+	transposedWf.Release(); transposedWi.Release(); transposedWc.Release(); transposedWo.Release()
 
 	gradCombined, err := gradCombined_f.Add(gradCombined_i)
 	if err != nil {
@@ -529,6 +565,7 @@ func (c *LSTMCell) Backward(gradHt, gradCt *Tensor) error {
 	if err != nil {
 		return err
 	}
+	gradCombined_f.Release(); gradCombined_i.Release(); gradCombined_c.Release(); gradCombined_o.Release()
 
 	// 8. Split gradCombined into gradInput and gradPrevHidden
 	gradInput, err := gradCombined.Slice(1, 0, c.InputSize)
@@ -539,6 +576,7 @@ func (c *LSTMCell) Backward(gradHt, gradCt *Tensor) error {
 	if err != nil {
 		return err
 	}
+	gradCombined.Release()
 
 	// 9. Accumulate gradients for inputs
 	if c.InputTensor.RequiresGrad {
@@ -615,6 +653,25 @@ func (l *LSTM) Parameters() []*Tensor {
 		}
 	}
 	return params
+}
+
+// ToGPU moves all cells' parameters to the GPU.
+func (l *LSTM) ClearState() {
+	for _, layer := range l.Cells {
+		for _, cell := range layer {
+			cell.ClearState()
+		}
+	}
+	if l.timeStepCells != nil {
+		for _, layer := range l.timeStepCells {
+			for _, cell := range layer {
+				if cell != nil {
+					cell.ClearState()
+				}
+			}
+		}
+	}
+	l.timeStepCells = nil
 }
 
 // ToGPU moves all cells' parameters to the GPU.
@@ -874,6 +931,11 @@ func (l *LSTM) Backward(gradNextHidden, gradNextCell *Tensor) error {
 			gradHFromFuture = cell.PrevHidden.Grad
 			gradCFromFuture = cell.PrevCell.Grad
 
+			totalGradH.Release()
+			if totalGradC != gradCFromFuture && totalGradC != gradC {
+				totalGradC.Release()
+			}
+
 			// Accumulate gradient for the input of this layer
 			if cell.InputTensor.Grad != nil {
 				batchSize := cell.InputTensor.Shape[0]
@@ -891,8 +953,14 @@ func (l *LSTM) Backward(gradNextHidden, gradNextCell *Tensor) error {
 		}
 
 		// The gradient for the input of this layer becomes the gradH for the layer below.
+		if gradH != layerInputTensor.Grad && gradH != gradNextHidden {
+			gradH.Release()
+		}
 		gradH = layerInputTensor.Grad
 		// There is no cell state gradient between layers.
+		if gradC != gradNextCell {
+			gradC.Release()
+		}
 		gradC = NewTensor(gradC.Shape, make([]float32, len(gradC.Data)), false)
 	}
 	return nil
@@ -966,10 +1034,7 @@ func (l *LSTM) GetInputGradStep(t int) *Tensor {
 	return l.timeStepCells[0][t].InputTensor.Grad
 }
 
-// ClearState clears the internal state of the LSTM.
-func (l *LSTM) ClearState() {
-	l.timeStepCells = nil
-}
+
 
 // GetSingleStepInputGrad returns the input gradient from the bottom LSTM layer
 // after a single-step (2D input) backward pass.
