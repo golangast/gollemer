@@ -843,6 +843,17 @@ func trainIntentMoEBatch(intentMoEModel *moe.IntentMoE, optimizer nn.Optimizer, 
 
 	optimTime := time.Since(tOptim)
 
+	// 🛡️ Proactive GPU Memory Release
+	for _, l := range semanticOutputLogits {
+		if l != nil { l.Release() }
+	}
+	for _, g := range semanticOutputGrads {
+		if g != nil { g.Release() }
+	}
+	if inputTensor != nil { inputTensor.Release() }
+	if semanticOutputTensor != nil { semanticOutputTensor.Release() }
+	if inputMask != nil { inputMask.Release() }
+
 	if batchIndex%10 == 0 {
 		log.Printf("Batch %d Profile: Prep=%v, Fwd=%v, Loss=%v, Bwd=%v, Opt=%v", batchIndex, prepTime, forwardTime, lossTime, backwardTime, optimTime)
 	}
@@ -966,14 +977,11 @@ func BuildVocabularies(semanticTrainingData *IntentTrainingData) (*mainvocab.Voc
 }
 
 func main() {
-	// Set a 4 GB soft memory limit to ensure aggressive Garbage Collection
-	// happens before Linux OOM-Killer kills the training process.
-	// (System has 6.3GiB, so 4GiB is a safe ceiling for the heap.)
-	debug.SetMemoryLimit(4 * 1024 * 1024 * 1024)
+	// 🛡️ MEMORY PROTECTION: Set a soft memory limit to force Go's GC to be aggressive.
+	// Since the system has 6.3GiB, we set this to 3.5GB to ensure we stay well below the OS ceiling.
+	debug.SetMemoryLimit(3500 * 1024 * 1024)
 
 	// Set GC to 20% to force much more aggressive garbage collection.
-	// Default GOGC=100 means Go waits until heap doubles (2.3GB -> 4.6GB) before collecting.
-	// At 20%, GC fires every ~460MB of growth, keeping heap under control.
 	debug.SetGCPercent(20)
 
 	const semanticTrainingDataPath = "./data/training/tiny_chat.json"
@@ -1155,6 +1163,7 @@ func main() {
 				intentMoEModel.Decoder.ResizeOutputLayer(semanticOutputVocabSize)
 				intentMoEModel.SentenceVocabSize = semanticOutputVocabSize
 			}
+			intentMoEModel.RebuildActiveLayers()
 		}
 	}
 
@@ -1357,7 +1366,7 @@ func main() {
 			*sentencesFile,
 			*rebalance,
 			*overfit,
-			float32(*flagLR),
+			float32(0.0001), // Reduced from 0.0005 for stability
 			float32(*weightDecay),
 			*autoHealFlag,
 			float32(*maxGradNorm),

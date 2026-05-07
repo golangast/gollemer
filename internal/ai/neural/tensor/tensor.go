@@ -299,10 +299,6 @@ func (t *Tensor) Clone() *Tensor {
 }
 
 // ToGPU is now implemented in gpu_init_*.go
-// Release is a no-op in Cgo-free mode.
-func (t *Tensor) Release() {
-}
-
 // SyncToHost is now implemented in gpu_init_*.go
 func (t *Tensor) SyncToHost() {
 }
@@ -528,7 +524,6 @@ func (t *Tensor) MatMul(other *Tensor) (*Tensor, error) {
 		rowsA := t.Shape[0]
 		colsA := t.Shape[1]
 		colsB := other.Shape[1]
-		fmt.Fprintf(os.Stderr, "💎 MatMul CPU (Goffi): %v x %v\n", t.Shape, other.Shape)
 
 		resultData := make([]float32, rowsA*colsB)
 		err := GoffiMatMul(t.Data, other.Data, resultData, rowsA, colsB, colsA)
@@ -539,7 +534,7 @@ func (t *Tensor) MatMul(other *Tensor) (*Tensor, error) {
 			}
 			return res, nil
 		}
-		
+
 		// Permanent fallback if Goffi is unavailable or failing
 		goffiMatMulFailed = true
 		fmt.Fprintf(os.Stderr, "⚠️ Goffi MatMul failed (%v), switching to Gonum fallback.\n", err)
@@ -557,7 +552,6 @@ func (t *Tensor) MatMul(other *Tensor) (*Tensor, error) {
 
 		resultRows := rowsA
 		resultCols := colsB
-		fmt.Fprintf(os.Stderr, "💎 MatMul CPU (Gonum): %v x %v\n", t.Shape, other.Shape)
 		resultData := make([]float32, resultRows*resultCols)
 
 		// 🚀 Use Pure-Go SIMD for optimized CPU MatMul
@@ -595,9 +589,7 @@ func (t *Tensor) MatMul(other *Tensor) (*Tensor, error) {
 		resultCols := colsB
 		var ms runtime.MemStats
 		runtime.ReadMemStats(&ms)
-		fmt.Fprintf(os.Stderr, "💎 MatMul CPU (4D): %v x %v | Heap: %d MB\n", t.Shape, other.Shape, ms.Alloc/1024/1024)
 		resultData := make([]float32, batchSize*numHeads*resultRows*resultCols)
-		fmt.Fprintf(os.Stderr, "💎 MatMul CPU (4D) Allocated: %d elements\n", len(resultData))
 		resultShape := []int{batchSize, numHeads, resultRows, resultCols}
 
 		totalSlices := batchSize * numHeads
@@ -983,6 +975,7 @@ func (op *MatMulOperation) Backward(grad *Tensor) error {
 
 	return fmt.Errorf("MatMul backward only supports 2D or 4D tensors, got %d dimensions", len(op.A.Shape))
 }
+
 type TransposeOperation struct {
 	A     *Tensor
 	Axis1 int
@@ -1007,7 +1000,6 @@ func (op *TransposeOperation) Backward(grad *Tensor) error {
 	}
 	return nil
 }
-
 
 // Transpose transposes a tensor by swapping two specified axes.
 func (t *Tensor) Transpose(axis1, axis2 int) (*Tensor, error) {

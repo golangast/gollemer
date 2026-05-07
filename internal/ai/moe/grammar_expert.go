@@ -13,9 +13,9 @@ func init() {
 	gob.Register(&GrammarExpert{})
 }
 
-// grammarRole maps a POS category to a learnable bias slot index (0-7).
+// GrammarRoles maps a POS category to a learnable bias slot index (0-7).
 // This lets each of the 8 grammar experts specialise in one structural role.
-var grammarRoles = []string{
+var GrammarRoles = []string{
 	"PRON",  // 0 — pronouns
 	"VERB",  // 1 — copula / aux verbs
 	"AUX",   // 2 — auxiliary verbs (will, can, should)
@@ -26,10 +26,10 @@ var grammarRoles = []string{
 	"OTHER", // 7 — everything else (residual)
 }
 
-// grammarRoleIndex returns the role index for a coarse POS tag.
-func grammarRoleIndex(posTag string) int {
+// GrammarRoleIndex returns the role index for a coarse POS tag.
+func GrammarRoleIndex(posTag string) int {
 	t := strings.ToUpper(posTag)
-	for i, r := range grammarRoles {
+	for i, r := range GrammarRoles {
 		if t == r {
 			return i
 		}
@@ -67,8 +67,8 @@ type GrammarExpert struct {
 // NewGrammarExpert creates a GrammarExpert that owns the given grammar role (0-7).
 // hiddenDim is intentionally narrower than a standard expert to force syntactic focus.
 func NewGrammarExpert(id, roleID, inputDim, outputDim int) (*GrammarExpert, error) {
-	if roleID < 0 || roleID >= len(grammarRoles) {
-		roleID = roleID % len(grammarRoles)
+	if roleID < 0 || roleID >= len(GrammarRoles) {
+		roleID = roleID % len(GrammarRoles)
 	}
 	hiddenDim := inputDim / 2
 	if hiddenDim < 64 {
@@ -90,7 +90,7 @@ func NewGrammarExpert(id, roleID, inputDim, outputDim int) (*GrammarExpert, erro
 	return &GrammarExpert{
 		ID:        id,
 		RoleID:    roleID,
-		RoleName:  grammarRoles[roleID],
+		RoleName:  GrammarRoles[roleID],
 		inputDim:  inputDim,
 		hiddenDim: hiddenDim,
 		outputDim: outputDim,
@@ -247,3 +247,29 @@ func (e *GrammarExpert) ToGPU() {
 }
 
 func (e *GrammarExpert) SyncParameters() error { return nil }
+// SeedGrammarBias applies a structural prior to the expert's output bias.
+// This jumpstarts specialization by making the expert naturally "prefer" tokens
+// that match its assigned syntactic role (e.g. PRON expert gets a boost for 'i', 'you').
+func (ge *GrammarExpert) SeedGrammarBias(vocabSize int, tokenToWord []string) {
+	if ge.FC2.Biases == nil {
+		ge.FC2.Biases = tensor.NewTensor([]int{vocabSize}, make([]float32, vocabSize), true)
+	}
+	
+	boostCount := 0
+	for id, word := range tokenToWord {
+		if id >= vocabSize {
+			continue
+		}
+		
+		role := MapWordToGrammarType(word)
+		if role == ge.RoleName {
+			// Apply a significant structural prior (+5.0 logit boost)
+			ge.FC2.Biases.Data[id] += 5.0
+			boostCount++
+		}
+	}
+	
+	if boostCount > 0 {
+		fmt.Printf("🧬 [MoE] Seeded Expert E%d (%s) with %d role-specific biases\n", ge.ID, ge.RoleName, boostCount)
+	}
+}

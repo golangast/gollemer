@@ -88,7 +88,6 @@ func (r *Runner) Init() {
 	if _, err := os.Stat(socialModelPath); err == nil {
 		if loaded, err := moe.LoadIntentMoEModelWithFallback(socialModelPath); err == nil && loaded != nil {
 			socialModel = loaded
-			socialModel.RepairArchitecture()
 			log.Printf("🎭 Social MoE Model loaded successfully from %s", socialModelPath)
 		} else {
 			log.Printf("⚠️  Failed to load social model at %s: %v", socialModelPath, err)
@@ -99,21 +98,26 @@ func (r *Runner) Init() {
 	}
 
 
-	// Wire up SentenceVocab for social model - always attempt to load latest from disk
+	// Wire up SentenceVocab for social model - ONLY if model doesn't have one
 	if socialModel != nil {
 		socialVocabCandidates := []string{
 			filepath.Join(r.ProjectRoot, "data/models/gob_models/social_vocabulary.gob"),
 			filepath.Join(r.ProjectRoot, "data/models/gob_models/moe_social_model_vocab.gob"),
 			filepath.Join(r.ProjectRoot, "data/models/gob_models/seq2seq_output_vocab.gob"),
 		}
-		for _, vocabPath := range socialVocabCandidates {
-			if _, err := os.Stat(vocabPath); err != nil {
-				continue
-			}
-			if v, err := mainvocab.LoadVocabulary(vocabPath); err == nil {
-				socialModel.SentenceVocab = v
-				log.Printf("✅ Wired SentenceVocab to social model from: %s (size=%d)", filepath.Base(vocabPath), v.Size())
-				break
+
+		if socialModel.SentenceVocab != nil && socialModel.SentenceVocab.Size() > 10 {
+			log.Printf("🧠 Using internal SentenceVocab from social model (size=%d)", socialModel.SentenceVocab.Size())
+		} else {
+			for _, vocabPath := range socialVocabCandidates {
+				if _, err := os.Stat(vocabPath); err != nil {
+					continue
+				}
+				if v, err := mainvocab.LoadVocabulary(vocabPath); err == nil {
+					socialModel.SentenceVocab = v
+					log.Printf("✅ Wired SentenceVocab to social model from disk: %s (size=%d)", filepath.Base(vocabPath), v.Size())
+					break
+				}
 			}
 		}
 		if socialModel.SentenceVocab == nil || socialModel.SentenceVocab.Size() < 10 {
@@ -133,6 +137,10 @@ func (r *Runner) Init() {
 		} else {
 			log.Printf("✅ Verified social model vocabulary: %d tokens", socialModel.SentenceVocab.Size())
 		}
+
+		// 🧬 REPAIR ARCHITECTURE
+		socialModel.RepairArchitecture()
+		log.Printf("🛠️ Social MoE Architecture verified and repaired (Experts: %d)", len(r.findMoELayers(socialModel)[0].Experts))
 
 		// 🧬 WIRE UP SOCIAL MODEL
 		// We keep r.IntentModel as the primary classification brain,

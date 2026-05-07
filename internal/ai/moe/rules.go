@@ -35,7 +35,7 @@ func NewRuleBook() *RuleBook {
 	rb.Rules["social:greeting"] = IntentRule{
 		ParentIntent: "social",
 		ChildIntent:  "greeting",
-		GrammarSkeleton: []string{"GREET", "PRON", "VERB"}, // "Hello how are..."
+		GrammarSkeleton: []string{"GREET", "INTERROGATIVE", "VERB", "PRON"}, // "Hi how are you"
 		RequiredKeywords: []string{"hello", "hi", "hey", "morning", "evening"},
 	}
 
@@ -51,7 +51,7 @@ func NewRuleBook() *RuleBook {
 	rb.Rules["social:status_check"] = IntentRule{
 		ParentIntent: "social",
 		ChildIntent:  "status_check",
-		GrammarSkeleton: []string{"PRON", "VERB", "ADJ"}, // "I am doing well"
+		GrammarSkeleton: []string{"PRON", "VERB", "OTHER", "ADJ"}, // "I am doing well"
 		RequiredKeywords: []string{"doing", "well", "fine", "good", "great"},
 	}
 
@@ -80,33 +80,43 @@ func MapWordToGrammarType(w string) string {
 	
 	// GREETINGS
 	switch w {
-	case "hello", "hi", "hey", "greetings": return "GREET"
+	case "hello", "hi", "hey", "greetings", "morning", "evening": return "GREET"
 	}
 
 	// PRONOUNS
 	switch w {
-	case "i", "me", "my", "you", "your", "it", "we", "they": return "PRON"
+	case "i", "me", "my", "you", "your", "it", "we", "they", "them", "us", "our": return "PRON"
 	}
 
-	// VERBS (Common)
+	// VERBS (Copula / State)
 	switch w {
-	case "am", "is", "are", "was", "were", "be", "been", "being", "do", "does", "did", "have", "has", "had": return "VERB"
+	case "am", "is", "are", "was", "were", "be", "been", "being": return "VERB"
 	}
 
-	// ARTICLES
+	// AUXILIARY VERBS
 	switch w {
-	case "the", "a", "an": return "ART"
+	case "will", "can", "should", "must", "might", "do", "does", "did", "have", "has", "had": return "AUX"
 	}
 
-	// IDENTITY
+	// ADJECTIVES / ADVERBS
 	switch w {
-	case "name", "gollemer", "bot", "assistant", "system": return "NAME"
+	case "good", "fine", "well", "great", "excellent", "bad", "okay", "happy", "sad", "very", "really": return "ADJ"
 	}
 
-	// ADJECTIVES
+	// NOUNS / NAMES
 	switch w {
-	case "good", "fine", "well", "great", "excellent", "bad", "okay": return "ADJ"
+	case "name", "gollemer", "bot", "assistant", "system", "ai", "machine", "human", "person", "thing": return "NOUN"
 	}
 
+	// PREPOSITIONS / ARTICLES / CONJUNCTIONS
+	switch w {
+	case "the", "a", "an", "in", "on", "at", "to", "for", "with", "by", "and", "but", "or", "of": return "PREP"
+	}
+
+	// INTERROGATIVES
+	switch w {
+	case "how", "what", "where", "why", "when", "who": return "INTERROGATIVE"
+	}
+	
 	return "OTHER"
 }

@@ -493,14 +493,38 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 	// Use normalized input text as trained
 	lowerInput := strings.ToLower(input)
 	
-	// Match intent labels used during training in chat.go
-	intent := "social_chat"
-	if strings.Contains(lowerInput, "hello") || strings.Contains(lowerInput, "hi") {
+	// Match intent labels exactly as used in conversing.csv training data
+	intent := "social" // default (matches 'can we be friends' row)
+	if strings.Contains(lowerInput, "hello") || strings.Contains(lowerInput, "hi") ||
+		strings.Contains(lowerInput, "good morning") || strings.Contains(lowerInput, "good night") || strings.Contains(lowerInput, "hey") {
 		intent = "greeting"
-	} else if strings.Contains(lowerInput, "your name") || strings.Contains(lowerInput, "who are you") {
+	} else if strings.Contains(lowerInput, "your name") || strings.Contains(lowerInput, "who are you") ||
+		strings.Contains(lowerInput, "who made") || strings.Contains(lowerInput, "robot") ||
+		strings.Contains(lowerInput, "feelings") || strings.Contains(lowerInput, "sleep") ||
+		strings.Contains(lowerInput, "purpose") || strings.Contains(lowerInput, "learn") ||
+		strings.Contains(lowerInput, "where are you") || strings.Contains(lowerInput, "smart") {
 		intent = "identity"
-	} else if strings.Contains(lowerInput, "how are you") {
+	} else if strings.Contains(lowerInput, "how are you") || strings.Contains(lowerInput, "how are things") {
 		intent = "status_check"
+	} else if strings.Contains(lowerInput, "thank") || strings.Contains(lowerInput, "sorry") {
+		intent = "polite"
+	} else if strings.Contains(lowerInput, "goodbye") || strings.Contains(lowerInput, "see you") {
+		intent = "farewell"
+	} else if strings.Contains(lowerInput, "help") {
+		intent = "support"
+	} else if strings.Contains(lowerInput, "what is go") || strings.Contains(lowerInput, "routine") {
+		intent = "knowledge"
+	} else if strings.Contains(lowerInput, "can you do") || strings.Contains(lowerInput, "how do you work") {
+		intent = "capabilities"
+	} else if strings.Contains(lowerInput, "sunny") || strings.Contains(lowerInput, "rain") || strings.Contains(lowerInput, "coding") {
+		intent = "small_talk"
+	} else if strings.Contains(lowerInput, "tired") || strings.Contains(lowerInput, "happy") || strings.Contains(lowerInput, "sad") {
+		intent = "emotional_support"
+	} else if strings.Contains(lowerInput, "fact") || strings.Contains(lowerInput, "joke") ||
+		strings.Contains(lowerInput, "meaning") || strings.Contains(lowerInput, "color") {
+		intent = "trivia"
+	} else if strings.Contains(lowerInput, "why did") {
+		intent = "clarification"
 	}
 
 	formattedInput := fmt.Sprintf("__intent__ %s : __ques__ %s __ans__", intent, lowerInput)
@@ -600,14 +624,18 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 	}()
 
 	// ── Beam Search Decode ────────────────────────────────────────────────────
-	// beamWidth=4, temperature=0.7, repetitionPenalty=0.3, maxLen=30
+	// beamWidth=4, temperature=0.8, repetitionPenalty=3.0, maxLen=20
+	// 🧬 Structural Guidance: Fetch the rule for this intent to guide the beam search
+	rule, _ := model.Rules.GetRuleByIntent("social", intent)
+	
 	resIDs, beamErr := model.BeamSearchDecode(
 		ctx,
-		40, // Increased from 30
+		20, // shorter max length to reduce repetition chances
 		model.SentenceVocab.BosID, model.SentenceVocab.EosID,
 		4,   // beam width
-		0.7, // temperature
-		2.0, // repetition penalty (increased from 0.3)
+		0.8, // temperature (slightly higher for diversity)
+		3.0, // strong repetition penalty
+		&rule, // 🧬 Guided Beam Search
 	)
 	if beamErr != nil || len(resIDs) == 0 {
 		log.Printf("⚠️  BeamSearchDecode failed (%v), falling back to sampling", beamErr)

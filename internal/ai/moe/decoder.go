@@ -317,11 +317,35 @@ func (d *RNNDecoder) Forward(contextVector, targetSequence *Tensor, scheduledSam
 
 	d.InitialHiddenState = initialHidden
 	d.InitialCellState = cellState
+	ctxMean.Release()
+	ctxMeanReshaped.Release()
 	return outputs, nil
 }
 
 // ClearState clears the intermediate states of the decoder to free memory.
 func (d *RNNDecoder) ClearState() {
+	for _, t := range d.hiddenStates {
+		if t != nil { t.Release() }
+	}
+	for _, t := range d.cellStates {
+		if t != nil { t.Release() }
+	}
+	for _, t := range d.embeddedInputs {
+		if t != nil { t.Release() }
+	}
+	for _, t := range d.attentionOutputs {
+		if t != nil { t.Release() }
+	}
+	for _, t := range d.combinedInputs {
+		if t != nil { t.Release() }
+	}
+	for _, t := range d.decoderInputs {
+		if t != nil { t.Release() }
+	}
+	if d.InitialHiddenState != nil { d.InitialHiddenState.Release() }
+	if d.InitialCellState != nil { d.InitialCellState.Release() }
+	if d.contextVector != nil { d.contextVector.Release() }
+
 	d.hiddenStates = nil
 	d.cellStates = nil
 	d.embeddedInputs = nil
@@ -330,6 +354,7 @@ func (d *RNNDecoder) ClearState() {
 	d.decoderInputs = nil
 	d.InitialHiddenState = nil
 	d.InitialCellState = nil
+	
 	if d.LSTM != nil {
 		d.LSTM.ClearState()
 	}
@@ -391,7 +416,12 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
         // Re-run InputNorm FIRST
         allEmbedded, _ = d.InputNorm.Forward(allEmbedded)
 		// Then add context as post-norm residual
-		allEmbedded, _ = allEmbedded.AddWithBroadcast(ctxMeanReshaped.Scale(d.ContextMultiplier))
+		ctxScaled := ctxMeanReshaped.Scale(d.ContextMultiplier)
+		allEmbedded, _ = allEmbedded.AddWithBroadcast(ctxScaled)
+		
+		ctxMean.Release()
+		ctxMeanReshaped.Release()
+		ctxScaled.Release()
 
 		// 2b. Re-run LSTM sequence forward to populate timeStepCells for BPTT
 		allHidden, _, err := d.LSTM.Forward(allEmbedded, d.InitialHiddenState, initialCell(batchSize, hiddenSize))
@@ -514,7 +544,9 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
 		// GetPrevHiddenGrad returns dL/d(initialHidden)
 		initialHiddenGrad := d.LSTM.GetPrevHiddenGrad()
 		if initialHiddenGrad != nil {
+			oldGrad := gradCtxMean
 			gradCtxMean, _ = gradCtxMean.Add(initialHiddenGrad)
+			oldGrad.Release()
 		}
 
 		// 4. Distribute back to encoder sequence dimension
@@ -528,9 +560,29 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
 		if d.contextVector.Grad == nil {
 			d.contextVector.Grad = expandedGrad
 		} else {
+			oldGrad := d.contextVector.Grad
 			d.contextVector.Grad, _ = d.contextVector.Grad.Add(expandedGrad)
+			oldGrad.Release()
+			expandedGrad.Release()
 		}
+		
+		gradCtxMeanFromInputs.Release()
+		gradCtxMean.Release()
+		distGrad.Release()
 	}
+
+	// Release local sequence tensors created for re-vectorization
+	if allGrads != nil && len(grads) > 1 {
+		allGrads.Release()
+	}
+
+	// 🛡️ Proactive Release of intermediate backprop tensors
+	if zeroCellGrad != nil { zeroCellGrad.Release() }
+	if totalHiddenGrad != nil && totalHiddenGrad != hiddenGradFromOutput {
+		totalHiddenGrad.Release()
+	}
+	// Note: normedGrad and combinedGrad are handled by their creators' ClearState()
+	// or are references to previous layer grads.
 
 	return nil
 }

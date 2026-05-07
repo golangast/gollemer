@@ -193,6 +193,12 @@ func (gn *GatingNetwork) Forward(inputs ...*tensor.Tensor) (*tensor.Tensor, erro
 	}
 
 	gn.outputTensor = normalized
+
+	// Clean up intermediate scaled input if it was a new tensor (not the same as input)
+	if scaledInput != nil && scaledInput != input {
+		scaledInput.Release()
+	}
+
 	return normalized, nil
 }
 
