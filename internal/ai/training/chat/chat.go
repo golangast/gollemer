@@ -29,6 +29,7 @@ import (
 	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
 	"github.com/golangast/gollemer/internal/ai/neural/nnu/word2vec"
 	"github.com/golangast/gollemer/internal/ai/neural/tensor"
+	"github.com/golangast/gollemer/internal/ai/orchestrator"
 	"github.com/golangast/gollemer/internal/ai/train"
 )
 
@@ -333,7 +334,6 @@ skipCSV:
 	tmpVocab = nil // free immediately
 	log.Printf("📐 Pre-computed final vocab size: %d", precomputedVocabSize)
 
-	// Reset ActiveLayers to ensure we track only the current model's layers and prevent leaks
 	moe.ActiveLayers = nil
 
 	var intentModel *moe.IntentMoE
@@ -2065,12 +2065,22 @@ skipCSV:
 
 // Using moe.SocialConfig and moe.LoadSocialConfig from moe package
 
+type surgeryImpl struct {
+	layers []*moe.MoELayer
+}
+
+func (s *surgeryImpl) PerformSurgery(layerIdx int, alphaID int, sinkID int) {
+	if layerIdx >= 0 && layerIdx < len(s.layers) {
+		s.layers[layerIdx].PerformSurgery(alphaID, sinkID)
+	}
+}
+
 // TrainSocialChat trains a specialized model ONLY on human_chat.txt for pure social conversations
 func TrainSocialChat(projectRoot string, epochs int, customDataPath string, overfitMode bool, initialLR float32, weightDecay float32, autoHeal bool, maxGradNorm float32, useGPU bool, batchSize int, accumulationSteps int, numExperts int) {
 	// 🛡️ AGGRESSIVE MEMORY MANAGEMENT
 	debug.SetMemoryLimit(4 * 1024 * 1024 * 1024) // Enforce 4GB limit
-	debug.SetGCPercent(20)                      // Trigger GC more frequently (Standard is 100)
-	
+	debug.SetGCPercent(20)                       // Trigger GC more frequently (Standard is 100)
+
 	log.Println("🎭 Starting SOCIAL-ONLY Chat Training")
 	if customDataPath != "" {
 		log.Printf("📂 Using CUSTOM training data: %s", customDataPath)
@@ -2261,7 +2271,15 @@ skipSocialLoad:
 	}
 
 	configPath := filepath.Join(projectRoot, "data/config/social_train.json")
-	config := moe.LoadSocialConfig(configPath)
+	safeCfg, err := orchestrator.NewSafeConfig(configPath)
+	if err != nil {
+		log.Fatalf("❌ Failed to load safe config: %v", err)
+	}
+	if err := safeCfg.WatchConfig(configPath); err != nil {
+		log.Printf("⚠️  Failed to start config watcher: %v", err)
+	}
+	expert := orchestrator.NewHyperparameterExpert(safeCfg)
+	config := safeCfg.Get()
 
 	if intentModel == nil {
 		modelDim := config.ModelDim
@@ -2328,11 +2346,11 @@ skipSocialLoad:
 				log.Printf("✅ Decoder upgraded to MoE output with %d experts", numExperts)
 			}
 		}
-		
+
 		// 🛠️ ARCHITECTURE REPAIR: Ensure all MoE layers (encoder + decoder) have GrammarExperts
 		intentModel.RepairArchitecture()
 		log.Println("🛠️ Architecture repair complete: GrammarExperts synced across all layers.")
-		
+
 		if intentModel.Decoder != nil && intentModel.Decoder.OutputMoE != nil {
 			intentModel.Decoder.OutputMoE.ExpertDropoutRate = config.ExpertDropout
 		}
@@ -2342,6 +2360,9 @@ skipSocialLoad:
 		intentModel.ToGPU()
 	}
 
+	layers := findMoELayers(intentModel)
+	surgery := &surgeryImpl{layers: layers}
+
 	// Propagate all MoE/Decoder hyperparameters from social_train.json
 	if intentModel.Decoder != nil {
 		intentModel.Decoder.ContextMultiplier = config.ContextMultiplier
@@ -2350,7 +2371,7 @@ skipSocialLoad:
 	// Wire router noise factor so the JSON value is actually used
 	if config.RouterNoise > 0 {
 		moe.SetRouterNoiseFactor(config.RouterNoise)
-log.Printf("🔀 Router Noise Factor: %.2f", config.RouterNoise)
+		log.Printf("🔀 Router Noise Factor: %.2f", config.RouterNoise)
 	}
 	// Apply router temperature and load-balancing weight to all active layers
 	for _, layer := range moe.ActiveLayers {
@@ -2558,7 +2579,7 @@ log.Printf("🔀 Router Noise Factor: %.2f", config.RouterNoise)
 
 	// Initialize MoE layers with config values
 	moe.SetRouterNoiseFactor(config.RouterNoise)
-	layers := findMoELayers(intentModel)
+	layers = findMoELayers(intentModel)
 	for _, layer := range layers {
 		layer.LoadBalancingWeight = config.LoadBalancingWeight
 		layer.ExpertDropoutRate = config.ExpertDropout
@@ -2574,6 +2595,23 @@ log.Printf("🔀 Router Noise Factor: %.2f", config.RouterNoise)
 	// to ensure the model perfectly memorizes the sequences.
 
 	for epoch := 0; epoch < epochs; epoch++ {
+		// 1. Grab fresh config values safely for this epoch
+		cfg := safeCfg.Get()
+
+		// Update MoE layers with fresh config
+		moe.SetRouterNoiseFactor(cfg.RouterNoise)
+		for _, layer := range layers {
+			layer.LoadBalancingWeight = cfg.LoadBalancingWeight
+			layer.ExpertDropoutRate = cfg.ExpertDropout
+			layer.RouterTemperature = cfg.RouterTemperature
+			layer.CapacityFactor = cfg.CapacityFactor
+			layer.K = cfg.K
+			layer.ClearResetCount()
+		}
+
+		// Update optimizer if LR changed
+		optimizer.SetLearningRate(cfg.LearningRate)
+
 		// Stop if requested (checked via PROJECT_ROOT/.stop)
 		if _, err := os.Stat(filepath.Join(projectRoot, ".stop")); err == nil {
 			log.Println("🛑 Stop signal detected. Saving and exiting...")
@@ -2619,7 +2657,7 @@ log.Printf("🔀 Router Noise Factor: %.2f", config.RouterNoise)
 			if epoch > 50 { // Start earlier to escape exposure bias
 				// Linear ramp up
 				ramp := float32(0.01)
-				samplingProb = float32(math.Min(float64(config.SamplingMax), float64(epoch-50)*float64(ramp)))
+				samplingProb = float32(math.Min(float64(cfg.SamplingMax), float64(epoch-50)*float64(ramp)))
 			}
 
 			// --- 🧬 GRAMMAR-GUIDED ROUTING: inject grammar targets before Forward ---
@@ -2632,8 +2670,10 @@ log.Printf("🔀 Router Noise Factor: %.2f", config.RouterNoise)
 				layers := findMoELayers(intentModel)
 				if len(layers) > 0 {
 					baseExpertCount := len(layers[0].Experts) - 8
-					if baseExpertCount < 0 { baseExpertCount = 0 }
-					
+					if baseExpertCount < 0 {
+						baseExpertCount = 0
+					}
+
 					grammarTargets := make([]int, len(batch.Grammar.Data))
 					for gi, gv := range batch.Grammar.Data {
 						if int(gv) >= 0 {
@@ -2646,14 +2686,13 @@ log.Printf("🔀 Router Noise Factor: %.2f", config.RouterNoise)
 						layer.TargetRouting = grammarTargets
 					}
 				}
-			} else {
 				// 🛡️ CRITICAL: Clear routing from previous batch
-				layers := findMoELayers(intentModel)
 				for _, layer := range layers {
 					layer.TargetRouting = nil
 				}
 			}
 
+			// --- 🧠 FORWARD PASS ───
 			logits, _, err := intentModel.Forward(samplingProb, inputTensor, targetTensor, inputMask)
 			if err != nil {
 				continue
@@ -2679,7 +2718,9 @@ log.Printf("🔀 Router Noise Factor: %.2f", config.RouterNoise)
 					log.Println("🏴‍☠️ [CRITICAL] NaNs/Infs detected in logits. Triggering Emergency Stabilization...")
 					StabilizeParameters(intentModel, 1.0, 0.5) // Aggressive reset
 					for _, l := range logits {
-						if l != nil { l.Release() }
+						if l != nil {
+							l.Release()
+						}
 					}
 					continue
 				}
@@ -2735,7 +2776,7 @@ log.Printf("🔀 Router Noise Factor: %.2f", config.RouterNoise)
 				lbLoss := float32(0)
 
 				// 🛡️ LBW Safety: If weight is missing or insane, force a stable default
-				currentLBW := config.LoadBalancingWeight
+				currentLBW := cfg.LoadBalancingWeight
 				if currentLBW <= 0 {
 					currentLBW = 0.01
 				}
@@ -2769,7 +2810,7 @@ log.Printf("🔀 Router Noise Factor: %.2f", config.RouterNoise)
 					for b := 0; b < batch.Input.Shape[0]; b++ {
 						var predictedWords []string
 						var targetWords []string
-						
+
 						intent := batch.Intents[b]
 						p, c := "social", intent
 
@@ -2791,7 +2832,7 @@ log.Printf("🔀 Router Noise Factor: %.2f", config.RouterNoise)
 								predictedWords = append(predictedWords, intentModel.SentenceVocab.GetWord(bestIdx))
 							}
 						}
-						
+
 						// 2. Extract Target Words (for similarity check)
 						targetSeqLen := targetTensor.Shape[1]
 						for t := 1; t < targetSeqLen; t++ { // Skip BOS
@@ -2805,18 +2846,18 @@ log.Printf("🔀 Router Noise Factor: %.2f", config.RouterNoise)
 						// 3. Compute Metrics
 						gPenalty := intentModel.CalculateGrammarLoss(predictedWords, p, c)
 						sim := intentModel.CalculateSequenceSimilarity(predictedWords, targetWords)
-						
+
 						grammarPenalty += gPenalty
 						batchSimilarity += sim
 					}
-					
+
 					batchSizeFP := float32(batch.Input.Shape[0])
 					grammarPenalty /= batchSizeFP
 					batchSimilarity /= batchSizeFP
-					
+
 					// Update batchLoss for logging (non-differentiable part)
 					batchLoss += grammarPenalty * 0.5
-					
+
 					// 🚀 INTELLIGENCE BOOST: Calculate Gradient Reward
 					// We scale the learning signal based on how 'good' the result was.
 					// If Similarity is high, we amplify the signal to lock it in.
@@ -2828,7 +2869,9 @@ log.Printf("🔀 Router Noise Factor: %.2f", config.RouterNoise)
 					// 🛡️ STABILITY FIX: On tiny datasets or early training, ensure the reward
 					// doesn't throttle the model before it even learns its first words.
 					if isTinyDataset || globalStep < 1000 {
-						if totalReward < 1.0 { totalReward = 1.0 }
+						if totalReward < 1.0 {
+							totalReward = 1.0
+						}
 					}
 				}
 
@@ -2896,27 +2939,45 @@ log.Printf("🔀 Router Noise Factor: %.2f", config.RouterNoise)
 
 				// 🛡️ Proactive GPU Memory Release
 				for _, l := range logits {
-					if l != nil { l.Release() }
+					if l != nil {
+						l.Release()
+					}
 				}
 				for _, g := range grads {
-					if g != nil { g.Release() }
+					if g != nil {
+						g.Release()
+					}
 				}
-				if inputTensor != nil { inputTensor.Release() }
-				if targetTensor != nil { targetTensor.Release() }
-				if inputMask != nil { inputMask.Release() }
-				if batch.Grammar != nil { batch.Grammar.Release() }
-				if batch.InputMask != nil { batch.InputMask.Release() }
-				if batch.Input != nil { batch.Input.Release() }
-				if batch.Target != nil { batch.Target.Release() }
+				if inputTensor != nil {
+					inputTensor.Release()
+				}
+				if targetTensor != nil {
+					targetTensor.Release()
+				}
+				if inputMask != nil {
+					inputMask.Release()
+				}
+				if batch.Grammar != nil {
+					batch.Grammar.Release()
+				}
+				if batch.InputMask != nil {
+					batch.InputMask.Release()
+				}
+				if batch.Input != nil {
+					batch.Input.Release()
+				}
+				if batch.Target != nil {
+					batch.Target.Release()
+				}
 
 				epochLoss += batchLoss
-				
+
 				batchNum++
 				globalStep++
 				if batchNum%8 == 0 {
 					runtime.GC()
 				}
-				
+
 				// 🛡️ OS-LEVEL MEMORY RECLAMATION: Trigger every 10 batches
 				// (with only 42 pairs, every-50-batch trigger NEVER fires)
 				if batchNum%10 == 0 {
@@ -2951,7 +3012,7 @@ log.Printf("🔀 Router Noise Factor: %.2f", config.RouterNoise)
 					log.Printf("🎭 Social Epoch %d/%d | Batch %d | Loss: %.6f | Probe: [Target: %s | Pred: %s]",
 						epoch+1, epochs, batchNum, avgLoss, targetWord, predWord)
 				}
-				
+
 				// 🛡️ MEMORY SAFETY: Break all references to the large computation graph tensors.
 				// This allows the GC to sweep thousands of activation tensors immediately
 				// instead of waiting for the next iteration to overwrite them.
@@ -2969,11 +3030,11 @@ log.Printf("🔀 Router Noise Factor: %.2f", config.RouterNoise)
 			intentModel.Detach()
 			ckptPath := filepath.Join(projectRoot, fmt.Sprintf("data/models/gob_models/moe_social_model_step_%d.gob", globalStep))
 			log.Printf("💾 Saving periodic checkpoint at Step %d...", globalStep)
-			if err := moe.SaveIntentMoEModelToGOB(intentModel, ckptPath); err != nil {
+			if err := moe.SaveIntentMoECheckpoint(&moe.Checkpoint{Model: intentModel}, ckptPath); err != nil {
 				log.Printf("❌ Mid-epoch save failed: %v", err)
 			}
 			// Also update the main social model file so restarts pick up latest progress
-			_ = moe.SaveIntentMoEModelToGOB(intentModel, socialModelPath)
+			_ = moe.SaveIntentMoECheckpoint(&moe.Checkpoint{Model: intentModel}, socialModelPath)
 
 			// 💾 SAVE VOCABULARY PERIODICALLY as well (Critical Fix)
 			if intentModel.SentenceVocab != nil {
@@ -3082,6 +3143,7 @@ log.Printf("🔀 Router Noise Factor: %.2f", config.RouterNoise)
 			}
 		}
 
+		var testProbeResults []orchestrator.TestProbeResult
 		for i, p := range currentTestPrompts {
 			// Use shorter maxLen during early training to reduce inference memory.
 			// The KV cache in cross-attention grows with sequence length, so fewer steps = less RAM.
@@ -3090,7 +3152,12 @@ log.Printf("🔀 Router Noise Factor: %.2f", config.RouterNoise)
 				testMaxLen = 15
 			}
 			testVerbose := (i == 0) // Only first test is verbose to save memory/console
-			response := StrictGenerate(intentModel, p, testMaxLen, config.RepetitionPenalty, testVerbose)
+			response, path := StrictGenerate(intentModel, p, testMaxLen, cfg.RepetitionPenalty, testVerbose)
+			testProbeResults = append(testProbeResults, orchestrator.TestProbeResult{
+				Prompt:   p,
+				Response: response,
+				Path:     path,
+			})
 			// CRITICAL: Detach graph after each test to prevent memory accumulation
 			intentModel.Detach()
 
@@ -3208,18 +3275,46 @@ log.Printf("🔀 Router Noise Factor: %.2f", config.RouterNoise)
 
 			// 4. Persist to Disk
 			configPath := filepath.Join(projectRoot, "data/config/social_train.json")
-			_ = moe.SaveSocialConfig(configPath, config)
+
+			// Convert orchestrator.TrainingConfig to moe.SocialConfig for saving
+			socialCfg := moe.SocialConfig{
+				NumExperts:          cfg.NumExperts,
+				ModelDim:            cfg.ModelDim,
+				Epochs:              cfg.Epochs,
+				LearningRate:        cfg.LearningRate,
+				BatchSize:           cfg.BatchSize,
+				ContextMultiplier:   cfg.ContextMultiplier,
+				RouterNoise:         cfg.RouterNoise,
+				RouterTemperature:   cfg.RouterTemperature,
+				LoadBalancingWeight: cfg.LoadBalancingWeight,
+				ExpertDropout:       cfg.ExpertDropout,
+				CollapseThreshold:   cfg.CollapseThreshold,
+				LabelSmoothing:      cfg.LabelSmoothing,
+				AccumulateSteps:     cfg.AccumulateSteps,
+				WeightDecay:         cfg.WeightDecay,
+				MaxGradNorm:         cfg.MaxGradNorm,
+				AutoHeal:            cfg.AutoHeal,
+				OverfitMode:         cfg.OverfitMode,
+				SamplingStart:       cfg.SamplingStart,
+				SamplingMax:         cfg.SamplingMax,
+				VerboseThinking:     cfg.VerboseThinking,
+				CapacityFactor:      cfg.CapacityFactor,
+				K:                   cfg.K,
+				RepetitionPenalty:   cfg.RepetitionPenalty,
+				EntropyWeight:       cfg.EntropyWeight,
+			}
+			_ = moe.SaveSocialConfig(configPath, socialCfg)
 
 			// 5. Update running values
-			moe.SetRouterNoiseFactor(config.RouterNoise)
+			moe.SetRouterNoiseFactor(cfg.RouterNoise)
 			for _, layer := range moe.ActiveLayers {
-				layer.LoadBalancingWeight = config.LoadBalancingWeight
-				layer.ExpertDropoutRate = config.ExpertDropout
-				layer.RouterTemperature = config.RouterTemperature
-				layer.CapacityFactor = config.CapacityFactor
+				layer.LoadBalancingWeight = cfg.LoadBalancingWeight
+				layer.ExpertDropoutRate = cfg.ExpertDropout
+				layer.RouterTemperature = cfg.RouterTemperature
+				layer.CapacityFactor = cfg.CapacityFactor
 			}
 			log.Printf("📡 Applied MoE config to %d layers (LBW=%.2f, Dropout=%.2f, Temp=%.2f)",
-				len(moe.ActiveLayers), config.LoadBalancingWeight, config.ExpertDropout, config.RouterTemperature)
+				len(moe.ActiveLayers), cfg.LoadBalancingWeight, cfg.ExpertDropout, cfg.RouterTemperature)
 		}
 
 		// 4. Save Checkpoint (Periodic)
@@ -3241,6 +3336,71 @@ log.Printf("🔀 Router Noise Factor: %.2f", config.RouterNoise)
 			// Update latest main file (compressed)
 			_ = moe.SaveIntentMoECheckpoint(ckpt, socialModelPath)
 		}
+
+		// 2. Track metrics at end of epoch
+		sinkHits := 0
+		var layerResets []map[int]int
+		var layerUsage []map[int]int
+
+		for _, layer := range layers {
+			sinkHits += layer.GetResetCount()
+			layerResets = append(layerResets, layer.GetExpertResets())
+			layerUsage = append(layerUsage, layer.UtilizationStats())
+		}
+
+		avgLoss := float32(0)
+		if batchNum > 0 {
+			avgLoss = epochLoss / float32(batchNum)
+		}
+
+		epochMetrics := orchestrator.TrainingMetrics{
+			Epoch:             epoch + 1,
+			AverageLoss:       avgLoss,
+			SemanticSinksHits: sinkHits,
+			GatingEntropy:     intentModel.CalculateGatingEntropy(),
+			GrammarScore:      currentTotalGrammar / float32(max(1, len(epochGrammarScores))),
+			SimilarityScore:   currentAvgSim * 100.0,
+			TestResults:       testProbeResults,
+			LayerResets:       layerResets,
+			LayerUsage:        layerUsage,
+		}
+
+		// 2. Status Line every 100 epochs (Concise)
+		if (epoch+1)%100 == 0 || epoch == 0 {
+			stats := layers[0].UtilizationStats()
+			total := 0
+			for _, c := range stats {
+				total += c
+			}
+
+			usageStr := ""
+			if total > 0 {
+				type expertUsage struct {
+					id    int
+					usage float32
+				}
+				usages := make([]expertUsage, 0, len(stats))
+				for id, c := range stats {
+					usages = append(usages, expertUsage{id, float32(c) / float32(total)})
+				}
+				sort.Slice(usages, func(i, j int) bool { return usages[i].usage > usages[j].usage })
+
+				for i := 0; i < 2 && i < len(usages); i++ {
+					usageStr += fmt.Sprintf(" | E%d: %.0f%%", usages[i].id, usages[i].usage*100)
+				}
+			}
+
+			sinkStr := ""
+			if sinkHits > 0 {
+				sinkStr = " (SINK!)"
+			}
+
+			log.Printf("📊 Epoch %d | Loss: %.2f | Grammar: %.1f | Similarity: %.1f%%%s | LR: %.6f",
+				epoch+1, avgLoss, epochMetrics.GrammarScore, epochMetrics.SimilarityScore, sinkStr, cfg.LearningRate)
+		}
+
+		// 3. Autonomous Supervisor: Analyze, Mutate, Verify, SURGERY
+		expert.Step(epochMetrics, surgery)
 	}
 
 	intentModel.Detach()
@@ -3272,7 +3432,8 @@ log.Printf("🔀 Router Noise Factor: %.2f", config.RouterNoise)
 }
 
 // StrictGenerate forces the model to generate a response without using UNK or PAD tokens.
-func StrictGenerate(model *moe.IntentMoE, input string, maxLen int, repetitionPenalty float32, verbose bool) string {
+// It returns the generated response and the expert path (e.g. "E1+E8 -> E4+E12").
+func StrictGenerate(model *moe.IntentMoE, input string, maxLen int, repetitionPenalty float32, verbose bool) (string, string) {
 	// 1. Diagnostics: We keep Training=true for MoE layers during tests
 	// to see the REAL routing behavior (noise, dropout, penalties).
 	// CRITICAL: Disable gradient tracking to prevent stateStack bloat and graph memory leaks.
@@ -3309,7 +3470,7 @@ func StrictGenerate(model *moe.IntentMoE, input string, maxLen int, repetitionPe
 	tokens := cleanTokenize(formattedInput)
 	if len(tokens) == 0 {
 		log.Printf("⚠️ Skip empty prompt: %s", input)
-		return ""
+		return "", ""
 	}
 	inputIDs := make([]float32, len(tokens))
 	for i, t := range tokens {
@@ -3321,78 +3482,27 @@ func StrictGenerate(model *moe.IntentMoE, input string, maxLen int, repetitionPe
 	ctx, err := model.EncoderForward(inputTensor, nil)
 	if err != nil {
 		log.Printf("StrictGenerate Error (EncoderForward): %v", err)
-		return ""
+		return "", ""
 	}
 
 	// ─── 🧠 THINKING TRACE ────────────────────────────────────────────────────
-	// Show what the encoder understood about the question BEFORE generating.
-	// This makes debugging and tuning much easier.
 	if verbose {
 		fmt.Println("\n💭 [Thinking]")
+		fmt.Printf("   Input tokens  : %s\n", strings.Join(tokens, " "))
 	}
 
-	// (a) Show which tokens the encoder focused on most (highest L2 norm per token)
-	fmt.Printf("   Input tokens  : %s\n", strings.Join(tokens, " "))
-	if ctx.Shape[1] > 0 && ctx.Shape[2] > 0 {
-		type tokenScore struct {
-			tok   string
-			score float32
-		}
-		var scores []tokenScore
-		for i, t := range tokens {
-			if i >= ctx.Shape[1] {
-				continue
-			}
-			// L2 norm of this token's context slot
-			start := i * ctx.Shape[2]
-			end := start + ctx.Shape[2]
-			if end > len(ctx.Data) {
-				break
-			}
-			var norm float32
-			for _, v := range ctx.Data[start:end] {
-				norm += v * v
-			}
-			norm = float32(math.Sqrt(float64(norm)))
-			scores = append(scores, tokenScore{t, norm})
-		}
-		// Sort descending
-		sort.Slice(scores, func(a, b int) bool { return scores[a].score > scores[b].score })
-		top := scores
-		if len(top) > 3 {
-			top = top[:3]
-		}
-		var focusWords []string
-		for _, s := range top {
-			focusWords = append(focusWords, fmt.Sprintf("%s(%.2f)", s.tok, s.score))
-		}
-		if verbose && len(focusWords) > 0 {
-			fmt.Printf("   Encoder focus : %s\n", strings.Join(focusWords, ", "))
-		}
-	}
-
-	// (b) Classify the question type from the raw input
+	// (b) Question Type Heuristic
 	lowerInput := strings.ToLower(input)
-	questionType := "statement"
+	questionType := "generic"
 	switch {
-	case strings.HasPrefix(lowerInput, "how are") || strings.HasPrefix(lowerInput, "how do you feel"):
-		questionType = "greeting/wellbeing"
-	case strings.HasPrefix(lowerInput, "how"):
-		questionType = "how-question"
-	case strings.HasPrefix(lowerInput, "what"):
-		questionType = "what-question"
-	case strings.HasPrefix(lowerInput, "who"):
-		questionType = "who-question"
-	case strings.HasPrefix(lowerInput, "where"):
-		questionType = "where-question"
-	case strings.HasPrefix(lowerInput, "when"):
-		questionType = "when-question"
-	case strings.HasPrefix(lowerInput, "why"):
-		questionType = "why-question"
-	case strings.HasPrefix(lowerInput, "do you") || strings.HasPrefix(lowerInput, "can you") || strings.HasPrefix(lowerInput, "are you"):
-		questionType = "yes/no-question"
-	case strings.Contains(lowerInput, "hello") || strings.Contains(lowerInput, "hi") || strings.Contains(lowerInput, "hey"):
+	case strings.Contains(lowerInput, "hello") || strings.Contains(lowerInput, "hi "):
 		questionType = "greeting"
+	case strings.Contains(lowerInput, "how are") || strings.Contains(lowerInput, "who are"):
+		questionType = "personal"
+	case strings.Contains(lowerInput, "what is") || strings.Contains(lowerInput, "tell me"):
+		questionType = "request"
+	case strings.Contains(lowerInput, "weather") || strings.Contains(lowerInput, "rain") || strings.Contains(lowerInput, "sunny"):
+		questionType = "weather"
 	case strings.Contains(lowerInput, "bye") || strings.Contains(lowerInput, "goodbye") || strings.Contains(lowerInput, "later"):
 		questionType = "farewell"
 	case strings.Contains(lowerInput, "thank"):
@@ -3402,7 +3512,6 @@ func StrictGenerate(model *moe.IntentMoE, input string, maxLen int, repetitionPe
 		fmt.Printf("   Question type  : %s\n", questionType)
 	}
 
-	// (c) Show context strength — weak means the encoder didn't understand the input
 	ctxNorm := ctx.L2Norm()
 	understanding := "weak"
 	if ctxNorm > 5.0 {
@@ -3415,27 +3524,21 @@ func StrictGenerate(model *moe.IntentMoE, input string, maxLen int, repetitionPe
 		fmt.Println("   Generating answer...")
 		fmt.Println()
 	}
-	// ─────────────────────────────────────────────────────────────────────────
 
 	if ctx.Shape[1] == 0 {
 		log.Printf("StrictGenerate Error: encoder produced empty sequence")
-		return ""
+		return "", ""
 	}
 
 	// 3. Prepare Decoder States
 	batchSize := 1
 	hiddenSize := model.Decoder.LSTM.HiddenSize
-
-	// Initial hidden state from CONTEXT MEAN (matching RNNDecoder.Forward logic)
-	// This ensures consistency between training and generation.
 	hiddenState, err := ctx.Mean(1)
 	if err != nil {
 		log.Printf("StrictGenerate Error (Initial Hidden Mean): %v", err)
-		return ""
+		return "", ""
 	}
 	hiddenState, _ = hiddenState.Reshape([]int{batchSize, ctx.Shape[2]})
-
-	// Projection if needed (copying logic from Decoder.Forward)
 	if hiddenState.Shape[1] != hiddenSize {
 		if hiddenState.Shape[1] > hiddenSize {
 			hiddenState, _ = hiddenState.Slice(1, 0, hiddenSize)
@@ -3449,55 +3552,45 @@ func StrictGenerate(model *moe.IntentMoE, input string, maxLen int, repetitionPe
 	// 4. Start Sequence with <s> (BOS)
 	resIDs := []int{model.SentenceVocab.BosID}
 	currentTokenID := model.SentenceVocab.BosID
-
-	// Track counts for frequency penalty during generation
 	counts := make(map[int]int)
+	var pathSteps []string
 
-	var path []string
 	if verbose {
 		fmt.Printf("📡 Encoder Context Strength: %.4f | Vector[0:3]: %.4f, %.4f, %.4f\n", ctxNorm, ctx.Data[0], ctx.Data[1], ctx.Data[2])
 	}
 
 	for i := 0; i < maxLen; i++ {
 		inputT := tensor.NewTensor([]int{1, 1}, []float32{float32(currentTokenID)}, false)
-
 		oldHiddenNorm := hiddenState.L2Norm()
-		// 1. Step-by-step decoding with expert tracking
 		logits, nextHidden, nextCell, expertIDs, err := model.Decoder.DecodeStepWithExpert(inputT, hiddenState, cellState, ctx)
 		if err != nil {
 			log.Printf("StrictGenerate Error (DecodeStep): %v", err)
 			break
 		}
 		newHiddenNorm := nextHidden.L2Norm()
-
-		// Update states
 		hiddenState = nextHidden
 		cellState = nextCell
 
-		// Diagnostic: Context Influence and Expert
 		hiddenDelta := float32(math.Abs(float64(newHiddenNorm - oldHiddenNorm)))
-		expertStr := ""
-		for j, eid := range expertIDs {
-			if j > 0 {
-				expertStr += "+"
-			}
-			expertStr += fmt.Sprintf("E%d", eid)
+
+		// Collect Expert IDs for the path
+		var stepExperts []string
+		for _, eid := range expertIDs {
+			label := fmt.Sprintf("E%d", eid)
+			stepExperts = append(stepExperts, label)
 		}
+		expertStr := strings.Join(stepExperts, "+")
+
 		if verbose {
 			fmt.Printf("🔍 Step %d | Context Influence: %.4f | Expert: %s\n", i, hiddenDelta, expertStr)
+			if i == 0 {
+				LogTopPredictions(model, "Step 0 Generation", logits)
+			}
 		}
 
-		// [Diagnostic] Log Top-3 predictions for Step 0 to debug "Still Silent"
-		if i == 0 && verbose {
-			LogTopPredictions(model, "Step 0 Generation", logits)
-		}
-		// Suppress EOS for the first 5 tokens to force sentence generation.
-		// Without this the model stops after 1 token because EOS always wins at step 1.
 		if i < 5 {
 			logits.Data[model.SentenceVocab.EosID] = -1e9
 		}
-
-		// 🚫 Mute Special Tokens that should NEVER be in a social answer
 		specialTokens := []string{"__intent__", "__ques__", "__ans__", "social", ":"}
 		for _, st := range specialTokens {
 			id := model.SentenceVocab.GetTokenID(st)
@@ -3506,35 +3599,18 @@ func StrictGenerate(model *moe.IntentMoE, input string, maxLen int, repetitionPe
 			}
 		}
 
-		// 5. Apply Repetition and Frequency Penalty
-		// Repetition Penalty (multiplicative-like subtraction)
 		moe.ApplyRepetitionPenalty(logits, resIDs, repetitionPenalty)
-
-		// Frequency Penalty (additive)
-		const frequencyPenalty = 0.0
-		for id, count := range counts {
-			if id < len(logits.Data) {
-				logits.Data[id] -= frequencyPenalty * float32(count)
-			}
-		}
-
-		// 6. Mute UNK and <pad>
 		logits.Data[model.SentenceVocab.PaddingTokenID] = -1e9
-		unkID := model.SentenceVocab.GetTokenID("UNK")
-		if unkID != -1 {
+		if unkID := model.SentenceVocab.GetTokenID("UNK"); unkID != -1 {
 			logits.Data[unkID] = -1e9
 		}
 
-		// 7. Pick Best Word (Greedy for Evaluation)
 		bestID, err := moe.SampleFromLogits(logits, 0.1, 1, 0.9)
 		if err != nil {
-			log.Printf("StrictGenerate Error (Sampling): %v", err)
 			break
 		}
 
-		// 8. Compute probs for diagnostics and top-k logging
 		probs := tensor.Softmax(logits)
-
 		if bestID == model.SentenceVocab.EosID {
 			probs.Release()
 			logits.Release()
@@ -3554,58 +3630,25 @@ func StrictGenerate(model *moe.IntentMoE, input string, maxLen int, repetitionPe
 				fmt.Printf("   [%d] %-12s (%.2f%%)\n", k+1, word, topValues[k]*100)
 			}
 		}
+
+		word := model.SentenceVocab.GetWord(bestID)
+		pathSteps = append(pathSteps, fmt.Sprintf("%s(%s)", word, expertStr))
+
 		probs.Release()
 		logits.Release()
 		inputT.Release()
-
-		// Record the word and the experts that produced it
-		word := model.SentenceVocab.GetWord(bestID)
-		expertIDsStr := ""
-		for j, eid := range expertIDs {
-			if j > 0 {
-				expertIDsStr += "+"
-			}
-			label := fmt.Sprintf("E%d", eid)
-			// If it's a grammar expert, try to get its role name
-			if model.Decoder.OutputMoE != nil && eid < len(model.Decoder.OutputMoE.Experts) {
-				exp := model.Decoder.OutputMoE.Experts[eid]
-				desc := exp.Description()
-				if strings.Contains(desc, "role=") {
-					parts := strings.Split(desc, "role=")
-					if len(parts) > 1 {
-						role := strings.TrimSuffix(parts[1], ")")
-						label += ":" + role
-					}
-				}
-			}
-			expertIDsStr += label
-		}
-		path = append(path, fmt.Sprintf("%s(%s)", word, expertIDsStr))
-
-		// CRITICAL: Free layer caches after each decode step.
-		// DecodeStep runs Attention/LSTM/LayerNorm forward and caches activations.
-		// Without clearing, 25 steps × N prompts accumulates 100s of MB.
 		model.ClearState()
-
-		// Trigger GC periodically to reclaim memory freed by ClearState.
 		if i%5 == 4 {
 			runtime.GC()
 		}
 	}
 
-	// Convert IDs back to words
-	var result []string
-	for _, id := range resIDs[1:] { // Skip the BOS token
-		word := model.SentenceVocab.GetWord(id)
-		// Final check to not include special tokens in the final string
-		if word != "<s>" && word != "</s>" && word != "<pad>" && word != "UNK" {
-			result = append(result, word)
-		}
-	}
-
-	// 3. Print the diagnostic expert path
-	if len(path) > 0 && verbose {
-		fmt.Printf("\n🧠 Expert Path: %s\n", strings.Join(path, " -> "))
+	result := ""
+	for i, id := range resIDs {
+		if i == 0 {
+			continue
+		} // Skip BOS
+		result += model.SentenceVocab.GetWord(id) + " "
 	}
 
 	inputTensor.Release()
@@ -3613,9 +3656,8 @@ func StrictGenerate(model *moe.IntentMoE, input string, maxLen int, repetitionPe
 	cellState.Release()
 	ctx.Release()
 	model.ClearState()
-	model.Detach()
 
-	return strings.Join(result, " ")
+	return strings.TrimSpace(result), strings.Join(pathSteps, " -> ")
 }
 
 // StrictGenerateWithExperts is a variant of StrictGenerate that also returns the expert IDs used.

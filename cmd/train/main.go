@@ -46,6 +46,9 @@ func main() {
 	// Training Loop with Goroutine Pipelining
 	// Data preparation and GPU compute run in parallel via go channels
 	log.Println("--- 🚀 Starting Gollemer Training (Goroutine-pipelined) ---")
+	sup := moe.NewSupervisor()
+	fmt.Println("🤖 Training starting with Autonomous Supervisor active...")
+	
 	startTime := time.Now()
 
 	// Channel for pipelined data (CPU prepares while GPU computes)
@@ -150,6 +153,21 @@ func main() {
 			elapsed := time.Since(startTime).Seconds()
 			throughput := float64((epoch+1)*(*batchSize)) / elapsed
 			fmt.Printf("Epoch %d | Loss: %.6f | Batch Size: %d | Throughput: %.0f samples/sec\r", epoch, avgLoss, *batchSize, throughput)
+		}
+
+		// 🛡️ Autonomous Supervision
+		supStats := moe.TrainingStats{
+			Epoch:        epoch,
+			CurrentLoss:  avgLoss,
+			MaxDominance: moe.GetMaxUtilization(batchExpertGrads),
+		}
+		currentLR := float32(*lr)
+		sup.ReflectSparse(supStats, model.Gater, &currentLR)
+		*lr = float64(currentLR)
+
+		if epoch > 0 && epoch%2000 == 0 {
+			// Check for expert collapse (dead experts)
+			sup.PerformSurgerySparse(model)
 		}
 
 		// 🗃️ Periodic Checkpointing

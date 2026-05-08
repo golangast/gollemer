@@ -732,6 +732,48 @@ func (m *IntentMoE) EncoderForward(input *tensor.Tensor, mask *tensor.Tensor) (*
 	return enc, nil
 }
 
+// CalculateGatingEntropy computes the average Shannon Entropy across all active MoE layers.
+func (m *IntentMoE) CalculateGatingEntropy() float32 {
+	layers := m.Encoder.GetMoELayers()
+	if m.Decoder != nil && m.Decoder.OutputMoE != nil {
+		layers = append(layers, m.Decoder.OutputMoE)
+	}
+	
+	if len(layers) == 0 {
+		return 0
+	}
+	
+	var totalEntropy float32
+	var count int
+	for _, layer := range layers {
+		if layer.GateOutputs != nil {
+			// Calculate Shannon Entropy: -sum(p * log2(p))
+			var entropy float32
+			probs := layer.GateOutputs.Data
+			numExperts := len(layer.Experts)
+			numTokens := len(probs) / numExperts
+			
+			if numTokens == 0 { continue }
+			
+			for t := 0; t < numTokens; t++ {
+				for e := 0; e < numExperts; e++ {
+					p := probs[t*numExperts+e]
+					if p > 1e-10 {
+						entropy -= p * float32(math.Log2(float64(p)))
+					}
+				}
+			}
+			totalEntropy += entropy / float32(numTokens)
+			count++
+		}
+	}
+	
+	if count == 0 {
+		return 0
+	}
+	return totalEntropy / float32(count)
+}
+
 
 
 func (m *IntentMoE) warmup() {

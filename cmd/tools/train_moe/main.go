@@ -262,6 +262,7 @@ func TrainIntentMoEModel(model *moe.IntentMoE, data []TokenizedTrainingExample, 
 	optimizer := nn.NewOptimizer(model.Parameters(), learningRate, 1.0) // Using a clip value of 1.0
 
 	trainer := &moe.Trainer{CollapseCount: 0}
+	sup := moe.NewSupervisor()
 
 	// Learning rate scheduling parameters
 	totalBatches := (len(data) + batchSize - 1) / batchSize
@@ -412,7 +413,21 @@ func TrainIntentMoEModel(model *moe.IntentMoE, data []TokenizedTrainingExample, 
 
 			if *autoHealFlag {
 				trainer.SaveGoldenCheckpoint(model, stats, currentStep, profile, totalTokens, totalDuration)
-				trainer.AutoHeal(model, optimizer.(*nn.Adam), stats)
+				
+				// 🛡️ Autonomous Supervisor Intervention
+				sup.Reflect(stats, optimizer.(*nn.Adam), model)
+				
+				// Periodic structural validation (Check for word salad)
+				if numBatches > 0 && numBatches%100 == 0 {
+					if !sup.Validate(model) {
+						log.Println("⚠️ Supervisor: Mumble detected in social response. Increasing temperature and noise...")
+						// We can also trigger surgery if it persists
+						if sup.MumbleCount > 3 {
+							sup.PerformSurgery(model)
+							sup.MumbleCount = 0
+						}
+					}
+				}
 			}
 
 			if bestPerplexity == 0 || perplexity < bestPerplexity {
@@ -523,6 +538,7 @@ func TrainIntentMoEModelWithEnhancedData(model *moe.IntentMoE, enhancedData []En
 
 	// Reuse the standard training loop but call enhanced batch trainer
 	optimizer := nn.NewOptimizer(model.Parameters(), learningRate, 1.0)
+	sup := moe.NewSupervisor()
 	baseLR := learningRate
 	minLR := learningRate / 10.0
 	totalBatches := (len(simple) + batchSize - 1) / batchSize
@@ -557,6 +573,30 @@ func TrainIntentMoEModelWithEnhancedData(model *moe.IntentMoE, enhancedData []En
 				continue
 			}
 			totalLoss += float64(loss)
+			
+			// 🛡️ Autonomous Supervisor Intervention
+			stats := moe.TrainingStats{
+				Epoch:          epoch,
+				CurrentLoss:    loss,
+				Perplexity:     float32(math.Exp(float64(loss))),
+				StepConfidence: 0.25, // Estimate
+			}
+			// Use the first expert grads for dominance check if available
+			if len(moe.ActiveLayers) > 0 {
+				stats.MaxDominance = moe.GetMaxUtilization(moe.ActiveLayers[0].AccumulatedUtilization)
+			}
+			sup.Reflect(stats, optimizer.(*nn.Adam), model)
+
+			// Periodic structural validation
+			if numBatches > 0 && numBatches%100 == 0 {
+				if !sup.Validate(model) {
+					log.Println("⚠️ Supervisor: Mumble detected in enhanced response. Increasing temperature...")
+					if sup.MumbleCount > 3 {
+						sup.PerformSurgery(model)
+						sup.MumbleCount = 0
+					}
+				}
+			}
 
 			// Aggressively clear computation graph after each batch
 			enhancedBatch[0].Enhanced.ASG = nil // Free reference
