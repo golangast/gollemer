@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	. "github.com/golangast/gollemer/internal/ai/neural/tensor"
 )
@@ -64,9 +65,14 @@ type MoELayer struct {
 	ExpertGradMultiplier   []float32 // Boosts gradients for experts recovering from freeze
 	DiversityLoss          float32   // Penalty for experts being too similar
 	TargetRouting          []int     // Ground truth expert IDs for each token (set before Forward)
+	PersistenceBias        float32   // Bias for experts selected in the previous token step
+	LastSelectedExperts    [][]int   // Stores experts chosen for each batch item in the previous step
+	ResetCount             int32     // Atomic counter for experts reset in this epoch
+	expertResets           map[int]int
+	resetsMu               sync.RWMutex
 }
 
-// ResetUtilizationStats clears the accumulated utilization counters.
+// ResetUtilizationStats clears the accumulated utilization counters and expert resets.
 func (moe *MoELayer) ResetUtilizationStats() {
 	if moe.AccumulatedUtilization == nil || len(moe.AccumulatedUtilization) != len(moe.Experts) {
 		moe.AccumulatedUtilization = make([]int, len(moe.Experts))
@@ -74,6 +80,10 @@ func (moe *MoELayer) ResetUtilizationStats() {
 	for i := range moe.AccumulatedUtilization {
 		moe.AccumulatedUtilization[i] = 0
 	}
+	
+	moe.resetsMu.Lock()
+	moe.expertResets = make(map[int]int)
+	moe.resetsMu.Unlock()
 }
 
 // safeAccumulate adds src to dst, ensuring we don't go out of bounds.
@@ -136,6 +146,7 @@ func NewMoELayer(inputDim, outputDim, numExperts, k int, expertBuilder func(int)
 		ExpertFrozen:         make([]bool, numExperts),
 		StagnationCounters:   make([]int, numExperts),
 		ExpertGradMultiplier: make([]float32, numExperts),
+		PersistenceBias:      1.5, // Default persistence strength
 	}
 	for i := range layer.ExpertGradMultiplier {
 		layer.ExpertGradMultiplier[i] = 1.0
@@ -179,6 +190,16 @@ func (moe *MoELayer) ResetExpertWeights(expertIdx int) {
 		return
 	}
 
+	moe.resetsMu.Lock()
+	if moe.expertResets == nil {
+		moe.expertResets = make(map[int]int)
+	}
+	moe.expertResets[expertIdx]++
+	moe.resetsMu.Unlock()
+
+	atomic.AddInt32(&moe.ResetCount, 1)
+	fmt.Printf("🔥 Expert E%d Weights Reset for %T: Breaking Semantic Sink.\n", expertIdx, moe)
+
 	expert := moe.Experts[expertIdx]
 	params := expert.Parameters()
 	for _, p := range params {
@@ -197,7 +218,39 @@ func (moe *MoELayer) ResetExpertWeights(expertIdx int) {
 			p.Data[i] = float32(rand.NormFloat64()) * stdDev
 		}
 	}
-	fmt.Printf("🔥 Expert E%d Weights Reset for %T: Breaking Semantic Sink.\n", expertIdx, moe)
+}
+
+// PerformSurgery clones weights from an alpha expert to a sink expert with tiny mutation noise.
+func (moe *MoELayer) PerformSurgery(alphaID, sinkID int) {
+	if alphaID < 0 || alphaID >= len(moe.Experts) || sinkID < 0 || sinkID >= len(moe.Experts) {
+		return
+	}
+	if alphaID == sinkID {
+		return
+	}
+
+	fmt.Printf("🧬 [Surgery] Cloning Expert E%d (Alpha) -> Expert E%d (Sink) for %T\n", alphaID, sinkID, moe)
+
+	alphaParams := moe.Experts[alphaID].Parameters()
+	sinkParams := moe.Experts[sinkID].Parameters()
+
+	for i := range sinkParams {
+		if i >= len(alphaParams) {
+			break
+		}
+		if sinkParams[i] == nil || alphaParams[i] == nil {
+			continue
+		}
+
+		// Deep copy the underlying data
+		copy(sinkParams[i].Data, alphaParams[i].Data)
+
+		// Mutation: Add 0.1% Gaussian-ish noise
+		for j := range sinkParams[i].Data {
+			noise := float32((float64(j%1000)/500.0 - 1.0) * 0.001)
+			sinkParams[i].Data[j] += noise
+		}
+	}
 }
 
 // ValidateHealth triggers a health check based on accumulated utilization.
@@ -444,6 +497,43 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 		}
 	} else {
 		scoresTensor = gateLogits
+	}
+
+	// 🧬 EXPERT PERSISTENCE (Bias for N+1)
+	// If we have stored experts from the previous step, bias the router toward them
+	// to prevent "expert jumping" mid-phrase.
+	if batchSize > 0 {
+		if moe.LastSelectedExperts == nil || len(moe.LastSelectedExperts) != batchSize {
+			moe.LastSelectedExperts = make([][]int, batchSize)
+		}
+
+		for b := 0; b < batchSize; b++ {
+			for t := 0; t < seqLength; t++ {
+				tokenIdx := b*seqLength + t
+				
+				// Identify experts to bias for this token
+				var expertsToBias []int
+				if t > 0 {
+					// Within a sequence (Training): bias toward previous token's target expert
+					if moe.Training && len(moe.TargetRouting) > tokenIdx-1 {
+						target := moe.TargetRouting[tokenIdx-1]
+						if target >= 0 && target < numExperts {
+							expertsToBias = []int{target}
+						}
+					}
+					// Note: during parallel Forward, we don't have current pass's SelectedExperts yet for t > 0
+				} else {
+					// Start of sequence or Inference (seqLen=1): bias toward saved experts from previous Forward call
+					expertsToBias = moe.LastSelectedExperts[b]
+				}
+
+				for _, eid := range expertsToBias {
+					if eid >= 0 && eid < numExperts {
+						gateLogits.Data[tokenIdx*numExperts+eid] += moe.PersistenceBias
+					}
+				}
+			}
+		}
 	}
 
 	// 🧬 STRUCTURAL ROUTING BIAS (Training Only)
@@ -790,8 +880,13 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 		// 4. Router Load Balancing Diversity (Entropy-Based)
 		routerDivLoss := moe.GatingNetwork.CalculateDiversityLoss()
 
+		// 5. Direct Shannon Entropy (Sharpness vs Fairness)
+		// We use the version from stats.go
+		shannonEntropy := CalculateDiversityLoss(moe.GateOutputs)
+
 		// Combine them (stLoss, auxLoss, divLoss, and routerDivLoss)
-		moe.LoadBalancingLoss = 0.3*stLoss + 0.3*auxLoss + 0.2*divLoss + 0.2*routerDivLoss
+		// Slightly increased weights for diversity and added Shannon Entropy
+		moe.LoadBalancingLoss = 0.25*stLoss + 0.25*auxLoss + 0.2*divLoss + 0.2*routerDivLoss + 0.1*shannonEntropy
 	} else {
 		moe.LoadBalancingLoss = 0
 		moe.DiversityLoss = 0
@@ -820,6 +915,14 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 			TargetRouting:      moe.TargetRouting,
 		}
 		moe.stateStack = append(moe.stateStack, state)
+	}
+
+	// 🧬 Update Persistence Memory for next call
+	if batchSize > 0 && len(moe.SelectedExperts) >= batchSize*seqLength {
+		for b := 0; b < batchSize; b++ {
+			lastTokenIdx := (b + 1)*seqLength - 1
+			moe.LastSelectedExperts[b] = moe.SelectedExperts[lastTokenIdx]
+		}
 	}
 
 	return finalOutput, nil
@@ -1348,7 +1451,8 @@ func (moe *MoELayer) ClearState() {
 	moe.stateStack = nil
 	moe.gateLogits = nil
 	moe.TargetRouting = nil
-
+	moe.LastSelectedExperts = nil
+	
 	// Clear state for all experts
 	for _, expert := range moe.Experts {
 		if expert != nil {
@@ -1359,6 +1463,24 @@ func (moe *MoELayer) ClearState() {
 	if moe.GatingNetwork != nil {
 		moe.GatingNetwork.ClearState()
 	}
+}
+
+func (moe *MoELayer) GetResetCount() int {
+	return int(atomic.LoadInt32(&moe.ResetCount))
+}
+
+func (moe *MoELayer) GetExpertResets() map[int]int {
+	moe.resetsMu.RLock()
+	defer moe.resetsMu.RUnlock()
+	resets := make(map[int]int)
+	for i, c := range moe.expertResets {
+		resets[i] = c
+	}
+	return resets
+}
+
+func (moe *MoELayer) ClearResetCount() {
+	atomic.StoreInt32(&moe.ResetCount, 0)
 }
 
 // UtilizationStats returns a map of expert index to the number of tokens it processed in the last forward pass.

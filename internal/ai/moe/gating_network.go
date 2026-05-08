@@ -12,8 +12,8 @@ import (
 )
 
 // RouterNoiseFactor controls the magnitude of random noise added during routing.
-// Default is 1.5 to aggressively break expert monopoly.
-var RouterNoiseFactor float32 = 1.5
+// Increased to 2.0 to aggressively break expert monopoly and word salad collapse.
+var RouterNoiseFactor float32 = 2.0
 
 // SetRouterNoiseFactor updates the global router noise magnitude.
 func SetRouterNoiseFactor(v float32) {
@@ -390,7 +390,7 @@ func (gn *GatingNetwork) CalculateDiversityLoss() float32 {
 
 	coeff := gn.DiversityCoefficient
 	if coeff == 0 {
-		coeff = 0.25 // Default "Anti-Lazy" coefficient
+		coeff = 0.5 // Increased from 0.25 to aggressively break "Lazy Router" monopolies
 	}
 	
 	res := totalLoss * coeff
