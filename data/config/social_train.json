@@ -7,7 +7,7 @@
   "context_multiplier": 30,
   "router_noise": 0.5,
   "router_temperature": 0.5,
-  "load_balancing_weight": 0.56000006,
+  "load_balancing_weight": 0.58000004,
   "expert_dropout": 0.3,
   "collapse_threshold": 0.1,
   "label_smoothing": 0.1,
