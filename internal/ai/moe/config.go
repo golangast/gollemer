@@ -30,6 +30,8 @@ type SocialConfig struct {
 	K                   int     `json:"k"`
 	RepetitionPenalty   float32 `json:"repetition_penalty"`
 	EntropyWeight       float32 `json:"entropy_weight"`
+	UnkPenalty          float32 `json:"unk_penalty"`
+	StructuralBiasIntensity float32 `json:"structural_bias_intensity"`
 }
 
 func LoadSocialConfig(path string) SocialConfig {

@@ -340,18 +340,24 @@ func ApplyRepetitionPenalty(logits *tensor.Tensor, generatedIDs []int, penalty f
 		return
 	}
 	counts := make(map[int]float32)
-	for _, id := range generatedIDs {
-		counts[id]++
+	for i, id := range generatedIDs {
+		// Prioritize the last 5 tokens for penalty
+		weight := float32(1.0)
+		dist := len(generatedIDs) - 1 - i
+		if dist < 5 {
+			weight = 2.5 // Stronger penalty for recent tokens
+		}
+		counts[id] += weight
 	}
-	for id, count := range counts {
+	for id, weight := range counts {
 		if id < 0 || id >= len(logits.Data) {
 			continue
 		}
 
 		// Subtractive penalty is much more effective than multiplicative for logit suppression.
-		// We multiply by (1 + count) to increase penalty for frequent tokens,
+		// We multiply by weight to increase penalty for recent/frequent tokens,
 		// and add an extra boost if the token was the IMMEDIATE previous token.
-		p := penalty * count
+		p := penalty * weight
 		if len(generatedIDs) > 0 && id == generatedIDs[len(generatedIDs)-1] {
 			p *= 2.0 // Double penalty for immediate repetition
 		}
@@ -966,7 +972,7 @@ func (m *IntentMoE) BeamSearchDecode(
 			lastID := cand.ids[len(cand.ids)-1]
 			inputT := tensor.NewTensor([]int{1, 1}, []float32{float32(lastID)}, false)
 
-			logits, newHidden, newCell, err := m.Decoder.DecodeStep(inputT, cand.hiddenState, cand.cellState, contextVector)
+			logits, newHidden, newCell, err := m.Decoder.DecodeStep(inputT, cand.hiddenState, cand.cellState, contextVector, step)
 			if err != nil {
 				continue
 			}
@@ -1657,7 +1663,7 @@ func (m *IntentMoE) GreedySearchDecodeWithTemp(contextVector *tensor.Tensor, max
 	cellState := tensor.NewTensor([]int{batchSize, hiddenSize}, make([]float32, batchSize*hiddenSize), false)
 
 	for step := 0; step < maxLen; step++ {
-		outputLogits, newHidden, newCell, err := m.Decoder.DecodeStep(decoderInputIDs, hiddenState, cellState, contextVector)
+		outputLogits, newHidden, newCell, err := m.Decoder.DecodeStep(decoderInputIDs, hiddenState, cellState, contextVector, step)
 		if err != nil {
 			return nil, fmt.Errorf("decoder step failed: %w", err)
 		}
@@ -1860,8 +1866,8 @@ func (m *IntentMoE) SampleDecode(contextVector *tensor.Tensor, maxLen, sosToken,
 	hiddenState := initialHidden
 	cellState := tensor.NewTensor([]int{batchSize, hiddenSize}, make([]float32, batchSize*hiddenSize), false)
 
-	for range maxLen {
-		outputLogits, newHidden, newCell, err := m.Decoder.DecodeStep(decoderInputIDs, hiddenState, cellState, contextVector)
+	for step := range maxLen {
+		outputLogits, newHidden, newCell, err := m.Decoder.DecodeStep(decoderInputIDs, hiddenState, cellState, contextVector, step)
 		if err != nil {
 			return nil, fmt.Errorf("decoder step failed: %w", err)
 		}
@@ -2243,6 +2249,20 @@ func (m *IntentMoE) RebuildActiveLayers() {
 	}
 	
 	log.Printf("🧬 Rebuilt MoE tracking: %d layers registered for load-balancing.", len(ActiveLayers))
+	
+	// Ensure new fields are initialized for hot-loading or old checkpoints
+	for _, layer := range ActiveLayers {
+		if len(layer.ExpertOutputScale) == 0 {
+			numExperts := len(layer.Experts)
+			layer.ExpertOutputScale = make([]float32, numExperts)
+			for i := range layer.ExpertOutputScale {
+				layer.ExpertOutputScale[i] = 1.0
+			}
+		}
+		if layer.StructuralBiasIntensity == 0 {
+			layer.StructuralBiasIntensity = 8.0
+		}
+	}
 }
 
 // PruneExpertRouter zeros out the routing probabilities for a specific expert to break a collapse.

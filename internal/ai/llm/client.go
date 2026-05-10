@@ -73,14 +73,19 @@ func (c *GollemerMoEClient) LoadChatBank(path string) {
 	}
 
 	for i, record := range records {
-		if i == 0 && strings.Contains(strings.ToLower(record[0]), "intent") {
-			continue // Skip header
+		if i == 0 && (strings.Contains(strings.ToLower(record[0]), "query") ||
+			strings.Contains(strings.ToLower(record[0]), "intent") ||
+			strings.Contains(strings.ToLower(record[0]), "question")) {
+			continue // Skip header row
 		}
-		if len(record) >= 3 {
-			// Pattern is record[1], Response is record[2]
-			q := strings.Trim(record[1], "\" ")
-			a := strings.Trim(record[2], "\" ")
-			intent := strings.Trim(record[0], "\" ")
+		if len(record) >= 2 {
+			// conversing.csv columns: query, answer, intent, grammar
+			q := strings.Trim(record[0], "\" ")
+			a := strings.Trim(record[1], "\" ")
+			intent := ""
+			if len(record) >= 3 {
+				intent = strings.Trim(record[2], "\" ")
+			}
 			if q != "" && a != "" {
 				pairs = append(pairs, ChatPair{Q: q, A: a, Intent: intent})
 			}
@@ -477,6 +482,187 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 	return "", 0.0
 }
 
+// lookupChatBank does a direct string-based lookup against the loaded training pairs.
+// It does NOT require W2V embeddings — it works on raw text similarity.
+// Returns the best matching answer and a confidence score [0,1].
+func (c *GollemerMoEClient) lookupChatBank(input, intent string) (string, float64) {
+	if len(c.ChatBank) == 0 {
+		return "", 0
+	}
+	normalInput := strings.TrimSpace(strings.ToLower(input))
+
+	// Pass 1: exact match on question
+	for _, pair := range c.ChatBank {
+		if strings.TrimSpace(strings.ToLower(pair.Q)) == normalInput {
+			return pair.A, 1.0
+		}
+	}
+
+	// Pass 2: best word-overlap match within the same intent family
+	inputWords := strings.Fields(normalInput)
+	wordSet := make(map[string]bool, len(inputWords))
+	for _, w := range inputWords {
+		wordSet[w] = true
+	}
+
+	bestScore := 0.0
+	bestAnswer := ""
+	for _, pair := range c.ChatBank {
+		// Prefer same-intent rows but don't exclude cross-intent
+		intentBonus := 0.0
+		if strings.EqualFold(pair.Intent, intent) {
+			intentBonus = 0.25
+		}
+		pairWords := strings.Fields(strings.ToLower(pair.Q))
+		matches := 0
+		for _, w := range pairWords {
+			if wordSet[w] {
+				matches++
+			}
+		}
+		if len(pairWords) == 0 {
+			continue
+		}
+		score := float64(matches)/float64(len(pairWords)) + intentBonus
+		if score > bestScore {
+			bestScore = score
+			bestAnswer = pair.A
+		}
+	}
+	if bestScore >= 0.35 {
+		return bestAnswer, bestScore
+	}
+	return "", 0
+}
+
+// supervisorCompleteSentenceGuided uses the grammar skeleton for the given intent to
+// guide a greedy decode pass, strongly boosting words that match the expected
+// POS type at each position. It also applies a 'guidance boost' for tokens 
+// present in a target answer (e.g. from ChatBank) to nudge the model toward
+// proven linguistic patterns.
+func (c *GollemerMoEClient) supervisorCompleteSentenceGuided(ctx *tensor.Tensor, intent string, model *moe.IntentMoE, guidanceIDs map[int]bool, boost float32) string {
+	if model.SentenceVocab == nil || model.Decoder == nil {
+		return ""
+	}
+
+	// Resolve grammar skeleton for this intent
+	parent := "social"
+	child := intent
+	rule, hasRule := model.Rules.GetRuleByIntent(parent, child)
+
+	// Prepare initial hidden state from encoder context
+	batchSize := 1
+	hiddenSize := model.Decoder.LSTM.HiddenSize
+	initHidden, err := ctx.Mean(1)
+	if err != nil {
+		return ""
+	}
+	initHidden, _ = initHidden.Reshape([]int{batchSize, ctx.Shape[2]})
+	if initHidden.Shape[1] > hiddenSize {
+		initHidden, _ = initHidden.Slice(1, 0, hiddenSize)
+	} else if initHidden.Shape[1] < hiddenSize {
+		pad := tensor.NewTensor([]int{batchSize, hiddenSize - initHidden.Shape[1]}, make([]float32, batchSize*(hiddenSize-initHidden.Shape[1])), false)
+		initHidden, _ = tensor.Concat([]*tensor.Tensor{initHidden, pad}, 1)
+	}
+	cellState := tensor.NewTensor([]int{batchSize, hiddenSize}, make([]float32, batchSize*hiddenSize), false)
+
+	hidden := initHidden
+	cell := cellState
+	currentID := model.SentenceVocab.BosID
+	unkID := model.SentenceVocab.GetTokenID("UNK")
+
+	var generated []string
+	var decodedIDs []int
+
+	for step := 0; step < 20; step++ {
+		inputT := tensor.NewTensor([]int{1, 1}, []float32{float32(currentID)}, false)
+		logits, nextH, nextC, _, decErr := model.Decoder.DecodeStepWithExpert(inputT, hidden, cell, ctx, step)
+		if decErr != nil {
+			break
+		}
+		hidden = nextH
+		cell = nextC
+		logits.ToCPU()
+
+		// Suppress garbage tokens
+		logits.Data[model.SentenceVocab.PaddingTokenID] = -1e9
+		if unkID != -1 {
+			logits.Data[unkID] = -1e9
+		}
+		logits.Data[model.SentenceVocab.BosID] = -1e9
+		if step < 4 && model.SentenceVocab.EosID >= 0 && model.SentenceVocab.EosID < len(logits.Data) {
+			logits.Data[model.SentenceVocab.EosID] = -1e9
+		}
+
+		// 🧭 Guidance boost: favour tokens from the ChatBank target answer
+		if len(guidanceIDs) > 0 {
+			for id := range guidanceIDs {
+				if id < len(logits.Data) {
+					logits.Data[id] += boost
+				}
+			}
+		}
+
+		// 🧬 Grammar skeleton enforcement — strong boost for matching POS type
+		if hasRule && step < len(rule.GrammarSkeleton) {
+			expectedType := rule.GrammarSkeleton[step]
+			for idx := range logits.Data {
+				if logits.Data[idx] < -1e8 {
+					continue
+				}
+				word := model.SentenceVocab.GetWord(idx)
+				actualType := moe.MapWordToGrammarType(word)
+				if actualType == expectedType {
+					logits.Data[idx] += 6.0 // Strong pull toward correct POS
+				} else if actualType != "OTHER" {
+					logits.Data[idx] -= 4.0 // Penalize wrong POS
+				}
+			}
+			// Required keyword boost: if a required keyword exists in the vocab, give it a large bonus
+			for _, kw := range rule.RequiredKeywords {
+				kwID := model.SentenceVocab.GetTokenID(kw)
+				if kwID > 1 && kwID < len(logits.Data) {
+					logits.Data[kwID] += 4.0
+				}
+			}
+		}
+
+		// Repetition penalty
+		moe.ApplyRepetitionPenalty(logits, decodedIDs, 2.5)
+		if len(decodedIDs) >= 1 {
+			lastID := decodedIDs[len(decodedIDs)-1]
+			if lastID < len(logits.Data) {
+				logits.Data[lastID] -= 3.0
+			}
+		}
+
+		// Greedy pick
+		bestID := 0
+		bestVal := float32(-1e38)
+		for idx, val := range logits.Data {
+			if val > bestVal {
+				bestVal = val
+				bestID = idx
+			}
+		}
+		if bestID == model.SentenceVocab.EosID {
+			break
+		}
+		word := model.SentenceVocab.GetWord(bestID)
+		if word == "" || word == "<pad>" || word == "UNK" {
+			continue
+		}
+		generated = append(generated, word)
+		decodedIDs = append(decodedIDs, bestID)
+		currentID = bestID
+	}
+
+	if len(generated) == 0 {
+		return ""
+	}
+	return strings.Join(generated, " ")
+}
+
 func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 	log.Printf("📡 GenerateSocialResponse called with input: '%s'", input)
 	if c.SocialModel == nil {
@@ -489,12 +675,11 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 		return ""
 	}
 
-	// ── Neural decoder path ─────────────────────────────────
-	// Use normalized input text as trained
+	// ── Resolve intent ──────────────────────────────────────────────────────────
 	lowerInput := strings.ToLower(input)
-	
+
 	// Match intent labels exactly as used in conversing.csv training data
-	intent := "social" // default (matches 'can we be friends' row)
+	intent := "social" // default
 	if strings.Contains(lowerInput, "hello") || strings.Contains(lowerInput, "hi") ||
 		strings.Contains(lowerInput, "good morning") || strings.Contains(lowerInput, "good night") || strings.Contains(lowerInput, "hey") {
 		intent = "greeting"
@@ -525,6 +710,23 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 		intent = "trivia"
 	} else if strings.Contains(lowerInput, "why did") {
 		intent = "clarification"
+	}
+
+	// ── 🎯 ChatBank: fetch target answer for guided decoding (not returned directly) ──
+	// Instead of copy-pasting, we tokenize the target answer and use it as a
+	// soft logit boost during MoE decoding.  The decoder generates its own tokens;
+	// it is merely nudged toward the right vocabulary.
+	chatTarget, chatTargetScore := c.lookupChatBank(input, intent)
+	var guidanceTokenIDs map[int]bool
+	const guidanceBoost = float32(4.5) // logit bonus for tokens present in the target answer
+	if chatTarget != "" && chatTargetScore >= 0.35 {
+		log.Printf("🧭 ChatBank guidance target (score=%.2f, intent=%s): '%s'", chatTargetScore, intent, chatTarget)
+		guidanceTokenIDs = make(map[int]bool)
+		for _, w := range cleanTokenize(chatTarget) {
+			if id := lookupVocab(w, model.SentenceVocab); id > 1 { // skip PAD / UNK
+				guidanceTokenIDs[id] = true
+			}
+		}
 	}
 
 	formattedInput := fmt.Sprintf("__intent__ %s : __ques__ %s __ans__", intent, lowerInput)
@@ -623,11 +825,18 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 		}
 	}()
 
-	// ── Beam Search Decode ────────────────────────────────────────────────────
-	// beamWidth=4, temperature=0.8, repetitionPenalty=3.0, maxLen=20
+	// ── 🦺 SECONDARY: Supervisor grammar-skeleton + guidance guided completion ──
+	// supervisorCompleteSentenceGuided already applies POS boosting and ChatBank guidance.
+	supervisorResp := c.supervisorCompleteSentenceGuided(ctx, intent, model, guidanceTokenIDs, guidanceBoost)
+	if supervisorResp != "" && !isGarbageOutput(supervisorResp) && !isLowQualitySocialResponse(supervisorResp) {
+		log.Printf("🦺 Supervised+guided generation (intent=%s): '%s'", intent, supervisorResp)
+		return supervisorResp
+	}
+
+	// ── Beam Search Decode (tertiary) ────────────────────────────────────────
 	// 🧬 Structural Guidance: Fetch the rule for this intent to guide the beam search
 	rule, _ := model.Rules.GetRuleByIntent("social", intent)
-	
+
 	resIDs, beamErr := model.BeamSearchDecode(
 		ctx,
 		20, // shorter max length to reduce repetition chances
@@ -661,7 +870,7 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 
 		for i := 0; i < 30; i++ {
 			inputT := tensor.NewTensor([]int{1, 1}, []float32{float32(currentID)}, false)
-			logits, nextH, nextC, expertID, err := model.Decoder.DecodeStepWithExpert(inputT, fbHidden, fbCell, ctx)
+			logits, nextH, nextC, expertID, err := model.Decoder.DecodeStepWithExpert(inputT, fbHidden, fbCell, ctx, i)
 			if err != nil {
 				break
 			}
@@ -714,7 +923,7 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 	for _, id := range resIDs {
 		w := model.SentenceVocab.GetWord(id)
 		log.Printf("   Token ID %d -> '%s'", id, w)
-		if w != "</s>" && w != "<s>" && w != "<pad>" && w != "UNK" && w != "" && 
+		if w != "</s>" && w != "<s>" && w != "<pad>" && w != "UNK" && w != "" &&
 		   w != "__intent__" && w != "__ques__" && w != "__ans__" && w != "social" && w != ":" {
 			result = append(result, w)
 		}
@@ -726,7 +935,7 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 	}
 	log.Printf("🎭 Neural Social Model generated: '%s'", response)
 	if isGarbageOutput(response) || isLowQualitySocialResponse(response) {
-		log.Printf("🗑️  Social output rejected (quality gate): '%s'", response)
+		log.Printf("🗑️  Neural output rejected (quality gate): '%s'", response)
 		return ""
 	}
 	return response

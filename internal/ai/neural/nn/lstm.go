@@ -79,7 +79,7 @@ func NewLSTMCell(inputSize, hiddenSize int) (*LSTMCell, error) {
 		return nil, err
 	}
 
-	return &LSTMCell{
+	cell := &LSTMCell{
 		InputSize:  inputSize,
 		HiddenSize: hiddenSize,
 		Wf:         wf.Weights,
@@ -90,7 +90,9 @@ func NewLSTMCell(inputSize, hiddenSize int) (*LSTMCell, error) {
 		Bi:         wi.Biases,
 		Bc:         wc.Biases,
 		Bo:         wo.Biases,
-	}, nil
+	}
+	cell.SetForgetGateBias(1.0)
+	return cell, nil
 }
 
 // Parameters returns all learnable parameters of the LSTMCell.

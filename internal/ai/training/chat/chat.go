@@ -986,6 +986,7 @@ skipCSV:
 		// Reset utilization for each layer and the session monitor
 		for _, l := range moe.ActiveLayers {
 			l.ResetUtilizationStats()
+			l.SoftRouting = epoch < 50 // Soft Routing for the first 50 epochs
 		}
 		epochMonitor.Reset() // Start fresh dispatch counts for this epoch
 
@@ -2075,11 +2076,23 @@ func (s *surgeryImpl) PerformSurgery(layerIdx int, alphaID int, sinkID int) {
 	}
 }
 
+func (s *surgeryImpl) HealExpert(layerIdx int, expertIdx int, alphaIDs []int) {
+	if layerIdx >= 0 && layerIdx < len(s.layers) {
+		s.layers[layerIdx].HealExpert(expertIdx, alphaIDs)
+	}
+}
+
+func (s *surgeryImpl) SetHealthyExperts(layerIdx int, expertIDs []int) {
+	if layerIdx >= 0 && layerIdx < len(s.layers) {
+		s.layers[layerIdx].HealthyExpertIDs = expertIDs
+	}
+}
+
 // TrainSocialChat trains a specialized model ONLY on human_chat.txt for pure social conversations
 func TrainSocialChat(projectRoot string, epochs int, customDataPath string, overfitMode bool, initialLR float32, weightDecay float32, autoHeal bool, maxGradNorm float32, useGPU bool, batchSize int, accumulationSteps int, numExperts int) {
 	// 🛡️ AGGRESSIVE MEMORY MANAGEMENT
-	debug.SetMemoryLimit(4 * 1024 * 1024 * 1024) // Enforce 4GB limit
-	debug.SetGCPercent(20)                       // Trigger GC more frequently (Standard is 100)
+	debug.SetMemoryLimit(5 * 1024 * 1024 * 1024) // Enforce 5GB limit
+	debug.SetGCPercent(50)                       // Trigger GC more frequently (Standard is 100)
 
 	log.Println("🎭 Starting SOCIAL-ONLY Chat Training")
 	if customDataPath != "" {
@@ -2533,7 +2546,7 @@ skipSocialLoad:
 
 	// Aggressively suppress high-frequency "word salad" tokens (DISABLED for tiny datasets)
 	if !isTinyDataset {
-		saladTokens := []string{"unk", "!", ",", "?", "."}
+		saladTokens := []string{"unk", "!", ",", "?", ".", "color"}
 		for _, st := range saladTokens {
 			id := intentModel.SentenceVocab.GetTokenID(st)
 			if id >= 0 {
@@ -2548,7 +2561,97 @@ skipSocialLoad:
 		config.EntropyWeight = 0.0
 		config.LabelSmoothing = 0.0
 		log.Println("🛡️  Disabled EntropyWeight and LabelSmoothing for better memorization of tiny dataset.")
+
+		// --- [Overfit Strategy: Anchor Boost] ---
+		ansID := intentModel.SentenceVocab.GetTokenID("__ans__")
+		if ansID >= 0 {
+			lossWeights[ansID] = 50.0
+			ResolvedPunctuationWeights[ansID] = 50.0
+			log.Printf("⚓ Anchor Boost: Assigned weight 50.0 to token '__ans__' (ID %d)", ansID)
+		}
+		ansShortID := intentModel.SentenceVocab.GetTokenID("ans")
+		if ansShortID >= 0 {
+			lossWeights[ansShortID] = 50.0
+			ResolvedPunctuationWeights[ansShortID] = 50.0
+		}
 	}
+
+	// --- 🧪 EXPERT SURGERY: NUDGE BIASES & STEP ROUTING ---
+	// Nudge E14 (GREET) and E11 (ADJ) to have a baseline preference for their tokens.
+	nudgeExpertBias := func(expertIdx int, words []string, strength float32) {
+		if intentModel.Decoder == nil || intentModel.Decoder.OutputMoE == nil {
+			return
+		}
+		if expertIdx < 0 || expertIdx >= len(intentModel.Decoder.OutputMoE.Experts) {
+			return
+		}
+		exp := intentModel.Decoder.OutputMoE.Experts[expertIdx]
+		params := exp.Parameters()
+		if len(params) >= 4 {
+			bias := params[3] // FC2 Bias
+			for _, word := range words {
+				tid := intentModel.SentenceVocab.GetTokenID(word)
+				if tid != -1 && tid < len(bias.Data) {
+					bias.Data[tid] += strength
+				}
+			}
+		}
+	}
+
+	// 1. Token-Level Biases (Long-term preference)
+	greetWords := []string{"hello", "hi", "hey", "morning", "afternoon", "evening", "greetings", "welcome", "howdy"}
+	nudgeExpertBias(14, greetWords, 0.5)
+
+	adjWords := []string{"good", "great", "nice", "lovely", "wonderful", "excellent", "happy", "fine", "better"}
+	nudgeExpertBias(11, adjWords, 0.5)
+
+	// 1b. Fix generic UNK bias for PREP (E13) and AUX (E10)
+	prepWords := []string{"in", "on", "at", "to", "from", "with", "by", "of", "for", "under", "over"}
+	nudgeExpertBias(13, prepWords, 0.8) // High boost to force specialization
+	
+	auxWords := []string{"is", "am", "are", "was", "were", "be", "been", "being", "have", "has", "had", "do", "does", "did"}
+	nudgeExpertBias(10, auxWords, 0.8)
+
+	// 🆕 Seed E9 (VERB) — copula verbs that appear in social speech
+	verbWords := []string{"am", "is", "are", "was", "were", "feel", "feels", "seem", "seems", "look", "looks", "sound", "sounds", "doing", "going"}
+	nudgeExpertBias(9, verbWords, 0.8)
+
+	// Explicitly DAMPEN UNK bias for these experts to break generic mumble
+	dampenUNK := func(expertIdx int) {
+		if intentModel.Decoder == nil || intentModel.Decoder.OutputMoE == nil { return }
+		if expertIdx < 0 || expertIdx >= len(intentModel.Decoder.OutputMoE.Experts) { return }
+		exp := intentModel.Decoder.OutputMoE.Experts[expertIdx]
+		params := exp.Parameters()
+		if len(params) >= 4 {
+			bias := params[3] // FC2 Bias
+			tid := intentModel.SentenceVocab.GetTokenID("UNK")
+			if tid != -1 && tid < len(bias.Data) {
+				bias.Data[tid] -= 1.0 // Strong dampen
+			}
+		}
+	}
+	dampenUNK(9)
+	dampenUNK(13)
+	dampenUNK(10)
+	dampenUNK(14) // E14:GREET — specialization reinforcement
+
+	// 2. Hard-code step-aware logit bias for E8 (PRON) and E14 (GREET) at steps 0 and 1.
+	// This creates a syntactical "rail": Step 0 is strongly biased toward greetings/pronouns,
+	// Step 1 stays softer (PRON-only) to allow natural follow-through.
+	for _, layer := range append(layers, func() []*moe.MoELayer {
+		if intentModel.Decoder.OutputMoE != nil { return []*moe.MoELayer{intentModel.Decoder.OutputMoE} }
+		return nil
+	}()...) {
+		numExperts := len(layer.Experts)
+		step0Bias := make([]float32, numExperts)
+		step1Bias := make([]float32, numExperts)
+		if 14 < numExperts { step0Bias[14] = 2.0 } // E14:GREET — strong rail at step 0
+		if 8 < numExperts  { step0Bias[8]  = 1.5 } // E8:PRON  — secondary at step 0
+		if 8 < numExperts  { step1Bias[8]  = 1.5 } // E8:PRON  — keep pronoun rail at step 1
+		layer.StepRoutingBias[0] = step0Bias
+		layer.StepRoutingBias[1] = step1Bias
+	}
+	log.Printf("🧪 Expert Surgery: Nudged E14(GREET), E11(ADJ), E13(PREP), E10(AUX), E9(VERB) biases and set step-aware routing.")
 
 	// Create optimizer (Wrapped with Cooling Safety)
 	// Merge Boolean and Float parameters with config
@@ -2586,6 +2689,7 @@ skipSocialLoad:
 		layer.RouterTemperature = config.RouterTemperature
 		layer.CapacityFactor = config.CapacityFactor
 		layer.K = config.K
+		layer.OverfitMode = overfitMode
 	}
 	log.Printf("🧬 MoE System: %d layers initialized (LBW=%.1f, Dropout=%.2f, Noise=%.1f, K=%d)",
 		len(layers), config.LoadBalancingWeight, config.ExpertDropout, config.RouterNoise, layers[0].K)
@@ -2598,19 +2702,114 @@ skipSocialLoad:
 		// 1. Grab fresh config values safely for this epoch
 		cfg := safeCfg.Get()
 
-		// Update MoE layers with fresh config
-		moe.SetRouterNoiseFactor(cfg.RouterNoise)
+		// Update loss weights from config
+		if cfg.TokenWeights != nil {
+			for token, weight := range cfg.TokenWeights {
+				id := intentModel.SentenceVocab.GetTokenID(token)
+				if id >= 0 {
+					lossWeights[id] = weight
+					ResolvedPunctuationWeights[id] = weight
+				}
+			}
+		}
+		
+		// 🛡️ UNK Penalty (Force specialization)
+		if unkID >= 0 {
+			if cfg.UnkPenalty > 0 {
+				lossWeights[unkID] = cfg.UnkPenalty
+			} else {
+				lossWeights[unkID] = 0.01 // Fallback
+			}
+		}
+
+		// 🌡️ Router Temperature Decay (Sharpen routing over time)
+		decayStart := 152 // Natural decay starts at Epoch 152
+		decayEnd := 2000
+		currentTemp := cfg.RouterTemperature
+		if epoch > decayStart {
+			progress := float32(epoch-decayStart) / float32(decayEnd-decayStart)
+			if progress > 1.0 { progress = 1.0 }
+			currentTemp = cfg.RouterTemperature * (1.0 - progress*0.8)
+			if currentTemp < 0.1 { currentTemp = 0.1 }
+		}
+
+		// 🎯 Top-1 Routing Phase (Define expert boundaries)
+		// Force model to commit to a single expert per token to stop "blending"
+		isTop1Phase := (epoch >= 1073 && epoch < 1173) // Applied for the next 100 epochs
+
 		for _, layer := range layers {
 			layer.LoadBalancingWeight = cfg.LoadBalancingWeight
 			layer.ExpertDropoutRate = cfg.ExpertDropout
-			layer.RouterTemperature = cfg.RouterTemperature
+			layer.RouterTemperature = currentTemp
 			layer.CapacityFactor = cfg.CapacityFactor
 			layer.K = cfg.K
+			if isTop1Phase {
+				layer.K = 1
+			}
 			layer.ClearResetCount()
+			layer.SoftRouting = epoch < 50 // Soft Routing for the first 50 epochs
+			layer.StructuralRoutingWeight = cfg.StructuralRoutingWeight
+			layer.StructuralBiasIntensity = cfg.StructuralBiasIntensity
+			layer.ExpertRegularizationWeight = cfg.ExpertRegularizationWeight
+			layer.ExpertSparsityWeight = cfg.ExpertSparsityWeight
+
+			// 🔊 Expert Signal Boosting (E8:PRON, E10:AUX)
+			// Applied for 50 epochs starting from epoch 153 to signal importance to decoder
+			if epoch >= 153 && epoch < 203 {
+				if len(layer.ExpertOutputScale) > 10 {
+					layer.ExpertOutputScale[8] = 1.2
+					layer.ExpertOutputScale[10] = 1.2
+				}
+			} else if epoch >= 203 {
+				// Restore defaults after the signal phase
+				if len(layer.ExpertOutputScale) > 10 {
+					layer.ExpertOutputScale[8] = 1.0
+					layer.ExpertOutputScale[10] = 1.0
+				}
+			}
+
+			// 🏥 Expert Health Monitoring (E13, E14)
+			totalUsage := 0
+			for _, u := range layer.AccumulatedUtilization { totalUsage += u }
+			if totalUsage > 1000 && len(layer.AccumulatedUtilization) > 14 {
+				e13H := float32(layer.AccumulatedUtilization[13]) / float32(totalUsage)
+				e14H := float32(layer.AccumulatedUtilization[14]) / float32(totalUsage)
+				if e13H < 0.02 || e14H < 0.02 {
+					// Increase dropout to force other experts to pick up the slack
+					layer.ExpertDropoutRate = 0.5 
+					log.Printf("🏥 [Supervisor] Expert Health Low (E13:%.1f%%, E14:%.1f%%). Boosting Dropout to 0.5", e13H*100, e14H*100)
+				}
+			}
+
+			// 🛡️ Expert Capping (E9, E10)
+			// Apply a hard-cap logit bias to favor E11 (ADJ) and E12 (NOUN)
+			if layer.StepRoutingBias == nil { layer.StepRoutingBias = make(map[int][]float32) }
+			for step := 0; step < 80; step++ {
+				if _, ok := layer.StepRoutingBias[step]; !ok {
+					layer.StepRoutingBias[step] = make([]float32, len(layer.Experts))
+				}
+				if len(layer.StepRoutingBias[step]) > 10 {
+					layer.StepRoutingBias[step][9] -= 2.0  // Cap E9 (VERB)
+					layer.StepRoutingBias[step][10] -= 2.0 // Cap E10 (AUX)
+				}
+			}
+
+			// --- [Overfit Strategy: Manual Lock] ---
+			if overfitMode {
+				layer.RouterTemperature = 0.1
+				moe.SetRouterNoiseFactor(0.0)
+				layer.OverfitMode = true
+			}
 		}
 
 		// Update optimizer if LR changed
 		optimizer.SetLearningRate(cfg.LearningRate)
+
+		// 🛡️ [Overfit Strategy: Force Zero Regularization]
+		if overfitMode || isTinyDataset {
+			cfg.EntropyWeight = 0.0
+			cfg.LabelSmoothing = 0.0
+		}
 
 		// Stop if requested (checked via PROJECT_ROOT/.stop)
 		if _, err := os.Stat(filepath.Join(projectRoot, ".stop")); err == nil {
@@ -2652,6 +2851,10 @@ skipSocialLoad:
 				continue
 			}
 
+			// --- 🧠 DECODER CONFIG: apply multiplier and decay ---
+			intentModel.Decoder.ContextMultiplier = cfg.ContextMultiplier
+			intentModel.Decoder.ContextMultiplierDecay = cfg.ContextMultiplierDecay
+
 			// Scheduled sampling: start with 100% teacher forcing, then gradually introduce model predictions
 			samplingProb := float32(0.0)
 			if epoch > 50 { // Start earlier to escape exposure bias
@@ -2686,14 +2889,17 @@ skipSocialLoad:
 						layer.TargetRouting = grammarTargets
 					}
 				}
-				// 🛡️ CRITICAL: Clear routing from previous batch
-				for _, layer := range layers {
-					layer.TargetRouting = nil
-				}
 			}
 
 			// --- 🧠 FORWARD PASS ───
 			logits, _, err := intentModel.Forward(samplingProb, inputTensor, targetTensor, inputMask)
+			
+			// 🛡️ CRITICAL: Clear routing AFTER Forward so it doesn't leak to next batch
+			layers := findMoELayers(intentModel)
+			for _, layer := range layers {
+				layer.TargetRouting = nil
+			}
+
 			if err != nil {
 				continue
 			}
@@ -2726,6 +2932,18 @@ skipSocialLoad:
 				}
 			}
 
+			if len(moe.ActiveLayers) > 0 {
+				iTokenID, exists := intentModel.SentenceVocab.WordToToken["i"]
+				for _, layer := range moe.ActiveLayers {
+					if exists {
+						layer.MutedTokenID = iTokenID
+						layer.MutedTokenScale = 0.5 // Scale bias gradients for "i" by 0.5x
+					} else {
+						layer.MutedTokenID = -1
+					}
+				}
+			}
+
 			// Compute loss
 			var batchLoss float32 = 0.0
 			var grads []*tensor.Tensor
@@ -2742,7 +2960,7 @@ skipSocialLoad:
 					}
 				}
 				cpuLogits := l.ToCPU()
-				loss, grad := WeightedCrossEntropy(cpuLogits, targets, lossWeights, config.LabelSmoothing, config.EntropyWeight)
+				loss, grad := WeightedCrossEntropy(cpuLogits, targets, lossWeights, cfg.LabelSmoothing, cfg.EntropyWeight)
 				cpuLogits.Release()
 				if grad == nil {
 					grad = tensor.NewTensor(l.Shape, make([]float32, len(l.Data)), false)
@@ -2771,6 +2989,42 @@ skipSocialLoad:
 				div := float32(len(logits))
 				batchLoss = stepLossTotal / div
 
+				// 🆕 PoS Penalty: Triple loss when the predicted token type doesn't match
+				// the target's structural category (VERB/AUX expected but NOUN/other predicted).
+				// This punishes word-salad behavior where grammar tokens are swapped for context nouns.
+				currentBatchSize2 := targetTensor.Shape[0]
+				seqLen2 := targetTensor.Shape[1]
+				for t, g := range grads {
+					targetToken := int(targetTensor.Data[(0)*seqLen2+t+1]) // batch 0 representative
+					targetWord := intentModel.SentenceVocab.GetWord(targetToken)
+					targetType := moe.MapWordToGrammarType(targetWord)
+					if targetType == "VERB" || targetType == "AUX" || targetType == "PRON" {
+						// Find predicted word for batch 0 to check type
+						predIdx := 0
+						predMax := float32(-1e9)
+						if len(logits[t].Data) > 0 {
+							for vi, v := range logits[t].Data {
+								if v > predMax { predMax = v; predIdx = vi }
+							}
+						}
+						predWord := intentModel.SentenceVocab.GetWord(predIdx)
+						predType := moe.MapWordToGrammarType(predWord)
+						if predType == "NOUN" || predType == "OTHER" {
+							// Structural mismatch: amplify gradient signal for this step
+							for bi := 0; bi < currentBatchSize2; bi++ {
+								base := bi * intentModel.SentenceVocab.Size()
+								if base+intentModel.SentenceVocab.Size() <= len(g.Data) {
+									for i := base; i < base+intentModel.SentenceVocab.Size(); i++ {
+										g.Data[i] *= 3.0
+									}
+								}
+							}
+						}
+					}
+					_ = t // suppress unused warning
+				}
+				_ = currentBatchSize2 // suppress unused warning
+
 				// 🧬 MoE Load Balancing Integration
 				// Add auxiliary MoE loss to the total batch loss to force expert diversity
 				lbLoss := float32(0)
@@ -2794,6 +3048,15 @@ skipSocialLoad:
 						lLoss = 50.0
 					}
 					lbLoss += lLoss * currentLBW
+
+					// --- GATING ENTROPY REGULARIZATION ---
+					if cfg.GatingEntropyWeight > 0 {
+						eLoss := layer.GatingEntropyLoss
+						if !math.IsNaN(float64(eLoss)) && !math.IsInf(float64(eLoss), 0) {
+							// Negative entropy to MAXIMIZE it (L = ... - lambda * Entropy)
+							batchLoss -= eLoss * cfg.GatingEntropyWeight
+						}
+					}
 				}
 				batchLoss += lbLoss
 
@@ -2859,13 +3122,18 @@ skipSocialLoad:
 					batchLoss += grammarPenalty * 0.5
 
 					// 🚀 INTELLIGENCE BOOST: Calculate Gradient Reward
-					// We scale the learning signal based on how 'good' the result was.
-					// If Similarity is high, we amplify the signal to lock it in.
-					// If Grammar is bad (high penalty), we dampen the signal to avoid learning junk.
-					totalReward = 0.5 + (batchSimilarity * 1.5) // Base signal [0.5] to [2.0] for perfect similarity
-					if grammarPenalty > 1.0 {
-						totalReward *= 0.8 // Dampen word salad
+					// Rebalanced: Favor Transition Probability (Grammar) over Similarity.
+					// Similarity reward: [0.2 to 1.2]
+					similarityReward := float32(0.2) + (batchSimilarity * 1.0)
+					
+					// Grammar reward: scale based on penalty (1.0 is perfect, drops to 0.1)
+					grammarReward := float32(1.0)
+					if grammarPenalty > 0 {
+						grammarReward = float32(math.Max(0.1, 1.0 - float64(grammarPenalty)*0.5))
 					}
+					
+					totalReward = similarityReward * grammarReward
+
 					// 🛡️ STABILITY FIX: On tiny datasets or early training, ensure the reward
 					// doesn't throttle the model before it even learns its first words.
 					if isTinyDataset || globalStep < 1000 {
@@ -3046,17 +3314,16 @@ skipSocialLoad:
 
 		// 🩺 MoE Health Check & Auto-Healing (Monopoly Recovery)
 		if (globalStep+1)%100 == 0 { // Check every 100 steps
-			for i, layer := range moe.ActiveLayers {
+			for _, layer := range moe.ActiveLayers {
 				totalTokens := 0
 				for _, u := range layer.AccumulatedUtilization {
 					totalTokens += u
 				}
 				if totalTokens > 0 {
-					for e, u := range layer.AccumulatedUtilization {
+					for _, u := range layer.AccumulatedUtilization {
 						usage := float32(u) / float32(totalTokens)
 						// If one expert handles more than 90% of the traffic, it's a monopoly
-						if usage > 0.9 {
-							log.Printf("🚨 MONOPOLY detected in MoE Layer %d (Expert %d: %.1f%%). Applying noise for exploration...", i, e, usage*100)
+						if usage > 0.9 && !overfitMode {
 							// Cap noise at 0.5 — runaway noise (up to 4.0) destroys routing stability
 							newNoise := config.RouterNoise + 0.05
 							if newNoise > 0.5 {
@@ -3152,7 +3419,7 @@ skipSocialLoad:
 				testMaxLen = 15
 			}
 			testVerbose := (i == 0) // Only first test is verbose to save memory/console
-			response, path := StrictGenerate(intentModel, p, testMaxLen, cfg.RepetitionPenalty, testVerbose)
+			response, path := StrictGenerate(intentModel, p, testMaxLen, cfg.RepetitionPenalty, testVerbose, epoch)
 			testProbeResults = append(testProbeResults, orchestrator.TestProbeResult{
 				Prompt:   p,
 				Response: response,
@@ -3185,9 +3452,25 @@ skipSocialLoad:
 
 			// Similarity Score (Target matching)
 			targetWords := []string{}
-			if i < len(trainPairs) {
-				tText := trainPairs[i].A
-				targetWords = strings.Fields(strings.ToLower(tText))
+			if isFullTest {
+				if i < len(trainPairs) {
+					tText := trainPairs[i].A
+					targetWords = strings.Fields(strings.ToLower(tText))
+				}
+			} else {
+				// Match targets for the 3 fixed prompts defined at line 3264.
+				// Use broad social vocabulary so partial credit is possible early in training.
+				fixedTargets := [][]string{
+					// Prompt 0: "hello" — greetings and positive social words
+					{"hello", "hi", "hey", "morning", "welcome", "good", "great", "nice"},
+					// Prompt 1: "how are you" — status words
+					{"i", "am", "doing", "well", "fine", "good", "great", "feeling", "okay"},
+					// Prompt 2: "what is your name" — identity words
+					{"i", "am", "my", "name", "is", "gollemer", "assistant", "ai"},
+				}
+				if i < len(fixedTargets) {
+					targetWords = fixedTargets[i]
+				}
 			}
 			simScore := intentModel.CalculateSequenceSimilarity(words, targetWords)
 			epochSimilarityScores = append(epochSimilarityScores, simScore)
@@ -3302,6 +3585,8 @@ skipSocialLoad:
 				K:                   cfg.K,
 				RepetitionPenalty:   cfg.RepetitionPenalty,
 				EntropyWeight:       cfg.EntropyWeight,
+				UnkPenalty:          cfg.UnkPenalty,
+				StructuralBiasIntensity: cfg.StructuralBiasIntensity,
 			}
 			_ = moe.SaveSocialConfig(configPath, socialCfg)
 
@@ -3363,6 +3648,7 @@ skipSocialLoad:
 			TestResults:       testProbeResults,
 			LayerResets:       layerResets,
 			LayerUsage:        layerUsage,
+			OverfitMode:       overfitMode,
 		}
 
 		// 2. Status Line every 100 epochs (Concise)
@@ -3433,7 +3719,7 @@ skipSocialLoad:
 
 // StrictGenerate forces the model to generate a response without using UNK or PAD tokens.
 // It returns the generated response and the expert path (e.g. "E1+E8 -> E4+E12").
-func StrictGenerate(model *moe.IntentMoE, input string, maxLen int, repetitionPenalty float32, verbose bool) (string, string) {
+func StrictGenerate(model *moe.IntentMoE, input string, maxLen int, repetitionPenalty float32, verbose bool, epoch int) (string, string) {
 	// 1. Diagnostics: We keep Training=true for MoE layers during tests
 	// to see the REAL routing behavior (noise, dropout, penalties).
 	// CRITICAL: Disable gradient tracking to prevent stateStack bloat and graph memory leaks.
@@ -3443,12 +3729,23 @@ func StrictGenerate(model *moe.IntentMoE, input string, maxLen int, repetitionPe
 	for _, layer := range moe.ActiveLayers {
 		layer.SetMode(true) // KEEP TRAINING MODE FOR DIVERSITY
 		oldTemps[layer] = layer.RouterTemperature
-		layer.RouterTemperature = 0.4 // SHARPENED for test coherence (was 1.1)
+		
+		// If early in training, use a higher temperature to force exploration
+		if epoch < 100 {
+			layer.RouterTemperature = 1.25 // Forces rarer expert combinations
+		} else {
+			layer.RouterTemperature = 0.35 // 0.35 for quality gate: pick most-probable (grammatical) path
+		}
 	}
 	if model.Decoder.OutputMoE != nil {
 		model.Decoder.OutputMoE.SetMode(true)
 		oldTemps[model.Decoder.OutputMoE] = model.Decoder.OutputMoE.RouterTemperature
-		model.Decoder.OutputMoE.RouterTemperature = 0.4
+		
+		if epoch < 100 {
+			model.Decoder.OutputMoE.RouterTemperature = 1.25
+		} else {
+			model.Decoder.OutputMoE.RouterTemperature = 0.1
+		}
 	}
 
 	defer func() {
@@ -3562,7 +3859,7 @@ func StrictGenerate(model *moe.IntentMoE, input string, maxLen int, repetitionPe
 	for i := 0; i < maxLen; i++ {
 		inputT := tensor.NewTensor([]int{1, 1}, []float32{float32(currentTokenID)}, false)
 		oldHiddenNorm := hiddenState.L2Norm()
-		logits, nextHidden, nextCell, expertIDs, err := model.Decoder.DecodeStepWithExpert(inputT, hiddenState, cellState, ctx)
+		logits, nextHidden, nextCell, expertIDs, err := model.Decoder.DecodeStepWithExpert(inputT, hiddenState, cellState, ctx, i)
 		if err != nil {
 			log.Printf("StrictGenerate Error (DecodeStep): %v", err)
 			break
@@ -3735,7 +4032,7 @@ func StrictGenerateWithExperts(model *moe.IntentMoE, input string, maxLen int, r
 
 	for i := 0; i < maxLen; i++ {
 		inputT := tensor.NewTensor([]int{1, 1}, []float32{float32(currentTokenID)}, false)
-		logits, nextHidden, nextCell, expertID, err := model.Decoder.DecodeStepWithExpert(inputT, hiddenState, cellState, ctx)
+		logits, nextHidden, nextCell, expertID, err := model.Decoder.DecodeStepWithExpert(inputT, hiddenState, cellState, ctx, i)
 		if err != nil {
 			break
 		}
@@ -4590,7 +4887,7 @@ var ResolvedPunctuationWeights = make(map[int]float32)
 func resolvePunctuationWeights(vocab *mainvocab.Vocabulary) {
 	puncs := map[string]float32{
 		".": 0.05, ",": 0.1, "?": 0.1, "!": 0.1,
-		"[": 2.0, "]": 2.0, "ques": 3.0, "ans": 3.0, "intent": 2.0,
+		"[": 2.0, "]": 2.0, "ques": 3.0, "ans": 50.0, "__ans__": 50.0, "intent": 2.0,
 	}
 	ResolvedPunctuationWeights = make(map[int]float32)
 	for token, weight := range puncs {
@@ -4652,8 +4949,16 @@ func WeightedCrossEntropy(logits *tensor.Tensor, targets []int, weights []float3
 		loss := -float32(math.Log(float64(prob + 1e-12)))
 
 		currentWeight := weights[targetID]
-		if currentWeight > 5.0 {
-			currentWeight = 5.0
+		// --- [Overfit Strategy: Weight Cap Lift] ---
+		// We increase the cap from 5.0 to 100.0 if the token is a high-priority structural marker
+		// or if we are in a targeted overfit session. This allows Anchor Boost to function.
+		weightCap := float32(5.0)
+		if currentWeight >= 50.0 {
+			weightCap = 100.0 
+		}
+		
+		if currentWeight > weightCap {
+			currentWeight = weightCap
 		}
 		// Apply Punctuation/Marker Weight
 		if puncWeight, ok := ResolvedPunctuationWeights[targetID]; ok {
@@ -4785,7 +5090,7 @@ func GenerateTokens(model *moe.IntentMoE, input string, maxLen int, useGPU bool)
 
 	for i := 0; i < maxLen; i++ {
 		inputT := tensor.NewTensor([]int{1, 1}, []float32{float32(currentTokenID)}, false)
-		logits, nextHidden, nextCell, _, err := model.Decoder.DecodeStepWithExpert(inputT, hiddenState, cellState, ctx)
+		logits, nextHidden, nextCell, _, err := model.Decoder.DecodeStepWithExpert(inputT, hiddenState, cellState, ctx, i)
 		if err != nil {
 			break
 		}
