@@ -36,11 +36,20 @@ type TrainingConfig struct {
 	K                   int     `json:"k"`
 	RepetitionPenalty   float32 `json:"repetition_penalty"`
 	EntropyWeight       float32 `json:"entropy_weight"`
+	GatingEntropyWeight    float32 `json:"gating_entropy_weight"`
+	ContextMultiplierDecay float32 `json:"context_multiplier_decay"`
+	StructuralRoutingWeight float32 `json:"structural_routing_weight"`
+	StructuralBiasIntensity float32 `json:"structural_bias_intensity"`
+	UnkPenalty             float32 `json:"unk_penalty"`
+	ExpertRegularizationWeight float32 `json:"expert_regularization_weight"`
+	ExpertSparsityWeight       float32 `json:"expert_sparsity_weight"`
+	TokenWeights           map[string]float32 `json:"token_weights"`
 }
 
 type SafeConfig struct {
 	sync.RWMutex
-	Config TrainingConfig
+	Config         TrainingConfig
+	lastReloadTime time.Time
 }
 
 func NewSafeConfig(path string) (*SafeConfig, error) {
@@ -87,6 +96,15 @@ func (s *SafeConfig) WatchConfig(path string) error {
 				// Watch for Write or Rename/Create (atomic saves often involve renames)
 				if (event.Op&fsnotify.Write == fsnotify.Write || event.Op&fsnotify.Create == fsnotify.Create) && 
 				   filepath.Base(event.Name) == filename {
+					// Debounce: prevent multiple reloads within a short window
+					s.Lock()
+					lastReload := s.lastReloadTime
+					s.lastReloadTime = time.Now()
+					s.Unlock()
+					
+					if time.Since(lastReload) < 500 * time.Millisecond {
+						continue
+					}
 					
 					// Small delay to ensure the file is completely written/closed
 					time.Sleep(200 * time.Millisecond)

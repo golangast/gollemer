@@ -18,6 +18,7 @@ type TrainingMetrics struct {
 	TestResults       []TestProbeResult
 	LayerResets       []map[int]int // Per-layer expert reset counts
 	LayerUsage        []map[int]int // Per-layer expert utilization
+	OverfitMode       bool
 }
 
 type TestProbeResult struct {
@@ -28,66 +29,299 @@ type TestProbeResult struct {
 
 type SurgeryPerformer interface {
 	PerformSurgery(layerIdx, alphaID, sinkID int)
+	HealExpert(layerIdx, expertIdx int, alphaIDs []int)
+	SetHealthyExperts(layerIdx int, expertIDs []int)
+}
+
+// expertRecord tracks cumulative health and recovery cooldowns for one expert.
+type expertRecord struct {
+	Health      float32 // EMA health score
+	UsageEMA    float32 // EMA of how often it gets used
+	HealCount   int     // How many times it has been healed
+	CooldownEpochs int  // Epochs remaining before healing can be triggered again
+	TrendDown   int     // Consecutive epochs with negative health delta
 }
 
 type HyperparameterExpert struct {
 	SafeCfg      *SafeConfig
-	ExpertHealth map[int]float32 // expertID -> grammar contribution score
+	ExpertHealth map[int]float32    // deprecated alias — kept for backward compat
+	records      map[int]*expertRecord
+	BoostEpochs  int
+	// Trend tracking
+	lossHistory  []float32
+	grammarHistory []float32
+	simHistory   []float32
+	// Running averages across epochs
+	epochsElapsed int
 }
 
 func NewHyperparameterExpert(cfg *SafeConfig) *HyperparameterExpert {
 	return &HyperparameterExpert{
 		SafeCfg:      cfg,
 		ExpertHealth: make(map[int]float32),
+		records:      make(map[int]*expertRecord),
 	}
 }
 
-// Step is the high-level Supervisor logic called at the end of every epoch
-func (e *HyperparameterExpert) Step(metrics TrainingMetrics, surgery SurgeryPerformer) {
-	// 1. Update Expert Health based on test paths and scores
-	e.UpdateHealth(metrics)
+func (e *HyperparameterExpert) getRecord(id int) *expertRecord {
+	if r, ok := e.records[id]; ok {
+		return r
+	}
+	r := &expertRecord{Health: 0.0, UsageEMA: 0.1}
+	e.records[id] = r
+	return r
+}
 
-	// 2. ANALYZE & MUTATE
+// Step is the high-level Supervisor logic called at the end of every epoch.
+func (e *HyperparameterExpert) Step(metrics TrainingMetrics, surgery SurgeryPerformer) {
+	e.epochsElapsed++
+
+	// Tick down cooldowns
+	for _, r := range e.records {
+		if r.CooldownEpochs > 0 {
+			r.CooldownEpochs--
+		}
+	}
+
+	// 1. Update expert health with momentum-aware scoring
+	e.updateHealthMomentum(metrics)
+
+	// 2. Track trends (loss/grammar/sim) for smarter decisions
+	e.trackTrends(metrics)
+
+	// 3. Analyze & mutate hyperparameters
 	e.AnalyzeAndAdjust(metrics)
-	
-	// 3. VERIFY: Expert Path Check
+
+	// 4. Verify routing paths
 	e.VerifyExpertPaths(metrics)
 
-	// 4. SURGERY: If we have consistent sinks, perform cloning
-	if metrics.Epoch > 50 && metrics.SemanticSinksHits > 0 {
+	// 5. SURGERY: Clone strong experts into collapsed ones (after warmup)
+	if metrics.Epoch > 50 && metrics.SemanticSinksHits > 0 && !metrics.OverfitMode {
 		e.PerformSurgery(metrics, surgery)
 	}
 
-	// 5. AUTO-STOP: If loss is low and grammar is high, stop training
+	// 6. HEALING: Blend-reset experts that are critically unhealthy
+	e.runHealingPass(metrics, surgery)
+
+	// 7. Propagate healthy expert set to all layers for regularization
+	e.propagateHealthyExperts(metrics, surgery)
+
+	// 8. AUTO-STOP: Maturation check
 	if metrics.AverageLoss < 0.2 && metrics.GrammarScore > 25.0 {
-		fmt.Printf("\n🎓 [Supervisor] BRAIN MATURATION COMPLETE! Loss: %.4f | Grammar: %.1f\n", 
+		fmt.Printf("\n🎓 [Supervisor] BRAIN MATURATION COMPLETE! Loss: %.4f | Grammar: %.1f\n",
 			metrics.AverageLoss, metrics.GrammarScore)
 		fmt.Println("🚀 Triggering Graceful Shutdown.")
 		os.Exit(0)
 	}
 }
 
-// UpdateHealth correlates expert paths with overall epoch success
-func (e *HyperparameterExpert) UpdateHealth(metrics TrainingMetrics) {
+// updateHealthMomentum updates per-expert health using a momentum-weighted EMA.
+// Experts that appear in coherent response paths get rewarded; those absent get penalized.
+func (e *HyperparameterExpert) updateHealthMomentum(metrics TrainingMetrics) {
+	// Determine overall training quality this epoch
+	const (
+		healthDecay   = 0.92 // EMA decay for health
+		usageDecay    = 0.90
+	)
+
+	// Quality signal: combined score normalized to [-1, +1]
+	quality := float32(0)
+	if metrics.GrammarScore > 0 {
+		quality += (metrics.GrammarScore/30.0)*0.5 - 0.25 // grammar: 0..30 → -0.25..+0.25
+	}
+	if metrics.SimilarityScore > 0 {
+		quality += (metrics.SimilarityScore/100.0)*0.5 - 0.25 // sim: 0..100% → -0.25..+0.25
+	}
+	if metrics.AverageLoss < 5.0 {
+		quality += 0.3 // Loss is getting reasonable
+	}
+
+	expertsSeen := make(map[int]bool)
 	for _, res := range metrics.TestResults {
-		// Parse expert IDs from path: "word(E1+E8) -> word(E4+E12)"
 		experts := e.parseExpertsFromPath(res.Path)
-		
-		// If the response is semi-coherent, reward the experts
-		reward := float32(0.01)
-		if metrics.GrammarScore < 10.0 {
-			reward = -0.01
-		}
-		
 		for _, eid := range experts {
-			e.ExpertHealth[eid] += reward
+			expertsSeen[eid] = true
+		}
+	}
+
+	// Update records
+	for _, res := range metrics.TestResults {
+		experts := e.parseExpertsFromPath(res.Path)
+		for _, eid := range experts {
+			r := e.getRecord(eid)
+			delta := quality * 0.6 // scale reward
+			r.Health = r.Health*healthDecay + delta*(1-healthDecay)
+			r.UsageEMA = r.UsageEMA*usageDecay + 1.0*(1-usageDecay)
+			e.ExpertHealth[eid] = r.Health
+		}
+	}
+
+	// Penalize experts never seen in any test path this epoch
+	for id, r := range e.records {
+		if !expertsSeen[id] {
+			r.Health = r.Health*healthDecay + (-0.05)*(1-healthDecay)
+			r.UsageEMA = r.UsageEMA * usageDecay
+			r.TrendDown++
+			e.ExpertHealth[id] = r.Health
+		} else {
+			r.TrendDown = 0
 		}
 	}
 }
 
+func (e *HyperparameterExpert) trackTrends(metrics TrainingMetrics) {
+	const maxHistory = 10
+	e.lossHistory = append(e.lossHistory, metrics.AverageLoss)
+	e.grammarHistory = append(e.grammarHistory, metrics.GrammarScore)
+	e.simHistory = append(e.simHistory, metrics.SimilarityScore)
+	if len(e.lossHistory) > maxHistory {
+		e.lossHistory = e.lossHistory[len(e.lossHistory)-maxHistory:]
+		e.grammarHistory = e.grammarHistory[len(e.grammarHistory)-maxHistory:]
+		e.simHistory = e.simHistory[len(e.simHistory)-maxHistory:]
+	}
+}
+
+// lossImproving returns true if the last N epochs show a downward loss trend.
+func (e *HyperparameterExpert) lossImproving(n int) bool {
+	h := e.lossHistory
+	if len(h) < n+1 {
+		return false
+	}
+	h = h[len(h)-n-1:]
+	return h[n] < h[0]
+}
+
+// grammarStagnant returns true if grammar hasn't improved in n epochs.
+func (e *HyperparameterExpert) grammarStagnant(n int) bool {
+	h := e.grammarHistory
+	if len(h) < n {
+		return false
+	}
+	h = h[len(h)-n:]
+	max := h[0]
+	for _, v := range h {
+		if v > max {
+			max = v
+		}
+	}
+	// Stagnant if best in window equals first value (no improvement)
+	return max <= h[0]+0.5
+}
+
+// runHealingPass triggers genetic blending for critically unhealthy experts.
+func (e *HyperparameterExpert) runHealingPass(metrics TrainingMetrics, surgery SurgeryPerformer) {
+	// Build sorted list of healthiest experts to use as anchors
+	type rank struct {
+		id     int
+		health float32
+	}
+	var allRanks []rank
+	for id, r := range e.records {
+		allRanks = append(allRanks, rank{id, r.Health})
+	}
+	sort.Slice(allRanks, func(i, j int) bool { return allRanks[i].health > allRanks[j].health })
+
+	// Global anchor pool: top 3 healthy experts
+	var globalAnchors []int
+	for _, r := range allRanks {
+		if r.health > -0.2 && len(globalAnchors) < 3 {
+			globalAnchors = append(globalAnchors, r.id)
+		}
+	}
+	if len(globalAnchors) == 0 {
+		globalAnchors = []int{14, 9} // Structural defaults: GREET, VERB
+	}
+
+	criticalThreshold := float32(-1.0)
+
+	for id, r := range e.records {
+		if r.Health >= criticalThreshold {
+			continue
+		}
+		if r.CooldownEpochs > 0 {
+			fmt.Printf("🏥 [Supervisor] Expert E%d health critical (%.2f) but on cooldown (%d epochs).\n",
+				id, r.Health, r.CooldownEpochs)
+			continue
+		}
+
+		fmt.Printf("🏥 [Supervisor] Expert E%d health is critical (%.2f). Triggering Healing pass.\n", id, r.Health)
+
+		// Reset health to break the trigger cycle
+		r.Health = 0.0
+		e.ExpertHealth[id] = 0.0
+		r.HealCount++
+		// Cooldown grows with each successive healing (max 5 epochs)
+		r.CooldownEpochs = 1 + r.HealCount
+		if r.CooldownEpochs > 5 {
+			r.CooldownEpochs = 5
+		}
+
+		// Use per-expert anchors: prefer experts that are healthy AND different from the sick one
+		anchors := make([]int, 0, 3)
+		for _, rk := range allRanks {
+			if rk.id != id && rk.health > -0.1 && len(anchors) < 3 {
+				anchors = append(anchors, rk.id)
+			}
+		}
+		if len(anchors) == 0 {
+			anchors = globalAnchors
+		}
+
+		for lIdx := range metrics.LayerUsage {
+			surgery.HealExpert(lIdx, id, anchors)
+		}
+	}
+}
+
+// propagateHealthyExperts updates all layers with the current healthy expert set.
+func (e *HyperparameterExpert) propagateHealthyExperts(metrics TrainingMetrics, surgery SurgeryPerformer) {
+	type healthRank struct {
+		id    int
+		score float32
+	}
+	ranks := []healthRank{}
+	for id, s := range e.ExpertHealth {
+		ranks = append(ranks, healthRank{id, s})
+	}
+	sort.Slice(ranks, func(i, j int) bool { return ranks[i].score > ranks[j].score })
+
+	healthyIDs := []int{}
+	// Always try the grammar anchors first
+	for _, id := range []int{14, 9} {
+		if e.ExpertHealth[id] > -0.5 {
+			healthyIDs = append(healthyIDs, id)
+		}
+	}
+	// Add top performers
+	for i := 0; i < 3 && i < len(ranks); i++ {
+		if ranks[i].score > 0.1 {
+			found := false
+			for _, hid := range healthyIDs {
+				if hid == ranks[i].id {
+					found = true
+					break
+				}
+			}
+			if !found {
+				healthyIDs = append(healthyIDs, ranks[i].id)
+			}
+		}
+	}
+
+	if len(healthyIDs) > 0 {
+		for lIdx := range metrics.LayerUsage {
+			surgery.SetHealthyExperts(lIdx, healthyIDs)
+		}
+	}
+}
+
+// UpdateHealth is the legacy method kept for compatibility.
+func (e *HyperparameterExpert) UpdateHealth(metrics TrainingMetrics) {
+	e.updateHealthMomentum(metrics)
+}
+
 func (e *HyperparameterExpert) parseExpertsFromPath(path string) []int {
 	var experts []int
-	// Simple parsing for E[number]
 	parts := strings.Split(path, "E")
 	for i := 1; i < len(parts); i++ {
 		var id int
@@ -99,62 +333,151 @@ func (e *HyperparameterExpert) parseExpertsFromPath(path string) []int {
 	return experts
 }
 
-// AnalyzeAndAdjust reads the latest training metrics and tweaks variables on-the-fly
+// AnalyzeAndAdjust reads the latest training metrics and tweaks hyperparameters on-the-fly.
 func (e *HyperparameterExpert) AnalyzeAndAdjust(metrics TrainingMetrics) {
 	e.SafeCfg.Update(func(cfg *TrainingConfig) {
-		fmt.Printf("\n🧠 [Supervisor Analyze] Epoch %d | Loss: %.4f | Grammar: %.1f | Similarity: %.1f%%\n", 
-			metrics.Epoch, metrics.AverageLoss, metrics.GrammarScore, metrics.SimilarityScore)
+		fmt.Printf("\n🧠 [Supervisor Analyze] Epoch %d | Loss: %.4f | Grammar: %.1f | Similarity: %.1f%% | UnkPen: %.3f | BiasInt: %.1f\n",
+			metrics.Epoch, metrics.AverageLoss, metrics.GrammarScore, metrics.SimilarityScore, cfg.UnkPenalty, cfg.StructuralBiasIntensity)
 
-		// Log Health for top experts
-		type healthRank struct { id int; score float32 }
-		ranks := []healthRank{}
-		for id, s := range e.ExpertHealth { ranks = append(ranks, healthRank{id, s}) }
+		// Log top-3 and bottom-3 expert health
+		type healthRank struct{ id int; score float32 }
+		var ranks []healthRank
+		for id, s := range e.ExpertHealth {
+			ranks = append(ranks, healthRank{id, s})
+		}
 		sort.Slice(ranks, func(i, j int) bool { return ranks[i].score > ranks[j].score })
-		
+
 		fmt.Print("🏥 Expert Health: ")
 		for i := 0; i < 3 && i < len(ranks); i++ {
 			fmt.Printf("E%d(%.2f) ", ranks[i].id, ranks[i].score)
 		}
+		if len(ranks) > 6 {
+			fmt.Print("... ")
+			for i := len(ranks) - 3; i < len(ranks); i++ {
+				fmt.Printf("E%d(%.2f) ", ranks[i].id, ranks[i].score)
+			}
+		}
 		fmt.Println()
 
-		// A. Detect "Mumbling" (Word Salad)
-		if metrics.GrammarScore < 15.0 && metrics.Epoch > 50 {
-			cfg.ContextMultiplier = min(30.0, cfg.ContextMultiplier+0.5)
-			cfg.RouterTemperature = max(0.5, cfg.RouterTemperature*0.98)
-			fmt.Printf("📝 Detect Mumbling: Increased ContextMultiplier to %.1f, Sharpened Temp to %.2f\n", 
+		// ── OverfitMode: Lockdown ───────────────────────────────────────────
+		if cfg.OverfitMode {
+			fmt.Println("🎯 Supervisor: OverfitMode active. Lockdown engaged.")
+			cfg.RouterNoise = 0.0
+			cfg.RouterTemperature = 0.1
+			return
+		}
+
+		// ── Exploration Boost ───────────────────────────────────────────────
+		if e.BoostEpochs > 0 {
+			fmt.Printf("🔥 [Supervisor] EXPLORATION BOOST: %d epochs remaining\n", e.BoostEpochs)
+			cfg.RouterTemperature = 0.7
+			cfg.RouterNoise = 0.06
+			e.BoostEpochs--
+			return
+		}
+
+		// Trigger exploration boost for chronic word salad
+		if metrics.Epoch > 30 && metrics.GrammarScore < 10.0 && e.BoostEpochs == 0 && e.grammarStagnant(5) {
+			fmt.Println("🚨 [Supervisor] Grammar stagnant. Triggering 8-epoch Exploration Boost.")
+			e.BoostEpochs = 8
+		}
+
+		// ── A: Context Multiplier — boost if model is mumbling ────────────
+		if metrics.GrammarScore < 15.0 && metrics.Epoch > 20 {
+			cfg.ContextMultiplier = min32(30.0, cfg.ContextMultiplier+0.3)
+			cfg.RouterTemperature = max32(0.5, cfg.RouterTemperature*0.97)
+			fmt.Printf("📝 Mumbling: ContextMultiplier→%.1f, Temp→%.2f\n",
 				cfg.ContextMultiplier, cfg.RouterTemperature)
+		} else if metrics.GrammarScore >= 20.0 {
+			// Cool down temperature as model matures
+			cfg.RouterTemperature = max32(0.4, cfg.RouterTemperature*0.99)
 		}
 
-		// B. Tackle Semantic Sinks / Expert Collapse
+		// ── B: Expert Collapse ────────────────────────────────────────────
 		if metrics.SemanticSinksHits > 2 {
-			cfg.RouterNoise = min(0.50, cfg.RouterNoise+0.05)
-			cfg.LoadBalancingWeight = min(1.0, cfg.LoadBalancingWeight+0.02)
-			fmt.Printf("⚠️  Sink Detected! Increased Router Noise to %.3f, LBW to %.3f\n", 
-				cfg.RouterNoise, cfg.LoadBalancingWeight)
+			cfg.RouterNoise = min32(0.50, cfg.RouterNoise+0.04)
+			cfg.LoadBalancingWeight = min32(1.0, cfg.LoadBalancingWeight+0.02)
+			fmt.Printf("⚠️  Sink: Noise→%.3f, LBW→%.3f\n", cfg.RouterNoise, cfg.LoadBalancingWeight)
+		} else if metrics.GatingEntropy > 3.0 {
+			// Good entropy: dial down noise slightly to let routing solidify
+			cfg.RouterNoise = max32(0.01, cfg.RouterNoise*0.97)
 		}
 
-		// C. Adjust Learning Rate based on plateauing
-		if metrics.AverageLoss > 5.5 && metrics.Epoch > 20 {
-			cfg.LearningRate = max(1e-6, cfg.LearningRate*0.95)
-			fmt.Printf("📉 Plateau detected. Scaled down Learning Rate to %e\n", cfg.LearningRate)
+		// ── C: Learning Rate — plateau detection ──────────────────────────
+		if metrics.AverageLoss > 5.5 && metrics.Epoch > 20 && !e.lossImproving(3) {
+			cfg.LearningRate = max32(1e-6, cfg.LearningRate*0.93)
+			fmt.Printf("📉 Plateau: LR→%e\n", cfg.LearningRate)
+		} else if metrics.AverageLoss < 3.0 && e.lossImproving(5) && metrics.Epoch > 50 {
+			// Loss is improving well — allow slight LR recovery
+			cfg.LearningRate = min32(cfg.LearningRate*1.05, 5e-4)
+		}
+
+		// ── D: Structural Routing Bias Decay ─────────────────────────────
+		if metrics.GrammarScore >= 20.0 {
+			decay := 5.0 - (metrics.GrammarScore-20.0)*0.4
+			if decay < 1.0 {
+				decay = 1.0
+			}
+			cfg.StructuralRoutingWeight = decay
+			fmt.Printf("📉 Bias Decay: StructuralRoutingWeight→%.2f\n", cfg.StructuralRoutingWeight)
+			
+			// Also decay the bias intensity to let the model "learn for real"
+			cfg.StructuralBiasIntensity = max32(2.0, 8.0 - (metrics.GrammarScore-20.0)*0.5)
+		} else {
+			cfg.StructuralRoutingWeight = 5.0
+			cfg.StructuralBiasIntensity = 4.0
+		}
+
+		// ── UNK Penalty ──────────────────────────────────────────────────
+		if metrics.GrammarScore < 10.0 {
+			cfg.UnkPenalty = 0.15 // Standard suppression
+		} else if metrics.GrammarScore > 20.0 {
+			cfg.UnkPenalty = 0.005 // Extreme suppression to force variety
+		}
+
+		// ── E: Similarity-driven feedback ────────────────────────────────
+		if metrics.SimilarityScore < 5.0 && metrics.Epoch > 20 {
+			cfg.ContextMultiplier = min32(40.0, cfg.ContextMultiplier+0.5)
+			fmt.Printf("🎯 Low Similarity (%.1f%%): ContextMultiplier→%.1f\n",
+				metrics.SimilarityScore, cfg.ContextMultiplier)
+		} else if metrics.SimilarityScore > 30.0 {
+			cfg.StructuralRoutingWeight = max32(1.0, cfg.StructuralRoutingWeight*0.98)
+		}
+
+		// ── F: LR Defibrillation — escape deep local minima ──────────────
+		// When LR has decayed below 5e-06 AND grammar is stuck below 15, shock the weights.
+		if cfg.LearningRate < 5e-6 && metrics.GrammarScore < 15.0 && metrics.Epoch > 50 && e.grammarStagnant(5) {
+			cfg.LearningRate = 8e-5
+			fmt.Printf("⚡ [Supervisor] LR Defibrillation! Bumping LR 1e-06→8e-05 to escape local minima.\n")
+		}
+
+		// ── G: Expert Regularization (enable after warmup) ───────────────
+		if metrics.Epoch > 80 && cfg.ExpertRegularizationWeight == 0 {
+			cfg.ExpertRegularizationWeight = 0.001
+			fmt.Println("✅ Expert regularization enabled.")
+		}
+
+		// ── H: Noise Decay — once model is stable, taper noise ───────────
+		if metrics.GrammarScore > 18.0 && metrics.SimilarityScore > 15.0 {
+			cfg.RouterNoise = max32(0.005, cfg.RouterNoise*0.97)
+			fmt.Printf("🔕 Stable: Router noise decayed to %.4f\n", cfg.RouterNoise)
 		}
 	})
-	
-	// PERSIST
+
+	// Persist config
 	e.SafeCfg.RLock()
 	data, _ := json.MarshalIndent(e.SafeCfg.Config, "", "  ")
 	_ = os.WriteFile("data/config/social_train.json", data, 0644)
 	e.SafeCfg.RUnlock()
 }
 
-// PerformSurgery identifies alpha and sink experts and triggers cloning
+// PerformSurgery identifies alpha and sink experts and triggers cloning.
 func (e *HyperparameterExpert) PerformSurgery(metrics TrainingMetrics, surgery SurgeryPerformer) {
 	if surgery == nil {
 		return
 	}
 
 	for lIdx, resets := range metrics.LayerResets {
-		// Find worst expert in this layer (most resets)
 		worstID := -1
 		maxResets := 0
 		for eid, count := range resets {
@@ -163,41 +486,79 @@ func (e *HyperparameterExpert) PerformSurgery(metrics TrainingMetrics, surgery S
 				worstID = eid
 			}
 		}
+		if worstID == -1 || maxResets <= 1 {
+			continue
+		}
 
-		if worstID != -1 && maxResets > 1 {
-			// Find best expert (Alpha) - the one with highest health
-			bestID := -1
-			maxHealth := float32(-1e9)
-			for eid, health := range e.ExpertHealth {
-				if health > maxHealth {
-					maxHealth = health
-					bestID = eid
-				}
+		// Alpha: highest-health expert that is NOT the worst AND has positive health.
+		// If no expert is healthy enough, skip surgery to avoid sick→sick cloning.
+		bestID := -1
+		maxHealth := float32(-0.1) // minimum threshold: must be at least slightly positive
+		for eid, r := range e.records {
+			if eid == worstID {
+				continue
 			}
-			
-			if bestID != -1 && bestID != worstID {
-				surgery.PerformSurgery(lIdx, bestID, worstID)
+			if r.Health > maxHealth {
+				maxHealth = r.Health
+				bestID = eid
 			}
+		}
+
+		if bestID != -1 {
+			fmt.Printf("🔬 [Supervisor Surgery] Layer %d: Cloning E%d (health=%.2f) → E%d (resets=%d)\n",
+				lIdx, bestID, maxHealth, worstID, maxResets)
+			surgery.PerformSurgery(lIdx, bestID, worstID)
+		} else {
+			fmt.Printf("⏭️ [Supervisor Surgery] Layer %d: Skipping — no healthy alpha available (all experts sick)\n", lIdx)
 		}
 	}
 }
 
-// VerifyExpertPaths checks if the routing decisions make linguistic sense
+// VerifyExpertPaths checks if routing decisions make linguistic sense.
 func (e *HyperparameterExpert) VerifyExpertPaths(metrics TrainingMetrics) {
 	for _, res := range metrics.TestResults {
 		isQuestion := strings.Contains(strings.ToLower(res.Prompt), "__ques__")
 		if isQuestion {
+			// Check for PRON (E8) or AUX (E10) experts in question context
 			hasQuestionExpert := strings.Contains(res.Path, "E8") || strings.Contains(res.Path, "E10")
+			
+			// Relational check: Does it have a structure like PRON -> AUX or PRON -> VERB?
+			hasRelation := (strings.Contains(res.Path, "E8") && strings.Contains(res.Path, "E10")) ||
+				(strings.Contains(res.Path, "E8") && strings.Contains(res.Path, "E9"))
+
 			if !hasQuestionExpert && metrics.Epoch > 100 {
-				fmt.Printf("🕵️ [Supervisor Verify] Question Path Nonsense: '%s' (Path: %s). Path lacks PRON/AUX specialization.\n", 
+				fmt.Printf("🕵️ [Supervisor Verify] Question lacks PRON/AUX expert: '%s' (Path: %s)\n",
 					res.Prompt, res.Path)
 				e.SafeCfg.Update(func(cfg *TrainingConfig) {
-					cfg.LoadBalancingWeight = min(1.0, cfg.LoadBalancingWeight + 0.01)
+					cfg.LoadBalancingWeight = min32(1.0, cfg.LoadBalancingWeight+0.01)
+					cfg.StructuralRoutingWeight = min32(10.0, cfg.StructuralRoutingWeight+0.5)
+				})
+			}
+
+			if !hasRelation && metrics.Epoch > 150 {
+				fmt.Printf("🕵️ [Supervisor Verify] Weak token relations (No PRON-AUX/VERB link): '%s'\n", res.Prompt)
+				// Nudge the model to care more about structure
+				e.SafeCfg.Update(func(cfg *TrainingConfig) {
+					cfg.EntropyWeight = min32(0.5, cfg.EntropyWeight+0.005)
 				})
 			}
 		}
 	}
 }
 
-func min(a, b float32) float32 { if a < b { return a }; return b }
-func max(a, b float32) float32 { if a > b { return a }; return b }
+func min32(a, b float32) float32 {
+	if a < b {
+		return a
+	}
+	return b
+}
+func max32(a, b float32) float32 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+// Keep old names to avoid breaking any callers from the old code.
+func min(a, b float32) float32 { return min32(a, b) }
+func max(a, b float32) float32 { return max32(a, b) }

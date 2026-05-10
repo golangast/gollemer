@@ -12,14 +12,12 @@ import (
 )
 
 // RouterNoiseFactor controls the magnitude of random noise added during routing.
-// Increased to 2.0 to aggressively break expert monopoly and word salad collapse.
-var RouterNoiseFactor float32 = 2.0
+// Defaulted to 0.0 for Overfit Strategy (memorization test).
+var RouterNoiseFactor float32 = 0.0
 
 // SetRouterNoiseFactor updates the global router noise magnitude.
 func SetRouterNoiseFactor(v float32) {
-    if v > 0 {
-        RouterNoiseFactor = v
-    }
+	RouterNoiseFactor = v
 }
 
 type GatingNetwork struct {
@@ -81,22 +79,19 @@ func (gn *GatingNetwork) Forward(inputs ...*tensor.Tensor) (*tensor.Tensor, erro
 	input := inputs[0]
 	gn.inputTensor = input
 
-	// 🛡️ The Stability Floor (Prevent division by zero and Expert Collapse)
+	// 🛡️ The Stability Floor
 	inputNorm := input.L2Norm()
 	if inputNorm < 1e-8 {
-		// Inject a tiny bit of jitter to "wake up" the signal if it has collapsed
 		input.AddJitter(1e-6)
 		inputNorm = 1e-8
 	}
 
-	// Work with the stable, normalized signal for gating
 	scaledInput := input
 	if inputNorm != 1.0 {
 		scaledInput = input.Scale(1.0 / inputNorm)
 	}
 
-	// Determine dimensions.
-	numExperts := gn.Linear.Weights.Shape[1] // [inputDim, numExperts]
+	numExperts := gn.Linear.Weights.Shape[1]
 	inputDim := gn.Linear.Weights.Shape[0]
 
 	var numTokens = 0
@@ -105,12 +100,10 @@ func (gn *GatingNetwork) Forward(inputs ...*tensor.Tensor) (*tensor.Tensor, erro
 
 	switch len(scaledInput.Shape) {
 	case 2:
-		// [batchSize, inputDim]
 		numTokens = scaledInput.Shape[0]
 		logitsShape = []int{numTokens, numExperts}
 		inputFlat = scaledInput.Data
 	case 3:
-		// [batchSize, seqLength, inputDim]
 		numTokens = scaledInput.Shape[0] * scaledInput.Shape[1]
 		logitsShape = []int{scaledInput.Shape[0], scaledInput.Shape[1], numExperts}
 		inputFlat = scaledInput.Data
@@ -118,32 +111,17 @@ func (gn *GatingNetwork) Forward(inputs ...*tensor.Tensor) (*tensor.Tensor, erro
 		return nil, fmt.Errorf("GatingNetwork.Forward: unsupported input shape %v", input.Shape)
 	}
 
-	// Allocate output (logits before bias).
+	// 1. Compute Base Logits
 	logitsData := make([]float32, numTokens*numExperts)
+	computeRouterLogitsSIMD(inputFlat, gn.Linear.Weights.Data, numTokens, numExperts, inputDim, logitsData)
 
-	// ── SIMD-accelerated router logit computation ─────────────────────────
-	computeRouterLogitsSIMD(
-		inputFlat,
-		gn.Linear.Weights.Data,
-		numTokens, numExperts, inputDim,
-		logitsData,
-	)
-
-	// 🛡️ Stability Hack: Scaling + Logit Clipping
-	// Scaling by 1/sqrt(inputDim) keeps the variance of logits under control,
-	// preventing 'Expert Monopolies' and large gradients during backprop.
-	// We also clip to [-25, 25] to prevent softmax saturation.
+	// Apply Scaling & Clipping
 	scaleFactor := float32(1.0 / math.Sqrt(float64(inputDim)))
 	for i := range logitsData {
 		logitsData[i] *= scaleFactor
-		if logitsData[i] > 25.0 {
-			logitsData[i] = 25.0
-		} else if logitsData[i] < -25.0 {
-			logitsData[i] = -25.0
-		}
 	}
 
-	// Add bias (broadcast over tokens).
+	// Add Bias
 	if gn.Linear.Biases != nil {
 		biasData := gn.Linear.Biases.Data
 		for t := 0; t < numTokens; t++ {
@@ -153,21 +131,34 @@ func (gn *GatingNetwork) Forward(inputs ...*tensor.Tensor) (*tensor.Tensor, erro
 			}
 		}
 	}
-	
-	// 🛡️ NUMERICAL SAFETY: Clip logits to prevent exp() from exploding in Softmax or LayerNorm
-	for i := range logitsData {
-		v := logitsData[i]
-		if math.IsNaN(float64(v)) || math.IsInf(float64(v), 0) {
-			// If we hit NaNs, reset this token's preference to small noise
-			logitsData[i] = (rand.Float32() * 0.02) - 0.01 
-		} else {
-			if v > 50.0 { logitsData[i] = 50.0 }
-			if v < -50.0 { logitsData[i] = -50.0 }
-		}
-	}
 
 	logits := tensor.NewTensor(logitsShape, logitsData, input.RequiresGrad || gn.Linear.Weights.RequiresGrad)
 	gn.logitsTensor = logits
+
+	// 2. NOISY TOP-K: Compute Noise Scale via NoiseLinear
+	if gn.Training && gn.NoiseLinear != nil {
+		noiseLogitsData := make([]float32, numTokens*numExperts)
+		computeRouterLogitsSIMD(inputFlat, gn.NoiseLinear.Weights.Data, numTokens, numExperts, inputDim, noiseLogitsData)
+		
+		// noise_scale = Softplus(noise_logits)
+		// We approximate Softplus here for performance
+		for i := range noiseLogitsData {
+			v := float64(noiseLogitsData[i])
+			if v > 20 {
+				noiseLogitsData[i] = float32(v)
+			} else {
+				noiseLogitsData[i] = float32(math.Log(1.0 + math.Exp(v)))
+			}
+		}
+		
+		gn.noiseLogitsTensor = tensor.NewTensor(logitsShape, noiseLogitsData, gn.NoiseLinear.Weights.RequiresGrad)
+		
+		// logits = logits + StandardNormal() * noise_scale
+		for i := range logits.Data {
+			noise := float32(rand.NormFloat64())
+			logits.Data[i] += noise * gn.noiseLogitsTensor.Data[i]
+		}
+	}
 
 	// Apply LayerNorm for stability
 	normalized, err := gn.LayerNorm.Forward(logits)
@@ -175,26 +166,11 @@ func (gn *GatingNetwork) Forward(inputs ...*tensor.Tensor) (*tensor.Tensor, erro
 		return nil, fmt.Errorf("layer norm forward failed: %w", err)
 	}
 
-	// 🎲 NOISE INJECTION AFTER LAYERNORM (Crucial to break ties)
-	// We add noise here so LayerNorm doesn't wash it out or rescale it.
-	normData := normalized.Data
-	if gn.Training {
-		for i := range normData {
-			normData[i] += (rand.Float32() - 0.5) * RouterNoiseFactor
-		}
-	} else {
-		// Inference: NO Jitter for memorization tasks.
-		// If we need exploration during inference, we should use temperature/top-p on the output,
-		// not noise on the router.
-	}
-
 	if normalized.RequiresGrad {
 		normalized.Creator = gn
 	}
-
 	gn.outputTensor = normalized
 
-	// Clean up intermediate scaled input if it was a new tensor (not the same as input)
 	if scaledInput != nil && scaledInput != input {
 		scaledInput.Release()
 	}
@@ -345,7 +321,10 @@ func (gn *GatingNetwork) Parameters() []*tensor.Tensor {
 
 // CalculateDiversityLoss calculates the load balancing penalty based on routing distribution.
 // It punishes the network if it starts relying too heavily on a few experts (Alpha Dominance).
-func (gn *GatingNetwork) CalculateDiversityLoss() float32 {
+// CalculateCVLoss implements the Coefficient of Variation load balancing loss.
+// It penalizes the variance of expert utilization across the batch.
+// CV = std(load) / mean(load)
+func (gn *GatingNetwork) CalculateCVLoss() float32 {
 	if gn.outputTensor == nil {
 		return 0
 	}
@@ -360,40 +339,96 @@ func (gn *GatingNetwork) CalculateDiversityLoss() float32 {
 		return 0
 	}
 
-	// 1. Convert logits to probabilities for fair loss calculation
-	// We use a temporary softmax here to get the current distribution
 	probs, err := gn.outputTensor.Softmax(len(gn.outputTensor.Shape) - 1)
 	if err != nil {
 		return 0
 	}
 
-	// 2. Calculate the average usage of each expert across the batch
-	avgUsage := make([]float32, numExperts)
+	// 1. Calculate the average probability assigned to each expert (Load)
+	loads := make([]float64, numExperts)
 	for t := 0; t < numTokens; t++ {
 		base := t * numExperts
 		for e := 0; e < numExperts; e++ {
-			avgUsage[e] += probs.Data[base+e]
+			loads[e] += float64(probs.Data[base+e])
 		}
 	}
 
-	// 3. Normalize by token count
-	var totalLoss float32
-	targetUsage := float32(1.0 / float32(numExperts))
+	// 2. Compute Mean
+	var mean float64
+	for _, l := range loads {
+		mean += l
+	}
+	mean /= float64(numExperts)
 
-	for e := 0; e < numExperts; e++ {
-		avgUsage[e] /= float32(numTokens)
-
-		// 4. Penalty = (Actual Usage - Target Usage)^2
-		diff := avgUsage[e] - targetUsage
-		totalLoss += diff * diff
+	if mean < 1e-6 {
+		return 0
 	}
 
+	// 3. Compute Variance
+	var variance float64
+	for _, l := range loads {
+		diff := l - mean
+		variance += diff * diff
+	}
+	variance /= float64(numExperts)
+
+	// 4. CV^2 = variance / (mean^2)
+	cvSquared := variance / (mean * mean)
+
+	// Weight the CV loss
 	coeff := gn.DiversityCoefficient
 	if coeff == 0 {
-		coeff = 0.5 // Increased from 0.25 to aggressively break "Lazy Router" monopolies
+		coeff = 0.5
 	}
 	
-	res := totalLoss * coeff
+	res := float32(cvSquared) * coeff
+	if math.IsNaN(float64(res)) || math.IsInf(float64(res), 0) {
+		return 0.0
+	}
+	return res
+}
+
+func (gn *GatingNetwork) CalculateDiversityLoss() float32 {
+	// Transitioning to CV Loss as the primary load balancer
+	return gn.CalculateCVLoss()
+}
+
+// CalculateGatingEntropy computes the entropy of the expert selection distribution.
+// Higher entropy means the router is more uncertain/diverse.
+func (gn *GatingNetwork) CalculateGatingEntropy() float32 {
+	if gn.outputTensor == nil {
+		return 0
+	}
+
+	numTokens := gn.outputTensor.Shape[0]
+	if len(gn.outputTensor.Shape) > 2 {
+		numTokens *= gn.outputTensor.Shape[1]
+	}
+	numExperts := gn.outputTensor.Shape[len(gn.outputTensor.Shape)-1]
+	
+	if numTokens <= 0 {
+		return 0
+	}
+
+	probs, err := gn.outputTensor.Softmax(len(gn.outputTensor.Shape) - 1)
+	if err != nil {
+		return 0
+	}
+
+	var totalEntropy float64
+	for t := 0; t < numTokens; t++ {
+		base := t * numExperts
+		var tokenEntropy float64
+		for e := 0; e < numExperts; e++ {
+			p := float64(probs.Data[base+e])
+			if p > 1e-10 {
+				tokenEntropy -= p * math.Log(p)
+			}
+		}
+		totalEntropy += tokenEntropy
+	}
+
+	res := float32(totalEntropy / float64(numTokens))
 	if math.IsNaN(float64(res)) || math.IsInf(float64(res), 0) {
 		return 0.0
 	}

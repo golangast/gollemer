@@ -310,6 +310,9 @@ func (e *BornExpert) SetMode(training bool) {
 func (e *BornExpert) ClearState() {
 	e.lastInput = nil
 	e.lastOutput = nil
+	if e.backend != nil && e.backend.Tape() != nil {
+		e.backend.Tape().Clear()
+	}
 }
 
 func (e *BornExpert) ClipWeights(maxVal float32) {

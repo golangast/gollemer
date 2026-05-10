@@ -48,7 +48,8 @@ type RNNDecoder struct {
 	contextVector    *Tensor   // Context vector from encoder (saved for backward pass)
 	attentionMask    *Tensor   // Attention mask from forward (saved for backward pass)
 
-	ContextMultiplier float32 // Scale for reinforced context injection
+	ContextMultiplier      float32 // Scale for reinforced context injection
+	ContextMultiplierDecay float32 // Decay factor per step (e.g. 0.7)
 }
 
 // NewRNNDecoder creates a new RNNDecoder.
@@ -107,7 +108,8 @@ func NewRNNDecoder(inputDim, outputVocabSize, hiddenSize, maxAttentionHeads, num
 		Embedding:         embedding,
 		MaxAttentionHeads: maxAttentionHeads,
 		Attention:         attention,
-		ContextMultiplier: 10.0,
+		ContextMultiplier:      10.0,
+		ContextMultiplierDecay: 1.0, // Default: no decay
 	}, nil
 }
 
@@ -178,7 +180,23 @@ func (d *RNNDecoder) Forward(contextVector, targetSequence *Tensor, scheduledSam
 		fullInput, _ := targetSequence.Slice(1, 0, maxSequenceLength-1)
 		allEmbedded, _ := d.Embedding.Forward(fullInput)
 		normedEmbedded, _ := d.InputNorm.Forward(allEmbedded)
-				normedEmbedded, _ = normedEmbedded.AddWithBroadcast(ctxMeanReshaped.Scale(d.ContextMultiplier))
+		
+		// Apply Decaying Context Injection
+		if d.ContextMultiplierDecay > 0 && d.ContextMultiplierDecay < 1.0 {
+			decayData := make([]float32, maxSequenceLength-1)
+			scale := d.ContextMultiplier
+			for t := 0; t < maxSequenceLength-1; t++ {
+				decayData[t] = scale
+				scale *= d.ContextMultiplierDecay
+			}
+			decayTensor := NewTensor([]int{1, maxSequenceLength - 1, 1}, decayData, false)
+			scaledCtx, _ := ctxMeanReshaped.MulWithBroadcast(decayTensor)
+			normedEmbedded, _ = normedEmbedded.AddWithBroadcast(scaledCtx)
+			scaledCtx.Release()
+			decayTensor.Release()
+		} else {
+			normedEmbedded, _ = normedEmbedded.AddWithBroadcast(ctxMeanReshaped.Scale(d.ContextMultiplier))
+		}
 
 		// 1. LSTM first
 		allHidden, lastCell, err := d.LSTM.Forward(normedEmbedded, initialHidden, cellState)
@@ -246,9 +264,10 @@ func (d *RNNDecoder) Forward(contextVector, targetSequence *Tensor, scheduledSam
 		embeddedInput, _ := d.Embedding.Forward(decoderInput)
 		d.embeddedInputs = append(d.embeddedInputs, embeddedInput)
 
-		// Apply InputNorm first, then inject context as post-norm residual.
+		// Apply InputNorm first, then inject context as post-norm residual with decay.
 		normedIn, _ := d.InputNorm.Forward(embeddedInput)
-		normedIn, _ = normedIn.AddWithBroadcast(ctxMeanReshaped.Scale(d.ContextMultiplier))
+		stepScale := d.ContextMultiplier * float32(math.Pow(float64(d.ContextMultiplierDecay), float64(t)))
+		normedIn, _ = normedIn.AddWithBroadcast(ctxMeanReshaped.Scale(stepScale))
 
 		// 1. LSTM
 		reshapedIn, _ := normedIn.Reshape([]int{batchSize, embeddedInput.Shape[2]})
@@ -415,13 +434,25 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
 		
         // Re-run InputNorm FIRST
         allEmbedded, _ = d.InputNorm.Forward(allEmbedded)
-		// Then add context as post-norm residual
-		ctxScaled := ctxMeanReshaped.Scale(d.ContextMultiplier)
-		allEmbedded, _ = allEmbedded.AddWithBroadcast(ctxScaled)
-		
-		ctxMean.Release()
-		ctxMeanReshaped.Release()
-		ctxScaled.Release()
+		// Then add context as post-norm residual with decay
+		if d.ContextMultiplierDecay > 0 && d.ContextMultiplierDecay < 1.0 {
+			seqLen := allEmbedded.Shape[1]
+			decayData := make([]float32, seqLen)
+			scale := d.ContextMultiplier
+			for t := 0; t < seqLen; t++ {
+				decayData[t] = scale
+				scale *= d.ContextMultiplierDecay
+			}
+			decayTensor := NewTensor([]int{1, seqLen, 1}, decayData, false)
+			scaledCtx, _ := ctxMeanReshaped.MulWithBroadcast(decayTensor)
+			allEmbedded, _ = allEmbedded.AddWithBroadcast(scaledCtx)
+			scaledCtx.Release()
+			decayTensor.Release()
+		} else {
+			ctxScaled := ctxMeanReshaped.Scale(d.ContextMultiplier)
+			allEmbedded, _ = allEmbedded.AddWithBroadcast(ctxScaled)
+			ctxScaled.Release()
+		}
 
 		// 2b. Re-run LSTM sequence forward to populate timeStepCells for BPTT
 		allHidden, _, err := d.LSTM.Forward(allEmbedded, d.InitialHiddenState, initialCell(batchSize, hiddenSize))
@@ -531,44 +562,77 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
 			return err
 		}
 
-		// Branch B: To Context Vector (direct from LSTM input grad via Mean and Multiplier)
-		// 1. Sum over decoder sequence dimension to get grad for ctxMean from the LSTM inputs
-		gradCtxMeanFromInputs, _ := lstmInputGrad.Sum(1)
-
-		// 2. Scale by multiplier (y = x + k*z => dz = k*dy)
-		gradCtxMean := gradCtxMeanFromInputs.Scale(d.ContextMultiplier)
-
-		// 3. Add gradients from the initial hidden state (which came from context mean but NO multiplier)
-		// Note: Initial hidden state calculation in Forward was HT_0 = ctxMean
-		// so dL/dctxMean += dL/dHT_0
-		// GetPrevHiddenGrad returns dL/d(initialHidden)
-		initialHiddenGrad := d.LSTM.GetPrevHiddenGrad()
-		if initialHiddenGrad != nil {
-			oldGrad := gradCtxMean
-			gradCtxMean, _ = gradCtxMean.Add(initialHiddenGrad)
-			oldGrad.Release()
-		}
-
-		// 4. Distribute back to encoder sequence dimension
-		// ctxMean = sum(contextVector) / S, so dL/dv_i = (dL/dctxMean) / S
-		encSeqLen := d.contextVector.Shape[1]
-		distGrad := gradCtxMean.Scale(1.0 / float32(encSeqLen))
-
-		// expandedGrad shape [Batch, encSeqLen, Dim]
-		expandedGrad := distGrad.Expand([]int{batchSize, encSeqLen, embeddingDim})
-
-		if d.contextVector.Grad == nil {
-			d.contextVector.Grad = expandedGrad
+		// 2. Scale by multiplier (decayed)
+		// Since context injection is now decayed, we must apply the same decay in backward.
+		if d.ContextMultiplierDecay > 0 && d.ContextMultiplierDecay < 1.0 {
+			seqLen := lstmInputGrad.Shape[1]
+			decayData := make([]float32, seqLen)
+			scale := d.ContextMultiplier
+			for t := 0; t < seqLen; t++ {
+				decayData[t] = scale
+				scale *= d.ContextMultiplierDecay
+			}
+			decayTensor := NewTensor([]int{1, seqLen, 1}, decayData, false)
+			// Apply decay to gradients before summing over time
+			decayedGrads, _ := lstmInputGrad.MulWithBroadcast(decayTensor)
+			gradCtxMeanFromInputs, _ := decayedGrads.Sum(1)
+			gradCtxMean := gradCtxMeanFromInputs.Scale(1.0) // multiplier already in decayTensor
+			
+			// Continue with standard flow... (simplified for this edit)
+			initialHiddenGrad := d.LSTM.GetPrevHiddenGrad()
+			if initialHiddenGrad != nil {
+				oldGrad := gradCtxMean
+				gradCtxMean, _ = gradCtxMean.Add(initialHiddenGrad)
+				oldGrad.Release()
+			}
+			
+			encSeqLen := d.contextVector.Shape[1]
+			distGrad := gradCtxMean.Scale(1.0 / float32(encSeqLen))
+			expandedGrad := distGrad.Expand([]int{batchSize, encSeqLen, embeddingDim})
+			
+			if d.contextVector.Grad == nil {
+				d.contextVector.Grad = expandedGrad
+			} else {
+				oldGrad := d.contextVector.Grad
+				d.contextVector.Grad, _ = d.contextVector.Grad.Add(expandedGrad)
+				oldGrad.Release()
+				expandedGrad.Release()
+			}
+			
+			decayedGrads.Release()
+			decayTensor.Release()
+			gradCtxMeanFromInputs.Release()
+			gradCtxMean.Release()
+			distGrad.Release()
 		} else {
-			oldGrad := d.contextVector.Grad
-			d.contextVector.Grad, _ = d.contextVector.Grad.Add(expandedGrad)
-			oldGrad.Release()
-			expandedGrad.Release()
+			// Legacy path
+			gradCtxMeanFromInputs, _ := lstmInputGrad.Sum(1)
+			gradCtxMean := gradCtxMeanFromInputs.Scale(d.ContextMultiplier)
+			
+			initialHiddenGrad := d.LSTM.GetPrevHiddenGrad()
+			if initialHiddenGrad != nil {
+				oldGrad := gradCtxMean
+				gradCtxMean, _ = gradCtxMean.Add(initialHiddenGrad)
+				oldGrad.Release()
+			}
+			
+			encSeqLen := d.contextVector.Shape[1]
+			distGrad := gradCtxMean.Scale(1.0 / float32(encSeqLen))
+			expandedGrad := distGrad.Expand([]int{batchSize, encSeqLen, embeddingDim})
+			
+			if d.contextVector.Grad == nil {
+				d.contextVector.Grad = expandedGrad
+			} else {
+				oldGrad := d.contextVector.Grad
+				d.contextVector.Grad, _ = d.contextVector.Grad.Add(expandedGrad)
+				oldGrad.Release()
+				expandedGrad.Release()
+			}
+			
+			gradCtxMeanFromInputs.Release()
+			gradCtxMean.Release()
+			distGrad.Release()
 		}
-		
-		gradCtxMeanFromInputs.Release()
-		gradCtxMean.Release()
-		distGrad.Release()
 	}
 
 	// Release local sequence tensors created for re-vectorization
@@ -592,7 +656,7 @@ func initialCell(batchSize, hiddenSize int) *Tensor {
 }
 
 // DecodeStep performs a single decoding step.
-func (d *RNNDecoder) DecodeStep(inputToken *Tensor, prevHiddenState, prevCellState, contextVector *Tensor, mask ...*Tensor) (*Tensor, *Tensor, *Tensor, error) {
+func (d *RNNDecoder) DecodeStep(inputToken *Tensor, prevHiddenState, prevCellState, contextVector *Tensor, stepIndex int, mask ...*Tensor) (*Tensor, *Tensor, *Tensor, error) {
 	var attentionMask *Tensor
 	if len(mask) > 0 {
 		attentionMask = mask[0]
@@ -624,7 +688,16 @@ func (d *RNNDecoder) DecodeStep(inputToken *Tensor, prevHiddenState, prevCellSta
 		ctxMean = ctxMean.Scale(scale)
 	}
 	ctxMeanReshaped, _ := ctxMean.Reshape([]int{batchSize, 1, contextVector.Shape[2]})
-	normedIn, _ = normedIn.AddWithBroadcast(ctxMeanReshaped.Scale(d.ContextMultiplier))
+	// 🆕 Context Decay: ContextMultiplier * decay^step so context cools as generation progresses.
+	// Step 0 gets full multiplier (topic-setting); later steps let grammar experts drive structure.
+	decayedMultiplier := d.ContextMultiplier
+	if d.ContextMultiplierDecay > 0 && d.ContextMultiplierDecay < 1.0 && stepIndex > 0 {
+		decayedMultiplier *= float32(math.Pow(float64(d.ContextMultiplierDecay), float64(stepIndex)))
+		if decayedMultiplier < 0.5 {
+			decayedMultiplier = 0.5 // Floor so context never disappears entirely
+		}
+	}
+	normedIn, _ = normedIn.AddWithBroadcast(ctxMeanReshaped.Scale(decayedMultiplier))
 
 	// 2. LSTM
 	reshapedIn, _ := normedIn.Reshape([]int{batchSize, embeddedInput.Shape[2]})
@@ -649,6 +722,8 @@ func (d *RNNDecoder) DecodeStep(inputToken *Tensor, prevHiddenState, prevCellSta
 	
 	var outputLogits *Tensor
 	if d.OutputMoE != nil {
+		// Set step index for step-aware routing bias
+		d.OutputMoE.CurrentStepIndex = stepIndex
 		outputLogits, err = d.OutputMoE.Forward(normed)
 	} else {
 		outputLogits, err = d.OutputLayer.Forward(normed)
@@ -662,8 +737,8 @@ func (d *RNNDecoder) DecodeStep(inputToken *Tensor, prevHiddenState, prevCellSta
 }
 
 // DecodeStepWithExpert is like DecodeStep but also returns the ID of the top expert used.
-func (d *RNNDecoder) DecodeStepWithExpert(input *Tensor, prevHiddenState, prevCellState, contextVector *Tensor) (*Tensor, *Tensor, *Tensor, []int, error) {
-	logits, h, c, err := d.DecodeStep(input, prevHiddenState, prevCellState, contextVector)
+func (d *RNNDecoder) DecodeStepWithExpert(input *Tensor, prevHiddenState, prevCellState, contextVector *Tensor, stepIndex int) (*Tensor, *Tensor, *Tensor, []int, error) {
+	logits, h, c, err := d.DecodeStep(input, prevHiddenState, prevCellState, contextVector, stepIndex)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}

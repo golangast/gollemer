@@ -8,11 +8,11 @@ export CGO_ENABLED=0
 # Social Curriculum Training
 train: clean
 	@echo "🚀 Starting Social Curriculum Training (Fresh Start)..."
-	GOMEMLIMIT=4000MiB GOGC=20 go run cmd/tools/train_moe/main.go -train-social
+	GOMEMLIMIT=5000MiB GOGC=50 go run cmd/tools/train_moe/main.go -train-social
 
 train-social:
 	@echo "🚀 Resuming Social Curriculum Training..."
-	GOMEMLIMIT=4000MiB GOGC=20 go run cmd/tools/train_moe/main.go -train-social
+	GOMEMLIMIT=5000MiB GOGC=50 go run cmd/tools/train_moe/main.go -train-social
 
 llm:
 	@echo "🎮 Starting Gollemer LLM..."

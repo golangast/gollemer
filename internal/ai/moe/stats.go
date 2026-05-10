@@ -229,7 +229,7 @@ func CalculateSparsityPenalty(params []*tensor.Tensor, lambda float32) float32 {
 	return l1Loss * lambda
 }
 
-// CalculateDiversityLoss calculates the Shannon Entropy of probs to force sharp peaks.
+// CalculateDiversityLoss calculates the Shannon Entropy of probs to encourage exploration.
 func CalculateDiversityLoss(probs *tensor.Tensor) float32 {
 	var entropy float32
 	var epsilon float32 = 1e-10 // Prevent log(0)
@@ -240,9 +240,10 @@ func CalculateDiversityLoss(probs *tensor.Tensor) float32 {
 		}
 	}
 	
-	// We want to MINIMIZE entropy to force sharp peaks.
+	// We want to MAXIMIZE entropy to force diversity and exploration.
+	// Penalize the model if the routing distribution is too "peaky" (low entropy).
 	// Scale by small factor (0.01) so it doesn't overwhelm Cross-Entropy loss.
-	return (entropy / float32(len(probs.Data))) * 0.01
+	return (-entropy / float32(len(probs.Data))) * 0.01
 }
 
 // CalculateUsageVariance calculates the variance of expert usage to discourage monopolies.
