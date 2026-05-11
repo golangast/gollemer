@@ -1,37 +1,49 @@
 # Gollemer Makefile
+# -----------------------------------------------------------------------------
+# High-performance Mixture of Experts (MoE) Framework
+# -----------------------------------------------------------------------------
 
-# Set environment variables for all commands
+# Configuration
+# Use GOEXPERIMENT=simd for native AVX2/SSE acceleration
+export GOEXPERIMENT=simd
 export CGO_ENABLED=0
 
-.PHONY: train llm clean
+# Runtime Tuning
+MEM_LIMIT = 5000MiB
+GOGC      = 50
+MAIN_CMD  = go run cmd/tools/train_moe/main.go
 
-# Social Curriculum Training
+.PHONY: train train-social chat clean help
+
+# --- Training ---
+
+## train: Start a fresh Social Curriculum training (clears old state)
 train: clean
-	@echo "🚀 Starting Social Curriculum Training (Fresh Start)..."
-	GOMEMLIMIT=5000MiB GOGC=50 go run cmd/tools/train_moe/main.go -train-social
+	@echo "🚀 Starting Fresh Social Curriculum Training..."
+	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) $(MAIN_CMD) -train-social
 
+## train-social: Resume existing Social Curriculum training
 train-social:
 	@echo "🚀 Resuming Social Curriculum Training..."
-	GOMEMLIMIT=5000MiB GOGC=50 go run cmd/tools/train_moe/main.go -train-social
+	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) $(MAIN_CMD) -train-social
 
-llm:
-	@echo "🎮 Starting Gollemer LLM..."
-	GOMEMLIMIT=4000MiB GOGC=20 go run cmd/tools/train_moe/main.go -llm
+# --- Interaction ---
 
-
-# Interactive LLM Chat
+## chat: Launch the interactive LLM chat shell
 chat:
 	@echo "💬 Starting Interactive Chat..."
-	GOMEMLIMIT=4000MiB GOGC=20 go run -mod=mod cmd/tools/train_moe/main.go -llm
+	GOMEMLIMIT=4000MiB GOGC=20 $(MAIN_CMD) -llm
 
-# Cleanup model state
+llm: chat
+
+# --- Maintenance ---
+
+## clean: Remove all model checkpoints and cached vocabularies
 clean:
-	@echo "🧹 Cleaning old model state..."
-	rm -f data/models/gob_models/moe_social_model.gob
-	rm -f data/models/gob_models/social_vocabulary.gob
-	rm -f data/models/gob_models/moe_social_model_vocab.gob
-	rm -f data/models/gob_models/seq2seq_output_vocab.gob
-	rm -f data/models/gob_models/moe_classification_model.gob
-	rm -f data/models/gob_models/classification_vocabulary.gob
-	rm -f data/models/gob_models/moe_social_model_epoch_*.gob
-	rm -f data/models/gob_models/moe_social_model_step_*.gob
+	@echo "🧹 Cleaning model state..."
+	rm -f data/models/gob_models/*.gob
+
+## help: Display available commands
+help:
+	@echo "Available commands:"
+	@grep -E '^##' Makefile | sed 's/## //'
