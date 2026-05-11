@@ -7,8 +7,6 @@ import (
 	"math"
 	"math/rand"
 
-	"gonum.org/v1/gonum/blas"
-	"gonum.org/v1/gonum/blas/blas32"
 
 	. "github.com/golangast/gollemer/internal/ai/neural/tensor"
 )
@@ -232,18 +230,13 @@ func (l *Linear) Backward(grad *Tensor) error {
 			return fmt.Errorf("linear layer backward: failed to transpose input (2D): %w", err)
 		}
 		if l.Weights.RequiresGrad {
-			// Bypass Goffi: use blas32 directly for reliable gradient computation
+			// Bypass Goffi: use native SIMD MatMulRaw for reliable gradient computation
 			m2 := inputTranspose.Shape[0]
 			k2 := inputTranspose.Shape[1]
 			n2 := grad.Shape[1]
 			dWeightsData2D := make([]float32, m2*n2)
 
-			blas32.Gemm(blas.NoTrans, blas.NoTrans, 1,
-				blas32.General{Rows: m2, Cols: k2, Stride: k2, Data: inputTranspose.Data},
-				blas32.General{Rows: k2, Cols: n2, Stride: n2, Data: grad.Data},
-				0,
-				blas32.General{Rows: m2, Cols: n2, Stride: n2, Data: dWeightsData2D},
-			)
+			MatMulRaw(inputTranspose.Data, grad.Data, dWeightsData2D, m2, n2, k2)
 			AddAccumulate(l.Weights.Grad.Data, dWeightsData2D)
 		}
 
@@ -279,12 +272,7 @@ func (l *Linear) Backward(grad *Tensor) error {
 			n := reshapedGrad.Shape[1]    // outputDim
 			dWeightsData := make([]float32, m*n)
 
-			blas32.Gemm(blas.NoTrans, blas.NoTrans, 1,
-				blas32.General{Rows: m, Cols: k, Stride: k, Data: inputTranspose.Data},
-				blas32.General{Rows: k, Cols: n, Stride: n, Data: reshapedGrad.Data},
-				0,
-				blas32.General{Rows: m, Cols: n, Stride: n, Data: dWeightsData},
-			)
+			MatMulRaw(inputTranspose.Data, reshapedGrad.Data, dWeightsData, m, n, k)
 
 			// Per-layer gradient clipping to prevent explosion
 			var dwNorm float32
@@ -338,17 +326,12 @@ func (l *Linear) Backward(grad *Tensor) error {
 		var dInput *Tensor
 		switch len(grad.Shape) {
 		case 2:
-			// Bypass Goffi: use blas32 directly
+			// Bypass Goffi: use native SIMD MatMulRaw
 			rows2 := grad.Shape[0]
 			cols2 := grad.Shape[1]
 			inDim2 := weightsTranspose.Shape[1]
 			dInputData2 := make([]float32, rows2*inDim2)
-			blas32.Gemm(blas.NoTrans, blas.NoTrans, 1,
-				blas32.General{Rows: rows2, Cols: cols2, Stride: cols2, Data: grad.Data},
-				blas32.General{Rows: cols2, Cols: inDim2, Stride: inDim2, Data: weightsTranspose.Data},
-				0,
-				blas32.General{Rows: rows2, Cols: inDim2, Stride: inDim2, Data: dInputData2},
-			)
+			MatMulRaw(grad.Data, weightsTranspose.Data, dInputData2, rows2, inDim2, cols2)
 			dInput = NewTensor([]int{rows2, inDim2}, dInputData2, false)
 		case 3:
 			batchSize := grad.Shape[0]
@@ -369,18 +352,13 @@ func (l *Linear) Backward(grad *Tensor) error {
 				return err
 			}
 
-			// Use blas32.Gemm DIRECTLY to bypass Goffi (which silently returns zeros on large matmuls).
+			// Use native SIMD MatMulRaw DIRECTLY to bypass Goffi (which silently returns zeros on large matmuls).
 			// dInput = reshapedGrad [batch*seqLen, outputDim] @ weightsTranspose [outputDim, inputDim]
 			bSL := reshapedGrad.Shape[0]    // batch*seqLen
 			oDim := reshapedGrad.Shape[1]   // outputDim
 			iDim := weightsTranspose.Shape[1] // inputDim
 			dInput2DData := make([]float32, bSL*iDim)
-			blas32.Gemm(blas.NoTrans, blas.NoTrans, 1,
-				blas32.General{Rows: bSL, Cols: oDim, Stride: oDim, Data: reshapedGrad.Data},
-				blas32.General{Rows: oDim, Cols: iDim, Stride: iDim, Data: weightsTranspose.Data},
-				0,
-				blas32.General{Rows: bSL, Cols: iDim, Stride: iDim, Data: dInput2DData},
-			)
+			MatMulRaw(reshapedGrad.Data, weightsTranspose.Data, dInput2DData, bSL, iDim, oDim)
 			dInput2D := NewTensor([]int{bSL, iDim}, dInput2DData, false)
 			dInput, err = dInput2D.Reshape([]int{batchSize, seqLength, inputDim})
 			if err != nil {

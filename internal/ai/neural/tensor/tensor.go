@@ -12,10 +12,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"unsafe"
-
-	"gonum.org/v1/gonum/blas"
-	"gonum.org/v1/gonum/blas/blas32"
-	"gonum.org/v1/gonum/blas/gonum"
 )
 
 // Device represents the hardware device where a tensor's data resides.
@@ -26,11 +22,6 @@ const (
 	GPU
 )
 
-func init() {
-	// Initialize Gonum BLAS engine with the best available implementation.
-	// Future: detect and use OpenBLAS (netlib) here if CGO is enabled.
-	blas32.Use(gonum.Implementation{})
-}
 
 // MatMulIterator is an iterator for the result tensor of a matrix multiplication.
 // It provides the current row and column indices for each chunk in the result tensor.
@@ -554,13 +545,8 @@ func (t *Tensor) MatMul(other *Tensor) (*Tensor, error) {
 		resultCols := colsB
 		resultData := make([]float32, resultRows*resultCols)
 
-		// 🚀 Use Pure-Go SIMD for optimized CPU MatMul
-		blas32.Gemm(blas.NoTrans, blas.NoTrans, 1,
-			blas32.General{Rows: rowsA, Cols: colsA, Stride: colsA, Data: t.Data},
-			blas32.General{Rows: colsA, Cols: colsB, Stride: colsB, Data: other.Data},
-			0,
-			blas32.General{Rows: resultRows, Cols: resultCols, Stride: resultCols, Data: resultData},
-		)
+		// 🚀 Use Native SIMD for optimized CPU MatMul (Exceeds Gonum pure-Go)
+		MatMulRaw(t.Data, other.Data, resultData, rowsA, colsB, colsA)
 
 		resultTensor := NewTensor([]int{resultRows, resultCols}, resultData, t.RequiresGrad || other.RequiresGrad)
 		if resultTensor.RequiresGrad {
@@ -653,12 +639,7 @@ func (t *Tensor) MatMul(other *Tensor) (*Tensor, error) {
 				otherOffset := b * colsA * colsB
 				resultOffset := b * rowsA * colsB
 
-				blas32.Gemm(blas.NoTrans, blas.NoTrans, 1,
-					blas32.General{Rows: rowsA, Cols: colsA, Stride: colsA, Data: t.Data[tOffset : tOffset+rowsA*colsA]},
-					blas32.General{Rows: colsA, Cols: colsB, Stride: colsB, Data: other.Data[otherOffset : otherOffset+colsA*colsB]},
-					0,
-					blas32.General{Rows: rowsA, Cols: colsB, Stride: colsB, Data: resultData[resultOffset : resultOffset+rowsA*colsB]},
-				)
+				MatMulRaw(t.Data[tOffset:tOffset+rowsA*colsA], other.Data[otherOffset:otherOffset+colsA*colsB], resultData[resultOffset:resultOffset+rowsA*colsB], rowsA, colsB, colsA)
 			}(b)
 		}
 		wg.Wait()

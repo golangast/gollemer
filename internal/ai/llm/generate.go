@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -29,142 +28,132 @@ func generateDataStructurePackageContent(structName, packageName, dirName string
 	}
 	structDef.WriteString("}\n\n")
 
-	// Show Handler construction
-	selectColumns := []string{"id"}
-	scanFields := []string{"&u.ID"}
-	for _, fieldName := range sortedFieldNames {
-		selectColumns = append(selectColumns, strings.ToLower(fieldName))
-		scanFields = append(scanFields, "&u."+strings.Title(fieldName))
-	}
-
 	showHandlerContent := fmt.Sprintf(`
-func Show%%sHandler(w http.ResponseWriter, r *http.Request) {
+func Show%sHandler(w http.ResponseWriter, r *http.Request) {
 	cwd, _ := os.Getwd()
-	dbPath := filepath.Join(cwd, "%%s", "%%s.db")
-	db, err := sql.Open("sqlite", dbPath)
+	jsonPath := filepath.Join(cwd, "%s", "%s.json")
+	
+	data, err := os.ReadFile(jsonPath)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer db.Close()
-
-	rows, err := db.Query("SELECT %%s FROM %%s")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
-
-	results := make([]%%s, 0)
-	for rows.Next() {
-		var u %%s
-		if err := rows.Scan(%%s); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+		if os.IsNotExist(err) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte("[]"))
 			return
 		}
-		results = append(results, u)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	var results []%s
+	if err := json.Unmarshal(data, &results); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(results)
-}`, structName, dirName, lowercaseName, strings.Join(selectColumns, ", "), lowercaseName, structName, structName, strings.Join(scanFields, ", "))
-
-	var structFields []string
-	var structFieldExecs []string
-	for _, fieldName := range sortedFieldNames {
-		structFields = append(structFields, fmt.Sprintf("%%s = ?", strings.ToLower(fieldName)))
-		structFieldExecs = append(structFieldExecs, "u."+strings.Title(fieldName))
-	}
+}`, structName, dirName, lowercaseName, structName)
 
 	updateHandlerContent := fmt.Sprintf(`
-func Update%%sHandler(w http.ResponseWriter, r *http.Request) {
+func Update%sHandler(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) < 4 { // e.g. /update/user/123
-		http.Error(w, "Invalid URL, expecting /update/%%s/{id}", http.StatusBadRequest)
+	if len(parts) < 4 {
+		http.Error(w, "Invalid URL, expecting /update/%s/{id}", http.StatusBadRequest)
 		return
 	}
-	id := parts[len(parts)-1]
+	idStr := parts[len(parts)-1]
+	id, _ := strconv.Atoi(idStr)
 
-	var u %%s
-	err := json.NewDecoder(r.Body).Decode(&u)
+	var updatedItem %s
+	err := json.NewDecoder(r.Body).Decode(&updatedItem)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	cwd, _ := os.Getwd()
-	dbPath := filepath.Join(cwd, "%%s", "%%s.db")
-	db, err := sql.Open("sqlite", dbPath)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer db.Close()
-
-	stmt, err := db.Prepare("UPDATE %%s SET %%s WHERE id = ?")
+	jsonPath := filepath.Join(cwd, "%s", "%s.json")
+	
+	data, err := os.ReadFile(jsonPath)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	_, err = stmt.Exec(%%s, id)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	var items []%s
+	json.Unmarshal(data, &items)
+
+	found := false
+	for i := range items {
+		if items[i].ID == id {
+			updatedItem.ID = id // Keep the ID
+			items[i] = updatedItem
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		http.Error(w, "Item not found", http.StatusNotFound)
 		return
 	}
 
-	fmt.Fprintf(w, "%%s with ID %%s updated successfully", id)
-}`, structName, lowercaseName, structName, dirName, lowercaseName, lowercaseName, strings.Join(structFields, ", "), strings.Join(structFieldExecs, ", "), structName)
+	newData, _ := json.MarshalIndent(items, "", "  ")
+	os.WriteFile(jsonPath, newData, 0644)
+
+	fmt.Fprintf(w, "%s with ID %%d updated successfully", id)
+}`, structName, lowercaseName, structName, dirName, lowercaseName, structName, structName)
 
 	deleteHandlerContent := fmt.Sprintf(`
-func Delete%%sHandler(w http.ResponseWriter, r *http.Request) {
+func Delete%sHandler(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) < 4 { // e.g. /delete/user/123
-		http.Error(w, "Invalid URL, expecting /delete/%%s/{id}", http.StatusBadRequest)
+	if len(parts) < 4 {
+		http.Error(w, "Invalid URL, expecting /delete/%s/{id}", http.StatusBadRequest)
 		return
 	}
-	id := parts[len(parts)-1]
+	idStr := parts[len(parts)-1]
+	id, _ := strconv.Atoi(idStr)
 
 	cwd, _ := os.Getwd()
-	dbPath := filepath.Join(cwd, "%%s", "%%s.db")
-	db, err := sql.Open("sqlite", dbPath)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer db.Close()
-
-	stmt, err := db.Prepare("DELETE FROM %%s WHERE id = ?")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	_, err = stmt.Exec(id)
+	jsonPath := filepath.Join(cwd, "%s", "%s.json")
+	
+	data, err := os.ReadFile(jsonPath)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	fmt.Fprintf(w, "%%s with ID %%s deleted successfully", id)
-}`, structName, lowercaseName, dirName, lowercaseName, lowercaseName, structName)
+	var items []%s
+	json.Unmarshal(data, &items)
 
-	packageFileContent := fmt.Sprintf(`package %%s
+	newItems := make([]%s, 0)
+	for _, item := range items {
+		if item.ID != id {
+			newItems = append(newItems, item)
+		}
+	}
+
+	newData, _ := json.MarshalIndent(newItems, "", "  ")
+	os.WriteFile(jsonPath, newData, 0644)
+
+	fmt.Fprintf(w, "%s with ID %%d deleted successfully", id)
+}`, structName, lowercaseName, dirName, lowercaseName, structName, structName, structName)
+
+	packageFileContent := fmt.Sprintf(`package %s
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
-
-	_ "modernc.org/sqlite"
 )
 
-%%s
-%%s
-%%s
-%%s
+%s
+%s
+%s
+%s
 `, packageName, structDef.String(), showHandlerContent, updateHandlerContent, deleteHandlerContent)
 
 	return packageFileContent
@@ -223,8 +212,8 @@ func generateWordVizHTML(words []string, vectors [][]float64) string {
 <body>
     <div id="myDiv" style="width: 100%%; height: 100vh;"></div>
     <script>
-        var words = %%s;
-        var rawVectors = %%s;
+        var words = %s;
+        var rawVectors = %s;
 
         var x = [];
         var y = [];
@@ -328,6 +317,3 @@ func handleGenericCreate(objectType, fileName, targetDirectory, handlerURL strin
 	return fmt.Sprintf("I created a work directory '%s' for you.", folderPath), true
 }
 
-func goImports(path string) {
-	_ = exec.Command("go", "run", "golang.org/x/tools/cmd/goimports", "-w", path).Run()
-}

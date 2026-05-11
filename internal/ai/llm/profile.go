@@ -1,7 +1,6 @@
 package llm
 
 import (
-	"database/sql"
 	"fmt"
 	"io/fs"
 	"os"
@@ -48,7 +47,7 @@ func printIntro() {
 }
 
 // ScanAndSaveProfile scans the project directory and updates the database profile.
-func ScanAndSaveProfile(projectName string, projectPath string, db *sql.DB) error {
+func ScanAndSaveProfile(projectName string, projectPath string, db *sqlite_db.JSONDatabase) error {
 	if projectName == "" || projectPath == "" {
 		return fmt.Errorf("invalid project name or path")
 	}
@@ -142,7 +141,7 @@ func ScanAndSaveProfile(projectName string, projectPath string, db *sql.DB) erro
 }
 
 // ShowProjectProfile prints a personable and visually rich summary of the project.
-func ShowProjectProfile(projectName string, db *sql.DB, mascot *ui.Mascot) {
+func ShowProjectProfile(projectName string, db *sqlite_db.JSONDatabase, mascot *ui.Mascot) {
 	p, err := sqlite_db.GetProjectProfile(db, projectName)
 	if err != nil {
 		mascot.Speak(ui.MoodWaiting, fmt.Sprintf("I tried to peek into the heart of '%s', but I couldn't find its profile. Is it a secret project?", projectName))

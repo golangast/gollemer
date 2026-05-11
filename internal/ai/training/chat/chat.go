@@ -8,7 +8,6 @@ import (
 	"log"
 	"math"
 	"math/rand"
-	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -20,9 +19,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/golangast/gollemer/internal/ai/moe"
 	neuralnn "github.com/golangast/gollemer/internal/ai/neural/nn"
@@ -33,23 +29,6 @@ import (
 	"github.com/golangast/gollemer/internal/ai/train"
 )
 
-var (
-	expertUtilization = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "moe_expert_usage_total",
-			Help: "The total number of tokens processed by each expert.",
-		},
-		[]string{"layer", "expert_id"},
-	)
-
-	tokenLatency = promauto.NewHistogram(
-		prometheus.HistogramOpts{
-			Name:    "moe_token_generation_latency_ms",
-			Help:    "Time taken to generate a single token.",
-			Buckets: prometheus.LinearBuckets(10, 10, 10), // 10ms to 100ms
-		},
-	)
-)
 
 type Batch struct {
 	Input     *tensor.Tensor // Shape: [BatchSize, MaxInputLen]
@@ -3350,7 +3329,7 @@ skipSocialLoad:
 			fmt.Println("📊 Decoder Expert Bias Check (Top 5 tokens by bias):")
 			for i, exp := range intentModel.Decoder.OutputMoE.Experts {
 				var biasData []float32
-				if be, ok := exp.(*moe.BornExpert); ok {
+				if be, ok := exp.(*moe.InternalExpert); ok {
 					params := be.Parameters()
 					if len(params) >= 4 && params[3] != nil {
 						biasData = params[3].Data
@@ -5462,13 +5441,6 @@ func injectContextualClues(session *ChatSession) {
 }
 
 func StartChat(model *moe.IntentMoE) {
-	// Start Prometheus metrics server on port 2112
-	go func() {
-		http.Handle("/metrics", promhttp.Handler())
-		http.ListenAndServe(":2112", nil)
-	}()
-
-	fmt.Println("📈 Metrics available at http://localhost:2112/metrics")
 
 	session := NewChatSession(3, model.Embedding.DimModel)
 	// 1. Define the "Core Identity"
@@ -5828,28 +5800,10 @@ func (b *MoEChatBot) StreamReply(userInput string) <-chan string {
 		var responseTokens []string
 
 		for i := 0; i < 50; i++ {
-			startToken := time.Now()
 
 			decInputT := tensor.NewTensor([]int{1, len(currIDs)}, currIDs, false)
 			logits, _, _ := b.model.Forward(0.0, nil, decInputT)
 
-			// 2. LOG THE EXPERTS: Capture the routing decisions for this token
-			for layerIdx, layer := range moe.ActiveLayers {
-				// We peek at the last routing decision made by the Gating Network
-				selected := layer.GetSelectedExperts()
-				if len(selected) > 0 {
-					if last := selected[len(selected)-1]; len(last) > 0 {
-						winner := last[0]
-						expertUtilization.WithLabelValues(
-							fmt.Sprintf("%d", layerIdx),
-							fmt.Sprintf("%d", winner),
-						).Inc()
-					}
-				}
-			}
-
-			// 3. Measure Latency
-			tokenLatency.Observe(float64(time.Since(startToken).Milliseconds()))
 
 			lastLogit := logits[len(logits)-1]
 			nextID := b.sampleNextToken(lastLogit)

@@ -4,11 +4,8 @@ import (
 	"encoding/json"
 	"log"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
-
-	"github.com/fsnotify/fsnotify"
 )
 
 type TrainingConfig struct {
@@ -77,68 +74,67 @@ func (s *SafeConfig) Update(fn func(*TrainingConfig)) {
 }
 
 func (s *SafeConfig) WatchConfig(path string) error {
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		return err
-	}
-
-	dir := filepath.Dir(path)
-	filename := filepath.Base(path)
-
 	go func() {
-		defer watcher.Close()
-		for {
-			select {
-			case event, ok := <-watcher.Events:
-				if !ok {
-					return
+		var lastSize int64
+		var lastModTime time.Time
+
+		// Initial state
+		if info, err := os.Stat(path); err == nil {
+			lastSize = info.Size()
+			lastModTime = info.ModTime()
+		}
+
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			info, err := os.Stat(path)
+			if err != nil {
+				continue
+			}
+
+			// Check for changes in size or modification time
+			if info.Size() != lastSize || !info.ModTime().Equal(lastModTime) {
+				lastSize = info.Size()
+				lastModTime = info.ModTime()
+
+				// Debounce: prevent multiple reloads within a short window
+				s.Lock()
+				lastReload := s.lastReloadTime
+				s.lastReloadTime = time.Now()
+				s.Unlock()
+
+				if time.Since(lastReload) < 500*time.Millisecond {
+					continue
 				}
-				// Watch for Write or Rename/Create (atomic saves often involve renames)
-				if (event.Op&fsnotify.Write == fsnotify.Write || event.Op&fsnotify.Create == fsnotify.Create) && 
-				   filepath.Base(event.Name) == filename {
-					// Debounce: prevent multiple reloads within a short window
-					s.Lock()
-					lastReload := s.lastReloadTime
-					s.lastReloadTime = time.Now()
-					s.Unlock()
-					
-					if time.Since(lastReload) < 500 * time.Millisecond {
-						continue
-					}
-					
-					// Small delay to ensure the file is completely written/closed
-					time.Sleep(200 * time.Millisecond)
-					
-					data, err := os.ReadFile(path)
+
+				// Small delay to ensure the file is completely written/closed
+				time.Sleep(200 * time.Millisecond)
+
+				data, err := os.ReadFile(path)
+				if err != nil {
+					// On some systems, the file might temporarily not exist during an atomic save
+					time.Sleep(100 * time.Millisecond)
+					data, err = os.ReadFile(path)
 					if err != nil {
-						// On some systems, the file might temporarily not exist during a move
-						time.Sleep(100 * time.Millisecond)
-						data, err = os.ReadFile(path)
-						if err != nil {
-							log.Printf("⚠️  Failed to reload config: %v", err)
-							continue
-						}
-					}
-					
-					var cfg TrainingConfig
-					if err := json.Unmarshal(data, &cfg); err != nil {
-						log.Printf("⚠️  Failed to parse reloaded config: %v", err)
+						log.Printf("⚠️  Failed to reload config: %v", err)
 						continue
 					}
-					
-					s.Lock()
-					s.Config = cfg
-					s.Unlock()
-					log.Printf("🚀 Training variables updated via hot-reload (from %s)", path)
 				}
-			case err, ok := <-watcher.Errors:
-				if !ok {
-					return
+
+				var cfg TrainingConfig
+				if err := json.Unmarshal(data, &cfg); err != nil {
+					log.Printf("⚠️  Failed to parse reloaded config: %v", err)
+					continue
 				}
-				log.Printf("⚠️  Config watcher error: %v", err)
+
+				s.Lock()
+				s.Config = cfg
+				s.Unlock()
+				log.Printf("🚀 Training variables updated via hot-reload (from %s)", path)
 			}
 		}
 	}()
 
-	return watcher.Add(dir)
+	return nil
 }

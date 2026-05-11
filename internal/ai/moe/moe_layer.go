@@ -134,11 +134,11 @@ func NewMoELayer(inputDim, outputDim, numExperts, k int, expertBuilder func(int)
 			}
 			experts[i] = expert
 		} else {
-			// Default to BornExpert for high performance (Pure Go / Cgo-free)
+			// Default to InternalExpert for unified native performance
 			hiddenDim := inputDim * 4 // Common multiplier
-			expert, err := NewBornExpert(i, inputDim, hiddenDim, outputDim)
+			expert, err := NewInternalExpert(i, inputDim, hiddenDim, outputDim)
 			if err != nil {
-				return nil, fmt.Errorf("failed to create born expert %d: %w", i, err)
+				return nil, fmt.Errorf("failed to create internal expert %d: %w", i, err)
 			}
 			experts[i] = expert
 		}
@@ -1243,7 +1243,7 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 				params := moe.Experts[expertIdx].Parameters()
 				// Usually the last parameter is the output bias (vocab size)
 				if len(params) >= 4 {
-					bias := params[3] // FC2 Bias in BornExpert
+					bias := params[3] // FC2 Bias in InternalExpert
 					if bias.Grad != nil && len(bias.Grad.Data) > moe.MutedTokenID {
 						bias.Grad.Data[moe.MutedTokenID] *= moe.MutedTokenScale
 					}

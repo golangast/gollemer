@@ -513,6 +513,7 @@ func vecTopKZero(data []float32, k int) {
 	}
 }
 
+
 func vecLeakyReLU(data []float32, alpha float32) {
 	n := len(data)
 	vAlpha8 := archsimd.BroadcastFloat32x8(alpha)
@@ -528,6 +529,46 @@ func vecLeakyReLU(data []float32, alpha float32) {
 	for ; i < n; i++ {
 		if data[i] < 0 {
 			data[i] *= alpha
+		}
+	}
+}
+
+// vecMatMul performs a SIMD-accelerated matrix multiplication (C = A @ B).
+// This implementation uses a row-major blocked approach (IKJ order) for cache-friendliness
+// and processes B in 256-bit (AVX2) or 128-bit (SSE) chunks.
+func MatMulRaw(a, b, res []float32, m, n, k int) {
+	for i := 0; i < m; i++ {
+		rowA := a[i*k : (i+1)*k]
+		rowRes := res[i*n : (i+1)*n]
+		for ik := 0; ik < k; ik++ {
+			aik := rowA[ik]
+			if aik == 0 {
+				continue // Sparse optimization
+			}
+			
+			rowB := b[ik*n : (ik+1)*n]
+			vA8 := archsimd.BroadcastFloat32x8(aik)
+			vA4 := archsimd.BroadcastFloat32x4(aik)
+			
+			j := 0
+			// 8-wide (AVX2)
+			for ; j+8 <= n; j += 8 {
+				vB8 := archsimd.LoadFloat32x8Slice(rowB[j:])
+				vR8 := archsimd.LoadFloat32x8Slice(rowRes[j:])
+				vR8 = vR8.Add(vA8.Mul(vB8))
+				vR8.StoreSlice(rowRes[j:])
+			}
+			// 4-wide (SSE)
+			for ; j+4 <= n; j += 4 {
+				vB4 := archsimd.LoadFloat32x4Slice(rowB[j:])
+				vR4 := archsimd.LoadFloat32x4Slice(rowRes[j:])
+				vR4 = vR4.Add(vA4.Mul(vB4))
+				vR4.StoreSlice(rowRes[j:])
+			}
+			// Tail
+			for ; j < n; j++ {
+				rowRes[j] += aik * rowB[j]
+			}
 		}
 	}
 }
