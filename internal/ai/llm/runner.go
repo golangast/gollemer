@@ -2,7 +2,6 @@ package llm
 
 import (
 	"bufio"
-	"database/sql"
 	"fmt"
 	"log"
 	"os"
@@ -21,7 +20,7 @@ import (
 type Runner struct {
 	Mascot         *ui.Mascot
 	ProjectRoot    string
-	DB             *sql.DB
+	DB             *sqlite_db.JSONDatabase
 	KB             *KnowledgeBase
 	Reader         *bufio.Reader
 	W2V            *word2vec.SimpleWord2Vec

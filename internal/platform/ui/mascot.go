@@ -3,7 +3,6 @@ package ui
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/gen2brain/beeep"
 	"go/ast"
 	"go/format"
 	"go/parser"
@@ -18,12 +17,12 @@ import (
 type Expression string
 
 const (
-	Neutral   Expression = "—◡—"   // Idle / Default
-	Thinking  Expression = "●‿●"   // Processing / Scaffolding
-	Happy     Expression = "ᵘˣᵘ"   // Success / Build Passed
+	Neutral   Expression = "—◡—"     // Idle / Default
+	Thinking  Expression = "●‿●"     // Processing / Scaffolding
+	Happy     Expression = "ᵘˣᵘ"     // Success / Build Passed
 	Shocked   Expression = "•̀ o •́" // Validation Error / Missing Input
-	Fixing    Expression = "🛠️"     // Auto-repairing code
-	Disturbed Expression = "°◡°"   // Build Panic / Error
+	Fixing    Expression = "🛠️"      // Auto-repairing code
+	Disturbed Expression = "°◡°"     // Build Panic / Error
 	Alert     Expression = "•̀◡•́"
 	Think     Expression = "•◡•"
 )
@@ -74,7 +73,7 @@ const (
 
 func NewMascot() *Mascot {
 	return &Mascot{
-		Name:  "Gollemer", 
+		Name:  "Gollemer",
 		Color: ColorCyan,
 		Mood:  &MoodManager{History: make([]Activity, 0), LastSayTime: time.Now()},
 	}
@@ -101,7 +100,7 @@ func (m *Mascot) Say(exp Expression, message string) {
 // DrawHUD prints a visual header with stats and time
 func (m *Mascot) DrawHUD(step int, total int, loc int) {
 	now := time.Now().Format("15:04")
-	fmt.Printf("\n%s[ %s ] [ Step %d/%d ] [ Project Scale: %d LOC ]%s\n", 
+	fmt.Printf("\n%s[ %s ] [ Step %d/%d ] [ Project Scale: %d LOC ]%s\n",
 		m.Color, now, step, total, loc, ColorReset)
 	fmt.Println("-------------------------------------------------------")
 }
@@ -122,7 +121,7 @@ func (m *Mascot) toFace(exp any) string {
 
 func (m *Mascot) ReactToFileChange(path string, status string) {
 	filename := filepath.Base(path)
-	
+
 	// Check for "Stuck" state (high velocity on a single file without success)
 	if m.GetVelocity() > 30 && (strings.Contains(filename, "simd") || strings.Contains(filename, "adamw")) {
 		m.Say(Alert, fmt.Sprintf("We've been hitting %s hard for an hour. Maybe a quick coffee/tea break while the gradients settle? ☕", filename))
@@ -170,9 +169,9 @@ func (m *Mascot) RecordActivity(path string, delta int64) {
 		Timestamp: time.Now(),
 		Delta:     delta,
 	})
-	
+
 	//if count == 20 {
-		//m.Say(Happy, "20 changes this hour! You're in the zone.")
+	//m.Say(Happy, "20 changes this hour! You're in the zone.")
 	//}
 }
 
@@ -447,7 +446,7 @@ func (m *Mascot) AnalyzeProject(path string) {
 
 	structs := 0
 	simdFound := false
-	
+
 	// Inspect the code for specific patterns
 	ast.Inspect(node, func(n ast.Node) bool {
 		// Count Structs
@@ -478,7 +477,7 @@ func (m *Mascot) AnalyzeProject(path string) {
 	// Trigger New Deep Analysis Suite (Limited to Go source)
 	if strings.HasSuffix(path, ".go") {
 		m.AnalyzeComplexity(path)
-		// For larger project scans, we might want to gate these at a specific interval 
+		// For larger project scans, we might want to gate these at a specific interval
 		// but since we already have a 60s cooldown in the caller, we're safe for a first pass.
 		dir := filepath.Dir(path)
 		m.HuntDeadCode(dir)
@@ -556,7 +555,7 @@ func (m *Mascot) ReactToGrowth(currentLOC int, currentFiles int) {
 	switch {
 	case old.TotalLOC == 0:
 		m.Say(Happy, "A fresh start! I've bookmarked our starting point.")
-	
+
 	case diff < -50:
 		m.Say(Fixing, fmt.Sprintf("Refactoring alert! You trimmed %d lines. I love a clean codebase.", -diff))
 	case currentFiles > old.FileCount:
@@ -604,7 +603,7 @@ func (m *Mascot) ProposeCommit(root string) {
 	fmt.Printf("  📝 Message: %s\n", msg)
 	fmt.Println("-------------------------------------------")
 
-	m.Say(Think, "Should I run `git add . && git commit -m \"" + msg + "\"` for you? (y/n)")
+	m.Say(Think, "Should I run `git add . && git commit -m \""+msg+"\"` for you? (y/n)")
 }
 
 // CaringPush checks for large files before pushing to git
@@ -729,8 +728,8 @@ func (m *Mascot) ApplyRefactor(filePath string, newCode ast.Node) {
 
 // ExplainCode identifies the "Roles" of functions using AST analysis
 func (m *Mascot) ExplainCode(filePath string) {
-	m.Say(Thinking, "Reading the architecture of " + filepath.Base(filePath) + "...")
-	
+	m.Say(Thinking, "Reading the architecture of "+filepath.Base(filePath)+"...")
+
 	fset := token.NewFileSet()
 	node, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
 	if err != nil {
@@ -738,7 +737,7 @@ func (m *Mascot) ExplainCode(filePath string) {
 	}
 
 	m.Say(Happy, "I've mapped the logic. Here is what I'm seeing:")
-	
+
 	// Scan for indicators
 	role := "General Utility"
 	strategy := "Standard Go logic"
@@ -767,10 +766,10 @@ func (m *Mascot) ExplainCode(filePath string) {
 
 // TraceVariable builds a "Map of Transformations" for a variable
 func (m *Mascot) TraceVariable(targetVar string, root string) {
-	m.Say(Thinking, "Tracing the life of '" + targetVar + "' across the project...")
+	m.Say(Thinking, "Tracing the life of '"+targetVar+"' across the project...")
 
 	fmt.Printf("\n%s[ Lifecycle of: %s ]%s\n", m.Color, targetVar, ColorReset)
-	
+
 	// Mocked for the tutorial feel, but uses root to scan
 	fmt.Println("  📍 Birth:   main.go (Line 42) - Initialized as Input Tensor")
 	fmt.Println("  🔄 Reform:  gater.go (Line 12) - Passed to TopK Selection")
@@ -791,7 +790,7 @@ func (m *Mascot) VisualizeFlow() {
 	fmt.Println("      │                │")
 	fmt.Println("  ┌───┴───┐        ┌───┴───┐")
 	fmt.Println("[Exp 1] [Exp 2]  [Weights] [Bias]")
-	
+
 	m.Say(Happy, "I've confirmed the data flow! Your Gater is correctly driving the Expert selection.")
 }
 
@@ -810,7 +809,7 @@ func (m *Mascot) ExportReadmeDiagram() string {
       F --> G[AdamW Optimizer]
       G --> H[Updated Weights]
     `
-	
+
 	m.Say(Thinking, "I've generated the Mermaid.js code. You can paste this directly into your README!")
 	return "```mermaid" + diagram + "```"
 }
@@ -821,17 +820,17 @@ func (m *Mascot) GenerateDailyLog() string {
 
 	stats := m.LoadStats()
 	date := time.Now().Format("Monday, Jan 02, 2026")
-	
+
 	log := fmt.Sprintf("# Developer Journal: %s\n\n", date)
 	log += "## 🚀 Today's Engineering Focus\n"
 	log += "- **Project:** Gollemer\n"
 	log += fmt.Sprintf("- **Velocity:** %d files tracked / %d lines total\n", stats.FileCount, stats.TotalLOC)
 	log += "- **Key Milestone:** Integrated Advanced AST Diagnostics\n\n"
-	
+
 	log += "## 🧠 Architecture Insights\n"
 	log += "Successfully traced the data flow from the Gater to the SIMD-optimized experts. "
 	log += "The 128-bit alignment is holding steady across the backward pass.\n\n"
-	
+
 	log += "## 📅 Looking Ahead\n"
 	log += "- Prepare the MoE core for the Nashville road trip demo.\n"
 	log += "- Review the 'Expert Collapse' mitigation strategy.\n"
@@ -984,7 +983,7 @@ func (m *Mascot) ScaffoldReadme(root string) string {
 func (m *Mascot) StartWatching(root string) {
 	m.Say(Happy, "Gollemer is now on guard duty. I'll handle the paperwork while you code.")
 	m.Say(Thinking, "Watching for changes in "+root+"...")
-	
+
 	// Polling implementation (Simplified for the CLI)
 	go func() {
 		for {
@@ -992,24 +991,6 @@ func (m *Mascot) StartWatching(root string) {
 			// Trigger updates if changes detected
 		}
 	}()
-}
-
-// PushAlert sends a cross-platform desktop notification
-func (m *Mascot) PushAlert(title, message string, level AlertLevel) {
-	icon := "ʕ•ᴥ•ʔ"
-	if level == Critical {
-		icon = "ʕ°◡°ʔ"
-	}
-
-	// We use beeep for native OS notifications
-	err := beeep.Notify(
-		fmt.Sprintf("%s - %s", icon, title),
-		message,
-		"", // Path to icon if available
-	)
-	if err != nil {
-		fmt.Printf("  ❌ Notification failed: %v\n", err)
-	}
 }
 
 // InstallSuite wires the project with Git hooks and config directories
@@ -1023,11 +1004,11 @@ func (m *Mascot) InstallSuite(targetDir string) {
 	}
 
 	m.Say(Thinking, "Wiring the Git-Hooks and starting the Watcher...")
-	
+
 	// Simulation of hook injection
 	hookPath := filepath.Join(targetDir, ".git/hooks/prepare-commit-msg")
 	hookContent := "#!/bin/bash\n# Gollemer Git-Hook\ngo run main.go --mode=git-summary"
-	
+
 	if _, err := os.Stat(filepath.Dir(hookPath)); err == nil {
 		os.WriteFile(hookPath, []byte(hookContent), 0755)
 		fmt.Println("  ✅ Git-Hook injected.")

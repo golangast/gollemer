@@ -538,3 +538,9 @@ func lookupVocab(token string, vocab *mainvocab.Vocabulary) int {
 }
 
 
+func goImports(path string) {
+	cmd := exec.Command("go", "run", "golang.org/x/tools/cmd/goimports@latest", "-w", path)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		log.Printf("⚠️  goimports failed on %s: %v\n%s", path, err, string(output))
+	}
+}

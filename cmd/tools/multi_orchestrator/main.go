@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"database/sql"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -277,7 +276,7 @@ func main() {
 	kb := NewKnowledgeBase("examples/learning")
 
 	// Initialize database once
-	dbFileName := "generated_projects/project/orchestrator.db"
+	dbFileName := "generated_projects/project/orchestrator.json"
 	db, err := sqlite_db.InitDB(dbFileName)
 	if err != nil {
 		fmt.Printf("Failed to initialize database: %v\n", err)
@@ -1380,7 +1379,7 @@ func writeGoServerWithDB(dbName string) error {
 		"func helloHandler(w http.ResponseWriter, r *http.Request) {\n" +
 		"	fmt.Fprintln(w, \"Hello, World!\")\n" +
 		"}\n\n" +
-		"func saveHandler(db *sql.DB) http.HandlerFunc {\n" +
+		"func saveHandler(db *sqlite_db.JSONDatabase) http.HandlerFunc {\n" +
 		"	return func(w http.ResponseWriter, r *http.Request) {\n" +
 		"		role := r.URL.Query().Get(\"role\")\n" +
 		"		content := r.URL.Query().Get(\"content\")\n" +
@@ -1395,7 +1394,7 @@ func writeGoServerWithDB(dbName string) error {
 		"		fmt.Fprintln(w, \"Message saved successfully\")\n" +
 		"	}\n" +
 		"}\n\n" +
-		"func viewHandler(db *sql.DB) http.HandlerFunc {\n" +
+		"func viewHandler(db *sqlite_db.JSONDatabase) http.HandlerFunc {\n" +
 		"	return func(w http.ResponseWriter, r *http.Request) {\n" +
 		"		messages, err := sqlite_db.GetMessages(db)\n" +
 		"		if err != nil {\n" +
@@ -1585,7 +1584,7 @@ func initGitRepo() error {
 	}
 	return nil
 }
-func commitChanges(goal string, db *sql.DB, messageID int64) error {
+func commitChanges(goal string, db *sqlite_db.JSONDatabase, messageID int64) error {
 	projectDir := "generated_projects/project"
 	fmt.Println("Committing changes...")
 	if _, err := runCommand(projectDir, "git", "add", "."); err != nil {

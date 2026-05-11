@@ -170,10 +170,28 @@ func vecTopKZero(data []float32, k int) {
 	}
 }
 
+
 func vecLeakyReLU(data []float32, alpha float32) {
 	for i := range data {
 		if data[i] < 0 {
 			data[i] *= alpha
+		}
+	}
+}
+
+// vecMatMul performs a generic matrix multiplication (C = A @ B).
+// A: [m x k], B: [k x n], C: [m x n]
+func MatMulRaw(a, b, res []float32, m, n, k int) {
+	// Use a slightly optimized loop order for cache-friendliness (IKJ)
+	for i := 0; i < m; i++ {
+		rowA := a[i*k : (i+1)*k]
+		rowRes := res[i*n : (i+1)*n]
+		for ik := 0; ik < k; ik++ {
+			aik := rowA[ik]
+			rowB := b[ik*n : (ik+1)*n]
+			for j := 0; j < n; j++ {
+				rowRes[j] += aik * rowB[j]
+			}
 		}
 	}
 }

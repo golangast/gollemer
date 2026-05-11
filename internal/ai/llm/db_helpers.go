@@ -1,106 +1,61 @@
 package llm
 
 import (
-	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
-
-	_ "modernc.org/sqlite"
 )
 
 func createTableWithFields(dbFileName, tableName string, fields map[string]string) error {
-	db, err := sql.Open("sqlite", dbFileName)
-	if err != nil {
-		return fmt.Errorf("couldn't open the database file %s: %v", dbFileName, err)
+	// If it ends in .db, change to .json
+	if strings.HasSuffix(dbFileName, ".db") {
+		dbFileName = strings.TrimSuffix(dbFileName, ".db") + ".json"
 	}
-	defer db.Close()
 
-	sqlStatement := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (\n", tableName)
-	columns := []string{"\tid INTEGER PRIMARY KEY AUTOINCREMENT"}
-	for fieldName, fieldType := range fields {
-		sqlType := ""
-		switch strings.ToLower(fieldType) {
-		case "string":
-			sqlType = "TEXT"
-		case "int":
-			sqlType = "INTEGER"
-		// Add more type mappings as needed
-		default:
-			sqlType = "TEXT" // Default to TEXT for unknown types
+	// In a JSON-based system, a "table" is just a JSON file containing a list of objects.
+	// We ensure the file exists.
+	if _, err := os.Stat(dbFileName); os.IsNotExist(err) {
+		err := os.MkdirAll(filepath.Dir(dbFileName), 0755)
+		if err != nil {
+			return err
 		}
-		columns = append(columns, fmt.Sprintf("\t%s %s", strings.ToLower(fieldName), sqlType))
+		// Create an empty list
+		return os.WriteFile(dbFileName, []byte("[]"), 0644)
 	}
-	sqlStatement += strings.Join(columns, ",\n")
-	sqlStatement += "\n);"
 
-	_, err = db.Exec(sqlStatement)
-	if err != nil {
-		return fmt.Errorf("couldn't create the table '%s' in %s: %v", tableName, dbFileName, err)
-	}
 	return nil
 }
 
 func deleteColumnFromTable(dbFileName, tableName, columnToDelete string, remainingFields map[string]string) error {
-	db, err := sql.Open("sqlite", dbFileName)
+	// If it ends in .db, change to .json
+	if strings.HasSuffix(dbFileName, ".db") {
+		dbFileName = strings.TrimSuffix(dbFileName, ".db") + ".json"
+	}
+
+	data, err := os.ReadFile(dbFileName)
 	if err != nil {
-		return fmt.Errorf("couldn't open the database file %s: %v", dbFileName, err)
+		return fmt.Errorf("failed to read JSON file: %w", err)
 	}
-	defer db.Close()
 
-	tx, err := db.Begin()
+	var items []map[string]interface{}
+	if err := json.Unmarshal(data, &items); err != nil {
+		return fmt.Errorf("failed to parse JSON file: %w", err)
+	}
+
+	// Remove the column from each item
+	for _, item := range items {
+		delete(item, strings.ToLower(columnToDelete))
+	}
+
+	updatedData, err := json.MarshalIndent(items, "", "  ")
 	if err != nil {
-		return fmt.Errorf("could not begin transaction: %w", err)
+		return fmt.Errorf("failed to marshal updated data: %w", err)
 	}
 
-	// 1. Create a new temporary table
-	tempTableName := tableName + "_temp_gollemer"
-	columns := []string{"id INTEGER PRIMARY KEY AUTOINCREMENT"}
-	var fieldNames []string
-	for fieldName, fieldType := range remainingFields {
-		sqlType := "TEXT"
-		switch strings.ToLower(fieldType) {
-		case "string":
-			sqlType = "TEXT"
-		case "int":
-			sqlType = "INTEGER"
-		}
-		columns = append(columns, fmt.Sprintf("%s %s", strings.ToLower(fieldName), sqlType))
-		fieldNames = append(fieldNames, strings.ToLower(fieldName))
-	}
-	sort.Strings(fieldNames)
-
-	createSQL := fmt.Sprintf("CREATE TABLE %s (%s)", tempTableName, strings.Join(columns, ", "))
-	if _, err := tx.Exec(createSQL); err != nil {
-		tx.Rollback()
-		return fmt.Errorf("failed to create temp table: %w", err)
-	}
-
-	// 2. Copy data from the old table to the new table
-	columnList := "id, " + strings.Join(fieldNames, ", ")
-	insertSQL := fmt.Sprintf("INSERT INTO %s (%s) SELECT %s FROM %s", tempTableName, columnList, columnList, tableName)
-	if _, err := tx.Exec(insertSQL); err != nil {
-		tx.Rollback()
-		return fmt.Errorf("failed to copy data to temp table: %w", err)
-	}
-
-	// 3. Drop the old table
-	dropSQL := fmt.Sprintf("DROP TABLE %s", tableName)
-	if _, err := tx.Exec(dropSQL); err != nil {
-		tx.Rollback()
-		return fmt.Errorf("failed to drop old table: %w", err)
-	}
-
-	// 4. Rename the new table
-	renameSQL := fmt.Sprintf("ALTER TABLE %s RENAME TO %s", tempTableName, tableName)
-	if _, err := tx.Exec(renameSQL); err != nil {
-		tx.Rollback()
-		return fmt.Errorf("failed to rename temp table: %w", err)
-	}
-
-	return tx.Commit()
+	return os.WriteFile(dbFileName, updatedData, 0644)
 }
 
 func registerHandlerURL(handlerName, handlerURL, mainGoPath string) (string, error) {
@@ -213,3 +168,4 @@ func registerHandlerWithPackage(packageName, packageImportPath, handlerName, han
 	goImports(mainGoPath)
 	return fmt.Sprintf("And registered it to URL '%s' in %s.", handlerURL, mainGoPath), nil
 }
+

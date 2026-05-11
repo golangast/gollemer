@@ -1,350 +1,376 @@
 package sqlite_db
 
 import (
-	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-
-	_ "modernc.org/sqlite" // Pure Go SQLite driver
+	"sort"
+	"strings"
+	"sync"
+	"time"
 )
 
-// InitDB initializes an SQLite database at the given path.
-// It creates the database file if it doesn't exist and sets up a 'messages' table.
-func InitDB(dataSourceName string) (*sql.DB, error) {
-	// Extract the directory from the dataSourceName
+// JSONDatabase handles persistence for Gollemer state using a flat JSON file.
+type JSONDatabase struct {
+	Messages         []Message          `json:"messages"`
+	Users            []User             `json:"users"`
+	TutorialMetadata TutorialMetadata   `json:"tutorial_metadata"`
+	ProjectProfiles  []ProjectProfile   `json:"project_profiles"`
+	ProjectRoutes    []ProjectRoute     `json:"project_routes"`
+	ProjectDatabases []ProjectDatabase  `json:"project_databases"`
+	
+	path string
+	mu   sync.RWMutex
+}
+
+type Message struct {
+	ID         int    `json:"id"`
+	Role       string `json:"role"`
+	Content    string `json:"content"`
+	Timestamp  string `json:"timestamp"`
+	CommitHash string `json:"commit_hash,omitempty"`
+}
+
+type User struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+	Age  int    `json:"age"`
+}
+
+type TutorialMetadata struct {
+	CurrentStep int    `json:"current_step"`
+	IsActive    bool   `json:"is_active"`
+	UpdatedAt   string `json:"updated_at"`
+}
+
+type ProjectProfile struct {
+	ID          int    `json:"id"`
+	Name        string `json:"name"`
+	Path        string `json:"path"`
+	FilesCount  int    `json:"files_count"`
+	RoutesCount int    `json:"routes_count"`
+	DbCount     int    `json:"db_count"`
+	TotalLOC    int    `json:"total_loc"`
+	LastVisited string `json:"last_visited"`
+	CreatedAt   string `json:"created_at"`
+	Description string `json:"description"`
+}
+
+type ProjectRoute struct {
+	ID        int    `json:"id"`
+	ProjectID int    `json:"project_id"`
+	Route     string `json:"route"`
+	Method    string `json:"method"`
+	Handler   string `json:"handler"`
+}
+
+type ProjectDatabase struct {
+	ID        int    `json:"id"`
+	ProjectID int    `json:"project_id"`
+	DBPath    string `json:"db_path"`
+	DBType    string `json:"db_type"`
+}
+
+// InitDB initializes a JSON database at the given path.
+func InitDB(dataSourceName string) (*JSONDatabase, error) {
+	// If it ends in .db, change to .json for clarity
+	if strings.HasSuffix(dataSourceName, ".db") {
+		dataSourceName = strings.TrimSuffix(dataSourceName, ".db") + ".json"
+	}
+
 	dir := filepath.Dir(dataSourceName)
-	// Create the directory if it doesn't exist
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		err := os.MkdirAll(dir, 0755) // Use MkdirAll to create parent directories as well
+		err := os.MkdirAll(dir, 0755)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create directory %s: %w", dir, err)
 		}
 	}
 
-	db, err := sql.Open("sqlite", dataSourceName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open database: %w", err)
+	db := &JSONDatabase{
+		path: dataSourceName,
 	}
 
-	// Create messages table
-	createMessagesTableSQL := `CREATE TABLE IF NOT EXISTS messages (
-		"id" INTEGER PRIMARY KEY AUTOINCREMENT,
-		"role" TEXT NOT NULL,
-		"content" TEXT NOT NULL,
-		"timestamp" DATETIME DEFAULT CURRENT_TIMESTAMP,
-		"commit_hash" TEXT
-	);`
-
-	_, err = db.Exec(createMessagesTableSQL)
-	if err != nil {
-		db.Close()
-		return nil, fmt.Errorf("failed to create messages table: %w", err)
-	}
-
-	createUsersTableSQL := `CREATE TABLE IF NOT EXISTS users (
-		"id" INTEGER PRIMARY KEY AUTOINCREMENT,
-		"name" TEXT NOT NULL,
-		"age" INTEGER NOT NULL
-	);`
-
-	_, err = db.Exec(createUsersTableSQL)
-	if err != nil {
-		db.Close()
-		return nil, fmt.Errorf("failed to create users table: %w", err)
-	}
-
-	createTutorialTableSQL := `CREATE TABLE IF NOT EXISTS tutorial_metadata (
-		id INTEGER PRIMARY KEY CHECK (id = 1),
-		current_step INTEGER DEFAULT 0,
-		is_active BOOLEAN DEFAULT FALSE,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-	);`
-
-	_, err = db.Exec(createTutorialTableSQL)
-	if err != nil {
-		db.Close()
-		return nil, fmt.Errorf("failed to create tutorial_metadata table: %w", err)
-	}
-
-	// Project Profile Tables
-	createProjectProfilesTableSQL := `CREATE TABLE IF NOT EXISTS project_profiles (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name TEXT UNIQUE NOT NULL,
-		path TEXT NOT NULL,
-		files_count INTEGER,
-		routes_count INTEGER,
-		db_count INTEGER,
-		total_loc INTEGER,
-		last_visited TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		description TEXT
-	);`
-	_, err = db.Exec(createProjectProfilesTableSQL)
-	if err != nil {
-		db.Close()
-		return nil, fmt.Errorf("failed to create project_profiles table: %w", err)
-	}
-
-	createProjectRoutesTableSQL := `CREATE TABLE IF NOT EXISTS project_routes (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		project_id INTEGER,
-		route TEXT,
-		method TEXT,
-		handler TEXT,
-		FOREIGN KEY(project_id) REFERENCES project_profiles(id) ON DELETE CASCADE
-	);`
-	_, err = db.Exec(createProjectRoutesTableSQL)
-	if err != nil {
-		db.Close()
-		return nil, fmt.Errorf("failed to create project_routes table: %w", err)
-	}
-
-	createProjectDatabasesTableSQL := `CREATE TABLE IF NOT EXISTS project_databases (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		project_id INTEGER,
-		db_path TEXT,
-		db_type TEXT,
-		FOREIGN KEY(project_id) REFERENCES project_profiles(id) ON DELETE CASCADE
-	);`
-	_, err = db.Exec(createProjectDatabasesTableSQL)
-	if err != nil {
-		db.Close()
-		return nil, fmt.Errorf("failed to create project_databases table: %w", err)
+	if _, err := os.Stat(dataSourceName); err == nil {
+		data, err := os.ReadFile(dataSourceName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read database file: %w", err)
+		}
+		if err := json.Unmarshal(data, db); err != nil {
+			return nil, fmt.Errorf("failed to parse database file: %w", err)
+		}
+	} else {
+		// Initialize with default data
+		db.TutorialMetadata = TutorialMetadata{CurrentStep: 0, IsActive: false, UpdatedAt: time.Now().Format(time.RFC3339)}
+		if err := db.save(); err != nil {
+			return nil, err
+		}
 	}
 
 	return db, nil
 }
 
-// SaveMessage saves a message to the 'messages' table and returns the new row's ID.
-func SaveMessage(db *sql.DB, role, content string) (int64, error) {
-	insertSQL := `INSERT INTO messages(role, content) VALUES (?, ?)`
-	result, err := db.Exec(insertSQL, role, content)
+func (db *JSONDatabase) save() error {
+	data, err := json.MarshalIndent(db, "", "  ")
 	if err != nil {
-		return 0, fmt.Errorf("failed to insert message: %w", err)
+		return fmt.Errorf("failed to marshal database: %w", err)
 	}
-	id, err := result.LastInsertId()
-	if err != nil {
-		return 0, fmt.Errorf("failed to get last insert ID: %w", err)
+	return os.WriteFile(db.path, data, 0644)
+}
+
+func (db *JSONDatabase) Close() error {
+	return db.save()
+}
+
+// SaveMessage saves a message and returns the new row's ID.
+func SaveMessage(db *JSONDatabase, role, content string) (int64, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	id := 1
+	if len(db.Messages) > 0 {
+		id = db.Messages[len(db.Messages)-1].ID + 1
 	}
-	return id, nil
+
+	msg := Message{
+		ID:        id,
+		Role:      role,
+		Content:   content,
+		Timestamp: time.Now().Format(time.RFC3339),
+	}
+	db.Messages = append(db.Messages, msg)
+	return int64(id), db.save()
 }
 
 // UpdateCommitHash updates the commit_hash for a given message ID.
-func UpdateCommitHash(db *sql.DB, id int64, hash string) error {
-	updateSQL := `UPDATE messages SET commit_hash = ? WHERE id = ?`
-	_, err := db.Exec(updateSQL, hash, id)
-	if err != nil {
-		return fmt.Errorf("failed to update commit hash: %w", err)
+func UpdateCommitHash(db *JSONDatabase, id int64, hash string) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	for i := range db.Messages {
+		if int64(db.Messages[i].ID) == id {
+			db.Messages[i].CommitHash = hash
+			return db.save()
+		}
 	}
-	return nil
+	return fmt.Errorf("message with id %d not found", id)
 }
 
 // GetCommitHash retrieves the commit_hash for a given message ID.
-func GetCommitHash(db *sql.DB, id int64) (string, error) {
-	query := `SELECT commit_hash FROM messages WHERE id = ?`
-	var hash sql.NullString
-	err := db.QueryRow(query, id).Scan(&hash)
-	if err != nil {
-		return "", fmt.Errorf("failed to get commit hash: %w", err)
+func GetCommitHash(db *JSONDatabase, id int64) (string, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	for _, msg := range db.Messages {
+		if int64(msg.ID) == id {
+			if msg.CommitHash == "" {
+				return "", fmt.Errorf("no commit hash found for id %d", id)
+			}
+			return msg.CommitHash, nil
+		}
 	}
-	if !hash.Valid {
-		return "", fmt.Errorf("no commit hash found for id %d", id)
-	}
-	return hash.String, nil
+	return "", fmt.Errorf("message with id %d not found", id)
 }
 
 // GetMessageByCommitHash retrieves a message by its commit hash (supports partial hash).
-func GetMessageByCommitHash(db *sql.DB, hash string) (*Message, error) {
-	// Support both full and partial hashes by using LIKE
-	query := `SELECT id, role, content, timestamp, commit_hash FROM messages WHERE commit_hash LIKE ? ORDER BY timestamp DESC LIMIT 1`
-	var msg Message
-	err := db.QueryRow(query, hash+"%").Scan(&msg.ID, &msg.Role, &msg.Content, &msg.Timestamp, &msg.CommitHash)
-	if err == sql.ErrNoRows {
-		return nil, fmt.Errorf("no message found with commit hash starting with '%s'", hash)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to query message by commit hash: %w", err)
-	}
-	return &msg, nil
-}
+func GetMessageByCommitHash(db *JSONDatabase, hash string) (*Message, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
 
-// Message represents a message stored in the database.
-type Message struct {
-	ID         int
-	Role       string
-	Content    string
-	Timestamp  string
-	CommitHash sql.NullString
-}
+	// Sort by timestamp DESC to get the latest
+	sort.Slice(db.Messages, func(i, j int) bool {
+		return db.Messages[i].Timestamp > db.Messages[j].Timestamp
+	})
 
-// GetMessages retrieves all messages from the 'messages' table.
-func GetMessages(db *sql.DB) ([]Message, error) {
-	query := `SELECT id, role, content, timestamp, commit_hash FROM messages ORDER BY timestamp ASC`
-	rows, err := db.Query(query)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query messages: %w", err)
-	}
-	defer rows.Close()
-
-	var messages []Message
-	for rows.Next() {
-		var msg Message
-		if err := rows.Scan(&msg.ID, &msg.Role, &msg.Content, &msg.Timestamp, &msg.CommitHash); err != nil {
-			return nil, fmt.Errorf("failed to scan message: %w", err)
+	for _, msg := range db.Messages {
+		if strings.HasPrefix(msg.CommitHash, hash) {
+			return &msg, nil
 		}
-		messages = append(messages, msg)
 	}
+	return nil, fmt.Errorf("no message found with commit hash starting with '%s'", hash)
+}
 
-	return messages, nil
+// GetMessages retrieves all messages.
+func GetMessages(db *JSONDatabase) ([]Message, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	// Sort by timestamp ASC
+	sort.Slice(db.Messages, func(i, j int) bool {
+		return db.Messages[i].Timestamp < db.Messages[j].Timestamp
+	})
+
+	return db.Messages, nil
 }
 
 // SyncStep updates the database with the current tutorial progress
-func SyncStep(db *sql.DB, step int, isActive bool) error {
-	query := `
-		INSERT INTO tutorial_metadata (id, current_step, is_active, updated_at)
-		VALUES (1, ?, ?, CURRENT_TIMESTAMP)
-		ON CONFLICT(id) DO UPDATE SET 
-			current_step = excluded.current_step,
-			is_active = excluded.is_active,
-			updated_at = CURRENT_TIMESTAMP`
-	_, err := db.Exec(query, step, isActive)
-	return err
+func SyncStep(db *JSONDatabase, step int, isActive bool) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	db.TutorialMetadata.CurrentStep = step
+	db.TutorialMetadata.IsActive = isActive
+	db.TutorialMetadata.UpdatedAt = time.Now().Format(time.RFC3339)
+	return db.save()
 }
 
 // GetCurrentStep retrieves the user's progress
-func GetCurrentStep(db *sql.DB) (int, bool) {
-	var step int
-	var active bool
-	err := db.QueryRow("SELECT current_step, is_active FROM tutorial_metadata WHERE id = 1").Scan(&step, &active)
-	if err != nil {
-		return 0, false
-	}
-	return step, active
-}
+func GetCurrentStep(db *JSONDatabase) (int, bool) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
 
-// ProjectProfile represents a project's metadata.
-type ProjectProfile struct {
-	ID          int
-	Name        string
-	Path        string
-	FilesCount  int
-	RoutesCount int
-	DbCount     int
-	TotalLOC    int
-	LastVisited string
-	CreatedAt   string
-	Description string
-}
-
-// ProjectRoute represents a route in a project.
-type ProjectRoute struct {
-	ID        int
-	ProjectID int
-	Route     string
-	Method    string
-	Handler   string
-}
-
-// ProjectDatabase represents a database in a project.
-type ProjectDatabase struct {
-	ID        int
-	ProjectID int
-	DBPath    string
-	DBType    string
+	return db.TutorialMetadata.CurrentStep, db.TutorialMetadata.IsActive
 }
 
 // UpsertProjectProfile saves or updates a project profile.
-func UpsertProjectProfile(db *sql.DB, profile ProjectProfile) (int64, error) {
-	query := `
-		INSERT INTO project_profiles (name, path, files_count, routes_count, db_count, total_loc, last_visited, description)
-		VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
-		ON CONFLICT(name) DO UPDATE SET
-			path = excluded.path,
-			files_count = excluded.files_count,
-			routes_count = excluded.routes_count,
-			db_count = excluded.db_count,
-			total_loc = excluded.total_loc,
-			last_visited = CURRENT_TIMESTAMP,
-			description = excluded.description`
-	
-	_, err := db.Exec(query, profile.Name, profile.Path, profile.FilesCount, profile.RoutesCount, profile.DbCount, profile.TotalLOC, profile.Description)
-	if err != nil {
-		return 0, err
+func UpsertProjectProfile(db *JSONDatabase, profile ProjectProfile) (int64, error) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	now := time.Now().Format(time.RFC3339)
+	for i := range db.ProjectProfiles {
+		if db.ProjectProfiles[i].Name == profile.Name {
+			db.ProjectProfiles[i].Path = profile.Path
+			db.ProjectProfiles[i].FilesCount = profile.FilesCount
+			db.ProjectProfiles[i].RoutesCount = profile.RoutesCount
+			db.ProjectProfiles[i].DbCount = profile.DbCount
+			db.ProjectProfiles[i].TotalLOC = profile.TotalLOC
+			db.ProjectProfiles[i].LastVisited = now
+			db.ProjectProfiles[i].Description = profile.Description
+			return int64(db.ProjectProfiles[i].ID), db.save()
+		}
 	}
-	
-	// Get ID
-	var id int64
-	err = db.QueryRow("SELECT id FROM project_profiles WHERE name = ?", profile.Name).Scan(&id)
-	return id, err
+
+	id := 1
+	if len(db.ProjectProfiles) > 0 {
+		maxID := 0
+		for _, p := range db.ProjectProfiles {
+			if p.ID > maxID {
+				maxID = p.ID
+			}
+		}
+		id = maxID + 1
+	}
+
+	profile.ID = id
+	profile.LastVisited = now
+	profile.CreatedAt = now
+	db.ProjectProfiles = append(db.ProjectProfiles, profile)
+	return int64(id), db.save()
 }
 
 // ClearProjectDetails removes routes and databases for a project to refresh them.
-func ClearProjectDetails(db *sql.DB, projectID int64) error {
-	_, err := db.Exec("DELETE FROM project_routes WHERE project_id = ?", projectID)
-	if err != nil {
-		return err
+func ClearProjectDetails(db *JSONDatabase, projectID int64) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	newRoutes := make([]ProjectRoute, 0)
+	for _, r := range db.ProjectRoutes {
+		if int64(r.ProjectID) != projectID {
+			newRoutes = append(newRoutes, r)
+		}
 	}
-	_, err = db.Exec("DELETE FROM project_databases WHERE project_id = ?", projectID)
-	return err
+	db.ProjectRoutes = newRoutes
+
+	newDBs := make([]ProjectDatabase, 0)
+	for _, d := range db.ProjectDatabases {
+		if int64(d.ProjectID) != projectID {
+			newDBs = append(newDBs, d)
+		}
+	}
+	db.ProjectDatabases = newDBs
+
+	return db.save()
 }
 
 // AddProjectRoute adds a route to a project.
-func AddProjectRoute(db *sql.DB, projectID int64, route, method, handler string) error {
-	_, err := db.Exec("INSERT INTO project_routes (project_id, route, method, handler) VALUES (?, ?, ?, ?)", projectID, route, method, handler)
-	return err
+func AddProjectRoute(db *JSONDatabase, projectID int64, route, method, handler string) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	id := 1
+	if len(db.ProjectRoutes) > 0 {
+		maxID := 0
+		for _, r := range db.ProjectRoutes {
+			if r.ID > maxID {
+				maxID = r.ID
+			}
+		}
+		id = maxID + 1
+	}
+
+	db.ProjectRoutes = append(db.ProjectRoutes, ProjectRoute{
+		ID:        id,
+		ProjectID: int(projectID),
+		Route:     route,
+		Method:    method,
+		Handler:   handler,
+	})
+	return db.save()
 }
 
 // AddProjectDatabase adds a database info to a project.
-func AddProjectDatabase(db *sql.DB, projectID int64, dbPath, dbType string) error {
-	_, err := db.Exec("INSERT INTO project_databases (project_id, db_path, db_type) VALUES (?, ?, ?)", projectID, dbPath, dbType)
-	return err
+func AddProjectDatabase(db *JSONDatabase, projectID int64, dbPath, dbType string) error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	id := 1
+	if len(db.ProjectDatabases) > 0 {
+		maxID := 0
+		for _, d := range db.ProjectDatabases {
+			if d.ID > maxID {
+				maxID = d.ID
+			}
+		}
+		id = maxID + 1
+	}
+
+	db.ProjectDatabases = append(db.ProjectDatabases, ProjectDatabase{
+		ID:        id,
+		ProjectID: int(projectID),
+		DBPath:    dbPath,
+		DBType:    dbType,
+	})
+	return db.save()
 }
 
 // GetProjectProfile retrieves a project profile by name.
-func GetProjectProfile(db *sql.DB, name string) (*ProjectProfile, error) {
-	query := `SELECT id, name, path, files_count, routes_count, db_count, total_loc, last_visited, created_at, description FROM project_profiles WHERE name = ?`
-	var p ProjectProfile
-	err := db.QueryRow(query, name).Scan(&p.ID, &p.Name, &p.Path, &p.FilesCount, &p.RoutesCount, &p.DbCount, &p.TotalLOC, &p.LastVisited, &p.CreatedAt, &p.Description)
-	if err != nil {
-		return nil, err
+func GetProjectProfile(db *JSONDatabase, name string) (*ProjectProfile, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	for _, p := range db.ProjectProfiles {
+		if p.Name == name {
+			return &p, nil
+		}
 	}
-	return &p, nil
+	return nil, fmt.Errorf("project profile '%s' not found", name)
 }
 
 // GetProjectRoutes retrieves all routes for a project.
-func GetProjectRoutes(db *sql.DB, projectID int) ([]ProjectRoute, error) {
-	rows, err := db.Query("SELECT id, project_id, route, method, handler FROM project_routes WHERE project_id = ?", projectID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var routes []ProjectRoute
-	for rows.Next() {
-		var r ProjectRoute
-		if err := rows.Scan(&r.ID, &r.ProjectID, &r.Route, &r.Method, &r.Handler); err != nil {
-			return nil, err
+func GetProjectRoutes(db *JSONDatabase, projectID int) ([]ProjectRoute, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	routes := make([]ProjectRoute, 0)
+	for _, r := range db.ProjectRoutes {
+		if r.ProjectID == projectID {
+			routes = append(routes, r)
 		}
-		routes = append(routes, r)
 	}
 	return routes, nil
 }
 
 // GetProjectDatabases retrieves all databases for a project.
-func GetProjectDatabases(db *sql.DB, projectID int) ([]ProjectDatabase, error) {
-	rows, err := db.Query("SELECT id, project_id, db_path, db_type FROM project_databases WHERE project_id = ?", projectID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var databases []ProjectDatabase
-	for rows.Next() {
-		var d ProjectDatabase
-		if err := rows.Scan(&d.ID, &d.ProjectID, &d.DBPath, &d.DBType); err != nil {
-			return nil, err
+func GetProjectDatabases(db *JSONDatabase, projectID int) ([]ProjectDatabase, error) {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	databases := make([]ProjectDatabase, 0)
+	for _, d := range db.ProjectDatabases {
+		if d.ProjectID == projectID {
+			databases = append(databases, d)
 		}
-		databases = append(databases, d)
 	}
 	return databases, nil
 }
-
