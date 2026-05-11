@@ -2,7 +2,7 @@
   "num_experts": 8,
   "model_dim": 256,
   "epochs": 2000,
-  "learning_rate": 0.00006434856,
+  "learning_rate": 0.000059844162,
   "batch_size": 1,
   "context_multiplier": 30,
   "router_noise": 0.06,

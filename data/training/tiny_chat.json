@@ -1,49 +1,17 @@
 [
   {
+    "query": "hello",
+    "flat_output": "greeting",
+    "semantic_output": {"operation": "greet"}
+  },
+  {
+    "query": "who are you",
+    "flat_output": "identity",
+    "semantic_output": {"operation": "identify"}
+  },
+  {
     "query": "how are you",
-    "flat_output": "intent:social_interaction sub_intent:wellbeing_check tone:friendly mood:helpful status:nominal reciprocity:true",
-    "semantic_output": {
-      "social": {
-        "intent": "social_interaction",
-        "sub_intent": "wellbeing_check",
-        "speech_act": "inquiry",
-        "social_dynamics": {
-          "tone": "friendly",
-          "formality": "casual_professional",
-          "sentiment_alignment": "positive",
-          "reciprocity_level": 1.0
-        },
-        "internal_state": {
-          "agent_mood": "helpful",
-          "energy_level": "high",
-          "system_health": {
-            "status": "nominal",
-            "load": "low",
-            "uptime": "stable"
-          }
-        },
-        "response_strategy": {
-          "primary_action": "acknowledge_wellbeing",
-          "secondary_action": "reciprocate_inquiry",
-          "template_id": "polite_wellbeing_reply",
-          "multimodal_hints": [
-            "slight_smile",
-            "warm_tone"
-          ]
-        },
-        "target_entities": [
-          {
-            "name": "gollemer",
-            "type": "AGENT",
-            "relation": "respondent"
-          },
-          {
-            "name": "user",
-            "type": "USER",
-            "relation": "interrogator"
-          }
-        ]
-      }
-    }
+    "flat_output": "status_check",
+    "semantic_output": {"operation": "status"}
   }
 ]
