@@ -1,6 +1,6 @@
 # Gollemer
 
-Gollemer is a high-performance **Mixture of Experts (MoE)** neural network framework and training pipeline written entirely in **Go**. It is designed for efficient conversational AI and intent classification without heavy external ML dependencies, featuring native GPU acceleration via WebGPU/Vulkan.
+Gollemer is a high-performance **Mixture of Experts (MoE)** neural network framework and training pipeline written entirely in **Go**. It is designed for maximum performance with **zero Rust/Python dependencies**, featuring a native, dependency-free core and GPU acceleration via `goffi`.
 
 ---
 
@@ -17,18 +17,33 @@ Gollemer is a high-performance **Mixture of Experts (MoE)** neural network frame
   - **Social Curriculum**: Specialized training for natural, diverse human-like interaction.
   - **Scheduled Sampling**: Smooth transition from teacher-forcing to self-generated sequence learning.
   - **Robust Model Persistence**: Gzip-compressed checkpoints with legacy fallback support and atomic saving.
-- **Pure Go Core**: No Python/C++ dependencies; leverages Go's concurrency for maximum data throughput.
+- **Dependency-Free Core**: No Rust or Python toolchains required. The entire neural engine is native Go.
+- **Hardware-Native Performance**:
+  - **GPU**: Direct FFI to Vulkan/WebGPU/OpenCL via `goffi`.
+  - **CPU**: Native **SIMD acceleration** using Go's `archsimd` (AVX2/SSE), matching BLAS performance without external libraries like Gonum.
+- **Ultra-Portable**: Compiles to a single static binary. No shared libraries or complex environments needed.
+
+---
+
+## 🏗️ Why Gollemer?
+
+By eliminating heavy external libraries like **Rust-based backends** and **Gonum**, Gollemer achieves a state of "Mechanical Sympathy" with the Go runtime:
+- **Faster Setup**: No need for Rust toolchains, LLVM, or complex CGO configurations for basic training.
+- **Superior Portability**: The native SIMD fallbacks ensure that the model remains fast even on systems without a dedicated GPU.
+- **Lean Footprint**: A single binary deployment with zero runtime dependencies (except for optional GPU drivers).
 
 ---
 
 ## ⚡ Quick Start
 
 ### 1. Installation
-Ensure you have Go 1.22+ and a working C compiler (GCC) for GPU support.
+Gollemer requires **Go 1.26+** to leverage native SIMD acceleration.
 
 ```bash
 git clone https://github.com/golangast/gollemer
 cd gollemer
+# Enable SIMD experiments for maximum CPU performance
+export GOEXPERIMENT=simd 
 go mod tidy
 ```
 
