@@ -47,13 +47,8 @@ export GOEXPERIMENT=simd
 go mod tidy
 ```
 
-### 2. GPU Setup (Linux)
-Gollemer uses WebGPU via `wgpu-native`.
-
-```bash
-# Install wgpu-native binaries
-./build_gpu.sh
-```
+### 2. GPU Acceleration
+GPU acceleration is powered by **Goffi** and requires no manual compilation of Rust or C++ backends. It automatically attempts to leverage **WebGPU/Vulkan** if drivers are present.
 
 ### 3. Training the Model
 We provide a simplified `Makefile` to handle the curriculum training process.
@@ -136,18 +131,34 @@ The `data/config/social_train.json` file controls the behavior of the social cur
 
 ## 🏗️ Project Structure
 
+Gollemer is organized into a clean, modular structure designed for ease of use and high performance:
+
 ```text
 .
-├── cmd/                # Entry points (train_moe, tools)
-├── internal/           # Core Logic
-│   ├── ai/             # MoE, RNN, Positional Encoding, and Optimizers
-│   └── training/       # Social and Intent curriculum pipelines
-├── data/               # Assets
-│   ├── models/         # Gzip-compressed .gob model weights
-│   └── training/       # Conversational datasets
-├── Makefile            # Simplified workflow entry points
-├── build_gpu.sh        # GPU dependency setup script
-└── GOB_DECODING_FIX.md # Documentation on recent serialization improvements
+├── cmd/tools/          # Entry Points
+│   └── train_moe/      # The primary training engine and interactive LLM shell.
+│
+├── internal/ai/        # Core Intelligence Engine
+│   ├── moe/            # Mixture of Experts (MoE) core architecture and routing logic.
+│   ├── neural/         # Native neural math:
+│   │   ├── tensor/     # SIMD-accelerated (AVX2/SSE) tensor operations.
+│   │   ├── nn/         # Neural network layers (Linear, Embedding, etc.).
+│   │   └── tokenizer/  # Advanced sub-word and sentence tokenization.
+│   ├── llm/            # High-level assistant runner, client, and intent logic.
+│   └── training/       # Specialized curriculum pipelines (Social, Intent).
+│
+├── data/               # Assets & Persistence
+│   ├── config/         # Hot-reloadable training and model configurations.
+│   ├── models/         # Serialized (.gob) model checkpoints and vocabularies.
+│   ├── training/       # Curated datasets (JSON/CSV/TXT) for social learning.
+│   ├── db/             # SQLite-backed long-term memory and knowledge bases.
+│   └── knowledge.json  # Static world-knowledge and retrieval facts.
+│
+├── scripts/            # Support Tools
+│   └── *.go            # Standalone tools for vocab analysis and model inspection.
+│
+├── Makefile            # Central workflow: train, chat, and clean.
+└── go.mod              # Minimal dependency management (Goffi only).
 ```
 
 ---
