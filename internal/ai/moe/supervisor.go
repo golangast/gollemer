@@ -26,6 +26,7 @@ type Supervisor struct {
 
 	// Per-expert variable overrides (layerIdx -> expertIdx -> ExpertConfig)
 	expertOverrides map[int]map[int]*ExpertOverride
+	FailureLogs     map[string]int // Tracks failures per expert ID (e.g., "E1")
 	mu              sync.Mutex
 }
 
@@ -433,6 +434,7 @@ type TrainPair struct {
 	A       string
 	Intent  string
 	Grammar string
+	Weight  float32
 }
 
 // AddExpertToLayer dynamically creates a new GrammarExpert and appends it to the
@@ -596,6 +598,118 @@ func (s *Supervisor) SetExpertVariables(model *IntentMoE, layerIdx, expertIdx in
 
 	log.Printf("🎛️ [Supervisor] Layer %d Expert E%d: OutputScale=%.2f LRMult=%.2f",
 		layerIdx, expertIdx, outputScale, lrMultiplier)
+}
+
+// HandleQualityGateFailure acts as the core decision-maker when the Subject-Verb Connection quality gate drops below threshold.
+func (s *Supervisor) HandleQualityGateFailure(model *IntentMoE, path string, pair *TrainPair, actualScore float64) {
+	log.Printf("🎯 [Supervisor] Adapting system for failing path [%s] on question: '%s'", path, pair.Q)
+
+	// involvedExperts might look like "E1+E8 -> E4+E12"
+	parts := strings.FieldsFunc(path, func(r rune) bool {
+		return r == '+' || r == '-' || r == '>' || r == ' '
+	})
+
+	s.mu.Lock()
+	if s.FailureLogs == nil {
+		s.FailureLogs = make(map[string]int)
+	}
+	s.mu.Unlock()
+
+	// 1. MUTATE VARIABLES: Penalize the failed expert combination
+	for _, idStr := range parts {
+		if !strings.HasPrefix(idStr, "E") {
+			continue
+		}
+		var eid int
+		_, err := fmt.Sscanf(idStr, "E%d", &eid)
+		if err != nil {
+			continue
+		}
+
+		// Apply to all layers to ensure we catch the bottleneck expert
+		layers := model.Encoder.GetMoELayers()
+		if model.Decoder.OutputMoE != nil {
+			layers = append(layers, model.Decoder.OutputMoE)
+		}
+
+		for lIdx, layer := range layers {
+			if eid < len(layer.Experts) {
+				// Get current overrides or defaults
+				currentScale := float32(1.0)
+				currentLR := float32(1.0)
+
+				s.mu.Lock()
+				if ov, ok := s.expertOverrides[lIdx][eid]; ok {
+					currentScale = ov.OutputScale
+					currentLR = ov.LRMultiplier
+				}
+				s.mu.Unlock()
+
+				// Mutate: weight *= 0.90, LR *= 1.05
+				newScale := currentScale * 0.90
+				newLR := currentLR * 1.05
+				s.SetExpertVariables(model, lIdx, eid, newScale, newLR)
+
+				s.mu.Lock()
+				s.FailureLogs[idStr]++
+				s.mu.Unlock()
+			}
+		}
+	}
+
+	// 2. CREATE NEW EXPERTS: If an expert fails too often on an intent, isolate it
+	for _, idStr := range parts {
+		s.mu.Lock()
+		failCount := s.FailureLogs[idStr]
+		s.mu.Unlock()
+
+		if failCount >= 3 {
+			log.Printf("🔥 [Supervisor] Path Component %s failed %d times. Spawning Specialized Expert.", idStr, failCount)
+
+			// Determine role from intent
+			roleID := 7 // OTHER
+			if pair.Intent == "social" {
+				roleID = 6 // GREET
+			}
+
+			// Spawn to Layer 0 and Decoder Output MoE
+			s.AddExpertToLayer(model, 0, roleID)
+			layers := model.Encoder.GetMoELayers()
+			if model.Decoder.OutputMoE != nil {
+				s.AddExpertToLayer(model, len(layers), roleID)
+			}
+
+			s.mu.Lock()
+			s.FailureLogs[idStr] = 0
+			s.mu.Unlock()
+		}
+	}
+}
+
+// EvolveTrainingData mutates training pairs to match expected syntactic structures.
+func (s *Supervisor) EvolveTrainingData(pairs *[]TrainPair, failedPair *TrainPair) {
+	for i := range *pairs {
+		pair := &(*pairs)[i]
+		if pair.Q == failedPair.Q && pair.Intent == failedPair.Intent {
+			// If it's a short social utterance failing grammar validation, rewrite or adapt
+			if pair.Intent == "social" && len(strings.Fields(pair.Q)) <= 2 {
+				log.Printf("📝 [Supervisor Data Update] Augmenting grammar structure for shorthand data: '%s'", pair.Q)
+
+				switch strings.ToLower(pair.Q) {
+				case "hello", "hi", "hey":
+					pair.Q = "i greet you with " + pair.Q
+				case "thanks", "thank you":
+					pair.Q = "i offer you my thanks"
+				default:
+					// Lower the sample weight so it stops poisoning the general gradient
+					if pair.Weight == 0 {
+						pair.Weight = 1.0
+					}
+					pair.Weight *= 0.5
+				}
+			}
+		}
+	}
 }
 
 // RunTriage orchestrates all supervisor interventions based on current metrics.
