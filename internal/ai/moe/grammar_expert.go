@@ -62,6 +62,9 @@ type GrammarExpert struct {
 
 	lastInput   *tensor.Tensor
 	lastReLUOut *tensor.Tensor
+	
+	// Multi-token memory (EMA of inputs to catch temporal patterns)
+	ContextMemory *tensor.Tensor
 }
 
 // NewGrammarExpert creates a GrammarExpert that owns the given grammar role (0-7).
@@ -98,6 +101,7 @@ func NewGrammarExpert(id, roleID, inputDim, outputDim int) (*GrammarExpert, erro
 		FC2:       fc2,
 		RoleBias:  roleBias,
 		health:    0.125,
+		ContextMemory: tensor.NewTensor([]int{1, inputDim}, make([]float32, inputDim), false),
 	}, nil
 }
 
@@ -118,15 +122,15 @@ func (e *GrammarExpert) Forward(input *tensor.Tensor) (*tensor.Tensor, error) {
 	}
 
 	// Add the learned role bias (broadcast over batch tokens)
-	rows := 1
-	for _, s := range out.Shape[:len(out.Shape)-1] {
-		rows *= s
-	}
-	for row := 0; row < rows; row++ {
-		offset := row * e.outputDim
-		for col := 0; col < e.outputDim && col < len(e.RoleBias.Data); col++ {
-			out.Data[offset+col] += e.RoleBias.Data[col]
-		}
+	out.AddWithBroadcast(e.RoleBias)
+
+	// Update Context Memory (EMA)
+	if e.ContextMemory != nil && len(input.Data) >= e.inputDim {
+		// Vectorized update: Context = 0.9*Context + 0.1*Mean(Input)
+		inputMean, _ := input.Mean(0)
+		e.ContextMemory.Scale(0.9)
+		e.ContextMemory.Add(inputMean.Scale(0.1))
+		inputMean.Release()
 	}
 
 	return out, nil

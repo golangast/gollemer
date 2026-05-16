@@ -23,9 +23,9 @@ type MoEEncoder struct {
 
 // NewMoEEncoder creates a new Mixture of Experts Encoder.
 func NewMoEEncoder(inputSize, hiddenSize, numLayers, numExperts int) (*MoEEncoder, error) {
-	// Define expert builder using nn.Linear wrapped in LinearExpert
+	// Define expert builder using FeedForwardExpert
 	expertBuilder := func(expertIdx int) (Expert, error) {
-		return NewGoffiExpert(expertIdx, inputSize, hiddenSize, hiddenSize)
+		return NewFeedForwardExpert(inputSize, hiddenSize, hiddenSize)
 	}
 
 	// Create MoELayer with Top-K=2 (standard for MoE)

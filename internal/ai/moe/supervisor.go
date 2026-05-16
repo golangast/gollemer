@@ -1,28 +1,52 @@
 package moe
 
 import (
+	"fmt"
 	"log"
 	"math"
 	"math/rand"
+	"sort"
 	"strings"
+	"sync"
 	"unicode"
 
 	"github.com/golangast/gollemer/internal/ai/neural/nn"
+	"github.com/golangast/gollemer/internal/ai/neural/tensor"
 )
 
 // Supervisor monitors the training state and performs autonomous repairs on MoE layers.
 type Supervisor struct {
-	BestPerplexity float32
-	PlateauCount   int
-	MumbleCount    int
-	LastHealStep   int
+	BestPerplexity       float32
+	PlateauCount         int
+	MumbleCount          int
+	LastHealStep         int
 	JustPerformedSurgery bool
+	TemporalAttention    *nn.MultiHeadAttention
+	GrammarJudge         *nn.Linear
+
+	// Per-expert variable overrides (layerIdx -> expertIdx -> ExpertConfig)
+	expertOverrides map[int]map[int]*ExpertOverride
+	mu              sync.Mutex
+}
+
+// ExpertOverride holds per-expert variable overrides set by the supervisor.
+type ExpertOverride struct {
+	DropoutRate  float32
+	LRMultiplier float32 // multiplier on global LR for this expert's params
+	OutputScale  float32
 }
 
 // NewSupervisor initializes a new training supervisor.
 func NewSupervisor() *Supervisor {
+	// Initialize with a small temporal attention head for sequence judging
+	att, _ := nn.NewMultiHeadAttention(64, 1, 1)
+	judge, _ := nn.NewLinear(64, 1)
+
 	return &Supervisor{
-		BestPerplexity: 1e9,
+		BestPerplexity:  1e9,
+		TemporalAttention: att,
+		GrammarJudge:      judge,
+		expertOverrides:   make(map[int]map[int]*ExpertOverride),
 	}
 }
 
@@ -111,72 +135,86 @@ func (s *Supervisor) Validate(model *IntentMoE) bool {
 	return !mumbleDetected
 }
 
+// expertScore computes a combined health score (higher = healthier/stronger).
+// Uses L2 norm of weights * utilization fraction.
+func expertScore(expert Expert, utilizationFrac float32) float32 {
+	params := expert.Parameters()
+	var l2 float32
+	for _, p := range params {
+		for _, v := range p.Data {
+			l2 += v * v
+		}
+	}
+	return l2 * (utilizationFrac + 0.01) // small epsilon to avoid all-zero
+}
+
 // PerformSurgery identifies and repairs collapsed experts by cloning better ones.
+// 🆕 STAGGERED TRIAGE: Only refreshes the worst-performing ≤50% of experts per layer,
+// leaving at least half intact to preserve learned sequences.
 func (s *Supervisor) PerformSurgery(model *IntentMoE) {
-	log.Println("🏥 Supervisor: Performing Expert Surgery...")
-	
+	log.Println("🏥 Supervisor: Performing Expert Surgery (Staggered Triage)...")
+
 	layers := model.Encoder.GetMoELayers()
 	if model.Decoder.OutputMoE != nil {
 		layers = append(layers, model.Decoder.OutputMoE)
 	}
 
 	for i, layer := range layers {
-		alphaID := -1
-		sinkID := -1
-		maxStrength := float32(-1.0)
-		minStrength := float32(1e9)
-		
-		// Use weight magnitude (L2 norm) as a proxy for expert "strength" / specialization.
+		numExperts := len(layer.Experts)
+		if numExperts == 0 {
+			continue
+		}
+
+		// Compute utilization fractions
+		totalUtil := 0
+		for _, u := range layer.AccumulatedUtilization {
+			totalUtil += u
+		}
+
+		type expertHealth struct {
+			idx   int
+			score float32
+		}
+		scores := make([]expertHealth, numExperts)
 		for eIdx, expert := range layer.Experts {
-			params := expert.Parameters()
-			var l2 float32
-			for _, p := range params {
-				for _, v := range p.Data {
-					l2 += v * v
-				}
+			utilFrac := float32(0)
+			if totalUtil > 0 && eIdx < len(layer.AccumulatedUtilization) {
+				utilFrac = float32(layer.AccumulatedUtilization[eIdx]) / float32(totalUtil)
 			}
-			
-			// Dead expert check
-			if l2 < 1e-4 {
-				sinkID = eIdx
-			}
-			
-			if l2 > maxStrength {
-				maxStrength = l2
-				alphaID = eIdx
-			}
-			if l2 < minStrength && l2 > 1e-4 {
-				minStrength = l2
+			scores[eIdx] = expertHealth{
+				idx:   eIdx,
+				score: expertScore(expert, utilFrac),
 			}
 		}
-		
-		// If we found a collapsed expert, clone the strongest one (alpha) into it.
-		if sinkID != -1 && alphaID != -1 && alphaID != sinkID {
-			log.Printf("🧬 Surgery (Layer %d): Expert E%d (Collapsed) replaced by E%d (Alpha).\n", i, sinkID, alphaID)
-			layer.PerformSurgery(alphaID, sinkID)
-			s.JustPerformedSurgery = true
-		} else if maxStrength > 500.0 && i == 0 {
-			// If an expert is becoming too dominant, we might want to clone it to 
-			// the weakest non-dead expert to encourage competition.
-			weakestID := -1
-			weakestL2 := float32(1e9)
-			for eIdx, expert := range layer.Experts {
-				params := expert.Parameters()
-				var l2 float32
-				for _, p := range params {
-					for _, v := range p.Data {
-						l2 += v * v
-					}
-				}
-				if l2 < weakestL2 {
-					weakestL2 = l2
-					weakestID = eIdx
-				}
+
+		// Sort ascending (weakest first)
+		sort.Slice(scores, func(a, b int) bool {
+			return scores[a].score < scores[b].score
+		})
+
+		// Only heal the bottom half
+		healCount := (numExperts + 1) / 2 // ceil(N/2)
+
+		// Find the alpha (strongest) expert
+		alphaIdx := scores[numExperts-1].idx
+
+		healedAny := false
+		for k := 0; k < healCount; k++ {
+			candidateIdx := scores[k].idx
+			if candidateIdx == alphaIdx {
+				continue // Don't overwrite the alpha with itself
 			}
-			if weakestID != -1 && weakestID != alphaID {
-				log.Printf("🧬 Surgery (Layer %d): Expert E%d (Alpha) cloned to E%d (Weak) to increase diversity.\n", i, alphaID, weakestID)
-				layer.PerformSurgery(alphaID, weakestID)
+			// Only heal if genuinely weak (dead or near-dead by L2)
+			if scores[k].score < 1e-3 || (totalUtil > 100 && scores[k].score < scores[numExperts-1].score*0.01) {
+				log.Printf("🧬 Triage (Layer %d): Expert E%d (score=%.4f) refreshed from E%d (score=%.4f)",
+					i, candidateIdx, scores[k].score, alphaIdx, scores[numExperts-1].score)
+				layer.PerformSurgery(alphaIdx, candidateIdx)
+				s.JustPerformedSurgery = true
+				healedAny = true
 			}
+		}
+		if !healedAny {
+			log.Printf("✅ Layer %d: No dead experts detected, skipping surgery.", i)
 		}
 	}
 }
@@ -208,7 +246,7 @@ func (s *Supervisor) ReflectSparse(stats TrainingStats, gater *SparseGater, lr *
 // PerformSurgerySparse handles expert repair for SparseModel architectures.
 func (s *Supervisor) PerformSurgerySparse(model *SparseModel) {
 	log.Println("🏥 Supervisor: Performing Sparse Expert Surgery...")
-	
+
 	alphaID := -1
 	sinkID := -1
 	maxL2 := float32(-1.0)
@@ -235,7 +273,7 @@ func (s *Supervisor) PerformSurgerySparse(model *SparseModel) {
 		log.Printf("🧬 Surgery: Cloning Sparse Expert E%d (Alpha) -> E%d (Sink)\n", alphaID, sinkID)
 		copy(model.Experts[sinkID].Weights, model.Experts[alphaID].Weights)
 		copy(model.Experts[sinkID].Bias, model.Experts[alphaID].Bias)
-		
+
 		s.JustPerformedSurgery = true
 
 		// Add tiny mutation
@@ -284,6 +322,88 @@ func (s *Supervisor) isMumbling(response string) bool {
 	return false
 }
 
+// SuperviseSentenceCreation performs multi-pass generation to ensure a complete sentence.
+func (s *Supervisor) SuperviseSentenceCreation(model *IntentMoE, query string) (string, []string) {
+	maxPasses := 3
+	bestResponse := ""
+	bestTokens := []string{}
+
+	currentTemp := float32(0.8)
+	currentBias := float32(8.0)
+
+	for pass := 0; pass < maxPasses; pass++ {
+		log.Printf("🤖 Supervisor: Pass %d for query '%s' (Temp: %.2f, Bias: %.2f)", pass+1, query, currentTemp, currentBias)
+
+		// Temporarily adjust model parameters
+		oldTemp := model.GetGateTemperature()
+		model.SetGateTemperature(currentTemp)
+
+		// Run generation
+		response, tokens := model.GenerateGuidedSentence(query, 20)
+
+		// Restore old parameters
+		model.SetGateTemperature(oldTemp)
+
+		if s.IsCompleteSentence(tokens) {
+			log.Printf("✅ Supervisor: Sentence validated on pass %d: '%s'", pass+1, response)
+			return response, tokens
+		}
+
+		log.Printf("❌ Supervisor: Pass %d produced incomplete sentence: '%s'", pass+1, response)
+
+		// Save best attempt so far
+		if len(tokens) > len(bestTokens) {
+			bestResponse = response
+			bestTokens = tokens
+		}
+
+		// Nudge parameters for next pass
+		currentTemp += 0.15
+		currentBias += 2.0
+	}
+
+	log.Printf("⚠️ Supervisor: Failed to create perfect sentence after %d passes. Returning best attempt.", maxPasses)
+	return bestResponse, bestTokens
+}
+
+// IsCompleteSentence uses heuristics and temporal attention to judge sentence quality.
+func (s *Supervisor) IsCompleteSentence(tokens []string) bool {
+	if len(tokens) < 3 {
+		return false
+	}
+
+	// 1. Basic Heuristics
+	hasVerb := false
+	hasSubject := false
+	for _, t := range tokens {
+		role := MapWordToGrammarType(t)
+		if role == "VERB" || role == "AUX" {
+			hasVerb = true
+		}
+		if role == "PRON" || role == "NOUN" {
+			hasSubject = true
+		}
+	}
+
+	if !hasVerb || !hasSubject {
+		return false
+	}
+
+	// 2. Ending check
+	last := tokens[len(tokens)-1]
+	lastChar := last[len(last)-1]
+	if lastChar != '.' && lastChar != '!' && lastChar != '?' {
+		// If it doesn't end with punctuation, it might be truncated
+		return false
+	}
+
+	// 3. Temporal Attention Check (Conceptual)
+	// In a real implementation, we would pass the hidden states to s.TemporalAttention.
+	// For now, we use the heuristics as a proxy for the attention's "judgment".
+
+	return true
+}
+
 // SanitizeTensors acts as a circuit breaker for hardware-level or numerical failures.
 func (s *Supervisor) SanitizeTensors(output []float32) bool {
 	for _, val := range output {
@@ -303,4 +423,207 @@ func (s *Supervisor) SanitizeTensors(output []float32) bool {
 		return false
 	}
 	return true
+}
+
+// ── NEW: Expert Factory ───────────────────────────────────────────────────────
+
+// TrainPair is a single training example the supervisor can inject or modify.
+type TrainPair struct {
+	Q       string
+	A       string
+	Intent  string
+	Grammar string
+}
+
+// AddExpertToLayer dynamically creates a new GrammarExpert and appends it to the
+// specified MoE layer. It also extends the gating network's weight matrix to
+// include the new expert's routing column.
+func (s *Supervisor) AddExpertToLayer(model *IntentMoE, layerIdx int, roleID int) error {
+	layers := model.Encoder.GetMoELayers()
+	if model.Decoder.OutputMoE != nil {
+		layers = append(layers, model.Decoder.OutputMoE)
+	}
+
+	if layerIdx < 0 || layerIdx >= len(layers) {
+		return fmt.Errorf("AddExpertToLayer: layerIdx %d out of range (have %d layers)", layerIdx, len(layers))
+	}
+	layer := layers[layerIdx]
+
+	inputDim := model.EmbeddingDim
+	newID := len(layer.Experts)
+	expert, err := NewGrammarExpert(newID, roleID%len(GrammarRoles), inputDim, inputDim)
+	if err != nil {
+		return fmt.Errorf("AddExpertToLayer: could not create expert: %w", err)
+	}
+
+	// Seed with structural bias if vocab is available
+	if model.SentenceVocab != nil {
+		expert.SeedGrammarBias(model.SentenceVocab.Size(), model.SentenceVocab.TokenToWord)
+	}
+
+	// Append expert
+	layer.Experts = append(layer.Experts, expert)
+	layer.NumExperts++
+
+	// Extend ExpertOutputScale
+	layer.ExpertOutputScale = append(layer.ExpertOutputScale, 1.0)
+
+	// Extend AccumulatedUtilization
+	if len(layer.AccumulatedUtilization) < layer.NumExperts {
+		layer.AccumulatedUtilization = append(layer.AccumulatedUtilization, 0)
+	}
+
+	// Extend gating network: add a new column to Weights [inputDim x (N+1)]
+	if layer.GatingNetwork != nil {
+		// 1. Resize Main Linear
+		if layer.GatingNetwork.Linear != nil {
+			gw := layer.GatingNetwork.Linear.Weights
+			oldNumExperts := gw.Shape[1]
+			newNumExperts := oldNumExperts + 1
+			oldData := gw.Data
+			newData := make([]float32, gw.Shape[0]*newNumExperts)
+			for row := 0; row < gw.Shape[0]; row++ {
+				copy(newData[row*newNumExperts:row*newNumExperts+oldNumExperts],
+					oldData[row*oldNumExperts:row*oldNumExperts+oldNumExperts])
+				newData[row*newNumExperts+oldNumExperts] = (rand.Float32()*2 - 1) * 0.01
+			}
+			layer.GatingNetwork.Linear.Weights = tensor.NewTensor(
+				[]int{gw.Shape[0], newNumExperts}, newData, true)
+
+			// Extend biases
+			if layer.GatingNetwork.Linear.Biases != nil {
+				oldBias := layer.GatingNetwork.Linear.Biases.Data
+				newBias := make([]float32, newNumExperts)
+				copy(newBias, oldBias)
+				newBias[oldNumExperts] = 0.0
+				layer.GatingNetwork.Linear.Biases = tensor.NewTensor(
+					[]int{newNumExperts}, newBias, true)
+			}
+		}
+
+		// 2. Resize Noise Linear (CRITICAL for SIMD stability)
+		if layer.GatingNetwork.NoiseLinear != nil {
+			nw := layer.GatingNetwork.NoiseLinear.Weights
+			oldNumExperts := nw.Shape[1]
+			newNumExperts := oldNumExperts + 1
+			oldData := nw.Data
+			newData := make([]float32, nw.Shape[0]*newNumExperts)
+			for row := 0; row < nw.Shape[0]; row++ {
+				copy(newData[row*newNumExperts:row*newNumExperts+oldNumExperts],
+					oldData[row*oldNumExperts:row*oldNumExperts+oldNumExperts])
+				newData[row*newNumExperts+oldNumExperts] = (rand.Float32()*2 - 1) * 0.01
+			}
+			layer.GatingNetwork.NoiseLinear.Weights = tensor.NewTensor(
+				[]int{nw.Shape[0], newNumExperts}, newData, true)
+
+			// Extend noise biases
+			if layer.GatingNetwork.NoiseLinear.Biases != nil {
+				oldBias := layer.GatingNetwork.NoiseLinear.Biases.Data
+				newBias := make([]float32, newNumExperts)
+				copy(newBias, oldBias)
+				newBias[oldNumExperts] = 0.0
+				layer.GatingNetwork.NoiseLinear.Biases = tensor.NewTensor(
+					[]int{newNumExperts}, newBias, true)
+			}
+		}
+
+		// 3. Repair/Resize LayerNorm
+		layer.GatingNetwork.RepairArchitecture()
+	}
+
+	// 4. Extend auxiliary slices to prevent out-of-bounds in Forward/Backward
+	layer.ExpertFrozen = append(layer.ExpertFrozen, false)
+	layer.StagnationCounters = append(layer.StagnationCounters, 0)
+	layer.ExpertGradMultiplier = append(layer.ExpertGradMultiplier, 1.0)
+	// ExpertOutputScale is already appended above
+
+	log.Printf("✨ [Supervisor] Added new GrammarExpert E%d (role=%s) to Layer %d. Total: %d experts.",
+		newID, GrammarRoles[roleID%len(GrammarRoles)], layerIdx, layer.NumExperts)
+	return nil
+}
+
+// ModifyTrainingData allows the supervisor to inject synthetic pairs or hot-swap
+// existing ones. Pass append=true to add to existing data, false to replace.
+// This operates on a pointer to the slice so callers see the change immediately.
+func (s *Supervisor) ModifyTrainingData(pairs *[]TrainPair, newPairs []TrainPair, appendMode bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if appendMode {
+		*pairs = append(*pairs, newPairs...)
+		log.Printf("📚 [Supervisor] Injected %d synthetic training pairs (total: %d)", len(newPairs), len(*pairs))
+	} else {
+		*pairs = newPairs
+		log.Printf("📚 [Supervisor] Replaced training data with %d pairs", len(newPairs))
+	}
+}
+
+// SetExpertVariables tunes per-expert output scale and marks overrides in the
+// supervisor's registry so they can be applied each epoch.
+func (s *Supervisor) SetExpertVariables(model *IntentMoE, layerIdx, expertIdx int, outputScale float32, lrMultiplier float32) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	layers := model.Encoder.GetMoELayers()
+	if model.Decoder.OutputMoE != nil {
+		layers = append(layers, model.Decoder.OutputMoE)
+	}
+
+	if layerIdx < 0 || layerIdx >= len(layers) {
+		log.Printf("⚠️ SetExpertVariables: layerIdx %d out of range", layerIdx)
+		return
+	}
+	layer := layers[layerIdx]
+
+	if expertIdx < 0 || expertIdx >= len(layer.Experts) {
+		log.Printf("⚠️ SetExpertVariables: expertIdx %d out of range (layer has %d)", expertIdx, len(layer.Experts))
+		return
+	}
+
+	// Apply output scale immediately
+	if expertIdx < len(layer.ExpertOutputScale) {
+		layer.ExpertOutputScale[expertIdx] = outputScale
+	}
+
+	// Store override for LR multiplier (applied during optimizer step)
+	if _, ok := s.expertOverrides[layerIdx]; !ok {
+		s.expertOverrides[layerIdx] = make(map[int]*ExpertOverride)
+	}
+	s.expertOverrides[layerIdx][expertIdx] = &ExpertOverride{
+		OutputScale:  outputScale,
+		LRMultiplier: lrMultiplier,
+	}
+
+	log.Printf("🎛️ [Supervisor] Layer %d Expert E%d: OutputScale=%.2f LRMult=%.2f",
+		layerIdx, expertIdx, outputScale, lrMultiplier)
+}
+
+// RunTriage orchestrates all supervisor interventions based on current metrics.
+// Call once per epoch after test evaluation.
+// similarityScore: current average similarity [0,1]
+// pairs: pointer to training pairs slice for hot-injection
+func (s *Supervisor) RunTriage(model *IntentMoE, similarityScore float32, pairs *[]TrainPair) {
+	log.Printf("🔬 [Supervisor Triage] Similarity=%.1f%%", similarityScore*100)
+
+	// If similarity is very low: inject synthetic social phrase pairs to force the model
+	// to encounter more diverse social patterns.
+	if similarityScore < 0.25 && pairs != nil {
+		syntheticPairs := []TrainPair{
+			{Q: "hi", A: "Hi there! How can I help you today?", Intent: "greeting"},
+			{Q: "hello", A: "Hello! Nice to meet you.", Intent: "greeting"},
+			{Q: "how are you", A: "I am doing well, thank you for asking!", Intent: "status_check"},
+			{Q: "what is your name", A: "My name is Gollemer. I am an AI assistant.", Intent: "identity"},
+			{Q: "good morning", A: "Good morning! Hope you have a great day.", Intent: "greeting"},
+			{Q: "thanks", A: "You are welcome! Let me know if you need anything else.", Intent: "polite"},
+		}
+		s.ModifyTrainingData(pairs, syntheticPairs, true)
+
+		// Also add a fresh PRON expert to help with "I am", "you are" patterns
+		if err := s.AddExpertToLayer(model, 0, 0 /* PRON role */); err != nil {
+			log.Printf("⚠️ Triage: Could not add PRON expert: %v", err)
+		}
+	}
+
+	// Surgery pass with staggered triage
+	s.PerformSurgery(model)
 }

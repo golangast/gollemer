@@ -391,12 +391,12 @@ func isGarbageOutput(response string) bool {
 		return true
 	}
 
-	// Common high-frequency garbage tokens - expanded to be more representative
 	garbageSet := map[string]bool{
 		".": true, "-": true, ",": true, "to": true, "the": true,
 		"a": true, "an": true, "of": true, "and": true, "is": true,
 		"it": true, "i": true, "you": true, "that": true, "be": true,
 		"in": true, "on": true, "at": true, "for": true, "with": true,
+		"?": true, "!": true, ":": true, ";": true, "hi": true,
 	}
 
 	garbageCount := 0
@@ -469,24 +469,27 @@ func isLowQualitySocialResponse(response string) bool {
 		}
 	}
 
-	if len(trimmedTokens) == 0 {
-		return true
-	}
+	tokenCount := len(trimmedTokens)
 
 	// Check for repetitive tokens (stuck decoder)
-	for i := 0; i < len(trimmedTokens)-2; i++ {
-		if trimmedTokens[i] == trimmedTokens[i+1] && trimmedTokens[i+1] == trimmedTokens[i+2] {
-			return true // Triple repetition
+	for i := 0; i < tokenCount-1; i++ {
+		if trimmedTokens[i] == trimmedTokens[i+1] {
+			// Double repetition of common tokens or any triple repetition
+			if tokenCount > 10 || i+2 < tokenCount && trimmedTokens[i+1] == trimmedTokens[i+2] {
+				return true
+			}
 		}
 	}
-
-	tokenCount := len(trimmedTokens)
 	uniqueRatio := float64(len(unique)) / float64(tokenCount)
 	functionRatio := float64(functionCount) / float64(tokenCount)
 	punctuationCount := strings.Count(response, ".") + strings.Count(response, "!") + strings.Count(response, "?")
 
+	// High repetition ratio check
+	if uniqueRatio < 0.6 && tokenCount > 8 {
+		return true
+	}
+
 	// Long, mostly-unique outputs with little linguistic glue are typically token soup.
-	// Tightened thresholds: 0.22 function ratio is a healthy minimum for social English.
 	if tokenCount >= 12 && uniqueRatio > 0.85 && functionRatio < 0.22 {
 		return true
 	}

@@ -36,8 +36,8 @@ func NewRuleBook() *RuleBook {
 	rb.Rules["social:greeting"] = IntentRule{
 		ParentIntent: "social",
 		ChildIntent:  "greeting",
-		GrammarSkeleton: []string{"GREET", "OTHER", "OTHER", "AUX", "PRON", "VERB", "PRON", "OTHER"},
-		RequiredKeywords: []string{"hi", "hello", "help"},
+		GrammarSkeleton: []string{"GREET", "OTHER", "OTHER", "INTERROGATIVE", "AUX", "PRON", "VERB", "PRON", "OTHER", "OTHER"},
+		RequiredKeywords: []string{"hi", "hello", "help", "how", "today"},
 	}
 
 	// Rule: Identity — "i am gollemer, your ai assistant."
@@ -139,49 +139,143 @@ func (rb *RuleBook) GetRuleByIntent(parent, child string) (IntentRule, bool) {
 }
 
 // MapWordToGrammarType returns a coarse-grained tag for a word.
-// This is used for structural training.
+// This is used for structural training and grammar scoring.
+// Vocabulary is tuned to match the human_chat.txt training corpus.
 func MapWordToGrammarType(w string) string {
-	w = strings.ToLower(w)
-	
-	// GREETINGS
+	w = strings.ToLower(strings.Trim(w, ".,!?;:\"'()[]"))
+
+	// GREETINGS / Discourse markers
 	switch w {
-	case "hello", "hi", "hey", "greetings", "morning", "evening": return "GREET"
+	case "hello", "hi", "hey", "greetings", "afternoon",
+		"hiya", "howdy", "yo", "sup", "hii", "heya", "ohh", "oh", "wow",
+		"haha", "lol", "hehe", "yep", "yup", "yeah", "yea", "yes",
+		"nope", "nah", "cool", "awesome", "amazing",
+		"interesting", "true", "right", "exactly", "indeed", "absolutely", "there", "here", "now":
+		return "GREET"
 	}
 
 	// PRONOUNS
 	switch w {
-	case "i", "me", "my", "you", "your", "it", "we", "they", "them", "us", "our": return "PRON"
+	case "i", "me", "my", "mine", "myself",
+		"you", "your", "yours", "yourself",
+		"he", "him", "his", "himself",
+		"she", "her", "hers", "herself",
+		"it", "its", "itself",
+		"we", "us", "our", "ours", "ourselves",
+		"they", "them", "their", "theirs", "themselves",
+		"this", "that", "these", "those",
+		"someone", "anyone", "everyone", "nobody", "somebody":
+		return "PRON"
 	}
 
-	// VERBS (Copula / State)
+	// VERBS — Copula / State verbs
 	switch w {
-	case "am", "is", "are", "was", "were", "be", "been", "being": return "VERB"
+	case "am", "is", "are", "was", "were", "be", "been", "being",
+		"seem", "seems", "seemed", "feel", "feels", "felt",
+		"looks", "sounded", "become", "became", "stay", "stayed",
+		"remain", "remains":
+		return "VERB"
 	}
 
 	// AUXILIARY VERBS
 	switch w {
-	case "will", "can", "should", "must", "might", "do", "does", "did", "have", "has", "had": return "AUX"
+	case "will", "would", "can", "could", "should", "shall", "may", "might",
+		"must", "ought", "dare",
+		"do", "does", "did", "doing",
+		"have", "has", "had", "having",
+		"get", "got", "gotten", "getting",
+		"going", "gonna", "gotta", "wanna":
+		return "AUX"
+	}
+
+	// ACTION VERBS — common in casual conversation
+	switch w {
+	case "think", "thinking", "thought", "know", "knowing", "knew",
+		"want", "wanted", "wanting", "like", "liked", "liking", "love", "loved", "loving",
+		"make", "made", "making", "go", "went", "gone", "start", "started", "starting",
+		"use", "used", "using", "work", "worked", "working",
+		"try", "tried", "trying", "learn", "learned", "learning",
+		"take", "took", "taken", "taking", "put", "keep", "kept",
+		"come", "came", "coming", "run", "ran", "running",
+		"see", "saw", "seen", "seeing", "look", "looked", "looking",
+		"find", "found", "finding", "give", "gave", "given", "giving",
+		"tell", "told", "telling", "ask", "asked", "asking",
+		"talk", "talked", "talking", "say", "said", "saying",
+		"help", "helped", "helping", "plan", "planned", "planning",
+		"buy", "bought", "buying", "eat", "ate", "eaten", "eating",
+		"drink", "drank", "drunk", "drinking", "read", "reading",
+		"write", "wrote", "written", "writing", "play", "played", "playing",
+		"cook", "cooked", "cooking", "build", "built", "building",
+		"enjoy", "enjoyed", "enjoying", "listen", "listened", "listening",
+		"practice", "practiced", "practicing", "need", "needed", "needing",
+		"check", "checked", "checking", "share", "shared", "sharing",
+		"hear", "heard", "hearing", "remember", "remembered", "remembering",
+		"spend", "spent", "spending", "live", "lived", "living",
+		"grow", "grew", "grown", "growing", "move", "moved", "moving",
+		"done", "finished", "completed":
+		return "VERB"
 	}
 
 	// ADJECTIVES / ADVERBS
 	switch w {
-	case "good", "fine", "well", "great", "excellent", "bad", "okay", "happy", "sad", "very", "really": return "ADJ"
+	case "good", "fine", "well", "great", "excellent", "bad", "okay", "ok",
+		"happy", "sad", "excited", "bored", "tired", "busy", "free", "ready",
+		"easy", "hard", "difficult", "complex", "fun", "funny",
+		"nice", "beautiful", "lovely", "wonderful",
+		"big", "small", "large", "little", "long", "short", "new", "old",
+		"hot", "cold", "warm", "clean", "fresh", "quick", "slow",
+		"better", "worse", "best", "worst", "more", "most", "less", "least",
+		"very", "really", "quite", "just", "still", "already", "again",
+		"always", "never", "often", "sometimes", "usually", "actually",
+		"definitely", "probably", "maybe", "perhaps", "sure", "only",
+		"also", "too", "even", "much", "many", "few", "lot", "lots",
+		"pretty", "fairly", "kind", "sort", "bit", "enough",
+		"so", "such", "both", "each", "every", "all", "any", "some",
+		"local", "different", "same", "next", "last", "other", "own",
+		"full", "whole", "main", "basic", "simple", "special", "first",
+		"second", "several", "single", "important", "natural",
+		"classic", "healthy", "perfect":
+		return "ADJ"
 	}
 
-	// NOUNS / NAMES
+	// NOUNS — common content words in casual conversation
 	switch w {
-	case "name", "gollemer", "bot", "assistant", "system", "ai", "machine", "human", "person", "thing": return "NOUN"
+	case "name", "gollemer", "bot", "assistant", "system", "ai", "machine",
+		"human", "person", "people", "friend", "friends", "family",
+		"thing", "things", "stuff", "way", "ways", "time", "day", "days",
+		"week", "month", "year", "place", "home", "house", "room",
+		"job", "school", "class", "project", "idea", "ideas",
+		"food", "water", "coffee", "tea", "book", "books", "music",
+		"life", "world", "city", "town", "country", "morning", "night",
+		"habit", "hobby", "skill", "goal", "goals",
+		"garden", "kitchen", "dog", "cat", "recipe", "hiking",
+		"weekend", "vacation", "holiday", "trip", "weather", "sleep",
+		"rest", "exercise", "health", "mind", "body", "heart", "energy",
+		"money", "phone", "computer", "app", "game", "show",
+		"movie", "podcast", "video", "photo", "message", "email",
+		"question", "answer", "story", "point", "reason", "moment", "today", "yesterday", "tomorrow":
+		return "NOUN"
 	}
 
 	// PREPOSITIONS / ARTICLES / CONJUNCTIONS
 	switch w {
-	case "the", "a", "an", "in", "on", "at", "to", "for", "with", "by", "and", "but", "or", "of": return "PREP"
+	case "the", "a", "an",
+		"in", "on", "at", "to", "for", "with", "by", "from", "of",
+		"about", "above", "after", "before", "between", "during",
+		"into", "near", "off", "out", "over", "through",
+		"under", "until", "up", "upon", "within", "without",
+		"and", "but", "or", "nor", "yet", "because", "if",
+		"when", "while", "although", "though", "since", "unless",
+		"as", "than", "then", "not", "no":
+		return "PREP"
 	}
 
 	// INTERROGATIVES
 	switch w {
-	case "how", "what", "where", "why", "when", "who": return "INTERROGATIVE"
+	case "how", "what", "where", "why", "who", "which", "whose", "whom":
+		return "INTERROGATIVE"
 	}
-	
+
 	return "OTHER"
 }
+

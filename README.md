@@ -1,13 +1,13 @@
 # Gollemer
 
-Gollemer is a high-performance **Mixture of Experts (MoE)** neural network framework and training pipeline written entirely in **Go**. It is designed for maximum performance with **zero Rust/Python dependencies**, featuring a native, dependency-free core and GPU acceleration via `goffi`.
+Gollemer is a high-performance **Mixture of Experts (MoE)** neural network framework and training pipeline written entirely in **Go**. It is designed for maximum performance with **zero external dependencies**, featuring a native core optimized for SIMD-accelerated CPU training.
 
 ---
 
 ## 🚀 Key Features
 
 - **Mixture of Experts Architecture**: Efficient multi-expert routing (K=1) for increased model capacity with low inference latency.
-- **Native GPU Acceleration**: High-performance training and inference powered by `goffi` + WebGPU/Vulkan.
+- **High Performance**: Native SIMD-vectorized operations for AVX2/SSE/Neon.
 - **Stabilized MoE Training**: 
   - **Router Noise & Jitter**: Prevents expert collapse and forces specialization.
   - **Expert Health Monitoring**: Real-time tracking of expert utilization and saturation.
@@ -19,7 +19,7 @@ Gollemer is a high-performance **Mixture of Experts (MoE)** neural network frame
   - **Robust Model Persistence**: Gzip-compressed checkpoints with legacy fallback support and atomic saving.
 - **Dependency-Free Core**: No Rust or Python toolchains required. The entire neural engine is native Go.
 - **Hardware-Native Performance**:
-  - **GPU**: Direct FFI to Vulkan/WebGPU/OpenCL via `goffi`.
+  - **CPU**: Optimized Go assembly and SIMD intrinsics via `archsimd`.
   - **CPU**: Native **SIMD acceleration** using Go's `archsimd` (AVX2/SSE), matching BLAS performance without external libraries like Gonum.
 - **Ultra-Portable**: Compiles to a single static binary. No shared libraries or complex environments needed.
 

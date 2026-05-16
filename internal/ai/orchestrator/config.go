@@ -37,10 +37,15 @@ type TrainingConfig struct {
 	ContextMultiplierDecay float32 `json:"context_multiplier_decay"`
 	StructuralRoutingWeight float32 `json:"structural_routing_weight"`
 	StructuralBiasIntensity float32 `json:"structural_bias_intensity"`
-	UnkPenalty             float32 `json:"unk_penalty"`
-	ExpertRegularizationWeight float32 `json:"expert_regularization_weight"`
-	ExpertSparsityWeight       float32 `json:"expert_sparsity_weight"`
+	UnkPenalty             float32            `json:"unk_penalty"`
+	ExpertRegularizationWeight float32        `json:"expert_regularization_weight"`
+	ExpertSparsityWeight       float32        `json:"expert_sparsity_weight"`
 	TokenWeights           map[string]float32 `json:"token_weights"`
+	FrequencyPenalty       float32            `json:"frequency_penalty"`
+	PresencePenalty        float32            `json:"presence_penalty"`
+	IntentBias             float32            `json:"intent_bias"`
+	TopP                   float32            `json:"top_p"`
+	TopK                   int                `json:"top_k"`
 }
 
 type SafeConfig struct {
@@ -131,7 +136,7 @@ func (s *SafeConfig) WatchConfig(path string) error {
 				s.Lock()
 				s.Config = cfg
 				s.Unlock()
-				log.Printf("🚀 Training variables updated via hot-reload (from %s)", path)
+				// log.Printf("🚀 Training variables updated via hot-reload (from %s)", path)
 			}
 		}
 	}()

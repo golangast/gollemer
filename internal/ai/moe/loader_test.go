@@ -12,9 +12,7 @@ import (
 func TestLoadIntentMoEModelWithFallback(t *testing.T) {
 	// Create a minimal test model
 	testModel := &IntentMoE{
-		ModelDim:      256,
-		NumExperts:    2,
-		VocabSize:     100,
+		EmbeddingDim:      256,
 		SentenceVocabSize: 50,
 	}
 
@@ -34,8 +32,7 @@ func TestLoadIntentMoEModelWithFallback(t *testing.T) {
 		encoder := gob.NewEncoder(gz)
 		checkpoint := &Checkpoint{
 			Model:      testModel,
-			Epoch:      1,
-			GlobalStep: 100,
+			StepCount: 100,
 		}
 		if err := encoder.Encode(checkpoint); err != nil {
 			t.Fatalf("Failed to encode checkpoint: %v", err)
@@ -48,8 +45,8 @@ func TestLoadIntentMoEModelWithFallback(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to load gzip checkpoint: %v", err)
 		}
-		if loaded.ModelDim != 256 {
-			t.Errorf("Expected ModelDim=256, got %d", loaded.ModelDim)
+		if loaded.EmbeddingDim != 256 {
+			t.Errorf("Expected EmbeddingDim=256, got %d", loaded.EmbeddingDim)
 		}
 	})
 
@@ -76,8 +73,8 @@ func TestLoadIntentMoEModelWithFallback(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to load raw gob model: %v", err)
 		}
-		if loaded.ModelDim != 256 {
-			t.Errorf("Expected ModelDim=256, got %d", loaded.ModelDim)
+		if loaded.EmbeddingDim != 256 {
+			t.Errorf("Expected EmbeddingDim=256, got %d", loaded.EmbeddingDim)
 		}
 	})
 

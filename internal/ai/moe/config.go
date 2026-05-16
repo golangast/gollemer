@@ -24,14 +24,24 @@ type SocialConfig struct {
 	AutoHeal            bool    `json:"auto_heal"`
 	OverfitMode         bool    `json:"overfit_mode"`
 	SamplingStart       int     `json:"sampling_start_epoch"`
-	SamplingMax         float32 `json:"sampling_max_prob"`
-	VerboseThinking     bool    `json:"verbose_thinking"`
-	CapacityFactor      float32 `json:"capacity_factor"`
-	K                   int     `json:"k"`
-	RepetitionPenalty   float32 `json:"repetition_penalty"`
-	EntropyWeight       float32 `json:"entropy_weight"`
-	UnkPenalty          float32 `json:"unk_penalty"`
-	StructuralBiasIntensity float32 `json:"structural_bias_intensity"`
+	SamplingMax         float32            `json:"sampling_max_prob"`
+	VerboseThinking     bool               `json:"verbose_thinking"`
+	CapacityFactor      float32            `json:"capacity_factor"`
+	K                   int                `json:"k"`
+	RepetitionPenalty   float32            `json:"repetition_penalty"`
+	FrequencyPenalty    float32            `json:"frequency_penalty"`
+	PresencePenalty     float32            `json:"presence_penalty"`
+	EntropyWeight       float32            `json:"entropy_weight"`
+	UnkPenalty          float32            `json:"unk_penalty"`
+	StructuralBiasIntensity   float32      `json:"structural_bias_intensity"`
+	StructuralRoutingWeight   float32      `json:"structural_routing_weight"`
+	ContextMultiplierDecay    float32      `json:"context_multiplier_decay"`
+	ExpertRegularizationWeight float32     `json:"expert_regularization_weight"`
+	ExpertSparsityWeight      float32      `json:"expert_sparsity_weight"`
+	TokenWeights              map[string]float32 `json:"token_weights"`
+	IntentBias                float32      `json:"intent_bias"`
+	TopP                      float32      `json:"top_p"`
+	TopK                      int          `json:"top_k"`
 }
 
 func LoadSocialConfig(path string) SocialConfig {
@@ -40,7 +50,7 @@ func LoadSocialConfig(path string) SocialConfig {
 		ModelDim:            256,
 		Epochs:              1000,
 		LearningRate:        1e-3,
-		BatchSize:           1,
+		BatchSize:           100,
 		ContextMultiplier:   15.0,
 		RouterNoise:         1.2,
 		RouterTemperature:   1.0,
@@ -58,6 +68,18 @@ func LoadSocialConfig(path string) SocialConfig {
 		SamplingMax:         0.5,
 		VerboseThinking:     true,
 		K:                   1,
+		RepetitionPenalty:   1.2,
+		FrequencyPenalty:    0.1,
+		PresencePenalty:     0.1,
+		ContextMultiplierDecay: 0.98,
+		StructuralRoutingWeight: 1.5,
+		StructuralBiasIntensity: 0.5,
+		ExpertRegularizationWeight: 0.0001,
+		ExpertSparsityWeight: 0.01,
+		IntentBias:          4.5,
+		TopP:                0.85,
+		TopK:                5,
+		TokenWeights:        make(map[string]float32),
 	}
 
 	data, err := os.ReadFile(path)

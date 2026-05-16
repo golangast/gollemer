@@ -15,6 +15,7 @@ import (
 	"github.com/golangast/gollemer/internal/platform/discovery"
 	"github.com/golangast/gollemer/internal/platform/sqlite_db"
 	"github.com/golangast/gollemer/internal/platform/ui"
+	"github.com/golangast/gollemer/internal/ai/orchestrator"
 )
 
 type Runner struct {
@@ -140,41 +141,6 @@ func (r *Runner) Init() {
 		// 🧬 REPAIR ARCHITECTURE
 		socialModel.RepairArchitecture()
 		log.Printf("🛠️ Social MoE Architecture verified and repaired (Experts: %d)", len(r.findMoELayers(socialModel)[0].Experts))
-
-		// 🧬 WIRE UP SOCIAL MODEL
-		// We keep r.IntentModel as the primary classification brain,
-		// and use socialModel specifically for conversational turns.
-		// r.IntentModel = socialModel // REMOVED: Don't overwrite the classifier
-		log.Printf("🧠 Social Brain prepared for conversational duties.")
-
-		// 🛡️ Apply Config from social_train.json
-		configPath := filepath.Join(r.ProjectRoot, "data/config/social_train.json")
-		config := moe.LoadSocialConfig(configPath)
-
-		if socialModel.Decoder != nil {
-			socialModel.Decoder.ContextMultiplier = config.ContextMultiplier
-			log.Printf("📡 Social Model Context Multiplier: %.2f", socialModel.Decoder.ContextMultiplier)
-		}
-
-		if config.RouterNoise > 0 {
-			moe.SetRouterNoiseFactor(config.RouterNoise)
-			log.Printf("🔀 Social Model Router Noise: %.2f", config.RouterNoise)
-		}
-
-		// Apply layer-specific settings
-		activeMoELayers := r.findMoELayers(socialModel)
-		for _, layer := range activeMoELayers {
-			if config.RouterTemperature > 0 {
-				layer.RouterTemperature = config.RouterTemperature
-			}
-			if config.LoadBalancingWeight > 0 {
-				layer.LoadBalancingWeight = config.LoadBalancingWeight
-			}
-			if config.ExpertDropout >= 0 {
-				layer.ExpertDropoutRate = config.ExpertDropout
-			}
-		}
-		log.Printf("⚙️  Applied MoE config to social model layers (Temp=%.2f, LBW=%.3f)", config.RouterTemperature, config.LoadBalancingWeight)
 	}
 
 	// Initialize Intent Resolver
@@ -184,6 +150,47 @@ func (r *Runner) Init() {
 		W2V:            r.W2V, // CRITICAL: wire W2V so getSentenceEmbedding doesn't nil-panic
 		CommandAnchors: map[string][]float64{},
 	}
+
+	// 🧬 WIRE UP SOCIAL MODEL & CONFIG
+	if socialModel != nil {
+		// 🛡️ Apply Config from social_train.json
+		configPath := filepath.Join(r.ProjectRoot, "data/config/social_train.json")
+		safeCfg, err := orchestrator.NewSafeConfig(configPath)
+		if err == nil {
+			safeCfg.WatchConfig(configPath)
+			r.Client.SocialConfig = safeCfg
+			log.Printf("📡 Social Config hot-reloader initialized.")
+			
+			config := safeCfg.Get()
+			if socialModel.Decoder != nil {
+				socialModel.Decoder.ContextMultiplier = config.ContextMultiplier
+				log.Printf("📡 Social Model Context Multiplier: %.2f", socialModel.Decoder.ContextMultiplier)
+			}
+
+			if config.RouterNoise > 0 {
+				moe.SetRouterNoiseFactor(config.RouterNoise)
+				log.Printf("🔀 Social Model Router Noise: %.2f", config.RouterNoise)
+			}
+
+			// Apply layer-specific settings
+			activeMoELayers := r.findMoELayers(socialModel)
+			for _, layer := range activeMoELayers {
+				if config.RouterTemperature > 0 {
+					layer.RouterTemperature = config.RouterTemperature
+				}
+				if config.LoadBalancingWeight > 0 {
+					layer.LoadBalancingWeight = config.LoadBalancingWeight
+				}
+				if config.ExpertDropout >= 0 {
+					layer.ExpertDropoutRate = config.ExpertDropout
+				}
+			}
+			log.Printf("⚙️  Applied MoE config to social model layers (Temp=%.2f, LBW=%.3f)", config.RouterTemperature, config.LoadBalancingWeight)
+		} else {
+			log.Printf("⚠️  Failed to load social config: %v", err)
+		}
+	}
+
 	if r.W2V != nil && r.W2V.VocabSize > 0 {
 		r.Client.CommandAnchors = map[string][]float64{
 			"create_file":    r.Client.getSentenceEmbedding("create a new file or scaffold code"),
@@ -211,7 +218,8 @@ func (r *Runner) initModels() {
 		if err == nil {
 			r.W2V = loadedW2V
 		} else {
-			log.Printf("⚠️  Failed to load Word2Vec: %v", err)
+			// Don't log as warning if it's likely just not trained yet
+			log.Printf("ℹ️  Word2Vec model not found at %s. Using basic fallback.", r.KB.ModelConfig.Word2VecPath)
 			// Create a default/dummy model
 			r.W2V = &word2vec.SimpleWord2Vec{
 				Vocabulary:  make(map[string]int),
@@ -228,7 +236,7 @@ func (r *Runner) initModels() {
 		}
 	}
 
-	vocabSize := 2547   // Final vocab size from TrainChat
+	vocabSize := 5000   // More sensible default for MoE architecture
 	embeddingDim := 768 // Match Transformer training
 	if r.W2V != nil {
 		vocabSize = r.W2V.VocabSize
@@ -329,7 +337,13 @@ func (r *Runner) initModels() {
 				}
 			}
 			r.IntentModel.SentenceVocab = v
-			log.Printf("⚠️  Using fallback SentenceVocab built from W2V (size=%d). Run -train-chat to generate a proper vocab.", v.Size())
+			
+			// Only show warning if we don't have a social model to rely on
+			if r.Client != nil && r.Client.SocialModel == nil {
+				log.Printf("⚠️  Using fallback SentenceVocab built from W2V (size=%d). Run -train-chat to generate a proper vocab.", v.Size())
+			} else {
+				log.Printf("ℹ️  Primary model using basic vocab fallback (size=%d).", v.Size())
+			}
 		}
 	}
 }
