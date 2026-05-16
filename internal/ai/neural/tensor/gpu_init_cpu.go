@@ -13,7 +13,6 @@ var (
 
 func initGPU() error {
 	// GPU initialization is handled by the compute platform
-	// In goffi mode, we use direct library loading.
 	return nil
 }
 

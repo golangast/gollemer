@@ -26,6 +26,7 @@ import (
 	"github.com/golangast/gollemer/internal/ai/tagger/tag"
 	"github.com/golangast/gollemer/internal/platform/ui"
 	"github.com/golangast/gollemer/internal/platform/watcher"
+	"github.com/golangast/gollemer/internal/ai/orchestrator"
 )
 
 // GollemerMoEClient implements the MoEClient interface using the existing NLP pipeline.
@@ -38,6 +39,7 @@ type GollemerMoEClient struct {
 	History           []ChatPair
 	lastMoEPrediction string
 	CommandAnchors    map[string][]float64
+	SocialConfig      *orchestrator.SafeConfig
 }
 
 func (c *GollemerMoEClient) PushHistory(q, a, intent string) {
@@ -576,7 +578,7 @@ func (c *GollemerMoEClient) supervisorCompleteSentenceGuided(ctx *tensor.Tensor,
 
 	for step := 0; step < 20; step++ {
 		inputT := tensor.NewTensor([]int{1, 1}, []float32{float32(currentID)}, false)
-		logits, nextH, nextC, _, decErr := model.Decoder.DecodeStepWithExpert(inputT, hidden, cell, ctx, step)
+		logits, nextH, nextC, _, _, decErr := model.Decoder.DecodeStepWithExpert(inputT, hidden, cell, ctx, step)
 		if decErr != nil {
 			break
 		}
@@ -636,14 +638,20 @@ func (c *GollemerMoEClient) supervisorCompleteSentenceGuided(ctx *tensor.Tensor,
 			}
 		}
 
-		// Greedy pick
-		bestID := 0
-		bestVal := float32(-1e38)
-		for idx, val := range logits.Data {
-			if val > bestVal {
-				bestVal = val
-				bestID = idx
-			}
+		// Use sampling instead of greedy to allow model logic to break ties between boosted tokens
+		temp := float32(0.8)
+		topK := 5
+		topP := float32(0.85)
+		if c.SocialConfig != nil {
+			sc := c.SocialConfig.Get()
+			if sc.RouterTemperature > 0 { temp = sc.RouterTemperature }
+			if sc.TopK > 0 { topK = sc.TopK }
+			if sc.TopP > 0 { topP = sc.TopP }
+		}
+
+		bestID, err := moe.SampleFromLogits(logits, temp, topK, topP)
+		if err != nil {
+			break
 		}
 		if bestID == model.SentenceVocab.EosID {
 			break
@@ -827,7 +835,19 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 
 	// ── 🦺 SECONDARY: Supervisor grammar-skeleton + guidance guided completion ──
 	// supervisorCompleteSentenceGuided already applies POS boosting and ChatBank guidance.
-	supervisorResp := c.supervisorCompleteSentenceGuided(ctx, intent, model, guidanceTokenIDs, guidanceBoost)
+	
+	// Use config-driven guidance boost if available
+	cfg := orchestrator.TrainingConfig{IntentBias: 4.5, TopP: 0.85, TopK: 5, RouterTemperature: 0.8, RepetitionPenalty: 0.3, FrequencyPenalty: 0.01}
+	if c.SocialConfig != nil {
+		cfg = c.SocialConfig.Get()
+	}
+	
+	finalIntentBias := cfg.IntentBias
+	if finalIntentBias <= 0 {
+		finalIntentBias = guidanceBoost
+	}
+
+	supervisorResp := c.supervisorCompleteSentenceGuided(ctx, intent, model, guidanceTokenIDs, finalIntentBias)
 	if supervisorResp != "" && !isGarbageOutput(supervisorResp) && !isLowQualitySocialResponse(supervisorResp) {
 		log.Printf("🦺 Supervised+guided generation (intent=%s): '%s'", intent, supervisorResp)
 		return supervisorResp
@@ -870,7 +890,7 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 
 		for i := 0; i < 30; i++ {
 			inputT := tensor.NewTensor([]int{1, 1}, []float32{float32(currentID)}, false)
-			logits, nextH, nextC, expertID, err := model.Decoder.DecodeStepWithExpert(inputT, fbHidden, fbCell, ctx, i)
+			logits, nextH, nextC, expertID, _, err := model.Decoder.DecodeStepWithExpert(inputT, fbHidden, fbCell, ctx, i)
 			if err != nil {
 				break
 			}
@@ -880,18 +900,34 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 			if i < 6 {
 				logits.Data[model.SentenceVocab.EosID] = -1e9
 			}
-			moe.ApplyRepetitionPenalty(logits, resIDs, 0.3)
-			const freqPenalty = 0.01
+			if unkID != -1 {
+				logits.Data[unkID] = -1e9
+			}
+			
+			// Use config for sampling
+			temp := float32(0.8)
+			topK := 5
+			topP := float32(0.85)
+			repPenalty := float32(0.3)
+			freqPenalty := float32(0.01)
+			
+			if c.SocialConfig != nil {
+				sc := c.SocialConfig.Get()
+				if sc.RouterTemperature > 0 { temp = sc.RouterTemperature }
+				if sc.TopK > 0 { topK = sc.TopK }
+				if sc.TopP > 0 { topP = sc.TopP }
+				if sc.RepetitionPenalty > 0 { repPenalty = sc.RepetitionPenalty }
+				if sc.FrequencyPenalty > 0 { freqPenalty = sc.FrequencyPenalty }
+			}
+
+			moe.ApplyRepetitionPenalty(logits, resIDs, repPenalty)
 			for id, count := range counts {
 				if id < len(logits.Data) {
 					logits.Data[id] -= freqPenalty * float32(count)
 				}
 			}
-			logits.Data[model.SentenceVocab.PaddingTokenID] = -1e9
-			if unkID != -1 {
-				logits.Data[unkID] = -1e9
-			}
-			bestID, err := moe.SampleFromLogits(logits, 0.8, 5, 0.85)
+
+			bestID, err := moe.SampleFromLogits(logits, temp, topK, topP)
 			if err != nil {
 				break
 			}

@@ -2,6 +2,7 @@ package moe
 
 import (
 	"fmt"
+	"iter"
 	"math"
 	"math/rand"
 	"runtime"
@@ -39,50 +40,71 @@ type MoELayer struct {
 	K             int // Number of top experts to select
 	InputDim      int
 	OutputDim     int
+	NumExperts    int
 
 	// Stored for backward pass
-	inputTensor            *Tensor
-	gateLogits             *Tensor // Raw logits for Z-loss gradient
-	expertOutputs          []*Tensor
-	ExpertTokenIndices     [][]int // Indices of tokens assigned to each expert
-	SelectedExperts        [][]int // Indices of selected experts for each input in the batch
-	GateOutputs            *Tensor // Output of the gating network (probabilities)
-	LoadBalancingLoss      float32 // Load balancing loss
-	GatingEntropyLoss      float32
-	Training               bool      // training mode
-	OverfitMode            bool      // If true, disable autonomous resets and exploration noise
-	GRPOEnabled            bool      // whether to use Training-Free GRPO (Group Relative Policy Optimization) for expert selection
-	ExpertProbSums         []float32 // Sum of probabilities for each expert in the batch
-	LoadBalancingWeight    float32   // Weight for the load balancing loss
-	CapacityFactor         float32   // Capacity factor to limit tokens per expert (e.g. 1.25)
-	RouterTemperature      float32   // Temperature for router softmax (default 1.0)
-	ExpertDropoutRate      float32   // Probability of dropping an expert during training (0.0 to 1.0)
-	TopExpertIDs           []int     // The #1 expert chosen for each token in the last batch (diagnostic)
-	RouterZLoss            float32   // Penalty for large router logits to keep them stable
-	stateStack             []MoEState
-	AccumulatedUtilization []int     // Tracks token assignments across steps/batches
-	ResidualScale          *Tensor   // Learned scale for the expert output in residual connection
-	ExpertFrozen           []bool    // Toggles whether an expert's weights can be updated
-	StagnationCounters     []int     // Counts consecutive steps/epochs with low utilization
-	ExpertGradMultiplier   []float32 // Boosts gradients for experts recovering from freeze
-	DiversityLoss          float32   // Penalty for experts being too similar
-	TargetRouting          []int     // Ground truth expert IDs for each token (set before Forward)
-	PersistenceBias        float32   // Bias for experts selected in the previous token step
-	LastSelectedExperts    [][]int   // Stores experts chosen for each batch item in the previous step
-	MutedTokenID           int       // Token ID to mute obsession (e.g. "i")
-	MutedTokenScale        float32   // Gradient multiplier for the muted token
-	ResetCount             int32     // Atomic counter for experts reset in this epoch
-	expertResets           map[int]int
-	resetsMu               sync.RWMutex
-	CurrentStepIndex       int
-	StepRoutingBias          map[int][]float32 // [step]bias_per_expert
-	SoftRouting              bool              // If true, use weighted average of all experts
-	StructuralRoutingWeight  float32           // Penalty strength for deviating from TargetRouting
-	StructuralBiasIntensity  float32           // Positive boost for TargetRouting during Forward
-	ExpertOutputScale        []float32         // Per-expert output multiplier
-	ExpertRegularizationWeight float32         // Penalty for experts deviating from healthy mean
-	ExpertSparsityWeight       float32         // Penalty for non-sparse or unbalanced expert selection
-	HealthyExpertIDs         []int             // List of IDs for experts considered "healthy" (e.g. 14, 9)
+	inputTensor                *Tensor
+	gateLogits                 *Tensor // Raw logits for Z-loss gradient
+	expertOutputs              []*Tensor
+	ExpertTokenIndices         [][]int // Indices of tokens assigned to each expert
+	SelectedExperts            [][]int // Indices of selected experts for each input in the batch
+	GateOutputs                *Tensor // Output of the gating network (probabilities)
+	LoadBalancingLoss          float32 // Load balancing loss
+	GatingEntropyLoss          float32
+	Training                   bool      // training mode
+	OverfitMode                bool      // If true, disable autonomous resets and exploration noise
+	GRPOEnabled                bool      // whether to use Training-Free GRPO (Group Relative Policy Optimization) for expert selection
+	ExpertProbSums             []float32 // Sum of probabilities for each expert in the batch
+	LoadBalancingWeight        float32   // Weight for the load balancing loss
+	CapacityFactor             float32   // Capacity factor to limit tokens per expert (e.g. 1.25)
+	RouterTemperature          float32   // Temperature for router softmax (default 1.0)
+	ExpertDropoutRate          float32   // Probability of dropping an expert during training (0.0 to 1.0)
+	TopExpertIDs               []int     // The #1 expert chosen for each token in the last batch (diagnostic)
+	RouterZLoss                float32   // Penalty for large router logits to keep them stable
+	stateStack                 []MoEState
+	AccumulatedUtilization     []int     // Tracks token assignments across steps/batches
+	ResidualScale              *Tensor   // Learned scale for the expert output in residual connection
+	ExpertFrozen               []bool    // Toggles whether an expert's weights can be updated
+	StagnationCounters         []int     // Counts consecutive steps/epochs with low utilization
+	ExpertGradMultiplier       []float32 // Boosts gradients for experts recovering from freeze
+	DiversityLoss              float32   // Penalty for experts being too similar
+	TargetRouting              []int     // Ground truth expert IDs for each token (set before Forward)
+	PersistenceBias            float32   // Bias for experts selected in the previous token step
+	LastSelectedExperts        [][]int   // Stores experts chosen for each batch item in the previous step
+	MutedTokenID               int       // Token ID to mute obsession (e.g. "i")
+	MutedTokenScale            float32   // Gradient multiplier for the muted token
+	ResetCount                 int32     // Atomic counter for experts reset in this epoch
+	expertResets               map[int]int
+	resetsMu                   sync.RWMutex
+	CurrentStepIndex           int
+	StepRoutingBias            map[int][]float32 // [step]bias_per_expert
+	SoftRouting                bool              // If true, use weighted average of all experts
+	StructuralRoutingWeight    float32           // Penalty strength for deviating from TargetRouting
+	StructuralBiasIntensity    float32           // Positive boost for TargetRouting during Forward
+	ExpertOutputScale          []float32         // Per-expert output multiplier
+	ExpertRegularizationWeight float32           // Penalty for experts deviating from healthy mean
+	ExpertSparsityWeight       float32           // Penalty for non-sparse or unbalanced expert selection
+	HealthyExpertIDs           []int             // List of IDs for experts considered "healthy" (e.g. 14, 9)
+}
+
+// ExpertTask represents work to be done by one expert on a subset of tokens.
+type ExpertTask struct {
+	ExpertIdx    int
+	TokenIndices []int
+}
+
+// ExpertTasks returns an iterator over experts that have tokens assigned to them.
+func (moe *MoELayer) ExpertTasks() iter.Seq[ExpertTask] {
+	return func(yield func(ExpertTask) bool) {
+		for i := 0; i < moe.NumExperts; i++ {
+			indices := moe.ExpertTokenIndices[i]
+			if len(indices) > 0 {
+				if !yield(ExpertTask{ExpertIdx: i, TokenIndices: indices}) {
+					return
+				}
+			}
+		}
+	}
 }
 
 // ResetUtilizationStats clears the accumulated utilization counters and expert resets.
@@ -145,26 +167,27 @@ func NewMoELayer(inputDim, outputDim, numExperts, k int, expertBuilder func(int)
 	}
 
 	layer := &MoELayer{
-		GatingNetwork:        gatingNetwork,
-		Experts:              experts,
-		K:                    k,
-		GRPOEnabled:          false, // Default to false. True requires implementing GRPO backward pass.
-		InputDim:             inputDim,
-		OutputDim:            outputDim,
-		LoadBalancingWeight:  0.1,                                       // Increased from 0.01 for tiny datasets
-		CapacityFactor:       1.25,                                      // Default capacity factor
-		RouterTemperature:    0.8,                                       // Default temperature
-		ExpertDropoutRate:    0.3,                                       // Increased from 0.1 to force alternative expert learning
-		ResidualScale:        NewTensor([]int{1}, []float32{1.0}, true), // Default to 1.0
-		ExpertFrozen:         make([]bool, numExperts),
-		StagnationCounters:   make([]int, numExperts),
-		ExpertGradMultiplier: make([]float32, numExperts),
-		MutedTokenID:         -1,
-		MutedTokenScale:         1.0,
-		StepRoutingBias:         make(map[int][]float32),
-		StructuralRoutingWeight: 5.0, // Default strength
-		StructuralBiasIntensity: 8.0, // Default boost
-		ExpertOutputScale:       make([]float32, numExperts),
+		GatingNetwork:              gatingNetwork,
+		Experts:                    experts,
+		NumExperts:                 numExperts,
+		K:                          k,
+		GRPOEnabled:                false, // Default to false. True requires implementing GRPO backward pass.
+		InputDim:                   inputDim,
+		OutputDim:                  outputDim,
+		LoadBalancingWeight:        0.1,                                       // Increased from 0.01 for tiny datasets
+		CapacityFactor:             1.25,                                      // Default capacity factor
+		RouterTemperature:          0.8,                                       // Default temperature
+		ExpertDropoutRate:          0.3,                                       // Increased from 0.1 to force alternative expert learning
+		ResidualScale:              NewTensor([]int{1}, []float32{1.0}, true), // Default to 1.0
+		ExpertFrozen:               make([]bool, numExperts),
+		StagnationCounters:         make([]int, numExperts),
+		ExpertGradMultiplier:       make([]float32, numExperts),
+		MutedTokenID:               -1,
+		MutedTokenScale:            1.0,
+		StepRoutingBias:            make(map[int][]float32),
+		StructuralRoutingWeight:    5.0, // Default strength
+		StructuralBiasIntensity:    8.0, // Default boost
+		ExpertOutputScale:          make([]float32, numExperts),
 		ExpertRegularizationWeight: 0.0, // Disabled by default
 		ExpertSparsityWeight:       0.0, // Disabled by default
 	}
@@ -282,13 +305,13 @@ func (moe *MoELayer) HealExpert(expertIdx int, healthyIDs []int) {
 	fmt.Printf("🏥 [Heal] Expert E%d is recovering. Blending weights with healthy experts: %v\n", expertIdx, healthyIDs)
 
 	targetParams := moe.Experts[expertIdx].Parameters()
-	
+
 	// Create mean parameters from healthy experts
 	for i := range targetParams {
 		if targetParams[i] == nil {
 			continue
 		}
-		
+
 		meanData := make([]float32, len(targetParams[i].Data))
 		count := 0
 		for _, hID := range healthyIDs {
@@ -303,12 +326,12 @@ func (moe *MoELayer) HealExpert(expertIdx int, healthyIDs []int) {
 				count++
 			}
 		}
-		
+
 		if count > 0 {
 			invCount := 1.0 / float32(count)
 			for j := range meanData {
 				meanData[j] *= invCount
-				
+
 				// Genetic Blending: 70% mean of healthy, 30% original (with jitter)
 				// This gives them a "fresh start" without wiping all their learned features.
 				targetParams[i].Data[j] = (meanData[j] * 0.7) + (targetParams[i].Data[j] * 0.3)
@@ -450,7 +473,7 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 	if moe.RouterTemperature > 0 {
 		routerScale = 1.0 / moe.RouterTemperature
 	}
-	simdScaleF32(gateLogits.Data, routerScale)
+	SimdScaleF32(gateLogits.Data, routerScale)
 
 	// --- [Penalty Mask for Over-Used Experts] ---
 	// Aggressive Penalty for Dominant Experts (Router Level)
@@ -575,7 +598,7 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 	// If we have stored experts from the previous step, bias the router toward them
 	// to prevent "expert jumping" mid-phrase.
 	numTokens := batchSize * seqLength
-	
+
 	if batchSize > 0 {
 		if moe.LastSelectedExperts == nil || len(moe.LastSelectedExperts) != batchSize {
 			moe.LastSelectedExperts = make([][]int, batchSize)
@@ -611,7 +634,6 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 		// 🧬 STRUCTURAL ROUTING BIAS (Training Only)
 		// If ground-truth routing is provided (from POS tags), boost the target expert.
 		if moe.Training && len(moe.TargetRouting) > 0 {
-			appliedCount := 0
 			for i := 0; i < numTokens && i < len(moe.TargetRouting); i++ {
 				target := moe.TargetRouting[i]
 				if target >= 0 && target < numExperts {
@@ -621,11 +643,7 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 						boost = 8.0
 					}
 					gateLogits.Data[i*numExperts+target] += boost
-					appliedCount++
 				}
-			}
-			if appliedCount > 0 && rand.Float32() < 0.01 {
-				fmt.Printf("🧬 [MoELayer] Applied Structural Routing Bias for %d tokens\n", appliedCount)
 			}
 		}
 
@@ -698,9 +716,6 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 		}
 		totalTokensRoute := batchSize * seqLength
 		// 🔍 Structural Diagnostic: Verify routing integrity
-		if moe.Training && totalTokensRoute > 0 && rand.Float32() < 0.001 {
-			fmt.Printf("🔍 [MoE Structural Check] K=%d | Logits[0]: %.4f\n", moe.K, gateLogits.Data[0])
-		}
 
 		tokensPerWorkerRoute := (totalTokensRoute + numWorkersRoute - 1) / numWorkersRoute
 
@@ -835,59 +850,43 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 		}
 
 		moe.expertOutputs = make([]*Tensor, numExperts)
-		var wg sync.WaitGroup
-		var errMutex sync.Mutex
 		var firstErr error
 
-		// fmt.Println("Starting parallel expert execution (Forward)")
-		// Run experts in parallel
-		for i := range numExperts {
-			indices := moe.ExpertTokenIndices[i]
-			if len(indices) == 0 {
-				continue
-			}
+		// 3. Parallel Expert Execution (Using Iterator Pattern)
+		var wg sync.WaitGroup
+		var errOnce sync.Once
 
+		for task := range moe.ExpertTasks() {
 			wg.Add(1)
-			go func(expertIdx int, tokenIndices []int) {
+			go func(t ExpertTask) {
 				defer wg.Done()
 
 				// Gather inputs for this expert
-				batchedInput, err := input2D.Gather(tokenIndices)
+				batchedInput, err := input2D.Gather(t.TokenIndices)
 				if err != nil {
-					errMutex.Lock()
-					if firstErr == nil {
-						firstErr = fmt.Errorf("failed to gather inputs for expert %d: %w", expertIdx, err)
-					}
-					errMutex.Unlock()
+					errOnce.Do(func() { firstErr = fmt.Errorf("failed to gather inputs for expert %d: %w", t.ExpertIdx, err) })
 					return
 				}
 
 				// Forward pass
-				output, err := moe.Experts[expertIdx].Forward(batchedInput)
+				output, err := moe.Experts[t.ExpertIdx].Forward(batchedInput)
 				if err != nil {
-					errMutex.Lock()
-					if firstErr == nil {
-						firstErr = fmt.Errorf("expert %d forward failed: %w", expertIdx, err)
-					}
-					errMutex.Unlock()
+					errOnce.Do(func() { firstErr = fmt.Errorf("expert %d forward failed: %w", t.ExpertIdx, err) })
 					return
 				}
 
 				// --- Activation Clipping ---
-				// Clamps every value between -15.0 and 15.0 to prevent activation explosion.
 				output.Clip(-15.0, 15.0)
 
 				// --- Expert Output Scaling ---
-				if len(moe.ExpertOutputScale) > expertIdx && moe.ExpertOutputScale[expertIdx] != 1.0 {
-					simdScaleF32(output.Data, moe.ExpertOutputScale[expertIdx])
-				} else if expertIdx == 1 {
-					// Fallback legacy boost for E1
-					simdScaleF32(output.Data, 1.1)
+				if len(moe.ExpertOutputScale) > t.ExpertIdx && moe.ExpertOutputScale[t.ExpertIdx] != 1.0 {
+					SimdScaleF32(output.Data, moe.ExpertOutputScale[t.ExpertIdx])
+				} else if t.ExpertIdx == 1 {
+					SimdScaleF32(output.Data, 1.1)
 				}
 
-				moe.expertOutputs[expertIdx] = output
-				// fmt.Printf("Expert %d finished forward\n", expertIdx)
-			}(i, indices)
+				moe.expertOutputs[t.ExpertIdx] = output
+			}(task)
 		}
 		wg.Wait()
 		// fmt.Println("Finished parallel expert execution (Forward)")
@@ -925,40 +924,41 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 				for i := start; i < end; i++ {
 					selected := moe.SelectedExperts[i]
 					outStart := i * moe.OutputDim
+					outRow := finalOutput.Data[outStart : outStart+moe.OutputDim]
 
-					for j, expertIdx := range selected {
-						output := moe.expertOutputs[expertIdx]
-						if output == nil {
-							continue
+					// Optimized scattering for Top-K
+					if len(selected) == 2 {
+						e0, e1 := selected[0], selected[1]
+
+						w0 := GateOutputs.Data[i*numExperts+e0]
+						w1 := GateOutputs.Data[i*numExperts+e1]
+
+						r0 := tokenExpertRelativeIndices[i][0]
+						r1 := tokenExpertRelativeIndices[i][1]
+
+						if r0 != -1 && moe.expertOutputs[e0] != nil {
+							expertRow := moe.expertOutputs[e0].Data[r0*moe.OutputDim : (r0+1)*moe.OutputDim]
+							SimdAddScalarMulF32(outRow, expertRow, w0)
 						}
-
-						// Get weight
-						weight := GateOutputs.Data[i*numExperts+expertIdx]
-
-						// Get expert output row
-						relativeRow := tokenExpertRelativeIndices[i][j]
-						if relativeRow == -1 {
-							continue // Token was dropped for this expert
+						if r1 != -1 && moe.expertOutputs[e1] != nil {
+							expertRow := moe.expertOutputs[e1].Data[r1*moe.OutputDim : (r1+1)*moe.OutputDim]
+							SimdAddScalarMulF32(outRow, expertRow, w1)
 						}
-						expertRowStart := relativeRow * moe.OutputDim
-						expertRow := output.Data[expertRowStart : expertRowStart+moe.OutputDim]
-
-						// 🛡️ NUMERICAL SAFETY: Check for NaNs in expert output
-						for _, v := range expertRow {
-							if math.IsNaN(float64(v)) || math.IsInf(float64(v), 0) {
-								// If an expert explodes, zero it out for this token to prevent trashing the whole layer
-								if rand.Float32() < 0.001 {
-									fmt.Printf("⚠️ [MoELayer] Expert %d produced NaN/Inf! Zeroing output for current token.", expertIdx)
-								}
-								for k := range expertRow {
-									expertRow[k] = 0
-								}
-								break
+					} else {
+						for j, expertIdx := range selected {
+							output := moe.expertOutputs[expertIdx]
+							if output == nil {
+								continue
 							}
-						}
 
-						outRow := finalOutput.Data[outStart : outStart+moe.OutputDim]
-						simdAddScalarMulF32(outRow, expertRow, weight)
+							weight := GateOutputs.Data[i*numExperts+expertIdx]
+							relativeRow := tokenExpertRelativeIndices[i][j]
+							if relativeRow == -1 {
+								continue
+							}
+							expertRow := output.Data[relativeRow*moe.OutputDim : (relativeRow+1)*moe.OutputDim]
+							SimdAddScalarMulF32(outRow, expertRow, weight)
+						}
 					}
 				}
 			}(startToken, endToken)
@@ -1139,183 +1139,87 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 	// moe.ExpertTokenIndices has the mapping
 
 	var wg sync.WaitGroup
-	var errMutex sync.Mutex
+	var errOnce sync.Once
 	var inputGradMutex sync.Mutex
 	var firstErr error
 
-	// Run experts backward in parallel
-	for i := range numExperts {
-		indices := moe.ExpertTokenIndices[i]
-		if len(indices) == 0 {
-			continue
-		}
-
+	// Run experts backward in parallel (Using Iterator Pattern)
+	for task := range moe.ExpertTasks() {
 		wg.Add(1)
-		go func(expertIdx int, tokenIndices []int) {
+		go func(t ExpertTask) {
 			defer wg.Done()
 
 			// Gather gradients for this expert
-			// We use Gather on the reshaped grad tensor
-			batchedGrad, err := gradReshaped.Gather(tokenIndices)
+			batchedGrad, err := gradReshaped.Gather(t.TokenIndices)
 			if err != nil {
-				errMutex.Lock()
-				if firstErr == nil {
-					firstErr = fmt.Errorf("failed to gather grads for expert %d: %w", expertIdx, err)
-				}
-				errMutex.Unlock()
+				errOnce.Do(func() { firstErr = fmt.Errorf("failed to gather grads for expert %d: %w", t.ExpertIdx, err) })
 				return
 			}
 
-			// Get weight
-			// dL/dExpertOutput = dL/dCombinedOutput * weight
-			// We need to multiply batchedGrad by the corresponding gate output weights.
-			// The batchedGrad is [numTokensForExpert, embeddingDim]
-			// The weights are moe.GateOutputs.Data[tokenIdx*numExperts+expertIdx]
-			// We need to create a weightedBatchedGrad
+			// Prepare weighted gradients
 			weightedBatchedGradData := make([]float32, len(batchedGrad.Data))
-			for k, tokenIdx := range tokenIndices {
-				gateIdx := tokenIdx*numExperts + expertIdx
-				if gateIdx < 0 || gateIdx >= len(moe.GateOutputs.Data) {
-					continue
-				}
+			for k, tokenIdx := range t.TokenIndices {
+				gateIdx := tokenIdx*numExperts + t.ExpertIdx
 				weight := moe.GateOutputs.Data[gateIdx]
-				simdMulScalarF32(weightedBatchedGradData[k*embeddingDim:(k+1)*embeddingDim], batchedGrad.Data[k*embeddingDim:(k+1)*embeddingDim], weight)
+				SimdMulScalarF32(weightedBatchedGradData[k*embeddingDim:(k+1)*embeddingDim], batchedGrad.Data[k*embeddingDim:(k+1)*embeddingDim], weight)
 			}
 			weightedBatchedGrad := NewTensor(batchedGrad.Shape, weightedBatchedGradData, false)
 
 			// Backward pass
-			err = moe.Experts[expertIdx].Backward(weightedBatchedGrad)
+			err = moe.Experts[t.ExpertIdx].Backward(weightedBatchedGrad)
 			if err != nil {
-				errMutex.Lock()
-				if firstErr == nil {
-					firstErr = fmt.Errorf("expert %d backward failed: %w", expertIdx, err)
-				}
-				errMutex.Unlock()
+				errOnce.Do(func() { firstErr = fmt.Errorf("expert %d backward failed: %w", t.ExpertIdx, err) })
 				return
 			}
 
-			// --- [Expert Grad Multiplier (Jump Start)] ---
-			// Apply a multiplier to experts recovering from freeze or stagnation
-			if moe.ExpertGradMultiplier != nil && moe.ExpertGradMultiplier[expertIdx] > 1.0 {
-				params := moe.Experts[expertIdx].Parameters()
+			// --- Expert Grad Multiplier ---
+			if moe.ExpertGradMultiplier != nil && moe.ExpertGradMultiplier[t.ExpertIdx] > 1.0 {
+				params := moe.Experts[t.ExpertIdx].Parameters()
 				for _, p := range params {
 					if p.Grad != nil {
-						simdScaleF32(p.Grad.Data, moe.ExpertGradMultiplier[expertIdx])
+						SimdScaleF32(p.Grad.Data, moe.ExpertGradMultiplier[t.ExpertIdx])
 					}
 				}
-				// Decay multiplier toward 1.0 (50 steps to normalization @ 0.98 decay)
-				moe.ExpertGradMultiplier[expertIdx] *= 0.98
-				if moe.ExpertGradMultiplier[expertIdx] < 1.02 {
-					moe.ExpertGradMultiplier[expertIdx] = 1.0
+				moe.ExpertGradMultiplier[t.ExpertIdx] *= 0.98
+				if moe.ExpertGradMultiplier[t.ExpertIdx] < 1.02 {
+					moe.ExpertGradMultiplier[t.ExpertIdx] = 1.0
 				}
 			}
 
-			// --- [Expert Surgery: Expert-Specific Backprop] ---
-			if expertIdx == 1 {
-				// E1: Gradient Boost to jump-start learning
-				params := moe.Experts[expertIdx].Parameters()
+			// --- Expert Surgery: Expert-Specific Backprop ---
+			if t.ExpertIdx == 1 {
+				params := moe.Experts[t.ExpertIdx].Parameters()
 				for _, p := range params {
 					if p.Grad != nil {
-						simdScaleF32(p.Grad.Data, 1.2)
-					}
-				}
-			} else if expertIdx == 6 {
-				// E6: Manual Weight Decay to tame influence
-				params := moe.Experts[expertIdx].Parameters()
-				for _, p := range params {
-					// Manual L2 penalty applied to weights
-					for i := range p.Data {
-						p.Data[i] *= 0.999 // Stronger decay
-					}
-				}
-			} else if expertIdx == 11 || expertIdx == 13 {
-				// E11/E13: Tame over-utilization for generic tokens
-				params := moe.Experts[expertIdx].Parameters()
-				for _, p := range params {
-					for i := range p.Data {
-						p.Data[i] *= 0.9995 // Subtle but persistent decay
+						SimdScaleF32(p.Grad.Data, 1.2)
 					}
 				}
 			}
 
-			// --- [Token-Specific Muting (e.g. "i" obsession)] ---
-			if moe.MutedTokenID != -1 && moe.MutedTokenScale != 1.0 {
-				params := moe.Experts[expertIdx].Parameters()
-				// Usually the last parameter is the output bias (vocab size)
-				if len(params) >= 4 {
-					bias := params[3] // FC2 Bias in InternalExpert
-					if bias.Grad != nil && len(bias.Grad.Data) > moe.MutedTokenID {
-						bias.Grad.Data[moe.MutedTokenID] *= moe.MutedTokenScale
-					}
-				}
-			}
-
-			// Accumulate input gradients
-			// The expert's input was created via Gather.
-			// So expert.Inputs()[0].Grad contains the gradients w.r.t the gathered input.
-			// We need to scatter these back to the original input.
-			// Fortunately, GatherOperation.Backward does exactly this!
-			// We just need to trigger backward on the gathered input.
-
+			// Accumulate input gradients via GatherOperation.Backward
 			if moe.inputTensor.RequiresGrad {
-				expertInputs := moe.Experts[expertIdx].Inputs()
-				if len(expertInputs) == 0 {
-					return
-				}
+				expertInputs := moe.Experts[t.ExpertIdx].Inputs()
 				if len(expertInputs) > 0 {
 					gatheredInput := expertInputs[0]
-					// Trigger backward on the gathered input to scatter gradients to input2D (and then to inputTensor)
-					// Note: gatheredInput.Creator is the GatherOperation.
 					if gatheredInput.Creator != nil && gatheredInput.Grad != nil {
 						inputGradMutex.Lock()
-						err := gatheredInput.Creator.Backward(gatheredInput.Grad)
+						gatheredInput.Creator.Backward(gatheredInput.Grad)
 						inputGradMutex.Unlock()
-						if err != nil {
-							errMutex.Lock()
-							if firstErr == nil {
-								firstErr = fmt.Errorf("failed to scatter grads for expert %d: %w", expertIdx, err)
-							}
-							errMutex.Unlock()
-							return
-						}
 					}
 				}
 			}
 
 			// Accumulate gating gradients
-			// dL/dGate = dot(grad_token, expert_output)
-			// expertOutput is stored in moe.expertOutputs[expertIdx]
-			expertOutput := moe.expertOutputs[expertIdx]
-
-			for k, tokenIdx := range tokenIndices {
-				// Re-fetch grad for token
+			expertOutput := moe.expertOutputs[t.ExpertIdx]
+			for k, tokenIdx := range t.TokenIndices {
 				startIdx := tokenIdx * embeddingDim
-				endIdx := (tokenIdx + 1) * embeddingDim
-				if startIdx >= len(gradReshaped.Data) || endIdx > len(gradReshaped.Data) {
-					continue
-				}
-				gradForTokenData := gradReshaped.Data[startIdx:endIdx]
+				gradForTokenData := gradReshaped.Data[startIdx : startIdx+embeddingDim]
+				expertOutRow := expertOutput.Data[k*embeddingDim : (k+1)*embeddingDim]
 
-				expertRowStart := k * embeddingDim
-				expertRowEnd := (k + 1) * embeddingDim
-				if expertRowStart >= len(expertOutput.Data) || expertRowEnd > len(expertOutput.Data) {
-					continue
-				}
-				expertOutRow := expertOutput.Data[expertRowStart:expertRowEnd]
-
-				gradForGateProb := DotProduct(gradForTokenData, expertOutRow)
-
-				// This write is safe?
-				// gateGradReshaped is [batch*seq, numExperts].
-				// Each expert writes to a DIFFERENT column (expertIdx).
-				// So this IS thread-safe.
-				gateGradIdx := tokenIdx*numExperts + expertIdx
-				if gateGradIdx >= 0 && gateGradIdx < len(gateGradReshaped.Data) {
-					gateGradReshaped.Data[gateGradIdx] += gradForGateProb
-				}
+				gradForGateProb := SimdDotProductF32(gradForTokenData, expertOutRow)
+				gateGradReshaped.Data[tokenIdx*numExperts+t.ExpertIdx] += gradForGateProb
 			}
-
-		}(i, indices)
+		}(task)
 	}
 	wg.Wait()
 	// fmt.Println("Finished parallel expert execution (Backward)")
@@ -1460,7 +1364,7 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 
 	// Apply Temperature Scaling to gradients (dL/dx = dL/dy * 1/T)
 	if moe.RouterTemperature != 1.0 && moe.RouterTemperature > 0 {
-		simdScaleF32(logitsGrad.Data, 1.0/moe.RouterTemperature)
+		SimdScaleF32(logitsGrad.Data, 1.0/moe.RouterTemperature)
 	}
 
 	// 4. Add Router Z-Loss Gradient (dL_z / d_logits)
@@ -1529,7 +1433,7 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 				meanProbs[j] /= float32(numTokens)
 			}
 
-			// Gradient for Balance Loss (simplified): 
+			// Gradient for Balance Loss (simplified):
 			// dL/dp_ij = lambda * mean_prob_j
 			// This encourages reducing probabilities for experts that already have high mean prob.
 			lambda := moe.ExpertSparsityWeight
@@ -1794,7 +1698,7 @@ func CalculateRouterZLoss(routerLogits *Tensor) float32 {
 // This calculates sum((count_i/total)^2) which rewards equal distribution.
 func CalculateSquareOfSumsLoss(usageCounts []int, totalTokens int) float32 {
 	// Weight heavily (e.g. 2.0) as requested to break stalemates
-	return float32(simdSquareOfSumsLossF32(usageCounts, totalTokens, 2.0))
+	return float32(SimdSquareOfSumsLossF32(usageCounts, totalTokens, 2.0))
 }
 
 // CalculateAuxLoss computes the load balancing loss (CV^2 of importance) to prevent expert starvation.

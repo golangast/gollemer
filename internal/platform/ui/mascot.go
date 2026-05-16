@@ -268,14 +268,7 @@ func (m *Mascot) WelcomeSequence() {
 // AskArchitecture prompts the user for their project goals
 func (m *Mascot) AskArchitecture() string {
 	m.Say(Think, "What kind of machine are we building today, Zachary?")
-	fmt.Println("  [1] MoE (Mixture of Experts) Transformer")
-	fmt.Println("  [2] High-Performance SIMD Primitives")
-	fmt.Println("  [3] Standard Web Service (Gin/Chi)")
-	fmt.Println("  [4] Custom NLP Tagger")
-
-	fmt.Printf("\n%s>> Choice (1-4): %s", m.Color, ColorReset)
 	var choice string
-	fmt.Scanln(&choice)
 	return choice
 }
 

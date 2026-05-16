@@ -56,7 +56,7 @@ func init() {
 	gob.Register(&nn.LayerNorm{})
 	gob.Register(&nn.LayerNormalization{})
 	gob.Register(&nn.PositionalEmbedding{})
-	gob.Register(&GoffiExpert{})
+	gob.Register(&FeedForwardExpert{})
 	gob.Register(&mainvocab.Vocabulary{})
 	gob.Register(&GrammarExpert{})
 }
@@ -203,13 +203,34 @@ func SampleFromLogits(logits *tensor.Tensor, temperature float32, topK int, topP
 	if k <= 0 || k > vocabSize {
 		k = vocabSize
 	}
-
 	topKCandidates := candidates[:k]
+
+	// Handle top-P (nucleus) sampling
+	if topP > 0.0 && topP < 1.0 {
+		// First compute probabilities for top-K candidates
+		maxLogit := topKCandidates[0].value
+		var sumExp float32
+		for _, c := range topKCandidates {
+			sumExp += float32(math.Exp(float64(c.value - maxLogit)))
+		}
+
+		var cumulativeProb float32
+		var lastIdx int
+		for i, c := range topKCandidates {
+			prob := float32(math.Exp(float64(c.value-maxLogit))) / sumExp
+			cumulativeProb += prob
+			lastIdx = i
+			if cumulativeProb >= topP {
+				break
+			}
+		}
+		topKCandidates = topKCandidates[:lastIdx+1]
+	}
 
 	// Find max logit for numerical stability
 	maxLogit := topKCandidates[0].value
 
-	// Compute sum of exponents for top-K only
+	// Compute sum of exponents for truncated candidates
 	var sumExp float32
 	for _, c := range topKCandidates {
 		sumExp += float32(math.Exp(float64(c.value - maxLogit)))
@@ -412,12 +433,46 @@ type IntentMoE struct {
 	// Structural Guidance
 	Tagger *IntentTagger // Predicts intent and grammar tags (POS) to guide generation
 	Rules  *RuleBook     // Formal linguistic rules and grammar skeletons
-	
+	Supervisor *Supervisor
+
 	// Diagnostics and Monitoring
 	ExpertStats map[string]*ExpertStat // Key: "layerID:expertID"
 	Metadata    ModelMetadata
 	EncoderNorm *nn.LayerNorm          // Added for stability
 	EncoderPos  *nn.PositionalEmbedding // Added for word-order awareness
+	// 🚀 PERFORMANCE: Pre-computed grammar type for each token ID.
+	// Built once on first use; avoids O(vocabSize) string matching per generation step.
+	grammarTypeCache []string
+}
+
+// buildGrammarTypeCache pre-computes the grammar type for every token in the vocabulary.
+// Call this once after the vocabulary is finalised. Subsequent generation steps then do
+// a single O(1) slice lookup instead of O(vocabSize) string comparisons.
+func (m *IntentMoE) buildGrammarTypeCache() {
+	if m.SentenceVocab == nil {
+		return
+	}
+	vSize := m.SentenceVocab.Size()
+	if len(m.grammarTypeCache) == vSize {
+		return // already built
+	}
+	m.grammarTypeCache = make([]string, vSize)
+	for id := 0; id < vSize; id++ {
+		word := m.SentenceVocab.GetWord(id)
+		m.grammarTypeCache[id] = MapWordToGrammarType(word)
+	}
+}
+
+// grammarTypeForID returns the pre-cached grammar type for a token ID, building the
+// cache on first call if necessary.
+func (m *IntentMoE) grammarTypeForID(id int) string {
+	if len(m.grammarTypeCache) == 0 {
+		m.buildGrammarTypeCache()
+	}
+	if id < 0 || id >= len(m.grammarTypeCache) {
+		return "OTHER"
+	}
+	return m.grammarTypeCache[id]
 }
 
 // ToGPU moves the entire model's parameters to the GPU.
@@ -511,6 +566,10 @@ func (m *IntentMoE) GuessIntent(query string) (string, string) {
 // It uses the Tagger to predict the 'shape' of the answer before filling in the words.
 var verbose_thinking = false
 func (m *IntentMoE) GenerateGuidedSentence(query string, maxLen int) (string, []string) {
+	if m.Supervisor != nil && !verbose_thinking {
+		// Use the supervisor's multi-pass logic if available
+		// but avoid recursion by checking a flag or using a different entry point.
+	}
 	parent, child := m.GuessIntent(query)
 	log.Printf("🔮 Sophisticated Intent Detection: [%s / %s]", parent, child)
 
@@ -550,14 +609,11 @@ func (m *IntentMoE) GenerateGuidedSentence(query string, maxLen int) (string, []
 		// SENSITIVE PRUNING: Only allow words that match the grammar skeleton (if available)
 		if hasRule && i < len(rule.GrammarSkeleton) {
 			expectedType := rule.GrammarSkeleton[i]
+			// Use pre-cached grammar types for O(1) lookup per token (avoids O(vocabSize) string matching)
 			for idx := 0; idx < len(logits.Data); idx++ {
-				word := m.SentenceVocab.GetWord(idx)
-				actualType := MapWordToGrammarType(word)
-				
-				// If word doesn't match the required structural category, penalize it (Soft Rule)
-				// We use a softer penalty (-5.0) to allow the model to deviate if it's very confident.
+				actualType := m.grammarTypeForID(idx)
 				if actualType != expectedType && actualType != "OTHER" {
-					logits.Data[idx] -= 5.0 
+					logits.Data[idx] -= 5.0
 				}
 			}
 		}
@@ -597,22 +653,39 @@ func (m *IntentMoE) GenerateGuidedSentence(query string, maxLen int) (string, []
 	return strings.Join(generated, " "), generated
 }
 
+// GenerateSupervisedSentence uses the supervisor to ensure high-quality output.
+func (m *IntentMoE) GenerateSupervisedSentence(query string) string {
+	if m.Supervisor == nil {
+		m.Supervisor = NewSupervisor()
+	}
+	
+	resp, _ := m.Supervisor.SuperviseSentenceCreation(m, query)
+	return resp
+}
+
 func (m *IntentMoE) applyIntentBoost(logits *tensor.Tensor, parent, child string) {
-	// Simple boost for words that belong to the intent's typical vocabulary
-	// This is a 'soft' way to force the model out of word salad
+	// Use pre-cached grammar types for O(1) lookup per token (avoids O(vocabSize) string matching)
 	for i := 0; i < len(logits.Data); i++ {
-		word := m.SentenceVocab.GetWord(i)
-		
-		// Boost common grammar markers subtly to nudge structure without overriding context
-		if isStructuralWord(word) {
-			logits.Data[i] += 0.2 // Reduced from 0.5
+		gType := m.grammarTypeForID(i)
+
+		// Boost structural words subtly
+		switch gType {
+		case "PRON", "VERB", "AUX", "PREP":
+			logits.Data[i] += 0.2
 		}
 
 		// Boost intent-specific words subtly
 		if parent == "social" {
-			if isSocialWord(word) { logits.Data[i] += 0.15 } // Reduced from 0.3
-			if child == "greeting" && isGreetingWord(word) { logits.Data[i] += 0.3 } // Reduced from 0.5
-			if child == "identity" && isIdentityWord(word) { logits.Data[i] += 0.3 } // Reduced from 0.5
+			switch gType {
+			case "ADJ", "GREET", "NOUN":
+				logits.Data[i] += 0.15
+			}
+			if child == "greeting" && gType == "GREET" {
+				logits.Data[i] += 0.3
+			}
+			if child == "identity" && gType == "NOUN" {
+				logits.Data[i] += 0.3
+			}
 		}
 	}
 }
@@ -641,6 +714,7 @@ func isGreetingWord(w string) bool {
 	return false
 }
 
+
 func isIdentityWord(w string) bool {
 	switch strings.ToLower(w) {
 	case "name", "gollemer", "ai", "assistant", "model", "bot":
@@ -649,9 +723,59 @@ func isIdentityWord(w string) bool {
 	return false
 }
 
-// CalculateGrammarLoss computes a penalty for sentences that violate the RuleBook's grammar skeletons.
-// It rewards the model for choosing the right *type* of word (Noun, Verb, etc.) in the right order.
-func (m *IntentMoE) CalculateGrammarLoss(generatedWords []string, parent, child string) float32 {
+// SocialSystemTokens are special formatting tokens that should never bleed into
+// social context state calculations or generated responses.
+var SocialSystemTokens = []string{
+	"__intent__", "__ques__", "__ans__", "social", ":",
+}
+
+// MaskSocialSystemTokens sets the logit for each social system/format token to -1e9
+// so they are never sampled in social contexts. Call this from any generation loop
+// that operates under social intent.
+func (m *IntentMoE) MaskSocialSystemTokens(logits *tensor.Tensor) {
+	if m.SentenceVocab == nil || logits == nil {
+		return
+	}
+	for _, tok := range SocialSystemTokens {
+		id := m.SentenceVocab.GetTokenID(tok)
+		if id >= 0 && id < len(logits.Data) {
+			logits.Data[id] = -1e9
+		}
+	}
+}
+
+// MaskSocialSystemTokensInIDs returns true if any of the given IDs correspond to
+// social system tokens, used to filter generated output sequences.
+func (m *IntentMoE) ContainsSocialSystemToken(ids []int) bool {
+	if m.SentenceVocab == nil {
+		return false
+	}
+	systemIDs := make(map[int]bool, len(SocialSystemTokens))
+	for _, tok := range SocialSystemTokens {
+		id := m.SentenceVocab.GetTokenID(tok)
+		if id >= 0 {
+			systemIDs[id] = true
+		}
+	}
+	for _, id := range ids {
+		if systemIDs[id] {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *IntentMoE) CalculateGrammarLossStrings(generatedWords []string, parent, child string) float32 {
+	ids := make([]int, len(generatedWords))
+	for i, w := range generatedWords {
+		ids[i] = m.SentenceVocab.GetTokenID(w)
+	}
+	return m.CalculateGrammarLoss(ids, parent, child)
+}
+
+// CalculateGrammarLossByID computes a penalty for sentences that violate the RuleBook's grammar skeletons.
+// Uses Token IDs directly to avoid string allocations during training.
+func (m *IntentMoE) CalculateGrammarLoss(generatedIDs []int, parent, child string) float32 {
 	if m.Rules == nil { return 0 }
 	rule, ok := m.Rules.GetRuleByIntent(parent, child)
 	if !ok { return 0 }
@@ -659,12 +783,19 @@ func (m *IntentMoE) CalculateGrammarLoss(generatedWords []string, parent, child 
 	skeleton := rule.GrammarSkeleton
 	if len(skeleton) == 0 { return 0 }
 
+	// 🆕 STRICT: Mask system/format tokens in social context.
+	// These tokens should never bleed into the social state calculation.
+	if parent == "social" && m.ContainsSocialSystemToken(generatedIDs) {
+		return 10.0 // Heavy penalty to force these tokens out of social state
+	}
+
 	var penalty float32 = 0.0
-	maxCheck := len(generatedWords)
+	maxCheck := len(generatedIDs)
 	if len(skeleton) < maxCheck { maxCheck = len(skeleton) }
 	
 	for i := 0; i < maxCheck; i++ {
-		actualType := MapWordToGrammarType(generatedWords[i])
+		// Use pre-computed grammar type cache for O(1) lookup
+		actualType := m.grammarTypeForID(generatedIDs[i])
 		expectedType := skeleton[i]
 		
 		if actualType != expectedType {
@@ -673,11 +804,14 @@ func (m *IntentMoE) CalculateGrammarLoss(generatedWords []string, parent, child 
 		}
 	}
 	
-	// Bonus for required keywords
+	// Bonus for required keywords (we check if any of the generated IDs match the keyword IDs)
+	// For now, keywords are still strings in the RuleBook, so we check them once.
+	// But we can optimize this further if keywords are also cached as IDs.
 	for _, kw := range rule.RequiredKeywords {
 		found := false
-		for _, w := range generatedWords {
-			if strings.ToLower(w) == strings.ToLower(kw) {
+		kwLower := strings.ToLower(kw)
+		for _, id := range generatedIDs {
+			if strings.ToLower(m.SentenceVocab.GetWord(id)) == kwLower {
 				found = true
 				break
 			}
@@ -687,29 +821,65 @@ func (m *IntentMoE) CalculateGrammarLoss(generatedWords []string, parent, child 
 		}
 	}
 
-	return penalty
-}
-// CalculateSequenceSimilarity computes a reward [0-1] based on how many target words are present
-// in the generated output, regardless of exact position (captures core content match).
-func (m *IntentMoE) CalculateSequenceSimilarity(generatedWords, targetWords []string) float32 {
-	if len(targetWords) == 0 {
-		return 0
+	//  Sequence Coherence Reward: Penalize repetitive local state transitions
+	// (e.g., looping between "to", "you", ",", "i").
+	if len(generatedIDs) >= 4 {
+		for i := 0; i < len(generatedIDs)-3; i++ {
+			// Check for repetitive bigrams: ABAB pattern
+			if generatedIDs[i] == generatedIDs[i+2] && generatedIDs[i+1] == generatedIDs[i+3] {
+				penalty += 0.5 // High penalty for local loops
+			}
+		}
 	}
-	matches := 0
-	targetMap := make(map[string]int)
-	for _, w := range targetWords {
-		targetMap[strings.ToLower(w)]++
-	}
-
-	for _, w := range generatedWords {
-		lowW := strings.ToLower(w)
-		if count, ok := targetMap[lowW]; ok && count > 0 {
-			matches++
-			targetMap[lowW]--
+	// Penalize immediate word repetition (if not already handled by repetition penalty)
+	for i := 0; i < len(generatedIDs)-1; i++ {
+		if generatedIDs[i] == generatedIDs[i+1] && generatedIDs[i] != m.SentenceVocab.PaddingTokenID {
+			penalty += 0.3
 		}
 	}
 
-	return float32(matches) / float32(len(targetWords))
+	return penalty
+}
+func (m *IntentMoE) CalculateSequenceSimilarityStrings(generatedWords, targetWords []string) float32 {
+	gIDs := make([]int, len(generatedWords))
+	for i, w := range generatedWords {
+		gIDs[i] = m.SentenceVocab.GetTokenID(w)
+	}
+	tIDs := make([]int, len(targetWords))
+	for i, w := range targetWords {
+		tIDs[i] = m.SentenceVocab.GetTokenID(w)
+	}
+	return m.CalculateSequenceSimilarity(gIDs, tIDs)
+}
+
+// CalculateSequenceSimilarity computes a reward [0-1] based on how many target words are present
+// in the generated output. Uses Token IDs to avoid string hashing and map overhead.
+func (m *IntentMoE) CalculateSequenceSimilarity(generatedIDs, targetIDs []int) float32 {
+	if len(targetIDs) == 0 {
+		return 0
+	}
+	
+	// Use an ID-based frequency count instead of map[string]int
+	// Vocab size is ~4.7k, so a fixed-size array or a sparse slice is fast.
+	// Find max ID to determine buffer size
+	maxID := 0
+	for _, id := range targetIDs { if id > maxID { maxID = id } }
+	for _, id := range generatedIDs { if id > maxID { maxID = id } }
+	
+	counts := make([]int, maxID+1)
+	for _, id := range targetIDs {
+		counts[id]++
+	}
+
+	matches := 0
+	for _, id := range generatedIDs {
+		if id <= maxID && counts[id] > 0 {
+			matches++
+			counts[id]--
+		}
+	}
+
+	return float32(matches) / float32(len(targetIDs))
 }
 func (m *IntentMoE) EncoderForward(input *tensor.Tensor, mask *tensor.Tensor) (*tensor.Tensor, error) {
 	emb, err := m.Embedding.Forward(input)
@@ -805,8 +975,8 @@ func (m *IntentMoE) warmup() {
 
 // appendGrammarExperts grows an existing MoELayer by 8 GrammarExperts (one per POS role).
 // The gating network weight matrix is widened to include columns for the new experts.
-func appendGrammarExperts(layer *MoELayer, embeddingDim int) error {
-	numGrammar := len(GrammarRoles) // 8
+func appendGrammarExperts(layer *MoELayer, embeddingDim int, count int) error {
+	numGrammar := count
 	startID := len(layer.Experts)
 
 	// Detect dimensions from the existing architecture to ensure specialized experts fit perfectly.
@@ -972,8 +1142,9 @@ func (m *IntentMoE) BeamSearchDecode(
 			lastID := cand.ids[len(cand.ids)-1]
 			inputT := tensor.NewTensor([]int{1, 1}, []float32{float32(lastID)}, false)
 
-			logits, newHidden, newCell, err := m.Decoder.DecodeStep(inputT, cand.hiddenState, cand.cellState, contextVector, step)
+			logits, newHidden, newCell, _, err := m.Decoder.DecodeStep(inputT, cand.hiddenState, cand.cellState, contextVector, step)
 			if err != nil {
+				inputT.Release()
 				continue
 			}
 			logits.ToCPU()
@@ -991,20 +1162,14 @@ func (m *IntentMoE) BeamSearchDecode(
 			ApplyRepetitionPenalty(logits, cand.ids, repetitionPenalty)
 
 			// 🧬 STRUCTURAL GUIDANCE (Structural Grammar Penalty)
-			// If a rule is provided, we guide the beam towards the expected POS sequence.
+			// Use pre-cached grammar types for O(1) lookup per token.
 			if rule != nil && len(rule.GrammarSkeleton) > 0 {
-				// Determine current step index (excluding BOS)
-				ruleStep := len(cand.ids) - 1 
+				ruleStep := len(cand.ids) - 1
 				if ruleStep < len(rule.GrammarSkeleton) {
 					expectedType := rule.GrammarSkeleton[ruleStep]
 					for idx, v := range logits.Data {
 						if v < -1e8 { continue } // Skip already suppressed tokens
-						
-						word := m.SentenceVocab.GetWord(idx)
-						actualType := MapWordToGrammarType(word)
-						
-						// If word doesn't match the required structural category, penalize it.
-						// We use a softer penalty (-3.0) to allow model confidence to override.
+						actualType := m.grammarTypeForID(idx)
 						if actualType != expectedType && actualType != "OTHER" {
 							logits.Data[idx] -= 3.0
 						}
@@ -1348,7 +1513,7 @@ func NewHybridIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, ch
 		if numExperts == 8 {
 			return NewGrammarExpert(expertIdx, expertIdx, embeddingDim, embeddingDim)
 		}
-		return NewGoffiExpert(expertIdx, embeddingDim, embeddingDim*4, embeddingDim)
+		return NewFeedForwardExpert(embeddingDim, embeddingDim*2, embeddingDim)
 	}
 	l0, err := NewMoELayer(embeddingDim, embeddingDim, numExperts, 2, expertBuilder)
 	if err != nil {
@@ -1358,14 +1523,6 @@ func NewHybridIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, ch
 	if err != nil {
 		return nil, fmt.Errorf("failed to create MoE Layer 1: %w", err)
 	}
-	l2, err := NewMoELayer(embeddingDim, embeddingDim, numExperts, 2, expertBuilder)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create MoE Layer 2: %w", err)
-	}
-	l3, err := NewMoELayer(embeddingDim, embeddingDim, numExperts, 2, expertBuilder)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create MoE Layer 3: %w", err)
-	}
 
 	// ── 8 Grammar Experts ──────────────────────────────────────────────────────
 	// Append one grammar expert per POS role to every encoder layer.
@@ -1373,14 +1530,14 @@ func NewHybridIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, ch
 	// (which was already initialised for numExperts; we extend it by appending
 	// additional parameter columns below via appendGrammarExperts).
 	if numExperts != 8 {
-		for _, layer := range []*MoELayer{l0, l1, l2, l3} {
-			if err := appendGrammarExperts(layer, embeddingDim); err != nil {
+		for _, layer := range []*MoELayer{l0, l1} {
+			if err := appendGrammarExperts(layer, embeddingDim, 4); err != nil {
 				return nil, fmt.Errorf("failed to append grammar experts: %w", err)
 			}
 		}
 	}
 
-	llmEncoder := NewMoEStack(l0, l1, l2, l3)
+	llmEncoder := NewMoEStack(l0, l1)
 
 	// 2. Wrap it with HybridLLMGNNEncoder
 	hybridEncoder, err := NewHybridLLMGNNEncoder(llmEncoder, embeddingDim)
@@ -1620,6 +1777,18 @@ func (m *IntentMoE) SetGateTemperature(temp float32) {
 	}
 }
 
+// GetGateTemperature returns the temperature of the first MoE layer found.
+func (m *IntentMoE) GetGateTemperature() float32 {
+	if m.Decoder != nil && m.Decoder.OutputMoE != nil {
+		return m.Decoder.OutputMoE.RouterTemperature
+	}
+	// Fallback to active layers if decoder MoE is not available
+	if len(ActiveLayers) > 0 {
+		return ActiveLayers[0].RouterTemperature
+	}
+	return 1.0
+}
+
 // GreedySearchDecode performs greedy decoding (temperature=1.0).
 // This is a wrapper for backward compatibility.
 func (m *IntentMoE) GreedySearchDecode(contextVector *tensor.Tensor, maxLen, sosToken, eosToken int, repetitionPenalty, frequencyPenalty float32, topK int, taggedData tag.Tag) ([]int, error) {
@@ -1663,7 +1832,7 @@ func (m *IntentMoE) GreedySearchDecodeWithTemp(contextVector *tensor.Tensor, max
 	cellState := tensor.NewTensor([]int{batchSize, hiddenSize}, make([]float32, batchSize*hiddenSize), false)
 
 	for step := 0; step < maxLen; step++ {
-		outputLogits, newHidden, newCell, err := m.Decoder.DecodeStep(decoderInputIDs, hiddenState, cellState, contextVector, step)
+		outputLogits, newHidden, newCell, _, err := m.Decoder.DecodeStep(decoderInputIDs, hiddenState, cellState, contextVector, step)
 		if err != nil {
 			return nil, fmt.Errorf("decoder step failed: %w", err)
 		}
@@ -1677,6 +1846,9 @@ func (m *IntentMoE) GreedySearchDecodeWithTemp(contextVector *tensor.Tensor, max
 		if step < 3 && eosToken >= 0 && eosToken < len(outputLogits.Data) {
 			outputLogits.Data[eosToken] = -1e9
 		}
+
+		// 🆕 STRICT: Mask system/format tokens from ever appearing in social responses.
+		m.MaskSocialSystemTokens(outputLogits)
 
 		// Apply repetition penalty
 		ApplyRepetitionPenalty(outputLogits, decodedIDs, repetitionPenalty)
@@ -1867,13 +2039,16 @@ func (m *IntentMoE) SampleDecode(contextVector *tensor.Tensor, maxLen, sosToken,
 	cellState := tensor.NewTensor([]int{batchSize, hiddenSize}, make([]float32, batchSize*hiddenSize), false)
 
 	for step := range maxLen {
-		outputLogits, newHidden, newCell, err := m.Decoder.DecodeStep(decoderInputIDs, hiddenState, cellState, contextVector, step)
+		outputLogits, newHidden, newCell, _, err := m.Decoder.DecodeStep(decoderInputIDs, hiddenState, cellState, contextVector, step)
 		if err != nil {
 			return nil, fmt.Errorf("decoder step failed: %w", err)
 		}
 
 		hiddenState = newHidden
 		cellState = newCell
+
+		// 🆕 STRICT: Mask system/format tokens in social context (SampleDecode).
+		m.MaskSocialSystemTokens(outputLogits)
 
 		// Apply repetition penalty
 		ApplyRepetitionPenalty(outputLogits, decodedIDs, repetitionPenalty)
@@ -2171,9 +2346,9 @@ func (m *IntentMoE) RepairArchitecture() {
 							}
 						}
 						// Only append if no grammar experts are present AND it looks like an old architecture
-						if !hasGrammar && len(layer.Experts) <= 8 {
+						if !hasGrammar && len(layer.Experts) <= 4 {
 							log.Printf("🛠️ [MoE] Repairing layer: adding missing Grammar Experts (currently %d experts)...", len(layer.Experts))
-							if err := appendGrammarExperts(layer, m.EmbeddingDim); err != nil {
+							if err := appendGrammarExperts(layer, m.EmbeddingDim, 4); err != nil {
 								log.Printf("❌ Failed to append grammar experts: %v", err)
 							} else {
 								// 🧬 JUMPSTART: Seed the new experts with structural bias if vocab is available
@@ -2206,11 +2381,11 @@ func (m *IntentMoE) RepairArchitecture() {
 					break
 				}
 			}
-			if !hasGrammar && len(layer.Experts) <= 8 {
+			if !hasGrammar && len(layer.Experts) <= 4 {
 				log.Printf("🛠️ [MoE] Repairing decoder: adding missing Grammar Experts (currently %d experts)...", len(layer.Experts))
 				// OutputMoE input dim is hiddenSize + inputDim (which is embeddingDim*2 in the hybrid case)
 				// But appendGrammarExperts uses layer.Experts[0].InputDim() to match dims.
-				if err := appendGrammarExperts(layer, m.EmbeddingDim); err != nil {
+				if err := appendGrammarExperts(layer, m.EmbeddingDim, 4); err != nil {
 					log.Printf("❌ Failed to append decoder grammar experts: %v", err)
 				} else {
 					// 🧬 JUMPSTART: Seed the new experts with structural bias if vocab is available

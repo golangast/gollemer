@@ -149,9 +149,6 @@ type Operation interface {
 }
 
 var (
-	// goffiMatMulFailed tracks if the OpenBLAS FFI backend is unavailable or failing.
-	// This prevents redundant allocations and FFI calls in the MatMul fallback path.
-	goffiMatMulFailed bool
 )
 
 // Tensor represents a multi-dimensional array of float32 values.
@@ -510,26 +507,6 @@ func (t *Tensor) MatMul(other *Tensor) (*Tensor, error) {
 		other.ToCPU()
 	}
 
-	// Case 0: Goffi-based OpenBLAS Dispatch (No CGO, No Rust)
-	if !goffiMatMulFailed && len(t.Shape) == 2 && len(other.Shape) == 2 && t.Shape[1] == other.Shape[0] {
-		rowsA := t.Shape[0]
-		colsA := t.Shape[1]
-		colsB := other.Shape[1]
-
-		resultData := make([]float32, rowsA*colsB)
-		err := GoffiMatMul(t.Data, other.Data, resultData, rowsA, colsB, colsA)
-		if err == nil {
-			res := NewTensor([]int{rowsA, colsB}, resultData, t.RequiresGrad || other.RequiresGrad)
-			if res.RequiresGrad {
-				res.Creator = &MatMulOperation{t, other}
-			}
-			return res, nil
-		}
-
-		// Permanent fallback if Goffi is unavailable or failing
-		goffiMatMulFailed = true
-		fmt.Fprintf(os.Stderr, "⚠️ Goffi MatMul failed (%v), switching to Gonum fallback.\n", err)
-	}
 
 	// Case 1: 2D matrix multiplication (Pure-Go Fallback)
 	if len(t.Shape) == 2 && len(other.Shape) == 2 {
@@ -596,15 +573,8 @@ func (t *Tensor) MatMul(other *Tensor) (*Tensor, error) {
 				return nil, fmt.Errorf("resultData out of bounds in 4D MatMul: offset %d, size %d, len %d", resultOffset, resultRows*resultCols, len(resultData))
 			}
 
-			for i := 0; i < rowsA; i++ {
-				for j := 0; j < colsB; j++ {
-					var sum float32
-					for k := 0; k < colsA; k++ {
-						sum += t.Data[tOffset+i*colsA+k] * other.Data[otherOffset+k*colsB+j]
-					}
-					resultData[resultOffset+i*colsB+j] = sum
-				}
-			}
+			// 🚀 Use Native SIMD for optimized CPU MatMul per slice
+			MatMulRaw(t.Data[tOffset:tOffset+rowsA*colsA], other.Data[otherOffset:otherOffset+colsA*colsB], resultData[resultOffset:resultOffset+resultRows*resultCols], rowsA, colsB, colsA)
 		}
 
 		resultTensor := NewTensor(resultShape, resultData, t.RequiresGrad || other.RequiresGrad)
@@ -687,10 +657,10 @@ func (t *Tensor) MatMul(other *Tensor) (*Tensor, error) {
 		resultData := make([]float32, batchSize*rowsA*colsB)
 		fmt.Fprintf(os.Stderr, "💎 MatMul CPU (3D x 2D): %v x %v\n", t.Shape, other.Shape)
 
-		otherT, err := other.Transpose(0, 1)
-		if err != nil {
-			return nil, err
-		}
+		// otherT, err := other.Transpose(0, 1) // Not needed for MatMulRaw
+		// if err != nil {
+		// 	return nil, err
+		// }
 
 		const (
 			chunkRows = 32
@@ -698,32 +668,11 @@ func (t *Tensor) MatMul(other *Tensor) (*Tensor, error) {
 		)
 
 		numWorkers := runtime.NumCPU()
-		if batchSize*rowsA*colsB < 5000 || numWorkers <= 1 {
+		if batchSize*rowsA*colsB < 2000 || numWorkers <= 1 {
 			for b := 0; b < batchSize; b++ {
 				tOffset := b * rowsA * colsA
 				resultOffset := b * rowsA * colsB
-				// Apply tiling within each batch slice
-				for itI := 0; itI < rowsA; itI += chunkRows {
-					actualChunkRows := min(chunkRows, rowsA-itI)
-					for itJ := 0; itJ < colsB; itJ += chunkCols {
-						actualChunkCols := min(chunkCols, colsB-itJ)
-
-						for i := itI; i < itI+actualChunkRows; i++ {
-							rowA := t.Data[tOffset+i*colsA : tOffset+(i+1)*colsA]
-							j := itJ
-							// Unroll inner loop over columns of 'other' (rows of 'otherT')
-							for ; j+UnrollFactor <= itJ+actualChunkCols; j += UnrollFactor {
-								resultData[resultOffset+i*colsB+j] = DotProduct(rowA, otherT.Data[j*colsA:(j+1)*colsA])
-								resultData[resultOffset+i*colsB+j+1] = DotProduct(rowA, otherT.Data[(j+1)*colsA:(j+2)*colsA])
-								resultData[resultOffset+i*colsB+j+2] = DotProduct(rowA, otherT.Data[(j+2)*colsA:(j+3)*colsA])
-								resultData[resultOffset+i*colsB+j+3] = DotProduct(rowA, otherT.Data[(j+3)*colsA:(j+4)*colsA])
-							}
-							for ; j < itJ+actualChunkCols; j++ {
-								resultData[resultOffset+i*colsB+j] = DotProduct(rowA, otherT.Data[j*colsA:(j+1)*colsA])
-							}
-						}
-					}
-				}
+				MatMulRaw(t.Data[tOffset:tOffset+rowsA*colsA], other.Data, resultData[resultOffset:resultOffset+rowsA*colsB], rowsA, colsB, colsA)
 			}
 		} else {
 			var wg sync.WaitGroup
@@ -740,26 +689,7 @@ func (t *Tensor) MatMul(other *Tensor) (*Tensor, error) {
 					for b := start; b < end; b++ {
 						tOffset := b * rowsA * colsA
 						resultOffset := b * rowsA * colsB
-						for itI := 0; itI < rowsA; itI += chunkRows {
-							actualChunkRows := min(chunkRows, rowsA-itI)
-							for itJ := 0; itJ < colsB; itJ += chunkCols {
-								actualChunkCols := min(chunkCols, colsB-itJ)
-
-								for i := itI; i < itI+actualChunkRows; i++ {
-									rowA := t.Data[tOffset+i*colsA : tOffset+(i+1)*colsA]
-									j := itJ
-									for ; j+UnrollFactor <= itJ+actualChunkCols; j += UnrollFactor {
-										resultData[resultOffset+i*colsB+j] = DotProduct(rowA, otherT.Data[j*colsA:(j+1)*colsA])
-										resultData[resultOffset+i*colsB+j+1] = DotProduct(rowA, otherT.Data[(j+1)*colsA:(j+2)*colsA])
-										resultData[resultOffset+i*colsB+j+2] = DotProduct(rowA, otherT.Data[(j+2)*colsA:(j+3)*colsA])
-										resultData[resultOffset+i*colsB+j+3] = DotProduct(rowA, otherT.Data[(j+3)*colsA:(j+4)*colsA])
-									}
-									for ; j < itJ+actualChunkCols; j++ {
-										resultData[resultOffset+i*colsB+j] = DotProduct(rowA, otherT.Data[j*colsA:(j+1)*colsA])
-									}
-								}
-							}
-						}
+						MatMulRaw(t.Data[tOffset:tOffset+rowsA*colsA], other.Data, resultData[resultOffset:resultOffset+rowsA*colsB], rowsA, colsB, colsA)
 					}
 				}(startSlice, endSlice)
 			}
@@ -2808,18 +2738,51 @@ func (t *Tensor) Gather(indices []int) (*Tensor, error) {
 	if len(t.Shape) != 2 {
 		return nil, fmt.Errorf("Gather currently only supports 2D tensors, got shape %v", t.Shape)
 	}
-	rows := t.Shape[0]
 	cols := t.Shape[1]
 
 	newShape := []int{len(indices), cols}
 	newData := make([]float32, len(indices)*cols)
 
-	for i, idx := range indices {
-		if idx < 0 || idx >= rows {
-			return nil, fmt.Errorf("gather index %d out of bounds for tensor with %d rows", idx, rows)
-		}
-		copy(newData[i*cols:(i+1)*cols], t.Data[idx*cols:(idx+1)*cols])
+	numWorkers := runtime.NumCPU()
+	if len(indices) < 128 {
+		numWorkers = 1
 	}
+	indicesPerWorker := (len(indices) + numWorkers - 1) / numWorkers
+
+	var wg sync.WaitGroup
+	for w := 0; w < numWorkers; w++ {
+		start := w * indicesPerWorker
+		end := (w + 1) * indicesPerWorker
+		if start >= len(indices) {
+			break
+		}
+		if end > len(indices) {
+			end = len(indices)
+		}
+
+		wg.Add(1)
+		go func(s, e int) {
+			defer wg.Done()
+			for i := s; i < e; i++ {
+				idx := indices[i]
+				srcRow := t.Data[idx*cols : (idx+1)*cols]
+				dstRow := newData[i*cols : (i+1)*cols]
+				
+				// Unrolled row copy
+				k := 0
+				for ; k <= cols-4; k += 4 {
+					dstRow[k] = srcRow[k]
+					dstRow[k+1] = srcRow[k+1]
+					dstRow[k+2] = srcRow[k+2]
+					dstRow[k+3] = srcRow[k+3]
+				}
+				for ; k < cols; k++ {
+					dstRow[k] = srcRow[k]
+				}
+			}
+		}(start, end)
+	}
+	wg.Wait()
 
 	resultTensor := NewTensor(newShape, newData, t.RequiresGrad)
 	if resultTensor.RequiresGrad {
@@ -2851,22 +2814,48 @@ func (op *GatherOperation) Backward(grad *Tensor) error {
 
 	// ScatterAdd the gradients back to the input
 	cols := op.Input.Shape[1]
-	for i, idx := range op.Indices {
-		if idx < 0 || (idx+1)*cols > len(op.Input.Grad.Data) {
-			continue
-		}
-		// grad row i corresponds to input row idx
-		start := i * cols
-		end := (i + 1) * cols
-		if start >= len(grad.Data) || end > len(grad.Data) {
-			continue
-		}
-		gradRow := grad.Data[start:end]
-		inputGradRow := op.Input.Grad.Data[idx*cols : (idx+1)*cols]
-		for j := range cols {
-			AtomicAddFloat32(&inputGradRow[j], gradRow[j])
-		}
+	numIndices := len(op.Indices)
+
+	numWorkers := runtime.NumCPU()
+	if numIndices < 128 {
+		numWorkers = 1
 	}
+	indicesPerWorker := (numIndices + numWorkers - 1) / numWorkers
+
+	var wg sync.WaitGroup
+	for w := 0; w < numWorkers; w++ {
+		start := w * indicesPerWorker
+		end := (w + 1) * indicesPerWorker
+		if start >= numIndices {
+			break
+		}
+		if end > numIndices {
+			end = numIndices
+		}
+
+		wg.Add(1)
+		go func(s, e int) {
+			defer wg.Done()
+			for i := s; i < e; i++ {
+				idx := op.Indices[i]
+				gradRow := grad.Data[i*cols : (i+1)*cols]
+				inputGradRow := op.Input.Grad.Data[idx*cols : (idx+1)*cols]
+
+				// Unrolled Atomic Add
+				k := 0
+				for ; k <= cols-4; k += 4 {
+					AtomicAddFloat32(&inputGradRow[k], gradRow[k])
+					AtomicAddFloat32(&inputGradRow[k+1], gradRow[k+1])
+					AtomicAddFloat32(&inputGradRow[k+2], gradRow[k+2])
+					AtomicAddFloat32(&inputGradRow[k+3], gradRow[k+3])
+				}
+				for ; k < cols; k++ {
+					AtomicAddFloat32(&inputGradRow[k], gradRow[k])
+				}
+			}
+		}(start, end)
+	}
+	wg.Wait()
 	return nil
 }
 

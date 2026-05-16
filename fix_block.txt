@@ -1,0 +1,23 @@
+// Using moe.SocialConfig and moe.LoadSocialConfig from moe package
+
+type surgeryImpl struct {
+	layers []*moe.MoELayer
+}
+
+func (s *surgeryImpl) PerformSurgery(layerIdx int, alphaID int, sinkID int) {
+	if layerIdx >= 0 && layerIdx < len(s.layers) {
+		s.layers[layerIdx].PerformSurgery(alphaID, sinkID)
+	}
+}
+
+func (s *surgeryImpl) HealExpert(layerIdx int, expertIdx int, alphaIDs []int) {
+	if layerIdx >= 0 && layerIdx < len(s.layers) {
+		s.layers[layerIdx].HealExpert(expertIdx, alphaIDs)
+	}
+}
+
+func (s *surgeryImpl) SetHealthyExperts(layerIdx int, expertIDs []int) {
+	if layerIdx >= 0 && layerIdx < len(s.layers) {
+		s.layers[layerIdx].HealthyExpertIDs = expertIDs
+	}
+}

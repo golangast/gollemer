@@ -1289,6 +1289,10 @@ func (m *MultiHeadCrossAttention) Query() *Tensor { return m.queryTensor }
 func (m *MultiHeadCrossAttention) Key() *Tensor   { return m.keyTensor }
 func (m *MultiHeadCrossAttention) Value() *Tensor { return m.valueTensor }
 
+func (m *MultiHeadCrossAttention) GetAttentionWeights() *Tensor {
+	return m.attentionWeights
+}
+
 func (m *MultiHeadCrossAttention) SetInput(q *Tensor) {
 	m.queryTensor = q
 }

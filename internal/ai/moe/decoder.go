@@ -76,7 +76,7 @@ func NewRNNDecoder(inputDim, outputVocabSize, hiddenSize, maxAttentionHeads, num
 	
 	if numExperts > 1 {
 		expertBuilder := func(expertIdx int) (Expert, error) {
-			return NewInternalExpert(expertIdx, hiddenSize+inputDim, (hiddenSize+inputDim)*2, outputVocabSize)
+			return NewInternalExpert(expertIdx, hiddenSize+inputDim, (hiddenSize+inputDim), outputVocabSize)
 		}
 		moeLayer, err := NewMoELayer(hiddenSize+inputDim, outputVocabSize, numExperts, 2, expertBuilder)
 		if err != nil {
@@ -656,7 +656,7 @@ func initialCell(batchSize, hiddenSize int) *Tensor {
 }
 
 // DecodeStep performs a single decoding step.
-func (d *RNNDecoder) DecodeStep(inputToken *Tensor, prevHiddenState, prevCellState, contextVector *Tensor, stepIndex int, mask ...*Tensor) (*Tensor, *Tensor, *Tensor, error) {
+func (d *RNNDecoder) DecodeStep(inputToken *Tensor, prevHiddenState, prevCellState, contextVector *Tensor, stepIndex int, mask ...*Tensor) (*Tensor, *Tensor, *Tensor, *Tensor, error) {
 	var attentionMask *Tensor
 	if len(mask) > 0 {
 		attentionMask = mask[0]
@@ -673,7 +673,7 @@ func (d *RNNDecoder) DecodeStep(inputToken *Tensor, prevHiddenState, prevCellSta
 
 	embeddedInput, err := d.Embedding.Forward(inputToken)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	// Apply InputNorm first
@@ -703,7 +703,7 @@ func (d *RNNDecoder) DecodeStep(inputToken *Tensor, prevHiddenState, prevCellSta
 	reshapedIn, _ := normedIn.Reshape([]int{batchSize, embeddedInput.Shape[2]})
 	hiddenState, cellState, err := d.LSTM.Forward(reshapedIn, prevHiddenState, prevCellState)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	// Apply HiddenNorm
@@ -713,7 +713,12 @@ func (d *RNNDecoder) DecodeStep(inputToken *Tensor, prevHiddenState, prevCellSta
 	// 3. Attention
 	attentionOutput, err := d.Attention.Forward(normedHidden, contextVector, contextVector, attentionMask)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
+	}
+	// Capture attention weights (before they are cleared)
+	var attWeights *Tensor
+	if d.Attention != nil {
+		attWeights = d.Attention.GetAttentionWeights()
 	}
 
 	// 4. Combined
@@ -729,18 +734,18 @@ func (d *RNNDecoder) DecodeStep(inputToken *Tensor, prevHiddenState, prevCellSta
 		outputLogits, err = d.OutputLayer.Forward(normed)
 	}
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	resLogits, _ := outputLogits.Reshape([]int{batchSize, d.OutputVocabSize})
-	return resLogits, hiddenState, cellState, nil
+	return resLogits, hiddenState, cellState, attWeights, nil
 }
 
 // DecodeStepWithExpert is like DecodeStep but also returns the ID of the top expert used.
-func (d *RNNDecoder) DecodeStepWithExpert(input *Tensor, prevHiddenState, prevCellState, contextVector *Tensor, stepIndex int) (*Tensor, *Tensor, *Tensor, []int, error) {
-	logits, h, c, err := d.DecodeStep(input, prevHiddenState, prevCellState, contextVector, stepIndex)
+func (d *RNNDecoder) DecodeStepWithExpert(input *Tensor, prevHiddenState, prevCellState, contextVector *Tensor, stepIndex int) (*Tensor, *Tensor, *Tensor, []int, *Tensor, error) {
+	logits, h, c, att, err := d.DecodeStep(input, prevHiddenState, prevCellState, contextVector, stepIndex)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 	
 	expertIDs := []int{}
@@ -750,8 +755,9 @@ func (d *RNNDecoder) DecodeStepWithExpert(input *Tensor, prevHiddenState, prevCe
 		expertIDs = []int{0}
 	}
 	
-	return logits, h, c, expertIDs, nil
+	return logits, h, c, expertIDs, att, nil
 }
+
 
 // Parameters returns all learnable parameters of the RNNDecoder.
 func (d *RNNDecoder) Parameters() []*Tensor {
