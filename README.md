@@ -74,9 +74,6 @@ export GOEXPERIMENT=simd
 go mod tidy
 ```
 
-### 2. GPU Acceleration
-GPU acceleration is powered by **Goffi** and requires no manual compilation of Rust or C++ backends. It automatically attempts to leverage **WebGPU/Vulkan** if drivers are present.
-
 ### 3. Training the Model
 We provide a simplified `Makefile` to handle the curriculum training process.
 
