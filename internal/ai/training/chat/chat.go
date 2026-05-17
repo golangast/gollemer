@@ -26,6 +26,7 @@ import (
 	"github.com/golangast/gollemer/internal/ai/neural/tensor"
 	"github.com/golangast/gollemer/internal/ai/orchestrator"
 	"github.com/golangast/gollemer/internal/ai/train"
+	"github.com/golangast/gollemer/internal/ai/training"
 )
 
 type Batch struct {
@@ -35,6 +36,7 @@ type Batch struct {
 	Mask      []float32      // To tell the loss function to ignore <pad>
 	InputMask *tensor.Tensor // Attention mask (0.0 for real, -1e9 for pad)
 	Intents   []string       // Stored intent labels for RuleBook matching
+	Weights   []float32      // Sample weights for evolutionary data control
 }
 
 // TrainingMetric defines a data structure for monitoring training health, compatible with WASM dashboards.
@@ -194,8 +196,8 @@ func toFloat32(tokens []string) []float32 {
 }
 
 func TrainChat(projectRoot string, customDataPath string, rebalanceRequested bool, overfitMode bool, initialLR float32, weightDecay float32, autoHeal bool, maxGradNorm float32, useGPU bool, batchSize int, accumulationSteps int) {
-	//  MEMORY PROTECTION: Lower limit to 3.5GB to allow room for OS/buffers on 6.3GB systems.
-	debug.SetMemoryLimit(3500 * 1024 * 1024)
+	//  MEMORY PROTECTION: Lower limit to 1.0GB to align with the cgroup budget (2.1GB) and prevent OOMs
+	debug.SetMemoryLimit(1000 * 1024 * 1024)
 	debug.SetGCPercent(20)
 
 	var err error
@@ -216,7 +218,7 @@ func TrainChat(projectRoot string, customDataPath string, rebalanceRequested boo
 	}
 	fmt.Println(" Loaded Word2Vec model")
 
-	var chatPairs []struct{ Q, A, Intent, Grammar string }
+	var chatPairs []moe.TrainPair
 
 	if customDataPath != "" {
 		customData, err := os.ReadFile(customDataPath)
@@ -231,7 +233,7 @@ func TrainChat(projectRoot string, customDataPath string, rebalanceRequested boo
 			var pairs []customPair
 			if err := json.Unmarshal(customData, &pairs); err == nil {
 				for _, p := range pairs {
-					chatPairs = append(chatPairs, struct{ Q, A, Intent, Grammar string }{p.Query, p.FlatOutput, p.SemanticOutput.Intent, ""})
+					chatPairs = append(chatPairs, moe.TrainPair{Q: p.Query, A: p.FlatOutput, Intent: p.SemanticOutput.Intent, Grammar: ""})
 				}
 				log.Printf(" Loaded %d pairs from custom dataset: %s", len(pairs), customDataPath)
 				if overfitMode {
@@ -263,7 +265,7 @@ skipCSV:
 			if strings.HasPrefix(line, "Human 1:") {
 				if currentQ != "" && currentA != "" {
 					// Save the Q-A pair before starting new question
-					chatPairs = append(chatPairs, struct{ Q, A, Intent, Grammar string }{currentQ, currentA, "social", ""})
+					chatPairs = append(chatPairs, moe.TrainPair{Q: currentQ, A: currentA, Intent: "social", Grammar: ""})
 				}
 				currentQ = strings.TrimPrefix(line, "Human 1:")
 				currentQ = strings.TrimSpace(currentQ)
@@ -276,7 +278,7 @@ skipCSV:
 
 		// Don't forget the last pair
 		if currentQ != "" && currentA != "" {
-			chatPairs = append(chatPairs, struct{ Q, A, Intent, Grammar string }{currentQ, currentA, "social", ""})
+			chatPairs = append(chatPairs, moe.TrainPair{Q: currentQ, A: currentA, Intent: "social", Grammar: ""})
 		}
 
 		log.Printf(" Loaded social intent pairs from human_chat.txt (total: %d pairs)", len(chatPairs))
@@ -599,6 +601,7 @@ skipCSV:
 		}
 	}
 	intentModel.SentenceVocabSize = currentVocabSize
+	intentModel.SanitizeControlTokens()
 
 	// Move Word2Vec coverage check here before we free it
 	hit := 0
@@ -625,7 +628,7 @@ skipCSV:
 
 	// --- [Balanced Mixing Strategy] ---
 	// Separate into Help (Technical) and Social/General
-	var helpPairs, socialPairs []struct{ Q, A, Intent, Grammar string }
+	var helpPairs, socialPairs []moe.TrainPair
 	for _, p := range chatPairs {
 		isHelp := strings.HasPrefix(p.Intent, "go_") ||
 			strings.HasPrefix(p.Intent, "ml_") ||
@@ -644,7 +647,7 @@ skipCSV:
 	log.Printf(" Data Distribution: Help=%d, Social=%d", len(helpPairs), len(socialPairs))
 
 	// Create balanced set (50/50 mix)
-	balancedPairs := make([]struct{ Q, A, Intent, Grammar string }, 0, len(chatPairs))
+	balancedPairs := make([]moe.TrainPair, 0, len(chatPairs))
 	maxLen := max(len(helpPairs), len(socialPairs))
 	for i := 0; i < maxLen; i++ {
 		if i < len(helpPairs) {
@@ -2033,16 +2036,17 @@ skipCSV:
 // Using moe.SocialConfig and moe.LoadSocialConfig from moe package
 
 func TrainSocialChat(projectRoot string, epochs int, customDataPath string, overfitMode bool, initialLR float32, weightDecay float32, autoHeal bool, maxGradNorm float32, useGPU bool, batchSize int, accumulationSteps int, numExperts int) {
-	//  AGGRESSIVE MEMORY MANAGEMENT
-	debug.SetMemoryLimit(4000 * 1024 * 1024) // 4GB is the sweet spot for 6GB systems
-	debug.SetGCPercent(50)                   // Trigger GC more frequently (Standard is 100)
+	//  AGGRESSIVE MEMORY MANAGEMENT: Set limit to 1.0GB to stay safely below the cgroup limit (2.1GB) leaving room for OpenBLAS
+	debug.SetMemoryLimit(1000 * 1024 * 1024)
+	debug.SetGCPercent(20)                   // Trigger GC extremely frequently (Standard is 100)
 
 	log.Println(" Starting SOCIAL-ONLY Chat Training")
 	if customDataPath != "" {
 		log.Printf(" Using CUSTOM training data: %s", customDataPath)
 	}
 
-	var chatPairs []struct{ Q, A, Intent, Grammar string }
+		var chatPairs []moe.TrainPair
+
 	var err error
 	var humanChatPath string
 	var socialVocabPathFinal string
@@ -2098,7 +2102,7 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 						answer = resp
 					}
 
-					chatPairs = append(chatPairs, struct{ Q, A, Intent, Grammar string }{p.Query, answer, p.SemanticOutput.Social.Intent, ""})
+					chatPairs = append(chatPairs, moe.TrainPair{Q: p.Query, A: answer, Intent: p.SemanticOutput.Social.Intent, Grammar: ""})
 				}
 				log.Printf(" Loaded %d pairs from custom dataset: %s (Stripped structured tags)", len(pairs), customDataPath)
 				if overfitMode {
@@ -2135,7 +2139,7 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 					} else if strings.Contains(qLower, "how are you") {
 						intent = "status_check"
 					}
-					chatPairs = append(chatPairs, struct{ Q, A, Intent, Grammar string }{lastQ, a, intent, ""})
+					chatPairs = append(chatPairs, moe.TrainPair{Q: lastQ, A: a, Intent: intent, Grammar: ""})
 				}
 				lastQ = ""
 			}
@@ -2171,7 +2175,7 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 						if len(record) >= 4 {
 							grammar = record[3]
 						}
-						chatPairs = append(chatPairs, struct{ Q, A, Intent, Grammar string }{q, a, intent, grammar})
+						chatPairs = append(chatPairs, moe.TrainPair{Q: q, A: a, Intent: intent, Grammar: grammar})
 					}
 				}
 			}
@@ -2342,8 +2346,8 @@ skipSocialLoad:
 	// For tiny datasets, use ALL pairs for training  a 90/10 split on a small dataset
 	// means multiple pairs are held out and NEVER trained on, guaranteeing word salad.
 	rand.Shuffle(len(chatPairs), func(i, j int) { chatPairs[i], chatPairs[j] = chatPairs[j], chatPairs[i] })
-	var trainPairs []struct{ Q, A, Intent, Grammar string }
-	var valPairs []struct{ Q, A, Intent, Grammar string }
+	var trainPairs []moe.TrainPair
+	var valPairs []moe.TrainPair
 	if len(chatPairs) < 50 {
 		// Tiny dataset: train on everything, validate on nothing
 		// Goal is memorization, not generalization
@@ -2439,6 +2443,7 @@ skipSocialLoad:
 	//  BIND VOCABULARY TO MODEL (This ensures the brain and words stay in sync in the .gob file)
 	intentModel.SentenceVocab = sentenceVocab
 	log.Printf(" Vocabulary bound to social model (%d tokens)", sentenceVocab.Size())
+	intentModel.SanitizeControlTokens()
 
 	moe.ActiveLayers = findMoELayers(intentModel)
 	log.Printf(" Registered %d MoE Layers for active monitoring and load-balancing.", len(moe.ActiveLayers))
@@ -2621,6 +2626,17 @@ skipSocialLoad:
 
 	// Initialize supervisor for autonomous expert repair and training data management
 	supervisor := moe.NewSupervisor()
+	supervisor.TrainingDataPath = customDataPath
+	if supervisor.TrainingDataPath == "" {
+		// Fallback to the primary social dataset for evolution
+		supervisor.TrainingDataPath = filepath.Join(projectRoot, "data/training/trainingdata/conversing.csv")
+	}
+
+	// Seed structural/syntactic base experts and lock parameters immediately
+	supervisor.SeedSystemExperts(intentModel)
+
+	// High-level Adaptive Supervisor for curriculum management and data evolution
+	adaptiveSup := training.NewAdaptiveSupervisor(numExperts, intentModel.EmbeddingDim, supervisor.TrainingDataPath)
 
 	globalStep := 0
 	stepsPerEpoch := (len(trainPairs) + batchSize - 1) / batchSize
@@ -2755,9 +2771,12 @@ skipSocialLoad:
 			}
 
 			// --- [Overfit Strategy: Manual Lock] ---
+			// NOTE: We do NOT override RouterTemperature or RouterNoise here anymore.
+			// The supervisor (expert.go) manages those values each epoch and sets
+			// RouterTemperature=0.50 + RouterNoise from the config while OverfitMode is active.
+			// Forcing them to 0.1/0.0 here was overriding the supervisor every epoch,
+			// preventing the noise from ever breaking the E7 collapse.
 			if overfitMode {
-				layer.RouterTemperature = 0.1
-				moe.SetRouterNoiseFactor(0.0)
 				layer.OverfitMode = true
 			}
 		}
@@ -2964,6 +2983,16 @@ skipSocialLoad:
 				}
 				div := float32(len(logits))
 				batchLoss = stepLossTotal / div
+
+				// Apply sample weights (Evolving Data Control)
+				if len(batch.Weights) > 0 {
+					var avgWeight float32 = 0
+					for _, w := range batch.Weights {
+						avgWeight += w
+					}
+					avgWeight /= float32(len(batch.Weights))
+					batchLoss *= avgWeight
+				}
 
 				// the target's structural category (VERB/AUX expected but NOUN/other predicted).
 				currentBatchSize2 := targetTensor.Shape[0]
@@ -3345,6 +3374,76 @@ skipSocialLoad:
 			
 			// Initial heuristic score calculation
 			heuristicScore := scoreSentenceHeuristic(response)
+
+			// --- [TTR & Anchor Word Density Quality Gate] ---
+			respWords := strings.Fields(strings.ToLower(response))
+			ttrFail := false
+			if len(respWords) > 0 {
+				unique := make(map[string]int)
+				hellosCount := 0
+				yesesCount := 0
+				for _, w := range respWords {
+					wTrimmed := strings.Trim(w, ".,!?;:\"'`()[]{}")
+					if wTrimmed == "" {
+						continue
+					}
+					unique[wTrimmed]++
+					if wTrimmed == "hello" || wTrimmed == "hi" || wTrimmed == "hey" || wTrimmed == "greetings" {
+						hellosCount++
+					}
+					if wTrimmed == "yes" || wTrimmed == "yeah" || wTrimmed == "yep" {
+						yesesCount++
+					}
+				}
+
+				ttr := float64(len(unique)) / float64(len(respWords))
+				
+				// 1. TTR threshold check (if too low, decoder is stuck/repetitive)
+				if len(respWords) >= 8 && ttr < 0.5 {
+					ttrFail = true
+					log.Printf(" ⚠️  Quality Gate REJECTED (TTR too low: %.4f < 0.5 for: '%s')", ttr, response)
+				}
+				// 2. High-frequency social anchor words check:
+				// "If a 15-word response contains 4 hellos and 3 yeses, auto-flag it as a fail regardless of the subject-verb score."
+				// Dynamic scaling for shorter responses as well:
+				if (len(respWords) >= 15 && (hellosCount >= 4 || yesesCount >= 3)) || 
+				   (len(respWords) < 15 && len(respWords) >= 5 && (hellosCount >= 3 || yesesCount >= 2)) {
+					ttrFail = true
+					log.Printf(" ⚠️  Quality Gate REJECTED (Social Anchor Density too high: hellos=%d, yeses=%d in %d words for: '%s')", hellosCount, yesesCount, len(respWords), response)
+				}
+			}
+
+			if ttrFail {
+				heuristicScore = 1.0 // Force failure
+				
+				// --- [Adaptive Supervisor Intervention on TTR/Anchor Fail] ---
+				failingPair := &moe.TrainPair{Q: p, Intent: "social"}
+				if strings.Contains(p, "__ques__") {
+					parts := strings.Split(p, "__ques__")
+					if len(parts) > 1 {
+						qPart := strings.TrimSpace(strings.Split(parts[1], "__ans__")[0])
+						failingPair.Q = qPart
+					}
+				}
+				
+				// 1. Curriculum & Data Evolution (AdaptiveSupervisor)
+				adaptiveSup.EvaluateGate(path, 0.01, "social", failingPair.Q)
+				
+				// 2. Structural & Variable Mutation (MoE Supervisor)
+				supervisor.HandleQualityGateFailure(intentModel, path, failingPair, 0.01)
+				
+				// 3. Sync Expert Count if AdaptiveSupervisor triggered an expansion
+				if adaptiveSup.CurrentExperts > len(moe.ActiveLayers[0].Experts) {
+					roleID := 6 // GREET
+					currentLayers := findMoELayers(intentModel)
+					supervisor.AddExpertToLayer(intentModel, 0, roleID)
+					if intentModel.Decoder.OutputMoE != nil {
+						supervisor.AddExpertToLayer(intentModel, len(currentLayers)-1, roleID)
+					}
+					moe.ActiveLayers = findMoELayers(intentModel)
+				}
+			}
+
 			testProbeResults = append(testProbeResults, orchestrator.TestProbeResult{
 				Prompt:   p,
 				Response: response,
@@ -3401,6 +3500,40 @@ skipSocialLoad:
 							if avgAtt < attThreshold {
 								log.Printf(" ⚠️  Quality Gate REJECTED (Subject-Verb Connection: %.4f < %.4f)", avgAtt, attThreshold)
 								heuristicScore = 1.0 // Force failure
+
+								// --- [Adaptive Supervisor Intervention] ---
+								failingPair := &moe.TrainPair{Q: p, Intent: "social"}
+								if strings.Contains(p, "__ques__") {
+									parts := strings.Split(p, "__ques__")
+									if len(parts) > 1 {
+										qPart := strings.TrimSpace(strings.Split(parts[1], "__ans__")[0])
+										failingPair.Q = qPart
+									}
+								}
+								
+								// 1. Curriculum & Data Evolution (AdaptiveSupervisor)
+								adaptiveSup.EvaluateGate(path, float64(avgAtt), "social", failingPair.Q)
+								
+								// 2. Structural & Variable Mutation (MoE Supervisor)
+								supervisor.HandleQualityGateFailure(intentModel, path, failingPair, float64(avgAtt))
+								
+								// 3. Sync Expert Count if AdaptiveSupervisor triggered an expansion
+								if adaptiveSup.CurrentExperts > len(moe.ActiveLayers[0].Experts) {
+									// Spawn a specialized expert to handle the failing intent
+									roleID := 6 // GREET
+									
+									// Identify total layers before modification for correct indexing
+									currentLayers := findMoELayers(intentModel)
+									
+									supervisor.AddExpertToLayer(intentModel, 0, roleID)
+									if intentModel.Decoder.OutputMoE != nil {
+										// Last layer index
+										supervisor.AddExpertToLayer(intentModel, len(currentLayers)-1, roleID)
+									}
+									
+									// CRITICAL: Re-register layers to ActiveLayers so monitoring/resets see the new experts
+									moe.ActiveLayers = findMoELayers(intentModel)
+								}
 							} else {
 								log.Printf(" ✅ Quality Gate PASSED (Subject-Verb Connection: %.4f)", avgAtt)
 							}
@@ -3598,7 +3731,7 @@ skipSocialLoad:
 			supervisor.RunTriage(intentModel, currentAvgSim, &supPairs)
 			if len(supPairs) > len(trainPairs) {
 				for _, sp := range supPairs[len(trainPairs):] {
-					trainPairs = append(trainPairs, struct{ Q, A, Intent, Grammar string }{
+					trainPairs = append(trainPairs, moe.TrainPair{
 						Q: sp.Q, A: sp.A, Intent: sp.Intent, Grammar: sp.Grammar,
 					})
 				}
@@ -3606,8 +3739,8 @@ skipSocialLoad:
 			}
 		}
 
-		// 4. Save Checkpoint (Strictly every 20 epochs)
-		if (epoch+1)%20 == 0 {
+		// 4. Save Checkpoint (Strictly every 20 epochs, and also at Epoch 1 for immediate developer usability)
+		if (epoch+1)%20 == 0 || epoch == 0 {
 			// Detach before epoch save to free up memory for serialization
 			intentModel.Detach()
 			ckpt := &moe.Checkpoint{
@@ -3642,6 +3775,19 @@ skipSocialLoad:
 			avgLoss = epochLoss / float32(batchNum)
 		}
 
+		var pronID, verbID, auxID string
+		for i, ex := range layers[0].Experts {
+			if ge, ok := ex.(*moe.GrammarExpert); ok {
+				if ge.RoleName == "PRON" {
+					pronID = fmt.Sprintf("E%d", i)
+				} else if ge.RoleName == "VERB" {
+					verbID = fmt.Sprintf("E%d", i)
+				} else if ge.RoleName == "AUX" {
+					auxID = fmt.Sprintf("E%d", i)
+				}
+			}
+		}
+
 		epochMetrics := orchestrator.TrainingMetrics{
 			Epoch:             epoch + 1,
 			AverageLoss:       avgLoss,
@@ -3653,6 +3799,9 @@ skipSocialLoad:
 			LayerResets:       layerResets,
 			LayerUsage:        layerUsage,
 			OverfitMode:       overfitMode,
+			PronPathID:        pronID,
+			VerbPathID:        verbID,
+			AuxPathID:         auxID,
 		}
 
 		// 2. Status Line every 100 epochs (Concise)
@@ -3857,6 +4006,25 @@ func StrictGenerate(model *moe.IntentMoE, input string, maxLen int, repetitionPe
 			}
 		}
 
+		// Step 4: 4-gram repetition penalty.
+		// If any token would complete a 4-gram sequence that has already appeared
+		// >= 2 times in the generated history, heavily penalize it to break loops
+		// like "i am processing the concept of i am processing..."
+		if len(resIDs) >= 3 {
+			fourgrams := make(map[[3]int]int)
+			for j := 0; j+2 < len(resIDs); j++ {
+				key := [3]int{resIDs[j], resIDs[j+1], resIDs[j+2]}
+				fourgrams[key]++
+			}
+			tailKey := [3]int{resIDs[len(resIDs)-3], resIDs[len(resIDs)-2], resIDs[len(resIDs)-1]}
+			if fourgrams[tailKey] >= 2 {
+				// Penalize every token that would extend this repeated 3-gram prefix
+				for candidateID := range logits.Data {
+					logits.Data[candidateID] -= 15.0
+				}
+			}
+		}
+
 		moe.ApplyRepetitionPenalty(logits, resIDs, repetitionPenalty)
 		logits.Data[model.SentenceVocab.PaddingTokenID] = -1e9
 		if unkID := model.SentenceVocab.GetTokenID("UNK"); unkID != -1 {
@@ -4003,6 +4171,21 @@ func StrictGenerateWithExperts(model *moe.IntentMoE, input string, maxLen int, r
 		if model.Encoder.GetMoELayers()[0].RouterTemperature > 1.2 {
 			for idx := range logits.Data {
 				logits.Data[idx] += float32((rand.Float64()*2 - 1) * 0.15)
+			}
+		}
+
+		// Step 4: 4-gram repetition penalty (mirrors StrictGenerate).
+		if len(resIDs) >= 3 {
+			fourgrams := make(map[[3]int]int)
+			for j := 0; j+2 < len(resIDs); j++ {
+				key := [3]int{resIDs[j], resIDs[j+1], resIDs[j+2]}
+				fourgrams[key]++
+			}
+			tailKey := [3]int{resIDs[len(resIDs)-3], resIDs[len(resIDs)-2], resIDs[len(resIDs)-1]}
+			if fourgrams[tailKey] >= 2 {
+				for candidateID := range logits.Data {
+					logits.Data[candidateID] -= 15.0
+				}
 			}
 		}
 
@@ -4191,7 +4374,7 @@ func logEpochHistory(projectRoot string, epoch int, loss float32, lbLoss float32
 // ChatDataIterator implements the Iterator pattern for training data.
 // It tokenizes data on-the-fly to save memory and supports shuffling.
 type ChatDataIterator struct {
-	pairs  []struct{ Q, A, Intent, Grammar string }
+	pairs  []moe.TrainPair
 	vocab  *mainvocab.Vocabulary
 	unkID  int
 	idx    int
@@ -4199,7 +4382,7 @@ type ChatDataIterator struct {
 	Epoch  int
 }
 
-func NewChatDataIterator(pairs []struct{ Q, A, Intent, Grammar string }, vocab *mainvocab.Vocabulary, unkID int) *ChatDataIterator {
+func NewChatDataIterator(pairs []moe.TrainPair, vocab *mainvocab.Vocabulary, unkID int) *ChatDataIterator {
 	// Shuffle pairs for better training
 	rand.Shuffle(len(pairs), func(i, j int) { pairs[i], pairs[j] = pairs[j], pairs[i] })
 	return &ChatDataIterator{
@@ -4279,11 +4462,12 @@ func (it *ChatDataIterator) NextBatch(batchSize int) *Batch {
 	var inputs [][]float32
 	var targets [][]float32
 	var grammars [][]float32
+	var weights []float32
 	var intents []string
 	maxIn, maxOut := 0, 0
 
 	for i := 0; i < batchSize && it.HasNext(); i++ {
-		// Access pair directly to get intent
+		// Access pair directly to get intent and weight
 		pair := it.pairs[it.idx]
 		inp, tgt, gmr := it.Next()
 		// Sequence length constraint: respects curriculum limit
@@ -4294,6 +4478,13 @@ func (it *ChatDataIterator) NextBatch(batchSize int) *Batch {
 		targets = append(targets, tgt.Data)
 		grammars = append(grammars, gmr.Data)
 		intents = append(intents, pair.Intent)
+		
+		w := pair.Weight
+		if w == 0 {
+			w = 1.0 // Default weight
+		}
+		weights = append(weights, w)
+
 		if len(inp.Data) > maxIn {
 			maxIn = len(inp.Data)
 		}
@@ -4346,6 +4537,7 @@ func (it *ChatDataIterator) NextBatch(batchSize int) *Batch {
 		Mask:      mask,
 		InputMask: inputMaskTensor,
 		Intents:   intents,
+		Weights:   weights,
 	}
 }
 
@@ -4726,7 +4918,7 @@ func isLSTMBias(param *tensor.Tensor, hiddenSize int) bool {
 	return size == hiddenSize || size == 4*hiddenSize || size == 8*hiddenSize
 }
 
-func ValidateChat(model *moe.IntentMoE, valPairs []struct{ Q, A, Intent, Grammar string }, useGPU bool) float32 {
+func ValidateChat(model *moe.IntentMoE, valPairs []moe.TrainPair, useGPU bool) float32 {
 	// 1. Enter Eval Mode (Disable Dropout/Noise)
 	for _, layer := range moe.ActiveLayers {
 		layer.SetMode(false)

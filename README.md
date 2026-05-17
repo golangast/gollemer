@@ -1,13 +1,15 @@
 # Gollemer
 
-Gollemer is a high-performance **Mixture of Experts (MoE)** neural network framework and training pipeline written entirely in **Go**. It is designed for maximum performance with **zero external dependencies**, featuring a native core optimized for SIMD-accelerated CPU training.
+Gollemer is a high-performance **Mixture of Experts (MoE)** neural network framework and training pipeline written entirely in **Go**. It is designed for maximum performance with **zero external dependencies**, featuring a native core optimized for SIMD-accelerated CPU training and an autonomous adaptive supervisor.
 
 ---
 
 ## 🚀 Key Features
 
-- **Mixture of Experts Architecture**: Efficient multi-expert routing (K=1) for increased model capacity with low inference latency.
+- **Mixture of Experts Architecture**: Efficient multi-expert routing ($K=1$) for increased model capacity with low inference latency.
 - **High Performance**: Native SIMD-vectorized operations for AVX2/SSE/Neon.
+- **Autonomous Adaptive Supervisor**: Real-time hyperparameter reflection, self-directed expert spawning/eviction, and on-the-fly training data evolution.
+- **Chromebook-Ready CPU Training**: Lightweight enough to train models entirely on standard Chromebooks and low-power commodity devices.
 - **Stabilized MoE Training**: 
   - **Router Noise & Jitter**: Prevents expert collapse and forces specialization.
   - **Expert Health Monitoring**: Real-time tracking of expert utilization and saturation.
@@ -17,24 +19,49 @@ Gollemer is a high-performance **Mixture of Experts (MoE)** neural network frame
   - **Social Curriculum**: Specialized training for natural, diverse human-like interaction.
   - **Scheduled Sampling**: Smooth transition from teacher-forcing to self-generated sequence learning.
   - **Robust Model Persistence**: Gzip-compressed checkpoints with legacy fallback support and atomic saving.
-- **Dependency-Free Core**: No Rust or Python toolchains required. The entire neural engine is native Go.
+- **Dependency-Free Core**: No Python, Rust, PyTorch, C++, or external BLAS (like Gonum/OpenBLAS) required. The entire neural engine is native Go.
 - **Hardware-Native Performance**:
-  - **CPU**: Optimized Go assembly and SIMD intrinsics via `archsimd`.
-  - **CPU**: Native **SIMD acceleration** using Go's `archsimd` (AVX2/SSE), matching BLAS performance without external libraries like Gonum.
-- **Ultra-Portable**: Compiles to a single static binary. No shared libraries or complex environments needed.
+  - **CPU**: Native **SIMD acceleration** using Go's `archsimd` (AVX2/SSE/Neon), matching BLAS performance without external C libraries.
+- **Ultra-Portable**: Compiles to a single static binary. No shared libraries, virtual environments, or complex environments needed.
 
 ---
 
 ## 🏗️ Why Gollemer?
 
-By eliminating heavy external libraries like **Rust-based backends** and **Gonum**, Gollemer achieves a state of "Mechanical Sympathy" with the Go runtime:
-- **Faster Setup**: No need for Rust toolchains, LLVM, or complex CGO configurations for basic training.
-- **Superior Portability**: The native SIMD fallbacks ensure that the model remains fast even on systems without a dedicated GPU.
-- **Lean Footprint**: A single binary deployment with zero runtime dependencies (except for optional GPU drivers).
+By eliminating heavy external libraries like **Rust-based backends**, **Python runtimes**, and **Gonum**, Gollemer achieves a state of absolute "Mechanical Sympathy" with the Go compiler and runtime:
+- **Zero External Dependencies**: Built entirely from scratch. No need for Python, CGO, Rust toolchains, LLVM, or complex shared libraries. Just clean, native Go.
+- **Chromebook-Ready Performance**: Due to its ultra-lean memory footprint and optimized Go-assembly/SIMD vector math, you can run and train Gollemer models directly on a **Chromebook**, basic laptops, or entry-level edge servers. No massive GPU clusters or gigabytes of VRAM required.
+- **Instant Deployment**: Compile once, run anywhere. The entire training suite, tokenizers, world knowledge database, and interactive shell deploy as a single static binary.
+
+---
+
+## 🧠 The Adaptive Supervisor (Self-Evolving MoE)
+
+The most advanced capability of Gollemer is its **Adaptive Supervisor** (`internal/ai/moe/supervisor.go`), an autonomous orchestrator that manages a real-time feedback loop during training. Instead of static hyperparameters and a fixed layout, the supervisor actively monitors, heals, and expands the network architecture dynamically.
+
+### 1. Dynamic Config Tuning & Real-Time Reflection
+The supervisor continuously reflects on training statistics (`Reflect` / `ReflectSparse`):
+*   **Anti-Monopoly Jitter**: If a single expert monopolizes traffic (dominance >85%), the supervisor automatically increases router noise and temperature to force expert exploration and restore healthy specialization.
+*   **Plateau Decay**: If training plateaus (perplexity or loss fails to improve for 500–1000 steps), it autonomously decays the global learning rate (`opt.SetLearningRate`) to safely guide weights into a stable minimum.
+*   **Confidence Restoration**: If routing confidence falls below a safe threshold (e.g., 18%), it nudges router temperature upward to prevent repetitive "word salad" patterns.
+*   **Numerical Safety (Emergency Brake)**: Validates all tensor operations via `SanitizeTensors` to detect and intercept numerical instabilities like `NaN` or `Inf` from failing hardware bridges.
+
+### 2. Autonomous Training Data Evolution
+When quality gates or linguistic validations fail on weak or shorthand structures, the supervisor dynamically updates the corpus:
+*   **Syntactic Augmentation**: It reads raw training files and mutates weak token fragments (e.g., "hello" or "thanks") on disk into rich grammatical trees containing full Subject-Verb-Object structures (e.g., "i welcome you with hello" or "i offer you my thanks").
+*   **Dynamic Sample Weighting**: It reduces the sample weight of grammatically ambiguous training pairs (weight *= 0.5) to prevent them from poisoning the model's loss gradient.
+*   **Hot-Injection**: If average similarity falls too low, the supervisor hot-injects highly structured, diverse synthetic conversational patterns directly into the active training loop.
+
+### 3. Self-Directed Expert Spawning, Eviction & Surgery
+Gollemer models can dynamically scale their brain capacity during curriculum learning:
+*   **Dynamic Spawning**: If an expert combination repeatedly fails (3+ times) under a target intent, the supervisor dynamically spawns a brand new, specialized expert into the MoE layers, automatically extending the gating and noise network weights to handle the new dimensions.
+*   **Staggered Triage (Expert Surgery)**: It monitors expert health based on an L2 norm and utilization score. Collapsed or dead experts are triaged and refreshed by cloning the "alpha" (strongest) expert with subtle mutation, while maintaining a ceiling (healing ≤50% per layer) to protect learned sequences.
+*   **Active Capacity Eviction**: To prevent memory explosion and out-of-memory (OOM) failures, layers are capped (e.g., 64 experts max). The supervisor evicts the lowest-performing dynamic experts using LRU/health tracking (`EvictLeastActive` or `ForceEvictLowestUtility`), while keeping foundational system experts (E0–E7 representing locked structural grammatical roles like `PRON`, `VERB`, `AUX`) permanently pinned and protected.
 
 ---
 
 ## ⚡ Quick Start
+
 
 ### 1. Installation
 Gollemer requires **Go 1.26+** to leverage native SIMD acceleration.

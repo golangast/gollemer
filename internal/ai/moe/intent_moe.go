@@ -1058,6 +1058,32 @@ func appendGrammarExperts(layer *MoELayer, embeddingDim int, count int) error {
 	}
 	layer.ExpertGradMultiplier = append(layer.ExpertGradMultiplier, extra...)
 
+	// Expand the new dynamic tracking slices
+	extraHealth := make([]float64, numGrammar)
+	for i := range extraHealth {
+		extraHealth[i] = 1.0
+	}
+	layer.ExpertHealth = append(layer.ExpertHealth, extraHealth...)
+
+	extraTimes := make([]time.Time, numGrammar)
+	now := time.Now()
+	for i := range extraTimes {
+		extraTimes[i] = now
+	}
+	layer.ExpertLastUsedAt = append(layer.ExpertLastUsedAt, extraTimes...)
+
+	extraPinned := make([]bool, numGrammar)
+	for i := range extraPinned {
+		extraPinned[i] = true // Grammar/syntactic experts are pinned by default
+	}
+	layer.ExpertPinned = append(layer.ExpertPinned, extraPinned...)
+
+	extraRoles := make([]string, numGrammar)
+	for i := 0; i < numGrammar; i++ {
+		extraRoles[i] = GrammarRoles[i%len(GrammarRoles)]
+	}
+	layer.ExpertRole = append(layer.ExpertRole, extraRoles...)
+
 	log.Printf("🔤 appended %d GrammarExperts to MoELayer (total experts: %d)", numGrammar, len(layer.Experts))
 	return nil
 }
@@ -2129,11 +2155,17 @@ func (m *IntentMoE) ResizeEmbeddings(newVocabSize int) {
 
 	oldEmb := m.Embedding
 	newEmb := nn.NewEmbedding(newVocabSize, oldEmb.DimModel)
+	
+	// Preserve old ControlTokenIDs
+	if oldEmb.ControlTokenIDs != nil {
+		newEmb.ControlTokenIDs = oldEmb.ControlTokenIDs
+	}
 
 	// Copy old weights
 	copy(newEmb.Weight.Data, oldEmb.Weight.Data)
 
 	m.Embedding = newEmb
+	m.SanitizeControlTokens()
 }
 
 // SaveIntentMoECheckpoint saves the IntentMoE and its metadata to a file with compression.
@@ -2403,7 +2435,26 @@ func (m *IntentMoE) RepairArchitecture() {
 
 	// 🧬 REBUILD ACTIVE LAYERS
 	// Ensure all MoE layers (including loaded ones) are tracked for Load Balancing
+	m.SanitizeControlTokens()
 	m.RebuildActiveLayers()
+}
+
+// SanitizeControlTokens registers conditional prefix tokens to be scaled down in variance.
+func (m *IntentMoE) SanitizeControlTokens() {
+	if m.Embedding == nil || m.SentenceVocab == nil {
+		return
+	}
+	if m.Embedding.ControlTokenIDs == nil {
+		m.Embedding.ControlTokenIDs = make(map[int]bool)
+	}
+	specialTokens := []string{"__intent__", "__ques__", "__ans__", "social", "create_webserver", "create_handler", "create_database", "create_page", "create_file", "create_folder", "create_structure", "move_file", "create_object", "stop", "run_webserver", "watch", ":"}
+	for _, tok := range specialTokens {
+		id := m.SentenceVocab.GetTokenID(tok)
+		if id > 0 {
+			m.Embedding.ControlTokenIDs[id] = true
+		}
+	}
+	log.Printf("🛡️ [SanitizeEmbeddings] Registered %d prefix/control tokens for scaling in Embedding layer.", len(m.Embedding.ControlTokenIDs))
 }
 
 func (m *IntentMoE) RebuildActiveLayers() {

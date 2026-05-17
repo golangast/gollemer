@@ -51,4 +51,7 @@ type Expert interface {
 
 	// SyncParameters synchronizes parameters from CPU to GPU.
 	SyncParameters() error
+
+	// GetID returns the expert's unique ID.
+	GetID() int
 }

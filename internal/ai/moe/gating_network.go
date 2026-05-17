@@ -481,6 +481,10 @@ func (gn *GatingNetwork) RepairArchitecture() {
 	numExperts := gn.Linear.Weights.Shape[1]
 	if gn.LayerNorm == nil || gn.LayerNorm.NormalizedShape != numExperts {
 		gn.LayerNorm = nn.NewLayerNorm(numExperts)
+		// 🛡️ DEVICE SYNC: If the gating network is on GPU, the new LayerNorm must be too.
+		if gn.Linear.Weights.Device == tensor.GPU {
+			gn.LayerNorm.ToGPU()
+		}
 	}
 }
 
@@ -488,4 +492,55 @@ func (gn *GatingNetwork) SyncParameters() error {
 	// GatingNetwork uses standard nn.Linear which currently targets direct GPU execution
 	// or CPU->GPU sync via ToGPU, so SyncParameters is a no-op for now.
 	return nil
+}
+
+// PruneExperts shrinks the gating network's projection matrices by dropping the columns
+// associated with the pruned expert indices.
+func (gn *GatingNetwork) PruneExperts(droppedIndices map[int]bool) {
+	shrinkLinear := func(lin *nn.Linear) {
+		if lin == nil || lin.Weights == nil {
+			return
+		}
+		oldW := lin.Weights
+		inputDim := oldW.Shape[0]
+		oldN := oldW.Shape[1]
+		newN := oldN - len(droppedIndices)
+		if newN <= 0 {
+			return
+		}
+
+		newWData := make([]float32, inputDim*newN)
+		for row := 0; row < inputDim; row++ {
+			newCol := 0
+			for col := 0; col < oldN; col++ {
+				if !droppedIndices[col] {
+					newWData[row*newN+newCol] = oldW.Data[row*oldN+col]
+					newCol++
+				}
+			}
+		}
+		lin.Weights = tensor.NewTensor([]int{inputDim, newN}, newWData, true)
+
+		if lin.Biases != nil {
+			oldB := lin.Biases.Data
+			newBData := make([]float32, newN)
+			newCol := 0
+			for col := 0; col < oldN; col++ {
+				if !droppedIndices[col] {
+					newBData[newCol] = oldB[col]
+					newCol++
+				}
+			}
+			lin.Biases = tensor.NewTensor([]int{newN}, newBData, true)
+		}
+	}
+
+	shrinkLinear(gn.Linear)
+	shrinkLinear(gn.NoiseLinear)
+
+	// LayerNorm needs to be rebuilt since the hidden dimension changed
+	if gn.LayerNorm != nil && gn.Linear != nil {
+		newN := gn.Linear.Weights.Shape[1]
+		gn.LayerNorm = nn.NewLayerNorm(newN)
+	}
 }

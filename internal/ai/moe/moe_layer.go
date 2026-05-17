@@ -3,6 +3,7 @@ package moe
 import (
 	"fmt"
 	"iter"
+	"log"
 	"math"
 	"math/rand"
 	"runtime"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	. "github.com/golangast/gollemer/internal/ai/neural/tensor"
 )
@@ -85,6 +87,10 @@ type MoELayer struct {
 	ExpertRegularizationWeight float32           // Penalty for experts deviating from healthy mean
 	ExpertSparsityWeight       float32           // Penalty for non-sparse or unbalanced expert selection
 	HealthyExpertIDs           []int             // List of IDs for experts considered "healthy" (e.g. 14, 9)
+	ExpertHealth               []float64
+	ExpertLastUsedAt           []time.Time
+	ExpertPinned               []bool
+	ExpertRole                 []string
 }
 
 // ExpertTask represents work to be done by one expert on a subset of tokens.
@@ -190,6 +196,22 @@ func NewMoELayer(inputDim, outputDim, numExperts, k int, expertBuilder func(int)
 		ExpertOutputScale:          make([]float32, numExperts),
 		ExpertRegularizationWeight: 0.0, // Disabled by default
 		ExpertSparsityWeight:       0.0, // Disabled by default
+		ExpertHealth:               make([]float64, numExperts),
+		ExpertLastUsedAt:           make([]time.Time, numExperts),
+		ExpertPinned:               make([]bool, numExperts),
+		ExpertRole:                 make([]string, numExperts),
+	}
+	now := time.Now()
+	for i := range layer.ExpertHealth {
+		layer.ExpertHealth[i] = 1.0
+		layer.ExpertLastUsedAt[i] = now
+		// Pin first 8 experts by default as structural/system experts
+		if i < 8 {
+			layer.ExpertPinned[i] = true
+			if i < len(GrammarRoles) {
+				layer.ExpertRole[i] = GrammarRoles[i]
+			}
+		}
 	}
 	for i := range layer.ExpertOutputScale {
 		layer.ExpertOutputScale[i] = 1.0
@@ -267,7 +289,10 @@ func (moe *MoELayer) ResetExpertWeights(expertIdx int) {
 	}
 }
 
-// PerformSurgery clones weights from an alpha expert to a sink expert with tiny mutation noise.
+// PerformSurgery blends weights from an alpha expert into a sink expert.
+// Instead of a hard overwrite (which discards all learned directional memory),
+// we apply an 80/20 blend: 80% alpha + 20% sink. This gives the sink a strong
+// healthy prior while retaining a fraction of its own accumulated gradient direction.
 func (moe *MoELayer) PerformSurgery(alphaID, sinkID int) {
 	if alphaID < 0 || alphaID >= len(moe.Experts) || sinkID < 0 || sinkID >= len(moe.Experts) {
 		return
@@ -276,7 +301,7 @@ func (moe *MoELayer) PerformSurgery(alphaID, sinkID int) {
 		return
 	}
 
-	fmt.Printf("🧬 [Surgery] Cloning Expert E%d (Alpha) -> Expert E%d (Sink) for %T\n", alphaID, sinkID, moe)
+	fmt.Printf("🧬 [Surgery] Blending Expert E%d (Alpha) → Expert E%d (Sink) [80%%α + 20%%sink]\n", alphaID, sinkID)
 
 	alphaParams := moe.Experts[alphaID].Parameters()
 	sinkParams := moe.Experts[sinkID].Parameters()
@@ -288,9 +313,15 @@ func (moe *MoELayer) PerformSurgery(alphaID, sinkID int) {
 		if sinkParams[i] == nil || alphaParams[i] == nil {
 			continue
 		}
+		if len(sinkParams[i].Data) != len(alphaParams[i].Data) {
+			continue
+		}
 
-		// Clone and add tiny mutation jitter (0.01)
-		copy(sinkParams[i].Data, alphaParams[i].Data)
+		// Smooth blend: 80% alpha + 20% sink retains directional memory
+		for j := range sinkParams[i].Data {
+			sinkParams[i].Data[j] = (0.8 * alphaParams[i].Data[j]) + (0.2 * sinkParams[i].Data[j])
+		}
+		// Small jitter to break symmetry after the blend
 		sinkParams[i].ApplyJitter(0.01)
 		sinkParams[i].ZeroGrad()
 	}
@@ -660,6 +691,35 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 				}
 			}
 		}
+		// 🛡️ HARD FLOOR ROUTING FOR LAGGING EXPERTS
+		if moe.Training {
+			// Ensure ExpertHealth is initialized to match numExperts
+			if len(moe.ExpertHealth) != numExperts {
+				newHealth := make([]float64, numExperts)
+				for i := range newHealth {
+					newHealth[i] = 1.0
+				}
+				if len(moe.ExpertHealth) > 0 {
+					copy(newHealth, moe.ExpertHealth)
+				}
+				moe.ExpertHealth = newHealth
+			}
+			
+			// Boost logits for lagging experts (health < 0.25 and not frozen) to give them a routing prior boost
+			for e := 0; e < numExperts; e++ {
+				if moe.ExpertHealth[e] < 0.25 {
+					isFrozen := false
+					if e < len(moe.ExpertFrozen) && moe.ExpertFrozen[e] {
+						isFrozen = true
+					}
+					if !isFrozen {
+						for i := 0; i < numTokens; i++ {
+							gateLogits.Data[i*numExperts+e] += 1.5
+						}
+					}
+				}
+			}
+		}
 
 		// Apply softmax to get probabilities
 		GateOutputs, err := scoresTensor.Softmax(len(scoresTensor.Shape) - 1)
@@ -995,6 +1055,45 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 		for i, expert := range moe.Experts {
 			wasUsed := len(moe.ExpertTokenIndices[i]) > 0
 			expert.UpdateHealth(wasUsed)
+
+			// Lazy initialize ExpertLastUsedAt if needed
+			if len(moe.ExpertLastUsedAt) != len(moe.Experts) {
+				moe.ExpertLastUsedAt = make([]time.Time, len(moe.Experts))
+				now := time.Now()
+				for j := range moe.ExpertLastUsedAt {
+					moe.ExpertLastUsedAt[j] = now
+				}
+			}
+			if wasUsed && i < len(moe.ExpertLastUsedAt) {
+				moe.ExpertLastUsedAt[i] = time.Now()
+			}
+
+			// Lazy initialize ExpertHealth if needed
+			if len(moe.ExpertHealth) != len(moe.Experts) {
+				moe.ExpertHealth = make([]float64, len(moe.Experts))
+				for j := range moe.ExpertHealth {
+					moe.ExpertHealth[j] = 1.0
+				}
+			}
+			if i < len(moe.ExpertHealth) {
+				// Assert and read expert ActivationEMA or health
+				if fe, ok := expert.(*FeedForwardExpert); ok {
+					moe.ExpertHealth[i] = float64(fe.ActivationEMA)
+				} else if ge, ok := expert.(*GrammarExpert); ok {
+					moe.ExpertHealth[i] = float64(ge.health)
+				} else if ie, ok := expert.(*InternalExpert); ok {
+					moe.ExpertHealth[i] = float64(ie.health)
+				} else if le, ok := expert.(*LinearExpert); ok {
+					moe.ExpertHealth[i] = float64(le.ActivationEMA)
+				} else {
+					// Fallback
+					if wasUsed {
+						moe.ExpertHealth[i] = moe.ExpertHealth[i]*0.99 + 0.01
+					} else {
+						moe.ExpertHealth[i] = moe.ExpertHealth[i]*0.99
+					}
+				}
+			}
 		}
 
 		// Push state to stack for BPTT
@@ -2124,3 +2223,486 @@ func (moe *MoELayer) RepairArchitecture() {
 		moe.GatingNetwork.RepairArchitecture()
 	}
 }
+
+// PruneUnderutilizedExperts removes a fraction of the least utilized experts from the layer,
+// reducing memory footprint and forcing the gating network to route to remaining experts.
+func (moe *MoELayer) PruneUnderutilizedExperts(fraction float32) {
+	if fraction <= 0 || fraction >= 1 {
+		return
+	}
+	dropCount := int(float32(len(moe.Experts)) * fraction)
+	if dropCount < 1 {
+		dropCount = 1
+	}
+	// ensure we keep a minimum baseline (e.g. 8 experts)
+	if len(moe.Experts)-dropCount < 8 {
+		dropCount = len(moe.Experts) - 8
+	}
+	if dropCount <= 0 {
+		return
+	}
+
+	type expertScore struct {
+		idx  int
+		util int
+	}
+	var scores []expertScore
+	for i := range moe.Experts {
+		// Pinned syntactic / system experts cannot be pruned
+		if i < len(moe.ExpertPinned) && moe.ExpertPinned[i] {
+			continue
+		}
+		util := 0
+		if i < len(moe.AccumulatedUtilization) {
+			util = moe.AccumulatedUtilization[i]
+		}
+		scores = append(scores, expertScore{idx: i, util: util})
+	}
+	
+	// Sort by utilization ascending
+	sort.Slice(scores, func(a, b int) bool {
+		return scores[a].util < scores[b].util
+	})
+
+	// Adjust dropCount if it exceeds available prunable candidates
+	if dropCount > len(scores) {
+		dropCount = len(scores)
+	}
+
+	droppedIndices := make(map[int]bool)
+	for i := 0; i < dropCount; i++ {
+		droppedIndices[scores[i].idx] = true
+	}
+
+	// Shrink Experts and parallel arrays
+	newExperts := make([]Expert, 0, len(moe.Experts)-dropCount)
+	newAccumulatedUtilization := make([]int, 0, len(moe.Experts)-dropCount)
+	newExpertFrozen := make([]bool, 0, len(moe.Experts)-dropCount)
+	newStagnationCounters := make([]int, 0, len(moe.Experts)-dropCount)
+	newExpertGradMultiplier := make([]float32, 0, len(moe.Experts)-dropCount)
+	newExpertOutputScale := make([]float32, 0, len(moe.Experts)-dropCount)
+	newExpertHealth := make([]float64, 0, len(moe.Experts)-dropCount)
+	newExpertLastUsedAt := make([]time.Time, 0, len(moe.Experts)-dropCount)
+	newExpertPinned := make([]bool, 0, len(moe.Experts)-dropCount)
+	newExpertRole := make([]string, 0, len(moe.Experts)-dropCount)
+
+	for i, e := range moe.Experts {
+		if droppedIndices[i] {
+			continue
+		}
+		newExperts = append(newExperts, e)
+
+		if i < len(moe.AccumulatedUtilization) {
+			newAccumulatedUtilization = append(newAccumulatedUtilization, moe.AccumulatedUtilization[i])
+		} else {
+			newAccumulatedUtilization = append(newAccumulatedUtilization, 0)
+		}
+		if i < len(moe.ExpertFrozen) {
+			newExpertFrozen = append(newExpertFrozen, moe.ExpertFrozen[i])
+		} else {
+			newExpertFrozen = append(newExpertFrozen, false)
+		}
+		if i < len(moe.StagnationCounters) {
+			newStagnationCounters = append(newStagnationCounters, moe.StagnationCounters[i])
+		} else {
+			newStagnationCounters = append(newStagnationCounters, 0)
+		}
+		if i < len(moe.ExpertGradMultiplier) {
+			newExpertGradMultiplier = append(newExpertGradMultiplier, moe.ExpertGradMultiplier[i])
+		} else {
+			newExpertGradMultiplier = append(newExpertGradMultiplier, 1.0)
+		}
+		if i < len(moe.ExpertOutputScale) {
+			newExpertOutputScale = append(newExpertOutputScale, moe.ExpertOutputScale[i])
+		} else {
+			newExpertOutputScale = append(newExpertOutputScale, 1.0)
+		}
+		if i < len(moe.ExpertHealth) {
+			newExpertHealth = append(newExpertHealth, moe.ExpertHealth[i])
+		} else {
+			newExpertHealth = append(newExpertHealth, 1.0)
+		}
+		if i < len(moe.ExpertLastUsedAt) {
+			newExpertLastUsedAt = append(newExpertLastUsedAt, moe.ExpertLastUsedAt[i])
+		} else {
+			newExpertLastUsedAt = append(newExpertLastUsedAt, time.Now())
+		}
+		if i < len(moe.ExpertPinned) {
+			newExpertPinned = append(newExpertPinned, moe.ExpertPinned[i])
+		} else {
+			newExpertPinned = append(newExpertPinned, false)
+		}
+		if i < len(moe.ExpertRole) {
+			newExpertRole = append(newExpertRole, moe.ExpertRole[i])
+		} else {
+			newExpertRole = append(newExpertRole, "")
+		}
+	}
+
+	moe.Experts = newExperts
+	moe.AccumulatedUtilization = newAccumulatedUtilization
+	moe.ExpertFrozen = newExpertFrozen
+	moe.StagnationCounters = newStagnationCounters
+	moe.ExpertGradMultiplier = newExpertGradMultiplier
+	moe.ExpertOutputScale = newExpertOutputScale
+	moe.ExpertHealth = newExpertHealth
+	moe.ExpertLastUsedAt = newExpertLastUsedAt
+	moe.ExpertPinned = newExpertPinned
+	moe.ExpertRole = newExpertRole
+	moe.NumExperts = len(newExperts)
+
+	// Shrink Gating Network
+	if moe.GatingNetwork != nil {
+		moe.GatingNetwork.PruneExperts(droppedIndices)
+	}
+}
+
+// FindLowestPerformingExpert returns the index of the expert with the lowest performance score.
+// The score is computed by blending expert health (from logs/evaluation) and recency of utilization:
+// score := health * (1.0 / (1.0 + age_seconds))
+// Pinned experts (vital structural experts) are excluded.
+// Returns -1 if no expert can be evicted.
+func (moe *MoELayer) FindLowestPerformingExpert(newRole string) int {
+	if len(moe.Experts) <= 4 {
+		return -1
+	}
+
+	// Lazy initialization check for security
+	if len(moe.ExpertHealth) != len(moe.Experts) {
+		moe.ExpertHealth = make([]float64, len(moe.Experts))
+		for i := range moe.ExpertHealth {
+			moe.ExpertHealth[i] = 1.0
+		}
+	}
+	if len(moe.ExpertLastUsedAt) != len(moe.Experts) {
+		moe.ExpertLastUsedAt = make([]time.Time, len(moe.Experts))
+		now := time.Now()
+		for i := range moe.ExpertLastUsedAt {
+			moe.ExpertLastUsedAt[i] = now
+		}
+	}
+	if len(moe.ExpertPinned) != len(moe.Experts) {
+		moe.ExpertPinned = make([]bool, len(moe.Experts))
+		for i := 0; i < 8 && i < len(moe.ExpertPinned); i++ {
+			moe.ExpertPinned[i] = true
+		}
+	}
+
+	weakestIdx := -1
+	lowestScore := math.MaxFloat64
+	now := time.Now()
+
+	isLowValueNewRole := (newRole == "GREET" || newRole == "OTHER")
+
+	totalUtilization := 0
+	for _, u := range moe.AccumulatedUtilization {
+		totalUtilization += u
+	}
+	averageUtilization := float64(0.0)
+	if len(moe.Experts) > 0 {
+		averageUtilization = float64(totalUtilization) / float64(len(moe.Experts))
+	}
+
+	// 1. Core search: Look for standard non-pinned eviction candidates
+	for i := range moe.Experts {
+		// Protect pinned experts in the standard path
+		if i < len(moe.ExpertPinned) && moe.ExpertPinned[i] {
+			continue
+		}
+
+		role := ""
+		if i < len(moe.ExpertRole) {
+			role = moe.ExpertRole[i]
+		}
+		isStructural := (role == "PRON" || role == "VERB" || role == "AUX" || role == "ADJ" || role == "NOUN" || role == "PREP" || role == "")
+
+		util := 0.0
+		if i < len(moe.AccumulatedUtilization) {
+			util = float64(moe.AccumulatedUtilization[i])
+		}
+		isHighlyActive := util > averageUtilization && util > 5.0
+
+		// Protect highly active structural experts from low-value roles
+		if isLowValueNewRole && isStructural && isHighlyActive {
+			continue
+		}
+
+		var health float64 = 1.0
+		if i < len(moe.ExpertHealth) {
+			health = moe.ExpertHealth[i]
+		}
+
+		var lastUsed time.Time = now
+		if i < len(moe.ExpertLastUsedAt) {
+			lastUsed = moe.ExpertLastUsedAt[i]
+		}
+
+		age := now.Sub(lastUsed).Seconds()
+
+		// Lower health and higher age = lower score (eviction candidate)
+		score := health * (1.0 / (1.0 + age))
+
+		if score < lowestScore {
+			lowestScore = score
+			weakestIdx = i
+		}
+	}
+
+	// 2. Fallback search: Under high capacity pressure (>=64 experts) or OverfitMode,
+	// if all candidates are pinned, we bypass the pinned flag for dynamically spawned experts (index >= 8).
+	// Core structural experts (indices 0 to 7) remain absolutely protected.
+	if weakestIdx == -1 && (len(moe.Experts) >= 64 || moe.OverfitMode) {
+		lowestScore = math.MaxFloat64
+		for i := 8; i < len(moe.Experts); i++ {
+			role := ""
+			if i < len(moe.ExpertRole) {
+				role = moe.ExpertRole[i]
+			}
+			isStructural := (role == "PRON" || role == "VERB" || role == "AUX" || role == "ADJ" || role == "NOUN" || role == "PREP" || role == "")
+
+			isPinned := false
+			if i < len(moe.ExpertPinned) {
+				isPinned = moe.ExpertPinned[i]
+			}
+
+			util := 0.0
+			if i < len(moe.AccumulatedUtilization) {
+				util = float64(moe.AccumulatedUtilization[i])
+			}
+			isHighlyActive := util > averageUtilization && util > 5.0
+
+			// Safety mechanism: If we are trying to spawn a low-value role (like GREET),
+			// we strictly prevent evicting pinned or highly active structural experts.
+			if isLowValueNewRole && isStructural && (isPinned || isHighlyActive) {
+				continue
+			}
+
+			var health float64 = 1.0
+			if i < len(moe.ExpertHealth) {
+				health = moe.ExpertHealth[i]
+			}
+
+			var lastUsed time.Time = now
+			if i < len(moe.ExpertLastUsedAt) {
+				lastUsed = moe.ExpertLastUsedAt[i]
+			}
+
+			age := now.Sub(lastUsed).Seconds()
+
+			// Cumulative token utilization
+			var utilization float64 = 0.0
+			if i < len(moe.AccumulatedUtilization) {
+				utilization = float64(moe.AccumulatedUtilization[i])
+			}
+
+			// Combined fallback score: blends health, LRU recency age, and cumulative utilization.
+			// Lower score = better eviction candidate.
+			score := health * (1.0 / (1.0 + age)) * (1.0 / (1.0 + utilization))
+
+			if score < lowestScore {
+				lowestScore = score
+				weakestIdx = i
+			}
+		}
+		if weakestIdx != -1 {
+			log.Printf("⚠️ [MoELayer] Fallback Eviction selected Expert E%d (ignoring Pin status, index >= 8) due to capacity pressure.", weakestIdx)
+		}
+	}
+
+	return weakestIdx
+}
+
+// EvictExpert removes a specific expert by index from the layer.
+func (moe *MoELayer) EvictExpert(idx int) {
+	if idx < 0 || idx >= len(moe.Experts) {
+		return
+	}
+	droppedIndices := map[int]bool{idx: true}
+
+	newExperts := make([]Expert, 0, len(moe.Experts)-1)
+	newAccumulatedUtilization := make([]int, 0, len(moe.Experts)-1)
+	newExpertFrozen := make([]bool, 0, len(moe.Experts)-1)
+	newStagnationCounters := make([]int, 0, len(moe.Experts)-1)
+	newExpertGradMultiplier := make([]float32, 0, len(moe.Experts)-1)
+	newExpertOutputScale := make([]float32, 0, len(moe.Experts)-1)
+	newExpertHealth := make([]float64, 0, len(moe.Experts)-1)
+	newExpertLastUsedAt := make([]time.Time, 0, len(moe.Experts)-1)
+	newExpertPinned := make([]bool, 0, len(moe.Experts)-1)
+	newExpertRole := make([]string, 0, len(moe.Experts)-1)
+
+	for i, e := range moe.Experts {
+		if droppedIndices[i] {
+			continue
+		}
+		newExperts = append(newExperts, e)
+		
+		if i < len(moe.AccumulatedUtilization) {
+			newAccumulatedUtilization = append(newAccumulatedUtilization, moe.AccumulatedUtilization[i])
+		} else {
+			newAccumulatedUtilization = append(newAccumulatedUtilization, 0)
+		}
+		if i < len(moe.ExpertFrozen) {
+			newExpertFrozen = append(newExpertFrozen, moe.ExpertFrozen[i])
+		} else {
+			newExpertFrozen = append(newExpertFrozen, false)
+		}
+		if i < len(moe.StagnationCounters) {
+			newStagnationCounters = append(newStagnationCounters, moe.StagnationCounters[i])
+		} else {
+			newStagnationCounters = append(newStagnationCounters, 0)
+		}
+		if i < len(moe.ExpertGradMultiplier) {
+			newExpertGradMultiplier = append(newExpertGradMultiplier, moe.ExpertGradMultiplier[i])
+		} else {
+			newExpertGradMultiplier = append(newExpertGradMultiplier, 1.0)
+		}
+		if i < len(moe.ExpertOutputScale) {
+			newExpertOutputScale = append(newExpertOutputScale, moe.ExpertOutputScale[i])
+		} else {
+			newExpertOutputScale = append(newExpertOutputScale, 1.0)
+		}
+		if i < len(moe.ExpertHealth) {
+			newExpertHealth = append(newExpertHealth, moe.ExpertHealth[i])
+		} else {
+			newExpertHealth = append(newExpertHealth, 1.0)
+		}
+		if i < len(moe.ExpertLastUsedAt) {
+			newExpertLastUsedAt = append(newExpertLastUsedAt, moe.ExpertLastUsedAt[i])
+		} else {
+			newExpertLastUsedAt = append(newExpertLastUsedAt, time.Now())
+		}
+		if i < len(moe.ExpertPinned) {
+			newExpertPinned = append(newExpertPinned, moe.ExpertPinned[i])
+		} else {
+			newExpertPinned = append(newExpertPinned, false)
+		}
+		if i < len(moe.ExpertRole) {
+			newExpertRole = append(newExpertRole, moe.ExpertRole[i])
+		} else {
+			newExpertRole = append(newExpertRole, "")
+		}
+	}
+
+	moe.Experts = newExperts
+	moe.AccumulatedUtilization = newAccumulatedUtilization
+	moe.ExpertFrozen = newExpertFrozen
+	moe.StagnationCounters = newStagnationCounters
+	moe.ExpertGradMultiplier = newExpertGradMultiplier
+	moe.ExpertOutputScale = newExpertOutputScale
+	moe.ExpertHealth = newExpertHealth
+	moe.ExpertLastUsedAt = newExpertLastUsedAt
+	moe.ExpertPinned = newExpertPinned
+	moe.ExpertRole = newExpertRole
+	moe.NumExperts = len(newExperts)
+
+	// Shrink Gating Network
+	if moe.GatingNetwork != nil {
+		moe.GatingNetwork.PruneExperts(droppedIndices)
+	}
+}
+
+// AtCapacity returns true if the layer has reached the hard maximum expert count.
+func (moe *MoELayer) AtCapacity() bool {
+	return len(moe.Experts) >= 64
+}
+
+// EvictLeastActive uses the standard FindLowestPerformingExpert heuristic to select and
+// evict the weakest non-protected expert. Returns the evicted index and whether eviction
+// succeeded. Returns (-1, false) if no standard eviction candidate is found.
+func (moe *MoELayer) EvictLeastActive(newRole string) (int, bool) {
+	idx := moe.FindLowestPerformingExpert(newRole)
+	if idx == -1 {
+		return -1, false
+	}
+	moe.EvictExpert(idx)
+	return idx, true
+}
+
+// ForceEvictLowestUtility is a guaranteed fallback that ignores the Pinned flag for
+// any dynamically spawned expert (index >= 8). Core structural experts (indices 0-7)
+// remain absolutely protected. Selection is by absolute lowest utility score:
+//
+//	score = health * (1/(1+age_seconds)) * (1/(1+cumulative_utilization))
+//
+// Returns the evicted index, or -1 if fewer than 9 experts exist (nothing safe to
+// evict under this policy).
+func (moe *MoELayer) ForceEvictLowestUtility(newRole string) int {
+	if len(moe.Experts) < 9 {
+		return -1 // Nothing dynamic to evict; all experts are structural.
+	}
+
+	// Lazy-initialize tracking slices to avoid nil dereferences.
+	now := time.Now()
+	if len(moe.ExpertHealth) != len(moe.Experts) {
+		moe.ExpertHealth = make([]float64, len(moe.Experts))
+		for i := range moe.ExpertHealth {
+			moe.ExpertHealth[i] = 1.0
+		}
+	}
+	if len(moe.ExpertLastUsedAt) != len(moe.Experts) {
+		moe.ExpertLastUsedAt = make([]time.Time, len(moe.Experts))
+		for i := range moe.ExpertLastUsedAt {
+			moe.ExpertLastUsedAt[i] = now
+		}
+	}
+	if len(moe.AccumulatedUtilization) != len(moe.Experts) {
+		moe.AccumulatedUtilization = make([]int, len(moe.Experts))
+	}
+
+	weakestIdx := -1
+	lowestScore := math.MaxFloat64
+
+	isLowValueNewRole := (newRole == "GREET" || newRole == "OTHER")
+
+	totalUtilization := 0
+	for _, u := range moe.AccumulatedUtilization {
+		totalUtilization += u
+	}
+	averageUtilization := float64(0.0)
+	if len(moe.Experts) > 0 {
+		averageUtilization = float64(totalUtilization) / float64(len(moe.Experts))
+	}
+
+	for i := 8; i < len(moe.Experts); i++ {
+		role := ""
+		if i < len(moe.ExpertRole) {
+			role = moe.ExpertRole[i]
+		}
+		isStructural := (role == "PRON" || role == "VERB" || role == "AUX" || role == "ADJ" || role == "NOUN" || role == "PREP" || role == "")
+
+		isPinned := false
+		if i < len(moe.ExpertPinned) {
+			isPinned = moe.ExpertPinned[i]
+		}
+
+		util := 0.0
+		if i < len(moe.AccumulatedUtilization) {
+			util = float64(moe.AccumulatedUtilization[i])
+		}
+		isHighlyActive := util > averageUtilization && util > 5.0
+
+		// Safety mechanism: If we are trying to spawn a low-value role (like GREET),
+		// we strictly prevent evicting pinned or highly active structural experts.
+		if isLowValueNewRole && isStructural && (isPinned || isHighlyActive) {
+			continue
+		}
+
+		health := moe.ExpertHealth[i]
+		age := now.Sub(moe.ExpertLastUsedAt[i]).Seconds()
+		utilization := float64(moe.AccumulatedUtilization[i])
+		score := health * (1.0 / (1.0 + age)) * (1.0 / (1.0 + utilization))
+		if score < lowestScore {
+			lowestScore = score
+			weakestIdx = i
+		}
+	}
+
+	if weakestIdx == -1 {
+		return -1
+	}
+
+	log.Printf("🔥 [MoELayer] ForceEvictLowestUtility: Evicting Expert E%d (score=%.6f) to free capacity slot.", weakestIdx, lowestScore)
+	moe.EvictExpert(weakestIdx)
+	return weakestIdx
+}
+

@@ -277,3 +277,7 @@ func (ge *GrammarExpert) SeedGrammarBias(vocabSize int, tokenToWord []string) {
 		fmt.Printf("🧬 [MoE] Seeded Expert E%d (%s) with %d role-specific biases\n", ge.ID, ge.RoleName, boostCount)
 	}
 }
+
+func (ge *GrammarExpert) GetID() int {
+	return ge.ID
+}
