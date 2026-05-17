@@ -302,12 +302,25 @@ func (d *RNNDecoder) Forward(contextVector, targetSequence *Tensor, scheduledSam
 
 		normed, _ := d.LayerNorm.Forward(combined)
 		var outputLogits *Tensor
+		var fwdErr error
 		if d.OutputMoE != nil {
-			outputLogits, _ = d.OutputMoE.Forward(normed)
+			outputLogits, fwdErr = d.OutputMoE.Forward(normed)
 		} else {
-			outputLogits, _ = d.OutputLayer.Forward(normed)
+			outputLogits, fwdErr = d.OutputLayer.Forward(normed)
 		}
-		resLogits, _ := outputLogits.Reshape([]int{batchSize, d.OutputVocabSize})
+
+		if fwdErr != nil {
+			return nil, fmt.Errorf("decoder output forward failed: %w", fwdErr)
+		}
+		if outputLogits == nil {
+			return nil, fmt.Errorf("decoder output forward returned nil tensor")
+		}
+
+		resLogits, err := outputLogits.Reshape([]int{batchSize, d.OutputVocabSize})
+		if err != nil {
+			return nil, fmt.Errorf("decoder output reshape failed: %w (outputLogits shape: %v, expected: [%d, %d])", 
+				err, outputLogits.Shape, batchSize, d.OutputVocabSize)
+		}
 		outputs = append(outputs, resLogits)
 
 		if t < maxSequenceLength-2 {

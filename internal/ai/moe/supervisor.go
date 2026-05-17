@@ -1,13 +1,16 @@
 package moe
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"math"
 	"math/rand"
+	"os"
 	"sort"
 	"strings"
 	"sync"
+	"time"
 	"unicode"
 
 	"github.com/golangast/gollemer/internal/ai/neural/nn"
@@ -25,9 +28,10 @@ type Supervisor struct {
 	GrammarJudge         *nn.Linear
 
 	// Per-expert variable overrides (layerIdx -> expertIdx -> ExpertConfig)
-	expertOverrides map[int]map[int]*ExpertOverride
-	FailureLogs     map[string]int // Tracks failures per expert ID (e.g., "E1")
-	mu              sync.Mutex
+	expertOverrides  map[int]map[int]*ExpertOverride
+	FailureLogs      map[string]int // Tracks failures per expert ID (e.g., "E1")
+	TrainingDataPath string         // Path to the raw training assets for evolution
+	mu               sync.Mutex
 }
 
 // ExpertOverride holds per-expert variable overrides set by the supervisor.
@@ -451,9 +455,55 @@ func (s *Supervisor) AddExpertToLayer(model *IntentMoE, layerIdx int, roleID int
 	}
 	layer := layers[layerIdx]
 
-	inputDim := model.EmbeddingDim
+	newRole := GrammarRoles[roleID%len(GrammarRoles)]
+
+	// Cap the number of experts to prevent memory explosion (OOM).
+	// Policy: (1) Try standard LRU/health-based eviction first.
+	//         (2) If blocked (all candidates are pinned), force-evict the absolute
+	//             lowest-utility dynamic expert (index >= 8) to guarantee a slot.
+	if layer.AtCapacity() {
+		evictedIdx, evicted := layer.EvictLeastActive(newRole)
+		if evicted {
+			log.Printf("♻️ [Supervisor] Evicted low-performing Expert E%d (standard) from layer %d to make room.", evictedIdx, layerIdx)
+		} else {
+			// Fallback: force-evict lowest utility dynamic expert, bypassing pinned flags.
+			evictedIdx = layer.ForceEvictLowestUtility(newRole)
+			if evictedIdx == -1 {
+				return fmt.Errorf("AddExpertToLayer: layer %d reached capacity and no expert could be force-evicted (fewer than 9 experts)", layerIdx)
+			}
+			log.Printf("⚠️ [Supervisor] Force-evicted Expert E%d from layer %d (all standard candidates were pinned).", evictedIdx, layerIdx)
+		}
+
+		// Scale back exploration metrics to stabilize after eviction.
+		if RouterNoiseFactor > 0 {
+			RouterNoiseFactor -= 0.05
+		}
+		if layer.RouterTemperature > 0.8 {
+			layer.RouterTemperature -= 0.05
+		}
+
+		// Sanity check: eviction should have freed a slot.
+		if layer.AtCapacity() {
+			return fmt.Errorf("AddExpertToLayer: layer %d still at maximum capacity (64 experts) after eviction", layerIdx)
+		}
+	}
+
+	inputDim := layer.InputDim
+	if inputDim <= 0 {
+		inputDim = model.EmbeddingDim // Fallback
+	}
+	outputDim := layer.OutputDim
+
+	s.mu.Lock()
 	newID := len(layer.Experts)
-	expert, err := NewGrammarExpert(newID, roleID%len(GrammarRoles), inputDim, inputDim)
+	for _, e := range layer.Experts {
+		if e.GetID() >= newID {
+			newID = e.GetID() + 1
+		}
+	}
+	s.mu.Unlock()
+
+	expert, err := NewGrammarExpert(newID, roleID%len(GrammarRoles), inputDim, outputDim)
 	if err != nil {
 		return fmt.Errorf("AddExpertToLayer: could not create expert: %w", err)
 	}
@@ -537,7 +587,12 @@ func (s *Supervisor) AddExpertToLayer(model *IntentMoE, layerIdx int, roleID int
 	layer.ExpertFrozen = append(layer.ExpertFrozen, false)
 	layer.StagnationCounters = append(layer.StagnationCounters, 0)
 	layer.ExpertGradMultiplier = append(layer.ExpertGradMultiplier, 1.0)
-	// ExpertOutputScale is already appended above
+	
+	// Extend dynamic parallel tracking slices
+	layer.ExpertHealth = append(layer.ExpertHealth, 1.0)
+	layer.ExpertLastUsedAt = append(layer.ExpertLastUsedAt, time.Now())
+	layer.ExpertPinned = append(layer.ExpertPinned, true) // Newly specialized spawned experts are pinned
+	layer.ExpertRole = append(layer.ExpertRole, GrammarRoles[roleID%len(GrammarRoles)])
 
 	log.Printf("✨ [Supervisor] Added new GrammarExpert E%d (role=%s) to Layer %d. Total: %d experts.",
 		newID, GrammarRoles[roleID%len(GrammarRoles)], layerIdx, layer.NumExperts)
@@ -580,6 +635,22 @@ func (s *Supervisor) SetExpertVariables(model *IntentMoE, layerIdx, expertIdx in
 	if expertIdx < 0 || expertIdx >= len(layer.Experts) {
 		log.Printf("⚠️ SetExpertVariables: expertIdx %d out of range (layer has %d)", expertIdx, len(layer.Experts))
 		return
+	}
+
+	// Step 2: Clamped bounds — prevents weight-frying from extreme supervisor adjustments.
+	// LRMult capped at 2.5 (was 5.0): stops runaway gradient explosions on failing paths.
+	// OutputScale floored at 0.3 (was 0.05): keeps experts contributing meaningfully.
+	if lrMultiplier > 2.5 {
+		lrMultiplier = 2.5
+	}
+	if lrMultiplier < 0.1 {
+		lrMultiplier = 0.1
+	}
+	if outputScale < 0.3 {
+		outputScale = 0.3
+	}
+	if outputScale > 1.0 {
+		outputScale = 1.0
 	}
 
 	// Apply output scale immediately
@@ -645,9 +716,9 @@ func (s *Supervisor) HandleQualityGateFailure(model *IntentMoE, path string, pai
 				}
 				s.mu.Unlock()
 
-				// Mutate: weight *= 0.90, LR *= 1.05
-				newScale := currentScale * 0.90
-				newLR := currentLR * 1.05
+				// Mutate: weight *= 0.85, LR *= 1.10 (Aggressive adaptation per AdaptiveSupervisor spec)
+				newScale := currentScale * 0.85
+				newLR := currentLR * 1.10
 				s.SetExpertVariables(model, lIdx, eid, newScale, newLR)
 
 				s.mu.Lock()
@@ -673,16 +744,111 @@ func (s *Supervisor) HandleQualityGateFailure(model *IntentMoE, path string, pai
 			}
 
 			// Spawn to Layer 0 and Decoder Output MoE
-			s.AddExpertToLayer(model, 0, roleID)
+			if err := s.AddExpertToLayer(model, 0, roleID); err != nil {
+				log.Printf("⚠️ Supervisor: %v", err)
+			}
 			layers := model.Encoder.GetMoELayers()
 			if model.Decoder.OutputMoE != nil {
-				s.AddExpertToLayer(model, len(layers), roleID)
+				if err := s.AddExpertToLayer(model, len(layers), roleID); err != nil {
+					log.Printf("⚠️ Supervisor: %v", err)
+				}
 			}
 
 			s.mu.Lock()
 			s.FailureLogs[idStr] = 0
 			s.mu.Unlock()
 		}
+	}
+
+	// 3. EVOLVE DATASET: Permanently rewrite training assets for this failure
+	s.EvolveDataset(pair.Q)
+}
+
+// EvolveDataset mutates the underlying training asset files to replace weak
+// linguistic structures with standard syntactic ones.
+func (s *Supervisor) EvolveDataset(targetQuestion string) {
+	s.mu.Lock()
+	path := s.TrainingDataPath
+	s.mu.Unlock()
+
+	if path == "" {
+		return
+	}
+
+	log.Printf("📝 [Supervisor] Scanning training assets for data evolution: '%s'", targetQuestion)
+
+	file, err := os.Open(path)
+	if err != nil {
+		log.Printf("⚠️ [Supervisor] Could not open data asset for evolution: %v", err)
+		return
+	}
+
+	var lines []string
+	scanner := bufio.NewScanner(file)
+	mutatedCount := 0
+
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		// Target checking: both Gollemer internal markers and raw CSV lines
+		match := false
+		if strings.Contains(line, "__ques__ "+targetQuestion+" __ans__") {
+			match = true
+		} else if strings.HasPrefix(line, targetQuestion+",") {
+			match = true
+		}
+
+		if match {
+			// Mutate short token fragments into rich syntactic representations
+			var replacement string
+			switch strings.ToLower(targetQuestion) {
+			case "hello", "hi", "hey":
+				replacement = "i greet you with " + targetQuestion
+			case "thanks", "thank you":
+				replacement = "i offer you my thanks"
+			case "i am sad":
+				replacement = "i feel very sad today"
+			default:
+				if strings.HasPrefix(strings.ToLower(targetQuestion), "i am processing the concept of ") {
+					replacement = targetQuestion
+				} else {
+					replacement = "i am processing the concept of " + targetQuestion
+				}
+			}
+
+			// Atomic replacement
+			var newLine string
+			if strings.Contains(line, "__ques__") {
+				oldMarker := "__ques__ " + targetQuestion
+				newMarker := "__ques__ " + replacement
+				newLine = strings.Replace(line, oldMarker, newMarker, 1)
+			} else {
+				// CSV Case: Replace leading question token
+				newLine = strings.Replace(line, targetQuestion+",", replacement+",", 1)
+			}
+			lines = append(lines, newLine)
+			mutatedCount++
+		} else {
+			lines = append(lines, line)
+		}
+	}
+	file.Close()
+
+	if mutatedCount > 0 {
+		// Flush changes back cleanly to prevent broken buffers
+		outFile, err := os.Create(path)
+		if err != nil {
+			log.Printf("⚠️ [Supervisor] Could not write evolved dataset: %v", err)
+			return
+		}
+		defer outFile.Close()
+
+		writer := bufio.NewWriter(outFile)
+		for _, line := range lines {
+			_, _ = writer.WriteString(line + "\n")
+		}
+		_ = writer.Flush()
+		log.Printf("✅ [Supervisor] Data Evolution Success. Mutated %d corpus references in %s", mutatedCount, path)
 	}
 }
 
@@ -740,4 +906,55 @@ func (s *Supervisor) RunTriage(model *IntentMoE, similarityScore float32, pairs 
 
 	// Surgery pass with staggered triage
 	s.PerformSurgery(model)
+}
+
+// SeedSystemExperts initializes a base layer of structural processing units
+// (e.g. E0/PRON, E1/AUX, E2/INTERROGATIVE) with locked attributes:
+// LRMultiplier = 1.0, OutputScale = 0.5, Pinned = true.
+func (s *Supervisor) SeedSystemExperts(model *IntentMoE) {
+	layers := model.Encoder.GetMoELayers()
+	if model.Decoder.OutputMoE != nil {
+		layers = append(layers, model.Decoder.OutputMoE)
+	}
+
+	for lIdx, layer := range layers {
+		// Ensure tracking arrays are sized
+		if len(layer.ExpertPinned) != len(layer.Experts) {
+			newPinned := make([]bool, len(layer.Experts))
+			copy(newPinned, layer.ExpertPinned)
+			layer.ExpertPinned = newPinned
+		}
+		if len(layer.ExpertRole) != len(layer.Experts) {
+			newRole := make([]string, len(layer.Experts))
+			copy(newRole, layer.ExpertRole)
+			layer.ExpertRole = newRole
+		}
+		if len(layer.ExpertHealth) != len(layer.Experts) {
+			newHealth := make([]float64, len(layer.Experts))
+			for i := range newHealth {
+				newHealth[i] = 1.0
+			}
+			copy(newHealth, layer.ExpertHealth)
+			layer.ExpertHealth = newHealth
+		}
+		if len(layer.ExpertLastUsedAt) != len(layer.Experts) {
+			newTimes := make([]time.Time, len(layer.Experts))
+			now := time.Now()
+			for i := range newTimes {
+				newTimes[i] = now
+			}
+			copy(newTimes, layer.ExpertLastUsedAt)
+			layer.ExpertLastUsedAt = newTimes
+		}
+
+		// Seed and lock parameters for structural experts E0 (PRON), E1 (VERB), E2 (AUX), E3 (ADJ), E4 (NOUN), E5 (PREP), E6 (GREET), E7 (OTHER)
+		for i := 0; i < 8 && i < len(layer.Experts); i++ {
+			layer.ExpertPinned[i] = true
+			if layer.ExpertRole[i] == "" && i < len(GrammarRoles) {
+				layer.ExpertRole[i] = GrammarRoles[i]
+			}
+			s.SetExpertVariables(model, lIdx, i, 0.5, 1.0)
+		}
+	}
+	log.Printf("🧬 [Supervisor] SeedSystemExperts complete. Seeded structural experts with OutputScale=0.5, LRMult=1.0, Pinned=true across all %d layers.", len(layers))
 }

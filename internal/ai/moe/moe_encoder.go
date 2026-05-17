@@ -251,6 +251,10 @@ func (l *LinearExpert) Resize(newOutputDim int) {
 	l.Linear = newLinear
 }
 
+func (l *LinearExpert) GetID() int {
+	return -1
+}
+
 func (m *MoEEncoder) RepairArchitecture() {
 	if m.Layer != nil {
 		m.Layer.RepairArchitecture()

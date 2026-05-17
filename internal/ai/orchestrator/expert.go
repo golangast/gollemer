@@ -19,6 +19,9 @@ type TrainingMetrics struct {
 	LayerResets       []map[int]int // Per-layer expert reset counts
 	LayerUsage        []map[int]int // Per-layer expert utilization
 	OverfitMode       bool
+	PronPathID        string        // e.g. "E4"
+	VerbPathID        string        // e.g. "E5"
+	AuxPathID         string        // e.g. "E6"
 }
 
 type TestProbeResult struct {
@@ -48,6 +51,9 @@ type HyperparameterExpert struct {
 	ExpertHealth map[int]float32    // deprecated alias — kept for backward compat
 	records      map[int]*expertRecord
 	BoostEpochs  int
+	// Anti-oscillation: minimum epochs that must pass between GlobalExpertRefresh calls.
+	// Prevents the supervisor from immediately re-blasting freshly-healed experts.
+	GlobalRefreshCooldown int
 	// Trend tracking
 	lossHistory    []float32
 	grammarHistory []float32
@@ -375,15 +381,31 @@ func (e *HyperparameterExpert) AnalyzeAndAdjust(metrics TrainingMetrics) {
 		if cfg.OverfitMode {
 			fmt.Println("🎯 Supervisor: OverfitMode active. Lockdown engaged.")
 			cfg.RouterNoise = 0.0
-			cfg.RouterTemperature = 0.05 // Even lower for perfect reproduction
-			// Note: We DO NOT return here anymore; we want to adjust ContextMultiplier and LR even in OverfitMode
+			// Step 3: Keep temperature at 0.50 (was 0.05) so the model can still explore
+			// and escape repetitive token loops even under lockdown.
+			cfg.RouterTemperature = 0.50
+			// Step 3: Cap ContextMultiplier at 3.0 in OverfitMode.
+			// A ContextMultiplier of 30+ forces pure prompt regurgitation.
+			// Capping at 3.0 lets the model temperature (0.50) do its job and
+			// actually diversify token generation.
+			if cfg.ContextMultiplier > 3.0 {
+				cfg.ContextMultiplier = 3.0
+			}
+			// Note: We DO NOT return here; we still adjust LR and other params in OverfitMode.
 		}
 
 		// ── Exploration Boost ───────────────────────────────────────────────
+		// Change 2: During a boost, widen sampling parameters and DROP structural
+		// bias intensity so that temperature (0.7) can actually push the model
+		// into rare expert combinations. Previously BiasInt stayed high, making
+		// the boost effectively a no-op for token diversity.
 		if e.BoostEpochs > 0 {
 			fmt.Printf("🔥 [Supervisor] EXPLORATION BOOST: %d epochs remaining\n", e.BoostEpochs)
 			cfg.RouterTemperature = 0.7
-			cfg.RouterNoise = 0.06
+			cfg.RouterNoise = 0.20 // Keep noise at the new baseline
+			cfg.TopK = 10         // Wider token beam: let rare tokens surface
+			cfg.TopP = 0.95       // More probability mass included
+			cfg.StructuralBiasIntensity = 1.0 // Relax structural lock so temperature works
 			e.BoostEpochs--
 			return
 		}
@@ -448,8 +470,12 @@ func (e *HyperparameterExpert) AnalyzeAndAdjust(metrics TrainingMetrics) {
 		}
 
 		// ── E: Similarity-driven feedback ────────────────────────────────
+		// Step 3: Cap ContextMultiplier at 3.0 (was 60.0) to prevent context domination.
+		// High ContextMultiplier forces the decoder to regurgitate prompt tokens rather
+		// than generating novel responses. Temperature at 0.5 only works if CM is low enough
+		// to let probability mass be distributed across the full vocabulary.
 		if metrics.SimilarityScore < 25.0 && metrics.Epoch > 10 {
-			cfg.ContextMultiplier = min32(60.0, cfg.ContextMultiplier+0.8)
+			cfg.ContextMultiplier = min32(3.0, cfg.ContextMultiplier+0.1)
 			cfg.StructuralBiasIntensity = min32(20.0, cfg.StructuralBiasIntensity+1.5)
 			fmt.Printf("🎯 Low Similarity (%.1f%%): ContextMultiplier→%.1f, BiasInt→%.1f\n",
 				metrics.SimilarityScore, cfg.ContextMultiplier, cfg.StructuralBiasIntensity)
@@ -505,15 +531,28 @@ func (e *HyperparameterExpert) AnalyzeLinguisticWindow(metrics TrainingMetrics, 
 	fmt.Printf("\n🧠 [Supervisor Audit] 20-Epoch Window | Avg Score: %.1f | Avg Grammar: %.1f | Avg Sim: %.1f%%\n",
 		avgScore, avgGrammar, avgSim)
 
+	// Change 3: Anti-oscillation cooldown.
+	// If a GlobalRefresh was triggered recently, tick down the cooldown timer
+	// and skip the refresh to let freshly-blended experts settle their gradients.
+	if e.GlobalRefreshCooldown > 0 {
+		e.GlobalRefreshCooldown--
+		fmt.Printf("🧘 [Supervisor Audit] GlobalRefresh cooldown: %d epochs remaining. Skipping refresh.\n", e.GlobalRefreshCooldown)
+		return
+	}
+
 	// Intervention Targets: Grammar < 18 or Sim < 15% after window
 	if avgGrammar < 18.0 || avgSim < 15.0 {
 		fmt.Println("🚨 [Supervisor Audit] Progress below target. Triggering GLOBAL EXPERT UPDATE.")
 		e.GlobalExpertRefresh(surgery)
-		
-		// Also nudge hyperparameters to break the plateau
+		// Set 30-epoch cooldown after a refresh to prevent immediate re-oscillation.
+		e.GlobalRefreshCooldown = 30
+		fmt.Println("⏳ [Supervisor Audit] GlobalRefresh cooldown set to 30 epochs.")
+
+		// Also nudge hyperparameters to break the plateau.
+		// Step 3: Cap ContextMultiplier escalation at 3.0 (was 50.0).
 		e.SafeCfg.Update(func(cfg *TrainingConfig) {
 			cfg.RouterTemperature = min32(1.2, cfg.RouterTemperature*1.2) // Increase exploration
-			cfg.ContextMultiplier = min32(50.0, cfg.ContextMultiplier*1.1)
+			cfg.ContextMultiplier = min32(3.0, cfg.ContextMultiplier*1.05)
 			cfg.StructuralBiasIntensity = min32(15.0, cfg.StructuralBiasIntensity+2.0)
 		})
 	} else {
@@ -603,12 +642,18 @@ func (e *HyperparameterExpert) VerifyExpertPaths(metrics TrainingMetrics) {
 	for _, res := range metrics.TestResults {
 		isQuestion := strings.Contains(strings.ToLower(res.Prompt), "__ques__")
 		if isQuestion {
-			// Check for PRON (E8) or AUX (E10) experts in question context
-			hasQuestionExpert := strings.Contains(res.Path, "E8") || strings.Contains(res.Path, "E10")
+			// Check for PRON or AUX experts in question context
+			hasQuestionExpert := false
+			if metrics.PronPathID != "" || metrics.AuxPathID != "" {
+				hasQuestionExpert = strings.Contains(res.Path, metrics.PronPathID) || strings.Contains(res.Path, metrics.AuxPathID)
+			}
 			
 			// Relational check: Does it have a structure like PRON -> AUX or PRON -> VERB?
-			hasRelation := (strings.Contains(res.Path, "E8") && strings.Contains(res.Path, "E10")) ||
-				(strings.Contains(res.Path, "E8") && strings.Contains(res.Path, "E9"))
+			hasRelation := false
+			if metrics.PronPathID != "" && (metrics.AuxPathID != "" || metrics.VerbPathID != "") {
+				hasRelation = (strings.Contains(res.Path, metrics.PronPathID) && strings.Contains(res.Path, metrics.AuxPathID)) ||
+					(strings.Contains(res.Path, metrics.PronPathID) && strings.Contains(res.Path, metrics.VerbPathID))
+			}
 
 			if !hasQuestionExpert && metrics.Epoch > 100 {
 				fmt.Printf("🕵️ [Supervisor Verify] Question lacks PRON/AUX expert: '%s' (Path: %s)\n",

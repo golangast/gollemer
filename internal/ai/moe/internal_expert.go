@@ -316,3 +316,7 @@ func (e *InternalExpert) SyncParameters() error {
 	}
 	return nil
 }
+
+func (e *InternalExpert) GetID() int {
+	return e.ID
+}

@@ -289,3 +289,7 @@ func (e *FeedForwardExpert) Resize(newOutputDim int) {
 	}
 	e.Layer2 = newLayer
 }
+
+func (e *FeedForwardExpert) GetID() int {
+	return -1
+}

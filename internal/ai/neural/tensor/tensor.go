@@ -2,7 +2,7 @@ package tensor
 
 import (
 	"bytes"
-	"encoding/gob"
+	"encoding/binary"
 	"fmt"
 	"math"
 	"math/rand"
@@ -173,61 +173,121 @@ type Tensor struct {
 // GobEncode implements the gob.GobEncoder interface.
 func (t *Tensor) GobEncode() ([]byte, error) {
 	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
 
-	if err := enc.Encode(t.Data); err != nil {
+	// Write shape length and elements
+	shapeLen := int32(len(t.Shape))
+	if err := binary.Write(&buf, binary.LittleEndian, shapeLen); err != nil {
 		return nil, err
 	}
-	if err := enc.Encode(t.Shape); err != nil {
-		return nil, err
-	}
-
-	// Explicitly handle nil for Mask
-	maskIsNil := t.Mask == nil
-	if err := enc.Encode(maskIsNil); err != nil {
-		return nil, err
-	}
-	if !maskIsNil {
-		if err := enc.Encode(t.Mask); err != nil {
+	for _, dim := range t.Shape {
+		if err := binary.Write(&buf, binary.LittleEndian, int32(dim)); err != nil {
 			return nil, err
 		}
 	}
 
-	if err := enc.Encode(t.RequiresGrad); err != nil {
+	// Write data length and elements
+	dataLen := int32(len(t.Data))
+	if err := binary.Write(&buf, binary.LittleEndian, dataLen); err != nil {
 		return nil, err
 	}
+	// Write data elements as float32
+	if err := binary.Write(&buf, binary.LittleEndian, t.Data); err != nil {
+		return nil, err
+	}
+
+	// Write RequiresGrad
+	var reqGradByte byte
+	if t.RequiresGrad {
+		reqGradByte = 1
+	}
+	if err := buf.WriteByte(reqGradByte); err != nil {
+		return nil, err
+	}
+
+	// Write Mask flag
+	if t.Mask == nil {
+		if err := buf.WriteByte(0); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := buf.WriteByte(1); err != nil {
+			return nil, err
+		}
+		maskBytes, err := t.Mask.GobEncode()
+		if err != nil {
+			return nil, err
+		}
+		// Write length of maskBytes
+		maskLen := int32(len(maskBytes))
+		if err := binary.Write(&buf, binary.LittleEndian, maskLen); err != nil {
+			return nil, err
+		}
+		if _, err := buf.Write(maskBytes); err != nil {
+			return nil, err
+		}
+	}
+
 	return buf.Bytes(), nil
 }
 
 // GobDecode implements the gob.GobDecoder interface.
 func (t *Tensor) GobDecode(data []byte) error {
-	buf := bytes.NewBuffer(data)
-	dec := gob.NewDecoder(buf)
+	reader := bytes.NewReader(data)
 
-	if err := dec.Decode(&t.Data); err != nil {
+	// Read shape length
+	var shapeLen int32
+	if err := binary.Read(reader, binary.LittleEndian, &shapeLen); err != nil {
 		return err
 	}
-	if err := dec.Decode(&t.Shape); err != nil {
-		return err
-	}
-
-	// Explicitly handle nil for Mask
-	var maskIsNil bool
-	if err := dec.Decode(&maskIsNil); err != nil {
-		return err
-	}
-	if !maskIsNil {
-		t.Mask = &Tensor{} // Initialize Mask before decoding into it
-		if err := dec.Decode(t.Mask); err != nil {
+	t.Shape = make([]int, shapeLen)
+	for i := range t.Shape {
+		var dim int32
+		if err := binary.Read(reader, binary.LittleEndian, &dim); err != nil {
 			return err
 		}
-	} else {
-		t.Mask = nil // Ensure Mask is nil if it was nil during encoding
+		t.Shape[i] = int(dim)
 	}
 
-	if err := dec.Decode(&t.RequiresGrad); err != nil {
+	// Read data length
+	var dataLen int32
+	if err := binary.Read(reader, binary.LittleEndian, &dataLen); err != nil {
 		return err
 	}
+	t.Data = make([]float32, dataLen)
+	if err := binary.Read(reader, binary.LittleEndian, t.Data); err != nil {
+		return err
+	}
+
+	// Read RequiresGrad
+	reqGradByte, err := reader.ReadByte()
+	if err != nil {
+		return err
+	}
+	t.RequiresGrad = reqGradByte == 1
+
+	// Read Mask flag
+	maskFlag, err := reader.ReadByte()
+	if err != nil {
+		return err
+	}
+	if maskFlag == 0 {
+		t.Mask = nil
+	} else {
+		var maskLen int32
+		if err := binary.Read(reader, binary.LittleEndian, &maskLen); err != nil {
+			return err
+		}
+		maskBytes := make([]byte, maskLen)
+		if _, err := reader.Read(maskBytes); err != nil {
+			return err
+		}
+		t.Mask = &Tensor{}
+		if err := t.Mask.GobDecode(maskBytes); err != nil {
+			return err
+		}
+	}
+
+	t.Device = CPU // Decoded tensors are always on CPU
 	return nil
 }
 

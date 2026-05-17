@@ -15,10 +15,11 @@ const tenThousand = 10000.0
 
 // Embedding represents a simple token embedding layer.
 type Embedding struct {
-	RequiresGrad bool
-	DimModel     int
-	VocabSize    int
-	Weight       *Tensor // Embedding weights
+	RequiresGrad    bool
+	DimModel        int
+	VocabSize       int
+	Weight          *Tensor // Embedding weights
+	ControlTokenIDs map[int]bool // Special control/prefix token IDs to scale down
 
 	// Stored values from forward pass for backward calculation
 	inputTokenIDs []int   // Store input token IDs
@@ -48,9 +49,10 @@ func NewEmbedding(vocabSize, dimModel int) *Embedding {
 	weights.RequiresGrad = true // Embedding weights require gradients
 
 	return &Embedding{
-		Weight:    weights,
-		DimModel:  dimModel,  // Initialize the DimModel field
-		VocabSize: vocabSize, // Initialize the VocabSize field
+		Weight:          weights,
+		DimModel:        dimModel,  // Initialize the DimModel field
+		VocabSize:       vocabSize, // Initialize the VocabSize field
+		ControlTokenIDs: make(map[int]bool),
 	}
 }
 
@@ -158,11 +160,16 @@ func (e *Embedding) Backward(grad *Tensor) error {
 			embeddingGradStart := tokenID * dimModel
 			gradVectorStart := gradFlatIndex // Current position in flattened grad data
 
+			scale := float32(1.0)
+			if e.ControlTokenIDs != nil && e.ControlTokenIDs[tokenID] {
+				scale = 0.1
+			}
+
 			for k := range dimModel {
 				if embeddingGradStart+k >= len(e.Weight.Grad.Data) || gradVectorStart+k >= len(grad.Data) || embeddingGradStart+k < 0 || gradVectorStart+k < 0 {
 					return fmt.Errorf("gradient data index out of bounds during Embedding backward accumulation")
 				}
-				e.Weight.Grad.Data[embeddingGradStart+k] += grad.Data[gradVectorStart+k] // Accumulate gradient
+				e.Weight.Grad.Data[embeddingGradStart+k] += grad.Data[gradVectorStart+k] * scale // Accumulate gradient
 			}
 
 			gradFlatIndex += dimModel // Move to the next embedded vector in grad
@@ -269,6 +276,13 @@ func (e *Embedding) Forward(inputIDs *Tensor) (*Tensor, error) {
 		weightsOffset := tokenID * e.DimModel
 		outputOffset := i * e.DimModel
 		copy(outputData[outputOffset:outputOffset+e.DimModel], e.Weight.Data[weightsOffset:weightsOffset+e.DimModel])
+
+		// Scale down conditional prefix control tokens to prevent overpowering actual semantic tokens
+		if e.ControlTokenIDs != nil && e.ControlTokenIDs[tokenID] {
+			for d := 0; d < e.DimModel; d++ {
+				outputData[outputOffset+d] *= 0.1
+			}
+		}
 	}
 	outputTensor := NewTensor(outputShape, outputData, e.Weight.RequiresGrad)
 	if outputTensor.RequiresGrad {
