@@ -1084,6 +1084,16 @@ func appendGrammarExperts(layer *MoELayer, embeddingDim int, count int) error {
 	}
 	layer.ExpertRole = append(layer.ExpertRole, extraRoles...)
 
+	// Extend ExpertOutputScale
+	extraScales := make([]float32, numGrammar)
+	for i := range extraScales {
+		extraScales[i] = 1.0
+	}
+	layer.ExpertOutputScale = append(layer.ExpertOutputScale, extraScales...)
+
+	// Update NumExperts
+	layer.NumExperts = len(layer.Experts)
+
 	log.Printf("🔤 appended %d GrammarExperts to MoELayer (total experts: %d)", numGrammar, len(layer.Experts))
 	return nil
 }
@@ -1339,9 +1349,6 @@ func NewIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, childVoc
 
 	// Define the expert builder function
 	expertBuilder := func(expertIdx int) (Expert, error) {
-		if numExperts == 8 {
-			return NewGrammarExpert(expertIdx, expertIdx, embeddingDim, embeddingDim)
-		}
 		return NewFeedForwardExpert(embeddingDim, embeddingDim, embeddingDim) // Example: inputDim, hiddenDim, outputDim
 	}
 
@@ -1536,9 +1543,6 @@ func NewHybridIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, ch
 
 	// 1. Create the inner LLM Encoder (MoE Stack with 4 layers for deeper reasoning)
 	expertBuilder := func(expertIdx int) (Expert, error) {
-		if numExperts == 8 {
-			return NewGrammarExpert(expertIdx, expertIdx, embeddingDim, embeddingDim)
-		}
 		return NewFeedForwardExpert(embeddingDim, embeddingDim*2, embeddingDim)
 	}
 	l0, err := NewMoELayer(embeddingDim, embeddingDim, numExperts, 2, expertBuilder)
@@ -1552,14 +1556,10 @@ func NewHybridIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, ch
 
 	// ── 8 Grammar Experts ──────────────────────────────────────────────────────
 	// Append one grammar expert per POS role to every encoder layer.
-	// They share the same dims so they slot cleanly into the existing gating network
-	// (which was already initialised for numExperts; we extend it by appending
-	// additional parameter columns below via appendGrammarExperts).
-	if numExperts != 8 {
-		for _, layer := range []*MoELayer{l0, l1} {
-			if err := appendGrammarExperts(layer, embeddingDim, 4); err != nil {
-				return nil, fmt.Errorf("failed to append grammar experts: %w", err)
-			}
+	// They share the same dims so they slot cleanly into the existing gating network.
+	for _, layer := range []*MoELayer{l0, l1} {
+		if err := appendGrammarExperts(layer, embeddingDim, 8); err != nil {
+			return nil, fmt.Errorf("failed to append grammar experts: %w", err)
 		}
 	}
 
@@ -1575,6 +1575,13 @@ func NewHybridIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, ch
 	decoder, err := NewRNNDecoder(embeddingDim, sentenceVocabSize, embeddingDim, maxAttentionHeads, 1, 0.0, numExperts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create RNN decoder: %w", err)
+	}
+
+	// 🧬 Decoder OutputMoE needs Grammar Experts too to match encoder topology
+	if decoder.OutputMoE != nil {
+		if err := appendGrammarExperts(decoder.OutputMoE, embeddingDim, 8); err != nil {
+			return nil, fmt.Errorf("failed to append decoder grammar experts: %w", err)
+		}
 	}
 
 	// 4. Initialize EncoderNorm and Positional Encoding
@@ -1652,6 +1659,14 @@ func (m *IntentMoE) Forward(scheduledSamplingProb float32, inputs ...*tensor.Ten
 	var inputMask *tensor.Tensor
 	if len(inputs) >= 3 {
 		inputMask = inputs[2]
+	}
+
+	if m.Decoder != nil {
+		m.Decoder.LastQueryTokens = queryTokenIDs
+		m.Decoder.LastTargetTokens = targetTokenIDs
+		if len(m.Decoder.TokenToWord) == 0 && m.SentenceVocab != nil {
+			m.Decoder.TokenToWord = m.SentenceVocab.TokenToWord
+		}
 	}
 
 	// Pass token IDs through embedding layer
@@ -2377,10 +2392,10 @@ func (m *IntentMoE) RepairArchitecture() {
 								break
 							}
 						}
-						// Only append if no grammar experts are present AND it looks like an old architecture
-						if !hasGrammar && len(layer.Experts) <= 4 {
+						// Only append if no grammar experts are present
+						if !hasGrammar {
 							log.Printf("🛠️ [MoE] Repairing layer: adding missing Grammar Experts (currently %d experts)...", len(layer.Experts))
-							if err := appendGrammarExperts(layer, m.EmbeddingDim, 4); err != nil {
+							if err := appendGrammarExperts(layer, m.EmbeddingDim, 8); err != nil {
 								log.Printf("❌ Failed to append grammar experts: %v", err)
 							} else {
 								// 🧬 JUMPSTART: Seed the new experts with structural bias if vocab is available
@@ -2413,11 +2428,9 @@ func (m *IntentMoE) RepairArchitecture() {
 					break
 				}
 			}
-			if !hasGrammar && len(layer.Experts) <= 4 {
+			if !hasGrammar {
 				log.Printf("🛠️ [MoE] Repairing decoder: adding missing Grammar Experts (currently %d experts)...", len(layer.Experts))
-				// OutputMoE input dim is hiddenSize + inputDim (which is embeddingDim*2 in the hybrid case)
-				// But appendGrammarExperts uses layer.Experts[0].InputDim() to match dims.
-				if err := appendGrammarExperts(layer, m.EmbeddingDim, 4); err != nil {
+				if err := appendGrammarExperts(layer, m.EmbeddingDim, 8); err != nil {
 					log.Printf("❌ Failed to append decoder grammar experts: %v", err)
 				} else {
 					// 🧬 JUMPSTART: Seed the new experts with structural bias if vocab is available

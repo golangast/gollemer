@@ -28,10 +28,13 @@ type Supervisor struct {
 	GrammarJudge         *nn.Linear
 
 	// Per-expert variable overrides (layerIdx -> expertIdx -> ExpertConfig)
-	expertOverrides  map[int]map[int]*ExpertOverride
-	FailureLogs      map[string]int // Tracks failures per expert ID (e.g., "E1")
-	TrainingDataPath string         // Path to the raw training assets for evolution
-	mu               sync.Mutex
+	expertOverrides       map[int]map[int]*ExpertOverride
+	FailureLogs           map[string]int // Tracks failures per expert ID (e.g., "E1")
+	TrainingDataPath      string         // Path to the raw training assets for evolution
+	SpawnsThisEpoch       int            // Track and pace expert spawning per epoch
+	OverfitMode           bool           // Allow relaxed constraints during overfit mode
+	DisableDataEvolution  bool           // When true, skip corpus mutation entirely
+	mu                    sync.Mutex
 }
 
 // ExpertOverride holds per-expert variable overrides set by the supervisor.
@@ -51,6 +54,7 @@ func NewSupervisor() *Supervisor {
 		BestPerplexity:  1e9,
 		TemporalAttention: att,
 		GrammarJudge:      judge,
+		FailureLogs:       make(map[string]int),
 		expertOverrides:   make(map[int]map[int]*ExpertOverride),
 	}
 }
@@ -640,8 +644,8 @@ func (s *Supervisor) SetExpertVariables(model *IntentMoE, layerIdx, expertIdx in
 	// Step 2: Clamped bounds — prevents weight-frying from extreme supervisor adjustments.
 	// LRMult capped at 2.5 (was 5.0): stops runaway gradient explosions on failing paths.
 	// OutputScale floored at 0.3 (was 0.05): keeps experts contributing meaningfully.
-	if lrMultiplier > 2.5 {
-		lrMultiplier = 2.5
+	if lrMultiplier > 1.50 {
+		lrMultiplier = 1.50
 	}
 	if lrMultiplier < 0.1 {
 		lrMultiplier = 0.1
@@ -703,8 +707,10 @@ func (s *Supervisor) HandleQualityGateFailure(model *IntentMoE, path string, pai
 			layers = append(layers, model.Decoder.OutputMoE)
 		}
 
+		expertFound := false
 		for lIdx, layer := range layers {
 			if eid < len(layer.Experts) {
+				expertFound = true
 				// Get current overrides or defaults
 				currentScale := float32(1.0)
 				currentLR := float32(1.0)
@@ -720,11 +726,13 @@ func (s *Supervisor) HandleQualityGateFailure(model *IntentMoE, path string, pai
 				newScale := currentScale * 0.85
 				newLR := currentLR * 1.10
 				s.SetExpertVariables(model, lIdx, eid, newScale, newLR)
-
-				s.mu.Lock()
-				s.FailureLogs[idStr]++
-				s.mu.Unlock()
 			}
+		}
+
+		if expertFound {
+			s.mu.Lock()
+			s.FailureLogs[idStr]++
+			s.mu.Unlock()
 		}
 	}
 
@@ -732,9 +740,19 @@ func (s *Supervisor) HandleQualityGateFailure(model *IntentMoE, path string, pai
 	for _, idStr := range parts {
 		s.mu.Lock()
 		failCount := s.FailureLogs[idStr]
+		spawns := s.SpawnsThisEpoch
 		s.mu.Unlock()
 
 		if failCount >= 3 {
+			limit := 32
+			if s.OverfitMode {
+				limit = 5
+			}
+			if spawns >= limit {
+				log.Printf("⏳ [Supervisor] Component %s reached failure threshold (%d), but pacing limits expert spawning to %d per epoch. Deferring...", idStr, failCount, limit)
+				continue
+			}
+
 			log.Printf("🔥 [Supervisor] Path Component %s failed %d times. Spawning Specialized Expert.", idStr, failCount)
 
 			// Determine role from intent
@@ -756,12 +774,15 @@ func (s *Supervisor) HandleQualityGateFailure(model *IntentMoE, path string, pai
 
 			s.mu.Lock()
 			s.FailureLogs[idStr] = 0
+			s.SpawnsThisEpoch++
 			s.mu.Unlock()
 		}
 	}
 
 	// 3. EVOLVE DATASET: Permanently rewrite training assets for this failure
-	s.EvolveDataset(pair.Q)
+	if !s.DisableDataEvolution {
+		s.EvolveDataset(pair.Q)
+	}
 }
 
 // EvolveDataset mutates the underlying training asset files to replace weak
@@ -882,11 +903,31 @@ func (s *Supervisor) EvolveTrainingData(pairs *[]TrainPair, failedPair *TrainPai
 // Call once per epoch after test evaluation.
 // similarityScore: current average similarity [0,1]
 // pairs: pointer to training pairs slice for hot-injection
+// expert: the HyperparameterExpert that owns the rolling history (may be nil to skip the gate)
 func (s *Supervisor) RunTriage(model *IntentMoE, similarityScore float32, pairs *[]TrainPair) {
 	log.Printf("🔬 [Supervisor Triage] Similarity=%.1f%%", similarityScore*100)
 
-	// If similarity is very low: inject synthetic social phrase pairs to force the model
-	// to encounter more diverse social patterns.
+	// Always run a light surgery pass (clones dead experts from healthy ones).
+	// This is a structural repair, not a policy change, so it is not gated.
+	s.PerformSurgery(model)
+}
+
+// RunTriageGated is the decay-aware version of RunTriage. It adds synthetic pairs
+// and structural interventions ONLY when the rolling 100-epoch window shows that
+// metrics are genuinely declining. Pass the HyperparameterExpert so the gate
+// can read the same history that AnalyzeAndAdjust uses.
+func (s *Supervisor) RunTriageGated(model *IntentMoE, similarityScore float32, pairs *[]TrainPair, expert interface{ MetricsAreDeclining() bool }) {
+	log.Printf("🔬 [Supervisor Triage] Similarity=%.1f%%", similarityScore*100)
+
+	// Warmup + direction guard: only intervene when things are getting worse.
+	if expert == nil || !expert.MetricsAreDeclining() {
+		log.Printf("✅ [Supervisor Triage] Metrics stable or improving — skipping synthetic injection and surgery.")
+		return
+	}
+
+	log.Printf("⚠️  [Supervisor Triage] Metrics declining — running full triage.")
+
+	// If similarity is very low: inject synthetic social phrase pairs.
 	if similarityScore < 0.25 && pairs != nil {
 		syntheticPairs := []TrainPair{
 			{Q: "hi", A: "Hi there! How can I help you today?", Intent: "greeting"},
@@ -958,3 +999,134 @@ func (s *Supervisor) SeedSystemExperts(model *IntentMoE) {
 	}
 	log.Printf("🧬 [Supervisor] SeedSystemExperts complete. Seeded structural experts with OutputScale=0.5, LRMult=1.0, Pinned=true across all %d layers.", len(layers))
 }
+
+// GetSpawnsThisEpoch returns the current spawns count this epoch in a thread-safe manner.
+func (s *Supervisor) GetSpawnsThisEpoch() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.SpawnsThisEpoch
+}
+
+// IncrementSpawnsThisEpoch increments the spawns count this epoch in a thread-safe manner.
+func (s *Supervisor) IncrementSpawnsThisEpoch() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.SpawnsThisEpoch++
+}
+
+// SpawnSpecializedExpert manually registers a specialized expert in the given layer.
+func (s *Supervisor) SpawnSpecializedExpert(model *IntentMoE, layerIdx int, roleName string, expertID int) {
+	layers := model.Encoder.GetMoELayers()
+	if model.Decoder.OutputMoE != nil {
+		layers = append(layers, model.Decoder.OutputMoE)
+	}
+
+	if layerIdx < 0 || layerIdx >= len(layers) {
+		log.Printf("⚠️ SpawnSpecializedExpert: layerIdx %d out of range", layerIdx)
+		return
+	}
+	layer := layers[layerIdx]
+
+	roleID := 0 // Default to PRON for IDENTITY
+	if roleName != "IDENTITY" {
+		roleID = GrammarRoleIndex(roleName)
+	}
+
+	for len(layer.Experts) <= expertID {
+		currRoleID := roleID
+		if len(layer.Experts) < expertID {
+			currRoleID = 7 // OTHER for intermediate ones
+		}
+		err := s.AddExpertToLayer(model, layerIdx, currRoleID)
+		if err != nil {
+			log.Printf("⚠️ SpawnSpecializedExpert error: %v", err)
+			break
+		}
+	}
+
+	// Ensure the spawned expert's role name matches
+	if expertID < len(layer.ExpertRole) {
+		layer.ExpertRole[expertID] = roleName
+	}
+	if expertID < len(layer.Experts) {
+		if ge, ok := layer.Experts[expertID].(*GrammarExpert); ok {
+			ge.RoleName = roleName
+		}
+	}
+	log.Printf("🧬 [Supervisor] SpawnSpecializedExpert: Expert E%d (role=%s) spawned in layer %d", expertID, roleName, layerIdx)
+}
+
+// AdjustRoutingAffinity manually adjusts routing affinity for a given token to an expert.
+func (s *Supervisor) AdjustRoutingAffinity(model *IntentMoE, tokenStr string, expertID int, affinityWeight float32) {
+	if model.SentenceVocab == nil || model.Embedding == nil {
+		log.Printf("⚠️ AdjustRoutingAffinity: SentenceVocab or Embedding is nil")
+		return
+	}
+
+	tokenID := model.SentenceVocab.GetTokenID(tokenStr)
+	if tokenID < 0 || tokenID >= model.Embedding.VocabSize {
+		log.Printf("⚠️ AdjustRoutingAffinity: token '%s' not found in vocab/embedding", tokenStr)
+		return
+	}
+
+	embeddingDim := model.EmbeddingDim
+	tokenEmbedding := model.Embedding.Weight.Data[tokenID*embeddingDim : (tokenID+1)*embeddingDim]
+
+	layers := model.Encoder.GetMoELayers()
+	if model.Decoder.OutputMoE != nil {
+		layers = append(layers, model.Decoder.OutputMoE)
+	}
+
+	for lIdx, layer := range layers {
+		if layer.GatingNetwork == nil || layer.GatingNetwork.Linear == nil {
+			continue
+		}
+		weights := layer.GatingNetwork.Linear.Weights
+		numExperts := weights.Shape[1]
+		if expertID >= numExperts {
+			log.Printf("⚠️ AdjustRoutingAffinity: expertID %d out of range for layer %d (has %d experts)", expertID, lIdx, numExperts)
+			continue
+		}
+
+		// Adjust column expertID in weights: shape [inputDim, numExperts]
+		for r := 0; r < embeddingDim; r++ {
+			weights.Data[r*numExperts+expertID] += affinityWeight * tokenEmbedding[r]
+		}
+
+		if layer.GatingNetwork.NoiseLinear != nil {
+			nWeights := layer.GatingNetwork.NoiseLinear.Weights
+			for r := 0; r < embeddingDim; r++ {
+				nWeights.Data[r*numExperts+expertID] += affinityWeight * tokenEmbedding[r]
+			}
+		}
+		log.Printf("🧬 [Supervisor] Adjusted Routing Affinity for token '%s' to Expert E%d in Layer %d (strength=%.2f)", tokenStr, expertID, lIdx, affinityWeight)
+	}
+}
+
+// ClearFailureLogs clears the failure history counters and overrides for all experts.
+func (s *Supervisor) ClearFailureLogs(model *IntentMoE) {
+	s.mu.Lock()
+	s.FailureLogs = make(map[string]int)
+	s.expertOverrides = make(map[int]map[int]*ExpertOverride)
+	s.mu.Unlock()
+
+	// Reset all expert output scales and LR multipliers
+	layers := model.Encoder.GetMoELayers()
+	if model.Decoder.OutputMoE != nil {
+		layers = append(layers, model.Decoder.OutputMoE)
+	}
+	for _, layer := range layers {
+		for eIdx := range layer.Experts {
+			defaultScale := float32(1.0)
+			if eIdx < 8 {
+				defaultScale = float32(0.5)
+			}
+			layer.ExpertOutputScale[eIdx] = defaultScale
+			if eIdx < len(layer.ExpertGradMultiplier) {
+				layer.ExpertGradMultiplier[eIdx] = 1.0
+			}
+		}
+	}
+	log.Println("♻️ [Supervisor] Cleared failure history counters and reset expert scales.")
+}
+

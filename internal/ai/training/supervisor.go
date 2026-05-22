@@ -26,6 +26,7 @@ type AdaptiveSupervisor struct {
 	ExpertRegistry   map[int]*ExpertHyperParams
 	PathFailureCount map[string]int // Tracks path sequences like "E1+E6"
 	TrainingDataPath string
+	ActiveMode       string // e.g. "OverfitMode", "" for standard
 }
 
 // NewAdaptiveSupervisor initializes a new adaptive supervisor.
@@ -46,6 +47,19 @@ func NewAdaptiveSupervisor(initialExperts, modelDim int, dataPath string) *Adapt
 		PathFailureCount: make(map[string]int),
 		TrainingDataPath: dataPath,
 	}
+}
+
+// AssessSpawningPacing dynamically widens or restricts the spawning gate based on the intent domain
+// and current training mode. OverfitMode + social intent gets the highest allocation to rapidly
+// clear structural failure bottlenecks.
+func (s *AdaptiveSupervisor) AssessSpawningPacing(intent string) int {
+	if s.ActiveMode == "OverfitMode" && intent == "social" {
+		return 20 // Widen the gate to clear the structural failure bottleneck rapidly
+	}
+	if intent == "social" || intent == "grammar_baseline" {
+		return 15 // Temporarily widen the gate to avoid massive deferral walls
+	}
+	return 5
 }
 
 // EvaluateGate is called by the main curriculum runner at the end of an epoch checkpoint.
