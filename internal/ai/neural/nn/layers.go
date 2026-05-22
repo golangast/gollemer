@@ -1268,6 +1268,8 @@ type MultiHeadCrossAttention struct {
 	DimKVHeads int // Dimension per key/value head (head_dim for keys/values)
 	Depth      int // Dimension per query head (head_dim for queries)
 
+	AttentionWeightsReward *Tensor // reward gradient for target-query grammatical alignment
+
 	// Stored intermediate tensors for backward pass
 	queryTensor                 *Tensor // Original query input from decoder
 	keyTensor                   *Tensor // Original key input from encoder
@@ -1451,6 +1453,10 @@ func (mha *MultiHeadCrossAttention) Backward(grad *Tensor) error {
 	}
 	safeAccumulate(mha.attentionWeights.Grad.Data, gradAttentionWeights.Data)
 
+	if mha.AttentionWeightsReward != nil && len(mha.AttentionWeightsReward.Data) == len(mha.attentionWeights.Grad.Data) {
+		safeAccumulate(mha.attentionWeights.Grad.Data, mha.AttentionWeightsReward.Data)
+	}
+
 	attentionWeightsTransposed, _ := mha.attentionWeights.Transpose(2, 3)
 	gradV_per_head, _ := attentionWeightsTransposed.MatMul(gradBeforeConcat)
 
@@ -1475,7 +1481,7 @@ func (mha *MultiHeadCrossAttention) Backward(grad *Tensor) error {
 				for i := range s0 {
 					base := (b*h0*s0+h*s0+i)*s1
 					p := mha.attentionWeights.Data[base : base+s1]
-					dp := gradAttentionWeights.Data[base : base+s1]
+					dp := mha.attentionWeights.Grad.Data[base : base+s1]
 					out := gradScoresData[base : base+s1]
 					SoftmaxBackwardRow(p, dp, out)
 				}
@@ -1662,6 +1668,10 @@ func (mha *MultiHeadCrossAttention) Backward(grad *Tensor) error {
 		}
 	}
 
+	if mha.AttentionWeightsReward != nil {
+		mha.AttentionWeightsReward.Release()
+		mha.AttentionWeightsReward = nil
+	}
 	return nil
 }
 

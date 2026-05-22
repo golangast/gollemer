@@ -52,15 +52,18 @@ type HyperparameterExpert struct {
 	records      map[int]*expertRecord
 	BoostEpochs  int
 	// Anti-oscillation: minimum epochs that must pass between GlobalExpertRefresh calls.
-	// Prevents the supervisor from immediately re-blasting freshly-healed experts.
 	GlobalRefreshCooldown int
-	// Trend tracking
+	// Trend tracking — 100-epoch rolling window (warmup: first 50 epochs are observation-only)
 	lossHistory    []float32
 	grammarHistory []float32
 	simHistory     []float32
-	// Running averages across epochs
+	// Snapshots of the previous 100-epoch window's averages, used to detect decline.
+	prevWindowGrammar float32
+	prevWindowSim     float32
+	prevWindowLoss    float32
+	// Running counter
 	epochsElapsed int
-	// Snapshots for 20-epoch window
+	// 20-epoch snapshots (kept for AnalyzeLinguisticWindow)
 	windowLoss    float32
 	windowGrammar float32
 	windowSim     float32
@@ -186,7 +189,7 @@ func (e *HyperparameterExpert) updateHealthMomentum(metrics TrainingMetrics) {
 }
 
 func (e *HyperparameterExpert) trackTrends(metrics TrainingMetrics) {
-	const maxHistory = 20 // Window of 20 epochs as requested
+	const maxHistory = 100 // 100-epoch rolling window
 	e.lossHistory = append(e.lossHistory, metrics.AverageLoss)
 	e.grammarHistory = append(e.grammarHistory, metrics.GrammarScore)
 	e.simHistory = append(e.simHistory, metrics.SimilarityScore)
@@ -194,6 +197,23 @@ func (e *HyperparameterExpert) trackTrends(metrics TrainingMetrics) {
 		e.lossHistory = e.lossHistory[len(e.lossHistory)-maxHistory:]
 		e.grammarHistory = e.grammarHistory[len(e.grammarHistory)-maxHistory:]
 		e.simHistory = e.simHistory[len(e.simHistory)-maxHistory:]
+	}
+
+	// Every 100 epochs, snapshot the window average so the next window can compare.
+	if e.epochsElapsed > 0 && e.epochsElapsed%100 == 0 {
+		n := len(e.grammarHistory)
+		if n > 0 {
+			var sg, ss, sl float32
+			for i := 0; i < n; i++ {
+				sg += e.grammarHistory[i]
+				ss += e.simHistory[i]
+				sl += e.lossHistory[i]
+			}
+			f := float32(n)
+			e.prevWindowGrammar = sg / f
+			e.prevWindowSim = ss / f
+			e.prevWindowLoss = sl / f
+		}
 	}
 }
 
@@ -222,6 +242,67 @@ func (e *HyperparameterExpert) grammarStagnant(n int) bool {
 	}
 	// Stagnant if best in window equals first value (no improvement)
 	return max <= h[0]+0.5
+}
+
+// windowAvg returns the average of the last n values of a slice.
+func windowAvg(h []float32, n int) (float32, bool) {
+	if len(h) < n {
+		return 0, false
+	}
+	h = h[len(h)-n:]
+	var sum float32
+	for _, v := range h {
+		sum += v
+	}
+	return sum / float32(n), true
+}
+
+// metricsAreDeclining returns true only when ALL three conditions are met:
+//  1. At least 50 epochs of history exist (warmup gate).
+//  2. The rolling average of the last 50 epochs is worse than the previous 50-epoch average.
+//  3. The most recent 10 epochs confirm the downturn (not a one-off dip).
+//
+// When training is improving or stable this always returns false, so the
+// supervisor stays silent.
+func (e *HyperparameterExpert) metricsAreDeclining() bool {
+	if e.epochsElapsed < 50 {
+		return false // observation-only warmup period
+	}
+
+	recentGrammar, okG := windowAvg(e.grammarHistory, 10)
+	recentSim, okS := windowAvg(e.simHistory, 10)
+	if !okG || !okS {
+		return false
+	}
+
+	// If we haven't crossed a full 100-epoch window yet, compare to an earlier
+	// slice of our own history as the baseline.
+	var baseGrammar, baseSim float32
+	if e.prevWindowGrammar == 0 && len(e.grammarHistory) >= 20 {
+		// Use the first-half of the current window as the baseline
+		old := e.grammarHistory[:len(e.grammarHistory)/2]
+		var sg, ss float32
+		n := len(old)
+		for i, v := range old {
+			sg += v
+			ss += e.simHistory[i]
+		}
+		baseGrammar = sg / float32(n)
+		baseSim = ss / float32(n)
+	} else {
+		baseGrammar = e.prevWindowGrammar
+		baseSim = e.prevWindowSim
+	}
+
+	// Both grammar AND similarity must be trending down vs the baseline.
+	grammarDown := recentGrammar < baseGrammar-0.5
+	simDown := recentSim < baseSim-0.5
+	return grammarDown && simDown
+}
+
+// MetricsAreDeclining is the exported version for use from RunTriage.
+func (e *HyperparameterExpert) MetricsAreDeclining() bool {
+	return e.metricsAreDeclining()
 }
 
 // runHealingPass triggers genetic blending for critically unhealthy experts.
@@ -378,12 +459,13 @@ func (e *HyperparameterExpert) AnalyzeAndAdjust(metrics TrainingMetrics) {
 		}
 
 		// ── OverfitMode: Lockdown ───────────────────────────────────────────
-		if cfg.OverfitMode {
+		if cfg.OverfitMode || metrics.OverfitMode {
+			cfg.OverfitMode = true
 			fmt.Println("🎯 Supervisor: OverfitMode active. Lockdown engaged.")
-			cfg.RouterNoise = 0.0
-			// Step 3: Keep temperature at 0.50 (was 0.05) so the model can still explore
+			cfg.RouterNoise = 0.10
+			// Step 3: Keep temperature at 0.65 so the model can still explore
 			// and escape repetitive token loops even under lockdown.
-			cfg.RouterTemperature = 0.50
+			cfg.RouterTemperature = 0.65
 			// Step 3: Cap ContextMultiplier at 3.0 in OverfitMode.
 			// A ContextMultiplier of 30+ forces pure prompt regurgitation.
 			// Capping at 3.0 lets the model temperature (0.50) do its job and
@@ -411,16 +493,18 @@ func (e *HyperparameterExpert) AnalyzeAndAdjust(metrics TrainingMetrics) {
 		}
 
 		// Trigger exploration boost for chronic word salad
-		if metrics.Epoch > 30 && metrics.GrammarScore < 10.0 && e.BoostEpochs == 0 && e.grammarStagnant(5) {
-			fmt.Println("🚨 [Supervisor] Grammar stagnant. Triggering 8-epoch Exploration Boost.")
+		// Guard: only fire after 100-epoch warmup AND when metrics are genuinely declining.
+		if metrics.Epoch > 100 && metrics.GrammarScore < 10.0 && e.BoostEpochs == 0 && e.grammarStagnant(5) && e.metricsAreDeclining() {
+			fmt.Println("🚨 [Supervisor] Grammar stagnant AND metrics declining. Triggering 8-epoch Exploration Boost.")
 			e.BoostEpochs = 8
 		}
 
 		// ── A: Context Multiplier — boost if model is mumbling ────────────
-		if metrics.GrammarScore < 15.0 && metrics.Epoch > 20 {
+		// Guard: only intervene after 100-epoch warmup AND when metrics are declining.
+		if metrics.GrammarScore < 15.0 && metrics.Epoch > 100 && e.metricsAreDeclining() {
 			cfg.ContextMultiplier = min32(30.0, cfg.ContextMultiplier+0.3)
 			cfg.RouterTemperature = max32(0.5, cfg.RouterTemperature*0.97)
-			fmt.Printf("📝 Mumbling: ContextMultiplier→%.1f, Temp→%.2f\n",
+			fmt.Printf("📝 Mumbling (declining): ContextMultiplier→%.1f, Temp→%.2f\n",
 				cfg.ContextMultiplier, cfg.RouterTemperature)
 		} else if metrics.GrammarScore >= 20.0 {
 			// Cool down temperature as model matures
@@ -428,20 +512,21 @@ func (e *HyperparameterExpert) AnalyzeAndAdjust(metrics TrainingMetrics) {
 		}
 
 		// ── B: Expert Collapse ────────────────────────────────────────────
-		if metrics.SemanticSinksHits > 2 {
+		if metrics.SemanticSinksHits > 2 && !cfg.OverfitMode {
 			cfg.RouterNoise = min32(0.50, cfg.RouterNoise+0.04)
 			cfg.LoadBalancingWeight = min32(1.0, cfg.LoadBalancingWeight+0.02)
 			fmt.Printf("⚠️  Sink: Noise→%.3f, LBW→%.3f\n", cfg.RouterNoise, cfg.LoadBalancingWeight)
-		} else if metrics.GatingEntropy > 3.0 {
+		} else if metrics.GatingEntropy > 3.0 && !cfg.OverfitMode {
 			// Good entropy: dial down noise slightly to let routing solidify
 			cfg.RouterNoise = max32(0.01, cfg.RouterNoise*0.97)
 		}
 
 		// ── C: Learning Rate — plateau detection ──────────────────────────
-		if metrics.AverageLoss > 5.5 && metrics.Epoch > 20 && !e.lossImproving(3) {
+		// Guard: only cut LR when we've had 100 epochs of history AND the trend is down.
+		if metrics.AverageLoss > 5.5 && metrics.Epoch > 100 && !e.lossImproving(3) && e.metricsAreDeclining() {
 			cfg.LearningRate = max32(1e-6, cfg.LearningRate*0.93)
-			fmt.Printf("📉 Plateau: LR→%e\n", cfg.LearningRate)
-		} else if metrics.AverageLoss < 3.0 && e.lossImproving(5) && metrics.Epoch > 50 {
+			fmt.Printf("📉 Plateau (declining): LR→%e\n", cfg.LearningRate)
+		} else if metrics.AverageLoss < 3.0 && e.lossImproving(5) && metrics.Epoch > 100 {
 			// Loss is improving well — allow slight LR recovery
 			cfg.LearningRate = min32(cfg.LearningRate*1.05, 5e-4)
 		}
@@ -470,14 +555,11 @@ func (e *HyperparameterExpert) AnalyzeAndAdjust(metrics TrainingMetrics) {
 		}
 
 		// ── E: Similarity-driven feedback ────────────────────────────────
-		// Step 3: Cap ContextMultiplier at 3.0 (was 60.0) to prevent context domination.
-		// High ContextMultiplier forces the decoder to regurgitate prompt tokens rather
-		// than generating novel responses. Temperature at 0.5 only works if CM is low enough
-		// to let probability mass be distributed across the full vocabulary.
-		if metrics.SimilarityScore < 25.0 && metrics.Epoch > 10 {
+		// Guard: only intervene after 100-epoch warmup AND when metrics are declining.
+		if metrics.SimilarityScore < 25.0 && metrics.Epoch > 100 && e.metricsAreDeclining() {
 			cfg.ContextMultiplier = min32(3.0, cfg.ContextMultiplier+0.1)
 			cfg.StructuralBiasIntensity = min32(20.0, cfg.StructuralBiasIntensity+1.5)
-			fmt.Printf("🎯 Low Similarity (%.1f%%): ContextMultiplier→%.1f, BiasInt→%.1f\n",
+			fmt.Printf("🎯 Low Similarity (%.1f%%, declining): ContextMultiplier→%.1f, BiasInt→%.1f\n",
 				metrics.SimilarityScore, cfg.ContextMultiplier, cfg.StructuralBiasIntensity)
 		} else if metrics.SimilarityScore > 45.0 {
 			cfg.StructuralRoutingWeight = max32(1.0, cfg.StructuralRoutingWeight*0.95)
@@ -486,7 +568,7 @@ func (e *HyperparameterExpert) AnalyzeAndAdjust(metrics TrainingMetrics) {
 
 		// ── F: LR Defibrillation — escape deep local minima ──────────────
 		// When LR has decayed below 5e-06 AND grammar is stuck below 15, shock the weights.
-		if cfg.LearningRate < 5e-6 && metrics.GrammarScore < 15.0 && metrics.Epoch > 50 && e.grammarStagnant(5) {
+		if cfg.LearningRate < 5e-6 && metrics.GrammarScore < 15.0 && metrics.Epoch > 100 && e.grammarStagnant(5) {
 			cfg.LearningRate = 8e-5
 			fmt.Printf("⚡ [Supervisor] LR Defibrillation! Bumping LR 1e-06→8e-05 to escape local minima.\n")
 		}
@@ -502,6 +584,12 @@ func (e *HyperparameterExpert) AnalyzeAndAdjust(metrics TrainingMetrics) {
 			cfg.RouterNoise = max32(0.005, cfg.RouterNoise*0.97)
 			fmt.Printf("🔕 Stable: Router noise decayed to %.4f\n", cfg.RouterNoise)
 		}
+
+		// ── I: Lockdown Enforcement ──────────────────────────────────────
+		if cfg.OverfitMode {
+			cfg.RouterNoise = 0.10
+			cfg.RouterTemperature = 0.65
+		}
 	})
 
 	// Persist config
@@ -511,54 +599,72 @@ func (e *HyperparameterExpert) AnalyzeAndAdjust(metrics TrainingMetrics) {
 	e.SafeCfg.RUnlock()
 }
 
-// AnalyzeLinguisticWindow evaluates performance over a 20-epoch block and intervenes if necessary.
+// AnalyzeLinguisticWindow evaluates performance over a rolling window and intervenes
+// ONLY when: (1) at least 100 epochs of history exist, AND (2) metrics are declining
+// compared to the previous 100-epoch window average. If training is improving or stable
+// the supervisor stays silent.
 func (e *HyperparameterExpert) AnalyzeLinguisticWindow(metrics TrainingMetrics, surgery SurgeryPerformer) {
-	if len(e.grammarHistory) < 20 {
+	// Warmup gate: require at least 50 epochs before any audit can fire.
+	if e.epochsElapsed < 50 {
+		fmt.Printf("🧘 [Supervisor Audit] Warmup in progress (%d/50 epochs). Observation-only.\n", e.epochsElapsed)
 		return
 	}
 
-	var sumScore, sumGrammar, sumSim float32
-	for i := 0; i < 20; i++ {
+	// Use the last 50 available epochs for the audit window.
+	auditN := 50
+	if len(e.grammarHistory) < auditN {
+		auditN = len(e.grammarHistory)
+	}
+	if auditN == 0 {
+		return
+	}
+
+	var sumGrammar, sumSim float32
+	for i := len(e.grammarHistory) - auditN; i < len(e.grammarHistory); i++ {
 		sumGrammar += e.grammarHistory[i]
 		sumSim += e.simHistory[i]
-		// Combined Score estimate (matching UI progress: Grammar + Sim Contribution)
-		sumScore += e.grammarHistory[i] + (e.simHistory[i] * 0.3)
 	}
-	avgGrammar := sumGrammar / 20.0
-	avgSim := sumSim / 20.0
-	avgScore := sumScore / 20.0
+	avgGrammar := sumGrammar / float32(auditN)
+	avgSim := sumSim / float32(auditN)
+	avgScore := avgGrammar + avgSim*0.3
 
-	fmt.Printf("\n🧠 [Supervisor Audit] 20-Epoch Window | Avg Score: %.1f | Avg Grammar: %.1f | Avg Sim: %.1f%%\n",
-		avgScore, avgGrammar, avgSim)
+	fmt.Printf("\n🧠 [Supervisor Audit] %d-Epoch Window | Avg Score: %.1f | Avg Grammar: %.1f | Avg Sim: %.1f%%\n",
+		auditN, avgScore, avgGrammar, avgSim)
 
-	// Change 3: Anti-oscillation cooldown.
-	// If a GlobalRefresh was triggered recently, tick down the cooldown timer
-	// and skip the refresh to let freshly-blended experts settle their gradients.
+	// Anti-oscillation cooldown.
 	if e.GlobalRefreshCooldown > 0 {
 		e.GlobalRefreshCooldown--
 		fmt.Printf("🧘 [Supervisor Audit] GlobalRefresh cooldown: %d epochs remaining. Skipping refresh.\n", e.GlobalRefreshCooldown)
 		return
 	}
 
-	// Intervention Targets: Grammar < 18 or Sim < 15% after window
+	// Only intervene when metrics are genuinely declining vs the previous window.
+	// If training is improving or holding steady, the supervisor does nothing.
+	if !e.metricsAreDeclining() {
+		fmt.Println("✅ [Supervisor Audit] Metrics stable or improving — no intervention needed.")
+		e.SafeCfg.Update(func(cfg *TrainingConfig) {
+			// Reward good progress: gently sharpen routing.
+			cfg.RouterTemperature = max32(0.2, cfg.RouterTemperature*0.9)
+		})
+		return
+	}
+
+	// Metrics are declining — decide whether the decline is severe enough to act.
 	if avgGrammar < 18.0 || avgSim < 15.0 {
-		fmt.Println("🚨 [Supervisor Audit] Progress below target. Triggering GLOBAL EXPERT UPDATE.")
+		fmt.Println("🚨 [Supervisor Audit] Metrics declining AND below target. Triggering GLOBAL EXPERT UPDATE.")
 		e.GlobalExpertRefresh(surgery)
-		// Set 30-epoch cooldown after a refresh to prevent immediate re-oscillation.
 		e.GlobalRefreshCooldown = 30
 		fmt.Println("⏳ [Supervisor Audit] GlobalRefresh cooldown set to 30 epochs.")
 
-		// Also nudge hyperparameters to break the plateau.
-		// Step 3: Cap ContextMultiplier escalation at 3.0 (was 50.0).
 		e.SafeCfg.Update(func(cfg *TrainingConfig) {
-			cfg.RouterTemperature = min32(1.2, cfg.RouterTemperature*1.2) // Increase exploration
+			cfg.RouterTemperature = min32(1.2, cfg.RouterTemperature*1.2)
 			cfg.ContextMultiplier = min32(3.0, cfg.ContextMultiplier*1.05)
 			cfg.StructuralBiasIntensity = min32(15.0, cfg.StructuralBiasIntensity+2.0)
 		})
 	} else {
-		fmt.Println("✅ [Supervisor Audit] Linguistic progress is on track. Smoothing expert weights...")
+		fmt.Println("⚠️ [Supervisor Audit] Metrics declining but above floor — smoothing only.")
 		e.SafeCfg.Update(func(cfg *TrainingConfig) {
-			cfg.RouterTemperature = max32(0.2, cfg.RouterTemperature*0.9) // Sharpen
+			cfg.RouterTemperature = max32(0.2, cfg.RouterTemperature*0.9)
 		})
 	}
 }
@@ -639,21 +745,39 @@ func (e *HyperparameterExpert) PerformSurgery(metrics TrainingMetrics, surgery S
 
 // VerifyExpertPaths checks if routing decisions make linguistic sense.
 func (e *HyperparameterExpert) VerifyExpertPaths(metrics TrainingMetrics) {
+	var pronID, verbID, auxID int = -1, -1, -1
+	if metrics.PronPathID != "" {
+		fmt.Sscanf(metrics.PronPathID, "E%d", &pronID)
+	}
+	if metrics.VerbPathID != "" {
+		fmt.Sscanf(metrics.VerbPathID, "E%d", &verbID)
+	}
+	if metrics.AuxPathID != "" {
+		fmt.Sscanf(metrics.AuxPathID, "E%d", &auxID)
+	}
+
 	for _, res := range metrics.TestResults {
 		isQuestion := strings.Contains(strings.ToLower(res.Prompt), "__ques__")
 		if isQuestion {
-			// Check for PRON or AUX experts in question context
-			hasQuestionExpert := false
-			if metrics.PronPathID != "" || metrics.AuxPathID != "" {
-				hasQuestionExpert = strings.Contains(res.Path, metrics.PronPathID) || strings.Contains(res.Path, metrics.AuxPathID)
-			}
+			pathExperts := e.parseExpertsFromPath(res.Path)
 			
-			// Relational check: Does it have a structure like PRON -> AUX or PRON -> VERB?
-			hasRelation := false
-			if metrics.PronPathID != "" && (metrics.AuxPathID != "" || metrics.VerbPathID != "") {
-				hasRelation = (strings.Contains(res.Path, metrics.PronPathID) && strings.Contains(res.Path, metrics.AuxPathID)) ||
-					(strings.Contains(res.Path, metrics.PronPathID) && strings.Contains(res.Path, metrics.VerbPathID))
+			hasQuestionExpert := false
+			hasPron := false
+			hasAux := false
+			hasVerb := false
+			for _, eid := range pathExperts {
+				if pronID != -1 && eid == pronID {
+					hasPron = true
+				}
+				if auxID != -1 && eid == auxID {
+					hasAux = true
+				}
+				if verbID != -1 && eid == verbID {
+					hasVerb = true
+				}
 			}
+			hasQuestionExpert = hasPron || hasAux
+			hasRelation := hasPron && (hasAux || hasVerb)
 
 			if !hasQuestionExpert && metrics.Epoch > 100 {
 				fmt.Printf("🕵️ [Supervisor Verify] Question lacks PRON/AUX expert: '%s' (Path: %s)\n",

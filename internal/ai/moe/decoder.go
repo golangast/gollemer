@@ -6,6 +6,7 @@ import (
 	"math"
 	"math/rand"
 	"runtime"
+	"strings"
 
 	"github.com/golangast/gollemer/internal/ai/neural/nn"
 	. "github.com/golangast/gollemer/internal/ai/neural/tensor"
@@ -50,6 +51,10 @@ type RNNDecoder struct {
 
 	ContextMultiplier      float32 // Scale for reinforced context injection
 	ContextMultiplierDecay float32 // Decay factor per step (e.g. 0.7)
+
+	LastQueryTokens  *Tensor  // Stored query tokens for cross-attention reward
+	LastTargetTokens *Tensor  // Stored target tokens for cross-attention reward
+	TokenToWord      []string // Reference map to decode tokens to word strings
 }
 
 // NewRNNDecoder creates a new RNNDecoder.
@@ -402,6 +407,10 @@ func (d *RNNDecoder) ClearState() {
 	if d.Embedding != nil {
 		d.Embedding.ClearState()
 	}
+	if d.LastQueryTokens != nil { d.LastQueryTokens.Release() }
+	if d.LastTargetTokens != nil { d.LastTargetTokens.Release() }
+	d.LastQueryTokens = nil
+	d.LastTargetTokens = nil
 	d.contextVector = nil
 }
 
@@ -533,6 +542,54 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
 	}
 	hiddenGradFromOutput := splits[0]
 	attentionGrad := splits[1]
+
+	// Calculate cross-attention alignment reward
+	if d.Attention != nil && d.Attention.GetAttentionWeights() != nil && d.LastQueryTokens != nil && d.LastTargetTokens != nil && len(d.TokenToWord) > 0 {
+		wShape := d.Attention.GetAttentionWeights().Shape
+		b0 := wShape[0]
+		h0 := wShape[1]
+		qSeq := wShape[2]  // TargetSeqLen
+		kvSeq := wShape[3] // QuerySeqLen
+
+		rewardData := make([]float32, b0*h0*qSeq*kvSeq)
+		
+		getWord := func(tokID float32) string {
+			idx := int(tokID)
+			if idx >= 0 && idx < len(d.TokenToWord) {
+				return d.TokenToWord[idx]
+			}
+			return ""
+		}
+
+		for b := 0; b < b0; b++ {
+			for t := 0; t < qSeq; t++ {
+				var targetWord string
+				targetIdx := b*qSeq + t
+				if targetIdx < len(d.LastTargetTokens.Data) {
+					targetWord = getWord(d.LastTargetTokens.Data[targetIdx])
+				}
+				
+				if targetWord != "" && isVerbOrAux(targetWord) {
+					for q := 0; q < kvSeq; q++ {
+						var queryWord string
+						queryIdx := b*kvSeq + q
+						if queryIdx < len(d.LastQueryTokens.Data) {
+							queryWord = getWord(d.LastQueryTokens.Data[queryIdx])
+						}
+						
+						if queryWord != "" && isPronoun(queryWord) {
+							for h := 0; h < h0; h++ {
+								offset := ((b*h0 + h)*qSeq + t)*kvSeq + q
+								rewardData[offset] = -0.08
+							}
+						}
+					}
+				}
+			}
+		}
+		
+		d.Attention.AttentionWeightsReward = NewTensor(wShape, rewardData, false)
+	}
 
 	// 4. Attention Backward (Query is LSTM Hidden)
 	if err := d.Attention.Backward(attentionGrad); err != nil {
@@ -990,4 +1047,20 @@ func (d *RNNDecoder) Step(tokenID int, contextVector, prevHidden, prevCell *Tens
 	flatLogits, _ := logits.Reshape([]int{batchSize, d.OutputVocabSize})
 
 	return flatLogits, hidden, cell, nil
+}
+
+func isPronoun(word string) bool {
+	w := strings.ToLower(word)
+	return w == "i" || w == "you" || w == "me" || w == "my" || w == "your" || w == "we" || w == "us" || w == "it" || w == "they" || w == "them" || w == "everything" || w == "anything"
+}
+
+func isVerbOrAux(word string) bool {
+	w := strings.ToLower(word)
+	switch w {
+	case "am", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had", "do", "does", "did", "done", "doing", "go", "goes", "went", "gone", "going", "see", "saw", "seen", "look", "looking", "say", "said", "tell", "told", "think", "thought", "know", "knew", "known", "help", "helping", "helped", "work", "working", "worked", "use", "using", "used", "make", "making", "made":
+		return true
+	case "can", "could", "will", "would", "should", "may", "might", "must":
+		return true
+	}
+	return false
 }

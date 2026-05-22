@@ -205,11 +205,15 @@ func NewMoELayer(inputDim, outputDim, numExperts, k int, expertBuilder func(int)
 	for i := range layer.ExpertHealth {
 		layer.ExpertHealth[i] = 1.0
 		layer.ExpertLastUsedAt[i] = now
-		// Pin first 8 experts by default as structural/system experts
-		if i < 8 {
+		// Pin first 32 experts by default as structural/system experts
+		if i < 32 {
 			layer.ExpertPinned[i] = true
 			if i < len(GrammarRoles) {
 				layer.ExpertRole[i] = GrammarRoles[i]
+			} else if i >= 8 && i <= 15 {
+				layer.ExpertRole[i] = "PRON/AUX"
+			} else {
+				layer.ExpertRole[i] = "STRUCTURAL"
 			}
 		}
 	}
@@ -267,7 +271,11 @@ func (moe *MoELayer) ResetExpertWeights(expertIdx int) {
 	moe.resetsMu.Unlock()
 
 	atomic.AddInt32(&moe.ResetCount, 1)
-	fmt.Printf("🔥 Expert E%d Weights Reset for %T: Breaking Semantic Sink.\n", expertIdx, moe)
+
+	if moe.OverfitMode {
+		log.Printf("🔥 Expert %d Weights Reset skipped (Warmup/Overfit Mode active)", expertIdx)
+		return
+	}
 
 	expert := moe.Experts[expertIdx]
 	params := expert.Parameters()
@@ -287,6 +295,7 @@ func (moe *MoELayer) ResetExpertWeights(expertIdx int) {
 			p.Data[i] = float32(rand.NormFloat64()) * stdDev
 		}
 	}
+	log.Printf("🔥 Expert %d Weights Reset (Xavier Init)", expertIdx)
 }
 
 // PerformSurgery blends weights from an alpha expert into a sink expert.
@@ -2449,14 +2458,20 @@ func (moe *MoELayer) FindLowestPerformingExpert(newRole string) int {
 	}
 
 	// 2. Fallback search: Under high capacity pressure (>=64 experts) or OverfitMode,
-	// if all candidates are pinned, we bypass the pinned flag for dynamically spawned experts (index >= 8).
-	// Core structural experts (indices 0 to 7) remain absolutely protected.
+	// if all candidates are pinned, we bypass the pinned flag for dynamically spawned experts (index >= 48).
+	// Core structural experts (indices 0 to 47) and any structural_baseline-tagged experts remain absolutely protected.
 	if weakestIdx == -1 && (len(moe.Experts) >= 64 || moe.OverfitMode) {
 		lowestScore = math.MaxFloat64
-		for i := 8; i < len(moe.Experts); i++ {
+		var backupCandidate = -1
+		var backupScore = math.MaxFloat64
+		for i := 48; i < len(moe.Experts); i++ {
 			role := ""
 			if i < len(moe.ExpertRole) {
 				role = moe.ExpertRole[i]
+			}
+			// Never evict explicitly structural-baseline anchors regardless of index.
+			if role == "structural_baseline" {
+				continue
 			}
 			isStructural := (role == "PRON" || role == "VERB" || role == "AUX" || role == "ADJ" || role == "NOUN" || role == "PREP" || role == "")
 
@@ -2489,7 +2504,6 @@ func (moe *MoELayer) FindLowestPerformingExpert(newRole string) int {
 
 			age := now.Sub(lastUsed).Seconds()
 
-			// Cumulative token utilization
 			var utilization float64 = 0.0
 			if i < len(moe.AccumulatedUtilization) {
 				utilization = float64(moe.AccumulatedUtilization[i])
@@ -2499,13 +2513,25 @@ func (moe *MoELayer) FindLowestPerformingExpert(newRole string) int {
 			// Lower score = better eviction candidate.
 			score := health * (1.0 / (1.0 + age)) * (1.0 / (1.0 + utilization))
 
-			if score < lowestScore {
-				lowestScore = score
-				weakestIdx = i
+			// Prefer truly non-structural experts as primary candidates; keep structural as backup.
+			if !isStructural && !isPinned {
+				if score < lowestScore {
+					lowestScore = score
+					weakestIdx = i
+				}
+			} else {
+				if score < backupScore {
+					backupScore = score
+					backupCandidate = i
+				}
 			}
 		}
+		// Only fall back to structural candidates if no standard candidate exists.
+		if weakestIdx == -1 {
+			weakestIdx = backupCandidate
+		}
 		if weakestIdx != -1 {
-			log.Printf("⚠️ [MoELayer] Fallback Eviction selected Expert E%d (ignoring Pin status, index >= 8) due to capacity pressure.", weakestIdx)
+			log.Printf("⚠️ [MoELayer] Fallback Eviction selected Expert E%d (index >= 48, structural_baseline protected) due to capacity pressure.", weakestIdx)
 		}
 	}
 
@@ -2619,15 +2645,15 @@ func (moe *MoELayer) EvictLeastActive(newRole string) (int, bool) {
 }
 
 // ForceEvictLowestUtility is a guaranteed fallback that ignores the Pinned flag for
-// any dynamically spawned expert (index >= 8). Core structural experts (indices 0-7)
+// any dynamically spawned expert (index >= 32). Core structural experts (indices 0-31)
 // remain absolutely protected. Selection is by absolute lowest utility score:
 //
 //	score = health * (1/(1+age_seconds)) * (1/(1+cumulative_utilization))
 //
-// Returns the evicted index, or -1 if fewer than 9 experts exist (nothing safe to
+// Returns the evicted index, or -1 if fewer than 33 experts exist (nothing safe to
 // evict under this policy).
 func (moe *MoELayer) ForceEvictLowestUtility(newRole string) int {
-	if len(moe.Experts) < 9 {
+	if len(moe.Experts) < 33 {
 		return -1 // Nothing dynamic to evict; all experts are structural.
 	}
 
@@ -2663,10 +2689,16 @@ func (moe *MoELayer) ForceEvictLowestUtility(newRole string) int {
 		averageUtilization = float64(totalUtilization) / float64(len(moe.Experts))
 	}
 
-	for i := 8; i < len(moe.Experts); i++ {
+	var backupCandidate = -1
+	var backupScore = math.MaxFloat64
+	for i := 48; i < len(moe.Experts); i++ {
 		role := ""
 		if i < len(moe.ExpertRole) {
 			role = moe.ExpertRole[i]
+		}
+		// Never evict structural_baseline-tagged anchors.
+		if role == "structural_baseline" {
+			continue
 		}
 		isStructural := (role == "PRON" || role == "VERB" || role == "AUX" || role == "ADJ" || role == "NOUN" || role == "PREP" || role == "")
 
@@ -2691,10 +2723,22 @@ func (moe *MoELayer) ForceEvictLowestUtility(newRole string) int {
 		age := now.Sub(moe.ExpertLastUsedAt[i]).Seconds()
 		utilization := float64(moe.AccumulatedUtilization[i])
 		score := health * (1.0 / (1.0 + age)) * (1.0 / (1.0 + utilization))
-		if score < lowestScore {
-			lowestScore = score
-			weakestIdx = i
+
+		// Prefer standard (non-structural, unpinned) experts; use structural as last resort.
+		if !isStructural && !isPinned {
+			if score < lowestScore {
+				lowestScore = score
+				weakestIdx = i
+			}
+		} else {
+			if score < backupScore {
+				backupScore = score
+				backupCandidate = i
+			}
 		}
+	}
+	if weakestIdx == -1 {
+		weakestIdx = backupCandidate
 	}
 
 	if weakestIdx == -1 {
