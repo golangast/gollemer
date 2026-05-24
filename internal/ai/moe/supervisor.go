@@ -642,16 +642,17 @@ func (s *Supervisor) SetExpertVariables(model *IntentMoE, layerIdx, expertIdx in
 	}
 
 	// Step 2: Clamped bounds — prevents weight-frying from extreme supervisor adjustments.
-	// LRMult capped at 2.5 (was 5.0): stops runaway gradient explosions on failing paths.
-	// OutputScale floored at 0.3 (was 0.05): keeps experts contributing meaningfully.
+	// LRMult capped at 1.50: stops runaway gradient escalation on failing paths.
+	// OutputScale floored at 0.70: keeps experts contributing meaningfully without
+	// fracturing learned paths over a long 2000-epoch training horizon.
 	if lrMultiplier > 1.50 {
 		lrMultiplier = 1.50
 	}
 	if lrMultiplier < 0.1 {
 		lrMultiplier = 0.1
 	}
-	if outputScale < 0.3 {
-		outputScale = 0.3
+	if outputScale < 0.70 {
+		outputScale = 0.70
 	}
 	if outputScale > 1.0 {
 		outputScale = 1.0
@@ -722,9 +723,14 @@ func (s *Supervisor) HandleQualityGateFailure(model *IntentMoE, path string, pai
 				}
 				s.mu.Unlock()
 
-				// Mutate: weight *= 0.85, LR *= 1.10 (Aggressive adaptation per AdaptiveSupervisor spec)
+				// Mutate: gentle scale decay (×0.85) with 0.70 floor, LR nudge (×1.05).
+				// Keeps the network stable over a 2000-epoch horizon without
+				// fracturing learned expert paths on isolated quality gate failures.
 				newScale := currentScale * 0.85
-				newLR := currentLR * 1.10
+				if newScale < 0.70 {
+					newScale = 0.70
+				}
+				newLR := currentLR * 1.05
 				s.SetExpertVariables(model, lIdx, eid, newScale, newLR)
 			}
 		}
@@ -1083,23 +1089,39 @@ func (s *Supervisor) AdjustRoutingAffinity(model *IntentMoE, tokenStr string, ex
 		}
 		weights := layer.GatingNetwork.Linear.Weights
 		numExperts := weights.Shape[1]
-		if expertID >= numExperts {
-			log.Printf("⚠️ AdjustRoutingAffinity: expertID %d out of range for layer %d (has %d experts)", expertID, lIdx, numExperts)
+
+		// 🛡️ Layer-expert-count guard: if this layer has fewer physical experts
+		// than the requested expertID (e.g. Layer 1 with only 16 experts), map
+		// the affinity to expert E0 (base fallback) so the gating column is
+		// always valid rather than silently skipping the adjustment.
+		targetExpertID := expertID
+		if targetExpertID >= len(layer.Experts) {
+			log.Printf("⚠️ AdjustRoutingAffinity: expertID %d >= len(Experts) %d for layer %d — remapping to base expert E0",
+				expertID, len(layer.Experts), lIdx)
+			targetExpertID = 0
+		}
+		// Also guard against gating-matrix width misalignment.
+		if targetExpertID >= numExperts {
+			log.Printf("⚠️ AdjustRoutingAffinity: targetExpertID %d out of gating range for layer %d (gating has %d cols)", targetExpertID, lIdx, numExperts)
 			continue
 		}
 
-		// Adjust column expertID in weights: shape [inputDim, numExperts]
+		// Adjust column targetExpertID in weights: shape [inputDim, numExperts]
 		for r := 0; r < embeddingDim; r++ {
-			weights.Data[r*numExperts+expertID] += affinityWeight * tokenEmbedding[r]
+			weights.Data[r*numExperts+targetExpertID] += affinityWeight * tokenEmbedding[r]
 		}
 
 		if layer.GatingNetwork.NoiseLinear != nil {
 			nWeights := layer.GatingNetwork.NoiseLinear.Weights
 			for r := 0; r < embeddingDim; r++ {
-				nWeights.Data[r*numExperts+expertID] += affinityWeight * tokenEmbedding[r]
+				nWeights.Data[r*numExperts+targetExpertID] += affinityWeight * tokenEmbedding[r]
 			}
 		}
-		log.Printf("🧬 [Supervisor] Adjusted Routing Affinity for token '%s' to Expert E%d in Layer %d (strength=%.2f)", tokenStr, expertID, lIdx, affinityWeight)
+		if targetExpertID != expertID {
+			log.Printf("🧬 [Supervisor] Routing Affinity for token '%s': E%d remapped to E%d in Layer %d (strength=%.2f)", tokenStr, expertID, targetExpertID, lIdx, affinityWeight)
+		} else {
+			log.Printf("🧬 [Supervisor] Adjusted Routing Affinity for token '%s' to Expert E%d in Layer %d (strength=%.2f)", tokenStr, expertID, lIdx, affinityWeight)
+		}
 	}
 }
 
