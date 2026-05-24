@@ -596,6 +596,15 @@ func (c *GollemerMoEClient) supervisorCompleteSentenceGuided(ctx *tensor.Tensor,
 			logits.Data[model.SentenceVocab.EosID] = -1e9
 		}
 
+		// Suppress evaluation harness and special routing tokens
+		specialTokens := []string{"__intent__", "__ques__", "__ans__", "social", ":"}
+		for _, st := range specialTokens {
+			id := model.SentenceVocab.GetTokenID(st)
+			if id != -1 && id < len(logits.Data) {
+				logits.Data[id] = -1e9
+			}
+		}
+
 		// 🧭 Guidance boost: favour tokens from the ChatBank target answer
 		if len(guidanceIDs) > 0 {
 			for id := range guidanceIDs {
@@ -854,6 +863,13 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 	}
 
 	// ── Beam Search Decode (tertiary) ────────────────────────────────────────
+	beamRepPenalty := float32(3.0)
+	if c.SocialConfig != nil {
+		if rp := c.SocialConfig.Get().RepetitionPenalty; rp > 0 {
+			beamRepPenalty = rp
+		}
+	}
+
 	// 🧬 Structural Guidance: Fetch the rule for this intent to guide the beam search
 	rule, _ := model.Rules.GetRuleByIntent("social", intent)
 
@@ -863,7 +879,7 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 		model.SentenceVocab.BosID, model.SentenceVocab.EosID,
 		4,   // beam width
 		0.8, // temperature (slightly higher for diversity)
-		3.0, // strong repetition penalty
+		beamRepPenalty, // dynamic repetition penalty from config
 		&rule, // 🧬 Guided Beam Search
 	)
 	if beamErr != nil || len(resIDs) == 0 {
