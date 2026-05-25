@@ -97,9 +97,10 @@ make llm
 ### Makefile Commands
 | Command | Description |
 |---|---|
-| `make train` | Cleans old state and starts the Social model training cycle. |
+| `make train-social` | Cleans old state and starts the Social model training cycle. |
 | `make llm` | Launches the interactive chat shell with the current model. |
 | `make clean` | Safely removes current model checkpoints and vocabularies. |
+| `make clean && make train-social` | Cleans old state and starts the Social model training cycle. |
 
 ### Configuration Tuning
 Model stability is controlled via parameters in the training configuration:

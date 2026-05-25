@@ -1037,6 +1037,7 @@ func main() {
 	autoHealFlag = flag.Bool("auto-heal", false, "Enable autonomous model recovery")
 	profileName := flag.String("profile", "standard", "Training profile: stable, aggressive, standard")
 	runLLM := flag.Bool("llm", false, "Run the interactive LLM inference mode")
+	talk := flag.Bool("talk", false, "Enable Text-to-Speech (TTS) for the mascot in LLM mode")
 
 	// Chat and training flags
 	trainChat := flag.Bool("train-chat", false, "Run chat-specific training")
@@ -1055,7 +1056,7 @@ func main() {
 
 	// --llm: launch interactive inference mode and exit
 	if *runLLM {
-		llm.RunLLM()
+		llm.RunLLM(*talk)
 		return
 	}
 

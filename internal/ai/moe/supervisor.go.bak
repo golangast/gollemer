@@ -95,9 +95,9 @@ func (s *Supervisor) Reflect(stats TrainingStats, opt *nn.Adam, model *IntentMoE
 		s.PlateauCount++
 	}
 
-	if s.PlateauCount > 5 {
+	if s.PlateauCount > 500 {
 		newLR := opt.GetLearningRate() * 0.75
-		log.Printf("📉 Supervisor Reflect: Training plateaued for 5 steps. Reducing LR to %e\n", newLR)
+		log.Printf("📉 Supervisor Reflect: Training plateaued for 500 steps. Reducing LR to %e\n", newLR)
 		opt.SetLearningRate(newLR)
 		s.PlateauCount = 0
 	}
@@ -158,7 +158,7 @@ func expertScore(expert Expert, utilizationFrac float32) float32 {
 }
 
 // PerformSurgery identifies and repairs collapsed experts by cloning better ones.
-// 🆕 STAGGERED TRIAGE: Only refreshes the worst-performing ≤5% of experts per layer,
+// 🆕 STAGGERED TRIAGE: Only refreshes the worst-performing ≤50% of experts per layer,
 // leaving at least half intact to preserve learned sequences.
 func (s *Supervisor) PerformSurgery(model *IntentMoE) {
 	log.Println("🏥 Supervisor: Performing Expert Surgery (Staggered Triage)...")
@@ -642,11 +642,11 @@ func (s *Supervisor) SetExpertVariables(model *IntentMoE, layerIdx, expertIdx in
 	}
 
 	// Step 2: Clamped bounds — prevents weight-frying from extreme supervisor adjustments.
-	// LRMult capped at 1.5: stops runaway gradient escalation on failing paths.
+	// LRMult capped at 1.50: stops runaway gradient escalation on failing paths.
 	// OutputScale floored at 0.70: keeps experts contributing meaningfully without
 	// fracturing learned paths over a long 2000-epoch training horizon.
-	if lrMultiplier > 1.5 {
-		lrMultiplier = 1.5
+	if lrMultiplier > 1.50 {
+		lrMultiplier = 1.50
 	}
 	if lrMultiplier < 0.1 {
 		lrMultiplier = 0.1
@@ -1002,11 +1002,6 @@ func (s *Supervisor) SeedSystemExperts(model *IntentMoE) {
 			}
 			s.SetExpertVariables(model, lIdx, i, 0.5, 1.0)
 		}
-
-		// Force specialized routing for grammatical tokens
-		s.SetExpertVariables(model, lIdx, 9, 0.8, 1.0)  // Bias E9 toward VERB/AUX
-		s.SetExpertVariables(model, lIdx, 10, 0.8, 1.0) // Bias E10 toward PRON
-		s.SetExpertVariables(model, lIdx, 17, 0.8, 1.0) // Bias E17 toward CONJ/PREP
 	}
 	log.Printf("🧬 [Supervisor] SeedSystemExperts complete. Seeded structural experts with OutputScale=0.5, LRMult=1.0, Pinned=true across all %d layers.", len(layers))
 }
