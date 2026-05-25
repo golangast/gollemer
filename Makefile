@@ -6,7 +6,7 @@
 # Configuration
 # Use GOEXPERIMENT=simd for native AVX2/SSE acceleration
 export GOEXPERIMENT=simd
-export CGO_ENABLED=0
+export CGO_ENABLED=1
 
 # Runtime Tuning
 MEM_LIMIT = 5000MiB
@@ -32,7 +32,7 @@ train-social:
 ## chat: Launch the interactive LLM chat shell
 chat:
 	@echo "💬 Starting Interactive Chat..."
-	GOMEMLIMIT=4000MiB GOGC=20 $(MAIN_CMD) -llm
+	GOMEMLIMIT=4000MiB GOGC=100 $(MAIN_CMD) -llm -talk
 
 llm: chat
 
