@@ -12,10 +12,10 @@ import (
 	"github.com/golangast/gollemer/internal/ai/moe"
 	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
 	"github.com/golangast/gollemer/internal/ai/neural/nnu/word2vec"
+	"github.com/golangast/gollemer/internal/ai/orchestrator"
 	"github.com/golangast/gollemer/internal/platform/discovery"
 	"github.com/golangast/gollemer/internal/platform/sqlite_db"
 	"github.com/golangast/gollemer/internal/platform/ui"
-	"github.com/golangast/gollemer/internal/ai/orchestrator"
 )
 
 type Runner struct {
@@ -97,7 +97,6 @@ func (r *Runner) Init() {
 		log.Printf("⚠️  Social model not found at %s (training with -train-social to create it)", socialModelPath)
 	}
 
-
 	// Wire up SentenceVocab for social model - ONLY if model doesn't have one
 	if socialModel != nil {
 		socialVocabCandidates := []string{
@@ -160,7 +159,7 @@ func (r *Runner) Init() {
 			safeCfg.WatchConfig(configPath)
 			r.Client.SocialConfig = safeCfg
 			log.Printf("📡 Social Config hot-reloader initialized.")
-			
+
 			config := safeCfg.Get()
 			if socialModel.Decoder != nil {
 				socialModel.Decoder.ContextMultiplier = config.ContextMultiplier
@@ -262,7 +261,7 @@ func (r *Runner) initModels() {
 				loaded.RepairArchitecture()
 				r.IntentModel = loaded
 				log.Printf("✅ Success: Loaded primary MoE model from: %s", filepath.Base(p))
-				
+
 				// Weight health check
 				params := r.IntentModel.Parameters()
 				log.Printf("📊 Model Health Check: Loaded %d parameters.", len(params))
@@ -337,7 +336,7 @@ func (r *Runner) initModels() {
 				}
 			}
 			r.IntentModel.SentenceVocab = v
-			
+
 			// Only show warning if we don't have a social model to rely on
 			if r.Client != nil && r.Client.SocialModel == nil {
 				log.Printf("⚠️  Using fallback SentenceVocab built from W2V (size=%d). Run -train-chat to generate a proper vocab.", v.Size())
@@ -362,7 +361,6 @@ func (r *Runner) Run() {
 	}
 
 	for {
-		r.Mascot.WellnessCheck()
 		r.SessionState.JustConfirmed = false
 
 		if r.InMenuMode {

@@ -21,12 +21,12 @@ import (
 	"github.com/golangast/gollemer/internal/ai/moe"
 	"github.com/golangast/gollemer/internal/ai/neural/nnu/word2vec"
 	"github.com/golangast/gollemer/internal/ai/neural/tensor"
+	"github.com/golangast/gollemer/internal/ai/orchestrator"
 	"github.com/golangast/gollemer/internal/ai/tagger/nertagger"
 	"github.com/golangast/gollemer/internal/ai/tagger/postagger"
 	"github.com/golangast/gollemer/internal/ai/tagger/tag"
 	"github.com/golangast/gollemer/internal/platform/ui"
 	"github.com/golangast/gollemer/internal/platform/watcher"
-	"github.com/golangast/gollemer/internal/ai/orchestrator"
 )
 
 // GollemerMoEClient implements the MoEClient interface using the existing NLP pipeline.
@@ -98,7 +98,23 @@ func (c *GollemerMoEClient) LoadChatBank(path string) {
 }
 
 func (c *GollemerMoEClient) RetrieveChatResponse(input string) (string, string, float64) {
-	if len(c.ChatBank) == 0 || c.W2V == nil {
+	if len(c.ChatBank) == 0 {
+		return "", "", 0
+	}
+
+	// If W2V is unavailable, fall back to text-based matching so ChatBank
+	// still produces answers even without embeddings.
+	if c.W2V == nil || c.W2V.VocabSize == 0 {
+		normalInput := strings.TrimSpace(strings.ToLower(input))
+		for _, pair := range c.ChatBank {
+			if strings.TrimSpace(strings.ToLower(pair.Q)) == normalInput {
+				return pair.A, pair.Intent, 1.0
+			}
+		}
+		ans, score := c.lookupChatBank(input, "")
+		if score >= 0.3 {
+			return ans, "chat_response", score
+		}
 		return "", "", 0
 	}
 
@@ -477,7 +493,7 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 	}
 
 	if lowerInput != "" {
-		c.lastMoEPrediction = "I'm picking up some signal, but I'm not sure what you need. Want to see the menu?"
+		c.lastMoEPrediction = "what did you say?"
 		return "chat_response", 0.05
 	}
 
@@ -539,7 +555,7 @@ func (c *GollemerMoEClient) lookupChatBank(input, intent string) (string, float6
 
 // supervisorCompleteSentenceGuided uses the grammar skeleton for the given intent to
 // guide a greedy decode pass, strongly boosting words that match the expected
-// POS type at each position. It also applies a 'guidance boost' for tokens 
+// POS type at each position. It also applies a 'guidance boost' for tokens
 // present in a target answer (e.g. from ChatBank) to nudge the model toward
 // proven linguistic patterns.
 func (c *GollemerMoEClient) supervisorCompleteSentenceGuided(ctx *tensor.Tensor, intent string, model *moe.IntentMoE, guidanceIDs map[int]bool, boost float32) string {
@@ -653,9 +669,15 @@ func (c *GollemerMoEClient) supervisorCompleteSentenceGuided(ctx *tensor.Tensor,
 		topP := float32(0.85)
 		if c.SocialConfig != nil {
 			sc := c.SocialConfig.Get()
-			if sc.RouterTemperature > 0 { temp = sc.RouterTemperature }
-			if sc.TopK > 0 { topK = sc.TopK }
-			if sc.TopP > 0 { topP = sc.TopP }
+			if sc.RouterTemperature > 0 {
+				temp = sc.RouterTemperature
+			}
+			if sc.TopK > 0 {
+				topK = sc.TopK
+			}
+			if sc.TopP > 0 {
+				topP = sc.TopP
+			}
 		}
 
 		bestID, err := moe.SampleFromLogits(logits, temp, topK, topP)
@@ -687,7 +709,7 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 	}
 	model := c.SocialModel
 	if model.SentenceVocab == nil || model.Decoder == nil || model.Embedding == nil || model.Encoder == nil {
-		fmt.Printf("⚠️  DEBUG: Social model is incomplete: Vocab=%v, Decoder=%v, Embedding=%v, Encoder=%v\n", 
+		fmt.Printf("⚠️  DEBUG: Social model is incomplete: Vocab=%v, Decoder=%v, Embedding=%v, Encoder=%v\n",
 			model.SentenceVocab != nil, model.Decoder != nil, model.Embedding != nil, model.Encoder != nil)
 		return ""
 	}
@@ -773,7 +795,7 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 	// ─── 🧠 THINKING TRACE ────────────────────────────────────────────────────
 	fmt.Println("\n💭 [Thinking]")
 	fmt.Printf("   Input tokens  : %s\n", strings.Join(tokens, " "))
-	
+
 	if ctx.Shape[1] > 0 && ctx.Shape[2] > 0 {
 		type tokenScore struct {
 			tok   string
@@ -782,37 +804,59 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 		var scores []tokenScore
 		skip := map[string]bool{"__intent__": true, "__ques__": true, "__ans__": true, "social": true, ":": true}
 		for i, t := range tokens {
-			if skip[t] || i >= ctx.Shape[1] { continue }
+			if skip[t] || i >= ctx.Shape[1] {
+				continue
+			}
 			start := i * ctx.Shape[2]
 			end := start + ctx.Shape[2]
-			if end > len(ctx.Data) { break }
+			if end > len(ctx.Data) {
+				break
+			}
 			var norm float32
-			for _, v := range ctx.Data[start:end] { norm += v * v }
+			for _, v := range ctx.Data[start:end] {
+				norm += v * v
+			}
 			norm = float32(math.Sqrt(float64(norm)))
 			scores = append(scores, tokenScore{t, norm})
 		}
 		sort.Slice(scores, func(i, j int) bool { return scores[i].score > scores[j].score })
 		top := scores
-		if len(top) > 3 { top = top[:3] }
+		if len(top) > 3 {
+			top = top[:3]
+		}
 		var focusWords []string
-		for _, s := range top { focusWords = append(focusWords, fmt.Sprintf("%s(%.2f)", s.tok, s.score)) }
-		if len(focusWords) > 0 { fmt.Printf("   Encoder focus : %s\n", strings.Join(focusWords, ", ")) }
+		for _, s := range top {
+			focusWords = append(focusWords, fmt.Sprintf("%s(%.2f)", s.tok, s.score))
+		}
+		if len(focusWords) > 0 {
+			fmt.Printf("   Encoder focus : %s\n", strings.Join(focusWords, ", "))
+		}
 	}
 
 	questionType := "statement"
 	switch {
-	case strings.HasPrefix(lowerInput, "how are") || strings.HasPrefix(lowerInput, "how do you feel"): questionType = "greeting/wellbeing"
-	case strings.HasPrefix(lowerInput, "how"): questionType = "how-question"
-	case strings.HasPrefix(lowerInput, "what"): questionType = "what-question"
-	case strings.HasPrefix(lowerInput, "who"): questionType = "who-question"
-	case strings.Contains(lowerInput, "hello") || strings.Contains(lowerInput, "hi"): questionType = "greeting"
-	case strings.Contains(lowerInput, "thank"): questionType = "gratitude"
+	case strings.HasPrefix(lowerInput, "how are") || strings.HasPrefix(lowerInput, "how do you feel"):
+		questionType = "greeting/wellbeing"
+	case strings.HasPrefix(lowerInput, "how"):
+		questionType = "how-question"
+	case strings.HasPrefix(lowerInput, "what"):
+		questionType = "what-question"
+	case strings.HasPrefix(lowerInput, "who"):
+		questionType = "who-question"
+	case strings.Contains(lowerInput, "hello") || strings.Contains(lowerInput, "hi"):
+		questionType = "greeting"
+	case strings.Contains(lowerInput, "thank"):
+		questionType = "gratitude"
 	}
 	fmt.Printf("   Question type  : %s\n", questionType)
-	
+
 	ctxNorm := ctx.L2Norm()
 	understanding := "weak"
-	if ctxNorm > 5.0 { understanding = "strong" } else if ctxNorm > 2.0 { understanding = "moderate" }
+	if ctxNorm > 5.0 {
+		understanding = "strong"
+	} else if ctxNorm > 2.0 {
+		understanding = "moderate"
+	}
 	fmt.Printf("   Context signal : %.4f (%s)\n", ctxNorm, understanding)
 	fmt.Println("   Generating answer...")
 	fmt.Println()
@@ -844,13 +888,13 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 
 	// ── 🦺 SECONDARY: Supervisor grammar-skeleton + guidance guided completion ──
 	// supervisorCompleteSentenceGuided already applies POS boosting and ChatBank guidance.
-	
+
 	// Use config-driven guidance boost if available
 	cfg := orchestrator.TrainingConfig{IntentBias: 4.5, TopP: 0.85, TopK: 5, RouterTemperature: 0.8, RepetitionPenalty: 0.3, FrequencyPenalty: 0.01}
 	if c.SocialConfig != nil {
 		cfg = c.SocialConfig.Get()
 	}
-	
+
 	finalIntentBias := cfg.IntentBias
 	if finalIntentBias <= 0 {
 		finalIntentBias = guidanceBoost
@@ -877,10 +921,10 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 		ctx,
 		20, // shorter max length to reduce repetition chances
 		model.SentenceVocab.BosID, model.SentenceVocab.EosID,
-		4,   // beam width
-		0.8, // temperature (slightly higher for diversity)
+		4,              // beam width
+		0.8,            // temperature (slightly higher for diversity)
 		beamRepPenalty, // dynamic repetition penalty from config
-		&rule, // 🧬 Guided Beam Search
+		&rule,          // 🧬 Guided Beam Search
 	)
 	if beamErr != nil || len(resIDs) == 0 {
 		log.Printf("⚠️  BeamSearchDecode failed (%v), falling back to sampling", beamErr)
@@ -919,21 +963,31 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 			if unkID != -1 {
 				logits.Data[unkID] = -1e9
 			}
-			
+
 			// Use config for sampling
 			temp := float32(0.8)
 			topK := 5
 			topP := float32(0.85)
 			repPenalty := float32(0.3)
 			freqPenalty := float32(0.01)
-			
+
 			if c.SocialConfig != nil {
 				sc := c.SocialConfig.Get()
-				if sc.RouterTemperature > 0 { temp = sc.RouterTemperature }
-				if sc.TopK > 0 { topK = sc.TopK }
-				if sc.TopP > 0 { topP = sc.TopP }
-				if sc.RepetitionPenalty > 0 { repPenalty = sc.RepetitionPenalty }
-				if sc.FrequencyPenalty > 0 { freqPenalty = sc.FrequencyPenalty }
+				if sc.RouterTemperature > 0 {
+					temp = sc.RouterTemperature
+				}
+				if sc.TopK > 0 {
+					topK = sc.TopK
+				}
+				if sc.TopP > 0 {
+					topP = sc.TopP
+				}
+				if sc.RepetitionPenalty > 0 {
+					repPenalty = sc.RepetitionPenalty
+				}
+				if sc.FrequencyPenalty > 0 {
+					freqPenalty = sc.FrequencyPenalty
+				}
 			}
 
 			moe.ApplyRepetitionPenalty(logits, resIDs, repPenalty)
@@ -976,7 +1030,7 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 		w := model.SentenceVocab.GetWord(id)
 		log.Printf("   Token ID %d -> '%s'", id, w)
 		if w != "</s>" && w != "<s>" && w != "<pad>" && w != "UNK" && w != "" &&
-		   w != "__intent__" && w != "__ques__" && w != "__ans__" && w != "social" && w != ":" {
+			w != "__intent__" && w != "__ques__" && w != "__ans__" && w != "social" && w != ":" {
 			result = append(result, w)
 		}
 	}
@@ -992,7 +1046,6 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 	}
 	return response
 }
-
 
 func (c *GollemerMoEClient) checkCommandHeuristics(lowerInput string) (string, float64) {
 	createVerbs := []string{"create", "make", "add", "generate", "initialize", "init", "new", "setup"}
@@ -1219,7 +1272,7 @@ func (c *GollemerMoEClient) ResetSocialRouter(m *ui.Mascot) {
 		return
 	}
 	m.Say(ui.Think, "Resetting social model router weights to break expert monopoly... ⚡")
-	
+
 	layers := c.SocialModel.Encoder.GetMoELayers()
 	if c.SocialModel.Decoder.OutputMoE != nil {
 		layers = append(layers, c.SocialModel.Decoder.OutputMoE)

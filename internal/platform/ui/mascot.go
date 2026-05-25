@@ -79,9 +79,9 @@ const (
 
 func NewMascot(useTTS bool) *Mascot {
 	return &Mascot{
-		Name:  "Gollemer",
-		Color: ColorCyan,
-		Mood:  &MoodManager{History: make([]Activity, 0), LastSayTime: time.Now()},
+		Name:   "Gollemer",
+		Color:  ColorCyan,
+		Mood:   &MoodManager{History: make([]Activity, 0), LastSayTime: time.Now()},
 		UseTTS: useTTS,
 		Speech: htgotts.Speech{Folder: "audio", Language: voices.English, Handler: &handlers.Native{}},
 	}
@@ -360,15 +360,6 @@ func (m *Mascot) PerformanceCheck() {
 	time.Sleep(1 * time.Second)
 
 	m.Say(Happy, "Vectors look aligned! Your 128-bit registers will be very happy with this memory layout.")
-}
-
-// WellnessCheck reminds the user to take a break
-func (m *Mascot) WellnessCheck() {
-	now := time.Now()
-	// If it's late at night in Crestwood
-	if now.Hour() > 22 || now.Hour() < 5 {
-		m.Say(Alert, "It's getting late. Those MoE weights will still be here in the morning. Maybe time to sync and head to bed?")
-	}
 }
 
 // ReactToMath provides reactions when editing math-heavy files
