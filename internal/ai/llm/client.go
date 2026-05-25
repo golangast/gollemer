@@ -104,18 +104,75 @@ func (c *GollemerMoEClient) RetrieveChatResponse(input string) (string, string, 
 
 	// If W2V is unavailable, fall back to text-based matching so ChatBank
 	// still produces answers even without embeddings.
-	if c.W2V == nil || c.W2V.VocabSize == 0 {
+	// Treat the 6-word dummy W2V fallback the same as nil — it can't embed
+	// conversational queries, so fall through to text-based matching instead.
+	if c.W2V == nil || c.W2V.VocabSize < 50 {
 		normalInput := strings.TrimSpace(strings.ToLower(input))
+		inputWords := strings.Fields(normalInput)
+		wordSet := make(map[string]bool, len(inputWords))
+		for _, w := range inputWords {
+			wordSet[w] = true
+		}
+
+		type candidate struct {
+			answer string
+			intent string
+			score  float64
+		}
+		var candidates []candidate
+
 		for _, pair := range c.ChatBank {
-			if strings.TrimSpace(strings.ToLower(pair.Q)) == normalInput {
-				return pair.A, pair.Intent, 1.0
+			pairQ := strings.TrimSpace(strings.ToLower(pair.Q))
+			// Exact match — score 0.85 (capped, not 1.0)
+			if pairQ == normalInput {
+				candidates = append(candidates, candidate{pair.A, pair.Intent, 0.85})
+				continue
+			}
+			// Word-overlap match
+			pairWords := strings.Fields(pairQ)
+			if len(pairWords) == 0 {
+				continue
+			}
+			matches := 0
+			for _, w := range pairWords {
+				if wordSet[w] {
+					matches++
+				}
+			}
+			score := float64(matches) / float64(len(pairWords))
+			if score >= 0.4 {
+				// Cap overlap scores at 0.75 to signal we're estimating
+				if score > 0.75 {
+					score = 0.75
+				}
+				candidates = append(candidates, candidate{pair.A, pair.Intent, score})
 			}
 		}
-		ans, score := c.lookupChatBank(input, "")
-		if score >= 0.3 {
-			return ans, "chat_response", score
+
+		if len(candidates) == 0 {
+			return "", "", 0
 		}
-		return "", "", 0
+
+		// Sort descending by score
+		for i := 0; i < len(candidates)-1; i++ {
+			for j := i + 1; j < len(candidates); j++ {
+				if candidates[j].score > candidates[i].score {
+					candidates[i], candidates[j] = candidates[j], candidates[i]
+				}
+			}
+		}
+
+		// Among top-scoring candidates (within 0.1 of best), pick one randomly
+		// to avoid always copy-pasting the exact same answer.
+		best := candidates[0]
+		var topCands []candidate
+		for _, c := range candidates {
+			if best.score-c.score < 0.1 && c.intent == best.intent {
+				topCands = append(topCands, c)
+			}
+		}
+		pick := topCands[rand.Intn(len(topCands))]
+		return pick.answer, pick.intent, pick.score
 	}
 
 	bestScore := -1.0
@@ -324,7 +381,8 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 		}
 		log.Printf("⚖️  Quality Gate: Social model output was too high-entropy (word salad); trying retrieval fallback.")
 		// Retrieval fallback: search the ChatBank for a matching social response
-		if len(c.ChatBank) > 0 && c.W2V != nil {
+		// (always attempt — text-based matching works without W2V embeddings)
+		if len(c.ChatBank) > 0 {
 			retrievedResp, retrievedIntent, retrievedScore := c.RetrieveChatResponse(input)
 			if retrievedScore > 0.5 && retrievedResp != "" {
 				log.Printf("✅ Retrieval Fallback: score=%.4f intent=%s", retrievedScore, retrievedIntent)
@@ -334,7 +392,8 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 		}
 	} else if isSocialIntent(input) && c.SocialModel == nil {
 		// No social model loaded — try retrieval directly for social queries
-		if len(c.ChatBank) > 0 && c.W2V != nil {
+		// (always attempt — text-based matching works without W2V embeddings)
+		if len(c.ChatBank) > 0 {
 			retrievedResp, retrievedIntent, retrievedScore := c.RetrieveChatResponse(input)
 			if retrievedScore > 0.5 && retrievedResp != "" {
 				log.Printf("✅ Social Retrieval (no neural model): score=%.4f intent=%s", retrievedScore, retrievedIntent)

@@ -2342,13 +2342,17 @@ skipSocialLoad:
 		// --- STABILITY FIX: Clear global MoE state before starting fresh training ---
 		moe.ActiveLayers = nil
 
-		intentModel, err = moe.NewHybridIntentMoE(freshVocab, modelDim, numExperts, modelDim, modelDim, freshVocab, config.K, nil)
+		baseExperts := numExperts - 8
+		if baseExperts < 2 {
+			baseExperts = 8
+		}
+		intentModel, err = moe.NewHybridIntentMoE(freshVocab, modelDim, baseExperts, modelDim, modelDim, freshVocab, config.K, nil)
 		if err != nil {
 			log.Fatalf(" Failed to create social model: %v", err)
 		}
 		// Initialize decoder
 		// Single-layer decoder  keeps memory below 3.5GB on the 6.3GB system
-		intentModel.Decoder, _ = moe.NewRNNDecoder(modelDim, freshVocab, modelDim, 8, 1, 0.0, numExperts)
+		intentModel.Decoder, _ = moe.NewRNNDecoder(modelDim, freshVocab, modelDim, 8, 1, 0.0, baseExperts)
 		intentModel.RepairArchitecture() //  ADD GRAMMAR EXPERTS (8 -> 16 experts)
 		intentModel.RebuildActiveLayers()
 
@@ -3978,7 +3982,7 @@ skipSocialLoad:
 		}
 
 		// 4. Save Checkpoint (every 100 epochs to reduce OOM risk from serialization spikes)
-		if (epoch+1)%100 == 0 {
+		if (epoch+1)%25 == 0 {
 			// Detach before save to free the computation graph
 			intentModel.Detach()
 			// Aggressively reclaim memory before the large serialization spike
@@ -4155,21 +4159,9 @@ func StrictGenerate(model *moe.IntentMoE, input string, maxLen int, repetitionPe
 		}
 	}()
 
-	// Format input: strip evaluation-harness prose so only the clean question
-	// payload reaches the encoder. A raw prompt like:
-	//   "__intent__ social : __ques__ hello __ans__"
-	// would otherwise expand the token sequence with marker tokens and skew
-	// expert selection — particularly harmful when ContextMultiplier amplifies
-	// the sequence-length contribution during early curriculum stages.
+	// Format input: keep the raw formatted input (including intent markers)
+	// so the encoder receives the exact same sequence layout it was trained on.
 	formattedInput := input
-	if idx := strings.Index(input, "__ques__"); idx != -1 {
-		afterQues := strings.TrimSpace(input[idx+len("__ques__"):])
-		if endIdx := strings.Index(afterQues, "__ans__"); endIdx != -1 {
-			formattedInput = strings.TrimSpace(afterQues[:endIdx])
-		} else {
-			formattedInput = afterQues
-		}
-	}
 	tokens := cleanTokenize(formattedInput)
 	if len(tokens) == 0 {
 		log.Printf(" Skip empty prompt: %s", input)
@@ -4244,7 +4236,7 @@ func StrictGenerate(model *moe.IntentMoE, input string, maxLen int, repetitionPe
 		expertStr := strings.Join(stepExperts, "+")
 		pathSteps = append(pathSteps, expertStr)
 
-		if i < 5 {
+		if i == 0 {
 			logits.Data[model.SentenceVocab.EosID] = -1e9
 		}
 		specialTokens := []string{"__intent__", "__ques__", "__ans__", "social", ":"}
@@ -5357,6 +5349,16 @@ func applyGrammarMask(logits *tensor.Tensor, tokenHistory []int, vocab *mainvoca
 	}
 	lastID := tokenHistory[len(tokenHistory)-1]
 	lastWord := vocab.GetWord(lastID)
+
+	// Rule 0: If we just started (last token is BOS), prevent starting the sentence with punctuation.
+	if lastID == vocab.BosID {
+		punctuation := []string{".", ",", "!", "?", ";", ":"}
+		for _, p := range punctuation {
+			if pid := vocab.GetTokenID(p); pid >= 0 && pid < len(logits.Data) {
+				logits.Data[pid] = -1e9
+			}
+		}
+	}
 
 	// Rule 1: No two punctuation marks in a row.
 	if lastWord == "." || lastWord == "," || lastWord == "!" || lastWord == "?" || lastWord == ";" {
