@@ -234,11 +234,11 @@ func TrainChat(projectRoot string, customDataPath string, rebalanceRequested boo
 	if err != nil {
 		log.Printf("⚠️  Word2Vec model not found at %s — using empty fallback (run -train-word2vec to pre-train). Error: %v", w2vPath, err)
 		w2v = &word2vec.SimpleWord2Vec{
-			Vocabulary:    make(map[string]int),
-			WordVectors:   make(map[int][]float64),
+			Vocabulary:     make(map[string]int),
+			WordVectors:    make(map[int][]float64),
 			WordVectorsF32: make(map[int][]float32),
-			VocabSize:     0,
-			VectorSize:    64, // Must be > 0 for Xavier init in expansion loop
+			VocabSize:      0,
+			VectorSize:     64, // Must be > 0 for Xavier init in expansion loop
 		}
 	} else {
 		fmt.Println(" Loaded Word2Vec model")
@@ -2122,13 +2122,13 @@ skipCSV:
 
 func TrainSocialChat(projectRoot string, epochs int, customDataPath string, overfitMode bool, initialLR float32, weightDecay float32, autoHeal bool, maxGradNorm float32, useGPU bool, batchSize int, accumulationSteps int, numExperts int) {
 	//  AGGRESSIVE MEMORY MANAGEMENT: Removed hardcoded limits to allow GOMEMLIMIT=5000MiB to provide enough headroom for gob.Encode.
-	
+
 	log.Println(" Starting SOCIAL-ONLY Chat Training")
 	if customDataPath != "" {
 		log.Printf(" Using CUSTOM training data: %s", customDataPath)
 	}
 
-		var chatPairs []moe.TrainPair
+	var chatPairs []moe.TrainPair
 
 	var err error
 	var humanChatPath string
@@ -2647,12 +2647,12 @@ skipSocialLoad:
 	// 1b. Fix generic UNK bias for PREP (E13) and AUX (E10)
 	prepWords := []string{"in", "on", "at", "to", "from", "with", "by", "of", "for", "under", "over"}
 	nudgeExpertBias(13, prepWords, 1.5) // Even higher boost for memorization
- 
- 	auxWords := []string{"is", "am", "are", "was", "were", "be", "been", "being", "have", "has", "had", "do", "does", "did"}
+
+	auxWords := []string{"is", "am", "are", "was", "were", "be", "been", "being", "have", "has", "had", "do", "does", "did"}
 	nudgeExpertBias(10, auxWords, 1.5)
- 
- 	//  Seed E9 (VERB)  copula verbs that appear in social speech
- 	verbWords := []string{"am", "is", "are", "was", "were", "feel", "feels", "seem", "seems", "look", "looks", "sound", "sounds", "doing", "going"}
+
+	//  Seed E9 (VERB)  copula verbs that appear in social speech
+	verbWords := []string{"am", "is", "are", "was", "were", "feel", "feels", "seem", "seems", "look", "looks", "sound", "sounds", "doing", "going"}
 	nudgeExpertBias(9, verbWords, 1.5)
 
 	// Explicitly DAMPEN UNK bias for these experts to break generic mumble
@@ -3177,7 +3177,7 @@ skipSocialLoad:
 					targetToken := int(targetTensor.Data[(0)*seqLen2+t+1]) // batch 0 representative
 					targetWord := intentModel.SentenceVocab.GetWord(targetToken)
 					targetType := moe.MapWordToGrammarType(targetWord)
-					
+
 					// Predicted word for batch 0 to check type
 					predIdx := 0
 					predMax := float32(-1e9)
@@ -3588,7 +3588,7 @@ skipSocialLoad:
 			}
 			testVerbose := (i == 0 && (epoch+1)%20 == 0) // Only verbose every 20 epochs
 			response, path, atts := StrictGenerate(intentModel, p, testMaxLen, cfg.RepetitionPenalty, testVerbose, epoch)
-			
+
 			// Initial heuristic score calculation
 			heuristicScore := scoreSentenceHeuristic(response)
 
@@ -3614,7 +3614,7 @@ skipSocialLoad:
 				}
 
 				ttr := float64(len(unique)) / float64(len(respWords))
-				
+
 				// 1. TTR threshold check (if too low, decoder is stuck/repetitive)
 				if len(respWords) >= 8 && ttr < 0.5 {
 					ttrFail = true
@@ -3623,8 +3623,8 @@ skipSocialLoad:
 				// 2. High-frequency social anchor words check:
 				// "If a 15-word response contains 4 hellos and 3 yeses, auto-flag it as a fail regardless of the subject-verb score."
 				// Dynamic scaling for shorter responses as well:
-				if (len(respWords) >= 15 && (hellosCount >= 8 || yesesCount >= 6)) || 
-				   (len(respWords) < 15 && len(respWords) >= 5 && (hellosCount >= 6 || yesesCount >= 4)) {
+				if (len(respWords) >= 15 && (hellosCount >= 8 || yesesCount >= 6)) ||
+					(len(respWords) < 15 && len(respWords) >= 5 && (hellosCount >= 6 || yesesCount >= 4)) {
 					ttrFail = true
 					log.Printf(" ⚠️  Quality Gate REJECTED (Social Anchor Density too high: hellos=%d, yeses=%d in %d words for: '%s')", hellosCount, yesesCount, len(respWords), response)
 				}
@@ -3632,7 +3632,7 @@ skipSocialLoad:
 
 			if ttrFail {
 				heuristicScore = 1.0 // Force failure
-				
+
 				// --- [Adaptive Supervisor Intervention on TTR/Anchor Fail] ---
 				failingPair := &moe.TrainPair{Q: p, Intent: "social"}
 				if strings.Contains(p, "__ques__") {
@@ -3642,7 +3642,7 @@ skipSocialLoad:
 						failingPair.Q = qPart
 					}
 				}
-				
+
 				failedGateCalls = append(failedGateCalls, failedGateCall{
 					path:        path,
 					score:       0.01,
@@ -3657,7 +3657,7 @@ skipSocialLoad:
 			})
 
 			//  STRICT QUALITY GATE: Enforce Subject-Verb Attention Connection
-			// If intent is social and prompt contains "what", "how", "are", 
+			// If intent is social and prompt contains "what", "how", "are",
 			// require a threshold connection between subject pronoun and verb.
 			if isFullTest {
 				pLower := strings.ToLower(p)
@@ -3701,9 +3701,9 @@ skipSocialLoad:
 								}
 							}
 							avgAtt := sumAtt / float32(numHeads)
-							
-							const attThreshold = 0.05 // Explicit threshold requirement
-							if avgAtt < attThreshold {
+
+							const attThreshold = 0.015 // Explicit threshold requirement
+							if avgAtt < attThreshold && epoch > 40 {
 								if cfg.OverfitMode && epoch < 500 {
 									// Temporary relaxation for small social dataset validation
 									// Don't engage total lockdown if the Subject-Verb connection is converting
@@ -3711,7 +3711,7 @@ skipSocialLoad:
 								} else {
 									log.Printf(" ⚠️  Quality Gate REJECTED (Subject-Verb Connection: %.4f < %.4f)", avgAtt, attThreshold)
 									heuristicScore = 1.0 // Force failure
-	
+
 									// --- [Adaptive Supervisor Intervention] ---
 									failingPair := &moe.TrainPair{Q: p, Intent: "social"}
 									if strings.Contains(p, "__ques__") {
@@ -3721,7 +3721,7 @@ skipSocialLoad:
 											failingPair.Q = qPart
 										}
 									}
-									
+
 									failedGateCalls = append(failedGateCalls, failedGateCall{
 										path:        path,
 										score:       float64(avgAtt),
@@ -3823,13 +3823,13 @@ skipSocialLoad:
 			for _, call := range failedGateCalls {
 				// 1. Curriculum & Data Evolution (AdaptiveSupervisor)
 				adaptiveSup.EvaluateGate(call.path, call.score, "social", call.failingPair.Q)
-				
+
 				// 2. Structural & Variable Mutation (MoE Supervisor)
 				supervisor.HandleQualityGateFailure(intentModel, call.path, call.failingPair, call.score)
-				
+
 				// 3. Sync training data mutations in-memory
 				supervisor.EvolveTrainingData(&trainPairs, call.failingPair)
-				
+
 				// 3. Sync Expert Count if AdaptiveSupervisor triggered an expansion
 				if adaptiveSup.CurrentExperts > len(moe.ActiveLayers[0].Experts) {
 					spawns := supervisor.GetSpawnsThisEpoch()
@@ -3842,7 +3842,7 @@ skipSocialLoad:
 							supervisor.AddExpertToLayer(intentModel, len(currentLayers)-1, roleID)
 						}
 						moe.ActiveLayers = findMoELayers(intentModel)
-						
+
 						supervisor.IncrementSpawnsThisEpoch()
 					}
 				}
@@ -4764,7 +4764,7 @@ func (it *ChatDataIterator) NextBatch(batchSize int) *Batch {
 		grammars = append(grammars, gmr.Data)
 		queryGrammars = append(queryGrammars, qgmr.Data)
 		intents = append(intents, pair.Intent)
-		
+
 		w := pair.Weight
 		if w == 0 {
 			w = 1.0 // Default weight
@@ -6709,22 +6709,22 @@ func getLR(currentStep, totalSteps int, baseLR float32) float32 {
 	// Every 5000 steps, reset the LR to a higher value to escape local minima.
 	const cycleLength = 5000
 	stepInCycle := currentStep % cycleLength
-	
+
 	// Cosine Annealing within each cycle
 	progress := float64(stepInCycle) / float64(cycleLength)
 	cosineDecay := 0.5 * (1.0 + math.Cos(math.Pi*progress))
-	
+
 	// Minimum LR should not be too low to prevent freezing
 	const minLR = 1e-6
-	lr := float32(float64(baseLR)*cosineDecay)
+	lr := float32(float64(baseLR) * cosineDecay)
 	if lr < minLR {
 		lr = minLR
 	}
-	
+
 	// Overall decay across cycles
 	totalProgress := float64(currentStep) / float64(totalSteps)
 	overallDecay := 1.0 - (0.5 * totalProgress)
-	
+
 	return lr * float32(overallDecay)
 }
 

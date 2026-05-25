@@ -34,8 +34,8 @@ type Runner struct {
 	InMenuMode     bool
 }
 
-func NewRunner() (*Runner, error) {
-	mascot := ui.NewMascot()
+func NewRunner(talk bool) (*Runner, error) {
+	mascot := ui.NewMascot(talk)
 
 	projectRoot, err := FindProjectRoot()
 	if err != nil {

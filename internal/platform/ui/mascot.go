@@ -12,6 +12,10 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	htgotts "github.com/hegedustibor/htgo-tts"
+	"github.com/hegedustibor/htgo-tts/handlers"
+	"github.com/hegedustibor/htgo-tts/voices"
 )
 
 type Expression string
@@ -61,9 +65,11 @@ type ProjectStats struct {
 }
 
 type Mascot struct {
-	Name  string
-	Color string
-	Mood  *MoodManager
+	Name   string
+	Color  string
+	Mood   *MoodManager
+	UseTTS bool
+	Speech htgotts.Speech
 }
 
 const (
@@ -71,11 +77,13 @@ const (
 	ColorReset = "\033[0m"
 )
 
-func NewMascot() *Mascot {
+func NewMascot(useTTS bool) *Mascot {
 	return &Mascot{
 		Name:  "Gollemer",
 		Color: ColorCyan,
 		Mood:  &MoodManager{History: make([]Activity, 0), LastSayTime: time.Now()},
+		UseTTS: useTTS,
+		Speech: htgotts.Speech{Folder: "audio", Language: voices.English, Handler: &handlers.Native{}},
 	}
 }
 
@@ -84,6 +92,12 @@ func (m *Mascot) Speak(exp any, message string) {
 	face := m.toFace(exp)
 	fmt.Printf("%s/ʕ%sʔ/ > %s%s\n", m.Color, face, ColorReset, message)
 	os.Stdout.Sync()
+	if m.UseTTS {
+		// Run TTS in a goroutine to not block the console interaction
+		go func() {
+			m.Speech.Speak(message)
+		}()
+	}
 }
 
 // ShowMascot immediately prints the mascot.

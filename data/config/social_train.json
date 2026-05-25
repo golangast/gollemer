@@ -4,7 +4,7 @@
   "epochs": 2000,
   "learning_rate": 0.000054460554,
   "batch_size": 4,
-  "context_multiplier": 3,
+  "context_multiplier": 1.5,
   "router_noise": 0.1,
   "router_temperature": 0.65,
   "load_balancing_weight": 0.02,
