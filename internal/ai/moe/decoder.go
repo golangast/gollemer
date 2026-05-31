@@ -425,12 +425,15 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
 	embeddingDim := d.Embedding.DimModel
 
 	var allGrads *Tensor
+	var allInputs, allEmbedded, allHidden, allAttention, combined, normed *Tensor
+	var reshapedGrads []*Tensor
+
 	if len(grads) == 1 && len(grads[0].Shape) == 3 {
 		allGrads = grads[0]
 	} else {
 		// --- Re-vectorization path for scheduled sampling or step-by-step grads ---
 		// 1. Stack gradients into [batchSize, seqLen, vocabSize]
-		reshapedGrads := make([]*Tensor, len(grads))
+		reshapedGrads = make([]*Tensor, len(grads))
 		for i, g := range grads {
 			reshapedGrads[i], _ = g.Reshape([]int{batchSize, 1, d.OutputVocabSize})
 		}
@@ -444,11 +447,11 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
 		// This is MUCH faster than the step-by-step backward loop.
 		
 		// 2a. Re-construct decoder inputs sequence
-		allInputs, err := Concat(d.decoderInputs, 1)
+		allInputs, err = Concat(d.decoderInputs, 1)
 		if err != nil {
 			return fmt.Errorf("failed to concat decoder inputs: %w", err)
 		}
-		allEmbedded, _ := d.Embedding.Forward(allInputs)
+		allEmbedded, _ = d.Embedding.Forward(allInputs)
 		
 		// 2a. Re-apply Reinforced Context Injection to match Forward pass for correct BPTT
 		ctxMean, _ := d.contextVector.Mean(1)
@@ -477,7 +480,7 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
 		}
 
 		// 2b. Re-run LSTM sequence forward to populate timeStepCells for BPTT
-		allHidden, _, err := d.LSTM.Forward(allEmbedded, d.InitialHiddenState, initialCell(batchSize, hiddenSize))
+		allHidden, _, err = d.LSTM.Forward(allEmbedded, d.InitialHiddenState, initialCell(batchSize, hiddenSize))
 		if err != nil {
 			return fmt.Errorf("LSTM forward failed during backward re-vectorization: %w", err)
 		}
@@ -486,7 +489,7 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
         allHidden, _ = d.HiddenNorm.Forward(allHidden)
 		
 		// 2c. Re-run Attention forward to populate query/key/value states for the whole sequence
-		allAttention, err := d.Attention.Forward(allHidden, d.contextVector, d.contextVector, d.attentionMask)
+		allAttention, err = d.Attention.Forward(allHidden, d.contextVector, d.contextVector, d.attentionMask)
 		if err != nil {
 			return fmt.Errorf("attention forward failed during backward re-vectorization: %w", err)
 		}
@@ -494,11 +497,11 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
 		// 2d. Re-run Concat, LayerNorm, and OutputLayer forward to populate their internal states
 		// This is CRITICAL to ensure that d.OutputLayer.input and d.LayerNorm.inputTensor
 		// match the current sequence length, avoiding 'zombie' tensors that cause MatMul panics.
-		combined, err := Concat([]*Tensor{allHidden, allAttention}, 2)
+		combined, err = Concat([]*Tensor{allHidden, allAttention}, 2)
 		if err != nil {
 			return fmt.Errorf("concat failed during backward re-vectorization: %w", err)
 		}
-		normed, err := d.LayerNorm.Forward(combined)
+		normed, err = d.LayerNorm.Forward(combined)
 		if err != nil {
 			return fmt.Errorf("layer norm failed during backward re-vectorization: %w", err)
 		}
@@ -709,6 +712,15 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
 	if allGrads != nil && len(grads) > 1 {
 		allGrads.Release()
 	}
+	for _, g := range reshapedGrads {
+		if g != nil { g.Release() }
+	}
+	if allInputs != nil { allInputs.Release() }
+	if allEmbedded != nil { allEmbedded.Release() }
+	if allHidden != nil { allHidden.Release() }
+	if allAttention != nil { allAttention.Release() }
+	if combined != nil { combined.Release() }
+	if normed != nil { normed.Release() }
 
 	// 🛡️ Proactive Release of intermediate backprop tensors
 	if zeroCellGrad != nil { zeroCellGrad.Release() }

@@ -67,7 +67,8 @@ type MoELayer struct {
 	AccumulatedUtilization     []int     // Tracks token assignments across steps/batches
 	ResidualScale              *Tensor   // Learned scale for the expert output in residual connection
 	ExpertFrozen               []bool    // Toggles whether an expert's weights can be updated
-	StagnationCounters         []int     // Counts consecutive steps/epochs with low utilization
+	StagnationCounters         []int     // Counts consecutive epochs with low utilization (for EvolutionaryReset)
+	StepStagnationCounters     []int     // Counts consecutive steps without being selected at all (for ResetExpertWeights)
 	ExpertGradMultiplier       []float32 // Boosts gradients for experts recovering from freeze
 	DiversityLoss              float32   // Penalty for experts being too similar
 	TargetRouting              []int     // Ground truth expert IDs for each token (set before Forward)
@@ -187,6 +188,7 @@ func NewMoELayer(inputDim, outputDim, numExperts, k int, expertBuilder func(int)
 		ResidualScale:              NewTensor([]int{1}, []float32{1.0}, true), // Default to 1.0
 		ExpertFrozen:               make([]bool, numExperts),
 		StagnationCounters:         make([]int, numExperts),
+		StepStagnationCounters:     make([]int, numExperts),
 		ExpertGradMultiplier:       make([]float32, numExperts),
 		MutedTokenID:               -1,
 		MutedTokenScale:            1.0,
@@ -295,7 +297,20 @@ func (moe *MoELayer) ResetExpertWeights(expertIdx int) {
 			p.Data[i] = float32(rand.NormFloat64()) * stdDev
 		}
 	}
-	log.Printf("🔥 Expert %d Weights Reset (Xavier Init)", expertIdx)
+
+	// Reset Router too: "If you must reset an expert's weights, you must also reset or slightly perturb the input projection weights of the gating network corresponding to that expert's index."
+	if moe.GatingNetwork != nil && moe.GatingNetwork.Linear != nil {
+		inputDim := moe.GatingNetwork.Linear.Weights.Shape[0]
+		numExperts := moe.GatingNetwork.Linear.Weights.Shape[1]
+		for k := 0; k < inputDim; k++ {
+			moe.GatingNetwork.Linear.Weights.Data[k*numExperts+expertIdx] = (rand.Float32()*2 - 1) * 0.05
+		}
+		if moe.GatingNetwork.Linear.Biases != nil {
+			moe.GatingNetwork.Linear.Biases.Data[expertIdx] = 0
+		}
+	}
+
+	log.Printf("🔥 Expert %d Weights Reset (Xavier Init) & Router Perturbed", expertIdx)
 }
 
 // PerformSurgery blends weights from an alpha expert into a sink expert.
@@ -873,15 +888,35 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 				}
 			}
 
+			// Ensure StepStagnationCounters is initialized (backward compatibility for layers created before this field was added)
+			if len(moe.StepStagnationCounters) != numExperts {
+				moe.StepStagnationCounters = make([]int, numExperts)
+			}
+
+			// Compute a proportional stagnation threshold.
+			// With K=2 and N experts, each expert is only expected to be used
+			// K/N of the time.
+			// Scale: max(5000, (N/K)*200) so experts have many epochs to learn
+			// before a reset fires. A low floor caused mass resets every ~5 epochs,
+			// wiping all learned weights before any convergence could occur.
+			kVal := moe.K
+			if kVal < 1 {
+				kVal = 1
+			}
+			stagnationThresh := (numExperts / kVal) * 200
+			if stagnationThresh < 5000 {
+				stagnationThresh = 5000
+			}
+
 			for j := 0; j < numExperts; j++ {
 				if !batchUsed[j] {
-					moe.StagnationCounters[j] += totalTokensRoute
-					if moe.StagnationCounters[j] >= 500 { // Stagnant for 500 tokens
+					moe.StepStagnationCounters[j]++ // Increment by 1 step
+					if moe.StepStagnationCounters[j] >= stagnationThresh {
 						moe.ResetExpertWeights(j)
-						moe.StagnationCounters[j] = 0
+						moe.StepStagnationCounters[j] = 0
 					}
 				} else {
-					moe.StagnationCounters[j] = 0
+					moe.StepStagnationCounters[j] = 0
 				}
 			}
 		}
@@ -1047,14 +1082,15 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 			moe.DiversityLoss = divLoss
 
 			// 4. Router Load Balancing Diversity (Entropy-Based)
-			routerDivLoss := moe.GatingNetwork.CalculateDiversityLoss()
+			_ = moe.GatingNetwork.CalculateDiversityLoss()
 
 			// 5. Direct Shannon Entropy (Sharpness vs Fairness)
-			shannonEntropy := CalculateDiversityLoss(moe.GateOutputs)
+			_ = CalculateDiversityLoss(moe.GateOutputs)
 
 			// Combine them (stLoss, divLoss, and routerDivLoss)
-			// Increased weight for CV loss (routerDivLoss) to force diverse selection
-			moe.LoadBalancingLoss = 0.4*stLoss + 0.2*divLoss + 0.3*routerDivLoss + 0.1*shannonEntropy
+			// User request: enforce uniform distribution across experts using auxiliary loss with alpha 0.1 or 0.2
+			alpha := float32(0.2)
+			moe.LoadBalancingLoss = alpha * stLoss
 		} else {
 			moe.LoadBalancingLoss = 0
 			moe.DiversityLoss = 0
@@ -2286,8 +2322,10 @@ func (moe *MoELayer) PruneUnderutilizedExperts(fraction float32) {
 	// Shrink Experts and parallel arrays
 	newExperts := make([]Expert, 0, len(moe.Experts)-dropCount)
 	newAccumulatedUtilization := make([]int, 0, len(moe.Experts)-dropCount)
+	newExpertTokenIndices := make([][]int, 0, len(moe.Experts)-dropCount)
 	newExpertFrozen := make([]bool, 0, len(moe.Experts)-dropCount)
 	newStagnationCounters := make([]int, 0, len(moe.Experts)-dropCount)
+	newStepStagnationCounters := make([]int, 0, len(moe.Experts)-dropCount)
 	newExpertGradMultiplier := make([]float32, 0, len(moe.Experts)-dropCount)
 	newExpertOutputScale := make([]float32, 0, len(moe.Experts)-dropCount)
 	newExpertHealth := make([]float64, 0, len(moe.Experts)-dropCount)
@@ -2295,17 +2333,19 @@ func (moe *MoELayer) PruneUnderutilizedExperts(fraction float32) {
 	newExpertPinned := make([]bool, 0, len(moe.Experts)-dropCount)
 	newExpertRole := make([]string, 0, len(moe.Experts)-dropCount)
 
-	for i, e := range moe.Experts {
+	for i := 0; i < len(moe.Experts); i++ {
 		if droppedIndices[i] {
 			continue
 		}
-		newExperts = append(newExperts, e)
+		newExperts = append(newExperts, moe.Experts[i])
 
 		if i < len(moe.AccumulatedUtilization) {
 			newAccumulatedUtilization = append(newAccumulatedUtilization, moe.AccumulatedUtilization[i])
 		} else {
 			newAccumulatedUtilization = append(newAccumulatedUtilization, 0)
 		}
+		newExpertTokenIndices = append(newExpertTokenIndices, []int{})
+
 		if i < len(moe.ExpertFrozen) {
 			newExpertFrozen = append(newExpertFrozen, moe.ExpertFrozen[i])
 		} else {
@@ -2315,6 +2355,11 @@ func (moe *MoELayer) PruneUnderutilizedExperts(fraction float32) {
 			newStagnationCounters = append(newStagnationCounters, moe.StagnationCounters[i])
 		} else {
 			newStagnationCounters = append(newStagnationCounters, 0)
+		}
+		if i < len(moe.StepStagnationCounters) {
+			newStepStagnationCounters = append(newStepStagnationCounters, moe.StepStagnationCounters[i])
+		} else {
+			newStepStagnationCounters = append(newStepStagnationCounters, 0)
 		}
 		if i < len(moe.ExpertGradMultiplier) {
 			newExpertGradMultiplier = append(newExpertGradMultiplier, moe.ExpertGradMultiplier[i])
@@ -2350,8 +2395,10 @@ func (moe *MoELayer) PruneUnderutilizedExperts(fraction float32) {
 
 	moe.Experts = newExperts
 	moe.AccumulatedUtilization = newAccumulatedUtilization
+	moe.ExpertTokenIndices = newExpertTokenIndices
 	moe.ExpertFrozen = newExpertFrozen
 	moe.StagnationCounters = newStagnationCounters
+	moe.StepStagnationCounters = newStepStagnationCounters
 	moe.ExpertGradMultiplier = newExpertGradMultiplier
 	moe.ExpertOutputScale = newExpertOutputScale
 	moe.ExpertHealth = newExpertHealth
@@ -2423,7 +2470,14 @@ func (moe *MoELayer) FindLowestPerformingExpert(newRole string) int {
 		if i < len(moe.ExpertRole) {
 			role = moe.ExpertRole[i]
 		}
+		
+		// STRICT PROTECTION: Never evict structural baseline experts in standard search
+		if role == "structural_baseline" {
+			continue
+		}
+
 		isStructural := (role == "PRON" || role == "VERB" || role == "AUX" || role == "ADJ" || role == "NOUN" || role == "PREP" || role == "")
+
 
 		util := 0.0
 		if i < len(moe.AccumulatedUtilization) {
@@ -2539,44 +2593,48 @@ func (moe *MoELayer) FindLowestPerformingExpert(newRole string) int {
 }
 
 // EvictExpert removes a specific expert by index from the layer.
-func (moe *MoELayer) EvictExpert(idx int) {
-	if idx < 0 || idx >= len(moe.Experts) {
+func (moe *MoELayer) EvictExpert(minIdx int) {
+	if minIdx < 0 || minIdx >= len(moe.Experts) {
 		return
 	}
-	droppedIndices := map[int]bool{idx: true}
 
 	newExperts := make([]Expert, 0, len(moe.Experts)-1)
 	newAccumulatedUtilization := make([]int, 0, len(moe.Experts)-1)
+	newExpertTokenIndices := make([][]int, 0, len(moe.Experts)-1)
+	newExpertOutputScale := make([]float32, 0, len(moe.Experts)-1)
 	newExpertFrozen := make([]bool, 0, len(moe.Experts)-1)
 	newStagnationCounters := make([]int, 0, len(moe.Experts)-1)
+	newStepStagnationCounters := make([]int, 0, len(moe.Experts)-1)
 	newExpertGradMultiplier := make([]float32, 0, len(moe.Experts)-1)
-	newExpertOutputScale := make([]float32, 0, len(moe.Experts)-1)
 	newExpertHealth := make([]float64, 0, len(moe.Experts)-1)
 	newExpertLastUsedAt := make([]time.Time, 0, len(moe.Experts)-1)
 	newExpertPinned := make([]bool, 0, len(moe.Experts)-1)
 	newExpertRole := make([]string, 0, len(moe.Experts)-1)
 
-	for i, e := range moe.Experts {
-		if droppedIndices[i] {
+	for i := 0; i < len(moe.Experts); i++ {
+		if i == minIdx {
 			continue
 		}
-		newExperts = append(newExperts, e)
-		
+		newExperts = append(newExperts, moe.Experts[i])
 		if i < len(moe.AccumulatedUtilization) {
 			newAccumulatedUtilization = append(newAccumulatedUtilization, moe.AccumulatedUtilization[i])
 		} else {
 			newAccumulatedUtilization = append(newAccumulatedUtilization, 0)
 		}
-		if i < len(moe.ExpertFrozen) {
-			newExpertFrozen = append(newExpertFrozen, moe.ExpertFrozen[i])
-		} else {
-			newExpertFrozen = append(newExpertFrozen, false)
-		}
+		newExpertTokenIndices = append(newExpertTokenIndices, []int{})
+
 		if i < len(moe.StagnationCounters) {
 			newStagnationCounters = append(newStagnationCounters, moe.StagnationCounters[i])
 		} else {
 			newStagnationCounters = append(newStagnationCounters, 0)
 		}
+
+		if i < len(moe.StepStagnationCounters) {
+			newStepStagnationCounters = append(newStepStagnationCounters, moe.StepStagnationCounters[i])
+		} else {
+			newStepStagnationCounters = append(newStepStagnationCounters, 0)
+		}
+
 		if i < len(moe.ExpertGradMultiplier) {
 			newExpertGradMultiplier = append(newExpertGradMultiplier, moe.ExpertGradMultiplier[i])
 		} else {
@@ -2586,6 +2644,11 @@ func (moe *MoELayer) EvictExpert(idx int) {
 			newExpertOutputScale = append(newExpertOutputScale, moe.ExpertOutputScale[i])
 		} else {
 			newExpertOutputScale = append(newExpertOutputScale, 1.0)
+		}
+		if i < len(moe.ExpertFrozen) {
+			newExpertFrozen = append(newExpertFrozen, moe.ExpertFrozen[i])
+		} else {
+			newExpertFrozen = append(newExpertFrozen, false)
 		}
 		if i < len(moe.ExpertHealth) {
 			newExpertHealth = append(newExpertHealth, moe.ExpertHealth[i])
@@ -2611,8 +2674,10 @@ func (moe *MoELayer) EvictExpert(idx int) {
 
 	moe.Experts = newExperts
 	moe.AccumulatedUtilization = newAccumulatedUtilization
+	moe.ExpertTokenIndices = newExpertTokenIndices
 	moe.ExpertFrozen = newExpertFrozen
 	moe.StagnationCounters = newStagnationCounters
+	moe.StepStagnationCounters = newStepStagnationCounters
 	moe.ExpertGradMultiplier = newExpertGradMultiplier
 	moe.ExpertOutputScale = newExpertOutputScale
 	moe.ExpertHealth = newExpertHealth
@@ -2623,6 +2688,7 @@ func (moe *MoELayer) EvictExpert(idx int) {
 
 	// Shrink Gating Network
 	if moe.GatingNetwork != nil {
+		droppedIndices := map[int]bool{minIdx: true}
 		moe.GatingNetwork.PruneExperts(droppedIndices)
 	}
 }

@@ -62,9 +62,19 @@ func NewSupervisor() *Supervisor {
 // Reflect nudges variables (LR, Noise, Temperature) based on training stats.
 func (s *Supervisor) Reflect(stats TrainingStats, opt *nn.Adam, model *IntentMoE) {
 	// 0. Jump Start Recovery (The "Heat" nudge)
+	// Use a relative bump (×2.0) instead of a hard-coded 0.0005 so the heat
+	// signal is proportional to the current training regime. The old absolute
+	// value was ~50× the new peak LR (1e-5) and would destroy weight geometry
+	// right after surgery tried to fix it. Cap at 2e-5 to stay conservative.
 	if s.JustPerformedSurgery {
-		log.Println("🔥 Surgery detected: Increasing Heat (LR) to bake in new weights.")
-		opt.SetLearningRate(0.0005)
+		currentLR := opt.GetLearningRate()
+		heatedLR := currentLR * 2.0
+		const maxPostSurgeryLR = float32(2e-5)
+		if heatedLR > maxPostSurgeryLR {
+			heatedLR = maxPostSurgeryLR
+		}
+		log.Printf("🔥 Surgery detected: Bumping LR %.2e → %.2e to bake in new weights.", currentLR, heatedLR)
+		opt.SetLearningRate(heatedLR)
 		RouterNoiseFactor += 0.05
 		s.JustPerformedSurgery = false
 	}
@@ -595,7 +605,7 @@ func (s *Supervisor) AddExpertToLayer(model *IntentMoE, layerIdx int, roleID int
 	// Extend dynamic parallel tracking slices
 	layer.ExpertHealth = append(layer.ExpertHealth, 1.0)
 	layer.ExpertLastUsedAt = append(layer.ExpertLastUsedAt, time.Now())
-	layer.ExpertPinned = append(layer.ExpertPinned, true) // Newly specialized spawned experts are pinned
+	layer.ExpertPinned = append(layer.ExpertPinned, false) // Dynamically spawned experts should NOT be pinned (prevent choking out baseline)
 	layer.ExpertRole = append(layer.ExpertRole, GrammarRoles[roleID%len(GrammarRoles)])
 
 	log.Printf("✨ [Supervisor] Added new GrammarExpert E%d (role=%s) to Layer %d. Total: %d experts.",
@@ -1006,7 +1016,7 @@ func (s *Supervisor) SeedSystemExperts(model *IntentMoE) {
 		// Force specialized routing for grammatical tokens
 		s.SetExpertVariables(model, lIdx, 9, 0.8, 1.0)  // Bias E9 toward VERB/AUX
 		s.SetExpertVariables(model, lIdx, 10, 0.8, 1.0) // Bias E10 toward PRON
-		s.SetExpertVariables(model, lIdx, 17, 0.8, 1.0) // Bias E17 toward CONJ/PREP
+		s.SetExpertVariables(model, lIdx, 13, 0.8, 1.0) // Bias E13 toward CONJ/PREP
 	}
 	log.Printf("🧬 [Supervisor] SeedSystemExperts complete. Seeded structural experts with OutputScale=0.5, LRMult=1.0, Pinned=true across all %d layers.", len(layers))
 }

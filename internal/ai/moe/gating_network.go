@@ -153,10 +153,10 @@ func (gn *GatingNetwork) Forward(inputs ...*tensor.Tensor) (*tensor.Tensor, erro
 		
 		gn.noiseLogitsTensor = tensor.NewTensor(logitsShape, noiseLogitsData, gn.NoiseLinear.Weights.RequiresGrad)
 		
-		// logits = logits + StandardNormal() * noise_scale
+		// logits = logits + StandardNormal() * noise_scale * RouterNoiseFactor
 		for i := range logits.Data {
 			noise := float32(rand.NormFloat64())
-			logits.Data[i] += noise * gn.noiseLogitsTensor.Data[i]
+			logits.Data[i] += noise * gn.noiseLogitsTensor.Data[i] * RouterNoiseFactor
 		}
 	}
 
