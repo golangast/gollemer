@@ -183,7 +183,7 @@ Gollemer is organized into a clean, modular structure designed for ease of use a
 │   └── *.go            # Standalone tools for vocab analysis and model inspection.
 │
 ├── Makefile            # Central workflow: train, chat, and clean.
-└── go.mod              # Minimal dependency management (Goffi only).
+└── go.mod              # Minimal dependency management (github.com/hegedustibor/htgo-tts for text to voice).
 ```
 
 ---

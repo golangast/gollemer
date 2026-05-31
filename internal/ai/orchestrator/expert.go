@@ -459,21 +459,31 @@ func (e *HyperparameterExpert) AnalyzeAndAdjust(metrics TrainingMetrics) {
 		}
 
 		// ── OverfitMode: Lockdown ───────────────────────────────────────────
+		// WARMUP GUARD: The first 100 epochs are observation-only.
+		// Locking down immediately kills the gradient variance the model needs
+		// to escape the initial loss plateau. OverfitMode is cleared during warmup
+		// so routing gates and expert weights can seat themselves before any
+		// parameter constraints are applied.
 		if cfg.OverfitMode || metrics.OverfitMode {
-			cfg.OverfitMode = true
-			fmt.Println("🎯 Supervisor: OverfitMode active. Lockdown engaged.")
-			cfg.RouterNoise = 0.10
-			// Step 3: Keep temperature at 0.65 so the model can still explore
-			// and escape repetitive token loops even under lockdown.
-			cfg.RouterTemperature = 0.65
-			// Step 3: Cap ContextMultiplier at 3.0 in OverfitMode.
-			// A ContextMultiplier of 30+ forces pure prompt regurgitation.
-			// Capping at 3.0 lets the model temperature (0.50) do its job and
-			// actually diversify token generation.
-			if cfg.ContextMultiplier > 3.0 {
-				cfg.ContextMultiplier = 3.0
+			if metrics.Epoch < 100 {
+				// Observation-only: hold OverfitMode off until the model has had
+				// at least 100 epochs to form routing associations.
+				cfg.OverfitMode = false
+				fmt.Printf("🧘 Supervisor: OverfitMode warmup (%d/100). Observation-only — lockdown suspended.\n", metrics.Epoch)
+			} else {
+				cfg.OverfitMode = true
+				fmt.Println("🎯 Supervisor: OverfitMode active. Lockdown engaged.")
+				// Keep noise small but non-zero so routing isn't purely deterministic.
+				cfg.RouterNoise = 0.02
+				// Keep temperature at 0.65 so the model can still explore
+				// and escape repetitive token loops even under lockdown.
+				cfg.RouterTemperature = 0.65
+				// Cap ContextMultiplier at 3.0 in OverfitMode.
+				if cfg.ContextMultiplier > 3.0 {
+					cfg.ContextMultiplier = 3.0
+				}
+				// Note: We DO NOT return here; we still adjust LR and other params in OverfitMode.
 			}
-			// Note: We DO NOT return here; we still adjust LR and other params in OverfitMode.
 		}
 
 		// ── Exploration Boost ───────────────────────────────────────────────
@@ -513,8 +523,8 @@ func (e *HyperparameterExpert) AnalyzeAndAdjust(metrics TrainingMetrics) {
 
 		// ── B: Expert Collapse ────────────────────────────────────────────
 		if metrics.SemanticSinksHits > 2 && !cfg.OverfitMode {
-			cfg.RouterNoise = min32(0.50, cfg.RouterNoise+0.04)
-			cfg.LoadBalancingWeight = min32(1.0, cfg.LoadBalancingWeight+0.02)
+			cfg.RouterNoise = min32(0.20, cfg.RouterNoise+0.01)
+			cfg.LoadBalancingWeight = min32(0.03, cfg.LoadBalancingWeight+0.002)
 			fmt.Printf("⚠️  Sink: Noise→%.3f, LBW→%.3f\n", cfg.RouterNoise, cfg.LoadBalancingWeight)
 		} else if metrics.GatingEntropy > 3.0 && !cfg.OverfitMode {
 			// Good entropy: dial down noise slightly to let routing solidify
@@ -586,8 +596,12 @@ func (e *HyperparameterExpert) AnalyzeAndAdjust(metrics TrainingMetrics) {
 		}
 
 		// ── I: Lockdown Enforcement ──────────────────────────────────────
-		if cfg.OverfitMode {
-			cfg.RouterNoise = 0.10
+		// Only enforce noise/temp pins AFTER the warmup window. Before epoch 100
+		// the lockdown block above already cleared OverfitMode, so this is a
+		// belt-and-suspenders guard against the config file having overfit_mode:true
+		// from a previous run.
+		if cfg.OverfitMode && metrics.Epoch >= 100 {
+			cfg.RouterNoise = 0.02
 			cfg.RouterTemperature = 0.65
 		}
 	})
@@ -756,6 +770,9 @@ func (e *HyperparameterExpert) VerifyExpertPaths(metrics TrainingMetrics) {
 		fmt.Sscanf(metrics.AuxPathID, "E%d", &auxID)
 	}
 
+	missingQuestionExpertCount := 0
+	weakRelationCount := 0
+
 	for _, res := range metrics.TestResults {
 		isQuestion := strings.Contains(strings.ToLower(res.Prompt), "__ques__")
 		if isQuestion {
@@ -779,22 +796,29 @@ func (e *HyperparameterExpert) VerifyExpertPaths(metrics TrainingMetrics) {
 			hasQuestionExpert = hasPron || hasAux
 			hasRelation := hasPron && (hasAux || hasVerb)
 
-			if !hasQuestionExpert && metrics.Epoch > 100 {
-				fmt.Printf("🕵️ [Supervisor Verify] Question lacks PRON/AUX expert: '%s' (Path: %s)\n",
-					res.Prompt, res.Path)
-				e.SafeCfg.Update(func(cfg *TrainingConfig) {
-					cfg.LoadBalancingWeight = min32(1.0, cfg.LoadBalancingWeight+0.01)
-					cfg.StructuralRoutingWeight = min32(10.0, cfg.StructuralRoutingWeight+0.5)
-				})
+			if !hasQuestionExpert {
+				missingQuestionExpertCount++
 			}
+			if !hasRelation {
+				weakRelationCount++
+			}
+		}
+	}
 
-			if !hasRelation && metrics.Epoch > 150 {
-				fmt.Printf("🕵️ [Supervisor Verify] Weak token relations (No PRON-AUX/VERB link): '%s'\n", res.Prompt)
-				// Nudge the model to care more about structure
-				e.SafeCfg.Update(func(cfg *TrainingConfig) {
-					cfg.EntropyWeight = min32(0.5, cfg.EntropyWeight+0.005)
-				})
-			}
+	if metrics.Epoch > 100 {
+		if missingQuestionExpertCount > 10 {
+			fmt.Printf("🕵️ [Supervisor Verify] %d questions lack PRON/AUX expert (e.g. PRON=%d, AUX=%d)\n", missingQuestionExpertCount, pronID, auxID)
+			e.SafeCfg.Update(func(cfg *TrainingConfig) {
+				cfg.LoadBalancingWeight = min32(0.05, cfg.LoadBalancingWeight+0.002) // Cap safely at 0.05, slow increment
+				cfg.StructuralRoutingWeight = min32(10.0, cfg.StructuralRoutingWeight+0.5)
+			})
+		}
+		
+		if weakRelationCount > 10 && metrics.Epoch > 150 {
+			fmt.Printf("🕵️ [Supervisor Verify] %d questions have weak token relations (No PRON-AUX/VERB link)\n", weakRelationCount)
+			e.SafeCfg.Update(func(cfg *TrainingConfig) {
+				cfg.EntropyWeight = min32(0.5, cfg.EntropyWeight+0.005)
+			})
 		}
 	}
 }

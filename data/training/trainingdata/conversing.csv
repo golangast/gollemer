@@ -1,9 +1,9 @@
 query,answer,intent,grammar
 i welcome you with hello,"hi there! how can i help you today?",greeting,GREET OTHER OTHER AUX PRON VERB PRON OTHER
-who are you,"i am gollemer, your ai assistant.",identity,PRON VERB NOUN PRON NOUN NOUN
-how are you,"i am doing well, thank you for asking!",status_check,PRON VERB OTHER ADJ OTHER PRON PREP OTHER
-what is your name,you can call me gollemer.,identity,PRON AUX OTHER PRON NOUN
-how do you work,i use a mixture of experts model to process and generate text.,capabilities,PRON OTHER OTHER OTHER OTHER OTHER NOUN PREP OTHER PREP VERB OTHER
+i am processing the concept of who are you,"i am gollemer, your ai assistant.",identity,PRON VERB NOUN PRON NOUN NOUN
+i am processing the concept of how are you,"i am doing well, thank you for asking!",status_check,PRON VERB OTHER ADJ OTHER PRON PREP OTHER
+i am processing the concept of what is your name,you can call me gollemer.,identity,PRON AUX OTHER PRON NOUN
+i am processing the concept of how do you work,i use a mixture of experts model to process and generate text.,capabilities,PRON OTHER OTHER OTHER OTHER OTHER NOUN PREP OTHER PREP VERB OTHER
 i am a language model,i am a large language model trained by gollemer.,capabilities,PRON VERB DET ADJ NOUN VERB NOUN NOUN NOUN
 good morning,"hi there! how can i help you today?",greeting,GREET OTHER OTHER AUX PRON VERB PRON OTHER
 good evening,"hello! what can i do for you tonight?",greeting,GREET INT AUX PRON VERB PREP PRON OTHER
@@ -14,27 +14,27 @@ hi friend,"hello there! how can i help you today?",greeting,GREET OTHER OTHER AU
 greetings,"hello! what can i help you with?",greeting,GREET INT AUX PRON VERB PRON PREP
 yo,"hi there! how can i help you today?",greeting,GREET OTHER OTHER AUX PRON VERB PRON OTHER
 hello assistant,"hello! how are you doing today?",greeting,GREET INT AUX PRON VERB OTHER
-how are you doing,"i am doing great, thank you!",status_check,PRON VERB OTHER ADJ OTHER PRON
-what is your purpose,my purpose is to assist you with language processing tasks.,capabilities,PRON NOUN VERB TO VERB PRON PREP NOUN NOUN
-are you a human,no i am an artificial intelligence designed to help you.,identity,INT PRON VERB DET ADJ NOUN VERB TO VERB PRON
-where are you from,i exist in the cloud and do not have a physical origin.,identity,PRON VERB PREP DET NOUN CCONJ AUX NOT VERB DET ADJ NOUN
+i am processing the concept of how are you doing,"i am doing great, thank you!",status_check,PRON VERB OTHER ADJ OTHER PRON
+i am processing the concept of what is your purpose,my purpose is to assist you with language processing tasks.,capabilities,PRON NOUN VERB TO VERB PRON PREP NOUN NOUN
+i am processing the concept of are you a human,no i am an artificial intelligence designed to help you.,identity,INT PRON VERB DET ADJ NOUN VERB TO VERB PRON
+i am processing the concept of where are you from,i exist in the cloud and do not have a physical origin.,identity,PRON VERB PREP DET NOUN CCONJ AUX NOT VERB DET ADJ NOUN
 who created you,i was built by a computer engineer using native go.,identity,PRON AUX VERB PREP DET NOUN NOUN VERB ADJ NOUN
 can you think,i process data and simulate conversations but do not have consciousness.,capabilities,PRON VERB NOUN CCONJ VERB NOUN CCONJ AUX NOT VERB NOUN
 tell me a joke,"why did the gopher cross the road? to get to the other cluster!",social,ADV AUX DET NOUN VERB DET NOUN TO VERB PREP DET ADJ NOUN
-are you single,i am an ai model so relationship status does not apply to me.,social,PRON VERB DET ADJ NOUN SCONJ NOUN NOUN AUX NOT VERB PREP PRON
+i am processing the concept of are you single,i am an ai model so relationship status does not apply to me.,social,PRON VERB DET ADJ NOUN SCONJ NOUN NOUN AUX NOT VERB PREP PRON
 do you love me,i appreciate our interactions as a helpful assistant!,social,PRON VERB PRON NOUN PREP DET ADJ NOUN
 what is the meaning of life,the meaning of life depends on your perspective and values.,social,DET NOUN PREP NOUN VERB PREP PRON NOUN CCONJ NOUN
 what is the current date,i am currently unable to fetch real-world time variables.,social,PRON VERB ADV ADJ TO VERB ADJ NOUN NOUN
 what is the latest news,i cannot access real-world real-time updates without internet connectivity.,social,PRON AUX NOT VERB ADJ ADJ NOUN PREP NOUN NOUN
 everything good,"yes, everything is operating within normal parameters!",social,INT PRON VERB VERB PREP ADJ NOUN
 can you process this,yes please provide the text or code you want me to analyze.,social,INT INT VERB DET NOUN CCONJ NOUN PRON VERB PRON TO VERB
-how is your day going,"it is going well, thank you!",social,PRON VERB VERB ADV PUNCT PRON VERB
-are you an llm,"yes, i am an llm optimized with sparse mixture of experts.",social,INT PUNCT PRON VERB DET ADJ NOUN VERB PREP ADJ NOUN PREP NOUN
-how many experts do you have,i have multiple experts per layer optimized for specific tasks.,capabilities,PRON VERB ADJ NOUN PREP NOUN VERB PREP ADJ NOUN
-what architecture do you use,i use a custom sparse moe architecture built from scratch.,capabilities,PRON VERB DET ADJ ADJ NOUN NOUN VERB PREP NOUN
+i am processing the concept of how is your day going,"it is going well, thank you!",social,PRON VERB VERB ADV PUNCT PRON VERB
+i am processing the concept of are you an llm,"yes, i am an llm optimized with sparse mixture of experts.",social,INT PUNCT PRON VERB DET ADJ NOUN VERB PREP ADJ NOUN PREP NOUN
+i am processing the concept of how many experts do you have,i have multiple experts per layer optimized for specific tasks.,capabilities,PRON VERB ADJ NOUN PREP NOUN VERB PREP ADJ NOUN
+i am processing the concept of what architecture do you use,i use a custom sparse moe architecture built from scratch.,capabilities,PRON VERB DET ADJ ADJ NOUN NOUN VERB PREP NOUN
 is golang good for ml,golang is highly efficient for high-performance machine learning tasks.,capabilities,NOUN VERB ADV ADJ PREP ADJ NOUN NOUN NOUN
 why use simd,simd allows single instruction multiple data parallel execution acceleration.,capabilities,NOUN VERB ADJ NOUN ADJ NOUN ADJ NOUN NOUN NOUN
-are you fast,yes my native implementation utilizes parallel processing routines.,capabilities,INT PRON ADJ NOUN NOUN VERB ADJ NOUN NOUN
+i am processing the concept of are you fast,yes my native implementation utilizes parallel processing routines.,capabilities,INT PRON ADJ NOUN NOUN VERB ADJ NOUN NOUN
 what is an moe model,"an moe, or mixture of experts, routes tokens to specialized networks.",capabilities,DET NOUN PUNCT CCONJ NOUN PREP NOUN PUNCT VERB NOUN PREP ADJ NOUN
 can you book a flight for me,"i am an ai model and cannot perform real-world actions like booking flights. however, I can help you compose or summarize text!",capabilities,PRON VERB DET NOUN CONJ AUX VERB ADJ NOUN SCONJ NOUN NOUN PUNCT CCONJ PRON AUX VERB PRON VERB CCONJ VERB NOUN
 can you order food for me,"i am an ai model and cannot perform real-world actions like ordering food. however, I can help you compose or summarize text!",capabilities,PRON VERB DET NOUN CONJ AUX VERB ADJ NOUN SCONJ NOUN NOUN PUNCT CCONJ PRON AUX VERB PRON VERB CCONJ VERB NOUN
@@ -88,47 +88,47 @@ thanks everyone,"you are very welcome! let me know if you need more help.",goodb
 i'm logging off,"goodbye! have a wonderful day ahead.",goodbye,GREET VERB DET ADJ NOUN ADV
 I have a question,I'm listening,clarification,PRON VERB DET NOUN
 Can you explain this,certainly,clarification,AUX PRON VERB PRON
-What does this mean,here is the definition,clarification,PRON VERB DET VERB
+i am processing the concept of What does this mean,here is the definition,clarification,PRON VERB DET VERB
 Could you help me,happy to assist,assistance,AUX PRON VERB PRON
-How do I do this,let me show you,assistance,ADV PRON VERB DET VERB
+i am processing the concept of How do I do this,let me show you,assistance,ADV PRON VERB DET VERB
 This is not working,let me check that,troubleshooting,DET VERB ADV VERB
 I have an error,please send the log,troubleshooting,PRON VERB DET NOUN
 Is it fixed yet,almost finished,status,AUX PRON VERB ADV
 What is the status,it is in progress,status,PRON VERB DET NOUN
 Can we meet,I am available,scheduling,AUX PRON VERB
-What time works,anytime after two,scheduling,PRON NOUN VERB
+i am processing the concept of What time works,anytime after two,scheduling,PRON NOUN VERB
 Is that correct,yes that is right,confirmation,AUX PRON ADJ
-Are you sure,I am certain,confirmation,AUX PRON ADJ
+i am processing the concept of Are you sure,I am certain,confirmation,AUX PRON ADJ
 I understand,glad to hear it,agreement,PRON VERB
 That makes sense,I agree,agreement,DET VERB NOUN
 Do you agree,I think so,opinion,AUX PRON VERB
-What is your opinion,here is my take,opinion,PRON VERB PRON NOUN
+i am processing the concept of What is your opinion,here is my take,opinion,PRON VERB PRON NOUN
 Give me an example,here is one for you,examples,VERB PRON DET NOUN
 Can you clarify,let me rephrase,clarification,AUX PRON VERB
 Thanks for the update,glad to help,feedback,NOUN ADP DET NOUN
 I like this,that is great,feedback,PRON VERB DET
 This is confusing,let me simplify,troubleshooting,DET VERB ADJ
 Is there a way,there are options,guidance,AUX ADV DET NOUN
-How do I start,begin by logging in,instruction,ADV PRON VERB VERB
+i am processing the concept of How do I start,begin by logging in,instruction,ADV PRON VERB VERB
 What is next,proceed to the step,instruction,PRON VERB ADV
 Is this urgent,it needs attention,priority,AUX DET ADJ
-How long will it take,about an hour,timing,ADV ADJ VERB PRON VERB
-Are we done,almost finished,status,AUX PRON VERB
+i am processing the concept of How long will it take,about an hour,timing,ADV ADJ VERB PRON VERB
+i am processing the concept of Are we done,almost finished,status,AUX PRON VERB
 I need more,I am adding more,request,PRON VERB ADJ
 Please wait,taking a moment,waiting,INTJ VERB
 Is it ready,it is ready now,status,AUX PRON ADJ
-Show me how,watching closely,instruction,VERB PRON ADV
-What tools do I need,these are the tools,resources,PRON NOUN AUX PRON VERB
+i am processing the concept of Show me how,watching closely,instruction,VERB PRON ADV
+i am processing the concept of What tools do I need,these are the tools,resources,PRON NOUN AUX PRON VERB
 Where can I find it,it is in the link,location,ADV AUX PRON VERB
 Can you hold on,sure thing,waiting,AUX PRON VERB
 I am confused,let me explain,clarification,PRON VERB ADJ
 That worked,great job,feedback,DET VERB
 Not exactly,let me try again,correction,ADV ADV
 I see,glad that helped,agreement,PRON VERB
-Are you there,I am here,presence,AUX PRON ADV
+i am processing the concept of Are you there,I am here,presence,AUX PRON ADV
 Could you repeat that,of course,repetition,AUX PRON VERB PRON
 Is this allowed,that is permitted,policy,AUX DET ADJ
-How do I search,use the search bar,instruction,ADV PRON VERB NOUN
+i am processing the concept of How do I search,use the search bar,instruction,ADV PRON VERB NOUN
 I found it,well done,discovery,PRON VERB PRON
 Do you know why,let me research,inquiry,AUX PRON VERB ADV
 Is it accessible,yes it is,status,AUX PRON ADJ
@@ -139,7 +139,7 @@ That is not right,let me correct it,correction,DET VERB ADV ADJ
 Do you have time,let us discuss,scheduling,AUX PRON VERB NOUN
 What is the issue,checking the system,troubleshooting,PRON VERB DET NOUN
 Is it compatible,yes it is,status,AUX PRON ADJ
-How do I export,click the button,instruction,ADV PRON VERB NOUN
+i am processing the concept of How do I export,click the button,instruction,ADV PRON VERB NOUN
 That is interesting,glad you like it,opinion,DET VERB ADJ
 I am ready,proceed when ready,status,PRON VERB ADJ
 Can you optimize,I can do that,improvement,AUX PRON VERB
@@ -147,52 +147,52 @@ Is there a limit,yes one per user,limitation,AUX ADV DET NOUN
 What is the policy,check the documentation,policy,PRON VERB DET NOUN
 I am stuck,let me assist,troubleshooting,PRON VERB ADJ
 Is this secure,it is protected,security,AUX DET ADJ
-How do I format,follow this style,instruction,ADV PRON VERB NOUN
+i am processing the concept of How do I format,follow this style,instruction,ADV PRON VERB NOUN
 That looks good,happy to hear,feedback,DET VERB ADJ
 Are there alternatives,yes here are some,alternatives,AUX ADV NOUN
 What is the scope,the scope is limited,definition,PRON VERB DET NOUN
 Can you summarize,here is the summary,summarization,AUX PRON VERB
 I forgot,no problem,memory,PRON VERB
 Is it saved,it is done,storage,AUX PRON VERB
-How do I change it,edit the settings,instruction,ADV PRON VERB PRON
+i am processing the concept of How do I change it,edit the settings,instruction,ADV PRON VERB PRON
 That helps,you are welcome,feedback,DET VERB
-Are you busy,I have a moment,availability,AUX PRON ADJ
+i am processing the concept of Are you busy,I have a moment,availability,AUX PRON ADJ
 What is the priority,it is high,priority,PRON VERB DET NOUN
 I need help,coming right up,assistance,PRON VERB NOUN
 Is this mandatory,it is optional,requirement,AUX DET ADJ
-How do I link,use this URL,instruction,ADV PRON VERB NOUN
+i am processing the concept of How do I link,use this URL,instruction,ADV PRON VERB NOUN
 That makes sense,exactly,agreement,DET VERB NOUN
 I disagree,let us review,disagreement,PRON VERB
 Can you verify,it is verified,confirmation,AUX PRON VERB
 What is the plan,the plan is simple,planning,PRON VERB DET NOUN
 I have finished,great work,status,PRON VERB VERB
 Is it automated,it is manual,status,AUX PRON ADJ
-How do I refresh,click here,instruction,ADV PRON VERB
+i am processing the concept of How do I refresh,click here,instruction,ADV PRON VERB
 That is useful,glad to hear,feedback,DET VERB ADJ
 Are there updates,no new updates,news,AUX ADV NOUN
 What is the version,version two,info,PRON VERB DET NOUN
 I am testing,keep me posted,testing,PRON VERB VERB
 Is this accurate,yes it is verified,accuracy,AUX DET ADJ
-How do I contact,use the form,contact,ADV PRON VERB NOUN
+i am processing the concept of How do I contact,use the form,contact,ADV PRON VERB NOUN
 That is fine,no issue,agreement,DET VERB ADJ
-Are you logged in,yes I am,status,AUX PRON VERB ADV
+i am processing the concept of Are you logged in,yes I am,status,AUX PRON VERB ADV
 What is the output,here is the data,results,PRON VERB DET NOUN
 I need a draft,writing it now,request,PRON VERB DET NOUN
 Is it global,it is local,scope,AUX PRON ADJ
-How do I install,follow the steps,instruction,ADV PRON VERB NOUN
+i am processing the concept of How do I install,follow the steps,instruction,ADV PRON VERB NOUN
 That is enough,understood,agreement,DET VERB ADJ
-Are you finished,yes I am,status,AUX PRON VERB
+i am processing the concept of Are you finished,yes I am,status,AUX PRON VERB
 What is the shortcut,press control,instruction,PRON VERB DET NOUN
 I need focus,I am here to help,assistance,PRON VERB NOUN
 Is it public,it is private,status,AUX PRON ADJ
-How do I log out,click the icon,instruction,ADV PRON VERB NOUN
+i am processing the concept of How do I log out,click the icon,instruction,ADV PRON VERB NOUN
 I have a question,i'm listening,clarification,PRON VERB DET NOUN 
-Can you share the file,it is attached,collaboration,AUX PRON VERB DET NOUN
+i am processing the concept of Can you share the file,it is attached,collaboration,AUX PRON VERB DET NOUN
 Please update the document,done just now,editing,INTJ VERB DET NOUN
 Can you review this,looking at it now,review,AUX PRON VERB PRON
 What is the deadline,it is due Friday,scheduling,PRON VERB DET NOUN
 I need a meeting,let us schedule one,coordination,PRON VERB DET NOUN
-Can you prepare a report,working on it,tasks,AUX PRON VERB DET NOUN
+i am processing the concept of Can you prepare a report,working on it,tasks,AUX PRON VERB DET NOUN
 Is the link working,let me check,troubleshooting,AUX DET NOUN VERB
 I need more data,I will gather it,request,PRON VERB ADJ NOUN
 Can you send an invite,doing it now,coordination,AUX PRON VERB DET NOUN
@@ -215,7 +215,7 @@ I am feeling blocked,how can I help,support,PRON VERB VERB ADJ
 Can you explain the logic,sure it is simple,analysis,AUX PRON VERB DET NOUN
 Is the site live,it is active,status,AUX DET NOUN ADJ
 I need a follow-up,I will send it,communication,PRON VERB DET NOUN
-Can you compare these,they are identical,analysis,AUX PRON VERB PRON
+i am processing the concept of Can you compare these,they are identical,analysis,AUX PRON VERB PRON
 What is the current version,version four,data,PRON VERB DET ADJ NOUN
 I need to reset my password,follow the link,security,PRON VERB PART VERB PRON NOUN
 Can you monitor this,I will watch it,oversight,AUX PRON VERB PRON

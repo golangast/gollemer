@@ -255,8 +255,9 @@ func (e *GrammarExpert) SyncParameters() error { return nil }
 // This jumpstarts specialization by making the expert naturally "prefer" tokens
 // that match its assigned syntactic role (e.g. PRON expert gets a boost for 'i', 'you').
 func (ge *GrammarExpert) SeedGrammarBias(vocabSize int, tokenToWord []string) {
-	if ge.FC2.Biases == nil {
-		ge.FC2.Biases = tensor.NewTensor([]int{vocabSize}, make([]float32, vocabSize), true)
+	if ge.FC2.Biases == nil || len(ge.FC2.Biases.Data) != vocabSize {
+		// Only seed output experts (whose output dimension matches vocabSize)
+		return
 	}
 	
 	boostCount := 0

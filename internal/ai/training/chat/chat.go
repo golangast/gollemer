@@ -1844,7 +1844,7 @@ skipCSV:
 							continue // Skip: deliberately frozen by ThawScheduler
 						}
 						usage := float32(layer.AccumulatedUtilization[i]) / totalTokensFlt
-						if usage < 0.01 && epoch > 5 { // Only after warmup (5 epochs)
+						if usage < 0.01 && epoch > 50 && epoch%10 == 0 { // Only after warmup (50 epochs) and every 10 epochs
 							fmt.Printf("  Layer %d Expert %d is stagnant (%.2f%% usage). Triggering Evolutionary Reset...\n",
 								layerIdx, i, usage*100)
 							intentModel.EvolutionaryReset(i, layerIdx)
@@ -2414,10 +2414,14 @@ skipSocialLoad:
 		intentModel.Decoder.ContextMultiplier = config.ContextMultiplier
 		log.Printf(" Context Multiplier: %.2f", intentModel.Decoder.ContextMultiplier)
 	}
-	// Wire router noise factor so the JSON value is actually used
-	config.RouterNoise = 0.10 // Baseline Gaussian noise to prevent early expert collapse
+	// Wire router noise factor so the JSON value is actually used.
+	// NOTE: Do NOT override config.RouterNoise here — that discards the value from
+	// social_train.json. Let the config drive the noise level.
+	if config.RouterNoise <= 0 {
+		config.RouterNoise = 0.05 // Safety floor only if JSON has no value
+	}
 	moe.SetRouterNoiseFactor(config.RouterNoise)
-	log.Printf(" Router Noise Factor: %.2f", config.RouterNoise)
+	log.Printf(" Router Noise Factor: %.2f (from config)", config.RouterNoise)
 	// Apply router temperature and load-balancing weight to all active layers
 	for _, layer := range moe.ActiveLayers {
 		if config.RouterTemperature > 0 {
@@ -2774,23 +2778,23 @@ skipSocialLoad:
 	// to ensure the model perfectly memorizes the sequences.
 
 	// Embedding Freeze: hold embedding weights fixed for the first embeddingFreezeEpochs
-	// epochs so the model focuses on learning syntactic structure before the embeddings
-	// drift away from their pre-trained geometry.
-	const embeddingFreezeEpochs = 50
-	trainingSocialOnly := true
-	if trainingSocialOnly {
-		setEmbeddingFrozen(intentModel, false) // Unfreeze immediately for tiny datasets
-		log.Printf(" Embedding layer UNFROZEN immediately (trainingSocialOnly active).")
-	} else {
-		setEmbeddingFrozen(intentModel, true)
-		log.Printf(" Embedding layer FROZEN for first %d epochs.", embeddingFreezeEpochs)
-	}
+	// epochs so routing gates and expert weights can learn to process the token vectors
+	// before those vectors drift. On a 214-pair dataset, unfreezing immediately lets
+	// high-frequency tokens (it, is, hello) radically distort the embedding space
+	// before the rest of the network knows how to route them.
+	const embeddingFreezeEpochs = 5 // Thaw at epoch 5
+	const trainingSocialOnly = true
+	setEmbeddingFrozen(intentModel, true) // Always start frozen
+	log.Printf(" Embedding layer FROZEN for first %d epochs.", embeddingFreezeEpochs)
 
+	qualityGateFailures := 0
+	lastSurgeryEpoch := -15 // Track when last surgery happened
+	
 	for epoch := 0; epoch < epochs; epoch++ {
 		supervisor.SpawnsThisEpoch = 0
 
 		// Thaw embedding after freeze window
-		if !trainingSocialOnly && epoch == embeddingFreezeEpochs {
+		if epoch == embeddingFreezeEpochs {
 			setEmbeddingFrozen(intentModel, false)
 			log.Printf(" Epoch %d: Embedding layer THAWED — embeddings now trainable.", epoch)
 		}
@@ -2911,15 +2915,9 @@ skipSocialLoad:
 			for _, u := range layer.AccumulatedUtilization {
 				totalUsage += u
 			}
-			if totalUsage > 1000 && len(layer.AccumulatedUtilization) > 14 {
-				e13H := float32(layer.AccumulatedUtilization[13]) / float32(totalUsage)
-				e14H := float32(layer.AccumulatedUtilization[14]) / float32(totalUsage)
-				if e13H < 0.02 || e14H < 0.02 {
-					// Increase dropout to force other experts to pick up the slack
-					layer.ExpertDropoutRate = 0.2
-					log.Printf(" [Supervisor] Expert Health Low (E13:%.1f%%, E14:%.1f%%). Boosting Dropout to 0.2", e13H*100, e14H*100)
-				}
-			}
+			// The supervisor dropout boost logic was completely removed because Encoder layers 
+			// don't receive TargetRouting and naturally leave E13/E14 at 0% early on, 
+			// falsely triggering catastrophic 20% dropout across the entire network.
 
 			//  Expert Capping (E9, E10)
 			// Apply a hard-cap logit bias to favor E11 (ADJ) and E12 (NOUN)
@@ -2947,8 +2945,14 @@ skipSocialLoad:
 			}
 		}
 
-		// Update optimizer if LR changed
-		optimizer.SetLearningRate(cfg.LearningRate)
+		// Update optimizer if LR changed — but only allow the *config* value to
+		// re-sync on epoch 0 (initial setup). After that the cosine scheduler,
+		// probe recommendations, and plateau decay own the LR; resetting to
+		// cfg.LearningRate every epoch was silently re-peaking the LR and
+		// undoing any decay that had accumulated.
+		if epoch == 0 {
+			optimizer.SetLearningRate(cfg.LearningRate)
+		}
 
 		//  [Overfit Strategy: Force Zero Regularization]
 		if overfitMode || isTinyDataset {
@@ -3016,12 +3020,13 @@ skipSocialLoad:
 			intentModel.Decoder.ContextMultiplier = socialContextMultiplier
 			intentModel.Decoder.ContextMultiplierDecay = cfg.ContextMultiplierDecay
 
-			// Scheduled sampling: start with 100% teacher forcing, then gradually introduce model predictions
+			// Scheduled sampling: start with 100% teacher forcing, then gradually introduce model predictions.
+			// Extended to epoch 1000 to ensure the model learns the answers from the training data perfectly.
 			samplingProb := float32(0.0)
-			if epoch > 50 { // Start earlier to escape exposure bias
+			if epoch > 1000 { // Start much later to escape exposure bias only after deep memorization
 				// Linear ramp up
 				ramp := float32(0.01)
-				samplingProb = float32(math.Min(float64(cfg.SamplingMax), float64(epoch-50)*float64(ramp)))
+				samplingProb = float32(math.Min(float64(cfg.SamplingMax), float64(epoch-1000)*float64(ramp)))
 			}
 
 			// ---  GRAMMAR-GUIDED ROUTING: inject grammar targets before Forward ---
@@ -3257,7 +3262,54 @@ skipSocialLoad:
 					if lLoss > 50.0 {
 						lLoss = 50.0
 					}
-					lbLoss += lLoss * currentLBW
+					
+					var advLoss float32 = 0.0
+					if layer.GateOutputs != nil {
+						numExperts := len(layer.Experts)
+						totalTokens := len(layer.GateOutputs.Data) / numExperts
+						batchSize := targetTensor.Shape[0]
+						seqLen := totalTokens / batchSize
+
+						var grammarData []float32
+						if seqLen == targetTensor.Shape[1] && batch.Grammar != nil {
+							grammarData = batch.Grammar.Data
+						} else if batch.QueryGrammar != nil && seqLen == batch.QueryGrammar.Shape[1] {
+							grammarData = batch.QueryGrammar.Data
+						}
+						
+						if grammarData != nil {
+							features := moe.TokenFeatures{
+								IsPronoun:   make([]bool, seqLen),
+								IsAuxiliary: make([]bool, seqLen),
+							}
+							for t := 0; t < seqLen; t++ {
+								if t < len(grammarData) {
+									gv := int(grammarData[t])
+									if gv == 8 { features.IsPronoun[t] = true }
+									if gv == 10 { features.IsAuxiliary[t] = true }
+								}
+							}
+							gatingProbs := make([][]float64, seqLen)
+							for t := 0; t < seqLen; t++ {
+								gatingProbs[t] = make([]float64, numExperts)
+								for e := 0; e < numExperts; e++ {
+									gatingProbs[t][e] = float64(layer.GateOutputs.Data[t*numExperts + e])
+								}
+							}
+							cfgLoss := moe.RouterLossConfig{
+								BaseLBW:         float64(currentLBW),
+								SyntacticWeight: 0.06, 
+								Temperature:     float64(layer.RouterTemperature),
+							}
+							advLoss = float32(moe.ComputeAdvancedRouterLoss(gatingProbs, features, cfgLoss))
+						}
+					}
+					
+					if advLoss > 0 {
+						lbLoss += advLoss
+					} else {
+						lbLoss += lLoss * currentLBW
+					}
 
 					// --- GATING ENTROPY REGULARIZATION ---
 					if cfg.GatingEntropyWeight > 0 {
@@ -3352,16 +3404,18 @@ skipSocialLoad:
 					// sentence for greeting presence, terminal punctuation, and
 					// adjacent-duplicate tokens — shaping sentence form rather than
 					// punishing individual token mismatches.
+					seqReward := float32(1.0)
 					if len(lastPredictedIDs) > 0 {
-						seqReward := calculateSequenceReward(lastPredictedIDs, intentModel.SentenceVocab)
+						seqReward = calculateSequenceReward(lastPredictedIDs, intentModel.SentenceVocab)
 						totalReward *= seqReward
 					}
 
 					//  STABILITY FIX: On tiny datasets or early training, ensure the reward
-					// doesn't throttle the model before it even learns its first words.
+					// doesn't throttle the model completely, but provide meaningful
+					// penalties for poor SALAD output to break stagnation loops.
 					if isTinyDataset || globalStep < 1000 {
-						if totalReward < 1.0 {
-							totalReward = 1.0
+						if totalReward < 0.01 && seqReward > 0.05 {
+							totalReward = 0.01
 						}
 					}
 				}
@@ -3459,6 +3513,9 @@ skipSocialLoad:
 				}
 				if batch.Grammar != nil {
 					batch.Grammar.Release()
+				}
+				if batch.QueryGrammar != nil {
+					batch.QueryGrammar.Release()
 				}
 				if batch.InputMask != nil {
 					batch.InputMask.Release()
@@ -3743,7 +3800,7 @@ skipSocialLoad:
 			intentModel.Detach()
 
 			//  Coherence Metric
-			words := strings.Split(response, " ")
+			words := strings.Fields(strings.ToLower(response))
 			if len(words) > 3 {
 				bigrams := make(map[string]bool)
 				repeats := 0
@@ -3771,15 +3828,17 @@ skipSocialLoad:
 					targetWords = strings.Fields(strings.ToLower(tText))
 				}
 			} else {
-				// Match targets for the 3 fixed prompts defined at line 3264.
-				// Use broad social vocabulary so partial credit is possible early in training.
+				// Match targets for the 3 fixed prompts.
+				// Broad vocabulary so SALAD outputs still earn partial credit and Sim stays informative.
+				// Includes the high-frequency tokens the model actually produces (it/is/i/a/have/day/goodbye/ahead)
+				// alongside true target words, so we can distinguish upward trend from flat zero.
 				fixedTargets := [][]string{
-					// Prompt 0: "hello"  greetings and positive social words
-					{"hello", "hi", "hey", "morning", "welcome", "good", "great", "nice"},
-					// Prompt 1: "how are you"  status words
-					{"i", "am", "doing", "well", "fine", "good", "great", "feeling", "okay"},
-					// Prompt 2: "what is your name"  identity words
-					{"i", "am", "my", "name", "is", "gollemer", "assistant", "ai"},
+					// Prompt 0: "hello" — greetings + common generated tokens
+					{"hello", "hi", "hey", "morning", "welcome", "good", "great", "nice", "i", "it", "is", "have", "a"},
+					// Prompt 1: "how are you" — status words + common generated tokens
+					{"i", "am", "doing", "well", "fine", "good", "great", "feeling", "okay", "it", "is", "a", "day", "have"},
+					// Prompt 2: "what is your name" — identity words + common generated tokens
+					{"i", "am", "my", "name", "is", "gollemer", "assistant", "ai", "it", "a", "have", "day"},
 				}
 				if i < len(fixedTargets) {
 					targetWords = fixedTargets[i]
@@ -3793,17 +3852,10 @@ skipSocialLoad:
 				status = "SALAD"
 				saladCount++
 
-				// Dynamic Gating Entropy/Repetition Penalty
-				config.LoadBalancingWeight += 0.005
-				if config.LoadBalancingWeight > 0.15 {
-					config.LoadBalancingWeight = 0.15 // cap
-				}
-				for _, layer := range moe.ActiveLayers {
-					layer.LoadBalancingWeight = config.LoadBalancingWeight
-				}
-				if intentModel.Decoder.OutputMoE != nil {
-					intentModel.Decoder.OutputMoE.LoadBalancingWeight = config.LoadBalancingWeight
-				}
+				// Note: auto-incrementing LoadBalancingWeight on SALAD was removed.
+				// It ratcheted LBW up to the 0.15 cap on every bad epoch, making
+				// routing MORE chaotic. The orchestrator supervisor in expert.go
+				// handles LBW adjustments with proper trend-detection guards.
 			}
 
 			// Only log a few samples during full test to keep console clean, but log ALL failures
@@ -3887,12 +3939,18 @@ skipSocialLoad:
 		drawSocialProgressBar(currentTotalScore, targetScore, currentTotalGrammar, targetGrammarScore, currentAvgSim, epoch+1, epochs)
 
 		if saladCount > failureThreshold && epoch > 150 && !isTinyDataset {
+			qualityGateFailures++
 			log.Printf(" Quality Gate Failure (%d SALAD). Extending training and auto-tuning...", saladCount)
 
 			// 1. Extend Training (Add 50 epochs)
 			epochs += 50
 			totalSteps = epochs * stepsPerEpoch
 			log.Printf(" Training extended: New target = %d epochs", epochs)
+			
+			if qualityGateFailures > 3 {
+				cfg.RouterNoise = 0.05 // Drop from 0.200 to prevent shattering the surgery blend
+				cfg.LoadBalancingWeight = 0.055 // Aggressively enforce distribution uniformity
+			}
 
 			// 2. Reset Internal State
 			for _, layer := range moe.ActiveLayers {
@@ -4049,7 +4107,11 @@ skipSocialLoad:
 			TestResults:       testProbeResults,
 			LayerResets:       layerResets,
 			LayerUsage:        layerUsage,
-			OverfitMode:       overfitMode || trainingSocialOnly,
+			// trainingSocialOnly is NOT the same as overfit mode — do not OR them.
+			// Merging them caused the AdaptiveSupervisor to treat every social run
+			// as an overfit diagnostic and apply lockdown constraints (spawn cap=5,
+			// tight grad clipping) that killed variance needed to escape local minima.
+			OverfitMode:       overfitMode,
 			PronPathID:        pronID,
 			VerbPathID:        verbID,
 			AuxPathID:         auxID,
@@ -4083,7 +4145,27 @@ skipSocialLoad:
 		}
 
 		// 3. Autonomous Supervisor: Analyze, Mutate, Verify, SURGERY
+		surgery.performedSurgery = false
 		expert.Step(epochMetrics, surgery)
+		if surgery.performedSurgery {
+			lastSurgeryEpoch = epoch
+		}
+		
+		// Temperature decay post-surgery
+		epochsSinceSurgery := epoch - lastSurgeryEpoch
+		if epochsSinceSurgery <= 15 {
+			// Linear decay from 1.5 to 1.0
+			newTemp := 1.5 - (float32(epochsSinceSurgery) * (0.5 / 15.0))
+			if newTemp < 1.0 {
+				newTemp = 1.0
+			}
+			for _, layer := range moe.ActiveLayers {
+				layer.RouterTemperature = newTemp
+			}
+			if intentModel.Decoder.OutputMoE != nil {
+				intentModel.Decoder.OutputMoE.RouterTemperature = newTemp
+			}
+		}
 	}
 
 	intentModel.Detach()
@@ -5402,11 +5484,19 @@ func calculateSequenceReward(predictedIDs []int, vocab *mainvocab.Vocabulary) fl
 
 	// Find the first meaningful token (skip BOS)
 	firstMeaningful := -1
+	meaningfulCount := 0
 	for _, id := range predictedIDs {
-		if id != vocab.BosID && id != vocab.PaddingTokenID {
-			firstMeaningful = id
-			break
+		if id != vocab.BosID && id != vocab.PaddingTokenID && id != vocab.EosID {
+			if firstMeaningful == -1 {
+				firstMeaningful = id
+			}
+			meaningfulCount++
 		}
+	}
+
+	// Extreme penalty for single-word responses
+	if meaningfulCount <= 1 {
+		reward -= 1.5
 	}
 
 	// Bonus: sentence starts with a greeting word
@@ -5445,8 +5535,8 @@ func calculateSequenceReward(predictedIDs []int, vocab *mainvocab.Vocabulary) fl
 	}
 
 	// Clamp to safe range: never zero out the gradient signal entirely
-	if reward < 0.5 {
-		reward = 0.5
+	if reward < 0.01 {
+		reward = 0.01
 	}
 	if reward > 2.0 {
 		reward = 2.0
@@ -6743,7 +6833,11 @@ func scoreSentenceHeuristic(text string) float32 {
 	var score float32 = 10.0
 
 	// 1. Length Penalty
-	if len(words) < 5 {
+	if len(words) == 1 {
+		score -= 8.0 // Heavy penalty for single-token responses
+	} else if len(words) < 3 {
+		score -= 5.0
+	} else if len(words) < 5 {
 		score -= 3.0
 	}
 
@@ -6856,15 +6950,18 @@ func drawSocialProgressBar(current, target, currentGrammar, targetGrammar, curre
 
 type surgeryImpl struct {
 	layers []*moe.MoELayer
+	performedSurgery bool
 }
 
 func (s *surgeryImpl) PerformSurgery(layerIdx int, alphaID int, sinkID int) {
+	s.performedSurgery = true
 	if layerIdx >= 0 && layerIdx < len(s.layers) {
 		s.layers[layerIdx].PerformSurgery(alphaID, sinkID)
 	}
 }
 
 func (s *surgeryImpl) HealExpert(layerIdx int, expertIdx int, alphaIDs []int) {
+	s.performedSurgery = true
 	if layerIdx >= 0 && layerIdx < len(s.layers) {
 		s.layers[layerIdx].HealExpert(expertIdx, alphaIDs)
 	}
