@@ -266,10 +266,13 @@ func (e *Embedding) Forward(inputIDs *Tensor) (*Tensor, error) {
 		tokenID := int(idAsFloat)
 		e.inputTokenIDs[i] = tokenID // Store for backward pass
 
-		// Validate the token ID is within the vocabulary range.
+		// Safe boundary gate protection for mismatch between primary model and social fallback
 		if tokenID < 0 || tokenID >= e.VocabSize {
-			log.Printf("Error: token ID %d is out of vocabulary range [0, %d)", tokenID, e.VocabSize)
-			return nil, fmt.Errorf("token ID %d is out of vocabulary range [0, %d)", tokenID, e.VocabSize)
+			log.Printf("Warning: token ID %d is out of vocabulary range [0, %d). Forcing fallback to UNK.", tokenID, e.VocabSize)
+			tokenID = 1
+			if tokenID >= e.VocabSize {
+				tokenID = 0
+			}
 		}
 
 		// Copy the embedding vector for the current token ID from the weights tensor.

@@ -36,15 +36,55 @@ func (r *Runner) handleMoveCommand(fileName, targetDirectory string) string {
 	if targetDirectory == "" {
 		return "Please specify a destination directory."
 	}
-	if _, err := os.Stat(targetDirectory); os.IsNotExist(err) {
-		return fmt.Sprintf("Destination directory '%s' does not exist.", targetDirectory)
+	// Handle logical "out of" / "back" targets
+	if targetDirectory == "out" || targetDirectory == "back" || targetDirectory == "up" {
+		targetDirectory = ".."
 	}
-	destFile := filepath.Join(targetDirectory, filepath.Base(fileName))
-	err := os.Rename(fileName, destFile)
+	if targetDirectory == "." || targetDirectory == "here" {
+		targetDirectory = "."
+	}
+	
+	// Strip leading slash so '/jimmy' means the local folder 'jimmy'
+	cleanTarget := strings.TrimPrefix(targetDirectory, "/")
+	if cleanTarget == "" {
+		cleanTarget = targetDirectory
+	}
+	if _, err := os.Stat(cleanTarget); os.IsNotExist(err) && cleanTarget != ".." && cleanTarget != "." {
+		return fmt.Sprintf("Destination directory '%s' does not exist.", cleanTarget)
+	}
+	// Detect if fileName is itself a directory — try the .go file variant first
+	effectiveFile := fileName
+	if info, err := os.Stat(fileName); err == nil && info.IsDir() {
+		// User may have said 'jimmy' meaning 'jimmy.go'
+		goVariant := fileName + ".go"
+		if _, err2 := os.Stat(goVariant); err2 == nil {
+			effectiveFile = goVariant
+		} else {
+			return fmt.Sprintf("'%s' is a directory, not a file. Did you mean to move a specific file inside it?", fileName)
+		}
+	} else if os.IsNotExist(err) {
+		// File not found locally. Let's try to find it in the project.
+		var foundPath string
+		_ = filepath.Walk(".", func(path string, info os.FileInfo, walkErr error) error {
+			if walkErr == nil && !info.IsDir() && info.Name() == effectiveFile {
+				foundPath = path
+				return filepath.SkipDir
+			}
+			return nil
+		})
+		if foundPath != "" {
+			effectiveFile = foundPath
+		} else {
+			return fmt.Sprintf("I couldn't find a file named '%s' anywhere in the project.", effectiveFile)
+		}
+	}
+	
+	destFile := filepath.Join(cleanTarget, filepath.Base(effectiveFile))
+	err := os.Rename(effectiveFile, destFile)
 	if err != nil {
-		return fmt.Sprintf("I couldn't move the file '%s' to '%s': %v", fileName, targetDirectory, err)
+		return fmt.Sprintf("I couldn't move the file '%s' to '%s': %v", effectiveFile, cleanTarget, err)
 	}
-	predictedSentence := fmt.Sprintf("I have moved the file '%s' to '%s'.", fileName, targetDirectory)
+	predictedSentence := fmt.Sprintf("I have moved the file '%s' to '%s'.", effectiveFile, cleanTarget)
 	if tree, err := generateDirectoryTree(".", "", 0, 2, destFile); err == nil {
 		predictedSentence += "\n\n" + tree
 	}

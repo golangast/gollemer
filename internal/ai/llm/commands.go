@@ -43,7 +43,86 @@ func (r *Runner) handleInteractiveQuery(query string) {
 		}
 	}
 
-	// 1. Session Logic: If we have an active intent waiting for data, 
+	// 0.5. Pronoun Resolution: if the user says "move it" or "move the file"
+	// resolve the pronoun to the last concrete filename mentioned in history.
+	{
+		lq := strings.ToLower(strings.TrimSpace(query))
+		isPronounCmd := strings.Contains(lq, "move it") || strings.Contains(lq, "put it") ||
+			strings.Contains(lq, "move the file into") || strings.Contains(lq, "move the file to") ||
+			strings.HasSuffix(lq, " the file")
+
+		if isPronounCmd && len(r.Client.History) > 0 {
+			resolvedFile := ""
+			for i := len(r.Client.History) - 1; i >= 0 && resolvedFile == ""; i-- {
+				for _, text := range []string{r.Client.History[i].Q, r.Client.History[i].A} {
+					words := strings.Fields(strings.ToLower(text))
+					for _, w := range words {
+						w = strings.Trim(w, "',\".")
+						if strings.Contains(w, ".") && !strings.HasPrefix(w, ".") {
+							// Looks like a filename (has extension)
+							resolvedFile = w
+							break
+						}
+					}
+					if resolvedFile != "" {
+						break
+					}
+				}
+			}
+			if resolvedFile != "" {
+				resolved := strings.ReplaceAll(query, " it ", " "+resolvedFile+" ")
+				if strings.Contains(lq, "move the file into") || strings.Contains(lq, "move the file to") {
+					resolved = strings.ReplaceAll(resolved, " the file ", " "+resolvedFile+" ")
+				} else if strings.HasSuffix(lq, " the file") {
+					resolved = strings.TrimSuffix(resolved, " the file") + " " + resolvedFile
+				}
+				if resolved != query {
+					r.Mascot.Speak(ui.MoodIdle, fmt.Sprintf("(Resolved to: '%s')", resolved))
+					query = resolved
+				}
+			}
+		}
+
+		// 0.6. Memory queries ("what file", "what folder", "do you remember"...) answered
+		// directly from live history before hitting the neural pipeline.
+		isMemQ := strings.Contains(lq, "what file") || strings.Contains(lq, "what folder") ||
+			strings.Contains(lq, "were we talking") || strings.Contains(lq, "do you remember") ||
+			strings.Contains(lq, "do you recall") || strings.Contains(lq, "what did i say") ||
+			strings.Contains(lq, "what did we talk") || strings.Contains(lq, "what was i talking") ||
+			strings.Contains(lq, "where is the file")
+
+		if isMemQ {
+			if len(r.Client.History) == 0 {
+				resp := "I don't have any conversation history from this session yet."
+				r.Mascot.Speak(ui.MoodIdle, resp)
+				r.Client.PushHistory(query, resp, "history_recall")
+				return
+			}
+			resp := r.Client.resolveContextQuery(lq)
+			if resp == "" {
+				// Generic summary fallback
+				var lines []string
+				for i, pair := range r.Client.History {
+					line := fmt.Sprintf("Turn %d — You: \"%s\"", i+1, pair.Q)
+					if pair.A != "" {
+						short := pair.A
+						if len(short) > 80 {
+							short = short[:80] + "…"
+						}
+						line += fmt.Sprintf(" | Me: \"%s\"", short)
+					}
+					lines = append(lines, line)
+				}
+				resp = "Here's what we've discussed:\n" + strings.Join(lines, "\n")
+			}
+			r.Mascot.Speak(ui.MoodIdle, resp)
+			r.Client.PushHistory(query, resp, "history_recall")
+			return
+		}
+	}
+
+
+	// 1. Session Logic: If we have an active intent waiting for data,
 	// we process the new input as part of that intent's context.
 	var prevIntent *IntentDataLayer
 	if r.SessionState.IsActive {
@@ -150,8 +229,20 @@ func (r *Runner) executeCommand(query string, intent *Intent, intentData *Intent
 		if targetDirectory != "" {
 			return targetDirectory
 		}
-		skipWords := map[string]bool{"into": true, "to": true, "in": true, "up": true, "inside": true}
+		skipWords := map[string]bool{"into": true, "to": true, "in": true, "up": true, "inside": true, "directory": true, "folder": true}
 		parts := strings.Fields(query)
+
+		if strings.HasPrefix(strings.ToLower(query), "move ") {
+			for i := len(parts) - 2; i >= 0; i-- {
+				if skipWords[strings.ToLower(parts[i])] {
+					return parts[i+1]
+				}
+			}
+			if len(parts) > 2 {
+				return parts[len(parts)-1]
+			}
+		}
+
 		for i, p := range parts {
 			lp := strings.ToLower(p)
 			if lp == "go" || lp == "cd" || lp == "goto" || lp == "list" || lp == "ls" || lp == "tree" {
@@ -264,8 +355,23 @@ func (r *Runner) executeCommand(query string, intent *Intent, intentData *Intent
 		switch command {
 		case "go":
 			predictedSentence = r.handleGoCommand(extractDir())
-		case "move":
-			predictedSentence = r.handleMoveCommand(fileName, targetDirectory)
+		case "move_query", "move":
+			if fileName == "" {
+				parts := strings.Fields(query)
+				for i, p := range parts {
+					if strings.ToLower(p) == "file" || strings.ToLower(p) == "named" || strings.ToLower(p) == "folder" {
+						if i+1 < len(parts) && parts[i+1] != "into" && parts[i+1] != "to" {
+							fileName = parts[i+1]
+							break
+						}
+					}
+				}
+				if fileName == "" && len(parts) >= 3 {
+					// e.g. "move jake jimmy" -> parts[0]="move", parts[1]="jake", parts[2]="jimmy"
+					fileName = parts[1]
+				}
+			}
+			predictedSentence = r.handleMoveCommand(fileName, extractDir())
 		case "list":
 			predictedSentence = r.handleListCommand(objectType, intent.ObjectTypeParts, targetDirectory)
 		case "tree":
@@ -310,7 +416,14 @@ func (r *Runner) executeCommand(query string, intent *Intent, intentData *Intent
 
 	predictedSentence = r.handleTutorialLogic(command, objectType, predictedSentence)
 	colors.AnimatedOutput("green", "black", predictedSentence, 1*time.Second)
-	r.Client.PushHistory(query, predictedSentence, intentData.Intent)
+	
+	// Prevent context poisoning: don't store massive terminal outputs or dir trees in history
+	historySentence := predictedSentence
+	if len(historySentence) > 200 || strings.Contains(historySentence, "├──") || strings.Contains(historySentence, "└──") {
+		lines := strings.Split(historySentence, "\n")
+		historySentence = lines[0]
+	}
+	r.Client.PushHistory(query, historySentence, intentData.Intent)
 }
 
 func (r *Runner) handleTreeCommand(targetDirectory string) string {
