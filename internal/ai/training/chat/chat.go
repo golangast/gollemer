@@ -35,9 +35,102 @@ type Batch struct {
 	Grammar      *tensor.Tensor // Shape: [BatchSize, MaxTargetLen] (Ground-truth POS tags)
 	QueryGrammar *tensor.Tensor // Shape: [BatchSize, MaxInputLen] (Ground-truth POS tags for query)
 	Mask         []float32      // To tell the loss function to ignore <pad>
+	LossMask     []float32      // 1.0 = compute gradient (assistant tokens), 0.0 = skip (user/control tokens)
 	InputMask    *tensor.Tensor // Attention mask (0.0 for real, -1e9 for pad)
 	Intents      []string       // Stored intent labels for RuleBook matching
 	Weights      []float32      // Sample weights for evolutionary data control
+}
+
+// --- Multi-Turn Conversation Helpers ---
+
+// DialogRole identifies the speaker of a conversation turn.
+type DialogRole string
+
+const (
+	RoleUser      DialogRole = "user"
+	RoleAssistant DialogRole = "assistant"
+)
+
+// DialogTurn is a single turn (one speaker's message) in a multi-turn conversation.
+type DialogTurn struct {
+	Role    DialogRole
+	Content string
+}
+
+// ConversationSample holds a full multi-turn dialogue for training.
+type ConversationSample struct {
+	Dialogue []DialogTurn
+}
+
+// PrepareTrainingSequence flattens a ConversationSample into a contiguous token ID
+// slice and a companion LossMask.
+//
+// Special tokens used:
+//   <|im_start|>  – marks the beginning of a speaker turn
+//   <|im_end|>    – marks the end of a speaker turn
+//
+// Loss masking rules:
+//   - Control/role prefix tokens  → 0.0  (never train the model to predict user text)
+//   - User content tokens         → 0.0
+//   - Assistant content tokens    → 1.0  (only these tokens contribute to the gradient)
+//   - Padding tokens              → 0.0
+//
+// The returned slices are padded to windowSize for SIMD-aligned batching. If
+// windowSize <= 0 the slices are returned at their natural length.
+func PrepareTrainingSequence(
+	conv ConversationSample,
+	vocab *mainvocab.Vocabulary,
+	windowSize int,
+) (tokens []int32, lossMask []float32) {
+	lookup := func(word string) int32 {
+		if id, ok := vocab.WordToToken[word]; ok {
+			return int32(id)
+		}
+		return int32(vocab.GetTokenID("UNK"))
+	}
+
+	imStart := lookup("<|im_start|>")
+	imEnd := lookup("<|im_end|>")
+	newline := lookup("\n")
+
+	for _, turn := range conv.Dialogue {
+		// 1. Role prefix: <|im_start|> ROLE \n
+		prefixIDs := []int32{imStart, lookup(string(turn.Role)), newline}
+		for _, id := range prefixIDs {
+			tokens = append(tokens, id)
+			lossMask = append(lossMask, 0.0) // control tokens never train
+		}
+
+		// 2. Content tokens
+		contentWords := cleanTokenize(strings.ToLower(turn.Content))
+		var maskVal float32
+		if turn.Role == RoleAssistant {
+			maskVal = 1.0 // only assistant tokens drive the gradient
+		}
+		for _, word := range contentWords {
+			tokens = append(tokens, lookup(word))
+			lossMask = append(lossMask, maskVal)
+		}
+
+		// 3. End-of-turn marker
+		tokens = append(tokens, imEnd)
+		lossMask = append(lossMask, 0.0)
+	}
+
+	// 4. Fixed-window SIMD padding
+	if windowSize > 0 {
+		padID := int32(vocab.PaddingTokenID)
+		for len(tokens) < windowSize {
+			tokens = append(tokens, padID)
+			lossMask = append(lossMask, 0.0)
+		}
+		// Truncate to window if over-length
+		if len(tokens) > windowSize {
+			tokens = tokens[:windowSize]
+			lossMask = lossMask[:windowSize]
+		}
+	}
+	return tokens, lossMask
 }
 
 // TrainingMetric defines a data structure for monitoring training health, compatible with WASM dashboards.
@@ -345,6 +438,18 @@ skipCSV:
 			}
 		} else {
 			log.Printf("⚠️  conversing.csv not found at %s", conversingPath)
+		}
+	}
+
+	// --- LOAD conversations.jsonl (multi-turn dialogue data) ---
+	conversingJSONLPath := filepath.Join(projectRoot, "data/training/trainingdata/conversations.jsonl")
+	if _, err := os.Stat(conversingJSONLPath); err == nil {
+		convPairs, convErr := LoadConversationJSONL(conversingJSONLPath)
+		if convErr != nil {
+			log.Printf("⚠️  conversations.jsonl load error (TrainChat): %v", convErr)
+		} else {
+			chatPairs = append(chatPairs, convPairs...)
+			log.Printf(" Loaded %d multi-turn conversation pairs from conversations.jsonl (TrainChat total: %d)", len(convPairs), len(chatPairs))
 		}
 	}
 
@@ -2134,6 +2239,8 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 	var humanChatPath string
 	var socialVocabPathFinal string
 	var conversingPath string
+	var conversingJSONLPath string
+	var conversingCSVPath string
 
 	// Load custom data if provided
 	if customDataPath != "" {
@@ -2195,6 +2302,9 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 			}
 		}
 	}
+	// Assign paths (declared above to satisfy Go's goto-over-declaration rule).
+	conversingJSONLPath = filepath.Join(projectRoot, "data/training/trainingdata/conversations.jsonl")
+	conversingCSVPath = filepath.Join(projectRoot, "data/training/trainingdata/conversations.csv")
 
 	humanChatPath = filepath.Join(projectRoot, "data/training/trainingdata/human_chat.txt")
 	if _, err := os.Stat(humanChatPath); err == nil {
@@ -2268,6 +2378,33 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 				}
 			}
 			log.Printf(" Loaded total %d pairs after adding conversing.csv (Proper CSV parsing)", len(chatPairs))
+		}
+	}
+
+	// --- LOAD conversations.jsonl (multi-turn dialogue data) ---
+	// Each conversation is expanded into context-windowed TrainPairs so the
+	// model learns to maintain dialogue history across turns.
+	if _, err := os.Stat(conversingJSONLPath); err == nil {
+		convPairs, convErr := LoadConversationJSONL(conversingJSONLPath)
+		if convErr != nil {
+			log.Printf("⚠️  conversations.jsonl load error: %v", convErr)
+		} else {
+			chatPairs = append(chatPairs, convPairs...)
+			log.Printf(" Loaded %d multi-turn conversation pairs from conversations.jsonl (total: %d)", len(convPairs), len(chatPairs))
+		}
+	}
+
+	// --- LOAD conversations.csv (flat multi-turn dialogue data) ---
+	// Format: conversation_id, turn_sequence, role, content
+	// Rows are grouped by conversation_id, sorted by turn_sequence, then
+	// expanded using the same causal-context window as the JSONL loader.
+	if _, err := os.Stat(conversingCSVPath); err == nil {
+		convCSVPairs, convCSVErr := LoadConversationCSV(conversingCSVPath)
+		if convCSVErr != nil {
+			log.Printf("⚠️  conversations.csv load error: %v", convCSVErr)
+		} else {
+			chatPairs = append(chatPairs, convCSVPairs...)
+			log.Printf(" Loaded %d multi-turn conversation pairs from conversations.csv (total: %d)", len(convCSVPairs), len(chatPairs))
 		}
 	}
 skipSocialLoad:
@@ -2491,6 +2628,13 @@ skipSocialLoad:
 			intentModel.SentenceVocab.AddToken("__intent__")
 			intentModel.SentenceVocab.AddToken("social")
 			intentModel.SentenceVocab.AddToken(":")
+			// Multi-turn conversation boundary tokens (ChatML-style)
+			// These anchor the gating network to route structural conversational
+			// flow to dedicated experts while domain nouns route to specialized ones.
+			intentModel.SentenceVocab.AddToken("<|im_start|>")
+			intentModel.SentenceVocab.AddToken("<|im_end|>")
+			intentModel.SentenceVocab.AddToken("user")
+			intentModel.SentenceVocab.AddToken("assistant")
 		}
 	}
 
@@ -3152,7 +3296,33 @@ skipSocialLoad:
 				currentBatchSize := targetTensor.Shape[0]
 				seqLen := targetTensor.Shape[1]
 				var stepLossTotal float32 = 0.0
+				// maskedSteps counts only steps where at least one batch element has loss
+				maskedSteps := 0
 				for t, logit := range logits {
+					// --- Loss Masking (Crucial) ---
+					// Check if ALL batch elements at this decode step are masked out.
+					// If the LossMask says 0.0 for every sample in this step, skip the
+					// gradient entirely so the model is never penalized for predicting
+					// user/control tokens or padding.
+					var stepMaskSum float32
+					if len(batch.LossMask) > 0 {
+						for b := 0; b < currentBatchSize; b++ {
+							maskIdx := b*seqLen + t + 1 // +1 because targets are shifted by 1
+							if maskIdx < len(batch.LossMask) {
+								stepMaskSum += batch.LossMask[maskIdx]
+							}
+						}
+					} else {
+						stepMaskSum = float32(currentBatchSize) // no mask = train on everything
+					}
+
+					if stepMaskSum == 0.0 {
+						// This step is fully masked (pad/user tokens): zero the gradient.
+						grads[t] = tensor.NewTensor(logit.Shape, make([]float32, len(logit.Data)), false)
+						continue
+					}
+					maskedSteps++
+
 					targets := make([]int, currentBatchSize)
 					for b := 0; b < currentBatchSize; b++ {
 						targets[b] = int(targetTensor.Data[b*seqLen+t+1])
@@ -3163,10 +3333,21 @@ skipSocialLoad:
 					if g == nil {
 						g = tensor.NewTensor(logit.Shape, make([]float32, len(logit.Data)), false)
 					}
+					// Scale gradient by per-step mask weight (fraction of unmasked batch elements)
+					scale := stepMaskSum / float32(currentBatchSize)
+					if scale < 1.0 {
+						for gi := range g.Data {
+							g.Data[gi] *= scale
+						}
+						l *= scale
+					}
 					stepLossTotal += l
 					grads[t] = g
 				}
-				div := float32(len(logits))
+				div := float32(maskedSteps)
+				if div <= 0 {
+					div = 1.0
+				}
 				batchLoss = stepLossTotal / div
 
 				// Apply sample weights (Evolving Data Control)
@@ -3763,14 +3944,15 @@ skipSocialLoad:
 							}
 							avgAtt := sumAtt / float32(numHeads)
 
-							const attThreshold = 0.015 // Explicit threshold requirement
-							if avgAtt < attThreshold && epoch > 40 {
+							const attThreshold = 0.05 // Explicit threshold requirement
+							structuralScore := scoreGrammarHeuristic(response)
+							if (avgAtt < attThreshold || structuralScore < 5.0) && epoch > 40 {
 								if cfg.OverfitMode && epoch < 500 {
 									// Temporary relaxation for small social dataset validation
 									// Don't engage total lockdown if the Subject-Verb connection is converting
 									log.Printf(" ℹ️ OverfitMode: Relaxing PRON/AUX expert constraint for early convergence (Connection: %.4f < %.4f)", avgAtt, attThreshold)
 								} else {
-									log.Printf(" ⚠️  Quality Gate REJECTED (Subject-Verb Connection: %.4f < %.4f)", avgAtt, attThreshold)
+									log.Printf(" ⚠️  Quality Gate REJECTED (Subject-Verb Connection: %.4f < %.4f, StructuralScore: %.2f)", avgAtt, attThreshold, structuralScore)
 									heuristicScore = 1.0 // Force failure
 
 									// --- [Adaptive Supervisor Intervention] ---
@@ -4857,11 +5039,25 @@ func (it *ChatDataIterator) NextBatch(batchSize int) *Batch {
 		return &Batch{}
 	}
 
+	// SIMD alignment: round maxIn and maxOut up to the nearest multiple of 8
+	// so that low-level vector operations always operate on aligned memory blocks.
+	const simdAlign = 8
+	if maxIn%simdAlign != 0 {
+		maxIn = (maxIn/simdAlign + 1) * simdAlign
+	}
+	if maxOut%simdAlign != 0 {
+		maxOut = (maxOut/simdAlign + 1) * simdAlign
+	}
+
 	paddedIn := make([]float32, len(inputs)*maxIn)
 	paddedOut := make([]float32, len(targets)*maxOut)
 	paddedGrammar := make([]float32, len(grammars)*maxOut)
 	paddedQueryGrammar := make([]float32, len(queryGrammars)*maxIn)
 	mask := make([]float32, len(targets)*maxOut)
+	// LossMask: 1.0 for real answer tokens, 0.0 for pad positions.
+	// The query (input) is never included in the target slice, so the target mask
+	// already acts as the correct loss mask — real answer tokens get 1.0, padding 0.0.
+	lossMask := make([]float32, len(targets)*maxOut)
 	inputLogitMask := make([]float32, len(inputs)*maxIn) // For attention: 0 for real, -1e9 for pad
 	padID := float32(it.vocab.PaddingTokenID)
 
@@ -4882,10 +5078,14 @@ func (it *ChatDataIterator) NextBatch(batchSize int) *Batch {
 				paddedOut[i*maxOut+j] = targets[i][j]
 				paddedGrammar[i*maxOut+j] = grammars[i][j]
 				mask[i*maxOut+j] = 1.0
+				// All real answer tokens contribute to the loss (1.0).
+				// BOS/EOS at position 0 or last are kept — the model must learn sequence boundaries.
+				lossMask[i*maxOut+j] = 1.0
 			} else {
 				paddedOut[i*maxOut+j] = padID
 				paddedGrammar[i*maxOut+j] = -1 // Padding (ignore in routing loss)
 				mask[i*maxOut+j] = 0.0
+				lossMask[i*maxOut+j] = 0.0 // Never train on padding
 			}
 		}
 	}
@@ -4899,6 +5099,7 @@ func (it *ChatDataIterator) NextBatch(batchSize int) *Batch {
 		Grammar:      tensor.NewTensor([]int{len(grammars), maxOut}, paddedGrammar, false),
 		QueryGrammar: tensor.NewTensor([]int{len(queryGrammars), maxIn}, paddedQueryGrammar, false),
 		Mask:         mask,
+		LossMask:     lossMask,
 		InputMask:    inputMaskTensor,
 		Intents:      intents,
 		Weights:      weights,
@@ -5054,7 +5255,8 @@ func cleanTokenize(text string) []string {
 	var currentWord strings.Builder
 
 	for _, r := range text {
-		if unicode.IsLetter(r) || unicode.IsNumber(r) || r == '\'' || r == '_' {
+		// Include < and > to preserve special tokens like <s> and </s>, and / for </s>
+		if unicode.IsLetter(r) || unicode.IsNumber(r) || r == '\'' || r == '_' || r == '<' || r == '>' || r == '/' {
 			currentWord.WriteRune(r)
 		} else {
 			// Save the word built so far
@@ -6977,4 +7179,312 @@ func (s *surgeryImpl) ResetRouters(layerIdx int) {
 	if layerIdx >= 0 && layerIdx < len(s.layers) {
 		s.layers[layerIdx].ResetRouterWeights()
 	}
+}
+
+// ─── JSONL Multi-Turn Conversation Loader ────────────────────────────────────
+
+// LoadConversationCSV reads a CSV file with columns:
+//
+//	conversation_id, turn_sequence, role, content
+//
+// Rows are grouped by conversation_id, sorted by turn_sequence, then walked
+// identically to LoadConversationJSONL so the model learns to condition each
+// assistant reply on the full preceding context (causal mask semantics).
+func LoadConversationCSV(path string) ([]moe.TrainPair, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("LoadConversationCSV: open %s: %w", path, err)
+	}
+	defer f.Close()
+
+	reader := csv.NewReader(f)
+	reader.FieldsPerRecord = -1 // tolerate variable column counts
+	reader.LazyQuotes = true
+
+	// csvRow holds one parsed row from the file.
+	type csvRow struct {
+		TurnSeq int
+		Role    string
+		Content string
+	}
+
+	// Collect rows grouped by conversation_id, preserving insertion order.
+	type convEntry struct {
+		id   string
+		rows []csvRow
+	}
+	convMap := make(map[string]*convEntry)
+	var convOrder []string
+
+	lineNo := 0
+	for {
+		record, rerr := reader.Read()
+		if rerr != nil {
+			break // EOF or unrecoverable
+		}
+		lineNo++
+		if lineNo == 1 {
+			// Skip header row (conversation_id, turn_sequence, role, content)
+			if strings.EqualFold(strings.Trim(record[0], `"`), "conversation_id") {
+				continue
+			}
+		}
+		if len(record) < 4 {
+			log.Printf("⚠️  LoadConversationCSV: skipping short row %d in %s", lineNo, path)
+			continue
+		}
+		convID := strings.Trim(record[0], `"`)
+		turnSeqStr := strings.Trim(record[1], `"`)
+		role := strings.ToLower(strings.Trim(record[2], `"`))
+		content := strings.Trim(record[3], `"`)
+
+		turnSeq := 0
+		fmt.Sscanf(turnSeqStr, "%d", &turnSeq)
+
+		if _, ok := convMap[convID]; !ok {
+			convMap[convID] = &convEntry{id: convID}
+			convOrder = append(convOrder, convID)
+		}
+		convMap[convID].rows = append(convMap[convID].rows, csvRow{
+			TurnSeq: turnSeq,
+			Role:    role,
+			Content: content,
+		})
+	}
+
+	// Build TrainPairs using the same causal-context logic as LoadConversationJSONL.
+	var pairs []moe.TrainPair
+	for _, cid := range convOrder {
+		entry := convMap[cid]
+		// Sort by turn sequence so out-of-order rows are handled gracefully.
+		sort.Slice(entry.rows, func(i, j int) bool {
+			return entry.rows[i].TurnSeq < entry.rows[j].TurnSeq
+		})
+
+		// Convert to jsonlDialogueTurn slice for intent inference reuse.
+		dialogue := make([]jsonlDialogueTurn, len(entry.rows))
+		for i, r := range entry.rows {
+			dialogue[i] = jsonlDialogueTurn{Role: r.Role, Content: r.Content}
+		}
+
+		var contextParts []string
+		for _, turn := range entry.rows {
+			content := strings.TrimSpace(turn.Content)
+			if content == "" {
+				continue
+			}
+			switch turn.Role {
+			case "system":
+				contextParts = append(contextParts, "<s> __system__ "+content+" </s>")
+			case "user":
+				contextParts = append(contextParts, "__user__ "+content)
+			case "assistant":
+				if len(contextParts) == 0 {
+					contextParts = append(contextParts, "__assistant__ "+content+" </s>")
+					continue
+				}
+				queryContext := strings.Join(contextParts, " ")
+				intent := inferConversationIntent(dialogue, content)
+
+				depth := 0
+				for _, p := range contextParts {
+					if strings.HasPrefix(p, "__user__") || strings.HasPrefix(p, "__assistant__") {
+						depth++
+					}
+				}
+				weight := float32(1.0)
+				if depth > 1 {
+					weight = 1.0 / float32(depth)
+					if weight < 0.3 {
+						weight = 0.3
+					}
+				}
+
+				pairs = append(pairs, moe.TrainPair{
+					Q:      queryContext,
+					A:      content,
+					Intent: intent,
+					Weight: weight,
+				})
+				contextParts = append(contextParts, "__assistant__ "+content+" </s>")
+			default:
+				log.Printf("⚠️  LoadConversationCSV: unknown role %q in conv %s", turn.Role, cid)
+			}
+		}
+	}
+
+	log.Printf("📖 LoadConversationCSV: loaded %d training pairs from %s", len(pairs), path)
+	return pairs, nil
+}
+
+// jsonlDialogueTurn mirrors one entry in the "dialogue" array of a conversation JSONL record.
+type jsonlDialogueTurn struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+// jsonlConversation is the top-level structure of each line in conversations.jsonl.
+type jsonlConversation struct {
+	ConversationID string              `json:"conversation_id"`
+	Dialogue       []jsonlDialogueTurn `json:"dialogue"`
+}
+
+// LoadConversationJSONL reads a JSONL file (one JSON object per line) where each
+// object represents a multi-turn dialogue and expands every assistant turn into a
+// TrainPair. The query is the full conversation history up to that point so the
+// model learns to condition on prior context. Cross-turn interleaving is achieved
+// automatically: one conversation with N assistant turns produces N pairs at
+// different context lengths, which are shuffled into batches together with pairs
+// from other conversations — forcing the router to handle both short and long
+// contexts simultaneously.
+func LoadConversationJSONL(path string) ([]moe.TrainPair, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("LoadConversationJSONL: open %s: %w", path, err)
+	}
+	defer f.Close()
+
+	var pairs []moe.TrainPair
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
+
+	lineNo := 0
+	for scanner.Scan() {
+		lineNo++
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "//") {
+			continue
+		}
+
+		var conv jsonlConversation
+		if err := json.Unmarshal([]byte(line), &conv); err != nil {
+			log.Printf("⚠️  LoadConversationJSONL: skipping malformed line %d in %s: %v", lineNo, path, err)
+			continue
+		}
+
+		// Walk the dialogue and emit one TrainPair per assistant turn.
+		var contextParts []string
+
+		for _, turn := range conv.Dialogue {
+			role := strings.ToLower(strings.TrimSpace(turn.Role))
+			content := strings.TrimSpace(turn.Content)
+			if content == "" {
+				continue
+			}
+
+			switch role {
+			case "system":
+				// System prompt becomes the first context segment; the model
+				// learns to condition on it but is never asked to generate it.
+				contextParts = append(contextParts, "<s> __system__ "+content+" </s>")
+
+			case "user":
+				contextParts = append(contextParts, "__user__ "+content)
+
+			case "assistant":
+				if len(contextParts) == 0 {
+					contextParts = append(contextParts, "__assistant__ "+content+" </s>")
+					continue
+				}
+
+				// Build query as the full accumulated context. This matches the
+				// __intent__ / __ques__ / __ans__ shape expected by the tokenizer
+				// so vocabulary and routing remain aligned with CSV pairs.
+				queryContext := strings.Join(contextParts, " ")
+				intent := inferConversationIntent(conv.Dialogue, content)
+
+				// Weight decays gently with dialogue depth so very long histories
+				// don't dominate the batch loss over short-context examples.
+				depth := 0
+				for _, p := range contextParts {
+					if strings.HasPrefix(p, "__user__") || strings.HasPrefix(p, "__assistant__") {
+						depth++
+					}
+				}
+				weight := float32(1.0)
+				if depth > 1 {
+					weight = 1.0 / float32(depth)
+					if weight < 0.3 {
+						weight = 0.3
+					}
+				}
+
+				pairs = append(pairs, moe.TrainPair{
+					Q:      queryContext,
+					A:      content,
+					Intent: intent,
+					Weight: weight,
+				})
+
+				// Extend context so subsequent turns can reference this reply.
+				contextParts = append(contextParts, "__assistant__ "+content+" </s>")
+
+			default:
+				log.Printf("⚠️  LoadConversationJSONL: unknown role %q in %s line %d", role, path, lineNo)
+			}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return pairs, fmt.Errorf("LoadConversationJSONL: scanner error: %w", err)
+	}
+
+	log.Printf("📖 LoadConversationJSONL: loaded %d training pairs from %s", len(pairs), path)
+	return pairs, nil
+}
+
+// inferConversationIntent derives a training intent label from the full dialogue
+// so the MoE router can correctly assign conversational flow to structural experts.
+func inferConversationIntent(dialogue []jsonlDialogueTurn, assistantReply string) string {
+	var allUser strings.Builder
+	for _, t := range dialogue {
+		if strings.ToLower(t.Role) == "user" {
+			allUser.WriteString(strings.ToLower(t.Content))
+			allUser.WriteByte(' ')
+		}
+	}
+	u := allUser.String()
+	r := strings.ToLower(assistantReply)
+
+	switch {
+	case containsAnyStr(u, "hello", "hi ", "hey ", "good morning", "good afternoon", "good evening"):
+		return "greeting"
+	case containsAnyStr(u, "thank", "appreciate"):
+		return "social"
+	case containsAnyStr(u, "memory", "heap", "leak", "allocation", "oom", "out of memory", "pointer"):
+		return "debugging"
+	case containsAnyStr(u, "database", "query", "sql", "index", "slow query", "join"):
+		return "database"
+	case containsAnyStr(u, "deploy", "pipeline", "ci ", "build", "release", "zero downtime"):
+		return "devops"
+	case containsAnyStr(u, "crash", "panic", "error", "exception", "500", "failed", "bug", "issue", "403"):
+		return "debugging"
+	case containsAnyStr(u, "goroutine", "channel", "mutex", "concurren", "race"):
+		return "concurrency"
+	case containsAnyStr(u, "context", "cancel", "timeout", "deadline"):
+		return "go_patterns"
+	case containsAnyStr(u, "secure", "security", "api key", "auth", "token", "rbac", "permission"):
+		return "security"
+	case containsAnyStr(u, "test", "mock", "assert", "coverage", "tdd", "unit"):
+		return "testing"
+	case containsAnyStr(u, "architecture", "microservice", "grpc", "rest", "design", "pattern"):
+		return "architecture"
+	case containsAnyStr(r, "profil", "debug", "check", "look", "analyz", "investigat"):
+		return "debugging"
+	case len(u) > 30 && !containsAnyStr(u, "how are you", "what is your name"):
+		// For long technical questions that missed keywords, use a generic technical intent
+		return "technical"
+	default:
+		return "social"
+	}
+}
+
+// containsAnyStr returns true if s contains any of the provided substrings.
+func containsAnyStr(s string, subs ...string) bool {
+	for _, sub := range subs {
+		if strings.Contains(s, sub) {
+			return true
+		}
+	}
+	return false
 }

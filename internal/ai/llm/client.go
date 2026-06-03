@@ -47,6 +47,34 @@ func (c *GollemerMoEClient) PushHistory(q, a, intent string) {
 	if len(c.History) > 10 { // Keep last 10 turns
 		c.History = c.History[1:]
 	}
+
+	// Dynamic Learning: Update the training data automatically so the MoE model
+	// can learn this phrase and intent mapping for future predictions.
+	if q != "" && a != "" && intent != "" && intent != "chat_response" {
+		// Do not save error fallbacks or word salad rejections
+		if !strings.Contains(a, "I'm sorry, I couldn't understand") && !strings.Contains(a, "what did you say") {
+			// Locate the project root
+			projectRoot := "."
+			if pwd, err := os.Getwd(); err == nil {
+				projectRoot = pwd
+			}
+			trainFile := filepath.Join(projectRoot, "data/training/trainingdata/conversing.csv")
+			f, err := os.OpenFile(trainFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+			if err == nil {
+				defer f.Close()
+				cleanQ := strings.ReplaceAll(q, "\"", "\"\"")
+				cleanA := strings.ReplaceAll(a, "\"", "\"\"")
+				
+				// Embed the intent directly into the target string so the neural 
+				// model learns to PREDICT the intent rather than just memorizing strings.
+				embeddedAnswer := fmt.Sprintf("[INTENT: %s] %s", intent, cleanA)
+				
+				// format: query,answer,intent,grammar
+				// Default grammar to OTHER since we don't run the POS tagger here.
+				f.WriteString(fmt.Sprintf("\"%s\",\"%s\",\"%s\",\"OTHER\"\n", cleanQ, embeddedAnswer, intent))
+			}
+		}
+	}
 }
 
 func (c *GollemerMoEClient) LoadChatBank(path string) {
@@ -60,8 +88,8 @@ func (c *GollemerMoEClient) LoadChatBank(path string) {
 	// Try JSON first if it doesn't look like a CSV header or if extension is .json
 	if !strings.HasSuffix(strings.ToLower(path), ".csv") {
 		if err := json.Unmarshal(data, &pairs); err == nil {
-			c.ChatBank = pairs
-			log.Printf("✅ Loaded %d prompts into ChatBank from JSON", len(c.ChatBank))
+			c.ChatBank = append(c.ChatBank, pairs...)
+			log.Printf("✅ Loaded %d prompts into ChatBank from JSON (Total: %d)", len(pairs), len(c.ChatBank))
 			return
 		}
 	}
@@ -74,39 +102,89 @@ func (c *GollemerMoEClient) LoadChatBank(path string) {
 		return
 	}
 
+	var isMultiTurn = false
 	for i, record := range records {
-		if i == 0 && (strings.Contains(strings.ToLower(record[0]), "query") ||
-			strings.Contains(strings.ToLower(record[0]), "intent") ||
-			strings.Contains(strings.ToLower(record[0]), "question")) {
-			continue // Skip header row
+		if i == 0 {
+			headerStr := strings.ToLower(strings.Join(record, ","))
+			if strings.Contains(headerStr, "conversation_id") {
+				isMultiTurn = true
+				continue // Skip header row
+			} else if strings.Contains(headerStr, "query") ||
+				strings.Contains(headerStr, "intent") ||
+				strings.Contains(headerStr, "question") {
+				continue // Skip header row
+			}
 		}
-		if len(record) >= 2 {
-			// conversing.csv columns: query, answer, intent, grammar
-			q := strings.Trim(record[0], "\" ")
-			
-			// Strip evaluation harness prose so text-overlap matching works correctly
-			qLower := strings.ToLower(q)
-			prefixes := []string{"i am processing the concept of ", "i welcome you with ", "i will now ask "}
-			for _, p := range prefixes {
-				if strings.HasPrefix(qLower, p) {
-					q = q[len(p):]
-					qLower = strings.ToLower(q)
+
+		if isMultiTurn {
+			if len(record) >= 4 {
+				// Format: conversation_id, turn_sequence, role, content
+				role := strings.ToLower(strings.Trim(record[2], "\" "))
+				content := strings.Trim(record[3], "\" ")
+				
+				if role == "user" {
+					// temporarily store user content in Q (we will pair it with the next assistant turn)
+					pairs = append(pairs, ChatPair{Q: content})
+				} else if role == "assistant" && len(pairs) > 0 {
+					// assign to the last user turn
+					lastIdx := len(pairs) - 1
+					if pairs[lastIdx].A == "" {
+						pairs[lastIdx].A = content
+						pairs[lastIdx].Intent = "social"
+					}
 				}
 			}
-			q = strings.TrimSpace(q)
+		} else {
+			if len(record) >= 2 {
+				// conversing.csv columns: query, answer, intent, grammar
+				q := strings.Trim(record[0], "\" ")
+				
+				// Strip evaluation harness prose so text-overlap matching works correctly
+				qLower := strings.ToLower(q)
+				prefixes := []string{"i am processing the concept of ", "i welcome you with ", "i will now ask "}
+				for _, p := range prefixes {
+					if strings.HasPrefix(qLower, p) {
+						q = q[len(p):]
+						qLower = strings.ToLower(q)
+					}
+				}
+				q = strings.TrimSpace(q)
 
-			a := strings.Trim(record[1], "\" ")
-			intent := ""
-			if len(record) >= 3 {
-				intent = strings.Trim(record[2], "\" ")
-			}
-			if q != "" && a != "" {
-				pairs = append(pairs, ChatPair{Q: q, A: a, Intent: intent})
+				a := strings.Trim(record[1], "\" ")
+				intent := ""
+				if len(record) >= 3 {
+					intent = strings.Trim(record[2], "\" ")
+				}
+				if q != "" && a != "" {
+					pairs = append(pairs, ChatPair{Q: q, A: a, Intent: intent})
+				}
 			}
 		}
 	}
 
-	c.ChatBank = pairs
+	// Filter out any unpaired multi-turn user queries
+	var finalPairs []ChatPair
+	for _, p := range pairs {
+		if p.Q != "" && p.A != "" {
+			finalPairs = append(finalPairs, p)
+		}
+	}
+
+	c.ChatBank = append(c.ChatBank, finalPairs...)
+	log.Printf("✅ Loaded %d prompts from %s (Total ChatBank: %d)", len(finalPairs), filepath.Base(path), len(c.ChatBank))
+}
+
+func (c *GollemerMoEClient) buildQueryContext(input string) string {
+	var contextParts []string
+	contextParts = append(contextParts, "<s> __system__ You are a helpful assistant. </s>")
+	for _, pair := range c.History {
+		contextParts = append(contextParts, "__user__ " + strings.ToLower(pair.Q))
+		if pair.A != "" {
+			contextParts = append(contextParts, "__assistant__ " + strings.ToLower(pair.A) + " </s>")
+		}
+	}
+	contextParts = append(contextParts, "__user__ " + strings.ToLower(input))
+	return strings.Join(contextParts, " ")
 }
 
 func (c *GollemerMoEClient) RetrieveChatResponse(input string) (string, string, float64) {
@@ -382,40 +460,28 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 	c.lastMoEPrediction = "" // Clear previous turn's chat prediction
 	lowerInput := strings.ToLower(input)
 
-	// --- SOCIAL ROUTING: If it's a social query and we have a social model, use it ---
-	if isSocialIntent(input) && c.SocialModel != nil {
-		// Generate response using social model
-		response := c.GenerateSocialResponse(input)
-		if response != "" {
-			c.lastMoEPrediction = response
-			log.Printf("🧠 Neural Social Match: Using weights from moe_social_model.gob")
-			return "social_chat", 0.95
-		}
-		log.Printf("⚖️  Quality Gate: Social model output was too high-entropy (word salad); trying retrieval fallback.")
-		// Retrieval fallback: search the ChatBank for a matching social response
-		// (always attempt — text-based matching works without W2V embeddings)
-		if len(c.ChatBank) > 0 {
-			retrievedResp, retrievedIntent, retrievedScore := c.RetrieveChatResponse(input)
-			if retrievedScore > 0.5 && retrievedResp != "" {
-				log.Printf("✅ Retrieval Fallback: score=%.4f intent=%s", retrievedScore, retrievedIntent)
-				c.lastMoEPrediction = retrievedResp
-				return "social_chat", retrievedScore
-			}
-		}
-	} else if isSocialIntent(input) && c.SocialModel == nil {
-		// No social model loaded — try retrieval directly for social queries
-		// (always attempt — text-based matching works without W2V embeddings)
-		if len(c.ChatBank) > 0 {
-			retrievedResp, retrievedIntent, retrievedScore := c.RetrieveChatResponse(input)
-			if retrievedScore > 0.5 && retrievedResp != "" {
-				log.Printf("✅ Social Retrieval (no neural model): score=%.4f intent=%s", retrievedScore, retrievedIntent)
-				c.lastMoEPrediction = retrievedResp
-				return "social_chat", retrievedScore
-			}
-		}
-	}
+	// (Moved to after command heuristics)
 
 	// --- 0. Instant Heuristics for Dynamic Queries ---
+	if lowerInput == "what did i say" || lowerInput == "what did i say?" || lowerInput == "what was my last message" {
+		if len(c.History) > 0 {
+			lastQ := c.History[len(c.History)-1].Q
+			c.lastMoEPrediction = fmt.Sprintf("You said: '%s'", lastQ)
+			return "chat_response", 0.99
+		}
+		c.lastMoEPrediction = "I don't have any past conversation history to reference."
+		return "chat_response", 0.99
+	}
+	if lowerInput == "what did you say" || lowerInput == "what did you say?" || lowerInput == "what was your last message" {
+		if len(c.History) > 0 {
+			lastA := c.History[len(c.History)-1].A
+			c.lastMoEPrediction = fmt.Sprintf("I said: '%s'", lastA)
+			return "chat_response", 0.99
+		}
+		c.lastMoEPrediction = "I haven't said anything yet."
+		return "chat_response", 0.99
+	}
+
 	if (strings.Contains(lowerInput, "time") || strings.Contains(lowerInput, "clock")) &&
 		(strings.Contains(lowerInput, "what") || strings.Contains(lowerInput, "know") || strings.Contains(lowerInput, "tell")) {
 		return "time_query", 0.95
@@ -449,6 +515,37 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 	// --- 1. Primary Command Heuristics ---
 	if intent, score := c.checkCommandHeuristics(lowerInput); score > 0.8 {
 		return intent, score
+	}
+
+	// --- 1.5 Conversational (Social) Routing ---
+	// If it's not a command, we want to chat! Pass it to the conversational MoE.
+	if c.SocialModel != nil {
+		response := c.GenerateSocialResponse(input)
+		if response != "" {
+			c.lastMoEPrediction = response
+			log.Printf("🧠 Neural Social Match: Using weights from moe_social_model.gob")
+			return "social_chat", 0.95
+		}
+		log.Printf("⚖️  Quality Gate: Social model output was too high-entropy (word salad); trying retrieval fallback.")
+		if len(c.ChatBank) > 0 {
+			retrievedResp, retrievedIntent, retrievedScore := c.RetrieveChatResponse(input)
+			if retrievedScore > 0.5 && retrievedResp != "" {
+				log.Printf("✅ Retrieval Fallback: score=%.4f intent=%s", retrievedScore, retrievedIntent)
+				c.lastMoEPrediction = paraphraseResponse(retrievedResp)
+				return "social_chat", retrievedScore
+			}
+		}
+	} else {
+		// No conversational model loaded — try retrieval directly
+		if len(c.ChatBank) > 0 {
+			retrievedResp, retrievedIntent, retrievedScore := c.RetrieveChatResponse(input)
+			// Higher threshold since we don't have neural confidence
+			if retrievedScore > 0.7 && retrievedResp != "" {
+				log.Printf("✅ Social Retrieval (no neural model): score=%.4f intent=%s", retrievedScore, retrievedIntent)
+				c.lastMoEPrediction = retrievedResp
+				return "social_chat", retrievedScore
+			}
+		}
 	}
 
 	// --- 1. Combined Retrieval & Neural Logic ---
@@ -499,19 +596,33 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 						}
 						neuralResponse = strings.Join(decodedWords, " ")
 						if neuralResponse != "" {
-							log.Printf("🧠 Neural Model (moe_classification_model.gob) generated: %s", neuralResponse)
-							if isGarbageOutput(neuralResponse) {
-								log.Printf("⚖️  Quality Gate: Main model output rejected (structural incoherence).")
-								neuralResponse = ""
-							} else if strings.HasPrefix(neuralResponse, "create webserver") {
-								neuralIntent = "create_webserver"
-								neuralScore = 0.99
-							} else if strings.HasPrefix(neuralResponse, "create handler") {
-								neuralIntent = "create_handler"
-								neuralScore = 0.99
-							} else {
-								neuralIntent = "chat_response"
-								neuralScore = 0.91
+							log.Printf("🧠 Neural Model generated: %s", neuralResponse)
+							
+							// Dynamic Intent Parsing!
+							// If the model learned to guess the intent, it will output [INTENT: xxx]
+							if strings.HasPrefix(neuralResponse, "[INTENT: ") {
+								endIdx := strings.Index(neuralResponse, "]")
+								if endIdx > 9 {
+									neuralIntent = neuralResponse[9:endIdx]
+									neuralResponse = strings.TrimSpace(neuralResponse[endIdx+1:])
+									neuralScore = 0.99
+								}
+							}
+							
+							if neuralIntent == "" {
+								if isGarbageOutput(neuralResponse) {
+									log.Printf("⚖️  Quality Gate: Main model output rejected (structural incoherence).")
+									neuralResponse = ""
+								} else if strings.HasPrefix(neuralResponse, "create webserver") {
+									neuralIntent = "create_webserver"
+									neuralScore = 0.99
+								} else if strings.HasPrefix(neuralResponse, "create handler") {
+									neuralIntent = "create_handler"
+									neuralScore = 0.99
+								} else {
+									neuralIntent = "chat_response"
+									neuralScore = 0.91
+								}
 							}
 						}
 					}
@@ -526,6 +637,17 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 	}
 
 	const retrievalThreshold = 0.96
+	
+	// Parse embedded intent from retrieved response if present
+	if strings.HasPrefix(retrievedResp, "[INTENT: ") {
+		endIdx := strings.Index(retrievedResp, "]")
+		if endIdx > 9 {
+			// Override retrieved intent with embedded one to ensure consistency
+			retrievedIntent = retrievedResp[9:endIdx]
+			retrievedResp = strings.TrimSpace(retrievedResp[endIdx+1:])
+		}
+	}
+	
 	if retrievedScore >= retrievalThreshold {
 		c.lastMoEPrediction = retrievedResp
 		return retrievedIntent, retrievedScore
@@ -534,6 +656,14 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 	if neuralResponse != "" {
 		c.lastMoEPrediction = neuralResponse
 		return neuralIntent, neuralScore
+	}
+
+	// Dynamic Command Intent Guessing
+	// If the retrieved intent is a known command (not chat_response) and we have decent 
+	// confidence (> 0.45), trust the fuzzy intent guess! This is what ties NLP to commands.
+	if retrievedScore > 0.45 && retrievedIntent != "chat_response" && retrievedIntent != "social_chat" && retrievedIntent != "social" && retrievedIntent != "" {
+		c.lastMoEPrediction = retrievedResp
+		return retrievedIntent, retrievedScore
 	}
 
 	if retrievedScore > 0.8 {
@@ -773,6 +903,105 @@ func (c *GollemerMoEClient) supervisorCompleteSentenceGuided(ctx *tensor.Tensor,
 	return strings.Join(generated, " ")
 }
 
+// resolveContextQuery handles memory and pronoun queries by scanning c.History for
+// the specific entity (file, folder, object) the user is referring to and composing
+// a precise answer. Returns "" if the query is not a context question.
+func (c *GollemerMoEClient) resolveContextQuery(lowerInput string) string {
+	if len(c.History) == 0 {
+		return ""
+	}
+
+	// --- Classify what the user is asking about ---
+	isFileQ := strings.Contains(lowerInput, "file") || strings.Contains(lowerInput, "files")
+	isFolderQ := strings.Contains(lowerInput, "folder") || strings.Contains(lowerInput, "directory") || strings.Contains(lowerInput, "folders")
+	isObjectQ := strings.Contains(lowerInput, "it") || strings.Contains(lowerInput, "that") || strings.Contains(lowerInput, "what was") || strings.Contains(lowerInput, "what is")
+	isWhereQ := strings.HasPrefix(lowerInput, "where")
+	isWhatQ := strings.HasPrefix(lowerInput, "what")
+	isRememberQ := strings.Contains(lowerInput, "remember") || strings.Contains(lowerInput, "recall") ||
+		strings.Contains(lowerInput, "do you know") || strings.Contains(lowerInput, "do you have")
+	isHistoryQ := strings.Contains(lowerInput, "we talking") || strings.Contains(lowerInput, "we talk") ||
+		strings.Contains(lowerInput, "were we") || strings.Contains(lowerInput, "did we") ||
+		strings.Contains(lowerInput, "last time") || strings.Contains(lowerInput, "conversation")
+
+	isContextQ := (isFileQ || isFolderQ || isObjectQ) && (isWhatQ || isWhereQ || isRememberQ || isHistoryQ)
+	if !isContextQ {
+		return ""
+	}
+
+	// --- Extract entities from history ---
+	var files []string
+	var folders []string
+	seenFiles := map[string]bool{}
+	seenFolders := map[string]bool{}
+
+	for _, pair := range c.History {
+		for _, text := range []string{pair.Q, pair.A} {
+			words := strings.Fields(strings.ToLower(text))
+			for wi, w := range words {
+				w = strings.Trim(w, "',\".")
+				// Files: ends with known extension
+				if (strings.HasSuffix(w, ".go") || strings.HasSuffix(w, ".json") ||
+					strings.HasSuffix(w, ".txt") || strings.HasSuffix(w, ".md") ||
+					strings.HasSuffix(w, ".csv") || strings.HasSuffix(w, ".js") ||
+					strings.HasSuffix(w, ".ts") || strings.HasSuffix(w, ".py") ||
+					strings.HasSuffix(w, ".html") || strings.HasSuffix(w, ".css")) &&
+					!seenFiles[w] {
+					files = append(files, w)
+					seenFiles[w] = true
+				}
+				// Folders: word after "folder" or "directory" or "into"
+				if (w == "folder" || w == "directory" || w == "into" || w == "to") && wi+1 < len(words) {
+					candidate := strings.Trim(words[wi+1], "',\".")
+					if candidate != "" && candidate != "the" && candidate != "a" && !seenFolders[candidate] {
+						folders = append(folders, candidate)
+						seenFolders[candidate] = true
+					}
+				}
+			}
+		}
+	}
+
+	// --- Compose the answer ---
+	if isFileQ && !isFolderQ {
+		switch len(files) {
+		case 0:
+			return "I don't see any specific file mentioned in our recent conversation."
+		case 1:
+			if isWhereQ {
+				return fmt.Sprintf("The file '%s' was mentioned in our conversation. You can check its location with 'list' or 'tree'.", files[0])
+			}
+			return fmt.Sprintf("The file we were talking about was '%s'.", files[0])
+		default:
+			return fmt.Sprintf("We've mentioned these files: %s.", strings.Join(files, ", "))
+		}
+	}
+
+	if isFolderQ && !isFileQ {
+		switch len(folders) {
+		case 0:
+			return "I don't see any specific folder mentioned in our recent conversation."
+		case 1:
+			return fmt.Sprintf("The folder we were working with was '%s'.", folders[0])
+		default:
+			return fmt.Sprintf("We've mentioned these folders: %s.", strings.Join(folders, ", "))
+		}
+	}
+
+	// Both files and folders — give a combined answer
+	if (isFileQ || isFolderQ) && (len(files) > 0 || len(folders) > 0) {
+		parts := []string{}
+		if len(files) > 0 {
+			parts = append(parts, fmt.Sprintf("files: %s", strings.Join(files, ", ")))
+		}
+		if len(folders) > 0 {
+			parts = append(parts, fmt.Sprintf("folders: %s", strings.Join(folders, ", ")))
+		}
+		return "In our recent conversation we talked about " + strings.Join(parts, " and ") + "."
+	}
+
+	return ""
+}
+
 func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 	log.Printf("📡 GenerateSocialResponse called with input: '%s'", input)
 	if c.SocialModel == nil {
@@ -787,6 +1016,18 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 
 	// ── Resolve intent ──────────────────────────────────────────────────────────
 	lowerInput := strings.ToLower(input)
+
+	// ── 🧠 SMART CONTEXT RESOLUTION (runs BEFORE the neural model) ──────────────
+	// Detect memory/context/pronoun questions and answer them directly from live
+	// history, extracting the specific entity the user is asking about rather than
+	// dumping the full history blob.
+	if len(c.History) > 0 {
+		resp := c.resolveContextQuery(lowerInput)
+		if resp != "" {
+			log.Printf("🧠 Context-resolved from history: '%s'", resp)
+			return resp
+		}
+	}
 
 	// Match intent labels exactly as used in conversing.csv training data
 	intent := "social" // default
@@ -828,7 +1069,11 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 	// it is merely nudged toward the right vocabulary.
 	chatTarget, chatTargetScore := c.lookupChatBank(input, intent)
 	var guidanceTokenIDs map[int]bool
-	const guidanceBoost = float32(4.5) // logit bonus for tokens present in the target answer
+	// guidanceBoost of 1.2 gently nudges the decoder toward vocabulary that appears
+	// in the reference answer without hard-locking it onto those tokens. A value
+	// of 4.5 (old) effectively forces verbatim copy because it drowns the model's
+	// own learned logits.
+	const guidanceBoost = float32(1.2)
 	if chatTarget != "" && chatTargetScore >= 0.35 {
 		log.Printf("🧭 ChatBank guidance target (score=%.2f, intent=%s): '%s'", chatTargetScore, intent, chatTarget)
 		guidanceTokenIDs = make(map[int]bool)
@@ -839,7 +1084,9 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 		}
 	}
 
-	formattedInput := fmt.Sprintf("__intent__ %s : __ques__ %s __ans__", intent, lowerInput)
+	queryContext := c.buildQueryContext(lowerInput)
+	
+	formattedInput := fmt.Sprintf("__intent__ %s : __ques__ %s __ans__", intent, queryContext)
 	tokens := cleanTokenize(formattedInput)
 	if len(tokens) == 0 {
 		return ""
@@ -1139,6 +1386,9 @@ func (c *GollemerMoEClient) checkCommandHeuristics(lowerInput string) (string, f
 	}
 	if strings.HasPrefix(lowerInput, "cat ") || strings.HasPrefix(lowerInput, "read ") {
 		return "cat_query", 0.99
+	}
+	if strings.HasPrefix(lowerInput, "move ") || lowerInput == "move" || strings.HasPrefix(lowerInput, "can you move ") || strings.HasPrefix(lowerInput, "could you move ") || strings.HasPrefix(lowerInput, "take ") || strings.HasPrefix(lowerInput, "bring ") {
+		return "move_query", 0.99
 	}
 	if strings.HasPrefix(lowerInput, "run ") || lowerInput == "run" || strings.HasPrefix(lowerInput, "start ") || lowerInput == "start" {
 		c.lastMoEPrediction = "Launching the application! 🚀 Hang tight."

@@ -502,6 +502,83 @@ func isLowQualitySocialResponse(response string) bool {
 	return false
 }
 
+// paraphraseResponse applies lightweight lexical variation to a retrieved
+// training answer so it is never a verbatim copy of a training sample.
+// Strategy:
+//  1. Randomly drop low-information filler words (up to 15% of tokens).
+//  2. Randomly trim 0-2 tokens from the tail to vary sentence length.
+//  3. Re-capitalise the first word and ensure terminal punctuation.
+//
+// The function is deliberately simple — it only needs to break verbatim
+// identity, not produce a fluent paraphrase.
+func paraphraseResponse(response string) string {
+	if response == "" {
+		return response
+	}
+	words := strings.Fields(response)
+	if len(words) <= 2 {
+		return response // too short to safely mutate
+	}
+
+	// Filler words that can be dropped without changing meaning much.
+	fillers := map[string]bool{
+		"actually": true, "basically": true, "certainly": true, "definitely": true,
+		"essentially": true, "generally": true, "just": true, "literally": true,
+		"mostly": true, "obviously": true, "perhaps": true, "possibly": true,
+		"pretty": true, "quite": true, "rather": true, "really": true,
+		"simply": true, "so": true, "somewhat": true, "truly": true,
+		"usually": true, "very": true, "well": true,
+	}
+
+	// Use a deterministic-but-varied seed based on the string content.
+	seed := 0
+	for _, c := range response {
+		seed = (seed*31 + int(c)) & 0x7fffffff
+	}
+
+	var out []string
+	dropBudget := len(words) / 7 // allow dropping ≤14% of tokens
+	dropped := 0
+	for i, w := range words {
+		lower := strings.ToLower(strings.Trim(w, ".,!?;:\"'"))
+		// Never drop the first or last word.
+		if i > 0 && i < len(words)-1 && dropped < dropBudget && fillers[lower] {
+			// Use a simple deterministic pseudo-random skip based on position + seed.
+			if (seed^i)%3 == 0 {
+				dropped++
+				continue
+			}
+		}
+		out = append(out, w)
+	}
+	if len(out) == 0 {
+		out = words
+	}
+
+	// Randomly trim 0-1 trailing tokens (except if they end the sentence).
+	last := strings.Trim(out[len(out)-1], " ")
+	endsInPunct := strings.ContainsAny(last, ".!?")
+	if !endsInPunct && len(out) > 4 && seed%4 == 0 {
+		out = out[:len(out)-1]
+	}
+
+	result := strings.Join(out, " ")
+
+	// Ensure it starts with a capital letter.
+	if len(result) > 0 {
+		result = strings.ToUpper(result[:1]) + result[1:]
+	}
+
+	// Ensure it ends with punctuation.
+	if len(result) > 0 {
+		finalChar := result[len(result)-1]
+		if finalChar != '.' && finalChar != '!' && finalChar != '?' {
+			result += "."
+		}
+	}
+	return result
+}
+
 func isCreatingCommand(input string) bool {
 	l := strings.ToLower(input)
 	keywords := []string{"create", "add", "new", "make", "generate", "setup", "init"}

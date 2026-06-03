@@ -521,6 +521,14 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 
 	// Noise injection (Expert Curiosity) is now handled inside GatingNetwork.Forward
 	// to ensure consistent Gaussian jitter before TopK selection.
+	
+	// Add standard normal or Gumbel noise to logits to encourage exploration
+	if moe.Training {
+		explorationFactor := float32(0.05)
+		for i := range gateLogits.Data {
+			gateLogits.Data[i] += float32(rand.NormFloat64()) * explorationFactor
+		}
+	}
 
 	// Apply Temperature Scaling to logits
 	// Default to 0.5 sharpening as requested ("divide by 0.5")
@@ -740,6 +748,13 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 						for i := 0; i < numTokens; i++ {
 							gateLogits.Data[i*numExperts+e] += 1.5
 						}
+					}
+				}
+				// Temporary Soft-Floor Constraints for PRON/AUX (Epoch 100-200)
+				// Hardcode routing floor for PRON and AUX experts (e.g. indices 8 through 15)
+				if e >= 8 && e <= 15 {
+					for i := 0; i < numTokens; i++ {
+						gateLogits.Data[i*numExperts+e] += 2.0 // Boost logit significantly to ensure minimum allocation
 					}
 				}
 			}
@@ -1845,46 +1860,28 @@ func CalculateSquareOfSumsLoss(usageCounts []int, totalTokens int) float32 {
 	return float32(SimdSquareOfSumsLossF32(usageCounts, totalTokens, 2.0))
 }
 
-// CalculateAuxLoss computes the load balancing loss (CV^2 of importance) to prevent expert starvation.
+// CalculateAuxLoss computes the load balancing loss to prevent expert starvation.
 func CalculateAuxLoss(gateProbs []float32, numExperts int) float32 {
 	if len(gateProbs) == 0 || numExperts == 0 {
 		return 0
 	}
 	numTokens := len(gateProbs) / numExperts
+	expertCounts := make([]float64, numExperts)
 
-	// 1. Calculate Importance (Sum of probabilities per expert)
-	importance := make([]float32, numExperts)
 	for i := 0; i < numTokens; i++ {
 		for j := 0; j < numExperts; j++ {
-			importance[j] += gateProbs[i*numExperts+j]
+			expertCounts[j] += float64(gateProbs[i*numExperts+j])
 		}
 	}
 
-	// 2. Compute the coefficient of variation (CV) squared
-	var sumImp float32
-	for _, imp := range importance {
-		sumImp += imp
+	var squareSum float64
+	for _, count := range expertCounts {
+		fraction := count / float64(numTokens)
+		squareSum += fraction * fraction
 	}
 
-	meanImp := sumImp / float32(numExperts)
-	if meanImp == 0 {
-		return 0
-	}
+	res := float32(squareSum * float64(numExperts)) // Ideal uniform distribution equals 1.0
 
-	var variance float32
-	for _, imp := range importance {
-		diff := imp - meanImp
-		variance += diff * diff
-	}
-	variance /= float32(numExperts)
-
-	// 🛡️ Denominator Stability Guard
-	denom := meanImp * meanImp
-	if denom < 1e-12 {
-		return 0.0
-	}
-
-	res := variance / denom
 	if math.IsNaN(float64(res)) || math.IsInf(float64(res), 0) {
 		return 0.0
 	}

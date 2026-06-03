@@ -237,3 +237,376 @@ Can you verify the user,verifying now,security,AUX PRON VERB DET NOUN
 What is the response time,it is very fast,performance,PRON VERB DET NOUN NOUN
 I need to scale up,adding more nodes,growth,PRON VERB PART VERB ADJ NOUN
 Can you optimize the query,doing that now,performance,AUX PRON VERB DET NOUN
+Did you compile the code,it is running now,development,AUX PRON VERB DET NOUN
+Can you fix the bug,working on it,debugging,AUX PRON VERB DET NOUN
+Is the server down,it is responding normally,infrastructure,AUX DET NOUN ADJ
+Should I restart the system,yes try that,troubleshooting,AUX PRON VERB DET NOUN
+Will you deploy the update,starting the pipeline,deployment,AUX PRON VERB DET NOUN
+Can you check the logs,looking at them,monitoring,AUX PRON VERB DET NOUN
+Is the database locked,it is accessible now,database,AUX DET NOUN ADJ
+Did you merge the branch,it is done,git,AUX PRON VERB DET NOUN
+Can you run the tests,they all passed,testing,AUX PRON VERB DET NOUN
+Is the API live,it is accepting requests,integration,AUX DET NOUN ADJ
+Should we review the code,let us do it,peer-review,AUX PRON VERB DET NOUN
+Will you test the feature,doing that today,testing,AUX PRON VERB DET NOUN
+Can you clear the cache,it is empty now,performance,AUX PRON VERB DET NOUN
+Is the build failing,yes it needs fixing,development,AUX DET NOUN VERB
+Did you push the changes,they are on main,git,AUX PRON VERB DET NOUN
+Can you review the PR,leaving comments now,collaboration,AUX PRON VERB DET NOUN
+Is the network slow,traffic is very high,infrastructure,AUX DET NOUN ADJ
+Should I upgrade the package,yes it is secure,security,AUX PRON VERB DET NOUN
+Will you back up data,saving it now,maintenance,AUX PRON VERB ADP NOUN
+Can you block the IP,it is restricted now,security,AUX PRON VERB DET NOUN
+Is the token expired,you need a new one,security,AUX DET NOUN ADJ
+Did you create the repository,it is ready online,git,AUX PRON VERB DET NOUN
+Can you format the file,it looks clean now,development,AUX PRON VERB DET NOUN
+Is the connection secure,encryption is enabled,security,AUX DET NOUN ADJ
+Should we migrate the data,let us schedule it,database,AUX PRON VERB DET NOUN
+Will you patch the vulnerability,applying the fix,security,AUX PRON VERB DET NOUN
+Can you isolate the environment,it is sandboxed now,devops,AUX PRON VERB DET NOUN
+Is the container running,it is active now,docker,AUX DET NOUN VERB
+Did you close the ticket,it is resolved now,support,AUX PRON VERB DET NOUN
+Can you export the metrics,generating the report,monitoring,AUX PRON VERB DET NOUN
+Is the load balanced,traffic is distributed,infrastructure,AUX DET NOUN ADJ
+Should I purge the queue,yes clear it out,architecture,AUX PRON VERB DET NOUN
+Will you index the table,speeding up queries,database,AUX PRON VERB DET NOUN
+Can you profile the application,running the benchmarks,performance,AUX PRON VERB DET NOUN
+Is the script automated,it runs every hour,automation,AUX DET NOUN ADJ
+Did you generate the keys,they are securely stored,security,AUX PRON VERB DET NOUN
+Can you refactor the function,making it cleaner,development,AUX PRON VERB DET NOUN
+Is the UI responsive,it works on mobile,frontend,AUX DET NOUN ADJ
+Should we scale the cluster,yes add more power,cloud,AUX PRON VERB DET NOUN
+Will you monitor the traffic,watching the dashboard,operations,AUX PRON VERB DET NOUN
+Can you rotate the secrets,updating them now,security,AUX PRON VERB DET NOUN
+Is the webhook triggered,it sent the payload,integration,AUX DET NOUN VERB
+Did you fix the leak,memory is stable now,debugging,AUX PRON VERB DET NOUN
+Can you trace the request,tracking the path,monitoring,AUX PRON VERB DET NOUN
+Is the site functional,users are logging in,operations,AUX DET NOUN ADJ
+Should I configure the firewall,yes block public access,security,AUX PRON VERB DET NOUN
+Will you automate the deployment,setting up actions,devops,AUX PRON VERB DET NOUN
+Can you renew the certificate,it is updated now,security,AUX PRON VERB DET NOUN
+Is the worker idle,it is waiting for jobs,architecture,AUX DET NOUN ADJ
+Did you optimize the image,it is much smaller,frontend,AUX PRON VERB DET NOUN
+Can you audit the code,checking for issues,security,AUX PRON VERB DET NOUN
+Is the memory full,it is clearing out,performance,AUX DET NOUN ADJ
+Should we deprecate the endpoint,yes remove it soon,api-design,AUX PRON VERB DET NOUN
+Will you update the documentation,writing the guide,management,AUX PRON VERB DET NOUN
+Can you reset the password,sending the link,auth,AUX PRON VERB DET NOUN
+Is the cluster healthy,all nodes are green,cloud,AUX DET NOUN ADJ
+Did you replicate the bug,i can see it,debugging,AUX PRON VERB DET NOUN
+Can you sync the database,it is matching now,database,AUX PRON VERB DET NOUN
+Is the process alive,it is running smoothly,os,AUX DET NOUN ADJ
+Should I disable the feature,yes turn it off,product,AUX PRON VERB DET NOUN
+Will you write the wrapper,creating the interface,development,AUX PRON VERB DET NOUN
+Can you mock the API,setting up stubs,testing,AUX PRON VERB DET NOUN
+Is the backup complete,it is saved safely,maintenance,AUX DET NOUN ADJ
+Did you scan the dependency,it has no threats,security,AUX PRON VERB DET NOUN
+Can you containerize the service,building the dockerfile,devops,AUX PRON VERB DET NOUN
+Is the routing correct,packets are arriving,networking,AUX DET NOUN ADJ
+Should we alert the team,yes send a page,operations,AUX PRON VERB DET NOUN
+Will you validate the payload,checking the schema,api,AUX PRON VERB DET NOUN
+Can you squash the commits,cleaning the history,git,AUX PRON VERB DET NOUN
+Is the pipeline broken,a test failed,ci-cd,AUX DET NOUN ADJ
+Did you approve the changes,looks good to me,collaboration,AUX PRON VERB DET NOUN
+Can you standardise the format,applying lint rules,development,AUX PRON VERB DET NOUN
+Is the firewall blocking,it is filtering traffic,security,AUX DET NOUN VERB
+Should I tag the release,yes mark version one,git,AUX PRON VERB DET NOUN
+Will you script the installation,making a bash file,automation,AUX PRON VERB DET NOUN
+Can you whitelist the domain,it is permitted now,security,AUX PRON VERB DET NOUN
+Is the storage adequate,we have plenty left,infrastructure,AUX DET NOUN ADJ
+Did you resolve the conflict,code is merged now,git,AUX PRON VERB DET NOUN
+Can you benchmark the hardware,running the stress test,performance,AUX PRON VERB DET NOUN
+Is the configuration valid,the syntax looks correct,devops,AUX DET NOUN ADJ
+Should we throttle the clients,yes limit the requests,rate-limiting,AUX PRON VERB DET NOUN
+Will you isolate the bug,finding the root cause,debugging,AUX PRON VERB DET NOUN
+Can you stream the data,opening the socket,architecture,AUX PRON VERB DET NOUN
+Is the traffic spiking,load is increasing fast,monitoring,AUX DET NOUN VERB
+Did you minimize the bundle,it loads much faster,frontend,AUX PRON VERB DET NOUN
+Can you inspect the packet,reading the headers,networking,AUX PRON VERB DET NOUN
+Is the endpoint public,anyone can access it,api-design,AUX DET NOUN ADJ
+Should I terminate the instance,yes shut it down,cloud,AUX PRON VERB DET NOUN
+Will you refactor the class,breaking it down,development,AUX PRON VERB DET NOUN
+Can you clean the directory,removing old artifacts,maintenance,AUX PRON VERB DET NOUN
+Is the certificate valid,it expires next year,security,AUX DET NOUN ADJ
+Did you initialize the variable,it starts at zero,development,AUX PRON VERB DET NOUN
+Can you parse the string,extracting the data,development,AUX PRON VERB DET NOUN
+Is the disk full,we need to delete data,infrastructure,AUX DET NOUN ADJ
+Should we override the method,yes change the behavior,oop,AUX PRON VERB DET NOUN
+Will you provision the infrastructure,terraform is running now,devops,AUX PRON VERB DET NOUN
+Can you debug the crash,analyzing the stack trace,debugging,AUX PRON VERB DET NOUN
+Is the encryption strong,it uses latest standards,security,AUX DET NOUN ADJ
+Did you test the logic,it covers all cases,testing,AUX PRON VERB DET NOUN
+Can you map the fields,linking the data types,database,AUX PRON VERB DET NOUN
+Are you updating the code,yes i am editing it,development,AUX PRON VERB DET NOUN 
+How is the project going,it is progressing well,status,PRON VERB DET NOUN
+Can you fix the error,i am working on it,debugging,AUX PRON VERB DET NOUN
+Is the system stable,yes it is running smoothly,operations,AUX DET NOUN ADJ
+Should I deploy now,let us wait a bit,release,AUX PRON VERB DET NOUN
+Will you write the tests,i will do them today,testing,AUX PRON VERB DET NOUN
+Can you check the status,i am looking now,monitoring,AUX PRON VERB DET NOUN
+Is the database optimized,yes it is running fast,database,AUX DET NOUN ADJ
+Did you commit the changes,i pushed them already,git,AUX PRON VERB DET NOUN
+Can you verify the build,it is compiling now,ci-cd,AUX PRON VERB DET NOUN
+Is the API documented,yes i updated it,documentation,AUX DET NOUN ADJ
+Should we upgrade the software,it is recommended,maintenance,AUX PRON VERB DET NOUN
+Will you handle the request,i can manage it,operations,AUX PRON VERB DET NOUN
+Can you backup the data,i will do it tonight,maintenance,AUX PRON VERB DET NOUN
+Is the connection secure,yes it is encrypted,security,AUX DET NOUN ADJ
+Did you create the branch,i created it yesterday,git,AUX PRON VERB DET NOUN
+Can you test the new feature,i will test it tomorrow,testing,AUX PRON VERB DET NOUN
+Is the server overloaded,it is handling the load,infrastructure,AUX DET NOUN ADJ
+Should I add the logs,yes it is necessary,monitoring,AUX PRON VERB DET NOUN
+Will you deploy the patch,i am deploying it now,devops,AUX PRON VERB DET NOUN
+Can you fix the UI,i will fix it soon,frontend,AUX PRON VERB DET NOUN
+Is the configuration correct,yes it is perfect,configuration,AUX DET NOUN ADJ
+Did you resolve the issue,yes i resolved it,support,AUX PRON VERB DET NOUN
+Can you test the form,i will test it now,testing,AUX PRON VERB DET NOUN
+Is the build passing,yes it is passing,ci-cd,AUX DET NOUN VERB
+Should we optimize the code,yes it will help,performance,AUX PRON VERB DET NOUN
+Will you update the docs,i am updating them now,documentation,AUX PRON VERB DET NOUN
+Can you merge the pull request,i will merge it later,git,AUX PRON VERB DET NOUN
+Is the token valid,yes it is valid,security,AUX DET NOUN ADJ
+Did you backup the database,yes i backed it up,backup,AUX PRON VERB DET NOUN
+Can you fix the bug,i am working on it,debugging,AUX PRON VERB DET NOUN
+Is the feature complete,yes it is complete,development,AUX DET NOUN ADJ
+Should I deploy the update,yes it is ready,deployment,AUX PRON VERB DET NOUN
+Will you test the endpoint,i will test it now,testing,AUX PRON VERB DET NOUN
+Can you check the status,yes i am checking it,monitoring,AUX PRON VERB DET NOUN
+Is the database optimized,yes i optimized it,database,AUX PRON VERB DET NOUN
+Did you commit the changes,yes i committed them,git,AUX PRON VERB DET NOUN
+Can you verify the build,yes i am verifying it,ci-cd,AUX PRON VERB DET NOUN
+Is the API documented,yes i documented it,api-design,AUX DET NOUN ADJ
+Should we upgrade the server,yes it is time,infrastructure,AUX PRON VERB DET NOUN
+Will you handle the request,i can handle it,operations,AUX PRON VERB DET NOUN
+Can you backup the files,i will backup them now,maintenance,AUX PRON VERB DET NOUN
+Is the connection secure,yes it is secure,security,AUX DET NOUN ADJ
+Did you create the branch,yes i created it,git,AUX PRON VERB DET NOUN
+Can you test the new feature,yes i will test it,testing,AUX PRON VERB DET NOUN
+Is the server overloaded,yes it is overloaded,infrastructure,AUX DET NOUN ADJ
+Should I add the logs,yes i will add them,debugging,AUX PRON VERB DET NOUN
+Will you deploy the patch,yes i will deploy it,devops,AUX PRON VERB DET NOUN
+Can you fix the UI,yes i will fix it,frontend,AUX PRON VERB DET NOUN
+Is the configuration correct,yes it is correct,configuration,AUX DET NOUN ADJ
+Did you resolve the issue,yes i resolved it,support,AUX PRON VERB DET NOUN
+Can you test the form,yes i will test it,testing,AUX PRON VERB DET NOUN
+Is the build passing,yes it is passing,ci-cd,AUX DET NOUN VERB
+Should we optimize the code,yes i will optimize it,performance,AUX PRON VERB DET NOUN
+Will you update the docs,yes i will update them,documentation,AUX PRON VERB DET NOUN
+Can you merge the pull request,yes i will merge it,git,AUX PRON VERB DET NOUN
+Is the token valid,yes it is valid,security,AUX DET NOUN ADJ
+Did you backup the database,yes i backed it up,database,AUX PRON VERB DET NOUN
+Can you fix the bug,yes i will fix it,debugging,AUX PRON VERB DET NOUN
+Is the feature complete,yes it is complete,development,AUX DET NOUN ADJ
+Should I deploy the update,yes i will deploy it,deployment,AUX PRON VERB DET NOUN
+Will you test the endpoint,yes i will test it,api-testing,AUX PRON VERB DET NOUN
+Can you check the status,yes i am checking it,monitoring,AUX PRON VERB DET NOUN
+Is the database optimized,yes i optimized it,database,AUX PRON VERB DET NOUN
+Did you commit the changes,yes i committed them,git,AUX PRON VERB DET NOUN
+Can you verify the build,yes i am verifying it,ci-cd,AUX PRON VERB DET NOUN
+Is the API documented,yes i documented it,documentation,AUX DET NOUN ADJ
+Should we upgrade the server,yes it is time,infrastructure,AUX PRON VERB DET NOUN
+Will you handle the request,i can handle it,operations,AUX PRON VERB DET NOUN
+Can you backup the files,yes i will backup them,maintenance,AUX PRON VERB DET NOUN
+Is the connection secure,yes it is secure,security,AUX DET NOUN ADJ
+Did you create the branch,yes i created it,git,AUX PRON VERB DET NOUN
+Can you test the new feature,yes i will test it,testing,AUX PRON VERB DET NOUN
+Is the server overloaded,yes it is overloaded,infrastructure,AUX DET NOUN ADJ
+Should I add the logs,yes i will add them,debugging,AUX PRON VERB DET NOUN
+Will you deploy the patch,yes i will deploy it,devops,AUX PRON VERB DET NOUN
+Can you fix the UI,yes i will fix it,frontend,AUX PRON VERB DET NOUN
+Is the configuration correct,yes it is correct,configuration,AUX DET NOUN ADJ
+Did you resolve the issue,yes i resolved it,support,AUX PRON VERB DET NOUN
+Can you test the form,yes i will test it,testing,AUX PRON VERB DET NOUN
+Is the build passing,yes it is passing,ci-cd,AUX DET NOUN VERB
+Should we optimize the code,yes i will optimize it,performance,AUX PRON VERB DET NOUN
+Will you update the docs,yes i will update them,documentation,AUX PRON VERB DET NOUN
+Can you merge the pull request,yes i will merge it,git,AUX PRON VERB DET NOUN
+Is the token valid,yes it is valid,security,AUX DET NOUN ADJ
+Did you backup the database,yes i backed it up,database,AUX PRON VERB DET NOUN
+Can you fix the bug,yes i will fix it,debugging,AUX PRON VERB DET NOUN
+Is the feature complete,yes it is complete,development,AUX DET NOUN ADJ
+Should I deploy the update,yes i will deploy it,deployment,AUX PRON VERB DET NOUN
+Will you test the endpoint,yes i will test it,api-testing,AUX PRON VERB DET NOUN
+Can you check the status,yes i am checking it,monitoring,AUX PRON VERB DET NOUN
+Is the database optimized,yes i optimized it,database,AUX PRON VERB DET NOUN
+Did you commit the changes,yes i committed them,git,AUX PRON VERB DET NOUN
+Can you verify the build,yes i am verifying it,ci-cd,AUX PRON VERB DET NOUN
+Is the API documented,yes i documented it,documentation,AUX DET NOUN ADJ
+Should we upgrade the server,yes it is time,infrastructure,AUX PRON VERB DET NOUN
+Will you handle the request,i can handle it,operations,AUX PRON VERB DET NOUN
+Can you backup the files,yes i will backup them,maintenance,AUX PRON VERB DET NOUN
+Is the connection secure,yes it is secure,security,AUX DET NOUN ADJ
+Did you create the branch,yes i created it,git,AUX PRON VERB DET NOUN
+Can you test the new feature,yes i will test it,testing,AUX PRON VERB DET NOUN
+Is the server overloaded,yes it is overloaded,infrastructure,AUX DET NOUN ADJ
+Should I add the logs,yes i will add them,debugging,AUX PRON VERB DET NOUN
+Will you deploy the patch,yes i will deploy it,devops,AUX PRON VERB DET NOUN
+Can you fix the UI,yes i will fix it,frontend,AUX PRON VERB DET NOUN
+Is the configuration correct,yes it is correct,configuration,AUX DET NOUN ADJ
+Did you resolve the issue,yes i resolved it,support,AUX PRON VERB DET NOUN
+Can you test the form,yes i will test it,testing,AUX PRON VERB DET NOUN
+Is the build passing,yes it is passing,ci-cd,AUX DET NOUN VERB
+Should we optimize the code,yes i will optimize it,performance,AUX PRON VERB DET NOUN
+Will you update the docs,yes i will update them,documentation,AUX PRON VERB DET NOUN
+Can you merge the pull request,yes i will merge it,git,AUX PRON VERB DET NOUN
+Is the token valid,yes it is valid,security,AUX DET NOUN ADJ 
+Did you compile the code,it is running now,development,AUX PRON VERB DET NOUN
+Can you fix the bug,working on it,debugging,AUX PRON VERB DET NOUN
+Is the server down,it is responding normally,infrastructure,AUX DET NOUN ADJ
+Should I restart the system,yes try that,troubleshooting,AUX PRON VERB DET NOUN
+Will you deploy the update,starting the pipeline,deployment,AUX PRON VERB DET NOUN
+Can you check the logs,looking at them,monitoring,AUX PRON VERB DET NOUN
+Is the database locked,it is accessible now,database,AUX DET NOUN ADJ
+Did you merge the branch,it is done,git,AUX PRON VERB DET NOUN
+Can you run the tests,they all passed,testing,AUX PRON VERB DET NOUN
+Is the API live,it is accepting requests,integration,AUX DET NOUN ADJ
+Should we review the code,let us do it,peer-review,AUX PRON VERB DET NOUN
+Will you test the feature,doing that today,testing,AUX PRON VERB DET NOUN
+Can you clear the cache,it is empty now,performance,AUX PRON VERB DET NOUN
+Is the build failing,yes it needs fixing,development,AUX DET NOUN VERB
+Did you push the changes,they are on main,git,AUX PRON VERB DET NOUN
+Can you review the PR,leaving comments now,collaboration,AUX PRON VERB DET NOUN
+Is the network slow,traffic is very high,infrastructure,AUX DET NOUN ADJ
+Should I upgrade the package,yes it is secure,security,AUX PRON VERB DET NOUN
+Will you back up data,saving it now,maintenance,AUX PRON VERB ADP NOUN
+Can you block the IP,it is restricted now,security,AUX PRON VERB DET NOUN
+Is the token expired,you need a new one,security,AUX DET NOUN ADJ
+Did you create the repository,it is ready online,git,AUX PRON VERB DET NOUN
+Can you format the file,it looks clean now,development,AUX PRON VERB DET NOUN
+Is the connection secure,encryption is enabled,security,AUX DET NOUN ADJ
+Should we migrate the data,let us schedule it,database,AUX PRON VERB DET NOUN
+Will you patch the vulnerability,applying the fix,security,AUX PRON VERB DET NOUN
+Can you isolate the environment,it is sandboxed now,devops,AUX PRON VERB DET NOUN
+Is the container running,it is active now,docker,AUX DET NOUN VERB
+Did you close the ticket,it is resolved now,support,AUX PRON VERB DET NOUN
+Can you export the metrics,generating the report,monitoring,AUX PRON VERB DET NOUN
+Is the load balanced,traffic is distributed,infrastructure,AUX DET NOUN ADJ
+Should I purge the queue,yes clear it out,architecture,AUX PRON VERB DET NOUN
+Will you index the table,speeding up queries,database,AUX PRON VERB DET NOUN
+Can you profile the application,running the benchmarks,performance,AUX PRON VERB DET NOUN
+Is the script automated,it runs every hour,automation,AUX DET NOUN ADJ
+Did you generate the keys,they are securely stored,security,AUX PRON VERB DET NOUN
+Can you refactor the function,making it cleaner,development,AUX PRON VERB DET NOUN
+Is the UI responsive,it works on mobile,frontend,AUX DET NOUN ADJ
+Should we scale the cluster,yes add more power,cloud,AUX PRON VERB DET NOUN
+Will you monitor the traffic,watching the dashboard,operations,AUX PRON VERB DET NOUN
+Can you rotate the secrets,updating them now,security,AUX PRON VERB DET NOUN
+Is the webhook triggered,it sent the payload,integration,AUX DET NOUN VERB
+Did you fix the leak,memory is stable now,debugging,AUX PRON VERB DET NOUN
+Can you trace the request,tracking the path,monitoring,AUX PRON VERB DET NOUN
+Is the site functional,users are logging in,operations,AUX DET NOUN ADJ
+Should I configure the firewall,yes block public access,security,AUX PRON VERB DET NOUN
+Will you automate the deployment,setting up actions,devops,AUX PRON VERB DET NOUN
+Can you renew the certificate,it is updated now,security,AUX PRON VERB DET NOUN
+Is the worker idle,it is waiting for jobs,architecture,AUX DET NOUN ADJ
+Did you optimize the image,it is much smaller,frontend,AUX PRON VERB DET NOUN
+Can you audit the code,checking for issues,security,AUX PRON VERB DET NOUN
+Is the memory full,it is clearing out,performance,AUX DET NOUN ADJ
+Should we deprecate the endpoint,yes remove it soon,api-design,AUX PRON VERB DET NOUN
+Will you update the documentation,writing the guide,management,AUX PRON VERB DET NOUN
+Can you reset the password,sending the link,auth,AUX PRON VERB DET NOUN
+Is the cluster healthy,all nodes are green,cloud,AUX DET NOUN ADJ
+Did you replicate the bug,i can see it,debugging,AUX PRON VERB DET NOUN
+Can you sync the database,it is matching now,database,AUX PRON VERB DET NOUN
+Is the process alive,it is running smoothly,os,AUX DET NOUN ADJ
+Should I disable the feature,yes turn it off,product,AUX PRON VERB DET NOUN
+Will you write the wrapper,creating the interface,development,AUX PRON VERB DET NOUN
+Can you mock the API,setting up stubs,testing,AUX PRON VERB DET NOUN
+Is the backup complete,it is saved safely,maintenance,AUX DET NOUN ADJ
+Did you scan the dependency,it has no threats,security,AUX PRON VERB DET NOUN
+Can you containerize the service,building the dockerfile,devops,AUX PRON VERB DET NOUN
+Is the routing correct,packets are arriving,networking,AUX DET NOUN ADJ
+Should we alert the team,yes send a page,operations,AUX PRON VERB DET NOUN
+Will you validate the payload,checking the schema,api,AUX PRON VERB DET NOUN
+Can you squash the commits,cleaning the history,git,AUX PRON VERB DET NOUN
+Is the pipeline broken,a test failed,ci-cd,AUX DET NOUN ADJ
+Did you approve the changes,looks good to me,collaboration,AUX PRON VERB DET NOUN
+Can you standardise the format,applying lint rules,development,AUX PRON VERB DET NOUN
+Is the firewall blocking,it is filtering traffic,security,AUX DET NOUN VERB
+Should I tag the release,yes mark version one,git,AUX PRON VERB DET NOUN
+Will you script the installation,making a bash file,automation,AUX PRON VERB DET NOUN
+Can you whitelist the domain,it is permitted now,security,AUX PRON VERB DET NOUN
+Is the storage adequate,we have plenty left,infrastructure,AUX DET NOUN ADJ
+Did you resolve the conflict,code is merged now,git,AUX PRON VERB DET NOUN
+Can you benchmark the hardware,running the stress test,performance,AUX PRON VERB DET NOUN
+Is the configuration valid,the syntax looks correct,devops,AUX DET NOUN ADJ
+Should we throttle the clients,yes limit the requests,rate-limiting,AUX PRON VERB DET NOUN
+Will you isolate the bug,finding the root cause,debugging,AUX PRON VERB DET NOUN
+Can you stream the data,opening the socket,architecture,AUX PRON VERB DET NOUN
+Is the traffic spiking,load is increasing fast,monitoring,AUX DET NOUN VERB
+Did you minimize the bundle,it loads much faster,frontend,AUX PRON VERB DET NOUN
+Can you inspect the packet,reading the headers,networking,AUX PRON VERB DET NOUN
+Is the endpoint public,anyone can access it,api-design,AUX DET NOUN ADJ
+Should I terminate the instance,yes shut it down,cloud,AUX PRON VERB DET NOUN
+Will you refactor the class,breaking it down,development,AUX PRON VERB DET NOUN
+Can you clean the directory,removing old artifacts,maintenance,AUX PRON VERB DET NOUN
+Is the certificate valid,it expires next year,security,AUX DET NOUN ADJ
+Did you initialize the variable,it starts at zero,development,AUX PRON VERB DET NOUN
+Can you parse the string,extracting the data,development,AUX PRON VERB DET NOUN
+Is the disk full,we need to delete data,infrastructure,AUX DET NOUN ADJ
+Should we override the method,yes change the behavior,oop,AUX PRON VERB DET NOUN
+Will you provision the infrastructure,terraform is running now,devops,AUX PRON VERB DET NOUN
+Can you debug the crash,analyzing the stack trace,debugging,AUX PRON VERB DET NOUN
+Is the encryption strong,it uses latest standards,security,AUX DET NOUN ADJ
+Did you test the logic,it covers all cases,testing,AUX PRON VERB DET NOUN
+Can you map the fields,linking the data types,database,AUX PRON VERB DET NOUN 
+Did you approve the PR,it is waiting on you,git,AUX PRON VERB DET NOUN
+
+
+
+"hello","Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.","greeting_query","OTHER"
+"move the file jane into folder jimmy","I couldn't find a file named 'jane' anywhere in the project.","move_query","OTHER"
+"move the file jane.go into folder jimmy","I have moved the file 'jane.go' to 'jimmy'.","move_query","OTHER"
+"who are you","I am Gollemer, your AI coding assistant and project orchestrator.","identity_query","OTHER"
+"what would you like to do with the file jane.go","I think so.","social_chat","OTHER"
+"hello","Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.","greeting_query","OTHER"
+"do you know where the folder jimmy is","Let me research.","social_chat","OTHER"
+"hello","[INTENT: greeting_query] Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.","greeting_query","OTHER"
+"move the file jake to the folder jimmy","[INTENT: move_query] I couldn't find a file named 'jake' anywhere in the project.","move_query","OTHER"
+"move the file jake.go and put jake into the folder jimmy","[INTENT: move_query] I have moved the file 'jake.go' to 'jimmy'.","move_query","OTHER"
+"hello","[INTENT: greeting_query] Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.","greeting_query","OTHER"
+"move the file jakey.go into folder jimmy","[INTENT: move_query] I have moved the file 'jakey.go' to 'jimmy'.","move_query","OTHER"
+"move file jane.go.go into folder jimmy","[INTENT: move_query] I have moved the file 'jane.go.go' to 'jimmy'.","move_query","OTHER"
+"what files and folders were we talking about","[INTENT: history_recall] Here's our conversation so far:
+Turn 1 — You: ""hello"" | Me: ""Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.""
+Turn 2 — You: ""move the file jakey.go into folder jimmy"" | Me: ""I have moved the file 'jakey.go' to 'jimmy'.""
+Turn 3 — You: ""move file jane.go.go into folder jimmy"" | Me: ""I have moved the file 'jane.go.go' to 'jimmy'.""","history_recall","OTHER"
+"do you remember the name of the file","[INTENT: history_recall] Here's our conversation so far:
+Turn 1 — You: ""hello"" | Me: ""Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.""
+Turn 2 — You: ""move the file jakey.go into folder jimmy"" | Me: ""I have moved the file 'jakey.go' to 'jimmy'.""
+Turn 3 — You: ""move file jane.go.go into folder jimmy"" | Me: ""I have moved the file 'jane.go.go' to 'jimmy'.""
+Turn 4 — You: ""what files and folders were we talking about"" | Me: ""Here's our conversation so far:
+Turn 1 — You: ""hello"" | Me: ""Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.""
+Turn 2 — You: ""move the file jakey.go into folder jimmy"" | Me: ""I have moved the file 'jakey.go' to 'jimmy'.""
+Turn 3 — You: ""move file jane.go.go into folder jimmy"" | Me: ""I have moved the file 'jane.go.go' to 'jimmy'.""""","history_recall","OTHER"
+"move the file out of the foler jimmy","[INTENT: move_query] I couldn't find a file named 'out' anywhere in the project.","move_query","OTHER"
+"move the file jake.go out of folder jimmy","[INTENT: move_query] I have moved the file 'jimmy/jake.go' to 'jimmy'.","move_query","OTHER"
+"what folder were we talking about","[INTENT: history_recall] Here's our conversation so far:
+Turn 1 — You: ""hello"" | Me: ""Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.""
+Turn 2 — You: ""move the file jakey.go into folder jimmy"" | Me: ""I have moved the file 'jakey.go' to 'jimmy'.""
+Turn 3 — You: ""move file jane.go.go into folder jimmy"" | Me: ""I have moved the file 'jane.go.go' to 'jimmy'.""
+Turn 4 — You: ""what files and folders were we talking about"" | Me: ""Here's our conversation so far:
+Turn 1 — You: ""hello"" | Me: ""Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.""
+Turn 2 — You: ""move the file jakey.go into folder jimmy"" | Me: ""I have moved the file 'jakey.go' to 'jimmy'.""
+Turn 3 — You: ""move file jane.go.go into folder jimmy"" | Me: ""I have moved the file 'jane.go.go' to 'jimmy'.""""
+Turn 5 — You: ""do you remember the name of the file"" | Me: ""Here's our conversation so far:
+Turn 1 — You: ""hello"" | Me: ""Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.""
+Turn 2 — You: ""move the file jakey.go into folder jimmy"" | Me: ""I have moved the file 'jakey.go' to 'jimmy'.""
+Turn 3 — You: ""move file jane.go.go into folder jimmy"" | Me: ""I have moved the file 'jane.go.go' to 'jimmy'.""
+Turn 4 — You: ""what files and folders were we talking about"" | Me: ""Here's our conversation so far:
+Turn 1 — You: ""hello"" | Me: ""Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.""
+Turn 2 — You: ""move the file jakey.go into folder jimmy"" | Me: ""I have moved the file 'jakey.go' to 'jimmy'.""
+Turn 3 — You: ""move file jane.go.go into folder jimmy"" | Me: ""I have moved the file 'jane.go.go' to 'jimmy'.""""""
+Turn 6 — You: ""move the file out of the foler jimmy"" | Me: ""I couldn't find a file named 'out' anywhere in the project.""
+Turn 7 — You: ""move the file jake.go out of folder jimmy"" | Me: ""I have moved the file 'jimmy/jake.go' to 'jimmy'.""","history_recall","OTHER"
+"what is the files name","[INTENT: social_chat] You can call me gollemer.","social_chat","OTHER"
+"what file were we talking about","[INTENT: social_chat] [INTENT: history_recall] Here's our conversation so far: Turn 1 — You: ""hello"" | Me: ""Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'."" Turn 2 — You: ""move the file jakey.go into folder jimmy"" | Me: ""I have moved the file 'jakey.go' to 'jimmy'."" Turn 3 — You: ""move file jane.go.go into folder jimmy"" | Me: ""I have moved the file 'jane.go.go' to 'jimmy'.","social_chat","OTHER"
+"where is the file mom.go","[INTENT: status] it is in progress","status","OTHER"
+"move jakeup.go into folder jimmy","[INTENT: move_query] 'jimmy' is a directory, not a file. Did you mean to move a specific file inside it?","move_query","OTHER"
+"move file jakeup.go into folder jimmy","[INTENT: move_query] I have moved the file 'jakeup.go' to 'jimmy'.","move_query","OTHER"
+"what files and folders were we talking about","[INTENT: history_recall] In our recent conversation we talked about files: jakeup.go and folders: folder, jimmy, not, move.","history_recall","OTHER"
+"what should i do with jakeup.go","[INTENT: social_chat] Let me show you.","social_chat","OTHER"
+"can you help me","[INTENT: social_chat] it can help wonderful the is","social_chat","OTHER"
+"can you help me","[INTENT: social_chat] --- ʕ◔ϖ◔ʔ Gollemer Help ---","social_chat","OTHER"
+"move file mom.go into jimmy","[INTENT: move_query] I have moved the file 'mom.go' to 'jimmy'.","move_query","OTHER"
+"what file and folder were we talking about","[INTENT: history_recall] In our recent conversation we talked about files: mom.go and folders: jimmy.","history_recall","OTHER"
