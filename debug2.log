@@ -1,0 +1,8 @@
+2026/06/04 21:50:27 main.go:1064: 🚀 GPU acceleration enabled (Paragon/WebGPU). Dispatching to AMD/Vulkan...
+---   Training Chat Model ---
+ Using Global GPU Context for Chat Training...
+2026/06/04 21:50:27 chat.go:328: ⚠️  Word2Vec model not found at data/models/gob_models/word2vec_model.gob — using empty fallback (run -train-word2vec to pre-train). Error: error opening model file: open data/models/gob_models/word2vec_model.gob: no such file or directory
+2026/06/04 21:50:27 chat.go:405:   human_chat.txt not found at data/training/trainingdata/human_chat.txt, skipping social intent data
+2026/06/04 21:50:27 chat.go:435:  Loaded 597 pairs from conversing.csv (fallback)
+2026/06/04 21:50:27 vocab.go:53: NewVocabulary: Initial size after adding <pad>, UNK, <s>, </s>: 4
+2026/06/04 21:50:27 chat.go:480:  Pre-computed final vocab size: 956

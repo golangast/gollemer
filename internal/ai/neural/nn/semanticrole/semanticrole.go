@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-
 	"os"
 	"strings"
 
@@ -72,7 +71,7 @@ func (m *SemanticRoleModel) PredictRoles(tokens []string) ([]string, error) {
 
 	}
 
-	trainingData, err := LoadRoleData("data/training/trainingdata/roledata/training_data.json")
+	trainingData, err := LoadRoleData("data/training/trainingdata/conversing.csv")
 	if err != nil {
 		fmt.Println("Error loading training data: ", err)
 		// Depending on your needs, you might want to return an error here

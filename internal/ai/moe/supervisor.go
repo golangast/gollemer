@@ -394,13 +394,25 @@ func (s *Supervisor) IsCompleteSentence(tokens []string) bool {
 	// 1. Basic Heuristics
 	hasVerb := false
 	hasSubject := false
-	for _, t := range tokens {
+	
+	dummyRule := IntentRule{}
+
+	for i, t := range tokens {
 		role := MapWordToGrammarType(t)
 		if role == "VERB" || role == "AUX" {
 			hasVerb = true
 		}
 		if role == "PRON" || role == "NOUN" {
 			hasSubject = true
+		}
+		
+		prevType := "BOS"
+		if i > 0 { prevType = MapWordToGrammarType(tokens[i-1]) }
+		nextType := "EOS"
+		if i < len(tokens)-1 { nextType = MapWordToGrammarType(tokens[i+1]) }
+		
+		if dummyRule.EvaluateWindow(prevType, role, nextType) > 0 {
+			return false // Fails trigram rule
 		}
 	}
 
@@ -478,8 +490,17 @@ func (s *Supervisor) AddExpertToLayer(model *IntentMoE, layerIdx int, roleID int
 	if layer.AtCapacity() {
 		evictedIdx, evicted := layer.EvictLeastActive(newRole)
 		if evicted {
-			log.Printf("♻️ [Supervisor] Evicted low-performing Expert E%d (standard) from layer %d to make room.", evictedIdx, layerIdx)
-		} else {
+			// Floor guard: if the evicted expert was a standard/structural expert and
+			// removing it would breach the 40% floor, veto the eviction and fall through
+			// to the force-evict path which only targets dynamic experts (index >= 48).
+			if !s.CanEvict(layer, evictedIdx) {
+				// CanEvict already logged the block reason. Fall through to force-evict.
+				evicted = false
+			} else {
+				log.Printf("♻️ [Supervisor] Evicted low-performing Expert E%d (standard) from layer %d to make room.", evictedIdx, layerIdx)
+			}
+		}
+		if !evicted {
 			// Fallback: force-evict lowest utility dynamic expert, bypassing pinned flags.
 			evictedIdx = layer.ForceEvictLowestUtility(newRole)
 			if evictedIdx == -1 {
@@ -652,17 +673,18 @@ func (s *Supervisor) SetExpertVariables(model *IntentMoE, layerIdx, expertIdx in
 	}
 
 	// Step 2: Clamped bounds — prevents weight-frying from extreme supervisor adjustments.
-	// LRMult capped at 1.5: stops runaway gradient escalation on failing paths.
-	// OutputScale floored at 0.70: keeps experts contributing meaningfully without
-	// fracturing learned paths over a long 2000-epoch training horizon.
-	if lrMultiplier > 1.5 {
-		lrMultiplier = 1.5
+	// MaxLRMult capped at 1.15 (down from 1.50): suppresses runaway gradient escalation
+	// on failing paths without starving valid experts of learning signal.
+	// MinOutputScale raised to 0.85 (up from 0.70): prevents over-suppressing weights
+	// on cross-layer bottleneck experts (e.g. E5) that are legitimately load-bearing.
+	if lrMultiplier > 1.15 {
+		lrMultiplier = 1.15
 	}
 	if lrMultiplier < 0.1 {
 		lrMultiplier = 0.1
 	}
-	if outputScale < 0.70 {
-		outputScale = 0.70
+	if outputScale < 0.85 {
+		outputScale = 0.85
 	}
 	if outputScale > 1.0 {
 		outputScale = 1.0
@@ -689,6 +711,22 @@ func (s *Supervisor) SetExpertVariables(model *IntentMoE, layerIdx, expertIdx in
 // HandleQualityGateFailure acts as the core decision-maker when the Subject-Verb Connection quality gate drops below threshold.
 func (s *Supervisor) HandleQualityGateFailure(model *IntentMoE, path string, pair *TrainPair, actualScore float64) {
 	log.Printf("🎯 [Supervisor] Adapting system for failing path [%s] on question: '%s'", path, pair.Q)
+
+	// Atomic pacing safety: if the epoch spawn cap is already saturated, skip ALL
+	// topology mutations for this path. Mutating hyperparameters for a topology that
+	// hasn't been built yet creates an unstable feedback loop where weights drift
+	// without any new structural anchors to absorb the gradient shift.
+	limit := 32
+	if s.OverfitMode {
+		limit = 5
+	}
+	s.mu.Lock()
+	currentSpawns := s.SpawnsThisEpoch
+	s.mu.Unlock()
+	if currentSpawns >= limit {
+		log.Printf("⏳ [Supervisor] Pacing limit reached (%d/%d). Deferring spawning AND topology mutations for path [%s].", currentSpawns, limit, path)
+		return
+	}
 
 	// involvedExperts might look like "E1+E8 -> E4+E12"
 	parts := strings.FieldsFunc(path, func(r rune) bool {
@@ -733,14 +771,15 @@ func (s *Supervisor) HandleQualityGateFailure(model *IntentMoE, path string, pai
 				}
 				s.mu.Unlock()
 
-				// Mutate: gentle scale decay (×0.85) with 0.70 floor, LR nudge (×1.05).
-				// Keeps the network stable over a 2000-epoch horizon without
-				// fracturing learned expert paths on isolated quality gate failures.
-				newScale := currentScale * 0.85
-				if newScale < 0.70 {
-					newScale = 0.70
+				// Incremental nudge: −0.05 to scale, +0.05 to LR per failure event.
+				// Replaces the old multiplicative (×0.85 / ×1.05) jumps which caused
+				// violent weight oscillations in bottleneck experts like E5 and
+				// destroyed adjacent paths that were actually converging correctly.
+				newScale := currentScale - 0.05
+				if newScale < 0.85 {
+					newScale = 0.85
 				}
-				newLR := currentLR * 1.05
+				newLR := currentLR + 0.05
 				s.SetExpertVariables(model, lIdx, eid, newScale, newLR)
 			}
 		}
@@ -771,10 +810,13 @@ func (s *Supervisor) HandleQualityGateFailure(model *IntentMoE, path string, pai
 
 			log.Printf("🔥 [Supervisor] Path Component %s failed %d times. Spawning Specialized Expert.", idStr, failCount)
 
-			// Determine role from intent
-			roleID := 7 // OTHER
-			if pair.Intent == "social" {
-				roleID = 6 // GREET
+			// Determine role from token context, not just intent label.
+			// Technical multi-word targets must NOT default to GREET — spawning
+			// a GREET expert for a complex query floods the router with useless
+			// specialists and destroys the semantic precision of existing paths.
+			roleID := 7 // OTHER — safe default for complex/unknown targets
+			if pair.Intent == "social" && !isTechnicalPayload(pair.Q) {
+				roleID = 6 // GREET — only for genuine short social phrases
 			}
 
 			// Spawn to Layer 0 and Decoder Output MoE
@@ -847,6 +889,12 @@ func (s *Supervisor) EvolveDataset(targetQuestion string) {
 				replacement = "i feel very sad today"
 			default:
 				if strings.HasPrefix(strings.ToLower(targetQuestion), "i am processing the concept of ") {
+					replacement = targetQuestion // Already wrapped — don't double-wrap
+				} else if isTechnicalPayload(targetQuestion) {
+					// Preserve technical multi-word queries verbatim.
+					// Wrapping them in "i am processing the concept of" mangles the
+					// tokenizer input and causes the router to misclassify the target,
+					// leading to cascading GREET expert deployments.
 					replacement = targetQuestion
 				} else {
 					replacement = "i am processing the concept of " + targetQuestion
@@ -1167,3 +1215,74 @@ func (s *Supervisor) ClearFailureLogs(model *IntentMoE) {
 	log.Println("♻️ [Supervisor] Cleared failure history counters and reset expert scales.")
 }
 
+// isTechnicalPayload returns true for multi-word or domain-specific token targets that
+// should NOT be collapsed into generic social roles like GREET. Short single-word social
+// phrases (hello, hi, thanks, etc.) are explicitly NOT technical.
+//
+// The key invariant: if a multi-turn technical conversation about encryption loops or
+// cache hits is being scanned, its token target is multi-word and must route to OTHER,
+// not to GREET. A GREET expert spawned for technical tokens is a pure noise injection.
+func isTechnicalPayload(targetToken string) bool {
+	lower := strings.ToLower(strings.TrimSpace(targetToken))
+	// Explicit social phrase allowlist — these are never "technical"
+	socialPhrases := []string{
+		"hello", "hi", "hey", "thanks", "thank you",
+		"bye", "goodbye", "good morning", "good night",
+		"how are you", "nice to meet you",
+	}
+	for _, p := range socialPhrases {
+		if lower == p {
+			return false
+		}
+	}
+	// Any input with 3+ words that isn't on the social allowlist is technical context
+	return len(strings.Fields(lower)) >= 3
+}
+
+// MinStandardExpertRatio is the minimum fraction of layer experts that must remain
+// structural/standard experts at all times. Evictions that would breach this floor
+// are blocked to preserve the baseline linguistic capability of the network.
+// At 64 experts, this protects a floor of at least 26 standard experts.
+const MinStandardExpertRatio = 0.40
+
+// CanEvict returns true if the expert at expertIdx in the given layer can be safely
+// evicted without breaching the 40% standard-expert floor. Non-structural experts
+// (GREET, OTHER, etc.) are always evictable. Structural experts (PRON, VERB, AUX,
+// ADJ, NOUN, PREP, or untagged) are blocked from eviction once the floor is reached.
+func (s *Supervisor) CanEvict(layer *MoELayer, expertIdx int) bool {
+	if expertIdx < 0 || expertIdx >= len(layer.Experts) {
+		return false
+	}
+
+	role := ""
+	if expertIdx < len(layer.ExpertRole) {
+		role = layer.ExpertRole[expertIdx]
+	}
+	isStandard := (role == "PRON" || role == "VERB" || role == "AUX" ||
+		role == "ADJ" || role == "NOUN" || role == "PREP" || role == "")
+
+	if !isStandard {
+		return true // Non-structural experts (GREET, OTHER) can always be evicted
+	}
+
+	// Count how many standard experts currently exist
+	standardCount := 0
+	for i := range layer.Experts {
+		r := ""
+		if i < len(layer.ExpertRole) {
+			r = layer.ExpertRole[i]
+		}
+		if r == "PRON" || r == "VERB" || r == "AUX" ||
+			r == "ADJ" || r == "NOUN" || r == "PREP" || r == "" {
+			standardCount++
+		}
+	}
+
+	floorCount := int(float64(len(layer.Experts)) * MinStandardExpertRatio)
+	if standardCount <= floorCount {
+		log.Printf("🛡️ [Supervisor] Eviction of E%d (role=%s) blocked: standard expert floor (%.0f%% = %d/%d experts) would be breached.",
+			expertIdx, role, MinStandardExpertRatio*100, standardCount, len(layer.Experts))
+		return false
+	}
+	return true
+}

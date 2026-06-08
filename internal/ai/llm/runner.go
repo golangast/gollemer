@@ -148,6 +148,8 @@ func (r *Runner) Init() {
 		SocialModel:    socialModel,
 		W2V:            r.W2V, // CRITICAL: wire W2V so getSentenceEmbedding doesn't nil-panic
 		CommandAnchors: map[string][]float64{},
+		Sessions:       NewSessionManager(),
+		SessionID:      "default",
 	}
 
 	// 🧬 WIRE UP SOCIAL MODEL & CONFIG

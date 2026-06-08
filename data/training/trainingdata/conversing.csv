@@ -315,7 +315,7 @@ Will you script the installation,making a bash file,automation,AUX PRON VERB DET
 Can you whitelist the domain,it is permitted now,security,AUX PRON VERB DET NOUN
 Is the storage adequate,we have plenty left,infrastructure,AUX DET NOUN ADJ
 Did you resolve the conflict,code is merged now,git,AUX PRON VERB DET NOUN
-Can you benchmark the hardware,running the stress test,performance,AUX PRON VERB DET NOUN
+i am processing the concept of Can you benchmark the hardware,running the stress test,performance,AUX PRON VERB DET NOUN
 Is the configuration valid,the syntax looks correct,devops,AUX DET NOUN ADJ
 Should we throttle the clients,yes limit the requests,rate-limiting,AUX PRON VERB DET NOUN
 Will you isolate the bug,finding the root cause,debugging,AUX PRON VERB DET NOUN
@@ -337,7 +337,7 @@ Can you debug the crash,analyzing the stack trace,debugging,AUX PRON VERB DET NO
 Is the encryption strong,it uses latest standards,security,AUX DET NOUN ADJ
 Did you test the logic,it covers all cases,testing,AUX PRON VERB DET NOUN
 Can you map the fields,linking the data types,database,AUX PRON VERB DET NOUN
-Are you updating the code,yes i am editing it,development,AUX PRON VERB DET NOUN 
+i am processing the concept of Are you updating the code,yes i am editing it,development,AUX PRON VERB DET NOUN 
 How is the project going,it is progressing well,status,PRON VERB DET NOUN
 Can you fix the error,i am working on it,debugging,AUX PRON VERB DET NOUN
 Is the system stable,yes it is running smoothly,operations,AUX DET NOUN ADJ
@@ -348,7 +348,7 @@ Is the database optimized,yes it is running fast,database,AUX DET NOUN ADJ
 Did you commit the changes,i pushed them already,git,AUX PRON VERB DET NOUN
 Can you verify the build,it is compiling now,ci-cd,AUX PRON VERB DET NOUN
 Is the API documented,yes i updated it,documentation,AUX DET NOUN ADJ
-Should we upgrade the software,it is recommended,maintenance,AUX PRON VERB DET NOUN
+i am processing the concept of Should we upgrade the software,it is recommended,maintenance,AUX PRON VERB DET NOUN
 Will you handle the request,i can manage it,operations,AUX PRON VERB DET NOUN
 Can you backup the data,i will do it tonight,maintenance,AUX PRON VERB DET NOUN
 Is the connection secure,yes it is encrypted,security,AUX DET NOUN ADJ
@@ -528,7 +528,7 @@ Will you script the installation,making a bash file,automation,AUX PRON VERB DET
 Can you whitelist the domain,it is permitted now,security,AUX PRON VERB DET NOUN
 Is the storage adequate,we have plenty left,infrastructure,AUX DET NOUN ADJ
 Did you resolve the conflict,code is merged now,git,AUX PRON VERB DET NOUN
-Can you benchmark the hardware,running the stress test,performance,AUX PRON VERB DET NOUN
+i am processing the concept of Can you benchmark the hardware,running the stress test,performance,AUX PRON VERB DET NOUN
 Is the configuration valid,the syntax looks correct,devops,AUX DET NOUN ADJ
 Should we throttle the clients,yes limit the requests,rate-limiting,AUX PRON VERB DET NOUN
 Will you isolate the bug,finding the root cause,debugging,AUX PRON VERB DET NOUN
@@ -610,3 +610,46 @@ Turn 7 — You: ""move the file jake.go out of folder jimmy"" | Me: ""I have mov
 "can you help me","[INTENT: social_chat] --- ʕ◔ϖ◔ʔ Gollemer Help ---","social_chat","OTHER"
 "move file mom.go into jimmy","[INTENT: move_query] I have moved the file 'mom.go' to 'jimmy'.","move_query","OTHER"
 "what file and folder were we talking about","[INTENT: history_recall] In our recent conversation we talked about files: mom.go and folders: jimmy.","history_recall","OTHER"
+"hello","[INTENT: greeting_query] Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.","greeting_query","OTHER"
+"who are you","[INTENT: identity_query] I am Gollemer, your AI coding assistant and project orchestrator.","identity_query","OTHER"
+"hello","[INTENT: greeting_query] Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.","greeting_query","OTHER"
+"move the file jimmy.go.go in folder file","[INTENT: move_query] I have moved the file 'jimmy.go.go' to 'file'.","move_query","OTHER"
+"move the file jimmy.go into folder file","[INTENT: move_query] I have moved the file 'jimmy.go' to 'file'.","move_query","OTHER"
+"who are you","[INTENT: identity_query] I am Gollemer, your AI coding assistant and project orchestrator.","identity_query","OTHER"
+"Our microservices are tightly coupled together via rigid client dependencies.","[INTENT: social_chat] You should transition your architecture toward an asynchronous, event-driven pattern to decouple them.","social_chat","OTHER"
+"i welcome you with hello","[INTENT: social_chat] Hi there! how can i help you today?","social_chat","OTHER"
+"hi frieend","[INTENT: social_chat] yes ! let how have i help it","social_chat","OTHER"
+"hi friend","[INTENT: social_chat] hello ! let how can it help i","social_chat","OTHER"
+"hello","[INTENT: greeting_query] Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.","greeting_query","OTHER"
+"how are you","[INTENT: social_chat] I am doing great, thank you!","social_chat","OTHER"
+"who are you","[INTENT: identity_query] I am Gollemer, your AI coding assistant and project orchestrator.","identity_query","OTHER"
+"what you like to do","[INTENT: social_chat] I think so.","social_chat","OTHER"
+"hi friend","[INTENT: social_chat] hello . ! how","social_chat","OTHER"
+"what do you do","[INTENT: social_chat] I think so.","social_chat","OTHER"
+"hello","[INTENT: greeting_query] Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.","greeting_query","OTHER"
+"how are you","[INTENT: social_chat] you using opening well","social_chat","OTHER"
+"who are you","[INTENT: identity_query] I am Gollemer, your AI coding assistant and project orchestrator.","identity_query","OTHER"
+"how are you","[INTENT: social_chat] i is goodbye well","social_chat","OTHER"
+"hello","[INTENT: greeting_query] Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.","greeting_query","OTHER"
+"how are you","[INTENT: social_chat] I am doing great, thank you!","social_chat","OTHER"
+"what you doing","[INTENT: status_check] i am doing great, thank you!","status_check","OTHER"
+"hi friend","[INTENT: social_chat] Hello there! how can i help you today?","social_chat","OTHER"
+"how are you","[INTENT: social_chat] I am doing great, thank you!","social_chat","OTHER"
+"hello","[INTENT: greeting_query] Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.","greeting_query","OTHER"
+"how are you","[INTENT: social_chat] I am doing great, thank you!","social_chat","OTHER"
+"who are you","[INTENT: identity_query] I am Gollemer, your AI coding assistant and project orchestrator.","identity_query","OTHER"
+"hi friend","[INTENT: social_chat] hello ! ? how","social_chat","OTHER"
+"what do you do","[INTENT: social_chat] [INTENT: social_chat] I think so.","social_chat","OTHER"
+"is the cluster healthy","[INTENT: social_chat] All nodes are green.","social_chat","OTHER"
+"hello","[INTENT: greeting_query] Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.","greeting_query","OTHER"
+"who are you","[INTENT: identity_query] I am Gollemer, your AI coding assistant and project orchestrator.","identity_query","OTHER"
+"hi friend","[INTENT: social_chat] hello ! . how can you help i","social_chat","OTHER"
+"Should I disable the feature","[INTENT: social_chat] Yes turn it off.","social_chat","OTHER"
+"Can you squash the commits","[INTENT: social_chat] cleaning the history","social_chat","OTHER"
+"Can you whitelist the domain","[INTENT: social_chat] it is permitted now","social_chat","OTHER"
+"Did you minimize the bundle,","[INTENT: social_chat] it loads much faster","social_chat","OTHER"
+"hi friend","[INTENT: social_chat] hello there! how can i help you today?","social_chat","OTHER"
+"hi friend","[INTENT: social_chat] there can help how should your take it hello hi intent hour verify mandatory i year ʕ bit ? on","social_chat","OTHER"
+"hello","[INTENT: greeting_query] Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.","greeting_query","OTHER"
+"how are you","[INTENT: social_chat] these find variable well doing our on , i optional an idle interesting installation coding report debugging mom sparse throttle","social_chat","OTHER"
+"what do you do","[INTENT: social_chat] tracking think resolve throttle sparse mobile runs ʕ an optional ] worked [ ? . , ! relationship updates variable","social_chat","OTHER"

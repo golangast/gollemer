@@ -413,10 +413,10 @@ func TrainIntentMoEModel(model *moe.IntentMoE, data []TokenizedTrainingExample, 
 
 			if *autoHealFlag {
 				trainer.SaveGoldenCheckpoint(model, stats, currentStep, profile, totalTokens, totalDuration)
-				
+
 				// 🛡️ Autonomous Supervisor Intervention
 				sup.Reflect(stats, optimizer.(*nn.Adam), model)
-				
+
 				// Periodic structural validation (Check for word salad)
 				if numBatches > 0 && numBatches%100 == 0 {
 					if !sup.Validate(model) {
@@ -573,7 +573,7 @@ func TrainIntentMoEModelWithEnhancedData(model *moe.IntentMoE, enhancedData []En
 				continue
 			}
 			totalLoss += float64(loss)
-			
+
 			// 🛡️ Autonomous Supervisor Intervention
 			stats := moe.TrainingStats{
 				Epoch:          epoch,
@@ -885,14 +885,24 @@ func trainIntentMoEBatch(intentMoEModel *moe.IntentMoE, optimizer nn.Optimizer, 
 
 	// 🛡️ Proactive GPU Memory Release
 	for _, l := range semanticOutputLogits {
-		if l != nil { l.Release() }
+		if l != nil {
+			l.Release()
+		}
 	}
 	for _, g := range semanticOutputGrads {
-		if g != nil { g.Release() }
+		if g != nil {
+			g.Release()
+		}
 	}
-	if inputTensor != nil { inputTensor.Release() }
-	if semanticOutputTensor != nil { semanticOutputTensor.Release() }
-	if inputMask != nil { inputMask.Release() }
+	if inputTensor != nil {
+		inputTensor.Release()
+	}
+	if semanticOutputTensor != nil {
+		semanticOutputTensor.Release()
+	}
+	if inputMask != nil {
+		inputMask.Release()
+	}
 
 	if batchIndex%10 == 0 {
 		log.Printf("Batch %d Profile: Prep=%v, Fwd=%v, Loss=%v, Bwd=%v, Opt=%v", batchIndex, prepTime, forwardTime, lossTime, backwardTime, optimTime)
@@ -1024,8 +1034,8 @@ func main() {
 	// Set GC to 20% to force much more aggressive garbage collection.
 	debug.SetGCPercent(20)
 
-	const semanticTrainingDataPath = "./data/training/tiny_chat.json"
 	const word2vecModelPath = "data/models/gob_models/word2vec_model.gob"
+	const semanticTrainingDataPath = "./data/training/tiny_chat.json"
 
 	// Seed random number generator
 	rand.Seed(time.Now().UnixNano())
@@ -1114,14 +1124,6 @@ func main() {
 	for _, example := range *semanticTrainingData {
 		for _, tok := range tokenizer.Tokenize(strings.ToLower(example.Query)) {
 			tokenCounts[tok]++
-		}
-	}
-
-	// Add missing tokens from our specific domain IF they appear enough or are known special tokens
-	extraTokens := []string{"jill", "webserver", "jack", "go", "8080", "create", "named", "jim", "test", "data", "handler"}
-	for _, token := range extraTokens {
-		if _, exists := queryVocabulary.WordToToken[token]; !exists {
-			queryVocabulary.AddToken(token)
 		}
 	}
 
@@ -1308,11 +1310,6 @@ func main() {
 		intentMoEModel.ToGPU()
 	}
 
-	log.Println("🔧 Adjusted MoE: Capacity=1.2, LB=2.5, Temp=1.2, Dropout=0.1")
-
-	// Training Loop
-	// epochs = 5 // Removed redundant assignment
-
 	// Create tokenizers once after vocabularies are loaded/created
 	queryTokenizer, err := tokenizer.NewTokenizer(queryVocabulary)
 	if err != nil {
@@ -1365,7 +1362,7 @@ func main() {
 	}()
 
 	// Train the model
-	checkpointInterval := 500 // Save every 500 batches
+	checkpointInterval := 100 // Save every 500 batches
 	// Pass the gpu flag to the training loop
 	err = TrainIntentMoEModel(intentMoEModel, tokenizedData, epochs, learningRate, batchSize, maxSequenceLength, semanticOutputVocabulary, modelSavePath, checkpointInterval, *gpu)
 	if err != nil {
@@ -1435,4 +1432,3 @@ func saveCheckpoint(model *moe.IntentMoE, basePath string, epoch, batch, current
 
 	return moe.SaveIntentMoECheckpoint(ckpt, filename)
 }
-

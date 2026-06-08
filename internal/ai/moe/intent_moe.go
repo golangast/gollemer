@@ -612,7 +612,7 @@ func (m *IntentMoE) GenerateGuidedSentence(query string, maxLen int) (string, []
 			// Use pre-cached grammar types for O(1) lookup per token (avoids O(vocabSize) string matching)
 			for idx := 0; idx < len(logits.Data); idx++ {
 				actualType := m.grammarTypeForID(idx)
-				if actualType != expectedType && actualType != "OTHER" {
+				if expectedType != "OTHER" && actualType != expectedType {
 					logits.Data[idx] -= 5.0
 				}
 			}
@@ -798,10 +798,18 @@ func (m *IntentMoE) CalculateGrammarLoss(generatedIDs []int, parent, child strin
 		actualType := m.grammarTypeForID(generatedIDs[i])
 		expectedType := skeleton[i]
 		
-		if actualType != expectedType {
+		if expectedType != "OTHER" && actualType != expectedType {
 			// Penalty for wrong structural category (word salad prevention)
 			penalty += 0.5
 		}
+
+		// N-gram Window Feature (Tri-grams)
+		prevType := "BOS"
+		if i > 0 { prevType = m.grammarTypeForID(generatedIDs[i-1]) }
+		nextType := "EOS"
+		if i < len(generatedIDs)-1 { nextType = m.grammarTypeForID(generatedIDs[i+1]) }
+
+		penalty += rule.EvaluateWindow(prevType, actualType, nextType)
 	}
 	
 	// Bonus for required keywords (we check if any of the generated IDs match the keyword IDs)
@@ -1120,7 +1128,8 @@ func (m *IntentMoE) BeamSearchDecode(
 	maxLen, sosToken, eosToken, beamWidth int,
 	temperature float32,
 	repetitionPenalty float32,
-	rule *IntentRule, // Optional structural guidance
+	rule *IntentRule,        // Optional structural guidance
+	suppressedIDs map[int]bool, // Optional token IDs to hard-suppress (set to -1e9)
 ) ([]int, error) {
 	if beamWidth <= 0 {
 		beamWidth = 4
@@ -1197,6 +1206,12 @@ func (m *IntentMoE) BeamSearchDecode(
 			// Repetition penalty
 			ApplyRepetitionPenalty(logits, cand.ids, repetitionPenalty)
 
+			// 🚫 Social-context technical vocabulary suppression
+			for id := range suppressedIDs {
+				if id >= 0 && id < len(logits.Data) {
+					logits.Data[id] = -1e9
+				}
+			}
 			// 🧬 STRUCTURAL GUIDANCE (Structural Grammar Penalty)
 			// Use pre-cached grammar types for O(1) lookup per token.
 			if rule != nil && len(rule.GrammarSkeleton) > 0 {
@@ -1206,7 +1221,7 @@ func (m *IntentMoE) BeamSearchDecode(
 					for idx, v := range logits.Data {
 						if v < -1e8 { continue } // Skip already suppressed tokens
 						actualType := m.grammarTypeForID(idx)
-						if actualType != expectedType && actualType != "OTHER" {
+						if expectedType != "OTHER" && actualType != expectedType {
 							logits.Data[idx] -= 3.0
 						}
 					}

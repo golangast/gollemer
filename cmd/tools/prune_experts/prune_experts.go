@@ -5,7 +5,7 @@ import (
 	"log"
 
 	"github.com/golangast/gollemer/internal/ai/moe"
-	"github.com/golangast/gollemer/internal/ai/tensor"
+	"github.com/golangast/gollemer/internal/ai/neural/tensor"
 )
 
 func main() {
@@ -27,13 +27,7 @@ func main() {
 			}
 			
 			if l.AccumulatedUtilization != nil && len(l.AccumulatedUtilization) > targetExperts {
-				newMap := make(map[int]int)
-				for k, v := range l.AccumulatedUtilization {
-					if k < targetExperts {
-						newMap[k] = v
-					}
-				}
-				l.AccumulatedUtilization = newMap
+				l.AccumulatedUtilization = l.AccumulatedUtilization[:targetExperts]
 			}
 
 			if l.StepRoutingBias != nil {
