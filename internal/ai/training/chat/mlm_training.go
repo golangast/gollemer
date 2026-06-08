@@ -366,6 +366,16 @@ func MLMCrossEntropy(logits *tensor.Tensor, targets []int, maskPositions []float
 					targetWord := vocab.GetWord(targetID)
 					targetType := moe.MapWordToGrammarType(targetWord)
 					
+					rule := moe.IntentRule{}
+					prevType := "BOS"
+					if i > 0 && targets[i-1] >= 0 {
+						prevType = moe.MapWordToGrammarType(vocab.GetWord(targets[i-1]))
+					}
+					nextType := "EOS"
+					if i < numPositions-1 && targets[i+1] >= 0 {
+						nextType = moe.MapWordToGrammarType(vocab.GetWord(targets[i+1]))
+					}
+					
 					if targetType != "OTHER" {
 						for j := 0; j < vocabSize; j++ {
 							if j == targetID { continue }
@@ -373,6 +383,12 @@ func MLMCrossEntropy(logits *tensor.Tensor, targets []int, maskPositions []float
 							t_j := moe.MapWordToGrammarType(w_j)
 							if t_j != targetType {
 								logits.Data[offset+j] = -1e9 // HARD BLOCK
+							}
+							
+							// Tri-gram penalty on non-matching tokens
+							penalty := rule.EvaluateWindow(prevType, t_j, nextType)
+							if penalty > 0 {
+								logits.Data[offset+j] -= penalty * 5.0
 							}
 						}
 					}

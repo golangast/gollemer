@@ -1,0 +1,94 @@
+2026/06/04 21:48:11 main.go:1064: 🚀 GPU acceleration enabled (Paragon/WebGPU). Dispatching to AMD/Vulkan...
+---   Training Chat Model ---
+ Using Global GPU Context for Chat Training...
+2026/06/04 21:48:11 chat.go:328: ⚠️  Word2Vec model not found at data/models/gob_models/word2vec_model.gob — using empty fallback (run -train-word2vec to pre-train). Error: error opening model file: open data/models/gob_models/word2vec_model.gob: no such file or directory
+2026/06/04 21:48:11 chat.go:405:   human_chat.txt not found at data/training/trainingdata/human_chat.txt, skipping social intent data
+2026/06/04 21:48:11 chat.go:435:  Loaded 597 pairs from conversing.csv (fallback)
+2026/06/04 21:48:11 vocab.go:53: NewVocabulary: Initial size after adding <pad>, UNK, <s>, </s>: 4
+2026/06/04 21:48:11 chat.go:480:  Pre-computed final vocab size: 956
+2026/06/04 21:48:13 intent_moe.go:2470: 🛡️ [SanitizeEmbeddings] Registered 5 prefix/control tokens for scaling in Embedding layer.
+2026/06/04 21:48:13 intent_moe.go:2490: 🧬 Rebuilt MoE tracking: 3 layers registered for load-balancing.
+2026/06/04 21:48:13 chat.go:491:  Loaded existing MoE model from data/models/gob_models/moe_classification_model.gob
+2026/06/04 21:48:13 chat.go:496:  Re-registered 3 MoE layers from loaded model
+ Inspecting Router Integrity...
+ Layer 0: Router weight magnitude is 183.2144
+ Layer 1: Router weight magnitude is 185.2855
+ Layer 2: Router weight magnitude is 370.4260
+2026/06/04 21:48:13 chat.go:514:  Resuming with existing 512d model architecture.
+ Moving loaded model to GPU...
+🌡️  GPU Warm-up: Sequential pipeline compilation...
+✅ GPU Warm-up complete.
+2026/06/04 21:48:13 chat.go:610:  Total Active MoE Layers: 3
+ Performing Pre-Flight Health Check...
+ Model weights are within safe numerical bounds.
+2026/06/04 21:48:14 chat.go:619:  Manual Rebalance Triggered: Normalizing Expert weight distributions...
+⚖️ Rebalancing Experts to target average L2 Norm: 57.8873
+   Expert 0: Norm 35.3420 -> 57.8873 (Scaled by 1.6379)
+   Expert 1: Norm 35.3417 -> 57.8873 (Scaled by 1.6379)
+   Expert 2: Norm 95.4148 -> 57.8873 (Scaled by 0.6067)
+   Expert 3: Norm 95.5097 -> 57.8873 (Scaled by 0.6061)
+   Expert 4: Norm 95.4295 -> 57.8873 (Scaled by 0.6066)
+   Expert 5: Norm 95.4807 -> 57.8873 (Scaled by 0.6063)
+   Expert 6: Norm 95.3986 -> 57.8873 (Scaled by 0.6068)
+   Expert 7: Norm 95.5288 -> 57.8873 (Scaled by 0.6060)
+   Expert 8: Norm 35.3440 -> 57.8873 (Scaled by 1.6378)
+   Expert 9: Norm 35.3439 -> 57.8873 (Scaled by 1.6378)
+   Expert 10: Norm 35.3438 -> 57.8873 (Scaled by 1.6378)
+   Expert 11: Norm 35.3438 -> 57.8873 (Scaled by 1.6378)
+   Expert 12: Norm 35.3436 -> 57.8873 (Scaled by 1.6378)
+   Expert 13: Norm 35.3440 -> 57.8873 (Scaled by 1.6378)
+   Expert 14: Norm 35.3438 -> 57.8873 (Scaled by 1.6378)
+   Expert 15: Norm 35.3441 -> 57.8873 (Scaled by 1.6378)
+👉 Router weights reset to small random values.
+⚖️ Rebalancing Experts to target average L2 Norm: 57.8849
+   Expert 0: Norm 35.3386 -> 57.8849 (Scaled by 1.6380)
+   Expert 1: Norm 35.3379 -> 57.8849 (Scaled by 1.6380)
+   Expert 2: Norm 95.4836 -> 57.8849 (Scaled by 0.6062)
+   Expert 3: Norm 95.4003 -> 57.8849 (Scaled by 0.6068)
+   Expert 4: Norm 95.4406 -> 57.8849 (Scaled by 0.6065)
+   Expert 5: Norm 95.4700 -> 57.8849 (Scaled by 0.6063)
+   Expert 6: Norm 95.5111 -> 57.8849 (Scaled by 0.6061)
+   Expert 7: Norm 95.4565 -> 57.8849 (Scaled by 0.6064)
+   Expert 8: Norm 35.3399 -> 57.8849 (Scaled by 1.6379)
+   Expert 9: Norm 35.3399 -> 57.8849 (Scaled by 1.6379)
+   Expert 10: Norm 35.3400 -> 57.8849 (Scaled by 1.6379)
+   Expert 11: Norm 35.3399 -> 57.8849 (Scaled by 1.6379)
+   Expert 12: Norm 35.3400 -> 57.8849 (Scaled by 1.6379)
+   Expert 13: Norm 35.3401 -> 57.8849 (Scaled by 1.6379)
+   Expert 14: Norm 35.3400 -> 57.8849 (Scaled by 1.6379)
+   Expert 15: Norm 35.3399 -> 57.8849 (Scaled by 1.6379)
+👉 Router weights reset to small random values.
+⚖️ Rebalancing Experts to target average L2 Norm: 87.7711
+   Expert 0: Norm 2.8275 -> 87.7711 (Scaled by 31.0424)
+   Expert 1: Norm 2.8275 -> 87.7711 (Scaled by 31.0419)
+   Expert 2: Norm 123.3308 -> 87.7711 (Scaled by 0.7117)
+   Expert 3: Norm 123.3006 -> 87.7711 (Scaled by 0.7118)
+   Expert 4: Norm 123.4359 -> 87.7711 (Scaled by 0.7111)
+   Expert 5: Norm 123.3123 -> 87.7711 (Scaled by 0.7118)
+   Expert 6: Norm 123.3890 -> 87.7711 (Scaled by 0.7113)
+   Expert 7: Norm 123.4210 -> 87.7711 (Scaled by 0.7112)
+   Expert 8: Norm 82.3115 -> 87.7711 (Scaled by 1.0663)
+   Expert 9: Norm 82.3127 -> 87.7711 (Scaled by 1.0663)
+   Expert 10: Norm 82.3120 -> 87.7711 (Scaled by 1.0663)
+   Expert 11: Norm 82.3112 -> 87.7711 (Scaled by 1.0663)
+   Expert 12: Norm 82.3110 -> 87.7711 (Scaled by 1.0663)
+   Expert 13: Norm 82.3117 -> 87.7711 (Scaled by 1.0663)
+   Expert 14: Norm 82.3121 -> 87.7711 (Scaled by 1.0663)
+   Expert 15: Norm 82.3114 -> 87.7711 (Scaled by 1.0663)
+👉 Router weights reset to small random values.
+2026/06/04 21:48:14 chat.go:639:  Adjusted MoE: Capacity=1.5, LBWeight=0.15, Temp=1.5, Dropout=0.1
+2026/06/04 21:48:14 chat.go:646:  Initial Router Temperature set to 2.5 for exploration
+2026/06/04 21:48:14 chat.go:701:  Expanded Word2Vec vocab with 495 new words from training data. Total: 495
+2026/06/04 21:48:14 chat.go:733:  Final SentenceVocab Size: 956
+2026/06/04 21:48:14 intent_moe.go:2470: 🛡️ [SanitizeEmbeddings] Registered 5 prefix/control tokens for scaling in Embedding layer.
+2026/06/04 21:48:14 chat.go:792: Word2Vec Coverage: 2880 hits, 0 misses (100.00%)
+2026/06/04 21:48:14 chat.go:795:   Freeing Word2Vec vectors from memory (495 vectors)...
+2026/06/04 21:48:14 chat.go:800:  Word2Vec heavy vectors freed.
+2026/06/04 21:48:14 chat.go:820:  Data Distribution: Help=0, Social=597
+Data Split Pre-Limit (Balanced): 537 Training, 60 Validation
+2026/06/04 21:48:14 chat.go:914:   Skipping Phase 0 (MLM): Model already pre-trained (Step 3958)
+2026/06/04 21:48:14 chat.go:921:  Curriculum active: Training starts with shortest sentences.
+2026/06/04 21:48:14 chat.go:933: Final Train Set Size: 567
+Training on 597 pairs for 60 epochs (patience=10)...
+2026/06/04 21:48:14 chat.go:1108:  Training CSV log: logs/training_log.csv
+2026/06/04 21:48:14 chat.go:1119:  [CHECKPOINT] Initial save at Step 0...

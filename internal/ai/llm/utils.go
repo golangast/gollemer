@@ -21,6 +21,50 @@ func contains(s []string, e string) bool {
 	return slices.Contains(s, e)
 }
 
+// socialTechBlacklist is the set of token strings that should NEVER appear in a
+// social/conversational response.  These are high-frequency technical terms that
+// bleed into social decoding because the training corpus is dominated by DevOps
+// and Go-development Q&A pairs.  Hard-suppressing them at logit level guarantees
+// the model can never emit them even when its weights favour them.
+var socialTechBlacklist = []string{
+	// Software / Go dev vocabulary observed in word-salad generations
+	"commentary", "importing", "protobuf", "orchestrators", "routing",
+	"identity_query", "lag", "complexity", "params", "parameters",
+	"response", "payload", "handler", "webserver", "middleware",
+	"grpc", "rpc", "endpoint", "pipeline", "deployment",
+	"docker", "terraform", "kubernetes", "container", "cluster",
+	"database", "schema", "query", "migration", "index",
+	"struct", "interface", "goroutine", "channel", "mutex",
+	"package", "module", "import", "export", "compile",
+	"build", "binary", "runtime", "garbage", "collector",
+	"malloc", "defer", "panic", "recover", "context",
+	"deadline", "timeout", "concurrency", "parallelism",
+	"token", "tokenize", "vocab", "embedding", "encoder",
+	"decoder", "logit", "softmax", "gradient", "backprop",
+	"checkpoint", "epoch", "batch", "loss", "weight",
+	// Specific DevOps / infra jargon
+	"url", "uri", "http", "https", "ssl", "tls",
+	"json", "yaml", "csv", "xml", "proto",
+	"repository", "branch", "commit", "merge", "pr",
+	"ci", "cd", "devops", "cache", "redis",
+	"queue", "worker", "scheduler", "orchestrator",
+	"identity_query", "status_check", "social_chat",
+}
+
+// buildSocialSuppressedIDs returns a set of vocab IDs that must be suppressed
+// (set to -1e9) during social-context decoding.  The result is cached in the
+// returned map so callers can apply it in O(1) per logit slot.
+func buildSocialSuppressedIDs(vocab interface{ GetTokenID(string) int }) map[int]bool {
+	out := make(map[int]bool, len(socialTechBlacklist))
+	for _, word := range socialTechBlacklist {
+		id := vocab.GetTokenID(word)
+		if id > 1 { // skip PAD (0) and UNK (1)
+			out[id] = true
+		}
+	}
+	return out
+}
+
 func FindProjectRoot() (string, error) {
 	currentDir, err := os.Getwd()
 	if err != nil {

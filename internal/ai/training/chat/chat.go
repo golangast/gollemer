@@ -66,8 +66,9 @@ type ConversationSample struct {
 // slice and a companion LossMask.
 //
 // Special tokens used:
-//   <|im_start|>  – marks the beginning of a speaker turn
-//   <|im_end|>    – marks the end of a speaker turn
+//
+//	<|im_start|>  – marks the beginning of a speaker turn
+//	<|im_end|>    – marks the end of a speaker turn
 //
 // Loss masking rules:
 //   - Control/role prefix tokens  → 0.0  (never train the model to predict user text)
@@ -494,6 +495,13 @@ skipCSV:
 			moe.ActiveLayers = findMoELayers(intentModel)
 			if len(moe.ActiveLayers) > 0 {
 				log.Printf(" Re-registered %d MoE layers from loaded model", len(moe.ActiveLayers))
+				for _, layer := range moe.ActiveLayers {
+					for i := 0; i < len(layer.Experts); i++ {
+						if i >= 4 {
+							layer.ExpertPinned[i] = false
+						}
+					}
+				}
 			}
 
 			InspectRouterWeights(intentModel)
@@ -623,13 +631,13 @@ skipCSV:
 
 	// Adjust MoE settings for training
 	for _, layer := range moe.ActiveLayers {
-		layer.CapacityFactor = 1.5       // Increased from 1.25
-		layer.LoadBalancingWeight = 0.05 // Reduced to let CrossEntropy lead more
-		layer.RouterTemperature = 1.2    // Increased to 1.2 to force expert exploration
+		layer.CapacityFactor = 1.5
+		layer.LoadBalancingWeight = 0.15 // Increased to force expert exploration and avoid collapse
+		layer.RouterTemperature = 1.5    // Increased to 1.5 to flatten softmax
 		layer.ExpertDropoutRate = 0.1    // Reduced dropout to prevent UNK collapse
 		layer.SetMode(true)              // Enable training mode (noise)
 	}
-	log.Println(" Adjusted MoE: Capacity=1.5, LBWeight=0.15, Temp=1.0, Dropout=0.1")
+	log.Println(" Adjusted MoE: Capacity=1.5, LBWeight=0.15, Temp=1.5, Dropout=0.1")
 
 	// Initial Router Shake: If starting fresh or rebalancing, increase temperature briefly
 	if rebalanceRequested {
@@ -1144,7 +1152,11 @@ skipCSV:
 		// Reset utilization for each layer and the session monitor
 		for _, l := range moe.ActiveLayers {
 			l.ResetUtilizationStats()
-			l.SoftRouting = epoch < 2 // Transition to Hard Routing earlier
+			// Only use soft routing in the very first epochs of a fresh model.
+			// On a resumed model (step > 0), always use hard routing so the
+			// stagnation monitor gets real per-expert dispatch data.
+			isFreshModel := globalStep == 0
+			l.SoftRouting = isFreshModel && epoch < 2
 		}
 		epochMonitor.Reset() // Start fresh dispatch counts for this epoch
 
@@ -1413,10 +1425,11 @@ skipCSV:
 				// Calculate how often the top-1 prediction matches the ground truth
 				var correctPredictions int
 				var totalMasked int
+				currentBatchSize := targetTensor.Shape[0]
+				seqLen := targetTensor.Shape[1]
+
 				if len(logits) == 1 && len(logits[0].Shape) == 3 {
 					l := logits[0]
-					currentBatchSize := targetTensor.Shape[0]
-					seqLen := targetTensor.Shape[1]
 					logitsSeqLen := l.Shape[1]
 					vocabSize := l.Shape[2]
 
@@ -1444,6 +1457,33 @@ skipCSV:
 							totalMasked++
 						}
 					}
+				} else if len(logits) > 0 {
+					for t, logit := range logits {
+						if len(logit.Shape) < 2 {
+							continue
+						}
+						vocabSize := logit.Shape[1]
+						for b := 0; b < currentBatchSize; b++ {
+							targetID := int(targetTensor.Data[b*seqLen+t+1])
+							if targetID == intentModel.SentenceVocab.PaddingTokenID {
+								continue
+							}
+							offset := b * vocabSize
+							bestIdx := 0
+							bestVal := float32(-1e10)
+							for i := 0; i < vocabSize; i++ {
+								val := logit.Data[offset+i]
+								if val > bestVal {
+									bestVal = val
+									bestIdx = i
+								}
+							}
+							if bestIdx == targetID {
+								correctPredictions++
+							}
+							totalMasked++
+						}
+					}
 				}
 				var accuracy float32
 				if totalMasked > 0 {
@@ -1452,29 +1492,52 @@ skipCSV:
 
 				// --- ADAPTIVE PREDICTIVE FEEDBACK ---
 				// Log Prediction Sample for the user (every 100 steps)
-				if globalStep%100 == 0 {
+				if globalStep%100 == 0 && len(logits) > 0 {
 					var predWords []string
 					var tgtWords []string
-					// Extract first sample from batch for visualization
-					l := logits[0]
-					sl := l.Shape[1]
-					vs := l.Shape[2]
-					for t := 0; t < sl; t++ {
-						offset := t * vs
-						bestIdx := 0
-						bestVal := float32(-1e9)
-						for i := 0; i < vs; i++ {
-							if l.Data[offset+i] > bestVal {
-								bestVal = l.Data[offset+i]
-								bestIdx = i
+
+					if len(logits) == 1 && len(logits[0].Shape) == 3 {
+						l := logits[0]
+						sl := l.Shape[1]
+						vs := l.Shape[2]
+						for t := 0; t < sl; t++ {
+							offset := t * vs
+							bestIdx := 0
+							bestVal := float32(-1e9)
+							for i := 0; i < vs; i++ {
+								if l.Data[offset+i] > bestVal {
+									bestVal = l.Data[offset+i]
+									bestIdx = i
+								}
+							}
+							predWords = append(predWords, intentModel.SentenceVocab.GetWord(bestIdx))
+							tgtID := int(targetTensor.Data[t+1]) // +1 for shifted target
+							if tgtID != intentModel.SentenceVocab.PaddingTokenID {
+								tgtWords = append(tgtWords, intentModel.SentenceVocab.GetWord(tgtID))
 							}
 						}
-						predWords = append(predWords, intentModel.SentenceVocab.GetWord(bestIdx))
-						tgtID := int(targetTensor.Data[t+1]) // +1 for shifted target
-						if tgtID != intentModel.SentenceVocab.PaddingTokenID {
-							tgtWords = append(tgtWords, intentModel.SentenceVocab.GetWord(tgtID))
+					} else {
+						for t, logit := range logits {
+							if len(logit.Shape) < 2 {
+								continue
+							}
+							vs := logit.Shape[1]
+							bestIdx := 0
+							bestVal := float32(-1e9)
+							for i := 0; i < vs; i++ {
+								if logit.Data[i] > bestVal {
+									bestVal = logit.Data[i]
+									bestIdx = i
+								}
+							}
+							predWords = append(predWords, intentModel.SentenceVocab.GetWord(bestIdx))
+							tgtID := int(targetTensor.Data[t+1])
+							if tgtID != intentModel.SentenceVocab.PaddingTokenID {
+								tgtWords = append(tgtWords, intentModel.SentenceVocab.GetWord(tgtID))
+							}
 						}
 					}
+
 					log.Printf(" [PREDICTIVE FEEDBACK - Step %d]", globalStep)
 					log.Printf("    Expected: %s", strings.Join(tgtWords, " "))
 					log.Printf("    Predicted: %s", strings.Join(predWords, " "))
@@ -1719,7 +1782,11 @@ skipCSV:
 
 				// Dashboard Reporting (Go-to-WASM Bridge)
 				activeExperts := []int{}
-				for _, layer := range moe.ActiveLayers {
+				allBatchLayers := intentModel.Encoder.GetMoELayers()
+				if intentModel.Decoder.OutputMoE != nil {
+					allBatchLayers = append(allBatchLayers, intentModel.Decoder.OutputMoE)
+				}
+				for _, layer := range allBatchLayers {
 					// Experts selected for each token in the current batch
 					selected := layer.GetSelectedExperts() // [TokenIdx][K]
 					for _, experts := range selected {
@@ -1765,7 +1832,7 @@ skipCSV:
 
 					//  Periodically print a Heatmap for the first expert of each layer
 					if batches%200 == 0 {
-						for i, layer := range moe.ActiveLayers {
+						for i, layer := range allBatchLayers {
 							moe.PrintExpertHeatmap(fmt.Sprintf("L%d E0", i), layer.Experts[0], float32(0.05))
 						}
 					}
@@ -1913,6 +1980,16 @@ skipCSV:
 			allLayers := intentModel.Encoder.GetMoELayers()
 			if intentModel.Decoder.OutputMoE != nil {
 				allLayers = append(allLayers, intentModel.Decoder.OutputMoE)
+			}
+			// Sync epochMonitor from layer AccumulatedUtilization (the authoritative source)
+			// before ResetUtilizationStats is called inside the allLayers loop.
+			epochMonitor.Reset()
+			for _, l := range allLayers {
+				for expertIdx, count := range l.AccumulatedUtilization {
+					for c := 0; c < count; c++ {
+						epochMonitor.LogSelection(expertIdx)
+					}
+				}
 			}
 
 			for layerIdx, layer := range allLayers {
@@ -2239,71 +2316,9 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 	var humanChatPath string
 	var socialVocabPathFinal string
 	var conversingPath string
-	var conversingJSONLPath string
 	var conversingCSVPath string
 
-	// Load custom data if provided
-	if customDataPath != "" {
-		customData, err := os.ReadFile(customDataPath)
-		if err == nil {
-			type customPair struct {
-				Query          string `json:"query"`
-				FlatOutput     string `json:"flat_output"`
-				SemanticOutput struct {
-					Social struct {
-						Intent string `json:"intent"`
-					} `json:"social"`
-				} `json:"semantic_output"`
-			}
-			var pairs []customPair
-			if err := json.Unmarshal(customData, &pairs); err == nil {
-				// Optional: pre-load human chat data to find real responses for these queries
-				humanResponseMap := make(map[string]string)
-				hPath := filepath.Join(projectRoot, "data/training/trainingdata/human_chat.txt")
-				if hData, hErr := os.ReadFile(hPath); hErr == nil {
-					hLines := strings.Split(string(hData), "\n")
-					var conv []string
-					for _, hl := range hLines {
-						hl = strings.TrimSpace(hl)
-						if hl == "" {
-							if len(conv) > 1 {
-								for i := 0; i < len(conv)-1; i++ {
-									q := strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(conv[i], "Human 1:"), "Human 2:"))
-									a := strings.TrimSpace(strings.TrimPrefix(strings.TrimPrefix(conv[i+1], "Human 1:"), "Human 2:"))
-									if q != "" && a != "" {
-										humanResponseMap[strings.ToLower(q)] = a
-									}
-								}
-							}
-							conv = nil
-							continue
-						}
-						if strings.HasPrefix(hl, "Human 1:") || strings.HasPrefix(hl, "Human 2:") {
-							conv = append(conv, hl)
-						}
-					}
-				}
-
-				for _, p := range pairs {
-					// The user doesn't want to train on the structured tags (FlatOutput).
-					// We use a natural response if we have one, otherwise just the query itself as a placeholder.
-					answer := p.Query
-					if resp, ok := humanResponseMap[strings.ToLower(p.Query)]; ok {
-						answer = resp
-					}
-
-					chatPairs = append(chatPairs, moe.TrainPair{Q: p.Query, A: answer, Intent: p.SemanticOutput.Social.Intent, Grammar: ""})
-				}
-				log.Printf(" Loaded %d pairs from custom dataset: %s (Stripped structured tags)", len(pairs), customDataPath)
-				if overfitMode {
-					// In overfit mode, we only use the custom data
-					goto skipSocialLoad
-				}
-			}
-		}
-	}
 	// Assign paths (declared above to satisfy Go's goto-over-declaration rule).
-	conversingJSONLPath = filepath.Join(projectRoot, "data/training/trainingdata/conversations.jsonl")
 	conversingCSVPath = filepath.Join(projectRoot, "data/training/trainingdata/conversations.csv")
 
 	humanChatPath = filepath.Join(projectRoot, "data/training/trainingdata/human_chat.txt")
@@ -2381,19 +2396,6 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 		}
 	}
 
-	// --- LOAD conversations.jsonl (multi-turn dialogue data) ---
-	// Each conversation is expanded into context-windowed TrainPairs so the
-	// model learns to maintain dialogue history across turns.
-	if _, err := os.Stat(conversingJSONLPath); err == nil {
-		convPairs, convErr := LoadConversationJSONL(conversingJSONLPath)
-		if convErr != nil {
-			log.Printf("⚠️  conversations.jsonl load error: %v", convErr)
-		} else {
-			chatPairs = append(chatPairs, convPairs...)
-			log.Printf(" Loaded %d multi-turn conversation pairs from conversations.jsonl (total: %d)", len(convPairs), len(chatPairs))
-		}
-	}
-
 	// --- LOAD conversations.csv (flat multi-turn dialogue data) ---
 	// Format: conversation_id, turn_sequence, role, content
 	// Rows are grouped by conversation_id, sorted by turn_sequence, then
@@ -2406,10 +2408,6 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 			chatPairs = append(chatPairs, convCSVPairs...)
 			log.Printf(" Loaded %d multi-turn conversation pairs from conversations.csv (total: %d)", len(convCSVPairs), len(chatPairs))
 		}
-	}
-skipSocialLoad:
-	if len(chatPairs) == 0 {
-		log.Fatalf(" No social pairs loaded")
 	}
 
 	// Reuse TrainChat with social-only data by temporarily renaming model output
@@ -2705,11 +2703,6 @@ skipSocialLoad:
 
 	log.Printf(" Training social model for %d epochs at peak LR=%.6f", epochs, peakLR)
 
-	// PHASE 0: MLM Pre-Training DISABLED for social model.
-	// With 13 training pairs, MLM consistently hits 0% accuracy and enters OBSESSION mode,
-	// which applies 5x penalties to weights  actively corrupting them before seq2seq starts.
-	log.Println("  Skipping MLM for social model (too few pairs for MLM to converge)")
-
 	isTinyDataset := len(chatPairs) < 50 // Threshold for social curriculum
 
 	// Create loss weights for vocabulary
@@ -2854,7 +2847,6 @@ skipSocialLoad:
 		layer.StepRoutingBias[0] = step0Bias
 		layer.StepRoutingBias[1] = step1Bias
 	}
-	log.Printf(" Expert Surgery: Nudged E14(GREET), E11(ADJ), E13(PREP), E10(AUX), E9(VERB) biases and set step-aware routing.")
 
 	// Create optimizer (Wrapped with Cooling Safety)
 	// Merge Boolean and Float parameters with config
@@ -2893,7 +2885,7 @@ skipSocialLoad:
 		adaptiveSup.ActiveMode = "OverfitMode"
 	}
 
-	globalStep := 0
+	globalStep := intentModel.StepCount
 	stepsPerEpoch := (len(trainPairs) + batchSize - 1) / batchSize
 	totalSteps := epochs * stepsPerEpoch
 
@@ -2933,7 +2925,7 @@ skipSocialLoad:
 
 	qualityGateFailures := 0
 	lastSurgeryEpoch := -15 // Track when last surgery happened
-	
+
 	for epoch := 0; epoch < epochs; epoch++ {
 		supervisor.SpawnsThisEpoch = 0
 
@@ -3012,13 +3004,6 @@ skipSocialLoad:
 			}
 		}
 
-		if epoch >= 112 && epoch < 122 {
-			currentTemp += 1.5
-			if epoch == 112 || epoch%5 == 0 {
-				log.Printf("🔥 [Supervisor] Epoch %d: Routing temperature temporarily bumped to %.2f for exploration", epoch, currentTemp)
-			}
-		}
-
 		//  Top-1 Routing Phase (Define expert boundaries)
 		// Force model to commit to a single expert per token to stop "blending"
 		isTop1Phase := (epoch >= 1073 && epoch < 1173) // Applied for the next 100 epochs
@@ -3033,7 +3018,10 @@ skipSocialLoad:
 				layer.K = 1
 			}
 			layer.ClearResetCount()
-			layer.SoftRouting = epoch < 2 // Transition to Hard Routing earlier
+			// Only use soft routing in the very first epochs of a fresh model.
+			// On a resumed model (step > 0), always use hard routing.
+			isFreshModel := globalStep == 0
+			layer.SoftRouting = isFreshModel && epoch < 2
 			layer.StructuralRoutingWeight = cfg.StructuralRoutingWeight
 			layer.StructuralBiasIntensity = cfg.StructuralBiasIntensity
 			layer.ExpertRegularizationWeight = cfg.ExpertRegularizationWeight
@@ -3059,8 +3047,8 @@ skipSocialLoad:
 			for _, u := range layer.AccumulatedUtilization {
 				totalUsage += u
 			}
-			// The supervisor dropout boost logic was completely removed because Encoder layers 
-			// don't receive TargetRouting and naturally leave E13/E14 at 0% early on, 
+			// The supervisor dropout boost logic was completely removed because Encoder layers
+			// don't receive TargetRouting and naturally leave E13/E14 at 0% early on,
 			// falsely triggering catastrophic 20% dropout across the entire network.
 
 			//  Expert Capping (E9, E10)
@@ -3443,7 +3431,7 @@ skipSocialLoad:
 					if lLoss > 50.0 {
 						lLoss = 50.0
 					}
-					
+
 					var advLoss float32 = 0.0
 					if layer.GateOutputs != nil {
 						numExperts := len(layer.Experts)
@@ -3457,7 +3445,7 @@ skipSocialLoad:
 						} else if batch.QueryGrammar != nil && seqLen == batch.QueryGrammar.Shape[1] {
 							grammarData = batch.QueryGrammar.Data
 						}
-						
+
 						if grammarData != nil {
 							features := moe.TokenFeatures{
 								IsPronoun:   make([]bool, seqLen),
@@ -3466,26 +3454,30 @@ skipSocialLoad:
 							for t := 0; t < seqLen; t++ {
 								if t < len(grammarData) {
 									gv := int(grammarData[t])
-									if gv == 8 { features.IsPronoun[t] = true }
-									if gv == 10 { features.IsAuxiliary[t] = true }
+									if gv == 8 {
+										features.IsPronoun[t] = true
+									}
+									if gv == 10 {
+										features.IsAuxiliary[t] = true
+									}
 								}
 							}
 							gatingProbs := make([][]float64, seqLen)
 							for t := 0; t < seqLen; t++ {
 								gatingProbs[t] = make([]float64, numExperts)
 								for e := 0; e < numExperts; e++ {
-									gatingProbs[t][e] = float64(layer.GateOutputs.Data[t*numExperts + e])
+									gatingProbs[t][e] = float64(layer.GateOutputs.Data[t*numExperts+e])
 								}
 							}
 							cfgLoss := moe.RouterLossConfig{
 								BaseLBW:         float64(currentLBW),
-								SyntacticWeight: 0.06, 
+								SyntacticWeight: 0.06,
 								Temperature:     float64(layer.RouterTemperature),
 							}
 							advLoss = float32(moe.ComputeAdvancedRouterLoss(gatingProbs, features, cfgLoss))
 						}
 					}
-					
+
 					if advLoss > 0 {
 						lbLoss += advLoss
 					} else {
@@ -3793,7 +3785,11 @@ skipSocialLoad:
 			for _, pair := range trainPairs {
 				lowerQ := strings.ToLower(pair.Q)
 				if strings.Contains(lowerQ, baseQ) {
-					testPrompts[idx] = "__intent__ social : __ques__ " + pair.Q + " __ans__"
+					intent := pair.Intent
+					if intent == "" {
+						intent = "social"
+					}
+					testPrompts[idx] = "__intent__ " + intent + " : __ques__ " + pair.Q + " __ans__"
 					break
 				}
 			}
@@ -3806,10 +3802,14 @@ skipSocialLoad:
 		currentTestPrompts := testPrompts
 		isFullTest := epoch >= 100
 		if isFullTest {
-			log.Printf(" Epoch %d: Running Full Social Quality Gate (%d pairs)...", epoch+1, len(trainPairs))
+			log.Printf(" Epoch %d: Running Full Quality Gate (%d pairs)...", epoch+1, len(trainPairs))
 			currentTestPrompts = nil
 			for _, pair := range trainPairs {
-				currentTestPrompts = append(currentTestPrompts, "__intent__ social : __ques__ "+pair.Q+" __ans__")
+				intent := pair.Intent
+				if intent == "" {
+					intent = "social"
+				}
+				currentTestPrompts = append(currentTestPrompts, "__intent__ "+intent+" : __ques__ "+pair.Q+" __ans__")
 			}
 		}
 
@@ -3876,7 +3876,14 @@ skipSocialLoad:
 				heuristicScore = 1.0 // Force failure
 
 				// --- [Adaptive Supervisor Intervention on TTR/Anchor Fail] ---
-				failingPair := &moe.TrainPair{Q: p, Intent: "social"}
+				intentVal := "social"
+				if strings.HasPrefix(p, "__intent__ ") {
+					parts := strings.SplitN(p, " : __ques__", 2)
+					if len(parts) == 2 {
+						intentVal = strings.TrimSpace(strings.TrimPrefix(parts[0], "__intent__ "))
+					}
+				}
+				failingPair := &moe.TrainPair{Q: p, Intent: intentVal}
 				if strings.Contains(p, "__ques__") {
 					parts := strings.Split(p, "__ques__")
 					if len(parts) > 1 {
@@ -3956,7 +3963,14 @@ skipSocialLoad:
 									heuristicScore = 1.0 // Force failure
 
 									// --- [Adaptive Supervisor Intervention] ---
-									failingPair := &moe.TrainPair{Q: p, Intent: "social"}
+									intentVal := "social"
+									if strings.HasPrefix(p, "__intent__ ") {
+										parts := strings.SplitN(p, " : __ques__", 2)
+										if len(parts) == 2 {
+											intentVal = strings.TrimSpace(strings.TrimPrefix(parts[0], "__intent__ "))
+										}
+									}
+									failingPair := &moe.TrainPair{Q: p, Intent: intentVal}
 									if strings.Contains(p, "__ques__") {
 										parts := strings.Split(p, "__ques__")
 										if len(parts) > 1 {
@@ -3993,7 +4007,6 @@ skipSocialLoad:
 					}
 					bigrams[bi] = true
 				}
-				_ = repeats // Calculation kept for potential future use
 			}
 
 			// Use the more sophisticated heuristic for the progress bar
@@ -4128,13 +4141,14 @@ skipSocialLoad:
 			epochs += 50
 			totalSteps = epochs * stepsPerEpoch
 			log.Printf(" Training extended: New target = %d epochs", epochs)
-			
+
 			if qualityGateFailures > 3 {
-				cfg.RouterNoise = 0.05 // Drop from 0.200 to prevent shattering the surgery blend
+				cfg.RouterNoise = 0.05          // Drop from 0.200 to prevent shattering the surgery blend
 				cfg.LoadBalancingWeight = 0.055 // Aggressively enforce distribution uniformity
 			}
 
 			// 2. Reset Internal State
+			adaptiveSup.ResetMetrics()
 			for _, layer := range moe.ActiveLayers {
 				layer.ResetRouterWeights()
 			}
@@ -4221,8 +4235,8 @@ skipSocialLoad:
 			}
 		}
 
-		// 4. Save Checkpoint (every 100 epochs to reduce OOM risk from serialization spikes)
-		if (epoch+1)%25 == 0 {
+		// 4. Save Checkpoint (every 1 epoch to ensure interactive LLM has latest weights)
+		if (epoch+1)%1 == 0 {
 			// Detach before save to free the computation graph
 			intentModel.Detach()
 			// Aggressively reclaim memory before the large serialization spike
@@ -4293,10 +4307,10 @@ skipSocialLoad:
 			// Merging them caused the AdaptiveSupervisor to treat every social run
 			// as an overfit diagnostic and apply lockdown constraints (spawn cap=5,
 			// tight grad clipping) that killed variance needed to escape local minima.
-			OverfitMode:       overfitMode,
-			PronPathID:        pronID,
-			VerbPathID:        verbID,
-			AuxPathID:         auxID,
+			OverfitMode: overfitMode,
+			PronPathID:  pronID,
+			VerbPathID:  verbID,
+			AuxPathID:   auxID,
 		}
 
 		// 2. Status Line every 100 epochs (Concise)
@@ -4332,7 +4346,7 @@ skipSocialLoad:
 		if surgery.performedSurgery {
 			lastSurgeryEpoch = epoch
 		}
-		
+
 		// Temperature decay post-surgery
 		epochsSinceSurgery := epoch - lastSurgeryEpoch
 		if epochsSinceSurgery <= 15 {
@@ -4391,22 +4405,15 @@ func StrictGenerate(model *moe.IntentMoE, input string, maxLen int, repetitionPe
 		layer.SetMode(true) // KEEP TRAINING MODE FOR DIVERSITY
 		oldTemps[layer] = layer.RouterTemperature
 
-		// If early in training, use a higher temperature to force exploration
-		if epoch < 100 {
-			layer.RouterTemperature = 1.25 // Forces rarer expert combinations
-		} else {
-			layer.RouterTemperature = 0.35 // 0.35 for quality gate: pick most-probable (grammatical) path
-		}
+		// Set tau to 1.2 during test evaluations to soften token salad and allow
+		// adjacent experts to absorb gradient/routing load.
+		layer.RouterTemperature = 1.2
 	}
 	if model.Decoder.OutputMoE != nil {
 		model.Decoder.OutputMoE.SetMode(true)
 		oldTemps[model.Decoder.OutputMoE] = model.Decoder.OutputMoE.RouterTemperature
 
-		if epoch < 100 {
-			model.Decoder.OutputMoE.RouterTemperature = 1.25
-		} else {
-			model.Decoder.OutputMoE.RouterTemperature = 0.1
-		}
+		model.Decoder.OutputMoE.RouterTemperature = 1.2
 	}
 
 	defer func() {
@@ -5669,6 +5676,26 @@ func applyGrammarMask(logits *tensor.Tensor, tokenHistory []int, vocab *mainvoca
 	if len(tokenHistory) >= 2 && tokenHistory[len(tokenHistory)-1] == tokenHistory[len(tokenHistory)-2] {
 		if lastID >= 0 && lastID < len(logits.Data) {
 			logits.Data[lastID] -= 10.0
+		}
+	}
+
+	// Rule 4: Apply Tri-gram window penalty (N-gram Window Feature)
+	if len(tokenHistory) >= 2 {
+		rule := moe.IntentRule{}
+		prevWord := vocab.GetWord(tokenHistory[len(tokenHistory)-2])
+		currWord := lastWord
+		
+		prevType := moe.MapWordToGrammarType(prevWord)
+		currType := moe.MapWordToGrammarType(currWord)
+		
+		for i := 0; i < len(logits.Data); i++ {
+			nextWord := vocab.GetWord(i)
+			nextType := moe.MapWordToGrammarType(nextWord)
+			
+			penalty := rule.EvaluateWindow(prevType, currType, nextType)
+			if penalty > 0 {
+				logits.Data[i] -= penalty * 5.0
+			}
 		}
 	}
 }
@@ -7151,7 +7178,7 @@ func drawSocialProgressBar(current, target, currentGrammar, targetGrammar, curre
 }
 
 type surgeryImpl struct {
-	layers []*moe.MoELayer
+	layers           []*moe.MoELayer
 	performedSurgery bool
 }
 

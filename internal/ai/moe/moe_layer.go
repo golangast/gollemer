@@ -207,16 +207,20 @@ func NewMoELayer(inputDim, outputDim, numExperts, k int, expertBuilder func(int)
 	for i := range layer.ExpertHealth {
 		layer.ExpertHealth[i] = 1.0
 		layer.ExpertLastUsedAt[i] = now
-		// Pin first 32 experts by default as structural/system experts
-		if i < 32 {
+		// Pin first 4 experts by default as core structural/system experts
+		// Unpinning the rest allows the AdaptiveSupervisor to hard-reset them if they stagnate
+		if i < 4 {
 			layer.ExpertPinned[i] = true
-			if i < len(GrammarRoles) {
-				layer.ExpertRole[i] = GrammarRoles[i]
-			} else if i >= 8 && i <= 15 {
-				layer.ExpertRole[i] = "PRON/AUX"
-			} else {
-				layer.ExpertRole[i] = "STRUCTURAL"
-			}
+		} else {
+			layer.ExpertPinned[i] = false
+		}
+		
+		if i < len(GrammarRoles) {
+			layer.ExpertRole[i] = GrammarRoles[i]
+		} else if i >= 8 && i <= 15 {
+			layer.ExpertRole[i] = "PRON/AUX"
+		} else {
+			layer.ExpertRole[i] = "STRUCTURAL"
 		}
 	}
 	for i := range layer.ExpertOutputScale {
@@ -598,6 +602,12 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 		}
 
 		// Safety: Ensure at least K experts remain active
+		activeCount = 0
+		for i := 0; i < numExperts; i++ {
+			if !droppedMask[i] {
+				activeCount++
+			}
+		}
 		for i := 0; i < numExperts && activeCount < moe.K; i++ {
 			if droppedMask[i] {
 				droppedMask[i] = false
@@ -823,11 +833,15 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 
 		if moe.SoftRouting {
 			// Soft Routing: Select ALL experts for ALL tokens
+			if moe.AccumulatedUtilization == nil || len(moe.AccumulatedUtilization) != numExperts {
+				moe.AccumulatedUtilization = make([]int, numExperts)
+			}
 			for i := 0; i < totalTokensRoute; i++ {
 				moe.TopExpertIDs[i] = 0 // Just for diagnostics
 				selected := make([]int, numExperts)
 				for j := range numExperts {
 					selected[j] = j
+					moe.AccumulatedUtilization[j]++ // Track so stagnation monitor has real data
 				}
 				allSelectedExperts[i] = selected
 			}
@@ -851,8 +865,8 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 						v1, v2 := float32(-1e30), float32(-1e30)
 
 						for j, score := range scores {
-							// 🎲 Tie-breaker jitter: Add a tiny random value to break the E0 monopoly on ties
-							jitteredScore := score + (rand.Float32() * 1e-6)
+							// 🎲 Tie-breaker jitter: Add a larger random value to definitively break ties
+							jitteredScore := score + (rand.Float32() * 0.05)
 							if jitteredScore > v1 {
 								v2 = v1
 								e2 = e1
@@ -2693,6 +2707,24 @@ func (moe *MoELayer) EvictExpert(minIdx int) {
 // AtCapacity returns true if the layer has reached the hard maximum expert count.
 func (moe *MoELayer) AtCapacity() bool {
 	return len(moe.Experts) >= 64
+}
+
+// CountStandardExperts returns the number of structural/standard experts in this layer.
+// Standard roles: PRON, VERB, AUX, ADJ, NOUN, PREP, and untagged (empty string).
+// Used by the supervisor's CanEvict floor check to enforce MinStandardExpertRatio.
+func (moe *MoELayer) CountStandardExperts() int {
+	count := 0
+	for i := range moe.Experts {
+		role := ""
+		if i < len(moe.ExpertRole) {
+			role = moe.ExpertRole[i]
+		}
+		if role == "PRON" || role == "VERB" || role == "AUX" ||
+			role == "ADJ" || role == "NOUN" || role == "PREP" || role == "" {
+			count++
+		}
+	}
+	return count
 }
 
 // EvictLeastActive uses the standard FindLowestPerformingExpert heuristic to select and

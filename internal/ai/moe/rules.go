@@ -1,7 +1,9 @@
 package moe
 
 import (
+	"encoding/csv"
 	"strings"
+	"sync"
 )
 
 // IntentRule defines the structural and vocabulary expectations for a specific intent.
@@ -18,6 +20,30 @@ type IntentRule struct {
 	
 	// ForbiddenPatterns are sequences that make the sentence incoherent for this intent.
 	ForbiddenPatterns []string
+}
+
+// EvaluateWindow evaluates a sliding window of three consecutive tokens (Tri-grams)
+// to catch complex errors that bigrams miss, such as missing words in verb phrases
+// or improper punctuation placement.
+func (r *IntentRule) EvaluateWindow(prev, curr, next string) float32 {
+	var penalty float32 = 0.0
+
+	// Missing words in verb phrases
+	if prev == "AUX" && curr != "VERB" && curr != "ADJ" && curr != "PREP" && curr != "PRON" {
+		penalty += 0.3
+	}
+
+	// Improper punctuation placement (prevent ending on an AUX or PREP)
+	if next == "EOS" && (curr == "AUX" || curr == "PREP" || curr == "INTERROGATIVE") {
+		penalty += 0.4
+	}
+
+	// Double pronoun without verb/prep
+	if prev == "PRON" && curr == "PRON" {
+		penalty += 0.2
+	}
+
+	return penalty
 }
 
 // RuleBook is the sophisticated collection of linguistic rules for the MoE model.
@@ -138,144 +164,571 @@ func (rb *RuleBook) GetRuleByIntent(parent, child string) (IntentRule, bool) {
 	return r, ok
 }
 
+var lexiconCSV = `word,type
+hello,GREET
+hi,GREET
+hey,GREET
+greetings,GREET
+afternoon,GREET
+hiya,GREET
+howdy,GREET
+yo,GREET
+sup,GREET
+hii,GREET
+heya,GREET
+ohh,GREET
+oh,GREET
+wow,GREET
+haha,GREET
+lol,GREET
+hehe,GREET
+yep,GREET
+yup,GREET
+yeah,GREET
+yea,GREET
+yes,GREET
+nope,GREET
+nah,GREET
+cool,GREET
+awesome,GREET
+amazing,GREET
+interesting,GREET
+true,GREET
+right,GREET
+exactly,GREET
+indeed,GREET
+absolutely,GREET
+there,GREET
+here,GREET
+now,GREET
+i,PRON
+me,PRON
+my,PRON
+mine,PRON
+myself,PRON
+you,PRON
+your,PRON
+yours,PRON
+yourself,PRON
+he,PRON
+him,PRON
+his,PRON
+himself,PRON
+she,PRON
+her,PRON
+hers,PRON
+herself,PRON
+it,PRON
+its,PRON
+itself,PRON
+we,PRON
+us,PRON
+our,PRON
+ours,PRON
+ourselves,PRON
+they,PRON
+them,PRON
+their,PRON
+theirs,PRON
+themselves,PRON
+this,PRON
+that,PRON
+these,PRON
+those,PRON
+someone,PRON
+anyone,PRON
+everyone,PRON
+nobody,PRON
+somebody,PRON
+am,VERB
+is,VERB
+are,VERB
+was,VERB
+were,VERB
+be,VERB
+been,VERB
+being,VERB
+seem,VERB
+seems,VERB
+seemed,VERB
+feel,VERB
+feels,VERB
+felt,VERB
+looks,VERB
+sounded,VERB
+become,VERB
+became,VERB
+stay,VERB
+stayed,VERB
+remain,VERB
+remains,VERB
+think,VERB
+thinking,VERB
+thought,VERB
+know,VERB
+knowing,VERB
+knew,VERB
+want,VERB
+wanted,VERB
+wanting,VERB
+like,VERB
+liked,VERB
+liking,VERB
+love,VERB
+loved,VERB
+loving,VERB
+make,VERB
+made,VERB
+making,VERB
+go,VERB
+went,VERB
+gone,VERB
+start,VERB
+started,VERB
+starting,VERB
+use,VERB
+used,VERB
+using,VERB
+work,VERB
+worked,VERB
+working,VERB
+try,VERB
+tried,VERB
+trying,VERB
+learn,VERB
+learned,VERB
+learning,VERB
+take,VERB
+took,VERB
+taken,VERB
+taking,VERB
+put,VERB
+keep,VERB
+kept,VERB
+come,VERB
+came,VERB
+coming,VERB
+run,VERB
+ran,VERB
+running,VERB
+see,VERB
+saw,VERB
+seen,VERB
+seeing,VERB
+look,VERB
+looked,VERB
+looking,VERB
+find,VERB
+found,VERB
+finding,VERB
+give,VERB
+gave,VERB
+given,VERB
+giving,VERB
+tell,VERB
+told,VERB
+telling,VERB
+ask,VERB
+asked,VERB
+asking,VERB
+talk,VERB
+talked,VERB
+talking,VERB
+say,VERB
+said,VERB
+saying,VERB
+help,VERB
+helped,VERB
+helping,VERB
+plan,VERB
+planned,VERB
+planning,VERB
+buy,VERB
+bought,VERB
+buying,VERB
+eat,VERB
+ate,VERB
+eaten,VERB
+eating,VERB
+drink,VERB
+drank,VERB
+drunk,VERB
+drinking,VERB
+read,VERB
+reading,VERB
+write,VERB
+wrote,VERB
+written,VERB
+writing,VERB
+play,VERB
+played,VERB
+playing,VERB
+cook,VERB
+cooked,VERB
+cooking,VERB
+build,VERB
+built,VERB
+building,VERB
+enjoy,VERB
+enjoyed,VERB
+enjoying,VERB
+listen,VERB
+listened,VERB
+listening,VERB
+practice,VERB
+practiced,VERB
+practicing,VERB
+need,VERB
+needed,VERB
+needing,VERB
+check,VERB
+checked,VERB
+checking,VERB
+share,VERB
+shared,VERB
+sharing,VERB
+hear,VERB
+heard,VERB
+hearing,VERB
+remember,VERB
+remembered,VERB
+remembering,VERB
+spend,VERB
+spent,VERB
+spending,VERB
+live,VERB
+lived,VERB
+living,VERB
+grow,VERB
+grew,VERB
+grown,VERB
+growing,VERB
+move,VERB
+moved,VERB
+moving,VERB
+done,VERB
+finished,VERB
+completed,VERB
+will,AUX
+would,AUX
+can,AUX
+could,AUX
+should,AUX
+shall,AUX
+may,AUX
+might,AUX
+must,AUX
+ought,AUX
+dare,AUX
+do,AUX
+does,AUX
+did,AUX
+doing,AUX
+have,AUX
+has,AUX
+had,AUX
+having,AUX
+get,AUX
+got,AUX
+gotten,AUX
+getting,AUX
+going,AUX
+gonna,AUX
+gotta,AUX
+wanna,AUX
+good,ADJ
+fine,ADJ
+well,ADJ
+great,ADJ
+excellent,ADJ
+bad,ADJ
+okay,ADJ
+ok,ADJ
+happy,ADJ
+sad,ADJ
+excited,ADJ
+bored,ADJ
+tired,ADJ
+busy,ADJ
+free,ADJ
+ready,ADJ
+easy,ADJ
+hard,ADJ
+difficult,ADJ
+complex,ADJ
+fun,ADJ
+funny,ADJ
+nice,ADJ
+beautiful,ADJ
+lovely,ADJ
+wonderful,ADJ
+big,ADJ
+small,ADJ
+large,ADJ
+little,ADJ
+long,ADJ
+short,ADJ
+new,ADJ
+old,ADJ
+hot,ADJ
+cold,ADJ
+warm,ADJ
+clean,ADJ
+fresh,ADJ
+quick,ADJ
+slow,ADJ
+better,ADJ
+worse,ADJ
+best,ADJ
+worst,ADJ
+more,ADJ
+most,ADJ
+less,ADJ
+least,ADJ
+very,ADJ
+really,ADJ
+quite,ADJ
+just,ADJ
+still,ADJ
+already,ADJ
+again,ADJ
+always,ADJ
+never,ADJ
+often,ADJ
+sometimes,ADJ
+usually,ADJ
+actually,ADJ
+definitely,ADJ
+probably,ADJ
+maybe,ADJ
+perhaps,ADJ
+sure,ADJ
+only,ADJ
+also,ADJ
+too,ADJ
+even,ADJ
+much,ADJ
+many,ADJ
+few,ADJ
+lot,ADJ
+lots,ADJ
+pretty,ADJ
+fairly,ADJ
+kind,ADJ
+sort,ADJ
+bit,ADJ
+enough,ADJ
+so,ADJ
+such,ADJ
+both,ADJ
+each,ADJ
+every,ADJ
+all,ADJ
+any,ADJ
+some,ADJ
+local,ADJ
+different,ADJ
+same,ADJ
+next,ADJ
+last,ADJ
+other,ADJ
+own,ADJ
+full,ADJ
+whole,ADJ
+main,ADJ
+basic,ADJ
+simple,ADJ
+special,ADJ
+first,ADJ
+second,ADJ
+several,ADJ
+single,ADJ
+important,ADJ
+natural,ADJ
+classic,ADJ
+healthy,ADJ
+perfect,ADJ
+name,NOUN
+gollemer,NOUN
+bot,NOUN
+assistant,NOUN
+system,NOUN
+ai,NOUN
+machine,NOUN
+human,NOUN
+person,NOUN
+people,NOUN
+friend,NOUN
+friends,NOUN
+family,NOUN
+thing,NOUN
+things,NOUN
+stuff,NOUN
+way,NOUN
+ways,NOUN
+time,NOUN
+day,NOUN
+days,NOUN
+week,NOUN
+month,NOUN
+year,NOUN
+place,NOUN
+home,NOUN
+house,NOUN
+room,NOUN
+job,NOUN
+school,NOUN
+class,NOUN
+project,NOUN
+idea,NOUN
+ideas,NOUN
+food,NOUN
+water,NOUN
+coffee,NOUN
+tea,NOUN
+book,NOUN
+books,NOUN
+music,NOUN
+life,NOUN
+world,NOUN
+city,NOUN
+town,NOUN
+country,NOUN
+morning,NOUN
+night,NOUN
+habit,NOUN
+hobby,NOUN
+skill,NOUN
+goal,NOUN
+goals,NOUN
+garden,NOUN
+kitchen,NOUN
+dog,NOUN
+cat,NOUN
+recipe,NOUN
+hiking,NOUN
+weekend,NOUN
+vacation,NOUN
+holiday,NOUN
+trip,NOUN
+weather,NOUN
+sleep,NOUN
+rest,NOUN
+exercise,NOUN
+health,NOUN
+mind,NOUN
+body,NOUN
+heart,NOUN
+energy,NOUN
+money,NOUN
+phone,NOUN
+computer,NOUN
+app,NOUN
+game,NOUN
+show,NOUN
+movie,NOUN
+podcast,NOUN
+video,NOUN
+photo,NOUN
+message,NOUN
+email,NOUN
+question,NOUN
+answer,NOUN
+story,NOUN
+point,NOUN
+reason,NOUN
+moment,NOUN
+today,NOUN
+yesterday,NOUN
+tomorrow,NOUN
+the,PREP
+a,PREP
+an,PREP
+in,PREP
+on,PREP
+at,PREP
+to,PREP
+for,PREP
+with,PREP
+by,PREP
+from,PREP
+of,PREP
+about,PREP
+above,PREP
+after,PREP
+before,PREP
+between,PREP
+during,PREP
+into,PREP
+near,PREP
+off,PREP
+out,PREP
+over,PREP
+through,PREP
+under,PREP
+until,PREP
+up,PREP
+upon,PREP
+within,PREP
+without,PREP
+and,PREP
+but,PREP
+or,PREP
+nor,PREP
+yet,PREP
+because,PREP
+if,PREP
+when,PREP
+while,PREP
+although,PREP
+though,PREP
+since,PREP
+unless,PREP
+as,PREP
+than,PREP
+then,PREP
+not,PREP
+no,PREP
+how,INTERROGATIVE
+what,INTERROGATIVE
+where,INTERROGATIVE
+why,INTERROGATIVE
+who,INTERROGATIVE
+which,INTERROGATIVE
+whose,INTERROGATIVE
+whom,INTERROGATIVE`
+
+var (
+	lexiconMap  map[string]string
+	lexiconOnce sync.Once
+)
+
+func initLexicon() {
+	lexiconOnce.Do(func() {
+		lexiconMap = make(map[string]string)
+		r := csv.NewReader(strings.NewReader(lexiconCSV))
+		records, err := r.ReadAll()
+		if err == nil {
+			for i, rec := range records {
+				if i == 0 {
+					continue
+				}
+				if len(rec) >= 2 {
+					lexiconMap[strings.ToLower(strings.TrimSpace(rec[0]))] = strings.TrimSpace(rec[1])
+				}
+			}
+		}
+	})
+}
+
 // MapWordToGrammarType returns a coarse-grained tag for a word.
-// This is used for structural training and grammar scoring.
-// Vocabulary is tuned to match the human_chat.txt training corpus.
+// This uses the Dynamic CSV Lexicon Loader.
 func MapWordToGrammarType(w string) string {
+	initLexicon()
 	w = strings.ToLower(strings.Trim(w, ".,!?;:\"'()[]"))
-
-	// GREETINGS / Discourse markers
-	switch w {
-	case "hello", "hi", "hey", "greetings", "afternoon",
-		"hiya", "howdy", "yo", "sup", "hii", "heya", "ohh", "oh", "wow",
-		"haha", "lol", "hehe", "yep", "yup", "yeah", "yea", "yes",
-		"nope", "nah", "cool", "awesome", "amazing",
-		"interesting", "true", "right", "exactly", "indeed", "absolutely", "there", "here", "now":
-		return "GREET"
+	if t, ok := lexiconMap[w]; ok {
+		return t
 	}
-
-	// PRONOUNS
-	switch w {
-	case "i", "me", "my", "mine", "myself",
-		"you", "your", "yours", "yourself",
-		"he", "him", "his", "himself",
-		"she", "her", "hers", "herself",
-		"it", "its", "itself",
-		"we", "us", "our", "ours", "ourselves",
-		"they", "them", "their", "theirs", "themselves",
-		"this", "that", "these", "those",
-		"someone", "anyone", "everyone", "nobody", "somebody":
-		return "PRON"
-	}
-
-	// VERBS — Copula / State verbs
-	switch w {
-	case "am", "is", "are", "was", "were", "be", "been", "being",
-		"seem", "seems", "seemed", "feel", "feels", "felt",
-		"looks", "sounded", "become", "became", "stay", "stayed",
-		"remain", "remains":
-		return "VERB"
-	}
-
-	// AUXILIARY VERBS
-	switch w {
-	case "will", "would", "can", "could", "should", "shall", "may", "might",
-		"must", "ought", "dare",
-		"do", "does", "did", "doing",
-		"have", "has", "had", "having",
-		"get", "got", "gotten", "getting",
-		"going", "gonna", "gotta", "wanna":
-		return "AUX"
-	}
-
-	// ACTION VERBS — common in casual conversation
-	switch w {
-	case "think", "thinking", "thought", "know", "knowing", "knew",
-		"want", "wanted", "wanting", "like", "liked", "liking", "love", "loved", "loving",
-		"make", "made", "making", "go", "went", "gone", "start", "started", "starting",
-		"use", "used", "using", "work", "worked", "working",
-		"try", "tried", "trying", "learn", "learned", "learning",
-		"take", "took", "taken", "taking", "put", "keep", "kept",
-		"come", "came", "coming", "run", "ran", "running",
-		"see", "saw", "seen", "seeing", "look", "looked", "looking",
-		"find", "found", "finding", "give", "gave", "given", "giving",
-		"tell", "told", "telling", "ask", "asked", "asking",
-		"talk", "talked", "talking", "say", "said", "saying",
-		"help", "helped", "helping", "plan", "planned", "planning",
-		"buy", "bought", "buying", "eat", "ate", "eaten", "eating",
-		"drink", "drank", "drunk", "drinking", "read", "reading",
-		"write", "wrote", "written", "writing", "play", "played", "playing",
-		"cook", "cooked", "cooking", "build", "built", "building",
-		"enjoy", "enjoyed", "enjoying", "listen", "listened", "listening",
-		"practice", "practiced", "practicing", "need", "needed", "needing",
-		"check", "checked", "checking", "share", "shared", "sharing",
-		"hear", "heard", "hearing", "remember", "remembered", "remembering",
-		"spend", "spent", "spending", "live", "lived", "living",
-		"grow", "grew", "grown", "growing", "move", "moved", "moving",
-		"done", "finished", "completed":
-		return "VERB"
-	}
-
-	// ADJECTIVES / ADVERBS
-	switch w {
-	case "good", "fine", "well", "great", "excellent", "bad", "okay", "ok",
-		"happy", "sad", "excited", "bored", "tired", "busy", "free", "ready",
-		"easy", "hard", "difficult", "complex", "fun", "funny",
-		"nice", "beautiful", "lovely", "wonderful",
-		"big", "small", "large", "little", "long", "short", "new", "old",
-		"hot", "cold", "warm", "clean", "fresh", "quick", "slow",
-		"better", "worse", "best", "worst", "more", "most", "less", "least",
-		"very", "really", "quite", "just", "still", "already", "again",
-		"always", "never", "often", "sometimes", "usually", "actually",
-		"definitely", "probably", "maybe", "perhaps", "sure", "only",
-		"also", "too", "even", "much", "many", "few", "lot", "lots",
-		"pretty", "fairly", "kind", "sort", "bit", "enough",
-		"so", "such", "both", "each", "every", "all", "any", "some",
-		"local", "different", "same", "next", "last", "other", "own",
-		"full", "whole", "main", "basic", "simple", "special", "first",
-		"second", "several", "single", "important", "natural",
-		"classic", "healthy", "perfect":
-		return "ADJ"
-	}
-
-	// NOUNS — common content words in casual conversation
-	switch w {
-	case "name", "gollemer", "bot", "assistant", "system", "ai", "machine",
-		"human", "person", "people", "friend", "friends", "family",
-		"thing", "things", "stuff", "way", "ways", "time", "day", "days",
-		"week", "month", "year", "place", "home", "house", "room",
-		"job", "school", "class", "project", "idea", "ideas",
-		"food", "water", "coffee", "tea", "book", "books", "music",
-		"life", "world", "city", "town", "country", "morning", "night",
-		"habit", "hobby", "skill", "goal", "goals",
-		"garden", "kitchen", "dog", "cat", "recipe", "hiking",
-		"weekend", "vacation", "holiday", "trip", "weather", "sleep",
-		"rest", "exercise", "health", "mind", "body", "heart", "energy",
-		"money", "phone", "computer", "app", "game", "show",
-		"movie", "podcast", "video", "photo", "message", "email",
-		"question", "answer", "story", "point", "reason", "moment", "today", "yesterday", "tomorrow":
-		return "NOUN"
-	}
-
-	// PREPOSITIONS / ARTICLES / CONJUNCTIONS
-	switch w {
-	case "the", "a", "an",
-		"in", "on", "at", "to", "for", "with", "by", "from", "of",
-		"about", "above", "after", "before", "between", "during",
-		"into", "near", "off", "out", "over", "through",
-		"under", "until", "up", "upon", "within", "without",
-		"and", "but", "or", "nor", "yet", "because", "if",
-		"when", "while", "although", "though", "since", "unless",
-		"as", "than", "then", "not", "no":
-		return "PREP"
-	}
-
-	// INTERROGATIVES
-	switch w {
-	case "how", "what", "where", "why", "who", "which", "whose", "whom":
-		return "INTERROGATIVE"
-	}
-
 	return "OTHER"
 }
 

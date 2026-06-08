@@ -72,6 +72,12 @@ func (s *AdaptiveSupervisor) EvaluateGate(activePath string, currentScore float6
 	}
 
 	log.Printf("⚠️  AdaptiveSupervisor: Quality Gate Rejected (Score: %.4f < %.4f). Taking control...", currentScore, minThreshold)
+
+	if s.CurrentExperts >= s.MaxExperts {
+		log.Printf("⚠️ [Supervisor] Hard cap reached. Freezing mutations to prevent token drift.")
+		return
+	}
+
 	s.PathFailureCount[activePath]++
 
 	// 1. MUTATE TARGET ROUTING VARIABLES
@@ -117,6 +123,18 @@ func (s *AdaptiveSupervisor) EvaluateGate(activePath string, currentScore float6
 
 	// 3. EVOLVE TRAINING DATA
 	s.EvolveDataset(problematicRawQuestion)
+}
+
+// ResetMetrics clears historical tracking windows and resets expert hyperparameters to base initialization.
+func (s *AdaptiveSupervisor) ResetMetrics() {
+	log.Printf("🔄 [Supervisor] Cold-Resetting metrics and returning to base routing weights.")
+	s.PathFailureCount = make(map[string]int)
+	for id, param := range s.ExpertRegistry {
+		param.LearningRate = 0.001
+		param.DropoutPenalty = 0.1
+		param.LossWeight = 1.0
+		log.Printf("🔄 [Supervisor] Reset Expert %d to base weights.", id)
+	}
 }
 
 // EvolveDataset reads the raw dataset file, expands the language structure into 
