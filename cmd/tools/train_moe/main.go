@@ -1061,6 +1061,7 @@ func main() {
 	trainSocial := flag.Bool("train-social", false, "Train ONLY on human_chat.txt for pure social conversations")
 	flagNumExperts := flag.Int("num-experts", 0, "Number of experts in MoE layer (use 0 to defer to social_train.json)")
 	sentencesFile := flag.String("sentences", "", "Path to custom sentences JSON for targeted training")
+	piMode := flag.Bool("pi", false, "Pi 3B mode: constrains RAM to 600 MB, sets batch=1, acc=16, experts=4 for 900 MB RAM devices")
 
 	flag.Parse()
 
@@ -1074,13 +1075,25 @@ func main() {
 		log.Println("🚀 GPU acceleration enabled (Paragon/WebGPU). Dispatching to AMD/Vulkan...")
 	}
 
+	// Pi 3B pre-flight: auto-override flags that would cause OOM on 900 MB devices
+	if *piMode {
+		log.Println("🥧 Pi 3B mode: forcing batch-size=1, acc-steps=16, disabling GPU")
+		*gpu = false
+		if *flagBatchSize <= 0 || *flagBatchSize > 1 {
+			*flagBatchSize = 1
+		}
+		if *flagAccSteps <= 0 || *flagAccSteps < 16 {
+			*flagAccSteps = 16
+		}
+	}
+
 	if *trainSocial {
-		chat.TrainSocialChat(".", *flagEpochs, *sentencesFile, *overfit, float32(*flagLR), float32(*weightDecay), *autoHealFlag, float32(*maxGradNorm), *gpu, *flagBatchSize, *flagAccSteps, *flagNumExperts)
+		chat.TrainSocialChat(".", *flagEpochs, *sentencesFile, *overfit, float32(*flagLR), float32(*weightDecay), *autoHealFlag, float32(*maxGradNorm), *gpu, *flagBatchSize, *flagAccSteps, *flagNumExperts, *piMode)
 		return
 	}
 
 	if *trainChat {
-		chat.TrainChat(".", *sentencesFile, *rebalance, *overfit, float32(*flagLR), float32(*weightDecay), *autoHealFlag, float32(*maxGradNorm), *gpu, *flagBatchSize, *flagAccSteps)
+		chat.TrainChat(".", *sentencesFile, *rebalance, *overfit, float32(*flagLR), float32(*weightDecay), *autoHealFlag, float32(*maxGradNorm), *gpu, *flagBatchSize, *flagAccSteps, *piMode)
 		return
 	}
 
@@ -1411,6 +1424,7 @@ func main() {
 			*gpu,
 			*flagBatchSize,
 			*flagAccSteps,
+			*piMode,
 		)
 	}
 }

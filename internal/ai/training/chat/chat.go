@@ -290,10 +290,26 @@ func toFloat32(tokens []string) []float32 {
 	return result
 }
 
-func TrainChat(projectRoot string, customDataPath string, rebalanceRequested bool, overfitMode bool, initialLR float32, weightDecay float32, autoHeal bool, maxGradNorm float32, useGPU bool, batchSize int, accumulationSteps int) {
-	//  MEMORY PROTECTION: Lower limit to 1.0GB to align with the cgroup budget (2.1GB) and prevent OOMs
-	debug.SetMemoryLimit(1000 * 1024 * 1024)
-	debug.SetGCPercent(20)
+func TrainChat(projectRoot string, customDataPath string, rebalanceRequested bool, overfitMode bool, initialLR float32, weightDecay float32, autoHeal bool, maxGradNorm float32, useGPU bool, batchSize int, accumulationSteps int, piMode bool) {
+	if piMode {
+		// Pi 3B mode: ~900 MB total RAM. Keep the Go process well under 600 MB
+		// so the OS and other processes don't starve.
+		log.Println("🥧 Pi 3B mode enabled: applying 600 MB memory cap, single-threaded GC, batch=1, acc=16")
+		debug.SetMemoryLimit(600 * 1024 * 1024)
+		debug.SetGCPercent(10)
+		runtime.GOMAXPROCS(1) // Pi's 4 slow cores cause GC pressure; keep it serial
+		useGPU = false        // no GPU on Pi
+		if batchSize <= 0 || batchSize > 1 {
+			batchSize = 1
+		}
+		if accumulationSteps <= 0 || accumulationSteps < 16 {
+			accumulationSteps = 16
+		}
+	} else {
+		//  MEMORY PROTECTION: Lower limit to 1.0GB to align with the cgroup budget (2.1GB) and prevent OOMs
+		debug.SetMemoryLimit(1000 * 1024 * 1024)
+		debug.SetGCPercent(20)
+	}
 
 	if batchSize <= 0 {
 		configPath := filepath.Join(projectRoot, "data/config/social_train.json")
@@ -2302,8 +2318,26 @@ skipCSV:
 
 // Using moe.SocialConfig and moe.LoadSocialConfig from moe package
 
-func TrainSocialChat(projectRoot string, epochs int, customDataPath string, overfitMode bool, initialLR float32, weightDecay float32, autoHeal bool, maxGradNorm float32, useGPU bool, batchSize int, accumulationSteps int, numExperts int) {
-	//  AGGRESSIVE MEMORY MANAGEMENT: Removed hardcoded limits to allow GOMEMLIMIT=5000MiB to provide enough headroom for gob.Encode.
+func TrainSocialChat(projectRoot string, epochs int, customDataPath string, overfitMode bool, initialLR float32, weightDecay float32, autoHeal bool, maxGradNorm float32, useGPU bool, batchSize int, accumulationSteps int, numExperts int, piMode bool) {
+	if piMode {
+		// Pi 3B mode: ~900 MB total RAM.
+		log.Println("🥧 Pi 3B mode enabled: applying 600 MB memory cap, single-threaded GC, batch=1, acc=16, experts=4")
+		debug.SetMemoryLimit(600 * 1024 * 1024)
+		debug.SetGCPercent(10)
+		runtime.GOMAXPROCS(1)
+		useGPU = false
+		if batchSize <= 0 || batchSize > 1 {
+			batchSize = 1
+		}
+		if accumulationSteps <= 0 || accumulationSteps < 16 {
+			accumulationSteps = 16
+		}
+		if numExperts <= 0 || numExperts > 4 {
+			numExperts = 4 // 4 experts consume roughly 1/2 the RAM of the default 8
+		}
+	} else {
+		//  AGGRESSIVE MEMORY MANAGEMENT: Removed hardcoded limits to allow GOMEMLIMIT=5000MiB to provide enough headroom for gob.Encode.
+	}
 
 	log.Println(" Starting SOCIAL-ONLY Chat Training")
 	if customDataPath != "" {
@@ -3706,6 +3740,27 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 				globalStep++
 				if batchNum%8 == 0 {
 					runtime.GC()
+				}
+
+				// Pi 3B mode: print a compact progress line every 50 batches so
+				// the user can see the training is alive during long epochs.
+				if piMode {
+					progressInterval := 50
+					if len(trainPairs) < 100 {
+						progressInterval = 10 // tiny datasets: log more often
+					}
+					if batchNum%progressInterval == 0 {
+						var ms runtime.MemStats
+						runtime.ReadMemStats(&ms)
+						avgLoss := float32(0)
+						if batchNum > 0 {
+							avgLoss = epochLoss / float32(batchNum)
+						}
+						totalBatches := (len(trainPairs) + batchSize - 1) / batchSize
+						pct := float32(batchNum) / float32(totalBatches) * 100
+						log.Printf("🥧 [Pi] Epoch %d | Batch %d/%d (%.0f%%) | AvgLoss=%.4f | Heap=%dMB",
+							epoch+1, batchNum, totalBatches, pct, avgLoss, ms.Alloc/1024/1024)
+					}
 				}
 
 				//  OS-LEVEL MEMORY RECLAMATION: Trigger every 10 batches
