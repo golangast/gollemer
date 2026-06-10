@@ -9,7 +9,7 @@ Gollemer is a high-performance **Mixture of Experts (MoE)** neural network frame
 - **Mixture of Experts Architecture**: Efficient multi-expert routing ($K=1$) for increased model capacity with low inference latency.
 - **High Performance**: Native SIMD-vectorized operations for AVX2/SSE/Neon.
 - **Autonomous Adaptive Supervisor**: Real-time hyperparameter reflection, self-directed expert spawning/eviction, and on-the-fly training data evolution.
-- **Chromebook-Ready CPU Training**: Lightweight enough to train models entirely on standard Chromebooks and low-power commodity devices.
+- **Chromebook & Raspberry Pi Ready**: Lightweight enough to train models entirely on Chromebooks, Raspberry Pi 3B, and other low-power commodity devices.
 - **Stabilized MoE Training**: 
   - **Router Noise & Jitter**: Prevents expert collapse and forces specialization.
   - **Expert Health Monitoring**: Real-time tracking of expert utilization and saturation.
@@ -95,12 +95,29 @@ make llm
 ## 🛠️ Advanced Usage
 
 ### Makefile Commands
+
+#### Desktop / x86 (SIMD-accelerated)
 | Command | Description |
 |---|---|
-| `make train-social` | Cleans old state and starts the Social model training cycle. |
+| `make train` | Cleans old state and starts a fresh Social model training cycle. |
+| `make train-social` | Resumes an existing Social model training cycle. |
 | `make llm` | Launches the interactive chat shell with the current model. |
 | `make clean` | Safely removes current model checkpoints and vocabularies. |
-| `make clean && make train-social` | Cleans old state and starts the Social model training cycle. |
+
+#### Raspberry Pi 3B — Cross-compilation
+| Command | Description |
+|---|---|
+| `make build-pi` | Cross-compiles a 32-bit ARMv7 binary (`gollemer-pi`) for Raspberry Pi OS 32-bit. |
+| `make build-pi64` | Cross-compiles a 64-bit ARM64 binary (`gollemer-pi64`) for a 64-bit Pi OS. |
+
+#### Raspberry Pi 3B — On-device Training & Inference
+| Command | Description |
+|---|---|
+| `make pi` | Alias for `make pi-social` — recommended first command on the Pi. |
+| `make pi-social` | Resumes social-only curriculum training in Pi 3B safe mode (900 MB cap). |
+| `make pi-social-fresh` | Clears existing model and starts a fresh social training run on the Pi. |
+| `make pi-chat` | Resumes chat curriculum training in Pi 3B safe mode. |
+| `make pi-llm` | Launches the interactive LLM in inference-only mode on the Pi. |
 
 ### Configuration Tuning
 Model stability is controlled via parameters in the training configuration:
@@ -109,6 +126,62 @@ Model stability is controlled via parameters in the training configuration:
 - **`router_noise`**: Stochastic jitter (0.8+) to ensure all experts are utilized.
 - **`k=1`**: Forces each token to a single specialized expert, improving specialization.
 - **`max_grad_norm`**: Hard cap (1.0) on updates to prevent mathematical instability.
+
+---
+
+## 🥧 Raspberry Pi 3B Deployment
+
+Gollemer includes first-class support for training and running on a **Raspberry Pi 3B** (~900 MB RAM, ARM Cortex-A53). Pi mode applies automatic constraints — 600 MB memory cap, single-threaded GC, `batch=1`, `accumulate=16`, and 4 experts — to keep the heap safely within the Pi's limits.
+
+> **Note**: `GOEXPERIMENT=simd` and `CGO_ENABLED` are intentionally disabled for Pi targets. The Pi has no x86 SIMD, and cross-compilation with CGO requires a separate toolchain.
+
+### Step 1 — Cross-Compile on Your Workstation
+
+```bash
+# 32-bit binary for Raspberry Pi OS (32-bit) — most common
+make build-pi
+
+# 64-bit binary for a 64-bit Pi OS (Pi 3B / 4 running arm64)
+make build-pi64
+```
+
+This produces a `gollemer-pi` (or `gollemer-pi64`) static binary with zero shared-library dependencies.
+
+### Step 2 — Transfer to the Pi
+
+```bash
+# Copy binary and required data directory to the Pi
+scp gollemer-pi pi@<pi-ip>:~/gollemer/
+scp -r data/           pi@<pi-ip>:~/gollemer/
+```
+
+### Step 3 — Run on the Pi
+
+```bash
+# SSH into the Pi first
+ssh pi@<pi-ip>
+cd ~/gollemer
+
+# Start a FRESH social training run (clears old model)
+make pi-social-fresh
+
+# OR resume an interrupted training run
+make pi-social
+
+# Launch the interactive chat (inference only — no -pi flag needed)
+make pi-llm
+```
+
+### Pi Runtime Limits
+| Setting | Value | Reason |
+|---|---|---|
+| `GOMEMLIMIT` | `700MiB` | Leaves ~200 MB headroom for the OS out of 900 MB total. |
+| `GOGC` | `10` | Fires GC very aggressively to keep heap below the limit. |
+| `GOMAXPROCS` | `1` (training) / `2` (inference) | Matches the Pi's single high-performance core for training. |
+| Memory cap (`-pi`) | `600 MB` | Enforced in code via the `-pi` flag. |
+| Batch size | `1` | Prevents OOM during forward/backward passes. |
+| Accumulation steps | `16` | Provides an effective batch of 16 without extra memory. |
+| Experts per layer | `4` | Reduces model size to fit within Pi constraints. |
 
 ---
 
