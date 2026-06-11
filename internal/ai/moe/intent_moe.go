@@ -2407,10 +2407,10 @@ func (m *IntentMoE) RepairArchitecture() {
 								break
 							}
 						}
-						// Only append if no grammar experts are present
 						if !hasGrammar {
+							numToAdd := len(layer.Experts)
 							log.Printf("🛠️ [MoE] Repairing layer: adding missing Grammar Experts (currently %d experts)...", len(layer.Experts))
-							if err := appendGrammarExperts(layer, m.EmbeddingDim, 8); err != nil {
+							if err := appendGrammarExperts(layer, m.EmbeddingDim, numToAdd); err != nil {
 								log.Printf("❌ Failed to append grammar experts: %v", err)
 							} else {
 								// 🧬 JUMPSTART: Seed the new experts with structural bias if vocab is available
@@ -2444,8 +2444,9 @@ func (m *IntentMoE) RepairArchitecture() {
 				}
 			}
 			if !hasGrammar {
+				numToAdd := len(layer.Experts)
 				log.Printf("🛠️ [MoE] Repairing decoder: adding missing Grammar Experts (currently %d experts)...", len(layer.Experts))
-				if err := appendGrammarExperts(layer, m.EmbeddingDim, 8); err != nil {
+				if err := appendGrammarExperts(layer, m.EmbeddingDim, numToAdd); err != nil {
 					log.Printf("❌ Failed to append decoder grammar experts: %v", err)
 				} else {
 					// 🧬 JUMPSTART: Seed the new experts with structural bias if vocab is available
