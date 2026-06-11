@@ -290,7 +290,7 @@ func toFloat32(tokens []string) []float32 {
 	return result
 }
 
-func TrainChat(projectRoot string, customDataPath string, rebalanceRequested bool, overfitMode bool, initialLR float32, weightDecay float32, autoHeal bool, maxGradNorm float32, useGPU bool, batchSize int, accumulationSteps int, piMode bool) {
+func TrainChat(projectRoot string, customDataPath string, rebalanceRequested bool, overfitMode bool, initialLR float32, weightDecay float32, autoHeal bool, maxGradNorm float32, useGPU bool, batchSize int, accumulationSteps int, piMode bool, distMode string, distAddr string) {
 	if piMode {
 		// Pi 3B mode: ~900 MB total RAM. Keep the Go process well under 600 MB
 		// so the OS and other processes don't starve.
@@ -536,6 +536,12 @@ skipCSV:
 	if intentModel != nil && useGPU {
 		fmt.Println(" Moving loaded model to GPU...")
 		intentModel.ToGPU()
+	}
+
+	// 🌐 Distributed: If this is the master node, start HTTP sync server now that model is loaded.
+	if distMode == "master" && distAddr != "" {
+		log.Printf("🌐 [Distributed] Starting master sync server on %s", distAddr)
+		StartMaster(intentModel, distAddr)
 	}
 
 	if intentModel == nil {
@@ -1859,36 +1865,36 @@ skipCSV:
 				// We now save only ONE file (timestamped) and skip the duplicate latest_periodic copy
 				// to avoid holding two full serialised copies in memory simultaneously.
 				if batches > 0 && batches%1000 == 0 {
-					log.Printf(" [CHECKPOINT] Starting periodic save at Step %d (Batch %d)...", globalStep, batches)
-					fmt.Printf(" Periodic Saving: Step %d (Batch %d)\n", globalStep, batches)
-
-					// Use a timestamped path for periodic savings
-					timestamp := time.Now().Format("20060102_150405")
-					periodicPath := filepath.Join(checkpointDir, fmt.Sprintf("ckpt_step%d_%s.gob", globalStep, timestamp))
-
-					// Use Checkpoint struct for full metadata
-					ckpt := &moe.Checkpoint{
-						Model:           intentModel,
-						StepCount:       globalStep,
-						LastProfile:     profile,
-						Commitment:      intentModel.CalculateCommitment(),
-						TokensProcessed: totalTokens,
-						TotalDuration:   totalDuration,
-						Version:         "gollemer-chat-v1.2-periodic",
-					}
 					intentModel.StepCount = globalStep
 					intentModel.TrainingPhase = 2
 
-					if err := moe.SaveIntentMoECheckpoint(ckpt, periodicPath); err != nil {
-						log.Printf("  Failed to save periodic checkpoint: %v", err)
-						fmt.Printf("  Periodic Save ERROR: %v\n", err)
-					}
+					if distMode == "worker" && distAddr != "" {
+						// 🌐 Worker: send weights to master instead of writing gob file.
+						log.Printf("🌐 [Distributed] Worker syncing weights at Step %d (Batch %d)...", globalStep, batches)
+						SyncWithMaster(intentModel, distAddr)
+					} else {
+						log.Printf(" [CHECKPOINT] Starting periodic save at Step %d (Batch %d)...", globalStep, batches)
+						fmt.Printf(" Periodic Saving: Step %d (Batch %d)\n", globalStep, batches)
 
-					// Nil the checkpoint immediately so the GC can reclaim the copy
-					// before the next batch allocates more intermediate tensors.
-					// NOTE: The duplicate save to latest_periodic.gob was removed  it was
-					// serialising a second full model copy, pushing peak RSS 2model_size.
-					ckpt = nil
+						// Use a timestamped path for periodic savings
+						timestamp := time.Now().Format("20060102_150405")
+						periodicPath := filepath.Join(checkpointDir, fmt.Sprintf("ckpt_step%d_%s.gob", globalStep, timestamp))
+
+						ckpt := &moe.Checkpoint{
+							Model:           intentModel,
+							StepCount:       globalStep,
+							LastProfile:     profile,
+							Commitment:      intentModel.CalculateCommitment(),
+							TokensProcessed: totalTokens,
+							TotalDuration:   totalDuration,
+							Version:         "gollemer-chat-v1.2-periodic",
+						}
+						if err := moe.SaveIntentMoECheckpoint(ckpt, periodicPath); err != nil {
+							log.Printf("  Failed to save periodic checkpoint: %v", err)
+							fmt.Printf("  Periodic Save ERROR: %v\n", err)
+						}
+						ckpt = nil
+					}
 					runtime.GC()
 					debug.FreeOSMemory()
 				}
@@ -2215,8 +2221,12 @@ skipCSV:
 			logEpochHistory(projectRoot, epoch+1, float32(avgLoss), epochLBLoss/float32(batches), learningRate)
 			ExportUtilizationCSV(epoch+1, globalStep)
 
-			// periodic snapshots
-			if (epoch+1)%20 == 0 || epoch == 0 || epoch == epochs-1 {
+			// Distributed Worker Sync
+			if distMode == "worker" && distAddr != "" {
+				SyncWithMaster(intentModel, distAddr)
+			} else {
+				// periodic snapshots
+				if (epoch+1)%20 == 0 || epoch == 0 || epoch == epochs-1 {
 				ckpt := &moe.Checkpoint{
 					Model:           intentModel,
 					StepCount:       globalStep,
@@ -2294,6 +2304,7 @@ skipCSV:
 					break
 				}
 			}
+			} // end of distMode != worker block
 		}
 
 		fmt.Printf(" Trained on %d chat pairs\n", len(chatPairs))
@@ -2318,7 +2329,7 @@ skipCSV:
 
 // Using moe.SocialConfig and moe.LoadSocialConfig from moe package
 
-func TrainSocialChat(projectRoot string, epochs int, customDataPath string, overfitMode bool, initialLR float32, weightDecay float32, autoHeal bool, maxGradNorm float32, useGPU bool, batchSize int, accumulationSteps int, numExperts int, piMode bool) {
+func TrainSocialChat(projectRoot string, epochs int, customDataPath string, overfitMode bool, initialLR float32, weightDecay float32, autoHeal bool, maxGradNorm float32, useGPU bool, batchSize int, accumulationSteps int, numExperts int, piMode bool, distMode string, distAddr string) {
 	if piMode {
 		// Pi 3B mode: ~900 MB total RAM.
 		log.Println("🥧 Pi 3B mode enabled: applying 600 MB memory cap, single-threaded GC, batch=1, acc=16, experts=4")
@@ -2511,9 +2522,9 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 		// --- STABILITY FIX: Clear global MoE state before starting fresh training ---
 		moe.ActiveLayers = nil
 
-		baseExperts := numExperts - 8
+		baseExperts := numExperts / 2
 		if baseExperts < 2 {
-			baseExperts = 8
+			baseExperts = 2
 		}
 		intentModel, err = moe.NewHybridIntentMoE(freshVocab, modelDim, baseExperts, modelDim, modelDim, freshVocab, config.K, nil)
 		if err != nil {
@@ -2569,6 +2580,10 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 		if intentModel.Decoder != nil && intentModel.Decoder.OutputMoE != nil {
 			intentModel.Decoder.OutputMoE.ExpertDropoutRate = config.ExpertDropout
 		}
+	}
+
+	if distMode == "master" && distAddr != "" {
+		StartMaster(intentModel, distAddr)
 	}
 
 	if useGPU {
@@ -3782,17 +3797,22 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 		//  SAVE PROGRESS MID-EPOCH (Reduced frequency)
 		if batchNum > 0 && batchNum%1000 == 0 {
 			intentModel.Detach()
-			ckptPath := filepath.Join(projectRoot, fmt.Sprintf("data/models/gob_models/moe_social_model_step_%d.gob", globalStep))
-			log.Printf(" Saving periodic checkpoint at Step %d...", globalStep)
-			if err := moe.SaveIntentMoECheckpoint(&moe.Checkpoint{Model: intentModel}, ckptPath); err != nil {
-				log.Printf(" Mid-epoch save failed: %v", err)
-			}
-			// Also update the main social model file so restarts pick up latest progress
-			_ = moe.SaveIntentMoECheckpoint(&moe.Checkpoint{Model: intentModel}, socialModelPath)
+			
+			if distMode == "worker" && distAddr != "" {
+				SyncWithMaster(intentModel, distAddr)
+			} else {
+				ckptPath := filepath.Join(projectRoot, fmt.Sprintf("data/models/gob_models/moe_social_model_step_%d.gob", globalStep))
+				log.Printf(" Saving periodic checkpoint at Step %d...", globalStep)
+				if err := moe.SaveIntentMoECheckpoint(&moe.Checkpoint{Model: intentModel}, ckptPath); err != nil {
+					log.Printf(" Mid-epoch save failed: %v", err)
+				}
+				// Also update the main social model file so restarts pick up latest progress
+				_ = moe.SaveIntentMoECheckpoint(&moe.Checkpoint{Model: intentModel}, socialModelPath)
 
-			//  SAVE VOCABULARY PERIODICALLY as well (Critical Fix)
-			if intentModel.SentenceVocab != nil {
-				_ = intentModel.SentenceVocab.Save(socialVocabPathFinal)
+				//  SAVE VOCABULARY PERIODICALLY as well (Critical Fix)
+				if intentModel.SentenceVocab != nil {
+					_ = intentModel.SentenceVocab.Save(socialVocabPathFinal)
+				}
 			}
 		}
 
@@ -4303,12 +4323,16 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 				Commitment: intentModel.CalculateCommitment(),
 				Version:    "gollemer-social-v1.2",
 			}
-			// Save ONLY to the main model file (single gob.Encode pass)
-			// Eliminates the double-encode that was doubling peak memory.
-			if err := moe.SaveIntentMoECheckpoint(ckpt, socialModelPath); err != nil {
-				log.Printf(" Failed to save checkpoint at epoch %d: %v", epoch+1, err)
+			if distMode == "worker" && distAddr != "" {
+				SyncWithMaster(intentModel, distAddr)
 			} else {
-				log.Printf(" Saved checkpoint: Epoch %d/%d", epoch+1, epochs)
+				// Save ONLY to the main model file (single gob.Encode pass)
+				// Eliminates the double-encode that was doubling peak memory.
+				if err := moe.SaveIntentMoECheckpoint(ckpt, socialModelPath); err != nil {
+					log.Printf(" Failed to save checkpoint at epoch %d: %v", epoch+1, err)
+				} else {
+					log.Printf(" Saved checkpoint: Epoch %d/%d", epoch+1, epochs)
+				}
 			}
 			ckpt = nil
 			runtime.GC()
@@ -4427,10 +4451,14 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 		Commitment: intentModel.CalculateCommitment(),
 		Version:    "gollemer-social-v1.2",
 	}
-	if err := moe.SaveIntentMoECheckpoint(ckpt, socialModelPath); err != nil {
-		log.Printf(" Failed to save social model: %v", err)
+	if distMode == "worker" && distAddr != "" {
+		SyncWithMaster(intentModel, distAddr)
 	} else {
-		fmt.Printf(" Saved final social model to %s\n", socialModelPath)
+		if err := moe.SaveIntentMoECheckpoint(ckpt, socialModelPath); err != nil {
+			log.Printf(" Failed to save social model: %v", err)
+		} else {
+			fmt.Printf(" Saved final social model to %s\n", socialModelPath)
+		}
 	}
 
 	// Save social vocabulary to all expected paths

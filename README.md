@@ -10,6 +10,7 @@ Gollemer is a high-performance **Mixture of Experts (MoE)** neural network frame
 - **High Performance**: Native SIMD-vectorized operations for AVX2/SSE/Neon.
 - **Autonomous Adaptive Supervisor**: Real-time hyperparameter reflection, self-directed expert spawning/eviction, and on-the-fly training data evolution.
 - **Chromebook & Raspberry Pi Ready**: Lightweight enough to train models entirely on Chromebooks, Raspberry Pi 3B, and other low-power commodity devices.
+- **Distributed Federated Training**: Two Raspberry Pis can train in parallel over a local Ethernet network. A master Pi runs training and hosts an HTTP weight-sync server; a worker Pi trains independently and streams its weights to the master for federated averaging — no shared storage or message broker required.
 - **Stabilized MoE Training**: 
   - **Router Noise & Jitter**: Prevents expert collapse and forces specialization.
   - **Expert Health Monitoring**: Real-time tracking of expert utilization and saturation.
@@ -119,6 +120,14 @@ make llm
 | `make pi-chat` | Resumes chat curriculum training in Pi 3B safe mode. |
 | `make pi-llm` | Launches the interactive LLM in inference-only mode on the Pi. |
 
+#### Raspberry Pi 3B — Distributed Two-Pi Training
+| Command | Description |
+|---|---|
+| `make pi-social-master` | Master Pi: trains + serves weight-sync HTTP endpoint on port 8080. |
+| `make pi-social-worker DIST_MASTER_IP=192.168.1.X` | Worker Pi: trains + streams weights to the master every 1 000 batches. |
+| `make pi-chat-master` | Same as above but for the chat curriculum. |
+| `make pi-chat-worker DIST_MASTER_IP=192.168.1.X` | Worker variant for chat curriculum. |
+
 ### Configuration Tuning
 Model stability is controlled via parameters in the training configuration:
 
@@ -182,6 +191,91 @@ make pi-llm
 | Batch size | `1` | Prevents OOM during forward/backward passes. |
 | Accumulation steps | `16` | Provides an effective batch of 16 without extra memory. |
 | Experts per layer | `4` | Reduces model size to fit within Pi constraints. |
+
+---
+
+## 🌐 Distributed Two-Pi Training
+
+Gollemer supports **parallel federated training** across two Raspberry Pis connected to the same router via Ethernet — no cloud, no shared filesystem, no message broker.
+
+### How it works
+
+```
+┌─────────────────────────────┐         Ethernet / LAN
+│        Master Pi            │◄────────────────────────┐
+│  • Trains on local data     │                         │
+│  • Hosts HTTP server :8080  │  POST /sync-weights     │
+│  • Averages incoming weights│  (binary float32 blob)  │
+│  • Writes .gob model files  │                         │
+└─────────────────────────────┘         ┌───────────────┴──────────────┐
+                                        │        Worker Pi             │
+                                        │  • Trains on same local data │
+                                        │  • Never writes .gob files   │
+                                        │  • Sends weights every       │
+                                        │    1 000 batches & at end    │
+                                        └──────────────────────────────┘
+```
+
+After each sync the master applies **federated averaging** (`(master_weight + worker_weight) / 2`), so both Pis' gradient updates are combined into the model that gets saved.
+
+### Setup
+
+#### Step 1 — Build and deploy the binary to both Pis
+
+```bash
+# On your workstation:
+make build-pi64
+scp gollemer-pi64 pi@<master-ip>:~/gollemer/
+scp gollemer-pi64 pi@<worker-ip>:~/gollemer/
+scp -r data/ pi@<master-ip>:~/gollemer/
+scp -r data/ pi@<worker-ip>:~/gollemer/
+```
+
+#### Step 2 — Find the master Pi's LAN address
+
+```bash
+# On the master Pi:
+hostname -I   # e.g. 192.168.1.100
+```
+
+#### Step 3 — Start training
+
+```bash
+# On the MASTER Pi:
+cd ~/gollemer
+make pi-social-master
+# Logs will show: 🌐 [Distributed] Master listening for workers on :8080
+
+# On the WORKER Pi (replace IP with your master's address):
+cd ~/gollemer
+make pi-social-worker DIST_MASTER_IP=192.168.1.100
+# Logs will show: 🌐 [Distributed] Worker syncing weights with master.
+```
+
+> **Tip**: `DIST_PORT` defaults to `8080`. Override with `DIST_PORT=9090` on both make calls if that port is in use.
+
+### Distributed flags (binary-level)
+
+If you run the binary directly instead of via Make:
+
+| Flag | Values | Description |
+|---|---|---|
+| `-dist-mode` | `master` \| `worker` | Role this Pi plays. |
+| `-dist-addr` | `:8080` (master) / `192.168.1.X:8080` (worker) | Listen address (master) or master address (worker). |
+
+```bash
+# Master
+./gollemer-pi64 -pi -train-social -dist-mode=master -dist-addr=:8080
+
+# Worker
+./gollemer-pi64 -pi -train-social -dist-mode=worker -dist-addr=192.168.1.100:8080
+```
+
+### Notes
+- Both Pis train on their **own local copy** of the training data simultaneously.
+- The worker **never writes `.gob` files**, saving disk I/O and RAM on the worker Pi.
+- The master is the single source of truth for model checkpoints and vocabulary.
+- If the worker loses connectivity mid-run, it logs a warning and continues training locally — sync resumes on the next 1 000-batch interval.
 
 ---
 

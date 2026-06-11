@@ -14,7 +14,8 @@ GOGC      = 50
 MAIN_CMD  = go run cmd/tools/train_moe/main.go
 
 .PHONY: train train-social chat clean help \
-        build-pi build-pi64 pi pi-social pi-chat pi-llm
+        build-pi build-pi64 pi pi-social pi-chat pi-llm \
+        pi-social-master pi-social-worker pi-chat-master pi-chat-worker
 
 # --- Training ---
 
@@ -77,26 +78,79 @@ PI_MEM   = 700MiB
 PI_GOGC  = 10
 PI_FLAGS = -pi
 
+# Dynamically select the correct Pi binary based on what was built
+PI_BIN ?= $(firstword $(wildcard ./gollemer-pi64 ./gollemer-pi ./gollemer))
+ifeq ($(PI_BIN),)
+PI_BIN = ./gollemer
+endif
+
 ## pi: Resume Pi 3B social training (recommended first command on the Pi)
 pi: pi-social
 
 ## pi-social: Resume social-only curriculum training in Pi 3B mode
 pi-social:
-	@echo "🥧 Pi 3B: Resuming Social Curriculum Training (900 MB safe mode)..."
+	@echo "🥧 Pi 3B: Resuming Social Curriculum Training (900 MB safe mode)... using $(PI_BIN)"
 	GOMEMLIMIT=$(PI_MEM) GOGC=$(PI_GOGC) GOMAXPROCS=1 \
-		./gollemer $(PI_FLAGS) -train-social
+		$(PI_BIN) $(PI_FLAGS) -train-social
 
 ## pi-social-fresh: Fresh social training on Pi (clears existing model first)
 pi-social-fresh: clean pi-social
 
 ## pi-chat: Resume chat training in Pi 3B mode
 pi-chat:
-	@echo "🥧 Pi 3B: Resuming Chat Training (900 MB safe mode)..."
+	@echo "🥧 Pi 3B: Resuming Chat Training (900 MB safe mode)... using $(PI_BIN)"
 	GOMEMLIMIT=$(PI_MEM) GOGC=$(PI_GOGC) GOMAXPROCS=1 \
-		./gollemer $(PI_FLAGS) -train-chat
+		$(PI_BIN) $(PI_FLAGS) -train-chat
 
 ## pi-llm: Launch the interactive LLM on the Pi (inference only — no -pi needed)
 pi-llm:
-	@echo "🥧 Pi 3B: Starting interactive LLM (inference mode)..."
+	@echo "🥧 Pi 3B: Starting interactive LLM (inference mode)... using $(PI_BIN)"
 	GOMEMLIMIT=$(PI_MEM) GOGC=50 GOMAXPROCS=2 \
-		./gollemer -llm
+		$(PI_BIN) -llm
+
+# =============================================================================
+# 🌐 Distributed Pi Targets — two-Pi parallel training over Ethernet
+# =============================================================================
+# Architecture:
+#   Master Pi  — runs training + HTTP server on port 8080.
+#                Receives weight updates from workers and writes the .gob files.
+#   Worker Pi  — runs training only.  Does NOT write .gob files.
+#                Sends weight tensors to the master after every 1000 batches.
+#
+# Usage (run each command on the respective Pi):
+#   Master:  make pi-social-master                          (uses default port 8080)
+#   Worker:  make pi-social-worker DIST_MASTER_IP=192.168.1.X
+#
+# The two Pis must be on the same LAN (e.g., both plugged into the same TP-Link
+# router via Ethernet).  Set DIST_MASTER_IP to the master Pi's LAN address.
+
+DIST_PORT        ?= 8080
+DIST_MASTER_IP   ?= 192.168.1.100
+
+## pi-social-master: Run distributed master Pi (trains + serves HTTP weight-sync endpoint)
+pi-social-master:
+	@echo "🌐 Pi Master: Starting distributed social training (port $(DIST_PORT))... using $(PI_BIN)"
+	GOMEMLIMIT=$(PI_MEM) GOGC=$(PI_GOGC) GOMAXPROCS=1 \
+		$(PI_BIN) $(PI_FLAGS) -train-social \
+		-dist-mode=master -dist-addr=:$(DIST_PORT)
+
+## pi-social-worker: Run distributed worker Pi (trains + streams weights to master)
+pi-social-worker:
+	@echo "🌐 Pi Worker: Starting distributed social training -> master $(DIST_MASTER_IP):$(DIST_PORT)... using $(PI_BIN)"
+	GOMEMLIMIT=$(PI_MEM) GOGC=$(PI_GOGC) GOMAXPROCS=1 \
+		$(PI_BIN) $(PI_FLAGS) -train-social \
+		-dist-mode=worker -dist-addr=$(DIST_MASTER_IP):$(DIST_PORT)
+
+## pi-chat-master: Distributed master for chat training
+pi-chat-master:
+	@echo "🌐 Pi Master: Starting distributed chat training (port $(DIST_PORT))... using $(PI_BIN)"
+	GOMEMLIMIT=$(PI_MEM) GOGC=$(PI_GOGC) GOMAXPROCS=1 \
+		$(PI_BIN) $(PI_FLAGS) -train-chat \
+		-dist-mode=master -dist-addr=:$(DIST_PORT)
+
+## pi-chat-worker: Distributed worker for chat training
+pi-chat-worker:
+	@echo "🌐 Pi Worker: Starting distributed chat training -> master $(DIST_MASTER_IP):$(DIST_PORT)... using $(PI_BIN)"
+	GOMEMLIMIT=$(PI_MEM) GOGC=$(PI_GOGC) GOMAXPROCS=1 \
+		$(PI_BIN) $(PI_FLAGS) -train-chat \
+		-dist-mode=worker -dist-addr=$(DIST_MASTER_IP):$(DIST_PORT)

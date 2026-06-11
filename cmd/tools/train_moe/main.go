@@ -1048,6 +1048,8 @@ func main() {
 	profileName := flag.String("profile", "standard", "Training profile: stable, aggressive, standard")
 	runLLM := flag.Bool("llm", false, "Run the interactive LLM inference mode")
 	talk := flag.Bool("talk", false, "Enable Text-to-Speech (TTS) for the mascot in LLM mode")
+	distMode := flag.String("dist-mode", "", "Distributed mode: 'master' or 'worker'")
+	distAddr := flag.String("dist-addr", "", "Address for distributed training sync (e.g., ':8080' for master, '192.168.1.100:8080' for worker)")
 
 	// Chat and training flags
 	trainChat := flag.Bool("train-chat", false, "Run chat-specific training")
@@ -1088,12 +1090,18 @@ func main() {
 	}
 
 	if *trainSocial {
-		chat.TrainSocialChat(".", *flagEpochs, *sentencesFile, *overfit, float32(*flagLR), float32(*weightDecay), *autoHealFlag, float32(*maxGradNorm), *gpu, *flagBatchSize, *flagAccSteps, *flagNumExperts, *piMode)
+		chat.TrainSocialChat(".", *flagEpochs, *sentencesFile, *overfit, float32(*flagLR), float32(*weightDecay), *autoHealFlag, float32(*maxGradNorm), *gpu, *flagBatchSize, *flagAccSteps, *flagNumExperts, *piMode, *distMode, *distAddr)
 		return
 	}
 
 	if *trainChat {
-		chat.TrainChat(".", *sentencesFile, *rebalance, *overfit, float32(*flagLR), float32(*weightDecay), *autoHealFlag, float32(*maxGradNorm), *gpu, *flagBatchSize, *flagAccSteps, *piMode)
+		chat.TrainChat(".", *sentencesFile, *rebalance, *overfit, float32(*flagLR), float32(*weightDecay), *autoHealFlag, float32(*maxGradNorm), *gpu, *flagBatchSize, *flagAccSteps, *piMode, *distMode, *distAddr)
+		return
+	}
+
+	if *piMode {
+		log.Println("🥧 Pi mode selected but no task specified. Defaulting to interactive LLM mode (-llm).")
+		llm.RunLLM(*talk)
 		return
 	}
 
@@ -1425,6 +1433,8 @@ func main() {
 			*flagBatchSize,
 			*flagAccSteps,
 			*piMode,
+			*distMode,
+			*distAddr,
 		)
 	}
 }
