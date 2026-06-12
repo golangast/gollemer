@@ -538,13 +538,20 @@ skipCSV:
 		intentModel.ToGPU()
 	}
 
-	// 🌐 Distributed: If this is the master node, start HTTP sync server now that model is loaded.
+	// 🌐 Distributed: If this is the master node, start TCP sync server now that model is loaded.
 	if distMode == "master" && distAddr != "" {
-		log.Printf("🌐 [Distributed] Starting master sync server on %s", distAddr)
-		err := StartMaster(intentModel, distAddr)
-		if err != nil {
-			log.Fatalf("❌ Failed to start master node cluster: %v", err)
-		}
+		// 1. Initialize the network listener
+		listener := initMasterSocket(distAddr)
+		
+		// 2. CRITICAL: Do NOT run this in a 'go' routine. 
+		// Call it synchronously so it pauses execution until workers check in!
+		log.Printf("🌐 [Distributed] Entering cluster sync lock...")
+		
+		// This function must handle accepting connections and only return 
+		// when the exact number of required workers are ready.
+		BlockAndRegisterWorkers(listener, ExpectedWorkers, intentModel)
+		
+		log.Printf("✅ [Distributed] Cluster established. Proceeding to dataset alignment.")
 	}
 
 	if intentModel == nil {
@@ -2586,11 +2593,18 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 	}
 
 	if distMode == "master" && distAddr != "" {
-		log.Printf("🌐 [Distributed] Starting master sync server on %s", distAddr)
-		err := StartMaster(intentModel, distAddr)
-		if err != nil {
-			log.Fatalf("❌ Failed to start master node cluster: %v", err)
-		}
+		// 1. Initialize the network listener
+		listener := initMasterSocket(distAddr)
+		
+		// 2. CRITICAL: Do NOT run this in a 'go' routine. 
+		// Call it synchronously so it pauses execution until workers check in!
+		log.Printf("🌐 [Distributed] Entering cluster sync lock...")
+		
+		// This function must handle accepting connections and only return 
+		// when the exact number of required workers are ready.
+		BlockAndRegisterWorkers(listener, ExpectedWorkers, intentModel)
+		
+		log.Printf("✅ [Distributed] Cluster established. Proceeding to dataset alignment.")
 	}
 
 	if useGPU {

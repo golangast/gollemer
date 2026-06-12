@@ -2,7 +2,6 @@ package chat
 
 import (
 	"encoding/binary"
-	"fmt"
 	"io"
 	"log"
 	"net"
@@ -34,9 +33,8 @@ func resolveListenAddr(addr string) string {
 	return ":" + addr // bare port number
 }
 
-// StartMaster starts a TCP server that listens for incoming model weights from workers.
-// It blocks until the expected number of workers connect.
-func StartMaster(model *moe.IntentMoE, addr string) error {
+// initMasterSocket normalizes the address and returns a bound TCP listener.
+func initMasterSocket(addr string) net.Listener {
 	listenAddr := resolveListenAddr(addr)
 	
 	// Helper to extract port for display
@@ -58,37 +56,33 @@ func StartMaster(model *moe.IntentMoE, addr string) error {
 	
 	listener, err := net.Listen("tcp", listenAddr)
 	if err != nil {
-		return fmt.Errorf("failed to bind master server to %s: %v", listenAddr, err)
+		log.Fatalf("failed to bind master server to %s: %v", listenAddr, err)
 	}
 
-	runMasterSyncServer(listener, model)
-	
-	return nil
+	return listener
 }
 
-func runMasterSyncServer(listener net.Listener, model *moe.IntentMoE) {
+// BlockAndRegisterWorkers blocks execution until expectedCount workers have successfully connected.
+func BlockAndRegisterWorkers(listener net.Listener, expectedCount int, model *moe.IntentMoE) {
 	var wg sync.WaitGroup
-	workersConnected := 0
+	connected := 0
 
-	log.Printf("🌐 [Distributed] Waiting for %d workers to join the cluster...", ExpectedWorkers)
-
-	for workersConnected < ExpectedWorkers {
+	for connected < expectedCount {
 		conn, err := listener.Accept()
 		if err != nil {
-			log.Printf("❌ [Distributed] Registration error: %v", err)
+			log.Printf("⚠️ [Distributed] Connection drop during registration: %v", err)
 			continue
 		}
 
-		workersConnected++
-		log.Printf("🌐 [Distributed] Worker %d/%d connected from %s", workersConnected, ExpectedWorkers, conn.RemoteAddr().String())
+		connected++
+		log.Printf("🌐 [Distributed] Worker %d/%d successfully joined cluster from %s", 
+			connected, expectedCount, conn.RemoteAddr().String())
 		
-		// Handle individual worker streams/sync loops in separate goroutines
+		// Hand the active connection off to your background shard manager
 		wg.Add(1)
 		go handleWorkerSync(conn, &wg, model)
 	}
-
-	// This is the crucial barrier: Do not let the master proceed to local training steps
-	log.Printf("✅ [Distributed] All expected workers checked in. Synchronizing topologies...")
+	// The function returns ONLY when the loop condition is satisfied
 }
 
 func handleWorkerSync(conn net.Conn, wg *sync.WaitGroup, model *moe.IntentMoE) {
