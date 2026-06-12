@@ -541,7 +541,10 @@ skipCSV:
 	// 🌐 Distributed: If this is the master node, start HTTP sync server now that model is loaded.
 	if distMode == "master" && distAddr != "" {
 		log.Printf("🌐 [Distributed] Starting master sync server on %s", distAddr)
-		StartMaster(intentModel, distAddr)
+		err := StartMaster(intentModel, distAddr)
+		if err != nil {
+			log.Fatalf("❌ Failed to start master node cluster: %v", err)
+		}
 	}
 
 	if intentModel == nil {
@@ -2583,7 +2586,11 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 	}
 
 	if distMode == "master" && distAddr != "" {
-		StartMaster(intentModel, distAddr)
+		log.Printf("🌐 [Distributed] Starting master sync server on %s", distAddr)
+		err := StartMaster(intentModel, distAddr)
+		if err != nil {
+			log.Fatalf("❌ Failed to start master node cluster: %v", err)
+		}
 	}
 
 	if useGPU {
