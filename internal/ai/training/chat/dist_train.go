@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,9 +19,23 @@ var (
 	syncMutex sync.Mutex
 )
 
+// resolveListenAddr normalises a user-supplied address into a valid
+// "host:port" string suitable for net.Listen / http.ListenAndServe.
+//
+//	":8080"          → ":8080"          (already a listen address)
+//	"0.0.0.0:8080"   → "0.0.0.0:8080"  (already a host:port)
+//	"8080"           → ":8080"          (bare port – prepend colon)
+func resolveListenAddr(addr string) string {
+	if strings.Contains(addr, ":") {
+		return addr // already host:port or :port — use as-is
+	}
+	return ":" + addr // bare port number
+}
+
 // StartMaster starts an HTTP server that listens for incoming model weights from workers.
 // It averages the received weights with its own weights.
-func StartMaster(model *moe.IntentMoE, port string) {
+// addr may be a full listen address (":8080", "0.0.0.0:8080") or a bare port ("8080").
+func StartMaster(model *moe.IntentMoE, addr string) error {
 	http.HandleFunc("/sync-weights", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Invalid method", http.StatusMethodNotAllowed)
@@ -59,17 +75,42 @@ func StartMaster(model *moe.IntentMoE, port string) {
 			}
 		}
 
-		log.Printf("🌐 [Distributed] Master successfully received and averaged %d weights from worker.", len(receivedWeights))
+		workerIP := r.RemoteAddr
+		log.Printf("🌐 [Distributed] Master successfully received and averaged %d weights from worker at %s.", len(receivedWeights), workerIP)
 		w.WriteHeader(http.StatusOK)
 	})
 
-	addr := ":" + port
-	log.Printf("🌐 [Distributed] Master listening for workers on %s", addr)
+	listenAddr := resolveListenAddr(addr)
+	
+	// Helper to extract port for display
+	displayPort := listenAddr
+	if strings.HasPrefix(displayPort, ":") {
+		displayPort = displayPort[1:]
+	} else if parts := strings.Split(displayPort, ":"); len(parts) == 2 {
+		displayPort = parts[1]
+	}
+
+	log.Printf("\n===================================================================")
+	log.Printf("🌐 [Distributed] Master Node is Active & Listening!")
+	log.Printf("📌 Bound Address : %s", listenAddr)
+	log.Printf("🛠️  To connect a worker, run the same training command on the worker node")
+	log.Printf("   with the following flags appended:")
+	log.Printf("   -dist-mode=worker -dist-addr=<MASTER_IP>:%s", displayPort)
+	log.Printf("   (Replace <MASTER_IP> with this machine's actual network IP if on another device)")
+	log.Printf("===================================================================\n")
+	
+	listener, err := net.Listen("tcp", listenAddr)
+	if err != nil {
+		return fmt.Errorf("failed to bind master server to %s: %v", listenAddr, err)
+	}
+
 	go func() {
-		if err := http.ListenAndServe(addr, nil); err != nil {
+		if err := http.Serve(listener, nil); err != nil {
 			log.Printf("⚠️  [Distributed] Master server error: %v", err)
 		}
 	}()
+	
+	return nil
 }
 
 // SyncWithMaster sends the current model weights to the master node.
