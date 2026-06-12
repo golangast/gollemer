@@ -1,23 +1,25 @@
 package chat
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
 	"log"
 	"net"
-	"net/http"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/golangast/gollemer/internal/ai/moe"
 )
 
 var (
-	syncMutex sync.Mutex
+	syncMutex        sync.Mutex
+	workerConn       net.Conn
+	workerConnMutex  sync.Mutex
 )
+
+// Global or structural variable to track expected cluster size
+const ExpectedWorkers = 1 // Since there's 1 master and 1 worker node in this scenario
 
 // resolveListenAddr normalises a user-supplied address into a valid
 // "host:port" string suitable for net.Listen / http.ListenAndServe.
@@ -32,54 +34,9 @@ func resolveListenAddr(addr string) string {
 	return ":" + addr // bare port number
 }
 
-// StartMaster starts an HTTP server that listens for incoming model weights from workers.
-// It averages the received weights with its own weights.
-// addr may be a full listen address (":8080", "0.0.0.0:8080") or a bare port ("8080").
+// StartMaster starts a TCP server that listens for incoming model weights from workers.
+// It blocks until the expected number of workers connect.
 func StartMaster(model *moe.IntentMoE, addr string) error {
-	http.HandleFunc("/sync-weights", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Invalid method", http.StatusMethodNotAllowed)
-			return
-		}
-
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			http.Error(w, "Failed to read body", http.StatusInternalServerError)
-			return
-		}
-		defer r.Body.Close()
-
-		// Convert bytes back to float32 slice
-		numWeights := len(body) / 4
-		receivedWeights := make([]float32, numWeights)
-		buf := bytes.NewReader(body)
-		if err := binary.Read(buf, binary.LittleEndian, &receivedWeights); err != nil {
-			log.Printf("⚠️  [Distributed] Master failed to decode weights: %v", err)
-			http.Error(w, "Failed to decode weights", http.StatusBadRequest)
-			return
-		}
-
-		// Average weights
-		syncMutex.Lock()
-		defer syncMutex.Unlock()
-
-		params := model.Parameters()
-		idx := 0
-		for _, p := range params {
-			for i := range p.Data {
-				if idx < len(receivedWeights) {
-					// Federated Averaging: Master and Worker contribute equally
-					p.Data[i] = (p.Data[i] + receivedWeights[idx]) / 2.0
-					idx++
-				}
-			}
-		}
-
-		workerIP := r.RemoteAddr
-		log.Printf("🌐 [Distributed] Master successfully received and averaged %d weights from worker at %s.", len(receivedWeights), workerIP)
-		w.WriteHeader(http.StatusOK)
-	})
-
 	listenAddr := resolveListenAddr(addr)
 	
 	// Helper to extract port for display
@@ -104,22 +61,101 @@ func StartMaster(model *moe.IntentMoE, addr string) error {
 		return fmt.Errorf("failed to bind master server to %s: %v", listenAddr, err)
 	}
 
-	go func() {
-		if err := http.Serve(listener, nil); err != nil {
-			log.Printf("⚠️  [Distributed] Master server error: %v", err)
-		}
-	}()
+	runMasterSyncServer(listener, model)
 	
 	return nil
 }
 
+func runMasterSyncServer(listener net.Listener, model *moe.IntentMoE) {
+	var wg sync.WaitGroup
+	workersConnected := 0
+
+	log.Printf("🌐 [Distributed] Waiting for %d workers to join the cluster...", ExpectedWorkers)
+
+	for workersConnected < ExpectedWorkers {
+		conn, err := listener.Accept()
+		if err != nil {
+			log.Printf("❌ [Distributed] Registration error: %v", err)
+			continue
+		}
+
+		workersConnected++
+		log.Printf("🌐 [Distributed] Worker %d/%d connected from %s", workersConnected, ExpectedWorkers, conn.RemoteAddr().String())
+		
+		// Handle individual worker streams/sync loops in separate goroutines
+		wg.Add(1)
+		go handleWorkerSync(conn, &wg, model)
+	}
+
+	// This is the crucial barrier: Do not let the master proceed to local training steps
+	log.Printf("✅ [Distributed] All expected workers checked in. Synchronizing topologies...")
+}
+
+func handleWorkerSync(conn net.Conn, wg *sync.WaitGroup, model *moe.IntentMoE) {
+	defer wg.Done()
+	defer conn.Close()
+
+	for {
+		// Read number of weights
+		var numWeights int32
+		if err := binary.Read(conn, binary.LittleEndian, &numWeights); err != nil {
+			if err != io.EOF {
+				log.Printf("⚠️  [Distributed] Connection error with worker %s: %v", conn.RemoteAddr(), err)
+			}
+			return
+		}
+
+		// Read weights
+		receivedWeights := make([]float32, numWeights)
+		if err := binary.Read(conn, binary.LittleEndian, &receivedWeights); err != nil {
+			log.Printf("⚠️  [Distributed] Failed to read weights from worker %s: %v", conn.RemoteAddr(), err)
+			return
+		}
+
+		// Average weights
+		syncMutex.Lock()
+		params := model.Parameters()
+		idx := 0
+		for _, p := range params {
+			for i := range p.Data {
+				if idx < len(receivedWeights) {
+					// Federated Averaging: Master and Worker contribute equally
+					p.Data[i] = (p.Data[i] + receivedWeights[idx]) / 2.0
+					idx++
+				}
+			}
+		}
+		syncMutex.Unlock()
+
+		log.Printf("🌐 [Distributed] Master successfully received and averaged %d weights from worker at %s.", len(receivedWeights), conn.RemoteAddr())
+		
+		// Send ACK
+		ack := []byte("OK")
+		conn.Write(ack)
+	}
+}
+
 // SyncWithMaster sends the current model weights to the master node.
 func SyncWithMaster(model *moe.IntentMoE, masterAddr string) {
+	workerConnMutex.Lock()
+	if workerConn == nil {
+		conn, err := net.Dial("tcp", masterAddr)
+		if err != nil {
+			log.Printf("⚠️  [Distributed] Worker failed to connect to master %s: %v", masterAddr, err)
+			workerConnMutex.Unlock()
+			return
+		}
+		workerConn = conn
+		log.Printf("🌐 [Distributed] Worker connected to master at %s", masterAddr)
+	}
+	conn := workerConn
+	workerConnMutex.Unlock()
+
 	syncMutex.Lock()
 	params := model.Parameters()
-	var totalWeights int
+	var totalWeights int32
 	for _, p := range params {
-		totalWeights += len(p.Data)
+		totalWeights += int32(len(p.Data))
 	}
 
 	flatWeights := make([]float32, 0, totalWeights)
@@ -128,32 +164,36 @@ func SyncWithMaster(model *moe.IntentMoE, masterAddr string) {
 	}
 	syncMutex.Unlock()
 
-	// Convert float32 slice to byte slice
-	buf := new(bytes.Buffer)
-	if err := binary.Write(buf, binary.LittleEndian, flatWeights); err != nil {
-		log.Printf("⚠️  [Distributed] Worker failed to encode weights: %v", err)
+	// Write number of weights
+	if err := binary.Write(conn, binary.LittleEndian, totalWeights); err != nil {
+		log.Printf("⚠️  [Distributed] Worker failed to send total weights: %v", err)
+		workerConn.Close()
+		workerConnMutex.Lock()
+		workerConn = nil
+		workerConnMutex.Unlock()
 		return
 	}
 
-	url := fmt.Sprintf("http://%s/sync-weights", masterAddr)
-	req, err := http.NewRequest("POST", url, buf)
-	if err != nil {
-		log.Printf("⚠️  [Distributed] Worker failed to create request: %v", err)
+	// Write weights
+	if err := binary.Write(conn, binary.LittleEndian, flatWeights); err != nil {
+		log.Printf("⚠️  [Distributed] Worker failed to send weights: %v", err)
+		workerConn.Close()
+		workerConnMutex.Lock()
+		workerConn = nil
+		workerConnMutex.Unlock()
 		return
 	}
-	req.Header.Set("Content-Type", "application/octet-stream")
 
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Printf("⚠️  [Distributed] Worker failed to sync with master %s: %v", masterAddr, err)
+	// Wait for ACK
+	ack := make([]byte, 2)
+	if _, err := io.ReadFull(conn, ack); err != nil {
+		log.Printf("⚠️  [Distributed] Worker failed to receive ACK from master: %v", err)
+		workerConn.Close()
+		workerConnMutex.Lock()
+		workerConn = nil
+		workerConnMutex.Unlock()
 		return
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode == http.StatusOK {
-		log.Printf("🌐 [Distributed] Worker successfully synced %d weights with master.", totalWeights)
-	} else {
-		log.Printf("⚠️  [Distributed] Worker sync rejected by master, status: %d", resp.StatusCode)
-	}
+	log.Printf("🌐 [Distributed] Worker successfully synced %d weights with master.", totalWeights)
 }
