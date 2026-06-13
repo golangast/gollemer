@@ -248,7 +248,7 @@ make pi-social-master
 
 # On the WORKER Pi (replace IP with your master's address):
 cd ~/gollemer
-make pi-social-worker DIST_MASTER_IP=192.168.1.100
+make pi-social-worker DIST_MASTER_IP="<master pi's IP>"
 # Logs will show: 🌐 [Distributed] Worker syncing weights with master.
 ```
 
@@ -264,11 +264,24 @@ If you run the binary directly instead of via Make:
 | `-dist-addr` | `:8080` (master) / `192.168.1.X:8080` (worker) | Listen address (master) or master address (worker). |
 
 ```bash
-# Master
-./gollemer-pi64 -pi -train-social -dist-mode=master -dist-addr=:8080
+# Build the binary first (if not already done)
+make build-pi64
 
-# Worker
-./gollemer-pi64 -pi -train-social -dist-mode=worker -dist-addr=192.168.1.100:8080
+# Master Pi
+GOMEMLIMIT=700MiB GOGC=10 GOMAXPROCS=1 \
+  nohup ./gollemer-pi64 -pi -train-social \
+  -dist-mode=master -dist-addr="<this pi's IP>:8080" > master_nohup.out 2>&1 &
+
+# Worker Pi
+GOMEMLIMIT=700MiB GOGC=10 GOMAXPROCS=1 \
+  nohup ./gollemer-pi64 -pi -train-social \
+  -dist-mode=worker -dist-addr="<master pi's IP>:8080" > worker_nohup.out 2>&1 &
+
+# Helpful commands
+pkill -9 -f gollemer-pi64     # Force kill the background process
+vcgencmd measure_temp         # Check Pi temperature
+
+# when you see "✅ [Distributed] Connected to master! Shard synchronization initialized." the training is ready
 ```
 
 ### Notes
