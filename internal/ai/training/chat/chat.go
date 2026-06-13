@@ -8,6 +8,7 @@ import (
 	"log"
 	"math"
 	"math/rand"
+	"net"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -2605,6 +2606,29 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 		BlockAndRegisterWorkers(listener, ExpectedWorkers, intentModel)
 		
 		log.Printf("✅ [Distributed] Cluster established. Proceeding to dataset alignment.")
+	} else if distMode == "worker" && distAddr != "" {
+		log.Printf("🌐 [Distributed] Worker mode active. Connecting to master at %s...", distAddr)
+		
+		// CRITICAL: Block here until a connection is physically established
+		var conn net.Conn
+		var err error
+		
+		for {
+			conn, err = net.Dial("tcp", distAddr)
+			if err == nil {
+				break // Successfully connected!
+			}
+			
+			log.Printf("⏳ [Distributed] Master node not ready (%v). Retrying in 5 seconds...", err)
+			time.Sleep(5 * time.Second)
+		}
+		
+		log.Printf("✅ [Distributed] Connected to master! Shard synchronization initialized.")
+		
+		// Hand connection off to worker parameter loop
+		workerConnMutex.Lock()
+		workerConn = conn
+		workerConnMutex.Unlock()
 	}
 
 	if useGPU {
