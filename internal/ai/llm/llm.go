@@ -4,8 +4,8 @@ import (
 	"log"
 )
 
-func RunLLM(talk bool) {
-	runner, err := NewRunner(talk)
+func RunLLM(talk bool, listen bool) {
+	runner, err := NewRunner(talk, listen)
 	if err != nil {
 		log.Fatalf("Failed to initialize LLM runner: %v", err)
 	}

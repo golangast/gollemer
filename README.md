@@ -75,7 +75,7 @@ export GOEXPERIMENT=simd
 go mod tidy
 ```
 
-### 3. Training the Model
+### 2. Training the Model
 We provide a simplified `Makefile` to handle the curriculum training process.
 
 ```bash
@@ -83,13 +83,121 @@ We provide a simplified `Makefile` to handle the curriculum training process.
 make train
 ```
 
-### 4. Running the LLM
+### 3. Running the LLM
 Chat with your trained model using the interactive shell.
 
 ```bash
 # Launch the interactive assistant
 make llm
 ```
+
+---
+
+## 🎙️ Voice Command Pipeline (Pure Go — No CGO)
+
+Gollemer includes a fully self-contained, dependency-free voice command recognition system. It uses a custom `AudioEncoder` + `TemporalEncoder` (GRU) architecture trained entirely in Go, with no Whisper, no PortAudio, and no CGO bindings required.
+
+The pipeline has four stages:
+
+```
+record_audio → train_audio → voice_capture → add_command (zero-shot)
+```
+
+### Stage 1 — Record Training Samples
+
+Use `record_audio` to capture raw 16kHz PCM samples for each voice command you want to recognise. Requires `ffmpeg` on your system.
+
+```bash
+# Record 3–5 samples per intent for good accuracy
+go run cmd/tools/record_audio/main.go TURN_ON_LIGHTS 1
+go run cmd/tools/record_audio/main.go TURN_ON_LIGHTS 2
+go run cmd/tools/record_audio/main.go TURN_ON_LIGHTS 3
+go run cmd/tools/record_audio/main.go TURN_OFF_FAN 1
+go run cmd/tools/record_audio/main.go TURN_OFF_FAN 2
+```
+
+Samples are saved to `dataset/audio/<INTENT_NAME>_<number>.raw`.
+
+### Stage 2 — Train the Audio GRU
+
+Train the `AudioEncoder` + `TemporalEncoder` (GRU) on your recorded samples. The trainer auto-balances classes, finds the loudest 1-second window per sample, runs backpropagation, and saves a prototype embedding for each command.
+
+```bash
+go run cmd/tools/train_audio/main.go
+```
+
+If no real samples exist in `dataset/audio/`, it falls back to synthetic sine-wave and white-noise data so the pipeline always runs. The trained model is saved to `models/audio_gru.json`.
+
+### Stage 3 — Run the Live Voice Capture Loop
+
+`voice_capture` opens an ALSA microphone via `ffmpeg`, streams 25 ms PCM frames through a 1-second rolling window, and classifies each window using the trained GRU + cosine-similarity prototype matching.
+
+```bash
+go run cmd/tools/voice_capture/main.go
+```
+
+- Requires `ffmpeg` and an ALSA microphone (`default` device).
+- Falls back to a simulated silence stream if no microphone is available.
+- Prints detected intents with confidence scores; suppresses low-confidence and silence results.
+
+```
+🎧 Listening...
+🤖 Audio GRU: TURN_ON_LIGHTS (Confidence: 0.94, RMS: 0.042)
+```
+
+### Stage 4 — Add New Commands Without Retraining
+
+`add_command` registers a brand-new voice command by computing its GRU prototype embedding from a few live recordings and appending it to the saved model JSON — **no retraining required**.
+
+```bash
+go run cmd/tools/add_command/main.go "TURN OFF FAN"
+go run cmd/tools/add_command/main.go "WHAT IS THE WEATHER"
+```
+
+The tool guides you through 3 recordings, computes a normalised mean prototype embedding, and patches `models/audio_gru.json` in place so all existing weights are preserved.
+
+> **Note:** The voice capture loop uses **cosine similarity** against stored prototypes, so zero-shot commands work immediately after `add_command` finishes — no restart needed if you reload the model.
+
+---
+
+## 👁️ Vision Capture Pipeline
+
+Gollemer includes a real-time vision processing pipeline built on `go4vl` for Linux kernel camera devices. It captures MJPEG frames, extracts geometric motion tokens (centre-of-mass, variance), and classifies motion sequences using the same `TemporalEncoder` GRU used in audio.
+
+```bash
+go run cmd/tools/vision_capture/main.go
+```
+
+**Live camera mode** (requires `/dev/video0`, e.g. a USB webcam):
+- Opens the camera at 224×224 MJPEG via `go4vl`.
+- Extracts a 4-float geometric token (`[CoM-x, CoM-y, var-x, var-y]`) from each frame.
+- Pushes tokens into a 4-frame ring buffer and classifies the sequence every 250 ms.
+
+```
+[Vision] PAN_RIGHT  (CoM-x=0.621 CoM-y=0.489)
+```
+
+**File fallback mode** (no camera required):
+- Reads images (`.png`, `.jpg`) and videos (`.mp4`, `.webm`) from the `video/` directory.
+- Feeds each file through the MotionWindow to demonstrate the full pipeline.
+- Also demonstrates ViT patch extraction (16×16 patches → 256-float feature maps).
+
+**Recognised motion classes:** `PAN_RIGHT`, `PAN_LEFT`, `STATIC`, `TILT_UP`, `TILT_DOWN`, `ZOOM_IN`, `ZOOM_OUT`, `REAL_IMAGE`, `REAL_VIDEO`.
+
+> **Dependency:** `go4vl` requires Linux (`/dev/video*` V4L2 support). The file-fallback path requires `ffmpeg` for video frame extraction.
+
+---
+
+## 🧠 Long-Term Vector Memory (VectorDB)
+
+Gollemer includes a lightweight, RAM-resident vector database (`internal/ai/memory/vectordb.go`) for stateful, long-term conversational awareness. It uses n-gram hashing and L2 normalisation — no external database or embedding model required.
+
+**How it works:**
+- **Ingestion**: Any statement prefixed with `"remember"` during voice or chat interaction is embedded using n-gram hashing and stored in a local JSON file (`data/memory/facts.json`).
+- **Retrieval**: Before processing each intent, the system queries the `VectorDB` for the top-K most semantically similar past facts and injects them into the neural query context.
+- **Persistence**: The memory store is loaded on startup and saved incrementally, surviving restarts.
+
+This enables the assistant to recall user-defined facts like names, preferences, and prior instructions without any cloud dependency.
 
 ---
 
@@ -340,30 +448,41 @@ Gollemer is organized into a clean, modular structure designed for ease of use a
 
 ```text
 .
-├── cmd/tools/          # Entry Points
-│   └── train_moe/      # The primary training engine and interactive LLM shell.
+├── cmd/tools/               # Entry Points & Standalone Tools
+│   ├── train_moe/           # Primary training engine and interactive LLM shell.
+│   ├── train_audio/         # Trains the AudioEncoder+GRU on voice command recordings.
+│   ├── train_temporal/      # Trains the TemporalEncoder GRU on motion/time sequences.
+│   ├── train_vision/        # Trains vision models on image/video data.
+│   ├── record_audio/        # Records 1.5s raw PCM samples (ffmpeg/ALSA) for train_audio.
+│   ├── voice_capture/       # Live always-on voice command recognition loop (no CGO).
+│   ├── vision_capture/      # Real-time camera motion tracking via go4vl + GRU.
+│   ├── add_command/         # Zero-shot: registers new voice commands without retraining.
+│   └── ...                  # 40+ additional analysis, inspection, and generation tools.
 │
-├── internal/ai/        # Core Intelligence Engine
-│   ├── moe/            # Mixture of Experts (MoE) core architecture and routing logic.
-│   ├── neural/         # Native neural math:
-│   │   ├── tensor/     # SIMD-accelerated (AVX2/SSE) tensor operations.
-│   │   ├── nn/         # Neural network layers (Linear, Embedding, etc.).
-│   │   └── tokenizer/  # Advanced sub-word and sentence tokenization.
-│   ├── llm/            # High-level assistant runner, client, and intent logic.
-│   └── training/       # Specialized curriculum pipelines (Social, Intent).
+├── internal/ai/             # Core Intelligence Engine
+│   ├── moe/                 # Mixture of Experts (MoE) architecture, routing, AudioEncoder, TemporalEncoder, MotionWindow.
+│   ├── memory/              # VectorDB: n-gram hashing + L2-normalised RAM-resident vector store.
+│   ├── neural/              # Native neural math:
+│   │   ├── tensor/          # SIMD-accelerated (AVX2/SSE) tensor operations.
+│   │   ├── nn/              # Neural network layers (Linear, Embedding, etc.).
+│   │   └── tokenizer/       # Advanced sub-word and sentence tokenization.
+│   ├── llm/                 # High-level assistant runner, client, and intent logic.
+│   └── training/            # Specialized curriculum pipelines (Social, Intent).
 │
-├── data/               # Assets & Persistence
-│   ├── config/         # Hot-reloadable training and model configurations.
-│   ├── models/         # Serialized (.gob) model checkpoints and vocabularies.
-│   ├── training/       # Curated datasets (JSON/CSV/TXT) for social learning.
-│   ├── db/             # SQLite-backed long-term memory and knowledge bases.
-│   └── knowledge.json  # Static world-knowledge and retrieval facts.
+├── data/                    # Assets & Persistence
+│   ├── config/              # Hot-reloadable training and model configurations.
+│   ├── models/              # Serialized (.gob) MoE checkpoints; audio_gru.json voice model.
+│   ├── memory/              # facts.json — persisted VectorDB long-term memory store.
+│   ├── training/            # Curated datasets (JSON/CSV/TXT) for social learning.
+│   ├── db/                  # SQLite-backed long-term memory and knowledge bases.
+│   └── knowledge.json       # Static world-knowledge and retrieval facts.
 │
-├── scripts/            # Support Tools
-│   └── *.go            # Standalone tools for vocab analysis and model inspection.
+├── dataset/audio/           # Raw 16kHz PCM voice recordings (created by record_audio).
+├── video/                   # Image/video files for vision_capture file-fallback mode.
+├── models/                  # audio_gru.json — trained GRU voice command model.
 │
-├── Makefile            # Central workflow: train, chat, and clean.
-└── go.mod              # Minimal dependency management (github.com/hegedustibor/htgo-tts for text to voice).
+├── Makefile                 # Central workflow: train, chat, Pi targets, distributed training.
+└── go.mod                   # Minimal dependency management.
 ```
 
 ---

@@ -34,7 +34,7 @@ train-social:
 ## chat: Launch the interactive LLM chat shell
 chat:
 	@echo "💬 Starting Interactive Chat..."
-	GOMEMLIMIT=4000MiB GOGC=100 $(MAIN_CMD) -llm -talk
+	GOMEMLIMIT=4000MiB GOGC=100 $(MAIN_CMD) -llm -talk -listen
 
 llm: chat
 
