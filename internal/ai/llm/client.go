@@ -106,6 +106,12 @@ func (c *GollemerMoEClient) PushHistory(q, a, intent string) {
 	}
 }
 
+// GetLastPrediction returns the most recently generated model response.
+// It is the exported accessor for the unexported lastMoEPrediction field.
+func (c *GollemerMoEClient) GetLastPrediction() string {
+	return c.lastMoEPrediction
+}
+
 func (c *GollemerMoEClient) LoadChatBank(path string) {
 	data, err := os.ReadFile(path)
 	if err != nil {

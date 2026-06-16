@@ -2,6 +2,7 @@ package llm
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -32,9 +33,10 @@ type Runner struct {
 	SessionState   ConversationState
 	TutorialState  TutorialState
 	InMenuMode     bool
+	Listen         bool
 }
 
-func NewRunner(talk bool) (*Runner, error) {
+func NewRunner(talk bool, listen bool) (*Runner, error) {
 	mascot := ui.NewMascot(talk)
 
 	projectRoot, err := FindProjectRoot()
@@ -60,8 +62,9 @@ func NewRunner(talk bool) (*Runner, error) {
 		DB:          db,
 		KB:          kb,
 		Reader:      bufio.NewReader(os.Stdin),
+		Listen:      listen,
 	}
-	log.Printf("🔧 Initializing Gollemer Runner (Root: %s)", r.ProjectRoot)
+	log.Printf("🔧 Initializing Gollemer Runner (Root: %s, Listen: %v)", r.ProjectRoot, listen)
 
 	return r, nil
 }
@@ -363,6 +366,22 @@ func (r *Runner) Run() {
 		r.Mascot.Speak(ui.MoodHappy, initialMsg)
 	}
 
+	inputChan := make(chan string)
+
+	// Goroutine for keyboard input
+	go func() {
+		for {
+			query, _ := r.Reader.ReadString('\n')
+			inputChan <- query
+		}
+	}()
+
+	// Goroutine for voice input
+	if r.Listen {
+		importCtx := context.Background()
+		go StartVoiceListener(importCtx, inputChan)
+	}
+
 	for {
 		r.SessionState.JustConfirmed = false
 
@@ -386,8 +405,15 @@ func (r *Runner) Run() {
 			mood = ui.MoodWaiting
 		}
 		r.Mascot.ShowMascot(mood)
-		query, _ := r.Reader.ReadString('\n')
+		
+		query := <-inputChan
 		query = strings.TrimSpace(query)
+
+		// Convert voice commands like TURN_ON_LIGHTS to "turn on lights"
+		if strings.Contains(query, "_") && strings.ToUpper(query) == query {
+			query = strings.ToLower(strings.ReplaceAll(query, "_", " "))
+			fmt.Printf("\n🗣️  Voice Command: %s\n", query)
+		}
 
 		// --- Strip Mascot Prefix if present (e.g., copied from logs or mimicry) ---
 		if strings.HasPrefix(query, "/") && strings.Contains(query, "/ >") {

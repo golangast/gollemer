@@ -1,0 +1,11 @@
+# Add all the commands you want Gollemer to know here!
+# One command per line.
+TURN ON LIGHTS
+TURN OFF LIGHTS
+WHAT TIME IS IT
+PLAY MUSIC
+STOP MUSIC
+GOLLEMER WAKE UP
+GO TO SLEEP
+NEXT TRACK
+MUTE VOLUME

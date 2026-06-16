@@ -1048,6 +1048,7 @@ func main() {
 	profileName := flag.String("profile", "standard", "Training profile: stable, aggressive, standard")
 	runLLM := flag.Bool("llm", false, "Run the interactive LLM inference mode")
 	talk := flag.Bool("talk", false, "Enable Text-to-Speech (TTS) for the mascot in LLM mode")
+	listen := flag.Bool("listen", false, "Enable voice commands listening via ALSA mic")
 	distMode := flag.String("dist-mode", "", "Distributed mode: 'master' or 'worker'")
 	distAddr := flag.String("dist-addr", "", "Address for distributed training sync (e.g., ':8080' for master, '192.168.1.100:8080' for worker)")
 
@@ -1069,7 +1070,7 @@ func main() {
 
 	// --llm: launch interactive inference mode and exit
 	if *runLLM {
-		llm.RunLLM(*talk)
+		llm.RunLLM(*talk, *listen)
 		return
 	}
 
@@ -1101,7 +1102,7 @@ func main() {
 
 	if *piMode {
 		log.Println("🥧 Pi mode selected but no task specified. Defaulting to interactive LLM mode (-llm).")
-		llm.RunLLM(*talk)
+		llm.RunLLM(*talk, *listen)
 		return
 	}
 
