@@ -8,127 +8,116 @@ import (
 	"strings"
 )
 
-// ExpertHyperParams maps directly to the configurations used during layer forward passes.
-// In Gollemer, these typically translate to OutputScale and LRMultiplier overrides.
+// ExpertHyperParams holds routing and learning overrides for an expert.
 type ExpertHyperParams struct {
 	LearningRate   float64
 	DropoutPenalty float64
 	LossWeight     float64
 }
 
-// AdaptiveSupervisor manages the autonomous feedback loop for MoE training,
-// handling variable mutation, structural scaling (expert spawning), and
-// automated evolution of raw training assets.
+// AdaptiveSupervisor manages the MoE training feedback loop.
 type AdaptiveSupervisor struct {
 	ModelDim         int
 	CurrentExperts   int
 	MaxExperts       int
 	ExpertRegistry   map[int]*ExpertHyperParams
-	PathFailureCount map[string]int // Tracks path sequences like "E1+E6"
+	PathFailureCount map[string]int // Tracks path failure sequences (e.g., "E1+E6")
 	TrainingDataPath string
-	ActiveMode       string // e.g. "OverfitMode", "" for standard
+	ActiveMode       string
 }
 
-// NewAdaptiveSupervisor initializes a new adaptive supervisor.
-func NewAdaptiveSupervisor(initialExperts, modelDim int, dataPath string) *AdaptiveSupervisor {
-	registry := make(map[int]*ExpertHyperParams)
-	for i := 0; i < initialExperts; i++ {
-		registry[i] = &ExpertHyperParams{
+// NewAdaptiveSupervisor initializes a new supervisor.
+func NewAdaptiveSupervisor(experts, dim int, dataPath string) *AdaptiveSupervisor {
+	reg := make(map[int]*ExpertHyperParams)
+	for i := 0; i < experts; i++ {
+		reg[i] = &ExpertHyperParams{
 			LearningRate:   0.001,
 			DropoutPenalty: 0.1,
 			LossWeight:     1.0,
 		}
 	}
 	return &AdaptiveSupervisor{
-		ModelDim:         modelDim,
-		CurrentExperts:   initialExperts,
+		ModelDim:         dim,
+		CurrentExperts:   experts,
 		MaxExperts:       16, // Bounds to prevent runaway memory expansion
-		ExpertRegistry:   registry,
+		ExpertRegistry:   reg,
 		PathFailureCount: make(map[string]int),
 		TrainingDataPath: dataPath,
 	}
 }
 
-// AssessSpawningPacing dynamically widens or restricts the spawning gate based on the intent domain
-// and current training mode. OverfitMode + social intent gets the highest allocation to rapidly
-// clear structural failure bottlenecks.
+// AssessSpawningPacing dynamically sets the spawning gate based on the intent domain.
 func (s *AdaptiveSupervisor) AssessSpawningPacing(intent string) int {
 	if s.ActiveMode == "OverfitMode" && intent == "social" {
-		return 20 // Widen the gate to clear the structural failure bottleneck rapidly
+		return 20
 	}
 	if intent == "social" || intent == "grammar_baseline" {
-		return 15 // Temporarily widen the gate to avoid massive deferral walls
+		return 15
 	}
 	return 5
 }
 
-// EvaluateGate is called by the main curriculum runner at the end of an epoch checkpoint.
-// It performs real-time model surgery and data refinement upon quality gate failures.
-func (s *AdaptiveSupervisor) EvaluateGate(activePath string, currentScore float64, targetIntent string, problematicRawQuestion string) {
-	const minThreshold = 0.0500
+// EvaluateGate performs real-time model surgery upon quality gate failures.
+func (s *AdaptiveSupervisor) EvaluateGate(path string, score float64, intent, question string) {
+	const threshold = 0.05
 
-	if currentScore >= minThreshold {
-		return // Quality gate passed safely
-	}
-
-	log.Printf("⚠️  AdaptiveSupervisor: Quality Gate Rejected (Score: %.4f < %.4f). Taking control...", currentScore, minThreshold)
-
-	if s.CurrentExperts >= s.MaxExperts {
-		log.Printf("⚠️ [Supervisor] Hard cap reached. Freezing mutations to prevent token drift.")
+	if score >= threshold {
 		return
 	}
 
-	s.PathFailureCount[activePath]++
+	log.Printf("⚠️  AdaptiveSupervisor: Quality Gate Rejected (Score: %.4f < %.4f). Taking control...", score, threshold)
 
-	// 1. MUTATE TARGET ROUTING VARIABLES
-	// We locate the individual expert IDs (e.g., from "E1+E6")
-	parts := strings.FieldsFunc(activePath, func(r rune) bool {
+	if s.CurrentExperts >= s.MaxExperts {
+		log.Printf("⚠️ [Supervisor] Hard cap reached. Freezing mutations.")
+		return
+	}
+
+	s.PathFailureCount[path]++
+	s.mutateRouting(path)
+
+	// Expand structural capacity if the path repeatedly fails.
+	if s.PathFailureCount[path] >= 3 && s.CurrentExperts < s.MaxExperts {
+		id := s.CurrentExperts
+		s.CurrentExperts++
+
+		log.Printf("🔥 [Structural Expansion] Path %s collapsed. Allocating Expert %d", path, id)
+
+		s.ExpertRegistry[id] = &ExpertHyperParams{
+			LearningRate:   0.0005,
+			DropoutPenalty: 0.05,
+			LossWeight:     1.2,
+		}
+		s.PathFailureCount[path] = 0
+	}
+
+	s.EvolveDataset(question)
+}
+
+func (s *AdaptiveSupervisor) mutateRouting(path string) {
+	parts := strings.FieldsFunc(path, func(r rune) bool {
 		return r == '+' || r == '-' || r == '>' || r == ' '
 	})
 
-	for _, idStr := range parts {
-		if !strings.HasPrefix(idStr, "E") {
+	for _, p := range parts {
+		if !strings.HasPrefix(p, "E") {
 			continue
 		}
 		var id int
-		fmt.Sscanf(idStr, "E%d", &id)
+		fmt.Sscanf(p, "E%d", &id)
 
-		if params, exists := s.ExpertRegistry[id]; exists {
+		if params, ok := s.ExpertRegistry[id]; ok {
 			log.Printf("🎯 [Mutation] Adjusting hyper-parameters for Expert %d", id)
-			params.LossWeight *= 0.85   // De-emphasize its current representation in structural calculations
-			params.LearningRate *= 1.10 // Force an exploratory learning rate bump
+			params.LossWeight *= 0.85
+			params.LearningRate *= 1.10
 		}
 	}
-
-	// 2. CREATE NEW SUB-NETWORK EXPERT
-	// If a specific routing alignment fails repeatedly, allocate an entirely clean path
-	if s.PathFailureCount[activePath] >= 3 && s.CurrentExperts < s.MaxExperts {
-		newExpertID := s.CurrentExperts
-		s.CurrentExperts++
-
-		log.Printf("🔥 [Structural Expansion] Path %s collapsed under intent '%s'. Allocating Expert %d (Dim: %d)",
-			activePath, targetIntent, newExpertID, s.ModelDim)
-
-		s.ExpertRegistry[newExpertID] = &ExpertHyperParams{
-			LearningRate:   0.0005, // Initialize stable
-			DropoutPenalty: 0.05,   // Keep representation sharp
-			LossWeight:     1.2,    // High confidence bias for initialization
-		}
-
-		// Reset tracking for the path to prevent infinite growth loops
-		s.PathFailureCount[activePath] = 0
-
-		// NOTE: In the main loop, we check s.CurrentExperts and call model.AddExpertToLayer()
-	}
-
-	// 3. EVOLVE TRAINING DATA
-	s.EvolveDataset(problematicRawQuestion)
 }
 
-// ResetMetrics clears historical tracking windows and resets expert hyperparameters to base initialization.
+// ResetMetrics clears historical tracking and resets hyper-parameters.
 func (s *AdaptiveSupervisor) ResetMetrics() {
-	log.Printf("🔄 [Supervisor] Cold-Resetting metrics and returning to base routing weights.")
+	log.Printf("🔄 [Supervisor] Cold-Resetting metrics.")
 	s.PathFailureCount = make(map[string]int)
+	
 	for id, param := range s.ExpertRegistry {
 		param.LearningRate = 0.001
 		param.DropoutPenalty = 0.1
@@ -137,86 +126,74 @@ func (s *AdaptiveSupervisor) ResetMetrics() {
 	}
 }
 
-// EvolveDataset reads the raw dataset file, expands the language structure into
-// standard syntax trees for specific failing queries, and writes it back atomically.
-func (s *AdaptiveSupervisor) EvolveDataset(targetQuestion string) {
+// EvolveDataset enriches the standard syntax trees for specific failing queries.
+func (s *AdaptiveSupervisor) EvolveDataset(question string) {
 	if s.TrainingDataPath == "" {
 		return
 	}
 
-	log.Printf("📝 [Data Evolution] Scanning training assets for token target: '%s'", targetQuestion)
+	log.Printf("📝 [Data Evolution] Scanning training assets for target: '%s'", question)
 
-	file, err := os.Open(s.TrainingDataPath)
+	f, err := os.Open(s.TrainingDataPath)
 	if err != nil {
 		log.Printf("⚠️  [Data Evolution] Error opening data: %v", err)
 		return
 	}
 
 	var lines []string
-	scanner := bufio.NewScanner(file)
-	mutatedCount := 0
+	scan := bufio.NewScanner(f)
+	mutations := 0
 
-	for scanner.Scan() {
-		line := scanner.Text()
-
-		// Target checking: handles both internal markers and raw CSV lines
-		match := false
-		if strings.Contains(line, "__ques__ "+targetQuestion+" __ans__") {
-			match = true
-		} else if strings.HasPrefix(line, targetQuestion+",") {
-			match = true
-		}
-
-		if match {
-			// Mutate short token fragments into rich syntactic representations
-			// containing functional Subject-Verb-Object profiles
-			var replacement string
-			switch strings.ToLower(targetQuestion) {
-			case "hello", "hi", "hey":
-				replacement = "i welcome you with " + targetQuestion
-			case "thanks", "thank you":
-				replacement = "i offer you my thanks"
-			case "i am sad":
-				replacement = "i feel very sad today"
-			default:
-				if strings.HasPrefix(strings.ToLower(targetQuestion), "") {
-					replacement = targetQuestion
-				} else {
-					replacement = "" + targetQuestion
-				}
-			}
-
-			var newLine string
-			if strings.Contains(line, "__ques__") {
-				oldMarker := "__ques__ " + targetQuestion
-				newMarker := "__ques__ " + replacement
-				newLine = strings.Replace(line, oldMarker, newMarker, 1)
-			} else {
-				// CSV Case
-				newLine = strings.Replace(line, targetQuestion+",", replacement+",", 1)
-			}
-			lines = append(lines, newLine)
-			mutatedCount++
-		} else {
+	for scan.Scan() {
+		line := scan.Text()
+		
+		if !strings.Contains(line, "__ques__ "+question+" __ans__") && !strings.HasPrefix(line, question+",") {
 			lines = append(lines, line)
+			continue
 		}
+
+		repl := replaceTarget(question)
+		if strings.Contains(line, "__ques__") {
+			line = strings.Replace(line, "__ques__ "+question, "__ques__ "+repl, 1)
+		} else {
+			line = strings.Replace(line, question+",", repl+",", 1)
+		}
+		
+		lines = append(lines, line)
+		mutations++
 	}
-	file.Close()
+	f.Close()
 
-	if mutatedCount > 0 {
-		// Flush changes back cleanly to prevent broken buffers
-		outFile, err := os.Create(s.TrainingDataPath)
-		if err != nil {
-			log.Printf("⚠️  [Data Evolution] Error writing evolved dataset: %v", err)
-			return
-		}
-		defer outFile.Close()
+	if mutations == 0 {
+		return
+	}
 
-		writer := bufio.NewWriter(outFile)
-		for _, line := range lines {
-			_, _ = writer.WriteString(line + "\n")
-		}
-		_ = writer.Flush()
-		log.Printf("✅ [Data Evolution] Success. Mutated %d corpus references.", mutatedCount)
+	// Flush changes.
+	out, err := os.Create(s.TrainingDataPath)
+	if err != nil {
+		log.Printf("⚠️  [Data Evolution] Error writing dataset: %v", err)
+		return
+	}
+	defer out.Close()
+
+	w := bufio.NewWriter(out)
+	for _, l := range lines {
+		w.WriteString(l + "\n")
+	}
+	w.Flush()
+	
+	log.Printf("✅ [Data Evolution] Success. Mutated %d references.", mutations)
+}
+
+func replaceTarget(q string) string {
+	switch strings.ToLower(q) {
+	case "hello", "hi", "hey":
+		return "i welcome you with " + q
+	case "thanks", "thank you":
+		return "i offer you my thanks"
+	case "i am sad":
+		return "i feel very sad today"
+	default:
+		return q
 	}
 }

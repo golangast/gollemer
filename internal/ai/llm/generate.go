@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 )
+
 
 func generateDataStructurePackageContent(structName, packageName, dirName string, fields map[string]string) string {
 	lowercaseName := strings.ToLower(structName)
@@ -316,4 +318,82 @@ func handleGenericCreate(objectType, fileName, targetDirectory, handlerURL strin
 	os.MkdirAll(folderPath, 0755)
 	return fmt.Sprintf("I created a work directory '%s' for you.", folderPath), true
 }
+
+func registerHandlerURL(handlerName, handlerURL, mainGoPath string) (string, error) {
+	mainGoContent, err := os.ReadFile(mainGoPath)
+	if err != nil {
+		return "", fmt.Errorf("could not read %s: %w", mainGoPath, err)
+	}
+
+	if handlerURL == "" {
+		handlerURL = "/" + strings.ToLower(handlerName)
+	}
+
+	registration := fmt.Sprintf("http.HandleFunc(\"%s\", %sHandler)", handlerURL, handlerName)
+	if !strings.Contains(string(mainGoContent), registration) {
+		// Detect the placeholder with any indentation
+		placeholder := "// HANDLER_REGISTRATIONS_GO_HERE"
+		lines := strings.Split(string(mainGoContent), "\n")
+		var updatedLines []string
+		found := false
+		for _, line := range lines {
+			if strings.Contains(line, placeholder) {
+				// preserve indentation
+				var indent strings.Builder
+				for _, char := range line {
+					if char == ' ' || char == '\t' {
+						indent.WriteString(string(char))
+					} else {
+						break
+					}
+				}
+				updatedLines = append(updatedLines, fmt.Sprintf("%shttp.HandleFunc(\"%s\", %sHandler)", indent.String(), handlerURL, handlerName))
+				updatedLines = append(updatedLines, line) // Keep the placeholder for future registrations
+				found = true
+			} else {
+				updatedLines = append(updatedLines, line)
+			}
+		}
+
+		if !found {
+			return "", fmt.Errorf("placeholder '%s' not found in %s. Tip: Place it inside func main() to enable auto-registration.", placeholder, mainGoPath)
+		}
+
+		updatedMainGoContent := strings.Join(updatedLines, "\n")
+
+		err = os.WriteFile(mainGoPath, []byte(updatedMainGoContent), 0644)
+		if err != nil {
+			return "", fmt.Errorf("could not write to %s: %w", mainGoPath, err)
+		}
+		goImports(mainGoPath)
+		return fmt.Sprintf("And registered it to URL '%s' in %s.", handlerURL, mainGoPath), nil
+	}
+
+	return "Handler already registered.", nil
+}
+
+// InjectPlaceholder looks for the main function and injects the handler registration tag
+func InjectPlaceholder(path string) error {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	// 1. Check if it's already there to avoid duplicates
+	if strings.Contains(string(content), "// HANDLER_REGISTRATIONS_GO_HERE") {
+		return nil
+	}
+
+	// 2. Look for the main function signature
+	re := regexp.MustCompile(`func main\(\) \{`)
+	if !re.Match(content) {
+		return fmt.Errorf("could not find func main in %s", path)
+	}
+
+	insertion := "func main() {\n\t// HANDLER_REGISTRATIONS_GO_HERE"
+	newContent := re.ReplaceAllString(string(content), insertion)
+
+	return os.WriteFile(path, []byte(newContent), 0644)
+}
+
 
