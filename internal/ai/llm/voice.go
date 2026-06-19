@@ -3,21 +3,35 @@ package llm
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"log"
 	"math"
+	"os"
 	"os/exec"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/golangast/gollemer/internal/ai/moe"
 )
 
+// isSpeaking is set to 1 while the LLM is generating/printing a response.
+// The voice listener checks this flag and mutes itself to prevent self-hearing.
+var isSpeaking int32
+
+// MuteVoice silences the microphone listener while the LLM is speaking.
+func MuteVoice() { atomic.StoreInt32(&isSpeaking, 1) }
+
+// UnmuteVoice re-enables the microphone listener after the LLM finishes speaking.
+func UnmuteVoice() { atomic.StoreInt32(&isSpeaking, 0) }
+
 const (
 	SampleRate      = 16000
 	Channels        = 1
 	BytesPerSample  = 2
-	FrameSize       = 400 // 25ms of audio at 16kHz
-	EnergyThreshold = 0.01 // Tuned for normalized float32 (-1.0 to 1.0)
+	FrameSize       = 400  // 25ms of audio at 16kHz
+	EnergyThreshold = 0.15 // Increased to 0.15 to ignore loud room fans and hum
 )
 
 type AudioBuffer struct {
@@ -208,6 +222,103 @@ func loadTrainedHead() (*moe.AudioEncoder, *moe.TemporalEncoder, []float32, []fl
 	return nil, nil, nil, nil, nil, nil
 }
 
+// whisperAutoTeach snapshots the current audio window frames, runs Whisper STT on them,
+// and automatically updates the in-memory prototype map with the new label.
+// This is called in a goroutine when the acoustic model is uncertain (conf 0.75–0.98).
+func whisperAutoTeach(frames [][]float32, aw *AudioWindow, ae *moe.AudioEncoder, te *moe.TemporalEncoder, headW, headB []float32) {
+	const (
+		whisperBin   = "/tmp/whisper.cpp/build/bin/whisper-cli"
+		whisperModel = "/tmp/whisper.cpp/models/ggml-tiny.en.bin"
+		rawTmp       = "dataset/audio/live_teach_temp.raw"
+		wavTmp       = "dataset/audio/live_teach_temp.wav"
+	)
+
+	if _, err := os.Stat(whisperBin); os.IsNotExist(err) {
+		return // whisper not available, skip silently
+	}
+
+	os.MkdirAll("dataset/audio", 0755)
+
+	// Write the current window frames to a raw s16le file
+	f, err := os.Create(rawTmp)
+	if err != nil {
+		return
+	}
+	for _, frame := range frames {
+		for _, s := range frame {
+			sample16 := int16(s * 32768.0)
+			_ = binary.Write(f, binary.LittleEndian, sample16)
+		}
+	}
+	f.Close()
+
+	// Convert raw → wav for Whisper
+	exec.Command("ffmpeg", "-y", "-f", "s16le", "-ar", "16000", "-ac", "1",
+		"-i", rawTmp, wavTmp).Run()
+
+	// Run Whisper, discard its stderr debug logs
+	devNull, _ := os.Open(os.DevNull)
+	defer devNull.Close()
+	wCmd := exec.Command(whisperBin, "-m", whisperModel, "-f", wavTmp, "-nt")
+	wCmd.Stderr = devNull
+	out, _ := wCmd.Output()
+
+	// Parse transcript from stdout only
+	var parts []string
+	for _, line := range strings.Split(string(out), "\n") {
+		t := strings.TrimSpace(line)
+		if t != "" {
+			parts = append(parts, t)
+		}
+	}
+	rawTranscript := strings.Join(parts, " ")
+
+	// Clean to intent label: uppercase, strip punctuation, spaces → underscores
+	label := strings.ToUpper(strings.TrimSpace(rawTranscript))
+	for _, ch := range []string{".", ",", "?", "!", "'", "\"", "(", ")", "[", "]", "-"} {
+		label = strings.ReplaceAll(label, ch, "")
+	}
+	label = strings.Join(strings.Fields(label), "_")
+
+	if label == "" || len(label) > 60 {
+		log.Printf("🎤 [AutoTeach] Whisper transcript empty or too long, skipping.")
+		return
+	}
+
+	log.Printf("🎤 [AutoTeach] Whisper heard: \"%s\" → teaching label: %s", rawTranscript, label)
+
+	// Compute embedding for this audio
+	audioTokens := ae.Forward(frames)
+	newEmb := te.Forward(audioTokens)
+
+	// Average with existing prototype or insert new one
+	aw.mu.Lock()
+	if existing, ok := aw.Prototypes[label]; ok {
+		avg := make([]float32, len(newEmb))
+		for i := range newEmb {
+			avg[i] = (existing[i] + newEmb[i]) * 0.5
+		}
+		aw.Prototypes[label] = avg
+		log.Printf("📐 [AutoTeach] Updated existing prototype for %s", label)
+	} else {
+		aw.Prototypes[label] = newEmb
+		aw.ClassNames = append(aw.ClassNames, label)
+		log.Printf("🆕 [AutoTeach] New command added: %s", label)
+	}
+	currentNames := aw.ClassNames
+	currentProtos := aw.Prototypes
+	aw.mu.Unlock()
+
+	// Persist updated model to disk
+	if err := moe.SaveAudioModel("models/audio_gru.json", ae, te, headW, headB, currentNames, currentProtos); err != nil {
+		log.Printf("⚠️  [AutoTeach] Failed to save model: %v", err)
+	} else {
+		finalRaw := fmt.Sprintf("dataset/audio/%s_live_%d.raw", label, time.Now().Unix())
+		os.Rename(rawTmp, finalRaw)
+		log.Printf("✅ [AutoTeach] Model saved. %s prototype persisted.", label)
+	}
+}
+
 func StartVoiceListener(ctx context.Context, inputChan chan<- string) {
 	ae, te, headW, headB, classNames, prototypes := loadTrainedHead()
 	if ae == nil {
@@ -220,7 +331,7 @@ func StartVoiceListener(ctx context.Context, inputChan chan<- string) {
 		return
 	}
 
-	aw := NewAudioWindow(40, ae, te, headW, headB, classNames, prototypes)
+	aw := NewAudioWindow(120, ae, te, headW, headB, classNames, prototypes)
 	ticker := time.NewTicker(25 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -238,17 +349,38 @@ func StartVoiceListener(ctx context.Context, inputChan chan<- string) {
 				rms := getRMS(frame)
 				aw.Push(frame)
 
-				if aw.Ready() && rms > EnergyThreshold {
+				if aw.Ready() && rms > EnergyThreshold && atomic.LoadInt32(&isSpeaking) == 0 {
 					intent, conf := aw.Classify()
-					
-					if conf > 0.80 && intent != "SILENCE" && intent != "NOISE" && intent != "UNKNOWN_SPEECH" {
+
+					if conf > 0.98 && intent != "SILENCE" && intent != "NOISE" && intent != "UNKNOWN_SPEECH" && intent != "BLANK_AUDIO" {
+						// High confidence — fire the command
 						log.Printf("\n🤖 [Voice] Heard: %s (Confidence: %.2f)", intent, conf)
 						inputChan <- intent
-						
-						// Debounce
+
+						// Hard cooldown: flush window + buffer, sleep 4s
 						aw.mu.Lock()
 						aw.filled = 0
 						aw.mu.Unlock()
+						ab.mu.Lock()
+						ab.samples = ab.samples[:0]
+						ab.mu.Unlock()
+						time.Sleep(4 * time.Second)
+
+					} else if conf > 0.93 {
+						// Medium-high confidence — heard real speech but uncertain.
+						// Run Whisper in the background to auto-teach the new phrase.
+						log.Printf("\n🤔 [Voice] Uncertain (best: %s, conf: %.2f) — auto-teaching via Whisper...", intent, conf)
+						snapshot := aw.GetOrderedSequence()
+						go whisperAutoTeach(snapshot, aw, ae, te, headW, headB)
+
+						// Flush and pause to avoid re-triggering on the same audio
+						aw.mu.Lock()
+						aw.filled = 0
+						aw.mu.Unlock()
+						ab.mu.Lock()
+						ab.samples = ab.samples[:0]
+						ab.mu.Unlock()
+						time.Sleep(4 * time.Second)
 					}
 				}
 			} else {

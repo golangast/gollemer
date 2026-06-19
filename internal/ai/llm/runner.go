@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/golangast/gollemer/internal/ai/moe"
 	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
@@ -405,7 +406,7 @@ func (r *Runner) Run() {
 			mood = ui.MoodWaiting
 		}
 		r.Mascot.ShowMascot(mood)
-		
+
 		query := <-inputChan
 		query = strings.TrimSpace(query)
 
@@ -428,7 +429,14 @@ func (r *Runner) Run() {
 		}
 
 		r.CommandHistory = append(r.CommandHistory, query)
+		MuteVoice()
 		r.handleInput(query)
+		// Keep muted for 2 extra seconds after response so speaker audio fully decays
+		time.AfterFunc(3*time.Second, UnmuteVoice)
+		// go func() {
+		// 	time.Sleep(2 * time.Second)
+		// 	UnmuteVoice()
+		// }()
 	}
 }
 

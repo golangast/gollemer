@@ -836,10 +836,10 @@ func (s *Supervisor) EvolveDataset(targetQuestion string) {
 			case "i am sad":
 				replacement = "i feel very sad today"
 			default:
-				if strings.HasPrefix(strings.ToLower(targetQuestion), "i am processing the concept of ") {
+				if strings.HasPrefix(strings.ToLower(targetQuestion), "") {
 					replacement = targetQuestion
 				} else {
-					replacement = "i am processing the concept of " + targetQuestion
+					replacement = "" + targetQuestion
 				}
 			}
 

@@ -31,7 +31,7 @@ import (
 const (
 	SampleRate  = 16000
 	FrameSize   = 400
-	NumSamples  = SampleRate * 1 // 1 second window
+	NumSamples  = SampleRate * 3 // 3 second window
 	NumRecordings = 3
 )
 
@@ -74,12 +74,12 @@ func main() {
 		reader.ReadBytes('\n')
 
 		filename := fmt.Sprintf("dataset/audio/%s_%d.raw", intent, i)
-		fmt.Println("🔴 RECORDING (1.5 seconds)...")
+		fmt.Println("🔴 RECORDING (3.5 seconds)...")
 
 		cmd := exec.Command("ffmpeg",
 			"-y",
 			"-f", "alsa", "-i", "default",
-			"-t", "1.5",
+			"-t", "3.5",
 			"-ac", "1", "-ar", "16000",
 			"-f", "s16le", filename,
 		)
@@ -153,7 +153,7 @@ func main() {
 	}
 }
 
-// computeEmbedding loads a raw audio file, finds the loudest 1-second window,
+// computeEmbedding loads a raw audio file, finds the loudest 3-second window,
 // and returns the GRU embedding vector for that audio.
 func computeEmbedding(filename string, ae *moe.AudioEncoder, te *moe.TemporalEncoder) ([]float32, error) {
 	rawBytes, err := os.ReadFile(filename)

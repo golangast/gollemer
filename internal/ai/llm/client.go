@@ -93,11 +93,11 @@ func (c *GollemerMoEClient) PushHistory(q, a, intent string) {
 				defer f.Close()
 				cleanQ := strings.ReplaceAll(q, "\"", "\"\"")
 				cleanA := strings.ReplaceAll(a, "\"", "\"\"")
-				
-				// Embed the intent directly into the target string so the neural 
+
+				// Embed the intent directly into the target string so the neural
 				// model learns to PREDICT the intent rather than just memorizing strings.
 				embeddedAnswer := fmt.Sprintf("[INTENT: %s] %s", intent, cleanA)
-				
+
 				// format: query,answer,intent,grammar
 				// Default grammar to OTHER since we don't run the POS tagger here.
 				f.WriteString(fmt.Sprintf("\"%s\",\"%s\",\"%s\",\"OTHER\"\n", cleanQ, embeddedAnswer, intent))
@@ -156,7 +156,7 @@ func (c *GollemerMoEClient) LoadChatBank(path string) {
 				// Format: conversation_id, turn_sequence, role, content
 				role := strings.ToLower(strings.Trim(record[2], "\" "))
 				content := strings.Trim(record[3], "\" ")
-				
+
 				if role == "user" {
 					// temporarily store user content in Q (we will pair it with the next assistant turn)
 					pairs = append(pairs, ChatPair{Q: content})
@@ -173,10 +173,10 @@ func (c *GollemerMoEClient) LoadChatBank(path string) {
 			if len(record) >= 2 {
 				// conversing.csv columns: query, answer, intent, grammar
 				q := strings.Trim(record[0], "\" ")
-				
+
 				// Strip evaluation harness prose so text-overlap matching works correctly
 				qLower := strings.ToLower(q)
-				prefixes := []string{"i am processing the concept of ", "i welcome you with ", "i will now ask "}
+				prefixes := []string{"i welcome you with ", "i will now ask "}
 				for _, p := range prefixes {
 					if strings.HasPrefix(qLower, p) {
 						q = q[len(p):]
@@ -630,7 +630,7 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 						neuralResponse = strings.Join(decodedWords, " ")
 						if neuralResponse != "" {
 							log.Printf("🧠 Neural Model generated: %s", neuralResponse)
-							
+
 							// Dynamic Intent Parsing!
 							// If the model learned to guess the intent, it will output [INTENT: xxx]
 							if strings.HasPrefix(neuralResponse, "[INTENT: ") {
@@ -641,7 +641,7 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 									neuralScore = 0.99
 								}
 							}
-							
+
 							if neuralIntent == "" {
 								if false {
 									// logic for retrieving response if needed
@@ -669,7 +669,7 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 	}
 
 	const retrievalThreshold = 0.96
-	
+
 	// Parse embedded intent from retrieved response if present
 	if strings.HasPrefix(retrievedResp, "[INTENT: ") {
 		endIdx := strings.Index(retrievedResp, "]")
@@ -679,7 +679,7 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 			retrievedResp = strings.TrimSpace(retrievedResp[endIdx+1:])
 		}
 	}
-	
+
 	if retrievedScore >= retrievalThreshold {
 		c.lastMoEPrediction = retrievedResp
 		return retrievedIntent, retrievedScore
@@ -691,7 +691,7 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 	}
 
 	// Dynamic Command Intent Guessing
-	// If the retrieved intent is a known command (not chat_response) and we have decent 
+	// If the retrieved intent is a known command (not chat_response) and we have decent
 	// confidence (> 0.45), trust the fuzzy intent guess! This is what ties NLP to commands.
 	if retrievedScore > 0.45 && retrievedIntent != "chat_response" && retrievedIntent != "social_chat" && retrievedIntent != "social" && retrievedIntent != "" {
 		c.lastMoEPrediction = retrievedResp
@@ -1128,7 +1128,7 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 	}
 
 	queryContext := c.buildQueryContext(lowerInput)
-	
+
 	formattedInput := fmt.Sprintf("__intent__ %s : __ques__ %s __ans__", intent, queryContext)
 	tokens := cleanTokenize(formattedInput)
 	if len(tokens) == 0 {
@@ -1287,11 +1287,11 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 		ctx,
 		20, // shorter max length to reduce repetition chances
 		model.SentenceVocab.BosID, model.SentenceVocab.EosID,
-		4,                    // beam width
-		0.8,                  // temperature (slightly higher for diversity)
-		beamRepPenalty,       // dynamic repetition penalty from config
-		&rule,                // 🧬 Guided Beam Search
-		socialSuppressedIDs,  // 🚫 block technical tokens in social context
+		4,                   // beam width
+		0.8,                 // temperature (slightly higher for diversity)
+		beamRepPenalty,      // dynamic repetition penalty from config
+		&rule,               // 🧬 Guided Beam Search
+		socialSuppressedIDs, // 🚫 block technical tokens in social context
 	)
 	if beamErr != nil || len(resIDs) == 0 {
 		log.Printf("⚠️  BeamSearchDecode failed (%v), falling back to sampling", beamErr)
