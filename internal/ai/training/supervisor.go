@@ -3,9 +3,9 @@ package training
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"os"
 	"strings"
-	"log"
 )
 
 // ExpertHyperParams maps directly to the configurations used during layer forward passes.
@@ -95,8 +95,8 @@ func (s *AdaptiveSupervisor) EvaluateGate(activePath string, currentScore float6
 
 		if params, exists := s.ExpertRegistry[id]; exists {
 			log.Printf("🎯 [Mutation] Adjusting hyper-parameters for Expert %d", id)
-			params.LossWeight *= 0.85      // De-emphasize its current representation in structural calculations
-			params.LearningRate *= 1.10    // Force an exploratory learning rate bump
+			params.LossWeight *= 0.85   // De-emphasize its current representation in structural calculations
+			params.LearningRate *= 1.10 // Force an exploratory learning rate bump
 		}
 	}
 
@@ -105,19 +105,19 @@ func (s *AdaptiveSupervisor) EvaluateGate(activePath string, currentScore float6
 	if s.PathFailureCount[activePath] >= 3 && s.CurrentExperts < s.MaxExperts {
 		newExpertID := s.CurrentExperts
 		s.CurrentExperts++
-		
-		log.Printf("🔥 [Structural Expansion] Path %s collapsed under intent '%s'. Allocating Expert %d (Dim: %d)", 
+
+		log.Printf("🔥 [Structural Expansion] Path %s collapsed under intent '%s'. Allocating Expert %d (Dim: %d)",
 			activePath, targetIntent, newExpertID, s.ModelDim)
-		
+
 		s.ExpertRegistry[newExpertID] = &ExpertHyperParams{
 			LearningRate:   0.0005, // Initialize stable
 			DropoutPenalty: 0.05,   // Keep representation sharp
 			LossWeight:     1.2,    // High confidence bias for initialization
 		}
-		
+
 		// Reset tracking for the path to prevent infinite growth loops
 		s.PathFailureCount[activePath] = 0
-		
+
 		// NOTE: In the main loop, we check s.CurrentExperts and call model.AddExpertToLayer()
 	}
 
@@ -137,7 +137,7 @@ func (s *AdaptiveSupervisor) ResetMetrics() {
 	}
 }
 
-// EvolveDataset reads the raw dataset file, expands the language structure into 
+// EvolveDataset reads the raw dataset file, expands the language structure into
 // standard syntax trees for specific failing queries, and writes it back atomically.
 func (s *AdaptiveSupervisor) EvolveDataset(targetQuestion string) {
 	if s.TrainingDataPath == "" {
@@ -145,20 +145,20 @@ func (s *AdaptiveSupervisor) EvolveDataset(targetQuestion string) {
 	}
 
 	log.Printf("📝 [Data Evolution] Scanning training assets for token target: '%s'", targetQuestion)
-	
+
 	file, err := os.Open(s.TrainingDataPath)
 	if err != nil {
 		log.Printf("⚠️  [Data Evolution] Error opening data: %v", err)
 		return
 	}
-	
+
 	var lines []string
 	scanner := bufio.NewScanner(file)
 	mutatedCount := 0
 
 	for scanner.Scan() {
 		line := scanner.Text()
-		
+
 		// Target checking: handles both internal markers and raw CSV lines
 		match := false
 		if strings.Contains(line, "__ques__ "+targetQuestion+" __ans__") {
@@ -168,7 +168,7 @@ func (s *AdaptiveSupervisor) EvolveDataset(targetQuestion string) {
 		}
 
 		if match {
-			// Mutate short token fragments into rich syntactic representations 
+			// Mutate short token fragments into rich syntactic representations
 			// containing functional Subject-Verb-Object profiles
 			var replacement string
 			switch strings.ToLower(targetQuestion) {
@@ -179,13 +179,13 @@ func (s *AdaptiveSupervisor) EvolveDataset(targetQuestion string) {
 			case "i am sad":
 				replacement = "i feel very sad today"
 			default:
-				if strings.HasPrefix(strings.ToLower(targetQuestion), "i am processing the concept of ") {
+				if strings.HasPrefix(strings.ToLower(targetQuestion), "") {
 					replacement = targetQuestion
 				} else {
-					replacement = "i am processing the concept of " + targetQuestion
+					replacement = "" + targetQuestion
 				}
 			}
-			
+
 			var newLine string
 			if strings.Contains(line, "__ques__") {
 				oldMarker := "__ques__ " + targetQuestion
@@ -211,7 +211,7 @@ func (s *AdaptiveSupervisor) EvolveDataset(targetQuestion string) {
 			return
 		}
 		defer outFile.Close()
-		
+
 		writer := bufio.NewWriter(outFile)
 		for _, line := range lines {
 			_, _ = writer.WriteString(line + "\n")

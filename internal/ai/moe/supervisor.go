@@ -28,13 +28,13 @@ type Supervisor struct {
 	GrammarJudge         *nn.Linear
 
 	// Per-expert variable overrides (layerIdx -> expertIdx -> ExpertConfig)
-	expertOverrides       map[int]map[int]*ExpertOverride
-	FailureLogs           map[string]int // Tracks failures per expert ID (e.g., "E1")
-	TrainingDataPath      string         // Path to the raw training assets for evolution
-	SpawnsThisEpoch       int            // Track and pace expert spawning per epoch
-	OverfitMode           bool           // Allow relaxed constraints during overfit mode
-	DisableDataEvolution  bool           // When true, skip corpus mutation entirely
-	mu                    sync.Mutex
+	expertOverrides      map[int]map[int]*ExpertOverride
+	FailureLogs          map[string]int // Tracks failures per expert ID (e.g., "E1")
+	TrainingDataPath     string         // Path to the raw training assets for evolution
+	SpawnsThisEpoch      int            // Track and pace expert spawning per epoch
+	OverfitMode          bool           // Allow relaxed constraints during overfit mode
+	DisableDataEvolution bool           // When true, skip corpus mutation entirely
+	mu                   sync.Mutex
 }
 
 // ExpertOverride holds per-expert variable overrides set by the supervisor.
@@ -51,7 +51,7 @@ func NewSupervisor() *Supervisor {
 	judge, _ := nn.NewLinear(64, 1)
 
 	return &Supervisor{
-		BestPerplexity:  1e9,
+		BestPerplexity:    1e9,
 		TemporalAttention: att,
 		GrammarJudge:      judge,
 		FailureLogs:       make(map[string]int),
@@ -394,7 +394,7 @@ func (s *Supervisor) IsCompleteSentence(tokens []string) bool {
 	// 1. Basic Heuristics
 	hasVerb := false
 	hasSubject := false
-	
+
 	dummyRule := IntentRule{}
 
 	for i, t := range tokens {
@@ -405,12 +405,16 @@ func (s *Supervisor) IsCompleteSentence(tokens []string) bool {
 		if role == "PRON" || role == "NOUN" {
 			hasSubject = true
 		}
-		
+
 		prevType := "BOS"
-		if i > 0 { prevType = MapWordToGrammarType(tokens[i-1]) }
+		if i > 0 {
+			prevType = MapWordToGrammarType(tokens[i-1])
+		}
 		nextType := "EOS"
-		if i < len(tokens)-1 { nextType = MapWordToGrammarType(tokens[i+1]) }
-		
+		if i < len(tokens)-1 {
+			nextType = MapWordToGrammarType(tokens[i+1])
+		}
+
 		if dummyRule.EvaluateWindow(prevType, role, nextType) > 0 {
 			return false // Fails trigram rule
 		}
@@ -622,7 +626,7 @@ func (s *Supervisor) AddExpertToLayer(model *IntentMoE, layerIdx int, roleID int
 	layer.ExpertFrozen = append(layer.ExpertFrozen, false)
 	layer.StagnationCounters = append(layer.StagnationCounters, 0)
 	layer.ExpertGradMultiplier = append(layer.ExpertGradMultiplier, 1.0)
-	
+
 	// Extend dynamic parallel tracking slices
 	layer.ExpertHealth = append(layer.ExpertHealth, 1.0)
 	layer.ExpertLastUsedAt = append(layer.ExpertLastUsedAt, time.Now())
@@ -888,16 +892,13 @@ func (s *Supervisor) EvolveDataset(targetQuestion string) {
 			case "i am sad":
 				replacement = "i feel very sad today"
 			default:
-				if strings.HasPrefix(strings.ToLower(targetQuestion), "i am processing the concept of ") {
+				if strings.HasPrefix(strings.ToLower(targetQuestion), "") {
 					replacement = targetQuestion // Already wrapped — don't double-wrap
 				} else if isTechnicalPayload(targetQuestion) {
 					// Preserve technical multi-word queries verbatim.
-					// Wrapping them in "i am processing the concept of" mangles the
-					// tokenizer input and causes the router to misclassify the target,
-					// leading to cascading GREET expert deployments.
 					replacement = targetQuestion
 				} else {
-					replacement = "i am processing the concept of " + targetQuestion
+					replacement = "" + targetQuestion
 				}
 			}
 

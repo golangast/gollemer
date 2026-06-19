@@ -543,15 +543,15 @@ skipCSV:
 	if distMode == "master" && distAddr != "" {
 		// 1. Initialize the network listener
 		listener := initMasterSocket(distAddr)
-		
-		// 2. CRITICAL: Do NOT run this in a 'go' routine. 
+
+		// 2. CRITICAL: Do NOT run this in a 'go' routine.
 		// Call it synchronously so it pauses execution until workers check in!
 		log.Printf("🌐 [Distributed] Entering cluster sync lock...")
-		
-		// This function must handle accepting connections and only return 
+
+		// This function must handle accepting connections and only return
 		// when the exact number of required workers are ready.
 		BlockAndRegisterWorkers(listener, ExpectedWorkers, intentModel)
-		
+
 		log.Printf("✅ [Distributed] Cluster established. Proceeding to dataset alignment.")
 	}
 
@@ -2238,83 +2238,83 @@ skipCSV:
 			} else {
 				// periodic snapshots
 				if (epoch+1)%20 == 0 || epoch == 0 || epoch == epochs-1 {
-				ckpt := &moe.Checkpoint{
-					Model:           intentModel,
-					StepCount:       globalStep,
-					LastProfile:     profile,
-					Commitment:      intentModel.CalculateCommitment(),
-					TokensProcessed: totalTokens,
-					TotalDuration:   totalDuration,
-					Version:         "gollemer-chat-v1.2",
-				}
+					ckpt := &moe.Checkpoint{
+						Model:           intentModel,
+						StepCount:       globalStep,
+						LastProfile:     profile,
+						Commitment:      intentModel.CalculateCommitment(),
+						TokensProcessed: totalTokens,
+						TotalDuration:   totalDuration,
+						Version:         "gollemer-chat-v1.2",
+					}
 
-				intentModel.StepCount = globalStep
-				intentModel.TrainingPhase = 2
-				moe.SaveIntentMoECheckpoint(ckpt, moePath)
+					intentModel.StepCount = globalStep
+					intentModel.TrainingPhase = 2
+					moe.SaveIntentMoECheckpoint(ckpt, moePath)
 
-				// GC between saves to avoid doubling peak RSS (two concurrent serializations)
-				ckpt = nil
-				runtime.GC()
-				debug.FreeOSMemory()
+					// GC between saves to avoid doubling peak RSS (two concurrent serializations)
+					ckpt = nil
+					runtime.GC()
+					debug.FreeOSMemory()
 
-				// Rebuild ckpt for the numbered snapshot
-				ckpt = &moe.Checkpoint{
-					Model:           intentModel,
-					StepCount:       globalStep,
-					LastProfile:     profile,
-					Commitment:      intentModel.CalculateCommitment(),
-					TokensProcessed: totalTokens,
-					TotalDuration:   totalDuration,
-					Version:         "gollemer-chat-v1.2",
-				}
-				numberedPath := filepath.Join(checkpointDir, fmt.Sprintf("moe_classification_model_epoch_%03d.gob", epoch+1))
-				moe.SaveIntentMoECheckpoint(ckpt, numberedPath)
+					// Rebuild ckpt for the numbered snapshot
+					ckpt = &moe.Checkpoint{
+						Model:           intentModel,
+						StepCount:       globalStep,
+						LastProfile:     profile,
+						Commitment:      intentModel.CalculateCommitment(),
+						TokensProcessed: totalTokens,
+						TotalDuration:   totalDuration,
+						Version:         "gollemer-chat-v1.2",
+					}
+					numberedPath := filepath.Join(checkpointDir, fmt.Sprintf("moe_classification_model_epoch_%03d.gob", epoch+1))
+					moe.SaveIntentMoECheckpoint(ckpt, numberedPath)
 
-				// Check if this is the best model so far
-				if valPPL < bestPPL {
+					// Check if this is the best model so far
+					if valPPL < bestPPL {
+						bestPPL = valPPL
+						patienceCounter = 0
+						if err := moe.SaveIntentMoECheckpoint(ckpt, bestMoePath); err != nil {
+							log.Printf("  Failed to save best MoE model: %v", err)
+						} else {
+							fmt.Printf(" New Best Model! PPL: %.2f (Saved to %s)\n", bestPPL, bestMoePath)
+							trainer.SaveGoldenCheckpoint(intentModel, stats, globalStep, profile, totalTokens, totalDuration)
+						}
+					}
+				} else if valPPL < bestPPL {
+					// Even if not a 20-epoch periodic save, we should still save the BEST model if it improves.
 					bestPPL = valPPL
 					patienceCounter = 0
+					ckpt := &moe.Checkpoint{
+						Model:           intentModel,
+						StepCount:       globalStep,
+						LastProfile:     profile,
+						Commitment:      intentModel.CalculateCommitment(),
+						TokensProcessed: totalTokens,
+						TotalDuration:   totalDuration,
+						Version:         "gollemer-chat-v1.2-best",
+					}
 					if err := moe.SaveIntentMoECheckpoint(ckpt, bestMoePath); err != nil {
 						log.Printf("  Failed to save best MoE model: %v", err)
 					} else {
 						fmt.Printf(" New Best Model! PPL: %.2f (Saved to %s)\n", bestPPL, bestMoePath)
 						trainer.SaveGoldenCheckpoint(intentModel, stats, globalStep, profile, totalTokens, totalDuration)
 					}
-				}
-			} else if valPPL < bestPPL {
-				// Even if not a 20-epoch periodic save, we should still save the BEST model if it improves.
-				bestPPL = valPPL
-				patienceCounter = 0
-				ckpt := &moe.Checkpoint{
-					Model:           intentModel,
-					StepCount:       globalStep,
-					LastProfile:     profile,
-					Commitment:      intentModel.CalculateCommitment(),
-					TokensProcessed: totalTokens,
-					TotalDuration:   totalDuration,
-					Version:         "gollemer-chat-v1.2-best",
-				}
-				if err := moe.SaveIntentMoECheckpoint(ckpt, bestMoePath); err != nil {
-					log.Printf("  Failed to save best MoE model: %v", err)
 				} else {
-					fmt.Printf(" New Best Model! PPL: %.2f (Saved to %s)\n", bestPPL, bestMoePath)
-					trainer.SaveGoldenCheckpoint(intentModel, stats, globalStep, profile, totalTokens, totalDuration)
-				}
-			} else {
-				patienceCounter++
-				log.Printf("  No improvement for %d/%d epochs (best PPL=%.2f, current=%.2f)", patienceCounter, patienceLimit, bestPPL, valPPL)
-				if patienceCounter >= patienceLimit {
-					log.Printf(" Early stopping triggered after %d epochs without improvement.", patienceLimit)
-					// Restore best model weights from disk before stopping
-					if loaded, err := moe.LoadIntentMoEModelWithFallback(bestMoePath); err == nil {
-						intentModel = loaded
-						log.Printf(" Restored best model (PPL=%.2f) from %s", bestPPL, bestMoePath)
-					} else {
-						log.Printf("  Could not restore best model: %v", err)
+					patienceCounter++
+					log.Printf("  No improvement for %d/%d epochs (best PPL=%.2f, current=%.2f)", patienceCounter, patienceLimit, bestPPL, valPPL)
+					if patienceCounter >= patienceLimit {
+						log.Printf(" Early stopping triggered after %d epochs without improvement.", patienceLimit)
+						// Restore best model weights from disk before stopping
+						if loaded, err := moe.LoadIntentMoEModelWithFallback(bestMoePath); err == nil {
+							intentModel = loaded
+							log.Printf(" Restored best model (PPL=%.2f) from %s", bestPPL, bestMoePath)
+						} else {
+							log.Printf("  Could not restore best model: %v", err)
+						}
+						break
 					}
-					break
 				}
-			}
 			} // end of distMode != worker block
 		}
 
@@ -2596,35 +2596,35 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 	if distMode == "master" && distAddr != "" {
 		// 1. Initialize the network listener
 		listener := initMasterSocket(distAddr)
-		
-		// 2. CRITICAL: Do NOT run this in a 'go' routine. 
+
+		// 2. CRITICAL: Do NOT run this in a 'go' routine.
 		// Call it synchronously so it pauses execution until workers check in!
 		log.Printf("🌐 [Distributed] Entering cluster sync lock...")
-		
-		// This function must handle accepting connections and only return 
+
+		// This function must handle accepting connections and only return
 		// when the exact number of required workers are ready.
 		BlockAndRegisterWorkers(listener, ExpectedWorkers, intentModel)
-		
+
 		log.Printf("✅ [Distributed] Cluster established. Proceeding to dataset alignment.")
 	} else if distMode == "worker" && distAddr != "" {
 		log.Printf("🌐 [Distributed] Worker mode active. Connecting to master at %s...", distAddr)
-		
+
 		// CRITICAL: Block here until a connection is physically established
 		var conn net.Conn
 		var err error
-		
+
 		for {
 			conn, err = net.Dial("tcp", distAddr)
 			if err == nil {
 				break // Successfully connected!
 			}
-			
+
 			log.Printf("⏳ [Distributed] Master node not ready (%v). Retrying in 5 seconds...", err)
 			time.Sleep(5 * time.Second)
 		}
-		
+
 		log.Printf("✅ [Distributed] Connected to master! Shard synchronization initialized.")
-		
+
 		// Hand connection off to worker parameter loop
 		workerConnMutex.Lock()
 		workerConn = conn
@@ -3842,7 +3842,7 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 		//  SAVE PROGRESS MID-EPOCH (Reduced frequency)
 		if batchNum > 0 && batchNum%1000 == 0 {
 			intentModel.Detach()
-			
+
 			if distMode == "worker" && distAddr != "" {
 				SyncWithMaster(intentModel, distAddr)
 			} else {
@@ -4663,7 +4663,6 @@ func StrictGenerate(model *moe.IntentMoE, input string, maxLen int, repetitionPe
 		// Step 4: 4-gram repetition penalty.
 		// If any token would complete a 4-gram sequence that has already appeared
 		// >= 2 times in the generated history, heavily penalize it to break loops
-		// like "i am processing the concept of i am processing..."
 		if len(resIDs) >= 3 {
 			fourgrams := make(map[[3]int]int)
 			for j := 0; j+2 < len(resIDs); j++ {
@@ -5812,14 +5811,14 @@ func applyGrammarMask(logits *tensor.Tensor, tokenHistory []int, vocab *mainvoca
 		rule := moe.IntentRule{}
 		prevWord := vocab.GetWord(tokenHistory[len(tokenHistory)-2])
 		currWord := lastWord
-		
+
 		prevType := moe.MapWordToGrammarType(prevWord)
 		currType := moe.MapWordToGrammarType(currWord)
-		
+
 		for i := 0; i < len(logits.Data); i++ {
 			nextWord := vocab.GetWord(i)
 			nextType := moe.MapWordToGrammarType(nextWord)
-			
+
 			penalty := rule.EvaluateWindow(prevType, currType, nextType)
 			if penalty > 0 {
 				logits.Data[i] -= penalty * 5.0

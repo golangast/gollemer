@@ -62,13 +62,13 @@ func main() {
 
 			filename := fmt.Sprintf("dataset/audio/%s_%d.raw", intent, sampleNum)
 
-			fmt.Println("🔴 RECORDING NOW (1.5 seconds)...")
+			fmt.Println("🔴 RECORDING NOW (3.5 seconds)...")
 
-			// Record 1.5 seconds of audio at 16kHz to a raw file using ffmpeg
+			// Record 3.5 seconds of audio at 16kHz to a raw file using ffmpeg
 			cmd := exec.Command("ffmpeg",
 				"-y",
 				"-f", "alsa", "-i", "default",
-				"-t", "1.5",
+				"-t", "3.5",
 				"-ac", "1", "-ar", "16000",
 				"-f", "s16le", filename,
 			)

@@ -16,7 +16,7 @@ import (
 // ─────────────────────────────────────────────────────────────────────────────
 
 const SampleRate = 16000
-const DurationSeconds = 1
+const DurationSeconds = 3
 const NumSamples = SampleRate * DurationSeconds
 const FrameSize = 400 // 25ms per frame
 

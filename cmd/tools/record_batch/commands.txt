@@ -1,11 +1,27 @@
-# Add all the commands you want Gollemer to know here!
-# One command per line.
-TURN ON LIGHTS
-TURN OFF LIGHTS
-WHAT TIME IS IT
-PLAY MUSIC
-STOP MUSIC
+# Core System Commands
 GOLLEMER WAKE UP
 GO TO SLEEP
-NEXT TRACK
-MUTE VOLUME
+SHUT DOWN SYSTEM
+
+# Status and System Info
+STATUS REPORT
+ARE THERE UPDATES
+CHECK THE LOGS
+
+# Hardware and Actions
+TURN ON
+TURN OFF
+EXECUTE ACTION
+
+# Development and Coding
+AUDIT THE CODE
+RUN THE TESTS
+EXPLAIN THE LOGIC
+REFACTOR THIS
+
+# Conversational and Social
+WHO ARE YOU
+WHAT DO YOU DO
+HOW ARE YOU
+I NEED A FOLLOWUP
+THAT IS INTERESTING
