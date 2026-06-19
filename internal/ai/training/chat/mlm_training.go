@@ -43,20 +43,24 @@ func ComputeTokenWeights(sentences []MLMSentence, vocab *mainvocab.Vocabulary) [
 		// Inverse log-frequency weighting: 1.0 / log(freq + 1.1)
 		// AGGRESSIVE PENALTY: We square the log to heavily suppress 'the', 'a', 'to'
 		w := 1.0 / float32(math.Pow(math.Log(float64(counts[i])+1.1), 2.0))
-		
+
 		// Rare word boost: If it appears < 5 times, it is 10x more important
 		if counts[i] < 5 {
 			w *= 10.0
 		}
-		
+
 		weights[i] = w
 	}
 
 	// Normalize so mean weight is 1.0 (to keep loss scale comparable)
 	var sum float32
-	for _, w := range weights { sum += w }
+	for _, w := range weights {
+		sum += w
+	}
 	avg := sum / float32(vocabSize)
-	for i := range weights { weights[i] /= avg }
+	for i := range weights {
+		weights[i] /= avg
+	}
 
 	log.Printf("⚖️ Token Weighting: 'a' weight: %.4f | 'the' weight: %.4f | rarity boost active.", weights[vocab.GetTokenID("a")], weights[vocab.GetTokenID("the")])
 	return weights
@@ -80,7 +84,7 @@ func NewMLMHead(hiddenSize, vocabSize int) (*MLMHead, error) {
 	linear, _ := neuralnn.NewLinear(hiddenSize, vocabSize)
 	grammar, _ := neuralnn.NewLinear(hiddenSize, 10) // 10 categories
 	intent, _ := neuralnn.NewLinear(hiddenSize, 20)  // 20 intents
-	
+
 	// Initialize
 	InitializeHeNormal(linear.Weights)
 	InitializeHeNormal(grammar.Weights)
@@ -238,7 +242,7 @@ func (it *MLMDataIterator) NextBatch(batchSize int) *MLMBatch {
 		allOriginal = append(allOriginal, originalIDs)
 		allMasked = append(allMasked, maskedIDs)
 		allMaskPos = append(allMaskPos, maskPositions)
-		
+
 		intentID := float32(-1)
 		if it.intentToID != nil {
 			if id, ok := it.intentToID[sentence.Intent]; ok {
@@ -246,7 +250,7 @@ func (it *MLMDataIterator) NextBatch(batchSize int) *MLMBatch {
 			}
 		}
 		batchIntents = append(batchIntents, intentID)
-		
+
 		if len(tokens) > maxLen {
 			maxLen = len(tokens)
 		}
@@ -302,7 +306,9 @@ func MLMCrossEntropy(logits *tensor.Tensor, targets []int, maskPositions []float
 	// Track predictions in this batch to detect "Obsession" (like the 'raining' issue)
 	predCounts := make(map[int]int)
 	for i := 0; i < numPositions; i++ {
-		if maskPositions[i] < 0.5 { continue }
+		if maskPositions[i] < 0.5 {
+			continue
+		}
 		offset := i * vocabSize
 		row := logits.Data[offset : offset+vocabSize]
 		bestIdx := 0
@@ -317,8 +323,10 @@ func MLMCrossEntropy(logits *tensor.Tensor, targets []int, maskPositions []float
 	}
 
 	numWorkers := runtime.NumCPU()
-	if numWorkers > 16 { numWorkers = 16 }
-	jobs := make(chan struct{start, end int}, numWorkers)
+	if numWorkers > 16 {
+		numWorkers = 16
+	}
+	jobs := make(chan struct{ start, end int }, numWorkers)
 	var wg sync.WaitGroup
 	var lossMutex sync.Mutex
 
@@ -331,17 +339,27 @@ func MLMCrossEntropy(logits *tensor.Tensor, targets []int, maskPositions []float
 			var localCount float32
 			for jb := range jobs {
 				for i := jb.start; i < jb.end; i++ {
-					if maskPositions[i] < 0.5 { continue }
+					if maskPositions[i] < 0.5 {
+						continue
+					}
 					targetID := targets[i]
-					if targetID < 0 || targetID >= vocabSize { continue }
-					
+					if targetID < 0 || targetID >= vocabSize {
+						continue
+					}
+
 					weight := float32(1.0)
-					if tokenWeights != nil { weight = tokenWeights[targetID] }
+					if tokenWeights != nil {
+						weight = tokenWeights[targetID]
+					}
 
 					offset := i * vocabSize
 					row := logits.Data[offset : offset+vocabSize]
 					maxLogit := row[0]
-					for _, v := range row { if v > maxLogit { maxLogit = v } }
+					for _, v := range row {
+						if v > maxLogit {
+							maxLogit = v
+						}
+					}
 					var sumExp float32
 					for j, v := range row {
 						localSoftmax[j] = float32(math.Exp(float64(v - maxLogit)))
@@ -354,18 +372,21 @@ func MLMCrossEntropy(logits *tensor.Tensor, targets []int, maskPositions []float
 					predictedIdx := 0
 					maxP := float32(-1e9)
 					for j := 0; j < vocabSize; j++ {
-						if localSoftmax[j] > maxP { maxP = localSoftmax[j]; predictedIdx = j }
+						if localSoftmax[j] > maxP {
+							maxP = localSoftmax[j]
+							predictedIdx = j
+						}
 					}
 					if predCounts[predictedIdx] > 3 && predictedIdx != targetID {
 						obsessionPenalty = 8.0 // Heavy penalty for repeating the same wrong word (the 'raining' fix)
 					}
 
 					// --- HARD LINGUISTIC CONSTRAINTS ---
-					// If the target has a known grammar type, we suppress all logits 
+					// If the target has a known grammar type, we suppress all logits
 					// for tokens that DON'T match that type.
 					targetWord := vocab.GetWord(targetID)
 					targetType := moe.MapWordToGrammarType(targetWord)
-					
+
 					rule := moe.IntentRule{}
 					prevType := "BOS"
 					if i > 0 && targets[i-1] >= 0 {
@@ -375,16 +396,18 @@ func MLMCrossEntropy(logits *tensor.Tensor, targets []int, maskPositions []float
 					if i < numPositions-1 && targets[i+1] >= 0 {
 						nextType = moe.MapWordToGrammarType(vocab.GetWord(targets[i+1]))
 					}
-					
+
 					if targetType != "OTHER" {
 						for j := 0; j < vocabSize; j++ {
-							if j == targetID { continue }
+							if j == targetID {
+								continue
+							}
 							w_j := vocab.GetWord(j)
 							t_j := moe.MapWordToGrammarType(w_j)
 							if t_j != targetType {
 								logits.Data[offset+j] = -1e9 // HARD BLOCK
 							}
-							
+
 							// Tri-gram penalty on non-matching tokens
 							penalty := rule.EvaluateWindow(prevType, t_j, nextType)
 							if penalty > 0 {
@@ -396,7 +419,9 @@ func MLMCrossEntropy(logits *tensor.Tensor, targets []int, maskPositions []float
 					// Recalculate Softmax with masked logits
 					maxLogit = logits.Data[offset]
 					for j := 1; j < vocabSize; j++ {
-						if logits.Data[offset+j] > maxLogit { maxLogit = logits.Data[offset+j] }
+						if logits.Data[offset+j] > maxLogit {
+							maxLogit = logits.Data[offset+j]
+						}
 					}
 					sumExp = 0
 					for j := 0; j < vocabSize; j++ {
@@ -408,14 +433,16 @@ func MLMCrossEntropy(logits *tensor.Tensor, targets []int, maskPositions []float
 					// --- MULTI-TASK JOINT LOSS ---
 					prob := localSoftmax[targetID] * invSumExp
 					wordLoss := -float32(math.Log(float64(prob)+1e-10)) * confidence
-					
+
 					localLoss += wordLoss * weight * obsessionPenalty
 					localCount++
-					
+
 					for j := 0; j < vocabSize; j++ {
 						sj := localSoftmax[j] * invSumExp
 						targetProb := smoothingValue
-						if j == targetID { targetProb += confidence }
+						if j == targetID {
+							targetProb += confidence
+						}
 						grad.Data[offset+j] = weight * obsessionPenalty * (sj - targetProb)
 					}
 				}
@@ -430,8 +457,10 @@ func MLMCrossEntropy(logits *tensor.Tensor, targets []int, maskPositions []float
 	chunkSize := (numPositions + numWorkers - 1) / numWorkers
 	for i := 0; i < numPositions; i += chunkSize {
 		end := i + chunkSize
-		if end > numPositions { end = numPositions }
-		jobs <- struct{start, end int}{i, end}
+		if end > numPositions {
+			end = numPositions
+		}
+		jobs <- struct{ start, end int }{i, end}
 	}
 	close(jobs)
 	wg.Wait()
@@ -439,7 +468,9 @@ func MLMCrossEntropy(logits *tensor.Tensor, targets []int, maskPositions []float
 	if count > 0 {
 		avgLoss := totalLoss / count
 		invCount := float32(1.0) / count
-		for i := range grad.Data { grad.Data[i] *= invCount }
+		for i := range grad.Data {
+			grad.Data[i] *= invCount
+		}
 		return avgLoss, grad
 	}
 	return 0, grad
@@ -451,20 +482,30 @@ func RunMLMPreTraining(model *moe.IntentMoE, sentences []MLMSentence, mlmEpochs 
 	embeddingDim := model.EmbeddingDim
 	mlmHead, _ := NewMLMHead(embeddingDim, vocabSize)
 	for _, p := range mlmHead.Parameters() {
-		if len(p.Shape) > 1 { InitializeHeNormal(p) } else { for i := range p.Data { p.Data[i] = 0 } }
+		if len(p.Shape) > 1 {
+			InitializeHeNormal(p)
+		} else {
+			for i := range p.Data {
+				p.Data[i] = 0
+			}
+		}
 		p.RequiresGrad = true
 	}
-	if useGPU { mlmHead.Linear.ToGPU() }
+	if useGPU {
+		mlmHead.Linear.ToGPU()
+	}
 
 	allParams := make([]*tensor.Tensor, 0)
 	allParams = append(allParams, model.Embedding.Parameters()...)
 	allParams = append(allParams, model.Encoder.Parameters()...)
-	if model.EncoderNorm != nil { allParams = append(allParams, model.EncoderNorm.Parameters()...) }
+	if model.EncoderNorm != nil {
+		allParams = append(allParams, model.EncoderNorm.Parameters()...)
+	}
 	allParams = append(allParams, mlmHead.Parameters()...)
 	allParams = append(allParams, mlmHead.Intent.Parameters()...) // Include Intent head
-	
+
 	optimizer := neuralnn.NewOptimizer(allParams, learningRate, 0)
-	
+
 	// Create intent mapping
 	intentToID := make(map[string]int)
 	idToIntent := make(map[int]string)
@@ -482,10 +523,12 @@ func RunMLMPreTraining(model *moe.IntentMoE, sentences []MLMSentence, mlmEpochs 
 	iterator := NewMLMDataIterator(sentences, model.SentenceVocab, 0.15, intentToID)
 	iterator.maxLen = 80
 	model.SetMode(true)
-	
+
 	globalStep := model.StepCount
 	totalSteps := mlmEpochs * (len(sentences) / batchSize)
-	if totalSteps == 0 { totalSteps = 1000 }
+	if totalSteps == 0 {
+		totalSteps = 1000
+	}
 	var smoothLoss, smoothPPL float32
 	var accuracy float32
 	var intentAccuracy float32
@@ -501,28 +544,38 @@ func RunMLMPreTraining(model *moe.IntentMoE, sentences []MLMSentence, mlmEpochs 
 		batches := 0
 		for iterator.HasNext() {
 			batch := iterator.NextBatch(batchSize)
-			if batch == nil { continue }
+			if batch == nil {
+				continue
+			}
 			optimizer.ZeroGrad()
-			
+
 			// 1. Forward
 			encoderOutput, err := model.EncoderForward(batch.MaskedInput, batch.AttentionMask)
-			if err != nil { continue }
+			if err != nil {
+				continue
+			}
 			logits, err := mlmHead.Forward(encoderOutput)
-			if err != nil { continue }
-			
+			if err != nil {
+				continue
+			}
+
 			// Joint Task: Intent Classification
 			intentInput, _ := encoderOutput.Mean(1) // Average across sequence
 			intentLogits, err := mlmHead.Intent.Forward(intentInput)
-			
+
 			// 2. Loss
 			logits.ToCPU()
 			batchSz, seqLen := batch.OriginalIDs.Shape[0], batch.OriginalIDs.Shape[1]
 			targets := make([]int, batchSz*seqLen)
-			for j := range batch.OriginalIDs.Data { targets[j] = int(batch.OriginalIDs.Data[j]) }
-			
+			for j := range batch.OriginalIDs.Data {
+				targets[j] = int(batch.OriginalIDs.Data[j])
+			}
+
 			loss, grad := MLMCrossEntropy(logits, targets, batch.MaskPositions.Data, vocabSize, tokenWeights, model.SentenceVocab)
-			if loss > 100.0 { loss = 100.0 }
-			
+			if loss > 100.0 {
+				loss = 100.0
+			}
+
 			// Compute Intent Loss if labels are available
 			var intentLoss float32
 			var intentGrad *tensor.Tensor
@@ -539,15 +592,19 @@ func RunMLMPreTraining(model *moe.IntentMoE, sentences []MLMSentence, mlmEpochs 
 			}
 			if hasIntent {
 				intentWeights := make([]float32, 20)
-				for i := range intentWeights { intentWeights[i] = 1.0 }
-				
+				for i := range intentWeights {
+					intentWeights[i] = 1.0
+				}
+
 				intentGrad = tensor.NewTensor(intentLogits.Shape, make([]float32, len(intentLogits.Data)), false)
 				intentLogitsCPU := intentLogits.ToCPU()
 				var validCount float32
-				
+
 				for b := 0; b < batchSz; b++ {
-					if batchIntents[b] == -1 { continue }
-					
+					if batchIntents[b] == -1 {
+						continue
+					}
+
 					// Compute loss for this single row
 					rowLogits := tensor.NewTensor([]int{1, 20}, intentLogitsCPU.Data[b*20:(b+1)*20], false)
 					l, g := WeightedCrossEntropy(rowLogits, []int{batchIntents[b]}, intentWeights, 0.1, 0.005)
@@ -561,27 +618,37 @@ func RunMLMPreTraining(model *moe.IntentMoE, sentences []MLMSentence, mlmEpochs 
 					intentLoss /= validCount
 					loss += intentLoss * 0.5 // Weight for intent task
 				}
-				
+
 				// Track Intent Accuracy
 				var correct int
 				for b := 0; b < batchSz; b++ {
-					if batchIntents[b] == -1 { continue }
+					if batchIntents[b] == -1 {
+						continue
+					}
 					row := intentLogits.Data[b*20 : (b+1)*20]
-					if argMaxSlice(row) == batchIntents[b] { correct++ }
+					if argMaxSlice(row) == batchIntents[b] {
+						correct++
+					}
 				}
 				intentAccuracy = float32(correct) / validCount
 			}
-			
+
 			// 3. Backward
 			grad3D, _ := grad.Reshape(logits.Shape)
-			if useGPU { grad3D.ToGPU() }
-			if err := mlmHead.Backward(grad3D); err != nil { continue }
-			
+			if useGPU {
+				grad3D.ToGPU()
+			}
+			if err := mlmHead.Backward(grad3D); err != nil {
+				continue
+			}
+
 			if intentGrad != nil {
-				if useGPU { intentGrad.ToGPU() }
+				if useGPU {
+					intentGrad.ToGPU()
+				}
 				mlmHead.Intent.Backward(intentGrad)
 			}
-			
+
 			encoderGrad := mlmHead.Linear.Input().Grad
 			if intentGrad != nil && mlmHead.Intent.Input().Grad != nil {
 				// Accumulate gradient from intent head into encoder output
@@ -594,14 +661,14 @@ func RunMLMPreTraining(model *moe.IntentMoE, sentences []MLMSentence, mlmEpochs 
 					}
 				}
 			}
-			
+
 			if model.EncoderNorm != nil {
 				model.EncoderNorm.Backward(encoderGrad)
 				encoderGrad = model.EncoderNorm.Input().Grad
 			}
 			train.ClipParamGrads([][]float32{encoderGrad.Data}, maxGradNorm)
 			model.Encoder.Backward(encoderGrad)
-			
+
 			// Backpropagate through Positional Encoding
 			gradBeforePos := model.Encoder.Inputs()[0].Grad
 			if gradBeforePos != nil {
@@ -615,14 +682,22 @@ func RunMLMPreTraining(model *moe.IntentMoE, sentences []MLMSentence, mlmEpochs 
 					model.Embedding.Backward(gradBeforePos)
 				}
 			}
-			
+
 			// Clipping and Step
 			allComponentParams := [][]*tensor.Tensor{model.Embedding.Parameters(), model.Encoder.Parameters(), mlmHead.Parameters(), mlmHead.Intent.Parameters()}
-			if model.EncoderNorm != nil { allComponentParams = append(allComponentParams, model.EncoderNorm.Parameters()) }
+			if model.EncoderNorm != nil {
+				allComponentParams = append(allComponentParams, model.EncoderNorm.Parameters())
+			}
 			for _, params := range allComponentParams {
 				grads := make([][]float32, 0)
-				for _, p := range params { if p.Grad != nil { grads = append(grads, p.Grad.Data) } }
-				if len(grads) > 0 { train.ClipParamGrads(grads, maxGradNorm) }
+				for _, p := range params {
+					if p.Grad != nil {
+						grads = append(grads, p.Grad.Data)
+					}
+				}
+				if len(grads) > 0 {
+					train.ClipParamGrads(grads, maxGradNorm)
+				}
 			}
 			// 🛡️ Parameter Stabilization (MLM)
 			if globalStep%5 == 0 {
@@ -630,18 +705,30 @@ func RunMLMPreTraining(model *moe.IntentMoE, sentences []MLMSentence, mlmEpochs 
 			}
 			optimizer.Step()
 			optimizer.SetLearningRate(train.GetLR(globalStep, totalSteps, learningRate))
-			if useGPU { for _, p := range allParams { p.SyncToDevice() } }
+			if useGPU {
+				for _, p := range allParams {
+					p.SyncToDevice()
+				}
+			}
 
-			if smoothLoss == 0 { smoothLoss = loss } else { smoothLoss = 0.9*smoothLoss + 0.1*loss }
-			
+			if smoothLoss == 0 {
+				smoothLoss = loss
+			} else {
+				smoothLoss = 0.9*smoothLoss + 0.1*loss
+			}
+
 			// --- PREDICTIVE ACCURACY TRACKING (MLM) ---
 			var correct int
 			var total int
 			logits.ToCPU()
 			for i := range targets {
-				if targets[i] < 0 || targets[i] >= vocabSize { continue }
-				if batch.MaskPositions.Data[i] < 0.5 { continue }
-				
+				if targets[i] < 0 || targets[i] >= vocabSize {
+					continue
+				}
+				if batch.MaskPositions.Data[i] < 0.5 {
+					continue
+				}
+
 				offset := i * vocabSize
 				bestIdx := 0
 				bestVal := float32(-1e9)
@@ -651,28 +738,36 @@ func RunMLMPreTraining(model *moe.IntentMoE, sentences []MLMSentence, mlmEpochs 
 						bestIdx = j
 					}
 				}
-				if bestIdx == targets[i] { correct++ }
+				if bestIdx == targets[i] {
+					correct++
+				}
 				total++
 			}
 			accuracy = float32(0)
-			if total > 0 { accuracy = float32(correct) / float32(total) }
+			if total > 0 {
+				accuracy = float32(correct) / float32(total)
+			}
 
-			if globalStep % 50 == 0 {
+			if globalStep%50 == 0 {
 				smoothPPL = float32(math.Exp(float64(smoothLoss)))
 				log.Printf("🎓 MLM Step %d | Loss: %.4f | Accuracy: %.2f%% (Intent: %.2f%%) | PPL: %.1f", globalStep, loss, accuracy*100, intentAccuracy*100, smoothPPL)
 				logMLMPrediction(model, mlmHead, batch, vocabSize, useGPU)
 			}
-			
-			model.ClearState(); mlmHead.ClearState(); DetachMLMModel(model, mlmHead)
-			epochLoss += loss; batches++; globalStep++
-			
-			if globalStep % 500 == 0 && savePath != "" {
+
+			model.ClearState()
+			mlmHead.ClearState()
+			DetachMLMModel(model, mlmHead)
+			epochLoss += loss
+			batches++
+			globalStep++
+
+			if globalStep%500 == 0 && savePath != "" {
 				model.StepCount = globalStep
 				ckpt := &moe.Checkpoint{Model: model, StepCount: globalStep, Version: "mlm"}
 				moe.SaveIntentMoECheckpoint(ckpt, savePath)
 			}
 		}
-		
+
 		log.Printf("🧪 MLM PROBE [Epoch %d]", epoch+1)
 		RunMLMProbe(model, mlmHead, "[Intent: social] how are [mask] today", "you")
 		RunMLMProbe(model, mlmHead, "[Intent: social] i am [mask] [mask] today", "doing", "fine")
@@ -688,7 +783,7 @@ func RunMLMPreTraining(model *moe.IntentMoE, sentences []MLMSentence, mlmEpochs 
 		log.Printf("   HOW TO FIX IT: We are increasing 'Inverse Frequency Weights'.")
 		log.Printf("   This forces the experts to ignore common filler and ")
 		log.Printf("   actually look at the sentence context to find rare words.")
-		
+
 		if accuracy > 0.30 {
 			log.Printf("   🚀 STATUS: The Experts have broken the Frequency Trap!")
 			log.Printf("      Model is now predicting specific content words.")
@@ -708,10 +803,14 @@ func RunMLMPreTraining(model *moe.IntentMoE, sentences []MLMSentence, mlmEpochs 
 }
 
 func isPunctuation(t string) bool {
-	if len(t) == 0 { return false }
+	if len(t) == 0 {
+		return false
+	}
 	if len(t) > 1 {
 		// Check if it's a common punctuation like '...'
-		if t == "..." || t == "--" { return true }
+		if t == "..." || t == "--" {
+			return true
+		}
 		return false
 	}
 	r := rune(t[0])
@@ -739,7 +838,8 @@ func RunMLMProbe(model *moe.IntentMoE, mlmHead *MLMHead, template string, expect
 	expectedIdx := 0
 	for i, t := range tokens {
 		id := lookupVocab(t, model.SentenceVocab)
-		maskedIDs[i] = float32(id); originalIDs[i] = id
+		maskedIDs[i] = float32(id)
+		originalIDs[i] = id
 		if t == "[mask]" {
 			maskIndices = append(maskIndices, i)
 			maskedIDs[i] = float32(model.SentenceVocab.GetTokenID(MaskToken))
@@ -756,20 +856,23 @@ func RunMLMProbe(model *moe.IntentMoE, mlmHead *MLMHead, template string, expect
 		row := output.Data[idx*model.SentenceVocabSize : (idx+1)*model.SentenceVocabSize]
 		log.Printf("    🔍 Probe '%s' → Expected: '%s' | Predicted: '%s'", template, model.SentenceVocab.GetWord(originalIDs[idx]), model.SentenceVocab.GetWord(argMaxSlice(row)))
 	}
-	model.ClearState(); mlmHead.ClearState()
+	model.ClearState()
+	mlmHead.ClearState()
 }
 
 func logMLMPrediction(model *moe.IntentMoE, mlmHead *MLMHead, batch *MLMBatch, vocabSize int, useGPU bool) {
-	model.SetMode(false); defer model.SetMode(true)
+	model.SetMode(false)
+	defer model.SetMode(true)
 	for j := 0; j < batch.MaskedInput.Shape[1]; j++ {
 		if batch.MaskPositions.Data[j] > 0.5 {
 			logits, _ := model.EncoderForward(batch.MaskedInput, batch.AttentionMask)
-			output, _ := mlmHead.Forward(logits); output.ToCPU()
+			output, _ := mlmHead.Forward(logits)
+			output.ToCPU()
 			row := output.Data[j*vocabSize : (j+1)*vocabSize]
-			
+
 			targetWord := model.SentenceVocab.GetWord(int(batch.OriginalIDs.Data[j]))
 			predWord := model.SentenceVocab.GetWord(argMaxSlice(row))
-			
+
 			targetType := moe.MapWordToGrammarType(targetWord)
 			predType := moe.MapWordToGrammarType(predWord)
 
@@ -783,12 +886,27 @@ func logMLMPrediction(model *moe.IntentMoE, mlmHead *MLMHead, batch *MLMBatch, v
 			break
 		}
 	}
-	model.ClearState(); mlmHead.ClearState()
+	model.ClearState()
+	mlmHead.ClearState()
 }
 
 func DetachMLMModel(model *moe.IntentMoE, mlmHead *MLMHead) {
-	for _, p := range model.Parameters() { if p != nil { p.Creator = nil; p.Mask = nil; p.Operation = nil } }
-	if mlmHead != nil { for _, p := range mlmHead.Parameters() { if p != nil { p.Creator = nil; p.Mask = nil; p.Operation = nil } } }
+	for _, p := range model.Parameters() {
+		if p != nil {
+			p.Creator = nil
+			p.Mask = nil
+			p.Operation = nil
+		}
+	}
+	if mlmHead != nil {
+		for _, p := range mlmHead.Parameters() {
+			if p != nil {
+				p.Creator = nil
+				p.Mask = nil
+				p.Operation = nil
+			}
+		}
+	}
 	model.ClearState()
 }
 
@@ -796,8 +914,14 @@ func ExtractMLMSentences(pairs []moe.TrainPair) []MLMSentence {
 	seen := make(map[string]bool)
 	var sentences []MLMSentence
 	for _, pair := range pairs {
-		if pair.Q != "" && !seen[pair.Q] { seen[pair.Q] = true; sentences = append(sentences, MLMSentence{Text: pair.Q, Intent: pair.Intent}) }
-		if pair.A != "" && !seen[pair.A] { seen[pair.A] = true; sentences = append(sentences, MLMSentence{Text: pair.A, Intent: pair.Intent}) }
+		if pair.Q != "" && !seen[pair.Q] {
+			seen[pair.Q] = true
+			sentences = append(sentences, MLMSentence{Text: pair.Q, Intent: pair.Intent})
+		}
+		if pair.A != "" && !seen[pair.A] {
+			seen[pair.A] = true
+			sentences = append(sentences, MLMSentence{Text: pair.A, Intent: pair.Intent})
+		}
 	}
 	return sentences
 }

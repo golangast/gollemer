@@ -1,0 +1,21 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Gollemer LLM",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "${workspaceFolder}/cmd/tools/train_moe/main.go",
+            "args": [
+                "-llm",
+                "-talk",
+                "-listen"
+            ],
+            "env": {
+                "GOMEMLIMIT": "4000MiB",
+                "GOGC": "100"
+            }
+        }
+    ]
+}

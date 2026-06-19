@@ -148,6 +148,7 @@ func (r *Runner) Init() {
 
 	// Initialize Intent Resolver
 	r.Client = &GollemerMoEClient{
+		KB:             r.KB, // CRITICAL: wire KB so ExtractEntities doesn't nil-panic
 		Model:          r.IntentModel,
 		SocialModel:    socialModel,
 		W2V:            r.W2V, // CRITICAL: wire W2V so getSentenceEmbedding doesn't nil-panic
@@ -408,6 +409,9 @@ func (r *Runner) Run() {
 		r.Mascot.ShowMascot(mood)
 
 		query := <-inputChan
+
+		log.Printf("🔍 [Raw Input]: %s", query)
+
 		query = strings.TrimSpace(query)
 
 		// Convert voice commands like TURN_ON_LIGHTS to "turn on lights"

@@ -1062,10 +1062,17 @@ func (s *Supervisor) SeedSystemExperts(model *IntentMoE) {
 			s.SetExpertVariables(model, lIdx, i, 0.5, 1.0)
 		}
 
-		// Force specialized routing for grammatical tokens
-		s.SetExpertVariables(model, lIdx, 9, 0.8, 1.0)  // Bias E9 toward VERB/AUX
-		s.SetExpertVariables(model, lIdx, 10, 0.8, 1.0) // Bias E10 toward PRON
-		s.SetExpertVariables(model, lIdx, 13, 0.8, 1.0) // Bias E13 toward CONJ/PREP
+		// Apply specialised routing biases only when the layer is large enough.
+		// These experts are spawned dynamically, so smaller layers simply skip them.
+		if len(layer.Experts) > 9 {
+			s.SetExpertVariables(model, lIdx, 9, 0.8, 1.0) // E9 → VERB/AUX
+		}
+		if len(layer.Experts) > 10 {
+			s.SetExpertVariables(model, lIdx, 10, 0.8, 1.0) // E10 → PRON
+		}
+		if len(layer.Experts) > 13 {
+			s.SetExpertVariables(model, lIdx, 13, 0.8, 1.0) // E13 → CONJ/PREP
+		}
 	}
 	log.Printf("🧬 [Supervisor] SeedSystemExperts complete. Seeded structural experts with OutputScale=0.5, LRMult=1.0, Pinned=true across all %d layers.", len(layers))
 }

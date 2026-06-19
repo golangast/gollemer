@@ -12,9 +12,9 @@ import (
 )
 
 var (
-	syncMutex        sync.Mutex
-	workerConn       net.Conn
-	workerConnMutex  sync.Mutex
+	syncMutex       sync.Mutex
+	workerConn      net.Conn
+	workerConnMutex sync.Mutex
 )
 
 // Global or structural variable to track expected cluster size
@@ -36,7 +36,7 @@ func resolveListenAddr(addr string) string {
 // initMasterSocket normalizes the address and returns a bound TCP listener.
 func initMasterSocket(addr string) net.Listener {
 	listenAddr := resolveListenAddr(addr)
-	
+
 	// Helper to extract port for display
 	displayPort := listenAddr
 	if strings.HasPrefix(displayPort, ":") {
@@ -53,7 +53,7 @@ func initMasterSocket(addr string) net.Listener {
 	log.Printf("   -dist-mode=worker -dist-addr=<MASTER_IP>:%s", displayPort)
 	log.Printf("   (Replace <MASTER_IP> with this machine's actual network IP if on another device)")
 	log.Printf("===================================================================\n")
-	
+
 	listener, err := net.Listen("tcp", listenAddr)
 	if err != nil {
 		log.Fatalf("failed to bind master server to %s: %v", listenAddr, err)
@@ -75,9 +75,9 @@ func BlockAndRegisterWorkers(listener net.Listener, expectedCount int, model *mo
 		}
 
 		connected++
-		log.Printf("🌐 [Distributed] Worker %d/%d successfully joined cluster from %s", 
+		log.Printf("🌐 [Distributed] Worker %d/%d successfully joined cluster from %s",
 			connected, expectedCount, conn.RemoteAddr().String())
-		
+
 		// Hand the active connection off to your background shard manager
 		wg.Add(1)
 		go handleWorkerSync(conn, &wg, model)
@@ -122,7 +122,7 @@ func handleWorkerSync(conn net.Conn, wg *sync.WaitGroup, model *moe.IntentMoE) {
 		syncMutex.Unlock()
 
 		log.Printf("🌐 [Distributed] Master successfully received and averaged %d weights from worker at %s.", len(receivedWeights), conn.RemoteAddr())
-		
+
 		// Send ACK
 		ack := []byte("OK")
 		conn.Write(ack)

@@ -227,10 +227,10 @@ func loadTrainedHead() (*moe.AudioEncoder, *moe.TemporalEncoder, []float32, []fl
 // This is called in a goroutine when the acoustic model is uncertain (conf 0.75–0.98).
 func whisperAutoTeach(frames [][]float32, aw *AudioWindow, ae *moe.AudioEncoder, te *moe.TemporalEncoder, headW, headB []float32) {
 	const (
-		whisperBin   = "/tmp/whisper.cpp/build/bin/whisper-cli"
-		whisperModel = "/tmp/whisper.cpp/models/ggml-tiny.en.bin"
-		rawTmp       = "dataset/audio/live_teach_temp.raw"
-		wavTmp       = "dataset/audio/live_teach_temp.wav"
+		whisperBin   = "/home/zendrulat/g/gollemer/build_whisper/whisper.cpp/build/bin/whisper-cli"
+		whisperModel = "/home/zendrulat/g/gollemer/build_whisper/whisper.cpp/models/ggml-tiny.en.bin"
+		rawTmp       = "dataset/audio/live_phrase_temp.raw"
+		wavTmp       = "dataset/audio/live_phrase_temp.wav"
 	)
 
 	if _, err := os.Stat(whisperBin); os.IsNotExist(err) {
@@ -331,9 +331,23 @@ func StartVoiceListener(ctx context.Context, inputChan chan<- string) {
 		return
 	}
 
-	aw := NewAudioWindow(120, ae, te, headW, headB, classNames, prototypes)
+	switch len(classNames) {
+	case 0:
+		log.Println("⚠️  No voice commands loaded (empty command list)")
+	case 1:
+		log.Printf("⚠️  Only %d voice command loaded — audio input will be very unreliable", len(classNames))
+	default:
+		log.Printf("✅ Audio command set size: %d commands", len(classNames))
+	}
+
+	// 200 frames * 25ms = 5000ms (5 seconds) window capacity
+	aw := NewAudioWindow(200, ae, te, headW, headB, classNames, prototypes)
 	ticker := time.NewTicker(25 * time.Millisecond)
 	defer ticker.Stop()
+
+	// NEW state variables to control phrase endings
+	var silenceFrames int
+	var isUserSpeaking bool
 
 	for {
 		select {
@@ -349,43 +363,109 @@ func StartVoiceListener(ctx context.Context, inputChan chan<- string) {
 				rms := getRMS(frame)
 				aw.Push(frame)
 
-				if aw.Ready() && rms > EnergyThreshold && atomic.LoadInt32(&isSpeaking) == 0 {
-					intent, conf := aw.Classify()
-
-					if conf > 0.98 && intent != "SILENCE" && intent != "NOISE" && intent != "UNKNOWN_SPEECH" && intent != "BLANK_AUDIO" {
-						// High confidence — fire the command
-						log.Printf("\n🤖 [Voice] Heard: %s (Confidence: %.2f)", intent, conf)
-						inputChan <- intent
-
-						// Hard cooldown: flush window + buffer, sleep 4s
-						aw.mu.Lock()
-						aw.filled = 0
-						aw.mu.Unlock()
-						ab.mu.Lock()
-						ab.samples = ab.samples[:0]
-						ab.mu.Unlock()
-						time.Sleep(4 * time.Second)
-
-					} else if conf > 0.93 {
-						// Medium-high confidence — heard real speech but uncertain.
-						// Run Whisper in the background to auto-teach the new phrase.
-						log.Printf("\n🤔 [Voice] Uncertain (best: %s, conf: %.2f) — auto-teaching via Whisper...", intent, conf)
-						snapshot := aw.GetOrderedSequence()
-						go whisperAutoTeach(snapshot, aw, ae, te, headW, headB)
-
-						// Flush and pause to avoid re-triggering on the same audio
-						aw.mu.Lock()
-						aw.filled = 0
-						aw.mu.Unlock()
-						ab.mu.Lock()
-						ab.samples = ab.samples[:0]
-						ab.mu.Unlock()
-						time.Sleep(4 * time.Second)
+				// Track Voice Activity Detection (VAD) states
+				if rms > EnergyThreshold {
+					silenceFrames = 0
+					if !isUserSpeaking && atomic.LoadInt32(&isSpeaking) == 0 {
+						isUserSpeaking = true
 					}
+				} else {
+					silenceFrames++
+				}
+
+				// Trigger criteria:
+				// 1. The structural buffer must be full (5 seconds of data context)
+				// 2. The user must have *started* speaking previously
+				// 3. The user must have been quiet for 32 straight frames (~800ms pause)
+				// 4. The system is not currently generating an LLM response output
+				if aw.Ready() && isUserSpeaking && silenceFrames >= 32 && atomic.LoadInt32(&isSpeaking) == 0 {
+
+					log.Printf("\n🎤 [Voice] Phrase ended. Transcribing whole sequence via Whisper...")
+
+					// 1. Snapshot the complete audio window frames safely
+					snapshot := aw.GetOrderedSequence()
+
+					// 2. Process transcription concurrently or synchronously to feed the LLM
+					go func(frames [][]float32) {
+						// We borrow your existing file creation and CLI parsing logic
+						// but pipe it back to your LLM's text communication channel.
+						textTranscript := transcribeFullPhrase(frames)
+
+						if textTranscript != "" {
+							log.Printf("🤖 [Voice Transcribed]: \"%s\"", textTranscript)
+							inputChan <- textTranscript // Sends "who are you..." straight to the LLM
+						}
+					}(snapshot)
+
+					// 3. Reset pipeline states completely
+					isUserSpeaking = false
+					silenceFrames = 0
+
+					aw.mu.Lock()
+					aw.filled = 0
+					aw.mu.Unlock()
+
+					ab.mu.Lock()
+					ab.samples = ab.samples[:0]
+					ab.mu.Unlock()
+					continue
 				}
 			} else {
 				ab.mu.Unlock()
 			}
 		}
 	}
+}
+
+func transcribeFullPhrase(frames [][]float32) string {
+	const (
+		whisperBin   = "/home/zendrulat/g/gollemer/build_whisper/whisper.cpp/build/bin/whisper-cli"
+		whisperModel = "/home/zendrulat/g/gollemer/build_whisper/whisper.cpp/models/ggml-tiny.en.bin"
+		rawTmp       = "dataset/audio/live_phrase_temp.raw"
+		wavTmp       = "dataset/audio/live_phrase_temp.wav"
+	)
+
+	if _, err := os.Stat(whisperBin); os.IsNotExist(err) {
+		log.Println("⚠️ Whisper binary not found. Cannot translate voice.")
+		return ""
+	}
+
+	_ = os.MkdirAll("dataset/audio", 0755)
+
+	// Write buffer down to disk
+	f, err := os.Create(rawTmp)
+	if err != nil {
+		return ""
+	}
+	for _, frame := range frames {
+		for _, s := range frame {
+			sample16 := int16(s * 32768.0)
+			_ = binary.Write(f, binary.LittleEndian, sample16)
+		}
+	}
+	f.Close()
+
+	// Resample header wrapper via ffmpeg
+	exec.Command("ffmpeg", "-y", "-f", "s16le", "-ar", "16000", "-ac", "1", "-i", rawTmp, wavTmp).Run()
+
+	// Call local whisper model execution
+	devNull, _ := os.Open(os.DevNull)
+	defer devNull.Close()
+	wCmd := exec.Command(whisperBin, "-m", whisperModel, "-f", wavTmp, "-nt")
+	wCmd.Stderr = devNull
+	out, err := wCmd.Output()
+	if err != nil {
+		return ""
+	}
+
+	// Sanitize multi-line logs down to standard string text sentences
+	var parts []string
+	for _, line := range strings.Split(string(out), "\n") {
+		t := strings.TrimSpace(line)
+		if t != "" {
+			parts = append(parts, t)
+		}
+	}
+
+	return strings.Join(parts, " ")
 }

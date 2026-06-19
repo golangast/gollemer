@@ -5,53 +5,42 @@ import (
 	"sync"
 )
 
-// CosineDecay calculates the next temperature based on the current progress.
-func CosineDecay(step, maxSteps int, tMax, tMin float32) float32 {
-	if step >= maxSteps {
-		return tMin
-	}
-	// T_cur = T_min + 0.5 * (T_max - T_min) * (1 + cos(pi * step / maxSteps))
-	ratio := float32(step) / float32(maxSteps)
-	return tMin + 0.5*(tMax-tMin)*(1+float32(math.Cos(math.Pi*float64(ratio))))
-}
-
+// ThawScheduler gradually unfreezes model layers as training progresses.
 type ThawScheduler struct {
-	mu          sync.Mutex
-	CurrentStep int
-	MaxSteps    int
-	StartTemp   float32
-	MinTemp     float32
-	// LayerThresholds maps a Temp to a Layer index to "thaw"
-	LayerThresholds []float32
+	mu         sync.Mutex
+	Step       int
+	MaxSteps   int
+	StartTemp  float32
+	MinTemp    float32
+	Thresholds []float32 // Thresholds map a temp to a layer index to thaw.
 }
 
-// Next calculates the next temperature using exponential decay and returns the number of active layer clusters.
+// Next advances the scheduler and returns the new temperature and number of active layers.
 func (s *ThawScheduler) Next() (float32, int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.CurrentStep < s.MaxSteps {
-		s.CurrentStep++
+	if s.Step < s.MaxSteps {
+		s.Step++
 	}
 
-	// Exponential Decay calculation: Temp = Initial * e^(-decayRate * step)
-	// decayRate 0.001 ensures we cool down over the first ~1k steps.
-	const decayRate = 0.001
-	temp := s.StartTemp * float32(math.Exp(-decayRate*float64(s.CurrentStep)))
+	// Exponential decay: temp = start * e^(-rate * step)
+	const rate = 0.001
+	temp := s.StartTemp * float32(math.Exp(-rate*float64(s.Step)))
 	if temp < s.MinTemp {
 		temp = s.MinTemp
 	}
 
-	// Layer clusters are thawed as the network "cools" and becomes more certain.
-	// We reverse the logic here: smaller temp means more experts are thawed (matured).
-	activeLayers := 0
-	for _, threshold := range s.LayerThresholds {
-		if temp <= threshold {
-			activeLayers++
+	active := 0
+	for _, t := range s.Thresholds {
+		if temp <= t {
+			active++
 		}
 	}
-	// Sanity floor: always at least 2 Experts (1 Cluster)
-	if activeLayers == 0 { activeLayers = 1 }
 
-	return temp, activeLayers
+	if active == 0 {
+		active = 1
+	}
+
+	return temp, active
 }
