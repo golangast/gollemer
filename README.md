@@ -61,6 +61,33 @@ Gollemer models can dynamically scale their brain capacity during curriculum lea
 *   **Staggered Triage (Expert Surgery)**: It monitors expert health based on an L2 norm and utilization score. Collapsed or dead experts are triaged and refreshed by cloning the "alpha" (strongest) expert with subtle mutation, while maintaining a ceiling (healing ≤50% per layer) to protect learned sequences.
 *   **Active Capacity Eviction**: To prevent memory explosion and out-of-memory (OOM) failures, layers are capped (e.g., 64 experts max). The supervisor evicts the lowest-performing dynamic experts using LRU/health tracking (`EvictLeastActive` or `ForceEvictLowestUtility`), while keeping foundational system experts (E0–E7 representing locked structural grammatical roles like `PRON`, `VERB`, `AUX`) permanently pinned and protected.
 
+## 🔌 Dynamic Expert Cartridges
+
+Gollemer supports **dynamic, hot-swappable expert cartridges** (.cartridge) for memory-constrained environments. Instead of keeping a massive trillion-parameter model in VRAM, Gollemer loads lightweight intent-specific "cartridges" from disk straight into active MoE layers precisely when the user's intent requires them.
+
+### 1. Zero-Copy I/O and LRU Pooling
+To prevent Garbage Collection (GC) pauses during cartridge swaps, Gollemer avoids allocating temporary decoding slices. 
+- **Zero-Copy Streaming**: Engine memory is managed via a global `sync.Pool`. Tensors from the `.cartridge` binary file are streamed directly into pre-allocated memory blocks.
+- **LRU Warm Cache**: A Least-Recently Used (LRU) cache keeps the last $N$ (default: 3) activated cartridges warm in RAM to eliminate latency when bouncing between conversational topics. Unused experts are instantly recycled back into the `sync.Pool`.
+
+### 2. Dual-Triage Streaming Classifier
+Gollemer identifies which cartridge to hot-swap **mid-sentence** while the user is still typing, utilizing an Always-On Dual-Triage method:
+1. **Zero-Latency Keyword Map**: An O(1) dictionary routing path for explicit intents (e.g., matching "git commit" immediately to the `coding` cartridge).
+2. **Tiny Semantic Matrix**: A ultra-lightweight cosine-similarity vector layer that routes nuanced semantic phrasing to the appropriate cartridge when explicit keywords fail.
+
+### 3. The Standardized `.cartridge` Format & CLI
+Cartridges are strictly typed binary files. They start with a standard header (`GLMR_CRT`, Engine Version, 32-byte Namespace identifier, and Tensor Dimensions), enabling a modular open ecosystem.
+
+You can compile any trained `FeedForwardExpert` `.gob` snapshot into a shareable `.cartridge` module using the built-in compiler:
+
+```bash
+# Compile a raw weights file into a standardized cartridge
+go run ./cmd/tools/compile_cartridge/main.go \
+    -weights="data/models/gob_models/coding_experts.gob" \
+    -namespace="coding" \
+    -out="data/models/intents/coding.cartridge"
+```
+
 ---
 
 ## ⚡ Quick Start

@@ -36,6 +36,10 @@ type Supervisor struct {
 	DisableDataEvolution bool           // When true, skip corpus mutation entirely
 	mu                   sync.Mutex
 	CartridgeMgr         *CartridgeManager
+
+	// Always-On Triage Classifier
+	KeywordMap map[string]string    // Fast exact routing: keyword -> namespace
+	TinyMatrix map[string][]float32 // Semantic routing: namespace -> small embedding
 }
 
 // ExpertOverride holds per-expert variable overrides set by the supervisor.
@@ -51,14 +55,72 @@ func NewSupervisor() *Supervisor {
 	att, _ := nn.NewMultiHeadAttention(64, 1, 1)
 	judge, _ := nn.NewLinear(64, 1)
 
-	return &Supervisor{
+	sup := &Supervisor{
 		BestPerplexity:    1e9,
 		TemporalAttention: att,
 		GrammarJudge:      judge,
 		FailureLogs:       make(map[string]int),
 		expertOverrides:   make(map[int]map[int]*ExpertOverride),
 		CartridgeMgr:      NewCartridgeManager(),
+		KeywordMap: map[string]string{
+			"medical":  "data/models/intents/medical.cartridge",
+			"health":   "data/models/intents/medical.cartridge",
+			"doctor":   "data/models/intents/medical.cartridge",
+			"database": "data/models/intents/database.cartridge",
+			"sql":      "data/models/intents/database.cartridge",
+			"query":    "data/models/intents/database.cartridge",
+			"git":      "data/models/intents/coding.cartridge",
+			"go test":  "data/models/intents/coding.cartridge",
+			"code":     "data/models/intents/coding.cartridge",
+		},
+		TinyMatrix: make(map[string][]float32),
 	}
+	return sup
+}
+
+// TriageCartridge performs a fast dual-pass classification to determine
+// the optimal intent namespace before loading a heavy model.
+func (s *Supervisor) TriageCartridge(query string, queryEmbedding []float32) string {
+	queryLower := strings.ToLower(query)
+
+	// Pass 1: Regex/Keyword Map (Zero Latency)
+	for keyword, namespace := range s.KeywordMap {
+		if strings.Contains(queryLower, keyword) {
+			return namespace
+		}
+	}
+
+	// Pass 2: Tiny Embedding Matrix (Cosine Similarity)
+	if len(queryEmbedding) > 0 && len(s.TinyMatrix) > 0 {
+		bestNamespace := ""
+		var bestScore float32 = -1.0
+
+		for namespace, emb := range s.TinyMatrix {
+			if len(emb) != len(queryEmbedding) {
+				continue
+			}
+			var dotProduct, normA, normB float32
+			for i := range queryEmbedding {
+				dotProduct += queryEmbedding[i] * emb[i]
+				normA += queryEmbedding[i] * queryEmbedding[i]
+				normB += emb[i] * emb[i]
+			}
+			if normA > 0 && normB > 0 {
+				score := dotProduct / (float32(math.Sqrt(float64(normA))) * float32(math.Sqrt(float64(normB))))
+				if score > bestScore {
+					bestScore = score
+					bestNamespace = namespace
+				}
+			}
+		}
+
+		// Threshold for semantic match
+		if bestScore > 0.7 {
+			return bestNamespace
+		}
+	}
+
+	return "" // No cartridge matched
 }
 
 // Reflect nudges variables (LR, Noise, Temperature) based on training stats.
