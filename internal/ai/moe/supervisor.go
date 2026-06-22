@@ -2,6 +2,7 @@ package moe
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"log"
 	"math"
@@ -62,7 +63,23 @@ func NewSupervisor() *Supervisor {
 		FailureLogs:       make(map[string]int),
 		expertOverrides:   make(map[int]map[int]*ExpertOverride),
 		CartridgeMgr:      NewCartridgeManager(),
-		KeywordMap: map[string]string{
+		KeywordMap:        make(map[string]string),
+		TinyMatrix:        make(map[string][]float32),
+	}
+	
+	// Load cartridge keyword mappings from JSON file
+	configPath := "data/config/cartridges.json"
+	data, err := os.ReadFile(configPath)
+	if err == nil {
+		var mappings map[string]string
+		if err := json.Unmarshal(data, &mappings); err == nil {
+			sup.KeywordMap = mappings
+		} else {
+			log.Printf("⚠️ Failed to parse cartridges.json: %v", err)
+		}
+	} else {
+		// Create default mappings if file doesn't exist
+		sup.KeywordMap = map[string]string{
 			"medical":  "data/models/intents/medical.cartridge",
 			"health":   "data/models/intents/medical.cartridge",
 			"doctor":   "data/models/intents/medical.cartridge",
@@ -72,9 +89,14 @@ func NewSupervisor() *Supervisor {
 			"git":      "data/models/intents/coding.cartridge",
 			"go test":  "data/models/intents/coding.cartridge",
 			"code":     "data/models/intents/coding.cartridge",
-		},
-		TinyMatrix: make(map[string][]float32),
+		}
+		// Try to save it for future edits
+		if jsonData, err := json.MarshalIndent(sup.KeywordMap, "", "  "); err == nil {
+			os.MkdirAll("data/config", 0755)
+			os.WriteFile(configPath, jsonData, 0644)
+		}
 	}
+	
 	return sup
 }
 

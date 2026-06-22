@@ -255,6 +255,16 @@ func (l *LinearExpert) GetID() int {
 	return -1
 }
 
+func (l *LinearExpert) GetContext() []float32 {
+	return []float32{l.ActivationEMA}
+}
+
+func (l *LinearExpert) RestoreContext(ctx []float32) {
+	if len(ctx) > 0 {
+		l.ActivationEMA = ctx[0]
+	}
+}
+
 func (m *MoEEncoder) RepairArchitecture() {
 	if m.Layer != nil {
 		m.Layer.RepairArchitecture()

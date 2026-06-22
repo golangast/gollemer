@@ -88,6 +88,56 @@ go run ./cmd/tools/compile_cartridge/main.go \
     -out="data/models/intents/coding.cartridge"
 ```
 
+
+Step 1: Use the -data flag to point the trainer at your computer.csv file.
+
+```bash
+go run ./cmd/tools/train_moe -train-social -data "data/training/trainingdata/computer/computer.csv" -epochs 100
+```
+
+This updates data/models/gob_models/moe_social_model.gob with the newly learned computer capabilities.
+
+Step 2: Extract the Trained Expert
+I have created a new CLI tool for you called extract_cartridge. It isolates a single trained expert from the full model checkpoint so it can be packaged:
+
+```bash
+go run ./cmd/tools/extract_cartridge/main.go \
+    -model="data/models/gob_models/moe_social_model.gob" \
+    -expert-index=3 \
+    -out="data/models/intents/computer_expert.gob"
+```
+
+- `-expert-index=3`: Targets the 4th expert (index 3). Adjust this number if you want a different expert (e.g., 4 for the 5th expert).
+- This creates a clean `computer_expert.gob` file containing only the weights for that specific expert, ready to be used by the Supervisor or Cartridge Loader.
+
+Step 3: Compile into a Standardized .cartridge
+Use the compiler tool to wrap the raw weights into the highly optimized .cartridge specification, assigning it the computer namespace:
+
+```bash
+go run ./cmd/tools/compile_cartridge/main.go \
+    -weights="data/models/gob_models/computer_expert.gob" \
+    -namespace="computer" \
+    -out="data/models/intents/computer.cartridge"
+```
+
+Step 4: Add the Routing Metadata (Zero Code Changes)
+Open the newly generated file data/config/cartridges.json. Add your keywords mapped to the new cartridge path so Gollemer knows exactly when to hot-swap it into RAM:
+
+```json
+{
+  "create file": "data/models/intents/computer.cartridge",
+  "touch": "data/models/intents/computer.cartridge",
+  "make file": "data/models/intents/computer.cartridge",
+  "directory": "data/models/intents/computer.cartridge",
+  "folder": "data/models/intents/computer.cartridge",
+  "medical": "data/models/intents/medical.cartridge",
+  "database": "data/models/intents/database.cartridge"
+}
+```
+
+Now, the moment a user types "how do i create a file", the Always-On Triage Classifier will instantly match the keyword, hot-swap computer.cartridge directly into the neural network using the zero-copy buffer pool, and route the generation through your newly trained expert!
+
+
 ---
 
 ## ⚡ Quick Start
