@@ -35,9 +35,10 @@ type CartridgeManager struct {
 	Mu       sync.Mutex
 	Loaded   map[string]Expert
 
-	// LRU Cache
-	lruOrder []string
-	MaxWarm  int
+	// LRU Cache & Centralized Context Pager
+	lruOrder     []string
+	MaxWarm      int
+	ContextPager map[string][]float32
 }
 
 // Global slice pool to prevent GC trashing when swapping cartridges.
@@ -65,9 +66,10 @@ func putSlice(s []float32) {
 
 func NewCartridgeManager() *CartridgeManager {
 	cm := &CartridgeManager{
-		requests: make(chan CartridgeRequest, 10),
-		Loaded:   make(map[string]Expert),
-		MaxWarm:  3, // Default to keeping 3 cartridges warm in memory
+		requests:     make(chan CartridgeRequest, 10),
+		Loaded:       make(map[string]Expert),
+		MaxWarm:      3, // Default to keeping 3 cartridges warm in memory
+		ContextPager: make(map[string][]float32),
 	}
 	go cm.loop()
 	return cm
@@ -94,6 +96,13 @@ func (cm *CartridgeManager) loop() {
 
 			cm.Mu.Lock()
 			cm.Loaded[req.Path] = expert
+			
+			// Re-inflate context if we have paged it out previously
+			if ctx, exists := cm.ContextPager[req.Path]; exists {
+				expert.RestoreContext(ctx)
+				log.Printf("🧠 Cartridge Manager: Re-inflated memory context for %s", req.Path)
+			}
+
 			cm.markUsed(req.Path)
 			cm.evictLRU()
 			cm.Mu.Unlock()
@@ -102,10 +111,13 @@ func (cm *CartridgeManager) loop() {
 		case "unload":
 			cm.Mu.Lock()
 			if expert, exists := cm.Loaded[req.Path]; exists {
+				// Page out context
+				cm.ContextPager[req.Path] = expert.GetContext()
+				
 				cm.recycleExpert(expert)
 				delete(cm.Loaded, req.Path)
 				cm.removeFromLRU(req.Path)
-				log.Printf("🎮 Cartridge Manager: UnLoaded cartridge %s from RAM to save memory.", req.Path)
+				log.Printf("🎮 Cartridge Manager: UnLoaded cartridge %s from RAM. Context paged out.", req.Path)
 			}
 			cm.Mu.Unlock()
 			req.Response <- nil
@@ -131,9 +143,12 @@ func (cm *CartridgeManager) evictLRU() {
 	for len(cm.Loaded) > cm.MaxWarm && len(cm.lruOrder) > 0 {
 		oldest := cm.lruOrder[0]
 		if expert, exists := cm.Loaded[oldest]; exists {
+			// Page out context before eviction
+			cm.ContextPager[oldest] = expert.GetContext()
+
 			cm.recycleExpert(expert)
 			delete(cm.Loaded, oldest)
-			log.Printf("🧹 Cartridge Manager: LRU Evicted cartridge %s from RAM.", oldest)
+			log.Printf("🧹 Cartridge Manager: LRU Evicted %s. Context paged out to Supervisor buffer.", oldest)
 		}
 		cm.lruOrder = cm.lruOrder[1:]
 	}

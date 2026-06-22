@@ -320,3 +320,13 @@ func (e *InternalExpert) SyncParameters() error {
 func (e *InternalExpert) GetID() int {
 	return e.ID
 }
+
+func (e *InternalExpert) GetContext() []float32 {
+	return []float32{e.health}
+}
+
+func (e *InternalExpert) RestoreContext(ctx []float32) {
+	if len(ctx) > 0 {
+		e.health = ctx[0]
+	}
+}

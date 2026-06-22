@@ -282,3 +282,23 @@ func (ge *GrammarExpert) SeedGrammarBias(vocabSize int, tokenToWord []string) {
 func (ge *GrammarExpert) GetID() int {
 	return ge.ID
 }
+
+func (e *GrammarExpert) GetContext() []float32 {
+	if e.ContextMemory != nil && len(e.ContextMemory.Data) > 0 {
+		ctx := make([]float32, len(e.ContextMemory.Data)+1)
+		ctx[0] = e.health
+		copy(ctx[1:], e.ContextMemory.Data)
+		return ctx
+	}
+	return []float32{e.health}
+}
+
+func (e *GrammarExpert) RestoreContext(ctx []float32) {
+	if len(ctx) == 0 {
+		return
+	}
+	e.health = ctx[0]
+	if e.ContextMemory != nil && len(ctx) == len(e.ContextMemory.Data)+1 {
+		copy(e.ContextMemory.Data, ctx[1:])
+	}
+}

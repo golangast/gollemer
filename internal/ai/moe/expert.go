@@ -54,4 +54,10 @@ type Expert interface {
 
 	// GetID returns the expert's unique ID.
 	GetID() int
+
+	// GetContext extracts the expert's temporal/hidden state for paging out.
+	GetContext() []float32
+
+	// RestoreContext re-inflates the expert's temporal/hidden state after paging in.
+	RestoreContext(ctx []float32)
 }

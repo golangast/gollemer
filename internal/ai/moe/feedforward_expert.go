@@ -293,3 +293,13 @@ func (e *FeedForwardExpert) Resize(newOutputDim int) {
 func (e *FeedForwardExpert) GetID() int {
 	return -1
 }
+
+func (e *FeedForwardExpert) GetContext() []float32 {
+	return []float32{e.ActivationEMA}
+}
+
+func (e *FeedForwardExpert) RestoreContext(ctx []float32) {
+	if len(ctx) > 0 {
+		e.ActivationEMA = ctx[0]
+	}
+}
