@@ -9,9 +9,11 @@ export GOEXPERIMENT=simd
 export CGO_ENABLED=1
 
 # Runtime Tuning
-MEM_LIMIT = 5000MiB
-GOGC      = 50
-MAIN_CMD  = go run cmd/tools/train_moe/main.go
+MEM_LIMIT    = 7000MiB
+GOGC         = 90
+GOMAXPROCS   = 8
+TRAIN_BIN    = ./.build/gollemer-train
+MAIN_CMD     = go run cmd/tools/train_moe/main.go
 
 .PHONY: train train-social chat clean help \
         build-pi build-pi64 pi pi-social pi-chat pi-llm \
@@ -22,12 +24,12 @@ MAIN_CMD  = go run cmd/tools/train_moe/main.go
 ## train: Start a fresh Social Curriculum training (clears old state)
 train: clean
 	@echo "🚀 Starting Fresh Social Curriculum Training..."
-	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) $(MAIN_CMD) -train-social
+	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-social
 
 ## train-social: Resume existing Social Curriculum training
 train-social:
 	@echo "🚀 Resuming Social Curriculum Training..."
-	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) $(MAIN_CMD) -train-social
+	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-social
 
 # --- Interaction ---
 

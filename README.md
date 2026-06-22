@@ -16,6 +16,7 @@ Gollemer is a high-performance **Mixture of Experts (MoE)** neural network frame
   - **Expert Health Monitoring**: Real-time tracking of expert utilization and saturation.
   - **Context Multiplier**: Enhanced signal strength for maintaining long-range conversational threads.
 - **Sequence Awareness**: Integrated **Positional Encoding** in the MoE encoder to solve bag-of-words limitations.
+- **Word2Vec Semantic Pre-training**: Initializes the embedding layer using Word2Vec to eliminate random weight initialization and provide a strong semantic baseline.
 - **Advanced Training Pipeline**:
   - **Social Curriculum**: Specialized training for natural, diverse human-like interaction.
   - **Scheduled Sampling**: Smooth transition from teacher-forcing to self-generated sequence learning.
@@ -41,7 +42,8 @@ By eliminating heavy external libraries like **Rust-based backends**, **Python r
 The most advanced capability of Gollemer is its **Adaptive Supervisor** (`internal/ai/moe/supervisor.go`), an autonomous orchestrator that manages a real-time feedback loop during training. Instead of static hyperparameters and a fixed layout, the supervisor actively monitors, heals, and expands the network architecture dynamically.
 
 ### 1. Dynamic Config Tuning & Real-Time Reflection
-The supervisor continuously reflects on training statistics (`Reflect` / `ReflectSparse`):
+The supervisor continuously reflects on training statistics (`Reflect` / `ReflectSparse`), assisted by an **Autonomous AI Supervisor Loop**:
+*   **Local Qwen Teacher Auditing**: A local Qwen model acts as a teacher to monitor training logs, inject historical epoch performance data, identify mode collapse ("SALAD" output), and dynamically patch hyperparameters in real-time.
 *   **Anti-Monopoly Jitter**: If a single expert monopolizes traffic (dominance >85%), the supervisor automatically increases router noise and temperature to force expert exploration and restore healthy specialization.
 *   **Plateau Decay**: If training plateaus (perplexity or loss fails to improve for 500–1000 steps), it autonomously decays the global learning rate (`opt.SetLearningRate`) to safely guide weights into a stable minimum.
 *   **Confidence Restoration**: If routing confidence falls below a safe threshold (e.g., 18%), it nudges router temperature upward to prevent repetitive "word salad" patterns.
@@ -87,8 +89,9 @@ make train
 Chat with your trained model using the interactive shell.
 
 ```bash
-# Launch the interactive assistant
-make llm
+# Launch the interactive assistant (with text, voice listening, and TTS output enabled)
+make chat
+# or use 'make llm'
 ```
 
 ---
@@ -138,7 +141,8 @@ go run cmd/tools/voice_capture/main.go
 
 - Requires `ffmpeg` and an ALSA microphone (`default` device).
 - Falls back to a simulated silence stream if no microphone is available.
-- Prints detected intents with confidence scores; suppresses low-confidence and silence results.
+- **Speaking-Mute Mechanism**: Automatically silences the microphone listener during LLM Text-to-Speech output to prevent self-triggering and audio-feedback loops.
+- **Smart Filtering**: Prints detected intents with confidence scores (threshold >= 0.93); suppresses low-confidence, silence, and high-frequency garbage phrases (e.g., `BLANK_AUDIO`).
 
 ```
 🎧 Listening...

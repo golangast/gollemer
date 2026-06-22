@@ -1,0 +1,101 @@
+input	intent	role_action	role_target	role_device	
+Hey assistant, take a photo with the camera and tell me what you see.	CAMERA_CAPTURE_ANALYZE	take	photo	camera	
+Snap a quick picture right now using the web cam.	CAMERA_CAPTURE	Snap	picture	web cam	
+Activate the video feed and scan the room for people.	CAMERA_ANALYZE_ENVIRONMENT	Activate	video feed	camera	
+Turn up the speaker volume because it is too quiet in here.	AUDIO_VOLUME_UP	Turn up	volume	speaker	
+Mute the microphone immediately.	MICROPHONE_MUTE	Mute	microphone	microphone	
+Can you record a ten second audio clip using your mic?	AUDIO_RECORD	record	audio clip	mic	
+Play the alert chime through the audio jack.	AUDIO_PLAYBACK	Play	alert chime	audio jack	
+Shut down the camera module to save power.	CAMERA_DISABLE	Shut down	camera module	camera	
+Unmute your microphone and listen for my commands.	MICROPHONE_UNMUTE	Unmute	microphone	microphone	
+Lower the sound output on your speakers to level three.	AUDIO_VOLUME_DOWN	Lower	sound output	speakers	
+Capture a snapshot and save the image file to the disk.	CAMERA_CAPTURE_SAVE	Capture	snapshot	camera	
+Check the microphone sensitivity and tell me if it is working.	MICROPHONE_STATUS_CHECK	Check	sensitivity	microphone	
+Broadcast this text message through the loud speaker.	AUDIO_SPEECH_SYNTHESIS	Broadcast	text message	loud speaker	
+Initialize the camera peripheral and start streaming data.	CAMERA_ENABLE	Initialize	camera peripheral	camera	
+Stop recording sound right now.	AUDIO_RECORD_STOP	Stop	recording sound	microphone	
+Maximize the speaker volume to full capacity.	AUDIO_VOLUME_MAX	Maximize	volume	speaker	
+Analyze the visual matrix from the camera sensor for color detection.	CAMERA_ANALYZE_COLOR	Analyze	visual matrix	camera sensor	
+Listen closely for any background noises in the room.	MICROPHONE_MONITOR	Listen	background noises	microphone	
+Pause all audio playback channels instantly.	AUDIO_PLAYBACK_PAUSE	Pause	audio playback channels	speaker	
+Take a photo right now and verify if it is blurry.	CAMERA_CAPTURE_QUALITY_CHECK	Take	photo	camera	
+Quiet down the audio output by fifty percent.	AUDIO_VOLUME_DOWN	Quiet down	audio output	speaker	
+Disable the mic hardware lines.	MICROPHONE_DISABLE	Disable	hardware lines	mic	
+Capture a five second video snippet using the Pi camera.	CAMERA_RECORD_VIDEO	Capture	video snippet	Pi camera	
+Test the audio system by playing a test frequency sound.	AUDIO_TEST	Test	test frequency sound	audio system	
+Look through the camera lens and identify any text on the paper.	CAMERA_OCR_READ	Look	text on the paper	camera lens	
+Increase audio output amplitude via the speakers.	AUDIO_VOLUME_UP	Increase	amplitude	speakers	
+Verify if the usb microphone is properly registered in the system.	MICROPHONE_HARDWARE_CHECK	Verify	registration	usb microphone	
+Read out the current system diagnostics through the audio output device.	AUDIO_SPEECH_DIAGNOSTICS	Read out	system diagnostics	audio output device	
+Take a picture with the infrared camera mode.	CAMERA_CAPTURE_IR	Take	picture	infrared camera	
+Adjust the mic gain level up by ten points.	MICROPHONE_GAIN_UP	Adjust	mic gain level	mic	
+Silence all speakers on this device node.	AUDIO_MUTE	Silence	speakers	speakers	
+Record environmental audio data until I tell you to stop.	AUDIO_RECORD_STREAM	Record	environmental audio data	microphone	
+Use the camera lens to scan the QR code in front of you.	CAMERA_SCAN_QR	Use	QR code	camera lens	
+Resume the voice synthesis pipeline output stream.	AUDIO_PLAYBACK_RESUME	Resume	voice synthesis pipeline output stream	speaker	
+Check if the video capture device is blocked or covered.	CAMERA_OBSTRUCTION_CHECK	Check	obstruction	video capture device	
+Drop the sound level down to absolute zero.	AUDIO_VOLUME_MIN	Drop	sound level	speaker	
+Listen closely for the wake word through the external mic.	MICROPHONE_LISTEN_WAKEWORD	Listen	wake word	external mic	
+Snap a photo using high resolution settings on the camera matrix.	CAMERA_CAPTURE_HD	Snap	photo	camera matrix	
+Reboot the sound subsystem driver lines.	AUDIO_DRIVER_RESTART	Reboot	driver lines	sound subsystem	
+Run an object tracking algorithm through the camera pipeline.	CAMERA_TRACK_OBJECT	Run	object tracking algorithm	camera pipeline	
+Lower the microphone input sensitivity threshold.	MICROPHONE_GAIN_DOWN	Lower	input sensitivity threshold	microphone	
+Generate a verbal response using the internal sound board.	AUDIO_SPEAK	Generate	verbal response	sound board	
+Take a rapid succession of three photos with the main camera.	CAMERA_BURST_CAPTURE	Take	three photos	main camera	
+Check the power consumption draw of the connected camera board.	CAMERA_POWER_CHECK	Check	power consumption draw	camera board	
+Open the audio pipeline capture gate for real time processing.	MICROPHONE_OPEN_STREAM	Open	audio pipeline capture gate	microphone	
+Play a high pitch beep sequence through the piezo speaker.	AUDIO_PLAY_BEEP	Play	high pitch beep sequence	piezo speaker	
+Adjust camera exposure levels to compensate for low lighting conditions.	CAMERA_EXPOSURE_ADJUST	Adjust	exposure levels	camera	
+Is the built in microphone array receiving any signal frequencies?	MICROPHONE_SIGNAL_CHECK	Check	signal frequencies	microphone array	
+Set speaker sound balance levels to the center position.	AUDIO_BALANCE_CENTER	Set	sound balance levels	speaker	
+Capture an image target from the video device and process human faces.	CAMERA_FACE_DETECTION	Capture	image target	video device	
+Kill the active voice recording subprocess immediately.	AUDIO_RECORD_KILL	Kill	voice recording subprocess	microphone	
+Announce the current epoch training loss parameters over the speaker mesh.	AUDIO_SPEECH_TRAINING_STATUS	Announce	epoch training loss parameters	speaker mesh	
+Switch the current video device feed to the secondary usb camera lens.	CAMERA_SWITCH_DEVICE	Switch	video device feed	usb camera lens	
+Boost the microphone line in gain parameters matrix.	MICROPHONE_BOOST_GAIN	Boost	line in gain parameters matrix	microphone	
+Turn off the speaker output amplification path.	AUDIO_DISABLE_OUTPUT	Turn off	amplification path	speaker	
+Analyze the frame buffers from the video input for structural motion vectors.	CAMERA_MOTION_DETECTION	Analyze	frame buffers	video input	
+Test the hardware speaker configuration by emitting a audio sweeping sweep.	AUDIO_SWEEP_TEST	Test	audio sweeping sweep	hardware speaker	
+Close down the camera hardware device stream handle.	CAMERA_CLOSE_STREAM	Close down	device stream handle	camera hardware device	
+Amplify your verbal feedback voice level over the main horn speaker.	AUDIO_VOLUME_BOOST	Amplify	verbal feedback voice level	horn speaker	
+Check if the microphone interface is dropping raw audio wave packets.	MICROPHONE_PACKET_CHECK	Check	raw audio wave packets	microphone interface	
+Take a photo frame and determine if the light environment is too bright.	CAMERA_CHECK_LUX	Take	photo frame	camera	
+Stop the audio output stream from playing sound waves.	AUDIO_PLAYBACK_STOP	Stop	audio output stream	speaker	
+Route the raw microphone buffer input straight into the network model pipeline.	MICROPHONE_ROUTE_TO_PIPELINE	Route	raw microphone buffer input	microphone	
+Change the camera frame recording resolution to 640 by 480 pixels.	CAMERA_SET_RESOLUTION	Change	frame recording resolution	camera	
+Output an acoustic audio notification alert through the connected headphones.	AUDIO_PLAY_NOTIFICATION	Output	acoustic audio notification alert	headphones	
+Check if the video sensor hardware array is running hot.	CAMERA_TEMPERATURE_CHECK	Check	hardware array	video sensor	
+Purge the data cache buffer for the microphone audio system loop.	MICROPHONE_BUFFER_PURGE	Purge	data cache buffer	microphone audio system loop	
+Raise speaker volume limits by twenty percentage marks.	AUDIO_VOLUME_UP_STEP	Raise	volume limits	speaker	
+Utilize the camera system to count how many visual objects are present.	CAMERA_COUNT_OBJECTS	Utilize	visual objects	camera system	
+Engage the microphone noise cancellation algorithms right now.	MICROPHONE_ENABLE_FILTER	Engage	noise cancellation algorithms	microphone	
+Send a speech warning voice packet to the speaker bus lines.	AUDIO_PLAY_WARNING	Send	speech warning voice packet	speaker bus lines	
+Take a photo file via the wide angle camera apparatus.	CAMERA_CAPTURE_WIDE	Take	photo file	wide angle camera apparatus	
+Is the external sound box receiving data packets from the device?	AUDIO_OUTPUT_STATUS_CHECK	Check	data packets	sound box	
+Temporarily suspend the processing loop for incoming microphone sound streams.	MICROPHONE_STREAM_SUSPEND	Temporarily suspend	processing loop	microphone	
+Adjust the digital focus mechanics on the camera sensor rig.	CAMERA_FOCUS_ADJUST	Adjust	digital focus mechanics	camera sensor rig	
+Lower the speech synthesis cadence rate over the sound card output.	AUDIO_SET_SPEECH_SPEED	Lower	speech synthesis cadence rate	sound card output	
+Initialize a voice calibration algorithm sequence via the main audio microphone.	MICROPHONE_CALIBRATE	Initialize	voice calibration algorithm sequence	audio microphone	
+Execute an environment color balance initialization via the camera driver frame stack.	CAMERA_WHITE_BALANCE	Execute	color balance initialization	camera driver frame stack	
+Cycle power states for the audio output sound board chips.	AUDIO_HARDWARE_RESET	Cycle	power states	sound board chips	
+Capture a raw image matrix and verify if structural depth edges can be found.	CAMERA_EDGE_DETECTION	Capture	raw image matrix	camera	
+Drop the sound processing collection window frame size down on the microphone.	MICROPHONE_SET_WINDOW	Drop	sound processing collection window frame size	microphone	
+Pipe the token output sequences text string direct to the speaker driver.	AUDIO_STREAM_TEXT_TO_VOICE	Pipe	token output sequences text string	speaker driver	
+Check if the video capture lenses have accumulated dust patterns.	CAMERA_LENS_DIAGNOSTIC	Check	dust patterns	video capture lenses	
+Unmute the primary sound output channel loop instantly.	AUDIO_UNMUTE	Unmute	sound output channel loop	speaker	
+Kill the listening background loops running inside the microphone controller framework.	MICROPHONE_SHUTDOWN_LOOP	Kill	listening background loops	microphone controller framework	
+Take an image capture frame to evaluate human gaze vector angles.	CAMERA_GAZE_TRACKING	Take	image capture frame	camera	
+Play back the last audio chunk segment recorded by the system node.	AUDIO_PLAYBACK_LAST_CHUNK	Play back	audio chunk segment	speaker	
+Verify that the microphone device kernel driver paths are open for read access.	MICROPHONE_DRIVER_VERIFY	Verify	driver paths	microphone device	
+Run an active luminosity scaling calculation routine over the camera input array.	CAMERA_BRIGHTNESS_CALC	Run	luminosity scaling calculation routine	camera input array	
+Deactivate sound frequency synthesis operations completely across all audio speaker blocks.	AUDIO_TERMINATE_ALL	Deactivate	sound frequency synthesis operations	speaker blocks	
+Listen through the headset microphone line for high frequency user audio signals.	MICROPHONE_LISTEN_HEADSET	Listen	high frequency user audio signals	headset microphone line	
+Snap a photo frame file using the internal monochrome camera mode settings.	CAMERA_CAPTURE_MONO	Snap	photo frame file	monochrome camera	
+Set the hardware audio internal master volume control node to forty percent capacity.	AUDIO_SET_VOLUME_VALUE	Set	master volume control node	audio	
+Check if the microphone preamp hardware path is experiencing digital clipping distortions.	MICROPHONE_CLIPPING_CHECK	Check	clipping distortions	microphone preamp hardware path	
+Trigger an environment visual landscape mapping sweep via the matrix camera setup.	CAMERA_VAM_SWEEP	Trigger	environment visual landscape mapping sweep	matrix camera setup	
+Broadcast an alarm signal tone sequence via the sound transducer hardware unit.	AUDIO_PLAY_ALARM	Broadcast	alarm signal tone sequence	sound transducer hardware unit	
+Switch the microphone hardware channel selector to capture input signals in mono mode.	MICROPHONE_SET_MONO	Switch	channel selector	microphone hardware	
+Take a photo image matrix with the camera and run a face clustering categorization rule.	CAMERA_FACE_CLUSTER	Take	photo image matrix	camera	
+Reduce the speaker volume down by two steps.	AUDIO_VOLUME_DOWN_STEP	Reduce	volume	speaker	
+Flush the raw sample sequence array stored inside the microphone driver queue.	MICROPHONE_QUEUE_FLUSH	Flush	raw sample sequence array	microphone driver queue	

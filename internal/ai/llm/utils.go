@@ -322,41 +322,48 @@ func levenshteinDistance(s1, s2 string) int {
 
 // cleanTokenize splits text into tokens, separating punctuation.
 func cleanTokenize(text string) []string {
-	var tokens []string
-	var currentToken strings.Builder
+	// Fast path: if the text contains a special hardware token pattern, protect it.
+	// We'll extract them, clean the rest, and re-insert them.
+	words := strings.Fields(text)
+	var finalTokens []string
 
-	for _, r := range text {
-		if unicode.IsSpace(r) {
-			if currentToken.Len() > 0 {
-				tokens = append(tokens, strings.ToLower(currentToken.String()))
-				currentToken.Reset()
-			}
-		} else if unicode.IsPunct(r) || unicode.IsSymbol(r) {
-			if (r == '\'' || r == '_') && currentToken.Len() > 0 {
-				currentToken.WriteRune(r)
-			} else if r == '_' {
-				// Allow starting underscores for special tokens like __intent__
-				currentToken.WriteRune(r)
+	for _, word := range words {
+		// If it's a bracketed token like <INTENT_CAMERA> or <ACT_TAKE> or <DEV_CAMERA>, keep it verbatim!
+		if strings.HasPrefix(word, "<") && strings.HasSuffix(word, ">") &&
+			(strings.Contains(word, "INTENT_") || strings.Contains(word, "ACT_") || strings.Contains(word, "DEV_")) {
+			finalTokens = append(finalTokens, word) // Do not lowercase or split
+			continue
+		}
+
+		// Otherwise do the standard char-by-char split
+		var currentToken strings.Builder
+		for _, r := range word {
+			if unicode.IsPunct(r) || unicode.IsSymbol(r) {
+				if (r == '\'' || r == '_') && currentToken.Len() > 0 {
+					currentToken.WriteRune(r)
+				} else if r == '_' {
+					currentToken.WriteRune(r)
+				} else {
+					if currentToken.Len() > 0 {
+						finalTokens = append(finalTokens, strings.ToLower(currentToken.String()))
+						currentToken.Reset()
+					}
+					if r < 128 {
+						finalTokens = append(finalTokens, string(r))
+					}
+				}
 			} else {
-				if currentToken.Len() > 0 {
-					tokens = append(tokens, strings.ToLower(currentToken.String()))
-					currentToken.Reset()
+				if r < 128 || unicode.IsLetter(r) {
+					currentToken.WriteRune(r)
 				}
-				// Skip non-ASCII symbols to keep the model context clean
-				if r < 128 {
-					tokens = append(tokens, string(r))
-				}
-			}
-		} else {
-			if r < 128 || unicode.IsLetter(r) { // Allow UTF-8 letters but keep symbols clean
-				currentToken.WriteRune(r)
 			}
 		}
+		if currentToken.Len() > 0 {
+			finalTokens = append(finalTokens, strings.ToLower(currentToken.String()))
+		}
 	}
-	if currentToken.Len() > 0 {
-		tokens = append(tokens, strings.ToLower(currentToken.String()))
-	}
-	return tokens
+
+	return finalTokens
 }
 
 func detectWebserverName(projectRoot string) string {

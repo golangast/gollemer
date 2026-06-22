@@ -28,6 +28,8 @@ import (
 	"github.com/golangast/gollemer/internal/ai/orchestrator"
 	"github.com/golangast/gollemer/internal/ai/train"
 	"github.com/golangast/gollemer/internal/ai/training"
+	"github.com/golangast/gollemer/internal/pipeline"
+	"github.com/golangast/gollemer/internal/tokenizer"
 )
 
 func TrainChat(projectRoot string, customDataPath string, rebalanceRequested bool, overfitMode bool, initialLR float32, weightDecay float32, autoHeal bool, maxGradNorm float32, useGPU bool, batchSize int, accumulationSteps int, piMode bool, distMode string, distAddr string) {
@@ -404,7 +406,7 @@ skipCSV:
 	// Adjust MoE settings for training
 	for _, layer := range moe.ActiveLayers {
 		layer.CapacityFactor = 1.5
-		layer.LoadBalancingWeight = 0.15 // Increased to force expert exploration and avoid collapse
+		layer.LoadBalancingWeight = 0.05 // Enforced distribution uniformity without being overly aggressive
 		layer.RouterTemperature = 1.5    // Increased to 1.5 to flatten softmax
 		layer.ExpertDropoutRate = 0.1    // Reduced dropout to prevent UNK collapse
 		layer.SetMode(true)              // Enable training mode (noise)
@@ -1112,17 +1114,35 @@ skipCSV:
 			var batchLoss float32 = 0.0
 			var grads []*tensor.Tensor
 
+			ansTokenID := intentModel.SentenceVocab.GetTokenID("__ans__")
+			padTokenID := intentModel.SentenceVocab.PaddingTokenID
+			currentBatchSize := targetTensor.Shape[0]
+			seqLen := targetTensor.Shape[1]
+
+			ansIndices := make([]int, currentBatchSize)
+			for b := 0; b < currentBatchSize; b++ {
+				ansIndices[b] = -1
+				for t := 0; t < seqLen; t++ {
+					if int(targetTensor.Data[b*seqLen+t]) == ansTokenID {
+						ansIndices[b] = t
+						break
+					}
+				}
+			}
+
 			if len(logits) == 1 && len(logits[0].Shape) == 3 {
 				// Vectorized 3D loss
 				l := logits[0]
 				// Target for loss is the sequence shifted by 1 (ignoring BOS at index 0)
-				currentBatchSize := targetTensor.Shape[0]
-				seqLen := targetTensor.Shape[1]
 				targetSeqLen := seqLen - 1
 				targets := make([]int, currentBatchSize*targetSeqLen)
 				for b := 0; b < currentBatchSize; b++ {
 					for t := 0; t < targetSeqLen; t++ {
-						targets[b*targetSeqLen+t] = int(targetTensor.Data[b*seqLen+t+1])
+						if ansIndices[b] != -1 && (t+1) <= ansIndices[b] {
+							targets[b*targetSeqLen+t] = padTokenID
+						} else {
+							targets[b*targetSeqLen+t] = int(targetTensor.Data[b*seqLen+t+1])
+						}
 					}
 				}
 
@@ -1136,14 +1156,16 @@ skipCSV:
 			} else {
 				// Sequence of logits (Step-by-step path used for scheduled sampling)
 				grads = make([]*tensor.Tensor, len(logits))
-				currentBatchSize := targetTensor.Shape[0]
-				seqLen := targetTensor.Shape[1]
 				var stepLossTotal float32 = 0.0
 				for t, logit := range logits {
 					// Target for this step is AIDs[t+1]
 					targets := make([]int, currentBatchSize)
 					for b := 0; b < currentBatchSize; b++ {
-						targets[b] = int(targetTensor.Data[b*seqLen+t+1])
+						if ansIndices[b] != -1 && (t+1) <= ansIndices[b] {
+							targets[b] = padTokenID
+						} else {
+							targets[b] = int(targetTensor.Data[b*seqLen+t+1])
+						}
 					}
 					l, g := WeightedCrossEntropy(logit.ToCPU(), targets, lossWeights, labelSmoothing, 0.005)
 					if g == nil {
@@ -2205,6 +2227,18 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 		}
 	}
 
+	// --- LOAD device_intents_multitask.txt (Text with special hardware tokens) ---
+	deviceIntentsPath := filepath.Join(projectRoot, "data/training/trainingdata/device_intents_multitask.txt")
+	if content, err := os.ReadFile(deviceIntentsPath); err == nil {
+		pairs := pipeline.LoadMultitaskDataset(deviceIntentsPath, string(content))
+		for _, p := range pairs {
+			chatPairs = append(chatPairs, moe.TrainPair{Q: p[0], A: p[1]})
+		}
+		log.Printf(" Loaded %d device intent pairs from device_intents_multitask.txt (total: %d)", len(pairs), len(chatPairs))
+	} else {
+		log.Printf("⚠️  device_intents_multitask.txt load error: %v", err)
+	}
+
 	// Reuse TrainChat with social-only data by temporarily renaming model output
 	// Call TrainChat with the social data
 	oldChatPairs := chatPairs
@@ -2219,7 +2253,7 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 	for _, pair := range chatPairs {
 		// Include ONLY conversational content in vocab pre-computation
 		fullText := pair.Q + " " + pair.A
-		for _, t := range cleanTokenize(strings.ToLower(fullText)) {
+		for _, t := range cleanTokenize(fullText) {
 			tmpVocab.AddToken(t)
 		}
 	}
@@ -2469,11 +2503,14 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 		}
 	}
 
+	// Always inject the special hardware tokens into the vocabulary!
+	tokenizer.InjectIntoVocab(intentModel.SentenceVocab.WordToToken, &intentModel.SentenceVocab.TokenToWord)
+
 	// Build deterministic list of new tokens to add
 	newTokensMap := make(map[string]bool)
 	for _, pair := range chatPairs {
 		text := pair.Q + " " + pair.A
-		tokens := cleanTokenize(strings.ToLower(text))
+		tokens := cleanTokenize(text)
 		for _, t := range tokens {
 			if _, ok := intentModel.SentenceVocab.WordToToken[t]; !ok {
 				newTokensMap[t] = true
@@ -2572,6 +2609,24 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 				ResolvedPunctuationWeights[id] = 0.05
 			}
 		}
+
+		// ── MODE-COLLAPSE PREVENTION ──────────────────────────────────────────
+		// "it", "is", "a", "the", "i" are the 5 highest-frequency tokens in the
+		// training corpus (~7-4% each). Because the default loss weight is 1.0
+		// for every token, the model finds a low-loss attractor by always predicting
+		// the mode of the distribution ("it"). We suppress these tokens so the
+		// gradient signal for predicting them correctly is ~10x weaker, while
+		// simultaneously boosting the CORRECT answer tokens to 4x so the model
+		// STRONGLY prefers specific, meaningful words over the statistical mode.
+		collapseTokens := []string{"it", "is", "a", "the", "i"}
+		for _, tok := range collapseTokens {
+			id := intentModel.SentenceVocab.GetTokenID(tok)
+			if id >= 0 {
+				lossWeights[id] = 0.1
+				log.Printf("  [Anti-Collapse] Suppressed '%s' (ID %d) loss weight to 0.1", tok, id)
+			}
+		}
+		// ─────────────────────────────────────────────────────────────────────
 	} else {
 		log.Println(" TINY DATASET: Standardizing all token weights to 1.0 for memorization.")
 		// For tiny datasets, disable anti-overfitting measures to allow perfect memorization
@@ -2739,7 +2794,7 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 		layer.K = config.K
 		layer.OverfitMode = overfitMode
 	}
-	log.Printf(" MoE System: %d layers initialized (LBW=%.1f, Dropout=%.2f, Noise=%.1f, K=%d)",
+	log.Printf(" MoE System: %d layers initialized (LBW=%.3f, Dropout=%.2f, Noise=%.1f, K=%d)",
 		len(layers), config.LoadBalancingWeight, config.ExpertDropout, config.RouterNoise, layers[0].K)
 
 	//  Tiny Dataset Optimization (Memorization Mode)
@@ -2751,7 +2806,7 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 	// before those vectors drift. On a 214-pair dataset, unfreezing immediately lets
 	// high-frequency tokens (it, is, hello) radically distort the embedding space
 	// before the rest of the network knows how to route them.
-	const embeddingFreezeEpochs = 5 // Thaw at epoch 5
+	const embeddingFreezeEpochs = 0 // Thaw immediately since Word2Vec fallback is random noise
 	const trainingSocialOnly = true
 	setEmbeddingFrozen(intentModel, true) // Always start frozen
 	log.Printf(" Embedding layer FROZEN for first %d epochs.", embeddingFreezeEpochs)
@@ -2759,7 +2814,9 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 	qualityGateFailures := 0
 	lastSurgeryEpoch := -15 // Track when last surgery happened
 
+	var epochHistory []string
 	for epoch := 0; epoch < epochs; epoch++ {
+		epochStartTime := time.Now()
 		supervisor.SpawnsThisEpoch = 0
 
 		// Thaw embedding after freeze window
@@ -3416,20 +3473,21 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 						totalReward *= seqReward
 					}
 
-					//  STABILITY FIX: On tiny datasets or early training, ensure the reward
-					// doesn't throttle the model completely, but provide meaningful
-					// penalties for poor SALAD output to break stagnation loops.
-					if isTinyDataset || globalStep < 1000 {
-						if totalReward < 0.01 && seqReward > 0.05 {
-							totalReward = 0.01
-						}
+					//  STABILITY FIX: NEVER throttle supervised gradients below 1.0!
+					// If totalReward drops near zero because the model predicted 'it',
+					// multiplying gradients by zero means it can never learn to escape
+					// the local minimum. It must always receive at least 1.0x gradient.
+					if totalReward < 1.0 {
+						totalReward = 1.0
 					}
 				}
 
+				// SIMD-accelerated gradient reward scaling:
+				// Fuses the /div and *totalReward into a single SimdScaleF32 pass
+				// instead of a scalar loop per element.
+				scale := totalReward / div
 				for t := range grads {
-					for i := range grads[t].Data {
-						grads[t].Data[i] = (grads[t].Data[i] / div) * totalReward
-					}
+					moe.SimdScaleF32(grads[t].Data, scale)
 				}
 			}
 
@@ -3636,11 +3694,10 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 		//  TEST GENERATION: See if it's learning sentences
 		testPrompts := []string{
 			"__intent__ social : __ques__ hello __ans__",
-			"__intent__ social : __ques__ how are you __ans__",
 			"__intent__ social : __ques__ what is your name __ans__",
 		}
 		// Match the test prompts with evolved queries if present in trainPairs
-		for idx, baseQ := range []string{"hello", "how are you", "what is your name"} {
+		for idx, baseQ := range []string{"hello", "what is your name"} {
 			for _, pair := range trainPairs {
 				lowerQ := strings.ToLower(pair.Q)
 				if strings.Contains(lowerQ, baseQ) {
@@ -3692,6 +3749,41 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 
 			// Initial heuristic score calculation
 			heuristicScore := scoreSentenceHeuristic(response)
+
+			// === OLLAMA TEACHER QUALITY GATE ===
+			// Only call the teacher every 5 epochs to avoid spending ~10s/prompt every epoch.
+			if epoch%5 == 0 {
+				teacherPassed, teacherReason, teacherCorrection := GradeAndCorrectWithTeacher(p, response)
+				if !teacherPassed {
+					heuristicScore = 1.0 // Force a failure so the supervisor penalizes the router
+					if epoch%10 == 0 {
+						log.Printf("👨‍🏫 Teacher REJECTED: %s", teacherReason)
+					}
+
+					// Dynamic Curriculum Injection!
+					if teacherCorrection != "" && teacherCorrection != "N/A" {
+						if epoch%10 == 0 {
+							log.Printf("👨‍🏫 Teacher CORRECTION added to training queue: '%s'", teacherCorrection)
+						}
+
+						// Clean up prompt format before saving as a target
+						cleanP := p
+						if strings.Contains(p, "__ques__ ") {
+							parts := strings.Split(p, "__ques__ ")
+							if len(parts) > 1 {
+								cleanP = strings.TrimSpace(strings.ReplaceAll(parts[1], "__ans__", ""))
+							}
+						}
+
+						chatPairs = append(chatPairs, moe.TrainPair{Q: cleanP, A: teacherCorrection, Intent: "social"})
+					}
+				} else {
+					if epoch%10 == 0 {
+						log.Printf("👨‍🏫 Teacher APPROVED! %s", teacherReason)
+					}
+					heuristicScore += 5.0
+				}
+			}
 
 			// --- [TTR & Anchor Word Density Quality Gate] ---
 			respWords := strings.Fields(strings.ToLower(response))
@@ -3889,9 +3981,7 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 				fixedTargets := [][]string{
 					// Prompt 0: "hello" — greetings + common generated tokens
 					{"hello", "hi", "hey", "morning", "welcome", "good", "great", "nice", "i", "it", "is", "have", "a"},
-					// Prompt 1: "how are you" — status words + common generated tokens
-					{"i", "am", "doing", "well", "fine", "good", "great", "feeling", "okay", "it", "is", "a", "day", "have"},
-					// Prompt 2: "what is your name" — identity words + common generated tokens
+					// Prompt 1: "what is your name" — identity words + common generated tokens
 					{"i", "am", "my", "name", "is", "gollemer", "assistant", "ai", "it", "a", "have", "day"},
 				}
 				if i < len(fixedTargets) {
@@ -3913,7 +4003,7 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 			}
 
 			// Only log a few samples during full test to keep console clean, but log ALL failures
-			if !isFullTest || i%10 == 0 || status == "SALAD" {
+			if (!isFullTest && epoch%10 == 0) || i%10 == 0 || (status == "SALAD" && epoch%10 == 0) {
 				log.Printf(" Test [%d] Query: '%s' -> Response: '%s' [Score: %.2f | status: %s]", i, p, response, heuristicScore, status)
 			}
 
@@ -3990,7 +4080,7 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 			currentAvgSim = simSum / float32(len(epochSimilarityScores))
 		}
 
-		drawSocialProgressBar(currentTotalScore, targetScore, currentTotalGrammar, targetGrammarScore, currentAvgSim, epoch+1, epochs)
+		drawSocialProgressBar(currentTotalScore, targetScore, currentTotalGrammar, targetGrammarScore, currentAvgSim, epoch+1, epochs, epochStartTime)
 
 		if saladCount > failureThreshold && epoch > 150 && !isTinyDataset {
 			qualityGateFailures++
@@ -4074,9 +4164,58 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 			}
 		}
 
+		// ── 30-Epoch Teacher Audit ────────────────────────────────────────────
+		// Every 30 epochs, Qwen reviews model outputs, current metrics, and the
+		// config in one shot and may patch social_train.json immediately.
+		// The hot-reloader picks up any changes automatically next epoch.
+		if (epoch+1)%5 == 0 {
+			auditConfigPath := filepath.Join(projectRoot, "data/config/social_train.json")
+
+			// 1. Run canonical probes on the live model
+			canonicalProbes := []string{
+				"how are you",
+				"who are you",
+				"what do you do",
+				"hello",
+				"tell me about yourself",
+				"what is your name",
+			}
+			probeResults := make(map[string]string, len(canonicalProbes))
+			for _, q := range canonicalProbes {
+				probeInput := "__intent__ social : __ques__ " + q + " __ans__"
+				resp, _, _ := StrictGenerate(intentModel, probeInput, 20, 1.2, false, epoch)
+				probeResults[q] = resp
+			}
+
+			// 2. Read current config JSON from disk (raw, so Teacher sees exactly what is stored)
+			cfgBytes, _ := os.ReadFile(auditConfigPath)
+			cfgSnap := string(cfgBytes)
+
+			// 3. Compute current avg loss for context
+			auditAvgLoss := float32(0)
+			if batchNum > 0 {
+				auditAvgLoss = epochLoss / float32(batchNum)
+			}
+
+			// 4. Send to Teacher and apply any patch
+			auditCtx := TeacherAuditContext{
+				Epoch:        epoch + 1,
+				AvgLoss:      auditAvgLoss,
+				AvgSim:       currentAvgSim,
+				GrammarScore: currentTotalGrammar / float32(max(1, len(epochGrammarScores))),
+				Probes:       probeResults,
+				ConfigJSON:   cfgSnap,
+				TrainingRows: len(trainPairs),
+				HistorySummary: strings.Join(epochHistory, "\n"),
+			}
+			auditResult := TeacherAuditAndPatch(auditCtx, auditConfigPath)
+			log.Printf("%s", auditResult)
+		}
+
 		//  Run Supervisor Triage after quality gate evaluation
 		// Frequency: every 50 epochs — the 100-epoch window needs enough data before acting.
 		if (epoch+1)%50 == 0 {
+
 			// Build a slice of TrainPair from trainPairs for supervisor
 			supPairs := make([]moe.TrainPair, len(trainPairs))
 			for i, p := range trainPairs {
@@ -4094,8 +4233,8 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 			}
 		}
 
-		// 4. Save Checkpoint (every 1 epoch to ensure interactive LLM has latest weights)
-		if (epoch+1)%1 == 0 {
+		// 4. Save Checkpoint every 5 epochs (serializing 142MB every epoch wastes ~5s each time)
+		if (epoch+1)%5 == 0 || epoch == epochs-1 {
 			// Detach before save to free the computation graph
 			intentModel.Detach()
 			// Aggressively reclaim memory before the large serialization spike
@@ -4174,6 +4313,11 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 			PronPathID:  pronID,
 			VerbPathID:  verbID,
 			AuxPathID:   auxID,
+		}
+
+		epochHistory = append(epochHistory, fmt.Sprintf("Epoch %d: Loss %.4f | Sim %.2f%% | Grammar %.2f", epoch+1, avgLoss, currentAvgSim*100.0, epochMetrics.GrammarScore))
+		if len(epochHistory) > 30 {
+			epochHistory = epochHistory[len(epochHistory)-30:]
 		}
 
 		// 2. Status Line every 100 epochs (Concise)
@@ -4552,31 +4696,43 @@ func SimpleTagger(tokens []string) []string {
 }
 
 func cleanTokenize(text string) []string {
-	text = strings.ToLower(text)
-	var tokens []string
-	var currentWord strings.Builder
+	words := strings.Fields(text)
+	var finalTokens []string
 
-	for _, r := range text {
-		// Include < and > to preserve special tokens like <s> and </s>, and / for </s>
-		if unicode.IsLetter(r) || unicode.IsNumber(r) || r == '\'' || r == '_' || r == '<' || r == '>' || r == '/' {
-			currentWord.WriteRune(r)
-		} else {
-			// Save the word built so far
-			if currentWord.Len() > 0 {
-				tokens = append(tokens, currentWord.String())
-				currentWord.Reset()
-			}
-			// If it's punctuation (and not whitespace), make it a token
-			if unicode.IsPunct(r) || r == '?' || r == '!' {
-				tokens = append(tokens, string(r))
+	for _, word := range words {
+		// If it's a bracketed token like <INTENT_CAMERA> or <ACT_TAKE> or <DEV_CAMERA>, keep it verbatim!
+		if strings.HasPrefix(word, "<") && strings.HasSuffix(word, ">") &&
+			(strings.Contains(word, "INTENT_") || strings.Contains(word, "ACT_") || strings.Contains(word, "DEV_")) {
+			finalTokens = append(finalTokens, word) // Do not lowercase or split
+			continue
+		}
+
+		// Otherwise lowercase and split
+		lowerWord := strings.ToLower(word)
+		var currentWord strings.Builder
+
+		for _, r := range lowerWord {
+			// Include < and > to preserve special tokens like <s> and </s>, and / for </s>
+			if unicode.IsLetter(r) || unicode.IsNumber(r) || r == '\'' || r == '_' || r == '<' || r == '>' || r == '/' {
+				currentWord.WriteRune(r)
+			} else {
+				// Save the word built so far
+				if currentWord.Len() > 0 {
+					finalTokens = append(finalTokens, currentWord.String())
+					currentWord.Reset()
+				}
+				// If it's punctuation (and not whitespace), make it a token
+				if unicode.IsPunct(r) || r == '?' || r == '!' {
+					finalTokens = append(finalTokens, string(r))
+				}
 			}
 		}
+		// Catch trailing word
+		if currentWord.Len() > 0 {
+			finalTokens = append(finalTokens, currentWord.String())
+		}
 	}
-	// Catch trailing word
-	if currentWord.Len() > 0 {
-		tokens = append(tokens, currentWord.String())
-	}
-	return tokens
+	return finalTokens
 }
 
 // InspectExpertStats calculates min, max, mean, and stdDev for all experts.
@@ -5191,12 +5347,13 @@ func getLR(currentStep, totalSteps int, baseLR float32) float32 {
 
 // drawSocialProgressBar renders a visual progress bar of how close the model is to "human-ready" coherence.
 
-func drawSocialProgressBar(current, target, currentGrammar, targetGrammar, currentSim float32, epoch, totalEpochs int) {
+func drawSocialProgressBar(current, target, currentGrammar, targetGrammar, currentSim float32, epoch, totalEpochs int, startTime time.Time) {
 	progress := current / target
 	if progress > 1.0 {
 		progress = 1.0
 	}
-	fmt.Printf("\r Progress: %.1f%% | Epoch %d/%d | Score: %.1f/%.1f | Grammar: %.1f | Sim: %.1f%%", progress*100, epoch, totalEpochs, current, target, currentGrammar, currentSim*100)
+	elapsed := time.Since(startTime).Seconds()
+	fmt.Printf("\r Progress: %.1f%% | Epoch %d/%d | Score: %.1f/%.1f | Grammar: %.1f | Sim: %.1f%% | EpochTime: %.1fs", progress*100, epoch, totalEpochs, current, target, currentGrammar, currentSim*100, elapsed)
 	if epoch == totalEpochs || epoch%20 == 0 {
 		fmt.Println()
 	}
@@ -5539,4 +5696,52 @@ func containsAnyStr(s string, subs ...string) bool {
 		}
 	}
 	return false
+}
+
+// LoadDeviceIntentsCSV reads a TSV/CSV of device intents and converts them into TrainPairs.
+func LoadDeviceIntentsCSV(path string) ([]moe.TrainPair, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("LoadDeviceIntentsCSV: %w", err)
+	}
+	defer f.Close()
+
+	reader := csv.NewReader(f)
+	reader.Comma = '\t' // The file is tab-separated
+	reader.FieldsPerRecord = -1
+	reader.LazyQuotes = true
+	records, err := reader.ReadAll()
+	if err != nil {
+		return nil, fmt.Errorf("LoadDeviceIntentsCSV parse error: %w", err)
+	}
+
+	var pairs []moe.TrainPair
+	for i, record := range records {
+		if i == 0 || len(record) < 5 {
+			continue // skip header or short rows
+		}
+
+		input := record[0]
+		intent := record[1]
+
+		roles := make(map[string]string)
+		if record[2] != "" {
+			roles["action"] = record[2]
+		}
+		if record[3] != "" {
+			roles["target"] = record[3]
+		}
+		if record[4] != "" {
+			roles["device"] = record[4]
+		}
+
+		rolesJSON, _ := json.Marshal(roles)
+		answerStr := fmt.Sprintf("[INTENT: %s] %s", intent, string(rolesJSON))
+		pairs = append(pairs, moe.TrainPair{
+			Q:      input,
+			A:      answerStr,
+			Intent: intent,
+		})
+	}
+	return pairs, nil
 }
