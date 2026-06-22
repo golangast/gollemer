@@ -1,6 +1,7 @@
 package moe
 
 import (
+	"encoding/binary"
 	"encoding/gob"
 	"fmt"
 	"log"
@@ -18,18 +19,55 @@ type CartridgeRequest struct {
 	Response  chan error
 }
 
+// CartridgeHeader defines the strict spec for .cartridge files.
+type CartridgeHeader struct {
+	Magic     [8]byte  // "GLMR_CRT"
+	Version   uint32   // Engine version
+	Namespace [32]byte // Intent namespace
+	InputDim  uint32
+	HiddenDim uint32
+	OutputDim uint32
+}
+
 // CartridgeManager handles dynamic loading and unloading of expert layers.
 type CartridgeManager struct {
 	requests chan CartridgeRequest
 	Mu       sync.Mutex
 	Loaded   map[string]Expert
+
+	// LRU Cache
+	lruOrder []string
+	MaxWarm  int
 }
 
-// NewCartridgeManager initializes a CartridgeManager.
+// Global slice pool to prevent GC trashing when swapping cartridges.
+var slicePool = sync.Pool{
+	New: func() interface{} {
+		return make([]float32, 0)
+	},
+}
+
+func getSlice(size int) []float32 {
+	s := slicePool.Get().([]float32)
+	if cap(s) < size {
+		return make([]float32, size)
+	}
+	return s[:size]
+}
+
+func putSlice(s []float32) {
+	if s == nil {
+		return
+	}
+	// Clear references if necessary, but it's just float32
+	slicePool.Put(s[:0])
+}
+
 func NewCartridgeManager() *CartridgeManager {
 	cm := &CartridgeManager{
 		requests: make(chan CartridgeRequest, 10),
 		Loaded:   make(map[string]Expert),
+		MaxWarm:  3, // Default to keeping 3 cartridges warm in memory
 	}
 	go cm.loop()
 	return cm
@@ -41,31 +79,80 @@ func (cm *CartridgeManager) loop() {
 		case "load":
 			cm.Mu.Lock()
 			if _, exists := cm.Loaded[req.Path]; exists {
+				cm.markUsed(req.Path)
 				cm.Mu.Unlock()
 				req.Response <- nil
 				continue
 			}
 			cm.Mu.Unlock()
-			
+
 			expert, err := cm.loadFromFile(req.Path)
 			if err != nil {
 				req.Response <- err
 				continue
 			}
-			
+
 			cm.Mu.Lock()
 			cm.Loaded[req.Path] = expert
+			cm.markUsed(req.Path)
+			cm.evictLRU()
 			cm.Mu.Unlock()
 			log.Printf("🎮 Cartridge Manager: Loaded cartridge %s into RAM.", req.Path)
 			req.Response <- nil
 		case "unload":
 			cm.Mu.Lock()
-			if _, exists := cm.Loaded[req.Path]; exists {
+			if expert, exists := cm.Loaded[req.Path]; exists {
+				cm.recycleExpert(expert)
 				delete(cm.Loaded, req.Path)
+				cm.removeFromLRU(req.Path)
 				log.Printf("🎮 Cartridge Manager: UnLoaded cartridge %s from RAM to save memory.", req.Path)
 			}
 			cm.Mu.Unlock()
 			req.Response <- nil
+		}
+	}
+}
+
+func (cm *CartridgeManager) markUsed(path string) {
+	cm.removeFromLRU(path)
+	cm.lruOrder = append(cm.lruOrder, path)
+}
+
+func (cm *CartridgeManager) removeFromLRU(path string) {
+	for i, p := range cm.lruOrder {
+		if p == path {
+			cm.lruOrder = append(cm.lruOrder[:i], cm.lruOrder[i+1:]...)
+			break
+		}
+	}
+}
+
+func (cm *CartridgeManager) evictLRU() {
+	for len(cm.Loaded) > cm.MaxWarm && len(cm.lruOrder) > 0 {
+		oldest := cm.lruOrder[0]
+		if expert, exists := cm.Loaded[oldest]; exists {
+			cm.recycleExpert(expert)
+			delete(cm.Loaded, oldest)
+			log.Printf("🧹 Cartridge Manager: LRU Evicted cartridge %s from RAM.", oldest)
+		}
+		cm.lruOrder = cm.lruOrder[1:]
+	}
+}
+
+func (cm *CartridgeManager) recycleExpert(expert Expert) {
+	// Reclaim memory to sync.Pool
+	if ffe, ok := expert.(*FeedForwardExpert); ok {
+		if ffe.Layer1 != nil && ffe.Layer1.Weights != nil {
+			putSlice(ffe.Layer1.Weights.Data)
+			if ffe.Layer1.Biases != nil {
+				putSlice(ffe.Layer1.Biases.Data)
+			}
+		}
+		if ffe.Layer2 != nil && ffe.Layer2.Weights != nil {
+			putSlice(ffe.Layer2.Weights.Data)
+			if ffe.Layer2.Biases != nil {
+				putSlice(ffe.Layer2.Biases.Data)
+			}
 		}
 	}
 }
@@ -76,13 +163,54 @@ func (cm *CartridgeManager) loadFromFile(path string) (Expert, error) {
 		return nil, fmt.Errorf("failed to open cartridge %s: %v", path, err)
 	}
 	defer file.Close()
-	
-	var expert Expert
-	decoder := gob.NewDecoder(file)
-	if err := decoder.Decode(&expert); err != nil {
-		return nil, fmt.Errorf("failed to decode cartridge %s: %v", path, err)
+
+	var header CartridgeHeader
+	if err := binary.Read(file, binary.LittleEndian, &header); err != nil {
+		return nil, fmt.Errorf("failed to read cartridge header %s: %v", path, err)
+	}
+
+	if string(header.Magic[:]) != "GLMR_CRT" {
+		// Fallback to Gob decoder for backward compatibility
+		file.Seek(0, 0)
+		var expert Expert
+		decoder := gob.NewDecoder(file) // Note: Requires importing "encoding/gob" inside function or globally
+		if err := decoder.Decode(&expert); err != nil {
+			return nil, fmt.Errorf("failed to decode gob cartridge %s: %v", path, err)
+		}
+		return expert, nil
+	}
+
+	// Zero-copy read into pooled buffers
+	expert, err := NewFeedForwardExpert(int(header.InputDim), int(header.HiddenDim), int(header.OutputDim))
+	if err != nil {
+		return nil, err
+	}
+
+	// Allocate from pool
+	expert.Layer1.Weights.Data = getSlice(len(expert.Layer1.Weights.Data))
+	if err := binary.Read(file, binary.LittleEndian, expert.Layer1.Weights.Data); err != nil {
+		return nil, err
 	}
 	
+	if expert.Layer1.Biases != nil {
+		expert.Layer1.Biases.Data = getSlice(len(expert.Layer1.Biases.Data))
+		if err := binary.Read(file, binary.LittleEndian, expert.Layer1.Biases.Data); err != nil {
+			return nil, err
+		}
+	}
+
+	expert.Layer2.Weights.Data = getSlice(len(expert.Layer2.Weights.Data))
+	if err := binary.Read(file, binary.LittleEndian, expert.Layer2.Weights.Data); err != nil {
+		return nil, err
+	}
+	
+	if expert.Layer2.Biases != nil {
+		expert.Layer2.Biases.Data = getSlice(len(expert.Layer2.Biases.Data))
+		if err := binary.Read(file, binary.LittleEndian, expert.Layer2.Biases.Data); err != nil {
+			return nil, err
+		}
+	}
+
 	return expert, nil
 }
 

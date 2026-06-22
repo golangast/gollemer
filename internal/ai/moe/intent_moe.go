@@ -592,16 +592,6 @@ func (m *IntentMoE) GuessIntent(query string) (string, string) {
 // It uses the Tagger to predict the 'shape' of the answer before filling in the words.
 var verbose_thinking = false
 
-// CartridgeNamespaces maps intent keywords to expert cartridge files.
-var CartridgeNamespaces = map[string]string{
-	"medical":  "data/models/gob_models/medical_experts.gob",
-	"health":   "data/models/gob_models/medical_experts.gob",
-	"doctor":   "data/models/gob_models/medical_experts.gob",
-	"database": "data/models/gob_models/database_experts.gob",
-	"sql":      "data/models/gob_models/database_experts.gob",
-	"query":    "data/models/gob_models/database_experts.gob",
-}
-
 // AnalyzePartialQuery implements streaming prediction by analyzing the first few words
 // of the user's input and pre-loading relevant expert cartridges into RAM with zero latency.
 func (m *IntentMoE) AnalyzePartialQuery(partialQuery string) {
@@ -609,13 +599,39 @@ func (m *IntentMoE) AnalyzePartialQuery(partialQuery string) {
 		return
 	}
 	
-	qLower := strings.ToLower(partialQuery)
-	for keyword, path := range CartridgeNamespaces {
-		if strings.Contains(qLower, keyword) {
-			// Trigger asynchronous pre-loading before the user finishes typing
-			log.Printf("⚡ Streaming Prediction: Detected namespace '%s' mid-sentence. Pre-loading %s...", keyword, path)
-			m.Supervisor.CartridgeMgr.PreloadCartridge(path, 0, 0)
+	// Create a mean embedding of the partial query to use for semantic triage
+	tokens := strings.Fields(strings.ToLower(partialQuery))
+	ids := make([]float32, len(tokens))
+	for i, t := range tokens {
+		id := m.SentenceVocab.GetTokenID(t)
+		if id < 0 {
+			id = 1
 		}
+		ids[i] = float32(id)
+	}
+	
+	var queryEmb []float32
+	if len(ids) > 0 {
+		inputT := tensor.NewTensor([]int{1, len(ids)}, ids, false)
+		if emb, err := m.Embedding.Forward(inputT); err == nil && len(emb.Data) > 0 {
+			// Calculate mean embedding for semantic triage
+			embDim := emb.Shape[1]
+			queryEmb = make([]float32, embDim)
+			for i := 0; i < len(ids); i++ {
+				for d := 0; d < embDim; d++ {
+					queryEmb[d] += emb.Data[i*embDim+d]
+				}
+			}
+			for d := 0; d < embDim; d++ {
+				queryEmb[d] /= float32(len(ids))
+			}
+		}
+	}
+	
+	cartridgePath := m.Supervisor.TriageCartridge(partialQuery, queryEmb)
+	if cartridgePath != "" {
+		log.Printf("⚡ Streaming Prediction: Detected namespace mid-sentence. Pre-loading %s...", cartridgePath)
+		m.Supervisor.CartridgeMgr.PreloadCartridge(cartridgePath, 0, 0)
 	}
 }
 
@@ -630,40 +646,59 @@ func (m *IntentMoE) GenerateGuidedSentence(query string, maxLen int) (string, []
 	// 🎮 DYNAMIC EXPERT CARTRIDGE HOT-SWAPPING & PRE-LOADING
 	var mountedExpertID int = -1
 	var loadedCartridge string
-	qLower := strings.ToLower(query)
-
 	if m.Supervisor != nil && m.Supervisor.CartridgeMgr != nil {
-		for keyword, cartridgePath := range CartridgeNamespaces {
-			if strings.Contains(qLower, keyword) {
-				log.Printf("🏥 Domain matched (%s). Hot-swapping %s into RAM...", keyword, cartridgePath)
-				// 1. Load into RAM via Cartridge Manager (instant if already pre-loaded)
-				err := m.Supervisor.CartridgeMgr.LoadCartridge(cartridgePath, 0, 0)
-				if err == nil {
-					// 2. Retrieve loaded expert
-					m.Supervisor.CartridgeMgr.Mu.Lock()
-					expert := m.Supervisor.CartridgeMgr.Loaded[cartridgePath]
-					m.Supervisor.CartridgeMgr.Mu.Unlock()
+		// Calculate mean embedding of the full query for triage
+		tokens := strings.Fields(strings.ToLower(query))
+		ids := make([]float32, len(tokens))
+		for i, t := range tokens {
+			id := m.SentenceVocab.GetTokenID(t)
+			if id < 0 {
+				id = 1
+			}
+			ids[i] = float32(id)
+		}
+		var queryEmb []float32
+		if len(ids) > 0 {
+			inputT := tensor.NewTensor([]int{1, len(ids)}, ids, false)
+			if emb, err := m.Embedding.Forward(inputT); err == nil && len(emb.Data) > 0 {
+				embDim := emb.Shape[1]
+				queryEmb = make([]float32, embDim)
+				for i := 0; i < len(ids); i++ {
+					for d := 0; d < embDim; d++ {
+						queryEmb[d] += emb.Data[i*embDim+d]
+					}
+				}
+				for d := 0; d < embDim; d++ {
+					queryEmb[d] /= float32(len(ids))
+				}
+			}
+		}
 
-					// 3. Mount to Output MoE layer dynamically
-					if m.Decoder.OutputMoE != nil {
-						mountedExpertID, err = m.Supervisor.MountCartridgeToLayer(m, len(m.Encoder.GetMoELayers()), expert)
-						if err != nil {
-							log.Printf("⚠️ Failed to mount cartridge: %v", err)
-							mountedExpertID = -1
-						} else {
-							loadedCartridge = cartridgePath
-							// 4. Force routing bias for the entire sequence to the new expert
-							for i := 0; i < maxLen; i++ {
-								m.Decoder.OutputMoE.StepRoutingBias[i] = make([]float32, len(m.Decoder.OutputMoE.Experts))
-								m.Decoder.OutputMoE.StepRoutingBias[i][mountedExpertID] = 20.0 // Overwhelming bias
-							}
+		cartridgePath := m.Supervisor.TriageCartridge(query, queryEmb)
+		if cartridgePath != "" {
+			log.Printf("🔌 Hot-Swapping: Loading expert cartridge %s into RAM...", cartridgePath)
+			err := m.Supervisor.CartridgeMgr.LoadCartridge(cartridgePath, 0, 0)
+			if err == nil {
+				m.Supervisor.CartridgeMgr.Mu.Lock()
+				expert := m.Supervisor.CartridgeMgr.Loaded[cartridgePath]
+				m.Supervisor.CartridgeMgr.Mu.Unlock()
+
+				if m.Decoder.OutputMoE != nil {
+					mountedExpertID, err = m.Supervisor.MountCartridgeToLayer(m, len(m.Encoder.GetMoELayers()), expert)
+					if err != nil {
+						log.Printf("⚠️ Failed to mount cartridge: %v", err)
+						mountedExpertID = -1
+					} else {
+						loadedCartridge = cartridgePath
+						// 4. Force routing bias for the entire sequence to the new expert
+						for i := 0; i < maxLen; i++ {
+							m.Decoder.OutputMoE.StepRoutingBias[i] = make([]float32, len(m.Decoder.OutputMoE.Experts))
+							m.Decoder.OutputMoE.StepRoutingBias[i][mountedExpertID] = 20.0 // Overwhelming bias
 						}
 					}
-				} else {
-					log.Printf("⚠️ Failed to load cartridge: %v", err)
 				}
-				// Break after first matched namespace to avoid multi-cartridge conflicts for now
-				break
+			} else {
+				log.Printf("⚠️ Failed to load cartridge: %v", err)
 			}
 		}
 
