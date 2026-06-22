@@ -35,6 +35,7 @@ type Supervisor struct {
 	OverfitMode          bool           // Allow relaxed constraints during overfit mode
 	DisableDataEvolution bool           // When true, skip corpus mutation entirely
 	mu                   sync.Mutex
+	CartridgeMgr         *CartridgeManager
 }
 
 // ExpertOverride holds per-expert variable overrides set by the supervisor.
@@ -56,6 +57,7 @@ func NewSupervisor() *Supervisor {
 		GrammarJudge:      judge,
 		FailureLogs:       make(map[string]int),
 		expertOverrides:   make(map[int]map[int]*ExpertOverride),
+		CartridgeMgr:      NewCartridgeManager(),
 	}
 }
 
@@ -708,8 +710,6 @@ func (s *Supervisor) SetExpertVariables(model *IntentMoE, layerIdx, expertIdx in
 		LRMultiplier: lrMultiplier,
 	}
 
-	log.Printf("🎛️ [Supervisor] Layer %d Expert E%d: OutputScale=%.2f LRMult=%.2f",
-		layerIdx, expertIdx, outputScale, lrMultiplier)
 }
 
 // HandleQualityGateFailure acts as the core decision-maker when the Subject-Verb Connection quality gate drops below threshold.
@@ -1074,7 +1074,6 @@ func (s *Supervisor) SeedSystemExperts(model *IntentMoE) {
 			s.SetExpertVariables(model, lIdx, 13, 0.8, 1.0) // E13 → CONJ/PREP
 		}
 	}
-	log.Printf("🧬 [Supervisor] SeedSystemExperts complete. Seeded structural experts with OutputScale=0.5, LRMult=1.0, Pinned=true across all %d layers.", len(layers))
 }
 
 // GetSpawnsThisEpoch returns the current spawns count this epoch in a thread-safe manner.

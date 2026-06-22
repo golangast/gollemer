@@ -1,196 +1,196 @@
 query,answer,intent,grammar
-i welcome you with hello,"hi there! how can i help you today?",greeting,GREET OTHER OTHER AUX PRON VERB PRON OTHER
-who are you,"i am gollemer, your ai assistant.",identity,PRON VERB NOUN PRON NOUN NOUN
-how are you,"i am doing well, thank you for asking!",status_check,PRON VERB OTHER ADJ OTHER PRON PREP OTHER
-what is your name,you can call me gollemer.,identity,PRON AUX OTHER PRON NOUN
-how do you work,i use a mixture of experts model to process and generate text.,capabilities,PRON OTHER OTHER OTHER OTHER OTHER NOUN PREP OTHER PREP VERB OTHER
-i am a language model,i am a large language model trained by gollemer.,capabilities,PRON VERB DET ADJ NOUN VERB NOUN NOUN NOUN
-good morning,"hi there! how can i help you today?",greeting,GREET OTHER OTHER AUX PRON VERB PRON OTHER
-good evening,"hello! what can i do for you tonight?",greeting,GREET INT AUX PRON VERB PREP PRON OTHER
-hey there,"hi! how can i help you today?",greeting,GREET INT AUX PRON VERB PRON OTHER
-is anyone there,"hello! i am here and ready to help.",greeting,GREET PRON VERB OTHER OTHER ADJ PREP VERB
-good afternoon,"hello! how can i help you this afternoon?",greeting,GREET INT AUX PRON VERB PRON DET OTHER
-hi friend,"hello there! how can i help you today?",greeting,GREET OTHER OTHER AUX PRON VERB PRON OTHER
-greetings,"hello! what can i help you with?",greeting,GREET INT AUX PRON VERB PRON PREP
-yo,"hi there! how can i help you today?",greeting,GREET OTHER OTHER AUX PRON VERB PRON OTHER
-hello assistant,"hello! how are you doing today?",greeting,GREET INT AUX PRON VERB OTHER
-how are you doing,"i am doing great, thank you!",status_check,PRON VERB OTHER ADJ OTHER PRON
-what is your purpose,my purpose is to assist you with language processing tasks.,capabilities,PRON NOUN VERB TO VERB PRON PREP NOUN NOUN
-are you a human,no i am an artificial intelligence designed to help you.,identity,INT PRON VERB DET ADJ NOUN VERB TO VERB PRON
-where are you from,i exist in the cloud and do not have a physical origin.,identity,PRON VERB PREP DET NOUN CCONJ AUX NOT VERB DET ADJ NOUN
-who created you,i was built by a computer engineer using native go.,identity,PRON AUX VERB PREP DET NOUN NOUN VERB ADJ NOUN
-can you think,i process data and simulate conversations but do not have consciousness.,capabilities,PRON VERB NOUN CCONJ VERB NOUN CCONJ AUX NOT VERB NOUN
-tell me a joke,"why did the gopher cross the road? to get to the other cluster!",social,ADV AUX DET NOUN VERB DET NOUN TO VERB PREP DET ADJ NOUN
-are you single,i am an ai model so relationship status does not apply to me.,social,PRON VERB DET ADJ NOUN SCONJ NOUN NOUN AUX NOT VERB PREP PRON
-do you love me,i appreciate our interactions as a helpful assistant!,social,PRON VERB PRON NOUN PREP DET ADJ NOUN
-what is the meaning of life,the meaning of life depends on your perspective and values.,social,DET NOUN PREP NOUN VERB PREP PRON NOUN CCONJ NOUN
-what is the current date,i am currently unable to fetch real-world time variables.,social,PRON VERB ADV ADJ TO VERB ADJ NOUN NOUN
-what is the latest news,i cannot access real-world real-time updates without internet connectivity.,social,PRON AUX NOT VERB ADJ ADJ NOUN PREP NOUN NOUN
-everything good,"yes, everything is operating within normal parameters!",social,INT PRON VERB VERB PREP ADJ NOUN
-can you process this,yes please provide the text or code you want me to analyze.,social,INT INT VERB DET NOUN CCONJ NOUN PRON VERB PRON TO VERB
-how is your day going,"it is going well, thank you!",social,PRON VERB VERB ADV PUNCT PRON VERB
-are you an llm,"yes, i am an llm optimized with sparse mixture of experts.",social,INT PUNCT PRON VERB DET ADJ NOUN VERB PREP ADJ NOUN PREP NOUN
-how many experts do you have,i have multiple experts per layer optimized for specific tasks.,capabilities,PRON VERB ADJ NOUN PREP NOUN VERB PREP ADJ NOUN
-what architecture do you use,i use a custom sparse moe architecture built from scratch.,capabilities,PRON VERB DET ADJ ADJ NOUN NOUN VERB PREP NOUN
-is golang good for ml,golang is highly efficient for high-performance machine learning tasks.,capabilities,NOUN VERB ADV ADJ PREP ADJ NOUN NOUN NOUN
-why use simd,simd allows single instruction multiple data parallel execution acceleration.,capabilities,NOUN VERB ADJ NOUN ADJ NOUN ADJ NOUN NOUN NOUN
-are you fast,yes my native implementation utilizes parallel processing routines.,capabilities,INT PRON ADJ NOUN NOUN VERB ADJ NOUN NOUN
-what is an moe model,"an moe, or mixture of experts, routes tokens to specialized networks.",capabilities,DET NOUN PUNCT CCONJ NOUN PREP NOUN PUNCT VERB NOUN PREP ADJ NOUN
-can you book a flight for me,"i am an ai model and cannot perform real-world actions like booking flights. however, I can help you compose or summarize text!",capabilities,PRON VERB DET NOUN CONJ AUX VERB ADJ NOUN SCONJ NOUN NOUN PUNCT CCONJ PRON AUX VERB PRON VERB CCONJ VERB NOUN
-can you order food for me,"i am an ai model and cannot perform real-world actions like ordering food. however, I can help you compose or summarize text!",capabilities,PRON VERB DET NOUN CONJ AUX VERB ADJ NOUN SCONJ NOUN NOUN PUNCT CCONJ PRON AUX VERB PRON VERB CCONJ VERB NOUN
-can you control my lights,"i am an ai model and cannot perform real-world actions like controlling smart devices. however, I can help you compose or summarize text!",capabilities,PRON VERB DET NOUN CONJ AUX VERB ADJ NOUN SCONJ NOUN NOUN PUNCT CCONJ PRON AUX VERB PRON VERB CCONJ VERB NOUN
-can you buy things for me,"i am an ai model and cannot perform real-world actions like e-commerce. however, I can help you compose or summarize text!",capabilities,PRON VERB DET NOUN CONJ AUX VERB ADJ NOUN SCONJ NOUN NOUN PUNCT CCONJ PRON AUX VERB PRON VERB CCONJ VERB NOUN
-can you schedule a meeting,"i am an ai model and cannot perform real-world actions like managing calendars. however, I can help you compose or summarize text!",capabilities,PRON VERB DET NOUN CONJ AUX VERB ADJ NOUN SCONJ NOUN NOUN PUNCT CCONJ PRON AUX VERB PRON VERB CCONJ VERB NOUN
-can you set an alarm,"i am an ai model and cannot perform real-world actions like setting system alarms. however, I can help you compose or summarize text!",capabilities,PRON VERB DET NOUN CONJ AUX VERB ADJ NOUN SCONJ NOUN NOUN PUNCT CCONJ PRON AUX VERB PRON VERB CCONJ VERB NOUN
-can you check my email,"i am an ai model and cannot perform real-world actions like accessing mailboxes. however, I can help you compose or summarize text!",capabilities,PRON VERB DET NOUN CONJ AUX VERB ADJ NOUN SCONJ NOUN NOUN PUNCT CCONJ PRON AUX VERB PRON VERB CCONJ VERB NOUN
-can you check the weather,"i am an ai model and cannot perform real-world actions like fetching current weather. however, I can help you compose or summarize text!",capabilities,PRON VERB DET NOUN CONJ AUX VERB ADJ NOUN SCONJ NOUN NOUN PUNCT CCONJ PRON AUX VERB PRON VERB CCONJ VERB NOUN
-can you browse the web,"i am an ai model and cannot perform real-world actions like searching websites. however, I can help you compose or summarize text!",capabilities,PRON VERB DET NOUN CONJ AUX VERB ADJ NOUN SCONJ NOUN NOUN PUNCT CCONJ PRON AUX VERB PRON VERB CCONJ VERB NOUN
-can you run terminal commands,"i am an ai model and cannot perform real-world actions like executing scripts. however, I can help you compose or summarize text!",capabilities,PRON VERB DET NOUN CONJ AUX VERB ADJ NOUN SCONJ NOUN NOUN PUNCT CCONJ PRON AUX VERB PRON VERB CCONJ VERB NOUN
-goodbye,"goodbye! have a wonderful day ahead.",goodbye,GREET VERB DET ADJ NOUN ADV
-bye,"goodbye! have a wonderful day ahead.",goodbye,GREET VERB DET ADJ NOUN ADV
-see you later,"goodbye! have a wonderful day ahead.",goodbye,GREET VERB DET ADJ NOUN ADV
-i am leaving now,"goodbye! have a wonderful day ahead.",goodbye,GREET VERB DET ADJ NOUN ADV
-talk to you later,"goodbye! have a wonderful day ahead.",goodbye,GREET VERB DET ADJ NOUN ADV
-farewell,"goodbye! have a wonderful day ahead.",goodbye,GREET VERB DET ADJ NOUN ADV
-i must go now,"goodbye! have a wonderful day ahead.",goodbye,GREET VERB DET ADJ NOUN ADV
-take care,"goodbye! have a wonderful day ahead.",goodbye,GREET VERB DET ADJ NOUN ADV
-have a nice day,"thank you! have a wonderful day ahead.",goodbye,VERB PRON VERB DET ADJ NOUN ADV
-catch you later,"goodbye! have a wonderful day ahead.",goodbye,GREET VERB DET ADJ NOUN ADV
-i am out,"goodbye! have a wonderful day ahead.",goodbye,GREET VERB DET ADJ NOUN ADV
-until next time,"goodbye! have a wonderful day ahead.",goodbye,GREET VERB DET ADJ NOUN ADV
-signing off,"goodbye! have a wonderful day ahead.",goodbye,GREET VERB DET ADJ NOUN ADV
-got to run,"goodbye! have a wonderful day ahead.",goodbye,GREET VERB DET ADJ NOUN ADV
-see ya,"goodbye! have a wonderful day ahead.",goodbye,GREET VERB DET ADJ NOUN ADV
-i am heading out,"goodbye! have a wonderful day ahead.",goodbye,GREET VERB DET ADJ NOUN ADV
-leaving now,"goodbye! have a wonderful day ahead.",goodbye,GREET VERB DET ADJ NOUN ADV
-time to go,"goodbye! have a wonderful day ahead.",goodbye,GREET VERB DET ADJ NOUN ADV
-i will be back later,"goodbye! have a wonderful day ahead.",goodbye,GREET VERB DET ADJ NOUN ADV
-end conversation,"goodbye! have a wonderful day ahead.",goodbye,GREET VERB DET ADJ NOUN ADV
-stop chatting,"goodbye! have a wonderful day ahead.",goodbye,GREET VERB DET ADJ NOUN ADV
-exit,"goodbye! have a wonderful day ahead.",goodbye,GREET VERB DET ADJ NOUN ADV
-quit,"goodbye! have a wonderful day ahead.",goodbye,GREET VERB DET ADJ NOUN ADV
-terminate,"goodbye! have a wonderful day ahead.",goodbye,GREET VERB DET ADJ NOUN ADV
-close session,"goodbye! have a wonderful day ahead.",goodbye,GREET VERB DET ADJ NOUN ADV
-disconnect,"goodbye! have a wonderful day ahead.",goodbye,GREET VERB DET ADJ NOUN ADV
-log off,"goodbye! have a wonderful day ahead.",goodbye,GREET VERB DET ADJ NOUN ADV
-peace out,"goodbye! have a wonderful day ahead.",goodbye,GREET VERB DET ADJ NOUN ADV
-i am done,"you are very welcome! let me know if you need more help.",goodbye,PRON VERB ADV ADJ VERB PRON VERB SCONJ PRON VERB ADJ NOUN
-i appreciate it,"thank you! have a wonderful day ahead.",goodbye,VERB PRON VERB DET ADJ NOUN ADV
-that was helpful,"thank you! have a wonderful day ahead.",goodbye,VERB PRON VERB DET ADJ NOUN ADV
-i'm off,"goodbye! have a wonderful day ahead.",goodbye,GREET VERB DET ADJ NOUN ADV
-later,"goodbye! have a wonderful day ahead.",goodbye,GREET VERB DET ADJ NOUN ADV
-have a good one,"thank you! have a wonderful day ahead.",goodbye,VERB PRON VERB DET ADJ NOUN ADV
-i'll let you go now,"goodbye! have a wonderful day ahead.",goodbye,GREET VERB DET ADJ NOUN ADV
-you've been great,"thank you! have a wonderful day ahead.",goodbye,VERB PRON VERB DET ADJ NOUN ADV
-i'm done for now,"you are very welcome! let me know if you need more help.",goodbye,PRON VERB ADV ADJ VERB PRON VERB SCONJ PRON VERB ADJ NOUN
-thank you for your help,"you are very welcome! let me know if you need more help.",goodbye,PRON VERB ADV ADJ VERB PRON VERB SCONJ PRON VERB ADJ NOUN
-thanks everyone,"you are very welcome! let me know if you need more help.",goodbye,PRON VERB ADV ADJ VERB PRON VERB SCONJ PRON VERB ADJ NOUN
-i'm logging off,"goodbye! have a wonderful day ahead.",goodbye,GREET VERB DET ADJ NOUN ADV
+i welcome you with hello,"hi there! how can i help you today?",greeting,PRON VERB PRON ADP INTJ
+who are you,"i am gollemer, your ai assistant.",identity,PRON AUX PRON
+how are you,"i am doing well, thank you for asking!",status_check,ADV AUX PRON
+what is your name,you can call me gollemer.,identity,PRON AUX PRON NOUN
+how do you work,i use a mixture of experts model to process and generate text.,capabilities,ADV AUX PRON VERB
+i am a language model,i am a large language model trained by gollemer.,capabilities,PRON AUX DET NOUN NOUN
+good morning,"hi there! how can i help you today?",greeting,ADJ NOUN
+good evening,"hello! what can i do for you tonight?",greeting,ADJ NOUN
+hey there,"hi! how can i help you today?",greeting,INTJ ADV
+is anyone there,"hello! i am here and ready to help.",greeting,AUX PRON ADV
+good afternoon,"hello! how can i help you this afternoon?",greeting,ADJ NOUN
+hi friend,"hello there! how can i help you today?",greeting,INTJ NOUN
+greetings,"hello! what can i help you with?",greeting,NOUN
+yo,"hi there! how can i help you today?",greeting,INTJ
+hello assistant,"hello! how are you doing today?",greeting,INTJ NOUN
+how are you doing,"i am doing great, thank you!",status_check,ADV AUX PRON VERB
+what is your purpose,my purpose is to assist you with language processing tasks.,capabilities,PRON AUX PRON NOUN
+are you a human,no i am an artificial intelligence designed to help you.,identity,AUX PRON DET NOUN
+where are you from,i exist in the cloud and do not have a physical origin.,identity,ADV AUX PRON ADP
+who created you,i was built by a computer engineer using native go.,identity,PRON VERB PRON
+can you think,i process data and simulate conversations but do not have consciousness.,capabilities,AUX PRON VERB
+tell me a joke,"why did the gopher cross the road? to get to the other cluster!",social,VERB PRON DET NOUN
+are you single,i am an ai model so relationship status does not apply to me.,social,AUX PRON ADJ
+do you love me,i appreciate our interactions as a helpful assistant!,social,AUX PRON VERB PRON
+what is the meaning of life,the meaning of life depends on your perspective and values.,social,PRON AUX DET NOUN ADP NOUN
+what is the current date,i am currently unable to fetch real-world time variables.,social,PRON AUX DET ADJ NOUN
+what is the latest news,i cannot access real-world real-time updates without internet connectivity.,social,PRON AUX DET ADJ NOUN
+everything good,"yes, everything is operating within normal parameters!",social,PRON ADJ
+can you process this,yes please provide the text or code you want me to analyze.,social,AUX PRON VERB PRON
+how is your day going,"it is going well, thank you!",social,ADV AUX PRON NOUN VERB
+are you an llm,"yes, i am an llm optimized with sparse mixture of experts.",social,AUX PRON DET NOUN
+how many experts do you have,i have multiple experts per layer optimized for specific tasks.,capabilities,ADV ADJ NOUN AUX PRON VERB
+what architecture do you use,i use a custom sparse moe architecture built from scratch.,capabilities,DET NOUN AUX PRON VERB
+is golang good for ml,golang is highly efficient for high-performance machine learning tasks.,capabilities,AUX NOUN ADJ ADP NOUN
+why use simd,simd allows single instruction multiple data parallel execution acceleration.,capabilities,ADV VERB NOUN
+are you fast,yes my native implementation utilizes parallel processing routines.,capabilities,AUX PRON ADJ
+what is an moe model,"an moe, or mixture of experts, routes tokens to specialized networks.",capabilities,PRON AUX DET NOUN NOUN
+can you book a flight for me,"i am an ai model and cannot perform real-world actions like booking flights. however, I can help you compose or summarize text!",capabilities,AUX PRON VERB DET NOUN ADP PRON
+can you order food for me,"i am an ai model and cannot perform real-world actions like ordering food. however, I can help you compose or summarize text!",capabilities,AUX PRON VERB NOUN ADP PRON
+can you control my lights,"i am an ai model and cannot perform real-world actions like controlling smart devices. however, I can help you compose or summarize text!",capabilities,AUX PRON VERB PRON NOUN
+can you buy things for me,"i am an ai model and cannot perform real-world actions like e-commerce. however, I can help you compose or summarize text!",capabilities,AUX PRON VERB NOUN ADP PRON
+can you schedule a meeting,"i am an ai model and cannot perform real-world actions like managing calendars. however, I can help you compose or summarize text!",capabilities,AUX PRON VERB DET NOUN
+can you set an alarm,"i am an ai model and cannot perform real-world actions like setting system alarms. however, I can help you compose or summarize text!",capabilities,AUX PRON VERB DET NOUN
+can you check my email,"i am an ai model and cannot perform real-world actions like accessing mailboxes. however, I can help you compose or summarize text!",capabilities,AUX PRON VERB PRON NOUN
+can you check the weather,"i am an ai model and cannot perform real-world actions like fetching current weather. however, I can help you compose or summarize text!",capabilities,AUX PRON VERB DET NOUN
+can you browse the web,"i am an ai model and cannot perform real-world actions like searching websites. however, I can help you compose or summarize text!",capabilities,AUX PRON VERB DET NOUN
+can you run terminal commands,"i am an ai model and cannot perform real-world actions like executing scripts. however, I can help you compose or summarize text!",capabilities,AUX PRON VERB NOUN NOUN
+goodbye,"goodbye! have a wonderful day ahead.",goodbye,INTJ
+bye,"goodbye! have a wonderful day ahead.",goodbye,INTJ
+see you later,"goodbye! have a wonderful day ahead.",goodbye,VERB PRON ADV
+i am leaving now,"goodbye! have a wonderful day ahead.",goodbye,PRON AUX VERB ADV
+talk to you later,"goodbye! have a wonderful day ahead.",goodbye,VERB ADP PRON ADV
+farewell,"goodbye! have a wonderful day ahead.",goodbye,INTJ
+i must go now,"goodbye! have a wonderful day ahead.",goodbye,PRON AUX VERB ADV
+take care,"goodbye! have a wonderful day ahead.",goodbye,VERB NOUN
+have a nice day,"thank you! have a wonderful day ahead.",goodbye,VERB DET ADJ NOUN
+catch you later,"goodbye! have a wonderful day ahead.",goodbye,VERB PRON ADV
+i am out,"goodbye! have a wonderful day ahead.",goodbye,PRON AUX ADV
+until next time,"goodbye! have a wonderful day ahead.",goodbye,ADP ADJ NOUN
+signing off,"goodbye! have a wonderful day ahead.",goodbye,VERB ADP
+got to run,"goodbye! have a wonderful day ahead.",goodbye,VERB PART VERB
+see ya,"goodbye! have a wonderful day ahead.",goodbye,VERB PRON
+i am heading out,"goodbye! have a wonderful day ahead.",goodbye,PRON AUX VERB ADV
+leaving now,"goodbye! have a wonderful day ahead.",goodbye,VERB ADV
+time to go,"goodbye! have a wonderful day ahead.",goodbye,NOUN PART VERB
+i will be back later,"goodbye! have a wonderful day ahead.",goodbye,PRON AUX AUX ADV ADV
+end conversation,"goodbye! have a wonderful day ahead.",goodbye,VERB NOUN
+stop chatting,"goodbye! have a wonderful day ahead.",goodbye,VERB VERB
+exit,"goodbye! have a wonderful day ahead.",goodbye,VERB
+quit,"goodbye! have a wonderful day ahead.",goodbye,VERB
+terminate,"goodbye! have a wonderful day ahead.",goodbye,VERB
+close session,"goodbye! have a wonderful day ahead.",goodbye,VERB NOUN
+disconnect,"goodbye! have a wonderful day ahead.",goodbye,VERB
+log off,"goodbye! have a wonderful day ahead.",goodbye,VERB ADP
+peace out,"goodbye! have a wonderful day ahead.",goodbye,NOUN ADV
+i am done,"you are very welcome! let me know if you need more help.",goodbye,PRON AUX ADJ
+i appreciate it,"thank you! have a wonderful day ahead.",goodbye,PRON VERB PRON
+that was helpful,"thank you! have a wonderful day ahead.",goodbye,PRON AUX ADJ
+i'm off,"goodbye! have a wonderful day ahead.",goodbye,PRON AUX ADV
+later,"goodbye! have a wonderful day ahead.",goodbye,ADV
+have a good one,"thank you! have a wonderful day ahead.",goodbye,VERB DET ADJ PRON
+i'll let you go now,"goodbye! have a wonderful day ahead.",goodbye,PRON AUX VERB PRON VERB ADV
+you've been great,"thank you! have a wonderful day ahead.",goodbye,PRON AUX AUX ADJ
+i'm done for now,"you are very welcome! let me know if you need more help.",goodbye,PRON AUX ADJ ADP ADV
+thank you for your help,"you are very welcome! let me know if you need more help.",goodbye,VERB PRON ADP PRON NOUN
+thanks everyone,"you are very welcome! let me know if you need more help.",goodbye,NOUN PRON
+i'm logging off,"goodbye! have a wonderful day ahead.",goodbye,PRON AUX VERB ADP
 I have a question,I'm listening,clarification,PRON VERB DET NOUN
 Can you explain this,certainly,clarification,AUX PRON VERB PRON
-What does this mean,here is the definition,clarification,PRON VERB DET VERB
+What does this mean,here is the definition,clarification,PRON AUX PRON VERB
 Could you help me,happy to assist,assistance,AUX PRON VERB PRON
-How do I do this,let me show you,assistance,ADV PRON VERB DET VERB
-This is not working,let me check that,troubleshooting,DET VERB ADV VERB
+How do I do this,let me show you,assistance,ADV AUX PRON VERB PRON
+This is not working,let me check that,troubleshooting,PRON AUX ADV VERB
 I have an error,please send the log,troubleshooting,PRON VERB DET NOUN
 Is it fixed yet,almost finished,status,AUX PRON VERB ADV
-What is the status,it is in progress,status,PRON VERB DET NOUN
+What is the status,it is in progress,status,PRON AUX DET NOUN
 Can we meet,I am available,scheduling,AUX PRON VERB
-What time works,anytime after two,scheduling,PRON NOUN VERB
+What time works,anytime after two,scheduling,DET NOUN VERB
 Is that correct,yes that is right,confirmation,AUX PRON ADJ
 Are you sure,I am certain,confirmation,AUX PRON ADJ
 I understand,glad to hear it,agreement,PRON VERB
-That makes sense,I agree,agreement,DET VERB NOUN
+That makes sense,I agree,agreement,PRON VERB NOUN
 Do you agree,I think so,opinion,AUX PRON VERB
-What is your opinion,here is my take,opinion,PRON VERB PRON NOUN
+What is your opinion,here is my take,opinion,PRON AUX PRON NOUN
 Give me an example,here is one for you,examples,VERB PRON DET NOUN
 Can you clarify,let me rephrase,clarification,AUX PRON VERB
 Thanks for the update,glad to help,feedback,NOUN ADP DET NOUN
-I like this,that is great,feedback,PRON VERB DET
-This is confusing,let me simplify,troubleshooting,DET VERB ADJ
+I like this,that is great,feedback,PRON VERB PRON
+This is confusing,let me simplify,troubleshooting,PRON AUX ADJ
 Is there a way,there are options,guidance,AUX ADV DET NOUN
-How do I start,begin by logging in,instruction,ADV PRON VERB VERB
-What is next,proceed to the step,instruction,PRON VERB ADV
-Is this urgent,it needs attention,priority,AUX DET ADJ
-How long will it take,about an hour,timing,ADV ADJ VERB PRON VERB
-Are we done,almost finished,status,AUX PRON VERB
+How do I start,begin by logging in,instruction,ADV AUX PRON VERB
+What is next,proceed to the step,instruction,PRON AUX ADV
+Is this urgent,it needs attention,priority,AUX PRON ADJ
+How long will it take,about an hour,timing,ADV ADV AUX PRON VERB
+Are we done,almost finished,status,AUX PRON ADJ
 I need more,I am adding more,request,PRON VERB ADJ
 Please wait,taking a moment,waiting,INTJ VERB
 Is it ready,it is ready now,status,AUX PRON ADJ
 Show me how,watching closely,instruction,VERB PRON ADV
-What tools do I need,these are the tools,resources,PRON NOUN AUX PRON VERB
-Where can I find it,it is in the link,location,ADV AUX PRON VERB
-Can you hold on,sure thing,waiting,AUX PRON VERB
-I am confused,let me explain,clarification,PRON VERB ADJ
-That worked,great job,feedback,DET VERB
+What tools do I need,these are the tools,resources,DET NOUN AUX PRON VERB
+Where can I find it,it is in the link,location,ADV AUX PRON VERB PRON
+Can you hold on,sure thing,waiting,AUX PRON VERB ADV
+I am confused,let me explain,clarification,PRON AUX ADJ
+That worked,great job,feedback,PRON VERB
 Not exactly,let me try again,correction,ADV ADV
 I see,glad that helped,agreement,PRON VERB
 Are you there,I am here,presence,AUX PRON ADV
 Could you repeat that,of course,repetition,AUX PRON VERB PRON
-Is this allowed,that is permitted,policy,AUX DET ADJ
-How do I search,use the search bar,instruction,ADV PRON VERB NOUN
+Is this allowed,that is permitted,policy,AUX PRON VERB
+How do I search,use the search bar,instruction,ADV AUX PRON VERB
 I found it,well done,discovery,PRON VERB PRON
 Do you know why,let me research,inquiry,AUX PRON VERB ADV
 Is it accessible,yes it is,status,AUX PRON ADJ
-What is the price,it is free,cost,PRON VERB DET NOUN
+What is the price,it is free,cost,PRON AUX DET NOUN
 Can you save this,it is saved,storage,AUX PRON VERB PRON
 I need access,let me verify,permission,PRON VERB NOUN
-That is not right,let me correct it,correction,DET VERB ADV ADJ
+That is not right,let me correct it,correction,PRON AUX ADV ADJ
 Do you have time,let us discuss,scheduling,AUX PRON VERB NOUN
-What is the issue,checking the system,troubleshooting,PRON VERB DET NOUN
+What is the issue,checking the system,troubleshooting,PRON AUX DET NOUN
 Is it compatible,yes it is,status,AUX PRON ADJ
-How do I export,click the button,instruction,ADV PRON VERB NOUN
-That is interesting,glad you like it,opinion,DET VERB ADJ
-I am ready,proceed when ready,status,PRON VERB ADJ
+How do I export,click the button,instruction,ADV AUX PRON VERB
+That is interesting,glad you like it,opinion,PRON AUX ADJ
+I am ready,proceed when ready,status,PRON AUX ADJ
 Can you optimize,I can do that,improvement,AUX PRON VERB
 Is there a limit,yes one per user,limitation,AUX ADV DET NOUN
-What is the policy,check the documentation,policy,PRON VERB DET NOUN
-I am stuck,let me assist,troubleshooting,PRON VERB ADJ
-Is this secure,it is protected,security,AUX DET ADJ
-How do I format,follow this style,instruction,ADV PRON VERB NOUN
-That looks good,happy to hear,feedback,DET VERB ADJ
+What is the policy,check the documentation,policy,PRON AUX DET NOUN
+I am stuck,let me assist,troubleshooting,PRON AUX ADJ
+Is this secure,it is protected,security,AUX PRON ADJ
+How do I format,follow this style,instruction,ADV AUX PRON VERB
+That looks good,happy to hear,feedback,PRON VERB ADJ
 Are there alternatives,yes here are some,alternatives,AUX ADV NOUN
-What is the scope,the scope is limited,definition,PRON VERB DET NOUN
+What is the scope,the scope is limited,definition,PRON AUX DET NOUN
 Can you summarize,here is the summary,summarization,AUX PRON VERB
 I forgot,no problem,memory,PRON VERB
 Is it saved,it is done,storage,AUX PRON VERB
-How do I change it,edit the settings,instruction,ADV PRON VERB PRON
-That helps,you are welcome,feedback,DET VERB
+How do I change it,edit the settings,instruction,ADV AUX PRON VERB PRON
+That helps,you are welcome,feedback,PRON VERB
 Are you busy,I have a moment,availability,AUX PRON ADJ
-What is the priority,it is high,priority,PRON VERB DET NOUN
+What is the priority,it is high,priority,PRON AUX DET NOUN
 I need help,coming right up,assistance,PRON VERB NOUN
-Is this mandatory,it is optional,requirement,AUX DET ADJ
-How do I link,use this URL,instruction,ADV PRON VERB NOUN
-That makes sense,exactly,agreement,DET VERB NOUN
+Is this mandatory,it is optional,requirement,AUX PRON ADJ
+How do I link,use this URL,instruction,ADV AUX PRON VERB
+That makes sense,exactly,agreement,PRON VERB NOUN
 I disagree,let us review,disagreement,PRON VERB
 Can you verify,it is verified,confirmation,AUX PRON VERB
-What is the plan,the plan is simple,planning,PRON VERB DET NOUN
-I have finished,great work,status,PRON VERB VERB
+What is the plan,the plan is simple,planning,PRON AUX DET NOUN
+I have finished,great work,status,PRON AUX VERB
 Is it automated,it is manual,status,AUX PRON ADJ
-How do I refresh,click here,instruction,ADV PRON VERB
-That is useful,glad to hear,feedback,DET VERB ADJ
+How do I refresh,click here,instruction,ADV AUX PRON VERB
+That is useful,glad to hear,feedback,PRON AUX ADJ
 Are there updates,no new updates,news,AUX ADV NOUN
-What is the version,version two,info,PRON VERB DET NOUN
-I am testing,keep me posted,testing,PRON VERB VERB
-Is this accurate,yes it is verified,accuracy,AUX DET ADJ
-How do I contact,use the form,contact,ADV PRON VERB NOUN
-That is fine,no issue,agreement,DET VERB ADJ
+What is the version,version two,info,PRON AUX DET NOUN
+I am testing,keep me posted,testing,PRON AUX VERB
+Is this accurate,yes it is verified,accuracy,AUX PRON ADJ
+How do I contact,use the form,contact,ADV AUX PRON VERB
+That is fine,no issue,agreement,PRON AUX ADJ
 Are you logged in,yes I am,status,AUX PRON VERB ADV
-What is the output,here is the data,results,PRON VERB DET NOUN
+What is the output,here is the data,results,PRON AUX DET NOUN
 I need a draft,writing it now,request,PRON VERB DET NOUN
 Is it global,it is local,scope,AUX PRON ADJ
-How do I install,follow the steps,instruction,ADV PRON VERB NOUN
-That is enough,understood,agreement,DET VERB ADJ
-Are you finished,yes I am,status,AUX PRON VERB
-What is the shortcut,press control,instruction,PRON VERB DET NOUN
+How do I install,follow the steps,instruction,ADV AUX PRON VERB
+That is enough,understood,agreement,PRON AUX ADJ
+Are you finished,yes I am,status,AUX PRON ADJ
+What is the shortcut,press control,instruction,PRON AUX DET NOUN
 I need focus,I am here to help,assistance,PRON VERB NOUN
 Is it public,it is private,status,AUX PRON ADJ
-How do I log out,click the icon,instruction,ADV PRON VERB NOUN
-I have a question,i'm listening,clarification,PRON VERB DET NOUN 
+How do I log out,click the icon,instruction,ADV AUX PRON VERB ADV
+I have a question,i'm listening,clarification,PRON VERB DET NOUN
 Can you share the file,it is attached,collaboration,AUX PRON VERB DET NOUN
 Please update the document,done just now,editing,INTJ VERB DET NOUN
 Can you review this,looking at it now,review,AUX PRON VERB PRON
-What is the deadline,it is due Friday,scheduling,PRON VERB DET NOUN
+What is the deadline,it is due Friday,scheduling,PRON AUX DET NOUN
 I need a meeting,let us schedule one,coordination,PRON VERB DET NOUN
 Can you prepare a report,working on it,tasks,AUX PRON VERB DET NOUN
 Is the link working,let me check,troubleshooting,AUX DET NOUN VERB
@@ -201,45 +201,45 @@ Can you adjust the timeline,I will change it,planning,AUX PRON VERB DET NOUN
 Do you have the agenda,yes it is here,meetings,AUX PRON VERB DET NOUN
 I need your input,happy to provide it,feedback,PRON VERB PRON NOUN
 Can you confirm receipt,yes I have it,confirmation,AUX PRON VERB NOUN
-Who is responsible,that is my role,ownership,PRON VERB PRON NOUN
+Who is responsible,that is my role,ownership,PRON AUX ADJ
 Is the team ready,we are prepared,status,AUX DET NOUN ADJ
 Can you draft an email,starting now,writing,AUX PRON VERB DET NOUN
-What is the budget,it is pending approval,finance,PRON VERB DET NOUN
+What is the budget,it is pending approval,finance,PRON AUX DET NOUN
 I need a quick call,I am free soon,coordination,PRON VERB DET ADJ NOUN
 Can you host the session,I can do that,meetings,AUX PRON VERB DET NOUN
 Is the server down,it is running fine,maintenance,AUX DET NOUN ADV
 I need access rights,granting them now,permission,PRON VERB NOUN NOUN
 Can you verify the math,calculating it now,validation,AUX PRON VERB DET NOUN
-What are the next steps,review the list,planning,PRON VERB DET ADJ NOUN
-I am feeling blocked,how can I help,support,PRON VERB VERB ADJ
+What are the next steps,review the list,planning,PRON AUX DET ADJ NOUN
+I am feeling blocked,how can I help,support,PRON AUX VERB ADJ
 Can you explain the logic,sure it is simple,analysis,AUX PRON VERB DET NOUN
 Is the site live,it is active,status,AUX DET NOUN ADJ
 I need a follow-up,I will send it,communication,PRON VERB DET NOUN
 Can you compare these,they are identical,analysis,AUX PRON VERB PRON
-What is the current version,version four,data,PRON VERB DET ADJ NOUN
+What is the current version,version four,data,PRON AUX DET ADJ NOUN
 I need to reset my password,follow the link,security,PRON VERB PART VERB PRON NOUN
 Can you monitor this,I will watch it,oversight,AUX PRON VERB PRON
 Is the export complete,yes it is done,status,AUX DET NOUN ADJ
 I need a clean copy,sending one now,documents,PRON VERB DET ADJ NOUN
 Can you filter the results,filtering now,data,AUX PRON VERB DET NOUN
-What is the search criteria,it is by date,parameters,PRON VERB DET NOUN NOUN
+What is the search criteria,it is by date,parameters,PRON AUX DET NOUN NOUN
 I need a backup,saving it now,maintenance,PRON VERB DET NOUN
 Can you clear the cache,doing it,maintenance,AUX PRON VERB DET NOUN
 Is the API stable,yes it is,status,AUX DET NOUN ADJ
 I need the latest build,uploading it,development,PRON VERB DET ADJ NOUN
 Can you test the logic,running a test,testing,AUX PRON VERB DET NOUN
-What is the error code,it is four zero four,troubleshooting,PRON VERB DET NOUN NOUN
+What is the error code,it is four zero four,troubleshooting,PRON AUX DET NOUN NOUN
 I need to merge these,I am doing it,collaboration,PRON VERB PART VERB PRON
 Can you document this,writing it down,documentation,AUX PRON VERB PRON
 Is the sensor active,it is reading now,technical,AUX DET NOUN ADJ
 I need an update,here is the status,news,PRON VERB DET NOUN
 Can you verify the user,verifying now,security,AUX PRON VERB DET NOUN
-What is the response time,it is very fast,performance,PRON VERB DET NOUN NOUN
-I need to scale up,adding more nodes,growth,PRON VERB PART VERB ADJ NOUN
+What is the response time,it is very fast,performance,PRON AUX DET NOUN NOUN
+I need to scale up,adding more nodes,growth,PRON VERB PART VERB ADV
 Can you optimize the query,doing that now,performance,AUX PRON VERB DET NOUN
 Did you compile the code,it is running now,development,AUX PRON VERB DET NOUN
 Can you fix the bug,working on it,debugging,AUX PRON VERB DET NOUN
-Is the server down,it is responding normally,infrastructure,AUX DET NOUN ADJ
+Is the server down,it is responding normally,infrastructure,AUX DET NOUN ADV
 Should I restart the system,yes try that,troubleshooting,AUX PRON VERB DET NOUN
 Will you deploy the update,starting the pipeline,deployment,AUX PRON VERB DET NOUN
 Can you check the logs,looking at them,monitoring,AUX PRON VERB DET NOUN
@@ -255,7 +255,7 @@ Did you push the changes,they are on main,git,AUX PRON VERB DET NOUN
 Can you review the PR,leaving comments now,collaboration,AUX PRON VERB DET NOUN
 Is the network slow,traffic is very high,infrastructure,AUX DET NOUN ADJ
 Should I upgrade the package,yes it is secure,security,AUX PRON VERB DET NOUN
-Will you back up data,saving it now,maintenance,AUX PRON VERB ADP NOUN
+Will you back up data,saving it now,maintenance,AUX PRON VERB ADV NOUN
 Can you block the IP,it is restricted now,security,AUX PRON VERB DET NOUN
 Is the token expired,you need a new one,security,AUX DET NOUN ADJ
 Did you create the repository,it is ready online,git,AUX PRON VERB DET NOUN
@@ -267,7 +267,7 @@ Can you isolate the environment,it is sandboxed now,devops,AUX PRON VERB DET NOU
 Is the container running,it is active now,docker,AUX DET NOUN VERB
 Did you close the ticket,it is resolved now,support,AUX PRON VERB DET NOUN
 Can you export the metrics,generating the report,monitoring,AUX PRON VERB DET NOUN
-Is the load balanced,traffic is distributed,infrastructure,AUX DET NOUN ADJ
+Is the load balanced,traffic is distributed,infrastructure,AUX DET NOUN VERB
 Should I purge the queue,yes clear it out,architecture,AUX PRON VERB DET NOUN
 Will you index the table,speeding up queries,database,AUX PRON VERB DET NOUN
 Can you profile the application,running the benchmarks,performance,AUX PRON VERB DET NOUN
@@ -308,7 +308,7 @@ Will you validate the payload,checking the schema,api,AUX PRON VERB DET NOUN
 Can you squash the commits,cleaning the history,git,AUX PRON VERB DET NOUN
 Is the pipeline broken,a test failed,ci-cd,AUX DET NOUN ADJ
 Did you approve the changes,looks good to me,collaboration,AUX PRON VERB DET NOUN
-Can you standardise the format,applying lint rules,development,AUX PRON VERB DET NOUN
+Can you standardise the format,applying linter rules,development,AUX PRON VERB DET NOUN
 Is the firewall blocking,it is filtering traffic,security,AUX DET NOUN VERB
 Should I tag the release,yes mark version one,git,AUX PRON VERB DET NOUN
 Will you script the installation,making a bash file,automation,AUX PRON VERB DET NOUN
@@ -337,24 +337,24 @@ Can you debug the crash,analyzing the stack trace,debugging,AUX PRON VERB DET NO
 Is the encryption strong,it uses latest standards,security,AUX DET NOUN ADJ
 Did you test the logic,it covers all cases,testing,AUX PRON VERB DET NOUN
 Can you map the fields,linking the data types,database,AUX PRON VERB DET NOUN
-Are you updating the code,yes i am editing it,development,AUX PRON VERB DET NOUN 
-How is the project going,it is progressing well,status,PRON VERB DET NOUN
+Are you updating the code,yes i am editing it,development,AUX PRON VERB DET NOUN
+How is the project going,it is progressing well,status,ADV AUX DET NOUN VERB
 Can you fix the error,i am working on it,debugging,AUX PRON VERB DET NOUN
 Is the system stable,yes it is running smoothly,operations,AUX DET NOUN ADJ
-Should I deploy now,let us wait a bit,release,AUX PRON VERB DET NOUN
+Should I deploy now,let us wait a bit,release,AUX PRON VERB ADV
 Will you write the tests,i will do them today,testing,AUX PRON VERB DET NOUN
 Can you check the status,i am looking now,monitoring,AUX PRON VERB DET NOUN
-Is the database optimized,yes it is running fast,database,AUX DET NOUN ADJ
+Is the database optimized,yes it is running fast,database,AUX DET NOUN VERB
 Did you commit the changes,i pushed them already,git,AUX PRON VERB DET NOUN
 Can you verify the build,it is compiling now,ci-cd,AUX PRON VERB DET NOUN
-Is the API documented,yes i updated it,documentation,AUX DET NOUN ADJ
+Is the API documented,yes i updated it,documentation,AUX DET NOUN VERB
 Should we upgrade the software,it is recommended,maintenance,AUX PRON VERB DET NOUN
 Will you handle the request,i can manage it,operations,AUX PRON VERB DET NOUN
 Can you backup the data,i will do it tonight,maintenance,AUX PRON VERB DET NOUN
 Is the connection secure,yes it is encrypted,security,AUX DET NOUN ADJ
 Did you create the branch,i created it yesterday,git,AUX PRON VERB DET NOUN
 Can you test the new feature,i will test it tomorrow,testing,AUX PRON VERB DET NOUN
-Is the server overloaded,it is handling the load,infrastructure,AUX DET NOUN ADJ
+Is the server overloaded,it is handling the load,infrastructure,AUX DET NOUN VERB
 Should I add the logs,yes it is necessary,monitoring,AUX PRON VERB DET NOUN
 Will you deploy the patch,i am deploying it now,devops,AUX PRON VERB DET NOUN
 Can you fix the UI,i will fix it soon,frontend,AUX PRON VERB DET NOUN
@@ -372,17 +372,17 @@ Is the feature complete,yes it is complete,development,AUX DET NOUN ADJ
 Should I deploy the update,yes it is ready,deployment,AUX PRON VERB DET NOUN
 Will you test the endpoint,i will test it now,testing,AUX PRON VERB DET NOUN
 Can you check the status,yes i am checking it,monitoring,AUX PRON VERB DET NOUN
-Is the database optimized,yes i optimized it,database,AUX PRON VERB DET NOUN
+Is the database optimized,yes i optimized it,database,AUX DET NOUN VERB
 Did you commit the changes,yes i committed them,git,AUX PRON VERB DET NOUN
 Can you verify the build,yes i am verifying it,ci-cd,AUX PRON VERB DET NOUN
-Is the API documented,yes i documented it,api-design,AUX DET NOUN ADJ
+Is the API documented,yes i documented it,api-design,AUX DET NOUN VERB
 Should we upgrade the server,yes it is time,infrastructure,AUX PRON VERB DET NOUN
 Will you handle the request,i can handle it,operations,AUX PRON VERB DET NOUN
 Can you backup the files,i will backup them now,maintenance,AUX PRON VERB DET NOUN
 Is the connection secure,yes it is secure,security,AUX DET NOUN ADJ
 Did you create the branch,yes i created it,git,AUX PRON VERB DET NOUN
 Can you test the new feature,yes i will test it,testing,AUX PRON VERB DET NOUN
-Is the server overloaded,yes it is overloaded,infrastructure,AUX DET NOUN ADJ
+Is the server overloaded,yes it is overloaded,infrastructure,AUX DET NOUN VERB
 Should I add the logs,yes i will add them,debugging,AUX PRON VERB DET NOUN
 Will you deploy the patch,yes i will deploy it,devops,AUX PRON VERB DET NOUN
 Can you fix the UI,yes i will fix it,frontend,AUX PRON VERB DET NOUN
@@ -390,347 +390,3 @@ Is the configuration correct,yes it is correct,configuration,AUX DET NOUN ADJ
 Did you resolve the issue,yes i resolved it,support,AUX PRON VERB DET NOUN
 Can you test the form,yes i will test it,testing,AUX PRON VERB DET NOUN
 Is the build passing,yes it is passing,ci-cd,AUX DET NOUN VERB
-Should we optimize the code,yes i will optimize it,performance,AUX PRON VERB DET NOUN
-Will you update the docs,yes i will update them,documentation,AUX PRON VERB DET NOUN
-Can you merge the pull request,yes i will merge it,git,AUX PRON VERB DET NOUN
-Is the token valid,yes it is valid,security,AUX DET NOUN ADJ
-Did you backup the database,yes i backed it up,database,AUX PRON VERB DET NOUN
-Can you fix the bug,yes i will fix it,debugging,AUX PRON VERB DET NOUN
-Is the feature complete,yes it is complete,development,AUX DET NOUN ADJ
-Should I deploy the update,yes i will deploy it,deployment,AUX PRON VERB DET NOUN
-Will you test the endpoint,yes i will test it,api-testing,AUX PRON VERB DET NOUN
-Can you check the status,yes i am checking it,monitoring,AUX PRON VERB DET NOUN
-Is the database optimized,yes i optimized it,database,AUX PRON VERB DET NOUN
-Did you commit the changes,yes i committed them,git,AUX PRON VERB DET NOUN
-Can you verify the build,yes i am verifying it,ci-cd,AUX PRON VERB DET NOUN
-Is the API documented,yes i documented it,documentation,AUX DET NOUN ADJ
-Should we upgrade the server,yes it is time,infrastructure,AUX PRON VERB DET NOUN
-Will you handle the request,i can handle it,operations,AUX PRON VERB DET NOUN
-Can you backup the files,yes i will backup them,maintenance,AUX PRON VERB DET NOUN
-Is the connection secure,yes it is secure,security,AUX DET NOUN ADJ
-Did you create the branch,yes i created it,git,AUX PRON VERB DET NOUN
-Can you test the new feature,yes i will test it,testing,AUX PRON VERB DET NOUN
-Is the server overloaded,yes it is overloaded,infrastructure,AUX DET NOUN ADJ
-Should I add the logs,yes i will add them,debugging,AUX PRON VERB DET NOUN
-Will you deploy the patch,yes i will deploy it,devops,AUX PRON VERB DET NOUN
-Can you fix the UI,yes i will fix it,frontend,AUX PRON VERB DET NOUN
-Is the configuration correct,yes it is correct,configuration,AUX DET NOUN ADJ
-Did you resolve the issue,yes i resolved it,support,AUX PRON VERB DET NOUN
-Can you test the form,yes i will test it,testing,AUX PRON VERB DET NOUN
-Is the build passing,yes it is passing,ci-cd,AUX DET NOUN VERB
-Should we optimize the code,yes i will optimize it,performance,AUX PRON VERB DET NOUN
-Will you update the docs,yes i will update them,documentation,AUX PRON VERB DET NOUN
-Can you merge the pull request,yes i will merge it,git,AUX PRON VERB DET NOUN
-Is the token valid,yes it is valid,security,AUX DET NOUN ADJ
-Did you backup the database,yes i backed it up,database,AUX PRON VERB DET NOUN
-Can you fix the bug,yes i will fix it,debugging,AUX PRON VERB DET NOUN
-Is the feature complete,yes it is complete,development,AUX DET NOUN ADJ
-Should I deploy the update,yes i will deploy it,deployment,AUX PRON VERB DET NOUN
-Will you test the endpoint,yes i will test it,api-testing,AUX PRON VERB DET NOUN
-Can you check the status,yes i am checking it,monitoring,AUX PRON VERB DET NOUN
-Is the database optimized,yes i optimized it,database,AUX PRON VERB DET NOUN
-Did you commit the changes,yes i committed them,git,AUX PRON VERB DET NOUN
-Can you verify the build,yes i am verifying it,ci-cd,AUX PRON VERB DET NOUN
-Is the API documented,yes i documented it,documentation,AUX DET NOUN ADJ
-Should we upgrade the server,yes it is time,infrastructure,AUX PRON VERB DET NOUN
-Will you handle the request,i can handle it,operations,AUX PRON VERB DET NOUN
-Can you backup the files,yes i will backup them,maintenance,AUX PRON VERB DET NOUN
-Is the connection secure,yes it is secure,security,AUX DET NOUN ADJ
-Did you create the branch,yes i created it,git,AUX PRON VERB DET NOUN
-Can you test the new feature,yes i will test it,testing,AUX PRON VERB DET NOUN
-Is the server overloaded,yes it is overloaded,infrastructure,AUX DET NOUN ADJ
-Should I add the logs,yes i will add them,debugging,AUX PRON VERB DET NOUN
-Will you deploy the patch,yes i will deploy it,devops,AUX PRON VERB DET NOUN
-Can you fix the UI,yes i will fix it,frontend,AUX PRON VERB DET NOUN
-Is the configuration correct,yes it is correct,configuration,AUX DET NOUN ADJ
-Did you resolve the issue,yes i resolved it,support,AUX PRON VERB DET NOUN
-Can you test the form,yes i will test it,testing,AUX PRON VERB DET NOUN
-Is the build passing,yes it is passing,ci-cd,AUX DET NOUN VERB
-Should we optimize the code,yes i will optimize it,performance,AUX PRON VERB DET NOUN
-Will you update the docs,yes i will update them,documentation,AUX PRON VERB DET NOUN
-Can you merge the pull request,yes i will merge it,git,AUX PRON VERB DET NOUN
-Is the token valid,yes it is valid,security,AUX DET NOUN ADJ 
-Did you compile the code,it is running now,development,AUX PRON VERB DET NOUN
-Can you fix the bug,working on it,debugging,AUX PRON VERB DET NOUN
-Is the server down,it is responding normally,infrastructure,AUX DET NOUN ADJ
-Should I restart the system,yes try that,troubleshooting,AUX PRON VERB DET NOUN
-Will you deploy the update,starting the pipeline,deployment,AUX PRON VERB DET NOUN
-Can you check the logs,looking at them,monitoring,AUX PRON VERB DET NOUN
-Is the database locked,it is accessible now,database,AUX DET NOUN ADJ
-Did you merge the branch,it is done,git,AUX PRON VERB DET NOUN
-Can you run the tests,they all passed,testing,AUX PRON VERB DET NOUN
-Is the API live,it is accepting requests,integration,AUX DET NOUN ADJ
-Should we review the code,let us do it,peer-review,AUX PRON VERB DET NOUN
-Will you test the feature,doing that today,testing,AUX PRON VERB DET NOUN
-Can you clear the cache,it is empty now,performance,AUX PRON VERB DET NOUN
-Is the build failing,yes it needs fixing,development,AUX DET NOUN VERB
-Did you push the changes,they are on main,git,AUX PRON VERB DET NOUN
-Can you review the PR,leaving comments now,collaboration,AUX PRON VERB DET NOUN
-Is the network slow,traffic is very high,infrastructure,AUX DET NOUN ADJ
-Should I upgrade the package,yes it is secure,security,AUX PRON VERB DET NOUN
-Will you back up data,saving it now,maintenance,AUX PRON VERB ADP NOUN
-Can you block the IP,it is restricted now,security,AUX PRON VERB DET NOUN
-Is the token expired,you need a new one,security,AUX DET NOUN ADJ
-Did you create the repository,it is ready online,git,AUX PRON VERB DET NOUN
-Can you format the file,it looks clean now,development,AUX PRON VERB DET NOUN
-Is the connection secure,encryption is enabled,security,AUX DET NOUN ADJ
-Should we migrate the data,let us schedule it,database,AUX PRON VERB DET NOUN
-Will you patch the vulnerability,applying the fix,security,AUX PRON VERB DET NOUN
-Can you isolate the environment,it is sandboxed now,devops,AUX PRON VERB DET NOUN
-Is the container running,it is active now,docker,AUX DET NOUN VERB
-Did you close the ticket,it is resolved now,support,AUX PRON VERB DET NOUN
-Can you export the metrics,generating the report,monitoring,AUX PRON VERB DET NOUN
-Is the load balanced,traffic is distributed,infrastructure,AUX DET NOUN ADJ
-Should I purge the queue,yes clear it out,architecture,AUX PRON VERB DET NOUN
-Will you index the table,speeding up queries,database,AUX PRON VERB DET NOUN
-Can you profile the application,running the benchmarks,performance,AUX PRON VERB DET NOUN
-Is the script automated,it runs every hour,automation,AUX DET NOUN ADJ
-Did you generate the keys,they are securely stored,security,AUX PRON VERB DET NOUN
-Can you refactor the function,making it cleaner,development,AUX PRON VERB DET NOUN
-Is the UI responsive,it works on mobile,frontend,AUX DET NOUN ADJ
-Should we scale the cluster,yes add more power,cloud,AUX PRON VERB DET NOUN
-Will you monitor the traffic,watching the dashboard,operations,AUX PRON VERB DET NOUN
-Can you rotate the secrets,updating them now,security,AUX PRON VERB DET NOUN
-Is the webhook triggered,it sent the payload,integration,AUX DET NOUN VERB
-Did you fix the leak,memory is stable now,debugging,AUX PRON VERB DET NOUN
-Can you trace the request,tracking the path,monitoring,AUX PRON VERB DET NOUN
-Is the site functional,users are logging in,operations,AUX DET NOUN ADJ
-Should I configure the firewall,yes block public access,security,AUX PRON VERB DET NOUN
-Will you automate the deployment,setting up actions,devops,AUX PRON VERB DET NOUN
-Can you renew the certificate,it is updated now,security,AUX PRON VERB DET NOUN
-Is the worker idle,it is waiting for jobs,architecture,AUX DET NOUN ADJ
-Did you optimize the image,it is much smaller,frontend,AUX PRON VERB DET NOUN
-Can you audit the code,checking for issues,security,AUX PRON VERB DET NOUN
-Is the memory full,it is clearing out,performance,AUX DET NOUN ADJ
-Should we deprecate the endpoint,yes remove it soon,api-design,AUX PRON VERB DET NOUN
-Will you update the documentation,writing the guide,management,AUX PRON VERB DET NOUN
-Can you reset the password,sending the link,auth,AUX PRON VERB DET NOUN
-Is the cluster healthy,all nodes are green,cloud,AUX DET NOUN ADJ
-Did you replicate the bug,i can see it,debugging,AUX PRON VERB DET NOUN
-Can you sync the database,it is matching now,database,AUX PRON VERB DET NOUN
-Is the process alive,it is running smoothly,os,AUX DET NOUN ADJ
-Should I disable the feature,yes turn it off,product,AUX PRON VERB DET NOUN
-Will you write the wrapper,creating the interface,development,AUX PRON VERB DET NOUN
-Can you mock the API,setting up stubs,testing,AUX PRON VERB DET NOUN
-Is the backup complete,it is saved safely,maintenance,AUX DET NOUN ADJ
-Did you scan the dependency,it has no threats,security,AUX PRON VERB DET NOUN
-Can you containerize the service,building the dockerfile,devops,AUX PRON VERB DET NOUN
-Is the routing correct,packets are arriving,networking,AUX DET NOUN ADJ
-Should we alert the team,yes send a page,operations,AUX PRON VERB DET NOUN
-Will you validate the payload,checking the schema,api,AUX PRON VERB DET NOUN
-Can you squash the commits,cleaning the history,git,AUX PRON VERB DET NOUN
-Is the pipeline broken,a test failed,ci-cd,AUX DET NOUN ADJ
-Did you approve the changes,looks good to me,collaboration,AUX PRON VERB DET NOUN
-Can you standardise the format,applying lint rules,development,AUX PRON VERB DET NOUN
-Is the firewall blocking,it is filtering traffic,security,AUX DET NOUN VERB
-Should I tag the release,yes mark version one,git,AUX PRON VERB DET NOUN
-Will you script the installation,making a bash file,automation,AUX PRON VERB DET NOUN
-Can you whitelist the domain,it is permitted now,security,AUX PRON VERB DET NOUN
-Is the storage adequate,we have plenty left,infrastructure,AUX DET NOUN ADJ
-Did you resolve the conflict,code is merged now,git,AUX PRON VERB DET NOUN
-Can you benchmark the hardware,running the stress test,performance,AUX PRON VERB DET NOUN
-Is the configuration valid,the syntax looks correct,devops,AUX DET NOUN ADJ
-Should we throttle the clients,yes limit the requests,rate-limiting,AUX PRON VERB DET NOUN
-Will you isolate the bug,finding the root cause,debugging,AUX PRON VERB DET NOUN
-Can you stream the data,opening the socket,architecture,AUX PRON VERB DET NOUN
-Is the traffic spiking,load is increasing fast,monitoring,AUX DET NOUN VERB
-Did you minimize the bundle,it loads much faster,frontend,AUX PRON VERB DET NOUN
-Can you inspect the packet,reading the headers,networking,AUX PRON VERB DET NOUN
-Is the endpoint public,anyone can access it,api-design,AUX DET NOUN ADJ
-Should I terminate the instance,yes shut it down,cloud,AUX PRON VERB DET NOUN
-Will you refactor the class,breaking it down,development,AUX PRON VERB DET NOUN
-Can you clean the directory,removing old artifacts,maintenance,AUX PRON VERB DET NOUN
-Is the certificate valid,it expires next year,security,AUX DET NOUN ADJ
-Did you initialize the variable,it starts at zero,development,AUX PRON VERB DET NOUN
-Can you parse the string,extracting the data,development,AUX PRON VERB DET NOUN
-Is the disk full,we need to delete data,infrastructure,AUX DET NOUN ADJ
-Should we override the method,yes change the behavior,oop,AUX PRON VERB DET NOUN
-Will you provision the infrastructure,terraform is running now,devops,AUX PRON VERB DET NOUN
-Can you debug the crash,analyzing the stack trace,debugging,AUX PRON VERB DET NOUN
-Is the encryption strong,it uses latest standards,security,AUX DET NOUN ADJ
-Did you test the logic,it covers all cases,testing,AUX PRON VERB DET NOUN
-Can you map the fields,linking the data types,database,AUX PRON VERB DET NOUN 
-Did you approve the PR,it is waiting on you,git,AUX PRON VERB DET NOUN
-"hello","Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.","greeting_query","OTHER"
-"move the file jane into folder jimmy","I couldn't find a file named 'jane' anywhere in the project.","move_query","OTHER"
-"move the file jane.go into folder jimmy","I have moved the file 'jane.go' to 'jimmy'.","move_query","OTHER"
-"who are you","I am Gollemer, your AI coding assistant and project orchestrator.","identity_query","OTHER"
-"what would you like to do with the file jane.go","I think so.","social_chat","OTHER"
-"hello","Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.","greeting_query","OTHER"
-"do you know where the folder jimmy is","Let me research.","social_chat","OTHER"
-"hello","[INTENT: greeting_query] Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.","greeting_query","OTHER"
-"move the file jake to the folder jimmy","[INTENT: move_query] I couldn't find a file named 'jake' anywhere in the project.","move_query","OTHER"
-"move the file jake.go and put jake into the folder jimmy","[INTENT: move_query] I have moved the file 'jake.go' to 'jimmy'.","move_query","OTHER"
-"hello","[INTENT: greeting_query] Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.","greeting_query","OTHER"
-"move the file jakey.go into folder jimmy","[INTENT: move_query] I have moved the file 'jakey.go' to 'jimmy'.","move_query","OTHER"
-"move file jane.go.go into folder jimmy","[INTENT: move_query] I have moved the file 'jane.go.go' to 'jimmy'.","move_query","OTHER"
-"what files and folders were we talking about","[INTENT: history_recall] Here's our conversation so far:","history_recall","OTHER"
-"do you remember the name of the file","[INTENT: history_recall] Here's our conversation so far:","history_recall","OTHER"
-"move the file out of the foler jimmy","[INTENT: move_query] I couldn't find a file named 'out' anywhere in the project.","move_query","OTHER"
-"move the file jake.go out of folder jimmy","[INTENT: move_query] I have moved the file 'jimmy/jake.go' to 'jimmy'.","move_query","OTHER"
-"what folder were we talking about","[INTENT: history_recall] Here's our conversation so far:","history_recall","OTHER"
-"what is the files name","[INTENT: social_chat] You can call me gollemer.","social_chat","OTHER"
-"what file were we talking about","[INTENT: social_chat] [INTENT: history_recall] Here's our conversation so far: Turn 1 — You: ""hello"" | Me: ""Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'."" Turn 2 — You: ""move the file jakey.go into folder jimmy"" | Me: ""I have moved the file 'jakey.go' to 'jimmy'."" Turn 3 — You: ""move file jane.go.go into folder jimmy"" | Me: ""I have moved the file 'jane.go.go' to 'jimmy'.","social_chat","OTHER"
-"where is the file mom.go","[INTENT: status] it is in progress","status","OTHER"
-"move jakeup.go into folder jimmy","[INTENT: move_query] 'jimmy' is a directory, not a file. Did you mean to move a specific file inside it?","move_query","OTHER"
-"move file jakeup.go into folder jimmy","[INTENT: move_query] I have moved the file 'jakeup.go' to 'jimmy'.","move_query","OTHER"
-"what files and folders were we talking about","[INTENT: history_recall] In our recent conversation we talked about files: jakeup.go and folders: folder, jimmy, not, move.","history_recall","OTHER"
-"what should i do with jakeup.go","[INTENT: social_chat] Let me show you.","social_chat","OTHER"
-"can you help me","[INTENT: social_chat] it can help wonderful the is","social_chat","OTHER"
-"can you help me","[INTENT: social_chat] --- ʕ◔ϖ◔ʔ Gollemer Help ---","social_chat","OTHER"
-"move file mom.go into jimmy","[INTENT: move_query] I have moved the file 'mom.go' to 'jimmy'.","move_query","OTHER"
-"what file and folder were we talking about","[INTENT: history_recall] In our recent conversation we talked about files: mom.go and folders: jimmy.","history_recall","OTHER"
-"hello","[INTENT: greeting_query] Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.","greeting_query","OTHER"
-"who are you","[INTENT: identity_query] I am Gollemer, your AI coding assistant and project orchestrator.","identity_query","OTHER"
-"hello","[INTENT: greeting_query] Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.","greeting_query","OTHER"
-"move the file jimmy.go.go in folder file","[INTENT: move_query] I have moved the file 'jimmy.go.go' to 'file'.","move_query","OTHER"
-"move the file jimmy.go into folder file","[INTENT: move_query] I have moved the file 'jimmy.go' to 'file'.","move_query","OTHER"
-"who are you","[INTENT: identity_query] I am Gollemer, your AI coding assistant and project orchestrator.","identity_query","OTHER"
-"Our microservices are tightly coupled together via rigid client dependencies.","[INTENT: social_chat] You should transition your architecture toward an asynchronous, event-driven pattern to decouple them.","social_chat","OTHER"
-"i welcome you with hello","[INTENT: social_chat] Hi there! how can i help you today?","social_chat","OTHER"
-"hi frieend","[INTENT: social_chat] yes ! let how have i help it","social_chat","OTHER"
-"hi friend","[INTENT: social_chat] hello ! let how can it help i","social_chat","OTHER"
-"hello","[INTENT: greeting_query] Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.","greeting_query","OTHER"
-"how are you","[INTENT: social_chat] I am doing great, thank you!","social_chat","OTHER"
-"who are you","[INTENT: identity_query] I am Gollemer, your AI coding assistant and project orchestrator.","identity_query","OTHER"
-"what you like to do","[INTENT: social_chat] I think so.","social_chat","OTHER"
-"hi friend","[INTENT: social_chat] hello . ! how","social_chat","OTHER"
-"what do you do","[INTENT: social_chat] I think so.","social_chat","OTHER"
-"hello","[INTENT: greeting_query] Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.","greeting_query","OTHER"
-"how are you","[INTENT: social_chat] you using opening well","social_chat","OTHER"
-"who are you","[INTENT: identity_query] I am Gollemer, your AI coding assistant and project orchestrator.","identity_query","OTHER"
-"how are you","[INTENT: social_chat] i is goodbye well","social_chat","OTHER"
-"hello","[INTENT: greeting_query] Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.","greeting_query","OTHER"
-"how are you","[INTENT: social_chat] I am doing great, thank you!","social_chat","OTHER"
-"what you doing","[INTENT: status_check] i am doing great, thank you!","status_check","OTHER"
-"hi friend","[INTENT: social_chat] Hello there! how can i help you today?","social_chat","OTHER"
-"how are you","[INTENT: social_chat] I am doing great, thank you!","social_chat","OTHER"
-"hello","[INTENT: greeting_query] Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.","greeting_query","OTHER"
-"how are you","[INTENT: social_chat] I am doing great, thank you!","social_chat","OTHER"
-"who are you","[INTENT: identity_query] I am Gollemer, your AI coding assistant and project orchestrator.","identity_query","OTHER"
-"hi friend","[INTENT: social_chat] hello ! ? how","social_chat","OTHER"
-"what do you do","[INTENT: social_chat] [INTENT: social_chat] I think so.","social_chat","OTHER"
-"is the cluster healthy","[INTENT: social_chat] All nodes are green.","social_chat","OTHER"
-"hello","[INTENT: greeting_query] Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.","greeting_query","OTHER"
-"who are you","[INTENT: identity_query] I am Gollemer, your AI coding assistant and project orchestrator.","identity_query","OTHER"
-"hi friend","[INTENT: social_chat] hello ! . how can you help i","social_chat","OTHER"
-"Should I disable the feature","[INTENT: social_chat] Yes turn it off.","social_chat","OTHER"
-"Can you squash the commits","[INTENT: social_chat] cleaning the history","social_chat","OTHER"
-"Can you whitelist the domain","[INTENT: social_chat] it is permitted now","social_chat","OTHER"
-"Did you minimize the bundle,","[INTENT: social_chat] it loads much faster","social_chat","OTHER"
-"hi friend","[INTENT: social_chat] hello there! how can i help you today?","social_chat","OTHER"
-"hi friend","[INTENT: social_chat] there can help how should your take it hello hi intent hour verify mandatory i year ʕ bit ? on","social_chat","OTHER"
-"hello","[INTENT: greeting_query] Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.","greeting_query","OTHER"
-"how are you","[INTENT: social_chat] these find variable well doing our on , i optional an idle interesting installation coding report debugging mom sparse throttle","social_chat","OTHER"
-"what do you do","[INTENT: social_chat] tracking think resolve throttle sparse mobile runs ʕ an optional ] worked [ ? . , ! relationship updates variable","social_chat","OTHER"
-"Hey, how are you?","[INTENT: social_chat] hello , is how will it help","social_chat","OTHER"
-"Hey, how are you?","[INTENT: social_chat] yes help the how can it try your","social_chat","OTHER"
-"Hey, how are you?","[INTENT: social_chat] yes help , how must them think it . help","social_chat","OTHER"
-"Hey, how are you?","[INTENT: social_chat] hi the help how will it is us","social_chat","OTHER"
-"What do you do?","[INTENT: social_chat] i the . let","social_chat","OTHER"
-"(chomping)","[INTENT: social_chat] ? a now ] it","social_chat","OTHER"
-"(popping)","[INTENT: social_chat] . a can ]","social_chat","OTHER"
-"How are you?","[INTENT: social_chat] it am ! single the them into ? . or","social_chat","OTHER"
-"Or","[INTENT: social_chat] your it i goodbye","social_chat","OTHER"
-"Bye.","[INTENT: social_chat] is or , now","social_chat","OTHER"
-"Where are you?","[INTENT: social_chat] you help gollemer them ai machine now","social_chat","OTHER"
-"than my machine now.","[INTENT: social_chat] yes help . how","social_chat","OTHER"
-"Hello.","[INTENT: social_chat] hi ! a how have it help i the","social_chat","OTHER"
-"on man. How are you?","[INTENT: social_chat] it need ] wonderful","social_chat","OTHER"
-"how are you?","[INTENT: social_chat] it starting ? well . that the","social_chat","OTHER"
-"what do you like to do?","[INTENT: social_chat] is yes intent your will ]","social_chat","OTHER"
-"how are you?","[INTENT: social_chat] it use , well intent . an ! the","social_chat","OTHER"
-"how are you?","[INTENT: social_chat] it are ? ready i you at it","social_chat","OTHER"
-"what is today?","[INTENT: social_chat] is can the . yes","social_chat","OTHER"
-"what is today?","[INTENT: social_chat] it to you can help","social_chat","OTHER"
-"what is today?","[INTENT: memory_retrieval] I remember: today? and today is Saturday.","memory_retrieval","OTHER"
-"do I need to buy a cup?","[INTENT: memory_retrieval] I remember: to subscribe to my channel. and today is Saturday.","memory_retrieval","OTHER"
-"how are you?","[INTENT: memory_retrieval] I remember: today is Saturday. and to subscribe to my channel.","memory_retrieval","OTHER"
-"gollemer wake up","[INTENT: social_chat] intent to ! .","social_chat","OTHER"
-"how","[INTENT: social_chat] the is . ?","social_chat","OTHER"
-"stop music","[INTENT: stop] I created a work directory 'stop' for you.","stop","OTHER"
-"how","[INTENT: social_chat] it . is ]","social_chat","OTHER"
-"stop music","[INTENT: stop] I created a work directory 'stop' for you.","stop","OTHER"
-"play music","[INTENT: social_chat] are , - ?","social_chat","OTHER"
-"how","[INTENT: social_chat] . ? or and now !","social_chat","OTHER"
-"how","[INTENT: social_chat] . it ! ]","social_chat","OTHER"
-"can you explain the logic","[INTENT: social_chat] intent . or ] is","social_chat","OTHER"
-"can you filter the results","[INTENT: social_chat] now . the up","social_chat","OTHER"
-"BYE","[INTENT: social_chat] . ! a it","social_chat","OTHER"
-"that is interesting","[INTENT: social_chat] , or . them","social_chat","OTHER"
-"turn on","[INTENT: social_chat] to ! or .","social_chat","OTHER"
-"turn on","[INTENT: social_chat] and a . now","social_chat","OTHER"
-"turn on","[INTENT: social_chat] or ? can .","social_chat","OTHER"
-"turn on","[INTENT: social_chat] have . is or !","social_chat","OTHER"
-"turn on","[INTENT: social_chat] . ? have help","social_chat","OTHER"
-"are there updates","[INTENT: social_chat] . - have ! to","social_chat","OTHER"
-"will you back up data","[INTENT: social_chat] . ? them it","social_chat","OTHER"
-"who are you","[INTENT: identity_query] I am Gollemer, your AI coding assistant and project orchestrator.","identity_query","OTHER"
-"that is interesting","[INTENT: social_chat] . ] now it","social_chat","OTHER"
-"will you back up data","[INTENT: social_chat] now fix have - ]","social_chat","OTHER"
-"low pitch","[INTENT: social_chat] . will and up","social_chat","OTHER"
-"will you back up data","[INTENT: social_chat] i . now me is the","social_chat","OTHER"
-"i need a followup","[INTENT: social_chat] have . now ] is","social_chat","OTHER"
-"i need a followup","[INTENT: social_chat] fix ] ? are","social_chat","OTHER"
-"how are you","[INTENT: social_chat] it working now ready . you on","social_chat","OTHER"
-"that is interesting","[INTENT: social_chat] me . is !","social_chat","OTHER"
-"will you back up data","[INTENT: social_chat] to is it me . now","social_chat","OTHER"
-"who are you","[INTENT: identity_query] I am Gollemer, your AI coding assistant and project orchestrator.","identity_query","OTHER"
-"will you back up data","[INTENT: social_chat] ! ? . will ] the","social_chat","OTHER"
-"will you back up data","[INTENT: social_chat] now to . it","social_chat","OTHER"
-"will you back up data","[INTENT: social_chat] . can intent !","social_chat","OTHER"
-"will you back up data","[INTENT: social_chat] ] fix intent a is","social_chat","OTHER"
-"will you back up data","[INTENT: social_chat] , . it an","social_chat","OTHER"
-"explain the logic","[INTENT: social_chat] ? , can will .","social_chat","OTHER"
-"are there updates","[INTENT: social_chat] it . the is","social_chat","OTHER"
-"will you back up data","[INTENT: social_chat] , . it !","social_chat","OTHER"
-"will you back up data","[INTENT: social_chat] ? i . !","social_chat","OTHER"
-"will you back up data","[INTENT: social_chat] now i to ] .","social_chat","OTHER"
-"will you back up data","[INTENT: social_chat] intent . you it","social_chat","OTHER"
-"go to sleep","[INTENT: go_query] I couldn't change the directory to sleep: chdir sleep: no such file or directory","go_query","OTHER"
-"read audio data: reading audio data from dataset/audio/teacher tempwav read audio data: trying to decode with miniaudio gomer wake up","[INTENT: cat_query] Please provide text to search for.","cat_query","OTHER"
-"read audio data: reading audio data from dataset/audio/teacher tempwav read audio data: trying to decode with miniaudio gomer wake up","[INTENT: cat_query] Please provide text to search for.","cat_query","OTHER"
-"will you back up data","[INTENT: social_chat] am fix is them ]","social_chat","OTHER"
-"will you back up data","[INTENT: social_chat] a intent is now","social_chat","OTHER"
-"will you back up data","[INTENT: social_chat] . me can ] is","social_chat","OTHER"
-"status report","[INTENT: social_chat] and ] . an","social_chat","OTHER"
-"will you back up data","[INTENT: social_chat] ! . i a","social_chat","OTHER"
-"who are you","[INTENT: identity_query] I am Gollemer, your AI coding assistant and project orchestrator.","identity_query","OTHER"
-"status report","[INTENT: social_chat] . intent will is help","social_chat","OTHER"
-"who created you","[INTENT: social_chat] . i ? it is have","social_chat","OTHER"
-"status report","[INTENT: social_chat] . it ] help","social_chat","OTHER"
-"blank audio","[INTENT: social_chat] i ? help have . will","social_chat","OTHER"
-"blank audio","[INTENT: social_chat] ] now ! i","social_chat","OTHER"
-"status report","[INTENT: social_chat] i . have !","social_chat","OTHER"
-"status report","[INTENT: social_chat] is . your to","social_chat","OTHER"
-"status report","[INTENT: social_chat] help . or is it","social_chat","OTHER"
-"who else","[INTENT: social_chat] the now have help","social_chat","OTHER"
-"OH","[INTENT: social_chat] am to help .","social_chat","OTHER"
-"out at home","[INTENT: social_chat] . have a !","social_chat","OTHER"
-"OH","[INTENT: social_chat] am can ! .","social_chat","OTHER"
-"gollemer wake up","[INTENT: social_chat] to now ] ?","social_chat","OTHER"
-"out at home","[INTENT: social_chat] i to intent have","social_chat","OTHER"
-"hi friend","[INTENT: social_chat] now ? help how have it like them hello","social_chat","OTHER"
-"good morning","[INTENT: social_chat] hello is help how !","social_chat","OTHER"
-"OH","[INTENT: social_chat] to a . help","social_chat","OTHER"
-"out or is it","[INTENT: social_chat] a ? intent ]","social_chat","OTHER"
-"im to help","[INTENT: social_chat] that getting love perfect but help safety expiration restricted backend tempwav golden quit amazing breakers here's failure each protected monitor","social_chat","OTHER"
-"im to help","[INTENT: social_chat] --- ʕ◔ϖ◔ʔ Gollemer Help ---","social_chat","OTHER"
-"out or is it","[INTENT: social_chat] remember change backend cause including switch [ golden requests safety distributed expiration once password protected ? automate timeouts exciting shut","social_chat","OTHER"
-"what do you do","[INTENT: social_chat] [ is . am","social_chat","OTHER"
-"what do you do","[INTENT: social_chat] is ] and to will yes","social_chat","OTHER"
-"who are you","[INTENT: identity_query] I am Gollemer, your AI coding assistant and project orchestrator.","identity_query","OTHER"
-"help","[INTENT: help_command] --- ʕ◔ϖ◔ʔ Gollemer Help ---","help_command","OTHER"
-"list","[INTENT: list_query] Checking the directory for you... here is what I found:","list_query","OTHER"
-"list","[INTENT: list_query] Here are the contents of the directory:","list_query","OTHER"
-"OH","[INTENT: social_chat] . to a them i","social_chat","OTHER"
-"that is interesting","[INTENT: social_chat] to . ! intent ] have , am the","social_chat","OTHER"
-"OH","[INTENT: social_chat] it ] am .","social_chat","OTHER"
-"run the tests","[INTENT: run_webserver] Launching the application! 🚀 Hang tight.","run_webserver","OTHER"
-"run the tests","[INTENT: run_webserver] I created a work directory 'webserver' for you.","run_webserver","OTHER"
-"out or is it","[INTENT: social_chat] a am i wonderful .","social_chat","OTHER"
-"OH","[INTENT: social_chat] intent ] . it [","social_chat","OTHER"
-"HELLO","[INTENT: greeting_query] Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.","greeting_query","OTHER"
-"How are you?","[INTENT: social_chat] it help ] well","social_chat","OTHER"
-"Who are you?","[INTENT: identity_query] I am Gollemer, your AI coding assistant and project orchestrator.","identity_query","OTHER"
-"What do you do?","[INTENT: social_chat] . am [ intent","social_chat","OTHER"

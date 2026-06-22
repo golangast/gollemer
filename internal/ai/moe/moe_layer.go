@@ -214,7 +214,7 @@ func NewMoELayer(inputDim, outputDim, numExperts, k int, expertBuilder func(int)
 		} else {
 			layer.ExpertPinned[i] = false
 		}
-		
+
 		if i < len(GrammarRoles) {
 			layer.ExpertRole[i] = GrammarRoles[i]
 		} else if i >= 8 && i <= 15 {
@@ -525,7 +525,7 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 
 	// Noise injection (Expert Curiosity) is now handled inside GatingNetwork.Forward
 	// to ensure consistent Gaussian jitter before TopK selection.
-	
+
 	// Add standard normal or Gumbel noise to logits to encourage exploration
 	if moe.Training {
 		explorationFactor := float32(0.05)
@@ -746,7 +746,7 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 				}
 				moe.ExpertHealth = newHealth
 			}
-			
+
 			// Boost logits for lagging experts (health < 0.25 and not frozen) to give them a routing prior boost
 			for e := 0; e < numExperts; e++ {
 				if moe.ExpertHealth[e] < 0.25 {
@@ -1164,7 +1164,7 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 					if wasUsed {
 						moe.ExpertHealth[i] = moe.ExpertHealth[i]*0.99 + 0.01
 					} else {
-						moe.ExpertHealth[i] = moe.ExpertHealth[i]*0.99
+						moe.ExpertHealth[i] = moe.ExpertHealth[i] * 0.99
 					}
 				}
 			}
@@ -2031,13 +2031,11 @@ func (moe *MoELayer) EvolutionaryReset(stagnationThreshold int) {
 // To minimize peak memory usage, each expert's old weights are explicitly
 // freed before allocating new ones, and the GC is hinted between iterations.
 func (moe *MoELayer) ResizeExperts(newOutputDim int) {
-	fmt.Printf("🔧 Resizing %d MoE Experts to new OutputDim: %d\n", len(moe.Experts), newOutputDim)
 
-	for i, exp := range moe.Experts {
+	for _, exp := range moe.Experts {
 		exp.Resize(newOutputDim)
 		// Hint GC to reclaim old memory before next expert
 		runtime.GC()
-		fmt.Printf("  ✓ Expert %d resized\n", i)
 	}
 	moe.OutputDim = newOutputDim
 }
@@ -2314,7 +2312,7 @@ func (moe *MoELayer) PruneUnderutilizedExperts(fraction float32) {
 		}
 		scores = append(scores, expertScore{idx: i, util: util})
 	}
-	
+
 	// Sort by utilization ascending
 	sort.Slice(scores, func(a, b int) bool {
 		return scores[a].util < scores[b].util
@@ -2481,14 +2479,13 @@ func (moe *MoELayer) FindLowestPerformingExpert(newRole string) int {
 		if i < len(moe.ExpertRole) {
 			role = moe.ExpertRole[i]
 		}
-		
+
 		// STRICT PROTECTION: Never evict structural baseline experts in standard search
 		if role == "structural_baseline" {
 			continue
 		}
 
 		isStructural := (role == "PRON" || role == "VERB" || role == "AUX" || role == "ADJ" || role == "NOUN" || role == "PREP" || role == "")
-
 
 		util := 0.0
 		if i < len(moe.AccumulatedUtilization) {
@@ -2844,4 +2841,3 @@ func (moe *MoELayer) ForceEvictLowestUtility(newRole string) int {
 	moe.EvictExpert(weakestIdx)
 	return weakestIdx
 }
-

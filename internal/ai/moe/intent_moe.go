@@ -431,14 +431,14 @@ type IntentMoE struct {
 	TrainingPhase int // 0: Init, 1: MLM Done, 2: Seq2Seq Done
 
 	// Structural Guidance
-	Tagger *IntentTagger // Predicts intent and grammar tags (POS) to guide generation
-	Rules  *RuleBook     // Formal linguistic rules and grammar skeletons
+	Tagger     *IntentTagger // Predicts intent and grammar tags (POS) to guide generation
+	Rules      *RuleBook     // Formal linguistic rules and grammar skeletons
 	Supervisor *Supervisor
 
 	// Diagnostics and Monitoring
 	ExpertStats map[string]*ExpertStat // Key: "layerID:expertID"
 	Metadata    ModelMetadata
-	EncoderNorm *nn.LayerNorm          // Added for stability
+	EncoderNorm *nn.LayerNorm           // Added for stability
 	EncoderPos  *nn.PositionalEmbedding // Added for word-order awareness
 	// 🚀 PERFORMANCE: Pre-computed grammar type for each token ID.
 	// Built once on first use; avoids O(vocabSize) string matching per generation step.
@@ -511,32 +511,48 @@ func (m *IntentMoE) ToGPU() {
 // 2. Heuristic keyword mapping for common social intents.
 func (m *IntentMoE) GuessIntent(query string) (string, string) {
 	q := strings.ToLower(query)
-	
+
 	// Advanced Weighted Scoring
 	scores := make(map[string]float32)
-	
+
 	// Social: Greeting Clues
-	if strings.Contains(q, "hello") || strings.Contains(q, "hi ") || strings.HasPrefix(q, "hi") { scores["social:greeting"] += 2.0 }
-	if strings.Contains(q, "hey") || strings.Contains(q, "morning") || strings.Contains(q, "evening") { scores["social:greeting"] += 1.5 }
-	
+	if strings.Contains(q, "hello") || strings.Contains(q, "hi ") || strings.HasPrefix(q, "hi") {
+		scores["social:greeting"] += 2.0
+	}
+	if strings.Contains(q, "hey") || strings.Contains(q, "morning") || strings.Contains(q, "evening") {
+		scores["social:greeting"] += 1.5
+	}
+
 	// Social: Identity Clues
-	if strings.Contains(q, "who are you") || strings.Contains(q, "your name") { scores["social:identity"] += 3.0 }
-	if strings.Contains(q, "what are you") || strings.Contains(q, "creator") { scores["social:identity"] += 2.0 }
-	
+	if strings.Contains(q, "who are you") || strings.Contains(q, "your name") {
+		scores["social:identity"] += 3.0
+	}
+	if strings.Contains(q, "what are you") || strings.Contains(q, "creator") {
+		scores["social:identity"] += 2.0
+	}
+
 	// Social: Status Check Clues
-	if strings.Contains(q, "how are you") || strings.Contains(q, "how you doing") { scores["social:status_check"] += 3.0 }
-	if strings.Contains(q, "how's it going") || strings.Contains(q, "everything ok") { scores["social:status_check"] += 2.5 }
-	
+	if strings.Contains(q, "how are you") || strings.Contains(q, "how you doing") {
+		scores["social:status_check"] += 3.0
+	}
+	if strings.Contains(q, "how's it going") || strings.Contains(q, "everything ok") {
+		scores["social:status_check"] += 2.5
+	}
+
 	// Social: Entertainment Clues
-	if strings.Contains(q, "joke") || strings.Contains(q, "funny") || strings.Contains(q, "story") { scores["social:entertainment"] += 2.0 }
-	
+	if strings.Contains(q, "joke") || strings.Contains(q, "funny") || strings.Contains(q, "story") {
+		scores["social:entertainment"] += 2.0
+	}
+
 	// Neural Verification (if Tagger is available)
 	if m.Tagger != nil {
 		tokens := strings.Fields(q)
 		ids := make([]float32, len(tokens))
 		for i, t := range tokens {
 			id := m.SentenceVocab.GetTokenID(t)
-			if id < 0 { id = 1 }
+			if id < 0 {
+				id = 1
+			}
 			ids[i] = float32(id)
 		}
 		input := tensor.NewTensor([]int{1, len(ids)}, ids, false)
@@ -547,11 +563,14 @@ func (m *IntentMoE) GuessIntent(query string) (string, string) {
 			bestIdx := 0
 			bestVal := float32(-1e9)
 			for i, v := range intentLogits.Data {
-				if v > bestVal { bestVal = v; bestIdx = i }
+				if v > bestVal {
+					bestVal = v
+					bestIdx = i
+				}
 			}
 			// Boost the neural winner
-			neuralIntent := fmt.Sprintf("social:neural_%d", bestIdx) 
-			scores[neuralIntent] += 1.0 
+			neuralIntent := fmt.Sprintf("social:neural_%d", bestIdx)
+			scores[neuralIntent] += 1.0
 		}
 	}
 
@@ -572,6 +591,34 @@ func (m *IntentMoE) GuessIntent(query string) (string, string) {
 // GenerateGuidedSentence attempts to generate a response that follows a grammatical skeleton.
 // It uses the Tagger to predict the 'shape' of the answer before filling in the words.
 var verbose_thinking = false
+
+// CartridgeNamespaces maps intent keywords to expert cartridge files.
+var CartridgeNamespaces = map[string]string{
+	"medical":  "data/models/gob_models/medical_experts.gob",
+	"health":   "data/models/gob_models/medical_experts.gob",
+	"doctor":   "data/models/gob_models/medical_experts.gob",
+	"database": "data/models/gob_models/database_experts.gob",
+	"sql":      "data/models/gob_models/database_experts.gob",
+	"query":    "data/models/gob_models/database_experts.gob",
+}
+
+// AnalyzePartialQuery implements streaming prediction by analyzing the first few words
+// of the user's input and pre-loading relevant expert cartridges into RAM with zero latency.
+func (m *IntentMoE) AnalyzePartialQuery(partialQuery string) {
+	if m.Supervisor == nil || m.Supervisor.CartridgeMgr == nil {
+		return
+	}
+	
+	qLower := strings.ToLower(partialQuery)
+	for keyword, path := range CartridgeNamespaces {
+		if strings.Contains(qLower, keyword) {
+			// Trigger asynchronous pre-loading before the user finishes typing
+			log.Printf("⚡ Streaming Prediction: Detected namespace '%s' mid-sentence. Pre-loading %s...", keyword, path)
+			m.Supervisor.CartridgeMgr.PreloadCartridge(path, 0, 0)
+		}
+	}
+}
+
 func (m *IntentMoE) GenerateGuidedSentence(query string, maxLen int) (string, []string) {
 	if m.Supervisor != nil && !verbose_thinking {
 		// Use the supervisor's multi-pass logic if available
@@ -580,6 +627,58 @@ func (m *IntentMoE) GenerateGuidedSentence(query string, maxLen int) (string, []
 	parent, child := m.GuessIntent(query)
 	log.Printf("🔮 Sophisticated Intent Detection: [%s / %s]", parent, child)
 
+	// 🎮 DYNAMIC EXPERT CARTRIDGE HOT-SWAPPING & PRE-LOADING
+	var mountedExpertID int = -1
+	var loadedCartridge string
+	qLower := strings.ToLower(query)
+
+	if m.Supervisor != nil && m.Supervisor.CartridgeMgr != nil {
+		for keyword, cartridgePath := range CartridgeNamespaces {
+			if strings.Contains(qLower, keyword) {
+				log.Printf("🏥 Domain matched (%s). Hot-swapping %s into RAM...", keyword, cartridgePath)
+				// 1. Load into RAM via Cartridge Manager (instant if already pre-loaded)
+				err := m.Supervisor.CartridgeMgr.LoadCartridge(cartridgePath, 0, 0)
+				if err == nil {
+					// 2. Retrieve loaded expert
+					m.Supervisor.CartridgeMgr.Mu.Lock()
+					expert := m.Supervisor.CartridgeMgr.Loaded[cartridgePath]
+					m.Supervisor.CartridgeMgr.Mu.Unlock()
+
+					// 3. Mount to Output MoE layer dynamically
+					if m.Decoder.OutputMoE != nil {
+						mountedExpertID, err = m.Supervisor.MountCartridgeToLayer(m, len(m.Encoder.GetMoELayers()), expert)
+						if err != nil {
+							log.Printf("⚠️ Failed to mount cartridge: %v", err)
+							mountedExpertID = -1
+						} else {
+							loadedCartridge = cartridgePath
+							// 4. Force routing bias for the entire sequence to the new expert
+							for i := 0; i < maxLen; i++ {
+								m.Decoder.OutputMoE.StepRoutingBias[i] = make([]float32, len(m.Decoder.OutputMoE.Experts))
+								m.Decoder.OutputMoE.StepRoutingBias[i][mountedExpertID] = 20.0 // Overwhelming bias
+							}
+						}
+					}
+				} else {
+					log.Printf("⚠️ Failed to load cartridge: %v", err)
+				}
+				// Break after first matched namespace to avoid multi-cartridge conflicts for now
+				break
+			}
+		}
+
+		// Ensure cleanup after generation
+		defer func() {
+			if mountedExpertID != -1 && m.Decoder.OutputMoE != nil && loadedCartridge != "" {
+				log.Printf("🧹 Unmounting and unloading %s to save memory...", loadedCartridge)
+				m.Supervisor.UnmountCartridgeFromLayer(m, len(m.Encoder.GetMoELayers()), mountedExpertID)
+				m.Supervisor.CartridgeMgr.UnloadCartridge(loadedCartridge)
+				// Clean up routing bias
+				m.Decoder.OutputMoE.StepRoutingBias = make(map[int][]float32)
+			}
+		}()
+	}
+
 	rule, hasRule := m.Rules.GetRuleByIntent(parent, child)
 
 	// 1. Encode query
@@ -587,11 +686,13 @@ func (m *IntentMoE) GenerateGuidedSentence(query string, maxLen int) (string, []
 	ids := make([]float32, len(tokens))
 	for i, t := range tokens {
 		id := m.SentenceVocab.GetTokenID(t)
-		if id < 0 { id = 1 }
+		if id < 0 {
+			id = 1
+		}
 		ids[i] = float32(id)
 	}
 	inputT := tensor.NewTensor([]int{1, len(ids)}, ids, false)
-	
+
 	emb, _ := m.Embedding.Forward(inputT)
 	ctx, _ := m.Encoder.Forward(emb)
 	if m.EncoderNorm != nil {
@@ -601,15 +702,19 @@ func (m *IntentMoE) GenerateGuidedSentence(query string, maxLen int) (string, []
 	// 2. Generate with "Hard Rule Enforcement"
 	var generated []string
 	var decodedIDs []int
-	
+
 	hidden := m.Decoder.InitialHiddenState
 	cell := m.Decoder.InitialCellState
 	currentID := m.SentenceVocab.BosID
-	if currentID < 0 { currentID = 0 }
-	
+	if currentID < 0 {
+		currentID = 0
+	}
+
 	for i := 0; i < maxLen; i++ {
 		logits, nextH, nextC, err := m.Decoder.Step(currentID, ctx, hidden, cell)
-		if err != nil { break }
+		if err != nil {
+			break
+		}
 		hidden = nextH
 		cell = nextC
 
@@ -649,8 +754,10 @@ func (m *IntentMoE) GenerateGuidedSentence(query string, maxLen int) (string, []
 			}
 		}
 
-		if bestID == m.SentenceVocab.EosID { break }
-		
+		if bestID == m.SentenceVocab.EosID {
+			break
+		}
+
 		word := m.SentenceVocab.GetWord(bestID)
 		generated = append(generated, word)
 		decodedIDs = append(decodedIDs, bestID)
@@ -665,7 +772,7 @@ func (m *IntentMoE) GenerateSupervisedSentence(query string) string {
 	if m.Supervisor == nil {
 		m.Supervisor = NewSupervisor()
 	}
-	
+
 	resp, _ := m.Supervisor.SuperviseSentenceCreation(m, query)
 	return resp
 }
@@ -720,7 +827,6 @@ func isGreetingWord(w string) bool {
 	}
 	return false
 }
-
 
 func isIdentityWord(w string) bool {
 	switch strings.ToLower(w) {
@@ -783,12 +889,18 @@ func (m *IntentMoE) CalculateGrammarLossStrings(generatedWords []string, parent,
 // CalculateGrammarLossByID computes a penalty for sentences that violate the RuleBook's grammar skeletons.
 // Uses Token IDs directly to avoid string allocations during training.
 func (m *IntentMoE) CalculateGrammarLoss(generatedIDs []int, parent, child string) float32 {
-	if m.Rules == nil { return 0 }
+	if m.Rules == nil {
+		return 0
+	}
 	rule, ok := m.Rules.GetRuleByIntent(parent, child)
-	if !ok { return 0 }
+	if !ok {
+		return 0
+	}
 
 	skeleton := rule.GrammarSkeleton
-	if len(skeleton) == 0 { return 0 }
+	if len(skeleton) == 0 {
+		return 0
+	}
 
 	// 🆕 STRICT: Mask system/format tokens in social context.
 	// These tokens should never bleed into the social state calculation.
@@ -798,13 +910,15 @@ func (m *IntentMoE) CalculateGrammarLoss(generatedIDs []int, parent, child strin
 
 	var penalty float32 = 0.0
 	maxCheck := len(generatedIDs)
-	if len(skeleton) < maxCheck { maxCheck = len(skeleton) }
-	
+	if len(skeleton) < maxCheck {
+		maxCheck = len(skeleton)
+	}
+
 	for i := 0; i < maxCheck; i++ {
 		// Use pre-computed grammar type cache for O(1) lookup
 		actualType := m.grammarTypeForID(generatedIDs[i])
 		expectedType := skeleton[i]
-		
+
 		if expectedType != "OTHER" && actualType != expectedType {
 			// Penalty for wrong structural category (word salad prevention)
 			penalty += 0.5
@@ -812,13 +926,17 @@ func (m *IntentMoE) CalculateGrammarLoss(generatedIDs []int, parent, child strin
 
 		// N-gram Window Feature (Tri-grams)
 		prevType := "BOS"
-		if i > 0 { prevType = m.grammarTypeForID(generatedIDs[i-1]) }
+		if i > 0 {
+			prevType = m.grammarTypeForID(generatedIDs[i-1])
+		}
 		nextType := "EOS"
-		if i < len(generatedIDs)-1 { nextType = m.grammarTypeForID(generatedIDs[i+1]) }
+		if i < len(generatedIDs)-1 {
+			nextType = m.grammarTypeForID(generatedIDs[i+1])
+		}
 
 		penalty += rule.EvaluateWindow(prevType, actualType, nextType)
 	}
-	
+
 	// Bonus for required keywords (we check if any of the generated IDs match the keyword IDs)
 	// For now, keywords are still strings in the RuleBook, so we check them once.
 	// But we can optimize this further if keywords are also cached as IDs.
@@ -873,14 +991,22 @@ func (m *IntentMoE) CalculateSequenceSimilarity(generatedIDs, targetIDs []int) f
 	if len(targetIDs) == 0 {
 		return 0
 	}
-	
+
 	// Use an ID-based frequency count instead of map[string]int
 	// Vocab size is ~4.7k, so a fixed-size array or a sparse slice is fast.
 	// Find max ID to determine buffer size
 	maxID := 0
-	for _, id := range targetIDs { if id > maxID { maxID = id } }
-	for _, id := range generatedIDs { if id > maxID { maxID = id } }
-	
+	for _, id := range targetIDs {
+		if id > maxID {
+			maxID = id
+		}
+	}
+	for _, id := range generatedIDs {
+		if id > maxID {
+			maxID = id
+		}
+	}
+
 	counts := make([]int, maxID+1)
 	for _, id := range targetIDs {
 		counts[id]++
@@ -901,7 +1027,7 @@ func (m *IntentMoE) EncoderForward(input *tensor.Tensor, mask *tensor.Tensor) (*
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Apply Positional Encoding if available (matching Forward logic)
 	if m.EncoderPos != nil {
 		emb, err = m.EncoderPos.Forward(emb)
@@ -929,11 +1055,11 @@ func (m *IntentMoE) CalculateGatingEntropy() float32 {
 	if m.Decoder != nil && m.Decoder.OutputMoE != nil {
 		layers = append(layers, m.Decoder.OutputMoE)
 	}
-	
+
 	if len(layers) == 0 {
 		return 0
 	}
-	
+
 	var totalEntropy float32
 	var count int
 	for _, layer := range layers {
@@ -943,9 +1069,11 @@ func (m *IntentMoE) CalculateGatingEntropy() float32 {
 			probs := layer.GateOutputs.Data
 			numExperts := len(layer.Experts)
 			numTokens := len(probs) / numExperts
-			
-			if numTokens == 0 { continue }
-			
+
+			if numTokens == 0 {
+				continue
+			}
+
 			for t := 0; t < numTokens; t++ {
 				for e := 0; e < numExperts; e++ {
 					p := probs[t*numExperts+e]
@@ -958,14 +1086,12 @@ func (m *IntentMoE) CalculateGatingEntropy() float32 {
 			count++
 		}
 	}
-	
+
 	if count == 0 {
 		return 0
 	}
 	return totalEntropy / float32(count)
 }
-
-
 
 func (m *IntentMoE) warmup() {
 	if m.Encoder == nil {
@@ -1109,17 +1235,16 @@ func appendGrammarExperts(layer *MoELayer, embeddingDim int, count int) error {
 	// Update NumExperts
 	layer.NumExperts = len(layer.Experts)
 
-	log.Printf("🔤 appended %d GrammarExperts to MoELayer (total experts: %d)", numGrammar, len(layer.Experts))
 	return nil
 }
 
 // beamCandidate holds a partial sequence for beam search.
 type beamCandidate struct {
-	ids        []int
-	logProb    float64 // cumulative log-probability
+	ids         []int
+	logProb     float64 // cumulative log-probability
 	hiddenState *tensor.Tensor
 	cellState   *tensor.Tensor
-	finished   bool
+	finished    bool
 }
 
 // BeamSearchDecode generates a response using beam search to guarantee a
@@ -1135,7 +1260,7 @@ func (m *IntentMoE) BeamSearchDecode(
 	maxLen, sosToken, eosToken, beamWidth int,
 	temperature float32,
 	repetitionPenalty float32,
-	rule *IntentRule,        // Optional structural guidance
+	rule *IntentRule, // Optional structural guidance
 	suppressedIDs map[int]bool, // Optional token IDs to hard-suppress (set to -1e9)
 ) ([]int, error) {
 	if beamWidth <= 0 {
@@ -1226,7 +1351,9 @@ func (m *IntentMoE) BeamSearchDecode(
 				if ruleStep < len(rule.GrammarSkeleton) {
 					expectedType := rule.GrammarSkeleton[ruleStep]
 					for idx, v := range logits.Data {
-						if v < -1e8 { continue } // Skip already suppressed tokens
+						if v < -1e8 {
+							continue
+						} // Skip already suppressed tokens
 						actualType := m.grammarTypeForID(idx)
 						if expectedType != "OTHER" && actualType != expectedType {
 							logits.Data[idx] -= 3.0
@@ -1397,7 +1524,7 @@ func NewIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, childVoc
 		ExpertStats:       make(map[string]*ExpertStat),
 		// 👁️ Initialize the VisionEncoder (16x16 patches → 512-dim tokens).
 		// PatchDim=256 matches the 16×16 luma patch from vision_capture/main.go.
-		VisionEncoder:     NewVisionEncoder(256, embeddingDim),
+		VisionEncoder: NewVisionEncoder(256, embeddingDim),
 	}, nil
 }
 
@@ -1612,7 +1739,7 @@ func NewHybridIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, ch
 	// 4. Initialize EncoderNorm and Positional Encoding
 	encoderNorm := nn.NewLayerNorm(embeddingDim)
 	encoderPos := nn.NewPositionalEmbedding(128, embeddingDim)
-	
+
 	model := &IntentMoE{
 		Encoder:           hybridEncoder,
 		EncoderNorm:       encoderNorm,
@@ -1818,7 +1945,7 @@ func (m *IntentMoE) Backward(grads ...*tensor.Tensor) error {
 		}
 		cvGrad = m.EncoderNorm.Input().Grad
 	}
-	
+
 	contextVectorGrad := cvGrad
 
 	// Backpropagate through the encoder
@@ -2257,11 +2384,9 @@ func (m *IntentMoE) ResizeEmbeddings(newVocabSize int) {
 		return
 	}
 
-	fmt.Printf("🔄 Resizing Model Embeddings: %d -> %d\n", m.Embedding.VocabSize, newVocabSize)
-
 	oldEmb := m.Embedding
 	newEmb := nn.NewEmbedding(newVocabSize, oldEmb.DimModel)
-	
+
 	// Preserve old ControlTokenIDs
 	if oldEmb.ControlTokenIDs != nil {
 		newEmb.ControlTokenIDs = oldEmb.ControlTokenIDs
@@ -2452,7 +2577,7 @@ func LoadIntentMoEModelWithFallback(filePath string) (*IntentMoE, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to load model in both gzip-checkpoint and raw-gob formats: %w", err)
 	}
-	
+
 	loadedModel.RepairArchitecture() // 🛠️ Fix missing LayerNorms on load
 	return &loadedModel, nil
 }
@@ -2466,11 +2591,11 @@ func (m *IntentMoE) RepairArchitecture() {
 	if m.EncoderPos == nil {
 		m.EncoderPos = nn.NewPositionalEmbedding(128, m.EmbeddingDim)
 	}
-	
+
 	// Delegate to encoder
 	if m.Encoder != nil {
 		m.Encoder.RepairArchitecture()
-		
+
 		// 🧬 AUTO-UPGRADE: Ensure all MoE layers have Grammar Experts (typically 16 experts total if base was 8)
 		if h, ok := m.Encoder.(*HybridLLMGNNEncoder); ok && h.LLMEncoder != nil {
 			if stack, ok := h.LLMEncoder.(*MoEStack); ok {
@@ -2508,7 +2633,7 @@ func (m *IntentMoE) RepairArchitecture() {
 	// Delegate to decoder
 	if m.Decoder != nil {
 		m.Decoder.RepairArchitecture()
-		
+
 		// 🧬 AUTO-UPGRADE: Decoder OutputMoE needs Grammar Experts too
 		if m.Decoder.OutputMoE != nil {
 			layer := m.Decoder.OutputMoE
@@ -2521,7 +2646,6 @@ func (m *IntentMoE) RepairArchitecture() {
 			}
 			if !hasGrammar {
 				numToAdd := len(layer.Experts)
-				log.Printf("🛠️ [MoE] Repairing decoder: adding missing Grammar Experts (currently %d experts)...", len(layer.Experts))
 				if err := appendGrammarExperts(layer, m.EmbeddingDim, numToAdd); err != nil {
 					log.Printf("❌ Failed to append decoder grammar experts: %v", err)
 				} else {
@@ -2559,13 +2683,12 @@ func (m *IntentMoE) SanitizeControlTokens() {
 			m.Embedding.ControlTokenIDs[id] = true
 		}
 	}
-	log.Printf("🛡️ [SanitizeEmbeddings] Registered %d prefix/control tokens for scaling in Embedding layer.", len(m.Embedding.ControlTokenIDs))
 }
 
 func (m *IntentMoE) RebuildActiveLayers() {
 	// Clear current tracking
 	ActiveLayers = nil
-	
+
 	// Collect from encoder
 	if m.Encoder != nil {
 		layers := m.Encoder.GetMoELayers()
@@ -2573,14 +2696,12 @@ func (m *IntentMoE) RebuildActiveLayers() {
 			ActiveLayers = append(ActiveLayers, l)
 		}
 	}
-	
+
 	// Collect from decoder
 	if m.Decoder != nil && m.Decoder.OutputMoE != nil {
 		ActiveLayers = append(ActiveLayers, m.Decoder.OutputMoE)
 	}
-	
-	log.Printf("🧬 Rebuilt MoE tracking: %d layers registered for load-balancing.", len(ActiveLayers))
-	
+
 	// Ensure new fields are initialized for hot-loading or old checkpoints
 	for _, layer := range ActiveLayers {
 		if len(layer.ExpertOutputScale) == 0 {

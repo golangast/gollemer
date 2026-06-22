@@ -6,7 +6,7 @@
   "batch_size": 16,
   "context_multiplier": 2.4,
   "router_noise": 0.3,
-  "router_temperature": 1.6,
+  "router_temperature": 1.8,
   "load_balancing_weight": 0.03,
   "expert_dropout": 0.1,
   "collapse_threshold": 0.05,

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/golangast/gollemer/internal/ai/neural/nn"
+
 	. "github.com/golangast/gollemer/internal/ai/neural/tensor"
 )
 
@@ -78,10 +79,10 @@ func NewRNNDecoder(inputDim, outputVocabSize, hiddenSize, maxAttentionHeads, num
 	// Create output layer
 	var outputLayer *nn.Linear
 	var outputMoE *MoELayer
-	
+
 	if numExperts > 1 {
 		expertBuilder := func(expertIdx int) (Expert, error) {
-			return NewInternalExpert(expertIdx, hiddenSize+inputDim, (hiddenSize+inputDim), outputVocabSize)
+			return NewInternalExpert(expertIdx, hiddenSize+inputDim, (hiddenSize + inputDim), outputVocabSize)
 		}
 		moeLayer, err := NewMoELayer(hiddenSize+inputDim, outputVocabSize, numExperts, 2, expertBuilder)
 		if err != nil {
@@ -103,16 +104,16 @@ func NewRNNDecoder(inputDim, outputVocabSize, hiddenSize, maxAttentionHeads, num
 	}
 
 	return &RNNDecoder{
-		LSTM:              lstm,
-		InputNorm:         inputNorm,
-		HiddenNorm:        hiddenNorm,
-		LayerNorm:         layerNorm,
-		OutputLayer:       outputLayer,
-		OutputMoE:         outputMoE,
-		OutputVocabSize:   outputVocabSize,
-		Embedding:         embedding,
-		MaxAttentionHeads: maxAttentionHeads,
-		Attention:         attention,
+		LSTM:                   lstm,
+		InputNorm:              inputNorm,
+		HiddenNorm:             hiddenNorm,
+		LayerNorm:              layerNorm,
+		OutputLayer:            outputLayer,
+		OutputMoE:              outputMoE,
+		OutputVocabSize:        outputVocabSize,
+		Embedding:              embedding,
+		MaxAttentionHeads:      maxAttentionHeads,
+		Attention:              attention,
 		ContextMultiplier:      10.0,
 		ContextMultiplierDecay: 1.0, // Default: no decay
 	}, nil
@@ -176,16 +177,18 @@ func (d *RNNDecoder) Forward(contextVector, targetSequence *Tensor, scheduledSam
 	const ctxEpsilon = 1e-5
 	if ctxMeanNorm > ctxEpsilon {
 		scale := 1.0 / ctxMeanNorm
-		if scale > 10.0 { scale = 10.0 } // Cap scaling factor
+		if scale > 10.0 {
+			scale = 10.0
+		} // Cap scaling factor
 		ctxMean = ctxMean.Scale(scale)
 	}
 	ctxMeanReshaped, _ := ctxMean.Reshape([]int{batchSize, 1, d.contextVector.Shape[2]})
-	
+
 	if scheduledSamplingProb == 0.0 {
 		fullInput, _ := targetSequence.Slice(1, 0, maxSequenceLength-1)
 		allEmbedded, _ := d.Embedding.Forward(fullInput)
 		normedEmbedded, _ := d.InputNorm.Forward(allEmbedded)
-		
+
 		// Apply Decaying Context Injection
 		if d.ContextMultiplierDecay > 0 && d.ContextMultiplierDecay < 1.0 {
 			decayData := make([]float32, maxSequenceLength-1)
@@ -209,7 +212,7 @@ func (d *RNNDecoder) Forward(contextVector, targetSequence *Tensor, scheduledSam
 			return nil, fmt.Errorf("vectorized LSTM failed: %w", err)
 		}
 		cellState = lastCell
-		
+
 		// Apply HiddenNorm
 		normedHidden, err := d.HiddenNorm.Forward(allHidden)
 		if err != nil {
@@ -250,7 +253,7 @@ func (d *RNNDecoder) Forward(contextVector, targetSequence *Tensor, scheduledSam
 		d.InitialCellState = cellState
 		d.attentionOutputs = []*Tensor{allAttention}
 		d.combinedInputs = []*Tensor{combined}
-		
+
 		return []*Tensor{allLogits}, nil
 	}
 
@@ -276,20 +279,22 @@ func (d *RNNDecoder) Forward(contextVector, targetSequence *Tensor, scheduledSam
 
 		// 1. LSTM
 		reshapedIn, _ := normedIn.Reshape([]int{batchSize, embeddedInput.Shape[2]})
-		
+
 		// 🛡️ NUMERICAL SAFETY: Check for NaNs before LSTM
 		if len(reshapedIn.Data) > 0 && math.IsNaN(float64(reshapedIn.Data[0])) {
 			fmt.Printf("⚠️ [Decoder] NaNs detected in LSTM input at step %d! Resetting to zero.\n", t)
-			for i := range reshapedIn.Data { reshapedIn.Data[i] = 0 }
+			for i := range reshapedIn.Data {
+				reshapedIn.Data[i] = 0
+			}
 		}
-		
+
 		hiddenState, cellState, err = d.LSTM.Forward(reshapedIn, hiddenState, cellState)
 		if err != nil {
 			return nil, err
 		}
 		d.hiddenStates = append(d.hiddenStates, hiddenState)
 		d.cellStates = append(d.cellStates, cellState)
-		
+
 		// Apply HiddenNorm
 		hiddenQuery, _ := hiddenState.Reshape([]int{batchSize, 1, hiddenSize})
 		normedHidden, _ := d.HiddenNorm.Forward(hiddenQuery)
@@ -323,7 +328,7 @@ func (d *RNNDecoder) Forward(contextVector, targetSequence *Tensor, scheduledSam
 
 		resLogits, err := outputLogits.Reshape([]int{batchSize, d.OutputVocabSize})
 		if err != nil {
-			return nil, fmt.Errorf("decoder output reshape failed: %w (outputLogits shape: %v, expected: [%d, %d])", 
+			return nil, fmt.Errorf("decoder output reshape failed: %w (outputLogits shape: %v, expected: [%d, %d])",
 				err, outputLogits.Shape, batchSize, d.OutputVocabSize)
 		}
 		outputs = append(outputs, resLogits)
@@ -362,26 +367,44 @@ func (d *RNNDecoder) Forward(contextVector, targetSequence *Tensor, scheduledSam
 // ClearState clears the intermediate states of the decoder to free memory.
 func (d *RNNDecoder) ClearState() {
 	for _, t := range d.hiddenStates {
-		if t != nil { t.Release() }
+		if t != nil {
+			t.Release()
+		}
 	}
 	for _, t := range d.cellStates {
-		if t != nil { t.Release() }
+		if t != nil {
+			t.Release()
+		}
 	}
 	for _, t := range d.embeddedInputs {
-		if t != nil { t.Release() }
+		if t != nil {
+			t.Release()
+		}
 	}
 	for _, t := range d.attentionOutputs {
-		if t != nil { t.Release() }
+		if t != nil {
+			t.Release()
+		}
 	}
 	for _, t := range d.combinedInputs {
-		if t != nil { t.Release() }
+		if t != nil {
+			t.Release()
+		}
 	}
 	for _, t := range d.decoderInputs {
-		if t != nil { t.Release() }
+		if t != nil {
+			t.Release()
+		}
 	}
-	if d.InitialHiddenState != nil { d.InitialHiddenState.Release() }
-	if d.InitialCellState != nil { d.InitialCellState.Release() }
-	if d.contextVector != nil { d.contextVector.Release() }
+	if d.InitialHiddenState != nil {
+		d.InitialHiddenState.Release()
+	}
+	if d.InitialCellState != nil {
+		d.InitialCellState.Release()
+	}
+	if d.contextVector != nil {
+		d.contextVector.Release()
+	}
 
 	d.hiddenStates = nil
 	d.cellStates = nil
@@ -391,7 +414,7 @@ func (d *RNNDecoder) ClearState() {
 	d.decoderInputs = nil
 	d.InitialHiddenState = nil
 	d.InitialCellState = nil
-	
+
 	if d.LSTM != nil {
 		d.LSTM.ClearState()
 	}
@@ -407,8 +430,12 @@ func (d *RNNDecoder) ClearState() {
 	if d.Embedding != nil {
 		d.Embedding.ClearState()
 	}
-	if d.LastQueryTokens != nil { d.LastQueryTokens.Release() }
-	if d.LastTargetTokens != nil { d.LastTargetTokens.Release() }
+	if d.LastQueryTokens != nil {
+		d.LastQueryTokens.Release()
+	}
+	if d.LastTargetTokens != nil {
+		d.LastTargetTokens.Release()
+	}
 	d.LastQueryTokens = nil
 	d.LastTargetTokens = nil
 	d.contextVector = nil
@@ -445,20 +472,20 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
 
 		// 2. Re-construct the sequence logic to set up vectorized states
 		// This is MUCH faster than the step-by-step backward loop.
-		
+
 		// 2a. Re-construct decoder inputs sequence
 		allInputs, err = Concat(d.decoderInputs, 1)
 		if err != nil {
 			return fmt.Errorf("failed to concat decoder inputs: %w", err)
 		}
 		allEmbedded, _ = d.Embedding.Forward(allInputs)
-		
+
 		// 2a. Re-apply Reinforced Context Injection to match Forward pass for correct BPTT
 		ctxMean, _ := d.contextVector.Mean(1)
 		ctxMeanReshaped, _ := ctxMean.Reshape([]int{batchSize, 1, d.contextVector.Shape[2]})
-		
-        // Re-run InputNorm FIRST
-        allEmbedded, _ = d.InputNorm.Forward(allEmbedded)
+
+		// Re-run InputNorm FIRST
+		allEmbedded, _ = d.InputNorm.Forward(allEmbedded)
 		// Then add context as post-norm residual with decay
 		if d.ContextMultiplierDecay > 0 && d.ContextMultiplierDecay < 1.0 {
 			seqLen := allEmbedded.Shape[1]
@@ -484,10 +511,10 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
 		if err != nil {
 			return fmt.Errorf("LSTM forward failed during backward re-vectorization: %w", err)
 		}
-        
-        // Re-run HiddenNorm
-        allHidden, _ = d.HiddenNorm.Forward(allHidden)
-		
+
+		// Re-run HiddenNorm
+		allHidden, _ = d.HiddenNorm.Forward(allHidden)
+
 		// 2c. Re-run Attention forward to populate query/key/value states for the whole sequence
 		allAttention, err = d.Attention.Forward(allHidden, d.contextVector, d.contextVector, d.attentionMask)
 		if err != nil {
@@ -555,7 +582,7 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
 		kvSeq := wShape[3] // QuerySeqLen
 
 		rewardData := make([]float32, b0*h0*qSeq*kvSeq)
-		
+
 		getWord := func(tokID float32) string {
 			idx := int(tokID)
 			if idx >= 0 && idx < len(d.TokenToWord) {
@@ -571,7 +598,7 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
 				if targetIdx < len(d.LastTargetTokens.Data) {
 					targetWord = getWord(d.LastTargetTokens.Data[targetIdx])
 				}
-				
+
 				if targetWord != "" && isVerbOrAux(targetWord) {
 					for q := 0; q < kvSeq; q++ {
 						var queryWord string
@@ -579,10 +606,10 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
 						if queryIdx < len(d.LastQueryTokens.Data) {
 							queryWord = getWord(d.LastQueryTokens.Data[queryIdx])
 						}
-						
+
 						if queryWord != "" && isPronoun(queryWord) {
 							for h := 0; h < h0; h++ {
-								offset := ((b*h0 + h)*qSeq + t)*kvSeq + q
+								offset := ((b*h0+h)*qSeq+t)*kvSeq + q
 								rewardData[offset] = -0.08
 							}
 						}
@@ -590,7 +617,7 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
 				}
 			}
 		}
-		
+
 		d.Attention.AttentionWeightsReward = NewTensor(wShape, rewardData, false)
 	}
 
@@ -599,7 +626,7 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
 		return fmt.Errorf("attention backward failed: %w", err)
 	}
 	normedHiddenGrad := d.Attention.Query().Grad
-	
+
 	// 5. HiddenNorm Backward
 	if err := d.HiddenNorm.Backward(normedHiddenGrad); err != nil {
 		return fmt.Errorf("hidden norm backward failed: %w", err)
@@ -627,7 +654,7 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
 	if err := d.InputNorm.Backward(lstmInputGrad); err != nil {
 		return fmt.Errorf("input norm backward failed: %w", err)
 	}
-	
+
 	// 9. Embedding and Context Vector Gradients
 	if lstmInputGrad != nil {
 		// Branch A: To Embedding (flows through InputNorm)
@@ -650,7 +677,7 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
 			decayedGrads, _ := lstmInputGrad.MulWithBroadcast(decayTensor)
 			gradCtxMeanFromInputs, _ := decayedGrads.Sum(1)
 			gradCtxMean := gradCtxMeanFromInputs.Scale(1.0) // multiplier already in decayTensor
-			
+
 			// Continue with standard flow... (simplified for this edit)
 			initialHiddenGrad := d.LSTM.GetPrevHiddenGrad()
 			if initialHiddenGrad != nil {
@@ -658,11 +685,11 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
 				gradCtxMean, _ = gradCtxMean.Add(initialHiddenGrad)
 				oldGrad.Release()
 			}
-			
+
 			encSeqLen := d.contextVector.Shape[1]
 			distGrad := gradCtxMean.Scale(1.0 / float32(encSeqLen))
 			expandedGrad := distGrad.Expand([]int{batchSize, encSeqLen, embeddingDim})
-			
+
 			if d.contextVector.Grad == nil {
 				d.contextVector.Grad = expandedGrad
 			} else {
@@ -671,7 +698,7 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
 				oldGrad.Release()
 				expandedGrad.Release()
 			}
-			
+
 			decayedGrads.Release()
 			decayTensor.Release()
 			gradCtxMeanFromInputs.Release()
@@ -681,18 +708,18 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
 			// Legacy path
 			gradCtxMeanFromInputs, _ := lstmInputGrad.Sum(1)
 			gradCtxMean := gradCtxMeanFromInputs.Scale(d.ContextMultiplier)
-			
+
 			initialHiddenGrad := d.LSTM.GetPrevHiddenGrad()
 			if initialHiddenGrad != nil {
 				oldGrad := gradCtxMean
 				gradCtxMean, _ = gradCtxMean.Add(initialHiddenGrad)
 				oldGrad.Release()
 			}
-			
+
 			encSeqLen := d.contextVector.Shape[1]
 			distGrad := gradCtxMean.Scale(1.0 / float32(encSeqLen))
 			expandedGrad := distGrad.Expand([]int{batchSize, encSeqLen, embeddingDim})
-			
+
 			if d.contextVector.Grad == nil {
 				d.contextVector.Grad = expandedGrad
 			} else {
@@ -701,7 +728,7 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
 				oldGrad.Release()
 				expandedGrad.Release()
 			}
-			
+
 			gradCtxMeanFromInputs.Release()
 			gradCtxMean.Release()
 			distGrad.Release()
@@ -713,17 +740,33 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
 		allGrads.Release()
 	}
 	for _, g := range reshapedGrads {
-		if g != nil { g.Release() }
+		if g != nil {
+			g.Release()
+		}
 	}
-	if allInputs != nil { allInputs.Release() }
-	if allEmbedded != nil { allEmbedded.Release() }
-	if allHidden != nil { allHidden.Release() }
-	if allAttention != nil { allAttention.Release() }
-	if combined != nil { combined.Release() }
-	if normed != nil { normed.Release() }
+	if allInputs != nil {
+		allInputs.Release()
+	}
+	if allEmbedded != nil {
+		allEmbedded.Release()
+	}
+	if allHidden != nil {
+		allHidden.Release()
+	}
+	if allAttention != nil {
+		allAttention.Release()
+	}
+	if combined != nil {
+		combined.Release()
+	}
+	if normed != nil {
+		normed.Release()
+	}
 
 	// 🛡️ Proactive Release of intermediate backprop tensors
-	if zeroCellGrad != nil { zeroCellGrad.Release() }
+	if zeroCellGrad != nil {
+		zeroCellGrad.Release()
+	}
 	if totalHiddenGrad != nil && totalHiddenGrad != hiddenGradFromOutput {
 		totalHiddenGrad.Release()
 	}
@@ -766,7 +809,9 @@ func (d *RNNDecoder) DecodeStep(inputToken *Tensor, prevHiddenState, prevCellSta
 	const ctxEpsilon = 1e-5
 	if ctxMeanNorm > ctxEpsilon {
 		scale := 1.0 / ctxMeanNorm
-		if scale > 10.0 { scale = 10.0 } // Cap scaling factor
+		if scale > 10.0 {
+			scale = 10.0
+		} // Cap scaling factor
 		ctxMean = ctxMean.Scale(scale)
 	}
 	ctxMeanReshaped, _ := ctxMean.Reshape([]int{batchSize, 1, contextVector.Shape[2]})
@@ -806,7 +851,7 @@ func (d *RNNDecoder) DecodeStep(inputToken *Tensor, prevHiddenState, prevCellSta
 	// 4. Combined
 	combined, _ := Concat([]*Tensor{hiddenQuery, attentionOutput}, 2)
 	normed, _ := d.LayerNorm.Forward(combined)
-	
+
 	var outputLogits *Tensor
 	if d.OutputMoE != nil {
 		// Set step index for step-aware routing bias
@@ -829,17 +874,16 @@ func (d *RNNDecoder) DecodeStepWithExpert(input *Tensor, prevHiddenState, prevCe
 	if err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
-	
+
 	expertIDs := []int{}
 	if d.OutputMoE != nil && len(d.OutputMoE.SelectedExperts) > 0 {
 		expertIDs = d.OutputMoE.SelectedExperts[0]
 	} else if d.OutputLayer != nil {
 		expertIDs = []int{0}
 	}
-	
+
 	return logits, h, c, expertIDs, att, nil
 }
-
 
 // Parameters returns all learnable parameters of the RNNDecoder.
 func (d *RNNDecoder) Parameters() []*Tensor {
@@ -933,7 +977,6 @@ func (d *RNNDecoder) ResizeOutputLayer(newSize int) {
 	} else if d.OutputMoE != nil {
 		// ResizeExperts already performs one-expert-at-a-time GC.
 		d.OutputMoE.ResizeExperts(newSize)
-		fmt.Printf("✅ Resized all %d Decoder Experts to %d\n", len(d.OutputMoE.Experts), newSize)
 	}
 
 	// --- 3. Resize LayerNorm only if dimensions changed ---
@@ -976,6 +1019,7 @@ func (d *RNNDecoder) SyncParameters() error {
 	}
 	return nil
 }
+
 // SetMode sets the decoder to training or inference mode.
 func (d *RNNDecoder) SetMode(training bool) {
 	if d.LSTM != nil {
@@ -1000,6 +1044,7 @@ func (d *RNNDecoder) RepairArchitecture() {
 		d.OutputMoE.RepairArchitecture()
 	}
 }
+
 // Step performs a single step of decoding (used for inference and diagnostics)
 func (d *RNNDecoder) Step(tokenID int, contextVector, prevHidden, prevCell *Tensor) (*Tensor, *Tensor, *Tensor, error) {
 	batchSize := 1
@@ -1017,11 +1062,13 @@ func (d *RNNDecoder) Step(tokenID int, contextVector, prevHidden, prevCell *Tens
 	// 1. Embedding
 	inputT := NewTensor([]int{batchSize, 1}, []float32{float32(tokenID)}, false)
 	embedded, err := d.Embedding.Forward(inputT)
-	if err != nil { return nil, nil, nil, err }
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
 	// 3. LSTM
 	normedIn, _ := d.InputNorm.Forward(embedded)
-	
+
 	// Reinforced Context Injection (Normalized Mean)
 	// Match Forward() and DecodeStep() logic: post-norm residual.
 	ctxMean, _ := contextVector.Mean(1)
@@ -1034,26 +1081,32 @@ func (d *RNNDecoder) Step(tokenID int, contextVector, prevHidden, prevCell *Tens
 
 	reshapedIn, _ := normedIn.Reshape([]int{batchSize, embedded.Shape[2]})
 	hidden, cell, err := d.LSTM.Forward(reshapedIn, prevHidden, prevCell)
-	if err != nil { return nil, nil, nil, err }
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
 	// 4. Attention
 	hiddenQuery, _ := hidden.Reshape([]int{batchSize, 1, d.LSTM.HiddenSize})
 	normedHidden, _ := d.HiddenNorm.Forward(hiddenQuery)
 	// Passing nil for attention mask during Step (single token inference)
 	attnOut, err := d.Attention.Forward(normedHidden, contextVector, contextVector, nil)
-	if err != nil { return nil, nil, nil, err }
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
 	// 5. Combined & Output
 	combined, _ := Concat([]*Tensor{hiddenQuery, attnOut}, 2)
 	normedOut, _ := d.LayerNorm.Forward(combined)
-	
+
 	var logits *Tensor
 	if d.OutputMoE != nil {
 		logits, err = d.OutputMoE.Forward(normedOut)
 	} else {
 		logits, err = d.OutputLayer.Forward(normedOut)
 	}
-	if err != nil { return nil, nil, nil, err }
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
 	// Reshape logits to 2D [batch, vocab]
 	flatLogits, _ := logits.Reshape([]int{batchSize, d.OutputVocabSize})
