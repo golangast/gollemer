@@ -35,9 +35,10 @@ type Runner struct {
 	TutorialState  TutorialState
 	InMenuMode     bool
 	Listen         bool
+	CartridgesFlag string
 }
 
-func NewRunner(talk bool, listen bool) (*Runner, error) {
+func NewRunner(talk bool, listen bool, cartridges string) (*Runner, error) {
 	mascot := ui.NewMascot(talk)
 
 	projectRoot, err := FindProjectRoot()
@@ -62,10 +63,11 @@ func NewRunner(talk bool, listen bool) (*Runner, error) {
 		ProjectRoot: projectRoot,
 		DB:          db,
 		KB:          kb,
-		Reader:      bufio.NewReader(os.Stdin),
-		Listen:      listen,
+		Reader:         bufio.NewReader(os.Stdin),
+		Listen:         listen,
+		CartridgesFlag: cartridges,
 	}
-	log.Printf("🔧 Initializing Gollemer Runner (Root: %s, Listen: %v)", r.ProjectRoot, listen)
+	log.Printf("🔧 Initializing Gollemer Runner (Root: %s, Listen: %v, Cartridges: %s)", r.ProjectRoot, listen, cartridges)
 
 	return r, nil
 }
@@ -217,6 +219,38 @@ func (r *Runner) Init() {
 	}
 
 	r.Mascot.AuditProjectSize(r.ProjectRoot)
+
+	// MOUNT EXPLICIT CARTRIDGES
+	if r.CartridgesFlag != "" {
+		if r.IntentModel != nil && r.IntentModel.Supervisor != nil && r.IntentModel.Supervisor.CartridgeMgr != nil {
+			parts := strings.Split(r.CartridgesFlag, ",")
+			for _, p := range parts {
+				path := strings.TrimSpace(p)
+				if path != "" {
+					log.Printf("🔌 Loading user-specified cartridge: %s", path)
+					err := r.IntentModel.Supervisor.CartridgeMgr.LoadCartridge(path, 0, 0)
+					if err == nil {
+						// Retrieve expert
+						r.IntentModel.Supervisor.CartridgeMgr.Mu.Lock()
+						expert := r.IntentModel.Supervisor.CartridgeMgr.Loaded[path]
+						r.IntentModel.Supervisor.CartridgeMgr.Mu.Unlock()
+
+						// Mount to output MoE
+						if r.IntentModel.Decoder != nil && r.IntentModel.Decoder.OutputMoE != nil {
+							_, err = r.IntentModel.Supervisor.MountCartridgeToLayer(r.IntentModel, len(r.IntentModel.Encoder.GetMoELayers()), expert)
+							if err != nil {
+								log.Printf("⚠️ Failed to mount cartridge %s: %v", path, err)
+							} else {
+								log.Printf("✅ Permanently mounted cartridge %s for this session", path)
+							}
+						}
+					} else {
+						log.Printf("⚠️ Failed to load cartridge %s: %v", path, err)
+					}
+				}
+			}
+		}
+	}
 }
 
 func (r *Runner) initModels() {

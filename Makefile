@@ -23,12 +23,10 @@ MAIN_CMD     = go run cmd/tools/train_moe/main.go
 
 ## train: Start a fresh Social Curriculum training (clears old state)
 train: clean
-	@echo "🚀 Starting Fresh Social Curriculum Training..."
 	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-social
 
 ## train-social: Resume existing Social Curriculum training
 train-social:
-	@echo "🚀 Resuming Social Curriculum Training..."
 	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-social
 
 # --- Interaction ---
@@ -44,7 +42,6 @@ llm: chat
 
 ## clean: Remove all model checkpoints and cached vocabularies
 clean:
-	@echo "🧹 Cleaning model state..."
 	rm -f data/models/gob_models/*.gob
 
 ## help: Display available commands

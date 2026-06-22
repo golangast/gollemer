@@ -94,6 +94,20 @@ make chat
 # or use 'make llm'
 ```
 
+### 4. Advanced CLI Flags
+When running the `train_moe` binary directly, you can use several flags to customize training and inference:
+
+```bash
+# Provide custom training data path (CSV, JSON, TXT)
+go run ./cmd/tools/train_moe -train-social -data "data/custom_training_set.csv"
+
+# Hot-swap expert cartridges on the fly for LLM inference
+go run ./cmd/tools/train_moe -llm -cartridges "data/models/gob_models/medical_experts.gob"
+
+# Mount expert cartridges permanently before training
+go run ./cmd/tools/train_moe -train-chat -cartridges "data/models/gob_models/medical_experts.gob,data/models/gob_models/database_experts.gob"
+```
+
 ---
 
 ## 🎙️ Voice Command Pipeline (Pure Go — No CGO)

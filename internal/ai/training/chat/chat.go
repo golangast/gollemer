@@ -32,7 +32,7 @@ import (
 	"github.com/golangast/gollemer/internal/tokenizer"
 )
 
-func TrainChat(projectRoot string, customDataPath string, rebalanceRequested bool, overfitMode bool, initialLR float32, weightDecay float32, autoHeal bool, maxGradNorm float32, useGPU bool, batchSize int, accumulationSteps int, piMode bool, distMode string, distAddr string) {
+func TrainChat(projectRoot string, customDataPath string, rebalanceRequested bool, overfitMode bool, initialLR float32, weightDecay float32, autoHeal bool, maxGradNorm float32, useGPU bool, batchSize int, accumulationSteps int, piMode bool, distMode string, distAddr string, cartridges string) {
 	if piMode {
 		// Pi 3B mode: ~900 MB total RAM. Keep the Go process well under 600 MB
 		// so the OS and other processes don't starve.
@@ -852,6 +852,39 @@ skipCSV:
 		}
 	}
 	// --------------------------------------
+
+	// MOUNT EXPLICIT CARTRIDGES (TrainChat: uses a transient CartridgeManager)
+	if cartridges != "" {
+		tmpMgr := moe.NewCartridgeManager()
+		tmpSup := moe.NewSupervisor()
+		tmpSup.CartridgeMgr = tmpMgr
+		for _, p := range strings.Split(cartridges, ",") {
+			path := strings.TrimSpace(p)
+			if path == "" {
+				continue
+			}
+			log.Printf("🔌 Loading cartridge: %s", path)
+			if err := tmpMgr.LoadCartridge(path, 0, 0); err != nil {
+				log.Printf("⚠️ Failed to load cartridge %s: %v", path, err)
+				continue
+			}
+			tmpMgr.Mu.Lock()
+			expert := tmpMgr.Loaded[path]
+			tmpMgr.Mu.Unlock()
+			if intentModel.Decoder != nil && intentModel.Decoder.OutputMoE != nil {
+				_, err := tmpSup.MountCartridgeToLayer(intentModel, len(intentModel.Encoder.GetMoELayers()), expert)
+				if err != nil {
+					log.Printf("⚠️ Failed to mount cartridge %s: %v", path, err)
+				} else {
+					log.Printf("✅ Permanently mounted cartridge %s for this training session", path)
+				}
+			}
+		}
+	}
+
+	// -------------------------------------------------------------------------
+	// EXPERT RESIZING LOGIC
+	// -------------------------------------------------------------------------
 
 	fmt.Printf("Training on %d pairs for %d epochs (patience=%d)...\n", len(chatPairs), epochs, patienceLimit)
 
@@ -2101,7 +2134,8 @@ skipCSV:
 
 // Using moe.SocialConfig and moe.LoadSocialConfig from moe package
 
-func TrainSocialChat(projectRoot string, epochs int, customDataPath string, overfitMode bool, initialLR float32, weightDecay float32, autoHeal bool, maxGradNorm float32, useGPU bool, batchSize int, accumulationSteps int, numExperts int, piMode bool, distMode string, distAddr string) {
+func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string, overfitMode bool, initialLR float32, weightDecay float32, autoHeal bool, maxGradNorm float32, useGPU bool, batchSize int, accumulationSteps int, targetExperts int, piMode bool, distMode string, distAddr string, cartridges string) {
+	epochs := totalEpochs // local alias; use epochs throughout function body
 	if piMode {
 		// Pi 3B mode: ~900 MB total RAM.
 		log.Println("🥧 Pi 3B mode enabled: applying 600 MB memory cap, single-threaded GC, batch=1, acc=16, experts=4")
@@ -2115,16 +2149,11 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 		if accumulationSteps <= 0 || accumulationSteps < 16 {
 			accumulationSteps = 16
 		}
-		if numExperts <= 0 || numExperts > 4 {
-			numExperts = 4 // 4 experts consume roughly 1/2 the RAM of the default 8
+		if targetExperts <= 0 || targetExperts > 4 {
+			targetExperts = 4 // 4 experts consume roughly 1/2 the RAM of the default 8
 		}
 	} else {
 		//  AGGRESSIVE MEMORY MANAGEMENT: Removed hardcoded limits to allow GOMEMLIMIT=5000MiB to provide enough headroom for gob.Encode.
-	}
-
-	log.Println(" Starting SOCIAL-ONLY Chat Training")
-	if customDataPath != "" {
-		log.Printf(" Using CUSTOM training data: %s", customDataPath)
 	}
 
 	var chatPairs []moe.TrainPair
@@ -2171,9 +2200,6 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 		}
 		var ms runtime.MemStats
 		runtime.ReadMemStats(&ms)
-		log.Printf(" Loaded %d pairs from human_chat.txt | Heap: %d MB", len(chatPairs), ms.Alloc/1024/1024)
-	} else {
-		log.Printf("  human_chat.txt not found at %s, skipping...", humanChatPath)
 	}
 
 	// --- LOAD conversing.csv IF AVAILABLE ---
@@ -2209,7 +2235,6 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 					}
 				}
 			}
-			log.Printf(" Loaded total %d pairs after adding conversing.csv (Proper CSV parsing)", len(chatPairs))
 		}
 	}
 
@@ -2223,7 +2248,6 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 			log.Printf("⚠️  conversations.csv load error: %v", convCSVErr)
 		} else {
 			chatPairs = append(chatPairs, convCSVPairs...)
-			log.Printf(" Loaded %d multi-turn conversation pairs from conversations.csv (total: %d)", len(convCSVPairs), len(chatPairs))
 		}
 	}
 
@@ -2234,9 +2258,6 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 		for _, p := range pairs {
 			chatPairs = append(chatPairs, moe.TrainPair{Q: p[0], A: p[1]})
 		}
-		log.Printf(" Loaded %d device intent pairs from device_intents_multitask.txt (total: %d)", len(pairs), len(chatPairs))
-	} else {
-		log.Printf("⚠️  device_intents_multitask.txt load error: %v", err)
 	}
 
 	// Reuse TrainChat with social-only data by temporarily renaming model output
@@ -2261,7 +2282,6 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 	PrepareTrainingWeights(tmpVocab) // Resolve weights before nilling
 	tmpVocab = nil
 	runtime.GC()
-	log.Printf(" Pre-computed final vocab size: %d", precomputedVocabSize)
 
 	//  Step 1: Model Loading or Initialization
 	var intentModel *moe.IntentMoE
@@ -2287,6 +2307,7 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 	expert := orchestrator.NewHyperparameterExpert(safeCfg)
 	config := safeCfg.Get()
 
+	numExperts := targetExperts // use local var name for rest of function
 	if intentModel == nil {
 		modelDim := config.ModelDim
 		if modelDim <= 0 {
@@ -2300,8 +2321,6 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 		if freshVocab < 100 {
 			freshVocab = 100 // Reduced from 2000 to prevent gradient dilution in tiny social models
 		}
-
-		log.Printf(" Initializing fresh social model: %dd, %d experts, MoE decoder output", modelDim, numExperts)
 
 		// --- STABILITY FIX: Clear global MoE state before starting fresh training ---
 		moe.ActiveLayers = nil
@@ -2329,16 +2348,13 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 		// Initialize Decoder specifically if not covered
 		// Initialize RuleBook for structural guidance
 		intentModel.Rules = moe.NewRuleBook()
-		log.Println(" RuleBook initialized: Sophisticated Intent & Grammar Rules loaded.")
 	} else {
 		// Ensure RuleBook is loaded on existing models
 		if intentModel.Rules == nil {
 			intentModel.Rules = moe.NewRuleBook()
-			log.Println(" RuleBook attached to existing social model.")
 		}
 		// Loaded model: ensure it has an OutputMoE decoder (old checkpoints may have plain Linear)
 		if intentModel.Decoder != nil && intentModel.Decoder.OutputMoE == nil {
-			log.Printf(" Loaded model has no OutputMoE decoder  inserting MoE output layer")
 			vocabSize := intentModel.SentenceVocab.Size()
 			modelDim := config.ModelDim
 			newDecoder, derr := moe.NewRNNDecoder(modelDim, vocabSize, modelDim, 8, 1, 0.0, numExperts)
@@ -2414,7 +2430,6 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 	// Propagate all MoE/Decoder hyperparameters from social_train.json
 	if intentModel.Decoder != nil {
 		intentModel.Decoder.ContextMultiplier = config.ContextMultiplier
-		log.Printf(" Context Multiplier: %.2f", intentModel.Decoder.ContextMultiplier)
 	}
 	// Wire router noise factor so the JSON value is actually used.
 	// NOTE: Do NOT override config.RouterNoise here — that discards the value from
@@ -2423,7 +2438,6 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 		config.RouterNoise = 0.05 // Safety floor only if JSON has no value
 	}
 	moe.SetRouterNoiseFactor(config.RouterNoise)
-	log.Printf(" Router Noise Factor: %.2f (from config)", config.RouterNoise)
 	// Apply router temperature and load-balancing weight to all active layers
 	for _, layer := range moe.ActiveLayers {
 		if config.RouterTemperature > 0 {
@@ -2435,8 +2449,6 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 		if config.ExpertDropout >= 0 {
 			layer.ExpertDropoutRate = config.ExpertDropout
 		}
-		log.Printf("  Layer config  Temp=%.2f LBW=%.3f Dropout=%.2f",
-			layer.RouterTemperature, layer.LoadBalancingWeight, layer.ExpertDropoutRate)
 	}
 
 	// Shuffle and split
@@ -2450,12 +2462,10 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 		// Goal is memorization, not generalization
 		trainPairs = chatPairs
 		valPairs = nil
-		log.Printf(" Tiny dataset (%d pairs): using ALL pairs for training (no val split)", len(trainPairs))
 	} else {
 		splitIdx := int(float64(len(chatPairs)) * 0.9)
 		trainPairs = chatPairs[:splitIdx]
 		valPairs = chatPairs[splitIdx:]
-		log.Printf(" Data: %d training, %d validation", len(trainPairs), len(valPairs))
 	}
 	_ = valPairs // validation not used in social training loop
 
@@ -2466,10 +2476,8 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 	if intentModel.SentenceVocab == nil || intentModel.SentenceVocab.Size() < 10 {
 		// Try to load social vocab first
 		if _, err := os.Stat(socialVocabPathFinal); err == nil {
-			log.Printf(" Loading existing social vocabulary from %s", socialVocabPathFinal)
 			if v, err := mainvocab.LoadVocabulary(socialVocabPathFinal); err == nil {
 				intentModel.SentenceVocab = v
-				log.Printf(" Loaded social vocabulary: %d tokens", v.Size())
 			}
 		}
 
@@ -2486,7 +2494,6 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 
 		// If still tiny, build from scratch but use a larger minimum set
 		if intentModel.SentenceVocab == nil || intentModel.SentenceVocab.Size() < 5 {
-			log.Println(" Building fresh social vocabulary (Merging with dataset tokens)...")
 			intentModel.SentenceVocab = mainvocab.NewVocabulary() // Includes BOS/EOS/PAD/UNK
 			intentModel.SentenceVocab.AddToken("__ques__")
 			intentModel.SentenceVocab.AddToken("__ans__")
@@ -2524,7 +2531,6 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 	}
 	sort.Strings(sortedNewTokens)
 
-	log.Printf(" Expanding vocabulary with %d new dataset tokens...", len(sortedNewTokens))
 	sentenceVocab := intentModel.SentenceVocab
 	for _, t := range sortedNewTokens {
 		sentenceVocab.AddToken(t)
@@ -2532,12 +2538,10 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 	// Dynamic Resizing for Vocab consistency in social model
 	newVocabSize := sentenceVocab.Size()
 	if newVocabSize != intentModel.SentenceVocabSize {
-		log.Printf(" Resizing social model output layer: %d -> %d", intentModel.SentenceVocabSize, newVocabSize)
 		intentModel.Decoder.ResizeOutputLayer(newVocabSize)
 		intentModel.SentenceVocabSize = newVocabSize
 	}
 	if intentModel.Embedding != nil && newVocabSize != intentModel.Embedding.VocabSize {
-		log.Printf(" Resizing social model embedding layer: %d -> %d", intentModel.Embedding.VocabSize, newVocabSize)
 		intentModel.ResizeEmbeddings(newVocabSize)
 	}
 
@@ -2545,15 +2549,12 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 	sentenceVocab.BosID = sentenceVocab.GetTokenID("<s>")
 	sentenceVocab.EosID = sentenceVocab.GetTokenID("</s>")
 	sentenceVocab.PaddingTokenID = sentenceVocab.GetTokenID("<pad>")
-	log.Printf(" Vocabulary State: %d tokens (BOS=%d, EOS=%d, PAD=%d)", sentenceVocab.Size(), sentenceVocab.BosID, sentenceVocab.EosID, sentenceVocab.PaddingTokenID)
 
 	//  BIND VOCABULARY TO MODEL (This ensures the brain and words stay in sync in the .gob file)
 	intentModel.SentenceVocab = sentenceVocab
-	log.Printf(" Vocabulary bound to social model (%d tokens)", sentenceVocab.Size())
 	intentModel.SanitizeControlTokens()
 
 	moe.ActiveLayers = findMoELayers(intentModel)
-	log.Printf(" Registered %d MoE Layers for active monitoring and load-balancing.", len(moe.ActiveLayers))
 
 	// Use iterator-based training (same as TrainChat)
 	// Use config-driven hyperparameters with CLI overrides
@@ -2570,8 +2571,6 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 	if accumulationSteps <= 0 {
 		accumulationSteps = config.AccumulateSteps
 	}
-
-	log.Printf(" Training social model for %d epochs at peak LR=%.6f", epochs, peakLR)
 
 	isTinyDataset := len(chatPairs) < 50 // Threshold for social curriculum
 
@@ -2623,7 +2622,6 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 			id := intentModel.SentenceVocab.GetTokenID(tok)
 			if id >= 0 {
 				lossWeights[id] = 0.1
-				log.Printf("  [Anti-Collapse] Suppressed '%s' (ID %d) loss weight to 0.1", tok, id)
 			}
 		}
 		// ─────────────────────────────────────────────────────────────────────
@@ -2763,6 +2761,32 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 		supervisor.TrainingDataPath = filepath.Join(projectRoot, "data/training/trainingdata/conversing.csv")
 	}
 
+	// MOUNT EXPLICIT CARTRIDGES (TrainSocialChat)
+	if cartridges != "" {
+		for _, p := range strings.Split(cartridges, ",") {
+			path := strings.TrimSpace(p)
+			if path == "" {
+				continue
+			}
+			log.Printf("🔌 Loading cartridge: %s", path)
+			if err := supervisor.CartridgeMgr.LoadCartridge(path, 0, 0); err != nil {
+				log.Printf("⚠️ Failed to load cartridge %s: %v", path, err)
+				continue
+			}
+			supervisor.CartridgeMgr.Mu.Lock()
+			expert := supervisor.CartridgeMgr.Loaded[path]
+			supervisor.CartridgeMgr.Mu.Unlock()
+			if intentModel.Decoder != nil && intentModel.Decoder.OutputMoE != nil {
+				_, err := supervisor.MountCartridgeToLayer(intentModel, len(intentModel.Encoder.GetMoELayers()), expert)
+				if err != nil {
+					log.Printf("⚠️ Failed to mount cartridge %s: %v", path, err)
+				} else {
+					log.Printf("✅ Permanently mounted cartridge %s for this training session", path)
+				}
+			}
+		}
+	}
+
 	// Seed structural/syntactic base experts and lock parameters immediately
 	supervisor.SeedSystemExperts(intentModel)
 
@@ -2794,8 +2818,6 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 		layer.K = config.K
 		layer.OverfitMode = overfitMode
 	}
-	log.Printf(" MoE System: %d layers initialized (LBW=%.3f, Dropout=%.2f, Noise=%.1f, K=%d)",
-		len(layers), config.LoadBalancingWeight, config.ExpertDropout, config.RouterNoise, layers[0].K)
 
 	//  Tiny Dataset Optimization (Memorization Mode)
 	// If the dataset is extremely small, we disable all "noise" and "regularization"
@@ -2809,7 +2831,6 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 	const embeddingFreezeEpochs = 0 // Thaw immediately since Word2Vec fallback is random noise
 	const trainingSocialOnly = true
 	setEmbeddingFrozen(intentModel, true) // Always start frozen
-	log.Printf(" Embedding layer FROZEN for first %d epochs.", embeddingFreezeEpochs)
 
 	qualityGateFailures := 0
 	lastSurgeryEpoch := -15 // Track when last surgery happened
@@ -2822,7 +2843,6 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 		// Thaw embedding after freeze window
 		if epoch == embeddingFreezeEpochs {
 			setEmbeddingFrozen(intentModel, false)
-			log.Printf(" Epoch %d: Embedding layer THAWED — embeddings now trainable.", epoch)
 		}
 
 		currentEpoch := epoch
@@ -2838,7 +2858,6 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 				Who:  "who",
 				You:  "you",
 			}
-			log.Printf("🤖 [Supervisor Intervention] Triggering Epoch 112 fixes...")
 			supervisor.ClearFailureLogs(intentModel)
 			supervisor.SpawnSpecializedExpert(intentModel, Layer0, "IDENTITY", E25)
 			supervisor.AdjustRoutingAffinity(intentModel, token.What, E25, 2.5)
@@ -3757,14 +3776,15 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 				if !teacherPassed {
 					heuristicScore = 1.0 // Force a failure so the supervisor penalizes the router
 					if epoch%10 == 0 {
-						log.Printf("👨‍🏫 Teacher REJECTED: %s", teacherReason)
+						if teacherCorrection != "" && teacherCorrection != "N/A" {
+							log.Printf(" 👨‍🏫 Teacher Reject: %s | Fix: '%s'", teacherReason, teacherCorrection)
+						} else {
+							log.Printf(" 👨‍🏫 Teacher Reject: %s", teacherReason)
+						}
 					}
 
 					// Dynamic Curriculum Injection!
 					if teacherCorrection != "" && teacherCorrection != "N/A" {
-						if epoch%10 == 0 {
-							log.Printf("👨‍🏫 Teacher CORRECTION added to training queue: '%s'", teacherCorrection)
-						}
 
 						// Clean up prompt format before saving as a target
 						cleanP := p
@@ -4004,7 +4024,14 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 
 			// Only log a few samples during full test to keep console clean, but log ALL failures
 			if (!isFullTest && epoch%10 == 0) || i%10 == 0 || (status == "SALAD" && epoch%10 == 0) {
-				log.Printf(" Test [%d] Query: '%s' -> Response: '%s' [Score: %.2f | status: %s]", i, p, response, heuristicScore, status)
+				cleanP := p
+				if strings.Contains(p, "__ques__") {
+					parts := strings.Split(p, "__ques__")
+					if len(parts) > 1 {
+						cleanP = strings.TrimSpace(strings.ReplaceAll(parts[1], "__ans__", ""))
+					}
+				}
+				log.Printf(" 🧪 Test %d | Q: '%s' \n      ↳ A: '%s' [%s: %.1f]", i, cleanP, response, status, heuristicScore)
 			}
 
 			// Periodically force GC during the test loop to keep RSS low
@@ -4199,13 +4226,13 @@ func TrainSocialChat(projectRoot string, epochs int, customDataPath string, over
 
 			// 4. Send to Teacher and apply any patch
 			auditCtx := TeacherAuditContext{
-				Epoch:        epoch + 1,
-				AvgLoss:      auditAvgLoss,
-				AvgSim:       currentAvgSim,
-				GrammarScore: currentTotalGrammar / float32(max(1, len(epochGrammarScores))),
-				Probes:       probeResults,
-				ConfigJSON:   cfgSnap,
-				TrainingRows: len(trainPairs),
+				Epoch:          epoch + 1,
+				AvgLoss:        auditAvgLoss,
+				AvgSim:         currentAvgSim,
+				GrammarScore:   currentTotalGrammar / float32(max(1, len(epochGrammarScores))),
+				Probes:         probeResults,
+				ConfigJSON:     cfgSnap,
+				TrainingRows:   len(trainPairs),
 				HistorySummary: strings.Join(epochHistory, "\n"),
 			}
 			auditResult := TeacherAuditAndPatch(auditCtx, auditConfigPath)
@@ -5292,7 +5319,6 @@ func StabilizeParameters(model *moe.IntentMoE, threshold float32, targetNorm flo
 	}
 
 	if clampedCount > 0 || resetCount > 0 {
-		log.Printf("  Stabilization: %d parameters clamped, %d reset.", clampedCount, resetCount)
 	}
 }
 
@@ -5522,7 +5548,6 @@ func LoadConversationCSV(path string) ([]moe.TrainPair, error) {
 		}
 	}
 
-	log.Printf("📖 LoadConversationCSV: loaded %d training pairs from %s", len(pairs), path)
 	return pairs, nil
 }
 

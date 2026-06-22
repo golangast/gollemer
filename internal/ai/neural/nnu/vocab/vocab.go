@@ -8,8 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-
-	"log"
 	"os"
 	"strings"
 
@@ -43,14 +41,13 @@ func NewVocabulary() *Vocabulary {
 	// Initialize special tokens with fixed IDs
 	v.AddToken("<pad>") // ID 0
 	v.PaddingTokenID = 0
-	v.AddToken("UNK")   // ID 1
+	v.AddToken("UNK") // ID 1
 	v.UnkID = 1
-	v.AddToken("<s>")   // ID 2
+	v.AddToken("<s>") // ID 2
 	v.BosID = 2
-	v.AddToken("</s>")  // ID 3
+	v.AddToken("</s>") // ID 3
 	v.EosID = 3
 
-	log.Printf("NewVocabulary: Initial size after adding <pad>, UNK, <s>, </s>: %d", v.Size())
 	return v
 }
 
@@ -181,16 +178,32 @@ func LoadVocabulary(filePath string) (*Vocabulary, error) {
 
 	// 🛡️ Robust ID restoration (Avoid -1 or UNK mapping for special tokens)
 	v.PaddingTokenID = -1
-	if id, ok := v.WordToToken["<pad>"]; ok { v.PaddingTokenID = id } else { v.PaddingTokenID = v.AddToken("<pad>") }
-	
+	if id, ok := v.WordToToken["<pad>"]; ok {
+		v.PaddingTokenID = id
+	} else {
+		v.PaddingTokenID = v.AddToken("<pad>")
+	}
+
 	v.UnkID = -1
-	if id, ok := v.WordToToken["UNK"]; ok { v.UnkID = id } else { v.UnkID = v.AddToken("UNK") }
+	if id, ok := v.WordToToken["UNK"]; ok {
+		v.UnkID = id
+	} else {
+		v.UnkID = v.AddToken("UNK")
+	}
 
 	v.BosID = -1
-	if id, ok := v.WordToToken["<s>"]; ok { v.BosID = id } else { v.BosID = v.AddToken("<s>") }
+	if id, ok := v.WordToToken["<s>"]; ok {
+		v.BosID = id
+	} else {
+		v.BosID = v.AddToken("<s>")
+	}
 
 	v.EosID = -1
-	if id, ok := v.WordToToken["</s>"]; ok { v.EosID = id } else { v.EosID = v.AddToken("</s>") }
+	if id, ok := v.WordToToken["</s>"]; ok {
+		v.EosID = id
+	} else {
+		v.EosID = v.AddToken("</s>")
+	}
 
 	return &v, nil
 }

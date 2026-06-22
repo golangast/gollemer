@@ -1063,14 +1063,15 @@ func main() {
 	flagAccSteps := flag.Int("acc-steps", 0, "Gradient accumulation steps (use 0 to defer to social_train.json)")
 	trainSocial := flag.Bool("train-social", false, "Train ONLY on human_chat.txt for pure social conversations")
 	flagNumExperts := flag.Int("num-experts", 0, "Number of experts in MoE layer (use 0 to defer to social_train.json)")
-	sentencesFile := flag.String("sentences", "", "Path to custom sentences JSON for targeted training")
+	dataFile := flag.String("data", "", "Path to custom training dataset (CSV/JSON/TXT) for targeted training")
 	piMode := flag.Bool("pi", false, "Pi 3B mode: constrains RAM to 600 MB, sets batch=1, acc=16, experts=4 for 900 MB RAM devices")
+	cartridgesFlag := flag.String("cartridges", "", "Comma-separated list of expert cartridge .gob files to permanently load at startup")
 
 	flag.Parse()
 
 	// --llm: launch interactive inference mode and exit
 	if *runLLM {
-		llm.RunLLM(*talk, *listen)
+		llm.RunLLM(*talk, *listen, *cartridgesFlag)
 		return
 	}
 
@@ -1091,18 +1092,18 @@ func main() {
 	}
 
 	if *trainSocial {
-		chat.TrainSocialChat(".", *flagEpochs, *sentencesFile, *overfit, float32(*flagLR), float32(*weightDecay), *autoHealFlag, float32(*maxGradNorm), *gpu, *flagBatchSize, *flagAccSteps, *flagNumExperts, *piMode, *distMode, *distAddr)
+		chat.TrainSocialChat(".", *flagEpochs, *dataFile, *overfit, float32(*flagLR), float32(*weightDecay), *autoHealFlag, float32(*maxGradNorm), *gpu, *flagBatchSize, *flagAccSteps, *flagNumExperts, *piMode, *distMode, *distAddr, *cartridgesFlag)
 		return
 	}
 
 	if *trainChat {
-		chat.TrainChat(".", *sentencesFile, *rebalance, *overfit, float32(*flagLR), float32(*weightDecay), *autoHealFlag, float32(*maxGradNorm), *gpu, *flagBatchSize, *flagAccSteps, *piMode, *distMode, *distAddr)
+		chat.TrainChat(".", *dataFile, *rebalance, *overfit, float32(*flagLR), float32(*weightDecay), *autoHealFlag, float32(*maxGradNorm), *gpu, *flagBatchSize, *flagAccSteps, *piMode, *distMode, *distAddr, *cartridgesFlag)
 		return
 	}
 
 	if *piMode {
 		log.Println("🥧 Pi mode selected but no task specified. Defaulting to interactive LLM mode (-llm).")
-		llm.RunLLM(*talk, *listen)
+		llm.RunLLM(*talk, *listen, *cartridgesFlag)
 		return
 	}
 
@@ -1423,7 +1424,7 @@ func main() {
 		log.Println("💡 This adds linguistic coherence to the model so it doesn't generate word salad.")
 		chat.TrainChat(
 			".",
-			*sentencesFile,
+			*dataFile,
 			*rebalance,
 			*overfit,
 			float32(0.0001), // Reduced from 0.0005 for stability
@@ -1436,6 +1437,7 @@ func main() {
 			*piMode,
 			*distMode,
 			*distAddr,
+			*cartridgesFlag,
 		)
 	}
 }
