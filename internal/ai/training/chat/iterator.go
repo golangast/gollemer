@@ -181,32 +181,44 @@ func (it *ChatDataIterator) NextBatch(batchSize int) *Batch {
 	padID := float32(it.vocab.PaddingTokenID)
 
 	for i := range inputs {
-		for j := 0; j < maxIn; j++ {
-			if j < len(inputs[i]) {
-				paddedIn[i*maxIn+j] = inputs[i][j]
-				paddedQueryGrammar[i*maxIn+j] = queryGrammars[i][j]
-				inputLogitMask[i*maxIn+j] = 0.0
-			} else {
-				paddedIn[i*maxIn+j] = padID
-				paddedQueryGrammar[i*maxIn+j] = -1 // Padding (ignore in routing loss)
-				inputLogitMask[i*maxIn+j] = -1e9
-			}
+		// --- Input row: copy real data, leave rest as padID ---
+		inBase := i * maxIn
+		copy(paddedIn[inBase:], inputs[i])
+		// Fill tail with padID using a fast loop (Go will inline/vectorise this)
+		for j := len(inputs[i]); j < maxIn; j++ {
+			paddedIn[inBase+j] = padID
 		}
-		for j := 0; j < maxOut; j++ {
-			if j < len(targets[i]) {
-				paddedOut[i*maxOut+j] = targets[i][j]
-				paddedGrammar[i*maxOut+j] = grammars[i][j]
-				mask[i*maxOut+j] = 1.0
-				// All real answer tokens contribute to the loss (1.0).
-				// BOS/EOS at position 0 or last are kept — the model must learn sequence boundaries.
-				lossMask[i*maxOut+j] = 1.0
-			} else {
-				paddedOut[i*maxOut+j] = padID
-				paddedGrammar[i*maxOut+j] = -1 // Padding (ignore in routing loss)
-				mask[i*maxOut+j] = 0.0
-				lossMask[i*maxOut+j] = 0.0 // Never train on padding
-			}
+		// Query grammar: copy real, fill tail with -1 (pad signal)
+		copy(paddedQueryGrammar[inBase:], queryGrammars[i])
+		for j := len(queryGrammars[i]); j < maxIn; j++ {
+			paddedQueryGrammar[inBase+j] = -1
 		}
+		// Attention mask: 0 for real tokens, -1e9 for padding
+		for j := 0; j < len(inputs[i]); j++ {
+			inputLogitMask[inBase+j] = 0.0
+		}
+		for j := len(inputs[i]); j < maxIn; j++ {
+			inputLogitMask[inBase+j] = -1e9
+		}
+
+		// --- Target row ---
+		outBase := i * maxOut
+		copy(paddedOut[outBase:], targets[i])
+		for j := len(targets[i]); j < maxOut; j++ {
+			paddedOut[outBase+j] = padID
+		}
+		// Grammar: copy real, fill tail with -1
+		copy(paddedGrammar[outBase:], grammars[i])
+		for j := len(grammars[i]); j < maxOut; j++ {
+			paddedGrammar[outBase+j] = -1
+		}
+		// Mask/LossMask: 1 for real, 0 for padding
+		realLen := len(targets[i])
+		for j := 0; j < realLen; j++ {
+			mask[outBase+j] = 1.0
+			lossMask[outBase+j] = 1.0
+		}
+		// tail is already zero (slices zero-initialised by make)
 	}
 
 	// Reshape InputMask for attention: [Batch, 1, 1, SeqLen]

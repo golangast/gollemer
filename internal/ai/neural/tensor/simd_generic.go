@@ -7,6 +7,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 )
 
 func IsSIMDEnabled() bool {
@@ -182,12 +183,46 @@ func vecLeakyReLU(data []float32, alpha float32) {
 // vecMatMul performs a generic matrix multiplication (C = A @ B).
 // A: [m x k], B: [k x n], C: [m x n]
 func MatMulRaw(a, b, res []float32, m, n, k int) {
+	if m < 4 {
+		matMulRawSequential(a, b, res, m, n, k, 0, m)
+		return
+	}
+
+	numWorkers := 8
+	if m < 8 {
+		numWorkers = m
+	}
+
+	var wg sync.WaitGroup
+	rowsPerWorker := (m + numWorkers - 1) / numWorkers
+	for w := 0; w < numWorkers; w++ {
+		startRow := w * rowsPerWorker
+		endRow := startRow + rowsPerWorker
+		if startRow >= m {
+			break
+		}
+		if endRow > m {
+			endRow = m
+		}
+		wg.Add(1)
+		go func(sRow, eRow int) {
+			defer wg.Done()
+			matMulRawSequential(a, b, res, m, n, k, sRow, eRow)
+		}(startRow, endRow)
+	}
+	wg.Wait()
+}
+
+func matMulRawSequential(a, b, res []float32, m, n, k, startRow, endRow int) {
 	// Use a slightly optimized loop order for cache-friendliness (IKJ)
-	for i := 0; i < m; i++ {
+	for i := startRow; i < endRow; i++ {
 		rowA := a[i*k : (i+1)*k]
 		rowRes := res[i*n : (i+1)*n]
 		for ik := 0; ik < k; ik++ {
 			aik := rowA[ik]
+			if aik == 0 {
+				continue
+			}
 			rowB := b[ik*n : (ik+1)*n]
 			for j := 0; j < n; j++ {
 				rowRes[j] += aik * rowB[j]

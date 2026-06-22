@@ -77,33 +77,9 @@ func (c *GollemerMoEClient) PushHistory(q, a, intent string) {
 		c.session().AddMessage("assistant", a)
 	}
 
-	// Dynamic Learning: Update the training data automatically so the MoE model
-	// can learn this phrase and intent mapping for future predictions.
-	if q != "" && a != "" && intent != "" && intent != "chat_response" {
-		// Do not save error fallbacks or word salad rejections
-		if !strings.Contains(a, "I'm sorry, I couldn't understand") && !strings.Contains(a, "what did you say") {
-			// Locate the project root
-			projectRoot := "."
-			if pwd, err := os.Getwd(); err == nil {
-				projectRoot = pwd
-			}
-			trainFile := filepath.Join(projectRoot, "data/training/trainingdata/conversing.csv")
-			f, err := os.OpenFile(trainFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			if err == nil {
-				defer f.Close()
-				cleanQ := strings.ReplaceAll(q, "\"", "\"\"")
-				cleanA := strings.ReplaceAll(a, "\"", "\"\"")
-
-				// Embed the intent directly into the target string so the neural
-				// model learns to PREDICT the intent rather than just memorizing strings.
-				embeddedAnswer := fmt.Sprintf("[INTENT: %s] %s", intent, cleanA)
-
-				// format: query,answer,intent,grammar
-				// Default grammar to OTHER since we don't run the POS tagger here.
-				f.WriteString(fmt.Sprintf("\"%s\",\"%s\",\"%s\",\"OTHER\"\n", cleanQ, embeddedAnswer, intent))
-			}
-		}
-	}
+	// Dynamic Learning is temporarily disabled to prevent the model from 
+	// corrupting its own training dataset with unverified "word salad" generations.
+	// We rely on the Teacher (Ollama) AI Supervisor for dataset evolution instead.
 }
 
 // GetLastPrediction returns the most recently generated model response.
@@ -207,6 +183,53 @@ func (c *GollemerMoEClient) LoadChatBank(path string) {
 
 	c.ChatBank = append(c.ChatBank, finalPairs...)
 	log.Printf("✅ Loaded %d prompts from %s (Total ChatBank: %d)", len(finalPairs), filepath.Base(path), len(c.ChatBank))
+}
+
+func (c *GollemerMoEClient) LoadDeviceIntentsBank(path string) {
+	f, err := os.Open(path)
+	if err != nil {
+		log.Printf("⚠️  Failed to load device intents from %s: %v", filepath.Base(path), err)
+		return
+	}
+	defer f.Close()
+
+	reader := csv.NewReader(f)
+	reader.Comma = '\t'
+	reader.FieldsPerRecord = -1
+	reader.LazyQuotes = true
+	records, err := reader.ReadAll()
+	if err != nil {
+		log.Printf("⚠️  Error parsing TSV from %s: %v", path, err)
+		return
+	}
+
+	var pairs []ChatPair
+	for i, record := range records {
+		if i == 0 || len(record) < 5 {
+			continue
+		}
+		
+		input := record[0]
+		intent := record[1]
+		
+		roles := make(map[string]string)
+		if record[2] != "" {
+			roles["action"] = record[2]
+		}
+		if record[3] != "" {
+			roles["target"] = record[3]
+		}
+		if record[4] != "" {
+			roles["device"] = record[4]
+		}
+
+		rolesJSON, _ := json.Marshal(roles)
+		answerStr := fmt.Sprintf("[INTENT: %s] %s", intent, string(rolesJSON))
+		pairs = append(pairs, ChatPair{Q: input, A: answerStr, Intent: intent})
+	}
+
+	c.ChatBank = append(c.ChatBank, pairs...)
+	log.Printf("✅ Loaded %d device intents from %s (Total ChatBank: %d)", len(pairs), filepath.Base(path), len(c.ChatBank))
 }
 
 func (c *GollemerMoEClient) buildQueryContext(input string) string {
@@ -576,6 +599,9 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 			if retrievedScore > 0.7 && retrievedResp != "" {
 				log.Printf("✅ Social Retrieval (no neural model): score=%.4f intent=%s", retrievedScore, retrievedIntent)
 				c.lastMoEPrediction = retrievedResp
+				if retrievedIntent != "" {
+					return retrievedIntent, retrievedScore
+				}
 				return "social_chat", retrievedScore
 			}
 		}
@@ -1485,6 +1511,17 @@ func (c *GollemerMoEClient) ExtractEntities(input string, intent string) map[str
 	if (intent == "social_chat" || intent == "chat_response" || strings.HasPrefix(intent, "Social_") || strings.HasPrefix(intent, "System_") || strings.HasPrefix(intent, "gollemer_")) && c.lastMoEPrediction != "" {
 		entities["response"] = c.lastMoEPrediction
 		return entities
+	}
+
+	// For device intents, c.lastMoEPrediction might hold the JSON roles (the [INTENT] prefix is stripped earlier).
+	lastPred := strings.TrimSpace(c.lastMoEPrediction)
+	if strings.HasPrefix(lastPred, "{") && strings.HasSuffix(lastPred, "}") {
+		var roles map[string]string
+		if err := json.Unmarshal([]byte(lastPred), &roles); err == nil {
+			for k, v := range roles {
+				entities[k] = v
+			}
+		}
 	}
 
 	name := findName(taggedData, c.KB)

@@ -6,6 +6,7 @@ import (
 	"math"
 	"simd/archsimd"
 	"sort"
+	"sync"
 )
 
 func IsSIMDEnabled() bool {
@@ -537,7 +538,38 @@ func vecLeakyReLU(data []float32, alpha float32) {
 // This implementation uses a row-major blocked approach (IKJ order) for cache-friendliness
 // and processes B in 256-bit (AVX2) or 128-bit (SSE) chunks.
 func MatMulRaw(a, b, res []float32, m, n, k int) {
-	for i := 0; i < m; i++ {
+	if m < 4 {
+		matMulRawSequential(a, b, res, m, n, k, 0, m)
+		return
+	}
+
+	numWorkers := 8
+	if m < 8 {
+		numWorkers = m
+	}
+
+	var wg sync.WaitGroup
+	rowsPerWorker := (m + numWorkers - 1) / numWorkers
+	for w := 0; w < numWorkers; w++ {
+		startRow := w * rowsPerWorker
+		endRow := startRow + rowsPerWorker
+		if startRow >= m {
+			break
+		}
+		if endRow > m {
+			endRow = m
+		}
+		wg.Add(1)
+		go func(sRow, eRow int) {
+			defer wg.Done()
+			matMulRawSequential(a, b, res, m, n, k, sRow, eRow)
+		}(startRow, endRow)
+	}
+	wg.Wait()
+}
+
+func matMulRawSequential(a, b, res []float32, m, n, k, startRow, endRow int) {
+	for i := startRow; i < endRow; i++ {
 		rowA := a[i*k : (i+1)*k]
 		rowRes := res[i*n : (i+1)*n]
 		for ik := 0; ik < k; ik++ {

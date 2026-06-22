@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golangast/gollemer/internal/hardware"
+	"github.com/golangast/gollemer/internal/pipeline"
 	"github.com/golangast/gollemer/internal/platform/ui"
 	"github.com/golangast/gollemer/internal/util/colors"
 )
@@ -155,7 +157,15 @@ func (r *Runner) handleInteractiveQuery(query string) {
 
 	// 5. Detailed Parsing Fallback (Keyword-based)
 	intent := parse(query, r.KB)
-	
+
+	// 5.5. Hardware intents bypass the chat response path entirely.
+	if isHardwareIntent(intentData.Intent) {
+		r.executeCommand(query, &intent, intentData, "")
+		r.SessionState.IsActive = false
+		r.SessionState.CurrentIntent = nil
+		return
+	}
+
 	// 6. Response / Chat handling
 	resp := r.extractResponse(intentData)
 	// hasCommand is true only if there's a structural command to execute.
@@ -163,8 +173,24 @@ func (r *Runner) handleInteractiveQuery(query string) {
 	hasCommand := intent.Command != "" || isCreatingCommand(query)
 
 	if resp != "" {
-		r.Mascot.Speak(ui.MoodIdle, resp)
-		r.Client.PushHistory(query, resp, intentData.Intent)
+		if strings.HasPrefix(resp, "<INTENT_") {
+			interceptor := pipeline.NewTokenInterceptor()
+			var finalProse strings.Builder
+			interceptor.OnProse = func(token string) {
+				finalProse.WriteString(token + " ")
+			}
+			stream := pipeline.TokenStreamFromString(resp)
+			interceptor.Process(stream)
+			cleanResp := strings.TrimSpace(finalProse.String())
+			if cleanResp != "" {
+				r.Mascot.Speak(ui.MoodIdle, cleanResp)
+			}
+			r.Client.PushHistory(query, cleanResp, intentData.Intent)
+		} else {
+			r.Mascot.Speak(ui.MoodIdle, resp)
+			r.Client.PushHistory(query, resp, intentData.Intent)
+		}
+		
 		if !hasCommand {
 			return
 		}
@@ -174,6 +200,16 @@ func (r *Runner) handleInteractiveQuery(query string) {
 	r.executeCommand(query, &intent, intentData, resp)
 	r.SessionState.IsActive = false
 	r.SessionState.CurrentIntent = nil
+}
+
+var hardwareIntents = map[string]bool{
+	"CAMERA_CAPTURE": true, "CAMERA_CAPTURE_ANALYZE": true,
+	"AUDIO_VOLUME_UP": true, "AUDIO_VOLUME_DOWN": true,
+	"MICROPHONE_MUTE": true, "MICROPHONE_UNMUTE": true,
+}
+
+func isHardwareIntent(intent string) bool {
+	return hardwareIntents[intent]
 }
 
 func (r *Runner) handleSessionInput(query string) {
@@ -291,6 +327,26 @@ func (r *Runner) executeCommand(query string, intent *Intent, intentData *Intent
 	// We map those semantic intents to handlers here so command execution is
 	// driven by the trained model rather than hardcoded keyword matching.
 	switch intentData.Intent {
+
+	// ── Hardware Intents ──────────────────────────────────────────────────────
+	case "CAMERA_CAPTURE", "CAMERA_CAPTURE_ANALYZE", "AUDIO_VOLUME_UP", "AUDIO_VOLUME_DOWN", "MICROPHONE_MUTE", "MICROPHONE_UNMUTE":
+		payload := hardware.IntentPayload{
+			Intent: intentData.Intent,
+			Roles:  make(map[string]string),
+		}
+		if intentData.Parameters != nil {
+			for k, v := range intentData.Parameters {
+				if strV, ok := v.(string); ok {
+					payload.Roles[k] = strV
+				}
+			}
+		}
+		err := hardware.HandleIntent(payload)
+		if err != nil {
+			predictedSentence = fmt.Sprintf("Hardware error: %v", err)
+		} else {
+			predictedSentence = fmt.Sprintf("Executed hardware command for intent: %s", intentData.Intent)
+		}
 
 	// ── Create family ─────────────────────────────────────────────────────────
 	case "create_folder":

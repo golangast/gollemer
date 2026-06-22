@@ -23,15 +23,15 @@ func StrictGenerate(model *moe.IntentMoE, input string, maxLen int, repetitionPe
 		layer.SetMode(true) // KEEP TRAINING MODE FOR DIVERSITY
 		oldTemps[layer] = layer.RouterTemperature
 
-		// Set tau to 1.2 during test evaluations to soften token salad and allow
+		// Set tau to 0.7 during test evaluations to soften token salad and allow
 		// adjacent experts to absorb gradient/routing load.
-		layer.RouterTemperature = 1.2
+		layer.RouterTemperature = 0.7
 	}
 	if model.Decoder.OutputMoE != nil {
 		model.Decoder.OutputMoE.SetMode(true)
 		oldTemps[model.Decoder.OutputMoE] = model.Decoder.OutputMoE.RouterTemperature
 
-		model.Decoder.OutputMoE.RouterTemperature = 1.2
+		model.Decoder.OutputMoE.RouterTemperature = 0.7
 	}
 
 	defer func() {
@@ -174,13 +174,35 @@ func StrictGenerate(model *moe.IntentMoE, input string, maxLen int, repetitionPe
 			logits.Data[unkID] = -1e9
 		}
 
-		// Raw ArgMax selection for perfectly sharp token choice
-		bestID := 0
-		maxLogit := -math.MaxFloat64
-		for tokenID, logitValue := range logits.Data {
-			if float64(logitValue) > maxLogit {
-				maxLogit = float64(logitValue)
-				bestID = tokenID
+		// Temperature top-k sampling: prevents mode collapse by sampling from the
+		// top-k candidates proportional to their softmax probabilities.
+		// Pure ArgMax (greedy) collapses to a single token the moment it has
+		// a slight numerical edge — sampling breaks that attractor.
+		const genTemp = float32(0.85)
+		const genTopK = 40
+		ApplyTemperature(logits.Data, genTemp)
+		topIndicesK, topProbs := getTopK(logits, genTopK)
+		// Softmax over top-k only
+		var sumP float32
+		for _, p := range topProbs {
+			if p > -1e8 { // skip masked entries
+				sumP += float32(math.Exp(float64(p)))
+			}
+		}
+		if sumP <= 0 {
+			sumP = 1
+		}
+		r := rand.Float32() * sumP
+		bestID := topIndicesK[0] // fallback
+		var cdf float32
+		for ki, idx := range topIndicesK {
+			if topProbs[ki] <= -1e8 {
+				continue
+			}
+			cdf += float32(math.Exp(float64(topProbs[ki])))
+			if r <= cdf {
+				bestID = idx
+				break
 			}
 		}
 
@@ -240,11 +262,11 @@ func StrictGenerateWithExperts(model *moe.IntentMoE, input string, maxLen int, r
 	for _, layer := range moe.ActiveLayers {
 		layer.SetMode(false)
 		oldTemps[layer] = layer.RouterTemperature
-		layer.RouterTemperature = 1.1
+		layer.RouterTemperature = 0.7
 	}
 	if model.Decoder.OutputMoE != nil {
 		oldTemps[model.Decoder.OutputMoE] = model.Decoder.OutputMoE.RouterTemperature
-		model.Decoder.OutputMoE.RouterTemperature = 1.1
+		model.Decoder.OutputMoE.RouterTemperature = 0.7
 	}
 
 	defer func() {
@@ -549,7 +571,7 @@ func BeamSearchDecode(model *moe.IntentMoE, ctx *tensor.Tensor, beamSize int, ma
 func BeamSearchDecodeFiltered(model *moe.IntentMoE, ctx *tensor.Tensor, beamSize int, maxLen int, filteredIDs []int) []int {
 	const repetitionPenalty = 1.2 // 1.0 = no penalty, 2.0 = very aggressive
 	const alpha = 0.7             // Length penalty coefficient
-	const temperature = 1.5       // Flatten distribution to encourage non-UNK tokens
+	const temperature = 0.7       // Flatten distribution to encourage non-UNK tokens
 
 	beams := []Hypothesis{{IDs: []int{model.SentenceVocab.BosID}, Score: 0.0}}
 

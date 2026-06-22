@@ -206,6 +206,7 @@ func (r *Runner) Init() {
 	}
 	r.Client.LoadChatBank(filepath.Join(r.ProjectRoot, "data/training/trainingdata/conversing.csv"))
 	r.Client.LoadChatBank(filepath.Join(r.ProjectRoot, "data/training/trainingdata/conversations.csv"))
+	r.Client.LoadDeviceIntentsBank(filepath.Join(r.ProjectRoot, "data/training/trainingdata/device_intents.csv"))
 
 	r.Resolver = NewHybridIntentResolver(r.Client)
 

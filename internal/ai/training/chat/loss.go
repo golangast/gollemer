@@ -20,6 +20,13 @@ func WeightedCrossEntropy(logits *tensor.Tensor, targets []int, weights []float3
 	var count float32
 	lsLabel := labelSmoothing / float32(numClasses)
 
+	// Pre-allocate a shifted-row scratch buffer for the SIMD label-smoothing path.
+	// Reusing across rows avoids per-row heap allocations for the common case.
+	var lsBuf []float32
+	if labelSmoothing > 0 && entropyWeight == 0 {
+		lsBuf = make([]float32, numClasses)
+	}
+
 	for i := 0; i < numRows; i++ {
 		if i >= len(targets) {
 			break
@@ -67,20 +74,19 @@ func WeightedCrossEntropy(logits *tensor.Tensor, targets []int, weights []float3
 		totalLoss += loss * currentWeight
 		count++
 
-		// 4. FUSED gradient + entropy
-		var rowEntropy float32
+		gradOut := grad.Data[offset : offset+numClasses]
+
+		// 4. Gradient computation
 		if entropyWeight > 0 {
+			// Slow path: entropy regularisation requires per-element log — stay scalar.
+			var rowEntropy float32
 			for j := 0; j < numClasses; j++ {
 				sj := row[j]
 				if sj > 1e-12 {
 					rowEntropy -= sj * float32(math.Log(float64(sj)))
 				}
 			}
-		}
-
-		gradOut := grad.Data[offset : offset+numClasses]
-		if labelSmoothing > 0 {
-			if entropyWeight > 0 {
+			if labelSmoothing > 0 {
 				for j := 0; j < numClasses; j++ {
 					sj := row[j]
 					targetProb := lsLabel
@@ -96,17 +102,6 @@ func WeightedCrossEntropy(logits *tensor.Tensor, targets []int, weights []float3
 			} else {
 				for j := 0; j < numClasses; j++ {
 					sj := row[j]
-					targetProb := lsLabel
-					if j == targetID {
-						targetProb += (1.0 - labelSmoothing)
-					}
-					gradOut[j] = (sj - targetProb) * currentWeight
-				}
-			}
-		} else {
-			if entropyWeight > 0 {
-				for j := 0; j < numClasses; j++ {
-					sj := row[j]
 					g := sj
 					if j == targetID {
 						g -= 1.0
@@ -116,19 +111,36 @@ func WeightedCrossEntropy(logits *tensor.Tensor, targets []int, weights []float3
 					}
 					gradOut[j] = g * currentWeight
 				}
-			} else {
-				// Fast path: SIMD multiplication for the bulk of the gradient
-				moe.SimdMulScalarF32(gradOut, row, currentWeight)
-				gradOut[targetID] = (row[targetID] - 1.0) * currentWeight
 			}
+		} else if labelSmoothing > 0 {
+			// SIMD label-smoothing fast path.
+			// gradOut[j] = (row[j] - lsLabel) * w   for j != targetID
+			// gradOut[targetID] = (row[targetID] - (lsLabel + 1 - ls)) * w
+			//
+			// Implementation:
+			//   lsBuf = row - lsLabel  (i.e. copy row then subtract uniform shift)
+			//   gradOut = lsBuf * w
+			//   then patch targetID: subtract (1-ls)*w
+			moe.SimdMulScalarF32(lsBuf, row, 1.0) // copy row into lsBuf
+			// shift all by -lsLabel: lsBuf[j] = row[j] - lsLabel
+			for j := range lsBuf {                // scalar shift, cheap, 1 pass
+				lsBuf[j] -= lsLabel
+			}
+			// scale: gradOut = lsBuf * currentWeight (SIMD, unrolled 4-way)
+			moe.SimdMulScalarF32(gradOut, lsBuf, currentWeight)
+			// Patch target: gradOut[tgt] -= (1.0 - labelSmoothing) * currentWeight
+			gradOut[targetID] -= (1.0 - labelSmoothing) * currentWeight
+		} else {
+			// Fastest path: SIMD scale + single scalar patch
+			moe.SimdMulScalarF32(gradOut, row, currentWeight)
+			gradOut[targetID] = (row[targetID] - 1.0) * currentWeight
 		}
 	}
 
 	if count > 0 {
 		avgLoss := totalLoss / count
-		for i := range grad.Data {
-			grad.Data[i] /= count
-		}
+		// SIMD: normalise all gradients in one 4-way unrolled vectorised pass.
+		moe.SimdScaleF32(grad.Data, 1.0/count)
 		return avgLoss, grad
 	}
 	return 0, grad

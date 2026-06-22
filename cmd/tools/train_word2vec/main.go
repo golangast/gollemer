@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	dimModel = flag.Int("dim", 768, "Dimension of the model")
+	dimModel = flag.Int("dim", 512, "Dimension of the model")
 )
 
 func main() {
@@ -18,7 +18,7 @@ func main() {
 	word2vecTrainingDataPath := "data/training/trainingdata/conversing.csv"
 	word2vecModelSavePath := "data/models/gob_models/word2vec_model.gob"
 	word2vecVectorSize := *dimModel
-	word2vecEpochs := 1
+	word2vecEpochs := 15
 	word2vecWindow := 5
 	word2vecNegativeSamples := 5
 	word2vecMinWordFrequency := 1

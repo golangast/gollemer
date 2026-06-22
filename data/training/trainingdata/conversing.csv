@@ -564,38 +564,11 @@ Did you approve the PR,it is waiting on you,git,AUX PRON VERB DET NOUN
 "hello","[INTENT: greeting_query] Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.","greeting_query","OTHER"
 "move the file jakey.go into folder jimmy","[INTENT: move_query] I have moved the file 'jakey.go' to 'jimmy'.","move_query","OTHER"
 "move file jane.go.go into folder jimmy","[INTENT: move_query] I have moved the file 'jane.go.go' to 'jimmy'.","move_query","OTHER"
-"what files and folders were we talking about","[INTENT: history_recall] Here's our conversation so far:
-Turn 1 — You: ""hello"" | Me: ""Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.""
-Turn 2 — You: ""move the file jakey.go into folder jimmy"" | Me: ""I have moved the file 'jakey.go' to 'jimmy'.""
-Turn 3 — You: ""move file jane.go.go into folder jimmy"" | Me: ""I have moved the file 'jane.go.go' to 'jimmy'.""","history_recall","OTHER"
-"do you remember the name of the file","[INTENT: history_recall] Here's our conversation so far:
-Turn 1 — You: ""hello"" | Me: ""Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.""
-Turn 2 — You: ""move the file jakey.go into folder jimmy"" | Me: ""I have moved the file 'jakey.go' to 'jimmy'.""
-Turn 3 — You: ""move file jane.go.go into folder jimmy"" | Me: ""I have moved the file 'jane.go.go' to 'jimmy'.""
-Turn 4 — You: ""what files and folders were we talking about"" | Me: ""Here's our conversation so far:
-Turn 1 — You: ""hello"" | Me: ""Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.""
-Turn 2 — You: ""move the file jakey.go into folder jimmy"" | Me: ""I have moved the file 'jakey.go' to 'jimmy'.""
-Turn 3 — You: ""move file jane.go.go into folder jimmy"" | Me: ""I have moved the file 'jane.go.go' to 'jimmy'.""""","history_recall","OTHER"
+"what files and folders were we talking about","[INTENT: history_recall] Here's our conversation so far:","history_recall","OTHER"
+"do you remember the name of the file","[INTENT: history_recall] Here's our conversation so far:","history_recall","OTHER"
 "move the file out of the foler jimmy","[INTENT: move_query] I couldn't find a file named 'out' anywhere in the project.","move_query","OTHER"
 "move the file jake.go out of folder jimmy","[INTENT: move_query] I have moved the file 'jimmy/jake.go' to 'jimmy'.","move_query","OTHER"
-"what folder were we talking about","[INTENT: history_recall] Here's our conversation so far:
-Turn 1 — You: ""hello"" | Me: ""Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.""
-Turn 2 — You: ""move the file jakey.go into folder jimmy"" | Me: ""I have moved the file 'jakey.go' to 'jimmy'.""
-Turn 3 — You: ""move file jane.go.go into folder jimmy"" | Me: ""I have moved the file 'jane.go.go' to 'jimmy'.""
-Turn 4 — You: ""what files and folders were we talking about"" | Me: ""Here's our conversation so far:
-Turn 1 — You: ""hello"" | Me: ""Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.""
-Turn 2 — You: ""move the file jakey.go into folder jimmy"" | Me: ""I have moved the file 'jakey.go' to 'jimmy'.""
-Turn 3 — You: ""move file jane.go.go into folder jimmy"" | Me: ""I have moved the file 'jane.go.go' to 'jimmy'.""""
-Turn 5 — You: ""do you remember the name of the file"" | Me: ""Here's our conversation so far:
-Turn 1 — You: ""hello"" | Me: ""Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.""
-Turn 2 — You: ""move the file jakey.go into folder jimmy"" | Me: ""I have moved the file 'jakey.go' to 'jimmy'.""
-Turn 3 — You: ""move file jane.go.go into folder jimmy"" | Me: ""I have moved the file 'jane.go.go' to 'jimmy'.""
-Turn 4 — You: ""what files and folders were we talking about"" | Me: ""Here's our conversation so far:
-Turn 1 — You: ""hello"" | Me: ""Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'.""
-Turn 2 — You: ""move the file jakey.go into folder jimmy"" | Me: ""I have moved the file 'jakey.go' to 'jimmy'.""
-Turn 3 — You: ""move file jane.go.go into folder jimmy"" | Me: ""I have moved the file 'jane.go.go' to 'jimmy'.""""""
-Turn 6 — You: ""move the file out of the foler jimmy"" | Me: ""I couldn't find a file named 'out' anywhere in the project.""
-Turn 7 — You: ""move the file jake.go out of folder jimmy"" | Me: ""I have moved the file 'jimmy/jake.go' to 'jimmy'.""","history_recall","OTHER"
+"what folder were we talking about","[INTENT: history_recall] Here's our conversation so far:","history_recall","OTHER"
 "what is the files name","[INTENT: social_chat] You can call me gollemer.","social_chat","OTHER"
 "what file were we talking about","[INTENT: social_chat] [INTENT: history_recall] Here's our conversation so far: Turn 1 — You: ""hello"" | Me: ""Hello! I'm ready to help you build something awesome. Try 'create webserver myapp'."" Turn 2 — You: ""move the file jakey.go into folder jimmy"" | Me: ""I have moved the file 'jakey.go' to 'jimmy'."" Turn 3 — You: ""move file jane.go.go into folder jimmy"" | Me: ""I have moved the file 'jane.go.go' to 'jimmy'.","social_chat","OTHER"
 "where is the file mom.go","[INTENT: status] it is in progress","status","OTHER"
