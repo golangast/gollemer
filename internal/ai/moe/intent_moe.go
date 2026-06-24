@@ -679,9 +679,9 @@ func (m *IntentMoE) GenerateGuidedSentence(query string, maxLen int) (string, []
 			log.Printf("🔌 Hot-Swapping: Loading expert cartridge %s into RAM...", cartridgePath)
 			err := m.Supervisor.CartridgeMgr.LoadCartridge(cartridgePath, 0, 0)
 			if err == nil {
-				m.Supervisor.CartridgeMgr.Mu.Lock()
+				m.Supervisor.CartridgeMgr.mu.Lock()
 				expert := m.Supervisor.CartridgeMgr.Loaded[cartridgePath]
-				m.Supervisor.CartridgeMgr.Mu.Unlock()
+				m.Supervisor.CartridgeMgr.mu.Unlock()
 
 				if m.Decoder.OutputMoE != nil {
 					mountedExpertID, err = m.Supervisor.MountCartridgeToLayer(m, len(m.Encoder.GetMoELayers()), expert)

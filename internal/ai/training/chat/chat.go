@@ -868,9 +868,9 @@ skipCSV:
 				log.Printf("⚠️ Failed to load cartridge %s: %v", path, err)
 				continue
 			}
-			tmpMgr.Mu.Lock()
+			tmpMgr.Lock()
 			expert := tmpMgr.Loaded[path]
-			tmpMgr.Mu.Unlock()
+			tmpMgr.Unlock()
 			if intentModel.Decoder != nil && intentModel.Decoder.OutputMoE != nil {
 				_, err := tmpSup.MountCartridgeToLayer(intentModel, len(intentModel.Encoder.GetMoELayers()), expert)
 				if err != nil {
@@ -2773,9 +2773,9 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 				log.Printf("⚠️ Failed to load cartridge %s: %v", path, err)
 				continue
 			}
-			supervisor.CartridgeMgr.Mu.Lock()
+			supervisor.CartridgeMgr.Lock()
 			expert := supervisor.CartridgeMgr.Loaded[path]
-			supervisor.CartridgeMgr.Mu.Unlock()
+			supervisor.CartridgeMgr.Unlock()
 			if intentModel.Decoder != nil && intentModel.Decoder.OutputMoE != nil {
 				_, err := supervisor.MountCartridgeToLayer(intentModel, len(intentModel.Encoder.GetMoELayers()), expert)
 				if err != nil {

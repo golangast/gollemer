@@ -30,6 +30,20 @@ type bornExpertData struct {
 	FC2Bias   []float32
 }
 
+// Add these to your internal expert file inside package moe:
+
+func (e *InternalExpert) GetFC1() *nn.Linear {
+	return e.fc1
+}
+
+func (e *InternalExpert) GetFC2() *nn.Linear {
+	return e.fc2
+}
+
+func (e *InternalExpert) GetHealth() float32 {
+	return e.health
+}
+
 // InternalExpert implements the Expert interface using the native neural framework.
 type InternalExpert struct {
 	ID         int

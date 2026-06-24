@@ -16,16 +16,11 @@ func main() {
 	expertIdx := flag.Int("expert", 0, "Index of the expert to extract from the OutputMoE layer")
 	flag.Parse()
 
-	file, err := os.Open(*inPath)
+	ckpt, err := moe.LoadIntentMoECheckpoint(*inPath)
 	if err != nil {
-		log.Fatalf("Failed to open model: %v", err)
-	}
-	defer file.Close()
-
-	var model moe.IntentMoE
-	if err := gob.NewDecoder(file).Decode(&model); err != nil {
 		log.Fatalf("Failed to decode model: %v", err)
 	}
+	model := ckpt.Model
 
 	if model.Decoder == nil || model.Decoder.OutputMoE == nil {
 		log.Fatalf("Model does not have an OutputMoE layer")

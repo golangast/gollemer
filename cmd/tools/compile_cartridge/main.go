@@ -34,10 +34,27 @@ func main() {
 		log.Fatalf("Failed to decode input weights: %v", err)
 	}
 
-	ffExpert, ok := expert.(*moe.FeedForwardExpert)
-	if !ok {
-		log.Fatalf("Compiled cartridges only support FeedForwardExpert right now")
+	// --- Dynamic Unpacking of Expert Types ---
+	var ffExpert *moe.FeedForwardExpert
+
+	switch e := expert.(type) {
+	case *moe.FeedForwardExpert:
+		ffExpert = e
+		log.Println("Successfully resolved native FeedForwardExpert structural layout.")
+
+	case *moe.InternalExpert:
+		log.Println("Mapping InternalExpert parameters to cartridge specifications...")
+		// Bridge InternalExpert layers over to the target compiler structural representation
+		ffExpert = &moe.FeedForwardExpert{
+			Layer1:        e.GetFC1(), // See implementation extension below if fields are unexported
+			Layer2:        e.GetFC2(),
+			ActivationEMA: e.GetHealth(),
+		}
+
+	default:
+		log.Fatalf("Compiled cartridges do not support expert type: %T", expert)
 	}
+	// ------------------------------------------
 
 	outFile, err := os.Create(*outPath)
 	if err != nil {
@@ -53,7 +70,6 @@ func main() {
 	}
 	copy(header.Magic[:], "GLMR_CRT")
 
-	// Copy namespace, padding with zeros if shorter, truncating if longer
 	ns := []byte(*namespace)
 	if len(ns) > 32 {
 		ns = ns[:32]
@@ -64,7 +80,7 @@ func main() {
 		log.Fatalf("Failed to write header: %v", err)
 	}
 
-	// Write weights sequentially
+	// Write weights sequentially for Mmap compatibility
 	if err := binary.Write(outFile, binary.LittleEndian, ffExpert.Layer1.Weights.Data); err != nil {
 		log.Fatalf("Failed to write Layer1 Weights: %v", err)
 	}
