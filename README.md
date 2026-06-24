@@ -101,13 +101,10 @@ Step 2: Extract the Trained Expert
 I have created a new CLI tool for you called extract_cartridge. It isolates a single trained expert from the full model checkpoint so it can be packaged:
 
 ```bash
-go run ./cmd/tools/extract_cartridge/main.go \
-    -model="data/models/gob_models/moe_social_model.gob" \
-    -expert-index=3 \
-    -out="data/models/intents/computer_expert.gob"
+go run ./cmd/tools/extract_cartridge/main.go     -model="data/models/gob_models/moe_social_model.gob"     -expert=0     -out="data/models/gob_models/computer_expert.gob"
 ```
 
-- `-expert-index=3`: Targets the 4th expert (index 3). Adjust this number if you want a different expert (e.g., 4 for the 5th expert).
+- `-expert=0`: Targets the 1st expert (index 0). Adjust this number if you want a different expert.
 - This creates a clean `computer_expert.gob` file containing only the weights for that specific expert, ready to be used by the Supervisor or Cartridge Loader.
 
 Step 3: Compile into a Standardized .cartridge
@@ -135,6 +132,12 @@ Open the newly generated file data/config/cartridges.json. Add your keywords map
 }
 ```
 
+Now to use it in the LLM (with voice)
+
+```bash
+go run cmd/tools/train_moe/main.go -llm -talk -listen -cartridges="data/models/intents/computer.cartridge"
+```
+
 Now, the moment a user types "how do i create a file", the Always-On Triage Classifier will instantly match the keyword, hot-swap computer.cartridge directly into the neural network using the zero-copy buffer pool, and route the generation through your newly trained expert!
 
 
@@ -160,6 +163,11 @@ We provide a simplified `Makefile` to handle the curriculum training process.
 ```bash
 # Start the Social Curriculum Training (Reset state & begin)
 make train
+```
+
+```bash
+# Train word2vec
+make word2vec
 ```
 
 ### 3. Running the LLM

@@ -44,6 +44,9 @@ llm: chat
 clean:
 	rm -f data/models/gob_models/*.gob
 
+word2vec: 
+	go run ./cmd/tools/train_word2vec
+
 ## help: Display available commands
 help:
 	@echo "Available commands:"

@@ -230,10 +230,9 @@ func (r *Runner) Init() {
 					log.Printf("🔌 Loading user-specified cartridge: %s", path)
 					err := r.IntentModel.Supervisor.CartridgeMgr.LoadCartridge(path, 0, 0)
 					if err == nil {
-						// Retrieve expert
-						r.IntentModel.Supervisor.CartridgeMgr.Mu.Lock()
+						r.IntentModel.Supervisor.CartridgeMgr.Lock()
 						expert := r.IntentModel.Supervisor.CartridgeMgr.Loaded[path]
-						r.IntentModel.Supervisor.CartridgeMgr.Mu.Unlock()
+						r.IntentModel.Supervisor.CartridgeMgr.Unlock()
 
 						// Mount to output MoE
 						if r.IntentModel.Decoder != nil && r.IntentModel.Decoder.OutputMoE != nil {

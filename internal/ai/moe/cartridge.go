@@ -32,7 +32,7 @@ type CartridgeHeader struct {
 // CartridgeManager handles dynamic loading and unloading of expert layers.
 type CartridgeManager struct {
 	requests chan CartridgeRequest
-	Mu       sync.Mutex
+	mu       sync.Mutex
 	Loaded   map[string]Expert
 
 	// LRU Cache & Centralized Context Pager
@@ -79,14 +79,14 @@ func (cm *CartridgeManager) loop() {
 	for req := range cm.requests {
 		switch req.Action {
 		case "load":
-			cm.Mu.Lock()
+			cm.mu.Lock()
 			if _, exists := cm.Loaded[req.Path]; exists {
 				cm.markUsed(req.Path)
-				cm.Mu.Unlock()
+				cm.mu.Unlock()
 				req.Response <- nil
 				continue
 			}
-			cm.Mu.Unlock()
+			cm.mu.Unlock()
 
 			expert, err := cm.loadFromFile(req.Path)
 			if err != nil {
@@ -94,7 +94,7 @@ func (cm *CartridgeManager) loop() {
 				continue
 			}
 
-			cm.Mu.Lock()
+			cm.mu.Lock()
 			cm.Loaded[req.Path] = expert
 			
 			// Re-inflate context if we have paged it out previously
@@ -105,11 +105,11 @@ func (cm *CartridgeManager) loop() {
 
 			cm.markUsed(req.Path)
 			cm.evictLRU()
-			cm.Mu.Unlock()
+			cm.mu.Unlock()
 			log.Printf("🎮 Cartridge Manager: Loaded cartridge %s into RAM.", req.Path)
 			req.Response <- nil
 		case "unload":
-			cm.Mu.Lock()
+			cm.mu.Lock()
 			if expert, exists := cm.Loaded[req.Path]; exists {
 				// Page out context
 				cm.ContextPager[req.Path] = expert.GetContext()
@@ -119,7 +119,7 @@ func (cm *CartridgeManager) loop() {
 				cm.removeFromLRU(req.Path)
 				log.Printf("🎮 Cartridge Manager: UnLoaded cartridge %s from RAM. Context paged out.", req.Path)
 			}
-			cm.Mu.Unlock()
+			cm.mu.Unlock()
 			req.Response <- nil
 		}
 	}
@@ -268,4 +268,14 @@ func (cm *CartridgeManager) PreloadCartridge(path string, layerIdx, roleID int) 
 		// Wait for completion but ignore error for preload
 		<-resp
 	}()
+}
+
+// Lock manually locks the CartridgeManager.
+func (cm *CartridgeManager) Lock() {
+	cm.mu.Lock()
+}
+
+// Unlock manually unlocks the CartridgeManager.
+func (cm *CartridgeManager) Unlock() {
+	cm.mu.Unlock()
 }
