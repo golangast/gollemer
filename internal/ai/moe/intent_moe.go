@@ -2627,6 +2627,10 @@ func (m *IntentMoE) RepairArchitecture() {
 		m.EncoderPos = nn.NewPositionalEmbedding(128, m.EmbeddingDim)
 	}
 
+	if m.Supervisor != nil && m.Supervisor.CartridgeMgr == nil {
+		m.Supervisor.CartridgeMgr = NewCartridgeManager()
+	}
+
 	// Delegate to encoder
 	if m.Encoder != nil {
 		m.Encoder.RepairArchitecture()

@@ -35,8 +35,8 @@ type Supervisor struct {
 	SpawnsThisEpoch      int            // Track and pace expert spawning per epoch
 	OverfitMode          bool           // Allow relaxed constraints during overfit mode
 	DisableDataEvolution bool           // When true, skip corpus mutation entirely
-	mu                   sync.Mutex
-	CartridgeMgr         *CartridgeManager
+	mu                   sync.Mutex         `gob:"-"`
+	CartridgeMgr         *CartridgeManager  `gob:"-"`
 
 	// Always-On Triage Classifier
 	KeywordMap map[string]string    // Fast exact routing: keyword -> namespace

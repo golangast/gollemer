@@ -1,0 +1,25 @@
+# Gollemer Training & Cartridge Manifest
+# This file links training datasets to their compiled outputs and defines
+# how the LLM should handle them.
+
+[base_model]
+# The core LLM model loaded at startup
+gob_file = "data/models/gob_models/moe_social_model.gob"
+train_data = "data/training/trainingdata/conversations.csv"
+
+# ---------------------------------------------------------
+# Dynamic Cartridges
+# ---------------------------------------------------------
+
+[[cartridge]]
+namespace = "computer"
+# Multiple CSV files can be combined to train this expert
+training_files = ["data/training/trainingdata/computer/computer.csv"]
+# Intermediate weight file saved during the 'make train' cycle
+output_gob = "data/models/gob_models/computer_expert.gob"
+# The final optimized cartridge loaded dynamically by the LLM
+output_cartridge = "data/models/intents/computer.cartridge"
+# Keywords to trigger this cartridge
+keywords = ["computer", "pc", "file", "directory"]
+# Whether the LLM should load this by default or keep it unloaded until needed
+auto_load = false
