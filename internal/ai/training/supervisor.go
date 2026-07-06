@@ -134,55 +134,61 @@ func (s *AdaptiveSupervisor) EvolveDataset(question string) {
 
 	log.Printf("📝 [Data Evolution] Scanning training assets for target: '%s'", question)
 
-	f, err := os.Open(s.TrainingDataPath)
-	if err != nil {
-		log.Printf("⚠️  [Data Evolution] Error opening data: %v", err)
-		return
-	}
+	paths := strings.Split(s.TrainingDataPath, ",")
+	totalMutations := 0
 
-	var lines []string
-	scan := bufio.NewScanner(f)
-	mutations := 0
-
-	for scan.Scan() {
-		line := scan.Text()
-		
-		if !strings.Contains(line, "__ques__ "+question+" __ans__") && !strings.HasPrefix(line, question+",") {
-			lines = append(lines, line)
+	for _, path := range paths {
+		path = strings.TrimSpace(path)
+		f, err := os.Open(path)
+		if err != nil {
+			log.Printf("⚠️  [Data Evolution] Error opening data %s: %v", path, err)
 			continue
 		}
 
-		repl := replaceTarget(question)
-		if strings.Contains(line, "__ques__") {
-			line = strings.Replace(line, "__ques__ "+question, "__ques__ "+repl, 1)
-		} else {
-			line = strings.Replace(line, question+",", repl+",", 1)
+		var lines []string
+		scan := bufio.NewScanner(f)
+		mutations := 0
+
+		for scan.Scan() {
+			line := scan.Text()
+			
+			if !strings.Contains(line, "__ques__ "+question+" __ans__") && !strings.HasPrefix(line, question+",") {
+				lines = append(lines, line)
+				continue
+			}
+
+			repl := replaceTarget(question)
+			if strings.Contains(line, "__ques__") {
+				line = strings.Replace(line, "__ques__ "+question, "__ques__ "+repl, 1)
+			} else {
+				line = strings.Replace(line, question+",", repl+",", 1)
+			}
+			
+			lines = append(lines, line)
+			mutations++
 		}
-		
-		lines = append(lines, line)
-		mutations++
-	}
-	f.Close()
+		f.Close()
 
-	if mutations == 0 {
-		return
+		if mutations > 0 {
+			// Flush changes.
+			out, err := os.Create(path)
+			if err != nil {
+				log.Printf("⚠️  [Data Evolution] Error writing dataset %s: %v", path, err)
+				continue
+			}
+			w := bufio.NewWriter(out)
+			for _, l := range lines {
+				w.WriteString(l + "\n")
+			}
+			w.Flush()
+			out.Close()
+			totalMutations += mutations
+		}
 	}
 
-	// Flush changes.
-	out, err := os.Create(s.TrainingDataPath)
-	if err != nil {
-		log.Printf("⚠️  [Data Evolution] Error writing dataset: %v", err)
-		return
+	if totalMutations > 0 {
+		log.Printf("✅ [Data Evolution] Success. Mutated %d references.", totalMutations)
 	}
-	defer out.Close()
-
-	w := bufio.NewWriter(out)
-	for _, l := range lines {
-		w.WriteString(l + "\n")
-	}
-	w.Flush()
-	
-	log.Printf("✅ [Data Evolution] Success. Mutated %d references.", mutations)
 }
 
 func replaceTarget(q string) string {

@@ -42,6 +42,9 @@ type SocialConfig struct {
 	IntentBias                float32      `json:"intent_bias"`
 	TopP                      float32      `json:"top_p"`
 	TopK                      int          `json:"top_k"`
+	AutoTestSave              bool         `json:"auto_test_save"`
+	TriggerTest               bool         `json:"trigger_test"`
+	TriggerSave               bool         `json:"trigger_save"`
 }
 
 func LoadSocialConfig(path string) SocialConfig {
@@ -79,6 +82,7 @@ func LoadSocialConfig(path string) SocialConfig {
 		IntentBias:          4.5,
 		TopP:                0.85,
 		TopK:                5,
+		AutoTestSave:        true,
 		TokenWeights:        make(map[string]float32),
 	}
 

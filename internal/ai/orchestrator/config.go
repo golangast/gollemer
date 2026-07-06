@@ -46,6 +46,9 @@ type TrainingConfig struct {
 	IntentBias             float32            `json:"intent_bias"`
 	TopP                   float32            `json:"top_p"`
 	TopK                   int                `json:"top_k"`
+	AutoTestSave           bool               `json:"auto_test_save"`
+	TriggerTest            bool               `json:"trigger_test"`
+	TriggerSave            bool               `json:"trigger_save"`
 }
 
 type SafeConfig struct {
@@ -60,6 +63,7 @@ func NewSafeConfig(path string) (*SafeConfig, error) {
 		return nil, err
 	}
 	var cfg TrainingConfig
+	cfg.AutoTestSave = true
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, err
 	}
@@ -128,6 +132,7 @@ func (s *SafeConfig) WatchConfig(path string) error {
 				}
 
 				var cfg TrainingConfig
+				cfg.AutoTestSave = true
 				if err := json.Unmarshal(data, &cfg); err != nil {
 					log.Printf("⚠️  Failed to parse reloaded config: %v", err)
 					continue

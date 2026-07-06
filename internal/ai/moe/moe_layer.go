@@ -92,6 +92,13 @@ type MoELayer struct {
 	ExpertLastUsedAt           []time.Time
 	ExpertPinned               []bool
 	ExpertRole                 []string
+	// IntentBias is a per-expert additive logit bias applied before softmax during
+	// training to condition the router on the intent category of the current batch.
+	// Set by the training loop each step; cleared after Forward so it never leaks.
+	IntentBias []float32
+	
+	// Phase Tracking for Curriculum Routing
+	CurrentPhase int
 }
 
 // ExpertTask represents work to be done by one expert on a subset of tokens.
@@ -731,6 +738,43 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 						gateLogits.Data[base+e] += b
 					}
 				}
+			}
+		}
+
+		// 🎯 INTENT-CONDITIONED ROUTING BIAS
+		// Apply a batch-level per-expert logit bias that steers the router toward the correct
+		// expert cluster for the current intent category (social vs technical vs coding etc.).
+		// This runs BEFORE softmax so gradients flow cleanly through the cross-entropy.
+		// Set externally by the training loop from batch.Intents; cleared after Forward
+		// via ClearIntentBias() to prevent cross-batch contamination.
+		if moe.Training && len(moe.IntentBias) == numExperts {
+			for i := 0; i < numTokens; i++ {
+				base := i * numExperts
+				for e := 0; e < numExperts; e++ {
+					gateLogits.Data[base+e] += moe.IntentBias[e]
+				}
+			}
+		}
+
+		// 🎯 STRUCTURAL DOMAIN MASKING (Phase-Based)
+		if moe.Training {
+			switch moe.CurrentPhase {
+			case 1:
+				// PHASE 1: Conversational Only. Hard-mask out cartridge slots.
+				for e := 8; e < numExperts; e++ {
+					for i := 0; i < numTokens; i++ {
+						gateLogits.Data[i*numExperts+e] = -1e9
+					}
+				}
+			case 2:
+				// PHASE 2: Cartridge Ingestion Only. Hard-mask out conversational slots.
+				for e := 0; e < 8 && e < numExperts; e++ {
+					for i := 0; i < numTokens; i++ {
+						gateLogits.Data[i*numExperts+e] = -1e9
+					}
+				}
+			case 3:
+				// PHASE 3: Cohesive Tuning. Let the router freely balance both domains globally.
 			}
 		}
 		// 🛡️ HARD FLOOR ROUTING FOR LAGGING EXPERTS
@@ -1776,6 +1820,7 @@ func (moe *MoELayer) ClearState() {
 	moe.gateLogits = nil
 	moe.TargetRouting = nil
 	moe.LastSelectedExperts = nil
+	moe.IntentBias = nil
 
 	// Clear state for all experts
 	for _, expert := range moe.Experts {
@@ -1787,6 +1832,22 @@ func (moe *MoELayer) ClearState() {
 	if moe.GatingNetwork != nil {
 		moe.GatingNetwork.ClearState()
 	}
+}
+
+// ClearIntentBias resets the intent-conditioned routing bias to nil so it cannot
+// leak from one batch to the next. Call this immediately after Forward returns.
+func (moe *MoELayer) ClearIntentBias() {
+	moe.IntentBias = nil
+}
+
+// SetIntentBias sets the intent-conditioned per-expert logit bias vector.
+// biases must have exactly len(moe.Experts) entries.
+// Positive values attract the router; negative values repel it.
+func (moe *MoELayer) SetIntentBias(biases []float32) {
+	if len(biases) != moe.NumExperts {
+		return
+	}
+	moe.IntentBias = biases
 }
 
 func (moe *MoELayer) GetResetCount() int {

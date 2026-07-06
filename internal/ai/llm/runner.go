@@ -407,7 +407,11 @@ func (r *Runner) Run() {
 	// Goroutine for keyboard input
 	go func() {
 		for {
-			query, _ := r.Reader.ReadString('\n')
+			query, err := r.Reader.ReadString('\n')
+			if err != nil {
+				inputChan <- "exit"
+				return
+			}
 			inputChan <- query
 		}
 	}()
