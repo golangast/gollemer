@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/golangast/gollemer/internal/ai/neural/nn"
 	"github.com/golangast/gollemer/internal/ai/neural/tensor"
 )
 
@@ -36,28 +37,37 @@ func (s *Supervisor) MountCartridgeToLayer(model *IntentMoE, layerIdx int, exper
 	layer.ExpertRole = append(layer.ExpertRole, "CARTRIDGE")
 
 	// Extend gating network
-	if layer.GatingNetwork != nil && layer.GatingNetwork.Linear != nil {
-		gw := layer.GatingNetwork.Linear.Weights
-		oldNumExperts := gw.Shape[1]
-		newNumExperts := oldNumExperts + 1
-		oldData := gw.Data
-		newData := make([]float32, gw.Shape[0]*newNumExperts)
-		for row := 0; row < gw.Shape[0]; row++ {
-			copy(newData[row*newNumExperts:row*newNumExperts+oldNumExperts],
-				oldData[row*oldNumExperts:row*oldNumExperts+oldNumExperts])
-			// Give cartridge a strong initial routing bias so it actually gets used
-			newData[row*newNumExperts+oldNumExperts] = 0.5 
-		}
-		layer.GatingNetwork.Linear.Weights = tensor.NewTensor(
-			[]int{gw.Shape[0], newNumExperts}, newData, true)
+	if layer.GatingNetwork != nil {
+		extendLinear := func(lin *nn.Linear, initWeight, initBias float32) {
+			if lin == nil || lin.Weights == nil {
+				return
+			}
+			gw := lin.Weights
+			oldNumExperts := gw.Shape[1]
+			newNumExperts := oldNumExperts + 1
+			oldData := gw.Data
+			newData := make([]float32, gw.Shape[0]*newNumExperts)
+			for row := 0; row < gw.Shape[0]; row++ {
+				copy(newData[row*newNumExperts:row*newNumExperts+oldNumExperts],
+					oldData[row*oldNumExperts:row*oldNumExperts+oldNumExperts])
+				newData[row*newNumExperts+oldNumExperts] = initWeight 
+			}
+			lin.Weights = tensor.NewTensor([]int{gw.Shape[0], newNumExperts}, newData, true)
 
-		if layer.GatingNetwork.Linear.Biases != nil {
-			oldBias := layer.GatingNetwork.Linear.Biases.Data
-			newBias := make([]float32, newNumExperts)
-			copy(newBias, oldBias)
-			newBias[oldNumExperts] = 2.0 // Strong bias
-			layer.GatingNetwork.Linear.Biases = tensor.NewTensor(
-				[]int{newNumExperts}, newBias, true)
+			if lin.Biases != nil {
+				oldBias := lin.Biases.Data
+				newBias := make([]float32, newNumExperts)
+				copy(newBias, oldBias)
+				newBias[oldNumExperts] = initBias
+				lin.Biases = tensor.NewTensor([]int{newNumExperts}, newBias, true)
+			}
+		}
+
+		if layer.GatingNetwork.Linear != nil {
+			extendLinear(layer.GatingNetwork.Linear, 0.5, 2.0) // Give cartridge strong bias
+		}
+		if layer.GatingNetwork.NoiseLinear != nil {
+			extendLinear(layer.GatingNetwork.NoiseLinear, 0.0, 0.0)
 		}
 		layer.GatingNetwork.RepairArchitecture()
 	}
@@ -98,26 +108,36 @@ func (s *Supervisor) UnmountCartridgeFromLayer(model *IntentMoE, layerIdx int, e
 	layer.ExpertRole = append(layer.ExpertRole[:expertIdx], layer.ExpertRole[expertIdx+1:]...)
 
 	// Shrink gating network
-	if layer.GatingNetwork != nil && layer.GatingNetwork.Linear != nil {
-		gw := layer.GatingNetwork.Linear.Weights
-		oldNumExperts := gw.Shape[1]
-		newNumExperts := oldNumExperts - 1
-		oldData := gw.Data
-		newData := make([]float32, gw.Shape[0]*newNumExperts)
-		for row := 0; row < gw.Shape[0]; row++ {
-			copy(newData[row*newNumExperts:row*newNumExperts+expertIdx], oldData[row*oldNumExperts:row*oldNumExperts+expertIdx])
-			copy(newData[row*newNumExperts+expertIdx:row*newNumExperts+newNumExperts], oldData[row*oldNumExperts+expertIdx+1:row*oldNumExperts+oldNumExperts])
-		}
-		layer.GatingNetwork.Linear.Weights = tensor.NewTensor(
-			[]int{gw.Shape[0], newNumExperts}, newData, true)
+	if layer.GatingNetwork != nil {
+		shrinkLinear := func(lin *nn.Linear) {
+			if lin == nil || lin.Weights == nil {
+				return
+			}
+			gw := lin.Weights
+			oldNumExperts := gw.Shape[1]
+			newNumExperts := oldNumExperts - 1
+			oldData := gw.Data
+			newData := make([]float32, gw.Shape[0]*newNumExperts)
+			for row := 0; row < gw.Shape[0]; row++ {
+				copy(newData[row*newNumExperts:row*newNumExperts+expertIdx], oldData[row*oldNumExperts:row*oldNumExperts+expertIdx])
+				copy(newData[row*newNumExperts+expertIdx:row*newNumExperts+newNumExperts], oldData[row*oldNumExperts+expertIdx+1:row*oldNumExperts+oldNumExperts])
+			}
+			lin.Weights = tensor.NewTensor([]int{gw.Shape[0], newNumExperts}, newData, true)
 
-		if layer.GatingNetwork.Linear.Biases != nil {
-			oldBias := layer.GatingNetwork.Linear.Biases.Data
-			newBias := make([]float32, newNumExperts)
-			copy(newBias[:expertIdx], oldBias[:expertIdx])
-			copy(newBias[expertIdx:], oldBias[expertIdx+1:])
-			layer.GatingNetwork.Linear.Biases = tensor.NewTensor(
-				[]int{newNumExperts}, newBias, true)
+			if lin.Biases != nil {
+				oldBias := lin.Biases.Data
+				newBias := make([]float32, newNumExperts)
+				copy(newBias[:expertIdx], oldBias[:expertIdx])
+				copy(newBias[expertIdx:], oldBias[expertIdx+1:])
+				lin.Biases = tensor.NewTensor([]int{newNumExperts}, newBias, true)
+			}
+		}
+
+		if layer.GatingNetwork.Linear != nil {
+			shrinkLinear(layer.GatingNetwork.Linear)
+		}
+		if layer.GatingNetwork.NoiseLinear != nil {
+			shrinkLinear(layer.GatingNetwork.NoiseLinear)
 		}
 		layer.GatingNetwork.RepairArchitecture()
 	}

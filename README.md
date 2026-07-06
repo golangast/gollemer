@@ -163,6 +163,9 @@ We provide a simplified `Makefile` to handle the curriculum training process.
 ```bash
 # Start the Social Curriculum Training (Reset state & begin)
 make train
+
+# Start the Social Curriculum Training (Reset state & begin) and add custom data
+make train ARGS='-cartridges="data/models/intents/computer.cartridge" -data "data/training/trainingdata/computer/computer.csv"'
 ```
 
 ```bash
@@ -178,6 +181,15 @@ Chat with your trained model using the interactive shell.
 make chat
 # or use 'make llm'
 ```
+
+```bash
+# Launch the interactive assistant (with text, voice listening, and TTS output enabled)
+make dashboard
+```
+
+![Gollemer Dashboard](docs/img/top.png)
+![Gollemer Dashboard](docs/img/middle.png)
+![Gollemer Dashboard](docs/img/bottom.png)
 
 ### 4. Advanced CLI Flags
 When running the `train_moe` binary directly, you can use several flags to customize training and inference:

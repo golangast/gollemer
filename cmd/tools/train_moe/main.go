@@ -1062,6 +1062,7 @@ func main() {
 	flagBatchSize := flag.Int("batch-size", 0, "Batch size per step (use 0 to defer to social_train.json)")
 	flagAccSteps := flag.Int("acc-steps", 0, "Gradient accumulation steps (use 0 to defer to social_train.json)")
 	trainSocial := flag.Bool("train-social", false, "Train ONLY on human_chat.txt for pure social conversations")
+	trainMultiphase := flag.Bool("train-multiphase", false, "Run the 3-phase curriculum (Social, Cartridge, Cohesive)")
 	flagNumExperts := flag.Int("num-experts", 0, "Number of experts in MoE layer (use 0 to defer to social_train.json)")
 	dataFile := flag.String("data", "", "Path to custom training dataset (CSV/JSON/TXT) for targeted training")
 	piMode := flag.Bool("pi", false, "Pi 3B mode: constrains RAM to 600 MB, sets batch=1, acc=16, experts=4 for 900 MB RAM devices")
@@ -1089,6 +1090,11 @@ func main() {
 		if *flagAccSteps <= 0 || *flagAccSteps < 16 {
 			*flagAccSteps = 16
 		}
+	}
+
+	if *trainMultiphase {
+		chat.TrainMultiPhaseCurriculum(".", *gpu)
+		return
 	}
 
 	if *trainSocial {
@@ -1419,7 +1425,7 @@ func main() {
 	// --- Automated Phase 2: Conversational Finetuning ---
 	// If we are not in interactive mode, automatically transition to chat training
 	// to ensure the model isn't just a classifier but also a coherent conversationalist.
-	if !*runLLM && !*trainChat && !*trainSocial {
+	if !*runLLM && !*trainChat && !*trainSocial && !*trainMultiphase {
 		log.Println("\n🏁 Phase 1 (Intent & MLM) Complete. Transitioning to Phase 2 (Conversational Finetuning)...")
 		log.Println("💡 This adds linguistic coherence to the model so it doesn't generate word salad.")
 		chat.TrainChat(

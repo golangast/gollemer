@@ -9,13 +9,13 @@ export GOEXPERIMENT=simd
 export CGO_ENABLED=1
 
 # Runtime Tuning
-MEM_LIMIT    = 7000MiB
+MEM_LIMIT    = 4500MiB
 GOGC         = 90
 GOMAXPROCS   = 8
 TRAIN_BIN    = ./.build/gollemer-train
 MAIN_CMD     = go run cmd/tools/train_moe/main.go
 
-.PHONY: train train-social chat clean help \
+.PHONY: train train-social chat clean help dashboard \
         build-pi build-pi64 pi pi-social pi-chat pi-llm \
         pi-social-master pi-social-worker pi-chat-master pi-chat-worker
 
@@ -23,11 +23,11 @@ MAIN_CMD     = go run cmd/tools/train_moe/main.go
 
 ## train: Start a fresh Social Curriculum training (clears old state)
 train: clean
-	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-social
+	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-multiphase $(ARGS)
 
 ## train-social: Resume existing Social Curriculum training
 train-social:
-	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-social
+	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-social $(ARGS)
 
 # --- Interaction ---
 
@@ -51,6 +51,11 @@ word2vec:
 help:
 	@echo "Available commands:"
 	@grep -E '^##' Makefile | sed 's/## //'
+
+## dashboard: Launch the live training dashboard on http://localhost:8765
+dashboard:
+	@echo "🖥️  Starting Gollemer Training Dashboard → http://localhost:8765"
+	go run cmd/tools/dashboard/main.go
 
 # =============================================================================
 # 🥧 Pi 3B targets  (Raspberry Pi 3B, ~900 MB RAM, ARM Cortex-A53)

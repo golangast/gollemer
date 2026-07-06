@@ -1,0 +1,11 @@
+GOMEMLIMIT=4500MiB GOGC=90 GOMAXPROCS=8 go run cmd/tools/train_moe/main.go -train-social 
+2026/06/28 09:58:45 chat.go:2291:  Resuming training: Loading existing social model from data/models/gob_models/moe_social_model.gob
+2026/06/28 09:58:48 chat.go:2378:  Architecture repair complete: GrammarExperts synced across all layers.
+2026/06/28 10:00:47 chat.go:3780:  👨‍🏫 Teacher Reject: The response is completely unrelated to the given query and does not provide a greeting. | Fix: 'i welcome you with hello'
+2026/06/28 10:00:47 chat.go:4034:  🧪 Test 0 | Q: 'i welcome you with hello' 
+      ↳ A: 'a environment application camera can or them ahead is audio' [SALAD: 1.0]
+2026/06/28 10:00:58 chat.go:3780:  👨‍🏫 Teacher Reject: The response is not grammatically correct and lacks coherence. | Fix: 'John'
+2026/06/28 10:00:58 chat.go:4034:  🧪 Test 1 | Q: 'what is your name' 
+      ↳ A: 'in no - camera you to yes me use pattern' [SALAD: 1.0]
+ Progress: 5.6% | Epoch 1/2000 | Score: 2.0/36.0 | Grammar: 17.5 | Sim: 7.7% | EpochTime: 130.5ssignal: killed
+make: *** [Makefile:30: train-social] Error 1

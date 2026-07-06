@@ -1131,6 +1131,17 @@ skipCSV:
 				}
 			}
 
+			// ---  INTENT-CONDITIONED ROUTING ---
+			if len(batch.Intents) > 0 {
+				intentStr := batch.Intents[0]
+				for _, layer := range findMoELayers(intentModel) {
+					bias := intentRoutingBias(intentStr, layer.NumExperts)
+					if bias != nil {
+						layer.SetIntentBias(bias)
+					}
+				}
+			}
+
 			logits, _, err := intentModel.Forward(samplingProb, inputTensor, targetTensor, batch.InputMask)
 			if err != nil {
 				log.Printf("Forward error: %v", err)
@@ -1594,6 +1605,7 @@ skipCSV:
 				intentModel.ClearState()
 				for _, layer := range findMoELayers(intentModel) {
 					layer.TargetRouting = nil
+					layer.ClearIntentBias()
 				}
 
 				// Critical Memory Safety: GC every 32 batches is enough to reclaim intermediates
@@ -2837,6 +2849,7 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 
 	var epochHistory []string
 	for epoch := 0; epoch < epochs; epoch++ {
+		config = safeCfg.Get()
 		epochStartTime := time.Now()
 		supervisor.SpawnsThisEpoch = 0
 
@@ -3112,6 +3125,17 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 				}
 			}
 
+			// ---  INTENT-CONDITIONED ROUTING ---
+			if len(batch.Intents) > 0 {
+				intentStr := batch.Intents[0]
+				for _, layer := range findMoELayers(intentModel) {
+					bias := intentRoutingBias(intentStr, layer.NumExperts)
+					if bias != nil {
+						layer.SetIntentBias(bias)
+					}
+				}
+			}
+
 			// ---  FORWARD PASS
 			logits, _, err := intentModel.Forward(samplingProb, inputTensor, targetTensor, inputMask)
 
@@ -3119,6 +3143,7 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 			layers := findMoELayers(intentModel)
 			for _, layer := range layers {
 				layer.TargetRouting = nil
+				layer.ClearIntentBias()
 			}
 
 			if err != nil {
@@ -3557,6 +3582,7 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 						intentModel.ClearState()
 						for _, layer := range findMoELayers(intentModel) {
 							layer.TargetRouting = nil
+							layer.ClearIntentBias()
 						}
 					} else {
 						// Accumulation step: gradients accumulate in .Grad fields (safe),
@@ -3564,6 +3590,7 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 						intentModel.ClearState()
 						for _, layer := range findMoELayers(intentModel) {
 							layer.TargetRouting = nil
+							layer.ClearIntentBias()
 						}
 					}
 				} else {
@@ -3571,6 +3598,7 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 					intentModel.ClearState()
 					for _, layer := range findMoELayers(intentModel) {
 						layer.TargetRouting = nil
+						layer.ClearIntentBias()
 					}
 				}
 
@@ -3756,6 +3784,10 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 		var failedGateCalls []failedGateCall
 
 		var testProbeResults []orchestrator.TestProbeResult
+		
+		runTest := config.AutoTestSave || config.TriggerTest
+		if runTest {
+
 		for i, p := range currentTestPrompts {
 			// Use shorter maxLen during early training to reduce inference memory.
 			// The KV cache in cross-attention grows with sequence length, so fewer steps = less RAM.
@@ -4076,6 +4108,22 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 			}
 		}
 
+		} // End of runTest
+
+		if config.TriggerTest {
+			safeCfg.Update(func(c *orchestrator.TrainingConfig) {
+				c.TriggerTest = false
+			})
+			configPath := filepath.Join(projectRoot, "data/config/social_train.json")
+			data, _ := os.ReadFile(configPath)
+			var cfgMap map[string]interface{}
+			if json.Unmarshal(data, &cfgMap) == nil {
+				cfgMap["trigger_test"] = false
+				out, _ := json.MarshalIndent(cfgMap, "", "  ")
+				os.WriteFile(configPath, out, 0644)
+			}
+		}
+
 		//  Quality Gate Recovery: If it fails a single test during full test, or majority during sampled test
 		failureThreshold := len(currentTestPrompts) / 2
 		if isFullTest {
@@ -4195,7 +4243,7 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 		// Every 30 epochs, Qwen reviews model outputs, current metrics, and the
 		// config in one shot and may patch social_train.json immediately.
 		// The hot-reloader picks up any changes automatically next epoch.
-		if (epoch+1)%5 == 0 {
+		if config.AutoTestSave && (epoch+1)%30 == 0 {
 			auditConfigPath := filepath.Join(projectRoot, "data/config/social_train.json")
 
 			// 1. Run canonical probes on the live model
@@ -4261,7 +4309,8 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 		}
 
 		// 4. Save Checkpoint every 5 epochs (serializing 142MB every epoch wastes ~5s each time)
-		if (epoch+1)%5 == 0 || epoch == epochs-1 {
+		runSave := (config.AutoTestSave && ((epoch+1)%5 == 0 || epoch == epochs-1)) || config.TriggerSave
+		if runSave {
 			// Detach before save to free the computation graph
 			intentModel.Detach()
 			// Aggressively reclaim memory before the large serialization spike
@@ -4287,6 +4336,20 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 			ckpt = nil
 			runtime.GC()
 			debug.FreeOSMemory()
+		}
+
+		if config.TriggerSave {
+			safeCfg.Update(func(c *orchestrator.TrainingConfig) {
+				c.TriggerSave = false
+			})
+			configPath := filepath.Join(projectRoot, "data/config/social_train.json")
+			data, _ := os.ReadFile(configPath)
+			var cfgMap map[string]interface{}
+			if json.Unmarshal(data, &cfgMap) == nil {
+				cfgMap["trigger_save"] = false
+				out, _ := json.MarshalIndent(cfgMap, "", "  ")
+				os.WriteFile(configPath, out, 0644)
+			}
 		}
 
 		// 2. Track metrics at end of epoch
@@ -4696,6 +4759,98 @@ func analyzeExpertSpecialization(model *moe.IntentMoE) {
 }
 
 // SimpleTagger provides structural POS tags for common tokens to guide MoE routing.
+
+// intentRoutingBias returns a per-expert logit bias vector for the given intent
+// label. The vector length must match numExperts. Positive values attract the
+// router toward that expert; negative values repel it.
+//
+// Expert slots follow GrammarRoles ordering (grammar_expert.go):
+//
+//	0=PRON  1=VERB  2=AUX  3=ADJ  4=NOUN  5=PREP  6=GREET  7=OTHER
+//
+// For intent categories beyond the base 8 grammar experts (when numExperts>8),
+// the remaining slots are left at 0.0 (neutral).
+//
+// Returns nil when the intent is unknown so the router is left unconstrained.
+func intentRoutingBias(intent string, numExperts int) []float32 {
+	if numExperts <= 0 {
+		return nil
+	}
+	bias := make([]float32, numExperts)
+
+	// Strength of intent conditioning. Chosen to be meaningful but weaker than
+	// StructuralBiasIntensity (8.0) so grammar routing still dominates per-token.
+	const attract = float32(6.0)
+	const repel = float32(-3.0)
+
+	lc := strings.ToLower(strings.TrimSpace(intent))
+	switch {
+	// ── Social / conversational domain ─────────────────────────────────────
+	case lc == "social" || lc == "greeting" || lc == "greet" ||
+		strings.HasPrefix(lc, "social:") || strings.HasPrefix(lc, "greeting:"):
+		// Strongly favour GREET (6) and PRON (0) for conversational flow.
+		// Suppress NOUN (4) / VERB (1) / OTHER (7) used by tech domains.
+		if 6 < numExperts {
+			bias[6] = attract // GREET
+		}
+		if 0 < numExperts {
+			bias[0] = attract * 0.5 // PRON — useful for "I am…" style answers
+		}
+		if 1 < numExperts {
+			bias[1] = repel // VERB — de-emphasise technical action verbs
+		}
+		if 4 < numExperts {
+			bias[4] = repel // NOUN — de-emphasise technical nouns
+		}
+		if 7 < numExperts {
+			bias[7] = repel * 0.5 // OTHER
+		}
+
+	// ── Technical / computer / coding domain ───────────────────────────────
+	case lc == "computer" || lc == "go_coding" || lc == "coding" ||
+		lc == "technical" || lc == "code" ||
+		strings.HasPrefix(lc, "computer:") || strings.HasPrefix(lc, "go_coding:") ||
+		strings.HasPrefix(lc, "coding:") || strings.HasPrefix(lc, "technical:"):
+		// Favour NOUN (4), VERB (1), AUX (2), and OTHER (7) for technical content.
+		// Strongly suppress GREET (6) so hellos don't trigger tech experts.
+		if 4 < numExperts {
+			bias[4] = attract // NOUN — technical terms
+		}
+		if 1 < numExperts {
+			bias[1] = attract * 0.75 // VERB — action verbs in instructions
+		}
+		if 2 < numExperts {
+			bias[2] = attract * 0.5 // AUX — modal constructions ("you should…")
+		}
+		if 7 < numExperts {
+			bias[7] = attract * 0.5 // OTHER — catch-all for identifiers/symbols
+		}
+		if 6 < numExperts {
+			bias[6] = repel * 1.5 // GREET — strongly repel: no greetings for tech
+		}
+		if 0 < numExperts {
+			bias[0] = repel * 0.5 // PRON — slightly de-emphasise conversational pronouns
+		}
+
+	// ── Question / inquiry domain ──────────────────────────────────────────
+	case lc == "question" || lc == "inquiry" || strings.HasPrefix(lc, "question:"):
+		if 3 < numExperts {
+			bias[3] = attract * 0.5 // ADJ — descriptive answers
+		}
+		if 4 < numExperts {
+			bias[4] = attract * 0.5 // NOUN
+		}
+		if 1 < numExperts {
+			bias[1] = attract * 0.5 // VERB
+		}
+
+	default:
+		// Unknown intent — return nil to leave the router unconstrained.
+		return nil
+	}
+	return bias
+}
+
 func SimpleTagger(tokens []string) []string {
 	roles := make([]string, len(tokens))
 	for i, t := range tokens {
@@ -5379,10 +5534,7 @@ func drawSocialProgressBar(current, target, currentGrammar, targetGrammar, curre
 		progress = 1.0
 	}
 	elapsed := time.Since(startTime).Seconds()
-	fmt.Printf("\r Progress: %.1f%% | Epoch %d/%d | Score: %.1f/%.1f | Grammar: %.1f | Sim: %.1f%% | EpochTime: %.1fs", progress*100, epoch, totalEpochs, current, target, currentGrammar, currentSim*100, elapsed)
-	if epoch == totalEpochs || epoch%20 == 0 {
-		fmt.Println()
-	}
+	fmt.Printf(" [SOCIAL_PROGRESS] Progress: %.1f%% | Epoch %d/%d | Score: %.1f/%.1f | Grammar: %.1f | Sim: %.1f%% | EpochTime: %.1fs\n", progress*100, epoch, totalEpochs, current, target, currentGrammar, currentSim*100, elapsed)
 }
 
 type surgeryImpl struct {
