@@ -188,8 +188,8 @@ make dashboard
 ```
 
 ![Gollemer Dashboard](docs/img/top.png)
-![Gollemer Dashboard](docs/img/middle.png)
-![Gollemer Dashboard](docs/img/bottom.png)
+![Gollemer Dashboard](docs/img/mid.png)
+![Gollemer Dashboard](docs/img/low.png)
 
 ### 4. Advanced CLI Flags
 When running the `train_moe` binary directly, you can use several flags to customize training and inference:
