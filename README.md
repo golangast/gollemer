@@ -190,6 +190,25 @@ make dashboard
 ![Gollemer Dashboard](docs/img/top.png)
 ![Gollemer Dashboard](docs/img/mid.png)
 ![Gollemer Dashboard](docs/img/low.png)
+## 🩺 Integrity Test Suite & Dashboard Diagnostics
+
+Gollemer includes a comprehensive, fully synchronous **Integrity Test Suite** accessible directly from the dashboard. This diagnostic pipeline runs critical safety, mathematical, and network health checks to ensure the training environment remains completely stable.
+
+The suite features heavy structural optimizations and live telemetry tracking across 9 major testing categories:
+
+### 1. Robust Core Optimizations
+* **Infinite Recursion Protection:** The test grid's rendering engine utilizes a decoupled `buildCategoryHTML` pipeline to eliminate layout-blocking infinite loops during heavy UI updates.
+* **Non-Skipped Health Computations:** The master health status bar dynamically computes system health percentages based strictly on active, non-skipped test groups—guaranteeing accurate diagnostics and eliminating mathematical runtime bugs ($NaN$).
+* **Cleaned DOM Handlers:** Replaced legacy, broken element references in the interface runner with clean no-op structural guards.
+
+### 2. Expanded Diagnostic Categories
+Tests are grouped into distinct testing pillars to give an instantaneous look into deep system behaviors:
+* **Gradient Health (New):** Analyzes learning rate decay vectors, loss variance stability over a moving step window, load-balancing loss ratios to flag expert monopolies, and training phase progression to catch chaotic gradients before divergence.
+* **Live Connection (New):** Verifies the immediate freshness, API reachability, and structural payload integrity of the underlying WebSocket data stream.
+* **Existing Pillars:** Deeper diagnostic coverage across *Loss Health*, *Router & Expert Health*, *Config Integrity*, *Supervisor Integrity*, *System Resources*, *Data & Model*, and *Social Training*.
+
+### 3. Live Detail UI Context
+Instead of nesting critical diagnostics inside hover tooltips or freezing them as static descriptions, tests now explicitly push live, real-time metrics (e.g., `Loss = 1.352` or `Temp = 1.800`) directly into their inline detail rows in the UI dashboard.
 
 ### 4. Advanced CLI Flags
 When running the `train_moe` binary directly, you can use several flags to customize training and inference:
@@ -315,6 +334,8 @@ Gollemer includes a lightweight, RAM-resident vector database (`internal/ai/memo
 This enables the assistant to recall user-defined facts like names, preferences, and prior instructions without any cloud dependency.
 
 ---
+
+
 
 ## 🛠️ Advanced Usage
 

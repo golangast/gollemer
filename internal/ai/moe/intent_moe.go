@@ -2438,6 +2438,8 @@ func (m *IntentMoE) ResizeEmbeddings(newVocabSize int) {
 func SaveIntentMoECheckpoint(ckpt *Checkpoint, path string) error {
 	// 🧹 Pre-serialization GC to reduce OOM risk during large model encoding
 	runtime.GC()
+	var before runtime.MemStats
+	runtime.ReadMemStats(&before)
 
 	// Ensure parent directory exists
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
@@ -2474,6 +2476,19 @@ func SaveIntentMoECheckpoint(ckpt *Checkpoint, path string) error {
 	}
 	if err := os.Rename(tempPath, path); err != nil {
 		return fmt.Errorf("failed to finalize checkpoint: %w", err)
+	}
+
+	var after runtime.MemStats
+	runtime.ReadMemStats(&after)
+	if GlobalTelemetry != nil {
+		GlobalTelemetry.RecordSerializationMetrics("checkpoint", map[string]interface{}{
+			"path":         path,
+			"alloc_delta":  int64(after.TotalAlloc - before.TotalAlloc),
+			"heap_delta":   int64(after.HeapAlloc - before.HeapAlloc),
+			"heap_in_use":  int64(after.HeapInuse),
+			"gc_pause_ms":  int64(after.PauseTotalNs / 1e6),
+			"num_gc":       int64(after.NumGC),
+		})
 	}
 
 	// Get file size for logging
@@ -2516,6 +2531,8 @@ func LoadIntentMoECheckpoint(filePath string) (*Checkpoint, error) {
 func SaveIntentMoEModelToGOB(model *IntentMoE, path string) error {
 	// 🧹 Pre-serialization GC
 	runtime.GC()
+	var before runtime.MemStats
+	runtime.ReadMemStats(&before)
 
 	// Ensure parent directory exists
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
@@ -2544,6 +2561,19 @@ func SaveIntentMoEModelToGOB(model *IntentMoE, path string) error {
 	writer.Flush()
 	gz.Close()
 	file.Close()
+
+	var after runtime.MemStats
+	runtime.ReadMemStats(&after)
+	if GlobalTelemetry != nil {
+		GlobalTelemetry.RecordSerializationMetrics("gob_model", map[string]interface{}{
+			"path":         path,
+			"alloc_delta":  int64(after.TotalAlloc - before.TotalAlloc),
+			"heap_delta":   int64(after.HeapAlloc - before.HeapAlloc),
+			"heap_in_use":  int64(after.HeapInuse),
+			"gc_pause_ms":  int64(after.PauseTotalNs / 1e6),
+			"num_gc":       int64(after.NumGC),
+		})
+	}
 
 	if runtime.GOOS == "windows" {
 		_ = os.Remove(path)

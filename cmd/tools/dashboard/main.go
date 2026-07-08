@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golangast/gollemer/internal/ai/moe"
 	"github.com/gorilla/websocket"
 )
 
@@ -104,18 +105,19 @@ type SysStats struct {
 }
 
 type DashboardState struct {
-	History          []MetricPoint    `json:"history"`
-	Latest           LatestMetric     `json:"latest"`
-	Cartridges       CartridgeMap     `json:"cartridges"`
-	Datasets         []string         `json:"datasets"`
-	Utilization      []UtilPoint      `json:"utilization"`
-	LiveLines        []string         `json:"live_lines"`
-	Process          ProcessInfo      `json:"process"`
-	SupervisorEvents []SupervisorEvent `json:"supervisor_events"`
-	Sys              SysStats         `json:"sys"`
-	LiveEpoch        float64          `json:"live_epoch"`
-	LiveEpochTime    string           `json:"live_epoch_time"`
-	LiveActiveExp    []int            `json:"live_active_experts"`
+	History          []MetricPoint      `json:"history"`
+	Latest           LatestMetric       `json:"latest"`
+	Cartridges       CartridgeMap       `json:"cartridges"`
+	Datasets         []string           `json:"datasets"`
+	Utilization      []UtilPoint        `json:"utilization"`
+	LiveLines        []string           `json:"live_lines"`
+	Process          ProcessInfo        `json:"process"`
+	SupervisorEvents []SupervisorEvent  `json:"supervisor_events"`
+	Telemetry        map[string]interface{} `json:"telemetry"`
+	Sys              SysStats           `json:"sys"`
+	LiveEpoch        float64            `json:"live_epoch"`
+	LiveEpochTime    string             `json:"live_epoch_time"`
+	LiveActiveExp    []int              `json:"live_active_experts"`
 }
 
 var (
@@ -379,6 +381,7 @@ func buildState() DashboardState {
 		LiveLines:        ll,
 		Process:          pi,
 		SupervisorEvents: evs,
+		Telemetry:        readTelemetry(),
 		Sys:              readSysStats(),
 		LiveEpoch:        lepoch,
 		LiveEpochTime:    lepochTime,
@@ -508,6 +511,18 @@ func listDatasets() []string {
 	})
 	sort.Strings(files)
 	return files
+}
+
+func readTelemetry() map[string]interface{} {
+	data, err := os.ReadFile(rel("logs/telemetry.json"))
+	if err != nil {
+		return map[string]interface{}{}
+	}
+	var m map[string]interface{}
+	if err := json.Unmarshal(data, &m); err != nil {
+		return map[string]interface{}{}
+	}
+	return m
 }
 
 func readUtilSample() []UtilPoint {
@@ -911,10 +926,31 @@ func handleConfigRollback(w http.ResponseWriter, r *http.Request) {
 func handleDiagnostics(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	if r.Method != http.MethodPost { return }
-	time.Sleep(1500 * time.Millisecond)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"vector_safety": true, "deterministic_response": true, "hardware_health": true,
-	})
+	var req struct {
+		Action string `json:"action"`
+		Label  string `json:"label"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&req)
+	resp := map[string]interface{}{
+		"vector_safety":         true,
+		"deterministic_response": true,
+		"hardware_health":       true,
+	}
+	if moe.GlobalTelemetry != nil {
+		resp["runtime"] = moe.GlobalTelemetry.Snapshot()
+	}
+	if strings.EqualFold(req.Action, "sandbox") {
+		label := req.Label
+		if label == "" {
+			label = "dashboard"
+		}
+		result := map[string]interface{}{"match": false}
+		if moe.GlobalTelemetry != nil {
+			result = moe.GlobalTelemetry.RunMathSandbox(label, 2, 3, 2)
+		}
+		resp["sandbox"] = result
+	}
+	json.NewEncoder(w).Encode(resp)
 }
 
 func handleTrigger(w http.ResponseWriter, r *http.Request) {

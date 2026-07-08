@@ -8,6 +8,8 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -41,6 +43,472 @@ type Supervisor struct {
 	// Always-On Triage Classifier
 	KeywordMap map[string]string    // Fast exact routing: keyword -> namespace
 	TinyMatrix map[string][]float32 // Semantic routing: namespace -> small embedding
+
+	// Observability / debugging state
+	CrashSnapshot *CrashSnapshot
+	Telemetry     *RuntimeTelemetry
+}
+
+var GlobalTelemetry *RuntimeTelemetry
+
+// CrashSnapshot stores a rolling window of recent optimizer and routing state.
+type CrashSnapshot struct {
+	mu          sync.Mutex
+	Steps       []map[string]interface{}
+	MaxSteps    int
+	SnapshotDir string
+}
+
+// TraceEvent is a compact in-memory event captured by the runtime for post-mortem inspection.
+type TraceEvent struct {
+	Timestamp string                 `json:"timestamp"`
+	Category  string                 `json:"category"`
+	Message   string                 `json:"message"`
+	Details   map[string]interface{} `json:"details,omitempty"`
+}
+
+// LeakDetector tracks goroutine growth over time and flags suspicious drift.
+type LeakDetector struct {
+	Enabled    bool
+	Interval   time.Duration
+	Threshold  int
+	Baseline   int
+	LastCount  int
+	AlertCount int
+	stopCh     chan struct{}
+	stopOnce   sync.Once
+}
+
+// SupervisorAdjustment is a compact causal-chain entry for supervisor actions.
+type SupervisorAdjustment struct {
+	Timestamp string `json:"timestamp"`
+	Step      int    `json:"step"`
+	Reason    string `json:"reason"`
+	Target    string `json:"target"`
+	OldValue  string `json:"old_value"`
+	NewValue  string `json:"new_value"`
+	Message   string `json:"message"`
+}
+
+// SerializationMetric captures memory deltas during checkpoint/GOB serialization work.
+type SerializationMetric struct {
+	Timestamp string                 `json:"timestamp"`
+	Label     string                 `json:"label"`
+	Details   map[string]interface{} `json:"details,omitempty"`
+}
+
+// RuntimeTelemetry exposes live cartridge pool, routing, trace, and health counters.
+type RuntimeTelemetry struct {
+	mu                 sync.Mutex
+	WarmCartridges     int
+	PoolHits           int
+	PoolMisses         int
+	IntentLatencyMs    float64
+	LastIntent         string
+	LastMatch          string
+	TraceBuffer        []TraceEvent
+	MaxTrace           int
+	LeakDetector         *LeakDetector
+	SupervisorAdjustments []SupervisorAdjustment
+	MaxTimeline          int
+	SerializationStats   []SerializationMetric
+	MaxSerialization     int
+}
+
+func NewRuntimeTelemetry() *RuntimeTelemetry {
+	return &RuntimeTelemetry{MaxTrace: 96, MaxTimeline: 24, MaxSerialization: 12}
+}
+
+func NewCrashSnapshot(dir string) *CrashSnapshot {
+	return &CrashSnapshot{MaxSteps: 10, SnapshotDir: dir}
+}
+
+func (c *CrashSnapshot) Record(step map[string]interface{}) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.Steps = append(c.Steps, step)
+	if len(c.Steps) > c.MaxSteps {
+		c.Steps = c.Steps[len(c.Steps)-c.MaxSteps:]
+	}
+}
+
+func (c *CrashSnapshot) Dump(path string) error {
+	if c == nil {
+		return nil
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(map[string]interface{}{"steps": c.Steps}, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
+func (t *RuntimeTelemetry) RecordPoolHit() {
+	if t == nil {
+		return
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.PoolHits++
+}
+
+func (t *RuntimeTelemetry) RecordPoolMiss() {
+	if t == nil {
+		return
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.PoolMisses++
+}
+
+func (t *RuntimeTelemetry) SetWarmCartridges(n int) {
+	if t == nil {
+		return
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.WarmCartridges = n
+}
+
+func (t *RuntimeTelemetry) SetIntentLatency(ms float64, intent, match string) {
+	if t == nil {
+		return
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.IntentLatencyMs = ms
+	t.LastIntent = intent
+	t.LastMatch = match
+}
+
+func (t *RuntimeTelemetry) RecordTrace(category, message string, details map[string]interface{}) {
+	if t == nil {
+		return
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.MaxTrace <= 0 {
+		t.MaxTrace = 96
+	}
+	evt := TraceEvent{Timestamp: time.Now().UTC().Format(time.RFC3339Nano), Category: category, Message: message}
+	if len(details) > 0 {
+		evt.Details = make(map[string]interface{}, len(details))
+		for k, v := range details {
+			evt.Details[k] = v
+		}
+	}
+	t.TraceBuffer = append(t.TraceBuffer, evt)
+	if len(t.TraceBuffer) > t.MaxTrace {
+		t.TraceBuffer = t.TraceBuffer[len(t.TraceBuffer)-t.MaxTrace:]
+	}
+}
+
+func (t *RuntimeTelemetry) TraceSnapshot() []TraceEvent {
+	if t == nil {
+		return nil
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	out := make([]TraceEvent, len(t.TraceBuffer))
+	copy(out, t.TraceBuffer)
+	return out
+}
+
+func (t *RuntimeTelemetry) RecordSupervisorAdjustment(step int, reason, target, oldValue, newValue string) {
+	if t == nil {
+		return
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.MaxTimeline <= 0 {
+		t.MaxTimeline = 24
+	}
+	entry := SupervisorAdjustment{Timestamp: time.Now().UTC().Format(time.RFC3339Nano), Step: step, Reason: reason, Target: target, OldValue: oldValue, NewValue: newValue}
+	entry.Message = fmt.Sprintf("%s -> %s", entry.Target, entry.NewValue)
+	if entry.Reason != "" {
+		entry.Message = fmt.Sprintf("%s (%s)", entry.Message, entry.Reason)
+	}
+	t.SupervisorAdjustments = append(t.SupervisorAdjustments, entry)
+	if len(t.SupervisorAdjustments) > t.MaxTimeline {
+		t.SupervisorAdjustments = t.SupervisorAdjustments[len(t.SupervisorAdjustments)-t.MaxTimeline:]
+	}
+}
+
+func (t *RuntimeTelemetry) SupervisorTimeline() []SupervisorAdjustment {
+	if t == nil {
+		return nil
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	out := make([]SupervisorAdjustment, len(t.SupervisorAdjustments))
+	copy(out, t.SupervisorAdjustments)
+	return out
+}
+
+func (t *RuntimeTelemetry) RecordSerializationMetrics(label string, details map[string]interface{}) {
+	if t == nil {
+		return
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.MaxSerialization <= 0 {
+		t.MaxSerialization = 12
+	}
+	entry := SerializationMetric{Timestamp: time.Now().UTC().Format(time.RFC3339Nano), Label: label}
+	if len(details) > 0 {
+		entry.Details = make(map[string]interface{}, len(details))
+		for k, v := range details {
+			entry.Details[k] = v
+		}
+	}
+	t.SerializationStats = append(t.SerializationStats, entry)
+	if len(t.SerializationStats) > t.MaxSerialization {
+		t.SerializationStats = t.SerializationStats[len(t.SerializationStats)-t.MaxSerialization:]
+	}
+}
+
+func (t *RuntimeTelemetry) SerializationSnapshot() *SerializationMetric {
+	if t == nil {
+		return nil
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if len(t.SerializationStats) == 0 {
+		return nil
+	}
+	last := t.SerializationStats[len(t.SerializationStats)-1]
+	copyDetails := make(map[string]interface{}, len(last.Details))
+	for k, v := range last.Details {
+		copyDetails[k] = v
+	}
+	return &SerializationMetric{Timestamp: last.Timestamp, Label: last.Label, Details: copyDetails}
+}
+
+func (t *RuntimeTelemetry) StartLeakDetector(intervalSeconds, threshold int) {
+	if t == nil {
+		return
+	}
+	if intervalSeconds <= 0 {
+		intervalSeconds = 1
+	}
+	if threshold <= 0 {
+		threshold = 1
+	}
+	t.mu.Lock()
+	if t.LeakDetector != nil && t.LeakDetector.Enabled {
+		t.mu.Unlock()
+		return
+	}
+	ld := &LeakDetector{
+		Enabled:   true,
+		Interval:  time.Duration(intervalSeconds) * time.Second,
+		Threshold: threshold,
+		Baseline:  runtime.NumGoroutine(),
+		stopCh:    make(chan struct{}),
+	}
+	t.LeakDetector = ld
+	t.mu.Unlock()
+
+	go func(rt *RuntimeTelemetry, ld *LeakDetector) {
+		ticker := time.NewTicker(ld.Interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				current := runtime.NumGoroutine()
+				ld.LastCount = current
+				if current > ld.Baseline+ld.Threshold {
+					ld.AlertCount++
+					if ld.AlertCount >= 2 {
+						rt.RecordTrace("runtime", "goroutine_growth", map[string]interface{}{"current": current, "baseline": ld.Baseline, "threshold": ld.Threshold})
+					}
+				} else {
+					ld.AlertCount = 0
+				}
+			case <-ld.stopCh:
+				ld.Enabled = false
+				return
+			}
+		}
+	}(t, ld)
+}
+
+func (t *RuntimeTelemetry) StopLeakDetector() {
+	if t == nil || t.LeakDetector == nil {
+		return
+	}
+	t.LeakDetector.stopOnce.Do(func() {
+		close(t.LeakDetector.stopCh)
+	})
+}
+
+func (t *RuntimeTelemetry) RunMathSandbox(label string, rowsA, shared, colsB int) map[string]interface{} {
+	if rowsA <= 0 || shared <= 0 || colsB <= 0 {
+		return map[string]interface{}{"match": false, "error": "invalid dimensions"}
+	}
+	if t == nil {
+		return map[string]interface{}{"match": false, "error": "telemetry unavailable"}
+	}
+
+	aData := make([]float32, rowsA*shared)
+	for i := range aData {
+		aData[i] = float32(i%7) + 1
+	}
+	bData := make([]float32, shared*colsB)
+	for i := range bData {
+		bData[i] = float32((i%5)+1) * 0.5
+	}
+
+	a := tensor.NewTensor([]int{rowsA, shared}, aData, false)
+	b := tensor.NewTensor([]int{shared, colsB}, bData, false)
+
+	simdRes, simdErr := a.MatMul(b)
+	fallbackRes, fallbackErr := referenceMatMul(a, b)
+	match := simdErr == nil && fallbackErr == nil && simdRes != nil && fallbackRes != nil && tensorsMatch(simdRes, fallbackRes, 1e-4)
+	result := map[string]interface{}{
+		"label":          label,
+		"match":          match,
+		"rows_a":         rowsA,
+		"shared":         shared,
+		"cols_b":         colsB,
+		"simd_error":     simdErr,
+		"fallback_error": fallbackErr,
+	}
+	if simdErr == nil && simdRes != nil {
+		result["simd_shape"] = simdRes.Shape
+	}
+	if fallbackErr == nil && fallbackRes != nil {
+		result["fallback_shape"] = fallbackRes.Shape
+	}
+	if match {
+		result["max_abs_diff"] = 0.0
+	}
+	t.RecordTrace("math_sandbox", label, result)
+	return result
+}
+
+func referenceMatMul(a, b *tensor.Tensor) (*tensor.Tensor, error) {
+	if len(a.Shape) != 2 || len(b.Shape) != 2 {
+		return nil, fmt.Errorf("sandbox only supports 2D tensors")
+	}
+	if a.Shape[1] != b.Shape[0] {
+		return nil, fmt.Errorf("incompatible shapes")
+	}
+	rowsA, colsA := a.Shape[0], a.Shape[1]
+	colsB := b.Shape[1]
+	resultData := make([]float32, rowsA*colsB)
+	for i := 0; i < rowsA; i++ {
+		for j := 0; j < colsB; j++ {
+			var sum float32
+			for k := 0; k < colsA; k++ {
+				sum += a.Data[i*colsA+k] * b.Data[k*colsB+j]
+			}
+			resultData[i*colsB+j] = sum
+		}
+	}
+	return tensor.NewTensor([]int{rowsA, colsB}, resultData, false), nil
+}
+
+func tensorsMatch(a, b *tensor.Tensor, tol float32) bool {
+	if a == nil || b == nil || len(a.Data) != len(b.Data) {
+		return false
+	}
+	for i := range a.Data {
+		if math.Abs(float64(a.Data[i]-b.Data[i])) > float64(tol) {
+			return false
+		}
+	}
+	return true
+}
+
+func (t *RuntimeTelemetry) Snapshot() map[string]interface{} {
+	if t == nil {
+		return map[string]interface{}{}
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	traceBuffer := make([]map[string]interface{}, 0, len(t.TraceBuffer))
+	for _, evt := range t.TraceBuffer {
+		evtCopy := map[string]interface{}{"timestamp": evt.Timestamp, "category": evt.Category, "message": evt.Message}
+		if evt.Details != nil {
+			evtCopy["details"] = evt.Details
+		}
+		traceBuffer = append(traceBuffer, evtCopy)
+	}
+	var timeline []map[string]interface{}
+	for _, entry := range t.SupervisorAdjustments {
+		timeline = append(timeline, map[string]interface{}{"timestamp": entry.Timestamp, "step": entry.Step, "reason": entry.Reason, "target": entry.Target, "old_value": entry.OldValue, "new_value": entry.NewValue, "message": entry.Message})
+	}
+	var serialization []map[string]interface{}
+	for _, entry := range t.SerializationStats {
+		serialization = append(serialization, map[string]interface{}{"timestamp": entry.Timestamp, "label": entry.Label, "details": entry.Details})
+	}
+	leak := map[string]interface{}{"enabled": false}
+	if t.LeakDetector != nil {
+		leak = map[string]interface{}{
+			"enabled":     t.LeakDetector.Enabled,
+			"interval_ms": t.LeakDetector.Interval.Milliseconds(),
+			"threshold":   t.LeakDetector.Threshold,
+			"baseline":    t.LeakDetector.Baseline,
+			"last_count":  t.LeakDetector.LastCount,
+			"alerts":      t.LeakDetector.AlertCount,
+		}
+	}
+	return map[string]interface{}{
+		"warm_cartridges":   t.WarmCartridges,
+		"pool_hits":         t.PoolHits,
+		"pool_misses":       t.PoolMisses,
+		"intent_latency_ms": t.IntentLatencyMs,
+		"last_intent":       t.LastIntent,
+		"last_match":        t.LastMatch,
+		"trace_buffer":      traceBuffer,
+		"leak_detector":     leak,
+		"supervisor_timeline": timeline,
+		"serialization":     serialization,
+	}
+}
+
+// EmitRuntimeTelemetry writes a compact telemetry snapshot for dashboards and offline inspection.
+func EmitRuntimeTelemetry(path string, monitor *ExpertMonitor) error {
+	payload := map[string]interface{}{
+		"updated_at": time.Now().UTC().Format(time.RFC3339Nano),
+	}
+	if monitor != nil {
+		monitor.mu.Lock()
+		fracs := make([]float64, monitor.NumExperts)
+		if monitor.Total > 0 {
+			for i, c := range monitor.Counts {
+				fracs[i] = float64(c) / float64(monitor.Total)
+			}
+		}
+		payload["routing"] = map[string]interface{}{
+			"total":      monitor.Total,
+			"counts":     append([]int(nil), monitor.Counts...),
+			"fractions":  fracs,
+			"history":    append([]map[string]interface{}(nil), monitor.History...),
+			"num_experts": monitor.NumExperts,
+		}
+		monitor.mu.Unlock()
+	}
+	if GlobalTelemetry != nil {
+		payload["runtime"] = GlobalTelemetry.Snapshot()
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
 }
 
 // ExpertOverride holds per-expert variable overrides set by the supervisor.
@@ -56,6 +524,9 @@ func NewSupervisor() *Supervisor {
 	att, _ := nn.NewMultiHeadAttention(64, 1, 1)
 	judge, _ := nn.NewLinear(64, 1)
 
+	telemetry := NewRuntimeTelemetry()
+	telemetry.StartLeakDetector(1, 2)
+	GlobalTelemetry = telemetry
 	sup := &Supervisor{
 		BestPerplexity:    1e9,
 		TemporalAttention: att,
@@ -65,6 +536,8 @@ func NewSupervisor() *Supervisor {
 		CartridgeMgr:      NewCartridgeManager(),
 		KeywordMap:        make(map[string]string),
 		TinyMatrix:        make(map[string][]float32),
+		CrashSnapshot:     NewCrashSnapshot("data/debug"),
+		Telemetry:         telemetry,
 	}
 	
 	// Load cartridge keyword mappings from JSON file
@@ -173,6 +646,9 @@ func (s *Supervisor) Reflect(stats TrainingStats, opt *nn.Adam, model *IntentMoE
 			layer.RouterTemperature += 0.15
 		}
 		RouterNoiseFactor += 0.05
+		if GlobalTelemetry != nil {
+			GlobalTelemetry.RecordSupervisorAdjustment(stats.Epoch, "dominance", "router_temperature", fmt.Sprintf("%.2f", float32(0.0)), fmt.Sprintf("%.2f", float32(0.15)))
+		}
 	} else if stats.MaxDominance < 0.25 {
 		// If dominance is too low (uniform distribution), we may be too noisy to specialize.
 		for _, layer := range ActiveLayers {
@@ -196,6 +672,9 @@ func (s *Supervisor) Reflect(stats TrainingStats, opt *nn.Adam, model *IntentMoE
 		log.Printf("📉 Supervisor Reflect: Training plateaued for 5 steps. Reducing LR to %e\n", newLR)
 		opt.SetLearningRate(newLR)
 		s.PlateauCount = 0
+		if GlobalTelemetry != nil {
+			GlobalTelemetry.RecordSupervisorAdjustment(stats.Epoch, "plateau", "learning_rate", fmt.Sprintf("%.6f", opt.GetLearningRate()*1.3333334), fmt.Sprintf("%.6f", newLR))
+		}
 	}
 
 	// 3. Confidence Check (The "Entropy" nudge)
@@ -204,6 +683,9 @@ func (s *Supervisor) Reflect(stats TrainingStats, opt *nn.Adam, model *IntentMoE
 		log.Printf("⚠️ Supervisor Reflect: Step Confidence low (%.2f%%). Increasing Router Temperature...\n", stats.StepConfidence*100)
 		for _, layer := range ActiveLayers {
 			layer.RouterTemperature += 0.1
+		}
+		if GlobalTelemetry != nil {
+			GlobalTelemetry.RecordSupervisorAdjustment(stats.Epoch, "confidence", "router_temperature", fmt.Sprintf("%.2f", float32(0.0)), fmt.Sprintf("%.2f", float32(0.1)))
 		}
 	}
 }

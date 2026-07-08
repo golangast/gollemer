@@ -5,6 +5,66 @@ import (
 	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
 )
 
+func TestRuntimeTelemetryTraceBuffer(t *testing.T) {
+	rt := NewRuntimeTelemetry()
+	rt.RecordTrace("router", "dispatch", map[string]interface{}{"expert": 2})
+
+	snap := rt.TraceSnapshot()
+	if len(snap) != 1 {
+		t.Fatalf("expected one trace event, got %d", len(snap))
+	}
+	if snap[0].Category != "router" {
+		t.Fatalf("expected router category, got %q", snap[0].Category)
+	}
+	if snap[0].Message != "dispatch" {
+		t.Fatalf("expected dispatch message, got %q", snap[0].Message)
+	}
+}
+
+func TestRuntimeTelemetryLeakDetector(t *testing.T) {
+	rt := NewRuntimeTelemetry()
+	rt.StartLeakDetector(1, 2)
+	defer rt.StopLeakDetector()
+	if rt.LeakDetector == nil {
+		t.Fatal("expected leak detector to be initialized")
+	}
+	if !rt.LeakDetector.Enabled {
+		t.Fatal("expected leak detector to be enabled")
+	}
+}
+
+func TestRuntimeTelemetryMathSandbox(t *testing.T) {
+	rt := NewRuntimeTelemetry()
+	result := rt.RunMathSandbox("sanity", 2, 2, 2)
+	if result == nil {
+		t.Fatal("expected sandbox result")
+	}
+	if result["match"] != true {
+		t.Fatalf("expected SIMD and fallback to match, got %#v", result)
+	}
+}
+
+func TestRuntimeTelemetrySupervisorTimeline(t *testing.T) {
+	rt := NewRuntimeTelemetry()
+	rt.RecordSupervisorAdjustment(500, "plateau", "lr", "0.001", "0.002")
+	entries := rt.SupervisorTimeline()
+	if len(entries) != 1 {
+		t.Fatalf("expected one supervisor adjustment, got %d", len(entries))
+	}
+	if entries[0].Reason != "plateau" {
+		t.Fatalf("expected plateau reason, got %q", entries[0].Reason)
+	}
+}
+
+func TestRuntimeTelemetrySerializationMetrics(t *testing.T) {
+	rt := NewRuntimeTelemetry()
+	rt.RecordSerializationMetrics("checkpoint", map[string]interface{}{"alloc_delta": 128})
+	stats := rt.SerializationSnapshot()
+	if stats == nil || stats.Label != "checkpoint" {
+		t.Fatalf("expected checkpoint snapshot, got %#v", stats)
+	}
+}
+
 func TestSupervisor_Interventions(t *testing.T) {
 	// Initialize a small vocabulary
 	vocab := mainvocab.NewVocabulary()

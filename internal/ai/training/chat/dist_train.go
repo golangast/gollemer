@@ -108,6 +108,9 @@ func handleWorkerSync(conn net.Conn, wg *sync.WaitGroup, model *moe.IntentMoE) {
 
 		// Average weights
 		syncMutex.Lock()
+		if moe.GlobalTelemetry != nil {
+			moe.GlobalTelemetry.RecordPoolHit()
+		}
 		params := model.Parameters()
 		idx := 0
 		for _, p := range params {
@@ -125,6 +128,7 @@ func handleWorkerSync(conn net.Conn, wg *sync.WaitGroup, model *moe.IntentMoE) {
 
 		// Send ACK
 		ack := []byte("OK")
+		_ = moe.EmitRuntimeTelemetry("logs/telemetry.json", nil)
 		conn.Write(ack)
 	}
 }
@@ -180,6 +184,7 @@ func SyncWithMaster(model *moe.IntentMoE, masterAddr string) {
 
 	// Wait for ACK
 	ack := make([]byte, 2)
+	_ = moe.EmitRuntimeTelemetry("logs/telemetry.json", nil)
 	if _, err := io.ReadFull(conn, ack); err != nil {
 		log.Printf("⚠️  [Distributed] Worker failed to receive ACK from master: %v", err)
 		workerConn.Close()
