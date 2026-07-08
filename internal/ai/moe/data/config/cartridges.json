@@ -1,0 +1,11 @@
+{
+  "code": "data/models/intents/coding.cartridge",
+  "database": "data/models/intents/database.cartridge",
+  "doctor": "data/models/intents/medical.cartridge",
+  "git": "data/models/intents/coding.cartridge",
+  "go test": "data/models/intents/coding.cartridge",
+  "health": "data/models/intents/medical.cartridge",
+  "medical": "data/models/intents/medical.cartridge",
+  "query": "data/models/intents/database.cartridge",
+  "sql": "data/models/intents/database.cartridge"
+}

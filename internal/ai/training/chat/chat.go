@@ -1658,6 +1658,9 @@ skipCSV:
 
 				// Loss Protection
 				if math.IsNaN(float64(totalLoss)) || math.IsInf(float64(totalLoss), 0) {
+					snapshotPath := filepath.Join(projectRoot, "logs", "crash_snapshot.json")
+					_ = epochMonitor.Snapshot(snapshotPath)
+					_ = moe.EmitRuntimeTelemetry(filepath.Join(projectRoot, "logs", "telemetry.json"), epochMonitor)
 					log.Fatalf(" Loss exploded to NaN/Inf at epoch %d, batch %d. Stopping training.", epoch, batches)
 				}
 
@@ -1674,6 +1677,8 @@ skipCSV:
 						for i, layer := range allBatchLayers {
 							moe.PrintExpertHeatmap(fmt.Sprintf("L%d E0", i), layer.Experts[0], float32(0.05))
 						}
+						log.Printf("\n%s", epochMonitor.HeatmapASCII(fmt.Sprintf("routing-epoch-%d-batch-%d", epoch, batches)))
+						_ = moe.EmitRuntimeTelemetry(filepath.Join(projectRoot, "logs", "telemetry.json"), epochMonitor)
 					}
 				}
 

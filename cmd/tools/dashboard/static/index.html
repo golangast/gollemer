@@ -246,6 +246,21 @@ canvas{display:block;width:100%!important;flex:1;}
     <!-- ── Dedicated AI Doctor Diagnostic Banner ── -->
     <div id="diag-banner" style="display:none; flex-direction:column; gap:8px; background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom: -4px; box-shadow:0 4px 6px rgba(0,0,0,0.3);"></div>
 
+    <!-- ── MoE Observability ── -->
+    <div class="card">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;width:100%;">
+        <div><span class="icon">🧭</span>MoE Observability</div>
+        <button class="btn btn-sm" style="background:var(--surface2);border:1px solid var(--border);color:var(--text)" onclick="runMathSandbox()">🧪 Sandbox</button>
+      </div>
+      <div id="obs-summary" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;"></div>
+      <div id="heatmap" style="margin-top:4px;"></div>
+      <div id="telemetry-grid" style="margin-top:8px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;"></div>
+      <div id="supervisor-timeline" style="margin-top:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.72rem;color:var(--muted);"></div>
+      <div id="serialization-metric" style="margin-top:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.72rem;color:var(--muted);"></div>
+      <div id="sandbox-result" style="margin-top:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.72rem;color:var(--muted);"></div>
+      <div id="sv-feed" style="margin-top:10px;max-height:220px;overflow-y:auto;"></div>
+    </div>
+
     <!-- ── Test Saved Model ── -->
     <div class="card">
       <div class="card-title"><span class="icon">🧪</span>Test Current Saved Model</div>
@@ -660,6 +675,8 @@ function render() {
   drawLossAndLRChart(hist);
   drawLBChart(hist);
 
+  renderTelemetrySummary(state.telemetry || {});
+
   // Expert heatmap
   drawHeatmap(state.utilization || [], state.supervisor_events || []);
 
@@ -886,6 +903,81 @@ function drawLossAndLRChart(hist) {
 
 function drawLBChart(hist) {
   drawLineChart('chart-lb', hist.map(p => p.lb_loss), '#8b5cf6', 'LB Loss', true);
+}
+
+async function runMathSandbox() {
+  const out = document.getElementById('sandbox-result');
+  if (!out) return;
+  out.textContent = 'Running sandbox…';
+  try {
+    const res = await fetch('/api/diagnostics', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({action: 'sandbox', label: 'dashboard'})
+    });
+    const data = await res.json();
+    const sandbox = data && data.sandbox ? data.sandbox : {};
+    const match = sandbox.match ? '✅ Match' : '⚠️ Drift';
+    const detail = sandbox.error ? `Error: ${sandbox.error}` : `Rows ${sandbox.rows_a ?? '—'}x${sandbox.shared ?? '—'}x${sandbox.cols_b ?? '—'} • ${match}`;
+    out.innerHTML = `<div style="font-weight:600;color:${sandbox.match ? 'var(--green)' : 'var(--yellow)'};">${detail}</div>`;
+  } catch (err) {
+    out.textContent = 'Sandbox unavailable: ' + err.message;
+  }
+}
+
+function renderTelemetrySummary(telemetry) {
+  const el = document.getElementById('obs-summary');
+  const grid = document.getElementById('telemetry-grid');
+  if (!el || !grid) return;
+  const runtime = telemetry && telemetry.runtime ? telemetry.runtime : {};
+  const routing = telemetry && telemetry.routing ? telemetry.routing : {};
+  const leak = runtime.leak_detector || {};
+  const trace = runtime.trace_buffer || [];
+  const timeline = runtime.supervisor_timeline || [];
+  const serialization = runtime.serialization || [];
+  const chips = [
+    `<span class="badge badge-ok">Warm Cartridges: ${runtime.warm_cartridges ?? '—'}</span>`,
+    `<span class="badge badge-cool">Pool Hits: ${runtime.pool_hits ?? '—'}</span>`,
+    `<span class="badge badge-warn">Pool Misses: ${runtime.pool_misses ?? '—'}</span>`,
+    `<span class="badge badge-hot">Intent Latency: ${runtime.intent_latency_ms != null ? runtime.intent_latency_ms.toFixed(2) + 'ms' : '—'}</span>`,
+    `<span class="badge ${leak.enabled ? 'badge-hot' : 'badge-ok'}">Leak Detector: ${leak.enabled ? 'On' : 'Off'}</span>`
+  ];
+  el.innerHTML = chips.join('');
+  const rows = [
+    ['Routing Total', routing.total ?? '—'],
+    ['Experts', routing.num_experts ?? '—'],
+    ['Last Intent', runtime.last_intent || '—'],
+    ['Last Match', runtime.last_match || '—'],
+    ['Trace Events', trace.length],
+    ['Goroutine Drift', leak.enabled ? `${leak.last_count ?? '—'} (base ${leak.baseline ?? '—'})` : '—']
+  ];
+  grid.innerHTML = rows.map(([k,v]) => `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.72rem;"><div style="color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:2px;">${k}</div><div style="font-family:var(--mono);font-weight:600;color:var(--text);">${v}</div></div>`).join('');
+
+  const timelineEl = document.getElementById('supervisor-timeline');
+  if (timelineEl) {
+    if (!timeline.length) {
+      timelineEl.innerHTML = '<div style="color:var(--muted);">No supervisor adjustments yet.</div>';
+    } else {
+      const items = timeline.slice().reverse().map(entry => {
+        const step = entry.step != null ? `Step ${entry.step}` : 'Step —';
+        return `<div style="padding:6px 0;border-bottom:1px solid var(--border);"><div style="color:var(--cyan);font-weight:600;">${step}</div><div>${entry.message || `${entry.target}: ${entry.new_value}`}</div><div style="color:var(--muted);font-size:0.68rem;">${entry.reason || 'adjustment'}</div></div>`;
+      }).join('');
+      timelineEl.innerHTML = `<div style="font-weight:600;color:var(--text);margin-bottom:6px;">Supervisor Genealogy</div>${items}`;
+    }
+  }
+
+  const serializationEl = document.getElementById('serialization-metric');
+  if (serializationEl) {
+    const latest = serialization.length ? serialization[serialization.length - 1] : null;
+    if (!latest) {
+      serializationEl.innerHTML = '<div style="color:var(--muted);">No serializer activity yet.</div>';
+    } else {
+      const details = latest.details || {};
+      const allocDelta = details.alloc_delta != null ? `${details.alloc_delta} B` : '—';
+      const heapDelta = details.heap_delta != null ? `${details.heap_delta} B` : '—';
+      serializationEl.innerHTML = `<div style="font-weight:600;color:var(--text);margin-bottom:6px;">GOB / Checkpoint Serialization</div><div>${latest.label || 'serialization'} • alloc Δ ${allocDelta} • heap Δ ${heapDelta}</div><div style="color:var(--muted);font-size:0.68rem;">heap ${details.heap_in_use != null ? details.heap_in_use + ' B' : '—'} • gc ${details.num_gc != null ? details.num_gc : '—'}</div>`;
+    }
+  }
 }
 
 // ── Expert Heatmap ─────────────────────────────────────────────────────

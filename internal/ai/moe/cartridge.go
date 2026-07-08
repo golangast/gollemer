@@ -83,8 +83,16 @@ func (cm *CartridgeManager) loop() {
 			if _, exists := cm.Loaded[req.Path]; exists {
 				cm.markUsed(req.Path)
 				cm.mu.Unlock()
+				if GlobalTelemetry != nil {
+					GlobalTelemetry.RecordPoolHit()
+					GlobalTelemetry.RecordTrace("cartridge", "pool_hit", map[string]interface{}{"path": req.Path})
+				}
 				req.Response <- nil
 				continue
+			}
+			if GlobalTelemetry != nil {
+				GlobalTelemetry.RecordPoolMiss()
+				GlobalTelemetry.RecordTrace("cartridge", "pool_miss", map[string]interface{}{"path": req.Path})
 			}
 			cm.mu.Unlock()
 
@@ -106,6 +114,11 @@ func (cm *CartridgeManager) loop() {
 			cm.markUsed(req.Path)
 			cm.evictLRU()
 			cm.mu.Unlock()
+			if GlobalTelemetry != nil {
+				GlobalTelemetry.SetWarmCartridges(len(cm.Loaded))
+				GlobalTelemetry.RecordTrace("cartridge", "loaded", map[string]interface{}{"path": req.Path, "warm": len(cm.Loaded)})
+			}
+			_ = EmitRuntimeTelemetry("logs/telemetry.json", nil)
 			log.Printf("🎮 Cartridge Manager: Loaded cartridge %s into RAM.", req.Path)
 			req.Response <- nil
 		case "unload":
@@ -120,6 +133,11 @@ func (cm *CartridgeManager) loop() {
 				log.Printf("🎮 Cartridge Manager: UnLoaded cartridge %s from RAM. Context paged out.", req.Path)
 			}
 			cm.mu.Unlock()
+			if GlobalTelemetry != nil {
+				GlobalTelemetry.SetWarmCartridges(len(cm.Loaded))
+				GlobalTelemetry.RecordTrace("cartridge", "unloaded", map[string]interface{}{"path": req.Path, "warm": len(cm.Loaded)})
+			}
+			_ = EmitRuntimeTelemetry("logs/telemetry.json", nil)
 			req.Response <- nil
 		}
 	}
