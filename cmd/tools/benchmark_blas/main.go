@@ -21,11 +21,7 @@ func main() {
 	}
 
 	start := time.Now()
-	err := tensor.GoffiMatMul(a, b, c, m, n, k)
-	if err != nil {
-		fmt.Printf("❌ GoffiMatMul failed: %v\n", err)
-		return
-	}
+	tensor.MatMulRaw(a, b, c, m, n, k)
 	duration := time.Since(start)
 
 	gflops := float64(2*m*n*k) / duration.Seconds() / 1e9

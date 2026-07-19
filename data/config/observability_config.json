@@ -1,0 +1,96 @@
+{
+  "token_categories": [
+    {
+      "name": "Structural Words",
+      "color": "#6366f1",
+      "description": "Grammar anchors: articles, prepositions, conjunctions",
+      "keywords": [
+        "the", "a", "an", "is", "are", "am", "be", "been", "being",
+        "to", "and", "or", "of", "in", "at", "on", "by", "from", "for",
+        "as", "with", "that", "this", "these", "those", "it", "its", "which",
+        "who", "what", "when", "where", "why", "how", "all", "each", "every",
+        "some", "any", "both", "either", "neither", "nor", "so", "but"
+      ]
+    },
+    {
+      "name": "Core Verbs",
+      "color": "#ec4899",
+      "description": "Primary action words and auxiliaries",
+      "keywords": [
+        "make", "go", "run", "do", "get", "set", "see", "come", "take",
+        "use", "help", "turn", "call", "ask", "need", "find", "try", "show",
+        "give", "know", "think", "tell", "put", "say", "leave", "feel", "let",
+        "write", "read", "work", "happen", "follow", "play", "open", "close",
+        "start", "stop", "move", "stay", "sit", "stand", "walk", "run", "jump"
+      ]
+    },
+    {
+      "name": "Technical Terms",
+      "color": "#f59e0b",
+      "description": "Computing and programming domain vocabulary",
+      "keywords": [
+        "file", "directory", "command", "script", "code", "function", "class",
+        "module", "import", "export", "program", "process", "system", "kernel",
+        "memory", "cpu", "gpu", "storage", "cache", "buffer", "queue", "stack",
+        "array", "list", "dictionary", "object", "interface", "library", "api",
+        "database", "table", "query", "index", "server", "client", "network",
+        "git", "commit", "branch", "merge", "push", "pull", "clone", "patch",
+        "debug", "test", "build", "compile", "link", "execute", "parse", "render",
+        "algorithm", "data", "structure", "variable", "constant", "parameter",
+        "return", "yield", "catch", "throw", "try", "except", "finally"
+      ]
+    },
+    {
+      "name": "Punctuation",
+      "color": "#8b5cf6",
+      "description": "Sentence structure and formatting symbols",
+      "keywords": [
+        ".", ",", "!", "?", ":", ";", "-", "--", "---",
+        "(", ")", "[", "]", "{", "}", "\"", "'", "`", "~",
+        "@", "#", "$", "%", "^", "&", "*", "+", "=", "/", "\\"
+      ]
+    },
+    {
+      "name": "Common Nouns",
+      "color": "#10b981",
+      "description": "Everyday objects and concepts",
+      "keywords": [
+        "thing", "people", "person", "day", "time", "year", "world", "life",
+        "hand", "part", "place", "case", "week", "system", "program", "number",
+        "group", "problem", "fact", "way", "work", "point", "right", "state",
+        "home", "name", "room", "house", "time", "water", "information"
+      ]
+    },
+    {
+      "name": "Semantic Connectors",
+      "color": "#06b6d4",
+      "description": "Words that establish relationships and flow",
+      "keywords": [
+        "because", "therefore", "however", "moreover", "furthermore", "meanwhile",
+        "although", "whereas", "since", "unless", "until", "before", "after",
+        "while", "then", "thus", "also", "instead", "rather", "still", "yet",
+        "so", "such", "too", "only", "just", "even", "actually", "really", "very"
+      ]
+    }
+  ],
+  "observability_settings": {
+    "enable_expert_lexicon": true,
+    "enable_category_loss": true,
+    "enable_weight_velocity": true,
+    "enable_semantic_drift": true,
+    "window_size": 500,
+    "top_k_tokens": 10,
+    "top_k_drifts": 3,
+    "velocity_update_interval": 10,
+    "metrics_refresh_interval_ms": 1000,
+    "history_points_to_keep": 200
+  },
+  "dashboard_settings": {
+    "enable_realtime_update": true,
+    "update_interval_ms": 1000,
+    "show_health_indicators": true,
+    "show_timeseries": true,
+    "chart_animation_duration": 500,
+    "max_expertise_panel_rows": 8
+  }
+}

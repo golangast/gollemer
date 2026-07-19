@@ -27,14 +27,14 @@ func (s *MoEStack) Forward(inputs ...*tensor.Tensor) (*tensor.Tensor, error) {
 	if len(inputs) == 0 {
 		return nil, fmt.Errorf("MoEStack.Forward expects at least 1 input")
 	}
-	
+
 	x := inputs[0]
 	for i, layer := range s.Layers {
 		out, err := layer.Forward(x)
 		if err != nil {
 			return nil, err
 		}
-		
+
 		// Residual: x = x + layer(x) * scale
 		var outScaled *tensor.Tensor
 		if layer.ResidualScale != nil {
@@ -52,7 +52,7 @@ func (s *MoEStack) Forward(inputs ...*tensor.Tensor) (*tensor.Tensor, error) {
 		if err != nil {
 			return nil, fmt.Errorf("MoEStack residual add failed: %w", err)
 		}
-		
+
 		// Apply LayerNorm
 		if i < len(s.Norms) {
 			normed, err := s.Norms[i].Forward(res)
@@ -64,7 +64,7 @@ func (s *MoEStack) Forward(inputs ...*tensor.Tensor) (*tensor.Tensor, error) {
 			x = res
 		}
 	}
-	
+
 	return x, nil
 }
 
@@ -74,7 +74,7 @@ func (s *MoEStack) Backward(grad *tensor.Tensor) error {
 	currGrad := grad
 	for i := len(s.Layers) - 1; i >= 0; i-- {
 		layer := s.Layers[i]
-		
+
 		// Backpropagate through LayerNorm first
 		if i < len(s.Norms) {
 			if err := s.Norms[i].Backward(currGrad); err != nil {
@@ -87,13 +87,13 @@ func (s *MoEStack) Backward(grad *tensor.Tensor) error {
 		layerGrad := currGrad
 		if layer.ResidualScale != nil {
 			layerGrad, _ = currGrad.MulScalar(layer.ResidualScale.Data[0])
-			
+
 			// Gradient w.r.t. ResidualScale: dot(currGrad, layerOutput)
 			if layer.ResidualScale.RequiresGrad {
 				if layer.ResidualScale.Grad == nil {
 					layer.ResidualScale.Grad = tensor.NewTensor(layer.ResidualScale.Shape, make([]float32, 1), false)
 				}
-				
+
 				stack := layer.GetStateStack()
 				if len(stack) > 0 {
 					lastOutput := stack[len(stack)-1].lastOutput
@@ -110,19 +110,19 @@ func (s *MoEStack) Backward(grad *tensor.Tensor) error {
 		if err := layer.Backward(layerGrad); err != nil {
 			return err
 		}
-		
+
 		if len(layer.Inputs()) == 0 {
 			continue
 		}
-		
+
 		input := layer.Inputs()[0]
 		if input.Grad == nil {
 			input.Grad = tensor.NewTensor(input.Shape, make([]float32, len(input.Data)), false)
 		}
-		
+
 		// Accumulate residual gradient
 		tensor.AddAccumulate(input.Grad.Data, currGrad.Data)
-		
+
 		currGrad = input.Grad
 	}
 	return nil

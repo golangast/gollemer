@@ -1,1 +1,2 @@
-2026/07/03 23:57:07 🖥️  Gollemer Dashboard → http://localhost:8765  (root=.)
+2026/07/12 18:16:23 main.go:664: 🧭 Observability backend already available at http://localhost:8080
+2026/07/12 18:16:23 main.go:334: 🖥️  Dashboard → http://localhost:8765 (enhanced observability UI)

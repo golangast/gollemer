@@ -16,6 +16,7 @@ import (
 	"math"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -23,14 +24,12 @@ import (
 )
 
 const (
-	sampleRate  = 16000
-	frameSize   = 400
-	recordSecs  = "3.5"
-	numSamples  = sampleRate * 3 // must match voice.go AudioWindow capacity logic
-	modelPath   = "models/audio_gru.json"
-	datasetDir  = "dataset/audio"
-	whisperBin  = "/tmp/whisper.cpp/build/bin/whisper-cli"
-	whisperModel = "/tmp/whisper.cpp/models/ggml-tiny.en.bin"
+	sampleRate = 16000
+	frameSize  = 400
+	recordSecs = "3.5"
+	numSamples = sampleRate * 3 // must match voice.go AudioWindow capacity logic
+	modelPath  = "models/audio_gru.json"
+	datasetDir = "dataset/audio"
 )
 
 // computeEmbedding reads a raw s16le file and returns the GRU motion vector.
@@ -102,6 +101,79 @@ func cosineSim(a, b []float32) float32 {
 	return float32(dot / (math.Sqrt(na) * math.Sqrt(nb)))
 }
 
+func findWhisperBinaryAndModel() (string, string, error) {
+	var checked []string
+	if envBin := os.Getenv("WHISPER_CLI_BIN"); envBin != "" {
+		checked = append(checked, envBin)
+		if _, err := os.Stat(envBin); err == nil {
+			if envModel := os.Getenv("WHISPER_MODEL_PATH"); envModel != "" {
+				checked = append(checked, envModel)
+				return envBin, envModel, nil
+			}
+			if modelPath, ok := resolveWhisperModelPath(envBin); ok {
+				return envBin, modelPath, nil
+			}
+		}
+	}
+
+	candidateBins := []string{
+		filepath.Join("build_whisper", "whisper.cpp", "build", "bin", "whisper-cli"),
+		filepath.Join("build_whisper", "whisper.cpp", "build", "bin", "whisper"),
+		filepath.Join("build_whisper", "whisper.cpp", "build", "bin", "main"),
+		"/tmp/whisper.cpp/build/bin/whisper-cli",
+		"/tmp/whisper.cpp/build/bin/whisper",
+		"/tmp/whisper.cpp/build/bin/main",
+	}
+
+	for _, bin := range candidateBins {
+		checked = append(checked, bin)
+		if _, err := os.Stat(bin); err == nil {
+			if modelPath, ok := resolveWhisperModelPath(bin); ok {
+				return bin, modelPath, nil
+			}
+		}
+	}
+
+	for _, binaryName := range []string{"whisper-cli", "whisper", "main"} {
+		if bin, err := exec.LookPath(binaryName); err == nil {
+			checked = append(checked, bin)
+			if modelPath, ok := resolveWhisperModelPath(bin); ok {
+				return bin, modelPath, nil
+			}
+		}
+	}
+
+	return "", "", fmt.Errorf("whisper binary/model not found; checked: %s; set WHISPER_CLI_BIN and WHISPER_MODEL_PATH to override; or run build_voice.sh to build whisper.cpp and download ggml-tiny.en.bin", strings.Join(checked, ", "))
+}
+
+func resolveWhisperModelPath(bin string) (string, bool) {
+	candidateModels := []string{
+		filepath.Join(filepath.Dir(bin), "models", "ggml-tiny.en.bin"),
+		filepath.Join(filepath.Dir(bin), "..", "models", "ggml-tiny.en.bin"),
+		filepath.Join(filepath.Dir(filepath.Dir(bin)), "..", "models", "ggml-tiny.en.bin"),
+		filepath.Join(filepath.Dir(filepath.Dir(filepath.Dir(bin))), "models", "ggml-tiny.en.bin"),
+		filepath.Join("build_whisper", "whisper.cpp", "models", "ggml-tiny.en.bin"),
+		filepath.Join("models", "ggml-tiny.en.bin"),
+		filepath.Join("/tmp", "whisper.cpp", "models", "ggml-tiny.en.bin"),
+	}
+
+	if home, err := os.UserHomeDir(); err == nil {
+		candidateModels = append(candidateModels,
+			filepath.Join(home, ".cache", "whisper", "ggml-tiny.en.bin"),
+			filepath.Join(home, ".cache", "whisper.cpp", "ggml-tiny.en.bin"),
+			filepath.Join(home, ".cache", "whisper.cpp", "models", "ggml-tiny.en.bin"),
+		)
+	}
+
+	for _, modelPath := range candidateModels {
+		modelPath = filepath.Clean(modelPath)
+		if _, err := os.Stat(modelPath); err == nil {
+			return modelPath, true
+		}
+	}
+	return "", false
+}
+
 func main() {
 	fmt.Println("🎓 Gollemer Whisper Teacher — Knowledge Distillation Mode")
 	fmt.Println("==========================================================")
@@ -110,13 +182,9 @@ func main() {
 	fmt.Println()
 
 	// Sanity-check whisper
-	if _, err := os.Stat(whisperBin); os.IsNotExist(err) {
-		fmt.Println("❌ Whisper binary not found at", whisperBin)
-		fmt.Println("   Ensure /tmp/whisper.cpp has been built first.")
-		os.Exit(1)
-	}
-	if _, err := os.Stat(whisperModel); os.IsNotExist(err) {
-		fmt.Println("❌ Whisper model not found at", whisperModel)
+	whisperBin, whisperModel, err := findWhisperBinaryAndModel()
+	if err != nil {
+		fmt.Println("❌", err)
 		os.Exit(1)
 	}
 

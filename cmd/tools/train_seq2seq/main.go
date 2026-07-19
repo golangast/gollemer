@@ -83,7 +83,7 @@ func main() {
 	}
 
 	// Optimizer
-	optimizer := nn.NewOptimizer(model.Parameters(), *learningRate, 0.0)
+	optimizer := nn.NewOptimizer(model.Parameters(), float32(*learningRate), 0.0)
 
 	log.Println("Starting training...")
 	for epoch := 0; epoch < *epochs; epoch++ {
@@ -93,7 +93,7 @@ func main() {
 			data[i], data[j] = data[j], data[i]
 		})
 
-		totalLoss := 0.0
+		totalLoss := float32(0.0)
 		numBatches := (len(data) + *batchSize - 1) / *batchSize
 
 		for i := range numBatches {
@@ -124,14 +124,14 @@ func main() {
 			totalLoss += loss.Data[0]
 
 			// Backward pass
-			if err := loss.Backward(tensor.NewTensor([]int{1}, []float64{1.0}, false)); err != nil {
+			if err := loss.Backward(tensor.NewTensor([]int{1}, []float32{1.0}, false)); err != nil {
 				log.Fatalf("Backward pass failed: %v", err)
 			}
 
 			// Update weights
 			optimizer.Step()
 		}
-		log.Printf("Epoch %d Loss: %.4f", epoch+1, totalLoss/float64(numBatches))
+		log.Printf("Epoch %d Loss: %.4f", epoch+1, float64(totalLoss)/float64(numBatches))
 	}
 
 	log.Printf("Training complete. Saving model to %s", *modelSavePath)
@@ -198,18 +198,18 @@ func prepareBatch(batch []CommandData, inputVocab, outputVocab *vocab.Vocabulary
 	}
 
 	// Convert to Tensors
-	inputTensorData := make([]float64, batchSize*maxSeqLen)
+	inputTensorData := make([]float32, batchSize*maxSeqLen)
 	for i, seq := range inputIDsBatch {
 		for j, id := range seq {
-			inputTensorData[i*maxSeqLen+j] = float64(id)
+			inputTensorData[i*maxSeqLen+j] = float32(id)
 		}
 	}
 	inputTensor := tensor.NewTensor([]int{batchSize, maxSeqLen}, inputTensorData, true)
 
-	targetTensorData := make([]float64, batchSize*maxSeqLen)
+	targetTensorData := make([]float32, batchSize*maxSeqLen)
 	for i, seq := range targetIDsBatch {
 		for j, id := range seq {
-			targetTensorData[i*maxSeqLen+j] = float64(id)
+			targetTensorData[i*maxSeqLen+j] = float32(id)
 		}
 	}
 	targetTensor := tensor.NewTensor([]int{batchSize, maxSeqLen}, targetTensorData, true)
@@ -261,7 +261,7 @@ func calculateLoss(predictions, targets *tensor.Tensor, paddingID int) (*tensor.
 
 	// Negative Log Likelihood
 	losses := []*tensor.Tensor{}
-	numTokens := 0.0
+	numTokens := float32(0.0)
 
 	for i := 0; i < batchSize*seqLen; i++ {
 		targetID := int(targetsFlat.Data[i])
@@ -281,7 +281,7 @@ func calculateLoss(predictions, targets *tensor.Tensor, paddingID int) (*tensor.
 	}
 
 	if numTokens == 0 {
-		return tensor.NewTensor([]int{1}, []float64{0.0}, false), nil // No valid tokens, loss is 0
+		return tensor.NewTensor([]int{1}, []float32{0.0}, false), nil // No valid tokens, loss is 0
 	}
 
 	// Sum all losses
@@ -294,7 +294,7 @@ func calculateLoss(predictions, targets *tensor.Tensor, paddingID int) (*tensor.
 	}
 
 	// Negate and calculate mean loss
-	meanLoss, err := totalLoss.MulScalar(-1.0 / numTokens)
+	meanLoss, err := totalLoss.MulScalar(float32(-1.0) / numTokens)
 	if err != nil {
 		return nil, fmt.Errorf("failed to calculate mean loss: %w", err)
 	}

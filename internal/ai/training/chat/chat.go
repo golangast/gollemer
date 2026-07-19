@@ -2554,6 +2554,7 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 	}
 	// Dynamic Resizing for Vocab consistency in social model
 	newVocabSize := sentenceVocab.Size()
+	log.Printf(" Vocab size: %d tokens", newVocabSize)
 	if newVocabSize != intentModel.SentenceVocabSize {
 		intentModel.Decoder.ResizeOutputLayer(newVocabSize)
 		intentModel.SentenceVocabSize = newVocabSize
@@ -2561,6 +2562,11 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 	if intentModel.Embedding != nil && newVocabSize != intentModel.Embedding.VocabSize {
 		intentModel.ResizeEmbeddings(newVocabSize)
 	}
+	// Both ResizeOutputLayer and ResizeEmbeddings allocate NEW tensors while
+	// the old ones are still in scope. Force GC + OS page return immediately
+	// so those old tensors are freed before the next allocation wave.
+	runtime.GC()
+	debug.FreeOSMemory()
 
 	// Set special token IDs (redundant but safe)
 	sentenceVocab.BosID = sentenceVocab.GetTokenID("<s>")
@@ -2572,6 +2578,28 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 	intentModel.SanitizeControlTokens()
 
 	moe.ActiveLayers = findMoELayers(intentModel)
+
+	// Force GC and return freed pages to OS before allocating observability
+	// structures and the optimizer. The gzip decoder and architecture-repair
+	// temporaries can hold several hundred MB of garbage at this point.
+	runtime.GC()
+	debug.FreeOSMemory()
+
+	//  OBSERVABILITY INTEGRATION: Initialize trainer for MoE metrics recording
+	trainer := &moe.Trainer{}
+	numExperts = 8 // Default
+	if len(moe.ActiveLayers) > 0 {
+		numExperts = len(moe.ActiveLayers[0].Experts)
+	}
+	trainer.InitializeObservability(numExperts, 500, sentenceVocab, nil)
+	log.Printf(" MoE Observability initialized: %d experts tracked", numExperts)
+
+	//  START METRICS SERVER: Non-blocking HTTP server for dashboard
+	go func() {
+		metricsPort := ":9090"
+		log.Printf(" Starting MoE Observability metrics server on %s", metricsPort)
+		moe.StartMetricsServer(trainer, sentenceVocab, metricsPort)
+	}()
 
 	// Use iterator-based training (same as TrainChat)
 	// Use config-driven hyperparameters with CLI overrides
@@ -2763,6 +2791,11 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 	overfitMode = overfitMode || config.OverfitMode
 
 	// Create optimizer (Wrapped with Cooling Safety)
+	// Force a full GC before creating the Adam optimizer so any scratch
+	// allocations from vocab expansion, bias nudging and supervisor seeding
+	// are returned to the OS before the first backward pass allocates M/V.
+	runtime.GC()
+	debug.FreeOSMemory()
 	baseOptimizer := neuralnn.NewOptimizer(intentModel.Parameters(), peakLR, float32(weightDecay))
 	optimizer := &neuralnn.CoolingOptimizer{
 		Base: baseOptimizer,
@@ -2853,7 +2886,21 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 	lastSurgeryEpoch := -15 // Track when last surgery happened
 
 	var epochHistory []string
-	for epoch := 0; epoch < epochs; epoch++ {
+	startEpoch := 0
+	if intentModel.Metadata.LastEpoch > 0 {
+		startEpoch = intentModel.Metadata.LastEpoch
+		if startEpoch >= epochs {
+			startEpoch = epochs
+		}
+		log.Printf(" Resuming social training from epoch %d based on checkpoint metadata", startEpoch)
+	} else if intentModel.StepCount > 0 && stepsPerEpoch > 0 {
+		startEpoch = intentModel.StepCount / stepsPerEpoch
+		if startEpoch >= epochs {
+			startEpoch = epochs
+		}
+		log.Printf(" Resuming social training from epoch %d based on step count %d and %d steps/epoch", startEpoch, intentModel.StepCount, stepsPerEpoch)
+	}
+	for epoch := startEpoch; epoch < epochs; epoch++ {
 		config = safeCfg.Get()
 		epochStartTime := time.Now()
 		supervisor.SpawnsThisEpoch = 0
@@ -3031,6 +3078,17 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 		epochLoss := float32(0)
 		batchNum := 0
 
+		// Force OS-level memory reclaim before the forward/backward/step cycle
+		// to maximise headroom for intermediate activation tensors and lazy Adam M/V.
+		runtime.GC()
+		debug.FreeOSMemory()
+		if epoch == startEpoch { // Log once at epoch start for diagnostics
+			var ms runtime.MemStats
+			runtime.ReadMemStats(&ms)
+			log.Printf(" [MEM] Epoch %d start: HeapAlloc=%.1fMB HeapSys=%.1fMB Sys=%.1fMB",
+				epoch+1, float64(ms.HeapAlloc)/1024/1024, float64(ms.HeapSys)/1024/1024, float64(ms.Sys)/1024/1024)
+		}
+
 		for iterator.HasNext() {
 			batch := iterator.NextBatch(batchSize)
 			inputTensor, targetTensor := batch.Input, batch.Target
@@ -3152,6 +3210,7 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 			}
 
 			if err != nil {
+				log.Printf(" ⚠️ Forward pass error (skipping batch): %v", err)
 				continue
 			}
 
@@ -3286,6 +3345,13 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 					avgWeight /= float32(len(batch.Weights))
 					batchLoss *= avgWeight
 				}
+
+				//  OBSERVABILITY: Record expert routing and loss for dashboard metrics
+				expertIDs, tokenIDs := extractExpertRoutingInfo(intentModel, inputTensor, targetTensor)
+				if len(expertIDs) == 0 {
+					log.Printf(" ⚠️ WARNING: extractExpertRoutingInfo returned 0 experts!")
+				}
+				trainer.RecordTrainingStep(expertIDs, tokenIDs, batchLoss)
 
 				// the target's structural category (VERB/AUX expected but NOUN/other predicted).
 				currentBatchSize2 := targetTensor.Shape[0]
@@ -3618,11 +3684,11 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 						g.Release()
 					}
 				}
-				if inputTensor != nil {
-					inputTensor.Release()
+				if batch.Input != nil {
+					batch.Input.Release()
 				}
-				if targetTensor != nil {
-					targetTensor.Release()
+				if batch.Target != nil {
+					batch.Target.Release()
 				}
 				if inputMask != nil {
 					inputMask.Release()
@@ -3697,13 +3763,13 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 			} else {
 				ckptPath := filepath.Join(projectRoot, fmt.Sprintf("data/models/gob_models/moe_social_model_step_%d.gob", globalStep))
 				log.Printf(" Saving periodic checkpoint at Step %d...", globalStep)
-				if err := moe.SaveIntentMoECheckpoint(&moe.Checkpoint{Model: intentModel}, ckptPath); err != nil {
+				intentModel.StepCount = globalStep
+				intentModel.Metadata.LastEpoch = epoch + 1
+				if err := moe.SaveIntentMoECheckpoint(&moe.Checkpoint{Model: intentModel, StepCount: globalStep}, ckptPath); err != nil {
 					log.Printf(" Mid-epoch save failed: %v", err)
 				}
 				// Also update the main social model file so restarts pick up latest progress
-				_ = moe.SaveIntentMoECheckpoint(&moe.Checkpoint{Model: intentModel}, socialModelPath)
-
-				//  SAVE VOCABULARY PERIODICALLY as well (Critical Fix)
+				_ = moe.SaveIntentMoECheckpoint(&moe.Checkpoint{Model: intentModel, StepCount: globalStep}, socialModelPath)
 				if intentModel.SentenceVocab != nil {
 					_ = intentModel.SentenceVocab.Save(socialVocabPathFinal)
 				}
@@ -3769,16 +3835,23 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 		// After 100 epochs, we test against the FULL dataset as a Quality Gate
 		currentTestPrompts := testPrompts
 		isFullTest := epoch >= 100
-		if isFullTest {
-			log.Printf(" Epoch %d: Running Full Quality Gate (%d pairs)...", epoch+1, len(trainPairs))
-			currentTestPrompts = nil
-			for _, pair := range trainPairs {
-				intent := pair.Intent
-				if intent == "" {
-					intent = "social"
-				}
-				currentTestPrompts = append(currentTestPrompts, "__intent__ "+intent+" : __ques__ "+pair.Q+" __ans__")
+		runTest := config.AutoTestSave || config.TriggerTest
+		if runTest {
+			if isFullTest {
+				log.Printf(" Epoch %d: Running Full Quality Gate (%d pairs)...", epoch+1, len(trainPairs))
 			}
+			if isFullTest {
+				currentTestPrompts = nil
+				for _, pair := range trainPairs {
+					intent := pair.Intent
+					if intent == "" {
+						intent = "social"
+					}
+					currentTestPrompts = append(currentTestPrompts, "__intent__ "+intent+" : __ques__ "+pair.Q+" __ans__")
+				}
+			}
+		} else if isFullTest {
+			log.Printf(" Epoch %d: Full Quality Gate is configured but tests are disabled. Enable auto_test_save or trigger_test to evaluate progress.", epoch+1)
 		}
 
 		type failedGateCall struct {
@@ -3789,329 +3862,334 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 		var failedGateCalls []failedGateCall
 
 		var testProbeResults []orchestrator.TestProbeResult
-		
-		runTest := config.AutoTestSave || config.TriggerTest
+
 		if runTest {
 
-		for i, p := range currentTestPrompts {
-			// Use shorter maxLen during early training to reduce inference memory.
-			// The KV cache in cross-attention grows with sequence length, so fewer steps = less RAM.
-			testMaxLen := 10
-			if isFullTest {
-				testMaxLen = 15
-			}
-			testVerbose := (i == 0 && (epoch+1)%20 == 0) // Only verbose every 20 epochs
-			response, path, atts := StrictGenerate(intentModel, p, testMaxLen, cfg.RepetitionPenalty, testVerbose, epoch)
+			for i, p := range currentTestPrompts {
+				// Use shorter maxLen during early training to reduce inference memory.
+				// The KV cache in cross-attention grows with sequence length, so fewer steps = less RAM.
+				testMaxLen := 10
+				if isFullTest {
+					testMaxLen = 15
+				}
+				testVerbose := (i == 0 && (epoch+1)%20 == 0) // Only verbose every 20 epochs
+				response, path, atts := StrictGenerate(intentModel, p, testMaxLen, cfg.RepetitionPenalty, testVerbose, epoch)
 
-			// Initial heuristic score calculation
-			heuristicScore := scoreSentenceHeuristic(response)
+				// Initial heuristic score calculation
+				heuristicScore := scoreSentenceHeuristic(response)
 
-			// === OLLAMA TEACHER QUALITY GATE ===
-			// Only call the teacher every 5 epochs to avoid spending ~10s/prompt every epoch.
-			if epoch%5 == 0 {
-				teacherPassed, teacherReason, teacherCorrection := GradeAndCorrectWithTeacher(p, response)
-				if !teacherPassed {
-					heuristicScore = 1.0 // Force a failure so the supervisor penalizes the router
-					if epoch%10 == 0 {
-						if teacherCorrection != "" && teacherCorrection != "N/A" {
-							log.Printf(" 👨‍🏫 Teacher Reject: %s | Fix: '%s'", teacherReason, teacherCorrection)
-						} else {
-							log.Printf(" 👨‍🏫 Teacher Reject: %s", teacherReason)
-						}
-					}
-
-					// Dynamic Curriculum Injection!
-					if teacherCorrection != "" && teacherCorrection != "N/A" {
-
-						// Clean up prompt format before saving as a target
-						cleanP := p
-						if strings.Contains(p, "__ques__ ") {
-							parts := strings.Split(p, "__ques__ ")
-							if len(parts) > 1 {
-								cleanP = strings.TrimSpace(strings.ReplaceAll(parts[1], "__ans__", ""))
+				// === OLLAMA TEACHER QUALITY GATE ===
+				// Only call the teacher every 5 epochs to avoid spending ~10s/prompt every epoch.
+				if epoch%5 == 0 {
+					teacherPassed, teacherReason, teacherCorrection := GradeAndCorrectWithTeacher(p, response)
+					if !teacherPassed {
+						heuristicScore = 1.0 // Force a failure so the supervisor penalizes the router
+						if epoch%10 == 0 {
+							if teacherCorrection != "" && teacherCorrection != "N/A" {
+								log.Printf(" 👨‍🏫 Teacher Reject: %s | Fix: '%s'", teacherReason, teacherCorrection)
+							} else {
+								log.Printf(" 👨‍🏫 Teacher Reject: %s", teacherReason)
 							}
 						}
 
-						chatPairs = append(chatPairs, moe.TrainPair{Q: cleanP, A: teacherCorrection, Intent: "social"})
-					}
-				} else {
-					if epoch%10 == 0 {
-						log.Printf("👨‍🏫 Teacher APPROVED! %s", teacherReason)
-					}
-					heuristicScore += 5.0
-				}
-			}
+						// Dynamic Curriculum Injection!
+						if teacherCorrection != "" && teacherCorrection != "N/A" {
 
-			// --- [TTR & Anchor Word Density Quality Gate] ---
-			respWords := strings.Fields(strings.ToLower(response))
-			ttrFail := false
-			if len(respWords) > 0 {
-				unique := make(map[string]int)
-				hellosCount := 0
-				yesesCount := 0
-				for _, w := range respWords {
-					wTrimmed := strings.Trim(w, ".,!?;:\"'`()[]{}")
-					if wTrimmed == "" {
-						continue
-					}
-					unique[wTrimmed]++
-					if wTrimmed == "hello" || wTrimmed == "hi" || wTrimmed == "hey" || wTrimmed == "greetings" {
-						hellosCount++
-					}
-					if wTrimmed == "yes" || wTrimmed == "yeah" || wTrimmed == "yep" {
-						yesesCount++
+							// Clean up prompt format before saving as a target
+							cleanP := p
+							if strings.Contains(p, "__ques__ ") {
+								parts := strings.Split(p, "__ques__ ")
+								if len(parts) > 1 {
+									cleanP = strings.TrimSpace(strings.ReplaceAll(parts[1], "__ans__", ""))
+								}
+							}
+
+							chatPairs = append(chatPairs, moe.TrainPair{Q: cleanP, A: teacherCorrection, Intent: "social"})
+						}
+					} else {
+						if epoch%10 == 0 {
+							log.Printf("👨‍🏫 Teacher APPROVED! %s", teacherReason)
+						}
+						heuristicScore += 5.0
 					}
 				}
 
-				ttr := float64(len(unique)) / float64(len(respWords))
-
-				// 1. TTR threshold check (if too low, decoder is stuck/repetitive)
-				if len(respWords) >= 8 && ttr < 0.5 {
-					ttrFail = true
-					log.Printf(" ⚠️  Quality Gate REJECTED (TTR too low: %.4f < 0.5 for: '%s')", ttr, response)
-				}
-				// 2. High-frequency social anchor words check:
-				// "If a 15-word response contains 4 hellos and 3 yeses, auto-flag it as a fail regardless of the subject-verb score."
-				// Dynamic scaling for shorter responses as well:
-				if (len(respWords) >= 15 && (hellosCount >= 8 || yesesCount >= 6)) ||
-					(len(respWords) < 15 && len(respWords) >= 5 && (hellosCount >= 6 || yesesCount >= 4)) {
-					ttrFail = true
-					log.Printf(" ⚠️  Quality Gate REJECTED (Social Anchor Density too high: hellos=%d, yeses=%d in %d words for: '%s')", hellosCount, yesesCount, len(respWords), response)
-				}
-			}
-
-			if ttrFail {
-				heuristicScore = 1.0 // Force failure
-
-				// --- [Adaptive Supervisor Intervention on TTR/Anchor Fail] ---
-				intentVal := "social"
-				if strings.HasPrefix(p, "__intent__ ") {
-					parts := strings.SplitN(p, " : __ques__", 2)
-					if len(parts) == 2 {
-						intentVal = strings.TrimSpace(strings.TrimPrefix(parts[0], "__intent__ "))
-					}
-				}
-				failingPair := &moe.TrainPair{Q: p, Intent: intentVal}
-				if strings.Contains(p, "__ques__") {
-					parts := strings.Split(p, "__ques__")
-					if len(parts) > 1 {
-						qPart := strings.TrimSpace(strings.Split(parts[1], "__ans__")[0])
-						failingPair.Q = qPart
-					}
-				}
-
-				failedGateCalls = append(failedGateCalls, failedGateCall{
-					path:        path,
-					score:       0.01,
-					failingPair: failingPair,
-				})
-			}
-
-			testProbeResults = append(testProbeResults, orchestrator.TestProbeResult{
-				Prompt:   p,
-				Response: response,
-				Path:     path,
-			})
-
-			//  STRICT QUALITY GATE: Enforce Subject-Verb Attention Connection
-			// If intent is social and prompt contains "what", "how", "are",
-			// require a threshold connection between subject pronoun and verb.
-			if isFullTest {
-				pLower := strings.ToLower(p)
-				if strings.Contains(pLower, "what") || strings.Contains(pLower, "how") || strings.Contains(pLower, "are") {
-					// Identify subject pronoun index in encoder (prompt)
-					subjectIdx := -1
-					pTokens := cleanTokenize(p)
-					for idx, tok := range pTokens {
-						if moe.MapWordToGrammarType(tok) == "PRON" {
-							subjectIdx = idx
-							break
+				// --- [TTR & Anchor Word Density Quality Gate] ---
+				respWords := strings.Fields(strings.ToLower(response))
+				ttrFail := false
+				if len(respWords) > 0 {
+					unique := make(map[string]int)
+					hellosCount := 0
+					yesesCount := 0
+					for _, w := range respWords {
+						wTrimmed := strings.Trim(w, ".,!?;:\"'`()[]{}")
+						if wTrimmed == "" {
+							continue
+						}
+						unique[wTrimmed]++
+						if wTrimmed == "hello" || wTrimmed == "hi" || wTrimmed == "hey" || wTrimmed == "greetings" {
+							hellosCount++
+						}
+						if wTrimmed == "yes" || wTrimmed == "yeah" || wTrimmed == "yep" {
+							yesesCount++
 						}
 					}
 
-					if subjectIdx != -1 {
-						// Find a verb in the generated response
-						rWords := strings.Split(response, " ")
-						verbStep := -1
-						for idx, w := range rWords {
-							t := moe.MapWordToGrammarType(w)
-							if t == "VERB" || t == "AUX" {
-								verbStep = idx
+					ttr := float64(len(unique)) / float64(len(respWords))
+
+					// 1. TTR threshold check (if too low, decoder is stuck/repetitive)
+					if len(respWords) >= 8 && ttr < 0.5 {
+						ttrFail = true
+						log.Printf(" ⚠️  Quality Gate REJECTED (TTR too low: %.4f < 0.5 for: '%s')", ttr, response)
+					}
+					// 2. High-frequency social anchor words check:
+					// "If a 15-word response contains 4 hellos and 3 yeses, auto-flag it as a fail regardless of the subject-verb score."
+					// Dynamic scaling for shorter responses as well:
+					if (len(respWords) >= 15 && (hellosCount >= 8 || yesesCount >= 6)) ||
+						(len(respWords) < 15 && len(respWords) >= 5 && (hellosCount >= 6 || yesesCount >= 4)) {
+						ttrFail = true
+						log.Printf(" ⚠️  Quality Gate REJECTED (Social Anchor Density too high: hellos=%d, yeses=%d in %d words for: '%s')", hellosCount, yesesCount, len(respWords), response)
+					}
+				}
+
+				if ttrFail {
+					heuristicScore = 1.0 // Force failure
+
+					// --- [Adaptive Supervisor Intervention on TTR/Anchor Fail] ---
+					intentVal := "social"
+					if strings.HasPrefix(p, "__intent__ ") {
+						parts := strings.SplitN(p, " : __ques__", 2)
+						if len(parts) == 2 {
+							intentVal = strings.TrimSpace(strings.TrimPrefix(parts[0], "__intent__ "))
+						}
+					}
+					failingPair := &moe.TrainPair{Q: p, Intent: intentVal}
+					if strings.Contains(p, "__ques__") {
+						parts := strings.Split(p, "__ques__")
+						if len(parts) > 1 {
+							qPart := strings.TrimSpace(strings.Split(parts[1], "__ans__")[0])
+							failingPair.Q = qPart
+						}
+					}
+
+					failedGateCalls = append(failedGateCalls, failedGateCall{
+						path:        path,
+						score:       0.01,
+						failingPair: failingPair,
+					})
+				}
+
+				testProbeResults = append(testProbeResults, orchestrator.TestProbeResult{
+					Prompt:   p,
+					Response: response,
+					Path:     path,
+				})
+
+				//  STRICT QUALITY GATE: Enforce Subject-Verb Attention Connection
+				// If intent is social and prompt contains "what", "how", "are",
+				// require a threshold connection between subject pronoun and verb.
+				if isFullTest {
+					pLower := strings.ToLower(p)
+					if strings.Contains(pLower, "what") || strings.Contains(pLower, "how") || strings.Contains(pLower, "are") {
+						// Identify subject pronoun index in encoder (prompt)
+						subjectIdx := -1
+						pTokens := cleanTokenize(p)
+						for idx, tok := range pTokens {
+							if moe.MapWordToGrammarType(tok) == "PRON" {
+								subjectIdx = idx
 								break
 							}
 						}
 
-						if verbStep != -1 && verbStep < len(atts) {
-							// Check attention weight from verb step to subject pronoun
-							att := atts[verbStep]
-							// att shape is [batch, heads, q_len, kv_len]
-							// For step-by-step, q_len is 1.
-							// heads = MaxAttentionHeads (e.g. 8)
-							// kv_len = prompt length
-							numHeads := intentModel.Decoder.MaxAttentionHeads
-							sumAtt := float32(0)
-							for h := 0; h < numHeads; h++ {
-								// Index into flattened att data: [b=0, h, q=0, kv=subjectIdx]
-								idx := (h * 1 * att.Shape[3]) + subjectIdx
-								if idx < len(att.Data) {
-									sumAtt += att.Data[idx]
+						if subjectIdx != -1 {
+							// Find a verb in the generated response
+							rWords := strings.Split(response, " ")
+							verbStep := -1
+							for idx, w := range rWords {
+								t := moe.MapWordToGrammarType(w)
+								if t == "VERB" || t == "AUX" {
+									verbStep = idx
+									break
 								}
 							}
-							avgAtt := sumAtt / float32(numHeads)
 
-							const attThreshold = 0.05 // Explicit threshold requirement
-							structuralScore := scoreGrammarHeuristic(response)
-							if (avgAtt < attThreshold || structuralScore < 5.0) && epoch > 40 {
-								if cfg.OverfitMode && epoch < 500 {
-									// Temporary relaxation for small social dataset validation
-									// Don't engage total lockdown if the Subject-Verb connection is converting
-									log.Printf(" ℹ️ OverfitMode: Relaxing PRON/AUX expert constraint for early convergence (Connection: %.4f < %.4f)", avgAtt, attThreshold)
+							if verbStep != -1 && verbStep < len(atts) {
+								// Check attention weight from verb step to subject pronoun
+								att := atts[verbStep]
+								// att shape is [batch, heads, q_len, kv_len]
+								// For step-by-step, q_len is 1.
+								// heads = MaxAttentionHeads (e.g. 8)
+								// kv_len = prompt length
+								numHeads := intentModel.Decoder.MaxAttentionHeads
+								sumAtt := float32(0)
+								for h := 0; h < numHeads; h++ {
+									// Index into flattened att data: [b=0, h, q=0, kv=subjectIdx]
+									idx := (h * 1 * att.Shape[3]) + subjectIdx
+									if idx < len(att.Data) {
+										sumAtt += att.Data[idx]
+									}
+								}
+								avgAtt := sumAtt / float32(numHeads)
+
+								const attThreshold = 0.05 // Explicit threshold requirement
+								structuralScore := scoreGrammarHeuristic(response)
+								if (avgAtt < attThreshold || structuralScore < 5.0) && epoch > 40 {
+									if cfg.OverfitMode && epoch < 500 {
+										// Temporary relaxation for small social dataset validation
+										// Don't engage total lockdown if the Subject-Verb connection is converting
+										log.Printf(" ℹ️ OverfitMode: Relaxing PRON/AUX expert constraint for early convergence (Connection: %.4f < %.4f)", avgAtt, attThreshold)
+									} else {
+										log.Printf(" ⚠️  Quality Gate REJECTED (Subject-Verb Connection: %.4f < %.4f, StructuralScore: %.2f)", avgAtt, attThreshold, structuralScore)
+										heuristicScore = 1.0 // Force failure
+
+										// --- [Adaptive Supervisor Intervention] ---
+										intentVal := "social"
+										if strings.HasPrefix(p, "__intent__ ") {
+											parts := strings.SplitN(p, " : __ques__", 2)
+											if len(parts) == 2 {
+												intentVal = strings.TrimSpace(strings.TrimPrefix(parts[0], "__intent__ "))
+											}
+										}
+										failingPair := &moe.TrainPair{Q: p, Intent: intentVal}
+										if strings.Contains(p, "__ques__") {
+											parts := strings.Split(p, "__ques__")
+											if len(parts) > 1 {
+												qPart := strings.TrimSpace(strings.Split(parts[1], "__ans__")[0])
+												failingPair.Q = qPart
+											}
+										}
+
+										failedGateCalls = append(failedGateCalls, failedGateCall{
+											path:        path,
+											score:       float64(avgAtt),
+											failingPair: failingPair,
+										})
+									}
 								} else {
-									log.Printf(" ⚠️  Quality Gate REJECTED (Subject-Verb Connection: %.4f < %.4f, StructuralScore: %.2f)", avgAtt, attThreshold, structuralScore)
-									heuristicScore = 1.0 // Force failure
-
-									// --- [Adaptive Supervisor Intervention] ---
-									intentVal := "social"
-									if strings.HasPrefix(p, "__intent__ ") {
-										parts := strings.SplitN(p, " : __ques__", 2)
-										if len(parts) == 2 {
-											intentVal = strings.TrimSpace(strings.TrimPrefix(parts[0], "__intent__ "))
-										}
-									}
-									failingPair := &moe.TrainPair{Q: p, Intent: intentVal}
-									if strings.Contains(p, "__ques__") {
-										parts := strings.Split(p, "__ques__")
-										if len(parts) > 1 {
-											qPart := strings.TrimSpace(strings.Split(parts[1], "__ans__")[0])
-											failingPair.Q = qPart
-										}
-									}
-
-									failedGateCalls = append(failedGateCalls, failedGateCall{
-										path:        path,
-										score:       float64(avgAtt),
-										failingPair: failingPair,
-									})
+									log.Printf(" ✅ Quality Gate PASSED (Subject-Verb Connection: %.4f)", avgAtt)
 								}
-							} else {
-								log.Printf(" ✅ Quality Gate PASSED (Subject-Verb Connection: %.4f)", avgAtt)
 							}
 						}
 					}
 				}
-			}
-			// CRITICAL: Detach graph after each test to prevent memory accumulation
-			intentModel.Detach()
-
-			//  Coherence Metric
-			words := strings.Fields(strings.ToLower(response))
-			if len(words) > 3 {
-				bigrams := make(map[string]bool)
-				repeats := 0
-				for i := 0; i < len(words)-1; i++ {
-					bi := words[i] + " " + words[i+1]
-					if bigrams[bi] {
-						repeats++
-					}
-					bigrams[bi] = true
-				}
-			}
-
-			// Use the more sophisticated heuristic for the progress bar
-			epochScores = append(epochScores, heuristicScore)
-
-			grammarScore := scoreGrammarHeuristic(response)
-			epochGrammarScores = append(epochGrammarScores, grammarScore)
-
-			// Similarity Score (Target matching)
-			targetWords := []string{}
-			if isFullTest {
-				if i < len(trainPairs) {
-					tText := trainPairs[i].A
-					targetWords = strings.Fields(strings.ToLower(tText))
-				}
-			} else {
-				// Match targets for the 3 fixed prompts.
-				// Broad vocabulary so SALAD outputs still earn partial credit and Sim stays informative.
-				// Includes the high-frequency tokens the model actually produces (it/is/i/a/have/day/goodbye/ahead)
-				// alongside true target words, so we can distinguish upward trend from flat zero.
-				fixedTargets := [][]string{
-					// Prompt 0: "hello" — greetings + common generated tokens
-					{"hello", "hi", "hey", "morning", "welcome", "good", "great", "nice", "i", "it", "is", "have", "a"},
-					// Prompt 1: "what is your name" — identity words + common generated tokens
-					{"i", "am", "my", "name", "is", "gollemer", "assistant", "ai", "it", "a", "have", "day"},
-				}
-				if i < len(fixedTargets) {
-					targetWords = fixedTargets[i]
-				}
-			}
-			simScore := intentModel.CalculateSequenceSimilarityStrings(words, targetWords)
-			epochSimilarityScores = append(epochSimilarityScores, simScore)
-
-			status := "Coherent"
-			if heuristicScore < 10.0 { // Heuristic is out of 20.0
-				status = "SALAD"
-				saladCount++
-
-				// Note: auto-incrementing LoadBalancingWeight on SALAD was removed.
-				// It ratcheted LBW up to the 0.15 cap on every bad epoch, making
-				// routing MORE chaotic. The orchestrator supervisor in expert.go
-				// handles LBW adjustments with proper trend-detection guards.
-			}
-
-			// Only log a few samples during full test to keep console clean, but log ALL failures
-			if (!isFullTest && epoch%10 == 0) || i%10 == 0 || (status == "SALAD" && epoch%10 == 0) {
-				cleanP := p
-				if strings.Contains(p, "__ques__") {
-					parts := strings.Split(p, "__ques__")
-					if len(parts) > 1 {
-						cleanP = strings.TrimSpace(strings.ReplaceAll(parts[1], "__ans__", ""))
+				// CRITICAL: Detach graph after each test to prevent memory accumulation
+				intentModel.Detach()
+				
+				for _, att := range atts {
+					if att != nil {
+						att.Release()
 					}
 				}
-				log.Printf(" 🧪 Test %d | Q: '%s' \n      ↳ A: '%s' [%s: %.1f]", i, cleanP, response, status, heuristicScore)
-			}
 
-			// Periodically force GC during the test loop to keep RSS low
-			if i%5 == 4 {
-				runtime.GC()
-				debug.FreeOSMemory()
-			}
-		}
-		// Final flush after all tests
-		runtime.GC()
-		debug.FreeOSMemory()
-
-		// Process collected quality gate failures after consistent evaluation has finished
-		if len(failedGateCalls) > 0 {
-			log.Printf("🛠️  Processing %d collected Quality Gate failures...", len(failedGateCalls))
-			for _, call := range failedGateCalls {
-				// 1. Curriculum & Data Evolution (AdaptiveSupervisor)
-				adaptiveSup.EvaluateGate(call.path, call.score, "social", call.failingPair.Q)
-
-				// 2. Structural & Variable Mutation (MoE Supervisor)
-				supervisor.HandleQualityGateFailure(intentModel, call.path, call.failingPair, call.score)
-
-				// 3. Sync training data mutations in-memory
-				supervisor.EvolveTrainingData(&trainPairs, call.failingPair)
-
-				// 3. Sync Expert Count if AdaptiveSupervisor triggered an expansion
-				if adaptiveSup.CurrentExperts > len(moe.ActiveLayers[0].Experts) {
-					spawns := supervisor.GetSpawnsThisEpoch()
-					limit := adaptiveSup.AssessSpawningPacing("social")
-					if spawns < limit {
-						roleID := 6 // GREET
-						currentLayers := findMoELayers(intentModel)
-						supervisor.AddExpertToLayer(intentModel, 0, roleID)
-						if intentModel.Decoder.OutputMoE != nil {
-							supervisor.AddExpertToLayer(intentModel, len(currentLayers)-1, roleID)
+				//  Coherence Metric
+				words := strings.Fields(strings.ToLower(response))
+				if len(words) > 3 {
+					bigrams := make(map[string]bool)
+					repeats := 0
+					for i := 0; i < len(words)-1; i++ {
+						bi := words[i] + " " + words[i+1]
+						if bigrams[bi] {
+							repeats++
 						}
-						moe.ActiveLayers = findMoELayers(intentModel)
+						bigrams[bi] = true
+					}
+				}
 
-						supervisor.IncrementSpawnsThisEpoch()
+				// Use the more sophisticated heuristic for the progress bar
+				epochScores = append(epochScores, heuristicScore)
+
+				grammarScore := scoreGrammarHeuristic(response)
+				epochGrammarScores = append(epochGrammarScores, grammarScore)
+
+				// Similarity Score (Target matching)
+				targetWords := []string{}
+				if isFullTest {
+					if i < len(trainPairs) {
+						tText := trainPairs[i].A
+						targetWords = strings.Fields(strings.ToLower(tText))
+					}
+				} else {
+					// Match targets for the 3 fixed prompts.
+					// Broad vocabulary so SALAD outputs still earn partial credit and Sim stays informative.
+					// Includes the high-frequency tokens the model actually produces (it/is/i/a/have/day/goodbye/ahead)
+					// alongside true target words, so we can distinguish upward trend from flat zero.
+					fixedTargets := [][]string{
+						// Prompt 0: "hello" — greetings + common generated tokens
+						{"hello", "hi", "hey", "morning", "welcome", "good", "great", "nice", "i", "it", "is", "have", "a"},
+						// Prompt 1: "what is your name" — identity words + common generated tokens
+						{"i", "am", "my", "name", "is", "gollemer", "assistant", "ai", "it", "a", "have", "day"},
+					}
+					if i < len(fixedTargets) {
+						targetWords = fixedTargets[i]
+					}
+				}
+				simScore := intentModel.CalculateSequenceSimilarityStrings(words, targetWords)
+				epochSimilarityScores = append(epochSimilarityScores, simScore)
+
+				status := "Coherent"
+				if heuristicScore < 10.0 { // Heuristic is out of 20.0
+					status = "SALAD"
+					saladCount++
+
+					// Note: auto-incrementing LoadBalancingWeight on SALAD was removed.
+					// It ratcheted LBW up to the 0.15 cap on every bad epoch, making
+					// routing MORE chaotic. The orchestrator supervisor in expert.go
+					// handles LBW adjustments with proper trend-detection guards.
+				}
+
+				// Only log a few samples during full test to keep console clean, but log ALL failures
+				if (!isFullTest && epoch%10 == 0) || i%10 == 0 || (status == "SALAD" && epoch%10 == 0) {
+					cleanP := p
+					if strings.Contains(p, "__ques__") {
+						parts := strings.Split(p, "__ques__")
+						if len(parts) > 1 {
+							cleanP = strings.TrimSpace(strings.ReplaceAll(parts[1], "__ans__", ""))
+						}
+					}
+					log.Printf(" 🧪 Test %d | Q: '%s' \n      ↳ A: '%s' [%s: %.1f]", i, cleanP, response, status, heuristicScore)
+				}
+
+				// Periodically force GC during the test loop to keep RSS low
+				if i%5 == 4 {
+					runtime.GC()
+					debug.FreeOSMemory()
+				}
+			}
+			// Final flush after all tests
+			runtime.GC()
+			debug.FreeOSMemory()
+
+			// Process collected quality gate failures after consistent evaluation has finished
+			if len(failedGateCalls) > 0 {
+				log.Printf("🛠️  Processing %d collected Quality Gate failures...", len(failedGateCalls))
+				for _, call := range failedGateCalls {
+					// 1. Curriculum & Data Evolution (AdaptiveSupervisor)
+					adaptiveSup.EvaluateGate(call.path, call.score, "social", call.failingPair.Q)
+
+					// 2. Structural & Variable Mutation (MoE Supervisor)
+					supervisor.HandleQualityGateFailure(intentModel, call.path, call.failingPair, call.score)
+
+					// 3. Sync training data mutations in-memory
+					supervisor.EvolveTrainingData(&trainPairs, call.failingPair)
+
+					// 3. Sync Expert Count if AdaptiveSupervisor triggered an expansion
+					if adaptiveSup.CurrentExperts > len(moe.ActiveLayers[0].Experts) {
+						spawns := supervisor.GetSpawnsThisEpoch()
+						limit := adaptiveSup.AssessSpawningPacing("social")
+						if spawns < limit {
+							roleID := 6 // GREET
+							currentLayers := findMoELayers(intentModel)
+							supervisor.AddExpertToLayer(intentModel, 0, roleID)
+							if intentModel.Decoder.OutputMoE != nil {
+								supervisor.AddExpertToLayer(intentModel, len(currentLayers)-1, roleID)
+							}
+							moe.ActiveLayers = findMoELayers(intentModel)
+
+							supervisor.IncrementSpawnsThisEpoch()
+						}
 					}
 				}
 			}
-		}
 
 		} // End of runTest
 
@@ -4160,7 +4238,11 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 			currentAvgSim = simSum / float32(len(epochSimilarityScores))
 		}
 
-		drawSocialProgressBar(currentTotalScore, targetScore, currentTotalGrammar, targetGrammarScore, currentAvgSim, epoch+1, epochs, epochStartTime)
+		if runTest {
+			drawSocialProgressBar(currentTotalScore, targetScore, currentTotalGrammar, targetGrammarScore, currentAvgSim, epoch+1, epochs, epochStartTime)
+		} else {
+			log.Printf(" [SOCIAL_PROGRESS] Progress: unavailable because testing is disabled. Enable auto_test_save or trigger_test.")
+		}
 
 		if saladCount > failureThreshold && epoch > 150 && !isTinyDataset {
 			qualityGateFailures++
@@ -4321,6 +4403,8 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 			// Aggressively reclaim memory before the large serialization spike
 			runtime.GC()
 			debug.FreeOSMemory()
+			intentModel.StepCount = globalStep
+			intentModel.Metadata.LastEpoch = epoch + 1
 			ckpt := &moe.Checkpoint{
 				Model:      intentModel,
 				StepCount:  globalStep,
@@ -4361,6 +4445,9 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 		sinkHits := 0
 		var layerResets []map[int]int
 		var layerUsage []map[int]int
+
+		//  OBSERVABILITY: Finalize epoch metrics for dashboard
+		trainer.FinishEpoch(sentenceVocab)
 
 		for _, layer := range layers {
 			sinkHits += layer.GetResetCount()
@@ -4468,6 +4555,8 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 
 	intentModel.Detach()
 	// Save final social model (compressed)
+	intentModel.StepCount = globalStep
+	intentModel.Metadata.LastEpoch = epochs
 	ckpt := &moe.Checkpoint{
 		Model:      intentModel,
 		StepCount:  globalStep,
@@ -4588,24 +4677,36 @@ func LogTopPredictions(model *moe.IntentMoE, testName string, logits *tensor.Ten
 
 // lookupVocab tries to find a token ID in the given vocabulary with fallbacks.
 func lookupVocab(token string, vocab *mainvocab.Vocabulary) int {
-	token = strings.ToLower(strings.TrimSpace(token))
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return vocab.UnkID
+	}
 
-	// Direct lookup
+	// Direct lookup with original casing first to preserve special tokens such as
+	// <INTENT_CAMERA_CAPTURE> and other control tokens.
 	if id, ok := vocab.WordToToken[token]; ok {
 		return id
 	}
 
+	// Case-insensitive fallback for natural-language tokens.
+	lowered := strings.ToLower(token)
+	if lowered != token {
+		if id, ok := vocab.WordToToken[lowered]; ok {
+			return id
+		}
+	}
+
 	// Try stripping trailing punctuation
-	stripped := strings.TrimRight(token, ".,!?;:'\"")
-	if stripped != token {
+	stripped := strings.TrimRight(lowered, ".,!?;:'\"")
+	if stripped != lowered {
 		if id, ok := vocab.WordToToken[stripped]; ok {
 			return id
 		}
 	}
 
 	// Try stripping all punctuation
-	veryStripped := strings.Trim(token, ".,!?;:'\"()[]{}")
-	if veryStripped != token && veryStripped != stripped {
+	veryStripped := strings.Trim(lowered, ".,!?;:'\"()[]{}")
+	if veryStripped != lowered && veryStripped != stripped {
 		if id, ok := vocab.WordToToken[veryStripped]; ok {
 			return id
 		}
@@ -4888,8 +4989,9 @@ func cleanTokenize(text string) []string {
 
 	for _, word := range words {
 		// If it's a bracketed token like <INTENT_CAMERA> or <ACT_TAKE> or <DEV_CAMERA>, keep it verbatim!
+		// Also preserve core vocab structural tokens like <s>, </s>, <pad>.
 		if strings.HasPrefix(word, "<") && strings.HasSuffix(word, ">") &&
-			(strings.Contains(word, "INTENT_") || strings.Contains(word, "ACT_") || strings.Contains(word, "DEV_")) {
+			(strings.Contains(word, "INTENT_") || strings.Contains(word, "ACT_") || strings.Contains(word, "DEV_") || word == "<s>" || word == "</s>" || word == "<pad>") {
 			finalTokens = append(finalTokens, word) // Do not lowercase or split
 			continue
 		}

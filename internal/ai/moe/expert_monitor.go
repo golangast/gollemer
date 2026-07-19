@@ -14,8 +14,8 @@ import (
 // (epoch or a configurable window). It decouples monitoring from the MoELayer
 // struct, making it safe to reset independently without touching model weights.
 type ExpertMonitor struct {
-	Counts     []int  // Token count per expert
-	Total      int    // Total tokens processed
+	Counts     []int // Token count per expert
+	Total      int   // Total tokens processed
 	NumExperts int
 
 	mu        sync.Mutex
@@ -184,10 +184,10 @@ func (m *ExpertMonitor) Snapshot(path string) error {
 		}
 	}
 	payload := map[string]interface{}{
-		"total":      m.Total,
-		"counts":     append([]int(nil), m.Counts...),
-		"fractions":  fracs,
-		"history":    append([]map[string]interface{}(nil), m.History...),
+		"total":       m.Total,
+		"counts":      append([]int(nil), m.Counts...),
+		"fractions":   fracs,
+		"history":     append([]map[string]interface{}(nil), m.History...),
 		"num_experts": m.NumExperts,
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {

@@ -311,7 +311,7 @@ func (r *Runner) visualizeNeuralNetwork() {
 		fmt.Printf("  ╔═══════════════════════╗\n  ║        Decoder        ║  Hidden Size: %d\n  ╚═══════════════════════╝\n", nn.Decoder.LSTM.HiddenSize)
 	}
 	fmt.Printf("             ⬇\n  ╔═══════════════════════╗\n  ║     Output Vocab      ║  Size: %d\n  ╚═══════════════════════╝\n", nn.SentenceVocabSize)
-	fmt.Println("             ⬇\n      [ Predicted Intent ]\n")
+	fmt.Print("             ⬇\n      [ Predicted Intent ]\n")
 }
 
 func (r *Runner) visualizeWord2Vec() {

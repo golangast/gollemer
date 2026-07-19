@@ -8,6 +8,7 @@ import (
 	"math"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -32,6 +33,10 @@ const (
 	BytesPerSample  = 2
 	FrameSize       = 400  // 25ms of audio at 16kHz
 	EnergyThreshold = 0.15 // Increased to 0.15 to ignore loud room fans and hum
+
+	whisperTempDir = "dataset/audio"
+	whisperRawTmp  = "live_phrase_temp.raw"
+	whisperWavTmp  = "live_phrase_temp.wav"
 )
 
 type AudioBuffer struct {
@@ -211,6 +216,79 @@ func getRMS(samples []float32) float32 {
 	return float32(math.Sqrt(float64(sum / float32(len(samples)))))
 }
 
+func findWhisperBinaryAndModel() (string, string, error) {
+	var checked []string
+	if envBin := os.Getenv("WHISPER_CLI_BIN"); envBin != "" {
+		checked = append(checked, envBin)
+		if _, err := os.Stat(envBin); err == nil {
+			if envModel := os.Getenv("WHISPER_MODEL_PATH"); envModel != "" {
+				checked = append(checked, envModel)
+				return envBin, envModel, nil
+			}
+			if modelPath, ok := resolveWhisperModelPath(envBin); ok {
+				return envBin, modelPath, nil
+			}
+		}
+	}
+
+	candidateBins := []string{
+		filepath.Join("build_whisper", "whisper.cpp", "build", "bin", "whisper-cli"),
+		filepath.Join("build_whisper", "whisper.cpp", "build", "bin", "whisper"),
+		filepath.Join("build_whisper", "whisper.cpp", "build", "bin", "main"),
+		"/tmp/whisper.cpp/build/bin/whisper-cli",
+		"/tmp/whisper.cpp/build/bin/whisper",
+		"/tmp/whisper.cpp/build/bin/main",
+	}
+
+	for _, bin := range candidateBins {
+		checked = append(checked, bin)
+		if _, err := os.Stat(bin); err == nil {
+			if modelPath, ok := resolveWhisperModelPath(bin); ok {
+				return bin, modelPath, nil
+			}
+		}
+	}
+
+	for _, binaryName := range []string{"whisper-cli", "whisper", "main"} {
+		if bin, err := exec.LookPath(binaryName); err == nil {
+			checked = append(checked, bin)
+			if modelPath, ok := resolveWhisperModelPath(bin); ok {
+				return bin, modelPath, nil
+			}
+		}
+	}
+
+	return "", "", fmt.Errorf("whisper binary/model not found; checked: %s; set WHISPER_CLI_BIN and WHISPER_MODEL_PATH to override; or run build_voice.sh to build whisper.cpp and download ggml-tiny.en.bin", strings.Join(checked, ", "))
+}
+
+func resolveWhisperModelPath(bin string) (string, bool) {
+	candidateModels := []string{
+		filepath.Join(filepath.Dir(bin), "models", "ggml-tiny.en.bin"),
+		filepath.Join(filepath.Dir(bin), "..", "models", "ggml-tiny.en.bin"),
+		filepath.Join(filepath.Dir(filepath.Dir(bin)), "..", "models", "ggml-tiny.en.bin"),
+		filepath.Join(filepath.Dir(filepath.Dir(filepath.Dir(bin))), "models", "ggml-tiny.en.bin"),
+		filepath.Join("build_whisper", "whisper.cpp", "models", "ggml-tiny.en.bin"),
+		filepath.Join("models", "ggml-tiny.en.bin"),
+		filepath.Join("/tmp", "whisper.cpp", "models", "ggml-tiny.en.bin"),
+	}
+
+	if home, err := os.UserHomeDir(); err == nil {
+		candidateModels = append(candidateModels,
+			filepath.Join(home, ".cache", "whisper", "ggml-tiny.en.bin"),
+			filepath.Join(home, ".cache", "whisper.cpp", "ggml-tiny.en.bin"),
+			filepath.Join(home, ".cache", "whisper.cpp", "models", "ggml-tiny.en.bin"),
+		)
+	}
+
+	for _, modelPath := range candidateModels {
+		modelPath = filepath.Clean(modelPath)
+		if _, err := os.Stat(modelPath); err == nil {
+			return modelPath, true
+		}
+	}
+	return "", false
+}
+
 func loadTrainedHead() (*moe.AudioEncoder, *moe.TemporalEncoder, []float32, []float32, []string, map[string][]float32) {
 	ae, te, headW, headB, classNames, prototypes, err := moe.LoadAudioModel("models/audio_gru.json")
 	if err == nil {
@@ -226,22 +304,20 @@ func loadTrainedHead() (*moe.AudioEncoder, *moe.TemporalEncoder, []float32, []fl
 // and automatically updates the in-memory prototype map with the new label.
 // This is called in a goroutine when the acoustic model is uncertain (conf 0.75–0.98).
 func whisperAutoTeach(frames [][]float32, aw *AudioWindow, ae *moe.AudioEncoder, te *moe.TemporalEncoder, headW, headB []float32) {
-	const (
-		whisperBin   = "/home/zendrulat/g/gollemer/build_whisper/whisper.cpp/build/bin/whisper-cli"
-		whisperModel = "/home/zendrulat/g/gollemer/build_whisper/whisper.cpp/models/ggml-tiny.en.bin"
-		rawTmp       = "dataset/audio/live_phrase_temp.raw"
-		wavTmp       = "dataset/audio/live_phrase_temp.wav"
-	)
-
-	if _, err := os.Stat(whisperBin); os.IsNotExist(err) {
+	whisperBin, whisperModel, err := findWhisperBinaryAndModel()
+	if err != nil {
 		return // whisper not available, skip silently
 	}
 
-	os.MkdirAll("dataset/audio", 0755)
+	rawTmp := filepath.Join(whisperTempDir, whisperRawTmp)
+	wavTmp := filepath.Join(whisperTempDir, whisperWavTmp)
+
+	os.MkdirAll(whisperTempDir, 0755)
 
 	// Write the current window frames to a raw s16le file
 	f, err := os.Create(rawTmp)
 	if err != nil {
+		log.Printf("⚠️ [AutoTeach] could not write temp raw audio: %v", err)
 		return
 	}
 	for _, frame := range frames {
@@ -253,15 +329,22 @@ func whisperAutoTeach(frames [][]float32, aw *AudioWindow, ae *moe.AudioEncoder,
 	f.Close()
 
 	// Convert raw → wav for Whisper
-	exec.Command("ffmpeg", "-y", "-f", "s16le", "-ar", "16000", "-ac", "1",
-		"-i", rawTmp, wavTmp).Run()
+	if err := exec.Command("ffmpeg", "-y", "-f", "s16le", "-ar", "16000", "-ac", "1",
+		"-i", rawTmp, wavTmp).Run(); err != nil {
+		log.Printf("⚠️ [Voice] ffmpeg conversion failed: %v", err)
+		return
+	}
 
 	// Run Whisper, discard its stderr debug logs
 	devNull, _ := os.Open(os.DevNull)
 	defer devNull.Close()
 	wCmd := exec.Command(whisperBin, "-m", whisperModel, "-f", wavTmp, "-nt")
 	wCmd.Stderr = devNull
-	out, _ := wCmd.Output()
+	out, err := wCmd.Output()
+	if err != nil {
+		log.Printf("⚠️ [Voice] Whisper failed: %v", err)
+		return
+	}
 
 	// Parse transcript from stdout only
 	var parts []string
@@ -418,19 +501,16 @@ func StartVoiceListener(ctx context.Context, inputChan chan<- string) {
 }
 
 func transcribeFullPhrase(frames [][]float32) string {
-	const (
-		whisperBin   = "/home/zendrulat/g/gollemer/build_whisper/whisper.cpp/build/bin/whisper-cli"
-		whisperModel = "/home/zendrulat/g/gollemer/build_whisper/whisper.cpp/models/ggml-tiny.en.bin"
-		rawTmp       = "dataset/audio/live_phrase_temp.raw"
-		wavTmp       = "dataset/audio/live_phrase_temp.wav"
-	)
-
-	if _, err := os.Stat(whisperBin); os.IsNotExist(err) {
-		log.Println("⚠️ Whisper binary not found. Cannot translate voice.")
+	whisperBin, whisperModel, err := findWhisperBinaryAndModel()
+	if err != nil {
+		log.Printf("⚠️ Whisper not available: %v", err)
 		return ""
 	}
 
-	_ = os.MkdirAll("dataset/audio", 0755)
+	rawTmp := filepath.Join(whisperTempDir, whisperRawTmp)
+	wavTmp := filepath.Join(whisperTempDir, whisperWavTmp)
+
+	_ = os.MkdirAll(whisperTempDir, 0755)
 
 	// Write buffer down to disk
 	f, err := os.Create(rawTmp)

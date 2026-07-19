@@ -1,11 +1,11 @@
 package moe
 
 import (
+	"log"
 	"math"
-	"sync/atomic"
 	"os"
 	"runtime/pprof"
-	"log"
+	"sync/atomic"
 )
 
 // FastExpert represents a single expert in the MoE layer with optimized memory layout.
@@ -19,10 +19,10 @@ type FastMoELayer struct {
 	NumExperts int
 	TopK       int
 	Experts    []FastExpert
-	
+
 	// Router weights [InputSize * NumExperts]
-	RouterWeights []float32 
-	
+	RouterWeights []float32
+
 	// Monitoring / Training State
 	AuxLossWeight float32
 	ExpertCounts  []int64   // Use sync/atomic to update
@@ -52,13 +52,13 @@ func NewMoELayerFast(numExperts, inputSize, outputSize, topK int) *FastMoELayer 
 func (m *FastMoELayer) Forward(input []float32) []float32 {
 	// 1. Get Router Logits (Linear layer)
 	logits := m.computeRouterLogits(input)
-	
+
 	// 2. Fast Top-K selection (Top-2)
 	idx1, idx2, val1, val2 := getTop2(logits)
-	
+
 	// 3. Normalize Top-2 scores (Softmax)
 	w1, w2 := normalizeTwo(val1, val2)
-	
+
 	// 4. Update Balancing Metrics (Atomic for thread safety)
 	atomic.AddInt64(&m.ExpertCounts[idx1], 1)
 	atomic.AddInt64(&m.ExpertCounts[idx2], 1)
@@ -72,7 +72,7 @@ func (m *FastMoELayer) Forward(input []float32) []float32 {
 	for i := 0; i < len(out1); i++ {
 		finalOut[i] = (out1[i] * w1) + (out2[i] * w2)
 	}
-	
+
 	return finalOut
 }
 
@@ -95,12 +95,12 @@ func (m *FastMoELayer) computeRouterLogits(input []float32) []float32 {
 func getTop2(logits []float32) (int, int, float32, float32) {
 	idx1, idx2 := 0, 1
 	val1, val2 := logits[0], logits[1]
-	
+
 	if val2 > val1 {
 		idx1, idx2 = 1, 0
 		val1, val2 = val2, val1
 	}
-	
+
 	for i := 2; i < len(logits); i++ {
 		v := logits[i]
 		if v > val1 {
@@ -146,10 +146,10 @@ func (e *FastExpert) Compute(input []float32) []float32 {
 		// Unrolled loop for 8-element processing
 		j := 0
 		for ; j <= inputSize-8; j += 8 {
-			dot += row[j]*input[j] + row[j+1]*input[j+1] + 
-				   row[j+2]*input[j+2] + row[j+3]*input[j+3] +
-				   row[j+4]*input[j+4] + row[j+5]*input[j+5] + 
-				   row[j+6]*input[j+6] + row[j+7]*input[j+7]
+			dot += row[j]*input[j] + row[j+1]*input[j+1] +
+				row[j+2]*input[j+2] + row[j+3]*input[j+3] +
+				row[j+4]*input[j+4] + row[j+5]*input[j+5] +
+				row[j+6]*input[j+6] + row[j+7]*input[j+7]
 		}
 		for ; j < inputSize; j++ {
 			dot += row[j] * input[j]
@@ -164,15 +164,15 @@ func (m *FastMoELayer) CalculateAuxLoss(batchSize int, counts []int64, probs []f
 	if batchSize == 0 {
 		return 0
 	}
-	
+
 	var cvSum float32
-	targetCount := float32(batchSize * m.TopK) / float32(m.NumExperts)
-	
+	targetCount := float32(batchSize*m.TopK) / float32(m.NumExperts)
+
 	for i := 0; i < m.NumExperts; i++ {
 		diff := float32(counts[i]) - targetCount
 		cvSum += diff * diff * probs[i]
 	}
-	
+
 	return cvSum * m.AuxLossWeight
 }
 
@@ -211,7 +211,7 @@ type AdamRouter struct {
 	M []float32 // First moment vector
 	V []float32 // Second moment vector
 	T int       // Time step (iteration)
-	
+
 	Beta1 float32
 	Beta2 float32
 	Eps   float32
@@ -233,39 +233,39 @@ func NewAdamRouter(size int, lr float32) *AdamRouter {
 // Update updates the weights using the Adam optimizer with auxiliary gradients.
 func (a *AdamRouter) Update(weights []float32, grads []float32) {
 	a.T++
-	
+
 	// Bias correction terms
 	b1t := 1.0 - float32(math.Pow(float64(a.Beta1), float64(a.T)))
 	b2t := 1.0 - float32(math.Pow(float64(a.Beta2), float64(a.T)))
-	
+
 	// Unrolled for performance
 	i := 0
 	for ; i <= len(weights)-8; i += 8 {
 		for k := 0; k < 8; k++ {
 			idx := i + k
 			g := grads[idx]
-			
+
 			// m = beta1 * m + (1 - beta1) * g
 			a.M[idx] = a.Beta1*a.M[idx] + (1-a.Beta1)*g
 			// v = beta2 * v + (1 - beta2) * g^2
 			a.V[idx] = a.Beta2*a.V[idx] + (1-a.Beta2)*g*g
-			
+
 			mHat := a.M[idx] / b1t
 			vHat := a.V[idx] / b2t
-			
+
 			weights[idx] -= a.LR * mHat / (float32(math.Sqrt(float64(vHat))) + a.Eps)
 		}
 	}
-	
+
 	// Handle remainder
 	for ; i < len(weights); i++ {
 		g := grads[i]
 		a.M[i] = a.Beta1*a.M[i] + (1-a.Beta1)*g
 		a.V[i] = a.Beta2*a.V[i] + (1-a.Beta2)*g*g
-		
+
 		mHat := a.M[i] / b1t
 		vHat := a.V[i] / b2t
-		
+
 		weights[i] -= a.LR * mHat / (float32(math.Sqrt(float64(vHat))) + a.Eps)
 	}
 }

@@ -21,30 +21,30 @@ type Optimizer interface {
 
 // TrainingProfile represents a preset for training hyperparameters.
 type TrainingProfile struct {
-	Name           string
-	LR             float32
-	Lambda         float32 // Weight Decay
-	ClipThreshold  float32 // Gradient Clipping
-	HealThreshold  float32 // When to reset experts (e.g., 0.85)
-	WarmupSteps    int     // Steps before applying full LR
+	Name          string
+	LR            float32
+	Lambda        float32 // Weight Decay
+	ClipThreshold float32 // Gradient Clipping
+	HealThreshold float32 // When to reset experts (e.g., 0.85)
+	WarmupSteps   int     // Steps before applying full LR
 }
 
 func GetProfile(name string) TrainingProfile {
 	switch name {
 	case "aggressive":
 		return TrainingProfile{
-			Name: "Aggressive", LR: 2e-3, Lambda: 0.005, 
+			Name: "Aggressive", LR: 2e-3, Lambda: 0.005,
 			ClipThreshold: 2.0, HealThreshold: 0.70, WarmupSteps: 100,
 		}
 	case "stable":
 		return TrainingProfile{
-			Name: "Stable", LR: 5e-4, Lambda: 0.01, 
+			Name: "Stable", LR: 5e-4, Lambda: 0.01,
 			ClipThreshold: 1.0, HealThreshold: 0.90, WarmupSteps: 500,
 		}
 	default:
 		// Default "Standard" profile
 		return TrainingProfile{
-			Name: "Standard", LR: 1e-3, Lambda: 0.01, 
+			Name: "Standard", LR: 1e-3, Lambda: 0.01,
 			ClipThreshold: 1.0, HealThreshold: 0.85, WarmupSteps: 200,
 		}
 	}
@@ -68,6 +68,9 @@ type Adam struct {
 }
 
 // NewOptimizer creates a new Adam optimizer.
+// M/V moment tensors are allocated lazily on first Step() to avoid a
+// burst memory spike (2× model params) that can trigger the OOM killer on
+// memory-constrained hardware.
 func NewOptimizer(parameters []*Tensor, learningRate float32, clipThreshold float32) Optimizer {
 	o := &Adam{
 		parameters:    parameters,
@@ -79,36 +82,9 @@ func NewOptimizer(parameters []*Tensor, learningRate float32, clipThreshold floa
 		m:             make(map[*Tensor]*Tensor),
 		v:             make(map[*Tensor]*Tensor),
 		ClipThreshold: clipThreshold,
-		Lambda:        0.001, // Reduced from 0.01 for better MLM convergence
-		RouterLR:      learningRate * 15.0, // Aggressive exploration for experts (15x)
+		Lambda:        0.001,
+		RouterLR:      learningRate * 15.0,
 	}
-	// Pre-allocate moments in parallel to avoid startup hangs on large models
-	var wg sync.WaitGroup
-	paramChan := make(chan *Tensor, len(parameters))
-	for _, p := range parameters {
-		paramChan <- p
-	}
-	close(paramChan)
-
-	numWorkers := runtime.NumCPU()
-	if numWorkers > 16 { numWorkers = 16 }
-	
-	mu := sync.Mutex{}
-	for i := 0; i < numWorkers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for p := range paramChan {
-				m := NewTensor(p.Shape, make([]float32, len(p.Data)), false)
-				v := NewTensor(p.Shape, make([]float32, len(p.Data)), false)
-				mu.Lock()
-				o.m[p] = m
-				o.v[p] = v
-				mu.Unlock()
-			}
-		}()
-	}
-	wg.Wait()
 	return o
 }
 
@@ -160,13 +136,24 @@ func (o *Adam) ResetStagnantMoments(t *Tensor) {
 func (o *Adam) Step() {
 	o.t++
 
+	// Pre-allocate M/V tensors for all parameters with gradients (single-threaded)
+	// to avoid concurrent map read/write races in the worker goroutines.
+	for _, p := range o.parameters {
+		if p.Grad != nil {
+			if _, ok := o.m[p]; !ok {
+				o.m[p] = NewTensor(p.Shape, make([]float32, len(p.Data)), false)
+				o.v[p] = NewTensor(p.Shape, make([]float32, len(p.Data)), false)
+			}
+		}
+	}
+
 	var wg sync.WaitGroup
 	// Use limited concurrency to avoid context switching overhead
 	numWorkers := runtime.NumCPU()
 	if numWorkers > 16 {
 		numWorkers = 16
 	}
-	
+
 	paramChan := make(chan *Tensor, len(o.parameters))
 	for _, p := range o.parameters {
 		if p.Grad != nil {
@@ -184,7 +171,7 @@ func (o *Adam) Step() {
 				v := o.v[p].Data
 				grad := p.Grad.Data
 				param := p.Data
-				
+
 				lr := o.learningRate
 				if p.IsRouter {
 					lr = o.RouterLR
@@ -193,21 +180,21 @@ func (o *Adam) Step() {
 				if p.TimidMask() != nil {
 					b1t := float32(1.0 - math.Pow(float64(o.beta1), float64(o.t)))
 					b2t := float32(1.0 - math.Pow(float64(o.beta2), float64(o.t)))
-					
+
 					mask := p.TimidMask()
 					for i := range param {
 						m[i] = o.beta1*m[i] + (1-o.beta1)*grad[i]
 						v[i] = o.beta2*v[i] + (1-o.beta2)*grad[i]*grad[i]
-						
+
 						effectiveLR := lr
 						if mask[i] {
 							effectiveLR *= 3.0
 						}
-						
+
 						mHat := m[i] / b1t
 						vHat := v[i] / b2t
 						denom := float32(math.Sqrt(float64(vHat))) + o.epsilon
-						
+
 						update := (mHat / denom) + (o.Lambda * param[i])
 						param[i] -= effectiveLR * update
 					}
@@ -218,8 +205,12 @@ func (o *Adam) Step() {
 				// 🛡️ Continuous Clamping for Routers to prevent "Expert Obsession"
 				if p.IsRouter {
 					for i := range param {
-						if param[i] > 2.5 { param[i] = 2.5 }
-						if param[i] < -2.5 { param[i] = -2.5 }
+						if param[i] > 2.5 {
+							param[i] = 2.5
+						}
+						if param[i] < -2.5 {
+							param[i] = -2.5
+						}
 					}
 				}
 			}
@@ -279,7 +270,7 @@ type CoolingOptimizer struct {
 	Base       Optimizer // Your SIMD AdamW / SGD
 	Cooldown   int       // Remaining steps in cooldown
 	IsActive   bool
-	OriginalLR float32   // To store where we should be post-recovery
+	OriginalLR float32 // To store where we should be post-recovery
 }
 
 // Step executes the base optimizer but overrides LR if cooling
@@ -331,10 +322,10 @@ func (o *CoolingOptimizer) Trigger(steps int, reduction float32) {
 	if !o.IsActive {
 		o.OriginalLR = o.Base.GetLearningRate()
 	}
-	
+
 	o.IsActive = true
 	o.Cooldown = steps
-	
+
 	// Drop the LR immediately to allow "shaken" weights to settle
 	current := o.Base.GetLearningRate()
 	o.Base.SetLearningRate(current * reduction)

@@ -31,7 +31,7 @@ func TestLoadIntentMoEModelWithFallback(t *testing.T) {
 		gz := gzip.NewWriter(file)
 		encoder := gob.NewEncoder(gz)
 		checkpoint := &Checkpoint{
-			Model:      testModel,
+			Model:     testModel,
 			StepCount: 100,
 		}
 		if err := encoder.Encode(checkpoint); err != nil {

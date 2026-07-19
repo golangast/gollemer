@@ -3,9 +3,9 @@ package moe
 import (
 	"encoding/gob"
 	"fmt"
-	"log"
 	"github.com/golangast/gollemer/internal/ai/neural/nn"
 	"github.com/golangast/gollemer/internal/ai/neural/tensor"
+	"log"
 )
 
 func init() {
@@ -20,10 +20,10 @@ type HybridLLMGNNEncoder struct {
 	EmbeddingDim int
 
 	// Intermediate tensors for backward
-	llmOutput    *tensor.Tensor
-	gnnOutput    *tensor.Tensor
-	adj          *tensor.Tensor
-	residualOut  *tensor.Tensor
+	llmOutput   *tensor.Tensor
+	gnnOutput   *tensor.Tensor
+	adj         *tensor.Tensor
+	residualOut *tensor.Tensor
 }
 
 func NewHybridLLMGNNEncoder(llmEncoder Encoder, embeddingDim int) (*HybridLLMGNNEncoder, error) {
@@ -68,17 +68,19 @@ func (e *HybridLLMGNNEncoder) Forward(inputs ...*tensor.Tensor) (*tensor.Tensor,
 	// Using Global Receptive Field with Distance Decay to solve "no context" issue.
 	// Every token now sees every other token, but closer neighbors have higher weight.
 	adjData := make([]float32, batchSize*seqLen*seqLen)
-	
+
 	for b := 0; b < batchSize; b++ {
 		batchOffset := b * seqLen * seqLen
 		for i := 0; i < seqLen; i++ {
 			rowOffset := batchOffset + i*seqLen
-			
+
 			var rowSum float32
 			for j := 0; j < seqLen; j++ {
 				dist := float64(i - j)
-				if dist < 0 { dist = -dist }
-				
+				if dist < 0 {
+					dist = -dist
+				}
+
 				// Weight = 1.0 for local (dist <= 2), 0.2 for global (dist > 2)
 				// This allows global context flow while preserving local grammar.
 				weight := float32(0.2)
@@ -88,7 +90,7 @@ func (e *HybridLLMGNNEncoder) Forward(inputs ...*tensor.Tensor) (*tensor.Tensor,
 				adjData[rowOffset+j] = weight
 				rowSum += weight
 			}
-			
+
 			// Normalize row to sum to 1.0
 			if rowSum > 0 {
 				invSum := 1.0 / rowSum
@@ -188,7 +190,6 @@ func (e *HybridLLMGNNEncoder) ClearState() {
 		e.LLMEncoder.ClearState()
 	}
 }
-
 
 func (e *HybridLLMGNNEncoder) Parameters() []*tensor.Tensor {
 	params := e.LLMEncoder.Parameters()

@@ -70,14 +70,21 @@ func (c *GollemerMoEClient) PushHistory(q, a, intent string) {
 
 	// Mirror into the session's Message log so the token-aware context window
 	// stays in sync with the flat ChatPair history.
+	sess := c.session()
 	if q != "" {
-		c.session().AddMessage("user", q)
+		sess.mu.RLock()
+		lastIsSameUser := len(sess.Messages) > 0 && sess.Messages[len(sess.Messages)-1].Role == "user" &&
+			strings.TrimSpace(sess.Messages[len(sess.Messages)-1].Content) == strings.TrimSpace(q)
+		sess.mu.RUnlock()
+		if !lastIsSameUser {
+			sess.AddMessage("user", q)
+		}
 	}
 	if a != "" {
-		c.session().AddMessage("assistant", a)
+		sess.AddMessage("assistant", a)
 	}
 
-	// Dynamic Learning is temporarily disabled to prevent the model from 
+	// Dynamic Learning is temporarily disabled to prevent the model from
 	// corrupting its own training dataset with unverified "word salad" generations.
 	// We rely on the Teacher (Ollama) AI Supervisor for dataset evolution instead.
 }
@@ -208,10 +215,10 @@ func (c *GollemerMoEClient) LoadDeviceIntentsBank(path string) {
 		if i == 0 || len(record) < 5 {
 			continue
 		}
-		
+
 		input := record[0]
 		intent := record[1]
-		
+
 		roles := make(map[string]string)
 		if record[2] != "" {
 			roles["action"] = record[2]
@@ -233,14 +240,7 @@ func (c *GollemerMoEClient) LoadDeviceIntentsBank(path string) {
 }
 
 func (c *GollemerMoEClient) buildQueryContext(input string) string {
-	// Add the current user turn to the session before building the context string
-	// so it appears in the sliding-window payload.
-	sess := c.session()
-	sess.AddMessage("user", input)
-
-	// BuildContextString uses GetContextForInference with the default budget,
-	// preserves the system prompt, and emits the gollemer token format.
-	return sess.BuildContextString(defaultMaxTokens)
+	return c.session().BuildContextStringWithUserInput(defaultMaxTokens, input)
 }
 
 func (c *GollemerMoEClient) RetrieveChatResponse(input string) (string, string, float64) {
@@ -1134,16 +1134,17 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 
 	// ── 🎯 ChatBank: fetch target answer for guided decoding (not returned directly) ──
 	// Instead of copy-pasting, we tokenize the target answer and use it as a
-	// soft logit boost during MoE decoding.  The decoder generates its own tokens;
+	// soft logit boost during MoE decoding. The decoder generates its own tokens;
 	// it is merely nudged toward the right vocabulary.
 	chatTarget, chatTargetScore := c.lookupChatBank(input, intent)
+	retrievedResp, _, retrievedScore := c.RetrieveChatResponse(input)
 	var guidanceTokenIDs map[int]bool
 	// guidanceBoost of 1.2 gently nudges the decoder toward vocabulary that appears
 	// in the reference answer without hard-locking it onto those tokens. A value
 	// of 4.5 (old) effectively forces verbatim copy because it drowns the model's
 	// own learned logits.
 	const guidanceBoost = float32(1.2)
-	if chatTarget != "" && chatTargetScore >= 0.35 {
+	if chatTarget != "" && chatTargetScore >= 0.70 {
 		log.Printf("🧭 ChatBank guidance target (score=%.2f, intent=%s): '%s'", chatTargetScore, intent, chatTarget)
 		guidanceTokenIDs = make(map[int]bool)
 		for _, w := range cleanTokenize(chatTarget) {
@@ -1151,6 +1152,19 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 				guidanceTokenIDs[id] = true
 			}
 		}
+	} else if chatTarget != "" {
+		log.Printf("🔍 Skipping weak ChatBank guidance (score=%.2f)", chatTargetScore)
+	}
+
+	// If the ChatBank has a strong target answer, prefer it over the weak social
+	// model generation path for now, since the conversational MoE is still noisy.
+	if chatTarget != "" && chatTargetScore >= 0.80 {
+		log.Printf("🔁 Strong ChatBank direct answer (score=%.2f): '%s'", chatTargetScore, chatTarget)
+		return paraphraseResponse(chatTarget)
+	}
+	if retrievedResp != "" && retrievedScore >= 0.80 {
+		log.Printf("🔁 Strong retrieval fallback answer (score=%.2f): '%s'", retrievedScore, retrievedResp)
+		return paraphraseResponse(retrievedResp)
 	}
 
 	queryContext := c.buildQueryContext(lowerInput)
@@ -1293,9 +1307,21 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 	socialSuppressedIDs := buildSocialSuppressedIDs(model.SentenceVocab)
 
 	supervisorResp := c.supervisorCompleteSentenceGuided(ctx, intent, model, guidanceTokenIDs, finalIntentBias, socialSuppressedIDs)
-	if supervisorResp != "" { // BYPASS: && !isGarbageOutput(supervisorResp) && !isLowQualitySocialResponse(supervisorResp)
-		log.Printf("🦺 Supervised+guided generation (intent=%s): '%s'", intent, supervisorResp)
-		return supervisorResp
+	if supervisorResp != "" {
+		if isGarbageOutput(supervisorResp) || isLowQualitySocialResponse(supervisorResp) {
+			log.Printf("🗑️  Supervised response rejected (quality gate): '%s'", supervisorResp)
+			if chatTarget != "" && chatTargetScore >= 0.70 {
+				log.Printf("🔁 Falling back to strong ChatBank target answer (score=%.2f): '%s'", chatTargetScore, chatTarget)
+				return paraphraseResponse(chatTarget)
+			}
+			if retrievedScore >= 0.75 && retrievedResp != "" {
+				log.Printf("🔁 Falling back to high-confidence ChatBank retrieval (score=%.2f): '%s'", retrievedScore, retrievedResp)
+				return paraphraseResponse(retrievedResp)
+			}
+		} else {
+			log.Printf("🦺 Supervised+guided generation (intent=%s): '%s'", intent, supervisorResp)
+			return supervisorResp
+		}
 	}
 
 	// ── Beam Search Decode (tertiary) ────────────────────────────────────────
@@ -1311,10 +1337,10 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 
 	resIDs, beamErr := model.BeamSearchDecode(
 		ctx,
-		20, // shorter max length to reduce repetition chances
+		16, // shorter max length to reduce repetition chances
 		model.SentenceVocab.BosID, model.SentenceVocab.EosID,
-		4,                   // beam width
-		0.8,                 // temperature (slightly higher for diversity)
+		3,                   // smaller beam width helps reduce spurious paths
+		0.65,                // lower temperature for safer decoding
 		beamRepPenalty,      // dynamic repetition penalty from config
 		&rule,               // 🧬 Guided Beam Search
 		socialSuppressedIDs, // 🚫 block technical tokens in social context
@@ -1422,22 +1448,32 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 	for _, id := range resIDs {
 		w := model.SentenceVocab.GetWord(id)
 		log.Printf("   Token ID %d -> '%s'", id, w)
-		if w != "</s>" && w != "<s>" && w != "<pad>" && w != "UNK" && w != "" &&
-			w != "__intent__" && w != "__ques__" && w != "__ans__" && w != "social" && w != ":" {
-			result = append(result, w)
+		if w == "</s>" || w == "<s>" || w == "<pad>" || w == "UNK" || w == "" ||
+			w == "__intent__" || w == "__ques__" || w == "__ans__" || w == "social" || w == ":" ||
+			strings.HasPrefix(w, "<INTENT_") || strings.HasPrefix(w, "<ACT_") || strings.HasPrefix(w, "<DEV_") {
+			continue
 		}
+		result = append(result, w)
 	}
 	response := strings.Join(result, " ")
 	if response == "" {
 		log.Printf("⚠️  Response became empty after filtering %d tokens", len(resIDs))
+		if chatTarget != "" && chatTargetScore >= 0.75 {
+			log.Printf("🔁 Falling back to strong ChatBank target answer (score=%.2f): '%s'", chatTargetScore, chatTarget)
+			return paraphraseResponse(chatTarget)
+		}
+		if retrievedScore >= 0.8 && retrievedResp != "" {
+			log.Printf("🔁 Falling back to high-confidence direct ChatBank retrieval (score=%.2f): '%s'", retrievedScore, retrievedResp)
+			return retrievedResp
+		}
+		log.Printf("⚠️  Neural social response failed and retrieval score was low (%.2f)", retrievedScore)
+		return "I'm sorry, I don't have a good answer for that right now. Can you ask in a different way?"
+	}
+	if isGarbageOutput(response) || isLowQualitySocialResponse(response) {
+		log.Printf("🗑️  Neural social output rejected (quality gate): '%s'", response)
 		return ""
 	}
 	log.Printf("🎭 Neural Social Model generated: '%s'", response)
-	if false { // BYPASS: isGarbageOutput(response) || isLowQualitySocialResponse(response)
-		log.Printf("🗑️  Neural output rejected (quality gate): '%s'", response)
-		// Return empty to trigger fallback logic
-		return ""
-	}
 	return response
 }
 

@@ -64,7 +64,7 @@ func compareLayers(mA, mB *moe.MoELayer) {
 		normA := calculateNorm(mA.Experts[i])
 		normB := calculateNorm(mB.Experts[i])
 		diff := normB - normA
-		
+
 		status := "✅ Stable"
 		if math.Abs(diff) > 0.5 {
 			status = "⚠️  DRIFTING"
@@ -73,14 +73,14 @@ func compareLayers(mA, mB *moe.MoELayer) {
 			status = "❌ CRITICAL (NaN)"
 		}
 
-		fmt.Printf("  Expert %d: NormA: %.4f | NormB: %.4f | Change: %+.4f [%s]\n", 
+		fmt.Printf("  Expert %d: NormA: %.4f | NormB: %.4f | Change: %+.4f [%s]\n",
 			i, normA, normB, diff, status)
 	}
 
 	// Router
 	rNormA := calculateRouterNorm(mA)
 	rNormB := calculateRouterNorm(mB)
-	fmt.Printf("  Router  : NormA: %.4f | NormB: %.4f | Change: %+.4f\n\n", 
+	fmt.Printf("  Router  : NormA: %.4f | NormB: %.4f | Change: %+.4f\n\n",
 		rNormA, rNormB, rNormB-rNormA)
 }
 
@@ -88,7 +88,7 @@ func calculateNorm(expert moe.Expert) float64 {
 	var sum float64
 	for _, p := range expert.Parameters() {
 		for _, v := range p.Data {
-			sum += v * v
+			sum += float64(v) * float64(v)
 		}
 	}
 	return math.Sqrt(sum)
@@ -98,7 +98,7 @@ func calculateRouterNorm(m *moe.MoELayer) float64 {
 	var sum float64
 	for _, p := range m.GatingNetwork.Linear.Parameters() {
 		for _, v := range p.Data {
-			sum += v * v
+			sum += float64(v) * float64(v)
 		}
 	}
 	return math.Sqrt(sum)

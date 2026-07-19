@@ -1,0 +1,168 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Gollemer Combined (Inline DOM) Dashboard</title>
+</head>
+<body style="margin:0;padding:0;background:#0f172a;color:#fff;">
+  <div style="padding:8px;display:flex;gap:8px;align-items:center;background:#071028;color:#fff;">
+    <h3 style="margin:0;font-family:Inter,system-ui">Gollemer — Combined Inline Dashboard</h3>
+    <div style="margin-left:12px;">(DOM-level merge using Shadow DOM + document proxy)</div>
+    <div style="margin-left:auto"><button onclick="toggleLayout()">Toggle Layout</button></div>
+  </div>
+
+  <div id="container" style="display:flex;flex-direction:row;gap:8px;height:calc(100vh - 48px);padding:8px;box-sizing:border-box;">
+    <div id="left-host" style="flex:1;border-radius:8px;overflow:auto;background:#071028"></div>
+    <div id="right-host" style="flex:1;border-radius:8px;overflow:auto;background:#071028"></div>
+  </div>
+
+<script>
+  let vertical = true;
+  function toggleLayout(){
+    const c = document.getElementById('container');
+    vertical = !vertical;
+    c.style.flexDirection = vertical ? 'row' : 'column';
+  }
+
+  async function fetchText(url){
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Failed to fetch '+url);
+    return await res.text();
+  }
+
+  // Mount html into a shadow root and return {shadowRoot, container, scripts}
+  async function mountPageToShadow(hostEl, url){
+    const html = await fetchText(url);
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+
+    const shadow = hostEl.attachShadow({mode:'open'});
+
+    // Copy link rel=stylesheet and style tags into shadow
+    doc.head.querySelectorAll('link[rel="stylesheet"]').forEach(l=>{
+      const href = l.getAttribute('href');
+      if (!href) return;
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = href;
+      shadow.appendChild(link);
+    });
+    doc.head.querySelectorAll('style').forEach(s=>{
+      const st = document.createElement('style');
+      st.textContent = s.textContent;
+      shadow.appendChild(st);
+    });
+
+    // Create container div that will act as body for this shadow
+    const container = document.createElement('div');
+    container.innerHTML = doc.body.innerHTML;
+    shadow.appendChild(container);
+
+    // Collect scripts (external and inline) in order
+    const scripts = [];
+    doc.querySelectorAll('script').forEach(s=>{
+      if (s.src) scripts.push({src: s.src});
+      else if (s.textContent && s.textContent.trim()) scripts.push({inline: s.textContent});
+    });
+
+    return {shadow, container, scripts};
+  }
+
+  // Deduplicate externals by src
+  function dedupeBySrc(arr){
+    const seen = new Set();
+    return arr.filter(item=>{
+      if (!item.src) return true;
+      if (seen.has(item.src)) return false;
+      seen.add(item.src);
+      return true;
+    });
+  }
+
+  // Load external scripts into the global document (deduped)
+  async function loadExternalScriptsOrdered(srcs){
+    for (const src of srcs){
+      // ignore empty
+      if (!src) continue;
+      // if already present in DOM by matching src, skip
+      if (Array.from(document.scripts).some(s=>s.src===src)) continue;
+      await new Promise(res => {
+        const s = document.createElement('script');
+        s.src = src;
+        s.async = false;
+        s.onload = ()=>res();
+        s.onerror = ()=>{ console.warn('Failed load', src); res(); };
+        document.head.appendChild(s);
+      });
+    }
+  }
+
+  // Create a lightweight document proxy that maps common DOM operations to the shadow container
+  function makeShadowDocument(container, shadowRoot){
+    return {
+      getElementById: (id)=> shadowRoot.querySelector('#'+id),
+      querySelector: (sel)=> shadowRoot.querySelector(sel),
+      querySelectorAll: (sel)=> shadowRoot.querySelectorAll(sel),
+      createElement: (tag)=> document.createElement(tag),
+      createTextNode: (t)=> document.createTextNode(t),
+      body: container,
+      head: document.head,
+      // pass-through a few useful props
+      location: document.location,
+      addEventListener: (...args)=> container.addEventListener(...args),
+      removeEventListener: (...args)=> container.removeEventListener(...args),
+      // allow setting attributes on the body
+      documentElement: container,
+    };
+  }
+
+  // Execute inline scripts with a document proxy so `document.getElementById` resolves inside shadow
+  async function runInlineScriptsForShadow(inlines, shadowDoc){
+    for (const code of inlines){
+      try{
+        // Wrap in a function receiving document and window
+        const fn = new Function('document','window', code);
+        // call with shadowDoc proxy and real window
+        fn(shadowDoc, window);
+      }catch(e){
+        console.warn('Inline script error', e);
+      }
+    }
+  }
+
+  (async ()=>{
+    try{
+      const leftHost = document.getElementById('left-host');
+      const rightHost = document.getElementById('right-host');
+
+      const params = new URLSearchParams(window.location.search);
+      params.set('embedded', '1');
+
+      const left = await mountPageToShadow(leftHost, '/docs/dashboard.html' + window.location.search);
+      const right = await mountPageToShadow(rightHost, '/docs/dashboard-enhanced.html?' + params.toString());
+
+      // Collect externals in order left then right
+      const externals = dedupeBySrc(left.scripts.concat(right.scripts));
+      const extSrcs = externals.filter(s=>s.src).map(s=>s.src);
+      await loadExternalScriptsOrdered(extSrcs);
+
+      // For each shadow, run inline scripts with proxy
+      const leftInline = left.scripts.filter(s=>s.inline).map(s=>s.inline);
+      const rightInline = right.scripts.filter(s=>s.inline).map(s=>s.inline);
+
+      const leftDoc = makeShadowDocument(left.container, left.shadow);
+      const rightDoc = makeShadowDocument(right.container, right.shadow);
+
+      await runInlineScriptsForShadow(leftInline, leftDoc);
+      await runInlineScriptsForShadow(rightInline, rightDoc);
+
+      console.log('Combined inline dashboards mounted');
+    }catch(err){
+      console.error('Failed to mount combined inline dashboards', err);
+      document.body.innerHTML = '<pre style="color:#fff;padding:16px;background:#800">Failed: '+err.message+'</pre>';
+    }
+  })();
+</script>
+</body>
+</html>

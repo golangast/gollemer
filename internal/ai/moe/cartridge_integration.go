@@ -50,7 +50,7 @@ func (s *Supervisor) MountCartridgeToLayer(model *IntentMoE, layerIdx int, exper
 			for row := 0; row < gw.Shape[0]; row++ {
 				copy(newData[row*newNumExperts:row*newNumExperts+oldNumExperts],
 					oldData[row*oldNumExperts:row*oldNumExperts+oldNumExperts])
-				newData[row*newNumExperts+oldNumExperts] = initWeight 
+				newData[row*newNumExperts+oldNumExperts] = initWeight
 			}
 			lin.Weights = tensor.NewTensor([]int{gw.Shape[0], newNumExperts}, newData, true)
 

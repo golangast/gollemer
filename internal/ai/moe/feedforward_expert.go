@@ -35,10 +35,10 @@ func NewFeedForwardExpert(inputDim, hiddenDim, outputDim int) (*FeedForwardExper
 	}
 
 	return &FeedForwardExpert{
-		Layer1: layer1,
-		Layer2: layer2,
+		Layer1:        layer1,
+		Layer2:        layer2,
 		ActivationEMA: 0.125, // Initial health (1/num_experts if 8)
-		Decay: 0.99,
+		Decay:         0.99,
 	}, nil
 }
 
@@ -84,7 +84,7 @@ func (e *FeedForwardExpert) Backward(grad *tensor.Tensor) error {
 	if e.activationOutput == nil || e.activationOutput.Grad == nil {
 		return fmt.Errorf("expert activation output or its gradient is nil in backward")
 	}
-	
+
 	// Explicit check for "Dead ReLU" during backprop
 	if e.intermediateOutput != nil {
 		if e.intermediateOutput.Grad == nil {
@@ -225,7 +225,7 @@ func (e *FeedForwardExpert) Shake(intensity float32) {
 
 // IsStagnant returns true if the expert's relevance is below a minimal threshold.
 func (e *FeedForwardExpert) IsStagnant() bool {
-	// If 8 experts, ideal health is 0.125. 
+	// If 8 experts, ideal health is 0.125.
 	// Threshold of 0.01 means less than 1% utilization.
 	return e.ActivationEMA < 0.01
 }

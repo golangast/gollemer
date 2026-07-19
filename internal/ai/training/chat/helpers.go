@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"github.com/golangast/gollemer/internal/ai/moe"
+	"github.com/golangast/gollemer/internal/ai/neural/tensor"
 	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
 )
 
@@ -89,4 +90,43 @@ func toFloat32(tokens []string) []float32 {
 		out[i] = float32(h % 10000)
 	}
 	return out
+}
+
+// extractExpertRoutingInfo collects expert IDs and ACTUAL vocabulary token IDs from all MoE layers.
+func extractExpertRoutingInfo(intentModel *moe.IntentMoE, inputTensor *tensor.Tensor, targetTensor *tensor.Tensor) ([]int, []int) {
+	expertIDs := make([]int, 0)
+	tokenIDs := make([]int, 0)
+
+	// Process Encoder Layers (mapped to inputTensor)
+	for _, layer := range intentModel.Encoder.GetMoELayers() {
+		if layer != nil && layer.ExpertTokenIndices != nil {
+			for expertIdx, seqIndices := range layer.ExpertTokenIndices {
+				for _, seqIdx := range seqIndices {
+					if inputTensor != nil && seqIdx < len(inputTensor.Data) {
+						vocabID := int(inputTensor.Data[seqIdx])
+						expertIDs = append(expertIDs, expertIdx)
+						tokenIDs = append(tokenIDs, vocabID)
+					}
+				}
+			}
+		}
+	}
+
+	// Process Decoder Layers (mapped to targetTensor)
+	if intentModel.Decoder.OutputMoE != nil {
+		layer := intentModel.Decoder.OutputMoE
+		if layer.ExpertTokenIndices != nil {
+			for expertIdx, seqIndices := range layer.ExpertTokenIndices {
+				for _, seqIdx := range seqIndices {
+					if targetTensor != nil && seqIdx < len(targetTensor.Data) {
+						vocabID := int(targetTensor.Data[seqIdx])
+						expertIDs = append(expertIDs, expertIdx)
+						tokenIDs = append(tokenIDs, vocabID)
+					}
+				}
+			}
+		}
+	}
+
+	return expertIDs, tokenIDs
 }

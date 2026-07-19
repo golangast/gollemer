@@ -10,14 +10,14 @@ import (
 type IntentRule struct {
 	ParentIntent string
 	ChildIntent  string
-	
+
 	// GrammarSkeleton defines the expected sequence of POS types (simplified)
 	// Example: ["PRON", "VERB", "ADJ"] -> "I am happy"
 	GrammarSkeleton []string
-	
+
 	// RequiredKeywords are words that SHOULD be present for this intent to be valid.
 	RequiredKeywords []string
-	
+
 	// ForbiddenPatterns are sequences that make the sentence incoherent for this intent.
 	ForbiddenPatterns []string
 }
@@ -60,102 +60,101 @@ func NewRuleBook() *RuleBook {
 	// Rule: Greeting — "hi there! how can i help you today?"
 	// CSV grammar: GREET OTHER OTHER AUX PRON VERB PRON OTHER
 	rb.Rules["social:greeting"] = IntentRule{
-		ParentIntent: "social",
-		ChildIntent:  "greeting",
-		GrammarSkeleton: []string{"GREET", "OTHER", "OTHER", "INTERROGATIVE", "AUX", "PRON", "VERB", "PRON", "OTHER", "OTHER"},
+		ParentIntent:     "social",
+		ChildIntent:      "greeting",
+		GrammarSkeleton:  []string{"GREET", "OTHER", "OTHER", "INTERROGATIVE", "AUX", "PRON", "VERB", "PRON", "OTHER", "OTHER"},
 		RequiredKeywords: []string{"hi", "hello", "help", "how", "today"},
 	}
 
 	// Rule: Identity — "i am gollemer, your ai assistant."
 	// CSV grammar: PRON VERB NOUN PRON NOUN NOUN
 	rb.Rules["social:identity"] = IntentRule{
-		ParentIntent: "social",
-		ChildIntent:  "identity",
-		GrammarSkeleton: []string{"PRON", "VERB", "NOUN", "PRON", "NOUN", "NOUN"},
+		ParentIntent:     "social",
+		ChildIntent:      "identity",
+		GrammarSkeleton:  []string{"PRON", "VERB", "NOUN", "PRON", "NOUN", "NOUN"},
 		RequiredKeywords: []string{"gollemer", "ai", "assistant"},
 	}
 
 	// Rule: Status Check — "i am doing well, thank you for asking!"
 	// CSV grammar: PRON VERB OTHER ADJ OTHER PRON PREP OTHER
 	rb.Rules["social:status_check"] = IntentRule{
-		ParentIntent: "social",
-		ChildIntent:  "status_check",
-		GrammarSkeleton: []string{"PRON", "VERB", "OTHER", "ADJ", "OTHER", "PRON", "PREP", "OTHER"},
+		ParentIntent:     "social",
+		ChildIntent:      "status_check",
+		GrammarSkeleton:  []string{"PRON", "VERB", "OTHER", "ADJ", "OTHER", "PRON", "PREP", "OTHER"},
 		RequiredKeywords: []string{"doing", "well"},
 	}
 
 	// Rule: Polite — "you are very welcome! i am happy to help."
 	// CSV grammar: PRON VERB OTHER OTHER PRON VERB ADJ PREP VERB
 	rb.Rules["social:polite"] = IntentRule{
-		ParentIntent: "social",
-		ChildIntent:  "polite",
-		GrammarSkeleton: []string{"PRON", "VERB", "OTHER", "OTHER", "PRON", "VERB", "ADJ", "PREP", "VERB"},
+		ParentIntent:     "social",
+		ChildIntent:      "polite",
+		GrammarSkeleton:  []string{"PRON", "VERB", "OTHER", "OTHER", "PRON", "VERB", "ADJ", "PREP", "VERB"},
 		RequiredKeywords: []string{"welcome", "happy", "help"},
 	}
 
 	// Rule: Farewell — "goodbye! it was nice talking to you today."
 	// CSV grammar: GREET PRON VERB ADJ OTHER PREP PRON OTHER
 	rb.Rules["social:farewell"] = IntentRule{
-		ParentIntent: "social",
-		ChildIntent:  "farewell",
-		GrammarSkeleton: []string{"GREET", "PRON", "VERB", "ADJ", "OTHER", "PREP", "PRON", "OTHER"},
+		ParentIntent:     "social",
+		ChildIntent:      "farewell",
+		GrammarSkeleton:  []string{"GREET", "PRON", "VERB", "ADJ", "OTHER", "PREP", "PRON", "OTHER"},
 		RequiredKeywords: []string{"goodbye"},
 	}
 
 	// Rule: Capabilities — "i can answer questions, tell jokes, and help you with your code."
 	// CSV grammar: PRON AUX OTHER NOUN OTHER OTHER PREP VERB PRON PREP PRON NOUN
 	rb.Rules["social:capabilities"] = IntentRule{
-		ParentIntent: "social",
-		ChildIntent:  "capabilities",
-		GrammarSkeleton: []string{"PRON", "AUX", "OTHER", "NOUN", "OTHER", "VERB", "PRON", "PREP", "PRON", "NOUN"},
+		ParentIntent:     "social",
+		ChildIntent:      "capabilities",
+		GrammarSkeleton:  []string{"PRON", "AUX", "OTHER", "NOUN", "OTHER", "VERB", "PRON", "PREP", "PRON", "NOUN"},
 		RequiredKeywords: []string{"can", "help"},
 	}
 
 	// Rule: Emotional Support — "i hope you can get some rest soon."
 	// CSV grammar: PRON OTHER PRON AUX VERB OTHER OTHER OTHER
 	rb.Rules["social:emotional_support"] = IntentRule{
-		ParentIntent: "social",
-		ChildIntent:  "emotional_support",
-		GrammarSkeleton: []string{"PRON", "OTHER", "PRON", "AUX", "VERB", "OTHER", "OTHER"},
+		ParentIntent:     "social",
+		ChildIntent:      "emotional_support",
+		GrammarSkeleton:  []string{"PRON", "OTHER", "PRON", "AUX", "VERB", "OTHER", "OTHER"},
 		RequiredKeywords: []string{},
 	}
 
 	// Rule: Support/Help — "i would be happy to help!"
 	// CSV grammar: PRON AUX VERB ADJ PREP VERB
 	rb.Rules["social:support"] = IntentRule{
-		ParentIntent: "social",
-		ChildIntent:  "support",
-		GrammarSkeleton: []string{"PRON", "AUX", "VERB", "ADJ", "PREP", "VERB"},
+		ParentIntent:     "social",
+		ChildIntent:      "support",
+		GrammarSkeleton:  []string{"PRON", "AUX", "VERB", "ADJ", "PREP", "VERB"},
 		RequiredKeywords: []string{"help"},
 	}
 
 	// Rule: General Social — simple subject-verb structure
 	rb.Rules["social:social_chat"] = IntentRule{
-		ParentIntent: "social",
-		ChildIntent:  "social_chat",
-		GrammarSkeleton: []string{"PRON", "VERB", "OTHER"},
+		ParentIntent:     "social",
+		ChildIntent:      "social_chat",
+		GrammarSkeleton:  []string{"PRON", "VERB", "OTHER"},
 		RequiredKeywords: []string{},
 	}
 
 	// Rule: Trivia / Knowledge
 	rb.Rules["social:trivia"] = IntentRule{
-		ParentIntent: "social",
-		ChildIntent:  "trivia",
-		GrammarSkeleton: []string{"OTHER", "PRON", "OTHER", "OTHER", "OTHER", "VERB"},
+		ParentIntent:     "social",
+		ChildIntent:      "trivia",
+		GrammarSkeleton:  []string{"OTHER", "PRON", "OTHER", "OTHER", "OTHER", "VERB"},
 		RequiredKeywords: []string{},
 	}
 
 	// Rule: Small Talk
 	rb.Rules["social:small_talk"] = IntentRule{
-		ParentIntent: "social",
-		ChildIntent:  "small_talk",
-		GrammarSkeleton: []string{"PRON", "OTHER", "OTHER", "PRON", "VERB"},
+		ParentIntent:     "social",
+		ChildIntent:      "small_talk",
+		GrammarSkeleton:  []string{"PRON", "OTHER", "OTHER", "PRON", "VERB"},
 		RequiredKeywords: []string{},
 	}
 
 	return rb
 }
-
 
 // GetRuleByIntent retrieves the rule for a specific intent pair.
 func (rb *RuleBook) GetRuleByIntent(parent, child string) (IntentRule, bool) {
@@ -731,4 +730,3 @@ func MapWordToGrammarType(w string) string {
 	}
 	return "OTHER"
 }
-

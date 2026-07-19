@@ -31,7 +31,7 @@ func TestDynamicLexicon(t *testing.T) {
 	if tag != "GREET" {
 		t.Errorf("Expected GREET for hello, got %s", tag)
 	}
-	
+
 	tag = MapWordToGrammarType("running")
 	if tag != "VERB" {
 		t.Errorf("Expected VERB for running, got %s", tag)

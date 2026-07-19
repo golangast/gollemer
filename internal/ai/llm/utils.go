@@ -11,8 +11,8 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/golangast/gollemer/internal/ai/tagger/tag"
 	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
+	"github.com/golangast/gollemer/internal/ai/tagger/tag"
 )
 
 var absoluteLastDirConfigPath string // Global variable for the absolute path to last_dir.txt
@@ -49,6 +49,14 @@ var socialTechBlacklist = []string{
 	"repository", "branch", "commit", "merge", "pr",
 	"ci", "cd", "devops", "cache", "redis",
 	"queue", "worker", "scheduler", "orchestrator",
+	"bandwidth", "server", "servers", "distributed", "infrastructure",
+	"initialization", "config", "configuration", "performance",
+	"latency", "throughput", "protocol", "session", "router",
+	"enabled", "counting", "opinion", "dedicated", "statements",
+	"track", "fifty", "commands", "buffer", "behavior",
+	"scanning", "attack", "tool", "recent", "mock",
+	"innerhtml", "cloudflare", "server's", "tone", "experience",
+	"process", "containing", "deployment", "utilization",
 	"identity_query", "status_check", "social_chat",
 }
 
@@ -329,8 +337,9 @@ func cleanTokenize(text string) []string {
 
 	for _, word := range words {
 		// If it's a bracketed token like <INTENT_CAMERA> or <ACT_TAKE> or <DEV_CAMERA>, keep it verbatim!
+		// Also preserve core vocab structural tokens like <s>, </s>, <pad>.
 		if strings.HasPrefix(word, "<") && strings.HasSuffix(word, ">") &&
-			(strings.Contains(word, "INTENT_") || strings.Contains(word, "ACT_") || strings.Contains(word, "DEV_")) {
+			(strings.Contains(word, "INTENT_") || strings.Contains(word, "ACT_") || strings.Contains(word, "DEV_") || word == "<s>" || word == "</s>" || word == "<pad>") {
 			finalTokens = append(finalTokens, word) // Do not lowercase or split
 			continue
 		}
@@ -646,7 +655,7 @@ func isCreatingCommand(input string) bool {
 func lookupVocab(token string, vocab *mainvocab.Vocabulary) int {
 	token = strings.ToLower(strings.TrimSpace(token))
 	id := vocab.GetTokenID(token)
-	
+
 	// If it's a real token (not UNK and not PAD unless specifically requested)
 	if id > 1 || (id == 0 && token == "<pad>") {
 		return id
@@ -668,7 +677,6 @@ func lookupVocab(token string, vocab *mainvocab.Vocabulary) int {
 	}
 	return id
 }
-
 
 func goImports(path string) {
 	cmd := exec.Command("go", "run", "golang.org/x/tools/cmd/goimports@latest", "-w", path)
@@ -718,4 +726,3 @@ func ExtractEntities(intent string, input string) []Entity {
 
 	return entities
 }
-

@@ -13,9 +13,9 @@ type TokenFeatures struct {
 
 // RouterLossConfig holds hyperparameters for the advanced gating objective.
 type RouterLossConfig struct {
-	BaseLBW       float64 // Traditional load balancing weight (e.g., 0.030)
+	BaseLBW         float64 // Traditional load balancing weight (e.g., 0.030)
 	SyntacticWeight float64 // Penalty weight for separating PRON/AUX dependencies
-	Temperature   float64 // Softmax temperature for gating stability
+	Temperature     float64 // Softmax temperature for gating stability
 }
 
 // ComputeAdvancedRouterLoss calculates a composite loss that punishes the router
@@ -39,7 +39,7 @@ func ComputeAdvancedRouterLoss(
 			expertCounts[e] += gatingProbs[t][e]
 		}
 	}
-	
+
 	meanCount := float64(numTokens) / float64(numExperts)
 	for e := 0; e < numExperts; e++ {
 		diff := expertCounts[e] - meanCount
@@ -71,7 +71,7 @@ func ComputeAdvancedRouterLoss(
 			}
 			// Minimize (1 - alignment)
 			syncLoss += (1.0 - dotProduct)
-			
+
 			// Reset tracking for next pair window
 			pronIdx = -1
 			auxIdx = -1

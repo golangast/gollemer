@@ -21,7 +21,7 @@ type SavedAudioModel struct {
 	ClassNames   []string
 	// Prototypes stores the mean GRU embedding for each class.
 	// This enables zero-shot command addition without retraining.
-	Prototypes   map[string][]float32
+	Prototypes map[string][]float32
 }
 
 func SaveAudioModel(path string, ae *AudioEncoder, te *TemporalEncoder, headW, headB []float32, classNames []string, prototypes map[string][]float32) error {

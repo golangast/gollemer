@@ -1,14 +1,12 @@
-
-
 package moe
 
 import (
-    "fmt"
-    "math"
-    "math/rand"
+	"fmt"
+	"math"
+	"math/rand"
 
-    "github.com/golangast/gollemer/internal/ai/neural/nn"
-    "github.com/golangast/gollemer/internal/ai/neural/tensor"
+	"github.com/golangast/gollemer/internal/ai/neural/nn"
+	"github.com/golangast/gollemer/internal/ai/neural/tensor"
 )
 
 // RouterNoiseFactor controls the magnitude of random noise added during routing.
@@ -139,7 +137,7 @@ func (gn *GatingNetwork) Forward(inputs ...*tensor.Tensor) (*tensor.Tensor, erro
 	if gn.Training && gn.NoiseLinear != nil {
 		noiseLogitsData := make([]float32, numTokens*numExperts)
 		computeRouterLogitsSIMD(inputFlat, gn.NoiseLinear.Weights.Data, numTokens, numExperts, inputDim, noiseLogitsData)
-		
+
 		// noise_scale = Softplus(noise_logits)
 		// We approximate Softplus here for performance
 		for i := range noiseLogitsData {
@@ -150,9 +148,9 @@ func (gn *GatingNetwork) Forward(inputs ...*tensor.Tensor) (*tensor.Tensor, erro
 				noiseLogitsData[i] = float32(math.Log(1.0 + math.Exp(v)))
 			}
 		}
-		
+
 		gn.noiseLogitsTensor = tensor.NewTensor(logitsShape, noiseLogitsData, gn.NoiseLinear.Weights.RequiresGrad)
-		
+
 		// logits = logits + StandardNormal() * noise_scale * RouterNoiseFactor
 		for i := range logits.Data {
 			noise := float32(rand.NormFloat64())
@@ -206,7 +204,7 @@ func (gn *GatingNetwork) Backward(grad *tensor.Tensor) error {
 	// Ensure weight and input gradient tensors exist.
 	var dWeightsOut []float32
 	var dInputOut []float32
-	
+
 	if gn.Linear.Weights.RequiresGrad {
 		if gn.Linear.Weights.Grad == nil {
 			gn.Linear.Weights.Grad = tensor.NewTensor(gn.Linear.Weights.Shape, make([]float32, len(gn.Linear.Weights.Data)), false)
@@ -228,7 +226,7 @@ func (gn *GatingNetwork) Backward(grad *tensor.Tensor) error {
 	// Accumulate weight and input gradients using SIMD.
 	// Apply 1/sqrt(inputDim) scaling factor to match forward pass
 	scaleFactor := float32(1.0 / math.Sqrt(float64(inputDim)))
- 
+
 	computeRouterGradSIMD(
 		gn.inputTensor.Data,
 		gn.Linear.Weights.Data,
@@ -334,7 +332,7 @@ func (gn *GatingNetwork) CalculateCVLoss() float32 {
 		numTokens *= gn.outputTensor.Shape[1]
 	}
 	numExperts := gn.outputTensor.Shape[len(gn.outputTensor.Shape)-1]
-	
+
 	if numTokens <= 0 {
 		return 0
 	}
@@ -380,7 +378,7 @@ func (gn *GatingNetwork) CalculateCVLoss() float32 {
 	if coeff == 0 {
 		coeff = 0.5
 	}
-	
+
 	res := float32(cvSquared) * coeff
 	if math.IsNaN(float64(res)) || math.IsInf(float64(res), 0) {
 		return 0.0
@@ -405,7 +403,7 @@ func (gn *GatingNetwork) CalculateGatingEntropy() float32 {
 		numTokens *= gn.outputTensor.Shape[1]
 	}
 	numExperts := gn.outputTensor.Shape[len(gn.outputTensor.Shape)-1]
-	
+
 	if numTokens <= 0 {
 		return 0
 	}
@@ -441,7 +439,7 @@ func (gn *GatingNetwork) ClearState() {
 	gn.logitsTensor = nil
 	gn.noiseLogitsTensor = nil
 	gn.outputTensor = nil
-	
+
 	if gn.Linear != nil {
 		gn.Linear.ClearState()
 	}

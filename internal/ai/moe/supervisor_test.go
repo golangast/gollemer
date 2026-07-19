@@ -1,8 +1,8 @@
 package moe
 
 import (
-	"testing"
 	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
+	"testing"
 )
 
 func TestRuntimeTelemetryTraceBuffer(t *testing.T) {

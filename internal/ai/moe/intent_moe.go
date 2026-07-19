@@ -598,7 +598,7 @@ func (m *IntentMoE) AnalyzePartialQuery(partialQuery string) {
 	if m.Supervisor == nil || m.Supervisor.CartridgeMgr == nil {
 		return
 	}
-	
+
 	// Create a mean embedding of the partial query to use for semantic triage
 	tokens := strings.Fields(strings.ToLower(partialQuery))
 	ids := make([]float32, len(tokens))
@@ -609,7 +609,7 @@ func (m *IntentMoE) AnalyzePartialQuery(partialQuery string) {
 		}
 		ids[i] = float32(id)
 	}
-	
+
 	var queryEmb []float32
 	if len(ids) > 0 {
 		inputT := tensor.NewTensor([]int{1, len(ids)}, ids, false)
@@ -627,7 +627,7 @@ func (m *IntentMoE) AnalyzePartialQuery(partialQuery string) {
 			}
 		}
 	}
-	
+
 	cartridgePath := m.Supervisor.TriageCartridge(partialQuery, queryEmb)
 	if cartridgePath != "" {
 		log.Printf("⚡ Streaming Prediction: Detected namespace mid-sentence. Pre-loading %s...", cartridgePath)
@@ -1905,8 +1905,28 @@ func (m *IntentMoE) Forward(scheduledSamplingProb float32, inputs ...*tensor.Ten
 	}
 
 	// Encoder forward pass
+	// Before calling encoder forward, expose token IDs for observability
+	if queryTokenIDs != nil {
+		// Flatten token IDs from tensor data
+		if ObservabilityInstance != nil {
+			ids := make([]int, len(queryTokenIDs.Data))
+			for i, v := range queryTokenIDs.Data {
+				ids[i] = int(v)
+			}
+			ObservabilityInstance.SetTempTokenIDs(ids)
+		}
+	} else {
+		if ObservabilityInstance != nil {
+			ObservabilityInstance.ClearTempTokenIDs()
+		}
+	}
+
 	contextVector, err := m.Encoder.Forward(queryEmbeddings)
 	if err != nil {
+		// Clear token IDs on error
+		if ObservabilityInstance != nil {
+			ObservabilityInstance.ClearTempTokenIDs()
+		}
 		return nil, nil, fmt.Errorf("MoE encoder forward failed: %w", err)
 	}
 
@@ -1927,7 +1947,15 @@ func (m *IntentMoE) Forward(scheduledSamplingProb float32, inputs ...*tensor.Ten
 	// Decoder forward pass with scheduled sampling & mask
 	sentenceLogits, err := m.Decoder.Forward(contextVector, targetTokenIDs, scheduledSamplingProb, inputMask)
 	if err != nil {
+		// Clear token IDs on error
+		if ObservabilityInstance != nil {
+			ObservabilityInstance.ClearTempTokenIDs()
+		}
 		return nil, nil, fmt.Errorf("decoder forward failed: %w", err)
+	}
+	// Clear the temporary token ID buffer after forward completed
+	if ObservabilityInstance != nil {
+		ObservabilityInstance.ClearTempTokenIDs()
 	}
 
 	return sentenceLogits, contextVector, nil
@@ -2482,12 +2510,12 @@ func SaveIntentMoECheckpoint(ckpt *Checkpoint, path string) error {
 	runtime.ReadMemStats(&after)
 	if GlobalTelemetry != nil {
 		GlobalTelemetry.RecordSerializationMetrics("checkpoint", map[string]interface{}{
-			"path":         path,
-			"alloc_delta":  int64(after.TotalAlloc - before.TotalAlloc),
-			"heap_delta":   int64(after.HeapAlloc - before.HeapAlloc),
-			"heap_in_use":  int64(after.HeapInuse),
-			"gc_pause_ms":  int64(after.PauseTotalNs / 1e6),
-			"num_gc":       int64(after.NumGC),
+			"path":        path,
+			"alloc_delta": int64(after.TotalAlloc - before.TotalAlloc),
+			"heap_delta":  int64(after.HeapAlloc - before.HeapAlloc),
+			"heap_in_use": int64(after.HeapInuse),
+			"gc_pause_ms": int64(after.PauseTotalNs / 1e6),
+			"num_gc":      int64(after.NumGC),
 		})
 	}
 
@@ -2566,12 +2594,12 @@ func SaveIntentMoEModelToGOB(model *IntentMoE, path string) error {
 	runtime.ReadMemStats(&after)
 	if GlobalTelemetry != nil {
 		GlobalTelemetry.RecordSerializationMetrics("gob_model", map[string]interface{}{
-			"path":         path,
-			"alloc_delta":  int64(after.TotalAlloc - before.TotalAlloc),
-			"heap_delta":   int64(after.HeapAlloc - before.HeapAlloc),
-			"heap_in_use":  int64(after.HeapInuse),
-			"gc_pause_ms":  int64(after.PauseTotalNs / 1e6),
-			"num_gc":       int64(after.NumGC),
+			"path":        path,
+			"alloc_delta": int64(after.TotalAlloc - before.TotalAlloc),
+			"heap_delta":  int64(after.HeapAlloc - before.HeapAlloc),
+			"heap_in_use": int64(after.HeapInuse),
+			"gc_pause_ms": int64(after.PauseTotalNs / 1e6),
+			"num_gc":      int64(after.NumGC),
 		})
 	}
 
@@ -2600,7 +2628,10 @@ func LoadIntentMoEModelFromGOB(filePath string) (*IntentMoE, error) {
 }
 
 // LoadIntentMoEModelWithFallback attempts to load IntentMoE with format detection.
-// Tries gzip-compressed checkpoint format first, then falls back to raw gob legacy format.
+// Tries three paths in order:
+//  1. gzip-compressed Checkpoint wrapper (SaveIntentMoECheckpoint format)
+//  2. gzip-compressed raw IntentMoE (SaveIntentMoEModelToGOB format — most common)
+//  3. raw (uncompressed) gob IntentMoE (legacy format)
 func LoadIntentMoEModelWithFallback(filePath string) (*IntentMoE, error) {
 	// Check file size first
 	fi, err := os.Stat(filePath)
@@ -2611,39 +2642,62 @@ func LoadIntentMoEModelWithFallback(filePath string) (*IntentMoE, error) {
 		return nil, fmt.Errorf("model file is empty: %s", filePath)
 	}
 
-	// Try gzip-compressed checkpoint format first
+	// ── Path 1: gzip + Checkpoint wrapper ─────────────────────────────────────
+	{
+		file, err := os.Open(filePath)
+		if err != nil {
+			return nil, fmt.Errorf("error opening model file: %w", err)
+		}
+		gz, gzErr := gzip.NewReader(file)
+		if gzErr == nil {
+			var ckpt Checkpoint
+			decErr := gob.NewDecoder(gz).Decode(&ckpt)
+			gz.Close()
+			file.Close()
+			if decErr == nil && ckpt.Model != nil {
+				if ckpt.StepCount > ckpt.Model.StepCount {
+					ckpt.Model.StepCount = ckpt.StepCount
+				}
+				ckpt.Model.RepairArchitecture()
+				return ckpt.Model, nil
+			}
+		} else {
+			file.Close()
+		}
+	}
+
+	// ── Path 2: gzip + raw IntentMoE (SaveIntentMoEModelToGOB format) ─────────
+	{
+		file, err := os.Open(filePath)
+		if err != nil {
+			return nil, fmt.Errorf("error opening model file: %w", err)
+		}
+		gz, gzErr := gzip.NewReader(file)
+		if gzErr == nil {
+			var model IntentMoE
+			decErr := gob.NewDecoder(gz).Decode(&model)
+			gz.Close()
+			file.Close()
+			if decErr == nil {
+				model.RepairArchitecture()
+				return &model, nil
+			}
+		} else {
+			file.Close()
+		}
+	}
+
+	// ── Path 3: raw (uncompressed) gob IntentMoE (legacy) ─────────────────────
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("error opening model file: %w", err)
 	}
 	defer file.Close()
-
-	// Attempt gzip decompression
-	gz, err := gzip.NewReader(file)
-	if err == nil {
-		// File is gzip-compressed, try to decode as checkpoint
-		defer gz.Close()
-		decoder := gob.NewDecoder(gz)
-		var ckpt Checkpoint
-		err := decoder.Decode(&ckpt)
-		if err == nil && ckpt.Model != nil {
-			ckpt.Model.RepairArchitecture()
-			return ckpt.Model, nil
-		}
-		// If checkpoint decoding failed, fall through to raw gob attempt
-	}
-
-	// Fallback: try raw gob format (legacy)
-	file.Seek(0, 0)
-	reader := bufio.NewReader(file)
-	decoder := gob.NewDecoder(reader)
 	var loadedModel IntentMoE
-	err = decoder.Decode(&loadedModel)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load model in both gzip-checkpoint and raw-gob formats: %w", err)
+	if err := gob.NewDecoder(bufio.NewReader(file)).Decode(&loadedModel); err != nil {
+		return nil, fmt.Errorf("failed to load model in all formats (gzip-checkpoint, gzip-model, raw-gob): %w", err)
 	}
-
-	loadedModel.RepairArchitecture() // 🛠️ Fix missing LayerNorms on load
+	loadedModel.RepairArchitecture()
 	return &loadedModel, nil
 }
 

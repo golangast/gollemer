@@ -1,3 +1,6 @@
+//go:build ignore
+// +build ignore
+
 package main
 
 import (
@@ -25,7 +28,7 @@ func main() {
 			if l.ExpertOutputScale != nil && len(l.ExpertOutputScale) > targetExperts {
 				l.ExpertOutputScale = l.ExpertOutputScale[:targetExperts]
 			}
-			
+
 			if l.AccumulatedUtilization != nil && len(l.AccumulatedUtilization) > targetExperts {
 				l.AccumulatedUtilization = l.AccumulatedUtilization[:targetExperts]
 			}
@@ -37,24 +40,24 @@ func main() {
 					}
 				}
 			}
-			
+
 			// Resize GatingNetwork weights
 			if l.GatingNetwork != nil {
 				oldWeights := l.GatingNetwork.Linear.Weights
 				inputDim := oldWeights.Shape[0]
 				oldNumExperts := oldWeights.Shape[1]
-				
+
 				newWeights := tensor.NewTensor([]int{inputDim, targetExperts}, make([]float32, inputDim*targetExperts), true)
 				for d := 0; d < inputDim; d++ {
 					for e := 0; e < targetExperts; e++ {
-						newWeights.Data[d*targetExperts + e] = oldWeights.Data[d*oldNumExperts + e]
+						newWeights.Data[d*targetExperts+e] = oldWeights.Data[d*oldNumExperts+e]
 					}
 				}
 				l.GatingNetwork.Linear.Weights = newWeights
 			}
 		}
 	}
-	
+
 	ckpt.Model.RebuildActiveLayers()
 
 	// Save the model

@@ -3,14 +3,20 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"encoding/csv"
+	"encoding/gob"
 	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
 	"log"
+	"math"
 	"math/rand"
+	"net"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,22 +28,24 @@ import (
 	"time"
 
 	"github.com/golangast/gollemer/internal/ai/moe"
+	"github.com/golangast/gollemer/internal/ai/neural/nn"
 	"github.com/gorilla/websocket"
+	"syscall"
 )
 
 type MetricPoint struct {
-	Epoch    float64 `json:"epoch"`
-	Loss     float64 `json:"loss"`
-	LBLoss   float64 `json:"lb_loss"`
-	LR       float64 `json:"lr"`
-	Phase    int     `json:"phase"`
-	Timestamp string `json:"timestamp"`
-	Progress float64 `json:"progress"`
-	Score    float64 `json:"score"`
-	MaxScore float64 `json:"max_score"`
-	Grammar  float64 `json:"grammar"`
-	Sim      float64 `json:"sim"`
-	IsSocial bool    `json:"is_social"`
+	Epoch     float64 `json:"epoch"`
+	Loss      float64 `json:"loss"`
+	LBLoss    float64 `json:"lb_loss"`
+	LR        float64 `json:"lr"`
+	Phase     int     `json:"phase"`
+	Timestamp string  `json:"timestamp"`
+	Progress  float64 `json:"progress"`
+	Score     float64 `json:"score"`
+	MaxScore  float64 `json:"max_score"`
+	Grammar   float64 `json:"grammar"`
+	Sim       float64 `json:"sim"`
+	IsSocial  bool    `json:"is_social"`
 }
 
 type UtilPoint struct {
@@ -104,20 +112,30 @@ type SysStats struct {
 	ProcMem float64 `json:"proc_mem_mb"`
 }
 
+type SentenceTestPoint struct {
+	Sentence   string  `json:"sentence"`
+	Confidence float64 `json:"confidence"`
+	Coherent   bool    `json:"coherent"`
+	Phase      int     `json:"phase"`
+	Epoch      float64 `json:"epoch"`
+	Timestamp  string  `json:"timestamp"`
+}
+
 type DashboardState struct {
-	History          []MetricPoint      `json:"history"`
-	Latest           LatestMetric       `json:"latest"`
-	Cartridges       CartridgeMap       `json:"cartridges"`
-	Datasets         []string           `json:"datasets"`
-	Utilization      []UtilPoint        `json:"utilization"`
-	LiveLines        []string           `json:"live_lines"`
-	Process          ProcessInfo        `json:"process"`
-	SupervisorEvents []SupervisorEvent  `json:"supervisor_events"`
+	History          []MetricPoint          `json:"history"`
+	Latest           LatestMetric           `json:"latest"`
+	Cartridges       CartridgeMap           `json:"cartridges"`
+	Datasets         []string               `json:"datasets"`
+	Utilization      []UtilPoint            `json:"utilization"`
+	LiveLines        []string               `json:"live_lines"`
+	SentenceTests    []SentenceTestPoint    `json:"sentence_tests"`
+	Process          ProcessInfo            `json:"process"`
+	SupervisorEvents []SupervisorEvent      `json:"supervisor_events"`
 	Telemetry        map[string]interface{} `json:"telemetry"`
-	Sys              SysStats           `json:"sys"`
-	LiveEpoch        float64            `json:"live_epoch"`
-	LiveEpochTime    string             `json:"live_epoch_time"`
-	LiveActiveExp    []int              `json:"live_active_experts"`
+	Sys              SysStats               `json:"sys"`
+	LiveEpoch        float64                `json:"live_epoch"`
+	LiveEpochTime    string                 `json:"live_epoch_time"`
+	LiveActiveExp    []int                  `json:"live_active_experts"`
 }
 
 var (
@@ -132,18 +150,21 @@ var (
 	svMu             sync.RWMutex
 	supervisorEvents []SupervisorEvent
 
-	procMu      sync.Mutex
-	runningCmd  *exec.Cmd
-	runningName string
+	procMu            sync.Mutex
+	runningCmd        *exec.Cmd
+	runningName       string
+	observabilityCmd  *exec.Cmd
+	observabilityPort int
 
 	ansiRe  = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 	rootDir = detectRoot()
 
-	liveParseMu    sync.RWMutex
-	liveEpoch      float64
-	liveEpochTime  string
-	liveActiveExps []int
-	liveStep       int
+	liveParseMu       sync.RWMutex
+	liveEpoch         float64
+	liveEpochTime     string
+	liveActiveExps    []int
+	liveSentenceTests []SentenceTestPoint
+	liveStep          int
 
 	snapshotMu      sync.Mutex
 	configSnapshots []ConfigSnapshot
@@ -162,18 +183,19 @@ func detectRoot() string {
 func rel(p string) string { return filepath.Join(rootDir, p) }
 
 var (
-	reDominance   = regexp.MustCompile(`Expert Dominance too high \(([\d.]+)%\)`)
-	rePlateau     = regexp.MustCompile(`Plateau.*?(\d+).*?learning rate`)
-	reConfidence  = regexp.MustCompile(`Step Confidence low \(([\d.]+)%\)`)
-	reAugment     = regexp.MustCompile(`(?:Augmenting grammar|Data Evolution Success|Mutated.*corpus)`)
-	reMutateQ     = regexp.MustCompile(`shorthand data: '([^']+)'`)
-	reJitter      = regexp.MustCompile(`Nudging Router Noise`)
-	reTempAdj     = regexp.MustCompile(`Increasing Router Temperature`)
-	reWeightReset = regexp.MustCompile(`Expert\s+(\d+)\s+Weights Reset`)
-	reNaN         = regexp.MustCompile(`NaN|Emergency Brake|CRITICAL.*MatMul`)
-	reSurgery     = regexp.MustCompile(`Performing.*Surgery|Triage.*Expert`)
-	reStepNum     = regexp.MustCompile(`\[Step\s+(\d+)\]`)
-	reLRVal       = regexp.MustCompile(`(?:LR|learning rate).*?([\d.e+-]+)`)
+	reDominance    = regexp.MustCompile(`Expert Dominance too high \(([\d.]+)%\)`)
+	rePlateau      = regexp.MustCompile(`Plateau.*?(\d+).*?learning rate`)
+	reConfidence   = regexp.MustCompile(`Step Confidence low \(([\d.]+)%\)`)
+	reAugment      = regexp.MustCompile(`(?:Augmenting grammar|Data Evolution Success|Mutated.*corpus)`)
+	reMutateQ      = regexp.MustCompile(`shorthand data: '([^']+)'`)
+	reJitter       = regexp.MustCompile(`Nudging Router Noise`)
+	reTempAdj      = regexp.MustCompile(`Increasing Router Temperature`)
+	reWeightReset  = regexp.MustCompile(`Expert\s+(\d+)\s+Weights Reset`)
+	reNaN          = regexp.MustCompile(`NaN|Emergency Brake|CRITICAL.*MatMul`)
+	reSurgery      = regexp.MustCompile(`Performing.*Surgery|Triage.*Expert`)
+	reStepNum      = regexp.MustCompile(`\[Step\s+(\d+)\]`)
+	reLRVal        = regexp.MustCompile(`(?:LR|learning rate).*?([\d.e+-]+)`)
+	reSentenceTest = regexp.MustCompile(`🧪 Phase(\d+) test: '(.+)' → SVC=([\d.]+) coherent=(true|false)`)
 )
 
 var (
@@ -235,7 +257,7 @@ func parseAndAppendSupervisorEvent(line string) {
 		ev = &SupervisorEvent{
 			Type: "augment", Severity: "info", ExpertID: -1, Step: step, Time: now,
 			Message: "📝 Corpus augmented via grammar expansion",
-			Old: m[1], New: "expanded syntactic form",
+			Old:     m[1], New: "expanded syntactic form",
 			Raw: cleaned,
 		}
 	case reAugment.MatchString(cleaned):
@@ -287,15 +309,41 @@ func parseAndAppendSupervisorEvent(line string) {
 	svMu.Unlock()
 }
 
+func serveNoCacheFile(w http.ResponseWriter, r *http.Request, path string) {
+	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+	http.ServeFile(w, r, path)
+}
+
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	go watchLoop()
 	go broadcastWorker()
+	startObservabilityBackend()
 
 	mux := http.NewServeMux()
 	static := filepath.Join(rootDir, "cmd/tools/dashboard/static")
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(static))))
+	// Serve enhanced observability dashboard from docs and keep the classic widgets available at the root.
+	docsDir := filepath.Join(rootDir, "docs")
+	mux.HandleFunc("/docs/dashboard-enhanced.html", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("embedded") == "1" {
+			serveNoCacheFile(w, r, filepath.Join(docsDir, "dashboard-enhanced.html"))
+			return
+		}
+		http.Redirect(w, r, "/", http.StatusFound)
+	})
+	mux.HandleFunc("/docs/combined-dashboard.html", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/", http.StatusFound)
+	})
+	mux.Handle("/docs/", http.StripPrefix("/docs/", http.FileServer(http.Dir(docsDir))))
+	// Serve the classic training dashboard at the root path
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
 		http.ServeFile(w, r, filepath.Join(static, "index.html"))
 	})
 	mux.HandleFunc("/api/state", handleState)
@@ -317,9 +365,15 @@ func main() {
 	mux.HandleFunc("/api/diagnostics", handleDiagnostics)
 	mux.HandleFunc("/api/trigger", handleTrigger)
 	mux.HandleFunc("/api/download_model", handleDownloadModel)
+	mux.HandleFunc("/api/inspect", handleInspect)
+	// Proxy both the enhanced metrics API and the legacy dashboard metrics endpoint.
+	mux.Handle("/api/metrics", newMetricsProxy())
+	mux.Handle("/api/metrics/", newMetricsProxy())
+	mux.Handle("/metrics", newMetricsProxy())
+	mux.Handle("/metrics/", newMetricsProxy())
 	mux.HandleFunc("/ws", handleWS)
 
-	log.Printf("🖥️  Dashboard → http://localhost:8765")
+	log.Printf("🖥️  Dashboard → http://localhost:8765 (classic training UI)")
 	log.Fatal(http.ListenAndServe(":8765", mux))
 }
 
@@ -370,6 +424,7 @@ func buildState() DashboardState {
 	lepoch := liveEpoch
 	lepochTime := liveEpochTime
 	lactiveExps := append([]int{}, liveActiveExps...)
+	sentenceTests := append([]SentenceTestPoint{}, liveSentenceTests...)
 	liveParseMu.RUnlock()
 
 	return DashboardState{
@@ -379,6 +434,7 @@ func buildState() DashboardState {
 		Datasets:         listDatasets(),
 		Utilization:      readUtilSample(),
 		LiveLines:        ll,
+		SentenceTests:    sentenceTests,
 		Process:          pi,
 		SupervisorEvents: evs,
 		Telemetry:        readTelemetry(),
@@ -558,39 +614,59 @@ func readSysStats() SysStats {
 		var total, available uint64
 		for _, line := range strings.Split(string(data), "\n") {
 			fields := strings.Fields(line)
-			if len(fields) < 2 { continue }
+			if len(fields) < 2 {
+				continue
+			}
 			v, _ := strconv.ParseUint(fields[1], 10, 64)
 			switch fields[0] {
-			case "MemTotal:":    total = v
-			case "MemAvailable:": available = v
+			case "MemTotal:":
+				total = v
+			case "MemAvailable:":
+				available = v
 			}
 		}
 		used := total - available
 		s.MemMB = float64(used) / 1024
-		if total > 0 { s.MemPct = float64(used) / float64(total) * 100 }
+		if total > 0 {
+			s.MemPct = float64(used) / float64(total) * 100
+		}
 	}
 	if data, err := os.ReadFile("/proc/stat"); err == nil {
 		for _, line := range strings.Split(string(data), "\n") {
-			if !strings.HasPrefix(line, "cpu ") { continue }
+			if !strings.HasPrefix(line, "cpu ") {
+				continue
+			}
 			fields := strings.Fields(line)
-			if len(fields) < 5 { break }
+			if len(fields) < 5 {
+				break
+			}
 			idle, _ := strconv.ParseFloat(fields[4], 64)
 			var total float64
-			for _, f := range fields[1:] { v, _ := strconv.ParseFloat(f, 64); total += v }
-			if total > 0 { s.CPUPct = (1 - idle/total) * 100 }
+			for _, f := range fields[1:] {
+				v, _ := strconv.ParseFloat(f, 64)
+				total += v
+			}
+			if total > 0 {
+				s.CPUPct = (1 - idle/total) * 100
+			}
 			break
 		}
 	}
 	procMu.Lock()
 	var pid int
-	if runningCmd != nil && runningCmd.Process != nil { pid = runningCmd.Process.Pid }
+	if runningCmd != nil && runningCmd.Process != nil {
+		pid = runningCmd.Process.Pid
+	}
 	procMu.Unlock()
 	if pid > 0 {
 		if data, err := os.ReadFile(fmt.Sprintf("/proc/%d/status", pid)); err == nil {
 			for _, line := range strings.Split(string(data), "\n") {
 				if strings.HasPrefix(line, "VmRSS:") {
 					fields := strings.Fields(line)
-					if len(fields) >= 2 { v, _ := strconv.ParseFloat(fields[1], 64); s.ProcMem = v / 1024 }
+					if len(fields) >= 2 {
+						v, _ := strconv.ParseFloat(fields[1], 64)
+						s.ProcMem = v / 1024
+					}
 				}
 			}
 		}
@@ -606,16 +682,145 @@ func handleState(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(buildState())
 }
 
+func isTCPPortOpen(addr string) bool {
+	conn, err := net.DialTimeout("tcp", addr, 750*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	conn.Close()
+	return true
+}
+
+func startObservabilityBackend() {
+	port := os.Getenv("MOE_OBSERVABILITY_PORT")
+	if port == "" {
+		// Prefer the live training observability port if it is already active.
+		if isTCPPortOpen("localhost:9090") {
+			observabilityPort = 9090
+			log.Printf("🧭 Found live training metrics backend at http://localhost:9090")
+			return
+		}
+		port = "8080"
+	}
+	portNum, err := strconv.Atoi(port)
+	if err != nil || portNum <= 0 {
+		portNum = 8080
+		port = "8080"
+	}
+
+	addr := fmt.Sprintf("localhost:%s", port)
+	if isTCPPortOpen(addr) {
+		observabilityPort = portNum
+		log.Printf("🧭 Observability backend already available at http://%s", addr)
+		return
+	}
+
+	for candidate := portNum; candidate < portNum+10; candidate++ {
+		candidateAddr := fmt.Sprintf("localhost:%d", candidate)
+		if isTCPPortOpen(candidateAddr) {
+			observabilityPort = candidate
+			log.Printf("🧭 Reusing observability backend on http://%s", candidateAddr)
+			return
+		}
+	}
+
+	selectedPort := portNum
+	for selectedPort < portNum+10 {
+		listener, listenErr := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", selectedPort))
+		if listenErr == nil {
+			listener.Close()
+			break
+		}
+		selectedPort++
+	}
+	if selectedPort >= portNum+10 {
+		selectedPort = portNum
+	}
+	observabilityPort = selectedPort
+	port = strconv.Itoa(selectedPort)
+
+	log.Printf("🧭 Starting Observability backend on http://localhost:%s...", port)
+	cmd := exec.Command("go", "run", "cmd/tools/observability_example/main.go")
+	cmd.Dir = rootDir
+	cmd.Env = append(os.Environ(), "MOE_OBSERVABILITY_PORT="+port)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Start(); err != nil {
+		log.Printf("⚠️ Failed to start observability backend: %v", err)
+		return
+	}
+	observabilityCmd = cmd
+	go func() {
+		if err := cmd.Wait(); err != nil {
+			log.Printf("⚠️ Observability backend exited: %v", err)
+		}
+	}()
+}
+
+func preferredMetricsPort() int {
+	if isTCPPortOpen("localhost:9090") {
+		return 9090
+	}
+	if observabilityPort > 0 {
+		return observabilityPort
+	}
+	return 8080
+}
+
+func newMetricsProxy() http.Handler {
+	proxy := &httputil.ReverseProxy{
+		Director: func(req *http.Request) {
+			port := preferredMetricsPort()
+			target, err := url.Parse(fmt.Sprintf("http://localhost:%d", port))
+			if err != nil {
+				panic(err)
+			}
+			req.URL.Scheme = target.Scheme
+			req.URL.Host = target.Host
+
+			if req.URL.Path == "/metrics" || req.URL.Path == "/metrics/" {
+				req.URL.Path = "/api/metrics/current"
+				return
+			}
+			if strings.HasPrefix(req.URL.Path, "/metrics/") {
+				req.URL.Path = "/api/metrics/metrics/" + strings.TrimPrefix(req.URL.Path, "/metrics/")
+				return
+			}
+			if req.URL.Path == "/api/metrics" || req.URL.Path == "/api/metrics/" {
+				req.URL.Path = "/api/metrics/current"
+				return
+			}
+			if strings.HasPrefix(req.URL.Path, "/api/metrics/metrics/") {
+				return
+			}
+			if strings.HasPrefix(req.URL.Path, "/api/metrics/") {
+				req.URL.Path = strings.Replace(req.URL.Path, "/api/metrics/", "/api/metrics/metrics/", 1)
+				log.Printf("🔁 Rewriting metrics proxy path to %s (port %d)", req.URL.Path, port)
+			}
+		},
+		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
+			log.Printf("⚠️ metrics proxy error: %v", err)
+			http.Error(w, "Metrics server unavailable", http.StatusBadGateway)
+		},
+	}
+	return proxy
+}
+
 func handleUpdateCartridges(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost { http.Error(w, "POST only", http.StatusMethodNotAllowed); return }
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	var payload CartridgeMap
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		http.Error(w, "bad JSON", http.StatusBadRequest); return
+		http.Error(w, "bad JSON", http.StatusBadRequest)
+		return
 	}
 	data, _ := json.MarshalIndent(payload, "", "  ")
 	if err := os.WriteFile(rel("data/config/cartridges.json"), data, 0644); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError); return
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 	fmt.Fprintln(w, `{"ok":true}`)
 }
@@ -623,20 +828,20 @@ func handleUpdateCartridges(w http.ResponseWriter, r *http.Request) {
 func handleModels(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Content-Type", "application/json")
-	
+
 	dir := rel("data/models/gob_models")
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	
+
 	type ModelStat struct {
 		Name    string `json:"name"`
 		Size    int64  `json:"size"`
 		ModTime string `json:"mod_time"`
 	}
-	
+
 	var models []ModelStat
 	for _, e := range entries {
 		if !e.IsDir() && strings.HasSuffix(e.Name(), ".gob") {
@@ -659,22 +864,28 @@ var allowedTargets = map[string]bool{
 }
 
 func handleCmd(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost { http.Error(w, "POST only", http.StatusMethodNotAllowed); return }
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	var req struct {
 		Target string            `json:"target"`
 		Env    map[string]string `json:"env"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "bad JSON", http.StatusBadRequest); return
+		http.Error(w, "bad JSON", http.StatusBadRequest)
+		return
 	}
 	if !allowedTargets[req.Target] {
-		http.Error(w, "target not allowed", http.StatusForbidden); return
+		http.Error(w, "target not allowed", http.StatusForbidden)
+		return
 	}
 	procMu.Lock()
 	if runningCmd != nil {
 		procMu.Unlock()
-		http.Error(w, `{"error":"already running"}`, http.StatusConflict); return
+		http.Error(w, `{"error":"already running"}`, http.StatusConflict)
+		return
 	}
 	appendLive("── Starting: make " + req.Target + " ──")
 	cmd := exec.Command("make", req.Target)
@@ -684,11 +895,16 @@ func handleCmd(w http.ResponseWriter, r *http.Request) {
 		env = append(env, k+"="+v)
 	}
 	cmd.Env = env
+	// Put the subprocess in its own session (Setsid) so it is not killed by
+	// SIGHUP when the dashboard process itself exits during a train-social run
+	// (the Makefile kills the dashboard to free RAM, then restarts it).
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	stdout, _ := cmd.StdoutPipe()
 	stderr, _ := cmd.StderrPipe()
 	if err := cmd.Start(); err != nil {
 		procMu.Unlock()
-		http.Error(w, err.Error(), http.StatusInternalServerError); return
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 	runningCmd = cmd
 	runningName = req.Target
@@ -708,7 +924,10 @@ func handleCmd(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleKill(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost { http.Error(w, "POST only", http.StatusMethodNotAllowed); return }
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	procMu.Lock()
 	defer procMu.Unlock()
@@ -727,12 +946,18 @@ func handleDownloadModel(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleInfer(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost { http.Error(w, "POST only", http.StatusMethodNotAllowed); return }
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	var req struct{ Prompt string `json:"prompt"` }
+	var req struct {
+		Prompt string `json:"prompt"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Prompt == "" {
-		http.Error(w, "bad request", http.StatusBadRequest); return
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
 	}
 	cmd := exec.Command("go", "run", "cmd/tools/train_moe/main.go", "-llm")
 	cmd.Dir = rootDir
@@ -743,7 +968,9 @@ func handleInfer(w http.ResponseWriter, r *http.Request) {
 	var lines []string
 	for _, l := range strings.Split(outStr, "\n") {
 		cleaned := strings.TrimSpace(ansiRe.ReplaceAllString(l, ""))
-		if cleaned == "" || strings.HasPrefix(cleaned, "20") { continue }
+		if cleaned == "" || strings.HasPrefix(cleaned, "20") {
+			continue
+		}
 		lines = append(lines, cleaned)
 	}
 	type InferResp struct {
@@ -752,16 +979,24 @@ func handleInfer(w http.ResponseWriter, r *http.Request) {
 		Error    string `json:"error,omitempty"`
 	}
 	resp := InferResp{Response: strings.Join(lines, "\n"), Raw: outStr}
-	if err != nil { resp.Error = err.Error() }
+	if err != nil {
+		resp.Error = err.Error()
+	}
 	json.NewEncoder(w).Encode(resp)
 }
 
 func handleInferWS(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil { return }
+	if err != nil {
+		return
+	}
 	defer conn.Close()
-	var req struct{ Prompt string `json:"prompt"` }
-	if err := conn.ReadJSON(&req); err != nil || req.Prompt == "" { return }
+	var req struct {
+		Prompt string `json:"prompt"`
+	}
+	if err := conn.ReadJSON(&req); err != nil || req.Prompt == "" {
+		return
+	}
 	cmd := exec.Command("go", "run", "cmd/tools/train_moe/main.go", "-llm")
 	cmd.Dir = rootDir
 	cmd.Env = os.Environ()
@@ -769,16 +1004,20 @@ func handleInferWS(w http.ResponseWriter, r *http.Request) {
 	stdout, _ := cmd.StdoutPipe()
 	stderr, _ := cmd.StderrPipe()
 	if err := cmd.Start(); err != nil {
-		conn.WriteJSON(map[string]string{"error": err.Error()}); return
+		conn.WriteJSON(map[string]string{"error": err.Error()})
+		return
 	}
 	go func() {
 		scanner := bufio.NewScanner(stderr)
-		for scanner.Scan() { /* discard stderr */ }
+		for scanner.Scan() { /* discard stderr */
+		}
 	}()
 	scanner := bufio.NewScanner(stdout)
 	for scanner.Scan() {
 		line := ansiRe.ReplaceAllString(scanner.Text(), "")
-		if strings.TrimSpace(line) == "" { continue }
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
 		conn.WriteJSON(map[string]string{"token": line})
 	}
 	cmd.Wait()
@@ -792,7 +1031,8 @@ func handleConfig(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		var cfg map[string]interface{}
 		if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
-			http.Error(w, "bad JSON", http.StatusBadRequest); return
+			http.Error(w, "bad JSON", http.StatusBadRequest)
+			return
 		}
 		// snapshot before save
 		snapshotMu.Lock()
@@ -804,7 +1044,9 @@ func handleConfig(w http.ResponseWriter, r *http.Request) {
 				Label:     fmt.Sprintf("pre-save-%d", len(configSnapshots)+1),
 				Config:    old,
 			})
-			if len(configSnapshots) > 20 { configSnapshots = configSnapshots[len(configSnapshots)-20:] }
+			if len(configSnapshots) > 20 {
+				configSnapshots = configSnapshots[len(configSnapshots)-20:]
+			}
 		}
 		snapshotMu.Unlock()
 		data, _ := json.MarshalIndent(cfg, "", "  ")
@@ -813,13 +1055,18 @@ func handleConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data, err := os.ReadFile(configPath)
-	if err != nil { http.Error(w, "config not found", http.StatusNotFound); return }
+	if err != nil {
+		http.Error(w, "config not found", http.StatusNotFound)
+		return
+	}
 	w.Write(data)
 }
 
 func handleValidateCartridge(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	var req struct{ Path string `json:"path"` }
+	var req struct {
+		Path string `json:"path"`
+	}
 	json.NewDecoder(r.Body).Decode(&req)
 	_, err := os.Stat(req.Path)
 	if err != nil {
@@ -832,9 +1079,14 @@ func handleValidateCartridge(w http.ResponseWriter, r *http.Request) {
 func handleFSList(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	dir := r.URL.Query().Get("dir")
-	if dir == "" { dir = rootDir }
+	if dir == "" {
+		dir = rootDir
+	}
 	entries, err := os.ReadDir(dir)
-	if err != nil { http.Error(w, err.Error(), http.StatusInternalServerError); return }
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	type Entry struct {
 		Name  string `json:"name"`
 		IsDir bool   `json:"is_dir"`
@@ -850,51 +1102,74 @@ func handleFSList(w http.ResponseWriter, r *http.Request) {
 func patchConfig(updates map[string]interface{}) error {
 	path := rel("data/config/social_train.json")
 	data, err := os.ReadFile(path)
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 	var cfg map[string]interface{}
-	if err := json.Unmarshal(data, &cfg); err != nil { return err }
-	for k, v := range updates { cfg[k] = v }
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return err
+	}
+	for k, v := range updates {
+		cfg[k] = v
+	}
 	out, _ := json.MarshalIndent(cfg, "", "  ")
 	return os.WriteFile(path, out, 0644)
 }
 
 func handlePresetClipping(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	if r.Method != http.MethodPost { return }
+	if r.Method != http.MethodPost {
+		return
+	}
 	patchConfig(map[string]interface{}{"max_grad_norm": 1.0, "weight_decay": 0.01})
 	fmt.Fprintln(w, `{"ok":true}`)
 }
 
 func handlePresetFlushGC(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	if r.Method != http.MethodPost { return }
+	if r.Method != http.MethodPost {
+		return
+	}
 	appendLive("⚙️ GC flush requested via dashboard")
 	fmt.Fprintln(w, `{"ok":true}`)
 }
 
 func handlePresetBoost(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	if r.Method != http.MethodPost { return }
+	if r.Method != http.MethodPost {
+		return
+	}
 	patchConfig(map[string]interface{}{"router_temperature": 1.8, "router_noise": 0.4})
 	fmt.Fprintln(w, `{"ok":true}`)
 }
 
 func handlePresetCooldown(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	if r.Method != http.MethodPost { return }
+	if r.Method != http.MethodPost {
+		return
+	}
 	patchConfig(map[string]interface{}{"router_temperature": 0.9, "router_noise": 0.1, "learning_rate": 0.0001})
 	fmt.Fprintln(w, `{"ok":true}`)
 }
 
 func handlePresetSnapshot(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	if r.Method != http.MethodPost { return }
-	var req struct{ Label string `json:"label"` }
+	if r.Method != http.MethodPost {
+		return
+	}
+	var req struct {
+		Label string `json:"label"`
+	}
 	json.NewDecoder(r.Body).Decode(&req)
-	if req.Label == "" { req.Label = fmt.Sprintf("snapshot-%d", rand.Intn(9999)) }
+	if req.Label == "" {
+		req.Label = fmt.Sprintf("snapshot-%d", rand.Intn(9999))
+	}
 	configPath := rel("data/config/social_train.json")
 	data, err := os.ReadFile(configPath)
-	if err != nil { http.Error(w, "no config", http.StatusInternalServerError); return }
+	if err != nil {
+		http.Error(w, "no config", http.StatusInternalServerError)
+		return
+	}
 	var cfg map[string]interface{}
 	json.Unmarshal(data, &cfg)
 	snapshotMu.Lock()
@@ -903,18 +1178,23 @@ func handlePresetSnapshot(w http.ResponseWriter, r *http.Request) {
 		Label:     req.Label,
 		Config:    cfg,
 	})
-	if len(configSnapshots) > 20 { configSnapshots = configSnapshots[len(configSnapshots)-20:] }
+	if len(configSnapshots) > 20 {
+		configSnapshots = configSnapshots[len(configSnapshots)-20:]
+	}
 	snapshotMu.Unlock()
 	json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "label": req.Label})
 }
 
 func handleConfigRollback(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	if r.Method != http.MethodPost { return }
+	if r.Method != http.MethodPost {
+		return
+	}
 	snapshotMu.Lock()
 	defer snapshotMu.Unlock()
 	if len(configSnapshots) == 0 {
-		http.Error(w, "no snapshots", http.StatusNotFound); return
+		http.Error(w, "no snapshots", http.StatusNotFound)
+		return
 	}
 	snap := configSnapshots[len(configSnapshots)-1]
 	configSnapshots = configSnapshots[:len(configSnapshots)-1]
@@ -925,16 +1205,18 @@ func handleConfigRollback(w http.ResponseWriter, r *http.Request) {
 
 func handleDiagnostics(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	if r.Method != http.MethodPost { return }
+	if r.Method != http.MethodPost {
+		return
+	}
 	var req struct {
 		Action string `json:"action"`
 		Label  string `json:"label"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&req)
 	resp := map[string]interface{}{
-		"vector_safety":         true,
+		"vector_safety":          true,
 		"deterministic_response": true,
-		"hardware_health":       true,
+		"hardware_health":        true,
 	}
 	if moe.GlobalTelemetry != nil {
 		resp["runtime"] = moe.GlobalTelemetry.Snapshot()
@@ -955,14 +1237,22 @@ func handleDiagnostics(w http.ResponseWriter, r *http.Request) {
 
 func handleTrigger(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	if r.Method != http.MethodPost { return }
-	var req struct{ Action string `json:"action"` }
+	if r.Method != http.MethodPost {
+		return
+	}
+	var req struct {
+		Action string `json:"action"`
+	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest); return
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
 	}
 	path := rel("data/config/social_train.json")
 	data, err := os.ReadFile(path)
-	if err != nil { http.Error(w, "no config", http.StatusInternalServerError); return }
+	if err != nil {
+		http.Error(w, "no config", http.StatusInternalServerError)
+		return
+	}
 	var cfg map[string]interface{}
 	json.Unmarshal(data, &cfg)
 
@@ -974,7 +1264,9 @@ func handleTrigger(w http.ResponseWriter, r *http.Request) {
 		cfg["trigger_save"] = true
 	case "toggle_auto":
 		current := false
-		if v, ok := cfg["auto_test_save"].(bool); ok { current = v }
+		if v, ok := cfg["auto_test_save"].(bool); ok {
+			current = v
+		}
 		cfg["auto_test_save"] = !current
 		resp["auto"] = !current
 	}
@@ -985,7 +1277,9 @@ func handleTrigger(w http.ResponseWriter, r *http.Request) {
 
 func handleWS(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil { return }
+	if err != nil {
+		return
+	}
 	defer func() {
 		clientsMu.Lock()
 		delete(clients, conn)
@@ -1000,7 +1294,9 @@ func handleWS(w http.ResponseWriter, r *http.Request) {
 		conn.WriteMessage(websocket.TextMessage, data)
 	}
 	for {
-		if _, _, err := conn.ReadMessage(); err != nil { break }
+		if _, _, err := conn.ReadMessage(); err != nil {
+			break
+		}
 	}
 }
 
@@ -1011,13 +1307,35 @@ const maxLiveLines = 500
 func appendLive(line string) {
 	line = ansiRe.ReplaceAllString(line, "")
 	line = strings.TrimRight(line, "\r\n ")
-	if line == "" { return }
+	if line == "" {
+		return
+	}
 
 	liveParseMu.Lock()
 	liveStep++
 	liveParseMu.Unlock()
 
 	parseAndAppendSupervisorEvent(line)
+
+	if m := reSentenceTest.FindStringSubmatch(line); m != nil {
+		phase, _ := strconv.Atoi(m[1])
+		sentence := strings.TrimSpace(m[2])
+		confidence, _ := strconv.ParseFloat(m[3], 64)
+		coherent := strings.EqualFold(m[4], "true")
+		liveParseMu.Lock()
+		liveSentenceTests = append(liveSentenceTests, SentenceTestPoint{
+			Sentence:   sentence,
+			Confidence: confidence,
+			Coherent:   coherent,
+			Phase:      phase,
+			Epoch:      liveEpoch,
+			Timestamp:  time.Now().Format(time.RFC3339),
+		})
+		if len(liveSentenceTests) > 200 {
+			liveSentenceTests = liveSentenceTests[len(liveSentenceTests)-200:]
+		}
+		liveParseMu.Unlock()
+	}
 
 	if m := reMultiphase.FindStringSubmatch(line); m != nil {
 		epoch, _ := strconv.ParseFloat(m[2], 64)
@@ -1040,7 +1358,9 @@ func appendLive(line string) {
 		nums := strings.FieldsFunc(m[1], func(r rune) bool { return r == ',' || r == ' ' })
 		var exps []int
 		for _, n := range nums {
-			if v, err := strconv.Atoi(strings.TrimSpace(n)); err == nil { exps = append(exps, v) }
+			if v, err := strconv.Atoi(strings.TrimSpace(n)); err == nil {
+				exps = append(exps, v)
+			}
 		}
 		liveParseMu.Lock()
 		liveActiveExps = exps
@@ -1061,4 +1381,185 @@ func streamToLive(r io.Reader) {
 	for scanner.Scan() {
 		appendLive(scanner.Text())
 	}
+}
+
+type InspectReport struct {
+	Type            string             `json:"type"`
+	StepCount       int                `json:"step_count"`
+	TrainingPhase   int                `json:"training_phase"`
+	Version         string             `json:"version,omitempty"`
+	Commitment      float32            `json:"commitment,omitempty"`
+	TokensProcessed int64              `json:"tokens_processed,omitempty"`
+	TotalDuration   string             `json:"total_duration,omitempty"`
+	LastProfile     nn.TrainingProfile `json:"last_profile,omitempty"`
+	VocabSize       int                `json:"vocab_size"`
+	EmbeddingDim    int                `json:"embedding_dim"`
+	Layers          []LayerReport      `json:"layers"`
+	FileSizeMB      float64            `json:"file_size_mb"`
+	FileName        string             `json:"file_name"`
+}
+
+type LayerReport struct {
+	Name              string         `json:"name"`
+	NumExperts        int            `json:"num_experts"`
+	K                 int            `json:"k"`
+	RouterWeightMag   float64        `json:"router_weight_magnitude"`
+	RouterTemperature float32        `json:"router_temperature"`
+	Experts           []ExpertReport `json:"experts"`
+}
+
+type ExpertReport struct {
+	ID           int    `json:"id"`
+	Frozen       bool   `json:"frozen"`
+	StepStagnant int    `json:"step_stagnant_counter"`
+	Status       string `json:"status"`
+}
+
+func handleInspect(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	path := r.URL.Query().Get("file")
+	if path == "" {
+		path = "data/models/gob_models/moe_social_model.gob"
+	}
+	fullPath := rel(path)
+
+	file, err := os.Open(fullPath)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to open file: %v", err), http.StatusNotFound)
+		return
+	}
+	defer file.Close()
+
+	fi, err := file.Stat()
+	if err != nil || fi.Size() == 0 {
+		http.Error(w, "model file is empty or unreadable", http.StatusBadRequest)
+		return
+	}
+
+	var ckpt *moe.Checkpoint
+	var model *moe.IntentMoE
+	var isCheckpoint bool
+
+	// ── 1. gzip Checkpoint wrapper ─────────────────────────────────────────
+	{
+		_, _ = file.Seek(0, io.SeekStart)
+		if gz, gzErr := gzip.NewReader(file); gzErr == nil {
+			var dc moe.Checkpoint
+			if decErr := gob.NewDecoder(gz).Decode(&dc); decErr == nil && dc.Model != nil {
+				ckpt, model, isCheckpoint = &dc, dc.Model, true
+			}
+			gz.Close()
+		}
+	}
+
+	// ── 2. gzip raw IntentMoE ───────────────────────────────────────────────
+	if model == nil {
+		_, _ = file.Seek(0, io.SeekStart)
+		if gz, gzErr := gzip.NewReader(file); gzErr == nil {
+			var dm moe.IntentMoE
+			if decErr := gob.NewDecoder(gz).Decode(&dm); decErr == nil {
+				model = &dm
+			}
+			gz.Close()
+		}
+	}
+
+	// ── 3. raw gob Checkpoint ───────────────────────────────────────────────
+	if model == nil {
+		_, _ = file.Seek(0, io.SeekStart)
+		var dc moe.Checkpoint
+		if decErr := gob.NewDecoder(bufio.NewReader(file)).Decode(&dc); decErr == nil && dc.Model != nil {
+			ckpt, model, isCheckpoint = &dc, dc.Model, true
+		}
+	}
+
+	// ── 4. raw gob IntentMoE (legacy) ─────────────────────────────────────
+	if model == nil {
+		_, _ = file.Seek(0, io.SeekStart)
+		var dm moe.IntentMoE
+		if decErr := gob.NewDecoder(bufio.NewReader(file)).Decode(&dm); decErr == nil {
+			model = &dm
+		}
+	}
+
+	if model == nil {
+		http.Error(w, "Failed to decode in all formats", http.StatusUnsupportedMediaType)
+		return
+	}
+
+	model.RepairArchitecture()
+
+	layers := model.Encoder.GetMoELayers()
+	if model.Decoder != nil && model.Decoder.OutputMoE != nil {
+		layers = append(layers, model.Decoder.OutputMoE)
+	}
+
+	report := InspectReport{
+		Type:          "model",
+		StepCount:     model.StepCount,
+		TrainingPhase: model.TrainingPhase,
+		VocabSize:     model.SentenceVocabSize,
+		EmbeddingDim:  model.EmbeddingDim,
+		FileName:      filepath.Base(path),
+		FileSizeMB:    float64(fi.Size()) / 1_000_000,
+	}
+
+	if isCheckpoint && ckpt != nil {
+		report.Type = "checkpoint"
+		report.Version = ckpt.Version
+		report.Commitment = ckpt.Commitment
+		report.TokensProcessed = ckpt.TokensProcessed
+		report.TotalDuration = ckpt.TotalDuration.String()
+		report.LastProfile = ckpt.LastProfile
+	}
+
+	for li, layer := range layers {
+		layerName := fmt.Sprintf("Encoder Layer %d", li)
+		if li == len(layers)-1 && model.Decoder != nil && model.Decoder.OutputMoE == layer {
+			layerName = "Decoder Output MoE"
+		}
+
+		routerMag := 0.0
+		if layer.GatingNetwork != nil && layer.GatingNetwork.Linear != nil &&
+			layer.GatingNetwork.Linear.Weights != nil {
+			for _, v := range layer.GatingNetwork.Linear.Weights.Data {
+				routerMag += math.Abs(float64(v))
+			}
+		}
+
+		lr := LayerReport{
+			Name:              layerName,
+			NumExperts:        layer.NumExperts,
+			K:                 layer.K,
+			RouterWeightMag:   routerMag,
+			RouterTemperature: layer.RouterTemperature,
+		}
+
+		for ei := 0; ei < layer.NumExperts; ei++ {
+			frozen := ei < len(layer.ExpertFrozen) && layer.ExpertFrozen[ei]
+			stagnant := 0
+			if ei < len(layer.StepStagnationCounters) {
+				stagnant = layer.StepStagnationCounters[ei]
+			}
+
+			status := "active"
+			if frozen {
+				status = "frozen"
+			} else if stagnant > 1000 {
+				status = "stagnant"
+			}
+
+			lr.Experts = append(lr.Experts, ExpertReport{
+				ID:           ei,
+				Frozen:       frozen,
+				StepStagnant: stagnant,
+				Status:       status,
+			})
+		}
+		report.Layers = append(report.Layers, lr)
+	}
+
+	json.NewEncoder(w).Encode(report)
 }

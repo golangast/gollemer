@@ -60,11 +60,6 @@ canvas{display:block;width:100%!important;flex:1;}
 .col-cyan{color:var(--cyan)}
 .col-accent{color:var(--accent)}
 
-/* ── Expert Heatmap ── */
-.heatmap-wrap{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
-.heatmap-cell{width:32px;height:32px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:.55rem;font-family:var(--mono);font-weight:600;color:#fff;transition:transform .15s;cursor:default;border:1px solid rgba(255,255,255,.05)}
-.heatmap-cell:hover{transform:scale(1.15);z-index:10}
-
 /* ── Cartridge Panel ── */
 .cart-list{display:flex;flex-direction:column;gap:6px;margin-top:4px;max-height:240px;overflow-y:auto}
 .cart-row{display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px 10px;font-size:.78rem}
@@ -166,6 +161,89 @@ canvas{display:block;width:100%!important;flex:1;}
 @keyframes pulse-g { 0% { color: var(--green); text-shadow: 0 0 10px var(--green); } 100% { color: var(--text); } }
 .pulse-red { animation: pulse-r 1s ease-out; }
 @keyframes pulse-r { 0% { color: var(--red); text-shadow: 0 0 10px var(--red); } 100% { color: var(--text); } }
+
+/* Expert Inspector Widget Styles */
+.expert-grid {
+  display: grid;
+  grid-template-columns: repeat(16, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+@media (max-width: 900px) {
+  .expert-grid {
+    grid-template-columns: repeat(8, 1fr);
+  }
+}
+.expert-node {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-family: var(--mono);
+  font-weight: 600;
+  position: relative;
+  cursor: help;
+  transition: all 0.2s ease;
+}
+.expert-node:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  z-index: 10;
+}
+.expert-node.active {
+  border-color: var(--green);
+  background: rgba(16, 185, 129, 0.08);
+  color: var(--green);
+}
+.expert-node.active::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 4px var(--green);
+}
+.expert-node.frozen {
+  border-color: var(--cyan);
+  background: rgba(6, 182, 212, 0.08);
+  color: var(--cyan);
+}
+.expert-node.stagnant {
+  border-color: var(--red);
+  background: rgba(239, 68, 68, 0.08);
+  color: var(--red);
+}
+.expert-tooltip {
+  visibility: hidden;
+  position: absolute;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 0.65rem;
+  white-space: nowrap;
+  z-index: 20;
+  opacity: 0;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+}
+.expert-node:hover .expert-tooltip {
+  visibility: visible;
+  opacity: 1;
+}
 </style>
 </head>
 <body>
@@ -197,6 +275,7 @@ canvas{display:block;width:100%!important;flex:1;}
     <!-- Training commands -->
     <button class="btn btn-primary btn-sm" onclick="runCmd('train')">🛠️ train</button>
     <button class="btn btn-primary btn-sm" onclick="runCmd('train-social')">🗣️ social</button>
+    <button class="btn btn-primary btn-sm" onclick="runCmd('train-social')">▶ Continue</button>
     <button class="btn btn-primary btn-sm" onclick="runCmd('chat')">💬 chat</button>
     <button class="btn btn-primary btn-sm" onclick="runCmd('word2vec')">📚 w2v</button>
     <button class="btn btn-primary btn-sm" style="background:var(--surface2);border:1px solid var(--border);color:var(--text)" onclick="runCmd('clean')">🧹 clean</button>
@@ -246,21 +325,6 @@ canvas{display:block;width:100%!important;flex:1;}
     <!-- ── Dedicated AI Doctor Diagnostic Banner ── -->
     <div id="diag-banner" style="display:none; flex-direction:column; gap:8px; background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom: -4px; box-shadow:0 4px 6px rgba(0,0,0,0.3);"></div>
 
-    <!-- ── MoE Observability ── -->
-    <div class="card">
-      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;width:100%;">
-        <div><span class="icon">🧭</span>MoE Observability</div>
-        <button class="btn btn-sm" style="background:var(--surface2);border:1px solid var(--border);color:var(--text)" onclick="runMathSandbox()">🧪 Sandbox</button>
-      </div>
-      <div id="obs-summary" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px;"></div>
-      <div id="heatmap" style="margin-top:4px;"></div>
-      <div id="telemetry-grid" style="margin-top:8px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;"></div>
-      <div id="supervisor-timeline" style="margin-top:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.72rem;color:var(--muted);"></div>
-      <div id="serialization-metric" style="margin-top:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.72rem;color:var(--muted);"></div>
-      <div id="sandbox-result" style="margin-top:8px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.72rem;color:var(--muted);"></div>
-      <div id="sv-feed" style="margin-top:10px;max-height:220px;overflow-y:auto;"></div>
-    </div>
-
     <!-- ── Test Saved Model ── -->
     <div class="card">
       <div class="card-title"><span class="icon">🧪</span>Test Current Saved Model</div>
@@ -304,6 +368,39 @@ canvas{display:block;width:100%!important;flex:1;}
         <div id="pb-smart-fill" style="height:100%; width:0%; background:var(--green); transition:width 0.3s;"></div>
       </div>
       <div style="font-size: 0.65rem; color: var(--muted); margin-top: 4px;" id="pb-smart-details">Grammar: 0 | Sim: 0%</div>
+    </div>
+  </div>
+
+  <!-- ================= EXPERT ROUTING INSPECTOR ================= -->
+  <div class="wide card" id="expert-inspector-card">
+    <!-- Header -->
+    <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;width:100%;">
+      <div style="display:flex;align-items:center;gap:8px;"><span class="icon">🔬</span>Expert Routing Inspector</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <select id="inspect-model-file" onchange="inspectModel()" style="background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:4px 10px;color:var(--text);font-family:var(--mono);font-size:0.7rem;">
+          <option value="data/models/gob_models/moe_social_model.gob">moe_social_model.gob</option>
+          <option value="data/models/gob_models/moe_classification_model.gob">moe_classification_model.gob</option>
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="inspectModel()" id="btn-inspect">🔄 Inspect</button>
+        <span id="inspect-status" style="font-size:0.65rem;color:var(--muted);font-family:var(--mono);"></span>
+      </div>
+    </div>
+
+    <!-- Metadata strip -->
+    <div id="inspect-meta" style="display:none;">
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-top:10px;">
+        <div class="metric" style="padding:10px;"><div class="metric-label">Format</div><div class="metric-value" id="im-type" style="font-size:0.9rem;">—</div></div>
+        <div class="metric" style="padding:10px;"><div class="metric-label">Step Count</div><div class="metric-value col-accent" id="im-steps" style="font-size:0.9rem;">—</div></div>
+        <div class="metric" style="padding:10px;"><div class="metric-label">Training Phase</div><div class="metric-value col-blue" id="im-phase" style="font-size:0.9rem;">—</div></div>
+        <div class="metric" style="padding:10px;"><div class="metric-label">Vocab Size</div><div class="metric-value" id="im-vocab" style="font-size:0.9rem;">—</div></div>
+        <div class="metric" style="padding:10px;"><div class="metric-label">Embedding Dim</div><div class="metric-value" id="im-emb" style="font-size:0.9rem;">—</div></div>
+        <div class="metric" style="padding:10px;"><div class="metric-label">File Size</div><div class="metric-value col-muted" id="im-size" style="font-size:0.9rem;">—</div></div>
+      </div>
+    </div>
+
+    <!-- Layer panels -->
+    <div id="inspect-layers" style="margin-top:14px;display:flex;flex-direction:column;gap:16px;">
+      <div style="font-size:0.75rem;color:var(--muted);font-family:var(--mono);">Click <strong>Inspect</strong> to load expert routing health.</div>
     </div>
   </div>
 
@@ -611,8 +708,13 @@ function render() {
   setText('h-temp', m.temperature ? m.temperature.toFixed(3) : '—');
   setText('h-thawed', `${m.thawed_count !== undefined ? m.thawed_count : '—'} thawed`);
   
-  const activeExps = (state.live_active_experts && state.live_active_experts.length > 0) ? state.live_active_experts : (m.active_experts || []);
-  setText('h-experts', activeExps.length > 0 ? activeExps.length : '—');
+  const activeExps = state.live_active_experts || m.active_experts;
+  const expertCount = Array.isArray(activeExps)
+    ? activeExps.length
+    : typeof activeExps === 'number'
+      ? activeExps
+      : '—';
+  setText('h-experts', expertCount !== 0 ? expertCount : '—');
   
   setHTML('h-cb',   m.circuit_breaker ? '<span class="badge badge-hot">TRIPPED</span>' : '<span class="badge badge-ok">OK</span>');
   setHTML('h-cool', m.is_cooling      ? '<span class="badge badge-cool">COOLING</span>' : '<span class="badge badge-ok">NORMAL</span>');
@@ -674,11 +776,6 @@ function render() {
   // Charts
   drawLossAndLRChart(hist);
   drawLBChart(hist);
-
-  renderTelemetrySummary(state.telemetry || {});
-
-  // Expert heatmap
-  drawHeatmap(state.utilization || [], state.supervisor_events || []);
 
   // Supervisor Feed
   renderSupervisorEvents(state.supervisor_events || []);
@@ -925,147 +1022,7 @@ async function runMathSandbox() {
   }
 }
 
-function renderTelemetrySummary(telemetry) {
-  const el = document.getElementById('obs-summary');
-  const grid = document.getElementById('telemetry-grid');
-  if (!el || !grid) return;
-  const runtime = telemetry && telemetry.runtime ? telemetry.runtime : {};
-  const routing = telemetry && telemetry.routing ? telemetry.routing : {};
-  const leak = runtime.leak_detector || {};
-  const trace = runtime.trace_buffer || [];
-  const timeline = runtime.supervisor_timeline || [];
-  const serialization = runtime.serialization || [];
-  const chips = [
-    `<span class="badge badge-ok">Warm Cartridges: ${runtime.warm_cartridges ?? '—'}</span>`,
-    `<span class="badge badge-cool">Pool Hits: ${runtime.pool_hits ?? '—'}</span>`,
-    `<span class="badge badge-warn">Pool Misses: ${runtime.pool_misses ?? '—'}</span>`,
-    `<span class="badge badge-hot">Intent Latency: ${runtime.intent_latency_ms != null ? runtime.intent_latency_ms.toFixed(2) + 'ms' : '—'}</span>`,
-    `<span class="badge ${leak.enabled ? 'badge-hot' : 'badge-ok'}">Leak Detector: ${leak.enabled ? 'On' : 'Off'}</span>`
-  ];
-  el.innerHTML = chips.join('');
-  const rows = [
-    ['Routing Total', routing.total ?? '—'],
-    ['Experts', routing.num_experts ?? '—'],
-    ['Last Intent', runtime.last_intent || '—'],
-    ['Last Match', runtime.last_match || '—'],
-    ['Trace Events', trace.length],
-    ['Goroutine Drift', leak.enabled ? `${leak.last_count ?? '—'} (base ${leak.baseline ?? '—'})` : '—']
-  ];
-  grid.innerHTML = rows.map(([k,v]) => `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:0.72rem;"><div style="color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:2px;">${k}</div><div style="font-family:var(--mono);font-weight:600;color:var(--text);">${v}</div></div>`).join('');
-
-  const timelineEl = document.getElementById('supervisor-timeline');
-  if (timelineEl) {
-    if (!timeline.length) {
-      timelineEl.innerHTML = '<div style="color:var(--muted);">No supervisor adjustments yet.</div>';
-    } else {
-      const items = timeline.slice().reverse().map(entry => {
-        const step = entry.step != null ? `Step ${entry.step}` : 'Step —';
-        return `<div style="padding:6px 0;border-bottom:1px solid var(--border);"><div style="color:var(--cyan);font-weight:600;">${step}</div><div>${entry.message || `${entry.target}: ${entry.new_value}`}</div><div style="color:var(--muted);font-size:0.68rem;">${entry.reason || 'adjustment'}</div></div>`;
-      }).join('');
-      timelineEl.innerHTML = `<div style="font-weight:600;color:var(--text);margin-bottom:6px;">Supervisor Genealogy</div>${items}`;
-    }
-  }
-
-  const serializationEl = document.getElementById('serialization-metric');
-  if (serializationEl) {
-    const latest = serialization.length ? serialization[serialization.length - 1] : null;
-    if (!latest) {
-      serializationEl.innerHTML = '<div style="color:var(--muted);">No serializer activity yet.</div>';
-    } else {
-      const details = latest.details || {};
-      const allocDelta = details.alloc_delta != null ? `${details.alloc_delta} B` : '—';
-      const heapDelta = details.heap_delta != null ? `${details.heap_delta} B` : '—';
-      serializationEl.innerHTML = `<div style="font-weight:600;color:var(--text);margin-bottom:6px;">GOB / Checkpoint Serialization</div><div>${latest.label || 'serialization'} • alloc Δ ${allocDelta} • heap Δ ${heapDelta}</div><div style="color:var(--muted);font-size:0.68rem;">heap ${details.heap_in_use != null ? details.heap_in_use + ' B' : '—'} • gc ${details.num_gc != null ? details.num_gc : '—'}</div>`;
-    }
-  }
-}
-
 // ── Expert Heatmap ─────────────────────────────────────────────────────
-function drawHeatmap(util, svEvents) {
-  const el = document.getElementById('heatmap');
-  if (!util.length) { el.textContent = 'No utilization data'; return; }
-
-  const totals = {};
-  let overallTotal = 0;
-  util.forEach(p => {
-    const k = p.expert_id;
-    totals[k] = (totals[k] || 0) + p.count;
-    overallTotal += p.count;
-  });
-  
-  if (overallTotal === 0) overallTotal = 1;
-  const ids = Object.keys(totals).map(Number).sort((a,b)=>a-b);
-
-  // Check for recent dominance events (last 10 seconds)
-  const recentEvents = svEvents ? svEvents.filter(e => e.type === 'dominance' && (Date.now() - new Date().setHours(...e.time.split(':'))) < 10000) : [];
-  const hasDominanceEvent = recentEvents.length > 0;
-
-  el.innerHTML = '';
-  
-  // Create a stacked horizontal bar
-  const stackedBar = document.createElement('div');
-  stackedBar.style.display = 'flex';
-  stackedBar.style.width = '100%';
-  stackedBar.style.height = '24px';
-  stackedBar.style.borderRadius = '4px';
-  stackedBar.style.overflow = 'hidden';
-  stackedBar.style.border = '1px solid var(--border)';
-  
-  const colors = ['#6366f1', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', '#ef4444', '#14b8a6'];
-  
-  const activeExps = (state.latest.active_experts || []);
-
-  ids.forEach((id) => {
-    const frac = totals[id] / overallTotal;
-    const pct = (frac * 100).toFixed(1);
-    const isActive = activeExps.length === 0 || activeExps.includes(id);
-    
-    // Highlight if dominance is > 85%
-    const isDominant = frac > 0.85;
-    
-    const segment = document.createElement('div');
-    segment.style.width = `${Math.max(5, pct)}%`; // Ensure visible
-    segment.style.height = '100%';
-    
-    if (!isActive) {
-       segment.style.background = '#475569';
-       segment.innerHTML = `🔒${id}`;
-       segment.title = `E${id}: Frozen`;
-    } else {
-       segment.style.background = isDominant ? 'var(--red)' : '#6366f1';
-       if (isDominant && hasDominanceEvent) {
-          segment.style.animation = 'pulse-r 1s infinite';
-       } else if (isDominant) {
-          segment.style.border = '2px solid var(--yellow)';
-       }
-       segment.textContent = frac > 0.05 ? `E${id}` : '';
-       segment.title = `E${id}: ${totals[id]} tokens (${pct}%)`;
-    }
-    
-    segment.style.display = 'flex';
-    segment.style.alignItems = 'center';
-    segment.style.justifyContent = 'center';
-    segment.style.fontSize = '0.65rem';
-    segment.style.color = '#fff';
-    segment.style.fontWeight = 'bold';
-    segment.style.overflow = 'hidden';
-    segment.style.whiteSpace = 'nowrap';
-    segment.style.borderRight = '1px solid var(--bg)';
-    
-    stackedBar.appendChild(segment);
-  });
-  
-  el.appendChild(stackedBar);
-  
-  // Flash intervention badge if needed
-  if (hasDominanceEvent) {
-     const badge = document.createElement('div');
-     badge.style.marginTop = '4px';
-     badge.innerHTML = `<span class="badge badge-hot" style="animation:pulse 1s infinite">⚡ Jitter Increased / Temp Adjusted</span>`;
-     el.appendChild(badge);
-  }
-}
-
 // ── Supervisor Feed & AI Doctor ──
 function renderSupervisorEvents(events) {
   const el = document.getElementById('sv-feed');
@@ -1195,6 +1152,7 @@ function runInference() {
   
   const infWs = new WebSocket(`ws://${location.host}/api/infer/ws`);
   let fullResponse = "";
+  let infSuccess = true;
   
   infWs.onopen = () => {
     infWs.send(JSON.stringify({prompt, fork_run: forkRun}));
@@ -1203,6 +1161,7 @@ function runInference() {
   infWs.onmessage = (e) => {
     const data = JSON.parse(e.data);
     if (data.error) {
+      infSuccess = false;
       const errSpan = document.createElement('span');
       errSpan.style.color = "var(--red)";
       errSpan.textContent = " Error: " + data.error;
@@ -1258,6 +1217,7 @@ function runInference() {
   };
   infWs.onerror = () => {
     btn.disabled = false;
+    infSuccess = false;
     const errSpan = document.createElement('span');
     errSpan.style.color = "var(--red)";
     errSpan.textContent = " Connection Error.";
@@ -1266,6 +1226,11 @@ function runInference() {
   infWs.onclose = () => {
     btn.disabled = false;
     botCursor.remove();
+    if (infSuccess) {
+      showToast('✅ Live trace created', '#10b981');
+    } else {
+      showToast('❌ Live trace failed', '#ef4444');
+    }
   };
 }
 
@@ -2338,6 +2303,136 @@ async function runAllTests() {
 
 // Build grid on page load
 initTestGrid();
+
+// ── Expert Routing Inspector ─────────────────────────────────────────────────
+let inspectAutoTimer = null;
+
+async function inspectModel() {
+  const sel   = document.getElementById('inspect-model-file');
+  const btn   = document.getElementById('btn-inspect');
+  const statusEl = document.getElementById('inspect-status');
+  const file  = sel ? sel.value : 'data/models/gob_models/moe_social_model.gob';
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Loading…';
+  statusEl.textContent = '';
+
+  try {
+    const res  = await fetch(`/api/inspect?file=${encodeURIComponent(file)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    renderInspectReport(data);
+    statusEl.textContent = `Updated ${new Date().toLocaleTimeString()}`;
+  } catch(e) {
+    document.getElementById('inspect-layers').innerHTML =
+      `<div style="color:var(--red);font-size:0.75rem;font-family:var(--mono);">❌ Failed to load: ${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔄 Inspect';
+  }
+}
+
+function renderInspectReport(d) {
+  // ── Metadata strip ──
+  const meta = document.getElementById('inspect-meta');
+  meta.style.display = 'block';
+  setText('im-type',  d.type || '—');
+  setText('im-steps', d.step_count ?? '—');
+  setText('im-phase', d.training_phase != null ? `Phase ${d.training_phase}` : '—');
+  setText('im-vocab', d.vocab_size ? d.vocab_size.toLocaleString() : '—');
+  setText('im-emb',   d.embedding_dim ?? '—');
+  setText('im-size',  d.file_size_mb ? `${d.file_size_mb.toFixed(1)} MB` : '—');
+
+  // ── Layer panels ──
+  const container = document.getElementById('inspect-layers');
+  if (!d.layers || !d.layers.length) {
+    container.innerHTML = '<div style="font-size:0.75rem;color:var(--muted);">No MoE layers found in this model.</div>';
+    return;
+  }
+
+  container.innerHTML = d.layers.map(layer => renderLayerPanel(layer)).join('');
+}
+
+function renderLayerPanel(layer) {
+  const mag     = layer.router_weight_magnitude;
+  const temp    = layer.router_temperature;
+  const experts = layer.experts || [];
+  const frozen  = experts.filter(e => e.frozen).length;
+  const active  = experts.filter(e => e.status === 'active').length;
+  const stagnant = experts.filter(e => e.status === 'stagnant').length;
+
+  // Router health badge
+  let routerBadge, routerColor;
+  if (mag === 0) {
+    routerBadge = '🔴 ZERO — all tokens pin to E0';
+    routerColor = 'var(--red)';
+  } else if (mag < 0.1) {
+    routerBadge = '⚠️ Weak router';
+    routerColor = 'var(--yellow)';
+  } else {
+    routerBadge = '✅ Healthy';
+    routerColor = 'var(--green)';
+  }
+
+  // Router weight bar (normalise to 0–100% against 200 as a rough max)
+  const barPct = Math.min(100, (mag / 200) * 100);
+
+  // Expert grid nodes
+  const nodes = experts.map(e => {
+    const cls = e.status === 'frozen' ? 'frozen' : e.status === 'stagnant' ? 'stagnant' : 'active';
+    const icon = e.frozen ? '❄' : e.status === 'stagnant' ? '⚠' : '';
+    const tip  = `E${e.id}\nStatus: ${e.status}\nFrozen: ${e.frozen}\nStagnant ctr: ${e.step_stagnant_counter}`;
+    return `<div class="expert-node ${cls}" title="${tip}">${icon}<span>${e.id}</span><div class="expert-tooltip"><strong>E${e.id}</strong><br>Status: ${e.status}<br>Frozen: ${e.frozen}<br>Stagnant: ${e.step_stagnant_counter}</div></div>`;
+  }).join('');
+
+  return `
+  <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;position:relative;overflow:hidden;">
+    <div style="position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent),var(--cyan));opacity:.5"></div>
+
+    <!-- Layer header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+      <div style="font-size:0.8rem;font-weight:700;color:var(--text);font-family:var(--mono);">🔧 ${layer.name}</div>
+      <div style="display:flex;gap:10px;font-size:0.7rem;font-family:var(--mono);">
+        <span style="color:var(--muted);">Experts: <span style="color:var(--text);font-weight:600;">${layer.num_experts}</span></span>
+        <span style="color:var(--muted);">K: <span style="color:var(--cyan);font-weight:600;">${layer.k}</span></span>
+        <span style="color:var(--muted);">Temp: <span style="color:var(--yellow);font-weight:600;">${temp != null ? temp.toFixed(2) : '—'}</span></span>
+        <span style="color:${routerColor};font-weight:600;">${routerBadge}</span>
+      </div>
+    </div>
+
+    <!-- Router weight magnitude bar -->
+    <div style="margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;font-size:0.65rem;color:var(--muted);margin-bottom:4px;">
+        <span>Router Weight Magnitude</span><span style="color:var(--text);font-weight:600;">${mag.toFixed(4)}</span>
+      </div>
+      <div style="height:5px;background:var(--bg);border-radius:3px;overflow:hidden;">
+        <div style="height:100%;width:${barPct}%;background:${routerColor};transition:width .4s;"></div>
+      </div>
+    </div>
+
+    <!-- Expert status summary -->
+    <div style="display:flex;gap:16px;margin-bottom:10px;font-size:0.68rem;font-family:var(--mono);">
+      <span><span style="color:var(--green);font-weight:700;">${active}</span> <span style="color:var(--muted);">active</span></span>
+      <span><span style="color:var(--cyan);font-weight:700;">${frozen}</span> <span style="color:var(--muted);">frozen</span></span>
+      <span><span style="color:var(--red);font-weight:700;">${stagnant}</span> <span style="color:var(--muted);">stagnant</span></span>
+    </div>
+
+    <!-- Expert grid -->
+    <div class="expert-grid">${nodes}</div>
+  </div>`;
+}
+
+// Auto-refresh when training is running
+function maybeAutoInspect() {
+  if (state && state.process && state.process.running) {
+    inspectModel();
+  }
+}
+if (!inspectAutoTimer) {
+  inspectAutoTimer = setInterval(maybeAutoInspect, 30000);
+}
+// Initial load on page open
+inspectModel();
 </script>
 </body>
 </html>

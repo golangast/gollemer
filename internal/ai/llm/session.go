@@ -14,7 +14,7 @@ import (
 // Message is a single turn in a conversation, carrying the speaker's role,
 // the content, and a lightweight token-count estimate for context-window math.
 type Message struct {
-	Role      string    `json:"role"`             // "system", "user", or "assistant"
+	Role      string    `json:"role"` // "system", "user", or "assistant"
 	Content   string    `json:"content"`
 	Timestamp time.Time `json:"timestamp"`
 	Tokens    int       `json:"tokens,omitempty"` // Rough estimate: len(fields)
@@ -103,6 +103,52 @@ func (c *Conversation) GetContextForInference(maxTokens int) []Message {
 // gollemer's encoder already understands (__system__ / __user__ / __assistant__).
 func (c *Conversation) BuildContextString(maxTokens int) string {
 	msgs := c.GetContextForInference(maxTokens)
+	return formatMessagesForInference(msgs)
+}
+
+func (c *Conversation) BuildContextStringWithUserInput(maxTokens int, userInput string) string {
+	userInput = strings.TrimSpace(userInput)
+	if userInput == "" {
+		return c.BuildContextString(maxTokens)
+	}
+
+	c.mu.RLock()
+	msgs := append([]Message(nil), c.Messages...)
+	c.mu.RUnlock()
+
+	if len(msgs) == 0 || msgs[len(msgs)-1].Role != "user" || strings.TrimSpace(msgs[len(msgs)-1].Content) != userInput {
+		msgs = append(msgs, Message{Role: "user", Content: userInput, Tokens: estimateTokens(userInput)})
+	}
+
+	var systemMsg *Message
+	tokenCount := 0
+	if len(msgs) > 0 && msgs[0].Role == "system" {
+		systemMsg = &msgs[0]
+		tokenCount += systemMsg.Tokens
+	}
+
+	var recent []Message
+	for i := len(msgs) - 1; i >= 0; i-- {
+		msg := msgs[i]
+		if msg.Role == "system" {
+			continue
+		}
+		if tokenCount+msg.Tokens > maxTokens {
+			break
+		}
+		tokenCount += msg.Tokens
+		recent = append([]Message{msg}, recent...)
+	}
+
+	var payload []Message
+	if systemMsg != nil {
+		payload = append(payload, *systemMsg)
+	}
+	payload = append(payload, recent...)
+	return formatMessagesForInference(payload)
+}
+
+func formatMessagesForInference(msgs []Message) string {
 	var sb strings.Builder
 	for _, m := range msgs {
 		switch m.Role {

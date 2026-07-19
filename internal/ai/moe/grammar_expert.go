@@ -62,7 +62,7 @@ type GrammarExpert struct {
 
 	lastInput   *tensor.Tensor
 	lastReLUOut *tensor.Tensor
-	
+
 	// Multi-token memory (EMA of inputs to catch temporal patterns)
 	ContextMemory *tensor.Tensor
 }
@@ -91,16 +91,16 @@ func NewGrammarExpert(id, roleID, inputDim, outputDim int) (*GrammarExpert, erro
 	roleBias := tensor.NewTensor([]int{1, outputDim}, make([]float32, outputDim), true)
 
 	return &GrammarExpert{
-		ID:        id,
-		RoleID:    roleID,
-		RoleName:  GrammarRoles[roleID],
-		inputDim:  inputDim,
-		hiddenDim: hiddenDim,
-		outputDim: outputDim,
-		FC1:       fc1,
-		FC2:       fc2,
-		RoleBias:  roleBias,
-		health:    0.125,
+		ID:            id,
+		RoleID:        roleID,
+		RoleName:      GrammarRoles[roleID],
+		inputDim:      inputDim,
+		hiddenDim:     hiddenDim,
+		outputDim:     outputDim,
+		FC1:           fc1,
+		FC2:           fc2,
+		RoleBias:      roleBias,
+		health:        0.125,
 		ContextMemory: tensor.NewTensor([]int{1, inputDim}, make([]float32, inputDim), false),
 	}, nil
 }
@@ -197,7 +197,7 @@ func (e *GrammarExpert) UpdateHealth(wasUsed bool) {
 	e.health = current*(1-decay) + e.health*decay
 }
 
-func (e *GrammarExpert) IsStagnant() bool  { return e.health < 0.01 }
+func (e *GrammarExpert) IsStagnant() bool      { return e.health < 0.01 }
 func (e *GrammarExpert) ClipWeights(_ float32) {}
 
 func (e *GrammarExpert) EvolutionaryReset(winner Expert, jitter float32) {
@@ -251,6 +251,7 @@ func (e *GrammarExpert) ToGPU() {
 }
 
 func (e *GrammarExpert) SyncParameters() error { return nil }
+
 // SeedGrammarBias applies a structural prior to the expert's output bias.
 // This jumpstarts specialization by making the expert naturally "prefer" tokens
 // that match its assigned syntactic role (e.g. PRON expert gets a boost for 'i', 'you').
@@ -259,13 +260,13 @@ func (ge *GrammarExpert) SeedGrammarBias(vocabSize int, tokenToWord []string) {
 		// Only seed output experts (whose output dimension matches vocabSize)
 		return
 	}
-	
+
 	boostCount := 0
 	for id, word := range tokenToWord {
 		if id >= vocabSize {
 			continue
 		}
-		
+
 		role := MapWordToGrammarType(word)
 		if role == ge.RoleName {
 			// Apply a significant structural prior (+5.0 logit boost)
@@ -273,7 +274,7 @@ func (ge *GrammarExpert) SeedGrammarBias(vocabSize int, tokenToWord []string) {
 			boostCount++
 		}
 	}
-	
+
 	if boostCount > 0 {
 		fmt.Printf("🧬 [MoE] Seeded Expert E%d (%s) with %d role-specific biases\n", ge.ID, ge.RoleName, boostCount)
 	}

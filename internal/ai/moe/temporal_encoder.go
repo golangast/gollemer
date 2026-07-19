@@ -25,25 +25,25 @@ type TemporalEncoder struct {
 	HiddenDim int
 
 	// Update gate weights
-	Wz    []float32 // [HiddenDim x InputDim]
-	Uz    []float32 // [HiddenDim x HiddenDim]
-	Bz    []float32 // [HiddenDim]
+	Wz     []float32 // [HiddenDim x InputDim]
+	Uz     []float32 // [HiddenDim x HiddenDim]
+	Bz     []float32 // [HiddenDim]
 	GradWz []float32
 	GradUz []float32
 	GradBz []float32
 
 	// Reset gate weights
-	Wr    []float32
-	Ur    []float32
-	Br    []float32
+	Wr     []float32
+	Ur     []float32
+	Br     []float32
 	GradWr []float32
 	GradUr []float32
 	GradBr []float32
 
 	// Candidate weights
-	Wn    []float32
-	Un    []float32
-	Bn    []float32
+	Wn     []float32
+	Un     []float32
+	Bn     []float32
 	GradWn []float32
 	GradUn []float32
 	GradBn []float32
@@ -84,7 +84,7 @@ func NewTemporalEncoder(inputDim, hiddenDim int) *TemporalEncoder {
 }
 
 // sigmoid and tanh helpers
-func sigm(x float32) float32 { return float32(1.0 / (1.0 + math.Exp(float64(-x)))) }
+func sigm(x float32) float32  { return float32(1.0 / (1.0 + math.Exp(float64(-x)))) }
 func tanhF(x float32) float32 { return float32(math.Tanh(float64(x))) }
 
 // mvMul computes y[i] = sum_j W[i*cols+j] * x[j]  (row-major matrix × vector)
@@ -133,25 +133,35 @@ func (te *TemporalEncoder) Forward(frameTokens [][]float32) []float32 {
 		// Update gate: z = sigmoid(Wz*x + Uz*h + bz)
 		zRaw := vadd(vadd(mvMul(te.Wz, x, hd, id), mvMul(te.Uz, h, hd, hd)), te.Bz)
 		z := make([]float32, hd)
-		for i := range zRaw { z[i] = sigm(zRaw[i]) }
+		for i := range zRaw {
+			z[i] = sigm(zRaw[i])
+		}
 
 		// Reset gate: r = sigmoid(Wr*x + Ur*h + br)
 		rRaw := vadd(vadd(mvMul(te.Wr, x, hd, id), mvMul(te.Ur, h, hd, hd)), te.Br)
 		r := make([]float32, hd)
-		for i := range rRaw { r[i] = sigm(rRaw[i]) }
+		for i := range rRaw {
+			r[i] = sigm(rRaw[i])
+		}
 
 		// r ⊙ h
 		rh := make([]float32, hd)
-		for i := range rh { rh[i] = r[i] * h[i] }
+		for i := range rh {
+			rh[i] = r[i] * h[i]
+		}
 
 		// Candidate: n = tanh(Wn*x + Un*(r⊙h) + bn)
 		nRaw := vadd(vadd(mvMul(te.Wn, x, hd, id), mvMul(te.Un, rh, hd, hd)), te.Bn)
 		n := make([]float32, hd)
-		for i := range nRaw { n[i] = tanhF(nRaw[i]) }
+		for i := range nRaw {
+			n[i] = tanhF(nRaw[i])
+		}
 
 		// New hidden: h_new = (1-z)⊙h + z⊙n
 		hNew := make([]float32, hd)
-		for i := range hNew { hNew[i] = (1-z[i])*h[i] + z[i]*n[i] }
+		for i := range hNew {
+			hNew[i] = (1-z[i])*h[i] + z[i]*n[i]
+		}
 
 		te.lastZ[t] = z
 		te.lastR[t] = r
@@ -171,19 +181,37 @@ func (te *TemporalEncoder) Backward(dh []float32, lr float32) [][]float32 {
 	id := te.InputDim
 
 	// Reset accumulated gradients
-	for i := range te.GradWz { te.GradWz[i] = 0 }
-	for i := range te.GradUz { te.GradUz[i] = 0 }
-	for i := range te.GradBz { te.GradBz[i] = 0 }
-	for i := range te.GradWr { te.GradWr[i] = 0 }
-	for i := range te.GradUr { te.GradUr[i] = 0 }
-	for i := range te.GradBr { te.GradBr[i] = 0 }
-	for i := range te.GradWn { te.GradWn[i] = 0 }
-	for i := range te.GradUn { te.GradUn[i] = 0 }
-	for i := range te.GradBn { te.GradBn[i] = 0 }
+	for i := range te.GradWz {
+		te.GradWz[i] = 0
+	}
+	for i := range te.GradUz {
+		te.GradUz[i] = 0
+	}
+	for i := range te.GradBz {
+		te.GradBz[i] = 0
+	}
+	for i := range te.GradWr {
+		te.GradWr[i] = 0
+	}
+	for i := range te.GradUr {
+		te.GradUr[i] = 0
+	}
+	for i := range te.GradBr {
+		te.GradBr[i] = 0
+	}
+	for i := range te.GradWn {
+		te.GradWn[i] = 0
+	}
+	for i := range te.GradUn {
+		te.GradUn[i] = 0
+	}
+	for i := range te.GradBn {
+		te.GradBn[i] = 0
+	}
 
 	dhNext := make([]float32, hd)
 	copy(dhNext, dh)
-	
+
 	dxTokens := make([][]float32, T)
 
 	for t := T - 1; t >= 0; t-- {
@@ -198,11 +226,15 @@ func (te *TemporalEncoder) Backward(dh []float32, lr float32) [][]float32 {
 
 		// d_n: grad through z⊙n part of h
 		dn := make([]float32, hd)
-		for i := range dn { dn[i] = dht[i] * z[i] * (1 - n[i]*n[i]) } // tanh'
+		for i := range dn {
+			dn[i] = dht[i] * z[i] * (1 - n[i]*n[i])
+		} // tanh'
 
 		// d_z
 		dz := make([]float32, hd)
-		for i := range dz { dz[i] = dht[i] * (n[i] - h[i]) * z[i] * (1 - z[i]) } // sigmoid'
+		for i := range dz {
+			dz[i] = dht[i] * (n[i] - h[i]) * z[i] * (1 - z[i])
+		} // sigmoid'
 
 		// d_r (flows from Wn path)
 		dr := make([]float32, hd)
@@ -212,7 +244,9 @@ func (te *TemporalEncoder) Backward(dh []float32, lr float32) [][]float32 {
 				dr[i] += te.Un[j*hd+i] * dn[j] * h[i]
 			}
 		}
-		for i := range dr { dr[i] *= r[i] * (1 - r[i]) }
+		for i := range dr {
+			dr[i] *= r[i] * (1 - r[i])
+		}
 
 		// dx (gradient w.r.t input frame x)
 		dx := make([]float32, id)
@@ -266,15 +300,33 @@ func (te *TemporalEncoder) Backward(dh []float32, lr float32) [][]float32 {
 	}
 
 	// Apply SGD
-	for i := range te.Wz { te.Wz[i] -= lr * te.GradWz[i] }
-	for i := range te.Uz { te.Uz[i] -= lr * te.GradUz[i] }
-	for i := range te.Bz { te.Bz[i] -= lr * te.GradBz[i] }
-	for i := range te.Wr { te.Wr[i] -= lr * te.GradWr[i] }
-	for i := range te.Ur { te.Ur[i] -= lr * te.GradUr[i] }
-	for i := range te.Br { te.Br[i] -= lr * te.GradBr[i] }
-	for i := range te.Wn { te.Wn[i] -= lr * te.GradWn[i] }
-	for i := range te.Un { te.Un[i] -= lr * te.GradUn[i] }
-	for i := range te.Bn { te.Bn[i] -= lr * te.GradBn[i] }
-	
+	for i := range te.Wz {
+		te.Wz[i] -= lr * te.GradWz[i]
+	}
+	for i := range te.Uz {
+		te.Uz[i] -= lr * te.GradUz[i]
+	}
+	for i := range te.Bz {
+		te.Bz[i] -= lr * te.GradBz[i]
+	}
+	for i := range te.Wr {
+		te.Wr[i] -= lr * te.GradWr[i]
+	}
+	for i := range te.Ur {
+		te.Ur[i] -= lr * te.GradUr[i]
+	}
+	for i := range te.Br {
+		te.Br[i] -= lr * te.GradBr[i]
+	}
+	for i := range te.Wn {
+		te.Wn[i] -= lr * te.GradWn[i]
+	}
+	for i := range te.Un {
+		te.Un[i] -= lr * te.GradUn[i]
+	}
+	for i := range te.Bn {
+		te.Bn[i] -= lr * te.GradBn[i]
+	}
+
 	return dxTokens
 }

@@ -1,28 +1,94 @@
 ---
 description: how to train and test the MoE model with current stability fixes
 ---
-To train and test your Mixture of Experts model with the latest stability and diversity fixes:
+// turbo-all
 
-1. Build the updated code to ensure all fixes are applied
-// turbo
-go build -o gollemer ./cmd/tools/train_moe/main.go
+## Overview
 
-2. Run the chat training loop
-   - **Phase 0**: MLM pre-training runs first (5 epochs of fill-in-the-blank) to teach grammar
-   - **Phase 1**: Then the main seq2seq training begins with curriculum learning
-   - The batch size is reduced to 8 to fit 8GB GPU memory
-   - Use -batch-size 4 and -acc-steps 16 if you still hit OOM
-// turbo
-./gollemer -train-chat -gpu
+The training pipeline runs a **3-Phase Multi-Domain Curriculum**:
 
-3. (Optional) Run overfitting test if you suspect signal collapse
-   - Use this to verify that the model can learn a single pattern perfectly
-   - Note: overfit mode SKIPS MLM pre-training to focus on the single example
-./gollemer -overfit -gpu
+| Phase | Dataset | Frozen Experts | Advance Condition |
+|---|---|---|---|
+| 1 — Social Core | `conversations.csv` | 8–15 (cartridge) | SVC > 0.05 + coherent, 3× in a row |
+| 2 — Cartridge Ingestion | `computer.csv` | 0–7 (social) | 30 stable epochs |
+| 3 — Cohesive Tuning | Both | None | Runs to completion |
 
-4. Test in interactive mode
-   - The new Retrieval Logic will now prioritize exact matches
-./gollemer -llm
+### Key stability fixes in place
+- **Checkpoint loader** — 3-stage format detection (gzip-Checkpoint → gzip-IntentMoE → raw-GOB). No more "encoded unsigned integer out of range" panics.
+- **Expert stagnation guard** — Frozen experts (phase-masked with −1e9 logit) are excluded from stagnation counters, preventing spurious `ResetExpertWeights` calls that corrupted the gating network.
+- **Word2Vec persistence** — `make clean` backs up and restores `word2vec_model.gob` so the full 1374-token vocabulary survives between training runs.
+
+---
+
+## 1. Pre-train Word2Vec (one-time, or after `make clean-all`)
+
+Only needed if the vocabulary is missing or stale. Skip if `word2vec_model.gob` already exists.
+
+```
+make word2vec
+```
+
+This saves `word2vec_model.gob` and its `.bak` automatically.
+
+---
+
+## 2. Run the 3-Phase Curriculum (standard)
+
+Clears MoE checkpoints, restores word2vec from backup, then trains.
+
+```
+make train
+```
+
+Environment: `GOMEMLIMIT=4500MiB GOGC=90 GOMAXPROCS=8`
+
+Watch the logs for Phase transition signals:
+```
+✅ SVC > 0.0500 + coherent (3/3)
+🚀 Phase 1 complete → advancing to Phase 2
+```
+Checkpoints are saved every 10 epochs to `data/models/gob_models/moe_social_model.gob`.
+
+---
+
+## 3. Resume training (without wiping the model)
+
+```
+make train-social
+```
+
+Use this to pick up from the last checkpoint without `clean`.
+
+---
+
+## 4. Full cold-start (wipes everything including Word2Vec)
+
+```
+make train-fresh
+```
+
+---
+
+## 5. Test in interactive mode
+
+```
+make llm
+```
+
+Verify the inference path in the logs:
+- ✅ Good: `🧠 Neural Social Match: Using weights from moe_social_model.gob`
+- ⚠️ Fallback: `✅ Social Retrieval (no neural model)` — model not loaded
+
+---
+
+## 6. Inspect a saved model checkpoint
+
+```
+go run cmd/tools/inspect_model/main.go data/models/gob_models/moe_social_model.gob
+```
+
+Supports all serialization formats (gzip-checkpoint, gzip-model, raw-gob).
+Add `--export` to write a JSON summary alongside the file.
 
 ---
 
@@ -33,22 +99,17 @@ any device with ~900 MB of usable RAM. The flag automatically applies:
 
 | Setting | Normal | Pi 3B |
 |---|---|---|
-| Memory cap (GOMEMLIMIT) | 1 000 MB | 600 MB |
-| GC aggressiveness | 20 % | 10 % |
-| GOMAXPROCS | all cores | 1 (serial GC) |
-| Batch size | from config (4–8) | 1 |
-| Accumulation steps | from config (2–4) | 16 |
-| Num experts | from config (8) | 4 |
+| Memory cap (GOMEMLIMIT) | 4 500 MB | 600 MB |
+| GC aggressiveness | 90 % | 10 % |
+| GOMAXPROCS | 8 | 1 (serial GC) |
+| Batch size | from config (8–16) | 1 |
+| Accumulation steps | from config | 16 |
+| Num experts | from config (8–16) | 4 |
 | GPU | user choice | disabled |
 
 **Social-only training on Pi (recommended — smallest model path):**
 ```
 ./gollemer -train-social -pi
-```
-
-**Chat training on Pi:**
-```
-./gollemer -train-chat -pi
 ```
 
 **Combine with -epochs to keep runs short overnight:**

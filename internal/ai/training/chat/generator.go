@@ -140,12 +140,26 @@ func StrictGenerate(model *moe.IntentMoE, input string, maxLen int, repetitionPe
 		applyGrammarMask(logits, resIDs, model.SentenceVocab)
 
 		//  Punctuation Proximity Penalty: scale down probability of punctuation if too close
-		if i-lastPunctStep < 4 {
+		//  or if consecutive punctuation tokens appear back-to-back.
+		consecutivePunct := 0
+		for j := len(resIDs) - 1; j >= 0; j-- {
+			w := model.SentenceVocab.GetWord(resIDs[j])
+			if w == "." || w == "," || w == "!" || w == "?" || w == ";" || w == ":" {
+				consecutivePunct++
+			} else {
+				break
+			}
+		}
+		punctPenalty := float32(5.0)
+		if consecutivePunct > 1 {
+			punctPenalty = 10.0 // Push probability of repeating punctuation out of bounds
+		}
+		if i-lastPunctStep < 4 || consecutivePunct > 1 {
 			punctuation := []string{".", ",", "!", "?", ";", ":"}
 			for _, p := range punctuation {
 				id := model.SentenceVocab.GetTokenID(p)
 				if id != -1 && id < len(logits.Data) {
-					logits.Data[id] -= 5.0 // Strong penalty for proximity
+					logits.Data[id] -= punctPenalty
 				}
 			}
 		}
@@ -178,7 +192,8 @@ func StrictGenerate(model *moe.IntentMoE, input string, maxLen int, repetitionPe
 		// top-k candidates proportional to their softmax probabilities.
 		// Pure ArgMax (greedy) collapses to a single token the moment it has
 		// a slight numerical edge — sampling breaks that attractor.
-		const genTemp = float32(0.85)
+		// Lowered to 0.7 for sharper categorical sampling that still avoids greedy collapse.
+		const genTemp = float32(0.7)
 		const genTopK = 40
 		ApplyTemperature(logits.Data, genTemp)
 		topIndicesK, topProbs := getTopK(logits, genTopK)
@@ -272,6 +287,7 @@ func StrictGenerateWithExperts(model *moe.IntentMoE, input string, maxLen int, r
 	defer func() {
 		// Restore
 		model.SetParamsRequiresGrad(true)
+		model.ClearState()
 
 		for layer, temp := range oldTemps {
 			layer.SetMode(true)
@@ -401,6 +417,11 @@ func StrictGenerateWithExperts(model *moe.IntentMoE, input string, maxLen int, r
 }
 
 func GenerateTokens(model *moe.IntentMoE, input string, maxLen int, useGPU bool) []string {
+	model.SetParamsRequiresGrad(false)
+	defer func() {
+		model.SetParamsRequiresGrad(true)
+		model.ClearState()
+	}()
 	// Quiet version for circuit breaker
 	tokens := cleanTokenize(input)
 	if len(tokens) == 0 {
@@ -487,6 +508,11 @@ func GenerateTokens(model *moe.IntentMoE, input string, maxLen int, useGPU bool)
 }
 
 func BeamSearchDecode(model *moe.IntentMoE, ctx *tensor.Tensor, beamSize int, maxLen int) []int {
+	model.SetParamsRequiresGrad(false)
+	defer func() {
+		model.SetParamsRequiresGrad(true)
+		model.ClearState()
+	}()
 	const repetitionPenalty = 1.8 // 1.0 = no penalty, 2.0 = very aggressive
 	const alpha = 0.7             // Length penalty coefficient
 
@@ -569,6 +595,11 @@ func BeamSearchDecode(model *moe.IntentMoE, ctx *tensor.Tensor, beamSize int, ma
 }
 
 func BeamSearchDecodeFiltered(model *moe.IntentMoE, ctx *tensor.Tensor, beamSize int, maxLen int, filteredIDs []int) []int {
+	model.SetParamsRequiresGrad(false)
+	defer func() {
+		model.SetParamsRequiresGrad(true)
+		model.ClearState()
+	}()
 	const repetitionPenalty = 1.2 // 1.0 = no penalty, 2.0 = very aggressive
 	const alpha = 0.7             // Length penalty coefficient
 	const temperature = 0.7       // Flatten distribution to encourage non-UNK tokens

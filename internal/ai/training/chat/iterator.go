@@ -40,7 +40,7 @@ func NewChatDataIterator(pairs []moe.TrainPair, vocab *mainvocab.Vocabulary, unk
 		vocab:  vocab,
 		unkID:  unkID,
 		idx:    0,
-		MaxLen: 80, // Default cap
+		MaxLen: 48, // Reduced from 80: attention is O(seq²), saves ~64% attention memory
 	}
 }
 

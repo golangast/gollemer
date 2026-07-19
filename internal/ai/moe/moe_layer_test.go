@@ -1,8 +1,8 @@
 package moe
 
 import (
-	"testing"
 	"github.com/golangast/gollemer/internal/ai/neural/tensor"
+	"testing"
 )
 
 func TestMoELayer_SignalCollapse(t *testing.T) {
@@ -11,7 +11,7 @@ func TestMoELayer_SignalCollapse(t *testing.T) {
 	outputDim := 128
 	numExperts := 8
 	k := 2
-	
+
 	expertBuilder := func(id int) (Expert, error) {
 		return NewFeedForwardExpert(inputDim, 256, outputDim)
 	}

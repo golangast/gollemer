@@ -8,6 +8,10 @@ i am a language model,i am a large language model trained by gollemer.,capabilit
 good morning,"hi there! how can i help you today?",greeting,ADJ NOUN
 good evening,"hello! what can i do for you tonight?",greeting,ADJ NOUN
 hey there,"hi! how can i help you today?",greeting,INTJ ADV
+what do you like to do,"i enjoy processing data and generating text.",opinion,ADV AUX PRON VERB
+what is your favorite thing to do,"i enjoy processing data and generating text.",opinion,PRON AUX PRON NOUN
+what should i do,"i think you should .",opinion,ADV AUX PRON
+what can you do,"i process data and generate text.",capabilities,ADV AUX PRON VERB
 is anyone there,"hello! i am here and ready to help.",greeting,AUX PRON ADV
 good afternoon,"hello! how can i help you this afternoon?",greeting,ADJ NOUN
 hi friend,"hello there! how can i help you today?",greeting,INTJ NOUN

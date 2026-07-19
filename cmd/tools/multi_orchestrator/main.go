@@ -15,12 +15,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golangast/gollemer/internal/platform/config"
-	"github.com/golangast/gollemer/internal/util/csvgen"
-	"github.com/golangast/gollemer/internal/platform/dsl"
-	"github.com/golangast/gollemer/internal/platform/sqlite_db"
 	"github.com/golangast/gollemer/internal/ai/neural/nn/ner"
 	"github.com/golangast/gollemer/internal/ai/neural/semantic"
+	"github.com/golangast/gollemer/internal/platform/config"
+	"github.com/golangast/gollemer/internal/platform/dsl"
+	"github.com/golangast/gollemer/internal/platform/sqlite_db"
+	"github.com/golangast/gollemer/internal/util/csvgen"
 )
 
 var projects map[string]string
@@ -735,8 +735,8 @@ func main() {
 				if msg.Role == "user" {
 					fmt.Printf("ID: %d, Timestamp: %s\n", msg.ID, msg.Timestamp)
 					fmt.Printf("Command: %s\n", msg.Content)
-					if msg.CommitHash.Valid {
-						fmt.Printf("Commit: %s\n", msg.CommitHash.String[:7])
+					if msg.CommitHash != "" {
+						fmt.Printf("Commit: %s\n", msg.CommitHash[:7])
 					}
 					fmt.Println("-----------------")
 				}
@@ -785,7 +785,7 @@ func main() {
 						continue
 					}
 					revertID = int64(msg.ID)
-					hash = msg.CommitHash.String
+					hash = msg.CommitHash
 				} else {
 					// It's a command string
 					fmt.Printf("Searching for command: '%s'\n", identifier)
@@ -811,11 +811,11 @@ func main() {
 						continue
 					}
 					revertID = int64(latestMatchingMessage.ID)
-					if !latestMatchingMessage.CommitHash.Valid {
+					if latestMatchingMessage.CommitHash == "" {
 						fmt.Printf("No commit hash associated with command ID %d ('%s'). Cannot revert.\n", revertID, latestMatchingMessage.Content)
 						continue
 					}
-					hash = latestMatchingMessage.CommitHash.String
+					hash = latestMatchingMessage.CommitHash
 				}
 			}
 

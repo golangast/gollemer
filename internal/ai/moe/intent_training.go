@@ -24,10 +24,10 @@ func (m *IntentMoE) Train(dataset []IntentSample, epochs int, lr float32) {
 			// Note: Convert []int indices to Tensor as expected by Forward
 			// (Implementation details abstracted for this conceptual loop)
 			_ = sample.Input
-			
+
 			// conceptually calling model forward
-			// outputs := m.Forward(...) 
-			
+			// outputs := m.Forward(...)
+
 			// 2. Compute Cross-Entropy Loss
 			// loss := CrossEntropy(outputs, sample.Target)
 			loss := 0.0 // Placeholder

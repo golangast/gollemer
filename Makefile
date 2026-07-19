@@ -9,25 +9,39 @@ export GOEXPERIMENT=simd
 export CGO_ENABLED=1
 
 # Runtime Tuning
-MEM_LIMIT    = 4500MiB
+MEM_LIMIT    = 5500MiB
 GOGC         = 90
 GOMAXPROCS   = 8
 TRAIN_BIN    = ./.build/gollemer-train
 MAIN_CMD     = go run cmd/tools/train_moe/main.go
 
-.PHONY: train train-social chat clean help dashboard \
+.PHONY: train train-fresh train-social chat clean clean-all help dashboard \
         build-pi build-pi64 pi pi-social pi-chat pi-llm \
         pi-social-master pi-social-worker pi-chat-master pi-chat-worker
 
 # --- Training ---
 
-## train: Start a fresh Social Curriculum training (clears old state)
+## train: Start a fresh Social Curriculum training (clears MoE models, preserves word2vec)
 train: clean
 	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-multiphase $(ARGS)
 
+## train-fresh: Full fresh start — clears ALL models including word2vec, then trains
+train-fresh: clean-all
+	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-multiphase $(ARGS)
+
 ## train-social: Resume existing Social Curriculum training
+## Suspends ALL dashboard services before training to free ~1.5 GiB RAM, restarts on completion.
 train-social:
-	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-social $(ARGS)
+	@echo "⏸  Suspending dashboard services to free RAM for training..."
+	@for f in /tmp/dashboard.pid /tmp/observability.pid /tmp/dashboard_injector.pid; do \
+	    [ -f $$f ] && kill -9 $$(cat $$f) 2>/dev/null || true; rm -f $$f; done
+	@sleep 2
+	@echo "🔨 Building training binary..."
+	@mkdir -p .build
+	go build -o .build/gollemer-train ./cmd/tools/train_moe/main.go
+	GOMEMLIMIT=$(MEM_LIMIT) GOGC=20 GOMAXPROCS=$(GOMAXPROCS) .build/gollemer-train -train-social $(ARGS)
+	@echo "▶️  Restarting dashboard (http://localhost:8765)..."
+	@bash scripts/start_dashboard.sh
 
 # --- Interaction ---
 
@@ -40,22 +54,42 @@ llm: chat
 
 # --- Maintenance ---
 
-## clean: Remove all model checkpoints and cached vocabularies
+## clean: Remove MoE model checkpoints (preserves word2vec to avoid cold restarts)
 clean:
 	rm -f data/models/gob_models/*.gob
+	@if [ -f data/models/gob_models/word2vec_model.gob.bak ]; then \
+		cp data/models/gob_models/word2vec_model.gob.bak data/models/gob_models/word2vec_model.gob 2>/dev/null || true; \
+	fi
 
-word2vec: 
+## clean-all: Remove ALL model files including word2vec (full cold start)
+clean-all:
+	rm -f data/models/gob_models/*.gob
+
+word2vec:
 	go run ./cmd/tools/train_word2vec
+	@cp data/models/gob_models/word2vec_model.gob data/models/gob_models/word2vec_model.gob.bak 2>/dev/null || true
 
 ## help: Display available commands
 help:
 	@echo "Available commands:"
 	@grep -E '^##' Makefile | sed 's/## //'
 
-## dashboard: Launch the live training dashboard on http://localhost:8765
+## dashboard: Show how to start the live training dashboard
 dashboard:
-	@echo "🖥️  Starting Gollemer Training Dashboard → http://localhost:8765"
-	go run cmd/tools/dashboard/main.go
+	bash scripts/start_dashboard.sh
+	@echo "🖥️  Gollemer Training Dashboard → http://localhost:8765"
+	@echo "🧭 Advanced Observability → http://localhost:8765/observability"
+	@echo "To start the dashboard and demo observability services, run:"
+	@echo "  bash scripts/start_dashboard.sh"
+	@echo "Or run detached via Make: make dashboard.start"
+
+## dashboard.start: Start observability+injector+dashboard detached (background)
+dashboard.start:
+	@echo "🔁 Launching demo observability server and live injector (detached)..."
+	@pkill -f cmd/tools/observability_example/main.go || true
+	@pkill -f scripts/dashboard_injector.sh || true
+	@sh -c 'nohup bash scripts/start_dashboard.sh > /dev/null 2>&1 & echo \$! > /tmp/start_dashboard_launcher.pid; exit 0'
+	@echo "✅ Launched (check /tmp/*.pid and /tmp/*.log)"
 
 # =============================================================================
 # 🥧 Pi 3B targets  (Raspberry Pi 3B, ~900 MB RAM, ARM Cortex-A53)

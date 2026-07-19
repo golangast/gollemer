@@ -2,8 +2,8 @@ package moe
 
 import (
 	"fmt"
-	"math"
 	"github.com/golangast/gollemer/internal/ai/neural/tensor"
+	"math"
 )
 
 // VerifyGradients performs numerical gradient checking on a model.
@@ -21,15 +21,15 @@ func VerifyGradients(m *IntentMoE, inputIDs, targetIDs *tensor.Tensor) {
 		fmt.Printf("❌ Forward failed: %v\n", err)
 		return
 	}
-	
+
 	// Create dummy loss and gradient for testing
 	// In a real check, we'd use the actual training loss function
 	const stepIdx = 0
 	targetLogit := logits[stepIdx]
-	
+
 	// Simplified analytical pass
 	m.Backward(targetLogit) // Just pass the output as grad for simplicity of check-setup
-	
+
 	// Pick a parameter to check: e.g., the first expert's weights in Layer 0
 	var testParam *tensor.Tensor
 	if stack, ok := m.Encoder.(*HybridLLMGNNEncoder).LLMEncoder.(*MoEStack); ok {
@@ -54,7 +54,7 @@ func VerifyGradients(m *IntentMoE, inputIDs, targetIDs *tensor.Tensor) {
 	// 2. Get numerical gradient: (L(w+e) - L(w-e)) / 2e
 	// Note: For this to work perfectly, we must use the same loss function.
 	// Here we use Sum(Output) as a simple 'loss' for verification of the graph.
-	
+
 	fetchLoss := func() float32 {
 		l, _, _ := m.Forward(0.0, inputIDs, targetIDs)
 		var sum float32 = 0.0

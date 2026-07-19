@@ -79,11 +79,11 @@ func svcIsCoherent(response string) bool {
 	if len(words) < 4 {
 		return false
 	}
-	
+
 	hasConversational := false
 	socialTokens := map[string]bool{"hi": true, "hello": true, "assistant": true, "am": true, "gollemer": true, "how": true, "you": true, "i": true}
 	techTokens := map[string]bool{"elasticsearch": true, "cloudflare": true, "/readyz": true, "goroutines": true, "asynchronous": true, "pub/sub": true, "cpu": true, "dataset": true}
-	
+
 	unique := make(map[string]struct{})
 	for _, w := range words {
 		wClean := strings.Trim(w, ".,!?")
@@ -95,7 +95,7 @@ func svcIsCoherent(response string) bool {
 			return false // Reject if tech words dominate/exist
 		}
 	}
-	
+
 	ttr := float64(len(unique)) / float64(len(words))
 	return ttr >= 0.5 && hasConversational
 }
@@ -124,10 +124,38 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 	computerCSVPath := filepath.Join(projectRoot, "data/training/trainingdata/computer/computer.csv")
 	computerPairs := LoadComputerCSV(computerCSVPath)
 
+	// ── Synthetic data augmentation ───────────────────────────────────────────
+	syntheticCSVPath := filepath.Join(projectRoot, "data/training/trainingdata/synthetic_pairs.csv")
+	if f, err := os.Open(syntheticCSVPath); err == nil {
+		defer f.Close()
+		reader := csv.NewReader(f)
+		records, _ := reader.ReadAll()
+		for i, record := range records {
+			if i == 0 || len(record) < 2 {
+				continue // skip header or malformed
+			}
+			q, a := record[0], record[1]
+			intent := "technical"
+			if len(record) >= 3 && record[2] != "" {
+				intent = record[2]
+			}
+			grammar := ""
+			if len(record) >= 4 {
+				grammar = record[3]
+			}
+			if q != "" && a != "" {
+				socialPairs = append(socialPairs, moe.TrainPair{Q: q, A: a, Intent: intent, Grammar: grammar})
+			}
+		}
+		log.Printf("📚 Loaded %d synthetic pairs from synthetic_pairs.csv", len(records)-1)
+	} else {
+		log.Printf("⚠️ synthetic_pairs.csv not found at %s: %v", syntheticCSVPath, err)
+	}
+
 	if len(socialPairs) == 0 || len(computerPairs) == 0 {
 		log.Fatalf("❌ Missing required datasets (social=%d, computer=%d). Aborting.", len(socialPairs), len(computerPairs))
 	}
-	log.Printf("📚 Social pairs: %d | Computer pairs: %d", len(socialPairs), len(computerPairs))
+	log.Printf("📚 Total social+technical pairs: %d | Computer pairs: %d", len(socialPairs), len(computerPairs))
 
 	// ── 2. Build vocabulary ───────────────────────────────────────────────────
 	tmpVocab := mainvocab.NewVocabulary()
@@ -186,7 +214,7 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 
 	// ── 4. Optimizer ──────────────────────────────────────────────────────────
 	optimizer := &neuralnn.CoolingOptimizer{
-		Base: neuralnn.NewOptimizer(intentModel.Parameters(), 0.0001, 1.0),
+		Base: neuralnn.NewOptimizer(intentModel.Parameters(), 0.0005, 1.0),
 	}
 
 	// ── 5. Seed structural experts ────────────────────────────────────────────
@@ -196,7 +224,7 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 	layers := findMoELayers(intentModel)
 
 	// ── 6. Training state ─────────────────────────────────────────────────────
-	const batchSize = 8
+	const batchSize = 32
 	const maxSeqLen = 24
 	const maxEpochs = 2000
 	const labelSmoothing = float32(0.05)
@@ -219,15 +247,33 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 		switch currentPhase {
 		case 1:
 			trainPairs = socialPairs
-			phaseLR = 0.002
+			phaseLR = 0.001 // Higher LR for cold start — pulls random init out of chaos
+			for _, layer := range layers {
+				layer.LoadBalancingWeight = 0.05
+				layer.RouterTemperature = 1.2
+				layer.ExpertDropoutRate = 0.1
+				// Force all tokens to Expert 0 during first 5 epochs (cold start)
+				// to prevent thin weight distribution across 8 experts with small corpus.
+				// Disabled after epoch 5; avgLoss threshold checked at end of epoch.
+				if epoch < 5 {
+					layer.ForceSingleExpert = true
+				}
+			}
 		case 2:
 			trainPairs = computerPairs
-			phaseLR = 0.001
+			phaseLR = 0.0002
+			for _, layer := range layers {
+				layer.LoadBalancingWeight = 0.05
+				layer.RouterTemperature = 1.2
+				layer.ExpertDropoutRate = 0.1
+			}
 		case 3:
 			trainPairs = append(socialPairs, computerPairs...)
 			phaseLR = 0.00005 // η = 5*10⁻⁵
 			for _, layer := range layers {
 				layer.LoadBalancingWeight = 1.0
+				layer.RouterTemperature = 1.0
+				layer.ExpertDropoutRate = 0.05
 			}
 		}
 		optimizer.SetLearningRate(phaseLR)
@@ -362,7 +408,7 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 							targets[b] = padID
 						}
 					}
-					
+
 					eosID := intentModel.SentenceVocab.EosID
 					if eosID < 0 {
 						eosID = intentModel.SentenceVocab.GetTokenID("<EOS>")

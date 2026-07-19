@@ -126,11 +126,11 @@ func main() {
 
 // TrainIntentModel trains the SimpleIntentClassifier for intent classification.
 func TrainIntentModel(model *intent.SimpleIntentClassifier, data *IntentTrainingData, queryVocab, parentIntentVocab, childIntentVocab *mainvocab.Vocabulary, epochs int, learningRate float64, batchSize int, maxSeqLength int) {
-	optimizer := NewOptimizer(model.Parameters(), learningRate, 5.0)
+	optimizer := NewOptimizer(model.Parameters(), float32(learningRate), 5.0)
 
-	for epoch := range epochs {
+	for epoch := 0; epoch < epochs; epoch++ {
 		log.Printf("Epoch %d/%d", epoch+1, epochs)
-		totalLoss := 0.0
+		totalLoss := float32(0.0)
 		numBatches := 0
 
 		for i := 0; i < len(*data); i += batchSize {
@@ -146,13 +146,13 @@ func TrainIntentModel(model *intent.SimpleIntentClassifier, data *IntentTraining
 			numBatches++
 		}
 		if numBatches > 0 {
-			log.Printf("Epoch %d, Average Loss: %f", epoch+1, totalLoss/float64(numBatches))
+			log.Printf("Epoch %d, Average Loss: %f", epoch+1, float64(totalLoss)/float64(numBatches))
 		}
 	}
 }
 
 // trainIntentModelBatch performs a single training step on a batch of intent data.
-func trainIntentModelBatch(model *intent.SimpleIntentClassifier, optimizer Optimizer, batch IntentTrainingData, queryVocab, parentIntentVocab, childIntentVocab *mainvocab.Vocabulary, maxSeqLength int) (float64, error) {
+func trainIntentModelBatch(model *intent.SimpleIntentClassifier, optimizer Optimizer, batch IntentTrainingData, queryVocab, parentIntentVocab, childIntentVocab *mainvocab.Vocabulary, maxSeqLength int) (float32, error) {
 	optimizer.ZeroGrad()
 
 	batchSize := len(batch)
@@ -187,7 +187,7 @@ func trainIntentModelBatch(model *intent.SimpleIntentClassifier, optimizer Optim
 		childIntentIDs[i] = childIntentVocab.GetTokenID(example.ChildIntent)
 	}
 
-	inputTensor := NewTensor([]int{batchSize, maxSeqLength}, convertIntsToFloat64s(inputIDsBatch), false)
+	inputTensor := NewTensor([]int{batchSize, maxSeqLength}, convertIntsToFloat32s(inputIDsBatch), false)
 
 	parentLogits, childLogits, err := model.Forward(inputTensor)
 	if err != nil {
@@ -214,10 +214,10 @@ func trainIntentModelBatch(model *intent.SimpleIntentClassifier, optimizer Optim
 	return totalLoss, nil
 }
 
-func convertIntsToFloat64s(input []int) []float64 {
-	output := make([]float64, len(input))
+func convertIntsToFloat32s(input []int) []float32 {
+	output := make([]float32, len(input))
 	for i, v := range input {
-		output[i] = float64(v)
+		output[i] = float32(v)
 	}
 	return output
 }

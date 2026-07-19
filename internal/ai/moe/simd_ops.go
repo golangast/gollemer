@@ -362,10 +362,10 @@ func SimdSoftmaxBackwardRowF32(p, dp, out []float32) {
 	if len(p) < n || len(dp) < n {
 		return
 	}
-	
+
 	// Calculate sumDP = dot(dp, p)
 	sumDP := SimdDotProductF32(dp, p)
-	
+
 	i := 0
 	for ; i+8 <= n; i += 8 {
 		vp := archsimd.LoadFloat32x8Slice(p[i:])
@@ -433,9 +433,12 @@ func SimdSquareOfSumsLossF32(counts []int, total int, weight float32) float32 {
 	}
 	return sumSq * weight
 }
+
 // SimdArgMaxF32 finds the index of the maximum value in a slice.
 func SimdArgMaxF32(data []float32) int {
-	if len(data) == 0 { return -1 }
+	if len(data) == 0 {
+		return -1
+	}
 	maxIdx := 0
 	maxVal := data[0]
 	for i, v := range data {
@@ -446,6 +449,7 @@ func SimdArgMaxF32(data []float32) int {
 	}
 	return maxIdx
 }
+
 // SimdAddF32 computes a[i] += b[i] using SIMD.
 func SimdAddF32(a, b []float32) {
 	n := len(a)
@@ -524,7 +528,9 @@ func SimdIsFiniteF32(data []float32) bool {
 		var buf [8]float32
 		diff.Store(&buf)
 		for _, d := range buf {
-			if d != 0 { return false }
+			if d != 0 {
+				return false
+			}
 		}
 	}
 	for ; i < n; i++ {
@@ -540,20 +546,20 @@ func SimdIsFiniteF32(data []float32) bool {
 func SimdExpF32(data []float32) {
 	n := len(data)
 	i := 0
-	
+
 	// Constants for 2^(x * log2(e))
 	// i = int(1.442695 * 2^23 * x + 127 * 2^23)
 	// We use the bits directly.
-	log2e := archsimd.BroadcastFloat32x8(12102203.0) // 1.442695 * 2^23
+	log2e := archsimd.BroadcastFloat32x8(12102203.0)    // 1.442695 * 2^23
 	offset := archsimd.BroadcastFloat32x8(1065353216.0) // 127 * 2^23 (exponent bias)
 
 	for ; i+8 <= n; i += 8 {
 		v := archsimd.LoadFloat32x8Slice(data[i:])
-		
+
 		// This is a rough but fast approximation for neural net gradients
 		// exp(x) ~= bits_to_float(int(12102203 * x + 1065353216))
 		vexp := v.Mul(log2e).Add(offset)
-		
+
 		// In archsimd, we don't have direct bit manipulation yet in all versions,
 		// so we store and use math.Float32frombits if needed, but we can try to use
 		// the fact that adding to the bit representation of a float is roughly exp.
@@ -565,7 +571,7 @@ func SimdExpF32(data []float32) {
 			data[i+j] = math.Float32frombits(uint32(buf[j]))
 		}
 	}
-	
+
 	for ; i < n; i++ {
 		data[i] = float32(math.Exp(float64(data[i])))
 	}
@@ -574,11 +580,13 @@ func SimdExpF32(data []float32) {
 // SimdSoftmaxF32 performs an in-place softmax on a row.
 func SimdSoftmaxF32(data []float32) float32 {
 	n := len(data)
-	if n == 0 { return 0 }
-	
+	if n == 0 {
+		return 0
+	}
+
 	// 1. Find max
 	maxVal := SimdMaxSliceF32(data)
-	
+
 	// 2. Subtract max and compute Exp via SIMD
 	vMax := archsimd.BroadcastFloat32x8(maxVal)
 	i := 0
@@ -589,10 +597,10 @@ func SimdSoftmaxF32(data []float32) float32 {
 	for ; i < n; i++ {
 		data[i] -= maxVal
 	}
-	
+
 	// Vectorized Exp approximation
 	SimdExpF32(data)
-	
+
 	// 3. Sum and Normalize
 	var sumExp float32
 	i = 0
@@ -601,16 +609,19 @@ func SimdSoftmaxF32(data []float32) float32 {
 		v := archsimd.LoadFloat32x8Slice(data[i:])
 		vSum8 = vSum8.Add(v)
 	}
-	
+
 	// Horizontal sum
 	var buf [8]float32
 	vSum8.Store(&buf)
-	for _, v := range buf { sumExp += v }
-	for ; i < n; i++ { sumExp += data[i] }
+	for _, v := range buf {
+		sumExp += v
+	}
+	for ; i < n; i++ {
+		sumExp += data[i]
+	}
 
 	if sumExp > 0 {
 		SimdScaleF32(data, 1.0/sumExp)
 	}
 	return sumExp
 }
-

@@ -69,9 +69,9 @@ func (c *KVCache) Reset() {
 
 // MoEModel represents the next-gen architecture for Gollemer.
 type MoEModel struct {
-	Tokenizer *tokenizer.Tokenizer
-	Cache     *KVCache
-	Config    MoEConfig
+	Tokenizer  *tokenizer.Tokenizer
+	Cache      *KVCache
+	Config     MoEConfig
 	MockBigram map[int][]int
 }
 
@@ -83,9 +83,9 @@ type MoEConfig struct {
 
 // GenerationOptions defines parameters for text generation.
 type GenerationOptions struct {
-	MaxLen      int
-	Temperature float32
-	TopP        float32
+	MaxLen            int
+	Temperature       float32
+	TopP              float32
 	TopK              int
 	Echo              bool
 	StopTokens        []int
@@ -127,18 +127,24 @@ func (m *MoEModel) InitializeMockBigram() {
 
 	for id1, w1 := range vocabWords {
 		for id2, w2 := range vocabWords {
-			
+
 			// Simple rules to favor certain transitions
 			isGood := false
 			lw1, lw2 := strings.ToLower(w1), strings.ToLower(w2)
-			
+
 			// Determiner -> Noun
-			if (lw1 == "the" || lw1 == "a") && !(lw2 == "the" || lw2 == "a") { isGood = true }
+			if (lw1 == "the" || lw1 == "a") && !(lw2 == "the" || lw2 == "a") {
+				isGood = true
+			}
 			// Noun -> Verb
-			if (lw1 == "gollemer" || lw1 == "network" || lw1 == "system") && (lw2 == "is" || lw2 == "processes" || lw2 == "thinks") { isGood = true }
+			if (lw1 == "gollemer" || lw1 == "network" || lw1 == "system") && (lw2 == "is" || lw2 == "processes" || lw2 == "thinks") {
+				isGood = true
+			}
 			// Verb -> Adjective/Adverb/Preposition
-			if (lw1 == "is" || lw1 == "becomes") && (lw2 == "fast" || lw2 == "powerful" || lw2 == "smart") { isGood = true }
-			
+			if (lw1 == "is" || lw1 == "becomes") && (lw2 == "fast" || lw2 == "powerful" || lw2 == "smart") {
+				isGood = true
+			}
+
 			if isGood {
 				m.MockBigram[id1] = append(m.MockBigram[id1], id2)
 			}
@@ -149,7 +155,7 @@ func (m *MoEModel) InitializeMockBigram() {
 func (m *MoEModel) Forward(tokens []int) []float32 {
 	vocabSize := m.Tokenizer.Vocabulary.Size()
 	logits := make([]float32, vocabSize)
-	
+
 	lastToken := -1
 	if len(tokens) > 0 {
 		lastToken = tokens[len(tokens)-1]
@@ -375,7 +381,7 @@ func ApplyRoPE(vec []float32, position int, headDim int, theta float32) {
 	for i := 0; i < headDim/2; i++ {
 		freq := float32(1.0 / math.Pow(float64(theta), float64(2*i)/float64(headDim)))
 		angle := float32(position) * freq
-		
+
 		cos := float32(math.Cos(float64(angle)))
 		sin := float32(math.Sin(float64(angle)))
 

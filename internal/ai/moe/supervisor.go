@@ -32,13 +32,13 @@ type Supervisor struct {
 
 	// Per-expert variable overrides (layerIdx -> expertIdx -> ExpertConfig)
 	expertOverrides      map[int]map[int]*ExpertOverride
-	FailureLogs          map[string]int // Tracks failures per expert ID (e.g., "E1")
-	TrainingDataPath     string         // Path to the raw training assets for evolution
-	SpawnsThisEpoch      int            // Track and pace expert spawning per epoch
-	OverfitMode          bool           // Allow relaxed constraints during overfit mode
-	DisableDataEvolution bool           // When true, skip corpus mutation entirely
-	mu                   sync.Mutex         `gob:"-"`
-	CartridgeMgr         *CartridgeManager  `gob:"-"`
+	FailureLogs          map[string]int    // Tracks failures per expert ID (e.g., "E1")
+	TrainingDataPath     string            // Path to the raw training assets for evolution
+	SpawnsThisEpoch      int               // Track and pace expert spawning per epoch
+	OverfitMode          bool              // Allow relaxed constraints during overfit mode
+	DisableDataEvolution bool              // When true, skip corpus mutation entirely
+	mu                   sync.Mutex        `gob:"-"`
+	CartridgeMgr         *CartridgeManager `gob:"-"`
 
 	// Always-On Triage Classifier
 	KeywordMap map[string]string    // Fast exact routing: keyword -> namespace
@@ -99,20 +99,22 @@ type SerializationMetric struct {
 
 // RuntimeTelemetry exposes live cartridge pool, routing, trace, and health counters.
 type RuntimeTelemetry struct {
-	mu                 sync.Mutex
-	WarmCartridges     int
-	PoolHits           int
-	PoolMisses         int
-	IntentLatencyMs    float64
-	LastIntent         string
-	LastMatch          string
-	TraceBuffer        []TraceEvent
-	MaxTrace           int
-	LeakDetector         *LeakDetector
+	mu                    sync.Mutex
+	WarmCartridges        int
+	PoolHits              int
+	PoolMisses            int
+	IntentLatencyMs       float64
+	LastIntent            string
+	LastMatch             string
+	TraceBuffer           []TraceEvent
+	MaxTrace              int
+	LeakDetector          *LeakDetector
 	SupervisorAdjustments []SupervisorAdjustment
-	MaxTimeline          int
-	SerializationStats   []SerializationMetric
-	MaxSerialization     int
+	MaxTimeline           int
+	SerializationStats    []SerializationMetric
+	MaxSerialization      int
+	Custom                map[string]interface{}        `json:"-"`
+	MoEBaselines          map[string]map[string]float64 `json:"-"`
 }
 
 func NewRuntimeTelemetry() *RuntimeTelemetry {
@@ -462,17 +464,24 @@ func (t *RuntimeTelemetry) Snapshot() map[string]interface{} {
 			"alerts":      t.LeakDetector.AlertCount,
 		}
 	}
+
+	custom := map[string]interface{}{}
+	for k, v := range t.Custom {
+		custom[k] = v
+	}
+
 	return map[string]interface{}{
-		"warm_cartridges":   t.WarmCartridges,
-		"pool_hits":         t.PoolHits,
-		"pool_misses":       t.PoolMisses,
-		"intent_latency_ms": t.IntentLatencyMs,
-		"last_intent":       t.LastIntent,
-		"last_match":        t.LastMatch,
-		"trace_buffer":      traceBuffer,
-		"leak_detector":     leak,
+		"warm_cartridges":     t.WarmCartridges,
+		"pool_hits":           t.PoolHits,
+		"pool_misses":         t.PoolMisses,
+		"intent_latency_ms":   t.IntentLatencyMs,
+		"last_intent":         t.LastIntent,
+		"last_match":          t.LastMatch,
+		"trace_buffer":        traceBuffer,
+		"leak_detector":       leak,
 		"supervisor_timeline": timeline,
-		"serialization":     serialization,
+		"serialization":       serialization,
+		"custom":              custom,
 	}
 }
 
@@ -490,10 +499,10 @@ func EmitRuntimeTelemetry(path string, monitor *ExpertMonitor) error {
 			}
 		}
 		payload["routing"] = map[string]interface{}{
-			"total":      monitor.Total,
-			"counts":     append([]int(nil), monitor.Counts...),
-			"fractions":  fracs,
-			"history":    append([]map[string]interface{}(nil), monitor.History...),
+			"total":       monitor.Total,
+			"counts":      append([]int(nil), monitor.Counts...),
+			"fractions":   fracs,
+			"history":     append([]map[string]interface{}(nil), monitor.History...),
 			"num_experts": monitor.NumExperts,
 		}
 		monitor.mu.Unlock()
@@ -539,7 +548,7 @@ func NewSupervisor() *Supervisor {
 		CrashSnapshot:     NewCrashSnapshot("data/debug"),
 		Telemetry:         telemetry,
 	}
-	
+
 	// Load cartridge keyword mappings from JSON file
 	configPath := "data/config/cartridges.json"
 	data, err := os.ReadFile(configPath)
@@ -569,7 +578,7 @@ func NewSupervisor() *Supervisor {
 			os.WriteFile(configPath, jsonData, 0644)
 		}
 	}
-	
+
 	return sup
 }
 

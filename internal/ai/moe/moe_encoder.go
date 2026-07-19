@@ -35,11 +35,11 @@ func NewMoEEncoder(inputSize, hiddenSize, numLayers, numExperts int) (*MoEEncode
 	}
 
 	return &MoEEncoder{
-		InputSize:     inputSize,
-		HiddenSize:    hiddenSize,
-		NumLayers:     numLayers,
-		NumExperts:    numExperts,
-		Layer:         layer,
+		InputSize:  inputSize,
+		HiddenSize: hiddenSize,
+		NumLayers:  numLayers,
+		NumExperts: numExperts,
+		Layer:      layer,
 	}, nil
 }
 
@@ -135,9 +135,12 @@ func (l *LinearExpert) ClearState() {
 		l.Linear.ClearState()
 	}
 }
+
 // ClipWeights implements the Expert interface.
 func (l *LinearExpert) ClipWeights(maxVal float32) {
-	if l.Linear == nil { return }
+	if l.Linear == nil {
+		return
+	}
 	if l.Linear.Weights != nil {
 		tensor.ClipWeights(l.Linear.Weights.Data, maxVal)
 	}

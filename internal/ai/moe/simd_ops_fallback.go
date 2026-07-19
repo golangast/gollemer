@@ -294,7 +294,9 @@ func simdAddJitterF32(dst, src []float32, jitterStdDev float32) {
 }
 
 func SimdArgMaxF32(data []float32) int {
-	if len(data) == 0 { return -1 }
+	if len(data) == 0 {
+		return -1
+	}
 	maxIdx := 0
 	maxVal := data[0]
 	for i, v := range data {
@@ -307,11 +309,15 @@ func SimdArgMaxF32(data []float32) int {
 }
 
 func SimdAddF32(a, b []float32) {
-	for i := range a { a[i] += b[i] }
+	for i := range a {
+		a[i] += b[i]
+	}
 }
 
 func SimdSubF32(a, b []float32) {
-	for i := range a { a[i] -= b[i] }
+	for i := range a {
+		a[i] -= b[i]
+	}
 }
 
 func SimdIsFiniteF32(data []float32) bool {
@@ -330,7 +336,9 @@ func SimdExpF32(data []float32) {
 }
 
 func SimdSoftmaxF32(data []float32) float32 {
-	if len(data) == 0 { return 0 }
+	if len(data) == 0 {
+		return 0
+	}
 	max := SimdMaxSliceF32(data)
 	var sum float32
 	for i := range data {
@@ -339,7 +347,9 @@ func SimdSoftmaxF32(data []float32) float32 {
 	}
 	if sum > 0 {
 		invSum := 1.0 / sum
-		for i := range data { data[i] *= invSum }
+		for i := range data {
+			data[i] *= invSum
+		}
 	}
 	return sum
 }

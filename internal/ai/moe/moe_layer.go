@@ -96,9 +96,15 @@ type MoELayer struct {
 	// training to condition the router on the intent category of the current batch.
 	// Set by the training loop each step; cleared after Forward so it never leaks.
 	IntentBias []float32
-	
+
 	// Phase Tracking for Curriculum Routing
 	CurrentPhase int
+
+	// ForceSingleExpert forces the router to send all tokens to Expert 0 during
+	// cold-start training, preventing thin weight distribution across 8 experts
+	// when the data corpus is small. Set to true in Phase 1 of multiphase
+	// curriculum; disable once loss crosses below ~4.5.
+	ForceSingleExpert bool
 }
 
 // ExpertTask represents work to be done by one expert on a subset of tokens.
@@ -815,6 +821,7 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 		}
 
 		// Apply softmax to get probabilities
+		gateStart := time.Now()
 		GateOutputs, err := scoresTensor.Softmax(len(scoresTensor.Shape) - 1)
 		if err != nil {
 			return nil, fmt.Errorf("gating network softmax failed: %w", err)
@@ -888,6 +895,35 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 					moe.AccumulatedUtilization[j]++ // Track so stagnation monitor has real data
 				}
 				allSelectedExperts[i] = selected
+			}
+		} else if moe.ForceSingleExpert {
+			// Force Top-1 routing to Expert 0 during cold-start / low-data phases.
+			// Prevents thin weight distribution across all 8 experts when the corpus
+			// is too small for effective multi-expert learning.
+			if moe.AccumulatedUtilization == nil || len(moe.AccumulatedUtilization) != numExperts {
+				moe.AccumulatedUtilization = make([]int, numExperts)
+			}
+			for i := 0; i < totalTokensRoute; i++ {
+				moe.TopExpertIDs[i] = 0
+				selected := []int{0}
+				allSelectedExperts[i] = selected
+				moe.AccumulatedUtilization[0]++
+
+				// Zero out all gate outputs except expert 0, then re-normalize
+				if moe.GateOutputs != nil {
+					for j := 0; j < numExperts; j++ {
+						if j != 0 {
+							moe.GateOutputs.Data[i*numExperts+j] = 0
+						}
+					}
+				}
+			}
+			// Re-normalize: expert 0 gets 100% weight per token
+			if moe.GateOutputs != nil {
+				for i := 0; i < totalTokensRoute; i++ {
+					idx := i*numExperts + 0
+					moe.GateOutputs.Data[idx] = 1.0
+				}
 			}
 		} else {
 			for w := 0; w < numWorkersRoute; w++ {
@@ -982,6 +1018,14 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 			}
 
 			for j := 0; j < numExperts; j++ {
+				// Skip frozen experts: they are intentionally excluded from routing
+				// by the phase domain mask (-1e9 logit), so they will always appear
+				// unused. Counting them as stagnant and resetting them every ~1600
+				// steps corrupts the shared gating network for the active experts.
+				if j < len(moe.ExpertFrozen) && moe.ExpertFrozen[j] {
+					moe.StepStagnationCounters[j] = 0 // keep counter clear while frozen
+					continue
+				}
 				if !batchUsed[j] {
 					moe.StepStagnationCounters[j]++ // Increment by 1 step
 					if moe.StepStagnationCounters[j] >= stagnationThresh {
@@ -995,6 +1039,56 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 		}
 
 		moe.SelectedExperts = allSelectedExperts
+		// --- Observability: record per-layer selected experts + confidences when available ---
+		if ObservabilityInstance != nil {
+			layerStart := time.Now()
+			numTokensObs := batchSize * seqLength
+			selectedCopy := make([][]int, numTokensObs)
+			confidences := make([][]float32, numTokensObs)
+			for ti := 0; ti < numTokensObs; ti++ {
+				sel := moe.SelectedExperts[ti]
+				selectedCopy[ti] = append([]int{}, sel...)
+				// confidences for each chosen expert
+				confRow := make([]float32, len(sel))
+				if moe.GateOutputs != nil {
+					for j, ex := range sel {
+						idx := ti*numExperts + ex
+						if idx < len(moe.GateOutputs.Data) {
+							confRow[j] = moe.GateOutputs.Data[idx]
+						}
+					}
+				}
+				confidences[ti] = confRow
+			}
+
+			// find layer index in ActiveLayers
+			layerIdx := -1
+			for li, l := range ActiveLayers {
+				if l == moe {
+					layerIdx = li
+					break
+				}
+			}
+
+			// token IDs if provided by caller (request-scoped via ObservabilityInstance)
+			var tokenIDs []int
+			if ObservabilityInstance != nil {
+				cur := ObservabilityInstance.GetTempTokenIDs()
+				if len(cur) == batchSize*seqLength {
+					tokenIDs = make([]int, len(cur))
+					copy(tokenIDs, cur)
+				}
+			}
+
+			if layerIdx >= 0 {
+				ObservabilityInstance.SetLayerSelection(layerIdx, tokenIDs, selectedCopy, confidences)
+			}
+			// record latency for this layer if a trace is active
+			if layerIdx >= 0 {
+				dur := time.Since(layerStart).Milliseconds()
+				ObservabilityInstance.AddLayerLatency(layerIdx, dur)
+			}
+		}
 		// Clear and re-fill ExpertTokenIndices sequentially to ensure correct relative indexing
 		for i := range moe.ExpertTokenIndices {
 			moe.ExpertTokenIndices[i] = moe.ExpertTokenIndices[i][:0]
@@ -1026,6 +1120,20 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 			}
 		}
 
+		// record gate latency up to selection end
+		gateDur := time.Since(gateStart).Milliseconds()
+		// find layer index
+		layerIdx := -1
+		for li, l := range ActiveLayers {
+			if l == moe {
+				layerIdx = li
+				break
+			}
+		}
+		if layerIdx >= 0 && ObservabilityInstance != nil {
+			ObservabilityInstance.AddLayerComponentLatency(layerIdx, "gate", gateDur)
+		}
+
 		moe.expertOutputs = make([]*Tensor, numExperts)
 		var firstErr error
 
@@ -1045,11 +1153,26 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 					return
 				}
 
-				// Forward pass
+				// Forward pass (measure expert compute time)
+				exStart := time.Now()
 				output, err := moe.Experts[t.ExpertIdx].Forward(batchedInput)
 				if err != nil {
 					errOnce.Do(func() { firstErr = fmt.Errorf("expert %d forward failed: %w", t.ExpertIdx, err) })
 					return
+				}
+				exDur := time.Since(exStart).Milliseconds()
+				if ObservabilityInstance != nil {
+					// find layer index
+					layerIdx := -1
+					for li, l := range ActiveLayers {
+						if l == moe {
+							layerIdx = li
+							break
+						}
+					}
+					if layerIdx >= 0 {
+						ObservabilityInstance.AddLayerComponentLatency(layerIdx, "expert", exDur)
+					}
 				}
 
 				// --- Activation Clipping ---

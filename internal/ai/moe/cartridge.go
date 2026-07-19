@@ -104,7 +104,7 @@ func (cm *CartridgeManager) loop() {
 
 			cm.mu.Lock()
 			cm.Loaded[req.Path] = expert
-			
+
 			// Re-inflate context if we have paged it out previously
 			if ctx, exists := cm.ContextPager[req.Path]; exists {
 				expert.RestoreContext(ctx)
@@ -126,7 +126,7 @@ func (cm *CartridgeManager) loop() {
 			if expert, exists := cm.Loaded[req.Path]; exists {
 				// Page out context
 				cm.ContextPager[req.Path] = expert.GetContext()
-				
+
 				cm.recycleExpert(expert)
 				delete(cm.Loaded, req.Path)
 				cm.removeFromLRU(req.Path)
@@ -224,7 +224,7 @@ func (cm *CartridgeManager) loadFromFile(path string) (Expert, error) {
 	if err := binary.Read(file, binary.LittleEndian, expert.Layer1.Weights.Data); err != nil {
 		return nil, err
 	}
-	
+
 	if expert.Layer1.Biases != nil {
 		expert.Layer1.Biases.Data = getSlice(len(expert.Layer1.Biases.Data))
 		if err := binary.Read(file, binary.LittleEndian, expert.Layer1.Biases.Data); err != nil {
@@ -236,7 +236,7 @@ func (cm *CartridgeManager) loadFromFile(path string) (Expert, error) {
 	if err := binary.Read(file, binary.LittleEndian, expert.Layer2.Weights.Data); err != nil {
 		return nil, err
 	}
-	
+
 	if expert.Layer2.Biases != nil {
 		expert.Layer2.Biases.Data = getSlice(len(expert.Layer2.Biases.Data))
 		if err := binary.Read(file, binary.LittleEndian, expert.Layer2.Biases.Data); err != nil {

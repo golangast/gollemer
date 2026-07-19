@@ -9,8 +9,8 @@ import (
 // into a continuous vector space of dimension dModel.
 // This is the audio equivalent of the VisionEncoder.
 type AudioEncoder struct {
-	InputDim int // Number of samples per frame (e.g., 400 samples for 25ms at 16kHz)
-	DModel   int // Output dimension (matches the MoE or TemporalEncoder input dimension)
+	InputDim int       // Number of samples per frame (e.g., 400 samples for 25ms at 16kHz)
+	DModel   int       // Output dimension (matches the MoE or TemporalEncoder input dimension)
 	Weights  []float32 // [InputDim * DModel]
 }
 

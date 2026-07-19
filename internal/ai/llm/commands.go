@@ -170,7 +170,8 @@ func (r *Runner) handleInteractiveQuery(query string) {
 	resp := r.extractResponse(intentData)
 	// hasCommand is true only if there's a structural command to execute.
 	// Simple chat intents should not trigger executeCommand.
-	hasCommand := intent.Command != "" || isCreatingCommand(query)
+	isChat := intentData.Intent == "social" || intentData.Intent == "greeting" || intentData.Intent == "goodbye"
+	hasCommand := (intent.Command != "" || isCreatingCommand(query)) && !isChat
 
 	if resp != "" {
 		if strings.HasPrefix(resp, "<INTENT_") {
