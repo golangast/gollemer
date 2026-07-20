@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	neuralnn "github.com/golangast/gollemer/internal/ai/neural/nn"
 	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
 	"github.com/golangast/gollemer/internal/ai/neural/tensor"
+	"github.com/golangast/gollemer/internal/ai/orchestrator"
 	"github.com/golangast/gollemer/internal/tokenizer"
 )
 
@@ -52,19 +54,20 @@ func setLayerFreezeQuiet(layer *moe.MoELayer, expertID int, freeze bool) {
 }
 
 // applyPhaseFreeze sets the correct freeze pattern for the given phase on all layers.
-// Phase 1: freeze experts >= 8 (cartridges), thaw 0..7 (conversational)
-// Phase 2: freeze experts 0..7 (conversational), thaw >= 8 (cartridges)
-// Phase 3: thaw everyone
-func applyPhaseFreeze(layers []*moe.MoELayer, phase int) {
+// Phase 1: freeze experts >= freezeStart (cartridges), thaw 0..freezeStart-1 (conversational)
+// Phase 2: freeze experts 0..freezeEnd-1 (conversational), thaw >= freezeEnd (cartridges)
+// Phase 3: thaw everyone (freezeStart < 0)
+func applyPhaseFreeze(layers []*moe.MoELayer, freezeStart, freezeEnd int) {
 	for _, layer := range layers {
 		for i := 0; i < len(layer.Experts); i++ {
 			var shouldFreeze bool
-			switch phase {
-			case 1:
-				shouldFreeze = i >= 8 // Cartridge slots frozen
-			case 2:
-				shouldFreeze = i < 8 // Social slots frozen
-			case 3:
+			if freezeStart >= 0 && freezeEnd > freezeStart {
+				// Freeze range [freezeStart, freezeEnd)
+				shouldFreeze = i >= freezeStart && i < freezeEnd
+			} else if freezeStart >= 0 {
+				// Freeze from freezeStart to end
+				shouldFreeze = i >= freezeStart
+			} else {
 				shouldFreeze = false // Unfreeze all
 			}
 			setLayerFreezeQuiet(layer, i, shouldFreeze)
@@ -100,17 +103,18 @@ func svcIsCoherent(response string) bool {
 	return ttr >= 0.5 && hasConversational
 }
 
-// TrainMultiPhaseCurriculum orchestrates the 3-phase curriculum:
-//
-//	Phase 1 — Social Core: train on conversations.csv; cartridge experts frozen.
-//	           Advance when Subject-Verb Connection > 0.05 three times in a row
-//	           AND the test response is coherent (not SALAD).
-//	Phase 2 — Cartridge Ingestion: train on computer.csv; conversational experts frozen.
-//	           Advance after 30 epochs of stable cartridge training.
-//	Phase 3 — Cohesive Tuning: train on both; all experts unfrozen; LR ≤ 1e-5;
-//	           load-balancing weight enabled on every layer.
+// TrainMultiPhaseCurriculum orchestrates the 3-phase curriculum.
+// All hyperparameters are loaded from data/config/social_train.json.
 func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 	log.Println("🚀 Starting 3-Phase Multi-Domain Curriculum Training...")
+
+	// ── 0. Load config ────────────────────────────────────────────────────────
+	configPath := filepath.Join(projectRoot, "data/config/social_train.json")
+	safeCfg, err := orchestrator.NewSafeConfig(configPath)
+	if err != nil {
+		log.Fatalf("❌ Failed to load config from %s: %v", configPath, err)
+	}
+	cfg := safeCfg.Get()
 
 	// ── 1. Load datasets ──────────────────────────────────────────────────────
 	var socialPairs []moe.TrainPair
@@ -132,7 +136,7 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 		records, _ := reader.ReadAll()
 		for i, record := range records {
 			if i == 0 || len(record) < 2 {
-				continue // skip header or malformed
+				continue
 			}
 			q, a := record[0], record[1]
 			intent := "technical"
@@ -176,8 +180,14 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 		intentModel, _ = moe.LoadIntentMoEModelWithFallback(socialModelPath)
 	}
 
-	const modelDim = 512
-	const baseExperts = 8
+	modelDim := cfg.ModelDim
+	if modelDim <= 0 {
+		modelDim = 512
+	}
+	baseExperts := cfg.NumExperts
+	if baseExperts <= 0 {
+		baseExperts = 8
+	}
 	if intentModel == nil {
 		intentModel, _ = moe.NewHybridIntentMoE(
 			tmpVocab.Size(), modelDim, baseExperts,
@@ -212,9 +222,13 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 		intentModel.ToGPU()
 	}
 
-	// ── 4. Optimizer ──────────────────────────────────────────────────────────
+	// ── 4. Optimizer (base LR from config) ────────────────────────────────────
+	baseLR := cfg.LearningRate
+	if baseLR <= 0 {
+		baseLR = 0.0005
+	}
 	optimizer := &neuralnn.CoolingOptimizer{
-		Base: neuralnn.NewOptimizer(intentModel.Parameters(), 0.0005, 1.0),
+		Base: neuralnn.NewOptimizer(intentModel.Parameters(), baseLR, 1.0),
 	}
 
 	// ── 5. Seed structural experts ────────────────────────────────────────────
@@ -223,11 +237,23 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 
 	layers := findMoELayers(intentModel)
 
-	// ── 6. Training state ─────────────────────────────────────────────────────
-	const batchSize = 32
-	const maxSeqLen = 24
-	const maxEpochs = 2000
-	const labelSmoothing = float32(0.05)
+	// ── 6. Training state (from config) ───────────────────────────────────────
+	batchSize := cfg.BatchSize
+	if batchSize <= 0 {
+		batchSize = 32
+	}
+	maxSeqLen := cfg.MaxSeqLen
+	if maxSeqLen <= 0 {
+		maxSeqLen = 24
+	}
+	maxEpochs := cfg.Epochs
+	if maxEpochs <= 0 {
+		maxEpochs = 2000
+	}
+	labelSmoothing := cfg.LabelSmoothing
+	if labelSmoothing <= 0 {
+		labelSmoothing = 0.05
+	}
 
 	// Build flat loss-weight slice for WeightedCrossEntropy
 	lossWeights := buildDefaultLossWeights(intentModel.SentenceVocab)
@@ -237,43 +263,43 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 	phase2Epochs := 0
 
 	// Ensure correct freeze state before epoch 0
-	applyPhaseFreeze(layers, currentPhase)
+	phaseCfg := cfg.Phases[strconv.Itoa(currentPhase)]
+	if phaseCfg != nil {
+		applyPhaseFreeze(layers, phaseCfg.FreezeExpertsStart, phaseCfg.FreezeExpertsEnd)
+	}
 
 	for epoch := 0; epoch < maxEpochs; epoch++ {
 		epochStart := time.Now()
-		// ── Select dataset & set LR ────────────────────────────────────────────
+		// ── Select dataset & set LR from config ────────────────────────────────
 		var trainPairs []moe.TrainPair
 		var phaseLR float32
-		switch currentPhase {
-		case 1:
+
+		phaseCfg := cfg.Phases[strconv.Itoa(currentPhase)]
+		if phaseCfg == nil {
+			log.Fatalf("❌ Missing config for phase %d", currentPhase)
+		}
+
+		switch phaseCfg.Dataset {
+		case "social":
 			trainPairs = socialPairs
-			phaseLR = 0.001 // Higher LR for cold start — pulls random init out of chaos
-			for _, layer := range layers {
-				layer.LoadBalancingWeight = 0.05
-				layer.RouterTemperature = 1.2
-				layer.ExpertDropoutRate = 0.1
-				// Force all tokens to Expert 0 during first 5 epochs (cold start)
-				// to prevent thin weight distribution across 8 experts with small corpus.
-				// Disabled after epoch 5; avgLoss threshold checked at end of epoch.
-				if epoch < 5 {
-					layer.ForceSingleExpert = true
-				}
-			}
-		case 2:
+		case "computer":
 			trainPairs = computerPairs
-			phaseLR = 0.0002
-			for _, layer := range layers {
-				layer.LoadBalancingWeight = 0.05
-				layer.RouterTemperature = 1.2
-				layer.ExpertDropoutRate = 0.1
-			}
-		case 3:
+		case "all":
 			trainPairs = append(socialPairs, computerPairs...)
-			phaseLR = 0.00005 // η = 5*10⁻⁵
-			for _, layer := range layers {
-				layer.LoadBalancingWeight = 1.0
-				layer.RouterTemperature = 1.0
-				layer.ExpertDropoutRate = 0.05
+		default:
+			trainPairs = socialPairs
+		}
+
+		phaseLR = phaseCfg.LearningRate
+		for _, layer := range layers {
+			layer.LoadBalancingWeight = phaseCfg.LoadBalancingWeight
+			layer.RouterTemperature = phaseCfg.RouterTemperature
+			layer.ExpertDropoutRate = phaseCfg.ExpertDropout
+			// Force single expert during cold start epochs
+			if phaseCfg.ForceSingleExpertEpochs > 0 && epoch < phaseCfg.ForceSingleExpertEpochs {
+				layer.ForceSingleExpert = true
+			} else {
+				layer.ForceSingleExpert = false
 			}
 		}
 		optimizer.SetLearningRate(phaseLR)
@@ -284,8 +310,17 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 		var totalLoss float32
 		batches := 0
 
-		for i := 0; i < len(trainPairs); i += batchSize {
-			end := i + batchSize
+		phaseBatchSize := phaseCfg.BatchSize
+		if phaseBatchSize <= 0 {
+			phaseBatchSize = batchSize
+		}
+		phaseMaxSeqLen := phaseCfg.MaxSeqLen
+		if phaseMaxSeqLen <= 0 {
+			phaseMaxSeqLen = maxSeqLen
+		}
+
+		for i := 0; i < len(trainPairs); i += phaseBatchSize {
+			end := i + phaseBatchSize
 			if end > len(trainPairs) {
 				end = len(trainPairs)
 			}
@@ -295,20 +330,20 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 			optimizer.ZeroGrad()
 
 			// Build input/target tensors
-			inputData := make([]float32, currentBatchSize*maxSeqLen)
-			targetData := make([]float32, currentBatchSize*maxSeqLen)
+			inputData := make([]float32, currentBatchSize*phaseMaxSeqLen)
+			targetData := make([]float32, currentBatchSize*phaseMaxSeqLen)
 
 			padID := intentModel.SentenceVocab.PaddingTokenID
 
 			for bIdx, pair := range batch {
 				qText := "__intent__ " + pair.Intent + " : __ques__ " + pair.Q
 				qToks := cleanTokenize(qText)
-				for t := 0; t < maxSeqLen && t < len(qToks); t++ {
+				for t := 0; t < phaseMaxSeqLen && t < len(qToks); t++ {
 					id := intentModel.SentenceVocab.GetTokenID(qToks[t])
 					if id < 0 {
 						id = padID
 					}
-					inputData[bIdx*maxSeqLen+t] = float32(id)
+					inputData[bIdx*phaseMaxSeqLen+t] = float32(id)
 				}
 
 				aToks := cleanTokenize(pair.A)
@@ -316,20 +351,20 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 				if eosID < 0 {
 					eosID = intentModel.SentenceVocab.GetTokenID("<EOS>")
 				}
-				for t := 0; t < maxSeqLen && t < len(aToks); t++ {
+				for t := 0; t < phaseMaxSeqLen && t < len(aToks); t++ {
 					id := intentModel.SentenceVocab.GetTokenID(aToks[t])
 					if id < 0 {
 						id = padID
 					}
-					targetData[bIdx*maxSeqLen+t] = float32(id)
+					targetData[bIdx*phaseMaxSeqLen+t] = float32(id)
 				}
-				if len(aToks) < maxSeqLen {
-					targetData[bIdx*maxSeqLen+len(aToks)] = float32(eosID)
+				if len(aToks) < phaseMaxSeqLen {
+					targetData[bIdx*phaseMaxSeqLen+len(aToks)] = float32(eosID)
 				}
 			}
 
-			inputTensor := tensor.NewTensor([]int{currentBatchSize, maxSeqLen}, inputData, false)
-			targetTensor := tensor.NewTensor([]int{currentBatchSize, maxSeqLen}, targetData, false)
+			inputTensor := tensor.NewTensor([]int{currentBatchSize, phaseMaxSeqLen}, inputData, false)
+			targetTensor := tensor.NewTensor([]int{currentBatchSize, phaseMaxSeqLen}, targetData, false)
 
 			for _, layer := range layers {
 				layer.CurrentPhase = currentPhase
@@ -337,7 +372,7 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 
 			logits, _, err := intentModel.Forward(0.1, inputTensor, targetTensor)
 			if err != nil {
-				log.Printf("⚠️ Forward error (batch %d): %v", i/batchSize, err)
+				log.Printf("⚠️ Forward error (batch %d): %v", i/phaseBatchSize, err)
 				intentModel.ClearState()
 				continue
 			}
@@ -348,7 +383,7 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 
 			if len(logits) == 1 && len(logits[0].Shape) == 3 {
 				// Vectorized 3D path: logits shape [batch, seqLen-1, vocab]
-				targetSeqLen := maxSeqLen - 1
+				targetSeqLen := phaseMaxSeqLen - 1
 				targets := make([]int, currentBatchSize*targetSeqLen)
 				var eosPenalty float32
 				vocabSize := logits[0].Shape[2]
@@ -360,7 +395,7 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 				for b := 0; b < currentBatchSize; b++ {
 					eosExpectedAt := -1
 					for t := 0; t < targetSeqLen; t++ {
-						tID := int(targetData[b*maxSeqLen+t+1])
+						tID := int(targetData[b*phaseMaxSeqLen+t+1])
 						targets[b*targetSeqLen+t] = tID
 						if eosExpectedAt == -1 && tID == eosID {
 							eosExpectedAt = t
@@ -401,7 +436,7 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 				for t, logit := range logits {
 					targets := make([]int, currentBatchSize)
 					for b := 0; b < currentBatchSize; b++ {
-						idx := b*maxSeqLen + t + 1
+						idx := b*phaseMaxSeqLen + t + 1
 						if idx < len(targetData) {
 							targets[b] = int(targetData[idx])
 						} else {
@@ -535,7 +570,10 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 					log.Printf("🚀 Phase 1 complete → advancing to Phase 2 (Cartridge Ingestion)")
 					currentPhase = 2
 					consecutiveHighSVC = 0
-					applyPhaseFreeze(layers, currentPhase)
+					nextPhaseCfg := cfg.Phases["2"]
+					if nextPhaseCfg != nil {
+						applyPhaseFreeze(layers, nextPhaseCfg.FreezeExpertsStart, nextPhaseCfg.FreezeExpertsEnd)
+					}
 					moe.SaveIntentMoEModelToGOB(intentModel, socialModelPath)
 				}
 			} else {
@@ -548,7 +586,10 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 				log.Printf("🚀 Phase 2 complete (%d epochs) → advancing to Phase 3 (Cohesive Tuning)", phase2Epochs)
 				currentPhase = 3
 				phase2Epochs = 0
-				applyPhaseFreeze(layers, currentPhase)
+				nextPhaseCfg := cfg.Phases["3"]
+				if nextPhaseCfg != nil {
+					applyPhaseFreeze(layers, nextPhaseCfg.FreezeExpertsStart, nextPhaseCfg.FreezeExpertsEnd)
+				}
 				moe.SaveIntentMoEModelToGOB(intentModel, socialModelPath)
 			}
 		}
