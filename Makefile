@@ -32,6 +32,7 @@ train-fresh: clean-all
 ## train-social: Resume existing Social Curriculum training
 ## Suspends ALL dashboard services before training to free ~1.5 GiB RAM, restarts on completion.
 train-social:
+
 	@echo "⏸  Suspending dashboard services to free RAM for training..."
 	@for f in /tmp/dashboard.pid /tmp/observability.pid /tmp/dashboard_injector.pid; do \
 	    [ -f $$f ] && kill -9 $$(cat $$f) 2>/dev/null || true; rm -f $$f; done
@@ -39,7 +40,7 @@ train-social:
 	@echo "🔨 Building training binary..."
 	@mkdir -p .build
 	go build -o .build/gollemer-train ./cmd/tools/train_moe/main.go
-	GOMEMLIMIT=$(MEM_LIMIT) GOGC=20 GOMAXPROCS=$(GOMAXPROCS) .build/gollemer-train -train-social $(ARGS)
+	GOMEMLIMIT=$(MEM_LIMIT) GOGC=90 GOMAXPROCS=$(GOMAXPROCS) .build/gollemer-train -train-multiphase $(ARGS)
 	@echo "▶️  Restarting dashboard (http://localhost:8765)..."
 	@bash scripts/start_dashboard.sh
 

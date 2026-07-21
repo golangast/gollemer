@@ -129,6 +129,7 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 	computerPairs := LoadComputerCSV(computerCSVPath)
 
 	// ── Synthetic data augmentation ───────────────────────────────────────────
+	var syntheticPairs []moe.TrainPair
 	syntheticCSVPath := filepath.Join(projectRoot, "data/training/trainingdata/synthetic_pairs.csv")
 	if f, err := os.Open(syntheticCSVPath); err == nil {
 		defer f.Close()
@@ -148,12 +149,17 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 				grammar = record[3]
 			}
 			if q != "" && a != "" {
-				socialPairs = append(socialPairs, moe.TrainPair{Q: q, A: a, Intent: intent, Grammar: grammar})
+				syntheticPairs = append(syntheticPairs, moe.TrainPair{Q: q, A: a, Intent: intent, Grammar: grammar})
 			}
 		}
-		log.Printf("📚 Loaded %d synthetic pairs from synthetic_pairs.csv", len(records)-1)
+		log.Printf("📚 Loaded %d synthetic pairs from %s", len(records)-1, syntheticCSVPath)
 	} else {
-		log.Printf("⚠️ synthetic_pairs.csv not found at %s: %v", syntheticCSVPath, err)
+		log.Printf("⚠️ %s not found: %v", syntheticCSVPath, err)
+	}
+
+	if len(syntheticPairs) > 0 {
+		socialPairs = append(socialPairs, syntheticPairs...)
+		log.Printf("📚 Injected %d synthetic pairs via syntheticCSVPath (total social+technical: %d)", len(syntheticPairs), len(socialPairs))
 	}
 
 	if len(socialPairs) == 0 || len(computerPairs) == 0 {
