@@ -18,6 +18,7 @@ data/models/checkpoints/
 
 # Native libraries and WebGPU binaries
 lib/
+audio/
 include/
 scripts/old_lib/
 *.so
@@ -38,6 +39,9 @@ logs/training_full.log
 scratch/
 
 # Other
+.*
+./.git
+ ./.git/objects
 .gollemer_stats
 last_dir.txt
 vendor/
@@ -49,3 +53,6 @@ prometheus.yml
 wgpu-linux-x86_64-release.zip
 wgpu-native-meta/
 .fuse_hidden*
+dataset/
+build_whisper/
+video/
