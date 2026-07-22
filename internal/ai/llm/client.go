@@ -6,13 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"math"
 	"math/rand"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -21,6 +19,7 @@ import (
 	"github.com/golangast/gollemer/internal/ai/moe"
 	"github.com/golangast/gollemer/internal/ai/neural/nnu/word2vec"
 	"github.com/golangast/gollemer/internal/ai/neural/tensor"
+	"github.com/golangast/gollemer/internal/ai/neural/tokenizer"
 	"github.com/golangast/gollemer/internal/ai/orchestrator"
 	"github.com/golangast/gollemer/internal/ai/tagger/nertagger"
 	"github.com/golangast/gollemer/internal/ai/tagger/postagger"
@@ -30,21 +29,23 @@ import (
 )
 
 // GollemerMoEClient implements the MoEClient interface using the existing NLP pipeline.
+//
+// ChatBank overrides have been removed. The neural MoE weights handle ALL
+// responses — both conversational and code queries — directly using BPE
+// tokenization and ChatML format (when BPE tokenizer is available).
 type GollemerMoEClient struct {
 	KB                *KnowledgeBase
 	Model             *moe.IntentMoE
 	SocialModel       *moe.IntentMoE // Specialized model for social conversations
 	W2V               *word2vec.SimpleWord2Vec
-	ChatBank          []ChatPair
 	History           []ChatPair
 	lastMoEPrediction string
 	CommandAnchors    map[string][]float64
 	SocialConfig      *orchestrator.SafeConfig
+	BPETokenizer      *tokenizer.BPETokenizer // BPE tokenizer for ChatML-based inference
+	ChatBank          []ChatPair              // Deprecated: kept for backward compat; neural MoE used instead
 
 	// Multiconversational session layer.
-	// Sessions manages all concurrent user sessions with TTL eviction.
-	// SessionID identifies which session this client instance is currently serving;
-	// it defaults to "default" for single-user CLI mode.
 	Sessions  *SessionManager
 	SessionID string
 }
@@ -1071,410 +1072,50 @@ func (c *GollemerMoEClient) resolveContextQuery(lowerInput string) string {
 	return ""
 }
 
+func (c *GollemerMoEClient) FormatChatMLPrompt(userInput string) string {
+	return "<|im_start|>system\nYou are Gollemer, an expert AI Go development assistant.<|im_end|>\n" +
+		"<|im_start|>user\n" + userInput + "<|im_end|>\n" +
+		"<|im_start|>assistant\n"
+}
+
 func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
-	log.Printf("📡 GenerateSocialResponse called with input: '%s'", input)
-	if c.SocialModel == nil {
-		return ""
-	}
-	model := c.SocialModel
-	if model.SentenceVocab == nil || model.Decoder == nil || model.Embedding == nil || model.Encoder == nil {
-		fmt.Printf("⚠️  DEBUG: Social model is incomplete: Vocab=%v, Decoder=%v, Embedding=%v, Encoder=%v\n",
-			model.SentenceVocab != nil, model.Decoder != nil, model.Embedding != nil, model.Encoder != nil)
+	log.Printf("📡 GenerateSocialResponse called with ChatML prompt")
+	if c.SocialModel == nil || c.BPETokenizer == nil {
 		return ""
 	}
 
-	// ── Resolve intent ──────────────────────────────────────────────────────────
-	lowerInput := strings.ToLower(input)
-
-	// ── 🧠 SMART CONTEXT RESOLUTION (runs BEFORE the neural model) ──────────────
-	// Detect memory/context/pronoun questions and answer them directly from live
-	// history, extracting the specific entity the user is asking about rather than
-	// dumping the full history blob.
-	if len(c.History) > 0 {
-		resp := c.resolveContextQuery(lowerInput)
-		if resp != "" {
-			log.Printf("🧠 Context-resolved from history: '%s'", resp)
-			return resp
-		}
-	}
-
-	// Match intent labels exactly as used in conversing.csv training data
-	intent := "social" // default
-	if strings.Contains(lowerInput, "hello") || strings.Contains(lowerInput, "hi") ||
-		strings.Contains(lowerInput, "good morning") || strings.Contains(lowerInput, "good night") || strings.Contains(lowerInput, "hey") {
-		intent = "greeting"
-	} else if strings.Contains(lowerInput, "your name") || strings.Contains(lowerInput, "who are you") ||
-		strings.Contains(lowerInput, "who made") || strings.Contains(lowerInput, "robot") ||
-		strings.Contains(lowerInput, "feelings") || strings.Contains(lowerInput, "sleep") ||
-		strings.Contains(lowerInput, "purpose") || strings.Contains(lowerInput, "learn") ||
-		strings.Contains(lowerInput, "where are you") || strings.Contains(lowerInput, "smart") {
-		intent = "identity"
-	} else if strings.Contains(lowerInput, "how are you") || strings.Contains(lowerInput, "how are things") {
-		intent = "status_check"
-	} else if strings.Contains(lowerInput, "thank") || strings.Contains(lowerInput, "sorry") {
-		intent = "polite"
-	} else if strings.Contains(lowerInput, "goodbye") || strings.Contains(lowerInput, "see you") {
-		intent = "farewell"
-	} else if strings.Contains(lowerInput, "help") {
-		intent = "support"
-	} else if strings.Contains(lowerInput, "what is go") || strings.Contains(lowerInput, "routine") {
-		intent = "knowledge"
-	} else if strings.Contains(lowerInput, "can you do") || strings.Contains(lowerInput, "how do you work") {
-		intent = "capabilities"
-	} else if strings.Contains(lowerInput, "sunny") || strings.Contains(lowerInput, "rain") || strings.Contains(lowerInput, "coding") {
-		intent = "small_talk"
-	} else if strings.Contains(lowerInput, "tired") || strings.Contains(lowerInput, "happy") || strings.Contains(lowerInput, "sad") {
-		intent = "emotional_support"
-	} else if strings.Contains(lowerInput, "fact") || strings.Contains(lowerInput, "joke") ||
-		strings.Contains(lowerInput, "meaning") || strings.Contains(lowerInput, "color") {
-		intent = "trivia"
-	} else if strings.Contains(lowerInput, "why did") {
-		intent = "clarification"
-	}
-
-	// ── 🎯 ChatBank: fetch target answer for guided decoding (not returned directly) ──
-	// Instead of copy-pasting, we tokenize the target answer and use it as a
-	// soft logit boost during MoE decoding. The decoder generates its own tokens;
-	// it is merely nudged toward the right vocabulary.
-	chatTarget, chatTargetScore := c.lookupChatBank(input, intent)
-	retrievedResp, _, retrievedScore := c.RetrieveChatResponse(input)
-	var guidanceTokenIDs map[int]bool
-	// guidanceBoost of 1.2 gently nudges the decoder toward vocabulary that appears
-	// in the reference answer without hard-locking it onto those tokens. A value
-	// of 4.5 (old) effectively forces verbatim copy because it drowns the model's
-	// own learned logits.
-	const guidanceBoost = float32(1.2)
-	if chatTarget != "" && chatTargetScore >= 0.70 {
-		log.Printf("🧭 ChatBank guidance target (score=%.2f, intent=%s): '%s'", chatTargetScore, intent, chatTarget)
-		guidanceTokenIDs = make(map[int]bool)
-		for _, w := range cleanTokenize(chatTarget) {
-			if id := lookupVocab(w, model.SentenceVocab); id > 1 { // skip PAD / UNK
-				guidanceTokenIDs[id] = true
-			}
-		}
-	} else if chatTarget != "" {
-		log.Printf("🔍 Skipping weak ChatBank guidance (score=%.2f)", chatTargetScore)
-	}
-
-	// If the ChatBank has a strong target answer, prefer it over the weak social
-	// model generation path for now, since the conversational MoE is still noisy.
-	if chatTarget != "" && chatTargetScore >= 0.80 {
-		log.Printf("🔁 Strong ChatBank direct answer (score=%.2f): '%s'", chatTargetScore, chatTarget)
-		return paraphraseResponse(chatTarget)
-	}
-	if retrievedResp != "" && retrievedScore >= 0.80 {
-		log.Printf("🔁 Strong retrieval fallback answer (score=%.2f): '%s'", retrievedScore, retrievedResp)
-		return paraphraseResponse(retrievedResp)
-	}
-
-	queryContext := c.buildQueryContext(lowerInput)
-
-	formattedInput := fmt.Sprintf("__intent__ %s : __ques__ %s __ans__", intent, queryContext)
-	tokens := cleanTokenize(formattedInput)
-	if len(tokens) == 0 {
-		return ""
-	}
-	inputIDs := make([]float32, len(tokens))
-	for i, t := range tokens {
-		inputIDs[i] = float32(lookupVocab(t, model.SentenceVocab))
-	}
-	inputTensor := tensor.NewTensor([]int{1, len(inputIDs)}, inputIDs, false)
-
-	emb, err := model.Embedding.Forward(inputTensor)
-	if err != nil {
-		return ""
-	}
-	ctx, err := model.Encoder.Forward(emb)
-	if err != nil {
-		return ""
-	}
-	ctx = model.NormalizeContextVector(ctx)
-	if ctx.Shape[1] == 0 {
+	prompt := c.FormatChatMLPrompt(input)
+	tokenIDs := c.BPETokenizer.Encode(prompt)
+	if len(tokenIDs) == 0 {
 		return ""
 	}
 
-	// ─── 🧠 THINKING TRACE ────────────────────────────────────────────────────
-	fmt.Println("\n💭 [Thinking]")
-	fmt.Printf("   Input tokens  : %s\n", strings.Join(tokens, " "))
+	var generatedIDs []int
+	currentSequence := append([]int(nil), tokenIDs...)
 
-	if ctx.Shape[1] > 0 && ctx.Shape[2] > 0 {
-		type tokenScore struct {
-			tok   string
-			score float32
-		}
-		var scores []tokenScore
-		skip := map[string]bool{"__intent__": true, "__ques__": true, "__ans__": true, "social": true, ":": true}
-		for i, t := range tokens {
-			if skip[t] || i >= ctx.Shape[1] {
-				continue
-			}
-			start := i * ctx.Shape[2]
-			end := start + ctx.Shape[2]
-			if end > len(ctx.Data) {
-				break
-			}
-			var norm float32
-			for _, v := range ctx.Data[start:end] {
-				norm += v * v
-			}
-			norm = float32(math.Sqrt(float64(norm)))
-			scores = append(scores, tokenScore{t, norm})
-		}
-		sort.Slice(scores, func(i, j int) bool { return scores[i].score > scores[j].score })
-		top := scores
-		if len(top) > 3 {
-			top = top[:3]
-		}
-		var focusWords []string
-		for _, s := range top {
-			focusWords = append(focusWords, fmt.Sprintf("%s(%.2f)", s.tok, s.score))
-		}
-		if len(focusWords) > 0 {
-			fmt.Printf("   Encoder focus : %s\n", strings.Join(focusWords, ", "))
-		}
+	imEndID := -1
+	eosID := -1
+	if c.BPETokenizer.Vocab != nil {
+		imEndID = c.BPETokenizer.Vocab.GetTokenID("<|im_end|>")
+		eosID = c.BPETokenizer.Vocab.GetTokenID("</s>")
 	}
 
-	questionType := "statement"
-	switch {
-	case strings.HasPrefix(lowerInput, "how are") || strings.HasPrefix(lowerInput, "how do you feel"):
-		questionType = "greeting/wellbeing"
-	case strings.HasPrefix(lowerInput, "how"):
-		questionType = "how-question"
-	case strings.HasPrefix(lowerInput, "what"):
-		questionType = "what-question"
-	case strings.HasPrefix(lowerInput, "who"):
-		questionType = "who-question"
-	case strings.Contains(lowerInput, "hello") || strings.Contains(lowerInput, "hi"):
-		questionType = "greeting"
-	case strings.Contains(lowerInput, "thank"):
-		questionType = "gratitude"
-	}
-	fmt.Printf("   Question type  : %s\n", questionType)
+	maxNewTokens := 128
+	for i := 0; i < maxNewTokens; i++ {
+		nextTokenID := c.SocialModel.PredictNextToken(currentSequence)
 
-	ctxNorm := ctx.L2Norm()
-	understanding := "weak"
-	if ctxNorm > 5.0 {
-		understanding = "strong"
-	} else if ctxNorm > 2.0 {
-		understanding = "moderate"
-	}
-	fmt.Printf("   Context signal : %.4f (%s)\n", ctxNorm, understanding)
-	fmt.Println("   Generating answer...")
-	fmt.Println()
-	// ─────────────────────────────────────────────────────────────────────────
-
-	// 1. Enter Eval Mode and set Router Temperature for stability
-	oldTemps := make(map[*moe.MoELayer]float32)
-	layers := model.Encoder.GetMoELayers()
-	if model.Decoder.OutputMoE != nil {
-		layers = append(layers, model.Decoder.OutputMoE)
-	}
-
-	oldModes := make(map[*moe.MoELayer]bool)
-	for _, layer := range layers {
-		oldModes[layer] = layer.Training
-		layer.SetMode(false)
-		oldTemps[layer] = layer.RouterTemperature
-		if layer.RouterTemperature <= 0 {
-			layer.RouterTemperature = 0.85
+		// Stop immediately if the model predicts ChatML end token or EOS
+		if nextTokenID == imEndID || nextTokenID == eosID || nextTokenID == 0 {
+			break
 		}
+
+		generatedIDs = append(generatedIDs, nextTokenID)
+		currentSequence = append(currentSequence, nextTokenID)
 	}
 
-	defer func() {
-		for _, layer := range layers {
-			layer.SetMode(oldModes[layer])
-			layer.RouterTemperature = oldTemps[layer]
-		}
-	}()
-
-	// ── 🦺 SECONDARY: Supervisor grammar-skeleton + guidance guided completion ──
-	// supervisorCompleteSentenceGuided already applies POS boosting and ChatBank guidance.
-
-	// Use config-driven guidance boost if available
-	cfg := orchestrator.TrainingConfig{IntentBias: 4.5, TopP: 0.85, TopK: 5, RouterTemperature: 0.8, RepetitionPenalty: 0.3, FrequencyPenalty: 0.01}
-	if c.SocialConfig != nil {
-		cfg = c.SocialConfig.Get()
-	}
-
-	finalIntentBias := cfg.IntentBias
-	if finalIntentBias <= 0 {
-		finalIntentBias = guidanceBoost
-	}
-
-	// 🚫 Build social-context technical token suppression set (computed once per call).
-	// This prevents the decoder from ever generating DevOps / Go jargon in a conversational
-	// response, regardless of how biased the model weights are from the technical training data.
-	socialSuppressedIDs := buildSocialSuppressedIDs(model.SentenceVocab)
-
-	supervisorResp := c.supervisorCompleteSentenceGuided(ctx, intent, model, guidanceTokenIDs, finalIntentBias, socialSuppressedIDs)
-	if supervisorResp != "" {
-		if isGarbageOutput(supervisorResp) || isLowQualitySocialResponse(supervisorResp) {
-			log.Printf("🗑️  Supervised response rejected (quality gate): '%s'", supervisorResp)
-			if chatTarget != "" && chatTargetScore >= 0.70 {
-				log.Printf("🔁 Falling back to strong ChatBank target answer (score=%.2f): '%s'", chatTargetScore, chatTarget)
-				return paraphraseResponse(chatTarget)
-			}
-			if retrievedScore >= 0.75 && retrievedResp != "" {
-				log.Printf("🔁 Falling back to high-confidence ChatBank retrieval (score=%.2f): '%s'", retrievedScore, retrievedResp)
-				return paraphraseResponse(retrievedResp)
-			}
-		} else {
-			log.Printf("🦺 Supervised+guided generation (intent=%s): '%s'", intent, supervisorResp)
-			return supervisorResp
-		}
-	}
-
-	// ── Beam Search Decode (tertiary) ────────────────────────────────────────
-	beamRepPenalty := float32(3.0)
-	if c.SocialConfig != nil {
-		if rp := c.SocialConfig.Get().RepetitionPenalty; rp > 0 {
-			beamRepPenalty = rp
-		}
-	}
-
-	// 🧬 Structural Guidance: Fetch the rule for this intent to guide the beam search
-	rule, _ := model.Rules.GetRuleByIntent("social", intent)
-
-	resIDs, beamErr := model.BeamSearchDecode(
-		ctx,
-		16, // shorter max length to reduce repetition chances
-		model.SentenceVocab.BosID, model.SentenceVocab.EosID,
-		3,                   // smaller beam width helps reduce spurious paths
-		0.65,                // lower temperature for safer decoding
-		beamRepPenalty,      // dynamic repetition penalty from config
-		&rule,               // 🧬 Guided Beam Search
-		socialSuppressedIDs, // 🚫 block technical tokens in social context
-	)
-	if beamErr != nil || len(resIDs) == 0 {
-		log.Printf("⚠️  BeamSearchDecode failed (%v), falling back to sampling", beamErr)
-		// Fallback: original sampling path
-		resIDs = nil
-		fbBatchSize := 1
-		fbHiddenSize := model.Decoder.LSTM.HiddenSize
-		fbHidden, _ := ctx.Mean(1)
-		fbHidden, _ = fbHidden.Reshape([]int{fbBatchSize, ctx.Shape[2]})
-		if fbHidden.Shape[1] != fbHiddenSize {
-			if fbHidden.Shape[1] > fbHiddenSize {
-				fbHidden, _ = fbHidden.Slice(1, 0, fbHiddenSize)
-			} else {
-				pad := tensor.NewTensor([]int{fbBatchSize, fbHiddenSize - fbHidden.Shape[1]}, make([]float32, fbBatchSize*(fbHiddenSize-fbHidden.Shape[1])), false)
-				fbHidden, _ = tensor.Concat([]*tensor.Tensor{fbHidden, pad}, 1)
-			}
-		}
-		fbCell := tensor.NewTensor([]int{fbBatchSize, fbHiddenSize}, make([]float32, fbBatchSize*fbHiddenSize), false)
-		currentID := model.SentenceVocab.BosID
-		counts := make(map[int]int)
-		unkID := model.SentenceVocab.GetTokenID("UNK")
-		var expertPath []string
-
-		for i := 0; i < 30; i++ {
-			inputT := tensor.NewTensor([]int{1, 1}, []float32{float32(currentID)}, false)
-			logits, nextH, nextC, expertID, _, err := model.Decoder.DecodeStepWithExpert(inputT, fbHidden, fbCell, ctx, i)
-			if err != nil {
-				break
-			}
-			fbHidden = nextH
-			fbCell = nextC
-
-			if i < 6 {
-				logits.Data[model.SentenceVocab.EosID] = -1e9
-			}
-			if unkID != -1 {
-				logits.Data[unkID] = -1e9
-			}
-
-			// Use config for sampling
-			temp := float32(0.8)
-			topK := 5
-			topP := float32(0.85)
-			repPenalty := float32(0.3)
-			freqPenalty := float32(0.01)
-
-			if c.SocialConfig != nil {
-				sc := c.SocialConfig.Get()
-				if sc.RouterTemperature > 0 {
-					temp = sc.RouterTemperature
-				}
-				if sc.TopK > 0 {
-					topK = sc.TopK
-				}
-				if sc.TopP > 0 {
-					topP = sc.TopP
-				}
-				if sc.RepetitionPenalty > 0 {
-					repPenalty = sc.RepetitionPenalty
-				}
-				if sc.FrequencyPenalty > 0 {
-					freqPenalty = sc.FrequencyPenalty
-				}
-			}
-
-			moe.ApplyRepetitionPenalty(logits, resIDs, repPenalty)
-			for id, count := range counts {
-				if id < len(logits.Data) {
-					logits.Data[id] -= freqPenalty * float32(count)
-				}
-			}
-
-			bestID, err := moe.SampleFromLogits(logits, temp, topK, topP)
-			if err != nil {
-				break
-			}
-			if bestID == model.SentenceVocab.EosID {
-				break
-			}
-			expertStr := ""
-			for j, eid := range expertID {
-				if j > 0 {
-					expertStr += "+"
-				}
-				expertStr += fmt.Sprintf("E%d", eid)
-			}
-			word := model.SentenceVocab.GetWord(bestID)
-			expertPath = append(expertPath, fmt.Sprintf("%s(%s)", word, expertStr))
-			resIDs = append(resIDs, bestID)
-			counts[bestID]++
-			currentID = bestID
-		}
-		if len(expertPath) > 0 {
-			log.Printf("🧠 Expert Path (inference/fallback): %s", strings.Join(expertPath, " -> "))
-		}
-	} else {
-		log.Printf("🎯 BeamSearchDecode produced %d tokens", len(resIDs))
-	}
-
-	log.Printf("🎯 BeamSearchDecode produced %d IDs: %v", len(resIDs), resIDs)
-	var result []string
-	for _, id := range resIDs {
-		w := model.SentenceVocab.GetWord(id)
-		log.Printf("   Token ID %d -> '%s'", id, w)
-		if w == "</s>" || w == "<s>" || w == "<pad>" || w == "UNK" || w == "" ||
-			w == "__intent__" || w == "__ques__" || w == "__ans__" || w == "social" || w == ":" ||
-			strings.HasPrefix(w, "<INTENT_") || strings.HasPrefix(w, "<ACT_") || strings.HasPrefix(w, "<DEV_") {
-			continue
-		}
-		result = append(result, w)
-	}
-	response := strings.Join(result, " ")
-	if response == "" {
-		log.Printf("⚠️  Response became empty after filtering %d tokens", len(resIDs))
-		if chatTarget != "" && chatTargetScore >= 0.75 {
-			log.Printf("🔁 Falling back to strong ChatBank target answer (score=%.2f): '%s'", chatTargetScore, chatTarget)
-			return paraphraseResponse(chatTarget)
-		}
-		if retrievedScore >= 0.8 && retrievedResp != "" {
-			log.Printf("🔁 Falling back to high-confidence direct ChatBank retrieval (score=%.2f): '%s'", retrievedScore, retrievedResp)
-			return retrievedResp
-		}
-		log.Printf("⚠️  Neural social response failed and retrieval score was low (%.2f)", retrievedScore)
-		return "I'm sorry, I don't have a good answer for that right now. Can you ask in a different way?"
-	}
-	if isGarbageOutput(response) || isLowQualitySocialResponse(response) {
-		log.Printf("🗑️  Neural social output rejected (quality gate): '%s'", response)
-		return ""
-	}
-	log.Printf("🎭 Neural Social Model generated: '%s'", response)
-	return response
+	responseText := c.BPETokenizer.Decode(generatedIDs)
+	log.Printf("🎭 Neural Social Model generated: '%s'", responseText)
+	return responseText
 }
 
 func (c *GollemerMoEClient) checkCommandHeuristics(lowerInput string) (string, float64) {

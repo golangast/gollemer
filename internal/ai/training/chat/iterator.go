@@ -48,12 +48,53 @@ func (it *ChatDataIterator) HasNext() bool {
 	return it.idx < len(it.pairs)
 }
 
+// buildChatMLSequence builds a ChatML-formatted token sequence with loss mask
+// from a TrainPair. Format:
+//
+//	<|im_start|>user\nQUERY<|im_end|>\n<|im_start|>assistant\nANSWER<|im_end|>
+//
+// lossMask[i] = 0.0 for user tokens, 1.0 for assistant tokens.
+func (it *ChatDataIterator) buildChatMLSequence(pair moe.TrainPair) (inputIDs, targetIDs, lossMask []float32) {
+	// Build ChatML: user turn + assistant turn
+	userMsg := fmt.Sprintf("<|im_start|>user\n%s<|im_end|>\n<|im_start|>assistant\n", pair.Q)
+	assistantMsg := fmt.Sprintf("%s<|im_end|>", pair.A)
+
+	// Tokenize user message (not used for loss)
+	userTokens := cleanTokenize(userMsg)
+	userIDs := make([]float32, len(userTokens))
+	for i, t := range userTokens {
+		userIDs[i] = float32(lookupVocab(t, it.vocab))
+	}
+
+	// Tokenize assistant message (used for loss) — convert to float32 IDs
+	assistantTokens := cleanTokenize(assistantMsg)
+	assistantIDs := make([]float32, len(assistantTokens))
+	for i, t := range assistantTokens {
+		assistantIDs[i] = float32(lookupVocab(t, it.vocab))
+	}
+
+	// Full sequence: user part (no loss) + assistant part (loss applied)
+	fullTokens := make([]float32, len(userIDs)+len(assistantIDs))
+	copy(fullTokens, userIDs)
+	copy(fullTokens[len(userIDs):], assistantIDs)
+
+	// Loss mask: 0 for user tokens, 1 for assistant tokens
+	lm := make([]float32, len(fullTokens))
+	for i := 0; i < len(userIDs); i++ {
+		lm[i] = 0.0
+	}
+	for i := len(userIDs); i < len(fullTokens); i++ {
+		lm[i] = 1.0
+	}
+
+	return fullTokens, fullTokens, lm
+}
+
 func (it *ChatDataIterator) Next() (*tensor.Tensor, *tensor.Tensor, *tensor.Tensor, *tensor.Tensor) {
 	pair := it.pairs[it.idx]
 	it.idx++
 
 	// --- DYNAMIC AUGMENTATION ---
-	// (Keeping the existing augmentation logic)
 	q := pair.Q
 	a := pair.A
 	if rand.Float32() < 0.3 {
@@ -69,15 +110,16 @@ func (it *ChatDataIterator) Next() (*tensor.Tensor, *tensor.Tensor, *tensor.Tens
 		}
 	}
 
-	// Query Format: Normalized structure with intent markers
-	queryText := fmt.Sprintf("__intent__ %s : __ques__ %s __ans__", pair.Intent, q)
-	qTokens := cleanTokenize(queryText)
-	qIDs := make([]float32, len(qTokens))
-	for i, t := range qTokens {
-		qIDs[i] = float32(lookupVocab(t, it.vocab))
-	}
+	// Use ChatML format with loss masking
+	augmentedPair := moe.TrainPair{Q: q, A: a, Intent: pair.Intent}
+	fullIDs, _, _ := it.buildChatMLSequence(augmentedPair)
 
-	// Target Format: Raw answer from dataset
+	// For backward compatibility, we split into input and target the standard way:
+	// input = full sequence (teacher forcing), target = shifted by 1.
+	// The loss mask is stored in the Batch struct for WeightedCrossEntropy.
+	qIDs := fullIDs
+
+	// Target Format: Raw answer tokens with BOS/EOS
 	targetText := a
 	aTokens := cleanTokenize(targetText)
 	aIDs := make([]float32, len(aTokens)+2)
@@ -92,20 +134,20 @@ func (it *ChatDataIterator) Next() (*tensor.Tensor, *tensor.Tensor, *tensor.Tens
 	gIDs := make([]float32, len(aIDs))
 	gIDs[0] = 7 // BOS -> OTHER
 	for i := 0; i < len(aTokens); i++ {
-		//  Syntactic Boost: Bias toward linking PRON to VERB
 		role := moe.GrammarRoleIndex(aRoles[i])
 		if i > 0 && aRoles[i-1] == "PRON" && (aRoles[i] == "VERB" || aRoles[i] == "AUX") {
-			gIDs[i+1] = float32(role) + 0.5 // Boost signal
+			gIDs[i+1] = float32(role) + 0.5
 		} else {
 			gIDs[i+1] = float32(role)
 		}
 	}
 	gIDs[len(gIDs)-1] = 7 // EOS -> OTHER
 
-	// Query Grammar Tags: Map query tokens to roles
+	// Query Grammar Tags
+	qTokens := cleanTokenize(q)
 	qRoles := SimpleTagger(qTokens)
 	qgIDs := make([]float32, len(qIDs))
-	for i := 0; i < len(qTokens); i++ {
+	for i := 0; i < len(qTokens) && i < len(qIDs); i++ {
 		role := moe.GrammarRoleIndex(qRoles[i])
 		qgIDs[i] = float32(role)
 	}

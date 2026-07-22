@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/golangast/gollemer/internal/ai/moe"
@@ -262,7 +263,7 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 	}
 
 	// Build flat loss-weight slice for WeightedCrossEntropy
-	lossWeights := buildDefaultLossWeights(intentModel.SentenceVocab)
+	lossWeights := buildDefaultLossWeights(intentModel.SentenceVocab, &cfg)
 
 	currentPhase := 1
 	consecutiveHighSVC := 0
@@ -298,6 +299,7 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 
 		phaseLR = phaseCfg.LearningRate
 		for _, layer := range layers {
+			atomic.StoreInt32(&layer.ResetCount, 0)
 			layer.LoadBalancingWeight = phaseCfg.LoadBalancingWeight
 			layer.RouterTemperature = phaseCfg.RouterTemperature
 			layer.ExpertDropoutRate = phaseCfg.ExpertDropout
@@ -427,11 +429,28 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 				if grad == nil {
 					grad = tensor.NewTensor(logits[0].Shape, make([]float32, len(logits[0].Data)), false)
 				}
+
+				// DYNAMIC NORMALIZATION
+				var sumWeights float32
+				validTokens := 0
+				for _, tID := range targets {
+					if tID >= 0 && tID < len(lossWeights) && tID != padID {
+						sumWeights += lossWeights[tID]
+						validTokens++
+					}
+				}
+				avgWeight := float32(1.0)
+				if validTokens > 0 && sumWeights > 0 {
+					avgWeight = sumWeights / float32(validTokens)
+				}
+
 				penaltyFactor := float32(1.0) + (eosPenalty / float32(currentBatchSize))
-				batchLoss = loss * penaltyFactor
-				if penaltyFactor > 1.0 {
+				batchLoss = (loss * penaltyFactor) / avgWeight
+
+				scale := penaltyFactor / avgWeight
+				if scale != 1.0 {
 					for i := range grad.Data {
-						grad.Data[i] *= penaltyFactor
+						grad.Data[i] *= scale
 					}
 				}
 				grads = []*tensor.Tensor{grad}
@@ -477,11 +496,28 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 					if g == nil {
 						g = tensor.NewTensor(logit.Shape, make([]float32, len(logit.Data)), false)
 					}
+
+					// DYNAMIC NORMALIZATION
+					var sumWeights float32
+					validTokens := 0
+					for _, tID := range targets {
+						if tID >= 0 && tID < len(lossWeights) && tID != padID {
+							sumWeights += lossWeights[tID]
+							validTokens++
+						}
+					}
+					avgWeight := float32(1.0)
+					if validTokens > 0 && sumWeights > 0 {
+						avgWeight = sumWeights / float32(validTokens)
+					}
+
 					penaltyFactor := float32(1.0) + (eosPenalty / float32(currentBatchSize))
-					stepTotal += l * penaltyFactor
-					if penaltyFactor > 1.0 {
+					stepTotal += (l * penaltyFactor) / avgWeight
+
+					scale := penaltyFactor / avgWeight
+					if scale != 1.0 {
 						for i := range g.Data {
-							g.Data[i] *= penaltyFactor
+							g.Data[i] *= scale
 						}
 					}
 					grads[t] = g
@@ -610,7 +646,7 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 
 // buildDefaultLossWeights builds a flat weight vector for WeightedCrossEntropy.
 // High-frequency stop-words are down-weighted; BOS/EOS/terminal punctuation are boosted.
-func buildDefaultLossWeights(vocab *mainvocab.Vocabulary) []float32 {
+func buildDefaultLossWeights(vocab *mainvocab.Vocabulary, cfg *orchestrator.TrainingConfig) []float32 {
 	if vocab == nil {
 		return nil
 	}
@@ -618,18 +654,28 @@ func buildDefaultLossWeights(vocab *mainvocab.Vocabulary) []float32 {
 	for i := range weights {
 		weights[i] = 1.0
 	}
-	suppressed := []string{"it", "is", "a", "the", "i"}
-	for _, w := range suppressed {
-		id := vocab.GetTokenID(w)
-		if id >= 0 && id < len(weights) {
-			weights[id] = 0.3
+
+	if cfg != nil && cfg.TokenWeights != nil {
+		for token, weight := range cfg.TokenWeights {
+			id := vocab.GetTokenID(token)
+			if id >= 0 && id < len(weights) {
+				weights[id] = float32(weight)
+			}
 		}
-	}
-	boosted := []string{".", "!", "?", "<BOS>", "<EOS>", "__ans__"}
-	for _, w := range boosted {
-		id := vocab.GetTokenID(w)
-		if id >= 0 && id < len(weights) {
-			weights[id] = 2.0
+	} else {
+		suppressed := []string{"it", "is", "a", "the", "i"}
+		for _, w := range suppressed {
+			id := vocab.GetTokenID(w)
+			if id >= 0 && id < len(weights) {
+				weights[id] = 0.3
+			}
+		}
+		boosted := []string{".", "!", "?", "<BOS>", "<EOS>", "__ans__"}
+		for _, w := range boosted {
+			id := vocab.GetTokenID(w)
+			if id >= 0 && id < len(weights) {
+				weights[id] = 2.0
+			}
 		}
 	}
 	return weights

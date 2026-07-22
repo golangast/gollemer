@@ -282,6 +282,12 @@ func (moe *MoELayer) ResetExpertWeights(expertIdx int) {
 		return
 	}
 
+	// RATE LIMITER: at most one expert per layer can undergo reset/cloning in a given epoch
+	if atomic.LoadInt32(&moe.ResetCount) > 0 {
+		return
+	}
+	atomic.AddInt32(&moe.ResetCount, 1)
+
 	moe.resetsMu.Lock()
 	if moe.expertResets == nil {
 		moe.expertResets = make(map[int]int)
@@ -289,30 +295,46 @@ func (moe *MoELayer) ResetExpertWeights(expertIdx int) {
 	moe.expertResets[expertIdx]++
 	moe.resetsMu.Unlock()
 
-	atomic.AddInt32(&moe.ResetCount, 1)
-
 	if moe.OverfitMode {
 		log.Printf("🔥 Expert %d Weights Reset skipped (Warmup/Overfit Mode active)", expertIdx)
 		return
 	}
 
-	expert := moe.Experts[expertIdx]
-	params := expert.Parameters()
-	for _, p := range params {
-		if p == nil {
-			continue
+	// CLONING WITH JITTER: Find the top-performing expert to clone from instead of pure random
+	bestExpertIdx := -1
+	maxUtil := -1
+	if len(moe.AccumulatedUtilization) > 0 {
+		for i, u := range moe.AccumulatedUtilization {
+			if u > maxUtil && i != expertIdx {
+				maxUtil = u
+				bestExpertIdx = i
+			}
 		}
-		// Xavier Initialization
-		var fanIn int
-		if len(p.Shape) >= 2 {
-			fanIn = p.Shape[0]
-		} else {
-			fanIn = p.Shape[0]
+	}
+
+	if bestExpertIdx != -1 {
+		moe.PerformSurgery(bestExpertIdx, expertIdx)
+		log.Printf("🔥 Expert %d Weights Reset via Cloning from Expert %d & Router Perturbed", expertIdx, bestExpertIdx)
+	} else {
+		expert := moe.Experts[expertIdx]
+		params := expert.Parameters()
+		for _, p := range params {
+			if p == nil {
+				continue
+			}
+			// Fallback Xavier Initialization
+			var fanIn int
+			if len(p.Shape) >= 2 {
+				fanIn = p.Shape[0]
+			} else {
+				fanIn = p.Shape[0]
+			}
+			stdDev := float32(math.Sqrt(1.0 / float64(fanIn)))
+			for i := range p.Data {
+				p.Data[i] = float32(rand.NormFloat64()) * stdDev
+			}
 		}
-		stdDev := float32(math.Sqrt(1.0 / float64(fanIn)))
-		for i := range p.Data {
-			p.Data[i] = float32(rand.NormFloat64()) * stdDev
-		}
+		log.Printf("🔥 Expert %d Weights Reset (Xavier Init) & Router Perturbed", expertIdx)
 	}
 
 	// Reset Router too: "If you must reset an expert's weights, you must also reset or slightly perturb the input projection weights of the gating network corresponding to that expert's index."
@@ -326,8 +348,6 @@ func (moe *MoELayer) ResetExpertWeights(expertIdx int) {
 			moe.GatingNetwork.Linear.Biases.Data[expertIdx] = 0
 		}
 	}
-
-	log.Printf("🔥 Expert %d Weights Reset (Xavier Init) & Router Perturbed", expertIdx)
 }
 
 // PerformSurgery blends weights from an alpha expert into a sink expert.
@@ -359,11 +379,29 @@ func (moe *MoELayer) PerformSurgery(alphaID, sinkID int) {
 		}
 
 		// Smooth blend: 80% alpha + 20% sink retains directional memory
+		var sum, sumSq float64
 		for j := range sinkParams[i].Data {
-			sinkParams[i].Data[j] = (0.8 * alphaParams[i].Data[j]) + (0.2 * sinkParams[i].Data[j])
+			alphaVal := alphaParams[i].Data[j]
+			sinkParams[i].Data[j] = (0.8 * alphaVal) + (0.2 * sinkParams[i].Data[j])
+			sum += float64(alphaVal)
+			sumSq += float64(alphaVal) * float64(alphaVal)
 		}
+
+		// Calculate stddev for proportional jitter magnitude
+		n := float64(len(alphaParams[i].Data))
+		mean := sum / n
+		variance := (sumSq / n) - (mean * mean)
+		if variance < 0 {
+			variance = 0
+		}
+		stdDev := float32(math.Sqrt(variance))
+		jitterMag := stdDev * 0.1 // 10% of standard deviation
+		if jitterMag < 1e-4 {
+			jitterMag = 1e-4 // minimum fallback
+		}
+
 		// Small jitter to break symmetry after the blend
-		sinkParams[i].ApplyJitter(0.01)
+		sinkParams[i].ApplyJitter(jitterMag)
 		sinkParams[i].ZeroGrad()
 	}
 }
@@ -926,16 +964,19 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 				}
 			}
 		} else {
+			workerLocalUtil := make([][]int, numWorkersRoute)
 			for w := 0; w < numWorkersRoute; w++ {
 				start := w * tokensPerWorkerRoute
 				end := min(start+tokensPerWorkerRoute, totalTokensRoute)
 				if start >= end {
 					break
 				}
+				workerLocalUtil[w] = make([]int, numExperts)
 
 				wgRoute.Add(1)
-				go func(tokenStart, tokenEnd int) {
+				go func(workerIdx, tokenStart, tokenEnd int) {
 					defer wgRoute.Done()
+					localUtil := workerLocalUtil[workerIdx]
 
 					for i := tokenStart; i < tokenEnd; i++ {
 						scores := scoresTensor.Data[i*numExperts : (i+1)*numExperts]
@@ -960,8 +1001,10 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 
 						moe.TopExpertIDs[i] = e1
 						selected := []int{e1}
+						localUtil[e1]++
 						if moe.K > 1 && e2 != -1 {
 							selected = append(selected, e2)
+							localUtil[e2]++
 						}
 						allSelectedExperts[i] = selected
 
@@ -981,9 +1024,21 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 							}
 						}
 					}
-				}(start, end)
+				}(w, start, end)
 			}
 			wgRoute.Wait()
+
+			// Aggregate thread-local utilization counters
+			if moe.AccumulatedUtilization == nil || len(moe.AccumulatedUtilization) != numExperts {
+				moe.AccumulatedUtilization = make([]int, numExperts)
+			}
+			for w := 0; w < numWorkersRoute; w++ {
+				if workerLocalUtil[w] != nil {
+					for j := 0; j < numExperts; j++ {
+						moe.AccumulatedUtilization[j] += workerLocalUtil[w][j]
+					}
+				}
+			}
 		}
 
 		// 🧬 STAGNATION RECOVERY (Training Only)
@@ -1110,12 +1165,7 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 				if len(moe.ExpertTokenIndices[expertIdx]) < capacity*2 { // permissive limit
 					tokenExpertRelativeIndices[i][j] = len(moe.ExpertTokenIndices[expertIdx])
 					moe.ExpertTokenIndices[expertIdx] = append(moe.ExpertTokenIndices[expertIdx], i)
-
-					// CRITICAL FIX: Track utilization for health monitoring and resets
-					if moe.AccumulatedUtilization == nil || len(moe.AccumulatedUtilization) != numExperts {
-						moe.AccumulatedUtilization = make([]int, numExperts)
-					}
-					moe.AccumulatedUtilization[expertIdx]++
+					// (Utilization is now tracked properly and aggregated from worker slices above)
 				}
 			}
 		}

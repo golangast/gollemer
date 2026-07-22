@@ -677,6 +677,16 @@ func (s *Supervisor) Reflect(stats TrainingStats, opt *nn.Adam, model *IntentMoE
 	}
 
 	if s.PlateauCount > 5 {
+		if model != nil {
+			// ROLLBACK CHECKPOINT
+			err := SaveIntentMoEModelToGOB(model, "data/models/gob_models/rollback_checkpoint.gob")
+			if err == nil {
+				log.Printf("💾 Saved safe rollback checkpoint before learning rate reduction.")
+			} else {
+				log.Printf("⚠️ Failed to save rollback checkpoint: %v", err)
+			}
+		}
+
 		newLR := opt.GetLearningRate() * 0.75
 		log.Printf("📉 Supervisor Reflect: Training plateaued for 5 steps. Reducing LR to %e\n", newLR)
 		opt.SetLearningRate(newLR)
@@ -833,8 +843,11 @@ func (s *Supervisor) ReflectSparse(stats TrainingStats, gater *SparseGater, lr *
 	}
 
 	if s.PlateauCount > 1000 {
+		// ROLLBACK CHECKPOINT
+		// For SparseModel we don't have a direct SaveGOB method reference here without the model,
+		// but since we only have LR we'll log it.
+		log.Printf("📉 Supervisor Reflect: Sparse training plateaued. Reducing LR")
 		*lr *= 0.9
-		log.Printf("📉 Supervisor Reflect: Sparse training plateaued. Reducing LR to %e\n", *lr)
 		s.PlateauCount = 0
 	}
 }

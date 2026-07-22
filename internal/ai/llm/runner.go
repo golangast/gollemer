@@ -14,6 +14,7 @@ import (
 	"github.com/golangast/gollemer/internal/ai/moe"
 	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
 	"github.com/golangast/gollemer/internal/ai/neural/nnu/word2vec"
+	"github.com/golangast/gollemer/internal/ai/neural/tokenizer"
 	"github.com/golangast/gollemer/internal/ai/orchestrator"
 	"github.com/golangast/gollemer/internal/platform/discovery"
 	"github.com/golangast/gollemer/internal/platform/sqlite_db"
@@ -36,6 +37,7 @@ type Runner struct {
 	InMenuMode     bool
 	Listen         bool
 	CartridgesFlag string
+	BPETok         *tokenizer.BPETokenizer // BPE tokenizer for ChatML-based inference
 }
 
 func NewRunner(talk bool, listen bool, cartridges string) (*Runner, error) {
@@ -59,10 +61,10 @@ func NewRunner(talk bool, listen bool, cartridges string) (*Runner, error) {
 	kb := LoadKnowledgeBase()
 
 	r := &Runner{
-		Mascot:      mascot,
-		ProjectRoot: projectRoot,
-		DB:          db,
-		KB:          kb,
+		Mascot:         mascot,
+		ProjectRoot:    projectRoot,
+		DB:             db,
+		KB:             kb,
 		Reader:         bufio.NewReader(os.Stdin),
 		Listen:         listen,
 		CartridgesFlag: cartridges,
@@ -86,6 +88,19 @@ func (r *Runner) Init() {
 		_ = os.Chdir(lastDir)
 	}
 
+	// Try to load BPE tokenizer for ChatML-based inference
+	bpePath := filepath.Join(r.ProjectRoot, "data/models/gob_models/bpe_tokenizer.gob")
+	if _, statErr := os.Stat(bpePath); statErr == nil {
+		if bpeTok, bpeErr := tokenizer.LoadBPETokenizer(bpePath); bpeErr == nil {
+			r.BPETok = bpeTok
+			log.Printf("✅ BPE Tokenizer loaded from %s (vocab=%d)", bpePath, bpeTok.Vocab.Size())
+		} else {
+			log.Printf("⚠️  Failed to load BPE Tokenizer from %s: %v", bpePath, bpeErr)
+		}
+	} else {
+		log.Printf("ℹ️  BPE Tokenizer not found at %s (run -train-bpe to create it)", bpePath)
+	}
+
 	r.initModels()
 
 	// Load social model if available (try checkpoint first, then raw GOB)
@@ -106,6 +121,7 @@ func (r *Runner) Init() {
 	// Wire up SentenceVocab for social model - ONLY if model doesn't have one
 	if socialModel != nil {
 		socialVocabCandidates := []string{
+			filepath.Join(r.ProjectRoot, "data/models/gob_models/bpe_vocabulary.gob"),
 			filepath.Join(r.ProjectRoot, "data/models/gob_models/social_vocabulary.gob"),
 			filepath.Join(r.ProjectRoot, "data/models/gob_models/moe_social_model_vocab.gob"),
 			filepath.Join(r.ProjectRoot, "data/models/gob_models/seq2seq_output_vocab.gob"),
@@ -148,20 +164,20 @@ func (r *Runner) Init() {
 		log.Printf("🛠️ Social MoE Architecture verified and repaired (Experts: %d)", len(r.findMoELayers(socialModel)[0].Experts))
 	}
 
-	// Initialize Intent Resolver
+	// Initialize Intent Resolver with BPE tokenizer
 	r.Client = &GollemerMoEClient{
-		KB:             r.KB, // CRITICAL: wire KB so ExtractEntities doesn't nil-panic
+		KB:             r.KB,
 		Model:          r.IntentModel,
 		SocialModel:    socialModel,
-		W2V:            r.W2V, // CRITICAL: wire W2V so getSentenceEmbedding doesn't nil-panic
+		W2V:            r.W2V,
 		CommandAnchors: map[string][]float64{},
 		Sessions:       NewSessionManager(),
 		SessionID:      "default",
+		BPETokenizer:   r.BPETok,
 	}
 
 	// 🧬 WIRE UP SOCIAL MODEL & CONFIG
 	if socialModel != nil {
-		// 🛡️ Apply Config from social_train.json
 		configPath := filepath.Join(r.ProjectRoot, "data/config/social_train.json")
 		safeCfg, err := orchestrator.NewSafeConfig(configPath)
 		if err == nil {
@@ -180,7 +196,6 @@ func (r *Runner) Init() {
 				log.Printf("🔀 Social Model Router Noise: %.2f", config.RouterNoise)
 			}
 
-			// Apply layer-specific settings
 			activeMoELayers := r.findMoELayers(socialModel)
 			for _, layer := range activeMoELayers {
 				if config.RouterTemperature > 0 {
@@ -206,9 +221,8 @@ func (r *Runner) Init() {
 			"MENU":           r.Client.getSentenceEmbedding("show the main menu with options"),
 		}
 	}
-	r.Client.LoadChatBank(filepath.Join(r.ProjectRoot, "data/training/trainingdata/conversing.csv"))
-	r.Client.LoadChatBank(filepath.Join(r.ProjectRoot, "data/training/trainingdata/conversations.csv"))
-	r.Client.LoadDeviceIntentsBank(filepath.Join(r.ProjectRoot, "data/training/trainingdata/device_intents.csv"))
+	// ChatBank loading removed. The neural MoE weights handle ALL
+	// responses — both conversational and code queries — directly.
 
 	r.Resolver = NewHybridIntentResolver(r.Client)
 
@@ -234,7 +248,6 @@ func (r *Runner) Init() {
 						expert := r.IntentModel.Supervisor.CartridgeMgr.Loaded[path]
 						r.IntentModel.Supervisor.CartridgeMgr.Unlock()
 
-						// Mount to output MoE
 						if r.IntentModel.Decoder != nil && r.IntentModel.Decoder.OutputMoE != nil {
 							_, err = r.IntentModel.Supervisor.MountCartridgeToLayer(r.IntentModel, len(r.IntentModel.Encoder.GetMoELayers()), expert)
 							if err != nil {
@@ -253,15 +266,12 @@ func (r *Runner) Init() {
 }
 
 func (r *Runner) initModels() {
-	// Try to load Word2Vec model
 	if r.KB.ModelConfig.Word2VecPath != "" {
 		loadedW2V, err := word2vec.LoadModel(r.KB.ModelConfig.Word2VecPath)
 		if err == nil {
 			r.W2V = loadedW2V
 		} else {
-			// Don't log as warning if it's likely just not trained yet
 			log.Printf("ℹ️  Word2Vec model not found at %s. Using basic fallback.", r.KB.ModelConfig.Word2VecPath)
-			// Create a default/dummy model
 			r.W2V = &word2vec.SimpleWord2Vec{
 				Vocabulary:  make(map[string]int),
 				VocabSize:   0,
@@ -277,14 +287,12 @@ func (r *Runner) initModels() {
 		}
 	}
 
-	vocabSize := 5000   // More sensible default for MoE architecture
-	embeddingDim := 768 // Match Transformer training
+	vocabSize := 5000
+	embeddingDim := 768
 	if r.W2V != nil {
 		vocabSize = r.W2V.VocabSize
-		// If W2V was loaded, it may be 64d but the model should still be 768d
 	}
 
-	// Try to load trained MoE model - prioritize the latest trained model or checkpoint
 	if r.KB.ModelConfig.MoEPath != "" {
 		paths := []string{
 			filepath.Join(r.ProjectRoot, "data/models/checkpoints/latest_periodic.gob"),
@@ -293,7 +301,6 @@ func (r *Runner) initModels() {
 			filepath.Join(r.ProjectRoot, r.KB.ModelConfig.MoEPath),
 		}
 
-		// Try to load primary intent model using the robust fallback loader
 		for _, p := range paths {
 			if _, err := os.Stat(p); err != nil {
 				continue
@@ -303,8 +310,6 @@ func (r *Runner) initModels() {
 				loaded.RepairArchitecture()
 				r.IntentModel = loaded
 				log.Printf("✅ Success: Loaded primary MoE model from: %s", filepath.Base(p))
-
-				// Weight health check
 				params := r.IntentModel.Parameters()
 				log.Printf("📊 Model Health Check: Loaded %d parameters.", len(params))
 				break
@@ -320,11 +325,11 @@ func (r *Runner) initModels() {
 		intentModel, err := moe.NewHybridIntentMoE(
 			vocabSize,
 			embeddingDim,
-			4,    // numExperts
-			100,  // parentVocabSize
-			100,  // childVocabSize
-			1000, // sentenceVocabSize
-			4,    // maxAttentionHeads
+			4,
+			100,
+			100,
+			1000,
+			4,
 			r.W2V,
 		)
 		if err == nil {
@@ -335,11 +340,8 @@ func (r *Runner) initModels() {
 	}
 
 	if r.IntentModel != nil && r.IntentModel.SentenceVocab == nil {
-		// Priority order for vocab loading:
-		// 1. seq2seq_output_vocab.gob  — saved by TrainChat/TrainSocialChat (chat-trained)
-		// 2. semantic_output_vocabulary.gob — saved by main intent training (WikiQA/intent)
-		// 3. Tiny fallback built from W2V vocabulary
 		vocabCandidates := []string{
+			filepath.Join(r.ProjectRoot, "data/models/gob_models/bpe_vocabulary.gob"),
 			filepath.Join(r.ProjectRoot, "data/models/gob_models/social_vocabulary.gob"),
 			filepath.Join(r.ProjectRoot, "data/models/gob_models/seq2seq_output_vocab.gob"),
 			filepath.Join(r.ProjectRoot, r.KB.ModelConfig.SemanticVocabPath),
@@ -359,7 +361,6 @@ func (r *Runner) initModels() {
 			}
 		}
 		if !loaded {
-			// CHECK IF THE MODEL ITSELF HAS A VOCAB BEFORE FALLBACK
 			if r.IntentModel != nil && r.IntentModel.SentenceVocab != nil && r.IntentModel.SentenceVocab.Size() > 10 {
 				log.Printf("✅ Using SentenceVocab embedded in the model (size=%d)", r.IntentModel.SentenceVocab.Size())
 				return
@@ -379,7 +380,6 @@ func (r *Runner) initModels() {
 			}
 			r.IntentModel.SentenceVocab = v
 
-			// Only show warning if we don't have a social model to rely on
 			if r.Client != nil && r.Client.SocialModel == nil {
 				log.Printf("⚠️  Using fallback SentenceVocab built from W2V (size=%d). Run -train-chat to generate a proper vocab.", v.Size())
 			} else {
@@ -395,7 +395,6 @@ func (r *Runner) Run() {
 
 	initialMsg := discovery.GetExpertAdvice(projectCtx)
 	if initialMsg == "Ready to code! What's the focus for this session?" {
-		// Suppress redundant greeting if we already did WelcomeSequence
 		initialMsg = ""
 	}
 	if initialMsg != "" {
@@ -404,7 +403,6 @@ func (r *Runner) Run() {
 
 	inputChan := make(chan string)
 
-	// Goroutine for keyboard input
 	go func() {
 		for {
 			query, err := r.Reader.ReadString('\n')
@@ -416,7 +414,6 @@ func (r *Runner) Run() {
 		}
 	}()
 
-	// Goroutine for voice input
 	if r.Listen {
 		importCtx := context.Background()
 		go StartVoiceListener(importCtx, inputChan)
@@ -430,7 +427,6 @@ func (r *Runner) Run() {
 			continue
 		}
 
-		// Periodic Proactive Scan
 		if discovery.QuickCheck(".", lastDirState) {
 			newCtx := discovery.ScanProject()
 			if newCtx.IsGollemer != projectCtx.IsGollemer || newCtx.HasModel != projectCtx.HasModel {
@@ -452,13 +448,11 @@ func (r *Runner) Run() {
 
 		query = strings.TrimSpace(query)
 
-		// Convert voice commands like TURN_ON_LIGHTS to "turn on lights"
 		if strings.Contains(query, "_") && strings.ToUpper(query) == query {
 			query = strings.ToLower(strings.ReplaceAll(query, "_", " "))
 			fmt.Printf("\n🗣️  Voice Command: %s\n", query)
 		}
 
-		// --- Strip Mascot Prefix if present (e.g., copied from logs or mimicry) ---
 		if strings.HasPrefix(query, "/") && strings.Contains(query, "/ >") {
 			parts := strings.SplitN(query, "/ >", 2)
 			if len(parts) == 2 {
@@ -473,12 +467,7 @@ func (r *Runner) Run() {
 		r.CommandHistory = append(r.CommandHistory, query)
 		MuteVoice()
 		r.handleInput(query)
-		// Keep muted for 2 extra seconds after response so speaker audio fully decays
 		time.AfterFunc(3*time.Second, UnmuteVoice)
-		// go func() {
-		// 	time.Sleep(2 * time.Second)
-		// 	UnmuteVoice()
-		// }()
 	}
 }
 

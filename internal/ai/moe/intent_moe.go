@@ -288,6 +288,23 @@ func (m *IntentMoE) PredictNext(input *tensor.Tensor, k int, temp float32) (int,
 	return idx, confidence, nil
 }
 
+// PredictNextToken wraps PredictNext for autoregressive LLM loops
+func (m *IntentMoE) PredictNextToken(currentSequence []int) int {
+	inputData := make([]float32, len(currentSequence))
+	for i, id := range currentSequence {
+		inputData[i] = float32(id)
+	}
+	inputTensor := tensor.NewTensor([]int{1, len(currentSequence)}, inputData, false)
+	idx, _, err := m.PredictNext(inputTensor, 5, 0.8) // TopK 5, Temp 0.8
+	if err != nil {
+		if m.SentenceVocab != nil && m.SentenceVocab.EosID > 0 {
+			return m.SentenceVocab.EosID
+		}
+		return 0
+	}
+	return idx
+}
+
 // CalculateAccuracy evaluates the model on a dataset for Top-K precision.
 func (m *IntentMoE) CalculateAccuracy(inputs []*tensor.Tensor, targets []*tensor.Tensor, k int) float32 {
 	correct := 0

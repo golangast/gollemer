@@ -226,6 +226,13 @@ skipCSV:
 	tmpVocab.AddToken("ques")
 	tmpVocab.AddToken("ans")
 	tmpVocab.AddToken("intent")
+	// ChatML control tokens for unified coding+conversation training
+	tmpVocab.AddToken("<|im_start|>")
+	tmpVocab.AddToken("<|im_end|>")
+	tmpVocab.AddToken("user")
+	tmpVocab.AddToken("assistant")
+	tmpVocab.AddToken("system")
+	tmpVocab.AddToken("\n")
 	for _, pair := range chatPairs {
 		if pair.Intent != "" {
 			tmpVocab.AddToken(strings.ToLower(pair.Intent))
@@ -488,12 +495,20 @@ skipCSV:
 		intentModel.SentenceVocab.EosID = intentModel.SentenceVocab.GetTokenID("</s>")
 
 		// Add structural markers
+		// Add structural markers
 		intentModel.SentenceVocab.AddToken("[")
 		intentModel.SentenceVocab.AddToken("]")
 		intentModel.SentenceVocab.AddToken(":")
 		intentModel.SentenceVocab.AddToken("ques")
 		intentModel.SentenceVocab.AddToken("ans")
 		intentModel.SentenceVocab.AddToken("intent")
+		// ChatML control tokens
+		intentModel.SentenceVocab.AddToken("<|im_start|>")
+		intentModel.SentenceVocab.AddToken("<|im_end|>")
+		intentModel.SentenceVocab.AddToken("user")
+		intentModel.SentenceVocab.AddToken("assistant")
+		intentModel.SentenceVocab.AddToken("system")
+		intentModel.SentenceVocab.AddToken("\n")
 	}
 
 	// Add EVERY word and intent from the training data to the SentenceVocab
@@ -4074,7 +4089,7 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 				}
 				// CRITICAL: Detach graph after each test to prevent memory accumulation
 				intentModel.Detach()
-				
+
 				for _, att := range atts {
 					if att != nil {
 						att.Release()
