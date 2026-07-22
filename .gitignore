@@ -48,3 +48,4 @@ docker-compose.yml
 prometheus.yml
 wgpu-linux-x86_64-release.zip
 wgpu-native-meta/
+.fuse_hidden*
