@@ -56,3 +56,11 @@ wgpu-native-meta/
 dataset/
 build_whisper/
 video/
+
+# Ignore massive models and binaries
+*.gob
+gob_models/
+.build/
+train_moe
+multi_orchestrator
+gollemer-train
