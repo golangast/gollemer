@@ -65,11 +65,7 @@ func (ic *IntentClassifier) Classify(query string) IntentType {
 	}
 
 	// Check for modify_code intent
-	if containsAny(query, []string{"modify", "update", "change", "refactor"}) &&
-		containsAny(query, []string{
-			"code", "component", "service", "api", "handler",
-			"webserver", "server", "middleware", "controller",
-		}) {
+	if containsAny(query, []string{"modify", "update", "change", "refactor", "fix", "repair", "gofix", "debug"}) {
 		return IntentModifyCode
 	}
 

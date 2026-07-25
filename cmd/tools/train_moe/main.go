@@ -1035,7 +1035,7 @@ func main() {
 	debug.SetGCPercent(20)
 
 	const word2vecModelPath = "data/models/gob_models/word2vec_model.gob"
-	const semanticTrainingDataPath = "./data/training/tiny_chat.json"
+	var semanticTrainingDataPath = "./data/training/tiny_chat.json"
 
 	// Seed random number generator
 	rand.Seed(time.Now().UnixNano())
@@ -1069,8 +1069,33 @@ func main() {
 	dataFile := flag.String("data", "", "Path to custom training dataset (CSV/JSON/TXT) for targeted training")
 	piMode := flag.Bool("pi", false, "Pi 3B mode: constrains RAM to 600 MB, sets batch=1, acc=16, experts=4 for 900 MB RAM devices")
 	cartridgesFlag := flag.String("cartridges", "", "Comma-separated list of expert cartridge .gob files to permanently load at startup")
+	trainMoE := flag.Bool("train-moe", false, "Train MoE intent model on custom or default dataset")
+	outPath := flag.String("out", "", "Output path to save trained MoE model checkpoint or cartridge")
+	cpuProfile := flag.String("cpuprofile", "", "Write CPU profile to file")
 
 	flag.Parse()
+
+	if *cpuProfile != "" {
+		f, err := os.Create(*cpuProfile)
+		if err != nil {
+			log.Fatalf("could not create CPU profile: %v", err)
+		}
+		if err := pprof.StartCPUProfile(f); err != nil {
+			log.Fatalf("could not start CPU profile: %v", err)
+		}
+		defer pprof.StopCPUProfile()
+
+		// Flush profile on exit/signals
+		sigChanProfile := make(chan os.Signal, 1)
+		signal.Notify(sigChanProfile, os.Interrupt, syscall.SIGTERM)
+		go func() {
+			<-sigChanProfile
+			log.Println("[!] Interrupt received. Flushing CPU profile...")
+			pprof.StopCPUProfile()
+			f.Close()
+			os.Exit(130)
+		}()
+	}
 
 	// --llm: launch interactive inference mode and exit
 	if *runLLM {
@@ -1122,7 +1147,7 @@ func main() {
 		return
 	}
 
-	if *piMode {
+	if *piMode && !*trainMoE {
 		log.Println("🥧 Pi mode selected but no task specified. Defaulting to interactive LLM mode (-llm).")
 		llm.RunLLM(*talk, *listen, *cartridgesFlag)
 		return
@@ -1135,12 +1160,19 @@ func main() {
 		learningRate = float32(*flagLR)
 	}
 	batchSize := *flagBatchSize // Respect user flag to avoid OOM
+	if batchSize <= 0 {
+		batchSize = 8
+	}
 	semanticOutputVocabularySavePath := "data/models/gob_models/semantic_output_vocabulary.gob"
 
 	// Load Word2Vec model
 	word2vecModel, err := word2vec.LoadModel(word2vecModelPath)
 	if err != nil {
 		log.Fatalf("Failed to load Word2Vec model: %v", err)
+	}
+
+	if *dataFile != "" {
+		semanticTrainingDataPath = *dataFile
 	}
 
 	// Load Intent training data
@@ -1217,7 +1249,10 @@ func main() {
 	semanticOutputVocabSize := len(semanticOutputVocabulary.WordToToken)
 	embeddingDim := word2vecModel.VectorSize // Match Word2Vec dimension
 	numExperts := *flagNumExperts            // Used from flag
-	maxSequenceLength := 50                  // Reduced to 50
+	if numExperts <= 0 {
+		numExperts = 8
+	}
+	maxSequenceLength := 50 // Reduced to 50
 
 	log.Printf("Query Vocabulary Size: %d", inputVocabSize)
 	log.Printf("Semantic Output Vocabulary Size: %d", semanticOutputVocabSize)
@@ -1229,6 +1264,9 @@ func main() {
 	var intentMoEModel *moe.IntentMoE // Declare intentMoEModel here
 
 	modelSavePath := "data/models/gob_models/moe_classification_model.gob"
+	if outPath != nil && *outPath != "" {
+		modelSavePath = *outPath
+	}
 
 	// Try to load existing model first
 	if _, err := os.Stat(modelSavePath); err == nil {

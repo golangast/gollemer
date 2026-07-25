@@ -627,6 +627,35 @@ func (s *Supervisor) TriageCartridge(query string, queryEmbedding []float32) str
 	return "" // No cartridge matched
 }
 
+// TriageCartridgesMulti performs multi-expert triage scanning for all matching cartridges in a user query.
+func (s *Supervisor) TriageCartridgesMulti(query string, queryEmbedding []float32) []string {
+	queryLower := strings.ToLower(query)
+	var matches []string
+	seen := make(map[string]bool)
+
+	// Pass 1: Regex/Keyword Map (Zero Latency Multi-Match)
+	for keyword, namespace := range s.KeywordMap {
+		if strings.Contains(queryLower, keyword) {
+			if !seen[namespace] {
+				seen[namespace] = true
+				matches = append(matches, namespace)
+			}
+		}
+	}
+
+	if len(matches) > 0 {
+		return matches
+	}
+
+	// Pass 2 fallback
+	single := s.TriageCartridge(query, queryEmbedding)
+	if single != "" {
+		return []string{single}
+	}
+
+	return nil
+}
+
 // Reflect nudges variables (LR, Noise, Temperature) based on training stats.
 func (s *Supervisor) Reflect(stats TrainingStats, opt *nn.Adam, model *IntentMoE) {
 	// 0. Jump Start Recovery (The "Heat" nudge)

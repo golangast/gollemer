@@ -173,6 +173,10 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 	for _, tok := range []string{"__ques__", "__ans__", "__intent__", "social", "computer", ":"} {
 		tmpVocab.AddToken(tok)
 	}
+	// Add code syntax tokens so the model can generate Go code.
+	for _, tok := range []string{"{", "}", "(", ")", "=", ":", ";", ".", ",", "!", "?", "nil", "err", "if", "else", "for", "range", "return", "func", "type", "struct", "int", "string", "bool", "float64", "true", "false", "package", "import", "var", "const", "make", "new", "len", "cap", "append", "fmt", "Println", "Sprintf", "Errorf", "error", "interface{}"} {
+		tmpVocab.AddToken(tok)
+	}
 	for _, pair := range append(socialPairs, computerPairs...) {
 		for _, t := range cleanTokenize(pair.Q + " " + pair.A) {
 			tmpVocab.AddToken(t)
@@ -266,8 +270,18 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 	lossWeights := buildDefaultLossWeights(intentModel.SentenceVocab, &cfg)
 
 	currentPhase := 1
-	consecutiveHighSVC := 0
 	phase2Epochs := 0
+
+	// ── Phase 1 learning rate scheduler state ────────────────────────────────
+	var phase1BestLoss float32 = 1e9
+	var phase1StagnantEpochs int
+	var phase1LRFactor float32 = 1.0
+	const phase1LRDecayPatience = 10
+	const phase1LRImprovementThreshold = 0.05
+
+	// Sliding window for Phase 1 probe pass/fail (relaxed gating)
+	const probeWindowSize = 5
+	probeWindow := make([]bool, 0, probeWindowSize)
 
 	// Ensure correct freeze state before epoch 0
 	phaseCfg := cfg.Phases[strconv.Itoa(currentPhase)]
@@ -303,6 +317,11 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 			layer.LoadBalancingWeight = phaseCfg.LoadBalancingWeight
 			layer.RouterTemperature = phaseCfg.RouterTemperature
 			layer.ExpertDropoutRate = phaseCfg.ExpertDropout
+			if cfg.CapacityFactor > 0 {
+				layer.CapacityFactor = cfg.CapacityFactor
+			} else {
+				layer.CapacityFactor = 2.0
+			}
 			// Force single expert during cold start epochs
 			if phaseCfg.ForceSingleExpertEpochs > 0 && epoch < phaseCfg.ForceSingleExpertEpochs {
 				layer.ForceSingleExpert = true
@@ -559,11 +578,36 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 			log.Printf("Active Experts: [%s]", strings.Join(activeExps, ", "))
 		}
 
+		// ── Phase 1: LR scheduler (reduce on stagnation) ──────────────────────
+		if currentPhase == 1 {
+			// Track best loss and detect stagnation
+			if avgLoss < phase1BestLoss-phase1LRImprovementThreshold {
+				phase1BestLoss = avgLoss
+				phase1StagnantEpochs = 0
+			} else {
+				phase1StagnantEpochs++
+			}
+
+			// If loss has been stagnant for patience epochs, halve the LR factor
+			if phase1StagnantEpochs >= phase1LRDecayPatience && phase1LRFactor > 0.03125 {
+				phase1LRFactor *= 0.5
+				phase1StagnantEpochs = 0
+				log.Printf("🔻 Phase 1 loss stagnant for %d epochs → reducing LR factor to %.4f (effective LR: %.6f)",
+					phase1LRDecayPatience, phase1LRFactor, phaseCfg.LearningRate*phase1LRFactor)
+			}
+
+			// Apply the LR factor on top of the base phase LR
+			effectiveLR := phaseCfg.LearningRate * phase1LRFactor
+			optimizer.SetLearningRate(effectiveLR)
+		}
+
 		// ── Phase transition logic ─────────────────────────────────────────────
 		switch currentPhase {
 		case 1:
+			// Use low-temperature probe (greedy decoding) for evaluation
+			// to test the model's argmax knowledge rather than noisy sampling.
 			testPrompt := "__intent__ social : __ques__ how are you"
-			gen, _, atts := StrictGenerate(intentModel, testPrompt, 15, 1.3, false, epoch)
+			gen, _, atts := StrictGenerateLowTemp(intentModel, testPrompt, 15, 1.3, false, epoch)
 
 			// Subject index in prompt
 			pToks := cleanTokenize(testPrompt)
@@ -601,25 +645,31 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 				avgAtt = sumAtt / float32(numHeads)
 			}
 
-			log.Printf("🧪 Phase1 test: '%s' → SVC=%.4f coherent=%v", gen, avgAtt, svcIsCoherent(gen))
+			probePassed := avgAtt > 0.05 && svcIsCoherent(gen)
+			log.Printf("🧪 Phase1 test: '%s' → SVC=%.4f coherent=%v pass=%v", gen, avgAtt, svcIsCoherent(gen), probePassed)
 
-			// Only count as a pass when BOTH the attention threshold AND
-			// the coherence guard pass — prevents SALAD from tripping the gate.
-			if avgAtt > 0.05 && svcIsCoherent(gen) {
-				consecutiveHighSVC++
-				log.Printf("✅ SVC > 0.0500 + coherent (%d/3)", consecutiveHighSVC)
-				if consecutiveHighSVC >= 3 {
-					log.Printf("🚀 Phase 1 complete → advancing to Phase 2 (Cartridge Ingestion)")
-					currentPhase = 2
-					consecutiveHighSVC = 0
-					nextPhaseCfg := cfg.Phases["2"]
-					if nextPhaseCfg != nil {
-						applyPhaseFreeze(layers, nextPhaseCfg.FreezeExpertsStart, nextPhaseCfg.FreezeExpertsEnd)
-					}
-					moe.SaveIntentMoEModelToGOB(intentModel, socialModelPath)
+			// Sliding window gating: track last 5 probe results, advance if >= 3 pass
+			probeWindow = append(probeWindow, probePassed)
+			if len(probeWindow) > probeWindowSize {
+				probeWindow = probeWindow[1:]
+			}
+
+			passCount := 0
+			for _, p := range probeWindow {
+				if p {
+					passCount++
 				}
-			} else {
-				consecutiveHighSVC = 0
+			}
+			log.Printf("📊 Phase1 probe window: %d/%d passes (window: %v)", passCount, len(probeWindow), probeWindow)
+
+			if passCount >= 3 {
+				log.Printf("🚀 Phase 1 complete (%d/5 in window) → advancing to Phase 2 (Cartridge Ingestion)", passCount)
+				currentPhase = 2
+				nextPhaseCfg := cfg.Phases["2"]
+				if nextPhaseCfg != nil {
+					applyPhaseFreeze(layers, nextPhaseCfg.FreezeExpertsStart, nextPhaseCfg.FreezeExpertsEnd)
+				}
+				moe.SaveIntentMoEModelToGOB(intentModel, socialModelPath)
 			}
 
 		case 2:
@@ -646,6 +696,7 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 
 // buildDefaultLossWeights builds a flat weight vector for WeightedCrossEntropy.
 // High-frequency stop-words are down-weighted; BOS/EOS/terminal punctuation are boosted.
+// For code-syntax tokens delimiters and structural Go keywords get higher weight.
 func buildDefaultLossWeights(vocab *mainvocab.Vocabulary, cfg *orchestrator.TrainingConfig) []float32 {
 	if vocab == nil {
 		return nil
@@ -678,5 +729,45 @@ func buildDefaultLossWeights(vocab *mainvocab.Vocabulary, cfg *orchestrator.Trai
 			}
 		}
 	}
+	// Always boost Go code syntax tokens for code-fix datasets.
+	codeSyntaxBoosted := []string{"{", "}", "(", ")", "=", ":", ";", "if", "else", "for", "range", "func", "return", "package", "type", "struct", "err", "nil", ":= ", "==", "!="}
+	for _, w := range codeSyntaxBoosted {
+		id := vocab.GetTokenID(w)
+		if id >= 0 && id < len(weights) {
+			weights[id] = 3.0
+		}
+	}
 	return weights
+}
+
+// codePassCondition evaluates a generated response for code-fix datasets.
+// It returns true if:
+//  1. The response is a non-empty string.
+//  2. Balanced braces { } and parentheses ( ) — same number of opening and closing.
+//  3. Contains at least one Go structural keyword (func, if, for, range, return, package, type, struct, var, const, import, make, append, import, defer, go, select, switch, case, break, continue, fallthrough, else).
+//
+// This replaces the natural-language svcIsCoherent check when training on code datasets.
+func codePassCondition(response string) bool {
+	response = strings.TrimSpace(response)
+	if response == "" {
+		return false
+	}
+	openBrace := strings.Count(response, "{")
+	closeBrace := strings.Count(response, "}")
+	if openBrace != closeBrace {
+		return false
+	}
+	openParen := strings.Count(response, "(")
+	closeParen := strings.Count(response, ")")
+	if openParen != closeParen {
+		return false
+	}
+	goKeywords := []string{"func ", "if ", "for ", "range ", "return ", "package ", "type ", "struct ", "var ", "const ", "import ", "make(", "append(", "defer ", "go ", "select {", "switch ", "case ", "break ", "continue ", "fallthrough ", "else ", "err ", "nil", "error", "interface", "map[", "[]", "chan ", "wg.", "http.", "fmt.", "json.", "io.", "os.", "ioutil."}
+	lower := strings.ToLower(response)
+	for _, kw := range goKeywords {
+		if strings.Contains(lower, kw) {
+			return true
+		}
+	}
+	return false
 }

@@ -1,0 +1,13 @@
+[
+  {
+    "query": "add handler internal_api with database connection",
+    "semantic_output": {
+      "intent": "add_handler",
+      "entities": {
+        "component": "internal_api"
+      },
+      "code_snippet": "func internal_api(w http.ResponseWriter, r *http.Request) {\n\tdb, err := sql.Open(\"postgres\", \"...\")\n\tif err != nil { log.Fatal(err) }\n\tdefer db.Close()\n\tw.Write([]byte(\"ok\"))\n}"
+    },
+    "flat_output": "[INTENT:add_handler] [ENT:component=internal_api]"
+  }
+]

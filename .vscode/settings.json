@@ -1,3 +1,5 @@
 {
-    "makefile.configureOnOpen": false
+    "makefile.configureOnOpen": false,
+    "languageServerExample.trace.server": "verbose",
+    "gollemer.lsp.path": "/home/zendrulat/g/gollemer/bin/gollemer-lsp"
 }

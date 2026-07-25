@@ -497,12 +497,15 @@ func fillAddHandler(entities map[string]string) SemanticOutput {
 		handlerName = entities["name"]
 	}
 	if handlerName == "" {
+		handlerName = entities["component"]
+	}
+	if handlerName == "" {
 		handlerName = "jim"
 	}
 
 	url := entities["url"]
 	if url == "" {
-		url = "/jim"
+		url = "/" + handlerName
 	}
 
 	properties := map[string]any{

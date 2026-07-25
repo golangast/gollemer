@@ -17,7 +17,22 @@ MAIN_CMD     = go run cmd/tools/train_moe/main.go
 
 .PHONY: train train-fresh train-social chat clean clean-all help dashboard \
         build-pi build-pi64 pi pi-social pi-chat pi-llm \
-        pi-social-master pi-social-worker pi-chat-master pi-chat-worker
+        pi-social-master pi-social-worker pi-chat-master pi-chat-worker \
+        build-all install-hooks
+
+## build-all: Cross-compile gollemer CLI for Linux (amd64, arm64) and macOS (darwin-amd64, darwin-arm64)
+build-all:
+	@echo "🔨 Cross-compiling gollemer binaries for Linux and macOS..."
+	@mkdir -p .build/dist
+	GOEXPERIMENT= CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o .build/dist/gollemer-linux-amd64 ./cmd/gollemer
+	GOEXPERIMENT= CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o .build/dist/gollemer-linux-arm64 ./cmd/gollemer
+	GOEXPERIMENT= CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o .build/dist/gollemer-darwin-amd64 ./cmd/gollemer
+	GOEXPERIMENT= CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -o .build/dist/gollemer-darwin-arm64 ./cmd/gollemer
+	@echo "✅ Cross-compilation complete! Binaries saved in .build/dist/"
+
+## install-hooks: Install Gollemer Git pre-commit validation hook
+install-hooks:
+	@bash scripts/install_git_hook.sh
 
 # --- Training ---
 

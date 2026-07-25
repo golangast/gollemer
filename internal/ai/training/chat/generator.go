@@ -12,6 +12,216 @@ import (
 	"github.com/golangast/gollemer/internal/ai/neural/tensor"
 )
 
+// StrictGenerateLowTemp is a near-argmax variant of StrictGenerate for evaluation probes.
+// Uses temperature=0.1 and topK=5 to produce greedy-almost deterministic output,
+// testing the model's actual argmax knowledge rather than noisy random token samples.
+func StrictGenerateLowTemp(model *moe.IntentMoE, input string, maxLen int, repetitionPenalty float32, verbose bool, epoch int) (string, string, []*tensor.Tensor) {
+	model.SetParamsRequiresGrad(false)
+
+	oldTemps := make(map[*moe.MoELayer]float32)
+	for _, layer := range moe.ActiveLayers {
+		layer.SetMode(true)
+		oldTemps[layer] = layer.RouterTemperature
+		layer.RouterTemperature = 0.7
+	}
+	if model.Decoder.OutputMoE != nil {
+		model.Decoder.OutputMoE.SetMode(true)
+		oldTemps[model.Decoder.OutputMoE] = model.Decoder.OutputMoE.RouterTemperature
+		model.Decoder.OutputMoE.RouterTemperature = 0.7
+	}
+
+	defer func() {
+		model.SetParamsRequiresGrad(true)
+		for layer, temp := range oldTemps {
+			layer.SetMode(true)
+			layer.RouterTemperature = temp
+		}
+		if model.Decoder.OutputMoE != nil {
+			model.Decoder.OutputMoE.SetMode(true)
+			model.Decoder.OutputMoE.RouterTemperature = oldTemps[model.Decoder.OutputMoE]
+		}
+	}()
+
+	formattedInput := input
+	tokens := cleanTokenize(formattedInput)
+	if len(tokens) == 0 {
+		log.Printf(" Skip empty prompt: %s", input)
+		return "", "", nil
+	}
+	inputIDs := make([]float32, len(tokens))
+	for i, t := range tokens {
+		inputIDs[i] = float32(lookupVocab(t, model.SentenceVocab))
+	}
+	inputTensor := tensor.NewTensor([]int{1, len(inputIDs)}, inputIDs, false)
+
+	ctx, err := model.EncoderForward(inputTensor, nil)
+	if err != nil {
+		log.Printf("StrictGenerateLowTemp Error (EncoderForward): %v", err)
+		return "", "", nil
+	}
+
+	if ctx.Shape[1] == 0 {
+		log.Printf("StrictGenerateLowTemp Error: encoder produced empty sequence")
+		return "", "", nil
+	}
+
+	batchSize := 1
+	hiddenSize := model.Decoder.LSTM.HiddenSize
+	hiddenState, err := ctx.Mean(1)
+	if err != nil {
+		log.Printf("StrictGenerateLowTemp Error (Initial Hidden Mean): %v", err)
+		return "", "", nil
+	}
+	hiddenState, _ = hiddenState.Reshape([]int{batchSize, ctx.Shape[2]})
+	if hiddenState.Shape[1] != hiddenSize {
+		if hiddenState.Shape[1] > hiddenSize {
+			hiddenState, _ = hiddenState.Slice(1, 0, hiddenSize)
+		} else {
+			padding := tensor.NewTensor([]int{batchSize, hiddenSize - hiddenState.Shape[1]}, make([]float32, batchSize*(hiddenSize-hiddenState.Shape[1])), false)
+			hiddenState, _ = tensor.Concat([]*tensor.Tensor{hiddenState, padding}, 1)
+		}
+	}
+	cellState := tensor.NewTensor([]int{batchSize, hiddenSize}, make([]float32, batchSize*hiddenSize), false)
+
+	resIDs := []int{model.SentenceVocab.BosID}
+	currentTokenID := model.SentenceVocab.BosID
+	counts := make(map[int]int)
+	var pathSteps []string
+	var allAtts []*tensor.Tensor
+	lastPunctStep := -10
+
+	const genTemp = float32(0.0) // greedy/argmax for deterministic probe evaluation
+
+	for i := 0; i < maxLen; i++ {
+		inputT := tensor.NewTensor([]int{1, 1}, []float32{float32(currentTokenID)}, false)
+		logits, nextHidden, nextCell, expertIDs, attWeights, err := model.Decoder.DecodeStepWithExpert(inputT, hiddenState, cellState, ctx, i)
+		if err != nil {
+			log.Printf("StrictGenerateLowTemp Error (DecodeStep): %v", err)
+			break
+		}
+		hiddenState = nextHidden
+		cellState = nextCell
+		if attWeights != nil {
+			allAtts = append(allAtts, attWeights)
+		}
+
+		var stepExperts []string
+		for _, eid := range expertIDs {
+			label := fmt.Sprintf("E%d", eid)
+			stepExperts = append(stepExperts, label)
+		}
+		expertStr := strings.Join(stepExperts, "+")
+		pathSteps = append(pathSteps, expertStr)
+
+		if i == 0 {
+			logits.Data[model.SentenceVocab.EosID] = -1e9
+		}
+		specialTokens := []string{"__intent__", "__ques__", "__ans__", "social", ":"}
+		for _, st := range specialTokens {
+			id := model.SentenceVocab.GetTokenID(st)
+			if id != -1 && id < len(logits.Data) {
+				logits.Data[id] = -1e9
+			}
+		}
+
+		applyGrammarMask(logits, resIDs, model.SentenceVocab)
+
+		consecutivePunct := 0
+		for j := len(resIDs) - 1; j >= 0; j-- {
+			w := model.SentenceVocab.GetWord(resIDs[j])
+			if w == "." || w == "," || w == "!" || w == "?" || w == ";" || w == ":" {
+				consecutivePunct++
+			} else {
+				break
+			}
+		}
+		punctPenalty := float32(5.0)
+		if consecutivePunct > 1 {
+			punctPenalty = 10.0
+		}
+		if i-lastPunctStep < 4 || consecutivePunct > 1 {
+			punctuation := []string{".", ",", "!", "?", ";", ":"}
+			for _, p := range punctuation {
+				id := model.SentenceVocab.GetTokenID(p)
+				if id != -1 && id < len(logits.Data) {
+					logits.Data[id] -= punctPenalty
+				}
+			}
+		}
+
+		if len(resIDs) >= 3 {
+			fourgrams := make(map[[3]int]int)
+			for j := 0; j+2 < len(resIDs); j++ {
+				key := [3]int{resIDs[j], resIDs[j+1], resIDs[j+2]}
+				fourgrams[key]++
+			}
+			tailKey := [3]int{resIDs[len(resIDs)-3], resIDs[len(resIDs)-2], resIDs[len(resIDs)-1]}
+			if fourgrams[tailKey] >= 2 {
+				for candidateID := range logits.Data {
+					logits.Data[candidateID] -= 15.0
+				}
+			}
+		}
+
+		moe.ApplyRepetitionPenalty(logits, resIDs, repetitionPenalty)
+		logits.Data[model.SentenceVocab.PaddingTokenID] = -1e9
+		if unkID := model.SentenceVocab.GetTokenID("UNK"); unkID != -1 {
+			logits.Data[unkID] = -1e9
+		}
+
+		// Greedy argmax decoding: pick the single highest-logit token with no randomness.
+		// Temperature 0.0 means zero exploration — pure evaluation.
+		if genTemp > 0 {
+			ApplyTemperature(logits.Data, genTemp)
+		}
+		bestID := 0
+		maxLogit := float32(-1e9)
+		for tokenID, logitValue := range logits.Data {
+			if logitValue > maxLogit {
+				maxLogit = logitValue
+				bestID = tokenID
+			}
+		}
+
+		probs := tensor.Softmax(logits)
+		if bestID == model.SentenceVocab.EosID {
+			probs.Release()
+			logits.Release()
+			inputT.Release()
+			break
+		}
+
+		resIDs = append(resIDs, bestID)
+		counts[bestID]++
+		currentTokenID = bestID
+
+		word := model.SentenceVocab.GetWord(bestID)
+		if word == "." || word == "," || word == "!" || word == "?" {
+			lastPunctStep = i
+		}
+
+		probs.Release()
+		logits.Release()
+		inputT.Release()
+	}
+
+	result := ""
+	for i, id := range resIDs {
+		if i == 0 {
+			continue
+		}
+		result += model.SentenceVocab.GetWord(id) + " "
+	}
+
+	inputTensor.Release()
+	hiddenState.Release()
+	cellState.Release()
+	ctx.Release()
+	model.ClearState()
+
+	return strings.TrimSpace(result), strings.Join(pathSteps, " -> "), allAtts
+}
+
 func StrictGenerate(model *moe.IntentMoE, input string, maxLen int, repetitionPenalty float32, verbose bool, epoch int) (string, string, []*tensor.Tensor) {
 	// 1. Diagnostics: We keep Training=true for MoE layers during tests
 	// to see the REAL routing behavior (noise, dropout, penalties).

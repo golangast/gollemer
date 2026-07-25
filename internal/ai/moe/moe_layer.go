@@ -579,7 +579,10 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 
 	// Add standard normal or Gumbel noise to logits to encourage exploration
 	if moe.Training {
-		explorationFactor := float32(0.05)
+		explorationFactor := RouterNoiseFactor
+		if explorationFactor <= 0 {
+			explorationFactor = 0.05
+		}
 		for i := range gateLogits.Data {
 			gateLogits.Data[i] += float32(rand.NormFloat64()) * explorationFactor
 		}
@@ -1335,7 +1338,10 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 
 			// Combine them (stLoss, divLoss, and routerDivLoss)
 			// User request: enforce uniform distribution across experts using auxiliary loss with alpha 0.1 or 0.2
-			alpha := float32(0.2)
+			alpha := moe.LoadBalancingWeight
+			if alpha <= 0 {
+				alpha = 0.1 // Default fallback weight if not set
+			}
 			moe.LoadBalancingLoss = alpha * stLoss
 		} else {
 			moe.LoadBalancingLoss = 0
@@ -1691,9 +1697,8 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 	logitsGrad := NewTensor(gateGradReshaped.Shape, make([]float32, len(gateGradReshaped.Data)), false)
 
 	// --- [Auxiliary Loss Gradient (Manual Inject) BEFORE Softmax Backward] ---
-	// Combined Loss: 0.5 * SwitchTransformerLoss + 0.5 * CV^2_Importance
-	// dST/dP_ie = (N/T^2) * n_e
-	// dCV2/dP_ie = (2N/T^2) * (I_e - T/N)
+	// L_balance = alpha * N * sum_{e} (n_e / T) * (P_sum_e / T)
+	// dL_balance / dp_xe = alpha * (N / T^2) * n_e
 	numTokens := batchSize * seqLength
 	if moe.LoadBalancingWeight > 0 && numTokens > 0 {
 		numExperts := len(moe.Experts)
@@ -1707,15 +1712,8 @@ func (moe *MoELayer) Backward(grad *Tensor) error {
 		for e := 0; e < numExperts; e++ {
 			// n_e is the number of tokens assigned to expert e
 			n_e := float32(len(moe.ExpertTokenIndices[e]))
-			// I_e is the sum of probabilities for expert e
-			I_e := moe.ExpertProbSums[e]
-
-			// Gradient from ST loss: 0.5 * (N/T^2) * n_e
-			stGrad := 0.5 * n_e * baseScalar
-			// Gradient from CV^2 Importance loss: 0.5 * (2N/T^2) * (I_e - T/N)
-			auxGrad := 0.5 * 2.0 * (I_e - T/N) * baseScalar
-
-			scaledFractions[e] = stGrad + auxGrad
+			// Gradient from Switch Transformer loss: alpha * (N/T^2) * n_e
+			scaledFractions[e] = n_e * baseScalar
 		}
 
 		// Prepare 2D view for UpdateRouterGrads

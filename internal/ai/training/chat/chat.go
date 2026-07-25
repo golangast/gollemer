@@ -41,8 +41,10 @@ func TrainChat(projectRoot string, customDataPath string, rebalanceRequested boo
 		debug.SetGCPercent(10)
 		runtime.GOMAXPROCS(1) // Pi's 4 slow cores cause GC pressure; keep it serial
 		useGPU = false        // no GPU on Pi
-		if batchSize <= 0 || batchSize > 1 {
-			batchSize = 1
+		if batchSize <= 0 {
+			batchSize = 4
+		} else if batchSize > 8 {
+			batchSize = 8
 		}
 		if accumulationSteps <= 0 || accumulationSteps < 16 {
 			accumulationSteps = 16
@@ -2175,8 +2177,10 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 		debug.SetGCPercent(10)
 		runtime.GOMAXPROCS(1)
 		useGPU = false
-		if batchSize <= 0 || batchSize > 1 {
-			batchSize = 1
+		if batchSize <= 0 {
+			batchSize = 4
+		} else if batchSize > 8 {
+			batchSize = 8
 		}
 		if accumulationSteps <= 0 || accumulationSteps < 16 {
 			accumulationSteps = 16
@@ -5017,7 +5021,8 @@ func cleanTokenize(text string) []string {
 
 		for _, r := range lowerWord {
 			// Include < and > to preserve special tokens like <s> and </s>, and / for </s>
-			if unicode.IsLetter(r) || unicode.IsNumber(r) || r == '\'' || r == '_' || r == '<' || r == '>' || r == '/' {
+			// Include = to allow := and == to be preserved as part of tokens
+			if unicode.IsLetter(r) || unicode.IsNumber(r) || r == '\'' || r == '_' || r == '<' || r == '>' || r == '/' || r == '=' || r == '!' {
 				currentWord.WriteRune(r)
 			} else {
 				// Save the word built so far

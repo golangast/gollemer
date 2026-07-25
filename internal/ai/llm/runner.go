@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/golangast/gollemer/internal/ai/moe"
@@ -551,4 +552,95 @@ func (r *Runner) findMoELayers(m *moe.IntentMoE) []*moe.MoELayer {
 		layers = append(layers, m.Decoder.OutputMoE)
 	}
 	return layers
+}
+
+// RouteMultiCartridges scans the user query for all matching trigger keywords,
+// loads the corresponding cartridges concurrently in parallel, and mounts them to the MoE model.
+func (r *Runner) RouteMultiCartridges(query string) ([]string, error) {
+	if r.IntentModel == nil || r.IntentModel.Supervisor == nil {
+		return nil, fmt.Errorf("intent model supervisor not initialized")
+	}
+
+	paths := r.IntentModel.Supervisor.TriageCartridgesMulti(query, nil)
+	if len(paths) == 0 {
+		return nil, nil
+	}
+
+	cm := r.IntentModel.Supervisor.CartridgeMgr
+	if cm == nil {
+		return paths, nil
+	}
+
+	var wg sync.WaitGroup
+	errCh := make(chan error, len(paths))
+
+	for _, p := range paths {
+		wg.Add(1)
+		go func(cartPath string) {
+			defer wg.Done()
+			if err := cm.LoadCartridge(cartPath, 0, 0); err != nil {
+				log.Printf("⚠️ Multi-Expert Router: Failed loading %s: %v", cartPath, err)
+				errCh <- err
+				return
+			}
+
+			cm.Lock()
+			expert := cm.Loaded[cartPath]
+			cm.Unlock()
+
+			if expert != nil && r.IntentModel.Decoder != nil && r.IntentModel.Decoder.OutputMoE != nil {
+				layerIdx := len(r.IntentModel.Encoder.GetMoELayers())
+				if _, err := r.IntentModel.Supervisor.MountCartridgeToLayer(r.IntentModel, layerIdx, expert); err != nil {
+					log.Printf("Notice: Cartridge %s mount notice: %v", cartPath, err)
+				} else {
+					log.Printf("⚡ Multi-Expert Router: Parallel mounted expert %s to layer %d", cartPath, layerIdx)
+				}
+			}
+		}(p)
+	}
+
+	wg.Wait()
+	close(errCh)
+
+	return paths, nil
+}
+
+// BlendPredictionVectors averages top token prediction vectors across multiple active experts.
+func BlendPredictionVectors(vectors [][]float32) []float32 {
+	if len(vectors) == 0 {
+		return nil
+	}
+	if len(vectors) == 1 {
+		return vectors[0]
+	}
+
+	dim := len(vectors[0])
+	blended := make([]float32, dim)
+	numVecs := float32(len(vectors))
+
+	for _, v := range vectors {
+		for i := 0; i < dim && i < len(v); i++ {
+			blended[i] += v[i] / numVecs
+		}
+	}
+	return blended
+}
+
+// MergeASTSubKeys merges AST JSON properties from multiple expert outputs sequentially.
+func MergeASTSubKeys(maps []map[string]interface{}) map[string]interface{} {
+	merged := make(map[string]interface{})
+	for _, m := range maps {
+		for k, v := range m {
+			if existingMap, ok := merged[k].(map[string]interface{}); ok {
+				if newMap, ok := v.(map[string]interface{}); ok {
+					for subK, subV := range newMap {
+						existingMap[subK] = subV
+					}
+					continue
+				}
+			}
+			merged[k] = v
+		}
+	}
+	return merged
 }

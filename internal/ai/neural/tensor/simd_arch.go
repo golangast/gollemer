@@ -16,6 +16,28 @@ func IsSIMDEnabled() bool {
 func vecAdd(a, b, res []float32) {
 	n := len(a)
 	i := 0
+	// Try 32-wide (unrolled AVX2)
+	for ; i+32 <= n; i += 32 {
+		va0 := archsimd.LoadFloat32x8Slice(a[i:])
+		vb0 := archsimd.LoadFloat32x8Slice(b[i:])
+		vr0 := va0.Add(vb0)
+		vr0.StoreSlice(res[i:])
+
+		va1 := archsimd.LoadFloat32x8Slice(a[i+8:])
+		vb1 := archsimd.LoadFloat32x8Slice(b[i+8:])
+		vr1 := va1.Add(vb1)
+		vr1.StoreSlice(res[i+8:])
+
+		va2 := archsimd.LoadFloat32x8Slice(a[i+16:])
+		vb2 := archsimd.LoadFloat32x8Slice(b[i+16:])
+		vr2 := va2.Add(vb2)
+		vr2.StoreSlice(res[i+16:])
+
+		va3 := archsimd.LoadFloat32x8Slice(a[i+24:])
+		vb3 := archsimd.LoadFloat32x8Slice(b[i+24:])
+		vr3 := va3.Add(vb3)
+		vr3.StoreSlice(res[i+24:])
+	}
 	// Try 8-wide (AVX2)
 	for ; i+8 <= n; i += 8 {
 		va := archsimd.LoadFloat32x8Slice(a[i:])
@@ -253,21 +275,21 @@ func vecSum(a []float32) float32 {
 		va := archsimd.LoadFloat32x8Slice(a[i:])
 		acc8 = acc8.Add(va)
 	}
-	
+
 	// Horizontal reduction
 	lo8 := acc8.GetLo()
 	hi8 := acc8.GetHi()
 	acc4 := lo8.Add(hi8)
-	
+
 	for ; i+4 <= n; i += 4 {
 		va4 := archsimd.LoadFloat32x4Slice(a[i:])
 		acc4 = acc4.Add(va4)
 	}
-	
+
 	var buf [4]float32
 	acc4.Store(&buf)
 	sum := buf[0] + buf[1] + buf[2] + buf[3]
-	
+
 	for ; i < n; i++ {
 		sum += a[i]
 	}
@@ -279,8 +301,27 @@ func vecDot(a, b []float32) float32 {
 	if n == 0 {
 		return 0
 	}
-	var acc8 archsimd.Float32x8
+	var acc8_0, acc8_1, acc8_2, acc8_3 archsimd.Float32x8
 	i := 0
+	for ; i+32 <= n; i += 32 {
+		va0 := archsimd.LoadFloat32x8Slice(a[i:])
+		vb0 := archsimd.LoadFloat32x8Slice(b[i:])
+		acc8_0 = acc8_0.Add(va0.Mul(vb0))
+
+		va1 := archsimd.LoadFloat32x8Slice(a[i+8:])
+		vb1 := archsimd.LoadFloat32x8Slice(b[i+8:])
+		acc8_1 = acc8_1.Add(va1.Mul(vb1))
+
+		va2 := archsimd.LoadFloat32x8Slice(a[i+16:])
+		vb2 := archsimd.LoadFloat32x8Slice(b[i+16:])
+		acc8_2 = acc8_2.Add(va2.Mul(vb2))
+
+		va3 := archsimd.LoadFloat32x8Slice(a[i+24:])
+		vb3 := archsimd.LoadFloat32x8Slice(b[i+24:])
+		acc8_3 = acc8_3.Add(va3.Mul(vb3))
+	}
+	var acc8 = acc8_0.Add(acc8_1).Add(acc8_2).Add(acc8_3)
+
 	for ; i+8 <= n; i += 8 {
 		va := archsimd.LoadFloat32x8Slice(a[i:])
 		vb := archsimd.LoadFloat32x8Slice(b[i:])
@@ -290,17 +331,17 @@ func vecDot(a, b []float32) float32 {
 	lo8 := acc8.GetLo()
 	hi8 := acc8.GetHi()
 	acc4 := lo8.Add(hi8)
-	
+
 	for ; i+4 <= n; i += 4 {
 		va4 := archsimd.LoadFloat32x4Slice(a[i:])
 		vb4 := archsimd.LoadFloat32x4Slice(b[i:])
 		acc4 = acc4.Add(va4.Mul(vb4))
 	}
-	
+
 	var buf [4]float32
 	acc4.Store(&buf)
 	sum := buf[0] + buf[1] + buf[2] + buf[3]
-	
+
 	for ; i < n; i++ {
 		sum += a[i] * b[i]
 	}
@@ -313,6 +354,27 @@ func vecSoftmaxBackwardRow(p, dp, out []float32) {
 	vDot8 := archsimd.BroadcastFloat32x8(dot)
 	vDot4 := archsimd.BroadcastFloat32x4(dot)
 	i := 0
+	for ; i+32 <= n; i += 32 {
+		vp0 := archsimd.LoadFloat32x8Slice(p[i:])
+		vdp0 := archsimd.LoadFloat32x8Slice(dp[i:])
+		vr0 := vp0.Mul(vdp0.Sub(vDot8))
+		vr0.StoreSlice(out[i:])
+
+		vp1 := archsimd.LoadFloat32x8Slice(p[i+8:])
+		vdp1 := archsimd.LoadFloat32x8Slice(dp[i+8:])
+		vr1 := vp1.Mul(vdp1.Sub(vDot8))
+		vr1.StoreSlice(out[i+8:])
+
+		vp2 := archsimd.LoadFloat32x8Slice(p[i+16:])
+		vdp2 := archsimd.LoadFloat32x8Slice(dp[i+16:])
+		vr2 := vp2.Mul(vdp2.Sub(vDot8))
+		vr2.StoreSlice(out[i+16:])
+
+		vp3 := archsimd.LoadFloat32x8Slice(p[i+24:])
+		vdp3 := archsimd.LoadFloat32x8Slice(dp[i+24:])
+		vr3 := vp3.Mul(vdp3.Sub(vDot8))
+		vr3.StoreSlice(out[i+24:])
+	}
 	for ; i+8 <= n; i += 8 {
 		vp := archsimd.LoadFloat32x8Slice(p[i:])
 		vdp := archsimd.LoadFloat32x8Slice(dp[i:])
@@ -411,7 +473,7 @@ func vecAdamWUpdate(weights, grads, m, v []float32, lr, beta1, beta2, eps, weigh
 	n := len(weights)
 	biasCorrection1 := float32(1.0 - math.Pow(float64(beta1), float64(t)))
 	biasCorrection2 := float32(1.0 - math.Pow(float64(beta2), float64(t)))
-	
+
 	vB1 := archsimd.BroadcastFloat32x8(beta1)
 	vB1Inv := archsimd.BroadcastFloat32x8(1.0 - beta1)
 	vB2 := archsimd.BroadcastFloat32x8(beta2)
@@ -437,14 +499,14 @@ func vecAdamWUpdate(weights, grads, m, v []float32, lr, beta1, beta2, eps, weigh
 		// mHat / (sqrt(vHat) + eps)
 		mHat := mv.Div(vBC1)
 		vHat := vv.Div(vBC2)
-		
+
 		var mH, vH [8]float32
 		mHat.StoreSlice(mH[:])
 		vHat.StoreSlice(vH[:])
-		
+
 		var wData [8]float32
 		w.StoreSlice(wData[:])
-		
+
 		for j := 0; j < 8; j++ {
 			update := mH[j] / (float32(math.Sqrt(float64(vH[j]))) + eps)
 			// AdamW: w = w - lr * update - lr * weightDecay * w
@@ -453,7 +515,7 @@ func vecAdamWUpdate(weights, grads, m, v []float32, lr, beta1, beta2, eps, weigh
 		newW := archsimd.LoadFloat32x8Slice(wData[:])
 		newW.StoreSlice(weights[i:])
 	}
-	
+
 	// Fallback
 	for ; i < n; i++ {
 		m[i] = beta1*m[i] + (1.0-beta1)*grads[i]
@@ -488,12 +550,12 @@ func vecTopKZero(data []float32, k int) {
 	if k >= n || k <= 0 {
 		return
 	}
-	
+
 	sorted := make([]float32, n)
 	copy(sorted, data)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
 	threshold := sorted[n-k]
-	
+
 	i := 0
 	for ; i+8 <= n; i += 8 {
 		v := archsimd.LoadFloat32x8Slice(data[i:])
@@ -513,7 +575,6 @@ func vecTopKZero(data []float32, k int) {
 		}
 	}
 }
-
 
 func vecLeakyReLU(data []float32, alpha float32) {
 	n := len(data)
@@ -577,13 +638,35 @@ func matMulRawSequential(a, b, res []float32, m, n, k, startRow, endRow int) {
 			if aik == 0 {
 				continue // Sparse optimization
 			}
-			
+
 			rowB := b[ik*n : (ik+1)*n]
 			vA8 := archsimd.BroadcastFloat32x8(aik)
 			vA4 := archsimd.BroadcastFloat32x4(aik)
-			
+
 			j := 0
-			// 8-wide (AVX2)
+			// 8-wide (AVX2) unrolled by 4
+			for ; j+32 <= n; j += 32 {
+				vB0 := archsimd.LoadFloat32x8Slice(rowB[j:])
+				vB1 := archsimd.LoadFloat32x8Slice(rowB[j+8:])
+				vB2 := archsimd.LoadFloat32x8Slice(rowB[j+16:])
+				vB3 := archsimd.LoadFloat32x8Slice(rowB[j+24:])
+
+				vR0 := archsimd.LoadFloat32x8Slice(rowRes[j:])
+				vR1 := archsimd.LoadFloat32x8Slice(rowRes[j+8:])
+				vR2 := archsimd.LoadFloat32x8Slice(rowRes[j+16:])
+				vR3 := archsimd.LoadFloat32x8Slice(rowRes[j+24:])
+
+				vR0 = vR0.Add(vA8.Mul(vB0))
+				vR1 = vR1.Add(vA8.Mul(vB1))
+				vR2 = vR2.Add(vA8.Mul(vB2))
+				vR3 = vR3.Add(vA8.Mul(vB3))
+
+				vR0.StoreSlice(rowRes[j:])
+				vR1.StoreSlice(rowRes[j+8:])
+				vR2.StoreSlice(rowRes[j+16:])
+				vR3.StoreSlice(rowRes[j+24:])
+			}
+			// 8-wide (AVX2) tail
 			for ; j+8 <= n; j += 8 {
 				vB8 := archsimd.LoadFloat32x8Slice(rowB[j:])
 				vR8 := archsimd.LoadFloat32x8Slice(rowRes[j:])

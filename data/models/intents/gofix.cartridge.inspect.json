@@ -1,0 +1,8 @@
+{
+  "hidden_dim": 1024,
+  "input_dim": 1024,
+  "namespace": "gofix",
+  "output_dim": 2043,
+  "type": "cartridge",
+  "version": 1
+}
