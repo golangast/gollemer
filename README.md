@@ -173,7 +173,30 @@ make train ARGS='-cartridges="data/models/intents/computer.cartridge" -data "dat
 make word2vec
 ```
 
-### 3. Running the LLM
+### 3. Running the HTTP Server
+The root `main.go` starts a minimal HTTP server with the following routes:
+
+| Route | Handler | Response |
+|---|---|---|
+| `/user` | `userHandler` | `Hello from userHandler!` |
+| `/auth` | `authHandler` | `Hello from authHandler!` |
+| `/handle` | `handler` | `Hello from handler!` |
+| `/health` | inline | `OK` |
+
+```bash
+go run .
+# Server listening on :8765
+```
+
+```bash
+# Test the endpoints
+curl http://localhost:8765/user     # → Hello from userHandler!
+curl http://localhost:8765/auth     # → Hello from authHandler!
+curl http://localhost:8765/handle   # → Hello from handler!
+curl http://localhost:8765/health   # → OK
+```
+
+### 4. Running the LLM
 Chat with your trained model using the interactive shell.
 
 ```bash
