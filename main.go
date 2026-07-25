@@ -5,12 +5,12 @@ import (
 	"net/http"
 )
 
-func user_handler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Hello from user_handler!")
+func userHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "Hello from userHandler!")
 }
 
-func auth_handler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Hello from auth_handler!")
+func authHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "Hello from authHandler!")
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
@@ -18,54 +18,12 @@ func handler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	http.HandleFunc("/user", user_handler)
-	http.
-		HandleFunc("/auth_handler",
-
-			auth_handler)
-	http.
-		HandleFunc("/handler",
-
-			handler)
-	http.
-		HandleFunc("/auth_handler",
-
-			auth_handler)
-	http.
-		HandleFunc("/handler",
-
-			handler)
-	http.
-		HandleFunc("/auth_handler",
-
-			auth_handler)
-	http.
-		HandleFunc("/auth_handler",
-
-			auth_handler)
-	http.
-		HandleFunc("/auth_handler",
-
-			auth_handler)
-	http.
-		HandleFunc("/auth_handler",
-
-			auth_handler)
-	http.
-		HandleFunc("/handler",
-
-			handler)
-	http.
-		HandleFunc("/auth_handler",
-
-			auth_handler)
-	http.
-		HandleFunc("/handler",
-
-			handler)
-	http.
-		HandleFunc("/auth_handler",
-
-			auth_handler)
-
+	http.HandleFunc("/user", userHandler)
+	http.HandleFunc("/auth", authHandler)
+	http.HandleFunc("/handle", handler)
+	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, "OK")
+	})
+	fmt.Println("Server listening on :8765")
+	http.ListenAndServe(":8765", nil)
 }
