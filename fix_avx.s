@@ -1,2 +1,0 @@
-    VSHUFPS $0, X0, X0, X0
-    VINSERTF128 $1, X0, Y0, Y2

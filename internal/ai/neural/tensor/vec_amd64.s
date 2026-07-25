@@ -4,7 +4,7 @@
 
 // func vecDotAVX2(a, b []float32) float32
 // Stack frame: 0 bytes, 56 bytes arguments
-TEXT ·vecDotAVX2(SB), NOSPLIT, $0-56
+TEXT ·vecDotAVX2(SB), NOSPLIT, $0-52
     MOVQ a_base+0(FP), AX      // AX = ptr to a
     MOVQ a_len+8(FP), CX       // CX = len(a)
     MOVQ b_base+24(FP), BX      // BX = ptr to b
