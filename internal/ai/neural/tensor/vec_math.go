@@ -1,34 +1,14 @@
-//go:build !goexperiment.simd
-
 package tensor
 
 import (
 	"math"
-	"os"
 	"sort"
-	"strings"
 	"sync"
 )
-
-func IsSIMDEnabled() bool {
-	return strings.Contains(os.Getenv("GOEXPERIMENT"), "simd")
-}
 
 func vecAdd(a, b, res []float32) {
 	for i := range a {
 		res[i] = a[i] + b[i]
-	}
-}
-
-func vecSub(a, b, res []float32) {
-	for i := range a {
-		res[i] = a[i] - b[i]
-	}
-}
-
-func vecMul(a, b, res []float32) {
-	for i := range a {
-		res[i] = a[i] * b[i]
 	}
 }
 
@@ -56,12 +36,6 @@ func vecAddScalar(a []float32, scalar float32, res []float32) {
 	}
 }
 
-func vecAddAccumulate(res, a []float32) {
-	for i := range a {
-		res[i] += a[i]
-	}
-}
-
 func vecMulAccumulate(res, a, b []float32) {
 	for i := range a {
 		res[i] += a[i] * b[i]
@@ -86,21 +60,6 @@ func vecSum(a []float32) float32 {
 		sum += a[i]
 	}
 	return sum
-}
-
-func vecDot(a, b []float32) float32 {
-	var sum float32
-	for i := range a {
-		sum += a[i] * b[i]
-	}
-	return sum
-}
-
-func vecSoftmaxBackwardRow(p, dp, out []float32) {
-	dot := vecDot(dp, p)
-	for i := range p {
-		out[i] = p[i] * (dp[i] - dot)
-	}
 }
 
 func vecReLU(data []float32) {
@@ -170,7 +129,6 @@ func vecTopKZero(data []float32, k int) {
 		}
 	}
 }
-
 
 func vecLeakyReLU(data []float32, alpha float32) {
 	for i := range data {

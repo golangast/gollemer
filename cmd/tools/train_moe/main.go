@@ -1294,7 +1294,7 @@ func main() {
 
 	if intentMoEModel == nil {
 		// Always create a new IntentMoE model for now to debug gob loading
-		log.Printf("Creating a new IntentMoE model. (SIMD Enabled: %v)", IsSIMDEnabled())
+		log.Printf("Creating a new IntentMoE model (using Go Assembly SIMD)")
 		// Model hyperparameters - INCREASED CAPACITY
 		// embeddingDim is set above based on W2V model
 		hiddenSize := 768      // Match embeddingDim for optimal capacity
