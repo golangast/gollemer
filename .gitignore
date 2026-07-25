@@ -2,19 +2,21 @@
 bin/
 gollemer
 gollemer_server
-train_moe
+/train_moe
 main
 
 # Debug and Profiling
 logs/*.prof
 logs/*.csv
 *.prof
+*.pprof
 *.test
 
 # Model files (too large for git — use external storage)
 data/models/*.gob
 data/models/gob_models/
 data/models/checkpoints/
+data/models/intents/*.cartridge*
 
 # Native libraries and WebGPU binaries
 lib/
@@ -61,6 +63,6 @@ video/
 *.gob
 gob_models/
 .build/
-train_moe
+/train_moe
 multi_orchestrator
 gollemer-train

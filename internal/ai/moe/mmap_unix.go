@@ -5,7 +5,6 @@ package moe
 
 import (
 	"os"
-	"reflect"
 	"syscall"
 	"unsafe"
 )
@@ -30,10 +29,7 @@ func MmapWeights(filename string) ([]float32, *os.File, error) {
 		return nil, nil, err
 	}
 
-	// Use unsafe to convert []byte to []float32
-	header := *(*reflect.SliceHeader)(unsafe.Pointer(&data))
-	header.Len /= 4
-	header.Cap /= 4
-
-	return *(*[]float32)(unsafe.Pointer(&header)), f, nil
+	// Use unsafe.Slice to convert []byte to []float32 safely
+	floatData := unsafe.Slice((*float32)(unsafe.Pointer(&data[0])), len(data)/4)
+	return floatData, f, nil
 }

@@ -13,17 +13,25 @@
       "threshold": 2
     },
     "pool_hits": 0,
-    "pool_misses": 1,
+    "pool_misses": 2,
     "serialization": null,
     "supervisor_timeline": null,
     "trace_buffer": [
       {
         "category": "cartridge",
         "details": {
+          "path": "data/models/intents/coding.cartridge"
+        },
+        "message": "pool_miss",
+        "timestamp": "2026-07-25T14:11:47.661670816Z"
+      },
+      {
+        "category": "cartridge",
+        "details": {
           "path": "data/models/intents/gofix.cartridge"
         },
         "message": "pool_miss",
-        "timestamp": "2026-07-23T12:50:44.677339598Z"
+        "timestamp": "2026-07-25T14:11:47.661735292Z"
       },
       {
         "category": "cartridge",
@@ -32,10 +40,10 @@
           "warm": 1
         },
         "message": "loaded",
-        "timestamp": "2026-07-23T12:50:44.740639273Z"
+        "timestamp": "2026-07-25T14:11:47.711686993Z"
       }
     ],
     "warm_cartridges": 1
   },
-  "updated_at": "2026-07-23T12:50:44.74064617Z"
+  "updated_at": "2026-07-25T14:11:47.711701361Z"
 }
