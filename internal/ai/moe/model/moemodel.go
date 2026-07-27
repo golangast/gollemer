@@ -306,3 +306,20 @@ func SaveMoEClassificationModelToGOB(model *MoEClassificationModel, filePath str
 
 	return nil
 }
+
+// LoadMoEClassificationModelFromGOB loads a MoEClassificationModel from a Gob file.
+func LoadMoEClassificationModelFromGOB(filePath string) (*MoEClassificationModel, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open file for loading MoE model: %w", err)
+	}
+	defer file.Close()
+
+	decoder := gob.NewDecoder(file)
+	var model MoEClassificationModel
+	if err := decoder.Decode(&model); err != nil {
+		return nil, fmt.Errorf("failed to decode MoE model from Gob: %w", err)
+	}
+
+	return &model, nil
+}
