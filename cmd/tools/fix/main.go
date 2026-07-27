@@ -94,15 +94,6 @@ func runAutoApplyFix(projectRoot string, pkgTarget string, maxRetries int, testM
 			log.Printf("⚠️  Could not initialize MoE classifier: %v", err)
 			log.Printf("   Falling back to regex-based classification")
 		}
-		// Create a classifier with just the regex patterns (no MoE model)
-		classifier, err := errors.NewErrorClassifierDefault(verbose)
-		if err != nil {
-			// Still ok, we'll just use the raw parser
-			if verbose {
-				log.Printf("   Using raw error parsing only")
-			}
-		}
-		_ = classifier
 	}
 
 	// Handle recursive package scanning (./...)

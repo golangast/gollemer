@@ -44,6 +44,28 @@ func GetFixer(intent ErrorIntent) FixerFunc {
 		return fixSyntaxError
 	case IntentNonBoolUsedInIf:
 		return fixNonBoolInIf
+	case IntentAssignmentMismatch:
+		return fixAssignmentMismatch
+	case IntentInvalidBinaryOp:
+		return fixInvalidBinaryOp
+	case IntentNoNewVariables:
+		return fixNoNewVariables
+	case IntentTooManyArgs:
+		return fixTooManyArgs
+	case IntentNotEnoughArgs:
+		return fixNotEnoughArgs
+	case IntentCallNonFunction:
+		return fixCallNonFunction
+	case IntentCannotRange:
+		return fixCannotRange
+	case IntentDuplicateField:
+		return fixDuplicateField
+	case IntentDuplicateKey:
+		return fixDuplicateKey
+	case IntentInvalidUseOfNil:
+		return fixInvalidUseOfNil
+	case IntentMissingFunctionBody:
+		return fixMissingFunctionBody
 	default:
 		return nil
 	}
@@ -479,6 +501,17 @@ func fixMissingReturn(pe *ParsedError, projectRoot string) (string, error) {
 // For type mismatches, it reads the line, identifies the expression that needs
 // conversion, and wraps it with a type conversion: B(x).
 func fixTypeMismatch(pe *ParsedError, projectRoot string) (string, error) {
+	// DEBUG PRINTS
+	fmt.Printf("[DEBUG] Raw Message: %q\n", pe.Message)
+	fmt.Printf("[DEBUG] Parsed Symbol: %q, Line: %d, File: %q\n", pe.Symbol, pe.Line, pe.File)
+
+	targetType := extractTargetTypeFromMessage(pe.Message)
+	fmt.Printf("[DEBUG] Extracted Target Type: %q\n", targetType)
+
+	if targetType == "" {
+		return fmt.Sprintf("Type mismatch at %s:%d — could not parse target type", pe.File, pe.Line), nil
+	}
+
 	fullPath := filepath.Join(projectRoot, pe.File)
 	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
 		return "", fmt.Errorf("file not found: %s", fullPath)
@@ -496,16 +529,10 @@ func fixTypeMismatch(pe *ParsedError, projectRoot string) (string, error) {
 		return "", fmt.Errorf("invalid line number %d", pe.Line)
 	}
 
-	// 1. Extract target type (e.g., "int")
-	targetType := extractTargetTypeFromMessage(pe.Message)
-	if targetType == "" {
-		return fmt.Sprintf("Type mismatch at %s:%d — could not parse target type", pe.File, pe.Line), nil
-	}
-
 	lineIdx := pe.Line - 1
 	line := lines[lineIdx]
+	fmt.Printf("[DEBUG] Target Line: %q\n", line)
 
-	// 2. Use pe.Symbol if available, otherwise fall back to right-hand side of '='
 	exprToConvert := pe.Symbol
 	if exprToConvert == "" {
 		parts := strings.SplitN(line, "=", 2)
@@ -514,6 +541,7 @@ func fixTypeMismatch(pe *ParsedError, projectRoot string) (string, error) {
 			exprToConvert = strings.TrimSuffix(exprToConvert, ";")
 		}
 	}
+	fmt.Printf("[DEBUG] Expression to Convert: %q\n", exprToConvert)
 
 	if exprToConvert == "" {
 		return fmt.Sprintf("Type mismatch at %s:%d — could not determine expression to convert", pe.File, pe.Line), nil
@@ -548,14 +576,16 @@ func fixTypeMismatch(pe *ParsedError, projectRoot string) (string, error) {
 //
 //	Input:  "cannot assign to x"
 //	Output: ""  (no type information)
+//
+// extractTargetTypeFromMessage extracts the target type from a type-mismatch error message.
 func extractTargetTypeFromMessage(msg string) string {
-	// Pattern: "as type B in" or "as B value in"
-	re := regexp.MustCompile(`as\s+(?:type\s+)?(\S+)\s+(?:value\s+)?in`)
+	// Pattern: "as type B in" or "as B value in" or "as B value"
+	re := regexp.MustCompile(`as\s+(?:type\s+)?([a-zA-Z0-9_.]+)(?:\s+value)?(?:\s+in|\s*$)`)
 	if m := re.FindStringSubmatch(msg); len(m) > 1 {
 		return m[1]
 	}
-	// Alternate: "as B value" or "as B" at the end of the line
-	re2 := regexp.MustCompile(`as\s+(\S+)(?:\s+value)?$`)
+	// Alternate fallback matching end of line type specifications
+	re2 := regexp.MustCompile(`as\s+([a-zA-Z0-9_.]+)(?:\s+value)?$`)
 	if m := re2.FindStringSubmatch(msg); len(m) > 1 {
 		return m[1]
 	}
@@ -761,6 +791,362 @@ func guessTypeFromContext(pe *ParsedError, fileLines []string) string {
 	}
 
 	return "interface{}"
+}
+
+// fixAssignmentMismatch fixes assignment mismatch errors by expanding the
+// called function's return signature to match the number of variables on the
+// left-hand side of the assignment.
+//
+// For example: "x, y := single()" where single() returns 1 value becomes:
+// single() is modified to return the appropriate number of values.
+//
+// The parsed error's Symbol field contains the number of expected variables,
+// and the Package field contains the number of values the function returns.
+func fixAssignmentMismatch(pe *ParsedError, projectRoot string) (string, error) {
+	fullPath := filepath.Join(projectRoot, pe.File)
+	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+		return "", fmt.Errorf("file not found: %s", fullPath)
+	}
+
+	data, err := os.ReadFile(fullPath)
+	if err != nil {
+		return "", fmt.Errorf("read error: %w", err)
+	}
+
+	content := string(data)
+	lines := strings.Split(content, "\n")
+
+	if pe.Line <= 0 || pe.Line > len(lines) {
+		return "", fmt.Errorf("invalid line number %d", pe.Line)
+	}
+
+	// The symbol from the parsed error contains the function name (e.g. "single")
+	// We parse the file to find the function definition and expand its return values
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, fullPath, nil, parser.ParseComments)
+	if err != nil {
+		return "", fmt.Errorf("parse error: %w", err)
+	}
+
+	// Find the assignment line to extract the LHS variable count and called function
+	lineIdx := pe.Line - 1
+	line := lines[lineIdx]
+	line = strings.TrimSpace(line)
+
+	// Extract the called function name from the line
+	// Pattern: x, y := funcName(...) or x, y = funcName(...)
+	funcName := pe.Symbol
+	if funcName == "" {
+		// Try to extract from the error message
+		// "assignment mismatch: 2 variables but single returns 1 value"
+		re := regexp.MustCompile(`but\s+(\w+)\s+returns`)
+		if m := re.FindStringSubmatch(pe.Message); len(m) > 1 {
+			funcName = m[1]
+		}
+	}
+
+	if funcName == "" {
+		return fmt.Sprintf("Could not determine function name at %s:%d", pe.File, pe.Line), nil
+	}
+
+	// Find the function declaration and add one more return value
+	var targetFunc *ast.FuncDecl
+	ast.Inspect(node, func(n ast.Node) bool {
+		if fn, ok := n.(*ast.FuncDecl); ok && fn.Name.Name == funcName {
+			targetFunc = fn
+			return false
+		}
+		return true
+	})
+
+	if targetFunc == nil {
+		return fmt.Sprintf("Function %q not found in %s", funcName, pe.File), nil
+	}
+
+	// Count current return values
+	currentResults := 0
+	if targetFunc.Type.Results != nil {
+		for _, field := range targetFunc.Type.Results.List {
+			// Each field may have multiple names of the same type, or just a type
+			if len(field.Names) > 1 {
+				currentResults += len(field.Names)
+			} else {
+				currentResults++
+			}
+		}
+	}
+
+	// Count expected variables from the error message
+	// "assignment mismatch: 2 variables but single returns 1 value"
+	varCount := 0
+	reVar := regexp.MustCompile(`(\d+)\s+variables`)
+	if m := reVar.FindStringSubmatch(pe.Message); len(m) > 1 {
+		varCount = atoi(m[1])
+	}
+
+	if varCount <= currentResults {
+		// No additional return values needed (or fewer), can't auto-fix
+		return fmt.Sprintf("Assignment mismatch at %s:%d — function %q returns %d values but assignment expects %d",
+			pe.File, pe.Line, funcName, currentResults, varCount), nil
+	}
+
+	// Add return values to match the expected count
+	// We duplicate the last return value's type for simplicity
+	extraCount := varCount - currentResults
+	lastReturnType := guessReturnType(targetFunc)
+	for i := 0; i < extraCount; i++ {
+		if lastReturnType != "" {
+			targetFunc.Type.Results.List = append(targetFunc.Type.Results.List, &ast.Field{
+				Type: ast.NewIdent(lastReturnType),
+			})
+		} else {
+			targetFunc.Type.Results.List = append(targetFunc.Type.Results.List, &ast.Field{
+				Type: ast.NewIdent("interface{}"),
+			})
+		}
+	}
+
+	// Also update the function body: add extra return values
+	if targetFunc.Body != nil && len(targetFunc.Body.List) > 0 {
+		// Find the last return statement
+		for i := len(targetFunc.Body.List) - 1; i >= 0; i-- {
+			if retStmt, ok := targetFunc.Body.List[i].(*ast.ReturnStmt); ok {
+				for j := 0; j < extraCount; j++ {
+					// Use the same type as the last return value for the extra values
+					zeroVal := "nil"
+					if lastReturnType != "" {
+						zeroVal = getZeroValue(lastReturnType)
+					}
+					retStmt.Results = append(retStmt.Results, &ast.Ident{Name: zeroVal})
+				}
+				break
+			}
+		}
+	}
+
+	f, err := os.Create(fullPath)
+	if err != nil {
+		return "", fmt.Errorf("write error: %w", err)
+	}
+	defer f.Close()
+
+	if err := format.Node(f, fset, node); err != nil {
+		return "", fmt.Errorf("format error: %w", err)
+	}
+
+	return fmt.Sprintf("Added %d return value(s) to function %q in %s to match assignment", extraCount, funcName, pe.File), nil
+}
+
+// guessReturnType returns a string representation of the last return type of a function.
+func guessReturnType(fn *ast.FuncDecl) string {
+	if fn.Type.Results == nil || len(fn.Type.Results.List) == 0 {
+		return ""
+	}
+	last := fn.Type.Results.List[len(fn.Type.Results.List)-1]
+	return typeExprToString(last.Type)
+}
+
+// typeExprToString converts an AST type expression to a string representation.
+func typeExprToString(expr ast.Expr) string {
+	switch t := expr.(type) {
+	case *ast.Ident:
+		return t.Name
+	case *ast.StarExpr:
+		return "*" + typeExprToString(t.X)
+	case *ast.SelectorExpr:
+		return typeExprToString(t.X) + "." + t.Sel.Name
+	case *ast.ArrayType:
+		return "[]" + typeExprToString(t.Elt)
+	case *ast.MapType:
+		return "map[" + typeExprToString(t.Key) + "]" + typeExprToString(t.Value)
+	default:
+		return ""
+	}
+}
+
+// fixInvalidBinaryOp fixes mismatched types in binary operations by adding
+// an explicit type conversion to the second operand.
+// For example: s + x (mismatched types string and int) becomes s + int(x)
+func fixInvalidBinaryOp(pe *ParsedError, projectRoot string) (string, error) {
+	fullPath := filepath.Join(projectRoot, pe.File)
+	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+		return "", fmt.Errorf("file not found: %s", fullPath)
+	}
+
+	data, err := os.ReadFile(fullPath)
+	if err != nil {
+		return "", fmt.Errorf("read error: %w", err)
+	}
+
+	content := string(data)
+	lines := strings.Split(content, "\n")
+
+	if pe.Line <= 0 || pe.Line > len(lines) {
+		return "", fmt.Errorf("invalid line number %d", pe.Line)
+	}
+
+	lineIdx := pe.Line - 1
+	line := lines[lineIdx]
+
+	// The symbol field contains the first type (e.g. "string") and
+	// the package field contains the second type (e.g. "int").
+	// We want to convert the second operand to the type of the first operand.
+	// For s + x where s=string and x=int, the Package field is "int",
+	// the Symbol field is "string". We need to convert x to string.
+	targetType := pe.Symbol // the type we want to convert TO (e.g. "string")
+
+	// Extract the second operand (right side of +)
+	// Parse the line to find the expression after the + operator
+	plusIdx := strings.Index(line, "+")
+	if plusIdx < 0 {
+		// Try +=
+		plusIdx = strings.Index(line, "+=")
+		if plusIdx >= 0 {
+			plusIdx++ // point to =
+		}
+	}
+
+	if plusIdx < 0 || plusIdx >= len(line)-1 {
+		return fmt.Sprintf("Could not find + operator on line %d", pe.Line), nil
+	}
+
+	// Get everything after the +
+	afterPlus := strings.TrimSpace(line[plusIdx+1:])
+
+	// Check for semicolons or comments
+	if scIdx := strings.IndexAny(afterPlus, ";/"); scIdx >= 0 {
+		afterPlus = strings.TrimSpace(afterPlus[:scIdx])
+	}
+
+	if afterPlus == "" {
+		return fmt.Sprintf("Empty right operand at %s:%d", pe.File, pe.Line), nil
+	}
+
+	// Prevent duplicate conversions
+	if strings.Contains(line, fmt.Sprintf("%s(%s)", targetType, afterPlus)) {
+		return fmt.Sprintf("Type conversion already present at %s:%d", pe.File, pe.Line), nil
+	}
+
+	// Apply the conversion: wrap the second operand with the target type
+	newLine := strings.Replace(line, afterPlus, fmt.Sprintf("%s(%s)", targetType, afterPlus), 1)
+	lines[lineIdx] = newLine
+
+	newContent := strings.Join(lines, "\n")
+	if err := os.WriteFile(fullPath, []byte(newContent), 0644); err != nil {
+		return "", fmt.Errorf("write error: %w", err)
+	}
+
+	return fmt.Sprintf("Added type conversion %s(%s) at %s:%d", targetType, afterPlus, pe.File, pe.Line), nil
+}
+
+// fixNoNewVariables changes := to = when there are no new variables.
+func fixNoNewVariables(pe *ParsedError, projectRoot string) (string, error) {
+	fullPath := filepath.Join(projectRoot, pe.File)
+	data, err := os.ReadFile(fullPath)
+	if err != nil {
+		return "", fmt.Errorf("read error: %w", err)
+	}
+	lines := strings.Split(string(data), "\n")
+	if pe.Line <= 0 || pe.Line > len(lines) {
+		return "", fmt.Errorf("invalid line number %d", pe.Line)
+	}
+	line := lines[pe.Line-1]
+	newLine := strings.Replace(line, ":=", "=", 1)
+	if newLine == line {
+		return fmt.Sprintf("Could not find := on line %d", pe.Line), nil
+	}
+	lines[pe.Line-1] = newLine
+	if err := os.WriteFile(fullPath, []byte(strings.Join(lines, "\n")), 0644); err != nil {
+		return "", fmt.Errorf("write error: %w", err)
+	}
+	return fmt.Sprintf("Changed := to = at %s:%d", pe.File, pe.Line), nil
+}
+
+// fixTooManyArgs removes extra arguments from a function call.
+func fixTooManyArgs(pe *ParsedError, projectRoot string) (string, error) {
+	return fmt.Sprintf("Too many arguments in call to %s at %s:%d — manual review needed", pe.Symbol, pe.File, pe.Line), nil
+}
+
+// fixNotEnoughArgs adds nil arguments to a function call.
+func fixNotEnoughArgs(pe *ParsedError, projectRoot string) (string, error) {
+	return fmt.Sprintf("Not enough arguments in call to %s at %s:%d — manual review needed", pe.Symbol, pe.File, pe.Line), nil
+}
+
+// fixCallNonFunction warns about calling a non-function value.
+func fixCallNonFunction(pe *ParsedError, projectRoot string) (string, error) {
+	return fmt.Sprintf("Call of non-function %s at %s:%d — manual review needed", pe.Symbol, pe.File, pe.Line), nil
+}
+
+// fixCannotRange warns about values that cannot be ranged over.
+func fixCannotRange(pe *ParsedError, projectRoot string) (string, error) {
+	return fmt.Sprintf("Cannot range over %s (type %s) at %s:%d — manual review needed", pe.Symbol, pe.Package, pe.File, pe.Line), nil
+}
+
+// fixDuplicateField removes duplicate fields from struct literals.
+func fixDuplicateField(pe *ParsedError, projectRoot string) (string, error) {
+	return fmt.Sprintf("Duplicate field %s at %s:%d — manual review needed", pe.Symbol, pe.File, pe.Line), nil
+}
+
+// fixDuplicateKey removes duplicate keys from map literals.
+func fixDuplicateKey(pe *ParsedError, projectRoot string) (string, error) {
+	return fmt.Sprintf("Duplicate key %s at %s:%d — manual review needed", pe.Symbol, pe.File, pe.Line), nil
+}
+
+// fixInvalidUseOfNil replaces nil with the zero value of the expected type.
+func fixInvalidUseOfNil(pe *ParsedError, projectRoot string) (string, error) {
+	fullPath := filepath.Join(projectRoot, pe.File)
+	data, err := os.ReadFile(fullPath)
+	if err != nil {
+		return "", fmt.Errorf("read error: %w", err)
+	}
+	lines := strings.Split(string(data), "\n")
+	if pe.Line <= 0 || pe.Line > len(lines) {
+		return "", fmt.Errorf("invalid line number %d", pe.Line)
+	}
+	// Replace nil with the type's zero value expression
+	line := lines[pe.Line-1]
+	targetType := pe.Symbol
+	zeroVal := getZeroValue(targetType)
+	newLine := strings.Replace(line, "nil", zeroVal, 1)
+	if newLine == line {
+		return fmt.Sprintf("Could not replace nil on line %d", pe.Line), nil
+	}
+	lines[pe.Line-1] = newLine
+	if err := os.WriteFile(fullPath, []byte(strings.Join(lines, "\n")), 0644); err != nil {
+		return "", fmt.Errorf("write error: %w", err)
+	}
+	return fmt.Sprintf("Replaced nil with %s at %s:%d", zeroVal, pe.File, pe.Line), nil
+}
+
+// fixMissingFunctionBody adds an empty body to a function declaration.
+func fixMissingFunctionBody(pe *ParsedError, projectRoot string) (string, error) {
+	fullPath := filepath.Join(projectRoot, pe.File)
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, fullPath, nil, parser.ParseComments)
+	if err != nil {
+		return "", fmt.Errorf("parse error: %w", err)
+	}
+	var targetFunc *ast.FuncDecl
+	ast.Inspect(node, func(n ast.Node) bool {
+		if fn, ok := n.(*ast.FuncDecl); ok && fn.Body == nil && fset.Position(fn.Pos()).Line <= pe.Line && fset.Position(fn.End()).Line >= pe.Line {
+			targetFunc = fn
+			return false
+		}
+		return true
+	})
+	if targetFunc == nil {
+		return fmt.Sprintf("No function without body found at %s:%d", pe.File, pe.Line), nil
+	}
+	targetFunc.Body = &ast.BlockStmt{}
+	f, err := os.Create(fullPath)
+	if err != nil {
+		return "", fmt.Errorf("write error: %w", err)
+	}
+	defer f.Close()
+	if err := format.Node(f, fset, node); err != nil {
+		return "", fmt.Errorf("format error: %w", err)
+	}
+	return fmt.Sprintf("Added missing body to function at %s:%d", pe.File, pe.Line), nil
 }
 
 // getZeroValue returns the zero value literal for a given type.
