@@ -20,22 +20,22 @@
       {
         "category": "cartridge",
         "details": {
-          "path": "data/models/intents/gin_router.cartridge"
+          "path": "data/models/intents/gofix.cartridge"
         },
         "message": "pool_miss",
-        "timestamp": "2026-07-27T01:10:21.102984108Z"
+        "timestamp": "2026-07-27T02:08:40.153680994Z"
       },
       {
         "category": "cartridge",
         "details": {
-          "path": "data/models/intents/gin_router.cartridge",
+          "path": "data/models/intents/gofix.cartridge",
           "warm": 1
         },
         "message": "loaded",
-        "timestamp": "2026-07-27T01:10:21.114033454Z"
+        "timestamp": "2026-07-27T02:08:40.22350874Z"
       }
     ],
     "warm_cartridges": 1
   },
-  "updated_at": "2026-07-27T01:10:21.114040058Z"
+  "updated_at": "2026-07-27T02:08:40.223515058Z"
 }

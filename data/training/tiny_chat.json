@@ -1,0 +1,7 @@
+[
+  {
+    "instruction": "Fix the error handling in this Go function",
+    "input": "func test() { err := run(); fmt.Println(err) }",
+    "output": "func test() error { if err := run(); err != nil { return err }; return nil }"
+  }
+]

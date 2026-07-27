@@ -119,6 +119,7 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Unknown mode: %s\n", *mode)
 		os.Exit(1)
 	}
+
 }
 
 func printExploration(e *planner.ExplorationResult) {
