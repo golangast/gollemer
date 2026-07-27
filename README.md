@@ -1287,6 +1287,6 @@ Gollemer is organized into a clean, modular structure designed for ease of use a
 
 ---
 
-## 🚪 Exit
+## 🚪     Exit
 - **Interactive Shell**: Type `exit` to shut down.
 - **Interrupt**: `Ctrl+C` terminates training or inference loops safely.
