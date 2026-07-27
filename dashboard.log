@@ -1,2 +1,2 @@
-2026/07/12 18:16:23 main.go:664: 🧭 Observability backend already available at http://localhost:8080
-2026/07/12 18:16:23 main.go:334: 🖥️  Dashboard → http://localhost:8765 (enhanced observability UI)
+2026/07/26 12:04:41 main.go:717: 🧭 Observability backend already available at http://localhost:8080
+2026/07/26 12:04:41 main.go:379: 🖥️  Dashboard → http://localhost:8765 (classic training UI)

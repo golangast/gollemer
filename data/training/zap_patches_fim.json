@@ -1,0 +1,242 @@
+[
+  {
+    "prefix": "// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\n// THE SOFTWARE.\n",
+    "suffix": "// grpc from Zap itself.\npackage grpc\n",
+    "middle": "// Package grpc tests Zap's zapgrpc package without requiring a dependency on",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "",
+    "suffix": "}",
+    "middle": "// Copyright (c) 2023 Uber Technologies, Inc.\n//\n// Permission is hereby granted, free of charge, to any person obtaining a copy\n// of this software and associated documentation files (the \"Software\"), to deal\npackage ztest\n\nimport (\n\t\"sort\"\n\t\"sync\"\n\t\"time\"\n)\n\n// MockClock is a fake source of time.\n// It implements standard time operations,\n// but allows the user to control the passage of time.\n//\n// Use the [Add] method to progress time.\ntype MockClock struct {\n\tmu  sync.RWMutex\n\tnow time.Time\n\n\t// The MockClock works by maintaining a list of waiters.\n\t// Each waiter knows the time at which it should be resolved.\n\t// When the clock advances, all waiters that are in range are resolved\n\t// in chronological order.\n\twaiters []waiter\n}\n\n// NewMockClock builds a new mock clock\n// using the current actual time as the initial time.\nfunc NewMockClock() *MockClock {\n\treturn \u0026MockClock{\n\t\tnow: time.Now(),\n\t}\n}\n\n// Now reports the current time.\nfunc (c *MockClock) Now() time.Time {\n\tc.mu.RLock()\n\tdefer c.mu.RUnlock()\n\treturn c.now\n}\n\n// NewTicker returns a time.Ticker that ticks at the specified frequency.\n//\n// As with [time.NewTicker],\n// the ticker will drop ticks if the receiver is slow,\n// and the channel is never closed.\n//\n// Calling Stop on the returned ticker is a no-op.\n// The ticker only runs when the clock is advanced.\nfunc (c *MockClock) NewTicker(d time.Duration) *time.Ticker {\n\tch := make(chan time.Time, 1)\n\n\tvar tick func(time.Time)\n\ttick = func(now time.Time) {\n\t\tnext := now.Add(d)\n\t\tc.runAt(next, func() {\n\t\t\tdefer tick(next)\n\n\t\t\tselect {\n\t\t\tcase ch \u003c- next:\n\t\t\t\t// ok\n\t\t\tdefault:\n\t\t\t\t// The receiver is slow.\n\t\t\t\t// Drop the tick and continue.\n\t\t\t}\n\t\t})\n\t}\n\ttick(c.Now())\n\n\treturn \u0026time.Ticker{C: ch}\n}\n\n// runAt schedules the given function to be run at the given time.\n// The function runs without a lock held, so it may schedule more work.\nfunc (c *MockClock) runAt(t time.Time, fn func()) {\n\tc.mu.Lock()\n\tdefer c.mu.Unlock()\n\tc.waiters = append(c.waiters, waiter{until: t, fn: fn})\n}\n\ntype waiter struct {\n\tuntil time.Time\n\tfn    func()\n}\n\n// Add progresses time by the given duration.\n// Other operations waiting for the time to advance\n// will be resolved if they are within range.\n//\n// Side effects of operations waiting for the time to advance\n// will take effect on a best-effort basis.\n// Avoid racing with operations that have side effects.\n//\n// Panics if the duration is negative.\nfunc (c *MockClock) Add(d time.Duration) {\n\tif d \u003c 0 {\n\t\tpanic(\"cannot add negative duration\")\n\t}\n\n\tc.mu.Lock()\n\tdefer c.mu.Unlock()\n\n\tsort.Slice(c.waiters, func(i, j int) bool {\n\t\treturn c.waiters[i].until.Before(c.waiters[j].until)\n\t})\n\n\tnewTime := c.now.Add(d)\n\t// newTime won't be recorded until the end of this method.\n\t// This ensures that any waiters that are resolved\n\t// are resolved at the time they were expecting.\n\n\tfor len(c.waiters) \u003e 0 {\n\t\tw := c.waiters[0]\n\t\tif w.until.After(newTime) {\n\t\t\tbreak\n\t\t}\n\t\tc.waiters[0] = waiter{} // avoid memory leak\n\t\tc.waiters = c.waiters[1:]\n\n\t\t// The waiter is within range.\n\t\t// Travel to the time of the waiter and resolve it.\n\t\tc.now = w.until\n\n\t\t// The waiter may schedule more work\n\t\t// so we must release the lock.\n\t\tc.mu.Unlock()\n\t\tw.fn()\n\t\t// Sleeping here is necessary to let the side effects of waiters\n\t\t// take effect before we continue.\n\t\ttime.Sleep(1 * time.Millisecond)\n\t\tc.mu.Lock()\n\t}\n\n\tc.now = newTime",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "// Package zapslog provides an implementation of slog.Handler which writes to\n// the supplied zapcore.Core.\n//",
+    "suffix": "package zapslog // import \"go.uber.org/zap/exp/zapslog\"",
+    "middle": "// Use of this package requires at least Go 1.21.",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "// Package zapslog provides an implementation of slog.Handler which writes to\n// the supplied zapcore.Core.\n//",
+    "suffix": "package zapslog // import \"go.uber.org/zap/exp/zapslog\"",
+    "middle": "// For versions of Go before 1.21, this package uses golang.org/x/exp/slog.\n// For Go 1.21 or newer, this package uses the standard log/slog package.",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "package zap\n\nimport (",
+    "suffix": "}\n\n// NewAtomicLevelAt is a convenience function that creates an AtomicLevel",
+    "middle": "\t\"sync/atomic\"\n\n\t\"go.uber.org/zap/internal\"\n\t\"go.uber.org/zap/zapcore\"\n)\n// NewAtomicLevel creates an AtomicLevel with InfoLevel and above logging\n// enabled.\nfunc NewAtomicLevel() AtomicLevel {\n\tlvl := AtomicLevel{l: new(atomic.Int32)}\n\tlvl.l.Store(int32(InfoLevel))\n\treturn lvl",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\n// THE SOFTWARE.\n",
+    "suffix": "package internal\n\nimport \"go.uber.org/zap/zapcore\"",
+    "middle": "// Package internal and its subpackages hold types and functionality\n// that are not part of Zap's public API.",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\n// THE SOFTWARE.\n",
+    "suffix": "package grpc\n\n// This file exists to treat this directory as a valid package with at least",
+    "middle": "// Package grpc tests Zap's zapgrpc package without requring a dependency on\n// grpc from Zap itself.",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "\npackage zapcore\n",
+    "suffix": "\n// DefaultClock is the default clock used by Zap in operations that require\n// time. This clock uses the system clock for all operations.",
+    "middle": "import \"time\"",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "// THE SOFTWARE.\n\n// See #682 for more information.",
+    "suffix": "// +build go1.12\n\npackage zap",
+    "middle": "//go:build go1.12",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "// THE SOFTWARE.\n\n// See #682 for more information.",
+    "suffix": "// +build !go1.12\n\npackage zap",
+    "middle": "//go:build !go1.12",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\n// THE SOFTWARE.\n",
+    "suffix": "// +build tools\n\npackage tools",
+    "middle": "//go:build tools",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "// THE SOFTWARE.\n\n// Package observer provides a zapcore.Core that keeps an in-memory,",
+    "suffix": "// applications that want to unit test their log output without tying their\n// tests to a particular output encoding.\npackage observer // import \"go.uber.org/zap/zaptest/observer\"",
+    "middle": "// encoding-agnostic representation of log entries. It's useful for",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "\npackage zap\n",
+    "suffix": "}",
+    "middle": "import (\n\t\"time\"\n\n\t\"go.uber.org/zap/zapcore\"\n)\n\n// Clock is a source of time for logged entries.\ntype Clock = zapcore.Clock\n\n// systemClock implements default Clock that uses system time.\ntype systemClock struct{}\nfunc (systemClock) Now() time.Time {\n\treturn time.Now()\n}\n\nfunc (systemClock) NewTicker(duration time.Duration) *time.Ticker {\n\treturn time.NewTicker(duration)",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\n// THE SOFTWARE.\n",
+    "suffix": "",
+    "middle": "package zaptest\n\nimport \"go.uber.org/zap/internal/ztest\"\n\ntype (\n\t// A Syncer is a spy for the Sync portion of zapcore.WriteSyncer.\n\tSyncer = ztest.Syncer\n\n\t// A Discarder sends all writes to ioutil.Discard.\n\tDiscarder = ztest.Discarder\n\n\t// FailWriter is a WriteSyncer that always returns an error on writes.\n\tFailWriter = ztest.FailWriter\n\n\t// ShortWriter is a WriteSyncer whose write method never returns an error,\n\t// but always reports that it wrote one byte less than the input slice's\n\t// length (thus, a \"short write\").\n\tShortWriter = ztest.ShortWriter\n\n\t// Buffer is an implementation of zapcore.WriteSyncer that sends all writes to\n\t// a bytes.Buffer. It has convenience methods to split the accumulated buffer\n\t// on newlines.\n\tBuffer = ztest.Buffer\n)",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "package zaptest\n\nimport (",
+    "suffix": "\treturn len(p), nil\n}\n",
+    "middle": "\t\"bytes\"\n\n\t\"go.uber.org/zap\"\n\t\"go.uber.org/zap/zapcore\"\n)\ntype testingWriter struct{ t TestingT }\n\nfunc (w testingWriter) Write(p []byte) (n int, err error) {\n\t// Strip trailing newline because t.Log always adds one.\n\tp = bytes.TrimRight(p, \"\\n\")\n\n\t// Note: t.Log is safe for concurrent use.\n\tw.t.Logf(\"%s\", p)",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "// Package buffer provides a thin wrapper around a byte slice. Unlike the\n// standard library's bytes.Buffer, it supports a portion of the strconv\n// package's zero-allocation formatters.",
+    "suffix": "\nimport \"strconv\"\n",
+    "middle": "package buffer // import \"go.uber.org/zap/buffer\"",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\n// THE SOFTWARE.\n",
+    "suffix": "package zaptest // import \"go.uber.org/zap/zaptest\"",
+    "middle": "// Package zaptest provides a variety of helpers for testing log output.",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "package zaptest\n\nimport (",
+    "suffix": "}",
+    "middle": "\t\"time\"\n\n\t\"go.uber.org/zap/internal/ztest\"\n)\n\n// Timeout scales the provided duration by $TEST_TIMEOUT_SCALE.\n//\n// Deprecated: This function is intended for internal testing and shouldn't be\n// used outside zap itself. It was introduced before Go supported internal\n// packages.\nfunc Timeout(base time.Duration) time.Duration {\n\treturn ztest.Timeout(base)\n}\n\n// Sleep scales the sleep duration by $TEST_TIMEOUT_SCALE.\n//\n// Deprecated: This function is intended for internal testing and shouldn't be\n// used outside zap itself. It was introduced before Go supported internal\n// packages.\nfunc Sleep(base time.Duration) {\n\tztest.Sleep(base)",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\n// THE SOFTWARE.\n",
+    "suffix": "package zap // import \"go.uber.org/zap\"",
+    "middle": "// Package zap provides fast, structured, leveled logging.\n//\n// For applications that log in the hot path, reflection-based serialization\n// and string formatting are prohibitively expensive - they're CPU-intensive\n// and make many small allocations. Put differently, using json.Marshal and\n// fmt.Fprintf to log tons of interface{} makes your application slow.\n//\n// Zap takes a different approach. It includes a reflection-free,\n// zero-allocation JSON encoder, and the base Logger strives to avoid\n// serialization overhead and allocations wherever possible. By building the\n// high-level SugaredLogger on that foundation, zap lets users choose when\n// they need to count every allocation and when they'd prefer a more familiar,\n// loosely typed API.\n//\n// Choosing a Logger\n//\n// In contexts where performance is nice, but not critical, use the\n// SugaredLogger. It's 4-10x faster than other structured logging packages and\n// supports both structured and printf-style logging. Like log15 and go-kit,\n// the SugaredLogger's structured logging APIs are loosely typed and accept a\n// variadic number of key-value pairs. (For more advanced use cases, they also\n// accept strongly typed fields - see the SugaredLogger.With documentation for\n// details.)\n//  sugar := zap.NewExample().Sugar()\n//  defer sugar.Sync()\n//  sugar.Infow(\"failed to fetch URL\",\n//    \"url\", \"http://example.com\",\n//    \"attempt\", 3,\n//    \"backoff\", time.Second,\n//  )\n//  sugar.Printf(\"failed to fetch URL: %s\", \"http://example.com\")\n//\n// By default, loggers are unbuffered. However, since zap's low-level APIs\n// allow buffering, calling `Sync` before letting your process exit is a good\n// habit.\n//\n// In the rare contexts where every microsecond and every allocation matter,\n// use the Logger. It's even faster than the SugaredLogger and allocates far\n// less, but it only supports strongly-typed, structured logging.\n//  logger := zap.NewExample()\n//  defer logger.Sync()\n//  logger.Info(\"failed to fetch URL\",\n//    zap.String(\"url\", \"http://example.com\"),\n//    zap.Int(\"attempt\", 3),\n//    zap.Duration(\"backoff\", time.Second),\n//  )\n//\n// Choosing between the Logger and SugaredLogger doesn't need to be an\n// application-wide decision: converting between the two is simple and\n// inexpensive.\n//   logger := zap.NewExample()\n//   defer logger.Sync()\n//   sugar := logger.Sugar()\n//   plain := sugar.Desugar()\n//\n// Configuring Zap\n//\n// The simplest way to build a Logger is to use zap's opinionated presets:\n// NewExample, NewProduction, and NewDevelopment. These presets build a logger\n// with a single function call:\n//  logger, err := zap.NewProduction()\n//  if err != nil {\n//    log.Fatalf(\"can't initialize zap logger: %v\", err)\n//  }\n//  defer logger.Sync()\n//\n// Presets are fine for small projects, but larger projects and organizations\n// naturally require a bit more customization. For most users, zap's Config\n// struct strikes the right balance between flexibility and convenience. See\n// the package-level BasicConfiguration example for sample code.\n//\n// More unusual configurations (splitting output between files, sending logs\n// to a message queue, etc.) are possible, but require direct use of\n// go.uber.org/zap/zapcore. See the package-level AdvancedConfiguration\n// example for sample code.\n//\n// Extending Zap\n//\n// The zap package itself is a relatively thin wrapper around the interfaces\n// in go.uber.org/zap/zapcore. Extending zap to support a new encoding (e.g.,\n// BSON), a new log sink (e.g., Kafka), or something more exotic (perhaps an\n// exception aggregation service, like Sentry or Rollbar) typically requires\n// implementing the zapcore.Encoder, zapcore.WriteSyncer, or zapcore.Core\n// interfaces. See the zapcore documentation for details.\n//\n// Similarly, package authors can use the high-performance Encoder and Core\n// implementations in the zapcore package to build their own loggers.\n//\n// Frequently Asked Questions\n//\n// An FAQ covering everything from installation errors to design decisions is\n// available at https://github.com/uber-go/zap/blob/master/FAQ.md.",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\n// THE SOFTWARE.\n",
+    "suffix": "",
+    "middle": "// Package bufferpool houses zap's shared internal buffer pool. Third-party\n// packages can recreate the same functionality with buffers.NewPool.\npackage bufferpool\n\nimport \"go.uber.org/zap/buffer\"\n\nvar (\n\t_pool = buffer.NewPool()\n\t// Get retrieves a buffer from the pool, creating one if necessary.\n\tGet = _pool.Get\n)",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "\npackage zap\n",
+    "suffix": "}",
+    "middle": "import (\n\t\"runtime\"\n\t\"strings\"\n\t\"sync\"\n\n\t\"go.uber.org/zap/internal/bufferpool\"\n)\n\nvar (\n\t_stacktraceIgnorePrefixes = []string{\n\t\t\"runtime.goexit\",\n\t\t\"runtime.main\",\n\t}\n\t_stacktracePool = sync.Pool{\n\t\tNew: func() interface{} {\n\t\t\treturn newProgramCounters(64)\n\t\t},\n\t}\n)\n\nfunc takeStacktrace() string {\n\tbuffer := bufferpool.Get()\n\tdefer bufferpool.Put(buffer)\n\tprogramCounters := _stacktracePool.Get().(*programCounters)\n\tdefer _stacktracePool.Put(programCounters)\n\n\tfor {\n\t\t// Skip the call to runtime.Counters and takeStacktrace so that the\n\t\t// program counters start at the caller of takeStacktrace.\n\t\tn := runtime.Callers(2, programCounters.pcs)\n\t\tif n \u003c cap(programCounters.pcs) {\n\t\t\tprogramCounters.pcs = programCounters.pcs[:n]\n\t\t\tbreak\n\t\t}\n\t\t// Don't put the too-short counter slice back into the pool; this lets\n\t\t// the pool adjust if we consistently take deep stacktraces.\n\t\tprogramCounters = newProgramCounters(len(programCounters.pcs) * 2)\n\t}\n\n\ti := 0\n\tfor _, programCounter := range programCounters.pcs {\n\t\tf := runtime.FuncForPC(programCounter)\n\t\tname := f.Name()\n\t\tif shouldIgnoreStacktraceName(name) {\n\t\t\tcontinue\n\t\t}\n\t\tif i != 0 {\n\t\t\tbuffer.AppendByte('\\n')\n\t\t}\n\t\ti++\n\t\tfile, line := f.FileLine(programCounter - 1)\n\t\tbuffer.AppendString(name)\n\t\tbuffer.AppendByte('\\n')\n\t\tbuffer.AppendByte('\\t')\n\t\tbuffer.AppendString(file)\n\t\tbuffer.AppendByte(':')\n\t\tbuffer.AppendInt(int64(line))\n\t}\n\n\treturn buffer.String()\n}\n\nfunc shouldIgnoreStacktraceName(name string) bool {\n\tfor _, prefix := range _stacktraceIgnorePrefixes {\n\t\tif strings.HasPrefix(name, prefix) {\n\t\t\treturn true\n\t\t}\n\t}\n\treturn false\n}\n\ntype programCounters struct {\n\tpcs []uintptr\n}\n\nfunc newProgramCounters(size int) *programCounters {\n\treturn \u0026programCounters{make([]uintptr, size)}",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "// THE SOFTWARE.\n\n// Package zap provides fast, structured, leveled logging in Go.",
+    "suffix": "",
+    "middle": "package zap // import \"go.uber.org/zap\"",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "// Package zapcore defines and implements the low-level interfaces upon which\n// zap is built. By providing alternate implementations of these interfaces,\n// external packages can extend zap's capabilities.",
+    "suffix": "",
+    "middle": "package zapcore // import \"go.uber.org/zap/zapcore\"",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "// a single error.\npackage multierror\n",
+    "suffix": "\treturn ret\n}\n",
+    "middle": "import \"go.uber.org/zap/internal/bufferpool\"\n\n// implement the standard lib's error interface on a private type so that we\n// can't forget to call Error.AsError().\ntype errSlice []error\n\nfunc (es errSlice) Error() string {\n\tb := bufferpool.Get()\n\tfor i, err := range es {\n\t\tif i \u003e 0 {\n\t\t\tb.AppendByte(';')\n\t\t\tb.AppendByte(' ')\n\t\t}\n\t\tb.AppendString(err.Error())\n\t}\n\tret := b.String()\n\tbufferpool.Put(b)",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "\npackage zapcore\n",
+    "suffix": "}\n\n// Encoder is a format-agnostic interface for all log entry marshalers. Since",
+    "middle": "import (\n\t\"strings\"\n\t\"time\"\n)\n\n// A LevelEncoder serializes a Level to a primitive type.\ntype LevelEncoder func(Level, PrimitiveArrayEncoder)\n\n// LowercaseLevelEncoder serializes a Level to a lowercase string. For example,\n// InfoLevel is serialized to \"info\".\nfunc LowercaseLevelEncoder(l Level, enc PrimitiveArrayEncoder) {\n\tenc.AppendString(l.String())\n}\n\n// CapitalLevelEncoder serializes a Level to an all-caps string. For example,\n// InfoLevel is serialized to \"INFO\".\nfunc CapitalLevelEncoder(l Level, enc PrimitiveArrayEncoder) {\n\tenc.AppendString(strings.ToUpper(l.String()))\n}\n\n// UnmarshalText unmarshals text to a LevelEncoder. \"capital\" is unmarshaled to\n// CapitalLevelEncoder, and anything else is unmarshaled to LowercaseLevelEncoder.\nfunc (e *LevelEncoder) UnmarshalText(text []byte) error {\n\tswitch string(text) {\n\tcase \"capital\":\n\t\t*e = CapitalLevelEncoder\n\tdefault:\n\t\t*e = LowercaseLevelEncoder\n\t}\n\treturn nil\n}\n\n// A TimeEncoder serializes a time.Time to a primitive type.\ntype TimeEncoder func(time.Time, PrimitiveArrayEncoder)\n\n// EpochTimeEncoder serializes a time.Time to a floating-point number of seconds\n// since the Unix epoch.\nfunc EpochTimeEncoder(t time.Time, enc PrimitiveArrayEncoder) {\n\tnanos := t.UnixNano()\n\tsec := float64(nanos) / float64(time.Second)\n\tenc.AppendFloat64(sec)\n}\n\n// EpochMillisTimeEncoder serializes a time.Time to a floating-point number of\n// milliseconds since the Unix epoch.\nfunc EpochMillisTimeEncoder(t time.Time, enc PrimitiveArrayEncoder) {\n\tnanos := t.UnixNano()\n\tmillis := float64(nanos) / float64(time.Millisecond)\n\tenc.AppendFloat64(millis)\n}\n\n// EpochNanosTimeEncoder serializes a time.Time to an integer number of\n// nanoseconds since the Unix epoch.\nfunc EpochNanosTimeEncoder(t time.Time, enc PrimitiveArrayEncoder) {\n\tenc.AppendInt64(t.UnixNano())\n}\n\n// ISO8601TimeEncoder serializes a time.Time to an ISO8601-formatted string\n// with millisecond precision.\nfunc ISO8601TimeEncoder(t time.Time, enc PrimitiveArrayEncoder) {\n\tenc.AppendString(t.Format(\"2006-01-02T15:04:05.999Z0700\"))\n}\n\n// UnmarshalText unmarshals text to a TimeEncoder. \"iso8601\" and \"ISO8601\" are\n// unmarshaled to ISO8601TimeEncoder, \"millis\" is unmarshaled to\n// EpochMillisTimeEncoder, and anything else is unmarshaled to EpochTimeEncoder.\nfunc (e *TimeEncoder) UnmarshalText(text []byte) error {\n\tswitch string(text) {\n\tcase \"iso8601\", \"ISO8601\":\n\t\t*e = ISO8601TimeEncoder\n\tcase \"millis\":\n\t\t*e = EpochMillisTimeEncoder\n\tcase \"nanos\":\n\t\t*e = EpochNanosTimeEncoder\n\tdefault:\n\t\t*e = EpochTimeEncoder\n\t}\n\treturn nil\n}\n\n// A DurationEncoder serializes a time.Duration to a primitive type.\ntype DurationEncoder func(time.Duration, PrimitiveArrayEncoder)\n\n// SecondsDurationEncoder serializes a time.Duration to a floating-point number of seconds elapsed.\nfunc SecondsDurationEncoder(d time.Duration, enc PrimitiveArrayEncoder) {\n\tenc.AppendFloat64(float64(d) / float64(time.Second))\n}\n\n// NanosDurationEncoder serializes a time.Duration to an integer number of\n// nanoseconds elapsed.\nfunc NanosDurationEncoder(d time.Duration, enc PrimitiveArrayEncoder) {\n\tenc.AppendInt64(int64(d))\n}\n\n// StringDurationEncoder serializes a time.Duration using its built-in String\n// method.\nfunc StringDurationEncoder(d time.Duration, enc PrimitiveArrayEncoder) {\n\tenc.AppendString(d.String())\n}\n\n// UnmarshalText unmarshals text to a DurationEncoder. \"string\" is unmarshaled\n// to StringDurationEncoder, and anything else is unmarshaled to\n// NanosDurationEncoder.\nfunc (e *DurationEncoder) UnmarshalText(text []byte) error {\n\tswitch string(text) {\n\tcase \"string\":\n\t\t*e = StringDurationEncoder\n\tcase \"nanos\":\n\t\t*e = NanosDurationEncoder\n\tdefault:\n\t\t*e = SecondsDurationEncoder\n\t}\n\treturn nil\n}\n\n// An EncoderConfig allows users to configure the concrete encoders supplied by\n// zapcore.\ntype EncoderConfig struct {\n\t// Set the keys used for each log entry.\n\tMessageKey    string `json:\"message_key\",yaml:\"message_key\"`\n\tLevelKey      string `json:\"level_key\",yaml:\"level_key\"`\n\tTimeKey       string `json:\"time_key\",yaml:\"time_key\"`\n\tNameKey       string `json:\"name_key\",yaml:\"name_key\"`\n\tCallerKey     string `json:\"caller_key\",yaml:\"caller_key\"`\n\tStacktraceKey string `json:\"stacktrace_key\",yaml:\"stacktrace_key\"`\n\t// Configure the primitive representations of common complex types. For\n\t// example, some users may want all time.Times serialized as floating-point\n\t// seconds since epoch, while others may prefer ISO8601 strings.\n\tEncodeLevel    LevelEncoder    `json:\"level_encoder\",yaml:\"level_encoder\"`\n\tEncodeTime     TimeEncoder     `json:\"time_encoder\",yaml:\"time_encoder\"`\n\tEncodeDuration DurationEncoder `json:\"duration_encoder\",yaml:\"duration_encoder\"`\n}\n\n// ObjectEncoder is a strongly-typed, encoding-agnostic interface for adding a\n// arrays even though they aren't typical in Go. Like slices, ArrayEncoders\n// aren't safe for concurrent use (though typical use shouldn't require locks).\ntype ArrayEncoder interface {\n\t// Built-in types.\n\tPrimitiveArrayEncoder\n\n\t// Time-related types.\n\tAppendDuration(time.Duration)\n\tAppendTime(time.Time)\n\n\t// Logging-specific marshalers.\n\tAppendArray(ArrayMarshaler) error\n\tAppendObject(ObjectMarshaler) error\n\n\t// AppendReflected uses reflection to serialize arbitrary objects, so it's\n\t// slow and allocation-heavy.\n\tAppendReflected(value interface{}) error\n}\n\n// PrimitiveArrayEncoder is the subset of the ArrayEncoder interface that deals\n// only in Go's built-in types. It's included only so that Duration- and\n// TimeEncoders cannot trigger infinite recursion.\ntype PrimitiveArrayEncoder interface {\n\t// Built-in types.\n\tAppendBool(bool)\n\tAppendByte(byte)\n\tAppendComplex128(complex128)\n\tAppendComplex64(complex64)\n\tAppendFloat64(float64)\n\tAppendFloat32(float32)\n\tAppendInt(int)\n\tAppendInt8(int8)\n\tAppendRune(rune)\n\tAppendString(string)\n\tAppendUint(uint)\n\tAppendUint64(uint64)\n\tAppendUint32(uint32)\n\tAppendUint16(uint16)\n\tAppendUint8(uint8)\n\tAppendUintptr(uintptr)",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "\npackage zapcore\n",
+    "suffix": "}",
+    "middle": "// ObjectEncoder is a strongly-typed, encoding-agnostic interface for adding a\n// map- or struct-like object to the logging context. Like maps, ObjectEncoders\n// aren't safe for concurrent use (though typical use shouldn't require locks).\n// lower-allocation.\n//\n// Implementations of the ObjectEncoder interface's methods can, of course,\n// freely modify the receiver. However, the Clone and EncodeEntry methods will\n// be called concurrently and shouldn't modify the receiver.\ntype Encoder interface {\n\tObjectEncoder\n\t// Clone copies the encoder, ensuring that adding fields to the copy doesn't\n\t// affect the original.\n\tClone() Encoder\n\n\t// EncodeEntry encodes an entry and fields, along with any accumulated\n\t// context, into a byte buffer and returns it.\n\tEncodeEntry(Entry, []Field) ([]byte, error)",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "package zapcore\n\nimport (",
+    "suffix": "}",
+    "middle": "\t\"io\"\n\t\"sync\"\n\n\t\"go.uber.org/zap/internal/multierror\"\n)\n\n// A WriteSyncer is an io.Writer that can also flush any buffered data. Note\n// the smallest number is returned even though Write() is called on\n// all of them.\nfunc (ws multiWriteSyncer) Write(p []byte) (int, error) {\n\tvar errs multierror.Error\n\tnWritten := 0\n\tfor _, w := range ws {\n\t\tn, err := w.Write(p)\n\t\terrs = errs.Append(err)\n\t\tif nWritten == 0 \u0026\u0026 n != 0 {\n\t\t\tnWritten = n\n\t\t} else if n \u003c nWritten {\n\t\t\tnWritten = n\n\t\t}\n\t}\n\treturn nWritten, errs.AsError()\n}\n\nfunc (ws multiWriteSyncer) Sync() error {\n\tvar errs multierror.Error\n\tfor _, w := range ws {\n\t\terrs = errs.Append(w.Sync())\n\t}\n\treturn errs.AsError()",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "\npackage zap\n",
+    "suffix": "}",
+    "middle": "import (\n\t\"flag\"\n\n\t\"go.uber.org/zap/zapcore\"\n)\n\n// LevelFlag defines a Level flag with specified name, default value and\n// usage string. The return value is the address of a Level value that stores\n// the value of the flag.\nfunc LevelFlag(name string, defaultLevel zapcore.Level, usage string) *zapcore.Level {\n\tlvl := defaultLevel\n\tflag.Var(\u0026lvl, name, usage)\n\treturn \u0026lvl",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "\npackage zap\n",
+    "suffix": "}",
+    "middle": "// Tee creates a Facility that duplicates log entries into two or more\n// facilities; if you call it with less than two, you get back the one facility\n// you passed (or nil in the pathological case).\nfunc Tee(facs ...Facility) Facility {\n\tswitch len(facs) {\n\tcase 0:\n\t\treturn nil\n\tcase 1:\n\t\treturn facs[0]\n\tdefault:\n\t\treturn multiFacility(facs)\n\t}\n}\n\ntype multiFacility []Facility\n\nfunc (mf multiFacility) With(fields []Field) Facility {\n\tclone := make(multiFacility, len(mf))\n\tfor i := range mf {\n\t\tclone[i] = mf[i].With(fields)\n\t}\n\treturn clone\n}\n\nfunc (mf multiFacility) Enabled(lvl Level) bool {\n\tfor i := range mf {\n\t\tif mf[i].Enabled(lvl) {\n\t\t\treturn true\n\t\t}\n\t}\n\treturn false\n}\n\nfunc (mf multiFacility) Check(ent Entry, ce *CheckedEntry) *CheckedEntry {\n\tfor i := range mf {\n\t\tce = mf[i].Check(ent, ce)\n\t}\n\treturn ce\n}\n\nfunc (mf multiFacility) Write(ent Entry, fields []Field) error {\n\tvar errs multiError\n\tfor i := range mf {\n\t\tif err := mf[i].Write(ent, fields); err != nil {\n\t\t\terrs = append(errs, err)\n\t\t}\n\t}\n\treturn errs.asError()",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "\npackage zwrap\n",
+    "suffix": "\n// KeyValueMap implements zap.KeyValue backed by a map.\ntype KeyValueMap map[string]interface{}",
+    "middle": "import \"go.uber.org/zap\"",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "\npackage zap\n",
+    "suffix": "}",
+    "middle": "// Tee creates a Logger that duplicates its log calls to two or more\n// loggers. It is similar to io.MultiWriter.\n//\n// For each logging level method (.Debug, .Info, etc), the Tee calls\n// each sub-logger's level method.\n//\n// Exceptions are made for the Fatal and Panic methods: the returned\n// logger calls .Log(FatalLevel, ...) and .Log(PanicLevel, ...). Only\n// after all sub-loggers have received the message, then the Tee\n// terminates the process (using os.Exit or panic() per usual\n// semantics).\n//\n// DFatal is handled similarly to Fatal and Panic, since it is not actually a\n// level; each sub-logger's DFatal method dynamically chooses to either call\n// Error or Fatal.\n//\n// Check returns a CheckedMessage chain of any OK CheckedMessages returned by\n// all sub-loggers. The returned message is OK if any of the sub-messages are.\n// An exception is made for FatalLevel and PanicLevel, where a CheckedMessage\n// is returned against the Tee itself. This is so that tlog.Check(PanicLevel,\n// ...).Write(...) is equivalent to tlog.Panic(...) (likewise for FatalLevel).\nfunc Tee(logs ...Logger) Logger {\n\tswitch len(logs) {\n\tcase 0:\n\t\treturn nil\n\tcase 1:\n\t\treturn logs[0]\n\tdefault:\n\t\treturn multiLogger(logs)\n\t}\n}\n\ntype multiLogger []Logger\n\nfunc (ml multiLogger) Log(lvl Level, msg string, fields ...Field) {\n\tml.log(lvl, msg, fields)\n}\n\nfunc (ml multiLogger) Debug(msg string, fields ...Field) {\n\tml.log(DebugLevel, msg, fields)\n}\n\nfunc (ml multiLogger) Info(msg string, fields ...Field) {\n\tml.log(InfoLevel, msg, fields)\n}\n\nfunc (ml multiLogger) Warn(msg string, fields ...Field) {\n\tml.log(WarnLevel, msg, fields)\n}\n\nfunc (ml multiLogger) Error(msg string, fields ...Field) {\n\tml.log(ErrorLevel, msg, fields)\n}\n\nfunc (ml multiLogger) Panic(msg string, fields ...Field) {\n\tml.log(PanicLevel, msg, fields)\n\tpanic(msg)\n}\n\nfunc (ml multiLogger) Fatal(msg string, fields ...Field) {\n\tml.log(FatalLevel, msg, fields)\n\t_exit(1)\n}\n\nfunc (ml multiLogger) log(lvl Level, msg string, fields []Field) {\n\tfor _, log := range ml {\n\t\tlog.Log(lvl, msg, fields...)\n\t}\n}\n\nfunc (ml multiLogger) DFatal(msg string, fields ...Field) {\n\tfor _, log := range ml {\n\t\tlog.DFatal(msg, fields...)\n\t}\n}\n\nfunc (ml multiLogger) With(fields ...Field) Logger {\n\tclone := make(multiLogger, len(ml))\n\tfor i := range ml {\n\t\tclone[i] = ml[i].With(fields...)\n\t}\n\treturn clone\n}\n\nfunc (ml multiLogger) Check(lvl Level, msg string) *CheckedMessage {\n\tswitch lvl {\n\tcase FatalLevel, PanicLevel:\n\t\t// need to end up calling multiLogger Fatal and Panic methods, to avoid\n\t\t// sub-logger termination (by merely logging at FatalLevel and\n\t\t// PanicLevel).\n\t\treturn NewCheckedMessage(ml, lvl, msg)\n\t}\n\tvar cm *CheckedMessage\n\tfor _, log := range ml {\n\t\tcm = cm.Chain(log.Check(lvl, msg))\n\t}\n\treturn cm",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "// THE SOFTWARE.\n\n// Package zbark provides a wrapper to make zap.Loggers compatible with the",
+    "suffix": "//\n// This package is only of interest to users of github.com/uber-common/bark.\npackage zbark",
+    "middle": "// bark.Logger interface and a wrapper to make bark.Loggers compatible with\n// zap.Logger interface.",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "\npackage zap\n",
+    "suffix": "}",
+    "middle": "import \"io\"\n\n// encoder is a format-agnostic interface for all log field encoders. It's not\n// safe for concurrent use.\ntype encoder interface {\n\tKeyValue\n\n\tAddFields([]Field)\n\tClone() encoder\n\tFree()\n\tWriteEntry(io.Writer, *Entry) error",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\n// THE SOFTWARE.\n",
+    "suffix": "package spy",
+    "middle": "// Package spy provides an implementation of zap.Logger that helps test\n// logging wrappers.",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\n// THE SOFTWARE.\n",
+    "suffix": "package zwrap",
+    "middle": "// Package zwrap provides a variety of wrappers for the core zap logger.",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "\npackage zap\n",
+    "suffix": "\tMarshalLog(KeyValue) error\n}",
+    "middle": "// LogMarshaler allows user-defined types to efficiently add themselves to the\n// logging context, and to selectively omit information which shouldn't be\n// included in logs (e.g., passwords).\ntype LogMarshaler interface {",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "\npackage spy\n",
+    "suffix": "}",
+    "middle": "import (\n\t\"errors\"\n\t\"io\"\n)\n\n// FailWriter is an io.Writer that always returns an error.\ntype FailWriter struct{}\nfunc (w ShortWriter) Write(b []byte) (int, error) {\n\treturn len(b) - 1, nil\n}\n\n// A Syncer is a spy for the Sync portion of zap.WriteSyncer.\ntype Syncer struct {\n\terr    error\n\tcalled bool\n}\n\n// SetError sets the error that the Sync method will return.\nfunc (s *Syncer) SetError(err error) {\n\ts.err = err\n}\n\n// Sync records that it was called, then returns the user-supplied error (if\n// any).\nfunc (s *Syncer) Sync() error {\n\ts.called = true\n\treturn s.err\n}\n\n// Called reports whether the Sync method was called.\nfunc (s *Syncer) Called() bool {\n\treturn s.called\n}\n\n// A Flusher is a spy for the Flush portion of zap.WriteFlusher.\ntype Flusher struct {\n\terr    error\n\tcalled bool\n}\n\n// SetError sets the error that the Flush method will return.\nfunc (f *Flusher) SetError(err error) {\n\tf.err = err\n}\n\n// Flush records that it was called, then returns the user-supplied error (if\n// any).\nfunc (f *Flusher) Flush() error {\n\tf.called = true\n\treturn f.err\n}\n\n// Called reports whether the Flush method was called.\nfunc (f *Flusher) Called() bool {\n\treturn f.called\n}\n\n// WriteSyncer is a concrete type that implements zap.WriteSyncer.\ntype WriteSyncer struct {\n\tio.Writer\n\tSyncer\n}\n\n// WriteFlusher is a concrete type that implements zap.WriteFlusher.\ntype WriteFlusher struct {\n\tio.Writer\n\tFlusher\n}\n\n// A WriteFlushSyncer implements both zap.WriteFlusher and zap.WriteSyncer.\ntype WriteFlushSyncer struct {\n\tio.Writer\n\tSyncer\n\tFlusher",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "\npackage zap\n",
+    "suffix": "type Marshaler interface {\n\tMarshalLog(KeyValue) error\n}",
+    "middle": "// Marshaler allows user-defined types to efficiently add themselves to the\n// logging context, and to selectively omit information which shouldn't be\n// included in logs (e.g., passwords).",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "// OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN\n// THE SOFTWARE.\n",
+    "suffix": "package zap",
+    "middle": "// Package zap provides fast, structured, leveled logging in Go.",
+    "repo": "uber-go_zap"
+  },
+  {
+    "prefix": "\npackage zap\n",
+    "suffix": "\t}\n\treturn nil\n}",
+    "middle": "import (\n\t\"fmt\"\n\t\"math\"\n\t\"time\"\n)\n\ntype fieldType int\n\n// A FieldCloser closes a nested field.\ntype FieldCloser interface {\n\tCloseField()\n}\n\nconst (\n\tunknownType fieldType = iota\n\tboolType\n\tfloatType\n\tintType\n\tint64Type\n\tstringType\n\tmarshalerType\n)\n\n// A Field is a deferred marshaling operation used to add a key-value pair to\n// a logger's context. Keys and values are appropriately escaped for the current\n// encoding scheme (e.g., JSON).\ntype Field struct {\n\tkey       string\n\tfieldType fieldType\n\tival      int64\n\tstr       string\n\tobj       Marshaler\n}\n\n// Bool constructs a Field with the given key and value.\nfunc Bool(key string, val bool) Field {\n\treturn Field{key: key, fieldType: boolType, ival: 1}\n}\n\n// Float64 constructs a Field with the given key and value. The floating-point\n// value is encoded using strconv.FormatFloat's 'g' option (exponential notation\n// for large exponents, grade-school notation otherwise).\nfunc Float64(key string, val float64) Field {\n\treturn Field{key: key, fieldType: floatType, ival: int64(math.Float64bits(val))}\n}\n\n// Int constructs a Field with the given key and value.\nfunc Int(key string, val int) Field {\n\treturn Field{key: key, fieldType: intType, ival: int64(val)}\n}\n\n// Int64 constructs a Field with the given key and value.\nfunc Int64(key string, val int64) Field {\n\treturn Field{key: key, fieldType: int64Type, ival: val}\n}\n\n// String constructs a Field with the given key and value.\nfunc String(key string, val string) Field {\n\treturn Field{key: key, fieldType: stringType, str: val}\n}\n\n// Time constructs a Field with the given key and value. It represents a\n// time.Time as nanoseconds since epoch.\nfunc Time(key string, val time.Time) Field {\n\treturn Int64(key, val.UnixNano())\n}\n\n// Err constructs a Field that stores err.Error() under the key \"error\".\nfunc Err(err error) Field {\n\treturn String(\"error\", err.Error())\n}\n\n// Duration constructs a Field with the given key and value. It represents\n// durations as an integer number of nanoseconds.\nfunc Duration(key string, val time.Duration) Field {\n\treturn Int64(key, int64(val))\n}\n\n// Object constructs a field with the given key and zap.Marshaler. It provides a\n// flexible, but still type-safe and efficient, way to add user-defined types to\n// the logging context.\nfunc Object(key string, val Marshaler) Field {\n\treturn Field{key: key, fieldType: marshalerType, obj: val}\n}\n\n// Nest takes a key and a variadic number of Fields and creates a nested\n// namespace.\nfunc Nest(key string, fields ...Field) Field {\n\treturn Field{key: key, fieldType: marshalerType, obj: multiFields(fields)}\n}\n\ntype multiFields []Field\n\nfunc (fs multiFields) MarshalLog(kv KeyValue) error {\n\tfor _, f := range fs {\n\t\tf.addTo(kv)\n\t}\n\treturn nil\n}\n\nfunc (f Field) addTo(enc KeyValue) error {\n\tswitch f.fieldType {\n\tcase boolType:\n\t\tenc.AddBool(f.key, f.ival == 1)\n\tcase floatType:\n\t\tenc.AddFloat64(f.key, math.Float64frombits(uint64(f.ival)))\n\tcase intType:\n\t\tenc.AddInt(f.key, int(f.ival))\n\tcase int64Type:\n\t\tenc.AddInt64(f.key, f.ival)\n\tcase stringType:\n\t\tenc.AddString(f.key, f.str)\n\tcase marshalerType:\n\t\tcloser := enc.Nest(f.key)\n\t\terr := f.obj.MarshalLog(enc)\n\t\tcloser.CloseField()\n\t\treturn err\n\tdefault:\n\t\tpanic(fmt.Sprintf(\"unknown field type found: %v\", f))",
+    "repo": "uber-go_zap"
+  }
+]

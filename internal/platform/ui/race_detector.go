@@ -28,7 +28,7 @@ func (m *Mascot) SimulateRaceConditions(root string) {
 			if goStmt, ok := n.(*ast.GoStmt); ok {
 				if call, ok := goStmt.Call.Fun.(*ast.FuncLit); ok {
 					m.Say(Thinking, fmt.Sprintf("Simulating concurrent access patterns in %s...", filepath.Base(path)))
-					
+
 					// Basic check: is it capturing a variable from the outer scope?
 					ast.Inspect(call.Body, func(bn ast.Node) bool {
 						if id, ok := bn.(*ast.Ident); ok {

@@ -7,7 +7,6 @@ import (
 	"math"
 	"math/rand"
 
-
 	. "github.com/golangast/gollemer/internal/ai/neural/tensor"
 )
 
@@ -267,21 +266,25 @@ func (l *Linear) Backward(grad *Tensor) error {
 
 		if l.Weights.RequiresGrad {
 			// dWeights = inputTranspose [inputDim, batch*seqLen] @ reshapedGrad [batch*seqLen, outputDim]
-			m := inputTranspose.Shape[0]  // inputDim
-			k := inputTranspose.Shape[1]  // batch*seqLen
-			n := reshapedGrad.Shape[1]    // outputDim
+			m := inputTranspose.Shape[0] // inputDim
+			k := inputTranspose.Shape[1] // batch*seqLen
+			n := reshapedGrad.Shape[1]   // outputDim
 			dWeightsData := make([]float32, m*n)
 
 			MatMulRaw(inputTranspose.Data, reshapedGrad.Data, dWeightsData, m, n, k)
 
 			// Per-layer gradient clipping to prevent explosion
 			var dwNorm float32
-			for _, v := range dWeightsData { dwNorm += v * v }
+			for _, v := range dWeightsData {
+				dwNorm += v * v
+			}
 			dwNorm = float32(math.Sqrt(float64(dwNorm)))
 			const maxGradNorm = float32(50.0)
 			if dwNorm > maxGradNorm {
 				scale := maxGradNorm / dwNorm
-				for i := range dWeightsData { dWeightsData[i] *= scale }
+				for i := range dWeightsData {
+					dWeightsData[i] *= scale
+				}
 			}
 
 			safeAccumulate(l.Weights.Grad.Data, dWeightsData)
@@ -319,7 +322,9 @@ func (l *Linear) Backward(grad *Tensor) error {
 
 		weightsTranspose, err := l.Weights.Transpose(0, 1)
 		if err != nil {
-			if inputTranspose != nil { inputTranspose.Release() }
+			if inputTranspose != nil {
+				inputTranspose.Release()
+			}
 			return fmt.Errorf("linear layer backward: failed to transpose weights: %w", err)
 		}
 
@@ -342,20 +347,24 @@ func (l *Linear) Backward(grad *Tensor) error {
 			// Safety check: ensure grad.Data has enough elements for the reshaped shape
 			if len(grad.Data) < batchSize*seqLength*outputDim {
 				weightsTranspose.Release()
-				if inputTranspose != nil { inputTranspose.Release() }
+				if inputTranspose != nil {
+					inputTranspose.Release()
+				}
 				return fmt.Errorf("linear layer backward (3D res): grad data length %d is too small for shape [%d, %d]", len(grad.Data), batchSize*seqLength, outputDim)
 			}
 			reshapedGrad, err := grad.Reshape([]int{batchSize * seqLength, outputDim})
 			if err != nil {
 				weightsTranspose.Release()
-				if inputTranspose != nil { inputTranspose.Release() }
+				if inputTranspose != nil {
+					inputTranspose.Release()
+				}
 				return err
 			}
 
 			// Use native SIMD MatMulRaw DIRECTLY to bypass Goffi (which silently returns zeros on large matmuls).
 			// dInput = reshapedGrad [batch*seqLen, outputDim] @ weightsTranspose [outputDim, inputDim]
-			bSL := reshapedGrad.Shape[0]    // batch*seqLen
-			oDim := reshapedGrad.Shape[1]   // outputDim
+			bSL := reshapedGrad.Shape[0]      // batch*seqLen
+			oDim := reshapedGrad.Shape[1]     // outputDim
 			iDim := weightsTranspose.Shape[1] // inputDim
 			dInput2DData := make([]float32, bSL*iDim)
 			MatMulRaw(reshapedGrad.Data, weightsTranspose.Data, dInput2DData, bSL, iDim, oDim)
@@ -363,7 +372,9 @@ func (l *Linear) Backward(grad *Tensor) error {
 			dInput, err = dInput2D.Reshape([]int{batchSize, seqLength, inputDim})
 			if err != nil {
 				weightsTranspose.Release()
-				if inputTranspose != nil { inputTranspose.Release() }
+				if inputTranspose != nil {
+					inputTranspose.Release()
+				}
 				dInput2D.Release()
 				return err
 			}
@@ -372,10 +383,12 @@ func (l *Linear) Backward(grad *Tensor) error {
 
 		default:
 			weightsTranspose.Release()
-			if inputTranspose != nil { inputTranspose.Release() }
+			if inputTranspose != nil {
+				inputTranspose.Release()
+			}
 			return fmt.Errorf("linear layer backward only supports 2D or 3D gradient, got %d dimensions", len(grad.Shape))
 		}
-		
+
 		safeAccumulate(l.input.Grad.Data, dInput.Data)
 		dInput.Release()
 		weightsTranspose.Release()
@@ -575,7 +588,7 @@ func (l *LayerNormalization) Backward(grad *Tensor) error {
 		if math.IsNaN(float64(stdDev)) || math.IsInf(float64(stdDev), 0) {
 			stdDev = 1e-5 // Fallback to avoid zero/NaN gradient
 		}
-		dLoss_dStdDevData[i] = sum_dL_dNorm_x_minus_mean * (-1.0 / (stdDev * stdDev + 1e-9)) // Derivative of 1/std_dev is -1/std_dev^2
+		dLoss_dStdDevData[i] = sum_dL_dNorm_x_minus_mean * (-1.0 / (stdDev*stdDev + 1e-9)) // Derivative of 1/std_dev is -1/std_dev^2
 		dLoss_dMeanData[i] = sum_dL_dNorm * (-l.invStdDev.Data[i])
 
 		if math.IsNaN(float64(dLoss_dStdDevData[i])) || math.IsInf(float64(dLoss_dStdDevData[i]), 0) {
@@ -792,22 +805,46 @@ func (mha *MultiHeadAttention) Parameters() []*Tensor {
 
 // ToGPU moves the layer's parameters to the GPU.
 func (mha *MultiHeadAttention) ToGPU() {
-	if mha.QueryLinear != nil { mha.QueryLinear.ToGPU() }
-	if mha.KeyLinear != nil { mha.KeyLinear.ToGPU() }
-	if mha.ValueLinear != nil { mha.ValueLinear.ToGPU() }
-	if mha.OutputLinear != nil { mha.OutputLinear.ToGPU() }
+	if mha.QueryLinear != nil {
+		mha.QueryLinear.ToGPU()
+	}
+	if mha.KeyLinear != nil {
+		mha.KeyLinear.ToGPU()
+	}
+	if mha.ValueLinear != nil {
+		mha.ValueLinear.ToGPU()
+	}
+	if mha.OutputLinear != nil {
+		mha.OutputLinear.ToGPU()
+	}
 }
 
 // ClearState clears the intermediate states to free memory.
 func (mha *MultiHeadAttention) ClearState() {
-	if mha.attentionOutput != nil { mha.attentionOutput.Release() }
-	if mha.inputTensor != nil { mha.inputTensor.Release() }
-	if mha.q != nil { mha.q.Release() }
-	if mha.k != nil { mha.k.Release() }
-	if mha.v != nil { mha.v.Release() }
-	if mha.attentionScores != nil { mha.attentionScores.Release() }
-	if mha.attentionWeights != nil { mha.attentionWeights.Release() }
-	if mha.attentionOutputBeforeConcat != nil { mha.attentionOutputBeforeConcat.Release() }
+	if mha.attentionOutput != nil {
+		mha.attentionOutput.Release()
+	}
+	if mha.inputTensor != nil {
+		mha.inputTensor.Release()
+	}
+	if mha.q != nil {
+		mha.q.Release()
+	}
+	if mha.k != nil {
+		mha.k.Release()
+	}
+	if mha.v != nil {
+		mha.v.Release()
+	}
+	if mha.attentionScores != nil {
+		mha.attentionScores.Release()
+	}
+	if mha.attentionWeights != nil {
+		mha.attentionWeights.Release()
+	}
+	if mha.attentionOutputBeforeConcat != nil {
+		mha.attentionOutputBeforeConcat.Release()
+	}
 
 	mha.attentionOutput = nil
 	mha.inputTensor = nil
@@ -817,11 +854,19 @@ func (mha *MultiHeadAttention) ClearState() {
 	mha.attentionScores = nil
 	mha.attentionWeights = nil
 	mha.attentionOutputBeforeConcat = nil
-	
-	if mha.QueryLinear != nil { mha.QueryLinear.ClearState() }
-	if mha.KeyLinear != nil { mha.KeyLinear.ClearState() }
-	if mha.ValueLinear != nil { mha.ValueLinear.ClearState() }
-	if mha.OutputLinear != nil { mha.OutputLinear.ClearState() }
+
+	if mha.QueryLinear != nil {
+		mha.QueryLinear.ClearState()
+	}
+	if mha.KeyLinear != nil {
+		mha.KeyLinear.ClearState()
+	}
+	if mha.ValueLinear != nil {
+		mha.ValueLinear.ClearState()
+	}
+	if mha.OutputLinear != nil {
+		mha.OutputLinear.ClearState()
+	}
 }
 
 // Backward performs the backward pass for multi-head self-attention.
@@ -926,7 +971,7 @@ func (mha *MultiHeadAttention) Backward(grad *Tensor) error {
 		for b := range b0 {
 			for h := range h0 {
 				for i := range s0 {
-					base := (b*h0*s0+h*s0+i)*s1
+					base := (b*h0*s0 + h*s0 + i) * s1
 					p := mha.attentionWeights.Data[base : base+s1]
 					dp := gradAttentionWeights.Data[base : base+s1]
 					out := gradScoresData[base : base+s1]
@@ -970,7 +1015,7 @@ func (mha *MultiHeadAttention) Backward(grad *Tensor) error {
 					copy(newData[dstStart:dstStart+dim], src)
 				}
 			}
-			
+
 			if len(gradAttentionScores.Shape) == 4 {
 				// Broadcast over heads: [b, h, kSeq, dim]
 				h := gradAttentionScores.Shape[1]
@@ -1001,7 +1046,7 @@ func (mha *MultiHeadAttention) Backward(grad *Tensor) error {
 	}
 
 	gradScoresTransposed, _ := gradAttentionScores.Transpose(2, 3)
-	
+
 	qForMatMul := mha.q
 	// Fix for shape mismatch: grad^T [1, N, N] or [1, 1, N, N] vs Q [1, 64]
 	if (len(gradScoresTransposed.Shape) == 3 || len(gradScoresTransposed.Shape) == 4) && len(mha.q.Shape) == 2 {
@@ -1027,7 +1072,7 @@ func (mha *MultiHeadAttention) Backward(grad *Tensor) error {
 					copy(newData[dstStart:dstStart+dim], src)
 				}
 			}
-			
+
 			if len(gradScoresTransposed.Shape) == 4 {
 				// Broadcast over heads: [b, h, qSeq, dim]
 				h := gradScoresTransposed.Shape[1]
@@ -1350,10 +1395,18 @@ func (mha *MultiHeadCrossAttention) Parameters() []*Tensor {
 
 // ToGPU moves the layer's parameters to the GPU.
 func (mha *MultiHeadCrossAttention) ToGPU() {
-	if mha.QueryLinear != nil { mha.QueryLinear.ToGPU() }
-	if mha.KeyLinear != nil { mha.KeyLinear.ToGPU() }
-	if mha.ValueLinear != nil { mha.ValueLinear.ToGPU() }
-	if mha.OutputLinear != nil { mha.OutputLinear.ToGPU() }
+	if mha.QueryLinear != nil {
+		mha.QueryLinear.ToGPU()
+	}
+	if mha.KeyLinear != nil {
+		mha.KeyLinear.ToGPU()
+	}
+	if mha.ValueLinear != nil {
+		mha.ValueLinear.ToGPU()
+	}
+	if mha.OutputLinear != nil {
+		mha.OutputLinear.ToGPU()
+	}
 }
 
 // ClearState clears the intermediate states to free memory.
@@ -1368,11 +1421,19 @@ func (mha *MultiHeadCrossAttention) ClearState() {
 	mha.attentionScores = nil
 	mha.attentionWeights = nil
 	mha.attentionOutputBeforeConcat = nil
-	
-	if mha.QueryLinear != nil { mha.QueryLinear.ClearState() }
-	if mha.KeyLinear != nil { mha.KeyLinear.ClearState() }
-	if mha.ValueLinear != nil { mha.ValueLinear.ClearState() }
-	if mha.OutputLinear != nil { mha.OutputLinear.ClearState() }
+
+	if mha.QueryLinear != nil {
+		mha.QueryLinear.ClearState()
+	}
+	if mha.KeyLinear != nil {
+		mha.KeyLinear.ClearState()
+	}
+	if mha.ValueLinear != nil {
+		mha.ValueLinear.ClearState()
+	}
+	if mha.OutputLinear != nil {
+		mha.OutputLinear.ClearState()
+	}
 }
 
 // Inputs returns the input tensors of the MultiHeadCrossAttention operation.
@@ -1479,7 +1540,7 @@ func (mha *MultiHeadCrossAttention) Backward(grad *Tensor) error {
 		for b := range b0 {
 			for h := range h0 {
 				for i := range s0 {
-					base := (b*h0*s0+h*s0+i)*s1
+					base := (b*h0*s0 + h*s0 + i) * s1
 					p := mha.attentionWeights.Data[base : base+s1]
 					dp := mha.attentionWeights.Grad.Data[base : base+s1]
 					out := gradScoresData[base : base+s1]
@@ -1523,7 +1584,7 @@ func (mha *MultiHeadCrossAttention) Backward(grad *Tensor) error {
 					copy(newData[dstStart:dstStart+dim], src)
 				}
 			}
-			
+
 			if len(gradAttentionScoresMHCA.Shape) == 4 {
 				// Broadcast over heads: [b, h, kvSeq, dim]
 				h := gradAttentionScoresMHCA.Shape[1]
@@ -1553,9 +1614,8 @@ func (mha *MultiHeadCrossAttention) Backward(grad *Tensor) error {
 	}
 	safeAccumulate(mha.q.Grad.Data, gradQ_per_head.Data)
 
-
 	gradScoresMHCATransposed, _ := gradAttentionScoresMHCA.Transpose(2, 3)
-	
+
 	qForMatMul := mha.q
 	// Fix for shape mismatch: grad^T [1, N, N] or [1, 1, N, N] vs Q [1, 64]
 	if (len(gradScoresMHCATransposed.Shape) == 3 || len(gradScoresMHCATransposed.Shape) == 4) && len(mha.q.Shape) == 2 {
@@ -1581,7 +1641,7 @@ func (mha *MultiHeadCrossAttention) Backward(grad *Tensor) error {
 					copy(newData[dstStart:dstStart+dim], src)
 				}
 			}
-			
+
 			if len(gradScoresMHCATransposed.Shape) == 4 {
 				// Broadcast over heads: [b, h, qSeq, dim]
 				h := gradScoresMHCATransposed.Shape[1]
@@ -1789,12 +1849,12 @@ func (mha *MultiHeadCrossAttention) Forward(inputs ...*Tensor) (*Tensor, error) 
 			qSeq := scaledAttentionScores.Shape[2]
 			heads := scaledAttentionScores.Shape[1]
 			batchSize := scaledAttentionScores.Shape[0]
-			
+
 			for b := 0; b < batchSize; b++ {
 				mOffset := b * kvSeq
 				for h := 0; h < heads; h++ {
 					for q := 0; q < qSeq; q++ {
-						offset := ((b * heads + h) * qSeq + q) * kvSeq
+						offset := ((b*heads+h)*qSeq + q) * kvSeq
 						for k := 0; k < kvSeq; k++ {
 							resultData[offset+k] = scaledAttentionScores.Data[offset+k] + mask.Data[mOffset+k]
 						}
@@ -1803,7 +1863,7 @@ func (mha *MultiHeadCrossAttention) Forward(inputs ...*Tensor) (*Tensor, error) 
 			}
 			maskedScores := NewTensor(scaledAttentionScores.Shape, resultData, scaledAttentionScores.RequiresGrad || mask.RequiresGrad)
 			if maskedScores.RequiresGrad {
-				maskedScores.Creator = &AddWithBroadcastOperation{scaledAttentionScores, mask}
+				maskedScores.Creator = &AddWithBroadcastOperation{A: scaledAttentionScores, B: mask}
 			}
 			scaledAttentionScores = maskedScores
 		} else {
@@ -1873,22 +1933,38 @@ func (mha *MultiHeadCrossAttention) Forward(inputs ...*Tensor) (*Tensor, error) 
 
 // SetMode sets the attention layer to training or inference mode.
 func (mha *MultiHeadAttention) SetMode(training bool) {
-	if mha.QueryLinear != nil { mha.QueryLinear.SetMode(training) }
-	if mha.KeyLinear != nil { mha.KeyLinear.SetMode(training) }
-	if mha.ValueLinear != nil { mha.ValueLinear.SetMode(training) }
-	if mha.OutputLinear != nil { mha.OutputLinear.SetMode(training) }
+	if mha.QueryLinear != nil {
+		mha.QueryLinear.SetMode(training)
+	}
+	if mha.KeyLinear != nil {
+		mha.KeyLinear.SetMode(training)
+	}
+	if mha.ValueLinear != nil {
+		mha.ValueLinear.SetMode(training)
+	}
+	if mha.OutputLinear != nil {
+		mha.OutputLinear.SetMode(training)
+	}
 }
 
 // SetMode sets the cross-attention layer to training or inference mode.
 func (mhca *MultiHeadCrossAttention) SetMode(training bool) {
-	if mhca.QueryLinear != nil { mhca.QueryLinear.SetMode(training) }
-	if mhca.KeyLinear != nil { mhca.KeyLinear.SetMode(training) }
-	if mhca.ValueLinear != nil { mhca.ValueLinear.SetMode(training) }
-	if mhca.OutputLinear != nil { mhca.OutputLinear.SetMode(training) }
+	if mhca.QueryLinear != nil {
+		mhca.QueryLinear.SetMode(training)
+	}
+	if mhca.KeyLinear != nil {
+		mhca.KeyLinear.SetMode(training)
+	}
+	if mhca.ValueLinear != nil {
+		mhca.ValueLinear.SetMode(training)
+	}
+	if mhca.OutputLinear != nil {
+		mhca.OutputLinear.SetMode(training)
+	}
 }
 
 // SetMode sets the linear layer to training or inference mode.
 func (l *Linear) SetMode(training bool) {
 	// Linear layer doesn't have internal mode-specific behavior like dropout yet,
-// but we implement it for interface consistency.
+	// but we implement it for interface consistency.
 }

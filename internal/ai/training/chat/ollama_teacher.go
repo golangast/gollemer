@@ -92,9 +92,9 @@ type TeacherAuditContext struct {
 	AvgSim       float32
 	GrammarScore float32
 	// Sample of model outputs: map[query]response
-	Probes       map[string]string
-	ConfigJSON   string
-	TrainingRows int
+	Probes         map[string]string
+	ConfigJSON     string
+	TrainingRows   int
 	HistorySummary string
 }
 

@@ -16,7 +16,7 @@ func main() {
 
 	// 1. Initialize Vocabulary and Tokenizer
 	v := vocab.NewVocabulary()
-	
+
 	// Add a diverse set of tokens to make the random generation look like sentences
 	vocabularyWords := []string{
 		"The", "A", "Gollemer", "intelligence", "network", "system", "MoE", "module",
@@ -29,13 +29,13 @@ func main() {
 		"performance", "latency", "throughput", "capacity", "accuracy",
 		".", ",", "!", "?",
 	}
-	
+
 	for _, tok := range vocabularyWords {
 		v.AddToken(tok)
 	}
 
 	t, _ := tokenizer.NewTokenizer(v)
-	
+
 	// 2. Setup Model
 	// Note: Forward pass currently uses random logits for demonstration.
 	m := model.NewMoEModel(t, model.MoEConfig{
@@ -79,9 +79,9 @@ func main() {
 		fmt.Println(strings.Repeat("-", len(prompt)+10))
 
 		for _, cfg := range configs {
-			fmt.Printf("\n%-25s | Temp: %.1f | TopP: %.2f | TopK: %d | RouterTemp: %.1f\n", 
+			fmt.Printf("\n%-25s | Temp: %.1f | TopP: %.2f | TopK: %d | RouterTemp: %.1f\n",
 				cfg.Name, cfg.Opts.Temperature, cfg.Opts.TopP, cfg.Opts.TopK, cfg.Opts.RouterTemperature)
-			
+
 			var totalScore float32
 			numTrials := 3
 			for i := 1; i <= numTrials; i++ {

@@ -32,12 +32,12 @@ type Vector []float64
 
 type SimpleWord2Vec struct {
 	// Core word representation
-	Vocabulary   map[string]int
+	Vocabulary     map[string]int
 	WordVectors    map[int][]float64
 	WordVectorsF32 map[int][]float32 // float32 version for NN layers
 	VectorSize     int
-	NgramVectors map[string][]float64
-	VocabSize    int
+	NgramVectors   map[string][]float64
+	VocabSize      int
 
 	// Context and semantic information
 	ContextEmbeddings map[string][]float64
@@ -78,7 +78,6 @@ func (sw2v *SimpleWord2Vec) ToVocabulary() *vocab.Vocabulary {
 	}
 	return v
 }
-
 
 // SyncF32 populates WordVectorsF32 from WordVectors.
 func (sw2v *SimpleWord2Vec) SyncF32() {
@@ -232,12 +231,12 @@ func (sw2v *SimpleWord2Vec) Backpropagate(output, context []float64, learningRat
 	for i := 0; i < sw2v.HiddenSize; i++ {
 		grad := output[i] - context[i]
 		weightNorm := math.Abs(grad) * math.Sqrt(float64(sw2v.VectorSize))
-		
+
 		scale := 1.0
 		if weightNorm > maxGrad {
 			scale = maxGrad / weightNorm
 		}
-		
+
 		scaledGrad := grad * scale
 		sw2v.Weights[i][i] -= learningRate * scaledGrad
 		sw2v.Biases[i][0] -= learningRate * grad

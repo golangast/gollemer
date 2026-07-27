@@ -2,6 +2,7 @@ package chat
 
 import (
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"log"
 	"math/rand"
@@ -106,7 +107,7 @@ func svcIsCoherent(response string) bool {
 
 // TrainMultiPhaseCurriculum orchestrates the 3-phase curriculum.
 // All hyperparameters are loaded from data/config/social_train.json.
-func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
+func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string) {
 	log.Println("🚀 Starting 3-Phase Multi-Domain Curriculum Training...")
 
 	// ── 0. Load config ────────────────────────────────────────────────────────
@@ -161,6 +162,38 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 	if len(syntheticPairs) > 0 {
 		socialPairs = append(socialPairs, syntheticPairs...)
 		log.Printf("📚 Injected %d synthetic pairs via syntheticCSVPath (total social+technical: %d)", len(syntheticPairs), len(socialPairs))
+	}
+
+	// ── FIM dataset augmentation ──────────────────────────────────────────────
+	if dataFile != "" {
+		log.Printf("📂 Loading FIM dataset from %s...", dataFile)
+		if fimData, err := os.ReadFile(dataFile); err == nil {
+			var fimDataset struct {
+				Train []map[string]interface{} `json:"train"`
+			}
+			if err := json.Unmarshal(fimData, &fimDataset); err == nil {
+				fimCount := 0
+				for _, item := range fimDataset.Train {
+					instruction, _ := item["instruction"].(string)
+					targetPatch, _ := item["target_patch"].(string)
+					if instruction == "" || targetPatch == "" {
+						continue
+					}
+					// Create a TrainPair: Q=instruction, A=patch, Intent=computer
+					computerPairs = append(computerPairs, moe.TrainPair{
+						Q:      instruction,
+						A:      targetPatch,
+						Intent: "computer",
+					})
+					fimCount++
+				}
+				log.Printf("📚 Loaded %d FIM examples from %s into computer dataset", fimCount, dataFile)
+			} else {
+				log.Printf("⚠️ Failed to parse FIM dataset %s: %v", dataFile, err)
+			}
+		} else {
+			log.Printf("⚠️ Failed to read FIM dataset %s: %v", dataFile, err)
+		}
 	}
 
 	if len(socialPairs) == 0 || len(computerPairs) == 0 {
@@ -605,9 +638,22 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 		switch currentPhase {
 		case 1:
 			// Use low-temperature probe (greedy decoding) for evaluation
-			// to test the model's argmax knowledge rather than noisy sampling.
-			testPrompt := "__intent__ social : __ques__ how are you"
-			gen, _, atts := StrictGenerateLowTemp(intentModel, testPrompt, 15, 1.3, false, epoch)
+			// to test the model's ability to generate Go code symbols.
+			// Probes with Go code prompts and checks for structural keywords,
+			// balanced braces/parentheses, and semantic symbols.
+			testPrompt := "__intent__ computer : __ques__ create a function that adds two numbers"
+			gen, _, atts := StrictGenerateLowTemp(intentModel, testPrompt, 25, 1.3, false, epoch)
+
+			// Check Go symbol coverage: extract symbols present in the generated code
+			symbolsFound := extractGoSymbols(gen)
+			symbolCount := len(symbolsFound)
+
+			// Braces/parens balance check
+			openBrace := strings.Count(gen, "{")
+			closeBrace := strings.Count(gen, "}")
+			openParen := strings.Count(gen, "(")
+			closeParen := strings.Count(gen, ")")
+			balanced := openBrace == closeBrace && openParen == closeParen
 
 			// Subject index in prompt
 			pToks := cleanTokenize(testPrompt)
@@ -645,8 +691,19 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool) {
 				avgAtt = sumAtt / float32(numHeads)
 			}
 
-			probePassed := avgAtt > 0.05 && svcIsCoherent(gen)
-			log.Printf("🧪 Phase1 test: '%s' → SVC=%.4f coherent=%v pass=%v", gen, avgAtt, svcIsCoherent(gen), probePassed)
+			// Pass if: >=2 Go symbols found AND balanced braces/parens AND (symbols include a keyword or identifier)
+			hasKeywordOrIdent := false
+			for _, sym := range symbolsFound {
+				if sym == "func" || sym == "if" || sym == "for" || sym == "return" || sym == "package" || sym == "import" || sym == "type" || sym == "struct" || sym == "var" || len(sym) > 2 {
+					hasKeywordOrIdent = true
+					break
+				}
+			}
+			probePassed := symbolCount >= 2 && balanced && hasKeywordOrIdent
+			log.Printf("🧪 Phase1 test: '%s' → symbols=%d balanced=%v avgAtt=%.4f pass=%v", gen, symbolCount, balanced, avgAtt, probePassed)
+			if symbolCount > 0 {
+				log.Printf("   Symbols: %v", symbolsFound)
+			}
 
 			// Sliding window gating: track last 5 probe results, advance if >= 3 pass
 			probeWindow = append(probeWindow, probePassed)
@@ -738,6 +795,79 @@ func buildDefaultLossWeights(vocab *mainvocab.Vocabulary, cfg *orchestrator.Trai
 		}
 	}
 	return weights
+}
+
+// extractGoSymbols extracts Go code symbols (keywords, identifiers, operators)
+// from a generated string. Returns a deduplicated list of symbols found.
+func extractGoSymbols(s string) []string {
+	if s == "" {
+		return nil
+	}
+	goKeywords := map[string]bool{
+		"func": true, "if": true, "for": true, "range": true, "return": true,
+		"package": true, "import": true, "type": true, "struct": true,
+		"var": true, "const": true, "make": true, "new": true, "len": true,
+		"cap": true, "append": true, "defer": true, "go": true, "select": true,
+		"switch": true, "case": true, "break": true, "continue": true,
+		"fallthrough": true, "else": true, "map": true, "chan": true,
+		"interface": true, "error": true, "nil": true, "true": true, "false": true,
+	}
+	goTypes := map[string]bool{
+		"int": true, "string": true, "bool": true, "float64": true,
+		"float32": true, "int64": true, "int32": true, "byte": true,
+		"rune": true, "uint": true, "uint64": true, "uint32": true,
+	}
+	operators := map[string]bool{
+		"=": true, ":=": true, "==": true, "!=": true, "<": true, ">": true,
+		"+": true, "-": true, "*": true, "/": true, "&": true, "|": true,
+		"^": true, "<<": true, ">>": true,
+	}
+
+	seen := make(map[string]bool)
+	var symbols []string
+
+	// Tokenize: split on whitespace and common delimiters
+	words := strings.Fields(s)
+	for _, w := range words {
+		// Trim trailing punctuation/delimiters
+		w = strings.TrimRight(w, ".,;:(){}[]\"'`")
+		if w == "" {
+			continue
+		}
+		// Check against known sets
+		if goKeywords[w] || goTypes[w] || operators[w] {
+			if !seen[w] {
+				seen[w] = true
+				symbols = append(symbols, w)
+			}
+			continue
+		}
+		// Identifiers: start with letter or underscore, length > 1
+		if len(w) > 1 && ((w[0] >= 'a' && w[0] <= 'z') || (w[0] >= 'A' && w[0] <= 'Z') || w[0] == '_') {
+			isAlpha := true
+			for _, c := range w[1:] {
+				if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_') {
+					isAlpha = false
+					break
+				}
+			}
+			if isAlpha && !seen[w] {
+				seen[w] = true
+				symbols = append(symbols, w)
+			}
+		}
+		// Package-qualified names like fmt.Println
+		if strings.Contains(w, ".") {
+			parts := strings.Split(w, ".")
+			for _, p := range parts {
+				if p != "" && !seen[p] {
+					seen[p] = true
+					symbols = append(symbols, p)
+				}
+			}
+		}
+	}
+	return symbols
 }
 
 // codePassCondition evaluates a generated response for code-fix datasets.

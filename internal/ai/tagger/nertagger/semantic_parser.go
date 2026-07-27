@@ -10,23 +10,23 @@ import (
 type SemanticRole string
 
 const (
-	Agent       SemanticRole = "AGENT"       // Who performs the action
-	Patient     SemanticRole = "PATIENT"     // What is affected by the action
-	Instrument  SemanticRole = "INSTRUMENT"  // How the action is performed
-	Location    SemanticRole = "LOCATION"    // Where the action happens
-	TimeArg     SemanticRole = "TIME"        // When the action happens
-	Attribute   SemanticRole = "ATTRIBUTE"   // Properties of entities
-	Modifier    SemanticRole = "MODIFIER"    // Additional descriptors
-	Predicate   SemanticRole = "PREDICATE"   // The action/verb
+	Agent      SemanticRole = "AGENT"      // Who performs the action
+	Patient    SemanticRole = "PATIENT"    // What is affected by the action
+	Instrument SemanticRole = "INSTRUMENT" // How the action is performed
+	Location   SemanticRole = "LOCATION"   // Where the action happens
+	TimeArg    SemanticRole = "TIME"       // When the action happens
+	Attribute  SemanticRole = "ATTRIBUTE"  // Properties of entities
+	Modifier   SemanticRole = "MODIFIER"   // Additional descriptors
+	Predicate  SemanticRole = "PREDICATE"  // The action/verb
 )
 
 // SRLAnalysis represents the semantic role analysis of a sentence
 type SRLAnalysis struct {
-	Tokens       []string
-	PredIdx      int            // Index of the main predicate (verb)
-	Predicate    string         // The main predicate word
-	Roles        map[int]SemanticRole // Maps token index to semantic role
-	Arguments    map[SemanticRole][]int // Maps roles to token indices
+	Tokens    []string
+	PredIdx   int                    // Index of the main predicate (verb)
+	Predicate string                 // The main predicate word
+	Roles     map[int]SemanticRole   // Maps token index to semantic role
+	Arguments map[SemanticRole][]int // Maps roles to token indices
 }
 
 // ========== DEPENDENCY PARSING ==========
@@ -36,57 +36,57 @@ type DependencyRelation string
 
 const (
 	// Core relations
-	Root      DependencyRelation = "ROOT"      // Root of the sentence
-	Nsubj     DependencyRelation = "NSUBJ"     // Nominal subject
-	Obj       DependencyRelation = "OBJ"       // Object
-	IObj      DependencyRelation = "IOBJ"      // Indirect object
-	OBlique   DependencyRelation = "OBLIQUE"   // Oblique argument
-	CSubj     DependencyRelation = "CSUBJ"     // Clausal subject
-	CComp     DependencyRelation = "CCOMP"     // Clausal complement
+	Root    DependencyRelation = "ROOT"    // Root of the sentence
+	Nsubj   DependencyRelation = "NSUBJ"   // Nominal subject
+	Obj     DependencyRelation = "OBJ"     // Object
+	IObj    DependencyRelation = "IOBJ"    // Indirect object
+	OBlique DependencyRelation = "OBLIQUE" // Oblique argument
+	CSubj   DependencyRelation = "CSUBJ"   // Clausal subject
+	CComp   DependencyRelation = "CCOMP"   // Clausal complement
 
 	// Modifier relations
-	Amod      DependencyRelation = "AMOD"      // Adjectival modifier
-	Advmod    DependencyRelation = "ADVMOD"    // Adverbial modifier
-	Nmod      DependencyRelation = "NMOD"      // Nominal modifier
-	Appos     DependencyRelation = "APPOS"     // Appositional modifier
-	Acl       DependencyRelation = "ACL"       // Adjectival clause
-	Relcl     DependencyRelation = "RELCL"     // Relative clause
+	Amod   DependencyRelation = "AMOD"   // Adjectival modifier
+	Advmod DependencyRelation = "ADVMOD" // Adverbial modifier
+	Nmod   DependencyRelation = "NMOD"   // Nominal modifier
+	Appos  DependencyRelation = "APPOS"  // Appositional modifier
+	Acl    DependencyRelation = "ACL"    // Adjectival clause
+	Relcl  DependencyRelation = "RELCL"  // Relative clause
 
 	// Function word relations
-	Case      DependencyRelation = "CASE"      // Case marking (prepositions)
-	Mark      DependencyRelation = "MARK"      // Marker (subordinating)
-	Cop       DependencyRelation = "COP"       // Copula (is, are, etc.)
-	Aux       DependencyRelation = "AUX"       // Auxiliary
-	Det       DependencyRelation = "DET"       // Determiner (the, a, etc.)
+	Case DependencyRelation = "CASE" // Case marking (prepositions)
+	Mark DependencyRelation = "MARK" // Marker (subordinating)
+	Cop  DependencyRelation = "COP"  // Copula (is, are, etc.)
+	Aux  DependencyRelation = "AUX"  // Auxiliary
+	Det  DependencyRelation = "DET"  // Determiner (the, a, etc.)
 
 	// Compound relations
-	Compound  DependencyRelation = "COMPOUND"  // Compound words
-	Flat      DependencyRelation = "FLAT"      // Multi-word expressions
-	MWE       DependencyRelation = "MWE"       // Multi-word expressions
+	Compound DependencyRelation = "COMPOUND" // Compound words
+	Flat     DependencyRelation = "FLAT"     // Multi-word expressions
+	MWE      DependencyRelation = "MWE"      // Multi-word expressions
 
 	// Coordination
-	Conj      DependencyRelation = "CONJ"      // Conjunct
-	Cc        DependencyRelation = "CC"        // Coordinating conjunction
+	Conj DependencyRelation = "CONJ" // Conjunct
+	Cc   DependencyRelation = "CC"   // Coordinating conjunction
 
 	// Other
-	Punct     DependencyRelation = "PUNCT"     // Punctuation
-	Dep       DependencyRelation = "DEP"       // Unknown dependency
+	Punct DependencyRelation = "PUNCT" // Punctuation
+	Dep   DependencyRelation = "DEP"   // Unknown dependency
 )
 
 // DependencyEdge represents an edge in the dependency graph
 type DependencyEdge struct {
-	Governor   int                 // Index of the head
-	Dependent  int                 // Index of the dependent
-	Relation   DependencyRelation
+	Governor  int // Index of the head
+	Dependent int // Index of the dependent
+	Relation  DependencyRelation
 }
 
 // DependencyTree represents the dependency parse tree of a sentence
 type DependencyTree struct {
-	Tokens      []string
-	Edges       []DependencyEdge
-	Children    map[int][]int       // Maps token index to child indices
-	Parent      map[int]int         // Maps token index to parent index
-	Relations   map[int]DependencyRelation // Maps token index to its relation to parent
+	Tokens    []string
+	Edges     []DependencyEdge
+	Children  map[int][]int              // Maps token index to child indices
+	Parent    map[int]int                // Maps token index to parent index
+	Relations map[int]DependencyRelation // Maps token index to its relation to parent
 }
 
 // ========== COMBINED SRL + DEPENDENCY PARSER ==========
@@ -437,16 +437,16 @@ func (sf *StopWordFilter) FilterParameter(paramValue string) string {
 
 	for _, token := range tokens {
 		lower := strings.ToLower(token)
-		
+
 		// Remove trailing punctuation for comparison
 		cleanToken := strings.TrimRight(lower, ".,!?;:")
-		
+
 		// Skip if it's an intent or object keyword
 		if sf.IntentKeywords[cleanToken] || sf.ObjectKeywords[cleanToken] {
 			sf.FilteredTokens[cleanToken] = true
 			continue
 		}
-		
+
 		filtered = append(filtered, token)
 	}
 

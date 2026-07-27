@@ -74,7 +74,7 @@ A: <answer>`
 		} else if strings.HasPrefix(line, "A:") {
 			currentA = strings.TrimSpace(strings.TrimPrefix(line, "A:"))
 			currentA = strings.Trim(currentA, "\"'")
-			
+
 			if currentQ != "" && currentA != "" {
 				// Append with a "grammar_lesson" intent
 				writer.Write([]string{currentQ, currentA, "grammar_lesson", "OTHER"})

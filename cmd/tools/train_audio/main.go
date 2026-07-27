@@ -125,11 +125,13 @@ func main() {
 			if strings.HasSuffix(f.Name(), ".raw") {
 				// Filename format: INTENT_NAME_sample1.raw
 				parts := strings.Split(f.Name(), "_")
-				if len(parts) < 2 { continue }
-				
+				if len(parts) < 2 {
+					continue
+				}
+
 				// Rejoin intent name if it had underscores (e.g., TURN_ON_LIGHTS_1.raw)
 				intentName := strings.Join(parts[:len(parts)-1], "_")
-				
+
 				if _, exists := classMap[intentName]; !exists {
 					classMap[intentName] = len(classNames)
 					classNames = append(classNames, intentName)
@@ -150,9 +152,9 @@ func main() {
 						}
 					}
 					fmt.Printf("Loaded %s (Max Amplitude: %.4f)\n", f.Name(), maxAmp)
-					
+
 					// Find the loudest 1.0 second (16000 samples) window
-					targetSamples := 16000 
+					targetSamples := 16000
 					if len(samples) > targetSamples {
 						bestStart := 0
 						bestEnergy := float32(0)
@@ -172,7 +174,7 @@ func main() {
 						copy(padded, samples)
 						samples = padded
 					}
-					
+
 					dataset = append(dataset, sample{
 						frames:      ChunkAudio(samples, FrameSize),
 						targetClass: classIdx,
@@ -203,7 +205,7 @@ func main() {
 			maxCount = classCounts[s.targetClass]
 		}
 	}
-	
+
 	var balancedDataset []sample
 	for classIdx, count := range classCounts {
 		// Find all samples of this class
@@ -213,7 +215,7 @@ func main() {
 				classSamples = append(classSamples, s)
 			}
 		}
-		
+
 		// Duplicate until we hit maxCount
 		for i := 0; i < maxCount; i++ {
 			balancedDataset = append(balancedDataset, classSamples[i%count])
@@ -264,9 +266,13 @@ func main() {
 			totalLoss += loss
 
 			// ── Backward ──
-			for i := range headGradW { headGradW[i] = 0 }
-			for i := range headGradB { headGradB[i] = 0 }
-			
+			for i := range headGradW {
+				headGradW[i] = 0
+			}
+			for i := range headGradB {
+				headGradB[i] = 0
+			}
+
 			dMotion := make([]float32, gruHiddenDim)
 			for c := 0; c < numClasses; c++ {
 				for d := 0; d < gruHiddenDim; d++ {
@@ -283,8 +289,12 @@ func main() {
 			ae.Backward(s.frames, dAudioTokens, lr)
 
 			// Update head weights
-			for i := range headW { headW[i] -= lr * headGradW[i] }
-			for i := range headB { headB[i] -= lr * headGradB[i] }
+			for i := range headW {
+				headW[i] -= lr * headGradW[i]
+			}
+			for i := range headB {
+				headB[i] -= lr * headGradB[i]
+			}
 		}
 
 		if epoch%20 == 0 {
@@ -299,7 +309,7 @@ func main() {
 	for _, s := range dataset {
 		audioTokens := ae.Forward(s.frames)
 		motionVec := te.Forward(audioTokens)
-		
+
 		logits := make([]float32, numClasses)
 		for c := 0; c < numClasses; c++ {
 			for d := 0; d < gruHiddenDim; d++ {
@@ -307,7 +317,7 @@ func main() {
 			}
 			logits[c] += headB[c]
 		}
-		
+
 		probs := softmax(logits)
 		pred := 0
 		for c := 1; c < numClasses; c++ {
@@ -315,7 +325,7 @@ func main() {
 				pred = c
 			}
 		}
-		
+
 		status := "✗"
 		if pred == s.targetClass {
 			correct++

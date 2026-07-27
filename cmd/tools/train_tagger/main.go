@@ -161,13 +161,13 @@ func trainTaggerBatch(model *moe.IntentTagger, optimizer Optimizer, batch Tagged
 	// Calculate tag loss
 	var tagLoss float32 = 0.0
 	allTagGrads := make([]float32, batchSize*maxSequenceLength*tagVocab.Size())
-	
+
 	for t := range maxSequenceLength {
 		targets := make([]int, batchSize)
 		for i := range batchSize {
 			targets[i] = targetTagIDsBatch[i*maxSequenceLength+t]
 		}
-		
+
 		// Slice the 3D tensor to get [batchSize, tagVocabSize] for timestep t
 		stepLogits, err := tagLogits.Slice(1, t, t+1)
 		if err != nil {
@@ -178,7 +178,7 @@ func trainTaggerBatch(model *moe.IntentTagger, optimizer Optimizer, batch Tagged
 
 		loss, grad := tensor.CrossEntropyLoss(stepLogits, targets, tagVocab.PaddingTokenID, 0.0)
 		tagLoss += loss
-		
+
 		// Copy gradients into the flat buffer for the 3D gradient tensor [batchSize, maxSequenceLength, tagVocabSize]
 		vocabSize := tagVocab.Size()
 		for b := 0; b < batchSize; b++ {

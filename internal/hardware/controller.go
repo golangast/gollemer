@@ -15,16 +15,16 @@ func HandleIntent(payload IntentPayload) error {
 	switch payload.Intent {
 	case "CAMERA_CAPTURE", "CAMERA_CAPTURE_ANALYZE":
 		return TriggerCameraCapture(payload.Roles["target"])
-		
+
 	case "AUDIO_VOLUME_UP", "AUDIO_VOLUME_DOWN":
 		return AdjustSpeakerVolume(payload.Intent)
-		
+
 	case "MICROPHONE_MUTE":
 		return ToggleMicrophone(false)
-		
+
 	case "MICROPHONE_UNMUTE":
 		return ToggleMicrophone(true)
-		
+
 	default:
 		return fmt.Errorf("intent %s recognized but no hardware routine mapped yet", payload.Intent)
 	}

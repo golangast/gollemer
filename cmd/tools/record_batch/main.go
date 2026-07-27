@@ -54,7 +54,7 @@ func main() {
 		fmt.Printf("\n==========================================\n")
 		fmt.Printf("🎙️  NEW COMMAND: '%s'\n", cmdStr)
 		fmt.Printf("==========================================\n")
-		
+
 		for sampleNum := 1; sampleNum <= 3; sampleNum++ {
 			fmt.Printf("\nGet ready to say '%s' (Sample %d of 3)...\n", cmdStr, sampleNum)
 			fmt.Println("Press [ENTER] to start recording...")

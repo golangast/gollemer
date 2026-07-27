@@ -19,9 +19,9 @@ type TrainingMetrics struct {
 	LayerResets       []map[int]int // Per-layer expert reset counts
 	LayerUsage        []map[int]int // Per-layer expert utilization
 	OverfitMode       bool
-	PronPathID        string        // e.g. "E4"
-	VerbPathID        string        // e.g. "E5"
-	AuxPathID         string        // e.g. "E6"
+	PronPathID        string // e.g. "E4"
+	VerbPathID        string // e.g. "E5"
+	AuxPathID         string // e.g. "E6"
 }
 
 type TestProbeResult struct {
@@ -39,16 +39,16 @@ type SurgeryPerformer interface {
 
 // expertRecord tracks cumulative health and recovery cooldowns for one expert.
 type expertRecord struct {
-	Health      float32 // EMA health score
-	UsageEMA    float32 // EMA of how often it gets used
-	HealCount   int     // How many times it has been healed
-	CooldownEpochs int  // Epochs remaining before healing can be triggered again
-	TrendDown   int     // Consecutive epochs with negative health delta
+	Health         float32 // EMA health score
+	UsageEMA       float32 // EMA of how often it gets used
+	HealCount      int     // How many times it has been healed
+	CooldownEpochs int     // Epochs remaining before healing can be triggered again
+	TrendDown      int     // Consecutive epochs with negative health delta
 }
 
 type HyperparameterExpert struct {
 	SafeCfg      *SafeConfig
-	ExpertHealth map[int]float32    // deprecated alias — kept for backward compat
+	ExpertHealth map[int]float32 // deprecated alias — kept for backward compat
 	records      map[int]*expertRecord
 	BoostEpochs  int
 	// Anti-oscillation: minimum epochs that must pass between GlobalExpertRefresh calls.
@@ -139,8 +139,8 @@ func (e *HyperparameterExpert) Step(metrics TrainingMetrics, surgery SurgeryPerf
 func (e *HyperparameterExpert) updateHealthMomentum(metrics TrainingMetrics) {
 	// Determine overall training quality this epoch
 	const (
-		healthDecay   = 0.92 // EMA decay for health
-		usageDecay    = 0.90
+		healthDecay = 0.92 // EMA decay for health
+		usageDecay  = 0.90
 	)
 
 	// Quality signal: combined score normalized to [-1, +1]
@@ -438,7 +438,10 @@ func (e *HyperparameterExpert) AnalyzeAndAdjust(metrics TrainingMetrics) {
 				metrics.Epoch, metrics.AverageLoss, metrics.GrammarScore, metrics.SimilarityScore, cfg.UnkPenalty, cfg.StructuralBiasIntensity)
 
 			// Log top-3 and bottom-3 expert health
-			type healthRank struct{ id int; score float32 }
+			type healthRank struct {
+				id    int
+				score float32
+			}
 			var ranks []healthRank
 			for id, s := range e.ExpertHealth {
 				ranks = append(ranks, healthRank{id, s})
@@ -494,9 +497,9 @@ func (e *HyperparameterExpert) AnalyzeAndAdjust(metrics TrainingMetrics) {
 		if e.BoostEpochs > 0 {
 			fmt.Printf("🔥 [Supervisor] EXPLORATION BOOST: %d epochs remaining\n", e.BoostEpochs)
 			cfg.RouterTemperature = 0.7
-			cfg.RouterNoise = 0.20 // Keep noise at the new baseline
-			cfg.TopK = 10         // Wider token beam: let rare tokens surface
-			cfg.TopP = 0.95       // More probability mass included
+			cfg.RouterNoise = 0.20            // Keep noise at the new baseline
+			cfg.TopK = 10                     // Wider token beam: let rare tokens surface
+			cfg.TopP = 0.95                   // More probability mass included
 			cfg.StructuralBiasIntensity = 1.0 // Relax structural lock so temperature works
 			e.BoostEpochs--
 			return
@@ -549,9 +552,9 @@ func (e *HyperparameterExpert) AnalyzeAndAdjust(metrics TrainingMetrics) {
 			}
 			cfg.StructuralRoutingWeight = decay
 			fmt.Printf("📉 Bias Decay: StructuralRoutingWeight→%.2f\n", cfg.StructuralRoutingWeight)
-			
+
 			// Also decay the bias intensity to let the model "learn for real"
-			cfg.StructuralBiasIntensity = max32(2.0, 8.0 - (metrics.GrammarScore-20.0)*0.5)
+			cfg.StructuralBiasIntensity = max32(2.0, 8.0-(metrics.GrammarScore-20.0)*0.5)
 		} else {
 			cfg.StructuralRoutingWeight = 5.0
 			cfg.StructuralBiasIntensity = 4.0
@@ -686,7 +689,10 @@ func (e *HyperparameterExpert) AnalyzeLinguisticWindow(metrics TrainingMetrics, 
 // GlobalExpertRefresh updates all experts by blending them with known healthy anchors.
 func (e *HyperparameterExpert) GlobalExpertRefresh(surgery SurgeryPerformer) {
 	// Identify anchors (Top 3 healthiest experts)
-	type rank struct{ id int; health float32 }
+	type rank struct {
+		id     int
+		health float32
+	}
 	var allRanks []rank
 	for id, r := range e.records {
 		allRanks = append(allRanks, rank{id, r.Health})
@@ -704,7 +710,7 @@ func (e *HyperparameterExpert) GlobalExpertRefresh(surgery SurgeryPerformer) {
 	}
 
 	fmt.Printf("🔄 [Supervisor] Global Refresh: Updating ALL experts using anchors %v\n", anchors)
-	
+
 	// Apply Healing to ALL experts (0-15 typically)
 	for lIdx := 0; lIdx < 16; lIdx++ { // Safeguard: loop many layers, interface checks bounds
 		surgery.ResetRouters(lIdx)
@@ -777,7 +783,7 @@ func (e *HyperparameterExpert) VerifyExpertPaths(metrics TrainingMetrics) {
 		isQuestion := strings.Contains(strings.ToLower(res.Prompt), "__ques__")
 		if isQuestion {
 			pathExperts := e.parseExpertsFromPath(res.Path)
-			
+
 			hasQuestionExpert := false
 			hasPron := false
 			hasAux := false
@@ -813,7 +819,7 @@ func (e *HyperparameterExpert) VerifyExpertPaths(metrics TrainingMetrics) {
 				cfg.StructuralRoutingWeight = min32(10.0, cfg.StructuralRoutingWeight+0.5)
 			})
 		}
-		
+
 		if weakRelationCount > 10 && metrics.Epoch > 150 {
 			fmt.Printf("🕵️ [Supervisor Verify] %d questions have weak token relations (No PRON-AUX/VERB link)\n", weakRelationCount)
 			e.SafeCfg.Update(func(cfg *TrainingConfig) {

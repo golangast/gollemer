@@ -50,7 +50,7 @@ func analyzeLayer(m *moe.MoELayer) {
 		var totalWeight float32
 		var count int
 		hasNaN := false
-		
+
 		for _, p := range params {
 			for _, v := range p.Data {
 				if math.IsNaN(float64(v)) {
@@ -60,13 +60,13 @@ func analyzeLayer(m *moe.MoELayer) {
 				count++
 			}
 		}
-		
+
 		norm := math.Sqrt(float64(totalWeight))
 		status := "✅ OK"
 		if hasNaN {
 			status = "❌ NaN DETECTED"
 		}
-		
+
 		fmt.Printf("  Expert %d: Norm=%.4f, Params=%d [%s]\n", i, norm, count, status)
 	}
 

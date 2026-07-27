@@ -217,6 +217,45 @@
                 </div>
             </div>
         </div>
+
+        <!-- FIM Pipeline Section -->
+        <div class="grid" style="margin-top: 1.5rem;">
+            <div class="card" style="grid-column: 1 / -1;">
+                <h3 style="margin-bottom: 1rem;">🔧 FIM Dataset Mining & Training Pipeline</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;">
+                    <div style="background: rgba(0,0,0,0.2); border-radius: 0.75rem; padding: 1rem; border-left: 3px solid #6366f1;">
+                        <div style="font-size: 0.85rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Step 1: Mine</div>
+                        <code style="font-family: 'Fira Code', monospace; font-size: 0.8rem; color: #38bdf8; word-break: break-all;">make mine-dataset REPO="https://..."</code>
+                        <div style="margin-top: 0.5rem; font-size: 0.8rem; color: #94a3b8;">→ <span id="fim-mined-status">data/training/mined_patches.json</span></div>
+                    </div>
+                    <div style="background: rgba(0,0,0,0.2); border-radius: 0.75rem; padding: 1rem; border-left: 3px solid #8b5cf6;">
+                        <div style="font-size: 0.85rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Step 2: Build</div>
+                        <code style="font-family: 'Fira Code', monospace; font-size: 0.8rem; color: #38bdf8; word-break: break-all;">make build-dataset</code>
+                        <div style="margin-top: 0.5rem; font-size: 0.8rem; color: #94a3b8;">→ <span id="fim-dataset-status">data/training/fim_dataset.json</span></div>
+                    </div>
+                    <div style="background: rgba(0,0,0,0.2); border-radius: 0.75rem; padding: 1rem; border-left: 3px solid #10b981;">
+                        <div style="font-size: 0.85rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Step 3: Train FIM</div>
+                        <code style="font-family: 'Fira Code', monospace; font-size: 0.8rem; color: #38bdf8; word-break: break-all;">make train-fim</code>
+                        <div style="margin-top: 0.5rem; font-size: 0.8rem; color: #94a3b8;">→ <span id="fim-checkpoint-status">models/fim_checkpoints/</span></div>
+                    </div>
+                    <div style="background: rgba(0,0,0,0.2); border-radius: 0.75rem; padding: 1rem; border-left: 3px solid #f59e0b;">
+                        <div style="font-size: 0.85rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Step 4: Quick Test</div>
+                        <code style="font-family: 'Fira Code', monospace; font-size: 0.8rem; color: #38bdf8; word-break: break-all;">make train-fim-quick</code>
+                        <div style="margin-top: 0.5rem; font-size: 0.8rem; color: #94a3b8;">→ <span id="fim-quick-status">/tmp/fim_test (1 epoch)</span></div>
+                    </div>
+                </div>
+                <div style="margin-top: 1rem; padding: 0.75rem; background: rgba(245, 158, 11, 0.1); border-radius: 0.5rem; border: 1px solid rgba(245, 158, 11, 0.2); font-size: 0.85rem; color: #fbbf24;">
+                    ⚠️ <strong>Note:</strong> The FIM pipeline is <strong>isolated</strong> from the LLM (<code>make chat</code>). FIM checkpoints in <code>models/fim_checkpoints/</code> are not loaded by the LLM by default. Use <code>make chat ARGS='-cartridges="models/fim_checkpoints/<checkpoint>.gob"'</code> to bridge them.
+                </div>
+                <div style="margin-top: 0.75rem; display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;">
+                        <span id="fim-mined-badge" class="status-badge status-normal">✅ Mined</span>
+                        <span id="fim-dataset-badge" class="status-badge status-normal">✅ Built</span>
+                        <span id="fim-trained-badge" class="status-badge status-normal">✅ Trained</span>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -324,6 +363,36 @@
             lossChart.update('none'); // Use 'none' for high-performance updates
         };
 
+        // Check FIM pipeline file existence
+        async function checkFIMStatus() {
+            const fimFiles = [
+                { path: '/data/training/mined_patches.json', badge: 'fim-mined-badge', text: 'fim-mined-status' },
+                { path: '/data/training/fim_dataset.json', badge: 'fim-dataset-badge', text: 'fim-dataset-status' }
+            ];
+            for (const f of fimFiles) {
+                try {
+                    const resp = await fetch(f.path, { method: 'HEAD' });
+                    const badge = document.getElementById(f.badge);
+                    const text = document.getElementById(f.text);
+                    if (resp.ok) {
+                        if (badge) { badge.innerText = '✅ ' + f.path.split('/').pop(); badge.className = 'status-badge status-normal'; }
+                    } else {
+                        if (badge) { badge.innerText = '❌ Not found'; badge.style.background = '#dc2626'; badge.style.color = '#fef2f2'; }
+                    }
+                } catch (e) {
+                    // file access not available via fetch
+                }
+            }
+            // Check checkpoint directory via HEAD on a known checkpoint pattern
+            try {
+                const ckptResp = await fetch('/models/fim_checkpoints/', { method: 'HEAD' });
+                const badge = document.getElementById('fim-trained-badge');
+                if (ckptResp.ok) {
+                    if (badge) { badge.innerText = '✅ Checkpoints dir'; badge.className = 'status-badge status-normal'; }
+                }
+            } catch (e) {}
+        }
+
         // Polling logic to fetch metrics from the server
         setInterval(async () => {
             try {
@@ -340,6 +409,10 @@
                 // Fallback for local file testing if necessary
             }
         }, 1000);
+
+        // Check FIM pipeline status on load
+        checkFIMStatus();
+        setInterval(checkFIMStatus, 30000); // Re-check every 30s
     </script>
 </body>
 

@@ -6,7 +6,7 @@ import (
 )
 
 // WarpCommand takes a single command and generates several training variations.
-// This forces the MoE architecture to learn the semantic intent rather than 
+// This forces the MoE architecture to learn the semantic intent rather than
 // just memorizing exact token sequences.
 func WarpCommand(input string) []string {
 	variations := []string{input}
@@ -19,7 +19,7 @@ func WarpCommand(input string) []string {
 		if typoed != input {
 			variations = append(variations, typoed)
 		}
-		
+
 		// Another typo: double "m" or transposition
 		if strings.Contains(input, "create") {
 			variations = append(variations, strings.Replace(input, "create", "cretae", 1))
@@ -31,7 +31,7 @@ func WarpCommand(input string) []string {
 	if len(words) > 3 {
 		shuffled := make([]string, len(words))
 		copy(shuffled, words)
-		
+
 		// Target indices > 1 to preserve leading core command (e.g., "git commit")
 		if len(shuffled) > 3 {
 			rand.Shuffle(len(shuffled)-2, func(i, j int) {
@@ -51,7 +51,7 @@ func WarpCommand(input string) []string {
 		"make":   "create",
 		"create": "make",
 	}
-	
+
 	for key, value := range synonyms {
 		if strings.Contains(strings.ToLower(input), key) {
 			// Replace only the specific instance

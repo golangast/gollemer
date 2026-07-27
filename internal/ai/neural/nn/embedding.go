@@ -18,7 +18,7 @@ type Embedding struct {
 	RequiresGrad    bool
 	DimModel        int
 	VocabSize       int
-	Weight          *Tensor // Embedding weights
+	Weight          *Tensor      // Embedding weights
 	ControlTokenIDs map[int]bool // Special control/prefix token IDs to scale down
 
 	// Stored values from forward pass for backward calculation

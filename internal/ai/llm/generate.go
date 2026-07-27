@@ -10,7 +10,6 @@ import (
 	"strings"
 )
 
-
 func generateDataStructurePackageContent(structName, packageName, dirName string, fields map[string]string) string {
 	lowercaseName := strings.ToLower(structName)
 
@@ -395,5 +394,3 @@ func InjectPlaceholder(path string) error {
 
 	return os.WriteFile(path, []byte(newContent), 0644)
 }
-
-

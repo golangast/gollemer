@@ -16,9 +16,9 @@ func (m *Mascot) ProposeMove(name string, moveFunc func() error) {
 	if strings.ToLower(input) == "y" || strings.ToLower(input) == "yes" {
 		m.Say(Thinking, "Restructuring project...")
 		if err := moveFunc(); err != nil {
-			m.Say(Disturbed, "I failed to move it: " + err.Error())
+			m.Say(Disturbed, "I failed to move it: "+err.Error())
 		} else {
-			m.Say(Happy, "Moved! Now running '" + name + "' from its proper home.")
+			m.Say(Happy, "Moved! Now running '"+name+"' from its proper home.")
 		}
 	} else {
 		m.Say(Neutral, "Okay, keeping it where it is. I'll adapt my search next time!")
@@ -36,7 +36,7 @@ func (m *Mascot) ConfirmRepair(issue string, repairFunc func() error) {
 	if strings.ToLower(input) == "y" || strings.ToLower(input) == "yes" {
 		m.Say(Thinking, "Applying fix...")
 		if err := repairFunc(); err != nil {
-			m.Say(Disturbed, "Repair failed: " + err.Error())
+			m.Say(Disturbed, "Repair failed: "+err.Error())
 		} else {
 			m.Say(Happy, "Done! The system should be healthy now.")
 		}

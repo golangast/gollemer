@@ -9,16 +9,16 @@ import (
 func ComputeLogMelSpectrogram(pcm []int16) []float32 {
 	// 1. Apply a Hanning Window to the raw samples to reduce edge leakage
 	windowed := applyHanningWindow(pcm)
-	
+
 	// 2. Compute the power spectrum magnitudes (Simplified inline magnitude calculation)
 	fftMagnitudes := naivePowerSpectrum(windowed)
-	
+
 	// 3. Compress the values logarithmically to mimic human hearing perception
 	features := make([]float32, len(fftMagnitudes))
 	for i, mag := range fftMagnitudes {
 		features[i] = float32(math.Log(float64(mag) + 1e-5))
 	}
-	
+
 	return features
 }
 
@@ -36,5 +36,5 @@ func applyHanningWindow(samples []int16) []float64 {
 func naivePowerSpectrum(input []float64) []float64 {
 	// Placeholder for your native FFT transformation array loop
 	// Returns a frequency coefficient bin array
-	return input[:len(input)/2] 
+	return input[:len(input)/2]
 }

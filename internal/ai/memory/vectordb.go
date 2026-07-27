@@ -48,7 +48,7 @@ func (db *VectorDB) Embed(text string) []float64 {
 	for i := 0; i < len(runes)-2; i++ {
 		trigram := string(runes[i : i+3])
 		hash := sha256.Sum256([]byte(trigram))
-		
+
 		// Map hash bytes into the vector
 		for j := 0; j < len(hash)-1; j += 2 {
 			idx := (int(hash[j])<<8 | int(hash[j+1])) % db.dim
@@ -92,7 +92,7 @@ func (db *VectorDB) Insert(text string) {
 		Vector:    vec,
 		Timestamp: time.Now(),
 	})
-	
+
 	db.save()
 }
 
@@ -140,7 +140,7 @@ func (db *VectorDB) save() error {
 	}
 	dir := filepath.Dir(db.dbPath)
 	os.MkdirAll(dir, 0755)
-	
+
 	data, err := json.MarshalIndent(db.records, "", "  ")
 	if err != nil {
 		return err
@@ -156,7 +156,7 @@ func (db *VectorDB) Load() error {
 	if err != nil {
 		return err
 	}
-	
+
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	return json.Unmarshal(data, &db.records)

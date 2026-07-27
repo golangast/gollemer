@@ -46,8 +46,7 @@ func RefactoredTagTokens(tokens []string, posTags []string) []string {
 			tags[i] = "NAME"
 		}
 
-		// If previous tag was OBJECT_TYPE and current tag is NN, tag as NAME, but not if the token is "named"
-		if i > 0 && tags[i-1] == "OBJECT_TYPE" && posTags[i] == "NN" && token != "named" {
+		if i > 0 && (tags[i-1] == "OBJECT_TYPE" || tags[i-1] == "PREPOSITION" || tags[i-1] == "NAME_PREFIX") && posTags[i] == "NN" && token != "named" {
 			tags[i] = "NAME"
 		}
 	}

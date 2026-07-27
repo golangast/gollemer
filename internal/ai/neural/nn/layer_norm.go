@@ -66,7 +66,7 @@ func (ln *LayerNorm) Forward(input *Tensor) (*Tensor, error) {
 	for i := range batchSize {
 		start := i * ln.NormalizedShape
 		data := input.Data[start : start+ln.NormalizedShape]
-		
+
 		m := SumVector(data) / float32(ln.NormalizedShape)
 		mean.Data[i] = m
 
@@ -82,20 +82,20 @@ func (ln *LayerNorm) Forward(input *Tensor) (*Tensor, error) {
 	// Normalize, Scale and Shift in one pass
 	output := NewTensor(input.Shape, make([]float32, len(input.Data)), input.RequiresGrad)
 	normalized := NewTensor(input.Shape, make([]float32, len(input.Data)), input.RequiresGrad)
-	
+
 	for i := range batchSize {
 		start := i * ln.NormalizedShape
 		std := float32(math.Sqrt(float64(variance.Data[i] + ln.Eps)))
 		m := mean.Data[i]
-		
+
 		inData := input.Data[start : start+ln.NormalizedShape]
 		normData := normalized.Data[start : start+ln.NormalizedShape]
 		outData := output.Data[start : start+ln.NormalizedShape]
-		
+
 		// (x - m) / std
 		AddScalar(inData, -m, normData)
 		DivScalar(normData, std, normData)
-		
+
 		// y = gamma * norm + beta
 		MulVectors(ln.Gamma.Data, normData, outData)
 		AddVectors(outData, ln.Beta.Data, outData)
@@ -129,7 +129,7 @@ func (ln *LayerNorm) Backward(gradOutput *Tensor) error {
 		start := i * ln.NormalizedShape
 		gOut := gradOutput.Data[start : start+ln.NormalizedShape]
 		norm := ln.normalized.Data[start : start+ln.NormalizedShape]
-		
+
 		MulAccumulate(ln.Gamma.Grad.Data, gOut, norm)
 		AddAccumulate(ln.Beta.Grad.Data, gOut)
 	}
@@ -142,7 +142,7 @@ func (ln *LayerNorm) Backward(gradOutput *Tensor) error {
 		std := float32(math.Sqrt(float64(ln.variance.Data[i] + ln.Eps)))
 		gOut := gradOutput.Data[start : start+ln.NormalizedShape]
 		norm := ln.normalized.Data[start : start+ln.NormalizedShape]
-		
+
 		// 1. Calculate dL/dnorm = dL/dy * gamma
 		dL_dnorm := make([]float32, ln.NormalizedShape)
 		for j := 0; j < ln.NormalizedShape; j++ {

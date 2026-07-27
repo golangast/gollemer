@@ -2,13 +2,13 @@ package semantic
 
 // SocialInteraction represents the complex structure of a social exchange.
 type SocialInteraction struct {
-	Intent            string             `json:"intent"`             // e.g., "greeting", "wellbeing_check", "farewell"
-	SubIntent         string             `json:"sub_intent"`         // e.g., "personal_how_are_you"
-	SpeechAct         string             `json:"speech_act"`         // e.g., "inquiry", "assertion", "directive"
-	SocialDynamics    SocialDynamics     `json:"social_dynamics"`
-	InternalState     InternalState      `json:"internal_state"`
-	ResponseStrategy  ResponseStrategy   `json:"response_strategy"`
-	TargetEntities    []SocialEntity     `json:"target_entities"`
+	Intent           string           `json:"intent"`     // e.g., "greeting", "wellbeing_check", "farewell"
+	SubIntent        string           `json:"sub_intent"` // e.g., "personal_how_are_you"
+	SpeechAct        string           `json:"speech_act"` // e.g., "inquiry", "assertion", "directive"
+	SocialDynamics   SocialDynamics   `json:"social_dynamics"`
+	InternalState    InternalState    `json:"internal_state"`
+	ResponseStrategy ResponseStrategy `json:"response_strategy"`
+	TargetEntities   []SocialEntity   `json:"target_entities"`
 }
 
 // SocialDynamics defines the tone and relationship context.

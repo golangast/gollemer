@@ -312,13 +312,13 @@ func main() {
 	fmt.Println()
 
 	featureDim := 4
-	hiddenDim  := 32
+	hiddenDim := 32
 	numClasses := 9
 
 	te := moe.NewTemporalEncoder(featureDim, hiddenDim)
 
-	headW     := make([]float32, numClasses*hiddenDim)
-	headB     := make([]float32, numClasses)
+	headW := make([]float32, numClasses*hiddenDim)
+	headB := make([]float32, numClasses)
 	headGradW := make([]float32, numClasses*hiddenDim)
 	headGradB := make([]float32, numClasses)
 	limit := float32(math.Sqrt(1.0 / float64(hiddenDim)))
@@ -393,7 +393,7 @@ func main() {
 
 	// ── Training ─────────────────────────────────────────────────────────────
 	epochs := 2000
-	lr     := float32(0.005)
+	lr := float32(0.005)
 
 	for epoch := 1; epoch <= epochs; epoch++ {
 		totalLoss := float32(0)
@@ -413,8 +413,12 @@ func main() {
 			loss, dLogits := crossEntropyLoss(probs, s.targetClass)
 			totalLoss += loss
 
-			for i := range headGradW { headGradW[i] = 0 }
-			for i := range headGradB { headGradB[i] = 0 }
+			for i := range headGradW {
+				headGradW[i] = 0
+			}
+			for i := range headGradB {
+				headGradB[i] = 0
+			}
 			dMotion := make([]float32, hiddenDim)
 			for c := 0; c < numClasses; c++ {
 				for d := 0; d < hiddenDim; d++ {
@@ -426,8 +430,12 @@ func main() {
 
 			te.Backward(dMotion, lr)
 
-			for i := range headW { headW[i] -= lr * headGradW[i] }
-			for i := range headB { headB[i] -= lr * headGradB[i] }
+			for i := range headW {
+				headW[i] -= lr * headGradW[i]
+			}
+			for i := range headB {
+				headB[i] -= lr * headGradB[i]
+			}
 		}
 
 		if epoch%200 == 0 {

@@ -117,7 +117,7 @@ func (s *AdaptiveSupervisor) mutateRouting(path string) {
 func (s *AdaptiveSupervisor) ResetMetrics() {
 	log.Printf("🔄 [Supervisor] Cold-Resetting metrics.")
 	s.PathFailureCount = make(map[string]int)
-	
+
 	for id, param := range s.ExpertRegistry {
 		param.LearningRate = 0.001
 		param.DropoutPenalty = 0.1
@@ -151,7 +151,7 @@ func (s *AdaptiveSupervisor) EvolveDataset(question string) {
 
 		for scan.Scan() {
 			line := scan.Text()
-			
+
 			if !strings.Contains(line, "__ques__ "+question+" __ans__") && !strings.HasPrefix(line, question+",") {
 				lines = append(lines, line)
 				continue
@@ -163,7 +163,7 @@ func (s *AdaptiveSupervisor) EvolveDataset(question string) {
 			} else {
 				line = strings.Replace(line, question+",", repl+",", 1)
 			}
-			
+
 			lines = append(lines, line)
 			mutations++
 		}

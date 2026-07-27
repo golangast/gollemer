@@ -24,7 +24,7 @@ const (
 	SampleRate      = 16000
 	Channels        = 1
 	BytesPerSample  = 2
-	FrameSize       = 400 // 25ms of audio at 16kHz
+	FrameSize       = 400  // 25ms of audio at 16kHz
 	EnergyThreshold = 0.01 // Tuned for normalized float32 (-1.0 to 1.0)
 )
 
@@ -230,7 +230,7 @@ func loadTrainedHead() (*moe.AudioEncoder, *moe.TemporalEncoder, []float32, []fl
 
 	log.Println("⚠️  No trained audio model found. Run 'go run cmd/tools/train_audio/main.go' first.")
 	log.Println("Using dummy untrained weights (will output random predictions).")
-	
+
 	classNames = []string{"SILENCE", "WAKE_WORD_DETECTED", "UNKNOWN_SPEECH"}
 	numClasses := len(classNames)
 	hiddenDim := 32
@@ -255,7 +255,7 @@ func loadTrainedHead() (*moe.AudioEncoder, *moe.TemporalEncoder, []float32, []fl
 func main() {
 	log.Println("Gollemer Voice Capture — Pure Go Implementation (No CGO)")
 	log.Println("Using AudioEncoder + TemporalEncoder GRU for intent processing.")
-	
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -268,12 +268,12 @@ func main() {
 	}()
 
 	ab := &AudioBuffer{}
-	
+
 	err := StartAudioCapture(ctx, ab)
 	if err != nil {
 		log.Printf("⚠️  Could not start ffmpeg audio capture: %v", err)
 		log.Println("Falling back to simulated audio stream.")
-		
+
 		// Simulate audio capture with white noise
 		go func() {
 			ticker := time.NewTicker(25 * time.Millisecond)
@@ -321,13 +321,13 @@ func main() {
 				if aw.Ready() && rms > EnergyThreshold {
 					// Voice detected! Classify the 1-second window
 					intent, conf := aw.Classify()
-					
+
 					// Avoid spamming the log with silence/noise or low confidence guesses
 					if conf > 0.80 && intent != "SILENCE" && intent != "NOISE" && intent != "UNKNOWN_SPEECH" {
 						fmt.Printf("\n🤖 Audio GRU: %s (Confidence: %.2f, RMS: %.3f)\n", intent, conf, rms)
 						// In a full implementation, you would trigger the MoE intent handler here:
 						// processWithGollemer(intent)
-						
+
 						// Debounce: clear the buffer to avoid multi-triggering on the same sound
 						aw.mu.Lock()
 						aw.filled = 0

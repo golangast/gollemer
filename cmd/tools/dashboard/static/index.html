@@ -271,17 +271,23 @@ canvas{display:block;width:100%!important;flex:1;}
     <div id="verified-badge" style="display:none;background:rgba(16,185,129,.1);color:var(--green);border:1px solid rgba(16,185,129,.3);padding:4px 12px;border-radius:12px;font-size:0.75rem;font-weight:bold;">🟢 Verified Stable</div>
   </div>
   <!-- ── Command Bar ── -->
-  <div style="display:flex;align-items:center;gap:6px;padding:7px 20px;flex-wrap:wrap;background:var(--surface);">
-    <!-- Training commands -->
-    <button class="btn btn-primary btn-sm" onclick="runCmd('train')">🛠️ train</button>
-    <button class="btn btn-primary btn-sm" onclick="runCmd('train-social')">🗣️ social</button>
-    <button class="btn btn-primary btn-sm" onclick="runCmd('train-social')">▶ Continue</button>
-    <button class="btn btn-primary btn-sm" onclick="runCmd('chat')">💬 chat</button>
-    <button class="btn btn-primary btn-sm" onclick="runCmd('word2vec')">📚 w2v</button>
-    <button class="btn btn-primary btn-sm" style="background:var(--surface2);border:1px solid var(--border);color:var(--text)" onclick="runCmd('clean')">🧹 clean</button>
-    <a class="btn btn-primary btn-sm" style="background:var(--green);color:#fff;text-decoration:none;" href="/api/download_model" download>💾 Download</a>
-    <!-- Divider -->
-    <div style="width:1px;height:20px;background:var(--border);margin:0 4px;"></div>
+    <div style="display:flex;align-items:center;gap:6px;padding:7px 20px;flex-wrap:wrap;background:var(--surface);">
+      <!-- Training commands -->
+      <button class="btn btn-primary btn-sm" onclick="runCmd('train')">🛠️ train</button>
+      <button class="btn btn-primary btn-sm" onclick="runCmd('train-social')">🗣️ social</button>
+      <button class="btn btn-primary btn-sm" onclick="runCmd('train-social')">▶ Continue</button>
+      <button class="btn btn-primary btn-sm" onclick="runCmd('chat')">💬 chat</button>
+      <button class="btn btn-primary btn-sm" onclick="runCmd('word2vec')">📚 w2v</button>
+      <button class="btn btn-primary btn-sm" style="background:var(--surface2);border:1px solid var(--border);color:var(--text)" onclick="runCmd('clean')">🧹 clean</button>
+      <a class="btn btn-primary btn-sm" style="background:var(--green);color:#fff;text-decoration:none;" href="/api/download_model" download>💾 Download</a>
+      <!-- FIM Pipeline -->
+      <button class="btn btn-primary btn-sm" style="background:var(--accent2);color:#fff;" onclick="runCmd('mine-dataset')" id="btn-mine">⛏️ mine</button>
+      <button class="btn btn-primary btn-sm" style="background:var(--accent2);color:#fff;" onclick="runCmd('build-dataset')" id="btn-build">🔨 build-ds</button>
+      <button class="btn btn-primary btn-sm" style="background:var(--accent2);color:#fff;" onclick="runCmd('train-fim')" id="btn-fim-train">🔧 train-fim</button>
+      <button class="btn btn-primary btn-sm" style="background:var(--accent2);color:#fff;" onclick="runCmd('trainfim')" id="btn-trainfim">📋 train+fim</button>
+      <button class="btn btn-primary btn-sm" style="background:var(--accent2);color:#fff;" onclick="runCmd('train-fim-quick')" id="btn-fim-quick">⚡ fim-quick</button>
+      <!-- Divider -->
+      <div style="width:1px;height:20px;background:var(--border);margin:0 4px;"></div>
     <!-- Training controls -->
     <button class="btn btn-primary btn-sm" style="background:#0e7490;color:#fff;" onclick="triggerAction('test')">🧪 Test</button>
     <button class="btn btn-primary btn-sm" style="background:var(--accent);color:#fff;" onclick="triggerAction('save')">💾 Save</button>
@@ -335,6 +341,24 @@ canvas{display:block;width:100%!important;flex:1;}
       <div id="simple-infer-out" style="background:#000; border:1px solid var(--border); border-radius:8px; padding:10px; height:150px; overflow-y:auto; font-family:var(--mono); font-size:0.75rem; color:#e2e8f0; white-space:pre-wrap;"></div>
     </div>
     
+    <!-- ── FIM Pipeline Mining Widget ── -->
+    <div class="card">
+      <div class="card-title"><span class="icon">⛏️</span>FIM Dataset Pipeline</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <input type="text" id="fim-repo" placeholder="Git repo URL e.g. https://github.com/golang/go" style="flex:1; background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:8px 12px; color:var(--text); font-family:var(--mono); font-size:0.75rem;">
+        <input type="number" id="fim-max" value="5000" min="100" max="50000" style="width:100px; background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:6px 10px; color:var(--text); font-family:var(--mono); font-size:0.7rem;">
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button class="btn btn-sm" style="background:var(--accent2);color:#fff;" onclick="runMine()">⛏️ Mine Patches</button>
+          <button class="btn btn-sm" style="background:var(--accent2);color:#fff;" onclick="runBuildDataset()">🔨 Build Dataset</button>
+          <button class="btn btn-sm" style="background:var(--accent2);color:#fff;" onclick="runCmd('train-fim')">🔧 Train FIM</button>
+        </div>
+        <div id="fim-status" style="font-size:0.7rem;color:var(--muted);font-family:var(--mono);margin-top:4px;">
+          <span>mined_patches: </span><span id="fim-file-mined" class="badge badge-ok" style="font-size:0.6rem;">checking...</span>
+          <span style="margin-left:8px;">fim_dataset: </span><span id="fim-file-built" class="badge badge-ok" style="font-size:0.6rem;">checking...</span>
+        </div>
+      </div>
+    </div>
+
     <!-- ── Saved Models ── -->
     <div class="card">
       <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;width:100%;">
@@ -547,6 +571,29 @@ function runCmd(target) {
     if(!r.ok) r.text().then(t => showToast(`❌ Error: ${t}`, 'red'));
     else showToast(`🚀 Started: make ${target}`);
   });
+}
+
+function runMine() {
+  const repo = document.getElementById('fim-repo').value.trim();
+  if (!repo) { showToast('❌ Enter a repo URL first', 'red'); return; }
+  const max = parseInt(document.getElementById('fim-max').value) || 5000;
+  fetch('/api/mine', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({repo, max})
+  }).then(r => r.json()).then(d => {
+    showToast('⛏️ ' + (d.msg || 'Mining started'), 'green');
+  }).catch(e => showToast('❌ ' + e.message, 'red'));
+}
+
+function runBuildDataset() {
+  fetch('/api/build-dataset', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({})
+  }).then(r => r.json()).then(d => {
+    showToast('🔨 Build started', 'green');
+  }).catch(e => showToast('❌ ' + e.message, 'red'));
 }
 
 function killCmd() {
@@ -788,6 +835,9 @@ function render() {
 
   // Log tail
   renderLog(hist);
+
+  // FIM file status
+  renderFIMStatus(state.fim_status);
 
   // Keep test sanity checks up to date if they are visible
   updateSanityCards();
@@ -1320,6 +1370,38 @@ function selectDataset(path) {
 }
 
 // ── Log Tail ───────────────────────────────────────────────────────────
+function renderFIMStatus(fim) {
+  if (!fim) return;
+  // mined_patches status
+  const minedEl = document.getElementById('fim-file-mined');
+  if (minedEl) {
+    if (fim.mined_patches && fim.mined_patches.exists) {
+      const sizeKB = (fim.mined_patches.size / 1024).toFixed(0);
+      minedEl.textContent = `✅ ${sizeKB} KB`;
+      minedEl.className = 'badge badge-ok';
+      minedEl.style.fontSize = '0.6rem';
+    } else {
+      minedEl.textContent = '⚠️ not found';
+      minedEl.className = 'badge badge-warn';
+      minedEl.style.fontSize = '0.6rem';
+    }
+  }
+  // fim_dataset status
+  const datasetEl = document.getElementById('fim-file-built');
+  if (datasetEl) {
+    if (fim.fim_dataset && fim.fim_dataset.exists) {
+      const sizeKB = (fim.fim_dataset.size / 1024).toFixed(0);
+      datasetEl.textContent = `✅ ${sizeKB} KB`;
+      datasetEl.className = 'badge badge-ok';
+      datasetEl.style.fontSize = '0.6rem';
+    } else {
+      datasetEl.textContent = '⚠️ not found';
+      datasetEl.className = 'badge badge-warn';
+      datasetEl.style.fontSize = '0.6rem';
+    }
+  }
+}
+
 function renderLog(hist) {
   const el = document.getElementById('log-wrap');
   if (!el || !hist.length) return;

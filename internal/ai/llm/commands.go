@@ -123,7 +123,6 @@ func (r *Runner) handleInteractiveQuery(query string) {
 		}
 	}
 
-
 	// 1. Session Logic: If we have an active intent waiting for data,
 	// we process the new input as part of that intent's context.
 	var prevIntent *IntentDataLayer
@@ -150,7 +149,7 @@ func (r *Runner) handleInteractiveQuery(query string) {
 	if !intentData.IsComplete && intentData.Intent != "" && intentData.Intent != "chat_response" && len(intentData.Missing) > 0 {
 		r.SessionState.IsActive = true
 		r.SessionState.CurrentIntent = intentData
-		r.Mascot.Speak(ui.MoodWaiting, fmt.Sprintf("I've identified your intent as '%s', but I'm missing some details: %s. Could you provide the %s?", 
+		r.Mascot.Speak(ui.MoodWaiting, fmt.Sprintf("I've identified your intent as '%s', but I'm missing some details: %s. Could you provide the %s?",
 			intentData.Intent, strings.Join(intentData.Missing, ", "), intentData.Missing[0]))
 		return
 	}
@@ -191,7 +190,7 @@ func (r *Runner) handleInteractiveQuery(query string) {
 			r.Mascot.Speak(ui.MoodIdle, resp)
 			r.Client.PushHistory(query, resp, intentData.Intent)
 		}
-		
+
 		if !hasCommand {
 			return
 		}
@@ -473,7 +472,7 @@ func (r *Runner) executeCommand(query string, intent *Intent, intentData *Intent
 
 	predictedSentence = r.handleTutorialLogic(command, objectType, predictedSentence)
 	colors.AnimatedOutput("green", "black", predictedSentence, 1*time.Second)
-	
+
 	// Prevent context poisoning: don't store massive terminal outputs or dir trees in history
 	historySentence := predictedSentence
 	if len(historySentence) > 200 || strings.Contains(historySentence, "├──") || strings.Contains(historySentence, "└──") {

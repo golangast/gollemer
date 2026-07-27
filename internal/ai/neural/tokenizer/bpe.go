@@ -283,50 +283,64 @@ func (b *BPETokenizer) Train(projectRoot string) error {
 	return nil
 }
 
-// Encode converts a text string into a slice of token IDs using the learned BPE merges.
+// Encode converts a text string into a slice of token IDs using special token matching and BPE merges.
 func (b *BPETokenizer) Encode(text string) []int {
-	// Check for special tokens first
-	if b.SpecialTokens[text] {
-		if id := b.Vocab.GetTokenID(text); id >= 0 {
-			return []int{id}
-		}
-	}
-
-	// Special handling for <|im_start|>, <|im_end|> etc.
-	if strings.HasPrefix(text, "<|") && strings.HasSuffix(text, "|>") {
-		if id := b.Vocab.GetTokenID(text); id >= 0 {
-			return []int{id}
-		}
-	}
-
-	// Determine tokenization strategy based on content
-	tokens := tokenizeText(text)
-
-	if len(tokens) == 0 {
-		if id := b.Vocab.GetTokenID("UNK"); id >= 0 {
-			return []int{id}
-		}
-		return []int{0}
+	if len(text) == 0 {
+		return nil
 	}
 
 	var ids []int
-	for _, word := range tokens {
-		// Check if word is a special token or control token
-		if b.SpecialTokens[word] || word == "\n" {
-			if id := b.Vocab.GetTokenID(word); id >= 0 {
-				ids = append(ids, id)
+	remaining := text
+
+	for len(remaining) > 0 {
+		matchedSpecial := false
+
+		// 1. Check if 'remaining' starts with any registered Special Token (longest match first)
+		for specTok := range b.SpecialTokens {
+			if strings.HasPrefix(remaining, specTok) {
+				if id := b.Vocab.GetTokenID(specTok); id >= 0 {
+					ids = append(ids, id)
+					remaining = remaining[len(specTok):]
+					matchedSpecial = true
+					break
+				}
 			}
+		}
+
+		if matchedSpecial {
 			continue
 		}
 
-		// Apply BPE merges to segment the word
-		segments := b.segmentWord(word)
-		for _, seg := range segments {
-			id := b.Vocab.GetTokenID(seg)
-			if id < 0 {
-				id = b.Vocab.UnkID
+		// 2. If no special token prefix matched, find the distance to the next potential special token match
+		nextSpecialIdx := len(remaining)
+		for specTok := range b.SpecialTokens {
+			if idx := strings.Index(remaining, specTok); idx > 0 && idx < nextSpecialIdx {
+				nextSpecialIdx = idx
 			}
-			ids = append(ids, id)
+		}
+
+		// 3. Extract standard text chunk up to the next special token
+		chunk := remaining[:nextSpecialIdx]
+		remaining = remaining[nextSpecialIdx:]
+
+		// 4. Tokenize standard chunk through traditional word splitter + BPE merges
+		words := tokenizeText(chunk)
+		for _, word := range words {
+			if word == "\n" {
+				if id := b.Vocab.GetTokenID(word); id >= 0 {
+					ids = append(ids, id)
+				}
+				continue
+			}
+
+			segments := b.segmentWord(word)
+			for _, seg := range segments {
+				id := b.Vocab.GetTokenID(seg)
+				if id < 0 {
+					id = b.Vocab.UnkID
+				}
+				ids = append(ids, id)
+			}
 		}
 	}
 

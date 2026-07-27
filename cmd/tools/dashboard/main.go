@@ -25,12 +25,13 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
+
+	"github.com/gorilla/websocket"
 
 	"github.com/golangast/gollemer/internal/ai/moe"
 	"github.com/golangast/gollemer/internal/ai/neural/nn"
-	"github.com/gorilla/websocket"
-	"syscall"
 )
 
 type MetricPoint struct {
@@ -121,6 +122,17 @@ type SentenceTestPoint struct {
 	Timestamp  string  `json:"timestamp"`
 }
 
+type FIMFileStatus struct {
+	Exists bool   `json:"exists"`
+	Size   int64  `json:"size"`
+	Path   string `json:"path"`
+}
+
+type FIMStatus struct {
+	MinedPatches FIMFileStatus `json:"mined_patches"`
+	FIMDataset   FIMFileStatus `json:"fim_dataset"`
+}
+
 type DashboardState struct {
 	History          []MetricPoint          `json:"history"`
 	Latest           LatestMetric           `json:"latest"`
@@ -136,6 +148,7 @@ type DashboardState struct {
 	LiveEpoch        float64                `json:"live_epoch"`
 	LiveEpochTime    string                 `json:"live_epoch_time"`
 	LiveActiveExp    []int                  `json:"live_active_experts"`
+	FIMStatus        FIMStatus              `json:"fim_status"`
 }
 
 var (
@@ -365,6 +378,8 @@ func main() {
 	mux.HandleFunc("/api/diagnostics", handleDiagnostics)
 	mux.HandleFunc("/api/trigger", handleTrigger)
 	mux.HandleFunc("/api/download_model", handleDownloadModel)
+	mux.HandleFunc("/api/mine", handleMine)
+	mux.HandleFunc("/api/build-dataset", handleBuildDataset)
 	mux.HandleFunc("/api/inspect", handleInspect)
 	// Proxy both the enhanced metrics API and the legacy dashboard metrics endpoint.
 	mux.Handle("/api/metrics", newMetricsProxy())
@@ -442,6 +457,7 @@ func buildState() DashboardState {
 		LiveEpoch:        lepoch,
 		LiveEpochTime:    lepochTime,
 		LiveActiveExp:    lactiveExps,
+		FIMStatus:        readFIMStatus(),
 	}
 }
 
@@ -551,6 +567,21 @@ func readCartridges() CartridgeMap {
 	var m CartridgeMap
 	json.Unmarshal(data, &m)
 	return m
+}
+
+func readFIMStatus() FIMStatus {
+	checkFile := func(path string) FIMFileStatus {
+		fi, err := os.Stat(rel(path))
+		if err != nil {
+			return FIMFileStatus{Exists: false, Size: 0, Path: path}
+		}
+		return FIMFileStatus{Exists: true, Size: fi.Size(), Path: path}
+	}
+
+	return FIMStatus{
+		MinedPatches: checkFile("data/training/mined_patches.json"),
+		FIMDataset:   checkFile("data/training/fim_dataset.json"),
+	}
 }
 
 func listDatasets() []string {
@@ -861,6 +892,9 @@ func handleModels(w http.ResponseWriter, r *http.Request) {
 var allowedTargets = map[string]bool{
 	"train": true, "train-social": true, "clean": true,
 	"word2vec": true, "llm": true, "chat": true,
+	"mine-dataset": true, "build-dataset": true,
+	"train-fim": true, "train-fim-quick": true,
+	"trainfim": true,
 }
 
 func handleCmd(w http.ResponseWriter, r *http.Request) {
@@ -1381,6 +1415,142 @@ func streamToLive(r io.Reader) {
 	for scanner.Scan() {
 		appendLive(scanner.Text())
 	}
+}
+
+// handleMine runs the dataset_miner with a user-specified repo URL.
+func handleMine(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Repo string `json:"repo"`
+		Max  int    `json:"max"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad JSON", http.StatusBadRequest)
+		return
+	}
+	if req.Repo == "" {
+		http.Error(w, `{"error":"repo is required"}`, http.StatusBadRequest)
+		return
+	}
+	if req.Max <= 0 {
+		req.Max = 5000
+	}
+	procMu.Lock()
+	if runningCmd != nil {
+		procMu.Unlock()
+		http.Error(w, `{"error":"already running"}`, http.StatusConflict)
+		return
+	}
+	appendLive("── Mining repo: " + req.Repo + " ──")
+	cmd := exec.Command("go", "run", "cmd/tools/dataset_miner/main.go",
+		"-repo="+req.Repo,
+		"-out=data/training/mined_patches.json",
+		"-max="+strconv.Itoa(req.Max),
+	)
+	cmd.Dir = rootDir
+	cmd.Env = os.Environ()
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	stdout, _ := cmd.StdoutPipe()
+	stderr, _ := cmd.StderrPipe()
+	if err := cmd.Start(); err != nil {
+		procMu.Unlock()
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	runningCmd = cmd
+	runningName = "mine:" + shortenRepo(req.Repo)
+	procMu.Unlock()
+	go streamToLive(stdout)
+	go streamToLive(stderr)
+	go func() {
+		cmd.Wait()
+		procMu.Lock()
+		runningCmd = nil
+		runningName = ""
+		procMu.Unlock()
+		appendLive("── Mining complete ──")
+	}()
+	json.NewEncoder(w).Encode(map[string]string{"ok": "true", "msg": "Mining " + req.Repo})
+}
+
+// handleBuildDataset runs the dataset_builder on the mined patches.
+func handleBuildDataset(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Input  string  `json:"input"`
+		Output string  `json:"output"`
+		Val    float64 `json:"val_split"`
+		Test   float64 `json:"test_split"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad JSON", http.StatusBadRequest)
+		return
+	}
+	if req.Input == "" {
+		req.Input = "data/training/mined_patches.json"
+	}
+	if req.Output == "" {
+		req.Output = "data/training/fim_dataset.json"
+	}
+	if req.Val <= 0 {
+		req.Val = 0.1
+	}
+	if req.Test <= 0 {
+		req.Test = 0.05
+	}
+	procMu.Lock()
+	if runningCmd != nil {
+		procMu.Unlock()
+		http.Error(w, `{"error":"already running"}`, http.StatusConflict)
+		return
+	}
+	appendLive("── Building dataset from " + req.Input + " ──")
+	cmd := exec.Command("go", "run", "cmd/tools/dataset_builder/main.go",
+		"-in="+req.Input,
+		"-out="+req.Output,
+		"-val-split="+strconv.FormatFloat(req.Val, 'f', 2, 64),
+		"-test-split="+strconv.FormatFloat(req.Test, 'f', 2, 64),
+	)
+	cmd.Dir = rootDir
+	cmd.Env = os.Environ()
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	stdout, _ := cmd.StdoutPipe()
+	stderr, _ := cmd.StderrPipe()
+	if err := cmd.Start(); err != nil {
+		procMu.Unlock()
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	runningCmd = cmd
+	runningName = "build-dataset"
+	procMu.Unlock()
+	go streamToLive(stdout)
+	go streamToLive(stderr)
+	go func() {
+		cmd.Wait()
+		procMu.Lock()
+		runningCmd = nil
+		runningName = ""
+		procMu.Unlock()
+		appendLive("── Build complete ──")
+	}()
+	json.NewEncoder(w).Encode(map[string]string{"ok": "true"})
+}
+
+func shortenRepo(repo string) string {
+	parts := strings.Split(strings.TrimRight(repo, "/"), "/")
+	if len(parts) >= 2 {
+		return parts[len(parts)-2] + "/" + parts[len(parts)-1]
+	}
+	return repo
 }
 
 type InspectReport struct {

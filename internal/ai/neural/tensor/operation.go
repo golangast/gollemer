@@ -105,85 +105,85 @@ func CrossEntropyLoss(logits *Tensor, targetIDs []int, padID int, labelSmoothing
 	}
 	targetConfidence := float32(1.0) - labelSmoothing
 
-		numWorkers := runtime.NumCPU()
-		if numWorkers > 8 {
-			numWorkers = 8
+	numWorkers := runtime.NumCPU()
+	if numWorkers > 8 {
+		numWorkers = 8
+	}
+	rowsPerWorker := (reshapedLogits.Shape[0] + numWorkers - 1) / numWorkers
+
+	var wg sync.WaitGroup
+	losses := make([]float64, numWorkers)
+	tokenCounts := make([]int, numWorkers)
+
+	for w := 0; w < numWorkers; w++ {
+		start := w * rowsPerWorker
+		end := (w + 1) * rowsPerWorker
+		if start >= reshapedLogits.Shape[0] {
+			break
 		}
-		rowsPerWorker := (reshapedLogits.Shape[0] + numWorkers - 1) / numWorkers
+		if end > reshapedLogits.Shape[0] {
+			end = reshapedLogits.Shape[0]
+		}
 
-		var wg sync.WaitGroup
-		losses := make([]float64, numWorkers)
-		tokenCounts := make([]int, numWorkers)
-		
-		for w := 0; w < numWorkers; w++ {
-			start := w * rowsPerWorker
-			end := (w + 1) * rowsPerWorker
-			if start >= reshapedLogits.Shape[0] {
-				break
-			}
-			if end > reshapedLogits.Shape[0] {
-				end = reshapedLogits.Shape[0]
-			}
+		wg.Add(1)
+		go func(workerID, s, e int) {
+			defer wg.Done()
+			var localLoss float64
+			localActive := 0
+			epsilon := float32(1e-9)
 
-			wg.Add(1)
-			go func(workerID, s, e int) {
-				defer wg.Done()
-				var localLoss float64
-				localActive := 0
-				epsilon := float32(1e-9)
+			for i := s; i < e; i++ {
+				targetID := targetIDs[i]
+				if targetID == padID {
+					continue
+				}
+				localActive++
 
-				for i := s; i < e; i++ {
-					targetID := targetIDs[i]
-					if targetID == padID {
-						continue
-					}
-					localActive++
-
-					baseIndex := i * numClasses
-					// Calculate row entropy for entropy maximization penalty
-					var rowEntropy float32
-					for j := 0; j < numClasses; j++ {
-						p := probs.Data[baseIndex+j]
-						if p > 1e-12 {
-							rowEntropy -= p * float32(math.Log(float64(p)))
-						}
-					}
-
-					for j := 0; j < numClasses; j++ {
-						p := probs.Data[baseIndex+j]
-						var t float32
-						if j == targetID {
-							t = targetConfidence
-						} else if j == padID {
-							t = 0
-						} else {
-							t = smoothValue
-						}
-						localLoss -= float64(t) * math.Log(float64(p+epsilon))
-						
-						// Basic CE gradient
-						g := p - t
-						
-						// Entropy maximization (negative of entropy gradient to maximize H)
-						// This helps break word salad loops in under-trained models.
-						const entropyWeight = float32(0.01)
-						if p > 1e-12 {
-							g -= entropyWeight * p * (rowEntropy + float32(math.Log(float64(p))))
-						}
-						
-						grad.Data[baseIndex+j] = g
+				baseIndex := i * numClasses
+				// Calculate row entropy for entropy maximization penalty
+				var rowEntropy float32
+				for j := 0; j < numClasses; j++ {
+					p := probs.Data[baseIndex+j]
+					if p > 1e-12 {
+						rowEntropy -= p * float32(math.Log(float64(p)))
 					}
 				}
-				losses[workerID] = localLoss
-				tokenCounts[workerID] = localActive
-			}(w, start, end)
-		}
-		wg.Wait()
 
-		for w := 0; w < numWorkers; w++ {
-			loss += losses[w]
-			activeTokens += tokenCounts[w]
-		}
+				for j := 0; j < numClasses; j++ {
+					p := probs.Data[baseIndex+j]
+					var t float32
+					if j == targetID {
+						t = targetConfidence
+					} else if j == padID {
+						t = 0
+					} else {
+						t = smoothValue
+					}
+					localLoss -= float64(t) * math.Log(float64(p+epsilon))
+
+					// Basic CE gradient
+					g := p - t
+
+					// Entropy maximization (negative of entropy gradient to maximize H)
+					// This helps break word salad loops in under-trained models.
+					const entropyWeight = float32(0.01)
+					if p > 1e-12 {
+						g -= entropyWeight * p * (rowEntropy + float32(math.Log(float64(p))))
+					}
+
+					grad.Data[baseIndex+j] = g
+				}
+			}
+			losses[workerID] = localLoss
+			tokenCounts[workerID] = localActive
+		}(w, start, end)
+	}
+	wg.Wait()
+
+	for w := 0; w < numWorkers; w++ {
+		loss += losses[w]
+		activeTokens += tokenCounts[w]
+	}
 
 	if activeTokens > 0 {
 		loss /= float64(activeTokens)

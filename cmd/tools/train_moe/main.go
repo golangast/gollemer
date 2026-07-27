@@ -26,11 +26,10 @@ import (
 	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
 	"github.com/golangast/gollemer/internal/ai/neural/nnu/word2vec"
 	"github.com/golangast/gollemer/internal/ai/neural/semantic"
+	. "github.com/golangast/gollemer/internal/ai/neural/tensor"
 	"github.com/golangast/gollemer/internal/ai/neural/tokenizer"
 	"github.com/golangast/gollemer/internal/ai/tagger/tag"
 	"github.com/golangast/gollemer/internal/ai/training/chat"
-
-	. "github.com/golangast/gollemer/internal/ai/neural/tensor"
 )
 
 func init() {
@@ -1133,7 +1132,7 @@ func main() {
 	}
 
 	if *trainMultiphase || *multiphaseAlias {
-		chat.TrainMultiPhaseCurriculum(".", *gpu)
+		chat.TrainMultiPhaseCurriculum(".", *gpu, *dataFile)
 		return
 	}
 

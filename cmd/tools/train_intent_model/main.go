@@ -251,7 +251,7 @@ func trainIntentModelBatch(model *moe.IntentMoE, optimizer nn.Optimizer, batch I
 
 		parentIntentIDs[i] = parentIntentVocab.GetTokenID(example.SemanticOutput.Social.Intent)
 		childIntentIDs[i] = childIntentVocab.GetTokenID(example.SemanticOutput.Social.SubIntent)
-		
+
 		sentenceTokenIDs, err := sentenceTokenizer.Encode(example.FlatOutput)
 		if err != nil {
 			return 0, fmt.Errorf("sentence tokenization failed for item %d: %w", i, err)
@@ -290,7 +290,7 @@ func trainIntentModelBatch(model *moe.IntentMoE, optimizer nn.Optimizer, batch I
 				fullTargets[i*(maxSeqLength-1)+t] = targetSentenceIDsBatch[i*maxSeqLength+t+1]
 			}
 		}
-		
+
 		loss, grad := tensor.CrossEntropyLoss(logits, fullTargets, sentenceVocab.PaddingTokenID, 0.1)
 		sentenceLoss = loss
 		sentenceGrads = []*tensor.Tensor{grad}

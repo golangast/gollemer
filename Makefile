@@ -18,7 +18,7 @@ MAIN_CMD     = go run cmd/tools/train_moe/main.go
 .PHONY: train train-fresh train-social chat clean clean-all help dashboard \
         build-pi build-pi64 pi pi-social pi-chat pi-llm \
         pi-social-master pi-social-worker pi-chat-master pi-chat-worker \
-        build-all install-hooks
+        build-all install-hooks trainfim
 
 ## build-all: Cross-compile gollemer CLI for Linux (amd64, arm64) and macOS (darwin-amd64, darwin-arm64)
 build-all:
@@ -59,6 +59,23 @@ train-social:
 	@echo "▶️  Restarting dashboard (http://localhost:8765)..."
 	@bash scripts/start_dashboard.sh
 
+## trainfim: Normal MoE training with FIM dataset augmentation loaded.
+## Suspends dashboard services to free RAM, trains the standard MoE model
+## with the FIM dataset as additional training data.
+trainfim:
+	@echo "⏸  Suspending dashboard services to free RAM for FIM training..."
+	@for f in /tmp/dashboard.pid /tmp/observability.pid /tmp/dashboard_injector.pid; do \
+	    [ -f $$f ] && kill -9 $$(cat $$f) 2>/dev/null || true; rm -f $$f; done
+	@sleep 2
+	@echo "🔨 Building training binary..."
+	@mkdir -p .build
+	go build -o .build/gollemer-train ./cmd/tools/train_moe/main.go && \
+	(echo "📂 Training with FIM dataset: data/training/fim_dataset.json" && \
+	 GOMEMLIMIT=$(MEM_LIMIT) GOGC=90 GOMAXPROCS=$(GOMAXPROCS) .build/gollemer-train -train-multiphase -data "data/training/fim_dataset.json" $(ARGS))
+	@echo "▶️  Restarting dashboard (http://localhost:8765)..."
+	@bash scripts/start_dashboard.sh
+
+	
 # --- Interaction ---
 
 ## chat: Launch the interactive LLM chat shell
@@ -84,6 +101,44 @@ clean-all:
 word2vec:
 	go run ./cmd/tools/train_word2vec
 	@cp data/models/gob_models/word2vec_model.gob data/models/gob_models/word2vec_model.gob.bak 2>/dev/null || true
+
+## train-fim: Train the MoE model on mined Go patches using Fill-In-The-Middle (FIM)
+train-fim:
+	@echo "🔧 Training MoE on mined Go patches with FIM..."
+	@mkdir -p models/fim_checkpoints
+	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) \
+	  go run ./cmd/tools/train_fim/main.go \
+	  -data="data/training/fim_dataset.json" \
+	  -epochs=10 \
+	  -batch=8 \
+	  -lr=0.0001 \
+	  -output="models/fim_checkpoints" \
+	  $(ARGS)
+
+## train-fim-quick: Quick FIM training run (1 epoch, small batch) for testing
+train-fim-quick:
+	@echo "🔧 Quick FIM training test..."
+	go run ./cmd/tools/train_fim/main.go \
+	  -data="data/training/fim_dataset.json" \
+	  -epochs=1 \
+	  -batch=2 \
+	  -lr=0.0001 \
+	  -output="/tmp/fim_test"
+
+## mine-dataset: Mine a Go repository for training patches
+mine-dataset:
+	@echo "⛏️  Mining Go patches from $(REPO)..."
+	go run ./cmd/tools/dataset_miner/main.go \
+	  -repo="$(REPO)" \
+	  -out="data/training/mined_patches.json" \
+	  -max=5000
+
+## build-dataset: Build structured FIM dataset from mined patches
+build-dataset:
+	@echo "🔨 Building FIM dataset from mined patches..."
+	go run ./cmd/tools/dataset_builder/main.go \
+	  -in="data/training/mined_patches.json" \
+	  -out="data/training/fim_dataset.json"
 
 ## help: Display available commands
 help:

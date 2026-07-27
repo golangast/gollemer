@@ -29,9 +29,9 @@ import (
 )
 
 const (
-	SampleRate  = 16000
-	FrameSize   = 400
-	NumSamples  = SampleRate * 3 // 3 second window
+	SampleRate    = 16000
+	FrameSize     = 400
+	NumSamples    = SampleRate * 3 // 3 second window
 	NumRecordings = 3
 )
 

@@ -28,7 +28,7 @@ func main() {
 	}
 
 	// Create the MoE Layer
-	moeLayer, err := NewMoELayer(inputDim, outputDim,numExperts, k, expertBuilder)
+	moeLayer, err := NewMoELayer(inputDim, outputDim, numExperts, k, expertBuilder)
 	if err != nil {
 		log.Fatalf("Failed to create MoE Layer: %v", err)
 	}

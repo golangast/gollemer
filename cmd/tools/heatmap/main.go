@@ -26,7 +26,7 @@ func main() {
 		if err == io.EOF {
 			break
 		}
-		
+
 		// Skip header if present (or just check for numeric Layer ID)
 		if record[2] != "0" {
 			continue
@@ -36,7 +36,7 @@ func main() {
 		dom, _ := strconv.ParseFloat(record[len(record)-1], 64)
 
 		fmt.Printf("%-5s |", epoch)
-		
+
 		// Print Experts 0-7 (columns 3 to 10 if they exist)
 		numCols := len(record) - 1
 		for i := 3; i < numCols && i <= 10; i++ {
@@ -55,7 +55,7 @@ func main() {
 
 func printColoredCell(val float64) {
 	// ANSI Colors: 34 (Blue/Cold), 32 (Green/Healthy), 33 (Yellow/Warm), 31 (Red/Hot)
-	color := 34 
+	color := 34
 	if val > 0.10 && val <= 0.25 {
 		color = 32 // Healthy distribution
 	} else if val > 0.25 && val <= 0.70 {

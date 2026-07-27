@@ -43,7 +43,7 @@ func (r *Runner) handleMoveCommand(fileName, targetDirectory string) string {
 	if targetDirectory == "." || targetDirectory == "here" {
 		targetDirectory = "."
 	}
-	
+
 	// Strip leading slash so '/jimmy' means the local folder 'jimmy'
 	cleanTarget := strings.TrimPrefix(targetDirectory, "/")
 	if cleanTarget == "" {
@@ -78,7 +78,7 @@ func (r *Runner) handleMoveCommand(fileName, targetDirectory string) string {
 			return fmt.Sprintf("I couldn't find a file named '%s' anywhere in the project.", effectiveFile)
 		}
 	}
-	
+
 	destFile := filepath.Join(cleanTarget, filepath.Base(effectiveFile))
 	err := os.Rename(effectiveFile, destFile)
 	if err != nil {

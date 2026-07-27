@@ -13,13 +13,13 @@ import (
 
 // JSONDatabase handles persistence for Gollemer state using a flat JSON file.
 type JSONDatabase struct {
-	Messages         []Message          `json:"messages"`
-	Users            []User             `json:"users"`
-	TutorialMetadata TutorialMetadata   `json:"tutorial_metadata"`
-	ProjectProfiles  []ProjectProfile   `json:"project_profiles"`
-	ProjectRoutes    []ProjectRoute     `json:"project_routes"`
-	ProjectDatabases []ProjectDatabase  `json:"project_databases"`
-	
+	Messages         []Message         `json:"messages"`
+	Users            []User            `json:"users"`
+	TutorialMetadata TutorialMetadata  `json:"tutorial_metadata"`
+	ProjectProfiles  []ProjectProfile  `json:"project_profiles"`
+	ProjectRoutes    []ProjectRoute    `json:"project_routes"`
+	ProjectDatabases []ProjectDatabase `json:"project_databases"`
+
 	path string
 	mu   sync.RWMutex
 }

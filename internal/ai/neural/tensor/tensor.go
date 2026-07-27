@@ -22,7 +22,6 @@ const (
 	GPU
 )
 
-
 // MatMulIterator is an iterator for the result tensor of a matrix multiplication.
 // It provides the current row and column indices for each chunk in the result tensor.
 type MatMulIterator struct {
@@ -148,8 +147,7 @@ type Operation interface {
 	Backward(grad *Tensor) error
 }
 
-var (
-)
+var ()
 
 // Tensor represents a multi-dimensional array of float32 values.
 type Tensor struct {
@@ -566,7 +564,6 @@ func (t *Tensor) MatMul(other *Tensor) (*Tensor, error) {
 		t.ToCPU()
 		other.ToCPU()
 	}
-
 
 	// Case 1: 2D matrix multiplication (Pure-Go Fallback)
 	if len(t.Shape) == 2 && len(other.Shape) == 2 {
@@ -2827,7 +2824,7 @@ func (t *Tensor) Gather(indices []int) (*Tensor, error) {
 				idx := indices[i]
 				srcRow := t.Data[idx*cols : (idx+1)*cols]
 				dstRow := newData[i*cols : (i+1)*cols]
-				
+
 				// Unrolled row copy
 				k := 0
 				for ; k <= cols-4; k += 4 {

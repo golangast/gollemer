@@ -27,7 +27,7 @@ func main() {
 
 	// 3. Simple Test Set
 	log.Println("--- 🩺 Running Diagnostic Suite ---")
-	
+
 	testInput := make([]float32, inputDim)
 	for i := range testInput {
 		testInput[i] = 1.0 // Unit signal

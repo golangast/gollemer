@@ -49,12 +49,12 @@ func (m *Mascot) AuditGlobalState(root string) {
 							line := fset.Position(id.Pos()).Line
 							m.ConfirmRepair(fmt.Sprintf("Found a mutable global '%s' in %s:%d.", varName, filePath, line), func() error {
 								m.Say(Thinking, fmt.Sprintf("Encapsulating '%s' into a SystemState struct...", varName))
-								
+
 								// Perform the actual AST transformation:
 								// 1. Find the declaration of varName
 								// 2. Wrap it in a struct
 								// 3. Update all local references to use state.VarName
-								
+
 								fset := token.NewFileSet()
 								node, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
 								if err != nil {
@@ -64,7 +64,7 @@ func (m *Mascot) AuditGlobalState(root string) {
 								// Create a 'state' variable if it doesn't exist? (Simplified for now)
 								// We'll just add a FIXME comment as a first step of a "real" change
 								// and then attempt a basic rename if possible.
-								
+
 								ast.Inspect(node, func(n ast.Node) bool {
 									if id, ok := n.(*ast.Ident); ok && id.Name == varName {
 										// Rename to indicate encapsulation requirement

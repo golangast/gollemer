@@ -48,7 +48,7 @@ func ScanProject() ProjectContext {
 
 func GetExpertAdvice(ctx ProjectContext) string {
 	switch {
-	
+
 	case ctx.IsGollemer && ctx.HasModel:
 		return "Model weights detected. Want to **run an inference test** on a sample sentence?"
 	case !ctx.IsGollemer:

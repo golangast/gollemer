@@ -123,7 +123,7 @@ func WeightedCrossEntropy(logits *tensor.Tensor, targets []int, weights []float3
 			//   then patch targetID: subtract (1-ls)*w
 			moe.SimdMulScalarF32(lsBuf, row, 1.0) // copy row into lsBuf
 			// shift all by -lsLabel: lsBuf[j] = row[j] - lsLabel
-			for j := range lsBuf {                // scalar shift, cheap, 1 pass
+			for j := range lsBuf { // scalar shift, cheap, 1 pass
 				lsBuf[j] -= lsLabel
 			}
 			// scale: gradOut = lsBuf * currentWeight (SIMD, unrolled 4-way)

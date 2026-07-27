@@ -173,30 +173,7 @@ make train ARGS='-cartridges="data/models/intents/computer.cartridge" -data "dat
 make word2vec
 ```
 
-### 3. Running the HTTP Server
-The root `main.go` starts a minimal HTTP server with the following routes:
-
-| Route | Handler | Response |
-|---|---|---|
-| `/user` | `userHandler` | `Hello from userHandler!` |
-| `/auth` | `authHandler` | `Hello from authHandler!` |
-| `/handle` | `handler` | `Hello from handler!` |
-| `/health` | inline | `OK` |
-
-```bash
-go run .
-# Server listening on :8765
-```
-
-```bash
-# Test the endpoints
-curl http://localhost:8765/user     # → Hello from userHandler!
-curl http://localhost:8765/auth     # → Hello from authHandler!
-curl http://localhost:8765/handle   # → Hello from handler!
-curl http://localhost:8765/health   # → OK
-```
-
-### 4. Running the LLM
+### 3. Running the LLM
 Chat with your trained model using the interactive shell.
 
 ```bash
@@ -358,119 +335,781 @@ This enables the assistant to recall user-defined facts like names, preferences,
 
 ---
 
+## 📚 Concept-Guided Code Editing with Book Ingestion
 
+Gollemer can read Go textbooks and extract idioms, patterns, and code structures into a structured **Concept Registry** that guides all code generation. This bridges high-level textbook terminology (e.g. "Worker Pool") directly to the required Go primitive constructs and AST mutation rules.
 
-## 🛠️ Advanced Usage
+### Architecture Overview
 
-### Makefile Commands
+```
+Go Book (Markdown/PDF/TXT)
+  → BookIngester parses chapters & code blocks
+  → ConceptTemplates extracted: terms, synonyms, required constructs, AST mutations
+  → Registered into knowledge.Registry (14 built-in patterns + book-derived patterns)
+  → User Command → ConceptMatcher.ExtractConcepts() → concept-augmented prompt
+  → LLM generates code following proven patterns from the book
+```
 
-#### Desktop / x86 (SIMD-accelerated)
-| Command | Description |
+### Built-in Concept Registry (14 Patterns)
+
+| Pattern | Required Constructs |
 |---|---|
-| `make train` | Cleans old state and starts a fresh Social model training cycle. |
-| `make train-social` | Resumes an existing Social model training cycle. |
-| `make llm` | Launches the interactive chat shell with the current model. |
-| `make clean` | Safely removes current model checkpoints and vocabularies. |
+| Worker Pool | `sync.WaitGroup`, `chan`, `go fn()` |
+| Caching | `sync.RWMutex`, `map`, `sync.Map` |
+| Circuit Breaker | `sync.Mutex`, `time.Time`, `atomic` |
+| Rate Limiter | `time.Ticker`, `chan struct{}` |
+| Observer/PubSub | `chan`, `sync.Mutex`, `interface{}` |
+| Singleton | `sync.Once`, `sync.Mutex` |
+| Context Propagation | `context.Context`, `context.WithCancel` |
+| Fan-Out | `go fn()`, `sync.WaitGroup`, `chan` |
+| Fan-In | `chan`, `go fn()`, `sync.WaitGroup` |
+| Pipeline | `chan`, `go fn()` |
+| Graceful Shutdown | `os.Signal`, `os/signal`, `context.WithCancel` |
+| Connection Pool | `chan`, `sync.Mutex` |
+| Retry Pattern | `time.Duration`, `time.Sleep` |
+| Dependency Injection | `interface{}`, struct embedding |
 
-#### Raspberry Pi 3B — Cross-compilation
-| Command | Description |
-|---|---|
-| `make build-pi` | Cross-compiles a 32-bit ARMv7 binary (`gollemer-pi`) for Raspberry Pi OS 32-bit. |
-| `make build-pi64` | Cross-compiles a 64-bit ARM64 binary (`gollemer-pi64`) for a 64-bit Pi OS. |
+### Book Ingestion Commands
 
-#### Raspberry Pi 3B — On-device Training & Inference
-| Command | Description |
-|---|---|
-| `make pi` | Alias for `make pi-social` — recommended first command on the Pi. |
-| `make pi-social` | Resumes social-only curriculum training in Pi 3B safe mode (900 MB cap). |
-| `make pi-social-fresh` | Clears existing model and starts a fresh social training run on the Pi. |
-| `make pi-chat` | Resumes chat curriculum training in Pi 3B safe mode. |
-| `make pi-llm` | Launches the interactive LLM in inference-only mode on the Pi. |
+```bash
+# Ingest a Go book (Markdown format) and extract patterns
+go run ./cmd/tools/ingest_book/main.go \
+  -file="docs/concurrency-in-go.md" \
+  -out="data/knowledge/book_concepts.json"
 
-#### Raspberry Pi 3B — Distributed Two-Pi Training
-| Command | Description |
-|---|---|
-| `make pi-social-master` | Master Pi: trains + serves weight-sync HTTP endpoint on port 8080. |
-| `make pi-social-worker DIST_MASTER_IP=192.168.1.X` | Worker Pi: trains + streams weights to the master every 1 000 batches. |
-| `make pi-chat-master` | Same as above but for the chat curriculum. |
-| `make pi-chat-worker DIST_MASTER_IP=192.168.1.X` | Worker variant for chat curriculum. |
+# Ingest inline text
+go run ./cmd/tools/ingest_book/main.go \
+  -text="Worker Pools use channels and sync.WaitGroup..." \
+  -title="Go Concurrency Patterns"
 
-### Configuration Tuning
-Model stability is controlled via parameters in the training configuration:
+# Export extracted concepts for reuse
+go run ./cmd/tools/ingest_book/main.go \
+  -export="data/knowledge/exported_concepts.json"
 
-- **`context_multiplier`**: Adjusts how much previous tokens dictate routing (1.5 - 2.0 recommended for deep context).
-- **`router_noise`**: Stochastic jitter (0.8+) to ensure all experts are utilized.
-- **`k=1`**: Forces each token to a single specialized expert, improving specialization.
-- **`max_grad_norm`**: Hard cap (1.0) on updates to prevent mathematical instability.
+# Import previously extracted concepts (no re-parsing needed)
+go run ./cmd/tools/ingest_book/main.go \
+  -import="data/knowledge/exported_concepts.json"
+```
+
+### Programmatic Usage
+
+```go
+// Create planner with built-in concept registry
+planner := NewPlanner(symbolGraph, rootDir, llmEngine)
+
+// Ingest a Go book to learn new patterns
+result, err := planner.conceptMatcher.IngestBookFromFile("the-go-programming-language.md")
+fmt.Printf("Learned %d concepts from %s\n", len(result.Concepts), result.BookTitle)
+
+// Save for later reuse
+planner.conceptMatcher.ExportConcepts("learned_concepts.json")
+
+// Later, reload without re-parsing
+planner.conceptMatcher.ImportConcepts("learned_concepts.json")
+
+// Process commands using book-derived + built-in knowledge
+plan, _ := planner.GenerateExecutionPlan(ctx, exploration)
+// The prompt includes blueprints from both built-in registry AND the book
+```
 
 ---
 
-## 🥧 Raspberry Pi 3B Deployment
+## 🔬 Dataset Mining & Training Pipeline
 
-Gollemer includes first-class support for training and running on a **Raspberry Pi 3B** (~900 MB RAM, ARM Cortex-A53). Pi mode applies automatic constraints — 600 MB memory cap, single-threaded GC, `batch=1`, `accumulate=16`, and 4 experts — to keep the heap safely within the Pi's limits.
+Gollemer includes a complete pipeline for mining real-world Go patches from Git history, converting them into training data, and fine-tuning via Fill-In-The-Middle (FIM) and Compiler-Driven Reinforcement Learning (RLAIF).
 
-> **Note**: `GOEXPERIMENT=simd` and `CGO_ENABLED` are intentionally disabled for Pi targets. The Pi has no x86 SIMD, and cross-compilation with CGO requires a separate toolchain.
+### Pipeline Overview
 
-### Step 1 — Cross-Compile on Your Workstation
-
-```bash
-# 32-bit binary for Raspberry Pi OS (32-bit) — most common
-make build-pi
-
-# 64-bit binary for a 64-bit Pi OS (Pi 3B / 4 running arm64)
-make build-pi64
+```
+1. Dataset Mining:  git log -p → structured training triplets
+2. Dataset Builder: triplets → FIM format + SEARCH/REPLACE + augmented examples
+3. FIM Training:    <PRE>code<SUF>code<MID> → model learns surgical code insertion
+4. RLAIF Loop:      generate patch → go/parser → go vet → go build → reward signal
 ```
 
-This produces a `gollemer-pi` (or `gollemer-pi64`) static binary with zero shared-library dependencies.
-
-### Step 2 — Transfer to the Pi
+### Step 1: Mine Git Commits into Training Triplets
 
 ```bash
-# Copy binary and required data directory to the Pi
-scp gollemer-pi pi@<pi-ip>:~/gollemer/
-scp -r data/           pi@<pi-ip>:~/gollemer/
+# Mine a single repository
+go run ./cmd/tools/dataset_miner/main.go \
+  -repo="https://github.com/gin-gonic/gin" \
+  -out="data/training/gin_patches.json" \
+  -max=5000
+
+# Mine multiple repositories
+go run ./cmd/tools/dataset_miner/main.go \
+  -repo="https://github.com/golang/go" \
+  -out="data/training/go_patches.json" \
+  -max=10000
+
+go run ./cmd/tools/dataset_miner/main.go \
+  -repo="https://github.com/uber-go/zap" \
+  -out="data/training/zap_patches.json" \
+  -max=5000
 ```
 
-### Step 3 — Run on the Pi
+Output:
+- `mined_patches.json` — TrainingTriplets with `instruction`, `before_code`, `target_patch`
+- `mined_patches_fim.json` — FIM examples with `prefix`, `suffix`, `middle`
+- All patches validated with `go/parser` (invalid Go discarded automatically)
+
+### Step 2: Build Structured Dataset
 
 ```bash
-# SSH into the Pi first
-ssh pi@<pi-ip>
-cd ~/gollemer
+# Convert mined patches into training-ready dataset
+go run ./cmd/tools/dataset_builder/main.go \
+  -in="data/training/gin_patches.json" \
+  -out="data/training/fim_dataset.json"
 
-# Start a FRESH social training run (clears old model)
-make pi-social-fresh
-
-# OR resume an interrupted training run
-make pi-social
-
-# Launch the interactive chat (inference only — no -pi flag needed)
-make pi-llm
+# Custom split ratios
+go run ./cmd/tools/dataset_builder/main.go \
+  -in="data/training/mined_patches.json" \
+  -out="data/training/fim_dataset.json" \
+  -val-split=0.15 \
+  -test-split=0.05
 ```
 
-### Pi Runtime Limits
-| Setting | Value | Reason |
+Output dataset includes:
+- **FIM examples**: `<PRE>prefix<SUF>suffix<MID>` format for surgical code insertion
+- **SEARCH/REPLACE examples**: Full before/after patch pairs
+- **Augmented examples**: Concept-tagged examples with required primitives
+- **Train/Val/Test splits**: Automatically partitioned
+
+### Step 3: Run FIM Training
+
+```go
+// Programmatic usage in Go
+config := DefaultFIMConfig()
+config.Epochs = 20
+config.BatchSize = 16
+
+trainer := NewFIMTrainer(config, moeModel)
+err := trainer.TrainFromFile("data/training/fim_dataset.json")
+```
+
+### ⚠️ Important: Data Flow — FIM Pipeline vs LLM
+
+The `build-dataset` → `fim_dataset.json` → `train-fim` pipeline is **isolated** from the LLM (`make chat` / `-llm`) by default:
+
+```
+make mine-dataset REPO=...   →   data/training/mined_patches.json
+       │
+       ▼
+make build-dataset           →   data/training/fim_dataset.json   ───→   make train-fim
+                                                                              │
+                                                                              ▼
+                                                                     models/fim_checkpoints/
+                                                                     (NOT loaded by the LLM)
+
+LLM inference (make chat) loads from:
+  ❌ data/training/fim_dataset.json           ← NOT used
+  ❌ models/fim_checkpoints/                  ← NOT used
+  ✅ data/models/gob_models/moe_classification_model.gob
+  ✅ data/models/gob_models/moe_social_model.gob
+  ✅ data/models/gob_models/word2vec_model.gob
+```
+
+#### Bridging the Gap
+
+To use FIM-trained knowledge in the LLM, you have three options:
+
+**Option A — Load FIM checkpoints as cartridges:**
+```bash
+make train-fim
+make chat ARGS='-cartridges="models/fim_checkpoints/<checkpoint>.gob"'
+```
+
+**Option B — Combine FIM data into the main MoE training:**
+```bash
+# Point the main trainer at the FIM dataset
+make train ARGS='-data "data/training/fim_dataset.json"'
+```
+Note: The main trainer expects a different JSON schema (IntentTrainingData format), so you may need to convert the FIM dataset format first.
+
+**Option C — Add FIM checkpoint paths to the model loader:**
+Edit `internal/ai/llm/runner.go` `initModels()` and add `models/fim_checkpoints/` to the candidate paths. The loader currently searches:
+- `data/models/checkpoints/latest_periodic.gob`
+- `data/models/gob_models/moe_classification_model.gob`
+- `data/models/gob_models/golden_checkpoint.gob`
+
+**Option D - train normally but with fim data**
+```bash
+make trainfim
+```
+---
+
+### Step 4: Compiler-Driven RLAIF Loop
+
+```
+                    ┌─────────────────────────────┐
+                    │   Gollemer Generates         │
+                    │   SEARCH/REPLACE Patch       │
+                    └──────────────┬──────────────┘
+                                   │
+                                   ▼
+                    ┌─────────────────────────────┐
+                    │  Apply Patch to AST In-Memory│
+                    └──────────────┬──────────────┘
+                                   │
+                    ┌──────────────┴──────────────┐
+                    │  go/parser.ParseFile()       │
+                    │  (syntax validation)         │
+                    └──────────────┬──────────────┘
+                                   │
+                    ┌──────────────┴──────────────┐
+                    │  go vet (lint check)         │
+                    └──────────────┬──────────────┘
+                                   │
+                    ┌──────────────┴──────────────┐
+                    │  go build (compilation)      │
+                    └──────────────┬──────────────┘
+                                   │
+                    ┌──────────────┴──────────────┐
+                    ▼                              ▼
+           Compilation Passed!            Compilation Failed!
+           [Reward: +1.0]                [Penalty: -1.0]
+                                         [Error fed back to model]
+```
+
+```go
+// Programmatic RLAIF training
+config := DefaultRLAIFConfig()
+config.MaxIterations = 1000
+config.SamplesPerPrompt = 5
+
+trainer := NewRLAIFTrainer(config, moeModel)
+err := trainer.RunTrainingLoop(trainingExamples)
+
+// Get training stats
+stats := trainer.GetStats()
+fmt.Printf("Success rate: %.1f%%\n",
+    float64(stats.SuccessfulPatches)/float64(stats.TotalPatches)*100)
+```
+
+### Planner Integration
+
+The `ExecutePatchAndVerify` method on Planner provides the full RLAIF verification pipeline:
+
+```go
+// Verify a generated patch against Go toolchain
+outcome := planner.ExecutePatchAndVerify(patch, beforeCode, filePath)
+if outcome.Reward > 0 {
+    fmt.Println("✅ Patch compiles and passes vet")
+} else {
+    fmt.Printf("❌ Compilation failed: %s\n", outcome.CompilerErrors)
+}
+```
+
+---
+
+## ✏️ Editing Code with Gollemer (Advanced Code-Aware Architecture)
+
+Gollemer's code editing capability is built on a **symbol-aware, plan-then-execute architecture** — going far beyond basic string search or flat AST parsing. Instead of training on your codebase or guessing where symbols live, Gollemer uses five advanced techniques to navigate, understand, and edit your Go source code with surgical precision:
+
+1. **LSIF / SCIP Symbol Reference Graph** — High-precision cross-file symbol tracing
+2. **Step-by-Step Reasoning (Plan-Before-Execute)** — Three-phase pipeline: explore → plan → patch
+3. **Multi-Candidate Sampling & Self-Reflection** — Generate N candidates, dry-run, pick the best
+4. **Surgical AST Patches + Verification Loop** — Precise edits with compiler + test feedback
+5. **Project Guidelines & Rules Context (.gollemerrules)** — Enforce project conventions
+
+This means that when you say "change the JWT secret handling", Gollemer doesn't guess which files use it — it traces the exact function call graph from `config.go` → `auth.go` → `middleware.go` without missing dependent calls.
+
+---
+
+### 1. LSIF / SCIP Symbol Reference Graph (High-Precision Symbol Tracing)
+
+Basic string search or light AST parsing works for simple scripts but fails on complex codebases where functions are called across multiple files or packages. Gollemer implements a **Language Server Index Format (LSIF) / SCIP-compatible symbol graph** that indexes the workspace into a precise symbol graph.
+
+#### How It Works
+
+Instead of reading plain text, the indexer builds a directed graph of symbol relationships:
+
+```json
+{
+  "symbols": [
+    {
+      "id": "pkg/auth/jwt.go:JWTHandler",
+      "kind": "struct",
+      "document": "pkg/auth/jwt.go",
+      "references": [
+        {"file": "internal/server/middleware.go", "line": 34, "role": "parameter"},
+        {"file": "pkg/auth/jwt_test.go", "line": 12, "role": "test"},
+        {"file": "cmd/main.go", "line": 59, "role": "instantiation"}
+      ],
+      "methods": [
+        {"name": "ValidateToken", "signature": "func(*Claims, error)", "line": 42},
+        {"name": "Sign", "signature": "func([]byte, error)", "line": 68}
+      ]
+    },
+    {
+      "id": "pkg/auth/jwt.go:ValidateToken",
+      "kind": "method",
+      "receiver": "*JWTHandler",
+      "callers": [
+        {"file": "internal/server/middleware.go", "line": 38, "call_site": "jwt.ValidateToken(tokenStr)"},
+        {"file": "pkg/auth/jwt_test.go", "line": 45, "call_site": "handler.ValidateToken(testToken)"}
+      ],
+      "callees": [
+        {"file": "pkg/auth/jwt.go", "line": 43, "callee": "hmac.Equal"},
+        {"file": "pkg/auth/jwt.go", "line": 44, "callee": "base64.StdEncoding.DecodeString"}
+      ]
+    }
+  ],
+  "call_graph": [
+    {"from": "internal/server/middleware.go:AuthMiddleware", "to": "pkg/auth/jwt.go:ValidateToken"},
+    {"from": "pkg/auth/jwt.go:ValidateToken", "to": "crypto/hmac:Equal"},
+    {"from": "cmd/main.go:main", "to": "internal/server/middleware.go:AuthMiddleware"}
+  ]
+}
+```
+
+#### Symbol Navigation Queries
+
+This graph lets Gollemer run precise queries:
+
+| Query | Example | Returns |
 |---|---|---|
-| `GOMEMLIMIT` | `700MiB` | Leaves ~200 MB headroom for the OS out of 900 MB total. |
-| `GOGC` | `10` | Fires GC very aggressively to keep heap below the limit. |
-| `GOMAXPROCS` | `1` (training) / `2` (inference) | Matches the Pi's single high-performance core for training. |
-| Memory cap (`-pi`) | `600 MB` | Enforced in code via the `-pi` flag. |
-| Batch size | `1` | Prevents OOM during forward/backward passes. |
-| Accumulation steps | `16` | Provides an effective batch of 16 without extra memory. |
-| Experts per layer | `4` | Reduces model size to fit within Pi constraints. |
+| `find_definitions("JWTHandler")` | Where is this type declared? | `pkg/auth/jwt.go:Line 12` |
+| `find_references("ValidateToken")` | Everything that calls this method | `middleware.go:38, jwt_test.go:45` |
+| `find_implementations("Storage")` | All types implementing an interface | `db/postgres.go, db/sqlite.go, cache/redis.go` |
+| `trace_call_chain("main()","JWTHandler")` | Full call path from entrypoint to target | `main → AuthMiddleware → ValidateToken` |
+
+#### Why It Makes Gollemer Smarter
+
+When you ask to "change the JWT secret handling", Gollemer:
+
+1. **Finds** `JWTHandler` definition → `pkg/auth/jwt.go:12`
+2. **Traces** all references → `middleware.go:34`, `jwt_test.go:12`, `main.go:59`
+3. **Follows** the call graph → `main()` → `AuthMiddleware()` → `ValidateToken()`
+4. **Identifies** all dependent files that need updates → `middleware.go` (parameter type change), `jwt_test.go` (test fixtures), `main.go` (initialization)
+
+Without this graph, a naive approach would miss `middleware.go` or `jwt_test.go`, leading to broken builds or untested code.
+
+#### Building the Symbol Graph
+
+```bash
+# Index the workspace into a symbol reference graph
+gollemer -index-symbols -output .gollemer/symbol_graph.json
+
+# Or run incrementally (watches for file changes)
+gollemer -index-symbols -watch &
+```
 
 ---
 
-## 🌐 Distributed Two-Pi Training
+### 2. Step-by-Step Reasoning (Plan-Before-Execute)
 
-Gollemer supports **parallel federated training** across two Raspberry Pis connected to the same router via Ethernet — no cloud, no shared filesystem, no message broker.
+Smart coding agents don't jump straight into emitting code changes. They use **structured task planning** (ReAct / Chain-of-Thought). Gollemer's supervisor forces a three-phase pipeline before any patch is applied:
 
-### How it works
+#### Phase 1: Exploration & Mapping
+
+The supervisor explores the codebase to understand scope and impact:
 
 ```
-┌─────────────────────────────┐         Ethernet / LAN
-│        Master Pi            │◄────────────────────────┐
-│  • Trains on local data     │                         │
+Action: search_types("JWTHandler")
+        → type JWTHandler struct { SecretKey []byte }
+
+Action: find_references("ValidateToken")
+        → middleware.go:38 (call site)
+        → jwt_test.go:45 (test call)
+        → main.go:59 (instantiation)
+
+Action: find_references("SecretKey")
+        → jwt.go:13 (field declaration)
+        → middleware.go:40 (field access)
+        → jwt_test.go:18 (test fixture)
+
+Output: Internal map of affected files and dependencies:
+        {
+          "primary": ["pkg/auth/jwt.go"],
+          "callers": ["internal/server/middleware.go"],
+          "tests":   ["pkg/auth/jwt_test.go"],
+          "init":    ["cmd/main.go"]
+        }
+```
+
+#### Phase 2: Architectural Execution Plan
+
+The supervisor drafts a plain-text execution plan before touching any file:
+
+```
+# Execution Plan: Convert JWT from HMAC to RSA
+#
+# Step 1: Update struct definition in jwt.go
+#   - Replace SecretKey []byte with PrivateKey *rsa.PrivateKey + PublicKey *rsa.PublicKey
+#   - Add import "crypto/rsa"
+#
+# Step 2: Replace Sign() implementation in jwt.go
+#   - Change from hmac.Sign to rsa.SignPKCS1v15 with SHA-256
+#   - Add import "crypto/sha256" and "crypto/rand"
+#
+# Step 3: Replace ValidateToken() implementation in jwt.go
+#   - Change from hmac.Equal to rsa.VerifyPKCS1v15
+#
+# Step 4: Fix caller in middleware.go
+#   - Update AuthMiddleware parameter from []byte to *rsa.PublicKey
+#
+# Step 5: Update test fixtures in jwt_test.go
+#   - Replace HMAC test keys with RSA key pair
+#   - Add test for invalid signature
+#
+# Step 6: Update initialization in main.go
+#   - Load RSA keys from PEM files instead of single secret
+```
+
+This plan is logged and optionally presented for user approval before execution.
+
+#### Phase 3: Targeted Patch Execution
+
+The supervisor emits individual surgical patches file-by-file according to the plan:
+
+```
+→ Executing Step 1/6: pkg/auth/jwt.go (struct definition)
+  ✓ Patch applied, go build passes
+
+→ Executing Step 2/6: pkg/auth/jwt.go (Sign method)
+  ✓ Patch applied, go build passes
+
+→ Executing Step 3/6: pkg/auth/jwt.go (ValidateToken method)
+  ✓ Patch applied, go build passes
+
+→ Executing Step 4/6: internal/server/middleware.go
+  ✓ Patch applied, go build passes
+
+→ Executing Step 5/6: pkg/auth/jwt_test.go
+  ✓ Patch applied, go build passes
+
+→ Executing Step 6/6: cmd/main.go
+  ✓ Patch applied, go build passes
+
+→ All 6 steps complete. Running go test ./pkg/auth/... → PASS
+```
+
+If any step fails, the supervisor pauses the pipeline, fixes the error, and retries that step before continuing.
+
+---
+
+### 3. Multi-Candidate Sampling & Self-Reflection
+
+A single generation pass often contains subtle bugs. Gollemer uses **Self-Correction & Reflection Loops** before applying changes to disk:
+
+#### Step 1 — Generate N Patch Candidates
+
+The model generates 2–3 different implementation approaches:
+
+```diff
+# Candidate A (simpler — inline RSA key fields)
++type JWTHandler struct {
++    PrivateKey *rsa.PrivateKey
++    PublicKey  *rsa.PublicKey
++}
+
+# Candidate B (wraps keys in a config struct)
++type JWTConfig struct {
++    PrivateKey *rsa.PrivateKey
++    PublicKey  *rsa.PublicKey
++}
++type JWTHandler struct {
++    Config *JWTConfig
++}
+
+# Candidate C (uses crypto.Signer interface for flexibility)
++type JWTHandler struct {
++    Signer crypto.Signer
++}
+```
+
+#### Step 2 — Dry-Run Parsing
+
+Each candidate is parsed using `go/parser` in memory *before* writing to disk:
+
+```bash
+# Check syntax validity of each candidate
+go/parser.ParseFile(fset, "", candidateCode, parser.ParseComments)
+```
+
+Candidates with syntax errors are discarded immediately.
+
+#### Step 3 — Compiler & Test Feedback Loop
+
+Each valid candidate is applied in an isolated temp directory or git branch:
+
+```bash
+# Create temp branch for testing
+git checkout -b _gollemer_candidate_a
+
+# Apply patch
+go run ./cmd/tools/go_edit_agent/main.go -file="pkg/auth/jwt.go" -edits='[...]'
+
+# Run full test suite
+go test ./pkg/auth/... 2>&1
+
+# If failure:
+#   "The patch caused error: cannot use rsaKey (type *rsa.PublicKey) as type []byte.
+#    Fix this specific error in middleware.go:40."
+
+# Capture the failure, feed it back to the model for fix generation
+```
+
+#### Step 4 — Select Best Candidate
+
+The supervisor scores candidates on:
+- **Compilation**: Passes `go build` (mandatory)
+- **Tests**: Passes `go test ./...` (mandatory for production)
+- **Lint**: Passes `golangci-lint` (preferred)
+- **Style**: Best matches project conventions from `.gollemerrules`
+- **Minimality**: Fewest lines changed (reduces risk)
+
+The highest-scoring candidate is selected and applied to the real workspace.
+
+---
+
+### 4. Surgical AST Patches + Verification Loop
+
+To apply changes without mangling formatting or breaking builds, Gollemer uses a **surgical AST patch** approach combined with a **compiler + test verification feedback loop**.
+
+#### The Full Verification Pipeline
+
+```
+                    ┌─────────────────────────┐
+                    │   User Code Prompt      │
+                    └────────────┬────────────┘
+                                 │
+                                 ▼
+                    ┌─────────────────────────┐
+                    │  Phase 1: Explora0tion   │
+                    │  Symbol Reference Graph  │  (LSIF / SCIP / AST)
+                    └────────────┬────────────┘
+                                 │
+                                 ▼
+                    ┌─────────────────────────┐
+                    │  Phase 2: Plan Draft    │
+                    │  Step-by-Step Plan      │  (Chain-of-Thought)
+                    └────────────┬────────────┘
+                                 │
+                                 ▼
+                    ┌─────────────────────────┐
+                    │  Phase 3: Execute       │
+                    │  Surgical Patch Per File│
+                    └────────────┬────────────┘
+                                 │
+                                 ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│              Verification & Self-Healing Loop                          │
+│                                                                        │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────────┐         │
+│  │ gofmt -w     │───→│ go vet ./... │───→│ go build ./...   │         │
+│  │ (format)     │    │ (lint)       │    │ (compile check)  │         │
+│  └──────────────┘    └──────────────┘    └────────┬─────────┘         │
+│                                                    │                    │
+│                                                    ▼                    │
+│                                          ┌──────────────────┐          │
+│                                          │ go test ./...    │          │
+│                                          │ (unit tests)     │          │
+│                                          └────────┬─────────┘          │
+│                                                    │                    │
+│                                           ┌────────┴────────┐          │
+│                                           ▼                 ▼          │
+│                                    ┌──────────┐    ┌──────────────┐    │
+│                                    │ PASSED   │    │ FAILED       │    │
+│                                    │ Done.    │    │ (Stderr +    │    │
+│                                    │          │    │  Stacktrace) │    │
+│                                    └──────────┘    └──────┬───────┘    │
+│                                                            │            │
+│                                                            ▼            │
+│                                              ┌────────────────────┐    │
+│                                              │ Feed Error to      │    │
+│                                              │ Model:             │    │
+│                                              │ "cannot use rsaKey │    │
+│                                              │ as type []byte     │    │
+│                                              │ in middleware.go:40│    │
+│                                              └────────┬───────────┘    │
+│                                                       │                │
+│                                                       ▼                │
+│                                              ┌────────────────────┐    │
+│                                              │ Generate Fix       │    │
+│                                              │ Patch + Re-apply   │    │
+│                                              └────────────────────┘    │
+│                                                                        │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+#### Step-by-Step: Applying a Surgical Patch
+
+##### Step 1 — Generate a Unified Diff
+
+Instead of rewriting entire files, the model generates a minimal unified diff:
+
+```diff
+--- a/pkg/auth/jwt.go
++++ b/pkg/auth/jwt.go
+@@ -1,5 +1,6 @@
+ package auth
+ 
++import "crypto/rsa"
++
+ type JWTHandler struct {
+-    SecretKey []byte
++    PrivateKey *rsa.PrivateKey
++    PublicKey  *rsa.PublicKey
+ }
+```
+
+##### Step 2 — Dry-Run Parse
+
+```bash
+# Validate syntax in memory before writing
+echo 'package auth; import "crypto/rsa"; type JWTHandler struct { PrivateKey *rsa.PrivateKey; PublicKey *rsa.PublicKey }' | gofmt
+```
+
+##### Step 3 — Apply the Diff via AST
+
+```bash
+# Apply the diff using the go_edit_agent
+go run ./cmd/tools/go_edit_agent/main.go \
+  -file="pkg/auth/jwt.go" \
+  -edits='[
+    {"type": "add_import", "import_path": "crypto/rsa"},
+    {"type": "replace_code", "old_code": "type JWTHandler struct {\n\tSecretKey []byte\n}", "new_code": "type JWTHandler struct {\n\tPrivateKey *rsa.PrivateKey\n\tPublicKey  *rsa.PublicKey\n}"}
+  ]'
+```
+
+##### Step 4 — Compiler + Test Verification
+
+```bash
+go build ./pkg/auth/ && go test ./pkg/auth/...
+```
+
+If the build fails, the exact error is captured:
+
+```
+# pkg/auth/jwt.go:42: undefined: rsa
+```
+
+##### Step 5 — Self-Healing Loop
+
+The supervisor feeds the compiler error back to the model, which generates a corrective patch. The patch is re-applied and the build is re-run. This loop continues until the build + tests pass or `max_retries` is reached.
+
+---
+
+### 5. Project Guidelines & Rules Context (.gollemerrules)
+
+Just like `.cursorrules` or system instruction files, Gollemer uses a workspace rules file to inject project conventions into every code edit request, eliminating common mistakes.
+
+#### Creating .gollemerrules
+
+Create a file at the root of your project:
+
+```bash
+touch .gollemerrules
+```
+
+Example `.gollemerrules`:
+
+```text
+# Gollemer Project Rules
+# =======================
+
+## Coding Conventions
+- Always handle errors explicitly; never use panic()
+- Use structured logging (internal/log) not fmt.Println
+- All exported functions must have doc comments
+- Prefer table-driven tests with t.Run()
+- Interface types go in the consumer package, not the producer
+
+## Package Architecture
+- Database access must go through internal/db/
+- HTTP handlers go in handlers/, business logic in internal/service/
+- No circular dependencies between packages
+- Configuration is loaded in main.go and passed down via dependency injection
+
+## Testing Standards
+- Every modified function must have an accompanying test in _test.go
+- Test fixtures go in testdata/ next to the test file
+- Use require over assert for fatal assertions
+- Coverage threshold: 80% minimum for modified packages
+
+## Naming Conventions
+- Acronyms are uppercase: HTTP, API, ID, JSON
+- Private methods use camelCase, exported use PascalCase
+- Error variables start with Err: ErrNotFound, ErrInvalidInput
+
+## Performance
+- No reflection in hot paths
+- Pre-allocate slices with make() when size is known
+- Use sync.Pool for frequently allocated temporary buffers
+```
+
+#### Automatic Injection
+
+The `.gollemerrules` file is automatically loaded and injected into Gollemer's base prompt whenever it processes a request:
+
+```go
+// Internal: rulesProvider loads the .gollemerrules file and prepends it to prompts
+func (s *Supervisor) LoadProjectRules() string {
+    data, err := os.ReadFile(filepath.Join(s.WorkspaceRoot, ".gollemerrules"))
+    if err != nil {
+        return defaultRules // built-in sensible defaults
+    }
+    return string(data)
+}
+```
+
+The rules are combined with the user's request at inference time:
+
+```
+System Prompt:
+  You are editing Go source code in the workspace /home/user/project.
+  Project rules: [.gollemerrules content]
+  Always follow these conventions.
+
+User Request:
+  "Update JWT to support RSA key pairs instead of HMAC"
+```
+
+This ensures every generated patch respects the project's specific coding standards, package architecture, and testing requirements — without the model needing to infer them from context or remember them from previous conversations.
+
+---
+
+### 6. Architectural Upgrade Summary
+
+```
+                    ┌─────────────────────────┐
+                    │   User Code Prompt      │
+                    │  "Update JWT to RSA"    │
+                    └────────────┬────────────┘
+                                 │
+                                 ▼
+                    ┌───────────────────────────────────────┐
+                    │  LSIF / SCIP Symbol Reference Graph   │
+                    │  find_def / find_refs / trace_call    │
+                    │  → jwt.go, middleware.go, test.go     │
+                    └────────────┬──────────────────────────┘
+                                 │
+                                 ▼
+                    ┌───────────────────────────────────────┐
+                    │  Phase 1: Exploration & Mapping       │
+                    │  search_types → find_references →     │
+                    │  internal map of 4 affected files     │
+                    └────────────┬──────────────────────────┘
+                                 │
+                                 ▼
+                    ┌───────────────────────────────────────┐
+                    │  Phase 2: Execution Plan (CoT)        │
+                    │  Step 1: jwt.go struct                │
+                    │  Step 2: jwt.go Sign()                │
+                    │  Step 3: jwt.go ValidateToken()       │
+                    │  Step 4: middleware.go                 │
+                    │  Step 5: jwt_test.go                   │
+                    │  Step 6: main.go                      │
+                    └────────────┬──────────────────────────┘
+                                 │
+                                 ▼
+                    ┌───────────────────────────────────────┐
+                    │  Phase 3: Multi-Candidate Execution   │
+                    │  Generate 3 candidates                │
+                    │  Dry-run parse each                   │
+                    │  Score & select best
 │  • Hosts HTTP server :8080  │  POST /sync-weights     │
 │  • Averages incoming weights│  (binary float32 blob)  │
 │  • Writes .gob model files  │                         │
@@ -616,6 +1255,8 @@ Gollemer is organized into a clean, modular structure designed for ease of use a
 │   ├── voice_capture/       # Live always-on voice command recognition loop (no CGO).
 │   ├── vision_capture/      # Real-time camera motion tracking via go4vl + GRU.
 │   ├── add_command/         # Zero-shot: registers new voice commands without retraining.
+│   ├── go_edit_agent/       # AST-level Go source code editor with validation & self-correction.
+│   ├── apply_patch/         # Semantic patch tool with self-healing via MoE inference.
 │   └── ...                  # 40+ additional analysis, inspection, and generation tools.
 │
 ├── internal/ai/             # Core Intelligence Engine
@@ -649,4 +1290,3 @@ Gollemer is organized into a clean, modular structure designed for ease of use a
 ## 🚪 Exit
 - **Interactive Shell**: Type `exit` to shut down.
 - **Interrupt**: `Ctrl+C` terminates training or inference loops safely.
-```

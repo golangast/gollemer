@@ -1,0 +1,6 @@
+{
+  "embed_dim": 64,
+  "learning_rate": 0.00005885423701597917,
+  "step": 500,
+  "vocab_size": 1000
+}

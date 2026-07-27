@@ -5,8 +5,8 @@ import (
 	"math"
 
 	"github.com/golangast/gollemer/internal/ai/moe"
-	"github.com/golangast/gollemer/internal/ai/neural/tensor"
 	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
+	"github.com/golangast/gollemer/internal/ai/neural/tensor"
 )
 
 // IsStuck detects a stuck decoder: consecutive repetition or all-unique word salad.

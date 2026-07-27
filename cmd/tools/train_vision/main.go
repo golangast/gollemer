@@ -106,7 +106,7 @@ func main() {
 
 			// B. Extract Patches
 			patches := ImageToPatches(img, 16)
-			
+
 			// C. Forward Pass
 			tokens := visionEncoder.Forward(patches)
 
@@ -114,28 +114,28 @@ func main() {
 			// Here we pretend the network wants the tokens to match a specific pattern to learn
 			gradOut := make([][]float32, len(tokens))
 			exampleLoss := float32(0.0)
-			
+
 			for i, token := range tokens {
 				gradOut[i] = make([]float32, 512)
 				for d := 0; d < 512; d++ {
 					// Target is an arbitrary value, e.g., 0.5
 					target := float32(0.5)
 					errorDiff := token[d] - target
-					
+
 					// Mean Squared Error gradient
 					gradOut[i][d] = errorDiff
 					exampleLoss += errorDiff * errorDiff
 				}
 			}
-			
+
 			// E. Backward Pass!
 			visionEncoder.Backward(gradOut, patches, learningRate)
-			
+
 			totalLoss += exampleLoss / float32(len(tokens)*512)
 		}
-		
+
 		fmt.Printf("Epoch %d/%d - Average Vision Projection Loss: %.4f\n", epoch, epochs, totalLoss/float32(len(dataset)))
 	}
-	
+
 	fmt.Println("Training complete! The VisionEncoder weights have been successfully updated.")
 }

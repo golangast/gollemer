@@ -424,8 +424,6 @@ var intentIcons = map[string]string{
 	"watch":            "👁️  [Watch]",
 }
 
-
-
 // paraphraseResponse applies lightweight lexical variation to a retrieved
 // training answer so it is never a verbatim copy of a training sample.
 // Strategy:

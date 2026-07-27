@@ -149,6 +149,4 @@ func interpretOutputAsAnswer(predictedOutput []float64, docs rag.RagDocuments, s
 		return "No", answerWord, nil
 	}
 
-
-
 }

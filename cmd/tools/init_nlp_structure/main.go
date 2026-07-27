@@ -3,12 +3,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io"
-	"log"
-	"os"
 	"github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
 	"github.com/golangast/gollemer/internal/ai/neural/semantic"
 	"github.com/golangast/gollemer/internal/ai/neural/tokenizer"
+	"io"
+	"log"
+	"os"
 )
 
 type IntentTrainingExample struct {
@@ -40,13 +40,13 @@ func main() {
 	}
 
 	semanticOutputVocabulary := vocab.NewVocabulary()
-	
+
 	// Add special tokens
 	semanticOutputVocabulary.AddToken("<s>")
 	semanticOutputVocabulary.AddToken("</s>")
 	semanticOutputVocabulary.AddToken("<pad>")
 	semanticOutputVocabulary.AddToken("UNK")
-	
+
 	for _, pair := range data {
 		// Tokenize Flat Output
 		trainingSemanticOutput := "<s> " + pair.FlatOutput + " </s>"

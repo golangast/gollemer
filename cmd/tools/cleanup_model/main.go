@@ -25,16 +25,16 @@ func main() {
 		"PARDON_TO_CODE":             true,
 		"RUN_THE_TEST":               true,
 		"REFECTIVE_THIS":             true,
-		"I_NEED_A_JOB_WORK":         true,
-		"AND_YOU_DEFILE_THE_WORLD":  true,
-		"I_NEED_A_FILE_OF_WORK":     true,
-		"I_NEED_A_FOLLOW_UP":        true,
+		"I_NEED_A_JOB_WORK":          true,
+		"AND_YOU_DEFILE_THE_WORLD":   true,
+		"I_NEED_A_FILE_OF_WORK":      true,
+		"I_NEED_A_FOLLOW_UP":         true,
 		"COME_HERE_DUKE":             true,
 		// LLM self-listening pollution
-		"BLANK_AUDIO":                true,
-		"OKAY":                       true,
-		"HEALTH":                     true,
-		"DOWN_I_AM":                  true,
+		"BLANK_AUDIO": true,
+		"OKAY":        true,
+		"HEALTH":      true,
+		"DOWN_I_AM":   true,
 	}
 
 	cleaned := make(map[string][]float32)
