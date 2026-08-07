@@ -5738,8 +5738,12 @@ func LoadConversationCSV(path string) ([]moe.TrainPair, error) {
 		}
 		lineNo++
 		if lineNo == 1 {
+			firstCol := strings.ToLower(strings.Trim(record[0], `"`))
+			if firstCol == "query" {
+				return LoadConversingCSV(path)
+			}
 			// Skip header row (conversation_id, turn_sequence, role, content)
-			if strings.EqualFold(strings.Trim(record[0], `"`), "conversation_id") {
+			if firstCol == "conversation_id" {
 				continue
 			}
 		}
@@ -5827,6 +5831,54 @@ func LoadConversationCSV(path string) ([]moe.TrainPair, error) {
 		}
 	}
 
+	return pairs, nil
+}
+
+// LoadConversingCSV reads a CSV file with columns: query, answer, intent, grammar
+func LoadConversingCSV(path string) ([]moe.TrainPair, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("LoadConversingCSV: open %s: %w", path, err)
+	}
+	defer f.Close()
+
+	reader := csv.NewReader(f)
+	reader.FieldsPerRecord = -1
+	reader.LazyQuotes = true
+
+	records, err := reader.ReadAll()
+	if err != nil {
+		return nil, fmt.Errorf("LoadConversingCSV: read %s: %w", path, err)
+	}
+
+	var pairs []moe.TrainPair
+	for i, record := range records {
+		if i == 0 && len(record) > 0 && strings.EqualFold(strings.Trim(record[0], `"`), "query") {
+			continue
+		}
+		if len(record) < 2 {
+			continue
+		}
+		q := strings.Trim(record[0], `"`)
+		a := strings.Trim(record[1], `"`)
+		if q == "" || a == "" {
+			continue
+		}
+		intent := "social_chat"
+		if len(record) >= 3 {
+			intent = strings.Trim(record[2], `"`)
+		}
+		grammar := ""
+		if len(record) >= 4 {
+			grammar = strings.Trim(record[3], `"`)
+		}
+		pairs = append(pairs, moe.TrainPair{
+			Q:       q,
+			A:       a,
+			Intent:  intent,
+			Grammar: grammar,
+		})
+	}
 	return pairs, nil
 }
 

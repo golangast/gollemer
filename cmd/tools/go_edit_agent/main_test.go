@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"strings"
@@ -280,6 +282,47 @@ func main() {
 	}
 	if !strings.Contains(string(content), "func handler") {
 		t.Errorf("Expected handler function. Content:\n%s", string(content))
+	}
+}
+
+func TestFixSyntaxErrors_MissingStructKeyword(t *testing.T) {
+	tempDir := t.TempDir()
+	targetFile := filepath.Join(tempDir, "jim.go")
+
+	// Mirrors ft/jim.go: "type jill  {" is missing the 'struct' keyword
+	brokenContent := `package main
+
+type named struct {
+	name string
+}
+
+type jill  {
+	cat string
+	age int
+}
+`
+	if err := os.WriteFile(targetFile, []byte(brokenContent), 0644); err != nil {
+		t.Fatalf("Failed to write temp file: %v", err)
+	}
+
+	edits := fixSyntaxErrors(targetFile)
+	if len(edits) == 0 {
+		t.Fatalf("Expected fixSyntaxErrors to produce edits for missing 'struct' keyword")
+	}
+
+	content, err := os.ReadFile(targetFile)
+	if err != nil {
+		t.Fatalf("Failed to read fixed file: %v", err)
+	}
+
+	if !strings.Contains(string(content), "type jill struct {") {
+		t.Errorf("Expected file to contain 'type jill struct {', got:\n%s", string(content))
+	}
+
+	// The fixed file must parse cleanly
+	fset := token.NewFileSet()
+	if _, err := parser.ParseFile(fset, targetFile, content, parser.ParseComments); err != nil {
+		t.Errorf("Fixed file should parse cleanly, got: %v", err)
 	}
 }
 

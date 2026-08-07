@@ -32,6 +32,7 @@ type Runner struct {
 	IntentModel    *moe.IntentMoE
 	Client         *GollemerMoEClient
 	Resolver       *HybridIntentResolver
+	SemanticRouter *SemanticRouter
 	CommandHistory []string
 	SessionState   ConversationState
 	TutorialState  TutorialState
@@ -175,6 +176,14 @@ func (r *Runner) Init() {
 		Sessions:       NewSessionManager(),
 		SessionID:      "default",
 		BPETokenizer:   r.BPETok,
+	}
+
+	// Initialize the semantic router for dynamic NLP routing
+	if sr, err := LoadOrComputeIntentEmbeddings(r.ProjectRoot, r.Client); err == nil {
+		r.SemanticRouter = sr
+		log.Printf("✅ Semantic Intent Router loaded (%d embeddings cached)", len(sr.Embeddings))
+	} else {
+		log.Printf("⚠️  Failed to load Semantic Intent Router: %v", err)
 	}
 
 	// 🧬 WIRE UP SOCIAL MODEL & CONFIG

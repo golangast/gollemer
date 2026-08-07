@@ -313,3 +313,113 @@ func priorityLabel(p int) string {
 		return "LOW"
 	}
 }
+
+// ─── File Edit Tool ──────────────────────────────────────────────────────────
+
+// FileEditTool wraps the planner for file-editing commands.
+type FileEditTool struct {
+	planner *Planner
+}
+
+// NewFileEditTool creates a new file edit tool.
+func NewFileEditTool(p *Planner) *FileEditTool {
+	return &FileEditTool{planner: p}
+}
+
+func (t *FileEditTool) Name() string {
+	return "edit_file"
+}
+
+func (t *FileEditTool) Description() string {
+	return "Edits a file by adding, modifying, or deleting content"
+}
+
+func (t *FileEditTool) Schema() agent.ToolSchema {
+	return agent.ToolSchema{
+		Parameters: map[string]agent.ParameterDef{
+			"query": {
+				Type:        "string",
+				Description: "The file edit command to execute",
+			},
+		},
+		Required: []string{"query"},
+	}
+}
+
+func (t *FileEditTool) Execute(args map[string]any) (agent.ToolResult, error) {
+	query, ok := args["query"].(string)
+	if !ok || query == "" {
+		return agent.ToolResult{
+			Success: false,
+			Error:   fmt.Errorf("query is required"),
+		}, nil
+	}
+
+	// Create a file edit plan
+	plan, err := t.planner.AddFileEditCommand(query)
+	if err != nil {
+		return agent.ToolResult{
+			Success: false,
+			Error:   fmt.Errorf("failed to create file edit plan: %w", err),
+		}, nil
+	}
+
+	// Execute the plan
+	exploration := &ExplorationResult{
+		Query: query,
+	}
+	results, verification, err := t.planner.ExecutePlan(plan, exploration)
+	if err != nil {
+		return agent.ToolResult{
+			Success: false,
+			Error:   fmt.Errorf("failed to execute file edit plan: %w", err),
+		}, nil
+	}
+
+	// Build output
+	var output strings.Builder
+	output.WriteString(fmt.Sprintf("## File Edit Results\n\n"))
+	output.WriteString(fmt.Sprintf("Query: %q\n", query))
+	output.WriteString(fmt.Sprintf("File: %s\n\n", plan.Phases[0].Steps[0].File))
+
+	output.WriteString("### Execution Results\n")
+	successCount := 0
+	for _, r := range results {
+		status := "✅"
+		if !r.Success {
+			status = "❌"
+		} else {
+			successCount++
+		}
+		output.WriteString(fmt.Sprintf("- %s Step %d: %s (%v)\n", status, r.StepID, r.File, r.Duration))
+		if r.ErrorMessage != "" {
+			output.WriteString(fmt.Sprintf("  Error: %s\n", r.ErrorMessage))
+		}
+	}
+
+	output.WriteString("\n### Verification\n")
+	if verification.Success {
+		output.WriteString("✅ All checks passed!\n")
+	} else {
+		output.WriteString("❌ Verification failed:\n")
+		if verification.GoVet != "" {
+			output.WriteString(fmt.Sprintf("- go vet: %s\n", verification.GoVet))
+		}
+		if verification.GoBuild != "" {
+			output.WriteString(fmt.Sprintf("- go build: %s\n", verification.GoBuild))
+		}
+		if verification.GoTest != "" {
+			output.WriteString(fmt.Sprintf("- go test: %s\n", verification.GoTest))
+		}
+	}
+
+	output.WriteString(fmt.Sprintf("\nSummary: %d/%d steps succeeded\n", successCount, len(results)))
+
+	return agent.ToolResult{
+		Success: true,
+		Output:  output.String(),
+		Metadata: map[string]any{
+			"query": query,
+		},
+	}, nil
+}

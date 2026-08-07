@@ -9,9 +9,9 @@ export GOEXPERIMENT=simd
 export CGO_ENABLED=1
 
 # Runtime Tuning
-MEM_LIMIT    = 5500MiB
-GOGC         = 90
-GOMAXPROCS   = 8
+MEM_LIMIT    = 2500MiB
+GOGC         = 50
+GOMAXPROCS   = 4
 TRAIN_BIN    = ./.build/gollemer-train
 MAIN_CMD     = go run cmd/tools/train_moe/main.go
 
@@ -81,9 +81,14 @@ trainfim:
 ## chat: Launch the interactive LLM chat shell
 chat:
 	@echo "💬 Starting Interactive Chat..."
-	GOMEMLIMIT=4000MiB GOGC=100 $(MAIN_CMD) -llm -talk -listen
+	GOMEMLIMIT=4000MiB GOGC=100 $(MAIN_CMD) -llm -talk -listen 
 
-llm: chat
+## llm: Build go_edit_agent and launch the interactive LLM chat shell
+llm:
+	@echo "🔨 Building go_edit_agent..."
+	@go build -o go_edit_agent cmd/tools/go_edit_agent/main.go
+	@echo "💬 Starting Interactive Chat..."
+	GOMEMLIMIT=4000MiB GOGC=100 $(MAIN_CMD) -llm -talk -listen
 
 # --- Maintenance ---
 
@@ -266,3 +271,91 @@ pi-chat-worker:
 	GOMEMLIMIT=$(PI_MEM) GOGC=$(PI_GOGC) GOMAXPROCS=1 \
 		$(PI_BIN) $(PI_FLAGS) -train-chat \
 		-dist-mode=worker -dist-addr=$(DIST_MASTER_IP):$(DIST_PORT)
+
+# --- AST Orchestrator Rules ---
+
+# Default paths (can be overridden from the command line)
+CORPUS_DIR    ?= ./ft
+CORPUS_JSON   ?= ./corpus.json
+MEMORY_JSON   ?= ./memory.json
+INTENT        ?= ""
+
+## ast-llm: Run the 4-stage semantic orchestrator with a custom INTENT.
+##          Usage: make ast-llm INTENT="add DataManager struct" TARGET=./ft/myfile.go
+ast-llm:
+	@if [ -z "$(INTENT)" ]; then \
+		echo "❌ INTENT is required. Usage: make ast-llm INTENT=\"your instruction\" TARGET=./path/to/file.go"; \
+		exit 1; \
+	fi
+	@echo "🧠 Running Gollemer intent: $(INTENT)"
+	go run . \
+		-intent="$(INTENT)" \
+		-target="$(TARGET)" \
+		-corpus="$(CORPUS_DIR)" \
+		-corpus-json="$(CORPUS_JSON)" \
+		-memory-json="$(MEMORY_JSON)"
+
+## webserver: Scaffold a Go HTTP web server into ft/generated_server.go using the corpus blueprint.
+##            Equivalent to: make llm INTENT="add web server"
+webserver:
+	@echo "🌐 Scaffolding web server blueprint..."
+	go run . \
+		-intent="add web server" \
+		-corpus="$(CORPUS_DIR)" \
+		-corpus-json="$(CORPUS_JSON)" \
+		-memory-json="$(MEMORY_JSON)"
+
+## corpus-build: Rebuild corpus.json from the ft/ blueprint directory.
+corpus-build:
+	@echo "📚 Rebuilding corpus from $(CORPUS_DIR)..."
+	go run . \
+		-intent="rebuild corpus" \
+		-target="/dev/null" \
+		-corpus="$(CORPUS_DIR)" \
+		-corpus-json="$(CORPUS_JSON)" \
+		-memory-json="$(MEMORY_JSON)" || true
+	@echo "✅ Corpus rebuilt at $(CORPUS_JSON)"
+
+## clone-repo: Clone a GitHub repo and index it into corpus.json.
+##             Usage: make clone-repo REPO=https://github.com/user/repo [REPO_DEST=./repos/myrepo]
+REPO      ?= ""
+REPO_DEST ?= ""
+clone-repo:
+	@if [ -z "$(REPO)" ]; then \
+		echo "❌ REPO is required. Usage: make clone-repo REPO=https://github.com/user/repo"; \
+		exit 1; \
+	fi
+	@echo "📥 Cloning $(REPO)..."
+	go run . \
+		-repo="$(REPO)" \
+		-repo-dest="$(REPO_DEST)" \
+		-corpus-json="$(CORPUS_JSON)" \
+		-memory-json="$(MEMORY_JSON)"
+
+## map-nlp: Map a natural language instruction to the nearest pattern in corpus.json.
+##          Usage: make map-nlp NLP="find http handler" [CORPUS_JSON=./corpus.json]
+NLP ?= ""
+map-nlp:
+	@if [ -z "$(NLP)" ]; then \
+		echo "❌ NLP is required. Usage: make map-nlp NLP=\"your instruction\""; \
+		exit 1; \
+	fi
+	@echo "🗺️  Mapping: $(NLP)"
+	go run . \
+		-map-nlp="$(NLP)" \
+		-corpus-json="$(CORPUS_JSON)" \
+		-memory-json="$(MEMORY_JSON)"
+
+## plan: Run the Multi-Step Execution Planner with a high-level intent.
+##       Usage: make plan INTENT="Build a user auth API" [TARGET=./ft/models.go]
+plan:
+	@if [ -z "$(INTENT)" ]; then \
+		echo "❌ INTENT is required. Usage: make plan INTENT=\"your goal\""; \
+		exit 1; \
+	fi
+	go run . \
+		-plan-intent="$(INTENT)" \
+		-target="$(TARGET)" \
+		-corpus="$(CORPUS_DIR)" \
+		-corpus-json="$(CORPUS_JSON)" \
+		-memory-json="$(MEMORY_JSON)"

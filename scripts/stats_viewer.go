@@ -47,20 +47,22 @@ func main() {
 	fmt.Printf("\n--- 📈 Gollemer Progress (Epoch %d/%d | Loss: %s) ---\n", currentEpoch, totalEpochs, loss)
 
 	// ... (Expert Bar Drawing Logic) ...
-    for i := 0; i < 8; i++ {
+	for i := 0; i < 8; i++ {
 		val, _ := strconv.ParseFloat(last[i+3], 64)
 		barLength := int(val * 50)
-		if barLength > 50 { barLength = 50 }
+		if barLength > 50 {
+			barLength = 50
+		}
 		bar := strings.Repeat("█", barLength) + strings.Repeat("░", 50-barLength)
 		fmt.Printf("Expert %d: [%s] %.2f%%\n", i, bar, val*100)
 	}
 
 	fmt.Println("--------------------------------------------------")
 	if currentEpoch < totalEpochs {
-		fmt.Printf("⏱️  Avg/Epoch: %.1fs | ETA: %s (%s remaining)\n", 
-            avgTimePerEpoch, 
-            etaTime.Format("03:04 PM"), 
-            time.Duration(etaSeconds)*time.Second)
+		fmt.Printf("⏱️  Avg/Epoch: %.1fs | ETA: %s (%s remaining)\n",
+			avgTimePerEpoch,
+			etaTime.Format("03:04 PM"),
+			time.Duration(etaSeconds)*time.Second)
 	} else {
 		fmt.Println("🏁 Training Complete!")
 	}

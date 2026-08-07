@@ -1,0 +1,50 @@
+[
+  {
+    "intent": "edit_agent",
+    "examples": [
+      "add a return type to the function",
+      "add return type int for startmyserver",
+      "add return type string to this function",
+      "modify this function to do something else",
+      "change the struct field to be a string",
+      "refactor the logic to use a switch statement",
+      "implement the missing interface methods",
+      "change the code",
+      "rewrite this function",
+      "add a new function that does this",
+      "add a new field to this struct",
+      "make this function public",
+      "rename this function to something else",
+      "add a parameter to this function",
+      "remove the unused parameter from this function",
+      "make this function return an error",
+      "add error handling to this function",
+      "insert a new method into the struct",
+      "add a return value to startmyserver",
+      "change the return type of this function",
+      "wrap this function in a new interface",
+      "add logging to this function",
+      "add comments to this function"
+    ]
+  },
+  {
+    "intent": "auto_fix",
+    "examples": [
+      "fix the syntax errors in this file",
+      "resolve the compiler errors",
+      "repair the broken code",
+      "auto fix",
+      "fix it",
+      "fix the file",
+      "correct the syntax",
+      "run the auto fixer on this file",
+      "fix the compilation errors",
+      "fix the go vet issues",
+      "fix the lint errors",
+      "just fix it",
+      "check and fix the file",
+      "repair the syntax",
+      "resolve all errors in this file"
+    ]
+  }
+]

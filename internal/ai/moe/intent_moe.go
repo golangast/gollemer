@@ -254,7 +254,7 @@ func SampleFromLogits(logits *tensor.Tensor, temperature float32, topK int, topP
 func (m *IntentMoE) PredictNext(input *tensor.Tensor, k int, temp float32) (int, float32, error) {
 	// 1. Forward pass
 	// We assume a simplified forward call for single-token prediction
-	logits, _, err := m.Forward(0.0, input, nil, nil)
+	logits, _, err := m.Forward(0.0, input, input, nil)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -316,7 +316,7 @@ func (m *IntentMoE) CalculateAccuracy(inputs []*tensor.Tensor, targets []*tensor
 
 		// 1. Get logits from the forward pass (inference mode)
 		m.SetMode(false)
-		logits, _, err := m.Forward(0.0, input, nil, nil)
+		logits, _, err := m.Forward(0.0, input, input, nil)
 		if err != nil || len(logits) == 0 {
 			continue
 		}

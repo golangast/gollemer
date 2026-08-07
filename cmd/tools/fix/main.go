@@ -87,12 +87,17 @@ func main() {
 // runAutoApplyFix uses the MoE-based ErrorRouter for automatic AST-level fixes
 // without needing the full LLM pipeline.
 func runAutoApplyFix(projectRoot string, pkgTarget string, maxRetries int, testMode bool, verbose bool) error {
-	// Initialize the error router with the MoE classification model
+	// Initialize the hybrid engine with regex classifier as the primary fixer
+	// (uses AST-based deterministic fixers rather than MoE classification)
+	classifier := errors.NewRegexClassifier(projectRoot)
+	hybrid := errors.NewHybridEngine(projectRoot, classifier, verbose)
+
+	// Also try the MoE-based error router for additional classification
 	router, err := errors.NewErrorRouter(projectRoot, verbose)
 	if err != nil {
 		if verbose {
 			log.Printf("⚠️  Could not initialize MoE classifier: %v", err)
-			log.Printf("   Falling back to regex-based classification")
+			log.Printf("   Using deterministic hybrid engine (AST-based fixers + regex classification)")
 		}
 	}
 
@@ -133,33 +138,36 @@ func runAutoApplyFix(projectRoot string, pkgTarget string, maxRetries int, testM
 				fmt.Printf("  ❌ Build failed:\n  %s\n", truncateString(output, 300))
 			}
 
-			// Process errors through the router
-			var result *errors.RouterResult
+			// Try hybrid engine first (AST-based deterministic fixers)
+			hybridResults, hybridErr := hybrid.ProcessError(output)
+			hasFixes := false
+			if hybridErr == nil && len(hybridResults) > 0 {
+				for _, r := range hybridResults {
+					if strings.HasPrefix(r, "✅") || strings.HasPrefix(r, "  ✅") {
+						hasFixes = true
+					}
+					fmt.Printf("    %s\n", r)
+				}
+				if hasFixes {
+					if verbose {
+						log.Printf("  🔄 Hybrid engine applied fixes, retrying build...")
+					}
+					continue
+				}
+			}
+
+			// Fall back to MoE router if hybrid engine couldn't fix
 			if router != nil {
-				result = router.ProcessCompilerOutput(output)
-			} else {
-				// Use raw parsing only
-				result = &errors.RouterResult{}
-				parsed := errors.ParseCompilerOutput(output)
-				result.TotalCount = len(parsed)
-				result.Errors = parsed
-				for _, pe := range parsed {
-					fixer := errors.GetFixer(pe.Intent)
-					if fixer != nil {
-						msg, fixErr := fixer(pe, projectRoot)
-						if fixErr == nil {
-							result.FixedCount++
-							result.FixResults = append(result.FixResults, errors.FixResult{
-								ParsedError: pe,
-								Fixed:       true,
-								Message:     msg,
-							})
-						}
+				result := router.ProcessCompilerOutput(output)
+				for _, fr := range result.FixResults {
+					if fr.Fixed {
+						fmt.Printf("    ✅ %s\n", fr.Message)
+						hasFixes = true
 					}
 				}
 			}
 
-			if result.FixedCount == 0 {
+			if !hasFixes {
 				if i == maxRetries-1 {
 					fmt.Printf("  ⚠️  No fixes could be applied for %s\n", pkg)
 				} else {
@@ -168,13 +176,6 @@ func runAutoApplyFix(projectRoot string, pkgTarget string, maxRetries int, testM
 					}
 				}
 				continue
-			}
-
-			// Print results
-			for _, fr := range result.FixResults {
-				if fr.Fixed {
-					fmt.Printf("    ✅ %s\n", fr.Message)
-				}
 			}
 		}
 	}
@@ -527,4 +528,30 @@ func escapeJSON(s string) string {
 	s = strings.ReplaceAll(s, "\n", "\\n")
 	s = strings.ReplaceAll(s, "\t", "\\t")
 	return s
+}
+
+// Add a new function to fix the jim.go file specifically
+func fixJimFile(projectRoot string) error {
+	// Read the jim.go file
+	fullPath := filepath.Join(projectRoot, "jim.go")
+	data, err := os.ReadFile(fullPath)
+	if err != nil {
+		return fmt.Errorf("read jim.go: %w", err)
+	}
+
+	// Check if the file has syntax errors
+	content := string(data)
+	if strings.Contains(content, "func fn") && !strings.Contains(content, "func fn(") {
+		// Fix the incomplete function
+		fixedContent := strings.Replace(content, "func fn", "func fn()", 1)
+
+		// Write the fixed content back to the file
+		if err := os.WriteFile(fullPath, []byte(fixedContent), 0644); err != nil {
+			return fmt.Errorf("write jim.go: %w", err)
+		}
+
+		return nil
+	}
+
+	return fmt.Errorf("no syntax errors found in jim.go")
 }

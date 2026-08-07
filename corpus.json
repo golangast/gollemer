@@ -1,0 +1,11 @@
+[
+  {
+    "id": "server_blueprint.go_func_1",
+    "type": "func",
+    "name": "StartServer",
+    "raw_code": "func StartServer() {\n\thttp.HandleFunc(\"/\", func(w http.ResponseWriter, r *http.Request) {\n\t\tfmt.Fprintf(w, \"Hello from Gollemer Server!\")\n\t})\n\thttp.ListenAndServe(\":8080\", nil)\n}",
+    "tags": [
+      "startserver"
+    ]
+  }
+]

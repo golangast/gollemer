@@ -125,6 +125,12 @@ const (
 	IntentInvalidUseOfBlank
 	// IntentInvalidUseOfNil indicates an invalid use of nil.
 	IntentInvalidUseOfNil
+	// IntentTooManyReturnValues indicates a function returns more values than its signature declares.
+	IntentTooManyReturnValues
+	// IntentTooFewReturnValues indicates a function returns fewer values than its signature declares.
+	IntentTooFewReturnValues
+	// IntentWrongReturnType indicates a function returns a value of the wrong type.
+	IntentWrongReturnType
 )
 
 // String returns a human-readable name for the error intent.
@@ -160,6 +166,12 @@ func (e ErrorIntent) String() string {
 		return "CANNOT_ASSIGN"
 	case IntentNonBoolUsedInIf:
 		return "NON_BOOL_IN_IF"
+	case IntentTooManyReturnValues:
+		return "TOO_MANY_RETURN_VALUES"
+	case IntentTooFewReturnValues:
+		return "TOO_FEW_RETURN_VALUES"
+	case IntentWrongReturnType:
+		return "WRONG_RETURN_TYPE"
 	default:
 		return "UNKNOWN"
 	}
@@ -198,6 +210,12 @@ func ErrorIntentFromString(s string) ErrorIntent {
 		return IntentCannotAssign
 	case "NON_BOOL_IN_IF":
 		return IntentNonBoolUsedInIf
+	case "TOO_MANY_RETURN_VALUES":
+		return IntentTooManyReturnValues
+	case "TOO_FEW_RETURN_VALUES":
+		return IntentTooFewReturnValues
+	case "WRONG_RETURN_TYPE":
+		return IntentWrongReturnType
 	default:
 		return IntentUnknown
 	}
@@ -946,6 +964,50 @@ var CompilerErrorPatterns = []struct {
 			return m[1], atoi(m[2]), 0, fmt.Sprintf("cannot use nil as type %s in assignment", m[3]), m[3], ""
 		},
 	},
+	// ── go vet: too many return values ─────────────────────────────────────────
+	// vet: ft/jim.go:20:9: too many return values
+	// Matches both bare "file:line:col: too many return values" and vet-prefixed.
+	{
+		Pattern: regexp.MustCompile(`^(?:vet:\s+)?([^:]+):(\d+):(\d+):\s+too\s+many\s+return\s+values`),
+		Intent:  IntentTooManyReturnValues,
+		Extract: func(m []string) (string, int, int, string, string, string) {
+			return m[1], atoi(m[2]), atoi(m[3]), "too many return values", "", ""
+		},
+	},
+	// vet: ft/jim.go:20: too many return values (no column)
+	{
+		Pattern: regexp.MustCompile(`^(?:vet:\s+)?([^:]+):(\d+):\s+too\s+many\s+return\s+values`),
+		Intent:  IntentTooManyReturnValues,
+		Extract: func(m []string) (string, int, int, string, string, string) {
+			return m[1], atoi(m[2]), 0, "too many return values", "", ""
+		},
+	},
+	// ── go vet: not enough return values ───────────────────────────────────────
+	// vet: ft/jim.go:20:9: not enough return values
+	{
+		Pattern: regexp.MustCompile(`^(?:vet:\s+)?([^:]+):(\d+):(\d+):\s+not\s+enough\s+return\s+values`),
+		Intent:  IntentTooFewReturnValues,
+		Extract: func(m []string) (string, int, int, string, string, string) {
+			return m[1], atoi(m[2]), atoi(m[3]), "not enough return values", "", ""
+		},
+	},
+	// vet: ft/jim.go:20: not enough return values (no column)
+	{
+		Pattern: regexp.MustCompile(`^(?:vet:\s+)?([^:]+):(\d+):\s+not\s+enough\s+return\s+values`),
+		Intent:  IntentTooFewReturnValues,
+		Extract: func(m []string) (string, int, int, string, string, string) {
+			return m[1], atoi(m[2]), 0, "not enough return values", "", ""
+		},
+	},
+	// ── go vet: wrong return type ──────────────────────────────────────────────
+	// ft/jim.go:20:9: cannot use 0 (untyped int constant) as string value in return statement
+	{
+		Pattern: regexp.MustCompile(`^(?:vet:\s+)?([^:]+):(\d+):(\d+):\s+cannot\s+use\s+(\S+).*\s+as\s+(\S+)\s+value\s+in\s+return\s+statement`),
+		Intent:  IntentWrongReturnType,
+		Extract: func(m []string) (string, int, int, string, string, string) {
+			return m[1], atoi(m[2]), atoi(m[3]), fmt.Sprintf("wrong return type: %s used as %s", m[4], m[5]), m[4], m[5]
+		},
+	},
 }
 
 // atoi converts a string to an int, returning 0 on error.
@@ -1015,11 +1077,23 @@ func ParseErrorLine(line string) *ParsedError {
 
 // ParseCompilerOutput parses the full output of a Go compiler/test run
 // and returns a list of structured ParsedErrors.
+// It handles both regular compiler output and `go vet` output which may
+// include a "# package" header line and "vet: " prefixed lines.
 func ParseCompilerOutput(output string) []*ParsedError {
 	var errors []*ParsedError
 	seen := make(map[string]bool) // deduplicate
 
 	for _, line := range strings.Split(output, "\n") {
+		// Skip go vet header lines like "# command-line-arguments" and "# [command-line-arguments]"
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		// Strip leading "vet: " prefix that go vet emits on some errors
+		if strings.HasPrefix(trimmed, "vet: ") {
+			line = strings.TrimPrefix(trimmed, "vet: ")
+		}
+
 		pe := ParseErrorLine(line)
 		if pe == nil {
 			continue

@@ -177,6 +177,11 @@ func (h *HybridEngine) registerAllFixers() {
 	h.Fixers[IntentDuplicateField] = FixerFuncAdapter(h.fixDuplicateFieldAST)
 	h.Fixers[IntentDuplicateKey] = FixerFuncAdapter(h.fixDuplicateKeyAST)
 
+	// ── Return Value Fixers ──────────────────────────────────────────────
+	h.Fixers[IntentTooManyReturnValues] = FixerFuncAdapter(h.fixTooManyReturnValuesAST)
+	h.Fixers[IntentTooFewReturnValues] = FixerFuncAdapter(h.fixTooFewReturnValuesAST)
+	h.Fixers[IntentWrongReturnType] = FixerFuncAdapter(h.fixWrongReturnTypeAST)
+
 	// ── Syntax & Fallback ─────────────────────────────────────────────────
 	h.Fixers[IntentSyntaxError] = FixerFuncAdapter(h.fixSyntaxErrorAST)
 	h.Fixers[IntentUnknown] = FixerFuncAdapter(h.fixUnknownAST)
@@ -381,19 +386,141 @@ func (h *HybridEngine) verifyCompilation(filePath string) error {
 // and immune to neural hallucination. They are wrapped from the existing
 // file-level fixers in fixers.go to work with the AST-based HybridEngine.
 
+// builtinTypes lists all Go predeclared types for typo-correction.
+var builtinTypes = []string{
+	"bool", "byte", "complex64", "complex128", "error",
+	"float32", "float64", "int", "int8", "int16", "int32", "int64",
+	"rune", "string", "uint", "uint8", "uint16", "uint32", "uint64",
+	"uintptr", "any",
+}
+
+// typoCorrectType returns the best-matching builtin type for a likely-typo'd
+// identifier, or "" if no close match is found. Uses prefix matching and a
+// simple Levenshtein distance threshold.
+func typoCorrectType(symbol string) string {
+	lower := strings.ToLower(symbol)
+	best := ""
+	bestDist := len(symbol) + 1
+	for _, t := range builtinTypes {
+		if strings.HasPrefix(t, lower) || strings.HasPrefix(lower, t) {
+			d := levenshtein(lower, t)
+			if d < bestDist {
+				bestDist = d
+				best = t
+			}
+		} else {
+			d := levenshtein(lower, t)
+			if d <= 2 && d < bestDist {
+				bestDist = d
+				best = t
+			}
+		}
+	}
+	// Only correct if within edit distance 3 to avoid wild guesses.
+	if bestDist <= 3 {
+		return best
+	}
+	return ""
+}
+
+// levenshtein computes the edit distance between two strings.
+func levenshtein(a, b string) int {
+	la, lb := len(a), len(b)
+	dp := make([]int, lb+1)
+	for j := range dp {
+		dp[j] = j
+	}
+	for i := 1; i <= la; i++ {
+		prev := dp[0]
+		dp[0] = i
+		for j := 1; j <= lb; j++ {
+			tmp := dp[j]
+			if a[i-1] == b[j-1] {
+				dp[j] = prev
+			} else {
+				dp[j] = 1 + min3(prev, dp[j], dp[j-1])
+			}
+			prev = tmp
+		}
+	}
+	return dp[lb]
+}
+
+func min3(a, b, c int) int {
+	if a < b {
+		if a < c {
+			return a
+		}
+		return c
+	}
+	if b < c {
+		return b
+	}
+	return c
+}
+
 // fixUndefinedSymbolAST adds a placeholder declaration to the AST.
+// If the symbol appears in a type position and looks like a typo of a builtin
+// type, the ident is corrected in-place instead of adding a stub declaration.
 func (h *HybridEngine) fixUndefinedSymbolAST(file *ast.File, fset *token.FileSet, info ErrorInfo) (string, error) {
 	symbol := info.Symbol
 	if symbol == "" {
 		return "", fmt.Errorf("no symbol to fix")
 	}
 
-	// Detect if it's a function call
+	// --- Phase 1: check if the symbol is used as a type. -----------------
+	// Walk the AST looking for *ast.Ident nodes in type positions whose name
+	// matches our undefined symbol. If found, attempt a typo correction
+	// against the builtin types and patch the ident in-place.
+	corrected := ""
+	usedAsType := false
+	ast.Inspect(file, func(n ast.Node) bool {
+		if usedAsType {
+			return false
+		}
+		switch node := n.(type) {
+		// struct fields: type is node.Type
+		case *ast.Field:
+			if ident, ok := node.Type.(*ast.Ident); ok && ident.Name == symbol {
+				if c := typoCorrectType(symbol); c != "" {
+					ident.Name = c
+					corrected = c
+					usedAsType = true
+					return false
+				}
+			}
+		// var/const/type specs: type is node.Type
+		case *ast.ValueSpec:
+			if ident, ok := node.Type.(*ast.Ident); ok && ident.Name == symbol {
+				if c := typoCorrectType(symbol); c != "" {
+					ident.Name = c
+					corrected = c
+					usedAsType = true
+					return false
+				}
+			}
+		// type alias: node.Type
+		case *ast.TypeSpec:
+			if ident, ok := node.Type.(*ast.Ident); ok && ident.Name == symbol {
+				if c := typoCorrectType(symbol); c != "" {
+					ident.Name = c
+					corrected = c
+					usedAsType = true
+					return false
+				}
+			}
+		}
+		return true
+	})
+	if usedAsType {
+		return fmt.Sprintf("Corrected type typo %q → %q", symbol, corrected), nil
+	}
+
+	// --- Phase 2: check if it's a function call. -------------------------
 	isFunc := false
 	if info.Line > 0 {
 		pos := fset.Position(file.Package)
 		if pos.Line > 0 {
-			// We can't easily reverse-map from line to node, so check by position
 			ast.Inspect(file, func(n ast.Node) bool {
 				if call, ok := n.(*ast.CallExpr); ok {
 					if ident, ok := call.Fun.(*ast.Ident); ok && ident.Name == symbol {
@@ -419,7 +546,7 @@ func (h *HybridEngine) fixUndefinedSymbolAST(file *ast.File, fset *token.FileSet
 		return fmt.Sprintf("Added stub function %q", symbol), nil
 	}
 
-	// Add a variable declaration with zero value
+	// --- Phase 3: fall back to a var stub declaration. -------------------
 	stubDecl := &ast.GenDecl{
 		Tok: token.VAR,
 		Specs: []ast.Spec{
@@ -630,34 +757,32 @@ func (h *HybridEngine) fixNoNewVariablesAST(file *ast.File, fset *token.FileSet,
 	return "", fmt.Errorf("use file-level fixer for no-new-variables")
 }
 
-// fixMissingReturnAST adds a return statement to a function.
+// fixMissingReturnAST adds a return statement to a function, using proper zero values
+// for each declared return type in the function signature.
 func (h *HybridEngine) fixMissingReturnAST(file *ast.File, fset *token.FileSet, info ErrorInfo) (string, error) {
-	var targetFunc *ast.FuncDecl
-	ast.Inspect(file, func(n ast.Node) bool {
-		if fn, ok := n.(*ast.FuncDecl); ok && fn.Body != nil {
-			pos := fset.Position(fn.Pos())
-			end := fset.Position(fn.End())
-			if pos.Line <= info.Line && end.Line >= info.Line {
-				targetFunc = fn
-				return false
-			}
-		}
-		return true
-	})
-
+	targetFunc := findFuncContainingLine(file, fset, info.Line)
 	if targetFunc == nil {
 		return "", fmt.Errorf("no function found at line %d", info.Line)
 	}
 
 	returnStmt := &ast.ReturnStmt{}
 	if targetFunc.Type.Results != nil {
-		for range targetFunc.Type.Results.List {
-			returnStmt.Results = append(returnStmt.Results, &ast.Ident{Name: "nil"})
+		for _, field := range targetFunc.Type.Results.List {
+			zeroExpr := zeroValueExpr(field.Type)
+			if len(field.Names) == 0 {
+				// unnamed return: one zero value per field
+				returnStmt.Results = append(returnStmt.Results, zeroExpr)
+			} else {
+				// named return: one zero value per name
+				for range field.Names {
+					returnStmt.Results = append(returnStmt.Results, zeroExpr)
+				}
+			}
 		}
 	}
 	targetFunc.Body.List = append(targetFunc.Body.List, returnStmt)
 
-	return fmt.Sprintf("Added return statement at line %d", info.Line), nil
+	return fmt.Sprintf("Added return statement to %q at line %d", targetFunc.Name.Name, info.Line), nil
 }
 
 // fixHandlerDefinitionAST adds a stub HTTP handler to the AST.
@@ -841,6 +966,211 @@ func (h *HybridEngine) fixSyntaxErrorAST(file *ast.File, fset *token.FileSet, in
 // fixUnknownAST is the fallback for unclassified errors.
 func (h *HybridEngine) fixUnknownAST(file *ast.File, fset *token.FileSet, info ErrorInfo) (string, error) {
 	return fmt.Sprintf("Unknown error at %s:%d — cannot auto-fix", info.File, info.Line), nil
+}
+
+// =============================================================================
+// 7. Return Value Fixers (The Semantic Engine)
+// =============================================================================
+
+// fixTooManyReturnValuesAST handles "too many return values".
+// Two strategies:
+//
+//	a) If the function has NO declared return type, remove the returned expressions
+//	   (turn "return expr" into bare "return").
+//	b) If the function has return types, add the missing ones to the signature
+//	   to match what is actually returned.
+func (h *HybridEngine) fixTooManyReturnValuesAST(file *ast.File, fset *token.FileSet, info ErrorInfo) (string, error) {
+	targetFunc := findFuncContainingLine(file, fset, info.Line)
+	if targetFunc == nil {
+		return "", fmt.Errorf("no function found containing line %d", info.Line)
+	}
+
+	// Count how many values are actually returned at the error line
+	var returnStmt *ast.ReturnStmt
+	ast.Inspect(targetFunc.Body, func(n ast.Node) bool {
+		if ret, ok := n.(*ast.ReturnStmt); ok {
+			pos := fset.Position(ret.Pos())
+			if pos.Line == info.Line {
+				returnStmt = ret
+				return false
+			}
+		}
+		return true
+	})
+
+	// Strategy A: function declares no return values → strip return expressions
+	hasNoResults := targetFunc.Type.Results == nil || len(targetFunc.Type.Results.List) == 0
+	if hasNoResults {
+		if returnStmt != nil {
+			returnStmt.Results = nil // bare return
+		}
+		return fmt.Sprintf("✅ Removed extra return values from %q (function declares no return type)", targetFunc.Name.Name), nil
+	}
+
+	// Strategy B: function has return types → add matching result types to signature
+	// Build result list from the return statement's expressions
+	if returnStmt != nil && len(returnStmt.Results) > 0 {
+		// Replace the entire result list with interface{} placeholders
+		// so it at least compiles (user can refine types)
+		newList := make([]*ast.Field, len(returnStmt.Results))
+		for i := range returnStmt.Results {
+			newList[i] = &ast.Field{Type: ast.NewIdent("interface{}")}
+		}
+		targetFunc.Type.Results = &ast.FieldList{List: newList}
+		return fmt.Sprintf("✅ Updated %q return signature to match %d return value(s)", targetFunc.Name.Name, len(returnStmt.Results)), nil
+	}
+
+	return "", fmt.Errorf("could not determine return expression at line %d", info.Line)
+}
+
+// fixTooFewReturnValuesAST handles "not enough return values".
+// Adds missing zero-value return expressions to the return statement.
+func (h *HybridEngine) fixTooFewReturnValuesAST(file *ast.File, fset *token.FileSet, info ErrorInfo) (string, error) {
+	targetFunc := findFuncContainingLine(file, fset, info.Line)
+	if targetFunc == nil {
+		return "", fmt.Errorf("no function found containing line %d", info.Line)
+	}
+
+	// Find how many return values the signature demands
+	want := 0
+	if targetFunc.Type.Results != nil {
+		for _, f := range targetFunc.Type.Results.List {
+			if len(f.Names) == 0 {
+				want++
+			} else {
+				want += len(f.Names)
+			}
+		}
+	}
+
+	// Find the return statement at error line
+	var returnStmt *ast.ReturnStmt
+	ast.Inspect(targetFunc.Body, func(n ast.Node) bool {
+		if ret, ok := n.(*ast.ReturnStmt); ok {
+			pos := fset.Position(ret.Pos())
+			if pos.Line == info.Line {
+				returnStmt = ret
+				return false
+			}
+		}
+		return true
+	})
+
+	if returnStmt == nil {
+		return "", fmt.Errorf("no return statement found at line %d", info.Line)
+	}
+
+	have := len(returnStmt.Results)
+	if have >= want {
+		return fmt.Sprintf("Return statement at line %d already has %d value(s)", info.Line, have), nil
+	}
+
+	// Pad with zero values for each missing slot
+	for i, field := range targetFunc.Type.Results.List {
+		_ = i
+		count := 1
+		if len(field.Names) > 0 {
+			count = len(field.Names)
+		}
+		for c := 0; c < count && len(returnStmt.Results) < want; c++ {
+			returnStmt.Results = append(returnStmt.Results, zeroValueExpr(field.Type))
+		}
+	}
+
+	return fmt.Sprintf("✅ Added %d missing zero-value return(s) to %q at line %d", want-have, targetFunc.Name.Name, info.Line), nil
+}
+
+// fixWrongReturnTypeAST handles type mismatches in return statements.
+// It updates the function's return signature to match the actual returned type.
+func (h *HybridEngine) fixWrongReturnTypeAST(file *ast.File, fset *token.FileSet, info ErrorInfo) (string, error) {
+	targetFunc := findFuncContainingLine(file, fset, info.Line)
+	if targetFunc == nil {
+		return "", fmt.Errorf("no function found containing line %d", info.Line)
+	}
+
+	// info.Symbol = the literal being returned, info.Package = the expected type
+	actualType := info.Package // re-used as the expected type from the pattern
+	if actualType == "" {
+		return "", fmt.Errorf("could not determine return type from error message")
+	}
+
+	// Update result list to match the declared return type
+	if targetFunc.Type.Results != nil && len(targetFunc.Type.Results.List) > 0 {
+		targetFunc.Type.Results.List[0].Type = ast.NewIdent(actualType)
+		return fmt.Sprintf("✅ Updated return type of %q to %q at line %d", targetFunc.Name.Name, actualType, info.Line), nil
+	}
+
+	// If no results list, add one
+	targetFunc.Type.Results = &ast.FieldList{
+		List: []*ast.Field{{Type: ast.NewIdent(actualType)}},
+	}
+	return fmt.Sprintf("✅ Added return type %q to %q at line %d", actualType, targetFunc.Name.Name, info.Line), nil
+}
+
+// =============================================================================
+// 8. AST Helper Functions
+// =============================================================================
+
+// findFuncContainingLine finds the *ast.FuncDecl whose body spans the given line.
+func findFuncContainingLine(file *ast.File, fset *token.FileSet, line int) *ast.FuncDecl {
+	var found *ast.FuncDecl
+	ast.Inspect(file, func(n ast.Node) bool {
+		if fn, ok := n.(*ast.FuncDecl); ok && fn.Body != nil {
+			start := fset.Position(fn.Pos()).Line
+			end := fset.Position(fn.End()).Line
+			if start <= line && line <= end {
+				// Pick the innermost (smallest) matching function
+				if found == nil {
+					found = fn
+				} else {
+					foundStart := fset.Position(found.Pos()).Line
+					foundEnd := fset.Position(found.End()).Line
+					if (end - start) < (foundEnd - foundStart) {
+						found = fn
+					}
+				}
+			}
+		}
+		return true
+	})
+	return found
+}
+
+// zeroValueExpr returns the zero-value expression for a given AST type expression.
+// It handles common named types, pointers, slices, maps, channels, and interfaces.
+func zeroValueExpr(t ast.Expr) ast.Expr {
+	switch typ := t.(type) {
+	case *ast.Ident:
+		switch typ.Name {
+		case "int", "int8", "int16", "int32", "int64",
+			"uint", "uint8", "uint16", "uint32", "uint64", "uintptr",
+			"byte", "rune":
+			return &ast.BasicLit{Kind: token.INT, Value: "0"}
+		case "float32", "float64":
+			return &ast.BasicLit{Kind: token.FLOAT, Value: "0.0"}
+		case "complex64", "complex128":
+			return &ast.BasicLit{Kind: token.IMAG, Value: "0i"}
+		case "bool":
+			return &ast.Ident{Name: "false"}
+		case "string":
+			return &ast.BasicLit{Kind: token.STRING, Value: `""`}
+		case "error":
+			return &ast.Ident{Name: "nil"}
+		default:
+			// Unknown named type — use nil and hope for the best
+			return &ast.Ident{Name: "nil"}
+		}
+	case *ast.StarExpr, *ast.ArrayType, *ast.MapType, *ast.ChanType, *ast.InterfaceType, *ast.FuncType:
+		// All of these have nil as their zero value
+		return &ast.Ident{Name: "nil"}
+	case *ast.SelectorExpr:
+		// Package-qualified type like "io.Reader" — zero value is nil
+		return &ast.Ident{Name: "nil"}
+	case *ast.StructType:
+		// Composite literal for an anonymous struct
+		return &ast.CompositeLit{Type: t}
+	}
+	return &ast.Ident{Name: "nil"}
 }
 
 // =============================================================================

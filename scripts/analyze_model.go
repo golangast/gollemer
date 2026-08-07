@@ -45,7 +45,7 @@ func main() {
 func analyzeModel(m *moe.IntentMoE) {
 	totalParams := 0
 	tensorCount := 0
-	
+
 	v := reflect.ValueOf(m).Elem()
 	findTensors(v, &totalParams, &tensorCount)
 

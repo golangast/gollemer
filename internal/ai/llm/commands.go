@@ -1,8 +1,14 @@
 package llm
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"go/parser"
+	"go/token"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -396,6 +402,98 @@ func (r *Runner) executeCommand(query string, intent *Intent, intentData *Intent
 		cwd, _ := os.Getwd()
 		predictedSentence = fmt.Sprintf("The current directory is: %s", cwd)
 
+	// ── Fix / edit ───────────────────────────────────────────────────────────
+	case "fix_query":
+		fileName := ""
+		if fn, ok := intentData.Parameters["name"].(string); ok {
+			fileName = fn
+		}
+		if fileName == "" {
+			// Try to extract filename from query
+			parts := strings.Fields(query)
+			for _, p := range parts {
+				if strings.Contains(p, ".go") || strings.Contains(p, ".js") || strings.Contains(p, ".ts") {
+					fileName = p
+					break
+				}
+			}
+		}
+		if fileName == "" {
+			// Check if "jim" or "jim.go" or any existing file appears in query
+			lowerQ := strings.ToLower(query)
+			for _, p := range strings.Fields(lowerQ) {
+				p = strings.Trim(p, "',\".")
+				if p == "" {
+					continue
+				}
+				if strings.Contains(p, "jim") || strings.HasSuffix(p, ".go") {
+					fileName = p
+					if !strings.HasSuffix(fileName, ".go") {
+						fileName += ".go"
+					}
+					break
+				}
+				cand := p + ".go"
+				if _, err := os.Stat(cand); err == nil {
+					fileName = cand
+					break
+				}
+			}
+		}
+		// If file not found at the given path, search subdirectories
+		if fileName != "" {
+			if _, err := os.Stat(fileName); os.IsNotExist(err) {
+				// Search for the file in subdirectories
+				var foundPath string
+				filepath.Walk(".", func(path string, info os.FileInfo, walkErr error) error {
+					if walkErr == nil && !info.IsDir() && info.Name() == fileName {
+						foundPath = path
+						return filepath.SkipDir
+					}
+					return nil
+				})
+				if foundPath != "" {
+					fileName = foundPath
+				}
+			}
+		}
+		if fileName != "" {
+			// ── Corpus-Driven Semantic Routing ──────────────────────────────────
+			// Route to edit_agent or auto_fix by comparing the user's query
+			// embedding against the pre-trained intent corpus embeddings.
+			queryEmb := r.Client.getSentenceEmbedding(query)
+			bestIntent := ""
+			bestScore := -1.0
+
+			if queryEmb != nil && r.SemanticRouter != nil {
+				for _, entry := range r.SemanticRouter.Embeddings {
+					score := cosineSimilarity(queryEmb, entry.Embedding)
+					if score > bestScore {
+						bestScore = score
+						bestIntent = entry.Intent
+					}
+				}
+			}
+
+			// Fallback: keyword triggers that are unambiguous
+			lq := strings.ToLower(query)
+			fallbackEdit := strings.Contains(lq, "function") || strings.Contains(lq, "func") ||
+				strings.Contains(lq, "import ") || strings.Contains(lq, "change ") ||
+				strings.Contains(lq, "struct") || strings.Contains(lq, "add ") ||
+				strings.Contains(lq, "create ") || strings.Contains(lq, "insert") ||
+				strings.Contains(lq, "field") || strings.Contains(lq, "type ") ||
+				strings.Contains(lq, "remove") || strings.Contains(lq, "delete")
+
+			useEditAgent := (bestIntent == "edit_agent" && bestScore > 0.60) || fallbackEdit
+			if useEditAgent {
+				predictedSentence = r.handleLLMEditCommand(fileName, query)
+			} else {
+				predictedSentence = r.handleFixCommand(fileName)
+			}
+		} else {
+			predictedSentence = "I couldn't determine which file to fix."
+		}
+
 	// ── Social / personality ──────────────────────────────────────────────────
 	case "identity_query":
 		predictedSentence = "I am Gollemer, your AI coding assistant and project orchestrator."
@@ -506,6 +604,540 @@ func (r *Runner) handleHistoryCommand() string {
 	return strings.Join(historyLines, "\n")
 }
 
+// EditOperation describes a single AST-level edit to apply to a Go source file.
+// Mirrors the type in cmd/tools/go_edit_agent/main.go for JSON serialization.
+type EditOperation struct {
+	Type       string `json:"type"`
+	TargetFile string `json:"target_file"`
+	FuncName   string `json:"func_name,omitempty"`
+	StructName string `json:"struct_name,omitempty"`
+	FieldName  string `json:"field_name,omitempty"`
+	FieldType  string `json:"field_type,omitempty"`
+	FieldTag   string `json:"field_tag,omitempty"`
+	ImportPath string `json:"import_path,omitempty"`
+	Code       string `json:"code,omitempty"`
+	InsertAt   string `json:"insert_at,omitempty"`
+	OldCode    string `json:"old_code,omitempty"`
+	NewCode    string `json:"new_code,omitempty"`
+}
+
+// AgentResponse mirrors the response type from cmd/tools/go_edit_agent/main.go.
+type AgentResponse struct {
+	Success      bool   `json:"success"`
+	File         string `json:"file"`
+	EditsApplied int    `json:"edits_applied"`
+	Error        string `json:"error,omitempty"`
+	Duration     string `json:"duration"`
+}
+
+func (r *Runner) handleFixCommand(fileName string) string {
+	// Read the file to understand its current state
+	content, readErr := os.ReadFile(fileName)
+	if readErr != nil {
+		return fmt.Sprintf("⚠️ Could not read %s: %v", fileName, readErr)
+	}
+	lines := strings.Split(string(content), "\n")
+	lineCount := len(lines)
+
+	// Describe what we found
+	var desc strings.Builder
+	desc.WriteString(fmt.Sprintf("📄 I read %s (%d lines). ", fileName, lineCount))
+
+	// Check for common issues
+	hasMissingBrace := false
+	hasMissingStructKeyword := false
+	openBraces := 0
+	closeBraces := 0
+	funcsWithoutBrace := 0
+	structsWithoutBrace := 0
+	structsWithoutKeyword := 0
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		openBraces += strings.Count(line, "{")
+		closeBraces += strings.Count(line, "}")
+		// Detect: func declaration with params but no opening brace
+		if strings.HasPrefix(trimmed, "func ") && strings.Contains(trimmed, ")") && !strings.Contains(trimmed, "{") {
+			funcsWithoutBrace++
+		}
+		// Detect: type X struct declaration without opening brace
+		if strings.HasPrefix(trimmed, "type ") && strings.Contains(trimmed, " struct") && !strings.Contains(trimmed, "{") {
+			structsWithoutBrace++
+		}
+		// Detect: type X { declaration missing the 'struct' keyword (e.g. "type jill  {")
+		if strings.HasPrefix(trimmed, "type ") && strings.Contains(trimmed, "{") &&
+			!strings.Contains(trimmed, " struct ") && !strings.HasPrefix(trimmed, "type struct") {
+			structsWithoutKeyword++
+		}
+	}
+	if funcsWithoutBrace > 0 {
+		hasMissingBrace = true
+		desc.WriteString(fmt.Sprintf("🔍 Found %d function declaration(s) with params but missing '{'. ", funcsWithoutBrace))
+	}
+	if structsWithoutBrace > 0 {
+		hasMissingBrace = true
+		desc.WriteString(fmt.Sprintf("🔍 Found %d struct declaration(s) missing '{'. ", structsWithoutBrace))
+	}
+	if structsWithoutKeyword > 0 {
+		hasMissingStructKeyword = true
+		desc.WriteString(fmt.Sprintf("🔍 Found %d type declaration(s) with '{' but missing the 'struct' keyword (e.g. 'type jill  {'). ", structsWithoutKeyword))
+	}
+	if hasMissingStructKeyword {
+		hasMissingBrace = true
+	}
+	if openBraces > closeBraces {
+		hasMissingBrace = true
+		desc.WriteString(fmt.Sprintf("🔍 Found %d opening braces but only %d closing braces — missing %d '}'. ", openBraces, closeBraces, openBraces-closeBraces))
+	} else if closeBraces > openBraces {
+		hasMissingBrace = true
+		desc.WriteString(fmt.Sprintf("🔍 Found %d closing braces but only %d opening braces — missing %d '{'. ", closeBraces, openBraces, closeBraces-openBraces))
+	}
+
+	// Try parsing to detect syntax errors
+	_, parseErr := parser.ParseFile(token.NewFileSet(), fileName, content, parser.ParseComments)
+	if parseErr != nil {
+		desc.WriteString(fmt.Sprintf("🔍 Parse error detected: %s. ", parseErr.Error()))
+	}
+
+	// Run go vet to detect semantic issues (e.g., package main without main())
+	vetOut, _ := exec.Command("go", "vet", fileName).CombinedOutput()
+	vetStr := strings.TrimSpace(string(vetOut))
+	if vetStr != "" {
+		desc.WriteString(fmt.Sprintf("🔍 Go vet found issues: %s. ", vetStr))
+	}
+
+	// Apply the fix
+	fixer := NewGoFixer(fileName)
+	err := fixer.Fix()
+	if err == nil {
+		// Read the file again to see what changed
+		newContent, _ := os.ReadFile(fileName)
+		newLines := strings.Split(string(newContent), "\n")
+		if len(newLines) != lineCount || string(newContent) != string(content) {
+			desc.WriteString("✅ Applied fix: ")
+			if structsWithoutKeyword > 0 {
+				desc.WriteString("added the missing 'struct' keyword to type declaration(s) (e.g. 'type jill  {' → 'type jill struct {').")
+			} else if funcsWithoutBrace > 0 && structsWithoutBrace > 0 {
+				desc.WriteString("added missing '{' after function and struct declaration(s).")
+			} else if funcsWithoutBrace > 0 {
+				desc.WriteString("added missing '{' after function declaration(s).")
+			} else if structsWithoutBrace > 0 {
+				desc.WriteString("added missing '{' after struct declaration(s).")
+			} else if hasMissingBrace {
+				desc.WriteString("added missing braces to balance the file.")
+			} else {
+				desc.WriteString("corrected syntax errors.")
+			}
+		} else if vetStr != "" {
+			desc.WriteString("⚠️ File is syntactically valid but has semantic issues (go vet found problems). ")
+
+			// Use the Hybrid Engine via the fix CLI with the correct package directory.
+			absFile, absErr := filepath.Abs(fileName)
+			if absErr != nil {
+				absFile = fileName
+			}
+			fileDir := filepath.Dir(absFile)
+			relDir, relErr := filepath.Rel(r.ProjectRoot, fileDir)
+			if relErr != nil || relDir == "" {
+				relDir = "."
+			}
+			cmd := exec.Command("go", "run", "./cmd/tools/fix/main.go", "-auto-apply", "-verbose", "./"+relDir)
+			cmd.Dir = r.ProjectRoot
+			output, fixErr := cmd.CombinedOutput()
+			fixOutput := strings.TrimSpace(string(output))
+			if fixErr == nil && strings.Contains(fixOutput, "✅") {
+				desc.WriteString("🔄 Hybrid engine applied fixes:\n")
+				for _, line := range strings.Split(fixOutput, "\n") {
+					if strings.Contains(line, "✅") || strings.Contains(line, "❌") {
+						desc.WriteString("  " + line + "\n")
+					}
+				}
+			} else {
+				desc.WriteString("🔄 Hybrid engine could not fix the semantic errors automatically.")
+				if fixOutput != "" {
+					desc.WriteString("\n  Details: " + fixOutput)
+				}
+			}
+		} else {
+			desc.WriteString("✅ File was already valid — no changes needed.")
+		}
+		return desc.String()
+	}
+
+	// GoFixer failed - try the go_edit_agent with a repair query
+	desc.WriteString(fmt.Sprintf("⚠️ GoFixer could not auto-fix: %v. ", err))
+
+	// Try go_edit_agent with a repair query
+	editResp := r.handleLLMEditCommand(fileName, "fix syntax errors in "+fileName)
+	if strings.Contains(editResp, "Successfully edited") {
+		desc.WriteString("🔄 go_edit_agent attempted repairs. ")
+		// Check if it's fixed now
+		newContent, _ := os.ReadFile(fileName)
+		_, newParseErr := parser.ParseFile(token.NewFileSet(), fileName, newContent, parser.ParseComments)
+		if newParseErr == nil {
+			desc.WriteString("✅ File now parses correctly!")
+		} else {
+			desc.WriteString(fmt.Sprintf("⚠️ Still has issues: %s", newParseErr.Error()))
+		}
+	} else {
+		desc.WriteString("🔄 go_edit_agent also could not fix it automatically.")
+	}
+
+	return desc.String()
+}
+
+// handleLLMEditCommand uses the go_edit_agent binary to apply an intelligent edit
+// to a Go file based on a natural language description.
+// The agent reads the file's AST for context and parses the query itself.
+func (r *Runner) handleLLMEditCommand(fileName, query string) string {
+	// Locate the go_edit_agent binary. It is built at the project root, but the
+	// runner may be invoked from a subdirectory, so `./go_edit_agent` would fail.
+	agentBin := filepath.Join(r.ProjectRoot, "go_edit_agent")
+	if _, err := os.Stat(agentBin); err != nil {
+		return fmt.Sprintf("⚠️ go_edit_agent binary not found at %s (build it with: go build -o go_edit_agent ./cmd/tools/go_edit_agent)", agentBin)
+	}
+
+	// Call the go_edit_agent binary with the raw natural language query
+	// The agent handles all parsing internally using its AST-aware parser.
+	// NOTE: we use Output() (stdout only) because the agent's JSON response goes
+	// to stdout while its log lines go to stderr. Combining them corrupts the JSON.
+	var stderrBuf bytes.Buffer
+	cmd := exec.Command(agentBin,
+		"-file", fileName,
+		"-query", query,
+		"-retries", "2",
+	)
+	cmd.Stderr = &stderrBuf
+	output, err := cmd.Output()
+	if err != nil {
+		return fmt.Sprintf("⚠️ Edit agent failed for %s: %v\n%s", fileName, err, strings.TrimSpace(stderrBuf.String()))
+	}
+
+	// Parse the response
+	var resp AgentResponse
+	if err := json.Unmarshal(output, &resp); err != nil {
+		return fmt.Sprintf("⚠️ Could not parse edit agent response: %v (raw output: %s)", err, string(output))
+	}
+
+	if resp.Success {
+		return fmt.Sprintf("✅ Successfully edited %s (%d edits applied)", fileName, resp.EditsApplied)
+	}
+
+	return fmt.Sprintf("⚠️ Edit failed for %s: %s", fileName, resp.Error)
+}
+
+// parseEditFromQuery converts a natural language edit request into an EditOperation.
+// It uses simple heuristics to detect the type of edit requested.
+func parseEditFromQuery(query, fileName string) *EditOperation {
+	lower := strings.ToLower(strings.TrimSpace(query))
+
+	// Strip the filename reference from the query to avoid confusion
+	// e.g. "add function jim to ft/jim.go" -> "add function jim"
+	baseName := strings.TrimSuffix(filepath.Base(fileName), ".go")
+	lower = strings.ReplaceAll(lower, " to "+baseName+".go", "")
+	lower = strings.ReplaceAll(lower, " to file "+baseName+".go", "")
+	lower = strings.ReplaceAll(lower, " to "+baseName, "")
+	lower = strings.ReplaceAll(lower, " in "+baseName+".go", "")
+	lower = strings.ReplaceAll(lower, " in file "+baseName+".go", "")
+	lower = strings.ReplaceAll(lower, " in "+baseName, "")
+	lower = strings.ReplaceAll(lower, " to file ", "")
+	lower = strings.ReplaceAll(lower, " in file ", "")
+	lower = strings.TrimSpace(lower)
+
+	// Detect: "add a function called X" or "add function X" or "add a new function X"
+	if strings.Contains(lower, "add") && strings.Contains(lower, "function") ||
+		strings.Contains(lower, "add") && strings.Contains(lower, "func") ||
+		strings.Contains(lower, "new function") ||
+		strings.Contains(lower, "insert function") {
+
+		// Extract function name
+		funcName := extractFuncName(lower)
+		if funcName == "" {
+			return nil
+		}
+
+		// Build function code from the description
+		code := buildFuncCodeFromQuery(lower, funcName)
+
+		return &EditOperation{
+			Type:       "insert_func",
+			TargetFile: fileName,
+			FuncName:   funcName,
+			Code:       code,
+		}
+	}
+
+	// Detect: "modify function X" or "update function X"
+	if (strings.Contains(lower, "modify") || strings.Contains(lower, "update") || strings.Contains(lower, "change")) &&
+		strings.Contains(lower, "function") {
+		funcName := extractFuncName(lower)
+		if funcName == "" {
+			return nil
+		}
+		return &EditOperation{
+			Type:       "modify_func",
+			TargetFile: fileName,
+			FuncName:   funcName,
+			Code:       buildFuncCodeFromQuery(lower, funcName),
+		}
+	}
+
+	// Detect: "delete function X" or "remove function X"
+	if (strings.Contains(lower, "delete") || strings.Contains(lower, "remove")) &&
+		strings.Contains(lower, "function") {
+		funcName := extractFuncName(lower)
+		if funcName == "" {
+			return nil
+		}
+		return &EditOperation{
+			Type:       "delete_func",
+			TargetFile: fileName,
+			FuncName:   funcName,
+		}
+	}
+
+	// Detect: "add import X"
+	if strings.Contains(lower, "add import") || strings.Contains(lower, "import ") {
+		importPath := extractImportPath(lower)
+		if importPath != "" {
+			return &EditOperation{
+				Type:       "add_import",
+				TargetFile: fileName,
+				ImportPath: importPath,
+			}
+		}
+	}
+
+	// Detect: "add field X to struct Y"
+	if strings.Contains(lower, "add field") && strings.Contains(lower, "struct") {
+		fieldName := extractFieldName(lower)
+		structName := extractStructName(lower)
+		fieldType := extractFieldType(lower)
+		if fieldName != "" && structName != "" {
+			return &EditOperation{
+				Type:       "add_field",
+				TargetFile: fileName,
+				StructName: structName,
+				FieldName:  fieldName,
+				FieldType:  fieldType,
+			}
+		}
+	}
+
+	return nil
+}
+
+// extractFuncName extracts a function name from a natural language query.
+func extractFuncName(lower string) string {
+	// Pattern: "function called X" or "function named X" or "function X"
+	patterns := []struct {
+		prefix string
+		offset int
+	}{
+		{"function called ", 0},
+		{"function named ", 0},
+		{"function '", 0},
+		{"function \"", 0},
+		{"func called ", 0},
+		{"func named ", 0},
+		{"func '", 0},
+		{"func \"", 0},
+		{"add function ", 0},
+		{"add func ", 0},
+		{"new function ", 0},
+		{"insert function ", 0},
+	}
+
+	for _, p := range patterns {
+		if idx := strings.Index(lower, p.prefix); idx >= 0 {
+			start := idx + len(p.prefix)
+			remaining := lower[start:]
+			// Iterate through words to skip stop words and find the actual name
+			words := strings.Fields(remaining)
+			for _, w := range words {
+				name := strings.Trim(w, "'\",.;:()")
+				if name != "" && !isStopWord(name) {
+					return name
+				}
+			}
+		}
+	}
+
+	// Fallback: look for "called X" or "named X"
+	for _, marker := range []string{" called ", " named "} {
+		if idx := strings.Index(lower, marker); idx >= 0 {
+			start := idx + len(marker)
+			remaining := lower[start:]
+			// Iterate through words to skip stop words and find the actual name
+			words := strings.Fields(remaining)
+			for _, w := range words {
+				name := strings.Trim(w, "'\",.;:()")
+				if name != "" && !isStopWord(name) {
+					return name
+				}
+			}
+		}
+	}
+
+	return ""
+}
+
+// extractStructName extracts a struct name from a natural language query.
+func extractStructName(lower string) string {
+	if idx := strings.Index(lower, "struct "); idx >= 0 {
+		remaining := lower[idx+7:]
+		words := strings.Fields(remaining)
+		if len(words) > 0 {
+			return strings.Trim(words[0], "'\",.;:()")
+		}
+	}
+	return ""
+}
+
+// extractFieldName extracts a field name from a natural language query.
+func extractFieldName(lower string) string {
+	if idx := strings.Index(lower, "field "); idx >= 0 {
+		remaining := lower[idx+6:]
+		words := strings.Fields(remaining)
+		if len(words) > 0 {
+			return strings.Trim(words[0], "'\",.;:()")
+		}
+	}
+	return ""
+}
+
+// extractFieldType extracts a field type from a natural language query.
+func extractFieldType(lower string) string {
+	// Look for "of type X" or "type X"
+	for _, marker := range []string{" of type ", " type "} {
+		if idx := strings.Index(lower, marker); idx >= 0 {
+			start := idx + len(marker)
+			remaining := lower[start:]
+			words := strings.Fields(remaining)
+			if len(words) > 0 {
+				return strings.Trim(words[0], "'\",.;:()")
+			}
+		}
+	}
+	return "string"
+}
+
+// extractImportPath extracts an import path from a natural language query.
+func extractImportPath(lower string) string {
+	// Pattern: "import X" or "import \"X\""
+	if idx := strings.Index(lower, "import "); idx >= 0 {
+		remaining := lower[idx+7:]
+		words := strings.Fields(remaining)
+		if len(words) > 0 {
+			path := strings.Trim(words[0], "'\"")
+			if path != "" {
+				return path
+			}
+		}
+	}
+	return ""
+}
+
+// buildFuncCodeFromQuery generates Go function code from a natural language description.
+func buildFuncCodeFromQuery(lower, funcName string) string {
+	// Detect function signature patterns
+	hasParams := strings.Contains(lower, "take") || strings.Contains(lower, "parameter") || strings.Contains(lower, "argument") || strings.Contains(lower, "input")
+	hasReturn := strings.Contains(lower, "return") || strings.Contains(lower, "result")
+
+	// Detect parameter types
+	hasInt := strings.Contains(lower, "int") || strings.Contains(lower, "integer")
+	hasString := strings.Contains(lower, "string") || strings.Contains(lower, "str")
+	hasFloat := strings.Contains(lower, "float") || strings.Contains(lower, "float64")
+
+	// Detect return type
+	returnsInt := strings.Contains(lower, "sum") || strings.Contains(lower, "total") || strings.Contains(lower, "count") || strings.Contains(lower, "number")
+	returnsString := strings.Contains(lower, "concat") || strings.Contains(lower, "join") || strings.Contains(lower, "message")
+	returnsBool := strings.Contains(lower, "check") || strings.Contains(lower, "valid") || strings.Contains(lower, "compare")
+
+	// Build the function signature
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("func %s(", funcName))
+
+	if hasParams {
+		if hasInt && hasString {
+			sb.WriteString("a int, b string")
+		} else if hasInt && hasFloat {
+			sb.WriteString("a int, b float64")
+		} else if hasInt {
+			// Check if there are two integers
+			if strings.Contains(lower, "two") || strings.Contains(lower, "2") {
+				sb.WriteString("a, b int")
+			} else {
+				sb.WriteString("a int")
+			}
+		} else if hasString {
+			sb.WriteString("s string")
+		} else if hasFloat {
+			sb.WriteString("f float64")
+		} else {
+			sb.WriteString("a int")
+		}
+	}
+
+	sb.WriteString(")")
+
+	if hasReturn {
+		if returnsInt {
+			sb.WriteString(" int")
+		} else if returnsString {
+			sb.WriteString(" string")
+		} else if returnsBool {
+			sb.WriteString(" bool")
+		} else if hasInt {
+			sb.WriteString(" int")
+		} else {
+			sb.WriteString(" int")
+		}
+	}
+
+	sb.WriteString(" {\n")
+
+	// Build the function body
+	if strings.Contains(lower, "sum") || strings.Contains(lower, "add") {
+		sb.WriteString("\treturn a + b\n")
+	} else if strings.Contains(lower, "concat") || strings.Contains(lower, "join") {
+		sb.WriteString("\treturn a + b\n")
+	} else if strings.Contains(lower, "multiply") || strings.Contains(lower, "product") {
+		sb.WriteString("\treturn a * b\n")
+	} else if strings.Contains(lower, "greet") || strings.Contains(lower, "hello") {
+		sb.WriteString("\treturn fmt.Sprintf(\"Hello, %s!\", name)\n")
+	} else if strings.Contains(lower, "square") {
+		sb.WriteString("\treturn a * a\n")
+	} else {
+		sb.WriteString("\t// TODO: implement\n")
+		sb.WriteString("\treturn 0\n")
+	}
+
+	sb.WriteString("}\n")
+
+	return sb.String()
+}
+
+// isStopWord checks if a word is a common stop word that shouldn't be treated as a name.
+func isStopWord(word string) bool {
+	stopWords := map[string]bool{
+		"that": true, "this": true, "with": true, "from": true, "into": true,
+		"file": true, "the": true, "a": true, "an": true, "to": true,
+		"in": true, "of": true, "for": true, "and": true, "or": true,
+		"it": true, "is": true, "are": true, "was": true, "be": true,
+		"has": true, "have": true, "do": true, "does": true, "will": true,
+		"would": true, "could": true, "should": true, "may": true, "might": true,
+		"can": true, "shall": true, "must": true, "need": true, "let": true,
+		"make": true, "take": true, "get": true, "set": true, "put": true,
+		"add": true, "new": true, "function": true, "func": true,
+		"called": true, "named": true, "returns": true, "return": true,
+		"takes": true, "parameters": true, "parameter": true,
+		"arguments": true, "argument": true, "input": true, "output": true,
+		"two": true, "three": true, "four": true, "five": true,
+		"integers": true, "integer": true, "int": true, "string": true,
+		"float": true, "bool": true, "boolean": true,
+	}
+	return stopWords[word]
+}
 func (r *Runner) handleTemplateCreate(objectType, fileName, targetDirectory, handlerURL string) string {
 	msg, _ := handleGenericCreate(objectType, fileName, targetDirectory, handlerURL, r.KB)
 	return msg

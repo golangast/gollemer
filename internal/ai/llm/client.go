@@ -559,6 +559,33 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 	if lowerInput == "hi" || lowerInput == "hello" || lowerInput == "hey" || lowerInput == "greeting" {
 		return "greeting_query", 0.99
 	}
+	// Fast-path status / small-talk queries — handle these before neural routing
+	// so the model gives a sensible reply even while still training.
+	if strings.Contains(lowerInput, "how are you") || strings.Contains(lowerInput, "how are you doing") ||
+		strings.Contains(lowerInput, "how's it going") || strings.Contains(lowerInput, "how do you do") ||
+		strings.Contains(lowerInput, "how have you been") || lowerInput == "how r u" || lowerInput == "hru" {
+		c.lastMoEPrediction = "I am doing well, thank you for asking! How can I help you today?"
+		return "chat_response", 0.99
+	}
+	if strings.Contains(lowerInput, "good morning") || strings.Contains(lowerInput, "good evening") ||
+		strings.Contains(lowerInput, "good afternoon") || strings.Contains(lowerInput, "good night") {
+		c.lastMoEPrediction = "Hello! Good to hear from you. What can I help you with?"
+		return "chat_response", 0.99
+	}
+	if strings.Contains(lowerInput, "tell me a joke") || strings.Contains(lowerInput, "tell me joke") {
+		c.lastMoEPrediction = "Why did the gopher cross the road? To get to the other cluster!"
+		return "chat_response", 0.99
+	}
+	if lowerInput == "what can you do" || lowerInput == "what do you do" || strings.Contains(lowerInput, "what are you capable") ||
+		strings.Contains(lowerInput, "how can you help") || strings.Contains(lowerInput, "how can you assist") ||
+		strings.Contains(lowerInput, "what can you help") || strings.Contains(lowerInput, "how do you help") {
+		c.lastMoEPrediction = "I can chat, create Go webservers, edit files, fix syntax errors, and answer questions about your project!"
+		return "chat_response", 0.99
+	}
+	if strings.Contains(lowerInput, "are you a human") || strings.Contains(lowerInput, "are you real") || strings.Contains(lowerInput, "are you an ai") {
+		c.lastMoEPrediction = "No, I am Gollemer — an AI assistant built in Go. I am here to help you build and code!"
+		return "chat_response", 0.99
+	}
 
 	// --- 0.2. Common Coding Queries ---
 	if strings.Contains(lowerInput, "better at go") || strings.Contains(lowerInput, "learn go") || strings.Contains(lowerInput, "go tutorial") {
@@ -586,7 +613,7 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 		log.Printf("⚖️  Quality Gate: Social model output was too high-entropy (word salad); trying retrieval fallback.")
 		if len(c.ChatBank) > 0 {
 			retrievedResp, retrievedIntent, retrievedScore := c.RetrieveChatResponse(input)
-			if retrievedScore > 0.5 && retrievedResp != "" {
+			if retrievedScore > 0.35 && retrievedResp != "" {
 				log.Printf("✅ Retrieval Fallback: score=%.4f intent=%s", retrievedScore, retrievedIntent)
 				c.lastMoEPrediction = paraphraseResponse(retrievedResp)
 				return "social_chat", retrievedScore
@@ -1079,13 +1106,25 @@ func (c *GollemerMoEClient) FormatChatMLPrompt(userInput string) string {
 }
 
 func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
-	log.Printf("📡 GenerateSocialResponse called with ChatML prompt")
-	if c.SocialModel == nil || c.BPETokenizer == nil {
+	log.Printf("📡 GenerateSocialResponse called")
+	if c.SocialModel == nil || c.SocialModel.SentenceVocab == nil {
 		return ""
 	}
 
-	prompt := c.FormatChatMLPrompt(input)
-	tokenIDs := c.BPETokenizer.Encode(prompt)
+	// Tokenize using the social model's own vocabulary (the token space it was trained on)
+	vocab := c.SocialModel.SentenceVocab
+	words := strings.Fields(strings.ToLower(input))
+	var tokenIDs []int
+	for _, w := range words {
+		id := vocab.GetTokenID(w)
+		if id < 0 {
+			id = vocab.UnkID
+			if id < 0 {
+				id = 1 // fallback UNK
+			}
+		}
+		tokenIDs = append(tokenIDs, id)
+	}
 	if len(tokenIDs) == 0 {
 		return ""
 	}
@@ -1093,19 +1132,14 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 	var generatedIDs []int
 	currentSequence := append([]int(nil), tokenIDs...)
 
-	imEndID := -1
-	eosID := -1
-	if c.BPETokenizer.Vocab != nil {
-		imEndID = c.BPETokenizer.Vocab.GetTokenID("<|im_end|>")
-		eosID = c.BPETokenizer.Vocab.GetTokenID("</s>")
-	}
+	eosID := vocab.EosID
 
 	maxNewTokens := 128
 	for i := 0; i < maxNewTokens; i++ {
 		nextTokenID := c.SocialModel.PredictNextToken(currentSequence)
 
-		// Stop immediately if the model predicts ChatML end token or EOS
-		if nextTokenID == imEndID || nextTokenID == eosID || nextTokenID == 0 {
+		// Stop immediately if the model predicts EOS or 0
+		if nextTokenID == eosID || nextTokenID == 0 {
 			break
 		}
 
@@ -1113,12 +1147,38 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 		currentSequence = append(currentSequence, nextTokenID)
 	}
 
-	responseText := c.BPETokenizer.Decode(generatedIDs)
+	// Decode using the social model's vocabulary
+	var wordsOut []string
+	for _, id := range generatedIDs {
+		w := vocab.GetWord(id)
+		if w == "" || w == "UNK" || w == "<pad>" || w == "<s>" || w == "</s>" {
+			continue
+		}
+		wordsOut = append(wordsOut, w)
+	}
+	responseText := strings.Join(wordsOut, " ")
 	log.Printf("🎭 Neural Social Model generated: '%s'", responseText)
 	return responseText
 }
 
 func (c *GollemerMoEClient) checkCommandHeuristics(lowerInput string) (string, float64) {
+	// Fix / edit commands must come BEFORE create verb matching so phrases
+	// like "add } to jim.go" aren't caught by the "add" create verb handler.
+	// Any "add X to file.go" / "add X to jim" pattern routes to fix_query; the
+	// fix_query handler in commands.go then decides between go_edit_agent
+	// (semantic edits: struct/field/func/type) and GoFixer (syntax patches)
+	// via its fallbackEdit keyword routing.
+	if strings.HasPrefix(lowerInput, "fix ") || strings.HasPrefix(lowerInput, "edit ") ||
+		strings.HasPrefix(lowerInput, "update ") || strings.HasPrefix(lowerInput, "patch ") ||
+		strings.HasPrefix(lowerInput, "add }") || strings.HasPrefix(lowerInput, "add missing") ||
+		strings.HasPrefix(lowerInput, "add the") || strings.HasPrefix(lowerInput, "add fmt") ||
+		strings.HasPrefix(lowerInput, "add func") || strings.HasPrefix(lowerInput, "add line") ||
+		strings.HasPrefix(lowerInput, "remove the") || strings.HasPrefix(lowerInput, "delete the") ||
+		strings.Contains(lowerInput, " add ") || strings.Contains(lowerInput, "missing ") ||
+		(strings.HasPrefix(lowerInput, "add ") && (strings.Contains(lowerInput, ".go") || strings.Contains(lowerInput, "jim"))) {
+		return "fix_query", 0.95
+	}
+
 	createVerbs := []string{"create", "make", "add", "generate", "initialize", "init", "new", "setup"}
 	for _, v := range createVerbs {
 		if lowerInput == v || strings.HasPrefix(lowerInput, v+" ") {

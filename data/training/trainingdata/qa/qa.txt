@@ -1,2 +1,0 @@
-How do I declare a variable in Go?	var x int = 10
-How do I handle errors in Go?	if err != nil { return err }
