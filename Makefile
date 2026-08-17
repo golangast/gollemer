@@ -86,9 +86,22 @@ chat:
 ## llm: Build go_edit_agent and launch the interactive LLM chat shell
 llm:
 	@echo "🔨 Building go_edit_agent..."
-	@go build -o go_edit_agent cmd/tools/go_edit_agent/main.go
+	@go build -o go_edit_agent ./cmd/tools/go_edit_agent/
 	@echo "💬 Starting Interactive Chat..."
 	GOMEMLIMIT=4000MiB GOGC=100 $(MAIN_CMD) -llm -talk -listen
+
+## metrics: Run metrics aggregation and CSV export for edit logs
+metrics:
+	@echo "📊 Generating edit metrics and CSV..."
+	@go run scripts/compute_edit_metrics.go || true
+	@go run scripts/edits_to_csv.go || true
+	@echo "✅ metrics written to logs/edits/"
+
+## export-labels: Export training examples to CSV for manual labeling
+export-labels:
+	@echo "📝 Exporting edits_failed.jsonl -> data/training/edits_for_labeling.csv"
+	@go run scripts/export_for_labeling.go || true
+
 
 # --- Maintenance ---
 

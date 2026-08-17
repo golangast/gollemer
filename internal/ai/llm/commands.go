@@ -801,10 +801,17 @@ func (r *Runner) handleLLMEditCommand(fileName, query string) string {
 	// NOTE: we use Output() (stdout only) because the agent's JSON response goes
 	// to stdout while its log lines go to stderr. Combining them corrupts the JSON.
 	var stderrBuf bytes.Buffer
+	// Determine whether we should enable interactive confirmation
+	confirmArg := "false"
+	if r.Listen || r.Mascot != nil {
+		confirmArg = "true"
+	}
+
 	cmd := exec.Command(agentBin,
 		"-file", fileName,
 		"-query", query,
 		"-retries", "2",
+		"-confirm", confirmArg,
 	)
 	cmd.Stderr = &stderrBuf
 	output, err := cmd.Output()
