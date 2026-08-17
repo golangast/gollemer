@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -18,7 +19,6 @@ import (
 	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
 	"github.com/golangast/gollemer/internal/ai/neural/tensor"
 	"github.com/golangast/gollemer/internal/ai/orchestrator"
-	"github.com/golangast/gollemer/internal/tokenizer"
 )
 
 // LoadComputerCSV parses the computer.csv dataset into TrainPairs.
@@ -61,14 +61,48 @@ func setLayerFreezeQuiet(layer *moe.MoELayer, expertID int, freeze bool) {
 // Phase 3: thaw everyone (freezeStart < 0)
 func applyPhaseFreeze(layers []*moe.MoELayer, freezeStart, freezeEnd int) {
 	for _, layer := range layers {
-		for i := 0; i < len(layer.Experts); i++ {
+		numExperts := len(layer.Experts)
+		if numExperts == 0 {
+			continue
+		}
+
+		start := freezeStart
+		end := freezeEnd
+		if start < 0 {
+			start = -1
+		}
+		if end < 0 {
+			end = numExperts
+		}
+
+		// A social-phase config that targets a larger model must still respect the
+		// actual layer size. Keeping the lower half active and freezing the upper half
+		// is the stable default for a compact MoE, and it prevents the “unfreeze all” bug.
+		if freezeStart >= numExperts || freezeEnd > numExperts {
+			for i := 0; i < numExperts; i++ {
+				setLayerFreezeQuiet(layer, i, i >= numExperts/2)
+			}
+			continue
+		}
+		if start >= numExperts {
+			start = numExperts - 1
+		}
+		if end > numExperts {
+			end = numExperts
+		}
+		if start >= end {
+			start = -1
+			end = numExperts
+		}
+
+		for i := 0; i < numExperts; i++ {
 			var shouldFreeze bool
-			if freezeStart >= 0 && freezeEnd > freezeStart {
-				// Freeze range [freezeStart, freezeEnd)
-				shouldFreeze = i >= freezeStart && i < freezeEnd
-			} else if freezeStart >= 0 {
+			if start >= 0 && end > start {
+				// Freeze range [start, end)
+				shouldFreeze = i >= start && i < end
+			} else if start >= 0 {
 				// Freeze from freezeStart to end
-				shouldFreeze = i >= freezeStart
+				shouldFreeze = i >= start
 			} else {
 				shouldFreeze = false // Unfreeze all
 			}
@@ -314,27 +348,51 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 	}
 	log.Printf("📚 Total social+technical pairs: %d | Computer pairs: %d", len(socialPairs), len(computerPairs))
 
-	// ── 2. Build vocabulary ───────────────────────────────────────────────────
+	// ── 2. Build isolated subject vocabularies ──────────────────────────────
 	tmpVocab := mainvocab.NewVocabulary()
-	for _, tok := range []string{"__ques__", "__ans__", "__intent__", "social", "computer", ":"} {
+	socialVocab := mainvocab.NewVocabulary()
+	techVocab := mainvocab.NewVocabulary()
+
+	sharedTokens := []string{"__ques__", "__ans__", "__intent__", "social", "computer", ":"}
+	for _, tok := range sharedTokens {
 		tmpVocab.AddToken(tok)
+		socialVocab.AddToken(tok)
+		techVocab.AddToken(tok)
 	}
-	// Add code syntax tokens so the model can generate Go code.
+
+	// Add code syntax tokens so the tech model can generate Go code.
 	for _, tok := range []string{"{", "}", "(", ")", "=", ":", ";", ".", ",", "!", "?", "nil", "err", "if", "else", "for", "range", "return", "func", "type", "struct", "int", "string", "bool", "float64", "true", "false", "package", "import", "var", "const", "make", "new", "len", "cap", "append", "fmt", "Println", "Sprintf", "Errorf", "error", "interface{}"} {
 		tmpVocab.AddToken(tok)
+		techVocab.AddToken(tok)
 	}
-	for _, pair := range append(socialPairs, computerPairs...) {
+
+	// Build SocialVocab using only social pairs (isolated!)
+	for _, pair := range socialPairs {
 		for _, t := range cleanTokenize(pair.Q + " " + pair.A) {
 			tmpVocab.AddToken(t)
+			socialVocab.AddToken(t)
+		}
+	}
+
+	// Build TechVocab using only computer pairs (isolated!)
+	for _, pair := range computerPairs {
+		for _, t := range cleanTokenize(pair.Q + " " + pair.A) {
+			tmpVocab.AddToken(t)
+			techVocab.AddToken(t)
 		}
 	}
 
 	// ── 3. Load or create model ───────────────────────────────────────────────
 	var intentModel *moe.IntentMoE
 	socialModelPath := filepath.Join(projectRoot, "data/models/gob_models/moe_social_model.gob")
+	optStatePath := socialModelPath + ".optstate"
+	loadedFromCheckpoint := false
 	if _, err := os.Stat(socialModelPath); err == nil {
 		log.Printf("⬇️ Loading existing model from %s", socialModelPath)
 		intentModel, _ = moe.LoadIntentMoEModelWithFallback(socialModelPath)
+		if intentModel != nil {
+			loadedFromCheckpoint = true
+		}
 	}
 
 	modelDim := cfg.ModelDim
@@ -361,18 +419,28 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 		intentModel.RepairArchitecture()
 	}
 
-	// Merge vocab into model
+	// Merge vocab into model.
+	// IMPORTANT: Use the unified tmpVocab (words from actual training pairs only)
+	// as the primary SentenceVocab — NOT the full 16k BPE tokenizer.
+	// This creates a compact vocabulary containing both social and computer terms
+	// (usually ~3000 tokens) which prevents OOB errors across phases and ensures
+	// consistent token IDs across the entire model architecture.
 	if intentModel.SentenceVocab == nil {
 		intentModel.SentenceVocab = tmpVocab
 	} else {
+		// Merge tokens into model's vocab on resume
 		for k := range tmpVocab.WordToToken {
 			intentModel.SentenceVocab.AddToken(k)
 		}
 	}
-	tokenizer.InjectIntoVocab(intentModel.SentenceVocab.WordToToken, &intentModel.SentenceVocab.TokenToWord)
+	intentModel.SocialVocab = socialVocab
+	intentModel.TechVocab = techVocab
+	// Do NOT inject the full BPE tokenizer — that would bloat the output head to 16k.
+	// tokenizer.InjectIntoVocab(...) is intentionally skipped for the social model.
 	intentModel.SentenceVocabSize = intentModel.SentenceVocab.Size()
 	intentModel.Decoder.ResizeOutputLayer(intentModel.SentenceVocabSize)
 	intentModel.ResizeEmbeddings(intentModel.SentenceVocabSize)
+	log.Printf("📖 Social model vocab size: %d tokens (compact social-only)", intentModel.SentenceVocabSize)
 	moe.ActiveLayers = findMoELayers(intentModel)
 
 	if useGPU {
@@ -386,6 +454,17 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 	}
 	optimizer := &neuralnn.CoolingOptimizer{
 		Base: neuralnn.NewOptimizer(intentModel.Parameters(), baseLR, 1.0),
+	}
+
+	// Restore Adam optimizer state if available.
+	// Without this, every resume zeroes Adam's m/v moments, causing a
+	// cold-start regression that kicks the model out of its learned optimum.
+	if loadedFromCheckpoint {
+		if err := optimizer.LoadState(optStatePath); err != nil {
+			log.Printf("⚠️ Optimizer state not restored (will cold-start): %v", err)
+		} else {
+			log.Printf("✅ Optimizer state restored from %s", optStatePath)
+		}
 	}
 
 	// ── 5. Seed structural experts ────────────────────────────────────────────
@@ -421,13 +500,18 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 	var phase1BestLoss float32 = 1e9
 	var phase1StagnantEpochs int
 	var phase1LRFactor float32 = 1.0
-	const phase1LRDecayPatience = 35
-	const phase1LRImprovementThreshold = 0.005
-	// Never let Phase 1 LR fall below 25% of its base value. The previous 1/32
-	// floor (0.03125) let the LR collapse to ~0.000016 after 4–5 stagnation
-	// halvings — far too small to make progress before Phase 1 even ended,
-	// leaving the social experts unable to form sentences.
-	const phase1LRFactorMin = 0.25
+	const phase1LRDecayPatience = 50
+	const phase1LRImprovementThreshold = 0.002
+	// Never let Phase 1 LR fall below 70% of its base value. The previous 0.25
+	// floor let the LR collapse to 0.000075 after 2 halvings (0.0003 → 0.00015 →
+	// 0.000075). At that rate a random-init 256-dim → 10k-class output head makes
+	// no progress at all, pinning the loss at chance (~9.0 = ln(10000)) and the
+	// model at "repetitive tokens / <unk> still dominate".
+	const phase1LRFactorMin = 0.7
+	// Once the LR has been stuck at the floor for another full patience window,
+	// warm-restart it back to the phase base rate to break out of the plateau
+	// (classic SGDR-style restart). Without this, the floor is a death sentence.
+	const phase1FloorRestartPatience = phase1LRDecayPatience * 2
 
 	// Per-phase loss tracking for the summary report
 	phaseBestLoss := make(map[int]float32)
@@ -519,10 +603,14 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 			padID := intentModel.SentenceVocab.PaddingTokenID
 
 			for bIdx, pair := range batch {
+				// ALWAYS use the unified SentenceVocab to prevent OOB errors and ensure
+				// consistent token-to-neuron mappings across the entire model.
+				activeVocab := intentModel.SentenceVocab
+
 				qText := "__intent__ " + pair.Intent + " : __ques__ " + pair.Q
 				qToks := cleanTokenize(qText)
 				for t := 0; t < phaseMaxSeqLen && t < len(qToks); t++ {
-					id := intentModel.SentenceVocab.GetTokenID(qToks[t])
+					id := activeVocab.GetTokenID(qToks[t])
 					if id < 0 {
 						id = padID
 					}
@@ -530,12 +618,12 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 				}
 
 				aToks := cleanTokenize(pair.A)
-				eosID := intentModel.SentenceVocab.EosID
+				eosID := activeVocab.EosID
 				if eosID < 0 {
-					eosID = intentModel.SentenceVocab.GetTokenID("<EOS>")
+					eosID = activeVocab.GetTokenID("<EOS>")
 				}
 				for t := 0; t < phaseMaxSeqLen && t < len(aToks); t++ {
-					id := intentModel.SentenceVocab.GetTokenID(aToks[t])
+					id := activeVocab.GetTokenID(aToks[t])
 					if id < 0 {
 						id = padID
 					}
@@ -745,11 +833,30 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 		if currentPhase == 1 {
 			effectiveLR = phaseLR * phase1LRFactor
 		}
+		ppl := float32(0.0)
+		if avgLoss > 0 {
+			ppl = float32(math.Exp(float64(avgLoss)))
+		}
 
 		epochInPhase := epoch%epochsPerPhase + 1
-		log.Printf("Phase %d [%d/%d] | Epoch %d | Loss: %.4f | LR: %.6f | Active: [%s] | EpochTime: %.1fs",
-			currentPhase, epochInPhase, epochsPerPhase, epoch, avgLoss, effectiveLR,
+		log.Printf("Phase %d [%d/%d] | Epoch %d | Loss: %.4f | PPL: %.1f | LR: %.6f | Act: [%s] | Time: %.1fs",
+			currentPhase, epochInPhase, epochsPerPhase, epoch, avgLoss, ppl, effectiveLR,
 			strings.Join(activeExps, ","), epochDuration)
+
+		if currentPhase == 1 && (epoch%10 == 0 || epoch == 0) {
+			probePrompt := "The artificial intelligence"
+			probeText, _, _ := StrictGenerateLowTemp(intentModel, probePrompt, 18, 1.0, false, epoch)
+			if probeText != "" {
+				label, status, reason := assessSentenceFormation(probeText)
+				log.Printf("📝 Generation Sample (Epoch %d): Prompt: %q | Generated: %q | SentenceStatus=%s | Quality=%s | Reason=%s",
+					epoch, probePrompt, probeText, label, status, reason)
+				if status == "coherent" || status == "emerging" {
+					log.Printf("✅ Sentence forming: generation is moving from repetitive tokens toward language structure.")
+				} else {
+					log.Printf("⚠️ Early-stage output: repetitive tokens and/or <unk> still dominate; sentence formation is not yet stable.")
+				}
+			}
+		}
 
 		// ── Phase 1: LR reducer on stagnation ────────────────────────────────
 		if currentPhase == 1 {
@@ -767,6 +874,17 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 				phase1StagnantEpochs = 0
 				log.Printf("🔻 Phase 1 stagnant %d epochs → LR factor %.4f (effective %.6f)",
 					phase1LRDecayPatience, phase1LRFactor, phaseCfg.LearningRate*phase1LRFactor)
+			}
+			// Warm-restart (SGDR-style): if the LR has been pinned at the floor for
+			// a full extra patience window with no improvement, jump it back to the
+			// full phase base rate. This is the escape hatch that prevents the model
+			// from being permanently stuck at chance-level loss (~9.0 = ln(vocab)).
+			if phase1LRFactor <= phase1LRFactorMin && phase1StagnantEpochs >= phase1FloorRestartPatience {
+				log.Printf("🚀 Phase 1 LR warm-restart: floor reached (factor %.3f) → restoring full LR %.6f (loss still %.4f)",
+					phase1LRFactor, phaseCfg.LearningRate, avgLoss)
+				phase1LRFactor = 1.0
+				phase1StagnantEpochs = 0
+				phase1BestLoss = avgLoss // reset best so the new LR gets a fresh patience window
 			}
 			optimizer.SetLearningRate(phaseCfg.LearningRate * phase1LRFactor)
 		}
@@ -795,19 +913,98 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 					optimizer.SetLearningRate(nextPhaseCfg.LearningRate)
 				}
 				moe.SaveIntentMoEModelToGOB(intentModel, socialModelPath)
+				if err := optimizer.SaveState(optStatePath); err != nil {
+					log.Printf("⚠️ Failed to save optimizer state at phase transition: %v", err)
+				}
 			}
 		}
 
-		// ── Periodic checkpoint every 10 epochs ───────────────────────────────
+		// ── Periodic checkpoint every 10 epochs ──────────────────────────────────────────────
 		if epoch > 0 && epoch%10 == 0 {
 			moe.SaveIntentMoEModelToGOB(intentModel, socialModelPath)
 			log.Printf("💾 Checkpoint saved (epoch %d)", epoch)
+			// Also persist optimizer state so the next resume doesn't cold-start.
+			if err := optimizer.SaveState(optStatePath); err != nil {
+				log.Printf("⚠️ Failed to save optimizer state: %v", err)
+			}
 		}
 	}
 }
 
 // runEndOfPhaseProbe runs the diagnostic probe for the completed phase and logs
 // a structured summary block with PASS/FAIL result.
+func assessSentenceFormation(text string) (string, string, string) {
+	clean := strings.ToLower(strings.TrimSpace(text))
+	if clean == "" {
+		return "Early-stage", "fragmented", "empty generation"
+	}
+
+	words := strings.Fields(clean)
+	if len(words) == 0 {
+		return "Early-stage", "fragmented", "no tokens generated"
+	}
+
+	unique := map[string]struct{}{}
+	for _, w := range words {
+		w = strings.Trim(w, ".,!?;:\"'()[]{}<>/")
+		if w == "" {
+			continue
+		}
+		unique[w] = struct{}{}
+	}
+
+	repeatRate := 0.0
+	if len(words) > 0 {
+		repeat := 0
+		seen := map[string]int{}
+		for _, w := range words {
+			w = strings.Trim(w, ".,!?;:\"'()[]{}<>/")
+			if w == "" {
+				continue
+			}
+			seen[w]++
+			if seen[w] > 1 {
+				repeat++
+			}
+		}
+		repeatRate = float64(repeat) / float64(len(words))
+	}
+
+	unkCount := 0
+	for _, w := range words {
+		if strings.Contains(strings.Trim(w, ".,!?;:\"'()[]{}<>/"), "<unk>") {
+			unkCount++
+		}
+	}
+
+	containsVerb := false
+	verbSet := map[string]bool{"is": true, "are": true, "can": true, "do": true, "does": true, "process": true, "learn": true, "work": true, "make": true, "help": true, "use": true}
+	for _, w := range words {
+		if verbSet[w] {
+			containsVerb = true
+			break
+		}
+	}
+
+	endsWithPunct := strings.HasSuffix(clean, ".") || strings.HasSuffix(clean, "!") || strings.HasSuffix(clean, "?")
+	if unkCount > 0 || repeatRate > 0.2 || len(words) < 4 || (!endsWithPunct && repeatRate > 0.0) {
+		if repeatRate > 0.2 || (!endsWithPunct && repeatRate > 0.0) {
+			return "Early-stage", "fragmented", "token repetition is dominating the output"
+		}
+		if unkCount > 0 {
+			return "Early-stage", "fragmented", "unknown tokens are still dominating the sequence"
+		}
+		return "Early-stage", "fragmented", "too short to form a sentence"
+	}
+	if containsVerb && endsWithPunct && len(unique) >= 5 {
+		return "Emerging sentence", "coherent", "output has a verb, punctuation, and enough lexical variety to look sentence-like"
+	}
+	if len(words) >= 6 && len(unique) >= 4 && containsVerb {
+		return "Emerging sentence", "emerging", "several content words are present and the sample is moving toward grammatical structure"
+	}
+	return "Early-stage", "fragmented", "output still lacks stable sentence structure"
+}
+
 func runEndOfPhaseProbe(intentModel *moe.IntentMoE, layers []*moe.MoELayer,
 	phase, epoch int, finalLoss, bestLoss, worstLoss float32, activeExpertCount int) {
 
@@ -986,6 +1183,13 @@ func buildDefaultLossWeights(vocab *mainvocab.Vocabulary, cfg *orchestrator.Trai
 			weights[id] = 3.0
 		}
 	}
+
+	// CRITICAL: Ensure padding token weight is 0.0 so the model isn't penalized
+	// for (or trained to predict) padding tokens, which swamps the gradients.
+	if vocab.PaddingTokenID >= 0 && vocab.PaddingTokenID < len(weights) {
+		weights[vocab.PaddingTokenID] = 0.0
+	}
+
 	return weights
 }
 

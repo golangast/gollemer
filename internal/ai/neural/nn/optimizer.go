@@ -1,13 +1,25 @@
 package nn
 
 import (
+	"compress/gzip"
+	"encoding/gob"
 	"fmt"
 	"math"
+	"os"
 	"runtime"
 	"sync"
 
 	. "github.com/golangast/gollemer/internal/ai/neural/tensor"
 )
+
+// OptimizerState holds serializable Adam optimizer state for checkpoint/resume.
+// It lets training resume without the cold-start regression that occurs when
+// Adam moments are zeroed on every process restart.
+type OptimizerState struct {
+	T     int         // Global step counter
+	MData [][]float32 // 1st moment, indexed by parameter order
+	VData [][]float32 // 2nd moment, indexed by parameter order
+}
 
 // Optimizer interface defines the contract for optimizers.
 type Optimizer interface {
@@ -130,6 +142,92 @@ func (o *Adam) ResetStagnantMoments(t *Tensor) {
 			v.Data[i] = 0
 		}
 	}
+}
+
+// SaveState serializes the Adam optimizer state (step counter + m/v moments)
+// to a gzip-compressed gob file sequentially to avoid massive OOM spikes.
+func (o *Adam) SaveState(path string) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("optimizer SaveState: create file: %w", err)
+	}
+	defer f.Close()
+	gz := gzip.NewWriter(f)
+	defer gz.Close()
+	enc := gob.NewEncoder(gz)
+
+	if err := enc.Encode(o.t); err != nil {
+		return err
+	}
+	if err := enc.Encode(len(o.parameters)); err != nil {
+		return err
+	}
+	for _, p := range o.parameters {
+		if m, ok := o.m[p]; ok {
+			if err := enc.Encode(m.Data); err != nil {
+				return err
+			}
+		} else {
+			if err := enc.Encode([]float32(nil)); err != nil {
+				return err
+			}
+		}
+		if v, ok := o.v[p]; ok {
+			if err := enc.Encode(v.Data); err != nil {
+				return err
+			}
+		} else {
+			if err := enc.Encode([]float32(nil)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// LoadState restores Adam optimizer state sequentially.
+func (o *Adam) LoadState(path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("optimizer LoadState: open: %w", err)
+	}
+	defer f.Close()
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return fmt.Errorf("optimizer LoadState: gzip: %w", err)
+	}
+	defer gz.Close()
+	dec := gob.NewDecoder(gz)
+
+	var t, count int
+	if err := dec.Decode(&t); err != nil {
+		return err
+	}
+	if err := dec.Decode(&count); err != nil {
+		return err
+	}
+	o.t = t
+
+	for i, p := range o.parameters {
+		if i >= count {
+			break
+		}
+		var mData, vData []float32
+		if err := dec.Decode(&mData); err != nil {
+			return err
+		}
+		if err := dec.Decode(&vData); err != nil {
+			return err
+		}
+
+		if len(mData) == len(p.Data) {
+			o.m[p] = NewTensor(p.Shape, mData, false)
+		}
+		if len(vData) == len(p.Data) {
+			o.v[p] = NewTensor(p.Shape, vData, false)
+		}
+	}
+	return nil
 }
 
 // Step performs a single optimization step, now with Timid-Aware LR boosting.
@@ -330,4 +428,20 @@ func (o *CoolingOptimizer) Trigger(steps int, reduction float32) {
 	current := o.Base.GetLearningRate()
 	o.Base.SetLearningRate(current * reduction)
 	fmt.Printf("📉 Circuit Breaker: Cooling for %d steps at LR %f (Was: %f)\n", steps, current*reduction, current)
+}
+
+// SaveState saves the underlying Adam optimizer state to path.
+func (o *CoolingOptimizer) SaveState(path string) error {
+	if adam, ok := o.Base.(*Adam); ok {
+		return adam.SaveState(path)
+	}
+	return nil // non-Adam base — no-op
+}
+
+// LoadState restores optimizer state from path into the underlying Adam.
+func (o *CoolingOptimizer) LoadState(path string) error {
+	if adam, ok := o.Base.(*Adam); ok {
+		return adam.LoadState(path)
+	}
+	return nil // non-Adam base — no-op
 }

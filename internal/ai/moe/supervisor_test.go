@@ -1,8 +1,10 @@
 package moe
 
 import (
-	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
+	"sync/atomic"
 	"testing"
+
+	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
 )
 
 func TestRuntimeTelemetryTraceBuffer(t *testing.T) {
@@ -62,6 +64,32 @@ func TestRuntimeTelemetrySerializationMetrics(t *testing.T) {
 	stats := rt.SerializationSnapshot()
 	if stats == nil || stats.Label != "checkpoint" {
 		t.Fatalf("expected checkpoint snapshot, got %#v", stats)
+	}
+}
+
+func TestSupervisor_PlateauGuardSkipsSurgery(t *testing.T) {
+	s := NewSupervisor()
+	s.BestPerplexity = 8.5
+	s.PlateauCount = 4
+
+	if !s.ShouldSkipExpertSurgery() {
+		t.Fatal("expected plateaued training to skip autonomous expert surgery")
+	}
+}
+
+func TestMoELayer_ResetExpertWeightsWarmupSuppressed(t *testing.T) {
+	layer, err := NewMoELayer(8, 8, 2, 1, func(i int) (Expert, error) {
+		return NewFeedForwardExpert(8, 16, 8)
+	})
+	if err != nil {
+		t.Fatalf("failed to create layer: %v", err)
+	}
+	layer.CurrentPhase = 1
+	layer.AccumulatedUtilization = []int{0, 0}
+
+	layer.ResetExpertWeights(1)
+	if got := atomic.LoadInt32(&layer.ResetCount); got != 0 {
+		t.Fatalf("expected warmup reset to be suppressed, got reset count %d", got)
 	}
 }
 

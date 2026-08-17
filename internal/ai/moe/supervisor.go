@@ -786,7 +786,24 @@ func expertScore(expert Expert, utilizationFrac float32) float32 {
 // PerformSurgery identifies and repairs collapsed experts by cloning better ones.
 // 🆕 STAGGERED TRIAGE: Only refreshes the worst-performing ≤5% of experts per layer,
 // leaving at least half intact to preserve learned sequences.
+func (s *Supervisor) ShouldSkipExpertSurgery() bool {
+	// While the model is flat or worsening, autonomous surgeries are counterproductive:
+	// they repeatedly clone one dominant expert into weaker ones and destroy the routing signal
+	// that training is trying to build. A short warmup and plateau guard prevents self-inflicted collapse.
+	if s == nil {
+		return true
+	}
+	if s.BestPerplexity == 0 {
+		return false
+	}
+	return s.PlateauCount >= 3 || s.BestPerplexity > 8.0
+}
+
 func (s *Supervisor) PerformSurgery(model *IntentMoE) {
+	if s == nil || model == nil || s.ShouldSkipExpertSurgery() {
+		log.Printf("🛑 Supervisor: Skipping autonomous expert surgery during warmup/plateau (BestPPL=%.3f, PlateauCount=%d)", s.BestPerplexity, s.PlateauCount)
+		return
+	}
 	log.Println("🏥 Supervisor: Performing Expert Surgery (Staggered Triage)...")
 
 	layers := model.Encoder.GetMoELayers()
@@ -1589,6 +1606,12 @@ func (s *Supervisor) EvolveTrainingData(pairs *[]TrainPair, failedPair *TrainPai
 func (s *Supervisor) RunTriage(model *IntentMoE, similarityScore float32, pairs *[]TrainPair) {
 	log.Printf("🔬 [Supervisor Triage] Similarity=%.1f%%", similarityScore*100)
 
+	// Do not trigger self-surgery while the model is still plateauing.
+	if s.ShouldSkipExpertSurgery() {
+		log.Printf("🛑 [Supervisor Triage] Skipping autonomous surgery during plateau: BestPPL=%.3f PlateauCount=%d", s.BestPerplexity, s.PlateauCount)
+		return
+	}
+
 	// Always run a light surgery pass (clones dead experts from healthy ones).
 	// This is a structural repair, not a policy change, so it is not gated.
 	s.PerformSurgery(model)
@@ -1604,6 +1627,10 @@ func (s *Supervisor) RunTriageGated(model *IntentMoE, similarityScore float32, p
 	// Warmup + direction guard: only intervene when things are getting worse.
 	if expert == nil || !expert.MetricsAreDeclining() {
 		log.Printf("✅ [Supervisor Triage] Metrics stable or improving — skipping synthetic injection and surgery.")
+		return
+	}
+	if s.ShouldSkipExpertSurgery() {
+		log.Printf("🛑 [Supervisor Triage] Skipping full triage during plateau: BestPPL=%.3f PlateauCount=%d", s.BestPerplexity, s.PlateauCount)
 		return
 	}
 

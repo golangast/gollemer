@@ -393,7 +393,7 @@ func (li *LocalInference) Generate(prompt string) (string, error) {
 
 	maxNewTokens := 256
 	for i := 0; i < maxNewTokens; i++ {
-		nextTokenID := li.SocialModel.PredictNextToken(currentSequence)
+		nextTokenID := li.SocialModel.PredictNextToken(currentSequence, nil)
 
 		if nextTokenID == imEndID || nextTokenID == eosID || nextTokenID == 0 {
 			break

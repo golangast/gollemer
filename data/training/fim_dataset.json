@@ -14593,9 +14593,15 @@
         "defer",
         "error",
         "interface{}"
-      ]
+        ]
+      },
+    {
+      "instruction": "add int after the return type of F in f/j.go",
+      "before_code": "package f\n\nfunc jim() \n        return\n}\n\nvar a, b int = 0, 0",
+      "target_patch": "<<<<<<<<< SEARCH\nfunc F() int {\n\treturn calculate(1, 2)\n}\n=======\nfunc F() (int, int) {\n\treturn calculate(1, 2), 0\n}\n>>>>>>> REPLACE",
+      "valid_go": true
     }
-  ],
+    ],
   "val": [
     {
       "instruction": "Fill in the middle of this Go code",

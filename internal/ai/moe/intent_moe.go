@@ -251,7 +251,7 @@ func SampleFromLogits(logits *tensor.Tensor, temperature float32, topK int, topP
 }
 
 // PredictNext performs a forward pass and samples the next token index using Top-K and temperature.
-func (m *IntentMoE) PredictNext(input *tensor.Tensor, k int, temp float32) (int, float32, error) {
+func (m *IntentMoE) PredictNext(input *tensor.Tensor, k int, temp float32, suppressedIDs map[int]bool) (int, float32, error) {
 	// 1. Forward pass
 	// We assume a simplified forward call for single-token prediction
 	logits, _, err := m.Forward(0.0, input, input, nil)
@@ -275,6 +275,15 @@ func (m *IntentMoE) PredictNext(input *tensor.Tensor, k int, temp float32) (int,
 		lastLogits.Data[i] /= temp
 	}
 
+	// Apply Suppression
+	if suppressedIDs != nil {
+		for id := range suppressedIDs {
+			if id >= 0 && id < len(lastLogits.Data) {
+				lastLogits.Data[id] = -1e9
+			}
+		}
+	}
+
 	// 4. Sample using Top-K logic
 	idx, err := SampleFromLogits(lastLogits, 1.0, k, 0.0)
 	if err != nil {
@@ -289,13 +298,13 @@ func (m *IntentMoE) PredictNext(input *tensor.Tensor, k int, temp float32) (int,
 }
 
 // PredictNextToken wraps PredictNext for autoregressive LLM loops
-func (m *IntentMoE) PredictNextToken(currentSequence []int) int {
+func (m *IntentMoE) PredictNextToken(currentSequence []int, suppressedIDs map[int]bool) int {
 	inputData := make([]float32, len(currentSequence))
 	for i, id := range currentSequence {
 		inputData[i] = float32(id)
 	}
 	inputTensor := tensor.NewTensor([]int{1, len(currentSequence)}, inputData, false)
-	idx, _, err := m.PredictNext(inputTensor, 5, 0.8) // TopK 5, Temp 0.8
+	idx, _, err := m.PredictNext(inputTensor, 5, 0.8, suppressedIDs) // TopK 5, Temp 0.8
 	if err != nil {
 		if m.SentenceVocab != nil && m.SentenceVocab.EosID > 0 {
 			return m.SentenceVocab.EosID
@@ -441,6 +450,8 @@ type IntentMoE struct {
 	Embedding         *nn.Embedding
 	SentenceVocabSize int
 	SentenceVocab     *mainvocab.Vocabulary
+	SocialVocab       *mainvocab.Vocabulary
+	TechVocab         *mainvocab.Vocabulary
 	EmbeddingDim      int // Persisted dimension (e.g., 768) for resizing logic
 
 	// Training Metadata for persistence
@@ -1441,7 +1452,7 @@ func (m *IntentMoE) BeamSearchDecode(
 				}
 			}
 
-			// Temperature scaling
+			// Apply Temperature scaling
 			for i := range logits.Data {
 				logits.Data[i] /= temperature
 			}
@@ -1758,12 +1769,18 @@ func NewHybridIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, ch
 		return nil, fmt.Errorf("failed to create MoE Layer 1: %w", err)
 	}
 
-	// ── 8 Grammar Experts ──────────────────────────────────────────────────────
-	// Append one grammar expert per POS role to every encoder layer.
-	// They share the same dims so they slot cleanly into the existing gating network.
+	// Grammar experts are optional for resource-constrained training runs.
+	// On small models, auto-appending 8 grammar experts doubles the MoE size and
+	// can trigger OOMs during the social curriculum. Keep the default compact.
+	grammarExpertCount := 0
+	if numExperts >= 8 && embeddingDim >= 384 {
+		grammarExpertCount = 4
+	}
 	for _, layer := range []*MoELayer{l0, l1} {
-		if err := appendGrammarExperts(layer, embeddingDim, 8); err != nil {
-			return nil, fmt.Errorf("failed to append grammar experts: %w", err)
+		if grammarExpertCount > 0 {
+			if err := appendGrammarExperts(layer, embeddingDim, grammarExpertCount); err != nil {
+				return nil, fmt.Errorf("failed to append grammar experts: %w", err)
+			}
 		}
 	}
 
@@ -1781,9 +1798,10 @@ func NewHybridIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, ch
 		return nil, fmt.Errorf("failed to create RNN decoder: %w", err)
 	}
 
-	// 🧬 Decoder OutputMoE needs Grammar Experts too to match encoder topology
-	if decoder.OutputMoE != nil {
-		if err := appendGrammarExperts(decoder.OutputMoE, embeddingDim, 8); err != nil {
+	// Decoder output MoE only gets grammar experts when the training run is large enough
+	// to afford them; the compact social curriculum stays lean to avoid OOM kills.
+	if decoder.OutputMoE != nil && grammarExpertCount > 0 {
+		if err := appendGrammarExperts(decoder.OutputMoE, embeddingDim, grammarExpertCount); err != nil {
 			return nil, fmt.Errorf("failed to append decoder grammar experts: %w", err)
 		}
 	}
@@ -2131,10 +2149,10 @@ func (m *IntentMoE) GetGateTemperature() float32 {
 // GreedySearchDecode performs greedy decoding (temperature=1.0).
 // This is a wrapper for backward compatibility.
 func (m *IntentMoE) GreedySearchDecode(contextVector *tensor.Tensor, maxLen, sosToken, eosToken int, repetitionPenalty, frequencyPenalty float32, topK int, taggedData tag.Tag) ([]int, error) {
-	return m.GreedySearchDecodeWithTemp(contextVector, maxLen, sosToken, eosToken, 1.0, repetitionPenalty, frequencyPenalty, topK, taggedData)
+	return m.GreedySearchDecodeWithTemp(contextVector, maxLen, sosToken, eosToken, 1.0, repetitionPenalty, frequencyPenalty, topK, taggedData, nil)
 }
 
-func (m *IntentMoE) GreedySearchDecodeWithTemp(contextVector *tensor.Tensor, maxLen, sosToken, eosToken int, temperature, repetitionPenalty, frequencyPenalty float32, topK int, taggedData tag.Tag) ([]int, error) {
+func (m *IntentMoE) GreedySearchDecodeWithTemp(contextVector *tensor.Tensor, maxLen, sosToken, eosToken int, temperature, repetitionPenalty, frequencyPenalty float32, topK int, taggedData tag.Tag, suppressedIDs map[int]bool) ([]int, error) {
 	var decodedIDs []int
 	decoderInputIDs := tensor.NewTensor([]int{1, 1}, []float32{float32(sosToken)}, false)
 
@@ -2213,6 +2231,15 @@ func (m *IntentMoE) GreedySearchDecodeWithTemp(contextVector *tensor.Tensor, max
 			if last1 == last2 && last2 == last3 {
 				if last1 < len(outputLogits.Data) {
 					outputLogits.Data[last1] = -1e9
+				}
+			}
+		}
+
+		// Domain Masking: Suppress technical jargon
+		if suppressedIDs != nil {
+			for id := range suppressedIDs {
+				if id >= 0 && id < len(outputLogits.Data) {
+					outputLogits.Data[id] = -1e9
 				}
 			}
 		}

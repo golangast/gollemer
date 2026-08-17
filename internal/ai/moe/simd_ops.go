@@ -541,38 +541,12 @@ func SimdIsFiniteF32(data []float32) bool {
 	return true
 }
 
-// SimdExpF32 computes exp(x) for every element in data using a fast SIMD approximation.
-// Uses the trick: exp(x) = 2^(x * log2(e))
+// SimdExpF32 computes exp(x) for every element in data.
+// The bit-twiddling approximation used earlier was numerically unstable and can
+// generate invalid probability distributions during training, so we use the
+// mathematically correct scalar path here to keep the loss objective reliable.
 func SimdExpF32(data []float32) {
-	n := len(data)
-	i := 0
-
-	// Constants for 2^(x * log2(e))
-	// i = int(1.442695 * 2^23 * x + 127 * 2^23)
-	// We use the bits directly.
-	log2e := archsimd.BroadcastFloat32x8(12102203.0)    // 1.442695 * 2^23
-	offset := archsimd.BroadcastFloat32x8(1065353216.0) // 127 * 2^23 (exponent bias)
-
-	for ; i+8 <= n; i += 8 {
-		v := archsimd.LoadFloat32x8Slice(data[i:])
-
-		// This is a rough but fast approximation for neural net gradients
-		// exp(x) ~= bits_to_float(int(12102203 * x + 1065353216))
-		vexp := v.Mul(log2e).Add(offset)
-
-		// In archsimd, we don't have direct bit manipulation yet in all versions,
-		// so we store and use math.Float32frombits if needed, but we can try to use
-		// the fact that adding to the bit representation of a float is roughly exp.
-		// However, for best performance, we'll use a scalar fallback if archsimd doesn't expose bit casts.
-		// For now, let's use the scalar fast-path if SIMD bit-cast is missing.
-		var buf [8]float32
-		vexp.Store(&buf)
-		for j := 0; j < 8; j++ {
-			data[i+j] = math.Float32frombits(uint32(buf[j]))
-		}
-	}
-
-	for ; i < n; i++ {
+	for i := range data {
 		data[i] = float32(math.Exp(float64(data[i])))
 	}
 }

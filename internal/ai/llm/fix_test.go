@@ -6,6 +6,17 @@ import (
 	"testing"
 )
 
+func TestCheckCommandHeuristics_WhatDoYouLikeToDo(t *testing.T) {
+	client := &GollemerMoEClient{}
+	intent, score := client.checkCommandHeuristics("what do you like to do")
+	if intent != "chat_response" {
+		t.Fatalf("expected social fast-path for 'what do you like to do', got intent=%q score=%.2f", intent, score)
+	}
+	if score < 0.9 {
+		t.Fatalf("expected high confidence social routing, got score=%.2f", score)
+	}
+}
+
 func TestHandleFixCommand(t *testing.T) {
 	// Create a temporary directory for testing fix command
 	tmpDir := t.TempDir()

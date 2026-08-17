@@ -7,6 +7,7 @@
 package tokenizer
 
 import (
+	"encoding/csv"
 	"encoding/gob"
 	"fmt"
 	"log"
@@ -102,14 +103,36 @@ func (b *BPETokenizer) collectCorpus(projectRoot string) (map[string]int, error)
 		filepath.Join(projectRoot, "data/training/trainingdata/synthetic_pairs.csv"),
 	}
 	for _, csvPath := range csvFiles {
-		data, err := os.ReadFile(csvPath)
+		f, err := os.Open(csvPath)
 		if err != nil {
 			log.Printf("⚠️  BPE corpus: cannot read %s: %v", csvPath, err)
 			continue
 		}
-		words := tokenizeText(string(data))
-		for _, w := range words {
-			freq[w]++
+		reader := csv.NewReader(f)
+		reader.FieldsPerRecord = -1
+		reader.LazyQuotes = true
+		records, err := reader.ReadAll()
+		f.Close()
+		if err != nil {
+			log.Printf("⚠️  BPE corpus: error parsing %s: %v", csvPath, err)
+			continue
+		}
+
+		for i, rec := range records {
+			if i == 0 && len(rec) > 0 && (strings.EqualFold(rec[0], "query") || strings.EqualFold(rec[0], "role")) {
+				continue // skip header row
+			}
+			// Ingest query (col 0) and answer (col 1) text ONLY
+			for col := 0; col < len(rec) && col < 2; col++ {
+				text := strings.TrimSpace(rec[col])
+				if text == "" {
+					continue
+				}
+				words := tokenizeText(text)
+				for _, w := range words {
+					freq[w]++
+				}
+			}
 		}
 	}
 

@@ -11112,6 +11112,69 @@
     ]
   },
   {
+    "id": "j.go_struct_1_0",
+    "type": "struct",
+    "name": "middlewareWrapper",
+    "raw_code": "type middlewareWrapper struct {\n\tMiddleware func(func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request)\n}",
+    "tags": [
+      "middlewarewrapper",
+      "minimal",
+      "stubs",
+      "in-file",
+      "so",
+      "single-file",
+      "`go",
+      "build`",
+      "validation",
+      "succeeds",
+      "when",
+      "the",
+      "orchestrator",
+      "injects",
+      "edits.",
+      "these",
+      "are",
+      "harmless",
+      "placeholders."
+    ]
+  },
+  {
+    "id": "j.go_struct_2_0",
+    "type": "struct",
+    "name": "RouteMatch",
+    "raw_code": "type RouteMatch struct {\n\tMatchErr\terror\n\tHandler\t\tfunc(http.ResponseWriter, *http.Request)\n\t// Match may be called with the request and an output match pointer\n\tMatch\tfunc(*http.Request, *RouteMatch) bool\n}",
+    "tags": [
+      "routematch"
+    ]
+  },
+  {
+    "id": "j.go_struct_3_0",
+    "type": "struct",
+    "name": "Router",
+    "raw_code": "type Router struct {\n\troutes\t\t\t[]*RouteMatch\n\tmiddlewares\t\t[]middlewareWrapper\n\tMethodNotAllowedHandler\tfunc(http.ResponseWriter, *http.Request)\n\tNotFoundHandler\t\tfunc(http.ResponseWriter, *http.Request)\n}",
+    "tags": [
+      "router"
+    ]
+  },
+  {
+    "id": "j.go_func_6",
+    "type": "func",
+    "name": "F",
+    "raw_code": "func F() int {\n\treturn calculate(1, 2)\n}",
+    "tags": [
+      "f"
+    ]
+  },
+  {
+    "id": "j.go_func_7",
+    "type": "func",
+    "name": "calculate",
+    "raw_code": "func calculate(a, b int) int {\n\treturn a + b\n}",
+    "tags": [
+      "calculate"
+    ]
+  },
+  {
     "id": "main.go_func_1",
     "type": "func",
     "name": "calculateSum",

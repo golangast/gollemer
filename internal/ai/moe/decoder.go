@@ -926,6 +926,11 @@ func (d *RNNDecoder) ResizeOutputLayer(newSize int) {
 
 	// Build new embedding weight data inline before creating Tensor.
 	newEmbData := make([]float32, newSize*dimModel)
+	// Initialize with random noise so new tokens aren't perfectly zero
+	for i := range newEmbData {
+		newEmbData[i] = (rand.Float32()*2 - 1) * 0.1
+	}
+
 	oldEmbData := d.Embedding.Weight.Data
 	for i := 0; i < copyLimit; i++ {
 		start := i * dimModel
@@ -950,6 +955,12 @@ func (d *RNNDecoder) ResizeOutputLayer(newSize int) {
 		oldLayerBiases := d.OutputLayer.Biases.Data
 
 		newWeights := make([]float32, inputDim*newSize)
+		// Xavier initialization for the new expanded portion
+		limit := float32(math.Sqrt(6.0 / float64(inputDim+newSize)))
+		for i := range newWeights {
+			newWeights[i] = (rand.Float32()*2 - 1) * limit
+		}
+
 		for i := 0; i < inputDim; i++ {
 			oldStart := i * oldVocabSize
 			newStart := i * newSize
@@ -957,6 +968,9 @@ func (d *RNNDecoder) ResizeOutputLayer(newSize int) {
 		}
 
 		newBiases := make([]float32, newSize)
+		for j := range newBiases {
+			newBiases[j] = 0.01 // Small positive bias for new tokens
+		}
 		for j := 0; j < copyLimit && j < len(oldLayerBiases); j++ {
 			newBiases[j] = oldLayerBiases[j]
 		}

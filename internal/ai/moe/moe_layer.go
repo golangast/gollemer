@@ -282,6 +282,20 @@ func (moe *MoELayer) ResetExpertWeights(expertIdx int) {
 		return
 	}
 
+	// Warmup / cold-start phase: many experts are intentionally unused while routing
+	// is still being learned. Treating those as dead experts causes the layer to
+	// self-destruct the router before it ever establishes a stable specialization.
+	if moe.CurrentPhase <= 1 {
+		totalUtil := 0
+		for _, u := range moe.AccumulatedUtilization {
+			totalUtil += u
+		}
+		if totalUtil < 32 {
+			log.Printf("🧊 Expert %d reset suppressed during warmup (phase=%d, util=%d)", expertIdx, moe.CurrentPhase, totalUtil)
+			return
+		}
+	}
+
 	// RATE LIMITER: at most one expert per layer can undergo reset/cloning in a given epoch
 	if atomic.LoadInt32(&moe.ResetCount) > 0 {
 		return
@@ -1046,52 +1060,58 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 
 		// 🧬 STAGNATION RECOVERY (Training Only)
 		if moe.Training && !moe.OverfitMode {
-			batchUsed := make([]bool, numExperts)
-			for _, selected := range allSelectedExperts {
-				for _, eid := range selected {
-					if eid >= 0 && eid < numExperts {
-						batchUsed[eid] = true
+			if moe.CurrentPhase <= 1 {
+				for j := 0; j < numExperts; j++ {
+					moe.StepStagnationCounters[j] = 0
+				}
+			} else {
+				batchUsed := make([]bool, numExperts)
+				for _, selected := range allSelectedExperts {
+					for _, eid := range selected {
+						if eid >= 0 && eid < numExperts {
+							batchUsed[eid] = true
+						}
 					}
 				}
-			}
 
-			// Ensure StepStagnationCounters is initialized (backward compatibility for layers created before this field was added)
-			if len(moe.StepStagnationCounters) != numExperts {
-				moe.StepStagnationCounters = make([]int, numExperts)
-			}
-
-			// Compute a proportional stagnation threshold.
-			// With K=2 and N experts, each expert is only expected to be used
-			// K/N of the time.
-			// Scale: max(5000, (N/K)*200) so experts have many epochs to learn
-			// before a reset fires. A low floor caused mass resets every ~5 epochs,
-			// wiping all learned weights before any convergence could occur.
-			kVal := moe.K
-			if kVal < 1 {
-				kVal = 1
-			}
-			stagnationThresh := (numExperts / kVal) * 200
-			if stagnationThresh < 5000 {
-				stagnationThresh = 5000
-			}
-
-			for j := 0; j < numExperts; j++ {
-				// Skip frozen experts: they are intentionally excluded from routing
-				// by the phase domain mask (-1e9 logit), so they will always appear
-				// unused. Counting them as stagnant and resetting them every ~1600
-				// steps corrupts the shared gating network for the active experts.
-				if j < len(moe.ExpertFrozen) && moe.ExpertFrozen[j] {
-					moe.StepStagnationCounters[j] = 0 // keep counter clear while frozen
-					continue
+				// Ensure StepStagnationCounters is initialized (backward compatibility for layers created before this field was added)
+				if len(moe.StepStagnationCounters) != numExperts {
+					moe.StepStagnationCounters = make([]int, numExperts)
 				}
-				if !batchUsed[j] {
-					moe.StepStagnationCounters[j]++ // Increment by 1 step
-					if moe.StepStagnationCounters[j] >= stagnationThresh {
-						moe.ResetExpertWeights(j)
+
+				// Compute a proportional stagnation threshold.
+				// With K=2 and N experts, each expert is only expected to be used
+				// K/N of the time.
+				// Scale: max(5000, (N/K)*200) so experts have many epochs to learn
+				// before a reset fires. A low floor caused mass resets every ~5 epochs,
+				// wiping all learned weights before any convergence could occur.
+				kVal := moe.K
+				if kVal < 1 {
+					kVal = 1
+				}
+				stagnationThresh := (numExperts / kVal) * 200
+				if stagnationThresh < 5000 {
+					stagnationThresh = 5000
+				}
+
+				for j := 0; j < numExperts; j++ {
+					// Skip frozen experts: they are intentionally excluded from routing
+					// by the phase domain mask (-1e9 logit), so they will always appear
+					// unused. Counting them as stagnant and resetting them every ~1600
+					// steps corrupts the shared gating network for the active experts.
+					if j < len(moe.ExpertFrozen) && moe.ExpertFrozen[j] {
+						moe.StepStagnationCounters[j] = 0 // keep counter clear while frozen
+						continue
+					}
+					if !batchUsed[j] {
+						moe.StepStagnationCounters[j]++ // Increment by 1 step
+						if moe.StepStagnationCounters[j] >= stagnationThresh {
+							moe.ResetExpertWeights(j)
+							moe.StepStagnationCounters[j] = 0
+						}
+					} else {
 						moe.StepStagnationCounters[j] = 0
 					}
-				} else {
-					moe.StepStagnationCounters[j] = 0
 				}
 			}
 		}
@@ -2274,7 +2294,13 @@ func (moe *MoELayer) ResizeExperts(newOutputDim int) {
 
 // SetExpertFreeze toggles the learnability of a specific expert.
 func (moe *MoELayer) SetExpertFreeze(expertID int, freeze bool) {
-	if expertID < 0 || expertID >= len(moe.Experts) {
+	if moe == nil || expertID < 0 || expertID >= len(moe.Experts) {
+		return
+	}
+	if moe.Experts[expertID] == nil {
+		return
+	}
+	if len(moe.ExpertFrozen) <= expertID {
 		return
 	}
 	// If unfreezing, set a jump-start multiplier

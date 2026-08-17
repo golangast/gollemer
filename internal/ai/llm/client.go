@@ -17,6 +17,7 @@ import (
 	"unicode"
 
 	"github.com/golangast/gollemer/internal/ai/moe"
+	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
 	"github.com/golangast/gollemer/internal/ai/neural/nnu/word2vec"
 	"github.com/golangast/gollemer/internal/ai/neural/tensor"
 	"github.com/golangast/gollemer/internal/ai/neural/tokenizer"
@@ -559,6 +560,11 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 	if lowerInput == "hi" || lowerInput == "hello" || lowerInput == "hey" || lowerInput == "greeting" {
 		return "greeting_query", 0.99
 	}
+	if strings.Contains(lowerInput, "what do you like to do") || strings.Contains(lowerInput, "what do you enjoy doing") ||
+		strings.Contains(lowerInput, "what are your hobbies") || strings.Contains(lowerInput, "what are you into") {
+		c.lastMoEPrediction = "I enjoy helping people build Go projects, debug code, and turn rough ideas into working software."
+		return "chat_response", 0.99
+	}
 	// Fast-path status / small-talk queries — handle these before neural routing
 	// so the model gives a sensible reply even while still training.
 	if strings.Contains(lowerInput, "how are you") || strings.Contains(lowerInput, "how are you doing") ||
@@ -580,6 +586,11 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 		strings.Contains(lowerInput, "how can you help") || strings.Contains(lowerInput, "how can you assist") ||
 		strings.Contains(lowerInput, "what can you help") || strings.Contains(lowerInput, "how do you help") {
 		c.lastMoEPrediction = "I can chat, create Go webservers, edit files, fix syntax errors, and answer questions about your project!"
+		return "chat_response", 0.99
+	}
+	if strings.Contains(lowerInput, "what do you like to do") || strings.Contains(lowerInput, "what do you enjoy doing") ||
+		strings.Contains(lowerInput, "what are your hobbies") || strings.Contains(lowerInput, "what are you into") {
+		c.lastMoEPrediction = "I enjoy helping people build Go projects, debug code, and turn rough ideas into working software."
 		return "chat_response", 0.99
 	}
 	if strings.Contains(lowerInput, "are you a human") || strings.Contains(lowerInput, "are you real") || strings.Contains(lowerInput, "are you an ai") {
@@ -647,9 +658,16 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 		formattedInput := fmt.Sprintf("__intent__ social : __ques__ %s __ans__", lowerInput)
 		cleanWords := cleanTokenize(formattedInput)
 		var tokenIDs []int
+		var activeVocab *mainvocab.Vocabulary
+		if c.Model.SocialVocab != nil {
+			activeVocab = c.Model.SocialVocab
+		} else {
+			activeVocab = c.Model.SentenceVocab
+		}
+
 		for _, w := range cleanWords {
-			if c.Model.SentenceVocab != nil {
-				tokenIDs = append(tokenIDs, lookupVocab(w, c.Model.SentenceVocab))
+			if activeVocab != nil {
+				tokenIDs = append(tokenIDs, lookupVocab(w, activeVocab))
 			} else if id, ok := c.W2V.Vocabulary[w]; ok {
 				tokenIDs = append(tokenIDs, id)
 			}
@@ -668,15 +686,34 @@ func (c *GollemerMoEClient) PredictIntent(input string) (string, float64) {
 				taggedData := nertagger.Nertagger(tag.Tag{Tokens: cleanWords, PosTag: posTags})
 
 				if c.Model.SentenceVocab != nil {
+					suppressedIDs := make(map[int]bool)
+					techKeywords := []string{
+						"func", "struct", "type", "interface", "package", "import", "chan", "goroutine",
+						"fmt", "log", "http", "json", "os", "io", "string", "int", "bool", "float64",
+						"err", "nil", "return", "var", "const", "for", "if", "else", "switch", "case",
+						"devops", "kubernetes", "docker", "server", "endpoint", "api", "database", "sql",
+						"query", "pointer", "memory", "cpu", "ram", "network", "tcp", "udp", "socket",
+						"session", "certificate", "tag", "ui", "status", "traffic", "receipt", "opinion",
+						"ADV", "AUX", "PRON", "VERB", "NOUN", "PREP", "ADJ", "CONJ", "DET", "INTJ", "PROPN",
+						"__ans__", "__ques__", "__intent__", "social:", "code:",
+						"{", "}", "(", ")", "[", "]", ":=", "==", "!=", "<=", ">=", "&&", "||", "++", "--",
+					}
+					for _, kw := range techKeywords {
+						id := activeVocab.GetTokenID(kw)
+						if id > 0 {
+							suppressedIDs[id] = true
+						}
+					}
+
 					outputIDs, err := c.Model.GreedySearchDecodeWithTemp(
 						contextVector, 20,
 						c.Model.SentenceVocab.BosID, c.Model.SentenceVocab.EosID,
-						0.4, 1.2, 0.3, 50, taggedData,
+						0.4, 1.2, 0.3, 50, taggedData, suppressedIDs,
 					)
 					if err == nil && len(outputIDs) > 0 {
 						var decodedWords []string
 						for _, id := range outputIDs {
-							w := c.Model.SentenceVocab.GetWord(id)
+							w := activeVocab.TokenToWord[id]
 							if w != "</s>" && w != "<s>" && w != "<pad>" && w != "UNK" && w != "" {
 								decodedWords = append(decodedWords, w)
 							}
@@ -1111,8 +1148,11 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 		return ""
 	}
 
-	// Tokenize using the social model's own vocabulary (the token space it was trained on)
-	vocab := c.SocialModel.SentenceVocab
+	// Tokenize using the isolated social vocabulary
+	vocab := c.SocialModel.SocialVocab
+	if vocab == nil {
+		vocab = c.SocialModel.SentenceVocab
+	}
 	words := strings.Fields(strings.ToLower(input))
 	var tokenIDs []int
 	for _, w := range words {
@@ -1135,8 +1175,28 @@ func (c *GollemerMoEClient) GenerateSocialResponse(input string) string {
 	eosID := vocab.EosID
 
 	maxNewTokens := 128
+
+	suppressedIDs := make(map[int]bool)
+	techKeywords := []string{
+		"func", "struct", "type", "interface", "package", "import", "chan", "goroutine",
+		"fmt", "log", "http", "json", "os", "io", "string", "int", "bool", "float64",
+		"err", "nil", "return", "var", "const", "for", "if", "else", "switch", "case",
+		"devops", "kubernetes", "docker", "server", "endpoint", "api", "database", "sql",
+		"query", "pointer", "memory", "cpu", "ram", "network", "tcp", "udp", "socket",
+		"session", "certificate", "tag", "ui", "status", "traffic", "receipt", "opinion",
+		"ADV", "AUX", "PRON", "VERB", "NOUN", "PREP", "ADJ", "CONJ", "DET", "INTJ", "PROPN",
+		"__ans__", "__ques__", "__intent__", "social:", "code:",
+		"{", "}", "(", ")", "[", "]", ":=", "==", "!=", "<=", ">=", "&&", "||", "++", "--",
+	}
+	for _, kw := range techKeywords {
+		id := vocab.GetTokenID(kw)
+		if id > 0 {
+			suppressedIDs[id] = true
+		}
+	}
+
 	for i := 0; i < maxNewTokens; i++ {
-		nextTokenID := c.SocialModel.PredictNextToken(currentSequence)
+		nextTokenID := c.SocialModel.PredictNextToken(currentSequence, suppressedIDs)
 
 		// Stop immediately if the model predicts EOS or 0
 		if nextTokenID == eosID || nextTokenID == 0 {
@@ -1215,6 +1275,11 @@ func (c *GollemerMoEClient) checkCommandHeuristics(lowerInput string) (string, f
 	}
 	if lowerInput == "watch" || lowerInput == "monitor" || lowerInput == "guard" {
 		return "watch", 0.99
+	}
+	if strings.Contains(lowerInput, "what do you like to do") || strings.Contains(lowerInput, "what do you enjoy doing") ||
+		strings.Contains(lowerInput, "what are your hobbies") || strings.Contains(lowerInput, "what are you into") {
+		c.lastMoEPrediction = "I enjoy helping people build Go projects, debug code, and turn rough ideas into working software."
+		return "chat_response", 0.99
 	}
 	if lowerInput == "pwd" || lowerInput == "history" || lowerInput == "clear" || lowerInput == "cls" {
 		return lowerInput + "_query", 0.99

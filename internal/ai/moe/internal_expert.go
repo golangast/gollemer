@@ -301,7 +301,7 @@ func (e *InternalExpert) Resize(newOutputDim int) {
 		return
 	}
 
-	// Create new fc2
+	// Create new fc2 (automatically initialized)
 	newFc2, _ := nn.NewLinear(e.hiddenDim, newOutputDim)
 
 	// Copy old weights where possible
@@ -315,6 +315,11 @@ func (e *InternalExpert) Resize(newOutputDim int) {
 
 	for i := 0; i < e.hiddenDim; i++ {
 		copy(newW[i*newOutputDim:], oldW[i*e.outputDim:i*e.outputDim+copyLimit])
+	}
+
+	// Copy old biases
+	if e.fc2.Biases != nil && newFc2.Biases != nil {
+		copy(newFc2.Biases.Data, e.fc2.Biases.Data[:copyLimit])
 	}
 
 	e.fc2 = newFc2
