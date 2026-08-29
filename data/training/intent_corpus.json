@@ -1,50 +1,302 @@
 [
   {
-    "intent": "edit_agent",
+    "intent": "greet",
     "examples": [
-      "add a return type to the function",
-      "add return type int for startmyserver",
-      "add return type string to this function",
-      "modify this function to do something else",
-      "change the struct field to be a string",
-      "refactor the logic to use a switch statement",
-      "implement the missing interface methods",
-      "change the code",
-      "rewrite this function",
-      "add a new function that does this",
-      "add a new field to this struct",
-      "make this function public",
-      "rename this function to something else",
-      "add a parameter to this function",
-      "remove the unused parameter from this function",
-      "make this function return an error",
-      "add error handling to this function",
-      "insert a new method into the struct",
-      "add a return value to startmyserver",
-      "change the return type of this function",
-      "wrap this function in a new interface",
-      "add logging to this function",
-      "add comments to this function"
+      "Hello there!",
+      "Hi, how are you?",
+      "Hey! Good to see you.",
+      "Good morning!",
+      "Good afternoon, how is your day going?",
+      "Good evening!",
+      "What's up?",
+      "Howdy!",
+      "Hey, long time no see.",
+      "Nice to meet you.",
+      "Pleased to meet you.",
+      "How do you do?",
+      "Greetings!",
+      "Hey, how have you been?",
+      "Hi there, what is new?"
     ]
   },
   {
-    "intent": "auto_fix",
+    "intent": "farewell",
     "examples": [
-      "fix the syntax errors in this file",
-      "resolve the compiler errors",
-      "repair the broken code",
-      "auto fix",
-      "fix it",
-      "fix the file",
-      "correct the syntax",
-      "run the auto fixer on this file",
-      "fix the compilation errors",
-      "fix the go vet issues",
-      "fix the lint errors",
-      "just fix it",
-      "check and fix the file",
-      "repair the syntax",
-      "resolve all errors in this file"
+      "Goodbye!",
+      "See you later.",
+      "Take care.",
+      "Bye bye!",
+      "Have a great day.",
+      "Until next time.",
+      "Catch you later.",
+      "Farewell.",
+      "Talk to you soon.",
+      "Have a good one.",
+      "See you around.",
+      "Good night!",
+      "It was nice talking to you.",
+      "I have to go now, bye!",
+      "So long!"
+    ]
+  },
+  {
+    "intent": "express gratitude",
+    "examples": [
+      "Thank you so much.",
+      "Thanks a lot.",
+      "I really appreciate it.",
+      "That was very helpful.",
+      "I am grateful for your help.",
+      "Thank you, that means a lot.",
+      "You are very kind.",
+      "Much appreciated.",
+      "Thanks, you saved me a lot of time.",
+      "I cannot thank you enough.",
+      "Cheers, that was exactly what I needed.",
+      "Thank you for explaining that so clearly.",
+      "I owe you one.",
+      "Thanks for your patience.",
+      "You have been incredibly helpful."
+    ]
+  },
+  {
+    "intent": "ask for help",
+    "examples": [
+      "Can you help me?",
+      "I need some assistance.",
+      "Could you explain this to me?",
+      "I am confused, can you clarify?",
+      "What does this mean?",
+      "Can you walk me through this?",
+      "I do not understand, please help.",
+      "Would you mind helping me out?",
+      "I am stuck, can you give me a hint?",
+      "Could you show me an example?",
+      "How does this work?",
+      "Can you give me more details?",
+      "I need a better explanation.",
+      "What should I do here?",
+      "Could you point me in the right direction?"
+    ]
+  },
+  {
+    "intent": "ask about wellbeing",
+    "examples": [
+      "How are you feeling today?",
+      "Are you doing well?",
+      "How has your week been?",
+      "Is everything okay with you?",
+      "How are things going?",
+      "Are you having a good day?",
+      "How are you holding up?",
+      "Hope you are doing great.",
+      "Are you feeling alright?",
+      "How have you been lately?"
+    ]
+  },
+  {
+    "intent": "share information",
+    "examples": [
+      "I wanted to let you know something.",
+      "Here is what I found out.",
+      "Let me tell you something interesting.",
+      "I have some news to share.",
+      "Did you know that the sky is blue because of Rayleigh scattering?",
+      "Here is an important fact you should know.",
+      "I just learned something new today.",
+      "Let me share what I discovered.",
+      "I thought you might find this useful.",
+      "There is something I would like to mention."
+    ]
+  },
+  {
+    "intent": "make a request",
+    "examples": [
+      "Could you please do this for me?",
+      "Would you be able to help with this?",
+      "Please take a look at this.",
+      "I would like you to review this.",
+      "Can you check this out?",
+      "Would you mind taking a look?",
+      "Please let me know what you think.",
+      "Could you provide some feedback?",
+      "I would appreciate it if you could review this.",
+      "Please give me your opinion on this."
+    ]
+  },
+  {
+    "intent": "apologize",
+    "examples": [
+      "I am sorry for the trouble.",
+      "Please accept my apologies.",
+      "I apologize for the confusion.",
+      "Sorry about that.",
+      "I did not mean to cause any issues.",
+      "My apologies, I made a mistake.",
+      "I am sorry, let me correct that.",
+      "Pardon me for the interruption.",
+      "I regret the inconvenience.",
+      "I am truly sorry about what happened."
+    ]
+  },
+  {
+    "intent": "express opinion",
+    "examples": [
+      "I think this is a great idea.",
+      "In my opinion, this approach is better.",
+      "I believe we should try a different method.",
+      "From my perspective, this seems correct.",
+      "I feel that this could be improved.",
+      "It seems to me that the problem is here.",
+      "I would say this is the right solution.",
+      "My view is that we need more data.",
+      "I think there is a simpler way to do this.",
+      "As far as I can tell, this should work."
+    ]
+  },
+  {
+    "intent": "answer a question",
+    "examples": [
+      "The answer to your question is yes.",
+      "That is correct.",
+      "Yes, that is exactly right.",
+      "No, that is not quite right.",
+      "The answer is forty-two.",
+      "Based on what I know, the answer is this.",
+      "To answer your question, it depends on the context.",
+      "The short answer is yes, but there is more to it.",
+      "That is a great question and the answer is simple.",
+      "Here is the answer you are looking for."
+    ]
+  },
+  {
+    "intent": "describe something",
+    "examples": [
+      "Let me describe what I see here.",
+      "This is a complex structure with many parts.",
+      "The process works by breaking down the problem into smaller steps.",
+      "It is a simple concept once you understand the basics.",
+      "The system is designed to handle many requests at once.",
+      "This is an approach that prioritizes simplicity over complexity.",
+      "The idea is to make things easier to understand.",
+      "This works by taking an input and producing an output.",
+      "Here is how I would describe it in simple terms.",
+      "The concept can be explained as follows."
+    ]
+  },
+  {
+    "intent": "suggest something",
+    "examples": [
+      "I would suggest trying a different approach.",
+      "Have you considered doing it this way?",
+      "You might want to try this instead.",
+      "Why not give this a shot?",
+      "I recommend looking into this option.",
+      "Perhaps you could try breaking it into smaller parts.",
+      "It might be worth exploring an alternative.",
+      "You should consider simplifying the approach.",
+      "One option would be to start with the basics.",
+      "I suggest reviewing the fundamentals first."
+    ]
+  },
+  {
+    "intent": "confirm understanding",
+    "examples": [
+      "I understand what you mean.",
+      "That makes sense to me.",
+      "Got it, I see what you are saying.",
+      "I follow your logic.",
+      "Now I understand, thank you.",
+      "That is clear to me now.",
+      "I see your point.",
+      "Understood.",
+      "Yes, I get it now.",
+      "I comprehend what you are explaining."
+    ]
+  },
+  {
+    "intent": "express curiosity",
+    "examples": [
+      "I am curious about how this works.",
+      "Can you tell me more about this?",
+      "That is interesting, what happens next?",
+      "I wonder why that is the case.",
+      "What is the reason behind this?",
+      "I would love to learn more about this topic.",
+      "Could you elaborate on that?",
+      "Why does this happen?",
+      "I find this fascinating, please explain.",
+      "What causes this behavior?"
+    ]
+  },
+  {
+    "intent": "encourage",
+    "examples": [
+      "You are doing great!",
+      "Keep up the good work.",
+      "You are almost there.",
+      "Do not give up, you can do it.",
+      "That is excellent progress.",
+      "You should be proud of how far you have come.",
+      "Well done, that is impressive.",
+      "Great effort!",
+      "You are on the right track.",
+      "Keep going, you are doing really well."
+    ]
+  },
+  {
+    "intent": "form a complete sentence",
+    "examples": [
+      "The cat sat on the mat.",
+      "She walks to school every morning.",
+      "The sun rises in the east.",
+      "He finished his homework before dinner.",
+      "The dog barked loudly at the strangers.",
+      "They are going to the park this afternoon.",
+      "We need to solve this problem together.",
+      "The book is on the table.",
+      "She smiled and waved goodbye.",
+      "The children played happily in the garden.",
+      "He read the letter carefully before replying.",
+      "The train arrived at the station on time.",
+      "She cooked a delicious meal for her family.",
+      "The wind blew the leaves off the trees.",
+      "He closed the door quietly behind him.",
+      "They worked together to finish the project.",
+      "The stars shone brightly in the night sky.",
+      "She laughed at the funny joke.",
+      "The river flowed gently through the valley.",
+      "He decided to take a different path home."
+    ]
+  },
+  {
+    "intent": "ask for clarification",
+    "examples": [
+      "Could you please clarify what you mean?",
+      "I did not quite understand that, could you repeat it?",
+      "What exactly do you mean by that?",
+      "Can you be more specific?",
+      "I am not sure I follow, could you explain further?",
+      "Could you give me an example?",
+      "What do you mean when you say that?",
+      "I need more context to understand.",
+      "Could you rephrase that for me?",
+      "Can you elaborate on that point?"
+    ]
+  },
+  {
+    "intent": "make small talk",
+    "examples": [
+      "The weather has been lovely today.",
+      "Did you do anything fun over the weekend?",
+      "I have been quite busy lately.",
+      "It has been a while since we last talked.",
+      "I heard there is a lot going on right now.",
+      "Things have been pretty hectic at work.",
+      "I finally got some time to relax.",
+      "The holidays are coming up soon.",
+      "I cannot believe how fast time flies.",
+      "Have you seen any good movies lately?"
     ]
   }
 ]

@@ -24,23 +24,25 @@ type Batch struct {
 }
 
 type ChatDataIterator struct {
-	pairs  []moe.TrainPair
-	vocab  *mainvocab.Vocabulary
-	unkID  int
-	idx    int
-	MaxLen int
-	Epoch  int
+	pairs       []moe.TrainPair
+	vocab       *mainvocab.Vocabulary
+	unkID       int
+	idx         int
+	MaxLen      int
+	Epoch       int
+	PureSeq2Seq bool
 }
 
-func NewChatDataIterator(pairs []moe.TrainPair, vocab *mainvocab.Vocabulary, unkID int) *ChatDataIterator {
+func NewChatDataIterator(pairs []moe.TrainPair, vocab *mainvocab.Vocabulary, unkID int, pureSeq2Seq bool) *ChatDataIterator {
 	// Shuffle pairs for better training
 	rand.Shuffle(len(pairs), func(i, j int) { pairs[i], pairs[j] = pairs[j], pairs[i] })
 	return &ChatDataIterator{
-		pairs:  pairs,
-		vocab:  vocab,
-		unkID:  unkID,
-		idx:    0,
-		MaxLen: 48, // Reduced from 80: attention is O(seq²), saves ~64% attention memory
+		pairs:       pairs,
+		vocab:       vocab,
+		unkID:       unkID,
+		idx:         0,
+		MaxLen:      48, // Reduced from 80: attention is O(seq²), saves ~64% attention memory
+		PureSeq2Seq: pureSeq2Seq,
 	}
 }
 
@@ -94,10 +96,9 @@ func (it *ChatDataIterator) Next() (*tensor.Tensor, *tensor.Tensor, *tensor.Tens
 	pair := it.pairs[it.idx]
 	it.idx++
 
-	// --- DYNAMIC AUGMENTATION ---
 	q := pair.Q
 	a := pair.A
-	if rand.Float32() < 0.3 {
+	if !it.PureSeq2Seq && rand.Float32() < 0.3 {
 		synonyms := map[string]string{
 			"hello": "hi", "how are you": "how are you doing", "goodbye": "bye",
 			"who are you": "what is your name", "what is your name": "who are you",
@@ -110,16 +111,32 @@ func (it *ChatDataIterator) Next() (*tensor.Tensor, *tensor.Tensor, *tensor.Tens
 		}
 	}
 
-	// Use ChatML format with loss masking
+	if it.PureSeq2Seq {
+		qTokens := cleanTokenize(q)
+		qIDs := make([]float32, len(qTokens)+2)
+		qIDs[0] = float32(it.vocab.BosID)
+		for i, tok := range qTokens {
+			qIDs[i+1] = float32(lookupVocab(tok, it.vocab))
+		}
+		qIDs[len(qIDs)-1] = float32(it.vocab.EosID)
+
+		aTokens := cleanTokenize(a)
+		aIDs := make([]float32, len(aTokens)+2)
+		aIDs[0] = float32(it.vocab.BosID)
+		for i, tok := range aTokens {
+			aIDs[i+1] = float32(lookupVocab(tok, it.vocab))
+		}
+		aIDs[len(aIDs)-1] = float32(it.vocab.EosID)
+
+		inputTensor := tensor.NewTensor([]int{1, len(qIDs)}, qIDs, false)
+		targetTensor := tensor.NewTensor([]int{1, len(aIDs)}, aIDs, false)
+		return inputTensor, targetTensor, tensor.NewTensor([]int{1, 1}, []float32{0}, false), tensor.NewTensor([]int{1, 1}, []float32{0}, false)
+	}
+
 	augmentedPair := moe.TrainPair{Q: q, A: a, Intent: pair.Intent}
 	fullIDs, _, _ := it.buildChatMLSequence(augmentedPair)
-
-	// For backward compatibility, we split into input and target the standard way:
-	// input = full sequence (teacher forcing), target = shifted by 1.
-	// The loss mask is stored in the Batch struct for WeightedCrossEntropy.
 	qIDs := fullIDs
 
-	// Target Format: Raw answer tokens with BOS/EOS
 	targetText := a
 	aTokens := cleanTokenize(targetText)
 	aIDs := make([]float32, len(aTokens)+2)
@@ -129,10 +146,9 @@ func (it *ChatDataIterator) Next() (*tensor.Tensor, *tensor.Tensor, *tensor.Tens
 	}
 	aIDs[len(aIDs)-1] = float32(it.vocab.EosID)
 
-	// Grammar Tags: Map role strings to indices
 	aRoles := SimpleTagger(aTokens)
 	gIDs := make([]float32, len(aIDs))
-	gIDs[0] = 7 // BOS -> OTHER
+	gIDs[0] = 7
 	for i := 0; i < len(aTokens); i++ {
 		role := moe.GrammarRoleIndex(aRoles[i])
 		if i > 0 && aRoles[i-1] == "PRON" && (aRoles[i] == "VERB" || aRoles[i] == "AUX") {
@@ -141,9 +157,8 @@ func (it *ChatDataIterator) Next() (*tensor.Tensor, *tensor.Tensor, *tensor.Tens
 			gIDs[i+1] = float32(role)
 		}
 	}
-	gIDs[len(gIDs)-1] = 7 // EOS -> OTHER
+	gIDs[len(gIDs)-1] = 7
 
-	// Query Grammar Tags
 	qTokens := cleanTokenize(q)
 	qRoles := SimpleTagger(qTokens)
 	qgIDs := make([]float32, len(qIDs))

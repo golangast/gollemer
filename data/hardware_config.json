@@ -1,8 +1,0 @@
-{
-  "audio_capture_device": "hw:1,0",
-  "audio_playback_device": "hw:0,0",
-  "video_device_path": "/dev/video0",
-  "microphone_sample_rate": 16000,
-  "speaker_backoff_delay_ms": 4000,
-  "rms_silence_threshold": 35.5
-}

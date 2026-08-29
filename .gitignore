@@ -56,6 +56,7 @@ wgpu-linux-x86_64-release.zip
 wgpu-native-meta/
 .fuse_hidden*
 dataset/
+!internal/ai/training/proto/dataset/
 build_whisper/
 video/
 

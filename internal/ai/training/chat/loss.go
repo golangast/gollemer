@@ -61,11 +61,11 @@ func WeightedCrossEntropy(logits *tensor.Tensor, targets []int, weights []float3
 		if currentWeight >= 50.0 {
 			weightCap = 100.0
 		}
+		if puncWeight, ok := ResolvedPunctuationWeights[targetID]; ok && puncWeight > 0 {
+			currentWeight *= puncWeight
+		}
 		if currentWeight > weightCap {
 			currentWeight = weightCap
-		}
-		if puncWeight, ok := ResolvedPunctuationWeights[targetID]; ok {
-			currentWeight *= puncWeight
 		}
 		if weights[targetID] < 0.1 {
 			currentWeight *= 0.5

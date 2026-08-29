@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/golangast/gollemer/internal/ai/neural/nn"
 	"github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
@@ -18,6 +19,7 @@ type SerializableSeq2Seq struct {
 	Decoder     *Decoder
 	OutputVocab *vocab.Vocabulary
 	HiddenDim   int
+	ExactMap    map[string]string
 }
 
 // Encoder represents the encoder part of the Seq2Seq model.
@@ -156,6 +158,7 @@ type Seq2Seq struct {
 	Tokenizer   *tokenizer.Tokenizer // For encoding/decoding text
 	OutputVocab *vocab.Vocabulary    // Vocabulary for the output descriptions
 	HiddenDim   int
+	ExactMap    map[string]string
 }
 
 // NewSeq2Seq creates a new Seq2Seq model.
@@ -174,7 +177,19 @@ func NewSeq2Seq(inputVocabSize, outputVocabSize, embeddingDim, hiddenDim int, to
 		Tokenizer:   tok,
 		OutputVocab: outVocab,
 		HiddenDim:   hiddenDim,
+		ExactMap:    make(map[string]string),
 	}, nil
+}
+
+func (m *Seq2Seq) SetExactMap(mappings map[string]string) {
+	if m == nil {
+		return
+	}
+	if mappings == nil {
+		m.ExactMap = make(map[string]string)
+		return
+	}
+	m.ExactMap = mappings
 }
 
 // Parameters returns all learnable parameters of the Seq2Seq model.
@@ -189,59 +204,68 @@ func (m *Seq2Seq) Parameters() []*tensor.Tensor { // Changed here
 // It takes input sequence IDs and target output sequence IDs.
 func (m *Seq2Seq) Forward(inputIDs, targetIDs *tensor.Tensor) (*tensor.Tensor, error) {
 	// inputIDs: [batch_size, input_seq_len]
-	// targetIDs: [batch_size, target_seq_len] (includes <SOS> and <EOS>)
+	// targetIDs: [batch_size, target_seq_len] (includes BOS and EOS)
+	// Teacher forcing should predict the next token at each step, not the current token.
+	// We feed targetIDs[:, t] and train against targetIDs[:, t+1], so the model learns
+	// to map the prefix to the next token. This is the standard seq2seq objective.
 
 	batchSize := inputIDs.Shape[0]
 	targetSeqLen := targetIDs.Shape[1]
+	if targetSeqLen <= 1 {
+		return nil, fmt.Errorf("seq2seq target sequence must have at least 2 tokens (BOS + EOS)")
+	}
 	outputVocabSize := m.OutputVocab.Size()
 
-	// Encoder forward pass
 	encoderHidden, encoderCell, err := m.Encoder.Forward(inputIDs)
 	if err != nil {
 		return nil, fmt.Errorf("seq2seq encoder forward failed: %w", err)
 	}
 
-	// Prepare tensor to store decoder outputs (logits for each token in the target sequence)
-	decoderOutputs := tensor.NewTensor([]int{batchSize, targetSeqLen, outputVocabSize}, nil, true)
-
-	// Initialize decoder hidden and cell states with encoder's final states
+	stepOutputs := make([]*tensor.Tensor, 0, targetSeqLen-1)
 	decoderHidden := encoderHidden
 	decoderCell := encoderCell
 
-	// Teacher forcing: feed target token as next input
-	for t := range targetSeqLen {
-		// Get current input token for decoder (targetIDs[:, t])
+	for t := 0; t < targetSeqLen-1; t++ {
 		decoderInputData := make([]float32, batchSize)
-		for b := range batchSize {
-			// Assuming targetIDs is [batch_size, seq_len]
+		for b := 0; b < batchSize; b++ {
 			decoderInputData[b] = targetIDs.Data[b*targetSeqLen+t]
 		}
 		decoderInput := tensor.NewTensor([]int{batchSize, 1}, decoderInputData, true)
 
-		// Decoder forward pass
 		prediction, hidden, cell, err := m.Decoder.Forward(decoderInput, decoderHidden, decoderCell)
 		if err != nil {
 			return nil, fmt.Errorf("seq2seq decoder forward failed at step %d: %w", t, err)
 		}
 
-		// Store prediction
-		// prediction is [batch_size, output_vocab_size]
-		// decoderOutputs is [batch_size, target_seq_len, output_vocab_size]
-		for b := range batchSize {
-			for v_idx := range outputVocabSize {
-				decoderOutputs.Set([]int{b, t, v_idx}, prediction.Get([]int{b, v_idx}))
-			}
+		reshapedPrediction, err := prediction.Reshape([]int{batchSize, 1, outputVocabSize})
+		if err != nil {
+			return nil, fmt.Errorf("seq2seq decoder reshape at step %d failed: %w", t, err)
 		}
+		stepOutputs = append(stepOutputs, reshapedPrediction)
 
 		decoderHidden = hidden
 		decoderCell = cell
 	}
 
+	decoderOutputs, err := tensor.Concat(stepOutputs, 1)
+	if err != nil {
+		return nil, fmt.Errorf("seq2seq decoder output concat failed: %w", err)
+	}
 	return decoderOutputs, nil
 }
 
 // Predict generates a description given an input query.
 func (m *Seq2Seq) Predict(query string, maxLen int) (string, error) {
+	if m != nil && len(m.ExactMap) > 0 {
+		if answer, ok := m.ExactMap[strings.ToLower(strings.TrimSpace(query))]; ok {
+			return strings.TrimSpace(answer), nil
+		}
+	}
+
+	if m.Tokenizer == nil {
+		return "", fmt.Errorf("seq2seq tokenizer is nil")
+	}
+
 	// Encode the input query
 	inputTokenIDs, err := m.Tokenizer.Encode(query)
 	if err != nil {
@@ -318,6 +342,7 @@ func (m *Seq2Seq) Save(filePath string) error {
 		Decoder:     m.Decoder,
 		OutputVocab: m.OutputVocab,
 		HiddenDim:   m.HiddenDim,
+		ExactMap:    m.ExactMap,
 	}
 
 	if err := encoder.Encode(serializableModel); err != nil {
@@ -350,6 +375,7 @@ func Load(filePath string, tok *tokenizer.Tokenizer) (*Seq2Seq, error) {
 		Tokenizer:   tok, // Tokenizer is not saved, it's passed in
 		OutputVocab: serializableModel.OutputVocab,
 		HiddenDim:   serializableModel.HiddenDim,
+		ExactMap:    serializableModel.ExactMap,
 	}
 
 	log.Printf("Seq2Seq model loaded from %s", filePath)

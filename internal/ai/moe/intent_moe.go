@@ -18,9 +18,7 @@ import (
 
 	"github.com/golangast/gollemer/internal/ai/neural/nn"
 	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
-	"github.com/golangast/gollemer/internal/ai/neural/nnu/word2vec"
 	"github.com/golangast/gollemer/internal/ai/neural/tensor"
-	"github.com/golangast/gollemer/internal/ai/tagger/tag"
 )
 
 func init() {
@@ -1549,15 +1547,8 @@ func (m *IntentMoE) BeamSearchDecode(
 }
 
 // NewIntentMoE creates a new IntentMoE model.
-func NewIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, childVocabSize, sentenceVocabSize, maxAttentionHeads int, word2vecModel *word2vec.SimpleWord2Vec) (*IntentMoE, error) {
-	if word2vecModel != nil {
-		vocabSize = word2vecModel.VocabSize
-		word2vecModel.SyncF32()
-	}
+func NewIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, childVocabSize, sentenceVocabSize, maxAttentionHeads int) (*IntentMoE, error) {
 	embedding := nn.NewEmbedding(vocabSize, embeddingDim)
-	if word2vecModel != nil {
-		embedding.LoadPretrainedWeights(word2vecModel.WordVectorsF32)
-	}
 
 	// Define the expert builder function
 	expertBuilder := func(expertIdx int) (Expert, error) {
@@ -1746,25 +1737,22 @@ func (m *IntentMoE) PerformGlobalWeightSurgery(threshold float32) int {
 }
 
 // NewHybridIntentMoE creates a new IntentMoE model using the Hybrid LLM-GNN Encoder.
-func NewHybridIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, childVocabSize, sentenceVocabSize, maxAttentionHeads int, word2vecModel *word2vec.SimpleWord2Vec) (*IntentMoE, error) {
-	if word2vecModel != nil {
-		vocabSize = word2vecModel.VocabSize
-		word2vecModel.SyncF32()
-	}
+func NewHybridIntentMoE(vocabSize, embeddingDim, numExperts, parentVocabSize, childVocabSize, sentenceVocabSize, maxAttentionHeads int) (*IntentMoE, error) {
 	embedding := nn.NewEmbedding(vocabSize, embeddingDim)
-	if word2vecModel != nil {
-		embedding.LoadPretrainedWeights(word2vecModel.WordVectorsF32)
+	k := 2
+	if numExperts <= 1 {
+		k = 1
 	}
 
 	// 1. Create the inner LLM Encoder (MoE Stack with 4 layers for deeper reasoning)
 	expertBuilder := func(expertIdx int) (Expert, error) {
 		return NewFeedForwardExpert(embeddingDim, embeddingDim*2, embeddingDim)
 	}
-	l0, err := NewMoELayer(embeddingDim, embeddingDim, numExperts, 2, expertBuilder)
+	l0, err := NewMoELayer(embeddingDim, embeddingDim, numExperts, k, expertBuilder)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create MoE Layer 0: %w", err)
 	}
-	l1, err := NewMoELayer(embeddingDim, embeddingDim, numExperts, 2, expertBuilder)
+	l1, err := NewMoELayer(embeddingDim, embeddingDim, numExperts, k, expertBuilder)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create MoE Layer 1: %w", err)
 	}
@@ -1941,27 +1929,8 @@ func (m *IntentMoE) Forward(scheduledSamplingProb float32, inputs ...*tensor.Ten
 
 	// Encoder forward pass
 	// Before calling encoder forward, expose token IDs for observability
-	if queryTokenIDs != nil {
-		// Flatten token IDs from tensor data
-		if ObservabilityInstance != nil {
-			ids := make([]int, len(queryTokenIDs.Data))
-			for i, v := range queryTokenIDs.Data {
-				ids[i] = int(v)
-			}
-			ObservabilityInstance.SetTempTokenIDs(ids)
-		}
-	} else {
-		if ObservabilityInstance != nil {
-			ObservabilityInstance.ClearTempTokenIDs()
-		}
-	}
-
 	contextVector, err := m.Encoder.Forward(queryEmbeddings)
 	if err != nil {
-		// Clear token IDs on error
-		if ObservabilityInstance != nil {
-			ObservabilityInstance.ClearTempTokenIDs()
-		}
 		return nil, nil, fmt.Errorf("MoE encoder forward failed: %w", err)
 	}
 
@@ -1982,15 +1951,7 @@ func (m *IntentMoE) Forward(scheduledSamplingProb float32, inputs ...*tensor.Ten
 	// Decoder forward pass with scheduled sampling & mask
 	sentenceLogits, err := m.Decoder.Forward(contextVector, targetTokenIDs, scheduledSamplingProb, inputMask)
 	if err != nil {
-		// Clear token IDs on error
-		if ObservabilityInstance != nil {
-			ObservabilityInstance.ClearTempTokenIDs()
-		}
 		return nil, nil, fmt.Errorf("decoder forward failed: %w", err)
-	}
-	// Clear the temporary token ID buffer after forward completed
-	if ObservabilityInstance != nil {
-		ObservabilityInstance.ClearTempTokenIDs()
 	}
 
 	return sentenceLogits, contextVector, nil
@@ -2148,11 +2109,11 @@ func (m *IntentMoE) GetGateTemperature() float32 {
 
 // GreedySearchDecode performs greedy decoding (temperature=1.0).
 // This is a wrapper for backward compatibility.
-func (m *IntentMoE) GreedySearchDecode(contextVector *tensor.Tensor, maxLen, sosToken, eosToken int, repetitionPenalty, frequencyPenalty float32, topK int, taggedData tag.Tag) ([]int, error) {
-	return m.GreedySearchDecodeWithTemp(contextVector, maxLen, sosToken, eosToken, 1.0, repetitionPenalty, frequencyPenalty, topK, taggedData, nil)
+func (m *IntentMoE) GreedySearchDecode(contextVector *tensor.Tensor, maxLen, sosToken, eosToken int, repetitionPenalty, frequencyPenalty float32, topK int) ([]int, error) {
+	return m.GreedySearchDecodeWithTemp(contextVector, maxLen, sosToken, eosToken, 1.0, repetitionPenalty, frequencyPenalty, topK, nil)
 }
 
-func (m *IntentMoE) GreedySearchDecodeWithTemp(contextVector *tensor.Tensor, maxLen, sosToken, eosToken int, temperature, repetitionPenalty, frequencyPenalty float32, topK int, taggedData tag.Tag, suppressedIDs map[int]bool) ([]int, error) {
+func (m *IntentMoE) GreedySearchDecodeWithTemp(contextVector *tensor.Tensor, maxLen, sosToken, eosToken int, temperature, repetitionPenalty, frequencyPenalty float32, topK int, suppressedIDs map[int]bool) ([]int, error) {
 	var decodedIDs []int
 	decoderInputIDs := tensor.NewTensor([]int{1, 1}, []float32{float32(sosToken)}, false)
 
@@ -2297,70 +2258,6 @@ func (m *IntentMoE) GreedySearchDecodeWithTemp(contextVector *tensor.Tensor, max
 		decoderInputIDs = tensor.NewTensor([]int{1, 1}, []float32{float32(predictedID)}, false)
 	}
 
-	// Debug: print predicted token IDs and their mapped words
-	if m.SentenceVocab != nil {
-		words := make([]string, 0, len(decodedIDs))
-		for _, id := range decodedIDs {
-			// Filter out PAD, UNK, BOS, EOS tokens
-			if id == m.SentenceVocab.PaddingTokenID || id == m.SentenceVocab.UnkID || id == m.SentenceVocab.BosID || id == m.SentenceVocab.EosID {
-				continue
-			}
-			word := m.SentenceVocab.GetWord(id)
-			// Filter out UNK and empty
-			if word == "UNK" || word == "" {
-				continue
-			}
-			words = append(words, word)
-		}
-		// Expanded known keys for formatting
-		knownKeys := map[string]bool{
-			"operation": true, "target_resource": true, "context": true, "user_role": true, "type": true, "name": true, "properties": true, "path": true,
-			"Create": true, "Delete": true, "Update": true, "Filesystem::Folder": true, "Filesystem::File": true,
-			"admin": true, "query": true, "semantic_output": true, "directory": true, "file": true, "folder": true, "resource": true, "role": true,
-			"intent": true, "action": true, "status": true, "result": true, "input": true, "output": true, "config": true, "data": true, "plugin": true,
-			"server": true, "webserver": true, "repository": true, "host": true, "port": true, "address": true, "command": true, "response": true,
-			"description": true, "permission": true, "owner": true, "group": true, "mode": true, "timestamp": true, "log": true, "message": true,
-			"license": true, "desktop": true, "user": true, "plugins": true, "project": true, "test": true, "src": true, "docs": true,
-			"update": true, "delete": true, "create": true, "read": true, "write": true, "execute": true, "run": true, "start": true, "stop": true,
-			"restart": true, "info": true, "details": true, "summary": true, "version": true, "author": true, "email": true,
-			"readme": true, "main": true, "go": true, "server.go": true, "repository.go": true, "test.go": true, "config.go": true,
-		}
-
-		keyToNer := map[string]string{
-			"type":            "OBJECT_TYPE",
-			"target_resource": "PATH",
-			"path":            "PATH",
-		}
-
-		nerToToken := make(map[string]string)
-		for i, token := range taggedData.Tokens {
-			if i < len(taggedData.NerTag) && taggedData.NerTag[i] != "O" && taggedData.NerTag[i] != "" {
-				nerToToken[taggedData.NerTag[i]] = token
-			}
-		}
-
-		for i := 0; i < len(words)-1; i++ {
-			if nerTag, ok := keyToNer[words[i]]; ok {
-				if replacementToken, ok := nerToToken[nerTag]; ok {
-					words[i+1] = replacementToken
-				}
-			}
-		}
-
-		var formatted []string
-		i := 0
-		for i < len(words)-1 {
-			key := words[i]
-			val := words[i+1]
-			if knownKeys[key] {
-				formatted = append(formatted, fmt.Sprintf("%s: %s", key, val))
-				i += 2
-			} else {
-				formatted = append(formatted, key)
-				i++
-			}
-		}
-	}
 	return decodedIDs, nil
 }
 

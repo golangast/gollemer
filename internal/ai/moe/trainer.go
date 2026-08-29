@@ -1,12 +1,12 @@
 package moe
 
 import (
-	"github.com/golangast/gollemer/internal/ai/neural/nn"
-	"github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
-	"github.com/golangast/gollemer/internal/ai/neural/nnu/word2vec"
-	"github.com/golangast/gollemer/internal/ai/neural/tensor"
 	"log"
 	"time"
+
+	"github.com/golangast/gollemer/internal/ai/neural/nn"
+	"github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
+	"github.com/golangast/gollemer/internal/ai/neural/tensor"
 )
 
 type TrainingStats struct {
@@ -23,7 +23,6 @@ type Trainer struct {
 	BestModelPath        string
 	CollapseCount        int
 	LastSafeLR           float32
-	Observability        *MoEObservability
 	ObservabilityEnabled bool
 }
 
@@ -38,7 +37,6 @@ func (t *Trainer) AutoHeal(m *IntentMoE, opt *nn.Adam, stats TrainingStats) {
 		}
 		t.CollapseCount++
 	} else {
-		// Recovery: If usage is healthy, slowly bleed off the collapse counter
 		if t.CollapseCount > 0 {
 			t.CollapseCount--
 		}
@@ -66,19 +64,14 @@ func (t *Trainer) AutoHeal(m *IntentMoE, opt *nn.Adam, stats TrainingStats) {
 }
 
 func (t *Trainer) SaveGoldenCheckpoint(m *IntentMoE, stats TrainingStats, currentStep int, profile nn.TrainingProfile, tokens int64, duration time.Duration) {
-	// 1. Check for Expert Dominance (The "Dictator" Check)
 	if stats.MaxDominance > 0.75 {
 		log.Printf("🚫 Save Aborted: Expert Dominance too high (%.2f%%)\n", stats.MaxDominance*100)
 		return
 	}
-
-	// 2. Check for Confidence (The "Word Salad" Check)
 	if stats.StepConfidence < 0.15 && stats.Epoch > 5 {
 		log.Printf("🚫 Save Aborted: Step Confidence too low (%.2f%%)\n", stats.StepConfidence*100)
 		return
 	}
-
-	// 3. Check for Improvement (The "Progress" Check)
 	if stats.Perplexity < stats.BestPerplexity || stats.BestPerplexity == 0 {
 		log.Println("💾 Saving New Golden Checkpoint: Perplexity Improved!")
 		checkpointPath := "data/models/gob_models/golden_checkpoint.gob"
@@ -98,88 +91,46 @@ func (t *Trainer) SaveGoldenCheckpoint(m *IntentMoE, stats TrainingStats, curren
 			log.Printf("Error saving checkpoint: %v\n", err)
 			return
 		}
-
-		// Update the trainer's benchmark
 		t.BestModelPath = checkpointPath
 	}
 }
 
-// InitializeObservability sets up advanced observability tracking.
-func (t *Trainer) InitializeObservability(numExperts int, windowSize int, vocab *vocab.Vocabulary, w2vModel *word2vec.SimpleWord2Vec) {
-	t.Observability = NewMoEObservability(numExperts, windowSize, vocab, w2vModel)
-	t.ObservabilityEnabled = true
-	log.Println("✅ MoE Observability initialized with 4 advanced metrics")
+// InitializeObservability is a no-op stub (observability removed).
+func (t *Trainer) InitializeObservability(numExperts int, windowSize int, vocab *vocab.Vocabulary) {
+	_ = numExperts
+	_ = windowSize
+	_ = vocab
+	log.Println("✅ MoE Trainer initialized")
 }
 
-// RecordTrainingStep records a single training step for observability tracking.
-func (t *Trainer) RecordTrainingStep(expertIDs, tokenIDs []int, loss float32) {
-	if !t.ObservabilityEnabled || t.Observability == nil {
-		return
-	}
-	t.Observability.RecordStep(expertIDs, tokenIDs, loss)
-}
+// RecordTrainingStep is a no-op stub.
+func (t *Trainer) RecordTrainingStep(expertIDs, tokenIDs []int, loss float32) {}
 
-// UpdateWeightVelocity updates weight velocity tracking for a layer.
+// UpdateWeightVelocity is a no-op stub.
 func (t *Trainer) UpdateWeightVelocity(layerName string, currentWeights []float32, embeddingTensor *tensor.Tensor) {
-	if !t.ObservabilityEnabled || t.Observability == nil {
-		return
-	}
-	t.Observability.FinishStep(layerName, currentWeights, embeddingTensor)
 }
 
-// RecordWeightSnapshot captures baseline weights for next delta calculation.
-func (t *Trainer) RecordWeightSnapshot(layerName string, weights []float32) {
-	if !t.ObservabilityEnabled || t.Observability == nil {
-		return
-	}
-	t.Observability.RecordWeights(layerName, weights)
-}
+// RecordWeightSnapshot is a no-op stub.
+func (t *Trainer) RecordWeightSnapshot(layerName string, weights []float32) {}
 
-// FinishEpoch resets windowed metrics and logs observability report.
-func (t *Trainer) FinishEpoch(vocab *vocab.Vocabulary) {
-	if !t.ObservabilityEnabled || t.Observability == nil {
-		return
-	}
-	t.Observability.ResetForEpoch()
-	t.Observability.Log(vocab)
-}
+// FinishEpoch is a no-op stub.
+func (t *Trainer) FinishEpoch(vocab *vocab.Vocabulary) {}
 
-// ExportObservabilityMetrics exports all observability metrics as JSON.
+// ExportObservabilityMetrics is a no-op stub.
 func (t *Trainer) ExportObservabilityMetrics(vocab *vocab.Vocabulary) (string, error) {
-	if !t.ObservabilityEnabled || t.Observability == nil {
-		return "{}", nil
-	}
-	return t.Observability.ExportMetricsJSON(vocab)
+	return "{}", nil
 }
 
-// RecordTokenTrajectory records the full routing path of a token through expert layers.
+// RecordTokenTrajectory is a no-op stub.
 func (t *Trainer) RecordTokenTrajectory(tokenID int, tokenStr string, expertPath []int, confidences []float32) {
-	if !t.ObservabilityEnabled || t.Observability == nil {
-		return
-	}
-	t.Observability.RecordTokenTrajectory(tokenID, tokenStr, expertPath, confidences)
 }
 
-// UpdateEmbeddingGalaxy updates the 2D PCA projection of the embedding space.
+// UpdateEmbeddingGalaxy is a no-op stub.
 func (t *Trainer) UpdateEmbeddingGalaxy(vocab *vocab.Vocabulary, embeddingTensor *tensor.Tensor, topN int) {
-	if !t.ObservabilityEnabled || t.Observability == nil {
-		return
-	}
-	t.Observability.UpdateEmbeddingProjection(vocab, embeddingTensor, topN)
 }
 
-// RecordExpertForSimilarity records expert weights for redundancy detection.
-func (t *Trainer) RecordExpertForSimilarity(expertID int, weights []float32) {
-	if !t.ObservabilityEnabled || t.Observability == nil {
-		return
-	}
-	t.Observability.RecordExpertWeights(expertID, weights)
-}
+// RecordExpertForSimilarity is a no-op stub.
+func (t *Trainer) RecordExpertForSimilarity(expertID int, weights []float32) {}
 
-// ComputeExpertRedundancy computes the expert similarity matrix and detects redundancy.
-func (t *Trainer) ComputeExpertRedundancy(numExperts int) {
-	if !t.ObservabilityEnabled || t.Observability == nil {
-		return
-	}
-	t.Observability.ComputeExpertSimilarity()
-}
+// ComputeExpertRedundancy is a no-op stub.
+func (t *Trainer) ComputeExpertRedundancy(numExperts int) {}

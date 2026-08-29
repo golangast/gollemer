@@ -84,7 +84,11 @@ func NewRNNDecoder(inputDim, outputVocabSize, hiddenSize, maxAttentionHeads, num
 		expertBuilder := func(expertIdx int) (Expert, error) {
 			return NewInternalExpert(expertIdx, hiddenSize+inputDim, (hiddenSize + inputDim), outputVocabSize)
 		}
-		moeLayer, err := NewMoELayer(hiddenSize+inputDim, outputVocabSize, numExperts, 2, expertBuilder)
+		k := 2
+		if numExperts <= 1 {
+			k = 1
+		}
+		moeLayer, err := NewMoELayer(hiddenSize+inputDim, outputVocabSize, numExperts, k, expertBuilder)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create MoE output layer: %w", err)
 		}

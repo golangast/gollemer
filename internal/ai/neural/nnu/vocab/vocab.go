@@ -10,12 +10,6 @@ import (
 	"io"
 	"os"
 	"strings"
-
-	"github.com/golangast/gollemer/internal/ai/neural/nn/dr"
-	"github.com/golangast/gollemer/internal/ai/neural/nn/ner"
-	"github.com/golangast/gollemer/internal/ai/neural/nn/phrase"
-	"github.com/golangast/gollemer/internal/ai/neural/nn/pos"
-	"github.com/golangast/gollemer/internal/ai/tagger/tag"
 )
 
 // Vocabulary represents a mapping from words to integer IDs.
@@ -28,8 +22,9 @@ type Vocabulary struct {
 	UnkID          int
 }
 
+// TrainingDataJSON is kept for backward compatibility with GOB-encoded models.
 type TrainingDataJSON struct {
-	Sentences []tag.Tag `json:"sentences"`
+	Sentences []map[string]interface{} `json:"sentences"`
 }
 
 // NewVocabulary creates a new Vocabulary instance.
@@ -74,12 +69,12 @@ func (v *Vocabulary) AddToken(word string) int {
 	return id
 }
 
-// GetTokenID returns the token ID for a given word, or -1 if not found.
+// GetTokenID returns the token ID for a given word, or the UNK id if not found.
 func (v *Vocabulary) GetTokenID(word string) int {
 	if id, ok := v.WordToToken[word]; ok {
 		return id
 	}
-	return v.UnkID // Return UNK token ID if not found
+	return v.UnkID
 }
 
 // GetWord returns the word for a given token ID, or an empty string if not found.
@@ -87,7 +82,7 @@ func (v *Vocabulary) GetWord(id int) string {
 	if id >= 0 && id < len(v.TokenToWord) {
 		return v.TokenToWord[id]
 	}
-	return "" // Or return UNK word
+	return ""
 }
 
 // Size returns the number of unique tokens in the vocabulary.
@@ -100,43 +95,21 @@ func (v *Vocabulary) Decode(tokenIDs []int) string {
 	words := make([]string, 0, len(tokenIDs))
 	for _, id := range tokenIDs {
 		if id == v.EosID {
-			break // Stop decoding at EOS token
+			break
 		}
 		if id == v.PaddingTokenID {
-			continue // Skip padding tokens
+			continue
 		}
 		words = append(words, v.GetWord(id))
 	}
 	return strings.Join(words, " ")
 }
 
-func CreateVocab(modeldirectory string) (*Vocabulary, map[string]int, map[string]int, map[string]int, map[string]int, *TrainingDataJSON) {
-	trainingData, err := LoadTrainingDataJSON(modeldirectory)
-	if err != nil {
-		fmt.Println("error loading training data: %w", err)
-	}
-	// Create vocabularies
+// CreateAndSaveVocab creates a vocabulary from a list of token slices and saves it as a GOB file.
+func CreateAndSaveVocab(sentences [][]string, vocabPath string) (*Vocabulary, error) {
 	tokenVocab := NewVocabulary()
-	tokenVocab.AddToken("UNK") // Add "UNK" token initially
-	for _, sentence := range trainingData.Sentences {
-		for _, token := range sentence.Tokens {
-			tokenVocab.AddToken(token)
-		}
-	}
-
-	posTagVocab := pos.CreatePosTagVocab(trainingData.Sentences)
-	nerTagVocab := ner.CreateTagVocabNer(trainingData.Sentences)
-	phraseTagVocab := phrase.CreatePhraseTagVocab(trainingData.Sentences)
-	drTagVocab := dr.CreateDRTagVocab(trainingData.Sentences)
-
-	return tokenVocab, posTagVocab, nerTagVocab, phraseTagVocab, drTagVocab, trainingData
-}
-
-// CreateAndSaveVocab creates a vocabulary from training data and saves it as a GOB file.
-func CreateAndSaveVocab(sentences []tag.Tag, vocabPath string) (*Vocabulary, error) {
-	tokenVocab := NewVocabulary()
-	for _, sentence := range sentences {
-		for _, token := range sentence.Tokens {
+	for _, tokens := range sentences {
+		for _, token := range tokens {
 			tokenVocab.AddToken(token)
 		}
 	}
@@ -176,7 +149,7 @@ func LoadVocabulary(filePath string) (*Vocabulary, error) {
 		return nil, err
 	}
 
-	// 🛡️ Robust ID restoration (Avoid -1 or UNK mapping for special tokens)
+	// 🛡️ Robust ID restoration
 	v.PaddingTokenID = -1
 	if id, ok := v.WordToToken["<pad>"]; ok {
 		v.PaddingTokenID = id
@@ -208,7 +181,7 @@ func LoadVocabulary(filePath string) (*Vocabulary, error) {
 	return &v, nil
 }
 
-// Function to load training data from a JSON file
+// LoadTrainingDataJSON loads training data from a JSON file.
 func LoadTrainingDataJSON(filePath string) (*TrainingDataJSON, error) {
 	file, err := os.Open(filePath)
 	if err != nil {

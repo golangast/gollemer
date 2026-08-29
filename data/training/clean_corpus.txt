@@ -1,8 +1,0 @@
-create a webserver with authentication
-generate dsl
-delete project
-show history
-revert command
-add handler
-endpoint get ping
-model user

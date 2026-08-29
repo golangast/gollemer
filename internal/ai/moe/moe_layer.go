@@ -821,17 +821,22 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 		if moe.Training {
 			switch moe.CurrentPhase {
 			case 1:
-				// PHASE 1: Conversational Only. Hard-mask out cartridge slots.
+				// PHASE 1: Conversational Only. Hard-mask out cartridge slots (experts 8+).
+				// Only applies if the model has >8 experts; otherwise there's nothing to mask.
 				for e := 8; e < numExperts; e++ {
 					for i := 0; i < numTokens; i++ {
 						gateLogits.Data[i*numExperts+e] = -1e9
 					}
 				}
 			case 2:
-				// PHASE 2: Cartridge Ingestion Only. Hard-mask out conversational slots.
-				for e := 0; e < 8 && e < numExperts; e++ {
-					for i := 0; i < numTokens; i++ {
-						gateLogits.Data[i*numExperts+e] = -1e9
+				// PHASE 2: Cartridge Ingestion Only. Hard-mask out conversational slots (experts 0–7).
+				// Only applies if the model has >8 experts; with <=8 experts all are
+				// "conversational" and there are no cartridge-only slots to isolate.
+				if numExperts > 8 {
+					for e := 0; e < 8; e++ {
+						for i := 0; i < numTokens; i++ {
+							gateLogits.Data[i*numExperts+e] = -1e9
+						}
 					}
 				}
 			case 3:
@@ -876,7 +881,6 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 		}
 
 		// Apply softmax to get probabilities
-		gateStart := time.Now()
 		GateOutputs, err := scoresTensor.Softmax(len(scoresTensor.Shape) - 1)
 		if err != nil {
 			return nil, fmt.Errorf("gating network softmax failed: %w", err)
@@ -1060,6 +1064,11 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 
 		// 🧬 STAGNATION RECOVERY (Training Only)
 		if moe.Training && !moe.OverfitMode {
+			// Ensure StepStagnationCounters is initialized and sized correctly (handles dynamically added experts)
+			if len(moe.StepStagnationCounters) != numExperts {
+				moe.StepStagnationCounters = make([]int, numExperts)
+			}
+
 			if moe.CurrentPhase <= 1 {
 				for j := 0; j < numExperts; j++ {
 					moe.StepStagnationCounters[j] = 0
@@ -1074,11 +1083,6 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 					}
 				}
 
-				// Ensure StepStagnationCounters is initialized (backward compatibility for layers created before this field was added)
-				if len(moe.StepStagnationCounters) != numExperts {
-					moe.StepStagnationCounters = make([]int, numExperts)
-				}
-
 				// Compute a proportional stagnation threshold.
 				// With K=2 and N experts, each expert is only expected to be used
 				// K/N of the time.
@@ -1090,8 +1094,8 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 					kVal = 1
 				}
 				stagnationThresh := (numExperts / kVal) * 200
-				if stagnationThresh < 5000 {
-					stagnationThresh = 5000
+				if stagnationThresh < 50000 {
+					stagnationThresh = 50000
 				}
 
 				for j := 0; j < numExperts; j++ {
@@ -1117,56 +1121,7 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 		}
 
 		moe.SelectedExperts = allSelectedExperts
-		// --- Observability: record per-layer selected experts + confidences when available ---
-		if ObservabilityInstance != nil {
-			layerStart := time.Now()
-			numTokensObs := batchSize * seqLength
-			selectedCopy := make([][]int, numTokensObs)
-			confidences := make([][]float32, numTokensObs)
-			for ti := 0; ti < numTokensObs; ti++ {
-				sel := moe.SelectedExperts[ti]
-				selectedCopy[ti] = append([]int{}, sel...)
-				// confidences for each chosen expert
-				confRow := make([]float32, len(sel))
-				if moe.GateOutputs != nil {
-					for j, ex := range sel {
-						idx := ti*numExperts + ex
-						if idx < len(moe.GateOutputs.Data) {
-							confRow[j] = moe.GateOutputs.Data[idx]
-						}
-					}
-				}
-				confidences[ti] = confRow
-			}
 
-			// find layer index in ActiveLayers
-			layerIdx := -1
-			for li, l := range ActiveLayers {
-				if l == moe {
-					layerIdx = li
-					break
-				}
-			}
-
-			// token IDs if provided by caller (request-scoped via ObservabilityInstance)
-			var tokenIDs []int
-			if ObservabilityInstance != nil {
-				cur := ObservabilityInstance.GetTempTokenIDs()
-				if len(cur) == batchSize*seqLength {
-					tokenIDs = make([]int, len(cur))
-					copy(tokenIDs, cur)
-				}
-			}
-
-			if layerIdx >= 0 {
-				ObservabilityInstance.SetLayerSelection(layerIdx, tokenIDs, selectedCopy, confidences)
-			}
-			// record latency for this layer if a trace is active
-			if layerIdx >= 0 {
-				dur := time.Since(layerStart).Milliseconds()
-				ObservabilityInstance.AddLayerLatency(layerIdx, dur)
-			}
-		}
 		// Clear and re-fill ExpertTokenIndices sequentially to ensure correct relative indexing
 		for i := range moe.ExpertTokenIndices {
 			moe.ExpertTokenIndices[i] = moe.ExpertTokenIndices[i][:0]
@@ -1191,20 +1146,6 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 					// (Utilization is now tracked properly and aggregated from worker slices above)
 				}
 			}
-		}
-
-		// record gate latency up to selection end
-		gateDur := time.Since(gateStart).Milliseconds()
-		// find layer index
-		layerIdx := -1
-		for li, l := range ActiveLayers {
-			if l == moe {
-				layerIdx = li
-				break
-			}
-		}
-		if layerIdx >= 0 && ObservabilityInstance != nil {
-			ObservabilityInstance.AddLayerComponentLatency(layerIdx, "gate", gateDur)
 		}
 
 		moe.expertOutputs = make([]*Tensor, numExperts)
@@ -1233,20 +1174,7 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 					errOnce.Do(func() { firstErr = fmt.Errorf("expert %d forward failed: %w", t.ExpertIdx, err) })
 					return
 				}
-				exDur := time.Since(exStart).Milliseconds()
-				if ObservabilityInstance != nil {
-					// find layer index
-					layerIdx := -1
-					for li, l := range ActiveLayers {
-						if l == moe {
-							layerIdx = li
-							break
-						}
-					}
-					if layerIdx >= 0 {
-						ObservabilityInstance.AddLayerComponentLatency(layerIdx, "expert", exDur)
-					}
-				}
+				_ = time.Since(exStart).Milliseconds()
 
 				// --- Activation Clipping ---
 				output.Clip(-15.0, 15.0)

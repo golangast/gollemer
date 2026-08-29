@@ -1,5 +1,0 @@
-{"input":"add the return string to f/j.go","expected":{"type":"replace_code","target_file":"f/j.go","change":"add return type string to function F"}}
-{"input":"add return type string to f/j.go","expected":{"type":"replace_code","target_file":"f/j.go","change":"add return type string to function F"}}
-{"input":"add string after the return type of F","expected":{"type":"replace_code","target_file":"f/j.go","change":"insert string return type or modify signature for F"}}
-{"input":"add \"dfdfds\" to the return of F to f/j.go","expected":{"type":"replace_code","target_file":"f/j.go","change":"append literal to return of F"}}
-{"input":"return \"fddsf\" to F on f/j.go","expected":{"type":"replace_code","target_file":"f/j.go","change":"replace return expression of F with literal"}}

@@ -1,7 +1,6 @@
 package chat
 
 import (
-	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -19,30 +18,8 @@ import (
 	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
 	"github.com/golangast/gollemer/internal/ai/neural/tensor"
 	"github.com/golangast/gollemer/internal/ai/orchestrator"
+	trainingpb "github.com/golangast/gollemer/internal/ai/training/proto"
 )
-
-// LoadComputerCSV parses the computer.csv dataset into TrainPairs.
-func LoadComputerCSV(path string) []moe.TrainPair {
-	var pairs []moe.TrainPair
-	f, err := os.Open(path)
-	if err != nil {
-		return pairs
-	}
-	defer f.Close()
-	reader := csv.NewReader(f)
-	records, _ := reader.ReadAll()
-	for i, record := range records {
-		if i == 0 || len(record) < 2 {
-			continue
-		}
-		intent := "computer"
-		if len(record) >= 3 {
-			intent = record[2]
-		}
-		pairs = append(pairs, moe.TrainPair{Q: record[0], A: record[1], Intent: intent})
-	}
-	return pairs
-}
 
 // setLayerFreezeQuiet sets expert freeze state without printing if unchanged.
 func setLayerFreezeQuiet(layer *moe.MoELayer, expertID int, freeze bool) {
@@ -143,32 +120,71 @@ func svcIsCoherent(response string) bool {
 	return ttr >= 0.5 && hasConversational
 }
 
+func buildTargetSequence(answerTokens []string, vocab *mainvocab.Vocabulary, maxLen int) []float32 {
+	seq := make([]float32, maxLen)
+	for i := range seq {
+		seq[i] = float32(vocab.PaddingTokenID)
+	}
+	if vocab == nil || maxLen <= 0 {
+		return seq
+	}
+
+	bosID := vocab.BosID
+	if bosID < 0 {
+		bosID = vocab.GetTokenID("<s>")
+	}
+	eosID := vocab.EosID
+	if eosID < 0 {
+		eosID = vocab.GetTokenID("</s>")
+	}
+	seq[0] = float32(bosID)
+	writePos := 1
+	for _, tok := range answerTokens {
+		if writePos >= maxLen-1 {
+			break
+		}
+		id := lookupVocab(tok, vocab)
+		if id == vocab.PaddingTokenID {
+			continue
+		}
+		seq[writePos] = float32(id)
+		writePos++
+	}
+	if writePos >= maxLen {
+		writePos = maxLen - 1
+	}
+	seq[writePos] = float32(eosID)
+	return seq
+}
+
 // phaseNames maps phase number to its human-readable name and goal.
 var phaseNames = map[int]string{
 	1: "Social Bootcamp     — experts 0–7 learn conversational patterns; 8–15 frozen",
-	2: "Cartridge Injection — experts 8–15 learn technical/code vocab; 0–7 frozen",
-	3: "Joint Warmup        — all experts train together; routing stabilizes",
-	4: "Router Refinement   — low LR fine-tunes gating; slight LBW increase",
-	5: "Coherence Polish    — ultra-low LR; EOS/coherence optimization",
+	2: "Coherence Polish    — ultra-low LR; EOS/coherence optimization",
 }
 
-// epochsPerPhase is the fixed number of epochs each phase runs.
-const epochsPerPhase = 200
+// epochsPerPhase is the fixed number of epochs each phase runs (after Phase 1).
+const epochsPerPhase = 400
+
+// phase1Epochs is the reduced number of epochs for Phase 1 to prevent saturation.
+const phase1Epochs = 100
 
 // phaseForEpoch returns the 1-based phase number for a given epoch index.
 func phaseForEpoch(epoch int) int {
-	p := epoch/epochsPerPhase + 1
+	if epoch < phase1Epochs {
+		return 1
+	}
+	p := ((epoch - phase1Epochs) / epochsPerPhase) + 2
 	if p > 5 {
 		return 5
 	}
 	return p
 }
 
-// TrainMultiPhaseCurriculum orchestrates the 5-phase, 200-epoch-per-phase curriculum.
+// TrainMultiPhaseCurriculum orchestrates the 5-phase curriculum.
 // All hyperparameters are loaded from data/config/social_train.json.
-// Phase boundaries are purely epoch-count based: phase = epoch/200 + 1 (clamped to 5).
 func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string) {
-	log.Println("🚀 Starting 5-Phase Multi-Domain Curriculum Training (200 epochs/phase)...")
+	log.Printf("🚀 Starting 5-Phase Multi-Domain Curriculum Training (Phase 1: %d epochs, others: %d epochs)...", phase1Epochs, epochsPerPhase)
 	for p := 1; p <= 5; p++ {
 		log.Printf("   Phase %d: %s", p, phaseNames[p])
 	}
@@ -183,37 +199,18 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 
 	// ── 1. Load datasets ──────────────────────────────────────────────────────
 	var socialPairs []moe.TrainPair
-	var computerPairs []moe.TrainPair
 
-	// ── 1a. conversations.csv (multi-turn dialogue) ────────────────────────
-	// Format: conversation_id, turn_sequence, role, content
+	// ── 1a. conversations.pb (multi-turn dialogue, protobuf) ──────────────
+	// Format: ConversationSet { Conversation { id, turns[] } }
 	// We pair consecutive user→assistant turns into Q/A pairs.
-	conversationsCSVPath := filepath.Join(projectRoot, "data/training/trainingdata/conversations.csv")
-	if f, err := os.Open(conversationsCSVPath); err == nil {
-		reader := csv.NewReader(f)
-		records, _ := reader.ReadAll()
-		f.Close()
-		type turn struct{ role, content string }
-		convMap := make(map[string][]turn)
-		convOrder := []string{}
-		seen := map[string]bool{}
-		for i, rec := range records {
-			if i == 0 || len(rec) < 4 {
-				continue
-			}
-			id, role, content := rec[0], rec[2], rec[3]
-			convMap[id] = append(convMap[id], turn{role, content})
-			if !seen[id] {
-				seen[id] = true
-				convOrder = append(convOrder, id)
-			}
-		}
+	conversationsPBPath := filepath.Join(projectRoot, "data/training/trainingdata/conversations.pb")
+	if conversations, err := trainingpb.LoadConversationsFromProto(conversationsPBPath); err == nil {
 		convCount := 0
-		for _, id := range convOrder {
-			turns := convMap[id]
+		for _, conv := range conversations {
+			turns := conv.Turns
 			for i := 0; i+1 < len(turns); i++ {
-				if strings.ToLower(turns[i].role) == "user" && strings.ToLower(turns[i+1].role) == "assistant" {
-					q, a := strings.TrimSpace(turns[i].content), strings.TrimSpace(turns[i+1].content)
+				if strings.ToLower(turns[i].Role) == "user" && strings.ToLower(turns[i+1].Role) == "assistant" {
+					q, a := strings.TrimSpace(turns[i].Content), strings.TrimSpace(turns[i+1].Content)
 					if q != "" && a != "" {
 						socialPairs = append(socialPairs, moe.TrainPair{Q: q, A: a, Intent: "social"})
 						convCount++
@@ -221,9 +218,9 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 				}
 			}
 		}
-		log.Printf("📚 Loaded %d pairs from conversations.csv", convCount)
+		log.Printf("📚 Loaded %d pairs from conversations.pb", convCount)
 	} else {
-		log.Printf("⚠️ conversations.csv: %v", err)
+		log.Printf("⚠️ conversations.pb: %v", err)
 	}
 
 	// ── 1b. conversing.csv (simple Q/A) ───────────────────────────────────
@@ -253,18 +250,13 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 					if strings.TrimSpace(example) == "" {
 						continue
 					}
-					// Classify into social vs computer domain based on intent name.
 					if strings.Contains(entry.Intent, "edit") ||
 						strings.Contains(entry.Intent, "code") ||
 						strings.Contains(entry.Intent, "fix") ||
 						strings.Contains(entry.Intent, "add") ||
 						strings.Contains(entry.Intent, "refactor") ||
 						strings.Contains(entry.Intent, "debug") {
-						computerPairs = append(computerPairs, moe.TrainPair{
-							Q:      example,
-							A:      fmt.Sprintf("Sure, I will %s.", intentName),
-							Intent: "computer",
-						})
+						// Skip code intents for pure sentence training
 					} else {
 						socialPairs = append(socialPairs, moe.TrainPair{
 							Q:      example,
@@ -283,87 +275,19 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 		log.Printf("⚠️ intent_corpus.json: %v", err)
 	}
 
-	// ── 1d. mined_patches.json (instruction → patch) ──────────────────────
-	// Format: [{ "instruction": "...", "target_patch": "..." }]
-	minedPatchesPath := filepath.Join(projectRoot, "data/training/mined_patches.json")
-	if raw, err := os.ReadFile(minedPatchesPath); err == nil {
-		var patches []struct {
-			Instruction string `json:"instruction"`
-			TargetPatch string `json:"target_patch"`
-		}
-		if jsonErr := json.Unmarshal(raw, &patches); jsonErr == nil {
-			for _, p := range patches {
-				q := strings.TrimSpace(p.Instruction)
-				a := strings.TrimSpace(p.TargetPatch)
-				if q != "" && a != "" {
-					computerPairs = append(computerPairs, moe.TrainPair{Q: q, A: a, Intent: "computer"})
-				}
-			}
-			log.Printf("📚 Loaded %d instruction-patch pairs from mined_patches.json", len(patches))
-		} else {
-			log.Printf("⚠️ Failed to parse mined_patches.json: %v", jsonErr)
-		}
-	} else {
-		log.Printf("⚠️ mined_patches.json: %v", err)
+	if len(socialPairs) == 0 {
+		log.Fatalf("❌ Missing required datasets (social=%d). Aborting.", len(socialPairs))
 	}
-
-	// ── 1e. mined_patches_fim.json (fill-in-the-middle) ───────────────────
-	// Format: [{ "prefix": "...", "middle": "...", "suffix": "..." }]
-	// Q = "Complete the code between <PREFIX> ... <SUFFIX>", A = middle
-	minedFIMPath := filepath.Join(projectRoot, "data/training/mined_patches_fim.json")
-	if raw, err := os.ReadFile(minedFIMPath); err == nil {
-		var fimItems []struct {
-			Prefix string `json:"prefix"`
-			Middle string `json:"middle"`
-			Suffix string `json:"suffix"`
-		}
-		if jsonErr := json.Unmarshal(raw, &fimItems); jsonErr == nil {
-			fimCount := 0
-			for _, item := range fimItems {
-				middle := strings.TrimSpace(item.Middle)
-				if middle == "" {
-					continue
-				}
-				prefix := strings.TrimSpace(item.Prefix)
-				suffix := strings.TrimSpace(item.Suffix)
-				var q string
-				if suffix != "" {
-					q = fmt.Sprintf("complete the code: %s <fill> %s", prefix, suffix)
-				} else {
-					q = fmt.Sprintf("complete the code: %s", prefix)
-				}
-				computerPairs = append(computerPairs, moe.TrainPair{Q: q, A: middle, Intent: "computer"})
-				fimCount++
-			}
-			log.Printf("📚 Loaded %d FIM examples from mined_patches_fim.json", fimCount)
-		} else {
-			log.Printf("⚠️ Failed to parse mined_patches_fim.json: %v", jsonErr)
-		}
-	} else {
-		log.Printf("⚠️ mined_patches_fim.json: %v", err)
-	}
-
-	if len(socialPairs) == 0 || len(computerPairs) == 0 {
-		log.Fatalf("❌ Missing required datasets (social=%d, computer=%d). Aborting.", len(socialPairs), len(computerPairs))
-	}
-	log.Printf("📚 Total social+technical pairs: %d | Computer pairs: %d", len(socialPairs), len(computerPairs))
+	log.Printf("📚 Total social pairs: %d", len(socialPairs))
 
 	// ── 2. Build isolated subject vocabularies ──────────────────────────────
 	tmpVocab := mainvocab.NewVocabulary()
 	socialVocab := mainvocab.NewVocabulary()
-	techVocab := mainvocab.NewVocabulary()
 
-	sharedTokens := []string{"__ques__", "__ans__", "__intent__", "social", "computer", ":"}
+	sharedTokens := []string{"__ques__", "__ans__", "__intent__", "social", ":"}
 	for _, tok := range sharedTokens {
 		tmpVocab.AddToken(tok)
 		socialVocab.AddToken(tok)
-		techVocab.AddToken(tok)
-	}
-
-	// Add code syntax tokens so the tech model can generate Go code.
-	for _, tok := range []string{"{", "}", "(", ")", "=", ":", ";", ".", ",", "!", "?", "nil", "err", "if", "else", "for", "range", "return", "func", "type", "struct", "int", "string", "bool", "float64", "true", "false", "package", "import", "var", "const", "make", "new", "len", "cap", "append", "fmt", "Println", "Sprintf", "Errorf", "error", "interface{}"} {
-		tmpVocab.AddToken(tok)
-		techVocab.AddToken(tok)
 	}
 
 	// Build SocialVocab using only social pairs (isolated!)
@@ -371,14 +295,6 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 		for _, t := range cleanTokenize(pair.Q + " " + pair.A) {
 			tmpVocab.AddToken(t)
 			socialVocab.AddToken(t)
-		}
-	}
-
-	// Build TechVocab using only computer pairs (isolated!)
-	for _, pair := range computerPairs {
-		for _, t := range cleanTokenize(pair.Q + " " + pair.A) {
-			tmpVocab.AddToken(t)
-			techVocab.AddToken(t)
 		}
 	}
 
@@ -406,7 +322,7 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 	if intentModel == nil {
 		intentModel, _ = moe.NewHybridIntentMoE(
 			tmpVocab.Size(), modelDim, baseExperts,
-			modelDim, modelDim, tmpVocab.Size(), 2, nil,
+			modelDim, modelDim, tmpVocab.Size(), 2,
 		)
 		intentModel.Decoder, _ = moe.NewRNNDecoder(modelDim, tmpVocab.Size(), modelDim, 8, 1, 0.0, baseExperts)
 		intentModel.RepairArchitecture()
@@ -434,7 +350,6 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 		}
 	}
 	intentModel.SocialVocab = socialVocab
-	intentModel.TechVocab = techVocab
 	// Do NOT inject the full BPE tokenizer — that would bloat the output head to 16k.
 	// tokenizer.InjectIntoVocab(...) is intentionally skipped for the social model.
 	intentModel.SentenceVocabSize = intentModel.SentenceVocab.Size()
@@ -487,8 +402,8 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 		maxEpochs = 2000
 	}
 	labelSmoothing := cfg.LabelSmoothing
-	if labelSmoothing <= 0 {
-		labelSmoothing = 0.05
+	if labelSmoothing < 0 {
+		labelSmoothing = 0.0
 	}
 
 	// Build flat loss-weight slice for WeightedCrossEntropy
@@ -541,12 +456,6 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 		switch phaseCfg.Dataset {
 		case "social":
 			trainPairs = socialPairs
-		case "computer":
-			trainPairs = computerPairs
-		case "all":
-			trainPairs = make([]moe.TrainPair, 0, len(socialPairs)+len(computerPairs))
-			trainPairs = append(trainPairs, socialPairs...)
-			trainPairs = append(trainPairs, computerPairs...)
 		default:
 			trainPairs = socialPairs
 		}
@@ -618,20 +527,8 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 				}
 
 				aToks := cleanTokenize(pair.A)
-				eosID := activeVocab.EosID
-				if eosID < 0 {
-					eosID = activeVocab.GetTokenID("<EOS>")
-				}
-				for t := 0; t < phaseMaxSeqLen && t < len(aToks); t++ {
-					id := activeVocab.GetTokenID(aToks[t])
-					if id < 0 {
-						id = padID
-					}
-					targetData[bIdx*phaseMaxSeqLen+t] = float32(id)
-				}
-				if len(aToks) < phaseMaxSeqLen {
-					targetData[bIdx*phaseMaxSeqLen+len(aToks)] = float32(eosID)
-				}
+				seqStart := bIdx * phaseMaxSeqLen
+				copy(targetData[seqStart:seqStart+phaseMaxSeqLen], buildTargetSequence(aToks, activeVocab, phaseMaxSeqLen))
 			}
 
 			inputTensor := tensor.NewTensor([]int{currentBatchSize, phaseMaxSeqLen}, inputData, false)
@@ -889,10 +786,9 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 			optimizer.SetLearningRate(phaseCfg.LearningRate * phase1LRFactor)
 		}
 
-		// ── Fixed 200-epoch phase transitions ─────────────────────────────────
-		// Each phase ends at epoch 199, 399, 599, 799 (i.e. (epoch+1) % epochsPerPhase == 0)
-		isPhaseEnd := (epoch+1)%epochsPerPhase == 0
+		// ── Phase transitions ─────────────────────────────────
 		nextPhase := phaseForEpoch(epoch + 1)
+		isPhaseEnd := nextPhase != currentPhase && nextPhase <= 5
 
 		if isPhaseEnd {
 			// ── Run the end-of-phase diagnostic probe ─────────────────────────
@@ -1042,93 +938,12 @@ func runEndOfPhaseProbe(intentModel *moe.IntentMoE, layers []*moe.MoELayer,
 		probeResult = fmt.Sprintf("Social response: '%s'\n   TTR=%.2f, social_tokens=%v", gen, ttr, hasSocial)
 
 	case 2:
-		// Phase 2 probe: Technical vocabulary
-		// Goal: cartridge experts (8–15) must have learned Go/code vocabulary.
-		// Pass: ≥1 Go keyword or symbol in the generated response.
-		goKeywords := map[string]bool{"func": true, "return": true, "if": true, "var": true, "err": true,
-			"nil": true, "int": true, "string": true, "error": true, "for": true, "range": true, "type": true}
-		gen, _, _ := StrictGenerateLowTemp(intentModel,
-			"__intent__ computer : __ques__ write a go function", 25, 1.0, false, epoch)
-		genLower := strings.ToLower(gen)
-		foundKeyword := ""
-		for kw := range goKeywords {
-			if strings.Contains(genLower, kw) {
-				foundKeyword = kw
-				break
-			}
-		}
-		passed = foundKeyword != ""
-		probeResult = fmt.Sprintf("Code response: '%s'\n   First Go keyword found: %q", gen, foundKeyword)
-
-	case 3:
-		// Phase 3 probe: Routing diversity
-		// Goal: different intents should route to different experts.
-		// Pass: ≥1 active expert in each of the two intent groups (social 0–7, code 8–15).
-		socialActive := 0
-		codeActive := 0
-		if len(layers) > 0 {
-			for i, frozen := range layers[0].ExpertFrozen {
-				if !frozen {
-					if i < 8 {
-						socialActive++
-					} else {
-						codeActive++
-					}
-				}
-			}
-		}
-		passed = socialActive >= 1 && codeActive >= 1
-		probeResult = fmt.Sprintf("Routing diversity: social experts active=%d, code experts active=%d", socialActive, codeActive)
-
-	case 4:
-		// Phase 4 probe: Load balancing
-		// Goal: no single expert should dominate token routing.
-		// Pass: max load fraction across all experts ≤ 50%.
-		maxLoad := 0
-		totalLoad := 0
-		for _, layer := range layers {
-			if len(layer.AccumulatedUtilization) == 0 {
-				continue
-			}
-			for _, u := range layer.AccumulatedUtilization {
-				if u > maxLoad {
-					maxLoad = u
-				}
-				totalLoad += u
-			}
-		}
-		maxFraction := float32(0)
-		if totalLoad > 0 {
-			maxFraction = float32(maxLoad) / float32(totalLoad)
-		}
-		passed = maxFraction <= 0.5
-		probeResult = fmt.Sprintf("Load balance: max expert fraction=%.1f%%", maxFraction*100)
-
-	case 5:
-		// Phase 5 probe: End-to-end quality
-		// Goal: model must produce coherent responses for BOTH social AND code prompts.
-		// Pass: both social and code responses pass their respective quality checks.
-		socialGen, _, _ := StrictGenerateLowTemp(intentModel,
-			"__intent__ social : __ques__ tell me about yourself", 20, 1.0, false, epoch)
-		codeGen, _, _ := StrictGenerateLowTemp(intentModel,
-			"__intent__ computer : __ques__ how do you handle errors in go", 25, 1.0, false, epoch)
-
+		// Phase 2 probe: Coherence Polish
+		// Goal: ensure the polished model still generates coherent language.
+		socialGen, _, _ := StrictGenerateLowTemp(intentModel, "__intent__ social : __ques__ tell me about yourself", 20, 1.0, false, epoch)
 		socialWords := strings.Fields(socialGen)
-		socialPassed := len(socialWords) >= 3 && svcIsCoherent(socialGen)
-
-		goKeywords := map[string]bool{"err": true, "error": true, "return": true, "nil": true, "if": true, "func": true}
-		codeGenLower := strings.ToLower(codeGen)
-		codeHasKeyword := false
-		for kw := range goKeywords {
-			if strings.Contains(codeGenLower, kw) {
-				codeHasKeyword = true
-				break
-			}
-		}
-		passed = socialPassed && codeHasKeyword
-		probeResult = fmt.Sprintf(
-			"Social: '%s' (coherent=%v)\n   Code: '%s' (has_keyword=%v)",
-			socialGen, socialPassed, codeGen, codeHasKeyword)
+		passed = len(socialWords) >= 3 && svcIsCoherent(socialGen)
+		probeResult = fmt.Sprintf("Polished social: '%s' (coherent=%v)", socialGen, passed)
 	}
 
 	resultIcon := "✅ PASS"
@@ -1164,7 +979,7 @@ func buildDefaultLossWeights(vocab *mainvocab.Vocabulary, cfg *orchestrator.Trai
 		for _, w := range suppressed {
 			id := vocab.GetTokenID(w)
 			if id >= 0 && id < len(weights) {
-				weights[id] = 0.3
+				weights[id] = 0.8
 			}
 		}
 		boosted := []string{".", "!", "?", "<BOS>", "<EOS>", "__ans__"}
@@ -1175,14 +990,6 @@ func buildDefaultLossWeights(vocab *mainvocab.Vocabulary, cfg *orchestrator.Trai
 			}
 		}
 	}
-	// Always boost Go code syntax tokens for code-fix datasets.
-	codeSyntaxBoosted := []string{"{", "}", "(", ")", "=", ":", ";", "if", "else", "for", "range", "func", "return", "package", "type", "struct", "err", "nil", ":= ", "==", "!="}
-	for _, w := range codeSyntaxBoosted {
-		id := vocab.GetTokenID(w)
-		if id >= 0 && id < len(weights) {
-			weights[id] = 3.0
-		}
-	}
 
 	// CRITICAL: Ensure padding token weight is 0.0 so the model isn't penalized
 	// for (or trained to predict) padding tokens, which swamps the gradients.
@@ -1191,109 +998,4 @@ func buildDefaultLossWeights(vocab *mainvocab.Vocabulary, cfg *orchestrator.Trai
 	}
 
 	return weights
-}
-
-// extractGoSymbols extracts Go code symbols (keywords, identifiers, operators)
-// from a generated string. Returns a deduplicated list of symbols found.
-func extractGoSymbols(s string) []string {
-	if s == "" {
-		return nil
-	}
-	goKeywords := map[string]bool{
-		"func": true, "if": true, "for": true, "range": true, "return": true,
-		"package": true, "import": true, "type": true, "struct": true,
-		"var": true, "const": true, "make": true, "new": true, "len": true,
-		"cap": true, "append": true, "defer": true, "go": true, "select": true,
-		"switch": true, "case": true, "break": true, "continue": true,
-		"fallthrough": true, "else": true, "map": true, "chan": true,
-		"interface": true, "error": true, "nil": true, "true": true, "false": true,
-	}
-	goTypes := map[string]bool{
-		"int": true, "string": true, "bool": true, "float64": true,
-		"float32": true, "int64": true, "int32": true, "byte": true,
-		"rune": true, "uint": true, "uint64": true, "uint32": true,
-	}
-	operators := map[string]bool{
-		"=": true, ":=": true, "==": true, "!=": true, "<": true, ">": true,
-		"+": true, "-": true, "*": true, "/": true, "&": true, "|": true,
-		"^": true, "<<": true, ">>": true,
-	}
-
-	seen := make(map[string]bool)
-	var symbols []string
-
-	// Tokenize: split on whitespace and common delimiters
-	words := strings.Fields(s)
-	for _, w := range words {
-		// Trim trailing punctuation/delimiters
-		w = strings.TrimRight(w, ".,;:(){}[]\"'`")
-		if w == "" {
-			continue
-		}
-		// Check against known sets
-		if goKeywords[w] || goTypes[w] || operators[w] {
-			if !seen[w] {
-				seen[w] = true
-				symbols = append(symbols, w)
-			}
-			continue
-		}
-		// Identifiers: start with letter or underscore, length > 1
-		if len(w) > 1 && ((w[0] >= 'a' && w[0] <= 'z') || (w[0] >= 'A' && w[0] <= 'Z') || w[0] == '_') {
-			isAlpha := true
-			for _, c := range w[1:] {
-				if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_') {
-					isAlpha = false
-					break
-				}
-			}
-			if isAlpha && !seen[w] {
-				seen[w] = true
-				symbols = append(symbols, w)
-			}
-		}
-		// Package-qualified names like fmt.Println
-		if strings.Contains(w, ".") {
-			parts := strings.Split(w, ".")
-			for _, p := range parts {
-				if p != "" && !seen[p] {
-					seen[p] = true
-					symbols = append(symbols, p)
-				}
-			}
-		}
-	}
-	return symbols
-}
-
-// codePassCondition evaluates a generated response for code-fix datasets.
-// It returns true if:
-//  1. The response is a non-empty string.
-//  2. Balanced braces { } and parentheses ( ) — same number of opening and closing.
-//  3. Contains at least one Go structural keyword (func, if, for, range, return, package, type, struct, var, const, import, make, append, import, defer, go, select, switch, case, break, continue, fallthrough, else).
-//
-// This replaces the natural-language svcIsCoherent check when training on code datasets.
-func codePassCondition(response string) bool {
-	response = strings.TrimSpace(response)
-	if response == "" {
-		return false
-	}
-	openBrace := strings.Count(response, "{")
-	closeBrace := strings.Count(response, "}")
-	if openBrace != closeBrace {
-		return false
-	}
-	openParen := strings.Count(response, "(")
-	closeParen := strings.Count(response, ")")
-	if openParen != closeParen {
-		return false
-	}
-	goKeywords := []string{"func ", "if ", "for ", "range ", "return ", "package ", "type ", "struct ", "var ", "const ", "import ", "make(", "append(", "defer ", "go ", "select {", "switch ", "case ", "break ", "continue ", "fallthrough ", "else ", "err ", "nil", "error", "interface", "map[", "[]", "chan ", "wg.", "http.", "fmt.", "json.", "io.", "os.", "ioutil."}
-	lower := strings.ToLower(response)
-	for _, kw := range goKeywords {
-		if strings.Contains(lower, kw) {
-			return true
-		}
-	}
-	return false
 }

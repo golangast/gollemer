@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/golangast/gollemer/internal/ai/moe"
+	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
 	"github.com/golangast/gollemer/internal/ai/neural/tensor"
 )
 
@@ -130,6 +131,52 @@ func TestAssessSentenceFormationDetectsEmergingSentence(t *testing.T) {
 	}
 	if !strings.Contains(reason, "sentence") && !strings.Contains(reason, "coherent") {
 		t.Fatalf("expected coherent sentence reasoning, got %q", reason)
+	}
+}
+
+func TestBuildTargetSequenceIncludesBOSAndEOS(t *testing.T) {
+	vocab := mainvocab.NewVocabulary()
+	vocab.AddToken("hello")
+	vocab.AddToken("there")
+
+	row := buildTargetSequence([]string{"hello", "there"}, vocab, 8)
+	if len(row) != 8 {
+		t.Fatalf("expected target row length 8, got %d", len(row))
+	}
+	if int(row[0]) != vocab.BosID {
+		t.Fatalf("expected BOS at index 0, got %d", int(row[0]))
+	}
+	if int(row[1]) != vocab.GetTokenID("hello") {
+		t.Fatalf("expected hello at index 1, got %d", int(row[1]))
+	}
+	if int(row[2]) != vocab.GetTokenID("there") {
+		t.Fatalf("expected there at index 2, got %d", int(row[2]))
+	}
+	if int(row[3]) != vocab.EosID {
+		t.Fatalf("expected EOS after the answer tokens, got %d at index %d", int(row[3]), 3)
+	}
+	for i := 4; i < len(row); i++ {
+		if int(row[i]) != vocab.PaddingTokenID {
+			t.Fatalf("expected padding after EOS, but row[%d]=%d", i, int(row[i]))
+		}
+	}
+}
+
+func TestUnknownTokensDoNotCollapseToUNK(t *testing.T) {
+	vocab := mainvocab.NewVocabulary()
+	vocab.AddToken("hello")
+	vocab.AddToken("there")
+
+	if got := lookupVocab("mysteryword", vocab); got != vocab.PaddingTokenID {
+		t.Fatalf("unknown words should map to padding, not UNK; got %d want %d", got, vocab.PaddingTokenID)
+	}
+
+	row := buildTargetSequence([]string{"hello", "mysteryword"}, vocab, 8)
+	if got := int(row[1]); got != vocab.GetTokenID("hello") {
+		t.Fatalf("hello should remain in the target, but got %d", got)
+	}
+	if got := int(row[2]); got != vocab.EosID {
+		t.Fatalf("unknown word should be skipped, leaving EOS at index 2; got %d", got)
 	}
 }
 

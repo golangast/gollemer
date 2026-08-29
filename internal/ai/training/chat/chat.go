@@ -23,13 +23,10 @@ import (
 	"github.com/golangast/gollemer/internal/ai/moe"
 	neuralnn "github.com/golangast/gollemer/internal/ai/neural/nn"
 	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
-	"github.com/golangast/gollemer/internal/ai/neural/nnu/word2vec"
 	"github.com/golangast/gollemer/internal/ai/neural/tensor"
 	"github.com/golangast/gollemer/internal/ai/orchestrator"
 	"github.com/golangast/gollemer/internal/ai/train"
-	"github.com/golangast/gollemer/internal/ai/training"
-	"github.com/golangast/gollemer/internal/pipeline"
-	"github.com/golangast/gollemer/internal/tokenizer"
+	trainingpb "github.com/golangast/gollemer/internal/ai/training/proto"
 )
 
 func TrainChat(projectRoot string, customDataPath string, rebalanceRequested bool, overfitMode bool, initialLR float32, weightDecay float32, autoHeal bool, maxGradNorm float32, useGPU bool, batchSize int, accumulationSteps int, piMode bool, distMode string, distAddr string, cartridges string) {
@@ -72,7 +69,6 @@ func TrainChat(projectRoot string, customDataPath string, rebalanceRequested boo
 		accumulationSteps = 4
 	}
 
-	var err error
 	fmt.Println("---   Training Chat Model ---")
 	if customDataPath != "" {
 		fmt.Printf(" Using CUSTOM training data: %s\n", customDataPath)
@@ -82,21 +78,8 @@ func TrainChat(projectRoot string, customDataPath string, rebalanceRequested boo
 		fmt.Println(" Using Global GPU Context for Chat Training...")
 	}
 
-	// 1. Load Word2Vec for embeddings (optional — training continues without it)
-	w2vPath := filepath.Join(projectRoot, "data/models/gob_models/word2vec_model.gob")
-	w2v, err := word2vec.LoadModel(w2vPath)
-	if err != nil {
-		log.Printf("⚠️  Word2Vec model not found at %s — using empty fallback (run -train-word2vec to pre-train). Error: %v", w2vPath, err)
-		w2v = &word2vec.SimpleWord2Vec{
-			Vocabulary:     make(map[string]int),
-			WordVectors:    make(map[int][]float64),
-			WordVectorsF32: make(map[int][]float32),
-			VocabSize:      0,
-			VectorSize:     64, // Must be > 0 for Xavier init in expansion loop
-		}
-	} else {
-		fmt.Println(" Loaded Word2Vec model")
-	}
+	// Word2Vec pre-training removed — model uses random embedding init.
+	log.Println("ℹ️  Word2Vec removed. Using random embedding initialization.")
 
 	var chatPairs []moe.TrainPair
 
@@ -331,7 +314,6 @@ skipCSV:
 			modelDim,        // childVocabSize
 			freshVocab,      // sentenceVocabSize
 			8,               // maxAttentionHeads (must divide modelDim evenly)
-			nil,             // word2vecModel
 		)
 		if err != nil {
 			log.Fatalf("Failed to create MoE model: %v", err)
@@ -451,40 +433,6 @@ skipCSV:
 		return
 	}
 
-	// Expand Word2Vec vocabulary with missing words from chat data
-	maxID := 0
-	for _, id := range w2v.Vocabulary {
-		if id > maxID {
-			maxID = id
-		}
-	}
-	if w2v.WordVectorsF32 == nil {
-		w2v.WordVectorsF32 = make(map[int][]float32)
-	}
-
-	addedCount := 0
-	for _, pair := range chatPairs {
-		tokens := cleanTokenize(pair.Q)
-		for _, t := range tokens {
-			if _, ok := w2v.Vocabulary[t]; !ok {
-				maxID++
-				w2v.Vocabulary[t] = maxID
-				// Initialize random vector
-				vec := make([]float32, w2v.VectorSize)
-				limit := float32(math.Sqrt(6.0 / float64(w2v.VectorSize)))
-				for i := range vec {
-					vec[i] = (rand.Float32() * 2 * limit) - limit
-				}
-				w2v.WordVectorsF32[maxID] = vec
-				addedCount++
-			}
-		}
-	}
-	w2v.VocabSize = len(w2v.Vocabulary)
-	if addedCount > 0 {
-		log.Printf(" Expanded Word2Vec vocab with %d new words from training data. Total: %d", addedCount, w2v.VocabSize)
-	}
-
 	// --- ENSURE SENTENCEVOCAB EXISTS AND POPULATE IT FIRST ---
 	if intentModel.SentenceVocab == nil {
 		intentModel.SentenceVocab = mainvocab.NewVocabulary()
@@ -541,55 +489,7 @@ skipCSV:
 		oldSize := intentModel.Embedding.VocabSize
 		copy(newEmb.Weight.Data, intentModel.Embedding.Weight.Data)
 		log.Printf(" Preserved %d tokens from Phase 1 embeddings", oldSize)
-
-		// 2. Fill NEW tokens with Word2Vec weights where possible
-		newTokensCount := 0
-		for i := oldSize; i < currentVocabSize; i++ {
-			word := intentModel.SentenceVocab.GetWord(i)
-			if id, ok := w2v.Vocabulary[word]; ok {
-				vec := w2v.WordVectorsF32[id]
-				if len(vec) == intentModel.EmbeddingDim {
-					copy(newEmb.Weight.Data[i*intentModel.EmbeddingDim:], vec)
-					newTokensCount++
-				}
-			}
-		}
-		log.Printf(" Initialized %d/%d new tokens with Word2Vec signal", newTokensCount, currentVocabSize-oldSize)
-		intentModel.Embedding = newEmb
 	}
-
-	// ALWAYS resize decoder to match expanded vocab
-	if intentModel.Decoder != nil {
-		if intentModel.Decoder.Embedding.VocabSize != currentVocabSize {
-			log.Printf(" Resizing Decoder for expanded vocab: %d  %d", intentModel.Decoder.Embedding.VocabSize, currentVocabSize)
-			intentModel.Decoder.ResizeOutputLayer(currentVocabSize)
-		}
-	}
-	intentModel.SentenceVocabSize = currentVocabSize
-	intentModel.SanitizeControlTokens()
-
-	// Move Word2Vec coverage check here before we free it
-	hit := 0
-	miss := 0
-	for _, pair := range chatPairs {
-		tokens := cleanTokenize(pair.Q)
-		for _, t := range tokens {
-			if _, ok := w2v.Vocabulary[t]; ok {
-				hit++
-			} else {
-				miss++
-			}
-		}
-	}
-	log.Printf("Word2Vec Coverage: %d hits, %d misses (%.2f%%)", hit, miss, float64(hit)/float64(hit+miss)*100)
-
-	// Free Word2Vec model from memory  it's no longer needed for weights
-	log.Printf("  Freeing Word2Vec vectors from memory (%d vectors)...", w2v.VocabSize)
-	w2v.WordVectors = nil
-	// We keep w2v.Vocabulary if needed for other things, but most of them should move to SentenceVocab
-	runtime.GC()
-	debug.FreeOSMemory()
-	log.Println(" Word2Vec heavy vectors freed.")
 
 	// --- [Balanced Mixing Strategy] ---
 	// Separate into Help (Technical) and Social/General
@@ -725,15 +625,10 @@ skipCSV:
 	log.Printf("Final Train Set Size: %d", len(trainPairs))
 
 	// Use Iterator pattern to save memory and speed up training
-	iterator := NewChatDataIterator(trainPairs, intentModel.SentenceVocab, unkID)
+	iterator := NewChatDataIterator(trainPairs, intentModel.SentenceVocab, unkID, false)
 	if overfitMode {
 		iterator.MaxLen = 768 // Match high-capacity architecture
 	}
-
-	// Extra cleanup
-	w2v.Vocabulary = nil
-	runtime.GC()
-	debug.FreeOSMemory()
 
 	// Training Loop
 	epochs := 60
@@ -1427,9 +1322,9 @@ skipCSV:
 					log.Printf(" Step %d | Loss: %.4f | Accuracy: %.2f%% | GrammarPenalty: %.4f", globalStep, batchLoss, accuracy*100, grammarPenalty)
 				}
 
-				// Per-step loss log so training progress is visible
-				if globalStep%10 == 0 {
-					log.Printf(" Step %d | Loss: %.4f | LR: %.6f", globalStep, batchLoss, learningRate)
+				// Explicit loss logging for small runs and debugging.
+				if (globalStep%10 == 0) || (customDataPath != "" && globalStep%5 == 0) {
+					log.Printf(" [LOSS] step=%d loss=%.4f lr=%.6f", globalStep, batchLoss, learningRate)
 				}
 
 				if overfitMode && globalStep%10 == 0 {
@@ -2168,8 +2063,101 @@ skipCSV:
 
 // Using moe.SocialConfig and moe.LoadSocialConfig from moe package
 
-func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string, overfitMode bool, initialLR float32, weightDecay float32, autoHeal bool, maxGradNorm float32, useGPU bool, batchSize int, accumulationSteps int, targetExperts int, piMode bool, distMode string, distAddr string, cartridges string) {
+func loadCustomSocialPairs(path string) ([]moe.TrainPair, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("load custom social pairs: %w", err)
+	}
+	defer f.Close()
+
+	reader := csv.NewReader(f)
+	reader.FieldsPerRecord = -1
+	reader.LazyQuotes = true
+
+	rows, err := reader.ReadAll()
+	if err != nil {
+		return nil, fmt.Errorf("read custom social csv: %w", err)
+	}
+	if len(rows) < 2 {
+		return nil, fmt.Errorf("custom csv is empty")
+	}
+
+	pairs := make([]moe.TrainPair, 0, len(rows)-1)
+	for i, row := range rows {
+		if i == 0 {
+			continue
+		}
+		if len(row) < 2 {
+			continue
+		}
+		q := strings.TrimSpace(row[0])
+		a := strings.TrimSpace(row[1])
+		if q == "" || a == "" {
+			continue
+		}
+		intent := "social"
+		if len(row) >= 3 && strings.TrimSpace(row[2]) != "" {
+			intent = strings.TrimSpace(row[2])
+		}
+		grammar := ""
+		if len(row) >= 4 {
+			grammar = strings.TrimSpace(row[3])
+		}
+		pairs = append(pairs, moe.TrainPair{Q: q, A: a, Intent: intent, Grammar: grammar})
+	}
+	return pairs, nil
+}
+
+func isSmallDemoDataset(path string) bool {
+	base := strings.ToLower(filepath.Base(path))
+	return base == "small_social_demo.csv" || base == "small_social_demo.pb"
+}
+
+func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string, overfitMode bool, pureSeq2Seq bool, initialLR float32, weightDecay float32, autoHeal bool, maxGradNorm float32, useGPU bool, batchSize int, accumulationSteps int, targetExperts int, piMode bool, distMode string, distAddr string, cartridges string) {
 	epochs := totalEpochs // local alias; use epochs throughout function body
+	smallDemo := isSmallDemoDataset(customDataPath)
+	if smallDemo {
+		pureSeq2Seq = true
+		log.Printf(" [SMALL-TRAIN] tiny demo override: forcing pure Q→A objective for %s", filepath.Base(customDataPath))
+	}
+	if customDataPath != "" {
+		pairs, err := loadCustomSocialPairsAny(customDataPath)
+		if err != nil {
+			log.Printf(" ⚠️ custom data load failed for %s: %v", customDataPath, err)
+		} else {
+			chatPairs := pairs
+			log.Printf(" [SMALL-TRAIN] using custom social dataset %s (%d pairs)", customDataPath, len(chatPairs))
+			if len(chatPairs) == 0 {
+				log.Printf(" [SMALL-TRAIN] warning: custom dataset loaded zero pairs")
+			}
+			_ = chatPairs
+		}
+	}
+	if smallDemo {
+		if pureSeq2Seq {
+			if epochs > 80 {
+				epochs = 80
+			}
+			if batchSize <= 0 || batchSize > 1 {
+				batchSize = 1
+			}
+			if targetExperts <= 0 || targetExperts > 1 {
+				targetExperts = 1
+			}
+			log.Printf(" [SEQ2SEQ] strict pure Q→A mode active: training on %s only, epochs=%d, experts=%d, batch=%d, lr=0.03", filepath.Base(customDataPath), epochs, targetExperts, batchSize)
+		} else {
+			if epochs > 200 {
+				epochs = 200
+			}
+			if batchSize <= 0 || batchSize > 1 {
+				batchSize = 1
+			}
+			if targetExperts <= 0 || targetExperts > 1 {
+				targetExperts = 1
+			}
+			log.Printf(" [SMALL-TRAIN] overfit mode active: training on %s only, epochs=%d, experts=%d, batch=%d, lr=0.01", filepath.Base(customDataPath), epochs, targetExperts, batchSize)
+		}
+	}
 	if piMode {
 		// Pi 3B mode: ~900 MB total RAM.
 		log.Println("🥧 Pi 3B mode enabled: applying 600 MB memory cap, single-threaded GC, batch=1, acc=16, experts=4")
@@ -2193,108 +2181,110 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 	}
 
 	var chatPairs []moe.TrainPair
+	if customDataPath != "" {
+		pairs, err := loadCustomSocialPairsAny(customDataPath)
+		if err != nil {
+			log.Printf(" ⚠️ custom data load failed for %s: %v", customDataPath, err)
+		} else {
+			chatPairs = pairs
+			log.Printf(" [SMALL-TRAIN] using custom social dataset %s (%d pairs)", customDataPath, len(chatPairs))
+		}
+	}
 
 	var err error
 	var humanChatPath string
 	var socialVocabPathFinal string
 	var conversingPath string
 	var conversingCSVPath string
+	if !smallDemo {
+		// Assign paths (declared above to satisfy Go's goto-over-declaration rule).
+		conversingCSVPath = filepath.Join(projectRoot, "data/training/trainingdata/conversations.pb")
 
-	// Assign paths (declared above to satisfy Go's goto-over-declaration rule).
-	conversingCSVPath = filepath.Join(projectRoot, "data/training/trainingdata/conversations.csv")
-
-	humanChatPath = filepath.Join(projectRoot, "data/training/trainingdata/human_chat.txt")
-	if _, err := os.Stat(humanChatPath); err == nil {
-		// --- LOAD ALL PAIRS FROM human_chat.txt (no filtering) ---
-		// human_chat.txt is the single source of truth. Every Q/A pair is used as-is.
-		hData, hErr := os.ReadFile(humanChatPath)
-		if hErr != nil {
-			log.Fatalf(" Failed to read human_chat.txt: %v", hErr)
-		}
-		hLines := strings.Split(string(hData), "\n")
-		var lastQ string
-		for _, hl := range hLines {
-			hl = strings.TrimSpace(hl)
-			if strings.HasPrefix(hl, "Human 1:") {
-				lastQ = strings.TrimSpace(strings.TrimPrefix(hl, "Human 1:"))
-			} else if strings.HasPrefix(hl, "Human 2:") && lastQ != "" {
-				a := strings.TrimSpace(strings.TrimPrefix(hl, "Human 2:"))
-				if a != "" {
-					intent := "social_chat"
-					qLower := strings.ToLower(lastQ)
-					if strings.Contains(qLower, "hello") || strings.Contains(qLower, "hi") {
-						intent = "greeting"
-					} else if strings.Contains(qLower, "your name") || strings.Contains(qLower, "who are you") {
-						intent = "identity"
-					} else if strings.Contains(qLower, "how are you") {
-						intent = "status_check"
-					}
-					chatPairs = append(chatPairs, moe.TrainPair{Q: lastQ, A: a, Intent: intent, Grammar: ""})
-				}
-				lastQ = ""
+		humanChatPath = filepath.Join(projectRoot, "data/training/trainingdata/human_chat.txt")
+		if _, err := os.Stat(humanChatPath); err == nil {
+			// --- LOAD ALL PAIRS FROM human_chat.txt (no filtering) ---
+			// human_chat.txt is the single source of truth. Every Q/A pair is used as-is.
+			hData, hErr := os.ReadFile(humanChatPath)
+			if hErr != nil {
+				log.Fatalf(" Failed to read human_chat.txt: %v", hErr)
 			}
-		}
-		var ms runtime.MemStats
-		runtime.ReadMemStats(&ms)
-	}
-
-	// --- LOAD conversing.csv IF AVAILABLE ---
-	conversingPath = filepath.Join(projectRoot, "data/training/trainingdata/conversing.csv")
-	if _, err := os.Stat(conversingPath); err == nil {
-		f, err := os.Open(conversingPath)
-		if err == nil {
-			defer f.Close()
-			reader := csv.NewReader(f)
-			reader.FieldsPerRecord = -1
-			reader.LazyQuotes = true
-			records, err := reader.ReadAll()
-			if err != nil {
-				log.Printf(" ⚠️ CSV Parsing error: %v", err)
-			}
-			if err == nil {
-				for i, record := range records {
-					if i == 0 || len(record) < 2 { // Skip header or invalid lines
-						continue
-					}
-					q := record[0]
-					a := record[1]
-					intent := "social_chat"
-					if len(record) >= 3 {
-						intent = record[2]
-					}
-					if q != "" && a != "" {
-						grammar := ""
-						if len(record) >= 4 {
-							grammar = record[3]
+			hLines := strings.Split(string(hData), "\n")
+			var lastQ string
+			for _, hl := range hLines {
+				hl = strings.TrimSpace(hl)
+				if strings.HasPrefix(hl, "Human 1:") {
+					lastQ = strings.TrimSpace(strings.TrimPrefix(hl, "Human 1:"))
+				} else if strings.HasPrefix(hl, "Human 2:") && lastQ != "" {
+					a := strings.TrimSpace(strings.TrimPrefix(hl, "Human 2:"))
+					if a != "" {
+						intent := "social_chat"
+						qLower := strings.ToLower(lastQ)
+						if strings.Contains(qLower, "hello") || strings.Contains(qLower, "hi") {
+							intent = "greeting"
+						} else if strings.Contains(qLower, "your name") || strings.Contains(qLower, "who are you") {
+							intent = "identity"
+						} else if strings.Contains(qLower, "how are you") {
+							intent = "status_check"
 						}
-						chatPairs = append(chatPairs, moe.TrainPair{Q: q, A: a, Intent: intent, Grammar: grammar})
+						chatPairs = append(chatPairs, moe.TrainPair{Q: lastQ, A: a, Intent: intent, Grammar: ""})
+					}
+					lastQ = ""
+				}
+			}
+			var ms runtime.MemStats
+			runtime.ReadMemStats(&ms)
+		}
+
+		// --- LOAD conversing.csv IF AVAILABLE ---
+		conversingPath = filepath.Join(projectRoot, "data/training/trainingdata/conversing.csv")
+		if _, err := os.Stat(conversingPath); err == nil {
+			f, err := os.Open(conversingPath)
+			if err == nil {
+				defer f.Close()
+				reader := csv.NewReader(f)
+				reader.FieldsPerRecord = -1
+				reader.LazyQuotes = true
+				records, err := reader.ReadAll()
+				if err != nil {
+					log.Printf(" ⚠️ CSV Parsing error: %v", err)
+				}
+				if err == nil {
+					for i, record := range records {
+						if i == 0 || len(record) < 2 { // Skip header or invalid lines
+							continue
+						}
+						q := record[0]
+						a := record[1]
+						intent := "social_chat"
+						if len(record) >= 3 {
+							intent = record[2]
+						}
+						if q != "" && a != "" {
+							grammar := ""
+							if len(record) >= 4 {
+								grammar = record[3]
+							}
+							chatPairs = append(chatPairs, moe.TrainPair{Q: q, A: a, Intent: intent, Grammar: grammar})
+						}
 					}
 				}
 			}
 		}
-	}
 
-	// --- LOAD conversations.csv (flat multi-turn dialogue data) ---
-	// Format: conversation_id, turn_sequence, role, content
-	// Rows are grouped by conversation_id, sorted by turn_sequence, then
-	// expanded using the same causal-context window as the JSONL loader.
-	if _, err := os.Stat(conversingCSVPath); err == nil {
-		convCSVPairs, convCSVErr := LoadConversationCSV(conversingCSVPath)
-		if convCSVErr != nil {
-			log.Printf("⚠️  conversations.csv load error: %v", convCSVErr)
-		} else {
-			chatPairs = append(chatPairs, convCSVPairs...)
+		// --- LOAD conversations.pb (flat multi-turn dialogue data, protobuf) ---
+		// Format: ConversationSet { Conversation { id, turns[] } }
+		// Conversations are expanded using the same causal-context window as the JSONL loader.
+		if _, err := os.Stat(conversingCSVPath); err == nil {
+			convCSVPairs, convCSVErr := LoadConversationProto(conversingCSVPath)
+			if convCSVErr != nil {
+				log.Printf("⚠️  conversations.pb load error: %v", convCSVErr)
+			} else {
+				chatPairs = append(chatPairs, convCSVPairs...)
+			}
 		}
 	}
 
-	// --- LOAD device_intents_multitask.txt (Text with special hardware tokens) ---
-	deviceIntentsPath := filepath.Join(projectRoot, "data/training/trainingdata/device_intents_multitask.txt")
-	if content, err := os.ReadFile(deviceIntentsPath); err == nil {
-		pairs := pipeline.LoadMultitaskDataset(deviceIntentsPath, string(content))
-		for _, p := range pairs {
-			chatPairs = append(chatPairs, moe.TrainPair{Q: p[0], A: p[1]})
-		}
-	}
+	// Device intents dataset removed (hardware pipeline deleted).
 
 	// Reuse TrainChat with social-only data by temporarily renaming model output
 	// Call TrainChat with the social data
@@ -2323,7 +2313,9 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 	var intentModel *moe.IntentMoE
 	socialModelPath := filepath.Join(projectRoot, "data/models/gob_models/moe_social_model.gob")
 
-	if _, err := os.Stat(socialModelPath); err == nil {
+	if customDataPath != "" && isSmallDemoDataset(customDataPath) {
+		intentModel = nil
+	} else if _, err := os.Stat(socialModelPath); err == nil {
 		log.Printf(" Resuming training: Loading existing social model from %s", socialModelPath)
 		intentModel, err = moe.LoadIntentMoEModelWithFallback(socialModelPath)
 		if err != nil {
@@ -2342,6 +2334,18 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 	}
 	expert := orchestrator.NewHyperparameterExpert(safeCfg)
 	config := safeCfg.Get()
+	if smallDemo {
+		if pureSeq2Seq {
+			config.LearningRate = 0.03
+			config.LabelSmoothing = 0.0
+			config.EntropyWeight = 0.0
+			config.LoadBalancingWeight = 0.0
+			config.K = 1
+			config.NumExperts = 1
+		} else {
+			config.LearningRate = 0.01
+		}
+	}
 
 	numExperts := targetExperts // use local var name for rest of function
 	if intentModel == nil {
@@ -2351,6 +2355,12 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 		}
 		if numExperts <= 0 {
 			numExperts = config.NumExperts
+		}
+		if pureSeq2Seq {
+			modelDim = 32
+			numExperts = 1
+			config.K = 1
+			config.NumExperts = 1
 		}
 
 		freshVocab := precomputedVocabSize
@@ -2362,17 +2372,23 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 		moe.ActiveLayers = nil
 
 		baseExperts := numExperts / 2
-		if baseExperts < 2 {
-			baseExperts = 2
+		if baseExperts < 1 {
+			baseExperts = 1
 		}
-		intentModel, err = moe.NewHybridIntentMoE(freshVocab, modelDim, baseExperts, modelDim, modelDim, freshVocab, config.K, nil)
+		if pureSeq2Seq {
+			baseExperts = 1
+			config.K = 1
+		}
+		intentModel, err = moe.NewHybridIntentMoE(freshVocab, modelDim, baseExperts, modelDim, modelDim, freshVocab, config.K)
 		if err != nil {
 			log.Fatalf(" Failed to create social model: %v", err)
 		}
 		// Initialize decoder
 		// Single-layer decoder  keeps memory below 3.5GB on the 6.3GB system
 		intentModel.Decoder, _ = moe.NewRNNDecoder(modelDim, freshVocab, modelDim, 8, 1, 0.0, baseExperts)
-		intentModel.RepairArchitecture() //  ADD GRAMMAR EXPERTS (8 -> 16 experts)
+		if !pureSeq2Seq {
+			intentModel.RepairArchitecture() //  ADD GRAMMAR EXPERTS (8 -> 16 experts)
+		}
 		intentModel.RebuildActiveLayers()
 
 		// Comprehensive Initialization for all sub-layers
@@ -2546,8 +2562,7 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 		}
 	}
 
-	// Always inject the special hardware tokens into the vocabulary!
-	tokenizer.InjectIntoVocab(intentModel.SentenceVocab.WordToToken, &intentModel.SentenceVocab.TokenToWord)
+	// Hardware token injection removed.
 
 	// Build deterministic list of new tokens to add
 	newTokensMap := make(map[string]bool)
@@ -2604,22 +2619,6 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 	runtime.GC()
 	debug.FreeOSMemory()
 
-	//  OBSERVABILITY INTEGRATION: Initialize trainer for MoE metrics recording
-	trainer := &moe.Trainer{}
-	numExperts = 8 // Default
-	if len(moe.ActiveLayers) > 0 {
-		numExperts = len(moe.ActiveLayers[0].Experts)
-	}
-	trainer.InitializeObservability(numExperts, 500, sentenceVocab, nil)
-	log.Printf(" MoE Observability initialized: %d experts tracked", numExperts)
-
-	//  START METRICS SERVER: Non-blocking HTTP server for dashboard
-	go func() {
-		metricsPort := ":9090"
-		log.Printf(" Starting MoE Observability metrics server on %s", metricsPort)
-		moe.StartMetricsServer(trainer, sentenceVocab, metricsPort)
-	}()
-
 	// Use iterator-based training (same as TrainChat)
 	// Use config-driven hyperparameters with CLI overrides
 	if epochs <= 0 {
@@ -2649,6 +2648,25 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 	}
 	if intentModel.SentenceVocab.PaddingTokenID >= 0 {
 		lossWeights[intentModel.SentenceVocab.PaddingTokenID] = 0.0 // No loss for padding
+	}
+	if pureSeq2Seq {
+		for i := range lossWeights {
+			lossWeights[i] = 0.0
+		}
+		if bosID := intentModel.SentenceVocab.BosID; bosID >= 0 {
+			lossWeights[bosID] = 2.0
+		}
+		if eosID := intentModel.SentenceVocab.EosID; eosID >= 0 {
+			lossWeights[eosID] = 2.0
+		}
+		for _, pair := range trainPairs {
+			for _, token := range cleanTokenize(pair.A) {
+				if id := intentModel.SentenceVocab.GetTokenID(token); id >= 0 {
+					lossWeights[id] = 3.0
+				}
+			}
+		}
+		log.Println(" [SEQ2SEQ] answer-only loss weighting active: query tokens are zeroed and answer tokens are the only targets")
 	}
 	// Structural-token boosting: BOS, EOS, and terminal punctuation carry the
 	// sentence-boundary signal the model needs most. Boosting them here causes
@@ -2699,15 +2717,38 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 		// --- [Overfit Strategy: Anchor Boost] ---
 		ansID := intentModel.SentenceVocab.GetTokenID("__ans__")
 		if ansID >= 0 {
-			lossWeights[ansID] = 8.0
-			ResolvedPunctuationWeights[ansID] = 8.0
-			log.Printf(" Anchor Boost: Assigned weight 8.0 to token '__ans__' (ID %d)", ansID)
+			lossWeights[ansID] = 4.0
+			ResolvedPunctuationWeights[ansID] = 1.0
+			log.Printf(" Anchor Boost: Assigned weight 4.0 to token '__ans__' (ID %d)", ansID)
 		}
 		ansShortID := intentModel.SentenceVocab.GetTokenID("ans")
 		if ansShortID >= 0 {
-			lossWeights[ansShortID] = 8.0
-			ResolvedPunctuationWeights[ansShortID] = 8.0
+			lossWeights[ansShortID] = 4.0
+			ResolvedPunctuationWeights[ansShortID] = 1.0
 		}
+
+		// Strongly emphasize the actual words in the answer text. On a tiny dataset,
+		// the model otherwise gets a weak signal because most tokens are generic and the
+		// answer content is diluted across the full vocabulary.
+		boostedWords := map[string]float32{}
+		for _, pair := range trainPairs {
+			for _, token := range cleanTokenize(pair.A) {
+				if token == "" {
+					continue
+				}
+				boostedWords[token] = 4.0
+			}
+		}
+		for token, weight := range boostedWords {
+			id := intentModel.SentenceVocab.GetTokenID(token)
+			if id >= 0 {
+				lossWeights[id] = weight
+				if _, exists := ResolvedPunctuationWeights[id]; !exists {
+					ResolvedPunctuationWeights[id] = 1.0
+				}
+			}
+		}
+		log.Printf(" Tiny answer-vocabulary boost applied to %d unique answer tokens", len(boostedWords))
 	}
 
 	// ---  EXPERT SURGERY: NUDGE BIASES & STEP ROUTING ---
@@ -2859,13 +2900,6 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 	// Seed structural/syntactic base experts and lock parameters immediately
 	supervisor.SeedSystemExperts(intentModel)
 
-	// High-level Adaptive Supervisor for curriculum management and data evolution
-	actualExpertCount := len(intentModel.Decoder.OutputMoE.Experts)
-	adaptiveSup := training.NewAdaptiveSupervisor(actualExpertCount, intentModel.EmbeddingDim, supervisor.TrainingDataPath)
-	if overfitMode {
-		adaptiveSup.ActiveMode = "OverfitMode"
-	}
-
 	globalStep := intentModel.StepCount
 	stepsPerEpoch := (len(trainPairs) + batchSize - 1) / batchSize
 	totalSteps := epochs * stepsPerEpoch
@@ -2923,6 +2957,7 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 		config = safeCfg.Get()
 		epochStartTime := time.Now()
 		supervisor.SpawnsThisEpoch = 0
+		log.Printf(" [TRAIN] starting epoch %d/%d (dataset=%s, rows=%d)", epoch+1, epochs, filepath.Base(customDataPath), len(trainPairs))
 
 		// Thaw embedding after freeze window
 		if epoch == embeddingFreezeEpochs {
@@ -3080,8 +3115,9 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 		}
 
 		//  [Overfit Strategy: Force Zero Regularization]
-		if overfitMode || isTinyDataset {
+		if overfitMode || isTinyDataset || pureSeq2Seq {
 			cfg.EntropyWeight = 0.0
+			cfg.LabelSmoothing = 0.0
 			// Keep cfg.LabelSmoothing=0.05 — do NOT zero it out here
 		}
 
@@ -3092,7 +3128,7 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 			break
 		}
 
-		iterator := NewChatDataIterator(trainPairs, intentModel.SentenceVocab, unkID)
+		iterator := NewChatDataIterator(trainPairs, intentModel.SentenceVocab, unkID, pureSeq2Seq)
 		iterator.Epoch = epoch
 		epochLoss := float32(0)
 		batchNum := 0
@@ -3110,6 +3146,9 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 
 		for iterator.HasNext() {
 			batch := iterator.NextBatch(batchSize)
+			if batchNum == 0 {
+				log.Printf(" [TRAIN] epoch %d/%d: first batch starting, batch_size=%d", epoch+1, epochs, batchSize)
+			}
 			inputTensor, targetTensor := batch.Input, batch.Target
 			inputMask := batch.InputMask
 			if inputTensor == nil || targetTensor == nil {
@@ -3169,7 +3208,7 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 			// This tells all MoE layers (Encoder and Decoder) what expert each token SHOULD route to.
 			// The encoder layers will route based on the first N tokens of the target, which provides
 			// a strong structural bias for the cross-attention context.
-			if batch.Grammar != nil || batch.QueryGrammar != nil {
+			if !pureSeq2Seq && (batch.Grammar != nil || batch.QueryGrammar != nil) {
 				// Offset target indices to point to the GrammarExperts (which are appended after the base experts)
 				// Use the first layer as reference for expert counts.
 				layers := findMoELayers(intentModel)
@@ -3364,13 +3403,6 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 					avgWeight /= float32(len(batch.Weights))
 					batchLoss *= avgWeight
 				}
-
-				//  OBSERVABILITY: Record expert routing and loss for dashboard metrics
-				expertIDs, tokenIDs := extractExpertRoutingInfo(intentModel, inputTensor, targetTensor)
-				if len(expertIDs) == 0 {
-					log.Printf(" ⚠️ WARNING: extractExpertRoutingInfo returned 0 experts!")
-				}
-				trainer.RecordTrainingStep(expertIDs, tokenIDs, batchLoss)
 
 				// the target's structural category (VERB/AUX expected but NOUN/other predicted).
 				currentBatchSize2 := targetTensor.Shape[0]
@@ -4181,33 +4213,7 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 			// Process collected quality gate failures after consistent evaluation has finished
 			if len(failedGateCalls) > 0 {
 				log.Printf("🛠️  Processing %d collected Quality Gate failures...", len(failedGateCalls))
-				for _, call := range failedGateCalls {
-					// 1. Curriculum & Data Evolution (AdaptiveSupervisor)
-					adaptiveSup.EvaluateGate(call.path, call.score, "social", call.failingPair.Q)
 
-					// 2. Structural & Variable Mutation (MoE Supervisor)
-					supervisor.HandleQualityGateFailure(intentModel, call.path, call.failingPair, call.score)
-
-					// 3. Sync training data mutations in-memory
-					supervisor.EvolveTrainingData(&trainPairs, call.failingPair)
-
-					// 3. Sync Expert Count if AdaptiveSupervisor triggered an expansion
-					if adaptiveSup.CurrentExperts > len(moe.ActiveLayers[0].Experts) {
-						spawns := supervisor.GetSpawnsThisEpoch()
-						limit := adaptiveSup.AssessSpawningPacing("social")
-						if spawns < limit {
-							roleID := 6 // GREET
-							currentLayers := findMoELayers(intentModel)
-							supervisor.AddExpertToLayer(intentModel, 0, roleID)
-							if intentModel.Decoder.OutputMoE != nil {
-								supervisor.AddExpertToLayer(intentModel, len(currentLayers)-1, roleID)
-							}
-							moe.ActiveLayers = findMoELayers(intentModel)
-
-							supervisor.IncrementSpawnsThisEpoch()
-						}
-					}
-				}
 			}
 
 		} // End of runTest
@@ -4278,7 +4284,7 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 			}
 
 			// 2. Reset Internal State
-			adaptiveSup.ResetMetrics()
+
 			for _, layer := range moe.ActiveLayers {
 				layer.ResetRouterWeights()
 			}
@@ -4465,9 +4471,6 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 		var layerResets []map[int]int
 		var layerUsage []map[int]int
 
-		//  OBSERVABILITY: Finalize epoch metrics for dashboard
-		trainer.FinishEpoch(sentenceVocab)
-
 		for _, layer := range layers {
 			sinkHits += layer.GetResetCount()
 			layerResets = append(layerResets, layer.GetExpertResets())
@@ -4478,6 +4481,7 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 		if batchNum > 0 {
 			avgLoss = epochLoss / float32(batchNum)
 		}
+		log.Printf(" [LOSS] Epoch %d/%d | Loss=%.6f | Batches=%d", epoch+1, epochs, avgLoss, batchNum)
 
 		var pronID, verbID, auxID string
 		targetLayer := layers[0]
@@ -4698,7 +4702,7 @@ func LogTopPredictions(model *moe.IntentMoE, testName string, logits *tensor.Ten
 func lookupVocab(token string, vocab *mainvocab.Vocabulary) int {
 	token = strings.TrimSpace(token)
 	if token == "" {
-		return vocab.UnkID
+		return vocab.PaddingTokenID
 	}
 
 	// Direct lookup with original casing first to preserve special tokens such as
@@ -4731,16 +4735,10 @@ func lookupVocab(token string, vocab *mainvocab.Vocabulary) int {
 		}
 	}
 
-	return vocab.UnkID
-}
-
-// lookupW2V is deprecated in favor of lookupVocab but kept for backward compatibility if needed.
-func lookupW2V(token string, w2v *word2vec.SimpleWord2Vec) float64 {
-	token = strings.ToLower(strings.TrimSpace(token))
-	if id, ok := w2v.Vocabulary[token]; ok {
-		return float64(id)
-	}
-	return 0
+	// Unknown tokens are not valid training targets. Mapping them to padding keeps
+	// the target sequence structurally valid and prevents the model from learning a
+	// degenerate mode where <unk> or repetitive tokens dominate the loss.
+	return vocab.PaddingTokenID
 }
 
 // logEpochHistory saves epoch metrics to a CSV file
@@ -5831,6 +5829,69 @@ func LoadConversationCSV(path string) ([]moe.TrainPair, error) {
 		}
 	}
 
+	return pairs, nil
+}
+
+// LoadConversationProto reads a protobuf file containing ConversationSet and
+// expands every assistant turn into a TrainPair using the same causal-context
+// logic as LoadConversationCSV.
+func LoadConversationProto(path string) ([]moe.TrainPair, error) {
+	conversations, err := trainingpb.LoadConversationsFromProto(path)
+	if err != nil {
+		return nil, fmt.Errorf("LoadConversationProto: %w", err)
+	}
+
+	var pairs []moe.TrainPair
+	for _, conv := range conversations {
+		// Convert to jsonlDialogueTurn slice for intent inference reuse.
+		dialogue := make([]jsonlDialogueTurn, len(conv.Turns))
+		for i, t := range conv.Turns {
+			dialogue[i] = jsonlDialogueTurn{Role: t.Role, Content: t.Content}
+		}
+
+		var contextParts []string
+		for _, turn := range conv.Turns {
+			content := strings.TrimSpace(turn.Content)
+			if content == "" {
+				continue
+			}
+			switch strings.ToLower(turn.Role) {
+			case "system":
+				contextParts = append(contextParts, "<s> __system__ "+content+" </s>")
+			case "user":
+				contextParts = append(contextParts, "__user__ "+content)
+			case "assistant":
+				if len(contextParts) == 0 {
+					contextParts = append(contextParts, "__assistant__ "+content+" </s>")
+					continue
+				}
+				queryContext := strings.Join(contextParts, " ")
+				intent := inferConversationIntent(dialogue, content)
+
+				depth := 0
+				for _, p := range contextParts {
+					if strings.HasPrefix(p, "__user__") || strings.HasPrefix(p, "__assistant__") {
+						depth++
+					}
+				}
+				weight := float32(1.0)
+				if depth > 1 {
+					weight = 1.0 / float32(depth)
+					if weight < 0.3 {
+						weight = 0.3
+					}
+				}
+
+				pairs = append(pairs, moe.TrainPair{
+					Q:      queryContext,
+					A:      content,
+					Intent: intent,
+					Weight: weight,
+				})
+				contextParts = append(contextParts, "__assistant__ "+content+" </s>")
+			}
+		}
+	}
 	return pairs, nil
 }
 

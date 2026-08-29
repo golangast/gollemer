@@ -3,11 +3,12 @@ module github.com/golangast/gollemer
 go 1.26.0
 
 require (
-	github.com/gordonklaus/portaudio v0.0.0-20260203164431-765aa7dfa631
 	github.com/gorilla/websocket v1.5.3
 	github.com/hegedustibor/htgo-tts v0.0.0-20240912200108-467b3e535435
 	github.com/vladimirvivien/go4vl v0.3.0
+	golang.org/x/tools v0.48.0
 	gonum.org/v1/gonum v0.9.0
+	google.golang.org/protobuf v1.36.12
 )
 
 require (
@@ -16,5 +17,5 @@ require (
 	golang.org/x/mod v0.38.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/tools v0.48.0 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
