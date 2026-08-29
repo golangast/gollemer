@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package gollemer.training;
+
+option go_package = "github.com/golangast/gollemer/internal/ai/training/proto;trainingpb";
+
+// CommandExample represents a single multi-conversational training example.
+// This mirrors the richer format with system prompt, user prompt, assistant
+// response, and code before/after states.
+message CommandExample {
+  string type = 1;              // "social", "code_update", "file_create", etc.
+  string system_prompt = 2;     // system prompt context
+  string user_prompt = 3;       // natural-language request
+  string assistant_response = 4; // assistant's response text
+  string code_before = 5;       // code state before the change
+  string code_after = 6;        // transformed code after the change
+}
+
+// CommandExampleSet is a collection of command examples.
+message CommandExampleSet {
+  repeated CommandExample examples = 1;
+}
+
+// ConversationTurn is a single message in a multi-turn conversation.
+// Mirrors the CSV columns: conversation_id, turn_sequence, role, content
+message ConversationTurn {
+  string conversation_id = 1;
+  int32 turn_sequence = 2;
+  string role = 3;    // "system", "user", or "assistant"
+  string content = 4;
+}
+
+// Conversation is a complete multi-turn dialogue.
+message Conversation {
+  string id = 1;
+  repeated ConversationTurn turns = 2;
+}
+
+// ConversationSet is a collection of conversations.
+message ConversationSet {
+  repeated Conversation conversations = 1;
+}
