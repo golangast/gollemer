@@ -1,0 +1,118 @@
+make train-fresh
+rm -f data/models/gob_models/*.gob
+GOMEMLIMIT=2500MiB GOGC=50 GOMAXPROCS=4 go run main.go -train-multiphase 
+2026/08/26 17:48:23 main.go:28: 🤖 Gollemer LLM Trainer
+2026/08/26 17:48:23 main.go:29:    Root: /home/zendrulat/g/gollemer
+2026/08/26 17:48:23 main.go:30:    Mode: Sentence-forming Seq2Seq
+2026/08/26 17:48:23 main.go:31: 
+2026/08/26 17:48:23 multiphase.go:150: 🚀 Starting 5-Phase Multi-Domain Curriculum Training (Phase 1: 40 epochs, others: 200 epochs)...
+2026/08/26 17:48:23 multiphase.go:152:    Phase 1: Social Bootcamp     — experts 0–7 learn conversational patterns; 8–15 frozen
+2026/08/26 17:48:23 multiphase.go:152:    Phase 2: Coherence Polish    — ultra-low LR; EOS/coherence optimization
+2026/08/26 17:48:23 multiphase.go:152:    Phase 3: 
+2026/08/26 17:48:23 multiphase.go:152:    Phase 4: 
+2026/08/26 17:48:23 multiphase.go:152:    Phase 5: 
+2026/08/26 17:48:23 multiphase.go:186: ⚠️ conversations.pb: read protobuf file: open /home/zendrulat/g/gollemer/data/training/trainingdata/conversations.pb: no such file or directory
+2026/08/26 17:48:23 multiphase.go:194: 📚 Loaded 395 pairs from conversing.csv
+2026/08/26 17:48:23 multiphase.go:233: 📚 Loaded 210 intent examples from intent_corpus.json
+2026/08/26 17:48:23 multiphase.go:245: 📚 Total social pairs: 605
+2026/08/26 17:48:23 intent_moe.go:2673: 🛠️ [MoE] Repairing layer: adding missing Grammar Experts (currently 4 experts)...
+2026/08/26 17:48:23 intent_moe.go:2673: 🛠️ [MoE] Repairing layer: adding missing Grammar Experts (currently 4 experts)...
+2026/08/26 17:48:23 multiphase.go:322: 📖 Social model vocab size: 1055 tokens (compact social-only)
+2026/08/26 17:49:42 multiphase.go:715: Phase 1 [1/200] | Epoch 0 | Loss: 3.2792 | PPL: 26.6 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 78.6s
+2026/08/26 17:49:42 multiphase.go:724: 📝 Generation Sample (Epoch 0): Prompt: "The artificial intelligence" | Generated: "down package prioritizes concept service uploading tokens hello cooked case" | SentenceStatus=Early-stage | Quality=fragmented | Reason=output still lacks stable sentence structure
+2026/08/26 17:49:42 multiphase.go:729: ⚠️ Early-stage output: repetitive tokens and/or <unk> still dominate; sentence formation is not yet stable.
+2026/08/26 17:51:05 multiphase.go:715: Phase 1 [2/200] | Epoch 1 | Loss: 3.2029 | PPL: 24.6 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 83.3s
+2026/08/26 17:52:28 multiphase.go:715: Phase 1 [3/200] | Epoch 2 | Loss: 2.9765 | PPL: 19.6 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 82.6s
+2026/08/26 17:53:52 multiphase.go:715: Phase 1 [4/200] | Epoch 3 | Loss: 2.7297 | PPL: 15.3 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 84.1s
+2026/08/26 17:55:13 multiphase.go:715: Phase 1 [5/200] | Epoch 4 | Loss: 2.9398 | PPL: 18.9 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 80.7s
+2026/08/26 17:56:36 multiphase.go:715: Phase 1 [6/200] | Epoch 5 | Loss: 2.8028 | PPL: 16.5 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 82.9s
+2026/08/26 17:57:59 multiphase.go:715: Phase 1 [7/200] | Epoch 6 | Loss: 2.8259 | PPL: 16.9 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 83.0s
+2026/08/26 17:59:22 multiphase.go:715: Phase 1 [8/200] | Epoch 7 | Loss: 2.7606 | PPL: 15.8 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 83.3s
+2026/08/26 18:00:46 multiphase.go:715: Phase 1 [9/200] | Epoch 8 | Loss: 2.6851 | PPL: 14.7 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 83.7s
+2026/08/26 18:02:08 multiphase.go:715: Phase 1 [10/200] | Epoch 9 | Loss: 2.6935 | PPL: 14.8 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 82.7s
+2026/08/26 18:03:32 multiphase.go:715: Phase 1 [11/200] | Epoch 10 | Loss: 2.8266 | PPL: 16.9 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 83.3s
+2026/08/26 18:03:32 multiphase.go:724: 📝 Generation Sample (Epoch 10): Prompt: "The artificial intelligence" | Generated: "i" | SentenceStatus=Early-stage | Quality=fragmented | Reason=too short to form a sentence
+2026/08/26 18:03:32 multiphase.go:729: ⚠️ Early-stage output: repetitive tokens and/or <unk> still dominate; sentence formation is not yet stable.
+2026/08/26 18:03:33 multiphase.go:797: 💾 Checkpoint saved (epoch 10)
+2026/08/26 18:05:03 multiphase.go:715: Phase 1 [12/200] | Epoch 11 | Loss: 2.7985 | PPL: 16.4 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 85.7s
+2026/08/26 18:06:30 multiphase.go:715: Phase 1 [13/200] | Epoch 12 | Loss: 2.7702 | PPL: 16.0 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 87.3s
+2026/08/26 18:07:58 multiphase.go:715: Phase 1 [14/200] | Epoch 13 | Loss: 2.6662 | PPL: 14.4 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 88.5s
+2026/08/26 18:09:27 multiphase.go:715: Phase 1 [15/200] | Epoch 14 | Loss: 2.7325 | PPL: 15.4 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 88.5s
+2026/08/26 18:10:54 multiphase.go:715: Phase 1 [16/200] | Epoch 15 | Loss: 2.7005 | PPL: 14.9 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 87.2s
+2026/08/26 18:12:24 multiphase.go:715: Phase 1 [17/200] | Epoch 16 | Loss: 2.6823 | PPL: 14.6 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 90.2s
+2026/08/26 18:13:55 multiphase.go:715: Phase 1 [18/200] | Epoch 17 | Loss: 2.5835 | PPL: 13.2 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 91.0s
+2026/08/26 18:15:25 multiphase.go:715: Phase 1 [19/200] | Epoch 18 | Loss: 2.5449 | PPL: 12.7 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 89.9s
+2026/08/26 18:16:55 multiphase.go:715: Phase 1 [20/200] | Epoch 19 | Loss: 2.6091 | PPL: 13.6 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 90.2s
+2026/08/26 18:18:25 multiphase.go:715: Phase 1 [21/200] | Epoch 20 | Loss: 2.6391 | PPL: 14.0 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 89.7s
+2026/08/26 18:18:25 multiphase.go:724: 📝 Generation Sample (Epoch 20): Prompt: "The artificial intelligence" | Generated: "will , i" | SentenceStatus=Early-stage | Quality=fragmented | Reason=too short to form a sentence
+2026/08/26 18:18:25 multiphase.go:729: ⚠️ Early-stage output: repetitive tokens and/or <unk> still dominate; sentence formation is not yet stable.
+2026/08/26 18:18:26 multiphase.go:797: 💾 Checkpoint saved (epoch 20)
+2026/08/26 18:19:59 multiphase.go:715: Phase 1 [22/200] | Epoch 21 | Loss: 2.7498 | PPL: 15.6 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 88.7s
+2026/08/26 18:21:29 multiphase.go:715: Phase 1 [23/200] | Epoch 22 | Loss: 2.7271 | PPL: 15.3 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 89.6s
+2026/08/26 18:22:59 multiphase.go:715: Phase 1 [24/200] | Epoch 23 | Loss: 2.7685 | PPL: 15.9 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 90.9s
+2026/08/26 18:24:29 multiphase.go:715: Phase 1 [25/200] | Epoch 24 | Loss: 2.7689 | PPL: 15.9 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 89.4s
+2026/08/26 18:25:59 multiphase.go:715: Phase 1 [26/200] | Epoch 25 | Loss: 2.8028 | PPL: 16.5 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 89.9s
+2026/08/26 18:27:30 multiphase.go:715: Phase 1 [27/200] | Epoch 26 | Loss: 2.7299 | PPL: 15.3 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 90.8s
+2026/08/26 18:28:58 multiphase.go:715: Phase 1 [28/200] | Epoch 27 | Loss: 2.8434 | PPL: 17.2 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 88.7s
+2026/08/26 18:30:28 multiphase.go:715: Phase 1 [29/200] | Epoch 28 | Loss: 2.8464 | PPL: 17.2 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 89.7s
+2026/08/26 18:31:59 multiphase.go:715: Phase 1 [30/200] | Epoch 29 | Loss: 2.7598 | PPL: 15.8 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 91.3s
+2026/08/26 18:33:30 multiphase.go:715: Phase 1 [31/200] | Epoch 30 | Loss: 2.6545 | PPL: 14.2 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 90.9s
+2026/08/26 18:33:30 multiphase.go:724: 📝 Generation Sample (Epoch 30): Prompt: "The artificial intelligence" | Generated: "a" | SentenceStatus=Early-stage | Quality=fragmented | Reason=too short to form a sentence
+2026/08/26 18:33:30 multiphase.go:729: ⚠️ Early-stage output: repetitive tokens and/or <unk> still dominate; sentence formation is not yet stable.
+2026/08/26 18:33:32 multiphase.go:797: 💾 Checkpoint saved (epoch 30)
+2026/08/26 18:35:07 multiphase.go:715: Phase 1 [32/200] | Epoch 31 | Loss: 2.7529 | PPL: 15.7 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 91.7s
+2026/08/26 18:36:39 multiphase.go:715: Phase 1 [33/200] | Epoch 32 | Loss: 2.6568 | PPL: 14.3 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 91.4s
+2026/08/26 18:38:10 multiphase.go:715: Phase 1 [34/200] | Epoch 33 | Loss: 2.8364 | PPL: 17.1 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 91.4s
+2026/08/26 18:39:41 multiphase.go:715: Phase 1 [35/200] | Epoch 34 | Loss: 2.8015 | PPL: 16.5 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 90.4s
+2026/08/26 18:41:12 multiphase.go:715: Phase 1 [36/200] | Epoch 35 | Loss: 2.7319 | PPL: 15.4 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 91.3s
+2026/08/26 18:42:43 multiphase.go:715: Phase 1 [37/200] | Epoch 36 | Loss: 2.8144 | PPL: 16.7 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 90.7s
+2026/08/26 18:44:11 multiphase.go:715: Phase 1 [38/200] | Epoch 37 | Loss: 2.8928 | PPL: 18.0 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 88.7s
+2026/08/26 18:45:41 multiphase.go:715: Phase 1 [39/200] | Epoch 38 | Loss: 3.0836 | PPL: 21.8 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 89.5s
+2026/08/26 18:47:08 multiphase.go:715: Phase 1 [40/200] | Epoch 39 | Loss: 3.0088 | PPL: 20.3 | LR: 0.000100 | Act: [0,1,2,3,4,5,6,7] | Time: 87.5s
+2026/08/26 18:47:08 multiphase.go:884: ═════════════════════════════════════════════════════════════════
+2026/08/26 18:47:08 multiphase.go:885: 📋 PHASE 1 COMPLETE — Social Bootcamp     — experts 0–7 learn conversational patterns; 8–15 frozen
+2026/08/26 18:47:08 multiphase.go:886:    Epochs: 0–39  |  Active Experts: 8
+2026/08/26 18:47:08 multiphase.go:888:    Loss → Best: 2.5449  Worst: 3.2792  Final: 3.0088
+2026/08/26 18:47:08 multiphase.go:930:    🧪 Phase 1 Probe: Social response: 'i .'
+   TTR=1.00, social_tokens=true
+2026/08/26 18:47:08 multiphase.go:931:    ❌ FAIL
+2026/08/26 18:47:08 multiphase.go:932: ═════════════════════════════════════════════════════════════════
+2026/08/26 18:47:08 multiphase.go:776: 
+2026/08/26 18:47:08 multiphase.go:777: ⏩ Advancing: Phase 1 → Phase 2 (Coherence Polish    — ultra-low LR; EOS/coherence optimization)
+2026/08/26 18:48:41 multiphase.go:715: Phase 2 [41/200] | Epoch 40 | Loss: 3.3983 | PPL: 29.9 | LR: 0.000050 | Act: [0,1,2,3,4,5,6,7] | Time: 86.9s
+2026/08/26 18:48:42 multiphase.go:797: 💾 Checkpoint saved (epoch 40)
+2026/08/26 18:50:13 multiphase.go:715: Phase 2 [42/200] | Epoch 41 | Loss: 3.3285 | PPL: 27.9 | LR: 0.000050 | Act: [0,1,2,3,4,5,6,7] | Time: 86.4s
+2026/08/26 18:51:39 multiphase.go:715: Phase 2 [43/200] | Epoch 42 | Loss: 3.3374 | PPL: 28.1 | LR: 0.000050 | Act: [0,1,2,3,4,5,6,7] | Time: 85.8s
+2026/08/26 18:53:08 multiphase.go:715: Phase 2 [44/200] | Epoch 43 | Loss: 3.1823 | PPL: 24.1 | LR: 0.000050 | Act: [0,1,2,3,4,5,6,7] | Time: 89.8s
+2026/08/26 18:54:39 multiphase.go:715: Phase 2 [45/200] | Epoch 44 | Loss: 3.0693 | PPL: 21.5 | LR: 0.000050 | Act: [0,1,2,3,4,5,6,7] | Time: 91.1s
+2026/08/26 18:56:11 multiphase.go:715: Phase 2 [46/200] | Epoch 45 | Loss: 2.9870 | PPL: 19.8 | LR: 0.000050 | Act: [0,1,2,3,4,5,6,7] | Time: 91.9s
+2026/08/26 18:57:42 multiphase.go:715: Phase 2 [47/200] | Epoch 46 | Loss: 2.8905 | PPL: 18.0 | LR: 0.000050 | Act: [0,1,2,3,4,5,6,7] | Time: 90.9s
+2026/08/26 18:59:15 multiphase.go:715: Phase 2 [48/200] | Epoch 47 | Loss: 2.9885 | PPL: 19.9 | LR: 0.000050 | Act: [0,1,2,3,4,5,6,7] | Time: 92.6s
+2026/08/26 19:00:56 multiphase.go:715: Phase 2 [49/200] | Epoch 48 | Loss: 2.9759 | PPL: 19.6 | LR: 0.000050 | Act: [0,1,2,3,4,5,6,7] | Time: 100.7s
+2026/08/26 19:02:48 multiphase.go:715: Phase 2 [50/200] | Epoch 49 | Loss: 3.0330 | PPL: 20.8 | LR: 0.000050 | Act: [0,1,2,3,4,5,6,7] | Time: 112.5s
+2026/08/26 19:04:39 multiphase.go:715: Phase 2 [51/200] | Epoch 50 | Loss: 2.9451 | PPL: 19.0 | LR: 0.000050 | Act: [0,1,2,3,4,5,6,7] | Time: 111.0s
+2026/08/26 19:04:41 multiphase.go:797: 💾 Checkpoint saved (epoch 50)
+2026/08/26 19:06:39 multiphase.go:715: Phase 2 [52/200] | Epoch 51 | Loss: 2.9618 | PPL: 19.3 | LR: 0.000050 | Act: [0,1,2,3,4,5,6,7] | Time: 114.7s
+2026/08/26 19:08:36 multiphase.go:715: Phase 2 [53/200] | Epoch 52 | Loss: 2.9889 | PPL: 19.9 | LR: 0.000050 | Act: [0,1,2,3,4,5,6,7] | Time: 117.2s
+2026/08/26 19:10:27 multiphase.go:715: Phase 2 [54/200] | Epoch 53 | Loss: 3.0229 | PPL: 20.6 | LR: 0.000050 | Act: [0,1,2,3,4,5,6,7] | Time: 110.7s
+2026/08/26 19:12:23 multiphase.go:715: Phase 2 [55/200] | Epoch 54 | Loss: 3.0551 | PPL: 21.2 | LR: 0.000050 | Act: [0,1,2,3,4,5,6,7] | Time: 116.0s
+2026/08/26 19:14:14 multiphase.go:715: Phase 2 [56/200] | Epoch 55 | Loss: 2.9964 | PPL: 20.0 | LR: 0.000050 | Act: [0,1,2,3,4,5,6,7] | Time: 110.9s
+2026/08/26 19:16:09 multiphase.go:715: Phase 2 [57/200] | Epoch 56 | Loss: 2.8972 | PPL: 18.1 | LR: 0.000050 | Act: [0,1,2,3,4,5,6,7] | Time: 115.3s
+2026/08/26 19:18:05 multiphase.go:715: Phase 2 [58/200] | Epoch 57 | Loss: 3.0117 | PPL: 20.3 | LR: 0.000050 | Act: [0,1,2,3,4,5,6,7] | Time: 116.1s
+2026/08/26 19:20:02 multiphase.go:715: Phase 2 [59/200] | Epoch 58 | Loss: 2.9223 | PPL: 18.6 | LR: 0.000050 | Act: [0,1,2,3,4,5,6,7] | Time: 116.7s
+2026/08/26 19:21:58 multiphase.go:715: Phase 2 [60/200] | Epoch 59 | Loss: 2.9171 | PPL: 18.5 | LR: 0.000050 | Act: [0,1,2,3,4,5,6,7] | Time: 116.3s
+2026/08/26 19:23:53 multiphase.go:715: Phase 2 [61/200] | Epoch 60 | Loss: 2.9724 | PPL: 19.5 | LR: 0.000050 | Act: [0,1,2,3,4,5,6,7] | Time: 115.3s
+2026/08/26 19:23:55 multiphase.go:797: 💾 Checkpoint saved (epoch 60)
+2026/08/26 19:25:56 multiphase.go:715: Phase 2 [62/200] | Epoch 61 | Loss: 2.9255 | PPL: 18.6 | LR: 0.000050 | Act: [0,1,2,3,4,5,6,7] | Time: 117.7s
+2026/08/26 19:27:52 multiphase.go:715: Phase 2 [63/200] | Epoch 62 | Loss: 2.9495 | PPL: 19.1 | LR: 0.000050 | Act: [0,1,2,3,4,5,6,7] | Time: 116.0s
+2026/08/26 19:29:43 multiphase.go:715: Phase 2 [64/200] | Epoch 63 | Loss: 3.0302 | PPL: 20.7 | LR: 0.000050 | Act: [0,1,2,3,4,5,6,7] | Time: 110.4s
+2026/08/26 19:31:41 multiphase.go:715: Phase 2 [65/200] | Epoch 64 | Loss: 2.9215 | PPL: 18.6 | LR: 0.000050 | Act: [0,1,2,3,4,5,6,7] | Time: 118.3s
+2026/08/26 19:33:38 multiphase.go:715: Phase 2 [66/200] | Epoch 65 | Loss: 2.9186 | PPL: 18.5 | LR: 0.000050 | Act: [0,1,2,3,4,5,6,7] | Time: 117.6s
+2026/08/26 19:35:31 multiphase.go:715: Phase 2 [67/200] | Epoch 66 | Loss: 2.9614 | PPL: 19.3 | LR: 0.000050 | Act: [0,1,2,3,4,5,6,7] | Time: 112.0s
+🧬 [Surgery] Blending Expert E1 (Alpha) → Expert E2 (Sink) [80%α + 20%sink]
+2026/08/26 19:36:16 moe_layer.go:331: 🔥 Expert 2 Weights Reset via Cloning from Expert 1 & Router Perturbed
+2026/08/26 19:37:24 multiphase.go:715: Phase 2 [68/200] | Epoch 67 | Loss: 2.8902 | PPL: 18.0 | LR: 0.000050 | Act: [0,1,2,3,4,5,6,7] | Time: 113.5s
+2026/08/26 19:39:13 multiphase.go:715: Phase 2 [69/200] | Epoch 68 | Loss: 2.9556 | PPL: 19.2 | LR: 0.000050 | Act: [0,1,2,3,4,5,6,7] | Time: 109.0s
+2026/08/26 19:41:06 multiphase.go:715: Phase 2 [70/200] | Epoch 69 | Loss: 2.9891 | PPL: 19.9 | LR: 0.000050 | Act: [0,1,2,3,4,5,6,7] | Time: 113.0s
+^Csignal: interrupt
+make: *** [Makefile:47: train-fresh] Interrupt

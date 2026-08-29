@@ -1,0 +1,69 @@
+syntax = "proto3";
+
+package dataset;
+
+// go_package is required for protoc-gen-go to know where to place the
+// generated Go code; it does not change the wire format described below.
+option go_package = "github.com/golangast/gollemer/internal/ai/training/proto/dataset;datasetpb";
+
+// Enum representing the entity role in the multi-turn conversation
+enum Role {
+  ROLE_UNSPECIFIED = 0;
+  ROLE_SYSTEM = 1;
+  ROLE_USER = 2;
+  ROLE_ASSISTANT = 3;
+}
+
+// Risk level attached to a simulated outcome.
+enum Risk {
+  RISK_UNSPECIFIED = 0;
+  RISK_LOW = 1;
+  RISK_MEDIUM = 2;
+  RISK_HIGH = 3;
+}
+
+// An entity mentioned in the assistant's reasoning.
+message Entity {
+  string subject = 1;        // e.g. "Friend"
+  string target_object = 2;  // e.g. "Loan request ($500)"
+}
+
+// One simulated action and its predicted consequence.
+message SimulatedOutcome {
+  string action_description = 1;    // e.g. "Blunt refusal"
+  string predicted_consequence = 2; // e.g. "Causes immediate offense"
+  Risk risk = 3;                    // e.g. RISK_HIGH
+}
+
+// Internal reasoning the assistant produced before answering.
+message Reasoning {
+  repeated Entity entities = 1;
+  string current_state = 2;          // e.g. "Financial risk creating strain"
+  string predicted_user_intent = 3;  // e.g. "Protect finances without losing friendship"
+  repeated SimulatedOutcome simulated_outcomes = 4;
+  string target_goal = 5;            // e.g. "Guide user to set boundaries politely"
+}
+
+// Represents a single turn/message in a conversation.
+// content is kept for backward compatibility; newer data uses
+// user_content for ROLE_USER turns and assistant_response + reasoning
+// for ROLE_ASSISTANT turns.
+message ConversationTurn {
+  int32 turn_sequence = 1;
+  Role role = 2;
+  string content = 3;
+  string user_content = 4;
+  string assistant_response = 5;
+  Reasoning reasoning = 6;
+}
+
+// Represents a complete multi-turn conversation
+message Conversation {
+  string conversation_id = 1;
+  repeated ConversationTurn turns = 2;
+}
+
+// Container message for the full dataset of conversations
+message ConversationDataset {
+  repeated Conversation conversations = 1;
+}
