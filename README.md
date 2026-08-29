@@ -1256,7 +1256,7 @@ Gollemer is organized into a clean, modular structure designed for ease of use a
 │   ├── vision_capture/      # Real-time camera motion tracking via go4vl + GRU.
 │   ├── add_command/         # Zero-shot: registers new voice commands without retraining.
 │   ├── go_edit_agent/       # AST-level Go source code editor with validation & self-correction.
-│   ├── apply_patch/         # Semantic patch tool with self-healing via MoE inference.
+│   ├──   /         # Semantic patch tool with self-healing via MoE inference.
 │   └── ...                  # 40+ additional analysis, inspection, and generation tools.
 │
 ├── internal/ai/             # Core Intelligence Engine

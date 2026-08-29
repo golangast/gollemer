@@ -1,4 +1,0 @@
-package jim
-
-func Jim() {
-}
