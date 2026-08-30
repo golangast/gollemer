@@ -48,13 +48,15 @@ func (r *IntentRule) EvaluateWindow(prev, curr, next string) float32 {
 
 // RuleBook is the sophisticated collection of linguistic rules for the MoE model.
 type RuleBook struct {
-	Rules map[string]IntentRule
+	Rules        map[string]IntentRule
+	EntityRoutes map[string]string // entity keyword -> cartridge path
 }
 
 // NewRuleBook initializes the rule system with standard conversational grammar.
 func NewRuleBook() *RuleBook {
 	rb := &RuleBook{
-		Rules: make(map[string]IntentRule),
+		Rules:        make(map[string]IntentRule),
+		EntityRoutes: make(map[string]string),
 	}
 
 	// Rule: Greeting — "hi there! how can i help you today?"
@@ -153,6 +155,29 @@ func NewRuleBook() *RuleBook {
 		RequiredKeywords: []string{},
 	}
 
+	// Entity Routes: map subject keywords to specialized cartridges.
+	rb.EntityRoutes["channel"] = "data/models/intents/channel.cartridge"
+	rb.EntityRoutes["goroutine"] = "data/models/intents/goroutine.cartridge"
+	rb.EntityRoutes["mutex"] = "data/models/intents/mutex.cartridge"
+	rb.EntityRoutes["interface"] = "data/models/intents/interface.cartridge"
+	rb.EntityRoutes["error"] = "data/models/intents/error.cartridge"
+	rb.EntityRoutes["context"] = "data/models/intents/context.cartridge"
+	rb.EntityRoutes["slice"] = "data/models/intents/slice.cartridge"
+	rb.EntityRoutes["map"] = "data/models/intents/map.cartridge"
+	rb.EntityRoutes["defer"] = "data/models/intents/defer.cartridge"
+	rb.EntityRoutes["init"] = "data/models/intents/init.cartridge"
+	rb.EntityRoutes["package"] = "data/models/intents/package.cartridge"
+	rb.EntityRoutes["module"] = "data/models/intents/module.cartridge"
+	rb.EntityRoutes["struct"] = "data/models/intents/struct.cartridge"
+	rb.EntityRoutes["function"] = "data/models/intents/function.cartridge"
+	rb.EntityRoutes["garbage collector"] = "data/models/intents/gc.cartridge"
+	rb.EntityRoutes["test"] = "data/models/intents/testing.cartridge"
+	rb.EntityRoutes["http"] = "data/models/intents/http.cartridge"
+	rb.EntityRoutes["panic"] = "data/models/intents/panic.cartridge"
+	rb.EntityRoutes["race"] = "data/models/intents/race.cartridge"
+	rb.EntityRoutes["build"] = "data/models/intents/build.cartridge"
+	rb.EntityRoutes["config"] = "data/models/intents/config.cartridge"
+
 	return rb
 }
 
@@ -161,6 +186,12 @@ func (rb *RuleBook) GetRuleByIntent(parent, child string) (IntentRule, bool) {
 	key := parent + ":" + child
 	r, ok := rb.Rules[key]
 	return r, ok
+}
+
+// GetEntityRoute returns the cartridge path for a given entity keyword.
+func (rb *RuleBook) GetEntityRoute(keyword string) (string, bool) {
+	route, ok := rb.EntityRoutes[strings.ToLower(keyword)]
+	return route, ok
 }
 
 var lexiconCSV = `word,type

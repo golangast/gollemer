@@ -9,10 +9,12 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"time"
 
+	"github.com/golangast/gollemer/internal/ai/memory"
 	"github.com/golangast/gollemer/internal/ai/moe"
 	seq2seq "github.com/golangast/gollemer/internal/ai/neural/nnu/seq2seq"
 	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
@@ -793,16 +795,31 @@ func RunTinySeq2SeqPrompt(projectRoot string, prompt string) {
 // the final [RESPONSE] segment. Answers without a [RESPONSE] tag are returned
 // unchanged so plain conversational pairs still display as-is.
 func FormatChatResponse(raw string) string {
+	// Strip <think>...</think> blocks (internal deliberation)
+	reThink := regexp.MustCompile(`(?s)<think>.*?</think>`)
+	raw = reThink.ReplaceAllString(raw, "")
+
+	// Strip <verify>...</verify> blocks (self-correction)
+	reVerify := regexp.MustCompile(`(?s)<verify>.*?</verify>`)
+	raw = reVerify.ReplaceAllString(raw, "")
+
+	// Strip [PREDICTIVE_REASONING]... blocks (legacy format)
+	reReasoning := regexp.MustCompile(`(?s)\[PREDICTIVE_REASONING\].*?\[/PREDICTIVE_REASONING\]`)
+	raw = reReasoning.ReplaceAllString(raw, "")
+
+	// Extract <answer>...</answer> block if present (new CoT format)
+	reAnswer := regexp.MustCompile(`(?s)<answer>(.*?)</answer>`)
+	if matches := reAnswer.FindStringSubmatch(raw); len(matches) > 1 {
+		return strings.TrimSpace(matches[1])
+	}
+
+	// Fallback: extract [RESPONSE] block if present
 	idx := strings.Index(raw, "[RESPONSE]")
 	if idx == -1 {
-		return raw
+		return strings.TrimSpace(raw)
 	}
 	response := strings.TrimSpace(raw[idx+len("[RESPONSE]"):])
-	greeting := ""
-	if reasonIdx := strings.Index(raw, "[PREDICTIVE_REASONING]"); reasonIdx != -1 && reasonIdx < idx {
-		greeting = strings.TrimSpace(raw[:reasonIdx]) + "\n\n"
-	}
-	return greeting + response
+	return response
 }
 
 func RunInteractiveTinySeq2SeqChat(projectRoot string) {
@@ -823,6 +840,10 @@ func RunInteractiveTinySeq2SeqChat(projectRoot string) {
 	for _, p := range pairs {
 		exactMap[strings.ToLower(strings.TrimSpace(p.Q))] = p.A
 	}
+
+	// Initialize vector DB for RAG
+	vectordbPath := filepath.Join(projectRoot, "data", "memory", "vectordb.json")
+	vectorDB := memory.NewVectorDB(128, vectordbPath)
 
 	// jaccardSimilarity returns word-overlap similarity in [0,1]
 	jaccardSimilarity := func(a, b string) float64 {
@@ -892,7 +913,12 @@ func RunInteractiveTinySeq2SeqChat(projectRoot string) {
 			fmt.Println("[SEQ2SEQ-CHAT] closing chat.")
 			return
 		}
-		response := findBestMatch(prompt)
+		ragContext := vectorDB.RetrieveContext(prompt, 3)
+		augmentedPrompt := prompt
+		if ragContext != "" {
+			augmentedPrompt = ragContext + "\n" + prompt
+		}
+		response := findBestMatch(augmentedPrompt)
 		if response == "" {
 			response = "I'm not sure about that. Could you provide more context?"
 		}

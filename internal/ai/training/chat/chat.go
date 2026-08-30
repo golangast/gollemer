@@ -2666,6 +2666,26 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 				}
 			}
 		}
+
+		dualStageTokens := []string{
+			"[triplets]", "[reasoning]", "[response]",
+			"subject:", "action:", "object:",
+			"subject", "action", "object",
+			"first,", "second,", "third,",
+			"therefore", "thus", "conclusion",
+			"channel", "goroutine", "mutex", "interface",
+			"error", "context", "slice", "map", "defer",
+			"init", "package", "module", "garbage", "collector",
+			"struct", "function", "vendor", "test", "log",
+			"database", "http", "middleware", "panic", "race",
+			"build", "config", "dependency", "go", "golang",
+		}
+		for _, tok := range dualStageTokens {
+			id := intentModel.SentenceVocab.GetTokenID(tok)
+			if id >= 0 {
+				lossWeights[id] = 3.5
+			}
+		}
 		log.Println(" [SEQ2SEQ] answer-only loss weighting active: query tokens are zeroed and answer tokens are the only targets")
 	}
 	// Structural-token boosting: BOS, EOS, and terminal punctuation carry the

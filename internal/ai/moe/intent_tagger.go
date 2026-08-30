@@ -2,6 +2,7 @@ package moe
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/golangast/gollemer/internal/ai/neural/nn"
 	"github.com/golangast/gollemer/internal/ai/neural/tensor"
@@ -13,6 +14,13 @@ type IntentTagger struct {
 	Embedding  *nn.Embedding
 	IntentHead *nn.Linear
 	TagHead    *nn.Linear
+}
+
+// EntityTriple represents a Subject-Action-Object triple extracted from text.
+type EntityTriple struct {
+	Subject string
+	Action  string
+	Object  string
 }
 
 // NewIntentTagger creates a new IntentTagger model.
@@ -126,4 +134,95 @@ func (m *IntentTagger) Backward(intentGrad, tagGrads *tensor.Tensor) error {
 	}
 
 	return nil
+}
+
+// ExtractEntities performs lightweight entity extraction from text using the
+// tagger's embeddings and a lexicon-based heuristic. It returns Subject-Action-
+// Object triples suitable for routing to specialized expert cartridges.
+func (m *IntentTagger) ExtractEntities(text string) []EntityTriple {
+	lower := strings.ToLower(text)
+	var triples []EntityTriple
+
+	subjectKeywords := map[string]string{
+		"channel": "Channel", "goroutine": "Goroutine", "mutex": "Mutex",
+		"interface": "Interface", "error": "Error", "context": "Context",
+		"slice": "Slice", "map": "Map", "defer": "Defer", "init": "InitFunction",
+		"package": "Package", "module": "Module", "struct": "Struct",
+		"function": "Function", "vendor": "VendorDirectory", "test": "Test",
+		"log": "Logger", "database": "Database", "http": "HTTPServer",
+		"middleware": "Middleware", "panic": "Panic", "race": "RaceCondition",
+		"build": "Build", "config": "Config", "dependency": "Dependency",
+		"garbage collector": "GarbageCollector",
+	}
+	actionKeywords := map[string]string{
+		"send": "Send", "receive": "Receive", "close": "Close",
+		"lock": "Lock", "unlock": "Unlock", "protect": "Protect",
+		"wrap": "Wrap", "propagate": "Propagate", "cancel": "Cancel",
+		"schedule": "Schedule", "execute": "Execute", "run": "Run",
+		"communicate": "Communicate", "synchronize": "Synchronize",
+		"store": "Store", "embed": "Embed", "build": "Build",
+		"import": "Import", "resolve": "Resolve", "manage": "Manage",
+		"handle": "Handle", "implement": "Implement", "define": "Define",
+	}
+	objectKeywords := map[string]string{
+		"channel": "Channel", "goroutine": "Goroutine", "mutex": "Mutex",
+		"interface": "Interface", "error": "Error", "context": "Context",
+		"slice": "Slice", "map": "Map", "defer": "Defer", "init": "InitFunction",
+		"package": "Package", "module": "Module", "struct": "Struct",
+		"function": "Function", "vendor": "VendorDirectory", "test": "Test",
+		"log": "Logger", "database": "Database", "http": "HTTPServer",
+		"middleware": "Middleware", "race": "RaceCondition",
+		"build": "Build", "config": "Config", "dependency": "Dependency",
+		"garbage collector": "GarbageCollector", "zero value": "ZeroValue",
+		"panic": "Panic", "deadlock": "Deadlock",
+	}
+
+	var subjects, actions, objects []string
+	for kw, label := range subjectKeywords {
+		if strings.Contains(lower, kw) {
+			subjects = append(subjects, label)
+		}
+	}
+	for kw, label := range actionKeywords {
+		if strings.Contains(lower, kw) {
+			actions = append(actions, label)
+		}
+	}
+	for kw, label := range objectKeywords {
+		if strings.Contains(lower, kw) {
+			objects = append(objects, label)
+		}
+	}
+
+	if len(subjects) == 0 {
+		subjects = append(subjects, "Code")
+	}
+	if len(actions) == 0 {
+		actions = append(actions, "Use")
+	}
+	if len(objects) == 0 {
+		objects = append(objects, "Implementation")
+	}
+
+	maxLen := len(subjects)
+	if len(actions) > maxLen {
+		maxLen = len(actions)
+	}
+	if len(objects) > maxLen {
+		maxLen = len(objects)
+	}
+	for i := 0; i < maxLen; i++ {
+		subj := subjects[i%len(subjects)]
+		act := actions[i%len(actions)]
+		obj := objects[i%len(objects)]
+		if subj != obj {
+			triples = append(triples, EntityTriple{
+				Subject: subj,
+				Action:  act,
+				Object:  obj,
+			})
+		}
+	}
+
+	return triples
 }

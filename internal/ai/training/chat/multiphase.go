@@ -1001,6 +1001,8 @@ func runEndOfPhaseProbe(intentModel *moe.IntentMoE, layers []*moe.MoELayer,
 // buildDefaultLossWeights builds a flat weight vector for WeightedCrossEntropy.
 // High-frequency stop-words are down-weighted; BOS/EOS/terminal punctuation are boosted.
 // For code-syntax tokens delimiters and structural Go keywords get higher weight.
+// Dual-stage training format: [TRIPLETS]/[REASONING]/[RESPONSE] markers and entity
+// tokens (Subject/Action/Object) receive elevated weight to anchor structure.
 func buildDefaultLossWeights(vocab *mainvocab.Vocabulary, cfg *orchestrator.TrainingConfig) []float32 {
 	if vocab == nil {
 		return nil
@@ -1032,10 +1034,28 @@ func buildDefaultLossWeights(vocab *mainvocab.Vocabulary, cfg *orchestrator.Trai
 				weights[id] = 2.0
 			}
 		}
+
+		dualStageTokens := []string{
+			"[triplets]", "[reasoning]", "[response]",
+			"subject:", "action:", "object:",
+			"subject", "action", "object",
+			"first,", "second,", "third,",
+			"therefore", "thus", "conclusion",
+			"channel", "goroutine", "mutex", "interface",
+			"error", "context", "slice", "map", "defer",
+			"init", "package", "module", "garbage", "collector",
+			"struct", "function", "vendor", "test", "log",
+			"database", "http", "middleware", "panic", "race",
+			"build", "config", "dependency", "go", "golang",
+		}
+		for _, tok := range dualStageTokens {
+			id := vocab.GetTokenID(tok)
+			if id >= 0 && id < len(weights) {
+				weights[id] = 2.5
+			}
+		}
 	}
 
-	// CRITICAL: Ensure padding token weight is 0.0 so the model isn't penalized
-	// for (or trained to predict) padding tokens, which swamps the gradients.
 	if vocab.PaddingTokenID >= 0 && vocab.PaddingTokenID < len(weights) {
 		weights[vocab.PaddingTokenID] = 0.0
 	}

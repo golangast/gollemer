@@ -4,10 +4,12 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/golangast/gollemer/internal/ai/memory"
 	"github.com/golangast/gollemer/internal/ai/moe"
 	"github.com/golangast/gollemer/internal/ai/neural/tensor"
 )
@@ -127,7 +129,7 @@ func StartChat(model *moe.IntentMoE) {
 		isApologetic := false
 		if sentiment < -0.5 {
 			isApologetic = true
-			fmt.Println(" [System Note: Bot is in 'Apologetic Mode']")
+			// fmt.Println(" [System Note: Bot is in 'Apologetic Mode']")
 			// for _, layer := range moe.ActiveLayers {
 			// 	// Manually add a bias to the router's logits for Expert 7
 			// 	// This makes it 5x more likely to be chosen for this specific turn
@@ -228,6 +230,7 @@ type MoEChatBot struct {
 	model        *moe.IntentMoE
 	session      *ChatSession
 	systemPrompt string
+	vectorDB     *memory.VectorDB
 }
 
 func NewMoEChatBot(model *moe.IntentMoE) *MoEChatBot {
@@ -235,6 +238,16 @@ func NewMoEChatBot(model *moe.IntentMoE) *MoEChatBot {
 		model:        model,
 		session:      NewChatSession(5, model.Embedding.DimModel),
 		systemPrompt: "System: You are a friendly, helpful assistant. Tone: Kind.",
+	}
+}
+
+func (b *MoEChatBot) ensureVectorDB(projectRoot string) {
+	if b.vectorDB == nil {
+		if projectRoot == "" {
+			projectRoot = "."
+		}
+		vectordbPath := filepath.Join(projectRoot, "data", "memory", "vectordb.json")
+		b.vectorDB = memory.NewVectorDB(128, vectordbPath)
 	}
 }
 

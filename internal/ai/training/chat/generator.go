@@ -902,3 +902,143 @@ func BeamSearchDecodeFiltered(model *moe.IntentMoE, ctx *tensor.Tensor, beamSize
 	}
 	return beams[0].IDs
 }
+
+// TreeOfThoughtsDecode implements branch sampling for complex reasoning.
+// Instead of running standard autoregressive decoding token-by-token, it:
+// 1. Generates N candidate reasoning steps at step 1 using temperature sampling (T=0.7).
+// 2. Scores candidates using the MoE gating network to evaluate which path best addresses the user prompt.
+// 3. Continues decoding on the highest-scoring branch.
+func TreeOfThoughtsDecode(model *moe.IntentMoE, input string, maxLen int, numBranches int) (string, error) {
+	model.SetParamsRequiresGrad(false)
+	defer func() {
+		model.SetParamsRequiresGrad(true)
+		model.ClearState()
+	}()
+
+	tokens := cleanTokenize(input)
+	if len(tokens) == 0 {
+		return "", fmt.Errorf("empty input")
+	}
+
+	inputIDs := make([]float32, len(tokens))
+	for i, t := range tokens {
+		inputIDs[i] = float32(lookupVocab(t, model.SentenceVocab))
+	}
+	inputTensor := tensor.NewTensor([]int{1, len(inputIDs)}, inputIDs, false)
+
+	emb, err := model.Embedding.Forward(inputTensor)
+	if err != nil {
+		return "", err
+	}
+	ctx, err := model.Encoder.Forward(emb)
+	if err != nil {
+		return "", err
+	}
+
+	batchSize := 1
+	hiddenSize := model.Decoder.LSTM.HiddenSize
+	hiddenState, _ := ctx.Mean(1)
+	hiddenState, _ = hiddenState.Reshape([]int{batchSize, ctx.Shape[2]})
+
+	if hiddenState.Shape[1] != hiddenSize {
+		if hiddenState.Shape[1] > hiddenSize {
+			hiddenState, _ = hiddenState.Slice(1, 0, hiddenSize)
+		} else {
+			padding := tensor.NewTensor([]int{batchSize, hiddenSize - hiddenState.Shape[1]}, make([]float32, batchSize*(hiddenSize-hiddenState.Shape[1])), false)
+			hiddenState, _ = tensor.Concat([]*tensor.Tensor{hiddenState, padding}, 1)
+		}
+	}
+	cellState := tensor.NewTensor([]int{batchSize, hiddenSize}, make([]float32, batchSize*hiddenSize), false)
+
+	// Step 1: Generate N candidate first tokens using temperature sampling
+	temperature := 0.7
+	firstInput := tensor.NewTensor([]int{1, 1}, []float32{float32(model.SentenceVocab.BosID)}, false)
+	logits, _, _, _, _, err := model.Decoder.DecodeStepWithExpert(firstInput, hiddenState, cellState, ctx, 0)
+	if err != nil {
+		return "", err
+	}
+
+	ApplyTemperature(logits.Data, float32(temperature))
+	probs := tensor.Softmax(logits)
+	topKIndices, topKProbs := getTopK(probs, numBranches)
+
+	type Branch struct {
+		IDs         []int
+		Score       float32
+		HiddenState *tensor.Tensor
+		CellState   *tensor.Tensor
+	}
+
+	branches := make([]Branch, len(topKIndices))
+	for i, idx := range topKIndices {
+		branches[i] = Branch{
+			IDs:         []int{model.SentenceVocab.BosID, idx},
+			Score:       topKProbs[i],
+			HiddenState: hiddenState,
+			CellState:   cellState,
+		}
+	}
+
+	// Step 2: Continue decoding each branch and score
+	maxBranchLen := maxLen / numBranches
+	for step := 1; step < maxBranchLen; step++ {
+		newBranches := make([]Branch, 0, len(branches))
+		for _, b := range branches {
+			if len(b.IDs) > 0 && b.IDs[len(b.IDs)-1] == model.SentenceVocab.EosID {
+				newBranches = append(newBranches, b)
+				continue
+			}
+
+			inputT := tensor.NewTensor([]int{1, len(b.IDs)}, convertToFloat(b.IDs), false)
+			bLogits, nextHidden, nextCell, _, _, err := model.Decoder.DecodeStepWithExpert(inputT, b.HiddenState, b.CellState, ctx, step)
+			if err != nil {
+				continue
+			}
+
+			bestID := 0
+			maxLogit := -math.MaxFloat64
+			for tokenID, logitValue := range bLogits.Data {
+				if float64(logitValue) > maxLogit {
+					maxLogit = float64(logitValue)
+					bestID = tokenID
+				}
+			}
+
+			newBranch := Branch{
+				IDs:         append(append([]int{}, b.IDs...), bestID),
+				Score:       b.Score + float32(maxLogit),
+				HiddenState: nextHidden,
+				CellState:   nextCell,
+			}
+			newBranches = append(newBranches, newBranch)
+		}
+
+		branches = newBranches
+		if len(branches) == 0 {
+			break
+		}
+	}
+
+	// Step 3: Select highest-scoring branch
+	if len(branches) == 0 {
+		return "", fmt.Errorf("no valid branches generated")
+	}
+
+	bestBranch := branches[0]
+	for _, b := range branches[1:] {
+		if b.Score > bestBranch.Score {
+			bestBranch = b
+		}
+	}
+
+	// Convert IDs to text
+	var result []string
+	for _, id := range bestBranch.IDs[1:] {
+		word := model.SentenceVocab.GetWord(id)
+		if word != "<s>" && word != "</s>" && word != "<pad>" && word != "UNK" {
+			result = append(result, word)
+		}
+	}
+
+	return strings.Join(result, " "), nil
+}
