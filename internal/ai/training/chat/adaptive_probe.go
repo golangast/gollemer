@@ -126,6 +126,25 @@ func isCoherent(text string) bool {
 		return false
 	}
 
+	// Check balanced sentence lengths: for 3+ sentences, no single sentence
+	// should dominate more than 4x the average length.
+	sentences := regexpSplitSentences(text)
+	if len(sentences) >= 3 {
+		totalWords := 0
+		maxLen := 0
+		for _, s := range sentences {
+			n := len(strings.Fields(s))
+			totalWords += n
+			if n > maxLen {
+				maxLen = n
+			}
+		}
+		avgLen := float64(totalWords) / float64(len(sentences))
+		if avgLen > 0 && float64(maxLen)/avgLen > 4.0 {
+			return false
+		}
+	}
+
 	return hasGrammar(text)
 }
 

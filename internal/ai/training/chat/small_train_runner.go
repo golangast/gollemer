@@ -134,6 +134,41 @@ func filterTinySeq2SeqPairs(pairs []moe.TrainPair) []moe.TrainPair {
 	return out
 }
 
+// filterNoisyPairs removes corrupted training pairs that would cause the
+// seq2seq model to learn mixed social+technical responses or leak internal
+// training metadata into answers.
+func filterNoisyPairs(pairs []moe.TrainPair) []moe.TrainPair {
+	out := make([]moe.TrainPair, 0, len(pairs))
+	for _, pair := range pairs {
+		q := normalizeTinySeq2SeqText(pair.Q)
+		a := normalizeTinySeq2SeqText(pair.A)
+
+		// Skip pairs with multiple concatenated questions.
+		if strings.Count(q, "?") > 1 {
+			continue
+		}
+
+		// Skip answers that still contain internal training metadata markers.
+		if strings.Contains(a, "[PREDICTIVE_REASONING]") ||
+			strings.Contains(a, "[RESPONSE]") ||
+			strings.Contains(a, "[TARGET_GOAL]") ||
+			strings.Contains(a, "[SIMULATED_OUTCOMES]") {
+			continue
+		}
+
+		// Skip answers that are excessively long relative to the question,
+		// which usually indicates concatenated social+technical content.
+		qLen := float64(len(strings.Fields(q)))
+		aLen := float64(len(strings.Fields(a)))
+		if qLen > 0 && aLen/qLen > 12.0 {
+			continue
+		}
+
+		out = append(out, pair)
+	}
+	return out
+}
+
 // loadTinyPairsFromProto reads a datasetpb.ConversationDataset protobuf file
 // and extracts consecutive ROLE_USER→ROLE_ASSISTANT pairs from each conversation,
 // skipping ROLE_SYSTEM turns.
@@ -172,6 +207,7 @@ func loadTinyPairsFromProto(dataPath string) ([]moe.TrainPair, error) {
 		}
 	}
 
+	pairs = filterNoisyPairs(pairs)
 	return pairs, nil
 }
 
@@ -267,6 +303,7 @@ func loadTinyPairs(dataPath string) ([]moe.TrainPair, error) {
 	}
 
 	pairs = filterTinySeq2SeqPairs(pairs)
+	pairs = filterNoisyPairs(pairs)
 	if len(pairs) == 0 {
 		return nil, fmt.Errorf("tiny seq2seq dataset is empty")
 	}

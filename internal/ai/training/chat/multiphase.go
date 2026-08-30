@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -88,8 +89,23 @@ func applyPhaseFreeze(layers []*moe.MoELayer, freezeStart, freezeEnd int) {
 	}
 }
 
+// regexpSplitSentences splits text into sentences using terminators.
+func regexpSplitSentences(text string) []string {
+	re := regexp.MustCompile(`[.!?]+`)
+	parts := re.Split(text, -1)
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
 // svcIsCoherent returns true when a generated response looks like real language
-// (not SALAD): needs at least 2 words and a type-token ratio above 0.5.
+// (not SALAD): needs at least 2 words, balanced sentence lengths, and enough
+// lexical variety.
 func svcIsCoherent(response string) bool {
 	words := strings.Fields(strings.ToLower(response))
 	if len(words) < 2 {
@@ -113,6 +129,33 @@ func svcIsCoherent(response string) bool {
 	}
 
 	ttr := float64(len(unique)) / float64(len(words))
+
+	// Check balanced sentence lengths: split on sentence terminators and
+	// ensure no single sentence dominates the response.
+	sentences := regexpSplitSentences(response)
+	if len(sentences) >= 3 {
+		totalWords := 0
+		minLen := len(words)
+		maxLen := 0
+		for _, s := range sentences {
+			n := len(strings.Fields(s))
+			totalWords += n
+			if n < minLen {
+				minLen = n
+			}
+			if n > maxLen {
+				maxLen = n
+			}
+		}
+		avgLen := float64(totalWords) / float64(len(sentences))
+		if avgLen > 0 && float64(maxLen)/avgLen > 4.0 {
+			return false
+		}
+		if maxLen > 0 && minLen == 0 {
+			return false
+		}
+	}
+
 	// For short responses (2-3 words), relax TTR requirement
 	if len(words) <= 3 {
 		return hasConversational

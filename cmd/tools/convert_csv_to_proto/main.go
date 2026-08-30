@@ -28,12 +28,23 @@ import (
 const systemPrompt = "You are Gollemer, an expert Go development assistant. Explain your code modifications clearly before providing code snippets."
 
 // generateAssistantResponse creates a natural-language explanation of the
-// code modification for a given prompt and code snippet. This makes the
-// training data multi-conversational by providing an assistant explanation
-// alongside the code before/after states.
+// code modification for a given prompt and code snippet. Responses follow a
+// Reasoning -> Conclusion/Action structure with conversational transitions.
 func generateAssistantResponse(prompt, codeAfter string) string {
 	lower := strings.ToLower(strings.TrimSpace(prompt))
 
+	// Build the base explanation.
+	base := buildBaseResponse(lower, codeAfter)
+
+	// Wrap in a reasoning structure for technical prompts.
+	if strings.Contains(lower, "how") || strings.Contains(lower, "explain") || strings.Contains(lower, "what") || strings.Contains(lower, "why") || strings.Contains(lower, "structure") {
+		return fmt.Sprintf("To give you the best answer, let me break this down. First, %s Therefore, this change keeps the code clean and idiomatic.", base)
+	}
+
+	return base
+}
+
+func buildBaseResponse(lower, codeAfter string) string {
 	// HTTP-related patterns.
 	switch {
 	case strings.Contains(lower, "http handlefunc"):

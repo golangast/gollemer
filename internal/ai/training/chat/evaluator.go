@@ -189,6 +189,24 @@ func calculateSequenceReward(predictedIDs []int, vocab *mainvocab.Vocabulary) fl
 		}
 	}
 
+	// Bonus: conversational transition markers reward reasoning structure
+	transitionTokens := map[string]float32{
+		"let": 0.15, "first": 0.15, "second": 0.15, "third": 0.1,
+		"therefore": 0.2, "thus": 0.2, "however": 0.15, "in": 0.1,
+		"addition": 0.1, "also": 0.1, "moreover": 0.1, "conclusion": 0.15,
+		"makes": 0.1, "sense": 0.1, "give": 0.1, "best": 0.1,
+		"break": 0.1, "down": 0.1, "starting": 0.1, "means": 0.1,
+	}
+	for _, id := range predictedIDs {
+		if id == vocab.BosID || id == vocab.PaddingTokenID || id == vocab.EosID {
+			continue
+		}
+		w := strings.ToLower(vocab.GetWord(id))
+		if bonus, ok := transitionTokens[w]; ok {
+			reward += bonus
+		}
+	}
+
 	// Find the last meaningful token (skip EOS/PAD)
 	lastMeaningful := -1
 	for i := len(predictedIDs) - 1; i >= 0; i-- {
@@ -264,6 +282,37 @@ func scoreSentenceHeuristic(text string) float32 {
 	// 4. Punctuation Reward
 	if strings.ContainsAny(text, ".!?") {
 		score += 2.0
+	}
+
+	// 5. Conversational Marker Reward: reward reasoning-structure transitions
+	lower := strings.ToLower(text)
+	markers := []struct {
+		phrase string
+		bonus  float32
+	}{
+		{"let me think", 0.4},
+		{"let's think", 0.4},
+		{"first", 0.3},
+		{"second", 0.3},
+		{"third", 0.2},
+		{"in addition", 0.3},
+		{"also", 0.2},
+		{"moreover", 0.3},
+		{"therefore", 0.4},
+		{"thus", 0.3},
+		{"however", 0.2},
+		{"makes sense", 0.3},
+		{"that makes sense", 0.4},
+		{"to give you the best", 0.4},
+		{"let me break this down", 0.4},
+		{"let me break that down", 0.4},
+		{"conclusion", 0.2},
+		{"starting with", 0.2},
+	}
+	for _, m := range markers {
+		if strings.Contains(lower, m.phrase) {
+			score += m.bonus
+		}
 	}
 
 	if score < 0 {
