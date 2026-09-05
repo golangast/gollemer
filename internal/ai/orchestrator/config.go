@@ -66,6 +66,13 @@ type TrainingConfig struct {
 	MaxSeqLen                  int                     `json:"max_seq_len"`
 	ForceSingleExpertEpochs    int                     `json:"force_single_expert_epochs"`
 	Phases                     map[string]*PhaseConfig `json:"phases"`
+	// Automated LR step-down
+	AutoLREnabled   bool    `json:"auto_lr_enabled"`
+	AutoLRThreshold float32 `json:"auto_lr_threshold"`
+	AutoLRFactor    float32 `json:"auto_lr_factor"`
+	AutoLRMaxSteps  int     `json:"auto_lr_max_steps"`
+	// Early stopping: halt training as soon as loss drops to this value (0 = disabled)
+	TargetLoss float32 `json:"target_loss"`
 }
 
 type SafeConfig struct {

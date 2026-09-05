@@ -480,6 +480,13 @@ skipCSV:
 		unkID = intentModel.SentenceVocab.GetTokenID("UNK")
 	}
 
+	// Enable UNK debug logging when requested via env var
+	if os.Getenv("DEBUG_UNK") == "1" {
+		DebugUnkEnabled = true
+		DebugUnkID = unkID
+		log.Printf("[DEBUG_UNK] enabled; UNK id=%d", unkID)
+	}
+
 	// Resize Encoder Embedding if Vocabulary has grown
 	currentVocabSize := intentModel.SentenceVocab.Size()
 	if intentModel.Embedding.VocabSize != currentVocabSize {
@@ -625,7 +632,7 @@ skipCSV:
 	log.Printf("Final Train Set Size: %d", len(trainPairs))
 
 	// Use Iterator pattern to save memory and speed up training
-	iterator := NewChatDataIterator(trainPairs, intentModel.SentenceVocab, unkID, false)
+	iterator := NewChatDataIterator(trainPairs, intentModel.SentenceVocab, unkID, true)
 	if overfitMode {
 		iterator.MaxLen = 768 // Match high-capacity architecture
 	}
@@ -4429,7 +4436,9 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 				supPairs[i] = moe.TrainPair{Q: p.Q, A: p.A, Intent: p.Intent, Grammar: p.Grammar}
 			}
 			// Inject any new pairs back — only fires when metrics are declining
-			supervisor.RunTriageGated(intentModel, currentAvgSim, &supPairs, expert)
+			if phaseForEpoch(epoch+1) != 2 {
+				supervisor.RunTriageGated(intentModel, currentAvgSim, &supPairs, expert)
+			}
 			if len(supPairs) > len(trainPairs) {
 				for _, sp := range supPairs[len(trainPairs):] {
 					trainPairs = append(trainPairs, moe.TrainPair{
@@ -4574,24 +4583,27 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 
 		// 3. Autonomous Supervisor: Analyze, Mutate, Verify, SURGERY
 		surgery.performedSurgery = false
-		expert.Step(epochMetrics, surgery)
+		if phaseForEpoch(epoch+1) != 2 {
+			expert.Step(epochMetrics, surgery)
+		}
 		if surgery.performedSurgery {
 			lastSurgeryEpoch = epoch
 		}
 
 		// Temperature decay post-surgery
-		epochsSinceSurgery := epoch - lastSurgeryEpoch
-		if epochsSinceSurgery <= 15 {
-			// Linear decay from 1.5 to 1.0
-			newTemp := 1.5 - (float32(epochsSinceSurgery) * (0.5 / 15.0))
-			if newTemp < 1.0 {
-				newTemp = 1.0
-			}
-			for _, layer := range moe.ActiveLayers {
-				layer.RouterTemperature = newTemp
-			}
-			if intentModel.Decoder.OutputMoE != nil {
-				intentModel.Decoder.OutputMoE.RouterTemperature = newTemp
+		if surgery.performedSurgery {
+			epochsSinceSurgery := epoch - lastSurgeryEpoch
+			if epochsSinceSurgery <= 15 {
+				newTemp := 1.5 - (float32(epochsSinceSurgery) * (0.5 / 15.0))
+				if newTemp < 1.0 {
+					newTemp = 1.0
+				}
+				for _, layer := range moe.ActiveLayers {
+					layer.RouterTemperature = newTemp
+				}
+				if intentModel.Decoder.OutputMoE != nil {
+					intentModel.Decoder.OutputMoE.RouterTemperature = newTemp
+				}
 			}
 		}
 	}

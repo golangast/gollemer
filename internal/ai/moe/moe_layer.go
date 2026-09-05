@@ -623,9 +623,10 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 				for j := 0; j < numExperts; j++ {
 					usage := float32(moe.AccumulatedUtilization[j])
 					if usage > avgTokens*1.1 { // If 10% over average
-						// Apply exponential penalty to discourage this expert
+						// Apply softened exponential penalty to discourage this expert
 						ratio := usage / avgTokens
-						penalty := float32(math.Pow(float64(ratio), 2.0)) * 5.0
+						// Reduced multiplier to avoid abrupt router swings after surgery
+						penalty := float32(math.Pow(float64(ratio), 2.0)) * 2.0
 						gateLogits.Data[i*numExperts+j] -= penalty
 					}
 				}
@@ -633,8 +634,9 @@ func (moe *MoELayer) Forward(inputs ...*Tensor) (*Tensor, error) {
 		}
 
 		// 🎲 RANDOM EXPERT SHUFFLE (Training Only)
-		// 15% of the time, zero out the top expert's logit to force model to learn alternatives
-		if rand.Float32() < 0.15 {
+		// Occasionally zero out the top expert's logit to encourage alternatives,
+		// but at a much lower rate to reduce destabilization after resets/surgery.
+		if rand.Float32() < 0.03 {
 			for i := 0; i < batchSize*seqLength; i++ {
 				maxIdx := 0
 				maxVal := gateLogits.Data[i*numExperts]

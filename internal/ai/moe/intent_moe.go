@@ -172,7 +172,13 @@ func SampleFromLogits(logits *tensor.Tensor, temperature float32, topK int, topP
 		return 0, fmt.Errorf("SampleFromLogits expects batch size 1, got %d", logits.Shape[0])
 	}
 
+	if len(logits.Shape) < 2 {
+		return 0, fmt.Errorf("SampleFromLogits: logits tensor has invalid shape %v", logits.Shape)
+	}
 	vocabSize := logits.Shape[1]
+	if vocabSize <= 0 {
+		return 0, fmt.Errorf("SampleFromLogits: invalid vocab size %d", vocabSize)
+	}
 	logits.ToCPU()
 	logitsData := logits.Data
 
@@ -187,8 +193,15 @@ func SampleFromLogits(logits *tensor.Tensor, temperature float32, topK int, topP
 	}
 
 	candidates := make([]tokenLogit, vocabSize)
-	for i := range vocabSize {
-		candidates[i] = tokenLogit{i, logitsData[i] / temperature}
+	for i := 0; i < vocabSize; i++ {
+		// safety: ensure we don't read past logitsData
+		var v float32
+		if i < len(logitsData) {
+			v = logitsData[i] / temperature
+		} else {
+			v = 0.0
+		}
+		candidates[i] = tokenLogit{i, v}
 	}
 
 	// Sort descending
@@ -201,11 +214,17 @@ func SampleFromLogits(logits *tensor.Tensor, temperature float32, topK int, topP
 	if k <= 0 || k > vocabSize {
 		k = vocabSize
 	}
+	if k <= 0 || k > len(candidates) {
+		k = len(candidates)
+	}
 	topKCandidates := candidates[:k]
 
 	// Handle top-P (nucleus) sampling
 	if topP > 0.0 && topP < 1.0 {
 		// First compute probabilities for top-K candidates
+		if len(topKCandidates) == 0 {
+			return 0, fmt.Errorf("SampleFromLogits: no candidates after top-k/top-p filtering")
+		}
 		maxLogit := topKCandidates[0].value
 		var sumExp float32
 		for _, c := range topKCandidates {
@@ -226,6 +245,9 @@ func SampleFromLogits(logits *tensor.Tensor, temperature float32, topK int, topP
 	}
 
 	// Find max logit for numerical stability
+	if len(topKCandidates) == 0 {
+		return 0, fmt.Errorf("SampleFromLogits: no candidates available")
+	}
 	maxLogit := topKCandidates[0].value
 
 	// Compute sum of exponents for truncated candidates
@@ -241,10 +263,15 @@ func SampleFromLogits(logits *tensor.Tensor, temperature float32, topK int, topP
 		prob := float32(math.Exp(float64(c.value-maxLogit))) / sumExp
 		cumulative += prob
 		if r < cumulative {
+			if os.Getenv("DEBUG_SAMPLE") == "1" {
+				log.Printf("[SAMPLE] selected=%d r=%.6f prob=%.6f topK=%d topP=%.3f\n", c.index, r, prob, topK, topP)
+			}
 			return c.index, nil
 		}
 	}
-
+	if os.Getenv("DEBUG_SAMPLE") == "1" {
+		log.Printf("[SAMPLE] fallback selected=%d r=%.6f topK=%d topP=%.3f\n", topKCandidates[0].index, r, topK, topP)
+	}
 	return topKCandidates[0].index, nil
 }
 
@@ -2190,6 +2217,23 @@ func (m *IntentMoE) GreedySearchDecodeWithTemp(contextVector *tensor.Tensor, max
 			last2 := decodedIDs[len(decodedIDs)-2]
 			last3 := decodedIDs[len(decodedIDs)-3]
 			if last1 == last2 && last2 == last3 {
+				if last1 < len(outputLogits.Data) {
+					outputLogits.Data[last1] = -1e9
+				}
+			}
+		}
+
+		// 2-gram Stuck Detector: Catch alternating loops like A B A B
+		if len(decodedIDs) >= 4 {
+			last1 := decodedIDs[len(decodedIDs)-1]
+			last2 := decodedIDs[len(decodedIDs)-2]
+			last3 := decodedIDs[len(decodedIDs)-3]
+			last4 := decodedIDs[len(decodedIDs)-4]
+			if last1 == last3 && last2 == last4 && last1 != last2 {
+				// Suppress both tokens of the loop to force exploration
+				if last2 < len(outputLogits.Data) {
+					outputLogits.Data[last2] = -1e9
+				}
 				if last1 < len(outputLogits.Data) {
 					outputLogits.Data[last1] = -1e9
 				}

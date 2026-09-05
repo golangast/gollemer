@@ -43,9 +43,10 @@ type yamlConversation struct {
 }
 
 type yamlTurn struct {
-	TurnSequence int32  `yaml:"turn_sequence"`
-	Role         string `yaml:"role"`
-	Content      string `yaml:"content"`
+	TurnSequence   int32  `yaml:"turn_sequence"`
+	Role           string `yaml:"role"`
+	Content        string `yaml:"content"`
+	ReasoningTrace string `yaml:"reasoning_trace,omitempty"`
 }
 
 type yamlRoot struct {
@@ -92,9 +93,10 @@ func main() {
 				log.Fatalf("%s turn %d: %v", conv.ConversationID, turn.TurnSequence, err)
 			}
 			pbConv.Turns = append(pbConv.Turns, &datasetpb.ConversationTurn{
-				TurnSequence: turn.TurnSequence,
-				Role:         role,
-				Content:      turn.Content,
+				TurnSequence:   turn.TurnSequence,
+				Role:           role,
+				Content:        turn.Content,
+				ReasoningTrace: turn.ReasoningTrace,
 			})
 		}
 		ds.Conversations = append(ds.Conversations, pbConv)

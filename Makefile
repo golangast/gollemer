@@ -8,12 +8,12 @@ export CGO_ENABLED=1
 # Runtime Tuning
 MEM_LIMIT    = 2500MiB
 GOGC         = 50
-GOMAXPROCS   = 4
+GOMAXPROCS   = 8
 MAIN_CMD     = go run main.go
 
 .PHONY: train train-fresh clean clean-all help install-hooks \
-        metrics export-labels train-small train-small-seq2seq \
-        test-small-seq2seq seq2seq-prompt seq2seq-chat
+       metrics export-labels train-small train-small-seq2seq \
+       test-small-seq2seq seq2seq-prompt seq2seq-chat chat
 
 ## install-hooks: Install Gollemer Git pre-commit validation hook
 install-hooks:
@@ -23,6 +23,10 @@ install-hooks:
 
 ## train: Start a fresh curriculum training (clears MoE models, preserves word2vec)
 train: clean
+	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-multiphase $(ARGS)
+
+# train-resume: Start training without cleaning existing model checkpoints
+train-resume:
 	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-multiphase $(ARGS)
 
 ## train-fresh: Full fresh start — clears ALL models including word2vec, then trains
@@ -49,6 +53,10 @@ seq2seq-prompt:
 ## seq2seq-chat: Start an interactive tiny seq2seq chat loop with the saved model
 seq2seq-chat:
 	$(MAIN_CMD) -seq2seq-chat
+
+## chat: Start an interactive full MoE chat loop with conversation history and reasoning
+chat:
+	$(MAIN_CMD) -chat
 
 # --- Analytics ---
 

@@ -4,10 +4,15 @@ import (
 	"log"
 	"math"
 	"math/rand"
+	"os"
 
 	"github.com/golangast/gollemer/internal/ai/moe"
 	"github.com/golangast/gollemer/internal/ai/neural/tensor"
 )
+
+// Debug variables set at runtime from training init
+var DebugUnkID int = -1
+var DebugUnkEnabled bool = false
 
 func WeightedCrossEntropy(logits *tensor.Tensor, targets []int, weights []float32, labelSmoothing float32, entropyWeight float32) (float32, *tensor.Tensor) {
 	// Flatten batch and sequence dimensions to handle 3D tensors [Batch, Seq, Vocab]
@@ -50,6 +55,36 @@ func WeightedCrossEntropy(logits *tensor.Tensor, targets []int, weights []float3
 				log.Printf(" [WeightedCrossEntropy] NaNs in row %d! Skipping.", i)
 			}
 			continue
+		}
+
+		// Optional debug: log when UNK receives significant probability mass
+		if os.Getenv("DEBUG_UNK") == "1" {
+			// find top token
+			maxP := float32(-1.0)
+			maxID := -1
+			for j, v := range row {
+				if v > maxP {
+					maxP = v
+					maxID = j
+				}
+			}
+
+			// If we know the UNK id, log its prob; otherwise log top/target info.
+			if DebugUnkID >= 0 && DebugUnkID < len(row) {
+				unkProb := row[DebugUnkID]
+				if i < 8 || i%50 == 0 || unkProb > 0.02 || rand.Float32() < 0.01 {
+					if env := os.Getenv("DEBUG_UNK_VERBOSE"); env == "1" {
+						log.Printf("[DEBUG_UNK] row=%d target=%d unk_prob=%.4f top=%d(%.4f)", i, targetID, unkProb, maxID, maxP)
+					} else {
+						log.Printf("[DEBUG_UNK] row=%d unk_prob=%.4f top=%d(%.4f)", i, unkProb, maxID, maxP)
+					}
+				}
+			} else {
+				// Log deterministic initial rows so we can inspect top predictions
+				if i < 8 || i%50 == 0 || rand.Float32() < 0.01 {
+					log.Printf("[DEBUG_UNK] row=%d target=%d top=%d(%.4f)", i, targetID, maxID, maxP)
+				}
+			}
 		}
 
 		// 3. Loss (log-prob of target)

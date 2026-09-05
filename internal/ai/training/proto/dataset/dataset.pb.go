@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.12
 // 	protoc        v3.21.12
-// source: internal/ai/training/proto/dataset/dataset.proto
+// source: dataset.proto
 
 package datasetpb
 
@@ -58,11 +58,11 @@ func (x Role) String() string {
 }
 
 func (Role) Descriptor() protoreflect.EnumDescriptor {
-	return file_internal_ai_training_proto_dataset_dataset_proto_enumTypes[0].Descriptor()
+	return file_dataset_proto_enumTypes[0].Descriptor()
 }
 
 func (Role) Type() protoreflect.EnumType {
-	return &file_internal_ai_training_proto_dataset_dataset_proto_enumTypes[0]
+	return &file_dataset_proto_enumTypes[0]
 }
 
 func (x Role) Number() protoreflect.EnumNumber {
@@ -71,7 +71,7 @@ func (x Role) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use Role.Descriptor instead.
 func (Role) EnumDescriptor() ([]byte, []int) {
-	return file_internal_ai_training_proto_dataset_dataset_proto_rawDescGZIP(), []int{0}
+	return file_dataset_proto_rawDescGZIP(), []int{0}
 }
 
 // Risk level attached to a simulated outcome.
@@ -111,11 +111,11 @@ func (x Risk) String() string {
 }
 
 func (Risk) Descriptor() protoreflect.EnumDescriptor {
-	return file_internal_ai_training_proto_dataset_dataset_proto_enumTypes[1].Descriptor()
+	return file_dataset_proto_enumTypes[1].Descriptor()
 }
 
 func (Risk) Type() protoreflect.EnumType {
-	return &file_internal_ai_training_proto_dataset_dataset_proto_enumTypes[1]
+	return &file_dataset_proto_enumTypes[1]
 }
 
 func (x Risk) Number() protoreflect.EnumNumber {
@@ -124,7 +124,7 @@ func (x Risk) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use Risk.Descriptor instead.
 func (Risk) EnumDescriptor() ([]byte, []int) {
-	return file_internal_ai_training_proto_dataset_dataset_proto_rawDescGZIP(), []int{1}
+	return file_dataset_proto_rawDescGZIP(), []int{1}
 }
 
 // An entity mentioned in the assistant's reasoning.
@@ -138,7 +138,7 @@ type Entity struct {
 
 func (x *Entity) Reset() {
 	*x = Entity{}
-	mi := &file_internal_ai_training_proto_dataset_dataset_proto_msgTypes[0]
+	mi := &file_dataset_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -150,7 +150,7 @@ func (x *Entity) String() string {
 func (*Entity) ProtoMessage() {}
 
 func (x *Entity) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_ai_training_proto_dataset_dataset_proto_msgTypes[0]
+	mi := &file_dataset_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -163,7 +163,7 @@ func (x *Entity) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Entity.ProtoReflect.Descriptor instead.
 func (*Entity) Descriptor() ([]byte, []int) {
-	return file_internal_ai_training_proto_dataset_dataset_proto_rawDescGZIP(), []int{0}
+	return file_dataset_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *Entity) GetSubject() string {
@@ -192,7 +192,7 @@ type SimulatedOutcome struct {
 
 func (x *SimulatedOutcome) Reset() {
 	*x = SimulatedOutcome{}
-	mi := &file_internal_ai_training_proto_dataset_dataset_proto_msgTypes[1]
+	mi := &file_dataset_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -204,7 +204,7 @@ func (x *SimulatedOutcome) String() string {
 func (*SimulatedOutcome) ProtoMessage() {}
 
 func (x *SimulatedOutcome) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_ai_training_proto_dataset_dataset_proto_msgTypes[1]
+	mi := &file_dataset_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -217,7 +217,7 @@ func (x *SimulatedOutcome) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SimulatedOutcome.ProtoReflect.Descriptor instead.
 func (*SimulatedOutcome) Descriptor() ([]byte, []int) {
-	return file_internal_ai_training_proto_dataset_dataset_proto_rawDescGZIP(), []int{1}
+	return file_dataset_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *SimulatedOutcome) GetActionDescription() string {
@@ -255,7 +255,7 @@ type Reasoning struct {
 
 func (x *Reasoning) Reset() {
 	*x = Reasoning{}
-	mi := &file_internal_ai_training_proto_dataset_dataset_proto_msgTypes[2]
+	mi := &file_dataset_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -267,7 +267,7 @@ func (x *Reasoning) String() string {
 func (*Reasoning) ProtoMessage() {}
 
 func (x *Reasoning) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_ai_training_proto_dataset_dataset_proto_msgTypes[2]
+	mi := &file_dataset_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -280,7 +280,7 @@ func (x *Reasoning) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Reasoning.ProtoReflect.Descriptor instead.
 func (*Reasoning) Descriptor() ([]byte, []int) {
-	return file_internal_ai_training_proto_dataset_dataset_proto_rawDescGZIP(), []int{2}
+	return file_dataset_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *Reasoning) GetEntities() []*Entity {
@@ -330,13 +330,14 @@ type ConversationTurn struct {
 	UserContent       string                 `protobuf:"bytes,4,opt,name=user_content,json=userContent,proto3" json:"user_content,omitempty"`
 	AssistantResponse string                 `protobuf:"bytes,5,opt,name=assistant_response,json=assistantResponse,proto3" json:"assistant_response,omitempty"`
 	Reasoning         *Reasoning             `protobuf:"bytes,6,opt,name=reasoning,proto3" json:"reasoning,omitempty"`
+	ReasoningTrace    string                 `protobuf:"bytes,7,opt,name=reasoning_trace,json=reasoningTrace,proto3" json:"reasoning_trace,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
 
 func (x *ConversationTurn) Reset() {
 	*x = ConversationTurn{}
-	mi := &file_internal_ai_training_proto_dataset_dataset_proto_msgTypes[3]
+	mi := &file_dataset_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -348,7 +349,7 @@ func (x *ConversationTurn) String() string {
 func (*ConversationTurn) ProtoMessage() {}
 
 func (x *ConversationTurn) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_ai_training_proto_dataset_dataset_proto_msgTypes[3]
+	mi := &file_dataset_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -361,7 +362,7 @@ func (x *ConversationTurn) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConversationTurn.ProtoReflect.Descriptor instead.
 func (*ConversationTurn) Descriptor() ([]byte, []int) {
-	return file_internal_ai_training_proto_dataset_dataset_proto_rawDescGZIP(), []int{3}
+	return file_dataset_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *ConversationTurn) GetTurnSequence() int32 {
@@ -406,6 +407,13 @@ func (x *ConversationTurn) GetReasoning() *Reasoning {
 	return nil
 }
 
+func (x *ConversationTurn) GetReasoningTrace() string {
+	if x != nil {
+		return x.ReasoningTrace
+	}
+	return ""
+}
+
 // Represents a complete multi-turn conversation
 type Conversation struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
@@ -417,7 +425,7 @@ type Conversation struct {
 
 func (x *Conversation) Reset() {
 	*x = Conversation{}
-	mi := &file_internal_ai_training_proto_dataset_dataset_proto_msgTypes[4]
+	mi := &file_dataset_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -429,7 +437,7 @@ func (x *Conversation) String() string {
 func (*Conversation) ProtoMessage() {}
 
 func (x *Conversation) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_ai_training_proto_dataset_dataset_proto_msgTypes[4]
+	mi := &file_dataset_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -442,7 +450,7 @@ func (x *Conversation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Conversation.ProtoReflect.Descriptor instead.
 func (*Conversation) Descriptor() ([]byte, []int) {
-	return file_internal_ai_training_proto_dataset_dataset_proto_rawDescGZIP(), []int{4}
+	return file_dataset_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *Conversation) GetConversationId() string {
@@ -469,7 +477,7 @@ type ConversationDataset struct {
 
 func (x *ConversationDataset) Reset() {
 	*x = ConversationDataset{}
-	mi := &file_internal_ai_training_proto_dataset_dataset_proto_msgTypes[5]
+	mi := &file_dataset_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -481,7 +489,7 @@ func (x *ConversationDataset) String() string {
 func (*ConversationDataset) ProtoMessage() {}
 
 func (x *ConversationDataset) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_ai_training_proto_dataset_dataset_proto_msgTypes[5]
+	mi := &file_dataset_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -494,7 +502,7 @@ func (x *ConversationDataset) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConversationDataset.ProtoReflect.Descriptor instead.
 func (*ConversationDataset) Descriptor() ([]byte, []int) {
-	return file_internal_ai_training_proto_dataset_dataset_proto_rawDescGZIP(), []int{5}
+	return file_dataset_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ConversationDataset) GetConversations() []*Conversation {
@@ -504,11 +512,11 @@ func (x *ConversationDataset) GetConversations() []*Conversation {
 	return nil
 }
 
-var File_internal_ai_training_proto_dataset_dataset_proto protoreflect.FileDescriptor
+var File_dataset_proto protoreflect.FileDescriptor
 
-const file_internal_ai_training_proto_dataset_dataset_proto_rawDesc = "" +
+const file_dataset_proto_rawDesc = "" +
 	"\n" +
-	"0internal/ai/training/proto/dataset/dataset.proto\x12\adataset\"G\n" +
+	"\rdataset.proto\x12\adataset\"G\n" +
 	"\x06Entity\x12\x18\n" +
 	"\asubject\x18\x01 \x01(\tR\asubject\x12#\n" +
 	"\rtarget_object\x18\x02 \x01(\tR\ftargetObject\"\x99\x01\n" +
@@ -522,14 +530,15 @@ const file_internal_ai_training_proto_dataset_dataset_proto_rawDesc = "" +
 	"\x15predicted_user_intent\x18\x03 \x01(\tR\x13predictedUserIntent\x12H\n" +
 	"\x12simulated_outcomes\x18\x04 \x03(\v2\x19.dataset.SimulatedOutcomeR\x11simulatedOutcomes\x12\x1f\n" +
 	"\vtarget_goal\x18\x05 \x01(\tR\n" +
-	"targetGoal\"\xf8\x01\n" +
+	"targetGoal\"\xa1\x02\n" +
 	"\x10ConversationTurn\x12#\n" +
 	"\rturn_sequence\x18\x01 \x01(\x05R\fturnSequence\x12!\n" +
 	"\x04role\x18\x02 \x01(\x0e2\r.dataset.RoleR\x04role\x12\x18\n" +
 	"\acontent\x18\x03 \x01(\tR\acontent\x12!\n" +
 	"\fuser_content\x18\x04 \x01(\tR\vuserContent\x12-\n" +
 	"\x12assistant_response\x18\x05 \x01(\tR\x11assistantResponse\x120\n" +
-	"\treasoning\x18\x06 \x01(\v2\x12.dataset.ReasoningR\treasoning\"h\n" +
+	"\treasoning\x18\x06 \x01(\v2\x12.dataset.ReasoningR\treasoning\x12'\n" +
+	"\x0freasoning_trace\x18\a \x01(\tR\x0ereasoningTrace\"h\n" +
 	"\fConversation\x12'\n" +
 	"\x0fconversation_id\x18\x01 \x01(\tR\x0econversationId\x12/\n" +
 	"\x05turns\x18\x02 \x03(\v2\x19.dataset.ConversationTurnR\x05turns\"R\n" +
@@ -547,20 +556,20 @@ const file_internal_ai_training_proto_dataset_dataset_proto_rawDesc = "" +
 	"\tRISK_HIGH\x10\x03BLZJgithub.com/golangast/gollemer/internal/ai/training/proto/dataset;datasetpbb\x06proto3"
 
 var (
-	file_internal_ai_training_proto_dataset_dataset_proto_rawDescOnce sync.Once
-	file_internal_ai_training_proto_dataset_dataset_proto_rawDescData []byte
+	file_dataset_proto_rawDescOnce sync.Once
+	file_dataset_proto_rawDescData []byte
 )
 
-func file_internal_ai_training_proto_dataset_dataset_proto_rawDescGZIP() []byte {
-	file_internal_ai_training_proto_dataset_dataset_proto_rawDescOnce.Do(func() {
-		file_internal_ai_training_proto_dataset_dataset_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_internal_ai_training_proto_dataset_dataset_proto_rawDesc), len(file_internal_ai_training_proto_dataset_dataset_proto_rawDesc)))
+func file_dataset_proto_rawDescGZIP() []byte {
+	file_dataset_proto_rawDescOnce.Do(func() {
+		file_dataset_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_dataset_proto_rawDesc), len(file_dataset_proto_rawDesc)))
 	})
-	return file_internal_ai_training_proto_dataset_dataset_proto_rawDescData
+	return file_dataset_proto_rawDescData
 }
 
-var file_internal_ai_training_proto_dataset_dataset_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_internal_ai_training_proto_dataset_dataset_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
-var file_internal_ai_training_proto_dataset_dataset_proto_goTypes = []any{
+var file_dataset_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_dataset_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_dataset_proto_goTypes = []any{
 	(Role)(0),                   // 0: dataset.Role
 	(Risk)(0),                   // 1: dataset.Risk
 	(*Entity)(nil),              // 2: dataset.Entity
@@ -570,7 +579,7 @@ var file_internal_ai_training_proto_dataset_dataset_proto_goTypes = []any{
 	(*Conversation)(nil),        // 6: dataset.Conversation
 	(*ConversationDataset)(nil), // 7: dataset.ConversationDataset
 }
-var file_internal_ai_training_proto_dataset_dataset_proto_depIdxs = []int32{
+var file_dataset_proto_depIdxs = []int32{
 	1, // 0: dataset.SimulatedOutcome.risk:type_name -> dataset.Risk
 	2, // 1: dataset.Reasoning.entities:type_name -> dataset.Entity
 	3, // 2: dataset.Reasoning.simulated_outcomes:type_name -> dataset.SimulatedOutcome
@@ -585,27 +594,27 @@ var file_internal_ai_training_proto_dataset_dataset_proto_depIdxs = []int32{
 	0, // [0:7] is the sub-list for field type_name
 }
 
-func init() { file_internal_ai_training_proto_dataset_dataset_proto_init() }
-func file_internal_ai_training_proto_dataset_dataset_proto_init() {
-	if File_internal_ai_training_proto_dataset_dataset_proto != nil {
+func init() { file_dataset_proto_init() }
+func file_dataset_proto_init() {
+	if File_dataset_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_ai_training_proto_dataset_dataset_proto_rawDesc), len(file_internal_ai_training_proto_dataset_dataset_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_dataset_proto_rawDesc), len(file_dataset_proto_rawDesc)),
 			NumEnums:      2,
 			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_internal_ai_training_proto_dataset_dataset_proto_goTypes,
-		DependencyIndexes: file_internal_ai_training_proto_dataset_dataset_proto_depIdxs,
-		EnumInfos:         file_internal_ai_training_proto_dataset_dataset_proto_enumTypes,
-		MessageInfos:      file_internal_ai_training_proto_dataset_dataset_proto_msgTypes,
+		GoTypes:           file_dataset_proto_goTypes,
+		DependencyIndexes: file_dataset_proto_depIdxs,
+		EnumInfos:         file_dataset_proto_enumTypes,
+		MessageInfos:      file_dataset_proto_msgTypes,
 	}.Build()
-	File_internal_ai_training_proto_dataset_dataset_proto = out.File
-	file_internal_ai_training_proto_dataset_dataset_proto_goTypes = nil
-	file_internal_ai_training_proto_dataset_dataset_proto_depIdxs = nil
+	File_dataset_proto = out.File
+	file_dataset_proto_goTypes = nil
+	file_dataset_proto_depIdxs = nil
 }

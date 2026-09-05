@@ -1078,7 +1078,7 @@ func (t *Tensor) AddWithBroadcast(other *Tensor) (*Tensor, error) {
 		paddedOtherShape[i] = 1
 	}
 
-	for i := range maxDims {
+	for i := 0; i < maxDims; i++ {
 		dimT := paddedTShape[i]
 		dimOther := paddedOtherShape[i]
 
@@ -1119,17 +1119,28 @@ func (t *Tensor) AddWithBroadcast(other *Tensor) (*Tensor, error) {
 
 	if lastDimMatch && len(other.Shape) > 0 {
 		otherSize := len(other.Data)
+		if otherSize == 0 {
+			return nil, fmt.Errorf("AddWithBroadcast: other tensor has no data (shape %v)", other.Shape)
+		}
 		if len(t.Data) < resultSize {
 			return nil, fmt.Errorf("AddWithBroadcast: t.Data length %d < resultSize %d. t.Shape: %v, other.Shape: %v", len(t.Data), resultSize, t.Shape, other.Shape)
 		}
 		for i := 0; i < resultSize; i += otherSize {
-			addVectors(t.Data[i:i+otherSize], other.Data, resultData[i:i+otherSize])
+			end := i + otherSize
+			if end > len(t.Data) {
+				end = len(t.Data)
+			}
+			sliceSize := end - i
+			addVectors(t.Data[i:i+sliceSize], other.Data[:sliceSize], resultData[i:i+sliceSize])
 		}
 	} else if resultSize == len(t.Data) && len(other.Data) == 1 {
 		// Optimization for scalar broadcasting
 		addScalar(t.Data, other.Data[0], resultData)
 	} else {
 		// Generic slow broadcast
+		if len(other.Data) == 0 {
+			return nil, fmt.Errorf("AddWithBroadcast: other tensor has no data (shape %v)", other.Shape)
+		}
 		for i := 0; i < resultSize; i++ {
 			coords := getCoords(i, resultShape, stridesResult)
 			idxT := 0
@@ -1143,6 +1154,10 @@ func (t *Tensor) AddWithBroadcast(other *Tensor) (*Tensor, error) {
 				if paddedOtherShape[dim] != 1 {
 					idxOther += coords[dim] * stridesOther[dim]
 				}
+			}
+			// Safety checks to avoid panics for malformed tensors
+			if idxT < 0 || idxT >= len(t.Data) || idxOther < 0 || idxOther >= len(other.Data) {
+				return nil, fmt.Errorf("AddWithBroadcast: computed index out of bounds idxT=%d idxOther=%d tLen=%d otherLen=%d; shapes %v + %v => %v", idxT, idxOther, len(t.Data), len(other.Data), t.Shape, other.Shape, resultShape)
 			}
 			resultData[i] = t.Data[idxT] + other.Data[idxOther]
 		}
@@ -1176,7 +1191,7 @@ func (t *Tensor) MulWithBroadcast(other *Tensor) (*Tensor, error) {
 		paddedOtherShape[i] = 1
 	}
 
-	for i := range maxDims {
+	for i := 0; i < maxDims; i++ {
 		dimT := paddedTShape[i]
 		dimOther := paddedOtherShape[i]
 
@@ -1199,6 +1214,9 @@ func (t *Tensor) MulWithBroadcast(other *Tensor) (*Tensor, error) {
 
 	// Optimization for common broadcasting cases (e.g., scaling by a vector)
 	// For now, using generic slow broadcast for correctness
+	if len(other.Data) == 0 {
+		return nil, fmt.Errorf("MulWithBroadcast: other tensor has no data (shape %v)", other.Shape)
+	}
 	for i := 0; i < resultSize; i++ {
 		coords := getCoords(i, resultShape, stridesResult)
 		idxT := 0
@@ -1212,6 +1230,9 @@ func (t *Tensor) MulWithBroadcast(other *Tensor) (*Tensor, error) {
 			if paddedOtherShape[dim] != 1 {
 				idxOther += coords[dim] * stridesOther[dim]
 			}
+		}
+		if idxT < 0 || idxT >= len(t.Data) || idxOther < 0 || idxOther >= len(other.Data) {
+			return nil, fmt.Errorf("MulWithBroadcast: computed index out of bounds idxT=%d idxOther=%d tLen=%d otherLen=%d; shapes %v + %v => %v", idxT, idxOther, len(t.Data), len(other.Data), t.Shape, other.Shape, resultShape)
 		}
 		resultData[i] = t.Data[idxT] * other.Data[idxOther]
 	}

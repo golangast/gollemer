@@ -3,6 +3,7 @@ package chat
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -200,7 +201,7 @@ func StartChat(model *moe.IntentMoE) {
 		botResponse := strings.Join(response, " ")
 
 		// 6. Print Routing Insight
-		fmt.Printf("Bot [%s]: %s\n", getExpertPath(), botResponse)
+		fmt.Printf("Bot [%s]: %s\n", getExpertPath(), FormatUserOutput(botResponse))
 
 		// 7. Save this turn to memory
 		newTurn := ConversationTurn{
@@ -268,8 +269,12 @@ func (b *MoEChatBot) Reply(input string) string {
 		// }
 	}
 
+	// The model was trained with specific structural tokens: __intent__ <intent> : __ques__ <question>
+	// Without these, the positional embeddings and attention heads fail, producing word salad.
+	formattedInput := "__intent__ social : __ques__ " + input + " __ans__"
+
 	// 1. Tokenize and embed current input
-	tokens := cleanTokenize(input)
+	tokens := cleanTokenize(formattedInput)
 	ids := make([]float32, len(tokens))
 	avgInputEmbedding := make([]float32, b.model.Embedding.DimModel)
 	tokenCount := 0
@@ -300,11 +305,11 @@ func (b *MoEChatBot) Reply(input string) string {
 
 	emb, _ := b.model.Embedding.Forward(inputT)
 
-	// 2. Combine with context vector
+	// 2. Combine with context vector (session history blending)
 	contextVector := b.session.GetContextVector()
 	const lambda = 0.3 // Context decay factor
 	if len(contextVector) == b.model.Embedding.DimModel {
-		for i := 0; i < emb.Shape[1]; i++ { // For each token in sequence
+		for i := 0; i < emb.Shape[1]; i++ {
 			offset := i * b.model.Embedding.DimModel
 			for j := 0; j < b.model.Embedding.DimModel; j++ {
 				emb.Data[offset+j] += contextVector[j] * lambda
@@ -314,10 +319,31 @@ func (b *MoEChatBot) Reply(input string) string {
 
 	ctx, _ := b.model.Encoder.Forward(emb)
 
-	// 4. Beam Search Decoding
-	outIDs := BeamSearchDecodeFiltered(b.model, ctx, 5, 50, []int{b.model.SentenceVocab.GetTokenID("UNK")})
+	// 3. Step-by-step decoding via GreedySearchDecodeWithTemp.
+	// BeamSearchDecodeFiltered calls Decoder.Forward() which expects a full
+	// target sequence (teacher-forced training mode) and fails for single-token
+	// inputs at inference time. GreedySearchDecodeWithTemp uses Decoder.DecodeStep()
+	// which is the correct autoregressive path.
+	suppressedIDs := map[int]bool{
+		b.model.SentenceVocab.GetTokenID("UNK"): true,
+	}
+	outIDs, decErr := b.model.GreedySearchDecodeWithTemp(
+		ctx,
+		50, // maxLen
+		b.model.SentenceVocab.BosID,
+		b.model.SentenceVocab.EosID,
+		1.2, // temperature — more diversity
+		4.0, // repetitionPenalty - strong penalty to break loops
+		2.0, // frequencyPenalty - strong penalty to break loops
+		40,  // topK
+		suppressedIDs,
+	)
+	if decErr != nil {
+		log.Printf("[CHAT] decoding error: %v", decErr)
+		return ""
+	}
 
-	// 5. Convert IDs back to Words
+	// 4. Convert IDs back to words.
 	var response []string
 	for _, id := range outIDs {
 		word := b.model.SentenceVocab.GetWord(id)
@@ -524,4 +550,12 @@ func StressTestBot(model *moe.IntentMoE) {
 	fmt.Printf("Total Time:      %v\n", totalTime)
 	fmt.Printf("Total Messages:  %d\n", totalMsgs)
 	fmt.Printf("Throughput:      %.2f msgs/sec\n", float64(totalMsgs)/totalTime.Seconds())
+}
+
+// FormatUserOutput strips the internal scratchpad block from model output.
+func FormatUserOutput(rawResponse string) string {
+	if idx := strings.Index(rawResponse, "</think>"); idx != -1 {
+		return strings.TrimSpace(rawResponse[idx+len("</think>"):])
+	}
+	return rawResponse
 }

@@ -677,7 +677,7 @@ type LSTM struct {
 // NewLSTM creates a new LSTM.
 func NewLSTM(inputSize, hiddenSize, numLayers int) (*LSTM, error) {
 	cells := make([][]*LSTMCell, numLayers)
-	for i := range numLayers {
+	for i := 0; i < numLayers; i++ {
 		layerInputSize := inputSize
 		if i > 0 {
 			layerInputSize = hiddenSize
@@ -758,6 +758,12 @@ func (l *LSTM) Forward(inputs ...*Tensor) (*Tensor, *Tensor, error) {
 
 		for i := 0; i < l.NumLayers; i++ {
 			h, c := initialHidden, initialCell
+			if i >= len(l.Cells) {
+				return nil, nil, fmt.Errorf("LSTM.Forward: missing layer %d in Cells (NumLayers=%d, len(Cells)=%d)", i, l.NumLayers, len(l.Cells))
+			}
+			if l.Cells[i] == nil || len(l.Cells[i]) == 0 || l.Cells[i][0] == nil {
+				return nil, nil, fmt.Errorf("LSTM.Forward: uninitialized LSTM cell at layer %d", i)
+			}
 			if i > 0 {
 				h = NewTensor([]int{batchSize, l.HiddenSize}, make([]float32, batchSize*l.HiddenSize), false)
 				c = NewTensor([]int{batchSize, l.HiddenSize}, make([]float32, batchSize*l.HiddenSize), false)
@@ -796,7 +802,7 @@ func (l *LSTM) Forward(inputs ...*Tensor) (*Tensor, *Tensor, error) {
 			inputProjTrans, _ := inputProjAll3D.Transpose(0, 1)
 
 			outputs := make([]*Tensor, sequenceLength)
-			for t := range sequenceLength {
+			for t := 0; t < sequenceLength; t++ {
 				// Use pre-computed input projection view (zero-copy)
 				projTData := inputProjTrans.Data[t*batchSize*4*l.HiddenSize : (t+1)*batchSize*4*l.HiddenSize]
 				projT := NewTensor([]int{batchSize, 4 * l.HiddenSize}, projTData, false)
@@ -858,7 +864,7 @@ func (l *LSTM) Forward(inputs ...*Tensor) (*Tensor, *Tensor, error) {
 			stackedOutput := NewTensor([]int{batchSize, sequenceLength, l.HiddenSize}, stackedOutputData, true)
 
 			// Store the full layerInput in the cell for the backward pass to find it
-			for t := range sequenceLength {
+			for t := 0; t < sequenceLength; t++ {
 				l.timeStepCells[i][t].InputTensor.Creator = layerInput
 			}
 

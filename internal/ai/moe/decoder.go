@@ -202,12 +202,26 @@ func (d *RNNDecoder) Forward(contextVector, targetSequence *Tensor, scheduledSam
 				scale *= d.ContextMultiplierDecay
 			}
 			decayTensor := NewTensor([]int{1, maxSequenceLength - 1, 1}, decayData, false)
-			scaledCtx, _ := ctxMeanReshaped.MulWithBroadcast(decayTensor)
-			normedEmbedded, _ = normedEmbedded.AddWithBroadcast(scaledCtx)
+			scaledCtx, err := ctxMeanReshaped.MulWithBroadcast(decayTensor)
+			if err != nil {
+				decayTensor.Release()
+				return nil, fmt.Errorf("decoder Forward: MulWithBroadcast failed: %w", err)
+			}
+			normedEmbedded, err = normedEmbedded.AddWithBroadcast(scaledCtx)
+			if err != nil {
+				scaledCtx.Release()
+				decayTensor.Release()
+				return nil, fmt.Errorf("decoder Forward: AddWithBroadcast failed: %w", err)
+			}
 			scaledCtx.Release()
 			decayTensor.Release()
 		} else {
-			normedEmbedded, _ = normedEmbedded.AddWithBroadcast(ctxMeanReshaped.Scale(d.ContextMultiplier))
+			scaledCtx := ctxMeanReshaped.Scale(d.ContextMultiplier)
+			var err error
+			normedEmbedded, err = normedEmbedded.AddWithBroadcast(scaledCtx)
+			if err != nil {
+				return nil, fmt.Errorf("decoder Forward: AddWithBroadcast failed: %w", err)
+			}
 		}
 
 		// 1. LSTM first
@@ -277,9 +291,15 @@ func (d *RNNDecoder) Forward(contextVector, targetSequence *Tensor, scheduledSam
 		d.embeddedInputs = append(d.embeddedInputs, embeddedInput)
 
 		// Apply InputNorm first, then inject context as post-norm residual with decay.
-		normedIn, _ := d.InputNorm.Forward(embeddedInput)
+		normedIn, err := d.InputNorm.Forward(embeddedInput)
+		if err != nil {
+			return nil, fmt.Errorf("decoder Forward: InputNorm failed: %w", err)
+		}
 		stepScale := d.ContextMultiplier * float32(math.Pow(float64(d.ContextMultiplierDecay), float64(t)))
-		normedIn, _ = normedIn.AddWithBroadcast(ctxMeanReshaped.Scale(stepScale))
+		normedIn, err = normedIn.AddWithBroadcast(ctxMeanReshaped.Scale(stepScale))
+		if err != nil {
+			return nil, fmt.Errorf("decoder Forward: AddWithBroadcast failed: %w", err)
+		}
 
 		// 1. LSTM
 		reshapedIn, _ := normedIn.Reshape([]int{batchSize, embeddedInput.Shape[2]})
@@ -482,14 +502,26 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
 		if err != nil {
 			return fmt.Errorf("failed to concat decoder inputs: %w", err)
 		}
-		allEmbedded, _ = d.Embedding.Forward(allInputs)
+		allEmbedded, err = d.Embedding.Forward(allInputs)
+		if err != nil {
+			return fmt.Errorf("decoder Backward: Embedding.Forward failed: %w", err)
+		}
 
 		// 2a. Re-apply Reinforced Context Injection to match Forward pass for correct BPTT
-		ctxMean, _ := d.contextVector.Mean(1)
-		ctxMeanReshaped, _ := ctxMean.Reshape([]int{batchSize, 1, d.contextVector.Shape[2]})
+		ctxMean, err := d.contextVector.Mean(1)
+		if err != nil {
+			return fmt.Errorf("decoder Backward: context Mean failed: %w", err)
+		}
+		ctxMeanReshaped, err := ctxMean.Reshape([]int{batchSize, 1, d.contextVector.Shape[2]})
+		if err != nil {
+			return fmt.Errorf("decoder Backward: ctx reshape failed: %w", err)
+		}
 
 		// Re-run InputNorm FIRST
-		allEmbedded, _ = d.InputNorm.Forward(allEmbedded)
+		allEmbedded, err = d.InputNorm.Forward(allEmbedded)
+		if err != nil {
+			return fmt.Errorf("decoder Backward: InputNorm failed: %w", err)
+		}
 		// Then add context as post-norm residual with decay
 		if d.ContextMultiplierDecay > 0 && d.ContextMultiplierDecay < 1.0 {
 			seqLen := allEmbedded.Shape[1]
@@ -500,13 +532,26 @@ func (d *RNNDecoder) Backward(grads []*Tensor) error {
 				scale *= d.ContextMultiplierDecay
 			}
 			decayTensor := NewTensor([]int{1, seqLen, 1}, decayData, false)
-			scaledCtx, _ := ctxMeanReshaped.MulWithBroadcast(decayTensor)
-			allEmbedded, _ = allEmbedded.AddWithBroadcast(scaledCtx)
+			scaledCtx, err := ctxMeanReshaped.MulWithBroadcast(decayTensor)
+			if err != nil {
+				decayTensor.Release()
+				return fmt.Errorf("decoder Backward: MulWithBroadcast failed: %w", err)
+			}
+			allEmbedded, err = allEmbedded.AddWithBroadcast(scaledCtx)
+			if err != nil {
+				scaledCtx.Release()
+				decayTensor.Release()
+				return fmt.Errorf("decoder Backward: AddWithBroadcast failed: %w", err)
+			}
 			scaledCtx.Release()
 			decayTensor.Release()
 		} else {
 			ctxScaled := ctxMeanReshaped.Scale(d.ContextMultiplier)
-			allEmbedded, _ = allEmbedded.AddWithBroadcast(ctxScaled)
+			allEmbedded, err = allEmbedded.AddWithBroadcast(ctxScaled)
+			if err != nil {
+				ctxScaled.Release()
+				return fmt.Errorf("decoder Backward: AddWithBroadcast failed: %w", err)
+			}
 			ctxScaled.Release()
 		}
 

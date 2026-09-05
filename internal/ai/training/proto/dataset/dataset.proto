@@ -55,6 +55,7 @@ message ConversationTurn {
   string user_content = 4;
   string assistant_response = 5;
   Reasoning reasoning = 6;
+  string reasoning_trace = 7;
 }
 
 // Represents a complete multi-turn conversation

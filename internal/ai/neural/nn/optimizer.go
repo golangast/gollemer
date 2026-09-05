@@ -29,6 +29,9 @@ type Optimizer interface {
 	SetLearningRate(lr float32)
 	GetLearningRate() float32
 	ResetStagnantMoments(t *Tensor)
+	// ResetAllMoments wipes all Adam m/v accumulators so bad momentum can't
+	// keep pushing weights in the wrong direction after a divergence event.
+	ResetAllMoments()
 }
 
 // TrainingProfile represents a preset for training hyperparameters.
@@ -142,6 +145,48 @@ func (o *Adam) ResetStagnantMoments(t *Tensor) {
 			v.Data[i] = 0
 		}
 	}
+}
+
+// ResetAllMoments wipes every Adam m/v accumulator to zero and resets the step
+// counter. Call after a divergence rollback so stale momentum can't keep
+// driving the weights in the wrong direction at the reduced learning rate.
+func (o *Adam) ResetAllMoments() {
+	for _, p := range o.parameters {
+		if m, ok := o.m[p]; ok {
+			for i := range m.Data {
+				m.Data[i] = 0
+			}
+		}
+		if v, ok := o.v[p]; ok {
+			for i := range v.Data {
+				v.Data[i] = 0
+			}
+		}
+	}
+	o.t = 0 // restart bias-correction schedule
+}
+
+// SnapshotParameters copies every parameter's current value into a flat map
+// keyed by tensor pointer. Use this to take a "best checkpoint" snapshot.
+func (o *Adam) SnapshotParameters() map[*Tensor][]float32 {
+	snap := make(map[*Tensor][]float32, len(o.parameters))
+	for _, p := range o.parameters {
+		clone := make([]float32, len(p.Data))
+		copy(clone, p.Data)
+		snap[p] = clone
+	}
+	return snap
+}
+
+// RestoreParameters writes a snapshotted weight copy back into the live
+// parameter tensors and resets all Adam moments so training restarts cleanly.
+func (o *Adam) RestoreParameters(snap map[*Tensor][]float32) {
+	for _, p := range o.parameters {
+		if saved, ok := snap[p]; ok && len(saved) == len(p.Data) {
+			copy(p.Data, saved)
+		}
+	}
+	o.ResetAllMoments()
 }
 
 // SaveState serializes the Adam optimizer state (step counter + m/v moments)
@@ -413,6 +458,26 @@ func (o *CoolingOptimizer) GetLearningRate() float32 {
 // ResetStagnantMoments delegates to the base optimizer.
 func (o *CoolingOptimizer) ResetStagnantMoments(t *Tensor) {
 	o.Base.ResetStagnantMoments(t)
+}
+
+// ResetAllMoments delegates to the base optimizer.
+func (o *CoolingOptimizer) ResetAllMoments() {
+	o.Base.ResetAllMoments()
+}
+
+// SnapshotParameters delegates to the underlying Adam if available.
+func (o *CoolingOptimizer) SnapshotParameters() map[*Tensor][]float32 {
+	if adam, ok := o.Base.(*Adam); ok {
+		return adam.SnapshotParameters()
+	}
+	return nil
+}
+
+// RestoreParameters delegates to the underlying Adam if available.
+func (o *CoolingOptimizer) RestoreParameters(snap map[*Tensor][]float32) {
+	if adam, ok := o.Base.(*Adam); ok {
+		adam.RestoreParameters(snap)
+	}
 }
 
 // Trigger enters the cooling state

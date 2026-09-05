@@ -19,7 +19,7 @@ import (
 	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
 	"github.com/golangast/gollemer/internal/ai/neural/tensor"
 	"github.com/golangast/gollemer/internal/ai/orchestrator"
-	trainingpb "github.com/golangast/gollemer/internal/ai/training/proto"
+	datasetpb "github.com/golangast/gollemer/internal/ai/training/proto/dataset"
 )
 
 // setLayerFreezeQuiet sets expert freeze state without printing if unchanged.
@@ -243,17 +243,17 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 	// ── 1. Load datasets ──────────────────────────────────────────────────────
 	var socialPairs []moe.TrainPair
 
-	// ── 1a. conversations.pb (multi-turn dialogue, protobuf) ──────────────
-	// Format: ConversationSet { Conversation { id, turns[] } }
+	// ── 1a. conversing.pb (multi-turn dialogue, protobuf) ──────────────
+	// Format: ConversationDataset { conversations { turns[] } }
 	// We pair consecutive user→assistant turns into Q/A pairs.
-	conversationsPBPath := filepath.Join(projectRoot, "data/training/trainingdata/conversations.pb")
-	if conversations, err := trainingpb.LoadConversationsFromProto(conversationsPBPath); err == nil {
+	conversationsPBPath := filepath.Join(projectRoot, "data/training/trainingdata/conversing.pb")
+	if ds, err := datasetpb.LoadConversationDatasetFromProto(conversationsPBPath); err == nil {
 		convCount := 0
-		for _, conv := range conversations {
-			turns := conv.Turns
+		for _, conv := range ds.GetConversations() {
+			turns := conv.GetTurns()
 			for i := 0; i+1 < len(turns); i++ {
-				if strings.ToLower(turns[i].Role) == "user" && strings.ToLower(turns[i+1].Role) == "assistant" {
-					q, a := strings.TrimSpace(turns[i].Content), strings.TrimSpace(turns[i+1].Content)
+				if turns[i].GetRole() == datasetpb.Role_ROLE_USER && turns[i+1].GetRole() == datasetpb.Role_ROLE_ASSISTANT {
+					q, a := strings.TrimSpace(turns[i].GetContent()), strings.TrimSpace(turns[i+1].GetContent())
 					if q != "" && a != "" {
 						socialPairs = append(socialPairs, moe.TrainPair{Q: q, A: a, Intent: "social"})
 						convCount++
@@ -261,17 +261,24 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 				}
 			}
 		}
-		log.Printf("📚 Loaded %d pairs from conversations.pb", convCount)
+		log.Printf("📚 Loaded %d pairs from conversing.pb", convCount)
 	} else {
-		log.Printf("⚠️ conversations.pb: %v", err)
+		log.Printf("⚠️ conversing.pb: %v", err)
 	}
 
 	// ── 1b. conversing.csv (simple Q/A) ───────────────────────────────────
 	// Format: query, answer, intent, grammar
+	// In OverfitMode load the single-example overfit CSV to build a tiny vocab.
 	conversingCSVPath := filepath.Join(projectRoot, "data/training/trainingdata/conversing.csv")
+	if cfg.OverfitMode {
+		overfitPath := filepath.Join(projectRoot, "data/training/trainingdata/conversing_overfit_single.csv")
+		if _, err := os.Stat(overfitPath); err == nil {
+			conversingCSVPath = overfitPath
+		}
+	}
 	if pairs, err := LoadConversingCSV(conversingCSVPath); err == nil {
 		socialPairs = append(socialPairs, pairs...)
-		log.Printf("📚 Loaded %d pairs from conversing.csv", len(pairs))
+		log.Printf("📚 Loaded %d pairs from %s", len(pairs), filepath.Base(conversingCSVPath))
 	} else {
 		log.Printf("⚠️ conversing.csv: %v", err)
 	}
@@ -280,42 +287,46 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 	// Format: [{ "intent": "edit_agent", "examples": ["add a return type...", ...] }]
 	// Each example is treated as a user utterance; the model learns to acknowledge it.
 	intentCorpusPath := filepath.Join(projectRoot, "data/training/intent_corpus.json")
-	if raw, err := os.ReadFile(intentCorpusPath); err == nil {
-		var corpus []struct {
-			Intent   string   `json:"intent"`
-			Examples []string `json:"examples"`
-		}
-		if jsonErr := json.Unmarshal(raw, &corpus); jsonErr == nil {
-			intentCount := 0
-			for _, entry := range corpus {
-				intentName := strings.ReplaceAll(entry.Intent, "_", " ")
-				for _, example := range entry.Examples {
-					if strings.TrimSpace(example) == "" {
-						continue
-					}
-					if strings.Contains(entry.Intent, "edit") ||
-						strings.Contains(entry.Intent, "code") ||
-						strings.Contains(entry.Intent, "fix") ||
-						strings.Contains(entry.Intent, "add") ||
-						strings.Contains(entry.Intent, "refactor") ||
-						strings.Contains(entry.Intent, "debug") {
-						// Skip code intents for pure sentence training
-					} else {
-						socialPairs = append(socialPairs, moe.TrainPair{
-							Q:      example,
-							A:      fmt.Sprintf("Sure, I will %s.", intentName),
-							Intent: "social",
-						})
-					}
-					intentCount++
-				}
-			}
-			log.Printf("📚 Loaded %d intent examples from intent_corpus.json", intentCount)
-		} else {
-			log.Printf("⚠️ Failed to parse intent_corpus.json: %v", jsonErr)
-		}
+	if cfg.OverfitMode {
+		log.Printf("🔒 OverfitMode enabled: skipping intent_corpus.json (using overfit dataset only)")
 	} else {
-		log.Printf("⚠️ intent_corpus.json: %v", err)
+		if raw, err := os.ReadFile(intentCorpusPath); err == nil {
+			var corpus []struct {
+				Intent   string   `json:"intent"`
+				Examples []string `json:"examples"`
+			}
+			if jsonErr := json.Unmarshal(raw, &corpus); jsonErr == nil {
+				intentCount := 0
+				for _, entry := range corpus {
+					intentName := strings.ReplaceAll(entry.Intent, "_", " ")
+					for _, example := range entry.Examples {
+						if strings.TrimSpace(example) == "" {
+							continue
+						}
+						if strings.Contains(entry.Intent, "edit") ||
+							strings.Contains(entry.Intent, "code") ||
+							strings.Contains(entry.Intent, "fix") ||
+							strings.Contains(entry.Intent, "add") ||
+							strings.Contains(entry.Intent, "refactor") ||
+							strings.Contains(entry.Intent, "debug") {
+							// Skip code intents for pure sentence training
+						} else {
+							socialPairs = append(socialPairs, moe.TrainPair{
+								Q:      example,
+								A:      fmt.Sprintf("Sure, I will %s.", intentName),
+								Intent: "social",
+							})
+						}
+						intentCount++
+					}
+				}
+				log.Printf("📚 Loaded %d intent examples from intent_corpus.json", intentCount)
+			} else {
+				log.Printf("⚠️ Failed to parse intent_corpus.json: %v", jsonErr)
+			}
+		} else {
+			log.Printf("⚠️ intent_corpus.json: %v", err)
+		}
 	}
 
 	if len(socialPairs) == 0 {
@@ -452,24 +463,27 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 	// Build flat loss-weight slice for WeightedCrossEntropy
 	lossWeights := buildDefaultLossWeights(intentModel.SentenceVocab, &cfg)
 
-	currentPhase := phaseForEpoch(0)
+	startEpoch := 0
+	if loadedFromCheckpoint {
+		startEpoch = intentModel.Metadata.LastEpoch
+		log.Printf("🔄 Resuming from Epoch %d", startEpoch)
+	}
 
-	// ── Phase 1 LR scheduler state (still used within Phase 1 to reduce on stagnation) ─
-	var phase1BestLoss float32 = 1e9
-	var phase1StagnantEpochs int
-	var phase1LRFactor float32 = 1.0
-	const phase1LRDecayPatience = 50
-	const phase1LRImprovementThreshold = 0.002
-	// Never let Phase 1 LR fall below 70% of its base value. The previous 0.25
-	// floor let the LR collapse to 0.000075 after 2 halvings (0.0003 → 0.00015 →
-	// 0.000075). At that rate a random-init 256-dim → 10k-class output head makes
-	// no progress at all, pinning the loss at chance (~9.0 = ln(10000)) and the
-	// model at "repetitive tokens / <unk> still dominate".
-	const phase1LRFactorMin = 0.7
+	currentPhase := phaseForEpoch(startEpoch)
+
+	// ── Active Phase LR scheduler state (used to reduce LR on stagnation / rollback on divergence) ─
+	var activePhaseBestLoss float32 = 1e9
+	var activePhaseStagnantEpochs int
+	var activePhaseLRFactor float32 = 1.0
+	const lrDecayPatience = 8 // react fast – divergence happens within 3 epochs
+	const lrImprovementThreshold = 0.002
+	// Allow LR to decay all the way to 5% of base; cosine annealing provides a
+	// smooth floor approach so we don't need the old 70% hard floor.
+	const lrFactorMin = 0.05
 	// Once the LR has been stuck at the floor for another full patience window,
 	// warm-restart it back to the phase base rate to break out of the plateau
 	// (classic SGDR-style restart). Without this, the floor is a death sentence.
-	const phase1FloorRestartPatience = phase1LRDecayPatience * 2
+	const floorRestartPatience = lrDecayPatience * 2
 
 	// Per-phase loss tracking for the summary report
 	phaseBestLoss := make(map[int]float32)
@@ -479,13 +493,21 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 		phaseWorstLoss[p] = 0
 	}
 
+	// Automated LR step-down tracker: how many auto-steps applied per phase
+	autoLRApplied := make(map[int]int)
+
+	// In-memory snapshot of parameter weights at the best-loss epoch.
+	// When divergence is detected we roll back to this snapshot AND clear Adam
+	// moments so stale momentum can't keep pushing weights the wrong way.
+	var bestWeightsSnap map[*tensor.Tensor][]float32
+
 	// Ensure correct freeze state before epoch 0
 	phaseCfg := cfg.Phases[strconv.Itoa(currentPhase)]
 	if phaseCfg != nil {
 		applyPhaseFreeze(layers, phaseCfg.FreezeExpertsStart, phaseCfg.FreezeExpertsEnd)
 	}
 
-	for epoch := 0; epoch < maxEpochs; epoch++ {
+	for epoch := startEpoch; epoch < maxEpochs; epoch++ {
 		epochStart := time.Now()
 		// ── Select dataset & set LR from config ────────────────────────────────
 		var trainPairs []moe.TrainPair
@@ -521,7 +543,28 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 				layer.ForceSingleExpert = false
 			}
 		}
-		optimizer.SetLearningRate(phaseLR)
+		// ── Set LR for this epoch ────────────────────────────────────────────
+		// Use cosine annealing over the phase window so the LR naturally decays
+		// from phaseLR → 5%*phaseLR. The stagnation-based activePhaseLRFactor
+		// acts as an additional multiplier on top of the cosine schedule.
+		// Figure out how many epochs the current phase lasts
+		var phaseEpochs int
+		if currentPhase == 1 {
+			phaseEpochs = phase1Epochs
+		} else {
+			phaseEpochs = cfg.Epochs - phase1Epochs
+			if phaseEpochs <= 0 {
+				phaseEpochs = 400 // fallback
+			}
+		}
+		// Calculate how many epochs we've been in the current phase
+		epochInPhase := epoch
+		if currentPhase > 1 {
+			epochInPhase = epoch - phase1Epochs
+		}
+		cosDecay := float32(0.5 * (1.0 + math.Cos(math.Pi*float64(epochInPhase)/float64(phaseEpochs))))
+		cosDecay = 0.05 + 0.95*cosDecay // clamp floor to 5% of phaseLR
+		optimizer.SetLearningRate(phaseLR * cosDecay * activePhaseLRFactor)
 
 		rand.Shuffle(len(trainPairs), func(i, j int) { trainPairs[i], trainPairs[j] = trainPairs[j], trainPairs[i] })
 
@@ -769,22 +812,51 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 			}
 		}
 		// Calculate effective LR for logging
-		effectiveLR := phaseLR
-		if currentPhase == 1 {
-			effectiveLR = phaseLR * phase1LRFactor
-		}
+		effectiveLR := phaseLR * activePhaseLRFactor
 		ppl := float32(0.0)
 		if avgLoss > 0 {
 			ppl = float32(math.Exp(float64(avgLoss)))
 		}
 
-		epochInPhase := epoch%epochsPerPhase + 1
+		epochInPhase = epoch%epochsPerPhase + 1
 		log.Printf("Phase %d [%d/%d] | Epoch %d | Loss: %.4f | PPL: %.1f | LR: %.6f | Act: [%s] | Time: %.1fs",
 			currentPhase, epochInPhase, epochsPerPhase, epoch, avgLoss, ppl, effectiveLR,
 			strings.Join(activeExps, ","), epochDuration)
 
-		if currentPhase == 1 && (epoch%10 == 0 || epoch == 0) {
-			probePrompt := "The artificial intelligence"
+		// ── Early stopping: halt when target loss is reached ───────────────────
+		if cfg.TargetLoss > 0 && avgLoss > 0 && avgLoss <= cfg.TargetLoss {
+			log.Printf("🎯 Target loss %.4f reached at epoch %d (loss=%.4f) — saving and stopping early.",
+				cfg.TargetLoss, epoch, avgLoss)
+			intentModel.Metadata.LastEpoch = epoch
+			moe.SaveIntentMoEModelToGOB(intentModel, socialModelPath)
+			if err := optimizer.SaveState(optStatePath); err != nil {
+				log.Printf("⚠️ Failed to save optimizer state on early stop: %v", err)
+			}
+			return
+		}
+
+		// ── Automated LR step-down: reduce phase LR when loss falls below threshold
+		if cfg.AutoLREnabled && cfg.AutoLRThreshold > 0 && cfg.AutoLRFactor > 0 {
+			maxSteps := cfg.AutoLRMaxSteps
+			if maxSteps <= 0 {
+				maxSteps = 3
+			}
+			applied := autoLRApplied[currentPhase]
+			if applied < maxSteps && avgLoss > 0 && avgLoss < cfg.AutoLRThreshold {
+				// apply step-down to the phase learning rate
+				phaseCfg.LearningRate = phaseCfg.LearningRate * cfg.AutoLRFactor
+				autoLRApplied[currentPhase] = applied + 1
+				// Update optimizer with new effective LR (respect phase factor)
+				optimizer.SetLearningRate(phaseCfg.LearningRate * activePhaseLRFactor)
+				log.Printf("🔻 Auto LR step-down applied: phase %d new LR=%.6f (applied %d/%d) at loss=%.6f",
+					currentPhase, phaseCfg.LearningRate, autoLRApplied[currentPhase], maxSteps, avgLoss)
+			}
+		}
+
+		if activePhaseStagnantEpochs == 0 && (epoch%10 == 0 || epoch == 0) && len(trainPairs) > 0 {
+			// Test sentence formation using the first prompt from our training dataset,
+			// rather than a hardcoded string that might be out-of-distribution.
+			probePrompt := trainPairs[0].Q
 			probeText, _, _ := StrictGenerateLowTemp(intentModel, probePrompt, 18, 1.0, false, epoch)
 			if probeText != "" {
 				label, status, reason := assessSentenceFormation(probeText)
@@ -798,36 +870,60 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 			}
 		}
 
-		// ── Phase 1: LR reducer on stagnation ────────────────────────────────
-		if currentPhase == 1 {
-			if avgLoss < phase1BestLoss-phase1LRImprovementThreshold {
-				phase1BestLoss = avgLoss
-				phase1StagnantEpochs = 0
+		// ── All Phases: LR reducer on stagnation + divergence circuit breaker ──────
+		// Divergence circuit breaker: if loss is >1.5× the best seen, cut LR
+		// AND roll the weights back to the best snapshot so bad momentum
+		// can't keep dragging the model away from the good region.
+		if activePhaseBestLoss < 1e8 && avgLoss > activePhaseBestLoss*1.5 {
+			if bestWeightsSnap != nil {
+				optimizer.RestoreParameters(bestWeightsSnap)
+				log.Printf("⚡ Phase %d divergence (%.4f > %.4f×1.5) → rolled back to best weights + reset Adam moments",
+					currentPhase, avgLoss, activePhaseBestLoss)
 			} else {
-				phase1StagnantEpochs++
+				optimizer.ResetAllMoments()
+				log.Printf("⚡ Phase %d divergence (%.4f > %.4f×1.5) → reset Adam moments (no snapshot yet)",
+					currentPhase, avgLoss, activePhaseBestLoss)
 			}
-			if phase1StagnantEpochs >= phase1LRDecayPatience && phase1LRFactor > phase1LRFactorMin {
-				phase1LRFactor *= 0.5
-				if phase1LRFactor < phase1LRFactorMin {
-					phase1LRFactor = phase1LRFactorMin
+			if activePhaseLRFactor > lrFactorMin {
+				activePhaseLRFactor *= 0.5
+				if activePhaseLRFactor < lrFactorMin {
+					activePhaseLRFactor = lrFactorMin
 				}
-				phase1StagnantEpochs = 0
-				log.Printf("🔻 Phase 1 stagnant %d epochs → LR factor %.4f (effective %.6f)",
-					phase1LRDecayPatience, phase1LRFactor, phaseCfg.LearningRate*phase1LRFactor)
 			}
-			// Warm-restart (SGDR-style): if the LR has been pinned at the floor for
-			// a full extra patience window with no improvement, jump it back to the
-			// full phase base rate. This is the escape hatch that prevents the model
-			// from being permanently stuck at chance-level loss (~9.0 = ln(vocab)).
-			if phase1LRFactor <= phase1LRFactorMin && phase1StagnantEpochs >= phase1FloorRestartPatience {
-				log.Printf("🚀 Phase 1 LR warm-restart: floor reached (factor %.3f) → restoring full LR %.6f (loss still %.4f)",
-					phase1LRFactor, phaseCfg.LearningRate, avgLoss)
-				phase1LRFactor = 1.0
-				phase1StagnantEpochs = 0
-				phase1BestLoss = avgLoss // reset best so the new LR gets a fresh patience window
-			}
-			optimizer.SetLearningRate(phaseCfg.LearningRate * phase1LRFactor)
+			activePhaseStagnantEpochs = 0
+		} else if avgLoss < activePhaseBestLoss-lrImprovementThreshold {
+			activePhaseBestLoss = avgLoss
+			activePhaseStagnantEpochs = 0
+			// Snapshot the weights at this new best loss.
+			bestWeightsSnap = optimizer.SnapshotParameters()
+		} else {
+			activePhaseStagnantEpochs++
 		}
+
+		if activePhaseStagnantEpochs >= lrDecayPatience && activePhaseLRFactor > lrFactorMin {
+			activePhaseLRFactor *= 0.5
+			if activePhaseLRFactor < lrFactorMin {
+				activePhaseLRFactor = lrFactorMin
+			}
+			activePhaseStagnantEpochs = 0
+			log.Printf("🔻 Phase %d stagnant %d epochs → LR factor %.4f",
+				currentPhase, lrDecayPatience, activePhaseLRFactor)
+		}
+
+		// Warm-restart (SGDR-style): if the LR has been at the floor for a full
+		// extra patience window, restore the best snapshot and restart with full LR.
+		if activePhaseLRFactor <= lrFactorMin && activePhaseStagnantEpochs >= floorRestartPatience {
+			log.Printf("🚀 Phase %d LR warm-restart: restoring best weights (loss %.4f) + full LR %.6f",
+				currentPhase, activePhaseBestLoss, phaseCfg.LearningRate)
+			if bestWeightsSnap != nil {
+				optimizer.RestoreParameters(bestWeightsSnap)
+			}
+			activePhaseLRFactor = 1.0
+			activePhaseStagnantEpochs = 0
+			activePhaseBestLoss = avgLoss
+		}
+		// Note: the actual SetLearningRate call is at the START of the next epoch
+		// (the cosine block above), so we don't call it again here to avoid double-set.
 
 		// ── Phase transitions ─────────────────────────────────
 		nextPhase := phaseForEpoch(epoch + 1)
@@ -846,11 +942,14 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 				nextPhaseCfg := cfg.Phases[strconv.Itoa(currentPhase)]
 				if nextPhaseCfg != nil {
 					applyPhaseFreeze(layers, nextPhaseCfg.FreezeExpertsStart, nextPhaseCfg.FreezeExpertsEnd)
-					// Reset LR factor when entering a new phase
-					phase1LRFactor = 1.0
-					phase1StagnantEpochs = 0
+					// Reset LR factor and state when entering a new phase
+					activePhaseLRFactor = 1.0
+					activePhaseStagnantEpochs = 0
+					activePhaseBestLoss = 1e9
+					bestWeightsSnap = nil // invalidate old phase snapshot
 					optimizer.SetLearningRate(nextPhaseCfg.LearningRate)
 				}
+				intentModel.Metadata.LastEpoch = epoch
 				moe.SaveIntentMoEModelToGOB(intentModel, socialModelPath)
 				if err := optimizer.SaveState(optStatePath); err != nil {
 					log.Printf("⚠️ Failed to save optimizer state at phase transition: %v", err)
@@ -860,6 +959,7 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 
 		// ── Periodic checkpoint every 10 epochs ──────────────────────────────────────────────
 		if epoch > 0 && epoch%10 == 0 {
+			intentModel.Metadata.LastEpoch = epoch
 			moe.SaveIntentMoEModelToGOB(intentModel, socialModelPath)
 			log.Printf("💾 Checkpoint saved (epoch %d)", epoch)
 			// Also persist optimizer state so the next resume doesn't cold-start.

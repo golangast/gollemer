@@ -503,3 +503,444 @@ Or, if reads dominate, use `sync.Map`. Never access a map from multiple goroutin
 [RESPONSE] Without context, a blocking function can hang forever if the client disconnects or the operation stalls. This leaks goroutines and file descriptors. Always pass context so your function can abort early when the parent operation is cancelled. Wrap top-level handlers with `recover()` to return 500 instead of crashing.@:Can I use the same context for multiple parallel requests?Œ…[TRIPLETS] Subject: Context -> Action: Cancel -> Object: Child | Subject: Goroutine -> Action: Receive -> Object: Signal
 [REASONING] 1. Identify core task: Context sharing across parallel requests. 2. Evaluate options: Single context vs derived contexts. 3. Decide heuristic: Derive separate child contexts for each parallel request.
 [RESPONSE] Derive separate child contexts for each parallel request using `context.WithCancel` or `context.WithTimeout`. If one request fails and you cancel its child context, the other parallel requests continue unaffected. Cancellation cascades from parent to child, so be careful with shared parent contexts.
+”
+conv_synth_race_01pjI have a race condition in my Go code. Two goroutines are writing to the same map without synchronization.ôí[TRIPLETS] Subject: Goroutine -> Action: Write -> Object: Map | Subject: Map -> Action: Corrupt -> Object: State
+</think> 1. Identify core task: Fix concurrent map write. 2. Evaluate options: sync.Mutex, sync.Map, channel serialization. 3. Decide heuristic: Use mutex for write-heavy access or sync.Map for read-heavy.
+</think> Go maps panic on concurrent writes. Wrap access in a sync.Mutex or use sync.Map. For write-heavy workloads, a mutex is usually faster. Use `go run -race` to confirm.nhThe race detector confirms it. But sync.Map feels heavy for my use case. Is there a lighter alternative?çà[TRIPLETS] Subject: Developer -> Action: Seek -> Object: Alternative | Subject: sync.Mutex -> Action: Protect -> Object: Map
+</think> 1. Identify core task: Lightweight concurrent map. 2. Evaluate options: Mutex, channel owner, copy-on-write. 3. Decide heuristic: Channel-based owner goroutine serializes access without explicit locking.
+</think> Use a channel-based owner goroutine pattern. All reads/writes go through a single goroutine via a request channel. This avoids mutex overhead and is easy to reason about. Example: `type MapOwner struct { updates chan func(map[string]int); data map[string]int }`XRWhat about garbage collection? Will many short-lived goroutines cause GC pressure?àÙ[TRIPLETS] Subject: Goroutine -> Action: Allocate -> Object: Memory | Subject: GC -> Action: Reclaim -> Object: Memory
+</think> 1. Identify core task: GC pressure from goroutines. 2. Evaluate options: Object pooling, sync.Pool, reducing allocations. 3. Decide heuristic: Go's GC handles short-lived objects well; only optimize if profiling shows it.
+</think> Go's concurrent GC is designed for high allocation rates. Short-lived goroutines and their stack allocations are cheap. Only worry about GC pressure if `pprof` shows it. If needed, use `sync.Pool` to reuse objects and reduce allocation churn.
+Í
+conv_synth_gc_01vpMy Go service has high throughput but GC pauses are causing latency spikes. How do I tune the garbage collector?£œ[TRIPLETS] Subject: GC -> Action: Tune -> Object: Latency | Subject: Service -> Action: Experience -> Object: Pause
+</think> 1. Identify core task: Reduce GC pause latency. 2. Evaluate options: GOGC tuning, runtime.SetGCPercent, arena allocation. 3. Decide heuristic: Lower GOGC means more frequent but smaller pauses; use profiling to find the sweet spot.
+</think> Start by profiling with `go tool pprof` to see GC impact. Tune `GOGC` (default 100) â€” lower values trigger GC more frequently with smaller pauses. For latency-sensitive services, try `GOGC=50` or use `runtime/debug.SetGCPercent` at runtime. Avoid manual memory management unless absolutely necessary.JDI set GOGC=50 but CPU usage went up 20%. Is there a better approach?‚û[TRIPLETS] Subject: CPU -> Action: Increase -> Object: Usage | Subject: GOGC -> Action: Trigger -> Object: GC
+</think> 1. Identify core task: Balance GC frequency vs CPU. 2. Evaluate options: GOGC tuning, sync.Pool, value reuse, arena. 3. Decide heuristic: Use sync.Pool for frequently allocated objects; tune GOGC incrementally.
+</think> Lower GOGC increases CPU because GC runs more often. Instead, reduce allocation rate first: reuse objects with `sync.Pool`, preallocate slices with `make`, and avoid unnecessary boxing. Then tune GOGC in small steps (100 â†’ 80 â†’ 60). Measure both latency p99 and CPU to find the optimal point.QKCan you show me a sync.Pool example for reducing allocations in a hot path?öï[TRIPLETS] Subject: sync.Pool -> Action: Reuse -> Object: Object | Subject: Goroutine -> Action: Allocate -> Object: Memory
+</think> 1. Identify core task: Reduce allocations in hot path. 2. Evaluate options: sync.Pool, preallocation, stack allocation. 3. Decide heuristic: Use sync.Pool for objects that are frequently created and discarded.
+</think> Here's a sync.Pool pattern for a hot path:
+
+```go
+var bufPool = sync.Pool{
+    New: func() interface{} { return new(bytes.Buffer) },
+}
+
+func handleRequest() {
+    buf := bufPool.Get().(*bytes.Buffer)
+    buf.Reset()
+    defer bufPool.Put(buf)
+    // use buf...
+}
+```
+
+This avoids allocating a new buffer on every request. The pool grows to the peak concurrency level and reuses objects across calls.
+
+conv_synth_channel_01nhI'm building a pipeline with channels. My worker goroutines seem to leak when the pipeline is cancelled.´­[TRIPLETS] Subject: Channel -> Action: Block -> Object: Goroutine | Subject: Context -> Action: Cancel -> Object: Pipeline
+</think> 1. Identify core task: Fix goroutine leaks in channel pipeline. 2. Evaluate options: Context cancellation, done channels, buffered channels. 3. Decide heuristic: Always drain or close channels when exiting; use select with ctx.Done().
+</think> Worker goroutines leak when they block forever on channel operations after cancellation. Use `context.Context` to broadcast cancellation, and wrap blocking ops in `select`:
+
+```go
+select {
+case ch <- val:
+case <-ctx.Done():
+    return
+}
+```
+
+Ensure the sender closes the channel so receivers can exit cleanly.`ZHow do I handle a case where the receiver might still be blocked when the sender finishes?º³[TRIPLETS] Subject: Receiver -> Action: Block -> Object: Channel | Subject: Sender -> Action: Close -> Object: Channel
+</think> 1. Identify core task: Unblock receiver after sender finishes. 2. Evaluate options: Close channel, done channel, select with default. 3. Decide heuristic: Close the channel when all sends are done; receivers exit when drained.
+</think> Use `sync.WaitGroup` to track active senders. When all senders finish, close the channel. Receivers use `for val := range ch` to drain until closed:
+
+```go
+var wg sync.WaitGroup
+go func() {
+    defer close(ch)
+    wg.Wait()
+}()
+for val := range ch {
+    // process val
+}
+```
+
+This guarantees receivers never block indefinitely.SMWhat if I need to send multiple results from one goroutine to many receivers?ÚÓ[TRIPLETS] Subject: Goroutine -> Action: Send -> Object: Channel | Subject: Receiver -> Action: Receive -> Object: Value
+</think> 1. Identify core task: Fan-out pattern. 2. Evaluate options: Multiple channels, single channel with multiple receivers, broadcast. 3. Decide heuristic: Use a single channel with multiple receivers for work distribution; use context for cancellation.
+</think> For one-to-many distribution, use a single channel with multiple receivers (work stealing pattern):
+
+```go
+results := make(chan Result, workers)
+for i := 0; i < workers; i++ {
+    go func(id int) {
+        for res := range results {
+            process(id, res)
+        }
+    }(i)
+}
+for _, work := range workItems {
+    results <- process(work)
+}
+close(results)
+```
+
+Each receiver processes items independently. Closing the channel signals all receivers to exit.
+–
+conv_synth_ctx_01tnI'm confused about when to use context.Context. My HTTP handler takes one, but I'm not sure what to pass down.ÜÕ[TRIPLETS] Subject: Context -> Action: Carry -> Object: Deadline | Subject: Handler -> Action: Pass -> Object: Function
+</think> 1. Identify core task: Context propagation. 2. Evaluate options: Background, WithTimeout, WithCancel. 3. Decide heuristic: Pass request context to all downstream I/O functions.
+</think> Pass the `context.Context` from your HTTP handler to every function that performs I/O, database queries, or spans multiple goroutines. Use `context.WithTimeout` or `context.WithCancel` to derive child contexts. Never store context in a struct; always pass it as the first parameter.ICWhat happens if I call a blocking function without passing context?”[TRIPLETS] Subject: Function -> Action: Block -> Object: Goroutine | Subject: Request -> Action: Timeout -> Object: Handler
+</think> 1. Identify core task: Consequences of ignoring context. 2. Evaluate options: Leaked goroutines, hung connections, resource exhaustion. 3. Decide heuristic: Always respect context cancellation.
+</think> Without context, a blocking function can hang forever if the client disconnects or the operation stalls. This leaks goroutines and file descriptors. Always pass context so your function can abort early when the parent operation is cancelled. Wrap top-level handlers with `recover()` to return 500 instead of crashing.@:Can I use the same context for multiple parallel requests?‡€[TRIPLETS] Subject: Context -> Action: Cancel -> Object: Child | Subject: Goroutine -> Action: Receive -> Object: Signal
+</think> 1. Identify core task: Context sharing across parallel requests. 2. Evaluate options: Single context vs derived contexts. 3. Decide heuristic: Derive separate child contexts for each parallel request.
+</think> Derive separate child contexts for each parallel request using `context.WithCancel` or `context.WithTimeout`. If one request fails and you cancel its child context, the other parallel requests continue unaffected. Cancellation cascades from parent to child, so be careful with shared parent contexts.
+¦
+conv_synth_mutex_01SMI keep getting deadlocks when using mutexes. How can I make my locking safer?þ÷[TRIPLETS] Subject: Goroutine -> Action: Lock -> Object: Mutex | Subject: Runtime -> Action: Detect -> Object: Deadlock
+</think> 1. Identify core task: Make mutex locking safer. 2. Evaluate options: defer unlock, consistent ordering, lock timeouts. 3. Decide heuristic: Use defer immediately after lock; document lock ordering.
+</think> Use `defer mu.Unlock()` immediately after `mu.Lock()` so the mutex is always released, even on early returns or panics. For complex code, document the lock acquisition order to prevent circular dependencies. Go's `sync.Mutex` is not reentrant â€” the same goroutine locking twice will deadlock.;5That threw a runtime deadlock error. How do I fix it?ëä[TRIPLETS] Subject: Runtime -> Action: Detect -> Object: Deadlock | Subject: Goroutine -> Action: Wait -> Object: Mutex
+</think> 1. Identify core task: Fix runtime deadlock. 2. Evaluate options: Restructure, channel-based coordination, context timeouts. 3. Decide heuristic: Redesign to avoid nested locking; use channels if possible.
+</think> Go's `sync.Mutex` is not recursive â€” if the same goroutine tries to lock it twice, it deadlocks. Refactor so each goroutine only holds one lock at a time. If you need reentrancy, switch to a channel-based state machine or use `sync.RWMutex` for read-heavy workloads.>8Can you show me a safe pattern for a concurrent counter?ÍÆ[TRIPLETS] Subject: Counter -> Action: Increment -> Object: Atomic | Subject: Goroutine -> Action: Update -> Object: State
+</think> 1. Identify core task: Safe concurrent counter. 2. Evaluate options: Mutex vs atomic vs channel. 3. Decide heuristic: sync/atomic is fastest for simple counters; mutex is clearer for complex state.
+</think> For a simple counter, use `sync/atomic`:
+
+```go
+var count int64
+func increment() {
+    atomic.AddInt64(&count, 1)
+}
+```
+
+For complex state, use a mutex with a single goroutine owner or a struct with `defer mu.Unlock()` after every `mu.Lock()`.
+Â
+conv_synth_pipeline_01icMy Go pipeline slows to a crawl when the downstream consumer is slow. How do I handle backpressure?Ÿ˜[TRIPLETS] Subject: Pipeline -> Action: Slow -> Object: Throughput | Subject: Channel -> Action: Block -> Object: Sender
+</think> 1. Identify core task: Handle backpressure in pipeline. 2. Evaluate options: Buffered channels, bounded channels, drop policy. 3. Decide heuristic: Use buffered channels for burst absorption; limit buffer size to control memory.
+</think> Backpressure is normal in Go pipelines â€” unbuffered channels naturally apply backpressure by blocking the sender until the receiver is ready. For bursty workloads, use a small buffered channel (e.g., `make(chan T, 16)`). If memory is a concern, implement a drop-or-batch policy in the producer.RLWhat if I want to drop old data instead of blocking when the buffer is full?Æ¿[TRIPLETS] Subject: Channel -> Action: Drop -> Object: Value | Subject: Producer -> Action: Skip -> Object: Item
+</think> 1. Identify core task: Drop-oldest strategy. 2. Evaluate options: Select with default, ring buffer, skip-on-full. 3. Decide heuristic: Use select with default for non-blocking send; or implement a ring buffer for controlled dropping.
+</think> Use `select` with a `default` case for non-blocking sends:
+
+```go
+select {
+case ch <- val:
+    // sent
+default:
+    // drop oldest or skip
+    <-ch // drain oldest
+    ch <- val
+}
+```
+
+For more control, implement a ring buffer (circular buffer) that overwrites the oldest element when full. This gives you bounded memory with no blocking.
+½
+conv_synth_atomic_01D>When should I use sync/atomic instead of a mutex for counters?×Ð[TRIPLETS] Subject: sync/atomic -> Action: Increment -> Object: Counter | Subject: Mutex -> Action: Protect -> Object: State
+</think> 1. Identify core task: Choose atomic vs mutex. 2. Evaluate options: atomic for simple ops, mutex for complex state. 3. Decide heuristic: Use atomic for single-variable counters; mutex for multi-variable invariants.
+</think> Use `sync/atomic` for simple counters and flags where a single operation is sufficient. Use `sync.Mutex` when you need to read-modify-write multiple variables atomically. Atomic operations are faster but limited to single-word values.;5Can I use atomics for more complex state transitions?ÇÀ[TRIPLETS] Subject: Atomic -> Action: Transition -> Object: State | Subject: CAS -> Action: Compare -> Object: Value
+</think> 1. Identify core task: Complex state with atomics. 2. Evaluate options: CAS loops, state machine, mutex. 3. Decide heuristic: CAS works for simple state machines; use mutex for complex transitions.
+</think> For complex state transitions, use Compare-And-Swap (CAS) loops:
+
+```go
+for {
+    old := atomic.LoadInt32(&state)
+    new := transition(old)
+    if atomic.CompareAndSwapInt32(&state, old, new) {
+        break
+    }
+}
+```
+
+But CAS loops can suffer from livelock under high contention. If your state machine has more than 2-3 states or multiple fields, use a mutex instead.
+Ý
+conv_synth_select_01e_My select statement seems to starve one of the cases. How does Go choose which case to execute?ýö[TRIPLETS] Subject: Select -> Action: Choose -> Object: Case | Subject: Runtime -> Action: Randomize -> Object: Order
+</think> 1. Identify core task: Understand select fairness. 2. Evaluate options: Random selection, pseudo-random, deterministic. 3. Decide heuristic: Go randomizes ready cases; if one case is always ready, it may starve others.
+</think> Go's `select` pseudo-randomly chooses among ready cases. If one case is always ready (e.g., a default case or a channel with buffered data), it may starve others. To ensure fairness, make sure all cases have similar readiness probabilities, or use a `default` case sparingly.D>How can I implement fair round-robin across multiple channels?—[TRIPLETS] Subject: Select -> Action: Round-robin -> Object: Channel | Subject: Runtime -> Action: Serve -> Object: Request
+</think> 1. Identify core task: Fair channel serving. 2. Evaluate options: Manual round-robin, timer-based, weighted fair queueing. 3. Decide heuristic: Use a ticker or manual index to rotate through channels.
+</think> Implement manual round-robin by tracking the last served channel:
+
+```go
+var last int
+for {
+    select {
+    case <-channels[last]:
+        // handle
+    default:
+    }
+    last = (last + 1) % len(channels)
+}
+```
+
+For production, use a `time.Ticker` to periodically rotate and prevent starvation of slow channels.
+”
+conv_synth_race_01pjI have a race condition in my Go code. Two goroutines are writing to the same map without synchronization.ôí[TRIPLETS] Subject: Goroutine -> Action: Write -> Object: Map | Subject: Map -> Action: Corrupt -> Object: State
+</think> 1. Identify core task: Fix concurrent map write. 2. Evaluate options: sync.Mutex, sync.Map, channel serialization. 3. Decide heuristic: Use mutex for write-heavy access or sync.Map for read-heavy.
+</think> Go maps panic on concurrent writes. Wrap access in a sync.Mutex or use sync.Map. For write-heavy workloads, a mutex is usually faster. Use `go run -race` to confirm.nhThe race detector confirms it. But sync.Map feels heavy for my use case. Is there a lighter alternative?çà[TRIPLETS] Subject: Developer -> Action: Seek -> Object: Alternative | Subject: sync.Mutex -> Action: Protect -> Object: Map
+</think> 1. Identify core task: Lightweight concurrent map. 2. Evaluate options: Mutex, channel owner, copy-on-write. 3. Decide heuristic: Channel-based owner goroutine serializes access without explicit locking.
+</think> Use a channel-based owner goroutine pattern. All reads/writes go through a single goroutine via a request channel. This avoids mutex overhead and is easy to reason about. Example: `type MapOwner struct { updates chan func(map[string]int); data map[string]int }`XRWhat about garbage collection? Will many short-lived goroutines cause GC pressure?àÙ[TRIPLETS] Subject: Goroutine -> Action: Allocate -> Object: Memory | Subject: GC -> Action: Reclaim -> Object: Memory
+</think> 1. Identify core task: GC pressure from goroutines. 2. Evaluate options: Object pooling, sync.Pool, reducing allocations. 3. Decide heuristic: Go's GC handles short-lived objects well; only optimize if profiling shows it.
+</think> Go's concurrent GC is designed for high allocation rates. Short-lived goroutines and their stack allocations are cheap. Only worry about GC pressure if `pprof` shows it. If needed, use `sync.Pool` to reuse objects and reduce allocation churn.
+Í
+conv_synth_gc_01vpMy Go service has high throughput but GC pauses are causing latency spikes. How do I tune the garbage collector?£œ[TRIPLETS] Subject: GC -> Action: Tune -> Object: Latency | Subject: Service -> Action: Experience -> Object: Pause
+</think> 1. Identify core task: Reduce GC pause latency. 2. Evaluate options: GOGC tuning, runtime.SetGCPercent, arena allocation. 3. Decide heuristic: Lower GOGC means more frequent but smaller pauses; use profiling to find the sweet spot.
+</think> Start by profiling with `go tool pprof` to see GC impact. Tune `GOGC` (default 100) â€” lower values trigger GC more frequently with smaller pauses. For latency-sensitive services, try `GOGC=50` or use `runtime/debug.SetGCPercent` at runtime. Avoid manual memory management unless absolutely necessary.JDI set GOGC=50 but CPU usage went up 20%. Is there a better approach?‚û[TRIPLETS] Subject: CPU -> Action: Increase -> Object: Usage | Subject: GOGC -> Action: Trigger -> Object: GC
+</think> 1. Identify core task: Balance GC frequency vs CPU. 2. Evaluate options: GOGC tuning, sync.Pool, value reuse, arena. 3. Decide heuristic: Use sync.Pool for frequently allocated objects; tune GOGC incrementally.
+</think> Lower GOGC increases CPU because GC runs more often. Instead, reduce allocation rate first: reuse objects with `sync.Pool`, preallocate slices with `make`, and avoid unnecessary boxing. Then tune GOGC in small steps (100 â†’ 80 â†’ 60). Measure both latency p99 and CPU to find the optimal point.QKCan you show me a sync.Pool example for reducing allocations in a hot path?öï[TRIPLETS] Subject: sync.Pool -> Action: Reuse -> Object: Object | Subject: Goroutine -> Action: Allocate -> Object: Memory
+</think> 1. Identify core task: Reduce allocations in hot path. 2. Evaluate options: sync.Pool, preallocation, stack allocation. 3. Decide heuristic: Use sync.Pool for objects that are frequently created and discarded.
+</think> Here's a sync.Pool pattern for a hot path:
+
+```go
+var bufPool = sync.Pool{
+    New: func() interface{} { return new(bytes.Buffer) },
+}
+
+func handleRequest() {
+    buf := bufPool.Get().(*bytes.Buffer)
+    buf.Reset()
+    defer bufPool.Put(buf)
+    // use buf...
+}
+```
+
+This avoids allocating a new buffer on every request. The pool grows to the peak concurrency level and reuses objects across calls.
+
+conv_synth_channel_01nhI'm building a pipeline with channels. My worker goroutines seem to leak when the pipeline is cancelled.´­[TRIPLETS] Subject: Channel -> Action: Block -> Object: Goroutine | Subject: Context -> Action: Cancel -> Object: Pipeline
+</think> 1. Identify core task: Fix goroutine leaks in channel pipeline. 2. Evaluate options: Context cancellation, done channels, buffered channels. 3. Decide heuristic: Always drain or close channels when exiting; use select with ctx.Done().
+</think> Worker goroutines leak when they block forever on channel operations after cancellation. Use `context.Context` to broadcast cancellation, and wrap blocking ops in `select`:
+
+```go
+select {
+case ch <- val:
+case <-ctx.Done():
+    return
+}
+```
+
+Ensure the sender closes the channel so receivers can exit cleanly.`ZHow do I handle a case where the receiver might still be blocked when the sender finishes?º³[TRIPLETS] Subject: Receiver -> Action: Block -> Object: Channel | Subject: Sender -> Action: Close -> Object: Channel
+</think> 1. Identify core task: Unblock receiver after sender finishes. 2. Evaluate options: Close channel, done channel, select with default. 3. Decide heuristic: Close the channel when all sends are done; receivers exit when drained.
+</think> Use `sync.WaitGroup` to track active senders. When all senders finish, close the channel. Receivers use `for val := range ch` to drain until closed:
+
+```go
+var wg sync.WaitGroup
+go func() {
+    defer close(ch)
+    wg.Wait()
+}()
+for val := range ch {
+    // process val
+}
+```
+
+This guarantees receivers never block indefinitely.SMWhat if I need to send multiple results from one goroutine to many receivers?ÚÓ[TRIPLETS] Subject: Goroutine -> Action: Send -> Object: Channel | Subject: Receiver -> Action: Receive -> Object: Value
+</think> 1. Identify core task: Fan-out pattern. 2. Evaluate options: Multiple channels, single channel with multiple receivers, broadcast. 3. Decide heuristic: Use a single channel with multiple receivers for work distribution; use context for cancellation.
+</think> For one-to-many distribution, use a single channel with multiple receivers (work stealing pattern):
+
+```go
+results := make(chan Result, workers)
+for i := 0; i < workers; i++ {
+    go func(id int) {
+        for res := range results {
+            process(id, res)
+        }
+    }(i)
+}
+for _, work := range workItems {
+    results <- process(work)
+}
+close(results)
+```
+
+Each receiver processes items independently. Closing the channel signals all receivers to exit.
+–
+conv_synth_ctx_01tnI'm confused about when to use context.Context. My HTTP handler takes one, but I'm not sure what to pass down.ÜÕ[TRIPLETS] Subject: Context -> Action: Carry -> Object: Deadline | Subject: Handler -> Action: Pass -> Object: Function
+</think> 1. Identify core task: Context propagation. 2. Evaluate options: Background, WithTimeout, WithCancel. 3. Decide heuristic: Pass request context to all downstream I/O functions.
+</think> Pass the `context.Context` from your HTTP handler to every function that performs I/O, database queries, or spans multiple goroutines. Use `context.WithTimeout` or `context.WithCancel` to derive child contexts. Never store context in a struct; always pass it as the first parameter.ICWhat happens if I call a blocking function without passing context?”[TRIPLETS] Subject: Function -> Action: Block -> Object: Goroutine | Subject: Request -> Action: Timeout -> Object: Handler
+</think> 1. Identify core task: Consequences of ignoring context. 2. Evaluate options: Leaked goroutines, hung connections, resource exhaustion. 3. Decide heuristic: Always respect context cancellation.
+</think> Without context, a blocking function can hang forever if the client disconnects or the operation stalls. This leaks goroutines and file descriptors. Always pass context so your function can abort early when the parent operation is cancelled. Wrap top-level handlers with `recover()` to return 500 instead of crashing.@:Can I use the same context for multiple parallel requests?‡€[TRIPLETS] Subject: Context -> Action: Cancel -> Object: Child | Subject: Goroutine -> Action: Receive -> Object: Signal
+</think> 1. Identify core task: Context sharing across parallel requests. 2. Evaluate options: Single context vs derived contexts. 3. Decide heuristic: Derive separate child contexts for each parallel request.
+</think> Derive separate child contexts for each parallel request using `context.WithCancel` or `context.WithTimeout`. If one request fails and you cancel its child context, the other parallel requests continue unaffected. Cancellation cascades from parent to child, so be careful with shared parent contexts.
+¦
+conv_synth_mutex_01SMI keep getting deadlocks when using mutexes. How can I make my locking safer?þ÷[TRIPLETS] Subject: Goroutine -> Action: Lock -> Object: Mutex | Subject: Runtime -> Action: Detect -> Object: Deadlock
+</think> 1. Identify core task: Make mutex locking safer. 2. Evaluate options: defer unlock, consistent ordering, lock timeouts. 3. Decide heuristic: Use defer immediately after lock; document lock ordering.
+</think> Use `defer mu.Unlock()` immediately after `mu.Lock()` so the mutex is always released, even on early returns or panics. For complex code, document the lock acquisition order to prevent circular dependencies. Go's `sync.Mutex` is not reentrant â€” the same goroutine locking twice will deadlock.;5That threw a runtime deadlock error. How do I fix it?ëä[TRIPLETS] Subject: Runtime -> Action: Detect -> Object: Deadlock | Subject: Goroutine -> Action: Wait -> Object: Mutex
+</think> 1. Identify core task: Fix runtime deadlock. 2. Evaluate options: Restructure, channel-based coordination, context timeouts. 3. Decide heuristic: Redesign to avoid nested locking; use channels if possible.
+</think> Go's `sync.Mutex` is not recursive â€” if the same goroutine tries to lock it twice, it deadlocks. Refactor so each goroutine only holds one lock at a time. If you need reentrancy, switch to a channel-based state machine or use `sync.RWMutex` for read-heavy workloads.>8Can you show me a safe pattern for a concurrent counter?ÍÆ[TRIPLETS] Subject: Counter -> Action: Increment -> Object: Atomic | Subject: Goroutine -> Action: Update -> Object: State
+</think> 1. Identify core task: Safe concurrent counter. 2. Evaluate options: Mutex vs atomic vs channel. 3. Decide heuristic: sync/atomic is fastest for simple counters; mutex is clearer for complex state.
+</think> For a simple counter, use `sync/atomic`:
+
+```go
+var count int64
+func increment() {
+    atomic.AddInt64(&count, 1)
+}
+```
+
+For complex state, use a mutex with a single goroutine owner or a struct with `defer mu.Unlock()` after every `mu.Lock()`.
+Â
+conv_synth_pipeline_01icMy Go pipeline slows to a crawl when the downstream consumer is slow. How do I handle backpressure?Ÿ˜[TRIPLETS] Subject: Pipeline -> Action: Slow -> Object: Throughput | Subject: Channel -> Action: Block -> Object: Sender
+</think> 1. Identify core task: Handle backpressure in pipeline. 2. Evaluate options: Buffered channels, bounded channels, drop policy. 3. Decide heuristic: Use buffered channels for burst absorption; limit buffer size to control memory.
+</think> Backpressure is normal in Go pipelines â€” unbuffered channels naturally apply backpressure by blocking the sender until the receiver is ready. For bursty workloads, use a small buffered channel (e.g., `make(chan T, 16)`). If memory is a concern, implement a drop-or-batch policy in the producer.RLWhat if I want to drop old data instead of blocking when the buffer is full?Æ¿[TRIPLETS] Subject: Channel -> Action: Drop -> Object: Value | Subject: Producer -> Action: Skip -> Object: Item
+</think> 1. Identify core task: Drop-oldest strategy. 2. Evaluate options: Select with default, ring buffer, skip-on-full. 3. Decide heuristic: Use select with default for non-blocking send; or implement a ring buffer for controlled dropping.
+</think> Use `select` with a `default` case for non-blocking sends:
+
+```go
+select {
+case ch <- val:
+    // sent
+default:
+    // drop oldest or skip
+    <-ch // drain oldest
+    ch <- val
+}
+```
+
+For more control, implement a ring buffer (circular buffer) that overwrites the oldest element when full. This gives you bounded memory with no blocking.
+½
+conv_synth_atomic_01D>When should I use sync/atomic instead of a mutex for counters?×Ð[TRIPLETS] Subject: sync/atomic -> Action: Increment -> Object: Counter | Subject: Mutex -> Action: Protect -> Object: State
+</think> 1. Identify core task: Choose atomic vs mutex. 2. Evaluate options: atomic for simple ops, mutex for complex state. 3. Decide heuristic: Use atomic for single-variable counters; mutex for multi-variable invariants.
+</think> Use `sync/atomic` for simple counters and flags where a single operation is sufficient. Use `sync.Mutex` when you need to read-modify-write multiple variables atomically. Atomic operations are faster but limited to single-word values.;5Can I use atomics for more complex state transitions?ÇÀ[TRIPLETS] Subject: Atomic -> Action: Transition -> Object: State | Subject: CAS -> Action: Compare -> Object: Value
+</think> 1. Identify core task: Complex state with atomics. 2. Evaluate options: CAS loops, state machine, mutex. 3. Decide heuristic: CAS works for simple state machines; use mutex for complex transitions.
+</think> For complex state transitions, use Compare-And-Swap (CAS) loops:
+
+```go
+for {
+    old := atomic.LoadInt32(&state)
+    new := transition(old)
+    if atomic.CompareAndSwapInt32(&state, old, new) {
+        break
+    }
+}
+```
+
+But CAS loops can suffer from livelock under high contention. If your state machine has more than 2-3 states or multiple fields, use a mutex instead.
+Ý
+conv_synth_select_01e_My select statement seems to starve one of the cases. How does Go choose which case to execute?ýö[TRIPLETS] Subject: Select -> Action: Choose -> Object: Case | Subject: Runtime -> Action: Randomize -> Object: Order
+</think> 1. Identify core task: Understand select fairness. 2. Evaluate options: Random selection, pseudo-random, deterministic. 3. Decide heuristic: Go randomizes ready cases; if one case is always ready, it may starve others.
+</think> Go's `select` pseudo-randomly chooses among ready cases. If one case is always ready (e.g., a default case or a channel with buffered data), it may starve others. To ensure fairness, make sure all cases have similar readiness probabilities, or use a `default` case sparingly.D>How can I implement fair round-robin across multiple channels?—[TRIPLETS] Subject: Select -> Action: Round-robin -> Object: Channel | Subject: Runtime -> Action: Serve -> Object: Request
+</think> 1. Identify core task: Fair channel serving. 2. Evaluate options: Manual round-robin, timer-based, weighted fair queueing. 3. Decide heuristic: Use a ticker or manual index to rotate through channels.
+</think> Implement manual round-robin by tracking the last served channel:
+
+```go
+var last int
+for {
+    select {
+    case <-channels[last]:
+        // handle
+    default:
+    }
+    last = (last + 1) % len(channels)
+}
+```
+
+For production, use a `time.Ticker` to periodically rotate and prevent starvation of slow channels.
+ä
+conv_synth_race_01pjI have a race condition in my Go code. Two goroutines are writing to the same map without synchronization.ä–[TRIPLETS] Subject: Goroutine -> Action: Write -> Object: Map | Subject: Map -> Action: Corrupt -> Object: State Go maps panic on concurrent writes. Wrap access in a sync.Mutex or use sync.Map. For write-heavy workloads, a mutex is usually faster. Use `go run -race` to confirm.:Ä1. Identify core task: Fix concurrent map write. 2. Evaluate options: sync.Mutex, sync.Map, channel serialization. 3. Decide heuristic: Use mutex for write-heavy access or sync.Map for read-heavy.nhThe race detector confirms it. But sync.Map feels heavy for my use case. Is there a lighter alternative?×‚[TRIPLETS] Subject: Developer -> Action: Seek -> Object: Alternative | Subject: sync.Mutex -> Action: Protect -> Object: Map Use a channel-based owner goroutine pattern. All reads/writes go through a single goroutine via a request channel. This avoids mutex overhead and is easy to reason about. Example: `type MapOwner struct { updates chan func(map[string]int); data map[string]int }`:Ë1. Identify core task: Lightweight concurrent map. 2. Evaluate options: Mutex, channel owner, copy-on-write. 3. Decide heuristic: Channel-based owner goroutine serializes access without explicit locking.XRWhat about garbage collection? Will many short-lived goroutines cause GC pressure?Ðé[TRIPLETS] Subject: Goroutine -> Action: Allocate -> Object: Memory | Subject: GC -> Action: Reclaim -> Object: Memory Go's concurrent GC is designed for high allocation rates. Short-lived goroutines and their stack allocations are cheap. Only worry about GC pressure if `pprof` shows it. If needed, use `sync.Pool` to reuse objects and reduce allocation churn.:Ý1. Identify core task: GC pressure from goroutines. 2. Evaluate options: Object pooling, sync.Pool, reducing allocations. 3. Decide heuristic: Go's GC handles short-lived objects well; only optimize if profiling shows it.
+
+conv_synth_gc_01vpMy Go service has high throughput but GC pauses are causing latency spikes. How do I tune the garbage collector?“¢[TRIPLETS] Subject: GC -> Action: Tune -> Object: Latency | Subject: Service -> Action: Experience -> Object: Pause Start by profiling with `go tool pprof` to see GC impact. Tune `GOGC` (default 100) â€” lower values trigger GC more frequently with smaller pauses. For latency-sensitive services, try `GOGC=50` or use `runtime/debug.SetGCPercent` at runtime. Avoid manual memory management unless absolutely necessary.:ç1. Identify core task: Reduce GC pause latency. 2. Evaluate options: GOGC tuning, runtime.SetGCPercent, arena allocation. 3. Decide heuristic: Lower GOGC means more frequent but smaller pauses; use profiling to find the sweet spot.JDI set GOGC=50 but CPU usage went up 20%. Is there a better approach?ò–[TRIPLETS] Subject: CPU -> Action: Increase -> Object: Usage | Subject: GOGC -> Action: Trigger -> Object: GC Lower GOGC increases CPU because GC runs more often. Instead, reduce allocation rate first: reuse objects with `sync.Pool`, preallocate slices with `make`, and avoid unnecessary boxing. Then tune GOGC in small steps (100 â†’ 80 â†’ 60). Measure both latency p99 and CPU to find the optimal point.:Ò1. Identify core task: Balance GC frequency vs CPU. 2. Evaluate options: GOGC tuning, sync.Pool, value reuse, arena. 3. Decide heuristic: Use sync.Pool for frequently allocated objects; tune GOGC incrementally.QKCan you show me a sync.Pool example for reducing allocations in a hot path?æ‹[TRIPLETS] Subject: sync.Pool -> Action: Reuse -> Object: Object | Subject: Goroutine -> Action: Allocate -> Object: Memory Here's a sync.Pool pattern for a hot path:
+
+```go
+var bufPool = sync.Pool{
+    New: func() interface{} { return new(bytes.Buffer) },
+}
+
+func handleRequest() {
+    buf := bufPool.Get().(*bytes.Buffer)
+    buf.Reset()
+    defer bufPool.Put(buf)
+    // use buf...
+}
+```
+
+This avoids allocating a new buffer on every request. The pool grows to the peak concurrency level and reuses objects across calls.:Ñ1. Identify core task: Reduce allocations in hot path. 2. Evaluate options: sync.Pool, preallocation, stack allocation. 3. Decide heuristic: Use sync.Pool for objects that are frequently created and discarded.
+ß
+conv_synth_channel_01nhI'm building a pipeline with channels. My worker goroutines seem to leak when the pipeline is cancelled.¤°[TRIPLETS] Subject: Channel -> Action: Block -> Object: Goroutine | Subject: Context -> Action: Cancel -> Object: Pipeline Worker goroutines leak when they block forever on channel operations after cancellation. Use `context.Context` to broadcast cancellation, and wrap blocking ops in `select`:
+
+```go
+select {
+case ch <- val:
+case <-ctx.Done():
+    return
+}
+```
+
+Ensure the sender closes the channel so receivers can exit cleanly.:ê1. Identify core task: Fix goroutine leaks in channel pipeline. 2. Evaluate options: Context cancellation, done channels, buffered channels. 3. Decide heuristic: Always drain or close channels when exiting; use select with ctx.Done().`ZHow do I handle a case where the receiver might still be blocked when the sender finishes?ª¾[TRIPLETS] Subject: Receiver -> Action: Block -> Object: Channel | Subject: Sender -> Action: Close -> Object: Channel Use `sync.WaitGroup` to track active senders. When all senders finish, close the channel. Receivers use `for val := range ch` to drain until closed:
+
+```go
+var wg sync.WaitGroup
+go func() {
+    defer close(ch)
+    wg.Wait()
+}()
+for val := range ch {
+    // process val
+}
+```
+
+This guarantees receivers never block indefinitely.:â1. Identify core task: Unblock receiver after sender finishes. 2. Evaluate options: Close channel, done channel, select with default. 3. Decide heuristic: Close the channel when all sends are done; receivers exit when drained.SMWhat if I need to send multiple results from one goroutine to many receivers?ÊÇ[TRIPLETS] Subject: Goroutine -> Action: Send -> Object: Channel | Subject: Receiver -> Action: Receive -> Object: Value For one-to-many distribution, use a single channel with multiple receivers (work stealing pattern):
+
+```go
+results := make(chan Result, workers)
+for i := 0; i < workers; i++ {
+    go func(id int) {
+        for res := range results {
+            process(id, res)
+        }
+    }(i)
+}
+for _, work := range workItems {
+    results <- process(work)
+}
+close(results)
+```
+
+Each receiver processes items independently. Closing the channel signals all receivers to exit.:ù1. Identify core task: Fan-out pattern. 2. Evaluate options: Multiple channels, single channel with multiple receivers, broadcast. 3. Decide heuristic: Use a single channel with multiple receivers for work distribution; use context for cancellation.
+æ
+conv_synth_ctx_01tnI'm confused about when to use context.Context. My HTTP handler takes one, but I'm not sure what to pass down.Ì’[TRIPLETS] Subject: Context -> Action: Carry -> Object: Deadline | Subject: Handler -> Action: Pass -> Object: Function Pass the `context.Context` from your HTTP handler to every function that performs I/O, database queries, or spans multiple goroutines. Use `context.WithTimeout` or `context.WithCancel` to derive child contexts. Never store context in a struct; always pass it as the first parameter.:°1. Identify core task: Context propagation. 2. Evaluate options: Background, WithTimeout, WithCancel. 3. Decide heuristic: Pass request context to all downstream I/O functions.ICWhat happens if I call a blocking function without passing context?„¹[TRIPLETS] Subject: Function -> Action: Block -> Object: Goroutine | Subject: Request -> Action: Timeout -> Object: Handler Without context, a blocking function can hang forever if the client disconnects or the operation stalls. This leaks goroutines and file descriptors. Always pass context so your function can abort early when the parent operation is cancelled. Wrap top-level handlers with `recover()` to return 500 instead of crashing.:Á1. Identify core task: Consequences of ignoring context. 2. Evaluate options: Leaked goroutines, hung connections, resource exhaustion. 3. Decide heuristic: Always respect context cancellation.@:Can I use the same context for multiple parallel requests?÷¥[TRIPLETS] Subject: Context -> Action: Cancel -> Object: Child | Subject: Goroutine -> Action: Receive -> Object: Signal Derive separate child contexts for each parallel request using `context.WithCancel` or `context.WithTimeout`. If one request fails and you cancel its child context, the other parallel requests continue unaffected. Cancellation cascades from parent to child, so be careful with shared parent contexts.:È1. Identify core task: Context sharing across parallel requests. 2. Evaluate options: Single context vs derived contexts. 3. Decide heuristic: Derive separate child contexts for each parallel request.
+ö
+conv_synth_mutex_01SMI keep getting deadlocks when using mutexes. How can I make my locking safer?îž[TRIPLETS] Subject: Goroutine -> Action: Lock -> Object: Mutex | Subject: Runtime -> Action: Detect -> Object: Deadlock Use `defer mu.Unlock()` immediately after `mu.Lock()` so the mutex is always released, even on early returns or panics. For complex code, document the lock acquisition order to prevent circular dependencies. Go's `sync.Mutex` is not reentrant â€” the same goroutine locking twice will deadlock.:Æ1. Identify core task: Make mutex locking safer. 2. Evaluate options: defer unlock, consistent ordering, lock timeouts. 3. Decide heuristic: Use defer immediately after lock; document lock ordering.;5That threw a runtime deadlock error. How do I fix it?Û„[TRIPLETS] Subject: Runtime -> Action: Detect -> Object: Deadlock | Subject: Goroutine -> Action: Wait -> Object: Mutex Go's `sync.Mutex` is not recursive â€” if the same goroutine tries to lock it twice, it deadlocks. Refactor so each goroutine only holds one lock at a time. If you need reentrancy, switch to a channel-based state machine or use `sync.RWMutex` for read-heavy workloads.:Í1. Identify core task: Fix runtime deadlock. 2. Evaluate options: Restructure, channel-based coordination, context timeouts. 3. Decide heuristic: Redesign to avoid nested locking; use channels if possible.>8Can you show me a safe pattern for a concurrent counter?½î[TRIPLETS] Subject: Counter -> Action: Increment -> Object: Atomic | Subject: Goroutine -> Action: Update -> Object: State For a simple counter, use `sync/atomic`:
+
+```go
+var count int64
+func increment() {
+    atomic.AddInt64(&count, 1)
+}
+```
+
+For complex state, use a mutex with a single goroutine owner or a struct with `defer mu.Unlock()` after every `mu.Lock()`.:Å1. Identify core task: Safe concurrent counter. 2. Evaluate options: Mutex vs atomic vs channel. 3. Decide heuristic: sync/atomic is fastest for simple counters; mutex is clearer for complex state.
+¢
+conv_synth_pipeline_01icMy Go pipeline slows to a crawl when the downstream consumer is slow. How do I handle backpressure?¡[TRIPLETS] Subject: Pipeline -> Action: Slow -> Object: Throughput | Subject: Channel -> Action: Block -> Object: Sender Backpressure is normal in Go pipelines â€” unbuffered channels naturally apply backpressure by blocking the sender until the receiver is ready. For bursty workloads, use a small buffered channel (e.g., `make(chan T, 16)`). If memory is a concern, implement a drop-or-batch policy in the producer.:ä1. Identify core task: Handle backpressure in pipeline. 2. Evaluate options: Buffered channels, bounded channels, drop policy. 3. Decide heuristic: Use buffered channels for burst absorption; limit buffer size to control memory.RLWhat if I want to drop old data instead of blocking when the buffer is full?¶Ã[TRIPLETS] Subject: Channel -> Action: Drop -> Object: Value | Subject: Producer -> Action: Skip -> Object: Item Use `select` with a `default` case for non-blocking sends:
+
+```go
+select {
+case ch <- val:
+    // sent
+default:
+    // drop oldest or skip
+    <-ch // drain oldest
+    ch <- val
+}
+```
+
+For more control, implement a ring buffer (circular buffer) that overwrites the oldest element when full. This gives you bounded memory with no blocking.:é1. Identify core task: Drop-oldest strategy. 2. Evaluate options: Select with default, ring buffer, skip-on-full. 3. Decide heuristic: Use select with default for non-blocking send; or implement a ring buffer for controlled dropping.
+
+conv_synth_atomic_01D>When should I use sync/atomic instead of a mutex for counters?Çç[TRIPLETS] Subject: sync/atomic -> Action: Increment -> Object: Counter | Subject: Mutex -> Action: Protect -> Object: State Use `sync/atomic` for simple counters and flags where a single operation is sufficient. Use `sync.Mutex` when you need to read-modify-write multiple variables atomically. Atomic operations are faster but limited to single-word values.:Ö1. Identify core task: Choose atomic vs mutex. 2. Evaluate options: atomic for simple ops, mutex for complex state. 3. Decide heuristic: Use atomic for single-variable counters; mutex for multi-variable invariants.;5Can I use atomics for more complex state transitions?·è[TRIPLETS] Subject: Atomic -> Action: Transition -> Object: State | Subject: CAS -> Action: Compare -> Object: Value For complex state transitions, use Compare-And-Swap (CAS) loops:
+
+```go
+for {
+    old := atomic.LoadInt32(&state)
+    new := transition(old)
+    if atomic.CompareAndSwapInt32(&state, old, new) {
+        break
+    }
+}
+```
+
+But CAS loops can suffer from livelock under high contention. If your state machine has more than 2-3 states or multiple fields, use a mutex instead.:Å1. Identify core task: Complex state with atomics. 2. Evaluate options: CAS loops, state machine, mutex. 3. Decide heuristic: CAS works for simple state machines; use mutex for complex transitions.
+½
+conv_synth_select_01e_My select statement seems to starve one of the cases. How does Go choose which case to execute?í‰[TRIPLETS] Subject: Select -> Action: Choose -> Object: Case | Subject: Runtime -> Action: Randomize -> Object: Order Go's `select` pseudo-randomly chooses among ready cases. If one case is always ready (e.g., a default case or a channel with buffered data), it may starve others. To ensure fairness, make sure all cases have similar readiness probabilities, or use a `default` case sparingly.:Ú1. Identify core task: Understand select fairness. 2. Evaluate options: Random selection, pseudo-random, deterministic. 3. Decide heuristic: Go randomizes ready cases; if one case is always ready, it may starve others.D>How can I implement fair round-robin across multiple channels?‡µ[TRIPLETS] Subject: Select -> Action: Round-robin -> Object: Channel | Subject: Runtime -> Action: Serve -> Object: Request Implement manual round-robin by tracking the last served channel:
+
+```go
+var last int
+for {
+    select {
+    case <-channels[last]:
+        // handle
+    default:
+    }
+    last = (last + 1) % len(channels)
+}
+```
+
+For production, use a `time.Ticker` to periodically rotate and prevent starvation of slow channels.:È1. Identify core task: Fair channel serving. 2. Evaluate options: Manual round-robin, timer-based, weighted fair queueing. 3. Decide heuristic: Use a ticker or manual index to rotate through channels.

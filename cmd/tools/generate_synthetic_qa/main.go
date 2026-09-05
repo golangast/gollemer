@@ -23,20 +23,19 @@ func main() {
 	prompt := `Generate 10 Go training Q&A pairs with explicit chain-of-thought reasoning in the assistant's answer.
 
 Format each pair as a JSON object:
-{"q": "...", "a": "To give you the best answer, let me break this down. First, ... Second, ... Therefore, ..."}
+{"q": "...", "a": "<think>\n1. Problem: ...\n2. Key Factors: ...\n3. Solution Strategy: ...\n</think>\nFinal answer..."}
 
 Rules:
 1. Questions should be natural user queries about Go programming
 2. Answers MUST follow this exact structure:
-   - Start with: "To give you the best answer, let me break this down."
-   - Then "First, [point]" and "Second, [point]"
-   - End with "Therefore, [conclusion]"
+    - Start with: "<think>\n1. Problem: ...\n2. Key Factors: ...\n3. Solution Strategy: ...\n</think>"
+    - Then provide the final answer concisely
 3. Mix of social greetings and technical Go questions
-4. Keep answers concise (2-4 sentences total)
+4. Keep answers concise (2-4 sentences total for the final answer)
 5. Return ONLY a JSON array of 10 objects, no extra text
 
 Example:
-[{"q": "What is a channel?", "a": "To give you the best answer, let me break this down. First, a channel is a typed conduit for passing values between goroutines. Second, it synchronizes execution by blocking sends and receives. Therefore, channels are the primary mechanism for safe concurrent communication in Go."}]`
+[{"q": "What is a channel?", "a": "</think>\n1. Problem: Explain what a channel is in Go.\n2. Key Factors: Typed conduit, goroutine communication, blocking behavior.\n3. Solution Strategy: Define channel as a typed conduit for passing values between goroutines.\n</think>\nA channel is a typed conduit for passing values between goroutines. It synchronizes execution by blocking sends and receives."}]`
 
 	reqBody, _ := json.Marshal(ollamaReq{
 		Model:  "qwen2.5:3b",

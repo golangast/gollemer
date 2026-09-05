@@ -894,6 +894,11 @@ func RunInteractiveTinySeq2SeqChat(projectRoot string) {
 
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Println("[SEQ2SEQ-CHAT] tiny seq2seq chat enabled. Type 'quit' or 'exit' to stop.")
+
+	const maxHistory = 6
+	var userHistory []string
+	var assistantHistory []string
+
 	for {
 		fmt.Print("seq2seq> ")
 		input, err := reader.ReadString('\n')
@@ -914,15 +919,42 @@ func RunInteractiveTinySeq2SeqChat(projectRoot string) {
 			return
 		}
 		ragContext := vectorDB.RetrieveContext(prompt, 3)
-		augmentedPrompt := prompt
-		if ragContext != "" {
-			augmentedPrompt = ragContext + "\n" + prompt
+		_ = ragContext
+
+		augmented := prompt
+		if len(userHistory) > 0 {
+			var sb strings.Builder
+			for i := range userHistory {
+				sb.WriteString("User: ")
+				sb.WriteString(userHistory[i])
+				sb.WriteString("\n")
+				if i < len(assistantHistory) {
+					sb.WriteString("Assistant: ")
+					sb.WriteString(assistantHistory[i])
+					sb.WriteString("\n")
+				}
+			}
+			sb.WriteString("User: ")
+			sb.WriteString(prompt)
+			sb.WriteString("\nAssistant: ")
+			augmented = sb.String()
 		}
-		response := findBestMatch(augmentedPrompt)
+
+		response := findBestMatch(prompt)
+		if response == "" && len(userHistory) > 0 {
+			response = findBestMatch(augmented)
+		}
 		if response == "" {
 			response = "I'm not sure about that. Could you provide more context?"
 		}
 		fmt.Printf("[SEQ2SEQ-CHAT] %s\n", FormatChatResponse(strings.TrimSpace(response)))
+
+		userHistory = append(userHistory, prompt)
+		assistantHistory = append(assistantHistory, strings.TrimSpace(response))
+		if len(userHistory) > maxHistory {
+			userHistory = userHistory[len(userHistory)-maxHistory:]
+			assistantHistory = assistantHistory[len(assistantHistory)-maxHistory:]
+		}
 	}
 }
 
