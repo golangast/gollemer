@@ -71,3 +71,4 @@ multi_orchestrator
 gollemer-train
 generated_projects/project
 project
+logs/*.log
