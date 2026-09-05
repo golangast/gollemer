@@ -38,6 +38,7 @@ jim.db
 out.log
 train_gpu_test.log
 logs/training_full.log
+*.log
 scratch/
 
 # Other
@@ -59,6 +60,7 @@ dataset/
 !internal/ai/training/proto/dataset/
 build_whisper/
 video/
+logs/
 
 # Ignore massive models and binaries
 *.gob
