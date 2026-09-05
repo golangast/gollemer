@@ -60,7 +60,7 @@ dataset/
 !internal/ai/training/proto/dataset/
 build_whisper/
 video/
-logs/
+.logs/
 
 # Ignore massive models and binaries
 *.gob
