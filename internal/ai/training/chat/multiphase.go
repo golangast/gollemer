@@ -1,7 +1,6 @@
 package chat
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"math"
@@ -20,6 +19,7 @@ import (
 	"github.com/golangast/gollemer/internal/ai/neural/tensor"
 	"github.com/golangast/gollemer/internal/ai/orchestrator"
 	datasetpb "github.com/golangast/gollemer/internal/ai/training/proto/dataset"
+	"gopkg.in/yaml.v3"
 )
 
 // setLayerFreezeQuiet sets expert freeze state without printing if unchanged.
@@ -266,9 +266,7 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 		log.Printf("⚠️ conversing.pb: %v", err)
 	}
 
-	// ── 1b. conversing.csv (simple Q/A) ───────────────────────────────────
-	// Format: query, answer, intent, grammar
-	// In OverfitMode load the single-example overfit CSV to build a tiny vocab.
+	// ── 1b. conversing.csv (simple Q/A) ─────────────────────────────────────
 	conversingCSVPath := filepath.Join(projectRoot, "data/training/trainingdata/conversing.csv")
 	if cfg.OverfitMode {
 		overfitPath := filepath.Join(projectRoot, "data/training/trainingdata/conversing_overfit_single.csv")
@@ -283,51 +281,63 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 		log.Printf("⚠️ conversing.csv: %v", err)
 	}
 
-	// ── 1c. intent_corpus.json (intent examples) ──────────────────────────
-	// Format: [{ "intent": "edit_agent", "examples": ["add a return type...", ...] }]
-	// Each example is treated as a user utterance; the model learns to acknowledge it.
-	intentCorpusPath := filepath.Join(projectRoot, "data/training/intent_corpus.json")
-	if cfg.OverfitMode {
-		log.Printf("🔒 OverfitMode enabled: skipping intent_corpus.json (using overfit dataset only)")
-	} else {
-		if raw, err := os.ReadFile(intentCorpusPath); err == nil {
-			var corpus []struct {
-				Intent   string   `json:"intent"`
-				Examples []string `json:"examples"`
+	// ── 1c. conversing.yaml (primary rich dataset — was never loaded before) ──
+	// This file has 257 real Q&A pairs. It was sitting unused while training
+	// only had 242 pairs total (236 pb + 6 csv), making the model underfit.
+	conversingYAMLPath := filepath.Join(projectRoot, "data/training/trainingdata/conversing.yaml")
+	if !cfg.OverfitMode {
+		if raw, err := os.ReadFile(conversingYAMLPath); err == nil {
+			var yamlDoc struct {
+				Conversations []struct {
+					ConversationID string `yaml:"conversation_id"`
+					Turns          []struct {
+						Role    string `yaml:"role"`
+						Content string `yaml:"content"`
+					} `yaml:"turns"`
+				} `yaml:"conversations"`
 			}
-			if jsonErr := json.Unmarshal(raw, &corpus); jsonErr == nil {
-				intentCount := 0
-				for _, entry := range corpus {
-					intentName := strings.ReplaceAll(entry.Intent, "_", " ")
-					for _, example := range entry.Examples {
-						if strings.TrimSpace(example) == "" {
-							continue
+			if yamlErr := yaml.Unmarshal(raw, &yamlDoc); yamlErr == nil {
+				yamlCount := 0
+				for _, conv := range yamlDoc.Conversations {
+					turns := conv.Turns
+					var historyBuilder strings.Builder
+					intent := "social"
+					if strings.HasSuffix(conv.ConversationID, "_tech") {
+						intent = "tech"
+					}
+					for i := 0; i+1 < len(turns); i++ {
+						if turns[i].Role == "user" && turns[i+1].Role == "assistant" {
+							qRaw := strings.TrimSpace(turns[i].Content)
+							aRaw := strings.TrimSpace(turns[i+1].Content)
+
+							if qRaw != "" && aRaw != "" {
+								// Construct Q with full history
+								q := historyBuilder.String() + "Human: " + qRaw + "\nAI: "
+								a := aRaw // Kept intact with [TRIPLETS] and [REASONING]
+
+								socialPairs = append(socialPairs, moe.TrainPair{Q: q, A: a, Intent: intent})
+								yamlCount++
+
+								// Add this turn to history for the next iteration (using cleaned 'a' for history so context doesn't bloat)
+								cleanA := aRaw
+								if idx := strings.Index(cleanA, "[RESPONSE]"); idx >= 0 {
+									cleanA = strings.TrimSpace(cleanA[idx+len("[RESPONSE]"):])
+								}
+								historyBuilder.WriteString("Human: " + qRaw + "\nAI: " + cleanA + "\n")
+							}
 						}
-						if strings.Contains(entry.Intent, "edit") ||
-							strings.Contains(entry.Intent, "code") ||
-							strings.Contains(entry.Intent, "fix") ||
-							strings.Contains(entry.Intent, "add") ||
-							strings.Contains(entry.Intent, "refactor") ||
-							strings.Contains(entry.Intent, "debug") {
-							// Skip code intents for pure sentence training
-						} else {
-							socialPairs = append(socialPairs, moe.TrainPair{
-								Q:      example,
-								A:      fmt.Sprintf("Sure, I will %s.", intentName),
-								Intent: "social",
-							})
-						}
-						intentCount++
 					}
 				}
-				log.Printf("📚 Loaded %d intent examples from intent_corpus.json", intentCount)
+				log.Printf("📚 Loaded %d contextual turns from conversing.yaml", yamlCount)
 			} else {
-				log.Printf("⚠️ Failed to parse intent_corpus.json: %v", jsonErr)
+				log.Printf("⚠️ conversing.yaml parse error: %v", yamlErr)
 			}
 		} else {
-			log.Printf("⚠️ intent_corpus.json: %v", err)
+			log.Printf("⚠️ conversing.yaml: %v", err)
 		}
 	}
+	// intent_corpus.json intentionally skipped: its synthetic "Sure, I will X." answers
+	// poisoned training — model always output "sure"/"i will". Real YAML data replaces it.
 
 	if len(socialPairs) == 0 {
 		log.Fatalf("❌ Missing required datasets (social=%d). Aborting.", len(socialPairs))
@@ -581,52 +591,39 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 			phaseMaxSeqLen = maxSeqLen
 		}
 
-		for i := 0; i < len(trainPairs); i += phaseBatchSize {
-			end := i + phaseBatchSize
-			if end > len(trainPairs) {
-				end = len(trainPairs)
+		// ── Iterator / Interactor pattern ────────────────────────────────────────
+		// Use ChatDataIterator (same pattern as chat.go) instead of a raw slice
+		// loop so shuffling, boundary checks, and MaxLen clamping are centralised.
+		phaseIter := NewChatDataIterator(trainPairs, intentModel.SentenceVocab,
+			intentModel.SentenceVocab.UnkID, true)
+		phaseIter.MaxLen = phaseMaxSeqLen
+		phaseIter.Epoch = epoch
+
+		for phaseIter.HasNext() {
+			batchData := phaseIter.NextBatch(phaseBatchSize)
+			if batchData == nil || batchData.Input == nil {
+				continue
 			}
-			batch := trainPairs[i:end]
-			currentBatchSize := len(batch)
 
 			optimizer.ZeroGrad()
 
-			// Build input/target tensors
-			inputData := make([]float32, currentBatchSize*phaseMaxSeqLen)
-			targetData := make([]float32, currentBatchSize*phaseMaxSeqLen)
+			inputTensor := batchData.Input
+			targetTensor := batchData.Target
+
+			currentBatchSize := inputTensor.Shape[0]
+			currentSeqLenOut := targetTensor.Shape[1]
 
 			padID := intentModel.SentenceVocab.PaddingTokenID
-
-			for bIdx, pair := range batch {
-				// ALWAYS use the unified SentenceVocab to prevent OOB errors and ensure
-				// consistent token-to-neuron mappings across the entire model.
-				activeVocab := intentModel.SentenceVocab
-
-				qText := "__intent__ " + pair.Intent + " : __ques__ " + pair.Q
-				qToks := cleanTokenize(qText)
-				for t := 0; t < phaseMaxSeqLen && t < len(qToks); t++ {
-					id := activeVocab.GetTokenID(qToks[t])
-					if id < 0 {
-						id = padID
-					}
-					inputData[bIdx*phaseMaxSeqLen+t] = float32(id)
-				}
-
-				aToks := cleanTokenize(pair.A)
-				seqStart := bIdx * phaseMaxSeqLen
-				copy(targetData[seqStart:seqStart+phaseMaxSeqLen], buildTargetSequence(aToks, activeVocab, phaseMaxSeqLen))
-			}
-
-			inputTensor := tensor.NewTensor([]int{currentBatchSize, phaseMaxSeqLen}, inputData, false)
-			targetTensor := tensor.NewTensor([]int{currentBatchSize, phaseMaxSeqLen}, targetData, false)
 
 			for _, layer := range layers {
 				layer.CurrentPhase = currentPhase
 			}
 
-			logits, _, err := intentModel.Forward(0.1, inputTensor, targetTensor)
+			// Use 0.0 sampling probability for strict teacher-forcing to allow deep overfitting.
+			// The previous 0.1 was injecting noise that capped out the loss.
+			logits, _, err := intentModel.Forward(0.0, inputTensor, targetTensor)
 			if err != nil {
-				log.Printf("⚠️ Forward error (batch %d): %v", i/phaseBatchSize, err)
+				log.Printf("⚠️ Forward error (epoch %d): %v", epoch, err)
 				intentModel.ClearState()
 				continue
 			}
@@ -637,7 +634,7 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 
 			if len(logits) == 1 && len(logits[0].Shape) == 3 {
 				// Vectorized 3D path: logits shape [batch, seqLen-1, vocab]
-				targetSeqLen := phaseMaxSeqLen - 1
+				targetSeqLen := currentSeqLenOut - 1
 				targets := make([]int, currentBatchSize*targetSeqLen)
 				var eosPenalty float32
 				vocabSize := logits[0].Shape[2]
@@ -649,7 +646,7 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 				for b := 0; b < currentBatchSize; b++ {
 					eosExpectedAt := -1
 					for t := 0; t < targetSeqLen; t++ {
-						tID := int(targetData[b*phaseMaxSeqLen+t+1])
+						tID := int(targetTensor.Data[b*currentSeqLenOut+t+1])
 						targets[b*targetSeqLen+t] = tID
 						if eosExpectedAt == -1 && tID == eosID {
 							eosExpectedAt = t
@@ -671,33 +668,22 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 						}
 					}
 				}
-				loss, grad := WeightedCrossEntropy(logits[0].ToCPU(), targets, lossWeights, labelSmoothing, 0.005)
+				loss, grad := WeightedCrossEntropy(logits[0].ToCPU(), targets, lossWeights, labelSmoothing, cfg.EntropyWeight)
 				if grad == nil {
 					grad = tensor.NewTensor(logits[0].Shape, make([]float32, len(logits[0].Data)), false)
 				}
 
-				// DYNAMIC NORMALIZATION
-				var sumWeights float32
-				validTokens := 0
-				for _, tID := range targets {
-					if tID >= 0 && tID < len(lossWeights) && tID != padID {
-						sumWeights += lossWeights[tID]
-						validTokens++
-					}
-				}
-				avgWeight := float32(1.0)
-				if validTokens > 0 && sumWeights > 0 {
-					avgWeight = sumWeights / float32(validTokens)
-				}
-
+				// DYNAMIC NORMALIZATION REMOVED
+				// WeightedCrossEntropy ALREADY averages the loss and scales the gradients
+				// by the number of valid (non-padded) tokens. Double-dividing them here
+				// caused extreme vanishing gradients, which froze the model's learning!
 				penaltyFactor := float32(1.0) + (eosPenalty / float32(currentBatchSize))
-				batchLoss = (loss * penaltyFactor) / avgWeight
+				batchLoss = loss * penaltyFactor
 
-				scale := penaltyFactor / avgWeight
+				scale := penaltyFactor
+				// Use SIMD-dispatched MulScalar (routes through GOEXPERIMENT=simd path).
 				if scale != 1.0 {
-					for i := range grad.Data {
-						grad.Data[i] *= scale
-					}
+					tensor.MulScalar(grad.Data, scale, grad.Data)
 				}
 				grads = []*tensor.Tensor{grad}
 			} else {
@@ -707,9 +693,9 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 				for t, logit := range logits {
 					targets := make([]int, currentBatchSize)
 					for b := 0; b < currentBatchSize; b++ {
-						idx := b*phaseMaxSeqLen + t + 1
-						if idx < len(targetData) {
-							targets[b] = int(targetData[idx])
+						idx := b*currentSeqLenOut + t + 1
+						if idx < len(targetTensor.Data) {
+							targets[b] = int(targetTensor.Data[idx])
 						} else {
 							targets[b] = padID
 						}
@@ -738,29 +724,19 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 							}
 						}
 					}
-					l, g := WeightedCrossEntropy(logit.ToCPU(), targets, lossWeights, labelSmoothing, 0.005)
+					l, g := WeightedCrossEntropy(logit.ToCPU(), targets, lossWeights, labelSmoothing, cfg.EntropyWeight)
 					if g == nil {
 						g = tensor.NewTensor(logit.Shape, make([]float32, len(logit.Data)), false)
 					}
 
-					// DYNAMIC NORMALIZATION
-					var sumWeights float32
-					validTokens := 0
-					for _, tID := range targets {
-						if tID >= 0 && tID < len(lossWeights) && tID != padID {
-							sumWeights += lossWeights[tID]
-							validTokens++
-						}
-					}
-					avgWeight := float32(1.0)
-					if validTokens > 0 && sumWeights > 0 {
-						avgWeight = sumWeights / float32(validTokens)
-					}
-
+					// DYNAMIC NORMALIZATION REMOVED
+					// WeightedCrossEntropy ALREADY averages the loss and scales the gradients
+					// by the number of valid (non-padded) tokens. Double-dividing them here
+					// caused extreme vanishing gradients, which froze the model's learning!
 					penaltyFactor := float32(1.0) + (eosPenalty / float32(currentBatchSize))
-					stepTotal += (l * penaltyFactor) / avgWeight
+					stepTotal += l * penaltyFactor
 
-					scale := penaltyFactor / avgWeight
+					scale := penaltyFactor
 					if scale != 1.0 {
 						for i := range g.Data {
 							g.Data[i] *= scale
@@ -871,18 +847,29 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 		}
 
 		// ── All Phases: LR reducer on stagnation + divergence circuit breaker ──────
-		// Divergence circuit breaker: if loss is >1.5× the best seen, cut LR
+		// Divergence circuit breaker: if loss is > threshold× the best seen, cut LR
 		// AND roll the weights back to the best snapshot so bad momentum
 		// can't keep dragging the model away from the good region.
-		if activePhaseBestLoss < 1e8 && avgLoss > activePhaseBestLoss*1.5 {
+		//
+		// DYNAMIC THRESHOLD: at low loss values (< 1.0), batch variance is high
+		// relative to the loss magnitude. A fixed 1.5× fires constantly at loss ~0.3
+		// (any +0.17 bounce = rollback). Scale the threshold so the band stays
+		// meaningful: use 3.0× below loss 0.5, 2.0× below loss 1.0, 1.5× above.
+		divThreshold := float32(1.5)
+		if activePhaseBestLoss < 0.5 {
+			divThreshold = 3.0
+		} else if activePhaseBestLoss < 1.0 {
+			divThreshold = 2.0
+		}
+		if activePhaseBestLoss < 1e8 && avgLoss > activePhaseBestLoss*divThreshold {
 			if bestWeightsSnap != nil {
 				optimizer.RestoreParameters(bestWeightsSnap)
-				log.Printf("⚡ Phase %d divergence (%.4f > %.4f×1.5) → rolled back to best weights + reset Adam moments",
-					currentPhase, avgLoss, activePhaseBestLoss)
+				log.Printf("⚡ Phase %d divergence (%.4f > %.4f×%.1f) → rolled back to best weights + reset Adam moments",
+					currentPhase, avgLoss, activePhaseBestLoss, divThreshold)
 			} else {
 				optimizer.ResetAllMoments()
-				log.Printf("⚡ Phase %d divergence (%.4f > %.4f×1.5) → reset Adam moments (no snapshot yet)",
-					currentPhase, avgLoss, activePhaseBestLoss)
+				log.Printf("⚡ Phase %d divergence (%.4f > %.4f×%.1f) → reset Adam moments (no snapshot yet)",
+					currentPhase, avgLoss, activePhaseBestLoss, divThreshold)
 			}
 			if activePhaseLRFactor > lrFactorMin {
 				activePhaseLRFactor *= 0.5
@@ -890,7 +877,11 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 					activePhaseLRFactor = lrFactorMin
 				}
 			}
-			activePhaseStagnantEpochs = 0
+			// NOTE: do NOT reset activePhaseStagnantEpochs here.
+			// If we reset it, the warm-restart counter (floorRestartPatience) can
+			// never accumulate enough while divergence keeps firing — the model
+			// gets permanently stuck. Let stagnation keep counting so the SGDR
+			// warm-restart eventually fires and breaks the deadlock.
 		} else if avgLoss < activePhaseBestLoss-lrImprovementThreshold {
 			activePhaseBestLoss = avgLoss
 			activePhaseStagnantEpochs = 0
@@ -910,18 +901,10 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 				currentPhase, lrDecayPatience, activePhaseLRFactor)
 		}
 
-		// Warm-restart (SGDR-style): if the LR has been at the floor for a full
-		// extra patience window, restore the best snapshot and restart with full LR.
-		if activePhaseLRFactor <= lrFactorMin && activePhaseStagnantEpochs >= floorRestartPatience {
-			log.Printf("🚀 Phase %d LR warm-restart: restoring best weights (loss %.4f) + full LR %.6f",
-				currentPhase, activePhaseBestLoss, phaseCfg.LearningRate)
-			if bestWeightsSnap != nil {
-				optimizer.RestoreParameters(bestWeightsSnap)
-			}
-			activePhaseLRFactor = 1.0
-			activePhaseStagnantEpochs = 0
-			activePhaseBestLoss = avgLoss
-		}
+		// SGDR warm-restart DISABLED: on a small memorization dataset, warm-restarts
+		// constantly reset the LR to full and blow the loss back up (e.g., 2.97 → 5.1).
+		// The model needs monotonically decreasing LR to converge, not cyclic spikes.
+		// if activePhaseLRFactor <= lrFactorMin && activePhaseStagnantEpochs >= floorRestartPatience { ... }
 		// Note: the actual SetLearningRate call is at the START of the next epoch
 		// (the cosine block above), so we don't call it again here to avoid double-set.
 

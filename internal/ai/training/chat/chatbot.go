@@ -95,6 +95,17 @@ func (s *ChatSession) GetContextVector() []float32 {
 	return ctxCopy
 }
 
+// GetLastBotTurn returns the bot's most recent response text (lower-cased) for
+// context carry-over in intent classification. Returns "" if no history yet.
+func (s *ChatSession) GetLastBotTurn() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if len(s.History) == 0 {
+		return ""
+	}
+	return strings.ToLower(s.History[len(s.History)-1].Response)
+}
+
 func StartChat(model *moe.IntentMoE) {
 
 	session := NewChatSession(3, model.Embedding.DimModel)
@@ -227,19 +238,119 @@ func StartChat(model *moe.IntentMoE) {
 	}
 }
 
+type RetrievalPair struct {
+	Q string
+	A string
+}
+
 type MoEChatBot struct {
-	model        *moe.IntentMoE
-	session      *ChatSession
-	systemPrompt string
-	vectorDB     *memory.VectorDB
+	model          *moe.IntentMoE
+	session        *ChatSession
+	systemPrompt   string
+	vectorDB       *memory.VectorDB
+	retrievalPairs []RetrievalPair // fallback retrieval when neural output is incoherent
 }
 
 func NewMoEChatBot(model *moe.IntentMoE) *MoEChatBot {
-	return &MoEChatBot{
+	bot := &MoEChatBot{
 		model:        model,
 		session:      NewChatSession(5, model.Embedding.DimModel),
 		systemPrompt: "System: You are a friendly, helpful assistant. Tone: Kind.",
 	}
+	// Load training pairs for retrieval fallback
+	bot.loadRetrievalPairs()
+	return bot
+}
+
+// loadRetrievalPairs reads conversing.yaml and the .pb pairs for instant retrieval.
+func (b *MoEChatBot) loadRetrievalPairs() {
+	yamlPath := filepath.Join(".", "data", "training", "trainingdata", "conversing.yaml")
+	data, err := os.ReadFile(yamlPath)
+	if err != nil {
+		log.Printf("[CHAT] Retrieval fallback: could not load conversing.yaml: %v", err)
+		return
+	}
+	// Parse the YAML structure:
+	// - role: "user" -> next line is content: "..."
+	// - role: "assistant" -> next line is content: "..."
+	lines := strings.Split(string(data), "\n")
+	var currentQ, currentA string
+	var nextIsUserContent, nextIsAssistantContent bool
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		if strings.HasPrefix(trimmed, `role: "user"`) {
+			nextIsUserContent = true
+		} else if strings.HasPrefix(trimmed, `role: "assistant"`) {
+			nextIsAssistantContent = true
+		} else if strings.HasPrefix(trimmed, "content: ") {
+			contentStr := strings.TrimSpace(strings.TrimPrefix(trimmed, "content: "))
+			contentStr = strings.Trim(contentStr, `"`)
+
+			if nextIsUserContent {
+				currentQ = contentStr
+				nextIsUserContent = false
+			} else if nextIsAssistantContent {
+				currentA = contentStr
+				nextIsAssistantContent = false
+
+				if currentQ != "" && currentA != "" {
+					b.retrievalPairs = append(b.retrievalPairs, RetrievalPair{Q: currentQ, A: currentA})
+					currentQ, currentA = "", ""
+				}
+			}
+		}
+	}
+	log.Printf("[CHAT] Retrieval fallback loaded %d pairs from conversing.yaml", len(b.retrievalPairs))
+}
+
+// retrievalLookup finds the best matching answer using Jaccard word-overlap similarity.
+func (b *MoEChatBot) retrievalLookup(query string) (string, float32) {
+	if len(b.retrievalPairs) == 0 {
+		return "", 0
+	}
+	qWords := make(map[string]bool)
+	for _, w := range strings.Fields(strings.ToLower(query)) {
+		if len(w) > 2 { // skip stop words
+			qWords[w] = true
+		}
+	}
+	var bestScore float32
+	var bestAnswer string
+	for _, pair := range b.retrievalPairs {
+		pWords := make(map[string]bool)
+		for _, w := range strings.Fields(strings.ToLower(pair.Q)) {
+			if len(w) > 2 {
+				pWords[w] = true
+			}
+		}
+		// Jaccard similarity
+		var intersection, union float32
+		for w := range qWords {
+			if pWords[w] {
+				intersection++
+			}
+		}
+		for w := range pWords {
+			qWords[w] = true // temp merge
+		}
+		union = float32(len(qWords))
+		// restore qWords
+		for w := range pWords {
+			if !qWords[w] {
+				delete(qWords, w)
+			}
+		}
+		if union > 0 {
+			score := intersection / union
+			if score > bestScore {
+				bestScore = score
+				bestAnswer = pair.A
+			}
+		}
+	}
+	return bestAnswer, bestScore
 }
 
 func (b *MoEChatBot) ensureVectorDB(projectRoot string) {
@@ -269,18 +380,111 @@ func (b *MoEChatBot) Reply(input string) string {
 		// }
 	}
 
-	// The model was trained with specific structural tokens: __intent__ <intent> : __ques__ <question>
-	// Without these, the positional embeddings and attention heads fail, producing word salad.
-	formattedInput := "__intent__ social : __ques__ " + input + " __ans__"
+	// 0. Predictive Intent Classification — weighted scoring, not naive keyword match.
+	// The old approach triggered on "go" in any sentence (e.g. "let's go"), tagging
+	// everything as "tech". Now we use explicit phrase-level and bigram matching with
+	// separate social/tech score accumulators. Social signals always compete.
+	lowerInput := strings.ToLower(input)
 
-	// 1. Tokenize and embed current input
+	var socialScore, techScore float32
+
+	// ── Social signals ──────────────────────────────────────────────────────────
+	socialPhrases := []string{
+		"how are you", "how's it going", "how you doing", "feeling", "doing well",
+		"what's up", "sup", "good morning", "good evening", "good afternoon",
+		"hello", "hey", "hi ", "howdy", "greetings",
+		"who are you", "what are you", "your name", "about you", "tell me about",
+		"thank", "please", "sorry", "nice to meet", "goodbye", "bye", "see you",
+		"haha", "lol", "funny", "joke",
+		"i'm bored", "entertain", "story", "chat", "talk",
+	}
+	for _, phrase := range socialPhrases {
+		if strings.Contains(lowerInput, phrase) {
+			if len(phrase) > 5 {
+				socialScore += 2.5
+			} else {
+				socialScore += 1.0
+			}
+		}
+	}
+
+	// ── Tech signals ────────────────────────────────────────────────────────────
+	// Use word-boundary style matching to avoid "go" in "I'm going to..."
+	techPhrases := []string{
+		"golang", "goroutine", "channel", "mutex", "interface{}", "struct{",
+		"func ", "func(", " func", "error handling", "nil pointer",
+		"compile", "runtime", "garbage collector", "package ", "import ",
+		"context.context", "http handler", "middleware", "api", "endpoint",
+		"database", "sql", "query", "schema", "orm",
+		"what is a ", "what does ", "how do i ", "how do you ", "explain ",
+		"define ", "difference between", "when to use", "how to ",
+		"function", "variable", "pointer", "array", "slice", "map[",
+		"architecture", "design pattern", "dependency", "module",
+	}
+	for _, phrase := range techPhrases {
+		if strings.Contains(lowerInput, phrase) {
+			if len(phrase) > 6 {
+				techScore += 2.5
+			} else {
+				techScore += 1.0
+			}
+		}
+	}
+
+	// Exact "go" only scores if adjacent to a programming concept
+	if strings.Contains(lowerInput, " go ") &&
+		(techScore > 0 || strings.Contains(lowerInput, "program") || strings.Contains(lowerInput, "language")) {
+		techScore += 1.5
+	}
+
+	// Sentiment can influence social leaning: strong emotion = social
+	if sentiment > 0.5 || sentiment < -0.3 {
+		socialScore += 0.8
+	}
+
+	// Previous-turn carry-over: if we already have a social context, lean social
+	if strings.Contains(b.session.GetLastBotTurn(), "hello") ||
+		strings.Contains(b.session.GetLastBotTurn(), "i'm doing") {
+		socialScore += 1.0
+	}
+
+	predictedIntent := "social"
+	if techScore > socialScore {
+		predictedIntent = "tech"
+	}
+
+	// Extract topic for notepad logging
+	predictedTopic := "general conversation"
+	if predictedIntent == "tech" {
+		predictedTopic = "programming / technical"
+	} else {
+		if strings.Contains(lowerInput, "who are you") || strings.Contains(lowerInput, "your name") {
+			predictedTopic = "identity"
+		} else if strings.Contains(lowerInput, "how are you") || strings.Contains(lowerInput, "feeling") {
+			predictedTopic = "wellbeing check"
+		} else if strings.Contains(lowerInput, "joke") || strings.Contains(lowerInput, "funny") {
+			predictedTopic = "entertainment"
+		}
+	}
+
+	// The model was trained with format: [BOS, __intent__, <intent>, :, __ques__, <words...>, EOS]
+	// Inference MUST match this exactly — no __ans__ suffix, BOS+EOS wrappers required.
+	formattedInput := "__intent__ " + predictedIntent + " : __ques__ " + input
+
+	// 1. Tokenize and embed current input — with BOS and EOS wrappers to match training
 	tokens := cleanTokenize(formattedInput)
-	ids := make([]float32, len(tokens))
+	bosID := b.model.SentenceVocab.BosID
+	eosID := b.model.SentenceVocab.EosID
+	ids := make([]float32, len(tokens)+2)
+	ids[0] = float32(bosID)
+	for i, t := range tokens {
+		ids[i+1] = float32(lookupVocab(t, b.model.SentenceVocab))
+	}
+	ids[len(ids)-1] = float32(eosID)
 	avgInputEmbedding := make([]float32, b.model.Embedding.DimModel)
 	tokenCount := 0
-	for i, t := range tokens {
-		id := lookupVocab(t, b.model.SentenceVocab)
-		ids[i] = float32(id)
+	for _, rawID := range ids {
+		id := int(rawID)
 		if id >= 0 && id < b.model.Embedding.VocabSize {
 			start := id * b.model.Embedding.DimModel
 			vec := b.model.Embedding.Weight.Data[start : start+b.model.Embedding.DimModel]
@@ -305,6 +509,11 @@ func (b *MoEChatBot) Reply(input string) string {
 
 	emb, _ := b.model.Embedding.Forward(inputT)
 
+	// Apply Positional Encoding to embeddings for word-order awareness
+	if b.model.EncoderPos != nil {
+		emb, _ = b.model.EncoderPos.Forward(emb)
+	}
+
 	// 2. Combine with context vector (session history blending)
 	contextVector := b.session.GetContextVector()
 	const lambda = 0.3 // Context decay factor
@@ -318,6 +527,11 @@ func (b *MoEChatBot) Reply(input string) string {
 	}
 
 	ctx, _ := b.model.Encoder.Forward(emb)
+
+	// Normalize context vector
+	if b.model.EncoderNorm != nil {
+		ctx, _ = b.model.EncoderNorm.Forward(ctx)
+	}
 
 	// 3. Step-by-step decoding via GreedySearchDecodeWithTemp.
 	// BeamSearchDecodeFiltered calls Decoder.Forward() which expects a full
@@ -352,6 +566,126 @@ func (b *MoEChatBot) Reply(input string) string {
 		}
 	}
 	botResponse := strings.Join(response, " ")
+
+	// ── Incoherence detection & retrieval fallback ──────────────────────────────
+	// Detect if the neural output is word salad (model hasn't converged yet) and
+	// substitute the best retrieval match instead.
+	usedRetrieval := false
+	retrievalScore := float32(0)
+	isIncoherent := false
+	if len(response) > 0 {
+		// Check 1: repetition — if any single word appears more than 30% of tokens
+		wordFreq := make(map[string]int)
+		for _, w := range response {
+			wordFreq[strings.ToLower(w)]++
+		}
+		maxFreq := 0
+		for _, c := range wordFreq {
+			if c > maxFreq {
+				maxFreq = c
+			}
+		}
+		if float32(maxFreq)/float32(len(response)) > 0.30 {
+			isIncoherent = true
+		}
+		// Check 2: structural tokens leaked into output
+		for _, w := range response {
+			if w == "__intent__" || w == "__ques__" || w == "__ans__" {
+				isIncoherent = true
+				break
+			}
+		}
+		// Check 3: too many punctuation/function tokens relative to words
+		punctCount := 0
+		for _, w := range response {
+			if w == "." || w == "," || w == "?" || w == "!" || w == ")" || w == "(" {
+				punctCount++
+			}
+		}
+		if len(response) > 3 && float32(punctCount)/float32(len(response)) > 0.4 {
+			isIncoherent = true
+		}
+	} else {
+		isIncoherent = true // empty response
+	}
+
+	if isIncoherent {
+		retrieved, score := b.retrievalLookup(input)
+		if retrieved != "" && score > 0.1 {
+			botResponse = retrieved
+			usedRetrieval = true
+			retrievalScore = score
+		}
+	}
+
+	// Extract [REASONING] if present
+	var reasoning string
+	if rIdx := strings.Index(botResponse, "[REASONING]"); rIdx >= 0 {
+		if respIdx := strings.Index(botResponse, "[RESPONSE]"); respIdx > rIdx {
+			reasoning = strings.TrimSpace(botResponse[rIdx+len("[REASONING]") : respIdx])
+			botResponse = strings.TrimSpace(botResponse[respIdx+len("[RESPONSE]"):])
+		} else {
+			reasoning = strings.TrimSpace(botResponse[rIdx+len("[REASONING]"):])
+			botResponse = "" // The model only output reasoning
+		}
+	}
+
+	// Attempt to predict the structural sub-intent and grammar skeleton
+	var ruleName string
+	var skeleton []string
+	if b.model.Rules != nil {
+		for name, rule := range b.model.Rules.Rules {
+			if strings.HasPrefix(name, predictedIntent+":") {
+				match := false
+				for _, kw := range rule.RequiredKeywords {
+					if strings.Contains(lowerInput, kw) {
+						match = true
+						break
+					}
+				}
+				if match {
+					ruleName = name
+					skeleton = rule.GrammarSkeleton
+					break
+				}
+			}
+		}
+	}
+
+	// Always write the notepad plan/execution to a file in the current directory
+	notepadPath := "gollemer_notepad.txt"
+	f, err := os.OpenFile(notepadPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err == nil {
+		f.WriteString("=== Turn Plan & Execution ===\n")
+		f.WriteString(fmt.Sprintf("Input Analysis: Sentiment=%.2f | Social Score=%.1f | Tech Score=%.1f\n", sentiment, socialScore, techScore))
+		f.WriteString(fmt.Sprintf("Predicted Intent: '%s' | Topic: %s\n", predictedIntent, predictedTopic))
+		if usedRetrieval {
+			f.WriteString(fmt.Sprintf("Source: RETRIEVAL FALLBACK (neural output was incoherent) | Match Score=%.2f\n", retrievalScore))
+		} else {
+			f.WriteString("Source: NEURAL (model output used directly)\n")
+		}
+		if ruleName != "" {
+			f.WriteString(fmt.Sprintf("Structural Prediction: Matched rule '%s'. Expected structure: %v\n", ruleName, skeleton))
+		} else {
+			f.WriteString(fmt.Sprintf("Structural Prediction: No rule matched for '%s' intent. Using default generation.\n", predictedIntent))
+		}
+		f.WriteString(fmt.Sprintf("Execution: Injecting '__intent__ %s : __ques__' structural tokens before prompting model.\n", predictedIntent))
+		if reasoning != "" {
+			f.WriteString("Model Reasoning:\n" + reasoning + "\n")
+		} else {
+			f.WriteString("Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)\n")
+		}
+		f.WriteString("Output: " + botResponse + "\n\n")
+		f.Close()
+		if usedRetrieval {
+			fmt.Printf("📚 [Retrieval: match=%.2f]\n", retrievalScore)
+		} else {
+			fmt.Printf("🧠 [Neural output]\n")
+		}
+		fmt.Printf("📝 [Note: Plan & Execution logged to %s]\n", notepadPath)
+	} else {
+		log.Printf("⚠️ Failed to write to gollemer_notepad.txt: %v", err)
+	}
 
 	// 7. Save this turn to memory
 	newTurn := ConversationTurn{

@@ -112,7 +112,12 @@ func (it *ChatDataIterator) Next() (*tensor.Tensor, *tensor.Tensor, *tensor.Tens
 	}
 
 	if it.PureSeq2Seq {
-		qTokens := cleanTokenize(q)
+		intentName := pair.Intent
+		if intentName == "" {
+			intentName = "social"
+		}
+		formattedQ := "__intent__ " + intentName + " : __ques__ " + q
+		qTokens := cleanTokenize(formattedQ)
 		qIDs := make([]float32, len(qTokens)+2)
 		qIDs[0] = float32(it.vocab.BosID)
 		for i, tok := range qTokens {

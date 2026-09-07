@@ -1,0 +1,222 @@
+How should structured logging be configured in Go?=== Turn Plan & Execution ===
+Input Analysis: Sentiment=0.00 | Social Score=2.5 | Tech Score=0.0
+Predicted Intent: 'social' | Topic: wellbeing check
+Structural Prediction: Matched rule 'social:greeting'. Expected structure: [GREET OTHER OTHER INTERROGATIVE AUX PRON VERB PRON OTHER OTHER]
+Execution: Injecting '__intent__ social : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: architecture ? ) next what . type know and let are go thanks - i'm with today design help
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=1.00 | Social Score=4.3 | Tech Score=4.0
+Predicted Intent: 'social' | Topic: wellbeing check
+Structural Prediction: Matched rule 'social:greeting'. Expected structure: [GREET OTHER OTHER INTERROGATIVE AUX PRON VERB PRON OTHER OTHER]
+Execution: Injecting '__intent__ social : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: your with doing i'm in go . ? help next modules hi! architecture type asking!
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=1.00 | Social Score=4.3 | Tech Score=8.5
+Predicted Intent: 'tech' | Topic: programming / technical
+Structural Prediction: No rule matched for 'tech' intent. Using default generation.
+Execution: Injecting '__intent__ tech : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: ) you doing . how next , the great
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=0.00 | Social Score=2.5 | Tech Score=0.0
+Predicted Intent: 'social' | Topic: wellbeing check
+Source: NEURAL (model output used directly)
+Structural Prediction: Matched rule 'social:greeting'. Expected structure: [GREET OTHER OTHER INTERROGATIVE AUX PRON VERB PRON OTHER OTHER]
+Execution: Injecting '__intent__ social : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: return a the ) blocking what for ? .
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=0.00 | Social Score=2.5 | Tech Score=0.0
+Predicted Intent: 'social' | Topic: wellbeing check
+Source: NEURAL (model output used directly)
+Structural Prediction: Matched rule 'social:greeting'. Expected structure: [GREET OTHER OTHER INTERROGATIVE AUX PRON VERB PRON OTHER OTHER]
+Execution: Injecting '__intent__ social : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: , can number value the buffer is until help ) reached
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=0.00 | Social Score=2.5 | Tech Score=0.0
+Predicted Intent: 'social' | Topic: wellbeing check
+Source: NEURAL (model output used directly)
+Structural Prediction: Matched rule 'social:greeting'. Expected structure: [GREET OTHER OTHER INTERROGATIVE AUX PRON VERB PRON OTHER OTHER]
+Execution: Injecting '__intent__ social : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: what for to access channel fixed
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=0.00 | Social Score=2.5 | Tech Score=2.5
+Predicted Intent: 'social' | Topic: wellbeing check
+Source: NEURAL (model output used directly)
+Structural Prediction: Matched rule 'social:greeting'. Expected structure: [GREET OTHER OTHER INTERROGATIVE AUX PRON VERB PRON OTHER OTHER]
+Execution: Injecting '__intent__ social : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: to is values here! i blocking ( the
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=0.00 | Social Score=2.5 | Tech Score=0.0
+Predicted Intent: 'social' | Topic: wellbeing check
+Source: NEURAL (model output used directly)
+Structural Prediction: Matched rule 'social:greeting'. Expected structure: [GREET OTHER OTHER INTERROGATIVE AUX PRON VERB PRON OTHER OTHER]
+Execution: Injecting '__intent__ social : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: there! in go named built , and when ready for project .
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=0.00 | Social Score=2.5 | Tech Score=0.0
+Predicted Intent: 'social' | Topic: wellbeing check
+Source: NEURAL (model output used directly)
+Structural Prediction: Matched rule 'social:greeting'. Expected structure: [GREET OTHER OTHER INTERROGATIVE AUX PRON VERB PRON OTHER OTHER]
+Execution: Injecting '__intent__ social : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: let me is a in , function to make with your go and as from run .
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=0.00 | Social Score=0.0 | Tech Score=0.0
+Predicted Intent: 'social' | Topic: general conversation
+Source: NEURAL (model output used directly)
+Structural Prediction: Matched rule 'social:greeting'. Expected structure: [GREET OTHER OTHER INTERROGATIVE AUX PRON VERB PRON OTHER OTHER]
+Execution: Injecting '__intent__ social : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: my let me know you're and the a that write .
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=0.00 | Social Score=0.0 | Tech Score=6.5
+Predicted Intent: 'tech' | Topic: programming / technical
+Source: NEURAL (model output used directly)
+Structural Prediction: No rule matched for 'tech' intent. Using default generation.
+Execution: Injecting '__intent__ tech : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: a in , is your go values concurrency an project the directly - should and as with for help .
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=0.00 | Social Score=2.5 | Tech Score=0.0
+Predicted Intent: 'social' | Topic: wellbeing check
+Source: NEURAL (model output used directly)
+Structural Prediction: Matched rule 'social:greeting'. Expected structure: [GREET OTHER OTHER INTERROGATIVE AUX PRON VERB PRON OTHER OTHER]
+Execution: Injecting '__intent__ social : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: generics architecture going .
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=0.00 | Social Score=2.5 | Tech Score=9.0
+Predicted Intent: 'tech' | Topic: programming / technical
+Source: NEURAL (model output used directly)
+Structural Prediction: No rule matched for 'tech' intent. Using default generation.
+Execution: Injecting '__intent__ tech : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: my there! design running . what
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=0.00 | Social Score=2.5 | Tech Score=0.0
+Predicted Intent: 'social' | Topic: wellbeing check
+Source: RETRIEVAL FALLBACK (neural output was incoherent) | Match Score=0.50
+Structural Prediction: Matched rule 'social:greeting'. Expected structure: [GREET OTHER OTHER INTERROGATIVE AUX PRON VERB PRON OTHER OTHER]
+Execution: Injecting '__intent__ social : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: Hello! I'm doing great, thank you for asking! How are things with you?
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=0.00 | Social Score=5.5 | Tech Score=0.0
+Predicted Intent: 'social' | Topic: wellbeing check
+Source: RETRIEVAL FALLBACK (neural output was incoherent) | Match Score=0.22
+Structural Prediction: Matched rule 'social:identity'. Expected structure: [PRON VERB NOUN PRON NOUN NOUN]
+Execution: Injecting '__intent__ social : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: Hello! I'm doing great, thank you for asking! How are things with you?
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=0.00 | Social Score=6.5 | Tech Score=0.0
+Predicted Intent: 'social' | Topic: wellbeing check
+Source: NEURAL (model output used directly)
+Structural Prediction: Matched rule 'social:greeting'. Expected structure: [GREET OTHER OTHER INTERROGATIVE AUX PRON VERB PRON OTHER OTHER]
+Execution: Injecting '__intent__ social : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: topic thanks! - .
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=0.00 | Social Score=5.5 | Tech Score=6.5
+Predicted Intent: 'tech' | Topic: programming / technical
+Source: NEURAL (model output used directly)
+Structural Prediction: No rule matched for 'tech' intent. Using default generation.
+Execution: Injecting '__intent__ tech : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: awesome good gollemer .
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=0.00 | Social Score=0.0 | Tech Score=0.0
+Predicted Intent: 'social' | Topic: general conversation
+Source: NEURAL (model output used directly)
+Structural Prediction: Matched rule 'social:greeting'. Expected structure: [GREET OTHER OTHER INTERROGATIVE AUX PRON VERB PRON OTHER OTHER]
+Execution: Injecting '__intent__ social : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: running ready to questions , any going everything you another what for i'm go hi! .
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=0.00 | Social Score=0.0 | Tech Score=7.5
+Predicted Intent: 'tech' | Topic: programming / technical
+Source: NEURAL (model output used directly)
+Structural Prediction: No rule matched for 'tech' intent. Using default generation.
+Execution: Injecting '__intent__ tech : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: my running day with or design was has howdy! if how you're today go on architecture is know are and going ?
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=0.00 | Social Score=2.5 | Tech Score=0.0
+Predicted Intent: 'social' | Topic: wellbeing check
+Source: NEURAL (model output used directly)
+Structural Prediction: Matched rule 'social:greeting'. Expected structure: [GREET OTHER OTHER INTERROGATIVE AUX PRON VERB PRON OTHER OTHER]
+Execution: Injecting '__intent__ social : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: me let that the concepts ?
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=0.00 | Social Score=2.5 | Tech Score=0.0
+Predicted Intent: 'social' | Topic: wellbeing check
+Source: NEURAL (model output used directly)
+Structural Prediction: Matched rule 'social:greeting'. Expected structure: [GREET OTHER OTHER INTERROGATIVE AUX PRON VERB PRON OTHER OTHER]
+Execution: Injecting '__intent__ social : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: a an interface functions ready to the asking! and ; going .
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=0.00 | Social Score=2.5 | Tech Score=6.0
+Predicted Intent: 'tech' | Topic: programming / technical
+Source: NEURAL (model output used directly)
+Structural Prediction: No rule matched for 'tech' intent. Using default generation.
+Execution: Injecting '__intent__ tech : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: . in - go elements from architecture and using goroutines ?
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=0.00 | Social Score=2.5 | Tech Score=0.0
+Predicted Intent: 'social' | Topic: wellbeing check
+Source: NEURAL (model output used directly)
+Structural Prediction: Matched rule 'social:greeting'. Expected structure: [GREET OTHER OTHER INTERROGATIVE AUX PRON VERB PRON OTHER OTHER]
+Execution: Injecting '__intent__ social : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: hey! - ready for packages .
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=0.00 | Social Score=3.5 | Tech Score=0.0
+Predicted Intent: 'social' | Topic: wellbeing check
+Source: NEURAL (model output used directly)
+Structural Prediction: Matched rule 'social:greeting'. Expected structure: [GREET OTHER OTHER INTERROGATIVE AUX PRON VERB PRON OTHER OTHER]
+Execution: Injecting '__intent__ social : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: an name to ; design and or memory go side .
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=0.00 | Social Score=3.5 | Tech Score=7.5
+Predicted Intent: 'tech' | Topic: programming / technical
+Source: NEURAL (model output used directly)
+Structural Prediction: No rule matched for 'tech' intent. Using default generation.
+Execution: Injecting '__intent__ tech : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: and gollemer go .
+
