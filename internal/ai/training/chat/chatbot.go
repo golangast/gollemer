@@ -13,6 +13,7 @@ import (
 	"github.com/golangast/gollemer/internal/ai/memory"
 	"github.com/golangast/gollemer/internal/ai/moe"
 	"github.com/golangast/gollemer/internal/ai/neural/tensor"
+	"github.com/golangast/gollemer/internal/ai/training/makefile"
 )
 
 type DialogRole string
@@ -244,11 +245,12 @@ type RetrievalPair struct {
 }
 
 type MoEChatBot struct {
-	model          *moe.IntentMoE
-	session        *ChatSession
-	systemPrompt   string
-	vectorDB       *memory.VectorDB
-	retrievalPairs []RetrievalPair // fallback retrieval when neural output is incoherent
+	model           *moe.IntentMoE
+	session         *ChatSession
+	systemPrompt    string
+	vectorDB        *memory.VectorDB
+	retrievalPairs  []RetrievalPair // fallback retrieval when neural output is incoherent
+	makefileTargets []makefile.MakeTarget
 }
 
 func NewMoEChatBot(model *moe.IntentMoE) *MoEChatBot {
@@ -257,17 +259,28 @@ func NewMoEChatBot(model *moe.IntentMoE) *MoEChatBot {
 		session:      NewChatSession(5, model.Embedding.DimModel),
 		systemPrompt: "System: You are a friendly, helpful assistant. Tone: Kind.",
 	}
-	// Load training pairs for retrieval fallback
 	bot.loadRetrievalPairs()
+	bot.loadMakefileTargets()
 	return bot
 }
 
-// loadRetrievalPairs reads conversing.yaml and the .pb pairs for instant retrieval.
+// loadMakefileTargets loads makefile.yaml targets for command prediction.
+func (b *MoEChatBot) loadMakefileTargets() {
+	targets, err := makefile.ParseMakefile(makefile.ParseOptions{MakefilePath: filepath.Join(".", "Makefile")})
+	if err != nil {
+		log.Printf("[CHAT] Makefile target loader: %v", err)
+		return
+	}
+	b.makefileTargets = targets
+	log.Printf("[CHAT] Loaded %d makefile targets for command prediction", len(targets))
+}
+
+// loadRetrievalPairs reads social_replies.yaml and the .pb pairs for instant retrieval.
 func (b *MoEChatBot) loadRetrievalPairs() {
-	yamlPath := filepath.Join(".", "data", "training", "trainingdata", "conversing.yaml")
+	yamlPath := filepath.Join(".", "data", "training", "trainingdata", "social_replies.yaml")
 	data, err := os.ReadFile(yamlPath)
 	if err != nil {
-		log.Printf("[CHAT] Retrieval fallback: could not load conversing.yaml: %v", err)
+		log.Printf("[CHAT] Retrieval fallback: could not load social_replies.yaml: %v", err)
 		return
 	}
 	// Parse the YAML structure:
@@ -302,7 +315,7 @@ func (b *MoEChatBot) loadRetrievalPairs() {
 			}
 		}
 	}
-	log.Printf("[CHAT] Retrieval fallback loaded %d pairs from conversing.yaml", len(b.retrievalPairs))
+	log.Printf("[CHAT] Retrieval fallback loaded %d pairs from social_replies.yaml", len(b.retrievalPairs))
 }
 
 // retrievalLookup finds the best matching answer using Jaccard word-overlap similarity.
@@ -437,6 +450,26 @@ func (b *MoEChatBot) Reply(input string) string {
 		techScore += 1.5
 	}
 
+	// ── Makefile signals ────────────────────────────────────────────────────────
+	var makefileScore float32
+	makefilePhrases := []string{
+		"make ", "makefile", "run make", "build project", "compile project",
+		"train model", "start training", "clean models", "run tests",
+		"generate protobuf", "convert yaml", "export labels",
+		"run metrics", "install hooks", "fresh start", "resume training",
+		"how do i run", "how do i build", "how do i train", "how do i clean",
+		"how do i test", "how do i generate", "command to", "target to",
+	}
+	for _, phrase := range makefilePhrases {
+		if strings.Contains(lowerInput, phrase) {
+			if len(phrase) > 6 {
+				makefileScore += 2.5
+			} else {
+				makefileScore += 1.5
+			}
+		}
+	}
+
 	// Sentiment can influence social leaning: strong emotion = social
 	if sentiment > 0.5 || sentiment < -0.3 {
 		socialScore += 0.8
@@ -449,8 +482,34 @@ func (b *MoEChatBot) Reply(input string) string {
 	}
 
 	predictedIntent := "social"
-	if techScore > socialScore {
+	if makefileScore > techScore && makefileScore > socialScore {
+		predictedIntent = "makefile"
+	} else if techScore > socialScore {
 		predictedIntent = "tech"
+	}
+
+	var makefilePredictions string
+	if predictedIntent == "makefile" && len(b.makefileTargets) > 0 {
+		ranked := makefile.TopKMakefileCommands(b.makefileTargets, input, 3)
+		if len(ranked) > 0 {
+			var predParts []string
+			predParts = append(predParts, "Top matches:")
+			for _, r := range ranked {
+				pct := int(r.Score * 100)
+				predParts = append(predParts, fmt.Sprintf("- make %s (%d%%)", r.Name, pct))
+			}
+			makefilePredictions = strings.Join(predParts, "\n")
+		}
+	} else if len(b.makefileTargets) > 0 {
+		if ranked := makefile.TopKMakefileCommands(b.makefileTargets, input, 3); len(ranked) > 0 && ranked[0].Score > 0 {
+			var predParts []string
+			predParts = append(predParts, "Top matches:")
+			for _, r := range ranked {
+				pct := int(r.Score * 100)
+				predParts = append(predParts, fmt.Sprintf("- make %s (%d%%)", r.Name, pct))
+			}
+			makefilePredictions = strings.Join(predParts, "\n")
+		}
 	}
 
 	// Extract topic for notepad logging
@@ -708,6 +767,10 @@ func (b *MoEChatBot) Reply(input string) string {
 
 	// Cleanup memory for the next turn
 	b.model.Detach()
+
+	if makefilePredictions != "" {
+		botResponse = botResponse + "\n\n" + makefilePredictions
+	}
 
 	return botResponse
 }

@@ -68,8 +68,12 @@ func roleFromString(s string) (datasetpb.Role, error) {
 
 func main() {
 	inPath := flag.String("in", "data/training/trainingdata/conversing.yaml", "input YAML path")
-	outPath := flag.String("out", "data/training/trainingdata/conversing.pb", "output protobuf path")
+	outPath := flag.String("out", "", "output protobuf path")
 	flag.Parse()
+
+	if *outPath == "" {
+		*outPath = strings.TrimSuffix(*inPath, ".yaml") + ".pb"
+	}
 
 	data, err := os.ReadFile(*inPath)
 	if err != nil {
@@ -78,7 +82,11 @@ func main() {
 
 	var root yamlRoot
 	if err := yaml.Unmarshal(data, &root); err != nil {
-		log.Fatalf("parse yaml: %v", err)
+		var rawConvs []yamlConversation
+		if err2 := yaml.Unmarshal(data, &rawConvs); err2 != nil {
+			log.Fatalf("parse yaml: %v; fallback also failed: %v", err, err2)
+		}
+		root.Conversations = rawConvs
 	}
 	if len(root.Conversations) == 0 {
 		log.Fatalf("no conversations found in %s", *inPath)

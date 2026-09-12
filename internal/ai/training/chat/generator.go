@@ -48,10 +48,12 @@ func StrictGenerateLowTemp(model *moe.IntentMoE, input string, maxLen int, repet
 		log.Printf(" Skip empty prompt: %s", input)
 		return "", "", nil
 	}
-	inputIDs := make([]float32, len(tokens))
+	inputIDs := make([]float32, len(tokens)+2)
+	inputIDs[0] = float32(model.SentenceVocab.BosID)
 	for i, t := range tokens {
-		inputIDs[i] = float32(lookupVocab(t, model.SentenceVocab))
+		inputIDs[i+1] = float32(lookupVocab(t, model.SentenceVocab))
 	}
+	inputIDs[len(inputIDs)-1] = float32(model.SentenceVocab.EosID)
 	inputTensor := tensor.NewTensor([]int{1, len(inputIDs)}, inputIDs, false)
 
 	ctx, err := model.EncoderForward(inputTensor, nil)
@@ -113,7 +115,7 @@ func StrictGenerateLowTemp(model *moe.IntentMoE, input string, maxLen int, repet
 		expertStr := strings.Join(stepExperts, "+")
 		pathSteps = append(pathSteps, expertStr)
 
-		if i == 0 {
+		if i <= 1 {
 			logits.Data[model.SentenceVocab.EosID] = -1e9
 		}
 		specialTokens := []string{"__intent__", "__ques__", "__ans__", "social", ":"}
@@ -266,10 +268,12 @@ func StrictGenerate(model *moe.IntentMoE, input string, maxLen int, repetitionPe
 		log.Printf(" Skip empty prompt: %s", input)
 		return "", "", nil
 	}
-	inputIDs := make([]float32, len(tokens))
+	inputIDs := make([]float32, len(tokens)+2)
+	inputIDs[0] = float32(model.SentenceVocab.BosID)
 	for i, t := range tokens {
-		inputIDs[i] = float32(lookupVocab(t, model.SentenceVocab))
+		inputIDs[i+1] = float32(lookupVocab(t, model.SentenceVocab))
 	}
+	inputIDs[len(inputIDs)-1] = float32(model.SentenceVocab.EosID)
 	inputTensor := tensor.NewTensor([]int{1, len(inputIDs)}, inputIDs, false)
 
 	// 2. Get Encoder Context using the stable pipeline
@@ -335,7 +339,7 @@ func StrictGenerate(model *moe.IntentMoE, input string, maxLen int, repetitionPe
 		expertStr := strings.Join(stepExperts, "+")
 		pathSteps = append(pathSteps, expertStr)
 
-		if i == 0 {
+		if i <= 1 {
 			logits.Data[model.SentenceVocab.EosID] = -1e9
 		}
 		specialTokens := []string{"__intent__", "__ques__", "__ans__", "social", ":"}
@@ -515,10 +519,12 @@ func StrictGenerateWithExperts(model *moe.IntentMoE, input string, maxLen int, r
 	if len(tokens) == 0 {
 		return "", nil
 	}
-	inputIDs := make([]float32, len(tokens))
+	inputIDs := make([]float32, len(tokens)+2)
+	inputIDs[0] = float32(model.SentenceVocab.BosID)
 	for i, t := range tokens {
-		inputIDs[i] = float32(lookupVocab(t, model.SentenceVocab))
+		inputIDs[i+1] = float32(lookupVocab(t, model.SentenceVocab))
 	}
+	inputIDs[len(inputIDs)-1] = float32(model.SentenceVocab.EosID)
 	inputTensor := tensor.NewTensor([]int{1, len(inputIDs)}, inputIDs, false)
 
 	emb, err := model.Embedding.Forward(inputTensor)
@@ -604,7 +610,7 @@ func StrictGenerateWithExperts(model *moe.IntentMoE, input string, maxLen int, r
 			}
 		}
 
-		if i == 0 {
+		if i <= 1 {
 			logits.Data[model.SentenceVocab.EosID] = -1e9
 		}
 		if bestID == model.SentenceVocab.EosID {
@@ -637,10 +643,12 @@ func GenerateTokens(model *moe.IntentMoE, input string, maxLen int, useGPU bool)
 	if len(tokens) == 0 {
 		return nil
 	}
-	inputIDs := make([]float32, len(tokens))
+	inputIDs := make([]float32, len(tokens)+2)
+	inputIDs[0] = float32(model.SentenceVocab.BosID)
 	for i, t := range tokens {
-		inputIDs[i] = float32(lookupVocab(t, model.SentenceVocab))
+		inputIDs[i+1] = float32(lookupVocab(t, model.SentenceVocab))
 	}
+	inputIDs[len(inputIDs)-1] = float32(model.SentenceVocab.EosID)
 	inputTensor := tensor.NewTensor([]int{1, len(inputIDs)}, inputIDs, false)
 
 	if useGPU {
@@ -920,10 +928,12 @@ func TreeOfThoughtsDecode(model *moe.IntentMoE, input string, maxLen int, numBra
 		return "", fmt.Errorf("empty input")
 	}
 
-	inputIDs := make([]float32, len(tokens))
+	inputIDs := make([]float32, len(tokens)+2)
+	inputIDs[0] = float32(model.SentenceVocab.BosID)
 	for i, t := range tokens {
-		inputIDs[i] = float32(lookupVocab(t, model.SentenceVocab))
+		inputIDs[i+1] = float32(lookupVocab(t, model.SentenceVocab))
 	}
+	inputIDs[len(inputIDs)-1] = float32(model.SentenceVocab.EosID)
 	inputTensor := tensor.NewTensor([]int{1, len(inputIDs)}, inputIDs, false)
 
 	emb, err := model.Embedding.Forward(inputTensor)

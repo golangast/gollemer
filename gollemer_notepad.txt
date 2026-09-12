@@ -220,3 +220,120 @@ Execution: Injecting '__intent__ tech : __ques__' structural tokens before promp
 Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
 Output: and gollemer go .
 
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=0.00 | Social Score=2.5 | Tech Score=0.0
+Predicted Intent: 'social' | Topic: wellbeing check
+Source: NEURAL (model output used directly)
+Structural Prediction: Matched rule 'social:greeting'. Expected structure: [GREET OTHER OTHER INTERROGATIVE AUX PRON VERB PRON OTHER OTHER]
+Execution: Injecting '__intent__ social : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: day pipelines - write . bursty single os persistent mu early lower you ? naturally completely therefore a not tries receive function about twice without but example leak proper imports relying simple , isolated need run hello case read all return impossible 500 whenever
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=0.00 | Social Score=4.5 | Tech Score=3.5
+Predicted Intent: 'social' | Topic: wellbeing check
+Source: NEURAL (model output used directly)
+Structural Prediction: Matched rule 'social:greeting'. Expected structure: [GREET OTHER OTHER INTERROGATIVE AUX PRON VERB PRON OTHER OTHER]
+Execution: Injecting '__intent__ social : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: hey! give . among case struct you all drivers tri relying os 2 single
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=0.00 | Social Score=2.5 | Tech Score=0.0
+Predicted Intent: 'social' | Topic: wellbeing check
+Source: NEURAL (model output used directly)
+Structural Prediction: Matched rule 'social:greeting'. Expected structure: [GREET OTHER OTHER INTERROGATIVE AUX PRON VERB PRON OTHER OTHER]
+Execution: Injecting '__intent__ social : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: my you project or need for files and one into . ?
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=0.00 | Social Score=2.5 | Tech Score=0.0
+Predicted Intent: 'social' | Topic: wellbeing check
+Source: NEURAL (model output used directly)
+Structural Prediction: Matched rule 'social:identity'. Expected structure: [PRON VERB NOUN PRON NOUN NOUN]
+Execution: Injecting '__intent__ social : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: to memory no .
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=0.00 | Social Score=2.5 | Tech Score=0.0
+Predicted Intent: 'social' | Topic: wellbeing check
+Source: NEURAL (model output used directly)
+Structural Prediction: Matched rule 'social:greeting'. Expected structure: [GREET OTHER OTHER INTERROGATIVE AUX PRON VERB PRON OTHER OTHER]
+Execution: Injecting '__intent__ social : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: go main ( how your day the memory .
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=0.00 | Social Score=2.5 | Tech Score=0.0
+Predicted Intent: 'social' | Topic: wellbeing check
+Source: NEURAL (model output used directly)
+Structural Prediction: Matched rule 'social:greeting'. Expected structure: [GREET OTHER OTHER INTERROGATIVE AUX PRON VERB PRON OTHER OTHER]
+Execution: Injecting '__intent__ social : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: an interface defines let , and execute compilation write functions go .
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=0.00 | Social Score=2.5 | Tech Score=0.0
+Predicted Intent: 'social' | Topic: wellbeing check
+Source: NEURAL (model output used directly)
+Structural Prediction: Matched rule 'social:greeting'. Expected structure: [GREET OTHER OTHER INTERROGATIVE AUX PRON VERB PRON OTHER OTHER]
+Execution: Injecting '__intent__ social : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: , use files this execute database launch
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=0.00 | Social Score=4.5 | Tech Score=5.0
+Predicted Intent: 'tech' | Topic: programming / technical
+Source: NEURAL (model output used directly)
+Structural Prediction: No rule matched for 'tech' intent. Using default generation.
+Execution: Injecting '__intent__ tech : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: the workflow for and
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=0.00 | Social Score=2.5 | Tech Score=0.0
+Predicted Intent: 'social' | Topic: wellbeing check
+Source: NEURAL (model output used directly)
+Structural Prediction: Matched rule 'social:greeting'. Expected structure: [GREET OTHER OTHER INTERROGATIVE AUX PRON VERB PRON OTHER OTHER]
+Execution: Injecting '__intent__ social : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: data is thank have afternoon am too target training i to makefile test models run prompt hi send okay small multiturn resume bye chatting later pb ai it command are how model care select replies this great want hello welcome conversing everything hooks for day fresh going clean evening
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=1.00 | Social Score=9.3 | Tech Score=0.0
+Predicted Intent: 'social' | Topic: wellbeing check
+Source: NEURAL (model output used directly)
+Structural Prediction: Matched rule 'social:polite'. Expected structure: [PRON VERB OTHER OTHER PRON VERB ADJ PREP VERB]
+Execution: Injecting '__intent__ social : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: resume conversing clean chatting i that much multiturn afternoon select hi convert test pb this everything the fresh data thank want models hooks are do have it train help bye welcome am prompt replies chat name labels up great you later aware gollemer hello a awesome makefile tech run install
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=2.00 | Social Score=9.3 | Tech Score=0.0
+Predicted Intent: 'social' | Topic: wellbeing check
+Source: NEURAL (model output used directly)
+Structural Prediction: Matched rule 'social:capabilities'. Expected structure: [PRON AUX OTHER NOUN OTHER VERB PRON PREP PRON NOUN]
+Execution: Injecting '__intent__ social : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: makefile that help day okay chatting thanks you thank chat data send name training tech see afternoon fresh multiturn who not labels pb hello do prompt the awesome have it models hi am up this test evening bye take make care much start model aware convert good metrics replies
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=0.00 | Social Score=1.0 | Tech Score=0.0
+Predicted Intent: 'makefile' | Topic: general conversation
+Source: NEURAL (model output used directly)
+Structural Prediction: No rule matched for 'makefile' intent. Using default generation.
+Execution: Injecting '__intent__ makefile : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: data have the okay conversing care afternoon multiturn prompt a hello seq2seq makefile run metrics test train i name ai hi am for convert tech chat to target not that chatting too bye are labels all help resume up how gollemer command going take you much make day want
+
+=== Turn Plan & Execution ===
+Input Analysis: Sentiment=0.00 | Social Score=5.0 | Tech Score=0.0
+Predicted Intent: 'makefile' | Topic: general conversation
+Source: NEURAL (model output used directly)
+Structural Prediction: No rule matched for 'makefile' intent. Using default generation.
+Execution: Injecting '__intent__ makefile : __ques__' structural tokens before prompting model.
+Model Reasoning: (Model is still training and hasn't output reasoning blocks yet)
+Output: welcome am select tech you this resume model help convert okay chatting hello it pb ai makefile test hi care that prompt great afternoon clean want well evening see do all target going name aware thanks are train metrics multiturn run everything nice export awesome seq2seq how labels later i
+

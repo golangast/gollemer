@@ -13,6 +13,7 @@ import (
 	"github.com/golangast/gollemer/internal/ai/moe"
 	"github.com/golangast/gollemer/internal/ai/neural/nnu/context"
 	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
+	"github.com/golangast/gollemer/internal/ai/training/makefile"
 )
 
 // loadSentenceVocabJSON loads the sentence_vocab.json file which stores a
@@ -192,5 +193,60 @@ func RunMoEChat(projectRoot string) {
 
 		convCtx.AddTurn("chat", nil, resolved)
 		convCtx.AddResponse(response)
+	}
+}
+
+// RunMakefileChat starts an interactive makefile command suggestion REPL.
+// It uses keyword matching against the project's Makefile to suggest top 3
+// commands with confidence percentages, bypassing the neural model entirely.
+func RunMakefileChat(projectRoot string) {
+	makefilePath, err := makefile.FindMakefile(projectRoot)
+	if err != nil {
+		log.Fatalf("[CHAT] %v", err)
+	}
+
+	targets, err := makefile.ParseMakefile(makefile.ParseOptions{MakefilePath: makefilePath})
+	if err != nil {
+		log.Fatalf("[CHAT] failed to parse makefile: %v", err)
+	}
+	if len(targets) == 0 {
+		log.Fatalf("[CHAT] no targets found in %s", makefilePath)
+	}
+	log.Printf("[CHAT] Loaded %d makefile targets from %s", len(targets), makefilePath)
+
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Println("\n--- Gollemer Makefile Chat ---")
+	fmt.Println("Ask about any make target. Type 'quit' or 'exit' to stop.")
+	fmt.Println()
+
+	for {
+		fmt.Print("You: ")
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			fmt.Println()
+			return
+		}
+		prompt := strings.TrimSpace(input)
+		if prompt == "" {
+			continue
+		}
+		if strings.EqualFold(prompt, "quit") || strings.EqualFold(prompt, "exit") {
+			fmt.Println("[CHAT] closing.")
+			return
+		}
+
+		ranked := makefile.TopKMakefileCommands(targets, prompt, 3)
+		if len(ranked) == 0 || ranked[0].Score == 0 {
+			fmt.Println("Bot: I could not find a matching make target. Try rephrasing.")
+			continue
+		}
+
+		var lines []string
+		lines = append(lines, "Bot: Here are the best matches:")
+		for _, r := range ranked {
+			pct := int(r.Score * 100)
+			lines = append(lines, fmt.Sprintf("- make %s (%d%%)", r.Name, pct))
+		}
+		fmt.Println(strings.Join(lines, "\n"))
 	}
 }

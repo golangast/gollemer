@@ -38,6 +38,10 @@ func WeightedCrossEntropy(logits *tensor.Tensor, targets []int, weights []float3
 		}
 		targetID := targets[i]
 
+		if targetID == -100 {
+			continue
+		}
+
 		// 1. Skip if weight is 0 (Padding)
 		if weights[targetID] == 0.0 {
 			continue

@@ -1,0 +1,161 @@
+conversations:
+  - conversation_id: "make_install-hooks"
+    turns:
+      - turn_sequence: 1
+        role: "user"
+        content: "How do I install-hooks?"
+      - turn_sequence: 2
+        role: "assistant"
+        content: "Run: @bash scripts/install_git_hook.sh"
+  - conversation_id: "make_train"
+    turns:
+      - turn_sequence: 1
+        role: "user"
+        content: "How do I clean?"
+      - turn_sequence: 2
+        role: "assistant"
+        content: "Run: GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-multiphase $(ARGS)"
+  - conversation_id: "make_train-resume"
+    turns:
+      - turn_sequence: 1
+        role: "user"
+        content: "How do I train-resume?"
+      - turn_sequence: 2
+        role: "assistant"
+        content: "Run: GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-multiphase $(ARGS)"
+  - conversation_id: "make_train-fresh"
+    turns:
+      - turn_sequence: 1
+        role: "user"
+        content: "How do I clean-all?"
+      - turn_sequence: 2
+        role: "assistant"
+        content: "Run: GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-multiphase $(ARGS)"
+  - conversation_id: "make_train-small"
+    turns:
+      - turn_sequence: 1
+        role: "user"
+        content: "How do I train-small?"
+      - turn_sequence: 2
+        role: "assistant"
+        content: "Run: GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-small"
+  - conversation_id: "make_train-small-seq2seq"
+    turns:
+      - turn_sequence: 1
+        role: "user"
+        content: "How do I train-small-seq2seq?"
+      - turn_sequence: 2
+        role: "assistant"
+        content: "Run: GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-small-seq2seq"
+  - conversation_id: "make_test-small-seq2seq"
+    turns:
+      - turn_sequence: 1
+        role: "user"
+        content: "How do I test-small-seq2seq?"
+      - turn_sequence: 2
+        role: "assistant"
+        content: "Run: $(MAIN_CMD) -test-small-seq2seq\nPROMPT ?= \"hello\""
+  - conversation_id: "make_seq2seq-prompt"
+    turns:
+      - turn_sequence: 1
+        role: "user"
+        content: "How do I seq2seq-prompt?"
+      - turn_sequence: 2
+        role: "assistant"
+        content: "Run: $(MAIN_CMD) -seq2seq-prompt=\"$(PROMPT)\""
+  - conversation_id: "make_seq2seq-chat"
+    turns:
+      - turn_sequence: 1
+        role: "user"
+        content: "How do I seq2seq-chat?"
+      - turn_sequence: 2
+        role: "assistant"
+        content: "Run: $(MAIN_CMD) -seq2seq-chat"
+  - conversation_id: "make_chat"
+    turns:
+      - turn_sequence: 1
+        role: "user"
+        content: "How do I chat?"
+      - turn_sequence: 2
+        role: "assistant"
+        content: "Run: $(MAIN_CMD) -chat"
+  - conversation_id: "make_metrics"
+    turns:
+      - turn_sequence: 1
+        role: "user"
+        content: "How do I metrics?"
+      - turn_sequence: 2
+        role: "assistant"
+        content: "Run: @echo \" Generating edit metrics and CSV...\"\n@go run scripts/compute_edit_metrics.go || true\n@go run scripts/edits_to_csv.go || true\n@echo \" metrics written to logs/edits/\""
+  - conversation_id: "make_export-labels"
+    turns:
+      - turn_sequence: 1
+        role: "user"
+        content: "How do I export-labels?"
+      - turn_sequence: 2
+        role: "assistant"
+        content: "Run: @echo \" Exporting edits_failed.jsonl -> data/training/edits_for_labeling.csv\"\n@go run scripts/export_for_labeling.go || true"
+  - conversation_id: "make_clean"
+    turns:
+      - turn_sequence: 1
+        role: "user"
+        content: "How do I clean?"
+      - turn_sequence: 2
+        role: "assistant"
+        content: "Run: rm -f data/models/gob_models/*.gob\n@if [ -f data/models/gob_models/word2vec_model.gob.bak ]; then \\\ncp data/models/gob_models/word2vec_model.gob.bak data/models/gob_models/word2vec_model.gob 2>/dev/null || true; \\\nfi"
+  - conversation_id: "make_clean-all"
+    turns:
+      - turn_sequence: 1
+        role: "user"
+        content: "How do I clean-all?"
+      - turn_sequence: 2
+        role: "assistant"
+        content: "Run: rm -f data/models/gob_models/*.gob"
+  - conversation_id: "make_conversing-pb"
+    turns:
+      - turn_sequence: 1
+        role: "user"
+        content: "How do I conversing-pb?"
+      - turn_sequence: 2
+        role: "assistant"
+        content: "Run: go run ./cmd/tools/gen_conversing_yaml_pb -in data/training/trainingdata/conversing.yaml"
+  - conversation_id: "make_social-replies-pb"
+    turns:
+      - turn_sequence: 1
+        role: "user"
+        content: "How do I social-replies-pb?"
+      - turn_sequence: 2
+        role: "assistant"
+        content: "Run: go run ./cmd/tools/gen_conversing_yaml_pb -in data/training/trainingdata/social_replies.yaml"
+  - conversation_id: "make_tech-multiturn-pb"
+    turns:
+      - turn_sequence: 1
+        role: "user"
+        content: "How do I tech-multiturn-pb?"
+      - turn_sequence: 2
+        role: "assistant"
+        content: "Run: go run ./cmd/tools/gen_conversing_yaml_pb -in data/training/trainingdata/tech_multiturn.yaml"
+  - conversation_id: "make_all-pb"
+    turns:
+      - turn_sequence: 1
+        role: "user"
+        content: "How do I conversing-pb social-replies-pb tech-multiturn-pb?"
+      - turn_sequence: 2
+        role: "assistant"
+        content: "Run: make all-pb"
+  - conversation_id: "make_makefile-pb"
+    turns:
+      - turn_sequence: 1
+        role: "user"
+        content: "How do I makefile-pb?"
+      - turn_sequence: 2
+        role: "assistant"
+        content: "Run: go run ./cmd/tools/gen_makefile_pb -makefile Makefile -out data/training/trainingdata/makefile.pb"
+  - conversation_id: "make_sel"
+    turns:
+      - turn_sequence: 1
+        role: "user"
+        content: "How do I sel?"
+      - turn_sequence: 2
+        role: "assistant"
+        content: "Run: $$1=$$2=\"\"; \\\nprintf \"%-22s %s\\n\", cmd, $$0; \\\n}' $(MAKEFILE_LIST) | go run ./cmd/tools/goz/main.go -h 25); \\\nif [ -n \"$$target\" ]; then \\\n$(MAKE) $$target; \\\nfi"

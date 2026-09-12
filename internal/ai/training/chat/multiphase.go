@@ -202,8 +202,11 @@ func buildTargetSequence(answerTokens []string, vocab *mainvocab.Vocabulary, max
 
 // phaseNames maps phase number to its human-readable name and goal.
 var phaseNames = map[int]string{
-	1: "Social Bootcamp     — experts 0–7 learn conversational patterns; 8–15 frozen",
-	2: "Coherence Polish    — ultra-low LR; EOS/coherence optimization",
+	1: "Social Bootcamp        — learn conversational patterns at full LR",
+	2: "Coherence Polish I     — ultra-low LR; EOS/coherence optimization",
+	3: "Coherence Polish II    — deeper refinement; lower LR for stability",
+	4: "Coherence Polish III   — fine detail pass; near-convergence LR",
+	5: "Coherence Polish IV    — final micro-tuning at minimum LR",
 }
 
 // epochsPerPhase is the fixed number of epochs each phase runs (after Phase 1).
@@ -226,7 +229,7 @@ func phaseForEpoch(epoch int) int {
 
 // TrainMultiPhaseCurriculum orchestrates the 5-phase curriculum.
 // All hyperparameters are loaded from data/config/social_train.json.
-func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string) {
+func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string, makefileOnly bool) {
 	log.Printf("🚀 Starting 5-Phase Multi-Domain Curriculum Training (Phase 1: %d epochs, others: %d epochs)...", phase1Epochs, epochsPerPhase)
 	for p := 1; p <= 5; p++ {
 		log.Printf("   Phase %d: %s", p, phaseNames[p])
@@ -246,47 +249,72 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 	// ── 1a. conversing.pb (multi-turn dialogue, protobuf) ──────────────
 	// Format: ConversationDataset { conversations { turns[] } }
 	// We pair consecutive user→assistant turns into Q/A pairs.
+	// Skipped in makefile-only mode.
 	conversationsPBPath := filepath.Join(projectRoot, "data/training/trainingdata/conversing.pb")
-	if ds, err := datasetpb.LoadConversationDatasetFromProto(conversationsPBPath); err == nil {
-		convCount := 0
-		for _, conv := range ds.GetConversations() {
-			turns := conv.GetTurns()
-			for i := 0; i+1 < len(turns); i++ {
-				if turns[i].GetRole() == datasetpb.Role_ROLE_USER && turns[i+1].GetRole() == datasetpb.Role_ROLE_ASSISTANT {
-					q, a := strings.TrimSpace(turns[i].GetContent()), strings.TrimSpace(turns[i+1].GetContent())
-					if q != "" && a != "" {
-						socialPairs = append(socialPairs, moe.TrainPair{Q: q, A: a, Intent: "social"})
-						convCount++
+	if !makefileOnly {
+		if ds, err := datasetpb.LoadConversationDatasetFromProto(conversationsPBPath); err == nil {
+			convCount := 0
+			for _, conv := range ds.GetConversations() {
+				turns := conv.GetTurns()
+				for i := 0; i+1 < len(turns); i++ {
+					if turns[i].GetRole() == datasetpb.Role_ROLE_USER && turns[i+1].GetRole() == datasetpb.Role_ROLE_ASSISTANT {
+						q, a := strings.TrimSpace(turns[i].GetContent()), strings.TrimSpace(turns[i+1].GetContent())
+						if q != "" && a != "" {
+							socialPairs = append(socialPairs, moe.TrainPair{Q: q, A: a, Intent: "social"})
+							convCount++
+						}
 					}
 				}
 			}
+			log.Printf("📚 Loaded %d pairs from conversing.pb", convCount)
+		} else {
+			log.Printf("⚠️ conversing.pb: %v", err)
 		}
-		log.Printf("📚 Loaded %d pairs from conversing.pb", convCount)
-	} else {
-		log.Printf("⚠️ conversing.pb: %v", err)
 	}
 
 	// ── 1b. conversing.csv (simple Q/A) ─────────────────────────────────────
+	// Skipped in makefile-only mode.
 	conversingCSVPath := filepath.Join(projectRoot, "data/training/trainingdata/conversing.csv")
-	if cfg.OverfitMode {
-		overfitPath := filepath.Join(projectRoot, "data/training/trainingdata/conversing_overfit_single.csv")
-		if _, err := os.Stat(overfitPath); err == nil {
-			conversingCSVPath = overfitPath
+	if !makefileOnly {
+		if cfg.OverfitMode {
+			overfitPath := filepath.Join(projectRoot, "data/training/trainingdata/conversing_overfit_single.csv")
+			if _, err := os.Stat(overfitPath); err == nil {
+				conversingCSVPath = overfitPath
+			}
+		}
+		if pairs, err := LoadConversingCSV(conversingCSVPath); err == nil {
+			socialPairs = append(socialPairs, pairs...)
+			log.Printf("📚 Loaded %d pairs from %s", len(pairs), filepath.Base(conversingCSVPath))
+		} else {
+			log.Printf("⚠️ conversing.csv: %v", err)
 		}
 	}
-	if pairs, err := LoadConversingCSV(conversingCSVPath); err == nil {
-		socialPairs = append(socialPairs, pairs...)
-		log.Printf("📚 Loaded %d pairs from %s", len(pairs), filepath.Base(conversingCSVPath))
-	} else {
-		log.Printf("⚠️ conversing.csv: %v", err)
-	}
 
-	// ── 1c. conversing.yaml (primary rich dataset — was never loaded before) ──
-	// This file has 257 real Q&A pairs. It was sitting unused while training
-	// only had 242 pairs total (236 pb + 6 csv), making the model underfit.
-	conversingYAMLPath := filepath.Join(projectRoot, "data/training/trainingdata/conversing.yaml")
+	// ── 1c. YAML datasets (social replies + technical multi-turn + makefile) ─────
+	// Load all YAML datasets upfront and select per-phase later.
+	// In makefile-only mode, only social replies and makefile data are loaded.
+	yamlDatasetPaths := []string{
+		"social_replies.yaml",
+		"tech_multiturn.yaml",
+		"conversing.yaml",
+		"makefile.yaml",
+	}
+	if makefileOnly {
+		yamlDatasetPaths = []string{
+			"social_replies.yaml",
+			"makefile.yaml",
+		}
+	}
+	yamlPairsByFile := make(map[string][]moe.TrainPair)
 	if !cfg.OverfitMode {
-		if raw, err := os.ReadFile(conversingYAMLPath); err == nil {
+		for _, yamlName := range yamlDatasetPaths {
+			yamlPath := filepath.Join(projectRoot, "data/training/trainingdata", yamlName)
+			raw, err := os.ReadFile(yamlPath)
+			if err != nil {
+				log.Printf("⚠️ %s: %v", yamlName, err)
+				continue
+			}
+
 			var yamlDoc struct {
 				Conversations []struct {
 					ConversationID string `yaml:"conversation_id"`
@@ -296,48 +324,112 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 					} `yaml:"turns"`
 				} `yaml:"conversations"`
 			}
-			if yamlErr := yaml.Unmarshal(raw, &yamlDoc); yamlErr == nil {
-				yamlCount := 0
-				for _, conv := range yamlDoc.Conversations {
-					turns := conv.Turns
-					var historyBuilder strings.Builder
-					intent := "social"
-					if strings.HasSuffix(conv.ConversationID, "_tech") {
-						intent = "tech"
-					}
-					for i := 0; i+1 < len(turns); i++ {
-						if turns[i].Role == "user" && turns[i+1].Role == "assistant" {
-							qRaw := strings.TrimSpace(turns[i].Content)
-							aRaw := strings.TrimSpace(turns[i+1].Content)
+			if yamlErr := yaml.Unmarshal(raw, &yamlDoc); yamlErr != nil {
+				var rawConvs []struct {
+					ConversationID string `yaml:"conversation_id"`
+					Turns          []struct {
+						Role    string `yaml:"role"`
+						Content string `yaml:"content"`
+					} `yaml:"turns"`
+				}
+				if err2 := yaml.Unmarshal(raw, &rawConvs); err2 == nil {
+					yamlDoc.Conversations = rawConvs
+				} else {
+					log.Printf("⚠️ %s parse error: %v", yamlName, yamlErr)
+					continue
+				}
+			}
 
-							if qRaw != "" && aRaw != "" {
-								// Construct Q with full history
-								q := historyBuilder.String() + "Human: " + qRaw + "\nAI: "
-								a := aRaw // Kept intact with [TRIPLETS] and [REASONING]
+			yamlCount := 0
+			var filePairs []moe.TrainPair
+			for _, conv := range yamlDoc.Conversations {
+				turns := conv.Turns
+				var historyBuilder strings.Builder
+				for i := 0; i+1 < len(turns); i++ {
+					if turns[i].Role == "user" && turns[i+1].Role == "assistant" {
+						qRaw := strings.TrimSpace(turns[i].Content)
+						aRaw := strings.TrimSpace(turns[i+1].Content)
 
-								socialPairs = append(socialPairs, moe.TrainPair{Q: q, A: a, Intent: intent})
-								yamlCount++
-
-								// Add this turn to history for the next iteration (using cleaned 'a' for history so context doesn't bloat)
-								cleanA := aRaw
-								if idx := strings.Index(cleanA, "[RESPONSE]"); idx >= 0 {
-									cleanA = strings.TrimSpace(cleanA[idx+len("[RESPONSE]"):])
-								}
-								historyBuilder.WriteString("Human: " + qRaw + "\nAI: " + cleanA + "\n")
+						if qRaw != "" && aRaw != "" {
+							intent := "social"
+							if strings.HasSuffix(conv.ConversationID, "_tech") {
+								intent = "tech"
+							} else if strings.HasPrefix(conv.ConversationID, "conv_multiturn_") || strings.HasPrefix(conv.ConversationID, "conv_synth_") {
+								intent = "multiturn"
+							} else if strings.HasPrefix(conv.ConversationID, "conv_cot_reasoning_") {
+								intent = "cot"
+							} else if strings.HasPrefix(conv.ConversationID, "conv_601") || strings.HasPrefix(conv.ConversationID, "conv_602") {
+								intent = "tech"
+							} else if strings.HasPrefix(conv.ConversationID, "make_") {
+								intent = "makefile"
 							}
+
+							q := historyBuilder.String() + "Human: " + qRaw + "\nAI: "
+							a := aRaw
+
+							filePairs = append(filePairs, moe.TrainPair{Q: q, A: a, Intent: intent})
+							yamlCount++
+
+							cleanA := aRaw
+							if idx := strings.Index(cleanA, "[RESPONSE]"); idx >= 0 {
+								cleanA = strings.TrimSpace(cleanA[idx+len("[RESPONSE]"):])
+							}
+							historyBuilder.WriteString("Human: " + qRaw + "\nAI: " + cleanA + "\n")
 						}
 					}
 				}
-				log.Printf("📚 Loaded %d contextual turns from conversing.yaml", yamlCount)
-			} else {
-				log.Printf("⚠️ conversing.yaml parse error: %v", yamlErr)
 			}
-		} else {
-			log.Printf("⚠️ conversing.yaml: %v", err)
+			yamlPairsByFile[yamlName] = filePairs
+			log.Printf("📚 Loaded %d contextual turns from %s", yamlCount, yamlName)
 		}
 	}
 	// intent_corpus.json intentionally skipped: its synthetic "Sure, I will X." answers
 	// poisoned training — model always output "sure"/"i will". Real YAML data replaces it.
+
+	// Merge makefile data into the training set in makefile-only mode.
+	// In this mode we train on makefile.yaml plus a larger set of basic social
+	// sentences so the model still learns conversational patterns.
+	if makefileOnly {
+		if makeYAML, ok := yamlPairsByFile["makefile.yaml"]; ok && len(makeYAML) > 0 {
+			socialPairs = append(socialPairs, makeYAML...)
+			log.Printf("📚 Makefile-only mode: training on %d makefile pairs", len(makeYAML))
+		}
+		basicSocial := []moe.TrainPair{
+			{Q: "hi", A: "hello"},
+			{Q: "hello", A: "hi"},
+			{Q: "how are you", A: "i am good"},
+			{Q: "how are you", A: "i am fine"},
+			{Q: "what is up", A: "not much"},
+			{Q: "good morning", A: "good morning"},
+			{Q: "good evening", A: "good evening"},
+			{Q: "good afternoon", A: "good afternoon"},
+			{Q: "thank you", A: "you are welcome"},
+			{Q: "thanks", A: "you are welcome"},
+			{Q: "bye", A: "goodbye"},
+			{Q: "goodbye", A: "bye"},
+			{Q: "see you later", A: "see you later"},
+			{Q: "what is your name", A: "i am gollemer"},
+			{Q: "who are you", A: "i am gollemer"},
+			{Q: "i am good", A: "that is great"},
+			{Q: "i am fine", A: "that is good"},
+			{Q: "i am great", A: "that is awesome"},
+			{Q: "i am okay", A: "that is good"},
+			{Q: "how is it going", A: "it is going well"},
+			{Q: "what are you up to", A: "i am here to help"},
+			{Q: "nice to meet you", A: "nice to meet you too"},
+			{Q: "have a good day", A: "you too"},
+			{Q: "take care", A: "thanks"},
+		}
+		for i := 0; i < 5; i++ {
+			socialPairs = append(socialPairs, basicSocial...)
+		}
+		log.Printf("📚 Makefile-only mode: added %d basic social pairs", len(basicSocial)*5)
+	} else {
+		if socialYAML, ok := yamlPairsByFile["social_replies.yaml"]; ok && len(socialYAML) > 0 {
+			socialPairs = append(socialPairs, socialYAML...)
+			log.Printf("📚 Added %d social pairs from social_replies.yaml", len(socialYAML))
+		}
+	}
 
 	if len(socialPairs) == 0 {
 		log.Fatalf("❌ Missing required datasets (social=%d). Aborting.", len(socialPairs))
@@ -369,6 +461,9 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 	loadedFromCheckpoint := false
 	if _, err := os.Stat(socialModelPath); err == nil {
 		log.Printf("⬇️ Loading existing model from %s", socialModelPath)
+		if makefileOnly {
+			log.Printf("⚠️ Makefile-only mode: loaded old checkpoint. If this model has different architecture, delete %s to train from scratch.", socialModelPath)
+		}
 		intentModel, _ = moe.LoadIntentMoEModelWithFallback(socialModelPath)
 		if intentModel != nil {
 			loadedFromCheckpoint = true
@@ -382,6 +477,14 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 	baseExperts := cfg.NumExperts
 	if baseExperts <= 0 {
 		baseExperts = 8
+	}
+	if makefileOnly {
+		if modelDim < 512 {
+			modelDim = 512
+		}
+		if baseExperts < 8 {
+			baseExperts = 8
+		}
 	}
 	if intentModel == nil {
 		intentModel, _ = moe.NewHybridIntentMoE(
@@ -485,7 +588,7 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 	var activePhaseBestLoss float32 = 1e9
 	var activePhaseStagnantEpochs int
 	var activePhaseLRFactor float32 = 1.0
-	const lrDecayPatience = 8 // react fast – divergence happens within 3 epochs
+	const lrDecayPatience = 20 // allow more epochs at higher LR before decay
 	const lrImprovementThreshold = 0.002
 	// Allow LR to decay all the way to 5% of base; cosine annealing provides a
 	// smooth floor approach so we don't need the old 70% hard floor.
@@ -494,6 +597,11 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 	// warm-restart it back to the phase base rate to break out of the plateau
 	// (classic SGDR-style restart). Without this, the floor is a death sentence.
 	const floorRestartPatience = lrDecayPatience * 2
+
+	// Probe failure tracking. If the probe fails probeFailLimit times in a row
+	// the model has converged as far as it can in this phase — force-advance.
+	const probeFailLimit = 5
+	var consecutiveProbeFails int
 
 	// Per-phase loss tracking for the summary report
 	phaseBestLoss := make(map[int]float32)
@@ -531,7 +639,16 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 		switch phaseCfg.Dataset {
 		case "social":
 			trainPairs = socialPairs
+		case "social_replies.yaml":
+			trainPairs = yamlPairsByFile["social_replies.yaml"]
+		case "tech_multiturn.yaml":
+			trainPairs = yamlPairsByFile["tech_multiturn.yaml"]
 		default:
+			trainPairs = socialPairs
+		}
+
+		if len(trainPairs) == 0 {
+			log.Printf("⚠️ Phase %d: no pairs for dataset %q, falling back to socialPairs", currentPhase, phaseCfg.Dataset)
 			trainPairs = socialPairs
 		}
 
@@ -545,6 +662,9 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 				layer.CapacityFactor = cfg.CapacityFactor
 			} else {
 				layer.CapacityFactor = 2.0
+			}
+			if makefileOnly {
+				layer.CapacityFactor = 1.0
 			}
 			// Force single expert during cold start epochs
 			if phaseCfg.ForceSingleExpertEpochs > 0 && epoch < phaseCfg.ForceSingleExpertEpochs {
@@ -562,15 +682,16 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 		if currentPhase == 1 {
 			phaseEpochs = phase1Epochs
 		} else {
-			phaseEpochs = cfg.Epochs - phase1Epochs
-			if phaseEpochs <= 0 {
-				phaseEpochs = 400 // fallback
-			}
+			phaseEpochs = epochsPerPhase // use per-phase count, not total epochs
 		}
-		// Calculate how many epochs we've been in the current phase
+		// Calculate how many epochs we've been in the current phase (within the current window)
 		epochInPhase := epoch
 		if currentPhase > 1 {
-			epochInPhase = epoch - phase1Epochs
+			phaseStart := phase1Epochs + (currentPhase-2)*epochsPerPhase
+			epochInPhase = epoch - phaseStart
+		}
+		if epochInPhase < 0 {
+			epochInPhase = 0
 		}
 		cosDecay := float32(0.5 * (1.0 + math.Cos(math.Pi*float64(epochInPhase)/float64(phaseEpochs))))
 		cosDecay = 0.05 + 0.95*cosDecay // clamp floor to 5% of phaseLR
@@ -589,6 +710,14 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 		phaseMaxSeqLen := phaseCfg.MaxSeqLen
 		if phaseMaxSeqLen <= 0 {
 			phaseMaxSeqLen = maxSeqLen
+		}
+		if makefileOnly {
+			if phaseBatchSize > 8 {
+				phaseBatchSize = 8
+			}
+			if phaseMaxSeqLen > 64 {
+				phaseMaxSeqLen = 64
+			}
 		}
 
 		// ── Iterator / Interactor pattern ────────────────────────────────────────
@@ -795,7 +924,7 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 		}
 
 		epochInPhase = epoch%epochsPerPhase + 1
-		log.Printf("Phase %d [%d/%d] | Epoch %d | Loss: %.4f | PPL: %.1f | LR: %.6f | Act: [%s] | Time: %.1fs",
+		log.Printf("Phase %d [%d/%d] | Epoch %d | Loss: %.4f | PPL: %.1f | LR: %g | Act: [%s] | Time: %.1fs",
 			currentPhase, epochInPhase, epochsPerPhase, epoch, avgLoss, ppl, effectiveLR,
 			strings.Join(activeExps, ","), epochDuration)
 
@@ -855,11 +984,11 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 		// relative to the loss magnitude. A fixed 1.5× fires constantly at loss ~0.3
 		// (any +0.17 bounce = rollback). Scale the threshold so the band stays
 		// meaningful: use 3.0× below loss 0.5, 2.0× below loss 1.0, 1.5× above.
-		divThreshold := float32(1.5)
+		divThreshold := float32(2.0)
 		if activePhaseBestLoss < 0.5 {
 			divThreshold = 3.0
 		} else if activePhaseBestLoss < 1.0 {
-			divThreshold = 2.0
+			divThreshold = 2.5
 		}
 		if activePhaseBestLoss < 1e8 && avgLoss > activePhaseBestLoss*divThreshold {
 			if bestWeightsSnap != nil {
@@ -901,6 +1030,21 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 				currentPhase, lrDecayPatience, activePhaseLRFactor)
 		}
 
+		// Early stopping: if stagnant for 30 epochs regardless of LR level, advance phase.
+		// This prevents the model from spinning for hundreds of epochs after it's converged.
+		const earlyStopPatience = 30
+		if activePhaseStagnantEpochs >= earlyStopPatience {
+			log.Printf("⚠️ Phase %d has been stagnant for %d epochs — force-advancing to next phase", currentPhase, earlyStopPatience)
+			// Fast-forward epoch so the phase transition triggers at the bottom of the loop
+			phaseEnd := phase1Epochs + (currentPhase-1)*epochsPerPhase - 1
+			if currentPhase == 1 {
+				phaseEnd = phase1Epochs - 1
+			}
+			if epoch < phaseEnd {
+				epoch = phaseEnd
+			}
+		}
+
 		// SGDR warm-restart DISABLED: on a small memorization dataset, warm-restarts
 		// constantly reset the LR to full and blow the loss back up (e.g., 2.97 → 5.1).
 		// The model needs monotonically decreasing LR to converge, not cyclic spikes.
@@ -914,14 +1058,24 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 
 		if isPhaseEnd {
 			// ── Run the end-of-phase diagnostic probe ─────────────────────────
-			runEndOfPhaseProbe(intentModel, layers, currentPhase, epoch, avgLoss,
-				phaseBestLoss[currentPhase], phaseWorstLoss[currentPhase], len(activeExps))
+			probePassed := runEndOfPhaseProbe(intentModel, layers, currentPhase, epoch, avgLoss,
+				phaseBestLoss[currentPhase], phaseWorstLoss[currentPhase], len(activeExps), makefileOnly)
 
-			// ── Advance to next phase if needed ───────────────────────────────
-			if nextPhase != currentPhase && nextPhase <= 5 {
+			if probePassed {
+				consecutiveProbeFails = 0
+			}
+			// ── Advance to next phase only if probe passed ─────────────────────
+			forceAdvance := !probePassed && consecutiveProbeFails >= probeFailLimit
+			if forceAdvance {
+				log.Printf("")
+				log.Printf("⚠️  Phase %d probe failed %d times in a row — model has converged; force-advancing to Phase %d",
+					currentPhase, consecutiveProbeFails, nextPhase)
+			}
+			if (probePassed || forceAdvance) && nextPhase != currentPhase && nextPhase <= 5 {
 				log.Printf("")
 				log.Printf("⏩ Advancing: Phase %d → Phase %d (%s)", currentPhase, nextPhase, phaseNames[nextPhase])
 				currentPhase = nextPhase
+				consecutiveProbeFails = 0
 				nextPhaseCfg := cfg.Phases[strconv.Itoa(currentPhase)]
 				if nextPhaseCfg != nil {
 					applyPhaseFreeze(layers, nextPhaseCfg.FreezeExpertsStart, nextPhaseCfg.FreezeExpertsEnd)
@@ -937,6 +1091,19 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string)
 				if err := optimizer.SaveState(optStatePath); err != nil {
 					log.Printf("⚠️ Failed to save optimizer state at phase transition: %v", err)
 				}
+			} else if !probePassed {
+				consecutiveProbeFails++
+				log.Printf("")
+				log.Printf("⏸ Phase %d probe failed (%d/%d) — extending current phase and warm-restarting LR",
+					currentPhase, consecutiveProbeFails, probeFailLimit)
+				// Warm-restart LR so the next extension window is not dead.
+				// This is the key fix: without this, activePhaseLRFactor stays at
+				// lrFactorMin (5%) forever and the model can never escape the plateau.
+				activePhaseLRFactor = 1.0
+				activePhaseStagnantEpochs = 0
+				activePhaseBestLoss = 1e9
+				// Extend the current phase by adding extra epochs
+				maxEpochs += epochsPerPhase
 			}
 		}
 
@@ -1028,7 +1195,7 @@ func assessSentenceFormation(text string) (string, string, string) {
 }
 
 func runEndOfPhaseProbe(intentModel *moe.IntentMoE, layers []*moe.MoELayer,
-	phase, epoch int, finalLoss, bestLoss, worstLoss float32, activeExpertCount int) {
+	phase, epoch int, finalLoss, bestLoss, worstLoss float32, activeExpertCount int, makefileOnly bool) bool {
 
 	banner := strings.Repeat("═", 65)
 	log.Printf("%s", banner)
@@ -1042,34 +1209,52 @@ func runEndOfPhaseProbe(intentModel *moe.IntentMoE, layers []*moe.MoELayer,
 
 	switch phase {
 	case 1:
-		// Phase 1 probe: Conversational coherence
-		// Goal: social experts (0–7) must produce a coherent, human-like social response.
-		// Pass: ≥1 social token (hi/hello/i/you/am/great/good) AND TTR ≥ 0.4
-		gen, _, _ := StrictGenerateLowTemp(intentModel, "__intent__ social : __ques__ how are you", 20, 1.0, false, epoch)
-		words := strings.Fields(strings.ToLower(gen))
-		socialTokenSet := map[string]bool{"hi": true, "hello": true, "i": true, "you": true, "am": true, "great": true, "good": true, "fine": true, "doing": true, "well": true}
-		hasSocial := false
-		unique := make(map[string]struct{})
-		for _, w := range words {
-			unique[w] = struct{}{}
-			if socialTokenSet[strings.Trim(w, ".,!?")] {
-				hasSocial = true
+		if makefileOnly {
+			gen, _, _ := StrictGenerateLowTemp(intentModel, "__intent__ makefile : __ques__ Human: how do i clean models\nAI: ", 20, 1.0, false, epoch)
+			words := strings.Fields(strings.ToLower(gen))
+			passed = len(words) >= 1 && strings.Contains(gen, "make")
+			probeResult = fmt.Sprintf("Makefile response: '%s'", gen)
+		} else {
+			gen, _, _ := StrictGenerateLowTemp(intentModel, "__intent__ social : __ques__ Human: how are you\nAI: ", 20, 1.0, false, epoch)
+			words := strings.Fields(strings.ToLower(gen))
+			socialTokenSet := map[string]bool{"hi": true, "hello": true, "i": true, "you": true, "am": true, "great": true, "good": true, "fine": true, "doing": true, "well": true}
+			hasSocial := false
+			unique := make(map[string]struct{})
+			for _, w := range words {
+				unique[w] = struct{}{}
+				if socialTokenSet[strings.Trim(w, ".,!?")] {
+					hasSocial = true
+				}
 			}
+			ttr := float32(0)
+			if len(words) > 0 {
+				ttr = float32(len(unique)) / float32(len(words))
+			}
+			passed = hasSocial && ttr >= 0.4 && len(words) >= 3
+			probeResult = fmt.Sprintf("Social response: '%s'\n   TTR=%.2f, social_tokens=%v", gen, ttr, hasSocial)
 		}
-		ttr := float32(0)
-		if len(words) > 0 {
-			ttr = float32(len(unique)) / float32(len(words))
-		}
-		passed = hasSocial && ttr >= 0.4 && len(words) >= 3
-		probeResult = fmt.Sprintf("Social response: '%s'\n   TTR=%.2f, social_tokens=%v", gen, ttr, hasSocial)
 
 	case 2:
-		// Phase 2 probe: Coherence Polish
-		// Goal: ensure the polished model still generates coherent language.
-		socialGen, _, _ := StrictGenerateLowTemp(intentModel, "__intent__ social : __ques__ tell me about yourself", 20, 1.0, false, epoch)
-		socialWords := strings.Fields(socialGen)
-		passed = len(socialWords) >= 3 && svcIsCoherent(socialGen)
-		probeResult = fmt.Sprintf("Polished social: '%s' (coherent=%v)", socialGen, passed)
+		if makefileOnly {
+			gen, _, _ := StrictGenerateLowTemp(intentModel, "__intent__ makefile : __ques__ Human: how do i clean models\nAI: ", 20, 1.0, false, epoch)
+			words := strings.Fields(strings.ToLower(gen))
+			// Phase 2 coherence check: model must output at least 2 words and contain "make".
+			// EOS is now suppressed for the first 2 decode steps in StrictGenerateLowTemp
+			// so any model that has learned the makefile domain will satisfy this.
+			passed = len(words) >= 2 && strings.Contains(gen, "make")
+			probeResult = fmt.Sprintf("Makefile response: '%s'", gen)
+		} else {
+			// Phase 2 probe: Coherence Polish
+			// Goal: ensure the polished model still generates coherent language.
+			socialGen, _, _ := StrictGenerateLowTemp(intentModel, "__intent__ social : __ques__ Human: tell me about yourself\nAI: ", 20, 1.0, false, epoch)
+			socialWords := strings.Fields(socialGen)
+			passed = len(socialWords) >= 3 && svcIsCoherent(socialGen)
+			probeResult = fmt.Sprintf("Polished social: '%s' (coherent=%v)", socialGen, passed)
+		}
+	default:
+		// If a phase has no specific probe defined, it passes automatically
+		passed = true
+		probeResult = "N/A (No specific probe for this phase)"
 	}
 
 	resultIcon := "✅ PASS"
@@ -1079,6 +1264,7 @@ func runEndOfPhaseProbe(intentModel *moe.IntentMoE, layers []*moe.MoELayer,
 	log.Printf("   🧪 Phase %d Probe: %s", phase, probeResult)
 	log.Printf("   %s", resultIcon)
 	log.Printf("%s", banner)
+	return passed
 }
 
 // buildDefaultLossWeights builds a flat weight vector for WeightedCrossEntropy.

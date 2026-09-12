@@ -1,0 +1,493 @@
+- conversation_id: "conv_801"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Start a completely fresh training run from scratch"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To initiate full curriculum training while resetting current active model states, you should start a clean training phase."
+
+- conversation_id: "conv_802"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "I want to resume training from my last saved checkpoint"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To continue training without overwriting or clearing existing weights and saved checkpoints, run the training resume workflow."
+
+- conversation_id: "conv_803"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Wipe everything including base embeddings and train"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "When you need a complete clean slate that removes all stored artifacts—including base word embeddings—before starting training, run a full fresh train task."
+
+- conversation_id: "conv_804"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Run a quick small training test to check loss and memory"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To quickly validate model performance and inspect memory usage on a smaller subset, execute the small dataset training task."
+
+- conversation_id: "conv_805"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Train a lightweight sequence-to-sequence model demo"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To train a strict question-and-answer model on a minimal scale, run the small seq2seq training workflow."
+
+- conversation_id: "conv_806"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Test the tiny seq2seq model with custom text"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "You can pass a custom string prompt into the lightweight seq2seq model to probe its responses directly."
+
+- conversation_id: "conv_807"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Launch an interactive chat session in the terminal"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To interactively chat with the full mixture-of-experts model while maintaining conversation history, launch the main chat task."
+
+- conversation_id: "conv_808"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Compute system metrics and export edit logs to CSV"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To analyze performance statistics and export edit logs into CSV format, execute the metrics aggregation workflow."
+
+- conversation_id: "conv_809"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Export failed edits for manual labeling"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To format unverified edit logs into structured files ready for human annotation, trigger the label export task."
+
+- conversation_id: "conv_810"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Clean up main model checkpoints but keep base embeddings"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To free up space by removing primary model checkpoints while preserving core pre-trained word vectors, run a standard cleanup task."
+
+- conversation_id: "conv_811"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Delete all generated model binaries and weights"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To purge all generated model files and saved weights entirely from disk, trigger a full deep clean."
+
+- conversation_id: "conv_812"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Convert all YAML data files into compiled protobuf format"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To process raw human-readable YAML datasets into binary serialized protobuf files, run the batch dataset compilation task."
+
+- conversation_id: "conv_813"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Train a model specifically on the project configuration data"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To recompile data and train a specialized model scoped strictly to project tasks and social datasets, execute the targeted train workflow."
+
+- conversation_id: "conv_814"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Install git hooks for pre-commit checks"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To configure automatic validation routines whenever changes are committed to version control, run the git hooks installation task."
+
+- conversation_id: "conv_815"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Open an interactive menu to search and select available tasks"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To search, filter, and run available automated tasks using a visual command picker, launch the interactive fuzzy target selector."
+- conversation_id: "conv_816"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Clear out old build artifacts"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To remove temporary build files and compiled binaries from previous runs, execute the workspace cleanup process."
+
+- conversation_id: "conv_817"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Build the whole project from source"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To compile all submodules, assets, and source files into fresh binaries, trigger the main build task."
+
+- conversation_id: "conv_818"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Run all automated tests"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To verify that all components are functioning properly across the codebase, execute the full test suite."
+
+- conversation_id: "conv_819"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Execute unit tests only"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To quickly validate individual functions and isolated logic without running heavy end-to-end setups, launch the unit testing task."
+
+- conversation_id: "conv_820"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Run integration tests"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To test interactions between multi-component workflows and external dependencies, run the integration test suite."
+
+- conversation_id: "conv_821"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Format all source code files"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To enforce standard code styling and auto-fix formatting across the repository, invoke the code formatter task."
+
+- conversation_id: "conv_822"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Check code for linting errors"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To scan source files for syntax issues, unused variables, and style violations, execute the linter target."
+
+- conversation_id: "conv_823"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Download and sync dependencies"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To fetch external libraries, vendor modules, and resolve lockfile discrepancies, trigger the dependency download task."
+
+- conversation_id: "conv_824"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Tidy up unused dependencies"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To prune unnecessary external packages and update dependency tracking files, run the dependency cleanup task."
+
+- conversation_id: "conv_825"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Spin up the local development environment"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To boot up background services, hot-reload compilers, and local database instances, start the local development server."
+
+- conversation_id: "conv_826"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Package the application for deployment"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To bundle binaries, assets, and configuration scripts into release-ready archives, run the release packaging process."
+
+- conversation_id: "conv_827"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Build container images"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To compile the application environment into containerized deployment images, trigger the container image build process."
+
+- conversation_id: "conv_828"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Push container images to the registry"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To upload newly generated container images to your remote artifact repository, execute the container publishing task."
+
+- conversation_id: "conv_829"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Deploy application to staging"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To push recent code changes and configuration updates to the pre-production environment, trigger the staging deployment workflow."
+
+- conversation_id: "conv_830"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Deploy latest release to production"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To roll out approved release artifacts to active live servers, launch the production deployment task."
+
+- conversation_id: "conv_831"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Run database migrations"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To apply pending schema updates and structural alterations to the connected database, run the database migration routine."
+
+- conversation_id: "conv_832"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Roll back the last database migration"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To revert the most recent database structural change, launch the migration rollback task."
+
+- conversation_id: "conv_833"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Seed database with mock data"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To populate empty database tables with dummy records for local testing, execute the database seeding task."
+
+- conversation_id: "conv_834"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Reset database to initial state"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To drop all active database tables, re-run migrations, and apply fresh seeds, execute the database reset workflow."
+
+- conversation_id: "conv_835"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Generate code documentation"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To extract inline comments and build HTML reference guides, run the documentation generator task."
+
+- conversation_id: "conv_836"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Serve documentation locally"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To preview generated project manuals and API docs in your web browser, start the documentation web server."
+
+- conversation_id: "conv_837"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Check for security vulnerabilities"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To audit third-party dependencies and codebase patterns for known CVEs, run the security scanning tool."
+
+- conversation_id: "conv_838"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Run benchmark tests"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To measure performance throughput, CPU usage, and memory allocation speeds, launch the benchmark task."
+
+- conversation_id: "conv_839"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Profile CPU performance"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To analyze runtime function execution times and trace CPU bottlenecks, launch the profiling tool."
+
+- conversation_id: "conv_840"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Analyze memory usage and leaks"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To inspect memory allocation patterns and identify potential heap leaks, execute the memory profiling task."
+
+- conversation_id: "conv_841"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Generate API boilerplate code"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To auto-generate client SDKs, routes, or models from schema definitions, run the code generation process."
+
+- conversation_id: "conv_842"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Check code coverage"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To measure what percentage of your codebase is tested and export coverage reports, execute the test coverage task."
+
+- conversation_id: "conv_843"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Display available project commands"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To view a list of supported tasks alongside their descriptions, trigger the project help workflow."
+
+- conversation_id: "conv_844"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Watch source files and auto-recompile on change"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To listen for local file saves and automatically trigger rebuilds, run the file watcher task."
+
+- conversation_id: "conv_845"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Compile static assets for the frontend"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To bundle, minify, and optimize stylesheets, scripts, and media for production, launch the asset pipeline."
+
+- conversation_id: "conv_846"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Check license compliance"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To scan third-party dependencies for restrictive or incompatible software licenses, run the license auditor."
+
+- conversation_id: "conv_847"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Set up the local development environment for the first time"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To install required tooling, configure local environment variables, and bootstrap databases, execute the initial setup workflow."
+
+- conversation_id: "conv_848"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Run sanity check across the entire project"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To sequentially run linting, unit tests, and build checks before opening a pull request, run the pre-flight verification task."
+
+- conversation_id: "conv_849"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Start background queue workers"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To process asynchronous background jobs and message queue tasks, boot up the background worker service."
+
+- conversation_id: "conv_850"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Clear application cache"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To flush cached key-value stores, compiled views, and temporary runtime data, execute the cache clearing task."
+
+- conversation_id: "conv_851"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Verify environment configuration variables"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To ensure all required API keys, secrets, and environment settings are populated correctly, run the config validation check."
+
+- conversation_id: "conv_852"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Stop all running local services"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To gracefully shut down active local servers, worker processes, and database instances, run the service stop process."
+
+- conversation_id: "conv_853"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Update dependency versions to latest"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To upgrade third-party packages to their newest compatible releases, launch the package update task."
+
+- conversation_id: "conv_854"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Export environment variables template"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To generate or update example environment config files for new developers, run the environment template generator."
+
+- conversation_id: "conv_855"
+  turns:
+  - turn_sequence: 1
+    role: "user"
+    content: "Run stress testing on local endpoints"
+  - turn_sequence: 2
+    role: "assistant"
+    content: "To simulate high-volume HTTP traffic and analyze request performance under heavy load, execute the load testing process."

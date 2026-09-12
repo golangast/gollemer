@@ -134,7 +134,7 @@ func CrossEntropyLoss(logits *Tensor, targetIDs []int, padID int, labelSmoothing
 
 			for i := s; i < e; i++ {
 				targetID := targetIDs[i]
-				if targetID == padID {
+				if targetID == -100 || targetID == padID {
 					continue
 				}
 				localActive++

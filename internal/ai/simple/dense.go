@@ -253,7 +253,15 @@ func softmaxAndGrad(logits [][]float32, targets []int) [][]float32 {
 // CrossEntropy computes mean softmax cross-entropy loss.
 func CrossEntropy(logits [][]float32, targets []int) float32 {
 	var total float32
+	var count float32
 	for b := range logits {
+		if b >= len(targets) {
+			break
+		}
+		targetID := targets[b]
+		if targetID == -100 {
+			continue
+		}
 		row := logits[b]
 		max := float32(math.Inf(-1))
 		for _, v := range row {
@@ -267,9 +275,13 @@ func CrossEntropy(logits [][]float32, targets []int) float32 {
 		}
 		// log-softmax of target class
 		lse := float32(math.Log(float64(sum))) + max
-		total += lse - row[targets[b]]
+		total += lse - row[targetID]
+		count++
 	}
-	return total / float32(len(targets))
+	if count > 0 {
+		return total / count
+	}
+	return 0
 }
 
 // Accuracy returns the fraction of predictions matching targets.
