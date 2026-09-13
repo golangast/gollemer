@@ -105,13 +105,13 @@ all-pb: conversing-pb social-replies-pb tech-multiturn-pb makefile-pb
 makefile-pb:
 	go run ./cmd/tools/gen_makefile_pb -makefile Makefile -out data/training/trainingdata/makefile.pb
 
-## makefile-train: Train on social + makefile-generated data only
-makefile-train: all-pb
-	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-multiphase -makefile-only $(ARGS)
+## makefile-train: Train on makefile-generated data only
+makefile-train:
+	cd standalone/makefile-assistant && go run main.go -train
 
 ## chat-makefile: Start makefile chat with top command predictions
 chat-makefile:
-	$(MAIN_CMD) -chat-makefile
+	cd standalone/makefile-assistant && go run main.go
 
 ## sel: Interactive fuzzy finder target selector
 sel:

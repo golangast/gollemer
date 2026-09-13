@@ -1,529 +1,881 @@
 conversations:
-  - conversation_id: "make_install-hooks_q1"
+  - conversation_id: makefile-install-hooks-0
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "how do i install hooks"
+        role: user
+        content: "Install Gollemer Git pre-commit validation hook"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "you can use make install-hooks for this"
-  - conversation_id: "make_install-hooks_q2"
+  - conversation_id: makefile-install-hooks-1
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "what is the command for install hooks"
+        role: user
+        content: "how do i install gollemer git pre-commit validation hook"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "use make install-hooks"
-  - conversation_id: "make_install-hooks_q3"
+  - conversation_id: makefile-install-hooks-2
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "i want to install hooks"
+        role: user
+        content: "what is install-hooks"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "try make install-hooks"
-  - conversation_id: "make_train_q1"
+  - conversation_id: makefile-install-hooks-3
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "how do i train the model"
+        role: user
+        content: "install hooks"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
+        content: "run make install-hooks to do this"
+  - conversation_id: makefile-install-hooks-4
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "install-hooks command"
+      - turn_sequence: 2
+        role: assistant
+        content: "make install-hooks will help with that"
+  - conversation_id: makefile-train-0
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "Start a fresh curriculum training (clears MoE models, preserves word2vec)"
+      - turn_sequence: 2
+        role: assistant
         content: "you can use make train for this"
-  - conversation_id: "make_train_q2"
+  - conversation_id: makefile-train-1
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "what is the command for train the model"
+        role: user
+        content: "how do i start a fresh curriculum training (clears moe models, preserves word2vec)"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "use make train"
-  - conversation_id: "make_train_q3"
+  - conversation_id: makefile-train-2
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "i want to train the model"
+        role: user
+        content: "what is train"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "try make train"
-  - conversation_id: "make_train-resume_q1"
+  - conversation_id: makefile-train-3
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "how do i resume training"
+        role: user
+        content: "train"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
+        content: "run make train to do this"
+  - conversation_id: makefile-train-4
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "train command"
+      - turn_sequence: 2
+        role: assistant
+        content: "make train will help with that"
+  - conversation_id: makefile-train-resume-0
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "Start training without cleaning existing model checkpoints"
+      - turn_sequence: 2
+        role: assistant
         content: "you can use make train-resume for this"
-  - conversation_id: "make_train-resume_q2"
+  - conversation_id: makefile-train-resume-1
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "what is the command for resume training"
+        role: user
+        content: "how do i start training without cleaning existing model checkpoints"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "use make train-resume"
-  - conversation_id: "make_train-resume_q3"
+  - conversation_id: makefile-train-resume-2
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "i want to resume training"
+        role: user
+        content: "what is train-resume"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "try make train-resume"
-  - conversation_id: "make_train-fresh_q1"
+  - conversation_id: makefile-train-resume-3
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "how do i fresh training"
+        role: user
+        content: "train resume"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
+        content: "run make train-resume to do this"
+  - conversation_id: makefile-train-resume-4
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "train-resume command"
+      - turn_sequence: 2
+        role: assistant
+        content: "make train-resume will help with that"
+  - conversation_id: makefile-train-fresh-0
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "Full fresh start — clears ALL models including word2vec, then trains"
+      - turn_sequence: 2
+        role: assistant
         content: "you can use make train-fresh for this"
-  - conversation_id: "make_train-fresh_q2"
+  - conversation_id: makefile-train-fresh-1
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "what is the command for fresh training"
+        role: user
+        content: "how do i full fresh start — clears all models including word2vec, then trains"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "use make train-fresh"
-  - conversation_id: "make_train-fresh_q3"
+  - conversation_id: makefile-train-fresh-2
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "i want to fresh training"
+        role: user
+        content: "what is train-fresh"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "try make train-fresh"
-  - conversation_id: "make_train-small_q1"
+  - conversation_id: makefile-train-fresh-3
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "how do i small training"
+        role: user
+        content: "train fresh"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
+        content: "run make train-fresh to do this"
+  - conversation_id: makefile-train-fresh-4
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "train-fresh command"
+      - turn_sequence: 2
+        role: assistant
+        content: "make train-fresh will help with that"
+  - conversation_id: makefile-train-small-0
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "Run the small social dataset, print loss + memory, and test the model"
+      - turn_sequence: 2
+        role: assistant
         content: "you can use make train-small for this"
-  - conversation_id: "make_train-small_q2"
+  - conversation_id: makefile-train-small-1
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "what is the command for small training"
+        role: user
+        content: "how do i run the small social dataset, print loss + memory, and test the model"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "use make train-small"
-  - conversation_id: "make_train-small_q3"
+  - conversation_id: makefile-train-small-2
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "i want to small training"
+        role: user
+        content: "what is train-small"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "try make train-small"
-  - conversation_id: "make_train-small-seq2seq_q1"
+  - conversation_id: makefile-train-small-3
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "how do i small seq2seq training"
+        role: user
+        content: "train small"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
+        content: "run make train-small to do this"
+  - conversation_id: makefile-train-small-4
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "train-small command"
+      - turn_sequence: 2
+        role: assistant
+        content: "make train-small will help with that"
+  - conversation_id: makefile-train-small-seq2seq-0
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "Run a strict pure Q->A seq2seq tiny demo"
+      - turn_sequence: 2
+        role: assistant
         content: "you can use make train-small-seq2seq for this"
-  - conversation_id: "make_train-small-seq2seq_q2"
+  - conversation_id: makefile-train-small-seq2seq-1
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "what is the command for small seq2seq training"
+        role: user
+        content: "how do i run a strict pure q->a seq2seq tiny demo"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "use make train-small-seq2seq"
-  - conversation_id: "make_train-small-seq2seq_q3"
+  - conversation_id: makefile-train-small-seq2seq-2
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "i want to small seq2seq training"
+        role: user
+        content: "what is train-small-seq2seq"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "try make train-small-seq2seq"
-  - conversation_id: "make_test-small-seq2seq_q1"
+  - conversation_id: makefile-train-small-seq2seq-3
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "how do i test seq2seq"
+        role: user
+        content: "train small seq2seq"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
+        content: "run make train-small-seq2seq to do this"
+  - conversation_id: makefile-train-small-seq2seq-4
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "train-small-seq2seq command"
+      - turn_sequence: 2
+        role: assistant
+        content: "make train-small-seq2seq will help with that"
+  - conversation_id: makefile-test-small-seq2seq-0
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "Load the tiny seq2seq model and probe a few prompts"
+      - turn_sequence: 2
+        role: assistant
         content: "you can use make test-small-seq2seq for this"
-  - conversation_id: "make_test-small-seq2seq_q2"
+  - conversation_id: makefile-test-small-seq2seq-1
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "what is the command for test seq2seq"
+        role: user
+        content: "how do i load the tiny seq2seq model and probe a few prompts"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "use make test-small-seq2seq"
-  - conversation_id: "make_test-small-seq2seq_q3"
+  - conversation_id: makefile-test-small-seq2seq-2
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "i want to test seq2seq"
+        role: user
+        content: "what is test-small-seq2seq"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "try make test-small-seq2seq"
-  - conversation_id: "make_seq2seq-prompt_q1"
+  - conversation_id: makefile-test-small-seq2seq-3
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "how do i send a prompt"
+        role: user
+        content: "test small seq2seq"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
+        content: "run make test-small-seq2seq to do this"
+  - conversation_id: makefile-test-small-seq2seq-4
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "test-small-seq2seq command"
+      - turn_sequence: 2
+        role: assistant
+        content: "make test-small-seq2seq will help with that"
+  - conversation_id: makefile-seq2seq-prompt-0
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "Send a custom prompt to the saved tiny seq2seq model"
+      - turn_sequence: 2
+        role: assistant
         content: "you can use make seq2seq-prompt for this"
-  - conversation_id: "make_seq2seq-prompt_q2"
+  - conversation_id: makefile-seq2seq-prompt-1
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "what is the command for send a prompt"
+        role: user
+        content: "how do i send a custom prompt to the saved tiny seq2seq model"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "use make seq2seq-prompt"
-  - conversation_id: "make_seq2seq-prompt_q3"
+  - conversation_id: makefile-seq2seq-prompt-2
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "i want to send a prompt"
+        role: user
+        content: "what is seq2seq-prompt"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "try make seq2seq-prompt"
-  - conversation_id: "make_seq2seq-chat_q1"
+  - conversation_id: makefile-seq2seq-prompt-3
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "how do i chat with seq2seq"
+        role: user
+        content: "seq2seq prompt"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
+        content: "run make seq2seq-prompt to do this"
+  - conversation_id: makefile-seq2seq-prompt-4
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "seq2seq-prompt command"
+      - turn_sequence: 2
+        role: assistant
+        content: "make seq2seq-prompt will help with that"
+  - conversation_id: makefile-seq2seq-chat-0
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "Start an interactive tiny seq2seq chat loop with the saved model"
+      - turn_sequence: 2
+        role: assistant
         content: "you can use make seq2seq-chat for this"
-  - conversation_id: "make_seq2seq-chat_q2"
+  - conversation_id: makefile-seq2seq-chat-1
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "what is the command for chat with seq2seq"
+        role: user
+        content: "how do i start an interactive tiny seq2seq chat loop with the saved model"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "use make seq2seq-chat"
-  - conversation_id: "make_seq2seq-chat_q3"
+  - conversation_id: makefile-seq2seq-chat-2
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "i want to chat with seq2seq"
+        role: user
+        content: "what is seq2seq-chat"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "try make seq2seq-chat"
-  - conversation_id: "make_chat_q1"
+  - conversation_id: makefile-seq2seq-chat-3
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "how do i start chatting"
+        role: user
+        content: "seq2seq chat"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
+        content: "run make seq2seq-chat to do this"
+  - conversation_id: makefile-seq2seq-chat-4
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "seq2seq-chat command"
+      - turn_sequence: 2
+        role: assistant
+        content: "make seq2seq-chat will help with that"
+  - conversation_id: makefile-chat-0
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "Start an interactive full MoE chat loop with conversation history"
+      - turn_sequence: 2
+        role: assistant
         content: "you can use make chat for this"
-  - conversation_id: "make_chat_q2"
+  - conversation_id: makefile-chat-1
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "what is the command for start chatting"
+        role: user
+        content: "how do i start an interactive full moe chat loop with conversation history"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "use make chat"
-  - conversation_id: "make_chat_q3"
+  - conversation_id: makefile-chat-2
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "i want to start chatting"
+        role: user
+        content: "what is chat"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "try make chat"
-  - conversation_id: "make_metrics_q1"
+  - conversation_id: makefile-chat-3
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "how do i run metrics"
+        role: user
+        content: "chat"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
+        content: "run make chat to do this"
+  - conversation_id: makefile-chat-4
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "chat command"
+      - turn_sequence: 2
+        role: assistant
+        content: "make chat will help with that"
+  - conversation_id: makefile-metrics-0
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "Run metrics aggregation and CSV export for edit logs"
+      - turn_sequence: 2
+        role: assistant
         content: "you can use make metrics for this"
-  - conversation_id: "make_metrics_q2"
+  - conversation_id: makefile-metrics-1
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "what is the command for run metrics"
+        role: user
+        content: "how do i run metrics aggregation and csv export for edit logs"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "use make metrics"
-  - conversation_id: "make_metrics_q3"
+  - conversation_id: makefile-metrics-2
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "i want to run metrics"
+        role: user
+        content: "what is metrics"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "try make metrics"
-  - conversation_id: "make_export-labels_q1"
+  - conversation_id: makefile-metrics-3
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "how do i export labels"
+        role: user
+        content: "metrics"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
+        content: "run make metrics to do this"
+  - conversation_id: makefile-metrics-4
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "metrics command"
+      - turn_sequence: 2
+        role: assistant
+        content: "make metrics will help with that"
+  - conversation_id: makefile-export-labels-0
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "Export training examples to CSV for manual labeling"
+      - turn_sequence: 2
+        role: assistant
         content: "you can use make export-labels for this"
-  - conversation_id: "make_export-labels_q2"
+  - conversation_id: makefile-export-labels-1
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "what is the command for export labels"
+        role: user
+        content: "how do i export training examples to csv for manual labeling"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "use make export-labels"
-  - conversation_id: "make_export-labels_q3"
+  - conversation_id: makefile-export-labels-2
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "i want to export labels"
+        role: user
+        content: "what is export-labels"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "try make export-labels"
-  - conversation_id: "make_clean_q1"
+  - conversation_id: makefile-export-labels-3
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "how do i clean models"
+        role: user
+        content: "export labels"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
+        content: "run make export-labels to do this"
+  - conversation_id: makefile-export-labels-4
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "export-labels command"
+      - turn_sequence: 2
+        role: assistant
+        content: "make export-labels will help with that"
+  - conversation_id: makefile-clean-0
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "Remove MoE model checkpoints (preserves word2vec)"
+      - turn_sequence: 2
+        role: assistant
         content: "you can use make clean for this"
-  - conversation_id: "make_clean_q2"
+  - conversation_id: makefile-clean-1
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "what is the command for clean models"
+        role: user
+        content: "how do i remove moe model checkpoints (preserves word2vec)"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "use make clean"
-  - conversation_id: "make_clean_q3"
+  - conversation_id: makefile-clean-2
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "i want to clean models"
+        role: user
+        content: "what is clean"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "try make clean"
-  - conversation_id: "make_clean-all_q1"
+  - conversation_id: makefile-clean-3
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "how do i clean everything"
+        role: user
+        content: "clean"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
+        content: "run make clean to do this"
+  - conversation_id: makefile-clean-4
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "clean command"
+      - turn_sequence: 2
+        role: assistant
+        content: "make clean will help with that"
+  - conversation_id: makefile-clean-all-0
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "Remove ALL model files including word2vec"
+      - turn_sequence: 2
+        role: assistant
         content: "you can use make clean-all for this"
-  - conversation_id: "make_clean-all_q2"
+  - conversation_id: makefile-clean-all-1
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "what is the command for clean everything"
+        role: user
+        content: "how do i remove all model files including word2vec"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "use make clean-all"
-  - conversation_id: "make_clean-all_q3"
+  - conversation_id: makefile-clean-all-2
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "i want to clean everything"
+        role: user
+        content: "what is clean-all"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "try make clean-all"
-  - conversation_id: "make_conversing-pb_q1"
+  - conversation_id: makefile-clean-all-3
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "how do i convert conversing data"
+        role: user
+        content: "clean all"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
+        content: "run make clean-all to do this"
+  - conversation_id: makefile-clean-all-4
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "clean-all command"
+      - turn_sequence: 2
+        role: assistant
+        content: "make clean-all will help with that"
+  - conversation_id: makefile-conversing-pb-0
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "Convert conversing.yaml to conversing.pb"
+      - turn_sequence: 2
+        role: assistant
         content: "you can use make conversing-pb for this"
-  - conversation_id: "make_conversing-pb_q2"
+  - conversation_id: makefile-conversing-pb-1
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "what is the command for convert conversing data"
+        role: user
+        content: "how do i convert conversing.yaml to conversing.pb"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "use make conversing-pb"
-  - conversation_id: "make_conversing-pb_q3"
+  - conversation_id: makefile-conversing-pb-2
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "i want to convert conversing data"
+        role: user
+        content: "what is conversing-pb"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "try make conversing-pb"
-  - conversation_id: "make_social-replies-pb_q1"
+  - conversation_id: makefile-conversing-pb-3
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "how do i convert social replies"
+        role: user
+        content: "conversing pb"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
+        content: "run make conversing-pb to do this"
+  - conversation_id: makefile-conversing-pb-4
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "conversing-pb command"
+      - turn_sequence: 2
+        role: assistant
+        content: "make conversing-pb will help with that"
+  - conversation_id: makefile-social-replies-pb-0
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "Convert social_replies.yaml to social_replies.pb"
+      - turn_sequence: 2
+        role: assistant
         content: "you can use make social-replies-pb for this"
-  - conversation_id: "make_social-replies-pb_q2"
+  - conversation_id: makefile-social-replies-pb-1
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "what is the command for convert social replies"
+        role: user
+        content: "how do i convert social_replies.yaml to social_replies.pb"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "use make social-replies-pb"
-  - conversation_id: "make_social-replies-pb_q3"
+  - conversation_id: makefile-social-replies-pb-2
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "i want to convert social replies"
+        role: user
+        content: "what is social-replies-pb"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "try make social-replies-pb"
-  - conversation_id: "make_tech-multiturn-pb_q1"
+  - conversation_id: makefile-social-replies-pb-3
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "how do i convert tech multiturn"
+        role: user
+        content: "social replies pb"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
+        content: "run make social-replies-pb to do this"
+  - conversation_id: makefile-social-replies-pb-4
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "social-replies-pb command"
+      - turn_sequence: 2
+        role: assistant
+        content: "make social-replies-pb will help with that"
+  - conversation_id: makefile-tech-multiturn-pb-0
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "Convert tech_multiturn.yaml to tech_multiturn.pb"
+      - turn_sequence: 2
+        role: assistant
         content: "you can use make tech-multiturn-pb for this"
-  - conversation_id: "make_tech-multiturn-pb_q2"
+  - conversation_id: makefile-tech-multiturn-pb-1
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "what is the command for convert tech multiturn"
+        role: user
+        content: "how do i convert tech_multiturn.yaml to tech_multiturn.pb"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "use make tech-multiturn-pb"
-  - conversation_id: "make_tech-multiturn-pb_q3"
+  - conversation_id: makefile-tech-multiturn-pb-2
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "i want to convert tech multiturn"
+        role: user
+        content: "what is tech-multiturn-pb"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "try make tech-multiturn-pb"
-  - conversation_id: "make_all-pb_q1"
+  - conversation_id: makefile-tech-multiturn-pb-3
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "how do i convert all data"
+        role: user
+        content: "tech multiturn pb"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
+        content: "run make tech-multiturn-pb to do this"
+  - conversation_id: makefile-tech-multiturn-pb-4
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "tech-multiturn-pb command"
+      - turn_sequence: 2
+        role: assistant
+        content: "make tech-multiturn-pb will help with that"
+  - conversation_id: makefile-all-pb-0
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "Convert all YAML training files to protobuf"
+      - turn_sequence: 2
+        role: assistant
         content: "you can use make all-pb for this"
-  - conversation_id: "make_all-pb_q2"
+  - conversation_id: makefile-all-pb-1
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "what is the command for convert all data"
+        role: user
+        content: "how do i convert all yaml training files to protobuf"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "use make all-pb"
-  - conversation_id: "make_all-pb_q3"
+  - conversation_id: makefile-all-pb-2
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "i want to convert all data"
+        role: user
+        content: "what is all-pb"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "try make all-pb"
-  - conversation_id: "make_makefile-pb_q1"
+  - conversation_id: makefile-all-pb-3
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "how do i convert makefile data"
+        role: user
+        content: "all pb"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
+        content: "run make all-pb to do this"
+  - conversation_id: makefile-all-pb-4
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "all-pb command"
+      - turn_sequence: 2
+        role: assistant
+        content: "make all-pb will help with that"
+  - conversation_id: makefile-makefile-pb-0
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "Convert Makefile targets to protobuf training data"
+      - turn_sequence: 2
+        role: assistant
         content: "you can use make makefile-pb for this"
-  - conversation_id: "make_makefile-pb_q2"
+  - conversation_id: makefile-makefile-pb-1
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "what is the command for convert makefile data"
+        role: user
+        content: "how do i convert makefile targets to protobuf training data"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "use make makefile-pb"
-  - conversation_id: "make_makefile-pb_q3"
+  - conversation_id: makefile-makefile-pb-2
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "i want to convert makefile data"
+        role: user
+        content: "what is makefile-pb"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "try make makefile-pb"
-  - conversation_id: "make_makefile-train_q1"
+  - conversation_id: makefile-makefile-pb-3
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "how do i train on social + makefile-generated data only"
+        role: user
+        content: "makefile pb"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
+        content: "run make makefile-pb to do this"
+  - conversation_id: makefile-makefile-pb-4
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "makefile-pb command"
+      - turn_sequence: 2
+        role: assistant
+        content: "make makefile-pb will help with that"
+  - conversation_id: makefile-makefile-train-0
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "Train on makefile-generated data only"
+      - turn_sequence: 2
+        role: assistant
         content: "you can use make makefile-train for this"
-  - conversation_id: "make_makefile-train_q2"
+  - conversation_id: makefile-makefile-train-1
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "what is the command for train on social + makefile-generated data only"
+        role: user
+        content: "how do i train on makefile-generated data only"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "use make makefile-train"
-  - conversation_id: "make_makefile-train_q3"
+  - conversation_id: makefile-makefile-train-2
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "i want to train on social + makefile-generated data only"
+        role: user
+        content: "what is makefile-train"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "try make makefile-train"
-  - conversation_id: "make_chat-makefile_q1"
+  - conversation_id: makefile-makefile-train-3
     turns:
       - turn_sequence: 1
-        role: "user"
+        role: user
+        content: "makefile train"
+      - turn_sequence: 2
+        role: assistant
+        content: "run make makefile-train to do this"
+  - conversation_id: makefile-makefile-train-4
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "makefile-train command"
+      - turn_sequence: 2
+        role: assistant
+        content: "make makefile-train will help with that"
+  - conversation_id: makefile-chat-makefile-0
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "Start makefile chat with top command predictions"
+      - turn_sequence: 2
+        role: assistant
+        content: "you can use make chat-makefile for this"
+  - conversation_id: makefile-chat-makefile-1
+    turns:
+      - turn_sequence: 1
+        role: user
         content: "how do i start makefile chat with top command predictions"
       - turn_sequence: 2
-        role: "assistant"
-        content: "you can use make chat-makefile for this"
-  - conversation_id: "make_chat-makefile_q2"
-    turns:
-      - turn_sequence: 1
-        role: "user"
-        content: "what is the command for start makefile chat with top command predictions"
-      - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "use make chat-makefile"
-  - conversation_id: "make_chat-makefile_q3"
+  - conversation_id: makefile-chat-makefile-2
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "i want to start makefile chat with top command predictions"
+        role: user
+        content: "what is chat-makefile"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "try make chat-makefile"
-  - conversation_id: "make_sel_q1"
+  - conversation_id: makefile-chat-makefile-3
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "how do i select a target"
+        role: user
+        content: "chat makefile"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
+        content: "run make chat-makefile to do this"
+  - conversation_id: makefile-chat-makefile-4
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "chat-makefile command"
+      - turn_sequence: 2
+        role: assistant
+        content: "make chat-makefile will help with that"
+  - conversation_id: makefile-sel-0
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "Interactive fuzzy finder target selector"
+      - turn_sequence: 2
+        role: assistant
         content: "you can use make sel for this"
-  - conversation_id: "make_sel_q2"
+  - conversation_id: makefile-sel-1
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "what is the command for select a target"
+        role: user
+        content: "how do i interactive fuzzy finder target selector"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "use make sel"
-  - conversation_id: "make_sel_q3"
+  - conversation_id: makefile-sel-2
     turns:
       - turn_sequence: 1
-        role: "user"
-        content: "i want to select a target"
+        role: user
+        content: "what is sel"
       - turn_sequence: 2
-        role: "assistant"
+        role: assistant
         content: "try make sel"
+  - conversation_id: makefile-sel-3
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "sel"
+      - turn_sequence: 2
+        role: assistant
+        content: "run make sel to do this"
+  - conversation_id: makefile-sel-4
+    turns:
+      - turn_sequence: 1
+        role: user
+        content: "sel command"
+      - turn_sequence: 2
+        role: assistant
+        content: "make sel will help with that"
