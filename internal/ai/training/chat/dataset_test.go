@@ -64,3 +64,26 @@ func TestClassifyDomainGoVariants(t *testing.T) {
 		}
 	}
 }
+
+func TestClassifyDomainMakefile(t *testing.T) {
+	mkQs := []struct{ in, out string }{
+		{"how do i train the model", "run make train-real-seq2seq"},
+		{"how do i chat with the model", "run make real-chat"},
+		{"clean up the checkpoints", "run make clean"},
+		{"what does the makefile do", "it defines targets like make train-real-seq2seq"},
+		{"resume training", "run make train-resume"},
+	}
+	for _, q := range mkQs {
+		if d := ClassifyDomain(q.in, q.out); d != MakefileDomain {
+			t.Errorf("(%q, %q) classified as %q, want makefile", q.in, q.out, d)
+		}
+	}
+	// "make the most of it" is social — the verb "make" must not trigger it.
+	if d := ClassifyDomain("make the most of your day", ""); d != SocialDomain {
+		t.Errorf("social 'make' verb classified as %q", d)
+	}
+	// makefile wins over go when both match.
+	if d := ClassifyDomain("how do i train", "run make train-real-seq2seq"); d != MakefileDomain {
+		t.Errorf("makefile+go overlap classified as %q", d)
+	}
+}

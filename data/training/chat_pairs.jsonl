@@ -315,3 +315,54 @@
 {"input":"Who am I talking to?","output":"I'm Gollemer, your friendly chat companion!","domain":"social"}
 {"input":"Your name, please.","output":"I'm Gollemer, your friendly chat companion!","domain":"social"}
 {"input":"Who is this?","output":"I'm Gollemer, your friendly chat companion!","domain":"social"}
+{"input":"how do i train the model","output":"run make train-real-seq2seq","domain":"makefile"}
+{"input":"train the neural model","output":"run make train-real-seq2seq","domain":"makefile"}
+{"input":"start training","output":"run make train-real-seq2seq","domain":"makefile"}
+{"input":"i want to train gollemer","output":"run make train-real-seq2seq","domain":"makefile"}
+{"input":"begin model training","output":"run make train-real-seq2seq","domain":"makefile"}
+{"input":"how do i chat with the model","output":"run make real-chat","domain":"makefile"}
+{"input":"talk to gollemer","output":"run make real-chat","domain":"makefile"}
+{"input":"start a chat session","output":"run make real-chat","domain":"makefile"}
+{"input":"let me talk to the model","output":"run make real-chat","domain":"makefile"}
+{"input":"open the chat","output":"run make real-chat","domain":"makefile"}
+{"input":"how do i clean up checkpoints","output":"run make clean","domain":"makefile"}
+{"input":"remove old checkpoints","output":"run make clean","domain":"makefile"}
+{"input":"clean the model files","output":"run make clean","domain":"makefile"}
+{"input":"delete the checkpoints","output":"run make clean","domain":"makefile"}
+{"input":"clear out old models","output":"run make clean","domain":"makefile"}
+{"input":"wipe everything and start over","output":"run make train-fresh","domain":"makefile"}
+{"input":"full fresh start","output":"run make train-fresh","domain":"makefile"}
+{"input":"start completely fresh","output":"run make train-fresh","domain":"makefile"}
+{"input":"resume training","output":"run make train-resume","domain":"makefile"}
+{"input":"continue training","output":"run make train-resume","domain":"makefile"}
+{"input":"pick up where training left off","output":"run make train-resume","domain":"makefile"}
+{"input":"keep training from the checkpoint","output":"run make train-resume","domain":"makefile"}
+{"input":"how do i add new training data","output":"run make import-pairs FILE=data.jsonl","domain":"makefile"}
+{"input":"import training pairs","output":"run make import-pairs FILE=data.jsonl","domain":"makefile"}
+{"input":"load new pairs into the dataset","output":"run make import-pairs FILE=data.jsonl","domain":"makefile"}
+{"input":"how do i retag the dataset","output":"run make reclassify-domains","domain":"makefile"}
+{"input":"reclassify the domains","output":"run make reclassify-domains","domain":"makefile"}
+{"input":"what make targets are available","output":"try make train-real-seq2seq, make real-chat, make clean","domain":"makefile"}
+{"input":"list the make commands","output":"try make train-real-seq2seq, make real-chat, make clean","domain":"makefile"}
+{"input":"what can i run with make","output":"try make train-real-seq2seq, make real-chat, make clean","domain":"makefile"}
+{"input":"show me the available commands","output":"try make train-real-seq2seq, make real-chat, make clean","domain":"makefile"}
+{"input":"how do i run the tiny demo training","output":"run make train-small-seq2seq","domain":"makefile"}
+{"input":"run the small training demo","output":"run make train-small-seq2seq","domain":"makefile"}
+{"input":"test the tiny model","output":"run make test-small-seq2seq","domain":"makefile"}
+{"input":"how do i test the small model","output":"run make test-small-seq2seq","domain":"makefile"}
+{"input":"how do i install the git hooks","output":"run make install-hooks","domain":"makefile"}
+{"input":"set up git hooks","output":"run make install-hooks","domain":"makefile"}
+{"input":"install hooks","output":"run make install-hooks","domain":"makefile"}
+{"input":"how do i train the makefile model","output":"run make makefile-train","domain":"makefile"}
+{"input":"train on makefile data","output":"run make makefile-train","domain":"makefile"}
+{"input":"chat about makefile commands","output":"run make chat-makefile","domain":"makefile"}
+{"input":"makefile chat","output":"run make chat-makefile","domain":"makefile"}
+{"input":"how do i convert the yaml data","output":"run make all-pb","domain":"makefile"}
+{"input":"build the protobuf files","output":"run make all-pb","domain":"makefile"}
+{"input":"convert yaml to protobuf","output":"run make all-pb","domain":"makefile"}
+{"input":"how do i check the metrics","output":"run make metrics","domain":"makefile"}
+{"input":"show training metrics","output":"run make metrics","domain":"makefile"}
+{"input":"view the metrics","output":"run make metrics","domain":"makefile"}
+{"input":"export the labels","output":"run make export-labels","domain":"makefile"}
+{"input":"dump labels to csv","output":"run make export-labels","domain":"makefile"}
+{"input":"how do i pick a make target interactively","output":"run make sel","domain":"makefile"}

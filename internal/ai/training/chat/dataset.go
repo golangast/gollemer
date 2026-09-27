@@ -30,7 +30,7 @@ import (
 )
 
 // ChatPair is one training example: a user input and the response to learn.
-// Domain tags what the pair teaches ("social", "go", ...). The roadmap trains
+// Domain tags what the pair teaches ("social", "go", "makefile", ...). The roadmap trains
 // one stage at a time, so the trainer filters by domain — a social model never
 // sees Go Q&A and vice versa.
 type ChatPair struct {
@@ -42,6 +42,15 @@ type ChatPair struct {
 // SocialDomain is the default domain: everyday conversation.
 const SocialDomain = "social"
 
+// MakefileDomain is stage two of the roadmap: guessing makefile commands.
+const MakefileDomain = "makefile"
+
+// makefileTerms marks the makefile-command domain: the word "makefile"
+// itself or one of the repo's known make target names. Checked before
+// goTerms on purpose: outputs like "run make train-real-seq2seq" contain
+// the word "train", and we want the makefile tag to win.
+var makefileTerms = regexp.MustCompile(`(?i:\bmakefile\b)|\b(train-real-seq2seq|real-chat|train-resume|train-fresh|train-small-seq2seq|test-small-seq2seq|chat-makefile|makefile-train|makefile-pb|import-pairs|reclassify-domains|conversing-pb|social-replies-pb|tech-multiturn-pb|clean-all|install-hooks|export-labels|all-pb)\b|(?i:\bmake\s+(clean|chat|train|test|sel|metrics)\b)`)
+
 // goTerms marks the Go-programming domain. Rule-based on purpose: data
 // curation is a human judgment, and this keeps it visible and auditable.
 // NOTE: the bare word "go" is matched case-sensitively only — the language
@@ -51,6 +60,9 @@ var goTerms = regexp.MustCompile(`(?i:\b(goroutine|closure|defer|struct|interfac
 
 // ClassifyDomain tags a pair by its content.
 func ClassifyDomain(input, output string) string {
+	if makefileTerms.MatchString(input) || makefileTerms.MatchString(output) {
+		return MakefileDomain
+	}
 	if goTerms.MatchString(input) || goTerms.MatchString(output) {
 		return "go"
 	}
