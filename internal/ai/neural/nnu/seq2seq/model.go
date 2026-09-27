@@ -88,9 +88,16 @@ func (e *Encoder) Parameters() []*tensor.Tensor { // Changed here
 type Decoder struct {
 	Embedding *nn.Embedding
 	LSTM      *nn.LSTM
+	MoE       *nn.MoE // mixture-of-experts refines the LSTM state before projection
 	Output    *nn.Linear
 	// Add other layers as needed, e.g., attention
 }
+
+// MoE configuration for the decoder.
+const (
+	decoderMoENumExperts = 4
+	decoderMoETopK       = 2
+)
 
 // NewDecoder creates a new Decoder.
 func NewDecoder(outputVocabSize, embeddingDim, hiddenDim int) (*Decoder, error) {
@@ -102,9 +109,14 @@ func NewDecoder(outputVocabSize, embeddingDim, hiddenDim int) (*Decoder, error) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create LSTM for decoder: %w", err)
 	}
+	moe, err := nn.NewMoE(hiddenDim, decoderMoENumExperts, decoderMoETopK, hiddenDim/2)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create MoE layer for decoder: %w", err)
+	}
 	return &Decoder{
 		Embedding: nn.NewEmbedding(outputVocabSize, embeddingDim),
 		LSTM:      lstm, // Input to LSTM will be embedded token + context
+		MoE:       moe,
 		Output:    outputLayer,
 	}, nil
 }
@@ -132,8 +144,23 @@ func (d *Decoder) Forward(inputTokenID *tensor.Tensor, hidden, cell *tensor.Tens
 	}
 	// newHidden, newCell: [batch_size, hidden_dim]
 
-	// Apply linear layer to the output of the LSTM
-	prediction, err := d.Output.Forward(newHidden)
+	// Mixture-of-experts: route the LSTM state through the top-k experts
+	// before projecting to vocabulary logits.
+	moeIn, err := newHidden.Reshape([]int{newHidden.Shape[0], 1, newHidden.Shape[1]})
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("decoder MoE input reshape failed: %w", err)
+	}
+	moeOut, _, err := d.MoE.Forward(moeIn)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("decoder MoE forward failed: %w", err)
+	}
+	moeOut2D, err := moeOut.Reshape([]int{moeOut.Shape[0], moeOut.Shape[2]})
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("decoder MoE output reshape failed: %w", err)
+	}
+
+	// Apply linear layer to the MoE-refined state
+	prediction, err := d.Output.Forward(moeOut2D)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("decoder output linear layer failed: %w", err)
 	}
@@ -147,6 +174,9 @@ func (d *Decoder) Parameters() []*tensor.Tensor { // Changed here
 	params := []*tensor.Tensor{} // Changed here
 	params = append(params, d.Embedding.Parameters()...)
 	params = append(params, d.LSTM.Parameters()...)
+	if d.MoE != nil {
+		params = append(params, d.MoE.Parameters()...)
+	}
 	params = append(params, d.Output.Parameters()...)
 	return params
 }
@@ -255,21 +285,75 @@ func (m *Seq2Seq) Forward(inputIDs, targetIDs *tensor.Tensor) (*tensor.Tensor, e
 }
 
 // Predict generates a description given an input query.
+// ThoughtStep records what the model did at one decoding step: the token it
+// chose, the runners-up it considered, and which MoE experts it consulted
+// (with their gate weights). This is the model's honest, observable "thought
+// process" — routing decisions, not a verbal chain-of-thought (the model is
+// far too small to reason in words).
+type ThoughtStep struct {
+	Token      string
+	TokenID    int
+	Experts    []int     // top-k expert indices consulted for this token
+	Gates      []float32 // gate weight per consulted expert (sums to 1)
+	Candidates []string  // top-3 candidate token texts after anti-repeat masking
+}
+
+// ThoughtTrace is the per-reply thought process: one step per generated token
+// plus the overall expert usage histogram for the reply.
+type ThoughtTrace struct {
+	Steps       []ThoughtStep
+	ExpertUsage []float32 // fraction of reply tokens routed to each expert
+	NumExperts  int
+}
+
 func (m *Seq2Seq) Predict(query string, maxLen int) (string, error) {
+	answer, _, err := m.PredictWithTrace(query, maxLen)
+	return answer, err
+}
+
+// NormalizeQuery canonicalizes a user query before encoding: lowercased,
+// sentence punctuation (.!?,;:) stripped, whitespace collapsed. "Tell me a
+// joke." and "tell me a joke" must reach the encoder identically —
+// punctuation carries no meaning for intent, and training uses the same
+// normalization, so the model never has to relearn every phrasing twice.
+func NormalizeQuery(q string) string {
+	q = strings.ToLower(q)
+	var b strings.Builder
+	b.Grow(len(q))
+	prevSpace := true
+	for _, r := range q {
+		switch {
+		case r == '.' || r == '!' || r == '?' || r == ',' || r == ';' || r == ':':
+			// drop sentence punctuation
+		case r == ' ' || r == '\t' || r == '\n' || r == '\r':
+			if !prevSpace {
+				b.WriteRune(' ')
+			}
+			prevSpace = true
+		default:
+			b.WriteRune(r)
+			prevSpace = false
+		}
+	}
+	return strings.TrimSpace(b.String())
+}
+
+func (m *Seq2Seq) PredictWithTrace(query string, maxLen int) (string, *ThoughtTrace, error) {
 	if m != nil && len(m.ExactMap) > 0 {
 		if answer, ok := m.ExactMap[strings.ToLower(strings.TrimSpace(query))]; ok {
-			return strings.TrimSpace(answer), nil
+			return strings.TrimSpace(answer), nil, nil
 		}
 	}
 
 	if m.Tokenizer == nil {
-		return "", fmt.Errorf("seq2seq tokenizer is nil")
+		return "", nil, fmt.Errorf("seq2seq tokenizer is nil")
 	}
 
+	query = NormalizeQuery(query)
 	// Encode the input query
 	inputTokenIDs, err := m.Tokenizer.Encode(query)
 	if err != nil {
-		return "", fmt.Errorf("failed to tokenize query: %w", err)
+		return "", nil, fmt.Errorf("failed to tokenize query: %w", err)
 	}
 
 	// Convert token IDs to tensor
@@ -282,7 +366,7 @@ func (m *Seq2Seq) Predict(query string, maxLen int) (string, error) {
 	// Encoder forward pass
 	encoderHidden, encoderCell, err := m.Encoder.Forward(inputTensor)
 	if err != nil {
-		return "", fmt.Errorf("prediction encoder forward failed: %w", err)
+		return "", nil, fmt.Errorf("prediction encoder forward failed: %w", err)
 	}
 
 	decoderHidden := encoderHidden
@@ -292,15 +376,39 @@ func (m *Seq2Seq) Predict(query string, maxLen int) (string, error) {
 	outputTokens := []int{}
 	currentInputTokenID := float64(m.OutputVocab.BosID)
 
+	trace := &ThoughtTrace{}
+	if m.Decoder.MoE != nil {
+		trace.NumExperts = m.Decoder.MoE.NumExperts
+		trace.ExpertUsage = make([]float32, m.Decoder.MoE.NumExperts)
+	}
+
+	// Anti-degeneration: tiny models love to loop ("go go go", "the the the").
+	// Forbid immediate token repeats and repeated bigrams during greedy
+	// decoding — standard practice, costs nothing.
+	seenBigrams := map[[2]int]bool{}
+
 	for t := range maxLen {
 		decoderInput := tensor.NewTensor([]int{1, 1}, []float32{float32(currentInputTokenID)}, true)
 
 		prediction, hidden, cell, err := m.Decoder.Forward(decoderInput, decoderHidden, decoderCell)
 		if err != nil {
-			return "", fmt.Errorf("prediction decoder forward failed at step %d: %w", t, err)
+			return "", nil, fmt.Errorf("prediction decoder forward failed at step %d: %w", t, err)
 		}
 
-		// Get the token with the highest probability (greedy decoding)
+		if len(outputTokens) > 0 {
+			prev := outputTokens[len(outputTokens)-1]
+			if prev >= 0 && prev < prediction.Shape[1] {
+				prediction.Data[prev] = -1e30 // no "go go"
+			}
+			for c := 0; c < prediction.Shape[1]; c++ {
+				if seenBigrams[[2]int{prev, c}] {
+					prediction.Data[c] = -1e30 // no repeated bigram
+				}
+			}
+		}
+
+		// Get the token with the highest probability (greedy decoding),
+		// plus the runners-up for the thought trace.
 		predictedTokenID := 0
 		maxProb := prediction.Data[0]
 		for i := 1; i < prediction.Shape[1]; i++ {
@@ -309,7 +417,32 @@ func (m *Seq2Seq) Predict(query string, maxLen int) (string, error) {
 				predictedTokenID = i
 			}
 		}
+		candidates := topKCandidates(prediction.Data, 3, m.OutputVocab)
 
+		// Record the MoE routing for this step (single token => first K entries).
+		step := ThoughtStep{
+			Token:      m.OutputVocab.GetWord(predictedTokenID),
+			TokenID:    predictedTokenID,
+			Candidates: candidates,
+		}
+		if m.Decoder.MoE != nil {
+			idx, gates := m.Decoder.MoE.LastRouting()
+			k := m.Decoder.MoE.TopK
+			if len(idx) >= k {
+				step.Experts = append([]int(nil), idx[:k]...)
+				step.Gates = append([]float32(nil), gates[:k]...)
+				for _, e := range step.Experts {
+					if e >= 0 && e < len(trace.ExpertUsage) {
+						trace.ExpertUsage[e]++
+					}
+				}
+			}
+		}
+		trace.Steps = append(trace.Steps, step)
+
+		if len(outputTokens) > 0 {
+			seenBigrams[[2]int{outputTokens[len(outputTokens)-1], predictedTokenID}] = true
+		}
 		outputTokens = append(outputTokens, predictedTokenID)
 		if predictedTokenID == m.OutputVocab.EosID {
 			break
@@ -321,9 +454,51 @@ func (m *Seq2Seq) Predict(query string, maxLen int) (string, error) {
 		decoderCell = cell
 	}
 
+	// Normalize the expert usage histogram (each step consults topK experts,
+	// so usage sums to topK per step).
+	if m.Decoder.MoE != nil {
+		if denom := float32(len(trace.Steps) * m.Decoder.MoE.TopK); denom > 0 {
+			for i := range trace.ExpertUsage {
+				trace.ExpertUsage[i] /= denom
+			}
+		}
+	}
+
 	decodedDescription := m.OutputVocab.Decode(outputTokens)
 
-	return decodedDescription, nil
+	return decodedDescription, trace, nil
+}
+
+// topKCandidates returns the text of the k highest-logit tokens.
+func topKCandidates(logits []float32, k int, v *vocab.Vocabulary) []string {
+	type pair struct {
+		id int
+		v  float32
+	}
+	best := make([]pair, 0, k)
+	for i, lv := range logits {
+		inserted := false
+		for j := range best {
+			if lv > best[j].v {
+				best = append(best, pair{})
+				copy(best[j+1:], best[j:])
+				best[j] = pair{i, lv}
+				inserted = true
+				break
+			}
+		}
+		if !inserted && len(best) < k {
+			best = append(best, pair{i, lv})
+		}
+		if len(best) > k {
+			best = best[:k]
+		}
+	}
+	out := make([]string, 0, len(best))
+	for _, b := range best {
+		out = append(out, v.GetWord(b.id))
+	}
+	return out
 }
 
 // Save saves the Seq2Seq model to a file.

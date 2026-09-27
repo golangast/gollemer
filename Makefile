@@ -13,6 +13,7 @@ MAIN_CMD     = go run main.go
 
 .PHONY: train train-resume train-fresh train-small train-small-seq2seq \
        test-small-seq2seq seq2seq-prompt seq2seq-chat chat metrics export-labels \
+       train-real-seq2seq real-chat import-pairs \
        clean clean-all conversing-pb social-replies-pb tech-multiturn-pb all-pb \
        makefile-pb makefile-train chat-makefile install-hooks help sel
 
@@ -54,6 +55,22 @@ seq2seq-prompt:
 ## seq2seq-chat: Start an interactive tiny seq2seq chat loop with the saved model
 seq2seq-chat:
 	$(MAIN_CMD) -seq2seq-chat
+
+## train-real-seq2seq: Train the genuine neural seq2seq social model (real BPTT, no cheat sheet)
+train-real-seq2seq:
+	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-real-seq2seq
+
+## real-chat: Chat with the trained neural model (pure generation, no lookup)
+real-chat:
+	$(MAIN_CMD) -real-chat
+
+## import-pairs: Import new training pairs (FILE=path.jsonl) through the quality gate
+import-pairs:
+	$(MAIN_CMD) -import-pairs="$(FILE)"
+
+## reclassify-domains: Re-tag dataset pairs with the current domain classifier
+reclassify-domains:
+	$(MAIN_CMD) -reclassify-domains
 
 ## chat: Start an interactive full MoE chat loop with conversation history
 chat:

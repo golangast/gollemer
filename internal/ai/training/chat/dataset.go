@@ -1,0 +1,264 @@
+package chat
+
+// The training-data loop: the mechanism behind "remember old data if it is
+// good data".
+//
+// All social training pairs live in ONE file: data/training/chat_pairs.jsonl
+// (one JSON object per line). Adding data never fine-tunes on just the new
+// pairs — every training run loads the whole file and retrains from scratch
+// on old + new together (rehearsal), which is what prevents the model from
+// forgetting what it already learned.
+//
+// New pairs pass through ValidatePair before they are admitted:
+//   - non-empty input and output
+//   - 1..40 whitespace-separated tokens on each side
+//   - input and output must differ
+//   - no exact duplicate of a pair already in the file
+//   - no control characters
+// Pairs that fail are quarantined (reported, never silently dropped) so bad
+// data can never poison the pool.
+
+import (
+	"bufio"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"unicode"
+)
+
+// ChatPair is one training example: a user input and the response to learn.
+// Domain tags what the pair teaches ("social", "go", ...). The roadmap trains
+// one stage at a time, so the trainer filters by domain — a social model never
+// sees Go Q&A and vice versa.
+type ChatPair struct {
+	Input  string `json:"input"`
+	Output string `json:"output"`
+	Domain string `json:"domain,omitempty"`
+}
+
+// SocialDomain is the default domain: everyday conversation.
+const SocialDomain = "social"
+
+// goTerms marks the Go-programming domain. Rule-based on purpose: data
+// curation is a human judgment, and this keeps it visible and auditable.
+// NOTE: the bare word "go" is matched case-sensitively only — the language
+// name is capitalized in this dataset ("use Go"), while the verb is not
+// ("how did your day go").
+var goTerms = regexp.MustCompile(`(?i:\b(goroutine|closure|defer|struct|interface|slice|channel|module|cgo|generics?|package|func|race condition|compil|architect|waitgroup|pointer|executable|binary|mutex|documentation|profiling|builtin|error handling|builds?|panic|blank identifier|anonymous function)\b)|\bdepende|\bnew\(\)|\bmake\(\)|\bGo\b`)
+
+// ClassifyDomain tags a pair by its content.
+func ClassifyDomain(input, output string) string {
+	if goTerms.MatchString(input) || goTerms.MatchString(output) {
+		return "go"
+	}
+	return SocialDomain
+}
+
+// ChatDatasetRelPath is the dataset location relative to the project root.
+const ChatDatasetRelPath = "data/training/chat_pairs.jsonl"
+
+// maxPairTokens bounds each side of a pair; longer texts are not social
+// chat and would destabilize the tiny model.
+const maxPairTokens = 40
+
+// normalizePairKey canonicalizes a pair for duplicate detection.
+func normalizePairKey(p ChatPair) string {
+	norm := func(s string) string {
+		return strings.Join(strings.Fields(strings.ToLower(s)), " ")
+	}
+	return norm(p.Input) + "\n" + norm(p.Output)
+}
+
+// ValidatePair is the quality gate. seen holds normalizePairKey values of the
+// pairs already admitted. It returns nil when the pair is good data worth
+// remembering, or a human-readable reason when it must be quarantined.
+func ValidatePair(p ChatPair, seen map[string]bool) error {
+	in := strings.TrimSpace(p.Input)
+	out := strings.TrimSpace(p.Output)
+	if in == "" {
+		return fmt.Errorf("empty input")
+	}
+	if out == "" {
+		return fmt.Errorf("empty output")
+	}
+	inTok := len(strings.Fields(in))
+	outTok := len(strings.Fields(out))
+	if inTok < 1 || outTok < 1 {
+		return fmt.Errorf("needs at least 1 token per side")
+	}
+	if inTok > maxPairTokens || outTok > maxPairTokens {
+		return fmt.Errorf("too long (%d/%d tokens, max %d per side)", inTok, outTok, maxPairTokens)
+	}
+	if strings.EqualFold(in, out) {
+		return fmt.Errorf("input and output are identical")
+	}
+	// NOTE: in and out are checked separately — the "\n" separator used in the
+	// duplicate-detection key is itself a control character.
+	for _, s := range in + out {
+		if unicode.IsControl(s) {
+			return fmt.Errorf("contains control characters")
+		}
+	}
+	if seen[normalizePairKey(p)] {
+		return fmt.Errorf("duplicate of an existing pair")
+	}
+	return nil
+}
+
+// LoadChatDataset reads the JSONL dataset. Missing file = empty dataset, nil error.
+func LoadChatDataset(path string) ([]ChatPair, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer f.Close()
+	var pairs []ChatPair
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 1024*1024), 1024*1024)
+	lineNo := 0
+	for sc.Scan() {
+		lineNo++
+		line := strings.TrimSpace(sc.Text())
+		if line == "" {
+			continue
+		}
+		var p ChatPair
+		if err := json.Unmarshal([]byte(line), &p); err != nil {
+			return nil, fmt.Errorf("dataset line %d: %w", lineNo, err)
+		}
+		if p.Domain == "" {
+			p.Domain = SocialDomain
+		}
+		pairs = append(pairs, p)
+	}
+	return pairs, sc.Err()
+}
+
+// SaveChatDataset writes pairs as JSONL, creating parent directories.
+func SaveChatDataset(path string, pairs []ChatPair) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	w := bufio.NewWriter(f)
+	for _, p := range pairs {
+		line, err := json.Marshal(p)
+		if err != nil {
+			return err
+		}
+		if _, err := w.Write(append(line, '\n')); err != nil {
+			return err
+		}
+	}
+	return w.Flush()
+}
+
+// ChatDatasetPath resolves the dataset file under the project root.
+func ChatDatasetPath(projectRoot string) string {
+	return filepath.Join(projectRoot, ChatDatasetRelPath)
+}
+
+// ReclassifyDomains re-runs ClassifyDomain over every pair in the dataset and
+// saves the result. Used when the classifier itself improves — the data stays,
+// the tags get smarter.
+func ReclassifyDomains(projectRoot string) (map[string]int, error) {
+	path := ChatDatasetPath(projectRoot)
+	pairs, err := LoadChatDataset(path)
+	if err != nil {
+		return nil, err
+	}
+	counts := map[string]int{}
+	for i := range pairs {
+		pairs[i].Domain = ClassifyDomain(pairs[i].Input, pairs[i].Output)
+		counts[pairs[i].Domain]++
+	}
+	if err := SaveChatDataset(path, pairs); err != nil {
+		return nil, err
+	}
+	return counts, nil
+}
+
+// SeedChatDataset populates the JSONL dataset from the built-in conversing.pb
+// pairs the first time it is missing. It never overwrites an existing file:
+// John's data is append-only by design.
+func SeedChatDataset(projectRoot string) (int, error) {
+	path := ChatDatasetPath(projectRoot)
+	if _, err := os.Stat(path); err == nil {
+		existing, err := LoadChatDataset(path)
+		if err != nil {
+			return 0, err
+		}
+		return len(existing), nil // already seeded; report current size
+	}
+	raw, err := loadTinyPairs(seq2SeqDataPath(projectRoot))
+	if err != nil {
+		return 0, fmt.Errorf("seed: load built-in pairs: %w", err)
+	}
+	seen := map[string]bool{}
+	pairs := make([]ChatPair, 0, len(raw))
+	for _, rp := range raw {
+		p := ChatPair{Input: rp.Q, Output: rp.A, Domain: ClassifyDomain(rp.Q, rp.A)}
+		if err := ValidatePair(p, seen); err != nil {
+			continue // quarantine quietly at seed time; the gate logs on import
+		}
+		seen[normalizePairKey(p)] = true
+		pairs = append(pairs, p)
+	}
+	if err := SaveChatDataset(path, pairs); err != nil {
+		return 0, err
+	}
+	return len(pairs), nil
+}
+
+// ImportChatPairs validates every pair in an import JSONL file and appends the
+// good ones to the dataset. It returns the number admitted and a list of
+// human-readable quarantine reports ("line 12: too long ...") for the rest.
+func ImportChatPairs(projectRoot, importPath string) (admitted int, quarantined []string, err error) {
+	incoming, err := LoadChatDataset(importPath)
+	if err != nil {
+		return 0, nil, fmt.Errorf("read import file: %w", err)
+	}
+	path := ChatDatasetPath(projectRoot)
+	existing, err := LoadChatDataset(path)
+	if err != nil {
+		return 0, nil, fmt.Errorf("read dataset: %w", err)
+	}
+	seen := map[string]bool{}
+	for _, p := range existing {
+		seen[normalizePairKey(p)] = true
+	}
+	for i, p := range incoming {
+		if p.Domain == "" {
+			p.Domain = ClassifyDomain(p.Input, p.Output)
+		} else {
+			p.Domain = strings.ToLower(strings.TrimSpace(p.Domain))
+		}
+		if verr := ValidatePair(p, seen); verr != nil {
+			quarantined = append(quarantined, fmt.Sprintf("pair %d: %v", i+1, verr))
+			continue
+		}
+		seen[normalizePairKey(p)] = true
+		existing = append(existing, ChatPair{
+			Input:  strings.TrimSpace(p.Input),
+			Output: strings.TrimSpace(p.Output),
+			Domain: p.Domain,
+		})
+		admitted++
+	}
+	if admitted > 0 {
+		if err := SaveChatDataset(path, existing); err != nil {
+			return 0, quarantined, fmt.Errorf("save dataset: %w", err)
+		}
+	}
+	return admitted, quarantined, nil
+}

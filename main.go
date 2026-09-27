@@ -21,10 +21,15 @@ func main() {
 	seq2SeqChatFlag := flag.Bool("seq2seq-chat", false, "Start an interactive tiny seq2seq chat loop with the saved model")
 	chatFlag := flag.Bool("chat", false, "Start an interactive full MoE chat loop with conversation history and reasoning")
 	chatMakefileFlag := flag.Bool("chat-makefile", false, "Start an interactive makefile chat loop with top command predictions")
+	trainRealSeq2SeqFlag := flag.Bool("train-real-seq2seq", false, "Train the genuine neural seq2seq social model (real BPTT, no cheat sheet)")
+	realChatFlag := flag.Bool("real-chat", false, "Chat with the trained neural model (pure generation, no lookup)")
+	importPairsFlag := flag.String("import-pairs", "", "Import new training pairs from a JSONL file through the quality gate")
+	domainFlag := flag.String("domain", "social", "Training/chat domain (social, go, ...)")
+	reclassifyFlag := flag.Bool("reclassify-domains", false, "Re-tag all dataset pairs with the current domain classifier")
 	flag.Parse()
 
-	if !*trainFlag && !*trainMultiphaseFlag && !*smallTrainFlag && !*smallLLMFlag && !*smallSeq2SeqFlag && !*testSmallSeq2SeqFlag && *seq2SeqPromptFlag == "" && !*seq2SeqChatFlag && !*chatFlag && !*chatMakefileFlag {
-		fmt.Fprintf(os.Stderr, "Usage: gollemer -train | gollemer -train-small | gollemer -small-llm | gollemer -train-small-seq2seq | gollemer -test-small-seq2seq | gollemer -seq2seq-prompt='hello' | gollemer -seq2seq-chat | gollemer -chat | gollemer -chat-makefile\n")
+	if !*trainFlag && !*trainMultiphaseFlag && !*smallTrainFlag && !*smallLLMFlag && !*smallSeq2SeqFlag && !*testSmallSeq2SeqFlag && *seq2SeqPromptFlag == "" && !*seq2SeqChatFlag && !*chatFlag && !*chatMakefileFlag && !*trainRealSeq2SeqFlag && !*realChatFlag && *importPairsFlag == "" && !*reclassifyFlag {
+		fmt.Fprintf(os.Stderr, "Usage: gollemer -train | gollemer -train-small | gollemer -small-llm | gollemer -train-small-seq2seq | gollemer -test-small-seq2seq | gollemer -seq2seq-prompt='hello' | gollemer -seq2seq-chat | gollemer -chat | gollemer -chat-makefile | gollemer -train-real-seq2seq | gollemer -real-chat | gollemer -import-pairs=file.jsonl | gollemer -reclassify-domains\n")
 		os.Exit(1)
 	}
 
@@ -57,6 +62,34 @@ func main() {
 	}
 	if *seq2SeqChatFlag {
 		chat.RunInteractiveTinySeq2SeqChat(rootDir)
+		return
+	}
+	if *trainRealSeq2SeqFlag {
+		if err := chat.RunRealSeq2SeqTraining(rootDir, *domainFlag); err != nil {
+			fmt.Fprintf(os.Stderr, "real training failed: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+	if *realChatFlag {
+		if err := chat.RunRealChat(rootDir, *domainFlag); err != nil {
+			fmt.Fprintf(os.Stderr, "real chat failed: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+	if *importPairsFlag != "" {
+		if err := chat.RunImportChatPairs(rootDir, *importPairsFlag); err != nil {
+			fmt.Fprintf(os.Stderr, "import failed: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+	if *reclassifyFlag {
+		if err := chat.RunReclassifyDomains(rootDir); err != nil {
+			fmt.Fprintf(os.Stderr, "reclassify failed: %v\n", err)
+			os.Exit(1)
+		}
 		return
 	}
 	if *chatMakefileFlag {
