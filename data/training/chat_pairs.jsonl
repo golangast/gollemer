@@ -366,3 +366,81 @@
 {"input":"export the labels","output":"run make export-labels","domain":"makefile"}
 {"input":"dump labels to csv","output":"run make export-labels","domain":"makefile"}
 {"input":"how do i pick a make target interactively","output":"run make sel","domain":"makefile"}
+{"input":"i need to train the neural net","output":"run make train-real-seq2seq","domain":"makefile"}
+{"input":"kick off training","output":"run make train-real-seq2seq","domain":"makefile"}
+{"input":"how to train the neural network","output":"run make train-real-seq2seq","domain":"makefile"}
+{"input":"run the real training","output":"run make train-real-seq2seq","domain":"makefile"}
+{"input":"train the seq2seq model","output":"run make train-real-seq2seq","domain":"makefile"}
+{"input":"start the full training run","output":"run make train-real-seq2seq","domain":"makefile"}
+{"input":"pick up training where it stopped","output":"run make train-resume","domain":"makefile"}
+{"input":"continue the last training run","output":"run make train-resume","domain":"makefile"}
+{"input":"training got interrupted, keep going","output":"run make train-resume","domain":"makefile"}
+{"input":"don't start over, just continue","output":"run make train-resume","domain":"makefile"}
+{"input":"resume from the checkpoint","output":"run make train-resume","domain":"makefile"}
+{"input":"delete everything and begin again","output":"run make train-fresh","domain":"makefile"}
+{"input":"complete reset and retrain","output":"run make train-fresh","domain":"makefile"}
+{"input":"throw away all models and restart","output":"run make train-fresh","domain":"makefile"}
+{"input":"fresh training from scratch","output":"run make train-fresh","domain":"makefile"}
+{"input":"nuke it all and start over","output":"run make train-fresh","domain":"makefile"}
+{"input":"enable the git hooks","output":"run make install-hooks","domain":"makefile"}
+{"input":"i need the precommit hook","output":"run make install-hooks","domain":"makefile"}
+{"input":"set up the git pre-commit hook","output":"run make install-hooks","domain":"makefile"}
+{"input":"install the precommit hooks","output":"run make install-hooks","domain":"makefile"}
+{"input":"hook up git validation","output":"run make install-hooks","domain":"makefile"}
+{"input":"bring in new chat pairs","output":"run make import-pairs FILE=data.jsonl","domain":"makefile"}
+{"input":"add pairs from a jsonl file","output":"run make import-pairs FILE=data.jsonl","domain":"makefile"}
+{"input":"import my new examples","output":"run make import-pairs FILE=data.jsonl","domain":"makefile"}
+{"input":"load pairs from disk","output":"run make import-pairs FILE=data.jsonl","domain":"makefile"}
+{"input":"feed new data into the dataset","output":"run make import-pairs FILE=data.jsonl","domain":"makefile"}
+{"input":"converse with gollemer","output":"run make real-chat","domain":"makefile"}
+{"input":"have a conversation with the model","output":"run make real-chat","domain":"makefile"}
+{"input":"launch the chat interface","output":"run make real-chat","domain":"makefile"}
+{"input":"talk with the trained model","output":"run make real-chat","domain":"makefile"}
+{"input":"purge the saved models","output":"run make clean","domain":"makefile"}
+{"input":"get rid of old checkpoints","output":"run make clean","domain":"makefile"}
+{"input":"erase the model files","output":"run make clean","domain":"makefile"}
+{"input":"tidy up the checkpoints","output":"run make clean","domain":"makefile"}
+{"input":"erase all models and begin anew","output":"run make train-fresh","domain":"makefile"}
+{"input":"reset everything, fresh training","output":"run make train-fresh","domain":"makefile"}
+{"input":"destroy all checkpoints, start clean","output":"run make train-fresh","domain":"makefile"}
+{"input":"full wipe then train","output":"run make train-fresh","domain":"makefile"}
+{"input":"start the training over from zero","output":"run make train-fresh","domain":"makefile"}
+{"input":"forget all progress, begin again","output":"run make train-fresh","domain":"makefile"}
+{"input":"scrap the old models, train anew","output":"run make train-fresh","domain":"makefile"}
+{"input":"carry on with training","output":"run make train-resume","domain":"makefile"}
+{"input":"training stopped, resume it","output":"run make train-resume","domain":"makefile"}
+{"input":"go on with the training run","output":"run make train-resume","domain":"makefile"}
+{"input":"continue the interrupted training","output":"run make train-resume","domain":"makefile"}
+{"input":"keep the training going","output":"run make train-resume","domain":"makefile"}
+{"input":"training was killed, pick it back up","output":"run make train-resume","domain":"makefile"}
+{"input":"finish the training run","output":"run make train-resume","domain":"makefile"}
+{"input":"train the model now","output":"run make train-real-seq2seq","domain":"makefile"}
+{"input":"i want to start training the model","output":"run make train-real-seq2seq","domain":"makefile"}
+{"input":"please train the model","output":"run make train-real-seq2seq","domain":"makefile"}
+{"input":"can you train the model","output":"run make train-real-seq2seq","domain":"makefile"}
+{"input":"model training please","output":"run make train-real-seq2seq","domain":"makefile"}
+{"input":"start training the model","output":"run make train-real-seq2seq","domain":"makefile"}
+{"input":"initiate model training","output":"run make train-real-seq2seq","domain":"makefile"}
+{"input":"how can i train the model","output":"run make train-real-seq2seq","domain":"makefile"}
+{"input":"what's the command to train the model","output":"run make train-real-seq2seq","domain":"makefile"}
+{"input":"which make target trains the model","output":"run make train-real-seq2seq","domain":"makefile"}
+{"input":"resume the training","output":"run make train-resume","domain":"makefile"}
+{"input":"please resume training","output":"run make train-resume","domain":"makefile"}
+{"input":"can you resume the training","output":"run make train-resume","domain":"makefile"}
+{"input":"i want to resume training","output":"run make train-resume","domain":"makefile"}
+{"input":"what's the command to resume training","output":"run make train-resume","domain":"makefile"}
+{"input":"which make target resumes training","output":"run make train-resume","domain":"makefile"}
+{"input":"how can i resume training","output":"run make train-resume","domain":"makefile"}
+{"input":"continue training please","output":"run make train-resume","domain":"makefile"}
+{"input":"training resume","output":"run make train-resume","domain":"makefile"}
+{"input":"resume my training run","output":"run make train-resume","domain":"makefile"}
+{"input":"retag the dataset","output":"run make reclassify-domains","domain":"makefile"}
+{"input":"please retag the dataset","output":"run make reclassify-domains","domain":"makefile"}
+{"input":"i want to retag the dataset","output":"run make reclassify-domains","domain":"makefile"}
+{"input":"can you retag the dataset","output":"run make reclassify-domains","domain":"makefile"}
+{"input":"how can i retag the dataset","output":"run make reclassify-domains","domain":"makefile"}
+{"input":"what's the command to retag the dataset","output":"run make reclassify-domains","domain":"makefile"}
+{"input":"which make target retags the dataset","output":"run make reclassify-domains","domain":"makefile"}
+{"input":"re-tag the dataset","output":"run make reclassify-domains","domain":"makefile"}
+{"input":"update the domain tags","output":"run make reclassify-domains","domain":"makefile"}
+{"input":"fix the domain labels","output":"run make reclassify-domains","domain":"makefile"}
