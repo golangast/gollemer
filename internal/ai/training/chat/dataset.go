@@ -170,6 +170,13 @@ func ValidatePair(p ChatPair, seen map[string]bool) error {
 
 // LoadChatDataset reads the JSONL dataset. Missing file = empty dataset, nil error.
 func LoadChatDataset(path string) ([]ChatPair, error) {
+	return loadChatPairs(path, SocialDomain)
+}
+
+// loadChatPairs reads a JSONL pair file. When defaultDomain is non-empty,
+// pairs without an explicit domain tag get it; when empty, the domain is
+// left blank so callers (like the import gate) can classify for themselves.
+func loadChatPairs(path string, defaultDomain string) ([]ChatPair, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -193,7 +200,7 @@ func LoadChatDataset(path string) ([]ChatPair, error) {
 			return nil, fmt.Errorf("dataset line %d: %w", lineNo, err)
 		}
 		if p.Domain == "" {
-			p.Domain = SocialDomain
+			p.Domain = defaultDomain
 		}
 		pairs = append(pairs, p)
 	}
@@ -284,7 +291,7 @@ func SeedChatDataset(projectRoot string) (int, error) {
 // good ones to the dataset. It returns the number admitted and a list of
 // human-readable quarantine reports ("line 12: too long ...") for the rest.
 func ImportChatPairs(projectRoot, importPath string) (admitted int, quarantined []string, err error) {
-	incoming, err := LoadChatDataset(importPath)
+	incoming, err := loadChatPairs(importPath, "")
 	if err != nil {
 		return 0, nil, fmt.Errorf("read import file: %w", err)
 	}

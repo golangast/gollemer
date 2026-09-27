@@ -1,6 +1,9 @@
 package chat
 
-import "testing"
+import (
+	"os"
+	"testing"
+)
 
 func TestValidatePairAcceptsGoodPair(t *testing.T) {
 	seen := map[string]bool{}
@@ -168,5 +171,46 @@ func TestTidyGoCode(t *testing.T) {
 	want = `func shout(s string) string { return strings.ToUpper(s) }`
 	if got != want {
 		t.Errorf("dotted ident: got %q, want %q", got, want)
+	}
+}
+
+func TestImportClassifiesDomainlessPairs(t *testing.T) {
+	root := t.TempDir()
+	// Seed with one existing pair so the dataset file exists.
+	seed := "{\"input\":\"hello\",\"output\":\"hi there\",\"domain\":\"social\"}\n"
+	seedPath := root + "/" + ChatDatasetRelPath
+	if err := os.MkdirAll(root+"/data/training", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(seedPath, []byte(seed), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Domain-less import: one gocode pair, one social pair, no "domain" keys.
+	impPath := root + "/import.jsonl"
+	imp := "{\"input\":\"write a function checking if a number is odd\",\"output\":\"func isOdd(n int) bool { return n % 2 != 0 }\"}\n" +
+		"{\"input\":\"good morning\",\"output\":\"good morning to you too\"}\n"
+	if err := os.WriteFile(impPath, []byte(imp), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	admitted, quarantined, err := ImportChatPairs(root, impPath)
+	if err != nil {
+		t.Fatalf("import failed: %v", err)
+	}
+	if admitted != 2 || len(quarantined) != 0 {
+		t.Fatalf("admitted=%d quarantined=%v, want 2 admitted", admitted, quarantined)
+	}
+	pairs, err := LoadChatDataset(seedPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byInput := map[string]string{}
+	for _, p := range pairs {
+		byInput[p.Input] = p.Domain
+	}
+	if byInput["write a function checking if a number is odd"] != GocodeDomain {
+		t.Errorf("gocode pair tagged %q, want %q", byInput["write a function checking if a number is odd"], GocodeDomain)
+	}
+	if byInput["good morning"] != SocialDomain {
+		t.Errorf("social pair tagged %q, want %q", byInput["good morning"], SocialDomain)
 	}
 }

@@ -583,3 +583,37 @@
 {"input":"i need a positivity check for ints in go","output":"func isPositive(n int) bool { return n \u003e 0 }","domain":"gocode"}
 {"input":"give me a function that totals a slice of ints","output":"func sum(nums []int) int { total := 0; for _, n := range nums { total += n }; return total }","domain":"gocode"}
 {"input":"i need a slice total function in go","output":"func sum(nums []int) int { total := 0; for _, n := range nums { total += n }; return total }","domain":"gocode"}
+{"input":"make a function checking if a number is even","output":"func isEven(n int) bool { return n % 2 == 0 }","domain":"gocode"}
+{"input":"create a function checking if a number is even","output":"func isEven(n int) bool { return n % 2 == 0 }","domain":"gocode"}
+{"input":"i need a function that checks whether a number is even","output":"func isEven(n int) bool { return n % 2 == 0 }","domain":"gocode"}
+{"input":"go function to determine if an integer is even","output":"func isEven(n int) bool { return n % 2 == 0 }","domain":"gocode"}
+{"input":"write a checker that tells if a number is even","output":"func isEven(n int) bool { return n % 2 == 0 }","domain":"gocode"}
+{"input":"write a function checking if a number is odd","output":"func isOdd(n int) bool { return n % 2 != 0 }","domain":"gocode"}
+{"input":"make a function checking if a number is odd","output":"func isOdd(n int) bool { return n % 2 != 0 }","domain":"gocode"}
+{"input":"go function to check for odd numbers","output":"func isOdd(n int) bool { return n % 2 != 0 }","domain":"gocode"}
+{"input":"write a function checking if a number is negative","output":"func isNegative(n int) bool { return n \u003c 0 }","domain":"gocode"}
+{"input":"make a function checking if a number is negative","output":"func isNegative(n int) bool { return n \u003c 0 }","domain":"gocode"}
+{"input":"create a function checking if a number is positive","output":"func isPositive(n int) bool { return n \u003e 0 }","domain":"gocode"}
+{"input":"i need a function that checks whether a number is positive","output":"func isPositive(n int) bool { return n \u003e 0 }","domain":"gocode"}
+{"input":"add up every element of an int slice","output":"func sum(nums []int) int { total := 0; for _, n := range nums { total += n }; return total }","domain":"gocode"}
+{"input":"compute the total of a slice of integers","output":"func sum(nums []int) int { total := 0; for _, n := range nums { total += n }; return total }","domain":"gocode"}
+{"input":"sum all values stored in a slice","output":"func sum(nums []int) int { total := 0; for _, n := range nums { total += n }; return total }","domain":"gocode"}
+{"input":"write a loop that totals a slice of ints","output":"func sum(nums []int) int { total := 0; for _, n := range nums { total += n }; return total }","domain":"gocode"}
+{"input":"multiply all numbers in a slice together","output":"func product(nums []int) int { p := 1; for _, n := range nums { p *= n }; return p }","domain":"gocode"}
+{"input":"find the largest value in an int slice","output":"func maxSlice(nums []int) int { m := nums[0]; for _, n := range nums { if n \u003e m { m = n } }; return m }","domain":"gocode"}
+{"input":"count the even numbers in a slice","output":"func countEven(nums []int) int { c := 0; for _, n := range nums { if n % 2 == 0 { c++ } }; return c }","domain":"gocode"}
+{"input":"double every value in an int slice","output":"func doubleAll(nums []int) { for i := range nums { nums[i] *= 2 } }","domain":"gocode"}
+{"input":"create a divide function that errors on zero","output":"func divide(a float64, b float64) (float64, error) { if b == 0 { return 0, errors.New(\"divide by zero\") }; return a / b, nil }","domain":"gocode"}
+{"input":"go function dividing two numbers with a zero check","output":"func divide(a float64, b float64) (float64, error) { if b == 0 { return 0, errors.New(\"divide by zero\") }; return a / b, nil }","domain":"gocode"}
+{"input":"make a safe division function for floats","output":"func divide(a float64, b float64) (float64, error) { if b == 0 { return 0, errors.New(\"divide by zero\") }; return a / b, nil }","domain":"gocode"}
+{"input":"write a division function that returns an error when dividing by zero","output":"func divide(a float64, b float64) (float64, error) { if b == 0 { return 0, errors.New(\"divide by zero\") }; return a / b, nil }","domain":"gocode"}
+{"input":"total the numbers in an integer slice","output":"func sum(nums []int) int { total := 0; for _, n := range nums { total += n }; return total }","domain":"gocode"}
+{"input":"write a function that adds up a slice","output":"func sum(nums []int) int { total := 0; for _, n := range nums { total += n }; return total }","domain":"gocode"}
+{"input":"sum an int slice using a loop","output":"func sum(nums []int) int { total := 0; for _, n := range nums { total += n }; return total }","domain":"gocode"}
+{"input":"add together all ints in a slice","output":"func sum(nums []int) int { total := 0; for _, n := range nums { total += n }; return total }","domain":"gocode"}
+{"input":"write a function adding n to a running total","output":"func addToTotal(total int, n int) int { total += n; return total }","domain":"gocode"}
+{"input":"accumulate n into total with a function","output":"func addToTotal(total int, n int) int { total += n; return total }","domain":"gocode"}
+{"input":"go function that bumps a total by n","output":"func addToTotal(total int, n int) int { total += n; return total }","domain":"gocode"}
+{"input":"make a function that adds n onto a total","output":"func addToTotal(total int, n int) int { total += n; return total }","domain":"gocode"}
+{"input":"sum up an int slice into a total","output":"func sum(nums []int) int { total := 0; for _, n := range nums { total += n }; return total }","domain":"gocode"}
+{"input":"add each int in a slice to a total","output":"func sum(nums []int) int { total := 0; for _, n := range nums { total += n }; return total }","domain":"gocode"}
