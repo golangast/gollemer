@@ -64,6 +64,18 @@ train-real-seq2seq:
 real-chat:
 	$(MAIN_CMD) -real-chat
 
+## train-gocode-seq2seq: Train the genuine neural seq2seq model on the gocode domain (NL -> Go code)
+train-gocode-seq2seq:
+	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-real-seq2seq -domain gocode
+
+## real-chat-gocode: Chat with the gocode model — describe what you want, get Go code
+real-chat-gocode:
+	$(MAIN_CMD) -real-chat -domain gocode
+
+## eval-gocode: Score the gocode model on the fixed eval suite (code correctness + chat/code mode separation)
+eval-gocode:
+	python3 scripts/gocode_eval_run.py
+
 ## import-pairs: Import new training pairs (FILE=path.jsonl) through the quality gate
 import-pairs:
 	$(MAIN_CMD) -import-pairs="$(FILE)"

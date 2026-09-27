@@ -15,6 +15,9 @@ package chat
 //   - input and output must differ
 //   - no exact duplicate of a pair already in the file
 //   - no control characters
+//   - no mixed chatter+code outputs ("I am func doing (x)"): an output that
+//     looks like code must not contain natural-language chatter, and a
+//     gocode-domain output must contain code at all
 // Pairs that fail are quarantined (reported, never silently dropped) so bad
 // data can never poison the pool.
 
@@ -45,11 +48,22 @@ const SocialDomain = "social"
 // MakefileDomain is stage two of the roadmap: guessing makefile commands.
 const MakefileDomain = "makefile"
 
+// GocodeDomain is stage three of the roadmap: generating Go code from a
+// natural-language request.
+const GocodeDomain = "gocode"
+
 // makefileTerms marks the makefile-command domain: the word "makefile"
 // itself or one of the repo's known make target names. Checked before
 // goTerms on purpose: outputs like "run make train-real-seq2seq" contain
 // the word "train", and we want the makefile tag to win.
 var makefileTerms = regexp.MustCompile(`(?i:\bmakefile\b)|\b(train-real-seq2seq|real-chat|train-resume|train-fresh|train-small-seq2seq|test-small-seq2seq|chat-makefile|makefile-train|makefile-pb|import-pairs|reclassify-domains|conversing-pb|social-replies-pb|tech-multiturn-pb|clean-all|install-hooks|export-labels|all-pb)\b|(?i:\bmake\s+(clean|chat|train|test|sel|metrics)\b)`)
+
+// gocodeTerms marks the code-generation domain: the input asks for code to
+// be written, or the output is a Go snippet (a func declaration, a package
+// clause, or a := assignment). Checked before goTerms on purpose: code
+// outputs contain words like "func" and "struct" that would otherwise tag
+// them as Go Q&A.
+var gocodeTerms = regexp.MustCompile(`(?i:\bwrite\b[^.]{0,40}\b(function|func|code|program|method|struct)\b)|\bfunc\s+[a-zA-Z_][a-zA-Z0-9_]*\s*\(|package main|:=`)
 
 // goTerms marks the Go-programming domain. Rule-based on purpose: data
 // curation is a human judgment, and this keeps it visible and auditable.
@@ -62,6 +76,9 @@ var goTerms = regexp.MustCompile(`(?i:\b(goroutine|closure|defer|struct|interfac
 func ClassifyDomain(input, output string) string {
 	if makefileTerms.MatchString(input) || makefileTerms.MatchString(output) {
 		return MakefileDomain
+	}
+	if gocodeTerms.MatchString(input) || gocodeTerms.MatchString(output) {
+		return GocodeDomain
 	}
 	if goTerms.MatchString(input) || goTerms.MatchString(output) {
 		return "go"
@@ -82,6 +99,23 @@ func normalizePairKey(p ChatPair) string {
 		return strings.Join(strings.Fields(strings.ToLower(s)), " ")
 	}
 	return norm(p.Input) + "\n" + norm(p.Output)
+}
+
+// codeOutputMarkers detects an output that looks like Go code: braces, a
+// := assignment, or a func/package/type keyword.
+var codeOutputMarkers = regexp.MustCompile(`[{}]|:=|\bfunc\b|\bpackage\b|\btype\b`)
+
+// chatterPhrases detects natural-language chatter: first-person framing,
+// offers, and pleasantries that have no place inside generated code.
+var chatterPhrases = regexp.MustCompile(`(?i)\b(i am|i'm|here is|here's|sure|of course|hope this helps|let me know|you're welcome|no problem|happy to help)\b`)
+
+// stringLiteral strips double-quoted string literals so a "hello" inside
+// "hello world" is not mistaken for chatter.
+var stringLiteral = regexp.MustCompile(`"[^"]*"`)
+
+// stripStringLiterals removes "..." spans from s.
+func stripStringLiterals(s string) string {
+	return stringLiteral.ReplaceAllString(s, "")
 }
 
 // ValidatePair is the quality gate. seen holds normalizePairKey values of the
@@ -116,6 +150,20 @@ func ValidatePair(p ChatPair, seen map[string]bool) error {
 	}
 	if seen[normalizePairKey(p)] {
 		return fmt.Errorf("duplicate of an existing pair")
+	}
+	// Mode separation: an output must never blend natural-language chatter
+	// with code ("I am func doing (x)"). String literals are stripped first
+	// so the "hello" in "hello world" doesn't count as chatter.
+	bare := stripStringLiterals(out)
+	isCode := codeOutputMarkers.MatchString(bare)
+	isChatter := chatterPhrases.MatchString(bare)
+	if isCode && isChatter {
+		return fmt.Errorf("output mixes natural-language chatter with code")
+	}
+	// A gocode-domain pair teaches code generation: its output must contain
+	// code, not a chat reply.
+	if p.Domain == GocodeDomain && !isCode {
+		return fmt.Errorf("gocode output contains no code")
 	}
 	return nil
 }

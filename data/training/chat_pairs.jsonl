@@ -444,3 +444,142 @@
 {"input":"re-tag the dataset","output":"run make reclassify-domains","domain":"makefile"}
 {"input":"update the domain tags","output":"run make reclassify-domains","domain":"makefile"}
 {"input":"fix the domain labels","output":"run make reclassify-domains","domain":"makefile"}
+{"input":"write a hello world program in go","output":"func main() { fmt.Println(\"hello world\") }","domain":"gocode"}
+{"input":"give me go code that prints hello world","output":"func main() { fmt.Println(\"hello world\") }","domain":"gocode"}
+{"input":"i need a main function printing hello world","output":"func main() { fmt.Println(\"hello world\") }","domain":"gocode"}
+{"input":"write a function that adds two ints","output":"func add(a int, b int) int { return a + b }","domain":"gocode"}
+{"input":"give me a go function to add two numbers","output":"func add(a int, b int) int { return a + b }","domain":"gocode"}
+{"input":"i need a function for adding integers","output":"func add(a int, b int) int { return a + b }","domain":"gocode"}
+{"input":"write a function that subtracts two ints","output":"func sub(a int, b int) int { return a - b }","domain":"gocode"}
+{"input":"give me a go function to subtract b from a","output":"func sub(a int, b int) int { return a - b }","domain":"gocode"}
+{"input":"code a subtraction function in go","output":"func sub(a int, b int) int { return a - b }","domain":"gocode"}
+{"input":"write a function that multiplies two ints","output":"func mul(a int, b int) int { return a * b }","domain":"gocode"}
+{"input":"give me a go function for multiplication","output":"func mul(a int, b int) int { return a * b }","domain":"gocode"}
+{"input":"i need a multiply function in go","output":"func mul(a int, b int) int { return a * b }","domain":"gocode"}
+{"input":"write a function returning the larger of two ints","output":"func max(a int, b int) int { if a \u003e b { return a }; return b }","domain":"gocode"}
+{"input":"give me a go max function for integers","output":"func max(a int, b int) int { if a \u003e b { return a }; return b }","domain":"gocode"}
+{"input":"code a function that picks the bigger int","output":"func max(a int, b int) int { if a \u003e b { return a }; return b }","domain":"gocode"}
+{"input":"write a function returning the smaller of two ints","output":"func min(a int, b int) int { if a \u003c b { return a }; return b }","domain":"gocode"}
+{"input":"give me a go min function for integers","output":"func min(a int, b int) int { if a \u003c b { return a }; return b }","domain":"gocode"}
+{"input":"code a function that picks the smaller int","output":"func min(a int, b int) int { if a \u003c b { return a }; return b }","domain":"gocode"}
+{"input":"write a function checking if a number is even","output":"func isEven(n int) bool { return n % 2 == 0 }","domain":"gocode"}
+{"input":"give me a go function for even numbers","output":"func isEven(n int) bool { return n % 2 == 0 }","domain":"gocode"}
+{"input":"i need an is even check in go","output":"func isEven(n int) bool { return n % 2 == 0 }","domain":"gocode"}
+{"input":"write a function checking if a number is positive","output":"func isPositive(n int) bool { return n \u003e 0 }","domain":"gocode"}
+{"input":"give me a go function testing positivity","output":"func isPositive(n int) bool { return n \u003e 0 }","domain":"gocode"}
+{"input":"code a positive number check in go","output":"func isPositive(n int) bool { return n \u003e 0 }","domain":"gocode"}
+{"input":"write an absolute value function in go","output":"func abs(n int) int { if n \u003c 0 { return -n }; return n }","domain":"gocode"}
+{"input":"give me a go function for abs of an int","output":"func abs(n int) int { if n \u003c 0 { return -n }; return n }","domain":"gocode"}
+{"input":"i need absolute value code in go","output":"func abs(n int) int { if n \u003c 0 { return -n }; return n }","domain":"gocode"}
+{"input":"write a function that greets someone by name","output":"func greet(name string) string { return \"hello \" + name }","domain":"gocode"}
+{"input":"give me a go greet function","output":"func greet(name string) string { return \"hello \" + name }","domain":"gocode"}
+{"input":"code a hello name function in go","output":"func greet(name string) string { return \"hello \" + name }","domain":"gocode"}
+{"input":"write a function that uppercases a string","output":"func shout(s string) string { return strings.ToUpper(s) }","domain":"gocode"}
+{"input":"give me go code to make a string uppercase","output":"func shout(s string) string { return strings.ToUpper(s) }","domain":"gocode"}
+{"input":"i need a string to upper function in go","output":"func shout(s string) string { return strings.ToUpper(s) }","domain":"gocode"}
+{"input":"write a function summing a slice of ints","output":"func sum(nums []int) int { total := 0; for _, n := range nums { total += n }; return total }","domain":"gocode"}
+{"input":"give me go code to sum all numbers in a slice","output":"func sum(nums []int) int { total := 0; for _, n := range nums { total += n }; return total }","domain":"gocode"}
+{"input":"i need a slice sum function in go","output":"func sum(nums []int) int { total := 0; for _, n := range nums { total += n }; return total }","domain":"gocode"}
+{"input":"write a function checking if a slice contains a value","output":"func contains(nums []int, x int) bool { for _, n := range nums { if n == x { return true } }; return false }","domain":"gocode"}
+{"input":"give me go code to search a slice","output":"func contains(nums []int, x int) bool { for _, n := range nums { if n == x { return true } }; return false }","domain":"gocode"}
+{"input":"i need a contains helper for int slices","output":"func contains(nums []int, x int) bool { for _, n := range nums { if n == x { return true } }; return false }","domain":"gocode"}
+{"input":"write a function doubling every element of a slice","output":"func doubleAll(nums []int) []int { out := make([]int, len(nums)); for i, n := range nums { out[i] = n * 2 }; return out }","domain":"gocode"}
+{"input":"give me go code to map a slice times two","output":"func doubleAll(nums []int) []int { out := make([]int, len(nums)); for i, n := range nums { out[i] = n * 2 }; return out }","domain":"gocode"}
+{"input":"i need a slice doubling function in go","output":"func doubleAll(nums []int) []int { out := make([]int, len(nums)); for i, n := range nums { out[i] = n * 2 }; return out }","domain":"gocode"}
+{"input":"write a function reversing an int slice","output":"func reverse(s []int) []int { for i, j := 0, len(s)-1; i \u003c j; i, j = i+1, j-1 { s[i], s[j] = s[j], s[i] }; return s }","domain":"gocode"}
+{"input":"give me go code to reverse a slice in place","output":"func reverse(s []int) []int { for i, j := 0, len(s)-1; i \u003c j; i, j = i+1, j-1 { s[i], s[j] = s[j], s[i] }; return s }","domain":"gocode"}
+{"input":"i need a reverse function for slices","output":"func reverse(s []int) []int { for i, j := 0, len(s)-1; i \u003c j; i, j = i+1, j-1 { s[i], s[j] = s[j], s[i] }; return s }","domain":"gocode"}
+{"input":"write a recursive factorial function in go","output":"func factorial(n int) int { if n \u003c= 1 { return 1 }; return n * factorial(n-1) }","domain":"gocode"}
+{"input":"give me go code for factorial","output":"func factorial(n int) int { if n \u003c= 1 { return 1 }; return n * factorial(n-1) }","domain":"gocode"}
+{"input":"i need a factorial function","output":"func factorial(n int) int { if n \u003c= 1 { return 1 }; return n * factorial(n-1) }","domain":"gocode"}
+{"input":"write a fibonacci function in go","output":"func fib(n int) int { if n \u003c 2 { return n }; return fib(n-1) + fib(n-2) }","domain":"gocode"}
+{"input":"give me go code for the fibonacci sequence","output":"func fib(n int) int { if n \u003c 2 { return n }; return fib(n-1) + fib(n-2) }","domain":"gocode"}
+{"input":"i need a fib function in go","output":"func fib(n int) int { if n \u003c 2 { return n }; return fib(n-1) + fib(n-2) }","domain":"gocode"}
+{"input":"write a rectangle struct in go","output":"type rect struct { w float64; h float64 }","domain":"gocode"}
+{"input":"give me a go struct for a rectangle","output":"type rect struct { w float64; h float64 }","domain":"gocode"}
+{"input":"i need a rect type with width and height","output":"type rect struct { w float64; h float64 }","domain":"gocode"}
+{"input":"write an area method on a rectangle struct","output":"func (r rect) area() float64 { return r.w * r.h }","domain":"gocode"}
+{"input":"give me go code for rectangle area","output":"func (r rect) area() float64 { return r.w * r.h }","domain":"gocode"}
+{"input":"i need a method computing rect area","output":"func (r rect) area() float64 { return r.w * r.h }","domain":"gocode"}
+{"input":"write a person struct in go","output":"type person struct { name string; age int }","domain":"gocode"}
+{"input":"give me a go struct with name and age","output":"type person struct { name string; age int }","domain":"gocode"}
+{"input":"i need a person type in go","output":"type person struct { name string; age int }","domain":"gocode"}
+{"input":"write a divide function returning an error on zero","output":"func divide(a float64, b float64) (float64, error) { if b == 0 { return 0, errors.New(\"divide by zero\") }; return a / b, nil }","domain":"gocode"}
+{"input":"give me go code for safe division","output":"func divide(a float64, b float64) (float64, error) { if b == 0 { return 0, errors.New(\"divide by zero\") }; return a / b, nil }","domain":"gocode"}
+{"input":"i need a division function with error handling","output":"func divide(a float64, b float64) (float64, error) { if b == 0 { return 0, errors.New(\"divide by zero\") }; return a / b, nil }","domain":"gocode"}
+{"input":"write a function looking up a key in a map","output":"func lookup(m map[string]int, key string) int { v, ok := m[key]; if ok { return v }; return 0 }","domain":"gocode"}
+{"input":"give me go code for map lookup with default zero","output":"func lookup(m map[string]int, key string) int { v, ok := m[key]; if ok { return v }; return 0 }","domain":"gocode"}
+{"input":"i need a map get helper in go","output":"func lookup(m map[string]int, key string) int { v, ok := m[key]; if ok { return v }; return 0 }","domain":"gocode"}
+{"input":"write a function counting characters in a string","output":"func count(s string) map[rune]int { m := make(map[rune]int); for _, r := range s { m[r]++ }; return m }","domain":"gocode"}
+{"input":"give me go code for rune frequency","output":"func count(s string) map[rune]int { m := make(map[rune]int); for _, r := range s { m[r]++ }; return m }","domain":"gocode"}
+{"input":"i need a char count function in go","output":"func count(s string) map[rune]int { m := make(map[rune]int); for _, r := range s { m[r]++ }; return m }","domain":"gocode"}
+{"input":"write a function averaging a float slice","output":"func average(nums []float64) float64 { sum := 0.0; for _, n := range nums { sum += n }; return sum / float64(len(nums)) }","domain":"gocode"}
+{"input":"give me go code for the average of numbers","output":"func average(nums []float64) float64 { sum := 0.0; for _, n := range nums { sum += n }; return sum / float64(len(nums)) }","domain":"gocode"}
+{"input":"i need an average function in go","output":"func average(nums []float64) float64 { sum := 0.0; for _, n := range nums { sum += n }; return sum / float64(len(nums)) }","domain":"gocode"}
+{"input":"give me the maximum of two integers as a function","output":"func max(a int, b int) int { if a \u003e b { return a }; return b }","domain":"gocode"}
+{"input":"how do i get the max of two numbers in go","output":"func max(a int, b int) int { if a \u003e b { return a }; return b }","domain":"gocode"}
+{"input":"write a max function for ints","output":"func max(a int, b int) int { if a \u003e b { return a }; return b }","domain":"gocode"}
+{"input":"function for the greater of two values","output":"func max(a int, b int) int { if a \u003e b { return a }; return b }","domain":"gocode"}
+{"input":"give me the minimum of two integers as a function","output":"func min(a int, b int) int { if a \u003c b { return a }; return b }","domain":"gocode"}
+{"input":"how do i get the min of two numbers in go","output":"func min(a int, b int) int { if a \u003c b { return a }; return b }","domain":"gocode"}
+{"input":"write a min function for ints","output":"func min(a int, b int) int { if a \u003c b { return a }; return b }","domain":"gocode"}
+{"input":"function for the lesser of two values","output":"func min(a int, b int) int { if a \u003c b { return a }; return b }","domain":"gocode"}
+{"input":"define a rect struct with width and height","output":"type rect struct { w float64; h float64 }","domain":"gocode"}
+{"input":"how do i declare a rectangle type in go","output":"type rect struct { w float64; h float64 }","domain":"gocode"}
+{"input":"make a struct called rect","output":"type rect struct { w float64; h float64 }","domain":"gocode"}
+{"input":"i want a rectangle struct","output":"type rect struct { w float64; h float64 }","domain":"gocode"}
+{"input":"define a person struct with name and age","output":"type person struct { name string; age int }","domain":"gocode"}
+{"input":"how do i declare a person type in go","output":"type person struct { name string; age int }","domain":"gocode"}
+{"input":"make a struct called person","output":"type person struct { name string; age int }","domain":"gocode"}
+{"input":"how do i check even numbers in go","output":"func isEven(n int) bool { return n % 2 == 0 }","domain":"gocode"}
+{"input":"how do i test if a number is even","output":"func isEven(n int) bool { return n % 2 == 0 }","domain":"gocode"}
+{"input":"check for even int in go","output":"func isEven(n int) bool { return n % 2 == 0 }","domain":"gocode"}
+{"input":"how do i add two numbers in go","output":"func add(a int, b int) int { return a + b }","domain":"gocode"}
+{"input":"add two integers with a function","output":"func add(a int, b int) int { return a + b }","domain":"gocode"}
+{"input":"how do i sum a slice in go","output":"func sum(nums []int) int { total := 0; for _, n := range nums { total += n }; return total }","domain":"gocode"}
+{"input":"total up int slice with a function","output":"func sum(nums []int) int { total := 0; for _, n := range nums { total += n }; return total }","domain":"gocode"}
+{"input":"how do i divide safely in go","output":"func divide(a float64, b float64) (float64, error) { if b == 0 { return 0, errors.New(\"divide by zero\") }; return a / b, nil }","domain":"gocode"}
+{"input":"division that handles zero in go","output":"func divide(a float64, b float64) (float64, error) { if b == 0 { return 0, errors.New(\"divide by zero\") }; return a / b, nil }","domain":"gocode"}
+{"input":"build an integer adder","output":"func add(a int, b int) int { return a + b }","domain":"gocode"}
+{"input":"adder function for two ints","output":"func add(a int, b int) int { return a + b }","domain":"gocode"}
+{"input":"i want to add numbers together","output":"func add(a int, b int) int { return a + b }","domain":"gocode"}
+{"input":"sum two integers with code","output":"func add(a int, b int) int { return a + b }","domain":"gocode"}
+{"input":"make a greeter function","output":"func greet(name string) string { return \"hello \" + name }","domain":"gocode"}
+{"input":"hello name maker in go","output":"func greet(name string) string { return \"hello \" + name }","domain":"gocode"}
+{"input":"say hello to someone with code","output":"func greet(name string) string { return \"hello \" + name }","domain":"gocode"}
+{"input":"biggest of two numbers please","output":"func max(a int, b int) int { if a \u003e b { return a }; return b }","domain":"gocode"}
+{"input":"which of two ints is greater in go","output":"func max(a int, b int) int { if a \u003e b { return a }; return b }","domain":"gocode"}
+{"input":"add up a list of ints","output":"func sum(nums []int) int { total := 0; for _, n := range nums { total += n }; return total }","domain":"gocode"}
+{"input":"total of integer slice please","output":"func sum(nums []int) int { total := 0; for _, n := range nums { total += n }; return total }","domain":"gocode"}
+{"input":"even or odd checker in go","output":"func isEven(n int) bool { return n % 2 == 0 }","domain":"gocode"}
+{"input":"tell me if a number divides by two","output":"func isEven(n int) bool { return n % 2 == 0 }","domain":"gocode"}
+{"input":"n factorial code please","output":"func factorial(n int) int { if n \u003c= 1 { return 1 }; return n * factorial(n-1) }","domain":"gocode"}
+{"input":"compute factorial recursively in go","output":"func factorial(n int) int { if n \u003c= 1 { return 1 }; return n * factorial(n-1) }","domain":"gocode"}
+{"input":"code me an adder for two integers","output":"func add(a int, b int) int { return a + b }","domain":"gocode"}
+{"input":"i want an adder for integer values","output":"func add(a int, b int) int { return a + b }","domain":"gocode"}
+{"input":"make an adder that adds two ints","output":"func add(a int, b int) int { return a + b }","domain":"gocode"}
+{"input":"print hello world from a main function","output":"func main() { fmt.Println(\"hello world\") }","domain":"gocode"}
+{"input":"a program that outputs hello world","output":"func main() { fmt.Println(\"hello world\") }","domain":"gocode"}
+{"input":"hello world program with package main","output":"func main() { fmt.Println(\"hello world\") }","domain":"gocode"}
+{"input":"say hello to a person by name in go","output":"func greet(name string) string { return \"hello \" + name }","domain":"gocode"}
+{"input":"function that welcomes someone using their name","output":"func greet(name string) string { return \"hello \" + name }","domain":"gocode"}
+{"input":"code a factorial function using recursion","output":"func factorial(n int) int { if n \u003c= 1 { return 1 }; return n * factorial(n-1) }","domain":"gocode"}
+{"input":"i need a function computing n factorial","output":"func factorial(n int) int { if n \u003c= 1 { return 1 }; return n * factorial(n-1) }","domain":"gocode"}
+{"input":"make a recursive fibonacci function in go","output":"func fib(n int) int { if n \u003c 2 { return n }; return fib(n-1) + fib(n-2) }","domain":"gocode"}
+{"input":"code a fib function using recursion","output":"func fib(n int) int { if n \u003c 2 { return n }; return fib(n-1) + fib(n-2) }","domain":"gocode"}
+{"input":"create a function adding up a slice of ints","output":"func sum(nums []int) int { total := 0; for _, n := range nums { total += n }; return total }","domain":"gocode"}
+{"input":"i want the total of all ints in a slice","output":"func sum(nums []int) int { total := 0; for _, n := range nums { total += n }; return total }","domain":"gocode"}
+{"input":"build a function summing slice elements","output":"func sum(nums []int) int { total := 0; for _, n := range nums { total += n }; return total }","domain":"gocode"}
+{"input":"write a function totaling a slice of numbers","output":"func sum(nums []int) int { total := 0; for _, n := range nums { total += n }; return total }","domain":"gocode"}
+{"input":"code me an adder for integers","output":"func add(a int, b int) int { return a + b }","domain":"gocode"}
+{"input":"i need an adder for two ints","output":"func add(a int, b int) int { return a + b }","domain":"gocode"}
+{"input":"build an adder function in go","output":"func add(a int, b int) int { return a + b }","domain":"gocode"}
+{"input":"make me an integer adder","output":"func add(a int, b int) int { return a + b }","domain":"gocode"}
+{"input":"code a function testing if an integer is even","output":"func isEven(n int) bool { return n % 2 == 0 }","domain":"gocode"}
+{"input":"i need an evenness check for ints in go","output":"func isEven(n int) bool { return n % 2 == 0 }","domain":"gocode"}
+{"input":"build a function checking integer evenness","output":"func isEven(n int) bool { return n % 2 == 0 }","domain":"gocode"}
+{"input":"make a function checking if a number is positive","output":"func isPositive(n int) bool { return n \u003e 0 }","domain":"gocode"}
+{"input":"code a function testing if an integer is positive","output":"func isPositive(n int) bool { return n \u003e 0 }","domain":"gocode"}
+{"input":"i need a positivity check for ints in go","output":"func isPositive(n int) bool { return n \u003e 0 }","domain":"gocode"}
+{"input":"give me a function that totals a slice of ints","output":"func sum(nums []int) int { total := 0; for _, n := range nums { total += n }; return total }","domain":"gocode"}
+{"input":"i need a slice total function in go","output":"func sum(nums []int) int { total := 0; for _, n := range nums { total += n }; return total }","domain":"gocode"}

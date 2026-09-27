@@ -1,0 +1,327 @@
+[
+ {
+  "prompt": "write a function that adds two ints",
+  "mode": "code",
+  "need": [
+   "func add",
+   "return a + b"
+  ],
+  "forbid": [
+   "i am",
+   "i'm",
+   "here is",
+   "here's",
+   "sure",
+   "of course",
+   "hope this helps",
+   "let me know",
+   "you're welcome",
+   "happy to help"
+  ],
+  "forbid_kind": "chatter"
+ },
+ {
+  "prompt": "give me a go function to subtract b from a",
+  "mode": "code",
+  "need": [
+   "func sub",
+   "return a - b"
+  ],
+  "forbid": [
+   "i am",
+   "i'm",
+   "here is",
+   "here's",
+   "sure",
+   "of course",
+   "hope this helps",
+   "let me know",
+   "you're welcome",
+   "happy to help"
+  ],
+  "forbid_kind": "chatter"
+ },
+ {
+  "prompt": "i need a multiply function in go",
+  "mode": "code",
+  "need": [
+   "func mul",
+   "return a * b"
+  ],
+  "forbid": [
+   "i am",
+   "i'm",
+   "here is",
+   "here's",
+   "sure",
+   "of course",
+   "hope this helps",
+   "let me know",
+   "you're welcome",
+   "happy to help"
+  ],
+  "forbid_kind": "chatter"
+ },
+ {
+  "prompt": "write a function returning the larger of two ints",
+  "mode": "code",
+  "need": [
+   "func max",
+   "return a",
+   "return b"
+  ],
+  "forbid": [
+   "i am",
+   "i'm",
+   "here is",
+   "here's",
+   "sure",
+   "of course",
+   "hope this helps",
+   "let me know",
+   "you're welcome",
+   "happy to help"
+  ],
+  "forbid_kind": "chatter"
+ },
+ {
+  "prompt": "write a function checking if a number is even",
+  "mode": "code",
+  "need": [
+   "func isEven",
+   "n % 2 == 0"
+  ],
+  "forbid": [
+   "i am",
+   "i'm",
+   "here is",
+   "here's",
+   "sure",
+   "of course",
+   "hope this helps",
+   "let me know",
+   "you're welcome",
+   "happy to help"
+  ],
+  "forbid_kind": "chatter"
+ },
+ {
+  "prompt": "write a hello world program in go",
+  "mode": "code",
+  "need": [
+   "func main",
+   "hello world"
+  ],
+  "forbid": [
+   "i am",
+   "i'm",
+   "here is",
+   "here's",
+   "sure",
+   "of course",
+   "hope this helps",
+   "let me know",
+   "you're welcome",
+   "happy to help"
+  ],
+  "forbid_kind": "chatter"
+ },
+ {
+  "prompt": "write a function summing a slice of ints",
+  "mode": "code",
+  "need": [
+   "func sum",
+   "total += n",
+   "return total"
+  ],
+  "forbid": [
+   "i am",
+   "i'm",
+   "here is",
+   "here's",
+   "sure",
+   "of course",
+   "hope this helps",
+   "let me know",
+   "you're welcome",
+   "happy to help"
+  ],
+  "forbid_kind": "chatter"
+ },
+ {
+  "prompt": "write a recursive factorial function in go",
+  "mode": "code",
+  "need": [
+   "func factorial",
+   "factorial(n-1)"
+  ],
+  "forbid": [
+   "i am",
+   "i'm",
+   "here is",
+   "here's",
+   "sure",
+   "of course",
+   "hope this helps",
+   "let me know",
+   "you're welcome",
+   "happy to help"
+  ],
+  "forbid_kind": "chatter"
+ },
+ {
+  "prompt": "write a rectangle struct in go",
+  "mode": "code",
+  "need": [
+   "type rect struct",
+   "float64"
+  ],
+  "forbid": [
+   "i am",
+   "i'm",
+   "here is",
+   "here's",
+   "sure",
+   "of course",
+   "hope this helps",
+   "let me know",
+   "you're welcome",
+   "happy to help"
+  ],
+  "forbid_kind": "chatter"
+ },
+ {
+  "prompt": "write a divide function returning an error on zero",
+  "mode": "code",
+  "need": [
+   "func divide",
+   "errors.New",
+   "divide by zero"
+  ],
+  "forbid": [
+   "i am",
+   "i'm",
+   "here is",
+   "here's",
+   "sure",
+   "of course",
+   "hope this helps",
+   "let me know",
+   "you're welcome",
+   "happy to help"
+  ],
+  "forbid_kind": "chatter"
+ },
+ {
+  "prompt": "code me an adder for integers",
+  "mode": "code",
+  "need": [
+   "func add",
+   "return a + b"
+  ],
+  "forbid": [
+   "i am",
+   "i'm",
+   "here is",
+   "here's",
+   "sure",
+   "of course",
+   "hope this helps",
+   "let me know",
+   "you're welcome",
+   "happy to help"
+  ],
+  "forbid_kind": "chatter"
+ },
+ {
+  "prompt": "how do i check even numbers in go",
+  "mode": "code",
+  "need": [
+   "func isEven",
+   "% 2 == 0"
+  ],
+  "forbid": [
+   "i am",
+   "i'm",
+   "here is",
+   "here's",
+   "sure",
+   "of course",
+   "hope this helps",
+   "let me know",
+   "you're welcome",
+   "happy to help"
+  ],
+  "forbid_kind": "chatter"
+ },
+ {
+  "prompt": "hello",
+  "mode": "chat",
+  "need": [],
+  "forbid": [
+   "func",
+   "{",
+   "}",
+   ":=",
+   "package",
+   "struct"
+  ],
+  "forbid_kind": "code"
+ },
+ {
+  "prompt": "how are you",
+  "mode": "chat",
+  "need": [],
+  "forbid": [
+   "func",
+   "{",
+   "}",
+   ":=",
+   "package",
+   "struct"
+  ],
+  "forbid_kind": "code"
+ },
+ {
+  "prompt": "thank you",
+  "mode": "chat",
+  "need": [],
+  "forbid": [
+   "func",
+   "{",
+   "}",
+   ":=",
+   "package",
+   "struct"
+  ],
+  "forbid_kind": "code"
+ },
+ {
+  "prompt": "tell me a joke",
+  "mode": "chat",
+  "need": [],
+  "forbid": [
+   "func",
+   "{",
+   "}",
+   ":=",
+   "package",
+   "struct"
+  ],
+  "forbid_kind": "code"
+ },
+ {
+  "prompt": "good morning",
+  "mode": "chat",
+  "need": [],
+  "forbid": [
+   "func",
+   "{",
+   "}",
+   ":=",
+   "package",
+   "struct"
+  ],
+  "forbid_kind": "code"
+ }
+]

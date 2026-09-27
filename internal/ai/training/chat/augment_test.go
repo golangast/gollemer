@@ -19,7 +19,7 @@ func TestAugmentInputsSkipsCollisions(t *testing.T) {
 	// "I'm unhappy." base pair (different output) and must be skipped.
 	// "morning" -> {"day"}: variant "good day" collides with the
 	// "Good afternoon" base pair and must be skipped.
-	got := augmentInputs(base, base)
+	got := augmentInputs(base, base, socialSynonyms)
 	seen := map[string]string{}
 	for _, p := range got {
 		n := normAugInput(p.Input)
@@ -60,4 +60,30 @@ func TestAugmentInputsSkipsCollisions(t *testing.T) {
 		t.Fatalf("base pairs lost: got %d pairs from %d base", len(got), len(base))
 	}
 	t.Logf("augmented %d base -> %d train pairs", len(base), len(got))
+}
+
+func TestGocodeSynonymsNeverTouchHello(t *testing.T) {
+	// The gocode synonym set must never rewrite greeting words: "write a
+	// hello world program" (main) vs "code a hello name function" (greet)
+	// is the boundary the model struggles with, and social-style swaps like
+	// hello->hi would blur it. Regression test for the round-5 collapse.
+	for w, syns := range gocodeSynonyms {
+		for _, s := range syns {
+			for _, banned := range []string{"hello", "hi", "hey", "greetings"} {
+				if w == banned || s == banned {
+					t.Fatalf("gocodeSynonyms touches greeting word %q (-> %q)", w, s)
+				}
+			}
+		}
+	}
+	variants := synonymVariants("write a hello world program in go", 9, gocodeSynonyms)
+	for _, v := range variants {
+		n := normAugInput(v)
+		if !strings.Contains(n, "hello world") {
+			t.Fatalf("gocode variant mangled the hello-world cue: %q", v)
+		}
+	}
+	if len(variants) == 0 {
+		t.Fatal("expected gocode variants for a write/make/create input")
+	}
 }

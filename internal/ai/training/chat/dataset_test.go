@@ -87,3 +87,86 @@ func TestClassifyDomainMakefile(t *testing.T) {
 		t.Errorf("makefile+go overlap classified as %q", d)
 	}
 }
+
+func TestClassifyDomainGocode(t *testing.T) {
+	codeQs := []struct{ in, out string }{
+		{"write a function that adds two ints", "func add(a int, b int) int { return a + b }"},
+		{"give me go code for hello world", "package main"},
+		{"how do i sum a slice", "total := 0"},
+		{"write a method on a struct", "func (r rect) area() float64 { return r.w * r.h }"},
+	}
+	for _, q := range codeQs {
+		if d := ClassifyDomain(q.in, q.out); d != GocodeDomain {
+			t.Errorf("(%q, %q) classified as %q, want gocode", q.in, q.out, d)
+		}
+	}
+	// gocode wins over go when both match (code output contains "func").
+	if d := ClassifyDomain("write a function", "func add(a int, b int) int { return a + b }"); d != GocodeDomain {
+		t.Errorf("gocode+go overlap classified as %q", d)
+	}
+	// Plain Go Q&A stays in the go domain.
+	if d := ClassifyDomain("What is a goroutine?", ""); d != "go" {
+		t.Errorf("go question classified as %q", d)
+	}
+	// Social chatter mentioning code casually stays social.
+	if d := ClassifyDomain("how did your day go?", ""); d != SocialDomain {
+		t.Errorf("social classified as %q", d)
+	}
+}
+
+func TestValidatePairRejectsMixedChatterAndCode(t *testing.T) {
+	seen := map[string]bool{}
+	mixed := []ChatPair{
+		// John's example: half sentence, half code.
+		{Input: "write a function", Output: "I am func doing (x int) int { return x }", Domain: GocodeDomain},
+		{Input: "add two numbers", Output: "sure! here is your function: func add(a int, b int) int { return a + b }", Domain: GocodeDomain},
+		{Input: "sum a slice", Output: "func sum(nums []int) int { total := 0; return total } hope this helps!", Domain: GocodeDomain},
+		// Pure chatter teaches the code model the wrong mode entirely.
+		{Input: "write a function", Output: "sure thing, happy to help!", Domain: GocodeDomain},
+	}
+	for i, p := range mixed {
+		if err := ValidatePair(p, seen); err == nil {
+			t.Fatalf("mixed case %d accepted but should be quarantined: %+v", i, p)
+		}
+	}
+}
+
+func TestValidatePairAcceptsCleanCodeAndChat(t *testing.T) {
+	seen := map[string]bool{}
+	good := []ChatPair{
+		// "hello" inside the string literal must not count as chatter.
+		{Input: "write a hello world program in go", Output: `func main() { fmt.Println("hello world") }`, Domain: GocodeDomain},
+		{Input: "add two ints", Output: "func add(a int, b int) int { return a + b }", Domain: GocodeDomain},
+		// Social chatter stays admissible in the social domain.
+		{Input: "hello there", Output: "hi, how are you?", Domain: SocialDomain},
+	}
+	for i, p := range good {
+		if err := ValidatePair(p, seen); err != nil {
+			t.Fatalf("clean case %d rejected: %v", i, err)
+		}
+		seen[normalizePairKey(p)] = true
+	}
+}
+
+func TestTidyGoCode(t *testing.T) {
+	caseMap := map[string]string{
+		"fmt.println":     "fmt.Println",
+		"strings.toupper": "strings.ToUpper",
+		"iseven":          "isEven",
+	}
+	got := tidyGoCode(`func iseven(n int) bool { return n % 2 == 0 }`, caseMap)
+	want := `func isEven(n int) bool { return n % 2 == 0 }`
+	if got != want {
+		t.Errorf("case restore: got %q, want %q", got, want)
+	}
+	got = tidyGoCode(`func sum(nums [ ] int) int { total: = 0 }`, caseMap)
+	want = `func sum(nums [] int) int { total := 0 }`
+	if got != want {
+		t.Errorf("spacing fix: got %q, want %q", got, want)
+	}
+	got = tidyGoCode(`func shout(s string) string { return strings.toupper(s) }`, caseMap)
+	want = `func shout(s string) string { return strings.ToUpper(s) }`
+	if got != want {
+		t.Errorf("dotted ident: got %q, want %q", got, want)
+	}
+}

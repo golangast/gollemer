@@ -39,13 +39,23 @@ import (
 )
 
 const (
-	realEmbedDim  = 64
-	realHiddenDim = 128
 	realBatchSize = 32
 	realMaxEpochs = 200
 	realBaseLR    = 1e-3
 	realClip      = 1.0
 )
+
+// dimsForDomain returns (embeddingDim, hiddenDim) per domain. The gocode
+// domain separates 24 near-identical code templates, so it gets a wider
+// model; the MoE expert width scales as hiddenDim/2 automatically.
+// social/makefile keep their original dims so existing .gob checkpoints
+// (which store their dims) stay valid and retraining stays comparable.
+func dimsForDomain(domain string) (embedDim, hiddenDim int) {
+	if domain == GocodeDomain {
+		return 128, 256
+	}
+	return 64, 128
+}
 
 // socialSynonyms drives augmentation: swapping a word for a synonym teaches
 // the model that meaning survives rephrasing. Single words only; multi-word
@@ -97,12 +107,31 @@ func tokenizeLower(text string) []string {
 	return toks
 }
 
-// synonymVariants returns up to n paraphrases of q, each swapping one word.
-func synonymVariants(q string, n int) []string {
+// gocodeSynonyms drives augmentation for the gocode domain. Unlike the social
+// set, these are verb-level swaps that never change WHICH snippet is wanted:
+// "write"/"make"/"create"/"build"/"code" and "give"/"show", "need"/"want" all
+// keep the same target function. Social synonyms like hello->hi are BANNED
+// here: "write a hello world program" vs "code a hello name function" must
+// stay far apart, and swapping hello->hi blurs exactly that boundary.
+var gocodeSynonyms = map[string][]string{
+	"write":  {"create", "make", "code"},
+	"make":   {"create", "build", "write"},
+	"create": {"make", "build", "write"},
+	"build":  {"make", "create"},
+	"code":   {"write", "create"},
+	"give":   {"show"},
+	"show":   {"give"},
+	"need":   {"want"},
+	"want":   {"need"},
+}
+
+// synonymVariants returns up to n paraphrases of q, each swapping one word
+// using the provided synonym map.
+func synonymVariants(q string, n int, syns map[string][]string) []string {
 	toks := tokenizeLower(q)
 	var out []string
 	for i, w := range toks {
-		for _, syn := range socialSynonyms[w] {
+		for _, syn := range syns[w] {
 			nt := append([]string{}, toks...)
 			nt[i] = syn
 			out = append(out, strings.Join(nt, " "))
@@ -132,7 +161,7 @@ func normAugInput(s string) string {
 // augmentInputs expands trainBase with synonym variants, skipping any variant
 // that collides (after normalization) with a different base pair's input
 // carrying a different output.
-func augmentInputs(base, trainBase []ChatPair) []ChatPair {
+func augmentInputs(base, trainBase []ChatPair, syns map[string][]string) []ChatPair {
 	baseOutputByNorm := make(map[string]string, len(base))
 	for _, p := range base {
 		n := normAugInput(p.Input)
@@ -145,7 +174,7 @@ func augmentInputs(base, trainBase []ChatPair) []ChatPair {
 	for _, p := range trainBase {
 		trainPairs = append(trainPairs, p)
 		emitted[normAugInput(p.Input)] = p.Output
-		for _, v := range synonymVariants(p.Input, 9) {
+		for _, v := range synonymVariants(p.Input, 9, syns) {
 			n := normAugInput(v)
 			if out, collides := baseOutputByNorm[n]; collides && out != p.Output {
 				continue // another pair owns this phrasing — don't contradict it
@@ -233,14 +262,20 @@ func RunRealSeq2SeqTraining(projectRoot, domain string) error {
 	// augmentation teaches near-identical inputs with conflicting labels
 	// (e.g. "i'm unhappy" from "I'm sad" vs base "I'm unhappy."), which a
 	// tiny model cannot satisfy and which blurs the class boundary.
-	trainPairs := augmentInputs(base, trainBase)
+	// The gocode domain uses code-safe synonyms only: social swaps like
+	// hello->hi would blur "hello world program" vs "hello name function".
+	syns := socialSynonyms
+	if domain == GocodeDomain {
+		syns = gocodeSynonyms
+	}
+	trainPairs := augmentInputs(base, trainBase, syns)
 
 	// Held-out probes: paraphrases of held-out inputs the model never sees.
 	type probe struct{ in, ref string }
 	var probes []probe
 	for _, p := range heldBase {
 		probes = append(probes, probe{in: p.Input, ref: p.Output})
-		for _, v := range synonymVariants(p.Input, 2) {
+		for _, v := range synonymVariants(p.Input, 2, syns) {
 			probes = append(probes, probe{in: v, ref: p.Output})
 		}
 	}
@@ -281,7 +316,8 @@ func RunRealSeq2SeqTraining(projectRoot, domain string) error {
 	// Length-bucketed batches: sort by input length so padding is minimal.
 	sort.Slice(encoded, func(i, j int) bool { return len(encoded[i].input) < len(encoded[j].input) })
 
-	model, err := seq2seq.NewSeq2Seq(v.Size(), v.Size(), realEmbedDim, realHiddenDim, tok, v)
+	embedDim, hiddenDim := dimsForDomain(domain)
+	model, err := seq2seq.NewSeq2Seq(v.Size(), v.Size(), embedDim, hiddenDim, tok, v)
 	if err != nil {
 		return err
 	}
@@ -385,13 +421,21 @@ func RunRealSeq2SeqTraining(projectRoot, domain string) error {
 
 	// Held-out probe: every generation printed verbatim, good or bad.
 	log.Printf("[REAL-SEQ2SEQ] held-out probe: %d paraphrased questions the model never saw", len(probes))
+	goCase := map[string]string{}
+	if domain == GocodeDomain {
+		goCase = goIdentCaseMap(projectRoot)
+	}
 	for i, pr := range probes {
 		out, err := model.Predict(strings.ToLower(pr.in), 40)
 		if err != nil {
 			log.Printf("[REAL-SEQ2SEQ] probe %d error: %v", i, err)
 			continue
 		}
-		log.Printf("[REAL-SEQ2SEQ] Q: %s\n[REAL-SEQ2SEQ] A: %s", pr.in, tidyDecode(out))
+		shown := tidyDecode(out)
+		if domain == GocodeDomain {
+			shown = tidyGoCode(out, goCase)
+		}
+		log.Printf("[REAL-SEQ2SEQ] Q: %s\n[REAL-SEQ2SEQ] A: %s", pr.in, shown)
 	}
 	return nil
 }
