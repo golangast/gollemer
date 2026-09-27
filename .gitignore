@@ -41,6 +41,15 @@ logs/training_full.log
 *.log
 scratch/
 
+# Secrets — never commit these
+.env
+*.pem
+new
+new.pub
+id_rsa*
+id_ed25519*
+*.key
+
 # Other
 .*
 ./.git
