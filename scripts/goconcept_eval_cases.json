@@ -1,0 +1,224 @@
+[
+ {
+  "forbid": [
+   "{",
+   "}",
+   ":="
+  ],
+  "forbid_kind": "code",
+  "mode": "concept",
+  "need": [
+   "goroutine",
+   "lightweight"
+  ],
+  "prompt": "what is a goroutine"
+ },
+ {
+  "forbid": [
+   "{",
+   "}",
+   ":="
+  ],
+  "forbid_kind": "code",
+  "mode": "concept",
+  "need": [
+   "channel",
+   "goroutines"
+  ],
+  "prompt": "explain channels to me"
+ },
+ {
+  "forbid": [
+   "{",
+   "}",
+   ":="
+  ],
+  "forbid_kind": "code",
+  "mode": "concept",
+  "need": [
+   "defer",
+   "returns"
+  ],
+  "prompt": "what does defer do"
+ },
+ {
+  "forbid": [
+   "{",
+   "}",
+   ":="
+  ],
+  "forbid_kind": "code",
+  "mode": "concept",
+  "need": [
+   "slice",
+   "array"
+  ],
+  "prompt": "tell me about slices"
+ },
+ {
+  "forbid": [
+   "{",
+   "}",
+   ":="
+  ],
+  "forbid_kind": "code",
+  "mode": "concept",
+  "need": [
+   "map",
+   "keys"
+  ],
+  "prompt": "how do maps work"
+ },
+ {
+  "forbid": [
+   "{",
+   "}",
+   ":="
+  ],
+  "forbid_kind": "code",
+  "mode": "concept",
+  "need": [
+   "interface",
+   "methods"
+  ],
+  "prompt": "what is an interface"
+ },
+ {
+  "forbid": [
+   "{",
+   "}",
+   ":="
+  ],
+  "forbid_kind": "code",
+  "mode": "concept",
+  "need": [
+   "pointer",
+   "slices"
+  ],
+  "prompt": "explain the difference between new and make"
+ },
+ {
+  "forbid": [
+   "{",
+   "}",
+   ":="
+  ],
+  "forbid_kind": "code",
+  "mode": "concept",
+  "need": [
+   "mutex",
+   "lock"
+  ],
+  "prompt": "what is a mutex"
+ },
+ {
+  "forbid": [
+   "{",
+   "}",
+   ":="
+  ],
+  "forbid_kind": "code",
+  "mode": "concept",
+  "need": [
+   "errors",
+   "explicitly"
+  ],
+  "prompt": "how does error handling work"
+ },
+ {
+  "forbid": [
+   "{",
+   "}",
+   ":="
+  ],
+  "forbid_kind": "code",
+  "mode": "concept",
+  "need": [
+   "module",
+   "packages"
+  ],
+  "prompt": "what is a module"
+ },
+ {
+  "forbid": [
+   "{",
+   "}",
+   ":="
+  ],
+  "forbid_kind": "code",
+  "mode": "concept",
+  "need": [
+   "reformats",
+   "style"
+  ],
+  "prompt": "what does gofmt do"
+ },
+ {
+  "forbid": [
+   "{",
+   "}",
+   ":="
+  ],
+  "forbid_kind": "code",
+  "mode": "concept",
+  "need": [
+   "panic",
+   "builtin"
+  ],
+  "prompt": "what is a panic"
+ },
+ {
+  "prompt": "where does the main function go in Go",
+  "mode": "concept",
+  "need": [
+   "main",
+   "package"
+  ],
+  "forbid": [
+   "{",
+   "}",
+   ":="
+  ],
+  "forbid_kind": "code"
+ },
+ {
+  "prompt": "how do you run a Go program",
+  "mode": "concept",
+  "need": [
+   "go run"
+  ],
+  "forbid": [
+   "{",
+   "}",
+   ":="
+  ],
+  "forbid_kind": "code"
+ },
+ {
+  "prompt": "how is a Go project laid out",
+  "mode": "concept",
+  "need": [
+   "package",
+   "directory"
+  ],
+  "forbid": [
+   "{",
+   "}",
+   ":="
+  ],
+  "forbid_kind": "code"
+ },
+ {
+  "prompt": "how do you start a new Go project",
+  "mode": "concept",
+  "need": [
+   "go mod init"
+  ],
+  "forbid": [
+   "{",
+   "}",
+   ":="
+  ],
+  "forbid_kind": "code"
+ }
+]

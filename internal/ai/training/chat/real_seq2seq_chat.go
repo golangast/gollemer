@@ -133,6 +133,9 @@ func loadRealModel(projectRoot, domain string) (*seq2seq.Seq2Seq, error) {
 // RunRealChat starts an interactive chat loop backed purely by the trained
 // neural model. No lookup tables, no fuzzy matching, no canned fallback.
 func RunRealChat(projectRoot, domain string) error {
+	if domain == UnifiedDomain {
+		return runUnifiedChat(projectRoot)
+	}
 	model, err := loadRealModel(projectRoot, domain)
 	if err != nil {
 		return err
@@ -212,6 +215,75 @@ func RunRealChat(projectRoot, domain string) error {
 			reply = tidyGoCode(answer, goCase)
 		}
 		fmt.Printf("gollemer> %s\n", reply)
+		if showThoughts {
+			printThoughtTrace(trace)
+		}
+	}
+	return sc.Err()
+}
+
+// runUnifiedChat is the single-chat mode John asked for: one session that
+// knows the difference between social chat, Go concepts, Go code, and
+// makefile commands. Each message is routed by input intent via
+// routeDomain; the reply is tagged with the model that produced it
+// (e.g. "gollemer [go]>") so the active brain is visible. Missing
+// specialized checkpoints fall back to the social model.
+func runUnifiedChat(projectRoot string) error {
+	models := map[string]*seq2seq.Seq2Seq{}
+	for _, d := range []string{SocialDomain, GoDomain, GocodeDomain, MakefileDomain} {
+		m, err := loadRealModel(projectRoot, d)
+		if err != nil {
+			log.Printf("[UNIFIED-CHAT] no %s checkpoint (%v); falling back to social", d, err)
+			continue
+		}
+		models[d] = m
+		log.Printf("[UNIFIED-CHAT] loaded %s model", d)
+	}
+	socialModel := models[SocialDomain]
+	if socialModel == nil {
+		return fmt.Errorf("unified chat requires at least the social checkpoint")
+	}
+
+	goCase := goIdentCaseMap(projectRoot)
+	sc := bufio.NewScanner(os.Stdin)
+	sc.Buffer(make([]byte, 1024*1024), 1024*1024)
+	showThoughts := true
+	fmt.Println("[unified chat — type /quit to exit, /thoughts to toggle the thought process]")
+	for {
+		fmt.Print("you> ")
+		if !sc.Scan() {
+			break
+		}
+		line := strings.TrimSpace(sc.Text())
+		if line == "" {
+			continue
+		}
+		if line == "/quit" {
+			break
+		}
+		if line == "/thoughts" {
+			showThoughts = !showThoughts
+			fmt.Printf("[thought process display %s]\n", map[bool]string{true: "on", false: "off"}[showThoughts])
+			continue
+		}
+		d := routeDomain(line)
+		model := models[d]
+		tag := d
+		if model == nil {
+			model = socialModel
+			tag = d + "→social"
+		}
+		answer, trace, err := model.PredictWithTrace(strings.ToLower(line), 40)
+		if err != nil {
+			fmt.Printf("gollemer [%s]> [error: %v]\n", tag, err)
+			continue
+		}
+		reply := tidyDecode(answer)
+		// Only gocode output gets code post-processing; prose modes never do.
+		if d == GocodeDomain {
+			reply = tidyGoCode(answer, goCase)
+		}
+		fmt.Printf("gollemer [%s]> %s\n", tag, reply)
 		if showThoughts {
 			printThoughtTrace(trace)
 		}

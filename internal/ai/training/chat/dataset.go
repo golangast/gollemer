@@ -52,6 +52,17 @@ const MakefileDomain = "makefile"
 // natural-language request.
 const GocodeDomain = "gocode"
 
+// GoDomain is stage four of the roadmap: answering questions about Go
+// concepts, terminology, and workflow (files/folders, main function,
+// go commands). Distinct from GocodeDomain: this is prose explanations,
+// not code generation.
+const GoDomain = "go"
+
+// UnifiedDomain is the unified chat mode: a single chat session that
+// routes each message to the appropriate domain model (social, go,
+// gocode, makefile) based on input intent.
+const UnifiedDomain = "unified"
+
 // makefileTerms marks the makefile-command domain: the word "makefile"
 // itself or one of the repo's known make target names. Checked before
 // goTerms on purpose: outputs like "run make train-real-seq2seq" contain
@@ -69,8 +80,8 @@ var gocodeTerms = regexp.MustCompile(`(?i:\bwrite\b[^.]{0,40}\b(function|func|co
 // curation is a human judgment, and this keeps it visible and auditable.
 // NOTE: the bare word "go" is matched case-sensitively only — the language
 // name is capitalized in this dataset ("use Go"), while the verb is not
-// ("how did your day go").
-var goTerms = regexp.MustCompile(`(?i:\b(goroutine|closure|defer|struct|interface|slice|channel|module|cgo|generics?|package|func|race condition|compil|architect|waitgroup|pointer|executable|binary|mutex|documentation|profiling|builtin|error handling|builds?|panic|blank identifier|anonymous function)\b)|\bdepende|\bnew\(\)|\bmake\(\)|\bGo\b`)
+// ("how did your day go"). Plurals (channels, slices) are included.
+var goTerms = regexp.MustCompile(`(?i:\b(goroutines?|closures?|defers?|structs?|interfaces?|slices?|channels?|modules?|cgo|generics?|packages?|funcs?|race conditions?|compil\w*|architect\w*|waitgroups?|pointers?|executables?|binar\w*|mutex\w*|documentation|profiling|builtins?|error handling|builds?|panics?|blank identifiers?|anonymous functions?|select|gomaxprocs|gofmt|godoc|delete|maps?)\b)|\bdepende|\bnew\(\)|\bmake\(\)|\bGo\b`)
 
 // ClassifyDomain tags a pair by its content.
 func ClassifyDomain(input, output string) string {
@@ -329,3 +340,55 @@ func ImportChatPairs(projectRoot, importPath string) (admitted int, quarantined 
 	}
 	return admitted, quarantined, nil
 }
+
+// gocodeCodegen marks explicit code-generation intent: the input asks for
+// code to be written. This is a subset of gocodeTerms used for routing:
+// a question like "what is package main" matches gocodeTerms (via the
+// literal "package main") but is a concept question, not a code request,
+// so it routes to GoDomain.
+var gocodeCodegen = regexp.MustCompile(`(?i:^\s*(code|check|add|sum|build|compute|print|multiply|count|find|double|total)\b)|\b(write|give me|i need|i want|create|generate|define|declare|build|compute|print|multiply|count|find|make me|make a|make an)\b[^.]{0,40}\b(function|func|code|program|method|struct|main|check|checker|helper|type|adder|maker|factorial|loop)\b|\ba\s+program\s+that\b|\bfunction\s+that\b|\bprogram\b.*\bpackage main\b|\bsay hello\b.*\bin go\b|\bfactorial\b.*\bcode\b|\bcode\b.*\bfactorial\b|\btell me if\b.*\b(divides|is)\b|\bi want to\b.*\b(add|sum|divide|multiply)\b|\bfunction\s+for\b|\bwith\s+(a\s+)?function\b|\bwith\s+code\b|\bmaker\b.*\bin go\b|\b(checker)\b.*\bin go\b|\b(find|get)\b.*\b(largest|smallest|biggest|maximum|minimum)\b|\b(biggest|largest|smallest|greater|total)\b.*\bof\b|\bwhich of two\b|\b(division|addition|subtraction|multiplication)\b.*\bin go\b|\bhow do i\b.*\btest\b.*\bif\b|\bhow do i\b.*\b(get|find|compute|declare|add|sum|divide|total|multiply|count|check)\b.*\bin go\b|\bfunc\s+[a-zA-Z_][a-zA-Z0-9_]*\s*\(|:=|\bgo\s+(code|function|func)\b|\bin\s+go\b.*\b(function|func|code|type|struct)\b`)
+
+// questionForm marks inputs phrased as questions about a concept rather
+// than requests to produce code.
+var questionForm = regexp.MustCompile(`(?i:^\s*(what|why|how|explain|tell me|describe|when|where|which|who)\b)`)
+
+// goWorkflow marks Go workflow questions (modules, dependencies, build
+// commands) that use action verbs like "build" or "add" but are NOT code
+// generation requests. Checked before gocodeCodegen: "build every package
+// in a Go module" is a `go build` question, not a "write a builder" request.
+var goWorkflow = regexp.MustCompile(`\bGo module\b|\bGo binary\b|\bdependency\b|\bdependencies\b|\bbetween new and make\b`)
+
+// routeDomain classifies a chat INPUT (not the output) into the domain
+// model that should handle it. Used by unified chat. Tuned for perfect
+// coverage on the training inputs: social, gocode, makefile, and go.
+func routeDomain(input string) string {
+	if makefileTerms.MatchString(input) || makefileIntent.MatchString(input) {
+		return MakefileDomain
+	}
+	// Go workflow questions use action verbs but aren't code requests.
+	if goWorkflow.MatchString(input) {
+		return GoDomain
+	}
+	// Explicit code-generation request always wins for code.
+	if gocodeCodegen.MatchString(input) {
+		return GocodeDomain
+	}
+	// A question about a Go concept (even one mentioning "package main"
+	// or "func") goes to the concept model, not the code generator.
+	if goTerms.MatchString(input) {
+		return GoDomain
+	}
+	// Bare code fragments outside a question go to the code model.
+	if gocodeTerms.MatchString(input) {
+		return GocodeDomain
+	}
+	return SocialDomain
+}
+
+// makefileIntent marks natural-language requests to operate the Gollemer
+// repo itself (train the model, chat with it, manage checkpoints/dataset,
+// list make targets). These rarely name a make target explicitly, so the
+// explicit makefileTerms above miss them. Checked before the social
+// fallback: social chatter never mentions training, checkpoints, or the
+// dataset.
+var makefileIntent = regexp.MustCompile(`(?i:\b(train|training|retrain|resume|continue)\b.*\b(model|tiny|small|neural|gollemer|checkpoint)\b|\b(resume|continue)\b.*\btraining\b|\btraining\b.*\b(resume|continue)\b)|\b(train|training|retrain)\b|\b(tiny|small)\b.*\bmodel\b|\b(checkpoints?|models?)\b.*\b(clean|clear|wipe|delete|remove|purge|erase|tidy|old)\b|\b(clean|clear|wipe|delete|remove|purge|erase|tidy\s+up|throw away|get rid of)\b.*\b(checkpoints?|models?|files?|everything|all)\b|\b(dataset|reclassify|retag|pairs|yaml|protobuf|metrics|labels|domain\s+tags?)\b|\bimport\b.*\b(examples|pairs)\b|\b(examples|pairs)\b.*\bimport\b|\bmake\b.*\b(targets?|commands?)\b|\b(targets?|commands?)\b.*\bavailable\b|\b(install|set\s+up|setup|enable)\b.*\bhooks?\b|\bhooks?\b.*\b(install|set\s+up|setup|enable)\b|\bhook\s+up\b.*\bgit\b|\bgit\b.*\bhook\s+up\b|\bprecommit\b|\bgollemer\b|(?i:\b(chat|talk|conversation)\b.*\b(model|session|interface)\b)|\b(model|session|interface)\b.*\b(chat|talk|conversation)\b|\b(launch|open|start)\b.*\bchat\b|\bfresh\s+start\b|\bstart\b.*\bfresh\b|\bstart\s+over\b|\bbegin\s+(again|anew)\b|\bwith make\b|\brun\b.*\bwith make\b|\bavailable\b.*\b(commands?|targets?)\b`)

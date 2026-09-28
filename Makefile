@@ -60,9 +60,10 @@ seq2seq-chat:
 train-real-seq2seq:
 	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-real-seq2seq
 
-## real-chat: Chat with the trained neural model (pure generation, no lookup)
+## real-chat: Unified chat — one session routing each message to the right
+## model (social, go concepts, gocode, makefile) by input intent.
 real-chat:
-	$(MAIN_CMD) -real-chat
+	$(MAIN_CMD) -real-chat -domain unified
 
 ## train-gocode-seq2seq: Train the genuine neural seq2seq model on the gocode domain (NL -> Go code)
 train-gocode-seq2seq:
@@ -75,6 +76,18 @@ real-chat-gocode:
 ## eval-gocode: Score the gocode model on the fixed eval suite (code correctness + chat/code mode separation)
 eval-gocode:
 	python3 scripts/gocode_eval_run.py
+
+## train-go-seq2seq: Train the Go concept model (Go terminology, workflow, commands)
+train-go-seq2seq:
+	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-real-seq2seq -domain go
+
+## real-chat-go: Chat with the Go concept model — questions about Go, not code generation
+real-chat-go:
+	$(MAIN_CMD) -real-chat -domain go
+
+## eval-go: Score the Go concept model on the 16-prompt suite
+eval-go:
+	python3 scripts/goconcept_eval_run.py
 
 ## import-pairs: Import new training pairs (FILE=path.jsonl) through the quality gate
 import-pairs:
