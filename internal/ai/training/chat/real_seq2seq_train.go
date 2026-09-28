@@ -317,9 +317,21 @@ func RunRealSeq2SeqTraining(projectRoot, domain string) error {
 	sort.Slice(encoded, func(i, j int) bool { return len(encoded[i].input) < len(encoded[j].input) })
 
 	embedDim, hiddenDim := dimsForDomain(domain)
+	// Stage-3 bigger model: the accumulator-binding miss is a long-range
+	// dependency limit, and the copy mechanism needs the extra capacity to
+	// train stably. Other domains keep their dims so their checkpoints
+	// stay valid.
+	if domain == GocodeDomain {
+		embedDim, hiddenDim = 256, 512
+	}
 	model, err := seq2seq.NewSeq2Seq(v.Size(), v.Size(), embedDim, hiddenDim, tok, v)
 	if err != nil {
 		return err
+	}
+	// The copy mechanism is gocode-only: a nil gate means exactly the old
+	// behavior, so the other domains are untouched.
+	if domain == GocodeDomain {
+		model.Decoder.Copy = seq2seq.NewCopyGate(hiddenDim)
 	}
 	// NOTE: no SetExactMap call — the saved model must generate, not retrieve.
 	opt := nn.NewOptimizer(model.Parameters(), realBaseLR, realClip)

@@ -90,7 +90,10 @@ type Decoder struct {
 	LSTM      *nn.LSTM
 	MoE       *nn.MoE // mixture-of-experts refines the LSTM state before projection
 	Output    *nn.Linear
-	// Add other layers as needed, e.g., attention
+	// Copy is the pointer/copy mechanism over the decoder's own output
+	// history. Nil disables it (all non-gocode domains): decoding is then
+	// exactly the pre-copy behavior, so old checkpoints stay valid.
+	Copy *CopyGate
 }
 
 // MoE configuration for the decoder.
@@ -124,6 +127,14 @@ func NewDecoder(outputVocabSize, embeddingDim, hiddenDim int) (*Decoder, error) 
 // Forward performs a forward pass through the decoder.
 // It takes the previous output token, and the encoder's final hidden and cell states.
 func (d *Decoder) Forward(inputTokenID *tensor.Tensor, hidden, cell *tensor.Tensor) (*tensor.Tensor, *tensor.Tensor, *tensor.Tensor, error) {
+	return d.ForwardCopy(inputTokenID, hidden, cell, nil, nil)
+}
+
+// ForwardCopy is Forward plus the copy mechanism. histStates[b] holds the
+// decoder's own past LSTM states for batch row b and histTokens[b] the token
+// ids that produced them; when d.Copy is nil (or history is empty) the copy
+// bias is zero and this is exactly Forward.
+func (d *Decoder) ForwardCopy(inputTokenID *tensor.Tensor, hidden, cell *tensor.Tensor, histStates [][][]float32, histTokens [][]int) (*tensor.Tensor, *tensor.Tensor, *tensor.Tensor, error) {
 	// inputTokenID: [batch_size, 1] (single token ID)
 	embedded, err := d.Embedding.Forward(inputTokenID)
 	if err != nil {
@@ -166,6 +177,25 @@ func (d *Decoder) Forward(inputTokenID *tensor.Tensor, hidden, cell *tensor.Tens
 	}
 	// prediction: [batch_size, output_vocab_size] (logits for next token)
 
+	// Copy mechanism: bias the logits toward tokens the decoder has
+	// already emitted, so identifiers survive long-range dependencies.
+	if d.Copy != nil && len(histStates) > 0 {
+		batchSize := prediction.Shape[0]
+		hiddenDim := moeOut2D.Shape[1]
+		vocabSize := prediction.Shape[1]
+		for b := 0; b < batchSize && b < len(histStates); b++ {
+			var toks []int
+			if b < len(histTokens) {
+				toks = histTokens[b]
+			}
+			qOff := b * hiddenDim
+			query := moeOut2D.Data[qOff : qOff+hiddenDim]
+			lOff := b * vocabSize
+			genLogits := prediction.Data[lOff : lOff+vocabSize]
+			d.Copy.forwardCopyStep(query, genLogits, histStates[b], toks)
+		}
+	}
+
 	return prediction, newHidden, newCell, nil
 }
 
@@ -178,6 +208,9 @@ func (d *Decoder) Parameters() []*tensor.Tensor { // Changed here
 		params = append(params, d.MoE.Parameters()...)
 	}
 	params = append(params, d.Output.Parameters()...)
+	if d.Copy != nil {
+		params = append(params, d.Copy.Parameters()...)
+	}
 	return params
 }
 
@@ -255,6 +288,13 @@ func (m *Seq2Seq) Forward(inputIDs, targetIDs *tensor.Tensor) (*tensor.Tensor, e
 	decoderHidden := encoderHidden
 	decoderCell := encoderCell
 
+	// Copy history: per batch row, the decoder's own past LSTM states and
+	// the token ids that produced them. Only used when the decoder carries
+	// a copy gate.
+	useCopy := m.Decoder.Copy != nil
+	histStates := make([][][]float32, batchSize)
+	histTokens := make([][]int, batchSize)
+
 	for t := 0; t < targetSeqLen-1; t++ {
 		decoderInputData := make([]float32, batchSize)
 		for b := 0; b < batchSize; b++ {
@@ -262,7 +302,7 @@ func (m *Seq2Seq) Forward(inputIDs, targetIDs *tensor.Tensor) (*tensor.Tensor, e
 		}
 		decoderInput := tensor.NewTensor([]int{batchSize, 1}, decoderInputData, true)
 
-		prediction, hidden, cell, err := m.Decoder.Forward(decoderInput, decoderHidden, decoderCell)
+		prediction, hidden, cell, err := m.Decoder.ForwardCopy(decoderInput, decoderHidden, decoderCell, histStates, histTokens)
 		if err != nil {
 			return nil, fmt.Errorf("seq2seq decoder forward failed at step %d: %w", t, err)
 		}
@@ -272,6 +312,16 @@ func (m *Seq2Seq) Forward(inputIDs, targetIDs *tensor.Tensor) (*tensor.Tensor, e
 			return nil, fmt.Errorf("seq2seq decoder reshape at step %d failed: %w", t, err)
 		}
 		stepOutputs = append(stepOutputs, reshapedPrediction)
+
+		if useCopy {
+			hiddenDim := hidden.Shape[1]
+			for b := 0; b < batchSize; b++ {
+				hOff := b * hiddenDim
+				hs := append([]float32(nil), hidden.Data[hOff:hOff+hiddenDim]...)
+				histStates[b] = append(histStates[b], hs)
+				histTokens[b] = append(histTokens[b], int(decoderInputData[b]))
+			}
+		}
 
 		decoderHidden = hidden
 		decoderCell = cell
@@ -387,10 +437,17 @@ func (m *Seq2Seq) PredictWithTrace(query string, maxLen int) (string, *ThoughtTr
 	// decoding — standard practice, costs nothing.
 	seenBigrams := map[[2]int]bool{}
 
+	// Copy history (batch=1 here): the decoder's own past LSTM states and
+	// the token ids that produced them. Only used when the decoder carries
+	// a copy gate.
+	useCopy := m.Decoder.Copy != nil
+	histStates := [][][]float32{{}}
+	histTokens := [][]int{{}}
+
 	for t := range maxLen {
 		decoderInput := tensor.NewTensor([]int{1, 1}, []float32{float32(currentInputTokenID)}, true)
 
-		prediction, hidden, cell, err := m.Decoder.Forward(decoderInput, decoderHidden, decoderCell)
+		prediction, hidden, cell, err := m.Decoder.ForwardCopy(decoderInput, decoderHidden, decoderCell, histStates, histTokens)
 		if err != nil {
 			return "", nil, fmt.Errorf("prediction decoder forward failed at step %d: %w", t, err)
 		}
@@ -446,6 +503,13 @@ func (m *Seq2Seq) PredictWithTrace(query string, maxLen int) (string, *ThoughtTr
 		outputTokens = append(outputTokens, predictedTokenID)
 		if predictedTokenID == m.OutputVocab.EosID {
 			break
+		}
+
+		// Record this step for the copy mechanism's history.
+		if useCopy {
+			hs := append([]float32(nil), hidden.Data...)
+			histStates[0] = append(histStates[0], hs)
+			histTokens[0] = append(histTokens[0], predictedTokenID)
 		}
 
 		// Use predicted token as next input

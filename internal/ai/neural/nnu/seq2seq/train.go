@@ -94,6 +94,27 @@ func TrainBatch(m *Seq2Seq, inputIDs, targetIDs [][]int, padID int) (float32, er
 		return 0, fmt.Errorf("decoder output forward: %w", err)
 	}
 
+	// Copy mechanism (gocode only; nil gate for other domains): additive
+	// copy bias in logit space, applied per (batch, step) over the
+	// decoder's own past states. The generation path below is untouched;
+	// the bias only adds gradient sources. Caches are kept for the
+	// backward pass.
+	var copyCaches [][]*copyCache
+	if m.Decoder.Copy != nil {
+		copyCaches = make([][]*copyCache, batch)
+		for b := 0; b < batch; b++ {
+			copyCaches[b] = make([]*copyCache, steps)
+			for t := 0; t < steps; t++ {
+				qOff := (b*steps + t) * hiddenSize
+				query := moeOut.Data[qOff : qOff+hiddenSize]
+				lOff := (b*steps + t) * vocabSize
+				genLogits := logits.Data[lOff : lOff+vocabSize]
+				hist, toks := stepHistory(decOut, decInputIDs, b, t, steps, hiddenSize)
+				copyCaches[b][t] = m.Decoder.Copy.forwardCopyStep(query, genLogits, hist, toks)
+			}
+		}
+	}
+
 	// ---- Loss (mean cross-entropy over non-padding target tokens). ----
 	loss, dLogits, err := softmaxCrossEntropy(logits, labels, padID, vocabSize)
 	if err != nil {
@@ -103,6 +124,31 @@ func TrainBatch(m *Seq2Seq, inputIDs, targetIDs [][]int, padID int) (float32, er
 	// collapsing onto one expert).
 	loss += moeAuxCoeff * moeAux
 
+	// ---- Copy backward: propagate dLogits through the copy bias into the
+	// gate parameters, the query states (moeOut) and the history states
+	// (decOut). Computed before Output.Backward; both only read dLogits.
+	var dMoeOutCopy, dDecOutCopy *tensor.Tensor
+	if m.Decoder.Copy != nil {
+		dMoeOutCopy = tensor.NewTensor([]int{batch, steps, hiddenSize}, make([]float32, batch*steps*hiddenSize), false)
+		dDecOutCopy = tensor.NewTensor([]int{batch, steps, hiddenSize}, make([]float32, batch*steps*hiddenSize), false)
+		for b := 0; b < batch; b++ {
+			for t := 0; t < steps; t++ {
+				lOff := (b*steps + t) * vocabSize
+				dStep := dLogits.Data[lOff : lOff+vocabSize]
+				hist, toks := stepHistory(decOut, decInputIDs, b, t, steps, hiddenSize)
+				dQuery, dHist := m.Decoder.Copy.backwardCopyStep(dStep, copyCaches[b][t], hist, toks)
+				qOff := (b*steps + t) * hiddenSize
+				copy(dMoeOutCopy.Data[qOff:qOff+hiddenSize], dQuery)
+				for i, dh := range dHist {
+					hOff := (b*steps + i) * hiddenSize
+					for h := 0; h < hiddenSize; h++ {
+						dDecOutCopy.Data[hOff+h] += dh[h]
+					}
+				}
+			}
+		}
+	}
+
 	// ---- Backward: decoder output -> MoE -> decoder LSTM -> decoder embedding ... ----
 	if err := m.Decoder.Output.Backward(dLogits); err != nil {
 		return 0, fmt.Errorf("decoder output backward: %w", err)
@@ -110,9 +156,19 @@ func TrainBatch(m *Seq2Seq, inputIDs, targetIDs [][]int, padID int) (float32, er
 	if moeOut.Grad == nil {
 		return 0, fmt.Errorf("moe output grad missing after linear backward")
 	}
+	if dMoeOutCopy != nil {
+		for i, g := range dMoeOutCopy.Data {
+			moeOut.Grad.Data[i] += g
+		}
+	}
 	dDecOut, err := m.Decoder.MoE.Backward(moeOut.Grad, moeAuxCoeff)
 	if err != nil {
 		return 0, fmt.Errorf("decoder moe backward: %w", err)
+	}
+	if dDecOutCopy != nil {
+		for i, g := range dDecOutCopy.Data {
+			dDecOut.Data[i] += g
+		}
 	}
 	zeroCell := tensor.NewTensor([]int{batch, hiddenSize}, make([]float32, batch*hiddenSize), false)
 	if err := m.Decoder.LSTM.Backward(dDecOut, zeroCell); err != nil {
