@@ -72,7 +72,7 @@ train-gocode:
 train-gocli:
 	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-real-seq2seq -domain gocli
 
-## train-makefile: Retrain the makefile command brain (64/128 dims)
+## train-makefile: Retrain the makefile command brain (128/256 dims)
 train-makefile:
 	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-real-seq2seq -domain makefile
 
