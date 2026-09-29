@@ -23,6 +23,7 @@ package chat
 
 import (
 	"bufio"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -281,6 +282,48 @@ func ReclassifyDomains(projectRoot string) (map[string]int, error) {
 	return counts, nil
 }
 
+// seedPair is a Q&A pair loaded from the legacy seed CSV.
+type seedPair struct {
+	Q string
+	A string
+}
+
+// loadSeedPairs reads Q&A pairs from a CSV file (header + rows).
+// It replaces the old moe-dependent loader; only used when seeding
+// a missing dataset from the built-in CSV.
+func loadSeedPairs(dataPath string) ([]seedPair, error) {
+	f, err := os.Open(dataPath)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	records, err := csv.NewReader(f).ReadAll()
+	if err != nil {
+		return nil, err
+	}
+	if len(records) < 2 {
+		return nil, fmt.Errorf("seed dataset is empty")
+	}
+	pairs := make([]seedPair, 0, len(records)-1)
+	for _, rec := range records[1:] {
+		if len(rec) < 2 {
+			continue
+		}
+		q, a := strings.TrimSpace(rec[0]), strings.TrimSpace(rec[1])
+		if q == "" || a == "" {
+			continue
+		}
+		pairs = append(pairs, seedPair{Q: q, A: a})
+	}
+	return pairs, nil
+}
+
+// seedDataPath resolves the built-in seed dataset.
+func seedDataPath(projectRoot string) string {
+	return filepath.Join(projectRoot, "data", "training", "trainingdata", "conversing.csv")
+}
+
 // SeedChatDataset populates the JSONL dataset from the built-in conversing.pb
 // pairs the first time it is missing. It never overwrites an existing file:
 // John's data is append-only by design.
@@ -293,7 +336,7 @@ func SeedChatDataset(projectRoot string) (int, error) {
 		}
 		return len(existing), nil // already seeded; report current size
 	}
-	raw, err := loadTinyPairs(seq2SeqDataPath(projectRoot))
+	raw, err := loadSeedPairs(seedDataPath(projectRoot))
 	if err != nil {
 		return 0, fmt.Errorf("seed: load built-in pairs: %w", err)
 	}
