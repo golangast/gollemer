@@ -101,6 +101,10 @@ real-chat-gocli:
 eval-gocli:
 	python3 scripts/gocli_eval_run.py
 
+## eval-social-multiturn: Score multi-turn conversation (history context + recall) through the real chat loop
+eval-social-multiturn:
+	python3 scripts/social_multiturn_eval.py
+
 ## import-pairs: Import new training pairs (FILE=path.jsonl) through the quality gate
 import-pairs:
 	$(MAIN_CMD) -import-pairs="$(FILE)"

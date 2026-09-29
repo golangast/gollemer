@@ -183,6 +183,7 @@ func RunRealChat(projectRoot, domain string) error {
 	sc := bufio.NewScanner(os.Stdin)
 	sc.Buffer(make([]byte, 1024*1024), 1024*1024)
 	showThoughts := true
+	conv := NewConversation()
 	goCase := map[string]string{}
 	if domain == GocodeDomain {
 		goCase = goIdentCaseMap(projectRoot)
@@ -205,6 +206,24 @@ func RunRealChat(projectRoot, domain string) error {
 			fmt.Printf("[thought process display %s]\n", map[bool]string{true: "on", false: "off"}[showThoughts])
 			continue
 		}
+		if line == "/history" {
+			printTranscript(conv)
+			continue
+		}
+		if line == "/forget" {
+			conv.Clear()
+			fmt.Println("[forgotten — starting fresh]")
+			continue
+		}
+		// Recall questions are answered from the session transcript,
+		// deterministically, before any model sees them.
+		if rq, ok := conv.Recall(line); ok {
+			fmt.Printf("gollemer> %s\n", rq)
+			conv.AddUser(line)
+			conv.AddReply(rq, domain, true)
+			continue
+		}
+		conv.AddUser(line)
 		if domain == GocodeDomain && chatterPrompt.MatchString(line) && !gocodeTerms.MatchString(line) {
 			// Conversational mode: answer with the chat model, never the
 			// code decoder. The gocodeTerms guard keeps greeting-prefixed
@@ -212,22 +231,29 @@ func RunRealChat(projectRoot, domain string) error {
 			// Chat replies get chat post-processing only — tidyGoCode must
 			// never touch them.
 			if socialModel != nil {
-				answer, trace, err := socialModel.PredictWithTrace(strings.ToLower(line), 40)
+				answer, trace, err := socialModel.PredictWithTrace(conv.SocialInput(strings.ToLower(line)), 40)
 				if err != nil {
 					fmt.Printf("gollemer> [error: %v]\n", err)
 					continue
 				}
-				fmt.Printf("gollemer> %s\n", tidyDecode(answer))
+				reply := tidyDecode(answer)
+				fmt.Printf("gollemer> %s\n", reply)
+				conv.AddReply(reply, SocialDomain, false)
 				if showThoughts {
 					printThoughtTrace(trace)
 				}
 			} else {
 				fmt.Printf("gollemer> %s\n", gocodeChatterRedirect)
+				conv.AddReply(gocodeChatterRedirect, SocialDomain, true)
 			}
 			continue
 		}
 		// Lowercased to match training; the model is case-insensitive by construction.
-		answer, trace, err := model.PredictWithTrace(strings.ToLower(line), 40)
+		modelInput := strings.ToLower(line)
+		if domain == SocialDomain {
+			modelInput = conv.SocialInput(modelInput)
+		}
+		answer, trace, err := model.PredictWithTrace(modelInput, 40)
 		if err != nil {
 			fmt.Printf("gollemer> [error: %v]\n", err)
 			continue
@@ -241,6 +267,7 @@ func RunRealChat(projectRoot, domain string) error {
 			reply = tidyGoCommand(answer)
 		}
 		fmt.Printf("gollemer> %s\n", reply)
+		conv.AddReply(reply, domain, false)
 		if showThoughts {
 			printThoughtTrace(trace)
 		}
@@ -274,6 +301,7 @@ func runUnifiedChat(projectRoot string) error {
 	sc := bufio.NewScanner(os.Stdin)
 	sc.Buffer(make([]byte, 1024*1024), 1024*1024)
 	showThoughts := true
+	conv := NewConversation()
 	fmt.Println("[unified chat — type /quit to exit, /thoughts to toggle the thought process]")
 	for {
 		fmt.Print("you> ")
@@ -292,6 +320,24 @@ func runUnifiedChat(projectRoot string) error {
 			fmt.Printf("[thought process display %s]\n", map[bool]string{true: "on", false: "off"}[showThoughts])
 			continue
 		}
+		if line == "/history" {
+			printTranscript(conv)
+			continue
+		}
+		if line == "/forget" {
+			conv.Clear()
+			fmt.Println("[forgotten — starting fresh]")
+			continue
+		}
+		// Recall questions are answered from the session transcript,
+		// deterministically, before routing or any model sees them.
+		if rq, ok := conv.Recall(line); ok {
+			fmt.Printf("gollemer [memory]> %s\n", rq)
+			conv.AddUser(line)
+			conv.AddReply(rq, SocialDomain, true)
+			continue
+		}
+		conv.AddUser(line)
 		d := routeDomain(line)
 		model := models[d]
 		tag := d
@@ -299,7 +345,17 @@ func runUnifiedChat(projectRoot string) error {
 			model = socialModel
 			tag = d + "→social"
 		}
-		answer, trace, err := model.PredictWithTrace(strings.ToLower(line), 40)
+		// The effective generating domain: a fallback answer comes from
+		// the social model even when the request routed elsewhere.
+		effD := d
+		if model == socialModel {
+			effD = SocialDomain
+		}
+		modelInput := strings.ToLower(line)
+		if effD == SocialDomain {
+			modelInput = conv.SocialInput(modelInput)
+		}
+		answer, trace, err := model.PredictWithTrace(modelInput, 40)
 		if err != nil {
 			fmt.Printf("gollemer [%s]> [error: %v]\n", tag, err)
 			continue
@@ -314,6 +370,7 @@ func runUnifiedChat(projectRoot string) error {
 			reply = tidyGoCommand(answer)
 		}
 		fmt.Printf("gollemer [%s]> %s\n", tag, reply)
+		conv.AddReply(reply, effD, false)
 		// A gocli reply is an exact toolchain command. Offer to run it
 		// directly (working directory shown, no shell); only bare
 		// go/gofmt invocations are ever offered, never model chatter.
@@ -325,6 +382,25 @@ func runUnifiedChat(projectRoot string) error {
 		}
 	}
 	return sc.Err()
+}
+
+// printTranscript shows what gollemer remembers from this session.
+func printTranscript(conv *Conversation) {
+	turns := conv.Turns()
+	if len(turns) == 0 {
+		fmt.Println("[nothing remembered yet — say something first]")
+		return
+	}
+	fmt.Printf("[remembering %d turns this session]\n", len(turns))
+	for _, t := range turns {
+		if t.Speaker == "you" {
+			fmt.Printf("you: %s\n", t.Text)
+		} else if t.Domain != "" {
+			fmt.Printf("gollemer [%s]: %s\n", t.Domain, t.Text)
+		} else {
+			fmt.Printf("gollemer: %s\n", t.Text)
+		}
+	}
 }
 
 // runnableGoCommand whitelists what unified chat will ever offer to
