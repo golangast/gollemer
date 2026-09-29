@@ -257,7 +257,7 @@
 {"input": "continue training", "output": "run make train-social", "domain": "makefile"}
 {"input": "pick up where training left off", "output": "run make train-social", "domain": "makefile"}
 {"input": "keep training from the checkpoint", "output": "run make train-social", "domain": "makefile"}
-{"input": "how do i add new training data", "output": "run make import FILE=data.jsonl", "domain": "makefile"}
+{"input": "how do i add new training data", "output": "run make import FILE=data.jsonl", "domain": "social"}
 {"input": "import training pairs", "output": "run make import FILE=data.jsonl", "domain": "makefile"}
 {"input": "load new pairs into the dataset", "output": "run make import FILE=data.jsonl", "domain": "makefile"}
 {"input": "what make targets are available", "output": "try make train-social, make chat, make smarter", "domain": "makefile"}

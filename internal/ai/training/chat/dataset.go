@@ -91,7 +91,7 @@ var gocodeTerms = regexp.MustCompile(`(?i:\bwrite\b[^.]{0,40}\b(function|func|co
 // NOTE: the bare word "go" is matched case-sensitively only — the language
 // name is capitalized in this dataset ("use Go"), while the verb is not
 // ("how did your day go"). Plurals (channels, slices) are included.
-var goTerms = regexp.MustCompile(`(?i:\b(goroutines?|closures?|defers?|structs?|interfaces?|slices?|channels?|modules?|cgo|generics?|packages?|funcs?|functions?|methods?|race conditions?|compil\w*|architect\w*|waitgroups?|pointers?|executables?|binar\w*|mutex\w*|documentation|profiling|builtins?|error handling|builds?|panics?|blank identifiers?|anonymous functions?|select|gomaxprocs|gofmt|godoc|delete|maps?|printf|sprintf|unmarshal|marshal|pipelines?|fan[- ]?out|fan[- ]?in|done (channels?|signals?)|context cancellation|errors?|goproxy|gosumdb|testmain|workspaces?|shadowing|loop variables?|zero values?|init functions?|benchmarks?|testdata|golden files?|work stealing|replace directive|minimal version|blank imports?|dot imports?|producers?|consumers?)\b|\bin go\b|\bgo (program|programs|string|server|language|programming)\b|\b(can|does) go\b|\bwhat is go\b|\blearn(ing)? go\b|\bfmt\b|\berrors\.\w+|\bt\.(helper|cleanup)\b|\binit\b.*\bmain\b)|\bdepende|\bnew\(\)|\bmake\(\)|\bGo\b`)
+var goTerms = regexp.MustCompile(`(?i:\b(goroutines?|closures?|defers?|structs?|interfaces?|slices?|channels?|modules?|cgo|generics?|packages?|funcs?|functions?|methods?|race conditions?|compil\w*|architect\w*|waitgroups?|pointers?|executables?|binar\w*|mutex\w*|documentation|profiling|builtins?|error handling|builds?|panics?|blank identifiers?|anonymous functions?|select|gomaxprocs|gofmt|godoc|delete|maps?|printf|sprintf|unmarshal|marshal|pipelines?|fan[- ]?out|fan[- ]?in|done (channels?|signals?)|context cancellation|errors?|goproxy|gosumdb|testmain|workspaces?|shadowing|loop variables?|zero values?|init functions?|benchmarks?|testdata|golden files?|work stealing|replace directive|minimal version|blank imports?|dot imports?|producers?|consumers?|config|standard input|stdin|logs|sync\.?\s*cond|time\.?\s*after|flaky|deferred|integer division|json|float64|slicing|concurrency|context|imports?|t\s+helper|t\s+cleanup|test coverage|from go|time values|string of an int|empty array|v2\b|test my code|tasks|configuration|cached|parallel|share.*value|read heavy|first of several|test pass|fail together|skip.*test|lines.*tests?)\b|\bin go\b|\bgo (program|programs|string|server|language|programming)\b|\b(can|does) go\b|\bwhat is go\b|\blearn(ing)? go\b|\bfmt\b|\berrors\.\w+|\bt\.(helper|cleanup)\b|\binit\b.*\bmain\b)|\bdepende|\bnew\(\)|\bmake\(\)|\bGo\b`)
 
 // ClassifyDomain tags a pair by its content.
 func ClassifyDomain(input, output string) string {
@@ -399,6 +399,12 @@ func ImportChatPairs(projectRoot, importPath string) (admitted int, quarantined 
 	return admitted, quarantined, nil
 }
 
+// goStdlibQuestion marks "how do i" questions about stdlib usage as
+// concept questions: "how do i get the current time in go" asks for
+// time.Now, not a program to be written. Checked before gocodeCodegen,
+// which would otherwise catch these via its "how do i ... in go" clause.
+var goStdlibQuestion = regexp.MustCompile(`(?i:\bhow do i\b.*\b(string|strings|current time|working directory|error|errors|file extension|cpus|timeout|channel receive|sorted)\b.*\bin go\b)`)
+
 // gocodeCodegen marks explicit code-generation intent: the input asks for
 // code to be written. This is a subset of gocodeTerms used for routing:
 // a question like "what is package main" matches gocodeTerms (via the
@@ -429,11 +435,12 @@ var runOneTestQuestion = regexp.MustCompile(`(?i:\brun\b.*\b(one|single)\b.*\bte
 
 // gocliQuestionCarveout marks explanatory questions about commands:
 // "what does go mod tidy do", "what is the difference between go run
-// and go build", "how do you run one test in Go". These ask what a
-// command does (GoDomain); they never ask to run one. Deliberately
-// limited to what/how: "which go version is installed" and "where is
+// and go build", "how do you run one test in Go", "why did go test say
+// cached". These ask what a command does or why it behaves a way
+// (GoDomain); they never ask to run one. Deliberately limited to
+// what/how/why: "which go version is installed" and "where is
 // the go module cache" ARE run requests (GoCliDomain).
-var gocliQuestionCarveout = regexp.MustCompile(`(?i:^\s*(what|how)\b)`)
+var gocliQuestionCarveout = regexp.MustCompile(`(?i:^\s*(what|how|why)\b)`)
 
 // gocliExplainMarker marks the phrasing that turns a command mention
 // into a concept question: "what does go mod tidy do", "the difference
@@ -490,16 +497,35 @@ var gocliIntent = regexp.MustCompile(`(?i:` +
 
 // isGoCliRequest reports whether the input asks to RUN a Go toolchain
 // command. Concept questions about commands ("what does go mod tidy do",
-// "how do you run one test in Go") are GoDomain, not run requests. The
-// bare imperative "test my code" is a run request; the question "How do
-// I test my code?" stays where the dataset put it (social) because the
-// pattern is anchored to the bare imperative.
+// "how do you run one test in Go", "why did go test say cached") are
+// GoDomain, not run requests. But "what go version do I have" IS a run
+// request (it wants the output of `go version`), so have/has/installed
+// questions are never carved out. The bare imperative "test my code" is
+// a run request; the question "How do I test my code?" stays where the
+// dataset put it (social) because the pattern is anchored to the bare
+// imperative.
 func isGoCliRequest(input string) bool {
 	if isGoCommandQuestion(input) {
 		return false
 	}
+	// A what/how/why question that mentions Go tooling asks for an
+	// explanation, not a command run: "why did go test say cached",
+	// "how do i run tests in parallel". Exception: "what go version
+	// do I have" wants the command output, not an explanation. And
+	// "how do I run the tests" is a run request (gocli) unless it has
+	// a concept qualifier like "parallel" — hence the goTerms check.
+	if gocliQuestionCarveout.MatchString(input) &&
+		(goCommandLiteral.MatchString(input) || gocliIntent.MatchString(input)) &&
+		!gocliHaveRequest.MatchString(input) &&
+		goTerms.MatchString(input) {
+		return false
+	}
 	return goCommandLiteral.MatchString(input) || gocliIntent.MatchString(input)
 }
+
+// gocliHaveRequest marks "what go version do I have" style questions as
+// run requests: the user wants the command output, not an explanation.
+var gocliHaveRequest = regexp.MustCompile(`(?i:\b(have|has|installed)\b)`)
 
 // routeDomain classifies a chat INPUT (not the output) into the domain
 // model that should handle it. Used by unified chat. Tuned for perfect
@@ -509,6 +535,15 @@ func routeDomain(input string) string {
 	// "who made you") are conversational, not make-command requests,
 	// even though they name Gollemer. Checked before makefileIntent.
 	if gollemerDefinition.MatchString(input) {
+		return SocialDomain
+	}
+	// "what does make chat do" asks for an explanation of a command,
+	// not a request to run it. Checked before makefileTerms.
+	if makeExplain.MatchString(input) {
+		return SocialDomain
+	}
+	// "how do i add training data" asks for an explanation, not a run.
+	if trainingDataQuestion.MatchString(input) {
 		return SocialDomain
 	}
 	if makefileTerms.MatchString(input) || makefileIntent.MatchString(input) {
@@ -530,6 +565,11 @@ func routeDomain(input string) string {
 	if goWorkflow.MatchString(input) {
 		return GoDomain
 	}
+	// "how do i" questions about stdlib usage are concept questions,
+	// not codegen: "how do i get the current time in go".
+	if goStdlibQuestion.MatchString(input) {
+		return GoDomain
+	}
 	// Explicit code-generation request always wins for code.
 	if gocodeCodegen.MatchString(input) {
 		return GocodeDomain
@@ -546,10 +586,20 @@ func routeDomain(input string) string {
 	return SocialDomain
 }
 
+// makeExplain marks "what does make X do" questions as conversational.
+// The user wants an explanation of the command, not a request to run it.
+var makeExplain = regexp.MustCompile(`(?i:^\s*what\s+does\s+make\s+\w+)`)
+
+// trainingDataQuestion marks "how do i add training data" as
+// conversational. The user wants an explanation of the process, not a
+// request to run a command. Checked before makefileIntent, whose bare
+// \btraining\b would otherwise catch it.
+var trainingDataQuestion = regexp.MustCompile(`(?i:\bhow do i\b.*\btraining data\b)`)
+
 // gollemerDefinition marks "what is gollemer" style questions as
 // conversational. Without this, makefileIntent's \bgollemer\b would
 // route them to the make-command model.
-var gollemerDefinition = regexp.MustCompile(`(?i:\b(what is|what's|who made|who created|who built|tell me about)\b.*\bgollemer\b|\bgollemer\b.*\b(what is|who made)\b)`)
+var gollemerDefinition = regexp.MustCompile(`(?i:\b(what is|what's|who made|who created|who built|tell me about|how many|how does)\b.*\bgollemer\b|\bgollemer\b.*\b(what is|who made|how many)\b|\b(get started|expand)\b.*\bgollemer\b|\bgollemer\b.*\b(learn|brains)\b)`)
 
 // makefileIntent marks natural-language requests to operate the Gollemer
 // repo itself (train the model, chat with it, manage checkpoints/dataset,
@@ -562,10 +612,18 @@ var gollemerDefinition = regexp.MustCompile(`(?i:\b(what is|what's|who made|who 
 // untangling a single giant expression. They're joined with | below.
 var makefileIntentPatterns = []string{
 	// Train/retrain the model: "retrain the neural model", "resume training".
+	// NOTE: bare \btrain\b is deliberately NOT matched: it's a vehicle
+	// ("train rides") as often as a verb. The specific patterns above
+	// cover "train the model"; bare \btraining\b and \bretrain\b are
+	// unambiguous (but see trainingDataQuestion: "how do i add training
+	// data" is an explanation question, not a command).
 	`\b(train|training|retrain|resume|continue)\b.*\b(model|tiny|small|neural|gollemer|checkpoint)\b`,
 	`\b(resume|continue)\b.*\btraining\b`,
 	`\btraining\b.*\b(resume|continue)\b`,
-	`\b(train|training|retrain)\b`,
+	`\btraining\b`,
+	`\bretrain\b`,
+	`\btrain\b.*\b(anew|from scratch)\b`,
+	`\b(wipe|reset|scrap)\b.*\btrain\b`,
 	`\b(tiny|small)\b.*\bmodel\b`,
 
 	// Manage checkpoints: "clean the checkpoints", "delete old models".
@@ -615,6 +673,33 @@ var makefileIntentPatterns = []string{
 	// Debug chat: "show the thought process", "chat with debug prints".
 	`\bthought\b.*\bprocess\b`,
 	`\bdebug\b.*\b(mode|prints)\b`,
+
+	// Improve/upgrade: "improve the models", "run the full upgrade".
+	// NOTE: bare \bupgrade\b is NOT matched: "upgrade a Go module
+	// dependency" is a go question and "upgrade the uuid dependency"
+	// is gocli. Only the model-upgrade senses count.
+	`\b(improve|upgrade)\b.*\bmodels?\b`,
+	`\b(full|complete)\b.*\bupgrade\b`,
+
+	// Explain project: "explain this project", "give me a project overview".
+	`\bexplain\b.*\bproject\b`,
+	`\bproject\b.*\b(overview|explain)\b`,
+
+	// Command picker: "let me choose a command", "open the command picker".
+	`\b(choose|pick|select)\b.*\bcommands?\b`,
+	`\bcommands?\b.*\bpicker\b`,
+	`\bpicker\b`,
+
+	// Eval: "score all the models", "run the eval suite".
+	`\beval\b.*\bsuite\b`,
+	`\bscore\b.*\bmodels?\b`,
+	`\bhow good\b.*\bmodels?\b`,
+
+	// Update a model: "update the gocli model".
+	`\bupdate\b.*\b(gocli|gocode|model)\b`,
+
+	// Help: "show the help".
+	`\bshow\b.*\bhelp\b`,
 }
 
 var makefileIntent = regexp.MustCompile(`(?i:` + strings.Join(makefileIntentPatterns, "|") + `)`)
