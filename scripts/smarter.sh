@@ -15,6 +15,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# Go toolchain location (not always on PATH in background sessions).
+export PATH="$PATH:/home/hatch/golang/bin:/usr/local/go/bin"
+
 BACKUP_DIR="$HOME/workspace/goals/get-gollemer-actually-working-as-an-llm/hidden_files"
 LOG_DIR="$HOME/workspace/goals/get-gollemer-actually-working-as-an-llm/hidden_files"
 STAMP=$(date +%Y%m%d_%H%M%S)
