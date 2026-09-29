@@ -1,5 +1,6 @@
 # Gollemer — one chat, five brains.
 #
+#   make start      the start-here guide: what to do, what it can do, how to expand it
 #   make chat       talk to gollemer (unified chat: social, go, code, makefile, gocli)
 #   make sel        pick a command from a columnar fuzzy finder
 #   make explain    what the project is and what each command does
@@ -18,8 +19,12 @@ GOGC       = 50
 GOMAXPROCS = 8
 MAIN_CMD   = go run main.go
 
-.PHONY: chat sel explain smarter eval help import \
+.PHONY: start chat sel explain smarter eval help import \
         train-social train-go train-gocode train-gocli train-makefile
+
+## start: The start-here guide — what to do, what it can do, how to expand it
+start:
+	bash scripts/start.sh
 
 ## chat: Talk to gollemer — one session, five brains, routed per message
 chat:

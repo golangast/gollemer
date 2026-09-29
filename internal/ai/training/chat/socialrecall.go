@@ -22,45 +22,51 @@ var (
 	socialRecallMap  map[string]string
 )
 
+// loadRecallPairs reads single-turn pairs for one domain from the
+// training JSONL, keyed by normalized input. Multi-turn history-format
+// inputs are skipped (they're model-input format, not raw messages).
+// Last pair wins on duplicates: the dataset is append-ordered and
+// newer pairs override older ones.
+func loadRecallPairs(projectRoot, domain string) map[string]string {
+	out := map[string]string{}
+	raw, err := os.ReadFile(ChatDatasetPath(projectRoot))
+	if err != nil {
+		return out
+	}
+	var p struct {
+		Input  string `json:"input"`
+		Output string `json:"output"`
+		Domain string `json:"domain"`
+	}
+	for _, line := range strings.Split(string(raw), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		p.Input, p.Output, p.Domain = "", "", ""
+		if err := json.Unmarshal([]byte(line), &p); err != nil {
+			continue
+		}
+		if p.Domain != domain || p.Input == "" || p.Output == "" {
+			continue
+		}
+		if strings.HasPrefix(strings.ToLower(p.Input), "before you said ") {
+			continue
+		}
+		key := normalizeRecallInput(p.Input)
+		if key == "" {
+			continue
+		}
+		out[key] = p.Output
+	}
+	return out
+}
+
 // initSocialRecall loads every single-turn social pair into a
-// normalized-input -> output map. Multi-turn history-format inputs
-// ("before you said ...") are model-input format, not raw user
-// messages, so they are skipped.
+// normalized-input -> output map.
 func initSocialRecall(projectRoot string) {
 	socialRecallOnce.Do(func() {
-		socialRecallMap = map[string]string{}
-		raw, err := os.ReadFile(ChatDatasetPath(projectRoot))
-		if err != nil {
-			return
-		}
-		var p struct {
-			Input  string `json:"input"`
-			Output string `json:"output"`
-			Domain string `json:"domain"`
-		}
-		for _, line := range strings.Split(string(raw), "\n") {
-			line = strings.TrimSpace(line)
-			if line == "" {
-				continue
-			}
-			p.Input, p.Output, p.Domain = "", "", ""
-			if err := json.Unmarshal([]byte(line), &p); err != nil {
-				continue
-			}
-			if p.Domain != SocialDomain || p.Input == "" || p.Output == "" {
-				continue
-			}
-			if strings.HasPrefix(strings.ToLower(p.Input), "before you said ") {
-				continue
-			}
-			key := normalizeRecallInput(p.Input)
-			if key == "" {
-				continue
-			}
-			// Last pair wins on duplicates: the dataset is append-ordered
-			// and newer pairs override older ones.
-			socialRecallMap[key] = p.Output
-		}
+		socialRecallMap = loadRecallPairs(projectRoot, SocialDomain)
 	})
 }
 

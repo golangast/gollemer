@@ -185,6 +185,7 @@ func RunRealChat(projectRoot, domain string) error {
 	showThoughts := true
 	conv := NewConversation()
 	initSocialRecall(projectRoot)
+	initMakefileRecall(projectRoot)
 	goCase := map[string]string{}
 	if domain == GocodeDomain {
 		goCase = goIdentCaseMap(projectRoot)
@@ -230,6 +231,14 @@ func RunRealChat(projectRoot, domain string) error {
 			if sr, ok := LookupSocialRecall(line); ok {
 				fmt.Printf("gollemer> %s\n", sr)
 				conv.AddReply(sr, SocialDomain, false)
+				continue
+			}
+		}
+		// Makefile recall: exact training-pair matches answer verbatim.
+		if domain == MakefileDomain {
+			if mr, ok := LookupMakefileRecall(line); ok {
+				fmt.Printf("gollemer> %s\n", mr)
+				conv.AddReply(mr, MakefileDomain, false)
 				continue
 			}
 		}
@@ -315,6 +324,7 @@ func runUnifiedChat(projectRoot string) error {
 	}
 	// Social recall: exact training-pair matches answer deterministically.
 	initSocialRecall(projectRoot)
+	initMakefileRecall(projectRoot)
 
 	goCase := goIdentCaseMap(projectRoot)
 	sc := bufio.NewScanner(os.Stdin)
@@ -365,6 +375,17 @@ func runUnifiedChat(projectRoot string) error {
 			if sr, ok := LookupSocialRecall(line); ok {
 				fmt.Printf("gollemer [%s]> %s\n", d, sr)
 				conv.AddReply(sr, SocialDomain, false)
+				continue
+			}
+		}
+		// Makefile recall: exact training-pair matches return the
+		// trained command verbatim. The tiny model confuses similar
+		// "how do i ..." inputs, so this guarantees correct commands
+		// for anything it was explicitly taught.
+		if d == MakefileDomain {
+			if mr, ok := LookupMakefileRecall(line); ok {
+				fmt.Printf("gollemer [%s]> %s\n", d, mr)
+				conv.AddReply(mr, MakefileDomain, false)
 				continue
 			}
 		}
