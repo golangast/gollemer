@@ -1,0 +1,61 @@
+{"input": "check if the dependencies are updated", "output": "go mod tidy", "domain": "gocli"}
+{"input": "are my dependencies up to date", "output": "go mod tidy", "domain": "gocli"}
+{"input": "clean up the dependencies", "output": "go mod tidy", "domain": "gocli"}
+{"input": "remove unused dependencies", "output": "go mod tidy", "domain": "gocli"}
+{"input": "tidy up the module dependencies", "output": "go mod tidy", "domain": "gocli"}
+{"input": "make sure go.mod is tidy", "output": "go mod tidy", "domain": "gocli"}
+{"input": "sync the dependencies", "output": "go mod tidy", "domain": "gocli"}
+{"input": "download all the dependencies", "output": "go mod download", "domain": "gocli"}
+{"input": "fetch the module dependencies", "output": "go mod download", "domain": "gocli"}
+{"input": "download the dependencies for this module", "output": "go mod download", "domain": "gocli"}
+{"input": "verify the dependencies are intact", "output": "go mod verify", "domain": "gocli"}
+{"input": "check that the dependencies haven't been tampered with", "output": "go mod verify", "domain": "gocli"}
+{"input": "verify all the module dependencies", "output": "go mod verify", "domain": "gocli"}
+{"input": "add the uuid package to my project", "output": "go get github.com/google/uuid", "domain": "gocli"}
+{"input": "install the uuid dependency", "output": "go get github.com/google/uuid", "domain": "gocli"}
+{"input": "add uuid as a dependency", "output": "go get github.com/google/uuid", "domain": "gocli"}
+{"input": "update the uuid package to the latest version", "output": "go get -u github.com/google/uuid", "domain": "gocli"}
+{"input": "upgrade the uuid dependency", "output": "go get -u github.com/google/uuid", "domain": "gocli"}
+{"input": "show the dependency graph", "output": "go mod graph", "domain": "gocli"}
+{"input": "list all the dependencies", "output": "go list -m all", "domain": "gocli"}
+{"input": "show me every dependency of this module", "output": "go list -m all", "domain": "gocli"}
+{"input": "build my program", "output": "go build .", "domain": "gocli"}
+{"input": "compile my program", "output": "go build .", "domain": "gocli"}
+{"input": "build a binary of my program", "output": "go build -o app .", "domain": "gocli"}
+{"input": "create an executable from my code", "output": "go build -o app .", "domain": "gocli"}
+{"input": "build the binary", "output": "go build -o app .", "domain": "gocli"}
+{"input": "build every package in the module", "output": "go build ./...", "domain": "gocli"}
+{"input": "compile all packages", "output": "go build ./...", "domain": "gocli"}
+{"input": "compile everything", "output": "go build ./...", "domain": "gocli"}
+{"input": "build the whole module", "output": "go build ./...", "domain": "gocli"}
+{"input": "run my program", "output": "go run .", "domain": "gocli"}
+{"input": "run the main package", "output": "go run .", "domain": "gocli"}
+{"input": "execute my go program", "output": "go run .", "domain": "gocli"}
+{"input": "run the tests", "output": "go test ./...", "domain": "gocli"}
+{"input": "run all the tests", "output": "go test ./...", "domain": "gocli"}
+{"input": "test my code", "output": "go test ./...", "domain": "gocli"}
+{"input": "run the test suite", "output": "go test ./...", "domain": "gocli"}
+{"input": "execute the tests", "output": "go test ./...", "domain": "gocli"}
+{"input": "run the tests with coverage", "output": "go test -cover ./...", "domain": "gocli"}
+{"input": "check test coverage", "output": "go test -cover ./...", "domain": "gocli"}
+{"input": "run the tests including race detection", "output": "go test -race ./...", "domain": "gocli"}
+{"input": "check for race conditions in the tests", "output": "go test -race ./...", "domain": "gocli"}
+{"input": "check my code for problems", "output": "go vet ./...", "domain": "gocli"}
+{"input": "vet my code", "output": "go vet ./...", "domain": "gocli"}
+{"input": "look for suspicious code", "output": "go vet ./...", "domain": "gocli"}
+{"input": "format my code", "output": "gofmt -w .", "domain": "gocli"}
+{"input": "format all the go files", "output": "gofmt -w .", "domain": "gocli"}
+{"input": "fix the formatting of my code", "output": "gofmt -w .", "domain": "gocli"}
+{"input": "reformat my source files", "output": "gofmt -w .", "domain": "gocli"}
+{"input": "check if my code is formatted correctly", "output": "gofmt -l .", "domain": "gocli"}
+{"input": "show the docs for the fmt package", "output": "go doc fmt", "domain": "gocli"}
+{"input": "look up the documentation for Println", "output": "go doc fmt.Println", "domain": "gocli"}
+{"input": "list all packages in the module", "output": "go list ./...", "domain": "gocli"}
+{"input": "show the go version", "output": "go version", "domain": "gocli"}
+{"input": "which go version is installed", "output": "go version", "domain": "gocli"}
+{"input": "show the go environment settings", "output": "go env", "domain": "gocli"}
+{"input": "where is the go module cache", "output": "go env GOMODCACHE", "domain": "gocli"}
+{"input": "install my program as a binary", "output": "go install .", "domain": "gocli"}
+{"input": "install the command to my path", "output": "go install .", "domain": "gocli"}
+{"input": "clear the build cache", "output": "go clean -cache", "domain": "gocli"}
+{"input": "clean up the build cache", "output": "go clean -cache", "domain": "gocli"}

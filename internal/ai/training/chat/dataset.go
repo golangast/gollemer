@@ -58,9 +58,18 @@ const GocodeDomain = "gocode"
 // not code generation.
 const GoDomain = "go"
 
+// GoCliDomain is stage five of the roadmap: the Go command domain. The
+// input is a natural-language request to do something with the Go
+// toolchain ("check if the dependencies are updated"); the output is the
+// exact CLI command ("go mod tidy"), which unified chat can run on
+// confirmation. Distinct from GoDomain (prose explanations of what
+// commands do) and GocodeDomain (generating Go code): modes stay
+// separate by design.
+const GoCliDomain = "gocli"
+
 // UnifiedDomain is the unified chat mode: a single chat session that
 // routes each message to the appropriate domain model (social, go,
-// gocode, makefile) based on input intent.
+// gocli, gocode, makefile) based on input intent.
 const UnifiedDomain = "unified"
 
 // makefileTerms marks the makefile-command domain: the word "makefile"
@@ -87,6 +96,12 @@ var goTerms = regexp.MustCompile(`(?i:\b(goroutines?|closures?|defers?|structs?|
 func ClassifyDomain(input, output string) string {
 	if makefileTerms.MatchString(input) || makefileTerms.MatchString(output) {
 		return MakefileDomain
+	}
+	// Command requests route to gocli before the prose domains: the
+	// router predicate already carves out concept questions ("what does
+	// go mod tidy do"), so reusing it keeps reclassify consistent.
+	if isGoCliRequest(input) {
+		return GoCliDomain
 	}
 	if gocodeTerms.MatchString(input) || gocodeTerms.MatchString(output) {
 		return GocodeDomain
@@ -358,12 +373,108 @@ var questionForm = regexp.MustCompile(`(?i:^\s*(what|why|how|explain|tell me|des
 // in a Go module" is a `go build` question, not a "write a builder" request.
 var goWorkflow = regexp.MustCompile(`\bGo module\b|\bGo binary\b|\bdependency\b|\bdependencies\b|\bbetween new and make\b`)
 
+// goCommandLiteral marks an explicit Go toolchain command in the input.
+// A bare invocation ("go mod tidy", "gofmt -w .") is a run request for
+// GoCliDomain; the same literal inside a question ("what does go mod
+// tidy do") is a concept question for GoDomain — see isGoCliRequest.
+var goCommandLiteral = regexp.MustCompile(`(?i:\bgo\s+(mod\s+(tidy|download|verify|graph)|get\b|build\b|run\b|test\b|vet\b|list\b|doc\b|env\b|version\b|install\b|clean\b)|\bgofmt\b)`)
+
+// runOneTestQuestion marks the explanatory "how do you run one test"
+// phrasing, which asks what the command looks like (GoDomain) rather
+// than asking to run the suite (GoCliDomain).
+var runOneTestQuestion = regexp.MustCompile(`(?i:\brun\b.*\b(one|single)\b.*\btest\b)`)
+
+// gocliQuestionCarveout marks explanatory questions about commands:
+// "what does go mod tidy do", "what is the difference between go run
+// and go build", "how do you run one test in Go". These ask what a
+// command does (GoDomain); they never ask to run one. Deliberately
+// limited to what/how: "which go version is installed" and "where is
+// the go module cache" ARE run requests (GoCliDomain).
+var gocliQuestionCarveout = regexp.MustCompile(`(?i:^\s*(what|how)\b)`)
+
+// gocliExplainMarker marks the phrasing that turns a command mention
+// into a concept question: "what does go mod tidy do", "the difference
+// between go run and go build", "what does gofmt mean". A bare "do" is
+// deliberately excluded: "what go version do I have" is a run request
+// (go version), not an explanation request.
+var gocliExplainMarker = regexp.MustCompile(`(?i:\bdoes\b|\bdifference between\b|\bmeans?\b|\bmeant\b|\bexplain\b)`)
+
+// isGoCommandQuestion reports whether the input asks what a Go command
+// does ("what does go mod tidy do", "how do you run one test in Go").
+// These are GoDomain concept questions, never run requests. A what/how
+// question that merely names a command ("what go version do I have")
+// stays a run request.
+func isGoCommandQuestion(input string) bool {
+	if !gocliQuestionCarveout.MatchString(input) {
+		return false
+	}
+	if !goCommandLiteral.MatchString(input) && !runOneTestQuestion.MatchString(input) {
+		return false
+	}
+	return gocliExplainMarker.MatchString(input) || runOneTestQuestion.MatchString(input)
+}
+
+// gocliIntent marks natural-language requests to RUN a Go toolchain
+// command: "check if the dependencies are updated" -> go mod tidy.
+// Deliberately narrow: bare verbs like "build" or "check" only count
+// with a toolchain object, so "build a web server" (gocode) and "check
+// the weather" (social) never match.
+var gocliIntent = regexp.MustCompile(`(?i:` +
+	`\btidy\b.*\b(dependenc|deps|go\.mod|module)\b|\bgo\.mod\b.*\btidy\b` +
+	`|\b(dependenc(y|ies)|deps)\b.*\b(tidy|updated?|up to date|clean ?up|sync(ed)?|download(ed)?|fetch(ed)?|verify|tampered|intact|remove(d)?)\b` +
+	`|\b(tidy|sync|download|fetch|verify|clean ?up|remove)\b.*\b(dependenc(y|ies)|deps)\b` +
+	`|\b(show|list)\b.*\b(dependenc\w*|deps)\b` +
+	`|\b(dependenc\w*|deps)\b.*\bgraph\b|\bgraph\b.*\b(dependenc\w*|deps)\b` +
+	`|\blist\b.*\bpackages\b` +
+	`|\buuid\b` +
+	`|\bbuild\b.*\b(my|the|this|our|every|all)\b.*\b(program|project|binary|packages|module)\b` +
+	`|\bcompile\b.*\b(program|project|packages|module|everything|code)\b` +
+	`|\bcreate\b.*\bexecutable\b` +
+	`|\brun\b.*\b(my|the|this)\b.*\b(program|package)\b|\bexecute\b.*\bprogram\b` +
+	`|\b(run|execute)\b.*\btests?\b|\btest\b.*\bpackages\b` +
+	`|\bcheck\b.*\btest\b.*\bcoverage\b|\bcoverage\b.*\b(check|run)\b` +
+	`|\brace\b.*\btests?\b|\btests?\b.*\brace\b` +
+	`|\bvet\b|\bcode\b.*\bfor\b.*\bproblems\b|\bsuspicious\b` +
+	`|\bformat(ted)?\b.*\b(code|go files?|source files?)\b|\bcode\b.*\bformat(ted)?\b|\bformatting\b.*\bcode\b|\breformat\b` +
+	`|\bgo doc\b|\bdocs?\b.*\bfor\b|\bdocumentation\b.*\bfor\b` +
+	`|\bgo version\b|\bversion\b.*\binstalled\b` +
+	`|\bgo env\b|\benvironment settings\b|\bmodule cache\b` +
+	`|\binstall\b.*\b(binary|command|program|path)\b` +
+	`|\b(clean|clear)\b.*\b(build )?cache\b` +
+	`|` + `^\s*test\s+my\s+code\b` +
+	`)`)
+
+// isGoCliRequest reports whether the input asks to RUN a Go toolchain
+// command. Concept questions about commands ("what does go mod tidy do",
+// "how do you run one test in Go") are GoDomain, not run requests. The
+// bare imperative "test my code" is a run request; the question "How do
+// I test my code?" stays where the dataset put it (social) because the
+// pattern is anchored to the bare imperative.
+func isGoCliRequest(input string) bool {
+	if isGoCommandQuestion(input) {
+		return false
+	}
+	return goCommandLiteral.MatchString(input) || gocliIntent.MatchString(input)
+}
+
 // routeDomain classifies a chat INPUT (not the output) into the domain
 // model that should handle it. Used by unified chat. Tuned for perfect
-// coverage on the training inputs: social, gocode, makefile, and go.
+// coverage on the training inputs: social, gocode, makefile, go, gocli.
 func routeDomain(input string) string {
 	if makefileTerms.MatchString(input) || makefileIntent.MatchString(input) {
 		return MakefileDomain
+	}
+	// A question about what a Go command does is a concept question,
+	// not a run request: "what does go mod tidy do" -> GoDomain.
+	if isGoCommandQuestion(input) {
+		return GoDomain
+	}
+	// A request to run a Go toolchain command goes to the command model.
+	// Checked before goWorkflow/gocodeCodegen: "check if the dependencies
+	// are updated" is a `go mod tidy` request, not a concept question,
+	// and "build my program" is a `go build` request, not codegen.
+	if isGoCliRequest(input) {
+		return GoCliDomain
 	}
 	// Go workflow questions use action verbs but aren't code requests.
 	if goWorkflow.MatchString(input) {

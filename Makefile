@@ -89,6 +89,18 @@ real-chat-go:
 eval-go:
 	python3 scripts/goconcept_eval_run.py
 
+## train-gocli-seq2seq: Train the Go CLI command model (NL request -> exact go command)
+train-gocli-seq2seq:
+	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-real-seq2seq -domain gocli
+
+## real-chat-gocli: Chat with the Go CLI command model — request a task, get the command, optionally run it
+real-chat-gocli:
+	$(MAIN_CMD) -real-chat -domain gocli
+
+## eval-gocli: Score the Go CLI model on the fixed command suite (exact match, no chatter)
+eval-gocli:
+	python3 scripts/gocli_eval_run.py
+
 ## import-pairs: Import new training pairs (FILE=path.jsonl) through the quality gate
 import-pairs:
 	$(MAIN_CMD) -import-pairs="$(FILE)"

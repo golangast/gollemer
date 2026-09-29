@@ -11,13 +11,16 @@ package chat
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/golangast/gollemer/internal/ai/neural/nnu/seq2seq"
 	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
@@ -54,6 +57,25 @@ func goIdentCaseMap(projectRoot string) map[string]string {
 	}
 	return m
 }
+
+// tidyGoCommand normalizes a predicted toolchain command: collapse
+// whitespace runs, trim ends, and repair the tokenizer's punctuation
+// splits ("go build ." must keep its space — "go build." would not
+// execute — while "./..." and "fmt.Println" must be glued back).
+// Unlike tidyDecode it never applies prose punctuation gluing.
+func tidyGoCommand(s string) string {
+	s = strings.Join(strings.Fields(s), " ")
+	// "./..." was split into "." and "/..." by the tokenizer; rejoin with
+	// the separating space intact ("go test ./...", not "go test./...").
+	s = goCmdDotSlash.ReplaceAllString(s, " ./...")
+	// Dotted paths: "fmt . Println" -> "fmt.Println",
+	// "github . com/google/uuid" -> "github.com/google/uuid".
+	s = goCmdDottedWord.ReplaceAllString(s, "$1.$2")
+	return strings.TrimSpace(s)
+}
+
+var goCmdDotSlash = regexp.MustCompile(`\s*\.\s*/\.\.\.`)
+var goCmdDottedWord = regexp.MustCompile(`(\w)\s*\.\s*(\w)`)
 
 // tidyGoCode makes a generated snippet compile-shaped: it repairs the
 // bracket/operator spacing the word-join decoder leaves ([ ] -> [], : = -> :=)
@@ -214,6 +236,10 @@ func RunRealChat(projectRoot, domain string) error {
 		if domain == GocodeDomain {
 			reply = tidyGoCode(answer, goCase)
 		}
+		if domain == GoCliDomain {
+			// Commands keep their token spacing: "go build ." not "go build.".
+			reply = tidyGoCommand(answer)
+		}
 		fmt.Printf("gollemer> %s\n", reply)
 		if showThoughts {
 			printThoughtTrace(trace)
@@ -230,7 +256,7 @@ func RunRealChat(projectRoot, domain string) error {
 // specialized checkpoints fall back to the social model.
 func runUnifiedChat(projectRoot string) error {
 	models := map[string]*seq2seq.Seq2Seq{}
-	for _, d := range []string{SocialDomain, GoDomain, GocodeDomain, MakefileDomain} {
+	for _, d := range []string{SocialDomain, GoDomain, GoCliDomain, GocodeDomain, MakefileDomain} {
 		m, err := loadRealModel(projectRoot, d)
 		if err != nil {
 			log.Printf("[UNIFIED-CHAT] no %s checkpoint (%v); falling back to social", d, err)
@@ -283,12 +309,89 @@ func runUnifiedChat(projectRoot string) error {
 		if d == GocodeDomain {
 			reply = tidyGoCode(answer, goCase)
 		}
+		if d == GoCliDomain {
+			// Commands keep their token spacing: "go build ." not "go build.".
+			reply = tidyGoCommand(answer)
+		}
 		fmt.Printf("gollemer [%s]> %s\n", tag, reply)
+		// A gocli reply is an exact toolchain command. Offer to run it
+		// directly (working directory shown, no shell); only bare
+		// go/gofmt invocations are ever offered, never model chatter.
+		if d == GoCliDomain && tag == GoCliDomain && isRunnableGoCommand(reply) {
+			offerRunGoCommand(sc, strings.TrimSpace(reply))
+		}
 		if showThoughts {
 			printThoughtTrace(trace)
 		}
 	}
 	return sc.Err()
+}
+
+// runnableGoCommand whitelists what unified chat will ever offer to
+// execute: a single bare `go ...` or `gofmt ...` invocation and nothing
+// else. The gocli model is trained on those commands alone; if it emits
+// anything else, the reply is printed as plain text and never offered.
+var runnableGoCommand = regexp.MustCompile(`(?i:^\s*(go|gofmt)\b.+$)`)
+
+// shellMetachars rejects command chaining: even a whitelisted command is
+// never offered if it smuggles in ;, &, |, redirects, or substitutions.
+var shellMetachars = regexp.MustCompile("[;&|<>()`$]")
+
+// isRunnableGoCommand reports whether a gocli reply is safe to offer for
+// execution: a single go/gofmt invocation with no shell metacharacters.
+func isRunnableGoCommand(reply string) bool {
+	r := strings.TrimSpace(reply)
+	return runnableGoCommand.MatchString(r) && !shellMetachars.MatchString(r)
+}
+
+// stdinIsTerminal reports whether stdin is an interactive terminal.
+// The run offer is skipped for piped input so scripted sessions (and
+// eval harnesses) never block on, or accidentally answer, the prompt.
+func stdinIsTerminal() bool {
+	fi, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
+}
+
+// offerRunGoCommand asks for confirmation, then runs a gocli command in
+// the chat's working directory and prints its output. The answer is read
+// through the chat's own scanner so stdin stays on one reader.
+func offerRunGoCommand(sc *bufio.Scanner, cmd string) {
+	cwd, _ := os.Getwd()
+	if !stdinIsTerminal() {
+		// Piped/scripted session: the command is already printed on the
+		// reply line above; never prompt, never run.
+		return
+	}
+	fmt.Printf("[run it here? %s] [y/n]: ", cwd)
+	if !sc.Scan() {
+		fmt.Println("[cancelled]")
+		return
+	}
+	yn := strings.ToLower(strings.TrimSpace(sc.Text()))
+	if yn != "y" && yn != "yes" {
+		fmt.Println("[not run]")
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	// Strict token split and direct execution: no shell is ever
+	// involved, so even a compromised model output cannot escape into
+	// sh syntax. isRunnableGoCommand already rejected every shell
+	// metacharacter; the trained commands contain no quoted strings,
+	// so Fields is a complete parse here.
+	fields := strings.Fields(cmd)
+	out, err := exec.CommandContext(ctx, fields[0], fields[1:]...).CombinedOutput()
+	if len(out) > 0 {
+		fmt.Printf("%s", out)
+	}
+	if err != nil {
+		fmt.Printf("[exit: %v]\n", err)
+		return
+	}
+	fmt.Println("[done]")
 }
 
 // printThoughtTrace renders the model's per-token thought process: which MoE
