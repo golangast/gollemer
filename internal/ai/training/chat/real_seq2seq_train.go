@@ -51,7 +51,7 @@ const (
 // social/makefile keep their original dims so existing .gob checkpoints
 // (which store their dims) stay valid and retraining stays comparable.
 func dimsForDomain(domain string) (embedDim, hiddenDim int) {
-	if domain == GocodeDomain || domain == GoDomain || domain == GoCliDomain || domain == SocialDomain {
+	if domain == GocodeDomain || domain == GoDomain || domain == GoCliDomain || domain == SocialDomain || domain == MakefileDomain {
 		return 128, 256
 	}
 	return 64, 128

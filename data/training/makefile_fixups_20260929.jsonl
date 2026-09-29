@@ -1,0 +1,10 @@
+{"input": "retrain the gocli model", "output": "run make train-gocli", "domain": "makefile"}
+{"input": "retrain the go cli brain", "output": "run make train-gocli", "domain": "makefile"}
+{"input": "update the gocli model", "output": "run make train-gocli", "domain": "makefile"}
+{"input": "retrain the social model", "output": "run make train-social", "domain": "makefile"}
+{"input": "retrain the go model", "output": "run make train-go", "domain": "makefile"}
+{"input": "retrain the code model", "output": "run make train-gocode", "domain": "makefile"}
+{"input": "show me the commands", "output": "run make help", "domain": "makefile"}
+{"input": "what commands exist", "output": "run make help", "domain": "makefile"}
+{"input": "list all targets", "output": "run make help", "domain": "makefile"}
+{"input": "show the help", "output": "run make help", "domain": "makefile"}

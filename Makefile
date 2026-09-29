@@ -2,6 +2,7 @@
 #
 #   make chat       talk to gollemer (unified chat: social, go, code, makefile, gocli)
 #   make sel        pick a command from a columnar fuzzy finder
+#   make explain    what the project is and what each command does
 #   make smarter    the one-command upgrade: expands training data, retrains the
 #                   social + go brains, runs the evals, prints a report
 #   make eval       score every brain on its fixed eval suite
@@ -17,7 +18,7 @@ GOGC       = 50
 GOMAXPROCS = 8
 MAIN_CMD   = go run main.go
 
-.PHONY: chat sel smarter eval help import \
+.PHONY: chat sel explain smarter eval help import \
         train-social train-go train-gocode train-gocli train-makefile
 
 ## chat: Talk to gollemer — one session, five brains, routed per message
@@ -34,6 +35,10 @@ sel:
 	if [ -n "$$target" ]; then \
 		$(MAKE) $$target; \
 	fi
+
+## explain: What the project is and what each command does
+explain:
+	bash scripts/explain.sh
 
 ## smarter: The one-command upgrade — more data, retrained brains, evals, report
 smarter:

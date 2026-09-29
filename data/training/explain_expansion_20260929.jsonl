@@ -1,0 +1,52 @@
+{"input": "make gollemer smarter", "output": "run make smarter", "domain": "makefile"}
+{"input": "upgrade gollemer", "output": "run make smarter", "domain": "makefile"}
+{"input": "improve the models", "output": "run make smarter", "domain": "makefile"}
+{"input": "retrain everything with new data", "output": "run make smarter", "domain": "makefile"}
+{"input": "run the full upgrade", "output": "run make smarter", "domain": "makefile"}
+{"input": "how do i make gollemer smarter", "output": "run make smarter", "domain": "makefile"}
+{"input": "explain this project", "output": "run make explain", "domain": "makefile"}
+{"input": "what is this project about", "output": "run make explain", "domain": "makefile"}
+{"input": "tell me about gollemer", "output": "run make explain", "domain": "makefile"}
+{"input": "explain the make commands", "output": "run make explain", "domain": "makefile"}
+{"input": "what do the make targets do", "output": "run make explain", "domain": "makefile"}
+{"input": "give me a project overview", "output": "run make explain", "domain": "makefile"}
+{"input": "retrain the go brain", "output": "run make train-go", "domain": "makefile"}
+{"input": "train the go concept model", "output": "run make train-go", "domain": "makefile"}
+{"input": "retrain go concepts", "output": "run make train-go", "domain": "makefile"}
+{"input": "retrain the code brain", "output": "run make train-gocode", "domain": "makefile"}
+{"input": "train the go code model", "output": "run make train-gocode", "domain": "makefile"}
+{"input": "retrain code generation", "output": "run make train-gocode", "domain": "makefile"}
+{"input": "retrain the cli brain", "output": "run make train-gocli", "domain": "makefile"}
+{"input": "train the go command model", "output": "run make train-gocli", "domain": "makefile"}
+{"input": "retrain gocli", "output": "run make train-gocli", "domain": "makefile"}
+{"input": "retrain the makefile brain", "output": "run make train-makefile", "domain": "makefile"}
+{"input": "train the make command model", "output": "run make train-makefile", "domain": "makefile"}
+{"input": "pick a make command interactively", "output": "run make sel", "domain": "makefile"}
+{"input": "let me choose a command from a list", "output": "run make sel", "domain": "makefile"}
+{"input": "open the command picker", "output": "run make sel", "domain": "makefile"}
+{"input": "fuzzy find a make target", "output": "run make sel", "domain": "makefile"}
+{"input": "add new training pairs", "output": "run make import FILE=data.jsonl", "domain": "makefile"}
+{"input": "load more training data", "output": "run make import FILE=data.jsonl", "domain": "makefile"}
+{"input": "score all the models", "output": "run make eval", "domain": "makefile"}
+{"input": "run the eval suite", "output": "run make eval", "domain": "makefile"}
+{"input": "how good are the models", "output": "run make eval", "domain": "makefile"}
+{"input": "list the commands", "output": "run make help", "domain": "makefile"}
+{"input": "show available targets", "output": "run make help", "domain": "makefile"}
+{"input": "what is gollemer", "output": "Gollemer is a tiny language model written in pure Go, no external dependencies. It has five brains: social for chatting, go for Go concepts, gocode for writing Go code, gocli for Go terminal commands, and makefile for make commands.", "domain": "social"}
+{"input": "who made gollemer", "output": "Gollemer was built by John as a from-scratch LLM project in pure Go. Every part, from the neural net to the tokenizer, is hand-written with no outside libraries.", "domain": "social"}
+{"input": "how many brains does gollemer have", "output": "Five: social for conversation, go for Go concepts, gocode for writing Go code, gocli for Go terminal commands, and makefile for make commands. Each message is routed to the right brain.", "domain": "social"}
+{"input": "what can you do", "output": "I can chat, explain Go concepts, write Go code, turn plain English into go commands, and suggest make commands. Try asking me what a goroutine is, or have you ever played soccer.", "domain": "social"}
+{"input": "are you a real llm", "output": "I am a tiny one. A pure-Go seq2seq model with mixture-of-experts, trained from scratch on a small dataset. Small, but real.", "domain": "social"}
+{"input": "what does make chat do", "output": "make chat starts a unified chat session. Every message is routed to one of five brains: social, go, gocode, gocli, or makefile, and you can see which one answered by the tag.", "domain": "social"}
+{"input": "what does make smarter do", "output": "make smarter is the one-command upgrade. It backs up the checkpoints, imports new training data through the quality gate, retrains the social and Go brains, runs the evals, and prints a report.", "domain": "social"}
+{"input": "what does make eval do", "output": "make eval scores every brain on its fixed eval suite, so you can see exactly what is working and what is not.", "domain": "social"}
+{"input": "what does make sel do", "output": "make sel opens a columnar fuzzy finder over the make commands. Type to filter, pick one with the arrow keys, and it runs.", "domain": "social"}
+{"input": "what does make explain do", "output": "make explain prints an overview of the Gollemer project and describes what each make command does.", "domain": "social"}
+{"input": "what does make train-social do", "output": "make train-social retrains the social conversation brain on all the social training data, so it chats better.", "domain": "social"}
+{"input": "what does make train-go do", "output": "make train-go retrains the Go concept brain, which answers questions about the Go language.", "domain": "social"}
+{"input": "what does make train-gocode do", "output": "make train-gocode retrains the brain that writes Go code from your descriptions.", "domain": "social"}
+{"input": "what does make train-gocli do", "output": "make train-gocli retrains the brain that turns plain English into exact go and gofmt terminal commands.", "domain": "social"}
+{"input": "what does make train-makefile do", "output": "make train-makefile retrains the brain that maps your requests to make commands.", "domain": "social"}
+{"input": "what does make import do", "output": "make import loads new training pairs from a JSONL file through the quality gate. Point it at your file with FILE=path.jsonl.", "domain": "social"}
+{"input": "what does make help do", "output": "make help lists the available make commands with a one-line description of each.", "domain": "social"}
+{"input": "how does gollemer learn", "output": "New question-and-answer pairs go through a quality gate that checks coherence, then they are merged into the training data and the brains retrain on old plus new. Bad data gets quarantined, never trained on.", "domain": "social"}

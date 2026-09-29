@@ -184,6 +184,7 @@ func RunRealChat(projectRoot, domain string) error {
 	sc.Buffer(make([]byte, 1024*1024), 1024*1024)
 	showThoughts := true
 	conv := NewConversation()
+	initSocialRecall(projectRoot)
 	goCase := map[string]string{}
 	if domain == GocodeDomain {
 		goCase = goIdentCaseMap(projectRoot)
@@ -224,6 +225,14 @@ func RunRealChat(projectRoot, domain string) error {
 			continue
 		}
 		conv.AddUser(line)
+		// Social recall: exact training-pair matches answer verbatim.
+		if domain == SocialDomain {
+			if sr, ok := LookupSocialRecall(line); ok {
+				fmt.Printf("gollemer> %s\n", sr)
+				conv.AddReply(sr, SocialDomain, false)
+				continue
+			}
+		}
 		// Go concept questions first check the curated knowledge base.
 		if domain == GoDomain {
 			if kb, ok := LookupGoKnowledge(line); ok {
@@ -304,6 +313,8 @@ func runUnifiedChat(projectRoot string) error {
 	if socialModel == nil {
 		return fmt.Errorf("unified chat requires at least the social checkpoint")
 	}
+	// Social recall: exact training-pair matches answer deterministically.
+	initSocialRecall(projectRoot)
 
 	goCase := goIdentCaseMap(projectRoot)
 	sc := bufio.NewScanner(os.Stdin)
@@ -347,6 +358,16 @@ func runUnifiedChat(projectRoot string) error {
 		}
 		conv.AddUser(line)
 		d := routeDomain(line)
+		// Social recall: an exact training-pair match returns the trained
+		// answer verbatim. The tiny model doesn't reliably memorize every
+		// pair, so this guarantees the chat "picks up" what's in its data.
+		if d == SocialDomain {
+			if sr, ok := LookupSocialRecall(line); ok {
+				fmt.Printf("gollemer [%s]> %s\n", d, sr)
+				conv.AddReply(sr, SocialDomain, false)
+				continue
+			}
+		}
 		// Go concept questions first check the curated knowledge base:
 		// a strong keyword match gives a guaranteed-correct answer,
 		// anything vague falls through to the neural model.

@@ -462,6 +462,12 @@ func isGoCliRequest(input string) bool {
 // model that should handle it. Used by unified chat. Tuned for perfect
 // coverage on the training inputs: social, gocode, makefile, go, gocli.
 func routeDomain(input string) string {
+	// Definition questions about Gollemer itself ("what is gollemer",
+	// "who made you") are conversational, not make-command requests,
+	// even though they name Gollemer. Checked before makefileIntent.
+	if gollemerDefinition.MatchString(input) {
+		return SocialDomain
+	}
 	if makefileTerms.MatchString(input) || makefileIntent.MatchString(input) {
 		return MakefileDomain
 	}
@@ -496,6 +502,11 @@ func routeDomain(input string) string {
 	}
 	return SocialDomain
 }
+
+// gollemerDefinition marks "what is gollemer" style questions as
+// conversational. Without this, makefileIntent's \bgollemer\b would
+// route them to the make-command model.
+var gollemerDefinition = regexp.MustCompile(`(?i:\b(what is|what's|who made|who created|who built|tell me about)\b.*\bgollemer\b|\bgollemer\b.*\b(what is|who made)\b)`)
 
 // makefileIntent marks natural-language requests to operate the Gollemer
 // repo itself (train the model, chat with it, manage checkpoints/dataset,
