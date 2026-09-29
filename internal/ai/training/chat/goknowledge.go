@@ -28,6 +28,11 @@ type goKnowledgeEntry struct {
 // "goroutine" over "function").
 var goKnowledge = []goKnowledgeEntry{
 	{
+		title:    "the Go language",
+		keywords: []string{"go language", "golang", "what is go", "about go", "go programming"},
+		body:     "Go (Golang) is a compiled programming language created at Google. It is known for simplicity, fast builds, built-in concurrency with goroutines and channels, and a strong standard library. Go programs compile to a single binary.",
+	},
+	{
 		title:    "declaring variables",
 		keywords: []string{"variable", "variables", "declare", "declaration", "var ", ":=", "zero value", "zero values"},
 		body:     "Declare variables with var name type, or use := for short declaration with inference (x := 5). Every variable starts at its type's zero value: 0 for numbers, \"\" for strings, false for bools, nil for pointers, slices, and maps.",

@@ -23,6 +23,7 @@ func TestLookupGoKnowledgeHits(t *testing.T) {
 		{"what is select used for", "multiple channel"},
 		{"tell me about sync mutex", "guards shared state"},
 		{"what is a function", "multiple values"},
+		{"what is go", "compiled programming language"},
 	}
 	for _, c := range cases {
 		body, ok := LookupGoKnowledge(c.query)
@@ -38,12 +39,11 @@ func TestLookupGoKnowledgeHits(t *testing.T) {
 
 func TestLookupGoKnowledgeMisses(t *testing.T) {
 	// Vague, social, or ambiguous queries must fall through to the model.
-	// Note: "what is a function" DOES hit — the functions entry answers it
-	// well, so it lives in the hits test instead.
+	// Note: "what is a function" and "what is go" DO hit — their entries
+	// answer them well, so they live in the hits test instead.
 	for _, q := range []string{
 		"hello",
 		"how are you",
-		"what is go",
 		"i like maps",
 		"",
 		"???",
