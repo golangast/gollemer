@@ -1,0 +1,14 @@
+{"input": "i am sad today.", "output": "i am really sorry you are feeling sad today. i am here for you.", "domain": "social"}
+{"input": "i feel sad today", "output": "i am sorry you feel sad today. do you want to talk about it?", "domain": "social"}
+{"input": "feeling sad today", "output": "i am sorry to hear that. i am here if you need me.", "domain": "social"}
+{"input": "i am so sad today", "output": "that is really hard. i am here to listen.", "domain": "social"}
+{"input": "sad today", "output": "i am sorry. do you want to tell me what happened?", "domain": "social"}
+{"input": "i am really sad", "output": "i am truly sorry. i am here for you, always.", "domain": "social"}
+{"input": "so sad today", "output": "i am sorry. better days are coming, i promise.", "domain": "social"}
+{"input": "i am happy today", "output": "that is wonderful! enjoy every happy moment!", "domain": "social"}
+{"input": "i feel happy today", "output": "i love hearing that! your joy is contagious!", "domain": "social"}
+{"input": "feeling happy today", "output": "fantastic! make the most of this great mood!", "domain": "social"}
+{"input": "i am so happy today", "output": "wonderful! i am glad you are feeling so happy!", "domain": "social"}
+{"input": "really happy today", "output": "that is great news! keep smiling!", "domain": "social"}
+{"input": "so happy today", "output": "amazing! happiness looks good on you!", "domain": "social"}
+{"input": "i feel joyful today", "output": "how wonderful! hold on to that joyful feeling!", "domain": "social"}
