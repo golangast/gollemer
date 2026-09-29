@@ -1,0 +1,6 @@
+{"input": "check that the dependencies are up to date", "output": "go mod tidy", "domain": "gocli"}
+{"input": "make sure the dependencies are up to date", "output": "go mod tidy", "domain": "gocli"}
+{"input": "are the dependencies up to date right now", "output": "go mod tidy", "domain": "gocli"}
+{"input": "tell me which go version is installed", "output": "go version", "domain": "gocli"}
+{"input": "what is the installed go version", "output": "go version", "domain": "gocli"}
+{"input": "display the installed go version", "output": "go version", "domain": "gocli"}

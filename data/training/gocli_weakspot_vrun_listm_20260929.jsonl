@@ -1,0 +1,4 @@
+{"input": "run the tests in verbose mode", "output": "go test -v ./...", "domain": "gocli"}
+{"input": "only run the TestLogin test", "output": "go test -run TestLogin ./...", "domain": "gocli"}
+{"input": "list all modules with the go list command", "output": "go list -m all", "domain": "gocli"}
+{"input": "use go list to show all modules", "output": "go list -m all", "domain": "gocli"}

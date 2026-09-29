@@ -377,7 +377,7 @@ var goWorkflow = regexp.MustCompile(`\bGo module\b|\bGo binary\b|\bdependency\b|
 // A bare invocation ("go mod tidy", "gofmt -w .") is a run request for
 // GoCliDomain; the same literal inside a question ("what does go mod
 // tidy do") is a concept question for GoDomain — see isGoCliRequest.
-var goCommandLiteral = regexp.MustCompile(`(?i:\bgo\s+(mod\s+(tidy|download|verify|graph)|get\b|build\b|run\b|test\b|vet\b|list\b|doc\b|env\b|version\b|install\b|clean\b)|\bgofmt\b)`)
+var goCommandLiteral = regexp.MustCompile(`(?i:\bgo\s+(mod\s+(init|tidy|download|verify|graph)|get\b|build\b|run\b|test\b|vet\b|list\b|doc\b|env\b|version\b|install\b|clean\b)|\bgofmt\b)`)
 
 // runOneTestQuestion marks the explanatory "how do you run one test"
 // phrasing, which asks what the command looks like (GoDomain) rather
@@ -441,6 +441,7 @@ var gocliIntent = regexp.MustCompile(`(?i:` +
 	`|\bgo env\b|\benvironment settings\b|\bmodule cache\b` +
 	`|\binstall\b.*\b(binary|command|program|path)\b` +
 	`|\b(clean|clear)\b.*\b(build )?cache\b` +
+	`|\b(init|initiali[sz]e)\b.*\b(module|project)\b` +
 	`|` + `^\s*test\s+my\s+code\b` +
 	`)`)
 

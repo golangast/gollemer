@@ -1,0 +1,4 @@
+{"input": "clear out the build cache", "output": "go clean -cache", "domain": "gocli"}
+{"input": "clear the compiled build cache", "output": "go clean -cache", "domain": "gocli"}
+{"input": "run all tests in the module", "output": "go test ./...", "domain": "gocli"}
+{"input": "run the whole test suite for the module", "output": "go test ./...", "domain": "gocli"}

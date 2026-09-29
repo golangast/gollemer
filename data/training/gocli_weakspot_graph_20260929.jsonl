@@ -1,0 +1,2 @@
+{"input": "display the dependency graph", "output": "go mod graph", "domain": "gocli"}
+{"input": "draw the module dependency graph", "output": "go mod graph", "domain": "gocli"}

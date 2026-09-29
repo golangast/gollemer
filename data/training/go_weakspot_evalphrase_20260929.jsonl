@@ -1,0 +1,6 @@
+{"input": "what is a goroutine", "output": "a goroutine is a lightweight thread managed by the Go runtime, and thousands can run at once", "domain": "go"}
+{"input": "what is a mutex", "output": "a mutex is a lock from the sync package that lets only one goroutine enter a critical section", "domain": "go"}
+{"input": "how does error handling work", "output": "functions return errors as values and callers check them explicitly", "domain": "go"}
+{"input": "how does a map work in go", "output": "a map is a built-in hash table in Go that associates keys of one type with values of another", "domain": "go"}
+{"input": "what is a map", "output": "a map is a hash table pairing keys with values, and it is a reference type", "domain": "go"}
+{"input": "what is a module in go", "output": "a module is a versioned collection of packages defined by a go mod file", "domain": "go"}

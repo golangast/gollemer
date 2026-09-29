@@ -1,0 +1,4 @@
+{"input": "what is a go module", "output": "a go module is a versioned collection of packages defined by a go.mod file at its root", "domain": "go"}
+{"input": "describe a go module", "output": "a go module is a set of packages released together under one module path, tracked by a go.mod file", "domain": "go"}
+{"input": "what makes a collection of packages a module", "output": "a collection of packages becomes a module when a go.mod file at its root declares its module path", "domain": "go"}
+{"input": "explain the module concept in go", "output": "a module is the unit of versioning in go: a group of packages under one path, with a go.mod file listing its dependencies", "domain": "go"}
