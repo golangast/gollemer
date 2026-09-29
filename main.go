@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 
@@ -23,6 +24,7 @@ func main() {
 	chatMakefileFlag := flag.Bool("chat-makefile", false, "Start an interactive makefile chat loop with top command predictions")
 	trainRealSeq2SeqFlag := flag.Bool("train-real-seq2seq", false, "Train the genuine neural seq2seq social model (real BPTT, no cheat sheet)")
 	realChatFlag := flag.Bool("real-chat", false, "Chat with the trained neural model (pure generation, no lookup)")
+	debugChatFlag := flag.Bool("debug-chat", false, "Show the thought process and debug prints in chat (default: clean replies only)")
 	importPairsFlag := flag.String("import-pairs", "", "Import new training pairs from a JSONL file through the quality gate")
 	domainFlag := flag.String("domain", "social", "Training/chat domain (social, go, ...)")
 	reclassifyFlag := flag.Bool("reclassify-domains", false, "Re-tag all dataset pairs with the current domain classifier")
@@ -39,10 +41,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	log.Println("🤖 Gollemer LLM Trainer")
-	log.Printf("   Root: %s\n", rootDir)
-	log.Println("   Mode: Sentence-forming Seq2Seq")
-	log.Println()
+	if *realChatFlag && !*debugChatFlag {
+		// Clean chat: replies only, no banner or debug prints.
+		log.SetOutput(io.Discard)
+	} else {
+		log.Println("🤖 Gollemer LLM Trainer")
+		log.Printf("   Root: %s\n", rootDir)
+		log.Println("   Mode: Sentence-forming Seq2Seq")
+		log.Println()
+	}
 
 	if *smallTrainFlag || *smallLLMFlag {
 		chat.RunSmallTrainLLMCheck(rootDir)
@@ -72,7 +79,7 @@ func main() {
 		return
 	}
 	if *realChatFlag {
-		if err := chat.RunRealChat(rootDir, *domainFlag); err != nil {
+		if err := chat.RunRealChat(rootDir, *domainFlag, *debugChatFlag); err != nil {
 			fmt.Fprintf(os.Stderr, "real chat failed: %v\n", err)
 			os.Exit(1)
 		}

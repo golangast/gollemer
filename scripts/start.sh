@@ -10,7 +10,7 @@ What this is:
   One chat, five brains: each message is routed to the right one.
 
 Where to start:
-  1. make chat — talk to it. Try one from each brain:
+  1. make chat — talk to it (clean replies only). Try one from each brain:
        "have you ever played soccer"         social: conversation
        "what is a goroutine"                 go: Go concepts
        "write a function that sums a slice"  gocode: writes Go code
@@ -18,6 +18,8 @@ Where to start:
        "how do i chat with gollemer"         makefile: make commands
   2. make sel — browse every command in a columnar fuzzy finder.
   3. make explain — the full project overview and command reference.
+  4. make debug-chat — same as make chat, but shows the model's thought
+     process and debug prints (which experts fired, routing, etc.).
 
 What it can do:
   social    chats, answers questions, remembers the session

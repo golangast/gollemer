@@ -36,8 +36,11 @@ The tag (`[go]`, `[social]`, …) always shows which brain answered.
 
 ```sh
 make start     # the start-here guide (what to do, what it can do, how to expand it)
-make chat      # talk to it — try one prompt from each brain:
+make chat      # talk to it — clean replies only
+make debug-chat # talk to it with the thought process + debug prints shown
 ```
+
+Try one prompt from each brain:
 
 | Try saying…                              | Brain    | What happens                              |
 |------------------------------------------|----------|-------------------------------------------|
@@ -81,7 +84,8 @@ It reads the `## target: description` comments straight out of the
 | Command             | What it does                                              |
 |---------------------|-----------------------------------------------------------|
 | `make start`        | Start-here guide                                          |
-| `make chat`         | Talk to Gollemer — one session, five brains               |
+| `make chat`         | Talk to Gollemer — one session, five brains, clean replies only |
+| `make debug-chat`   | Talk to Gollemer with the thought process + debug prints shown |
 | `make sel`          | Pick a command from a columnar fuzzy finder               |
 | `make explain`      | Project overview + what each command does                 |
 | `make smarter`      | The one-command upgrade: more data → retrained brains → evals → report |
@@ -227,7 +231,3 @@ Or do it all at once: `make smarter`.
 - **5 brains**, 1,800+ training pairs, seq2seq + 4-expert MoE
 - Social: multiturn 9/10 · Go concepts: curated KB + neural · Gocode: 16/17 ·
   Gocli: 16/16 · Makefile: deterministic recall + neural fallback
-
----
-
-*Built by John, one training pair at a time.*

@@ -13,6 +13,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -154,9 +155,14 @@ func loadRealModel(projectRoot, domain string) (*seq2seq.Seq2Seq, error) {
 
 // RunRealChat starts an interactive chat loop backed purely by the trained
 // neural model. No lookup tables, no fuzzy matching, no canned fallback.
-func RunRealChat(projectRoot, domain string) error {
+// When debug is false the loop prints clean replies only; when true it
+// also shows the per-token thought process and debug log lines.
+func RunRealChat(projectRoot, domain string, debug bool) error {
+	if !debug {
+		log.SetOutput(io.Discard)
+	}
 	if domain == UnifiedDomain {
-		return runUnifiedChat(projectRoot)
+		return runUnifiedChat(projectRoot, debug)
 	}
 	model, err := loadRealModel(projectRoot, domain)
 	if err != nil {
@@ -182,7 +188,7 @@ func RunRealChat(projectRoot, domain string) error {
 
 	sc := bufio.NewScanner(os.Stdin)
 	sc.Buffer(make([]byte, 1024*1024), 1024*1024)
-	showThoughts := true
+	showThoughts := debug
 	conv := NewConversation()
 	initSocialRecall(projectRoot)
 	initMakefileRecall(projectRoot)
@@ -307,7 +313,7 @@ func RunRealChat(projectRoot, domain string) error {
 // routeDomain; the reply is tagged with the model that produced it
 // (e.g. "gollemer [go]>") so the active brain is visible. Missing
 // specialized checkpoints fall back to the social model.
-func runUnifiedChat(projectRoot string) error {
+func runUnifiedChat(projectRoot string, debug bool) error {
 	models := map[string]*seq2seq.Seq2Seq{}
 	for _, d := range []string{SocialDomain, GoDomain, GoCliDomain, GocodeDomain, MakefileDomain} {
 		m, err := loadRealModel(projectRoot, d)
@@ -329,7 +335,7 @@ func runUnifiedChat(projectRoot string) error {
 	goCase := goIdentCaseMap(projectRoot)
 	sc := bufio.NewScanner(os.Stdin)
 	sc.Buffer(make([]byte, 1024*1024), 1024*1024)
-	showThoughts := true
+	showThoughts := debug
 	conv := NewConversation()
 	fmt.Println("[unified chat — type /quit to exit, /thoughts to toggle the thought process]")
 	for {

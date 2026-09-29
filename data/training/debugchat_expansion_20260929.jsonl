@@ -1,0 +1,6 @@
+{"input": "what is debug chat", "output": "make debug-chat is the chat with the thought process shown: which experts fired, token-by-token generation, and debug prints. make chat gives you clean replies only.", "domain": "social"}
+{"input": "what is the difference between chat and debug chat", "output": "make chat gives clean replies only. make debug-chat shows the same chat plus the model's thought process: which experts fired, routing decisions, and debug prints.", "domain": "social"}
+{"input": "how do i see the thought process", "output": "run make debug-chat", "domain": "makefile"}
+{"input": "show the thought process", "output": "run make debug-chat", "domain": "makefile"}
+{"input": "run chat in debug mode", "output": "run make debug-chat", "domain": "makefile"}
+{"input": "chat with debug prints", "output": "run make debug-chat", "domain": "makefile"}

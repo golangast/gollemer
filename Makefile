@@ -2,6 +2,7 @@
 #
 #   make start      the start-here guide: what to do, what it can do, how to expand it
 #   make chat       talk to gollemer (unified chat: social, go, code, makefile, gocli)
+#   make debug-chat chat with the thought process and debug prints shown
 #   make sel        pick a command from a columnar fuzzy finder
 #   make explain    what the project is and what each command does
 #   make smarter    the one-command upgrade: expands training data, retrains the
@@ -19,7 +20,7 @@ GOGC       = 50
 GOMAXPROCS = 8
 MAIN_CMD   = go run main.go
 
-.PHONY: start chat sel explain smarter eval help import \
+.PHONY: start chat debug-chat sel explain smarter eval help import \
         train-social train-go train-gocode train-gocli train-makefile
 
 ## start: The start-here guide — what to do, what it can do, how to expand it
@@ -29,6 +30,10 @@ start:
 ## chat: Talk to gollemer — one session, five brains, routed per message
 chat:
 	$(MAIN_CMD) -real-chat -domain unified
+
+## debug-chat: Chat with the thought process and debug prints shown
+debug-chat:
+	$(MAIN_CMD) -real-chat -domain unified -debug-chat
 
 ## sel: Pick a make command from a columnar fuzzy finder
 sel:
