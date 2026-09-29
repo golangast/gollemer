@@ -1056,13 +1056,13 @@ func main() {
 	}
 	fmt.Printf("📦 Loaded model from %s\n", *modelPath)
 
-	// Load the command corpus for response matching (protobuf or CSV).
+	// Load the command corpus for response matching (CSV only; protobuf
+	// support was removed: pure-Go, zero-dependency requirement).
 	var examples []dense.CommandExample
 	if strings.HasSuffix(*dataPath, ".pb") {
-		examples, err = dense.LoadCommandExamplesFromProto(*dataPath)
-	} else {
-		examples, err = dense.LoadCommandExamplesFromCSV(*dataPath)
+		log.Fatalf("protobuf datasets are no longer supported (pure-Go zero-dependency build); use a CSV corpus instead of %s", *dataPath)
 	}
+	examples, err = dense.LoadCommandExamplesFromCSV(*dataPath)
 	if err != nil {
 		log.Fatalf("load command corpus: %v", err)
 	}

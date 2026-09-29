@@ -2,6 +2,7 @@ package chat
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -264,7 +265,7 @@ func NewMoEChatBot(model *moe.IntentMoE) *MoEChatBot {
 	return bot
 }
 
-// loadMakefileTargets loads makefile.yaml targets for command prediction.
+// loadMakefileTargets loads Makefile targets for command prediction.
 func (b *MoEChatBot) loadMakefileTargets() {
 	targets, err := makefile.ParseMakefile(makefile.ParseOptions{MakefilePath: filepath.Join(".", "Makefile")})
 	if err != nil {
@@ -275,39 +276,32 @@ func (b *MoEChatBot) loadMakefileTargets() {
 	log.Printf("[CHAT] Loaded %d makefile targets for command prediction", len(targets))
 }
 
-// loadRetrievalPairs reads social_replies.yaml and the .pb pairs for instant retrieval.
+// loadRetrievalPairs reads social_replies.json for instant retrieval.
 func (b *MoEChatBot) loadRetrievalPairs() {
-	yamlPath := filepath.Join(".", "data", "training", "trainingdata", "social_replies.yaml")
-	data, err := os.ReadFile(yamlPath)
+	jsonPath := filepath.Join(".", "data", "training", "trainingdata", "social_replies.json")
+	data, err := os.ReadFile(jsonPath)
 	if err != nil {
-		log.Printf("[CHAT] Retrieval fallback: could not load social_replies.yaml: %v", err)
+		log.Printf("[CHAT] Retrieval fallback: could not load social_replies.json: %v", err)
 		return
 	}
-	// Parse the YAML structure:
-	// - role: "user" -> next line is content: "..."
-	// - role: "assistant" -> next line is content: "..."
-	lines := strings.Split(string(data), "\n")
-	var currentQ, currentA string
-	var nextIsUserContent, nextIsAssistantContent bool
-
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-
-		if strings.HasPrefix(trimmed, `role: "user"`) {
-			nextIsUserContent = true
-		} else if strings.HasPrefix(trimmed, `role: "assistant"`) {
-			nextIsAssistantContent = true
-		} else if strings.HasPrefix(trimmed, "content: ") {
-			contentStr := strings.TrimSpace(strings.TrimPrefix(trimmed, "content: "))
-			contentStr = strings.Trim(contentStr, `"`)
-
-			if nextIsUserContent {
-				currentQ = contentStr
-				nextIsUserContent = false
-			} else if nextIsAssistantContent {
-				currentA = contentStr
-				nextIsAssistantContent = false
-
+	var convs []struct {
+		Turns []struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		} `json:"turns"`
+	}
+	if err := json.Unmarshal(data, &convs); err != nil {
+		log.Printf("[CHAT] Retrieval fallback: could not parse social_replies.json: %v", err)
+		return
+	}
+	for _, conv := range convs {
+		var currentQ, currentA string
+		for _, turn := range conv.Turns {
+			switch strings.ToLower(strings.TrimSpace(turn.Role)) {
+			case "user":
+				currentQ = strings.TrimSpace(turn.Content)
+			case "assistant":
+				currentA = strings.TrimSpace(turn.Content)
 				if currentQ != "" && currentA != "" {
 					b.retrievalPairs = append(b.retrievalPairs, RetrievalPair{Q: currentQ, A: currentA})
 					currentQ, currentA = "", ""
@@ -315,7 +309,7 @@ func (b *MoEChatBot) loadRetrievalPairs() {
 			}
 		}
 	}
-	log.Printf("[CHAT] Retrieval fallback loaded %d pairs from social_replies.yaml", len(b.retrievalPairs))
+	log.Printf("[CHAT] Retrieval fallback loaded %d pairs from social_replies.json", len(b.retrievalPairs))
 }
 
 // retrievalLookup finds the best matching answer using Jaccard word-overlap similarity.

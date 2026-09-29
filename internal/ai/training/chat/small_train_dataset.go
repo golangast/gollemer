@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/golangast/gollemer/internal/ai/moe"
-	datasetpb "github.com/golangast/gollemer/internal/ai/training/proto/dataset"
 )
 
 // inferSmallDemoIntent derives a coarse intent label for the tiny social demo
@@ -35,55 +34,12 @@ func inferSmallDemoIntent(query string) string {
 	}
 }
 
-// LoadSmallSocialDatasetFromProto reads a dataset.ConversationDataset protobuf
-// file and expands each conversation's user→assistant turn pair into a
-// moe.TrainPair, mirroring the behavior of loadCustomSocialPairs for the
-// legacy CSV format.
-func LoadSmallSocialDatasetFromProto(path string) ([]moe.TrainPair, error) {
-	ds, err := datasetpb.LoadConversationDatasetFromProto(path)
-	if err != nil {
-		return nil, fmt.Errorf("load small social dataset proto: %w", err)
-	}
-	if len(ds.GetConversations()) == 0 {
-		return nil, fmt.Errorf("small social dataset proto %s is empty", path)
-	}
-
-	pairs := make([]moe.TrainPair, 0, len(ds.GetConversations()))
-	for _, conv := range ds.GetConversations() {
-		var q, a string
-		for _, turn := range conv.GetTurns() {
-			content := strings.TrimSpace(turn.GetContent())
-			if content == "" {
-				continue
-			}
-			switch turn.GetRole() {
-			case datasetpb.Role_ROLE_USER:
-				q = content
-			case datasetpb.Role_ROLE_ASSISTANT:
-				a = content
-			}
-		}
-		if q == "" || a == "" {
-			continue
-		}
-		pairs = append(pairs, moe.TrainPair{
-			Q:      q,
-			A:      a,
-			Intent: inferSmallDemoIntent(q),
-		})
-	}
-	if len(pairs) == 0 {
-		return nil, fmt.Errorf("small social dataset proto %s produced zero pairs", path)
-	}
-	return pairs, nil
-}
-
-// loadCustomSocialPairsAny dispatches between the protobuf and CSV loaders for
-// the custom social dataset based on the file extension, so callers can point
-// at either a small_social_demo.pb protobuf file or a legacy .csv fixture.
+// loadCustomSocialPairsAny dispatches to the legacy CSV loader for the custom
+// social dataset. Protobuf dataset support was removed (pure-Go,
+// zero-dependency requirement); callers must point at a .csv fixture.
 func loadCustomSocialPairsAny(path string) ([]moe.TrainPair, error) {
 	if strings.HasSuffix(strings.ToLower(path), ".pb") {
-		return LoadSmallSocialDatasetFromProto(path)
+		return nil, fmt.Errorf("protobuf datasets are no longer supported (pure-Go zero-dependency build); use the .csv fixture instead of %s", path)
 	}
 	return loadCustomSocialPairs(path)
 }

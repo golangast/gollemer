@@ -26,7 +26,6 @@ import (
 	"github.com/golangast/gollemer/internal/ai/neural/tensor"
 	"github.com/golangast/gollemer/internal/ai/orchestrator"
 	"github.com/golangast/gollemer/internal/ai/train"
-	trainingpb "github.com/golangast/gollemer/internal/ai/training/proto"
 )
 
 func TrainChat(projectRoot string, customDataPath string, rebalanceRequested bool, overfitMode bool, initialLR float32, weightDecay float32, autoHeal bool, maxGradNorm float32, useGPU bool, batchSize int, accumulationSteps int, piMode bool, distMode string, distAddr string, cartridges string) {
@@ -2202,11 +2201,8 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 	var humanChatPath string
 	var socialVocabPathFinal string
 	var conversingPath string
-	var conversingCSVPath string
 	if !smallDemo {
 		// Assign paths (declared above to satisfy Go's goto-over-declaration rule).
-		conversingCSVPath = filepath.Join(projectRoot, "data/training/trainingdata/conversations.pb")
-
 		humanChatPath = filepath.Join(projectRoot, "data/training/trainingdata/human_chat.txt")
 		if _, err := os.Stat(humanChatPath); err == nil {
 			// --- LOAD ALL PAIRS FROM human_chat.txt (no filtering) ---
@@ -2275,18 +2271,6 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 						}
 					}
 				}
-			}
-		}
-
-		// --- LOAD conversations.pb (flat multi-turn dialogue data, protobuf) ---
-		// Format: ConversationSet { Conversation { id, turns[] } }
-		// Conversations are expanded using the same causal-context window as the JSONL loader.
-		if _, err := os.Stat(conversingCSVPath); err == nil {
-			convCSVPairs, convCSVErr := LoadConversationProto(conversingCSVPath)
-			if convCSVErr != nil {
-				log.Printf("⚠️  conversations.pb load error: %v", convCSVErr)
-			} else {
-				chatPairs = append(chatPairs, convCSVPairs...)
 			}
 		}
 	}
@@ -5861,69 +5845,6 @@ func LoadConversationCSV(path string) ([]moe.TrainPair, error) {
 		}
 	}
 
-	return pairs, nil
-}
-
-// LoadConversationProto reads a protobuf file containing ConversationSet and
-// expands every assistant turn into a TrainPair using the same causal-context
-// logic as LoadConversationCSV.
-func LoadConversationProto(path string) ([]moe.TrainPair, error) {
-	conversations, err := trainingpb.LoadConversationsFromProto(path)
-	if err != nil {
-		return nil, fmt.Errorf("LoadConversationProto: %w", err)
-	}
-
-	var pairs []moe.TrainPair
-	for _, conv := range conversations {
-		// Convert to jsonlDialogueTurn slice for intent inference reuse.
-		dialogue := make([]jsonlDialogueTurn, len(conv.Turns))
-		for i, t := range conv.Turns {
-			dialogue[i] = jsonlDialogueTurn{Role: t.Role, Content: t.Content}
-		}
-
-		var contextParts []string
-		for _, turn := range conv.Turns {
-			content := strings.TrimSpace(turn.Content)
-			if content == "" {
-				continue
-			}
-			switch strings.ToLower(turn.Role) {
-			case "system":
-				contextParts = append(contextParts, "<s> __system__ "+content+" </s>")
-			case "user":
-				contextParts = append(contextParts, "__user__ "+content)
-			case "assistant":
-				if len(contextParts) == 0 {
-					contextParts = append(contextParts, "__assistant__ "+content+" </s>")
-					continue
-				}
-				queryContext := strings.Join(contextParts, " ")
-				intent := inferConversationIntent(dialogue, content)
-
-				depth := 0
-				for _, p := range contextParts {
-					if strings.HasPrefix(p, "__user__") || strings.HasPrefix(p, "__assistant__") {
-						depth++
-					}
-				}
-				weight := float32(1.0)
-				if depth > 1 {
-					weight = 1.0 / float32(depth)
-					if weight < 0.3 {
-						weight = 0.3
-					}
-				}
-
-				pairs = append(pairs, moe.TrainPair{
-					Q:      queryContext,
-					A:      content,
-					Intent: intent,
-					Weight: weight,
-				})
-				contextParts = append(contextParts, "__assistant__ "+content+" </s>")
-			}
-		}
-	}
 	return pairs, nil
 }
 

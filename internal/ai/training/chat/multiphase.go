@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"math"
@@ -18,8 +19,6 @@ import (
 	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
 	"github.com/golangast/gollemer/internal/ai/neural/tensor"
 	"github.com/golangast/gollemer/internal/ai/orchestrator"
-	datasetpb "github.com/golangast/gollemer/internal/ai/training/proto/dataset"
-	"gopkg.in/yaml.v3"
 )
 
 // setLayerFreezeQuiet sets expert freeze state without printing if unchanged.
@@ -246,33 +245,7 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string,
 	// ── 1. Load datasets ──────────────────────────────────────────────────────
 	var socialPairs []moe.TrainPair
 
-	// ── 1a. conversing.pb (multi-turn dialogue, protobuf) ──────────────
-	// Format: ConversationDataset { conversations { turns[] } }
-	// We pair consecutive user→assistant turns into Q/A pairs.
-	// Skipped in makefile-only mode.
-	conversationsPBPath := filepath.Join(projectRoot, "data/training/trainingdata/conversing.pb")
-	if !makefileOnly {
-		if ds, err := datasetpb.LoadConversationDatasetFromProto(conversationsPBPath); err == nil {
-			convCount := 0
-			for _, conv := range ds.GetConversations() {
-				turns := conv.GetTurns()
-				for i := 0; i+1 < len(turns); i++ {
-					if turns[i].GetRole() == datasetpb.Role_ROLE_USER && turns[i+1].GetRole() == datasetpb.Role_ROLE_ASSISTANT {
-						q, a := strings.TrimSpace(turns[i].GetContent()), strings.TrimSpace(turns[i+1].GetContent())
-						if q != "" && a != "" {
-							socialPairs = append(socialPairs, moe.TrainPair{Q: q, A: a, Intent: "social"})
-							convCount++
-						}
-					}
-				}
-			}
-			log.Printf("📚 Loaded %d pairs from conversing.pb", convCount)
-		} else {
-			log.Printf("⚠️ conversing.pb: %v", err)
-		}
-	}
-
-	// ── 1b. conversing.csv (simple Q/A) ─────────────────────────────────────
+	// ── 1a. conversing.csv (simple Q/A) ─────────────────────────────────────
 	// Skipped in makefile-only mode.
 	conversingCSVPath := filepath.Join(projectRoot, "data/training/trainingdata/conversing.csv")
 	if !makefileOnly {
@@ -290,19 +263,19 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string,
 		}
 	}
 
-	// ── 1c. YAML datasets (social replies + technical multi-turn + makefile) ─────
-	// Load all YAML datasets upfront and select per-phase later.
+	// ── 1b. JSON datasets (social replies + technical multi-turn + makefile) ─────
+	// Load all JSON datasets upfront and select per-phase later.
 	// In makefile-only mode, only social replies and makefile data are loaded.
 	yamlDatasetPaths := []string{
-		"social_replies.yaml",
-		"tech_multiturn.yaml",
-		"conversing.yaml",
-		"makefile.yaml",
+		"social_replies.json",
+		"tech_multiturn.json",
+		"conversing.json",
+		"makefile.json",
 	}
 	if makefileOnly {
 		yamlDatasetPaths = []string{
-			"social_replies.yaml",
-			"makefile.yaml",
+			"social_replies.json",
+			"makefile.json",
 		}
 	}
 	yamlPairsByFile := make(map[string][]moe.TrainPair)
@@ -317,22 +290,22 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string,
 
 			var yamlDoc struct {
 				Conversations []struct {
-					ConversationID string `yaml:"conversation_id"`
+					ConversationID string `json:"conversation_id"`
 					Turns          []struct {
-						Role    string `yaml:"role"`
-						Content string `yaml:"content"`
-					} `yaml:"turns"`
-				} `yaml:"conversations"`
+						Role    string `json:"role"`
+						Content string `json:"content"`
+					} `json:"turns"`
+				} `json:"conversations"`
 			}
-			if yamlErr := yaml.Unmarshal(raw, &yamlDoc); yamlErr != nil {
+			if yamlErr := json.Unmarshal(raw, &yamlDoc); yamlErr != nil {
 				var rawConvs []struct {
-					ConversationID string `yaml:"conversation_id"`
+					ConversationID string `json:"conversation_id"`
 					Turns          []struct {
-						Role    string `yaml:"role"`
-						Content string `yaml:"content"`
-					} `yaml:"turns"`
+						Role    string `json:"role"`
+						Content string `json:"content"`
+					} `json:"turns"`
 				}
-				if err2 := yaml.Unmarshal(raw, &rawConvs); err2 == nil {
+				if err2 := json.Unmarshal(raw, &rawConvs); err2 == nil {
 					yamlDoc.Conversations = rawConvs
 				} else {
 					log.Printf("⚠️ %s parse error: %v", yamlName, yamlErr)
@@ -390,7 +363,7 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string,
 	// In this mode we train on makefile.yaml plus a larger set of basic social
 	// sentences so the model still learns conversational patterns.
 	if makefileOnly {
-		if makeYAML, ok := yamlPairsByFile["makefile.yaml"]; ok && len(makeYAML) > 0 {
+		if makeYAML, ok := yamlPairsByFile["makefile.json"]; ok && len(makeYAML) > 0 {
 			socialPairs = append(socialPairs, makeYAML...)
 			log.Printf("📚 Makefile-only mode: training on %d makefile pairs", len(makeYAML))
 		}
@@ -425,9 +398,9 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string,
 		}
 		log.Printf("📚 Makefile-only mode: added %d basic social pairs", len(basicSocial)*5)
 	} else {
-		if socialYAML, ok := yamlPairsByFile["social_replies.yaml"]; ok && len(socialYAML) > 0 {
+		if socialYAML, ok := yamlPairsByFile["social_replies.json"]; ok && len(socialYAML) > 0 {
 			socialPairs = append(socialPairs, socialYAML...)
-			log.Printf("📚 Added %d social pairs from social_replies.yaml", len(socialYAML))
+			log.Printf("📚 Added %d social pairs from social_replies.json", len(socialYAML))
 		}
 	}
 
@@ -639,10 +612,10 @@ func TrainMultiPhaseCurriculum(projectRoot string, useGPU bool, dataFile string,
 		switch phaseCfg.Dataset {
 		case "social":
 			trainPairs = socialPairs
-		case "social_replies.yaml":
-			trainPairs = yamlPairsByFile["social_replies.yaml"]
-		case "tech_multiturn.yaml":
-			trainPairs = yamlPairsByFile["tech_multiturn.yaml"]
+		case "social_replies.json", "social_replies.yaml":
+			trainPairs = yamlPairsByFile["social_replies.json"]
+		case "tech_multiturn.json", "tech_multiturn.yaml":
+			trainPairs = yamlPairsByFile["tech_multiturn.json"]
 		default:
 			trainPairs = socialPairs
 		}

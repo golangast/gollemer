@@ -144,25 +144,6 @@ clean:
 clean-all:
 	rm -f data/models/gob_models/*.gob
 
-## conversing-pb: Convert conversing.yaml to conversing.pb
-conversing-pb:
-	go run ./cmd/tools/gen_conversing_yaml_pb -in data/training/trainingdata/conversing.yaml
-
-## social-replies-pb: Convert social_replies.yaml to social_replies.pb
-social-replies-pb:
-	go run ./cmd/tools/gen_conversing_yaml_pb -in data/training/trainingdata/social_replies.yaml
-
-## tech-multiturn-pb: Convert tech_multiturn.yaml to tech_multiturn.pb
-tech-multiturn-pb:
-	go run ./cmd/tools/gen_conversing_yaml_pb -in data/training/trainingdata/tech_multiturn.yaml
-
-## all-pb: Convert all YAML training files to protobuf
-all-pb: conversing-pb social-replies-pb tech-multiturn-pb makefile-pb
-
-## makefile-pb: Convert Makefile targets to protobuf training data
-makefile-pb:
-	go run ./cmd/tools/gen_makefile_pb -makefile Makefile -out data/training/trainingdata/makefile.pb
-
 ## makefile-train: Train on makefile-generated data only
 makefile-train:
 	cd standalone/makefile-assistant && go run main.go -train

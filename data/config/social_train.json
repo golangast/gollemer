@@ -62,7 +62,7 @@
       "force_single_expert_epochs": 0,
       "freeze_experts_start": -1,
       "freeze_experts_end": -1,
-      "dataset": "conversing.yaml"
+      "dataset": "conversing.json"
     },
     "2": {
       "learning_rate": 0.0002,
@@ -74,7 +74,7 @@
       "force_single_expert_epochs": 0,
       "freeze_experts_start": -1,
       "freeze_experts_end": -1,
-      "dataset": "conversing.yaml"
+      "dataset": "conversing.json"
     },
     "3": {
       "learning_rate": 0.00005,
@@ -86,7 +86,7 @@
       "force_single_expert_epochs": 0,
       "freeze_experts_start": -1,
       "freeze_experts_end": -1,
-      "dataset": "conversing.yaml"
+      "dataset": "conversing.json"
     },
     "4": {
       "learning_rate": 0.00001,
@@ -98,7 +98,7 @@
       "force_single_expert_epochs": 0,
       "freeze_experts_start": -1,
       "freeze_experts_end": -1,
-      "dataset": "conversing.yaml"
+      "dataset": "conversing.json"
     },
     "5": {
       "learning_rate": 0.000005,
@@ -110,7 +110,7 @@
       "force_single_expert_epochs": 0,
       "freeze_experts_start": -1,
       "freeze_experts_end": -1,
-      "dataset": "conversing.yaml"
+      "dataset": "conversing.json"
     }
   },
   "target_loss": 0.002

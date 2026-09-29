@@ -32,14 +32,14 @@ func main() {
 	logEvery := flag.Int("log-every", 10, "log a line every N steps")
 	flag.Parse()
 
-	// Load the training corpus from protobuf (or CSV for backward compatibility).
+	// Load the training corpus from CSV (protobuf support was removed:
+	// pure-Go, zero-dependency requirement).
 	var ds *dense.Dataset
 	var err error
 	if strings.HasSuffix(*dataPath, ".pb") {
-		ds, err = dense.CommandDatasetFromProto(*dataPath, 42)
-	} else {
-		ds, err = dense.CommandDatasetFromCSV(*dataPath, 42)
+		log.Fatalf("protobuf datasets are no longer supported (pure-Go zero-dependency build); use a CSV corpus instead of %s", *dataPath)
 	}
+	ds, err = dense.CommandDatasetFromCSV(*dataPath, 42)
 	if err != nil {
 		log.Fatalf("load dataset: %v", err)
 	}

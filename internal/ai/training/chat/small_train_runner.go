@@ -19,7 +19,6 @@ import (
 	seq2seq "github.com/golangast/gollemer/internal/ai/neural/nnu/seq2seq"
 	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
 	"github.com/golangast/gollemer/internal/ai/neural/tokenizer"
-	datasetpb "github.com/golangast/gollemer/internal/ai/training/proto/dataset"
 )
 
 func SmallTestPrompts() []string {
@@ -31,25 +30,17 @@ func SmallTestPrompts() []string {
 	}
 }
 
-// seq2SeqDataPath resolves the seq2seq training data file, preferring the
-// protobuf ConversationDataset (conversing.pb) over the legacy CSV files
-// when it is present.
+// seq2SeqDataPath resolves the seq2seq training data file. Protobuf dataset
+// support was removed (pure-Go, zero-dependency requirement); the CSV
+// fixture is used unconditionally.
 func seq2SeqDataPath(projectRoot string) string {
-	pbPath := filepath.Join(projectRoot, "data", "training", "trainingdata", "conversing.pb")
-	if _, err := os.Stat(pbPath); err == nil {
-		return pbPath
-	}
-	return filepath.Join(projectRoot, "data", "training", "trainingdata", "conversations.csv")
+	return filepath.Join(projectRoot, "data", "training", "trainingdata", "conversing.csv")
 }
 
-// smallDemoDataPath resolves the tiny social demo dataset, preferring the
-// protobuf ConversationDataset (small_social_demo.pb) over the legacy CSV
-// fixture (small_social_demo.csv) when both are present.
+// smallDemoDataPath resolves the tiny social demo dataset. Protobuf dataset
+// support was removed (pure-Go, zero-dependency requirement); the legacy
+// CSV fixture is used unconditionally.
 func smallDemoDataPath(projectRoot string) string {
-	pbPath := filepath.Join(projectRoot, "data", "training", "trainingdata", "small_social_demo.pb")
-	if _, err := os.Stat(pbPath); err == nil {
-		return pbPath
-	}
 	return filepath.Join(projectRoot, "data", "training", "trainingdata", "small_social_demo.csv")
 }
 
@@ -171,64 +162,14 @@ func filterNoisyPairs(pairs []moe.TrainPair) []moe.TrainPair {
 	return out
 }
 
-// loadTinyPairsFromProto reads a datasetpb.ConversationDataset protobuf file
-// and extracts consecutive ROLE_USER→ROLE_ASSISTANT pairs from each conversation,
-// skipping ROLE_SYSTEM turns.
-func loadTinyPairsFromProto(dataPath string) ([]moe.TrainPair, error) {
-	ds, err := datasetpb.LoadConversationDatasetFromProto(dataPath)
-	if err != nil {
-		return nil, fmt.Errorf("load conversing proto: %w", err)
-	}
-
-	type turn struct {
-		role    datasetpb.Role
-		content string
-	}
-	var pairs []moe.TrainPair
-
-	for _, conv := range ds.GetConversations() {
-		var turns []turn
-		for _, t := range conv.GetTurns() {
-			if t.GetRole() == datasetpb.Role_ROLE_SYSTEM {
-				continue
-			}
-			content := normalizeTinySeq2SeqText(t.GetContent())
-			if content == "" {
-				continue
-			}
-			turns = append(turns, turn{t.GetRole(), content})
-		}
-		for i := 0; i < len(turns)-1; i++ {
-			if turns[i].role == datasetpb.Role_ROLE_USER && turns[i+1].role == datasetpb.Role_ROLE_ASSISTANT {
-				pairs = append(pairs, moe.TrainPair{
-					Q:      turns[i].content,
-					A:      turns[i+1].content,
-					Intent: "conversational",
-				})
-			}
-		}
-	}
-
-	pairs = filterNoisyPairs(pairs)
-	return pairs, nil
-}
-
-// loadTinyPairs supports three data formats:
-//  1. conversing.pb:      datasetpb.ConversationDataset protobuf (preferred)
-//  2. conversations.csv:  conversation_id, turn_sequence, role, content (multi-turn CSV)
-//  3. conversing.csv:     Q, A [, intent [, grammar]]  (simple two-column CSV)
+// loadTinyPairs supports two CSV data formats:
+//  1. conversations.csv:  conversation_id, turn_sequence, role, content (multi-turn CSV)
+//  2. conversing.csv:     Q, A [, intent [, grammar]]  (simple two-column CSV)
+// (Protobuf dataset support was removed: pure-Go, zero-dependency requirement.)
 func loadTinyPairs(dataPath string) ([]moe.TrainPair, error) {
-	// Protobuf path — detected by file extension.
+	// Protobuf is no longer supported.
 	if strings.HasSuffix(dataPath, ".pb") {
-		pairs, err := loadTinyPairsFromProto(dataPath)
-		if err != nil {
-			return nil, err
-		}
-		pairs = filterTinySeq2SeqPairs(pairs)
-		if len(pairs) == 0 {
-			return nil, fmt.Errorf("tiny seq2seq proto dataset is empty")
-		}
-		return pairs, nil
+		return nil, fmt.Errorf("protobuf datasets are no longer supported (pure-Go zero-dependency build): %s", dataPath)
 	}
 
 	// CSV paths.

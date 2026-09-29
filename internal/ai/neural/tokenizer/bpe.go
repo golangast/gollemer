@@ -18,7 +18,6 @@ import (
 	"unicode"
 
 	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
-	trainingpb "github.com/golangast/gollemer/internal/ai/training/proto"
 )
 
 // BPEMerge records a single BPE merge operation: the two symbols being merged.
@@ -134,26 +133,6 @@ func (b *BPETokenizer) collectCorpus(projectRoot string) (map[string]int, error)
 				}
 			}
 		}
-	}
-
-	// 4. Collect conversations from protobuf
-	conversationsPBPath := filepath.Join(projectRoot, "data/training/trainingdata/conversations.pb")
-	if conversations, err := trainingpb.LoadConversationsFromProto(conversationsPBPath); err == nil {
-		for _, conv := range conversations {
-			for _, turn := range conv.Turns {
-				text := strings.TrimSpace(turn.Content)
-				if text == "" {
-					continue
-				}
-				words := tokenizeText(text)
-				for _, w := range words {
-					freq[w]++
-				}
-			}
-		}
-		log.Printf("📚 BPE corpus: loaded %d conversations from %s", len(conversations), conversationsPBPath)
-	} else {
-		log.Printf("⚠️  BPE corpus: cannot read %s: %v", conversationsPBPath, err)
 	}
 
 	return freq, nil

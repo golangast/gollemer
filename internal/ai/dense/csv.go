@@ -7,8 +7,6 @@ import (
 	"io"
 	"os"
 	"strings"
-
-	trainingpb "github.com/golangast/gollemer/internal/ai/training/proto"
 )
 
 // LoadCommandExamplesFromCSV reads CommandExample records from a CSV file.
@@ -122,44 +120,6 @@ func CommandDatasetFromCSV(path string, seed int64) (*Dataset, error) {
 		}
 	}
 	return NewDataset(seed, samples...), nil
-}
-
-// CommandDatasetFromProto builds a Dataset from a protobuf file of CommandExamples.
-func CommandDatasetFromProto(path string, seed int64) (*Dataset, error) {
-	examples, err := LoadCommandExamplesFromProto(path)
-	if err != nil {
-		return nil, err
-	}
-	if len(examples) == 0 {
-		return nil, fmt.Errorf("no command examples found in %s", path)
-	}
-
-	samples := make([]Sample, len(examples))
-	for i, c := range examples {
-		samples[i] = Sample{
-			Input: BagOfWords(c.Prompt, CommandVocab),
-			Label: LabelForCommand(c.Type),
-		}
-	}
-	return NewDataset(seed, samples...), nil
-}
-
-// LoadCommandExamplesFromProto reads CommandExample records from a protobuf file.
-func LoadCommandExamplesFromProto(path string) ([]CommandExample, error) {
-	pbExamples, err := trainingpb.LoadCommandExamplesFromProto(path)
-	if err != nil {
-		return nil, err
-	}
-	examples := make([]CommandExample, len(pbExamples))
-	for i, e := range pbExamples {
-		examples[i] = CommandExample{
-			Type:      e.Type,
-			Prompt:    e.UserPrompt,
-			Response:  e.AssistantResponse,
-			CodeAfter: e.CodeAfter,
-		}
-	}
-	return examples, nil
 }
 
 // SaveGob serializes the DenseModel to a gob file.
