@@ -53,16 +53,16 @@ func TestBlendPredictionVectors(t *testing.T) {
 }
 
 func TestMergeASTSubKeys(t *testing.T) {
-	output1 := map[string]interface{}{
+	output1 := map[string]any{
 		"handler": "auth_handler",
 		"url":     "/auth",
 	}
-	output2 := map[string]interface{}{
+	output2 := map[string]any{
 		"database":    "sqlite",
 		"inject_code": "db.Connect()",
 	}
 
-	merged := make(map[string]interface{})
+	merged := make(map[string]any)
 	for k, v := range output1 {
 		merged[k] = v
 	}

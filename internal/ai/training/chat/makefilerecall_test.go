@@ -13,7 +13,7 @@ func TestMakefileRecall(t *testing.T) {
 		"retrain gocli":                  "run make train-gocli",
 		"train the go code model":        "run make train-gocode",
 		"list the commands":              "run make help",
-		"how do i chat with the model":    "run make chat",
+		"how do i chat with the model":   "run make chat",
 	}
 	for in, want := range hits {
 		got, ok := LookupMakefileRecall(in)

@@ -307,6 +307,45 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 	return sc.Err()
 }
 
+// tryDeterministicAnswer checks the exact-match layers before the neural
+// model runs: social recall, makefile recall, and the Go knowledge base.
+// It prints the reply and records it in the conversation when one hits,
+// reporting whether the message was fully handled.
+func tryDeterministicAnswer(line, d string, conv *Conversation) bool {
+	// Social recall: an exact training-pair match returns the trained
+	// answer verbatim. The tiny model doesn't reliably memorize every
+	// pair, so this guarantees the chat "picks up" what's in its data.
+	if d == SocialDomain {
+		if sr, ok := LookupSocialRecall(line); ok {
+			fmt.Printf("gollemer [%s]> %s\n", d, sr)
+			conv.AddReply(sr, SocialDomain, false)
+			return true
+		}
+	}
+	// Makefile recall: exact training-pair matches return the trained
+	// command verbatim. The tiny model confuses similar "how do i ..."
+	// inputs, so this guarantees correct commands for anything it was
+	// explicitly taught.
+	if d == MakefileDomain {
+		if mr, ok := LookupMakefileRecall(line); ok {
+			fmt.Printf("gollemer [%s]> %s\n", d, mr)
+			conv.AddReply(mr, MakefileDomain, false)
+			return true
+		}
+	}
+	// Go concept questions first check the curated knowledge base: a
+	// strong keyword match gives a guaranteed-correct answer, anything
+	// vague falls through to the neural model.
+	if d == GoDomain {
+		if kb, ok := LookupGoKnowledge(line); ok {
+			fmt.Printf("gollemer [%s]> %s\n", d, kb)
+			conv.AddReply(kb, GoDomain, false)
+			return true
+		}
+	}
+	return false
+}
+
 // runUnifiedChat is the single-chat mode John asked for: one session that
 // knows the difference between social chat, Go concepts, Go code, and
 // makefile commands. Each message is routed by input intent via
@@ -374,36 +413,8 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		}
 		conv.AddUser(line)
 		d := routeDomain(line)
-		// Social recall: an exact training-pair match returns the trained
-		// answer verbatim. The tiny model doesn't reliably memorize every
-		// pair, so this guarantees the chat "picks up" what's in its data.
-		if d == SocialDomain {
-			if sr, ok := LookupSocialRecall(line); ok {
-				fmt.Printf("gollemer [%s]> %s\n", d, sr)
-				conv.AddReply(sr, SocialDomain, false)
-				continue
-			}
-		}
-		// Makefile recall: exact training-pair matches return the
-		// trained command verbatim. The tiny model confuses similar
-		// "how do i ..." inputs, so this guarantees correct commands
-		// for anything it was explicitly taught.
-		if d == MakefileDomain {
-			if mr, ok := LookupMakefileRecall(line); ok {
-				fmt.Printf("gollemer [%s]> %s\n", d, mr)
-				conv.AddReply(mr, MakefileDomain, false)
-				continue
-			}
-		}
-		// Go concept questions first check the curated knowledge base:
-		// a strong keyword match gives a guaranteed-correct answer,
-		// anything vague falls through to the neural model.
-		if d == GoDomain {
-			if kb, ok := LookupGoKnowledge(line); ok {
-				fmt.Printf("gollemer [%s]> %s\n", d, kb)
-				conv.AddReply(kb, GoDomain, false)
-				continue
-			}
+		if tryDeterministicAnswer(line, d, conv) {
+			continue
 		}
 		model := models[d]
 		tag := d

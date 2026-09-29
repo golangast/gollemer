@@ -2494,7 +2494,7 @@ func SaveIntentMoECheckpoint(ckpt *Checkpoint, path string) error {
 	var after runtime.MemStats
 	runtime.ReadMemStats(&after)
 	if GlobalTelemetry != nil {
-		GlobalTelemetry.RecordSerializationMetrics("checkpoint", map[string]interface{}{
+		GlobalTelemetry.RecordSerializationMetrics("checkpoint", map[string]any{
 			"path":        path,
 			"alloc_delta": int64(after.TotalAlloc - before.TotalAlloc),
 			"heap_delta":  int64(after.HeapAlloc - before.HeapAlloc),
@@ -2578,7 +2578,7 @@ func SaveIntentMoEModelToGOB(model *IntentMoE, path string) error {
 	var after runtime.MemStats
 	runtime.ReadMemStats(&after)
 	if GlobalTelemetry != nil {
-		GlobalTelemetry.RecordSerializationMetrics("gob_model", map[string]interface{}{
+		GlobalTelemetry.RecordSerializationMetrics("gob_model", map[string]any{
 			"path":        path,
 			"alloc_delta": int64(after.TotalAlloc - before.TotalAlloc),
 			"heap_delta":  int64(after.HeapAlloc - before.HeapAlloc),

@@ -163,9 +163,9 @@ type Tensor struct {
 	Operation    Operation `gob:"-"` // Exclude Operation from gob serialization
 	IsRouter     bool      // Flag for differential learning rates
 
-	needsSyncHost bool        `gob:"-"`
-	gpuData       interface{} `gob:"-"`
-	gpuSync       bool        `gob:"-"`
+	needsSyncHost bool `gob:"-"`
+	gpuData       any  `gob:"-"`
+	gpuSync       bool `gob:"-"`
 }
 
 // GobEncode implements the gob.GobEncoder interface.

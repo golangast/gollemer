@@ -4235,7 +4235,7 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 			})
 			configPath := filepath.Join(projectRoot, "data/config/social_train.json")
 			data, _ := os.ReadFile(configPath)
-			var cfgMap map[string]interface{}
+			var cfgMap map[string]any
 			if json.Unmarshal(data, &cfgMap) == nil {
 				cfgMap["trigger_test"] = false
 				out, _ := json.MarshalIndent(cfgMap, "", "  ")
@@ -4471,7 +4471,7 @@ func TrainSocialChat(projectRoot string, totalEpochs int, customDataPath string,
 			})
 			configPath := filepath.Join(projectRoot, "data/config/social_train.json")
 			data, _ := os.ReadFile(configPath)
-			var cfgMap map[string]interface{}
+			var cfgMap map[string]any
 			if json.Unmarshal(data, &cfgMap) == nil {
 				cfgMap["trigger_save"] = false
 				out, _ := json.MarshalIndent(cfgMap, "", "  ")

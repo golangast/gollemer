@@ -110,7 +110,7 @@ func generateGCTuningScenario() Conversation {
 			{Sequence: 3, Role: "user", Content: "I set GOGC=50 but CPU usage went up 20%. Is there a better approach?"},
 			{Sequence: 4, Role: "assistant", Content: "[TRIPLETS] Subject: CPU -> Action: Increase -> Object: Usage | Subject: GOGC -> Action: Trigger -> Object: GC\n</think> 1. Identify core task: Balance GC frequency vs CPU. 2. Evaluate options: GOGC tuning, sync.Pool, value reuse, arena. 3. Decide heuristic: Use sync.Pool for frequently allocated objects; tune GOGC incrementally.\n</think> Lower GOGC increases CPU because GC runs more often. Instead, reduce allocation rate first: reuse objects with `sync.Pool`, preallocate slices with `make`, and avoid unnecessary boxing. Then tune GOGC in small steps (100 → 80 → 60). Measure both latency p99 and CPU to find the optimal point."},
 			{Sequence: 5, Role: "user", Content: "Can you show me a sync.Pool example for reducing allocations in a hot path?"},
-			{Sequence: 6, Role: "assistant", Content: "[TRIPLETS] Subject: sync.Pool -> Action: Reuse -> Object: Object | Subject: Goroutine -> Action: Allocate -> Object: Memory\n</think> 1. Identify core task: Reduce allocations in hot path. 2. Evaluate options: sync.Pool, preallocation, stack allocation. 3. Decide heuristic: Use sync.Pool for objects that are frequently created and discarded.\n</think> Here's a sync.Pool pattern for a hot path:\n\n```go\nvar bufPool = sync.Pool{\n    New: func() interface{} { return new(bytes.Buffer) },\n}\n\nfunc handleRequest() {\n    buf := bufPool.Get().(*bytes.Buffer)\n    buf.Reset()\n    defer bufPool.Put(buf)\n    // use buf...\n}\n```\n\nThis avoids allocating a new buffer on every request. The pool grows to the peak concurrency level and reuses objects across calls."},
+			{Sequence: 6, Role: "assistant", Content: "[TRIPLETS] Subject: sync.Pool -> Action: Reuse -> Object: Object | Subject: Goroutine -> Action: Allocate -> Object: Memory\n</think> 1. Identify core task: Reduce allocations in hot path. 2. Evaluate options: sync.Pool, preallocation, stack allocation. 3. Decide heuristic: Use sync.Pool for objects that are frequently created and discarded.\n</think> Here's a sync.Pool pattern for a hot path:\n\n```go\nvar bufPool = sync.Pool{\n    New: func() any { return new(bytes.Buffer) },\n}\n\nfunc handleRequest() {\n    buf := bufPool.Get().(*bytes.Buffer)\n    buf.Reset()\n    defer bufPool.Put(buf)\n    // use buf...\n}\n```\n\nThis avoids allocating a new buffer on every request. The pool grows to the peak concurrency level and reuses objects across calls."},
 		},
 	}
 }
@@ -231,7 +231,7 @@ Topics: race conditions, GC tuning, channel lifecycle, context cancellation, mut
 
 Assistant answers MUST include [TRIPLETS], </think>, and </think> blocks.`
 
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"model":  "qwen2.5:3b",
 		"prompt": prompt,
 		"stream": false,

@@ -22,10 +22,10 @@ type SemanticOutput struct {
 }
 
 type ResourceTarget struct {
-	Type       string                 `json:"type"`
-	Name       string                 `json:"name"`
-	Content    string                 `json:"content,omitempty"`
-	Properties map[string]interface{} `json:"properties"`
+	Type       string         `json:"type"`
+	Name       string         `json:"name"`
+	Content    string         `json:"content,omitempty"`
+	Properties map[string]any `json:"properties"`
 }
 
 func main() {
@@ -281,7 +281,7 @@ func validateGoCode(targetFile string) error {
 	return nil
 }
 
-func getStringProp(props map[string]interface{}, keys ...string) string {
+func getStringProp(props map[string]any, keys ...string) string {
 	if props == nil {
 		return ""
 	}

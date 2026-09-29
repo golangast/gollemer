@@ -19,7 +19,7 @@ type ExpertMonitor struct {
 	NumExperts int
 
 	mu        sync.Mutex
-	History   []map[string]interface{} // Rolling utilization samples for ASCII/CLI dashboards
+	History   []map[string]any // Rolling utilization samples for ASCII/CLI dashboards
 	MaxEvents int
 }
 
@@ -41,7 +41,7 @@ func (m *ExpertMonitor) LogSelection(expertID int) {
 		m.recordSample(expertID)
 		m.mu.Unlock()
 		if GlobalTelemetry != nil {
-			GlobalTelemetry.RecordTrace("router", "dispatch", map[string]interface{}{"expert_id": expertID, "total": m.Total})
+			GlobalTelemetry.RecordTrace("router", "dispatch", map[string]any{"expert_id": expertID, "total": m.Total})
 		}
 	}
 }
@@ -166,7 +166,7 @@ func (m *ExpertMonitor) recordSample(expertID int) {
 	if m.MaxEvents <= 0 {
 		m.MaxEvents = 80
 	}
-	m.History = append(m.History, map[string]interface{}{"expert_id": expertID, "count": 1, "total": m.Total})
+	m.History = append(m.History, map[string]any{"expert_id": expertID, "count": 1, "total": m.Total})
 	if len(m.History) > m.MaxEvents {
 		m.History = m.History[len(m.History)-m.MaxEvents:]
 	}
@@ -183,11 +183,11 @@ func (m *ExpertMonitor) Snapshot(path string) error {
 			fracs[i] = float64(c) / float64(m.Total)
 		}
 	}
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"total":       m.Total,
 		"counts":      append([]int(nil), m.Counts...),
 		"fractions":   fracs,
-		"history":     append([]map[string]interface{}(nil), m.History...),
+		"history":     append([]map[string]any(nil), m.History...),
 		"num_experts": m.NumExperts,
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {

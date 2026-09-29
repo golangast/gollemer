@@ -165,6 +165,7 @@ func filterNoisyPairs(pairs []moe.TrainPair) []moe.TrainPair {
 // loadTinyPairs supports two CSV data formats:
 //  1. conversations.csv:  conversation_id, turn_sequence, role, content (multi-turn CSV)
 //  2. conversing.csv:     Q, A [, intent [, grammar]]  (simple two-column CSV)
+//
 // (Protobuf dataset support was removed: pure-Go, zero-dependency requirement.)
 func loadTinyPairs(dataPath string) ([]moe.TrainPair, error) {
 	// Protobuf is no longer supported.

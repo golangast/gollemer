@@ -8,7 +8,7 @@ import (
 
 // PushToJS sends the training metrics to the JavaScript dashboard via the WASM bridge.
 func (m *TrainingMetric) PushToJS() {
-	js.Global().Call("updateDashboard", map[string]interface{}{
+	js.Global().Call("updateDashboard", map[string]any{
 		"step":            m.Step,
 		"loss":            m.Loss,
 		"lb_loss":         m.LoadBalanceLoss,

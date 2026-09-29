@@ -418,7 +418,7 @@ func (b *MoEChatBot) Reply(input string) string {
 	// ── Tech signals ────────────────────────────────────────────────────────────
 	// Use word-boundary style matching to avoid "go" in "I'm going to..."
 	techPhrases := []string{
-		"golang", "goroutine", "channel", "mutex", "interface{}", "struct{",
+		"golang", "goroutine", "channel", "mutex", "any", "struct{",
 		"func ", "func(", " func", "error handling", "nil pointer",
 		"compile", "runtime", "garbage collector", "package ", "import ",
 		"context.context", "http handler", "middleware", "api", "endpoint",

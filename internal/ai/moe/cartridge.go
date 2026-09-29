@@ -43,7 +43,7 @@ type CartridgeManager struct {
 
 // Global slice pool to prevent GC trashing when swapping cartridges.
 var slicePool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return make([]float32, 0)
 	},
 }
@@ -85,14 +85,14 @@ func (cm *CartridgeManager) loop() {
 				cm.mu.Unlock()
 				if GlobalTelemetry != nil {
 					GlobalTelemetry.RecordPoolHit()
-					GlobalTelemetry.RecordTrace("cartridge", "pool_hit", map[string]interface{}{"path": req.Path})
+					GlobalTelemetry.RecordTrace("cartridge", "pool_hit", map[string]any{"path": req.Path})
 				}
 				req.Response <- nil
 				continue
 			}
 			if GlobalTelemetry != nil {
 				GlobalTelemetry.RecordPoolMiss()
-				GlobalTelemetry.RecordTrace("cartridge", "pool_miss", map[string]interface{}{"path": req.Path})
+				GlobalTelemetry.RecordTrace("cartridge", "pool_miss", map[string]any{"path": req.Path})
 			}
 			cm.mu.Unlock()
 
@@ -116,7 +116,7 @@ func (cm *CartridgeManager) loop() {
 			cm.mu.Unlock()
 			if GlobalTelemetry != nil {
 				GlobalTelemetry.SetWarmCartridges(len(cm.Loaded))
-				GlobalTelemetry.RecordTrace("cartridge", "loaded", map[string]interface{}{"path": req.Path, "warm": len(cm.Loaded)})
+				GlobalTelemetry.RecordTrace("cartridge", "loaded", map[string]any{"path": req.Path, "warm": len(cm.Loaded)})
 			}
 			_ = EmitRuntimeTelemetry("logs/telemetry.json", nil)
 			log.Printf("🎮 Cartridge Manager: Loaded cartridge %s into RAM.", req.Path)
@@ -135,7 +135,7 @@ func (cm *CartridgeManager) loop() {
 			cm.mu.Unlock()
 			if GlobalTelemetry != nil {
 				GlobalTelemetry.SetWarmCartridges(len(cm.Loaded))
-				GlobalTelemetry.RecordTrace("cartridge", "unloaded", map[string]interface{}{"path": req.Path, "warm": len(cm.Loaded)})
+				GlobalTelemetry.RecordTrace("cartridge", "unloaded", map[string]any{"path": req.Path, "warm": len(cm.Loaded)})
 			}
 			_ = EmitRuntimeTelemetry("logs/telemetry.json", nil)
 			req.Response <- nil

@@ -514,4 +514,64 @@ var gollemerDefinition = regexp.MustCompile(`(?i:\b(what is|what's|who made|who 
 // explicit makefileTerms above miss them. Checked before the social
 // fallback: social chatter never mentions training, checkpoints, or the
 // dataset.
-var makefileIntent = regexp.MustCompile(`(?i:\b(train|training|retrain|resume|continue)\b.*\b(model|tiny|small|neural|gollemer|checkpoint)\b|\b(resume|continue)\b.*\btraining\b|\btraining\b.*\b(resume|continue)\b)|\b(train|training|retrain)\b|\b(tiny|small)\b.*\bmodel\b|\b(checkpoints?|models?)\b.*\b(clean|clear|wipe|delete|remove|purge|erase|tidy|old)\b|\b(clean|clear|wipe|delete|remove|purge|erase|tidy\s+up|throw away|get rid of)\b.*\b(checkpoints?|models?|files?|everything|all)\b|\b(dataset|reclassify|retag|pairs|yaml|protobuf|metrics|labels|domain\s+tags?)\b|\bimport\b.*\b(examples|pairs)\b|\b(examples|pairs)\b.*\bimport\b|\bmake\b.*\b(targets?|commands?)\b|\b(targets?|commands?)\b.*\bavailable\b|\b(install|set\s+up|setup|enable)\b.*\bhooks?\b|\bhooks?\b.*\b(install|set\s+up|setup|enable)\b|\bhook\s+up\b.*\bgit\b|\bgit\b.*\bhook\s+up\b|\bprecommit\b|\bgollemer\b|(?i:\b(chat|talk|conversation)\b.*\b(model|session|interface)\b)|\b(model|session|interface)\b.*\b(chat|talk|conversation)\b|\b(launch|open|start)\b.*\bchat\b|\bfresh\s+start\b|\bstart\b.*\bfresh\b|\bstart\s+over\b|\bbegin\s+(again|anew)\b|\bwith make\b|\brun\b.*\bwith make\b|\bavailable\b.*\b(commands?|targets?)\b|\bstart\b.*\b(guide|here)\b|\b(guide|here)\b.*\bstart\b|\b(list|show|display)\b.*\b(commands|targets)\b|\bcommands?\b.*\bexist\b|\bthought\b.*\bprocess\b|\bdebug\b.*\b(mode|prints)\b`)
+//
+// The patterns are grouped by intent so new ones can be added without
+// untangling a single giant expression. They're joined with | below.
+var makefileIntentPatterns = []string{
+	// Train/retrain the model: "retrain the neural model", "resume training".
+	`\b(train|training|retrain|resume|continue)\b.*\b(model|tiny|small|neural|gollemer|checkpoint)\b`,
+	`\b(resume|continue)\b.*\btraining\b`,
+	`\btraining\b.*\b(resume|continue)\b`,
+	`\b(train|training|retrain)\b`,
+	`\b(tiny|small)\b.*\bmodel\b`,
+
+	// Manage checkpoints: "clean the checkpoints", "delete old models".
+	`\b(checkpoints?|models?)\b.*\b(clean|clear|wipe|delete|remove|purge|erase|tidy|old)\b`,
+	`\b(clean|clear|wipe|delete|remove|purge|erase|tidy\s+up|throw away|get rid of)\b.*\b(checkpoints?|models?|files?|everything|all)\b`,
+
+	// Dataset work: "import the pairs", "reclassify the dataset".
+	`\b(dataset|reclassify|retag|pairs|yaml|protobuf|metrics|labels|domain\s+tags?)\b`,
+	`\bimport\b.*\b(examples|pairs)\b`,
+	`\b(examples|pairs)\b.*\bimport\b`,
+
+	// Make targets: "list the commands", "what commands exist".
+	`\bmake\b.*\b(targets?|commands?)\b`,
+	`\b(targets?|commands?)\b.*\bavailable\b`,
+	`\bavailable\b.*\b(commands?|targets?)\b`,
+	`\b(list|show|display)\b.*\b(commands|targets)\b`,
+	`\bcommands?\b.*\bexist\b`,
+	`\bwith make\b`,
+	`\brun\b.*\bwith make\b`,
+
+	// Git hooks: "install the hooks", "hook up git".
+	`\b(install|set\s+up|setup|enable)\b.*\bhooks?\b`,
+	`\bhooks?\b.*\b(install|set\s+up|setup|enable)\b`,
+	`\bhook\s+up\b.*\bgit\b`,
+	`\bgit\b.*\bhook\s+up\b`,
+	`\bprecommit\b`,
+
+	// Talking to Gollemer itself: "talk to gollemer", "start a chat session".
+	// NOTE: \bgollemer\b stays case-sensitive (lowercase only). A capitalized
+	// "Gollemer" is someone greeting the bot by name ("Hi Gollemer!"), which
+	// is social; lowercase "gollemer" means the command/system.
+	`(?-i:\bgollemer\b)`,
+	`\b(chat|talk|conversation)\b.*\b(model|session|interface)\b`,
+	`\b(model|session|interface)\b.*\b(chat|talk|conversation)\b`,
+	`\b(launch|open|start)\b.*\bchat\b`,
+
+	// Fresh start: "start over", "begin again".
+	`\bfresh\s+start\b`,
+	`\bstart\b.*\bfresh\b`,
+	`\bstart\s+over\b`,
+	`\bbegin\s+(again|anew)\b`,
+
+	// Start-here guide: "show the start here guide".
+	`\bstart\b.*\b(guide|here)\b`,
+	`\b(guide|here)\b.*\bstart\b`,
+
+	// Debug chat: "show the thought process", "chat with debug prints".
+	`\bthought\b.*\bprocess\b`,
+	`\bdebug\b.*\b(mode|prints)\b`,
+}
+
+var makefileIntent = regexp.MustCompile(`(?i:` + strings.Join(makefileIntentPatterns, "|") + `)`)

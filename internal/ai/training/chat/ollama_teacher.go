@@ -174,7 +174,7 @@ Output ONLY the raw JSON object. Nothing else.`,
 	}
 
 	// Parse the teacher's recommended patch
-	var patch map[string]interface{}
+	var patch map[string]any
 	if err := json.Unmarshal([]byte(text), &patch); err != nil {
 		return fmt.Sprintf("👨‍🏫 [TeacherAudit Epoch %d] Teacher output invalid JSON (%q) — skipping", ctx.Epoch, text)
 	}
@@ -183,12 +183,12 @@ Output ONLY the raw JSON object. Nothing else.`,
 	}
 
 	// Merge patch into current config and write back
-	var currentCfg map[string]interface{}
+	var currentCfg map[string]any
 	if cfgData, err := os.ReadFile(configPath); err == nil {
 		_ = json.Unmarshal(cfgData, &currentCfg)
 	}
 	if currentCfg == nil {
-		currentCfg = make(map[string]interface{})
+		currentCfg = make(map[string]any)
 	}
 
 	var changedKeys []string

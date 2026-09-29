@@ -183,7 +183,7 @@ func GoHighFreqTokens() []string {
 		"context.WithValue(",
 
 		// Common interface patterns
-		"interface{}",
+		"any",
 		"interface {",
 		"Read(",
 		"Write(",

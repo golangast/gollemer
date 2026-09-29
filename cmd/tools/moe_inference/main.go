@@ -14,10 +14,10 @@ type SemanticOutput struct {
 }
 
 type ResourceTarget struct {
-	Type       string                 `json:"type"`
-	Name       string                 `json:"name"`
-	Content    string                 `json:"content,omitempty"`
-	Properties map[string]interface{} `json:"properties"`
+	Type       string         `json:"type"`
+	Name       string         `json:"name"`
+	Content    string         `json:"content,omitempty"`
+	Properties map[string]any `json:"properties"`
 }
 
 func main() {
@@ -35,7 +35,7 @@ func main() {
 			Type:       "go_file",
 			Name:       "main",
 			Content:    generateContent(*prompt),
-			Properties: map[string]interface{}{},
+			Properties: map[string]any{},
 		},
 	}
 

@@ -24,7 +24,7 @@ type Vocabulary struct {
 
 // TrainingDataJSON is kept for backward compatibility with GOB-encoded models.
 type TrainingDataJSON struct {
-	Sentences []map[string]interface{} `json:"sentences"`
+	Sentences []map[string]any `json:"sentences"`
 }
 
 // NewVocabulary creates a new Vocabulary instance.
