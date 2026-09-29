@@ -1,164 +1,65 @@
-# Gollemer Makefile
-# -----------------------------------------------------------------------------
+# Gollemer — one chat, five brains.
+#
+#   make chat       talk to gollemer (unified chat: social, go, code, makefile, gocli)
+#   make smarter    the one-command upgrade: expands training data, retrains the
+#                   social + go brains, runs the evals, prints a report
+#   make eval       score every brain on its fixed eval suite
+#   make train-*    retrain one brain: social, go, gocode, gocli, makefile
+#   make import     import new training pairs through the quality gate (FILE=path.jsonl)
+#   make help       this list
 
-# Configuration
 export GOEXPERIMENT=simd
 export CGO_ENABLED=1
 
-# Runtime Tuning
-MEM_LIMIT    = 2500MiB
-GOGC         = 50
-GOMAXPROCS   = 8
-MAIN_CMD     = go run main.go
+MEM_LIMIT  = 2500MiB
+GOGC       = 50
+GOMAXPROCS = 8
+MAIN_CMD   = go run main.go
 
-.PHONY: train train-resume train-fresh train-small train-small-seq2seq \
-       test-small-seq2seq seq2seq-prompt seq2seq-chat chat metrics export-labels \
-       train-real-seq2seq real-chat import-pairs \
-       clean clean-all conversing-pb social-replies-pb tech-multiturn-pb all-pb \
-       makefile-pb makefile-train chat-makefile install-hooks help sel
+.PHONY: chat smarter eval help import \
+        train-social train-go train-gocode train-gocli train-makefile
 
-## install-hooks: Install Gollemer Git pre-commit validation hook
-install-hooks:
-	@bash scripts/install_git_hook.sh
-
-# --- Training ---
-
-## train: Start a fresh curriculum training (clears MoE models, preserves word2vec)
-train: clean
-	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-multiphase $(ARGS)
-
-## train-resume: Start training without cleaning existing model checkpoints
-train-resume:
-	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-multiphase $(ARGS)
-
-## train-fresh: Full fresh start — clears ALL models including word2vec, then trains
-train-fresh: clean-all
-	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-multiphase $(ARGS)
-
-## train-small: Run the small social dataset, print loss + memory, and test the model
-train-small:
-	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-small
-
-## train-small-seq2seq: Run a strict pure Q->A seq2seq tiny demo
-train-small-seq2seq:
-	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-small-seq2seq
-
-## test-small-seq2seq: Load the tiny seq2seq model and probe a few prompts
-test-small-seq2seq:
-	$(MAIN_CMD) -test-small-seq2seq
-
-PROMPT ?= "hello"
-## seq2seq-prompt: Send a custom prompt to the saved tiny seq2seq model
-seq2seq-prompt:
-	$(MAIN_CMD) -seq2seq-prompt="$(PROMPT)"
-
-## seq2seq-chat: Start an interactive tiny seq2seq chat loop with the saved model
-seq2seq-chat:
-	$(MAIN_CMD) -seq2seq-chat
-
-## train-real-seq2seq: Train the genuine neural seq2seq social model (real BPTT, no cheat sheet)
-train-real-seq2seq:
-	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-real-seq2seq
-
-## real-chat: Unified chat — one session routing each message to the right
-## model (social, go concepts, gocode, makefile) by input intent.
-real-chat:
+## chat: Talk to gollemer — one session, five brains, routed per message
+chat:
 	$(MAIN_CMD) -real-chat -domain unified
 
-## train-gocode-seq2seq: Train the genuine neural seq2seq model on the gocode domain (NL -> Go code)
-train-gocode-seq2seq:
-	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-real-seq2seq -domain gocode
+## smarter: The one-command upgrade — more data, retrained brains, evals, report
+smarter:
+	bash scripts/smarter.sh
 
-## real-chat-gocode: Chat with the gocode model — describe what you want, get Go code
-real-chat-gocode:
-	$(MAIN_CMD) -real-chat -domain gocode
-
-## eval-gocode: Score the gocode model on the fixed eval suite (code correctness + chat/code mode separation)
-eval-gocode:
+## eval: Score every brain on its fixed eval suite
+eval:
 	python3 scripts/gocode_eval_run.py
-
-## train-go-seq2seq: Train the Go concept model (Go terminology, workflow, commands)
-train-go-seq2seq:
-	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-real-seq2seq -domain go
-
-## real-chat-go: Chat with the Go concept model — questions about Go, not code generation
-real-chat-go:
-	$(MAIN_CMD) -real-chat -domain go
-
-## eval-go: Score the Go concept model on the 16-prompt suite
-eval-go:
 	python3 scripts/goconcept_eval_run.py
-
-## train-gocli-seq2seq: Train the Go CLI command model (NL request -> exact go command)
-train-gocli-seq2seq:
-	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-real-seq2seq -domain gocli
-
-## real-chat-gocli: Chat with the Go CLI command model — request a task, get the command, optionally run it
-real-chat-gocli:
-	$(MAIN_CMD) -real-chat -domain gocli
-
-## eval-gocli: Score the Go CLI model on the fixed command suite (exact match, no chatter)
-eval-gocli:
 	python3 scripts/gocli_eval_run.py
-
-## eval-social-multiturn: Score multi-turn conversation (history context + recall) through the real chat loop
-eval-social-multiturn:
 	python3 scripts/social_multiturn_eval.py
 
-## import-pairs: Import new training pairs (FILE=path.jsonl) through the quality gate
-import-pairs:
+## train-social: Retrain the social brain (128/256 dims)
+train-social:
+	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-real-seq2seq -domain social
+
+## train-go: Retrain the Go concept brain (128/256 dims)
+train-go:
+	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-real-seq2seq -domain go
+
+## train-gocode: Retrain the Go code brain (256/512 dims + copy gate)
+train-gocode:
+	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-real-seq2seq -domain gocode
+
+## train-gocli: Retrain the Go CLI command brain (128/256 dims)
+train-gocli:
+	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-real-seq2seq -domain gocli
+
+## train-makefile: Retrain the makefile command brain (64/128 dims)
+train-makefile:
+	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-real-seq2seq -domain makefile
+
+## import: Import new training pairs through the quality gate (FILE=path.jsonl)
+import:
 	$(MAIN_CMD) -import-pairs="$(FILE)"
 
-## reclassify-domains: Re-tag dataset pairs with the current domain classifier
-reclassify-domains:
-	$(MAIN_CMD) -reclassify-domains
-
-## chat: Start an interactive full MoE chat loop with conversation history
-chat:
-	$(MAIN_CMD) -chat
-
-# --- Analytics ---
-
-## metrics: Run metrics aggregation and CSV export for edit logs
-metrics:
-	@echo " Generating edit metrics and CSV..."
-	@go run scripts/compute_edit_metrics.go || true
-	@go run scripts/edits_to_csv.go || true
-	@echo " metrics written to logs/edits/"
-
-## export-labels: Export training examples to CSV for manual labeling
-export-labels:
-	@echo " Exporting edits_failed.jsonl -> data/training/edits_for_labeling.csv"
-	@go run scripts/export_for_labeling.go || true
-
-# --- Maintenance ---
-
-## clean: Remove MoE model checkpoints (preserves word2vec)
-clean:
-	rm -f data/models/gob_models/*.gob
-	@if [ -f data/models/gob_models/word2vec_model.gob.bak ]; then \
-		cp data/models/gob_models/word2vec_model.gob.bak data/models/gob_models/word2vec_model.gob 2>/dev/null || true; \
-	fi
-
-## clean-all: Remove ALL model files including word2vec
-clean-all:
-	rm -f data/models/gob_models/*.gob
-
-## makefile-train: Train on makefile-generated data only
-makefile-train:
-	cd standalone/makefile-assistant && go run main.go -train
-
-## chat-makefile: Start makefile chat with top command predictions
-chat-makefile:
-	cd standalone/makefile-assistant && go run main.go
-
-## sel: Interactive fuzzy finder target selector
-sel:
-	@target=$$(awk '/^## [a-zA-Z0-9_-]+:/ { \
-		cmd=$$2; sub(":", "", cmd); \
-		$$1=$$2=""; \
-		printf "%-22s %s\n", cmd, $$0; \
-	}' $(MAKEFILE_LIST) | go run ./cmd/tools/goz/main.go -h 25); \
-	if [ -n "$$target" ]; then \
-		$(MAKE) $$target; \
-	fi
+## help: Show this list
+help:
+	@awk 'BEGIN { print "Gollemer commands:\n" } \
+		/^## [a-z-]+:/ { cmd=$$2; sub(":", "", cmd); $$1=$$2=""; \
+			printf "  make %-14s %s\n", cmd, $$0 }' $(MAKEFILE_LIST)

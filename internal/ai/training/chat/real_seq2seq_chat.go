@@ -224,6 +224,14 @@ func RunRealChat(projectRoot, domain string) error {
 			continue
 		}
 		conv.AddUser(line)
+		// Go concept questions first check the curated knowledge base.
+		if domain == GoDomain {
+			if kb, ok := LookupGoKnowledge(line); ok {
+				fmt.Printf("gollemer> %s\n", kb)
+				conv.AddReply(kb, domain, false)
+				continue
+			}
+		}
 		if domain == GocodeDomain && chatterPrompt.MatchString(line) && !gocodeTerms.MatchString(line) {
 			// Conversational mode: answer with the chat model, never the
 			// code decoder. The gocodeTerms guard keeps greeting-prefixed
@@ -339,6 +347,16 @@ func runUnifiedChat(projectRoot string) error {
 		}
 		conv.AddUser(line)
 		d := routeDomain(line)
+		// Go concept questions first check the curated knowledge base:
+		// a strong keyword match gives a guaranteed-correct answer,
+		// anything vague falls through to the neural model.
+		if d == GoDomain {
+			if kb, ok := LookupGoKnowledge(line); ok {
+				fmt.Printf("gollemer [%s]> %s\n", d, kb)
+				conv.AddReply(kb, GoDomain, false)
+				continue
+			}
+		}
 		model := models[d]
 		tag := d
 		if model == nil {
