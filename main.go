@@ -16,6 +16,7 @@ func main() {
 	debugChatFlag := flag.Bool("debug-chat", false, "Show the thought process and debug prints in chat (default: clean replies only)")
 	importPairsFlag := flag.String("import-pairs", "", "Import new training pairs from a JSONL file through the quality gate")
 	domainFlag := flag.String("domain", "social", "Training/chat domain (social, go, ...)")
+	resumeFlag := flag.Bool("resume", false, "Resume -train-real-seq2seq from the last checkpoint instead of starting at epoch 0")
 	reclassifyFlag := flag.Bool("reclassify-domains", false, "Re-tag all dataset pairs with the current domain classifier")
 	flag.Parse()
 
@@ -41,7 +42,7 @@ func main() {
 	}
 
 	if *trainRealSeq2SeqFlag {
-		if err := chat.RunRealSeq2SeqTraining(rootDir, *domainFlag); err != nil {
+		if err := chat.RunRealSeq2SeqTraining(rootDir, *domainFlag, *resumeFlag); err != nil {
 			fmt.Fprintf(os.Stderr, "real training failed: %v\n", err)
 			os.Exit(1)
 		}

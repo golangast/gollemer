@@ -22,7 +22,9 @@ package chat
 //     operational definition of "understands" at this scale.
 
 import (
+	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"log"
 	"math"
 	"math/rand"
@@ -44,6 +46,186 @@ const (
 	realBaseLR    = 1e-3
 	realClip      = 1.0
 )
+
+// heldProbe is one held-out evaluation case: an input the model never
+// trained on, plus its reference answer.
+type heldProbe struct {
+	in, ref string
+}
+
+// domainTrainData is everything RunRealSeq2SeqTraining needs before the
+// training loop: augmented training pairs, held-out base pairs, held-out
+// probes, the training vocabulary, and the tokenizer.
+type domainTrainData struct {
+	trainPairs []ChatPair
+	heldBase   []ChatPair
+	probes     []heldProbe
+	v          *vocab.Vocabulary
+	tok        *tokenizer.Tokenizer
+}
+
+// prepareDomainTrainData loads the chat dataset, selects one domain, runs
+// the deterministic 80/20 train/held-out split with synonym augmentation,
+// and builds the training vocabulary + tokenizer. Extracted from
+// RunRealSeq2SeqTraining so checkpoint-resume can verify a checkpoint's
+// vocabulary matches today's data before resuming from it.
+func prepareDomainTrainData(projectRoot, domain string) (*domainTrainData, error) {
+	seeded, err := SeedChatDataset(projectRoot)
+	if err != nil {
+		return nil, err
+	}
+	log.Printf("[REAL-SEQ2SEQ] dataset: %d pairs (%s)", seeded, ChatDatasetPath(projectRoot))
+	all, err := LoadChatDataset(ChatDatasetPath(projectRoot))
+	if err != nil {
+		return nil, err
+	}
+	base := make([]ChatPair, 0, len(all))
+	for _, p := range all {
+		if p.Domain == domain {
+			base = append(base, p)
+		}
+	}
+	log.Printf("[REAL-SEQ2SEQ] domain=%q: %d pairs (of %d total)", domain, len(base), len(all))
+	if len(base) < 10 {
+		return nil, fmt.Errorf("need at least 10 base pairs in domain %q, have %d", domain, len(base))
+	}
+
+	// Deterministic 80/20 split so results are reproducible.
+	rng := rand.New(rand.NewSource(20260926))
+	order := rng.Perm(len(base))
+	nTrain := int(0.8 * float64(len(base)))
+	trainBase := make([]ChatPair, 0, nTrain)
+	heldBase := make([]ChatPair, 0, len(base)-nTrain)
+	for i, idx := range order {
+		if i < nTrain {
+			trainBase = append(trainBase, base[idx])
+		} else {
+			heldBase = append(heldBase, base[idx])
+		}
+	}
+
+	// Augment training inputs with synonym paraphrases (input side only).
+	// Collision-aware: a variant is skipped when it normalizes to the same
+	// input as a DIFFERENT base pair with a different output — otherwise
+	// augmentation teaches near-identical inputs with conflicting labels
+	// (e.g. "i'm unhappy" from "I'm sad" vs base "I'm unhappy."), which a
+	// tiny model cannot satisfy and which blurs the class boundary.
+	// The gocode domain uses code-safe synonyms only: social swaps like
+	// hello->hi would blur "hello world program" vs "hello name function".
+	syns := socialSynonyms
+	if domain == GocodeDomain {
+		syns = gocodeSynonyms
+	}
+	trainPairs := augmentInputs(base, trainBase, syns)
+
+	// Held-out probes: paraphrases of held-out inputs the model never sees.
+	var probes []heldProbe
+	for _, p := range heldBase {
+		probes = append(probes, heldProbe{in: p.Input, ref: p.Output})
+		for _, sv := range synonymVariants(p.Input, 2, syns) {
+			probes = append(probes, heldProbe{in: sv, ref: p.Output})
+		}
+	}
+	log.Printf("[REAL-SEQ2SEQ] %d base pairs -> %d train (augmented %d), %d held-out base, %d probes",
+		len(base), len(trainBase), len(trainPairs), len(heldBase), len(probes))
+
+	// Vocabulary from TRAINING data only — held-out words stay unknown,
+	// which is exactly what the probes test.
+	v := vocab.NewVocabulary()
+	for _, p := range trainPairs {
+		for _, t := range tokenizeLower(p.Input) {
+			v.AddToken(t)
+		}
+		for _, t := range tokenizeLower(p.Output) {
+			v.AddToken(t)
+		}
+	}
+	tok, err := tokenizer.NewTokenizer(v)
+	if err != nil {
+		return nil, err
+	}
+	log.Printf("[REAL-SEQ2SEQ] vocab size=%d", v.Size())
+	return &domainTrainData{trainPairs: trainPairs, heldBase: heldBase, probes: probes, v: v, tok: tok}, nil
+}
+
+// ckptMeta is the sidecar written next to every training checkpoint. It
+// records exactly where a killed run stopped so -resume can pick up with
+// the same learning rate, best-loss tracking, and vocabulary it had.
+type ckptMeta struct {
+	Epoch              int     `json:"epoch"`                // last completed epoch
+	Best               float64 `json:"best"`                 // best train loss so far
+	LastCheckpointBest float64 `json:"last_checkpoint_best"` // best loss at last checkpoint write
+	LR                 float32 `json:"lr"`                   // learning rate in effect at Epoch
+	EpochsNoImprove    int     `json:"epochs_no_improve"`
+	VocabFP            uint64  `json:"vocab_fp"` // fingerprint of the training vocabulary
+}
+
+// ckptPaths returns the checkpoint weights path and its JSON sidecar. The
+// checkpoint lives NEXT TO the production model but under a different name:
+// a killed run must never again clobber the good model on disk.
+func ckptPaths(projectRoot, domain string) (ckptPath, metaPath string) {
+	modelPath := filepath.Join(projectRoot, "data", "models", "gob_models", "real_tiny_seq2seq_"+domain+".gob")
+	return modelPath + ".ckpt", modelPath + ".ckpt.json"
+}
+
+// vocabFingerprint hashes the training vocabulary so resume can refuse a
+// checkpoint trained on different data — a vocab index shift would silently
+// corrupt the resumed weights.
+func vocabFingerprint(v *vocab.Vocabulary) uint64 {
+	h := fnv.New64a()
+	fmt.Fprintf(h, "size=%d;", v.Size())
+	for i := 0; i < v.Size(); i++ {
+		fmt.Fprintf(h, "%d=%s;", i, v.GetWord(i))
+	}
+	return h.Sum64()
+}
+
+// saveTrainingCheckpoint writes the best weights and the resume sidecar.
+// The production model file is NOT touched — it is only written when
+// training completes.
+func saveTrainingCheckpoint(model *seq2seq.Seq2Seq, meta ckptMeta, ckptPath, metaPath string) error {
+	if err := os.MkdirAll(filepath.Dir(ckptPath), 0o755); err != nil {
+		return err
+	}
+	tmp := ckptPath + ".tmp"
+	if err := model.Save(tmp); err != nil {
+		return err
+	}
+	if err := os.Rename(tmp, ckptPath); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(meta, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(metaPath+".tmp", data, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(metaPath+".tmp", metaPath)
+}
+
+// loadTrainingCheckpoint restores a killed run's best weights for -resume.
+// It refuses (returns an error) when the sidecar is missing or the
+// vocabulary no longer matches, so a stale checkpoint can never corrupt a
+// fresh run — the caller falls back to training from epoch 1.
+func loadTrainingCheckpoint(tok *tokenizer.Tokenizer, curFP uint64, ckptPath, metaPath string) (*seq2seq.Seq2Seq, ckptMeta, error) {
+	var meta ckptMeta
+	data, err := os.ReadFile(metaPath)
+	if err != nil {
+		return nil, meta, fmt.Errorf("no checkpoint sidecar: %w", err)
+	}
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return nil, meta, fmt.Errorf("bad checkpoint sidecar: %w", err)
+	}
+	if meta.VocabFP != curFP {
+		return nil, meta, fmt.Errorf("checkpoint vocab fingerprint %d != current %d: data changed, refusing resume", meta.VocabFP, curFP)
+	}
+	model, err := seq2seq.Load(ckptPath, tok)
+	if err != nil {
+		return nil, meta, fmt.Errorf("loading checkpoint weights: %w", err)
+	}
+	return model, meta, nil
+}
 
 // dimsForDomain returns (embeddingDim, hiddenDim) per domain. The gocode
 // domain separates 24 near-identical code templates, so it gets a wider
@@ -221,83 +403,13 @@ type encodedPair struct {
 
 // RunRealSeq2SeqTraining trains the genuine social seq2seq model.
 // Only pairs tagged with domain are used — stages stay separate by design.
-func RunRealSeq2SeqTraining(projectRoot, domain string) error {
-	seeded, err := SeedChatDataset(projectRoot)
+func RunRealSeq2SeqTraining(projectRoot, domain string, resume bool) error {
+	dd, err := prepareDomainTrainData(projectRoot, domain)
 	if err != nil {
 		return err
 	}
-	log.Printf("[REAL-SEQ2SEQ] dataset: %d pairs (%s)", seeded, ChatDatasetPath(projectRoot))
-	all, err := LoadChatDataset(ChatDatasetPath(projectRoot))
-	if err != nil {
-		return err
-	}
-	base := make([]ChatPair, 0, len(all))
-	for _, p := range all {
-		if p.Domain == domain {
-			base = append(base, p)
-		}
-	}
-	log.Printf("[REAL-SEQ2SEQ] domain=%q: %d pairs (of %d total)", domain, len(base), len(all))
-	if len(base) < 10 {
-		return fmt.Errorf("need at least 10 base pairs in domain %q, have %d", domain, len(base))
-	}
-
-	// Deterministic 80/20 split so results are reproducible.
-	rng := rand.New(rand.NewSource(20260926))
-	order := rng.Perm(len(base))
-	nTrain := int(0.8 * float64(len(base)))
-	trainBase := make([]ChatPair, 0, nTrain)
-	heldBase := make([]ChatPair, 0, len(base)-nTrain)
-	for i, idx := range order {
-		if i < nTrain {
-			trainBase = append(trainBase, base[idx])
-		} else {
-			heldBase = append(heldBase, base[idx])
-		}
-	}
-
-	// Augment training inputs with synonym paraphrases (input side only).
-	// Collision-aware: a variant is skipped when it normalizes to the same
-	// input as a DIFFERENT base pair with a different output — otherwise
-	// augmentation teaches near-identical inputs with conflicting labels
-	// (e.g. "i'm unhappy" from "I'm sad" vs base "I'm unhappy."), which a
-	// tiny model cannot satisfy and which blurs the class boundary.
-	// The gocode domain uses code-safe synonyms only: social swaps like
-	// hello->hi would blur "hello world program" vs "hello name function".
-	syns := socialSynonyms
-	if domain == GocodeDomain {
-		syns = gocodeSynonyms
-	}
-	trainPairs := augmentInputs(base, trainBase, syns)
-
-	// Held-out probes: paraphrases of held-out inputs the model never sees.
-	type probe struct{ in, ref string }
-	var probes []probe
-	for _, p := range heldBase {
-		probes = append(probes, probe{in: p.Input, ref: p.Output})
-		for _, v := range synonymVariants(p.Input, 2, syns) {
-			probes = append(probes, probe{in: v, ref: p.Output})
-		}
-	}
-	log.Printf("[REAL-SEQ2SEQ] %d base pairs -> %d train (augmented %d), %d held-out base, %d probes",
-		len(base), len(trainBase), len(trainPairs), len(heldBase), len(probes))
-
-	// Vocabulary from TRAINING data only — held-out words stay unknown,
-	// which is exactly what the probes test.
-	v := vocab.NewVocabulary()
-	for _, p := range trainPairs {
-		for _, t := range tokenizeLower(p.Input) {
-			v.AddToken(t)
-		}
-		for _, t := range tokenizeLower(p.Output) {
-			v.AddToken(t)
-		}
-	}
-	tok, err := tokenizer.NewTokenizer(v)
-	if err != nil {
-		return err
-	}
-	log.Printf("[REAL-SEQ2SEQ] vocab size=%d", v.Size())
+	trainPairs, v, tok := dd.trainPairs, dd.v, dd.tok
+	probes := dd.probes
 
 	// Encode everything.
 	encoded := make([]encodedPair, 0, len(trainPairs))
@@ -316,43 +428,73 @@ func RunRealSeq2SeqTraining(projectRoot, domain string) error {
 	// Length-bucketed batches: sort by input length so padding is minimal.
 	sort.Slice(encoded, func(i, j int) bool { return len(encoded[i].input) < len(encoded[j].input) })
 
-	embedDim, hiddenDim := dimsForDomain(domain)
-	// Stage-3 bigger model: the accumulator-binding miss is a long-range
-	// dependency limit, and the copy mechanism needs the extra capacity to
-	// train stably. Other domains keep their dims so their checkpoints
-	// stay valid.
-	if domain == GocodeDomain {
-		embedDim, hiddenDim = 256, 512
+	curFP := vocabFingerprint(v)
+	ckptPath, metaPath := ckptPaths(projectRoot, domain)
+	modelPath := filepath.Join(projectRoot, "data", "models", "gob_models", "real_tiny_seq2seq_"+domain+".gob")
+
+	// Training state. A fresh run starts at epoch 1 from random weights;
+	// -resume picks up at the checkpoint's next epoch with its learning
+	// rate, best loss, and no-improvement counter intact. Adam momentum is
+	// NOT restored (fresh momentum on resume) — the divergence-rollback
+	// path already treats weight-restore + dropped momentum as safe.
+	startEpoch := 1
+	lr := float32(realBaseLR)
+	best := float32(math.Inf(1))
+	epochsNoImprove := 0
+	lastCheckpointBest := float32(math.Inf(1))
+	var model *seq2seq.Seq2Seq
+
+	if resume {
+		if m, meta, err := loadTrainingCheckpoint(tok, curFP, ckptPath, metaPath); err != nil {
+			log.Printf("[REAL-SEQ2SEQ] -resume given but checkpoint unusable (%v); starting fresh from epoch 1", err)
+		} else {
+			model = m
+			startEpoch = meta.Epoch + 1
+			lr = meta.LR
+			best = float32(meta.Best)
+			lastCheckpointBest = float32(meta.LastCheckpointBest)
+			epochsNoImprove = meta.EpochsNoImprove
+			log.Printf("[REAL-SEQ2SEQ] RESUMED from checkpoint: completed epoch=%d best=%.6f lr=%.6f (continuing at epoch %d)",
+				meta.Epoch, meta.Best, meta.LR, startEpoch)
+		}
 	}
-	model, err := seq2seq.NewSeq2Seq(v.Size(), v.Size(), embedDim, hiddenDim, tok, v)
-	if err != nil {
-		return err
+	if model == nil {
+		embedDim, hiddenDim := dimsForDomain(domain)
+		// Stage-3 bigger model: the accumulator-binding miss is a long-range
+		// dependency limit, and the copy mechanism needs the extra capacity to
+		// train stably. Other domains keep their dims so their checkpoints
+		// stay valid.
+		if domain == GocodeDomain {
+			embedDim, hiddenDim = 256, 512
+		}
+		model, err = seq2seq.NewSeq2Seq(v.Size(), v.Size(), embedDim, hiddenDim, tok, v)
+		if err != nil {
+			return err
+		}
+		// The copy mechanism is gocode-only: a nil gate means exactly the old
+		// behavior, so the other domains are untouched.
+		if domain == GocodeDomain {
+			model.Decoder.Copy = seq2seq.NewCopyGate(hiddenDim)
+		}
+		// NOTE: no SetExactMap call — the saved model must generate, not retrieve.
 	}
-	// The copy mechanism is gocode-only: a nil gate means exactly the old
-	// behavior, so the other domains are untouched.
-	if domain == GocodeDomain {
-		model.Decoder.Copy = seq2seq.NewCopyGate(hiddenDim)
-	}
-	// NOTE: no SetExactMap call — the saved model must generate, not retrieve.
 	opt := nn.NewOptimizer(model.Parameters(), realBaseLR, realClip)
 	adam, ok := opt.(*nn.Adam)
 	if !ok {
 		return fmt.Errorf("optimizer is not *nn.Adam")
 	}
-
-	padID := v.PaddingTokenID
-	lr := float32(realBaseLR)
-	best := float32(math.Inf(1))
+	adam.SetLearningRate(lr)
+	// Fresh run: snapshot of the random-init weights with best=+Inf, so the
+	// first epoch always sets the baseline. Resume: snapshot of the
+	// checkpoint's best weights with its recorded best loss.
 	bestParams := adam.SnapshotParameters()
-	epochsNoImprove := 0
-	lastCheckpointBest := float32(math.Inf(1))
-	modelPath := filepath.Join(projectRoot, "data", "models", "gob_models", "real_tiny_seq2seq_"+domain+".gob")
 	rollbacks := 0
 
+	padID := v.PaddingTokenID
 	batches := makeBatches(encoded, realBatchSize, padID)
 	log.Printf("[REAL-SEQ2SEQ] %d encoded pairs, %d batches/epoch, lr=%.6f", len(encoded), len(batches), lr)
 
-	for epoch := 1; epoch <= realMaxEpochs; epoch++ {
+	for epoch := startEpoch; epoch <= realMaxEpochs; epoch++ {
 		// Step decay every 40 epochs.
 		if epoch > 1 && (epoch-1)%40 == 0 {
 			lr *= 0.5
@@ -401,18 +543,25 @@ func RunRealSeq2SeqTraining(projectRoot, domain string) error {
 					model.Decoder.MoE.ExpertUsage()[0], model.Decoder.MoE.ExpertUsage()[1],
 					model.Decoder.MoE.ExpertUsage()[2], model.Decoder.MoE.ExpertUsage()[3])
 			}
-			// Periodic best-checkpoint: a killed run must never lose everything.
-			// Training continues from the restored best weights, which is safe.
+			// Periodic best-checkpoint: a killed run keeps its progress and
+			// -resume picks it up. The checkpoint goes to SIDE files — the
+			// production model is only written when training completes, so a
+			// kill can never again leave a half-trained model in its place.
 			if best < lastCheckpointBest {
 				adam.RestoreParameters(bestParams)
-				if err := os.MkdirAll(filepath.Dir(modelPath), 0o755); err != nil {
-					return err
+				meta := ckptMeta{
+					Epoch:              epoch,
+					Best:               float64(best),
+					LastCheckpointBest: float64(best),
+					LR:                 lr,
+					EpochsNoImprove:    epochsNoImprove,
+					VocabFP:            curFP,
 				}
-				if err := model.Save(modelPath); err != nil {
+				if err := saveTrainingCheckpoint(model, meta, ckptPath, metaPath); err != nil {
 					return err
 				}
 				lastCheckpointBest = best
-				log.Printf("[REAL-SEQ2SEQ] checkpointed best model (loss=%.6f) to %s", best, modelPath)
+				log.Printf("[REAL-SEQ2SEQ] checkpointed best model (loss=%.6f) to %s", best, ckptPath)
 			}
 		}
 		if epochsNoImprove >= 30 {
@@ -430,6 +579,15 @@ func RunRealSeq2SeqTraining(projectRoot, domain string) error {
 		return err
 	}
 	log.Printf("[REAL-SEQ2SEQ] saved best model (loss=%.6f) to %s", best, modelPath)
+
+	// Run completed: the checkpoint has served its purpose. Remove it so a
+	// later -resume starts fresh instead of picking up a stale checkpoint.
+	if err := os.Remove(ckptPath); err != nil && !os.IsNotExist(err) {
+		log.Printf("[REAL-SEQ2SEQ] warning: could not remove %s: %v", ckptPath, err)
+	}
+	if err := os.Remove(metaPath); err != nil && !os.IsNotExist(err) {
+		log.Printf("[REAL-SEQ2SEQ] warning: could not remove %s: %v", metaPath, err)
+	}
 
 	// Held-out probe: every generation printed verbatim, good or bad.
 	log.Printf("[REAL-SEQ2SEQ] held-out probe: %d paraphrased questions the model never saw", len(probes))
