@@ -16,7 +16,7 @@ export GOEXPERIMENT=simd
 export CGO_ENABLED=1
 
 MEM_LIMIT  = 2500MiB
-GOGC       = 50
+GOGC       = 100
 GOMAXPROCS = 8
 MAIN_CMD   = go run main.go
 

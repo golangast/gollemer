@@ -44,12 +44,13 @@ for f in data/training/social_expansion_v*.jsonl data/training/go_expansion_*.js
 done
 
 echo "=== [3/4] Retraining social + go brains (this takes a while) ==="
+echo "  (-resume: a killed run continues from its last checkpoint instead of epoch 0)"
 echo "  using GOMAXPROCS=$NPROC (nproc)"
 export GOEXPERIMENT=simd CGO_ENABLED=1
-GOMEMLIMIT=2500MiB GOGC=50 GOMAXPROCS="$NPROC" go run main.go -train-real-seq2seq -domain social > "$LOG_DIR/smarter_${STAMP}_social.log" 2>&1
+GOMEMLIMIT=2500MiB GOGC=100 GOMAXPROCS="$NPROC" go run main.go -train-real-seq2seq -resume -domain social > "$LOG_DIR/smarter_${STAMP}_social.log" 2>&1
 echo "  social done (log: smarter_${STAMP}_social.log)"
 tail -3 "$LOG_DIR/smarter_${STAMP}_social.log"
-GOMEMLIMIT=2500MiB GOGC=50 GOMAXPROCS="$NPROC" go run main.go -train-real-seq2seq -domain go > "$LOG_DIR/smarter_${STAMP}_go.log" 2>&1
+GOMEMLIMIT=2500MiB GOGC=100 GOMAXPROCS="$NPROC" go run main.go -train-real-seq2seq -resume -domain go > "$LOG_DIR/smarter_${STAMP}_go.log" 2>&1
 echo "  go done (log: smarter_${STAMP}_go.log)"
 tail -3 "$LOG_DIR/smarter_${STAMP}_go.log"
 

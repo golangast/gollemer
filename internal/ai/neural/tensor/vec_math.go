@@ -2,6 +2,7 @@ package tensor
 
 import (
 	"math"
+	"runtime"
 	"sort"
 	"sync"
 )
@@ -146,8 +147,14 @@ func MatMulRaw(a, b, res []float32, m, n, k int) {
 		return
 	}
 
-	numWorkers := 8
-	if m < 8 {
+	// Scale workers with the actual CPU count: hardcoding more workers than
+	// CPUs just adds goroutine scheduling overhead (each worker writes
+	// disjoint rows, so the result is bit-identical either way).
+	numWorkers := runtime.NumCPU()
+	if numWorkers < 1 {
+		numWorkers = 1
+	}
+	if m < numWorkers {
 		numWorkers = m
 	}
 
@@ -172,15 +179,15 @@ func MatMulRaw(a, b, res []float32, m, n, k int) {
 }
 
 func matMulRawSequential(a, b, res []float32, m, n, k, startRow, endRow int) {
-	// Use a slightly optimized loop order for cache-friendliness (IKJ)
+	// IKJ loop order for cache-friendliness. Dense inputs: no zero-skip
+	// branch — in training every aik is nonzero, the branch mispredicts
+	// constantly, and it blocks the compiler's auto-vectorizer on the
+	// inner loop. (Skipping zeros was only a win for sparse inputs.)
 	for i := startRow; i < endRow; i++ {
 		rowA := a[i*k : (i+1)*k]
 		rowRes := res[i*n : (i+1)*n]
 		for ik := 0; ik < k; ik++ {
 			aik := rowA[ik]
-			if aik == 0 {
-				continue
-			}
 			rowB := b[ik*n : (ik+1)*n]
 			for j := 0; j < n; j++ {
 				rowRes[j] += aik * rowB[j]
