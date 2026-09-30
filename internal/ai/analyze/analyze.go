@@ -42,6 +42,7 @@ type Project struct {
 type Package struct {
 	Name     string   // package clause, e.g. "chat"
 	Dir      string   // directory relative to Root ("" = Root)
+	Doc      string   // package doc comment ("// Package chat ..."), first one found
 	Files    []string // .go files, relative to Root
 	Imports  []string // every import path, sorted, unique
 	Internal []string // imports that resolve to another project package
@@ -67,6 +68,8 @@ type Func struct {
 	Doc      string
 	File     string // relative to Root
 	Line     int
+	EndLine  int    // last line of the declaration (for source excerpts)
+	Sig      string // rendered signature, e.g. "func (c *Chat) Add(a int) int"
 	Params   int
 	Calls    []string // callee IDs (heuristic)
 	Callers  []string // filled by BuildGraph
@@ -182,6 +185,11 @@ func (p *Project) addFile(rel string, src *ast.File, fset *token.FileSet) {
 	}
 	pkg := p.pkgFor(dir, src.Name.Name)
 	pkg.Files = append(pkg.Files, rel)
+	// Keep the most descriptive package doc: authors usually document
+	// the package in one file and leave the rest bare.
+	if d := docText(src.Doc); d != "" && len(d) > len(pkg.Doc) {
+		pkg.Doc = d
+	}
 	p.Files++
 	if tf := fset.File(src.Pos()); tf != nil {
 		p.Lines += tf.LineCount()
@@ -208,12 +216,14 @@ func (p *Project) addFile(rel string, src *ast.File, fset *token.FileSet) {
 				Doc:      docText(d.Doc),
 				File:     rel,
 				Line:     fset.Position(d.Pos()).Line,
+				EndLine:  fset.Position(d.End()).Line,
 				decl:     d,
 				pkg:      pkg,
 			}
 			if d.Recv != nil && len(d.Recv.List) > 0 {
 				fn.Receiver = exprName(d.Recv.List[0].Type)
 			}
+			fn.Sig = renderSig(d, fn.Receiver)
 			if d.Type.Params != nil {
 				for _, field := range d.Type.Params.List {
 					n := len(field.Names)

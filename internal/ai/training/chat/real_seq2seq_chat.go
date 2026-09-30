@@ -326,6 +326,15 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 // It prints the reply and records it in the conversation when one hits,
 // reporting whether the message was fully handled.
 func tryDeterministicAnswer(line, d string, conv *Conversation) bool {
+	// Codebase Q&A: if a project was analyzed this session and the
+	// message asks about one of its symbols ("what does routeDomain
+	// do"), answer from the AST. It only fires on known symbols, so it
+	// can't steal questions meant for the other brains.
+	if out, ok := tryCodebaseQuestion(line); ok {
+		fmt.Printf("gollemer [%s]> %s\n", GoAnalyzeDomain, out)
+		conv.AddReply(out, GoAnalyzeDomain, false)
+		return true
+	}
 	// Social recall: an exact training-pair match returns the trained
 	// answer verbatim. The tiny model doesn't reliably memorize every
 	// pair, so this guarantees the chat "picks up" what's in its data.

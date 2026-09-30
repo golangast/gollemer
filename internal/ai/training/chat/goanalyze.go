@@ -22,6 +22,23 @@ var unifiedProjectRoot string
 // follow-up "where would I add X" with no path reuses it.
 var lastAnalyzeRoot string
 
+// lastAnalyzeProject caches the analyzed project itself so follow-up
+// questions ("what does routeDomain do") are answered from memory
+// instead of re-parsing the tree.
+var lastAnalyzeProject *analyze.Project
+
+// tryCodebaseQuestion answers a natural-language question about the last
+// analyzed project. It only fires when the question names a symbol that
+// actually exists in the project, so it can never steal a question meant
+// for another brain ("what does a goroutine do" stays with the Go brain,
+// "what does make chat do" stays with the makefile brain).
+func tryCodebaseQuestion(line string) (string, bool) {
+	if lastAnalyzeProject == nil {
+		return "", false
+	}
+	return lastAnalyzeProject.Answer(line)
+}
+
 var (
 	quotedPath = regexp.MustCompile(`"([^"]+)"|'([^']+)'`)
 	githubURL  = regexp.MustCompile(`(?i)(?:https?://)?github\.com/([\w.-]+)/([\w.-]+)`)
@@ -62,6 +79,7 @@ func handleGoAnalyze(line string) (out string, ok bool) {
 		return fmt.Sprintf("I couldn't analyze %s: %v", root, err), true
 	}
 	lastAnalyzeRoot = root
+	lastAnalyzeProject = p
 	var b strings.Builder
 	if isWhere {
 		b.WriteString(p.WhereToChangeText(task))

@@ -37,6 +37,9 @@ func (p *Project) Summary() string {
 	if len(p.ParseErr) > 0 {
 		fmt.Fprintf(&b, "%d files skipped (parse errors)\n", len(p.ParseErr))
 	}
+	b.WriteString("\nIN PLAIN ENGLISH\n")
+	b.WriteString(p.Overview())
+	b.WriteString("\n")
 	return b.String()
 }
 
@@ -72,15 +75,28 @@ func (p *Project) ReadingGuide() string {
 		}
 	}
 	b.WriteString("4. Package reading order (dependencies first):\n")
-	for i, dir := range p.readingOrder() {
-		fmt.Fprintf(&b, "   %d. %s\n", i+1, dir)
+	for i, dir := range p.readingOrderDirs() {
+		label := dir
+		if label == "" {
+			label = ". (root)"
+		}
+		doc := ""
+		if pkg := p.byPkgDir[dir]; pkg != nil {
+			doc = firstSentence(pkg.Doc)
+		}
+		if doc != "" {
+			fmt.Fprintf(&b, "   %d. %s\n      %s\n", i+1, label, doc)
+		} else {
+			fmt.Fprintf(&b, "   %d. %s\n", i+1, label)
+		}
 	}
 	return b.String()
 }
 
-// readingOrder returns package dirs sorted so dependencies come before the
+// readingOrderDirs returns package dirs sorted so dependencies come before the
 // packages that import them (a topological-ish order by internal imports).
-func (p *Project) readingOrder() []string {
+// "" means the root directory.
+func (p *Project) readingOrderDirs() []string {
 	depth := map[string]int{}
 	var visit func(dir string, seen map[string]bool) int
 	visit = func(dir string, seen map[string]bool) int {
@@ -116,11 +132,16 @@ func (p *Project) readingOrder() []string {
 		return dirs[i] < dirs[j]
 	})
 	out := make([]string, len(dirs))
-	for i, d := range dirs {
+	copy(out, dirs)
+	return out
+}
+
+// readingOrder is the display form of readingOrderDirs ("" -> ". (root)").
+func (p *Project) readingOrder() []string {
+	out := p.readingOrderDirs()
+	for i, d := range out {
 		if d == "" {
 			out[i] = ". (root)"
-		} else {
-			out[i] = d
 		}
 	}
 	return out

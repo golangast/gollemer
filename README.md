@@ -74,20 +74,47 @@ no neural net, so it can't hallucinate structure that isn't there.
                                     analyzed project
  analyze this project and           everything above, plus an interactive
    show me a visual                 HTML report you can open in a browser
+
+Then just **ask questions** about the code — it answers from what it
+actually parsed, with file:line pointers:
+
+ you> what does routeDomain do      signature, doc, callers, callees
+ you> how does NewTensor work       step-by-step through what it calls
+ you> what calls NewTensor          every caller, with file:line
+ you> where is Project defined      definition site
+ you> show me routeDomain           the actual source code
+ you> what's in package chat        what the package is for + key functions
+ you> where is saving handled       keyword search → ranked file:line hits
 ```
+
+Questions only trigger when they name something really in the project,
+so `what does a goroutine do` still goes to the Go brain and
+`what does make chat do` still goes to the makefile brain.
 
 Point it at itself and you get this (real output):
 
 ```
 you> analyze this project
 gollemer [goanalyze]> Project: github.com/golangast/gollemer
-11 packages, 83 Go files, ~19288 lines
+10 packages, 85 Go files, ~20278 lines
 Entry points:
   - cmd/tools/goz/main.go
   - main.go
+  - scripts/stats_viewer.go
+22 test files
+
+IN PLAIN ENGLISH
+gollemer is a runnable Go program: 10 packages, about 20,278 lines of
+Go. It starts in main.go. The hardest-working function is
+tensor.NewTensor, called from 62 places — that's the engine room, the
+best place to look when something breaks. Read the code in this order:
+goz → analyze → vocab → tensor → nn → tokenizer, because each layer
+builds on the one before it.
 
 ENGINE ROOM (most-called functions)
 ████████████████████ tensor.NewTensor (62 callers)
+████ analyze.Func.Display (13 callers)
+████ analyze.Project.Answer (11 callers)
 ███ vocab.Vocabulary.AddToken (9 callers)
 ███ nn.NewLinear (8 callers)
 ...
@@ -97,11 +124,14 @@ WHERE TO START
 2. Then read the engine room:  tensor.NewTensor (62 callers)
 3. Learn the key types:        tensor.Operation — interface, 42 implementers
 4. Package reading order (dependencies first):
-   1. internal/ai/neural/tensor
-   2. internal/ai/neural/nn
-   3. internal/ai/neural/nnu/seq2seq
+   1. cmd/tools/goz
+   2. internal/ai/analyze
+      Package analyze reads a Go project off disk and builds a
+      structural map of it: packages, exported API, a heuristic call
+      graph, and the import graph.
+   3. internal/ai/neural/nnu/vocab
+   4. internal/ai/neural/tensor
    ...
-   10. . (root)
 ```
 
 And the map it drew of itself — bigger node = more packages depend on it,
@@ -118,6 +148,40 @@ gollemer [goanalyze]> WHERE TO CHANGE for "add a new brain"
 2. func chat.routeDomain         internal/ai/training/chat/dataset.go:541  (5 callers)
 3. func chat.loadRealModel       internal/ai/training/chat/real_seq2seq_chat.go:120
 ...
+```
+
+And once you've found a name, interrogate it — this is the part that
+makes a new codebase editable instead of just mappable:
+
+```
+you> what does routeDomain do
+gollemer [goanalyze]> func routeDomain(input string) string
+  internal/ai/training/chat/dataset.go:541
+  routeDomain classifies a chat INPUT (not the output) into the domain
+  model that should handle it.
+  Calls (2): chat.isGoCliRequest, chat.isGoCommandQuestion
+  Called by (5): chat.runUnifiedChat, ...
+
+you> how does NewTensor work
+gollemer [goanalyze]> func NewTensor(shape []int, data []float32,
+                                     requiresGrad bool) *Tensor
+  internal/ai/neural/tensor/tensor.go:293
+  NewTensor creates a new Tensor with the given shape and optional
+  data on the CPU.
+  Called by (62): seq2seq.Encoder.Forward, seq2seq.TrainBatch, ...
+
+you> show me routeDomain
+gollemer [goanalyze]> chat.routeDomain  (internal/ai/training/chat/dataset.go:541)
+  ```go
+  func routeDomain(input string) string {
+      // Definition questions about Gollemer itself ("what is gollemer",
+      // "who made you") are conversational, not make-command requests,
+      // even though they name Gollemer. Checked before makefileIntent.
+      if gollemerDefinition.MatchString(input) {
+          return SocialDomain
+      }
+      ...
+  ```
 ```
 
 Notes:
@@ -240,6 +304,8 @@ gollemer/
 ├── internal/ai/
 │   ├── analyze/                # 🔍 goanalyze: AST codebase reader (deterministic)
 │   │   ├── analyze.go          # parses Go source into packages/functions/types
+│   │   ├── deep.go             # plain-English summaries, signatures, overviews
+│   │   ├── qa.go               # answers "what does X do" about the code
 │   │   ├── graph.go            # heuristic call graph + engine-room ranking
 │   │   ├── report.go           # summary / reading guide / where-to-change
 │   │   └── html.go             # standalone SVG visual report
