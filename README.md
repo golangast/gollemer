@@ -1,31 +1,30 @@
 # Gollemer 🤖
 
 A tiny LLM written in **pure Go** — zero external dependencies.
-One chat, five brains: every message is routed to the right one.
+One chat, six brains: every message is routed to the right one.
 
 ```
- ┌─────────────────────────────────────────────────────────┐
- │                      make chat                          │
- │                                                         │
- │   you> what is a goroutine                              │
- │            │                                            │
- │            ▼                                            │
- │      ┌─────────────┐                                    │
- │      │   router    │─── which brain should answer?      │
- │      └──────┬──────┘                                    │
- │             │                                           │
- │    ┌────────┼────────┬────────────┬──────────┐           │
- │    ▼        ▼        ▼            ▼          ▼           │
- │ ┌──────┐ ┌──────┐ ┌───────┐ ┌──────────┐ ┌──────────┐    │
- │ │social│ │  go  │ │gocode │ │  gocli   │ │ makefile │    │
- │ │chat  │ │con-  │ │writes │ │ English  │ │"how do   │    │
- │ │      │ │cepts │ │Go code│ │→ go cmds │ │ i..."    │    │
- │ └──┬───┘ └──┬───┘ └───┬───┘ └────┬─────┘ └────┬─────┘    │
- │    └────────┴─────────┴──────────┴────────────┘          │
- │                         │                               │
- │                         ▼                               │
- │   gollemer [go]> A goroutine is a lightweight thread... │
- └─────────────────────────────────────────────────────────┘
+ ┌────────────────────────────────────────────────────────────────────┐
+ │                             make chat                              │
+ │                                                                    │
+ │ you> analyze this project                                          │
+ │            │                                                       │
+ │            ▼                                                       │
+ │      ┌─────────────┐                                               │
+ │      │   router    │─── which brain should answer?                 │
+ │      └──────┬──────┘                                               │
+ │             │                                                      │
+ │       ┌─────────┬─────────┬─────────┬──────────┬───────────┐       │
+ │       ▼         ▼         ▼         ▼          ▼           ▼       │
+ │   ┌──────┐ ┌────────┐ ┌───────┐ ┌───────┐ ┌────────┐ ┌──────────┐  │
+ │   │social│ │  go    │ │gocode │ │ gocli │ │makefile│ │goanalyze │  │
+ │   │ chat │ │concepts│ │writes │ │English│ │"how do │ │reads Go  │  │
+ │   │      │ │        │ │Go code│ │→go cmd│ │ i..."  │ │codebases │  │
+ │   └──────┘ └────────┘ └───────┘ └───────┘ └────────┘ └──────────┘  │
+ │                          │                                         │
+ │                          ▼                                         │
+ │   gollemer [goanalyze]> Project: github.com/golangast/gollemer     │
+ └────────────────────────────────────────────────────────────────────┘
 ```
 
 The tag (`[go]`, `[social]`, …) always shows which brain answered.
@@ -42,18 +41,93 @@ make debug-chat # talk to it with the thought process + debug prints shown
 
 Try one prompt from each brain:
 
-| Try saying…                              | Brain    | What happens                              |
-|------------------------------------------|----------|-------------------------------------------|
-| `have you ever played soccer`            | social   | chit-chat, remembers the session          |
-| `what is a goroutine`                    | go       | explains the Go concept                   |
-| `write a function that sums a slice`     | gocode   | writes Go code (never chats)              |
-| `what command formats my code`           | gocli    | gives the exact `gofmt` command, asks [y/n] before running |
-| `how do i chat with gollemer`            | makefile | suggests `run make chat`                  |
+| Try saying…                              | Brain      | What happens                              |
+|------------------------------------------|------------|-------------------------------------------|
+| `have you ever played soccer`            | social     | chit-chat, remembers the session          |
+| `what is a goroutine`                    | go         | explains the Go concept                   |
+| `write a function that sums a slice`     | gocode     | writes Go code (never chats)              |
+| `what command formats my code`           | gocli      | gives the exact `gofmt` command, asks [y/n] before running |
+| `how do i chat with gollemer`            | makefile   | suggests `run make chat`                  |
+| `analyze this project`                   | goanalyze  | maps the codebase — packages, engine room, reading order (see below) |
 
 ```sh
 make sel       # browse every command in a fuzzy finder (see below)
 make explain   # full project overview + command reference
 ```
+
+---
+
+## 🔍 goanalyze — point it at any Go codebase
+
+The sixth brain doesn't guess — it **reads**. It parses real Go source
+with the standard library's `go/ast`, builds a call graph, and tells you
+how a project works and exactly where to change it. It's deterministic:
+no neural net, so it can't hallucinate structure that isn't there.
+
+```
+ you say                          →  gollemer does
+ ─────────────────────────────────────────────────────────────────
+ analyze this project               maps the repo you're chatting in
+ /analyze ~/path/to/project         maps a folder on disk (~ works)
+ analyze github.com/owner/repo      shallow-clones it (cached) and maps it
+ where would I add a retry helper   ranked file:line hits, using the last
+                                    analyzed project
+ analyze this project and           everything above, plus an interactive
+   show me a visual                 HTML report you can open in a browser
+```
+
+Point it at itself and you get this (real output):
+
+```
+you> analyze this project
+gollemer [goanalyze]> Project: github.com/golangast/gollemer
+11 packages, 83 Go files, ~19288 lines
+Entry points:
+  - cmd/tools/goz/main.go
+  - main.go
+
+ENGINE ROOM (most-called functions)
+████████████████████ tensor.NewTensor (62 callers)
+███ vocab.Vocabulary.AddToken (9 callers)
+███ nn.NewLinear (8 callers)
+...
+
+WHERE TO START
+1. Start at the entry point:  main.go:13 — func main
+2. Then read the engine room:  tensor.NewTensor (62 callers)
+3. Learn the key types:        tensor.Operation — interface, 42 implementers
+4. Package reading order (dependencies first):
+   1. internal/ai/neural/tensor
+   2. internal/ai/neural/nn
+   3. internal/ai/neural/nnu/seq2seq
+   ...
+   10. . (root)
+```
+
+And the map it drew of itself — bigger node = more packages depend on it,
+red = entry point, arrows run importer → imported:
+
+![gollemer package dependency map](docs/codebase-map.png)
+
+Follow-ups reuse the last analyzed project, so you can drill in:
+
+```
+you> where would I add a new brain
+gollemer [goanalyze]> WHERE TO CHANGE for "add a new brain"
+1. struct chat.domainTrainData  internal/ai/training/chat/real_seq2seq_train.go:59
+2. func chat.routeDomain         internal/ai/training/chat/dataset.go:541  (5 callers)
+3. func chat.loadRealModel       internal/ai/training/chat/real_seq2seq_chat.go:120
+...
+```
+
+Notes:
+
+- `show me a visual` writes a standalone interactive page (SVG graph you
+  can pan around) to `~/workspace/your_files/codebase-maps/<project>.html`.
+- GitHub repos are cloned once into `~/workspace/codebase-maps/` and
+  reused on later runs.
+- The call graph is name-based (heuristic) — great for finding hot spots
+  and navigation paths, not compiler-grade call resolution.
 
 ---
 
@@ -84,7 +158,7 @@ It reads the `## target: description` comments straight out of the
 | Command             | What it does                                              |
 |---------------------|-----------------------------------------------------------|
 | `make start`        | Start-here guide                                          |
-| `make chat`         | Talk to Gollemer — one session, five brains, clean replies only |
+| `make chat`         | Talk to Gollemer — one session, six brains, clean replies only |
 | `make debug-chat`   | Talk to Gollemer with the thought process + debug prints shown |
 | `make sel`          | Pick a command from a columnar fuzzy finder               |
 | `make explain`      | Project overview + what each command does                 |
@@ -127,12 +201,14 @@ It reads the `## target: description` comments straight out of the
  └──────────────┘     └──────────────┘
 ```
 
-Three safety nets keep answers reliable:
+Four safety nets keep answers reliable:
 
 - **Recall layers** — exact training questions get their trained answer
   verbatim (social + makefile). The tiny net doesn't have to memorize.
 - **Go knowledge base** — ~50 curated Go facts answer before the neural
   net is even asked.
+- **goanalyze is deterministic** — codebase questions are answered by
+  parsing real ASTs, never by a model. Structure can't be hallucinated.
 - **Mode separation** — the code brain can never chat and the chat brain
   can never emit code. No `I am func doing (x)` mush, by construction.
 
@@ -145,6 +221,7 @@ gollemer/
 ├── main.go                     # entry point: -real-chat, -train-*, -import
 ├── Makefile                    # all commands (make help / make sel / make start)
 ├── README.md                   # this file
+├── docs/codebase-map.png       # dependency map shown in this README
 ├── go.mod                      # zero dependencies — stdlib only
 │
 ├── scripts/
@@ -161,6 +238,11 @@ gollemer/
 │       └── ...                 # one-off data + debug utilities
 │
 ├── internal/ai/
+│   ├── analyze/                # 🔍 goanalyze: AST codebase reader (deterministic)
+│   │   ├── analyze.go          # parses Go source into packages/functions/types
+│   │   ├── graph.go            # heuristic call graph + engine-room ranking
+│   │   ├── report.go           # summary / reading guide / where-to-change
+│   │   └── html.go             # standalone SVG visual report
 │   ├── moe/                    # mixture-of-experts layers (pure Go)
 │   ├── neural/
 │   │   ├── nn/                 # tensors, autograd, optimizers
@@ -174,6 +256,7 @@ gollemer/
 │   │   ├── socialrecall.go       # exact-match answers: social
 │   │   ├── makefilerecall.go     # exact-match answers: makefile
 │   │   ├── conversation.go       # session memory (/history, /forget)
+│   │   ├── goanalyze.go          # 6th brain: analyze paths/URLs, /analyze command
 │   │   └── *_test.go             # router, recall, knowledge, routing tests
 │   └── ...
 │
@@ -197,6 +280,7 @@ gollemer/
 | Change how messages get routed      | `internal/ai/training/chat/dataset.go` (`routeDomain`) |
 | Change what a brain knows           | `data/training/chat_pairs.jsonl` + `make import` |
 | Fix a wrong deterministic answer    | `goknowledge.go`, `socialrecall.go`, `makefilerecall.go` |
+| Change how codebases get analyzed    | `internal/ai/analyze/` (`report.go` renders the answers) |
 | Tune training (dims, epochs)        | `real_seq2seq_train.go` (`dimsForDomain`)        |
 | Change the chat UI (`/history`, …)  | `real_seq2seq_chat.go`, `conversation.go`        |
 | Add a command                       | `Makefile` (`## name: description` — `sel` picks it up automatically) |
@@ -228,6 +312,7 @@ Or do it all at once: `make smarter`.
 ## 📊 Current state
 
 - **Pure Go, zero dependencies** (`go.mod` has no `require` block)
-- **5 brains**, 1,800+ training pairs, seq2seq + 4-expert MoE
+- **6 brains**, 1,900+ training pairs, seq2seq + 4-expert MoE
 - Social: multiturn 9/10 · Go concepts: curated KB + neural · Gocode: 16/17 ·
-  Gocli: 16/16 · Makefile: deterministic recall + neural fallback
+  Gocli: 16/16 · Makefile: deterministic recall + neural fallback ·
+  Goanalyze: deterministic AST analysis, zero training needed
