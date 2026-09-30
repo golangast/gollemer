@@ -68,6 +68,14 @@ const GoDomain = "go"
 // separate by design.
 const GoCliDomain = "gocli"
 
+// GoAnalyzeDomain is the codebase-reader brain: it parses a Go project
+// with go/ast and reports how the codebase works — entry points, the
+// most-called functions, package dependencies, a suggested reading order,
+// and where to change things for a given task. Unlike the other brains
+// it is fully deterministic (no neural model): analysis is exact, so a
+// trained model would only add hallucinations.
+const GoAnalyzeDomain = "goanalyze"
+
 // UnifiedDomain is the unified chat mode: a single chat session that
 // routes each message to the appropriate domain model (social, go,
 // gocli, gocode, makefile) based on input intent.
@@ -546,6 +554,12 @@ func routeDomain(input string) string {
 	if trainingDataQuestion.MatchString(input) {
 		return SocialDomain
 	}
+	// "analyze this go project" / "where would I add a chat command" are
+	// codebase-reading requests for the goanalyze brain, not makefile or
+	// Go-concept questions.
+	if analyzeIntent.MatchString(input) {
+		return GoAnalyzeDomain
+	}
 	if makefileTerms.MatchString(input) || makefileIntent.MatchString(input) {
 		return MakefileDomain
 	}
@@ -585,6 +599,30 @@ func routeDomain(input string) string {
 	}
 	return SocialDomain
 }
+
+// analyzeIntentPatterns mark "read this codebase" requests: the user wants
+// Gollemer to parse a Go project and explain its structure, entry points,
+// and where to change things. Every pattern pairs a reading verb with a
+// codebase noun so bare \bmap\b (a Go builtin all over the training data)
+// can never match. Checked before makefileTerms and goTerms: "analyze
+// this go project" names Go but is a reading request, not a concept
+// question.
+var analyzeIntentPatterns = []string{
+	`\b(analyse|analyze|analyzing|analysing)\b.*\b(project|codebase|repo|repository|source|package|directory|folder|this)\b`,
+	`\b(analyse|analyze)\b.*\bgithub\.com\b`,
+	`\b(map|tour|walkthrough|overview)\b.*\b(codebase|repo|repository|project)\b`,
+	`\bwalk me through\b.*\b(code|repo|project|codebase)\b`,
+	`\bhow\b.*\b(codebase|repo|repository)\b.*\b(work|structured|organized|architected)\b`,
+	`\bwhere\b.*\b(start|begin)\b.*\b(codebase|repo|repository|project)\b`,
+	`\bread\b.*\b(codebase|repo|repository|source)\b`,
+	// "where would I add a chat command" — a change-location question.
+	// No training input asks where-to-change, so the bare form is safe;
+	// the handler defaults to the current project when no path is given.
+	`\bwhere\b.*\b(add|change|update|modify|fix|edit|put|implement|wire|hook)\b`,
+}
+
+// analyzeIntent is the compiled union of analyzeIntentPatterns.
+var analyzeIntent = regexp.MustCompile(`(?i:` + strings.Join(analyzeIntentPatterns, "|") + `)`)
 
 // makeExplain marks "what does make X do" questions as conversational.
 // The user wants an explanation of the command, not a request to run it.

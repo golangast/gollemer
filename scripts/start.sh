@@ -7,7 +7,7 @@ GOLLEMER — START HERE
 
 What this is:
   A tiny LLM written in pure Go (no external dependencies).
-  One chat, five brains: each message is routed to the right one.
+  One chat, six brains: each message is routed to the right one.
 
 Where to start:
   1. make chat — talk to it (clean replies only). Try one from each brain:
@@ -16,6 +16,7 @@ Where to start:
        "write a function that sums a slice"  gocode: writes Go code
        "what command formats my code"        gocli: go/gofmt commands
        "how do i chat with gollemer"         makefile: make commands
+       "analyze this project"                goanalyze: reads a Go codebase
   2. make sel — browse every command in a columnar fuzzy finder.
   3. make explain — the full project overview and command reference.
   4. make debug-chat — same as make chat, but shows the model's thought
@@ -29,6 +30,11 @@ What it can do:
   gocli     turns plain English into exact go/gofmt commands,
             and asks [y/n] before running one
   makefile  maps "how do i ..." to the right make command
+  goanalyze reads a Go project (local path or github.com URL) with go/ast
+            and maps it: entry points, most-called functions, package
+            dependencies, a reading order, and where to change things
+            ("where would I add a retry helper"). Deterministic — no
+            neural model, so it can't hallucinate structure.
 
 How to expand it (teach it new things):
   1. Write Q&A pairs as JSONL, one per line:

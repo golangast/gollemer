@@ -218,6 +218,20 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 			printTranscript(conv)
 			continue
 		}
+		// /analyze is the explicit entry to the codebase-reader brain:
+		// "/analyze ~/projects/foo" or "/analyze" for the current repo.
+		// "visual" anywhere in the line also writes the HTML graph.
+		if line == "/analyze" || strings.HasPrefix(line, "/analyze ") {
+			arg := strings.TrimSpace(strings.TrimPrefix(line, "/analyze"))
+			if arg == "" {
+				arg = unifiedProjectRoot
+			}
+			if out, ok := handleGoAnalyze("analyze " + arg); ok {
+				fmt.Printf("gollemer [%s]> %s\n", GoAnalyzeDomain, out)
+				conv.AddReply(out, GoAnalyzeDomain, false)
+			}
+			continue
+		}
 		if line == "/forget" {
 			conv.Clear()
 			fmt.Println("[forgotten — starting fresh]")
@@ -343,6 +357,15 @@ func tryDeterministicAnswer(line, d string, conv *Conversation) bool {
 			return true
 		}
 	}
+	// Codebase-reading requests run the AST analyzer: exact structural
+	// answers, no neural model involved.
+	if d == GoAnalyzeDomain {
+		if out, ok := handleGoAnalyze(line); ok {
+			fmt.Printf("gollemer [%s]> %s\n", d, out)
+			conv.AddReply(out, GoAnalyzeDomain, false)
+			return true
+		}
+	}
 	return false
 }
 
@@ -353,6 +376,7 @@ func tryDeterministicAnswer(line, d string, conv *Conversation) bool {
 // (e.g. "gollemer [go]>") so the active brain is visible. Missing
 // specialized checkpoints fall back to the social model.
 func runUnifiedChat(projectRoot string, debug bool) error {
+	unifiedProjectRoot = projectRoot
 	models := map[string]*seq2seq.Seq2Seq{}
 	for _, d := range []string{SocialDomain, GoDomain, GoCliDomain, GocodeDomain, MakefileDomain} {
 		m, err := loadRealModel(projectRoot, d)
@@ -396,6 +420,20 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		}
 		if line == "/history" {
 			printTranscript(conv)
+			continue
+		}
+		// /analyze is the explicit entry to the codebase-reader brain:
+		// "/analyze ~/projects/foo" or "/analyze" for the current repo.
+		// "visual" anywhere in the line also writes the HTML graph.
+		if line == "/analyze" || strings.HasPrefix(line, "/analyze ") {
+			arg := strings.TrimSpace(strings.TrimPrefix(line, "/analyze"))
+			if arg == "" {
+				arg = unifiedProjectRoot
+			}
+			if out, ok := handleGoAnalyze("analyze " + arg); ok {
+				fmt.Printf("gollemer [%s]> %s\n", GoAnalyzeDomain, out)
+				conv.AddReply(out, GoAnalyzeDomain, false)
+			}
 			continue
 		}
 		if line == "/forget" {
