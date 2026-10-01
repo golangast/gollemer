@@ -76,15 +76,6 @@ const GoCliDomain = "gocli"
 // trained model would only add hallucinations.
 const GoAnalyzeDomain = "goanalyze"
 
-// BeginnerDomain is the beginner-assistant brain: it translates simple
-// natural-language requests into small, idiomatic Go programs with a
-// plain-English explanation of why each construct was used, and explains
-// Go concepts with analogies and runnable snippets. Fully deterministic
-// (no neural model), like goanalyze: templates are exact, so a trained
-// model would only add hallucinations. It fires only on explicit
-// beginner markers ("beginner:", "xray", "eli5", ...), so it can never
-// steal requests meant for the go/gocode brains.
-const BeginnerDomain = "beginner"
 
 // UnifiedDomain is the unified chat mode: a single chat session that
 // routes each message to the appropriate domain model (social, go,
@@ -604,13 +595,6 @@ func routeDomain(input string) string {
 	if analyzeVerb.MatchString(input) && extractAnalyzePath(input) != "" {
 		return GoAnalyzeDomain
 	}
-	// Explicit beginner/xray requests go to the beginner brain: small
-	// generated programs with plain-English explanations, and concept
-	// explanations with analogies. Checked before makefileTerms/goTerms
-	// so the marker always wins.
-	if beginnerIntent.MatchString(input) {
-		return BeginnerDomain
-	}
 	if makefileTerms.MatchString(input) || makefileIntent.MatchString(input) {
 		return MakefileDomain
 	}
@@ -687,23 +671,6 @@ var analyzeIntent = regexp.MustCompile(`(?i:` + strings.Join(analyzeIntentPatter
 // analyzeVerb is the bare reading verb on its own.
 var analyzeVerb = regexp.MustCompile(`(?i:\b(analyse|analyze|analysing|analyzing)\b)`)
 
-// beginnerIntentPatterns mark explicit beginner-assistant requests: the
-// user wants a small Go program generated with a plain-English
-// explanation, or a concept explained with an analogy. Every pattern
-// requires an explicit beginner marker, so ordinary "write a function"
-// (gocode) and "what is a channel" (go) requests never match.
-var beginnerIntentPatterns = []string{
-	`\bbeginner\b`,
-	`\bx-?ray\b`,
-	`\beli5\b`,
-	`\blike i'?m a beginner\b`,
-	`\bexplain (it |this )?simply\b`,
-	`\bin simple terms\b`,
-	`\bfor (a )?beginners?\b`,
-}
-
-// beginnerIntent is the compiled union of beginnerIntentPatterns.
-var beginnerIntent = regexp.MustCompile(`(?i:` + strings.Join(beginnerIntentPatterns, "|") + `)`)
 
 // makeExplain marks "what does make X do" questions as conversational.
 // The user wants an explanation of the command, not a request to run it.

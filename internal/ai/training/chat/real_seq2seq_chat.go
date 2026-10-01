@@ -233,14 +233,6 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 			}
 			continue
 		}
-		// /shell is the explicit entry to the reactive pipeline shell:
-		// "/shell build a list of squares" runs synthesis, safety,
-		// tuning, and the visual trace, printing the terminal output.
-		if out, ok := handleShellCommand(line); ok {
-			fmt.Printf("gollemer [%s]> %s\n", ShellDomain, out)
-			conv.AddReply(out, ShellDomain, false)
-			continue
-		}
 		// /flow is the beginner entry to the same reactive pipeline:
 		// "/flow create a worker pool" runs synthesis, safety proving,
 		// auto-tuning, and the visual trace, rendered in plain words.
@@ -369,12 +361,7 @@ func tryDeterministicAnswer(line, d string, conv *Conversation) bool {
 			}
 		}
 		if p != nil {
-			out := ""
-			if htmlPath, err := writeAnalyzeHTML(p); err != nil {
-				out = fmt.Sprintf("I couldn't write the visual report: %v", err)
-			} else {
-				out = fmt.Sprintf("Interactive visual: %s\nOpen it in a browser to explore the dependency graph.", htmlPath)
-			}
+			out := analyze.RenderASCIIGraph(p)
 			fmt.Printf("gollemer [%s]> %s\n", GoAnalyzeDomain, out)
 			conv.AddReply(out, GoAnalyzeDomain, false)
 			return true
@@ -417,15 +404,6 @@ func tryDeterministicAnswer(line, d string, conv *Conversation) bool {
 		if out, ok := handleGoAnalyze(line); ok {
 			fmt.Printf("gollemer [%s]> %s\n", d, out)
 			conv.AddReply(out, GoAnalyzeDomain, false)
-			return true
-		}
-	}
-	// Beginner-brain requests get deterministic template answers with
-	// plain-English explanations: exact code, no neural model involved.
-	if d == BeginnerDomain {
-		if out, ok := handleBeginner(line); ok {
-			fmt.Printf("gollemer [%s]> %s\n", d, out)
-			conv.AddReply(out, BeginnerDomain, false)
 			return true
 		}
 	}
@@ -497,14 +475,6 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 				fmt.Printf("gollemer [%s]> %s\n", GoAnalyzeDomain, out)
 				conv.AddReply(out, GoAnalyzeDomain, false)
 			}
-			continue
-		}
-		// /shell is the explicit entry to the reactive pipeline shell:
-		// "/shell build a list of squares" runs synthesis, safety,
-		// tuning, and the visual trace, printing the terminal output.
-		if out, ok := handleShellCommand(line); ok {
-			fmt.Printf("gollemer [%s]> %s\n", ShellDomain, out)
-			conv.AddReply(out, ShellDomain, false)
 			continue
 		}
 		// /flow is the beginner entry to the same reactive pipeline:

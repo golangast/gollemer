@@ -99,14 +99,10 @@ func handleGoAnalyze(line string) (out string, ok bool) {
 	b.WriteString("\n")
 	b.WriteString(p.ImportGraph())
 	if visualWant.MatchString(line) {
-		htmlPath, err := writeAnalyzeHTML(p)
-		if err != nil {
-			fmt.Fprintf(&b, "\n(I couldn't write the visual report: %v)\n", err)
-		} else {
-			fmt.Fprintf(&b, "\nInteractive visual: %s\n", htmlPath)
-		}
+		b.WriteString("\n")
+		b.WriteString(analyze.RenderASCIIGraph(p))
 	} else {
-		b.WriteString("\nSay \"show me a visual\" and I'll draw the dependency graph as a page you can open.\n")
+		b.WriteString("\nSay \"show me a visual\" and I'll draw the dependency graph right here.\n")
 	}
 	return b.String(), true
 }
@@ -227,34 +223,4 @@ func ensureGitHubRepo(rawURL string) (string, error) {
 		return "", fmt.Errorf("clone failed: %v\n%s", err, strings.TrimSpace(string(out)))
 	}
 	return dest, nil
-}
-
-// writeAnalyzeHTML saves the standalone visual report and returns its path.
-func writeAnalyzeHTML(p *analyze.Project) (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	name := p.Module
-	if name == "" {
-		name = filepath.Base(p.Root)
-	}
-	safe := strings.Map(func(r rune) rune {
-		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' {
-			return r
-		}
-		return '-'
-	}, name)
-	if safe == "" {
-		safe = "codebase"
-	}
-	dir := filepath.Join(home, "workspace", "your_files", "codebase-maps")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return "", err
-	}
-	path := filepath.Join(dir, safe+".html")
-	if err := os.WriteFile(path, []byte(p.HTMLReport()), 0o644); err != nil {
-		return "", err
-	}
-	return path, nil
 }

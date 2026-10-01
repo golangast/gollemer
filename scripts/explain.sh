@@ -1,104 +1,77 @@
 #!/bin/bash
-# make explain — what Gollemer is and what each make command does.
+# make explain — what Gollemer is and what to say to it.
 cat << 'EOF'
 Gollemer — a tiny LLM in pure Go, no external dependencies.
-Seven brains, one chat: every message is routed to the right one.
+Six brains, one chat: every message is routed to the right one.
+Just talk to it — `make chat` — and say what you want.
 
-  social    conversation — chats, answers questions, remembers the session
-  go        Go concepts — goroutines, slices, errors, modules, gotchas
-  gocode    writes Go code from your description (never chats)
-  gocli     turns plain English into exact go/gofmt terminal commands
-  makefile  maps your requests to make commands
-  goanalyze reads a Go codebase with go/ast — entry points, hot spots,
-            package dependencies, reading order, where to change things
-            (deterministic, no neural model)
-  beginner  explains Go simply — analogies, tiny snippets, plain-English
-            "why" for generated code (deterministic, no neural model)
+WHAT TO SAY TO THE CHAT
+-----------------------
 
-  $ # beginner brain, inside make chat:
-  you> beginner: explain goroutines
-  gollemer [beginner]> **Goroutines** — Hiring an extra cook — the kitchen
-  keeps working while they chop vegetables in the background.
-  ```go
-  func main() {
-      go chop("carrots")   // runs concurrently
-      go chop("onions")
-      time.Sleep(100 * time.Millisecond)
-  }
-  ```
-  Key rules:
-  - When main returns, the program exits — even if goroutines are
-    still running.
-  - Use channels or a sync.WaitGroup to wait for goroutines to finish.
+Understand a Go codebase (the goanalyze brain — it reads real code,
+no guessing, no hallucinations):
 
-Visuals: the goanalyze brain draws the codebase, two ways —
-
-  $ # ASCII visuals, right in the chat:
   you> analyze this project
-  ENGINE ROOM (most-called functions)
-  ████████████████████ tensor.NewTensor (62 callers)
-  ████ analyze.Func.Display (13 callers)
-  ...
+  gollemer [goanalyze]> Project: github.com/golangast/gollemer
+      40 packages, 300 Go files, ~45000 lines
+      Entry points: ...
+      IN PLAIN ENGLISH: ...
 
-  $ # ...or a standalone HTML page you open in a browser:
+  you> analyze ~/path/to/project        (any folder on disk)
+  you> analyze github.com/owner/repo    (cloned once, cached)
+
   you> show me a visual
-  gollemer [goanalyze]> Interactive visual:
-    ~/workspace/your_files/codebase-maps/github-com-golangast-gollemer.html
-  (SVG dependency graph — blue nodes, red = entry point — plus stats
-  and reading-order cards; no server needed)
+  gollemer [goanalyze]> Dependency graph: github.com/golangast/gollemer
+      A → B means A imports B. ★ = entry point (func main).
 
-The shell is a separate single-file REPL (cmd/gollemer/main.go):
-every prompt runs synthesis → format/parse → safety inspection →
-genetic auto-tuning → visual execution trace, rendered in the
-terminal with ANSI color.
+      ★ 📦 cmd/gollemer-classic
+        ├── → pkg/analysis
+        ├── → pkg/ast
+        ...
 
-  $ make shell-once PROMPT="build a list of squares"
-  === GENERATED GO SOURCE ===
-  func squares(n int) []int {
-      out := make([]int, 0, n)   // preallocated by the tuner
-      for i := 0; i < n; i++ {
-          out = append(out, i*i)
-      }
-      return out
-  }
-  💡 BEGINNER CONCEPT ANALOGY
-  A factory assembly line: the tray is sized for the whole order up
-  front, so workers never stop to fetch a bigger one.
-  ─── VISUAL EXECUTION TRACE ───
-  [1] Main — calls squares, entry point
-  [2] Squares — leaf, runs 1 loop, 3 statements
-  STATUS BADGES
-  ⚡ PERF — 1 → 0 allocs/op (saved 1)
+Then ask questions about the code — it answers from what it parsed:
 
-  $ make shell-once PROMPT="create a worker pool"   # goroutines + channels
-  /shell <prompt>   # same pipeline, inline, inside make chat
+  you> what does routeDomain do     signature, docs, callers, callees
+  you> show me routeDomain          the actual source code
+  you> where would I add a retry    ranked file:line hits
+       helper
+  you> what's in package chat       what the package is for
 
-The pkg/ engine room — the libraries behind it all:
+Questions only fire on names really in the project, so
+"what does a goroutine do" still goes to the Go brain.
 
-  go test ./pkg/...   # all nine packages: ast, analysis, memory,
-                      # runner, synthesis, engine, xray, beginner, chat
+Explain commands (the gocli + makefile brains):
 
-  # the classic CLI (local only) wires them into runnable commands:
-  go run ./cmd/gollemer-classic -mock
-      # full pipeline demo: graph → proving → MCTS → self-heal → auto-tune
-  go run ./cmd/gollemer-classic -impact -symbol "BuildGraph" -dir ./pkg/memory
-      # which files would need updating if you changed that symbol
-  go run ./cmd/gollemer-classic -style -dir ./pkg/memory
-      # infer the repo's coding conventions (error style, tags, docs)
+  you> what does go build ./... do
+  you> build with the race detector
+  you> what does make chat do
 
-  # pkg/chat serves a web UI: 20-line main → http://localhost:8080
-  # (see README "The pkg/ engine room" for the recipe)
-  # pkg/engine has no CLI yet — run it via go test ./pkg/engine/ -v
+The gocli brain knows the full go toolchain (build, run, test, vet,
+fmt, mod, get, install, list, clean, doc, env, version, generate,
+fix, work, tool, bug, telemetry). It prints the exact command and
+asks [y/n] before running anything.
 
-Commands:
-  make chat          talk to gollemer — one session, seven brains
-  make shell         interactive natural-language Go shell (REPL)
-  make shell-once    run one shell prompt: PROMPT="build a list of squares"
-  /shell <prompt>    (inside make chat) run the shell pipeline inline
-  make flow          one prompt through the beginner pipeline, plain words:
+Write a small Go program in plain words (the /flow command):
+
+  you> /flow count with a mutex
+  gollemer [flow]> Here's your Go program:
+      ```go
+      ...
+      ```
+      💡 Think of it like ...
+      1. Main — calls worker.
+      ✅ Safety: verified — ...
+      ⚡ Speed: already lean — ...
+
+COMMANDS
+--------
+  make chat          talk to gollemer — one session, six brains
+  make debug-chat    same, with the thought process shown
+  make flow          one prompt through the pipeline, plain words:
                      PROMPT="create a worker pool"
-  /flow <prompt>     (inside make chat) same pipeline, in plain words
-  (local only: make shell-classic runs the flag-driven pipeline CLI)
+  /flow <prompt>     (inside make chat) same, in plain words
+  make classic       the flag-driven pipeline CLI (ARGS="-help"):
+                     -flow, -impact, -style, -mock, ...
   make sel           pick a command from a columnar fuzzy finder
   make explain       this overview
   make smarter       the one-command upgrade — more data, retrained
@@ -114,19 +87,31 @@ Commands:
                      (FILE=path.jsonl) — bad pairs are quarantined
   make help          list the commands
 
-Where the new pieces live:
-  cmd/gollemer/main.go                 the shell — one self-contained file
-                                       (go run cmd/gollemer/main.go)
-  cmd/gollemer-classic/                older flag-driven pipeline CLI (local only)
-                                       (-flow: one prompt, plain words)
+THE PKG/ ENGINE ROOM (the libraries behind the chat)
+---------------------------------------------------
+  go test ./pkg/...   # eight packages: ast, analysis, memory,
+                      # runner, synthesis, engine, xray, beginner
+
+  # the classic CLI wires them into runnable commands:
+  go run ./cmd/gollemer-classic -impact -symbol "BuildGraph" -dir ./pkg/memory
+      # which files would need updating if you changed that symbol
+  go run ./cmd/gollemer-classic -style -dir ./pkg/memory
+      # infer the repo's coding conventions (error style, tags, docs)
+  go run ./cmd/gollemer-classic -mock
+      # full pipeline demo: graph → proving → MCTS → self-heal → auto-tune
+
+Where the pieces live:
+  internal/ai/analyze/                 goanalyze: reads Go code with go/ast
+    ascii.go                           terminal dependency-graph renderer
+    report.go                          summaries, reading guide, where-to-change
+    qa.go                              answers "what does X do" about the code
+  internal/ai/training/chat/
+    goanalyze.go                       /analyze command, "show me a visual"
+    flow.go                            /flow command (engine, in-process)
   pkg/engine/reactive.go               the reactive pipeline (synthesis → prove
                                        → tune → trace)
   pkg/engine/render.go                 RenderBeginner: the plain-words output
-  pkg/beginner/assistant.go            beginner brain engine: explanations + code
-  internal/ai/training/chat/beginner.go
-                                       beginner brain wiring (beginner: markers)
-  internal/ai/training/chat/shell.go   /shell chat command (runs the shell once)
-  internal/ai/training/chat/flow.go    /flow chat command (engine, in-process)
+  pkg/beginner/assistant.go            plain-English code generation templates
 
 How it learns: new Q&A pairs pass a coherence quality gate, merge into
 data/training/chat_pairs.jsonl, and the brains retrain on old + new.

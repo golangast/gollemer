@@ -18,7 +18,7 @@ const flowTimeout = 60 * time.Second
 // handleFlowCommand handles "/flow <prompt>": it runs the prompt through
 // the reactive engine pipeline (synthesis, safety proving, auto-tuning,
 // visual trace) in-process and returns the beginner-friendly rendering.
-// Unlike /shell there is no subprocess: the engine is imported directly.
+// The engine is imported directly: no subprocess, no shell.
 func handleFlowCommand(line string) (string, bool) {
 	if line != "/flow" && !strings.HasPrefix(line, "/flow ") {
 		return "", false

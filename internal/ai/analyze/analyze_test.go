@@ -141,15 +141,15 @@ func TestAnalyzeNotADir(t *testing.T) {
 	}
 }
 
-func TestHTMLReport(t *testing.T) {
+func TestRenderASCIIGraphFixture(t *testing.T) {
 	p, err := Analyze(fixture(t))
 	if err != nil {
 		t.Fatal(err)
 	}
-	html := p.HTMLReport()
-	for _, want := range []string{"<svg", "store", "Entry points", "Engine room", "reading order"} {
-		if !strings.Contains(strings.ToLower(html), strings.ToLower(want)) {
-			t.Fatalf("html missing %q", want)
+	out := RenderASCIIGraph(p)
+	for _, want := range []string{"Dependency graph", "A → B means A imports B", "📦"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("ascii graph missing %q\n---\n%s", want, out)
 		}
 	}
 }
