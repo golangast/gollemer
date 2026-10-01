@@ -69,11 +69,14 @@ no neural net, so it can't hallucinate structure that isn't there.
  ─────────────────────────────────────────────────────────────────
  analyze this project               maps the repo you're chatting in
  /analyze ~/path/to/project         maps a folder on disk (~ works)
+ analyze ~/path/to/project          same, without the slash
  analyze github.com/owner/repo      shallow-clones it (cached) and maps it
  where would I add a retry helper   ranked file:line hits, using the last
                                     analyzed project
  analyze this project and           everything above, plus an interactive
    show me a visual                 HTML report you can open in a browser
+ show me a visual                   same report, after any analysis above
+                                    (uses the last analyzed project)
 
 Then just **ask questions** about the code — it answers from what it
 actually parsed, with file:line pointers:

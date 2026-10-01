@@ -26,6 +26,7 @@ import (
 	"github.com/golangast/gollemer/internal/ai/neural/nnu/seq2seq"
 	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
 	"github.com/golangast/gollemer/internal/ai/neural/tokenizer"
+	"github.com/golangast/gollemer/internal/ai/analyze"
 )
 
 // RealModelPath returns the per-domain model file.
@@ -334,6 +335,34 @@ func tryDeterministicAnswer(line, d string, conv *Conversation) bool {
 		fmt.Printf("gollemer [%s]> %s\n", GoAnalyzeDomain, out)
 		conv.AddReply(out, GoAnalyzeDomain, false)
 		return true
+	}
+	// "show me a visual" as a follow-up: draw the dependency graph for
+	// the last analyzed project without re-parsing it. The verb+noun
+	// shape keeps "show me routeDomain" (answered above) and "how do I
+	// render html templates" (go brain) out, and the domain guard keeps
+	// "show me how to draw a graph in go" (go/gocode) with its owner.
+	// With no prior analysis the visual is drawn for the repo the chat
+	// runs in — the only codebase in context.
+	if visualFollowup.MatchString(line) && (d == SocialDomain || d == GoAnalyzeDomain) {
+		p := lastAnalyzeProject
+		if p == nil && unifiedProjectRoot != "" {
+			if ap, err := analyze.Analyze(unifiedProjectRoot); err == nil {
+				lastAnalyzeRoot = unifiedProjectRoot
+				lastAnalyzeProject = ap
+				p = ap
+			}
+		}
+		if p != nil {
+			out := ""
+			if htmlPath, err := writeAnalyzeHTML(p); err != nil {
+				out = fmt.Sprintf("I couldn't write the visual report: %v", err)
+			} else {
+				out = fmt.Sprintf("Interactive visual: %s\nOpen it in a browser to explore the dependency graph.", htmlPath)
+			}
+			fmt.Printf("gollemer [%s]> %s\n", GoAnalyzeDomain, out)
+			conv.AddReply(out, GoAnalyzeDomain, false)
+			return true
+		}
 	}
 	// Social recall: an exact training-pair match returns the trained
 	// answer verbatim. The tiny model doesn't reliably memorize every

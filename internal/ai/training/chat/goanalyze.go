@@ -43,6 +43,12 @@ var (
 	quotedPath = regexp.MustCompile(`"([^"]+)"|'([^']+)'`)
 	githubURL  = regexp.MustCompile(`(?i)(?:https?://)?github\.com/([\w.-]+)/([\w.-]+)`)
 	visualWant = regexp.MustCompile(`(?i)\b(visual|graph|diagram|html|picture|show me)\b`)
+	// visualFollowup marks "show me a visual" style requests: a
+	// show/draw/give/make/generate verb aimed at a visual noun. The
+	// verb+noun shape keeps "show me routeDomain" (a source-excerpt
+	// question, answered by the Q&A layer) and "how do I render html
+	// templates" (a Go question) out.
+	visualFollowup = regexp.MustCompile(`(?i)\b(show|draw|give|make|generate)\b.{0,24}?\b(visual|diagram|picture|graphs?)\b`)
 	whereTask  = regexp.MustCompile(`(?i)\bwhere\b.{0,40}?\b(add|change|update|modify|fix|edit|put|implement|wire|hook)\b\s+(.{2,80})`)
 )
 

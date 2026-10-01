@@ -21,6 +21,8 @@ func TestGocliFalsePositives(t *testing.T) {
 		"how do I add two numbers in Go":                     "go", // pre-existing: goTerms, out of scope
 		"write a function that sorts a list":                 "gocode",
 		"are my deps up to date":                             "gocli",
+		"what command formats my code":                      "gocli",
+		"which command formats my code":                     "gocli",
 	}
 	for in, want := range cases {
 		if got := routeDomain(in); got != want {

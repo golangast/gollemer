@@ -493,7 +493,7 @@ var gocliIntent = regexp.MustCompile(`(?i:` +
 	`|\bcheck\b.*\btest\b.*\bcoverage\b|\bcoverage\b.*\b(check|run)\b` +
 	`|\brace\b.*\btests?\b|\btests?\b.*\brace\b` +
 	`|\bvet\b|\bcode\b.*\bfor\b.*\bproblems\b|\bsuspicious\b` +
-	`|\bformat(ted)?\b.*\b(code|go files?|source files?)\b|\bcode\b.*\bformat(ted)?\b|\bformatting\b.*\bcode\b|\breformat\b` +
+	`|\bformat(s|ted)?\b.*\b(code|go files?|source files?)\b|\bcode\b.*\bformat(ted)?\b|\bformatting\b.*\bcode\b|\breformat\b` +
 	`|\bgo doc\b|\bdocs?\b.*\bfor\b|\bdocumentation\b.*\bfor\b` +
 	`|\bgo version\b|\bversion\b.*\binstalled\b` +
 	`|\bgo env\b|\benvironment settings\b|\bmodule cache\b` +
@@ -560,6 +560,14 @@ func routeDomain(input string) string {
 	if analyzeIntent.MatchString(input) {
 		return GoAnalyzeDomain
 	}
+	// "analyze ~/projects/foo", "analyze ./cmd/tool": the analyze verb
+	// plus a path-shaped token is a codebase request even when the path
+	// names no codebase noun ("tinyproj"). extractAnalyzePath only finds
+	// real path shapes (/, ~, quoted, github.com), so "analyze the
+	// training dataset" still falls through to the makefile brain.
+	if analyzeVerb.MatchString(input) && extractAnalyzePath(input) != "" {
+		return GoAnalyzeDomain
+	}
 	if makefileTerms.MatchString(input) || makefileIntent.MatchString(input) {
 		return MakefileDomain
 	}
@@ -619,10 +627,22 @@ var analyzeIntentPatterns = []string{
 	// No training input asks where-to-change, so the bare form is safe;
 	// the handler defaults to the current project when no path is given.
 	`\bwhere\b.*\b(add|change|update|modify|fix|edit|put|implement|wire|hook)\b`,
+	// "show me a visual of this project" / "draw a diagram of the repo":
+	// a visual noun aimed at the codebase. "graph" stays scoped to
+	// codebase nouns so "write a graph traversal" (gocode) never matches.
+	`\b(visual|diagram|picture)\b.*\b(codebase|repo|repository|project|code)\b`,
+	`\bgraph\b.*\b(codebase|repo|repository|project)\b`,
 }
+
+// analyzeVerb marks the bare reading verb: "analyze ~/projects/foo".
+// Paired with extractAnalyzePath in routeDomain so a path that names no
+// codebase noun ("tinyproj") still routes to the goanalyze brain.
 
 // analyzeIntent is the compiled union of analyzeIntentPatterns.
 var analyzeIntent = regexp.MustCompile(`(?i:` + strings.Join(analyzeIntentPatterns, "|") + `)`)
+
+// analyzeVerb is the bare reading verb on its own.
+var analyzeVerb = regexp.MustCompile(`(?i:\b(analyse|analyze|analysing|analyzing)\b)`)
 
 // makeExplain marks "what does make X do" questions as conversational.
 // The user wants an explanation of the command, not a request to run it.
