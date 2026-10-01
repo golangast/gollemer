@@ -1884,3 +1884,129 @@
 {"input":"chat with debug prints","output":"run make debug-chat","domain":"makefile"}
 {"input":"what command formats my code","output":"gofmt -w .","domain":"gocli"}
 {"input":"which command formats my code","output":"gofmt -w .","domain":"gocli"}
+{"input":"run the code generators","output":"go generate ./...","domain":"gocli"}
+{"input":"generate the stringer code","output":"go generate ./...","domain":"gocli"}
+{"input":"run go generate on the whole module","output":"go generate ./...","domain":"gocli"}
+{"input":"regenerate the mock files","output":"go generate ./...","domain":"gocli"}
+{"input":"apply go fix to update my code","output":"go fix ./...","domain":"gocli"}
+{"input":"migrate my code to the new go version","output":"go fix ./...","domain":"gocli"}
+{"input":"list the available go tools","output":"go tool","domain":"gocli"}
+{"input":"profile the cpu dump with pprof","output":"go tool pprof cpu.prof","domain":"gocli"}
+{"input":"disassemble the compiled binary","output":"go tool objdump -s main.main app","domain":"gocli"}
+{"input":"run the vet tool on this package","output":"go tool vet .","domain":"gocli"}
+{"input":"start a new go workspace","output":"go work init","domain":"gocli"}
+{"input":"add this module to the workspace","output":"go work use .","domain":"gocli"}
+{"input":"sync the workspace build list","output":"go work sync","domain":"gocli"}
+{"input":"file a bug report against go","output":"go bug","domain":"gocli"}
+{"input":"open the go issue tracker","output":"go bug","domain":"gocli"}
+{"input":"turn off go telemetry","output":"go telemetry off","domain":"gocli"}
+{"input":"check the go telemetry setting","output":"go telemetry","domain":"gocli"}
+{"input":"build with the race detector","output":"go build -race .","domain":"gocli"}
+{"input":"name the output binary server","output":"go build -o server .","domain":"gocli"}
+{"input":"cross compile for windows","output":"GOOS=windows GOARCH=amd64 go build .","domain":"gocli"}
+{"input":"build with the prod build tag","output":"go build -tags prod .","domain":"gocli"}
+{"input":"rebuild everything from scratch","output":"go build -a .","domain":"gocli"}
+{"input":"print the build commands without running them","output":"go build -n .","domain":"gocli"}
+{"input":"run just the TestLogin tests","output":"go test -run TestLogin ./...","domain":"gocli"}
+{"input":"run the tests and show coverage","output":"go test -cover ./...","domain":"gocli"}
+{"input":"run the benchmarks","output":"go test -bench=. ./...","domain":"gocli"}
+{"input":"skip the test cache","output":"go test -count=1 ./...","domain":"gocli"}
+{"input":"run the tests verbosely","output":"go test -v ./...","domain":"gocli"}
+{"input":"preview what gofmt would change","output":"gofmt -d .","domain":"gocli"}
+{"input":"list files that need formatting","output":"gofmt -l .","domain":"gocli"}
+{"input":"show me the formatting diff","output":"gofmt -d .","domain":"gocli"}
+{"input":"show why each module is needed","output":"go mod why -m all","domain":"gocli"}
+{"input":"copy dependencies into the vendor directory","output":"go mod vendor","domain":"gocli"}
+{"input":"show the full module graph","output":"go mod graph","domain":"gocli"}
+{"input":"show the module path","output":"go list -m","domain":"gocli"}
+{"input":"persist a go environment setting","output":"go env -w GOFLAGS=-mod=mod","domain":"gocli"}
+{"input":"show where go is installed","output":"go env GOROOT","domain":"gocli"}
+{"input":"install the stringer tool at the latest version","output":"go install golang.org/x/tools/cmd/stringer@latest","domain":"gocli"}
+{"input":"install the current module binaries","output":"go install ./...","domain":"gocli"}
+{"input":"pass arguments to the program when running it","output":"go run . arg1 arg2","domain":"gocli"}
+{"input":"run a single go file","output":"go run main.go","domain":"gocli"}
+{"input":"clear just the test cache","output":"go clean -testcache","domain":"gocli"}
+{"input":"show the go version stamped in the binary","output":"go version -m app","domain":"gocli"}
+{"input":"show the docs for the strings package","output":"go doc strings","domain":"gocli"}
+{"input":"what does go generate do","output":"go generate scans your source files for go:generate directives and runs the commands they name. It does not run automatically during builds; you invoke it by hand when generated code needs refreshing.","domain":"go"}
+{"input":"when is code generation used in go","output":"Use go generate when part of your code is produced by a tool instead of written by hand, such as stringer output for enums or mocks for interfaces. Run it after changing the inputs the generator reads.","domain":"go"}
+{"input":"what does go fix do","output":"go fix finds uses of old language and library features in your packages and rewrites them to use newer equivalents. Run it when upgrading to a new Go release that changed an API you depend on.","domain":"go"}
+{"input":"what does go bug do","output":"go bug opens your browser on a new Go issue report pre-filled with your system information. Use it when you believe you found a bug in the Go toolchain or standard library itself.","domain":"go"}
+{"input":"what is go telemetry","output":"Go telemetry is opt-in counting of toolchain and command usage that the Go team uses to guide development. It never sends code or personal data, and you can turn it off with go telemetry off.","domain":"go"}
+{"input":"what does go tool do","output":"go tool runs the low-level programs shipped with the Go distribution, such as the compiler, linker, and pprof. Most developers use the higher-level commands like go build and go vet instead.","domain":"go"}
+{"input":"what is go tool pprof used for","output":"go tool pprof opens an interactive session over a profiling dump, such as a cpu.prof file. Use it to find which functions burn the most CPU or allocate the most memory in a running program.","domain":"go"}
+{"input":"when should I use a go workspace","output":"Use a go workspace when you develop several related modules together, such as a library and the program that consumes it. The workspace lets the modules resolve to your local copies instead of published versions.","domain":"go"}
+{"input":"what does go work init do","output":"go work init creates a go.work file that starts a new workspace in the current directory. Add modules to it with go work use so the toolchain builds them together.","domain":"go"}
+{"input":"what does go work sync do","output":"go work sync aligns the build lists of the workspace modules so they agree on dependency versions. Run it after adding or changing modules in the workspace.","domain":"go"}
+{"input":"when should dependencies be vendored","output":"Vendor dependencies with go mod vendor when you need builds that do not touch the network, such as reproducible CI or air-gapped environments. The go command then uses the vendor directory automatically.","domain":"go"}
+{"input":"what does go mod why tell me","output":"go mod why reports the shortest import chain from your main module to a given dependency. Use it to find out which of your packages pulls in a module you did not expect.","domain":"go"}
+{"input":"what does gofmt minus d show","output":"gofmt -d prints a diff of what gofmt would change without rewriting any files. Use it to preview formatting changes before applying them with gofmt -w.","domain":"go"}
+{"input":"what does go build minus race do","output":"go build -race compiles with the data race detector enabled so concurrent memory bugs are reported at run time. Use it on tests and programs that use goroutines before you ship.","domain":"go"}
+{"input":"what does go test minus run do","output":"go test -run takes a regular expression and runs only the tests whose names match. Use it to iterate on one test without waiting for the whole suite.","domain":"go"}
+{"input":"what is a text template in go","output":"text/template is the standard library package for filling placeholders in text output. Use it for generating config files, emails, or code; use html/template instead when the output is a web page.","domain":"go"}
+{"input":"when do I use text template","output":"Use text/template when you need to render the same text shape with different values, like form letters or generated files. Keep logic out of templates and prepare the data in Go code first.","domain":"go"}
+{"input":"how do regular expressions work in go","output":"Go regular expressions live in the regexp package and use RE2 syntax, which guarantees linear-time matching. Compile once with regexp.MustCompile and reuse the value for every match.","domain":"go"}
+{"input":"how do I work with directories in go","output":"The os package reads directories with os.ReadDir, and filepath.WalkDir walks a whole tree. Use filepath.Join to build paths so they stay correct across operating systems.","domain":"go"}
+{"input":"what is the subcommand pattern in go","output":"The subcommand pattern reads os.Args to dispatch on the first argument, like git does with git push. The flag package parses per-command flags after you route to the right subcommand.","domain":"go"}
+{"input":"how do I write an enum in go","output":"Go has no enum keyword; the idiom is a defined integer or string type with a block of iota constants. Run the stringer tool over it when you need the values to print nicely.","domain":"go"}
+{"input":"what is recursion in go","output":"Recursion is a function calling itself to solve a smaller piece of the same problem. Use it for naturally nested structures like trees, and make sure every path reaches a base case.","domain":"go"}
+{"input":"when do I use recursion","output":"Use recursion when the data is recursive, such as walking a file tree or an AST. Prefer a loop when the depth is unbounded, since Go does not optimize tail calls and deep recursion can exhaust the stack.","domain":"go"}
+{"input":"what does go version minus m do","output":"go version -m prints the module and build information embedded in a compiled binary. Use it to check which dependency versions a binary you did not build yourself was made with.","domain":"go"}
+{"input":"what does go clean minus testcache do","output":"go clean -testcache drops cached test results so the next go test run executes everything fresh. Use it when you suspect stale cached results are hiding a real failure.","domain":"go"}
+{"input":"show me a goroutine example","output":"func main() { go func() { fmt.Println(\"from a goroutine\") }(); time.Sleep(100 * time.Millisecond) }","domain":"gocode"}
+{"input":"show me a buffered channel example","output":"func main() { ch := make(chan string, 2); ch \u003c- \"a\"; ch \u003c- \"b\"; fmt.Println(\u003c-ch, \u003c-ch) }","domain":"gocode"}
+{"input":"show me a timeout example in go","output":"func main() { c := make(chan string); go func() { time.Sleep(2 * time.Second); c \u003c- \"done\" }(); select { case m := \u003c-c: fmt.Println(m); case \u003c-time.After(time.Second): fmt.Println(\"timed out\") } }","domain":"gocode"}
+{"input":"show me a waitgroup example","output":"func main() { var wg sync.WaitGroup; for i := 1; i \u003c= 3; i++ { wg.Add(1); go func(n int) { defer wg.Done(); fmt.Println(\"worker\", n) }(i) }; wg.Wait() }","domain":"gocode"}
+{"input":"write a mutex example in go","output":"func main() { var mu sync.Mutex; count := 0; var wg sync.WaitGroup; for i := 0; i \u003c 100; i++ { wg.Add(1); go func() { defer wg.Done(); mu.Lock(); count++; mu.Unlock() }() }; wg.Wait(); fmt.Println(count) }","domain":"gocode"}
+{"input":"give me an atomic counter example","output":"func main() { var count int64; var wg sync.WaitGroup; for i := 0; i \u003c 100; i++ { wg.Add(1); go func() { defer wg.Done(); atomic.AddInt64(\u0026count, 1) }() }; wg.Wait(); fmt.Println(atomic.LoadInt64(\u0026count)) }","domain":"gocode"}
+{"input":"show me a timer example in go","output":"func main() { t := time.NewTimer(100 * time.Millisecond); \u003c-t.C; fmt.Println(\"timer fired\") }","domain":"gocode"}
+{"input":"show me a ticker example in go","output":"func main() { tick := time.NewTicker(100 * time.Millisecond); defer tick.Stop(); for i := 0; i \u003c 3; i++ { \u003c-tick.C; fmt.Println(\"tick\") } }","domain":"gocode"}
+{"input":"show me a defer example","output":"func main() { defer fmt.Println(\"last\"); fmt.Println(\"first\") }","domain":"gocode"}
+{"input":"give me a panic and recover example","output":"func main() { defer func() { if r := recover(); r != nil { fmt.Println(\"recovered:\", r) } }(); panic(\"boom\") }","domain":"gocode"}
+{"input":"write a closure example in go","output":"func intSeq() func() int { i := 0; return func() int { i++; return i } }; func main() { next := intSeq(); fmt.Println(next(), next()) }","domain":"gocode"}
+{"input":"write a json marshal example","output":"type Point struct { X int; Y int }; func main() { b, _ := json.Marshal(Point{1, 2}); fmt.Println(string(b)) }","domain":"gocode"}
+{"input":"write a json unmarshal example","output":"type Point struct { X int; Y int }; func main() { var p Point; json.Unmarshal([]byte(`{\"X\":1,\"Y\":2}`), \u0026p); fmt.Println(p.X, p.Y) }","domain":"gocode"}
+{"input":"give me an http server example","output":"func main() { http.HandleFunc(\"/hi\", func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, \"hi\") }); http.ListenAndServe(\":8080\", nil) }","domain":"gocode"}
+{"input":"write an http client example","output":"func main() { resp, err := http.Get(\"https://example.com\"); if err != nil { panic(err) }; defer resp.Body.Close(); fmt.Println(resp.Status) }","domain":"gocode"}
+{"input":"show me a text template example","output":"func main() { t := template.Must(template.New(\"t\").Parse(\"hello {{.}}\")); t.Execute(os.Stdout, \"world\") }","domain":"gocode"}
+{"input":"give me a regex example in go","output":"func main() { re := regexp.MustCompile(`a(x*)b`); fmt.Println(re.FindString(\"aaxxb\")) }","domain":"gocode"}
+{"input":"show me a file reading example","output":"func main() { b, err := os.ReadFile(\"notes.txt\"); if err != nil { panic(err) }; fmt.Println(string(b)) }","domain":"gocode"}
+{"input":"show me a file writing example","output":"func main() { err := os.WriteFile(\"notes.txt\", []byte(\"hello\"), 0644); if err != nil { panic(err) } }","domain":"gocode"}
+{"input":"write a command line flags example","output":"func main() { name := flag.String(\"name\", \"world\", \"who to greet\"); flag.Parse(); fmt.Println(\"hello\", *name) }","domain":"gocode"}
+{"input":"show me an environment variable example","output":"func main() { fmt.Println(os.Getenv(\"HOME\")) }","domain":"gocode"}
+{"input":"give me a sorting example in go","output":"func main() { s := []int{3, 1, 2}; sort.Ints(s); fmt.Println(s) }","domain":"gocode"}
+{"input":"show me a random number example","output":"func main() { fmt.Println(rand.Intn(100)) }","domain":"gocode"}
+{"input":"give me a base64 example","output":"func main() { fmt.Println(base64.StdEncoding.EncodeToString([]byte(\"hello\"))) }","domain":"gocode"}
+{"input":"show me a string formatting example","output":"func main() { fmt.Println(fmt.Sprintf(\"%s is %d\", \"answer\", 42)) }","domain":"gocode"}
+{"input":"write a context timeout example in go","output":"func main() { ctx, cancel := context.WithTimeout(context.Background(), time.Second); defer cancel(); select { case \u003c-time.After(2 * time.Second): fmt.Println(\"slow\"); case \u003c-ctx.Done(): fmt.Println(\"timed out\") } }","domain":"gocode"}
+{"input":"give me a select example in go","output":"func main() { c1 := make(chan string); c2 := make(chan string); go func() { c1 \u003c- \"one\" }(); go func() { c2 \u003c- \"two\" }(); select { case m := \u003c-c1: fmt.Println(m); case m := \u003c-c2: fmt.Println(m) } }","domain":"gocode"}
+{"input":"write a worker pool example in go","output":"func main() { jobs := make(chan int); go func() { for j := range jobs { fmt.Println(j) } }(); for i := 1; i \u003c= 2; i++ { jobs \u003c- i }; close(jobs); time.Sleep(10 * time.Millisecond) }","domain":"gocode"}
+{"input":"show me a generics example","output":"func Double[T int | float64](s []T) []T { r := make([]T, len(s)); for i, v := range s { r[i] = v * 2 }; return r }; func main() { fmt.Println(Double([]int{1, 2})) }","domain":"gocode"}
+{"input":"vendor my module dependencies","output":"go mod vendor","domain":"gocli"}
+{"input":"put the dependencies in the vendor folder","output":"go mod vendor","domain":"gocli"}
+{"input":"create a vendor directory with the dependencies","output":"go mod vendor","domain":"gocli"}
+{"input":"explain why a module is required","output":"go mod why -m all","domain":"gocli"}
+{"input":"show why this module is in my build list","output":"go mod why -m all","domain":"gocli"}
+{"input":"what go tools are available","output":"go tool","domain":"gocli"}
+{"input":"show the installed go tools","output":"go tool","domain":"gocli"}
+{"input":"update uuid to the newest release","output":"go get -u github.com/google/uuid","domain":"gocli"}
+{"input":"bump the uuid package to latest","output":"go get -u github.com/google/uuid","domain":"gocli"}
+{"input":"vet all my code","output":"go vet ./...","domain":"gocli"}
+{"input":"run the vet checks on everything","output":"go vet ./...","domain":"gocli"}
+{"input":"build the binary and name it server","output":"go build -o server .","domain":"gocli"}
+{"input":"compile to an executable called server","output":"go build -o server .","domain":"gocli"}
+{"input":"show the go version embedded in the app binary","output":"go version -m app","domain":"gocli"}
+{"input":"show the go version that built the app binary","output":"go version -m app","domain":"gocli"}
+{"input":"run just the TestSignup tests","output":"go test -run TestSignup ./...","domain":"gocli"}
+{"input":"ensure the deps are tidy","output":"go mod tidy","domain":"gocli"}
+{"input":"make sure the deps stay tidy","output":"go mod tidy","domain":"gocli"}
+{"input":"get the latest uuid release","output":"go get -u github.com/google/uuid","domain":"gocli"}
+{"input":"upgrade uuid to the latest version","output":"go get -u github.com/google/uuid","domain":"gocli"}
+{"input":"run the code generator tools","output":"go generate ./...","domain":"gocli"}
+{"input":"execute the code generators","output":"go generate ./...","domain":"gocli"}
+{"input":"init a go workspace","output":"go work init","domain":"gocli"}
+{"input":"set up a go workspace","output":"go work init","domain":"gocli"}
+{"input":"begin a new go workspace","output":"go work init","domain":"gocli"}
+{"input":"copy the dependencies to the vendor directory","output":"go mod vendor","domain":"gocli"}
+{"input":"vendor the dependencies","output":"go mod vendor","domain":"gocli"}
+{"input":"display the go version stamped into the binary","output":"go version -m app","domain":"gocli"}

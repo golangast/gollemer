@@ -1,0 +1,4 @@
+{"domain":"gocli","input":"ensure the deps are tidy","output":"go mod tidy"}
+{"domain":"gocli","input":"make sure the deps stay tidy","output":"go mod tidy"}
+{"domain":"gocli","input":"get the latest uuid release","output":"go get -u github.com/google/uuid"}
+{"domain":"gocli","input":"upgrade uuid to the latest version","output":"go get -u github.com/google/uuid"}

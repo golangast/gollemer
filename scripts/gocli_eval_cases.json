@@ -1,1 +1,157 @@
-[{"expect":"go mod tidy","kind":"seen","prompt":"check if the dependencies are updated"},{"expect":"go mod tidy","kind":"seen","prompt":"are my dependencies up to date"},{"expect":"go mod tidy","kind":"seen","prompt":"sync the dependencies"},{"expect":"go mod download","kind":"seen","prompt":"download all the dependencies"},{"expect":"go mod verify","kind":"seen","prompt":"verify the dependencies are intact"},{"expect":"go mod graph","kind":"seen","prompt":"show the dependency graph"},{"expect":"go get -u github.com/google/uuid","kind":"seen","prompt":"update the uuid package to the latest version"},{"expect":"go build .","kind":"seen","prompt":"build my program"},{"expect":"go test ./...","kind":"seen","prompt":"run the tests"},{"expect":"go test -cover ./...","kind":"seen","prompt":"check test coverage"},{"expect":"go vet ./...","kind":"seen","prompt":"vet my code"},{"expect":"gofmt -w .","kind":"seen","prompt":"format all the go files"},{"expect":"go version","kind":"seen","prompt":"which go version is installed"},{"expect":"go clean -cache","kind":"seen","prompt":"clear the build cache"},{"expect":"go mod tidy","kind":"paraphrase","prompt":"make sure the deps are tidy"},{"expect":"go test ./...","kind":"paraphrase","prompt":"run every test in the module"}]
+[
+ {
+  "expect": "go mod tidy",
+  "kind": "seen",
+  "prompt": "check if the dependencies are updated"
+ },
+ {
+  "expect": "go mod tidy",
+  "kind": "seen",
+  "prompt": "are my dependencies up to date"
+ },
+ {
+  "expect": "go mod tidy",
+  "kind": "seen",
+  "prompt": "sync the dependencies"
+ },
+ {
+  "expect": "go mod download",
+  "kind": "seen",
+  "prompt": "download all the dependencies"
+ },
+ {
+  "expect": "go mod verify",
+  "kind": "seen",
+  "prompt": "verify the dependencies are intact"
+ },
+ {
+  "expect": "go mod graph",
+  "kind": "seen",
+  "prompt": "show the dependency graph"
+ },
+ {
+  "expect": "go get -u github.com/google/uuid",
+  "kind": "seen",
+  "prompt": "update the uuid package to the latest version"
+ },
+ {
+  "expect": "go build .",
+  "kind": "seen",
+  "prompt": "build my program"
+ },
+ {
+  "expect": "go test ./...",
+  "kind": "seen",
+  "prompt": "run the tests"
+ },
+ {
+  "expect": "go test -cover ./...",
+  "kind": "seen",
+  "prompt": "check test coverage"
+ },
+ {
+  "expect": "go vet ./...",
+  "kind": "seen",
+  "prompt": "vet my code"
+ },
+ {
+  "expect": "gofmt -w .",
+  "kind": "seen",
+  "prompt": "format all the go files"
+ },
+ {
+  "expect": "go version",
+  "kind": "seen",
+  "prompt": "which go version is installed"
+ },
+ {
+  "expect": "go clean -cache",
+  "kind": "seen",
+  "prompt": "clear the build cache"
+ },
+ {
+  "expect": "go mod tidy",
+  "kind": "paraphrase",
+  "prompt": "make sure the deps are tidy"
+ },
+ {
+  "expect": "go test ./...",
+  "kind": "paraphrase",
+  "prompt": "run every test in the module"
+ },
+ {
+  "prompt": "run the code generators",
+  "expect": "go generate ./...",
+  "kind": "seen"
+ },
+ {
+  "prompt": "apply go fix to update my code",
+  "expect": "go fix ./...",
+  "kind": "seen"
+ },
+ {
+  "prompt": "start a new go workspace",
+  "expect": "go work init",
+  "kind": "seen"
+ },
+ {
+  "prompt": "sync the workspace build list",
+  "expect": "go work sync",
+  "kind": "seen"
+ },
+ {
+  "prompt": "list the available go tools",
+  "expect": "go tool",
+  "kind": "seen"
+ },
+ {
+  "prompt": "profile the cpu dump with pprof",
+  "expect": "go tool pprof cpu.prof",
+  "kind": "seen"
+ },
+ {
+  "prompt": "file a bug report against go",
+  "expect": "go bug",
+  "kind": "seen"
+ },
+ {
+  "prompt": "turn off go telemetry",
+  "expect": "go telemetry off",
+  "kind": "seen"
+ },
+ {
+  "prompt": "build with the race detector",
+  "expect": "go build -race .",
+  "kind": "seen"
+ },
+ {
+  "prompt": "run only the TestLogin test",
+  "expect": "go test -run TestLogin ./...",
+  "kind": "seen"
+ },
+ {
+  "prompt": "run the benchmarks",
+  "expect": "go test -bench=. ./...",
+  "kind": "seen"
+ },
+ {
+  "prompt": "preview what gofmt would change",
+  "expect": "gofmt -d .",
+  "kind": "seen"
+ },
+ {
+  "prompt": "copy dependencies into the vendor directory",
+  "expect": "go mod vendor",
+  "kind": "seen"
+ },
+ {
+  "prompt": "show why each module is needed",
+  "expect": "go mod why -m all",
+  "kind": "seen"
+ },
+ {
+  "prompt": "show the go version stamped in the binary",
+  "expect": "go version -m app",
+  "kind": "seen"
+ }
+]

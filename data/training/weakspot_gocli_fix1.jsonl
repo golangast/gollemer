@@ -1,0 +1,16 @@
+{"domain":"gocli","input":"vendor my module dependencies","output":"go mod vendor"}
+{"domain":"gocli","input":"put the dependencies in the vendor folder","output":"go mod vendor"}
+{"domain":"gocli","input":"create a vendor directory with the dependencies","output":"go mod vendor"}
+{"domain":"gocli","input":"explain why a module is required","output":"go mod why -m all"}
+{"domain":"gocli","input":"why is this module in my build list","output":"go mod why -m all"}
+{"domain":"gocli","input":"what go tools are available","output":"go tool"}
+{"domain":"gocli","input":"show the installed go tools","output":"go tool"}
+{"domain":"gocli","input":"update uuid to the newest release","output":"go get -u github.com/google/uuid"}
+{"domain":"gocli","input":"bump the uuid package to latest","output":"go get -u github.com/google/uuid"}
+{"domain":"gocli","input":"vet all my code","output":"go vet ./..."}
+{"domain":"gocli","input":"run the vet checks on everything","output":"go vet ./..."}
+{"domain":"gocli","input":"build the binary and name it server","output":"go build -o server ."}
+{"domain":"gocli","input":"compile to an executable called server","output":"go build -o server ."}
+{"domain":"gocli","input":"show the go version embedded in the app binary","output":"go version -m app"}
+{"domain":"gocli","input":"what go version built the app binary","output":"go version -m app"}
+{"domain":"gocli","input":"run just the TestSignup tests","output":"go test -run TestSignup ./..."}

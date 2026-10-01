@@ -67,3 +67,51 @@ func TestIsRunnableGoCommand(t *testing.T) {
 		}
 	}
 }
+
+func TestGocliNewCommandRouting(t *testing.T) {
+	cases := map[string]string{
+		// New go command run requests -> gocli.
+		"run the code generators":              "gocli",
+		"apply go fix to update my code":       "gocli",
+		"start a new go workspace":             "gocli",
+		"sync the workspace build list":        "gocli",
+		"file a bug report against go":         "gocli",
+		"turn off go telemetry":                "gocli",
+		"build with the race detector":         "gocli",
+		"cross compile for windows":            "gocli",
+		"run the benchmarks":                   "gocli",
+		"skip the test cache":                  "gocli",
+		"preview what gofmt would change":      "gocli",
+		"copy dependencies into the vendor directory": "gocli",
+		"show why each module is needed":       "gocli",
+		"profile the cpu dump with pprof":      "gocli",
+		// Concept questions about the new commands -> go.
+		"what does go generate do":  "go",
+		"what does go fix do":       "go",
+		"what does go bug do":       "go",
+		"what is go telemetry":      "go",
+		"what does go tool do":      "go",
+		"when should I use a go workspace": "go",
+		// Near-misses that must NOT flip to gocli.
+		"how do i generate random numbers in go": "go",
+		"how do i fix loop variable capture in old go": "go",
+		"what is a generator in go":            "go",
+		"what is a go workspace":               "go",
+		"how do you install a Go tool":         "go",
+		"what is test coverage in Go":          "go",
+		"what are build tags in Go":            "go",
+		"what is the vendor directory in Go":   "go",
+		// gobyexample-style code requests -> gocode.
+		"show me a goroutine example":     "gocode",
+		"write a worker pool example in go": "gocode",
+		"give me a select example in go":  "gocode",
+		// ...but concept questions about examples stay put.
+		"what are example functions in go": "go",
+		"import my new examples":           "makefile",
+	}
+	for in, want := range cases {
+		if got := routeDomain(in); got != want {
+			t.Errorf("routeDomain(%q) = %s, want %s", in, got, want)
+		}
+	}
+}

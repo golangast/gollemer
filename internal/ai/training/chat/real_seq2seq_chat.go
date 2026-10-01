@@ -241,6 +241,14 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 			conv.AddReply(out, ShellDomain, false)
 			continue
 		}
+		// /flow is the beginner entry to the same reactive pipeline:
+		// "/flow create a worker pool" runs synthesis, safety proving,
+		// auto-tuning, and the visual trace, rendered in plain words.
+		if out, ok := handleFlowCommand(line); ok {
+			fmt.Printf("gollemer [%s]> %s\n", FlowDomain, out)
+			conv.AddReply(out, FlowDomain, false)
+			continue
+		}
 		if line == "/forget" {
 			conv.Clear()
 			fmt.Println("[forgotten — starting fresh]")
@@ -497,6 +505,14 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if out, ok := handleShellCommand(line); ok {
 			fmt.Printf("gollemer [%s]> %s\n", ShellDomain, out)
 			conv.AddReply(out, ShellDomain, false)
+			continue
+		}
+		// /flow is the beginner entry to the same reactive pipeline:
+		// "/flow create a worker pool" runs synthesis, safety proving,
+		// auto-tuning, and the visual trace, rendered in plain words.
+		if out, ok := handleFlowCommand(line); ok {
+			fmt.Printf("gollemer [%s]> %s\n", FlowDomain, out)
+			conv.AddReply(out, FlowDomain, false)
 			continue
 		}
 		if line == "/forget" {

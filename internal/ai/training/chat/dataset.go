@@ -76,6 +76,16 @@ const GoCliDomain = "gocli"
 // trained model would only add hallucinations.
 const GoAnalyzeDomain = "goanalyze"
 
+// BeginnerDomain is the beginner-assistant brain: it translates simple
+// natural-language requests into small, idiomatic Go programs with a
+// plain-English explanation of why each construct was used, and explains
+// Go concepts with analogies and runnable snippets. Fully deterministic
+// (no neural model), like goanalyze: templates are exact, so a trained
+// model would only add hallucinations. It fires only on explicit
+// beginner markers ("beginner:", "xray", "eli5", ...), so it can never
+// steal requests meant for the go/gocode brains.
+const BeginnerDomain = "beginner"
+
 // UnifiedDomain is the unified chat mode: a single chat session that
 // routes each message to the appropriate domain model (social, go,
 // gocli, gocode, makefile) based on input intent.
@@ -99,7 +109,7 @@ var gocodeTerms = regexp.MustCompile(`(?i:\bwrite\b[^.]{0,40}\b(function|func|co
 // NOTE: the bare word "go" is matched case-sensitively only — the language
 // name is capitalized in this dataset ("use Go"), while the verb is not
 // ("how did your day go"). Plurals (channels, slices) are included.
-var goTerms = regexp.MustCompile(`(?i:\b(goroutines?|closures?|defers?|structs?|interfaces?|slices?|channels?|modules?|cgo|generics?|packages?|funcs?|functions?|methods?|race conditions?|compil\w*|architect\w*|waitgroups?|pointers?|executables?|binar\w*|mutex\w*|documentation|profiling|builtins?|error handling|builds?|panics?|blank identifiers?|anonymous functions?|select|gomaxprocs|gofmt|godoc|delete|maps?|printf|sprintf|unmarshal|marshal|pipelines?|fan[- ]?out|fan[- ]?in|done (channels?|signals?)|context cancellation|errors?|goproxy|gosumdb|testmain|workspaces?|shadowing|loop variables?|zero values?|init functions?|benchmarks?|testdata|golden files?|work stealing|replace directive|minimal version|blank imports?|dot imports?|producers?|consumers?|config|standard input|stdin|logs|sync\.?\s*cond|time\.?\s*after|flaky|deferred|integer division|json|float64|slicing|concurrency|context|imports?|t\s+helper|t\s+cleanup|test coverage|from go|time values|string of an int|empty array|v2\b|test my code|tasks|configuration|cached|parallel|share.*value|read heavy|first of several|test pass|fail together|skip.*test|lines.*tests?)\b|\bin go\b|\bgo (program|programs|string|server|language|programming)\b|\b(can|does) go\b|\bwhat is go\b|\blearn(ing)? go\b|\bfmt\b|\berrors\.\w+|\bt\.(helper|cleanup)\b|\binit\b.*\bmain\b)|\bdepende|\bnew\(\)|\bmake\(\)|\bGo\b`)
+var goTerms = regexp.MustCompile(`(?i:\b(goroutines?|closures?|defers?|structs?|interfaces?|slices?|channels?|modules?|cgo|generics?|packages?|funcs?|functions?|methods?|race conditions?|compil\w*|architect\w*|waitgroups?|pointers?|executables?|binar\w*|mutex\w*|documentation|profiling|builtins?|error handling|builds?|panics?|blank identifiers?|anonymous functions?|select|gomaxprocs|gofmt|godoc|delete|maps?|printf|sprintf|unmarshal|marshal|pipelines?|fan[- ]?out|fan[- ]?in|done (channels?|signals?)|context cancellation|errors?|goproxy|gosumdb|testmain|workspaces?|shadowing|loop variables?|zero values?|init functions?|benchmarks?|testdata|golden files?|work stealing|replace directive|minimal version|blank imports?|dot imports?|producers?|consumers?|config|standard input|stdin|logs|sync\.?\s*cond|time\.?\s*after|flaky|deferred|integer division|json|float64|slicing|concurrency|context|imports?|t\s+helper|t\s+cleanup|test coverage|from go|time values|string of an int|empty array|v2\b|test my code|tasks|configuration|cached|parallel|share.*value|read heavy|first of several|test pass|fail together|skip.*test|lines.*tests?|templates?|recursion|recursive|regex|regular expressions?|enums?|subcommands?)\b|\bin go\b|\bgo (program|programs|string|server|language|programming)\b|\b(can|does) go\b|\bwhat is go\b|\blearn(ing)? go\b|\bfmt\b|\berrors\.\w+|\bt\.(helper|cleanup)\b|\binit\b.*\bmain\b)|\bdepende|\bnew\(\)|\bmake\(\)|\bGo\b`)
 
 // ClassifyDomain tags a pair by its content.
 func ClassifyDomain(input, output string) string {
@@ -418,7 +428,7 @@ var goStdlibQuestion = regexp.MustCompile(`(?i:\bhow do i\b.*\b(string|strings|c
 // a question like "what is package main" matches gocodeTerms (via the
 // literal "package main") but is a concept question, not a code request,
 // so it routes to GoDomain.
-var gocodeCodegen = regexp.MustCompile(`(?i:^\s*(code|check|add|sum|build|compute|print|multiply|count|find|double|total)\b)|\b(write|give me|i need|i want|create|generate|define|declare|build|compute|print|multiply|count|find|make me|make a|make an)\b[^.]{0,40}\b(function|func|code|program|method|struct|main|check|checker|helper|type|adder|maker|factorial|loop)\b|\ba\s+program\s+that\b|\bfunction\s+that\b|\bprogram\b.*\bpackage main\b|\bsay hello\b.*\bin go\b|\bfactorial\b.*\bcode\b|\bcode\b.*\bfactorial\b|\btell me if\b.*\b(divides|is)\b|\bi want to\b.*\b(add|sum|divide|multiply)\b|\bfunction\s+for\b|\bwith\s+(a\s+)?function\b|\bwith\s+code\b|\bmaker\b.*\bin go\b|\b(checker)\b.*\bin go\b|\b(find|get)\b.*\b(largest|smallest|biggest|maximum|minimum)\b|\b(biggest|largest|smallest|greater|total)\b.*\bof\b|\bwhich of two\b|\b(division|addition|subtraction|multiplication)\b.*\bin go\b|\bhow do i\b.*\btest\b.*\bif\b|\bhow do i\b.*\b(get|find|compute|declare|add|sum|divide|total|multiply|count|check)\b.*\bin go\b|\bfunc\s+[a-zA-Z_][a-zA-Z0-9_]*\s*\(|:=|\bgo\s+(code|function|func)\b|\bin\s+go\b.*\b(function|func|code|type|struct)\b`)
+var gocodeCodegen = regexp.MustCompile(`(?i:^\s*(code|check|add|sum|build|compute|print|multiply|count|find|double|total)\b)|\b(write|give me|i need|i want|create|generate|define|declare|build|compute|print|multiply|count|find|make me|make a|make an)\b[^.]{0,40}\b(function|func|code|program|method|struct|main|check|checker|helper|type|adder|maker|factorial|loop)\b|\b(show me|write|give me|create)\b[^.]{0,40}\bexamples?\b|\ba\s+program\s+that\b|\bfunction\s+that\b|\bprogram\b.*\bpackage main\b|\bsay hello\b.*\bin go\b|\bfactorial\b.*\bcode\b|\bcode\b.*\bfactorial\b|\btell me if\b.*\b(divides|is)\b|\bi want to\b.*\b(add|sum|divide|multiply)\b|\bfunction\s+for\b|\bwith\s+(a\s+)?function\b|\bwith\s+code\b|\bmaker\b.*\bin go\b|\b(checker)\b.*\bin go\b|\b(find|get)\b.*\b(largest|smallest|biggest|maximum|minimum)\b|\b(biggest|largest|smallest|greater|total)\b.*\bof\b|\bwhich of two\b|\b(division|addition|subtraction|multiplication)\b.*\bin go\b|\bhow do i\b.*\btest\b.*\bif\b|\bhow do i\b.*\b(get|find|compute|declare|add|sum|divide|total|multiply|count|check)\b.*\bin go\b|\bfunc\s+[a-zA-Z_][a-zA-Z0-9_]*\s*\(|:=|\bgo\s+(code|function|func)\b|\bin\s+go\b.*\b(function|func|code|type|struct)\b`)
 
 // questionForm marks inputs phrased as questions about a concept rather
 // than requests to produce code.
@@ -434,7 +444,7 @@ var goWorkflow = regexp.MustCompile(`\bGo module\b|\bGo binary\b|\bdependency\b|
 // A bare invocation ("go mod tidy", "gofmt -w .") is a run request for
 // GoCliDomain; the same literal inside a question ("what does go mod
 // tidy do") is a concept question for GoDomain — see isGoCliRequest.
-var goCommandLiteral = regexp.MustCompile(`(?i:\bgo\s+(mod\s+(init|tidy|download|verify|graph)|get\b|build\b|run\b|test\b|vet\b|list\b|doc\b|env\b|version\b|install\b|clean\b)|\bgofmt\b)`)
+var goCommandLiteral = regexp.MustCompile(`(?i:\bgo\s+(mod\s+(init|tidy|download|verify|graph)|get\b|build\b|run\b|test\b|vet\b|list\b|doc\b|env\b|version\b|install\b|clean\b|generate\b|fix\b|work\b|tools?\b|bug\b)|\bgofmt\b)`)
 
 // runOneTestQuestion marks the explanatory "how do you run one test"
 // phrasing, which asks what the command looks like (GoDomain) rather
@@ -486,7 +496,7 @@ var gocliIntent = regexp.MustCompile(`(?i:` +
 	`|\blist\b.*\bpackages\b` +
 	`|\buuid\b` +
 	`|\bbuild\b.*\b(my|the|this|our|every|all)\b.*\b(program|project|binary|packages|module)\b` +
-	`|\bcompile\b.*\b(program|project|packages|module|everything|code)\b` +
+	`|\bcompile\b.*\b(program|project|packages|module|everything|code|executable)\b` +
 	`|\bcreate\b.*\bexecutable\b` +
 	`|\brun\b.*\b(my|the|this)\b.*\b(program|package)\b|\bexecute\b.*\bprogram\b` +
 	`|\b(run|execute)\b.*\btests?\b|\btest\b.*\bpackages\b` +
@@ -497,9 +507,35 @@ var gocliIntent = regexp.MustCompile(`(?i:` +
 	`|\bgo doc\b|\bdocs?\b.*\bfor\b|\bdocumentation\b.*\bfor\b` +
 	`|\bgo version\b|\bversion\b.*\binstalled\b` +
 	`|\bgo env\b|\benvironment settings\b|\bmodule cache\b` +
-	`|\binstall\b.*\b(binary|command|program|path)\b` +
+	`|\binstall\b.*\b(binar\w*|commands?|programs?|paths?|tools?)\b` +
 	`|\b(clean|clear)\b.*\b(build )?cache\b` +
 	`|\b(init|initiali[sz]e)\b.*\b(module|project)\b` +
+	// go generate / fix / work / tool / bug / telemetry run requests.
+	`|\bgo\s+generate\b|\bcode\s+generators?\b|\bregenerate\b|\bstringer\b|\bmocks?\b.*\bgenerat` +
+	`|\bgo\s+fix\b|\bmigrat(e|ion)\b.*\bcode\b` +
+	`|\bgo\s+works?\b|\b(start|create)\b.*\bworkspace\b|\bworkspace\b.*\b(sync|use)\b|\bsync\b.*\bworkspace\b|\badd\b.*\bworkspace\b` +
+	`|\bgo\s+bug\b|\bbug\s+report\b.*\bgo\b|\bissue\s+tracker\b` +
+	`|\btelemetry\b` +
+	`|\bpprof\b|\bdisassembl` +
+	`|\brace\b.*\bdetector\b|\bdetector\b.*\brace\b` +
+	`|\bname\b.*\b(binary|output)\b` +
+	`|\bcross.?compil` +
+	`|\bbuild\b.*\btags?\b` +
+	`|\bfrom\s+scratch\b|\brebuild\b` +
+	`|\bwithout\s+running\b` +
+	`|\brun\b.*\bbenchmarks?\b` +
+	`|\bshow\b.*\bcoverage\b` +
+	`|\bskip\b.*\btest\s+cache\b` +
+	`|\bpreview\b.*\bformat|\bneed\b.*\bformatting\b|\bformat\w*\b.*\bdiff\b` +
+	`|\bvendor\b.*\bdependenc|\bdependenc.*\bvendor\b` +
+	`|\bmodule\b.*\bgraph\b` +
+	`|\bwhy\b.*\bmodules?\b` +
+	`|\bmodule\s+path\b` +
+	`|\bpersist\b.*\b(env|settings?)\b` +
+	`|\bwhere\b.*\binstalled\b` +
+	`|\bpass\b.*\barguments?\b` +
+	`|\brun\b.*\bsingle\b.*\bfile\b` +
+	`|\bstamped\b` +
 	`|` + `^\s*test\s+my\s+code\b` +
 	`)`)
 
@@ -567,6 +603,13 @@ func routeDomain(input string) string {
 	// training dataset" still falls through to the makefile brain.
 	if analyzeVerb.MatchString(input) && extractAnalyzePath(input) != "" {
 		return GoAnalyzeDomain
+	}
+	// Explicit beginner/xray requests go to the beginner brain: small
+	// generated programs with plain-English explanations, and concept
+	// explanations with analogies. Checked before makefileTerms/goTerms
+	// so the marker always wins.
+	if beginnerIntent.MatchString(input) {
+		return BeginnerDomain
 	}
 	if makefileTerms.MatchString(input) || makefileIntent.MatchString(input) {
 		return MakefileDomain
@@ -643,6 +686,24 @@ var analyzeIntent = regexp.MustCompile(`(?i:` + strings.Join(analyzeIntentPatter
 
 // analyzeVerb is the bare reading verb on its own.
 var analyzeVerb = regexp.MustCompile(`(?i:\b(analyse|analyze|analysing|analyzing)\b)`)
+
+// beginnerIntentPatterns mark explicit beginner-assistant requests: the
+// user wants a small Go program generated with a plain-English
+// explanation, or a concept explained with an analogy. Every pattern
+// requires an explicit beginner marker, so ordinary "write a function"
+// (gocode) and "what is a channel" (go) requests never match.
+var beginnerIntentPatterns = []string{
+	`\bbeginner\b`,
+	`\bx-?ray\b`,
+	`\beli5\b`,
+	`\blike i'?m a beginner\b`,
+	`\bexplain (it |this )?simply\b`,
+	`\bin simple terms\b`,
+	`\bfor (a )?beginners?\b`,
+}
+
+// beginnerIntent is the compiled union of beginnerIntentPatterns.
+var beginnerIntent = regexp.MustCompile(`(?i:` + strings.Join(beginnerIntentPatterns, "|") + `)`)
 
 // makeExplain marks "what does make X do" questions as conversational.
 // The user wants an explanation of the command, not a request to run it.

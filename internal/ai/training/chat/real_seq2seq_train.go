@@ -229,9 +229,11 @@ func loadTrainingCheckpoint(tok *tokenizer.Tokenizer, curFP uint64, ckptPath, me
 
 // dimsForDomain returns (embeddingDim, hiddenDim) per domain. The gocode
 // domain separates 24 near-identical code templates, so it gets a wider
-// model; the MoE expert width scales as hiddenDim/2 automatically.
-// social/makefile keep their original dims so existing .gob checkpoints
-// (which store their dims) stay valid and retraining stays comparable.
+// model; the gocli domain now separates ~40 near-identical commands, so it
+// gets the same wider model. The MoE expert width scales as hiddenDim/2
+// automatically. social/makefile keep their original dims so existing .gob
+// checkpoints (which store their dims) stay valid and retraining stays
+// comparable.
 func dimsForDomain(domain string) (embedDim, hiddenDim int) {
 	if domain == GocodeDomain || domain == GoDomain || domain == GoCliDomain || domain == SocialDomain || domain == MakefileDomain {
 		return 128, 256
@@ -462,9 +464,10 @@ func RunRealSeq2SeqTraining(projectRoot, domain string, resume bool) error {
 		embedDim, hiddenDim := dimsForDomain(domain)
 		// Stage-3 bigger model: the accumulator-binding miss is a long-range
 		// dependency limit, and the copy mechanism needs the extra capacity to
-		// train stably. Other domains keep their dims so their checkpoints
-		// stay valid.
-		if domain == GocodeDomain {
+		// train stably. The gocli domain separates ~40 near-identical
+		// commands and needs the same headroom. Other domains keep their
+		// dims so their checkpoints stay valid.
+		if domain == GocodeDomain || domain == GoCliDomain {
 			embedDim, hiddenDim = 256, 512
 		}
 		model, err = seq2seq.NewSeq2Seq(v.Size(), v.Size(), embedDim, hiddenDim, tok, v)

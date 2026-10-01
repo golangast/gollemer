@@ -1,0 +1,8 @@
+{"domain":"gocli","input":"run the code generator tools","output":"go generate ./..."}
+{"domain":"gocli","input":"execute the code generators","output":"go generate ./..."}
+{"domain":"gocli","input":"init a go workspace","output":"go work init"}
+{"domain":"gocli","input":"set up a go workspace","output":"go work init"}
+{"domain":"gocli","input":"begin a new go workspace","output":"go work init"}
+{"domain":"gocli","input":"copy the dependencies to the vendor directory","output":"go mod vendor"}
+{"domain":"gocli","input":"vendor the dependencies","output":"go mod vendor"}
+{"domain":"gocli","input":"display the go version stamped into the binary","output":"go version -m app"}

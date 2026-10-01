@@ -154,6 +154,20 @@ red = entry point, arrows run importer → imported:
 
 ![gollemer package dependency map](docs/codebase-map.png)
 
+Ask for the interactive version and it writes a standalone HTML page —
+open it in any browser, no server needed:
+
+```
+you> show me a visual
+gollemer [goanalyze]> Interactive visual:
+  ~/workspace/your_files/codebase-maps/github-com-golangast-gollemer.html
+```
+
+The page contains the SVG package-dependency graph (blue nodes, red =
+entry point, arrows run importer → imported), the package stats, and
+the reading-order cards — everything from the text analysis, clickable
+and zoomable in the browser.
+
 Follow-ups reuse the last analyzed project, so you can drill in:
 
 ```
@@ -229,19 +243,364 @@ reactive pipeline:
 Run it three ways:
 
 ```sh
-make shell                                  # interactive REPL (gollemer> )
-make shell-once PROMPT="build a list of squares"   # one prompt, non-interactive
-go run cmd/gollemer/main.go                 # the file alone, no make needed
+make shell                                       # interactive REPL (gollemer> )
+make shell-once PROMPT="create a worker pool"    # one prompt, non-interactive
+go run cmd/gollemer/main.go                      # the file alone, no make needed
 ```
+
+### Example: `make shell-once PROMPT="create a worker pool"`
+
+```sh
+$ make shell-once PROMPT="create a worker pool"
+=== GENERATED GO SOURCE ===
+package main
+
+import (
+	"fmt"
+	"sync"
+)
+
+func worker(id int, jobs <-chan int, results chan<- int, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for j := range jobs {
+		results <- j * 2
+	}
+}
+
+func main() {
+	const numJobs = 10
+	jobs := make(chan int, numJobs)
+	results := make(chan int, numJobs)
+	...
+}
+
+💡 BEGINNER CONCEPT ANALOGY
+A restaurant kitchen: orders arrive on a ticket rail (the channel) and
+each cook (a goroutine) grabs the next ticket until the rail is empty.
+
+─── VISUAL EXECUTION TRACE ───
+[1] Main
+└── main() · package main in repl.go — calls worker
+    entry point: spawns 1 goroutine, runs 3 loops, sends on channels 1x, 10 statements
+[2] Worker
+└── worker() · package main in repl.go — leaf
+    runs 1 loop, sends on channels 1x, defers cleanup, 2 statements
+
+STATUS BADGES
+⚠ UNVERIFIED — 0 panic paths, 0 guard clauses
+  1 deferred cleanup
+⚡ PERF — 0 → 0 allocs/op (saved 0)
+```
+
+### Example: auto-tuning in action
+
+```sh
+$ make shell-once PROMPT="build a list of squares"
+=== GENERATED GO SOURCE ===
+...
+func squares(n int) []int {
+	out := make([]int, 0, n) // preallocated — the tuner sized it from the loop bound
+	for i := 0; i < n; i++ {
+		out = append(out, i*i)
+	}
+	return out
+}
+...
+⚡ PERF — 1 → 0 allocs/op (saved 1)
+```
+
+The tuner rewrites `var out []int` into `make([]int, 0, n)` and runs a
+tiny genetic algorithm over buffer capacities, keeping the winners in
+session memory so later prompts start from what already worked.
+
+### Example: inside the chat
 
 Inside `make chat`, the `/shell` command runs the same pipeline and
 prints the terminal output inline:
 
 ```
-you> /shell create a worker pool
+you> /shell create an http server
 gollemer [shell]> === GENERATED GO SOURCE ===
+package main
+...
+func health(w http.ResponseWriter, r *http.Request) { ... }
+func main() { http.HandleFunc("/health", health); ... }
+
+💡 BEGINNER CONCEPT ANALOGY
+A reception desk that never closes: every visitor (request) is greeted
+the same way, one after another.
+
+─── VISUAL EXECUTION TRACE ───
+[1] Main
+└── main() · package main in repl.go — calls health
 ...
 ```
+
+### Prompts to try
+
+| Prompt | Shows off |
+|--------|-----------|
+| `create a worker pool` | goroutines, channels, trace with handler steps |
+| `create an http server` | handler registration tracing (`/health`) |
+| `read a file line by line` | error guards → `✓ SAFE` badge |
+| `build a list of squares` | slice preallocation + PERF badge |
+| `count with a mutex` | mutex-protected shared counter |
+
+Locally, `make shell-classic` (alias: `go run ./cmd/gollemer-classic`)
+is the older flag-driven pipeline CLI (`-prompt`, `-auto`, `-tune`,
+`-selfheal`, …) — kept for scripting, not yet pushed.
+
+---
+
+## 🔰 beginner — Go explained like you're new
+
+The seventh brain is deterministic (no neural net): it explains Go
+concepts with a one-line analogy, a tiny runnable snippet, and the key
+rules — or turns a plain-English request into small Go with a
+plain-English "why". Trigger it with the `beginner` marker, or phrases
+like `explain simply`, `eli5`, `like I'm a beginner`.
+
+Real output:
+
+````
+you> beginner: explain goroutines
+gollemer [beginner]> **Goroutines** — Hiring an extra cook — the kitchen
+keeps working while they chop vegetables in the background.
+```go
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+func chop(veg string) {
+	fmt.Println("chopping", veg)
+}
+
+func main() {
+	go chop("carrots")
+	go chop("onions")
+	time.Sleep(100 * time.Millisecond)
+	fmt.Println("dinner is served")
+}
+```
+Key rules:
+- When main returns, the program exits — even if goroutines are still running.
+- Use channels or a sync.WaitGroup to wait for goroutines to finish.
+- Don't communicate by sharing memory; share memory by communicating (or guard it with a mutex).
+````
+
+````
+you> beginner: create a worker pool
+gollemer [beginner]> ```go
+package main
+
+import (
+	"fmt"
+	"sync"
+)
+
+func worker(id int, jobs <-chan int, results chan<- int, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for j := range jobs {
+		results <- j * 2
+	}
+}
+...
+```
+**Why this code:** A WaitGroup lets main block on wg.Wait() until every
+worker finishes — without it the program could exit while jobs are
+still running. Closing the jobs channel tells workers no more work is
+coming so their range loops end, and results is closed only after
+wg.Wait() so the final draining loop terminates instead of deadlocking.
+````
+
+It covers variables, if/else, loops, functions, slices, maps, structs,
+pointers, errors, and concurrency primitives — ask `beginner: explain
+<concept>`, or `beginner: <do something>` to get code.
+
+---
+
+## 🌊 flow — one command through the whole pipeline, in plain words
+
+`flow` ties Go's small language and AST tooling to the ease of an LLM:
+one plain-English prompt in, and out comes the Go program, a one-line
+analogy, a step-by-step walk of what it does, and the safety and speed
+verdicts — no jargon. It runs the reactive engine (`pkg/engine`):
+synthesis → symbolic safety proving → auto-tuning → visual trace.
+
+Three ways to run it:
+
+```sh
+make flow PROMPT="count with a mutex"        # terminal
+go run ./cmd/gollemer-classic -flow -prompt "count with a mutex"
+```
+
+```
+/flow count with a mutex                      # inside make chat
+```
+
+Real output:
+
+````
+Here's your Go program:
+
+```go
+package main
+
+import (
+	"fmt"
+	"sync"
+)
+
+func main() {
+	var mu sync.Mutex
+	count := 0
+	var wg sync.WaitGroup
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			mu.Lock()
+			count++
+			mu.Unlock()
+		}()
+	}
+	wg.Wait()
+	fmt.Println("count:", count)
+}
+```
+
+Think of it like this: An independent worker at a factory line:
+lightweight and managed by Go's runtime scheduler.
+
+What it does, step by step:
+1. Main
+
+✅ Safety: checked — no unchecked nil dereferences, no leaked resources.
+⚡ Speed: already lean — the tuner found nothing to trim.
+````
+
+It knows the same things the beginner brain knows (worker pools,
+mutex counters, file I/O, HTTP servers, JSON, tickers, …) — anything
+else gets a plain-English "I don't know how to build that yet" listing
+what it can do. `/flow` runs in-process in the chat; `make flow` goes
+through the classic CLI.
+
+---
+
+## 🧪 The pkg/ engine room — how to run it all
+
+The heavy lifting lives in `pkg/` as plain library packages. Two ways
+to run them: their test suites, or the classic CLI that wires them
+together.
+
+### 1. The test suites (runs everything)
+
+```sh
+go test ./pkg/...          # all nine packages
+go test ./pkg/engine/ -v   # one package, verbose
+```
+
+All nine pass. This is also the fastest way to exercise `pkg/engine`
+(the reactive NL → AST → prove → tune → trace pipeline), which has no
+CLI of its own yet — see `TestExecutePipelineWorkerPool`.
+
+### 2. The classic CLI (local only)
+
+`cmd/gollemer-classic` stitches the packages into runnable commands.
+It isn't pushed yet — these run from your working tree:
+
+```sh
+# Full pipeline demo with a scripted mock LLM (no API key needed):
+# graph → symbolic proving → MCTS sandbox eval → self-heal → auto-tune
+go run ./cmd/gollemer-classic -mock
+```
+
+Real output (trimmed):
+
+```
+demo: full pipeline — graph → prove → MCTS → self-heal → auto-tune → commit
+🔍 Resolving Graph
+   [graph] 3 nodes, vector search + depth-2 expansion -> 3 context chunks
+🧠 Drafting 3 candidates
+🛡️ Symbolic Proving
+   candidate-0: clean ✅
+   candidate-1: clean ✅
+   candidate-2: clean ✅
+   3/3 candidates survived proving
+🧪 MCTS Parallel Sandboxes [3/3]
+   winner: candidate-0  fitness=20.0  allocs/op=0  ns/op=0
+🔧 Self-Healing
+   healed on attempt 1 ✅
+⚡ Auto-Tuning Memory [iter 1/3]: trying prealloc-append...
+   ...
+```
+
+```sh
+# pkg/ast: which files would need updating if you changed a symbol?
+go run ./cmd/gollemer-classic -impact -symbol "BuildGraph" -dir ./pkg/memory
+# [impact] Symbol "BuildGraph" modified -> 3 dependent files identified
+#   cmd/gollemer-classic/pipeline.go:222: BuildGraph
+#   pkg/chat/server.go:113: BuildGraph
+#   pkg/memory/indexer.go:97: BuildGraph
+```
+
+```sh
+# pkg/ast: infer a repo's coding conventions (for generation prompts)
+go run ./cmd/gollemer-classic -style -dir ./pkg/memory
+# error handling: fmt_wrap
+# struct tags:    [json gob]
+# uses context:   false
+# doc density:    0.60
+```
+
+### 3. Per-package cheat sheet
+
+| Package | What it does | How to run it |
+|---------|--------------|---------------|
+| `pkg/ast` | Load a Go module into a `CodebaseContext`; chunk files; impact radius; repo style | `-impact`, `-style` above; `go test ./pkg/ast/` |
+| `pkg/analysis` | Symbolic safety proving: nil derefs, resource leaks, slice bounds (soundy, not sound) | `-mock` proving stage; `go test ./pkg/analysis/` |
+| `pkg/memory` | Knowledge graph: chunk → embed → index → query a codebase | `-mock` graph stage; `go test ./pkg/memory/` |
+| `pkg/runner` | Sandboxed `go build`/`go test`/benchmark of generated code, transactional patch apply | `-mock` MCTS stage; `go test ./pkg/runner/` |
+| `pkg/synthesis` | MCTS candidate ranking + fitness; allocation optimizer | `-mock` stages; `go test ./pkg/synthesis/` |
+| `pkg/engine` | Reactive pipeline: NL → AST → prove → tune → trace | tests only: `go test ./pkg/engine/ -v` |
+| `pkg/xray` | Execution-path tracing + concept analogies | used by the shell and `pkg/engine`; `go test ./pkg/xray/` |
+| `pkg/beginner` | Beginner explanations + code generation | `beginner:` in chat; `go test ./pkg/beginner/` |
+| `pkg/chat` | HTTP codebase chat with SVG visuals | recipe below; `go test ./pkg/chat/` |
+
+### 4. pkg/chat: the web UI
+
+No CLI ships for it yet — this 20-line `main` is all it takes
+(save as `webmain.go` anywhere, then `go run webmain.go` from the repo):
+
+```go
+package main
+
+import (
+	"fmt"
+	"net/http"
+
+	"github.com/golangast/gollemer/pkg/chat"
+)
+
+func main() {
+	srv, err := chat.NewServer("./myrepo") // any local Go module
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("gollemer chat: http://localhost:8080")
+	if err := http.ListenAndServe(":8080", srv.Handler()); err != nil {
+		panic(err)
+	}
+}
+```
+
+It indexes the repo into a knowledge graph, then serves a chat page at
+`http://localhost:8080`: ask "how does saving work" and you get a
+plain-English answer plus an SVG diagram of the relevant code, with a
+safety summary (nil checks, deferred closes, score, violations).
 
 ---
 
@@ -276,6 +635,7 @@ It reads the `## target: description` comments straight out of the
 | `make debug-chat`   | Talk to Gollemer with the thought process + debug prints shown |
 | `make shell`        | Interactive natural-language Go shell (REPL: synthesis, safety, tuning, trace) |
 | `make shell-once PROMPT="..."` | Run one shell prompt non-interactively |
+| `make shell-classic ARGS="..."` | The flag-driven pipeline CLI (local only) |
 | `make sel`          | Pick a command from a columnar fuzzy finder               |
 | `make explain`      | Project overview + what each command does                 |
 | `make smarter`      | The one-command upgrade: more data → retrained brains → evals → report |
@@ -338,7 +698,7 @@ gollemer/
 ├── Makefile                    # all commands (make help / make sel / make start)
 ├── README.md                   # this file
 ├── docs/codebase-map.png       # dependency map shown in this README
-├── go.mod                      # zero dependencies — stdlib only
+├── go.mod                      # stdlib-only core (+ x/tools, x/sync, x/mod — approved)
 │
 ├── scripts/
 │   ├── start.sh                # make start — the start-here guide
@@ -348,10 +708,27 @@ gollemer/
 │   └── *_eval_cases.json       # eval prompts + expected answers
 │
 ├── cmd/
+│   ├── gollemer/               # 🐚 the shell: single-file stdlib REPL
+│   │   ├── main.go             # compiles alone: go run cmd/gollemer/main.go
+│   │   └── main_test.go        # synthesis, safety, tuning, trace tests
+│   ├── gollemer-classic/       # older flag-driven pipeline CLI (local only)
 │   └── tools/
 │       ├── goz/                # the fuzzy finder behind make sel
 │       ├── moe_inference/      # run a model from the CLI
 │       └── ...                 # one-off data + debug utilities
+│
+├── pkg/
+│   ├── beginner/               # 🔰 beginner brain engine (deterministic)
+│   │   ├── assistant.go        # concept explanations + code generation
+│   │   └── assistant_test.go
+│   ├── ast/                    # codebase contexts: load, chunk, impact, style
+│   ├── analysis/               # symbolic safety proving (nil, leaks, bounds)
+│   ├── memory/                 # knowledge graph: index + query the codebase
+│   ├── runner/                 # sandboxed build/test/benchmark of code
+│   ├── synthesis/              # MCTS candidate ranking, allocation optimizer
+│   ├── engine/                 # reactive pipeline: NL → AST → prove → tune → trace
+│   ├── xray/                   # execution tracing + concept analogies
+│   └── chat/                   # HTTP codebase chat with SVG visuals
 │
 ├── internal/ai/
 │   ├── analyze/                # 🔍 goanalyze: AST codebase reader (deterministic)
@@ -375,6 +752,9 @@ gollemer/
 │   │   ├── makefilerecall.go     # exact-match answers: makefile
 │   │   ├── conversation.go       # session memory (/history, /forget)
 │   │   ├── goanalyze.go          # 6th brain: analyze paths/URLs, /analyze command
+│   │   ├── beginner.go           # 7th brain wiring: beginner:/eli5/explain-simply routing
+│   │   ├── shell.go              # /shell command: runs cmd/gollemer -once, prints output
+│   │   ├── flow.go               # /flow command: engine pipeline in-process, plain words
 │   │   └── *_test.go             # router, recall, knowledge, routing tests
 │   └── ...
 │
@@ -401,6 +781,9 @@ gollemer/
 | Change how codebases get analyzed    | `internal/ai/analyze/` (`report.go` renders the answers) |
 | Tune training (dims, epochs)        | `real_seq2seq_train.go` (`dimsForDomain`)        |
 | Change the chat UI (`/history`, …)  | `real_seq2seq_chat.go`, `conversation.go`        |
+| Change a slash command (`/shell`, …) | `internal/ai/training/chat/shell.go`, `beginner.go` |
+| Change the shell (prompts, tuning, trace) | `cmd/gollemer/main.go` — one self-contained file |
+| Change beginner explanations    | `pkg/beginner/assistant.go` (engine), `chat/beginner.go` (wiring) |
 | Add a command                       | `Makefile` (`## name: description` — `sel` picks it up automatically) |
 
 ---
@@ -429,8 +812,9 @@ Or do it all at once: `make smarter`.
 
 ## 📊 Current state
 
-- **Pure Go, zero dependencies** (`go.mod` has no `require` block)
-- **6 brains**, 1,900+ training pairs, seq2seq + 4-expert MoE
+- **Pure Go** — stdlib-only core, plus `golang.org/x/tools`, `x/sync`,
+  `x/mod` (approved exceptions)
+- **7 brains**, 2,000+ training pairs, seq2seq + 4-expert MoE
 - Social: multiturn 9/10 · Go concepts: curated KB + neural · Gocode: 16/17 ·
   Gocli: 16/16 · Makefile: deterministic recall + neural fallback ·
   Goanalyze: deterministic AST analysis, zero training needed

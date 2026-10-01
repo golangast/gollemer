@@ -5,6 +5,9 @@
 #   make debug-chat chat with the thought process and debug prints shown
 #   make shell      interactive natural-language Go shell (REPL)
 #   make shell-once run one shell prompt non-interactively (PROMPT="...")
+#   make shell-classic
+#   make flow       one prompt through the beginner pipeline (PROMPT="...")
+#                   the full flag-driven pipeline CLI (local only)
 #   make sel        pick a command from a columnar fuzzy finder
 #   make explain    what the project is and what each command does
 #   make smarter    the one-command upgrade: expands training data, retrains the
@@ -22,7 +25,7 @@ GOGC       = 100
 GOMAXPROCS = 8
 MAIN_CMD   = go run main.go
 
-.PHONY: start chat debug-chat shell shell-once sel explain smarter eval help import \
+.PHONY: start chat debug-chat shell shell-once shell-classic flow sel explain smarter eval help import \
         train-social train-go train-gocode train-gocli train-makefile
 
 ## start: The start-here guide — what to do, what it can do, how to expand it
@@ -44,6 +47,14 @@ shell:
 ## shell-once: Run one shell prompt non-interactively: make shell-once PROMPT="build a list of squares"
 shell-once:
 	go run ./cmd/gollemer -once "$(PROMPT)"
+
+## shell-classic: The full flag-driven pipeline CLI (pass ARGS, e.g. ARGS="-help")
+shell-classic:
+	go run ./cmd/gollemer-classic $(ARGS)
+
+## flow: One prompt through the beginner pipeline — make flow PROMPT="create a worker pool"
+flow:
+	go run ./cmd/gollemer-classic -flow -prompt "$(PROMPT)"
 
 ## sel: Pick a make command from a columnar fuzzy finder
 sel:
