@@ -193,6 +193,7 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 	conv := NewConversation()
 	initSocialRecall(projectRoot)
 	initMakefileRecall(projectRoot)
+	initMakeAllowlist(projectRoot)
 	goCase := map[string]string{}
 	if domain == GocodeDomain {
 		goCase = goIdentCaseMap(projectRoot)
@@ -268,6 +269,9 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 			if mr, ok := LookupMakefileRecall(line); ok {
 				fmt.Printf("gollemer> %s\n", mr)
 				conv.AddReply(mr, MakefileDomain, false)
+				if t := runnableMakeTarget(mr); t != "" {
+					offerRunMakeCommand(sc, projectRoot, t)
+				}
 				continue
 			}
 		}
@@ -334,7 +338,7 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 // model runs: social recall, makefile recall, and the Go knowledge base.
 // It prints the reply and records it in the conversation when one hits,
 // reporting whether the message was fully handled.
-func tryDeterministicAnswer(line, d string, conv *Conversation) bool {
+func tryDeterministicAnswer(line, d string, conv *Conversation, sc *bufio.Scanner, projectRoot string) bool {
 	// Codebase Q&A: if a project was analyzed this session and the
 	// message asks about one of its symbols ("what does routeDomain
 	// do"), answer from the AST. It only fires on known symbols, so it
@@ -385,6 +389,11 @@ func tryDeterministicAnswer(line, d string, conv *Conversation) bool {
 		if mr, ok := LookupMakefileRecall(line); ok {
 			fmt.Printf("gollemer [%s]> %s\n", d, mr)
 			conv.AddReply(mr, MakefileDomain, false)
+			// A makefile reply names an exact repo command. Offer to
+			// run it directly, the same way gocli commands are run.
+			if t := runnableMakeTarget(mr); t != "" {
+				offerRunMakeCommand(sc, projectRoot, t)
+			}
 			return true
 		}
 	}
@@ -435,6 +444,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 	// Social recall: exact training-pair matches answer deterministically.
 	initSocialRecall(projectRoot)
 	initMakefileRecall(projectRoot)
+	initMakeAllowlist(projectRoot)
 
 	goCase := goIdentCaseMap(projectRoot)
 	sc := bufio.NewScanner(os.Stdin)
@@ -500,7 +510,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		}
 		conv.AddUser(line)
 		d := routeDomain(line)
-		if tryDeterministicAnswer(line, d, conv) {
+		if tryDeterministicAnswer(line, d, conv, sc, projectRoot) {
 			continue
 		}
 		model := models[d]
@@ -540,6 +550,13 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// go/gofmt invocations are ever offered, never model chatter.
 		if d == GoCliDomain && tag == GoCliDomain && isRunnableGoCommand(reply) {
 			offerRunGoCommand(sc, strings.TrimSpace(reply))
+		}
+		// A makefile neural reply names an exact repo command. Offer to
+		// run it directly (repo root, no shell), same as gocli commands.
+		if d == MakefileDomain && tag == MakefileDomain {
+			if t := runnableMakeTarget(reply); t != "" {
+				offerRunMakeCommand(sc, projectRoot, t)
+			}
 		}
 		if showThoughts {
 			printThoughtTrace(trace)
@@ -628,6 +645,89 @@ func offerRunGoCommand(sc *bufio.Scanner, cmd string) {
 		fmt.Printf("%s", out)
 	}
 	if err != nil {
+		fmt.Printf("[exit: %v]\n", err)
+		return
+	}
+	fmt.Println("[done]")
+}
+
+// makeTargetLine matches a Makefile target definition: a lowercase name
+// at the start of a line followed by a colon. Variable assignments and
+// recipe lines never match.
+var makeTargetLine = regexp.MustCompile(`^([a-z][a-z0-9_-]*):`)
+
+// runnableMakeReply matches a makefile-brain reply of the form
+// "run make <target>" and captures the target.
+var runnableMakeReply = regexp.MustCompile(`(?i:^\s*run make ([a-z][a-z0-9_-]*)\s*$)`)
+
+// makeTargetsAllowlist is the set of Makefile targets the chat may offer
+// to run, parsed from the repo Makefile at startup. The chat's own
+// entry points (chat, debug-chat) are excluded: running make chat from
+// inside the chat would nest a session inside itself.
+var makeTargetsAllowlist = map[string]bool{}
+
+// initMakeAllowlist parses the Makefile targets once per session. If the
+// Makefile can't be read the allowlist stays empty and nothing is ever
+// offered — fail closed.
+func initMakeAllowlist(projectRoot string) {
+	data, err := os.ReadFile(filepath.Join(projectRoot, "Makefile"))
+	if err != nil {
+		return
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if m := makeTargetLine.FindStringSubmatch(line); m != nil {
+			if m[1] != "chat" && m[1] != "debug-chat" {
+				makeTargetsAllowlist[m[1]] = true
+			}
+		}
+	}
+}
+
+// runnableMakeTarget extracts a whitelisted make target from a
+// makefile-brain reply ("run make eval" -> "eval"). Anything else —
+// model chatter, metachars, unknown targets — returns "" and is never
+// offered for execution.
+func runnableMakeTarget(reply string) string {
+	m := runnableMakeReply.FindStringSubmatch(reply)
+	if m == nil || shellMetachars.MatchString(m[1]) {
+		return ""
+	}
+	target := strings.ToLower(m[1])
+	if !makeTargetsAllowlist[target] {
+		return ""
+	}
+	return target
+}
+
+// offerRunMakeCommand asks for confirmation, then runs a makefile target
+// in the repo root with output streaming straight to the terminal.
+// There is no timeout: long targets (make smarter, make eval) need
+// their time, and the user confirmed interactively. Ctrl-C interrupts.
+func offerRunMakeCommand(sc *bufio.Scanner, projectRoot, target string) {
+	if !stdinIsTerminal() {
+		// Piped/scripted session: never prompt, never run.
+		return
+	}
+	fmt.Printf("[run it here? 'make %s'] [y/n]: ", target)
+	if !sc.Scan() {
+		fmt.Println("[cancelled]")
+		return
+	}
+	yn := strings.ToLower(strings.TrimSpace(sc.Text()))
+	if yn != "y" && yn != "yes" {
+		fmt.Println("[not run]")
+		return
+	}
+	fmt.Printf("[running: make %s — Ctrl-C to interrupt]\n", target)
+	// Direct execution, no shell: the target came from the parsed
+	// Makefile allowlist, so even a compromised model output cannot
+	// smuggle in flags, paths, or chained commands.
+	cmd := exec.Command("make", target)
+	cmd.Dir = projectRoot
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
 		fmt.Printf("[exit: %v]\n", err)
 		return
 	}

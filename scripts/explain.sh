@@ -48,8 +48,10 @@ Explain commands (the gocli + makefile brains):
 
 The gocli brain knows the full go toolchain (build, run, test, vet,
 fmt, mod, get, install, list, clean, doc, env, version, generate,
-fix, work, tool, bug, telemetry). It prints the exact command and
-asks [y/n] before running anything.
+fix, work, tool, bug, telemetry). The makefile brain knows every
+make command in this repo. Each prints the exact command and asks
+[run it here? ...] [y/n] — answer y and it runs right there in the
+terminal, no shell involved.
 
 Write a small Go program in plain words (the /flow command):
 
@@ -65,6 +67,7 @@ Write a small Go program in plain words (the /flow command):
 
 COMMANDS
 --------
+  make start         the start-here guide with example prompts
   make chat          talk to gollemer — one session, six brains
   make debug-chat    same, with the thought process shown
   make flow          one prompt through the pipeline, plain words:
@@ -77,15 +80,20 @@ COMMANDS
   make smarter       the one-command upgrade — more data, retrained
                      brains, evals, and a report
   make eval          score every brain on its fixed eval suite
-  make train-social  retrain the social brain (128/256 dims)
-  make train-go      retrain the Go concept brain (128/256 dims)
-  make train-gocode  retrain the Go code brain (256/512 + copy gate)
-  make train-gocli   retrain the Go CLI command brain (128/256 dims)
+  make train-social  retrain the social conversation brain
+  make train-go      retrain the Go concept brain
+  make train-gocode  retrain the Go code-generation brain
+  make train-gocli   retrain the Go CLI command brain
   make train-makefile
-                     retrain the makefile command brain (64/128 dims)
+                     retrain the makefile command brain
   make import        import new training pairs through the quality gate
                      (FILE=path.jsonl) — bad pairs are quarantined
   make help          list the commands
+
+Ask inside the chat and it will offer to run any of these for you:
+  you> list the commands
+  gollemer [makefile]> run make help
+  [run it here? 'make help'] [y/n]: y
 
 THE PKG/ ENGINE ROOM (the libraries behind the chat)
 ---------------------------------------------------

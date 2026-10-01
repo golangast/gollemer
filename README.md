@@ -66,6 +66,37 @@ with the exact command. It also knows the
 waitgroup` for the concept or `show me a waitgroup example` for the
 code.
 
+## 💬 Chat commands — say this, get that
+
+Every command below works inside `make chat`. When the chat answers
+with a `go`/`gofmt` command or a `make` command, it asks
+`[run it here? ...] [y/n]` — answer `y` and it runs right there in
+the terminal, no shell involved.
+
+| Say this | Example | What it does |
+|---|---|---|
+| Analyze a repo | `analyze this project` | Reads the repo's Go code and explains it in plain English: entry points, most-called functions, suggested reading order |
+| Analyze another repo | `analyze ~/projects/foo` or `analyze github.com/owner/repo` | Clones (if a URL) and explains that codebase instead |
+| See the structure | `show me a visual` | Draws the package dependency graph as ASCII in the terminal |
+| Ask about the code | `what does routeDomain do` | Signature, docs, and who calls it |
+| Read the source | `show me routeDomain` | Prints the actual function |
+| Find where to edit | `where would I add a retry helper` | Suggests the right file and why |
+| Tour a package | `what's in package chat` | What the package is for, its key pieces |
+| Run one idea end-to-end | `/flow count with a mutex` | Prompt → generated Go → safety check → tuned code → plain-words trace |
+| Ask about a Go command | `what does go build ./... do` | Explains the exact command |
+| Ask for a Go command | `build with the race detector` | Answers `go build -race ./...`, offers to run it |
+| Ask about a project command | `how do i retrain the model` | Answers `run make train-go`, offers to run it |
+| Ask about a Go concept | `what is a goroutine` | Plain-English explanation |
+| Ask for Go code | `write a function that reverses a string` | Generates the Go code |
+| Review the session | `/history` | Shows what it remembers from this session |
+| Start over | `/forget` | Wipes the session memory |
+| Peek at its reasoning | `/thoughts` | Toggles the per-token thought process display |
+| Leave | `/quit` | Ends the chat |
+
+The [goanalyze](#-goanalyze--point-it-at-any-go-codebase) and
+[flow](#-flow--one-command-through-the-whole-pipeline-in-plain-words)
+sections below show longer worked examples of the same commands.
+
 ---
 
 ## 🔍 goanalyze — point it at any Go codebase
@@ -394,25 +425,30 @@ It reads the `## target: description` comments straight out of the
 
 ---
 
-## ⌨️ Commands
+## ⌨️ Make commands
 
-| Command             | What it does                                              |
-|---------------------|-----------------------------------------------------------|
-| `make start`        | Start-here guide                                          |
-| `make chat`         | Talk to Gollemer — one session, six brains, clean replies only |
-| `make debug-chat`   | Talk to Gollemer with the thought process + debug prints shown |
-| `make classic ARGS="..."` | The flag-driven pipeline CLI (`-flow`, `-impact`, `-style`, …) |
-| `make sel`          | Pick a command from a columnar fuzzy finder               |
-| `make explain`      | Project overview + what each command does                 |
-| `make smarter`      | The one-command upgrade: more data → retrained brains → evals → report |
-| `make eval`         | Score every brain on its fixed eval suite                 |
-| `make train-social`   | Retrain the social brain (128/256 dims)                 |
-| `make train-go`       | Retrain the Go concept brain (128/256 dims)             |
-| `make train-gocode`   | Retrain the Go code brain (256/512 dims + copy gate)    |
-| `make train-gocli`    | Retrain the Go CLI command brain (128/256 dims)         |
-| `make train-makefile` | Retrain the makefile command brain (128/256 dims)       |
-| `make import FILE=pairs.jsonl` | Import new training pairs through the quality gate |
-| `make help`         | List the commands                                         |
+Every target, with an example and what it does. The chat knows these
+too — ask `how do i X` inside `make chat` and it answers with the
+command and offers to run it.
+
+| Command | Example | What it does |
+|---|---|---|
+| `make start` | `make start` | Prints the start-here guide with example prompts |
+| `make chat` | `make chat` | Talk to Gollemer — one session, six brains, clean replies only |
+| `make debug-chat` | `make debug-chat` | Same chat, with the thought process + debug prints shown |
+| `make classic ARGS="..."` | `make classic ARGS="-flow -prompt 'count with a mutex'"` | The flag-driven pipeline CLI (`-flow`, `-impact`, `-style`, …) |
+| `make flow PROMPT="..."` | `make flow PROMPT="count with a mutex"` | One prompt through the pipeline, in plain words |
+| `make sel` | `make sel` | Pick a command from a columnar fuzzy finder |
+| `make explain` | `make explain` | Project overview + what each command does |
+| `make help` | `make help` | List the commands |
+| `make smarter` | `make smarter` | The one-command upgrade: more data → retrained brains → evals → report |
+| `make eval` | `make eval` | Score every brain on its fixed eval suite |
+| `make train-social` | `make train-social` | Retrain the social conversation brain |
+| `make train-go` | `make train-go` | Retrain the Go concept brain |
+| `make train-gocode` | `make train-gocode` | Retrain the Go code-generation brain |
+| `make train-gocli` | `make train-gocli` | Retrain the Go CLI command brain |
+| `make train-makefile` | `make train-makefile` | Retrain the makefile command brain |
+| `make import FILE=...` | `make import FILE=my_pairs.jsonl` | Import new training pairs through the quality gate |
 
 ---
 
@@ -570,7 +606,7 @@ Or do it all at once: `make smarter`.
 
 - **Pure Go** — stdlib-only core, plus `golang.org/x/tools`, `x/sync`,
   `x/mod` (approved exceptions)
-- **7 brains**, 2,000+ training pairs, seq2seq + 4-expert MoE
+- **6 brains**, 2,000+ training pairs, trained to answer in your words
 - Social: multiturn 9/10 · Go concepts: curated KB + neural · Gocode: 16/17 ·
   Gocli: 16/16 · Makefile: deterministic recall + neural fallback ·
   Goanalyze: deterministic AST analysis, zero training needed
