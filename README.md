@@ -1,30 +1,30 @@
 # Gollemer 🤖
 
 A tiny LLM written in **pure Go** — zero external dependencies.
-One chat, six brains: every message is routed to the right one.
+One chat, seven brains: every message is routed to the right one.
 
 ```
- ┌────────────────────────────────────────────────────────────────────┐
- │                             make chat                              │
- │                                                                    │
- │ you> analyze this project                                          │
- │            │                                                       │
- │            ▼                                                       │
- │      ┌─────────────┐                                               │
- │      │   router    │─── which brain should answer?                 │
- │      └──────┬──────┘                                               │
- │             │                                                      │
- │       ┌─────────┬─────────┬─────────┬──────────┬───────────┐       │
- │       ▼         ▼         ▼         ▼          ▼           ▼       │
- │   ┌──────┐ ┌────────┐ ┌───────┐ ┌───────┐ ┌────────┐ ┌──────────┐  │
- │   │social│ │  go    │ │gocode │ │ gocli │ │makefile│ │goanalyze │  │
- │   │ chat │ │concepts│ │writes │ │English│ │"how do │ │reads Go  │  │
- │   │      │ │        │ │Go code│ │→go cmd│ │ i..."  │ │codebases │  │
- │   └──────┘ └────────┘ └───────┘ └───────┘ └────────┘ └──────────┘  │
- │                          │                                         │
- │                          ▼                                         │
- │   gollemer [goanalyze]> Project: github.com/golangast/gollemer     │
- └────────────────────────────────────────────────────────────────────┘
+ ┌──────────────────────────────────────────────────────────────────────────┐
+ │                                make chat                                 │
+ │                                                                          │
+ │ you> analyze this project                                                │
+ │            │                                                             │
+ │            ▼                                                             │
+ │      ┌─────────────┐                                                     │
+ │      │   router    │─── which brain should answer?                       │
+ │      └──────┬──────┘                                                     │
+ │             │                                                            │
+ │       ┌─────────┬─────────┬─────────┬──────────┬──────────┬───────────┐   │
+ │       ▼         ▼         ▼         ▼          ▼          ▼           ▼   │
+ │   ┌──────┐ ┌────────┐ ┌───────┐ ┌───────┐ ┌────────┐ ┌──────────┐ ┌────────┐│
+ │   │social│ │  go    │ │gocode │ │ gocli │ │makefile│ │goanalyze │ │beginner││
+ │   │ chat │ │concepts│ │writes │ │English│ │"how do │ │reads Go  │ │simple  ││
+ │   │      │ │        │ │Go code│ │→go cmd│ │ i..."  │ │codebases │ │Go+why  ││
+ │   └──────┘ └────────┘ └───────┘ └───────┘ └────────┘ └──────────┘ └────────┘│
+ │                          │                                               │
+ │                          ▼                                               │
+ │   gollemer [goanalyze]> Project: github.com/golangast/gollemer           │
+ └──────────────────────────────────────────────────────────────────────────┘
 ```
 
 The tag (`[go]`, `[social]`, …) always shows which brain answered.
@@ -49,11 +49,23 @@ Try one prompt from each brain:
 | `what command formats my code`           | gocli      | gives the exact `gofmt` command, asks [y/n] before running |
 | `how do i chat with gollemer`            | makefile   | suggests `run make chat`                  |
 | `analyze this project`                   | goanalyze  | maps the codebase — packages, engine room, reading order (see below) |
+| `beginner: create a worker pool`          | beginner   | writes small Go with a plain-English "why", explains concepts with analogies |
 
 ```sh
 make sel       # browse every command in a fuzzy finder (see below)
 make explain   # full project overview + command reference
 ```
+
+The gocli brain covers the full `go` toolchain (per
+[pkg.go.dev/cmd/go](https://pkg.go.dev/cmd/go)): `build`, `run`, `test`,
+`vet`, `fmt`/`gofmt`, `mod`, `get`, `install`, `list`, `clean`, `doc`,
+`env`, `version`, `generate`, `fix`, `work`, `tool`, `bug`, and
+`telemetry` — ask in plain English (`build with the race detector`,
+`turn off go telemetry`, `run just the TestLogin tests`) and it answers
+with the exact command. It also knows the
+[Go by Example](https://gobyexample.com/) catalog: ask `what is a
+waitgroup` for the concept or `show me a waitgroup example` for the
+code.
 
 ---
 
@@ -198,6 +210,41 @@ Notes:
 
 ---
 
+## 🐚 gollemer shell — natural language → Go, in the terminal
+
+A single-file, stdlib-only REPL (`cmd/gollemer/main.go` — it compiles
+alone with `go run cmd/gollemer/main.go`). Every prompt runs a 4-stage
+reactive pipeline:
+
+1. **AST synthesis** — plain English becomes idiomatic Go
+2. **Format & parse** — `go/parser` + `go/format`, then auto-tuning
+   (deterministic slice preallocation + a tiny genetic algorithm that
+   tunes buffer capacities against static demand; winners persist in
+   session memory and seed future runs)
+3. **Static safety inspection** — guard clauses via `ast.Inspect`,
+   verified only with zero panic paths
+4. **Trace & analogy** — visual execution walk plus a one-sentence
+   real-world analogy
+
+Run it three ways:
+
+```sh
+make shell                                  # interactive REPL (gollemer> )
+make shell-once PROMPT="build a list of squares"   # one prompt, non-interactive
+go run cmd/gollemer/main.go                 # the file alone, no make needed
+```
+
+Inside `make chat`, the `/shell` command runs the same pipeline and
+prints the terminal output inline:
+
+```
+you> /shell create a worker pool
+gollemer [shell]> === GENERATED GO SOURCE ===
+...
+```
+
+---
+
 ## 🎯 `make sel` — the command picker
 
 Don't remember the command names? `make sel` lists every target in
@@ -225,8 +272,10 @@ It reads the `## target: description` comments straight out of the
 | Command             | What it does                                              |
 |---------------------|-----------------------------------------------------------|
 | `make start`        | Start-here guide                                          |
-| `make chat`         | Talk to Gollemer — one session, six brains, clean replies only |
+| `make chat`         | Talk to Gollemer — one session, seven brains, clean replies only |
 | `make debug-chat`   | Talk to Gollemer with the thought process + debug prints shown |
+| `make shell`        | Interactive natural-language Go shell (REPL: synthesis, safety, tuning, trace) |
+| `make shell-once PROMPT="..."` | Run one shell prompt non-interactively |
 | `make sel`          | Pick a command from a columnar fuzzy finder               |
 | `make explain`      | Project overview + what each command does                 |
 | `make smarter`      | The one-command upgrade: more data → retrained brains → evals → report |

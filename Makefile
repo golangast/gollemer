@@ -1,8 +1,10 @@
-# Gollemer — one chat, five brains.
+# Gollemer — one chat, seven brains.
 #
 #   make start      the start-here guide: what to do, what it can do, how to expand it
 #   make chat       talk to gollemer (unified chat: social, go, code, makefile, gocli)
 #   make debug-chat chat with the thought process and debug prints shown
+#   make shell      interactive natural-language Go shell (REPL)
+#   make shell-once run one shell prompt non-interactively (PROMPT="...")
 #   make sel        pick a command from a columnar fuzzy finder
 #   make explain    what the project is and what each command does
 #   make smarter    the one-command upgrade: expands training data, retrains the
@@ -20,7 +22,7 @@ GOGC       = 100
 GOMAXPROCS = 8
 MAIN_CMD   = go run main.go
 
-.PHONY: start chat debug-chat sel explain smarter eval help import \
+.PHONY: start chat debug-chat shell shell-once sel explain smarter eval help import \
         train-social train-go train-gocode train-gocli train-makefile
 
 ## start: The start-here guide — what to do, what it can do, how to expand it
@@ -34,6 +36,14 @@ chat:
 ## debug-chat: Chat with the thought process and debug prints shown
 debug-chat:
 	$(MAIN_CMD) -real-chat -domain unified -debug-chat
+
+## shell: Interactive natural-language Go shell — synthesis, safety, tuning, trace
+shell:
+	go run ./cmd/gollemer
+
+## shell-once: Run one shell prompt non-interactively: make shell-once PROMPT="build a list of squares"
+shell-once:
+	go run ./cmd/gollemer -once "$(PROMPT)"
 
 ## sel: Pick a make command from a columnar fuzzy finder
 sel:

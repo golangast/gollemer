@@ -2,7 +2,7 @@
 # make explain — what Gollemer is and what each make command does.
 cat << 'EOF'
 Gollemer — a tiny LLM in pure Go, no external dependencies.
-Six brains, one chat: every message is routed to the right one.
+Seven brains, one chat: every message is routed to the right one.
 
   social    conversation — chats, answers questions, remembers the session
   go        Go concepts — goroutines, slices, errors, modules, gotchas
@@ -12,9 +12,19 @@ Six brains, one chat: every message is routed to the right one.
   goanalyze reads a Go codebase with go/ast — entry points, hot spots,
             package dependencies, reading order, where to change things
             (deterministic, no neural model)
+  beginner  explains Go simply — analogies, tiny snippets, plain-English
+            "why" for generated code (deterministic, no neural model)
+
+The shell is a separate single-file REPL (cmd/gollemer/main.go):
+every prompt runs synthesis → format/parse → safety inspection →
+genetic auto-tuning → visual execution trace, rendered in the
+terminal with ANSI color.
 
 Commands:
-  make chat          talk to gollemer — one session, six brains
+  make chat          talk to gollemer — one session, seven brains
+  make shell         interactive natural-language Go shell (REPL)
+  make shell-once    run one shell prompt: PROMPT="build a list of squares"
+  /shell <prompt>    (inside make chat) run the shell pipeline inline
   make sel           pick a command from a columnar fuzzy finder
   make explain       this overview
   make smarter       the one-command upgrade — more data, retrained

@@ -233,6 +233,14 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 			}
 			continue
 		}
+		// /shell is the explicit entry to the reactive pipeline shell:
+		// "/shell build a list of squares" runs synthesis, safety,
+		// tuning, and the visual trace, printing the terminal output.
+		if out, ok := handleShellCommand(line); ok {
+			fmt.Printf("gollemer [%s]> %s\n", ShellDomain, out)
+			conv.AddReply(out, ShellDomain, false)
+			continue
+		}
 		if line == "/forget" {
 			conv.Clear()
 			fmt.Println("[forgotten — starting fresh]")
@@ -404,6 +412,15 @@ func tryDeterministicAnswer(line, d string, conv *Conversation) bool {
 			return true
 		}
 	}
+	// Beginner-brain requests get deterministic template answers with
+	// plain-English explanations: exact code, no neural model involved.
+	if d == BeginnerDomain {
+		if out, ok := handleBeginner(line); ok {
+			fmt.Printf("gollemer [%s]> %s\n", d, out)
+			conv.AddReply(out, BeginnerDomain, false)
+			return true
+		}
+	}
 	return false
 }
 
@@ -472,6 +489,14 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 				fmt.Printf("gollemer [%s]> %s\n", GoAnalyzeDomain, out)
 				conv.AddReply(out, GoAnalyzeDomain, false)
 			}
+			continue
+		}
+		// /shell is the explicit entry to the reactive pipeline shell:
+		// "/shell build a list of squares" runs synthesis, safety,
+		// tuning, and the visual trace, printing the terminal output.
+		if out, ok := handleShellCommand(line); ok {
+			fmt.Printf("gollemer [%s]> %s\n", ShellDomain, out)
+			conv.AddReply(out, ShellDomain, false)
 			continue
 		}
 		if line == "/forget" {
