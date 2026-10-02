@@ -1,6 +1,9 @@
 package chat
 
-import "testing"
+import (
+	"os/exec"
+	"testing"
+)
 
 // The command shape: "clone <url> in folder <name>".
 func TestParseCloneCommand(t *testing.T) {
@@ -46,5 +49,29 @@ func TestCloneFolderValidation(t *testing.T) {
 		if folderNameRe.MatchString(folder) && folder != "." && folder != ".." {
 			t.Errorf("folderNameRe accepted %q", folder)
 		}
+	}
+}
+
+// gitOriginRepo reads owner/repo off the origin remote, so the issue
+// flow can tell when you're already looking at the issue's repo.
+func TestGitOriginRepo(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	dir := t.TempDir()
+	run := func(args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	run("init", "-q")
+	run("remote", "add", "origin", "https://github.com/pashkov256/deletor.git")
+	if got := gitOriginRepo(dir); got != "pashkov256/deletor" {
+		t.Errorf("gitOriginRepo = %q, want pashkov256/deletor", got)
+	}
+	if got := gitOriginRepo(t.TempDir()); got != "" {
+		t.Errorf("gitOriginRepo(non-repo) = %q, want empty", got)
 	}
 }

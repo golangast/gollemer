@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -45,21 +48,59 @@ func tryIssueWhere(line string) (string, bool) {
 	if err != nil {
 		return fmt.Sprintf("Couldn't fetch that issue: %s", err), true
 	}
-	fmt.Printf("   cloning %s/%s (once, cached)…\n", owner, repo)
-	dir, err := ensureGitHubRepo("github.com/" + owner + "/" + repo)
-	if err != nil {
-		return fmt.Sprintf("Couldn't clone %s/%s: %s", owner, repo, err), true
+	// If the chat is already looking at this repo (e.g. you cloned it
+	// with `clone <url> in folder example`), analyze your checkout —
+	// so the file links point at the folder you cloned to.
+	dir := ""
+	if want := strings.ToLower(owner + "/" + repo); lastAnalyzeRoot != "" && gitOriginRepo(lastAnalyzeRoot) == want {
+		dir = lastAnalyzeRoot
+		if rel, err := filepath.Rel(cwd(), dir); err == nil {
+			fmt.Printf("   using your %s checkout…\n", rel)
+		}
+	} else {
+		fmt.Printf("   cloning %s/%s (once, cached)…\n", owner, repo)
+		var err error
+		dir, err = ensureGitHubRepo("github.com/" + owner + "/" + repo)
+		if err != nil {
+			return fmt.Sprintf("Couldn't clone %s/%s: %s", owner, repo, err), true
+		}
 	}
 	fmt.Printf("   analyzing %s/%s…\n", owner, repo)
 	p, err := analyze.Analyze(dir)
 	if err != nil {
 		return fmt.Sprintf("Couldn't analyze %s/%s: %s", owner, repo, err), true
 	}
+	lastAnalyzeRoot = dir
+	lastAnalyzeProject = p
 	concepts := analyze.ExtractIssueConcepts(issue.Title + "\n\n" + issue.Body)
 	out := p.GuideIssue(concepts)
 	var b strings.Builder
 	fmt.Fprintf(&b, "Issue #%s: %s\n\n%s", num, issue.Title, out)
 	return b.String(), true
+}
+
+// cwd returns the working directory, or "" when it can't be told.
+func cwd() string {
+	if c, err := os.Getwd(); err == nil {
+		return c
+	}
+	return ""
+}
+
+// gitOriginRepo returns "owner/repo" for the origin remote of the git
+// checkout at dir, or "" when dir isn't a git repo or has no origin.
+func gitOriginRepo(dir string) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "git", "-C", dir, "remote", "get-url", "origin").Output()
+	if err != nil {
+		return ""
+	}
+	m := githubURL.FindStringSubmatch(strings.TrimSpace(string(out)))
+	if m == nil {
+		return ""
+	}
+	return strings.ToLower(m[1] + "/" + strings.TrimSuffix(m[2], ".git"))
 }
 
 // fetchIssue reads a public issue's title and body via the GitHub API.

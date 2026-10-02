@@ -396,7 +396,7 @@ func (p *Project) GuideIssue(c IssueConcepts) string {
 			n = 2
 		}
 		for _, ks := range keySites[:n] {
-			fmt.Fprintf(&b, "  %s:%d\n", ks.File, ks.Line)
+			fmt.Fprintf(&b, "  %s:%d\n", p.LinkPath(ks.File), ks.Line)
 			keys := ks.Keys
 			more := ""
 			if len(keys) > 8 {

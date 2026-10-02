@@ -124,7 +124,7 @@ func (p *Project) BiggestFiles(n int) string {
 		}
 	}
 	for _, f := range files {
-		fmt.Fprintf(&b, "  %-40s %s %d\n", f.rel, bars(f.lines, max, 24), f.lines)
+		fmt.Fprintf(&b, "  %-40s %s %d\n", p.LinkPath(f.rel), bars(f.lines, max, 24), f.lines)
 	}
 	return b.String()
 }
