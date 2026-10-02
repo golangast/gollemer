@@ -1,6 +1,7 @@
 package analyze
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -133,4 +134,82 @@ func keyLiterals(c IssueConcepts) []string {
 		}
 	}
 	return out
+}
+
+// recvName renders "App.Update" for a method, "Update" for a function.
+func recvName(fn *Func) string {
+	if fn.Receiver != "" {
+		return fn.Receiver + "." + fn.Name
+	}
+	return fn.Name
+}
+
+// writeKeyVisual draws how a keypress travels through the program — the
+// pressed key, the message the toolkit makes of it, and the chain of
+// functions down to the switch — followed by a plain-words explanation
+// of the pattern. Every line is grounded in the analyzed code: the
+// chain comes from the call graph, the switch from the dispatch scan.
+func writeKeyVisual(b *strings.Builder, p *Project, c IssueConcepts, sites []KeyDispatch) {
+	top := sites[0]
+	lits := keyLiterals(c)
+	pressed := "a key"
+	if len(lits) > 0 {
+		pressed = "`" + lits[0] + "`"
+	}
+	framework, msgType := "the UI toolkit", "a key message"
+	if top.Func != nil && strings.Contains(top.Func.Sig, "tea.KeyMsg") {
+		framework, msgType = "Bubble Tea", "tea.KeyMsg"
+	}
+	var chain []*Func
+	if top.Func != nil {
+		chain = callerChain(p, top.Func, 4)
+	}
+
+	b.WriteString("HOW A KEYPRESS FLOWS:\n\n")
+	fmt.Fprintf(b, "  you press %s\n", pressed)
+	b.WriteString("        ↓\n")
+	fmt.Fprintf(b, "  %s — %s turns the press into a message\n", msgType, framework)
+	for _, fn := range chain {
+		b.WriteString("        ↓\n")
+		if fn == top.Func {
+			fmt.Fprintf(b, "  %s (%s:%d) ← the switch\n", recvName(fn), top.File, top.Line)
+		} else {
+			fmt.Fprintf(b, "  %s (%s)\n", recvName(fn), fn.File)
+		}
+	}
+	b.WriteString("        ↓\n")
+	if len(lits) > 0 {
+		fmt.Fprintf(b, "  your new case %s → yours here\n\n", strings.Join(quoteAll(lits), ", "))
+	} else {
+		b.WriteString("  your new case → yours here\n\n")
+	}
+
+	// Plain-words explanation of the pattern, from the real code.
+	b.WriteString("IN PLAIN WORDS:\n")
+	if len(chain) > 0 && top.Func != nil {
+		var sample []string
+		if len(top.Keys) > 3 {
+			sample = top.Keys[:3]
+		} else {
+			sample = top.Keys
+		}
+		fw := strings.ToUpper(framework[:1]) + framework[1:]
+		fmt.Fprintf(b, "  Nothing here reads the keyboard directly. %s turns each\n", fw)
+		if len(chain) > 1 {
+			fmt.Fprintf(b, "  keypress into a message and hands it to %s,\n", recvName(chain[0]))
+			fmt.Fprintf(b, "  which passes it to %s.\n", recvName(top.Func))
+		} else {
+			fmt.Fprintf(b, "  keypress into a message and hands it to %s.\n", recvName(top.Func))
+		}
+		fmt.Fprintf(b, "  That function is one big switch matching key names like %s.\n",
+			strings.Join(quoteAll(sample), ", "))
+		b.WriteString("  A keyboard shortcut is just a new case in that switch:\n")
+		b.WriteString("  when the key matches, your code runs.\n\n")
+	} else {
+		b.WriteString("  Nothing here reads the keyboard directly. The toolkit turns\n")
+		b.WriteString("  each keypress into a message and delivers it to a key-handling\n")
+		b.WriteString("  function — one big switch matching key names. A keyboard\n")
+		b.WriteString("  shortcut is just a new case in that switch: when the key\n")
+		b.WriteString("  matches, your code runs.\n\n")
+	}
 }

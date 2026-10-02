@@ -389,6 +389,7 @@ func (p *Project) GuideIssue(c IssueConcepts) string {
 	}
 
 	if len(keySites) > 0 {
+		writeKeyVisual(&b, p, c, keySites)
 		b.WriteString("BEHAVIOR — add the hotkeys here:\n")
 		n := len(keySites)
 		if n > 2 {
@@ -433,15 +434,15 @@ func (p *Project) GuideIssue(c IssueConcepts) string {
 			c.Title, site.Keyword, action)
 	}
 
-	// You-are-here: walk from the key site, mechanism, or config
-	// toward main.
+	// You-are-here: walk from the mechanism or config toward main.
+	// (Key-dispatch answers drew the flow as a visual instead.)
 	var anchor *Func
-	if len(keySites) > 0 && keySites[0].Func != nil {
-		anchor = keySites[0].Func
-	} else if site != nil && site.KeyFunc != nil {
-		anchor = site.KeyFunc
-	} else if len(structs) > 0 {
-		anchor = keyFuncOf(p, structs[0].Pkg)
+	if len(keySites) == 0 {
+		if site != nil && site.KeyFunc != nil {
+			anchor = site.KeyFunc
+		} else if len(structs) > 0 {
+			anchor = keyFuncOf(p, structs[0].Pkg)
+		}
 	}
 	if anchor != nil {
 		chain := callerChain(p, anchor, 5)

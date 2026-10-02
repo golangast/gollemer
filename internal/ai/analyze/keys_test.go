@@ -144,15 +144,23 @@ func TestGuideIssueKeys(t *testing.T) {
 	out := p.GuideIssue(c)
 	for _, want := range []string{
 		"TO ADD",
+		"HOW A KEYPRESS FLOWS:",
+		"you press `ctrl+a`",
+		"← the switch",
+		"your new case `ctrl+a`, `del` → yours here",
+		"IN PLAIN WORDS:",
+		"A keyboard shortcut is just a new case in that switch",
 		"BEHAVIOR — add the hotkeys here:",
 		"app.go",
 		"ctrl+c",
 		"Add `ctrl+a`, `del` as new cases",
-		"YOU ARE HERE:",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("GuideIssue missing %q\n%s", want, out)
 		}
+	}
+	if strings.Contains(out, "YOU ARE HERE:") {
+		t.Errorf("key branch should use the visual, not YOU ARE HERE\n%s", out)
 	}
 	t.Logf("\n%s", out)
 }
