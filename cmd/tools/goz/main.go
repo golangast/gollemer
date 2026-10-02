@@ -133,6 +133,145 @@ func parseChoice(line string) Choice {
 	}
 }
 
+// picker holds the picker's interactive state.
+type picker struct {
+	choices  []Choice
+	filtered []Choice
+	query    string
+	sel      int
+}
+
+// refilter rebuilds the filtered list from the current query.
+func (p *picker) refilter() {
+	if p.query == "" {
+		p.filtered = make([]Choice, len(p.choices))
+		copy(p.filtered, p.choices)
+		p.sel = 0
+		return
+	}
+
+	type match struct {
+		choice Choice
+		score  int
+	}
+	var matches []match
+
+	for _, choice := range p.choices {
+		if ok, score := fuzzyMatch(choice.Raw, p.query); ok {
+			matches = append(matches, match{choice: choice, score: score})
+		}
+	}
+
+	p.filtered = nil
+	for _, m := range matches {
+		p.filtered = append(p.filtered, m.choice)
+	}
+
+	p.sel = 0
+}
+
+func (p *picker) moveUp(rows int) {
+	if p.sel%rows > 0 {
+		p.sel--
+	}
+}
+
+func (p *picker) moveDown(rows, total int) {
+	if p.sel%rows < rows-1 && p.sel+1 < total {
+		p.sel++
+	}
+}
+
+func (p *picker) moveRight(rows, total int) {
+	if p.sel+rows < total {
+		p.sel += rows
+	}
+}
+
+func (p *picker) moveLeft(rows int) {
+	if p.sel-rows >= 0 {
+		p.sel -= rows
+	}
+}
+
+// Actions returned by processKeys.
+const (
+	keyNone = ""
+	keyQuit = "quit" // Ctrl+C: leave without choosing
+	keyDone = "done" // Enter: accept the current selection
+)
+
+// processKeys consumes complete key events from the front of pending and
+// returns the number of bytes consumed plus an action for the caller.
+// Every byte of a burst is processed; a trailing partial escape sequence
+// is left unconsumed so the next read can complete it.
+func (p *picker) processKeys(pending []byte, rows, total int) (int, string) {
+	i := 0
+	for i < len(pending) {
+		b := pending[i]
+		switch {
+		case b == 3: // Ctrl+C
+			return i + 1, keyQuit
+
+		case b == 13: // Enter
+			return i + 1, keyDone
+
+		case b == 127 || b == 8: // Backspace
+			if len(p.query) > 0 {
+				p.query = p.query[:len(p.query)-1]
+				p.refilter()
+			}
+			i++
+
+		case b == 14 || b == 10: // Ctrl+N / Ctrl+J
+			p.moveDown(rows, total)
+			i++
+
+		case b == 16 || b == 11: // Ctrl+P / Ctrl+K
+			p.moveUp(rows)
+			i++
+
+		case b == 27: // Escape: CSI sequences arrive as ESC [ X
+			if len(pending)-i < 3 {
+				// Sequence split across reads: wait for the rest.
+				return i, keyNone
+			}
+			if pending[i+1] != '[' {
+				// Lone Escape (or Alt+key): drop the ESC, keep the rest.
+				i++
+				continue
+			}
+			skip := 3
+			switch pending[i+2] {
+			case 'A': // Up arrow
+				p.moveUp(rows)
+			case 'B': // Down arrow
+				p.moveDown(rows, total)
+			case 'C': // Right arrow
+				p.moveRight(rows, total)
+			case 'D': // Left arrow
+				p.moveLeft(rows)
+			case 'M': // Mouse report: ESC [ M + 3 bytes; swallow all 6
+				// so click coordinates never leak into the query.
+				skip = 6
+			}
+			if len(pending)-i < skip {
+				// Sequence split across reads: wait for the rest.
+				return i, keyNone
+			}
+			i += skip
+
+		default:
+			if b >= 32 && b <= 126 {
+				p.query += string(b)
+				p.refilter()
+			}
+			i++
+		}
+	}
+	return i, keyNone
+}
+
 func main() {
 	var choices []Choice
 	stat, _ := os.Stdin.Stat()
@@ -168,39 +307,8 @@ func main() {
 	tty.WriteString("\x1b[?1049h\x1b[?25l\x1b[?1000h")
 	defer tty.WriteString("\x1b[?1049l\x1b[?25h\x1b[?1000l")
 
-	query := ""
-	selectedIndex := 0
-
-	filtered := make([]Choice, len(choices))
-	copy(filtered, choices)
-
-	filterChoices := func() {
-		if query == "" {
-			filtered = make([]Choice, len(choices))
-			copy(filtered, choices)
-			selectedIndex = 0
-			return
-		}
-
-		type match struct {
-			choice Choice
-			score  int
-		}
-		var matches []match
-
-		for _, choice := range choices {
-			if ok, score := fuzzyMatch(choice.Raw, query); ok {
-				matches = append(matches, match{choice: choice, score: score})
-			}
-		}
-
-		filtered = nil
-		for _, m := range matches {
-			filtered = append(filtered, m.choice)
-		}
-
-		selectedIndex = 0
-	}
+	p := &picker{choices: choices}
+	p.refilter()
 
 	draw := func() {
 		width, _ := getTerminalSize(fd)
@@ -215,25 +323,25 @@ func main() {
 		sb.WriteString("\x1b[H\x1b[J")
 
 		// Search Input Box
-		sb.WriteString(fmt.Sprintf("\x1b[1;36m[ > %s ]\x1b[0m\r\n\r\n", query))
+		sb.WriteString(fmt.Sprintf("\x1b[1;36m[ > %s ]\x1b[0m\r\n\r\n", p.query))
 
-		if len(filtered) > 0 {
-			rows := (len(filtered) + cols - 1) / cols
+		if len(p.filtered) > 0 {
+			rows := (len(p.filtered) + cols - 1) / cols
 
 			for row := 0; row < rows; row++ {
 				for col := 0; col < cols; col++ {
 					i := col*rows + row
-					if i >= len(filtered) {
+					if i >= len(p.filtered) {
 						break
 					}
 
-					item := filtered[i]
+					item := p.filtered[i]
 					label := item.Command
 					if len(label) > 16 {
 						label = label[:16]
 					}
 
-					if i == selectedIndex {
+					if i == p.sel {
 						sb.WriteString(fmt.Sprintf("[ \x1b[37;45;1m%-16s\x1b[0m ] ", label))
 					} else {
 						sb.WriteString(fmt.Sprintf("[ \x1b[36m%-16s\x1b[0m ] ", label))
@@ -242,16 +350,16 @@ func main() {
 				sb.WriteString("\r\n")
 			}
 
-			if selectedIndex < len(filtered) && filtered[selectedIndex].Comment != "" {
-				sb.WriteString(fmt.Sprintf("\r\n\x1b[90m> %s\x1b[0m", filtered[selectedIndex].Comment))
+			if p.sel < len(p.filtered) && p.filtered[p.sel].Comment != "" {
+				sb.WriteString(fmt.Sprintf("\r\n\x1b[90m> %s\x1b[0m", p.filtered[p.sel].Comment))
 			}
 		}
 
 		tty.WriteString(sb.String())
 	}
 
-	buf := make([]byte, 6)
-	var selectedResult Choice
+	buf := make([]byte, 64)
+	var pending []byte
 
 	for {
 		draw()
@@ -259,6 +367,7 @@ func main() {
 		if err != nil || n == 0 {
 			break
 		}
+		pending = append(pending, buf[:n]...)
 
 		width, _ := getTerminalSize(fd)
 		cols := width / 24
@@ -266,43 +375,23 @@ func main() {
 			cols = 1
 		}
 
-		total := len(filtered)
+		total := len(p.filtered)
 		rows := 1
 		if total > 0 {
 			rows = (total + cols - 1) / cols
 		}
 
-		moveUp := func() {
-			if selectedIndex%rows > 0 {
-				selectedIndex--
-			}
-		}
+		consumed, action := p.processKeys(pending, rows, total)
+		pending = pending[consumed:]
 
-		moveDown := func() {
-			if selectedIndex%rows < rows-1 && selectedIndex+1 < total {
-				selectedIndex++
-			}
-		}
-
-		moveRight := func() {
-			if selectedIndex+rows < total {
-				selectedIndex += rows
-			}
-		}
-
-		moveLeft := func() {
-			if selectedIndex-rows >= 0 {
-				selectedIndex -= rows
-			}
-		}
-
-		switch {
-		case buf[0] == 3: // Ctrl+C
+		switch action {
+		case keyQuit:
 			return
 
-		case buf[0] == 13: // Enter
-			if len(filtered) > 0 && selectedIndex < len(filtered) {
-				selectedResult = filtered[selectedIndex]
+		case keyDone:
+			var selectedResult Choice
+			if len(p.filtered) > 0 && p.sel < len(p.filtered) {
+				selectedResult = p.filtered[p.sel]
 			}
 			disableRawMode(fd, oldState)
 			tty.WriteString("\x1b[?1049l\x1b[?25h\x1b[?1000l")
@@ -310,38 +399,6 @@ func main() {
 				fmt.Println(selectedResult.Command)
 			}
 			return
-
-		case buf[0] == 127 || buf[0] == 8: // Backspace
-			if len(query) > 0 {
-				query = query[:len(query)-1]
-				filterChoices()
-			}
-
-		case buf[0] == 14 || buf[0] == 10: // Ctrl+N / Ctrl+J
-			moveDown()
-
-		case buf[0] == 16 || buf[0] == 11: // Ctrl+P / Ctrl+K
-			moveUp()
-
-		case buf[0] == 27:
-			if n >= 3 && buf[1] == '[' {
-				switch buf[2] {
-				case 'A': // Up Arrow (Move up in current column)
-					moveUp()
-				case 'B': // Down Arrow (Move down in current column)
-					moveDown()
-				case 'C': // Right Arrow (Jump to next column)
-					moveRight()
-				case 'D': // Left Arrow (Jump to previous column)
-					moveLeft()
-				}
-			}
-
-		default:
-			if buf[0] >= 32 && buf[0] <= 126 {
-				query += string(buf[0])
-				filterChoices()
-			}
 		}
 	}
 }
