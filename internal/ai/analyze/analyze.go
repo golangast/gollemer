@@ -369,6 +369,26 @@ func contains(ss []string, s string) bool {
 	return false
 }
 
+// LinkPath renders a project-relative file path as a terminal-clickable
+// link. When the analyzed project isn't the working directory — a fresh
+// clone in ./example, a repo in ~/elsewhere — the path is rewritten
+// relative to the working directory, so file:line links click through
+// to the file. When the project is the working directory, the path is
+// unchanged.
+func (p *Project) LinkPath(rel string) string {
+	if p.Root == "" || rel == "" {
+		return rel
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return rel
+	}
+	if r, err := filepath.Rel(cwd, filepath.Join(p.Root, rel)); err == nil && r != "" {
+		return r
+	}
+	return rel
+}
+
 func firstLine(s string) string {
 	if i := strings.IndexByte(s, '\n'); i >= 0 {
 		return s[:i]

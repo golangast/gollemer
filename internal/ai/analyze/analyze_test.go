@@ -153,3 +153,29 @@ func TestRenderASCIIGraphFixture(t *testing.T) {
 		}
 	}
 }
+
+// LinkPath keeps paths as-is when the project is the working directory,
+// and rewrites them relative to the working directory otherwise — so
+// file:line links in the terminal click through to the file.
+func TestLinkPath(t *testing.T) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	here := &Project{Root: cwd}
+	if got := here.LinkPath("a/b.go"); got != "a/b.go" {
+		t.Errorf("cwd project: got %q, want a/b.go", got)
+	}
+	elsewhere := &Project{Root: filepath.Join(cwd, "example")}
+	want := filepath.Join("example", "a", "b.go")
+	if got := elsewhere.LinkPath("a/b.go"); got != want {
+		t.Errorf("other project: got %q, want %q", got, want)
+	}
+	// Empty root or rel passes through untouched.
+	if got := (&Project{}).LinkPath("a/b.go"); got != "a/b.go" {
+		t.Errorf("empty root: got %q", got)
+	}
+	if got := here.LinkPath(""); got != "" {
+		t.Errorf("empty rel: got %q", got)
+	}
+}

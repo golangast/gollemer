@@ -144,10 +144,10 @@ func (fn *Func) Summary() string {
 }
 
 // Detail renders the full readable card for a function.
-func (fn *Func) Detail() string {
+func (fn *Func) Detail(p *Project) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n", fn.Sig)
-	fmt.Fprintf(&b, "  %s:%d\n", fn.File, fn.Line)
+	fmt.Fprintf(&b, "  %s:%d\n", p.LinkPath(fn.File), fn.Line)
 	fmt.Fprintf(&b, "  %s\n", fn.Summary())
 	if len(fn.Calls) > 0 {
 		fmt.Fprintf(&b, "  Calls (%d): %s\n", len(fn.Calls), joinShort(fn.Calls, 6))
@@ -164,7 +164,7 @@ func (fn *Func) Detail() string {
 func (t *Type) Detail(p *Project) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "type %s.%s — %s\n", t.Pkg, t.Name, t.Kind)
-	fmt.Fprintf(&b, "  %s:%d\n", t.File, t.Line)
+	fmt.Fprintf(&b, "  %s:%d\n", p.LinkPath(t.File), t.Line)
 	if s := firstSentence(t.Doc); s != "" {
 		fmt.Fprintf(&b, "  %s\n", s)
 	}
@@ -274,7 +274,7 @@ func (p *Project) Overview() string {
 	} else {
 		fmt.Fprintf(&b, "%s is a runnable Go program: %d packages, about %s lines of Go. ",
 			name, len(p.Packages), commas(p.Lines))
-		fmt.Fprintf(&b, "It starts in %s. ", start)
+		fmt.Fprintf(&b, "It starts in %s. ", p.LinkPath(start))
 	}
 	// One-liner from the root/main package doc, if the author wrote one.
 	if one := p.projectOneLiner(); one != "" {

@@ -45,7 +45,7 @@ func (p *Project) Pipeline() string {
 		if i > 0 {
 			b.WriteString("\n")
 		}
-		fmt.Fprintf(&b, "%s  (%s:%d)\n", m.Name, m.File, m.Line)
+		fmt.Fprintf(&b, "%s  (%s:%d)\n", m.Name, p.LinkPath(m.File), m.Line)
 		if d := shortDoc(m, maxPipelineDocLen); d != "" {
 			fmt.Fprintf(&b, "  %s\n", d)
 		}
@@ -76,7 +76,7 @@ func (p *Project) Story() string {
 		return b.String()
 	}
 	m := mains[0]
-	fmt.Fprintf(&b, "Everything starts at main() in %s.\n", m.File)
+	fmt.Fprintf(&b, "Everything starts at main() in %s.\n", p.LinkPath(m.File))
 	kids := p.topCallees(m, 4)
 	if len(kids) == 0 {
 		b.WriteString("main() does its work directly, without calling other project functions.\n")

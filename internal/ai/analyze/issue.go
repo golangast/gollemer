@@ -356,7 +356,7 @@ func (p *Project) GuideIssue(c IssueConcepts) string {
 	if len(structs) > 0 {
 		m := structs[0]
 		fmt.Fprintf(&b, "CONFIG — put the new option here:\n")
-		fmt.Fprintf(&b, "  %s:%d\n", m.Type.File, m.Type.Line)
+		fmt.Fprintf(&b, "  %s:%d\n", p.LinkPath(m.Type.File), m.Type.Line)
 		fmt.Fprintf(&b, "  type %s struct — fields %s match the issue's example\n",
 			m.Type.Name, strings.Join(quoteAll(m.Hits), ", "))
 		if d := oneLineDoc(m.Type.Doc); d != "" {
@@ -424,7 +424,7 @@ func (p *Project) GuideIssue(c IssueConcepts) string {
 		fmt.Fprintf(&b, "BEHAVIOR — %s the work here:\n", action)
 		fmt.Fprintf(&b, "  package %s (%s)\n", site.Pkg.Name, site.Pkg.Dir)
 		if site.KeyFunc != nil {
-			fmt.Fprintf(&b, "  %s:%d — %s\n", site.KeyFunc.File, site.KeyFunc.Line,
+			fmt.Fprintf(&b, "  %s:%d — %s\n", p.LinkPath(site.KeyFunc.File), site.KeyFunc.Line,
 				strings.TrimPrefix(site.KeyFunc.Sig, "func "))
 			if d := oneLineDoc(site.KeyFunc.Doc); d != "" {
 				fmt.Fprintf(&b, "  %s\n", d)

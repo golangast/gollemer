@@ -62,7 +62,7 @@ func (p *Project) GuideChange(task string) string {
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "TO ADD %q:\n\n", task)
-	fmt.Fprintf(&b, "START HERE: %s:%d\n", anchor.File, anchor.Line)
+	fmt.Fprintf(&b, "START HERE: %s:%d\n", p.LinkPath(anchor.File), anchor.Line)
 	fmt.Fprintf(&b, "  %s", anchor.Sig)
 	if d := firstSentence(anchor.Doc); d != "" {
 		fmt.Fprintf(&b, " — %s", d)

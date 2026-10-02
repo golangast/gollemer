@@ -20,11 +20,11 @@ func (p *Project) Summary() string {
 	case 0:
 		b.WriteString("No func main: this is a library, not a runnable program.\n")
 	case 1:
-		fmt.Fprintf(&b, "Entry point: %s\n", mains[0].File)
+		fmt.Fprintf(&b, "Entry point: %s\n", p.LinkPath(mains[0].File))
 	default:
 		b.WriteString("Entry points:\n")
 		for _, m := range mains {
-			fmt.Fprintf(&b, "  - %s\n", m.File)
+			fmt.Fprintf(&b, "  - %s\n", p.LinkPath(m.File))
 		}
 	}
 	ext := 0
@@ -54,12 +54,12 @@ func (p *Project) ReadingGuide() string {
 	} else {
 		b.WriteString("1. Start at the entry point:\n")
 		for _, m := range mains {
-			fmt.Fprintf(&b, "   %s:%d — func main\n", m.File, m.Line)
+			fmt.Fprintf(&b, "   %s:%d — func main\n", p.LinkPath(m.File), m.Line)
 		}
 	}
 	b.WriteString("2. Then read the engine room (most-called functions):\n")
 	for _, fn := range p.TopFuncs(5) {
-		fmt.Fprintf(&b, "   %s  (%d callers)  %s:%d\n", fn.Display(), len(fn.Callers), fn.File, fn.Line)
+		fmt.Fprintf(&b, "   %s  (%d callers)  %s:%d\n", fn.Display(), len(fn.Callers), p.LinkPath(fn.File), fn.Line)
 	}
 	types := p.KeyTypes(5)
 	if len(types) > 0 {
@@ -363,7 +363,7 @@ func (p *Project) WhereToChangeText(task string) string {
 		return b.String()
 	}
 	for i, h := range hits {
-		fmt.Fprintf(&b, "%d. %s  %s:%d\n   (%s)\n", i+1, h.What, h.File, h.Line, h.Why)
+		fmt.Fprintf(&b, "%d. %s  %s:%d\n   (%s)\n", i+1, h.What, p.LinkPath(h.File), h.Line, h.Why)
 	}
 	return b.String()
 }

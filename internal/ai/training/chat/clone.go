@@ -35,9 +35,11 @@ func parseCloneCommand(line string) (rawURL, folder string, ok bool) {
 	return m[1], m[2], true
 }
 
-// tryCloneProject clones a GitHub repo into ~/workspace/<folder> — a
-// place you can see — and analyzes it on the spot, so follow-up
-// questions ("what does X do", "where would I add Y") work immediately.
+// tryCloneProject clones a GitHub repo into ./<folder> — the folder you
+// named, right where you are — and analyzes it on the spot, so
+// follow-up questions ("what does X do", "where would I add Y") work
+// immediately. Paths print relative to this directory, so file:line
+// links in the terminal click straight through to the file.
 func tryCloneProject(line string) (string, bool) {
 	rawURL, folder, ok := parseCloneCommand(line)
 	if !ok {
@@ -51,22 +53,22 @@ func tryCloneProject(line string) (string, bool) {
 	if !folderNameRe.MatchString(folder) || folder == "." || folder == ".." {
 		return "That folder name won't work — try a simple name like `example`.", true
 	}
-	home, err := os.UserHomeDir()
+	cwd, err := os.Getwd()
 	if err != nil {
-		return fmt.Sprintf("I couldn't find your home directory: %v", err), true
+		return fmt.Sprintf("I couldn't tell where I am: %v", err), true
 	}
-	dest := filepath.Join(home, "workspace", folder)
+	dest := filepath.Join(cwd, folder)
 
 	if fi, err := os.Stat(dest); err == nil {
 		if !fi.IsDir() {
-			return fmt.Sprintf("`~/workspace/%s` exists but isn't a folder — pick another name.", folder), true
+			return fmt.Sprintf("`./%s` exists but isn't a folder — pick another name.", folder), true
 		}
 		entries, _ := os.ReadDir(dest)
 		if len(entries) > 0 {
 			if _, err := os.Stat(filepath.Join(dest, ".git")); err != nil {
-				return fmt.Sprintf("`~/workspace/%s` already exists and isn't a git repo — pick another folder name, or `analyze ~/workspace/%s` to look at what's there.", folder, folder), true
+				return fmt.Sprintf("`./%s` already exists and isn't a git repo — pick another folder name, or `analyze ./%s` to look at what's there.", folder, folder), true
 			}
-			return analyzeCloned(dest, fmt.Sprintf("`~/workspace/%s` is already cloned — here's what's in it:\n\n", folder)), true
+			return analyzeCloned(dest, fmt.Sprintf("`./%s` is already cloned — here's what's in it:\n\n", folder)), true
 		}
 	}
 
@@ -77,13 +79,13 @@ func tryCloneProject(line string) (string, bool) {
 	if !strings.HasPrefix(strings.ToLower(url), "http") {
 		url = "https://" + url
 	}
-	fmt.Printf("   cloning into ~/workspace/%s…\n", folder)
+	fmt.Printf("   cloning into ./%s…\n", folder)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	if out, err := exec.CommandContext(ctx, "git", "clone", "--depth", "1", url, dest).CombinedOutput(); err != nil {
 		return fmt.Sprintf("Clone failed: %v\n%s", err, strings.TrimSpace(string(out))), true
 	}
-	return analyzeCloned(dest, fmt.Sprintf("Cloned into `~/workspace/%s`. Here's what I see:\n\n", folder)), true
+	return analyzeCloned(dest, fmt.Sprintf("Cloned into `./%s`. Here's what I see:\n\n", folder)), true
 }
 
 // analyzeCloned analyzes a freshly cloned repo, remembers it for

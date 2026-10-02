@@ -37,7 +37,7 @@ no guessing, no hallucinations):
 Or clone a repo into a folder you name, and look at it right away:
 
   you> clone https://github.com/owner/repo in folder example
-  gollemer [goanalyze]> Cloned into `~/workspace/example`. Here's what I see:
+  gollemer [goanalyze]> Cloned into `./example`. Here's what I see:
       Project: github.com/owner/repo
       ...summary, story, reading guide, visuals...
   you> what does main do                (answered from the cloned code)

@@ -172,9 +172,9 @@ func writeKeyVisual(b *strings.Builder, p *Project, c IssueConcepts, sites []Key
 	for _, fn := range chain {
 		b.WriteString("        ↓\n")
 		if fn == top.Func {
-			fmt.Fprintf(b, "  %s (%s:%d) ← the switch\n", recvName(fn), top.File, top.Line)
+			fmt.Fprintf(b, "  %s (%s:%d) ← the switch\n", recvName(fn), p.LinkPath(top.File), top.Line)
 		} else {
-			fmt.Fprintf(b, "  %s (%s)\n", recvName(fn), fn.File)
+			fmt.Fprintf(b, "  %s (%s)\n", recvName(fn), p.LinkPath(fn.File))
 		}
 	}
 	b.WriteString("        ↓\n")

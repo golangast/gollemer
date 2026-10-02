@@ -223,7 +223,7 @@ func (p *Project) answerWhatDoes(name string) (string, bool) {
 	fn, cands, typ, pkg := p.resolve(name)
 	switch {
 	case fn != nil:
-		return fn.Detail(), true
+		return fn.Detail(p), true
 	case typ != nil:
 		return typ.Detail(p), true
 	case pkg != nil:
@@ -251,7 +251,7 @@ func (p *Project) answerHowWorks(name string) (string, bool) {
 		return "", false
 	}
 	var b strings.Builder
-	b.WriteString(fn.Detail())
+	b.WriteString(fn.Detail(p))
 	if len(fn.Calls) > 0 {
 		b.WriteString("\nHow it works, step by step (what it calls):\n")
 		seen := map[string]bool{}
@@ -307,7 +307,7 @@ func (p *Project) answerCallers(name string) (string, bool) {
 			break
 		}
 		if f := p.byID[c]; f != nil {
-			fmt.Fprintf(&b, "  - %s  (%s:%d)\n", f.Display(), f.File, f.Line)
+			fmt.Fprintf(&b, "  - %s  (%s:%d)\n", f.Display(), p.LinkPath(f.File), f.Line)
 		} else {
 			fmt.Fprintf(&b, "  - %s\n", shortID(c))
 		}
@@ -352,9 +352,9 @@ func (p *Project) answerWhereDefined(name string) (string, bool) {
 	fn, cands, typ, pkg := p.resolve(name)
 	switch {
 	case fn != nil:
-		return fmt.Sprintf("%s is defined at %s:%d\n", fn.Display(), fn.File, fn.Line), true
+		return fmt.Sprintf("%s is defined at %s:%d\n", fn.Display(), p.LinkPath(fn.File), fn.Line), true
 	case typ != nil:
-		return fmt.Sprintf("type %s.%s is defined at %s:%d\n", typ.Pkg, typ.Name, typ.File, typ.Line), true
+		return fmt.Sprintf("type %s.%s is defined at %s:%d\n", typ.Pkg, typ.Name, p.LinkPath(typ.File), typ.Line), true
 	case pkg != nil:
 		dir := pkg.Dir
 		if dir == "" {
@@ -384,7 +384,7 @@ func (p *Project) answerShowMe(name string) (string, bool) {
 		return fmt.Sprintf("I couldn't read the source of %s.\n", fn.Display()), true
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s  (%s:%d)\n", fn.Display(), fn.File, fn.Line)
+	fmt.Fprintf(&b, "%s  (%s:%d)\n", fn.Display(), p.LinkPath(fn.File), fn.Line)
 	b.WriteString("```go\n")
 	b.WriteString(src)
 	b.WriteString("\n```\n")
@@ -422,7 +422,7 @@ func (p *Project) ambiguous(name string, cands []*Func) string {
 		if i >= 8 {
 			break
 		}
-		fmt.Fprintf(&b, "  - %s  (%s:%d)\n", fn.Display(), fn.File, fn.Line)
+		fmt.Fprintf(&b, "  - %s  (%s:%d)\n", fn.Display(), p.LinkPath(fn.File), fn.Line)
 	}
 	b.WriteString("Ask again with the full name, e.g. \"what does chat.routeDomain do\".\n")
 	return b.String()
