@@ -15,9 +15,27 @@ import (
 )
 
 var (
-	issueURLRe = regexp.MustCompile(`github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/issues/(\d+)`)
-	whereForRe = regexp.MustCompile(`(?i)^where for (.+)$`)
+	issueURLRe  = regexp.MustCompile(`github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/issues/(\d+)`)
+	issueListRe = regexp.MustCompile(`github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)/issues(?:$|/(?:$|[^0-9])|[^0-9/])`)
+	whereForRe  = regexp.MustCompile(`(?i)^where for (.+)$`)
+	bareNumRe   = regexp.MustCompile(`^\d+$`)
 )
+
+// listedRef remembers one entry from a listed set of issues or PRs so
+// the user can reply with just its number.
+type listedRef struct {
+	kind        string // "issues" or "pull"
+	owner, repo string
+	num, title  string
+}
+
+var lastList []listedRef
+
+type githubListItem struct {
+	Number      int             `json:"number"`
+	Title       string          `json:"title"`
+	PullRequest json.RawMessage `json:"pull_request"`
+}
 
 type githubIssue struct {
 	Title string `json:"title"`
@@ -30,6 +48,10 @@ type githubIssue struct {
 // renders the guided answer — the config struct to extend, the shared
 // mechanism to wrap, and the call chain it sits in.
 func tryIssueWhere(line string) (string, bool) {
+	line = expandBareNumber(line)
+	if m := issueListRe.FindStringSubmatch(line); m != nil {
+		return listIssues(m[1], m[2]), true
+	}
 	owner, repo, num := "", "", ""
 	if m := issueURLRe.FindStringSubmatch(line); m != nil {
 		owner, repo, num = m[1], m[2], m[3]
@@ -66,6 +88,52 @@ func tryIssueWhere(line string) (string, bool) {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Issue #%s: %s\n\n%s", num, issue.Title, out)
 	return b.String(), true
+}
+
+// expandBareNumber rewrites a lone "320" into the full issue/PR URL
+// when the user just picked from a listed set of issues or PRs.
+// Issue and PR numbers share one sequence per repo, so the number is
+// unambiguous.
+func expandBareNumber(line string) string {
+	n := strings.TrimSpace(line)
+	if !bareNumRe.MatchString(n) || len(lastList) == 0 {
+		return line
+	}
+	for _, r := range lastList {
+		if r.num == n {
+			return fmt.Sprintf("https://github.com/%s/%s/%s/%s", r.owner, r.repo, r.kind, n)
+		}
+	}
+	return line
+}
+
+// listIssues fetches the repo's open issues (excluding pull requests)
+// and remembers them so the user can reply with just a number.
+func listIssues(owner, repo string) string {
+	var items []githubListItem
+	err := githubGet(fmt.Sprintf("https://api.github.com/repos/%s/%s/issues?state=open&per_page=10", owner, repo), &items)
+	if err != nil {
+		return fmt.Sprintf("Couldn't list %s/%s issues: %s", owner, repo, err)
+	}
+	var refs []listedRef
+	for _, it := range items {
+		if len(it.PullRequest) > 0 {
+			continue // the issues endpoint also returns PRs
+		}
+		refs = append(refs, listedRef{kind: "issues", owner: owner, repo: repo,
+			num: fmt.Sprint(it.Number), title: it.Title})
+	}
+	lastList = refs
+	if len(refs) == 0 {
+		return fmt.Sprintf("%s/%s has no open issues.", owner, repo)
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "Open issues in %s/%s:\n", owner, repo)
+	for _, r := range refs {
+		fmt.Fprintf(&b, "\n  #%s — %s", r.num, r.title)
+	}
+	b.WriteString("\n\nReply with the number, or paste the issue URL.")
+	return b.String()
 }
 
 // cwd returns the working directory, or "" when it can't be told.
