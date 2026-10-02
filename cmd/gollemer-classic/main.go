@@ -110,7 +110,7 @@ func runClassic(args []string) {
 		if err != nil {
 			log.Fatalf("flow: %v", err)
 		}
-		fmt.Println(res.RenderBeginner())
+		fmt.Println(res.RenderDiagram(*prompt) + "\n\n" + res.RenderBeginner())
 		return
 	}
 	if *prompt == "" {

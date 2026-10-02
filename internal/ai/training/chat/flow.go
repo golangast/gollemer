@@ -33,5 +33,5 @@ func handleFlowCommand(line string) (string, bool) {
 	if err != nil {
 		return fmt.Sprintf("flow error: %v", err), true
 	}
-	return res.RenderBeginner(), true
+	return res.RenderDiagram(prompt) + "\n\n" + res.RenderBeginner(), true
 }

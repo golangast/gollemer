@@ -20,7 +20,7 @@ Say any of these inside `make chat`. When the chat answers with a `go`/`gofmt` c
 | Ask about the code | `what does routeDomain do`, `what's in package chat` | Signature, docs, and who calls it — or a package's purpose and key pieces |
 | Read the source | `show me routeDomain` | Prints the actual function |
 | Find where to edit | `where would I add a retry helper` | Suggests the right file and why |
-| Run one idea end-to-end | `/flow count with a mutex` | Prompt → generated Go → safety check → tuned code → plain-words trace |
+| Run one idea end-to-end | `/flow count with a mutex` | Box-style pipeline visual (prompt → 4 stages → renderer), then generated Go → safety check → tuned code → plain-words trace |
 | Ask about a Go command | `what does go build ./... do` | Explains the exact command |
 | Ask for a Go command | `build with the race detector` | Answers `go build -race ./...`, offers to run it |
 | Ask about a project command | `how do i retrain the model` | Answers `run make train-go`, offers to run it |

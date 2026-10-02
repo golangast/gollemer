@@ -63,7 +63,26 @@ terminal, no shell involved.
 Write a small Go program in plain words (the /flow command):
 
   you> /flow count with a mutex
-  gollemer [flow]> Here's your Go program:
+  gollemer [flow]> [ YOUR PROMPT ]
+      "count with a mutex"
+                    │
+                    ▼
+      ┌────────────────────────────────────────────────┐
+      │            pkg/engine/pipeline.go              │
+      ├────────────────────────────────────────────────┤
+      │ 1. Synthesis    -> prompt becomes Go code       │
+      │ 2. Proving      -> 0 nil-panics, 0 leaks   ✓    │
+      │ 3. Auto-tuning  -> ...                         │
+      │ 4. Visuals      -> walkthrough + analogy        │
+      └─────────────────────────┬──────────────────────┘
+                                ▼
+      ┌────────────────────────────────────────────────┐
+      │              TERMINAL RENDERER                 │
+      │  • Production Go Code  • Beginner Analogy      │
+      │  • Step-by-Step Walk   • Safety Badge          │
+      └────────────────────────────────────────────────┘
+
+      Here's your Go program:
       ```go
       ...
       ```
