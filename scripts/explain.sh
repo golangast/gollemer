@@ -16,34 +16,19 @@ no guessing, no hallucinations):
       40 packages, 300 Go files, ~45000 lines
       Entry points: ...
       IN PLAIN ENGLISH: ...
+      ... then the full visual report: package-size bars, coupling,
+      most-called functions, biggest files, dependency graph
 
   you> analyze ~/path/to/project        (any folder on disk)
   you> analyze github.com/owner/repo    (cloned once, cached)
 
-  you> show me a visual
-  gollemer [goanalyze]> VISUALS: github.com/golangast/gollemer
-      PACKAGE SIZES (lines of code)
-        internal/ai/neural/nn        ██████████████████████████████ 5150
-        ...
-      COUPLING (who depends on whom)
-        ...
-      ENGINE ROOM (most-called functions)
-        ████████████████████ tensor.NewTensor (62 callers)
-        ...
-      BIGGEST FILES (top 8)
-        ...
-      Dependency graph: ...
-        ★ 📦 cmd/gollemer-classic
-          ├── → pkg/analysis
-          ...
-
 Then ask questions about the code — it answers from what it parsed:
 
   you> what does routeDomain do     signature, docs, callers, callees
+  you> what's in package chat       what the package is for, key pieces
   you> show me routeDomain          the actual source code
   you> where would I add a retry    ranked file:line hits
        helper
-  you> what's in package chat       what the package is for
 
 Questions only fire on names really in the project, so
 "what does a goroutine do" still goes to the Go brain.

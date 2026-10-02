@@ -16,13 +16,10 @@ Say any of these inside `make chat`. When the chat answers with a `go`/`gofmt` c
 
 | Say this | Example | What it does |
 |---|---|---|
-| Analyze a repo | `analyze this project` | Reads the repo's Go code and explains it in plain English: entry points, most-called functions, suggested reading order — plus a full page of visuals (package sizes, coupling, biggest files, dependency graph) |
-| Analyze another repo | `analyze ~/projects/foo` or `analyze github.com/owner/repo` | Clones (if a URL) and explains that codebase instead, visuals included |
-| See the visuals | `show me a visual` | Draws the whole visual report again: package-size bars, coupling, most-called functions, biggest files, dependency graph |
-| Ask about the code | `what does routeDomain do` | Signature, docs, and who calls it |
+| Analyze a repo | `analyze this project` (or `analyze ~/path/to/foo`, `analyze github.com/owner/repo`) | Reads the Go code and explains it in plain English — entry points, most-called functions, reading order — plus visuals: package sizes, coupling, biggest files, dependency graph |
+| Ask about the code | `what does routeDomain do`, `what's in package chat` | Signature, docs, and who calls it — or a package's purpose and key pieces |
 | Read the source | `show me routeDomain` | Prints the actual function |
 | Find where to edit | `where would I add a retry helper` | Suggests the right file and why |
-| Tour a package | `what's in package chat` | What the package is for, its key pieces |
 | Run one idea end-to-end | `/flow count with a mutex` | Prompt → generated Go → safety check → tuned code → plain-words trace |
 | Ask about a Go command | `what does go build ./... do` | Explains the exact command |
 | Ask for a Go command | `build with the race detector` | Answers `go build -race ./...`, offers to run it |
