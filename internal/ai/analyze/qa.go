@@ -30,12 +30,34 @@ var (
 	qPkgList  = regexp.MustCompile(`(?i)^\s*(?:list|show)(?: me)? (?:all )?(?:the )?functions in (?:the )?(?:package )?(.+?)\.?$`)
 	qWhereHdl = regexp.MustCompile(`(?i)^\s*where is (.+?) (?:handled|done|implemented)\??$`)
 	qWhereDo  = regexp.MustCompile(`(?i)^\s*where (?:do|would|could) i (.+?)\??$`)
+	// Beginner walkthroughs, powered by the xray intelligence engine:
+	// "walk me through routeDomain", "explain routeDomain for beginners".
+	// Checked before qExplain/qWhatDoes so the plain "explain X" forms
+	// keep their reference answers.
+	qWalkThru = regexp.MustCompile(`(?i)^\s*walk(?: me)? through (?:the )?(.+?)\.?$`)
+	qTraceSym = regexp.MustCompile(`(?i)^\s*trace (?:the )?(.+?)\.?$`)
+	qBegFor   = regexp.MustCompile(`(?i)^\s*explain (?:the )?(.+?) for beginners?\.?$`)
+	qBegLike  = regexp.MustCompile(`(?i)^\s*explain (?:the )?(.+?) like i['’]?m a beginner\.?$`)
 )
 
 // Answer answers a natural-language question about the project. It
 // returns ok=false when the question doesn't reference anything in the
 // project, so callers can fall through to normal routing.
 func (p *Project) Answer(q string) (out string, ok bool) {
+	// Beginner walkthroughs first: the xray engine's plain-words view.
+	// On failure they fall back to the reference answer below.
+	if m := qWalkThru.FindStringSubmatch(q); m != nil {
+		return p.answerBeginner(cleanSymbol(m[1]))
+	}
+	if m := qTraceSym.FindStringSubmatch(q); m != nil {
+		return p.answerBeginner(cleanSymbol(m[1]))
+	}
+	if m := qBegFor.FindStringSubmatch(q); m != nil {
+		return p.answerBeginner(cleanSymbol(m[1]))
+	}
+	if m := qBegLike.FindStringSubmatch(q); m != nil {
+		return p.answerBeginner(cleanSymbol(m[1]))
+	}
 	// Most-specific patterns first: "what does X call" before "what does X do".
 	if m := qCallees.FindStringSubmatch(q); m != nil {
 		return p.answerCallees(cleanSymbol(m[1]))
@@ -185,6 +207,17 @@ func shortDir(dir string) string {
 }
 
 // answerWhatDoes handles "what does X do" / "what is X" / "explain X".
+// answerBeginner runs the symbol through the xray intelligence engine
+// for the beginner walkthrough. If that fails (unknown symbol, unreadable
+// file), it falls back to the reference answer so the user still gets
+// something useful, including the ambiguous-name disambiguation.
+func (p *Project) answerBeginner(name string) (string, bool) {
+	if out, ok := p.ExplainBeginner(name); ok {
+		return out, true
+	}
+	return p.answerWhatDoes(name)
+}
+
 func (p *Project) answerWhatDoes(name string) (string, bool) {
 	fn, cands, typ, pkg := p.resolve(name)
 	switch {

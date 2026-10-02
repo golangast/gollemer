@@ -42,6 +42,16 @@ Then ask questions about the code — it answers from what it parsed:
   you> where would I add a retry    ranked file:line hits
        helper
 
+For the beginner's view of a function, the xray intelligence engine
+walks you through it — analogy, execution steps, safety badge:
+
+  you> walk me through routeDomain
+  gollemer [goanalyze]> BEGINNER WALK: chat.routeDomain
+      Think of it like this: A recipe card: named steps you can run...
+      1. Route domain — classifies the chat input...
+      2. ...
+      Safety: clean · low — 2 allocation sites
+
 Questions only fire on names really in the project, so
 "what does a goroutine do" still goes to the Go brain.
 
