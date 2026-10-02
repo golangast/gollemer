@@ -8,6 +8,11 @@ Just talk to it — `make chat` — and say what you want.
 WHAT TO SAY TO THE CHAT
 -----------------------
 
+The prompt edits like a shell: up/down recalls history (kept across
+sessions in ~/.gollemer_history), left/right moves the cursor, tab
+completes commands, make targets, file paths, and code symbols (tab
+twice lists the matches), Ctrl-C cancels the line, Ctrl-D exits.
+
 Understand a Go codebase (the goanalyze brain — it reads real code,
 no guessing, no hallucinations):
 

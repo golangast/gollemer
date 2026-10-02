@@ -1,7 +1,6 @@
 package chat
 
 import (
-	"bufio"
 	"fmt"
 	"regexp"
 	"strings"
@@ -81,7 +80,7 @@ func parseMakeDocs(data string) {
 // "run make <target>" — validated against the Makefile allowlist and
 // offered immediately. Only a single token ever matches, so normal
 // sentences ("help me", "start over") can't trip it.
-func tryBareMakeTarget(line string, sc *bufio.Scanner, projectRoot string, conv *Conversation) bool {
+func tryBareMakeTarget(line string, r *LineReader, projectRoot string, conv *Conversation) bool {
 	fields := strings.Fields(line)
 	if len(fields) != 1 {
 		return false
@@ -91,7 +90,7 @@ func tryBareMakeTarget(line string, sc *bufio.Scanner, projectRoot string, conv 
 		out := "run make " + t
 		fmt.Printf("gollemer [%s]> %s\n", MakefileDomain, out)
 		conv.AddReply(out, MakefileDomain, false)
-		offerRunMakeCommand(sc, projectRoot, t)
+		offerRunMakeCommand(r, projectRoot, t)
 		return true
 	}
 	return false
@@ -100,7 +99,7 @@ func tryBareMakeTarget(line string, sc *bufio.Scanner, projectRoot string, conv 
 // tryDirectRunMake handles a bare "run make <target>" typed by the user:
 // the target is validated against the Makefile allowlist and, when valid,
 // the reply is printed and the run is offered — no brain needed.
-func tryDirectRunMake(line string, sc *bufio.Scanner, projectRoot string, conv *Conversation) bool {
+func tryDirectRunMake(line string, r *LineReader, projectRoot string, conv *Conversation) bool {
 	m := directRunMakeRe.FindStringSubmatch(line)
 	if m == nil {
 		return false
@@ -110,7 +109,7 @@ func tryDirectRunMake(line string, sc *bufio.Scanner, projectRoot string, conv *
 		out := "run make " + t
 		fmt.Printf("gollemer [%s]> %s\n", MakefileDomain, out)
 		conv.AddReply(out, MakefileDomain, false)
-		offerRunMakeCommand(sc, projectRoot, t)
+		offerRunMakeCommand(r, projectRoot, t)
 		return true
 	}
 	// Known Makefile target but not runnable from chat (chat/debug-chat),
@@ -130,7 +129,7 @@ func tryDirectRunMake(line string, sc *bufio.Scanner, projectRoot string, conv *
 // tryExplainMake handles "explain make <target>": it prints what the
 // target does (from the Makefile's own ## docs plus its recipe), then
 // offers to run it.
-func tryExplainMake(line string, sc *bufio.Scanner, projectRoot string, conv *Conversation) bool {
+func tryExplainMake(line string, r *LineReader, projectRoot string, conv *Conversation) bool {
 	m := explainMakeRe.FindStringSubmatch(line)
 	if m == nil {
 		return false
@@ -157,7 +156,7 @@ func tryExplainMake(line string, sc *bufio.Scanner, projectRoot string, conv *Co
 	fmt.Printf("gollemer [%s]> %s\n", MakefileDomain, out)
 	conv.AddReply(out, MakefileDomain, false)
 	if t := runnableMakeTarget("run make " + target); t != "" {
-		offerRunMakeCommand(sc, projectRoot, t)
+		offerRunMakeCommand(r, projectRoot, t)
 	}
 	return true
 }

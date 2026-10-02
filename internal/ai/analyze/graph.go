@@ -32,6 +32,8 @@ func (p *Project) BuildGraph() {
 				continue
 			}
 			varPkg := constructorVars(fn.decl.Body, pkg)
+			paramPkgs := paramPackages(fn, pkg)
+			loops := loopRanges(fn.decl.Body)
 			ast.Inspect(fn.decl.Body, func(n ast.Node) bool {
 				call, ok := n.(*ast.CallExpr)
 				if !ok {
@@ -45,7 +47,9 @@ func (p *Project) BuildGraph() {
 				case *ast.SelectorExpr:
 					// x.Foo(): prefer a same-package method named Foo;
 					// then the constructor pattern (s := store.New();
-					// s.Foo() resolves Foo in store); then pkg.Foo()
+					// s.Foo() resolves Foo in store); then a parameter
+					// typed by a project package (fm filemanager.FileManager
+					// lets fm.DeleteFile() resolve); then pkg.Foo()
 					// through imports.
 					if id, ok := fun.X.(*ast.Ident); ok {
 						target = p.findMethod(pkg, fun.Sel.Name)
@@ -54,6 +58,8 @@ func (p *Project) BuildGraph() {
 								if q, ok := pkg.aliasCache[alias]; ok {
 									target = p.findMethod(q, fun.Sel.Name)
 								}
+							} else if q, ok := paramPkgs[id.Name]; ok {
+								target = p.findMethod(q, fun.Sel.Name)
 							} else if q, ok := pkg.aliasCache[id.Name]; ok {
 								target = p.findFunc(q, "", fun.Sel.Name)
 							}
@@ -62,6 +68,12 @@ func (p *Project) BuildGraph() {
 				}
 				if target != nil && target != fn {
 					fn.Calls = append(fn.Calls, target.ID)
+					if inLoopRange(call, loops) {
+						if fn.LoopCalls == nil {
+							fn.LoopCalls = map[string]bool{}
+						}
+						fn.LoopCalls[target.ID] = true
+					}
 					key := [2]string{fn.ID, target.ID}
 					if !seen[key] {
 						seen[key] = true
@@ -156,6 +168,64 @@ func (p *Project) findFunc(pkg *Package, recv, name string) *Func {
 		}
 	}
 	return nil
+}
+
+// loopRanges returns the [pos, end) offsets of for/range loop bodies,
+// so calls made per-iteration (the per-item hooks) can be told apart
+// from calls evaluated once like the range expression itself.
+func loopRanges(body *ast.BlockStmt) [][2]int {
+	var ranges [][2]int
+	ast.Inspect(body, func(n ast.Node) bool {
+		switch x := n.(type) {
+		case *ast.ForStmt:
+			ranges = append(ranges, [2]int{int(x.Body.Pos()), int(x.Body.End())})
+		case *ast.RangeStmt:
+			ranges = append(ranges, [2]int{int(x.Body.Pos()), int(x.Body.End())})
+		}
+		return true
+	})
+	return ranges
+}
+
+func inLoopRange(call *ast.CallExpr, loops [][2]int) bool {
+	pos, end := int(call.Pos()), int(call.End())
+	for _, r := range loops {
+		if pos >= r[0] && end <= r[1] {
+			return true
+		}
+	}
+	return false
+}
+
+// paramPackages maps parameter names to project packages via their
+// declared types: RunCLI(fm filemanager.FileManager, ...) lets
+// fm.DeleteFile() resolve into the filemanager package. Unwraps pointer
+// types; only parameters typed as pkg.Type qualify.
+func paramPackages(fn *Func, pkg *Package) map[string]*Package {
+	out := map[string]*Package{}
+	if fn.decl == nil || fn.decl.Type == nil || fn.decl.Type.Params == nil {
+		return out
+	}
+	for _, field := range fn.decl.Type.Params.List {
+		typ := field.Type
+		if star, ok := typ.(*ast.StarExpr); ok {
+			typ = star.X
+		}
+		sel, ok := typ.(*ast.SelectorExpr)
+		if !ok {
+			continue
+		}
+		id, ok := sel.X.(*ast.Ident)
+		if !ok {
+			continue
+		}
+		if q, ok := pkg.aliasCache[id.Name]; ok {
+			for _, name := range field.Names {
+				out[name.Name] = q
+			}
+		}
+	}
+	return out
 }
 
 // findMethod looks up a method by name in pkg, preferring an exact

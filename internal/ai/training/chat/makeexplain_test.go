@@ -1,7 +1,6 @@
 package chat
 
 import (
-	"bufio"
 	"io"
 	"os"
 	"path/filepath"
@@ -157,8 +156,8 @@ func TestTryExplainMakeOutput(t *testing.T) {
 	initMakeAllowlist(dir)
 
 	out := captureStdout(t, func() {
-		sc := bufio.NewScanner(strings.NewReader(""))
-		if !tryExplainMake("explain make eval", sc, dir, NewConversation()) {
+		r := NewLineReader(strings.NewReader(""))
+		if !tryExplainMake("explain make eval", r, dir, NewConversation()) {
 			t.Error("tryExplainMake did not handle 'explain make eval'")
 		}
 	})
@@ -176,8 +175,8 @@ func TestTryDirectRunMakeUnknown(t *testing.T) {
 	makeTargetsAllowlist = map[string]bool{"eval": true}
 	defer func() { makeTargetsAllowlist = oldAllow }()
 	out := captureStdout(t, func() {
-		sc := bufio.NewScanner(strings.NewReader(""))
-		if !tryDirectRunMake("run make nope", sc, ".", NewConversation()) {
+		r := NewLineReader(strings.NewReader(""))
+		if !tryDirectRunMake("run make nope", r, ".", NewConversation()) {
 			t.Error("tryDirectRunMake did not handle 'run make nope'")
 		}
 	})
@@ -209,8 +208,8 @@ func TestTryBareMakeTarget(t *testing.T) {
 	capture := func(in string) (bool, string) {
 		var handled bool
 		out := captureStdout(t, func() {
-			sc := bufio.NewScanner(strings.NewReader(""))
-			handled = tryBareMakeTarget(in, sc, ".", NewConversation())
+			r := NewLineReader(strings.NewReader(""))
+			handled = tryBareMakeTarget(in, r, ".", NewConversation())
 		})
 		return handled, out
 	}

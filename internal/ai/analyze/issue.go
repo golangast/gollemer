@@ -32,7 +32,7 @@ type IssueConcepts struct {
 
 var (
 	yamlKeyRe  = regexp.MustCompile(`(?m)^([ \t]*)([a-zA-Z_][a-zA-Z0-9_-]*)[ \t]*:`)
-	codeWordRe = regexp.MustCompile("`([^`\\s][^`]*?)`")
+	codeWordRe = regexp.MustCompile("`([^`\\s][^`\n]*?)`")
 	wordRe     = regexp.MustCompile(`[a-zA-Z][a-zA-Z0-9+]*`)
 	fenceRe    = regexp.MustCompile("(?s)```.*?```")
 )
@@ -92,13 +92,18 @@ func ExtractIssueConcepts(text string) IssueConcepts {
 	} else {
 		seen := map[string]bool{}
 		c.KeyIndents = map[string]int{}
+		var fallback []string
 		for _, m := range yamlKeyRe.FindAllStringSubmatch(keySource, -1) {
 			k := strings.ToLower(m[2])
 			if !seen[k] {
 				seen[k] = true
-				c.YamlKeys = append(c.YamlKeys, k)
+				fallback = append(fallback, k)
 				c.KeyIndents[k] = len(m[1])
 			}
+		}
+		// A lone "key" is usually a prose header ("Example:"), not config.
+		if len(fallback) >= 2 {
+			c.YamlKeys = fallback
 		}
 	}
 
@@ -388,6 +393,13 @@ func (p *Project) GuideIssue(c IssueConcepts) string {
 		keySites = p.FindKeyDispatchSites()
 	}
 
+	// Feature plan: an "add" whose mechanism match isn't the title's
+	// subject gets the multi-file plan instead of the single anchor.
+	var plan *featurePlan
+	if c.Action == "add" && len(keySites) == 0 && !p.siteMatchesTitle(c, site) {
+		plan = p.buildFeaturePlan(c)
+	}
+
 	if len(keySites) > 0 {
 		writeKeyVisual(&b, p, c, keySites)
 		b.WriteString("BEHAVIOR — add the hotkeys here:\n")
@@ -416,6 +428,8 @@ func (p *Project) GuideIssue(c IssueConcepts) string {
 			b.WriteString("  Add your hotkeys as new cases next to the existing ones.\n")
 		}
 		b.WriteString("\n")
+	} else if plan != nil {
+		b.WriteString(p.writeFeaturePlan(c, plan, len(structs) > 0))
 	} else if site != nil {
 		action := "wrap"
 		if c.Action == "fix" {
@@ -438,9 +452,12 @@ func (p *Project) GuideIssue(c IssueConcepts) string {
 	// (Key-dispatch answers drew the flow as a visual instead.)
 	var anchor *Func
 	if len(keySites) == 0 {
-		if site != nil && site.KeyFunc != nil {
+		switch {
+		case plan != nil:
+			anchor = plan.flow
+		case site != nil && site.KeyFunc != nil:
 			anchor = site.KeyFunc
-		} else if len(structs) > 0 {
+		case len(structs) > 0:
 			anchor = keyFuncOf(p, structs[0].Pkg)
 		}
 	}
@@ -454,7 +471,7 @@ func (p *Project) GuideIssue(c IssueConcepts) string {
 		fmt.Fprintf(&b, "%s → yours here\n", strings.Join(names, " → "))
 	}
 
-	if len(structs) == 0 && site == nil && len(keySites) == 0 {
+	if len(structs) == 0 && site == nil && len(keySites) == 0 && plan == nil {
 		return p.GuideChange(c.Title)
 	}
 	return b.String()

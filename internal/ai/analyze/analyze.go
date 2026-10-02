@@ -74,6 +74,7 @@ type Func struct {
 	Params   int
 	Calls    []string // callee IDs (heuristic)
 	Callers  []string // filled by BuildGraph
+	LoopCalls map[string]bool // callee IDs called inside a for/range loop
 	Score    int      // importance, filled by Rank
 
 	decl *ast.FuncDecl // kept during scan for call extraction, then dropped

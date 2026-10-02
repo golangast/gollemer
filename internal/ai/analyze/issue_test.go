@@ -55,6 +55,14 @@ type HTTPClient interface {
 // New builds the shared client.
 func New() HTTPClient { return nil }
 `)
+	write("httpclient/retry.go", `package httpclient
+
+// RetryClient wraps Do with retry+backoff.
+type RetryClient struct{}
+
+// NewRetryClient builds the shared retrying client.
+func NewRetryClient() *RetryClient { return nil }
+`)
 	write("source/fetch.go", `package source
 
 import "example.com/iss/httpclient"

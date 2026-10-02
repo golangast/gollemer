@@ -10,7 +10,6 @@ package chat
 // this loop is the honest meter for whether training worked.
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"io"
@@ -187,8 +186,7 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 	log.Printf("[REAL-CHAT] loaded %s (vocab=%d, hidden=%d). Pure neural generation — type /quit to exit.",
 		RealModelPath(projectRoot, domain), model.OutputVocab.Size(), model.HiddenDim)
 
-	sc := bufio.NewScanner(os.Stdin)
-	sc.Buffer(make([]byte, 1024*1024), 1024*1024)
+	reader := NewLineReader(os.Stdin)
 	showThoughts := debug
 	conv := NewConversation()
 	initSocialRecall(projectRoot)
@@ -200,11 +198,14 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		log.Printf("[REAL-CHAT] gocode post-processing on (%d case mappings)", len(goCase))
 	}
 	for {
-		fmt.Print("you> ")
-		if !sc.Scan() {
+		line, rerr := reader.ReadLine("you> ")
+		if rerr == io.EOF {
 			break
 		}
-		line := strings.TrimSpace(sc.Text())
+		if rerr == errCancelled {
+			continue
+		}
+		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
@@ -270,7 +271,7 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 				fmt.Printf("gollemer> %s\n", mr)
 				conv.AddReply(mr, MakefileDomain, false)
 				if t := runnableMakeTarget(mr); t != "" {
-					offerRunMakeCommand(sc, projectRoot, t)
+					offerRunMakeCommand(reader, projectRoot, t)
 				}
 				continue
 			}
@@ -331,25 +332,25 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 			printThoughtTrace(trace)
 		}
 	}
-	return sc.Err()
+	return nil
 }
 
 // tryDeterministicAnswer checks the exact-match layers before the neural
 // model runs: social recall, makefile recall, and the Go knowledge base.
 // It prints the reply and records it in the conversation when one hits,
 // reporting whether the message was fully handled.
-func tryDeterministicAnswer(line, d string, conv *Conversation, sc *bufio.Scanner, projectRoot string) bool {
+func tryDeterministicAnswer(line, d string, conv *Conversation, r *LineReader, projectRoot string) bool {
 	// A bare target name ("eval", "explain") is "run make <target>".
-	if tryBareMakeTarget(line, sc, projectRoot, conv) {
+	if tryBareMakeTarget(line, r, projectRoot, conv) {
 		return true
 	}
 	// Direct "run make <target>": typed by the user, validated against
 	// the Makefile allowlist, offered immediately — no brain needed.
-	if tryDirectRunMake(line, sc, projectRoot, conv) {
+	if tryDirectRunMake(line, r, projectRoot, conv) {
 		return true
 	}
 	// "explain make <target>": what the target does, then the run offer.
-	if tryExplainMake(line, sc, projectRoot, conv) {
+	if tryExplainMake(line, r, projectRoot, conv) {
 		return true
 	}
 	// Codebase Q&A: if a project was analyzed this session and the
@@ -428,7 +429,7 @@ func tryDeterministicAnswer(line, d string, conv *Conversation, sc *bufio.Scanne
 			// A makefile reply names an exact repo command. Offer to
 			// run it directly, the same way gocli commands are run.
 			if t := runnableMakeTarget(mr); t != "" {
-				offerRunMakeCommand(sc, projectRoot, t)
+				offerRunMakeCommand(r, projectRoot, t)
 			}
 			return true
 		}
@@ -483,17 +484,19 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 	initMakeAllowlist(projectRoot)
 
 	goCase := goIdentCaseMap(projectRoot)
-	sc := bufio.NewScanner(os.Stdin)
-	sc.Buffer(make([]byte, 1024*1024), 1024*1024)
+	reader := NewLineReader(os.Stdin)
 	showThoughts := debug
 	conv := NewConversation()
 	fmt.Println("[unified chat — type /quit to exit, /thoughts to toggle the thought process]")
 	for {
-		fmt.Print("you> ")
-		if !sc.Scan() {
+		line, rerr := reader.ReadLine("you> ")
+		if rerr == io.EOF {
 			break
 		}
-		line := strings.TrimSpace(sc.Text())
+		if rerr == errCancelled {
+			continue
+		}
+		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
@@ -546,7 +549,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		}
 		conv.AddUser(line)
 		d := routeDomain(line)
-		if tryDeterministicAnswer(line, d, conv, sc, projectRoot) {
+		if tryDeterministicAnswer(line, d, conv, reader, projectRoot) {
 			continue
 		}
 		model := models[d]
@@ -585,20 +588,20 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// directly (working directory shown, no shell); only bare
 		// go/gofmt invocations are ever offered, never model chatter.
 		if d == GoCliDomain && tag == GoCliDomain && isRunnableGoCommand(reply) {
-			offerRunGoCommand(sc, strings.TrimSpace(reply))
+			offerRunGoCommand(reader, strings.TrimSpace(reply))
 		}
 		// A makefile neural reply names an exact repo command. Offer to
 		// run it directly (repo root, no shell), same as gocli commands.
 		if d == MakefileDomain && tag == MakefileDomain {
 			if t := runnableMakeTarget(reply); t != "" {
-				offerRunMakeCommand(sc, projectRoot, t)
+				offerRunMakeCommand(reader, projectRoot, t)
 			}
 		}
 		if showThoughts {
 			printThoughtTrace(trace)
 		}
 	}
-	return sc.Err()
+	return nil
 }
 
 // printTranscript shows what gollemer remembers from this session.
@@ -650,20 +653,20 @@ func stdinIsTerminal() bool {
 
 // offerRunGoCommand asks for confirmation, then runs a gocli command in
 // the chat's working directory and prints its output. The answer is read
-// through the chat's own scanner so stdin stays on one reader.
-func offerRunGoCommand(sc *bufio.Scanner, cmd string) {
+// through the chat's line reader so stdin stays on one reader.
+func offerRunGoCommand(r *LineReader, cmd string) {
 	cwd, _ := os.Getwd()
 	if !stdinIsTerminal() {
 		// Piped/scripted session: the command is already printed on the
 		// reply line above; never prompt, never run.
 		return
 	}
-	fmt.Printf("[run it here? %s] [y/n]: ", cwd)
-	if !sc.Scan() {
+	yn, err := r.ReadLine(fmt.Sprintf("[run it here? %s] [y/n]: ", cwd))
+	if err != nil {
 		fmt.Println("[cancelled]")
 		return
 	}
-	yn := strings.ToLower(strings.TrimSpace(sc.Text()))
+	yn = strings.ToLower(strings.TrimSpace(yn))
 	if yn != "y" && yn != "yes" {
 		fmt.Println("[not run]")
 		return
@@ -740,17 +743,17 @@ func runnableMakeTarget(reply string) string {
 // in the repo root with output streaming straight to the terminal.
 // There is no timeout: long targets (make smarter, make eval) need
 // their time, and the user confirmed interactively. Ctrl-C interrupts.
-func offerRunMakeCommand(sc *bufio.Scanner, projectRoot, target string) {
+func offerRunMakeCommand(r *LineReader, projectRoot, target string) {
 	if !stdinIsTerminal() {
 		// Piped/scripted session: never prompt, never run.
 		return
 	}
-	fmt.Printf("[run it here? 'make %s'] [y/n]: ", target)
-	if !sc.Scan() {
+	yn, err := r.ReadLine(fmt.Sprintf("[run it here? 'make %s'] [y/n]: ", target))
+	if err != nil {
 		fmt.Println("[cancelled]")
 		return
 	}
-	yn := strings.ToLower(strings.TrimSpace(sc.Text()))
+	yn = strings.ToLower(strings.TrimSpace(yn))
 	if yn != "y" && yn != "yes" {
 		fmt.Println("[not run]")
 		return
