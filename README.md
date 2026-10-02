@@ -16,9 +16,9 @@ Say any of these inside `make chat`. When the chat answers with a `go`/`gofmt` c
 
 | Say this | Example | What it does |
 |---|---|---|
-| Analyze a repo | `analyze this project` | Reads the repo's Go code and explains it in plain English: entry points, most-called functions, suggested reading order |
-| Analyze another repo | `analyze ~/projects/foo` or `analyze github.com/owner/repo` | Clones (if a URL) and explains that codebase instead |
-| See the structure | `show me a visual` | Draws the package dependency graph as ASCII in the terminal |
+| Analyze a repo | `analyze this project` | Reads the repo's Go code and explains it in plain English: entry points, most-called functions, suggested reading order — plus a full page of visuals (package sizes, coupling, biggest files, dependency graph) |
+| Analyze another repo | `analyze ~/projects/foo` or `analyze github.com/owner/repo` | Clones (if a URL) and explains that codebase instead, visuals included |
+| See the visuals | `show me a visual` | Draws the whole visual report again: package-size bars, coupling, most-called functions, biggest files, dependency graph |
 | Ask about the code | `what does routeDomain do` | Signature, docs, and who calls it |
 | Read the source | `show me routeDomain` | Prints the actual function |
 | Find where to edit | `where would I add a retry helper` | Suggests the right file and why |
@@ -27,6 +27,8 @@ Say any of these inside `make chat`. When the chat answers with a `go`/`gofmt` c
 | Ask about a Go command | `what does go build ./... do` | Explains the exact command |
 | Ask for a Go command | `build with the race detector` | Answers `go build -race ./...`, offers to run it |
 | Ask about a project command | `how do i retrain the model` | Answers `run make train-go`, offers to run it |
+| Run a project command | `run make eval` | Validates the target and offers to run it right there |
+| Explain a project command | `explain make eval` | Says what the target does and shows its recipe, then offers to run it |
 | Ask about a Go concept | `what is a goroutine` | Plain-English explanation |
 | Ask for Go code | `write a function that reverses a string` | Generates the Go code |
 | Review the session | `/history` | Shows what it remembers from this session |
@@ -36,7 +38,7 @@ Say any of these inside `make chat`. When the chat answers with a `go`/`gofmt` c
 
 ## ⌨️ Make commands
 
-Every target, with an example and what it does. The chat knows these too — ask `how do i X` inside `make chat` and it answers with the command and offers to run it.
+Every target, with an example and what it does. The chat knows these too — say `run make X` to run one directly, or `explain make X` to hear what it does first; either way it offers to run it.
 
 | Command | Example | What it does |
 |---|---|---|

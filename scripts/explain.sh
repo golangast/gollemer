@@ -21,13 +21,21 @@ no guessing, no hallucinations):
   you> analyze github.com/owner/repo    (cloned once, cached)
 
   you> show me a visual
-  gollemer [goanalyze]> Dependency graph: github.com/golangast/gollemer
-      A → B means A imports B. ★ = entry point (func main).
-
-      ★ 📦 cmd/gollemer-classic
-        ├── → pkg/analysis
-        ├── → pkg/ast
+  gollemer [goanalyze]> VISUALS: github.com/golangast/gollemer
+      PACKAGE SIZES (lines of code)
+        internal/ai/neural/nn        ██████████████████████████████ 5150
         ...
+      COUPLING (who depends on whom)
+        ...
+      ENGINE ROOM (most-called functions)
+        ████████████████████ tensor.NewTensor (62 callers)
+        ...
+      BIGGEST FILES (top 8)
+        ...
+      Dependency graph: ...
+        ★ 📦 cmd/gollemer-classic
+          ├── → pkg/analysis
+          ...
 
 Then ask questions about the code — it answers from what it parsed:
 
@@ -45,6 +53,8 @@ Explain commands (the gocli + makefile brains):
   you> what does go build ./... do
   you> build with the race detector
   you> what does make chat do
+  you> run make eval              validated against the Makefile, then run
+  you> explain make eval          what it does + its recipe, then run
 
 The gocli brain knows the full go toolchain (build, run, test, vet,
 fmt, mod, get, install, list, clean, doc, env, version, generate,
@@ -111,10 +121,13 @@ THE PKG/ ENGINE ROOM (the libraries behind the chat)
 Where the pieces live:
   internal/ai/analyze/                 goanalyze: reads Go code with go/ast
     ascii.go                           terminal dependency-graph renderer
+    visuals.go                         package sizes, coupling, biggest files,
+                                       the combined visual report
     report.go                          summaries, reading guide, where-to-change
     qa.go                              answers "what does X do" about the code
   internal/ai/training/chat/
     goanalyze.go                       /analyze command, "show me a visual"
+    makeexplain.go                     "run make X" / "explain make X" in chat
     flow.go                            /flow command (engine, in-process)
   pkg/engine/reactive.go               the reactive pipeline (synthesis → prove
                                        → tune → trace)

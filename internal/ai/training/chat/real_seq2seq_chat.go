@@ -339,6 +339,15 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 // It prints the reply and records it in the conversation when one hits,
 // reporting whether the message was fully handled.
 func tryDeterministicAnswer(line, d string, conv *Conversation, sc *bufio.Scanner, projectRoot string) bool {
+	// Direct "run make <target>": typed by the user, validated against
+	// the Makefile allowlist, offered immediately — no brain needed.
+	if tryDirectRunMake(line, sc, projectRoot, conv) {
+		return true
+	}
+	// "explain make <target>": what the target does, then the run offer.
+	if tryExplainMake(line, sc, projectRoot, conv) {
+		return true
+	}
 	// Codebase Q&A: if a project was analyzed this session and the
 	// message asks about one of its symbols ("what does routeDomain
 	// do"), answer from the AST. It only fires on known symbols, so it
@@ -348,12 +357,12 @@ func tryDeterministicAnswer(line, d string, conv *Conversation, sc *bufio.Scanne
 		conv.AddReply(out, GoAnalyzeDomain, false)
 		return true
 	}
-	// "show me a visual" as a follow-up: draw the dependency graph for
+	// "show me a visual" as a follow-up: draw the full visual report for
 	// the last analyzed project without re-parsing it. The verb+noun
 	// shape keeps "show me routeDomain" (answered above) and "how do I
 	// render html templates" (go brain) out, and the domain guard keeps
 	// "show me how to draw a graph in go" (go/gocode) with its owner.
-	// With no prior analysis the visual is drawn for the repo the chat
+	// With no prior analysis the visuals are drawn for the repo the chat
 	// runs in — the only codebase in context.
 	if visualFollowup.MatchString(line) && (d == SocialDomain || d == GoAnalyzeDomain) {
 		p := lastAnalyzeProject
@@ -365,7 +374,7 @@ func tryDeterministicAnswer(line, d string, conv *Conversation, sc *bufio.Scanne
 			}
 		}
 		if p != nil {
-			out := analyze.RenderASCIIGraph(p)
+			out := p.VisualReport()
 			fmt.Printf("gollemer [%s]> %s\n", GoAnalyzeDomain, out)
 			conv.AddReply(out, GoAnalyzeDomain, false)
 			return true
@@ -681,6 +690,7 @@ func initMakeAllowlist(projectRoot string) {
 			}
 		}
 	}
+	parseMakeDocs(string(data))
 }
 
 // runnableMakeTarget extracts a whitelisted make target from a

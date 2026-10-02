@@ -44,6 +44,7 @@ type Package struct {
 	Dir      string   // directory relative to Root ("" = Root)
 	Doc      string   // package doc comment ("// Package chat ..."), first one found
 	Files    []string // .go files, relative to Root
+	Lines    int      // total lines across Files
 	Imports  []string // every import path, sorted, unique
 	Internal []string // imports that resolve to another project package
 	Funcs    []*Func
@@ -192,7 +193,9 @@ func (p *Project) addFile(rel string, src *ast.File, fset *token.FileSet) {
 	}
 	p.Files++
 	if tf := fset.File(src.Pos()); tf != nil {
-		p.Lines += tf.LineCount()
+		n := tf.LineCount()
+		p.Lines += n
+		pkg.Lines += n
 	}
 	isTestFile := strings.HasSuffix(rel, "_test.go")
 	if isTestFile {

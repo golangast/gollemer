@@ -42,7 +42,6 @@ func tryCodebaseQuestion(line string) (string, bool) {
 var (
 	quotedPath = regexp.MustCompile(`"([^"]+)"|'([^']+)'`)
 	githubURL  = regexp.MustCompile(`(?i)(?:https?://)?github\.com/([\w.-]+)/([\w.-]+)`)
-	visualWant = regexp.MustCompile(`(?i)\b(visual|graph|diagram|html|picture|show me)\b`)
 	// visualFollowup marks "show me a visual" style requests: a
 	// show/draw/give/make/generate verb aimed at a visual noun. The
 	// verb+noun shape keeps "show me routeDomain" (a source-excerpt
@@ -98,12 +97,8 @@ func handleGoAnalyze(line string) (out string, ok bool) {
 	b.WriteString(p.ReadingGuide())
 	b.WriteString("\n")
 	b.WriteString(p.ImportGraph())
-	if visualWant.MatchString(line) {
-		b.WriteString("\n")
-		b.WriteString(analyze.RenderASCIIGraph(p))
-	} else {
-		b.WriteString("\nSay \"show me a visual\" and I'll draw the dependency graph right here.\n")
-	}
+	b.WriteString("\n")
+	b.WriteString(p.VisualReport())
 	return b.String(), true
 }
 
