@@ -99,13 +99,14 @@ func (p *Project) Answer(q string) (out string, ok bool) {
 			return p.answerWhatDoes(sym)
 		}
 	}
-	// "where is X handled" / "where do I X" with no symbol: keyword search.
+	// "where is X handled" / "where do I X" with no symbol: guided change
+	// location — one anchor, the pattern to imitate, and you-are-here.
 	if m := qWhereHdl.FindStringSubmatch(q); m != nil {
-		return p.WhereToChangeText(m[1]), true
+		return p.GuideChange(m[1]), true
 	}
 	if m := qWhereDo.FindStringSubmatch(q); m != nil {
 		if sym := cleanSymbol(m[1]); sym == "" || !p.knowsSymbol(sym) {
-			return p.WhereToChangeText(m[1]), true
+			return p.GuideChange(m[1]), true
 		}
 	}
 	return "", false

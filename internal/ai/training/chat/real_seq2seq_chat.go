@@ -23,10 +23,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golangast/gollemer/internal/ai/analyze"
 	"github.com/golangast/gollemer/internal/ai/neural/nnu/seq2seq"
 	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
 	"github.com/golangast/gollemer/internal/ai/neural/tokenizer"
-	"github.com/golangast/gollemer/internal/ai/analyze"
 )
 
 // RealModelPath returns the per-domain model file.
@@ -357,6 +357,21 @@ func tryDeterministicAnswer(line, d string, conv *Conversation, sc *bufio.Scanne
 	// do"), answer from the AST. It only fires on known symbols, so it
 	// can't steal questions meant for the other brains.
 	if out, ok := tryCodebaseQuestion(line); ok {
+		fmt.Printf("gollemer [%s]> %s\n", GoAnalyzeDomain, out)
+		conv.AddReply(out, GoAnalyzeDomain, false)
+		return true
+	}
+	// Pasted Go errors: translate into plain words, no command needed.
+	// Unrecognized shapes fall through to the Go brain below.
+	if out, ok := tryErrorHelp(line); ok {
+		fmt.Printf("gollemer [%s]> %s\n", GoDomain, out)
+		conv.AddReply(out, GoDomain, false)
+		return true
+	}
+	// Pasted GitHub issue URL ("where do I change for this?"): fetch
+	// the issue, analyze the repo, and point at the edit locations.
+	// Explicit "where for <url>" works too.
+	if out, ok := tryIssueWhere(line); ok {
 		fmt.Printf("gollemer [%s]> %s\n", GoAnalyzeDomain, out)
 		conv.AddReply(out, GoAnalyzeDomain, false)
 		return true

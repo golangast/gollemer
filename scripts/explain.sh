@@ -39,8 +39,20 @@ Then ask questions about the code — it answers from what it parsed:
   you> what does routeDomain do     signature, docs, callers, callees
   you> what's in package chat       what the package is for, key pieces
   you> show me routeDomain          the actual source code
-  you> where would I add a retry    ranked file:line hits
-       helper
+  you> where would I add a retry    one guided answer: START HERE (file:line),
+       helper                       PUT IT HERE (the pattern to imitate),
+                                    YOU ARE HERE (the call chain)
+  you> where for https://github.com/updatecli/updatecli/issues/10690
+       Paste a GitHub issue URL: it fetches the issue, analyzes the repo,
+       and points at the exact edit locations — the config struct to
+       extend, the shared code to wrap, the call chain it sits in.
+
+Go errors translate themselves — just paste one, no command needed:
+
+  you> ./prog.go:12:5: undefined: foo
+  gollemer [go]> 🔍 UNDEFINED NAME
+      What it means: Go doesn't know the name "foo" here...
+      How to fix: Check the spelling first...
 
 For the beginner's view of a function, the xray intelligence engine
 walks you through it — analogy, execution steps, safety badge:

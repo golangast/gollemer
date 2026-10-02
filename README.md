@@ -20,7 +20,7 @@ Say any of these inside `make chat`. When the chat answers with a `go`/`gofmt` c
 | Ask about the code | `what does routeDomain do`, `what's in package chat` | Signature, docs, and who calls it — or a package's purpose and key pieces |
 | Understand a function simply | `walk me through routeDomain` | The xray intelligence engine explains it like you're a beginner: a real-world analogy, a step-by-step execution walk, a safety badge |
 | Read the source | `show me routeDomain` | Prints the actual function |
-| Find where to edit | `where would I add a retry helper` | Suggests the right file and why |
+| Find where to edit | `where would I add a retry helper`, or paste a GitHub issue URL | One guided answer, not a hit list: the config struct to extend, the shared code to wrap, and the call chain it sits in |
 | Run one idea end-to-end | `/flow count with a mutex` | Box-style pipeline visual (prompt → 4 stages → renderer), then generated Go → safety check → tuned code → plain-words trace |
 | Ask about a Go command | `what does go build ./... do` | Explains the exact command |
 | Ask for a Go command | `build with the race detector` | Answers `go build -race ./...`, offers to run it |
@@ -29,6 +29,7 @@ Say any of these inside `make chat`. When the chat answers with a `go`/`gofmt` c
 | Explain a project command | `explain make eval` | Says what the target does and shows its recipe, then offers to run it |
 | Ask about a Go concept | `what is a goroutine` | Plain-English explanation |
 | Ask for Go code | `write a function that reverses a string` | Generates the Go code |
+| Paste a Go error | `./prog.go:12:5: undefined: foo` (or a panic) | Translates it into plain words: what it means and how to fix it — no command needed, just paste it |
 | Review the session | `/history` | Shows what it remembers from this session |
 | Start over | `/forget` | Wipes the session memory |
 | Peek at its reasoning | `/thoughts` | Toggles the per-token thought process display |
