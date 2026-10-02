@@ -43,6 +43,9 @@ var mechanismTable = []string{
 	"file", "read", "network", "tcp", "tls", "socket",
 	"retry", "backoff", "timeout", "ratelimit",
 	"cache", "database", "sql", "git", "docker", "yaml", "json",
+	"gui", "tui", "ui", "keyboard", "shortcut", "hotkey", "mouse",
+	"screen", "render", "view", "widget", "dialog", "menu", "input",
+	"terminal", "binding",
 }
 
 var addWords = []string{"feature", "request", "add", "support", "would like", "proposal", "new"}
@@ -377,7 +380,42 @@ func (p *Project) GuideIssue(c IssueConcepts) string {
 			m.Pkg.Name)
 	}
 
-	if site != nil {
+	// Keyboard shortcuts get the precise answer: the key-dispatch
+	// switches where new hotkeys are added as cases. This beats the
+	// package-level mechanism match when both exist.
+	var keySites []KeyDispatch
+	if wantsKeys(c) {
+		keySites = p.FindKeyDispatchSites()
+	}
+
+	if len(keySites) > 0 {
+		b.WriteString("BEHAVIOR — add the hotkeys here:\n")
+		n := len(keySites)
+		if n > 2 {
+			n = 2
+		}
+		for _, ks := range keySites[:n] {
+			fmt.Fprintf(&b, "  %s:%d\n", ks.File, ks.Line)
+			keys := ks.Keys
+			more := ""
+			if len(keys) > 8 {
+				more = fmt.Sprintf(" … +%d more", len(keys)-8)
+				keys = keys[:8]
+			}
+			if ks.Func != nil {
+				fmt.Fprintf(&b, "  %s — key dispatch already handles %s%s\n",
+					strings.TrimPrefix(ks.Func.Sig, "func "), strings.Join(quoteAll(keys), ", "), more)
+			} else {
+				fmt.Fprintf(&b, "  key dispatch already handles %s%s\n", strings.Join(quoteAll(keys), ", "), more)
+			}
+		}
+		if lits := keyLiterals(c); len(lits) > 0 {
+			fmt.Fprintf(&b, "  Add %s as new cases next to the existing ones.\n", strings.Join(quoteAll(lits), ", "))
+		} else {
+			b.WriteString("  Add your hotkeys as new cases next to the existing ones.\n")
+		}
+		b.WriteString("\n")
+	} else if site != nil {
 		action := "wrap"
 		if c.Action == "fix" {
 			action = "fix"
@@ -395,9 +433,12 @@ func (p *Project) GuideIssue(c IssueConcepts) string {
 			c.Title, site.Keyword, action)
 	}
 
-	// You-are-here: walk from the mechanism (or config) toward main.
+	// You-are-here: walk from the key site, mechanism, or config
+	// toward main.
 	var anchor *Func
-	if site != nil && site.KeyFunc != nil {
+	if len(keySites) > 0 && keySites[0].Func != nil {
+		anchor = keySites[0].Func
+	} else if site != nil && site.KeyFunc != nil {
 		anchor = site.KeyFunc
 	} else if len(structs) > 0 {
 		anchor = keyFuncOf(p, structs[0].Pkg)
@@ -412,7 +453,7 @@ func (p *Project) GuideIssue(c IssueConcepts) string {
 		fmt.Fprintf(&b, "%s → yours here\n", strings.Join(names, " → "))
 	}
 
-	if len(structs) == 0 && site == nil {
+	if len(structs) == 0 && site == nil && len(keySites) == 0 {
 		return p.GuideChange(c.Title)
 	}
 	return b.String()
