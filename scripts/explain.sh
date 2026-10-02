@@ -34,6 +34,14 @@ no guessing, no hallucinations):
   you> analyze ~/path/to/project        (any folder on disk)
   you> analyze github.com/owner/repo    (cloned once, cached)
 
+Or clone a repo into a folder you name, and look at it right away:
+
+  you> clone https://github.com/owner/repo in folder example
+  gollemer [goanalyze]> Cloned into `~/workspace/example`. Here's what I see:
+      Project: github.com/owner/repo
+      ...summary, story, reading guide, visuals...
+  you> what does main do                (answered from the cloned code)
+
 Then ask questions about the code — it answers from what it parsed:
 
   you> what does routeDomain do     signature, docs, callers, callees

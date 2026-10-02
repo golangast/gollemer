@@ -48,7 +48,7 @@ var (
 	// question, answered by the Q&A layer) and "how do I render html
 	// templates" (a Go question) out.
 	visualFollowup = regexp.MustCompile(`(?i)\b(show|draw|give|make|generate)\b.{0,24}?\b(visual|diagram|picture|graphs?)\b`)
-	whereTask  = regexp.MustCompile(`(?i)\bwhere\b.{0,40}?\b(add|change|update|modify|fix|edit|put|implement|wire|hook)\b\s+(.{2,80})`)
+	whereTask      = regexp.MustCompile(`(?i)\bwhere\b.{0,40}?\b(add|change|update|modify|fix|edit|put|implement|wire|hook)\b\s+(.{2,80})`)
 )
 
 // handleGoAnalyze answers a GoAnalyzeDomain message: it resolves the target
@@ -90,6 +90,15 @@ func handleGoAnalyze(line string) (out string, ok bool) {
 		b.WriteString(p.WhereToChangeText(task))
 		return b.String(), true
 	}
+	b.WriteString(renderAnalyzeReport(p))
+	return b.String(), true
+}
+
+// renderAnalyzeReport is the standard codebase report: summary, story,
+// reading guide, visuals. The clone command reuses it so a fresh clone
+// gets the same treatment as analyze.
+func renderAnalyzeReport(p *analyze.Project) string {
+	var b strings.Builder
 	b.WriteString(p.Summary())
 	b.WriteString("\n")
 	b.WriteString(p.Story())
@@ -97,7 +106,7 @@ func handleGoAnalyze(line string) (out string, ok bool) {
 	b.WriteString(p.ReadingGuide())
 	b.WriteString("\n")
 	b.WriteString(p.VisualReport())
-	return b.String(), true
+	return b.String()
 }
 
 // parseWhereTask extracts the task description from "where would I add X".

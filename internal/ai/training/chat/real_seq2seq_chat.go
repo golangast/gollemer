@@ -376,6 +376,14 @@ func tryDeterministicAnswer(line, d string, conv *Conversation, sc *bufio.Scanne
 		conv.AddReply(out, GoAnalyzeDomain, false)
 		return true
 	}
+	// "clone <url> in folder <name>": clone the repo into
+	// ~/workspace/<name> and analyze it, so the chat can answer
+	// questions about the code in that folder.
+	if out, ok := tryCloneProject(line); ok {
+		fmt.Printf("gollemer [%s]> %s\n", GoAnalyzeDomain, out)
+		conv.AddReply(out, GoAnalyzeDomain, false)
+		return true
+	}
 	// "show me a visual" as a follow-up: draw the full visual report for
 	// the last analyzed project without re-parsing it. The verb+noun
 	// shape keeps "show me routeDomain" (answered above) and "how do I
