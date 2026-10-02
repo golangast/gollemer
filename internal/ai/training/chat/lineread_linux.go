@@ -89,7 +89,7 @@ func tcgetattr(f *os.File) (*termios, error) {
 }
 
 func tcsetattr(f *os.File, t *termios) error {
-	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, f.Fd(), tcsets, uintptr(unsafe.Pointer(&t)))
+	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL, f.Fd(), tcsets, uintptr(unsafe.Pointer(t)))
 	if errno != 0 {
 		return errno
 	}
