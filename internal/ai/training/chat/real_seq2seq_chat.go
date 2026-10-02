@@ -209,7 +209,8 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		if line == "" {
 			continue
 		}
-		if line == "/quit" {
+		if line == "/quit" || line == "exit" || line == "quit" || line == "stop" {
+			fmt.Println("[bye — see you next time]")
 			break
 		}
 		if line == "/thoughts" {
@@ -377,6 +378,14 @@ func tryDeterministicAnswer(line, d string, conv *Conversation, r *LineReader, p
 		conv.AddReply(out, GoAnalyzeDomain, false)
 		return true
 	}
+	// Pasted GitHub pull-request URL: list the files the PR changed,
+	// each with a plain-words one-liner. Explicit "where for <url>"
+	// works too.
+	if out, ok := tryPullWhere(line); ok {
+		fmt.Printf("gollemer [%s]> %s\n", GoAnalyzeDomain, out)
+		conv.AddReply(out, GoAnalyzeDomain, false)
+		return true
+	}
 	// "clone <url> in folder <name>": clone the repo into
 	// ~/workspace/<name> and analyze it, so the chat can answer
 	// questions about the code in that folder.
@@ -500,7 +509,8 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if line == "" {
 			continue
 		}
-		if line == "/quit" {
+		if line == "/quit" || line == "exit" || line == "quit" || line == "stop" {
+			fmt.Println("[bye — see you next time]")
 			break
 		}
 		if line == "/thoughts" {

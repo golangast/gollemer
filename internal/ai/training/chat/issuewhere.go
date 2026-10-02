@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -51,19 +50,9 @@ func tryIssueWhere(line string) (string, bool) {
 	// If the chat is already looking at this repo (e.g. you cloned it
 	// with `clone <url> in folder example`), analyze your checkout —
 	// so the file links point at the folder you cloned to.
-	dir := ""
-	if want := strings.ToLower(owner + "/" + repo); lastAnalyzeRoot != "" && gitOriginRepo(lastAnalyzeRoot) == want {
-		dir = lastAnalyzeRoot
-		if rel, err := filepath.Rel(cwd(), dir); err == nil {
-			fmt.Printf("   using your %s checkout…\n", rel)
-		}
-	} else {
-		fmt.Printf("   cloning %s/%s (once, cached)…\n", owner, repo)
-		var err error
-		dir, err = ensureGitHubRepo("github.com/" + owner + "/" + repo)
-		if err != nil {
-			return fmt.Sprintf("Couldn't clone %s/%s: %s", owner, repo, err), true
-		}
+	dir, err := checkoutFor(owner, repo)
+	if err != nil {
+		return err.Error(), true
 	}
 	fmt.Printf("   analyzing %s/%s…\n", owner, repo)
 	p, err := analyze.Analyze(dir)

@@ -59,6 +59,9 @@ Then ask questions about the code — it answers from what it parsed:
        Paste a GitHub issue URL: it fetches the issue, analyzes the repo,
        and points at the exact edit locations — the config struct to
        extend, the shared code to wrap, the call chain it sits in.
+  you> https://github.com/pashkov256/deletor/pull/328
+       Paste a GitHub PR URL: it lists every file the PR changed, each
+       with a plain-words one-liner saying what that file is for.
 
 Go errors translate themselves — just paste one, no command needed:
 
