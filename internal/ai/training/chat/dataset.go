@@ -776,10 +776,13 @@ var makefileIntentPatterns = []string{
 	`\bcommands?\b.*\bpicker\b`,
 	`\bpicker\b`,
 
-	// Eval: "score all the models", "run the eval suite".
+	// Eval: "score all the models", "run the eval suite", "how do i
+	// run the evals". Bare "eval"/"evals" is unambiguous: no Go concept,
+	// command, or social phrase uses the word.
 	`\beval\b.*\bsuite\b`,
 	`\bscore\b.*\bmodels?\b`,
 	`\bhow good\b.*\bmodels?\b`,
+	`\bevals?\b`,
 
 	// Update a model: "update the gocli model".
 	`\bupdate\b.*\b(gocli|gocode|model)\b`,

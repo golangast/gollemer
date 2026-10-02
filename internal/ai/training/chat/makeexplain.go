@@ -76,6 +76,27 @@ func parseMakeDocs(data string) {
 	}
 }
 
+// tryBareMakeTarget handles a bare target name typed on its own
+// ("eval", "explain", "smarter"): the chat treats it as
+// "run make <target>" — validated against the Makefile allowlist and
+// offered immediately. Only a single token ever matches, so normal
+// sentences ("help me", "start over") can't trip it.
+func tryBareMakeTarget(line string, sc *bufio.Scanner, projectRoot string, conv *Conversation) bool {
+	fields := strings.Fields(line)
+	if len(fields) != 1 {
+		return false
+	}
+	target := strings.ToLower(strings.Trim(fields[0], "?!.,;:"))
+	if t := runnableMakeTarget("run make " + target); t != "" {
+		out := "run make " + t
+		fmt.Printf("gollemer [%s]> %s\n", MakefileDomain, out)
+		conv.AddReply(out, MakefileDomain, false)
+		offerRunMakeCommand(sc, projectRoot, t)
+		return true
+	}
+	return false
+}
+
 // tryDirectRunMake handles a bare "run make <target>" typed by the user:
 // the target is validated against the Makefile allowlist and, when valid,
 // the reply is printed and the run is offered — no brain needed.

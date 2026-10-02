@@ -339,6 +339,10 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 // It prints the reply and records it in the conversation when one hits,
 // reporting whether the message was fully handled.
 func tryDeterministicAnswer(line, d string, conv *Conversation, sc *bufio.Scanner, projectRoot string) bool {
+	// A bare target name ("eval", "explain") is "run make <target>".
+	if tryBareMakeTarget(line, sc, projectRoot, conv) {
+		return true
+	}
 	// Direct "run make <target>": typed by the user, validated against
 	// the Makefile allowlist, offered immediately — no brain needed.
 	if tryDirectRunMake(line, sc, projectRoot, conv) {

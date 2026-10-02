@@ -24,7 +24,7 @@ Say any of these inside `make chat`. When the chat answers with a `go`/`gofmt` c
 | Ask about a Go command | `what does go build ./... do` | Explains the exact command |
 | Ask for a Go command | `build with the race detector` | Answers `go build -race ./...`, offers to run it |
 | Ask about a project command | `how do i retrain the model` | Answers `run make train-go`, offers to run it |
-| Run a project command | `run make eval` | Validates the target and offers to run it right there |
+| Run a project command | `run make eval` or just `eval` | Validates the target and offers to run it right there |
 | Explain a project command | `explain make eval` | Says what the target does and shows its recipe, then offers to run it |
 | Ask about a Go concept | `what is a goroutine` | Plain-English explanation |
 | Ask for Go code | `write a function that reverses a string` | Generates the Go code |

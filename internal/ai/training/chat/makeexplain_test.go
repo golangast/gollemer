@@ -200,3 +200,43 @@ func captureStdout(t *testing.T, f func()) string {
 	data, _ := io.ReadAll(r)
 	return string(data)
 }
+
+// tryBareMakeTarget fires only on a single token naming a real target.
+func TestTryBareMakeTarget(t *testing.T) {
+	oldAllow := makeTargetsAllowlist
+	makeTargetsAllowlist = map[string]bool{"eval": true, "explain": true}
+	defer func() { makeTargetsAllowlist = oldAllow }()
+	capture := func(in string) (bool, string) {
+		var handled bool
+		out := captureStdout(t, func() {
+			sc := bufio.NewScanner(strings.NewReader(""))
+			handled = tryBareMakeTarget(in, sc, ".", NewConversation())
+		})
+		return handled, out
+	}
+	for _, in := range []string{"eval", "EVAL", "eval?", "  explain  "} {
+		handled, out := capture(in)
+		if !handled || !strings.Contains(out, "run make") {
+			t.Errorf("tryBareMakeTarget(%q) = %v, %q; want handled with run offer", in, handled, out)
+		}
+	}
+	for _, in := range []string{"", "help me", "run make eval", "notatarget", "evaluations"} {
+		if handled, _ := capture(in); handled {
+			t.Errorf("tryBareMakeTarget(%q) handled it, want false", in)
+		}
+	}
+}
+
+// "how do i run the evals" must reach the makefile brain, not social.
+func TestRouteEvalToMakefile(t *testing.T) {
+	for _, in := range []string{
+		"how do i run the evals",
+		"run the evals",
+		"explain eval",
+		"eval",
+	} {
+		if got := routeDomain(in); got != MakefileDomain {
+			t.Errorf("routeDomain(%q) = %q, want %q", in, got, MakefileDomain)
+		}
+	}
+}
