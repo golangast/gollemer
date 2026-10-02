@@ -16,8 +16,20 @@ no guessing, no hallucinations):
       40 packages, 300 Go files, ~45000 lines
       Entry points: ...
       IN PLAIN ENGLISH: ...
-      ... then the full visual report: package-size bars, coupling,
-      most-called functions, biggest files, dependency graph
+
+      STORY: what happens when you run it, in plain words
+      Everything starts at main() in cmd/gollemer-classic/main.go.
+      main() calls runClassic(): it parses the flags and picks a command.
+
+      PIPELINE: what happens when you run it
+      main  (cmd/gollemer-classic/main.go:16)
+      └─▶ main.runClassic — parses flags, runs the command
+          ├─▶ main.parseFlags — ...
+          ...
+
+      ... then the reading guide and the rest of the visuals:
+      package-size bars, coupling, most-called functions,
+      biggest files, dependency graph
 
   you> analyze ~/path/to/project        (any folder on disk)
   you> analyze github.com/owner/repo    (cloned once, cached)

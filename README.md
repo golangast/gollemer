@@ -16,7 +16,7 @@ Say any of these inside `make chat`. When the chat answers with a `go`/`gofmt` c
 
 | Say this | Example | What it does |
 |---|---|---|
-| Analyze a repo | `analyze this project` (or `analyze ~/path/to/foo`, `analyze github.com/owner/repo`) | Reads the Go code and explains it in plain English — entry points, most-called functions, reading order — plus visuals: package sizes, coupling, biggest files, dependency graph |
+| Analyze a repo | `analyze this project` (or `analyze ~/path/to/foo`, `analyze github.com/owner/repo`) | Explains the code in plain English for beginners: the story of what happens when you run it, the pipeline visual (main calls X calls Y), where to start reading — then visuals: package sizes, coupling, biggest files, dependency graph |
 | Ask about the code | `what does routeDomain do`, `what's in package chat` | Signature, docs, and who calls it — or a package's purpose and key pieces |
 | Read the source | `show me routeDomain` | Prints the actual function |
 | Find where to edit | `where would I add a retry helper` | Suggests the right file and why |

@@ -153,6 +153,8 @@ func (p *Project) VisualReport() string {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "VISUALS: %s\n%s\n\n", name, strings.Repeat("=", 46))
+	b.WriteString(p.Pipeline())
+	b.WriteString("\n")
 	b.WriteString(p.PackageSizes())
 	b.WriteString("\n")
 	b.WriteString(p.Coupling())

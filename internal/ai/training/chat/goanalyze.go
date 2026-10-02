@@ -92,11 +92,9 @@ func handleGoAnalyze(line string) (out string, ok bool) {
 	}
 	b.WriteString(p.Summary())
 	b.WriteString("\n")
-	b.WriteString(p.EngineRoom(6))
+	b.WriteString(p.Story())
 	b.WriteString("\n")
 	b.WriteString(p.ReadingGuide())
-	b.WriteString("\n")
-	b.WriteString(p.ImportGraph())
 	b.WriteString("\n")
 	b.WriteString(p.VisualReport())
 	return b.String(), true
