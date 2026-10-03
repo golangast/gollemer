@@ -39,34 +39,8 @@ func (p *Project) BuildGraph() {
 				if !ok {
 					return true
 				}
-				var target *Func
-				switch fun := call.Fun.(type) {
-				case *ast.Ident:
-					// Plain foo(): same-package function.
-					target = p.findFunc(pkg, "", fun.Name)
-				case *ast.SelectorExpr:
-					// x.Foo(): prefer a same-package method named Foo;
-					// then the constructor pattern (s := store.New();
-					// s.Foo() resolves Foo in store); then a parameter
-					// typed by a project package (fm filemanager.FileManager
-					// lets fm.DeleteFile() resolve); then pkg.Foo()
-					// through imports.
-					if id, ok := fun.X.(*ast.Ident); ok {
-						target = p.findMethod(pkg, fun.Sel.Name)
-						if target == nil {
-							if alias, ok := varPkg[id.Name]; ok {
-								if q, ok := pkg.aliasCache[alias]; ok {
-									target = p.findMethod(q, fun.Sel.Name)
-								}
-							} else if q, ok := paramPkgs[id.Name]; ok {
-								target = p.findMethod(q, fun.Sel.Name)
-							} else if q, ok := pkg.aliasCache[id.Name]; ok {
-								target = p.findFunc(q, "", fun.Sel.Name)
-							}
-						}
-					}
-				}
-				if target != nil && target != fn {
+				target := p.resolveCall(pkg, varPkg, paramPkgs, fn, call)
+				if target != nil {
 					fn.Calls = append(fn.Calls, target.ID)
 					if inLoopRange(call, loops) {
 						if fn.LoopCalls == nil {
@@ -82,13 +56,53 @@ func (p *Project) BuildGraph() {
 				}
 				return true
 			})
+			p.analyzeEffects(pkg, fn)
 		}
 	}
+	p.propagateEffects()
 	for _, fn := range p.byID {
 		sort.Strings(fn.Calls)
 		sort.Strings(fn.Callers)
 	}
 	p.finalize()
+}
+
+// resolveCall maps a call expression to a project function, or nil when
+// it targets an external package or can't be resolved. Shared by the
+// call-graph pass and the effect/guard collection so both see the same
+// edges.
+func (p *Project) resolveCall(pkg *Package, varPkg map[string]string, paramPkgs map[string]*Package, fn *Func, call *ast.CallExpr) *Func {
+	var target *Func
+	switch fun := call.Fun.(type) {
+	case *ast.Ident:
+		// Plain foo(): same-package function.
+		target = p.findFunc(pkg, "", fun.Name)
+	case *ast.SelectorExpr:
+		// x.Foo(): prefer a same-package method named Foo;
+		// then the constructor pattern (s := store.New();
+		// s.Foo() resolves Foo in store); then a parameter
+		// typed by a project package (fm filemanager.FileManager
+		// lets fm.DeleteFile() resolve); then pkg.Foo()
+		// through imports.
+		if id, ok := fun.X.(*ast.Ident); ok {
+			target = p.findMethod(pkg, fun.Sel.Name)
+			if target == nil {
+				if alias, ok := varPkg[id.Name]; ok {
+					if q, ok := pkg.aliasCache[alias]; ok {
+						target = p.findMethod(q, fun.Sel.Name)
+					}
+				} else if q, ok := paramPkgs[id.Name]; ok {
+					target = p.findMethod(q, fun.Sel.Name)
+				} else if q, ok := pkg.aliasCache[id.Name]; ok {
+					target = p.findFunc(q, "", fun.Sel.Name)
+				}
+			}
+		}
+	}
+	if target == fn {
+		return nil
+	}
+	return target
 }
 
 // constructorVars maps local variable names to import aliases for the

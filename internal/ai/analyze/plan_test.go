@@ -203,8 +203,10 @@ func list() []string { return nil }
 `)
 	write("worker/worker.go", `package worker
 
+import "os"
+
 // DoWork handles a single item.
-func DoWork(item string) {}
+func DoWork(item string) { os.Remove(item) }
 `)
 	return root
 }

@@ -13,16 +13,17 @@ import (
 // and a new file — so the plan names each with its role, grounded in
 // the actual code.
 type featurePlan struct {
-	configType  *Type            // type Config struct (fallback when no YAML match)
+	configType  *Type // type Config struct (fallback when no YAML match)
 	configPkg   *Package
-	flagsFunc   *Func            // the flag-parsing function
-	newFlags    []string         // --flags from the issue not covered by Config fields
-	flow        *Func            // the orchestrating function to extend
-	flowCall    *Func            // the called seed the feature hooks into
-	helpers     []*Func          // similar existing functions to imitate
+	flagsFunc   *Func             // the flag-parsing function
+	newFlags    []string          // --flags from the issue not covered by Config fields
+	flow        *Func             // the orchestrating function to extend
+	flowCall    *Func             // the called seed the feature hooks into
+	helpers     []*Func           // similar existing functions to imitate
 	helperNotes map[string]string // func ID -> why, e.g. "the issue names `--log-json`"
-	newFile     string           // suggested new file, relative to root ("" = none)
-	noun        string           // the feature's artifact noun ("report")
+	newFile     string            // suggested new file, relative to root ("" = none)
+	noun        string            // the feature's artifact noun ("report")
+	mutations   []mutation        // filesystem mutations the new flag should guard
 }
 
 var planStopwords = map[string]bool{
@@ -530,6 +531,10 @@ func (p *Project) buildFeaturePlan(c IssueConcepts) *featurePlan {
 			fp.flagsFunc = findFlagsFunc(pkg)
 			fp.newFlags = newFlags(c, t)
 		}
+		// What the new flag must gate: the filesystem mutations reachable
+		// from the flow. This is the semantic core of dry-run/preview-style
+		// features — not just where the code goes, but what it must guard.
+		fp.mutations = p.flowMutations(flow)
 	}
 
 	// New-file hint, named by the issue's own --flags.
@@ -575,6 +580,12 @@ func (p *Project) writeFeaturePlan(c IssueConcepts, fp *featurePlan, yamlShown b
 			fp.flow.Name, fp.flowCall.Name)
 	} else {
 		fmt.Fprintf(&b, "  Why here: this is the flow the feature belongs in.\n")
+	}
+	if len(fp.mutations) > 0 {
+		b.WriteString("  Guard these with the new flag — they change the filesystem:\n")
+		for _, m := range fp.mutations {
+			fmt.Fprintf(&b, "    `%s` → %s\n", m.FuncName, strings.Join(m.Via, ", "))
+		}
 	}
 	b.WriteString("\n")
 

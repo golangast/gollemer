@@ -57,27 +57,33 @@ type Package struct {
 
 // Func is one function or method.
 type Func struct {
-	ID       string // Dir.Name or Dir.Recv.Name, unique within the project
-	Name     string
-	PkgDir   string
-	Pkg      string
-	Receiver string // "" for plain functions
-	Exported bool
-	IsMain   bool
-	IsInit   bool
-	IsTest   bool // declared in a _test.go file
-	Doc      string
-	File     string // relative to Root
-	Line     int
-	EndLine  int    // last line of the declaration (for source excerpts)
-	Sig      string // rendered signature, e.g. "func (c *Chat) Add(a int) int"
-	Params   int
-	Calls    []string // callee IDs (heuristic)
-	Callers  []string // filled by BuildGraph
+	ID        string // Dir.Name or Dir.Recv.Name, unique within the project
+	Name      string
+	PkgDir    string
+	Pkg       string
+	Receiver  string // "" for plain functions
+	Exported  bool
+	IsMain    bool
+	IsInit    bool
+	IsTest    bool // declared in a _test.go file
+	Doc       string
+	File      string // relative to Root
+	Line      int
+	EndLine   int    // last line of the declaration (for source excerpts)
+	Sig       string // rendered signature, e.g. "func (c *Chat) Add(a int) int"
+	Params    int
+	Calls     []string        // callee IDs (heuristic)
+	Callers   []string        // filled by BuildGraph
 	LoopCalls map[string]bool // callee IDs called inside a for/range loop
-	Score    int      // importance, filled by Rank
+	Score     int             // importance, filled by Rank
 
-	decl *ast.FuncDecl // kept during scan for call extraction, then dropped
+	ExtCalls   []string // external calls, e.g. "os.Remove" (sorted, unique)
+	Mutates    bool     // directly invokes a mutating external call
+	MutatesAll bool     // transitively mutates: self or any callee does
+	Guards     []Guard  // if-statements and the calls each one guards
+
+	decl *ast.FuncDecl  // kept during scan for call extraction, then dropped
+	fset *token.FileSet // shared with the scan; lets effects read positions
 	pkg  *Package
 }
 
@@ -222,6 +228,7 @@ func (p *Project) addFile(rel string, src *ast.File, fset *token.FileSet) {
 				Line:     fset.Position(d.Pos()).Line,
 				EndLine:  fset.Position(d.End()).Line,
 				decl:     d,
+				fset:     fset,
 				pkg:      pkg,
 			}
 			if d.Recv != nil && len(d.Recv.List) > 0 {
