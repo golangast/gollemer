@@ -544,7 +544,7 @@ func RunRealSeq2SeqTraining(projectRoot, domain string, resume bool) error {
 		}
 		// Best is chosen on TRAIN loss so the held-out probes stay untouched.
 		log.Printf("[REAL-SEQ2SEQ] epoch=%d avg_loss=%.6f best=%.6f lr=%.6f", epoch, avg, best, lr)
-		if epoch%40 == 0 {
+		if epoch%10 == 0 {
 			if model.Decoder.MoE != nil {
 				log.Printf("[REAL-SEQ2SEQ] MoE expert usage: %.2f %.2f %.2f %.2f",
 					model.Decoder.MoE.ExpertUsage()[0], model.Decoder.MoE.ExpertUsage()[1],
