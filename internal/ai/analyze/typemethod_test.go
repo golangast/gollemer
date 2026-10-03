@@ -71,6 +71,7 @@ func TestTypeMethodPlan(t *testing.T) {
 	out := p.GuideIssue(c)
 	for _, want := range []string{
 		"edit one file",
+		"Problem: Show column types and counts.",
 		"OPEN THIS FILE",
 		"ADD HERE",
 		"type Widget struct",

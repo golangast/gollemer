@@ -234,11 +234,11 @@ func (p *Project) writeTypeMethodPlan(c IssueConcepts, tp *typeMethodPlan) strin
 	}
 
 	b.WriteString("  Steps:\n")
-	b.WriteString(fmt.Sprintf("  1. Open %s.\n", tp.typ.File))
+	b.WriteString(fmt.Sprintf("  1. Open %s.\n", p.LinkPath(tp.typ.File)))
 	b.WriteString(fmt.Sprintf("  2. Find `type %s struct` (line %d).\n", tp.typ.Name, tp.typ.Line))
 	if ex := simplestFunc(tp.siblings); ex != nil {
 		b.WriteString("  3. Add the new method after the type's other methods,\n")
-		b.WriteString(fmt.Sprintf("     writing it like %s (%s:%d):\n", ex.Name, ex.File, ex.Line))
+		b.WriteString(fmt.Sprintf("     writing it like %s (%s:%d):\n", ex.Name, p.LinkPath(ex.File), ex.Line))
 		b.WriteString(fmt.Sprintf("       %s\n", strings.TrimPrefix(ex.Sig, "func ")))
 	} else {
 		b.WriteString("  3. Add the new method right after the type declaration.\n")
@@ -246,7 +246,7 @@ func (p *Project) writeTypeMethodPlan(c IssueConcepts, tp *typeMethodPlan) strin
 	if tp.wantsOpts && len(tp.optTypes) > 0 {
 		ot := bestOption(tp)
 		b.WriteString(fmt.Sprintf("  4. The issue asks for options: add `type %sOption struct`,\n", tp.methodName))
-		b.WriteString(fmt.Sprintf("     copying %s (%s:%d).\n", ot.Name, ot.File, ot.Line))
+		b.WriteString(fmt.Sprintf("     copying %s (%s:%d).\n", ot.Name, p.LinkPath(ot.File), ot.Line))
 	}
 	return b.String()
 }

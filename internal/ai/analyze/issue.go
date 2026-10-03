@@ -337,6 +337,45 @@ func (p *Project) FindMechanism(keyword string) *MechanismSite {
 	return &MechanismSite{Pkg: bestPkg, Keyword: kw, KeyFunc: key, Score: bestScore}
 }
 
+// problemStatement distills the issue body into a short problem
+// description: the first meaningful lines after stripping the title,
+// markdown headers, code fences, and unfilled template boilerplate.
+func problemStatement(c IssueConcepts) string {
+	body := fenceRe.ReplaceAllString(c.Body, "")
+	title := strings.TrimSpace(c.Title)
+	var keep []string
+	for _, ln := range strings.Split(body, "\n") {
+		t := strings.TrimSpace(ln)
+		if t == "" || t == title {
+			continue
+		}
+		if strings.HasPrefix(t, "A clear and concise description") {
+			continue // unfilled template boilerplate
+		}
+		if strings.HasPrefix(t, "#") ||
+			(strings.HasPrefix(t, "**") && strings.HasSuffix(t, "**")) {
+			// Template section header: the problem is the text under
+			// the first header, so stop at the next one.
+			if len(keep) > 0 {
+				break
+			}
+			continue
+		}
+		keep = append(keep, t)
+		if len(keep) >= 3 {
+			break
+		}
+	}
+	s := strings.Join(strings.Fields(strings.Join(keep, " ")), " ")
+	if len(s) > 400 {
+		s = s[:397] + "..."
+	}
+	if s == "" {
+		return title
+	}
+	return s
+}
+
 // GuideIssue renders the full where-to-edit answer for an issue:
 // the config struct to extend, the mechanism to wrap, and the call
 // chain the change sits in. One clear path, not a hit list.
@@ -347,6 +386,9 @@ func (p *Project) GuideIssue(c IssueConcepts) string {
 		verb = "TO FIX"
 	}
 	fmt.Fprintf(&b, "%s %q:\n\n", verb, c.Title)
+	if ps := problemStatement(c); ps != "" {
+		fmt.Fprintf(&b, "Problem: %s\n\n", ps)
+	}
 
 	structs := p.FindConfigStruct(c.YamlKeys)
 	// Try every how-word; keep the best-scoring site. "http" beating
