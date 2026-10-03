@@ -1,0 +1,600 @@
+{"input":"what does func (c *Cache) Clear() do","output":"Clear purges all items from the cache."}
+{"input":"what does func (c *Cache) Get(id string) (*Manifest, bool) do","output":"Get retrieves a manifest from the cache."}
+{"input":"what does func (c *Cache) Invalidate(id string) do","output":"Invalidate removes an item by snapshot ID from the cache."}
+{"input":"what does func (c *Cache) Len() int do","output":"Len returns the current count of items in the cache."}
+{"input":"what does func (c *Cache) Put(m *Manifest) do","output":"Put adds or updates a manifest in the cache, evicting the least recently used item if full."}
+{"input":"what does func (c *Config) GetConfig() *Config do","output":"GetConfig returns the current configuration instance"}
+{"input":"what does func (c *Config) GetWithRules(rules rules.Rules) *Config do","output":"GetWithRules returns a value from config if it's set, otherwise returns value from rules"}
+{"input":"what does func (c *HashCache) Close() do","output":"Close releases pre-compiled SQL statements."}
+{"input":"what does func (c *HashCache) Lookup(path string, info os.FileInfo) (hash string, ok bool) do","output":"Lookup returns the cached sha256 for a file using pre-compiled prepared statements."}
+{"input":"what does func (c *HashCache) Purge(existingPaths map[string]bool) error do","output":"Purge removes stale entries for paths that no longer exist."}
+{"input":"what does func (d *defaultRules) GetRules() (*defaultRules, error) do","output":"GetRules loads and returns the current rules from the configuration file."}
+{"input":"what does func (d *defaultRules) GetRulesPath() string do","output":"GetRulesPath returns the path to the rules configuration file."}
+{"input":"what does func (d *defaultRules) SetupRulesConfig() error do","output":"SetupRulesConfig initializes the rules configuration file with default values."}
+{"input":"what does func (e *Error) GetMessage() string do","output":"GetMessage returns the error message"}
+{"input":"what does func (e *Error) GetType() ErrorType do","output":"GetType returns the error type"}
+{"input":"what does func (e *Error) Hide() do","output":"Hide makes the error invisible"}
+{"input":"what does func (e *Error) IsVisible() bool do","output":"IsVisible returns whether the error is currently visible"}
+{"input":"what does func (f *FileFilter) ExcludeFilter(info os.FileInfo, path string) bool do","output":"ExcludeFilter checks if a file should be excluded based on path patterns"}
+{"input":"what does func (f *FileFilter) MatchesFilters(info os.FileInfo, path string) bool do","output":"MatchesFilters checks if a file matches all filter criteria"}
+{"input":"what does func (f *FileFilter) NewerThanFilter(info os.FileInfo) bool do","output":"NewerThanFilter checks if a file is newer than the specified time"}
+{"input":"what does func (f *FileFilter) OlderThanFilter(info os.FileInfo) bool do","output":"OlderThanFilter checks if a file is older than the specified time"}
+{"input":"what does func (f *defaultFileManager) CalculateDirSize(path string) int64 do","output":"CalculateDirSize computes the total size of all files in a directory Uses concurrent processing with limits to handle large directories e..."}
+{"input":"what does func (f *defaultFileManager) DeleteEmptySubfolders(dir string) do","output":"DeleteEmptySubfolders removes all empty directories in the given path"}
+{"input":"what does func (f *defaultFileManager) DeleteFile(filePath string) do","output":"DeleteFile deletes a single file"}
+{"input":"what does func (f *defaultFileManager) DeleteFiles(dir string, extensions []string, exclude []string, minSize, maxSize int64, olderThan, newerThan time.Time) do","output":"DeleteFiles removes files matching the specified criteria from the given directory"}
+{"input":"what does func (f *defaultFileManager) ExpandTilde(path string) string do","output":"ExpandTilde expands the tilde (~) in a path to the user's home directory."}
+{"input":"what does func (f *defaultFileManager) IsEmptyDir(dirPath string) bool do","output":"IsEmptyDir checks if a directory is empty, including recursive check of subdirectories."}
+{"input":"what does func (f *defaultFileManager) MoveFileToTrash(filePath string) do","output":"MoveFileToTrash moves a single file to the system's recycle bin"}
+{"input":"what does func (f *defaultFileManager) MoveFilesToTrash(dir string, extensions []string, exclude []string, minSize, maxSize int64, olderThan, newerThan time.Time) do","output":"MoveFilesToTrash moves files matching the criteria to the system's recycle bin"}
+{"input":"what does func (fn *Func) Detail(p *Project) string do","output":"Detail renders the full readable card for a function."}
+{"input":"what does func (fn *Func) Display() string do","output":"Display renders \"pkg.Name\" or \"pkg.Recv.Name\"."}
+{"input":"what does func (fn *Func) Intent() string do","output":"Intent is the one-line plain-English purpose of a function."}
+{"input":"what does func (fn *Func) Source() string do","output":"Source returns the function's declaration source text, captured at parse time (the AST is dropped after analysis)."}
+{"input":"what does func (fn *Func) Summary() string do","output":"Summary is the one-line plain-English description of a function: its intent — the doc comment's first sentence when it has one, otherwise a synthesis of its name's verb, its effects, and the flags that gate it."}
+{"input":"what does func (fs *FileStorage) GetOperations(scanID string) ([]logging.FileOperation, error) do","output":"Gets an operations. Reads files (os.Open)."}
+{"input":"what does func (fs *FileStorage) GetStatistics(scanID string) (*logging.ScanStatistics, error) do","output":"Gets a statistics. Reads files (os.Open)."}
+{"input":"what does func (fs *FileStorage) SaveStatistics(stats *logging.ScanStatistics) error do","output":"Saves a statistics. Writes files (os.MkdirAll)."}
+{"input":"what does func (l *Logger) Close() error do","output":"Close closes the log file"}
+{"input":"what does func (l *Logger) Log(level LogLevel, message string) error do","output":"Log writes a log entry with the specified level and message"}
+{"input":"what does func (m *CleanFilesModel) CalculateDirSizeAsync() tea.Cmd do","output":"Asynchronous directory size calculation"}
+{"input":"what does func (m *CleanFilesModel) Cleanup() do","output":"Cleanup performs necessary cleanup operations when the model is destroyed"}
+{"input":"what does func (m *CleanFilesModel) DeleteUserSelectedFiles(stats *logging.ScanStatistics) (tea.Model, tea.Cmd) do","output":"Deletes an user selected files. Writes files (os.Remove)."}
+{"input":"what does func (m *CleanFilesModel) Handle(msg tea.KeyMsg) (tea.Model, tea.Cmd) do","output":"Handle processes a key message and returns appropriate model and command"}
+{"input":"what does func (m *CleanFilesModel) HandlePressStartButton() (tea.Model, tea.Cmd) do","output":"Handles a press start button. Reads files (os.Stat)."}
+{"input":"what does func (m *CleanFilesModel) Init() tea.Cmd do","output":"Initializes. Reads files (os.Stat)."}
+{"input":"what does func (m *CleanFilesModel) LoadDirs() tea.Cmd do","output":"Loads a dirs. Reads files (os.ReadDir)."}
+{"input":"what does func (m *CleanFilesModel) LoadFiles() tea.Cmd do","output":"Loads a files. Reads files (os.ReadDir)."}
+{"input":"what does func (m *CleanFilesModel) OnDelete() (tea.Model, tea.Cmd) do","output":"Handles on delete. Writes files (os.Remove)."}
+{"input":"what does func (m *CleanFilesModel) OpenFileExplorer(path string) tea.Cmd do","output":"opens the system's file explorer at the specified path"}
+{"input":"what does func (m *CleanTabManager) GetActiveTab() base.Tab do","output":"GetActiveTab returns the currently active tab"}
+{"input":"what does func (m *CleanTabManager) GetActiveTabIndex() int do","output":"GetActiveTabIndex returns the index of the currently active tab"}
+{"input":"what does func (m *CleanTabManager) GetAllTabs() []base.Tab do","output":"GetAllTabs returns all tabs"}
+{"input":"what does func (m *MainMenu) HandleFocusBottom() (tea.Model, tea.Cmd) do","output":"HandleFocusBottom moves focus down"}
+{"input":"what does func (m *MainMenu) HandleFocusTop() (tea.Model, tea.Cmd) do","output":"HandleFocusTop moves focus up"}
+{"input":"what does func (m *Manager) ClearCache() (deleteError error) do","output":"ClearCache removes all files from cache locations using OS-specific deletion methods"}
+{"input":"what does func (m *RulesModel) ValidateInputs() *errors.Error do","output":"ValidateInputs validates all input fields in the model"}
+{"input":"what does func (p *Printer) AskForConfirmation(s string) bool do","output":"AskForConfirmation prompts the user for confirmation with a yes/no question"}
+{"input":"what does func (p *Printer) PrintEmptyDirs(files []string) do","output":"PrintEmptyDirs prints a list of empty directories"}
+{"input":"what does func (p *Printer) PrintError(format string, args ...any) do","output":"PrintError prints an error message with a red X mark"}
+{"input":"what does func (p *Printer) PrintFilesTable(files map[string]string) do","output":"PrintFilesTable prints a formatted table of files with their sizes"}
+{"input":"what does func (p *Printer) PrintInfo(format string, args ...any) do","output":"PrintInfo prints an info message with a blue info symbol"}
+{"input":"what does func (p *Printer) PrintSuccess(format string, args ...any) do","output":"PrintSuccess prints a success message with a green checkmark"}
+{"input":"what does func (p *Progress) Current() int64 do","output":"Current returns the current progress count."}
+{"input":"what does func (p *Progress) Increment() do","output":"Increment advances the progress counter by one."}
+{"input":"what does func (p *Project) AllFuncs() []*Func do","output":"pkgFor returns the Package for dir, creating it on first use."}
+{"input":"what does func (p *Project) Answer(q string) (out string, ok bool) do","output":"Answer answers a natural-language question about the project."}
+{"input":"what does func (p *Project) BiggestFiles(n int) string do","output":"BiggestFiles draws the n largest Go files as a bar chart."}
+{"input":"what does func (p *Project) BuildGraph() do","output":"BuildGraph resolves call edges between the project's functions and fills in each Func's Callers list."}
+{"input":"what does func (p *Project) Coupling() string do","output":"Coupling draws fan-out (project packages this one imports) and fan-in (project packages importing this one) per package, sorted by fan-in."}
+{"input":"what does func (p *Project) DescribeFile(rel string) string do","output":"DescribeFile returns a one-line plain-words description of what the project-relative Go file is for, used by the pull-request changed-files view."}
+{"input":"what does func (p *Project) EngineRoom(n int) string do","output":"EngineRoom renders the top functions as an ASCII bar chart."}
+{"input":"what does func (p *Project) EntryPoints() []*Func do","output":"EntryPoints returns all func main declarations, ordered by package dir."}
+{"input":"what does func (p *Project) ExplainBeginner(symbol string) (string, bool) do","output":"ExplainBeginner runs symbol through the xray engine and renders the beginner walkthrough."}
+{"input":"what does func (p *Project) FieldReaders(field string) []string do","output":"FieldReaders returns the IDs of functions that read a \"pkg.Type.Field\" value, directly or through threaded calls, sorted."}
+{"input":"what does func (p *Project) FieldWriters(field string) []string do","output":"FieldWriters returns the IDs of functions that write a \"pkg.Type.Field\" value, sorted."}
+{"input":"what does func (p *Project) FindConfigStruct(keys []string) []ConfigMatch do","output":"FindConfigStruct finds the struct the issue's YAML example describes."}
+{"input":"what does func (p *Project) FindKeyDispatchSites() []KeyDispatch do","output":"FindKeyDispatchSites scans the project for keyboard dispatch switches: a switch with at least two key-like string cases."}
+{"input":"what does func (p *Project) FindMechanism(keyword string) *MechanismSite do","output":"FindMechanism locates the package behind a how-word, preferring the shared one: the package many others import is the choke point where one change (retry around the fetch) covers every caller."}
+{"input":"what does func (p *Project) FuncByID(id string) *Func do","output":"FuncByID looks up a function by its model ID."}
+{"input":"what does func (p *Project) GuideChange(task string) string do","output":"GuideChange renders the beginner-guided \"where do I change\" answer for task."}
+{"input":"what does func (p *Project) GuideIssue(c IssueConcepts) string do","output":"GuideIssue renders the full where-to-edit answer for an issue: the config struct to extend, the mechanism to wrap, and the call chain the change sits in."}
+{"input":"what does func (p *Project) ImportGraph() string do","output":"ImportGraph renders internal package dependencies as text edges."}
+{"input":"what does func (p *Project) KeyTypes(n int) []*Type do","output":"KeyTypes returns exported struct/interface types, interfaces with implementers first, then by method count."}
+{"input":"what does func (p *Project) LinkPath(rel string) string do","output":"LinkPath renders a project-relative file path as a terminal-clickable link."}
+{"input":"what does func (p *Project) Overview() string do","output":"Overview returns a plain-English paragraph describing the project for someone who has never seen it: what it is, where it starts, what the engine room is, and the order to read it in."}
+{"input":"what does func (p *Project) PackageDetail(pkg *Package) string do","output":"PackageDetail renders the readable card for a package."}
+{"input":"what does func (p *Project) PackageSizes() string do","output":"PackageSizes draws lines-of-code per package as a horizontal bar chart, biggest first."}
+{"input":"what does func (p *Project) PackageTree() string do","output":"PackageTree renders the package directory tree."}
+{"input":"what does func (p *Project) Pipeline() string do","output":"Pipeline draws the call flow starting at every func main."}
+{"input":"what does func (p *Project) Rank() do","output":"Rank scores every function by structural importance: how many distinct project functions call it, with bonuses for being exported, an entry point, or part of package main, and a penalty for test helpers."}
+{"input":"what does func (p *Project) ReadingGuide() string do","output":"ReadingGuide returns the \"where do I start\" walkthrough: entry points, the engine room, key types, and a suggested package reading order."}
+{"input":"what does func (p *Project) SourceOf(fn *Func, maxLines int) string do","output":"SourceOf returns up to maxLines of the function's source code."}
+{"input":"what does func (p *Project) Story() string do","output":"Story renders the first two levels of the pipeline as a plain-words paragraph: the beginner's \"what does this program do\" answer."}
+{"input":"what does func (p *Project) Summary() string do","output":"Summary returns the one-screen project overview."}
+{"input":"what does func (p *Project) TopFuncs(n int) []*Func do","output":"TopFuncs returns the n highest-scoring non-test functions."}
+{"input":"what does func (p *Project) VisualReport() string do","output":"VisualReport bundles every terminal visual into one report: package sizes, coupling, the engine room (most-called functions), and the package dependency graph."}
+{"input":"what does func (p *Project) WhereToChange(task string) []ChangeHit do","output":"WhereToChange ranks the functions and types most relevant to a task description like \"add a new chat command\" or \"fix the call graph\"."}
+{"input":"what does func (p *Project) WhereToChangeText(task string) string do","output":"WhereToChangeText renders the hits for chat output."}
+{"input":"what does func (p *Project) addEdge(caller, callee *Func) do","output":"addEdge records a call edge the heuristics missed."}
+{"input":"what does func (p *Project) addFile(rel string, src *ast.File, fset *token.FileSet) do","output":"addFile records one parsed file's declarations."}
+{"input":"what does func (p *Project) alsoFiles(c IssueConcepts, np *newCodePlan) []string do","output":"alsoFiles returns named existing files not otherwise covered: not the new paths, not test files (they're in IMITATE), not the reuse targets' files."}
+{"input":"what does func (p *Project) ambiguous(name string, cands []*Func) string do","output":"ambiguous lists candidate functions when a bare name matches several."}
+{"input":"what does func (p *Project) analyzeEffects(pkg *Package, fn *Func) do","output":"analyzeEffects records a function's external calls, call-site arguments, value reads, and if-statement guards."}
+{"input":"what does func (p *Project) answerBeginner(name string) (string, bool) do","output":"answerWhatDoes handles \"what does X do\" / \"what is X\" / \"explain X\"."}
+{"input":"what does func (p *Project) answerCallees(name string) (string, bool) do","output":"answerCallees handles \"what does X call\"."}
+{"input":"what does func (p *Project) answerCallers(name string) (string, bool) do","output":"answerCallers handles \"what calls X\" / \"who uses X\"."}
+{"input":"what does func (p *Project) answerEffects(cat, label string) (string, bool) do","output":"answerEffects handles \"where is the filesystem written\" / \"where does it use the network\": every function with the effect category in its transitive effects."}
+{"input":"what does func (p *Project) answerHowWorks(name string) (string, bool) do","output":"answerHowWorks handles \"how does X work\": the detail card plus what it calls, each with a one-line summary — the call chain a newcomer needs."}
+{"input":"what does func (p *Project) answerPackage(name string) (string, bool) do","output":"answerPackage handles \"what's in \u003cpkg\u003e\" / \"list functions in \u003cpkg\u003e\"."}
+{"input":"what does func (p *Project) answerShowMe(name string) (string, bool) do","output":"answerShowMe handles \"show me X\": the actual source of the function."}
+{"input":"what does func (p *Project) answerWhatReads(name string) (string, bool) do","output":"answerWhatReads handles \"what reads X\" / \"where is X read|used\": the value-flow index — every function that can observe the value, directly or through threaded calls."}
+{"input":"what does func (p *Project) answerWhereDefined(name string) (string, bool) do","output":"answerWhereDefined handles \"where is X defined\"."}
+{"input":"what does func (p *Project) answerWhoSets(name string) (string, bool) do","output":"answerWhoSets handles \"where is X set\" / \"who sets X\": the write index — every function that assigns the value."}
+{"input":"what does func (p *Project) answerWhyCalls(callerName, calleeName string) (string, bool) do","output":"answerWhyCalls handles \"why does X call Y\": the callee's purpose in infinitive form, plus the guard the call sits inside, if any."}
+{"input":"what does func (p *Project) buildFeaturePlan(c IssueConcepts) *featurePlan do","output":"buildFeaturePlan assembles the multi-file change plan, or nil when the pieces don't come together (then the single-anchor answer stands)."}
+{"input":"what does func (p *Project) buildFieldReaders() do","output":"buildFieldReaders computes the value-flow index by fixpoint over the call graph."}
+{"input":"what does func (p *Project) buildFieldWriters() do","output":"buildFieldWriters computes the write index: which functions set which values."}
+{"input":"what does func (p *Project) callRoots(n int) []*Func do","output":"callRoots returns exported functions nothing calls, by importance — the API surface a library is used through."}
+{"input":"what does func (p *Project) siblingCommands(newPath string) []siblingShape do","output":"siblingCommands finds the new file's future siblings that define the same kind of thing — e.g."}
+{"input":"what does func (s *FileScanner) ScanFilesCurrentLevel(dir string) (toDeleteMap map[string]string, totalClearSize int64) do","output":"ScanFilesCurrentLevel scans files in the current directory level only"}
+{"input":"what does func (s *PGVectorStore) Close() error do","output":"Close releases the database connection pool."}
+{"input":"what does func (s *PGVectorStore) DeleteBySnapshot(ctx context.Context, snapshotID string) error do","output":"DeleteBySnapshot removes all embeddings that belong to the given snapshot ID."}
+{"input":"what does func (s *Store) AllHashes() ([]string, error) do","output":"AllHashes returns every hash currently stored."}
+{"input":"what does func (s *Store) Exists(hash string) bool do","output":"Exists reports whether a blob with this hash is already stored."}
+{"input":"what does func (s *Store) ExtractTo(hash string, dstPath string, mode os.FileMode) error do","output":"ExtractTo writes the content of hash to dstPath with the given mode."}
+{"input":"what does func (s *Store) GarbageCollect(keep map[string]bool, dryRun bool) (int64, int, error) do","output":"GarbageCollect deletes objects that are not referenced by any hash in keep."}
+{"input":"what does func (s *Store) Get(hash string) (data []byte, err error) do","output":"Get decompresses and returns the raw bytes for a stored hash."}
+{"input":"what does func (s *Store) Put(data []byte) (hash string, err error) do","output":"Put stores data by its SHA-256 hash."}
+{"input":"what does func (s *Store) PutFile(filePath string, cachedHash string) (string, error) do","output":"PutFile reads filePath, stores it in the object store, and returns its hash."}
+{"input":"what does func (s *Store) RestoreTree(tree map[string]FileEntry, dstDir string, onProgress func(...)) error do","output":"RestoreTree extracts all files described by tree into dstDir using a parallel worker pool."}
+{"input":"what does func (t *Type) Detail(p *Project) string do","output":"Detail renders the full readable card for a type."}
+{"input":"what does func (v *Validator) ValidatePath(path string, optional bool) error do","output":"ValidatePath checks if a path exists and is valid If optional is true, empty paths are allowed"}
+{"input":"what does func AllHashes(ekoDir string) (map[string]bool, error) do","output":"AllHashes returns every blob hash referenced by any manifest in ekoDir."}
+{"input":"what does func Analyze(dir string) (*Project, error) do","output":"Analyze reads the Go project rooted at dir and returns its structural map."}
+{"input":"what does func AnalyzeDiff(diffs []api.DiffFile) ChangeSet do","output":"AnalyzeDiff converts a slice of DiffFile into a structured ChangeSet."}
+{"input":"what does func BuildDiff(fromTarget, toTarget string) ([]DiffFile, error) do","output":"BuildDiff walks both snapshot targets (manifest or dir), collecting file pairs where content differs."}
+{"input":"what does func CloneFile(src, dst string) error do","output":"CloneFile attempts to create a copy-on-write clone of src at dst using ioctl(FICLONE)."}
+{"input":"what does func CommandAttribute(command string) attribute.KeyValue do","output":"CommandAttribute returns the standard Eko command attribute."}
+{"input":"what does func CopyDir(src, dst string, onProgress func(...)) error do","output":"CopyDir copies all files from src to dst concurrently, skipping ignored items."}
+{"input":"what does func CopyFile(src, dst string) error do","output":"CopyFile performs a standard buffered file copy."}
+{"input":"what does func CopyOrCloneFile(src, dst string) error do","output":"CopyOrCloneFile attempts to create a copy-on-write clone of src at dst."}
+{"input":"what does func CountFiles() (int, error) do","output":"CountFiles returns the number of files in the current working directory that would be included in a snapshot (excluding ignored files/dirs)."}
+{"input":"what does func CreateSnapshot(db *sql.DB, withEnv bool, onProgress func(...)) (id, path string, err error) do","output":"CreateSnapshot captures the current workspace into the CAS object store and writes a manifest."}
+{"input":"what does func Delete(ekoDir, id string) error do","output":"Delete removes the manifest file for id and invalidates its cache entry."}
+{"input":"what does func DeleteFileWithUnixAPI(path string) error do","output":"DeleteFileWithUnixAPI is a stub implementation for Windows platforms."}
+{"input":"what does func DeleteFileWithWindowsAPI(path string) error do","output":"DeleteFileWithWindowsAPI deletes a file using Windows API calls."}
+{"input":"what does func EndOperation(operation any, err error) float64 do","output":"EndOperation completes an operation and returns its duration in seconds."}
+{"input":"what does func Exists(ekoDir, id string) bool do","output":"Exists reports whether a manifest file exists for id."}
+{"input":"what does func ExpandTilde(path string) string do","output":"ExpandTilde expands the tilde (~) in a path to the user's home directory."}
+{"input":"what does func ExtractIssueConcepts(text string) IssueConcepts do","output":"ExtractIssueConcepts reads a GitHub issue (title + body) and pulls out the concepts the engine needs: what config it talks about, what mechanism it touches, and whether it asks to add or fix."}
+{"input":"what does func FormatPatchSnippet(cs ChangeSet, maxBytes int) string do","output":"FormatPatchSnippet produces a concise representation of code diffs suitable for LLM prompts."}
+{"input":"what does func FormatSize(bytes int64) string do","output":"FormatSize converts a byte count into a human-readable string with appropriate unit Example: 1024 -\u003e \"1.00 KB\", 1024*1024 -\u003e \"1.00 MB\""}
+{"input":"what does func GenerateSnapshotSummary(ctx context.Context, fromDir, toDir, providerName string) (*SummaryResult, error) do","output":"GenerateSnapshotSummary builds diffs between fromDir and toDir and calls the specified AI provider."}
+{"input":"what does func GetFlags() *Config do","output":"GetFlags parses command-line flags and returns a Config instance with the parsed values."}
+{"input":"what does func GetLogFilePath() string do","output":"GetLogFilePath returns the path to the application's log file The log file is stored in the user's config directory under the app's direc..."}
+{"input":"what does func GetNextOption(currentOption, optionPrefix string, maxOptions int, forward bool) string do","output":"GetNextOption returns the next or previous option in a circular manner"}
+{"input":"what does func GetProvider(providerName string) Provider do","output":"GetProvider returns the Provider matching providerName, falling back to \"auto\"."}
+{"input":"what does func GetStyle(errType ErrorType) lipgloss.Style do","output":"GetStyle returns the appropriate style for the given error type"}
+{"input":"what does func IDFromPath(path string) string do","output":"IDFromPath extracts the snapshot ID from a stored path."}
+{"input":"what does func Init(ctx context.Context) (func(...), error) do","output":"Init initializes OpenTelemetry for Eko."}
+{"input":"what does func InitDB() *sql.DB do","output":"InitDB opens the local SQLite database and ensures migrations are applied."}
+{"input":"what does func IsTTY(w io.Writer) bool do","output":"IsTTY reports whether w is a terminal device."}
+{"input":"what does func LoadConfig() *Config do","output":"LoadConfig initializes and returns a new Config instance with values from command-line flags"}
+{"input":"what does func LoadOneOffCleanSpec(ruleManager rules.Rules) (*OneOffCleanSpec, error) do","output":"LoadOneOffCleanSpec snapshots the currently saved rules for a scheduled cleanup run."}
+{"input":"what does func LogDeletionToFile(files map[string]string) do","output":"LogDeletionToFile writes deletion records to a log file Each record includes timestamp, file path, and file size"}
+{"input":"what does func LogDeletionToFileAsJson(files map[string]string, dir string) do","output":"LogDeletionToFileAsJson generates JSON-formated deletion logs and writes to a file"}
+{"input":"what does func Meter() metric.Meter do","output":"Meter returns Eko's shared OpenTelemetry meter."}
+{"input":"what does func MetricsInstance() Metrics do","output":"MetricsInstance returns the initialized metrics."}
+{"input":"what does func MigrateDB(database *sql.DB) error do","output":"MigrateDB creates the schema if needed and adds any missing columns (e.g."}
+{"input":"what does func ModelAttribute(model string) attribute.KeyValue do","output":"ModelAttribute returns the standard Eko AI model attribute."}
+{"input":"what does func New(db *sql.DB) (*HashCache, error) do","output":"New initialises the hash_cache table and pre-compiles prepared SQL statements."}
+{"input":"what does func New(ekoDir string) (*Store, error) do","output":"New creates (or opens) the object store under ekoDir/objects."}
+{"input":"what does func New(errType ErrorType, message string) *Error do","output":"New creates a new error with the given type and message"}
+{"input":"what does func NewCache(capacity int) *Cache do","output":"NewCache constructs an LRU cache with the specified capacity."}
+{"input":"what does func NewCacheManager(fm filemanager.FileManager) *Manager do","output":"NewCacheManager creates a new cache manager instance for the current OS"}
+{"input":"what does func NewCleanTabManager(model interfaces.CleanModel, factory *CleanTabFactory) *CleanTabManager do","output":"NewCleanTabManager creates a new CleanTabManager"}
+{"input":"what does func NewFileManager() FileManager do","output":"NewFileManager creates a new instance of the default file manager"}
+{"input":"what does func NewFileOperation(filePath string, size int64, opType OperationType, reason, rule string) *FileOperation do","output":"NewFileOperation creates a new file operation record"}
+{"input":"what does func NewFileScanner(fileManager FileManager, filter *FileFilter, haveProgress bool) *FileScanner do","output":"NewFileScanner creates a new file scanner with the specified configuration"}
+{"input":"what does func NewLogger(ConfigPath string, statsCallback func(...)) (*Logger, error) do","output":"NewLogger creates a new logger instance with the specified configuration"}
+{"input":"what does func NewPGVectorStore(dsn string) (*PGVectorStore, error) do","output":"NewPGVectorStore opens a connection to the PostgreSQL database at dsn and ensures the pgvector extension and embeddings table exist."}
+{"input":"what does func NewPrinter() *Printer do","output":"NewPrinter creates a new Printer instance with default color settings"}
+{"input":"what does func NewProgress(total int, w io.Writer, prefix string) *Progress do","output":"NewProgress creates a new progress tracker."}
+{"input":"what does func NewRules() Rules do","output":"NewRules creates a new instance of the default rules."}
+{"input":"what does func NewRulesModel(rules rules.Rules, validator *validation.Validator) *RulesModel do","output":"NewRulesModel creates a new rules management model"}
+{"input":"what does func NewValidator() *Validator do","output":"NewValidator creates a new instance of the Validator"}
+{"input":"what does func OperationAttribute(operation string) attribute.KeyValue do","output":"OperationAttribute returns the standard Eko operation attribute."}
+{"input":"what does func ParseExcludeToSlice(exclude string) []string do","output":"ParseExcludeToSlice converts a comma-separated string of patterns into a slice"}
+{"input":"what does func ParseExtToMap(extSlice []string) map[string]struct{...} do","output":"ParseExtToMap converts a slice of extensions into a map for O(1) lookups"}
+{"input":"what does func ParseExtToSlice(extensions string) []string do","output":"ParseExtToSlice converts a comma-separated string of extensions into a slice"}
+{"input":"what does func ParseJsonLogsPath(args []string, flagName string) string do","output":"ParseJsonLogsPath gets the optional path provided for JSON-formatted logs"}
+{"input":"what does func ParseTimeDuration(timeStr string) (time.Time, error) do","output":"ParseTimeDuration converts a time duration string to a time.Time"}
+{"input":"what does func PendingRemovals() ([]string, error) do","output":"PendingRemovals returns the top-level entries that a legacy snapshot restore would delete, in directory order."}
+{"input":"what does func PendingRestoreChanges(path string) ([]string, error) do","output":"PendingRestoreChanges returns working-tree paths the selected restore will overwrite or delete."}
+{"input":"what does func PerformAIAsk(query string) string do","output":"PerformAIAsk queries repository architecture using stored memory indexes."}
+{"input":"what does func PerformAIBisect(failingTest string) string do","output":"PerformAIBisect isolates regression introduced commits using root-cause analysis."}
+{"input":"what does func PerformAIConflict(filePath string, conflictContent string) string do","output":"PerformAIConflict analyzes ours vs theirs conflict markers and proposes resolutions."}
+{"input":"what does func PerformAIExplain(filePath string, code string, history string) string do","output":"PerformAIExplain analyzes a file and its history to explain purpose, architecture, and risk."}
+{"input":"what does func PerformAIGate(diffs []api.DiffFile) (passed bool, report string) do","output":"PerformAIGate evaluates pre-commit quality gates."}
+{"input":"what does func PerformAIImpactAnalysis(diffs []api.DiffFile) string do","output":"PerformAIImpactAnalysis maps changes to dependent subsystems and recommends test suites."}
+{"input":"what does func PerformAINext() string do","output":"PerformAINext recommends the next optimal development task based on repository state."}
+{"input":"what does func PerformAIOwners(targetPath string) string do","output":"PerformAIOwners calculates code maintainers and recommends PR reviewers."}
+{"input":"what does func PerformAIPR(baseBranch string, diffs []api.DiffFile) string do","output":"PerformAIPR generates a professional GitHub Pull Request description."}
+{"input":"what does func PerformAIReview(ctx context.Context, diffs []api.DiffFile, providerName string) (*AIReviewResult, error) do","output":"PerformAIReview analyzes a changeset diff and returns structured review findings."}
+{"input":"what does func PerformAIRiskAnalysis(diffs []api.DiffFile) (score int, report string) do","output":"PerformAIRiskAnalysis evaluates multi-dimensional risk scores (Database, Auth, API, Tests, Config)."}
+{"input":"what does func PerformAISecurity(diffs []api.DiffFile) string do","output":"PerformAISecurity scans diffs for credentials, API keys, and injection risks."}
+{"input":"what does func PerformAISecurityReview(diffs []api.DiffFile) string do","output":"PerformAISecurityReview performs a deep security audit over a workspace diff."}
+{"input":"what does func PerformAISemDiff(diffs []api.DiffFile) string do","output":"PerformAISemDiff translates raw line diffs into functional behavioral impact descriptions."}
+{"input":"what does func PerformAIStatus(ctx context.Context, diffs []api.DiffFile) (*AIStatusResult, error) do","output":"PerformAIStatus analyzes workspace changes and generates intent \u0026 role analysis."}
+{"input":"what does func PerformAITest(diffs []api.DiffFile) string do","output":"PerformAITest generates a comprehensive testing strategy for a given diff."}
+{"input":"what does func ProviderAttribute(provider string) attribute.KeyValue do","output":"ProviderAttribute returns the standard Eko AI provider attribute."}
+{"input":"what does func Read(ekoDir, id string) (*Manifest, error) do","output":"Read deserialises the manifest for id from ekoDir/manifests/\u003cid\u003e.json."}
+{"input":"what does func RecordCAS(ctx context.Context, operation string, duration any, success bool) do","output":"RecordCAS records a completed CAS operation."}
+{"input":"what does func RecordCommand(ctx context.Context, command string, duration any, success bool) do","output":"RecordCommand records a completed CLI command."}
+{"input":"what does func RecordLLM(ctx context.Context, operation string, args ...any) do","output":"RecordLLM records a completed LLM operation."}
+{"input":"what does func RecordSQLite(ctx context.Context, operation string, duration any, success bool) do","output":"RecordSQLite records a completed SQLite operation."}
+{"input":"what does func RenderASCIIGraph(p *Project) string do","output":"RenderASCIIGraph draws the package dependency graph as plain text for the terminal: one block per package, listing the other project packages it imports."}
+{"input":"what does func ResolveSnapshot(database *sql.DB, target string) (id, path string, err error) do","output":"ResolveSnapshot resolves an 8-character snapshot ID or a human-readable tag to its manifest/snapshot path."}
+{"input":"what does func RestoreSnapshot(path string, onProgress func(...)) error do","output":"RestoreSnapshot reverts the working directory to the state captured in path."}
+{"input":"what does func RunCLI(fm filemanager.FileManager, rules rules.Rules, config *config.Config) do","output":"Runs a cli. Writes files (os.Remove). Checks the `config.UseRules` flag."}
+{"input":"what does func SaveSummary(database *sql.DB, id, summary string) error do","output":"SaveSummary updates the AI-generated summary for a given snapshot ID."}
+{"input":"what does func SaveTag(database *sql.DB, id, tag string) error do","output":"SaveTag assigns a human-readable tag/alias to a given snapshot ID."}
+{"input":"what does func Walk(root string, shouldIgnore func(...)) (chan FileEntry, chan error) do","output":"Walk traverses root in parallel using a pool of directory-scanner goroutines."}
+{"input":"what does func Write(ekoDir string, m *Manifest) error do","output":"Write atomically serialises m to ekoDir/manifests/\u003cid\u003e.json."}
+{"input":"what does func an(w string) string do","output":"an returns \"a\" or \"an\" for a word."}
+{"input":"what does func articleJoin(words []string) string do","output":"articleJoin renders [\"File\"] as \"a file\", [\"For\", \"Win\"] as \"for win\" (prepositions take no article), [\"HTTP\"] as \"an http\"."}
+{"input":"what does func bars(v, max, width int) string do","output":"bars scales v against max into a width-wide block bar."}
+{"input":"what does func blockReturns(b *ast.BlockStmt) bool do","output":"blockReturns reports whether a block ends in a return statement."}
+{"input":"what does func callerChain(p *Project, fn *Func, max int) []*Func do","output":"callerChain walks from fn up through its most important caller to a root, returning the chain root-first."}
+{"input":"what does func camelSplit(s string) []string do","output":"camelSplit splits \"ServeHTTP\" into [\"Serve\", \"HTTP\"], \"userID\" into [\"user\", \"ID\"]."}
+{"input":"what does func capExamples(in []string, n int) ([]string, int) do","output":"capExamples keeps the first n examples and counts the rest."}
+{"input":"what does func chainExamples(fset *token.FileSet, src []byte, s *ast.IfStmt) ([]string, int, bool) do","output":"chainExamples follows an if/else-if chain and collects the conditions that compare against a literal, e.g."}
+{"input":"what does func checkGuard(fn *Func) string do","output":"checkGuard returns the first flag-like guard condition: the option the function honors."}
+{"input":"what does func childStmtLists(stmt ast.Stmt) [][]ast.Stmt do","output":"childStmtLists returns nested statement lists for recursion into loops, switches, and selects."}
+{"input":"what does func cleanSymbol(s string) string do","output":"cleanSymbol strips articles, quotes, and role words from a symbol name."}
+{"input":"what does func existingPaths(p *Project, c IssueConcepts) []string do","output":"existingPaths returns the issue's backticked paths that exist on disk: the files (or directories) the change touches."}
+{"input":"what does func findDispatchSites(root string, fn *Func) []dispatchSite do","output":"findDispatchSites parses the anchor's file and looks for extension points in its body: switch statements and if/else chains that compare against literals — the shapes where new cases get added."}
+{"input":"what does func findModule(dir string) string do","output":"findModule reads the module path from the nearest go.mod at or above dir."}
+{"input":"what does func hasBenchmark(full string) bool do","output":"hasBenchmark reports whether a test file defines a Benchmark function."}
+{"input":"what does func missingPaths(p *Project, c IssueConcepts) []string do","output":"missingPaths returns the issue's backticked paths that don't exist in the repo: the issue telling us where to create."}
+{"input":"what is func (c *Cache) Clear() for","output":"Clear purges all items from the cache."}
+{"input":"what is func (c *Cache) Get(id string) (*Manifest, bool) for","output":"Get retrieves a manifest from the cache."}
+{"input":"what is func (c *Cache) Invalidate(id string) for","output":"Invalidate removes an item by snapshot ID from the cache."}
+{"input":"what is func (c *Cache) Len() int for","output":"Len returns the current count of items in the cache."}
+{"input":"what is func (c *Cache) Put(m *Manifest) for","output":"Put adds or updates a manifest in the cache, evicting the least recently used item if full."}
+{"input":"what is func (c *Config) GetConfig() *Config for","output":"GetConfig returns the current configuration instance"}
+{"input":"what is func (c *Config) GetWithRules(rules rules.Rules) *Config for","output":"GetWithRules returns a value from config if it's set, otherwise returns value from rules"}
+{"input":"what is func (c *HashCache) Close() for","output":"Close releases pre-compiled SQL statements."}
+{"input":"what is func (c *HashCache) Lookup(path string, info os.FileInfo) (hash string, ok bool) for","output":"Lookup returns the cached sha256 for a file using pre-compiled prepared statements."}
+{"input":"what is func (c *HashCache) Purge(existingPaths map[string]bool) error for","output":"Purge removes stale entries for paths that no longer exist."}
+{"input":"what is func (d *defaultRules) GetRules() (*defaultRules, error) for","output":"GetRules loads and returns the current rules from the configuration file."}
+{"input":"what is func (d *defaultRules) GetRulesPath() string for","output":"GetRulesPath returns the path to the rules configuration file."}
+{"input":"what is func (d *defaultRules) SetupRulesConfig() error for","output":"SetupRulesConfig initializes the rules configuration file with default values."}
+{"input":"what is func (e *Error) GetMessage() string for","output":"GetMessage returns the error message"}
+{"input":"what is func (e *Error) GetType() ErrorType for","output":"GetType returns the error type"}
+{"input":"what is func (e *Error) Hide() for","output":"Hide makes the error invisible"}
+{"input":"what is func (e *Error) IsVisible() bool for","output":"IsVisible returns whether the error is currently visible"}
+{"input":"what is func (f *FileFilter) ExcludeFilter(info os.FileInfo, path string) bool for","output":"ExcludeFilter checks if a file should be excluded based on path patterns"}
+{"input":"what is func (f *FileFilter) MatchesFilters(info os.FileInfo, path string) bool for","output":"MatchesFilters checks if a file matches all filter criteria"}
+{"input":"what is func (f *FileFilter) NewerThanFilter(info os.FileInfo) bool for","output":"NewerThanFilter checks if a file is newer than the specified time"}
+{"input":"what is func (f *FileFilter) OlderThanFilter(info os.FileInfo) bool for","output":"OlderThanFilter checks if a file is older than the specified time"}
+{"input":"what is func (f *defaultFileManager) CalculateDirSize(path string) int64 for","output":"CalculateDirSize computes the total size of all files in a directory Uses concurrent processing with limits to handle large directories e..."}
+{"input":"what is func (f *defaultFileManager) DeleteEmptySubfolders(dir string) for","output":"DeleteEmptySubfolders removes all empty directories in the given path"}
+{"input":"what is func (f *defaultFileManager) DeleteFile(filePath string) for","output":"DeleteFile deletes a single file"}
+{"input":"what is func (f *defaultFileManager) DeleteFiles(dir string, extensions []string, exclude []string, minSize, maxSize int64, olderThan, newerThan time.Time) for","output":"DeleteFiles removes files matching the specified criteria from the given directory"}
+{"input":"what is func (f *defaultFileManager) ExpandTilde(path string) string for","output":"ExpandTilde expands the tilde (~) in a path to the user's home directory."}
+{"input":"what is func (f *defaultFileManager) IsEmptyDir(dirPath string) bool for","output":"IsEmptyDir checks if a directory is empty, including recursive check of subdirectories."}
+{"input":"what is func (f *defaultFileManager) MoveFileToTrash(filePath string) for","output":"MoveFileToTrash moves a single file to the system's recycle bin"}
+{"input":"what is func (f *defaultFileManager) MoveFilesToTrash(dir string, extensions []string, exclude []string, minSize, maxSize int64, olderThan, newerThan time.Time) for","output":"MoveFilesToTrash moves files matching the criteria to the system's recycle bin"}
+{"input":"what is func (fn *Func) Detail(p *Project) string for","output":"Detail renders the full readable card for a function."}
+{"input":"what is func (fn *Func) Display() string for","output":"Display renders \"pkg.Name\" or \"pkg.Recv.Name\"."}
+{"input":"what is func (fn *Func) Intent() string for","output":"Intent is the one-line plain-English purpose of a function."}
+{"input":"what is func (fn *Func) Source() string for","output":"Source returns the function's declaration source text, captured at parse time (the AST is dropped after analysis)."}
+{"input":"what is func (fn *Func) Summary() string for","output":"Summary is the one-line plain-English description of a function: its intent — the doc comment's first sentence when it has one, otherwise a synthesis of its name's verb, its effects, and the flags that gate it."}
+{"input":"what is func (fs *FileStorage) GetOperations(scanID string) ([]logging.FileOperation, error) for","output":"Gets an operations. Reads files (os.Open)."}
+{"input":"what is func (fs *FileStorage) GetStatistics(scanID string) (*logging.ScanStatistics, error) for","output":"Gets a statistics. Reads files (os.Open)."}
+{"input":"what is func (fs *FileStorage) SaveStatistics(stats *logging.ScanStatistics) error for","output":"Saves a statistics. Writes files (os.MkdirAll)."}
+{"input":"what is func (l *Logger) Close() error for","output":"Close closes the log file"}
+{"input":"what is func (l *Logger) Log(level LogLevel, message string) error for","output":"Log writes a log entry with the specified level and message"}
+{"input":"what is func (m *CleanFilesModel) CalculateDirSizeAsync() tea.Cmd for","output":"Asynchronous directory size calculation"}
+{"input":"what is func (m *CleanFilesModel) Cleanup() for","output":"Cleanup performs necessary cleanup operations when the model is destroyed"}
+{"input":"what is func (m *CleanFilesModel) DeleteUserSelectedFiles(stats *logging.ScanStatistics) (tea.Model, tea.Cmd) for","output":"Deletes an user selected files. Writes files (os.Remove)."}
+{"input":"what is func (m *CleanFilesModel) Handle(msg tea.KeyMsg) (tea.Model, tea.Cmd) for","output":"Handle processes a key message and returns appropriate model and command"}
+{"input":"what is func (m *CleanFilesModel) HandlePressStartButton() (tea.Model, tea.Cmd) for","output":"Handles a press start button. Reads files (os.Stat)."}
+{"input":"what is func (m *CleanFilesModel) Init() tea.Cmd for","output":"Initializes. Reads files (os.Stat)."}
+{"input":"what is func (m *CleanFilesModel) LoadDirs() tea.Cmd for","output":"Loads a dirs. Reads files (os.ReadDir)."}
+{"input":"what is func (m *CleanFilesModel) LoadFiles() tea.Cmd for","output":"Loads a files. Reads files (os.ReadDir)."}
+{"input":"what is func (m *CleanFilesModel) OnDelete() (tea.Model, tea.Cmd) for","output":"Handles on delete. Writes files (os.Remove)."}
+{"input":"what is func (m *CleanFilesModel) OpenFileExplorer(path string) tea.Cmd for","output":"opens the system's file explorer at the specified path"}
+{"input":"what is func (m *CleanTabManager) GetActiveTab() base.Tab for","output":"GetActiveTab returns the currently active tab"}
+{"input":"what is func (m *CleanTabManager) GetActiveTabIndex() int for","output":"GetActiveTabIndex returns the index of the currently active tab"}
+{"input":"what is func (m *CleanTabManager) GetAllTabs() []base.Tab for","output":"GetAllTabs returns all tabs"}
+{"input":"what is func (m *MainMenu) HandleFocusBottom() (tea.Model, tea.Cmd) for","output":"HandleFocusBottom moves focus down"}
+{"input":"what is func (m *MainMenu) HandleFocusTop() (tea.Model, tea.Cmd) for","output":"HandleFocusTop moves focus up"}
+{"input":"what is func (m *Manager) ClearCache() (deleteError error) for","output":"ClearCache removes all files from cache locations using OS-specific deletion methods"}
+{"input":"what is func (m *RulesModel) ValidateInputs() *errors.Error for","output":"ValidateInputs validates all input fields in the model"}
+{"input":"what is func (p *Printer) AskForConfirmation(s string) bool for","output":"AskForConfirmation prompts the user for confirmation with a yes/no question"}
+{"input":"what is func (p *Printer) PrintEmptyDirs(files []string) for","output":"PrintEmptyDirs prints a list of empty directories"}
+{"input":"what is func (p *Printer) PrintError(format string, args ...any) for","output":"PrintError prints an error message with a red X mark"}
+{"input":"what is func (p *Printer) PrintFilesTable(files map[string]string) for","output":"PrintFilesTable prints a formatted table of files with their sizes"}
+{"input":"what is func (p *Printer) PrintInfo(format string, args ...any) for","output":"PrintInfo prints an info message with a blue info symbol"}
+{"input":"what is func (p *Printer) PrintSuccess(format string, args ...any) for","output":"PrintSuccess prints a success message with a green checkmark"}
+{"input":"what is func (p *Progress) Current() int64 for","output":"Current returns the current progress count."}
+{"input":"what is func (p *Progress) Increment() for","output":"Increment advances the progress counter by one."}
+{"input":"what is func (p *Project) AllFuncs() []*Func for","output":"pkgFor returns the Package for dir, creating it on first use."}
+{"input":"what is func (p *Project) Answer(q string) (out string, ok bool) for","output":"Answer answers a natural-language question about the project."}
+{"input":"what is func (p *Project) BiggestFiles(n int) string for","output":"BiggestFiles draws the n largest Go files as a bar chart."}
+{"input":"what is func (p *Project) BuildGraph() for","output":"BuildGraph resolves call edges between the project's functions and fills in each Func's Callers list."}
+{"input":"what is func (p *Project) Coupling() string for","output":"Coupling draws fan-out (project packages this one imports) and fan-in (project packages importing this one) per package, sorted by fan-in."}
+{"input":"what is func (p *Project) DescribeFile(rel string) string for","output":"DescribeFile returns a one-line plain-words description of what the project-relative Go file is for, used by the pull-request changed-files view."}
+{"input":"what is func (p *Project) EngineRoom(n int) string for","output":"EngineRoom renders the top functions as an ASCII bar chart."}
+{"input":"what is func (p *Project) EntryPoints() []*Func for","output":"EntryPoints returns all func main declarations, ordered by package dir."}
+{"input":"what is func (p *Project) ExplainBeginner(symbol string) (string, bool) for","output":"ExplainBeginner runs symbol through the xray engine and renders the beginner walkthrough."}
+{"input":"what is func (p *Project) FieldReaders(field string) []string for","output":"FieldReaders returns the IDs of functions that read a \"pkg.Type.Field\" value, directly or through threaded calls, sorted."}
+{"input":"what is func (p *Project) FieldWriters(field string) []string for","output":"FieldWriters returns the IDs of functions that write a \"pkg.Type.Field\" value, sorted."}
+{"input":"what is func (p *Project) FindConfigStruct(keys []string) []ConfigMatch for","output":"FindConfigStruct finds the struct the issue's YAML example describes."}
+{"input":"what is func (p *Project) FindKeyDispatchSites() []KeyDispatch for","output":"FindKeyDispatchSites scans the project for keyboard dispatch switches: a switch with at least two key-like string cases."}
+{"input":"what is func (p *Project) FindMechanism(keyword string) *MechanismSite for","output":"FindMechanism locates the package behind a how-word, preferring the shared one: the package many others import is the choke point where one change (retry around the fetch) covers every caller."}
+{"input":"what is func (p *Project) FuncByID(id string) *Func for","output":"FuncByID looks up a function by its model ID."}
+{"input":"what is func (p *Project) GuideChange(task string) string for","output":"GuideChange renders the beginner-guided \"where do I change\" answer for task."}
+{"input":"what is func (p *Project) GuideIssue(c IssueConcepts) string for","output":"GuideIssue renders the full where-to-edit answer for an issue: the config struct to extend, the mechanism to wrap, and the call chain the change sits in."}
+{"input":"what is func (p *Project) ImportGraph() string for","output":"ImportGraph renders internal package dependencies as text edges."}
+{"input":"what is func (p *Project) KeyTypes(n int) []*Type for","output":"KeyTypes returns exported struct/interface types, interfaces with implementers first, then by method count."}
+{"input":"what is func (p *Project) LinkPath(rel string) string for","output":"LinkPath renders a project-relative file path as a terminal-clickable link."}
+{"input":"what is func (p *Project) Overview() string for","output":"Overview returns a plain-English paragraph describing the project for someone who has never seen it: what it is, where it starts, what the engine room is, and the order to read it in."}
+{"input":"what is func (p *Project) PackageDetail(pkg *Package) string for","output":"PackageDetail renders the readable card for a package."}
+{"input":"what is func (p *Project) PackageSizes() string for","output":"PackageSizes draws lines-of-code per package as a horizontal bar chart, biggest first."}
+{"input":"what is func (p *Project) PackageTree() string for","output":"PackageTree renders the package directory tree."}
+{"input":"what is func (p *Project) Pipeline() string for","output":"Pipeline draws the call flow starting at every func main."}
+{"input":"what is func (p *Project) Rank() for","output":"Rank scores every function by structural importance: how many distinct project functions call it, with bonuses for being exported, an entry point, or part of package main, and a penalty for test helpers."}
+{"input":"what is func (p *Project) ReadingGuide() string for","output":"ReadingGuide returns the \"where do I start\" walkthrough: entry points, the engine room, key types, and a suggested package reading order."}
+{"input":"what is func (p *Project) SourceOf(fn *Func, maxLines int) string for","output":"SourceOf returns up to maxLines of the function's source code."}
+{"input":"what is func (p *Project) Story() string for","output":"Story renders the first two levels of the pipeline as a plain-words paragraph: the beginner's \"what does this program do\" answer."}
+{"input":"what is func (p *Project) Summary() string for","output":"Summary returns the one-screen project overview."}
+{"input":"what is func (p *Project) TopFuncs(n int) []*Func for","output":"TopFuncs returns the n highest-scoring non-test functions."}
+{"input":"what is func (p *Project) VisualReport() string for","output":"VisualReport bundles every terminal visual into one report: package sizes, coupling, the engine room (most-called functions), and the package dependency graph."}
+{"input":"what is func (p *Project) WhereToChange(task string) []ChangeHit for","output":"WhereToChange ranks the functions and types most relevant to a task description like \"add a new chat command\" or \"fix the call graph\"."}
+{"input":"what is func (p *Project) WhereToChangeText(task string) string for","output":"WhereToChangeText renders the hits for chat output."}
+{"input":"what is func (p *Project) addEdge(caller, callee *Func) for","output":"addEdge records a call edge the heuristics missed."}
+{"input":"what is func (p *Project) addFile(rel string, src *ast.File, fset *token.FileSet) for","output":"addFile records one parsed file's declarations."}
+{"input":"what is func (p *Project) alsoFiles(c IssueConcepts, np *newCodePlan) []string for","output":"alsoFiles returns named existing files not otherwise covered: not the new paths, not test files (they're in IMITATE), not the reuse targets' files."}
+{"input":"what is func (p *Project) ambiguous(name string, cands []*Func) string for","output":"ambiguous lists candidate functions when a bare name matches several."}
+{"input":"what is func (p *Project) analyzeEffects(pkg *Package, fn *Func) for","output":"analyzeEffects records a function's external calls, call-site arguments, value reads, and if-statement guards."}
+{"input":"what is func (p *Project) answerBeginner(name string) (string, bool) for","output":"answerWhatDoes handles \"what does X do\" / \"what is X\" / \"explain X\"."}
+{"input":"what is func (p *Project) answerCallees(name string) (string, bool) for","output":"answerCallees handles \"what does X call\"."}
+{"input":"what is func (p *Project) answerCallers(name string) (string, bool) for","output":"answerCallers handles \"what calls X\" / \"who uses X\"."}
+{"input":"what is func (p *Project) answerEffects(cat, label string) (string, bool) for","output":"answerEffects handles \"where is the filesystem written\" / \"where does it use the network\": every function with the effect category in its transitive effects."}
+{"input":"what is func (p *Project) answerHowWorks(name string) (string, bool) for","output":"answerHowWorks handles \"how does X work\": the detail card plus what it calls, each with a one-line summary — the call chain a newcomer needs."}
+{"input":"what is func (p *Project) answerPackage(name string) (string, bool) for","output":"answerPackage handles \"what's in \u003cpkg\u003e\" / \"list functions in \u003cpkg\u003e\"."}
+{"input":"what is func (p *Project) answerShowMe(name string) (string, bool) for","output":"answerShowMe handles \"show me X\": the actual source of the function."}
+{"input":"what is func (p *Project) answerWhatReads(name string) (string, bool) for","output":"answerWhatReads handles \"what reads X\" / \"where is X read|used\": the value-flow index — every function that can observe the value, directly or through threaded calls."}
+{"input":"what is func (p *Project) answerWhereDefined(name string) (string, bool) for","output":"answerWhereDefined handles \"where is X defined\"."}
+{"input":"what is func (p *Project) answerWhoSets(name string) (string, bool) for","output":"answerWhoSets handles \"where is X set\" / \"who sets X\": the write index — every function that assigns the value."}
+{"input":"what is func (p *Project) answerWhyCalls(callerName, calleeName string) (string, bool) for","output":"answerWhyCalls handles \"why does X call Y\": the callee's purpose in infinitive form, plus the guard the call sits inside, if any."}
+{"input":"what is func (p *Project) buildFeaturePlan(c IssueConcepts) *featurePlan for","output":"buildFeaturePlan assembles the multi-file change plan, or nil when the pieces don't come together (then the single-anchor answer stands)."}
+{"input":"what is func (p *Project) buildFieldReaders() for","output":"buildFieldReaders computes the value-flow index by fixpoint over the call graph."}
+{"input":"what is func (p *Project) buildFieldWriters() for","output":"buildFieldWriters computes the write index: which functions set which values."}
+{"input":"what is func (p *Project) callRoots(n int) []*Func for","output":"callRoots returns exported functions nothing calls, by importance — the API surface a library is used through."}
+{"input":"what is func (p *Project) siblingCommands(newPath string) []siblingShape for","output":"siblingCommands finds the new file's future siblings that define the same kind of thing — e.g."}
+{"input":"what is func (s *FileScanner) ScanFilesCurrentLevel(dir string) (toDeleteMap map[string]string, totalClearSize int64) for","output":"ScanFilesCurrentLevel scans files in the current directory level only"}
+{"input":"what is func (s *PGVectorStore) Close() error for","output":"Close releases the database connection pool."}
+{"input":"what is func (s *PGVectorStore) DeleteBySnapshot(ctx context.Context, snapshotID string) error for","output":"DeleteBySnapshot removes all embeddings that belong to the given snapshot ID."}
+{"input":"what is func (s *Store) AllHashes() ([]string, error) for","output":"AllHashes returns every hash currently stored."}
+{"input":"what is func (s *Store) Exists(hash string) bool for","output":"Exists reports whether a blob with this hash is already stored."}
+{"input":"what is func (s *Store) ExtractTo(hash string, dstPath string, mode os.FileMode) error for","output":"ExtractTo writes the content of hash to dstPath with the given mode."}
+{"input":"what is func (s *Store) GarbageCollect(keep map[string]bool, dryRun bool) (int64, int, error) for","output":"GarbageCollect deletes objects that are not referenced by any hash in keep."}
+{"input":"what is func (s *Store) Get(hash string) (data []byte, err error) for","output":"Get decompresses and returns the raw bytes for a stored hash."}
+{"input":"what is func (s *Store) Put(data []byte) (hash string, err error) for","output":"Put stores data by its SHA-256 hash."}
+{"input":"what is func (s *Store) PutFile(filePath string, cachedHash string) (string, error) for","output":"PutFile reads filePath, stores it in the object store, and returns its hash."}
+{"input":"what is func (s *Store) RestoreTree(tree map[string]FileEntry, dstDir string, onProgress func(...)) error for","output":"RestoreTree extracts all files described by tree into dstDir using a parallel worker pool."}
+{"input":"what is func (t *Type) Detail(p *Project) string for","output":"Detail renders the full readable card for a type."}
+{"input":"what is func (v *Validator) ValidatePath(path string, optional bool) error for","output":"ValidatePath checks if a path exists and is valid If optional is true, empty paths are allowed"}
+{"input":"what is func AllHashes(ekoDir string) (map[string]bool, error) for","output":"AllHashes returns every blob hash referenced by any manifest in ekoDir."}
+{"input":"what is func Analyze(dir string) (*Project, error) for","output":"Analyze reads the Go project rooted at dir and returns its structural map."}
+{"input":"what is func AnalyzeDiff(diffs []api.DiffFile) ChangeSet for","output":"AnalyzeDiff converts a slice of DiffFile into a structured ChangeSet."}
+{"input":"what is func BuildDiff(fromTarget, toTarget string) ([]DiffFile, error) for","output":"BuildDiff walks both snapshot targets (manifest or dir), collecting file pairs where content differs."}
+{"input":"what is func CloneFile(src, dst string) error for","output":"CloneFile attempts to create a copy-on-write clone of src at dst using ioctl(FICLONE)."}
+{"input":"what is func CommandAttribute(command string) attribute.KeyValue for","output":"CommandAttribute returns the standard Eko command attribute."}
+{"input":"what is func CopyDir(src, dst string, onProgress func(...)) error for","output":"CopyDir copies all files from src to dst concurrently, skipping ignored items."}
+{"input":"what is func CopyFile(src, dst string) error for","output":"CopyFile performs a standard buffered file copy."}
+{"input":"what is func CopyOrCloneFile(src, dst string) error for","output":"CopyOrCloneFile attempts to create a copy-on-write clone of src at dst."}
+{"input":"what is func CountFiles() (int, error) for","output":"CountFiles returns the number of files in the current working directory that would be included in a snapshot (excluding ignored files/dirs)."}
+{"input":"what is func CreateSnapshot(db *sql.DB, withEnv bool, onProgress func(...)) (id, path string, err error) for","output":"CreateSnapshot captures the current workspace into the CAS object store and writes a manifest."}
+{"input":"what is func Delete(ekoDir, id string) error for","output":"Delete removes the manifest file for id and invalidates its cache entry."}
+{"input":"what is func DeleteFileWithUnixAPI(path string) error for","output":"DeleteFileWithUnixAPI is a stub implementation for Windows platforms."}
+{"input":"what is func DeleteFileWithWindowsAPI(path string) error for","output":"DeleteFileWithWindowsAPI deletes a file using Windows API calls."}
+{"input":"what is func EndOperation(operation any, err error) float64 for","output":"EndOperation completes an operation and returns its duration in seconds."}
+{"input":"what is func Exists(ekoDir, id string) bool for","output":"Exists reports whether a manifest file exists for id."}
+{"input":"what is func ExpandTilde(path string) string for","output":"ExpandTilde expands the tilde (~) in a path to the user's home directory."}
+{"input":"what is func ExtractIssueConcepts(text string) IssueConcepts for","output":"ExtractIssueConcepts reads a GitHub issue (title + body) and pulls out the concepts the engine needs: what config it talks about, what mechanism it touches, and whether it asks to add or fix."}
+{"input":"what is func FormatPatchSnippet(cs ChangeSet, maxBytes int) string for","output":"FormatPatchSnippet produces a concise representation of code diffs suitable for LLM prompts."}
+{"input":"what is func FormatSize(bytes int64) string for","output":"FormatSize converts a byte count into a human-readable string with appropriate unit Example: 1024 -\u003e \"1.00 KB\", 1024*1024 -\u003e \"1.00 MB\""}
+{"input":"what is func GenerateSnapshotSummary(ctx context.Context, fromDir, toDir, providerName string) (*SummaryResult, error) for","output":"GenerateSnapshotSummary builds diffs between fromDir and toDir and calls the specified AI provider."}
+{"input":"what is func GetFlags() *Config for","output":"GetFlags parses command-line flags and returns a Config instance with the parsed values."}
+{"input":"what is func GetLogFilePath() string for","output":"GetLogFilePath returns the path to the application's log file The log file is stored in the user's config directory under the app's direc..."}
+{"input":"what is func GetNextOption(currentOption, optionPrefix string, maxOptions int, forward bool) string for","output":"GetNextOption returns the next or previous option in a circular manner"}
+{"input":"what is func GetProvider(providerName string) Provider for","output":"GetProvider returns the Provider matching providerName, falling back to \"auto\"."}
+{"input":"what is func GetStyle(errType ErrorType) lipgloss.Style for","output":"GetStyle returns the appropriate style for the given error type"}
+{"input":"what is func IDFromPath(path string) string for","output":"IDFromPath extracts the snapshot ID from a stored path."}
+{"input":"what is func Init(ctx context.Context) (func(...), error) for","output":"Init initializes OpenTelemetry for Eko."}
+{"input":"what is func InitDB() *sql.DB for","output":"InitDB opens the local SQLite database and ensures migrations are applied."}
+{"input":"what is func IsTTY(w io.Writer) bool for","output":"IsTTY reports whether w is a terminal device."}
+{"input":"what is func LoadConfig() *Config for","output":"LoadConfig initializes and returns a new Config instance with values from command-line flags"}
+{"input":"what is func LoadOneOffCleanSpec(ruleManager rules.Rules) (*OneOffCleanSpec, error) for","output":"LoadOneOffCleanSpec snapshots the currently saved rules for a scheduled cleanup run."}
+{"input":"what is func LogDeletionToFile(files map[string]string) for","output":"LogDeletionToFile writes deletion records to a log file Each record includes timestamp, file path, and file size"}
+{"input":"what is func LogDeletionToFileAsJson(files map[string]string, dir string) for","output":"LogDeletionToFileAsJson generates JSON-formated deletion logs and writes to a file"}
+{"input":"what is func Meter() metric.Meter for","output":"Meter returns Eko's shared OpenTelemetry meter."}
+{"input":"what is func MetricsInstance() Metrics for","output":"MetricsInstance returns the initialized metrics."}
+{"input":"what is func MigrateDB(database *sql.DB) error for","output":"MigrateDB creates the schema if needed and adds any missing columns (e.g."}
+{"input":"what is func ModelAttribute(model string) attribute.KeyValue for","output":"ModelAttribute returns the standard Eko AI model attribute."}
+{"input":"what is func New(db *sql.DB) (*HashCache, error) for","output":"New initialises the hash_cache table and pre-compiles prepared SQL statements."}
+{"input":"what is func New(ekoDir string) (*Store, error) for","output":"New creates (or opens) the object store under ekoDir/objects."}
+{"input":"what is func New(errType ErrorType, message string) *Error for","output":"New creates a new error with the given type and message"}
+{"input":"what is func NewCache(capacity int) *Cache for","output":"NewCache constructs an LRU cache with the specified capacity."}
+{"input":"what is func NewCacheManager(fm filemanager.FileManager) *Manager for","output":"NewCacheManager creates a new cache manager instance for the current OS"}
+{"input":"what is func NewCleanTabManager(model interfaces.CleanModel, factory *CleanTabFactory) *CleanTabManager for","output":"NewCleanTabManager creates a new CleanTabManager"}
+{"input":"what is func NewFileManager() FileManager for","output":"NewFileManager creates a new instance of the default file manager"}
+{"input":"what is func NewFileOperation(filePath string, size int64, opType OperationType, reason, rule string) *FileOperation for","output":"NewFileOperation creates a new file operation record"}
+{"input":"what is func NewFileScanner(fileManager FileManager, filter *FileFilter, haveProgress bool) *FileScanner for","output":"NewFileScanner creates a new file scanner with the specified configuration"}
+{"input":"what is func NewLogger(ConfigPath string, statsCallback func(...)) (*Logger, error) for","output":"NewLogger creates a new logger instance with the specified configuration"}
+{"input":"what is func NewPGVectorStore(dsn string) (*PGVectorStore, error) for","output":"NewPGVectorStore opens a connection to the PostgreSQL database at dsn and ensures the pgvector extension and embeddings table exist."}
+{"input":"what is func NewPrinter() *Printer for","output":"NewPrinter creates a new Printer instance with default color settings"}
+{"input":"what is func NewProgress(total int, w io.Writer, prefix string) *Progress for","output":"NewProgress creates a new progress tracker."}
+{"input":"what is func NewRules() Rules for","output":"NewRules creates a new instance of the default rules."}
+{"input":"what is func NewRulesModel(rules rules.Rules, validator *validation.Validator) *RulesModel for","output":"NewRulesModel creates a new rules management model"}
+{"input":"what is func NewValidator() *Validator for","output":"NewValidator creates a new instance of the Validator"}
+{"input":"what is func OperationAttribute(operation string) attribute.KeyValue for","output":"OperationAttribute returns the standard Eko operation attribute."}
+{"input":"what is func ParseExcludeToSlice(exclude string) []string for","output":"ParseExcludeToSlice converts a comma-separated string of patterns into a slice"}
+{"input":"what is func ParseExtToMap(extSlice []string) map[string]struct{...} for","output":"ParseExtToMap converts a slice of extensions into a map for O(1) lookups"}
+{"input":"what is func ParseExtToSlice(extensions string) []string for","output":"ParseExtToSlice converts a comma-separated string of extensions into a slice"}
+{"input":"what is func ParseJsonLogsPath(args []string, flagName string) string for","output":"ParseJsonLogsPath gets the optional path provided for JSON-formatted logs"}
+{"input":"what is func ParseTimeDuration(timeStr string) (time.Time, error) for","output":"ParseTimeDuration converts a time duration string to a time.Time"}
+{"input":"what is func PendingRemovals() ([]string, error) for","output":"PendingRemovals returns the top-level entries that a legacy snapshot restore would delete, in directory order."}
+{"input":"what is func PendingRestoreChanges(path string) ([]string, error) for","output":"PendingRestoreChanges returns working-tree paths the selected restore will overwrite or delete."}
+{"input":"what is func PerformAIAsk(query string) string for","output":"PerformAIAsk queries repository architecture using stored memory indexes."}
+{"input":"what is func PerformAIBisect(failingTest string) string for","output":"PerformAIBisect isolates regression introduced commits using root-cause analysis."}
+{"input":"what is func PerformAIConflict(filePath string, conflictContent string) string for","output":"PerformAIConflict analyzes ours vs theirs conflict markers and proposes resolutions."}
+{"input":"what is func PerformAIExplain(filePath string, code string, history string) string for","output":"PerformAIExplain analyzes a file and its history to explain purpose, architecture, and risk."}
+{"input":"what is func PerformAIGate(diffs []api.DiffFile) (passed bool, report string) for","output":"PerformAIGate evaluates pre-commit quality gates."}
+{"input":"what is func PerformAIImpactAnalysis(diffs []api.DiffFile) string for","output":"PerformAIImpactAnalysis maps changes to dependent subsystems and recommends test suites."}
+{"input":"what is func PerformAINext() string for","output":"PerformAINext recommends the next optimal development task based on repository state."}
+{"input":"what is func PerformAIOwners(targetPath string) string for","output":"PerformAIOwners calculates code maintainers and recommends PR reviewers."}
+{"input":"what is func PerformAIPR(baseBranch string, diffs []api.DiffFile) string for","output":"PerformAIPR generates a professional GitHub Pull Request description."}
+{"input":"what is func PerformAIReview(ctx context.Context, diffs []api.DiffFile, providerName string) (*AIReviewResult, error) for","output":"PerformAIReview analyzes a changeset diff and returns structured review findings."}
+{"input":"what is func PerformAIRiskAnalysis(diffs []api.DiffFile) (score int, report string) for","output":"PerformAIRiskAnalysis evaluates multi-dimensional risk scores (Database, Auth, API, Tests, Config)."}
+{"input":"what is func PerformAISecurity(diffs []api.DiffFile) string for","output":"PerformAISecurity scans diffs for credentials, API keys, and injection risks."}
+{"input":"what is func PerformAISecurityReview(diffs []api.DiffFile) string for","output":"PerformAISecurityReview performs a deep security audit over a workspace diff."}
+{"input":"what is func PerformAISemDiff(diffs []api.DiffFile) string for","output":"PerformAISemDiff translates raw line diffs into functional behavioral impact descriptions."}
+{"input":"what is func PerformAIStatus(ctx context.Context, diffs []api.DiffFile) (*AIStatusResult, error) for","output":"PerformAIStatus analyzes workspace changes and generates intent \u0026 role analysis."}
+{"input":"what is func PerformAITest(diffs []api.DiffFile) string for","output":"PerformAITest generates a comprehensive testing strategy for a given diff."}
+{"input":"what is func ProviderAttribute(provider string) attribute.KeyValue for","output":"ProviderAttribute returns the standard Eko AI provider attribute."}
+{"input":"what is func Read(ekoDir, id string) (*Manifest, error) for","output":"Read deserialises the manifest for id from ekoDir/manifests/\u003cid\u003e.json."}
+{"input":"what is func RecordCAS(ctx context.Context, operation string, duration any, success bool) for","output":"RecordCAS records a completed CAS operation."}
+{"input":"what is func RecordCommand(ctx context.Context, command string, duration any, success bool) for","output":"RecordCommand records a completed CLI command."}
+{"input":"what is func RecordLLM(ctx context.Context, operation string, args ...any) for","output":"RecordLLM records a completed LLM operation."}
+{"input":"what is func RecordSQLite(ctx context.Context, operation string, duration any, success bool) for","output":"RecordSQLite records a completed SQLite operation."}
+{"input":"what is func RenderASCIIGraph(p *Project) string for","output":"RenderASCIIGraph draws the package dependency graph as plain text for the terminal: one block per package, listing the other project packages it imports."}
+{"input":"what is func ResolveSnapshot(database *sql.DB, target string) (id, path string, err error) for","output":"ResolveSnapshot resolves an 8-character snapshot ID or a human-readable tag to its manifest/snapshot path."}
+{"input":"what is func RestoreSnapshot(path string, onProgress func(...)) error for","output":"RestoreSnapshot reverts the working directory to the state captured in path."}
+{"input":"what is func RunCLI(fm filemanager.FileManager, rules rules.Rules, config *config.Config) for","output":"Runs a cli. Writes files (os.Remove). Checks the `config.UseRules` flag."}
+{"input":"what is func SaveSummary(database *sql.DB, id, summary string) error for","output":"SaveSummary updates the AI-generated summary for a given snapshot ID."}
+{"input":"what is func SaveTag(database *sql.DB, id, tag string) error for","output":"SaveTag assigns a human-readable tag/alias to a given snapshot ID."}
+{"input":"what is func Walk(root string, shouldIgnore func(...)) (chan FileEntry, chan error) for","output":"Walk traverses root in parallel using a pool of directory-scanner goroutines."}
+{"input":"what is func Write(ekoDir string, m *Manifest) error for","output":"Write atomically serialises m to ekoDir/manifests/\u003cid\u003e.json."}
+{"input":"what is func an(w string) string for","output":"an returns \"a\" or \"an\" for a word."}
+{"input":"what is func articleJoin(words []string) string for","output":"articleJoin renders [\"File\"] as \"a file\", [\"For\", \"Win\"] as \"for win\" (prepositions take no article), [\"HTTP\"] as \"an http\"."}
+{"input":"what is func bars(v, max, width int) string for","output":"bars scales v against max into a width-wide block bar."}
+{"input":"what is func blockReturns(b *ast.BlockStmt) bool for","output":"blockReturns reports whether a block ends in a return statement."}
+{"input":"what is func callerChain(p *Project, fn *Func, max int) []*Func for","output":"callerChain walks from fn up through its most important caller to a root, returning the chain root-first."}
+{"input":"what is func camelSplit(s string) []string for","output":"camelSplit splits \"ServeHTTP\" into [\"Serve\", \"HTTP\"], \"userID\" into [\"user\", \"ID\"]."}
+{"input":"what is func capExamples(in []string, n int) ([]string, int) for","output":"capExamples keeps the first n examples and counts the rest."}
+{"input":"what is func chainExamples(fset *token.FileSet, src []byte, s *ast.IfStmt) ([]string, int, bool) for","output":"chainExamples follows an if/else-if chain and collects the conditions that compare against a literal, e.g."}
+{"input":"what is func checkGuard(fn *Func) string for","output":"checkGuard returns the first flag-like guard condition: the option the function honors."}
+{"input":"what is func childStmtLists(stmt ast.Stmt) [][]ast.Stmt for","output":"childStmtLists returns nested statement lists for recursion into loops, switches, and selects."}
+{"input":"what is func cleanSymbol(s string) string for","output":"cleanSymbol strips articles, quotes, and role words from a symbol name."}
+{"input":"what is func existingPaths(p *Project, c IssueConcepts) []string for","output":"existingPaths returns the issue's backticked paths that exist on disk: the files (or directories) the change touches."}
+{"input":"what is func findDispatchSites(root string, fn *Func) []dispatchSite for","output":"findDispatchSites parses the anchor's file and looks for extension points in its body: switch statements and if/else chains that compare against literals — the shapes where new cases get added."}
+{"input":"what is func findModule(dir string) string for","output":"findModule reads the module path from the nearest go.mod at or above dir."}
+{"input":"what is func hasBenchmark(full string) bool for","output":"hasBenchmark reports whether a test file defines a Benchmark function."}
+{"input":"what is func missingPaths(p *Project, c IssueConcepts) []string for","output":"missingPaths returns the issue's backticked paths that don't exist in the repo: the issue telling us where to create."}
+{"input":"why does Analyze call BuildGraph","output":"analyze.Analyze calls analyze.Project.BuildGraph to build a graph. (inside the `strings.TrimSpace(dir) == \"\"` check) (inside the `err != nil` check) (inside the `err != nil` check) (inside the `!fi.IsDir()` check) (inside the `walkErr != nil` check) (inside the `len(p.Packages) == 0` check)"}
+{"input":"why does AnalyzeDiff call countLines","output":"ai.AnalyzeDiff calls ai.countLines. Handles a count lines."}
+{"input":"why does Answer call GuideChange","output":"analyze.Project.Answer calls analyze.Project.GuideChange. GuideChange renders the beginner-guided \"where do I change\" answer for task."}
+{"input":"why does BiggestFiles call LinkPath","output":"analyze.Project.BiggestFiles calls analyze.Project.LinkPath. LinkPath renders a project-relative file path as a terminal-clickable link."}
+{"input":"why does BuildDiff call loadTargetFiles","output":"api.BuildDiff calls api.loadTargetFiles. Handles a load target files. Reads files (os.ReadFile, os.Stat)."}
+{"input":"why does BuildFileFilter call NewFileFilterWithOptions","output":"config.Config.BuildFileFilter calls filemanager.NewFileFilterWithOptions. Creates a new FileFilterWithOptions."}
+{"input":"why does BuildGraph call analyzeEffects","output":"analyze.Project.BuildGraph calls analyze.Project.analyzeEffects. analyzeEffects records a function's external calls, call-site arguments, value reads, and if-statement guards."}
+{"input":"why does Cleanup call Close","output":"views.CleanFilesModel.Cleanup calls logging.Logger.Close to close."}
+{"input":"why does ClearCache call DeleteFileWithUnixAPI","output":"cache.Manager.ClearCache calls cache.DeleteFileWithUnixAPI to delete a file with unix api."}
+{"input":"why does CopyDir call ShouldIgnore","output":"util.CopyDir calls util.ShouldIgnore. ShouldIgnore reports whether a file or directory should be ignored by Eko."}
+{"input":"why does CopyOrCloneFile call CloneFile","output":"util.CopyOrCloneFile calls util.CloneFile to clone a file."}
+{"input":"why does CountFiles call WalkFiles","output":"snapshot.CountFiles calls util.WalkFiles to walk a files."}
+{"input":"why does Coupling call bars","output":"analyze.Project.Coupling calls analyze.bars. bars scales v against max into a width-wide block bar."}
+{"input":"why does CreateSnapshot call Write","output":"snapshot.CreateSnapshot calls manifest.Write to write. (inside the `err != nil` check) (inside the `err != nil` check) (inside the `err != nil` check)"}
+{"input":"why does Delete call Invalidate","output":"manifest.Delete calls manifest.Cache.Invalidate. Invalidate removes an item by snapshot ID from the cache."}
+{"input":"why does DeleteUserSelectedFiles call Log","output":"views.CleanFilesModel.DeleteUserSelectedFiles calls logging.Logger.Log to log."}
+{"input":"why does DescribeFile call packageForFile","output":"analyze.Project.DescribeFile calls analyze.Project.packageForFile. packageForFile returns the package containing the project-relative file."}
+{"input":"why does EndOperation call SetError","output":"telemetry.EndOperation calls telemetry.SetError to set an error. (inside the `op == nil || op.Span == nil` check) (inside the `err != nil` check) (inside the `op == nil` check) (inside the `err != nil` check)"}
+{"input":"why does EngineRoom call Display","output":"analyze.Project.EngineRoom calls analyze.Func.Display to display. (inside the `len(top) == 0` check)"}
+{"input":"why does ExplainBeginner call resolve","output":"analyze.Project.ExplainBeginner calls analyze.Project.resolve. resolve finds a function, type, or package by name."}
+{"input":"why does ExtractIssueConcepts call issueTitle","output":"analyze.ExtractIssueConcepts calls analyze.issueTitle. Handles an issue title."}
+{"input":"why does ExtractTo call CopyOrCloneFile","output":"objects.Store.ExtractTo calls util.CopyOrCloneFile to copy or clone a file. (inside the `len(hash) \u003c 2` check) (inside the `err == nil` check) (inside the `err != nil` check)"}
+{"input":"why does FindConfigStruct call structFields","output":"analyze.Project.FindConfigStruct calls analyze.Project.structFields. structFields returns a struct's own fields plus one level of embedded struct fields (resource.ResourceConfig inlines into source.Config)."}
+{"input":"why does FindMechanism call importTarget","output":"analyze.Project.FindMechanism calls analyze.Project.importTarget. importTarget returns the project package for an import path, or nil for external dependencies."}
+{"input":"why does FormatPatchSnippet call diffLineCounts","output":"ai.FormatPatchSnippet calls ai.diffLineCounts. Handles a diff line counts."}
+{"input":"why does GarbageCollect call objectPath","output":"objects.Store.GarbageCollect calls objects.Store.objectPath. objectPath returns the on-disk path for a given SHA-256 hex hash."}
+{"input":"why does GenerateSnapshotSummary call AnalyzeDiff","output":"ai.GenerateSnapshotSummary calls ai.AnalyzeDiff. AnalyzeDiff converts a slice of DiffFile into a structured ChangeSet."}
+{"input":"why does GetFlags call ParseExcludeToSlice","output":"config.GetFlags calls utils.ParseExcludeToSlice to parse an exclude to slice. (inside the `*excludeFlag != \"\"` check)"}
+{"input":"why does GetWithRules call ParseTimeDuration","output":"config.Config.GetWithRules calls utils.ParseTimeDuration to parse a time duration. (inside the `err != nil` check) (inside the `c.OlderThan.IsZero() \u0026\u0026 defaultRules.OlderTha...` check) (inside the `c.NewerThan.IsZero() \u0026\u0026 defaultRules.NewerTha...` check)"}
+{"input":"why does GuideChange call LinkPath","output":"analyze.Project.GuideChange calls analyze.Project.LinkPath. LinkPath renders a project-relative file path as a terminal-clickable link."}
+{"input":"why does GuideIssue call FindConfigStruct","output":"analyze.Project.GuideIssue calls analyze.Project.FindConfigStruct to find a config struct."}
+{"input":"why does HandlePressDirButton call LoadDirs","output":"views.CleanFilesModel.HandlePressDirButton calls views.CleanFilesModel.LoadDirs to load a dirs. (inside the `m.ShowDirs` check)"}
+{"input":"why does HandlePressStartButton call New","output":"views.CleanFilesModel.HandlePressStartButton calls errors.New. New creates a new error with the given type and message"}
+{"input":"why does InitDB call MigrateDB","output":"db.InitDB calls db.MigrateDB. MigrateDB creates the schema if needed and adds any missing columns (e.g."}
+{"input":"why does InitialCacheModel call NewCacheManager","output":"views.InitialCacheModel calls cache.NewCacheManager. NewCacheManager creates a new cache manager instance for the current OS"}
+{"input":"why does InitialCleanModel call Log","output":"views.InitialCleanModel calls logging.Logger.Log to log."}
+{"input":"why does Intent call capitalize","output":"analyze.Func.Intent calls analyze.capitalize. Handles a capitalize."}
+{"input":"why does Invalidate call removeElement","output":"manifest.Cache.Invalidate calls manifest.Cache.removeElement. Handles a remove element."}
+{"input":"why does LoadConfig call GetFlags","output":"config.LoadConfig calls config.GetFlags to get a flags."}
+{"input":"why does LoadFiles call MatchesFilters","output":"views.CleanFilesModel.LoadFiles calls filemanager.FileFilter.MatchesFilters. MatchesFilters checks if a file matches all filter criteria"}
+{"input":"why does LoadOneOffCleanSpec call ParseTimeDuration","output":"cleanup.LoadOneOffCleanSpec calls utils.ParseTimeDuration to parse a time duration. (inside the `ruleManager == nil` check) (inside the `err != nil` check) (inside the `targetPath == \"\"` check) (inside the `err != nil` check) (inside the `savedRules.OlderThan != \"\"` check) (inside the `savedRules.NewerThan != \"\"` check)"}
+{"input":"why does LogDeletionToFileAsJson call ToBytesOrDefault","output":"utils.LogDeletionToFileAsJson calls utils.ToBytesOrDefault. ToBytesOrDefault converts a size string to bytes, returning 0 if conversion fails"}
+{"input":"why does MatchesFilters call ExcludeFilter","output":"filemanager.FileFilter.MatchesFilters calls filemanager.FileFilter.ExcludeFilter. ExcludeFilter checks if a file should be excluded based on path patterns"}
+{"input":"why does MetricsInstance call initMetrics","output":"telemetry.MetricsInstance calls telemetry.initMetrics. initMetrics initializes all Eko application metrics."}
+{"input":"why does MigrateDB call execWithTelemetry","output":"db.MigrateDB calls db.execWithTelemetry. Handles an exec with telemetry."}
+{"input":"why does NewApp call NewMainMenu","output":"tui.NewApp calls views.NewMainMenu. Creates a new MainMenu."}
+{"input":"why does NewCacheManager call getLocationsForOS","output":"cache.NewCacheManager calls cache.getLocationsForOS. getLocationsForOS returns a list of cache locations specific to the given operating system."}
+{"input":"why does NewPGVectorStore call migrate","output":"db.NewPGVectorStore calls db.PGVectorStore.migrate. migrate creates the pgvector extension and the embeddings table if they don't already exist."}
+{"input":"why does OnDelete call Log","output":"views.CleanFilesModel.OnDelete calls logging.Logger.Log to log."}
+{"input":"why does Overview call Display","output":"analyze.Project.Overview calls analyze.Func.Display to display. (inside the `len(top) \u003e 0 \u0026\u0026 len(top[0].Callers) \u003e 0` check)"}
+{"input":"why does PackageDetail call Display","output":"analyze.Project.PackageDetail calls analyze.Func.Display to display. (inside the `len(fns) \u003e 0` check)"}
+{"input":"why does PackageSizes call bars","output":"analyze.Project.PackageSizes calls analyze.bars. bars scales v against max into a width-wide block bar."}
+{"input":"why does PendingRemovals call ShouldIgnore","output":"snapshot.PendingRemovals calls util.ShouldIgnore. ShouldIgnore reports whether a file or directory should be ignored by Eko."}
+{"input":"why does PendingRestoreChanges call IDFromPath","output":"snapshot.PendingRestoreChanges calls manifest.IDFromPath. IDFromPath extracts the snapshot ID from a stored path."}
+{"input":"why does PerformAIReview call AnalyzeDiff","output":"mind.PerformAIReview calls ai.AnalyzeDiff. AnalyzeDiff converts a slice of DiffFile into a structured ChangeSet."}
+{"input":"why does PerformAIRiskAnalysis call AnalyzeDiff","output":"mind.PerformAIRiskAnalysis calls ai.AnalyzeDiff. AnalyzeDiff converts a slice of DiffFile into a structured ChangeSet."}
+{"input":"why does PerformAIStatus call AnalyzeDiff","output":"mind.PerformAIStatus calls ai.AnalyzeDiff. AnalyzeDiff converts a slice of DiffFile into a structured ChangeSet."}
+{"input":"why does Pipeline call Display","output":"analyze.Project.Pipeline calls analyze.Func.Display to display. (inside the `len(mains) == 0` check)"}
+{"input":"why does ProgressBarScanner call MatchesFilters","output":"filemanager.FileScanner.ProgressBarScanner calls filemanager.FileFilter.MatchesFilters. MatchesFilters checks if a file matches all filter criteria"}
+{"input":"why does Purge call RecordSQLite","output":"cache.HashCache.Purge calls telemetry.RecordSQLite. RecordSQLite records a completed SQLite operation."}
+{"input":"why does PutFile call putWithCompression","output":"objects.Store.PutFile calls objects.Store.putWithCompression. putWithCompression stores data either compressed with zstd or uncompressed."}
+{"input":"why does Rank call methodsOf","output":"analyze.Project.Rank calls analyze.Project.methodsOf. methodsOf returns the method names declared on a type."}
+{"input":"why does ReadingGuide call Display","output":"analyze.Project.ReadingGuide calls analyze.Func.Display to display."}
+{"input":"why does RecordCAS call durationSeconds","output":"telemetry.RecordCAS calls telemetry.durationSeconds. durationSeconds converts the duration representations used by existing Eko callers into seconds."}
+{"input":"why does RecordCommand call durationSeconds","output":"telemetry.RecordCommand calls telemetry.durationSeconds. durationSeconds converts the duration representations used by existing Eko callers into seconds."}
+{"input":"why does RecordLLM call durationSeconds","output":"telemetry.RecordLLM calls telemetry.durationSeconds. durationSeconds converts the duration representations used by existing Eko callers into seconds."}
+{"input":"why does RecordSQLite call durationSeconds","output":"telemetry.RecordSQLite calls telemetry.durationSeconds. durationSeconds converts the duration representations used by existing Eko callers into seconds."}
+{"input":"why does RefreshVisibleList call LoadDirs","output":"views.CleanFilesModel.RefreshVisibleList calls views.CleanFilesModel.LoadDirs to load a dirs. (inside the `m.ShowDirs` check)"}
+{"input":"why does RenderASCIIGraph call EntryPoints","output":"analyze.RenderASCIIGraph calls analyze.Project.EntryPoints. EntryPoints returns all func main declarations, ordered by package dir."}
+{"input":"why does ResolveSnapshot call RecordSQLite","output":"db.ResolveSnapshot calls telemetry.RecordSQLite. RecordSQLite records a completed SQLite operation."}
+{"input":"why does RestoreSnapshot call IDFromPath","output":"snapshot.RestoreSnapshot calls manifest.IDFromPath. IDFromPath extracts the snapshot ID from a stored path."}
+{"input":"why does RestoreTree call ExtractTo","output":"objects.Store.RestoreTree calls objects.Store.ExtractTo. ExtractTo writes the content of hash to dstPath with the given mode."}
+{"input":"why does RunCLI call BuildFileFilter","output":"runner.RunCLI calls config.Config.BuildFileFilter to build a file filter."}
+{"input":"why does RunOneOffClean call ScanEmptySubFolders","output":"cleanup.RunOneOffClean calls filemanager.FileScanner.ScanEmptySubFolders to scan an empty sub folders. (inside the `fm == nil` check) (inside the `spec == nil` check) (inside the `spec.DeleteEmptySubfolders` check)"}
+{"input":"why does RunTUI call NewApp","output":"runner.RunTUI calls tui.NewApp. Creates a new App."}
+{"input":"why does SaveOperation call appendToFile","output":"storage.FileStorage.SaveOperation calls storage.FileStorage.appendToFile. Handles an append to file. Writes files (os.Create) and reads files (os.Open)."}
+{"input":"why does SaveStatistics call saveToFile","output":"storage.FileStorage.SaveStatistics calls storage.FileStorage.saveToFile. Вспомогательные методы"}
+{"input":"why does SaveSummary call execWithTelemetry","output":"db.SaveSummary calls db.execWithTelemetry. Handles an exec with telemetry."}
+{"input":"why does SaveTag call execWithTelemetry","output":"db.SaveTag calls db.execWithTelemetry. Handles an exec with telemetry."}
+{"input":"why does ScanAllLocations call scan","output":"cache.Manager.ScanAllLocations calls cache.Manager.scan. scan analyzes a single cache location and returns its statistics"}
+{"input":"why does ScanFilesCurrentLevel call MatchesFilters","output":"filemanager.FileScanner.ScanFilesCurrentLevel calls filemanager.FileFilter.MatchesFilters. MatchesFilters checks if a file matches all filter criteria"}
+{"input":"why does ScanFilesRecursively call MatchesFilters","output":"filemanager.FileScanner.ScanFilesRecursively calls filemanager.FileFilter.MatchesFilters. MatchesFilters checks if a file matches all filter criteria"}
+{"input":"why does SendWebhook call formatMessage","output":"notify.SendWebhook calls notify.formatMessage. formatMessage creates a human-readable message for Slack/Discord."}
+{"input":"why does SetupRulesConfig call defaultRuleValues","output":"rules.defaultRules.SetupRulesConfig calls rules.defaultRuleValues. Handles a default rule values."}
+{"input":"why does Start call Stop","output":"util.Progress.Start calls util.Progress.Stop to stop."}
+{"input":"why does StartOperation call Tracer","output":"telemetry.StartOperation calls telemetry.Tracer. Tracer returns Eko's shared OpenTelemetry tracer."}
+{"input":"why does StartSpan call Tracer","output":"telemetry.StartSpan calls telemetry.Tracer. Tracer returns Eko's shared OpenTelemetry tracer."}
+{"input":"why does Store call RecordSQLite","output":"cache.HashCache.Store calls telemetry.RecordSQLite. RecordSQLite records a completed SQLite operation."}
+{"input":"why does Story call Display","output":"analyze.Project.Story calls analyze.Func.Display to display. (inside the `len(mains) == 0` check) (inside the `len(roots) \u003e 0` check)"}
+{"input":"why does ToBytesOrDefault call ToBytes","output":"utils.ToBytesOrDefault calls utils.ToBytes. ToBytes converts a human-readable size string to bytes Example: \"1.5MB\" -\u003e 1572864, \"2GB\" -\u003e 2147483648"}
+{"input":"why does UpdateRules call readRulesForUpdate","output":"rules.defaultRules.UpdateRules calls rules.defaultRules.readRulesForUpdate. Handles a read rules for update."}
+{"input":"why does ValidateInputs call New","output":"views.RulesModel.ValidateInputs calls errors.New. New creates a new error with the given type and message"}
+{"input":"why does ValidateSize call ToBytes","output":"validation.Validator.ValidateSize calls utils.ToBytes. ToBytes converts a human-readable size string to bytes Example: \"1.5MB\" -\u003e 1572864, \"2GB\" -\u003e 2147483648"}
+{"input":"why does ValidateTimeDuration call ParseTimeDuration","output":"validation.Validator.ValidateTimeDuration calls utils.ParseTimeDuration to parse a time duration. (inside the `trimmed == \"\"` check) (inside the `trimmed[0] \u003c '0' || trimmed[0] \u003e '9'` check)"}
+{"input":"why does VisualReport call BiggestFiles","output":"analyze.Project.VisualReport calls analyze.Project.BiggestFiles. BiggestFiles draws the n largest Go files as a bar chart."}
+{"input":"why does WalkFiles call Walk","output":"util.WalkFiles calls util.Walk to walk."}
+{"input":"why does WhereToChange call Display","output":"analyze.Project.WhereToChange calls analyze.Func.Display to display. (inside the `len(want) == 0` check)"}
+{"input":"why does WhereToChangeText call LinkPath","output":"analyze.Project.WhereToChangeText calls analyze.Project.LinkPath. LinkPath renders a project-relative file path as a terminal-clickable link."}
+{"input":"why does addFile call pkgFor","output":"analyze.Project.addFile calls analyze.Project.pkgFor. Handles a pkg for."}
+{"input":"why does alsoFiles call existingPaths","output":"analyze.Project.alsoFiles calls analyze.existingPaths. existingPaths returns the issue's backticked paths that exist on disk: the files (or directories) the change touches."}
+{"input":"why does ambiguous call Display","output":"analyze.Project.ambiguous calls analyze.Func.Display to display."}
+{"input":"why does analyzeEffects call collectGuards","output":"analyze.Project.analyzeEffects calls analyze.Project.collectGuards. collectGuards walks a function's if-statements, recording each condition and the project/external calls its body makes."}
+{"input":"why does answerBeginner call ExplainBeginner","output":"analyze.Project.answerBeginner calls analyze.Project.ExplainBeginner. ExplainBeginner runs symbol through the xray engine and renders the beginner walkthrough."}
+{"input":"why does answerCallees call Display","output":"analyze.Project.answerCallees calls analyze.Func.Display to display. (inside the `len(cands) \u003e 0` check) (inside the `fn == nil` check) (inside the `len(fn.Calls) == 0` check)"}
+{"input":"why does answerCallers call Display","output":"analyze.Project.answerCallers calls analyze.Func.Display to display. (inside the `typ != nil` check) (inside the `len(cands) \u003e 0` check) (inside the `fn == nil` check) (inside the `len(fn.Callers) == 0` check) (inside the `f != nil` check)"}
+{"input":"why does answerEffects call Display","output":"analyze.Project.answerEffects calls analyze.Func.Display to display. (inside the `len(fns) == 0` check)"}
+{"input":"why does answerHowWorks call Display","output":"analyze.Project.answerHowWorks calls analyze.Func.Display to display. (inside the `typ != nil` check) (inside the `pkg != nil` check) (inside the `len(cands) \u003e 0` check) (inside the `fn == nil` check) (inside the `len(fn.Calls) \u003e 0` check)"}
+{"input":"why does answerPackage call PackageDetail","output":"analyze.Project.answerPackage calls analyze.Project.PackageDetail. PackageDetail renders the readable card for a package."}
+{"input":"why does answerShowMe call Display","output":"analyze.Project.answerShowMe calls analyze.Func.Display to display. (inside the `typ != nil` check) (inside the `len(cands) \u003e 0` check) (inside the `fn == nil` check) (inside the `src == \"\"` check)"}
+{"input":"why does answerWhatReads call Display","output":"analyze.Project.answerWhatReads calls analyze.Func.Display to display. (inside the `len(keys) == 0` check) (inside the `len(ids) == 0` check) (inside the `f != nil` check)"}
+{"input":"why does clone call defaultRuleValues","output":"rules.defaultRules.clone calls rules.defaultRuleValues. Handles a default rule values."}
+{"input":"why does existingPaths call isPathWord","output":"analyze.existingPaths calls analyze.isPathWord. isPathWord reports whether a backticked word looks like a repo path: has a slash, no whitespace, not a URL or module path (first segment has no dot, so golang.org/x/sys is out), and looks like a file or directory (tra..."}
+{"input":"why does findDispatchSites call chainExamples","output":"analyze.findDispatchSites calls analyze.chainExamples. chainExamples follows an if/else-if chain and collects the conditions that compare against a literal, e.g."}
+{"input":"why does focusPrevious call focusNext","output":"views.ScheduleCleanModel.focusPrevious calls views.ScheduleCleanModel.focusNext. Handles a focus next."}
+{"input":"why does getCached call clone","output":"rules.defaultRules.getCached calls rules.defaultRules.clone. Handles a clone."}
+{"input":"why does handleUpDown call GetNextOption","output":"views.RulesModel.handleUpDown calls options.GetNextOption to get a next option. (inside the `activeTab == 2` check) (inside the `key == \"up\"` check)"}
+{"input":"why does missingPaths call isPathWord","output":"analyze.missingPaths calls analyze.isPathWord. isPathWord reports whether a backticked word looks like a repo path: has a slash, no whitespace, not a URL or module path (first segment has no dot, so golang.org/x/sys is out), and looks like a file or directory (tra..."}
+{"input":"why does parallelDelete call ShouldIgnore","output":"snapshot.parallelDelete calls util.ShouldIgnore. ShouldIgnore reports whether a file or directory should be ignored by Eko."}
+{"input":"why does readRulesFromDisk call defaultRuleValues","output":"rules.defaultRules.readRulesFromDisk calls rules.defaultRuleValues. Handles a default rule values."}
+{"input":"why does writeRules call setCache","output":"rules.defaultRules.writeRules calls rules.defaultRules.setCache. Handles a set cache."}
