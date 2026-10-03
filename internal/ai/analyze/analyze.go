@@ -40,6 +40,10 @@ type Project struct {
 	// fieldReaders maps "pkg.Type.Field" -> func IDs that read the value,
 	// directly or through threaded calls. Built by buildFieldReaders.
 	fieldReaders map[string][]string
+	// fieldWriters maps "pkg.Type.Field" -> func IDs that write the value
+	// (direct only — a write is where the value is set). Built by
+	// buildFieldWriters.
+	fieldWriters map[string][]string
 }
 
 // Package is one directory of Go source.
@@ -89,6 +93,7 @@ type Func struct {
 	Effects    []string          // direct effect categories, e.g. "fs-write"
 	EffectsAll []string          // transitive effect categories
 	Reads      []string          // "pkg.Type.Field" values read via params
+	Writes     []string          // "pkg.Type.Field" values written
 	ParamTypes map[string]string // param/receiver name -> "pkg.Type"
 	CallArgs   []CallArg         // call sites with identifier arguments
 

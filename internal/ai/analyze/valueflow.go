@@ -21,6 +21,33 @@ func (p *Project) FieldReaders(field string) []string {
 	return p.fieldReaders[field]
 }
 
+// FieldWriters returns the IDs of functions that write a
+// "pkg.Type.Field" value, sorted.
+func (p *Project) FieldWriters(field string) []string {
+	return p.fieldWriters[field]
+}
+
+// buildFieldWriters computes the write index: which functions set which
+// values. Direct only — unlike reads, a write is meaningful exactly
+// where it happens.
+func (p *Project) buildFieldWriters() {
+	p.fieldWriters = map[string][]string{}
+	byField := map[string]map[string]bool{}
+	for _, fn := range p.byID {
+		for _, w := range fn.Writes {
+			m := byField[w]
+			if m == nil {
+				m = map[string]bool{}
+				byField[w] = m
+			}
+			m[fn.ID] = true
+		}
+	}
+	for f, m := range byField {
+		p.fieldWriters[f] = sortedKeys(m)
+	}
+}
+
 // buildFieldReaders computes the value-flow index by fixpoint over the
 // call graph. Called from BuildGraph after the per-function passes.
 func (p *Project) buildFieldReaders() {

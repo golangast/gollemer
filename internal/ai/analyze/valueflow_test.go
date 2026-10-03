@@ -199,3 +199,106 @@ func writer() { os.WriteFile("x", nil, 0o644) }
 		t.Error("network question should not be handled when nothing uses the network")
 	}
 }
+
+// aliasFixture: a flow that copies a flag into a local before checking
+// it — the model must see through the local.
+func aliasFixture(t *testing.T) *Project {
+	t.Helper()
+	dir := t.TempDir()
+	write := func(rel, src string) {
+		full := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("go.mod", "module example.com/al\n\ngo 1.21\n")
+	write("config/config.go", "package config\n\ntype Config struct {\n\tDryRun bool\n}\n")
+	write("flow/flow.go", `package flow
+
+import "os"
+import "example.com/al/config"
+
+func Run(cfg *config.Config) {
+	dry := cfg.DryRun
+	if dry {
+		os.Remove("x")
+	}
+}
+
+func Reassigned(cfg *config.Config) {
+	dry := cfg.DryRun
+	dry = false
+	if dry {
+		os.Remove("x")
+	}
+}
+
+func Chained(cfg *config.Config) {
+	dry := cfg.DryRun
+	d := dry
+	if d {
+		os.Remove("x")
+	}
+}
+
+func Set(cfg *config.Config) {
+	cfg.DryRun = true
+}
+`)
+	p, err := Analyze(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func TestAliasGuardFlagLike(t *testing.T) {
+	p := aliasFixture(t)
+	byName := map[string]*Func{}
+	for _, fn := range p.byID {
+		byName[fn.Name] = fn
+	}
+	if len(byName["Run"].Guards) != 1 || !byName["Run"].Guards[0].FlagLike {
+		t.Errorf("Run guard should be flag-like via alias, got %+v", byName["Run"].Guards)
+	}
+	if got := byName["Reassigned"].Guards; len(got) != 1 || got[0].FlagLike {
+		t.Errorf("reassigned local must not be flag-like, got %+v", got)
+	}
+	if got := byName["Chained"].Guards; len(got) != 1 || !got[0].FlagLike {
+		t.Errorf("chained alias should be flag-like, got %+v", got)
+	}
+}
+
+func TestFieldWriters(t *testing.T) {
+	p := aliasFixture(t)
+	ids := p.FieldWriters("config.Config.DryRun")
+	if len(ids) != 1 {
+		t.Fatalf("writers = %v, want exactly [Set]", ids)
+	}
+	if fn := p.byID[ids[0]]; fn == nil || fn.Name != "Set" {
+		t.Errorf("writer = %v, want Set", fn)
+	}
+	// A read is not a write.
+	for _, id := range ids {
+		if p.byID[id].Name == "Run" {
+			t.Error("Run reads DryRun but must not be listed as a writer")
+		}
+	}
+}
+
+func TestAnswerWhoSets(t *testing.T) {
+	p := aliasFixture(t)
+	out, ok := p.Answer("where is DryRun set")
+	if !ok {
+		t.Fatal("Answer(\"where is DryRun set\") not handled")
+	}
+	if !strings.Contains(out, "Set") {
+		t.Errorf("answer missing Set:\n%s", out)
+	}
+	if _, ok := p.Answer("who sets Nope"); ok {
+		t.Error("unknown field should not be handled")
+	}
+}

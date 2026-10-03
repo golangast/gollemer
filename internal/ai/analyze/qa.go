@@ -35,6 +35,8 @@ var (
 	// written", "where does it use the network".
 	qWhatReads = regexp.MustCompile(`(?i)^\s*(?:so\s+)?what reads (?:the )?(.+?)\??$`)
 	qWhereUsed = regexp.MustCompile(`(?i)^\s*where is (?:the )?(.+?) (?:read|used)\??$`)
+	qWhereSet  = regexp.MustCompile(`(?i)^\s*where is (?:the )?(.+?) set\??$`)
+	qWhoSets   = regexp.MustCompile(`(?i)^\s*who sets (?:the )?(.+?)\??$`)
 	qFsWrite   = regexp.MustCompile(`(?i)^\s*where\b(?:.*\b(?:files?|filesystem)\b.*\b(?:writ|touch|creat|delet|chang|modif)\w*|.*\b(?:writ|touch|creat|delet|chang|modif)\w*\b.*\b(?:files?|filesystem)\b)`)
 	qNetUse    = regexp.MustCompile(`(?i)^\s*where\b.*?\b(?:network|internet)\b`)
 	// Beginner walkthroughs, powered by the xray intelligence engine:
@@ -77,6 +79,12 @@ func (p *Project) Answer(q string) (out string, ok bool) {
 	}
 	if m := qWhereUsed.FindStringSubmatch(q); m != nil {
 		return p.answerWhatReads(cleanSymbol(m[1]))
+	}
+	if m := qWhereSet.FindStringSubmatch(q); m != nil {
+		return p.answerWhoSets(cleanSymbol(m[1]))
+	}
+	if m := qWhoSets.FindStringSubmatch(q); m != nil {
+		return p.answerWhoSets(cleanSymbol(m[1]))
 	}
 	if qFsWrite.MatchString(q) {
 		return p.answerEffects(fxWrite, "write to the filesystem")
@@ -358,6 +366,43 @@ func (p *Project) answerWhatReads(name string) (string, bool) {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "`%s` is read by %d function(s):\n", name, len(ids))
+	for i, id := range ids {
+		if i >= 12 {
+			fmt.Fprintf(&b, "  ... and %d more\n", len(ids)-12)
+			break
+		}
+		if f := p.byID[id]; f != nil {
+			fmt.Fprintf(&b, "  - %s  (%s:%d)\n", f.Display(), p.LinkPath(f.File), f.Line)
+		} else {
+			fmt.Fprintf(&b, "  - %s\n", shortID(id))
+		}
+	}
+	return b.String(), true
+}
+
+// answerWhoSets handles "where is X set" / "who sets X": the write
+// index — every function that assigns the value.
+func (p *Project) answerWhoSets(name string) (string, bool) {
+	keys := p.resolveField(name)
+	if len(keys) == 0 {
+		return "", false
+	}
+	seen := map[string]bool{}
+	var ids []string
+	for _, k := range keys {
+		for _, id := range p.FieldWriters(k) {
+			if !seen[id] {
+				seen[id] = true
+				ids = append(ids, id)
+			}
+		}
+	}
+	sort.Strings(ids)
+	if len(ids) == 0 {
+		return "", false
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "`%s` is set by %d function(s):\n", name, len(ids))
 	for i, id := range ids {
 		if i >= 12 {
 			fmt.Fprintf(&b, "  ... and %d more\n", len(ids)-12)

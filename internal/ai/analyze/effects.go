@@ -122,6 +122,23 @@ func compositeTypeName(pkg *Package, e ast.Expr) string {
 	return ""
 }
 
+// rhsValue resolves the value of an assignment RHS to a "pkg.Type.Field"
+// when it's a field read (cfg.DryRun) or a chained alias (x := dry).
+// Anything else clears the alias.
+func rhsValue(e ast.Expr, typeName func(string) string, aliasOf map[string]string) string {
+	switch e := e.(type) {
+	case *ast.SelectorExpr:
+		if id, ok := e.X.(*ast.Ident); ok {
+			if t := typeName(id.Name); t != "" {
+				return t + "." + e.Sel.Name
+			}
+		}
+	case *ast.Ident:
+		return aliasOf[e.Name]
+	}
+	return ""
+}
+
 // analyzeEffects records a function's external calls, call-site
 // arguments, value reads, and if-statement guards. Called from
 // BuildGraph while decls are still available. Everything recorded here
@@ -192,6 +209,50 @@ func (p *Project) analyzeEffects(pkg *Package, fn *Func) {
 	})
 	fn.localTypes = localTypes
 
+	// Aliases: dry := cfg.DryRun makes dry an alias of
+	// "config.Config.DryRun" until reassigned. Guards on aliases are
+	// flag checks too — the model must see through the local.
+	aliasOf := map[string]string{}
+	typeName := func(name string) string {
+		if t := paramTypes[name]; t != "" {
+			return t
+		}
+		return localTypes[name]
+	}
+	ast.Inspect(fn.decl.Body, func(n ast.Node) bool {
+		switch s := n.(type) {
+		case *ast.AssignStmt:
+			if len(s.Lhs) == 1 && len(s.Rhs) == 1 {
+				if id, ok := s.Lhs[0].(*ast.Ident); ok {
+					if v := rhsValue(s.Rhs[0], typeName, aliasOf); v != "" {
+						aliasOf[id.Name] = v
+					} else {
+						delete(aliasOf, id.Name)
+					}
+					break
+				}
+			}
+			for _, lhs := range s.Lhs {
+				if id, ok := lhs.(*ast.Ident); ok {
+					delete(aliasOf, id.Name)
+				}
+			}
+		case *ast.IncDecStmt:
+			if id, ok := s.X.(*ast.Ident); ok {
+				delete(aliasOf, id.Name)
+			}
+		case *ast.RangeStmt:
+			// for k, v := range — the loop variables are fresh aliases of nothing.
+			if id, ok := s.Key.(*ast.Ident); ok {
+				delete(aliasOf, id.Name)
+			}
+			if id, ok := s.Value.(*ast.Ident); ok {
+				delete(aliasOf, id.Name)
+			}
+		}
+		return true
+	})
+
 	// Call targets that are bare selectors (x.Foo()) so the read pass
 	// below doesn't mistake method calls for field reads.
 	callFuns := map[ast.Node]bool{}
@@ -221,6 +282,7 @@ func (p *Project) analyzeEffects(pkg *Package, fn *Func) {
 
 	extSet := map[string]bool{}
 	readSet := map[string]bool{}
+	writeSet := map[string]bool{}
 	ast.Inspect(fn.decl.Body, func(n ast.Node) bool {
 		switch n := n.(type) {
 		case *ast.CallExpr:
@@ -241,13 +303,17 @@ func (p *Project) analyzeEffects(pkg *Package, fn *Func) {
 		case *ast.SelectorExpr:
 			// x.Y where x is a parameter or local: a read of "pkg.Type.Field".
 			// Skip method calls (x.Foo()) — those are calls, not reads —
-			// and pure-`=` writes (x.Y = ...).
-			if callFuns[n] || writeSel[n] {
+			// and pure-`=` writes (x.Y = ...), which go to the writes index.
+			if callFuns[n] {
 				return true
 			}
 			if id, ok := n.X.(*ast.Ident); ok {
 				if t := valueTypeOf(fn, id.Name); t != "" {
-					readSet[t+"."+n.Sel.Name] = true
+					if writeSel[n] {
+						writeSet[t+"."+n.Sel.Name] = true
+					} else {
+						readSet[t+"."+n.Sel.Name] = true
+					}
 				}
 			}
 		}
@@ -255,7 +321,8 @@ func (p *Project) analyzeEffects(pkg *Package, fn *Func) {
 	})
 	fn.ExtCalls = sortedKeys(extSet)
 	fn.Reads = sortedKeys(readSet)
-	p.collectGuards(pkg, fn, varPkg, paramPkgs, paramNames)
+	fn.Writes = sortedKeys(writeSet)
+	p.collectGuards(pkg, fn, varPkg, paramPkgs, paramNames, aliasOf)
 }
 
 // propagateEffects fills EffectsAll (transitive effect categories) by
@@ -317,7 +384,7 @@ func hasEffect(cats []string, want string) bool {
 // clause (if with no else whose body returns) also gates every
 // statement after it in the block: `if cfg.DryRun { return }` guards
 // the os.Remove below it.
-func (p *Project) collectGuards(pkg *Package, fn *Func, varPkg map[string]string, paramPkgs map[string]*Package, paramNames map[string]bool) {
+func (p *Project) collectGuards(pkg *Package, fn *Func, varPkg map[string]string, paramPkgs map[string]*Package, paramNames map[string]bool, aliasOf map[string]string) {
 	addCalls := func(node ast.Node, callSet, extSet map[string]bool) {
 		ast.Inspect(node, func(m ast.Node) bool {
 			call, ok := m.(*ast.CallExpr)
@@ -342,7 +409,7 @@ func (p *Project) collectGuards(pkg *Package, fn *Func, varPkg map[string]string
 				}
 				continue
 			}
-			g := Guard{Line: p.lineOf(fn, ifStmt), FlagLike: flagLikeCond(ifStmt.Cond, paramNames, paramPkgs)}
+			g := Guard{Line: p.lineOf(fn, ifStmt), FlagLike: flagLikeCond(ifStmt.Cond, paramNames, paramPkgs, aliasOf)}
 			g.Cond = shortCond(ifStmt.Cond)
 			callSet, extSet := map[string]bool{}, map[string]bool{}
 			addCalls(ifStmt.Body, callSet, extSet)
@@ -420,10 +487,11 @@ func childStmtLists(stmt ast.Stmt) [][]ast.Stmt {
 }
 
 // flagLikeCond reports whether a condition reads like an option/flag
-// check: a bare bool parameter (if dryRun) or a selector on a parameter
-// typed by a project package (if cfg.DryRun). err != nil and friends
-// don't match either shape.
-func flagLikeCond(cond ast.Expr, paramNames map[string]bool, paramPkgs map[string]*Package) bool {
+// check: a bare bool parameter (if dryRun), a selector on a parameter
+// typed by a project package (if cfg.DryRun), or a local alias of such
+// a value (dry := cfg.DryRun; if dry). err != nil and friends don't
+// match any shape.
+func flagLikeCond(cond ast.Expr, paramNames map[string]bool, paramPkgs map[string]*Package, aliasOf map[string]string) bool {
 	for {
 		switch c := cond.(type) {
 		case *ast.ParenExpr:
@@ -437,7 +505,7 @@ func flagLikeCond(cond ast.Expr, paramNames map[string]bool, paramPkgs map[strin
 done:
 	switch c := cond.(type) {
 	case *ast.Ident:
-		return paramNames[c.Name]
+		return paramNames[c.Name] || aliasOf[c.Name] != ""
 	case *ast.SelectorExpr:
 		if id, ok := c.X.(*ast.Ident); ok {
 			_, isParam := paramPkgs[id.Name]

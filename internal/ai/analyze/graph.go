@@ -61,6 +61,7 @@ func (p *Project) BuildGraph() {
 	}
 	p.propagateEffects()
 	p.buildFieldReaders()
+	p.buildFieldWriters()
 	for _, fn := range p.byID {
 		sort.Strings(fn.Calls)
 		sort.Strings(fn.Callers)
