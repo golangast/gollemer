@@ -64,6 +64,11 @@ func Copy(src, dest string) error {
 	}
 	return os.WriteFile(dest, data, 0644)
 }
+
+// Greet returns a greeting for the given name.
+func Greet(name string) string {
+	return "hello " + name
+}
 `)
 	write("main.go", `package main
 

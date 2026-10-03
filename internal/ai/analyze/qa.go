@@ -47,6 +47,9 @@ var (
 	qTraceSym = regexp.MustCompile(`(?i)^\s*trace (?:the )?(.+?)\.?$`)
 	qBegFor   = regexp.MustCompile(`(?i)^\s*explain (?:the )?(.+?) for beginners?\.?$`)
 	qBegLike  = regexp.MustCompile(`(?i)^\s*explain (?:the )?(.+?) like i['’]?m a beginner\.?$`)
+	// Intent questions: "what is X for", "why does X call Y".
+	qWhatFor  = regexp.MustCompile(`(?i)^\s*what(?:'s| is) (?:the )?(.+?) for\??$`)
+	qWhyCalls = regexp.MustCompile(`(?i)^\s*why does (?:the )?(.+?) call (?:the )?(.+?)\??$`)
 )
 
 // Answer answers a natural-language question about the project. It
@@ -119,6 +122,14 @@ func (p *Project) Answer(q string) (out string, ok bool) {
 	}
 	if m := qPkgList.FindStringSubmatch(q); m != nil {
 		return p.answerPackage(cleanSymbol(m[1]))
+	}
+	// Intent questions before bare "what is": "what is Copy for" must not
+	// be swallowed by the what-is pattern.
+	if m := qWhatFor.FindStringSubmatch(q); m != nil {
+		return p.answerWhatDoes(cleanSymbol(m[1]))
+	}
+	if m := qWhyCalls.FindStringSubmatch(q); m != nil {
+		return p.answerWhyCalls(cleanSymbol(m[1]), cleanSymbol(m[2]))
 	}
 	if m := qWhatIs.FindStringSubmatch(q); m != nil {
 		sym := cleanSymbol(m[1])
@@ -292,6 +303,42 @@ func (p *Project) answerHowWorks(name string) (string, bool) {
 			fmt.Fprintf(&b, "  %d. %s — %s\n", n+1, callee.Display(), callee.Summary())
 			n++
 			if n >= 8 {
+				break
+			}
+		}
+	}
+	return b.String(), true
+}
+
+// answerWhyCalls handles "why does X call Y": the callee's purpose in
+// infinitive form, plus the guard the call sits inside, if any.
+func (p *Project) answerWhyCalls(callerName, calleeName string) (string, bool) {
+	caller, _, _, _ := p.resolve(callerName)
+	callee, _, _, _ := p.resolve(calleeName)
+	if caller == nil || callee == nil {
+		return "", false
+	}
+	callsIt := false
+	for _, id := range caller.Calls {
+		if id == callee.ID {
+			callsIt = true
+			break
+		}
+	}
+	if !callsIt {
+		return fmt.Sprintf("%s doesn't call %s.", caller.Display(), callee.Display()), true
+	}
+	vp := verbPhrase(callee.Name, false)
+	if strings.HasPrefix(vp, "handles ") {
+		// Unknown verb: state the callee's intent plainly instead.
+		return fmt.Sprintf("%s calls %s. %s", caller.Display(), callee.Display(), callee.Intent()), true
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s calls %s to %s.", caller.Display(), callee.Display(), vp)
+	for _, g := range caller.Guards {
+		for _, id := range g.Calls {
+			if id == callee.ID {
+				fmt.Fprintf(&b, " (inside the `%s` check)", g.Cond)
 				break
 			}
 		}

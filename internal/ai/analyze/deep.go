@@ -113,34 +113,12 @@ func firstSentence(s string) string {
 	return s
 }
 
-// Summary is the one-line plain-English description of a function: its
-// doc comment's first sentence when it has one, otherwise an honest
-// synthesis of what it calls.
+// Summary is the one-line plain-English description of a function:
+// its intent — the doc comment's first sentence when it has one,
+// otherwise a synthesis of its name's verb, its effects, and the
+// flags that gate it.
 func (fn *Func) Summary() string {
-	if s := firstSentence(fn.Doc); s != "" {
-		return s
-	}
-	if fn.IsMain {
-		return "Program entry point."
-	}
-	if fn.IsInit {
-		return "Package initializer (runs automatically on import)."
-	}
-	if len(fn.Calls) > 0 {
-		names := make([]string, 0, 3)
-		for _, c := range fn.Calls {
-			if len(names) >= 3 {
-				break
-			}
-			names = append(names, shortID(c))
-		}
-		more := ""
-		if len(fn.Calls) > 3 {
-			more = fmt.Sprintf(", and %d more", len(fn.Calls)-3)
-		}
-		return fmt.Sprintf("Undocumented; calls %s%s.", strings.Join(names, ", "), more)
-	}
-	return "Undocumented; see the source."
+	return fn.Intent()
 }
 
 // Detail renders the full readable card for a function.
