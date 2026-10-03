@@ -204,3 +204,117 @@ func TestReplaceNeedsSignal(t *testing.T) {
 		t.Errorf("no replace signal — replace should be empty, got %v", np.replace)
 	}
 }
+
+// cmdFixture: a cobra-style cmd package; the issue adds a new command.
+func cmdFixture(t *testing.T) *Project {
+	t.Helper()
+	dir := t.TempDir()
+	write := func(rel, src string) {
+		full := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("go.mod", "module example.com/cmdx\n\ngo 1.21\n")
+	write("cmd/save.go", `package cmd
+
+import "github.com/spf13/cobra"
+
+var saveCmd = &cobra.Command{
+	Use:   "save",
+	Short: "Save a snapshot",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return nil
+	},
+}
+`)
+	write("cmd/restore.go", `package cmd
+
+import "github.com/spf13/cobra"
+
+var restoreCmd = &cobra.Command{
+	Use:   "restore",
+	Short: "Restore a snapshot",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return nil
+	},
+}
+`)
+	write("util/util.go", `package util
+
+// Wipe removes everything under dir.
+func Wipe(dir string) error { return nil }
+`)
+	p, err := Analyze(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func TestSiblingCommands(t *testing.T) {
+	p := cmdFixture(t)
+	c := ExtractIssueConcepts("Add `mytool copy` command\n\nCreate `cmd/copy.go` with Cobra command `copyCmd`.")
+	np := p.buildNewCodePlan(c)
+	if np == nil {
+		t.Fatal("buildNewCodePlan returned nil")
+	}
+	if len(np.follow) != 2 {
+		t.Fatalf("follow = %v, want saveCmd and restoreCmd", np.follow)
+	}
+	for _, s := range np.follow {
+		if !strings.Contains(s.label, "Cobra command") {
+			t.Errorf("sibling %v missing Cobra label", s)
+		}
+	}
+	if np.follow[0].intent == "" && np.follow[1].intent == "" {
+		t.Errorf("follow intents empty: %v", np.follow)
+	}
+	intents := map[string]bool{}
+	for _, s := range np.follow {
+		intents[s.intent] = true
+	}
+	if !intents["Save a snapshot"] || !intents["Restore a snapshot"] {
+		t.Errorf("intents missing Short descriptions: %v", np.follow)
+	}
+	// Sibling commands replace the generic package-API targets.
+	out := p.GuideIssue(c)
+	if strings.Contains(out, "TARGETS") {
+		t.Errorf("TARGETS should be suppressed when FOLLOW fires:\n%s", out)
+	}
+	if !strings.Contains(out, "FOLLOW") {
+		t.Errorf("plan missing FOLLOW:\n%s", out)
+	}
+}
+
+func TestReuseFuncs(t *testing.T) {
+	p := cmdFixture(t)
+	c := ExtractIssueConcepts("Add `mytool copy` command\n\nCreate `cmd/copy.go`. Reuse `internal/util/util.go` Wipe() for cleanup.")
+	np := p.buildNewCodePlan(c)
+	if np == nil {
+		t.Fatal("buildNewCodePlan returned nil")
+	}
+	if len(np.reuse) != 1 || np.reuse[0].Name != "Wipe" {
+		t.Fatalf("reuse = %v, want [Wipe]", np.reuse)
+	}
+	out := p.GuideIssue(c)
+	if !strings.Contains(out, "REUSE") || !strings.Contains(out, "Wipe removes everything") {
+		t.Errorf("plan missing REUSE with intent:\n%s", out)
+	}
+}
+
+func TestReuseNeedsSignal(t *testing.T) {
+	p := cmdFixture(t)
+	// Mentions Wipe() but no reuse language -> no REUSE section.
+	c := ExtractIssueConcepts("Add `mytool copy` command\n\nCreate `cmd/copy.go`. Maybe Wipe() helps.")
+	np := p.buildNewCodePlan(c)
+	if np == nil {
+		t.Fatal("buildNewCodePlan returned nil")
+	}
+	if len(np.reuse) != 0 {
+		t.Errorf("no reuse signal — reuse should be empty, got %v", np.reuse)
+	}
+}

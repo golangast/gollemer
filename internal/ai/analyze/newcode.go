@@ -3,7 +3,9 @@ package analyze
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -20,7 +22,23 @@ type newCodePlan struct {
 	patterns []string // existing test files to imitate, rel to Root
 	replace  []replaceSite // functions using the calls the issue wants replaced
 	replaceCalls []string   // the named calls, e.g. ["os.ReadFile", "io.ReadAll"]
+	follow   []siblingShape // sibling files defining the same kind of thing
+	reuse    []*Func        // existing functions the issue says to reuse
+	also     []string       // other named existing files
 }
+
+// siblingShape is one existing file the new file should be modeled on.
+type siblingShape struct {
+	file   string // rel to Root
+	label  string // e.g. "Cobra command saveCmd"
+	intent string // the author's own Short description, when present
+}
+
+var (
+	cobraCmdRe   = regexp.MustCompile(`(?m)^var\s+(\w+)\s*=\s*&cobra\.Command\{`)
+	cobraShortRe = regexp.MustCompile(`(?m)^\s*Short:\s*"([^"]+)"`)
+	identParenRe = regexp.MustCompile(`\b([A-Z][A-Za-z0-9_]*)\(\)`)
+)
 
 // replaceSite is one function using an external call the issue wants
 // replaced — the modification site for a "replace X with Y" change.
@@ -40,7 +58,7 @@ func (p *Project) buildNewCodePlan(c IssueConcepts) *newCodePlan {
 	}
 	np := &newCodePlan{newPaths: paths, target: pkg}
 	np.targets = p.packageTargets(pkg, c)
-	np.patterns = p.testPatterns(pkg)
+	np.patterns = p.testPatterns(pkg, c)
 	// "Replace X with Y": the issue names existing files and the calls
 	// to swap out — the model resolves both against the index.
 	if wantsReplace(c) {
@@ -51,7 +69,100 @@ func (p *Project) buildNewCodePlan(c IssueConcepts) *newCodePlan {
 			}
 		}
 	}
+	// "Create X like the existing Ys": sibling files defining the same
+	// kind of thing (Cobra commands, ...).
+	if len(np.newPaths) > 0 {
+		np.follow = p.siblingCommands(np.newPaths[0])
+	}
+	// "Reuse X": the issue names an existing function to call.
+	np.reuse = p.reuseFuncs(c)
+	// Other named existing files the issue points at.
+	np.also = p.alsoFiles(c, np)
 	return np
+}
+
+// siblingCommands finds the new file's future siblings that define the
+// same kind of thing — e.g. the existing Cobra commands next to a new
+// cmd/copy.go. Shape-detected textually; the Short description is the
+// author's own intent line.
+func (p *Project) siblingCommands(newPath string) []siblingShape {
+	dir := path.Dir(strings.TrimSuffix(newPath, "/"))
+	if dir == "." || dir == "" {
+		return nil
+	}
+	entries, err := os.ReadDir(filepath.Join(p.Root, filepath.FromSlash(dir)))
+	if err != nil {
+		return nil
+	}
+	var files []string
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".go") ||
+			strings.HasSuffix(e.Name(), "_test.go") {
+			continue
+		}
+		files = append(files, path.Join(dir, e.Name()))
+	}
+	sort.Strings(files)
+	var out []siblingShape
+	for _, f := range files {
+		src, err := os.ReadFile(filepath.Join(p.Root, f))
+		if err != nil {
+			continue
+		}
+		text := string(src)
+		m := cobraCmdRe.FindStringSubmatch(text)
+		if m == nil {
+			continue
+		}
+		short := ""
+		if sm := cobraShortRe.FindStringSubmatch(text); sm != nil {
+			short = sm[1]
+		}
+		out = append(out, siblingShape{file: f, label: "Cobra command " + m[1], intent: short})
+		if len(out) >= 4 {
+			break
+		}
+	}
+	return out
+}
+
+// reuseFuncs resolves "reuse X()" references: identifiers the issue
+// says to reuse, resolved against the index.
+func (p *Project) reuseFuncs(c IssueConcepts) []*Func {
+	if !strings.Contains(strings.ToLower(c.Title+"\n"+c.Body), "reus") {
+		return nil
+	}
+	var out []*Func
+	seen := map[string]bool{}
+	for _, m := range identParenRe.FindAllStringSubmatch(c.Title+"\n"+c.Body, -1) {
+		name := m[1]
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		if fn, _, _, _ := p.resolve(name); fn != nil {
+			out = append(out, fn)
+		}
+	}
+	return out
+}
+
+// alsoFiles returns named existing files not otherwise covered: not the
+// new paths, not test files (they're in IMITATE), not the reuse targets'
+// files.
+func (p *Project) alsoFiles(c IssueConcepts, np *newCodePlan) []string {
+	reuseFiles := map[string]bool{}
+	for _, fn := range np.reuse {
+		reuseFiles[fn.File] = true
+	}
+	var out []string
+	for _, f := range existingPaths(p, c) {
+		if reuseFiles[f] || strings.HasSuffix(f, "_test.go") {
+			continue
+		}
+		out = append(out, f)
+	}
+	return out
 }
 
 // existingPaths returns the issue's backticked paths that exist on disk:
@@ -302,10 +413,19 @@ func wordHit(tok string, kw map[string]bool) bool {
 // testPatterns finds existing test files to imitate: same package
 // first, files with benchmarks preferred. Purely structural — it works
 // for any kind of new test code.
-func (p *Project) testPatterns(pkg *Package) []string {
+func (p *Project) testPatterns(pkg *Package, c IssueConcepts) []string {
 	type scored struct {
 		rel   string
 		score int
+	}
+	// Test files the issue names outrank everything: it told us where
+	// the tests go.
+	named := map[string]bool{}
+	for _, w := range c.CodeWords {
+		w = strings.Trim(w, "`\"' ")
+		if strings.HasSuffix(w, "_test.go") {
+			named[strings.TrimSuffix(w, "/")] = true
+		}
 	}
 	var ss []scored
 	seen := map[string]bool{}
@@ -321,6 +441,9 @@ func (p *Project) testPatterns(pkg *Package) []string {
 			}
 			if hasBenchmark(filepath.Join(p.Root, f)) {
 				score += 3
+			}
+			if named[f] {
+				score += 5
 			}
 			ss = append(ss, scored{f, score})
 		}
@@ -357,7 +480,17 @@ func (p *Project) writeNewCodePlan(c IssueConcepts, np *newCodePlan) string {
 		fmt.Fprintf(&b, "  %s\n", path)
 	}
 	b.WriteString("  Why here: the issue names this location and it doesn't exist yet.\n\n")
-	if len(np.targets) > 0 {
+	if len(np.follow) > 0 {
+		b.WriteString("FOLLOW — model the new file on these siblings:\n")
+		for _, s := range np.follow {
+			intent := ""
+			if s.intent != "" {
+				intent = " — " + s.intent
+			}
+			fmt.Fprintf(&b, "  %s — %s%s\n", s.file, s.label, intent)
+		}
+		b.WriteString("  Why: the new code should look like its neighbors.\n\n")
+	} else if len(np.targets) > 0 {
 		fmt.Fprintf(&b, "TARGETS — the %s package's API:\n", np.target.Name)
 		for _, fn := range np.targets {
 			fmt.Fprintf(&b, "  %s:%d — %s\n",
@@ -365,6 +498,15 @@ func (p *Project) writeNewCodePlan(c IssueConcepts, np *newCodePlan) string {
 		}
 		fmt.Fprintf(&b, "  Why these: the issue is about the %s module — these are its exported functions.\n\n",
 			np.target.Name)
+	}
+	if len(np.reuse) > 0 {
+		b.WriteString("REUSE — the issue says to reuse these:\n")
+		for _, fn := range np.reuse {
+			fmt.Fprintf(&b, "  %s:%d — %s — %s\n",
+				p.LinkPath(fn.File), fn.Line,
+				strings.TrimPrefix(fn.Sig, "func "), fn.Intent())
+		}
+		b.WriteString("  Why: don't reinvent them — call them.\n\n")
 	}
 	if len(np.patterns) > 0 {
 		b.WriteString("IMITATE — existing tests to follow:\n")
@@ -386,6 +528,13 @@ func (p *Project) writeNewCodePlan(c IssueConcepts, np *newCodePlan) string {
 				strings.TrimPrefix(r.fn.Sig, "func "), strings.Join(r.via, ", "))
 		}
 		b.WriteString("  Why: the issue names these calls and files — swap them where they're used.\n\n")
+	}
+	if len(np.also) > 0 {
+		b.WriteString("SEE ALSO — the issue names these files:\n")
+		for _, f := range np.also {
+			fmt.Fprintf(&b, "  %s\n", f)
+		}
+		b.WriteString("\n")
 	}
 	return b.String()
 }
