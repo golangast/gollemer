@@ -105,3 +105,102 @@ func TestStemPlurals(t *testing.T) {
 		}
 	}
 }
+
+func TestIsPathWord(t *testing.T) {
+	for w, want := range map[string]bool{
+		"internal/util/mmap.go":       true,
+		"internal/tests/benchmark/w/": true,
+		"internal/objects/store.go":   true,
+		"golang.org/x/sys/unix":       false, // module path
+		"allocs/op":                   false, // metric, not a path
+		"Dry-Run / Preview":           false, // phrase, not a path
+		"https://example.com/x":       false, // URL
+		"os.ReadFile":                 false, // call, not a path
+	} {
+		if got := isPathWord(w); got != want {
+			t.Errorf("isPathWord(%q) = %v, want %v", w, got, want)
+		}
+	}
+}
+
+// replaceFixture: a store with os.ReadFile/io.ReadAll call sites and a
+// util package; the issue names a new mmap.go plus the files to change.
+func replaceFixture(t *testing.T) *Project {
+	t.Helper()
+	dir := t.TempDir()
+	write := func(rel, src string) {
+		full := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("go.mod", "module example.com/rp\n\ngo 1.21\n")
+	write("internal/util/util.go", "package util\n\nfunc Helper() {}\n")
+	write("internal/store/store.go", `package store
+
+import "os"
+import "io"
+
+func Put(path string) { os.ReadFile(path) }
+
+func Get(r io.Reader) { io.ReadAll(r) }
+
+func Other() {}
+`)
+	p, err := Analyze(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func TestReplaceSites(t *testing.T) {
+	p := replaceFixture(t)
+	c := ExtractIssueConcepts("perf: use mmap\n\n" +
+		"Replace `os.ReadFile` / `io.ReadAll` with mmap.\n\n" +
+		"Add wrapper in `internal/util/mmap.go`. Use it in `internal/store/store.go`.")
+	np := p.buildNewCodePlan(c)
+	if np == nil {
+		t.Fatal("buildNewCodePlan returned nil")
+	}
+	if len(np.newPaths) != 1 || np.newPaths[0] != "internal/util/mmap.go" {
+		t.Errorf("newPaths = %v", np.newPaths)
+	}
+	if len(np.replace) != 2 {
+		t.Fatalf("replace sites = %v, want Put and Get", np.replace)
+	}
+	names := map[string]bool{}
+	for _, r := range np.replace {
+		names[r.fn.Name] = true
+	}
+	if !names["Put"] || !names["Get"] {
+		t.Errorf("replace sites missing Put/Get: %v", names)
+	}
+	if names["Other"] {
+		t.Errorf("Other doesn't call the named calls: %v", names)
+	}
+	out := p.GuideIssue(c)
+	for _, want := range []string{"REPLACE", "Put", "os.ReadFile", "Get", "io.ReadAll"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("plan missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestReplaceNeedsSignal(t *testing.T) {
+	p := replaceFixture(t)
+	// Names files and calls but no replacement language -> no REPLACE.
+	c := ExtractIssueConcepts("perf: use mmap\n\n" +
+		"Consider `os.ReadFile` usage.\n\n" +
+		"Add wrapper in `internal/util/mmap.go`. See `internal/store/store.go`.")
+	np := p.buildNewCodePlan(c)
+	if np == nil {
+		t.Fatal("buildNewCodePlan returned nil")
+	}
+	if len(np.replace) != 0 {
+		t.Errorf("no replace signal — replace should be empty, got %v", np.replace)
+	}
+}
