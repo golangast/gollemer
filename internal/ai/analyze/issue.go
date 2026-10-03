@@ -414,6 +414,16 @@ func (p *Project) GuideIssue(c IssueConcepts) string {
 		newCode = p.buildNewCodePlan(c)
 	}
 
+	// New-method issues name a type. The type is the target, its methods
+	// are the pattern, and the repo's own *Option types shape any options
+	// the issue asks for. Beats the flow plan: a new method doesn't hook
+	// into any flow either. It also beats the flag plan: "options" in
+	// prose means the options pattern, not CLI flags.
+	var typePlan *typeMethodPlan
+	if c.Action == "add" && len(keySites) == 0 && newCode == nil {
+		typePlan = p.buildTypeMethodPlan(c)
+	}
+
 	if len(keySites) > 0 {
 		writeKeyVisual(&b, p, c, keySites)
 		b.WriteString("BEHAVIOR — add the hotkeys here:\n")
@@ -444,6 +454,8 @@ func (p *Project) GuideIssue(c IssueConcepts) string {
 		b.WriteString("\n")
 	} else if newCode != nil {
 		b.WriteString(p.writeNewCodePlan(c, newCode))
+	} else if typePlan != nil {
+		b.WriteString(p.writeTypeMethodPlan(c, typePlan))
 	} else if plan != nil {
 		b.WriteString(p.writeFeaturePlan(c, plan, len(structs) > 0))
 	} else if site != nil {
@@ -471,6 +483,8 @@ func (p *Project) GuideIssue(c IssueConcepts) string {
 		switch {
 		case newCode != nil:
 			// The code doesn't exist yet — no chain to draw.
+		case typePlan != nil:
+			// The method doesn't exist yet — no chain to draw.
 		case plan != nil:
 			anchor = plan.flow
 		case site != nil && site.KeyFunc != nil:
@@ -489,7 +503,7 @@ func (p *Project) GuideIssue(c IssueConcepts) string {
 		fmt.Fprintf(&b, "%s → yours here\n", strings.Join(names, " → "))
 	}
 
-	if len(structs) == 0 && site == nil && len(keySites) == 0 && plan == nil && newCode == nil {
+	if len(structs) == 0 && site == nil && len(keySites) == 0 && plan == nil && newCode == nil && typePlan == nil {
 		return p.GuideChange(c.Title)
 	}
 	return b.String()
