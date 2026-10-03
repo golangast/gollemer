@@ -424,6 +424,13 @@ func (p *Project) GuideIssue(c IssueConcepts) string {
 		typePlan = p.buildTypeMethodPlan(c)
 	}
 
+	// Consistency issues name a behavior to unify across components.
+	// The answer is the set of sites, not one anchor.
+	var consistency *consistencyPlan
+	if c.Action == "add" && len(keySites) == 0 && newCode == nil && typePlan == nil {
+		consistency = p.buildConsistencyPlan(c)
+	}
+
 	if len(keySites) > 0 {
 		writeKeyVisual(&b, p, c, keySites)
 		b.WriteString("BEHAVIOR — add the hotkeys here:\n")
@@ -456,6 +463,8 @@ func (p *Project) GuideIssue(c IssueConcepts) string {
 		b.WriteString(p.writeNewCodePlan(c, newCode))
 	} else if typePlan != nil {
 		b.WriteString(p.writeTypeMethodPlan(c, typePlan))
+	} else if consistency != nil {
+		b.WriteString(p.writeConsistencyPlan(c, consistency))
 	} else if plan != nil {
 		b.WriteString(p.writeFeaturePlan(c, plan, len(structs) > 0))
 	} else if site != nil {
@@ -485,6 +494,8 @@ func (p *Project) GuideIssue(c IssueConcepts) string {
 			// The code doesn't exist yet — no chain to draw.
 		case typePlan != nil:
 			// The method doesn't exist yet — no chain to draw.
+		case consistency != nil:
+			// Many sites — no single chain to draw.
 		case plan != nil:
 			anchor = plan.flow
 		case site != nil && site.KeyFunc != nil:
@@ -503,7 +514,7 @@ func (p *Project) GuideIssue(c IssueConcepts) string {
 		fmt.Fprintf(&b, "%s → yours here\n", strings.Join(names, " → "))
 	}
 
-	if len(structs) == 0 && site == nil && len(keySites) == 0 && plan == nil && newCode == nil && typePlan == nil {
+	if len(structs) == 0 && site == nil && len(keySites) == 0 && plan == nil && newCode == nil && typePlan == nil && consistency == nil {
 		return p.GuideChange(c.Title)
 	}
 	return b.String()

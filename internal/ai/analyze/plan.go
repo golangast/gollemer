@@ -45,6 +45,10 @@ var planStopwords = map[string]bool{
 	"there": true, "when": true, "what": true, "which": true,
 	"also": true, "just": true, "into": true, "about": true,
 	"the": true, "and": true, "are": true, "can": true,
+	"is": true, "it": true, "its": true, "be": true,
+	"as": true, "at": true, "by": true, "an": true,
+	"or": true, "if": true, "of": true, "to": true,
+	"in": true, "on": true, "a": true,
 }
 
 // stem reduces a word to a crude root so "deletion", "delete" and
