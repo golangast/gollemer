@@ -30,6 +30,13 @@ var (
 	qPkgList  = regexp.MustCompile(`(?i)^\s*(?:list|show)(?: me)? (?:all )?(?:the )?functions in (?:the )?(?:package )?(.+?)\.?$`)
 	qWhereHdl = regexp.MustCompile(`(?i)^\s*where is (.+?) (?:handled|done|implemented)\??$`)
 	qWhereDo  = regexp.MustCompile(`(?i)^\s*where (?:do|would|could) i (.+?)\??$`)
+	// Value-flow and effect questions, answered from the general index —
+	// no per-feature logic: "what reads X", "where is the filesystem
+	// written", "where does it use the network".
+	qWhatReads = regexp.MustCompile(`(?i)^\s*(?:so\s+)?what reads (?:the )?(.+?)\??$`)
+	qWhereUsed = regexp.MustCompile(`(?i)^\s*where is (?:the )?(.+?) (?:read|used)\??$`)
+	qFsWrite   = regexp.MustCompile(`(?i)^\s*where\b(?:.*\b(?:files?|filesystem)\b.*\b(?:writ|touch|creat|delet|chang|modif)\w*|.*\b(?:writ|touch|creat|delet|chang|modif)\w*\b.*\b(?:files?|filesystem)\b)`)
+	qNetUse    = regexp.MustCompile(`(?i)^\s*where\b.*?\b(?:network|internet)\b`)
 	// Beginner walkthroughs, powered by the xray intelligence engine:
 	// "walk me through routeDomain", "explain routeDomain for beginners".
 	// Checked before qExplain/qWhatDoes so the plain "explain X" forms
@@ -64,6 +71,18 @@ func (p *Project) Answer(q string) (out string, ok bool) {
 	}
 	if m := qCallers.FindStringSubmatch(q); m != nil {
 		return p.answerCallers(cleanSymbol(m[1]))
+	}
+	if m := qWhatReads.FindStringSubmatch(q); m != nil {
+		return p.answerWhatReads(cleanSymbol(m[1]))
+	}
+	if m := qWhereUsed.FindStringSubmatch(q); m != nil {
+		return p.answerWhatReads(cleanSymbol(m[1]))
+	}
+	if qFsWrite.MatchString(q) {
+		return p.answerEffects(fxWrite, "write to the filesystem")
+	}
+	if qNetUse.MatchString(q) {
+		return p.answerEffects(fxNet, "use the network")
 	}
 	if m := qWhatDoes.FindStringSubmatch(q); m != nil {
 		return p.answerWhatDoes(cleanSymbol(m[1]))
@@ -311,6 +330,83 @@ func (p *Project) answerCallers(name string) (string, bool) {
 		} else {
 			fmt.Fprintf(&b, "  - %s\n", shortID(c))
 		}
+	}
+	return b.String(), true
+}
+
+// answerWhatReads handles "what reads X" / "where is X read|used": the
+// value-flow index — every function that can observe the value, directly
+// or through threaded calls. Works for any struct field in the project.
+func (p *Project) answerWhatReads(name string) (string, bool) {
+	keys := p.resolveField(name)
+	if len(keys) == 0 {
+		return "", false
+	}
+	seen := map[string]bool{}
+	var ids []string
+	for _, k := range keys {
+		for _, id := range p.FieldReaders(k) {
+			if !seen[id] {
+				seen[id] = true
+				ids = append(ids, id)
+			}
+		}
+	}
+	sort.Strings(ids)
+	if len(ids) == 0 {
+		return "", false
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "`%s` is read by %d function(s):\n", name, len(ids))
+	for i, id := range ids {
+		if i >= 12 {
+			fmt.Fprintf(&b, "  ... and %d more\n", len(ids)-12)
+			break
+		}
+		if f := p.byID[id]; f != nil {
+			fmt.Fprintf(&b, "  - %s  (%s:%d)\n", f.Display(), p.LinkPath(f.File), f.Line)
+		} else {
+			fmt.Fprintf(&b, "  - %s\n", shortID(id))
+		}
+	}
+	return b.String(), true
+}
+
+// resolveField maps a field name to "pkg.Type.Field" keys across every
+// struct type in the project. A "--flag" prefix is stripped so "what
+// reads --verbose" works too.
+func (p *Project) resolveField(name string) []string {
+	name = strings.Trim(name, "`\"' ")
+	name = strings.TrimPrefix(name, "--")
+	var keys []string
+	for _, pkg := range p.Packages {
+		for _, t := range pkg.Types {
+			if t.Kind != "struct" {
+				continue
+			}
+			for _, f := range t.Fields {
+				if strings.EqualFold(f, name) {
+					keys = append(keys, pkg.Name+"."+t.Name+"."+f)
+				}
+			}
+		}
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// answerEffects handles "where is the filesystem written" / "where does
+// it use the network": every function with the effect category in its
+// transitive effects.
+func (p *Project) answerEffects(cat, label string) (string, bool) {
+	fns := p.effectFuncs(cat, 12)
+	if len(fns) == 0 {
+		return "", false
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "Functions that %s:\n", label)
+	for _, fn := range fns {
+		fmt.Fprintf(&b, "  - %s  (%s:%d)\n", fn.Display(), p.LinkPath(fn.File), fn.Line)
 	}
 	return b.String(), true
 }

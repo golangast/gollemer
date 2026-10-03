@@ -36,6 +36,10 @@ type Project struct {
 	byID     map[string]*Func
 	byMethod map[string][]*Func // method name -> methods (heuristic resolution)
 	byPkgDir map[string]*Package
+
+	// fieldReaders maps "pkg.Type.Field" -> func IDs that read the value,
+	// directly or through threaded calls. Built by buildFieldReaders.
+	fieldReaders map[string][]string
 }
 
 // Package is one directory of Go source.
@@ -81,6 +85,14 @@ type Func struct {
 	Mutates    bool     // directly invokes a mutating external call
 	MutatesAll bool     // transitively mutates: self or any callee does
 	Guards     []Guard  // if-statements and the calls each one guards
+
+	Effects    []string          // direct effect categories, e.g. "fs-write"
+	EffectsAll []string          // transitive effect categories
+	Reads      []string          // "pkg.Type.Field" values read via params
+	ParamTypes map[string]string // param/receiver name -> "pkg.Type"
+	CallArgs   []CallArg         // call sites with identifier arguments
+
+	localTypes map[string]string // local var name -> "pkg.Type"
 
 	decl *ast.FuncDecl  // kept during scan for call extraction, then dropped
 	fset *token.FileSet // shared with the scan; lets effects read positions
