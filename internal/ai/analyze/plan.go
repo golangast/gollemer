@@ -24,6 +24,15 @@ type featurePlan struct {
 	newFile     string            // suggested new file, relative to root ("" = none)
 	noun        string            // the feature's artifact noun ("report")
 	mutations   []mutation        // filesystem mutations the new flag should guard
+	flagSites   []flagSite        // existing flag checks in the flow to imitate
+}
+
+// flagSite is one place the flow already checks a flag — the pattern the
+// new flag should follow.
+type flagSite struct {
+	Cond string // e.g. "!config.SkipConfirm"
+	File string // relative to Root
+	Line int
 }
 
 var planStopwords = map[string]bool{
@@ -535,6 +544,10 @@ func (p *Project) buildFeaturePlan(c IssueConcepts) *featurePlan {
 		// from the flow. This is the semantic core of dry-run/preview-style
 		// features — not just where the code goes, but what it must guard.
 		fp.mutations = p.flowMutations(flow)
+		// Where this flow checks its other flags: the new flag belongs
+		// next to these. Imitating the local pattern is how the codebase
+		// itself threads options.
+		fp.flagSites = p.flowFlagSites(flow)
 	}
 
 	// New-file hint, named by the issue's own --flags.
@@ -585,6 +598,12 @@ func (p *Project) writeFeaturePlan(c IssueConcepts, fp *featurePlan, yamlShown b
 		b.WriteString("  Guard these with the new flag — they change the filesystem:\n")
 		for _, m := range fp.mutations {
 			fmt.Fprintf(&b, "    `%s` → %s\n", m.FuncName, strings.Join(m.Via, ", "))
+		}
+	}
+	if len(fp.flagSites) > 0 {
+		b.WriteString("  Check the new flag where this flow checks its other flags:\n")
+		for _, s := range fp.flagSites {
+			fmt.Fprintf(&b, "    `%s` (%s:%d)\n", s.Cond, p.LinkPath(s.File), s.Line)
 		}
 	}
 	b.WriteString("\n")

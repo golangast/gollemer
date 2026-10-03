@@ -337,6 +337,25 @@ func (p *Project) flowMutations(flow *Func) []mutation {
 	return out
 }
 
+// flowFlagSites returns the flag-like guard sites in the flow function
+// itself, deduplicated by condition. These are the local pattern a new
+// flag should imitate: same shape, same neighborhood.
+func (p *Project) flowFlagSites(flow *Func) []flagSite {
+	seen := map[string]bool{}
+	var out []flagSite
+	for _, g := range flow.Guards {
+		if !g.FlagLike || seen[g.Cond] {
+			continue
+		}
+		seen[g.Cond] = true
+		out = append(out, flagSite{Cond: g.Cond, File: flow.File, Line: g.Line})
+		if len(out) >= 3 {
+			break
+		}
+	}
+	return out
+}
+
 func sortedKeys(set map[string]bool) []string {
 	out := make([]string, 0, len(set))
 	for k := range set {

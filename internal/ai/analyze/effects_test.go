@@ -176,6 +176,8 @@ func TestPlanNamesGuardedMutations(t *testing.T) {
 	for _, want := range []string{
 		"Guard these with the new flag",
 		"`DoWork` → os.Remove",
+		"Check the new flag where",
+		"`cfg.Verbose`",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("plan missing %q\n%s", want, out)

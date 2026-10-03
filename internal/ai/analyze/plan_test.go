@@ -194,6 +194,9 @@ import "example.com/dryrun/worker"
 
 // RunCLI processes every item from the command line.
 func RunCLI(cfg *config.Config) {
+	if cfg.Verbose {
+		worker.DoWork("probe")
+	}
 	for _, it := range list() {
 		worker.DoWork(it)
 	}
