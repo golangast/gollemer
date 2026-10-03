@@ -227,6 +227,41 @@ func (p *Project) codeRefs(c IssueConcepts) map[string][]*Func {
 	return out
 }
 
+// findConfigFlow finds the flow for a new-flag issue via the config
+// type itself: the orchestrator among the config's field readers. A new
+// flag becomes a config field, so the flow is where config is consumed —
+// no keyword luck needed. (E.g. "--force" matches no function name, but
+// the config's readers lead to the flow.)
+func (p *Project) findConfigFlow(t *Type, pkg *Package) *Func {
+	seen := map[string]*Func{}
+	var walk func(fn *Func)
+	walk = func(fn *Func) {
+		if fn == nil || seen[fn.ID] != nil {
+			return
+		}
+		seen[fn.ID] = fn
+		for _, id := range fn.Callers {
+			walk(p.byID[id])
+		}
+	}
+	for _, f := range t.Fields {
+		key := pkg.Name + "." + t.Name + "." + f
+		for _, id := range p.FieldReaders(key) {
+			walk(p.byID[id])
+		}
+	}
+	var best *Func
+	for _, fn := range seen {
+		if fn.IsMain || fn.IsTest || fn.IsInit || isConstructor(fn.Name) {
+			continue
+		}
+		if best == nil || len(fn.Calls) > len(best.Calls) {
+			best = fn
+		}
+	}
+	return best
+}
+
 // findFlow picks the orchestrating function behind candidate funcs: walk
 // each candidate's callers up toward main and take the non-main function
 // with the most callees. Constructors never orchestrate a feature.
@@ -449,10 +484,17 @@ func (p *Project) buildFeaturePlan(c IssueConcepts) *featurePlan {
 			addCand(fn)
 		}
 	}
-	if len(cands) == 0 {
+	if len(cands) == 0 && !flagsSignal(c) {
 		return nil
 	}
 	flow := p.findFlow(cands)
+	if flow == nil && flagsSignal(c) {
+		// Keyword seeds miss when the flag name matches nothing (e.g.
+		// "--force"): fall back to the config's readers.
+		if t, pkg := p.findConfigType(); t != nil {
+			flow = p.findConfigFlow(t, pkg)
+		}
+	}
 	if flow == nil {
 		return nil
 	}
