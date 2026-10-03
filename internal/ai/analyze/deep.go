@@ -113,6 +113,12 @@ func firstSentence(s string) string {
 	return s
 }
 
+// Source returns the function's declaration source text, captured at
+// parse time (the AST is dropped after analysis).
+func (fn *Func) Source() string {
+	return fn.Src
+}
+
 // Summary is the one-line plain-English description of a function:
 // its intent — the doc comment's first sentence when it has one,
 // otherwise a synthesis of its name's verb, its effects, and the

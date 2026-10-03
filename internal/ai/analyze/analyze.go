@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/parser"
+	"go/printer"
 	"go/token"
 	"io/fs"
 	"os"
@@ -44,6 +45,9 @@ type Project struct {
 	// (direct only — a write is where the value is set). Built by
 	// buildFieldWriters.
 	fieldWriters map[string][]string
+	// Typed reports whether compiler-grade type info was loaded
+	// (refineTypes): call edges were checked against real method sets.
+	Typed bool
 }
 
 // Package is one directory of Go source.
@@ -79,6 +83,7 @@ type Func struct {
 	Line      int
 	EndLine   int    // last line of the declaration (for source excerpts)
 	Sig       string // rendered signature, e.g. "func (c *Chat) Add(a int) int"
+	Src       string // declaration source text, capped (for excerpts)
 	Params    int
 	Calls     []string        // callee IDs (heuristic)
 	Callers   []string        // filled by BuildGraph
@@ -179,6 +184,21 @@ func Analyze(dir string) (*Project, error) {
 }
 
 // pkgFor returns the Package for dir, creating it on first use.
+// AllFuncs returns every analyzed function, for tooling that distills
+// the model's understanding (training-data generation, audits).
+func (p *Project) AllFuncs() []*Func {
+	out := make([]*Func, 0, len(p.byID))
+	for _, fn := range p.byID {
+		out = append(out, fn)
+	}
+	return out
+}
+
+// FuncByID looks up a function by its model ID.
+func (p *Project) FuncByID(id string) *Func {
+	return p.byID[id]
+}
+
 func (p *Project) pkgFor(dir, pkgName string) *Package {
 	if pkg, ok := p.byPkgDir[dir]; ok {
 		return pkg
@@ -252,6 +272,13 @@ func (p *Project) addFile(rel string, src *ast.File, fset *token.FileSet) {
 				fn.Receiver = exprName(d.Recv.List[0].Type)
 			}
 			fn.Sig = renderSig(d, fn.Receiver)
+			var sb strings.Builder
+			if err := printer.Fprint(&sb, fset, d); err == nil {
+				fn.Src = sb.String()
+				if len(fn.Src) > 1200 {
+					fn.Src = fn.Src[:1200] + "\n// ... (truncated)"
+				}
+			}
 			if d.Type.Params != nil {
 				for _, field := range d.Type.Params.List {
 					n := len(field.Names)

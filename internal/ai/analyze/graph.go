@@ -59,6 +59,9 @@ func (p *Project) BuildGraph() {
 			p.analyzeEffects(pkg, fn)
 		}
 	}
+	// Compiler-grade pass: resolve selector calls through real method
+	// sets before effects propagate, so refined edges carry effects.
+	p.refineTypes()
 	p.propagateEffects()
 	p.buildFieldReaders()
 	p.buildFieldWriters()
