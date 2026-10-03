@@ -2,6 +2,7 @@ package analyze
 
 import (
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -202,48 +203,78 @@ func optionUser(pkg *Package, optName string) *Func {
 
 func (p *Project) writeTypeMethodPlan(c IssueConcepts, tp *typeMethodPlan) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "TARGET — add the method to this type:\n")
-	fmt.Fprintf(&b, "  %s:%d\n", p.LinkPath(tp.typ.File), tp.typ.Line)
-	fmt.Fprintf(&b, "  type %s struct\n", tp.typ.Name)
+	repo := filepath.Base(p.Root)
+	pkgDir := ""
+	if tp.pkg != nil {
+		pkgDir = tp.pkg.Dir
+	} else if d := filepath.Dir(tp.typ.File); d != "." {
+		pkgDir = d
+	}
+	fileBase := filepath.Base(tp.typ.File)
+
+	methodSig := fmt.Sprintf("func (%s *%s) %s(...)", tp.receiver, tp.typ.Name, tp.methodName)
 	if tp.wantsOpts && len(tp.optTypes) > 0 {
-		fmt.Fprintf(&b, "  New method, e.g.: func (%s *%s) %s(verbose ...%sOption)\n",
+		methodSig = fmt.Sprintf("func (%s *%s) %s(verbose ...%sOption)",
 			tp.receiver, tp.typ.Name, tp.methodName, tp.methodName)
-	} else {
-		fmt.Fprintf(&b, "  New method: func (%s *%s) %s(...)\n",
-			tp.receiver, tp.typ.Name, tp.methodName)
 	}
-	fmt.Fprintf(&b, "  Why here: the issue asks for %s %s method on %s.\n\n",
-		an(tp.methodName), tp.methodName, strings.ToLower(tp.typ.Name))
-	if len(tp.siblings) > 0 {
-		fmt.Fprintf(&b, "SIBLINGS — methods on %s to imitate:\n", tp.typ.Name)
-		for _, fn := range tp.siblings {
-			fmt.Fprintf(&b, "  %s:%d — %s\n",
-				p.LinkPath(fn.File), fn.Line, strings.TrimPrefix(fn.Sig, "func "))
-		}
-		b.WriteString("\n")
+
+	b.WriteString(fmt.Sprintf("To add the %s method, edit one file:\n\n", tp.methodName))
+	b.WriteString(fmt.Sprintf("  %s\n", repo))
+	if pkgDir == "" {
+		b.WriteString(fmt.Sprintf("  └── %s  ← OPEN THIS FILE\n", fileBase))
+		b.WriteString(fmt.Sprintf("      └── type %s struct  (line %d)\n", tp.typ.Name, tp.typ.Line))
+		b.WriteString("          └── ✚ ADD HERE\n")
+		b.WriteString(fmt.Sprintf("              %s\n\n", methodSig))
+	} else {
+		b.WriteString(fmt.Sprintf("  └── %s/  ← package\n", pkgDir))
+		b.WriteString(fmt.Sprintf("      └── %s  ← OPEN THIS FILE\n", fileBase))
+		b.WriteString(fmt.Sprintf("          └── type %s struct  (line %d)\n", tp.typ.Name, tp.typ.Line))
+		b.WriteString("              └── ✚ ADD HERE\n")
+		b.WriteString(fmt.Sprintf("                  %s\n\n", methodSig))
+	}
+
+	b.WriteString("  Steps:\n")
+	b.WriteString(fmt.Sprintf("  1. Open %s.\n", tp.typ.File))
+	b.WriteString(fmt.Sprintf("  2. Find `type %s struct` (line %d).\n", tp.typ.Name, tp.typ.Line))
+	if ex := simplestFunc(tp.siblings); ex != nil {
+		b.WriteString("  3. Add the new method after the type's other methods,\n")
+		b.WriteString(fmt.Sprintf("     writing it like %s (%s:%d):\n", ex.Name, ex.File, ex.Line))
+		b.WriteString(fmt.Sprintf("       %s\n", strings.TrimPrefix(ex.Sig, "func ")))
+	} else {
+		b.WriteString("  3. Add the new method right after the type declaration.\n")
 	}
 	if tp.wantsOpts && len(tp.optTypes) > 0 {
-		b.WriteString("OPTIONS — this repo's options pattern:\n")
-		for _, t := range tp.optTypes {
-			fmt.Fprintf(&b, "  type %s struct (%s:%d)\n", t.Name, p.LinkPath(t.File), t.Line)
-			if u := tp.optUser[t.Name]; u != nil {
-				fmt.Fprintf(&b, "  used by: %s\n", strings.TrimPrefix(u.Sig, "func "))
-			}
-		}
-		fmt.Fprintf(&b, "  Why: the issue asks for options — add %s %sOption struct in the same shape.\n\n",
-			an(tp.methodName), tp.methodName)
+		ot := bestOption(tp)
+		b.WriteString(fmt.Sprintf("  4. The issue asks for options: add `type %sOption struct`,\n", tp.methodName))
+		b.WriteString(fmt.Sprintf("     copying %s (%s:%d).\n", ot.Name, ot.File, ot.Line))
 	}
 	return b.String()
 }
 
-// an returns "a" or "an" for a word.
-func an(w string) string {
-	if w == "" {
-		return "a"
+// simplestFunc picks the shortest signature: the smallest complete
+// method is the best template for a beginner to copy.
+func simplestFunc(fns []*Func) *Func {
+	var best *Func
+	for _, fn := range fns {
+		if best == nil || len(fn.Sig) < len(best.Sig) ||
+			(len(fn.Sig) == len(best.Sig) && fn.Name < best.Name) {
+			best = fn
+		}
 	}
-	switch strings.ToLower(w[:1]) {
-	case "a", "e", "i", "o", "u":
-		return "an"
+	return best
+}
+
+// bestOption picks the *Option type whose example user is a method on
+// the target type — the closest shape to the method being added.
+func bestOption(tp *typeMethodPlan) *Type {
+	for _, t := range tp.optTypes {
+		if u := tp.optUser[t.Name]; u != nil &&
+			strings.TrimPrefix(u.Receiver, "*") == tp.typ.Name {
+			return t
+		}
 	}
-	return "a"
+	if len(tp.optTypes) > 0 {
+		return tp.optTypes[0]
+	}
+	return nil
 }

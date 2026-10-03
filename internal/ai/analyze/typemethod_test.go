@@ -70,12 +70,13 @@ func TestTypeMethodPlan(t *testing.T) {
 	}
 	out := p.GuideIssue(c)
 	for _, want := range []string{
-		"TARGET",
+		"edit one file",
+		"OPEN THIS FILE",
+		"ADD HERE",
 		"type Widget struct",
 		"func (w *Widget) Info(verbose ...InfoOption)",
-		"SIBLINGS",
-		"Describe",
-		"OPTIONS",
+		"Steps:",
+		"Render",
 		"PaintOption",
 		"InfoOption",
 	} {
