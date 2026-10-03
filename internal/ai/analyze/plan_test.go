@@ -158,3 +158,85 @@ func TestParamMethodCall(t *testing.T) {
 		t.Errorf("Run.Calls %v does not target DoWork", run.Calls)
 	}
 }
+
+// dryRunFixture mirrors deletor issue #319: a tui package whose name
+// matches the "(CLI + TUI)" parenthetical, plus a real config/flags
+// pair and a CLI runner flow. The issue asks for a --dry-run flag, so
+// the answer must be the multi-file plan, not the single tui anchor.
+func dryRunFixture(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	write := func(rel, src string) {
+		full := filepath.Join(root, rel)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("go.mod", "module example.com/dryrun\n\ngo 1.21\n")
+	write("main.go", "package main\n\nimport \"example.com/dryrun/runner\"\n\nimport \"example.com/dryrun/tui\"\n\nfunc main() { tui.NewApp(runner.RunCLI(nil)) }\n")
+	write("config/config.go", "package config\n\n// Config holds the run options.\ntype Config struct {\n\tVerbose bool\n}\n")
+	write("config/flags.go", "package config\n\n// GetFlags parses CLI flags into Config.\nfunc GetFlags() *Config { return &Config{} }\n")
+	write("tui/app.go", `package tui
+
+// App is the terminal UI.
+type App struct{}
+
+// NewApp builds the shared terminal UI.
+func NewApp() *App { return &App{} }
+`)
+	write("runner/cli.go", `package runner
+
+import "example.com/dryrun/config"
+import "example.com/dryrun/worker"
+
+// RunCLI processes every item from the command line.
+func RunCLI(cfg *config.Config) {
+	for _, it := range list() {
+		worker.DoWork(it)
+	}
+}
+
+func list() []string { return nil }
+`)
+	write("worker/worker.go", `package worker
+
+// DoWork handles a single item.
+func DoWork(item string) {}
+`)
+	return root
+}
+
+const dryRunIssue = "Add `Dry-Run / Preview` mode (CLI + TUI)\n\n" +
+	"Allow users to preview what would be deleted without modifying the filesystem.\n\n" +
+	"### CLI activation\n- Add flag: `--dry-run`\n"
+
+// A flag-asking "add" issue whose title parenthetical names the tui
+// package must still get the feature plan: the --dry-run flag lives in
+// config/flags, not in tui. Before the fix, siteMatchesTitle saw "tui"
+// and suppressed the plan, leaving only the NewApp anchor.
+func TestFlagIssueBeatsSurfaceMatch(t *testing.T) {
+	p, err := Analyze(dryRunFixture(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := ExtractIssueConcepts(dryRunIssue)
+	if !flagsSignal(c) {
+		t.Fatal("dry-run issue should raise the flags signal")
+	}
+	out := p.GuideIssue(c)
+	for _, want := range []string{
+		"CONFIG", "config.go", "type Config struct", "`--dry-run`",
+		"FLAGS", "GetFlags",
+		"BEHAVIOR", "RunCLI",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("plan missing %q\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "wrap the work here") {
+		t.Errorf("flag issue fell back to the single tui anchor\n%s", out)
+	}
+}

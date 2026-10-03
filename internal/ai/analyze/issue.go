@@ -395,8 +395,13 @@ func (p *Project) GuideIssue(c IssueConcepts) string {
 
 	// Feature plan: an "add" whose mechanism match isn't the title's
 	// subject gets the multi-file plan instead of the single anchor.
+	// An issue asking for user-facing flags/options always gets the plan
+	// too: flags live in the config package, never in the mechanism's
+	// package, so one anchor can't cover the change. (E.g. "Add Dry-Run
+	// mode (CLI + TUI)": the "tui" word matches internal/tui, but the
+	// real work is a --dry-run flag in config/flags.)
 	var plan *featurePlan
-	if c.Action == "add" && len(keySites) == 0 && !p.siteMatchesTitle(c, site) {
+	if c.Action == "add" && len(keySites) == 0 && (!p.siteMatchesTitle(c, site) || flagsSignal(c)) {
 		plan = p.buildFeaturePlan(c)
 	}
 
