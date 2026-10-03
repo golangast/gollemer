@@ -51,7 +51,16 @@ var planStopwords = map[string]bool{
 // "deleted" match each other.
 func stem(w string) string {
 	w = strings.ToLower(w)
-	for _, suf := range []string{"ing", "ion", "ed", "es", "s"} {
+	// Plural "es" only after s/x/z/ch/sh: boxes->box, watches->watch,
+	// classes->class. Otherwise it's a plain "s": files->file (not "fil").
+	if strings.HasSuffix(w, "es") && len(w) > 4 {
+		for _, suf := range []string{"ses", "xes", "zes", "ches", "shes"} {
+			if strings.HasSuffix(w, suf) {
+				return w[:len(w)-2]
+			}
+		}
+	}
+	for _, suf := range []string{"ing", "ion", "ed", "s"} {
 		if strings.HasSuffix(w, suf) && len(w) > len(suf)+2 {
 			if suf == "s" && strings.HasSuffix(w, "ss") {
 				continue

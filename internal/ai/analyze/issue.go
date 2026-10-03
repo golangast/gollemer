@@ -405,6 +405,15 @@ func (p *Project) GuideIssue(c IssueConcepts) string {
 		plan = p.buildFeaturePlan(c)
 	}
 
+	// New-code issues name a destination that doesn't exist yet. The
+	// issue tells us where to create; the general model tells us what to
+	// build against and what to imitate. This beats the flow plan when
+	// both could fire: benchmark suites don't hook into any flow.
+	var newCode *newCodePlan
+	if c.Action == "add" && len(keySites) == 0 {
+		newCode = p.buildNewCodePlan(c)
+	}
+
 	if len(keySites) > 0 {
 		writeKeyVisual(&b, p, c, keySites)
 		b.WriteString("BEHAVIOR — add the hotkeys here:\n")
@@ -433,6 +442,8 @@ func (p *Project) GuideIssue(c IssueConcepts) string {
 			b.WriteString("  Add your hotkeys as new cases next to the existing ones.\n")
 		}
 		b.WriteString("\n")
+	} else if newCode != nil {
+		b.WriteString(p.writeNewCodePlan(c, newCode))
 	} else if plan != nil {
 		b.WriteString(p.writeFeaturePlan(c, plan, len(structs) > 0))
 	} else if site != nil {
@@ -458,6 +469,8 @@ func (p *Project) GuideIssue(c IssueConcepts) string {
 	var anchor *Func
 	if len(keySites) == 0 {
 		switch {
+		case newCode != nil:
+			// The code doesn't exist yet — no chain to draw.
 		case plan != nil:
 			anchor = plan.flow
 		case site != nil && site.KeyFunc != nil:
@@ -476,7 +489,7 @@ func (p *Project) GuideIssue(c IssueConcepts) string {
 		fmt.Fprintf(&b, "%s → yours here\n", strings.Join(names, " → "))
 	}
 
-	if len(structs) == 0 && site == nil && len(keySites) == 0 && plan == nil {
+	if len(structs) == 0 && site == nil && len(keySites) == 0 && plan == nil && newCode == nil {
 		return p.GuideChange(c.Title)
 	}
 	return b.String()
