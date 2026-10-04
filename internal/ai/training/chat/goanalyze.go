@@ -32,9 +32,27 @@ var lastAnalyzeProject *analyze.Project
 // actually exists in the project, so it can never steal a question meant
 // for another brain ("what does a goroutine do" stays with the Go brain,
 // "what does make chat do" stays with the makefile brain).
+//
+// When no project was analyzed yet this session but the question has the
+// unmistakable shape of a codebase question ("why does X call Y",
+// "what is X for"), the repo the chat runs in is analyzed on demand so
+// the question just works instead of falling through to small talk.
 func tryCodebaseQuestion(line string) (string, bool) {
 	if lastAnalyzeProject == nil {
-		return "", false
+		if unifiedProjectRoot == "" || !analyze.IsCodebaseQuestion(line) {
+			return "", false
+		}
+		root, err := resolveAnalyzeRoot(unifiedProjectRoot)
+		if err != nil {
+			return "", false
+		}
+		fmt.Println("[reading the codebase — parsing Go files...]")
+		p, err := analyze.Analyze(root)
+		if err != nil {
+			return "", false
+		}
+		lastAnalyzeRoot = root
+		lastAnalyzeProject = p
 	}
 	return lastAnalyzeProject.Answer(line)
 }

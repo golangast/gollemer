@@ -52,6 +52,15 @@ var (
 	qWhyCalls = regexp.MustCompile(`(?i)^\s*why does (?:the )?(.+?) call (?:the )?(.+?)\??$`)
 )
 
+// IsCodebaseQuestion reports whether line has the shape of a project Q&A
+// question ("why does X call Y", "what is X for"), independent of any
+// particular project. The shapes are unambiguous: they can never be
+// Go-concept or social questions, so callers can use this to decide
+// whether a codebase is worth analyzing for the question.
+func IsCodebaseQuestion(line string) bool {
+	return qWhyCalls.MatchString(line) || qWhatFor.MatchString(line)
+}
+
 // Answer answers a natural-language question about the project. It
 // returns ok=false when the question doesn't reference anything in the
 // project, so callers can fall through to normal routing.
