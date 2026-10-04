@@ -70,12 +70,20 @@ type domainTrainData struct {
 // RunRealSeq2SeqTraining so checkpoint-resume can verify a checkpoint's
 // vocabulary matches today's data before resuming from it.
 func prepareDomainTrainData(projectRoot, domain string) (*domainTrainData, error) {
-	seeded, err := SeedChatDataset(projectRoot)
-	if err != nil {
-		return nil, err
+	datasetPath := ChatDatasetPath(projectRoot)
+	if domain == RouterDomain {
+		// The router trains on (message, domain-label) pairs, not chat
+		// pairs; its data lives in a separate file derived from the
+		// quality-gated chat dataset.
+		datasetPath = RouterDatasetPath(projectRoot)
+	} else {
+		seeded, err := SeedChatDataset(projectRoot)
+		if err != nil {
+			return nil, err
+		}
+		log.Printf("[REAL-SEQ2SEQ] dataset: %d pairs (%s)", seeded, datasetPath)
 	}
-	log.Printf("[REAL-SEQ2SEQ] dataset: %d pairs (%s)", seeded, ChatDatasetPath(projectRoot))
-	all, err := LoadChatDataset(ChatDatasetPath(projectRoot))
+	all, err := LoadChatDataset(datasetPath)
 	if err != nil {
 		return nil, err
 	}
@@ -237,7 +245,7 @@ func loadTrainingCheckpoint(tok *tokenizer.Tokenizer, curFP uint64, ckptPath, me
 // checkpoints (which store their dims) stay valid and retraining stays
 // comparable.
 func dimsForDomain(domain string) (embedDim, hiddenDim int) {
-	if domain == GocodeDomain || domain == GoDomain || domain == GoCliDomain || domain == SocialDomain || domain == MakefileDomain {
+	if domain == GocodeDomain || domain == GoDomain || domain == GoCliDomain || domain == SocialDomain || domain == MakefileDomain || domain == RouterDomain {
 		return 128, 256
 	}
 	return 64, 128

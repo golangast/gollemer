@@ -2278,107 +2278,107 @@
 {"input":"what is func GetStyle(errType ErrorType) lipgloss.Style for","output":"GetStyle returns the appropriate style for the given error type","domain":"gocode"}
 {"input":"what is func New(errType ErrorType, message string) *Error for","output":"New creates a new error with the given type and message","domain":"gocode"}
 {"input":"what is func RenderASCIIGraph(p *Project) string for","output":"RenderASCIIGraph draws the package dependency graph as plain text for the terminal: one block per package, listing the other project packages it imports.","domain":"gocode"}
-{"input":"why does AnalyzeDiff call countLines","output":"ai.AnalyzeDiff calls ai.countLines. Handles a count lines.","domain":"social"}
-{"input":"why does Answer call GuideChange","output":"analyze.Project.Answer calls analyze.Project.GuideChange. GuideChange renders the beginner-guided \"where do I change\" answer for task.","domain":"social"}
-{"input":"why does BiggestFiles call LinkPath","output":"analyze.Project.BiggestFiles calls analyze.Project.LinkPath. LinkPath renders a project-relative file path as a terminal-clickable link.","domain":"social"}
-{"input":"why does BuildDiff call loadTargetFiles","output":"api.BuildDiff calls api.loadTargetFiles. Handles a load target files. Reads files (os.ReadFile, os.Stat).","domain":"social"}
+{"input": "why does AnalyzeDiff call countLines", "output": "ai.AnalyzeDiff calls ai.countLines. Handles a count lines.", "domain": "go"}
+{"input": "why does Answer call GuideChange", "output": "analyze.Project.Answer calls analyze.Project.GuideChange. GuideChange renders the beginner-guided \"where do I change\" answer for task.", "domain": "go"}
+{"input": "why does BiggestFiles call LinkPath", "output": "analyze.Project.BiggestFiles calls analyze.Project.LinkPath. LinkPath renders a project-relative file path as a terminal-clickable link.", "domain": "go"}
+{"input": "why does BuildDiff call loadTargetFiles", "output": "api.BuildDiff calls api.loadTargetFiles. Handles a load target files. Reads files (os.ReadFile, os.Stat).", "domain": "go"}
 {"input":"why does BuildFileFilter call NewFileFilterWithOptions","output":"config.Config.BuildFileFilter calls filemanager.NewFileFilterWithOptions. Creates a new FileFilterWithOptions.","domain":"go"}
 {"input":"why does BuildGraph call analyzeEffects","output":"analyze.Project.BuildGraph calls analyze.Project.analyzeEffects. analyzeEffects records a function's external calls, call-site arguments, value reads, and if-statement guards.","domain":"go"}
-{"input":"why does Cleanup call Close","output":"views.CleanFilesModel.Cleanup calls logging.Logger.Close to close.","domain":"social"}
+{"input": "why does Cleanup call Close", "output": "views.CleanFilesModel.Cleanup calls logging.Logger.Close to close.", "domain": "go"}
 {"input":"why does ClearCache call DeleteFileWithUnixAPI","output":"cache.Manager.ClearCache calls cache.DeleteFileWithUnixAPI to delete a file with unix api.","domain":"go"}
-{"input":"why does CopyDir call ShouldIgnore","output":"util.CopyDir calls util.ShouldIgnore. ShouldIgnore reports whether a file or directory should be ignored by Eko.","domain":"social"}
-{"input":"why does CopyOrCloneFile call CloneFile","output":"util.CopyOrCloneFile calls util.CloneFile to clone a file.","domain":"social"}
-{"input":"why does CountFiles call WalkFiles","output":"snapshot.CountFiles calls util.WalkFiles to walk a files.","domain":"social"}
-{"input":"why does Coupling call bars","output":"analyze.Project.Coupling calls analyze.bars. bars scales v against max into a width-wide block bar.","domain":"social"}
-{"input":"why does CreateSnapshot call Write","output":"snapshot.CreateSnapshot calls manifest.Write to write. (inside the `err != nil` check) (inside the `err != nil` check) (inside the `err != nil` check)","domain":"social"}
+{"input": "why does CopyDir call ShouldIgnore", "output": "util.CopyDir calls util.ShouldIgnore. ShouldIgnore reports whether a file or directory should be ignored by Eko.", "domain": "go"}
+{"input": "why does CopyOrCloneFile call CloneFile", "output": "util.CopyOrCloneFile calls util.CloneFile to clone a file.", "domain": "go"}
+{"input": "why does CountFiles call WalkFiles", "output": "snapshot.CountFiles calls util.WalkFiles to walk a files.", "domain": "go"}
+{"input": "why does Coupling call bars", "output": "analyze.Project.Coupling calls analyze.bars. bars scales v against max into a width-wide block bar.", "domain": "go"}
+{"input": "why does CreateSnapshot call Write", "output": "snapshot.CreateSnapshot calls manifest.Write to write. (inside the `err != nil` check) (inside the `err != nil` check) (inside the `err != nil` check)", "domain": "go"}
 {"input":"why does Delete call Invalidate","output":"manifest.Delete calls manifest.Cache.Invalidate. Invalidate removes an item by snapshot ID from the cache.","domain":"go"}
-{"input":"why does DeleteUserSelectedFiles call Log","output":"views.CleanFilesModel.DeleteUserSelectedFiles calls logging.Logger.Log to log.","domain":"social"}
+{"input": "why does DeleteUserSelectedFiles call Log", "output": "views.CleanFilesModel.DeleteUserSelectedFiles calls logging.Logger.Log to log.", "domain": "go"}
 {"input":"why does DescribeFile call packageForFile","output":"analyze.Project.DescribeFile calls analyze.Project.packageForFile. packageForFile returns the package containing the project-relative file.","domain":"go"}
 {"input":"why does EndOperation call SetError","output":"telemetry.EndOperation calls telemetry.SetError to set an error. (inside the `op == nil || op.Span == nil` check) (inside the `err != nil` check) (inside the `op == nil` check) (inside the `err != nil` check)","domain":"go"}
 {"input":"why does EngineRoom call Display","output":"analyze.Project.EngineRoom calls analyze.Func.Display to display. (inside the `len(top) == 0` check)","domain":"go"}
 {"input":"why does ExplainBeginner call resolve","output":"analyze.Project.ExplainBeginner calls analyze.Project.resolve. resolve finds a function, type, or package by name.","domain":"go"}
-{"input":"why does ExtractIssueConcepts call issueTitle","output":"analyze.ExtractIssueConcepts calls analyze.issueTitle. Handles an issue title.","domain":"social"}
-{"input":"why does ExtractTo call CopyOrCloneFile","output":"objects.Store.ExtractTo calls util.CopyOrCloneFile to copy or clone a file. (inside the `len(hash) \u003c 2` check) (inside the `err == nil` check) (inside the `err != nil` check)","domain":"social"}
+{"input": "why does ExtractIssueConcepts call issueTitle", "output": "analyze.ExtractIssueConcepts calls analyze.issueTitle. Handles an issue title.", "domain": "go"}
+{"input": "why does ExtractTo call CopyOrCloneFile", "output": "objects.Store.ExtractTo calls util.CopyOrCloneFile to copy or clone a file. (inside the `len(hash) < 2` check) (inside the `err == nil` check) (inside the `err != nil` check)", "domain": "go"}
 {"input":"why does FindConfigStruct call structFields","output":"analyze.Project.FindConfigStruct calls analyze.Project.structFields. structFields returns a struct's own fields plus one level of embedded struct fields (resource.ResourceConfig inlines into source.Config).","domain":"go"}
 {"input":"why does FindMechanism call importTarget","output":"analyze.Project.FindMechanism calls analyze.Project.importTarget. importTarget returns the project package for an import path, or nil for external dependencies.","domain":"go"}
-{"input":"why does FormatPatchSnippet call diffLineCounts","output":"ai.FormatPatchSnippet calls ai.diffLineCounts. Handles a diff line counts.","domain":"social"}
-{"input":"why does GarbageCollect call objectPath","output":"objects.Store.GarbageCollect calls objects.Store.objectPath. objectPath returns the on-disk path for a given SHA-256 hex hash.","domain":"social"}
+{"input": "why does FormatPatchSnippet call diffLineCounts", "output": "ai.FormatPatchSnippet calls ai.diffLineCounts. Handles a diff line counts.", "domain": "go"}
+{"input": "why does GarbageCollect call objectPath", "output": "objects.Store.GarbageCollect calls objects.Store.objectPath. objectPath returns the on-disk path for a given SHA-256 hex hash.", "domain": "go"}
 {"input":"why does GenerateSnapshotSummary call AnalyzeDiff","output":"ai.GenerateSnapshotSummary calls ai.AnalyzeDiff. AnalyzeDiff converts a slice of DiffFile into a structured ChangeSet.","domain":"go"}
 {"input":"why does GetFlags call ParseExcludeToSlice","output":"config.GetFlags calls utils.ParseExcludeToSlice to parse an exclude to slice. (inside the `*excludeFlag != \"\"` check)","domain":"go"}
 {"input":"why does GetWithRules call ParseTimeDuration","output":"config.Config.GetWithRules calls utils.ParseTimeDuration to parse a time duration. (inside the `err != nil` check) (inside the `c.OlderThan.IsZero() \u0026\u0026 defaultRules.OlderTha...` check) (inside the `c.NewerThan.IsZero() \u0026\u0026 defaultRules.NewerTha...` check)","domain":"go"}
-{"input":"why does GuideChange call LinkPath","output":"analyze.Project.GuideChange calls analyze.Project.LinkPath. LinkPath renders a project-relative file path as a terminal-clickable link.","domain":"social"}
+{"input": "why does GuideChange call LinkPath", "output": "analyze.Project.GuideChange calls analyze.Project.LinkPath. LinkPath renders a project-relative file path as a terminal-clickable link.", "domain": "go"}
 {"input":"why does GuideIssue call FindConfigStruct","output":"analyze.Project.GuideIssue calls analyze.Project.FindConfigStruct to find a config struct.","domain":"go"}
-{"input":"why does HandlePressDirButton call LoadDirs","output":"views.CleanFilesModel.HandlePressDirButton calls views.CleanFilesModel.LoadDirs to load a dirs. (inside the `m.ShowDirs` check)","domain":"social"}
+{"input": "why does HandlePressDirButton call LoadDirs", "output": "views.CleanFilesModel.HandlePressDirButton calls views.CleanFilesModel.LoadDirs to load a dirs. (inside the `m.ShowDirs` check)", "domain": "go"}
 {"input":"why does HandlePressStartButton call New","output":"views.CleanFilesModel.HandlePressStartButton calls errors.New. New creates a new error with the given type and message","domain":"go"}
-{"input":"why does InitDB call MigrateDB","output":"db.InitDB calls db.MigrateDB. MigrateDB creates the schema if needed and adds any missing columns (e.g.","domain":"social"}
-{"input":"why does InitialCacheModel call NewCacheManager","output":"views.InitialCacheModel calls cache.NewCacheManager. NewCacheManager creates a new cache manager instance for the current OS","domain":"social"}
-{"input":"why does InitialCleanModel call Log","output":"views.InitialCleanModel calls logging.Logger.Log to log.","domain":"social"}
+{"input": "why does InitDB call MigrateDB", "output": "db.InitDB calls db.MigrateDB. MigrateDB creates the schema if needed and adds any missing columns (e.g.", "domain": "go"}
+{"input": "why does InitialCacheModel call NewCacheManager", "output": "views.InitialCacheModel calls cache.NewCacheManager. NewCacheManager creates a new cache manager instance for the current OS", "domain": "go"}
+{"input": "why does InitialCleanModel call Log", "output": "views.InitialCleanModel calls logging.Logger.Log to log.", "domain": "go"}
 {"input":"why does Intent call capitalize","output":"analyze.Func.Intent calls analyze.capitalize. Handles a capitalize.","domain":"go"}
-{"input":"why does Invalidate call removeElement","output":"manifest.Cache.Invalidate calls manifest.Cache.removeElement. Handles a remove element.","domain":"social"}
+{"input": "why does Invalidate call removeElement", "output": "manifest.Cache.Invalidate calls manifest.Cache.removeElement. Handles a remove element.", "domain": "go"}
 {"input":"why does LoadConfig call GetFlags","output":"config.LoadConfig calls config.GetFlags to get a flags.","domain":"go"}
-{"input":"why does LoadFiles call MatchesFilters","output":"views.CleanFilesModel.LoadFiles calls filemanager.FileFilter.MatchesFilters. MatchesFilters checks if a file matches all filter criteria","domain":"social"}
-{"input":"why does LogDeletionToFileAsJson call ToBytesOrDefault","output":"utils.LogDeletionToFileAsJson calls utils.ToBytesOrDefault. ToBytesOrDefault converts a size string to bytes, returning 0 if conversion fails","domain":"social"}
-{"input":"why does MatchesFilters call ExcludeFilter","output":"filemanager.FileFilter.MatchesFilters calls filemanager.FileFilter.ExcludeFilter. ExcludeFilter checks if a file should be excluded based on path patterns","domain":"social"}
-{"input":"why does MetricsInstance call initMetrics","output":"telemetry.MetricsInstance calls telemetry.initMetrics. initMetrics initializes all Eko application metrics.","domain":"social"}
-{"input":"why does MigrateDB call execWithTelemetry","output":"db.MigrateDB calls db.execWithTelemetry. Handles an exec with telemetry.","domain":"social"}
-{"input":"why does NewApp call NewMainMenu","output":"tui.NewApp calls views.NewMainMenu. Creates a new MainMenu.","domain":"social"}
-{"input":"why does NewCacheManager call getLocationsForOS","output":"cache.NewCacheManager calls cache.getLocationsForOS. getLocationsForOS returns a list of cache locations specific to the given operating system.","domain":"social"}
-{"input":"why does NewPGVectorStore call migrate","output":"db.NewPGVectorStore calls db.PGVectorStore.migrate. migrate creates the pgvector extension and the embeddings table if they don't already exist.","domain":"social"}
-{"input":"why does OnDelete call Log","output":"views.CleanFilesModel.OnDelete calls logging.Logger.Log to log.","domain":"social"}
+{"input": "why does LoadFiles call MatchesFilters", "output": "views.CleanFilesModel.LoadFiles calls filemanager.FileFilter.MatchesFilters. MatchesFilters checks if a file matches all filter criteria", "domain": "go"}
+{"input": "why does LogDeletionToFileAsJson call ToBytesOrDefault", "output": "utils.LogDeletionToFileAsJson calls utils.ToBytesOrDefault. ToBytesOrDefault converts a size string to bytes, returning 0 if conversion fails", "domain": "go"}
+{"input": "why does MatchesFilters call ExcludeFilter", "output": "filemanager.FileFilter.MatchesFilters calls filemanager.FileFilter.ExcludeFilter. ExcludeFilter checks if a file should be excluded based on path patterns", "domain": "go"}
+{"input": "why does MetricsInstance call initMetrics", "output": "telemetry.MetricsInstance calls telemetry.initMetrics. initMetrics initializes all Eko application metrics.", "domain": "go"}
+{"input": "why does MigrateDB call execWithTelemetry", "output": "db.MigrateDB calls db.execWithTelemetry. Handles an exec with telemetry.", "domain": "go"}
+{"input": "why does NewApp call NewMainMenu", "output": "tui.NewApp calls views.NewMainMenu. Creates a new MainMenu.", "domain": "go"}
+{"input": "why does NewCacheManager call getLocationsForOS", "output": "cache.NewCacheManager calls cache.getLocationsForOS. getLocationsForOS returns a list of cache locations specific to the given operating system.", "domain": "go"}
+{"input": "why does NewPGVectorStore call migrate", "output": "db.NewPGVectorStore calls db.PGVectorStore.migrate. migrate creates the pgvector extension and the embeddings table if they don't already exist.", "domain": "go"}
+{"input": "why does OnDelete call Log", "output": "views.CleanFilesModel.OnDelete calls logging.Logger.Log to log.", "domain": "go"}
 {"input":"why does Overview call Display","output":"analyze.Project.Overview calls analyze.Func.Display to display. (inside the `len(top) \u003e 0 \u0026\u0026 len(top[0].Callers) \u003e 0` check)","domain":"go"}
 {"input":"why does PackageDetail call Display","output":"analyze.Project.PackageDetail calls analyze.Func.Display to display. (inside the `len(fns) \u003e 0` check)","domain":"go"}
-{"input":"why does PackageSizes call bars","output":"analyze.Project.PackageSizes calls analyze.bars. bars scales v against max into a width-wide block bar.","domain":"social"}
-{"input":"why does PendingRemovals call ShouldIgnore","output":"snapshot.PendingRemovals calls util.ShouldIgnore. ShouldIgnore reports whether a file or directory should be ignored by Eko.","domain":"social"}
-{"input":"why does PendingRestoreChanges call IDFromPath","output":"snapshot.PendingRestoreChanges calls manifest.IDFromPath. IDFromPath extracts the snapshot ID from a stored path.","domain":"social"}
+{"input": "why does PackageSizes call bars", "output": "analyze.Project.PackageSizes calls analyze.bars. bars scales v against max into a width-wide block bar.", "domain": "go"}
+{"input": "why does PendingRemovals call ShouldIgnore", "output": "snapshot.PendingRemovals calls util.ShouldIgnore. ShouldIgnore reports whether a file or directory should be ignored by Eko.", "domain": "go"}
+{"input": "why does PendingRestoreChanges call IDFromPath", "output": "snapshot.PendingRestoreChanges calls manifest.IDFromPath. IDFromPath extracts the snapshot ID from a stored path.", "domain": "go"}
 {"input":"why does PerformAIReview call AnalyzeDiff","output":"mind.PerformAIReview calls ai.AnalyzeDiff. AnalyzeDiff converts a slice of DiffFile into a structured ChangeSet.","domain":"go"}
 {"input":"why does PerformAIRiskAnalysis call AnalyzeDiff","output":"mind.PerformAIRiskAnalysis calls ai.AnalyzeDiff. AnalyzeDiff converts a slice of DiffFile into a structured ChangeSet.","domain":"go"}
 {"input":"why does PerformAIStatus call AnalyzeDiff","output":"mind.PerformAIStatus calls ai.AnalyzeDiff. AnalyzeDiff converts a slice of DiffFile into a structured ChangeSet.","domain":"go"}
 {"input":"why does Pipeline call Display","output":"analyze.Project.Pipeline calls analyze.Func.Display to display. (inside the `len(mains) == 0` check)","domain":"go"}
-{"input":"why does ProgressBarScanner call MatchesFilters","output":"filemanager.FileScanner.ProgressBarScanner calls filemanager.FileFilter.MatchesFilters. MatchesFilters checks if a file matches all filter criteria","domain":"social"}
-{"input":"why does Purge call RecordSQLite","output":"cache.HashCache.Purge calls telemetry.RecordSQLite. RecordSQLite records a completed SQLite operation.","domain":"social"}
-{"input":"why does PutFile call putWithCompression","output":"objects.Store.PutFile calls objects.Store.putWithCompression. putWithCompression stores data either compressed with zstd or uncompressed.","domain":"social"}
+{"input": "why does ProgressBarScanner call MatchesFilters", "output": "filemanager.FileScanner.ProgressBarScanner calls filemanager.FileFilter.MatchesFilters. MatchesFilters checks if a file matches all filter criteria", "domain": "go"}
+{"input": "why does Purge call RecordSQLite", "output": "cache.HashCache.Purge calls telemetry.RecordSQLite. RecordSQLite records a completed SQLite operation.", "domain": "go"}
+{"input": "why does PutFile call putWithCompression", "output": "objects.Store.PutFile calls objects.Store.putWithCompression. putWithCompression stores data either compressed with zstd or uncompressed.", "domain": "go"}
 {"input":"why does Rank call methodsOf","output":"analyze.Project.Rank calls analyze.Project.methodsOf. methodsOf returns the method names declared on a type.","domain":"go"}
 {"input":"why does ReadingGuide call Display","output":"analyze.Project.ReadingGuide calls analyze.Func.Display to display.","domain":"go"}
-{"input":"why does RecordCAS call durationSeconds","output":"telemetry.RecordCAS calls telemetry.durationSeconds. durationSeconds converts the duration representations used by existing Eko callers into seconds.","domain":"social"}
-{"input":"why does RecordCommand call durationSeconds","output":"telemetry.RecordCommand calls telemetry.durationSeconds. durationSeconds converts the duration representations used by existing Eko callers into seconds.","domain":"social"}
-{"input":"why does RecordLLM call durationSeconds","output":"telemetry.RecordLLM calls telemetry.durationSeconds. durationSeconds converts the duration representations used by existing Eko callers into seconds.","domain":"social"}
-{"input":"why does RecordSQLite call durationSeconds","output":"telemetry.RecordSQLite calls telemetry.durationSeconds. durationSeconds converts the duration representations used by existing Eko callers into seconds.","domain":"social"}
-{"input":"why does RefreshVisibleList call LoadDirs","output":"views.CleanFilesModel.RefreshVisibleList calls views.CleanFilesModel.LoadDirs to load a dirs. (inside the `m.ShowDirs` check)","domain":"social"}
+{"input": "why does RecordCAS call durationSeconds", "output": "telemetry.RecordCAS calls telemetry.durationSeconds. durationSeconds converts the duration representations used by existing Eko callers into seconds.", "domain": "go"}
+{"input": "why does RecordCommand call durationSeconds", "output": "telemetry.RecordCommand calls telemetry.durationSeconds. durationSeconds converts the duration representations used by existing Eko callers into seconds.", "domain": "go"}
+{"input": "why does RecordLLM call durationSeconds", "output": "telemetry.RecordLLM calls telemetry.durationSeconds. durationSeconds converts the duration representations used by existing Eko callers into seconds.", "domain": "go"}
+{"input": "why does RecordSQLite call durationSeconds", "output": "telemetry.RecordSQLite calls telemetry.durationSeconds. durationSeconds converts the duration representations used by existing Eko callers into seconds.", "domain": "go"}
+{"input": "why does RefreshVisibleList call LoadDirs", "output": "views.CleanFilesModel.RefreshVisibleList calls views.CleanFilesModel.LoadDirs to load a dirs. (inside the `m.ShowDirs` check)", "domain": "go"}
 {"input":"why does RenderASCIIGraph call EntryPoints","output":"analyze.RenderASCIIGraph calls analyze.Project.EntryPoints. EntryPoints returns all func main declarations, ordered by package dir.","domain":"go"}
-{"input":"why does ResolveSnapshot call RecordSQLite","output":"db.ResolveSnapshot calls telemetry.RecordSQLite. RecordSQLite records a completed SQLite operation.","domain":"social"}
-{"input":"why does RestoreSnapshot call IDFromPath","output":"snapshot.RestoreSnapshot calls manifest.IDFromPath. IDFromPath extracts the snapshot ID from a stored path.","domain":"social"}
-{"input":"why does RestoreTree call ExtractTo","output":"objects.Store.RestoreTree calls objects.Store.ExtractTo. ExtractTo writes the content of hash to dstPath with the given mode.","domain":"social"}
+{"input": "why does ResolveSnapshot call RecordSQLite", "output": "db.ResolveSnapshot calls telemetry.RecordSQLite. RecordSQLite records a completed SQLite operation.", "domain": "go"}
+{"input": "why does RestoreSnapshot call IDFromPath", "output": "snapshot.RestoreSnapshot calls manifest.IDFromPath. IDFromPath extracts the snapshot ID from a stored path.", "domain": "go"}
+{"input": "why does RestoreTree call ExtractTo", "output": "objects.Store.RestoreTree calls objects.Store.ExtractTo. ExtractTo writes the content of hash to dstPath with the given mode.", "domain": "go"}
 {"input":"why does RunCLI call BuildFileFilter","output":"runner.RunCLI calls config.Config.BuildFileFilter to build a file filter.","domain":"go"}
-{"input":"why does RunOneOffClean call ScanEmptySubFolders","output":"cleanup.RunOneOffClean calls filemanager.FileScanner.ScanEmptySubFolders to scan an empty sub folders. (inside the `fm == nil` check) (inside the `spec == nil` check) (inside the `spec.DeleteEmptySubfolders` check)","domain":"social"}
-{"input":"why does RunTUI call NewApp","output":"runner.RunTUI calls tui.NewApp. Creates a new App.","domain":"social"}
-{"input":"why does SaveOperation call appendToFile","output":"storage.FileStorage.SaveOperation calls storage.FileStorage.appendToFile. Handles an append to file. Writes files (os.Create) and reads files (os.Open).","domain":"social"}
-{"input":"why does SaveStatistics call saveToFile","output":"storage.FileStorage.SaveStatistics calls storage.FileStorage.saveToFile. Вспомогательные методы","domain":"social"}
-{"input":"why does SaveSummary call execWithTelemetry","output":"db.SaveSummary calls db.execWithTelemetry. Handles an exec with telemetry.","domain":"social"}
-{"input":"why does SaveTag call execWithTelemetry","output":"db.SaveTag calls db.execWithTelemetry. Handles an exec with telemetry.","domain":"social"}
-{"input":"why does ScanAllLocations call scan","output":"cache.Manager.ScanAllLocations calls cache.Manager.scan. scan analyzes a single cache location and returns its statistics","domain":"social"}
-{"input":"why does ScanFilesCurrentLevel call MatchesFilters","output":"filemanager.FileScanner.ScanFilesCurrentLevel calls filemanager.FileFilter.MatchesFilters. MatchesFilters checks if a file matches all filter criteria","domain":"social"}
-{"input":"why does ScanFilesRecursively call MatchesFilters","output":"filemanager.FileScanner.ScanFilesRecursively calls filemanager.FileFilter.MatchesFilters. MatchesFilters checks if a file matches all filter criteria","domain":"social"}
-{"input":"why does SendWebhook call formatMessage","output":"notify.SendWebhook calls notify.formatMessage. formatMessage creates a human-readable message for Slack/Discord.","domain":"social"}
-{"input":"why does SetupRulesConfig call defaultRuleValues","output":"rules.defaultRules.SetupRulesConfig calls rules.defaultRuleValues. Handles a default rule values.","domain":"social"}
-{"input":"why does Start call Stop","output":"util.Progress.Start calls util.Progress.Stop to stop.","domain":"social"}
-{"input":"why does StartOperation call Tracer","output":"telemetry.StartOperation calls telemetry.Tracer. Tracer returns Eko's shared OpenTelemetry tracer.","domain":"social"}
-{"input":"why does StartSpan call Tracer","output":"telemetry.StartSpan calls telemetry.Tracer. Tracer returns Eko's shared OpenTelemetry tracer.","domain":"social"}
-{"input":"why does Store call RecordSQLite","output":"cache.HashCache.Store calls telemetry.RecordSQLite. RecordSQLite records a completed SQLite operation.","domain":"social"}
+{"input": "why does RunOneOffClean call ScanEmptySubFolders", "output": "cleanup.RunOneOffClean calls filemanager.FileScanner.ScanEmptySubFolders to scan an empty sub folders. (inside the `fm == nil` check) (inside the `spec == nil` check) (inside the `spec.DeleteEmptySubfolders` check)", "domain": "go"}
+{"input": "why does RunTUI call NewApp", "output": "runner.RunTUI calls tui.NewApp. Creates a new App.", "domain": "go"}
+{"input": "why does SaveOperation call appendToFile", "output": "storage.FileStorage.SaveOperation calls storage.FileStorage.appendToFile. Handles an append to file. Writes files (os.Create) and reads files (os.Open).", "domain": "go"}
+{"input": "why does SaveStatistics call saveToFile", "output": "storage.FileStorage.SaveStatistics calls storage.FileStorage.saveToFile. \u0412\u0441\u043f\u043e\u043c\u043e\u0433\u0430\u0442\u0435\u043b\u044c\u043d\u044b\u0435 \u043c\u0435\u0442\u043e\u0434\u044b", "domain": "go"}
+{"input": "why does SaveSummary call execWithTelemetry", "output": "db.SaveSummary calls db.execWithTelemetry. Handles an exec with telemetry.", "domain": "go"}
+{"input": "why does SaveTag call execWithTelemetry", "output": "db.SaveTag calls db.execWithTelemetry. Handles an exec with telemetry.", "domain": "go"}
+{"input": "why does ScanAllLocations call scan", "output": "cache.Manager.ScanAllLocations calls cache.Manager.scan. scan analyzes a single cache location and returns its statistics", "domain": "go"}
+{"input": "why does ScanFilesCurrentLevel call MatchesFilters", "output": "filemanager.FileScanner.ScanFilesCurrentLevel calls filemanager.FileFilter.MatchesFilters. MatchesFilters checks if a file matches all filter criteria", "domain": "go"}
+{"input": "why does ScanFilesRecursively call MatchesFilters", "output": "filemanager.FileScanner.ScanFilesRecursively calls filemanager.FileFilter.MatchesFilters. MatchesFilters checks if a file matches all filter criteria", "domain": "go"}
+{"input": "why does SendWebhook call formatMessage", "output": "notify.SendWebhook calls notify.formatMessage. formatMessage creates a human-readable message for Slack/Discord.", "domain": "go"}
+{"input": "why does SetupRulesConfig call defaultRuleValues", "output": "rules.defaultRules.SetupRulesConfig calls rules.defaultRuleValues. Handles a default rule values.", "domain": "go"}
+{"input": "why does Start call Stop", "output": "util.Progress.Start calls util.Progress.Stop to stop.", "domain": "go"}
+{"input": "why does StartOperation call Tracer", "output": "telemetry.StartOperation calls telemetry.Tracer. Tracer returns Eko's shared OpenTelemetry tracer.", "domain": "go"}
+{"input": "why does StartSpan call Tracer", "output": "telemetry.StartSpan calls telemetry.Tracer. Tracer returns Eko's shared OpenTelemetry tracer.", "domain": "go"}
+{"input": "why does Store call RecordSQLite", "output": "cache.HashCache.Store calls telemetry.RecordSQLite. RecordSQLite records a completed SQLite operation.", "domain": "go"}
 {"input":"why does Story call Display","output":"analyze.Project.Story calls analyze.Func.Display to display. (inside the `len(mains) == 0` check) (inside the `len(roots) \u003e 0` check)","domain":"go"}
-{"input":"why does ToBytesOrDefault call ToBytes","output":"utils.ToBytesOrDefault calls utils.ToBytes. ToBytes converts a human-readable size string to bytes Example: \"1.5MB\" -\u003e 1572864, \"2GB\" -\u003e 2147483648","domain":"social"}
-{"input":"why does UpdateRules call readRulesForUpdate","output":"rules.defaultRules.UpdateRules calls rules.defaultRules.readRulesForUpdate. Handles a read rules for update.","domain":"social"}
+{"input": "why does ToBytesOrDefault call ToBytes", "output": "utils.ToBytesOrDefault calls utils.ToBytes. ToBytes converts a human-readable size string to bytes Example: \"1.5MB\" -> 1572864, \"2GB\" -> 2147483648", "domain": "go"}
+{"input": "why does UpdateRules call readRulesForUpdate", "output": "rules.defaultRules.UpdateRules calls rules.defaultRules.readRulesForUpdate. Handles a read rules for update.", "domain": "go"}
 {"input":"why does ValidateInputs call New","output":"views.RulesModel.ValidateInputs calls errors.New. New creates a new error with the given type and message","domain":"go"}
-{"input":"why does ValidateSize call ToBytes","output":"validation.Validator.ValidateSize calls utils.ToBytes. ToBytes converts a human-readable size string to bytes Example: \"1.5MB\" -\u003e 1572864, \"2GB\" -\u003e 2147483648","domain":"social"}
-{"input":"why does ValidateTimeDuration call ParseTimeDuration","output":"validation.Validator.ValidateTimeDuration calls utils.ParseTimeDuration to parse a time duration. (inside the `trimmed == \"\"` check) (inside the `trimmed[0] \u003c '0' || trimmed[0] \u003e '9'` check)","domain":"social"}
+{"input": "why does ValidateSize call ToBytes", "output": "validation.Validator.ValidateSize calls utils.ToBytes. ToBytes converts a human-readable size string to bytes Example: \"1.5MB\" -> 1572864, \"2GB\" -> 2147483648", "domain": "go"}
+{"input": "why does ValidateTimeDuration call ParseTimeDuration", "output": "validation.Validator.ValidateTimeDuration calls utils.ParseTimeDuration to parse a time duration. (inside the `trimmed == \"\"` check) (inside the `trimmed[0] < '0' || trimmed[0] > '9'` check)", "domain": "go"}
 {"input":"why does VisualReport call BiggestFiles","output":"analyze.Project.VisualReport calls analyze.Project.BiggestFiles. BiggestFiles draws the n largest Go files as a bar chart.","domain":"go"}
-{"input":"why does WalkFiles call Walk","output":"util.WalkFiles calls util.Walk to walk.","domain":"social"}
+{"input": "why does WalkFiles call Walk", "output": "util.WalkFiles calls util.Walk to walk.", "domain": "go"}
 {"input":"why does WhereToChange call Display","output":"analyze.Project.WhereToChange calls analyze.Func.Display to display. (inside the `len(want) == 0` check)","domain":"go"}
-{"input":"why does WhereToChangeText call LinkPath","output":"analyze.Project.WhereToChangeText calls analyze.Project.LinkPath. LinkPath renders a project-relative file path as a terminal-clickable link.","domain":"social"}
-{"input":"why does addFile call pkgFor","output":"analyze.Project.addFile calls analyze.Project.pkgFor. Handles a pkg for.","domain":"social"}
-{"input":"why does alsoFiles call existingPaths","output":"analyze.Project.alsoFiles calls analyze.existingPaths. existingPaths returns the issue's backticked paths that exist on disk: the files (or directories) the change touches.","domain":"social"}
+{"input": "why does WhereToChangeText call LinkPath", "output": "analyze.Project.WhereToChangeText calls analyze.Project.LinkPath. LinkPath renders a project-relative file path as a terminal-clickable link.", "domain": "go"}
+{"input": "why does addFile call pkgFor", "output": "analyze.Project.addFile calls analyze.Project.pkgFor. Handles a pkg for.", "domain": "go"}
+{"input": "why does alsoFiles call existingPaths", "output": "analyze.Project.alsoFiles calls analyze.existingPaths. existingPaths returns the issue's backticked paths that exist on disk: the files (or directories) the change touches.", "domain": "go"}
 {"input":"why does ambiguous call Display","output":"analyze.Project.ambiguous calls analyze.Func.Display to display.","domain":"go"}
 {"input":"why does analyzeEffects call collectGuards","output":"analyze.Project.analyzeEffects calls analyze.Project.collectGuards. collectGuards walks a function's if-statements, recording each condition and the project/external calls its body makes.","domain":"go"}
-{"input":"why does answerBeginner call ExplainBeginner","output":"analyze.Project.answerBeginner calls analyze.Project.ExplainBeginner. ExplainBeginner runs symbol through the xray engine and renders the beginner walkthrough.","domain":"social"}
+{"input": "why does answerBeginner call ExplainBeginner", "output": "analyze.Project.answerBeginner calls analyze.Project.ExplainBeginner. ExplainBeginner runs symbol through the xray engine and renders the beginner walkthrough.", "domain": "go"}
 {"input":"why does answerCallees call Display","output":"analyze.Project.answerCallees calls analyze.Func.Display to display. (inside the `len(cands) \u003e 0` check) (inside the `fn == nil` check) (inside the `len(fn.Calls) == 0` check)","domain":"go"}
 {"input":"why does answerCallers call Display","output":"analyze.Project.answerCallers calls analyze.Func.Display to display. (inside the `typ != nil` check) (inside the `len(cands) \u003e 0` check) (inside the `fn == nil` check) (inside the `len(fn.Callers) == 0` check) (inside the `f != nil` check)","domain":"go"}
 {"input":"why does answerEffects call Display","output":"analyze.Project.answerEffects calls analyze.Func.Display to display. (inside the `len(fns) == 0` check)","domain":"go"}
@@ -2386,11 +2386,11 @@
 {"input":"why does answerPackage call PackageDetail","output":"analyze.Project.answerPackage calls analyze.Project.PackageDetail. PackageDetail renders the readable card for a package.","domain":"go"}
 {"input":"why does answerShowMe call Display","output":"analyze.Project.answerShowMe calls analyze.Func.Display to display. (inside the `typ != nil` check) (inside the `len(cands) \u003e 0` check) (inside the `fn == nil` check) (inside the `src == \"\"` check)","domain":"go"}
 {"input":"why does answerWhatReads call Display","output":"analyze.Project.answerWhatReads calls analyze.Func.Display to display. (inside the `len(keys) == 0` check) (inside the `len(ids) == 0` check) (inside the `f != nil` check)","domain":"go"}
-{"input":"why does clone call defaultRuleValues","output":"rules.defaultRules.clone calls rules.defaultRuleValues. Handles a default rule values.","domain":"social"}
-{"input":"why does findDispatchSites call chainExamples","output":"analyze.findDispatchSites calls analyze.chainExamples. chainExamples follows an if/else-if chain and collects the conditions that compare against a literal, e.g.","domain":"social"}
-{"input":"why does focusPrevious call focusNext","output":"views.ScheduleCleanModel.focusPrevious calls views.ScheduleCleanModel.focusNext. Handles a focus next.","domain":"social"}
-{"input":"why does getCached call clone","output":"rules.defaultRules.getCached calls rules.defaultRules.clone. Handles a clone.","domain":"social"}
-{"input":"why does handleUpDown call GetNextOption","output":"views.RulesModel.handleUpDown calls options.GetNextOption to get a next option. (inside the `activeTab == 2` check) (inside the `key == \"up\"` check)","domain":"social"}
-{"input":"why does parallelDelete call ShouldIgnore","output":"snapshot.parallelDelete calls util.ShouldIgnore. ShouldIgnore reports whether a file or directory should be ignored by Eko.","domain":"social"}
-{"input":"why does readRulesFromDisk call defaultRuleValues","output":"rules.defaultRules.readRulesFromDisk calls rules.defaultRuleValues. Handles a default rule values.","domain":"social"}
-{"input":"why does writeRules call setCache","output":"rules.defaultRules.writeRules calls rules.defaultRules.setCache. Handles a set cache.","domain":"social"}
+{"input": "why does clone call defaultRuleValues", "output": "rules.defaultRules.clone calls rules.defaultRuleValues. Handles a default rule values.", "domain": "go"}
+{"input": "why does findDispatchSites call chainExamples", "output": "analyze.findDispatchSites calls analyze.chainExamples. chainExamples follows an if/else-if chain and collects the conditions that compare against a literal, e.g.", "domain": "go"}
+{"input": "why does focusPrevious call focusNext", "output": "views.ScheduleCleanModel.focusPrevious calls views.ScheduleCleanModel.focusNext. Handles a focus next.", "domain": "go"}
+{"input": "why does getCached call clone", "output": "rules.defaultRules.getCached calls rules.defaultRules.clone. Handles a clone.", "domain": "go"}
+{"input": "why does handleUpDown call GetNextOption", "output": "views.RulesModel.handleUpDown calls options.GetNextOption to get a next option. (inside the `activeTab == 2` check) (inside the `key == \"up\"` check)", "domain": "go"}
+{"input": "why does parallelDelete call ShouldIgnore", "output": "snapshot.parallelDelete calls util.ShouldIgnore. ShouldIgnore reports whether a file or directory should be ignored by Eko.", "domain": "go"}
+{"input": "why does readRulesFromDisk call defaultRuleValues", "output": "rules.defaultRules.readRulesFromDisk calls rules.defaultRuleValues. Handles a default rule values.", "domain": "go"}
+{"input": "why does writeRules call setCache", "output": "rules.defaultRules.writeRules calls rules.defaultRules.setCache. Handles a set cache.", "domain": "go"}

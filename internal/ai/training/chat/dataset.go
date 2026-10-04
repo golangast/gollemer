@@ -271,6 +271,12 @@ func ChatDatasetPath(projectRoot string) string {
 	return filepath.Join(projectRoot, ChatDatasetRelPath)
 }
 
+// RouterDatasetPath is the (message, domain-label) training data for the
+// neural router, derived from the quality-gated chat pairs.
+func RouterDatasetPath(projectRoot string) string {
+	return filepath.Join(projectRoot, RouterDatasetRelPath)
+}
+
 // ReclassifyDomains re-runs ClassifyDomain over every pair in the dataset and
 // saves the result. Used when the classifier itself improves — the data stays,
 // the tags get smarter.
@@ -565,7 +571,22 @@ var gocliHaveRequest = regexp.MustCompile(`(?i:\b(have|has|installed)\b)`)
 // routeDomain classifies a chat INPUT (not the output) into the domain
 // model that should handle it. Used by unified chat. Tuned for perfect
 // coverage on the training inputs: social, gocode, makefile, go, gocli.
+// routeDomain routes a user message to its brain: the neural router
+// first (when its model is trained), the hand-written regex rules as
+// fallback. The deterministic answer layers (codebase Q&A, make
+// commands, error help, issue lookup) run before the routed model is
+// ever consulted, so the router only decides the neural fallback path.
 func routeDomain(input string) string {
+	if d, ok := routeNeural(unifiedProjectRoot, input); ok {
+		return d
+	}
+	return routeDomainRegex(input)
+}
+
+// routeDomainRegex is the hand-written routing rules. It stays as the
+// fallback when the neural router model is absent, and as the reference
+// the neural router was trained to beat (45 misses on the training set).
+func routeDomainRegex(input string) string {
 	// Definition questions about Gollemer itself ("what is gollemer",
 	// "who made you") are conversational, not make-command requests,
 	// even though they name Gollemer. Checked before makefileIntent.
