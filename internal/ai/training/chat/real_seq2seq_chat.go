@@ -167,6 +167,9 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 	if suggestion := profile.SuggestStartup(projectRoot); suggestion != "" {
 		fmt.Printf("\n%s\n\n", suggestion)
 	}
+	// Track actions for sequence learning.
+	var lastChatAction string
+	var pendingSuggestion string
 	if domain == UnifiedDomain {
 		return runUnifiedChat(projectRoot, debug)
 	}
@@ -226,8 +229,26 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		if line == "" {
 			continue
 		}
+		// Track for sequence learning (Layer 1) and action log (Layer 4).
+		if lastChatAction != "" && lastChatAction != line {
+			profile.RecordSequence(lastChatAction, line)
+		}
+		profile.LogAction(BuildContextString(projectRoot, lastChatAction), line, projectRoot)
+		lastChatAction = line
+
+		// Suggest next action based on learned patterns.
+		// Show it now (before processing) so it appears after the previous output.
+		if pendingSuggestion != "" {
+			fmt.Printf("\n[You usually do '%s' next — just say it or type it]\n\n", pendingSuggestion)
+			pendingSuggestion = ""
+		}
+		if suggestion := profile.SuggestNext(line); suggestion != "" {
+			pendingSuggestion = suggestion
+		}
+
 		if line == "/quit" || line == "exit" || line == "quit" || line == "stop" {
 			fmt.Println("[bye — see you next time]")
+			profile.Save()
 			break
 		}
 		if line == "/thoughts" {
@@ -282,10 +303,8 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 			}
 			receiver := strings.ToLower(structName[:1])
 			code := analyze.GenerateGetter(structName, receiver, fieldName, fieldType)
-			fmt.Printf("Generated getter for %s.%s:\n\n%s\n\nApply to %s? [y/n] ", structName, fieldName, code, targetFile)
-			var yn string
-			fmt.Scanln(&yn)
-			if strings.ToLower(strings.TrimSpace(yn)) == "y" {
+			fmt.Printf("Generated getter for %s.%s:\n\n%s\n\n", structName, fieldName, code)
+			if confirmAction(fmt.Sprintf("Apply to %s?", targetFile), profile) {
 				if err := appendToFile(lastAnalyzeRoot, targetFile, code); err != nil {
 					fmt.Printf("Failed: %v\n", err)
 				} else {
@@ -584,6 +603,37 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 				fmt.Printf("  %s = %v\n", k, v)
 			}
 			fmt.Printf("\nAll stored locally in ~/.gollemer_profile.json — never uploaded.\n\n")
+			// Show learned code style if available.
+			if style := profile.GetCachedStyle(); style != nil {
+				fmt.Printf("\n%s\n", style.StyleSummary())
+			}
+			continue
+		}
+		// /learn-style: analyze John's code conventions (Layer 3).
+		if line == "/learn-style" {
+			fmt.Println("Scanning your Go files for conventions...")
+			style := LearnStyle(projectRoot)
+			profile.CacheStyle(style)
+			profile.Save()
+			fmt.Printf("\n%s\n", style.StyleSummary())
+			fmt.Println("Style learned and cached. Generated code will match your conventions.")
+			continue
+		}
+		// /predictor: show neural predictor status (Layer 4).
+		if line == "/predictor" {
+			fmt.Printf("\n%s\n", PredictorStatus())
+			continue
+		}
+		// /train-predictor: export pairs and show training command.
+		if line == "/train-predictor" {
+			count, err := ExportTrainingPairs("/tmp/predictor_pairs.jsonl")
+			if err != nil {
+				fmt.Printf("Couldn't export: %v\n", err)
+				continue
+			}
+			fmt.Printf("Exported %d training pairs to /tmp/predictor_pairs.jsonl\n", count)
+			fmt.Println("To train: copy to data/training/ and run the seq2seq trainer with domain 'predictor'.")
+			fmt.Println("(Full training integration coming — the data format is ready.)")
 			continue
 		}
 		// /comment <Func>: generate a doc comment for a function.
@@ -593,7 +643,7 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 				continue
 			}
 			fname := strings.TrimSpace(strings.TrimPrefix(line, "/comment "))
-			if out, ok := generateDocCommentCmd(fname, lastAnalyzeProject); ok {
+			if out, ok := generateDocCommentCmd(fname, lastAnalyzeProject, profile); ok {
 				fmt.Printf("%s\n", out)
 			} else {
 				fmt.Printf("Function %q not found. Try /find %s.\n", fname, fname)
@@ -1871,7 +1921,7 @@ func reviewFunc(fname string, p *analyze.Project) string {
 // generateDocCommentCmd creates a Go doc comment for a function and offers
 // to insert it. The comment is derived from the function's structure:
 // name verb, signature, control flow, and data flow — not memorized text.
-func generateDocCommentCmd(fname string, p *analyze.Project) (string, bool) {
+func generateDocCommentCmd(fname string, p *analyze.Project, profile *UserProfile) (string, bool) {
 	for _, pkg := range p.Packages {
 		for _, fn := range pkg.Funcs {
 			if !strings.EqualFold(fn.Name, fname) || fn.IsTest {
@@ -1896,10 +1946,7 @@ func generateDocCommentCmd(fname string, p *analyze.Project) (string, bool) {
 			comment := b.String()
 			var out strings.Builder
 			fmt.Fprintf(&out, "Generated doc for %s:\n\n%s\n", fn.Name, comment)
-			fmt.Fprintf(&out, "Insert above %s at %s:%d? [y/n] ", fn.Name, fn.File, fn.Line)
-			var ans string
-			fmt.Scanln(&ans)
-			if strings.ToLower(strings.TrimSpace(ans)) == "y" {
+			if confirmAction(fmt.Sprintf("Insert above %s at %s:%d?", fn.Name, fn.File, fn.Line), profile) {
 				if err := insertDocComment(fn, comment); err != nil {
 					fmt.Fprintf(&out, "Couldn't insert: %v\n", err)
 				} else {
@@ -2044,6 +2091,19 @@ func insertDocComment(fn *analyze.Func, comment string) error {
 	newLines = append(newLines, commentLines...)
 	newLines = append(newLines, lines[idx:]...)
 	return os.WriteFile(fullPath, []byte(strings.Join(newLines, "\n")), 0644)
+}
+
+// confirmAction asks [y/n] unless the profile says to auto-build.
+// John's "do all"/"yeah" directive means: skip the question, just do it.
+func confirmAction(prompt string, profile *UserProfile) bool {
+	if profile.ShouldAutoBuild() {
+		fmt.Printf("%s [auto-yes: your 'do all' directive]\n", prompt)
+		return true
+	}
+	fmt.Printf("%s [y/n] ", prompt)
+	var ans string
+	fmt.Scanln(&ans)
+	return strings.ToLower(strings.TrimSpace(ans)) == "y"
 }
 
 // explainGoLine gives a plain-words explanation of a generated Go line.

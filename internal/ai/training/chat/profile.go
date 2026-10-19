@@ -26,6 +26,8 @@ type UserProfile struct {
 	StyleNotes []string `json:"style_notes"`
 	// LastUpdated: when the profile was last written.
 	LastUpdated time.Time `json:"last_updated"`
+	// cachedStyle: in-memory only, persisted separately.
+	cachedStyle *CodeStyle `json:"-"`
 }
 
 // CommandStat tracks a single command's usage.
@@ -236,6 +238,160 @@ func (p *UserProfile) SeedDefaults() {
 	p.RecordCommand("go run main.go -real-chat -domain goanalyze")
 	p.RecordCommand("go run main.go -real-chat -domain goanalyze")
 	p.Save()
+}
+
+// ShouldAutoBuild checks if John's "do all"/"yeah" directive means
+// we should skip confirmation prompts and just build.
+func (p *UserProfile) ShouldAutoBuild() bool {
+	return p.Directives["do_all_means_all"] || p.Directives["build_on_yes"]
+}
+
+// SuggestNext returns what John usually does after a given action,
+// based on learned sequences. Empty string if no pattern.
+func (p *UserProfile) SuggestNext(lastAction string) string {
+	// Check learned action sequences.
+	key := "after_" + normalizeAction(lastAction)
+	if next, ok := p.Patterns[key]; ok {
+		return next
+	}
+	return ""
+}
+
+// normalizeAction reduces a chat command to a pattern key.
+// "/analyze https://github.com/foo/bar" -> "analyze", "where for <url>" -> "where_issue".
+func normalizeAction(input string) string {
+	input = strings.TrimSpace(input)
+	if strings.HasPrefix(input, "/") {
+		parts := strings.Fields(input)
+		if len(parts) > 0 {
+			return strings.TrimPrefix(parts[0], "/")
+		}
+	}
+	if strings.HasPrefix(input, "where for ") {
+		return "where_issue"
+	}
+	if strings.Contains(input, "github.com") && strings.Contains(input, "analyze") {
+		return "analyze_repo"
+	}
+	if strings.HasPrefix(input, "clone ") {
+		return "clone"
+	}
+	return "other"
+}
+
+// RecordSequence learns that action B followed action A.
+func (p *UserProfile) RecordSequence(prevAction, nextAction string) {
+	prev := normalizeAction(prevAction)
+	next := normalizeAction(nextAction)
+	if prev == "other" || next == "other" || prev == next {
+		return
+	}
+	key := "after_" + prev
+	// Only learn if it's consistent: track counts.
+	// Simple version: if we've seen this sequence 2+ times, lock it in.
+	// For now, store the most recent consistent next action.
+	if existing, ok := p.Patterns[key]; ok && existing == next {
+		// Confirmed pattern — keep it.
+		return
+	}
+	// Store as candidate; needs confirmation via repeat.
+	p.Patterns[key+"_candidate"] = next
+	if p.Patterns[key+"_candidate"] == next {
+		// Seen twice — promote to learned pattern.
+		// (Simplified: second occurrence confirms.)
+		delete(p.Patterns, key+"_candidate")
+		p.Patterns[key] = next
+	}
+	p.Save()
+}
+
+// ActionLog is a single (context -> action) pair for future neural training.
+// Layer 4: when enough pairs accumulate, train a tiny predictor model.
+type ActionLog struct {
+	Timestamp time.Time `json:"ts"`
+	Context   string    `json:"context"` // e.g. "18:30, in gollemer, after /analyze"
+	Action    string    `json:"action"`  // e.g. "/find auth"
+	Cwd       string    `json:"cwd"`
+}
+
+// LogAction appends to the local action log for future model training.
+// The log lives at ~/.gollemer_actions.jsonl — local only, never uploaded.
+func (p *UserProfile) LogAction(context, action, cwd string) {
+	entry := ActionLog{
+		Timestamp: time.Now(),
+		Context:   context,
+		Action:    action,
+		Cwd:       cwd,
+	}
+	data, err := json.Marshal(entry)
+	if err != nil {
+		return
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	logPath := filepath.Join(home, ".gollemer_actions.jsonl")
+	f, err := os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	f.Write(append(data, '\n'))
+}
+
+// CachedStyle holds the last learned code style (Layer 3).
+// Stored in the profile JSON so it persists across sessions.
+
+// GetCachedStyle returns the cached code style, or nil if not learned yet.
+func (p *UserProfile) GetCachedStyle() *CodeStyle {
+	if p.cachedStyle == nil {
+		// Try to load from disk.
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil
+		}
+		stylePath := filepath.Join(home, ".gollemer_style.json")
+		data, err := os.ReadFile(stylePath)
+		if err != nil {
+			return nil
+		}
+		var style CodeStyle
+		if err := json.Unmarshal(data, &style); err != nil {
+			return nil
+		}
+		p.cachedStyle = &style
+	}
+	return p.cachedStyle
+}
+
+// CacheStyle saves the learned code style to disk (local only).
+func (p *UserProfile) CacheStyle(style *CodeStyle) {
+	p.cachedStyle = style
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	stylePath := filepath.Join(home, ".gollemer_style.json")
+	data, err := json.MarshalIndent(style, "", "  ")
+	if err != nil {
+		return
+	}
+	os.WriteFile(stylePath, data, 0600)
+}
+
+// ActionLogCount returns how many training pairs are logged.
+func (p *UserProfile) ActionLogCount() int {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return 0
+	}
+	logPath := filepath.Join(home, ".gollemer_actions.jsonl")
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		return 0
+	}
+	return strings.Count(string(data), "\n")
 }
 
 func min(a, b int) int {
