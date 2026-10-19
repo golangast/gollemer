@@ -462,3 +462,157 @@ tail_out_single:
 out_done:
     VZEROUPPER
     RET
+
+// func vecSaxpyAVX2(dst, src []float32, alpha float32)
+// Computes dst[i] += alpha * src[i] using AVX2 FMA.
+// Stack frame: 0 bytes, 52 bytes arguments (24+24 for slices, 4 for float32)
+TEXT ·vecSaxpyAVX2(SB), NOSPLIT, $0-52
+    MOVQ dst_base+0(FP), AX      // AX = dst ptr
+    MOVQ dst_len+8(FP), CX       // CX = len(dst)
+    MOVQ src_base+24(FP), BX     // BX = src ptr
+    MOVSS alpha+48(FP), X0       // X0 = alpha
+    VBROADCASTSS X0, Y0          // Y0 = [alpha x 8]
+
+    CMPQ CX, $32
+    JL saxpy_loop8
+
+saxpy_loop32:
+    // 4x unrolled: 32 floats per iteration, 4 independent FMA chains
+    VMOVUPS (AX), Y1
+    VMOVUPS 32(AX), Y2
+    VMOVUPS 64(AX), Y3
+    VMOVUPS 96(AX), Y4
+
+    VFMADD231PS (BX), Y0, Y1     // Y1 = Y0*src[0:8] + Y1
+    VFMADD231PS 32(BX), Y0, Y2
+    VFMADD231PS 64(BX), Y0, Y3
+    VFMADD231PS 96(BX), Y0, Y4
+
+    VMOVUPS Y1, (AX)
+    VMOVUPS Y2, 32(AX)
+    VMOVUPS Y3, 64(AX)
+    VMOVUPS Y4, 96(AX)
+
+    ADDQ $128, AX
+    ADDQ $128, BX
+    SUBQ $32, CX
+    CMPQ CX, $32
+    JGE saxpy_loop32
+
+saxpy_loop8:
+    CMPQ CX, $8
+    JL saxpy_tail
+
+saxpy_loop8_single:
+    VMOVUPS (AX), Y1
+    VFMADD231PS (BX), Y0, Y1
+    VMOVUPS Y1, (AX)
+
+    ADDQ $32, AX
+    ADDQ $32, BX
+    SUBQ $8, CX
+    CMPQ CX, $8
+    JGE saxpy_loop8_single
+
+saxpy_tail:
+    TESTQ CX, CX
+    JZ saxpy_done
+
+saxpy_tail_loop:
+    MOVSS (BX), X1
+    MOVSS (AX), X2
+    VFMADD231SS X0, X1, X2     // X2 = alpha*src[0] + dst[0]
+    MOVSS X2, (AX)
+    ADDQ $4, AX
+    ADDQ $4, BX
+    DECQ CX
+    JNZ saxpy_tail_loop
+
+saxpy_done:
+    VZEROUPPER
+    RET
+
+// func vecAdamWUpdateAVX2(weights, grads, m, v []float32, lr, oneMinusB1, oneMinusB2, beta1, beta2, eps, wd, invBc1, invBc2 float32)
+TEXT ·vecAdamWUpdateAVX2(SB), NOSPLIT, $0-136
+    MOVQ weights_base+0(FP), AX
+    MOVQ grads_base+24(FP), BX
+    MOVQ m_base+48(FP), CX
+    MOVQ v_base+72(FP), DX
+    MOVQ weights_len+8(FP), SI
+    VBROADCASTSS lr+96(FP), Y0
+    VBROADCASTSS oneMinusB1+100(FP), Y1
+    VBROADCASTSS oneMinusB2+104(FP), Y2
+    VBROADCASTSS beta1+108(FP), Y3
+    VBROADCASTSS beta2+112(FP), Y4
+    VBROADCASTSS eps+116(FP), Y5
+    VBROADCASTSS wd+120(FP), Y6
+    VBROADCASTSS invBc1+124(FP), Y7
+    VBROADCASTSS invBc2+128(FP), Y8
+    VMULPS Y0, Y6, Y10
+    VZEROUPPER
+adamw_loop:
+    CMPQ SI, $8
+    JL adamw_done
+    VMOVUPS (BX), Y11
+    VMOVUPS (CX), Y12
+    VMOVUPS (DX), Y13
+    VMOVUPS (AX), Y14
+    VMULPS Y3, Y12, Y12
+    VFMADD231PS Y11, Y1, Y12
+    VMULPS Y11, Y11, Y15
+    VMULPS Y4, Y13, Y13
+    VFMADD231PS Y15, Y2, Y13
+    VMOVUPS Y12, (CX)
+    VMOVUPS Y13, (DX)
+    VMULPS Y7, Y12, Y12
+    VMULPS Y8, Y13, Y13
+    VSQRTPS Y13, Y13
+    VADDPS Y5, Y13, Y13
+    VDIVPS Y13, Y12, Y12
+    VMULPS Y0, Y12, Y15
+    VFNMSUB231PS Y14, Y10, Y14
+    VSUBPS Y15, Y14, Y14
+    VMOVUPS Y14, (AX)
+    ADDQ $32, AX
+    ADDQ $32, BX
+    ADDQ $32, CX
+    ADDQ $32, DX
+    SUBQ $8, SI
+    JMP adamw_loop
+adamw_done:
+    VZEROUPPER
+    RET
+
+// func vecLayerNormFusedAVX2(out, norm, in, gamma, beta []float32, mean, rstd float32)
+// Computes: norm[i] = (in[i]-mean)*rstd; out[i] = norm[i]*gamma[i] + beta[i]
+TEXT ·vecLayerNormFusedAVX2(SB), NOSPLIT, $0-128
+    MOVQ out_base+0(FP), AX
+    MOVQ norm_base+24(FP), BX
+    MOVQ in_base+48(FP), CX
+    MOVQ gamma_base+72(FP), DX
+    MOVQ beta_base+96(FP), DI
+    MOVQ out_len+8(FP), SI
+    VBROADCASTSS mean+120(FP), Y0
+    VBROADCASTSS rstd+124(FP), Y1
+    VZEROUPPER
+ln_loop:
+    CMPQ SI, $8
+    JL ln_done
+    VMOVUPS (CX), Y2
+    VMOVUPS (DX), Y3
+    VMOVUPS (DI), Y4
+    VSUBPS Y0, Y2, Y2
+    VMULPS Y1, Y2, Y2
+    VMOVUPS Y2, (BX)
+    VFMADD231PS Y4, Y3, Y2
+    VMOVUPS Y2, (AX)
+    ADDQ $32, AX
+    ADDQ $32, BX
+    ADDQ $32, CX
+    ADDQ $32, DX
+    ADDQ $32, DI
+    SUBQ $8, SI
+    JMP ln_loop
+ln_done:
+    VZEROUPPER
+    RET

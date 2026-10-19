@@ -102,3 +102,8 @@ func TopKZero(data []float32, k int) {
 func LeakyReLUVectors(data []float32, alpha float32) {
 	vecLeakyReLU(data, alpha)
 }
+
+// Saxpy computes dst[i] += alpha * src[i] using AVX2 FMA on amd64.
+func Saxpy(dst, src []float32, alpha float32) {
+	vecSaxpy(dst, src, alpha)
+}

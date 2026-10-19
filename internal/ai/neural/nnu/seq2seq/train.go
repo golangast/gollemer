@@ -23,6 +23,13 @@ import (
 // Standard value from Switch Transformer; keeps the router using all experts.
 const moeAuxCoeff = 0.01
 
+// copyAuxCoeff scales the pointer-generator auxiliary loss that trains the
+// encoder-side copy attention to concentrate on the target token's input
+// positions. Codeintent-only (the EncoderCopy gate is nil for other
+// domains, so the loss is zero there). Variable (not const) so tests can
+// ablate it.
+var copyAuxCoeff = 0.5
+
 // TrainBatch runs one teacher-forcing forward/backward pass over a batch and
 // accumulates gradients into the model parameters.
 //
@@ -84,8 +91,28 @@ func TrainBatch(m *Seq2Seq, inputIDs, targetIDs [][]int, padID int) (float32, er
 	if err != nil {
 		return 0, fmt.Errorf("decoder lstm forward: %w", err)
 	}
-	// Mixture-of-experts refines the decoder state before vocab projection.
-	moeOut, moeAux, err := m.Decoder.MoE.Forward(decOut)
+	// Cross-attention: decoder attends to encoder's per-timestep outputs.
+	// This lets the model READ the input (e.g. code) when generating each
+	// output token, instead of relying solely on the compressed final state.
+	// Query=decoder states, Key/Value=encoder outputs.
+	// Residual: the attended context is ADDED to the decoder state (not
+	// replacing it), so the model keeps its learned recurrent signal and
+	// gains grounding on top. The 1-head PoC replaced the state and
+	// scored worse than the no-attention baseline.
+	moeIn := decOut
+	if m.Decoder.CrossAttn != nil {
+		attnOut, err := m.Decoder.CrossAttn.Forward(decOut, encOut, encOut)
+		if err != nil {
+			return 0, fmt.Errorf("decoder cross-attention forward: %w", err)
+		}
+		moeIn, err = decOut.Add(attnOut)
+		if err != nil {
+			return 0, fmt.Errorf("decoder cross-attention residual add failed: %w", err)
+		}
+	}
+	// Mixture-of-experts refines the (residually attended) decoder state
+	// before vocab projection.
+	moeOut, moeAux, err := m.Decoder.MoE.Forward(moeIn)
 	if err != nil {
 		return 0, fmt.Errorf("decoder moe forward: %w", err)
 	}
@@ -115,6 +142,32 @@ func TrainBatch(m *Seq2Seq, inputIDs, targetIDs [][]int, padID int) (float32, er
 		}
 	}
 
+	// Encoder-side copy (codeintent only; nil gate for other domains):
+	// same additive-bias machinery, but the attended "history" is the
+	// encoder's per-timestep states and the tokens are the encoder's input
+	// ids. This biases the logits toward input tokens (file paths,
+	// signatures, identifiers) so they can be reproduced verbatim.
+	var encCopyCaches [][]*copyCache
+	if m.Decoder.EncoderCopy != nil {
+		encCopyCaches = make([][]*copyCache, batch)
+		for b := 0; b < batch; b++ {
+			encCopyCaches[b] = make([]*copyCache, steps)
+			// Encoder states for batch row b: [encLen][H] views into encOut.
+			encStates := make([][]float32, encLen)
+			for e := 0; e < encLen; e++ {
+				off := (b*encLen + e) * hiddenSize
+				encStates[e] = encOut.Data[off : off+hiddenSize]
+			}
+			for t := 0; t < steps; t++ {
+				qOff := (b*steps + t) * hiddenSize
+				query := moeOut.Data[qOff : qOff+hiddenSize]
+				lOff := (b*steps + t) * vocabSize
+				genLogits := logits.Data[lOff : lOff+vocabSize]
+				encCopyCaches[b][t] = m.Decoder.EncoderCopy.forwardCopyStep(query, genLogits, encStates, inputIDs[b])
+			}
+		}
+	}
+
 	// ---- Loss (mean cross-entropy over non-padding target tokens). ----
 	loss, dLogits, err := softmaxCrossEntropy(logits, labels, padID, vocabSize)
 	if err != nil {
@@ -123,6 +176,45 @@ func TrainBatch(m *Seq2Seq, inputIDs, targetIDs [][]int, padID int) (float32, er
 	// Add the MoE load-balancing auxiliary loss (keeps the router from
 	// collapsing onto one expert).
 	loss += moeAuxCoeff * moeAux
+
+	// ---- Pointer-generator auxiliary loss (codeintent only): when the
+	// target token appears in the encoder input, reward the copy attention
+	// for concentrating mass on its positions. Diagnosed 2026-10-15: the
+	// gate opens (mean 0.39, max 1.0) but attention stays diffuse
+	// (maxW ~0.03), so the copy bias is uniform suppression rather than
+	// pointing. The main LM loss does not pressure attention to focus
+	// because memorized generation already achieves low loss. This loss
+	// directly trains the pointing behavior: L_aux = -log(sum_{i:tok_i==target} w_i).
+	var copyAuxLoss float64
+	var copyAuxCount int
+	// Per-(b,t) target positions in the input, for the backward pass.
+	type auxPos struct{ b, t int }
+	var auxPositions []auxPos
+	if m.Decoder.EncoderCopy != nil {
+		for b := 0; b < batch; b++ {
+			for t := 0; t < steps; t++ {
+				target := labels[b][t]
+				if target == padID {
+					continue
+				}
+				cache := encCopyCaches[b][t]
+				var mass float32
+				for i, tok := range inputIDs[b] {
+					if tok == target {
+						mass += cache.w[i]
+					}
+				}
+				if mass > 0 {
+					copyAuxLoss += -math.Log(float64(mass) + 1e-6)
+					copyAuxCount++
+					auxPositions = append(auxPositions, auxPos{b, t})
+				}
+			}
+		}
+		if copyAuxCount > 0 {
+			loss += float32(copyAuxCoeff * copyAuxLoss / float64(copyAuxCount))
+		}
+	}
 
 	// ---- Copy backward: propagate dLogits through the copy bias into the
 	// gate parameters, the query states (moeOut) and the history states
@@ -149,7 +241,101 @@ func TrainBatch(m *Seq2Seq, inputIDs, targetIDs [][]int, padID int) (float32, er
 		}
 	}
 
-	// ---- Backward: decoder output -> MoE -> decoder LSTM -> decoder embedding ... ----
+	// ---- Encoder-side copy backward: dQuery accumulates into the moeOut
+	// gradient (same query states as above); dHist accumulates into the
+	// encoder-output gradient (added to encOut.Grad alongside the
+	// cross-attention key/value gradients below).
+	var dMoeOutEncCopy, dEncOutCopy *tensor.Tensor
+	if m.Decoder.EncoderCopy != nil {
+		dMoeOutEncCopy = tensor.NewTensor([]int{batch, steps, hiddenSize}, make([]float32, batch*steps*hiddenSize), false)
+		dEncOutCopy = tensor.NewTensor([]int{batch, encLen, hiddenSize}, make([]float32, batch*encLen*hiddenSize), false)
+		for b := 0; b < batch; b++ {
+			encStates := make([][]float32, encLen)
+			for e := 0; e < encLen; e++ {
+				off := (b*encLen + e) * hiddenSize
+				encStates[e] = encOut.Data[off : off+hiddenSize]
+			}
+			for t := 0; t < steps; t++ {
+				lOff := (b*steps + t) * vocabSize
+				dStep := dLogits.Data[lOff : lOff+vocabSize]
+				dQuery, dHist := m.Decoder.EncoderCopy.backwardCopyStep(dStep, encCopyCaches[b][t], encStates, inputIDs[b])
+				qOff := (b*steps + t) * hiddenSize
+				for h := 0; h < hiddenSize; h++ {
+					dMoeOutEncCopy.Data[qOff+h] += dQuery[h]
+				}
+				for e, dh := range dHist {
+					hOff := (b*encLen + e) * hiddenSize
+					for h := 0; h < hiddenSize; h++ {
+						dEncOutCopy.Data[hOff+h] += dh[h]
+					}
+				}
+			}
+		}
+		// ---- Pointer-generator aux backward: gradients of
+		// -log(sum_{i:tok_i==target} w_i) through the copy softmax.
+		// Accumulates into the same dMoeOutEncCopy / dEncOutCopy tensors.
+		if copyAuxCount > 0 {
+			auxScale := float32(copyAuxCoeff / float64(copyAuxCount))
+			invSqrtH := float32(1.0 / math.Sqrt(float64(hiddenSize)))
+			for _, ap := range auxPositions {
+				b, t := ap.b, ap.t
+				target := labels[b][t]
+				cache := encCopyCaches[b][t]
+				nh := len(cache.w)
+				if nh == 0 {
+					continue
+				}
+				// mass = sum of attention on target positions
+				var mass float32
+				for i, tok := range inputIDs[b] {
+					if tok == target {
+						mass += cache.w[i]
+					}
+				}
+				if mass <= 0 {
+					continue
+				}
+				// dw_i = dL/dw_i = -auxScale/(mass+eps) for i on target, else 0
+				inv := -auxScale / (mass + 1e-6)
+				// softmax backward: ds_i = w_i * (dw_i - sum_j dw_j w_j)
+				var sDot float32
+				for i, tok := range inputIDs[b] {
+					if tok == target {
+						sDot += inv * cache.w[i]
+					}
+				}
+				qOff := (b*steps + t) * hiddenSize
+				query := moeOut.Data[qOff : qOff+hiddenSize]
+				encStates := make([][]float32, encLen)
+				for e := 0; e < encLen; e++ {
+					off := (b*encLen + e) * hiddenSize
+					encStates[e] = encOut.Data[off : off+hiddenSize]
+				}
+				for i, tok := range inputIDs[b] {
+					var dw float32
+					if tok == target {
+						dw = inv
+					}
+					ds := cache.w[i] * (dw - sDot)
+					if ds == 0 {
+						continue
+					}
+					// Use augmented keys (pos enc) for the query-gradient
+					// path, matching the forward pass.
+					hs := encStates[i]
+					if cache.keys != nil {
+						hs = cache.keys[i]
+					}
+					for h := 0; h < hiddenSize; h++ {
+						dMoeOutEncCopy.Data[qOff+h] += ds * hs[h] * invSqrtH
+						dEncOutCopy.Data[(b*encLen+i)*hiddenSize+h] += ds * query[h] * invSqrtH
+					}
+				}
+			}
+		}
+	}
+
+	// ---- Backward: decoder output -> MoE -> cross-attn -> decoder LSTM -> decoder embedding ... ----
 	if err := m.Decoder.Output.Backward(dLogits); err != nil {
 		return 0, fmt.Errorf("decoder output backward: %w", err)
 	}
@@ -161,9 +347,39 @@ func TrainBatch(m *Seq2Seq, inputIDs, targetIDs [][]int, padID int) (float32, er
 			moeOut.Grad.Data[i] += g
 		}
 	}
-	dDecOut, err := m.Decoder.MoE.Backward(moeOut.Grad, moeAuxCoeff)
+	if dMoeOutEncCopy != nil {
+		for i, g := range dMoeOutEncCopy.Data {
+			moeOut.Grad.Data[i] += g
+		}
+	}
+	dMoeIn, err := m.Decoder.MoE.Backward(moeOut.Grad, moeAuxCoeff)
 	if err != nil {
 		return 0, fmt.Errorf("decoder moe backward: %w", err)
+	}
+	// Cross-attention backward: with the residual, the gradient flows to
+	// decOut through TWO paths: directly (dL/d(moeIn) * 1) and through the
+	// attention query. Both accumulate into decOut.Grad.
+	var dDecOut *tensor.Tensor
+	if m.Decoder.CrossAttn != nil {
+		// Direct residual path.
+		if decOut.Grad == nil {
+			decOut.Grad = tensor.NewTensor(decOut.Shape, make([]float32, len(decOut.Data)), false)
+		}
+		for i, g := range dMoeIn.Data {
+			decOut.Grad.Data[i] += g
+		}
+		// Attention query path (accumulates into the existing decOut.Grad).
+		if err := m.Decoder.CrossAttn.Backward(dMoeIn); err != nil {
+			return 0, fmt.Errorf("decoder cross-attention backward: %w", err)
+		}
+		if decOut.Grad == nil {
+			return 0, fmt.Errorf("decoder lstm output grad missing after cross-attention backward")
+		}
+		dDecOut = decOut.Grad
+		// encOut.Grad now holds the key/value gradients from attention;
+		// it will be combined with the final-state gradient below.
+	} else {
+		dDecOut = dMoeIn
 	}
 	if dDecOutCopy != nil {
 		for i, g := range dDecOutCopy.Data {
@@ -187,9 +403,10 @@ func TrainBatch(m *Seq2Seq, inputIDs, targetIDs [][]int, padID int) (float32, er
 	}
 
 	// ---- ... across the boundary into the encoder.
-	// Only the encoder's final step seeds the decoder, so only that step
-	// receives gradient. Layout is batch-major: element (b,t) lives at
-	// ((b*encLen)+t)*hiddenSize.
+	// The encoder's final step seeds the decoder (dInitH), AND (with
+	// cross-attention) all steps receive gradient via the attention
+	// key/value path (encOut.Grad). Layout is batch-major: element (b,t)
+	// lives at ((b*encLen)+t)*hiddenSize.
 	if len(dInitH.Data) != batch*hiddenSize {
 		return 0, fmt.Errorf("decoder init hidden grad has %d elements, want %d", len(dInitH.Data), batch*hiddenSize)
 	}
@@ -198,6 +415,24 @@ func TrainBatch(m *Seq2Seq, inputIDs, targetIDs [][]int, padID int) (float32, er
 		dst := (b*encLen + (encLen - 1)) * hiddenSize
 		src := b * hiddenSize
 		copy(encGradH.Data[dst:dst+hiddenSize], dInitH.Data[src:src+hiddenSize])
+	}
+	// Add cross-attention key/value gradients (all encoder timesteps).
+	if m.Decoder.CrossAttn != nil && encOut.Grad != nil {
+		if len(encOut.Grad.Data) != len(encGradH.Data) {
+			return 0, fmt.Errorf("encoder output grad size mismatch: got %d, want %d", len(encOut.Grad.Data), len(encGradH.Data))
+		}
+		for i, g := range encOut.Grad.Data {
+			encGradH.Data[i] += g
+		}
+	}
+	// Add encoder-side copy gradients (all encoder timesteps).
+	if dEncOutCopy != nil {
+		if len(dEncOutCopy.Data) != len(encGradH.Data) {
+			return 0, fmt.Errorf("encoder copy grad size mismatch: got %d, want %d", len(dEncOutCopy.Data), len(encGradH.Data))
+		}
+		for i, g := range dEncOutCopy.Data {
+			encGradH.Data[i] += g
+		}
 	}
 	if err := m.Encoder.LSTM.Backward(encGradH, dInitC); err != nil {
 		return 0, fmt.Errorf("encoder lstm backward: %w", err)

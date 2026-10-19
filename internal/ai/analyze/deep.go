@@ -133,6 +133,14 @@ func (fn *Func) Detail(p *Project) string {
 	fmt.Fprintf(&b, "%s\n", fn.Sig)
 	fmt.Fprintf(&b, "  %s:%d\n", p.LinkPath(fn.File), fn.Line)
 	fmt.Fprintf(&b, "  %s\n", fn.Summary())
+	if why := fn.WhyExists(p); why != "" {
+		fmt.Fprintf(&b, "  Why: %s\n", why)
+	}
+	if flow := fn.FlowSummary(p); flow != "" {
+		fmt.Fprintf(&b, "  Dataflow: %s\n", flow)
+	}
+	fmt.Fprintf(&b, "  Control: %s\n", fn.ControlPhrase())
+	fmt.Fprintf(&b, "  Failures: %s\n", fn.FailurePhrase(p))
 	if len(fn.Calls) > 0 {
 		fmt.Fprintf(&b, "  Calls (%d): %s\n", len(fn.Calls), joinShort(fn.Calls, 6))
 	}

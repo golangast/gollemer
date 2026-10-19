@@ -43,6 +43,13 @@ type CopyGate struct {
 	Wg        *tensor.Tensor // [H] gate weights, zero-initialized
 	Bg        *tensor.Tensor // [1] gate bias, initialized to -2 (gate starts ~0.12)
 	HiddenDim int
+	// UsePosEnc adds sinusoidal positional encodings to the attention keys.
+	// This is for the encoder-side copy gate: encoder LSTM states can be
+	// too similar across positions (mean cosine sim ~0.70) for dot-product
+	// attention to focus sharply. Positional encodings give each position
+	// a distinctive signature. Not used for the history copy gate (gocode),
+	// where recency is already encoded.
+	UsePosEnc bool
 }
 
 // NewCopyGate creates a copy gate for a decoder with the given hidden dim.
@@ -76,14 +83,26 @@ func copySigmoid(x float32) float32 {
 	return 1.0 / (1.0 + float32(math.Exp(float64(-x))))
 }
 
-// copyCache holds the intermediates of one forwardCopyStep for the backward
-// pass.
+// posEncSinusoidal returns the sinusoidal positional encoding for position
+// pos with dimension d. Standard transformer formulation.
+func posEncSinusoidal(pos, d int) []float32 {
+	pe := make([]float32, d)
+	for i := 0; i < d; i += 2 {
+		div := float32(math.Pow(10000, float64(i)/float64(d)))
+		pe[i] = float32(math.Sin(float64(pos) / float64(div)))
+		if i+1 < d {
+			pe[i+1] = float32(math.Cos(float64(pos) / float64(div)))
+		}
+	}
+	return pe
+}
 type copyCache struct {
 	gate     float32
 	w        []float32 // [nh] attention weights over history
 	accum    []float32 // [V] copy mass scattered onto vocab ids
 	logAccum []float32 // [V] log(accum[v] + eps)
 	query    []float32 // [H] copy of the query
+	keys     [][]float32 // [nh][H] augmented keys (with pos enc); nil if not used
 	nh       int
 }
 
@@ -115,12 +134,32 @@ func (g *CopyGate) forwardCopyStep(query, genLogits []float32, histStates [][]fl
 		return c
 	}
 
+	// Keys for attention: optionally augment with sinusoidal positional
+	// encodings so each position has a distinctive signature. (Encoder
+	// LSTM states are too similar across positions for sharp dot-product
+	// attention otherwise.)
+	keys := histStates
+	if g.UsePosEnc {
+		keys = make([][]float32, c.nh)
+		d := len(query)
+		for i, hs := range histStates {
+			pe := posEncSinusoidal(i, d)
+			k := make([]float32, d)
+			for h := 0; h < d && h < len(hs); h++ {
+				k[h] = hs[h] + pe[h]
+			}
+			keys[i] = k
+		}
+		// Store augmented keys for the backward pass (dQuery path).
+		c.keys = keys
+	}
+
 	invSqrtH := float32(1.0 / math.Sqrt(float64(len(query))))
 	scores := make([]float32, c.nh)
-	for i, hs := range histStates {
+	for i, ks := range keys {
 		var s float32
 		for h, q := range query {
-			s += q * hs[h]
+			s += q * ks[h]
 		}
 		scores[i] = s * invSqrtH
 	}
@@ -205,12 +244,19 @@ func (g *CopyGate) backwardCopyStep(dLogits []float32, c *copyCache, histStates 
 	}
 	invSqrtH := float32(1.0 / math.Sqrt(float64(hDim)))
 	dHist = make([][]float32, c.nh)
+	// Use augmented keys (with pos enc) for the dQuery path if present;
+	// dHist is w.r.t. the original states (pos enc is fixed, so the
+	// gradient passes through unchanged).
+	keys := histStates
+	if c.keys != nil {
+		keys = c.keys
+	}
 	for i := range dAccum {
 		dw := c.w[i] * (dAccum[i] - sDot)
 		dh := make([]float32, hDim)
-		hs := histStates[i]
+		ks := keys[i]
 		for h := 0; h < hDim; h++ {
-			dQuery[h] += dw * hs[h] * invSqrtH
+			dQuery[h] += dw * ks[h] * invSqrtH
 			dh[h] = dw * c.query[h] * invSqrtH
 		}
 		dHist[i] = dh

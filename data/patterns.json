@@ -1,0 +1,252 @@
+{
+  "patterns": {
+    "closer": {
+      "kind": "closer",
+      "has_receiver": true,
+      "param_count": [
+        0
+      ],
+      "returns_error": true,
+      "returns_bool": false,
+      "min_branches": 2,
+      "has_loop": false,
+      "typical_verbs": [
+        "close"
+      ],
+      "typical_nouns": null,
+      "count": 13,
+      "example_intents": [
+        "Tests Close.",
+        "Releases resources held by the value.",
+        "Closes the gRPC connection"
+      ]
+    },
+    "constructor": {
+      "kind": "constructor",
+      "has_receiver": true,
+      "param_count": [
+        2,
+        1,
+        0,
+        4,
+        3
+      ],
+      "returns_error": true,
+      "returns_bool": false,
+      "min_branches": 4,
+      "has_loop": true,
+      "typical_verbs": [
+        "new"
+      ],
+      "typical_nouns": null,
+      "count": 338,
+      "example_intents": [
+        "NewEmbedding creates a new Embedding layer with random initialization.",
+        "NewLayerNorm creates a new LayerNorm module",
+        "NewMockClient builds a mock that returns responses in order."
+      ]
+    },
+    "getter": {
+      "kind": "getter",
+      "has_receiver": true,
+      "param_count": [
+        0
+      ],
+      "returns_error": true,
+      "returns_bool": true,
+      "min_branches": 14,
+      "has_loop": true,
+      "typical_verbs": [
+        "inputs",
+        "next",
+        "parameters",
+        "query",
+        "len",
+        "input",
+        "key",
+        "describe",
+        "overview",
+        "current"
+      ],
+      "typical_nouns": null,
+      "count": 490,
+      "example_intents": [
+        "Returns the inputs.",
+        "Next moves the iterator to the next row.",
+        "Returns the inputs."
+      ]
+    },
+    "handler": {
+      "kind": "handler",
+      "has_receiver": true,
+      "param_count": [
+        1,
+        3,
+        2,
+        0,
+        4
+      ],
+      "returns_error": true,
+      "returns_bool": false,
+      "min_branches": 8,
+      "has_loop": true,
+      "typical_verbs": [
+        "render",
+        "write",
+        "create",
+        "reset",
+        "push",
+        "serve",
+        "http",
+        "header",
+        "handle",
+        "ensure"
+      ],
+      "typical_nouns": null,
+      "count": 64,
+      "example_intents": [
+        "Render (Redirect) redirects the http request to new location and writes redirect response.",
+        "WriteString writes data according to its format and write custom ContentType.",
+        "Render (BSON) marshals the given interface object and writes data with custom ContentType."
+      ]
+    },
+    "predicate": {
+      "kind": "predicate",
+      "has_receiver": true,
+      "param_count": [
+        1,
+        0,
+        3,
+        4,
+        2
+      ],
+      "returns_error": true,
+      "returns_bool": true,
+      "min_branches": 10,
+      "has_loop": true,
+      "typical_verbs": [
+        "is",
+        "has",
+        "should",
+        "can"
+      ],
+      "typical_nouns": null,
+      "count": 132,
+      "example_intents": [
+        "IsCodebaseQuestion reports whether line has the shape of a project Q\u0026A question (\"why does X call Y\", \"what is X for\"), independent of any particular project.",
+        "IsCodeIntentFamily reports whether a domain uses the codeintent model architecture and training pipeline (cross-attention, encoder-side copy gate, pointer-generator aux loss, no synonym augmentation, capped vocab).",
+        "IsGoHighFreqToken checks if a given text is a registered Go high-frequency token."
+      ]
+    },
+    "retry": {
+      "kind": "retry",
+      "has_receiver": true,
+      "param_count": [
+        1,
+        2,
+        0
+      ],
+      "returns_error": true,
+      "returns_bool": false,
+      "min_branches": 19,
+      "has_loop": true,
+      "typical_verbs": [
+        "test",
+        "wait",
+        "method",
+        "acquire",
+        "checks",
+        "credits",
+        "watch"
+      ],
+      "typical_nouns": null,
+      "count": 13,
+      "example_intents": [
+        "Tests FileDescriptor.",
+        "Tests Listener.",
+        "waitForServerReady waits for a server to be ready by making HTTP requests with exponential backoff."
+      ]
+    },
+    "setter": {
+      "kind": "setter",
+      "has_receiver": true,
+      "param_count": [
+        1,
+        2,
+        3,
+        7,
+        4
+      ],
+      "returns_error": true,
+      "returns_bool": false,
+      "min_branches": 4,
+      "has_loop": true,
+      "typical_verbs": [
+        "set"
+      ],
+      "typical_nouns": null,
+      "count": 90,
+      "example_intents": [
+        "SetNeedsSyncHost is now implemented in gpu_init_*.go",
+        "SetInput sets the input tensor for the backward pass.",
+        "Sets the learning rate."
+      ]
+    },
+    "stringer": {
+      "kind": "stringer",
+      "has_receiver": true,
+      "param_count": [
+        0
+      ],
+      "returns_error": true,
+      "returns_bool": false,
+      "min_branches": 2,
+      "has_loop": false,
+      "typical_verbs": [
+        "string"
+      ],
+      "typical_nouns": null,
+      "count": 54,
+      "example_intents": [
+        "Returns a string representation of varKey.",
+        "Tests String.",
+        "Returns a string representation of Test_OptionalGroup."
+      ]
+    },
+    "validator": {
+      "kind": "validator",
+      "has_receiver": true,
+      "param_count": [
+        1,
+        2,
+        3,
+        4,
+        6
+      ],
+      "returns_error": true,
+      "returns_bool": true,
+      "min_branches": 64,
+      "has_loop": true,
+      "typical_verbs": [
+        "load",
+        "synthesize",
+        "tcgetattr",
+        "generate",
+        "backward",
+        "run",
+        "forward",
+        "create",
+        "fetch",
+        "resolve"
+      ],
+      "typical_nouns": null,
+      "count": 1877,
+      "example_intents": [
+        "LoadVocabulary loads a Vocabulary from a GOB file.",
+        "synthesizeTrace parses req.ContextCode and traces the execution path for the requested flow.",
+        "Load loads the Seq2Seq model from a file."
+      ]
+    }
+  },
+  "version": 1
+}

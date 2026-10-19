@@ -48,6 +48,9 @@ type Project struct {
 	// Typed reports whether compiler-grade type info was loaded
 	// (refineTypes): call edges were checked against real method sets.
 	Typed bool
+	// PatternLib is the cross-project pattern library, loaded lazily.
+	// It helps recognize patterns in unseen code.
+	PatternLib *PatternLibrary
 }
 
 // Package is one directory of Go source.

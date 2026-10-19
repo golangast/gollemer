@@ -96,6 +96,24 @@ func vecMaxSlice(data []float32) float32 {
 func vecAdamWUpdate(weights, grads, m, v []float32, lr, beta1, beta2, eps, weightDecay float32, t int) {
 	biasCorrection1 := float32(1.0 - math.Pow(float64(beta1), float64(t)))
 	biasCorrection2 := float32(1.0 - math.Pow(float64(beta2), float64(t)))
+	// Vectorized AVX2 path (processes 8 elements at a time with VSQRTPS)
+	n := len(weights)
+	if n >= 8 {
+		vecCount := n &^ 7 // round down to multiple of 8
+		vecAdamWUpdateAVX2(weights[:vecCount], grads[:vecCount], m[:vecCount], v[:vecCount],
+			lr, 1-beta1, 1-beta2, beta1, beta2, eps, weightDecay,
+			1/biasCorrection1, 1/biasCorrection2)
+		// Scalar tail for remaining elements
+		for i := vecCount; i < n; i++ {
+			m[i] = beta1*m[i] + (1.0-beta1)*grads[i]
+			v[i] = beta2*v[i] + (1.0-beta2)*grads[i]*grads[i]
+			mHat := m[i] / biasCorrection1
+			vHat := v[i] / biasCorrection2
+			weights[i] -= lr * (mHat/(float32(math.Sqrt(float64(vHat)))+eps) + weightDecay*weights[i])
+		}
+		return
+	}
+	// Small arrays: pure scalar
 	for i := range weights {
 		m[i] = beta1*m[i] + (1.0-beta1)*grads[i]
 		v[i] = beta2*v[i] + (1.0-beta2)*grads[i]*grads[i]
@@ -183,15 +201,16 @@ func matMulRawSequential(a, b, res []float32, m, n, k, startRow, endRow int) {
 	// branch — in training every aik is nonzero, the branch mispredicts
 	// constantly, and it blocks the compiler's auto-vectorizer on the
 	// inner loop. (Skipping zeros was only a win for sparse inputs.)
+	//
+	// Inner SAXPY uses hand-tuned AVX2 FMA on amd64 (vecSaxpyAVX2):
+	// 4 independent FMA chains, 32 floats per iteration.
 	for i := startRow; i < endRow; i++ {
 		rowA := a[i*k : (i+1)*k]
 		rowRes := res[i*n : (i+1)*n]
 		for ik := 0; ik < k; ik++ {
 			aik := rowA[ik]
 			rowB := b[ik*n : (ik+1)*n]
-			for j := 0; j < n; j++ {
-				rowRes[j] += aik * rowB[j]
-			}
+			vecSaxpy(rowRes, rowB, aik)
 		}
 	}
 }

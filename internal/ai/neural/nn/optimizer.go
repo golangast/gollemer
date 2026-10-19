@@ -111,9 +111,8 @@ func (o *Adam) ClipGradients() {
 	totalNorm := float32(0.0)
 	for _, p := range o.parameters {
 		if p.Grad != nil {
-			for _, g := range p.Grad.Data {
-				totalNorm += g * g
-			}
+			// SIMD-accelerated sum of squares via dot product
+			totalNorm += DotProduct(p.Grad.Data, p.Grad.Data)
 		}
 	}
 	totalNorm = float32(math.Sqrt(float64(totalNorm)))
@@ -362,30 +361,15 @@ func (o *Adam) Step() {
 	wg.Wait()
 }
 
-// ZeroGrad resets the gradients of all parameters in parallel.
+// ZeroGrad resets the gradients of all parameters.
+// Sequential clear() compiles to efficient memclr; the old channel+goroutine
+// version added 5-15µs of scheduler overhead per call for no benefit.
 func (o *Adam) ZeroGrad() {
-	var wg sync.WaitGroup
-	numWorkers := runtime.NumCPU()
-	if numWorkers > 16 {
-		numWorkers = 16
-	}
-
-	workCh := make(chan *Tensor, len(o.parameters))
 	for _, p := range o.parameters {
-		workCh <- p
+		if p.Grad != nil {
+			clear(p.Grad.Data)
+		}
 	}
-	close(workCh)
-
-	for i := 0; i < numWorkers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for p := range workCh {
-				p.ZeroGrad()
-			}
-		}()
-	}
-	wg.Wait()
 }
 
 func (o *Adam) SetLearningRate(lr float32) {

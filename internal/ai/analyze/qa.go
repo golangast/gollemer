@@ -50,6 +50,17 @@ var (
 	// Intent questions: "what is X for", "why does X call Y".
 	qWhatFor  = regexp.MustCompile(`(?i)^\s*what(?:'s| is) (?:the )?(.+?) for\??$`)
 	qWhyCalls = regexp.MustCompile(`(?i)^\s*why does (?:the )?(.+?) call (?:the )?(.+?)\??$`)
+	// Signature questions: "what is the signature of X".
+	qSig = regexp.MustCompile(`(?i)^\s*what(?:'s| is) the signature of (?:the )?(.+?)\??$`)
+	// Documentation: "document this project", "document routeDomain".
+	qDocProj = regexp.MustCompile(`(?i)^\s*document (?:this |the )?(?:project|code|codebase|repo)\.?$`)
+	qDocSym  = regexp.MustCompile(`(?i)^\s*document (?:the )?(.+?)\.?$`)
+	// Architecture: "what is the architecture", "how is this organized".
+	qArch = regexp.MustCompile(`(?i)^\s*(?:what(?:'s| is) the architecture|how is this (?:project|code|codebase|repo) organized|show (?:me )?the architecture)\.?$`)
+	// Anomalies: "find bugs", "what's wrong", "check for problems".
+	qBugs = regexp.MustCompile(`(?i)^\s*(?:find (?:the )?bugs|what(?:'s| is) wrong|check for (?:problems|bugs|issues)|any (?:bugs|problems))\??\.?$`)
+	// Decomposition: "break down X", "decompose X", "what are the steps for X".
+	qDecompose = regexp.MustCompile(`(?i)^\s*(?:break down|decompose|what are the steps (?:for|to)) (.+?)\.?$`)
 )
 
 // IsCodebaseQuestion reports whether line has the shape of a project Q&A
@@ -140,6 +151,24 @@ func (p *Project) Answer(q string) (out string, ok bool) {
 	if m := qWhyCalls.FindStringSubmatch(q); m != nil {
 		return p.answerWhyCalls(cleanSymbol(m[1]), cleanSymbol(m[2]))
 	}
+	if qDocProj.MatchString(q) {
+		return p.Document(), true
+	}
+	if qArch.MatchString(q) {
+		return p.ArchitectureSummary(), true
+	}
+	if qBugs.MatchString(q) {
+		return p.AnomalyReport(), true
+	}
+	if m := qDecompose.FindStringSubmatch(q); m != nil {
+		return p.BreakDown(cleanSymbol(m[1])), true
+	}
+	if m := qDocSym.FindStringSubmatch(q); m != nil {
+		return p.answerDocument(cleanSymbol(m[1]))
+	}
+	if m := qSig.FindStringSubmatch(q); m != nil {
+		return p.answerSignature(cleanSymbol(m[1]))
+	}
 	if m := qWhatIs.FindStringSubmatch(q); m != nil {
 		sym := cleanSymbol(m[1])
 		if !startsWithArticle(sym) {
@@ -208,6 +237,10 @@ func (p *Project) resolve(name string) (fn *Func, cands []*Func, typ *Type, pkg 
 	for _, f := range p.byID {
 		if dotted {
 			if strings.EqualFold(f.Display(), name) {
+				return f, nil, nil, nil
+			}
+			// "rect.area" for main.rect.area: receiver-qualified without pkg.
+			if f.Receiver != "" && strings.EqualFold(f.Receiver+"."+f.Name, name) {
 				return f, nil, nil, nil
 			}
 			continue
@@ -562,6 +595,84 @@ func (p *Project) answerWhereDefined(name string) (string, bool) {
 		return p.ambiguous(name, cands), true
 	}
 	return "", false
+}
+
+// answerSignature handles "what is the signature of X": the exact rendered
+// signature, deterministically — a fact lookup, never a model guess.
+func (p *Project) answerSignature(name string) (string, bool) {
+	fn, cands, typ, _ := p.resolve(name)
+	switch {
+	case fn != nil:
+		return fmt.Sprintf("%s\n", fn.Sig), true
+	case typ != nil:
+		return fmt.Sprintf("type %s.%s — %s\n", typ.Pkg, typ.Name, typ.Kind), true
+	case len(cands) > 0:
+		return p.ambiguous(name, cands), true
+	}
+	return "", false
+}
+
+// answerDocument handles "document X": full markdown documentation for a
+// single function or type.
+func (p *Project) answerDocument(name string) (string, bool) {
+	fn, cands, typ, _ := p.resolve(name)
+	switch {
+	case fn != nil:
+		return fn.Document(p), true
+	case typ != nil:
+		return typ.Document(p), true
+	case len(cands) > 0:
+		return p.ambiguous(name, cands), true
+	}
+	return "", false
+}
+
+// IsExplainQuestion reports whether q seeks an explanation of a symbol —
+// the what-does, what-for, what-is, explain, tell-me-about, and how-works
+// families — and returns the cleaned symbol name for fact extraction.
+// It mirrors the Answer dispatch order (qWhatFor before qWhatIs; qSig is
+// deterministic and excluded) so the neural explainer and the template
+// path agree on which questions they handle.
+func IsExplainQuestion(q string) (string, bool) {
+	if qSig.MatchString(q) {
+		return "", false
+	}
+	for _, re := range []*regexp.Regexp{qWhatDoes, qHowWorks, qExplain, qTellAbt, qWhatFor, qWhatIs} {
+		if m := re.FindStringSubmatch(q); m != nil {
+			if sym := cleanSymbol(m[1]); sym != "" && !startsWithArticle(sym) {
+				return sym, true
+			}
+		}
+	}
+	return "", false
+}
+
+// ExplainFacts bundles the exact analyzer facts for neural explanation:
+// the model generates prose, the analyzer guarantees the facts.
+type ExplainFacts struct {
+	Sig      string // exact rendered signature
+	FileLine string // exact "file:line"
+	Summary  string // analyzer's one-line intent
+	Input    string // [file][code][question] model input, training format
+}
+
+// FactsForExplain resolves name and builds the neural explainer input in
+// the exact format the codeintent model was trained on:
+// [file <file:line>], [code] source excerpt, [question] question.
+// ok=false when the symbol doesn't resolve to a function.
+func (p *Project) FactsForExplain(name, question string) (ExplainFacts, bool) {
+	fn, _, _, _ := p.resolve(name)
+	if fn == nil {
+		return ExplainFacts{}, false
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "[file %s:%d]\n[code]\n%s\n[question] %s", fn.File, fn.Line, p.SourceOf(fn, 40), question)
+	return ExplainFacts{
+		Sig:      fn.Sig,
+		FileLine: fmt.Sprintf("%s:%d", p.LinkPath(fn.File), fn.Line),
+		Summary:  fn.Summary(),
+		Input:    b.String(),
+	}, true
 }
 
 // answerShowMe handles "show me X": the actual source of the function.

@@ -76,6 +76,53 @@ func (e *Encoder) Forward(inputIDs *tensor.Tensor) (*tensor.Tensor, *tensor.Tens
 	return hidden, cell, nil
 }
 
+// ForwardWithOutputs performs a forward pass through the encoder, returning
+// the per-timestep hidden states [B, seq_len, H] in addition to the final
+// (hidden, cell). The per-timestep outputs are needed for cross-attention.
+func (e *Encoder) ForwardWithOutputs(inputIDs *tensor.Tensor) (*tensor.Tensor, *tensor.Tensor, *tensor.Tensor, error) {
+	// inputIDs: [batch_size, sequence_length]
+	embedded, err := e.Embedding.Forward(inputIDs)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("encoder embedding forward failed: %w", err)
+	}
+
+	batchSize := inputIDs.Shape[0]
+	seqLength := inputIDs.Shape[1]
+	hiddenSize := e.LSTM.HiddenSize
+
+	hidden := tensor.NewTensor([]int{batchSize, hiddenSize}, make([]float32, batchSize*hiddenSize), true)
+	cell := tensor.NewTensor([]int{batchSize, hiddenSize}, make([]float32, batchSize*hiddenSize), true)
+
+	// Collect per-timestep hidden states for cross-attention.
+	outputs := tensor.NewTensor([]int{batchSize, seqLength, hiddenSize}, make([]float32, batchSize*seqLength*hiddenSize), false)
+
+	for t := range seqLength {
+		// Get the input for the current time step
+		timeStepInput, err := embedded.Slice(1, t, t+1)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		timeStepInput, err = timeStepInput.Reshape([]int{batchSize, e.Embedding.DimModel})
+		if err != nil {
+			return nil, nil, nil, err
+		}
+
+		hidden, cell, err = e.LSTM.Forward(timeStepInput, hidden, cell)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("encoder LSTM forward failed at step %d: %w", t, err)
+		}
+
+		// Copy hidden [B, H] into outputs [B, seq_len, H] at position t.
+		for b := 0; b < batchSize; b++ {
+			srcOff := b * hiddenSize
+			dstOff := (b*seqLength + t) * hiddenSize
+			copy(outputs.Data[dstOff:dstOff+hiddenSize], hidden.Data[srcOff:srcOff+hiddenSize])
+		}
+	}
+
+	return outputs, hidden, cell, nil
+}
+
 // Parameters returns all learnable parameters of the Encoder.
 func (e *Encoder) Parameters() []*tensor.Tensor { // Changed here
 	params := []*tensor.Tensor{} // Changed here
@@ -90,10 +137,22 @@ type Decoder struct {
 	LSTM      *nn.LSTM
 	MoE       *nn.MoE // mixture-of-experts refines the LSTM state before projection
 	Output    *nn.Linear
+	// CrossAttn is encoder-decoder cross-attention: the decoder attends to
+	// the encoder's per-timestep outputs when generating each token. This
+	// lets the model actually READ the input (e.g. code) instead of relying
+	// solely on the compressed final encoder state. Nil disables it.
+	CrossAttn *nn.MultiHeadCrossAttention
 	// Copy is the pointer/copy mechanism over the decoder's own output
 	// history. Nil disables it (all non-gocode domains): decoding is then
 	// exactly the pre-copy behavior, so old checkpoints stay valid.
 	Copy *CopyGate
+	// EncoderCopy is the pointer/copy mechanism over the ENCODER's input:
+	// at each decode step it attends over the encoder's per-timestep
+	// states and biases the logits toward the input tokens (file paths,
+	// signatures, identifiers). This is what lets the model reproduce
+	// input-specific tokens verbatim instead of retrieving memorized
+	// answers. Nil disables it (all non-codeintent domains).
+	EncoderCopy *CopyGate
 }
 
 // MoE configuration for the decoder.
@@ -116,25 +175,33 @@ func NewDecoder(outputVocabSize, embeddingDim, hiddenDim int) (*Decoder, error) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to create MoE layer for decoder: %w", err)
 	}
+	// Note: CrossAttn is nil by default. It is enabled per-domain in
+	// real_seq2seq_train.go (codeintent-only for now); a nil CrossAttn
+	// means exactly the pre-attention behavior, so other domains and their
+	// existing models are untouched.
 	return &Decoder{
 		Embedding: nn.NewEmbedding(outputVocabSize, embeddingDim),
 		LSTM:      lstm, // Input to LSTM will be embedded token + context
 		MoE:       moe,
 		Output:    outputLayer,
+		CrossAttn: nil,
 	}, nil
 }
 
 // Forward performs a forward pass through the decoder.
 // It takes the previous output token, and the encoder's final hidden and cell states.
 func (d *Decoder) Forward(inputTokenID *tensor.Tensor, hidden, cell *tensor.Tensor) (*tensor.Tensor, *tensor.Tensor, *tensor.Tensor, error) {
-	return d.ForwardCopy(inputTokenID, hidden, cell, nil, nil)
+	return d.ForwardCopy(inputTokenID, hidden, cell, nil, nil, nil, nil)
 }
 
 // ForwardCopy is Forward plus the copy mechanism. histStates[b] holds the
 // decoder's own past LSTM states for batch row b and histTokens[b] the token
 // ids that produced them; when d.Copy is nil (or history is empty) the copy
 // bias is zero and this is exactly Forward.
-func (d *Decoder) ForwardCopy(inputTokenID *tensor.Tensor, hidden, cell *tensor.Tensor, histStates [][][]float32, histTokens [][]int) (*tensor.Tensor, *tensor.Tensor, *tensor.Tensor, error) {
+// encOut (optional, may be nil) holds the encoder's per-timestep outputs
+// [B, enc_len, H] for cross-attention; when nil (or d.CrossAttn is nil) the
+// decoder runs exactly as before.
+func (d *Decoder) ForwardCopy(inputTokenID *tensor.Tensor, hidden, cell *tensor.Tensor, histStates [][][]float32, histTokens [][]int, encOut *tensor.Tensor, encInputIDs [][]int) (*tensor.Tensor, *tensor.Tensor, *tensor.Tensor, error) {
 	// inputTokenID: [batch_size, 1] (single token ID)
 	embedded, err := d.Embedding.Forward(inputTokenID)
 	if err != nil {
@@ -155,12 +222,32 @@ func (d *Decoder) ForwardCopy(inputTokenID *tensor.Tensor, hidden, cell *tensor.
 	}
 	// newHidden, newCell: [batch_size, hidden_dim]
 
-	// Mixture-of-experts: route the LSTM state through the top-k experts
-	// before projecting to vocabulary logits.
+	// Cross-attention (inference): let the decoder look at the encoder's
+	// per-timestep outputs when generating this token. Query is the LSTM
+	// state reshaped to [B, 1, H]; key/value is encOut [B, enc_len, H].
+	// When CrossAttn or encOut is nil, this is skipped (exact old behavior).
 	moeIn, err := newHidden.Reshape([]int{newHidden.Shape[0], 1, newHidden.Shape[1]})
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("decoder MoE input reshape failed: %w", err)
 	}
+	if d.CrossAttn != nil && encOut != nil {
+		attnOut, err := d.CrossAttn.Forward(moeIn, encOut, encOut)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("decoder cross-attention forward failed: %w", err)
+		}
+		// Residual: ADD the attended context to the LSTM state instead of
+		// replacing it. The 1-head PoC replaced moeIn with attnOut, which
+		// discarded the decoder's recurrent state whenever attention was
+		// noisy — likely why it scored worse than the no-attention baseline.
+		// Residual keeps the learned signal and adds grounding on top.
+		moeIn, err = moeIn.Add(attnOut) // [B, 1, H]
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("decoder cross-attention residual add failed: %w", err)
+		}
+	}
+
+	// Mixture-of-experts: route the (possibly attended) LSTM state through
+	// the top-k experts before projecting to vocabulary logits.
 	moeOut, _, err := d.MoE.Forward(moeIn)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("decoder MoE forward failed: %w", err)
@@ -196,6 +283,29 @@ func (d *Decoder) ForwardCopy(inputTokenID *tensor.Tensor, hidden, cell *tensor.
 		}
 	}
 
+	// Encoder-side copy: bias the logits toward tokens in the ENCODER's
+	// input (the code block), so file paths, signatures, and identifiers
+	// can be reproduced verbatim instead of retrieved from memory.
+	if d.EncoderCopy != nil && encOut != nil && len(encInputIDs) > 0 {
+		batchSize := prediction.Shape[0]
+		hiddenDim := moeOut2D.Shape[1]
+		vocabSize := prediction.Shape[1]
+		encLen := encOut.Shape[1]
+		for b := 0; b < batchSize && b < len(encInputIDs); b++ {
+			// Extract encoder states for batch row b: [enc_len, H]
+			encStates := make([][]float32, encLen)
+			for t := 0; t < encLen; t++ {
+				off := (b*encLen + t) * hiddenDim
+				encStates[t] = encOut.Data[off : off+hiddenDim]
+			}
+			qOff := b * hiddenDim
+			query := moeOut2D.Data[qOff : qOff+hiddenDim]
+			lOff := b * vocabSize
+			genLogits := prediction.Data[lOff : lOff+vocabSize]
+			d.EncoderCopy.forwardCopyStep(query, genLogits, encStates, encInputIDs[b])
+		}
+	}
+
 	return prediction, newHidden, newCell, nil
 }
 
@@ -208,8 +318,14 @@ func (d *Decoder) Parameters() []*tensor.Tensor { // Changed here
 		params = append(params, d.MoE.Parameters()...)
 	}
 	params = append(params, d.Output.Parameters()...)
+	if d.CrossAttn != nil {
+		params = append(params, d.CrossAttn.Parameters()...)
+	}
 	if d.Copy != nil {
 		params = append(params, d.Copy.Parameters()...)
+	}
+	if d.EncoderCopy != nil {
+		params = append(params, d.EncoderCopy.Parameters()...)
 	}
 	return params
 }
@@ -222,6 +338,9 @@ type Seq2Seq struct {
 	OutputVocab *vocab.Vocabulary    // Vocabulary for the output descriptions
 	HiddenDim   int
 	ExactMap    map[string]string
+	// BeamWidth enables beam search decoding when > 1.
+	// 0 or 1 = greedy decoding (default, existing behavior).
+	BeamWidth int
 }
 
 // NewSeq2Seq creates a new Seq2Seq model.
@@ -279,7 +398,7 @@ func (m *Seq2Seq) Forward(inputIDs, targetIDs *tensor.Tensor) (*tensor.Tensor, e
 	}
 	outputVocabSize := m.OutputVocab.Size()
 
-	encoderHidden, encoderCell, err := m.Encoder.Forward(inputIDs)
+	encoderOutputs, encoderHidden, encoderCell, err := m.Encoder.ForwardWithOutputs(inputIDs)
 	if err != nil {
 		return nil, fmt.Errorf("seq2seq encoder forward failed: %w", err)
 	}
@@ -295,6 +414,20 @@ func (m *Seq2Seq) Forward(inputIDs, targetIDs *tensor.Tensor) (*tensor.Tensor, e
 	histStates := make([][][]float32, batchSize)
 	histTokens := make([][]int, batchSize)
 
+	// Encoder input token ids per batch row, for the encoder-side copy
+	// gate. Extracted once from the input tensor.
+	var encInputIDs [][]int
+	if m.Decoder.EncoderCopy != nil {
+		encLen := inputIDs.Shape[1]
+		encInputIDs = make([][]int, batchSize)
+		for b := 0; b < batchSize; b++ {
+			encInputIDs[b] = make([]int, encLen)
+			for t := 0; t < encLen; t++ {
+				encInputIDs[b][t] = int(inputIDs.Data[b*encLen+t])
+			}
+		}
+	}
+
 	for t := 0; t < targetSeqLen-1; t++ {
 		decoderInputData := make([]float32, batchSize)
 		for b := 0; b < batchSize; b++ {
@@ -302,7 +435,7 @@ func (m *Seq2Seq) Forward(inputIDs, targetIDs *tensor.Tensor) (*tensor.Tensor, e
 		}
 		decoderInput := tensor.NewTensor([]int{batchSize, 1}, decoderInputData, true)
 
-		prediction, hidden, cell, err := m.Decoder.ForwardCopy(decoderInput, decoderHidden, decoderCell, histStates, histTokens)
+		prediction, hidden, cell, err := m.Decoder.ForwardCopy(decoderInput, decoderHidden, decoderCell, histStates, histTokens, encoderOutputs, encInputIDs)
 		if err != nil {
 			return nil, fmt.Errorf("seq2seq decoder forward failed at step %d: %w", t, err)
 		}
@@ -357,6 +490,10 @@ type ThoughtTrace struct {
 }
 
 func (m *Seq2Seq) Predict(query string, maxLen int) (string, error) {
+	// Beam search when enabled (BeamWidth > 1), greedy otherwise.
+	if m.BeamWidth > 1 {
+		return m.PredictBeam(query, maxLen, m.BeamWidth)
+	}
 	answer, _, err := m.PredictWithTrace(query, maxLen)
 	return answer, err
 }
@@ -414,7 +551,7 @@ func (m *Seq2Seq) PredictWithTrace(query string, maxLen int) (string, *ThoughtTr
 	inputTensor := tensor.NewTensor([]int{1, len(inputTokenIDs)}, inputTensorData, true)
 
 	// Encoder forward pass
-	encoderHidden, encoderCell, err := m.Encoder.Forward(inputTensor)
+	encoderOutputs, encoderHidden, encoderCell, err := m.Encoder.ForwardWithOutputs(inputTensor)
 	if err != nil {
 		return "", nil, fmt.Errorf("prediction encoder forward failed: %w", err)
 	}
@@ -444,10 +581,16 @@ func (m *Seq2Seq) PredictWithTrace(query string, maxLen int) (string, *ThoughtTr
 	histStates := [][][]float32{{}}
 	histTokens := [][]int{{}}
 
+	// Encoder input token ids (batch=1), for the encoder-side copy gate.
+	var encInputIDs [][]int
+	if m.Decoder.EncoderCopy != nil {
+		encInputIDs = [][]int{inputTokenIDs}
+	}
+
 	for t := range maxLen {
 		decoderInput := tensor.NewTensor([]int{1, 1}, []float32{float32(currentInputTokenID)}, true)
 
-		prediction, hidden, cell, err := m.Decoder.ForwardCopy(decoderInput, decoderHidden, decoderCell, histStates, histTokens)
+		prediction, hidden, cell, err := m.Decoder.ForwardCopy(decoderInput, decoderHidden, decoderCell, histStates, histTokens, encoderOutputs, encInputIDs)
 		if err != nil {
 			return "", nil, fmt.Errorf("prediction decoder forward failed at step %d: %w", t, err)
 		}

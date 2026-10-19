@@ -12,6 +12,9 @@ import (
 
 func main() {
 	trainRealSeq2SeqFlag := flag.Bool("train-real-seq2seq", false, "Train the genuine neural seq2seq model (real BPTT, no cheat sheet)")
+	trainTransformerFlag := flag.Bool("train-transformer", false, "Train the Transformer seq2seq model (attention-based, not LSTM)")
+	pretrainTransformerFlag := flag.Bool("pretrain-transformer", false, "Pretrain the Transformer as a Go causal language model on raw Go code")
+	testTransformerFlag := flag.String("test-transformer", "", "Test a trained Transformer with a prompt (e.g. -test-transformer='write a function')")
 	realChatFlag := flag.Bool("real-chat", false, "Chat with the trained neural model (pure generation, no lookup)")
 	debugChatFlag := flag.Bool("debug-chat", false, "Show the thought process and debug prints in chat (default: clean replies only)")
 	importPairsFlag := flag.String("import-pairs", "", "Import new training pairs from a JSONL file through the quality gate")
@@ -20,7 +23,7 @@ func main() {
 	reclassifyFlag := flag.Bool("reclassify-domains", false, "Re-tag all dataset pairs with the current domain classifier")
 	flag.Parse()
 
-	if !*trainRealSeq2SeqFlag && !*realChatFlag && *importPairsFlag == "" && !*reclassifyFlag {
+	if !*trainRealSeq2SeqFlag && !*trainTransformerFlag && !*pretrainTransformerFlag && *testTransformerFlag == "" && !*realChatFlag && *importPairsFlag == "" && !*reclassifyFlag {
 		fmt.Fprintf(os.Stderr, "Usage: gollemer -train-real-seq2seq | gollemer -real-chat | gollemer -import-pairs=file.jsonl | gollemer -reclassify-domains\n")
 		os.Exit(1)
 	}
@@ -44,6 +47,27 @@ func main() {
 	if *trainRealSeq2SeqFlag {
 		if err := chat.RunRealSeq2SeqTraining(rootDir, *domainFlag, *resumeFlag); err != nil {
 			fmt.Fprintf(os.Stderr, "real training failed: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+	if *trainTransformerFlag {
+		if err := chat.RunTransformerTraining(rootDir, *domainFlag, *resumeFlag); err != nil {
+			fmt.Fprintf(os.Stderr, "transformer training failed: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+	if *pretrainTransformerFlag {
+		if err := chat.RunTransformerPretraining(rootDir, *resumeFlag); err != nil {
+			fmt.Fprintf(os.Stderr, "transformer pretraining failed: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+	if *testTransformerFlag != "" {
+		if err := chat.RunTransformerTest(rootDir, *domainFlag, *testTransformerFlag); err != nil {
+			fmt.Fprintf(os.Stderr, "transformer test failed: %v\n", err)
 			os.Exit(1)
 		}
 		return

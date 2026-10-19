@@ -54,6 +54,14 @@ func tryCodebaseQuestion(line string) (string, bool) {
 		lastAnalyzeRoot = root
 		lastAnalyzeProject = p
 	}
+	// Neural explanation over analyzer facts: the v3 codeintent model
+	// writes the prose, the analyzer guarantees every fact. Falls back
+	// to the deterministic template when the model is unavailable.
+	if name, ok := analyze.IsExplainQuestion(line); ok {
+		if out, ok := explainWithCodeIntent(lastAnalyzeProject, name, line, unifiedProjectRoot); ok {
+			return out, true
+		}
+	}
 	return lastAnalyzeProject.Answer(line)
 }
 

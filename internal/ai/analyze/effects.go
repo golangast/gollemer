@@ -262,14 +262,21 @@ func (p *Project) analyzeEffects(pkg *Package, fn *Func) {
 	// "reader" of ShowProgress.
 	writeSel := map[ast.Node]bool{}
 	ast.Inspect(fn.decl.Body, func(n ast.Node) bool {
-		as, ok := n.(*ast.AssignStmt)
-		if !ok || as.Tok != token.ASSIGN {
+		// x.Y = ... (pure assignment) or x.Y += ... (compound).
+		if as, ok := n.(*ast.AssignStmt); ok {
+			for _, lhs := range as.Lhs {
+				if sel, ok := lhs.(*ast.SelectorExpr); ok {
+					writeSel[sel] = true
+				}
+			}
 			return true
 		}
-		for _, lhs := range as.Lhs {
-			if sel, ok := lhs.(*ast.SelectorExpr); ok {
+		// x.Y++ or x.Y-- : read-modify-write.
+		if inc, ok := n.(*ast.IncDecStmt); ok {
+			if sel, ok := inc.X.(*ast.SelectorExpr); ok {
 				writeSel[sel] = true
 			}
+			return true
 		}
 		return true
 	})

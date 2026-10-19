@@ -185,3 +185,59 @@ func TestRenderSig(t *testing.T) {
 		t.Errorf("EndLine %d should be >= Line %d", fn.EndLine, fn.Line)
 	}
 }
+
+func TestAnswerSignature(t *testing.T) {
+	p := qaFixture(t)
+	out, ok := p.Answer("what is the signature of Save")
+	if !ok {
+		t.Fatal("expected an answer for 'what is the signature of Save'")
+	}
+	if !strings.Contains(out, "func (s *Store) Save(name string)") {
+		t.Errorf("expected exact signature, got:\n%s", out)
+	}
+}
+
+func TestIsExplainQuestion(t *testing.T) {
+	for _, q := range []string{
+		"what does Save do",
+		"how does Save work",
+		"what is Save",
+		"explain Save",
+		"tell me about Save",
+		"what is Save for",
+	} {
+		name, ok := IsExplainQuestion(q)
+		if !ok || name != "Save" {
+			t.Errorf("IsExplainQuestion(%q) = (%q, %v), want (Save, true)", q, name, ok)
+		}
+	}
+	for _, q := range []string{
+		"what is the signature of Save",
+		"where is Save defined",
+		"what is a goroutine",
+		"hello there",
+	} {
+		if name, ok := IsExplainQuestion(q); ok {
+			t.Errorf("IsExplainQuestion(%q) = (%q, true), want false", q, name)
+		}
+	}
+}
+
+func TestFactsForExplain(t *testing.T) {
+	p := qaFixture(t)
+	facts, ok := p.FactsForExplain("Save", "what does Save do")
+	if !ok {
+		t.Fatal("expected facts for Save")
+	}
+	if !strings.Contains(facts.Sig, "func (s *Store) Save(name string)") {
+		t.Errorf("bad Sig: %q", facts.Sig)
+	}
+	if !strings.Contains(facts.FileLine, "store.go:13") {
+		t.Errorf("bad FileLine: %q", facts.FileLine)
+	}
+	for _, want := range []string{"[file ", "[code]", "[question] what does Save do"} {
+		if !strings.Contains(facts.Input, want) {
+			t.Errorf("fact input missing %q", want)
+		}
+	}
+}

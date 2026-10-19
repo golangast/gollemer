@@ -76,6 +76,16 @@ func (fn *Func) Intent() string {
 	if isConstructor(fn.Name) {
 		return fmt.Sprintf("Creates a new %s.", strings.TrimPrefix(fn.Name, "New"))
 	}
+	// Known idioms: HTTP handlers, getters, setters, retry loops, etc.
+	if pat := patternIntent(fn); pat != "" {
+		return pat
+	}
+	// Cross-project library: match against patterns learned from other repos.
+	if lib := loadGlobalPatternLib(); lib != nil {
+		if kind, conf := lib.MatchAgainstLibrary(fn); kind != "" && conf >= 0.75 {
+			return fmt.Sprintf("%s (recognized from %d examples across projects).", describeKind(kind), lib.Patterns[kind].Count)
+		}
+	}
 	var b strings.Builder
 	b.WriteString(capitalize(verbPhrase(fn.Name, true)))
 	b.WriteString(".")

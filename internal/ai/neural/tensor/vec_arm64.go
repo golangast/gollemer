@@ -43,3 +43,9 @@ func vecSoftmaxBackwardRow(p, dp, out []float32) {
 	}
 	vecSoftmaxBackwardRowNEON(p, dp, out)
 }
+
+func vecSaxpy(dst, src []float32, alpha float32) {
+	for i := range dst {
+		dst[i] += alpha * src[i]
+	}
+}
