@@ -99,3 +99,43 @@ func analyzeCloned(root, intro string) string {
 	lastAnalyzeProject = p
 	return intro + renderAnalyzeReport(p)
 }
+
+// tryNaturalAnalyze detects natural-language repo analysis requests:
+// "analyze https://github.com/foo/bar", "take a look at this repo: <url>",
+// "what does https://github.com/foo/bar do?"
+//
+// It finds a repo URL (not an issue/PR URL) plus analysis intent words,
+// then routes to the standard clone+analyze flow.
+func tryNaturalAnalyze(line string) (string, bool) {
+	// Find a github repo URL. Must NOT be an issue/PR/commit URL
+	// (those are handled by tryIssueWhere).
+	repoRe := regexp.MustCompile(`https?://github\.com/([\w.-]+)/([\w.-]+)(?:/)?(?:\s|$)`)
+	m := repoRe.FindStringSubmatch(line)
+	if m == nil {
+		return "", false
+	}
+	// Skip if the line also contains issue/PR markers (let tryIssueWhere handle it).
+	ll := strings.ToLower(line)
+	if strings.Contains(ll, "/issues/") || strings.Contains(ll, "/pull/") || strings.Contains(ll, "/commit/") {
+		return "", false
+	}
+	// Analysis intent words.
+	intents := []string{
+		"analyz", "look at", "check out", "examine", "what is", "what does",
+		"tell me about", "show me", "take a look", "explore", "understand",
+		"review", "inspect",
+	}
+	hasIntent := false
+	for _, in := range intents {
+		if strings.Contains(ll, in) {
+			hasIntent = true
+			break
+		}
+	}
+	if !hasIntent {
+		return "", false
+	}
+	// Route to the standard clone flow.
+	url := fmt.Sprintf("https://github.com/%s/%s", m[1], m[2])
+	return tryCloneProject("clone " + url)
+}

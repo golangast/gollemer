@@ -22,6 +22,17 @@ Say any of these inside `make chat`. When the chat answers with a `go`/`gofmt` c
 | Understand a function simply | `walk me through routeDomain` | The xray intelligence engine explains it like you're a beginner: a real-world analogy, a step-by-step execution walk, a safety badge |
 | Read the source | `show me routeDomain` | Prints the actual function |
 | Find where to edit | `where would I add a retry helper`, or paste a GitHub issue or PR URL | One guided answer, not a hit list: for a feature it plans the whole change — config struct, flags, the flow to extend, similar helpers, the new file — and the call chain it sits in. A PR URL lists the files the PR touched, each with a plain-words one-liner. Paste the issues page with no number and it lists the open issues so you can pick one by number |
+| Analyze a repo in plain words | `analyze https://github.com/owner/repo` or `take a look at this repo: <url>` | No command syntax needed — just say what you want in a sentence. Detects the repo URL and your intent, clones it, and explains the codebase |
+| Build an API from pieces | `/build-api /users /health` | Composes a working HTTP API from learned piece schemas — not copied, not predicted. Each piece explains why it's where it is (route before server because the server reads routes at startup, etc.). Saves to `./compose/main.go` |
+| Learn pieces from docs | `/learn-pieces` | Reads the doc comments in the analyzed project and extracts composable piece schemas. The library grows from any Go code's natural-language docs |
+| Find code by concept | `/find auth` | Natural-language code search: finds functions and types matching your words, with file:line and a one-line description |
+| Fix a Go error | `/fix undefined: foo` | Parses the compiler error, suggests similar names from your code (typo check), and explains it in plain words. Handles "cannot use X as Y", "already declared", "imported and not used" |
+| Explain a concept via real code | `/whatis mutex` | Explains using the actual usage in your codebase ("Here, `Names()` uses `RLock` because it only reads") — not a textbook definition. Works for types and functions too |
+| Summarize the architecture | `/arch` | Walks from `main()` through the call graph and describes what the project does in plain words |
+| Scaffold a test | `/test Names` | Generates a table-driven test skeleton from the function's signature, with the doc-comment intent included |
+| Explain a dependency | `/why-import json` | Traces which functions use the imported package and shows exactly how |
+| Review a function | `/review Freeze` | Checks for ignored errors, overlong functions, and missing docs — each with a plain-words comment |
+| Generate a doc comment | `/comment Names` | Writes a Go doc comment from the function's structure (verb from the name, locking/iteration/error details from the analyzer) and offers to insert it |
 | Run one idea end-to-end | `/flow count with a mutex` | Box-style pipeline visual (prompt → 4 stages → renderer), then generated Go → safety check → tuned code → plain-words trace |
 | Ask about a Go command | `what does go build ./... do` | Explains the exact command |
 | Ask for a Go command | `build with the race detector` | Answers `go build -race ./...`, offers to run it |
@@ -37,6 +48,17 @@ Say any of these inside `make chat`. When the chat answers with a `go`/`gofmt` c
 | Leave | `/quit` (or just `exit`, `quit`, `stop`) | Ends the chat |
 
 The prompt edits like a shell: **up/down** recalls history (kept in `~/.gollemer_history`), **left/right** moves the cursor, **tab** completes commands, make targets, file paths, and code symbols (tab twice lists), **Ctrl-C** cancels the line, **Ctrl-D** exits.
+
+## 🧠 Why: pieces, not memorization
+
+Everything above is built on one idea: **understand Go code structurally, then compose — never memorize character sequences.**
+
+- **Go's simplicity is the lever.** Go is explicit: few keywords, clear structure, doc comments on everything. The analyzer reads types, functions, call graphs, and data flow directly from the AST — no guessing.
+- **Lightweight NLP bridges words to code.** Stemming maps "service definition" to the `serviceDefs` field. Doc comments become piece purposes. Issue verbs ("expose", "show") pick composition templates. No giant transformer, no character prediction.
+- **Pieces carry placement constraints.** Each learned piece knows where it goes structurally (route before server because the server reads routes at startup) and why. Composition is constraint solving, not pattern completion.
+- **Beginners get the map, not just the answer.** Every placement cites its reason. Every generated stub lists the available fields. The system shows *where*, explains *why*, and lets the human supply the *insight*.
+
+This is why a composed API works the first time: the pieces were learned as structures, the composition was derived from constraints, and `go build` verified it — not because the system saw a similar API before.
 
 ## ⌨️ Make commands
 
