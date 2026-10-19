@@ -636,6 +636,34 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 			fmt.Println("(Full training integration coming — the data format is ready.)")
 			continue
 		}
+		// /export-understanding: generate structure->language training pairs.
+		// This is "train on how the program knows code" — not character prediction.
+		if line == "/export-understanding" {
+			if lastAnalyzeProject == nil {
+				fmt.Println("Run /analyze first.")
+				continue
+			}
+			pairs := analyze.GenerateStructurePairs(lastAnalyzeProject)
+			path := "/tmp/understanding_pairs.jsonl"
+			if err := analyze.ExportStructurePairs(pairs, path); err != nil {
+				fmt.Printf("Couldn't export: %v\n", err)
+				continue
+			}
+			// Count by kind.
+			kinds := make(map[string]int)
+			for _, p := range pairs {
+				kinds[p.Kind]++
+			}
+			fmt.Printf("Exported %d structure→language pairs to %s\n", len(pairs), path)
+			for k, v := range kinds {
+				fmt.Printf("  %s: %d\n", k, v)
+			}
+			fmt.Println("\nThese teach a model HOW the analyzer understands code:")
+			fmt.Println("  Input:  structural facts (function X on Y, locks for reading, ...)")
+			fmt.Println("  Output: natural explanation (X returns... It locks...)")
+			fmt.Println("\nThe model learns facts→words, not characters→characters.")
+			continue
+		}
 		// /comment <Func>: generate a doc comment for a function.
 		if strings.HasPrefix(line, "/comment ") {
 			if lastAnalyzeProject == nil {
