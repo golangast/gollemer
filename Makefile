@@ -23,7 +23,7 @@ GOMAXPROCS = 8
 MAIN_CMD   = go run main.go
 
 .PHONY: start chat debug-chat classic flow sel explain smarter eval help import \
-        train-social train-go train-gocode train-gocli train-makefile
+        train-social train-go train-gocode train-gocli train-makefile train-transformer
 
 ## start: The start-here guide — what to do, what it can do, how to expand it
 start:
@@ -90,6 +90,11 @@ train-gocli:
 ## train-makefile: Retrain the makefile command brain (128/256 dims)
 train-makefile:
 	GOMEMLIMIT=$(MEM_LIMIT) GOGC=$(GOGC) GOMAXPROCS=$(GOMAXPROCS) $(MAIN_CMD) -train-real-seq2seq -domain makefile
+
+## train-transformer: Train the Transformer gocode model (OpenBLAS hybrid, tuned GC)
+## Uses: GOGC=400, GOMEMLIMIT=8000MiB, GOMAXPROCS=6, OPENBLAS_NUM_THREADS=6
+train-transformer:
+	GOMEMLIMIT=8000MiB GOGC=400 GOMAXPROCS=6 OPENBLAS_NUM_THREADS=6 CGO_ENABLED=1 go run -tags openblas main.go -train-transformer -domain gocode -resume
 
 ## import: Import new training pairs through the quality gate (FILE=path.jsonl)
 import:
