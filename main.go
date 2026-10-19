@@ -18,11 +18,22 @@ func main() {
 	domainFlag := flag.String("domain", "social", "Training/chat domain (social, go, ...)")
 	resumeFlag := flag.Bool("resume", false, "Resume -train-real-seq2seq from the last checkpoint instead of starting at epoch 0")
 	reclassifyFlag := flag.Bool("reclassify-domains", false, "Re-tag all dataset pairs with the current domain classifier")
+	genUnderstandingFlag := flag.Bool("gen-understanding", false, "Generate structure->language training pairs from Go source")
+	srcDirFlag := flag.String("src", ".", "Source directory for -gen-understanding")
+	outFileFlag := flag.String("out", "data/training/understanding_pairs.jsonl", "Output file for -gen-understanding")
 	flag.Parse()
 
-	if !*trainRealSeq2SeqFlag && !*realChatFlag && *importPairsFlag == "" && !*reclassifyFlag {
-		fmt.Fprintf(os.Stderr, "Usage: gollemer -train-real-seq2seq | gollemer -real-chat | gollemer -import-pairs=file.jsonl | gollemer -reclassify-domains\n")
+	if !*trainRealSeq2SeqFlag && !*realChatFlag && *importPairsFlag == "" && !*reclassifyFlag && !*genUnderstandingFlag {
+		fmt.Fprintf(os.Stderr, "Usage: gollemer -train-real-seq2seq | gollemer -real-chat | gollemer -import-pairs=file.jsonl | gollemer -reclassify-domains | gollemer -gen-understanding\n")
 		os.Exit(1)
+	}
+
+	if *genUnderstandingFlag {
+		if err := runGenUnderstanding(*srcDirFlag, *outFileFlag); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		return
 	}
 
 	rootDir, err := os.Getwd()

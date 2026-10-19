@@ -1,0 +1,557 @@
+{"domain":"understanding","input":"Analyze: may-fail","output":"Analyze analyzes. It may-fail."}
+{"domain":"understanding","input":"AnalyzeConcurrencySource","output":"AnalyzeConcurrencySource analyzeconcurrencysources."}
+{"domain":"understanding","input":"Describe on ConcurrencyReport","output":"Describe describes on the ConcurrencyReport."}
+{"domain":"understanding","input":"ExportStructurePairs: iterates,may-fail","output":"ExportStructurePairs returns the exportstructurepairs. It iterates, it may-fail."}
+{"domain":"understanding","input":"ExtractIssueConcepts: iterates","output":"ExtractIssueConcepts returns the extractissueconcepts. It iterates."}
+{"domain":"understanding","input":"FormatImprovements: iterates","output":"FormatImprovements returns the formatimprovements. It iterates."}
+{"domain":"understanding","input":"AnalyzeFailures on Func: iterates","output":"AnalyzeFailures returns the analyzefailures on the Func. It iterates."}
+{"domain":"understanding","input":"ContextualRole on Func","output":"ContextualRole contextualroles on the Func."}
+{"domain":"understanding","input":"Control on Func: iterates","output":"Control controls on the Func. It iterates."}
+{"domain":"understanding","input":"ControlPhrase on Func","output":"ControlPhrase controlphrases on the Func."}
+{"domain":"understanding","input":"Detail on Func","output":"Detail details on the Func."}
+{"domain":"understanding","input":"Display on Func","output":"Display displays on the Func."}
+{"domain":"understanding","input":"Document on Func: iterates","output":"Document documents on the Func. It iterates."}
+{"domain":"understanding","input":"FailurePhrase on Func: iterates","output":"FailurePhrase failurephrases on the Func. It iterates."}
+{"domain":"understanding","input":"FlowSummary on Func: iterates","output":"FlowSummary flowsummarys on the Func. It iterates."}
+{"domain":"understanding","input":"Flows on Func: iterates","output":"Flows returns the flows on the Func. It iterates."}
+{"domain":"understanding","input":"Intent on Func","output":"Intent intents on the Func."}
+{"domain":"understanding","input":"Source on Func","output":"Source sources on the Func."}
+{"domain":"understanding","input":"Summary on Func","output":"Summary summarys on the Func."}
+{"domain":"understanding","input":"WhyExists on Func: iterates","output":"WhyExists returns the whyexists on the Func. It iterates."}
+{"domain":"understanding","input":"GenerateConstructor: iterates","output":"GenerateConstructor generateconstructors. It iterates."}
+{"domain":"understanding","input":"GenerateGetter","output":"GenerateGetter generategetters."}
+{"domain":"understanding","input":"GenerateSetter","output":"GenerateSetter generatesetters."}
+{"domain":"understanding","input":"GenerateStringer: iterates","output":"GenerateStringer generatestringers. It iterates."}
+{"domain":"understanding","input":"GenerateStructurePairs: iterates","output":"GenerateStructurePairs returns the generatestructurepairs. It iterates."}
+{"domain":"understanding","input":"Describe on ImpactReport","output":"Describe describes on the ImpactReport."}
+{"domain":"understanding","input":"IsCodebaseQuestion","output":"IsCodebaseQuestion iscodebasequestions."}
+{"domain":"understanding","input":"LoadPatternLibrary: may-fail","output":"LoadPatternLibrary loadpatternlibrarys. It may-fail."}
+{"domain":"understanding","input":"NewPatternLibrary","output":"NewPatternLibrary newpatternlibrarys."}
+{"domain":"understanding","input":"NewPieceLibrary","output":"NewPieceLibrary newpiecelibrarys."}
+{"domain":"understanding","input":"LearnFromProject on PatternLibrary: iterates","output":"LearnFromProject learnfromprojects on the PatternLibrary. It iterates."}
+{"domain":"understanding","input":"MatchAgainstLibrary on PatternLibrary: iterates","output":"MatchAgainstLibrary matchagainstlibrarys on the PatternLibrary. It iterates."}
+{"domain":"understanding","input":"Save on PatternLibrary: may-fail","output":"Save saves on the PatternLibrary. It may-fail."}
+{"domain":"understanding","input":"PieceFirstSentence","output":"PieceFirstSentence piecefirstsentences."}
+{"domain":"understanding","input":"Compose on PieceLibrary: iterates","output":"Compose composes on the PieceLibrary. It iterates."}
+{"domain":"understanding","input":"LearnFromDocs on PieceLibrary: iterates","output":"LearnFromDocs returns the learnfromdocs on the PieceLibrary. It iterates."}
+{"domain":"understanding","input":"LearnHTTPFromProject on PieceLibrary: iterates","output":"LearnHTTPFromProject learnhttpfromprojects on the PieceLibrary. It iterates."}
+{"domain":"understanding","input":"Load on PieceLibrary: may-fail","output":"Load loads on the PieceLibrary. It may-fail."}
+{"domain":"understanding","input":"Save on PieceLibrary: may-fail","output":"Save saves on the PieceLibrary. It may-fail."}
+{"domain":"understanding","input":"SeedHTTP on PieceLibrary","output":"SeedHTTP seedhttps on the PieceLibrary."}
+{"domain":"understanding","input":"learnPiece on PieceLibrary","output":"learnPiece learnpieces on the PieceLibrary."}
+{"domain":"understanding","input":"Fill on PieceSchema: iterates","output":"Fill fills on the PieceSchema. It iterates."}
+{"domain":"understanding","input":"AllFuncs on Project: iterates","output":"AllFuncs returns the allfuncs on the Project. It iterates."}
+{"domain":"understanding","input":"AnalyzeImpact on Project: iterates","output":"AnalyzeImpact analyzeimpacts on the Project. It iterates."}
+{"domain":"understanding","input":"AnomalyReport on Project: iterates","output":"AnomalyReport anomalyreports on the Project. It iterates."}
+{"domain":"understanding","input":"Answer on Project","output":"Answer answers on the Project."}
+{"domain":"understanding","input":"ArchitectureSummary on Project: iterates","output":"ArchitectureSummary architecturesummarys on the Project. It iterates."}
+{"domain":"understanding","input":"BiggestFiles on Project: iterates","output":"BiggestFiles returns the biggestfiles on the Project. It iterates."}
+{"domain":"understanding","input":"BreakDown on Project: iterates","output":"BreakDown breakdowns on the Project. It iterates."}
+{"domain":"understanding","input":"BuildGraph on Project: iterates","output":"BuildGraph buildgraphs on the Project. It iterates."}
+{"domain":"understanding","input":"Coupling on Project: iterates","output":"Coupling couplings on the Project. It iterates."}
+{"domain":"understanding","input":"DescribeFile on Project: iterates","output":"DescribeFile describefiles on the Project. It iterates."}
+{"domain":"understanding","input":"DetectAnomalies on Project: iterates","output":"DetectAnomalies returns the detectanomalies on the Project. It iterates."}
+{"domain":"understanding","input":"Document on Project: iterates","output":"Document documents on the Project. It iterates."}
+{"domain":"understanding","input":"EngineRoom on Project: iterates","output":"EngineRoom enginerooms on the Project. It iterates."}
+{"domain":"understanding","input":"EntryPoints on Project: iterates","output":"EntryPoints returns the entrypoints on the Project. It iterates."}
+{"domain":"understanding","input":"ExplainBeginner on Project","output":"ExplainBeginner explainbeginners on the Project."}
+{"domain":"understanding","input":"FieldReaders on Project","output":"FieldReaders returns the fieldreaders on the Project."}
+{"domain":"understanding","input":"FieldWriters on Project","output":"FieldWriters returns the fieldwriters on the Project."}
+{"domain":"understanding","input":"FindConfigStruct on Project: iterates","output":"FindConfigStruct findconfigstructs on the Project. It iterates."}
+{"domain":"understanding","input":"FindKeyDispatchSites on Project: iterates","output":"FindKeyDispatchSites returns the findkeydispatchsites on the Project. It iterates."}
+{"domain":"understanding","input":"FindMechanism on Project: iterates","output":"FindMechanism findmechanisms on the Project. It iterates."}
+{"domain":"understanding","input":"FindPath on Project: iterates","output":"FindPath findpaths on the Project. It iterates."}
+{"domain":"understanding","input":"FuncByID on Project","output":"FuncByID funcbyids on the Project."}
+{"domain":"understanding","input":"GuideChange on Project: iterates","output":"GuideChange guidechanges on the Project. It iterates."}
+{"domain":"understanding","input":"GuideIssue on Project: iterates","output":"GuideIssue guideissues on the Project. It iterates."}
+{"domain":"understanding","input":"ImportGraph on Project: iterates","output":"ImportGraph importgraphs on the Project. It iterates."}
+{"domain":"understanding","input":"InferArchitecture on Project: iterates","output":"InferArchitecture inferarchitectures on the Project. It iterates."}
+{"domain":"understanding","input":"KeyTypes on Project: iterates","output":"KeyTypes returns the keytypes on the Project. It iterates."}
+{"domain":"understanding","input":"LinkPath on Project","output":"LinkPath linkpaths on the Project."}
+{"domain":"understanding","input":"Overview on Project: iterates","output":"Overview overviews on the Project. It iterates."}
+{"domain":"understanding","input":"PackageDetail on Project: iterates","output":"PackageDetail packagedetails on the Project. It iterates."}
+{"domain":"understanding","input":"PackageSizes on Project: iterates","output":"PackageSizes returns the packagesizes on the Project. It iterates."}
+{"domain":"understanding","input":"PackageTree on Project: iterates","output":"PackageTree packagetrees on the Project. It iterates."}
+{"domain":"understanding","input":"Pipeline on Project: iterates","output":"Pipeline pipelines on the Project. It iterates."}
+{"domain":"understanding","input":"Rank on Project: iterates","output":"Rank ranks on the Project. It iterates."}
+{"domain":"understanding","input":"ReadingGuide on Project: iterates","output":"ReadingGuide readingguides on the Project. It iterates."}
+{"domain":"understanding","input":"SourceOf on Project","output":"SourceOf sourceofs on the Project."}
+{"domain":"understanding","input":"Story on Project: iterates","output":"Story storys on the Project. It iterates."}
+{"domain":"understanding","input":"Summary on Project: iterates","output":"Summary summarys on the Project. It iterates."}
+{"domain":"understanding","input":"TopFuncs on Project: iterates","output":"TopFuncs returns the topfuncs on the Project. It iterates."}
+{"domain":"understanding","input":"VisualReport on Project","output":"VisualReport visualreports on the Project."}
+{"domain":"understanding","input":"WhereToChange on Project: iterates","output":"WhereToChange wheretochanges on the Project. It iterates."}
+{"domain":"understanding","input":"WhereToChangeText on Project: iterates","output":"WhereToChangeText wheretochangetexts on the Project. It iterates."}
+{"domain":"understanding","input":"addEdge on Project: iterates","output":"addEdge addedges on the Project. It iterates."}
+{"domain":"understanding","input":"addFile on Project: iterates","output":"addFile addfiles on the Project. It iterates."}
+{"domain":"understanding","input":"alsoFiles on Project: iterates","output":"alsoFiles returns the alsofiles on the Project. It iterates."}
+{"domain":"understanding","input":"ambiguous on Project: iterates","output":"ambiguous returns the ambiguous on the Project. It iterates."}
+{"domain":"understanding","input":"analyzeEffects on Project: iterates","output":"analyzeEffects returns the analyzeeffects on the Project. It iterates."}
+{"domain":"understanding","input":"answerBeginner on Project","output":"answerBeginner answerbeginners on the Project."}
+{"domain":"understanding","input":"answerCallees on Project: iterates","output":"answerCallees returns the answercallees on the Project. It iterates."}
+{"domain":"understanding","input":"answerCallers on Project: iterates","output":"answerCallers returns the answercallers on the Project. It iterates."}
+{"domain":"understanding","input":"answerEffects on Project: iterates","output":"answerEffects returns the answereffects on the Project. It iterates."}
+{"domain":"understanding","input":"answerHowWorks on Project: iterates","output":"answerHowWorks returns the answerhowworks on the Project. It iterates."}
+{"domain":"understanding","input":"answerPackage on Project","output":"answerPackage answerpackages on the Project."}
+{"domain":"understanding","input":"answerShowMe on Project","output":"answerShowMe answershowmes on the Project."}
+{"domain":"understanding","input":"answerWhatDoes on Project","output":"answerWhatDoes returns the answerwhatdoes on the Project."}
+{"domain":"understanding","input":"answerWhatReads on Project: iterates","output":"answerWhatReads returns the answerwhatreads on the Project. It iterates."}
+{"domain":"understanding","input":"answerWhereDefined on Project","output":"answerWhereDefined answerwheredefineds on the Project."}
+{"domain":"understanding","input":"answerWhoSets on Project: iterates","output":"answerWhoSets returns the answerwhosets on the Project. It iterates."}
+{"domain":"understanding","input":"answerWhyCalls on Project: iterates","output":"answerWhyCalls returns the answerwhycalls on the Project. It iterates."}
+{"domain":"understanding","input":"buildConsistencyPlan on Project: iterates","output":"buildConsistencyPlan buildconsistencyplans on the Project. It iterates."}
+{"domain":"understanding","input":"buildFeaturePlan on Project: iterates","output":"buildFeaturePlan buildfeatureplans on the Project. It iterates."}
+{"domain":"understanding","input":"buildFieldReaders on Project: iterates","output":"buildFieldReaders returns the buildfieldreaders on the Project. It iterates."}
+{"domain":"understanding","input":"buildFieldWriters on Project: iterates","output":"buildFieldWriters returns the buildfieldwriters on the Project. It iterates."}
+{"domain":"understanding","input":"buildNewCodePlan on Project","output":"buildNewCodePlan buildnewcodeplans on the Project."}
+{"domain":"understanding","input":"buildTypeMethodPlan on Project: iterates","output":"buildTypeMethodPlan buildtypemethodplans on the Project. It iterates."}
+{"domain":"understanding","input":"callRoots on Project: iterates","output":"callRoots returns the callroots on the Project. It iterates."}
+{"domain":"understanding","input":"codeRefs on Project: iterates","output":"codeRefs returns the coderefs on the Project. It iterates."}
+{"domain":"understanding","input":"collectGuards on Project: iterates","output":"collectGuards returns the collectguards on the Project. It iterates."}
+{"domain":"understanding","input":"effectFuncs on Project: iterates","output":"effectFuncs returns the effectfuncs on the Project. It iterates."}
+{"domain":"understanding","input":"finalize on Project: iterates","output":"finalize finalizes on the Project. It iterates."}
+{"domain":"understanding","input":"findConfigFlow on Project: iterates","output":"findConfigFlow findconfigflows on the Project. It iterates."}
+{"domain":"understanding","input":"findConfigType on Project: iterates","output":"findConfigType findconfigtypes on the Project. It iterates."}
+{"domain":"understanding","input":"findFlow on Project: iterates","output":"findFlow findflows on the Project. It iterates."}
+{"domain":"understanding","input":"findFunc on Project: iterates","output":"findFunc findfuncs on the Project. It iterates."}
+{"domain":"understanding","input":"findMethod on Project: iterates","output":"findMethod findmethods on the Project. It iterates."}
+{"domain":"understanding","input":"findPackage on Project: iterates","output":"findPackage findpackages on the Project. It iterates."}
+{"domain":"understanding","input":"flowFlagSites on Project: iterates","output":"flowFlagSites returns the flowflagsites on the Project. It iterates."}
+{"domain":"understanding","input":"flowMutations on Project: iterates","output":"flowMutations returns the flowmutations on the Project. It iterates."}
+{"domain":"understanding","input":"funcForObject on Project","output":"funcForObject funcforobjects on the Project."}
+{"domain":"understanding","input":"funcSeeds on Project: iterates","output":"funcSeeds returns the funcseeds on the Project. It iterates."}
+{"domain":"understanding","input":"importTarget on Project: iterates","output":"importTarget importtargets on the Project. It iterates."}
+{"domain":"understanding","input":"knowsSymbol on Project","output":"knowsSymbol knowssymbols on the Project."}
+{"domain":"understanding","input":"lineOf on Project","output":"lineOf lineofs on the Project."}
+{"domain":"understanding","input":"linkInternal on Project: iterates","output":"linkInternal linkinternals on the Project. It iterates."}
+{"domain":"understanding","input":"methodsOf on Project: iterates","output":"methodsOf methodsofs on the Project. It iterates."}
+{"domain":"understanding","input":"packageForFile on Project: iterates","output":"packageForFile packageforfiles on the Project. It iterates."}
+{"domain":"understanding","input":"packageTargets on Project: iterates","output":"packageTargets returns the packagetargets on the Project. It iterates."}
+{"domain":"understanding","input":"pkgFor on Project","output":"pkgFor pkgfors on the Project."}
+{"domain":"understanding","input":"projectOneLiner on Project: iterates","output":"projectOneLiner projectoneliners on the Project. It iterates."}
+{"domain":"understanding","input":"propagateEffects on Project: iterates","output":"propagateEffects returns the propagateeffects on the Project. It iterates."}
+{"domain":"understanding","input":"readingChain on Project: iterates","output":"readingChain readingchains on the Project. It iterates."}
+{"domain":"understanding","input":"readingOrder on Project: iterates","output":"readingOrder readingorders on the Project. It iterates."}
+{"domain":"understanding","input":"readingOrderDirs on Project: iterates","output":"readingOrderDirs returns the readingorderdirs on the Project. It iterates."}
+{"domain":"understanding","input":"refinePackage on Project: iterates","output":"refinePackage refinepackages on the Project. It iterates."}
+{"domain":"understanding","input":"refineTypes on Project: iterates","output":"refineTypes returns the refinetypes on the Project. It iterates."}
+{"domain":"understanding","input":"replaceSites on Project: iterates","output":"replaceSites returns the replacesites on the Project. It iterates."}
+{"domain":"understanding","input":"resolve on Project: iterates","output":"resolve resolves on the Project. It iterates."}
+{"domain":"understanding","input":"resolveCall on Project","output":"resolveCall resolvecalls on the Project."}
+{"domain":"understanding","input":"resolveField on Project: iterates","output":"resolveField resolvefields on the Project. It iterates."}
+{"domain":"understanding","input":"reuseFuncs on Project: iterates","output":"reuseFuncs returns the reusefuncs on the Project. It iterates."}
+{"domain":"understanding","input":"siblingCommands on Project: iterates","output":"siblingCommands returns the siblingcommands on the Project. It iterates."}
+{"domain":"understanding","input":"siteMatchesTitle on Project: iterates","output":"siteMatchesTitle sitematchestitles on the Project. It iterates."}
+{"domain":"understanding","input":"structFields on Project: iterates","output":"structFields returns the structfields on the Project. It iterates."}
+{"domain":"understanding","input":"targetPackage on Project: iterates","output":"targetPackage targetpackages on the Project. It iterates."}
+{"domain":"understanding","input":"targetType on Project: iterates","output":"targetType targettypes on the Project. It iterates."}
+{"domain":"understanding","input":"testPatterns on Project: iterates","output":"testPatterns returns the testpatterns on the Project. It iterates."}
+{"domain":"understanding","input":"topCallees on Project: iterates","output":"topCallees returns the topcallees on the Project. It iterates."}
+{"domain":"understanding","input":"typeMethods on Project: iterates","output":"typeMethods returns the typemethods on the Project. It iterates."}
+{"domain":"understanding","input":"typedTarget on Project","output":"typedTarget typedtargets on the Project."}
+{"domain":"understanding","input":"writeConsistencyPlan on Project: iterates","output":"writeConsistencyPlan writeconsistencyplans on the Project. It iterates."}
+{"domain":"understanding","input":"writeFeaturePlan on Project","output":"writeFeaturePlan writefeatureplans on the Project."}
+{"domain":"understanding","input":"writeNewCodePlan on Project: iterates","output":"writeNewCodePlan writenewcodeplans on the Project. It iterates."}
+{"domain":"understanding","input":"writeTypeMethodPlan on Project: iterates","output":"writeTypeMethodPlan writetypemethodplans on the Project. It iterates."}
+{"domain":"understanding","input":"RenderASCIIGraph: iterates","output":"RenderASCIIGraph renderasciigraphs. It iterates."}
+{"domain":"understanding","input":"SuggestImprovements: iterates","output":"SuggestImprovements returns the suggestimprovements. It iterates."}
+{"domain":"understanding","input":"Detail on Type","output":"Detail details on the Type."}
+{"domain":"understanding","input":"Document on Type","output":"Document documents on the Type."}
+{"domain":"understanding","input":"articleJoin: iterates","output":"articleJoin articlejoins. It iterates."}
+{"domain":"understanding","input":"bars","output":"bars returns the bars."}
+{"domain":"understanding","input":"bestOption: iterates","output":"bestOption bestoptions. It iterates."}
+{"domain":"understanding","input":"blockReturns","output":"blockReturns returns the blockreturns."}
+{"domain":"understanding","input":"callName","output":"callName callnames."}
+{"domain":"understanding","input":"callerChain: iterates","output":"callerChain callerchains. It iterates."}
+{"domain":"understanding","input":"camelSplit","output":"camelSplit camelsplits."}
+{"domain":"understanding","input":"camelToWords: iterates","output":"camelToWords returns the cameltowords. It iterates."}
+{"domain":"understanding","input":"capExamples","output":"capExamples returns the capexamples."}
+{"domain":"understanding","input":"capitalize","output":"capitalize capitalizes."}
+{"domain":"understanding","input":"chainExamples","output":"chainExamples returns the chainexamples."}
+{"domain":"understanding","input":"checkGuard: iterates","output":"checkGuard checkguards. It iterates."}
+{"domain":"understanding","input":"childStmtLists: iterates","output":"childStmtLists returns the childstmtlists. It iterates."}
+{"domain":"understanding","input":"classifyFunc","output":"classifyFunc classifyfuncs."}
+{"domain":"understanding","input":"cleanSymbol: iterates","output":"cleanSymbol cleansymbols. It iterates."}
+{"domain":"understanding","input":"coherent: iterates","output":"coherent coherents. It iterates."}
+{"domain":"understanding","input":"commas: iterates","output":"commas returns the commas. It iterates."}
+{"domain":"understanding","input":"commonDir: iterates","output":"commonDir commondirs. It iterates."}
+{"domain":"understanding","input":"commonReceiver: iterates","output":"commonReceiver commonreceivers. It iterates."}
+{"domain":"understanding","input":"comparesLiteral","output":"comparesLiteral comparesliterals."}
+{"domain":"understanding","input":"compositeTypeName","output":"compositeTypeName compositetypenames."}
+{"domain":"understanding","input":"concurrencyFix","output":"concurrencyFix concurrencyfixs."}
+{"domain":"understanding","input":"constructorVars","output":"constructorVars returns the constructorvars."}
+{"domain":"understanding","input":"contains: iterates","output":"contains returns the contains. It iterates."}
+{"domain":"understanding","input":"containsStr: iterates","output":"containsStr containsstrs. It iterates."}
+{"domain":"understanding","input":"countLines: iterates","output":"countLines returns the countlines. It iterates."}
+{"domain":"understanding","input":"declRecv","output":"declRecv declrecvs."}
+{"domain":"understanding","input":"describeKind","output":"describeKind describekinds."}
+{"domain":"understanding","input":"docText","output":"docText doctexts."}
+{"domain":"understanding","input":"effectPhrases: iterates","output":"effectPhrases returns the effectphrases. It iterates."}
+{"domain":"understanding","input":"existingPaths: iterates","output":"existingPaths returns the existingpaths. It iterates."}
+{"domain":"understanding","input":"explainFuncFromFacts","output":"explainFuncFromFacts returns the explainfuncfromfacts."}
+{"domain":"understanding","input":"explainTypeFromFacts","output":"explainTypeFromFacts returns the explaintypefromfacts."}
+{"domain":"understanding","input":"exprName","output":"exprName exprnames."}
+{"domain":"understanding","input":"exprStr","output":"exprStr exprstrs."}
+{"domain":"understanding","input":"extCallKey: iterates","output":"extCallKey extcallkeys. It iterates."}
+{"domain":"understanding","input":"fieldListString: iterates","output":"fieldListString fieldliststrings. It iterates."}
+{"domain":"understanding","input":"fieldNames: iterates","output":"fieldNames returns the fieldnames. It iterates."}
+{"domain":"understanding","input":"filepathBase","output":"filepathBase filepathbases."}
+{"domain":"understanding","input":"findDispatchSites","output":"findDispatchSites returns the finddispatchsites."}
+{"domain":"understanding","input":"findFlagsFunc: iterates","output":"findFlagsFunc findflagsfuncs. It iterates."}
+{"domain":"understanding","input":"findFuncDecl","output":"findFuncDecl findfuncdecls."}
+{"domain":"understanding","input":"findModule: iterates","output":"findModule findmodules. It iterates."}
+{"domain":"understanding","input":"firstLine","output":"firstLine firstlines."}
+{"domain":"understanding","input":"firstSentence: iterates","output":"firstSentence firstsentences. It iterates."}
+{"domain":"understanding","input":"flagLikeCond","output":"flagLikeCond flaglikeconds."}
+{"domain":"understanding","input":"flagsSignal: iterates","output":"flagsSignal flagssignals. It iterates."}
+{"domain":"understanding","input":"funcID","output":"funcID funcids."}
+{"domain":"understanding","input":"funcStructurePair: read-locks,iterates","output":"funcStructurePair funcstructurepairs. It read-locks, it iterates."}
+{"domain":"understanding","input":"hasBenchmark","output":"hasBenchmark hasbenchmarks."}
+{"domain":"understanding","input":"hasEffect: iterates","output":"hasEffect haseffects. It iterates."}
+{"domain":"understanding","input":"importBase","output":"importBase importbases."}
+{"domain":"understanding","input":"inLoopRange: iterates","output":"inLoopRange inloopranges. It iterates."}
+{"domain":"understanding","input":"isCache","output":"isCache iscaches."}
+{"domain":"understanding","input":"isConstructor","output":"isConstructor isconstructors."}
+{"domain":"understanding","input":"isExported","output":"isExported isexporteds."}
+{"domain":"understanding","input":"isGetter","output":"isGetter isgetters."}
+{"domain":"understanding","input":"isGoTypeWord","output":"isGoTypeWord isgotypewords."}
+{"domain":"understanding","input":"isHTTPHandler: iterates","output":"isHTTPHandler ishttphandlers. It iterates."}
+{"domain":"understanding","input":"isHandlerPattern: iterates","output":"isHandlerPattern ishandlerpatterns. It iterates."}
+{"domain":"understanding","input":"isLikelyErrorReturn: iterates","output":"isLikelyErrorReturn islikelyerrorreturns. It iterates."}
+{"domain":"understanding","input":"isPathWord","output":"isPathWord ispathwords."}
+{"domain":"understanding","input":"isPredicate: iterates","output":"isPredicate ispredicates. It iterates."}
+{"domain":"understanding","input":"isRetryLoop: iterates","output":"isRetryLoop isretryloops. It iterates."}
+{"domain":"understanding","input":"isSetter","output":"isSetter issetters."}
+{"domain":"understanding","input":"isUpper","output":"isUpper isuppers."}
+{"domain":"understanding","input":"isValidatorName","output":"isValidatorName isvalidatornames."}
+{"domain":"understanding","input":"isValidatorPattern","output":"isValidatorPattern isvalidatorpatterns."}
+{"domain":"understanding","input":"isVisualWord","output":"isVisualWord isvisualwords."}
+{"domain":"understanding","input":"issueTitle: iterates","output":"issueTitle issuetitles. It iterates."}
+{"domain":"understanding","input":"joinShort: iterates","output":"joinShort joinshorts. It iterates."}
+{"domain":"understanding","input":"joinWithAnd","output":"joinWithAnd joinwithands."}
+{"domain":"understanding","input":"joinWords","output":"joinWords returns the joinwords."}
+{"domain":"understanding","input":"keyFuncOf: iterates","output":"keyFuncOf keyfuncofs. It iterates."}
+{"domain":"understanding","input":"keyLiterals: iterates","output":"keyLiterals returns the keyliterals. It iterates."}
+{"domain":"understanding","input":"limitStr","output":"limitStr limitstrs."}
+{"domain":"understanding","input":"loadGlobalPatternLib: iterates","output":"loadGlobalPatternLib loadglobalpatternlibs. It iterates."}
+{"domain":"understanding","input":"loopRanges: iterates","output":"loopRanges returns the loopranges. It iterates."}
+{"domain":"understanding","input":"methodName: iterates","output":"methodName methodnames. It iterates."}
+{"domain":"understanding","input":"missingPaths: iterates","output":"missingPaths returns the missingpaths. It iterates."}
+{"domain":"understanding","input":"namedCalls: iterates","output":"namedCalls returns the namedcalls. It iterates."}
+{"domain":"understanding","input":"namedTypeName","output":"namedTypeName namedtypenames."}
+{"domain":"understanding","input":"newFlags: iterates","output":"newFlags returns the newflags. It iterates."}
+{"domain":"understanding","input":"newKeysAtLevel: iterates","output":"newKeysAtLevel newkeysatlevels. It iterates."}
+{"domain":"understanding","input":"nodeText","output":"nodeText nodetexts."}
+{"domain":"understanding","input":"oneLineDoc","output":"oneLineDoc onelinedocs."}
+{"domain":"understanding","input":"optionUser: iterates","output":"optionUser optionusers. It iterates."}
+{"domain":"understanding","input":"paramNames","output":"paramNames returns the paramnames."}
+{"domain":"understanding","input":"paramPackages: iterates","output":"paramPackages returns the parampackages. It iterates."}
+{"domain":"understanding","input":"paramTypeName","output":"paramTypeName paramtypenames."}
+{"domain":"understanding","input":"patternIntent","output":"patternIntent patternintents."}
+{"domain":"understanding","input":"pieceFirstSentence","output":"pieceFirstSentence piecefirstsentences."}
+{"domain":"understanding","input":"walk on pipelineWalker: iterates","output":"walk walks on the pipelineWalker. It iterates."}
+{"domain":"understanding","input":"pkgLabel","output":"pkgLabel pkglabels."}
+{"domain":"understanding","input":"planFileExists: iterates","output":"planFileExists returns the planfileexists. It iterates."}
+{"domain":"understanding","input":"planNoun: iterates","output":"planNoun plannouns. It iterates."}
+{"domain":"understanding","input":"predicatePhrase: iterates","output":"predicatePhrase predicatephrases. It iterates."}
+{"domain":"understanding","input":"problemStatement: iterates","output":"problemStatement problemstatements. It iterates."}
+{"domain":"understanding","input":"quoteAll: iterates","output":"quoteAll quotealls. It iterates."}
+{"domain":"understanding","input":"rankSiblings: iterates","output":"rankSiblings returns the ranksiblings. It iterates."}
+{"domain":"understanding","input":"receivesType: iterates","output":"receivesType receivestypes. It iterates."}
+{"domain":"understanding","input":"recvName","output":"recvName recvnames."}
+{"domain":"understanding","input":"renderSig","output":"renderSig rendersigs."}
+{"domain":"understanding","input":"renderXrayWalk: iterates","output":"renderXrayWalk renderxraywalks. It iterates."}
+{"domain":"understanding","input":"rhsValue","output":"rhsValue rhsvalues."}
+{"domain":"understanding","input":"routeToHandlerName","output":"routeToHandlerName routetohandlernames."}
+{"domain":"understanding","input":"safetyLine","output":"safetyLine safetylines."}
+{"domain":"understanding","input":"shortCond","output":"shortCond shortconds."}
+{"domain":"understanding","input":"shortDir","output":"shortDir shortdirs."}
+{"domain":"understanding","input":"shortDoc","output":"shortDoc shortdocs."}
+{"domain":"understanding","input":"shortID","output":"shortID shortids."}
+{"domain":"understanding","input":"shortType","output":"shortType shorttypes."}
+{"domain":"understanding","input":"simpleVerb","output":"simpleVerb simpleverbs."}
+{"domain":"understanding","input":"simplestFunc: iterates","output":"simplestFunc simplestfuncs. It iterates."}
+{"domain":"understanding","input":"singular","output":"singular singulars."}
+{"domain":"understanding","input":"snippetHead","output":"snippetHead snippetheads."}
+{"domain":"understanding","input":"sortedKeys: iterates","output":"sortedKeys returns the sortedkeys. It iterates."}
+{"domain":"understanding","input":"splitName","output":"splitName splitnames."}
+{"domain":"understanding","input":"startsWithArticle","output":"startsWithArticle startswitharticles."}
+{"domain":"understanding","input":"stem: iterates","output":"stem stems. It iterates."}
+{"domain":"understanding","input":"stubSuggestion","output":"stubSuggestion stubsuggestions."}
+{"domain":"understanding","input":"switchExamples: iterates","output":"switchExamples returns the switchexamples. It iterates."}
+{"domain":"understanding","input":"testIntent","output":"testIntent testintents."}
+{"domain":"understanding","input":"thirdPerson: iterates","output":"thirdPerson thirdpersons. It iterates."}
+{"domain":"understanding","input":"titleNouns: iterates","output":"titleNouns returns the titlenouns. It iterates."}
+{"domain":"understanding","input":"tokenizeName","output":"tokenizeName tokenizenames."}
+{"domain":"understanding","input":"topNew: iterates","output":"topNew topnews. It iterates."}
+{"domain":"understanding","input":"truncateRunes","output":"truncateRunes returns the truncaterunes."}
+{"domain":"understanding","input":"typeString","output":"typeString typestrings."}
+{"domain":"understanding","input":"typeStructurePair: iterates","output":"typeStructurePair typestructurepairs. It iterates."}
+{"domain":"understanding","input":"valueTypeOf","output":"valueTypeOf valuetypeofs."}
+{"domain":"understanding","input":"verbPhrase","output":"verbPhrase verbphrases."}
+{"domain":"understanding","input":"wantsConsistency: iterates","output":"wantsConsistency wantsconsistencys. It iterates."}
+{"domain":"understanding","input":"wantsKeys: iterates","output":"wantsKeys returns the wantskeys. It iterates."}
+{"domain":"understanding","input":"wantsReplace: iterates","output":"wantsReplace wantsreplaces. It iterates."}
+{"domain":"understanding","input":"wordHit: iterates","output":"wordHit wordhits. It iterates."}
+{"domain":"understanding","input":"wordSet: iterates","output":"wordSet wordsets. It iterates."}
+{"domain":"understanding","input":"wordTokens: iterates","output":"wordTokens returns the wordtokens. It iterates."}
+{"domain":"understanding","input":"writeKeyVisual: iterates","output":"writeKeyVisual writekeyvisuals. It iterates."}
+{"domain":"understanding","input":"Anomaly","output":"Anomaly is a struct."}
+{"domain":"understanding","input":"Architecture","output":"Architecture is a struct."}
+{"domain":"understanding","input":"CallArg","output":"CallArg is a struct."}
+{"domain":"understanding","input":"ChangeHit","output":"ChangeHit is a struct."}
+{"domain":"understanding","input":"ComposeRequest","output":"ComposeRequest is a struct."}
+{"domain":"understanding","input":"ComposeRoute","output":"ComposeRoute is a struct."}
+{"domain":"understanding","input":"ConcurrencyReport: Describe","output":"ConcurrencyReport is a struct with 1 methods (Describe)."}
+{"domain":"understanding","input":"ConfigMatch","output":"ConfigMatch is a struct."}
+{"domain":"understanding","input":"ControlSummary","output":"ControlSummary is a struct."}
+{"domain":"understanding","input":"FailureMode","output":"FailureMode is a struct."}
+{"domain":"understanding","input":"Field","output":"Field is a struct."}
+{"domain":"understanding","input":"Flow","output":"Flow is a struct."}
+{"domain":"understanding","input":"Func: AnalyzeFailures,ContextualRole,Control,ControlPhrase,Detail","output":"Func is a struct with 5 methods (AnalyzeFailures, ContextualRole, Control, ControlPhrase, Detail)."}
+{"domain":"understanding","input":"Guard","output":"Guard is a struct."}
+{"domain":"understanding","input":"ImpactReport: Describe","output":"ImpactReport is a struct with 1 methods (Describe)."}
+{"domain":"understanding","input":"Improvement","output":"Improvement is a struct."}
+{"domain":"understanding","input":"InterfaceInfo","output":"InterfaceInfo is a struct."}
+{"domain":"understanding","input":"IssueConcepts","output":"IssueConcepts is a struct."}
+{"domain":"understanding","input":"KeyDispatch","output":"KeyDispatch is a struct."}
+{"domain":"understanding","input":"Layer","output":"Layer is a struct."}
+{"domain":"understanding","input":"MechanismSite","output":"MechanismSite is a struct."}
+{"domain":"understanding","input":"Package","output":"Package is a struct."}
+{"domain":"understanding","input":"PatternLibrary: LearnFromProject,MatchAgainstLibrary,Save","output":"PatternLibrary is a struct with 3 methods (LearnFromProject, MatchAgainstLibrary, Save)."}
+{"domain":"understanding","input":"PieceLibrary: Compose,LearnFromDocs,LearnHTTPFromProject,Load,Save","output":"PieceLibrary is a struct with 5 methods (Compose, LearnFromDocs, LearnHTTPFromProject, Load, Save)."}
+{"domain":"understanding","input":"PieceSchema: Fill","output":"PieceSchema is a struct with 1 methods (Fill)."}
+{"domain":"understanding","input":"Project: AllFuncs,AnalyzeImpact,AnomalyReport,Answer,ArchitectureSummary","output":"Project is a struct with 5 methods (AllFuncs, AnalyzeImpact, AnomalyReport, Answer, ArchitectureSummary)."}
+{"domain":"understanding","input":"Role","output":"Role is a struct."}
+{"domain":"understanding","input":"StructuralPattern","output":"StructuralPattern is a struct."}
+{"domain":"understanding","input":"StructurePair","output":"StructurePair is a struct."}
+{"domain":"understanding","input":"Type: Detail,Document","output":"Type is a struct with 2 methods (Detail, Document)."}
+{"domain":"understanding","input":"consistencyPlan","output":"consistencyPlan is a struct."}
+{"domain":"understanding","input":"consistencySite","output":"consistencySite is a struct."}
+{"domain":"understanding","input":"dispatchSite","output":"dispatchSite is a struct."}
+{"domain":"understanding","input":"featurePlan","output":"featurePlan is a struct."}
+{"domain":"understanding","input":"flagSite","output":"flagSite is a struct."}
+{"domain":"understanding","input":"funcSeed","output":"funcSeed is a struct."}
+{"domain":"understanding","input":"mutation","output":"mutation is a struct."}
+{"domain":"understanding","input":"newCodePlan","output":"newCodePlan is a struct."}
+{"domain":"understanding","input":"pipelineWalker: walk","output":"pipelineWalker is a struct with 1 methods (walk)."}
+{"domain":"understanding","input":"replaceSite","output":"replaceSite is a struct."}
+{"domain":"understanding","input":"siblingShape","output":"siblingShape is a struct."}
+{"domain":"understanding","input":"typeMethodPlan","output":"typeMethodPlan is a struct."}
+{"domain":"understanding","input":"BuildContextString","output":"BuildContextString buildcontextstrings."}
+{"domain":"understanding","input":"ChatDatasetPath","output":"ChatDatasetPath chatdatasetpaths."}
+{"domain":"understanding","input":"ClassifyDomain","output":"ClassifyDomain classifydomains."}
+{"domain":"understanding","input":"StyleSummary on CodeStyle","output":"StyleSummary stylesummarys on the CodeStyle."}
+{"domain":"understanding","input":"AddReply on Conversation","output":"AddReply addreplys on the Conversation."}
+{"domain":"understanding","input":"AddUser on Conversation","output":"AddUser addusers on the Conversation."}
+{"domain":"understanding","input":"Clear on Conversation","output":"Clear clears on the Conversation."}
+{"domain":"understanding","input":"Len on Conversation","output":"Len lens on the Conversation."}
+{"domain":"understanding","input":"Recall on Conversation","output":"Recall recalls on the Conversation."}
+{"domain":"understanding","input":"SocialInput on Conversation","output":"SocialInput socialinputs on the Conversation."}
+{"domain":"understanding","input":"Turns on Conversation","output":"Turns returns the turns on the Conversation."}
+{"domain":"understanding","input":"lastCommand on Conversation","output":"lastCommand lastcommands on the Conversation."}
+{"domain":"understanding","input":"lastExchange on Conversation","output":"lastExchange lastexchanges on the Conversation."}
+{"domain":"understanding","input":"lastReply on Conversation","output":"lastReply lastreplys on the Conversation."}
+{"domain":"understanding","input":"lastUserText on Conversation","output":"lastUserText lastusertexts on the Conversation."}
+{"domain":"understanding","input":"trim on Conversation","output":"trim trims on the Conversation."}
+{"domain":"understanding","input":"DefaultPredictorConfig","output":"DefaultPredictorConfig defaultpredictorconfigs."}
+{"domain":"understanding","input":"ExportTrainingPairs: may-fail","output":"ExportTrainingPairs returns the exporttrainingpairs. It may-fail."}
+{"domain":"understanding","input":"ImportChatPairs: iterates,may-fail","output":"ImportChatPairs returns the importchatpairs. It iterates, it may-fail."}
+{"domain":"understanding","input":"LearnStyle","output":"LearnStyle learnstyles."}
+{"domain":"understanding","input":"ReadLine on LineReader: may-fail","output":"ReadLine readlines on the LineReader. It may-fail."}
+{"domain":"understanding","input":"addHistory on LineReader","output":"addHistory addhistorys on the LineReader."}
+{"domain":"understanding","input":"complete on LineReader","output":"complete completes on the LineReader."}
+{"domain":"understanding","input":"doComplete on LineReader: iterates","output":"doComplete docompletes on the LineReader. It iterates."}
+{"domain":"understanding","input":"drawRaw on LineReader","output":"drawRaw drawraws on the LineReader."}
+{"domain":"understanding","input":"insertCompletion on LineReader","output":"insertCompletion insertcompletions on the LineReader."}
+{"domain":"understanding","input":"readRaw on LineReader: may-fail","output":"readRaw readraws on the LineReader. It may-fail."}
+{"domain":"understanding","input":"LoadChatDataset: may-fail","output":"LoadChatDataset loadchatdatasets. It may-fail."}
+{"domain":"understanding","input":"LoadProfile","output":"LoadProfile loadprofiles."}
+{"domain":"understanding","input":"LookupGoKnowledge: iterates","output":"LookupGoKnowledge lookupgoknowledges. It iterates."}
+{"domain":"understanding","input":"LookupMakefileRecall","output":"LookupMakefileRecall lookupmakefilerecalls."}
+{"domain":"understanding","input":"LookupSocialRecall","output":"LookupSocialRecall lookupsocialrecalls."}
+{"domain":"understanding","input":"NewConversation","output":"NewConversation newconversations."}
+{"domain":"understanding","input":"NewLineReader","output":"NewLineReader newlinereaders."}
+{"domain":"understanding","input":"PredictorStatus","output":"PredictorStatus returns the predictorstatus."}
+{"domain":"understanding","input":"RealModelPath","output":"RealModelPath realmodelpaths."}
+{"domain":"understanding","input":"ReclassifyDomains: iterates,may-fail","output":"ReclassifyDomains returns the reclassifydomains. It iterates, it may-fail."}
+{"domain":"understanding","input":"RouterDatasetPath","output":"RouterDatasetPath routerdatasetpaths."}
+{"domain":"understanding","input":"RunImportChatPairs: iterates,may-fail","output":"RunImportChatPairs returns the runimportchatpairs. It iterates, it may-fail."}
+{"domain":"understanding","input":"RunRealChat: may-fail","output":"RunRealChat runrealchats. It may-fail."}
+{"domain":"understanding","input":"RunRealSeq2SeqTraining: iterates,may-fail","output":"RunRealSeq2SeqTraining runrealseq2seqtrainings. It iterates, it may-fail."}
+{"domain":"understanding","input":"RunReclassifyDomains: may-fail","output":"RunReclassifyDomains returns the runreclassifydomains. It may-fail."}
+{"domain":"understanding","input":"SaveChatDataset: iterates,may-fail","output":"SaveChatDataset savechatdatasets. It iterates, it may-fail."}
+{"domain":"understanding","input":"SeedChatDataset: iterates,may-fail","output":"SeedChatDataset seedchatdatasets. It iterates, it may-fail."}
+{"domain":"understanding","input":"SocialRecallSize","output":"SocialRecallSize socialrecallsizes."}
+{"domain":"understanding","input":"Next on ThawScheduler: locks,iterates","output":"Next nexts on the ThawScheduler. It locks, it iterates."}
+{"domain":"understanding","input":"ActionLogCount on UserProfile","output":"ActionLogCount actionlogcounts on the UserProfile."}
+{"domain":"understanding","input":"CacheStyle on UserProfile","output":"CacheStyle cachestyles on the UserProfile."}
+{"domain":"understanding","input":"GetCachedStyle on UserProfile","output":"GetCachedStyle returns the cachedstyle on the UserProfile."}
+{"domain":"understanding","input":"LearnDirective on UserProfile","output":"LearnDirective learndirectives on the UserProfile."}
+{"domain":"understanding","input":"LogAction on UserProfile","output":"LogAction logactions on the UserProfile."}
+{"domain":"understanding","input":"RecordCommand on UserProfile: iterates","output":"RecordCommand recordcommands on the UserProfile. It iterates."}
+{"domain":"understanding","input":"RecordFileTouch on UserProfile: iterates","output":"RecordFileTouch recordfiletouchs on the UserProfile. It iterates."}
+{"domain":"understanding","input":"RecordProjectTouch on UserProfile","output":"RecordProjectTouch recordprojecttouchs on the UserProfile."}
+{"domain":"understanding","input":"RecordSequence on UserProfile","output":"RecordSequence recordsequences on the UserProfile."}
+{"domain":"understanding","input":"Save on UserProfile: may-fail","output":"Save saves on the UserProfile. It may-fail."}
+{"domain":"understanding","input":"SeedDefaults on UserProfile","output":"SeedDefaults returns the seeddefaults on the UserProfile."}
+{"domain":"understanding","input":"ShouldAutoBuild on UserProfile","output":"ShouldAutoBuild shouldautobuilds on the UserProfile."}
+{"domain":"understanding","input":"SuggestNext on UserProfile","output":"SuggestNext suggestnexts on the UserProfile."}
+{"domain":"understanding","input":"SuggestStartup on UserProfile: iterates","output":"SuggestStartup suggeststartups on the UserProfile. It iterates."}
+{"domain":"understanding","input":"ValidatePair: iterates,may-fail","output":"ValidatePair validatepairs. It iterates, it may-fail."}
+{"domain":"understanding","input":"analyzeCloned","output":"analyzeCloned analyzecloneds."}
+{"domain":"understanding","input":"appendToFile: may-fail","output":"appendToFile appendtofiles. It may-fail."}
+{"domain":"understanding","input":"augmentInputs: iterates","output":"augmentInputs returns the augmentinputs. It iterates."}
+{"domain":"understanding","input":"camelToWords: iterates","output":"camelToWords returns the cameltowords. It iterates."}
+{"domain":"understanding","input":"checkoutFor: may-fail","output":"checkoutFor checkoutfors. It may-fail."}
+{"domain":"understanding","input":"ckptPaths","output":"ckptPaths returns the ckptpaths."}
+{"domain":"understanding","input":"closestSibling: iterates","output":"closestSibling closestsiblings. It iterates."}
+{"domain":"understanding","input":"commonPrefix: iterates","output":"commonPrefix commonprefixs. It iterates."}
+{"domain":"understanding","input":"completePath: iterates","output":"completePath completepaths. It iterates."}
+{"domain":"understanding","input":"confirmAction","output":"confirmAction confirmactions."}
+{"domain":"understanding","input":"conjugateVerb","output":"conjugateVerb conjugateverbs."}
+{"domain":"understanding","input":"cwd","output":"cwd cwds."}
+{"domain":"understanding","input":"deriveCommentDensity","output":"deriveCommentDensity derivecommentdensitys."}
+{"domain":"understanding","input":"deriveErrorStyle","output":"deriveErrorStyle deriveerrorstyles."}
+{"domain":"understanding","input":"deriveHandlerNaming: iterates","output":"deriveHandlerNaming derivehandlernamings. It iterates."}
+{"domain":"understanding","input":"deriveReceiverNaming: iterates","output":"deriveReceiverNaming derivereceivernamings. It iterates."}
+{"domain":"understanding","input":"deriveTestStyle","output":"deriveTestStyle deriveteststyles."}
+{"domain":"understanding","input":"describeArchitecture: iterates","output":"describeArchitecture describearchitectures. It iterates."}
+{"domain":"understanding","input":"dimsForDomain","output":"dimsForDomain dimsfordomains."}
+{"domain":"understanding","input":"docDetails: read-locks,iterates","output":"docDetails returns the docdetails. It read-locks, it iterates."}
+{"domain":"understanding","input":"docVerb","output":"docVerb docverbs."}
+{"domain":"understanding","input":"enableRawMode","output":"enableRawMode enablerawmodes."}
+{"domain":"understanding","input":"enableRawMode","output":"enableRawMode enablerawmodes."}
+{"domain":"understanding","input":"encodeInput","output":"encodeInput encodeinputs."}
+{"domain":"understanding","input":"encodeTarget","output":"encodeTarget encodetargets."}
+{"domain":"understanding","input":"ensureGitHubRepo: may-fail","output":"ensureGitHubRepo ensuregithubrepos. It may-fail."}
+{"domain":"understanding","input":"expandBareNumber: iterates","output":"expandBareNumber expandbarenumbers. It iterates."}
+{"domain":"understanding","input":"explainBuildError","output":"explainBuildError explainbuilderrors."}
+{"domain":"understanding","input":"explainConcept: iterates","output":"explainConcept explainconcepts. It iterates."}
+{"domain":"understanding","input":"explainGoLine","output":"explainGoLine explaingolines."}
+{"domain":"understanding","input":"explainImport: iterates","output":"explainImport explainimports. It iterates."}
+{"domain":"understanding","input":"explainMethodPurpose","output":"explainMethodPurpose explainmethodpurposes."}
+{"domain":"understanding","input":"extractAnalyzePath: iterates","output":"extractAnalyzePath extractanalyzepaths. It iterates."}
+{"domain":"understanding","input":"extractFieldName","output":"extractFieldName extractfieldnames."}
+{"domain":"understanding","input":"fetchIssue: may-fail","output":"fetchIssue fetchissues. It may-fail."}
+{"domain":"understanding","input":"fetchPull: may-fail","output":"fetchPull fetchpulls. It may-fail."}
+{"domain":"understanding","input":"fetchPullFiles: may-fail","output":"fetchPullFiles returns the fetchpullfiles. It may-fail."}
+{"domain":"understanding","input":"generateDocCommentCmd: iterates","output":"generateDocCommentCmd generatedoccommentcmds. It iterates."}
+{"domain":"understanding","input":"generateMethodSkeleton: iterates","output":"generateMethodSkeleton generatemethodskeletons. It iterates."}
+{"domain":"understanding","input":"generateTestSkeleton: iterates","output":"generateTestSkeleton generatetestskeletons. It iterates."}
+{"domain":"understanding","input":"gitOriginRepo","output":"gitOriginRepo gitoriginrepos."}
+{"domain":"understanding","input":"githubGet: may-fail","output":"githubGet githubgets. It may-fail."}
+{"domain":"understanding","input":"goIdentCaseMap: iterates","output":"goIdentCaseMap goidentcasemaps. It iterates."}
+{"domain":"understanding","input":"gollemerHistoryPath","output":"gollemerHistoryPath gollemerhistorypaths."}
+{"domain":"understanding","input":"handleContribute: iterates","output":"handleContribute handlecontributes. It iterates."}
+{"domain":"understanding","input":"handleFlowCommand","output":"handleFlowCommand handleflowcommands."}
+{"domain":"understanding","input":"handleGoAnalyze","output":"handleGoAnalyze handlegoanalyzes."}
+{"domain":"understanding","input":"hasAnyPrefix: iterates","output":"hasAnyPrefix hasanyprefixs. It iterates."}
+{"domain":"understanding","input":"initMakeAllowlist: iterates","output":"initMakeAllowlist initmakeallowlists. It iterates."}
+{"domain":"understanding","input":"initMakefileRecall: iterates","output":"initMakefileRecall initmakefilerecalls. It iterates."}
+{"domain":"understanding","input":"initSocialRecall","output":"initSocialRecall initsocialrecalls."}
+{"domain":"understanding","input":"insertDocComment: iterates,may-fail","output":"insertDocComment insertdoccomments. It iterates, it may-fail."}
+{"domain":"understanding","input":"isCharDevice","output":"isCharDevice ischardevices."}
+{"domain":"understanding","input":"isGoCliRequest","output":"isGoCliRequest isgoclirequests."}
+{"domain":"understanding","input":"isGoCommandQuestion","output":"isGoCommandQuestion isgocommandquestions."}
+{"domain":"understanding","input":"isMakeTarget","output":"isMakeTarget ismaketargets."}
+{"domain":"understanding","input":"isRunnableGoCommand","output":"isRunnableGoCommand isrunnablegocommands."}
+{"domain":"understanding","input":"isUpper","output":"isUpper isuppers."}
+{"domain":"understanding","input":"isVowel","output":"isVowel isvowels."}
+{"domain":"understanding","input":"itoa","output":"itoa itoas."}
+{"domain":"understanding","input":"knowledgeTokens: iterates","output":"knowledgeTokens returns the knowledgetokens. It iterates."}
+{"domain":"understanding","input":"levenshtein: iterates","output":"levenshtein levenshteins. It iterates."}
+{"domain":"understanding","input":"listIssues: iterates","output":"listIssues returns the listissues. It iterates."}
+{"domain":"understanding","input":"listPulls: iterates","output":"listPulls returns the listpulls. It iterates."}
+{"domain":"understanding","input":"loadChatPairs: may-fail","output":"loadChatPairs returns the loadchatpairs. It may-fail."}
+{"domain":"understanding","input":"loadHistory: iterates","output":"loadHistory loadhistorys. It iterates."}
+{"domain":"understanding","input":"loadRealModel: may-fail","output":"loadRealModel loadrealmodels. It may-fail."}
+{"domain":"understanding","input":"loadRecallPairs: iterates","output":"loadRecallPairs returns the loadrecallpairs. It iterates."}
+{"domain":"understanding","input":"loadSeedPairs: iterates,may-fail","output":"loadSeedPairs returns the loadseedpairs. It iterates, it may-fail."}
+{"domain":"understanding","input":"loadTrainingCheckpoint: may-fail","output":"loadTrainingCheckpoint loadtrainingcheckpoints. It may-fail."}
+{"domain":"understanding","input":"makeBatches: iterates","output":"makeBatches returns the makebatches. It iterates."}
+{"domain":"understanding","input":"makeTargetNames: iterates","output":"makeTargetNames returns the maketargetnames. It iterates."}
+{"domain":"understanding","input":"matchCandidates: iterates","output":"matchCandidates returns the matchcandidates. It iterates."}
+{"domain":"understanding","input":"min","output":"min mins."}
+{"domain":"understanding","input":"normAugInput: iterates","output":"normAugInput normauginputs. It iterates."}
+{"domain":"understanding","input":"normalizeAction","output":"normalizeAction normalizeactions."}
+{"domain":"understanding","input":"normalizePairKey","output":"normalizePairKey normalizepairkeys."}
+{"domain":"understanding","input":"normalizeRecallInput","output":"normalizeRecallInput normalizerecallinputs."}
+{"domain":"understanding","input":"offerRunGoCommand","output":"offerRunGoCommand offerrungocommands."}
+{"domain":"understanding","input":"offerRunMakeCommand","output":"offerRunMakeCommand offerrunmakecommands."}
+{"domain":"understanding","input":"parseCloneCommand","output":"parseCloneCommand parseclonecommands."}
+{"domain":"understanding","input":"parseMakeDocs: iterates","output":"parseMakeDocs returns the parsemakedocs. It iterates."}
+{"domain":"understanding","input":"parseWhereTask","output":"parseWhereTask parsewheretasks."}
+{"domain":"understanding","input":"prepareDomainTrainData: iterates,may-fail","output":"prepareDomainTrainData preparedomaintraindatas. It iterates, it may-fail."}
+{"domain":"understanding","input":"printThoughtTrace: iterates","output":"printThoughtTrace printthoughttraces. It iterates."}
+{"domain":"understanding","input":"printTranscript: iterates","output":"printTranscript printtranscripts. It iterates."}
+{"domain":"understanding","input":"profilePath","output":"profilePath profilepaths."}
+{"domain":"understanding","input":"pullTarget","output":"pullTarget pulltargets."}
+{"domain":"understanding","input":"readCSI","output":"readCSI readcsis."}
+{"domain":"understanding","input":"readEscape","output":"readEscape readescapes."}
+{"domain":"understanding","input":"readKey","output":"readKey readkeys."}
+{"domain":"understanding","input":"readKey","output":"readKey readkeys."}
+{"domain":"understanding","input":"renderAnalyzeReport","output":"renderAnalyzeReport renderanalyzereports."}
+{"domain":"understanding","input":"renderPull: iterates","output":"renderPull renderpulls. It iterates."}
+{"domain":"understanding","input":"resolveAnalyzeRoot: may-fail","output":"resolveAnalyzeRoot resolveanalyzeroots. It may-fail."}
+{"domain":"understanding","input":"reviewFunc: iterates","output":"reviewFunc reviewfuncs. It iterates."}
+{"domain":"understanding","input":"routeDomain","output":"routeDomain routedomains."}
+{"domain":"understanding","input":"routeDomainRegex","output":"routeDomainRegex routedomainregexs."}
+{"domain":"understanding","input":"routeNeural: locks","output":"routeNeural routeneurals. It locks."}
+{"domain":"understanding","input":"runUnifiedChat: iterates,may-fail","output":"runUnifiedChat rununifiedchats. It iterates, it may-fail."}
+{"domain":"understanding","input":"runnableMakeTarget","output":"runnableMakeTarget runnablemaketargets."}
+{"domain":"understanding","input":"saveTrainingCheckpoint: may-fail","output":"saveTrainingCheckpoint savetrainingcheckpoints. It may-fail."}
+{"domain":"understanding","input":"seedDataPath","output":"seedDataPath seeddatapaths."}
+{"domain":"understanding","input":"stdinIsTerminal","output":"stdinIsTerminal stdinisterminals."}
+{"domain":"understanding","input":"stem","output":"stem stems."}
+{"domain":"understanding","input":"stripStringLiterals","output":"stripStringLiterals returns the stripstringliterals."}
+{"domain":"understanding","input":"suggestErrorFix: iterates","output":"suggestErrorFix suggesterrorfixs. It iterates."}
+{"domain":"understanding","input":"symbolNames: iterates","output":"symbolNames returns the symbolnames. It iterates."}
+{"domain":"understanding","input":"synonymVariants: iterates","output":"synonymVariants returns the synonymvariants. It iterates."}
+{"domain":"understanding","input":"tcgetattr: may-fail","output":"tcgetattr tcgetattrs. It may-fail."}
+{"domain":"understanding","input":"tcsetattr: may-fail","output":"tcsetattr tcsetattrs. It may-fail."}
+{"domain":"understanding","input":"termWidth","output":"termWidth termwidths."}
+{"domain":"understanding","input":"termWidth","output":"termWidth termwidths."}
+{"domain":"understanding","input":"tidyDecode: iterates","output":"tidyDecode tidydecodes. It iterates."}
+{"domain":"understanding","input":"tidyGoCode: iterates","output":"tidyGoCode tidygocodes. It iterates."}
+{"domain":"understanding","input":"tidyGoCommand","output":"tidyGoCommand tidygocommands."}
+{"domain":"understanding","input":"tokenizeLower","output":"tokenizeLower tokenizelowers."}
+{"domain":"understanding","input":"topPrefixes: iterates","output":"topPrefixes returns the topprefixes. It iterates."}
+{"domain":"understanding","input":"tryBareMakeTarget","output":"tryBareMakeTarget trybaremaketargets."}
+{"domain":"understanding","input":"tryCloneProject","output":"tryCloneProject trycloneprojects."}
+{"domain":"understanding","input":"tryCodebaseQuestion","output":"tryCodebaseQuestion trycodebasequestions."}
+{"domain":"understanding","input":"tryDeterministicAnswer","output":"tryDeterministicAnswer trydeterministicanswers."}
+{"domain":"understanding","input":"tryDirectRunMake","output":"tryDirectRunMake trydirectrunmakes."}
+{"domain":"understanding","input":"tryErrorHelp","output":"tryErrorHelp tryerrorhelps."}
+{"domain":"understanding","input":"tryExplainMake: iterates","output":"tryExplainMake tryexplainmakes. It iterates."}
+{"domain":"understanding","input":"tryIssueWhere","output":"tryIssueWhere tryissuewheres."}
+{"domain":"understanding","input":"tryNaturalAnalyze: iterates","output":"tryNaturalAnalyze trynaturalanalyzes. It iterates."}
+{"domain":"understanding","input":"tryPullWhere","output":"tryPullWhere trypullwheres."}
+{"domain":"understanding","input":"verifyGocodeIntent","output":"verifyGocodeIntent verifygocodeintents."}
+{"domain":"understanding","input":"vocabFingerprint","output":"vocabFingerprint vocabfingerprints."}
+{"domain":"understanding","input":"ActionLog","output":"ActionLog is a struct."}
+{"domain":"understanding","input":"ChatPair","output":"ChatPair is a struct."}
+{"domain":"understanding","input":"CodeStyle: StyleSummary","output":"CodeStyle is a struct with 1 methods (StyleSummary)."}
+{"domain":"understanding","input":"CommandStat","output":"CommandStat is a struct."}
+{"domain":"understanding","input":"Conversation: AddReply,AddUser,Clear,Len,Recall","output":"Conversation is a struct with 5 methods (AddReply, AddUser, Clear, Len, Recall)."}
+{"domain":"understanding","input":"LineReader: ReadLine,addHistory,complete,doComplete,drawRaw","output":"LineReader is a struct with 5 methods (ReadLine, addHistory, complete, doComplete, drawRaw)."}
+{"domain":"understanding","input":"PredictorConfig","output":"PredictorConfig is a struct."}
+{"domain":"understanding","input":"ProjectMemory","output":"ProjectMemory is a struct."}
+{"domain":"understanding","input":"ThawScheduler: Next","output":"ThawScheduler is a struct with 1 methods (Next)."}
+{"domain":"understanding","input":"Turn","output":"Turn is a struct."}
+{"domain":"understanding","input":"UserProfile: ActionLogCount,CacheStyle,GetCachedStyle,LearnDirective,LogAction","output":"UserProfile is a struct with 5 methods (ActionLogCount, CacheStyle, GetCachedStyle, LearnDirective, LogAction)."}
+{"domain":"understanding","input":"batch","output":"batch is a struct."}
+{"domain":"understanding","input":"ckptMeta","output":"ckptMeta is a struct."}
+{"domain":"understanding","input":"domainTrainData","output":"domainTrainData is a struct."}
+{"domain":"understanding","input":"encodedPair","output":"encodedPair is a struct."}
+{"domain":"understanding","input":"githubIssue","output":"githubIssue is a struct."}
+{"domain":"understanding","input":"githubListItem","output":"githubListItem is a struct."}
+{"domain":"understanding","input":"githubPull","output":"githubPull is a struct."}
+{"domain":"understanding","input":"githubPullFile","output":"githubPullFile is a struct."}
+{"domain":"understanding","input":"goKnowledgeEntry","output":"goKnowledgeEntry is a struct."}
+{"domain":"understanding","input":"heldProbe","output":"heldProbe is a struct."}
+{"domain":"understanding","input":"keyCode","output":"keyCode is a struct."}
+{"domain":"understanding","input":"keyCode","output":"keyCode is a struct."}
+{"domain":"understanding","input":"listedRef","output":"listedRef is a struct."}
+{"domain":"understanding","input":"seedPair","output":"seedPair is a struct."}
+{"domain":"understanding","input":"termios","output":"termios is a struct."}

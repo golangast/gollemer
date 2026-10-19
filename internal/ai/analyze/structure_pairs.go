@@ -68,44 +68,33 @@ func funcStructurePair(fn *Func) *StructurePair {
 	}
 
 	// Build the structural facts — what the analyzer KNOWS, not the code text.
+	// Keep it SHORT: the quality gate allows max 40 tokens per side.
 	var facts strings.Builder
-	facts.WriteString(fmt.Sprintf("function %s", fn.Name))
+	// Just: name + key behaviors. Skip the full signature.
+	facts.WriteString(fn.Name)
 	if fn.Receiver != "" {
-		facts.WriteString(fmt.Sprintf(" on %s", strings.Trim(fn.Receiver, "*")))
+		facts.WriteString(" on " + strings.Trim(fn.Receiver, "*"))
 	}
-	facts.WriteString(fmt.Sprintf(", signature %s", fn.Sig))
 
-	// Control flow facts.
+	// Control flow facts — abbreviated.
 	src := strings.ToLower(fn.Src)
 	var behaviors []string
-	if strings.Contains(src, ".lock()") || strings.Contains(src, ".rlock()") {
-		if strings.Contains(src, ".rlock()") {
-			behaviors = append(behaviors, "locks for reading")
-		} else {
-			behaviors = append(behaviors, "locks for writing")
-		}
+	if strings.Contains(src, "rlock()") {
+		behaviors = append(behaviors, "read-locks")
+	} else if strings.Contains(src, ".lock()") {
+		behaviors = append(behaviors, "locks")
 	}
-	if strings.Contains(src, "for ") && strings.Contains(src, "range") {
-		behaviors = append(behaviors, "iterates over data")
-	}
-	if strings.Contains(src, "if err") {
-		behaviors = append(behaviors, "handles errors")
+	if strings.Contains(src, "range") {
+		behaviors = append(behaviors, "iterates")
 	}
 	if strings.Contains(fn.Sig, "error") {
-		behaviors = append(behaviors, "returns error")
+		behaviors = append(behaviors, "may-fail")
 	}
 	if len(behaviors) > 0 {
-		facts.WriteString(fmt.Sprintf(", behaviors: %s", strings.Join(behaviors, ", ")))
-	}
-
-	// Doc comment if present — that's the human's own explanation.
-	if fn.Doc != "" {
-		first := firstSentence(fn.Doc)
-		facts.WriteString(fmt.Sprintf(", documented as: %s", first))
+		facts.WriteString(": " + strings.Join(behaviors, ","))
 	}
 
 	// The output: natural explanation from the template system.
-	// This is "correct but rigid" — the model learns to be fluent.
 	output := explainFuncFromFacts(fn, behaviors)
 
 	return &StructurePair{
@@ -121,21 +110,9 @@ func typeStructurePair(typ *Type, pkg *Package) *StructurePair {
 		return nil
 	}
 
+	// Keep it SHORT for the quality gate.
 	var facts strings.Builder
-	facts.WriteString(fmt.Sprintf("type %s struct", typ.Name))
-	if len(typ.Fields) > 0 {
-		var fieldNames []string
-		for _, fname := range typ.Fields {
-			// Skip embedded mutexes for the facts.
-			if strings.Contains(fname, "Mutex") {
-				continue
-			}
-			fieldNames = append(fieldNames, fname)
-		}
-		if len(fieldNames) > 0 {
-			facts.WriteString(fmt.Sprintf(" with fields %s", strings.Join(fieldNames, ", ")))
-		}
-	}
+	facts.WriteString(typ.Name)
 
 	// Use the type's own method list if available, else scan.
 	methods := typ.Methods
@@ -147,7 +124,11 @@ func typeStructurePair(typ *Type, pkg *Package) *StructurePair {
 		}
 	}
 	if len(methods) > 0 {
-		facts.WriteString(fmt.Sprintf(", methods: %s", strings.Join(methods, ", ")))
+		// Limit to first 5 methods to stay under token limit.
+		if len(methods) > 5 {
+			methods = methods[:5]
+		}
+		facts.WriteString(": " + strings.Join(methods, ","))
 	}
 
 	output := explainTypeFromFacts(typ, methods)
