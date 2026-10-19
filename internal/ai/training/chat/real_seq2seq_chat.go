@@ -161,6 +161,12 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 	if !debug {
 		log.SetOutput(io.Discard)
 	}
+	// Load the user profile — the "learning you" model. Local only.
+	profile := LoadProfile()
+	profile.SeedDefaults()
+	if suggestion := profile.SuggestStartup(projectRoot); suggestion != "" {
+		fmt.Printf("\n%s\n\n", suggestion)
+	}
 	if domain == UnifiedDomain {
 		return runUnifiedChat(projectRoot, debug)
 	}
@@ -556,6 +562,28 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 			}
 			fname := strings.TrimSpace(strings.TrimPrefix(line, "/review "))
 			fmt.Printf("%s\n", reviewFunc(fname, lastAnalyzeProject))
+			continue
+		}
+		// /profile: show what the system has learned about you.
+		if line == "/profile" {
+			fmt.Printf("\nWhat I've learned about you:\n\n")
+			fmt.Printf("Frequent commands:\n")
+			for _, s := range profile.FrequentCommands {
+				fmt.Printf("  %dx  %s\n", s.Count, s.Cmd)
+			}
+			fmt.Printf("\nProjects:\n")
+			for dir, pm := range profile.Projects {
+				fmt.Printf("  %s  (last: %s, focus: %s)\n", dir, pm.LastActive.Format("Jan 2 15:04"), pm.Focus)
+			}
+			fmt.Printf("\nLearned patterns:\n")
+			for k, v := range profile.Patterns {
+				fmt.Printf("  %s → %s\n", k, v)
+			}
+			fmt.Printf("\nDirectives:\n")
+			for k, v := range profile.Directives {
+				fmt.Printf("  %s = %v\n", k, v)
+			}
+			fmt.Printf("\nAll stored locally in ~/.gollemer_profile.json — never uploaded.\n\n")
 			continue
 		}
 		// /comment <Func>: generate a doc comment for a function.
