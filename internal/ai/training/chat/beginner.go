@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/golangast/gollemer/internal/ai/analyze"
 )
 
 // Beginner-five commands (2026-10-20): /example, /tour (+ next),
@@ -26,9 +28,10 @@ var (
 // handleBeginnerCommand dispatches the beginner five. It returns true
 // when the line was one of them (handled or refused with a message).
 func handleBeginnerCommand(line string, profile *UserProfile) bool {
+	line = translateBeginnerSentence(line)
 	needProject := func() bool {
 		if lastAnalyzeProject == nil {
-			fmt.Println("Run /analyze first.")
+			fmt.Println("First let me look at a project — say: analyze <github link or folder>")
 			return false
 		}
 		return true
@@ -62,7 +65,10 @@ func handleBeginnerCommand(line string, profile *UserProfile) bool {
 		}
 		fmt.Printf("\n%s", lastAnalyzeProject.LearnPathText())
 		return true
-	case line == "/tour":
+	case isTourLine(line):
+		if arg := tourLineArg(line); arg != "" && !analyzeForTour(arg) {
+			return true
+		}
 		if !needProject() {
 			return true
 		}
@@ -87,6 +93,105 @@ func handleBeginnerCommand(line string, profile *UserProfile) bool {
 		return true
 	}
 	return false
+}
+
+// --- Sentence forms -------------------------------------------------------
+// The beginner five are sentence-first (John, 2026-10-20: "why cant it
+// just be a sentence"): "give me a tour", "run it", "what should I learn
+// first" all work; the /slash forms remain as shortcuts. Translation
+// rewrites a recognized sentence into its slash form and lets the
+// switch above do the work, so both spellings share one code path.
+
+// cutPrefixFold is strings.CutPrefix with case-insensitive matching;
+// the returned rest keeps its original case (function names need it).
+func cutPrefixFold(s, prefix string) (string, bool) {
+	if len(s) >= len(prefix) && strings.EqualFold(s[:len(prefix)], prefix) {
+		return strings.TrimSpace(s[len(prefix):]), true
+	}
+	return "", false
+}
+
+// looksLikeProjectRef reports whether s reads as a GitHub URL or a
+// filesystem path, so "tour https://…" can carry its project along.
+func looksLikeProjectRef(s string) bool {
+	return strings.Contains(s, "github.com") || strings.Contains(s, "/") ||
+		strings.HasPrefix(s, "~") || strings.HasSuffix(s, ".git")
+}
+
+func translateBeginnerSentence(line string) string {
+	t := strings.TrimSpace(line)
+	low := strings.Trim(strings.ToLower(t), ".!? ")
+	// A tour that names its project: "tour <url>", "/tour <url>".
+	if rest, ok := cutPrefixFold(t, "tour "); ok && looksLikeProjectRef(rest) {
+		return "/tour " + rest
+	}
+	switch low {
+	case "tour", "the tour", "give me a tour", "give me the tour",
+		"take the tour", "start the tour", "tour this", "tour it",
+		"tour this project", "show me around",
+		"walk me through the project", "walk me through this project",
+		"walk me through the repo", "walk me through this repo":
+		return "/tour"
+	case "glossary", "the glossary", "project glossary", "the dictionary",
+		"project dictionary", "key terms", "what are the key terms",
+		"what do the words mean", "what do these words mean",
+		"define the types", "define the main types", "what are the main types":
+		return "/glossary"
+	case "learn path", "learning path", "the learn path", "the learning path",
+		"what should i learn first", "what do i learn first",
+		"where should i start learning", "learning order",
+		"what order should i learn", "what order should i learn this in":
+		return "/learn-path"
+	case "watch", "watch it", "watch it run", "run it", "run this",
+		"run the project", "run this project", "run the program",
+		"see it run", "let me see it run", "try running it":
+		return "/watch"
+	}
+	if rest, ok := cutPrefixFold(t, "show me an example of "); ok {
+		return "/example " + rest
+	}
+	if rest, ok := cutPrefixFold(t, "example of "); ok {
+		return "/example " + rest
+	}
+	if rest, ok := cutPrefixFold(t, "example "); ok {
+		return "/example " + rest
+	}
+	if rest, ok := cutPrefixFold(t, "how is "); ok && strings.HasSuffix(strings.ToLower(rest), " used") {
+		return "/example " + strings.TrimSpace(rest[:len(rest)-len(" used")])
+	}
+	return line
+}
+
+// isTourLine matches the canonical tour forms after translation:
+// "/tour" and "/tour <project>".
+func isTourLine(line string) bool {
+	return line == "/tour" || strings.HasPrefix(line, "/tour ")
+}
+
+// tourLineArg returns the project reference in "/tour <ref>", or "".
+func tourLineArg(line string) string {
+	return strings.TrimSpace(strings.TrimPrefix(line, "/tour"))
+}
+
+// analyzeForTour resolves and analyzes a project reference for
+// "tour <project>", printing one line instead of the full report —
+// the tour itself is the introduction.
+func analyzeForTour(ref string) bool {
+	root, err := resolveAnalyzeRoot(ref)
+	if err != nil {
+		fmt.Printf("I couldn't read that codebase: %v\n", err)
+		return false
+	}
+	fmt.Println("[reading the codebase — parsing Go files...]")
+	p, err := analyze.Analyze(root)
+	if err != nil {
+		fmt.Printf("I couldn't analyze %s: %v\n", root, err)
+		return false
+	}
+	lastAnalyzeRoot = root
+	lastAnalyzeProject = p
+	fmt.Printf("Got it — %s. Starting the tour.\n", root)
+	return true
 }
 
 func printTourStop() {

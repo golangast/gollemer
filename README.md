@@ -61,12 +61,12 @@ The prompt edits like a shell: **up/down** recalls history (kept in `~/.gollemer
 
 ## 🗺️ New to a codebase? Start here
 
-Five commands that teach you a project the way people actually learn one — by examples, in the right order, and by watching it run. They all work on the **last analyzed project**, so analyze (or clone) first; if you haven't, each one reminds you.
+Five commands that teach you a project the way people actually learn one — by examples, in the right order, and by watching it run. **Just say them as sentences** — the `/slash` forms in the table above are shortcuts that do the same thing. They all work on the **last analyzed project**, so analyze (or clone) first; if you haven't, each one reminds you.
 
-**1. Take the tour.** One stop at a time, at your pace:
+**1. Take the tour.** Say `tour https://github.com/fgm/izidic` (the link carries the project along), or `give me a tour` for the project already analyzed. One stop at a time, at your pace:
 
 ```
-you> /tour
+you> tour https://github.com/fgm/izidic
 --- Stop 1 of 8 ---
 Welcome to github.com/fgm/izidic — 5 files, 515 lines, 3 packages...
 (say 'next' for the next stop)
