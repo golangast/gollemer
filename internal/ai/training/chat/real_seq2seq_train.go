@@ -454,6 +454,7 @@ func RunRealSeq2SeqTraining(projectRoot, domain string, resume bool) error {
 	best := float32(math.Inf(1))
 	epochsNoImprove := 0
 	lastCheckpointBest := float32(math.Inf(1))
+	lastCheckpointEpoch := 0
 	var model *seq2seq.Seq2Seq
 
 	if resume {
@@ -465,6 +466,7 @@ func RunRealSeq2SeqTraining(projectRoot, domain string, resume bool) error {
 			lr = meta.LR
 			best = float32(meta.Best)
 			lastCheckpointBest = float32(meta.LastCheckpointBest)
+			lastCheckpointEpoch = meta.Epoch
 			epochsNoImprove = meta.EpochsNoImprove
 			log.Printf("[REAL-SEQ2SEQ] RESUMED from checkpoint: completed epoch=%d best=%.6f lr=%.6f (continuing at epoch %d)",
 				meta.Epoch, meta.Best, meta.LR, startEpoch)
@@ -552,32 +554,34 @@ func RunRealSeq2SeqTraining(projectRoot, domain string, resume bool) error {
 		}
 		// Best is chosen on TRAIN loss so the held-out probes stay untouched.
 		log.Printf("[REAL-SEQ2SEQ] epoch=%d avg_loss=%.6f best=%.6f lr=%.6f", epoch, avg, best, lr)
-		if epoch%10 == 0 {
-			if model.Decoder.MoE != nil {
-				log.Printf("[REAL-SEQ2SEQ] MoE expert usage: %.2f %.2f %.2f %.2f",
-					model.Decoder.MoE.ExpertUsage()[0], model.Decoder.MoE.ExpertUsage()[1],
-					model.Decoder.MoE.ExpertUsage()[2], model.Decoder.MoE.ExpertUsage()[3])
+		if epoch%10 == 0 && model.Decoder.MoE != nil {
+			log.Printf("[REAL-SEQ2SEQ] MoE expert usage: %.2f %.2f %.2f %.2f",
+				model.Decoder.MoE.ExpertUsage()[0], model.Decoder.MoE.ExpertUsage()[1],
+				model.Decoder.MoE.ExpertUsage()[2], model.Decoder.MoE.ExpertUsage()[3])
+		}
+		// Best-checkpoint: bank on ANY improvement, at most every 2
+		// epochs — a killed run keeps its progress and -resume picks it
+		// up. The checkpoint goes to SIDE files; the production model
+		// is only written when training completes, so a kill can never
+		// leave a half-trained model in its place. (This gate used to
+		// sit inside epoch%10: the first two understanding-v2 runs were
+		// killed at epochs 1 and 8 and banked NOTHING — 2026-10-20.)
+		if best < lastCheckpointBest && epoch-lastCheckpointEpoch >= 2 {
+			adam.RestoreParameters(bestParams)
+			meta := ckptMeta{
+				Epoch:              epoch,
+				Best:               float64(best),
+				LastCheckpointBest: float64(best),
+				LR:                 lr,
+				EpochsNoImprove:    epochsNoImprove,
+				VocabFP:            curFP,
 			}
-			// Periodic best-checkpoint: a killed run keeps its progress and
-			// -resume picks it up. The checkpoint goes to SIDE files — the
-			// production model is only written when training completes, so a
-			// kill can never again leave a half-trained model in its place.
-			if best < lastCheckpointBest {
-				adam.RestoreParameters(bestParams)
-				meta := ckptMeta{
-					Epoch:              epoch,
-					Best:               float64(best),
-					LastCheckpointBest: float64(best),
-					LR:                 lr,
-					EpochsNoImprove:    epochsNoImprove,
-					VocabFP:            curFP,
-				}
-				if err := saveTrainingCheckpoint(model, meta, ckptPath, metaPath); err != nil {
-					return err
-				}
-				lastCheckpointBest = best
-				log.Printf("[REAL-SEQ2SEQ] checkpointed best model (loss=%.6f) to %s", best, ckptPath)
+			if err := saveTrainingCheckpoint(model, meta, ckptPath, metaPath); err != nil {
+				return err
 			}
+			lastCheckpointBest = best
+			lastCheckpointEpoch = epoch
+			log.Printf("[REAL-SEQ2SEQ] checkpointed best model (loss=%.6f) to %s", best, ckptPath)
 		}
 		if epochsNoImprove >= 30 {
 			log.Printf("[REAL-SEQ2SEQ] early stopping: 30 epochs without improvement")
