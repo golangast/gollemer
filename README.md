@@ -42,7 +42,7 @@ Say any of these inside `make chat`. When the chat answers with a `go`/`gofmt` c
 | Learn your code style | `/learn-style` | Scans your Go files and learns your conventions: handler naming, receiver style, test patterns, error handling. Generated code will match your style |
 | Check the action predictor | `/predictor` | Shows how many actions are logged and whether the neural next-action predictor is ready to train (Layer 4) |
 | Export structure→language pairs | `/export-understanding` | Generates training pairs from the analyzer's structural understanding: (facts → explanation). This is how you train a model on *how the program knows code* — not character-by-character like a transformer |
-| Test the understanding model | `/uexplain <Func>` | Uses the trained understanding model to explain a function from its structural facts. Shows what the model says vs the template — the real generalization test |
+| Test the understanding model | `/uexplain <Func>` | The trained model explains a function from its structural facts. It never writes the function's name itself — it emits placeholders the chat fills in with the real names — and its answer is verified against the facts; a rejected answer falls back to the verified template explanation |
 | Run one idea end-to-end | `/flow count with a mutex` | Box-style pipeline visual (prompt → 4 stages → renderer), then generated Go → safety check → tuned code → plain-words trace |
 | Ask about a Go command | `what does go build ./... do` | Explains the exact command |
 | Ask for a Go command | `build with the race detector` | Answers `go build -race ./...`, offers to run it |
@@ -58,6 +58,36 @@ Say any of these inside `make chat`. When the chat answers with a `go`/`gofmt` c
 | Leave | `/quit` (or just `exit`, `quit`, `stop`) | Ends the chat |
 
 The prompt edits like a shell: **up/down** recalls history (kept in `~/.gollemer_history`), **left/right** moves the cursor, **tab** completes commands, make targets, file paths, and code symbols (tab twice lists), **Ctrl-C** cancels the line, **Ctrl-D** exits.
+
+## 🗺️ New to a codebase? Start here
+
+Five commands that teach you a project the way people actually learn one — by examples, in the right order, and by watching it run. They all work on the **last analyzed project**, so analyze (or clone) first; if you haven't, each one reminds you.
+
+**1. Take the tour.** One stop at a time, at your pace:
+
+```
+you> /tour
+--- Stop 1 of 8 ---
+Welcome to github.com/fgm/izidic — 5 files, 515 lines, 3 packages...
+(say 'next' for the next stop)
+you> next
+--- Stop 2 of 8 ---
+Start where the program starts: main (examples/demo.go:10)...
+```
+
+The stops: where the program starts → what to read first → the cast of types → the engine room (most-called functions) → the shape → the tests → what to try next. Type `next` between stops; start over any time with `/tour` again.
+
+**2. Learn the words.** `/glossary` prints the project's dictionary — the types a newcomer must know, one plain line each, most important first. If two packages define the same name, it's labeled: `Container (in examples/di)`.
+
+**3. Know what to learn first.** `/learn-path` lists the project's concepts in dependency order — each step only uses ideas from the steps before it, says what it *Builds on*, and links the Go features it leans on to [gobyexample](https://gobyexample.com) (`mutexes (https://gobyexample.com/mutexes)`).
+
+**4. See any function used for real.** `/example Names` — names can be bare (`Names`), receiver-qualified (`Client.MakeRequest`), or package-qualified (`matrix.New`). You get up to two real call sites with the calling line marked `→`, a line on what each caller does, and a test that exercises the function. If nothing in the project calls it, it tells you why: entry point, public surface for other projects, or possibly dead code.
+
+**5. Watch it work.** `/watch` figures out how the project runs, in this order: a `run`/`demo`/`example`/`start`/`serve` target in the project's own Makefile → the entry point (`go run`) → for a library with no program, its tests (`go test ./...`). It asks `[y/n]` first (your "do all" directive auto-yeses, as usual), caps the run at 60 seconds, shows the program's real output, then narrates in plain words what happened — including the honest cases: it printed nothing, it ran long because it's probably a server, or it stopped with an error (paste that error into `/fix` next).
+
+### Reading the dependency graph
+
+The graph in the analyze report is deliberately simplified. Only packages that *connect* to something get a block — entry points (★) first, then the most-imported hubs. Packages that import nothing internal fold into one summary line (`… 10 package(s) import nothing internal: …`), build tooling folds into its own line (`… plus tooling …`), a deep cluster of packages appears as a single node (`internal/ai/neural (5 packages)`), and arrows that are already implied by a path through another package are dropped. Nothing is hidden — it's grouped, not removed.
 
 ## 🧠 Why: pieces, not memorization
 
