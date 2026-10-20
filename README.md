@@ -32,11 +32,11 @@ Say any of these inside `make chat`. When the chat answers with a `go`/`gofmt` c
 | Scaffold a test | `/test Names` | Generates a table-driven test skeleton from the function's signature, with the doc-comment intent included |
 | Explain a dependency | `/why-import json` | Traces which functions use the imported package and shows exactly how |
 | Review a function | `/review Freeze` | Checks for ignored errors, overlong functions, and missing docs — each with a plain-words comment |
-| See a function used for real | `/example Names` | Real call sites with the surrounding code, plus a test that exercises it. Beginners learn from examples, not definitions — and when nothing calls it, it says why |
-| Take the guided tour | `/tour`, then `next` | Walks the project one stop at a time: where it starts, what to read first, the cast of types, the engine room, the shape, the tests |
-| Learn the project's words | `/glossary` | The dictionary: the types a newcomer must know, one plain line each, most important first |
-| Watch it work | `/watch` | Runs the project (its Makefile run target, its entry point, or — for a library — its tests) after the usual confirmation, then narrates what happened in plain words |
-| Know what to learn first | `/learn-path` | The project's concepts in dependency order — each step only uses ideas from earlier steps — with the Go features each concept leans on linked to gobyexample |
+| See a function used for real | `example Names`, `show me an example of Names` (or `/example Names`) | Real call sites with the surrounding code, plus a test that exercises it. Beginners learn from examples, not definitions — and when nothing calls it, it says why |
+| Take the guided tour | `tour https://github.com/fgm/izidic`, `give me a tour` (or `/tour`), then `next` | Walks the project one stop at a time: where it starts, what to read first, the cast of types, the engine room, the shape, the tests |
+| Learn the project's words | `what are the main types` (or `/glossary`) | The dictionary: the types a newcomer must know, one plain line each, most important first |
+| Watch it work | `run it` (or `/watch`) | Runs the project (its Makefile run target, its entry point, or — for a library — its tests) after the usual confirmation, then narrates what happened in plain words |
+| Know what to learn first | `what should I learn first` (or `/learn-path`) | The project's concepts in dependency order — each step only uses ideas from earlier steps — with the Go features each concept leans on linked to gobyexample |
 | Generate a doc comment | `/comment Names` | Writes a Go doc comment from the function's structure (verb from the name, locking/iteration/error details from the analyzer) and offers to insert it |
 | See what it's learned about you | `/profile` | Shows your frequent commands, projects, learned patterns, directives, and code style — all stored locally, never uploaded |
 | Learn your code style | `/learn-style` | Scans your Go files and learns your conventions: handler naming, receiver style, test patterns, error handling. Generated code will match your style |
@@ -77,13 +77,13 @@ Start where the program starts: main (examples/demo.go:10)...
 
 The stops: where the program starts → what to read first → the cast of types → the engine room (most-called functions) → the shape → the tests → what to try next. Type `next` between stops; start over any time with `/tour` again.
 
-**2. Learn the words.** `/glossary` prints the project's dictionary — the types a newcomer must know, one plain line each, most important first. If two packages define the same name, it's labeled: `Container (in examples/di)`.
+**2. Learn the words.** Say `what are the main types` (or `/glossary`). It prints the project's dictionary — the types a newcomer must know, one plain line each, most important first. If two packages define the same name, it's labeled: `Container (in examples/di)`.
 
-**3. Know what to learn first.** `/learn-path` lists the project's concepts in dependency order — each step only uses ideas from the steps before it, says what it *Builds on*, and links the Go features it leans on to [gobyexample](https://gobyexample.com) (`mutexes (https://gobyexample.com/mutexes)`).
+**3. Know what to learn first.** Say `what should I learn first` (or `/learn-path`). It lists the project's concepts in dependency order — each step only uses ideas from the steps before it, says what it *Builds on*, and links the Go features it leans on to [gobyexample](https://gobyexample.com) (`mutexes (https://gobyexample.com/mutexes)`).
 
-**4. See any function used for real.** `/example Names` — names can be bare (`Names`), receiver-qualified (`Client.MakeRequest`), or package-qualified (`matrix.New`). You get up to two real call sites with the calling line marked `→`, a line on what each caller does, and a test that exercises the function. If nothing in the project calls it, it tells you why: entry point, public surface for other projects, or possibly dead code.
+**4. See any function used for real.** Say `example Names` or `show me an example of Names` (or `/example Names`) — names can be bare (`Names`), receiver-qualified (`Client.MakeRequest`), or package-qualified (`matrix.New`). You get up to two real call sites with the calling line marked `→`, a line on what each caller does, and a test that exercises the function. If nothing in the project calls it, it tells you why: entry point, public surface for other projects, or possibly dead code.
 
-**5. Watch it work.** `/watch` figures out how the project runs, in this order: a `run`/`demo`/`example`/`start`/`serve` target in the project's own Makefile → the entry point (`go run`) → for a library with no program, its tests (`go test ./...`). It asks `[y/n]` first (your "do all" directive auto-yeses, as usual), caps the run at 60 seconds, shows the program's real output, then narrates in plain words what happened — including the honest cases: it printed nothing, it ran long because it's probably a server, or it stopped with an error (paste that error into `/fix` next).
+**5. Watch it work.** Say `run it` (or `/watch`). It figures out how the project runs, in this order: a `run`/`demo`/`example`/`start`/`serve` target in the project's own Makefile → the entry point (`go run`) → for a library with no program, its tests (`go test ./...`). It asks `[y/n]` first (your "do all" directive auto-yeses, as usual), caps the run at 60 seconds, shows the program's real output, then narrates in plain words what happened — including the honest cases: it printed nothing, it ran long because it's probably a server, or it stopped with an error (paste that error into `/fix` next).
 
 ### Reading the dependency graph
 
