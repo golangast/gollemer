@@ -209,6 +209,7 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		log.Printf("[REAL-CHAT] goanalyze mode — no neural model, analyzer commands only. Type /quit to exit.")
 	}
 
+	printSayThis()
 	reader := NewLineReader(os.Stdin)
 	showThoughts := debug
 	conv := NewConversation()
@@ -992,7 +993,7 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		// GoAnalyze domain has no neural model — analyzer commands were handled above.
 		// If we get here, the input wasn't a recognized command.
 		if model == nil {
-			fmt.Println("Unknown command. Try: /analyze, where for <url>, /impact, /conc, /improve, /contribute, /add-getter")
+			fmt.Println(unknownCommandHint(line))
 			continue
 		}
 		answer, trace, err := model.PredictWithTrace(modelInput, 40)
@@ -1191,6 +1192,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 	showThoughts := debug
 	conv := NewConversation()
 	fmt.Println("[unified chat — type /quit to exit, /thoughts to toggle the thought process]")
+	printSayThis()
 	for {
 		line, rerr := reader.ReadLine("you> ")
 		if rerr == io.EOF {

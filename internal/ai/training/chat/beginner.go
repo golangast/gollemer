@@ -28,13 +28,30 @@ var (
 // handleBeginnerCommand dispatches the beginner five. It returns true
 // when the line was one of them (handled or refused with a message).
 func handleBeginnerCommand(line string, profile *UserProfile) bool {
-	line = translateBeginnerSentence(line)
-	needProject := func() bool {
-		if lastAnalyzeProject == nil {
-			fmt.Println("First let me look at a project — say: analyze <github link or folder>")
-			return false
-		}
+	if isHelpLine(line) {
+		printHelp()
 		return true
+	}
+	line = translateBeginnerSentence(line)
+	// needProject no longer refuses (on-ramp rule: a default beats a
+	// refusal). It ensures SOME project is loaded: the analyzed one,
+	// else the folder the chat started in, else the bundled demo.
+	needProject := func() bool {
+		if lastAnalyzeProject != nil {
+			return true
+		}
+		if root := startFolder(); root != "" && hasGoFiles(root) {
+			fmt.Println("Let me look at the project in this folder first…")
+			if analyzeQuiet(root) {
+				return true
+			}
+		}
+		if demo := demoProjectDir(); demo != "" {
+			fmt.Println("No project analyzed yet — I'll use the tiny built-in example (pocketcounter). Say 'tour <github link>' any time for a real project.")
+			return analyzeQuiet(demo)
+		}
+		fmt.Println("First let me look at a project — say: analyze <github link or folder>")
+		return false
 	}
 	switch {
 	case strings.HasPrefix(line, "/example "):
@@ -183,6 +200,16 @@ func analyzeForTour(ref string) bool {
 		return false
 	}
 	fmt.Println("[reading the codebase — parsing Go files...]")
+	if !analyzeQuiet(root) {
+		return false
+	}
+	fmt.Printf("Got it — %s. Starting the tour.\n", root)
+	return true
+}
+
+// analyzeQuiet analyzes root and makes it the current project,
+// without printing the full report.
+func analyzeQuiet(root string) bool {
 	p, err := analyze.Analyze(root)
 	if err != nil {
 		fmt.Printf("I couldn't analyze %s: %v\n", root, err)
@@ -190,8 +217,119 @@ func analyzeForTour(ref string) bool {
 	}
 	lastAnalyzeRoot = root
 	lastAnalyzeProject = p
-	fmt.Printf("Got it — %s. Starting the tour.\n", root)
 	return true
+}
+
+// startFolder is the directory the chat was started in: the unified
+// project root when set, else the process working directory.
+func startFolder() string {
+	if unifiedProjectRoot != "" {
+		return unifiedProjectRoot
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	return wd
+}
+
+// hasGoFiles reports whether dir holds Go code (checked two levels
+// deep, enough for a project root with cmd/ or examples/ layouts).
+func hasGoFiles(dir string) bool {
+	found := false
+	_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if strings.Count(strings.TrimPrefix(path, dir), string(os.PathSeparator)) > 2 {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.HasSuffix(path, ".go") {
+			found = true
+			return filepath.SkipAll
+		}
+		return nil
+	})
+	return found
+}
+
+// demoProjectDir finds the bundled pocketcounter example, which
+// ships inside the repo at examples/pocketcounter.
+func demoProjectDir() string {
+	cands := []string{}
+	for _, base := range []string{unifiedProjectRoot, startFolder()} {
+		if base != "" {
+			cands = append(cands, filepath.Join(base, "examples", "pocketcounter"))
+		}
+	}
+	// Walk up from the working directory: covers `go run .` from a
+	// repo subfolder and the chat package's own tests.
+	if wd, err := os.Getwd(); err == nil {
+		for d := wd; ; d = filepath.Dir(d) {
+			cands = append(cands, filepath.Join(d, "examples", "pocketcounter"))
+			if filepath.Dir(d) == d {
+				break
+			}
+		}
+	}
+	for _, d := range cands {
+		if fi, err := os.Stat(d); err == nil && fi.IsDir() {
+			return d
+		}
+	}
+	return ""
+}
+
+// --- Help -----------------------------------------------------------------
+
+// isHelpLine matches the ways a stuck beginner asks what exists.
+func isHelpLine(line string) bool {
+	switch strings.Trim(strings.ToLower(strings.TrimSpace(line)), ".!? ") {
+	case "help", "?", "menu", "commands", "what can you do",
+		"what can i say", "what can i ask", "what do you do":
+		return true
+	}
+	return false
+}
+
+// printSayThis is the startup hint: the few sentences a beginner
+// needs in the first minute, shown by the chat itself.
+func printSayThis() {
+	fmt.Println("Say things like:")
+	fmt.Println("  tour <github link>      — walk a project, one stop at a time (then: next)")
+	fmt.Println("  what are the main types — the project's words, in plain English")
+	fmt.Println("  run it                  — watch a project run")
+	fmt.Println("  help                    — everything you can say")
+}
+
+// printHelp is the 'help' answer: everything sayable, grouped by
+// intent, sentences first and slashes as shortcuts.
+func printHelp() {
+	fmt.Println(`
+Things you can say:
+
+Learn a project:
+  tour <github link>          walk it one stop at a time (then say: next)
+  give me a tour              tour the project already open
+  what are the main types     its key words, one plain line each
+  what should I learn first   its ideas, in the order to learn them
+  example Names               see a function used for real (any name works)
+  run it                      watch the project run, narrated
+
+Ask about code:
+  analyze <github link or folder>
+  what does Names do
+  where for <github issue link>   where to edit for an issue
+
+Fix and write:
+  paste any Go error          I'll translate it into plain words
+  /fix undefined: foo         (shortcut for the same idea)
+  write a function that reverses a string
+
+Or just talk — ask me anything. Say 'exit' to leave.`)
 }
 
 func printTourStop() {
@@ -302,4 +440,28 @@ func runWatchIt(profile *UserProfile) {
 			fmt.Println("\nIt ran fine. What you see above is the program talking: that's its real output, not a description of it.")
 		}
 	}
+}
+
+// unknownCommandHint turns the old dead-end "Unknown command" into a
+// nudge: the closest known phrase when there is one, plus example
+// sentences either way.
+func unknownCommandHint(line string) string {
+	known := []string{
+		"tour", "give me a tour", "run it", "example", "glossary", "learn-path",
+		"what are the main types", "what should i learn first", "analyze", "where", "help",
+		"/tour", "/example", "/glossary", "/watch", "/learn-path", "/analyze", "/fix",
+		"/whatis", "/review", "/comment", "/find", "/arch", "/test", "/why-import",
+		"/profile", "/history", "/forget", "/quit",
+	}
+	w := strings.ToLower(strings.TrimSpace(line))
+	best, bestD := "", 3 // a suggestion needs edit distance <= 2
+	for _, k := range known {
+		if d := levenshtein(w, k); d < bestD {
+			best, bestD = k, d
+		}
+	}
+	if best != "" {
+		return fmt.Sprintf("I don't know that one — did you mean '%s'? Say 'help' for everything you can say.", best)
+	}
+	return "I don't know that one. Say things like 'tour <github link>', 'what are the main types', or 'run it' — or say 'help' for the full list."
 }

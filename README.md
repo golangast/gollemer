@@ -61,7 +61,9 @@ The prompt edits like a shell: **up/down** recalls history (kept in `~/.gollemer
 
 ## 🗺️ New to a codebase? Start here
 
-Five commands that teach you a project the way people actually learn one — by examples, in the right order, and by watching it run. **Just say them as sentences** — the `/slash` forms in the table above are shortcuts that do the same thing. They all work on the **last analyzed project**, so analyze (or clone) first; if you haven't, each one reminds you.
+Five commands that teach you a project the way people actually learn one — by examples, in the right order, and by watching it run. **Just say them as sentences** — the `/slash` forms in the table above are shortcuts that do the same thing. The chat prints a few of them every time it starts, and `help` (or `what can you do`) shows everything you can say, grouped by what you're trying to do.
+
+No project open yet? No dead end: these commands look at the folder the chat started in, and if there's no Go code there either, the tour runs on **pocketcounter** — a tiny example project bundled in `examples/pocketcounter` (a counter with a lock, ~85 lines) — so the first tour works in the first minute, with nothing to clone. And a mistyped command gets a "did you mean…?" instead of an error.
 
 **1. Take the tour.** Say `tour https://github.com/fgm/izidic` (the link carries the project along), or `give me a tour` for the project already analyzed. One stop at a time, at your pace:
 
