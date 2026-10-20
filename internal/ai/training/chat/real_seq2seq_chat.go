@@ -170,6 +170,7 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 	// Track actions for sequence learning.
 	var lastChatAction string
 	var pendingSuggestion string
+	shownSuggestions := map[string]bool{}
 	// Understanding model (structure->language), loaded lazily on /uexplain.
 	var understandingModel *seq2seq.Seq2Seq
 	if domain == UnifiedDomain {
@@ -241,7 +242,14 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		// Suggest next action based on learned patterns.
 		// Show it now (before processing) so it appears after the previous output.
 		if pendingSuggestion != "" {
-			fmt.Printf("\n[You usually do '%s' next — just say it or type it]\n\n", pendingSuggestion)
+			// Show each distinct suggestion at most once per session —
+			// repeating it after every command is noise, not help.
+			// Never suggest quitting; that's the user's call, not a habit
+			// to reinforce.
+			if !shownSuggestions[pendingSuggestion] && pendingSuggestion != "quit" && pendingSuggestion != "exit" && pendingSuggestion != "stop" {
+				fmt.Printf("\n[You usually do '%s' next — just say it or type it]\n\n", pendingSuggestion)
+				shownSuggestions[pendingSuggestion] = true
+			}
 			pendingSuggestion = ""
 		}
 		if suggestion := profile.SuggestNext(line); suggestion != "" {
@@ -638,41 +646,50 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 			fmt.Println("(Full training integration coming — the data format is ready.)")
 			continue
 		}
-		// /uexplain <Func>: explain a function using the trained understanding model.
-		// Facts come from the analyzer; words come from the model (structure->language).
+		// /uexplain <Func>: explain a function from its structural facts.
+		// The trained model gets first try, but its answer is VERIFIED
+		// against the facts: if it names the wrong function or invents
+		// behavior that isn't in the facts, the answer is rejected and
+		// the verified template explanation is shown instead. Accepts
+		// bare names ("MakeRequest"), receiver-qualified ("Client.MakeRequest"),
+		// package-qualified ("matrix.New"), and full paths.
 		if strings.HasPrefix(line, "/uexplain ") {
 			if lastAnalyzeProject == nil {
 				fmt.Println("Run /analyze first.")
 				continue
 			}
 			fname := strings.TrimSpace(strings.TrimPrefix(line, "/uexplain "))
+			fn := findFuncByQuery(lastAnalyzeProject, fname)
+			if fn == nil {
+				fmt.Printf("Function %q not found.", fname)
+				if near := nearFuncNames(lastAnalyzeProject, fname); len(near) > 0 {
+					fmt.Printf(" Close matches: %s.", strings.Join(near, ", "))
+				}
+				fmt.Println()
+				continue
+			}
+			// Extract facts exactly like the training pairs.
+			facts := extractFuncFacts(fn)
+			fmt.Printf("\nFacts: %s\n", facts)
+			// Try the model if it's installed; never let a missing model
+			// block the command.
 			if understandingModel == nil {
-				m, err := loadRealModel(projectRoot, UnderstandingDomain)
-				if err != nil {
-					fmt.Printf("Understanding model not available: %v\nPlace real_tiny_seq2seq_understanding.gob in data/models/gob_models/\n", err)
-					continue
-				}
-				understandingModel = m
-			}
-			found := false
-			for _, pkg := range lastAnalyzeProject.Packages {
-				for _, fn := range pkg.Funcs {
-					if strings.EqualFold(fn.Name, fname) && !fn.IsTest {
-						// Extract facts exactly like the training pairs.
-						facts := extractFuncFacts(fn)
-						explanation := generateWithModel(understandingModel, facts)
-						fmt.Printf("\nFacts: %s\n", facts)
-						fmt.Printf("Model says: %s\n", explanation)
-						found = true
-						break
-					}
-				}
-				if found {
-					break
+				if m, err := loadRealModel(projectRoot, UnderstandingDomain); err == nil {
+					understandingModel = m
 				}
 			}
-			if !found {
-				fmt.Printf("Function %q not found.\n", fname)
+			answered := false
+			if understandingModel != nil {
+				out := generateWithModel(understandingModel, facts)
+				if ok, why := modelExplanationValid(fn, facts, out); ok {
+					fmt.Printf("Model says: %s\n", out)
+					answered = true
+				} else {
+					fmt.Printf("Model said (rejected — %s): %s\n", why, out)
+				}
+			}
+			if !answered {
+				fmt.Printf("Explained from the code itself: %s\n", templateExplanation(fn))
 			}
 			continue
 		}
@@ -1761,6 +1778,10 @@ func levenshtein(a, b string) int {
 // For Go built-ins (mutex, channel, goroutine), it finds usage and explains
 // through that concrete example — not a textbook definition.
 func explainConcept(concept string, p *analyze.Project) string {
+	// Accept "Client.MakeRequest" / "matrix.New" style references too.
+	if fn := findFuncByQuery(p, concept); fn != nil {
+		concept = fn.Name
+	}
 	cl := strings.ToLower(concept)
 	var b strings.Builder
 	// First: is it a type or func in the code?
@@ -1885,6 +1906,9 @@ func describeArchitecture(p *analyze.Project) string {
 
 // generateTestSkeleton creates a table-driven test from a function's signature.
 func generateTestSkeleton(fname string, p *analyze.Project) string {
+	if fn := findFuncByQuery(p, fname); fn != nil {
+		fname = fn.Name // accept "Client.MakeRequest" etc., not just bare names
+	}
 	for _, pkg := range p.Packages {
 		for _, fn := range pkg.Funcs {
 			if !strings.EqualFold(fn.Name, fname) || fn.IsTest {
@@ -1951,6 +1975,9 @@ func explainImport(pkg string, p *analyze.Project) string {
 
 // reviewFunc generates review comments for a function.
 func reviewFunc(fname string, p *analyze.Project) string {
+	if fn := findFuncByQuery(p, fname); fn != nil {
+		fname = fn.Name // accept "Client.MakeRequest" etc., not just bare names
+	}
 	for _, pkg := range p.Packages {
 		for _, fn := range pkg.Funcs {
 			if !strings.EqualFold(fn.Name, fname) || fn.IsTest {
@@ -1990,6 +2017,9 @@ func reviewFunc(fname string, p *analyze.Project) string {
 // to insert it. The comment is derived from the function's structure:
 // name verb, signature, control flow, and data flow — not memorized text.
 func generateDocCommentCmd(fname string, p *analyze.Project, profile *UserProfile) (string, bool) {
+	if fn := findFuncByQuery(p, fname); fn != nil {
+		fname = fn.Name // accept "Client.MakeRequest" etc., not just bare names
+	}
 	for _, pkg := range p.Packages {
 		for _, fn := range pkg.Funcs {
 			if !strings.EqualFold(fn.Name, fname) || fn.IsTest {
@@ -2049,6 +2079,11 @@ func docVerb(name string) string {
 		return "reports whether it has " + camelToWords(rest)
 	case strings.HasPrefix(lower, "new"):
 		return "creates and returns a new " + camelToWords(name[3:])
+	case strings.HasPrefix(lower, "must") && len(name) > 4 && isUpper(name[4]):
+		// Go's Must* convention: like the plain getter, but panics
+		// instead of returning an error (MustParam, MustService...).
+		rest := name[4:]
+		return "returns the " + camelToWords(rest) + ", and panics if it is missing"
 	default:
 		// Plural noun like "Names" -> "returns the names".
 		// Verb like "Register", "Freeze", "Store" -> conjugated.
@@ -2159,6 +2194,117 @@ func insertDocComment(fn *analyze.Func, comment string) error {
 	newLines = append(newLines, commentLines...)
 	newLines = append(newLines, lines[idx:]...)
 	return os.WriteFile(fullPath, []byte(strings.Join(newLines, "\n")), 0644)
+}
+
+// findFuncByQuery resolves a user-typed function reference to a *Func.
+// Accepts "New", "Client.MakeRequest", "matrix.New",
+// "mautrix.Client.MakeRequest" — matching is forgiving because typing
+// the exact bare name from memory is the friction users actually hit.
+// Returns nil when nothing matches.
+func findFuncByQuery(p *analyze.Project, query string) *analyze.Func {
+	query = strings.TrimSpace(query)
+	if query == "" || p == nil {
+		return nil
+	}
+	recvName := func(fn *analyze.Func) string {
+		if fn.Receiver == "" {
+			return ""
+		}
+		return strings.Trim(fn.Receiver, "*") + "." + fn.Name
+	}
+	var bare *analyze.Func
+	lastSeg := query
+	if i := strings.LastIndex(query, "."); i >= 0 {
+		lastSeg = query[i+1:]
+	}
+	for _, pkg := range p.Packages {
+		for _, fn := range pkg.Funcs {
+			if fn.IsTest {
+				continue
+			}
+			// Exact forms, most specific first.
+			if rn := recvName(fn); rn != "" {
+				if strings.EqualFold(query, rn) || strings.HasSuffix(strings.ToLower(query), "."+strings.ToLower(rn)) {
+					return fn
+				}
+			}
+			if fn.Pkg != "" && strings.EqualFold(query, fn.Pkg+"."+fn.Name) {
+				return fn
+			}
+			// Remember a bare-name / last-segment match as fallback.
+			if bare == nil && (strings.EqualFold(query, fn.Name) || strings.EqualFold(lastSeg, fn.Name)) {
+				bare = fn
+			}
+		}
+	}
+	return bare
+}
+
+// nearFuncNames lists up to 5 function names containing the query's last
+// segment (or contained by it), for "did you mean" hints.
+func nearFuncNames(p *analyze.Project, query string) []string {
+	seg := strings.ToLower(query)
+	if i := strings.LastIndex(seg, "."); i >= 0 {
+		seg = seg[i+1:]
+	}
+	if seg == "" || p == nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, pkg := range p.Packages {
+		for _, fn := range pkg.Funcs {
+			if fn.IsTest || seen[fn.Name] {
+				continue
+			}
+			ln := strings.ToLower(fn.Name)
+			if strings.Contains(ln, seg) || strings.Contains(seg, ln) {
+				seen[fn.Name] = true
+				out = append(out, fn.Name)
+				if len(out) >= 5 {
+					return out
+				}
+			}
+		}
+	}
+	return out
+}
+
+// modelExplanationValid checks a model-generated explanation against the
+// facts it was given. The model fails in two observed ways: it names a
+// memorized function instead of the one asked about, and it claims
+// behaviors (iterating, locking) that aren't in the facts. Either is a
+// rejection. This is the write-then-verify loop applied to prose.
+func modelExplanationValid(fn *analyze.Func, facts, out string) (bool, string) {
+	lo := strings.ToLower(out)
+	if !strings.Contains(lo, strings.ToLower(fn.Name)) {
+		return false, fmt.Sprintf("it talks about something else, not %s", fn.Name)
+	}
+	if strings.Contains(lo, "iterat") && !strings.Contains(facts, "iterates") {
+		return false, "it claims iteration that isn't in the facts"
+	}
+	if strings.Contains(lo, "lock") && !strings.Contains(facts, "locks") {
+		return false, "it claims locking that isn't in the facts"
+	}
+	return true, ""
+}
+
+// templateExplanation is the verified fallback: plain words built from
+// the function's real structure (same pieces /comment uses).
+func templateExplanation(fn *analyze.Func) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s %s", fn.Name, docVerb(fn.Name))
+	if fn.Receiver != "" {
+		fmt.Fprintf(&b, " on the %s", strings.Trim(fn.Receiver, "*"))
+	}
+	b.WriteString(".")
+	for _, d := range docDetails(fn) {
+		b.WriteString(" " + d)
+	}
+	if fn.Doc != "" {
+		fmt.Fprintf(&b, " Its docs say: %s", analyze.PieceFirstSentence(fn.Doc))
+	}
+	return b.String()
 }
 
 // extractFuncFacts builds the model's input: "Name on Receiver: behaviors".

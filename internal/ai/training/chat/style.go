@@ -9,6 +9,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -246,7 +247,7 @@ func topPrefixes(counts map[string]int, n int) []string {
 // StyleSummary returns a human-readable summary for /profile.
 func (s *CodeStyle) StyleSummary() string {
 	var b strings.Builder
-	b.WriteString("Code style (learned from " + itoa(s.FilesScanned) + " files):\n")
+	b.WriteString("Code style (learned from " + strconv.Itoa(s.FilesScanned) + " files):\n")
 	b.WriteString("  Handlers: " + s.HandlerNaming + "\n")
 	b.WriteString("  Receivers: " + s.ReceiverNaming + "\n")
 	b.WriteString("  Tests: " + s.TestStyle + "\n")
@@ -256,22 +257,4 @@ func (s *CodeStyle) StyleSummary() string {
 		b.WriteString("  Common prefixes: " + strings.Join(s.CommonPrefixes, ", ") + "\n")
 	}
 	return b.String()
-}
-
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	var b strings.Builder
-	for n > 0 {
-		b.WriteString(string(rune('0' + n%10)))
-		n /= 10
-	}
-	// Reverse.
-	s := b.String()
-	runes := []rune(s)
-	for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {
-		runes[i], runes[j] = runes[j], runes[i]
-	}
-	return string(runes)
 }

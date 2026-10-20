@@ -234,9 +234,9 @@ func (p *UserProfile) SeedDefaults() {
 			"https://github.com/fgm/izidic/issues/30",
 		},
 	}
-	p.RecordCommand("go run main.go -real-chat -domain goanalyze")
-	p.RecordCommand("go run main.go -real-chat -domain goanalyze")
-	p.RecordCommand("go run main.go -real-chat -domain goanalyze")
+	p.RecordCommand("go run . -real-chat -domain goanalyze")
+	p.RecordCommand("go run . -real-chat -domain goanalyze")
+	p.RecordCommand("go run . -real-chat -domain goanalyze")
 	p.Save()
 }
 
