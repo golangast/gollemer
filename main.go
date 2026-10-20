@@ -19,11 +19,12 @@ func main() {
 	resumeFlag := flag.Bool("resume", false, "Resume -train-real-seq2seq from the last checkpoint instead of starting at epoch 0")
 	reclassifyFlag := flag.Bool("reclassify-domains", false, "Re-tag all dataset pairs with the current domain classifier")
 	genUnderstandingFlag := flag.Bool("gen-understanding", false, "Generate structure->language training pairs from Go source")
+	uexplainProbeFlag := flag.String("uexplain-probe", "", "Feed facts text to the understanding model and print its raw output")
 	srcDirFlag := flag.String("src", ".", "Source directory for -gen-understanding")
 	outFileFlag := flag.String("out", "data/training/understanding_pairs.jsonl", "Output file for -gen-understanding")
 	flag.Parse()
 
-	if !*trainRealSeq2SeqFlag && !*realChatFlag && *importPairsFlag == "" && !*reclassifyFlag && !*genUnderstandingFlag {
+	if !*trainRealSeq2SeqFlag && !*realChatFlag && *importPairsFlag == "" && !*reclassifyFlag && !*genUnderstandingFlag && *uexplainProbeFlag == "" {
 		fmt.Fprintf(os.Stderr, "Usage: gollemer -train-real-seq2seq | gollemer -real-chat | gollemer -import-pairs=file.jsonl | gollemer -reclassify-domains | gollemer -gen-understanding\n")
 		os.Exit(1)
 	}
@@ -40,6 +41,14 @@ func main() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error getting working directory: %v\n", err)
 		os.Exit(1)
+	}
+
+	if *uexplainProbeFlag != "" {
+		if err := chat.RunUexplainProbe(rootDir, *uexplainProbeFlag); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		return
 	}
 
 	if *realChatFlag && !*debugChatFlag {
