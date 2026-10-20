@@ -114,3 +114,22 @@
 {"input": "give me the summary of this codebase", "intent": "summarize"}
 {"input": "what can you actually do", "intent": "help"}
 {"input": "show me an example", "intent": "example"}
+{"input": "why does Add lock", "intent": "why_func"}
+{"input": "why does Get return an error", "intent": "why_func"}
+{"input": "why is Freeze set up like that", "intent": "why_func"}
+{"input": "why does Total loop over everything", "intent": "why_func"}
+{"input": "how come Add needs a lock", "intent": "why_func"}
+{"input": "why does Names return a list", "intent": "why_func"}
+{"input": "compare Add and Get", "intent": "compare"}
+{"input": "whats the difference between Add and Total", "intent": "compare"}
+{"input": "Add vs Get", "intent": "compare"}
+{"input": "how is Add different from Get", "intent": "compare"}
+{"input": "difference between Freeze and Names", "intent": "compare"}
+{"input": "what brains do you have", "intent": "brains"}
+{"input": "show me your brains", "intent": "brains"}
+{"input": "who is in there doing the work", "intent": "brains"}
+{"input": "how are your brains doing", "intent": "brains"}
+{"input": "why did you answer it that way", "intent": "why_brain"}
+{"input": "who answered that", "intent": "why_brain"}
+{"input": "why did you use that one", "intent": "why_brain"}
+{"input": "which brain said that", "intent": "why_brain"}

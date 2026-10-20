@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/golangast/gollemer/internal/ai/analyze"
 )
 
 // The intent layer (2026-10-20, John's bar: "if I can't talk to it,
@@ -371,6 +373,27 @@ func canonicalFor(intent, line string) string {
 // falls through untouched. Brain-owned intents (concept questions,
 // code writing, social, make commands) are deliberately NOT
 // dispatched — the router and brains keep those.
+// slotFuncNames pulls up to max distinct project functions named in the
+// line, in order — the Comparer's two subjects.
+func slotFuncNames(line string, proj *analyze.Project, max int) []*analyze.Func {
+	var out []*analyze.Func
+	seen := map[string]bool{}
+	for _, tok := range strings.Fields(line) {
+		name := strings.Trim(tok, ".,!?;:'\u201d()")
+		if name == "" {
+			continue
+		}
+		if fn := findFuncByQuery(proj, name); fn != nil && !seen[fn.ID] {
+			seen[fn.ID] = true
+			out = append(out, fn)
+			if len(out) >= max {
+				break
+			}
+		}
+	}
+	return out
+}
+
 func tryIntentDispatch(line string, profile *UserProfile) bool {
 	m := defaultIntentModel()
 	if m == nil {
@@ -396,6 +419,14 @@ func tryIntentDispatch(line string, profile *UserProfile) bool {
 			}
 		}
 		return false
+	case "brains":
+		low := strings.ToLower(line)
+		if strings.Contains(low, "doing") || strings.Contains(low, "status") || strings.Contains(low, "working") || strings.Contains(low, "score") {
+			return handleBeginnerCommand("/brainstatus", profile)
+		}
+		return handleBeginnerCommand("/brains", profile)
+	case "why_brain":
+		return handleBeginnerCommand("/whybrain", profile)
 	case "tell_more":
 		return handleBeginnerCommand("/tell-more", profile)
 	case "what_now":
@@ -449,6 +480,7 @@ func tryIntentDispatch(line string, profile *UserProfile) bool {
 		}[intent]
 		if out, ok := lastAnalyzeProject.Answer(q); ok {
 			fmt.Println(out)
+			recordBrain("analyst", true, "intent "+intent)
 			return true
 		}
 		return false
@@ -473,20 +505,56 @@ func tryIntentDispatch(line string, profile *UserProfile) bool {
 		switch intent {
 		case "review":
 			fmt.Println(reviewFunc(name, lastAnalyzeProject))
+			recordBrain("critic", true, "intent review")
 		case "comment":
 			out, _ := generateDocCommentCmd(name, lastAnalyzeProject, profile)
 			fmt.Println(out)
+			recordBrain("composer", true, "intent comment")
 		case "test_scaffold":
 			fmt.Println(generateTestSkeleton(name, lastAnalyzeProject))
+			recordBrain("composer", true, "intent test_scaffold")
 		case "uexplain":
 			runUexplainPrint(fn, startFolder())
 		}
+		return true
+	case "why_func":
+		name := slotName(line)
+		if name == "" {
+			return false
+		}
+		if !ensureProject() {
+			return true
+		}
+		fn := findFuncByQuery(lastAnalyzeProject, name)
+		if fn == nil {
+			fmt.Printf("Function %q not found in this project.\n", name)
+			recordBrain("why", false, "not found: "+name)
+			return true
+		}
+		fmt.Println(lastAnalyzeProject.WhyText(fn))
+		recordBrain("why", true, "intent why_func")
+		lastActionKind, lastSubject = "why", name
+		return true
+	case "compare":
+		if !ensureProject() {
+			return true
+		}
+		fns := slotFuncNames(line, lastAnalyzeProject, 2)
+		if len(fns) < 2 {
+			fmt.Println("Name two functions and the Comparer will line them up — e.g. \"compare Add and Get\".")
+			recordBrain("comparer", false, "needed two function names")
+			return true
+		}
+		fmt.Println(lastAnalyzeProject.CompareText(fns[0], fns[1]))
+		recordBrain("comparer", true, "intent compare")
+		lastActionKind, lastSubject = "compare", fns[0].Name
 		return true
 	case "arch":
 		if !ensureProject() {
 			return true
 		}
 		fmt.Println(describeArchitecture(lastAnalyzeProject))
+		recordBrain("analyst", true, "intent arch")
 		return true
 	case "why_import":
 		pkg := slotPkg(line)
@@ -497,6 +565,7 @@ func tryIntentDispatch(line string, profile *UserProfile) bool {
 			return true
 		}
 		fmt.Println(explainImport(pkg, lastAnalyzeProject))
+		recordBrain("analyst", true, "intent why_import")
 		return true
 	case "fix":
 		if !ensureProject() {

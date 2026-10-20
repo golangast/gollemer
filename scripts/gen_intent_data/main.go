@@ -25,6 +25,7 @@ type pair struct {
 var slots = map[string][]string{
 	"url":     {"github.com/fgm/izidic", "github.com/golangast/gollemer", "github.com/mautrix/go", "github.com/spf13/cobra", "github.com/gin-gonic/gin", "https://github.com/fgm/izidic", "https://github.com/mautrix/go"},
 	"name":    {"Names", "Freeze", "MakeRequest", "New", "Total", "Add", "Get", "Resolve", "Store", "runClassic", "parseFlags", "HandleRequest", "Container", "Client", "Service", "Counter"},
+	"name2":   {"Get", "Total", "Freeze", "MustParam", "Store", "Names", "NewClient", "Validate", "Close", "Open", "parseConfig", "handleGet"},
 	"concept": {"mutex", "goroutine", "channel", "interface", "error", "map", "slice", "defer", "context", "generics", "pointer", "struct"},
 	"pkg":     {"json", "sync", "errors", "fmt", "http", "os", "time", "context", "strings"},
 	"target":  {"chat", "eval", "smarter", "train-go", "build", "test", "train-social", "help", "train-gocode"},
@@ -216,6 +217,30 @@ var templates = map[string][]string{
 		"hello", "hi", "hey there", "good morning", "good evening", "how are you",
 		"thanks", "thank you", "thats great", "nice", "cool", "tell me a joke",
 		"who are you", "what are you", "you are helpful",
+	},
+	"why_func": {
+		"why does {name} lock", "why does {name} return an error", "why does {name} exist",
+		"why is {name} written like that", "how come {name} needs a lock", "why does {name} loop",
+		"why does {name} iterate", "explain why {name} does that", "what is the reason {name} locks",
+		"why does it lock", "why does this return an error", "why does it need a lock",
+	},
+	"compare": {
+		"compare {name} and {name2}", "compare {name} with {name2}", "{name} vs {name2}",
+		"difference between {name} and {name2}", "what is the difference between {name} and {name2}",
+		"how is {name} different from {name2}", "how does {name} compare to {name2}",
+		"{name} versus {name2}", "side by side {name} and {name2}",
+	},
+	"brains": {
+		"what brains do you have", "show me your brains", "list your brains", "show brains",
+		"what brains are in there", "tell me your brains", "brains", "the brains",
+		"how are your brains doing", "brain status", "are your brains working",
+		"how are the brains doing", "brain scoreboard", "which brains do you have",
+	},
+	"why_brain": {
+		"why did you do that", "why did you answer that way", "who answered that",
+		"which brain was that", "why that brain", "why did you use that brain",
+		"who said that", "why did you say that", "why did you answer it that way",
+		"which brain answered that", "why did you pick that brain",
 	},
 	"other": {
 		"the weather is nice", "i like pizza", "what time is it in london",

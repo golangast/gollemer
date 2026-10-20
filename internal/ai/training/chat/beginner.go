@@ -27,7 +27,33 @@ var (
 
 // handleBeginnerCommand dispatches the beginner five. It returns true
 // when the line was one of them (handled or refused with a message).
+// handleBeginnerCommand wraps the implementation so the COORDINATOR can
+// record which brain each beginner command exercised.
 func handleBeginnerCommand(line string, profile *UserProfile) bool {
+	handled := handleBeginnerCommandImpl(line, profile)
+	if handled {
+		key := ""
+		switch {
+		case strings.HasPrefix(line, "/tour"), strings.HasPrefix(line, "/example"),
+			line == "next", line == "/summarize":
+			key = "analyst"
+		case line == "/glossary":
+			key = "lexicon"
+		case line == "/learn-path":
+			key = "teacher"
+		case line == "/watch":
+			key = "runner"
+	case line == "/tell-more":
+			key = "memory"
+		case line == "/what-now", line == "/brains", line == "/brainstatus", line == "/whybrain":
+			key = "coordinator"
+		}
+		recordBrain(key, true, "sentence: "+line)
+	}
+	return handled
+}
+
+func handleBeginnerCommandImpl(line string, profile *UserProfile) bool {
 	if isHelpLine(line) {
 		printHelp()
 		return true
@@ -35,6 +61,15 @@ func handleBeginnerCommand(line string, profile *UserProfile) bool {
 	line = translateBeginnerSentence(line)
 	needProject := func() bool { return ensureProject() }
 	switch {
+	case line == "/brains":
+		printBrains()
+		return true
+	case line == "/brainstatus":
+		printBrainStatus()
+		return true
+	case line == "/whybrain":
+		explainLastBrain()
+		return true
 	case line == "/tell-more":
 		handleTellMore(profile)
 		return true
@@ -150,6 +185,15 @@ func translateBeginnerSentence(line string) string {
 		"what do the words mean", "what do these words mean",
 		"define the types", "define the main types", "what are the main types":
 		return "/glossary"
+	case "brains", "show brains", "show me your brains", "what brains do you have",
+		"list your brains", "list brains", "your brains":
+		return "/brains"
+	case "brain status", "how are your brains doing", "how are the brains doing",
+		"are your brains working", "brain scoreboard":
+		return "/brainstatus"
+	case "why did you do that", "why did you answer that way", "who answered that",
+		"which brain was that", "why that brain", "why did you use that brain":
+		return "/whybrain"
 	case "learn path", "learning path", "the learn path", "the learning path",
 		"what should i learn first", "what do i learn first",
 		"where should i start learning", "learning order",
@@ -360,7 +404,14 @@ When you're stuck:
 Ask about code:
   analyze <github link or folder>
   what does Names do
+  why does Names lock          the reasons the code itself shows
+  compare Add and Total        two functions, side by side
   where for <github issue link>   where to edit for an issue
+
+The team behind the answers:
+  brains                       who does the work here, and their honest limits
+  how are your brains doing    the scoreboard — who answered, who failed
+  why did you do that          I'll name the brain and the recorded reason
 
 Fix and write:
   paste any Go error          I'll translate it into plain words

@@ -2438,14 +2438,22 @@ func runUexplainPrint(fn *analyze.Func, projectRoot string) {
 		out := substitutePlaceholders(raw, fn)
 		if strings.Contains(out, "@") {
 			fmt.Printf("Model said (rejected — unfilled placeholder): %s\n", raw)
+			recordBrain("storyteller", false, "unfilled placeholder")
+			recordBrain("verifier", true, "rejected unfilled placeholder")
 		} else if ok, why := modelExplanationValid(fn, facts, out); ok {
 			fmt.Printf("Model says: %s\n", out)
+			recordBrain("storyteller", true, "verifier accepted")
 			answered = true
 		} else {
 			fmt.Printf("Model said (rejected — %s): %s\n", why, out)
+			recordBrain("storyteller", false, "verifier rejected: "+why)
+			recordBrain("verifier", true, "rejected bad prose: "+why)
 		}
 	}
 	if !answered {
+		if understandingModel == nil {
+			recordBrain("storyteller", false, "no model installed; template answered")
+		}
 		fmt.Printf("Explained from the code itself: %s\n", templateExplanation(fn))
 	}
 }

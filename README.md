@@ -89,7 +89,26 @@ The stops: where the program starts → what to read first → the cast of types
 
 **5. Watch it work.** Say `run it` (or `/watch`). It figures out how the project runs, in this order: a `run`/`demo`/`example`/`start`/`serve` target in the project's own Makefile → the entry point (`go run`) → for a library with no program, its tests (`go test ./...`). It asks `[y/n]` first (your "do all" directive auto-yeses, as usual), caps the run at 60 seconds, shows the program's real output, then narrates in plain words what happened — including the honest cases: it printed nothing, it ran long because it's probably a server, or it stopped with an error (paste that error into `/fix` next).
 
-### Reading the dependency graph
+### The cast: many small brains, one coordinator
+
+Gollemer is not one model. A **coordinator** routes each sentence to a
+specialist brain, records whether it delivered, and answers for the
+routing. Ask it directly:
+
+| Say this | What happens |
+|---|---|
+| `brains` | the cast: every brain, its job, and its honest limits |
+| `how are your brains doing` | the scoreboard — per-brain ok/failed counts, this session and all time (logged locally in `~/.gollemer_brains.jsonl`) |
+| `why did you do that` | the coordinator names the brain that answered, the recorded outcome, and that brain's known limit |
+| `why does Add lock` | the Reasoner: why a function is shaped as it is — what the author stated vs what the structure implies |
+| `compare Add and Get` | the Comparer: two functions side by side, ending with the one biggest difference |
+
+The trained models are cast members too — with their measured records
+printed in the cast list, failures included. When the Storyteller model
+invents facts, the Verifier rejects it and the Analyst's verified
+wording speaks instead; the rejection is recorded on the scoreboard.
+
+## Reading the dependency graph
 
 The graph in the analyze report is deliberately simplified. Only packages that *connect* to something get a block — entry points (★) first, then the most-imported hubs. Packages that import nothing internal fold into one summary line (`… 10 package(s) import nothing internal: …`), build tooling folds into its own line (`… plus tooling …`), a deep cluster of packages appears as a single node (`internal/ai/neural (5 packages)`), and arrows that are already implied by a path through another package are dropped. Nothing is hidden — it's grouped, not removed.
 

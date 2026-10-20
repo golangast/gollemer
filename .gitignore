@@ -81,3 +81,4 @@ gollemer-train
 generated_projects/project
 project
 logs/*.log
+gollemer-bin
