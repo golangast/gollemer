@@ -34,6 +34,7 @@ var slots = map[string][]string{
 
 var templates = map[string][]string{
 	"tour": {
+		"the lay of the land", "lay of the land", "show me the lay of the land", "get my bearings", "bearings please",
 		"i just cloned this", "just cloned this repo", "no idea where to start", "i have no idea where to start", "im lost in this codebase", "i dont know this codebase at all", "orient me", "get me oriented", "orientation please", "new here, show me around",
 		"tour", "/tour", "tour {url}", "/tour {url}", "give me a tour", "give me the tour",
 		"take the tour", "start the tour", "show me around", "show me around {url}",
@@ -42,6 +43,7 @@ var templates = map[string][]string{
 		"can i get a tour", "walk through the whole thing with me",
 	},
 	"glossary": {
+		"types i dont recognize", "types i dont know", "words i dont recognize", "i dont recognize these types", "unfamiliar types",
 		"vocabulary", "vocabulary list", "the vocabulary", "word list", "list the words", "words i need to know",
 		"glossary", "/glossary", "the glossary", "project glossary", "what are the main types",
 		"what are the key types", "define the types", "define the main types", "key terms",
@@ -55,6 +57,7 @@ var templates = map[string][]string{
 		"teach me in order", "what do i learn next", "curriculum for this project",
 	},
 	"example": {
+		"show me an example", "give me an example", "an example please", "examples please",
 		"who calls {name}", "what calls {name}", "who uses {name}", "callers of {name}",
 		"example {name}", "/example {name}", "example of {name}", "show me an example of {name}",
 		"show me examples of {name}", "how is {name} used", "where is {name} used",
@@ -62,6 +65,7 @@ var templates = map[string][]string{
 		"an example for {name}", "examples for {name}",
 	},
 	"watch": {
+		"fire it up", "fire this up", "does it run", "does this run", "does this thing run", "run it and show me", "run it and show me what happens", "start it up",
 		"watch", "/watch", "watch it", "watch it run", "run it", "run this", "run the project",
 		"run this project", "run the program", "see it run", "let me see it run",
 		"try running it", "run the tests", "execute it", "launch it", "start the program",
@@ -88,6 +92,7 @@ var templates = map[string][]string{
 		"print {name}", "let me see {name}", "display {name}", "code for {name}",
 	},
 	"walkthrough": {
+		"trace what {name} does", "trace through {name}", "what does {name} do step by step",
 		"explain how {name} works", "show me how {name} works", "how {name} works", "explain {name} slowly",
 		"walk me through {name}", "trace {name}", "walk through {name}",
 		"step by step through {name}", "explain {name} step by step", "how does {name} work",
@@ -154,6 +159,8 @@ var templates = map[string][]string{
 		"run the flow", "flow this", "one idea end to end", "pipeline for {concept}",
 	},
 	"help": {
+		"list everything you can do", "list what you can do", "everything you can do", "all the things you can do",
+		"what are you able to do", "what all can you do", "your abilities", "what can this do",
 		"what am i allowed to type", "what can i type", "what can i type here", "what should i type", "whats the tour button do", "what are my options here",
 		"help", "?", "menu", "commands", "what can you do", "what can i say",
 		"what can i ask", "what do you do", "show commands", "list commands",
@@ -214,6 +221,27 @@ var templates = map[string][]string{
 		"the weather is nice", "i like pizza", "what time is it in london",
 		"buy me a coffee", "asdf qwer", "random words here", "my cat is cute",
 		"stocks went up today", "i went to the store",
+	},
+	"tell_more": {
+		"tell me more", "more", "tell me more about that", "tell me more about it",
+		"go on", "continue", "keep going", "and then", "what else", "more info",
+		"more about that", "elaborate", "expand on that", "dig deeper", "go deeper",
+		"tell me more about {name}", "more about {name}", "what else does it do",
+	},
+	"what_now": {
+		"what now", "what to do now", "what should i do now", "what next", "whats next",
+		"what do i do", "what should i do", "im stuck", "im lost", "i dont know what to do",
+		"help me", "how do i start", "where do i go from here", "what do i type",
+		"how do i use this", "guide me", "directions please", "im confused",
+		"i dont know what to type", "whats the next step", "next steps",
+	},
+	"summarize": {
+		"give me the summary", "give me a summary of this", "the summary of this codebase", "summary please", "short summary of this project",
+		"what does this program do", "what does this app do", "what is this program",
+		"what does this code do", "what does this project do", "what is this for",
+		"summarize this project", "summary of this project", "what does it do",
+		"describe this program", "project summary", "summarize this codebase",
+		"in plain english what does this do", "what is this thing",
 	},
 }
 

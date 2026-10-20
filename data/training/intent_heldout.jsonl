@@ -100,3 +100,17 @@
 {"input": "thanks that helped a lot", "intent": "social"}
 {"input": "asdfgh", "intent": "other"}
 {"input": "the weather is nice today", "intent": "other"}
+{"input": "tell me more about that", "intent": "tell_more"}
+{"input": "ok and then what happened", "intent": "tell_more"}
+{"input": "go on, im listening", "intent": "tell_more"}
+{"input": "what else is there", "intent": "tell_more"}
+{"input": "im confused, what should i do", "intent": "what_now"}
+{"input": "ok im stuck", "intent": "what_now"}
+{"input": "whats the next thing i should do here", "intent": "what_now"}
+{"input": "i dont know what to type", "intent": "what_now"}
+{"input": "what does this whole program actually do", "intent": "summarize"}
+{"input": "summarize the project for me", "intent": "summarize"}
+{"input": "what is this app even for", "intent": "summarize"}
+{"input": "give me the summary of this codebase", "intent": "summarize"}
+{"input": "what can you actually do", "intent": "help"}
+{"input": "show me an example", "intent": "example"}

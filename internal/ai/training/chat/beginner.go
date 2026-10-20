@@ -35,6 +35,15 @@ func handleBeginnerCommand(line string, profile *UserProfile) bool {
 	line = translateBeginnerSentence(line)
 	needProject := func() bool { return ensureProject() }
 	switch {
+	case line == "/tell-more":
+		handleTellMore(profile)
+		return true
+	case line == "/what-now":
+		handleWhatNow()
+		return true
+	case line == "/summarize":
+		handleSummarize()
+		return true
 	case strings.HasPrefix(line, "/example "):
 		if !needProject() {
 			return true
@@ -50,18 +59,21 @@ func handleBeginnerCommand(line string, profile *UserProfile) bool {
 			return true
 		}
 		fmt.Printf("\n%s", lastAnalyzeProject.ExamplesText(fn))
+		lastActionKind, lastSubject = "example", fname
 		return true
 	case line == "/glossary":
 		if !needProject() {
 			return true
 		}
 		fmt.Printf("\n%s", lastAnalyzeProject.GlossaryText())
+		lastActionKind = "glossary"
 		return true
 	case line == "/learn-path":
 		if !needProject() {
 			return true
 		}
 		fmt.Printf("\n%s", lastAnalyzeProject.LearnPathText())
+		lastActionKind = "learn_path"
 		return true
 	case isTourLine(line):
 		if arg := tourLineArg(line); arg != "" && !analyzeForTour(arg) {
@@ -72,12 +84,15 @@ func handleBeginnerCommand(line string, profile *UserProfile) bool {
 		}
 		tourStops = lastAnalyzeProject.TourStops()
 		tourIdx = 0
+		tourDone = false
+		lastActionKind = "tour"
 		printTourStop()
 		return true
 	case line == "next" && tourStops != nil:
 		tourIdx++
 		if tourIdx >= len(tourStops) {
 			tourStops = nil
+			tourDone = true
 			fmt.Println("End of the tour — that was the last stop.")
 			return true
 		}
@@ -144,6 +159,19 @@ func translateBeginnerSentence(line string) string {
 		"run the project", "run this project", "run the program",
 		"see it run", "let me see it run", "try running it":
 		return "/watch"
+	}
+	switch low {
+	case "tell me more", "more", "go on", "continue", "keep going", "what else",
+		"more info", "tell me more about that", "tell me more about it":
+		return "/tell-more"
+	case "what now", "what to do now", "what should i do now", "what next",
+		"whats next", "what do i do", "what should i do", "im stuck", "im lost",
+		"i dont know what to do", "how do i use this", "what do i type":
+		return "/what-now"
+	case "what does this program do", "what does this app do", "what does this code do",
+		"what does this project do", "what does it do", "summarize this project",
+		"what is this program", "what is this for":
+		return "/summarize"
 	}
 	if rest, ok := cutPrefixFold(t, "show me an example of "); ok {
 		return "/example " + rest
@@ -302,8 +330,10 @@ func isHelpLine(line string) bool {
 func printSayThis() {
 	fmt.Println("Say things like:")
 	fmt.Println("  tour <github link>      — walk a project, one stop at a time (then: next)")
+	fmt.Println("  what does this program do — the plain-English version")
 	fmt.Println("  what are the main types — the project's words, in plain English")
 	fmt.Println("  run it                  — watch a project run")
+	fmt.Println("  what should I do now    — whenever you're stuck")
 	fmt.Println("  help                    — everything you can say")
 }
 
@@ -316,10 +346,16 @@ Things you can say:
 Learn a project:
   tour <github link>          walk it one stop at a time (then say: next)
   give me a tour              tour the project already open
+  what does this program do   the plain-English summary
   what are the main types     its key words, one plain line each
   what should I learn first   its ideas, in the order to learn them
   example Names               see a function used for real (any name works)
   run it                      watch the project run, narrated
+
+When you're stuck:
+  what should I do now        I'll look at where you are and name the next step
+  tell me more                go one step deeper into whatever we just did
+  help                        this list
 
 Ask about code:
   analyze <github link or folder>
@@ -466,4 +502,112 @@ func unknownCommandHint(line string) string {
 		return fmt.Sprintf("I don't know that one — did you mean '%s'? Say 'help' for everything you can say.", best)
 	}
 	return "I don't know that one. Say things like 'tour <github link>', 'what are the main types', or 'run it' — or say 'help' for the full list."
+}
+
+// --- Session thread: tell me more / what now -----------------------------
+// Complete beginners ask three things over and over: "tell me
+// more", "what do I do now", and "what does this program do". The
+// first two are about the CONVERSATION, not the code, so the chat
+// remembers the last thing it did and continues from there.
+
+var (
+	lastActionKind string // e.g. "example", "tour", "review"
+	lastSubject    string // the function/type last discussed
+	tourDone       bool
+)
+
+// topFuncName is the project's engine room: its most-called
+// function, used for concrete suggestions ("try 'example New'").
+func topFuncName(p *analyze.Project) string {
+	if p == nil {
+		return ""
+	}
+	if tops := p.TopFuncs(1); len(tops) > 0 {
+		return tops[0].Name
+	}
+	return ""
+}
+
+// handleWhatNow answers "what should I do now" from the actual
+// session state, with one concrete next step.
+func handleWhatNow() {
+	if lastAnalyzeProject == nil {
+		fmt.Println("Nothing's open yet. Easiest first step: say 'tour' and I'll walk you through a tiny built-in example — or 'tour <github link>' for a real project.")
+		return
+	}
+	if tourStops != nil {
+		fmt.Printf("You're mid-tour — stop %d of %d. Say 'next' to keep going, or ask me anything about what you've seen.\n", tourIdx+1, len(tourStops))
+		return
+	}
+	if !tourDone {
+		fmt.Println("You haven't taken the tour of this project yet — say 'give me a tour'. It's the fastest way to get your bearings.")
+		return
+	}
+	if tf := topFuncName(lastAnalyzeProject); tf != "" {
+		fmt.Printf("Try this: say 'example %s' to see the busiest function in the project used for real. Or say 'run it' to watch the project run.\n", tf)
+		return
+	}
+	fmt.Println("Say 'run it' to watch the project run, or 'what are the main types' for its key words.")
+}
+
+// handleTellMore continues whatever the last answer was, one step
+// deeper along a natural chain: example → walkthrough → review →
+// test; glossary → learn-path → tour; anything else → tour/next.
+func handleTellMore(profile *UserProfile) {
+	if tourStops != nil {
+		handleBeginnerCommand("next", profile)
+		return
+	}
+	subject := lastSubject
+	switch lastActionKind {
+	case "example":
+		if subject != "" && ensureProject() {
+			fmt.Printf("More on %s — how it works, step by step:\n", subject)
+			if out, ok := lastAnalyzeProject.Answer("walk me through " + subject); ok {
+				fmt.Println(out)
+				lastActionKind = "walkthrough"
+				return
+			}
+		}
+	case "whatis", "show_func":
+		if subject != "" {
+			lastActionKind = ""
+			fmt.Printf("More on %s — seeing it used for real:\n", subject)
+			handleBeginnerCommand("/example "+subject, profile)
+			return
+		}
+	case "walkthrough":
+		if subject != "" && ensureProject() {
+			fmt.Printf("More on %s — a quick review:\n%s\n", subject, reviewFunc(subject, lastAnalyzeProject))
+			lastActionKind = "review"
+			return
+		}
+	case "review":
+		if subject != "" && ensureProject() {
+			fmt.Printf("More on %s — a test you could start from:\n%s\n", subject, generateTestSkeleton(subject, lastAnalyzeProject))
+			lastActionKind = "test_scaffold"
+			return
+		}
+	case "glossary":
+		if ensureProject() {
+			fmt.Printf("More of the map — what to learn, in order:\n%s", lastAnalyzeProject.LearnPathText())
+			lastActionKind = "learn_path"
+			return
+		}
+	case "learn_path", "arch", "summarize", "analyze":
+		handleBeginnerCommand("/tour", profile)
+		return
+	}
+	// Nothing to continue: the best "more" is a guided next step.
+	handleWhatNow()
+}
+
+// handleSummarize answers "what does this program do" with just
+// the plain-English parts of the report.
+func handleSummarize() {
+	if !ensureProject() {
+		return
+	}
+	fmt.Printf("\n%s\n%s", lastAnalyzeProject.Summary(), lastAnalyzeProject.Story())
+	lastActionKind = "summarize"
 }

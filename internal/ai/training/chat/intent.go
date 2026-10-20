@@ -390,7 +390,18 @@ func tryIntentDispatch(line string, profile *UserProfile) bool {
 		if canon := canonicalFor(intent, line); canon != "" {
 			return handleBeginnerCommand(canon, profile)
 		}
+		if intent == "example" && ensureProject() {
+			if tf := topFuncName(lastAnalyzeProject); tf != "" {
+				return handleBeginnerCommand("/example "+tf, profile)
+			}
+		}
 		return false
+	case "tell_more":
+		return handleBeginnerCommand("/tell-more", profile)
+	case "what_now":
+		return handleBeginnerCommand("/what-now", profile)
+	case "summarize":
+		return handleBeginnerCommand("/summarize", profile)
 	case "help":
 		printHelp()
 		return true
@@ -449,6 +460,7 @@ func tryIntentDispatch(line string, profile *UserProfile) bool {
 		if !ensureProject() {
 			return true
 		}
+		lastActionKind, lastSubject = intent, name
 		fn := findFuncByQuery(lastAnalyzeProject, name)
 		if fn == nil {
 			fmt.Printf("Function %q not found.", name)
