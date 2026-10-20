@@ -917,6 +917,13 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 			fmt.Println("[forgotten — starting fresh]")
 			continue
 		}
+		// Beginner five, claimed deterministically before routing —
+		// same as the single-domain loop. A sentence like "tour
+		// https://…" or "run it" must never be left for the router
+		// to guess at (it read "tour …" as a social greeting).
+		if handleBeginnerCommand(line, profile) {
+			continue
+		}
 		// Recall questions are answered from the session transcript,
 		// deterministically, before any model sees them.
 		if rq, ok := conv.Recall(line); ok {
@@ -1177,6 +1184,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 	initSocialRecall(projectRoot)
 	initMakefileRecall(projectRoot)
 	initMakeAllowlist(projectRoot)
+	profile := LoadProfile()
 
 	goCase := goIdentCaseMap(projectRoot)
 	reader := NewLineReader(os.Stdin)
@@ -1233,6 +1241,13 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if line == "/forget" {
 			conv.Clear()
 			fmt.Println("[forgotten — starting fresh]")
+			continue
+		}
+		// Beginner five, claimed deterministically before routing —
+		// same as the single-domain loop. A sentence like "tour
+		// https://…" or "run it" must never be left for the router
+		// to guess at (it read "tour …" as a social greeting).
+		if handleBeginnerCommand(line, profile) {
 			continue
 		}
 		// Recall questions are answered from the session transcript,

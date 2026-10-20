@@ -20,7 +20,7 @@ export CGO_ENABLED=1
 MEM_LIMIT  = 2500MiB
 GOGC       = 100
 GOMAXPROCS = 8
-MAIN_CMD   = go run main.go
+MAIN_CMD   = go run .
 
 .PHONY: start chat debug-chat classic flow sel explain smarter eval help import \
         train-social train-go train-gocode train-gocli train-makefile
