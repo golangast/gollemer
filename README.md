@@ -32,6 +32,11 @@ Say any of these inside `make chat`. When the chat answers with a `go`/`gofmt` c
 | Scaffold a test | `/test Names` | Generates a table-driven test skeleton from the function's signature, with the doc-comment intent included |
 | Explain a dependency | `/why-import json` | Traces which functions use the imported package and shows exactly how |
 | Review a function | `/review Freeze` | Checks for ignored errors, overlong functions, and missing docs — each with a plain-words comment |
+| See a function used for real | `/example Names` | Real call sites with the surrounding code, plus a test that exercises it. Beginners learn from examples, not definitions — and when nothing calls it, it says why |
+| Take the guided tour | `/tour`, then `next` | Walks the project one stop at a time: where it starts, what to read first, the cast of types, the engine room, the shape, the tests |
+| Learn the project's words | `/glossary` | The dictionary: the types a newcomer must know, one plain line each, most important first |
+| Watch it work | `/watch` | Runs the project (its Makefile run target, its entry point, or — for a library — its tests) after the usual confirmation, then narrates what happened in plain words |
+| Know what to learn first | `/learn-path` | The project's concepts in dependency order — each step only uses ideas from earlier steps — with the Go features each concept leans on linked to gobyexample |
 | Generate a doc comment | `/comment Names` | Writes a Go doc comment from the function's structure (verb from the name, locking/iteration/error details from the analyzer) and offers to insert it |
 | See what it's learned about you | `/profile` | Shows your frequent commands, projects, learned patterns, directives, and code style — all stored locally, never uploaded |
 | Learn your code style | `/learn-style` | Scans your Go files and learns your conventions: handler naming, receiver style, test patterns, error handling. Generated code will match your style |

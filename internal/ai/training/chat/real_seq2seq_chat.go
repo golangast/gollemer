@@ -593,6 +593,12 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 			fmt.Printf("%s\n", reviewFunc(fname, lastAnalyzeProject))
 			continue
 		}
+		// Beginner five: /example, /tour (+ next), /glossary, /watch,
+		// /learn-path — learn a project by examples, order, and
+		// watching it run, not by definitions.
+		if handleBeginnerCommand(line, profile) {
+			continue
+		}
 		// /profile: show what the system has learned about you.
 		if line == "/profile" {
 			fmt.Printf("\nWhat I've learned about you:\n\n")
@@ -668,8 +674,9 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 				fmt.Println()
 				continue
 			}
-			// Extract facts exactly like the training pairs.
-			facts := extractFuncFacts(fn)
+			// Facts in the v2 training format — one source of truth,
+			// shared with the pair generator.
+			facts := analyze.FuncFactsString(fn)
 			fmt.Printf("\nFacts: %s\n", facts)
 			// Try the model if it's installed; never let a missing model
 			// block the command.
@@ -680,8 +687,14 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 			}
 			answered := false
 			if understandingModel != nil {
-				out := generateWithModel(understandingModel, facts)
-				if ok, why := modelExplanationValid(fn, facts, out); ok {
+				raw := generateWithModel(understandingModel, facts)
+				// The v2 model never writes names: it emits @ (function)
+				// and @@ (receiver) placeholders, filled in here with
+				// the real names from the code.
+				out := substitutePlaceholders(raw, fn)
+				if strings.Contains(out, "@") {
+					fmt.Printf("Model said (rejected — unfilled placeholder): %s\n", raw)
+				} else if ok, why := modelExplanationValid(fn, facts, out); ok {
 					fmt.Printf("Model says: %s\n", out)
 					answered = true
 				} else {
@@ -2307,31 +2320,27 @@ func templateExplanation(fn *analyze.Func) string {
 	return b.String()
 }
 
-// extractFuncFacts builds the model's input: "Name on Receiver: behaviors".
-// Must match the training pair format exactly.
-func extractFuncFacts(fn *analyze.Func) string {
-	var b strings.Builder
-	b.WriteString(fn.Name)
-	if fn.Receiver != "" {
-		b.WriteString(" on " + strings.Trim(fn.Receiver, "*"))
+// substitutePlaceholders fills the v2 model's name placeholders with
+// the real names from the code: @@ is the receiver (replaced first,
+// since @ is a prefix of @@), @ is the function name. The model never
+// generates a name, so it cannot parrot a memorized one.
+func substitutePlaceholders(out string, fn *analyze.Func) string {
+	recv := strings.Trim(fn.Receiver, "*")
+	out = strings.ReplaceAll(out, "@@", recv)
+	out = strings.ReplaceAll(out, "@", fn.Name)
+	return out
+}
+
+// RunUexplainProbe feeds raw facts text to the understanding model and
+// prints its raw output — the Zorblax test: facts about a function
+// that cannot exist in training must still steer the explanation.
+func RunUexplainProbe(projectRoot, facts string) error {
+	m, err := loadRealModel(projectRoot, UnderstandingDomain)
+	if err != nil {
+		return fmt.Errorf("understanding model not loaded: %w", err)
 	}
-	src := strings.ToLower(fn.Src)
-	var behaviors []string
-	if strings.Contains(src, "rlock()") {
-		behaviors = append(behaviors, "read-locks")
-	} else if strings.Contains(src, ".lock()") {
-		behaviors = append(behaviors, "locks")
-	}
-	if strings.Contains(src, "range") {
-		behaviors = append(behaviors, "iterates")
-	}
-	if strings.Contains(fn.Sig, "error") {
-		behaviors = append(behaviors, "may-fail")
-	}
-	if len(behaviors) > 0 {
-		b.WriteString(": " + strings.Join(behaviors, ","))
-	}
-	return b.String()
+	fmt.Printf("facts: %s\nraw model output: %s\n", facts, generateWithModel(m, facts))
+	return nil
 }
 
 // generateWithModel runs the understanding model on structural facts.
