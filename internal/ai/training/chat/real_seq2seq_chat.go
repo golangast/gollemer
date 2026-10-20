@@ -171,8 +171,6 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 	var lastChatAction string
 	var pendingSuggestion string
 	shownSuggestions := map[string]bool{}
-	// Understanding model (structure->language), loaded lazily on /uexplain.
-	var understandingModel *seq2seq.Seq2Seq
 	if domain == UnifiedDomain {
 		return runUnifiedChat(projectRoot, debug)
 	}
@@ -600,6 +598,11 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		if handleBeginnerCommand(line, profile) {
 			continue
 		}
+		// Intent layer: a confident trained classification of what
+		// the user wants, in their own words — no memorized commands.
+		if tryIntentDispatch(line, profile) {
+			continue
+		}
 		// /profile: show what the system has learned about you.
 		if line == "/profile" {
 			fmt.Printf("\nWhat I've learned about you:\n\n")
@@ -677,34 +680,7 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 			}
 			// Facts in the v2 training format — one source of truth,
 			// shared with the pair generator.
-			facts := analyze.FuncFactsString(fn)
-			fmt.Printf("\nFacts: %s\n", facts)
-			// Try the model if it's installed; never let a missing model
-			// block the command.
-			if understandingModel == nil {
-				if m, err := loadRealModel(projectRoot, UnderstandingDomain); err == nil {
-					understandingModel = m
-				}
-			}
-			answered := false
-			if understandingModel != nil {
-				raw := generateWithModel(understandingModel, facts)
-				// The v2 model never writes names: it emits @ (function)
-				// and @@ (receiver) placeholders, filled in here with
-				// the real names from the code.
-				out := substitutePlaceholders(raw, fn)
-				if strings.Contains(out, "@") {
-					fmt.Printf("Model said (rejected — unfilled placeholder): %s\n", raw)
-				} else if ok, why := modelExplanationValid(fn, facts, out); ok {
-					fmt.Printf("Model says: %s\n", out)
-					answered = true
-				} else {
-					fmt.Printf("Model said (rejected — %s): %s\n", why, out)
-				}
-			}
-			if !answered {
-				fmt.Printf("Explained from the code itself: %s\n", templateExplanation(fn))
-			}
+			runUexplainPrint(fn, projectRoot)
 			continue
 		}
 		// /export-understanding: generate structure->language training pairs.
@@ -923,6 +899,11 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		// https://…" or "run it" must never be left for the router
 		// to guess at (it read "tour …" as a social greeting).
 		if handleBeginnerCommand(line, profile) {
+			continue
+		}
+		// Intent layer: a confident trained classification of what
+		// the user wants, in their own words — no memorized commands.
+		if tryIntentDispatch(line, profile) {
 			continue
 		}
 		// Recall questions are answered from the session transcript,
@@ -1250,6 +1231,11 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// https://…" or "run it" must never be left for the router
 		// to guess at (it read "tour …" as a social greeting).
 		if handleBeginnerCommand(line, profile) {
+			continue
+		}
+		// Intent layer: a confident trained classification of what
+		// the user wants, in their own words — no memorized commands.
+		if tryIntentDispatch(line, profile) {
 			continue
 		}
 		// Recall questions are answered from the session transcript,
@@ -2423,4 +2409,43 @@ func explainBuildError(out string) string {
 		return "An import isn't needed — the code doesn't use it."
 	}
 	return "The code has an error. Read the message above for the file and line number."
+}
+
+// understandingModel is the structure->language model, loaded
+// lazily on the first /uexplain (shared by every chat loop).
+var understandingModel *seq2seq.Seq2Seq
+
+// runUexplainPrint is the /uexplain body, shared by the slash
+// command and the intent layer: print the facts, try the
+// understanding model (placeholder output, verified against the
+// facts), and fall back to the template explanation.
+func runUexplainPrint(fn *analyze.Func, projectRoot string) {
+	facts := analyze.FuncFactsString(fn)
+	fmt.Printf("\nFacts: %s\n", facts)
+	// Try the model if it's installed; never let a missing model
+	// block the command.
+	if understandingModel == nil {
+		if m, err := loadRealModel(projectRoot, UnderstandingDomain); err == nil {
+			understandingModel = m
+		}
+	}
+	answered := false
+	if understandingModel != nil {
+		raw := generateWithModel(understandingModel, facts)
+		// The v2 model never writes names: it emits @ (function)
+		// and @@ (receiver) placeholders, filled in here with
+		// the real names from the code.
+		out := substitutePlaceholders(raw, fn)
+		if strings.Contains(out, "@") {
+			fmt.Printf("Model said (rejected — unfilled placeholder): %s\n", raw)
+		} else if ok, why := modelExplanationValid(fn, facts, out); ok {
+			fmt.Printf("Model says: %s\n", out)
+			answered = true
+		} else {
+			fmt.Printf("Model said (rejected — %s): %s\n", why, out)
+		}
+	}
+	if !answered {
+		fmt.Printf("Explained from the code itself: %s\n", templateExplanation(fn))
+	}
 }

@@ -33,26 +33,7 @@ func handleBeginnerCommand(line string, profile *UserProfile) bool {
 		return true
 	}
 	line = translateBeginnerSentence(line)
-	// needProject no longer refuses (on-ramp rule: a default beats a
-	// refusal). It ensures SOME project is loaded: the analyzed one,
-	// else the folder the chat started in, else the bundled demo.
-	needProject := func() bool {
-		if lastAnalyzeProject != nil {
-			return true
-		}
-		if root := startFolder(); root != "" && hasGoFiles(root) {
-			fmt.Println("Let me look at the project in this folder first…")
-			if analyzeQuiet(root) {
-				return true
-			}
-		}
-		if demo := demoProjectDir(); demo != "" {
-			fmt.Println("No project analyzed yet — I'll use the tiny built-in example (pocketcounter). Say 'tour <github link>' any time for a real project.")
-			return analyzeQuiet(demo)
-		}
-		fmt.Println("First let me look at a project — say: analyze <github link or folder>")
-		return false
-	}
+	needProject := func() bool { return ensureProject() }
 	switch {
 	case strings.HasPrefix(line, "/example "):
 		if !needProject() {
@@ -205,6 +186,27 @@ func analyzeForTour(ref string) bool {
 	}
 	fmt.Printf("Got it — %s. Starting the tour.\n", root)
 	return true
+}
+
+// ensureProject makes sure SOME project is loaded (on-ramp rule: a
+// default beats a refusal): the analyzed one, else the folder the
+// chat started in, else the bundled demo.
+func ensureProject() bool {
+	if lastAnalyzeProject != nil {
+		return true
+	}
+	if root := startFolder(); root != "" && hasGoFiles(root) {
+		fmt.Println("Let me look at the project in this folder first…")
+		if analyzeQuiet(root) {
+			return true
+		}
+	}
+	if demo := demoProjectDir(); demo != "" {
+		fmt.Println("No project analyzed yet — I'll use the tiny built-in example (pocketcounter). Say 'tour <github link>' any time for a real project.")
+		return analyzeQuiet(demo)
+	}
+	fmt.Println("First let me look at a project — say: analyze <github link or folder>")
+	return false
 }
 
 // analyzeQuiet analyzes root and makes it the current project,

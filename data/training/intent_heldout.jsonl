@@ -1,0 +1,102 @@
+{"input": "can you show me around this codebase", "intent": "tour"}
+{"input": "i just cloned this and i have no idea where to start", "intent": "tour"}
+{"input": "walk me thru the whole project pls", "intent": "tour"}
+{"input": "orient me", "intent": "tour"}
+{"input": "give me the lay of the land here", "intent": "tour"}
+{"input": "tour this thing https://github.com/spf13/cobra", "intent": "tour"}
+{"input": "whats the tour button do again", "intent": "help"}
+{"input": "ok what words do i actually need to know for this repo", "intent": "glossary"}
+{"input": "define the important types for me", "intent": "glossary"}
+{"input": "theres a bunch of types i dont recognize", "intent": "glossary"}
+{"input": "vocabulary list please", "intent": "glossary"}
+{"input": "what should i learn first in here", "intent": "learn_path"}
+{"input": "in what order should i read this stuff", "intent": "learn_path"}
+{"input": "learning order for this project", "intent": "learn_path"}
+{"input": "where do i even begin learning this", "intent": "learn_path"}
+{"input": "show me Freeze being used somewhere real", "intent": "example"}
+{"input": "i learn better from examples, got one for Total", "intent": "example"}
+{"input": "example of Add please", "intent": "example"}
+{"input": "who calls MakeRequest", "intent": "example"}
+{"input": "just run it and show me what happens", "intent": "watch"}
+{"input": "does this thing actually run", "intent": "watch"}
+{"input": "fire it up", "intent": "watch"}
+{"input": "lets see it in action", "intent": "watch"}
+{"input": "look at this repo for me https://github.com/mautrix/go", "intent": "analyze"}
+{"input": "explain this project ~/projects/foo", "intent": "analyze"}
+{"input": "what is this codebase", "intent": "analyze"}
+{"input": "analyze that folder on my desktop", "intent": "analyze"}
+{"input": "where would i add a retry helper", "intent": "where"}
+{"input": "i want to add logging, where does that go", "intent": "where"}
+{"input": "where for https://github.com/fgm/izidic/issues/30", "intent": "where"}
+{"input": "if i wanted a new command where would it live", "intent": "where"}
+{"input": "what does Freeze do exactly", "intent": "whatis"}
+{"input": "explain the Container type like im new", "intent": "whatis"}
+{"input": "whats a Store in this code", "intent": "whatis"}
+{"input": "show me the code for Resolve", "intent": "show_func"}
+{"input": "let me see Total's source", "intent": "show_func"}
+{"input": "print the Freeze function", "intent": "show_func"}
+{"input": "walk me through MakeRequest step by step", "intent": "walkthrough"}
+{"input": "trace what Names does", "intent": "walkthrough"}
+{"input": "explain how Resolve works slowly", "intent": "walkthrough"}
+{"input": "find anything about auth", "intent": "find"}
+{"input": "search the code for caching", "intent": "find"}
+{"input": "is there code that handles retries", "intent": "find"}
+{"input": "fix undefined: resovle", "intent": "fix"}
+{"input": "im getting cannot use string as int errors", "intent": "fix"}
+{"input": "this error makes no sense: imported and not used", "intent": "fix"}
+{"input": "is Freeze written ok", "intent": "review"}
+{"input": "check Total for problems", "intent": "review"}
+{"input": "any code smells in MakeRequest", "intent": "review"}
+{"input": "write a doc comment for Names", "intent": "comment"}
+{"input": "Names needs a comment above it", "intent": "comment"}
+{"input": "document the Add function", "intent": "comment"}
+{"input": "make a test for Get", "intent": "test_scaffold"}
+{"input": "i need a test skeleton for Freeze", "intent": "test_scaffold"}
+{"input": "generate a test for Total", "intent": "test_scaffold"}
+{"input": "how is this project put together overall", "intent": "arch"}
+{"input": "architecture summary pls", "intent": "arch"}
+{"input": "whats the big picture structure here", "intent": "arch"}
+{"input": "why does this import json", "intent": "why_import"}
+{"input": "what uses the sync package in here", "intent": "why_import"}
+{"input": "where is errors imported and why", "intent": "why_import"}
+{"input": "build me an api with /users and /health", "intent": "build_api"}
+{"input": "compose an http api for /items", "intent": "build_api"}
+{"input": "learn pieces from this projects docs", "intent": "learn_pieces"}
+{"input": "extract the pieces from the documentation", "intent": "learn_pieces"}
+{"input": "use the model to explain Freeze", "intent": "uexplain"}
+{"input": "what does the understanding model say about Names", "intent": "uexplain"}
+{"input": "export the understanding pairs", "intent": "export_understanding"}
+{"input": "generate training pairs from the structure", "intent": "export_understanding"}
+{"input": "run the flow for counting with a lock", "intent": "flow"}
+{"input": "flow: sort a list", "intent": "flow"}
+{"input": "help", "intent": "help"}
+{"input": "what am i allowed to type here", "intent": "help"}
+{"input": "list everything you can do", "intent": "help"}
+{"input": "what did we talk about so far", "intent": "history"}
+{"input": "show me our conversation", "intent": "history"}
+{"input": "forget everything i said", "intent": "forget"}
+{"input": "wipe your memory of this session", "intent": "forget"}
+{"input": "show me what youve learned about me", "intent": "profile"}
+{"input": "what do you know about my habits", "intent": "profile"}
+{"input": "learn my coding style from my files", "intent": "learn_style"}
+{"input": "pick up my conventions", "intent": "learn_style"}
+{"input": "is the predictor trained yet", "intent": "predictor"}
+{"input": "how many actions have you logged", "intent": "predictor"}
+{"input": "bye", "intent": "quit"}
+{"input": "im done, close it", "intent": "quit"}
+{"input": "run make eval", "intent": "run_make"}
+{"input": "do the smarter target", "intent": "run_make"}
+{"input": "make build please", "intent": "run_make"}
+{"input": "what does make train-go do", "intent": "explain_make"}
+{"input": "explain the eval make target", "intent": "explain_make"}
+{"input": "what is a goroutine", "intent": "concept_q"}
+{"input": "explain channels like im five", "intent": "concept_q"}
+{"input": "how do interfaces work in go", "intent": "concept_q"}
+{"input": "write a function that reverses a string", "intent": "write_code"}
+{"input": "code a helper that sorts ints", "intent": "write_code"}
+{"input": "how was your day", "intent": "social"}
+{"input": "tell me a joke", "intent": "social"}
+{"input": "good morning", "intent": "social"}
+{"input": "thanks that helped a lot", "intent": "social"}
+{"input": "asdfgh", "intent": "other"}
+{"input": "the weather is nice today", "intent": "other"}
