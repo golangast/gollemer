@@ -21,11 +21,15 @@ func TestRenderASCIIGraph(t *testing.T) {
 		"★ 📦 cmd/app",
 		"📦 internal/chat",
 		"└── → internal/analyze",
-		"📦 internal/analyze",
-		"(no project imports)",
+		// The import-less package is folded into the summary line,
+		// not given a dead block of its own.
+		"import nothing internal: internal/analyze",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("RenderASCIIGraph missing %q\n---\n%s", want, out)
 		}
+	}
+	if strings.Contains(out, "(no project imports)") {
+		t.Errorf("RenderASCIIGraph still prints the noise line\n---\n%s", out)
 	}
 }
