@@ -408,6 +408,7 @@ func tryIntentDispatch(line string, profile *UserProfile) bool {
 	if !ok {
 		return false
 	}
+	friendObserveIntent(intent)
 	switch intent {
 	case "tour", "glossary", "learn_path", "example", "watch":
 		if canon := canonicalFor(intent, line); canon != "" {
@@ -427,6 +428,10 @@ func tryIntentDispatch(line string, profile *UserProfile) bool {
 		return handleBeginnerCommand("/brains", profile)
 	case "why_brain":
 		return handleBeginnerCommand("/whybrain", profile)
+	case "suggest":
+		friendReport()
+		recordBrain("friend", true, "asked directly")
+		return true
 	case "tell_more":
 		return handleBeginnerCommand("/tell-more", profile)
 	case "what_now":
@@ -481,6 +486,7 @@ func tryIntentDispatch(line string, profile *UserProfile) bool {
 		if out, ok := lastAnalyzeProject.Answer(q); ok {
 			fmt.Println(out)
 			recordBrain("analyst", true, "intent "+intent)
+			friendNoteFunc(name)
 			return true
 		}
 		return false
@@ -494,6 +500,9 @@ func tryIntentDispatch(line string, profile *UserProfile) bool {
 		}
 		lastActionKind, lastSubject = intent, name
 		fn := findFuncByQuery(lastAnalyzeProject, name)
+		if fn != nil {
+			friendNoteFunc(name)
+		}
 		if fn == nil {
 			fmt.Printf("Function %q not found.", name)
 			if near := nearFuncNames(lastAnalyzeProject, name); len(near) > 0 {
@@ -533,6 +542,7 @@ func tryIntentDispatch(line string, profile *UserProfile) bool {
 		}
 		fmt.Println(lastAnalyzeProject.WhyText(fn))
 		recordBrain("why", true, "intent why_func")
+		friendNoteFunc(name)
 		lastActionKind, lastSubject = "why", name
 		return true
 	case "compare":

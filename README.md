@@ -101,6 +101,7 @@ routing. Ask it directly:
 | `how are your brains doing` | the scoreboard — per-brain ok/failed counts, this session and all time (logged locally in `~/.gollemer_brains.jsonl`) |
 | `why did you do that` | the coordinator names the brain that answered, the recorded outcome, and that brain's known limit |
 | `why does Add lock` | the Reasoner: why a function is shaped as it is — what the author stated vs what the structure implies |
+| `any suggestions` | the Friend: a personal brain that watches how you work across all the brains, remembers topics and habits between sessions (`~/.gollemer_friend.json`), and speaks up rarely — a stuck brain, a function you keep circling — under a long cooldown. Silence is its default |
 | `compare Add and Get` | the Comparer: two functions side by side, ending with the one biggest difference |
 
 The trained models are cast members too — with their measured records

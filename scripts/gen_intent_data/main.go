@@ -242,6 +242,11 @@ var templates = map[string][]string{
 		"who said that", "why did you say that", "why did you answer it that way",
 		"which brain answered that", "why did you pick that brain",
 	},
+	"suggest": {
+		"any suggestions", "what do you suggest", "any tips", "do you have any suggestions",
+		"suggest something", "what would you suggest", "any advice", "give me a suggestion",
+		"what do you recommend", "any recommendations", "suggestions please",
+	},
 	"other": {
 		"the weather is nice", "i like pizza", "what time is it in london",
 		"buy me a coffee", "asdf qwer", "random words here", "my cat is cute",

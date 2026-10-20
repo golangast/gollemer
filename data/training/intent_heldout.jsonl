@@ -133,3 +133,7 @@
 {"input": "who answered that", "intent": "why_brain"}
 {"input": "why did you use that one", "intent": "why_brain"}
 {"input": "which brain said that", "intent": "why_brain"}
+{"input": "got any suggestions for me", "intent": "suggest"}
+{"input": "suggest something for me", "intent": "suggest"}
+{"input": "what do you recommend I try", "intent": "suggest"}
+{"input": "any tips based on how I work", "intent": "suggest"}

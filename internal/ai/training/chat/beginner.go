@@ -32,6 +32,8 @@ var (
 func handleBeginnerCommand(line string, profile *UserProfile) bool {
 	handled := handleBeginnerCommandImpl(line, profile)
 	if handled {
+		friendTurn++
+		defer friendMaybeSpeak()
 		key := ""
 		switch {
 		case strings.HasPrefix(line, "/tour"), strings.HasPrefix(line, "/example"),
@@ -398,6 +400,7 @@ Learn a project:
 
 When you're stuck:
   what should I do now        I'll look at where you are and name the next step
+  any suggestions             the Friend speaks — patterns it noticed in how you work
   tell me more                go one step deeper into whatever we just did
   help                        this list
 

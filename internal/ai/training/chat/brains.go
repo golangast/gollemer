@@ -30,6 +30,9 @@ var brainRegistry = []BrainInfo{
 	{"coordinator", "The Coordinator", "routes your words to the right brain and keeps score",
 		"always on; owns the routing table and the outcome log",
 		"it knows nothing itself — if no brain fits, it must say so"},
+	{"friend", "The Friend", "watches how YOU work across all the brains and speaks up rarely, when it spots a pattern worth naming",
+		"patterns over many turns and sessions; its notebook is a local file (~/.gollemer_friend.json), yours alone",
+		"it is quiet by design — long cooldowns, never twice in a row; for advice on demand, ask \"any suggestions\""},
 	{"analyst", "The Analyst", "reads a project's structure: tours, examples, what-is, walkthroughs, the big picture",
 		"any Go project it can parse; every claim is computed, so unseen code is fine",
 		"structure only — it cannot judge taste, quality, or intent"},
@@ -107,6 +110,8 @@ func intentBrain(intent string) string {
 		return "critic"
 	case "uexplain":
 		return "storyteller"
+	case "suggest":
+		return "friend"
 	case "tell_more":
 		return "memory"
 	case "what_now", "help", "brains", "why_brain":
@@ -162,6 +167,7 @@ func recordBrain(key string, ok bool, note string) {
 	}
 	lastBrain, lastBrainOK, lastNote = key, ok, note
 	brainMu.Unlock()
+	friendObserveBrain(key, ok)
 
 	if path := brainLogPath(); path != "" {
 		line, err := json.Marshal(brainLogEntry{
