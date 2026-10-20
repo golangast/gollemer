@@ -37,6 +37,7 @@ Say any of these inside `make chat`. When the chat answers with a `go`/`gofmt` c
 | Learn your code style | `/learn-style` | Scans your Go files and learns your conventions: handler naming, receiver style, test patterns, error handling. Generated code will match your style |
 | Check the action predictor | `/predictor` | Shows how many actions are logged and whether the neural next-action predictor is ready to train (Layer 4) |
 | Export structure→language pairs | `/export-understanding` | Generates training pairs from the analyzer's structural understanding: (facts → explanation). This is how you train a model on *how the program knows code* — not character-by-character like a transformer |
+| Test the understanding model | `/uexplain <Func>` | Uses the trained understanding model to explain a function from its structural facts. Shows what the model says vs the template — the real generalization test |
 | Run one idea end-to-end | `/flow count with a mutex` | Box-style pipeline visual (prompt → 4 stages → renderer), then generated Go → safety check → tuned code → plain-words trace |
 | Ask about a Go command | `what does go build ./... do` | Explains the exact command |
 | Ask for a Go command | `build with the race detector` | Answers `go build -race ./...`, offers to run it |

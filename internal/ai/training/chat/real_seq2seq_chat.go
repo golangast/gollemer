@@ -170,6 +170,8 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 	// Track actions for sequence learning.
 	var lastChatAction string
 	var pendingSuggestion string
+	// Understanding model (structure->language), loaded lazily on /uexplain.
+	var understandingModel *seq2seq.Seq2Seq
 	if domain == UnifiedDomain {
 		return runUnifiedChat(projectRoot, debug)
 	}
@@ -634,6 +636,44 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 			fmt.Printf("Exported %d training pairs to /tmp/predictor_pairs.jsonl\n", count)
 			fmt.Println("To train: copy to data/training/ and run the seq2seq trainer with domain 'predictor'.")
 			fmt.Println("(Full training integration coming — the data format is ready.)")
+			continue
+		}
+		// /uexplain <Func>: explain a function using the trained understanding model.
+		// Facts come from the analyzer; words come from the model (structure->language).
+		if strings.HasPrefix(line, "/uexplain ") {
+			if lastAnalyzeProject == nil {
+				fmt.Println("Run /analyze first.")
+				continue
+			}
+			fname := strings.TrimSpace(strings.TrimPrefix(line, "/uexplain "))
+			if understandingModel == nil {
+				m, err := loadRealModel(projectRoot, UnderstandingDomain)
+				if err != nil {
+					fmt.Printf("Understanding model not available: %v\nPlace real_tiny_seq2seq_understanding.gob in data/models/gob_models/\n", err)
+					continue
+				}
+				understandingModel = m
+			}
+			found := false
+			for _, pkg := range lastAnalyzeProject.Packages {
+				for _, fn := range pkg.Funcs {
+					if strings.EqualFold(fn.Name, fname) && !fn.IsTest {
+						// Extract facts exactly like the training pairs.
+						facts := extractFuncFacts(fn)
+						explanation := generateWithModel(understandingModel, facts)
+						fmt.Printf("\nFacts: %s\n", facts)
+						fmt.Printf("Model says: %s\n", explanation)
+						found = true
+						break
+					}
+				}
+				if found {
+					break
+				}
+			}
+			if !found {
+				fmt.Printf("Function %q not found.\n", fname)
+			}
 			continue
 		}
 		// /export-understanding: generate structure->language training pairs.
@@ -2119,6 +2159,45 @@ func insertDocComment(fn *analyze.Func, comment string) error {
 	newLines = append(newLines, commentLines...)
 	newLines = append(newLines, lines[idx:]...)
 	return os.WriteFile(fullPath, []byte(strings.Join(newLines, "\n")), 0644)
+}
+
+// extractFuncFacts builds the model's input: "Name on Receiver: behaviors".
+// Must match the training pair format exactly.
+func extractFuncFacts(fn *analyze.Func) string {
+	var b strings.Builder
+	b.WriteString(fn.Name)
+	if fn.Receiver != "" {
+		b.WriteString(" on " + strings.Trim(fn.Receiver, "*"))
+	}
+	src := strings.ToLower(fn.Src)
+	var behaviors []string
+	if strings.Contains(src, "rlock()") {
+		behaviors = append(behaviors, "read-locks")
+	} else if strings.Contains(src, ".lock()") {
+		behaviors = append(behaviors, "locks")
+	}
+	if strings.Contains(src, "range") {
+		behaviors = append(behaviors, "iterates")
+	}
+	if strings.Contains(fn.Sig, "error") {
+		behaviors = append(behaviors, "may-fail")
+	}
+	if len(behaviors) > 0 {
+		b.WriteString(": " + strings.Join(behaviors, ","))
+	}
+	return b.String()
+}
+
+// generateWithModel runs the understanding model on structural facts.
+func generateWithModel(model *seq2seq.Seq2Seq, facts string) string {
+	if model == nil {
+		return "(no model)"
+	}
+	out, err := model.Predict(facts, 40)
+	if err != nil {
+		return fmt.Sprintf("(error: %v)", err)
+	}
+	return out
 }
 
 // confirmAction asks [y/n] unless the profile says to auto-build.
