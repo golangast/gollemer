@@ -79,3 +79,29 @@ func TestCoordinatorRecordsAndExplains(t *testing.T) {
 		t.Fatalf("all-time counts missing the new entries: %+v", counts)
 	}
 }
+
+func TestBeginnerRawSentenceRecordsBrain(t *testing.T) {
+	// Regression: loops hand handleBeginnerCommand RAW sentences; the
+	// coordinator must key off the translated form or a tour records
+	// nothing and "why did you do that" claims no brain has answered.
+	brainMu.Lock()
+	before := 0
+	if st := brainStats["analyst"]; st != nil {
+		before = st.OK
+	}
+	brainMu.Unlock()
+
+	if !handleBeginnerCommand("give me a tour", nil) {
+		t.Fatal("raw tour sentence should be handled")
+	}
+	brainMu.Lock()
+	after := 0
+	if st := brainStats["analyst"]; st != nil {
+		after = st.OK
+	}
+	last := lastBrain
+	brainMu.Unlock()
+	if after != before+1 || last != "analyst" {
+		t.Fatalf("tour via raw sentence not recorded: analyst %d->%d, lastBrain=%q", before, after, last)
+	}
+}

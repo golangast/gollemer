@@ -34,6 +34,10 @@ func handleBeginnerCommand(line string, profile *UserProfile) bool {
 	if handled {
 		friendTurn++
 		defer friendMaybeSpeak()
+		// Map the CANONICAL form: callers hand us raw sentences
+		// ("give me a tour") whose translation happens inside Impl —
+		// keying off the raw line left tours and runs unrecorded.
+		line = translateBeginnerSentence(line)
 		key := ""
 		switch {
 		case strings.HasPrefix(line, "/tour"), strings.HasPrefix(line, "/example"),
