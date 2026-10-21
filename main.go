@@ -23,9 +23,15 @@ func main() {
 	uexplainProbeFlag := flag.String("uexplain-probe", "", "Feed facts text to the understanding model and print its raw output")
 	srcDirFlag := flag.String("src", ".", "Source directory for -gen-understanding")
 	outFileFlag := flag.String("out", "data/training/understanding_pairs.jsonl", "Output file for -gen-understanding")
+	trainTransformerFlag := flag.Bool("train-transformer", false, "Train the mid-size Transformer on a pairs file (mid-transformer experiment)")
+	pairsFlag := flag.String("pairs", "", "Training pairs JSONL for -train-transformer (vocab is built from this file only)")
+	heldoutFlag := flag.String("heldout", "", "Held-out pairs JSONL for -train-transformer (vocab coverage report only; never trained on)")
+	expNameFlag := flag.String("exp-name", "copyexp", "Experiment name for -train-transformer artifacts (transformer_<name>.gob)")
+	maxStepsFlag := flag.Int("max-steps", 0, "For -train-transformer: stop after N optimizer steps (smoke mode; 0 = full training)")
+	batchTokensFlag := flag.Int("batch-tokens", 0, "For -train-transformer: padded source-token budget per batch (0 = default 2048)")
 	flag.Parse()
 
-	if !*trainRealSeq2SeqFlag && !*realChatFlag && *importPairsFlag == "" && !*reclassifyFlag && !*genUnderstandingFlag && *uexplainProbeFlag == "" && *watchFlag == "" {
+	if !*trainRealSeq2SeqFlag && !*trainTransformerFlag && !*realChatFlag && *importPairsFlag == "" && !*reclassifyFlag && !*genUnderstandingFlag && *uexplainProbeFlag == "" && *watchFlag == "" {
 		fmt.Fprintf(os.Stderr, "Usage: gollemer -train-real-seq2seq | gollemer -real-chat | gollemer -import-pairs=file.jsonl | gollemer -reclassify-domains | gollemer -gen-understanding\n")
 		os.Exit(1)
 	}
@@ -54,6 +60,18 @@ func main() {
 
 	if *watchFlag != "" {
 		chat.RunWatch(*watchFlag)
+		return
+	}
+
+	if *trainTransformerFlag {
+		if *pairsFlag == "" {
+			fmt.Fprintf(os.Stderr, "Error: -train-transformer needs -pairs <train.jsonl>\n")
+			os.Exit(1)
+		}
+		if err := chat.RunTransformerPairTraining(rootDir, *pairsFlag, *heldoutFlag, *expNameFlag, *resumeFlag, *maxStepsFlag, *batchTokensFlag); err != nil {
+			fmt.Fprintf(os.Stderr, "transformer training failed: %v\n", err)
+			os.Exit(1)
+		}
 		return
 	}
 
