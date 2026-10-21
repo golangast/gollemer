@@ -432,6 +432,8 @@ func tryIntentDispatch(line string, profile *UserProfile) bool {
 		friendReport()
 		recordBrain("friend", true, "asked directly")
 		return true
+	case "start_guide":
+		return handleBeginnerCommand("/start", profile)
 	case "tell_more":
 		return handleBeginnerCommand("/tell-more", profile)
 	case "what_now":

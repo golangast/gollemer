@@ -76,7 +76,8 @@ var templates = map[string][]string{
 		"look at {url}", "look at this repo {url}", "explain this repo", "explain {url}",
 		"read this codebase", "read {url}", "check out {url}", "what is this project",
 		"analyze this", "take a look at {url}", "take a look at this project",
-	},
+	
+		"analyze the folder on my desktop", "analyze that project on my desktop", "check the folder on my desktop",},
 	"where": {
 		"where for {url}", "where would i add a retry helper", "where would i add {concept} support",
 		"where do i add a new feature", "where should this go", "where does a new handler go",
@@ -247,6 +248,13 @@ var templates = map[string][]string{
 		"suggest something", "what would you suggest", "any advice", "give me a suggestion",
 		"what do you recommend", "any recommendations", "suggestions please",
 	},
+	"start_guide": {
+		"guide me", "start the guide", "get started", "im new here",
+		"i am new here", "show me how this works", "guide me through this",
+		"start guiding me", "take me through it", "walk me through everything",
+		"guide me step by step", "take me step by step", "i just got here",
+		"brand new here", "walk me through the whole thing",
+	},
 	"other": {
 		"the weather is nice", "i like pizza", "what time is it in london",
 		"buy me a coffee", "asdf qwer", "random words here", "my cat is cute",
@@ -264,7 +272,8 @@ var templates = map[string][]string{
 		"help me", "how do i start", "where do i go from here", "what do i type",
 		"how do i use this", "guide me", "directions please", "im confused",
 		"i dont know what to type", "whats the next step", "next steps",
-	},
+	
+		"what is the next thing to do", "tell me the next thing to do", "what do i do next in this project",},
 	"summarize": {
 		"give me the summary", "give me a summary of this", "the summary of this codebase", "summary please", "short summary of this project",
 		"what does this program do", "what does this app do", "what is this program",

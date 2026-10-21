@@ -26,6 +26,7 @@ type friendMemory struct {
 	LastDay    string            `json:"last_day"`
 	Spoken     map[string]string `json:"spoken"` // trigger key -> day it last spoke
 	WatchRead  string            `json:"watch_read,omitempty"` // RFC3339 cursor into the Watcher log
+	Guided     map[string]int    `json:"guided,omitempty"` // project root -> next guided step
 }
 
 var (
@@ -72,6 +73,9 @@ func friendLoad() *friendMemory {
 		}
 		if m.Spoken == nil {
 			m.Spoken = map[string]string{}
+		}
+		if m.Guided == nil {
+			m.Guided = map[string]int{}
 		}
 	}
 	friendMem = m

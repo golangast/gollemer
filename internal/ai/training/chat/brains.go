@@ -228,6 +228,7 @@ func printBrains() {
 func printBrainStatus() {
 	fmt.Println("Brain scoreboard:")
 	allTime := brainLogCounts()
+	var idle []string
 	for _, b := range brainRegistry {
 		brainMu.Lock()
 		sess := brainStats[b.Key]
@@ -241,11 +242,14 @@ func printBrainStatus() {
 			aOK, aF = all.OK, all.Fail
 		}
 		if sOK+sF+aOK+aF == 0 {
-			fmt.Printf("  %-14s idle so far\n", b.Name)
+			idle = append(idle, b.Name)
 			continue
 		}
 		fmt.Printf("  %-14s this session: %d ok, %d failed · all time: %d ok, %d failed\n",
 			b.Name, sOK, sF, aOK, aF)
+	}
+	if len(idle) > 0 {
+		fmt.Printf("\n%d other brain(s) haven't been needed yet: %s.\n", len(idle), strings.Join(idle, ", "))
 	}
 	if st := allTime["storyteller"]; st != nil && st.Fail > 0 {
 		fmt.Printf("\nNote: the Storyteller has failed the Verifier %d time(s) all time — when it does, the Analyst's verified wording speaks instead. That is the system working as designed.\n", st.Fail)

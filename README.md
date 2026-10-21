@@ -89,7 +89,17 @@ The stops: where the program starts → what to read first → the cast of types
 
 **5. Watch it work.** Say `run it` (or `/watch`). It figures out how the project runs, in this order: a `run`/`demo`/`example`/`start`/`serve` target in the project's own Makefile → the entry point (`go run`) → for a library with no program, its tests (`go test ./...`). It asks `[y/n]` first (your "do all" directive auto-yeses, as usual), caps the run at 60 seconds, shows the program's real output, then narrates in plain words what happened — including the honest cases: it printed nothing, it ran long because it's probably a server, or it stopped with an error (paste that error into `/fix` next).
 
-### The cast: many small brains, one coordinator
+### New here? Say `start`
+
+The guided walk: Gollemer drives — six short stops over the open
+project (the story, its hardest-working function, its key words, a look
+at it running, the team and the Friend, your first concept to learn).
+You just say `next`; questions interrupt freely; your place is kept in
+the Friend's notebook per project, so `start` resumes across sessions.
+`help` answers with three situations, not a catalog; the catalog lives
+behind `help all`.
+
+## The cast: many small brains, one coordinator
 
 Gollemer is not one model. A **coordinator** routes each sentence to a
 specialist brain, records whether it delivered, and answers for the

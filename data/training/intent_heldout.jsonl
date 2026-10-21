@@ -137,3 +137,7 @@
 {"input": "suggest something for me", "intent": "suggest"}
 {"input": "what do you recommend I try", "intent": "suggest"}
 {"input": "any tips based on how I work", "intent": "suggest"}
+{"input": "take me through it step by step", "intent": "start_guide"}
+{"input": "i just got here walk me through everything", "intent": "start_guide"}
+{"input": "start from the beginning please", "intent": "start_guide"}
+{"input": "can you guide me through this project", "intent": "start_guide"}

@@ -38,6 +38,9 @@ func handleBeginnerCommand(line string, profile *UserProfile) bool {
 		// ("give me a tour") whose translation happens inside Impl —
 		// keying off the raw line left tours and runs unrecorded.
 		line = translateBeginnerSentence(line)
+		if line == "next" && guideActive || line == "/start" || line == "/startover" || line == "/guidestop" {
+			return handled // the guide records its own steps
+		}
 		key := ""
 		switch {
 		case strings.HasPrefix(line, "/tour"), strings.HasPrefix(line, "/example"),
@@ -60,6 +63,10 @@ func handleBeginnerCommand(line string, profile *UserProfile) bool {
 }
 
 func handleBeginnerCommandImpl(line string, profile *UserProfile) bool {
+	if isHelpAllLine(line) {
+		printHelpAll()
+		return true
+	}
 	if isHelpLine(line) {
 		printHelp()
 		return true
@@ -67,6 +74,18 @@ func handleBeginnerCommandImpl(line string, profile *UserProfile) bool {
 	line = translateBeginnerSentence(line)
 	needProject := func() bool { return ensureProject() }
 	switch {
+	case line == "/start":
+		handleStart(false)
+		return true
+	case line == "/startover":
+		handleStart(true)
+		return true
+	case line == "/guidestop":
+		guideStop()
+		return true
+	case line == "next" && guideActive:
+		guideNext()
+		return true
 	case line == "/brains":
 		printBrains()
 		return true
@@ -191,6 +210,15 @@ func translateBeginnerSentence(line string) string {
 		"what do the words mean", "what do these words mean",
 		"define the types", "define the main types", "what are the main types":
 		return "/glossary"
+	case "start", "guide me", "lets start", "let's start", "get started", "begin",
+		"start the guide", "guide me through this", "im new here", "i'm new here",
+		"im new", "show me how this works", "take me through it",
+		"walk me through everything", "take me through everything":
+		return "/start"
+	case "start over", "start again", "restart the guide":
+		return "/startover"
+	case "stop guiding", "stop the guide", "end the guide", "no more guide":
+		return "/guidestop"
 	case "brains", "show brains", "show me your brains", "what brains do you have",
 		"list your brains", "list brains", "your brains":
 		return "/brains"
@@ -379,6 +407,7 @@ func isHelpLine(line string) bool {
 // needs in the first minute, shown by the chat itself.
 func printSayThis() {
 	fmt.Println("Say things like:")
+	fmt.Println("  start                   — new here? I'll drive: story, key functions, a run (just say 'next')")
 	fmt.Println("  tour <github link>      — walk a project, one stop at a time (then: next)")
 	fmt.Println("  what does this program do — the plain-English version")
 	fmt.Println("  what are the main types — the project's words, in plain English")
@@ -387,9 +416,44 @@ func printSayThis() {
 	fmt.Println("  help                    — everything you can say")
 }
 
-// printHelp is the 'help' answer: everything sayable, grouped by
-// intent, sentences first and slashes as shortcuts.
+// isHelpAllLine asks for the full catalog explicitly.
+func isHelpAllLine(line string) bool {
+	switch strings.Trim(strings.ToLower(strings.TrimSpace(line)), ".!? ") {
+	case "help all", "full help", "all commands", "everything you can do", "show everything":
+		return true
+	}
+	return false
+}
+
+// printHelp is the 'help' answer a beginner gets: three situations,
+// not a catalog. The full menu lives behind "help all".
 func printHelp() {
+	fmt.Println(`
+New here? Say "start" and I'll drive — six short stops, you just say "next".
+
+Three situations cover most of it:
+
+I'm lost:
+  start                       the guided walk (or "tour <github link>" to open a project)
+  what does this program do   the plain-English story
+  what should I do now        I'll name the next step from where you stand
+
+I want to understand one thing:
+  what does Names do          any function name
+  why does Names lock         the reasons the code itself shows
+  compare Add and Total       two functions, side by side
+
+Something's broken:
+  paste any Go error          I'll translate it into plain words
+  where for <github issue link>   where to edit for an issue
+
+Two more worth knowing: "brains" (who works here, and their limits) and
+"any suggestions" (the Friend's notebook on how you work).
+The full catalog: say "help all".`)
+}
+
+// printHelpAll is the full catalog, for after the training wheels.
+func printHelpAll() {
 	fmt.Println(`
 Things you can say:
 
