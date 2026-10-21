@@ -297,6 +297,24 @@ func transformerCrossEntropy(logits *tensor.Tensor, labels [][]int, padID, vocab
 	return float32(totalLoss / float64(valid)), dLogits, nil
 }
 
+// buildTransformerVocab builds the experiment vocabulary from pairs:
+// every subword piece of every input and output. Used by the trainer
+// (TRAIN pairs only — held-out data must never contribute) and by the
+// eval harness when it has to rebuild the same vocabulary for an
+// untrained-model plumbing run.
+func buildTransformerVocab(pairs []ChatPair) *vocab.Vocabulary {
+	v := vocab.NewVocabulary()
+	for _, p := range pairs {
+		for _, t := range subwordTokens(p.Input) {
+			v.AddToken(t)
+		}
+		for _, t := range subwordTokens(p.Output) {
+			v.AddToken(t)
+		}
+	}
+	return v
+}
+
 // RunTransformerPairTraining trains the mid-size Transformer on a pairs
 // file. pairsPath is the TRAINING file — the vocabulary is built from it
 // alone. heldoutPath, when non-empty, is used only for a vocab-coverage
@@ -315,15 +333,7 @@ func RunTransformerPairTraining(projectRoot, pairsPath, heldoutPath, expName str
 	}
 
 	// Vocabulary from the TRAIN pairs only.
-	v := vocab.NewVocabulary()
-	for _, p := range pairs {
-		for _, t := range subwordTokens(p.Input) {
-			v.AddToken(t)
-		}
-		for _, t := range subwordTokens(p.Output) {
-			v.AddToken(t)
-		}
-	}
+	v := buildTransformerVocab(pairs)
 	vocabSize := v.Size()
 	cfg := transformerConfigM(vocabSize)
 

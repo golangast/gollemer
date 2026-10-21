@@ -24,6 +24,7 @@ func main() {
 	srcDirFlag := flag.String("src", ".", "Source directory for -gen-understanding")
 	outFileFlag := flag.String("out", "data/training/understanding_pairs.jsonl", "Output file for -gen-understanding")
 	trainTransformerFlag := flag.Bool("train-transformer", false, "Train the mid-size Transformer on a pairs file (mid-transformer experiment)")
+	evalTransformerFlag := flag.Bool("eval-transformer", false, "Evaluate a trained Transformer on held-out pairs (greedy exact-match echo; mid-transformer experiment)")
 	pairsFlag := flag.String("pairs", "", "Training pairs JSONL for -train-transformer (vocab is built from this file only)")
 	heldoutFlag := flag.String("heldout", "", "Held-out pairs JSONL for -train-transformer (vocab coverage report only; never trained on)")
 	expNameFlag := flag.String("exp-name", "copyexp", "Experiment name for -train-transformer artifacts (transformer_<name>.gob)")
@@ -31,7 +32,7 @@ func main() {
 	batchTokensFlag := flag.Int("batch-tokens", 0, "For -train-transformer: padded source-token budget per batch (0 = default 2048)")
 	flag.Parse()
 
-	if !*trainRealSeq2SeqFlag && !*trainTransformerFlag && !*realChatFlag && *importPairsFlag == "" && !*reclassifyFlag && !*genUnderstandingFlag && *uexplainProbeFlag == "" && *watchFlag == "" {
+	if !*trainRealSeq2SeqFlag && !*trainTransformerFlag && !*evalTransformerFlag && !*realChatFlag && *importPairsFlag == "" && !*reclassifyFlag && !*genUnderstandingFlag && *uexplainProbeFlag == "" && *watchFlag == "" {
 		fmt.Fprintf(os.Stderr, "Usage: gollemer -train-real-seq2seq | gollemer -real-chat | gollemer -import-pairs=file.jsonl | gollemer -reclassify-domains | gollemer -gen-understanding\n")
 		os.Exit(1)
 	}
@@ -70,6 +71,18 @@ func main() {
 		}
 		if err := chat.RunTransformerPairTraining(rootDir, *pairsFlag, *heldoutFlag, *expNameFlag, *resumeFlag, *maxStepsFlag, *batchTokensFlag); err != nil {
 			fmt.Fprintf(os.Stderr, "transformer training failed: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if *evalTransformerFlag {
+		if *heldoutFlag == "" {
+			fmt.Fprintf(os.Stderr, "Error: -eval-transformer needs -heldout <heldout.jsonl>\n")
+			os.Exit(1)
+		}
+		if err := chat.RunTransformerEval(rootDir, *expNameFlag, *heldoutFlag, *pairsFlag); err != nil {
+			fmt.Fprintf(os.Stderr, "transformer eval failed: %v\n", err)
 			os.Exit(1)
 		}
 		return
