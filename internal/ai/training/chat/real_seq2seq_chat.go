@@ -208,7 +208,9 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 	}
 
 	printSayThis()
+	offerTeach()
 	reader := NewLineReader(os.Stdin)
+	paceInteractive = reader.term != nil
 	showThoughts := debug
 	conv := NewConversation()
 	initSocialRecall(projectRoot)
@@ -220,7 +222,7 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		log.Printf("[REAL-CHAT] gocode post-processing on (%d case mappings)", len(goCase))
 	}
 	for {
-		line, rerr := reader.ReadLine("you> ")
+		line, rerr := reader.ReadLine(cPrompt("you> "))
 		if rerr == io.EOF {
 			break
 		}
@@ -278,7 +280,7 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 				arg = unifiedProjectRoot
 			}
 			if out, ok := handleGoAnalyze("analyze " + arg); ok {
-				fmt.Printf("gollemer [%s]> %s\n", GoAnalyzeDomain, out)
+				fmt.Printf("%s %s\n", cTag(fmt.Sprintf("gollemer [%s]>", GoAnalyzeDomain)), out)
 				conv.AddReply(out, GoAnalyzeDomain, false)
 			}
 			continue
@@ -326,14 +328,14 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		}
 		// /contribute <task>: beginner-friendly contribution flow.
 		if out, ok := handleContribute(line, unifiedProjectRoot); ok {
-			fmt.Printf("gollemer [contribute]> %s\n", out)
+			fmt.Printf("%s %s\n", cTag("gollemer [contribute]>"), out)
 			conv.AddReply(out, "contribute", false)
 			continue
 		}
 		// "where for <url>": fetch a GitHub issue and point at the files to change.
 		if strings.HasPrefix(line, "where for ") {
 			if out, ok := tryIssueWhere(line); ok {
-				fmt.Printf("gollemer [%s]> %s\n", GoAnalyzeDomain, out)
+				fmt.Printf("%s %s\n", cTag(fmt.Sprintf("gollemer [%s]>", GoAnalyzeDomain)), out)
 				conv.AddReply(out, GoAnalyzeDomain, false)
 				// Offer to open the file in VSCode at the exact line.
 				if f := analyze.LastWhereFile; f != "" {
@@ -533,7 +535,7 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		// "take a look at this repo: <url>". Detects repo URL + intent,
 		// routes to clone+analyze.
 		if out, ok := tryNaturalAnalyze(line); ok {
-			fmt.Printf("gollemer [%s]> %s\n", GoAnalyzeDomain, out)
+			fmt.Printf("%s %s\n", cTag(fmt.Sprintf("gollemer [%s]>", GoAnalyzeDomain)), out)
 			conv.AddReply(out, GoAnalyzeDomain, false)
 			continue
 		}
@@ -885,7 +887,7 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		// "/flow create a worker pool" runs synthesis, safety proving,
 		// auto-tuning, and the visual trace, rendered in plain words.
 		if out, ok := handleFlowCommand(line); ok {
-			fmt.Printf("gollemer [%s]> %s\n", FlowDomain, out)
+			fmt.Printf("%s %s\n", cTag(fmt.Sprintf("gollemer [%s]>", FlowDomain)), out)
 			conv.AddReply(out, FlowDomain, false)
 			continue
 		}
@@ -1026,14 +1028,14 @@ func tryDeterministicAnswer(line, d string, conv *Conversation, r *LineReader, p
 	// do"), answer from the AST. It only fires on known symbols, so it
 	// can't steal questions meant for the other brains.
 	if out, ok := tryCodebaseQuestion(line); ok {
-		fmt.Printf("gollemer [%s]> %s\n", GoAnalyzeDomain, out)
+		fmt.Printf("%s %s\n", cTag(fmt.Sprintf("gollemer [%s]>", GoAnalyzeDomain)), out)
 		conv.AddReply(out, GoAnalyzeDomain, false)
 		return true
 	}
 	// Pasted Go errors: translate into plain words, no command needed.
 	// Unrecognized shapes fall through to the Go brain below.
 	if out, ok := tryErrorHelp(line); ok {
-		fmt.Printf("gollemer [%s]> %s\n", GoDomain, out)
+		fmt.Printf("%s %s\n", cTag(fmt.Sprintf("gollemer [%s]>", GoDomain)), out)
 		conv.AddReply(out, GoDomain, false)
 		return true
 	}
@@ -1041,7 +1043,7 @@ func tryDeterministicAnswer(line, d string, conv *Conversation, r *LineReader, p
 	// the issue, analyze the repo, and point at the edit locations.
 	// Explicit "where for <url>" works too.
 	if out, ok := tryIssueWhere(line); ok {
-		fmt.Printf("gollemer [%s]> %s\n", GoAnalyzeDomain, out)
+		fmt.Printf("%s %s\n", cTag(fmt.Sprintf("gollemer [%s]>", GoAnalyzeDomain)), out)
 		conv.AddReply(out, GoAnalyzeDomain, false)
 		return true
 	}
@@ -1049,7 +1051,7 @@ func tryDeterministicAnswer(line, d string, conv *Conversation, r *LineReader, p
 	// each with a plain-words one-liner. Explicit "where for <url>"
 	// works too.
 	if out, ok := tryPullWhere(line); ok {
-		fmt.Printf("gollemer [%s]> %s\n", GoAnalyzeDomain, out)
+		fmt.Printf("%s %s\n", cTag(fmt.Sprintf("gollemer [%s]>", GoAnalyzeDomain)), out)
 		conv.AddReply(out, GoAnalyzeDomain, false)
 		return true
 	}
@@ -1057,7 +1059,7 @@ func tryDeterministicAnswer(line, d string, conv *Conversation, r *LineReader, p
 	// ~/workspace/<name> and analyze it, so the chat can answer
 	// questions about the code in that folder.
 	if out, ok := tryCloneProject(line); ok {
-		fmt.Printf("gollemer [%s]> %s\n", GoAnalyzeDomain, out)
+		fmt.Printf("%s %s\n", cTag(fmt.Sprintf("gollemer [%s]>", GoAnalyzeDomain)), out)
 		conv.AddReply(out, GoAnalyzeDomain, false)
 		return true
 	}
@@ -1065,7 +1067,7 @@ func tryDeterministicAnswer(line, d string, conv *Conversation, r *LineReader, p
 	// "take a look at this repo: <url>", "what does <url> do?"
 	// Detects a repo URL + analysis intent, routes to clone+analyze.
 	if out, ok := tryNaturalAnalyze(line); ok {
-		fmt.Printf("gollemer [%s]> %s\n", GoAnalyzeDomain, out)
+		fmt.Printf("%s %s\n", cTag(fmt.Sprintf("gollemer [%s]>", GoAnalyzeDomain)), out)
 		conv.AddReply(out, GoAnalyzeDomain, false)
 		return true
 	}
@@ -1087,7 +1089,7 @@ func tryDeterministicAnswer(line, d string, conv *Conversation, r *LineReader, p
 		}
 		if p != nil {
 			out := p.VisualReport()
-			fmt.Printf("gollemer [%s]> %s\n", GoAnalyzeDomain, out)
+			fmt.Printf("%s %s\n", cTag(fmt.Sprintf("gollemer [%s]>", GoAnalyzeDomain)), out)
 			conv.AddReply(out, GoAnalyzeDomain, false)
 			return true
 		}
@@ -1097,7 +1099,7 @@ func tryDeterministicAnswer(line, d string, conv *Conversation, r *LineReader, p
 	// pair, so this guarantees the chat "picks up" what's in its data.
 	if d == SocialDomain {
 		if sr, ok := LookupSocialRecall(line); ok {
-			fmt.Printf("gollemer [%s]> %s\n", d, sr)
+			fmt.Printf("%s %s\n", cTag(fmt.Sprintf("gollemer [%s]>", d)), sr)
 			conv.AddReply(sr, SocialDomain, false)
 			return true
 		}
@@ -1108,7 +1110,7 @@ func tryDeterministicAnswer(line, d string, conv *Conversation, r *LineReader, p
 	// explicitly taught.
 	if d == MakefileDomain {
 		if mr, ok := LookupMakefileRecall(line); ok {
-			fmt.Printf("gollemer [%s]> %s\n", d, mr)
+			fmt.Printf("%s %s\n", cTag(fmt.Sprintf("gollemer [%s]>", d)), mr)
 			conv.AddReply(mr, MakefileDomain, false)
 			// A makefile reply names an exact repo command. Offer to
 			// run it directly, the same way gocli commands are run.
@@ -1123,7 +1125,7 @@ func tryDeterministicAnswer(line, d string, conv *Conversation, r *LineReader, p
 	// vague falls through to the neural model.
 	if d == GoDomain {
 		if kb, ok := LookupGoKnowledge(line); ok {
-			fmt.Printf("gollemer [%s]> %s\n", d, kb)
+			fmt.Printf("%s %s\n", cTag(fmt.Sprintf("gollemer [%s]>", d)), kb)
 			conv.AddReply(kb, GoDomain, false)
 			return true
 		}
@@ -1132,7 +1134,7 @@ func tryDeterministicAnswer(line, d string, conv *Conversation, r *LineReader, p
 	// answers, no neural model involved.
 	if d == GoAnalyzeDomain {
 		if out, ok := handleGoAnalyze(line); ok {
-			fmt.Printf("gollemer [%s]> %s\n", d, out)
+			fmt.Printf("%s %s\n", cTag(fmt.Sprintf("gollemer [%s]>", d)), out)
 			conv.AddReply(out, GoAnalyzeDomain, false)
 			return true
 		}
@@ -1170,12 +1172,14 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 
 	goCase := goIdentCaseMap(projectRoot)
 	reader := NewLineReader(os.Stdin)
+	paceInteractive = reader.term != nil
 	showThoughts := debug
 	conv := NewConversation()
 	fmt.Println("[unified chat — type /quit to exit, /thoughts to toggle the thought process]")
 	printSayThis()
+	offerTeach()
 	for {
-		line, rerr := reader.ReadLine("you> ")
+		line, rerr := reader.ReadLine(cPrompt("you> "))
 		if rerr == io.EOF {
 			break
 		}
@@ -1208,7 +1212,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 				arg = unifiedProjectRoot
 			}
 			if out, ok := handleGoAnalyze("analyze " + arg); ok {
-				fmt.Printf("gollemer [%s]> %s\n", GoAnalyzeDomain, out)
+				fmt.Printf("%s %s\n", cTag(fmt.Sprintf("gollemer [%s]>", GoAnalyzeDomain)), out)
 				conv.AddReply(out, GoAnalyzeDomain, false)
 			}
 			continue
@@ -1217,7 +1221,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// "/flow create a worker pool" runs synthesis, safety proving,
 		// auto-tuning, and the visual trace, rendered in plain words.
 		if out, ok := handleFlowCommand(line); ok {
-			fmt.Printf("gollemer [%s]> %s\n", FlowDomain, out)
+			fmt.Printf("%s %s\n", cTag(fmt.Sprintf("gollemer [%s]>", FlowDomain)), out)
 			conv.AddReply(out, FlowDomain, false)
 			continue
 		}
@@ -1241,7 +1245,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// Recall questions are answered from the session transcript,
 		// deterministically, before routing or any model sees them.
 		if rq, ok := conv.Recall(line); ok {
-			fmt.Printf("gollemer [memory]> %s\n", rq)
+			fmt.Printf("%s %s\n", cTag("gollemer [memory]>"), rq)
 			conv.AddUser(line)
 			conv.AddReply(rq, SocialDomain, true)
 			continue
@@ -1269,7 +1273,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		}
 		answer, trace, err := model.PredictWithTrace(modelInput, 40)
 		if err != nil {
-			fmt.Printf("gollemer [%s]> [error: %v]\n", tag, err)
+			fmt.Printf("%s %s\n", cTag(fmt.Sprintf("gollemer [%s]>", tag)), cErr(fmt.Sprintf("[error: %v]", err)))
 			continue
 		}
 		reply := tidyDecode(answer)
@@ -1281,7 +1285,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 			// Commands keep their token spacing: "go build ." not "go build.".
 			reply = tidyGoCommand(answer)
 		}
-		fmt.Printf("gollemer [%s]> %s\n", tag, reply)
+		fmt.Printf("%s %s\n", cTag(fmt.Sprintf("gollemer [%s]>", tag)), reply)
 		conv.AddReply(reply, effD, false)
 		// A gocli reply is an exact toolchain command. Offer to run it
 		// directly (working directory shown, no shell); only bare
@@ -1315,7 +1319,7 @@ func printTranscript(conv *Conversation) {
 		if t.Speaker == "you" {
 			fmt.Printf("you: %s\n", t.Text)
 		} else if t.Domain != "" {
-			fmt.Printf("gollemer [%s]: %s\n", t.Domain, t.Text)
+			fmt.Printf("%s %s\n", cTag(fmt.Sprintf("gollemer [%s]:", t.Domain)), t.Text)
 		} else {
 			fmt.Printf("gollemer: %s\n", t.Text)
 		}
@@ -2421,7 +2425,7 @@ var understandingModel *seq2seq.Seq2Seq
 // facts), and fall back to the template explanation.
 func runUexplainPrint(fn *analyze.Func, projectRoot string) {
 	facts := analyze.FuncFactsString(fn)
-	fmt.Printf("\nFacts: %s\n", facts)
+	fmt.Printf("\n%s %s\n", cHead("Facts:"), facts)
 	// Try the model if it's installed; never let a missing model
 	// block the command.
 	if understandingModel == nil {
@@ -2437,15 +2441,15 @@ func runUexplainPrint(fn *analyze.Func, projectRoot string) {
 		// the real names from the code.
 		out := substitutePlaceholders(raw, fn)
 		if strings.Contains(out, "@") {
-			fmt.Printf("Model said (rejected — unfilled placeholder): %s\n", raw)
+			fmt.Printf("%s %s\n", cErr("Model said (rejected — unfilled placeholder):"), raw)
 			recordBrain("storyteller", false, "unfilled placeholder")
 			recordBrain("verifier", true, "rejected unfilled placeholder")
 		} else if ok, why := modelExplanationValid(fn, facts, out); ok {
-			fmt.Printf("Model says: %s\n", out)
+			fmt.Printf("%s %s\n", cGood("Model says:"), out)
 			recordBrain("storyteller", true, "verifier accepted")
 			answered = true
 		} else {
-			fmt.Printf("Model said (rejected — %s): %s\n", why, out)
+			fmt.Printf("%s %s\n", cErr(fmt.Sprintf("Model said (rejected — %s):", why)), out)
 			recordBrain("storyteller", false, "verifier rejected: "+why)
 			recordBrain("verifier", true, "rejected bad prose: "+why)
 		}
@@ -2454,6 +2458,6 @@ func runUexplainPrint(fn *analyze.Func, projectRoot string) {
 		if understandingModel == nil {
 			recordBrain("storyteller", false, "no model installed; template answered")
 		}
-		fmt.Printf("Explained from the code itself: %s\n", templateExplanation(fn))
+		fmt.Printf("%s %s\n", cHead("Explained from the code itself:"), templateExplanation(fn))
 	}
 }

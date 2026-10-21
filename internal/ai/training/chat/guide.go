@@ -69,11 +69,10 @@ func guideShow() {
 		return
 	}
 	step := guideCurriculum[guideIdx]
-	fmt.Printf("\n--- Guided stop %d of %d: %s ---\n", guideIdx+1, len(guideCurriculum), step.title)
+	printBand(fmt.Sprintf("Guided stop %d of %d — %s", guideIdx+1, len(guideCurriculum), step.title))
 	switch step.kind {
 	case "story":
-		fmt.Println(p.Summary())
-		fmt.Println(p.Story())
+		printPaced(p.Summary() + "\n" + p.Story() + "\n")
 	case "example":
 		tf := topFuncName(p)
 		if tf == "" {

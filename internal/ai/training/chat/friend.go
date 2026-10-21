@@ -24,9 +24,10 @@ type friendMemory struct {
 	Sessions   int               `json:"sessions"`
 	LastTopic  string            `json:"last_topic"`
 	LastDay    string            `json:"last_day"`
-	Spoken     map[string]string `json:"spoken"` // trigger key -> day it last spoke
+	Spoken     map[string]string `json:"spoken"`               // trigger key -> day it last spoke
 	WatchRead  string            `json:"watch_read,omitempty"` // RFC3339 cursor into the Watcher log
-	Guided     map[string]int    `json:"guided,omitempty"` // project root -> next guided step
+	Guided     map[string]int    `json:"guided,omitempty"`     // project root -> next guided step
+	Taught     int               `json:"taught,omitempty"`     // training-tour lessons completed
 }
 
 var (

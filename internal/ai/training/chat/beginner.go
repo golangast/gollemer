@@ -30,6 +30,7 @@ var (
 // handleBeginnerCommand wraps the implementation so the COORDINATOR can
 // record which brain each beginner command exercised.
 func handleBeginnerCommand(line string, profile *UserProfile) bool {
+	teachBefore(line)
 	handled := handleBeginnerCommandImpl(line, profile)
 	if handled {
 		friendTurn++
@@ -38,8 +39,9 @@ func handleBeginnerCommand(line string, profile *UserProfile) bool {
 		// ("give me a tour") whose translation happens inside Impl —
 		// keying off the raw line left tours and runs unrecorded.
 		line = translateBeginnerSentence(line)
-		if line == "next" && guideActive || line == "/start" || line == "/startover" || line == "/guidestop" {
-			return handled // the guide records its own steps
+		if line == "next" && guideActive || line == "/start" || line == "/startover" || line == "/guidestop" ||
+			line == "/teach" || line == "/teachstop" || line == "/nextlesson" || line == "next" && teachActive {
+			return handled // the guide and the lessons record their own steps
 		}
 		key := ""
 		switch {
@@ -52,7 +54,7 @@ func handleBeginnerCommand(line string, profile *UserProfile) bool {
 			key = "teacher"
 		case line == "/watch":
 			key = "runner"
-	case line == "/tell-more":
+		case line == "/tell-more":
 			key = "memory"
 		case line == "/what-now", line == "/brains", line == "/brainstatus", line == "/whybrain":
 			key = "coordinator"
@@ -82,6 +84,27 @@ func handleBeginnerCommandImpl(line string, profile *UserProfile) bool {
 		return true
 	case line == "/guidestop":
 		guideStop()
+		return true
+	case line == "/teach":
+		handleTeach()
+		return true
+	case line == "/teachstop":
+		teachStop()
+		return true
+	case line == "/nextlesson":
+		teachNextLesson()
+		return true
+	case line == "next" && teachActive:
+		teachNextLesson()
+		return true
+	case line == "/speed":
+		setSpeed(!paceOn)
+		return true
+	case line == "/speed off":
+		setSpeed(false)
+		return true
+	case line == "/speed on":
+		setSpeed(true)
 		return true
 	case line == "next" && guideActive:
 		guideNext()
@@ -237,6 +260,27 @@ func translateBeginnerSentence(line string) string {
 		"run the project", "run this project", "run the program",
 		"see it run", "let me see it run", "try running it":
 		return "/watch"
+	case "teach me", "teach me gollemer", "teach me how", "train me",
+		"training", "the training", "take the training", "start training",
+		"start the training", "beginner training", "beginner tour",
+		"tutorial", "the tutorial", "lessons", "give me lessons",
+		"show me what you can do", "what all can you do",
+		"teach me how to use you", "teach me how to use this":
+		return "/teach"
+	case "next lesson", "lesson next", "skip the lesson", "skip this lesson",
+		"skip the practice", "skip practice":
+		return "/nextlesson"
+	case "stop teaching", "stop the training", "end training", "stop training",
+		"quit the training", "stop the lessons":
+		return "/teachstop"
+	case "speed", "/speed":
+		return "/speed"
+	case "speed off", "pacing off", "stop pacing", "no pacing",
+		"type faster", "print faster", "instant printing", "full speed":
+		return "/speed off"
+	case "speed on", "pacing on", "type slower", "print slower",
+		"slower printing", "slow down the printing", "slow printing":
+		return "/speed on"
 	}
 	switch low {
 	case "tell me more", "more", "go on", "continue", "keep going", "what else",
@@ -407,13 +451,14 @@ func isHelpLine(line string) bool {
 // needs in the first minute, shown by the chat itself.
 func printSayThis() {
 	fmt.Println("Say things like:")
-	fmt.Println("  start                   — new here? I'll drive: story, key functions, a run (just say 'next')")
-	fmt.Println("  tour <github link>      — walk a project, one stop at a time (then: next)")
-	fmt.Println("  what does this program do — the plain-English version")
-	fmt.Println("  what are the main types — the project's words, in plain English")
-	fmt.Println("  run it                  — watch a project run")
-	fmt.Println("  what should I do now    — whenever you're stuck")
-	fmt.Println("  help                    — everything you can say")
+	fmt.Printf("  %s — new here? I'll drive: story, key functions, a run (just say 'next')\n", cSay("start"))
+	fmt.Printf("  %s — two-minute training: I show you what I can do, then you try it\n", cSay("teach me"))
+	fmt.Printf("  %s — walk a project, one stop at a time (then: next)\n", cSay("tour <github link>"))
+	fmt.Printf("  %s — the plain-English version\n", cSay("what does this program do"))
+	fmt.Printf("  %s — the project's words, in plain English\n", cSay("what are the main types"))
+	fmt.Printf("  %s — watch a project run\n", cSay("run it"))
+	fmt.Printf("  %s — whenever you're stuck\n", cSay("what should I do now"))
+	fmt.Printf("  %s — everything you can say\n", cSay("help"))
 }
 
 // isHelpAllLine asks for the full catalog explicitly.
@@ -430,6 +475,7 @@ func isHelpAllLine(line string) bool {
 func printHelp() {
 	fmt.Println(`
 New here? Say "start" and I'll drive — six short stops, you just say "next".
+Or say "teach me" — six tiny lessons that train YOU on what I can do, by trying each one.
 
 Three situations cover most of it:
 
@@ -465,6 +511,8 @@ Learn a project:
   what should I learn first   its ideas, in the order to learn them
   example Names               see a function used for real (any name works)
   run it                      watch the project run, narrated
+  teach me                    learn what I can do — six tiny lessons, you try each one
+  /speed                      long answers stream in readably instead of dumping (say it again for full speed)
 
 When you're stuck:
   what should I do now        I'll look at where you are and name the next step
@@ -494,7 +542,8 @@ Or just talk — ask me anything. Say 'exit' to leave.`)
 }
 
 func printTourStop() {
-	fmt.Printf("\n--- Stop %d of %d ---\n%s\n", tourIdx+1, len(tourStops), tourStops[tourIdx])
+	printBand(fmt.Sprintf("Stop %d of %d", tourIdx+1, len(tourStops)))
+	printPaced(tourStops[tourIdx] + "\n")
 	if tourIdx < len(tourStops)-1 {
 		fmt.Println("(say 'next' for the next stop)")
 	}
@@ -731,6 +780,7 @@ func handleSummarize() {
 	if !ensureProject() {
 		return
 	}
-	fmt.Printf("\n%s\n%s", lastAnalyzeProject.Summary(), lastAnalyzeProject.Story())
+	fmt.Print("\n")
+	printPaced(lastAnalyzeProject.Summary() + "\n" + lastAnalyzeProject.Story())
 	lastActionKind = "summarize"
 }
