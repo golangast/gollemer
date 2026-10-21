@@ -12,6 +12,7 @@ import (
 
 func main() {
 	trainRealSeq2SeqFlag := flag.Bool("train-real-seq2seq", false, "Train the genuine neural seq2seq model (real BPTT, no cheat sheet)")
+	watchFlag := flag.String("watch", "", "Watch a folder while you code: report meaningful structural changes as you save")
 	realChatFlag := flag.Bool("real-chat", false, "Chat with the trained neural model (pure generation, no lookup)")
 	debugChatFlag := flag.Bool("debug-chat", false, "Show the thought process and debug prints in chat (default: clean replies only)")
 	importPairsFlag := flag.String("import-pairs", "", "Import new training pairs from a JSONL file through the quality gate")
@@ -24,7 +25,7 @@ func main() {
 	outFileFlag := flag.String("out", "data/training/understanding_pairs.jsonl", "Output file for -gen-understanding")
 	flag.Parse()
 
-	if !*trainRealSeq2SeqFlag && !*realChatFlag && *importPairsFlag == "" && !*reclassifyFlag && !*genUnderstandingFlag && *uexplainProbeFlag == "" {
+	if !*trainRealSeq2SeqFlag && !*realChatFlag && *importPairsFlag == "" && !*reclassifyFlag && !*genUnderstandingFlag && *uexplainProbeFlag == "" && *watchFlag == "" {
 		fmt.Fprintf(os.Stderr, "Usage: gollemer -train-real-seq2seq | gollemer -real-chat | gollemer -import-pairs=file.jsonl | gollemer -reclassify-domains | gollemer -gen-understanding\n")
 		os.Exit(1)
 	}
@@ -48,6 +49,11 @@ func main() {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
+		return
+	}
+
+	if *watchFlag != "" {
+		chat.RunWatch(*watchFlag)
 		return
 	}
 

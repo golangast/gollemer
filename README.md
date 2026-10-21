@@ -104,6 +104,14 @@ routing. Ask it directly:
 | `any suggestions` | the Friend: a personal brain that watches how you work across all the brains, remembers topics and habits between sessions (`~/.gollemer_friend.json`), and speaks up rarely — a stuck brain, a function you keep circling — under a long cooldown. Silence is its default |
 | `compare Add and Get` | the Comparer: two functions side by side, ending with the one biggest difference |
 
+**The Watcher** (`gollemer -watch <folder>`, or `make watch DIR=<folder>`):
+an opt-in mode that sits beside your editor. On every save it re-analyzes
+the project and diffs the *structure* — only meaningful changes become
+events (a signature change with callers at stake, a function that started
+locking, a new exported function no test touches, a function edited 4+
+times). Events print in its terminal and are logged locally; the Friend
+reads the log and mentions what mattered, under its usual restraint.
+
 The trained models are cast members too — with their measured records
 printed in the cast list, failures included. When the Storyteller model
 invents facts, the Verifier rejects it and the Analyst's verified

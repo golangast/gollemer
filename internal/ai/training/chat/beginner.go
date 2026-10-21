@@ -412,6 +412,7 @@ Ask about code:
   where for <github issue link>   where to edit for an issue
 
 The team behind the answers:
+  (another terminal) gollemer -watch <folder>   the Watcher diffs your code as you save; the Friend reports what mattered
   brains                       who does the work here, and their honest limits
   how are your brains doing    the scoreboard — who answered, who failed
   why did you do that          I'll name the brain and the recorded reason

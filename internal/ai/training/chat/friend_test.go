@@ -80,3 +80,29 @@ func TestFriendMemoryPersists(t *testing.T) {
 		t.Fatalf("friend forgot the last topic: %q", friendLoad().LastTopic)
 	}
 }
+
+func TestFriendWatchDigest(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	friendResetForTest()
+
+	entry := `{"t":"2020-01-01T10:00:00Z","kind":"sig-changed","func":"Counter.Freeze","detail":"signature changed — 3 caller(s) use it","root":"/x"}` + "\n" +
+		`{"t":"2020-01-01T10:01:00Z","kind":"untested-new","func":"Store","detail":"new exported function — no test exercises it yet","root":"/x"}` + "\n"
+	if err := os.WriteFile(filepath.Join(home, ".gollemer_watch.jsonl"), []byte(entry), 0600); err != nil {
+		t.Fatal(err)
+	}
+	notes := friendWatchNotes()
+	if len(notes) != 2 {
+		t.Fatalf("expected 2 watcher notes, got %v", notes)
+	}
+	friendBeginSession()
+	if !strings.Contains(friendPending, "Watcher noticed") || !strings.Contains(friendPending, "Counter.Freeze") {
+		t.Fatalf("session should open with the watcher digest queued, got %q", friendPending)
+	}
+	if friendLoad().WatchRead == "" {
+		t.Fatal("watch cursor must advance after the digest")
+	}
+	if again := friendWatchNotes(); len(again) != 0 {
+		t.Fatalf("digested events must not repeat: %v", again)
+	}
+}

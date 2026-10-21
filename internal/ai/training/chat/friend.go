@@ -25,6 +25,7 @@ type friendMemory struct {
 	LastTopic  string            `json:"last_topic"`
 	LastDay    string            `json:"last_day"`
 	Spoken     map[string]string `json:"spoken"` // trigger key -> day it last spoke
+	WatchRead  string            `json:"watch_read,omitempty"` // RFC3339 cursor into the Watcher log
 }
 
 var (
@@ -90,6 +91,44 @@ func friendSave() {
 
 func friendToday() string { return time.Now().Format("2006-01-02") }
 
+// friendWatchNotes composes the Watcher's notable events since the
+// read cursor: signature changes, untested new exports, churn, removed
+// functions with callers, behavior changes. Plain new functions are
+// only noted if nothing more notable happened.
+func friendWatchNotes() []string {
+	m := friendLoad()
+	var notable, plain []string
+	for _, e := range readWatchLog() {
+		if m.WatchRead != "" && e.T <= m.WatchRead {
+			continue
+		}
+		text := e.Func
+		if e.Detail != "" {
+			text += " — " + e.Detail
+		}
+		switch e.Kind {
+		case "sig-changed", "untested-new", "churn", "removed-func", "behavior-changed":
+			notable = append(notable, text)
+		default:
+			plain = append(plain, text)
+		}
+	}
+	out := notable
+	if len(out) == 0 {
+		out = plain
+	}
+	if len(out) > 3 {
+		out = out[:3]
+	}
+	return out
+}
+
+func friendAdvanceWatch() {
+	m := friendLoad()
+	m.WatchRead = time.Now().Format(time.RFC3339)
+	friendSave()
+}
+
 // friendBeginSession runs once per process: counts the session and, on
 // a new day, queues a welcome-back note about the last topic.
 func friendBeginSession() {
@@ -99,6 +138,11 @@ func friendBeginSession() {
 	friendSessionBegun = true
 	m := friendLoad()
 	m.Sessions++
+	if notes := friendWatchNotes(); len(notes) > 0 {
+		friendSetPending("watch:"+friendToday(),
+			"while you were away, the Watcher noticed: "+strings.Join(notes, "; ")+".")
+		friendAdvanceWatch()
+	}
 	if m.LastDay != "" && m.LastDay != friendToday() && m.LastTopic != "" {
 		friendSetPending("return", fmt.Sprintf(
 			"welcome back — last time you were deep in %s. Say \"what does %s do\" to pick it back up, or start anywhere you like.",
@@ -259,6 +303,11 @@ func friendReport() {
 			parts = append(parts, fmt.Sprintf("%s %d ok / %d failed", brains[i].name, brains[i].ok, brains[i].fail))
 		}
 		fmt.Fprintf(&b, "• Brains carrying your work: %s.\n", strings.Join(parts, "; "))
+	}
+
+	if notes := friendWatchNotes(); len(notes) > 0 {
+		fmt.Fprintf(&b, "• The Watcher noticed since last time: %s.\n", strings.Join(notes, "; "))
+		friendAdvanceWatch()
 	}
 
 	// A warm suggestion, if one is queued — direct asks bypass cooldown.

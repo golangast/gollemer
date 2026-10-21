@@ -21,8 +21,9 @@ MEM_LIMIT  = 2500MiB
 GOGC       = 100
 GOMAXPROCS = 8
 MAIN_CMD   = go run .
+DIR        ?= .
 
-.PHONY: start chat debug-chat classic flow sel explain smarter eval help import \
+.PHONY: start chat debug-chat classic flow sel explain smarter eval help import watch \
         train-social train-go train-gocode train-gocli train-makefile
 
 ## start: The start-here guide — what to do, what it can do, how to expand it
@@ -32,6 +33,10 @@ start:
 ## chat: Talk to gollemer — one session, five brains, routed per message
 chat:
 	$(MAIN_CMD) -real-chat -domain unified
+
+# Watch a folder while you code: make watch DIR=~/myproject
+watch:
+	$(MAIN_CMD) -watch $(DIR)
 
 ## debug-chat: Chat with the thought process and debug prints shown
 debug-chat:
