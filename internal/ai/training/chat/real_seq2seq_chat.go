@@ -472,63 +472,7 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 				fmt.Println("Run /analyze first.")
 				continue
 			}
-			concept := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(line, "/find ")))
-			words := strings.Fields(concept)
-			type hit struct {
-				kind, name, file string
-				line             int
-				desc             string
-			}
-			var hits []hit
-			for _, pkg := range lastAnalyzeProject.Packages {
-				for _, fn := range pkg.Funcs {
-					if fn.IsTest {
-						continue
-					}
-					nl := strings.ToLower(fn.Name + " " + fn.Doc)
-					matched := false
-					for _, w := range words {
-						if strings.Contains(nl, w) {
-							matched = true
-							break
-						}
-					}
-					if matched {
-						desc := fn.Sig
-						if fn.Doc != "" {
-							if s := analyze.PieceFirstSentence(fn.Doc); s != "" {
-								desc = s
-							}
-						}
-						hits = append(hits, hit{"func", fn.Name, fn.File, fn.Line, desc})
-					}
-				}
-				for _, t := range pkg.Types {
-					nl := strings.ToLower(t.Name)
-					matched := false
-					for _, w := range words {
-						if strings.Contains(nl, w) {
-							matched = true
-							break
-						}
-					}
-					if matched {
-						hits = append(hits, hit{"type", t.Name, t.File, t.Line, t.Kind})
-					}
-				}
-			}
-			if len(hits) == 0 {
-				fmt.Printf("No matches for %q.\n", concept)
-			} else {
-				fmt.Printf("Found %d match(es) for %q:\n", len(hits), concept)
-				for i, h := range hits {
-					if i >= 10 {
-						fmt.Printf("  ... and %d more.\n", len(hits)-10)
-						break
-					}
-					fmt.Printf("  %s %s (%s:%d)\n    %s\n", h.kind, h.name, h.file, h.line, h.desc)
-				}
-			}
+			runFindSearch(strings.ToLower(strings.TrimSpace(strings.TrimPrefix(line, "/find "))))
 			continue
 		}
 		// Natural language repo analysis: "analyze https://github.com/foo/bar",
@@ -700,25 +644,7 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 				fmt.Println("Run /analyze first.")
 				continue
 			}
-			pairs := analyze.GenerateStructurePairs(lastAnalyzeProject)
-			path := "/tmp/understanding_pairs.jsonl"
-			if err := analyze.ExportStructurePairs(pairs, path); err != nil {
-				fmt.Printf("Couldn't export: %v\n", err)
-				continue
-			}
-			// Count by kind.
-			kinds := make(map[string]int)
-			for _, p := range pairs {
-				kinds[p.Kind]++
-			}
-			fmt.Printf("Exported %d structure→language pairs to %s\n", len(pairs), path)
-			for k, v := range kinds {
-				fmt.Printf("  %s: %d\n", k, v)
-			}
-			fmt.Println("\nThese teach a model HOW the analyzer understands code:")
-			fmt.Println("  Input:  structural facts (function X on Y, locks for reading, ...)")
-			fmt.Println("  Output: natural explanation (X returns... It locks...)")
-			fmt.Println("\nThe model learns facts→words, not characters→characters.")
+			runExportUnderstanding()
 			continue
 		}
 		// /comment <Func>: generate a doc comment for a function.
@@ -743,21 +669,7 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 				fmt.Println("Run /analyze first.")
 				continue
 			}
-			lib := analyze.NewPieceLibrary()
-			n := lib.LearnFromDocs(lastAnalyzeProject)
-			fmt.Printf("Learned %d pieces from doc comments.\n", n)
-			// Show a few.
-			shown := 0
-			for name, p := range lib.Pieces {
-				if shown >= 5 {
-					break
-				}
-				fmt.Printf("  %s: %s\n", name, p.Purpose)
-				shown++
-			}
-			if n > 5 {
-				fmt.Printf("  ... and %d more.\n", n-5)
-			}
+			runLearnPieces()
 			continue
 		}
 		// /build-api <path> [path2...]: compose a working HTTP API from pieces.
@@ -770,48 +682,7 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 				fmt.Println("Usage: /build-api /path1 [/path2 ...]  (e.g. /build-api /users)")
 				continue
 			}
-			paths := strings.Fields(arg)
-			lib := analyze.NewPieceLibrary()
-			lib.SeedHTTP()
-			// Refine from the current project if one is analyzed.
-			if lastAnalyzeProject != nil {
-				lib.LearnHTTPFromProject(lastAnalyzeProject)
-			}
-			req := analyze.ComposeRequest{Kind: "api", Address: ":8080"}
-			for _, p := range paths {
-				if !strings.HasPrefix(p, "/") {
-					p = "/" + p
-				}
-				// Describe the data from the path: "/users" -> "list of users".
-				desc := "data for " + p
-				trimmed := strings.Trim(p, "/")
-				if trimmed != "" {
-					desc = "list of " + trimmed
-				}
-				req.Routes = append(req.Routes, analyze.ComposeRoute{
-					Path: p, Returns: "json", DataDesc: desc,
-				})
-			}
-			code, explanations := lib.Compose(req)
-			fmt.Printf("\nComposed API (%d routes):\n\n%s\n", len(req.Routes), code)
-			fmt.Printf("Why each piece is where it is:\n")
-			for _, e := range explanations {
-				fmt.Printf("  • %s\n", e)
-			}
-			fmt.Printf("\nThis was composed from learned pieces, not copied.\n")
-			fmt.Printf("The data is a placeholder — replace the TODO with your real data source.\n")
-			// Save to ./compose/main.go
-			composeDir := "compose"
-			if err := os.MkdirAll(composeDir, 0755); err != nil {
-				fmt.Printf("Couldn't create compose dir: %v\n", err)
-			} else {
-				outPath := composeDir + "/main.go"
-				if err := os.WriteFile(outPath, []byte(code), 0644); err != nil {
-					fmt.Printf("Couldn't write %s: %v\n", outPath, err)
-				} else {
-					fmt.Printf("\nSaved to %s — run it with: cd compose && go mod init api && go run main.go\n", outPath)
-				}
-			}
+			runBuildAPI(strings.Fields(arg))
 			continue
 		}
 		// /impact <FuncName>: show blast radius — what breaks if you change this.

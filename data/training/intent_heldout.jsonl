@@ -147,3 +147,66 @@
 {"input": "where does Inventory change", "intent": "dataflow_q"}
 {"input": "where does the cart come from", "intent": "dataflow_q"}
 {"input": "what updates Wishlist", "intent": "dataflow_q"}
+{"input": "wheres the login stuff", "intent": "find"}
+{"input": "got any code dealing with sessions", "intent": "find"}
+{"input": "hunt down the retry logic", "intent": "find"}
+{"input": "is there a place that parses dates", "intent": "find"}
+{"input": "any code about caching in here", "intent": "find"}
+{"input": "spin me up an api with /orders", "intent": "build_api"}
+{"input": "i need an http api, /status and /metrics", "intent": "build_api"}
+{"input": "api thing with /signup please", "intent": "build_api"}
+{"input": "could you compose an api /billing /refunds", "intent": "build_api"}
+{"input": "build api for /search and /index", "intent": "build_api"}
+{"input": "pull the pieces out of the docs", "intent": "learn_pieces"}
+{"input": "what pieces can you learn from the comments", "intent": "learn_pieces"}
+{"input": "go learn pieces", "intent": "learn_pieces"}
+{"input": "harvest the doc comments for parts", "intent": "learn_pieces"}
+{"input": "dump the understanding pairs to a file", "intent": "export_understanding"}
+{"input": "export pairs from the structure", "intent": "export_understanding"}
+{"input": "make me the structure pairs", "intent": "export_understanding"}
+{"input": "generate pairs for understanding training", "intent": "export_understanding"}
+{"input": "where does the token come from", "intent": "dataflow_q"}
+{"input": "where do the results get written", "intent": "dataflow_q"}
+{"input": "who keeps changing the totals", "intent": "dataflow_q"}
+{"input": "trace where the queue gets filled", "intent": "dataflow_q"}
+{"input": "whats feeding the metrics", "intent": "dataflow_q"}
+{"input": "where does Timeout get set", "intent": "dataflow_q"}
+{"input": "where do I change the router", "intent": "where"}
+{"input": "how does Add compare to Get", "intent": "compare"}
+{"input": "orient me pls", "intent": "tour"}
+{"input": "show me round the repo", "intent": "tour"}
+{"input": "list the lingo", "intent": "glossary"}
+{"input": "reading order for this code", "intent": "learn_path"}
+{"input": "got a usage of Store i can look at", "intent": "example"}
+{"input": "run it and lets see", "intent": "watch"}
+{"input": "print out the source for Resolve", "intent": "show_func"}
+{"input": "slowly, how does parseFlags work", "intent": "walkthrough"}
+{"input": "how come Container locks", "intent": "why_func"}
+{"input": "where should a new flag live", "intent": "where"}
+{"input": "look this repo over", "intent": "analyze"}
+{"input": "hows it all organized", "intent": "arch"}
+{"input": "why is errors even imported", "intent": "why_import"}
+{"input": "my compile fails", "intent": "fix"}
+{"input": "check Freeze for smells", "intent": "review"}
+{"input": "write the doc for Get", "intent": "comment"}
+{"input": "have the model explain Freeze", "intent": "uexplain"}
+{"input": "one idea, end to end: debounce", "intent": "flow"}
+{"input": "sum up the project", "intent": "summarize"}
+{"input": "what am i supposed to type", "intent": "help"}
+{"input": "wipe it all", "intent": "forget"}
+{"input": "just got here, guide me", "intent": "start_guide"}
+{"input": "more on that", "intent": "tell_more"}
+{"input": "ok what do i do", "intent": "what_now"}
+{"input": "name your brains", "intent": "brains"}
+{"input": "which one of you answered that", "intent": "why_brain"}
+{"input": "got a suggestion", "intent": "suggest"}
+{"input": "whatve you got on me", "intent": "profile"}
+{"input": "learn how i write code", "intent": "learn_style"}
+{"input": "the eval target, what is it", "intent": "explain_make"}
+{"input": "whats a channel in go", "intent": "concept_q"}
+{"input": "write me a function that doubles a slice", "intent": "write_code"}
+{"input": "hows your morning", "intent": "social"}
+{"input": "make eval pls", "intent": "run_make"}
+{"input": "the moon is bright tonight", "intent": "other"}
+{"input": "im out", "intent": "quit"}
+{"input": "show me the transcript of us", "intent": "history"}

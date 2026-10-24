@@ -183,6 +183,14 @@ func TrainIntentModel(pairs []IntentPair) *IntentModel {
 // Predict returns the best intent, its softmax confidence, and the
 // margin over the runner-up.
 func (m *IntentModel) Predict(line string) (string, float64, float64) {
+	best, bestConf, _, secondConf := m.predictTop2(line)
+	return best, bestConf, bestConf - secondConf
+}
+
+// predictTop2 returns the two most likely intents with their
+// softmax probabilities — the clarification fallback needs to know
+// WHO the runner-up is, not just the margin.
+func (m *IntentModel) predictTop2(line string) (string, float64, string, float64) {
 	feats := intentFeatures(line)
 	scores := make([]float64, len(m.Intents))
 	for k := range m.Intents {
@@ -204,22 +212,20 @@ func (m *IntentModel) Predict(line string) (string, float64, float64) {
 		probs[k] = math.Exp(s - max)
 		sum += probs[k]
 	}
-	best, second := -1, -1.0
-	bestP := -1.0
-	for k, p := range probs {
-		p /= sum
-		probs[k] = p
-		if p > bestP {
-			second = bestP
-			best, bestP = k, p
-		} else if p > second {
-			second = p
+	best, second := -1, -1
+	for k := range probs {
+		probs[k] /= sum
+		if best < 0 || probs[k] > probs[best] {
+			second = best
+			best = k
+		} else if second < 0 || probs[k] > probs[second] {
+			second = k
 		}
 	}
 	if second < 0 {
-		second = 0
+		return m.Intents[best], probs[best], "", 0
 	}
-	return m.Intents[best], bestP, bestP - second
+	return m.Intents[best], probs[best], m.Intents[second], probs[second]
 }
 
 // ClassifyIntent is Predict gated by the confidence/margin bar:
@@ -428,6 +434,12 @@ func slotFuncNames(line string, proj *analyze.Project, max int) []*analyze.Func 
 }
 
 func tryIntentDispatch(line string, profile *UserProfile) bool {
+	// A pending "did you mean…?" gets first claim on the reply —
+	// here, after the beginner commands and the edits parser have
+	// had their turn, the same place the question was asked from.
+	if done, handled := resolveClarification(line, profile); done {
+		return handled
+	}
 	m := defaultIntentModel()
 	if m == nil {
 		return false
@@ -439,9 +451,17 @@ func tryIntentDispatch(line string, profile *UserProfile) bool {
 	}
 	intent, _, ok := m.ClassifyIntent(line)
 	if !ok {
-		return false
+		return offerClarification(m, line)
 	}
 	friendObserveIntent(intent)
+	return dispatchIntent(intent, line, profile)
+}
+
+// dispatchIntent runs one confidently-classified intent — and, via
+// the clarification fallback, one the user just confirmed. Split
+// out of tryIntentDispatch so a confirmed guess routes through the
+// exact same cases as a confident one.
+func dispatchIntent(intent, line string, profile *UserProfile) bool {
 	switch intent {
 	case "tour", "glossary", "learn_path", "example", "watch":
 		if canon := canonicalFor(intent, line); canon != "" {
@@ -516,6 +536,16 @@ func tryIntentDispatch(line string, profile *UserProfile) bool {
 			return true
 		}
 		return false
+	case "build_api":
+		routes := slotRoutes(line)
+		if len(routes) == 0 {
+			fmt.Println("Tell me the routes and I'll compose the API — e.g. \"build an api with /users and /health\".")
+			recordBrain("composer", false, "intent build_api: no routes named")
+			return true
+		}
+		runBuildAPI(routes)
+		recordBrain("composer", true, "intent build_api")
+		return true
 	}
 	// Everything below answers from the analyzed project.
 	switch intent {
@@ -632,6 +662,31 @@ func tryIntentDispatch(line string, profile *UserProfile) bool {
 		}
 		fmt.Println(suggestErrorFix(line, lastAnalyzeProject))
 		return true
+	case "find":
+		concept := slotFindConcept(line)
+		if concept == "" {
+			return false
+		}
+		if !ensureProject() {
+			return true
+		}
+		runFindSearch(concept)
+		recordBrain("analyst", true, "intent find")
+		return true
+	case "learn_pieces":
+		if !ensureProject() {
+			return true
+		}
+		runLearnPieces()
+		recordBrain("composer", true, "intent learn_pieces")
+		return true
+	case "export_understanding":
+		if !ensureProject() {
+			return true
+		}
+		runExportUnderstanding()
+		recordBrain("analyst", true, "intent export_understanding")
+		return true
 	}
 	return false
 }
@@ -646,4 +701,266 @@ func slotPkg(line string) string {
 		}
 	}
 	return ""
+}
+
+// slotRoutes pulls the route paths ("/users", "/health") out of a
+// build-an-API sentence, in the order the user named them.
+func slotRoutes(line string) []string {
+	var out []string
+	for _, f := range strings.Fields(line) {
+		tok := strings.Trim(f, ",.!?;:'\"()")
+		if len(tok) < 2 || !strings.HasPrefix(tok, "/") {
+			continue
+		}
+		if tok == "/build-api" || tok == "/build" {
+			continue
+		}
+		out = append(out, tok)
+	}
+	return out
+}
+
+// findStopwords are the words of a search sentence that carry the
+// asking, not the topic — slotFindConcept strips them so what
+// remains is what the search matches on.
+var findStopwords = map[string]bool{
+	"find": true, "search": true, "searching": true, "look": true,
+	"looking": true, "lookup": true, "code": true, "the": true,
+	"a": true, "an": true, "is": true, "there": true, "anything": true,
+	"any": true, "about": true, "for": true, "does": true, "this": true,
+	"have": true, "has": true, "where": true, "handled": true,
+	"handles": true, "handle": true, "deals": true, "dealing": true,
+	"with": true, "in": true, "on": true, "of": true, "it": true,
+	"that": true, "me": true, "show": true, "get": true, "got": true,
+	"stuff": true, "logic": true, "related": true, "somewhere": true,
+	"here": true, "project": true, "please": true, "can": true,
+	"you": true, "do": true, "function": true, "functions": true,
+	"thing": true, "things": true,
+}
+
+// slotFindConcept strips the search phrasing off a find sentence,
+// leaving the topical words ("is there code that handles retries"
+// -> "retries").
+func slotFindConcept(line string) string {
+	var keep []string
+	for _, t := range intentTokens(line) {
+		if !findStopwords[t] {
+			keep = append(keep, t)
+		}
+	}
+	return strings.Join(keep, " ")
+}
+
+// --- clarification fallback (intent layer v2) ------------------------------
+//
+// A sentence the classifier almost understood used to fall through
+// silently, and the user learned nothing except that the front door
+// "didn't get it". Now a near miss asks ONE short question — "did
+// you mean — …?" — and routes on the reply (yes/no, or 1/2 when the
+// model is torn between two). The band comes from the classifier's
+// measured behavior: over the training and held-out corpora the
+// model is essentially never gated out while holding a plausible
+// favorite (it is confident, right or wrong — 0 gated-out lines in
+// either corpus), so a gated line whose top intent is STILL a
+// strong favorite is exactly the out-of-corpus paraphrase this
+// fallback exists for. Brain-owned intents (concept_q, write_code,
+// social, run_make) and the ones other stages own are never
+// suggested: those lines belong to their owners either way.
+
+const (
+	// clarifyMinConf is the floor under a near miss: below it the
+	// probability mass is spread thin over many intents and the
+	// top guess is noise, not a favorite.
+	clarifyMinConf = 0.35
+	// clarifySecondFloor is the least a runner-up must hold to be
+	// worth naming as the second option.
+	clarifySecondFloor = 0.20
+)
+
+// dispatchableIntent reports whether dispatchIntent has a real
+// case for the intent — the only intents a clarification may offer.
+func dispatchableIntent(intent string) bool {
+	switch intent {
+	case "tour", "glossary", "learn_path", "example", "watch",
+		"brains", "why_brain", "suggest", "start_guide", "tell_more",
+		"what_now", "summarize", "dataflow_q", "help", "analyze",
+		"where", "flow", "build_api", "whatis", "show_func",
+		"walkthrough", "review", "comment", "test_scaffold",
+		"uexplain", "why_func", "compare", "arch", "why_import",
+		"fix", "find", "learn_pieces", "export_understanding":
+		return true
+	}
+	return false
+}
+
+// clarifyLabel phrases an intent the way the "did you mean"
+// question names it: the action in plain words, never the intent's
+// code name — the user was never supposed to learn those.
+func clarifyLabel(intent string) string {
+	switch intent {
+	case "tour":
+		return "take the tour of this project"
+	case "glossary":
+		return "show the project's key words and types"
+	case "learn_path":
+		return "show the order to learn this project in"
+	case "example":
+		return "show a real example of a function in use"
+	case "watch":
+		return "run the project and watch what happens"
+	case "brains":
+		return "list the brains"
+	case "why_brain":
+		return "explain why that brain answered"
+	case "suggest":
+		return "hear a suggestion from the Friend"
+	case "start_guide":
+		return "start the guided walk"
+	case "tell_more":
+		return "tell you more about that"
+	case "what_now":
+		return "suggest what to do next"
+	case "summarize":
+		return "summarize what this project does"
+	case "dataflow_q":
+		return "trace where a value's data comes from and where it changes"
+	case "help":
+		return "show what you can ask"
+	case "analyze":
+		return "analyze a project"
+	case "where":
+		return "find where a change belongs"
+	case "flow":
+		return "run one idea end to end"
+	case "build_api":
+		return "build an API from pieces"
+	case "whatis":
+		return "explain what a function does"
+	case "show_func":
+		return "show a function's source"
+	case "walkthrough":
+		return "walk through a function step by step"
+	case "review":
+		return "review a function for problems"
+	case "comment":
+		return "write a doc comment for a function"
+	case "test_scaffold":
+		return "scaffold a test for a function"
+	case "uexplain":
+		return "explain a function, checked against the facts"
+	case "why_func":
+		return "explain why a function is written that way"
+	case "compare":
+		return "compare two functions"
+	case "arch":
+		return "describe how this project is put together"
+	case "why_import":
+		return "explain why a package is imported"
+	case "fix":
+		return "help fix an error"
+	case "find":
+		return "search the code for something"
+	case "learn_pieces":
+		return "learn the reusable pieces in the doc comments"
+	case "export_understanding":
+		return "export the understanding pairs"
+	}
+	return intent
+}
+
+// pendingClarification is the one outstanding "did you mean…?":
+// the line that prompted it and the candidate intents, best first.
+// Package state, like the guide's — exactly one at a time, and any
+// later line that reaches the intent layer either answers it or
+// clears it, so it can never hijack a later, unrelated sentence.
+type pendingClarification struct {
+	line  string
+	cands []string
+}
+
+var pendingClarify *pendingClarification
+
+// clarifyCandidates picks the suggestion(s) for a line the gate
+// just rejected, or nil when the line is no near miss worth asking
+// about. It is only called with the gate already failed.
+func clarifyCandidates(m *IntentModel, line string) []string {
+	top, conf, second, secondConf := m.predictTop2(line)
+	if conf < clarifyMinConf || !dispatchableIntent(top) {
+		return nil
+	}
+	if conf-secondConf >= intentMinMargin {
+		// The gate failed on confidence alone: one clear favorite,
+		// just under the bar.
+		return []string{top}
+	}
+	// The gate failed on margin: the model is torn between two.
+	// Name both when the runner-up is also routable; otherwise the
+	// favorite is still the only sensible question.
+	if dispatchableIntent(second) && secondConf >= clarifySecondFloor {
+		return []string{top, second}
+	}
+	return []string{top}
+}
+
+// offerClarification asks the one "did you mean…?" question for a
+// gated-out line and remembers it as pending. It returns false
+// when the line is no near miss — the line then falls through
+// exactly as it did before the fallback existed.
+func offerClarification(m *IntentModel, line string) bool {
+	cands := clarifyCandidates(m, line)
+	if len(cands) == 0 {
+		return false
+	}
+	pendingClarify = &pendingClarification{line: line, cands: cands}
+	if len(cands) == 1 {
+		fmt.Printf("Did you mean — %s? (yes/no)\n", clarifyLabel(cands[0]))
+	} else {
+		fmt.Printf("Did you mean (1) %s, or (2) %s? (1/2/neither)\n", clarifyLabel(cands[0]), clarifyLabel(cands[1]))
+	}
+	return true
+}
+
+var (
+	clarifyYes = map[string]bool{
+		"yes": true, "y": true, "yeah": true, "yep": true,
+		"sure": true, "ok": true, "okay": true, "yes please": true,
+	}
+	clarifyNo = map[string]bool{
+		"no": true, "n": true, "nope": true, "neither": true,
+		"none": true, "no thanks": true, "cancel": true, "never mind": true,
+	}
+)
+
+// resolveClarification gives a pending "did you mean…?" first
+// claim on the reply line. done=false means no answer was given
+// (any pending question is forgotten) and the line must be
+// processed normally.
+func resolveClarification(line string, profile *UserProfile) (done, handled bool) {
+	p := pendingClarify
+	if p == nil {
+		return false, false
+	}
+	ans := strings.ToLower(strings.Trim(strings.TrimSpace(line), ".!?"))
+	pick := -1
+	switch {
+	case ans == "1":
+		pick = 0
+	case ans == "2" && len(p.cands) > 1:
+		pick = 1
+	case clarifyYes[ans]:
+		pick = 0
+	case clarifyNo[ans]:
+		// Declined: suggest nothing more; the line falls through
+		// to exactly the behavior it would have had today.
+		pendingClarify = nil
+		return true, false
+	default:
+		// Not an answer at all: forget the question and let the
+		// line be processed fresh.
+		pendingClarify = nil
+		return false, false
+	}
+	pendingClarify = nil
+	friendObserveIntent(p.cands[pick])
+	return true, dispatchIntent(p.cands[pick], p.line, profile)
 }
