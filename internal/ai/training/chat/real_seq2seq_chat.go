@@ -165,8 +165,14 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 	// Load the user profile — the "learning you" model. Local only.
 	profile := LoadProfile()
 	profile.SeedDefaults()
-	if suggestion := profile.SuggestStartup(projectRoot); suggestion != "" {
-		fmt.Printf("\n%s\n\n", suggestion)
+	// The unified chat's start panel carries the profile's
+	// continuity line itself (startscreen.go) — printing the
+	// suggestion here too would say it twice at every launch.
+	// The single-domain loops below keep the printed suggestion.
+	if domain != UnifiedDomain {
+		if suggestion := profile.SuggestStartup(projectRoot); suggestion != "" {
+			fmt.Printf("\n%s\n\n", suggestion)
+		}
 	}
 	// Track actions for sequence learning.
 	var lastChatAction string

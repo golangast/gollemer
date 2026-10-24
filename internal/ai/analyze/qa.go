@@ -254,7 +254,13 @@ func (p *Project) resolve(name string) (fn *Func, cands []*Func, typ *Type, pkg 
 			if matches[i].Exported != matches[j].Exported {
 				return matches[i].Exported
 			}
-			return matches[i].Score > matches[j].Score
+			if matches[i].Score != matches[j].Score {
+				return matches[i].Score > matches[j].Score
+			}
+			// Deterministic tiebreak: matches arrive in map order,
+			// so without one the pick-list numbering shuffles
+			// between identical questions.
+			return matches[i].Display() < matches[j].Display()
 		})
 		return nil, matches, nil, nil
 	}

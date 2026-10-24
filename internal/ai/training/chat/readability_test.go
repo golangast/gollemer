@@ -77,9 +77,15 @@ func TestDecorateOutput(t *testing.T) {
 }
 
 // The start screen is one panel: the name in the border, what it
-// is, the three starter lines, and the folder chip — and nothing
-// from the old startup dump (no phrase catalog, no most-run line).
+// is, the three starter lines, and the folder chip — plus the
+// capability block beneath the panel — and nothing from the old
+// startup dump (no phrase catalog, no most-run line). The screen
+// is record-driven now, so the shape test pins an EMPTY home: the
+// generic screen a fresh install gets.
 func TestStartScreenShape(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	friendResetForTest()
+	defer friendResetForTest()
 	oldT := termui.Enabled
 	defer func() { termui.Enabled = oldT }()
 	termui.Enabled = false
@@ -97,7 +103,10 @@ func TestStartScreenShape(t *testing.T) {
 	if strings.Contains(out, "\x1b[") {
 		t.Errorf("start screen must carry no escapes with styling off:\n%q", out)
 	}
-	if n := len(strings.Split(out, "\n")); n > 14 {
+	// Height budget: the panel (11 lines at most, with the teach
+	// line) plus the 4 capability lines John's intro-screen ask
+	// added — and a line of headroom. Anything taller is bloat.
+	if n := len(strings.Split(out, "\n")); n > 16 {
 		t.Errorf("start screen too tall (%d lines) — print less:\n%s", n, out)
 	}
 }
