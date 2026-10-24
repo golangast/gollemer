@@ -1,6 +1,16 @@
 #!/bin/bash
 # make start — the start-here guide: what to do, where to begin,
 # what Gollemer can do, and how to expand it.
+#
+# The guide text lives in guide_text() and is the ONLY source. When
+# stdout is a pipe or NO_COLOR is set, it prints verbatim (byte-
+# identical to the original plain guide). On a real terminal the
+# same text passes through a bash-only colorizer speaking the
+# termui vocabulary: gold ◆ title, cyan ▸ section headers, quoted
+# example prompts in cyan, one hue per brain (the per-brain
+# palette), make commands in cyan.
+
+guide_text() {
 cat << 'EOF'
 GOLLEMER — START HERE
 ==================
@@ -55,3 +65,79 @@ How to expand it (teach it new things):
   Checkpoints live in data/models/gob_models/ (backed up before retrains).
   Ask the chat itself: "how do i teach you new things".
 EOF
+}
+
+# brain_color echoes the ANSI code for a brain name (termui palette).
+brain_color() {
+  case "$1" in
+    social)   printf '\033[35m' ;;
+    go)       printf '\033[34m' ;;
+    gocode)   printf '\033[32m' ;;
+    gocli)    printf '\033[36m' ;;
+    makefile) printf '\033[33m' ;;
+    goanalyze) printf '\033[1;37m' ;;
+    *)        printf '' ;;
+  esac
+}
+
+colorize_guide() {
+  local RST=$'\033[0m' GOLD=$'\033[1;33m' CYAN=$'\033[36m' DIM=$'\033[2m'
+  local line first rest pre quote after label
+  while IFS= read -r line; do
+    case "$line" in
+      "GOLLEMER — START HERE")
+        printf '%s◆ %s%s\n' "$GOLD" "$line" "$RST" ;;
+      "==================")
+        printf '%s──────────────────%s\n' "$DIM" "$RST" ;;
+      "What this is:"|"Where to start:"|"What it can do:"|"How to expand it (teach it new things):")
+        printf '%s▸ %s%s\n' "$CYAN" "$line" "$RST" ;;
+      *)
+        # Brain names opening a "What it can do" entry.
+        local trimmed=${line#"${line%%[![:space:]]*}"}
+        first=${trimmed%%[[:space:]]*}
+        case " social go gocode gocli makefile goanalyze " in
+          *" $first "*)
+            if [[ "$line" == "  $first "* ]]; then
+              printf '  %s%s%s%s\n' "$(brain_color "$first")" "$first" "$RST" "${line#  $first}"
+              continue
+            fi
+            ;;
+        esac
+        # Quoted example prompts: light the quote, color the brain label.
+        # (The JSONL example line is data, not a prompt — skip it.)
+        if [[ "$line" == *'"'*'"'* && "$line" != *'{"input"'* ]]; then
+          pre=${line%%\"*}
+          rest=${line#*\"}
+          quote=${rest%%\"*}
+          after=${rest#*\"}
+          label=${after%%:*}
+          label=${label//[[:space:]]/}
+          if [ -n "$(brain_color "$label")" ]; then
+            printf '%s%s"%s"%s%s%s%s\n' "$pre" "$CYAN" "$quote" "$RST" \
+              "${after%%"$label:"*}" "$(brain_color "$label")" "$label:$RST${after#*"$label:"}"
+            continue
+          fi
+          printf '%s%s"%s"%s%s\n' "$pre" "$CYAN" "$quote" "$RST" "$after"
+          continue
+        fi
+        # make commands, wherever they appear. The scan consumes
+        # the line left to right so colored output is never
+        # re-matched.
+        local out="" rest="$line" head tail cmd
+        while [[ "$rest" == *"make "* ]]; do
+          head=${rest%%make *}
+          tail=${rest#*make }
+          cmd=${tail%%[[:space:]|,]*}
+          out+="$head${CYAN}make $cmd${RST}"
+          rest=${tail#"$cmd"}
+        done
+        printf '%s\n' "$out$rest" ;;
+    esac
+  done
+}
+
+if [ -t 1 ] && [ -z "$NO_COLOR" ]; then
+  guide_text | colorize_guide
+else
+  guide_text
+fi

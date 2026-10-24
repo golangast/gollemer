@@ -3,7 +3,11 @@ package chat
 import (
 	"fmt"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
+
+	"github.com/golangast/gollemer/pkg/termui"
 )
 
 // color.go — PRETTY PRINTING, no framework: raw ANSI codes from the
@@ -125,8 +129,17 @@ func ColorizeOutPut(ForegroundColor, BackgroundColor, line string) {
 // cPrompt colors the "you> " prompt.
 func cPrompt(s string) string { return colorize("cyan", "", s) }
 
-// cTag colors the reply tag ("gollemer [go]>" and friends).
-func cTag(s string) string { return colorize("purple", "", s) }
+// cTag colors the reply tag ("gollemer [go]>" and friends) in the
+// answering brain's one hue — the per-brain palette from termui,
+// so a reader learns "green tag = the code writer" once.
+func cTag(s string) string {
+	if i := strings.Index(s, "["); i >= 0 {
+		if j := strings.Index(s[i:], "]"); j > 1 {
+			return colorize(termui.BrainColorName(s[i+1:i+j]), "", s)
+		}
+	}
+	return colorize("purple", "", s)
+}
 
 // cHead colors a section heading inside a block of output.
 func cHead(s string) string { return colorize("yellow", "", s) }
@@ -148,13 +161,60 @@ func cDim(s string) string {
 	return "\x1b[2m" + s + "\x1b[0m"
 }
 
-// printBand prints a full-width-feeling header band using John's
-// bracket label: the title in a colored [ ... ] block, then a dim
-// rule. Used by the guide and the lessons.
+// printBand prints a header block for the guide and the lessons:
+// the title set into the top border of a termui panel (bpytop
+// style), degrading to a plain section header on narrow screens.
 func printBand(title string) {
 	fmt.Println()
-	ColorizeCol("black", "cyan", title)
-	fmt.Println()
+	fmt.Println(termui.Panel(title, "", termui.Accent))
+}
+
+// --- The decorate pass --------------------------------------------------
+// Long answers that were NOT rendered through termui (help text,
+// walkthrough prose, brain replies) get one conservative pass:
+// ALL-CAPS section lines take the heading color, `make …` commands
+// and backticked spans take the sayable-phrase cyan, and file.go:NN
+// references take the path styling. Lines already carrying ANSI
+// (termui-rendered) pass through untouched, and with color off the
+// whole pass is the identity — pipes stay byte-identical.
+
+var (
+	reMakeCmd  = regexp.MustCompile(`\bmake [a-zA-Z0-9_-]+`)
+	reBacktick = regexp.MustCompile("`[^`\n]+`")
+	reFileLine = regexp.MustCompile(`([\w./-]+\.go):(\d+)\b`)
+	reCapsHead = regexp.MustCompile(`^[A-Z][A-Z0-9 ,()\-—:]{3,}$`)
+)
+
+// decorateOutput applies the pass to a whole block, line by line.
+func decorateOutput(s string) string {
+	if !colorEnabled || s == "" {
+		return s
+	}
+	lines := strings.Split(s, "\n")
+	for i, ln := range lines {
+		lines[i] = decorateLine(ln)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func decorateLine(ln string) string {
+	if strings.Contains(ln, "\x1b[") {
+		return ln // already styled at the source
+	}
+	trimmed := strings.TrimSpace(ln)
+	if len(trimmed) >= 4 && len(trimmed) <= 72 && reCapsHead.MatchString(trimmed) {
+		return cHead(ln)
+	}
+	ln = reBacktick.ReplaceAllStringFunc(ln, func(m string) string {
+		return cSay(strings.Trim(m, "`"))
+	})
+	ln = reMakeCmd.ReplaceAllStringFunc(ln, func(m string) string { return cSay(m) })
+	ln = reFileLine.ReplaceAllStringFunc(ln, func(m string) string {
+		parts := reFileLine.FindStringSubmatch(m)
+		n, _ := strconv.Atoi(parts[2])
+		return termui.StyleFileLine(parts[1], n)
+	})
+	return ln
 }
 
 // stripANSI removes SGR sequences — the raw-mode line editor counts

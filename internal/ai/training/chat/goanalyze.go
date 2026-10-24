@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/golangast/gollemer/internal/ai/analyze"
+	"github.com/golangast/gollemer/pkg/termui"
 )
 
 // unifiedProjectRoot is the repo directory the chat was started in
@@ -46,8 +47,9 @@ func tryCodebaseQuestion(line string) (string, bool) {
 		if err != nil {
 			return "", false
 		}
-		fmt.Println("[reading the codebase — parsing Go files...]")
+		sp := termui.Spin("Reading this project…")
 		p, err := analyze.Analyze(root)
+		sp.Stop("")
 		if err != nil {
 			return "", false
 		}
@@ -96,8 +98,9 @@ func handleGoAnalyze(line string) (out string, ok bool) {
 	if err != nil {
 		return fmt.Sprintf("I couldn't read that codebase: %v", err), true
 	}
-	fmt.Println("[reading the codebase — parsing Go files...]")
+	sp := termui.Spin("Reading this project…")
 	p, err := analyze.Analyze(root)
+	sp.Stop("")
 	if err != nil {
 		return fmt.Sprintf("I couldn't analyze %s: %v", root, err), true
 	}

@@ -93,7 +93,7 @@ func guideShow() {
 		fmt.Println("Reading about code only goes so far — say \"run it\" and I'll start this project here (make target, entry point, or its tests) and narrate what happens, 60 seconds at most.")
 		fmt.Println("Not ready? Say \"next\" and we'll skip the show.")
 	case "friend":
-		fmt.Println(guideFriendText())
+		fmt.Println(decorateOutput(guideFriendText()))
 	case "concept":
 		fmt.Println("Concepts in this project, in the order they build on each other — here is your first one:")
 		fmt.Println(firstLines(p.LearnPathText(), 10))

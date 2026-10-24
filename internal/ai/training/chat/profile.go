@@ -39,12 +39,12 @@ type CommandStat struct {
 
 // ProjectMemory remembers what John was doing in a project directory.
 type ProjectMemory struct {
-	Name         string   `json:"name"`
+	Name         string    `json:"name"`
 	LastActive   time.Time `json:"last_active"`
-	Focus        string   `json:"focus"`         // what he was working on
-	FilesTouched []string `json:"files_touched"` // recent files
-	IssuesViewed []string `json:"issues_viewed"` // GitHub issues investigated
-	ReposCloned  []string `json:"repos_cloned"`  // repos analyzed
+	Focus        string    `json:"focus"`         // what he was working on
+	FilesTouched []string  `json:"files_touched"` // recent files
+	IssuesViewed []string  `json:"issues_viewed"` // GitHub issues investigated
+	ReposCloned  []string  `json:"repos_cloned"`  // repos analyzed
 }
 
 // profilePath returns the local-only profile location.
@@ -183,18 +183,9 @@ func (p *UserProfile) SuggestStartup(cwd string) string {
 		}
 	}
 
-	// Most frequent command suggestion.
-	if len(p.FrequentCommands) > 0 {
-		best := p.FrequentCommands[0]
-		for _, s := range p.FrequentCommands[1:] {
-			if s.Count > best.Count {
-				best = s
-			}
-		}
-		if best.Count >= 3 {
-			b.WriteString("Your most-run command: " + best.Cmd + "\n")
-		}
-	}
+	// The most-run command line used to print here; it left the
+	// default startup in the 2026-10-24 start-screen pass (print
+	// less at launch). FrequentCommands is still recorded.
 
 	return strings.TrimSpace(b.String())
 }

@@ -473,7 +473,7 @@ func isHelpAllLine(line string) bool {
 // printHelp is the 'help' answer a beginner gets: three situations,
 // not a catalog. The full menu lives behind "help all".
 func printHelp() {
-	fmt.Println(`
+	fmt.Println(decorateOutput(`
 New here? Say "start" and I'll drive — six short stops, you just say "next".
 Or say "teach me" — six tiny lessons that train YOU on what I can do, by trying each one.
 
@@ -495,12 +495,12 @@ Something's broken:
 
 Two more worth knowing: "brains" (who works here, and their limits) and
 "any suggestions" (the Friend's notebook on how you work).
-The full catalog: say "help all".`)
+The full catalog: say "help all".`))
 }
 
 // printHelpAll is the full catalog, for after the training wheels.
 func printHelpAll() {
-	fmt.Println(`
+	fmt.Println(decorateOutput(`
 Things you can say:
 
 Learn a project:
@@ -538,7 +538,7 @@ Fix and write:
   /fix undefined: foo         (shortcut for the same idea)
   write a function that reverses a string
 
-Or just talk — ask me anything. Say 'exit' to leave.`)
+Or just talk — ask me anything. Say 'exit' to leave.`))
 }
 
 func printTourStop() {

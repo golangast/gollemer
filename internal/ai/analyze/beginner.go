@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/golangast/gollemer/pkg/termui"
 )
 
 // Beginner-understanding reports (2026-10-20): five views built for
@@ -67,7 +69,7 @@ func (p *Project) callWindow(caller *Func, fnName string) (text string, line int
 // it. When nothing calls it, it says why that might be.
 func (p *Project) ExamplesText(fn *Func) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "How %s is really used\n", fn.Name)
+	b.WriteString(termui.SubHeader(fmt.Sprintf("How %s is really used", fn.Name)) + "\n")
 	var realCallers, testCallers []*Func
 	for _, id := range fn.Callers {
 		c := p.FuncByID(id)
@@ -106,7 +108,7 @@ func (p *Project) ExamplesText(fn *Func) string {
 		if win == "" {
 			continue
 		}
-		fmt.Fprintf(&b, "\nCalled by %s (%s:%d):\n%s", shortID(c.ID), c.File, line, win)
+		fmt.Fprintf(&b, "\nCalled by %s %s:\n%s", termui.Bright.Apply(shortID(c.ID)), termui.StyleFileLine(c.File, line), win)
 		if c.Doc != "" {
 			if s := PieceFirstSentence(c.Doc); s != "" {
 				fmt.Fprintf(&b, "  That caller: %s\n", s)
@@ -116,7 +118,7 @@ func (p *Project) ExamplesText(fn *Func) string {
 	}
 	if len(testCallers) > 0 {
 		t := testCallers[0]
-		fmt.Fprintf(&b, "\nIn a test — %s (%s:%d):\n", t.Name, t.File, t.Line)
+		fmt.Fprintf(&b, "\nIn a test — %s %s:\n", termui.Bright.Apply(t.Name), termui.StyleFileLine(t.File, t.Line))
 		for _, l := range p.sourceLines(t.File, t.Line, t.Line+11) {
 			fmt.Fprintf(&b, "    %s\n", strings.TrimRight(l, " \t"))
 		}
@@ -167,7 +169,7 @@ func typeOneLiner(t *Type) string {
 func (p *Project) GlossaryText() string {
 	types := p.KeyTypes(18)
 	var b strings.Builder
-	b.WriteString("The words this project uses — learn these and the rest starts to make sense:\n\n")
+	b.WriteString(termui.SubHeader("The words this project uses — learn these and the rest starts to make sense:") + "\n\n")
 	if len(types) == 0 {
 		b.WriteString("No types stood out — this project is mostly functions.\n")
 		return b.String()
@@ -185,7 +187,7 @@ func (p *Project) GlossaryText() string {
 			}
 			name = fmt.Sprintf("%s (in %s)", t.Name, dir)
 		}
-		fmt.Fprintf(&b, "  %s — %s\n", name, typeOneLiner(t))
+		fmt.Fprintf(&b, "  %s%s\n", termui.Bright.Apply(name), termui.Muted.Apply(" — "+typeOneLiner(t)))
 	}
 	b.WriteString("\nAsk /whatis <word> about any of them for more.\n")
 	return b.String()
@@ -329,16 +331,17 @@ func (p *Project) LearnPathText() string {
 		order = append(order, next)
 	}
 	var b strings.Builder
-	b.WriteString("Learn this project in this order — each step only uses ideas from the steps before it:\n\n")
+	b.WriteString(termui.SubHeader("Learn this project in this order — each step only uses ideas from the steps before it:") + "\n\n")
 	for i, t := range order {
-		fmt.Fprintf(&b, "%d. %s — %s\n", i+1, display(t), typeOneLiner(t))
+		fmt.Fprintf(&b, "%s %s%s\n", termui.Gold.Apply(fmt.Sprintf("%d.", i+1)),
+			termui.Bright.Apply(display(t)), termui.Muted.Apply(" — "+typeOneLiner(t)))
 		var ds []string
 		for d := range deps[keyOf(t)] {
 			ds = append(ds, display(byKey[d]))
 		}
 		sort.Strings(ds)
 		if len(ds) > 0 {
-			fmt.Fprintf(&b, "   Builds on: %s.\n", strings.Join(ds, ", "))
+			fmt.Fprintf(&b, "   %s %s.\n", termui.Muted.Apply("Builds on:"), strings.Join(ds, ", "))
 		}
 		if fs := features[keyOf(t)]; len(fs) > 0 {
 			var parts []string
@@ -348,7 +351,7 @@ func (p *Project) LearnPathText() string {
 				}
 				parts = append(parts, f[0]+" ("+f[1]+")")
 			}
-			fmt.Fprintf(&b, "   Go ideas it uses: %s.\n", strings.Join(parts, ", "))
+			fmt.Fprintf(&b, "   %s %s.\n", termui.Muted.Apply("Go ideas it uses:"), strings.Join(parts, ", "))
 		}
 	}
 	return b.String()
@@ -362,7 +365,7 @@ func (p *Project) TourStops() []string {
 	if eps := p.EntryPoints(); len(eps) > 0 {
 		fn := eps[0]
 		var s strings.Builder
-		fmt.Fprintf(&s, "Start where the program starts: %s (%s:%d).", fn.Name, fn.File, fn.Line)
+		fmt.Fprintf(&s, "Start where the program starts: %s %s.", termui.Bright.Apply(fn.Name), termui.StyleFileLine(fn.File, fn.Line))
 		if fn.Doc != "" {
 			if d := PieceFirstSentence(fn.Doc); d != "" {
 				fmt.Fprintf(&s, " %s", d)
@@ -386,17 +389,18 @@ func (p *Project) TourStops() []string {
 	}
 	if types := p.KeyTypes(3); len(types) > 0 {
 		var s strings.Builder
-		s.WriteString("The cast — the types everything revolves around:")
+		s.WriteString(termui.SubHeader("The cast — the types everything revolves around:"))
 		for _, t := range types {
-			fmt.Fprintf(&s, "\n  %s — %s", t.Name, typeOneLiner(t))
+			fmt.Fprintf(&s, "\n  %s%s", termui.Bright.Apply(t.Name), termui.Muted.Apply(" — "+typeOneLiner(t)))
 		}
 		stops = append(stops, s.String())
 	}
 	if tops := p.TopFuncs(3); len(tops) > 0 {
 		var s strings.Builder
-		s.WriteString("The engine room — the most-called functions:")
+		s.WriteString(termui.SubHeader("The engine room — the most-called functions:"))
 		for _, fn := range tops {
-			fmt.Fprintf(&s, "\n  %s (called from %d places)", shortID(fn.ID), len(fn.Callers))
+			fmt.Fprintf(&s, "\n  %s %s", termui.Bright.Apply(shortID(fn.ID)),
+				termui.Muted.Apply("(called from ")+termui.Gold.Apply(fmt.Sprintf("%d", len(fn.Callers)))+termui.Muted.Apply(" places)"))
 		}
 		s.WriteString("\nUnderstand these and you understand what the program spends its time doing.")
 		stops = append(stops, s.String())
@@ -451,6 +455,10 @@ func (p *Project) TourStops() []string {
 	if module == "" {
 		module = "this project"
 	}
-	welcome := fmt.Sprintf("Welcome to %s — %d files, %d lines, %d packages. I'll walk you through it one stop at a time; say 'next' whenever you're ready.", module, p.Files, p.Lines, len(p.Packages))
+	welcome := fmt.Sprintf("Welcome to %s — %s files, %s lines, %s packages. I'll walk you through it one stop at a time; say 'next' whenever you're ready.",
+		termui.Bright.Apply(module),
+		termui.Gold.Apply(fmt.Sprintf("%d", p.Files)),
+		termui.Gold.Apply(fmt.Sprintf("%d", p.Lines)),
+		termui.Gold.Apply(fmt.Sprintf("%d", len(p.Packages))))
 	return append([]string{welcome}, stops...)
 }

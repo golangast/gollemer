@@ -77,8 +77,11 @@ func TestCoupling(t *testing.T) {
 	for _, l := range lines {
 		if strings.Contains(l, "store") && strings.Contains(l, " in ") {
 			found = true
-			// fan-in count for store should be 1 (imported by main).
-			if !strings.HasSuffix(strings.TrimSpace(l), "1") {
+			// fan-in count for store should be 1 (imported by main):
+			// the last table cell — the panel border and its padding
+			// now close the line after it.
+			cell := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(l), "│"))
+			if !strings.HasSuffix(cell, "1") {
 				t.Errorf("store fan-in should be 1: %q", l)
 			}
 		}

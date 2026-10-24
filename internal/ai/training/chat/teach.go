@@ -289,13 +289,22 @@ func teachStop() {
 // offerTeach prints the first-run invitation: shown at startup only
 // until the tour is finished (or well begun), because a beginner who
 // won't read a README might still take a two-minute tour.
-func offerTeach() {
+// teachOfferDue reports whether the teach-me offer should be
+// shown: lessons remain and the user still looks new here.
+func teachOfferDue() bool {
 	m := friendLoad()
 	if m.Taught >= len(lessonList()) {
-		return
+		return false
 	}
 	if m.Sessions > 3 && len(m.FuncAsks) > 0 {
-		return // clearly not a beginner anymore
+		return false // clearly not a beginner anymore
+	}
+	return true
+}
+
+func offerTeach() {
+	if !teachOfferDue() {
+		return
 	}
 	fmt.Printf("\n%s New here? Say %s and I'll teach you what I can do by showing you — two minutes, no reading.\n",
 		cHead("✦"), cSay("\"teach me\""))

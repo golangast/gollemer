@@ -24,6 +24,7 @@ import (
 
 	"github.com/golangast/gollemer/internal/ai/analyze"
 	"github.com/golangast/gollemer/internal/ai/neural/nnu/seq2seq"
+	"github.com/golangast/gollemer/pkg/termui"
 	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
 	"github.com/golangast/gollemer/internal/ai/neural/tokenizer"
 )
@@ -1037,6 +1038,7 @@ func tryDeterministicAnswer(line, d string, conv *Conversation, r *LineReader, p
 // specialized checkpoints fall back to the social model.
 func runUnifiedChat(projectRoot string, debug bool) error {
 	unifiedProjectRoot = projectRoot
+	sp := termui.Spin("Loading brains…")
 	models := map[string]*seq2seq.Seq2Seq{}
 	for _, d := range []string{SocialDomain, GoDomain, GoCliDomain, GocodeDomain, MakefileDomain} {
 		m, err := loadRealModel(projectRoot, d)
@@ -1049,8 +1051,10 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 	}
 	socialModel := models[SocialDomain]
 	if socialModel == nil {
+		sp.Stop("")
 		return fmt.Errorf("unified chat requires at least the social checkpoint")
 	}
+	sp.Stop("Ready.")
 	// Social recall: exact training-pair matches answer deterministically.
 	initSocialRecall(projectRoot)
 	initMakefileRecall(projectRoot)
@@ -1062,9 +1066,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 	paceInteractive = reader.term != nil
 	showThoughts := debug
 	conv := NewConversation()
-	fmt.Println("[unified chat — type /quit to exit, /thoughts to toggle the thought process]")
-	printSayThis()
-	offerTeach()
+	printStartScreen(projectRoot)
 	for {
 		line, rerr := reader.ReadLine(cPrompt("you> "))
 		if rerr == io.EOF {

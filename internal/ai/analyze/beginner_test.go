@@ -44,7 +44,7 @@ func TestExamplesText(t *testing.T) {
 		"How Compute is really used",
 		"called from 1 place(s)",
 		"exercised by 1 test(s)",
-		"Called by demo.main (main.go:4)",
+		"Called by demo.main main.go:4",
 		"x := Compute(2)",
 		"In a test — TestCompute",
 	} {

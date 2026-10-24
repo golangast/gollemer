@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/golangast/gollemer/pkg/termui"
 )
 
 // brains.go — THE COORDINATOR. One registry of every brain in the cast:
@@ -264,11 +266,12 @@ func brainLogCounts() map[string]*brainStat {
 // --- the coordinator answers for itself --------------------------------
 
 func printBrains() {
-	fmt.Println("The cast — every brain, its job, and its honest limits:")
+	fmt.Println(termui.SectionHeader("THE CAST — every brain, its job, and its honest limits"))
 	for _, b := range brainRegistry {
-		fmt.Printf("  %-14s %s\n", b.Name, b.Job)
-		fmt.Printf("  %-14s   works: %s\n", "", b.Works)
-		fmt.Printf("  %-14s   fails: %s\n", "", b.Fails)
+		name := colorize(termui.BrainColorName(b.Key), "", fmt.Sprintf("%-14s", b.Name))
+		fmt.Printf("  %s %s\n", name, b.Job)
+		fmt.Printf("  %-14s   %s %s\n", "", cDim("works:"), b.Works)
+		fmt.Printf("  %-14s   %s %s\n", "", cDim("fails:"), b.Fails)
 	}
 	fmt.Println("Ask \"how are your brains doing\" for the score so far, or \"why did you do that\" after any answer.")
 }

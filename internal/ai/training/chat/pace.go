@@ -72,6 +72,7 @@ func setSpeed(on bool) {
 // between lines while the burst budget lasts. When pacing is off,
 // non-interactive, or the text is short, it prints in one write.
 func printPaced(s string) {
+	s = decorateOutput(s)
 	if !paceOn || !paceInteractive || s == "" {
 		printRaw(s)
 		return

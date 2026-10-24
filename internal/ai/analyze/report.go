@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/golangast/gollemer/pkg/termui"
 )
 
 // Summary returns the one-screen project overview.
@@ -12,33 +14,41 @@ func (p *Project) Summary() string {
 	if name == "" {
 		name = filepathBase(p.Root)
 	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "Project: %s\n", name)
-	fmt.Fprintf(&b, "%d packages, %d Go files, ~%d lines\n", len(p.Packages), p.Files, p.Lines)
-	mains := p.EntryPoints()
-	switch len(mains) {
-	case 0:
-		b.WriteString("No func main: this is a library, not a runnable program.\n")
-	case 1:
-		fmt.Fprintf(&b, "Entry point: %s\n", p.LinkPath(mains[0].File))
-	default:
-		b.WriteString("Entry points:\n")
-		for _, m := range mains {
-			fmt.Fprintf(&b, "  - %s\n", p.LinkPath(m.File))
-		}
+	stats := []termui.Pair{
+		{Key: "Packages", Value: fmt.Sprintf("%d", len(p.Packages))},
+		{Key: "Go files", Value: fmt.Sprintf("%d", p.Files)},
+		{Key: "Lines", Value: fmt.Sprintf("~%d", p.Lines)},
 	}
 	ext := 0
 	for _, pkg := range p.Packages {
 		ext += pkg.Tests
 	}
 	if ext > 0 {
-		fmt.Fprintf(&b, "%d test files\n", ext)
+		stats = append(stats, termui.Pair{Key: "Test files", Value: fmt.Sprintf("%d", ext)})
+	}
+	var inner strings.Builder
+	inner.WriteString(termui.KeyValues(stats...) + "\n")
+	mains := p.EntryPoints()
+	switch len(mains) {
+	case 0:
+		inner.WriteString("No func main: this is a library, not a runnable program.")
+	case 1:
+		fmt.Fprintf(&inner, "%s %s", termui.Muted.Apply("Entry point:"), termui.StylePath(p.LinkPath(mains[0].File)))
+	default:
+		inner.WriteString(termui.Muted.Apply("Entry points:") + "\n")
+		paths := make([]string, 0, len(mains))
+		for _, m := range mains {
+			paths = append(paths, p.LinkPath(m.File))
+		}
+		inner.WriteString(termui.PathList(paths))
 	}
 	if len(p.ParseErr) > 0 {
-		fmt.Fprintf(&b, "%d files skipped (parse errors)\n", len(p.ParseErr))
+		fmt.Fprintf(&inner, "\n%s files skipped (parse errors)", termui.Bad.Apply(fmt.Sprintf("%d", len(p.ParseErr))))
 	}
-	b.WriteString("\nIN PLAIN ENGLISH\n")
-	b.WriteString(p.Overview())
+	var b strings.Builder
+	b.WriteString(termui.Panel("PROJECT — "+name, inner.String(), termui.Bright) + "\n")
+	b.WriteString("\n" + termui.SubHeader("IN PLAIN ENGLISH") + "\n")
+	b.WriteString(termui.Prose(p.Overview()))
 	b.WriteString("\n")
 	return b.String()
 }
@@ -47,23 +57,29 @@ func (p *Project) Summary() string {
 // the engine room, key types, and a suggested package reading order.
 func (p *Project) ReadingGuide() string {
 	var b strings.Builder
-	b.WriteString("WHERE TO START\n")
+	b.WriteString(termui.SubHeader("WHERE TO START") + "\n")
 	mains := p.EntryPoints()
 	if len(mains) == 0 {
 		b.WriteString("No main package — start with the exported API of the root package.\n")
 	} else {
-		b.WriteString("1. Start at the entry point:\n")
+		fmt.Fprintf(&b, "%s Start at the entry point:\n", termui.Gold.Apply("1."))
 		for _, m := range mains {
-			fmt.Fprintf(&b, "   %s:%d — func main\n", p.LinkPath(m.File), m.Line)
+			fmt.Fprintf(&b, "  %s %s%s\n",
+				termui.Accent.Apply(termui.Bullet),
+				termui.StyleFileLine(p.LinkPath(m.File), m.Line),
+				termui.Muted.Apply(" — func main"))
 		}
 	}
-	b.WriteString("2. Then read the engine room (most-called functions):\n")
+	fmt.Fprintf(&b, "%s Then read the engine room (most-called functions):\n", termui.Gold.Apply("2."))
 	for _, fn := range p.TopFuncs(5) {
-		fmt.Fprintf(&b, "   %s  (%d callers)  %s:%d\n", fn.Display(), len(fn.Callers), p.LinkPath(fn.File), fn.Line)
+		fmt.Fprintf(&b, "   %s  %s  %s\n",
+			termui.Bright.Apply(fn.Display()),
+			termui.Muted.Apply("("+termui.Gold.Apply(fmt.Sprintf("%d", len(fn.Callers)))+" callers)"),
+			termui.StyleFileLine(p.LinkPath(fn.File), fn.Line))
 	}
 	types := p.KeyTypes(5)
 	if len(types) > 0 {
-		b.WriteString("3. Learn the key types:\n")
+		fmt.Fprintf(&b, "%s Learn the key types:\n", termui.Gold.Apply("3."))
 		for _, t := range types {
 			desc := t.Kind
 			if t.Kind == "interface" && t.ImplCount > 0 {
@@ -71,11 +87,12 @@ func (p *Project) ReadingGuide() string {
 			} else if t.Kind == "struct" && len(t.Methods) > 0 {
 				desc = fmt.Sprintf("struct, %d methods", len(t.Methods))
 			}
-			fmt.Fprintf(&b, "   %s.%s — %s\n", t.Pkg, t.Name, desc)
+			fmt.Fprintf(&b, "   %s%s\n", termui.Bright.Apply(t.Pkg+"."+t.Name), termui.Muted.Apply(" — "+desc))
 		}
 	}
-	b.WriteString("4. Package reading order (dependencies first):\n")
-	for i, dir := range p.readingOrderDirs() {
+	fmt.Fprintf(&b, "%s Package reading order (dependencies first):\n", termui.Gold.Apply("4."))
+	var order []termui.RankedItem
+	for _, dir := range p.readingOrderDirs() {
 		label := dir
 		if label == "" {
 			label = ". (root)"
@@ -85,11 +102,11 @@ func (p *Project) ReadingGuide() string {
 			doc = firstSentence(pkg.Doc)
 		}
 		if doc != "" {
-			fmt.Fprintf(&b, "   %d. %s\n      %s\n", i+1, label, doc)
-		} else {
-			fmt.Fprintf(&b, "   %d. %s\n", i+1, label)
+			doc = termui.Muted.Apply(doc)
 		}
+		order = append(order, termui.RankedItem{Label: label, Detail: doc})
 	}
+	b.WriteString(termui.RankedList(order) + "\n")
 	return b.String()
 }
 
@@ -147,28 +164,18 @@ func (p *Project) readingOrder() []string {
 	return out
 }
 
-// EngineRoom renders the top functions as an ASCII bar chart.
+// EngineRoom renders the top functions as a bar chart in a panel.
 func (p *Project) EngineRoom(n int) string {
 	top := p.TopFuncs(n)
 	if len(top) == 0 {
 		return "no functions found\n"
 	}
-	max := 0
+	items := make([]termui.BarItem, 0, len(top))
 	for _, fn := range top {
-		if len(fn.Callers) > max {
-			max = len(fn.Callers)
-		}
+		items = append(items, termui.BarItem{Label: fn.Display(), Value: len(fn.Callers)})
 	}
-	var b strings.Builder
-	b.WriteString("ENGINE ROOM (most-called functions)\n")
-	for _, fn := range top {
-		bars := 0
-		if max > 0 {
-			bars = 1 + 19*len(fn.Callers)/max
-		}
-		fmt.Fprintf(&b, "%s %s (%d callers)\n", strings.Repeat("█", bars), fn.Display(), len(fn.Callers))
-	}
-	return b.String()
+	return termui.Panel("ENGINE ROOM (most-called functions)",
+		termui.BarChartTop(items, 20, termui.Accent, " callers"), termui.Accent) + "\n"
 }
 
 // PackageTree renders the package directory tree.

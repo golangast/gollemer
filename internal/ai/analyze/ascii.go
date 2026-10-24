@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/golangast/gollemer/pkg/termui"
 )
 
 // RenderASCIIGraph draws the package dependency graph as plain text for
@@ -28,8 +30,8 @@ func RenderASCIIGraph(p *Project) string {
 	if name == "" {
 		name = p.Root
 	}
-	fmt.Fprintf(&b, "Dependency graph: %s\n", name)
-	b.WriteString("A → B means A imports B. ★ = entry point (func main).\n\n")
+	fmt.Fprintf(&b, "%s\n", termui.Accent.Apply("Dependency graph: "+name))
+	b.WriteString(termui.Muted.Apply("A → B means A imports B. ★ = entry point (func main).") + "\n\n")
 
 	mains := map[string]bool{}
 	for _, m := range p.EntryPoints() {
@@ -193,20 +195,20 @@ func RenderASCIIGraph(p *Project) string {
 	for _, node := range blocks {
 		star := " "
 		if nodeHasMain[node] {
-			star = "★"
+			star = termui.Gold.Apply("★")
 		}
 		head := label(node)
 		if members, ok := groupMembers[node]; ok {
 			head = fmt.Sprintf("%s (%d packages)", node, len(members))
 		}
-		fmt.Fprintf(&b, "%s 📦 %s\n", star, head)
+		fmt.Fprintf(&b, "%s 📦 %s\n", star, termui.Bright.Apply(head))
 		deps := displayEdges[node]
 		for i, d := range deps {
 			branch := "├──"
 			if i == len(deps)-1 {
 				branch = "└──"
 			}
-			fmt.Fprintf(&b, "  %s → %s\n", branch, label(d))
+			fmt.Fprintf(&b, "  %s %s\n", termui.Muted.Apply(branch+" →"), termui.Bright.Apply(label(d)))
 		}
 	}
 
@@ -255,11 +257,11 @@ func RenderASCIIGraph(p *Project) string {
 			extra = len(shown) - 8
 			shown = shown[:8]
 		}
-		b.WriteString(line(total, strings.Join(shown, ", ")))
+		folded := line(total, strings.Join(shown, ", "))
 		if extra > 0 {
-			fmt.Fprintf(&b, " (+%d more)", extra)
+			folded += fmt.Sprintf(" (+%d more)", extra)
 		}
-		b.WriteString("\n")
+		b.WriteString(termui.Muted.Apply(folded) + "\n")
 	}
 	writeFold(leafEntries, func(total int, names string) string {
 		return fmt.Sprintf("… %d package(s) import nothing internal: %s", total, names)
