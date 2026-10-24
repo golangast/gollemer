@@ -566,6 +566,15 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		if tryRenameEdit(line, reader) {
 			continue
 		}
+		// Build-goal resources, claimed deterministically beside
+		// the edits/rename parsers and before the intent layer: a
+		// learning statement ("i want to build a webserver") gets
+		// its resource pack from the Advocates snapshot, never a
+		// classifier guess. Imperative build commands for this
+		// project are not shapes here — the composer keeps them.
+		if tryBuildResources(line, profile) {
+			continue
+		}
 		// Intent layer: a confident trained classification of what
 		// the user wants, in their own words — no memorized commands.
 		if tryIntentDispatch(line, profile) {
@@ -809,6 +818,15 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		// out from the project's type information, shown as a diff,
 		// and written only behind the [y/n] gate.
 		if tryRenameEdit(line, reader) {
+			continue
+		}
+		// Build-goal resources, claimed deterministically beside
+		// the edits/rename parsers and before the intent layer: a
+		// learning statement ("i want to build a webserver") gets
+		// its resource pack from the Advocates snapshot, never a
+		// classifier guess. Imperative build commands for this
+		// project are not shapes here — the composer keeps them.
+		if tryBuildResources(line, profile) {
 			continue
 		}
 		// Intent layer: a confident trained classification of what
@@ -1163,6 +1181,15 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// out from the project's type information, shown as a diff,
 		// and written only behind the [y/n] gate.
 		if tryRenameEdit(line, reader) {
+			continue
+		}
+		// Build-goal resources, claimed deterministically beside
+		// the edits/rename parsers and before the intent layer: a
+		// learning statement ("i want to build a webserver") gets
+		// its resource pack from the Advocates snapshot, never a
+		// classifier guess. Imperative build commands for this
+		// project are not shapes here — the composer keeps them.
+		if tryBuildResources(line, profile) {
 			continue
 		}
 		// Intent layer: a confident trained classification of what
