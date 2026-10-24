@@ -36,6 +36,7 @@ const (
 	EditAddField = "add_field"
 	EditRegister = "register"
 	EditAddFunc  = "add_func"
+	EditRename   = "rename"
 )
 
 // EditRequest is one parsed change request.
@@ -63,6 +64,15 @@ type EditRequest struct {
 	// add_func: copy SiblingName, call it NewName.
 	SiblingName string
 	NewName     string
+
+	// rename: the symbol as typed (bare, Recv.Name, or pkg.Name),
+	// the new name, an optional kind word ("function", "type",
+	// "variable", "constant", "field", "method"), and an optional
+	// package/file scope used to disambiguate ("in shop").
+	RenameFrom  string
+	RenameTo    string
+	RenameKind  string
+	RenameScope string
 }
 
 // EditFile is one file's before/after pair inside a plan.
@@ -116,6 +126,8 @@ func (p *Project) PlanEdit(req EditRequest) (*EditPlan, string) {
 		return p.planRegister(req)
 	case EditAddFunc:
 		return p.planCloneFunc(req)
+	case EditRename:
+		return p.planRename(req)
 	}
 	return nil, "I don't know that kind of edit yet."
 }

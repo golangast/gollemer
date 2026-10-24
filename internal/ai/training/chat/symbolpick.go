@@ -40,13 +40,16 @@ var pendingPick *pendingFuncPick
 
 // setFuncPick records (or clears) the outstanding pick-list. Called
 // wherever a codebase Q&A answer is produced: a fresh list replaces
-// any older one, and a non-list answer clears it.
+// any older one, and a non-list answer clears it. A fresh list also
+// supersedes a pending rename pick — one numeric-reply list at a
+// time, whichever was printed last.
 func setFuncPick(cands []*analyze.Func) {
 	if len(cands) == 0 {
 		pendingPick = nil
 		return
 	}
 	pendingPick = &pendingFuncPick{cands: cands}
+	pendingRenamePick = nil
 }
 
 // resolveFuncPick gives a pending pick-list first claim on a numeric

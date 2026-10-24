@@ -553,6 +553,13 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		if tryAssembledEdit(line, reader) {
 			continue
 		}
+		// Rename everywhere, claimed deterministically beside the
+		// assembled edits for the same reason: the rename is worked
+		// out from the project's type information, shown as a diff,
+		// and written only behind the [y/n] gate.
+		if tryRenameEdit(line, reader) {
+			continue
+		}
 		// Intent layer: a confident trained classification of what
 		// the user wants, in their own words — no memorized commands.
 		if tryIntentDispatch(line, profile) {
@@ -791,6 +798,13 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		if tryAssembledEdit(line, reader) {
 			continue
 		}
+		// Rename everywhere, claimed deterministically beside the
+		// assembled edits for the same reason: the rename is worked
+		// out from the project's type information, shown as a diff,
+		// and written only behind the [y/n] gate.
+		if tryRenameEdit(line, reader) {
+			continue
+		}
 		// Intent layer: a confident trained classification of what
 		// the user wants, in their own words — no memorized commands.
 		if tryIntentDispatch(line, profile) {
@@ -925,6 +939,10 @@ func tryDeterministicAnswer(line, d string, conv *Conversation, r *LineReader, p
 	if out, ok := tryErrorHelp(line); ok {
 		fmt.Printf("%s %s\n", cTag(fmt.Sprintf("gollemer [%s]>", GoDomain)), out)
 		conv.AddReply(out, GoDomain, false)
+		// When the error has exactly one mechanical repair, offer
+		// the repair itself behind the [y/n] gate — the translation
+		// above stands either way.
+		tryErrorFix(line, r)
 		return true
 	}
 	// Pasted GitHub issue URL ("where do I change for this?"): fetch
@@ -1132,6 +1150,13 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// Composer plans it from sibling code, shows the diff, and
 		// writes only behind the [y/n] gate.
 		if tryAssembledEdit(line, reader) {
+			continue
+		}
+		// Rename everywhere, claimed deterministically beside the
+		// assembled edits for the same reason: the rename is worked
+		// out from the project's type information, shown as a diff,
+		// and written only behind the [y/n] gate.
+		if tryRenameEdit(line, reader) {
 			continue
 		}
 		// Intent layer: a confident trained classification of what

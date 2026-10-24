@@ -198,30 +198,23 @@ func runAssembledEdit(line string, ask editAsk) bool {
 		root = lastAnalyzeRoot
 	}
 	// Apply. Any write failure restores every file already written.
-	written := 0
-	for _, f := range plan.Files {
-		if werr := os.WriteFile(filepath.Join(root, f.Rel), f.After, 0644); werr != nil {
-			restoreEditFiles(root, plan, written)
-			fmt.Printf("%s I couldn't write %s (%v) — so I restored everything; your files are exactly as they were.\n", tag, proj.LinkPath(f.Rel), werr)
-			recordBrain("composer", false, "edit write failed; restored")
-			return true
-		}
-		written++
+	written, werr, wrel := applyPlanFiles(root, plan)
+	if werr != nil {
+		restoreEditFiles(root, plan, written)
+		fmt.Printf("%s I couldn't write %s (%v) — so I restored everything; your files are exactly as they were.\n", tag, proj.LinkPath(wrel), werr)
+		recordBrain("composer", false, "edit write failed; restored")
+		return true
 	}
 	// Build, when the project has a go.mod at its root to build
 	// against. No go.mod (a loose folder): the structural verify
 	// below is the check, and the report says so.
 	built := false
 	if _, serr := os.Stat(filepath.Join(root, "go.mod")); serr == nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-		cmd := exec.CommandContext(ctx, "go", "build", "./...")
-		cmd.Dir = root
-		out, berr := cmd.CombinedOutput()
-		cancel()
-		if berr != nil {
+		out, bok := buildProject(root)
+		if !bok {
 			restoreEditFiles(root, plan, len(plan.Files))
 			fmt.Printf("%s That edit doesn't build, so I restored your files — everything is exactly as it was.\n", tag)
-			fmt.Printf("The build said: %s\nIn plain words: %s\n", strings.TrimSpace(string(out)), explainBuildError(string(out)))
+			fmt.Printf("The build said: %s\nIn plain words: %s\n", strings.TrimSpace(out), explainBuildError(out))
 			recordBrain("composer", false, "edit rolled back: build failed")
 			return true
 		}
@@ -243,6 +236,31 @@ func runAssembledEdit(line string, ask editAsk) bool {
 	fmt.Printf("%s Done — %s, at %s. I %s that it's really there.\n", tag, plan.VerifyDesc, plan.Site, how)
 	recordBrain("composer", true, "edit applied: "+req.Kind)
 	return true
+}
+
+// buildProject runs `go build ./...` at root — the spine's one
+// build check, shared by the assembled edits, renames, and error
+// fixes. It returns the combined output and whether it passed.
+func buildProject(root string) (string, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "go", "build", "./...")
+	cmd.Dir = root
+	out, err := cmd.CombinedOutput()
+	return string(out), err == nil
+}
+
+// applyPlanFiles writes a plan's files in order. On failure it
+// reports how many files were written and which one failed, so the
+// caller can restore exactly the written prefix.
+func applyPlanFiles(root string, plan *analyze.EditPlan) (written int, err error, failedRel string) {
+	for _, f := range plan.Files {
+		if werr := os.WriteFile(filepath.Join(root, f.Rel), f.After, 0644); werr != nil {
+			return written, werr, f.Rel
+		}
+		written++
+	}
+	return written, nil, ""
 }
 
 // restoreEditFiles writes back the original bytes of the first n
