@@ -3,6 +3,7 @@ package chat
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/golangast/gollemer/internal/ai/analyze"
@@ -15,13 +16,22 @@ import (
 // "learn the pieces", "export the understanding pairs") run the
 // exact same code.
 
+// exportUnderstandingPath keeps the export beside the analyzed
+// project, where it remains available after the chat exits.
+func exportUnderstandingPath() string {
+	if lastAnalyzeProject != nil && lastAnalyzeProject.Root != "" {
+		return filepath.Join(lastAnalyzeProject.Root, "understanding_pairs.jsonl")
+	}
+	return "understanding_pairs.jsonl"
+}
+
 // runExportUnderstanding generates structure->language training
 // pairs from the analyzed project and writes them out. This is
 // "train on how the program knows code" — not character
 // prediction. Caller guarantees a project is analyzed.
 func runExportUnderstanding() {
 	pairs := analyze.GenerateStructurePairs(lastAnalyzeProject)
-	path := "/tmp/understanding_pairs.jsonl"
+	path := exportUnderstandingPath()
 	if err := analyze.ExportStructurePairs(pairs, path); err != nil {
 		fmt.Printf("Couldn't export: %v\n", err)
 		return

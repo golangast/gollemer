@@ -122,11 +122,19 @@ func TestIntentV2DispatchLearnPieces(t *testing.T) {
 
 func TestIntentV2DispatchExportUnderstanding(t *testing.T) {
 	withRealIntentModel(t)
-	withEditsProject(t, intentV2Fixture(t))
+	dir := intentV2Fixture(t)
+	withEditsProject(t, dir)
 	var handled bool
 	out := captureStdout(t, func() { handled = tryIntentDispatch("export the pairs", nil) })
 	if !handled || !strings.Contains(out, "structure→language pairs") {
 		t.Errorf("export_understanding dispatch = %v:\n%s", handled, out)
+	}
+	path := filepath.Join(dir, "understanding_pairs.jsonl")
+	if !strings.Contains(out, path) {
+		t.Errorf("export_understanding did not report the durable project path %q:\n%s", path, out)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("export_understanding did not write %q: %v", path, err)
 	}
 }
 
