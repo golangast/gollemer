@@ -600,6 +600,14 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		if handleBeginnerCommand(line, profile) {
 			continue
 		}
+		// Edits by assembly, claimed deterministically like the
+		// beginner five: a sentence that would write to the user's
+		// files is never left for the classifier or a model — the
+		// Composer plans it from sibling code, shows the diff, and
+		// writes only behind the [y/n] gate.
+		if tryAssembledEdit(line, reader) {
+			continue
+		}
 		// Intent layer: a confident trained classification of what
 		// the user wants, in their own words — no memorized commands.
 		if tryIntentDispatch(line, profile) {
@@ -901,6 +909,14 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		// https://…" or "run it" must never be left for the router
 		// to guess at (it read "tour …" as a social greeting).
 		if handleBeginnerCommand(line, profile) {
+			continue
+		}
+		// Edits by assembly, claimed deterministically like the
+		// beginner five: a sentence that would write to the user's
+		// files is never left for the classifier or a model — the
+		// Composer plans it from sibling code, shows the diff, and
+		// writes only behind the [y/n] gate.
+		if tryAssembledEdit(line, reader) {
 			continue
 		}
 		// Intent layer: a confident trained classification of what
@@ -1235,6 +1251,14 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// https://…" or "run it" must never be left for the router
 		// to guess at (it read "tour …" as a social greeting).
 		if handleBeginnerCommand(line, profile) {
+			continue
+		}
+		// Edits by assembly, claimed deterministically like the
+		// beginner five: a sentence that would write to the user's
+		// files is never left for the classifier or a model — the
+		// Composer plans it from sibling code, shows the diff, and
+		// writes only behind the [y/n] gate.
+		if tryAssembledEdit(line, reader) {
 			continue
 		}
 		// Intent layer: a confident trained classification of what
