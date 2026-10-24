@@ -440,6 +440,18 @@ func tryIntentDispatch(line string, profile *UserProfile) bool {
 	if done, handled := resolveClarification(line, profile); done {
 		return handled
 	}
+	// Exact symbol references are deterministic too: a pending
+	// pick-list's numeric reply, or a dotted name pasted back from a
+	// candidate list, must never be left for the classifier to
+	// reinterpret (it once read the bare dotted name as a find
+	// search and answered "No matches" for the system's own
+	// suggestion). See symbolpick.go.
+	if done, handled := resolveFuncPick(line); done {
+		return handled
+	}
+	if tryDottedSymbol(line, profile) {
+		return true
+	}
 	m := defaultIntentModel()
 	if m == nil {
 		return false
@@ -578,7 +590,8 @@ func dispatchIntent(intent, line string, profile *UserProfile) bool {
 			"show_func":   "show me " + name,
 			"walkthrough": "walk me through " + name,
 		}[intent]
-		if out, ok := lastAnalyzeProject.Answer(q); ok {
+		if out, cands, ok := lastAnalyzeProject.AnswerCands(q); ok {
+			setFuncPick(cands)
 			fmt.Println(out)
 			recordBrain("analyst", true, "intent "+intent)
 			friendNoteFunc(name)

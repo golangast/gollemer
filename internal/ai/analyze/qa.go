@@ -75,6 +75,17 @@ func IsCodebaseQuestion(line string) bool {
 // returns ok=false when the question doesn't reference anything in the
 // project, so callers can fall through to normal routing.
 func (p *Project) Answer(q string) (out string, ok bool) {
+	out, _, ok = p.AnswerCands(q)
+	return out, ok
+}
+
+// AnswerCands is Answer plus the disambiguation candidates when the
+// reply was a pick-list (the symbol handlers' ambiguous branch): the
+// chat layer records them so the user's numeric reply ("2") can be
+// resolved against the very list that was printed. cands is nil for
+// every other reply.
+func (p *Project) AnswerCands(q string) (out string, cands []*Func, ok bool) {
+	plain := func(o string, k bool) (string, []*Func, bool) { return o, nil, k }
 	// Beginner walkthroughs first: the xray engine's plain-words view.
 	// On failure they fall back to the reference answer below.
 	if m := qWalkThru.FindStringSubmatch(q); m != nil {
@@ -97,31 +108,31 @@ func (p *Project) Answer(q string) (out string, ok bool) {
 		return p.answerCallers(cleanSymbol(m[1]))
 	}
 	if m := qWhatReads.FindStringSubmatch(q); m != nil {
-		return p.answerWhatReads(cleanSymbol(m[1]))
+		return plain(p.answerWhatReads(cleanSymbol(m[1])))
 	}
 	if m := qWhereUsed.FindStringSubmatch(q); m != nil {
-		return p.answerWhatReads(cleanSymbol(m[1]))
+		return plain(p.answerWhatReads(cleanSymbol(m[1])))
 	}
 	if m := qWhereSet.FindStringSubmatch(q); m != nil {
-		return p.answerWhoSets(cleanSymbol(m[1]))
+		return plain(p.answerWhoSets(cleanSymbol(m[1])))
 	}
 	if m := qWhoSets.FindStringSubmatch(q); m != nil {
-		return p.answerWhoSets(cleanSymbol(m[1]))
+		return plain(p.answerWhoSets(cleanSymbol(m[1])))
 	}
 	if m := qDataFrom.FindStringSubmatch(q); m != nil {
-		return p.DataflowText(m[1])
+		return plain(p.DataflowText(m[1]))
 	}
 	if m := qDataChange.FindStringSubmatch(q); m != nil {
-		return p.DataflowText(m[1])
+		return plain(p.DataflowText(m[1]))
 	}
 	if m := qWhatChanges.FindStringSubmatch(q); m != nil {
-		return p.DataflowText(m[1])
+		return plain(p.DataflowText(m[1]))
 	}
 	if qFsWrite.MatchString(q) {
-		return p.answerEffects(fxWrite, "write to the filesystem")
+		return plain(p.answerEffects(fxWrite, "write to the filesystem"))
 	}
 	if qNetUse.MatchString(q) {
-		return p.answerEffects(fxNet, "use the network")
+		return plain(p.answerEffects(fxNet, "use the network"))
 	}
 	if m := qWhatDoes.FindStringSubmatch(q); m != nil {
 		return p.answerWhatDoes(cleanSymbol(m[1]))
@@ -146,10 +157,10 @@ func (p *Project) Answer(q string) (out string, ok bool) {
 	// Package questions before bare "what is": "what's in package store"
 	// must not be swallowed by the what-is pattern.
 	if m := qPkgWhats.FindStringSubmatch(q); m != nil {
-		return p.answerPackage(cleanSymbol(m[1]))
+		return plain(p.answerPackage(cleanSymbol(m[1])))
 	}
 	if m := qPkgList.FindStringSubmatch(q); m != nil {
-		return p.answerPackage(cleanSymbol(m[1]))
+		return plain(p.answerPackage(cleanSymbol(m[1])))
 	}
 	// Intent questions before bare "what is": "what is Copy for" must not
 	// be swallowed by the what-is pattern.
@@ -157,7 +168,7 @@ func (p *Project) Answer(q string) (out string, ok bool) {
 		return p.answerWhatDoes(cleanSymbol(m[1]))
 	}
 	if m := qWhyCalls.FindStringSubmatch(q); m != nil {
-		return p.answerWhyCalls(cleanSymbol(m[1]), cleanSymbol(m[2]))
+		return plain(p.answerWhyCalls(cleanSymbol(m[1]), cleanSymbol(m[2])))
 	}
 	if m := qWhatIs.FindStringSubmatch(q); m != nil {
 		sym := cleanSymbol(m[1])
@@ -168,14 +179,14 @@ func (p *Project) Answer(q string) (out string, ok bool) {
 	// "where is X handled" / "where do I X" with no symbol: guided change
 	// location — one anchor, the pattern to imitate, and you-are-here.
 	if m := qWhereHdl.FindStringSubmatch(q); m != nil {
-		return p.GuideChange(m[1]), true
+		return p.GuideChange(m[1]), nil, true
 	}
 	if m := qWhereDo.FindStringSubmatch(q); m != nil {
 		if sym := cleanSymbol(m[1]); sym == "" || !p.knowsSymbol(sym) {
-			return p.GuideChange(m[1]), true
+			return p.GuideChange(m[1]), nil, true
 		}
 	}
-	return "", false
+	return "", nil, false
 }
 
 // cleanSymbol strips articles, quotes, and role words from a symbol name.
@@ -278,43 +289,43 @@ func shortDir(dir string) string {
 // for the beginner walkthrough. If that fails (unknown symbol, unreadable
 // file), it falls back to the reference answer so the user still gets
 // something useful, including the ambiguous-name disambiguation.
-func (p *Project) answerBeginner(name string) (string, bool) {
+func (p *Project) answerBeginner(name string) (string, []*Func, bool) {
 	if out, ok := p.ExplainBeginner(name); ok {
-		return out, true
+		return out, nil, true
 	}
 	return p.answerWhatDoes(name)
 }
 
-func (p *Project) answerWhatDoes(name string) (string, bool) {
+func (p *Project) answerWhatDoes(name string) (string, []*Func, bool) {
 	fn, cands, typ, pkg := p.resolve(name)
 	switch {
 	case fn != nil:
-		return fn.Detail(p), true
+		return fn.Detail(p), nil, true
 	case typ != nil:
-		return typ.Detail(p), true
+		return typ.Detail(p), nil, true
 	case pkg != nil:
-		return p.PackageDetail(pkg), true
+		return p.PackageDetail(pkg), nil, true
 	case len(cands) > 0:
-		return p.ambiguous(name, cands), true
+		return p.ambiguous(name, cands), cands, true
 	}
-	return "", false
+	return "", nil, false
 }
 
 // answerHowWorks handles "how does X work": the detail card plus what it
 // calls, each with a one-line summary — the call chain a newcomer needs.
-func (p *Project) answerHowWorks(name string) (string, bool) {
+func (p *Project) answerHowWorks(name string) (string, []*Func, bool) {
 	fn, cands, typ, pkg := p.resolve(name)
 	if typ != nil {
-		return typ.Detail(p), true
+		return typ.Detail(p), nil, true
 	}
 	if pkg != nil {
-		return p.PackageDetail(pkg), true
+		return p.PackageDetail(pkg), nil, true
 	}
 	if len(cands) > 0 {
-		return p.ambiguous(name, cands), true
+		return p.ambiguous(name, cands), cands, true
 	}
 	if fn == nil {
-		return "", false
+		return "", nil, false
 	}
 	var b strings.Builder
 	b.WriteString(fn.Detail(p))
@@ -335,7 +346,7 @@ func (p *Project) answerHowWorks(name string) (string, bool) {
 			}
 		}
 	}
-	return b.String(), true
+	return b.String(), nil, true
 }
 
 // answerWhyCalls handles "why does X call Y": the callee's purpose in
@@ -375,7 +386,7 @@ func (p *Project) answerWhyCalls(callerName, calleeName string) (string, bool) {
 }
 
 // answerCallers handles "what calls X" / "who uses X".
-func (p *Project) answerCallers(name string) (string, bool) {
+func (p *Project) answerCallers(name string) (string, []*Func, bool) {
 	fn, cands, typ, _ := p.resolve(name)
 	if typ != nil {
 		// "who uses this type": methods + constructors are the answer.
@@ -384,13 +395,13 @@ func (p *Project) answerCallers(name string) (string, bool) {
 		for _, m := range limitStr(p.methodsOf(typ), 12) {
 			fmt.Fprintf(&b, "  - %s\n", m)
 		}
-		return b.String(), true
+		return b.String(), nil, true
 	}
 	if len(cands) > 0 {
-		return p.ambiguous(name, cands), true
+		return p.ambiguous(name, cands), cands, true
 	}
 	if fn == nil {
-		return "", false
+		return "", nil, false
 	}
 	var b strings.Builder
 	if len(fn.Callers) == 0 {
@@ -398,7 +409,7 @@ func (p *Project) answerCallers(name string) (string, bool) {
 		if !fn.IsMain {
 			b.WriteString("It's either an entry point, dead code, or only called from outside.\n")
 		}
-		return b.String(), true
+		return b.String(), nil, true
 	}
 	callers := append([]string{}, fn.Callers...)
 	sort.Strings(callers)
@@ -414,7 +425,7 @@ func (p *Project) answerCallers(name string) (string, bool) {
 			fmt.Fprintf(&b, "  - %s\n", shortID(c))
 		}
 	}
-	return b.String(), true
+	return b.String(), nil, true
 }
 
 // answerWhatReads handles "what reads X" / "where is X read|used": the
@@ -532,18 +543,18 @@ func (p *Project) answerEffects(cat, label string) (string, bool) {
 }
 
 // answerCallees handles "what does X call".
-func (p *Project) answerCallees(name string) (string, bool) {
+func (p *Project) answerCallees(name string) (string, []*Func, bool) {
 	fn, cands, _, _ := p.resolve(name)
 	if len(cands) > 0 {
-		return p.ambiguous(name, cands), true
+		return p.ambiguous(name, cands), cands, true
 	}
 	if fn == nil {
-		return "", false
+		return "", nil, false
 	}
 	var b strings.Builder
 	if len(fn.Calls) == 0 {
 		fmt.Fprintf(&b, "%s doesn't call anything else in this project — it's a leaf function.\n", fn.Display())
-		return b.String(), true
+		return b.String(), nil, true
 	}
 	fmt.Fprintf(&b, "%s calls %d function(s):\n", fn.Display(), len(fn.Calls))
 	seen := map[string]bool{}
@@ -560,51 +571,51 @@ func (p *Project) answerCallees(name string) (string, bool) {
 			break
 		}
 	}
-	return b.String(), true
+	return b.String(), nil, true
 }
 
 // answerWhereDefined handles "where is X defined".
-func (p *Project) answerWhereDefined(name string) (string, bool) {
+func (p *Project) answerWhereDefined(name string) (string, []*Func, bool) {
 	fn, cands, typ, pkg := p.resolve(name)
 	switch {
 	case fn != nil:
-		return fmt.Sprintf("%s is defined at %s:%d\n", fn.Display(), p.LinkPath(fn.File), fn.Line), true
+		return fmt.Sprintf("%s is defined at %s:%d\n", fn.Display(), p.LinkPath(fn.File), fn.Line), nil, true
 	case typ != nil:
-		return fmt.Sprintf("type %s.%s is defined at %s:%d\n", typ.Pkg, typ.Name, p.LinkPath(typ.File), typ.Line), true
+		return fmt.Sprintf("type %s.%s is defined at %s:%d\n", typ.Pkg, typ.Name, p.LinkPath(typ.File), typ.Line), nil, true
 	case pkg != nil:
 		dir := pkg.Dir
 		if dir == "" {
 			dir = "."
 		}
-		return fmt.Sprintf("package %s lives in %s/\n", pkg.Name, dir), true
+		return fmt.Sprintf("package %s lives in %s/\n", pkg.Name, dir), nil, true
 	case len(cands) > 0:
-		return p.ambiguous(name, cands), true
+		return p.ambiguous(name, cands), cands, true
 	}
-	return "", false
+	return "", nil, false
 }
 
 // answerShowMe handles "show me X": the actual source of the function.
-func (p *Project) answerShowMe(name string) (string, bool) {
+func (p *Project) answerShowMe(name string) (string, []*Func, bool) {
 	fn, cands, typ, _ := p.resolve(name)
 	if typ != nil {
-		return typ.Detail(p), true
+		return typ.Detail(p), nil, true
 	}
 	if len(cands) > 0 {
-		return p.ambiguous(name, cands), true
+		return p.ambiguous(name, cands), cands, true
 	}
 	if fn == nil {
-		return "", false
+		return "", nil, false
 	}
 	src := p.SourceOf(fn, 60)
 	if src == "" {
-		return fmt.Sprintf("I couldn't read the source of %s.\n", fn.Display()), true
+		return fmt.Sprintf("I couldn't read the source of %s.\n", fn.Display()), nil, true
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s  (%s:%d)\n", fn.Display(), p.LinkPath(fn.File), fn.Line)
 	b.WriteString("```go\n")
 	b.WriteString(src)
 	b.WriteString("\n```\n")
-	return b.String(), true
+	return b.String(), nil, true
 }
 
 // answerPackage handles "what's in <pkg>" / "list functions in <pkg>".
@@ -631,6 +642,12 @@ func (p *Project) findPackage(name string) *Package {
 }
 
 // ambiguous lists candidate functions when a bare name matches several.
+// Entries are numbered so the user can answer with just the number
+// (the chat layer resolves it against these same candidates), and
+// locations are project-relative (pickLoc) — the clickable
+// cwd-relative LinkPath form belongs to reports, where a path that
+// wraps mid-token and starts with "../.." only gets in the way of
+// reading a list you're meant to pick from.
 func (p *Project) ambiguous(name string, cands []*Func) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "\"%s\" matches %d functions — which one did you mean?\n", name, len(cands))
@@ -638,8 +655,24 @@ func (p *Project) ambiguous(name string, cands []*Func) string {
 		if i >= 8 {
 			break
 		}
-		fmt.Fprintf(&b, "  - %s  (%s:%d)\n", fn.Display(), p.LinkPath(fn.File), fn.Line)
+		fmt.Fprintf(&b, "  %d. %s — %s\n", i+1, fn.Display(), pickLoc(fn.File, fn.Line))
 	}
-	b.WriteString("Ask again with the full name, e.g. \"what does chat.routeDomain do\".\n")
+	b.WriteString("Reply with the number, or ask again with the full name, e.g. \"what does chat.routeDomain do\".\n")
 	return b.String()
+}
+
+// pickLoc renders a "path:line" location for pick-lists: the path is
+// project-relative (never LinkPath's cwd-relative form), shortened
+// from the left with … when it would still be long enough to wrap.
+func pickLoc(rel string, line int) string {
+	loc := fmt.Sprintf("%s:%d", rel, line)
+	const maxPickLoc = 60
+	if len(loc) <= maxPickLoc {
+		return loc
+	}
+	tail := loc[len(loc)-maxPickLoc+1:]
+	if i := strings.Index(tail, "/"); i >= 0 && i < 16 {
+		tail = tail[i+1:]
+	}
+	return "…" + tail
 }

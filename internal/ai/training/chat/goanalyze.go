@@ -56,7 +56,11 @@ func tryCodebaseQuestion(line string) (string, bool) {
 		lastAnalyzeRoot = root
 		lastAnalyzeProject = p
 	}
-	return lastAnalyzeProject.Answer(line)
+	out, cands, ok := lastAnalyzeProject.AnswerCands(line)
+	// A pick-list answer arms the numeric reply path; any other
+	// answer disarms an older list. See symbolpick.go.
+	setFuncPick(cands)
+	return out, ok
 }
 
 var (

@@ -1133,7 +1133,7 @@ func (p *Project) renderAmbiguousSubjects(name string, subs []dataSubject) strin
 	var b strings.Builder
 	fmt.Fprintf(&b, "%q could mean more than one thing here:\n", name)
 	for _, s := range subs {
-		fmt.Fprintf(&b, "  - `%s` — %s, declared at %s:%d\n", s.name, s.declNote, p.LinkPath(s.file), s.line)
+		fmt.Fprintf(&b, "  - `%s` — %s, declared at %s\n", s.name, s.declNote, pickLoc(s.file, s.line))
 	}
 	b.WriteString("Ask with the fuller name — for a field, name its struct; for a variable, its package — and I'll trace just that one.\n")
 	return b.String()
