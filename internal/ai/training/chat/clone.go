@@ -100,42 +100,91 @@ func analyzeCloned(root, intro string) string {
 	return intro + renderAnalyzeReport(p)
 }
 
-// tryNaturalAnalyze detects natural-language repo analysis requests:
-// "analyze https://github.com/foo/bar", "take a look at this repo: <url>",
-// "what does https://github.com/foo/bar do?"
+// repoRootRe finds a candidate repo reference: an optional scheme,
+// then github.com/<owner>/<repo>. Whether it names the repo ROOT
+// (rather than a page inside it) is decided by what follows the
+// match — see repoQuestionURL.
+var repoRootRe = regexp.MustCompile(`(?i)(?:https?://)?\bgithub\.com/([\w.-]+)/([\w.-]+)`)
+
+// repoQuestionURL detects a natural-language question ABOUT a GitHub
+// repo: a repo-root URL plus analysis intent words ("analyze
+// https://github.com/foo/bar", "take a look at this repo: <url>",
+// "what does https://github.com/foo/bar do?"). It returns the
+// canonical repo URL.
 //
-// It finds a repo URL (not an issue/PR URL) plus analysis intent words,
-// then routes to the standard clone+analyze flow.
-func tryNaturalAnalyze(line string) (string, bool) {
-	// Find a github repo URL. Must NOT be an issue/PR/commit URL
-	// (those are handled by tryIssueWhere).
-	repoRe := regexp.MustCompile(`https?://github\.com/([\w.-]+)/([\w.-]+)(?:/)?(?:\s|$)`)
-	m := repoRe.FindStringSubmatch(line)
-	if m == nil {
+// Only the repo root counts: a URL that continues into the repo
+// (/issues/…, /pull/…, /blob/…, any deeper path) names a page, not
+// the project — issue/PR URLs belong to tryIssueWhere, and other
+// deep links fall through untouched rather than being force-cloned.
+func repoQuestionURL(line string) (string, bool) {
+	loc := repoRootRe.FindStringSubmatchIndex(line)
+	if loc == nil {
 		return "", false
 	}
-	// Skip if the line also contains issue/PR markers (let tryIssueWhere handle it).
-	ll := strings.ToLower(line)
-	if strings.Contains(ll, "/issues/") || strings.Contains(ll, "/pull/") || strings.Contains(ll, "/commit/") {
+	owner := line[loc[2]:loc[3]]
+	repo := strings.TrimSuffix(line[loc[4]:loc[5]], ".git")
+	repo = strings.TrimRight(repo, ".")
+	if owner == "" || repo == "" {
 		return "", false
 	}
-	// Analysis intent words.
-	intents := []string{
-		"analyz", "look at", "check out", "examine", "what is", "what does",
-		"tell me about", "show me", "take a look", "explore", "understand",
-		"review", "inspect",
-	}
-	hasIntent := false
-	for _, in := range intents {
-		if strings.Contains(ll, in) {
-			hasIntent = true
-			break
+	// What follows the repo name decides whether this is the root:
+	// end of line, whitespace, or closing punctuation is fine; a
+	// further path segment ("/issues/12", "/blob/main/x.go") is a
+	// page inside the repo, not the repo itself.
+	if rest := line[loc[1]:]; rest != "" {
+		if c := rest[0]; c == '/' {
+			rest = rest[1:]
+			if rest != "" && !strings.ContainsRune(" \t?.,;:!?)\"']", rune(rest[0])) {
+				return "", false
+			}
 		}
 	}
-	if !hasIntent {
+	ll := strings.ToLower(line)
+	// Analysis/question intent words. A bare URL mention ("my code
+	// is at <url>") has none and falls through as before.
+	intents := []string{
+		"analyz", "look at", "check out", "examine", "what is", "what does",
+		"how does", "explain", "tell me about", "show me", "take a look",
+		"explore", "understand", "review", "inspect",
+	}
+	for _, in := range intents {
+		if strings.Contains(ll, in) {
+			return fmt.Sprintf("https://github.com/%s/%s", owner, repo), true
+		}
+	}
+	return "", false
+}
+
+// tryNaturalAnalyze answers a natural-language repo analysis
+// request (see repoQuestionURL) with the standard analyze flow: the
+// repo is shallow-cloned into the codebase-maps cache (reused when
+// already present), analyzed, and made the current project, so the
+// report — summary and story — IS the answer to "what does it do",
+// and follow-up questions are about that repo.
+func tryNaturalAnalyze(line string) (string, bool) {
+	url, ok := repoQuestionURL(line)
+	if !ok {
 		return "", false
 	}
-	// Route to the standard clone flow.
-	url := fmt.Sprintf("https://github.com/%s/%s", m[1], m[2])
-	return tryCloneProject("clone " + url)
+	return handleGoAnalyze("analyze " + url)
+}
+
+// tryRepoURLDispatch is the intent layer's deterministic claim for
+// repo-URL questions, hooked into tryIntentDispatch before the
+// classifier (the same place, and for the same reason, as the
+// exact-symbol paths in symbolpick.go): the line names the exact
+// project to read, so there is nothing to classify. Left to the
+// classifier, "what does <url> do" was read as a summarize request
+// and answered about the folder the chat happened to start in —
+// tryNaturalAnalyze, which lives behind the classifier in
+// tryDeterministicAnswer, never saw the line.
+func tryRepoURLDispatch(line string) bool {
+	out, ok := tryNaturalAnalyze(line)
+	if !ok {
+		return false
+	}
+	fmt.Println(out)
+	recordBrain("analyst", true, "repo url question")
+	recordIntentOutcome(line, "analyze", 1, IntentOutcomeDispatched)
+	return true
 }

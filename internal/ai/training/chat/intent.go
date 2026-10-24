@@ -449,6 +449,16 @@ func tryIntentDispatch(line string, profile *UserProfile) bool {
 	if done, handled := resolveFuncPick(line); done {
 		return handled
 	}
+	// A question about a repo URL is deterministic too: the line
+	// names the exact project to read, so it is claimed before
+	// classification. The classifier otherwise reads "what does
+	// <url> do" as a summarize of the folder the chat started in
+	// (tryNaturalAnalyze sits behind it and never sees the line).
+	// See clone.go's repoQuestionURL for what counts as a repo
+	// question — issue/PR/deep links are never claimed here.
+	if tryRepoURLDispatch(line) {
+		return true
+	}
 	if tryDottedSymbol(line, profile) {
 		return true
 	}
