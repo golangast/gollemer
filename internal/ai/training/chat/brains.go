@@ -140,6 +140,14 @@ type brainLogEntry struct {
 	Brain string `json:"brain"`
 	OK    bool   `json:"ok"`
 	Note  string `json:"note,omitempty"`
+	// Intent-layer outcome fields (2026-10-24): present only on the
+	// entries recordIntentOutcome writes. The older consumers
+	// (brainLogCounts, the Friend) ignore them; scripts/mine_usage
+	// reads them to build training pairs from confirmed lines.
+	Line    string  `json:"line,omitempty"`
+	Intent  string  `json:"intent,omitempty"`
+	Conf    float64 `json:"conf,omitempty"`
+	Outcome string  `json:"outcome,omitempty"`
 }
 
 func brainLogPath() string {
@@ -182,6 +190,46 @@ func recordBrain(key string, ok bool, note string) {
 				f.Close()
 			}
 		}
+	}
+}
+
+// Intent-layer outcomes, recorded by recordIntentOutcome. Only
+// Dispatched and ClarifiedYes carry a label a user action actually
+// confirmed; scripts/mine_usage trains on those two and nothing else.
+const (
+	IntentOutcomeDispatched   = "dispatched"
+	IntentOutcomeClarifiedYes = "clarified-yes"
+	IntentOutcomeClarifiedNo  = "clarified-no"
+	IntentOutcomeFellThrough  = "fell-through"
+)
+
+// recordIntentOutcome appends ONE intent-layer outcome entry to the
+// same log recordBrain writes: the raw line, the intent the
+// classifier chose, its confidence, and how the line ended up. Until
+// 2026-10-24 the log kept the intent and the line in separate entries
+// (or not at all), so no (line → intent) pair could ever be mined
+// back out of it; these entries close that gap going forward.
+//
+// It deliberately does NOT touch the session stats, lastBrain, or
+// the Friend's feed: the brain that actually answered still records
+// itself through recordBrain, so "why did you do that" keeps naming
+// the answering brain and failure streaks keep their meaning.
+func recordIntentOutcome(line, intent string, conf float64, outcome string) {
+	path := brainLogPath()
+	if path == "" || line == "" {
+		return
+	}
+	data, err := json.Marshal(brainLogEntry{
+		T: time.Now().Format(time.RFC3339), Brain: "coordinator", OK: true,
+		Note: "intent outcome: " + outcome,
+		Line: line, Intent: intent, Conf: conf, Outcome: outcome,
+	})
+	if err != nil {
+		return
+	}
+	if f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600); err == nil {
+		f.Write(append(data, '\n'))
+		f.Close()
 	}
 }
 

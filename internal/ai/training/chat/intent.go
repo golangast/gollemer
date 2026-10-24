@@ -449,12 +449,28 @@ func tryIntentDispatch(line string, profile *UserProfile) bool {
 	if strings.Contains(line, ".go:") {
 		return false
 	}
-	intent, _, ok := m.ClassifyIntent(line)
+	intent, conf, ok := m.ClassifyIntent(line)
 	if !ok {
-		return offerClarification(m, line)
+		if offerClarification(m, line) {
+			return true
+		}
+		// The layer passed on this line: record the near miss so
+		// the outcome log holds the whole picture (a fell-through
+		// line is never a training pair — nothing confirmed it).
+		top, topConf, _, _ := m.predictTop2(line)
+		recordIntentOutcome(line, top, topConf, IntentOutcomeFellThrough)
+		return false
 	}
 	friendObserveIntent(intent)
-	return dispatchIntent(intent, line, profile)
+	handled := dispatchIntent(intent, line, profile)
+	if handled {
+		recordIntentOutcome(line, intent, conf, IntentOutcomeDispatched)
+	} else {
+		// Confident, but not the intent layer's to claim
+		// (brain-owned intents land here): it fell through.
+		recordIntentOutcome(line, intent, conf, IntentOutcomeFellThrough)
+	}
+	return handled
 }
 
 // dispatchIntent runs one confidently-classified intent — and, via
@@ -876,6 +892,7 @@ func clarifyLabel(intent string) string {
 type pendingClarification struct {
 	line  string
 	cands []string
+	conf  float64 // the top candidate's confidence when offered
 }
 
 var pendingClarify *pendingClarification
@@ -911,7 +928,8 @@ func offerClarification(m *IntentModel, line string) bool {
 	if len(cands) == 0 {
 		return false
 	}
-	pendingClarify = &pendingClarification{line: line, cands: cands}
+	_, conf, _, _ := m.predictTop2(line)
+	pendingClarify = &pendingClarification{line: line, cands: cands, conf: conf}
 	if len(cands) == 1 {
 		fmt.Printf("Did you mean — %s? (yes/no)\n", clarifyLabel(cands[0]))
 	} else {
@@ -951,7 +969,11 @@ func resolveClarification(line string, profile *UserProfile) (done, handled bool
 		pick = 0
 	case clarifyNo[ans]:
 		// Declined: suggest nothing more; the line falls through
-		// to exactly the behavior it would have had today.
+		// to exactly the behavior it would have had today. The
+		// outcome is recorded as a NEGATIVE — the line itself is
+		// never mined as a training pair (its true intent is
+		// unknown, only the rejected guess is known).
+		recordIntentOutcome(p.line, p.cands[0], p.conf, IntentOutcomeClarifiedNo)
 		pendingClarify = nil
 		return true, false
 	default:
@@ -961,6 +983,9 @@ func resolveClarification(line string, profile *UserProfile) (done, handled bool
 		return false, false
 	}
 	pendingClarify = nil
+	// The user just confirmed this label with their own answer —
+	// the strongest training signal the log can hold.
+	recordIntentOutcome(p.line, p.cands[pick], p.conf, IntentOutcomeClarifiedYes)
 	friendObserveIntent(p.cands[pick])
 	return true, dispatchIntent(p.cands[pick], p.line, profile)
 }
