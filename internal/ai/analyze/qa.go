@@ -37,6 +37,14 @@ var (
 	qWhereUsed = regexp.MustCompile(`(?i)^\s*where is (?:the )?(.+?) (?:read|used)\??$`)
 	qWhereSet  = regexp.MustCompile(`(?i)^\s*where is (?:the )?(.+?) set\??$`)
 	qWhoSets   = regexp.MustCompile(`(?i)^\s*who sets (?:the )?(.+?)\??$`)
+	// Dataflow questions, answered from the site-level varflow index
+	// (varflow.go): "where does X get its data", "where does X come
+	// from", "where does X change", "what changes X". These name a
+	// variable or field, not a function — the one thing the older
+	// patterns above can't see.
+	qDataFrom    = regexp.MustCompile(`(?i)^\s*(?:so\s+)?where does (?:the )?(.+?) (?:get (?:its|their|his|her) data(?: from)?|come from)\s*\??$`)
+	qDataChange  = regexp.MustCompile(`(?i)^\s*(?:so\s+)?where does (?:the )?(.+?) change\s*\??$`)
+	qWhatChanges = regexp.MustCompile(`(?i)^\s*what (?:changes|updates|modifies|mutates) (?:the )?(.+?)\s*\??$`)
 	qFsWrite   = regexp.MustCompile(`(?i)^\s*where\b(?:.*\b(?:files?|filesystem)\b.*\b(?:writ|touch|creat|delet|chang|modif)\w*|.*\b(?:writ|touch|creat|delet|chang|modif)\w*\b.*\b(?:files?|filesystem)\b)`)
 	qNetUse    = regexp.MustCompile(`(?i)^\s*where\b.*?\b(?:network|internet)\b`)
 	// Beginner walkthroughs, powered by the xray intelligence engine:
@@ -58,7 +66,9 @@ var (
 // Go-concept or social questions, so callers can use this to decide
 // whether a codebase is worth analyzing for the question.
 func IsCodebaseQuestion(line string) bool {
-	return qWhyCalls.MatchString(line) || qWhatFor.MatchString(line)
+	return qWhyCalls.MatchString(line) || qWhatFor.MatchString(line) ||
+		qDataFrom.MatchString(line) || qDataChange.MatchString(line) ||
+		qWhatChanges.MatchString(line)
 }
 
 // Answer answers a natural-language question about the project. It
@@ -97,6 +107,15 @@ func (p *Project) Answer(q string) (out string, ok bool) {
 	}
 	if m := qWhoSets.FindStringSubmatch(q); m != nil {
 		return p.answerWhoSets(cleanSymbol(m[1]))
+	}
+	if m := qDataFrom.FindStringSubmatch(q); m != nil {
+		return p.DataflowText(m[1])
+	}
+	if m := qDataChange.FindStringSubmatch(q); m != nil {
+		return p.DataflowText(m[1])
+	}
+	if m := qWhatChanges.FindStringSubmatch(q); m != nil {
+		return p.DataflowText(m[1])
 	}
 	if qFsWrite.MatchString(q) {
 		return p.answerEffects(fxWrite, "write to the filesystem")

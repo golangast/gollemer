@@ -33,7 +33,7 @@ var brainRegistry = []BrainInfo{
 	{"friend", "The Friend", "watches how YOU work across all the brains and speaks up rarely, when it spots a pattern worth naming",
 		"patterns over many turns and sessions; its notebook is a local file (~/.gollemer_friend.json), yours alone",
 		"it is quiet by design — long cooldowns, never twice in a row; for advice on demand, ask \"any suggestions\""},
-	{"analyst", "The Analyst", "reads a project's structure: tours, examples, what-is, walkthroughs, the big picture",
+	{"analyst", "The Analyst", "reads a project's structure: tours, examples, what-is, walkthroughs, where a value's data comes from and where it changes, the big picture",
 		"any Go project it can parse; every claim is computed, so unseen code is fine",
 		"structure only — it cannot judge taste, quality, or intent"},
 	{"why", "The Reasoner", "explains WHY a function is shaped the way it is",
@@ -93,7 +93,7 @@ func brainByKey(key string) *BrainInfo {
 func intentBrain(intent string) string {
 	switch intent {
 	case "summarize", "analyze", "tour", "example", "whatis", "show_func",
-		"walkthrough", "arch", "why_import":
+		"walkthrough", "arch", "why_import", "dataflow_q":
 		return "analyst"
 	case "why_func":
 		return "why"

@@ -48,6 +48,15 @@ type Project struct {
 	// Typed reports whether compiler-grade type info was loaded
 	// (refineTypes): call edges were checked against real method sets.
 	Typed bool
+
+	// Variable data flow (varflow.go): generated files skipped by the
+	// flow index, and the site-level event/local indexes the dataflow
+	// questions answer from.
+	genFiles  map[string]bool
+	varEvents map[string][]varEvent
+	varLocals map[string][]*localVar
+	varSwept  bool
+	vidx      *varIndex
 }
 
 // Package is one directory of Go source.
@@ -61,6 +70,7 @@ type Package struct {
 	Internal []string // imports that resolve to another project package
 	Funcs    []*Func
 	Types    []*Type
+	Vars     []*Var // package-level var/const declarations (varflow.go)
 	HasMain  bool
 	Tests    int // number of _test.go files
 
@@ -119,6 +129,11 @@ type Type struct {
 	Doc       string
 	Methods   []string // method names declared on it
 	Fields    []string // struct field names
+	// FieldTypes/FieldLines give each struct field its declared type
+	// text and declaration line (fields live in the type's own file).
+	// Filled for struct types only; used by the dataflow answers.
+	FieldTypes map[string]string
+	FieldLines map[string]int
 	ImplCount int      // interfaces only: heuristic implementer count
 	File      string
 	Line      int
@@ -230,6 +245,13 @@ func (p *Project) addFile(rel string, src *ast.File, fset *token.FileSet) {
 	}
 	pkg := p.pkgFor(dir, src.Name.Name)
 	pkg.Files = append(pkg.Files, rel)
+	generated := isGeneratedFile(src)
+	if generated {
+		if p.genFiles == nil {
+			p.genFiles = map[string]bool{}
+		}
+		p.genFiles[rel] = true
+	}
 	// Keep the most descriptive package doc: authors usually document
 	// the package in one file and leave the rest bare.
 	if d := docText(src.Doc); d != "" && len(d) > len(pkg.Doc) {
@@ -301,6 +323,16 @@ func (p *Project) addFile(rel string, src *ast.File, fset *token.FileSet) {
 			}
 		case *ast.GenDecl:
 			for _, spec := range d.Specs {
+				if vs, ok := spec.(*ast.ValueSpec); ok {
+					// Package-level variables and constants feed the
+					// dataflow index (varflow.go). Generated files are
+					// skipped: nobody asks where machine-written data
+					// comes from, and it would swamp the real sites.
+					if (d.Tok == token.VAR || d.Tok == token.CONST) && !generated {
+						p.addVarDecl(pkg, dir, rel, d.Tok == token.CONST, vs, fset)
+					}
+					continue
+				}
 				ts, ok := spec.(*ast.TypeSpec)
 				if !ok {
 					continue
@@ -319,6 +351,15 @@ func (p *Project) addFile(rel string, src *ast.File, fset *token.FileSet) {
 				case *ast.StructType:
 					t.Kind = "struct"
 					t.Fields = fieldNames(st.Fields)
+					t.FieldTypes = map[string]string{}
+					t.FieldLines = map[string]int{}
+					for _, f := range st.Fields.List {
+						ft := exprText(fset, f.Type)
+						for _, n := range f.Names {
+							t.FieldTypes[n.Name] = ft
+							t.FieldLines[n.Name] = fset.Position(n.Pos()).Line
+						}
+					}
 				case *ast.InterfaceType:
 					t.Kind = "interface"
 					t.Methods = fieldNames(st.Methods)

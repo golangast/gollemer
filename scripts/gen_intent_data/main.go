@@ -31,6 +31,8 @@ var slots = map[string][]string{
 	"target":  {"chat", "eval", "smarter", "train-go", "build", "test", "train-social", "help", "train-gocode"},
 	"path":    {"~/projects/foo", "./myproject", "~/Downloads/foo", "/home/a/code/bar", "."},
 	"route":   {"/users", "/health", "/items", "/login", "/products"},
+	"var":     {"Items", "cache", "Names", "config", "Counts", "settings", "Users", "queue", "Verbose", "DryRun", "items", "results", "buffer", "Total", "clients", "history", "options"},
+	"field":   {"Config.Names", "Config.Items", "store.Items", "cfg.Names", "Config.DryRun", "Config.Users", "store.Counts"},
 }
 
 var templates = map[string][]string{
@@ -54,6 +56,7 @@ var templates = map[string][]string{
 	"learn_path": {
 		"learn path", "/learn-path", "learning path", "the learn path", "the learning path",
 		"what should i learn first", "what do i learn first", "where should i start learning",
+		"in what order should i read this", "what order should i read this in", "what order to read this codebase",
 		"learning order", "what order should i learn", "what order should i learn this in",
 		"teach me in order", "what do i learn next", "curriculum for this project",
 	},
@@ -67,7 +70,7 @@ var templates = map[string][]string{
 	},
 	"watch": {
 		"fire it up", "fire this up", "does it run", "does this run", "does this thing run", "run it and show me", "run it and show me what happens", "start it up",
-		"watch", "/watch", "watch it", "watch it run", "run it", "run this", "run the project",
+		"watch", "/watch", "watch it", "watch it run", "watch it in action", "show it in action", "see the project in action", "put it to work", "run it", "run this", "run the project",
 		"run this project", "run the program", "see it run", "let me see it run",
 		"try running it", "run the tests", "execute it", "launch it", "start the program",
 	},
@@ -85,7 +88,7 @@ var templates = map[string][]string{
 		"where should i edit for this issue {url}", "where do i change things for {url}",
 	},
 	"whatis": {
-		"/whatis {name}", "what is {name}", "what does {name} do", "whats {name}",
+		"/whatis {name}", "what is {name}", "what does {name} do", "whats {name}", "whats a {name}",
 		"explain {name}", "tell me about {name}", "what is a {name}", "describe {name}",
 		"what does the {name} type do", "meaning of {name}",
 	},
@@ -250,6 +253,7 @@ var templates = map[string][]string{
 	},
 	"start_guide": {
 		"guide me", "start the guide", "get started", "im new here",
+		"guide me through the project", "guide me through this repo", "can you guide me",
 		"i am new here", "show me how this works", "guide me through this",
 		"start guiding me", "take me through it", "walk me through everything",
 		"guide me step by step", "take me step by step", "i just got here",
@@ -261,7 +265,7 @@ var templates = map[string][]string{
 		"stocks went up today", "i went to the store",
 	},
 	"tell_more": {
-		"tell me more", "more", "tell me more about that", "tell me more about it",
+		"tell me more", "more", "tell me more about that", "tell me more about it", "im listening", "go on listening",
 		"go on", "continue", "keep going", "and then", "what else", "more info",
 		"more about that", "elaborate", "expand on that", "dig deeper", "go deeper",
 		"tell me more about {name}", "more about {name}", "what else does it do",
@@ -274,6 +278,22 @@ var templates = map[string][]string{
 		"i dont know what to type", "whats the next step", "next steps",
 	
 		"what is the next thing to do", "tell me the next thing to do", "what do i do next in this project",},
+	"dataflow_q": {
+		"where does {var} get its data", "where does {var} get its data from",
+		"where does the {var} get its data", "where does {var} come from",
+		"where does the {var} come from", "where does {var} change",
+		"where does {var} get changed", "where does {var} get updated",
+		"where does {var} get set", "where does {var} get filled",
+		"where does {var} get populated", "where does the data in {var} come from",
+		"where do values in {var} come from", "where is {var} changed",
+		"what changes {var}", "what updates {var}", "what modifies {var}",
+		"what sets {var}", "who changes {var}", "what writes to {var}",
+		"who writes to {var}", "data flow of {var}",
+		"dataflow of {var}", "data flow for {var}",
+		"where does {field} get its data", "where does {field} come from",
+		"where does {field} change", "what changes {field}",
+		"where does {field} get its data from",
+	},
 	"summarize": {
 		"give me the summary", "give me a summary of this", "the summary of this codebase", "summary please", "short summary of this project",
 		"what does this program do", "what does this app do", "what is this program",

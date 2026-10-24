@@ -25,6 +25,11 @@ func (p *Project) BuildGraph() {
 		// Also honor explicit aliases: import foo "example.com/bar".
 		pkg.aliasCache = alias
 	}
+	// Variable data flow: the name index and the sites hidden in
+	// package-level initializers, now that alias caches and all
+	// declarations exist.
+	p.buildVarIndex()
+	p.sweepVarInits()
 	seen := map[[2]string]bool{}
 	for _, pkg := range p.Packages {
 		for _, fn := range pkg.Funcs {
@@ -57,6 +62,7 @@ func (p *Project) BuildGraph() {
 				return true
 			})
 			p.analyzeEffects(pkg, fn)
+			p.collectVarEvents(pkg, fn)
 		}
 	}
 	// Compiler-grade pass: resolve selector calls through real method

@@ -141,3 +141,9 @@
 {"input": "i just got here walk me through everything", "intent": "start_guide"}
 {"input": "start from the beginning please", "intent": "start_guide"}
 {"input": "can you guide me through this project", "intent": "start_guide"}
+{"input": "where does Wishlist get its data", "intent": "dataflow_q"}
+{"input": "where does the session come from", "intent": "dataflow_q"}
+{"input": "what changes the leaderboard", "intent": "dataflow_q"}
+{"input": "where does Inventory change", "intent": "dataflow_q"}
+{"input": "where does the cart come from", "intent": "dataflow_q"}
+{"input": "what updates Wishlist", "intent": "dataflow_q"}

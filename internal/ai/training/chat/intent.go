@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -303,6 +304,38 @@ func defaultIntentModel() *IntentModel {
 
 // --- slots ----------------------------------------------------------------
 
+// dataNameRes pull the variable name out of a dataflow question
+// when the project-token scan in slotVarName cannot (qualified
+// names, role-word suffixes — DataflowText cleans the capture).
+var dataNameRes = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)where does (?:the )?(.+?) (?:get|come|change)`),
+	regexp.MustCompile(`(?i)where is (?:the )?(.+?) (?:changed|set|updated)`),
+	regexp.MustCompile(`(?i)what (?:changes|updates|modifies|mutates|sets|writes to) (?:the )?(.+?)\s*\??$`),
+	regexp.MustCompile(`(?i)who (?:changes|writes to) (?:the )?(.+?)\s*\??$`),
+}
+
+// slotVarName pulls the variable/field name out of a dataflow
+// question: a token the analyzed project actually tracks (bare or
+// dotted) wins; else the name captured by the question shapes.
+func slotVarName(line string) string {
+	if lastAnalyzeProject != nil {
+		for _, tok := range intentTokens(line) {
+			if len(tok) < 2 && !strings.Contains(tok, ".") {
+				continue
+			}
+			if lastAnalyzeProject.HasData(tok) {
+				return tok
+			}
+		}
+	}
+	for _, re := range dataNameRes {
+		if m := re.FindStringSubmatch(line); m != nil {
+			return strings.TrimSpace(m[1])
+		}
+	}
+	return ""
+}
+
 // slotName guesses the function/type name a line refers to: a token
 // the analyzed project actually has wins; else the last capitalized
 // token; else the token after of/for/through.
@@ -440,6 +473,20 @@ func tryIntentDispatch(line string, profile *UserProfile) bool {
 		return handleBeginnerCommand("/what-now", profile)
 	case "summarize":
 		return handleBeginnerCommand("/summarize", profile)
+	case "dataflow_q":
+		if !ensureProject() {
+			return true
+		}
+		name := slotVarName(line)
+		if name == "" {
+			return false
+		}
+		if out, ok := lastAnalyzeProject.DataflowText(name); ok {
+			fmt.Println(out)
+			recordBrain("analyst", true, "intent dataflow_q")
+			return true
+		}
+		return false
 	case "help":
 		printHelp()
 		return true
