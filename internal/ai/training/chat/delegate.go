@@ -138,7 +138,7 @@ func runDelegate(line string, ask editAsk) bool {
 		recordBrain("composer", false, "delegate refused: target not Go")
 		return true
 	case strings.HasSuffix(strings.ToLower(typedFile), "_test.go"):
-		fmt.Printf("%s Not doing that delegate: delegates don't go in test files — the test skeleton this shape writes is the only test-file change it makes.\n", tag)
+		fmt.Printf("%s Not doing that delegate: delegates don't go in test files — the test scaffold this shape writes is the only test-file change it makes.\n", tag)
 		recordBrain("composer", false, "delegate refused: target is a test file")
 		return true
 	}
@@ -484,7 +484,7 @@ func testPackageDir(dir string) (string, bool) {
 }
 
 // testCompilePackageDir compiles the package's test files
-// without running any test, so a broken skeleton can never slip
+// without running any test, so a broken scaffold can never slip
 // in under a verdict that rested on the plain build.
 func testCompilePackageDir(dir string) (string, bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -515,7 +515,7 @@ type delegateBackup struct {
 	abs     string
 	bakAbs  string
 	modeAbs string
-	created bool // the file did not exist before the edit (a created skeleton)
+	created bool // the file did not exist before the edit (a created scaffold)
 	mode    os.FileMode
 }
 

@@ -119,18 +119,18 @@ func TestDelegatePlanCrossPackage(t *testing.T) {
 	if !strings.Contains(notes, "straight through") {
 		t.Errorf("plan notes missing the failure-mode note:\n%s", notes)
 	}
-	// The skeleton rides along, labeled as one.
+	// The scaffold rides along, labeled as one.
 	stub := plan.Files[1]
 	if stub.Rel != "app/main_test.go" || len(stub.Before) != 0 {
-		t.Errorf("skeleton = %s (before %d bytes), want a created app/main_test.go", stub.Rel, len(stub.Before))
+		t.Errorf("scaffold = %s (before %d bytes), want a created app/main_test.go", stub.Rel, len(stub.Before))
 	}
-	for _, want := range []string{"func TestLoad(t *testing.T)", "TODO", "cases := []struct"} {
+	for _, want := range []string{"func TestLoad(t *testing.T)", "TODO", "tests := []struct"} {
 		if !strings.Contains(string(stub.After), want) {
-			t.Errorf("skeleton missing %q:\n%s", want, stub.After)
+			t.Errorf("scaffold missing %q:\n%s", want, stub.After)
 		}
 	}
-	if !strings.Contains(notes, "test skeleton") || !strings.Contains(notes, "not part of how the edit is verified") {
-		t.Errorf("plan notes don't label the skeleton as a non-verifying skeleton:\n%s", notes)
+	if !strings.Contains(notes, "test scaffold") || !strings.Contains(notes, "not part of how the edit is verified") {
+		t.Errorf("plan notes don't label the scaffold as a non-verifying scaffold:\n%s", notes)
 	}
 	// The retry form is pre-assembled and named: the source
 	// imported under the alias, the call qualified by it.

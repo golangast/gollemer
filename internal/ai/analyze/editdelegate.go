@@ -36,7 +36,7 @@ func (p *Project) planDelegate(req EditRequest) (*EditPlan, string) {
 		return nil, "that edit needs a file to add the function to."
 	}
 	if strings.HasSuffix(rel, "_test.go") {
-		return nil, fmt.Sprintf("%s is a test file — delegates don't go there. (The test skeleton this shape writes is the only test-file change it makes.)", p.LinkPath(rel))
+		return nil, fmt.Sprintf("%s is a test file — delegates don't go there. (The test scaffold this shape writes is the only test-file change it makes.)", p.LinkPath(rel))
 	}
 	if why, blocked := p.fileBlocked(rel); blocked {
 		return nil, fmt.Sprintf("I won't edit %s — %s.", p.LinkPath(rel), why)
@@ -186,8 +186,8 @@ func (p *Project) planDelegate(req EditRequest) (*EditPlan, string) {
 		return nil, refusal
 	}
 
-	// The test skeleton rides in the same plan, as a second file.
-	stubEF, stubNote := p.delegateStub(tgtPkg, rel, wrapper)
+	// The test scaffold rides in the same plan, as a second file.
+	stubEF, stubNote := g.delegateScaffold(tgtPkg, rel)
 
 	files := []EditFile{*primary}
 	if stubEF != nil {
@@ -873,81 +873,6 @@ func finishDelegateFile(rel string, before, after []byte) EditFile {
 		ef.Diff = unifiedDiff(rel, before, f)
 	}
 	return ef
-}
-
-// --- the test skeleton -------------------------------------------------------
-
-// delegateStub builds the plan's second file: a table-driven test
-// skeleton for the wrapper, appended to the package's natural
-// _test.go (the target's own base name) or created there. It is
-// labeled a skeleton in the plan and is never verification
-// evidence. Returns nil (with a note) when the test already
-// exists.
-func (p *Project) delegateStub(tgtPkg *Package, targetRel, wrapper string) (*EditFile, string) {
-	dir := tgtPkg.Dir
-	base := targetRel
-	if i := strings.LastIndex(base, "/"); i >= 0 {
-		base = base[i+1:]
-	}
-	testRel := strings.TrimSuffix(base, ".go") + "_test.go"
-	if dir != "" {
-		testRel = dir + "/" + testRel
-	}
-	stubName := "Test" + titleFirst(wrapper)
-	stub := delegateStubText(stubName, wrapper)
-	note := fmt.Sprintf("Plus a test skeleton (%s in %s) — a table with TODO rows for you to fill in. It checks nothing until you add cases; it is not part of how the edit is verified.", stubName, testRel)
-
-	existing, _, testAST, _ := p.readProjectFile(testRel)
-	if testAST != nil {
-		for _, d := range testAST.Decls {
-			if fd, ok := d.(*ast.FuncDecl); ok && fd.Name.Name == stubName {
-				return nil, fmt.Sprintf("No test skeleton added: %s already has a %s.", testRel, stubName)
-			}
-		}
-		// Append to the existing test file, adding the testing
-		// import when it lacks one.
-		_, tfset, _, _ := p.readProjectFile(testRel)
-		var edits []textEdit
-		if !hasImportPath(testAST, "testing") {
-			edits = append(edits, insertImportSpecs(testAST, tfset, existing, []string{strconv.Quote("testing")})...)
-		}
-		appendText := "\n" + stub
-		if len(existing) == 0 || existing[len(existing)-1] != '\n' {
-			appendText = "\n" + appendText
-		}
-		edits = append(edits, textEdit{start: len(existing), end: len(existing), text: appendText})
-		after := applyTextEdits(existing, edits)
-		ef := finishDelegateFile(testRel, existing, after)
-		return &ef, note
-	}
-	// Create it: the target package's own clause, the testing
-	// import, the skeleton.
-	after := []byte("package " + tgtPkg.Name + "\n\nimport \"testing\"\n\n" + stub)
-	ef := finishDelegateFile(testRel, nil, after)
-	return &ef, note
-}
-
-// delegateStubText renders the skeleton body.
-func delegateStubText(stubName, wrapper string) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "// %s is a skeleton assembled by gollemer next to the %s delegate.\n", stubName, wrapper)
-	b.WriteString("// It has no real cases yet — fill in the TODO rows with your inputs\n")
-	b.WriteString("// and the results you expect. Until then it checks nothing.\n")
-	fmt.Fprintf(&b, "func %s(t *testing.T) {\n", stubName)
-	b.WriteString("\tcases := []struct {\n")
-	b.WriteString("\t\tname string\n")
-	fmt.Fprintf(&b, "\t\t// TODO: one field per input of %s, plus the result you want.\n", wrapper)
-	b.WriteString("\t}{\n")
-	b.WriteString("\t\t// TODO: add a case, e.g. {name: \"first case\"},\n")
-	b.WriteString("\t}\n")
-	b.WriteString("\tfor _, tc := range cases {\n")
-	b.WriteString("\t\tt.Run(tc.name, func(t *testing.T) {\n")
-	fmt.Fprintf(&b, "\t\t\t// TODO: call %s with tc's fields and compare with what you expect.\n", wrapper)
-	b.WriteString("\t\t\t_ = tc\n")
-	b.WriteString("\t\t})\n")
-	b.WriteString("\t}\n")
-	b.WriteString("}\n")
-	return b.String()
 }
 
 // --- the self-check ----------------------------------------------------------
