@@ -18,6 +18,18 @@ import (
 // Silence is its default. Asked directly ("any suggestions"), it reports
 // from its notebook.
 
+// friendMiss is one learn-mode check question the user got wrong:
+// the concept it was about, the question as asked, the correct fact,
+// and where and when it happened — so a later feature can bring the
+// missed ones back.
+type friendMiss struct {
+	Concept  string `json:"concept"`
+	Question string `json:"question"`
+	Fact     string `json:"fact"`
+	Project  string `json:"project"` // project root the question was about
+	Day      string `json:"day"`     // 2006-01-02
+}
+
 type friendMemory struct {
 	FuncAsks   map[string]int    `json:"func_asks"`
 	IntentSeen map[string]int    `json:"intent_seen"`
@@ -28,6 +40,7 @@ type friendMemory struct {
 	WatchRead  string            `json:"watch_read,omitempty"` // RFC3339 cursor into the Watcher log
 	Guided     map[string]int    `json:"guided,omitempty"`     // project root -> next guided step
 	Taught     int               `json:"taught,omitempty"`     // training-tour lessons completed
+	Misses     []friendMiss      `json:"misses,omitempty"`     // learn-mode questions missed
 }
 
 var (
@@ -260,6 +273,21 @@ func friendNoteFunc(name string) {
 			"you've come back to %s %d times now. If it's the thing you keep needing, say \"walk me through %s\" once and get the whole picture — or \"comment %s\" and its doc comment gets drafted, so the next visit is shorter.",
 			name, m.FuncAsks[name], name, name))
 	}
+}
+
+// friendNoteMiss records a learn-mode check question the user got
+// wrong, with the correct fact — the flow owns this write (it happens
+// as part of answering, never as a side effect of rendering).
+func friendNoteMiss(concept, question, fact, project string) {
+	m := friendLoad()
+	m.Misses = append(m.Misses, friendMiss{
+		Concept:  concept,
+		Question: question,
+		Fact:     fact,
+		Project:  project,
+		Day:      friendToday(),
+	})
+	friendSave()
 }
 
 // friendReport answers a direct ask from the notebook.

@@ -1151,6 +1151,14 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 			printProfile(profile)
 			continue
 		}
+		// Learn mode, claimed deterministically ahead of the
+		// beginner five: its start shapes, its "next", and —
+		// while a check question waits — its answers must never
+		// reach the classifier or a brain. Other lines pass
+		// through untouched; the flow waits (the guide's rule).
+		if tryLearnCommand(line) {
+			continue
+		}
 		// Beginner five, claimed deterministically before routing —
 		// same as the single-domain loop. A sentence like "tour
 		// https://…" or "run it" must never be left for the router

@@ -1309,3 +1309,72 @@ func min3(a, b, c int) int {
 	}
 	return c
 }
+
+// --- Structured dataflow facts --------------------------------------
+// DataflowText renders the varflow index as prose for one value at a
+// time. Some callers — the chat's learn mode, which quizzes the user
+// from analyzer ground truth — need the same facts as data: which
+// values exist, and which functions give each one its data.
+
+// DataFact is one tracked package-level value and where its data
+// comes from, in structured form.
+type DataFact struct {
+	Name    string       // value name, e.g. "Items"
+	Display string       // package-qualified, e.g. "store.Items"
+	Kind    string       // "var" | "const"
+	Type    string       // declared type text; "" if unknown
+	Init    string       // starting value as written; "" if none
+	Setters []DataSetter // functions that assign it, first-site order
+}
+
+// DataSetter is one function that gives a tracked value its data.
+type DataSetter struct {
+	Func  string // enclosing function, Display() form, e.g. "store.LoadAll"
+	Short string // its short name, e.g. "LoadAll"
+	File  string // first assignment site
+	Line  int
+}
+
+// VarFacts returns the dataflow facts for every package-level
+// variable and constant in the project, in name order — the same
+// site-level index DataflowText renders, as data.
+func (p *Project) VarFacts() []DataFact {
+	p.buildVarIndex()
+	vars := p.allVars()
+	sort.Slice(vars, func(i, j int) bool {
+		if vars[i].Name != vars[j].Name {
+			return vars[i].Name < vars[j].Name
+		}
+		return vars[i].Pkg < vars[j].Pkg
+	})
+	out := make([]DataFact, 0, len(vars))
+	for _, v := range vars {
+		kind := "var"
+		if v.Const {
+			kind = "const"
+		}
+		f := DataFact{
+			Name:    v.Name,
+			Display: v.Pkg + "." + v.Name,
+			Kind:    kind,
+			Type:    v.Type,
+			Init:    v.Init,
+		}
+		seen := map[string]bool{}
+		for _, ev := range p.sortedEvents(v.key()) {
+			if ev.Kind != "assign" || ev.In == "" || seen[ev.In] {
+				continue
+			}
+			seen[ev.In] = true
+			short := ev.In
+			if i := strings.LastIndex(ev.In, "."); i >= 0 {
+				short = ev.In[i+1:]
+			}
+			f.Setters = append(f.Setters, DataSetter{
+				Func: ev.In, Short: short, File: ev.File, Line: ev.Line,
+			})
+		}
+		out = append(out, f)
+	}
+	return out
+}

@@ -230,10 +230,22 @@ func goFeatures(text string, isInterface bool) [][2]string {
 	return out
 }
 
-// LearnPathText orders the project's concepts so each one only uses
-// ideas introduced earlier, and links the Go features each concept
-// leans on to gobyexample.
-func (p *Project) LearnPathText() string {
+// LearnConcept is one step of the project's learn path: an exported
+// type, the concepts it builds on, and the Go features its methods
+// use (each with the gobyexample page that teaches it). LearnPathText
+// renders these; the chat's learn mode walks them one by one.
+type LearnConcept struct {
+	Type     *Type
+	Name     string      // display name (package-disambiguated like the text path)
+	OneLiner string      // the type in one plain line
+	BuildsOn []string    // display names of the concepts this one uses, sorted
+	Features [][2]string // Go ideas it uses: (name, gobyexample URL)
+}
+
+// LearnPath returns the project's concepts ordered so each one only
+// uses ideas introduced earlier — the structured form of
+// LearnPathText.
+func (p *Project) LearnPath() []LearnConcept {
 	// Concepts: exported types, most methods first, capped.
 	var concepts []*Type
 	for _, pkg := range p.Packages {
@@ -253,7 +265,7 @@ func (p *Project) LearnPathText() string {
 		concepts = concepts[:15]
 	}
 	if len(concepts) == 0 {
-		return "No exported types to order — this project's concepts live in its functions. Start with /tour.\n"
+		return nil
 	}
 	// Concepts are keyed by package+name: two packages may both define
 	// a "Container", and they are different concepts.
@@ -330,22 +342,43 @@ func (p *Project) LearnPathText() string {
 		done[keyOf(next)] = true
 		order = append(order, next)
 	}
-	var b strings.Builder
-	b.WriteString(termui.SubHeader("Learn this project in this order — each step only uses ideas from the steps before it:") + "\n\n")
-	for i, t := range order {
-		fmt.Fprintf(&b, "%s %s%s\n", termui.Gold.Apply(fmt.Sprintf("%d.", i+1)),
-			termui.Bright.Apply(display(t)), termui.Muted.Apply(" — "+typeOneLiner(t)))
+	out := make([]LearnConcept, 0, len(order))
+	for _, t := range order {
 		var ds []string
 		for d := range deps[keyOf(t)] {
 			ds = append(ds, display(byKey[d]))
 		}
 		sort.Strings(ds)
-		if len(ds) > 0 {
-			fmt.Fprintf(&b, "   %s %s.\n", termui.Muted.Apply("Builds on:"), strings.Join(ds, ", "))
+		out = append(out, LearnConcept{
+			Type:     t,
+			Name:     display(t),
+			OneLiner: typeOneLiner(t),
+			BuildsOn: ds,
+			Features: features[keyOf(t)],
+		})
+	}
+	return out
+}
+
+// LearnPathText renders LearnPath: the project's concepts ordered so
+// each one only uses ideas introduced earlier, with the Go features
+// each concept leans on linked to gobyexample.
+func (p *Project) LearnPathText() string {
+	order := p.LearnPath()
+	if len(order) == 0 {
+		return "No exported types to order — this project's concepts live in its functions. Start with /tour.\n"
+	}
+	var b strings.Builder
+	b.WriteString(termui.SubHeader("Learn this project in this order — each step only uses ideas from the steps before it:") + "\n\n")
+	for i, c := range order {
+		fmt.Fprintf(&b, "%s %s%s\n", termui.Gold.Apply(fmt.Sprintf("%d.", i+1)),
+			termui.Bright.Apply(c.Name), termui.Muted.Apply(" — "+c.OneLiner))
+		if len(c.BuildsOn) > 0 {
+			fmt.Fprintf(&b, "   %s %s.\n", termui.Muted.Apply("Builds on:"), strings.Join(c.BuildsOn, ", "))
 		}
-		if fs := features[keyOf(t)]; len(fs) > 0 {
+		if len(c.Features) > 0 {
 			var parts []string
-			for j, f := range fs {
+			for j, f := range c.Features {
 				if j >= 2 {
 					break
 				}
