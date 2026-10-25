@@ -14,10 +14,13 @@ import (
 // resolves its root and analyzes quietly itself.
 func withServerProject(t *testing.T, dir string) {
 	t.Helper()
-	oldProj, oldRoot, oldURoot := lastAnalyzeProject, lastAnalyzeRoot, unifiedProjectRoot
-	t.Cleanup(func() { lastAnalyzeProject, lastAnalyzeRoot, unifiedProjectRoot = oldProj, oldRoot, oldURoot })
+	oldProj, oldRoot, oldURoot, oldSnap := lastAnalyzeProject, lastAnalyzeRoot, unifiedProjectRoot, lastAnalyzeSnapshot
+	t.Cleanup(func() {
+		lastAnalyzeProject, lastAnalyzeRoot, unifiedProjectRoot, lastAnalyzeSnapshot = oldProj, oldRoot, oldURoot, oldSnap
+	})
 	lastAnalyzeProject = nil
 	lastAnalyzeRoot = dir
+	lastAnalyzeSnapshot = nil
 	unifiedProjectRoot = dir
 }
 

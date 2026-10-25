@@ -150,6 +150,9 @@ func runDelegate(line string, ask editAsk) bool {
 			recordBrain("composer", false, "delegate refused: project unreadable")
 			return true
 		}
+	} else if !ensureFreshProject() {
+		recordBrain("composer", false, "delegate refused: stale project unreadable")
+		return true
 	}
 	proj := lastAnalyzeProject
 	plan, refusal := proj.PlanEdit(analyze.EditRequest{
@@ -302,7 +305,7 @@ func runDelegate(line string, ask editAsk) bool {
 		recordBrain("composer", false, "delegate rolled back: verify failed")
 		return true
 	}
-	lastAnalyzeProject = fresh
+	setCurrentProject(rootAbs, fresh)
 	tx.commit()
 
 	how := "built the " + tgtPkg.Name + " package and checked"

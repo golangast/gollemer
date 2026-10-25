@@ -53,8 +53,7 @@ func tryCodebaseQuestion(line string) (string, bool) {
 		if err != nil {
 			return "", false
 		}
-		lastAnalyzeRoot = root
-		lastAnalyzeProject = p
+		setCurrentProject(root, p)
 	}
 	out, cands, ok := lastAnalyzeProject.AnswerCands(line)
 	// A pick-list answer arms the numeric reply path; any other
@@ -108,8 +107,7 @@ func handleGoAnalyze(line string) (out string, ok bool) {
 	if err != nil {
 		return fmt.Sprintf("I couldn't analyze %s: %v", root, err), true
 	}
-	lastAnalyzeRoot = root
-	lastAnalyzeProject = p
+	setCurrentProject(root, p)
 	var b strings.Builder
 	if isWhere {
 		b.WriteString(p.WhereToChangeText(task))
@@ -137,8 +135,7 @@ func handleRepoGuide(url string) (string, bool) {
 	if err != nil {
 		return fmt.Sprintf("I couldn't analyze %s: %v", root, err), true
 	}
-	lastAnalyzeRoot = root
-	lastAnalyzeProject = p
+	setCurrentProject(root, p)
 	var b strings.Builder
 	fmt.Fprintf(&b, "Here's where to begin with %s:\n\n", url)
 	b.WriteString(p.Summary())

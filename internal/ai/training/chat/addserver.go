@@ -292,6 +292,9 @@ func runAddServer(line string, ask editAsk) bool {
 			recordBrain("composer", false, "add-server refused: project unreadable")
 			return true
 		}
+	} else if !ensureFreshProject() {
+		recordBrain("composer", false, "add-server refused: stale project unreadable")
+		return true
 	}
 	return executeEditPlan(analyze.EditRequest{Kind: analyze.EditAddServer, File: rel}, ask)
 }

@@ -95,8 +95,7 @@ func analyzeCloned(root, intro string) string {
 	if err != nil {
 		return fmt.Sprintf("%sI couldn't analyze it: %v", intro, err)
 	}
-	lastAnalyzeRoot = root
-	lastAnalyzeProject = p
+	setCurrentProject(root, p)
 	return intro + renderAnalyzeReport(p)
 }
 

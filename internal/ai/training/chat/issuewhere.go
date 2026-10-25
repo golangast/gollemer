@@ -81,8 +81,7 @@ func tryIssueWhere(line string) (string, bool) {
 	if err != nil {
 		return fmt.Sprintf("Couldn't analyze %s/%s: %s", owner, repo, err), true
 	}
-	lastAnalyzeRoot = dir
-	lastAnalyzeProject = p
+	setCurrentProject(dir, p)
 	concepts := analyze.ExtractIssueConcepts(issue.Title + "\n\n" + issue.Body)
 	out := p.GuideIssue(concepts)
 	var b strings.Builder

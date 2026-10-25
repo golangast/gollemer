@@ -24,9 +24,9 @@ import (
 
 	"github.com/golangast/gollemer/internal/ai/analyze"
 	"github.com/golangast/gollemer/internal/ai/neural/nnu/seq2seq"
-	"github.com/golangast/gollemer/pkg/termui"
 	mainvocab "github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
 	"github.com/golangast/gollemer/internal/ai/neural/tokenizer"
+	"github.com/golangast/gollemer/pkg/termui"
 )
 
 // RealModelPath returns the per-domain model file.
@@ -437,36 +437,36 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 									}
 								}
 								if !isDup {
-								// Append to the file directly.
-								fh, err := os.OpenFile(f, os.O_APPEND|os.O_WRONLY, 0644)
-								if err != nil {
-									fmt.Printf("Couldn't update file: %v\n", err)
-								} else {
-									_, err = fh.WriteString("\n" + genCode + "\n")
-									fh.Close()
+									// Append to the file directly.
+									fh, err := os.OpenFile(f, os.O_APPEND|os.O_WRONLY, 0644)
 									if err != nil {
 										fmt.Printf("Couldn't update file: %v\n", err)
 									} else {
-										fmt.Printf("Updated %s.\n", f)
-										// Verify it compiles.
-										fmt.Printf("\nChecking that it compiles...\n")
-										pkgDir := f
-										if idx := strings.LastIndex(f, "/"); idx >= 0 {
-											pkgDir = f[:idx]
-										}
-										cmd := exec.Command("go", "build", "./...")
-										cmd.Dir = pkgDir
-										// If the file is in a subdirectory, build from the project root.
-										// Try the directory containing the file first.
-										if out, err := cmd.CombinedOutput(); err != nil {
-											fmt.Printf("Build failed:\n%s\n", string(out))
-											fmt.Printf("\nIn plain words: %s\n", explainBuildError(string(out)))
+										_, err = fh.WriteString("\n" + genCode + "\n")
+										fh.Close()
+										if err != nil {
+											fmt.Printf("Couldn't update file: %v\n", err)
 										} else {
-											fmt.Printf("✓ It compiles.\n")
+											fmt.Printf("Updated %s.\n", f)
+											// Verify it compiles.
+											fmt.Printf("\nChecking that it compiles...\n")
+											pkgDir := f
+											if idx := strings.LastIndex(f, "/"); idx >= 0 {
+												pkgDir = f[:idx]
+											}
+											cmd := exec.Command("go", "build", "./...")
+											cmd.Dir = pkgDir
+											// If the file is in a subdirectory, build from the project root.
+											// Try the directory containing the file first.
+											if out, err := cmd.CombinedOutput(); err != nil {
+												fmt.Printf("Build failed:\n%s\n", string(out))
+												fmt.Printf("\nIn plain words: %s\n", explainBuildError(string(out)))
+											} else {
+												fmt.Printf("✓ It compiles.\n")
+											}
 										}
 									}
-								}
-							} // end if !isDup
+								} // end if !isDup
 							} else {
 								fmt.Println("Cancelled.")
 							}
@@ -999,8 +999,7 @@ func tryDeterministicAnswer(line, d string, conv *Conversation, r *LineReader, p
 		p := lastAnalyzeProject
 		if p == nil && unifiedProjectRoot != "" {
 			if ap, err := analyze.Analyze(unifiedProjectRoot); err == nil {
-				lastAnalyzeRoot = unifiedProjectRoot
-				lastAnalyzeProject = ap
+				setCurrentProject(unifiedProjectRoot, ap)
 				p = ap
 			}
 		}

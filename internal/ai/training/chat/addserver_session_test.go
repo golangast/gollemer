@@ -69,9 +69,9 @@ func claimChain(line string, ask editAsk, profile *UserProfile) bool {
 // against the folder the chat started in.
 func withChatSession(t *testing.T, dir string, analyzed bool) {
 	t.Helper()
-	oldProj, oldRoot, oldURoot := lastAnalyzeProject, lastAnalyzeRoot, unifiedProjectRoot
+	oldProj, oldRoot, oldURoot, oldSnap := lastAnalyzeProject, lastAnalyzeRoot, unifiedProjectRoot, lastAnalyzeSnapshot
 	t.Cleanup(func() {
-		lastAnalyzeProject, lastAnalyzeRoot, unifiedProjectRoot = oldProj, oldRoot, oldURoot
+		lastAnalyzeProject, lastAnalyzeRoot, unifiedProjectRoot, lastAnalyzeSnapshot = oldProj, oldRoot, oldURoot, oldSnap
 		learnResetForTest()
 	})
 	learnResetForTest()
@@ -83,6 +83,7 @@ func withChatSession(t *testing.T, dir string, analyzed bool) {
 	} else {
 		lastAnalyzeProject = nil
 		lastAnalyzeRoot = ""
+		lastAnalyzeSnapshot = nil
 	}
 }
 

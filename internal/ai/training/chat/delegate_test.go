@@ -298,13 +298,13 @@ func TestDelegateBaselineRedSibling(t *testing.T) {
 	}
 }
 
-// The mirror image: a delegate that would ADD a new error is
-// caught and restored. The collision is invisible to the
-// planner — the colliding file lands after the project was
-// analyzed (a stale index, the way a file edited in another
-// window would be) — so only the baseline-relative verdict can
-// catch it. Mode and bytes must both come back.
-func TestDelegateNewErrorCaughtAndRestored(t *testing.T) {
+// A file landing after the analysis used to be invisible to
+// the planner, leaving the baseline-relative verdict to catch
+// the collision after a write. The freshness invariant retires
+// that scenario: the delegate re-reads before planning, sees
+// both Load functions, and refuses the ambiguous source before
+// anything is written. Mode and bytes stay untouched.
+func TestDelegateExternalNewFileRefreshesBeforePlanning(t *testing.T) {
 	dir := delegateChatFixture(t)
 	withEditsProject(t, dir) // analyzed BEFORE the colliding file exists
 	writeFile(t, dir, "app/load.go", `package main
@@ -321,23 +321,26 @@ func Load(id int) (store.Item, error) { return store.Load(id) }
 	out := captureStdout(t, func() {
 		runDelegate("add a function in app/main.go that calls Load", yes)
 	})
-	if !strings.Contains(out, "restored your files from the on-disk backups") {
-		t.Fatalf("new-error delegate wasn't rolled back:\n%s", out)
+	if !strings.Contains(out, "You changed files outside the chat since I last read this project — I re-read it before planning.") {
+		t.Fatalf("external new file did not trigger the freshness re-read:\n%s", out)
+	}
+	if !strings.Contains(out, `"Load" could mean more than one function here`) {
+		t.Fatalf("refreshed delegate did not see the collision before planning:\n%s", out)
 	}
 	if strings.Contains(out, "Done —") {
-		t.Errorf("rolled-back delegate claims success:\n%s", out)
+		t.Errorf("refused delegate claims success:\n%s", out)
 	}
 	if got := readBack(t, dir, "app/main.go"); got != before {
-		t.Errorf("restored file differs from the original:\n%s", got)
+		t.Errorf("refused delegate changed the file:\n%s", got)
 	}
 	if fi, err := os.Stat(mainAbs); err != nil || fi.Mode().Perm() != 0o755 {
-		t.Errorf("mode after restore = %v (err %v), want 0755", fi.Mode().Perm(), err)
+		t.Errorf("mode after refusal = %v (err %v), want 0755 untouched", fi.Mode().Perm(), err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "app", "main_test.go")); !os.IsNotExist(err) {
-		t.Error("rolled-back delegate left its test skeleton behind")
+		t.Error("refused delegate created its test skeleton")
 	}
 	if n := countDelegateBackups(t, dir); n != 0 {
-		t.Errorf("%d backup files left after a rollback", n)
+		t.Errorf("%d backup files left after a refused delegate", n)
 	}
 }
 

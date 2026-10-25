@@ -715,6 +715,14 @@ func runCreate(line string, ask editAsk) bool {
 		recordBrain("composer", false, "create refused: root missing")
 		return true
 	}
+	// A creation in the current project validates against that
+	// project's packages (the sibling-clause and webserver rules),
+	// so a stale index gets the same re-read as every other write.
+	if lastAnalyzeProject != nil && sameAnalyzedRoot(lastAnalyzeProject.Root, rootAbs) && !ensureFreshProject() {
+		fmt.Printf("%s Not creating that — the project changed outside the chat and I couldn't re-read it.\n", tag)
+		recordBrain("composer", false, "create refused: stale project unreadable")
+		return true
+	}
 	plan, refusal := planCreate(req, rootAbs)
 	if refusal != "" {
 		fmt.Printf("%s Not creating that: %s.\n", tag, strings.TrimSuffix(refusal, "."))
@@ -802,6 +810,9 @@ func runCreate(line string, ask editAsk) bool {
 			return true
 		}
 		how = "I compiled it to check — it builds."
+	}
+	if plan.isGo && lastAnalyzeProject != nil && sameAnalyzedRoot(lastAnalyzeProject.Root, rootAbs) {
+		noteOwnCreatedFile(plan.file.rel)
 	}
 	created := make([]string, 0, len(plan.dirs)+1)
 	for _, d := range plan.dirs {

@@ -171,8 +171,11 @@ func runAssembledEdit(line string, ask editAsk) bool {
 		return false
 	}
 	tag := cTag("gollemer [composer]>")
-	if !ensureProject() {
-		fmt.Printf("%s I need a project to edit — analyze one first (or start me inside one).\n", tag)
+	hadProject := lastAnalyzeProject != nil
+	if !ensureFreshProject() {
+		if !hadProject {
+			fmt.Printf("%s I need a project to edit — analyze one first (or start me inside one).\n", tag)
+		}
 		return true
 	}
 	return executeEditPlan(req, ask)
@@ -257,7 +260,7 @@ func executeEditPlan(req analyze.EditRequest, ask editAsk) bool {
 		return true
 	}
 	tx.commit()
-	lastAnalyzeProject = fresh
+	setCurrentProject(root, fresh)
 	how := "built the project and checked"
 	if !built {
 		how = "re-read the project and checked (no go.mod at its root, so no build to run)"

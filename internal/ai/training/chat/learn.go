@@ -188,8 +188,7 @@ func learnResolveProject(target string) *analyze.Project {
 			fmt.Printf("I couldn't analyze %s: %v\n", root, err)
 			return nil
 		}
-		lastAnalyzeRoot = root
-		lastAnalyzeProject = p
+		setCurrentProject(root, p)
 		return p
 	}
 	if lastAnalyzeProject != nil {

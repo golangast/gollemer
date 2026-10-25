@@ -106,14 +106,15 @@ type State struct {
 // for the duration of a test.
 func withEditsProject(t *testing.T, dir string) {
 	t.Helper()
-	oldProj, oldRoot, oldURoot := lastAnalyzeProject, lastAnalyzeRoot, unifiedProjectRoot
-	t.Cleanup(func() { lastAnalyzeProject, lastAnalyzeRoot, unifiedProjectRoot = oldProj, oldRoot, oldURoot })
+	oldProj, oldRoot, oldURoot, oldSnap := lastAnalyzeProject, lastAnalyzeRoot, unifiedProjectRoot, lastAnalyzeSnapshot
+	t.Cleanup(func() {
+		lastAnalyzeProject, lastAnalyzeRoot, unifiedProjectRoot, lastAnalyzeSnapshot = oldProj, oldRoot, oldURoot, oldSnap
+	})
 	p, err := analyze.Analyze(dir)
 	if err != nil {
 		t.Fatalf("Analyze fixture: %v", err)
 	}
-	lastAnalyzeProject = p
-	lastAnalyzeRoot = dir
+	setCurrentProject(dir, p)
 	unifiedProjectRoot = dir
 }
 

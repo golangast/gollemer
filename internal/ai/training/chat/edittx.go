@@ -351,6 +351,11 @@ func (tx *editTx) rollback() (unrestored []string) {
 			continue
 		}
 		e.restored = true
+		// The restored bytes are the ones the session's index was
+		// built from; re-baseline the freshness snapshot so the
+		// rollback's own mtime bump doesn't read as an outside
+		// change at the next write.
+		noteSnapshotRestoredFile(tx.root, e.rel, e.created)
 		if e.wroteBackup {
 			_ = os.Remove(e.bakAbs)
 		}

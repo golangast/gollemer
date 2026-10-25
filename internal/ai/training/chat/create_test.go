@@ -12,10 +12,13 @@ import (
 // (runCreate resolves the root from the globals, like the loop).
 func withCreateRoot(t *testing.T, dir string) {
 	t.Helper()
-	oldProj, oldRoot, oldURoot := lastAnalyzeProject, lastAnalyzeRoot, unifiedProjectRoot
-	t.Cleanup(func() { lastAnalyzeProject, lastAnalyzeRoot, unifiedProjectRoot = oldProj, oldRoot, oldURoot })
+	oldProj, oldRoot, oldURoot, oldSnap := lastAnalyzeProject, lastAnalyzeRoot, unifiedProjectRoot, lastAnalyzeSnapshot
+	t.Cleanup(func() {
+		lastAnalyzeProject, lastAnalyzeRoot, unifiedProjectRoot, lastAnalyzeSnapshot = oldProj, oldRoot, oldURoot, oldSnap
+	})
 	lastAnalyzeProject = nil
 	lastAnalyzeRoot = dir
+	lastAnalyzeSnapshot = nil
 	unifiedProjectRoot = dir
 }
 

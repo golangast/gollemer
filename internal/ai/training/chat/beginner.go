@@ -376,8 +376,7 @@ func analyzeQuiet(root string) bool {
 		fmt.Printf("I couldn't analyze %s: %v\n", root, err)
 		return false
 	}
-	lastAnalyzeRoot = root
-	lastAnalyzeProject = p
+	setCurrentProject(root, p)
 	return true
 }
 

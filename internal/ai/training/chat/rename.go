@@ -91,8 +91,11 @@ func runRenameEdit(line string, ask editAsk) bool {
 		return false
 	}
 	tag := cTag("gollemer [composer]>")
-	if !ensureProject() {
-		fmt.Printf("%s I need a project to rename in — analyze one first (or start me inside one).\n", tag)
+	hadProject := lastAnalyzeProject != nil
+	if !ensureFreshProject() {
+		if !hadProject {
+			fmt.Printf("%s I need a project to rename in — analyze one first (or start me inside one).\n", tag)
+		}
 		return true
 	}
 	proj := lastAnalyzeProject
@@ -138,8 +141,11 @@ func resolveRenamePick(line string, ask editAsk) (handled bool) {
 	}
 	pendingRenamePick = nil
 	tag := cTag("gollemer [composer]>")
-	if !ensureProject() {
-		fmt.Printf("%s I need the project that list came from — analyze one first.\n", tag)
+	hadProject := lastAnalyzeProject != nil
+	if !ensureFreshProject() {
+		if !hadProject {
+			fmt.Printf("%s I need the project that list came from — analyze one first.\n", tag)
+		}
 		return true
 	}
 	proj := lastAnalyzeProject
@@ -220,7 +226,7 @@ func gateRenamePlan(proj *analyze.Project, target analyze.RenameTarget, newName 
 		return
 	}
 	tx.commit()
-	lastAnalyzeProject = fresh
+	setCurrentProject(root, fresh)
 	how := "built the project and checked"
 	if !built {
 		how = "re-read the project and checked (no go.mod at its root, so no build to run)"
