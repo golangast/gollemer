@@ -1,6 +1,7 @@
-# Gollemer — one chat, six brains.
+# Gollemer — one chat, 17 brains.
 #
-#   make start      the start-here guide: what to do, what it can do, how to expand it
+#   make start      open the chat (terminal only; the guide lives at make guide)
+#   make guide      the start-here guide: what to do, what it can do, how to expand it
 #   make chat       talk to gollemer (unified chat: social, go, code, makefile, gocli, goanalyze)
 #   make debug-chat chat with the thought process and debug prints shown
 #   make classic    the full flag-driven pipeline CLI (local only)
@@ -23,14 +24,18 @@ GOMAXPROCS = 8
 MAIN_CMD   = go run .
 DIR        ?= .
 
-.PHONY: start chat debug-chat classic flow sel explain smarter eval help import watch \
+.PHONY: start guide chat debug-chat classic flow sel explain smarter eval help import watch \
         train-social train-go train-gocode train-gocli train-makefile
 
-## start: The start-here guide — what to do, what it can do, how to expand it
+## start: Talk to gollemer — opens the unified chat (terminal only)
 start:
 	bash scripts/start.sh
 
-## chat: Talk to gollemer — one session, five brains, routed per message
+## guide: The start-here guide — what to do, what it can do, how to expand it
+guide:
+	bash scripts/start.sh guide
+
+## chat: Talk to gollemer — one session, 17 brains, routed per message
 chat:
 	$(MAIN_CMD) -real-chat -domain unified
 
