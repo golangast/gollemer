@@ -119,6 +119,34 @@ func handleGoAnalyze(line string) (out string, ok bool) {
 	return b.String(), true
 }
 
+// handleRepoGuide answers "where do I begin with this repo": the
+// repo is resolved and analyzed exactly like handleGoAnalyze (a
+// GitHub URL goes through the codebase-maps clone cache, and the
+// repo becomes the current project), but the answer is the reading
+// guide — the analyzer's ordered where-to-start path — under the
+// project summary, not the full report. Everything printed comes
+// from the analyzer's real output for this repo.
+func handleRepoGuide(url string) (string, bool) {
+	root, err := resolveAnalyzeRoot(url)
+	if err != nil {
+		return fmt.Sprintf("I couldn't read that codebase: %v", err), true
+	}
+	sp := termui.Spin("Reading this project…")
+	p, err := analyze.Analyze(root)
+	sp.Stop("")
+	if err != nil {
+		return fmt.Sprintf("I couldn't analyze %s: %v", root, err), true
+	}
+	lastAnalyzeRoot = root
+	lastAnalyzeProject = p
+	var b strings.Builder
+	fmt.Fprintf(&b, "Here's where to begin with %s:\n\n", url)
+	b.WriteString(p.Summary())
+	b.WriteString("\n")
+	b.WriteString(p.ReadingGuide())
+	return b.String(), true
+}
+
 // renderAnalyzeReport is the standard codebase report: summary, story,
 // reading guide, visuals. The clone command reuses it so a fresh clone
 // gets the same treatment as analyze.

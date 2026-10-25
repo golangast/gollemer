@@ -581,29 +581,10 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 			continue
 		}
 		// /profile: show what the system has learned about you.
+		// Shared renderer (profile.go) — the unified loop calls the
+		// same function.
 		if line == "/profile" {
-			fmt.Printf("\nWhat I've learned about you:\n\n")
-			fmt.Printf("Frequent commands:\n")
-			for _, s := range profile.FrequentCommands {
-				fmt.Printf("  %dx  %s\n", s.Count, s.Cmd)
-			}
-			fmt.Printf("\nProjects:\n")
-			for dir, pm := range profile.Projects {
-				fmt.Printf("  %s  (last: %s, focus: %s)\n", dir, pm.LastActive.Format("Jan 2 15:04"), pm.Focus)
-			}
-			fmt.Printf("\nLearned patterns:\n")
-			for k, v := range profile.Patterns {
-				fmt.Printf("  %s → %s\n", k, v)
-			}
-			fmt.Printf("\nDirectives:\n")
-			for k, v := range profile.Directives {
-				fmt.Printf("  %s = %v\n", k, v)
-			}
-			fmt.Printf("\nAll stored locally in ~/.gollemer_profile.json — never uploaded.\n\n")
-			// Show learned code style if available.
-			if style := profile.GetCachedStyle(); style != nil {
-				fmt.Printf("\n%s\n", style.StyleSummary())
-			}
+			printProfile(profile)
 			continue
 		}
 		// /learn-style: analyze John's code conventions (Layer 3).
@@ -1159,6 +1140,15 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if line == "/forget" {
 			conv.Clear()
 			fmt.Println("[forgotten — starting fresh]")
+			continue
+		}
+		// /profile: show what the system has learned about you.
+		// The handler used to live only in the single-domain loop,
+		// so in `make chat` the line fell through to the social
+		// brain and got a greeting. Same shared renderer
+		// (profile.go) as the single-domain loop.
+		if line == "/profile" {
+			printProfile(profile)
 			continue
 		}
 		// Beginner five, claimed deterministically before routing —

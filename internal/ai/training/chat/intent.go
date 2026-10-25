@@ -433,7 +433,20 @@ func slotFuncNames(line string, proj *analyze.Project, max int) []*analyze.Func 
 	return out
 }
 
+// tryIntentDispatch runs the intent layer proper
+// (tryIntentDispatchInner) and then the repo-URL floor: if nothing
+// claimed a line that names a whole GitHub repo, the floor answers
+// it with that repo's analysis instead of letting the line fall on
+// to the router, where the social brain could greet it. Every chat
+// loop enters through here, so the floor binds in all of them.
 func tryIntentDispatch(line string, profile *UserProfile) bool {
+	if tryIntentDispatchInner(line, profile) {
+		return true
+	}
+	return tryRepoURLFloor(line)
+}
+
+func tryIntentDispatchInner(line string, profile *UserProfile) bool {
 	// A pending "did you mean…?" gets first claim on the reply —
 	// here, after the beginner commands and the edits parser have
 	// had their turn, the same place the question was asked from.

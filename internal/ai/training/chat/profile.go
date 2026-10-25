@@ -6,6 +6,7 @@ package chat
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -329,6 +330,37 @@ func (p *UserProfile) LogAction(context, action, cwd string) {
 	}
 	defer f.Close()
 	f.Write(append(data, '\n'))
+}
+
+// printProfile renders the /profile answer: what the system has
+// learned about the user, straight from the profile store. Shared
+// by every chat loop — the single-domain loop's inline copy was
+// the only one for a while, which left `make chat` (the unified
+// loop) with no /profile at all: the line fell through to the
+// social brain and got a greeting.
+func printProfile(profile *UserProfile) {
+	fmt.Printf("\nWhat I've learned about you:\n\n")
+	fmt.Printf("Frequent commands:\n")
+	for _, s := range profile.FrequentCommands {
+		fmt.Printf("  %dx  %s\n", s.Count, s.Cmd)
+	}
+	fmt.Printf("\nProjects:\n")
+	for dir, pm := range profile.Projects {
+		fmt.Printf("  %s  (last: %s, focus: %s)\n", dir, pm.LastActive.Format("Jan 2 15:04"), pm.Focus)
+	}
+	fmt.Printf("\nLearned patterns:\n")
+	for k, v := range profile.Patterns {
+		fmt.Printf("  %s → %s\n", k, v)
+	}
+	fmt.Printf("\nDirectives:\n")
+	for k, v := range profile.Directives {
+		fmt.Printf("  %s = %v\n", k, v)
+	}
+	fmt.Printf("\nAll stored locally in ~/.gollemer_profile.json — never uploaded.\n\n")
+	// Show learned code style if available.
+	if style := profile.GetCachedStyle(); style != nil {
+		fmt.Printf("\n%s\n", style.StyleSummary())
+	}
 }
 
 // CachedStyle holds the last learned code style (Layer 3).
