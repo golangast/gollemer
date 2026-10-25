@@ -38,6 +38,7 @@ const (
 	EditAddFunc   = "add_func"
 	EditRename    = "rename"
 	EditAddServer = "add_server"
+	EditDelegate  = "delegate"
 )
 
 // EditRequest is one parsed change request.
@@ -79,6 +80,14 @@ type EditRequest struct {
 	// path) the webserver component goes into. The chat layer
 	// resolves folder targets to a file before planning.
 	File string
+
+	// delegate: the existing .go file (project-relative slash
+	// path) the wrapper is added to, the source function as typed
+	// (bare name or pkg.Name), and the wrapper's name ("" = the
+	// source's name when the target package doesn't declare it).
+	DelegateFile string
+	SourceName   string
+	WrapperName  string
 }
 
 // EditFile is one file's before/after pair inside a plan.
@@ -95,6 +104,17 @@ type EditPlan struct {
 	VerifyDesc string // plain words: what must be true once applied
 	Site       string // LinkPath(file):line of the main change, in the new text
 	Files      []EditFile
+
+	// Delegate-only extras (every other planner leaves them
+	// zero): the provenance line naming the source fact the plan
+	// was built from, extra plan notes shown before the gate,
+	// and the ONE alternate file set the bounded retry may use
+	// when the primary form fails with an import/qualification
+	// error, with its plain-words description.
+	Provenance string
+	Notes      []string
+	AltFiles   []EditFile
+	AltDesc    string
 
 	verify func(after *Project) bool
 }
@@ -136,6 +156,8 @@ func (p *Project) PlanEdit(req EditRequest) (*EditPlan, string) {
 		return p.planRename(req)
 	case EditAddServer:
 		return p.planAddServer(req)
+	case EditDelegate:
+		return p.planDelegate(req)
 	}
 	return nil, "I don't know that kind of edit yet."
 }

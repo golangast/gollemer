@@ -1090,6 +1090,19 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 	showThoughts := debug
 	conv := NewConversation()
 	printStartScreen(projectRoot)
+	// Unfinished-edit backups from an earlier session (a chat
+	// that died mid-edit): name each one with the exact command
+	// that restores its file. We never run the restore ourselves.
+	noticeRoot := projectRoot
+	if noticeRoot == "" {
+		noticeRoot = startFolder()
+	}
+	if abs, aerr := filepath.Abs(noticeRoot); aerr == nil {
+		noticeRoot = abs
+	}
+	for _, n := range leftoverBackupNotices(noticeRoot) {
+		fmt.Println(n)
+	}
 	for {
 		line, rerr := reader.ReadLine(cPrompt("you> "))
 		if rerr == io.EOF {
@@ -1209,6 +1222,16 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// not a directory") or a full report. The composer plans
 		// it, shows the diff, and writes only behind the gate.
 		if tryAddWebServer(line, reader) {
+			continue
+		}
+		// Cross-file delegates, claimed deterministically beside
+		// the other write-side parsers: "add a function in
+		// app/main.go that calls store.Load" writes code in one
+		// file from a real signature in another, assembled by the
+		// analyzer — plan, gate, disk backup, baseline-relative
+		// verdict on the one affected package, and at most one
+		// retry in the plan's named alternate form.
+		if tryDelegate(line, reader) {
 			continue
 		}
 		// Intent layer: a confident trained classification of what
