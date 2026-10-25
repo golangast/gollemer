@@ -13,7 +13,18 @@ package chat
 //
 // Grammar (exactly this):
 //
-//	add|put [a] webserver|web server to|in|into <target>
+//	add|put [a] webserver|web server to|in|into [the] [folder|file] <target>
+//
+// The folder|file word is a designator — it names the KIND of
+// target, never part of its path (creations read those words the
+// same way). The second live failure of this feature was exactly
+// that word: "add webserver to folder jim" kept "folder" in the
+// target, resolved a path that doesn't exist, and refused while
+// recommending a create command with "folder" baked into it —
+// the server never got added. A designator with NO name after it
+// still claims the line (parse returns ok with an empty target)
+// so the flow can ask which file or folder, in webserver terms,
+// instead of letting the sentence fall through to the analyzer.
 //
 // <target> is a .go file or a folder, resolved inside the same
 // root the creations use (the open project, else the folder the
@@ -42,6 +53,10 @@ import (
 // for anything outside the grammar — including the resources
 // claim's "i want to build a webserver" (no add verb, no target)
 // and the creations' "create a file …" (their verb, their claim).
+// A line that matches the grammar but names nothing after the
+// designator ("add a webserver to folder") returns ("", true):
+// claimed, so the caller answers in webserver terms instead of
+// the line falling through to the intent layer.
 func parseAddServer(line string) (string, bool) {
 	s := strings.TrimSpace(line)
 	s = strings.TrimSuffix(s, ".")
@@ -77,14 +92,33 @@ func parseAddServer(line string) (string, bool) {
 	if i >= len(fields) {
 		return "", false
 	}
-	target := strings.TrimSpace(strings.Join(fields[i:], " "))
-	if tl := strings.ToLower(target); strings.HasPrefix(tl, "the ") {
-		target = strings.TrimSpace(target[len("the "):])
+	// The target half: an optional article, an optional
+	// designator (the kind word — creations' grammar slot, never
+	// part of the path), then the target as typed.
+	consumed := false
+	if low[i] == "the" {
+		consumed = true
+		i++
 	}
-	if target == "" {
-		return "", false
+	if i < len(fields) {
+		switch strings.TrimSuffix(low[i], "/") {
+		case "folder", "directory", "file":
+			consumed = true
+			i++
+		}
 	}
-	return target, true
+	if i >= len(fields) {
+		// Words followed the preposition but none of them named
+		// a target ("…to folder", "…to the"): the shape is this
+		// claim's, so it answers — it never falls through.
+		return "", consumed
+	}
+	if target := strings.TrimSpace(strings.Join(fields[i:], " ")); target != "" {
+		return target, true
+	}
+	// Unreachable with real fields (tokens are never empty), but
+	// the claimed-with-no-target contract holds regardless.
+	return "", true
 }
 
 // serverTargetResolve turns a typed target into an absolute path
@@ -213,6 +247,16 @@ func runAddServer(line string, ask editAsk) bool {
 		return false
 	}
 	tag := cTag("gollemer [composer]>")
+	if target == "" {
+		// The grammar matched but named nothing ("add a
+		// webserver to folder"): claimed, and answered in
+		// webserver terms — this sentence must never reach the
+		// intent layer, where a path-less line earns a full
+		// analyze report.
+		fmt.Printf("%s Not adding that: the sentence doesn't name the file or folder — say it like \"add a webserver to jim/main.go\" (a file) or \"add a webserver to jim\" (its folder).\n", tag)
+		recordBrain("composer", false, "add-server refused: no target named")
+		return true
+	}
 	rootRaw := creationRoot()
 	if rootRaw == "" {
 		fmt.Printf("%s I don't have a project folder to edit in — start me inside your project and ask again.\n", tag)
