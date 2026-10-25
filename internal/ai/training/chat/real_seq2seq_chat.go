@@ -178,6 +178,12 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 	var lastChatAction string
 	var pendingSuggestion string
 	shownSuggestions := map[string]bool{}
+	// An edit interrupted by a chat that died mid-transaction
+	// recovers before anything else runs, in every chat mode:
+	// the manifest's restore is offered on a terminal and named
+	// with manual commands when piped; manifest-less leftovers
+	// get their printed notices (edittx.go).
+	startupEditRecovery(projectRoot)
 	if domain == UnifiedDomain {
 		return runUnifiedChat(projectRoot, debug)
 	}
@@ -1090,19 +1096,8 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 	showThoughts := debug
 	conv := NewConversation()
 	printStartScreen(projectRoot)
-	// Unfinished-edit backups from an earlier session (a chat
-	// that died mid-edit): name each one with the exact command
-	// that restores its file. We never run the restore ourselves.
-	noticeRoot := projectRoot
-	if noticeRoot == "" {
-		noticeRoot = startFolder()
-	}
-	if abs, aerr := filepath.Abs(noticeRoot); aerr == nil {
-		noticeRoot = abs
-	}
-	for _, n := range leftoverBackupNotices(noticeRoot) {
-		fmt.Println(n)
-	}
+	// Interrupted-edit recovery already ran in RunRealChat,
+	// before this loop was dispatched.
 	for {
 		line, rerr := reader.ReadLine(cPrompt("you> "))
 		if rerr == io.EOF {

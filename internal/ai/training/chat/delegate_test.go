@@ -5,8 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/golangast/gollemer/internal/ai/analyze"
 )
 
 // delegateChatFixture is the end-to-end stage: a store package
@@ -388,53 +386,6 @@ func TestLeftoverBackupNotices(t *testing.T) {
 		if strings.Contains(n, ".git") {
 			t.Errorf("notice reaches into .git:\n%s", n)
 		}
-	}
-}
-
-// The backup machinery itself, as units: bytes and mode round-
-// trip through a forced restore, and a file the edit created is
-// removed by it.
-func TestDelegateBackupRoundTrip(t *testing.T) {
-	dir := t.TempDir()
-	writeFile(t, dir, "app/main.go", "package main\n")
-	abs := filepath.Join(dir, "app", "main.go")
-	if err := os.Chmod(abs, 0o751); err != nil {
-		t.Fatal(err)
-	}
-	files := []analyze.EditFile{
-		{Rel: "app/main.go", After: []byte("package main\n\n// changed\n")},
-		{Rel: "app/main_test.go", After: []byte("package main\n")},
-	}
-	backups, err := writeDelegateBackups(dir, files)
-	if err != nil {
-		t.Fatalf("writeDelegateBackups: %v", err)
-	}
-	if err := applyDelegateFiles(dir, files, backups); err != nil {
-		t.Fatalf("applyDelegateFiles: %v", err)
-	}
-	if got := readBack(t, dir, "app/main.go"); !strings.Contains(got, "changed") {
-		t.Fatalf("apply didn't write:\n%s", got)
-	}
-	restoreDelegateBackups(backups)
-	if got := readBack(t, dir, "app/main.go"); got != "package main\n" {
-		t.Errorf("restored bytes = %q, want the original", got)
-	}
-	if fi, err := os.Stat(abs); err != nil || fi.Mode().Perm() != 0o751 {
-		t.Errorf("restored mode = %v (err %v), want 0751", fi.Mode().Perm(), err)
-	}
-	if _, err := os.Stat(filepath.Join(dir, "app", "main_test.go")); !os.IsNotExist(err) {
-		t.Error("restore left the created file behind")
-	}
-	if n := countDelegateBackups(t, dir); n != 0 {
-		t.Errorf("%d backup files left after restore", n)
-	}
-	// A second backup round on the same file refuses: the
-	// leftover may be the only copy of an original.
-	if _, err := writeDelegateBackups(dir, files[:1]); err != nil {
-		t.Fatalf("first backup round after restore should work: %v", err)
-	}
-	if _, err := writeDelegateBackups(dir, files[:1]); err == nil || !strings.Contains(err.Error(), "already a leftover backup") {
-		t.Errorf("second backup round = %v, want the leftover refusal", err)
 	}
 }
 

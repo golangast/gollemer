@@ -7,11 +7,13 @@ package chat
 // write, with the weakness list of the classic agent loop
 // engineered out one by one:
 //
-//   - no broken file on failure: before anything is applied, the
-//     original bytes AND permission mode of every touched file go
-//     to a disk backup beside it (.gollemer-backup), so even a
-//     crashed chat leaves a recoverable original — and the next
-//     chat start says so, with the exact restore command.
+//   - no broken file on failure: the write rides the shared
+//     transaction (edittx.go) — before anything is applied, the
+//     original bytes AND permission mode of every touched file
+//     go to a disk backup beside it (.gollemer-backup) under a
+//     transaction manifest, so even a crashed chat leaves a
+//     recoverable original, and the next chat start offers the
+//     restore.
 //   - no lying verdict: the outcome is baseline-relative (the
 //     errorfix rule) and judged on the affected package only —
 //     never a whole-suite run, never blamed for red that predates
@@ -29,12 +31,10 @@ package chat
 import (
 	"context"
 	"fmt"
-	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 	"time"
 
@@ -213,13 +213,12 @@ func runDelegate(line string, ask editAsk) bool {
 		}
 	}
 
-	// Disk backups for every file the plan touches, BEFORE
-	// applying. A leftover backup from an earlier session is a
-	// refusal, not an overwrite: it may be the only copy of the
-	// original.
-	backups, berr := writeDelegateBackups(rootAbs, plan.Files)
+	// The shared write transaction (edittx.go): disk backups
+	// for every file the plan touches, BEFORE applying. A
+	// leftover backup from an earlier session is a refusal, not
+	// an overwrite: it may be the only copy of the original.
+	tx, berr := beginEditTx(rootAbs, plan.Files)
 	if berr != nil {
-		discardDelegateBackups(backups)
 		fmt.Printf("%s Not doing that delegate: %s\n", tag, berr)
 		recordBrain("composer", false, "delegate refused: backup")
 		return true
@@ -227,9 +226,9 @@ func runDelegate(line string, ask editAsk) bool {
 
 	// Apply the primary form, preserving each existing file's
 	// permission mode.
-	if werr := applyDelegateFiles(rootAbs, plan.Files, backups); werr != nil {
-		restoreDelegateBackups(backups)
-		fmt.Printf("%s I couldn't write the edit (%v) — so I restored everything from the on-disk backups; your files are exactly as they were.\n", tag, werr)
+	if _, werr, _ := tx.writeAll(plan.Files); werr != nil {
+		unrestored := tx.rollback()
+		fmt.Printf("%s I couldn't write the edit (%v) — so I restored everything from the on-disk backups — %s.\n", tag, werr, rollbackOutcome(unrestored, proj.LinkPath))
 		recordBrain("composer", false, "delegate write failed; restored")
 		return true
 	}
@@ -241,17 +240,18 @@ func runDelegate(line string, ask editAsk) bool {
 		okVerdict := delegateBuildPasses(afterOut, afterOK, afterKeys, baseKeys, rel, sourceName)
 		if !okVerdict && len(plan.AltFiles) > 0 && delegateRetryApplies(afterOut, baseKeys, rel, sourceName) {
 			// The one bounded retry: the alternate form named
-			// in the plan replaces fileA. The backup still
-			// holds the pre-edit original.
-			if werr := applyDelegateFiles(rootAbs, plan.AltFiles[:1], backups[:1]); werr == nil {
+			// in the plan replaces fileA — inside the SAME
+			// transaction, so a retry failure still restores
+			// the pre-edit original, never the first attempt.
+			if werr := tx.write(plan.AltFiles[0]); werr == nil {
 				altOut, altOK := buildPackageDir(pkgDirAbs)
 				altKeys := buildErrorKeys(altOut)
 				if delegateBuildPasses(altOut, altOK, altKeys, baseKeys, rel, sourceName) {
 					retried = true
 					afterOut, afterOK = altOut, altOK
 				} else {
-					restoreDelegateBackups(backups)
-					fmt.Printf("%s That delegate doesn't build — I tried the retry form named in the plan too, and it didn't build either, so I restored your files from the on-disk backups; everything is exactly as it was.\n", tag)
+					unrestored := tx.rollback()
+					fmt.Printf("%s That delegate doesn't build — I tried the retry form named in the plan too, and it didn't build either, so I restored your files from the on-disk backups — %s.\n", tag, rollbackOutcome(unrestored, proj.LinkPath))
 					fmt.Printf("The build said: %s\nIn plain words: %s\n", strings.TrimSpace(altOut), explainBuildError(altOut))
 					recordBrain("composer", false, "delegate rolled back: build failed after retry")
 					return true
@@ -259,8 +259,8 @@ func runDelegate(line string, ask editAsk) bool {
 			}
 		}
 		if !okVerdict && !retried {
-			restoreDelegateBackups(backups)
-			fmt.Printf("%s That delegate doesn't build, so I restored your files from the on-disk backups — everything is exactly as it was.\n", tag)
+			unrestored := tx.rollback()
+			fmt.Printf("%s That delegate doesn't build, so I restored your files from the on-disk backups — %s.\n", tag, rollbackOutcome(unrestored, proj.LinkPath))
 			fmt.Printf("The build said: %s\nIn plain words: %s\n", strings.TrimSpace(afterOut), explainBuildError(afterOut))
 			recordBrain("composer", false, "delegate rolled back: build failed")
 			return true
@@ -275,16 +275,16 @@ func runDelegate(line string, ask editAsk) bool {
 		if delegatePlanTouchesTests(plan) || tgtPkg.Tests > 0 {
 			if baseTestsOK {
 				if tout, tok := testPackageDir(pkgDirAbs); !tok {
-					restoreDelegateBackups(backups)
-					fmt.Printf("%s That delegate builds, but the %s package's tests fail with it in place, so I restored your files from the on-disk backups.\n", tag, tgtPkg.Name)
+					unrestored := tx.rollback()
+					fmt.Printf("%s That delegate builds, but the %s package's tests fail with it in place, so I restored your files from the on-disk backups — %s.\n", tag, tgtPkg.Name, rollbackOutcome(unrestored, proj.LinkPath))
 					fmt.Printf("The tests said: %s\n", tailLines(tout, 12))
 					recordBrain("composer", false, "delegate rolled back: package tests failed")
 					return true
 				}
 			} else if baseTestCompileOK {
 				if cout, cok := testCompilePackageDir(pkgDirAbs); !cok {
-					restoreDelegateBackups(backups)
-					fmt.Printf("%s That delegate builds, but the package's test files don't compile with it in place, so I restored your files from the on-disk backups.\n", tag)
+					unrestored := tx.rollback()
+					fmt.Printf("%s That delegate builds, but the package's test files don't compile with it in place, so I restored your files from the on-disk backups — %s.\n", tag, rollbackOutcome(unrestored, proj.LinkPath))
 					fmt.Printf("The build said: %s\nIn plain words: %s\n", strings.TrimSpace(cout), explainBuildError(cout))
 					recordBrain("composer", false, "delegate rolled back: test files don't compile")
 					return true
@@ -297,13 +297,13 @@ func runDelegate(line string, ask editAsk) bool {
 	// the source — the spine's structural check.
 	fresh, aerr := analyze.Analyze(rootAbs)
 	if aerr != nil || fresh == nil || !plan.Verify(fresh) {
-		restoreDelegateBackups(backups)
-		fmt.Printf("%s I applied the delegate but couldn't verify it's really there, so I restored your files from the on-disk backups — everything is exactly as it was.\n", tag)
+		unrestored := tx.rollback()
+		fmt.Printf("%s I applied the delegate but couldn't verify it's really there, so I restored your files from the on-disk backups — %s.\n", tag, rollbackOutcome(unrestored, proj.LinkPath))
 		recordBrain("composer", false, "delegate rolled back: verify failed")
 		return true
 	}
 	lastAnalyzeProject = fresh
-	discardDelegateBackups(backups)
+	tx.commit()
 
 	how := "built the " + tgtPkg.Name + " package and checked"
 	if !hasMod {
@@ -502,163 +502,4 @@ func tailLines(out string, n int) string {
 		lines = lines[len(lines)-n:]
 	}
 	return strings.Join(lines, "\n")
-}
-
-// --- disk backups ------------------------------------------------------------
-
-// delegateBackup is one plan file's on-disk safety copy: the
-// original bytes at .<name>.gollemer-backup beside the file, and
-// the original permission mode in a .mode sidecar next to it, so
-// a restore is byte- and mode-exact even across a crashed chat.
-type delegateBackup struct {
-	rel     string
-	abs     string
-	bakAbs  string
-	modeAbs string
-	created bool // the file did not exist before the edit (a created scaffold)
-	mode    os.FileMode
-}
-
-// backupPathsFor names a file's backup and mode sidecar.
-func backupPathsFor(abs string) (bak, mode string) {
-	bak = filepath.Join(filepath.Dir(abs), "."+filepath.Base(abs)+".gollemer-backup")
-	return bak, bak + ".mode"
-}
-
-// writeDelegateBackups writes the backup for every file in
-// files, from the bytes on disk right now. A file with a backup
-// already beside it stops the whole edit: that backup may be the
-// only copy of an earlier original.
-func writeDelegateBackups(root string, files []analyze.EditFile) ([]*delegateBackup, error) {
-	var out []*delegateBackup
-	for _, f := range files {
-		abs := filepath.Join(root, f.Rel)
-		bakAbs, modeAbs := backupPathsFor(abs)
-		b := &delegateBackup{rel: f.Rel, abs: abs, bakAbs: bakAbs, modeAbs: modeAbs}
-		if _, err := os.Stat(bakAbs); err == nil {
-			return out, fmt.Errorf("there's already a leftover backup for %s (%s) — an earlier edit may not have finished. Restore it or remove it first, then ask again", f.Rel, filepath.Base(bakAbs))
-		}
-		fi, err := os.Stat(abs)
-		if os.IsNotExist(err) {
-			b.created = true
-			out = append(out, b)
-			continue
-		}
-		if err != nil {
-			return out, fmt.Errorf("couldn't read %s to back it up: %v", f.Rel, err)
-		}
-		data, err := os.ReadFile(abs)
-		if err != nil {
-			return out, fmt.Errorf("couldn't read %s to back it up: %v", f.Rel, err)
-		}
-		b.mode = fi.Mode().Perm()
-		if err := os.WriteFile(bakAbs, data, 0o600); err != nil {
-			return out, fmt.Errorf("couldn't write the backup for %s: %v", f.Rel, err)
-		}
-		if err := os.WriteFile(modeAbs, []byte(fmt.Sprintf("%04o\n", b.mode)), 0o600); err != nil {
-			return out, fmt.Errorf("couldn't write the backup's mode record for %s: %v", f.Rel, err)
-		}
-		out = append(out, b)
-	}
-	return out, nil
-}
-
-// applyDelegateFiles writes the given plan files, preserving
-// each existing file's recorded permission mode (the spine's
-// writer flattens everything to 0644; this shape restores modes
-// everywhere, including the success path).
-func applyDelegateFiles(root string, files []analyze.EditFile, backups []*delegateBackup) error {
-	byRel := map[string]*delegateBackup{}
-	for _, b := range backups {
-		byRel[b.rel] = b
-	}
-	for _, f := range files {
-		mode := os.FileMode(0o644)
-		if b := byRel[f.Rel]; b != nil && !b.created {
-			mode = b.mode
-		}
-		if err := os.WriteFile(filepath.Join(root, f.Rel), f.After, mode); err != nil {
-			return err
-		}
-		if b := byRel[f.Rel]; b != nil && !b.created {
-			// WriteFile only applies its mode to new files; make
-			// the preserved mode certain on existing ones too.
-			_ = os.Chmod(filepath.Join(root, f.Rel), mode)
-		}
-	}
-	return nil
-}
-
-// restoreDelegateBackups puts every file back from its on-disk
-// backup — bytes and mode — removes files the edit created, and
-// removes the backups themselves. Best effort by design: it
-// runs on paths this flow just wrote.
-func restoreDelegateBackups(backups []*delegateBackup) {
-	for _, b := range backups {
-		if b.created {
-			_ = os.Remove(b.abs)
-		} else if data, err := os.ReadFile(b.bakAbs); err == nil {
-			_ = os.WriteFile(b.abs, data, b.mode)
-			_ = os.Chmod(b.abs, b.mode)
-		}
-		_ = os.Remove(b.bakAbs)
-		_ = os.Remove(b.modeAbs)
-	}
-}
-
-// discardDelegateBackups removes the backups after a successful
-// edit — the originals have been replaced on purpose.
-func discardDelegateBackups(backups []*delegateBackup) {
-	for _, b := range backups {
-		_ = os.Remove(b.bakAbs)
-		_ = os.Remove(b.modeAbs)
-	}
-}
-
-// --- crash recovery notices --------------------------------------------------
-
-// leftoverBackupNotices scans root for unfinished-edit backups
-// (.gollemer-backup files) and renders one notice per file,
-// naming the file each backup belongs to and the exact terminal
-// command that restores it. The chat prints them at start; it
-// never runs the restore itself — the command is the user's to
-// run, the boundary-answer style used everywhere else.
-func leftoverBackupNotices(root string) []string {
-	if root == "" {
-		return nil
-	}
-	var notices []string
-	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		if d.IsDir() {
-			if name := d.Name(); name == ".git" || name == "vendor" {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		name := d.Name()
-		if !strings.HasPrefix(name, ".") || !strings.HasSuffix(name, ".gollemer-backup") {
-			return nil
-		}
-		origName := strings.TrimSuffix(strings.TrimPrefix(name, "."), ".gollemer-backup")
-		origAbs := filepath.Join(filepath.Dir(path), origName)
-		mode := ""
-		if mb, rerr := os.ReadFile(path + ".mode"); rerr == nil {
-			mode = strings.TrimSpace(string(mb))
-		}
-		cmd := fmt.Sprintf("cp %q %q", path, origAbs)
-		if mode != "" {
-			cmd += fmt.Sprintf(" && chmod %s %q", mode, origAbs)
-		}
-		cmd += fmt.Sprintf(" && rm %q", path)
-		if mode != "" {
-			cmd += fmt.Sprintf(" %q", path+".mode")
-		}
-		notices = append(notices, fmt.Sprintf("[leftover backup] %s has an unfinished-edit backup (%s) from an earlier session. To put the original back: %s", origAbs, path, cmd))
-		return nil
-	})
-	sort.Strings(notices)
-	return notices
 }

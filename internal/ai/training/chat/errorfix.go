@@ -226,10 +226,18 @@ func runErrorFix(line string, ask editAsk) bool {
 		out, _ := buildProject(root)
 		baseline = buildErrorKeys(out)
 	}
-	written, werr, wrel := applyPlanFiles(root, plan)
+	// The write transaction: an on-disk backup of the file set
+	// before anything is written (edittx.go).
+	tx, berr := beginEditTx(root, plan.Files)
+	if berr != nil {
+		fmt.Printf("%s Not doing that fix: %s\n", tag, berr)
+		recordBrain("composer", false, "error fix refused: backup")
+		return true
+	}
+	_, werr, wrel := tx.writeAll(plan.Files)
 	if werr != nil {
-		restoreEditFiles(root, plan, written)
-		fmt.Printf("%s I couldn't write %s (%v) — so I restored everything; your files are exactly as they were.\n", tag, proj.LinkPath(wrel), werr)
+		unrestored := tx.rollback()
+		fmt.Printf("%s I couldn't write %s (%v) — so I restored your files from the on-disk backups — %s.\n", tag, proj.LinkPath(wrel), werr, rollbackOutcome(unrestored, proj.LinkPath))
 		recordBrain("composer", false, "error fix write failed; restored")
 		return true
 	}
@@ -246,19 +254,20 @@ func runErrorFix(line string, ask editAsk) bool {
 		// The fix took iff its error is gone, nothing new appeared,
 		// and the build isn't failing for some output-less reason.
 		if after[targetKey] || newErrs > 0 || (!bok && len(after) == 0) {
-			restoreEditFiles(root, plan, len(plan.Files))
-			fmt.Printf("%s That fix didn't take, so I restored your files — everything is exactly as it was.\n", tag)
+			unrestored := tx.rollback()
+			fmt.Printf("%s That fix didn't take, so I restored your files from the on-disk backups — %s.\n", tag, rollbackOutcome(unrestored, proj.LinkPath))
 			fmt.Printf("The build said: %s\nIn plain words: %s\n", strings.TrimSpace(out), explainBuildError(out))
 			recordBrain("composer", false, "error fix rolled back: build failed")
 			return true
 		}
 		fresh, aerr := analyze.Analyze(root)
 		if aerr != nil || fresh == nil || !plan.Verify(fresh) {
-			restoreEditFiles(root, plan, len(plan.Files))
-			fmt.Printf("%s I applied the fix but couldn't verify it is really there, so I restored your files — everything is exactly as it was.\n", tag)
+			unrestored := tx.rollback()
+			fmt.Printf("%s I applied the fix but couldn't verify it is really there, so I restored your files from the on-disk backups — %s.\n", tag, rollbackOutcome(unrestored, proj.LinkPath))
 			recordBrain("composer", false, "error fix rolled back: verify failed")
 			return true
 		}
+		tx.commit()
 		lastAnalyzeProject = fresh
 		if bok {
 			fmt.Printf("%s Fixed — %s. The project builds clean now.\n", tag, plan.VerifyDesc)
@@ -272,11 +281,12 @@ func runErrorFix(line string, ask editAsk) bool {
 	// mirroring the edits spine.
 	fresh, aerr := analyze.Analyze(root)
 	if aerr != nil || fresh == nil || !plan.Verify(fresh) {
-		restoreEditFiles(root, plan, len(plan.Files))
-		fmt.Printf("%s I applied the fix but couldn't verify it is really there, so I restored your files — everything is exactly as it was.\n", tag)
+		unrestored := tx.rollback()
+		fmt.Printf("%s I applied the fix but couldn't verify it is really there, so I restored your files from the on-disk backups — %s.\n", tag, rollbackOutcome(unrestored, proj.LinkPath))
 		recordBrain("composer", false, "error fix rolled back: verify failed")
 		return true
 	}
+	tx.commit()
 	lastAnalyzeProject = fresh
 	fmt.Printf("%s Fixed — %s (no go.mod at the project root, so there was no build to check against).\n", tag, plan.VerifyDesc)
 	recordBrain("composer", true, "error fix applied: "+req.Class)

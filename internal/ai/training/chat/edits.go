@@ -214,11 +214,22 @@ func executeEditPlan(req analyze.EditRequest, ask editAsk) bool {
 	if root == "" {
 		root = lastAnalyzeRoot
 	}
-	// Apply. Any write failure restores every file already written.
-	written, werr, wrel := applyPlanFiles(root, plan)
+	// The write transaction: every touched file's original bytes
+	// and mode go to an on-disk backup before anything is
+	// written, so even a crash mid-apply leaves a recoverable
+	// original (edittx.go).
+	tx, berr := beginEditTx(root, plan.Files)
+	if berr != nil {
+		fmt.Printf("%s Not doing that edit: %s\n", tag, berr)
+		recordBrain("composer", false, "edit refused: backup")
+		return true
+	}
+	// Apply. Any write failure rolls the whole set back from
+	// the on-disk backups.
+	_, werr, wrel := tx.writeAll(plan.Files)
 	if werr != nil {
-		restoreEditFiles(root, plan, written)
-		fmt.Printf("%s I couldn't write %s (%v) — so I restored everything; your files are exactly as they were.\n", tag, proj.LinkPath(wrel), werr)
+		unrestored := tx.rollback()
+		fmt.Printf("%s I couldn't write %s (%v) — so I restored your files from the on-disk backups — %s.\n", tag, proj.LinkPath(wrel), werr, rollbackOutcome(unrestored, proj.LinkPath))
 		recordBrain("composer", false, "edit write failed; restored")
 		return true
 	}
@@ -229,8 +240,8 @@ func executeEditPlan(req analyze.EditRequest, ask editAsk) bool {
 	if _, serr := os.Stat(filepath.Join(root, "go.mod")); serr == nil {
 		out, bok := buildProject(root)
 		if !bok {
-			restoreEditFiles(root, plan, len(plan.Files))
-			fmt.Printf("%s That edit doesn't build, so I restored your files — everything is exactly as it was.\n", tag)
+			unrestored := tx.rollback()
+			fmt.Printf("%s That edit doesn't build, so I restored your files from the on-disk backups — %s.\n", tag, rollbackOutcome(unrestored, proj.LinkPath))
 			fmt.Printf("The build said: %s\nIn plain words: %s\n", strings.TrimSpace(out), explainBuildError(out))
 			recordBrain("composer", false, "edit rolled back: build failed")
 			return true
@@ -240,11 +251,12 @@ func executeEditPlan(req analyze.EditRequest, ask editAsk) bool {
 	// Re-analyze and verify the intended structure now exists.
 	fresh, aerr := analyze.Analyze(root)
 	if aerr != nil || fresh == nil || !plan.Verify(fresh) {
-		restoreEditFiles(root, plan, len(plan.Files))
-		fmt.Printf("%s I applied the edit but couldn't verify the change is really there, so I restored your files — everything is exactly as it was.\n", tag)
+		unrestored := tx.rollback()
+		fmt.Printf("%s I applied the edit but couldn't verify the change is really there, so I restored your files from the on-disk backups — %s.\n", tag, rollbackOutcome(unrestored, proj.LinkPath))
 		recordBrain("composer", false, "edit rolled back: verify failed")
 		return true
 	}
+	tx.commit()
 	lastAnalyzeProject = fresh
 	how := "built the project and checked"
 	if !built {
@@ -265,26 +277,4 @@ func buildProject(root string) (string, bool) {
 	cmd.Dir = root
 	out, err := cmd.CombinedOutput()
 	return string(out), err == nil
-}
-
-// applyPlanFiles writes a plan's files in order. On failure it
-// reports how many files were written and which one failed, so the
-// caller can restore exactly the written prefix.
-func applyPlanFiles(root string, plan *analyze.EditPlan) (written int, err error, failedRel string) {
-	for _, f := range plan.Files {
-		if werr := os.WriteFile(filepath.Join(root, f.Rel), f.After, 0644); werr != nil {
-			return written, werr, f.Rel
-		}
-		written++
-	}
-	return written, nil, ""
-}
-
-// restoreEditFiles writes back the original bytes of the first n
-// files of a plan. Best effort by design: it runs on paths the plan
-// itself produced from files that were just read.
-func restoreEditFiles(root string, plan *analyze.EditPlan, n int) {
-	for i := 0; i < n && i < len(plan.Files); i++ {
-		_ = os.WriteFile(filepath.Join(root, plan.Files[i].Rel), plan.Files[i].Before, 0644)
-	}
 }

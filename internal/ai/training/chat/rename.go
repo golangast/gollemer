@@ -185,10 +185,18 @@ func gateRenamePlan(proj *analyze.Project, target analyze.RenameTarget, newName 
 	if root == "" {
 		root = lastAnalyzeRoot
 	}
-	written, werr, wrel := applyPlanFiles(root, plan)
+	// The write transaction: on-disk backups of the whole set
+	// before anything is written (edittx.go).
+	tx, berr := beginEditTx(root, plan.Files)
+	if berr != nil {
+		fmt.Printf("%s Not renaming: %s\n", tag, berr)
+		recordBrain("composer", false, "rename refused: backup")
+		return
+	}
+	_, werr, wrel := tx.writeAll(plan.Files)
 	if werr != nil {
-		restoreEditFiles(root, plan, written)
-		fmt.Printf("%s I couldn't write %s (%v) — so I restored everything; your files are exactly as they were.\n", tag, proj.LinkPath(wrel), werr)
+		unrestored := tx.rollback()
+		fmt.Printf("%s I couldn't write %s (%v) — so I restored your files from the on-disk backups — %s.\n", tag, proj.LinkPath(wrel), werr, rollbackOutcome(unrestored, proj.LinkPath))
 		recordBrain("composer", false, "rename write failed; restored")
 		return
 	}
@@ -196,8 +204,8 @@ func gateRenamePlan(proj *analyze.Project, target analyze.RenameTarget, newName 
 	if _, serr := os.Stat(filepath.Join(root, "go.mod")); serr == nil {
 		out, bok := buildProject(root)
 		if !bok {
-			restoreEditFiles(root, plan, len(plan.Files))
-			fmt.Printf("%s That rename doesn't build, so I restored your files — everything is exactly as it was.\n", tag)
+			unrestored := tx.rollback()
+			fmt.Printf("%s That rename doesn't build, so I restored your files from the on-disk backups — %s.\n", tag, rollbackOutcome(unrestored, proj.LinkPath))
 			fmt.Printf("The build said: %s\nIn plain words: %s\n", strings.TrimSpace(out), explainBuildError(out))
 			recordBrain("composer", false, "rename rolled back: build failed")
 			return
@@ -206,11 +214,12 @@ func gateRenamePlan(proj *analyze.Project, target analyze.RenameTarget, newName 
 	}
 	fresh, aerr := analyze.Analyze(root)
 	if aerr != nil || fresh == nil || !plan.Verify(fresh) {
-		restoreEditFiles(root, plan, len(plan.Files))
-		fmt.Printf("%s I applied the rename but couldn't verify the change is really there, so I restored your files — everything is exactly as it was.\n", tag)
+		unrestored := tx.rollback()
+		fmt.Printf("%s I applied the rename but couldn't verify the change is really there, so I restored your files from the on-disk backups — %s.\n", tag, rollbackOutcome(unrestored, proj.LinkPath))
 		recordBrain("composer", false, "rename rolled back: verify failed")
 		return
 	}
+	tx.commit()
 	lastAnalyzeProject = fresh
 	how := "built the project and checked"
 	if !built {
