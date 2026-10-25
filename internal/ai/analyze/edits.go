@@ -32,11 +32,12 @@ import (
 
 // Edit kinds the chat's sentence parser can request.
 const (
-	EditAddCase  = "add_case"
-	EditAddField = "add_field"
-	EditRegister = "register"
-	EditAddFunc  = "add_func"
-	EditRename   = "rename"
+	EditAddCase   = "add_case"
+	EditAddField  = "add_field"
+	EditRegister  = "register"
+	EditAddFunc   = "add_func"
+	EditRename    = "rename"
+	EditAddServer = "add_server"
 )
 
 // EditRequest is one parsed change request.
@@ -73,6 +74,11 @@ type EditRequest struct {
 	RenameTo    string
 	RenameKind  string
 	RenameScope string
+
+	// add_server: the existing .go file (project-relative slash
+	// path) the webserver component goes into. The chat layer
+	// resolves folder targets to a file before planning.
+	File string
 }
 
 // EditFile is one file's before/after pair inside a plan.
@@ -128,6 +134,8 @@ func (p *Project) PlanEdit(req EditRequest) (*EditPlan, string) {
 		return p.planCloneFunc(req)
 	case EditRename:
 		return p.planRename(req)
+	case EditAddServer:
+		return p.planAddServer(req)
 	}
 	return nil, "I don't know that kind of edit yet."
 }
@@ -753,7 +761,15 @@ func (p *Project) planImportEdits(fn *Func, fileAST *ast.File, fset *token.FileS
 		specs = append(specs, specByRoot[r])
 	}
 	sort.Strings(specs)
-	// Find the import GenDecl, if any.
+	return insertImportSpecs(fileAST, fset, src, specs), ""
+}
+
+// insertImportSpecs returns the text edits that add specs (full
+// import specs like `"fmt"`) to a file's imports: into the
+// existing block before its closing paren, wrapped around a lone
+// import, or as a new block right after the package clause when
+// the file imports nothing yet.
+func insertImportSpecs(fileAST *ast.File, fset *token.FileSet, src []byte, specs []string) []textEdit {
 	for _, d := range fileAST.Decls {
 		gd, ok := d.(*ast.GenDecl)
 		if !ok || gd.Tok != token.IMPORT {
@@ -766,7 +782,7 @@ func (p *Project) planImportEdits(fn *Func, fileAST *ast.File, fset *token.FileS
 				start: lineStartOffset(src, rbraceLine),
 				end:   lineStartOffset(src, rbraceLine),
 				text:  "\t" + strings.Join(specs, "\n\t") + "\n",
-			}}, ""
+			}}
 		}
 		// A lone import: wrap it into a block.
 		declLine := lineOfPos(fset, gd.Pos())
@@ -778,7 +794,7 @@ func (p *Project) planImportEdits(fn *Func, fileAST *ast.File, fset *token.FileS
 			start: lineStartOffset(src, declLine),
 			end:   lineStartOffset(src, declEnd+1),
 			text:  block + "\n",
-		}}, ""
+		}}
 	}
 	// No imports at all: add a block right after the package clause.
 	pkgLine := lineOfPos(fset, fileAST.Name.Pos())
@@ -787,7 +803,7 @@ func (p *Project) planImportEdits(fn *Func, fileAST *ast.File, fset *token.FileS
 		start: lineStartOffset(src, pkgLine+1),
 		end:   lineStartOffset(src, pkgLine+1),
 		text:  block,
-	}}, ""
+	}}
 }
 
 // verifyCaseExists re-reads the edited file and confirms the switch

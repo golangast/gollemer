@@ -17,7 +17,7 @@ func (p *Project) Summary() string {
 	stats := []termui.Pair{
 		{Key: "Packages", Value: fmt.Sprintf("%d", len(p.Packages))},
 		{Key: "Go files", Value: fmt.Sprintf("%d", p.Files)},
-		{Key: "Lines", Value: fmt.Sprintf("~%d", p.Lines)},
+		{Key: "Lines", Value: fmt.Sprintf("%d", p.Lines)},
 	}
 	ext := 0
 	for _, pkg := range p.Packages {

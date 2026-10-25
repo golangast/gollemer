@@ -57,6 +57,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golangast/gollemer/internal/ai/analyze"
 	"github.com/golangast/gollemer/pkg/termui"
 )
 
@@ -462,27 +463,11 @@ func siblingPackage(dir string) string {
 }
 
 // webserverSource is the one starter v1 can write: a small,
-// working net/http server. Fixed in code — never generated, never
-// model output — so it compiles the same way every time.
-const webserverSource = `package main
-
-import (
-	"fmt"
-	"net/http"
-)
-
-// A tiny webserver: every page gets one friendly line back.
-// Run it with: go run main.go — then open http://localhost:8080
-func main() {
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, "hello — your webserver is running")
-	})
-	fmt.Println("listening at http://localhost:8080 — press Ctrl+C to stop")
-	if err := http.ListenAndServe(":8080", nil); err != nil {
-		fmt.Println("the server stopped:", err)
-	}
-}
-`
+// working net/http server. The text itself lives with the
+// composer (analyze.WebServerSource) — the same component the
+// "add a webserver to…" edit splices into an existing file — so
+// the two write paths can never drift into two different servers.
+const webserverSource = analyze.WebServerSource
 
 // --- the plan ---
 

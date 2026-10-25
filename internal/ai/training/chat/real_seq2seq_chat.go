@@ -1201,6 +1201,16 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if tryCreate(line, reader) {
 			continue
 		}
+		// Add-a-webserver edits, claimed deterministically beside
+		// the creations and before the intent layer: "add a
+		// webserver to jim/main.go" is an edit to an existing file,
+		// and left to the classifier it was read as an analyze
+		// request and answered with a dead end ("jim/main.go is
+		// not a directory") or a full report. The composer plans
+		// it, shows the diff, and writes only behind the gate.
+		if tryAddWebServer(line, reader) {
+			continue
+		}
 		// Intent layer: a confident trained classification of what
 		// the user wants, in their own words — no memorized commands.
 		if tryIntentDispatch(line, profile) {

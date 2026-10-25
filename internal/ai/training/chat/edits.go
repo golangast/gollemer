@@ -175,6 +175,19 @@ func runAssembledEdit(line string, ask editAsk) bool {
 		fmt.Printf("%s I need a project to edit — analyze one first (or start me inside one).\n", tag)
 		return true
 	}
+	return executeEditPlan(req, ask)
+}
+
+// executeEditPlan runs the one write spine for an assembled edit
+// request whose project is already the current one (the caller
+// acquired it — runAssembledEdit via ensureProject, the webserver
+// flow via its own root rule): plan from the project's own code,
+// show the diff, ask [y/n]. On yes: apply, go build, re-analyze,
+// verify the intended structure exists. On any failure after
+// applying, the original bytes go back and the reply says exactly
+// that. On no: nothing was ever written.
+func executeEditPlan(req analyze.EditRequest, ask editAsk) bool {
+	tag := cTag("gollemer [composer]>")
 	proj := lastAnalyzeProject
 	plan, refusal := proj.PlanEdit(req)
 	if refusal != "" || plan == nil {
