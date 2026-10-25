@@ -6,8 +6,9 @@ package analyze
 // plan is shown carrying it). It holds the scaffold to what it
 // claims to be: a test function with the scaffold's name that
 // SKIPS before it runs anything, whose args struct's fields
-// match the wrapper's signature field for field, and whose run
-// loop calls the wrapper by its real name.
+// match the scaffolded function's signature field for field,
+// and whose run loop calls that function by its real name —
+// through the receiver field, for a method.
 
 import (
 	"go/ast"
@@ -80,7 +81,10 @@ func checkScaffoldAST(fset *token.FileSet, fileAST *ast.File, stubName string, b
 	if !skips {
 		return stubName + " doesn't skip itself before its cases — its placeholder expectations could run"
 	}
-	// The run loop must call the wrapper by its real name.
+	// The run loop must call the function under test by its
+	// real name: a bare call for a plain function, and for a
+	// method a call through the receiver field —
+	// tc.args.<recv>.<Method>(...).
 	calls := false
 	runs := false
 	ast.Inspect(decl, func(n ast.Node) bool {
@@ -88,7 +92,13 @@ func checkScaffoldAST(fset *token.FileSet, fileAST *ast.File, stubName string, b
 		if !ok {
 			return true
 		}
-		if id, ok := call.Fun.(*ast.Ident); ok && id.Name == b.g.wrapper {
+		if b.recvName != "" {
+			if sel, ok := call.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == b.g.wrapper {
+				if x, ok := sel.X.(*ast.SelectorExpr); ok && x.Sel.Name == b.recvName {
+					calls = true
+				}
+			}
+		} else if id, ok := call.Fun.(*ast.Ident); ok && id.Name == b.g.wrapper {
 			calls = true
 		}
 		if sel, ok := call.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "Run" {
@@ -129,12 +139,12 @@ func checkScaffoldAST(fset *token.FileSet, fileAST *ast.File, stubName string, b
 		}
 	}
 	if len(fields) != len(b.params) {
-		return "the args struct's fields don't match the wrapper's parameters"
+		return "the args struct's fields don't match the scaffolded function's parameters"
 	}
 	norm := func(s string) string { return strings.Join(strings.Fields(s), "") }
 	for i, f := range fields {
 		if f.name != b.params[i].name || norm(exprText(fset, f.expr)) != norm(b.params[i].typ) {
-			return "the args struct's fields don't match the wrapper's parameters"
+			return "the args struct's fields don't match the scaffolded function's parameters"
 		}
 	}
 	return ""

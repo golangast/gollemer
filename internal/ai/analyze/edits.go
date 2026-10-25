@@ -105,14 +105,19 @@ type EditPlan struct {
 	Site       string // LinkPath(file):line of the main change, in the new text
 	Files      []EditFile
 
+	// Notes are extra plan lines shown before the gate: the
+	// delegate's companions to its provenance line, and the
+	// scaffold notes (present or honestly omitted) of every
+	// shape that carries one.
+	Notes []string
+
 	// Delegate-only extras (every other planner leaves them
-	// zero): the provenance line naming the source fact the plan
-	// was built from, extra plan notes shown before the gate,
-	// and the ONE alternate file set the bounded retry may use
-	// when the primary form fails with an import/qualification
-	// error, with its plain-words description.
+	// zero): the provenance line naming the source fact the
+	// plan was built from, and the ONE alternate file set the
+	// bounded retry may use when the primary form fails with an
+	// import/qualification error, with its plain-words
+	// description.
 	Provenance string
-	Notes      []string
 	AltFiles   []EditFile
 	AltDesc    string
 
@@ -563,7 +568,7 @@ func (p *Project) planAddCase(req EditRequest) (*EditPlan, string) {
 		newExpr, site.subject, fn.Display(), p.LinkPath(fn.File), strings.Join(tmplExprs, ", "))
 	subject, fname, expr := site.subject, fn.Name, newExpr
 	rel := fn.File
-	return &EditPlan{
+	plan := &EditPlan{
 		Summary:    summary,
 		VerifyDesc: fmt.Sprintf("the switch on %s in %s now has a case for %s", subject, fname, expr),
 		Site:       fmt.Sprintf("%s:%d", p.LinkPath(rel), siteLine),
@@ -571,7 +576,29 @@ func (p *Project) planAddCase(req EditRequest) (*EditPlan, string) {
 		verify: func(after *Project) bool {
 			return verifyCaseExists(after.Root, rel, fname, expr)
 		},
-	}, ""
+	}
+	// The case edit's scaffold: aimed at the function holding
+	// the switch, as it stands with the new case in place. The
+	// cases exercise its inputs generally — no generated case
+	// claims to pin the new branch's behavior; that case is
+	// the reader's to add in the TODOs, and the header and
+	// note both say so.
+	display := scaffoldDisplay(fn)
+	p.attachScaffold(plan, scaffoldTarget{
+		fn: fn, decl: decl, fset: fset, fileAST: fileAST,
+		name: fn.Name, display: display,
+		entry: entryReason(fn.Name),
+	}, scaffoldPresentation{
+		display:    display,
+		verifyNoun: "this edit",
+		intro: "%s is a test scaffold assembled by gollemer for " + display + ", written\n" +
+			"alongside the new " + newExpr + " case this edit adds to its switch. The\n" +
+			"cases below exercise " + display + "'s inputs generally — add a case for\n" +
+			"the new branch in the TODOs.",
+		accompany: "It scaffolds " + display + " as it stands with the new case in place — " +
+			"the cases exercise its inputs generally, and a case for the new " + newExpr + " branch is yours to add in the TODOs.",
+	})
+	return plan, ""
 }
 
 // shapeCaseExpr makes the user's case expression match the sibling
@@ -1090,7 +1117,7 @@ func (p *Project) planAddField(req EditRequest) (*EditPlan, string) {
 	if len(files) > 0 {
 		siteLine = insertedLine(files[0].After, req.FieldName+" "+req.FieldType)
 	}
-	return &EditPlan{
+	plan := &EditPlan{
 		Summary:    summary,
 		VerifyDesc: fmt.Sprintf("the %s struct now has a %s field", typeName, fieldName),
 		Site:       fmt.Sprintf("%s:%d", p.LinkPath(t.File), siteLine),
@@ -1109,7 +1136,37 @@ func (p *Project) planAddField(req EditRequest) (*EditPlan, string) {
 			}
 			return false
 		},
-	}, ""
+	}
+	// The field edit's scaffold: a field has no signature to
+	// scaffold against, so the scaffold aims at the one
+	// function the index singles out for the struct — its
+	// constructor, else its most-called method — as it stands
+	// with the new field in place. When the index singles out
+	// nothing, the plan carries the reason instead: inventing
+	// a target would be fiction.
+	if tf, why, reason := p.fieldScaffoldTarget(t); tf != nil {
+		if tgt, rerr := p.scaffoldTargetFor(tf); rerr == "" {
+			pres := scaffoldPresentation{
+				display:    tgt.display,
+				verifyNoun: "this edit",
+				accompany:  fmt.Sprintf("The scaffold aims at %s, %s.", tgt.display, why),
+			}
+			if tf.Receiver == "" {
+				pres.intro = "%s is a test scaffold assembled by gollemer for " + tgt.display + ", the\n" +
+					"constructor of " + t.Name + ", written alongside the " + req.FieldName + " field this\n" +
+					"edit adds to " + t.Name + "."
+			} else {
+				pres.intro = "%s is a test scaffold assembled by gollemer for " + tgt.display + ",\n" +
+					"written alongside the " + req.FieldName + " field this edit adds to " + t.Name + "."
+			}
+			p.attachScaffold(plan, tgt, pres)
+		} else {
+			plan.Notes = append(plan.Notes, "No test scaffold added: "+rerr)
+		}
+	} else {
+		plan.Notes = append(plan.Notes, "No test scaffold added: "+reason)
+	}
+	return plan, ""
 }
 
 // offsetIn converts a position from a parsed file to a byte offset.
@@ -1519,7 +1576,7 @@ func (p *Project) planCloneFunc(req EditRequest) (*EditPlan, string) {
 		note = fmt.Sprintf(" The body is copied word for word — where it mentioned %s, it still does; check the diff for those spots.", sib.Name)
 	}
 	pkgDir, recv, newName, relFile := sib.PkgDir, sib.Receiver, req.NewName, sib.File
-	return &EditPlan{
+	plan := &EditPlan{
 		Summary:    fmt.Sprintf("Add %s to %s, copied from %s (%s:%d).%s", req.NewName, p.LinkPath(sib.File), sib.Display(), p.LinkPath(sib.File), sib.Line, note),
 		VerifyDesc: fmt.Sprintf("a function named %s now exists in %s", newName, relFile),
 		Site:       fmt.Sprintf("%s:%d", p.LinkPath(relFile), siteLine),
@@ -1537,7 +1594,26 @@ func (p *Project) planCloneFunc(req EditRequest) (*EditPlan, string) {
 			}
 			return false
 		},
-	}, ""
+	}
+	// The clone's scaffold: the new function has the sibling's
+	// real signature, so it scaffolds exactly as the delegate's
+	// wrapper does — aimed at the NEW name, from the sibling's
+	// declaration.
+	display := req.NewName
+	if sib.Receiver != "" {
+		display = strings.Trim(sib.Receiver, "*") + "." + req.NewName
+	}
+	p.attachScaffold(plan, scaffoldTarget{
+		fn: sib, decl: decl, fset: fset, fileAST: fileAST,
+		name: req.NewName, display: display,
+		entry: entryReason(req.NewName),
+	}, scaffoldPresentation{
+		display:    display,
+		verifyNoun: "this edit",
+		intro: "%s is a test scaffold assembled by gollemer for " + display + ", the\n" +
+			"function this edit copies from " + sib.Name + ".",
+	})
+	return plan, ""
 }
 
 // --- unified diff -------------------------------------------------------------

@@ -389,6 +389,12 @@ type delegateGen struct {
 	srcImports map[string]string // qualifier -> path, in the source file
 	tgtImports map[string]string // path -> effective qualifier, in the target file
 
+	// recvTypeParams names the type parameters a method
+	// target's receiver type declares (a method on a generic
+	// type). Only the scaffold reads it — a delegate's source
+	// is never a method, so planDelegate leaves it empty.
+	recvTypeParams []string
+
 	needed map[string]string // path -> qualifier the generated code uses (per form)
 }
 
@@ -592,15 +598,14 @@ func (g *delegateGen) targetRelSource() string { return g.src.File }
 
 func (g *delegateGen) typeParamNames() []string {
 	var out []string
-	if g.srcDecl.Type.TypeParams == nil {
-		return nil
-	}
-	for _, f := range g.srcDecl.Type.TypeParams.List {
-		for _, n := range f.Names {
-			out = append(out, n.Name)
+	if g.srcDecl.Type.TypeParams != nil {
+		for _, f := range g.srcDecl.Type.TypeParams.List {
+			for _, n := range f.Names {
+				out = append(out, n.Name)
+			}
 		}
 	}
-	return out
+	return append(out, g.recvTypeParams...)
 }
 
 func (g *delegateGen) renderTypeParams(qual string) string {

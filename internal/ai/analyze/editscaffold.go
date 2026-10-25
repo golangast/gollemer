@@ -25,11 +25,16 @@ package analyze
 //     never silently pass as if they were checks. Skipped is
 //     the truthful state: present, runnable, visibly unfinished.
 //
-// The scaffold is a courtesy artifact of the delegate shape
-// only. It is never verification evidence: the chat's verdict
-// rests on the build and the package's pre-existing tests, the
-// bounded retry never touches it, and nothing in this file
-// refines an expectation from an observed result.
+// The scaffold began as a courtesy artifact of the delegate
+// shape (5f64d54); the extension generalized the entry point
+// (planScaffold, gens built by scaffoldGenFor in
+// editscaffold_attach.go) so the clone, add-case, and
+// add-field shapes scaffold their functions through the same
+// machinery — one generator, one type table, one honesty
+// standard. It is never verification evidence: the chat's
+// verdict rests on the build and the package's pre-existing
+// tests, the bounded retry never touches it, and nothing in
+// this file refines an expectation from an observed result.
 
 import (
 	"fmt"
@@ -49,6 +54,7 @@ type scaffoldParam struct {
 	expr     ast.Expr
 	ctx      scaffoldCtx
 	variadic bool
+	receiver bool // a method's receiver: args-struct field 0, never a call argument
 }
 
 // scaffoldResult is one wrapper result: its rendered type and
@@ -69,6 +75,20 @@ type scaffoldCtx struct {
 	pkgDir  string
 }
 
+// scaffoldPresentation is how one edit shape presents its
+// scaffold: the header's opening sentence(s), the function's
+// prose name for the plan note, an extra note sentence saying
+// what edit the scaffold accompanies ("" when the scaffolded
+// function IS the edit, as for the delegate and the clone), and
+// the noun the header's honesty line verifies nothing with.
+// The zero value is the delegate's presentation.
+type scaffoldPresentation struct {
+	intro      string // header opening, %s = the test's name; lines split on \n
+	display    string // prose name of the function under test
+	accompany  string // extra plan-note sentence, or ""
+	verifyNoun string // "the delegate" / "this edit"
+}
+
 // scaffoldBuilder assembles one scaffold. It renders types
 // through the delegate generator (so qualification and import
 // collection match the wrapper's), with the generator's target
@@ -76,6 +96,12 @@ type scaffoldCtx struct {
 type scaffoldBuilder struct {
 	g    *delegateGen
 	qual string // the source package's qualifier as the test file uses it
+	pres scaffoldPresentation
+
+	// recvName is the args-struct field holding a method
+	// target's receiver ("" for a plain function): the run
+	// loop's call is tc.args.<recvName>.<Method>(...).
+	recvName string
 
 	params  []scaffoldParam
 	results []scaffoldResult
@@ -119,31 +145,52 @@ func (b *scaffoldBuilder) valueResults() []scaffoldResult {
 
 // --- the plan's second file --------------------------------------------------
 
-// delegateScaffold builds the scaffold EditFile for the plan
-// (replacing the old delegateStub): appended to the package's
-// natural _test.go (the target's own base name) or created
-// there. Returns nil, with a note, when the test already exists
-// or the assembled scaffold fails the self-check.
-func (g *delegateGen) delegateScaffold(tgtPkg *Package, targetRel string) (*EditFile, string) {
-	p := g.p
-	dir := tgtPkg.Dir
+// scaffoldTestRel names the test file a scaffold for a
+// function in targetRel lands in: the target file's own base
+// name, in the target package's directory.
+func scaffoldTestRel(tgtPkg *Package, targetRel string) string {
 	base := targetRel
 	if i := strings.LastIndex(base, "/"); i >= 0 {
 		base = base[i+1:]
 	}
 	testRel := strings.TrimSuffix(base, ".go") + "_test.go"
-	if dir != "" {
-		testRel = dir + "/" + testRel
+	if tgtPkg.Dir != "" {
+		testRel = tgtPkg.Dir + "/" + testRel
 	}
+	return testRel
+}
+
+// delegateScaffold is the delegate shape's use of the shared
+// scaffolder: the wrapper is the edit, so the presentation is
+// the zero one (delegate wording throughout).
+func (g *delegateGen) delegateScaffold(tgtPkg *Package, targetRel string) (*EditFile, string) {
+	return g.planScaffold(tgtPkg, targetRel, scaffoldPresentation{display: g.wrapper})
+}
+
+// planScaffold builds the scaffold EditFile for the plan:
+// appended to the package's natural _test.go (the target's own
+// base name) or created there. Returns nil, with a note, when
+// the function is generic, the test already exists, or the
+// assembled scaffold fails the self-check. Shared by every
+// shape that scaffolds — the delegate (5f64d54) and, since the
+// extension, the clone, add-case, and add-field planners,
+// whose gens are built by scaffoldGenFor.
+func (g *delegateGen) planScaffold(tgtPkg *Package, targetRel string, pres scaffoldPresentation) (*EditFile, string) {
+	p := g.p
+	testRel := scaffoldTestRel(tgtPkg, targetRel)
 	stubName := "Test" + titleFirst(g.wrapper)
 	if len(g.typeParamNames()) > 0 {
-		// A generic wrapper's test would have to pick concrete
+		// A generic function's test would have to pick concrete
 		// type arguments the assembler has no basis to choose —
 		// a scaffold in generic terms doesn't compile, and an
 		// instantiated one would be invented. Omit it, plainly.
-		return nil, fmt.Sprintf("No test scaffold added: %s is generic, and its test would need concrete type arguments — that's a choice for whoever writes the test.", g.wrapper)
+		return nil, fmt.Sprintf("No test scaffold added: %s is generic, and its test would need concrete type arguments — that's a choice for whoever writes the test.", pres.display)
 	}
-	note := fmt.Sprintf("Plus a test scaffold (%s in %s) — a full table-driven test whose case inputs are generated from %s's parameter types (zero values, plus a named edge case per parameter where an honest one exists). Its expected results are TODO placeholders, and the test skips itself until you fill them in — it is not part of how the edit is verified.", stubName, testRel, g.wrapper)
+	accompany := ""
+	if pres.accompany != "" {
+		accompany = " " + pres.accompany
+	}
+	note := fmt.Sprintf("Plus a test scaffold (%s in %s) — a full table-driven test whose case inputs are generated from %s's parameter types (zero values, plus a named edge case per parameter where an honest one exists).%s Its expected results are TODO placeholders, and the test skips itself until you fill them in — it is not part of how the edit is verified.", stubName, testRel, pres.display, accompany)
 
 	existing, tfset, testAST, _ := p.readProjectFile(testRel)
 	if testAST != nil {
@@ -154,7 +201,7 @@ func (g *delegateGen) delegateScaffold(tgtPkg *Package, targetRel string) (*Edit
 		}
 	}
 
-	b := &scaffoldBuilder{g: g, todoSeen: map[string]bool{}}
+	b := &scaffoldBuilder{g: g, pres: pres, todoSeen: map[string]bool{}}
 
 	// Render for the test file: the generator's import
 	// resolution consults the target file's imports, but the
@@ -303,11 +350,44 @@ func scaffoldImportSpec(path, qual string) string {
 
 // collectSignature expands the source declaration into the
 // scaffold's parameters and results, in wrapper order, with
-// names exactly as the wrapper declares them.
+// names exactly as the wrapper declares them. A method's
+// receiver becomes args-struct field 0: the value table
+// generates for it like any parameter, and the run loop calls
+// through it.
 func (b *scaffoldBuilder) collectSignature() {
 	g := b.g
 	srcCtx := scaffoldCtx{imports: g.srcImports, pkgDir: g.src.PkgDir}
 	wparams := g.wrapperParams(b.qual)
+	if g.srcDecl.Recv != nil && len(g.srcDecl.Recv.List) > 0 {
+		rf := g.srcDecl.Recv.List[0]
+		// The field's name is the scaffold's own choice (it is
+		// just a struct field holding the receiver value): the
+		// declaration's receiver name when it is usable and
+		// free, else a deterministic fallback. (Go itself bars
+		// a parameter sharing the receiver's name, so a clash
+		// can only come from a generated argN placeholder.)
+		used := map[string]bool{}
+		for _, wp := range wparams {
+			used[wp.name] = true
+		}
+		name := ""
+		if len(rf.Names) > 0 {
+			name = rf.Names[0].Name
+		}
+		if name == "" || name == "_" || used[name] {
+			name = ""
+			for _, cand := range []string{"recv", "receiver", "self"} {
+				if !used[cand] {
+					name = cand
+					break
+				}
+			}
+		}
+		b.recvName = name
+		b.params = append(b.params, scaffoldParam{
+			name: name, typ: g.renderType(rf.Type, b.qual), expr: rf.Type, ctx: srcCtx, receiver: true,
+		})
+	}
 	pi := 0
 	if fl := g.srcDecl.Type.Params; fl != nil {
 		for _, f := range fl.List {
@@ -361,13 +441,23 @@ func (b *scaffoldBuilder) render(stubName string) scaffoldText {
 	cases := b.renderCases()
 
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "// %s is a test scaffold assembled by gollemer next to the %s delegate.\n", stubName, wrapper)
+	if b.pres.intro != "" {
+		for _, ln := range strings.Split(fmt.Sprintf(b.pres.intro, stubName), "\n") {
+			fmt.Fprintf(&sb, "// %s\n", ln)
+		}
+	} else {
+		fmt.Fprintf(&sb, "// %s is a test scaffold assembled by gollemer next to the %s delegate.\n", stubName, wrapper)
+	}
+	verifyNoun := b.pres.verifyNoun
+	if verifyNoun == "" {
+		verifyNoun = "the delegate"
+	}
 	sb.WriteString("// The cases' inputs are generated from the parameter types — zero\n")
 	sb.WriteString("// values, plus a named edge case per parameter where an honest edge\n")
 	sb.WriteString("// value exists. The expected results (want, wantErr) are TODO\n")
 	sb.WriteString("// placeholders: gollemer knows the types, not the answers, so the\n")
 	sb.WriteString("// test skips itself until you fill them in. It is a courtesy\n")
-	sb.WriteString("// artifact — nothing verifies the delegate with it.\n")
+	fmt.Fprintf(&sb, "// artifact — nothing verifies %s with it.\n", verifyNoun)
 	if len(b.todos) > 0 {
 		sb.WriteString("//\n// Assembler TODOs:\n")
 		for _, td := range b.todos {
@@ -425,13 +515,20 @@ func (b *scaffoldBuilder) render(stubName string) scaffoldText {
 	}
 	var callArgs []string
 	for _, prm := range b.params {
+		if prm.receiver {
+			continue // the receiver is the call's target, not an argument
+		}
 		a := "tc.args." + prm.name
 		if prm.variadic {
 			a += "..."
 		}
 		callArgs = append(callArgs, a)
 	}
-	call := fmt.Sprintf("%s(%s)", wrapper, strings.Join(callArgs, ", "))
+	callName := wrapper
+	if b.recvName != "" {
+		callName = "tc.args." + b.recvName + "." + wrapper
+	}
+	call := fmt.Sprintf("%s(%s)", callName, strings.Join(callArgs, ", "))
 	if len(lhs) > 0 {
 		fmt.Fprintf(&sb, "\t\t\t%s := %s\n", strings.Join(lhs, ", "), call)
 	} else {

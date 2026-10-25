@@ -198,7 +198,11 @@ func executeEditPlan(req analyze.EditRequest, ask editAsk) bool {
 		recordBrain("composer", false, "edit refused: "+req.Kind)
 		return true
 	}
-	fmt.Printf("%s Here's the edit I assembled from this project's own code:\n\n%s\n\n%s\n", tag, plan.Summary, plan.Diff())
+	fmt.Printf("%s Here's the edit I assembled from this project's own code:\n\n%s\n", tag, plan.Summary)
+	for _, n := range plan.Notes {
+		fmt.Printf("%s\n", n)
+	}
+	fmt.Printf("\n%s\n", plan.Diff())
 	ans, err := ask("Apply this edit? [y/n] ")
 	if err != nil || (strings.ToLower(strings.TrimSpace(ans)) != "y" && strings.ToLower(strings.TrimSpace(ans)) != "yes") {
 		fmt.Printf("%s Not applied — every file is exactly as it was.\n", tag)
