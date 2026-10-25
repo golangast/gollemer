@@ -1190,6 +1190,17 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if tryBuildResources(line, profile) {
 			continue
 		}
+		// Simple creations, claimed deterministically beside the
+		// other write-side parsers: "create a folder jim" and
+		// "create a file … with a webserver" act behind the same
+		// [y/n] gate as the edits (exact plan first, verify after),
+		// and the wider disk-action family (delete, move, install)
+		// is claimed only to answer honestly. A creation sentence
+		// must never reach the classifier — it read "create a
+		// folder jim" as a social greeting.
+		if tryCreate(line, reader) {
+			continue
+		}
 		// Intent layer: a confident trained classification of what
 		// the user wants, in their own words — no memorized commands.
 		if tryIntentDispatch(line, profile) {
