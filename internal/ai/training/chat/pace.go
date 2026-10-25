@@ -35,22 +35,26 @@ var paceOn = os.Getenv("GOLLEMER_PACE") != "off"
 var paceInteractive bool
 
 // paceBurstBudget caps the total delay one printed answer may add.
-const paceBurstBudget = 6 * time.Second
+const paceBurstBudget = 15 * time.Second
 
 // paceMinLines is the smallest output that paces at all: one or two
 // lines are a reply, not a wall.
 const paceMinLines = 3
 
-// paceDelayFor is the pause after a line of the given visible width:
-// a breath, a touch longer for long lines the eye has to travel.
+// paceDelayFor is the pause after a line of the given visible
+// width: a flat beat plus time proportional to the line's
+// length — 200ms + 20ms per character, capped at 2.4s — which
+// lands a typical multi-line answer at roughly 50 characters
+// per second, a comfortable reading pace. (The previous table,
+// 25/55/90ms by width, measured ≈1,600 chars/sec; the user's
+// verdict was "it types way too fast".) One pacing source:
+// every paced surface flows through printPaced and this table.
 func paceDelayFor(visible int) time.Duration {
-	switch {
-	case visible > 120:
-		return 90 * time.Millisecond
-	case visible > 60:
-		return 55 * time.Millisecond
+	d := 200*time.Millisecond + time.Duration(visible)*20*time.Millisecond
+	if d > 2400*time.Millisecond {
+		d = 2400 * time.Millisecond
 	}
-	return 25 * time.Millisecond
+	return d
 }
 
 // paceSleep is the pause hook (a variable so tests can count pauses

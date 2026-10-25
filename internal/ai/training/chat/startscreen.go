@@ -83,7 +83,7 @@ func startPersonalFor(root string) startPersonal {
 	if next, ok := guidedBookmarkFor(fm, root); ok {
 		out.starters = append(out.starters, fmt.Sprintf(
 			"start — continue the tour · you left off at stop %d of %d",
-			next+1, len(guideCurriculum)))
+			next+1, guideStepCount(root)))
 		out.guidedTour = true
 	}
 	if total := len(lessonList()); fm.Taught > 0 && fm.Taught < total {

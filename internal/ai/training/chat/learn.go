@@ -271,19 +271,25 @@ func learnShowWalkthrough(p *analyze.Project) {
 	fmt.Println("I couldn't read the entry point's source back — the map above still shows where it lives.")
 }
 
-// learnConceptsText renders the concepts stage from the structured
-// learn path: each concept in learning order, the Go ideas it uses
-// (gobyexample links from the learn-path machinery), an Advocates
-// link when the resources matcher has the topic, and a tiny example
-// from the project's own code where the machinery provides one.
+// learnConceptsText renders the concepts stage: the beginner
+// screen (analyze.BeginnerConcepts — front-door order, at most
+// four concepts, one Go-idea link each), plus learn mode's own
+// teaching extras per concept: an Advocates link when the
+// resources matcher has the topic, and a tiny example from the
+// project's own code where the machinery provides one.
 func learnConceptsText(p *analyze.Project) string {
-	concepts := p.LearnPath()
+	// The beginner screen, same as the tour's concept stop:
+	// beginner-usefulness order (the program's own front door
+	// first), at most four concepts, one Go-idea link each.
+	// The full dependency-ordered path stays one question
+	// away ("what should I learn first").
+	concepts := p.BeginnerConcepts(0)
 	if len(concepts) == 0 {
 		return "No exported types to order into a path — this project's concepts live in its functions, not its types. The map above is the way in, and \"what does <name> do\" answers for any function.\n"
 	}
-	const maxShown = 8
+	const maxShown = 4
 	var b strings.Builder
-	b.WriteString("The ideas this project is built from, in the order to learn them — each step only uses the steps before it:\n\n")
+	b.WriteString("The ideas this project is built from — starting with the ones the program itself starts from:\n\n")
 	shown := concepts
 	extra := 0
 	if len(shown) > maxShown {
@@ -297,14 +303,8 @@ func learnConceptsText(p *analyze.Project) string {
 			fmt.Fprintf(&b, "   %s %s.\n", termui.Muted.Apply("Builds on:"), strings.Join(c.BuildsOn, ", "))
 		}
 		if len(c.Features) > 0 {
-			var parts []string
-			for j, f := range c.Features {
-				if j >= 3 {
-					break
-				}
-				parts = append(parts, f[0]+" ("+f[1]+")")
-			}
-			fmt.Fprintf(&b, "   %s %s.\n", termui.Muted.Apply("Go ideas it uses:"), strings.Join(parts, ", "))
+			f := c.Features[0]
+			fmt.Fprintf(&b, "   %s %s.\n", termui.Muted.Apply("Go idea it uses:"), f[0]+" ("+f[1]+")")
 		}
 		if link := learnAdvocatesLink(c); link != nil {
 			fmt.Fprintf(&b, "   %s %s — %s\n", termui.Muted.Apply("From your Advocates list:"), link.Label, link.URL)

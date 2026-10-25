@@ -167,6 +167,13 @@ func handleBeginnerCommandImpl(line string, profile *UserProfile) bool {
 		if !needProject() {
 			return true
 		}
+		// One walk at a time (see handleStart): starting the
+		// tour ends any guided walk or teach session in
+		// flight, so "next" advances the tour alone. The
+		// guided walk's bookmark is saved in the Friend's
+		// notebook; "start" resumes it.
+		guideActive = false
+		teachActive = false
 		tourStops = lastAnalyzeProject.TourStops()
 		tourIdx = 0
 		tourDone = false

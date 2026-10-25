@@ -127,36 +127,14 @@ func (p *Project) ExamplesText(fn *Func) string {
 	return b.String()
 }
 
-// typeOneLiner renders one glossary line for a type: its doc's first
-// sentence when it has one, otherwise a line derived from its shape.
+// typeOneLiner renders one glossary line for a type: its doc's
+// first sentence when that sentence actually says something
+// (see lowInformation in beginner_rank.go), otherwise a line
+// derived from its shape.
 func typeOneLiner(t *Type) string {
-	desc := ""
-	if t.Doc != "" {
-		desc = PieceFirstSentence(t.Doc)
-	}
-	if desc == "" {
-		switch t.Kind {
-		case "struct":
-			desc = "a struct"
-			if len(t.Fields) > 0 {
-				fields := t.Fields
-				if len(fields) > 4 {
-					fields = fields[:4]
-				}
-				desc += " holding " + strings.Join(fields, ", ")
-			}
-		case "interface":
-			desc = "an interface"
-			if len(t.Methods) > 0 {
-				ms := t.Methods
-				if len(ms) > 4 {
-					ms = ms[:4]
-				}
-				desc += " — anything with " + strings.Join(ms, ", ") + " counts"
-			}
-		default:
-			desc = "a named " + t.Kind + " type"
-		}
+	desc, ok := docOneLiner(t, nil)
+	if !ok {
+		desc = shapeDesc(t)
 	}
 	if len(t.Methods) > 0 && t.Kind != "interface" {
 		desc += fmt.Sprintf(" (%d methods)", len(t.Methods))
@@ -264,9 +242,19 @@ func (p *Project) LearnPath() []LearnConcept {
 	if len(concepts) > 15 {
 		concepts = concepts[:15]
 	}
+	return p.buildConcepts(concepts)
+}
+
+// buildConcepts assembles LearnConcepts for a candidate set:
+// dependency order (Kahn, alphabetical on ties), structural
+// dependencies, Go features, and the non-circular one-liner
+// each. LearnPath and BeginnerConcepts share it; they differ
+// only in candidate selection and final ordering.
+func (p *Project) buildConcepts(concepts []*Type) []LearnConcept {
 	if len(concepts) == 0 {
 		return nil
 	}
+	facts := p.typeFacts(concepts)
 	// Concepts are keyed by package+name: two packages may both define
 	// a "Container", and they are different concepts.
 	keyOf := func(t *Type) string { return t.PkgDir + "\x00" + t.Name }
@@ -352,7 +340,7 @@ func (p *Project) LearnPath() []LearnConcept {
 		out = append(out, LearnConcept{
 			Type:     t,
 			Name:     display(t),
-			OneLiner: typeOneLiner(t),
+			OneLiner: p.conceptOneLiner(t, facts[keyOf(t)]),
 			BuildsOn: ds,
 			Features: features[keyOf(t)],
 		})
