@@ -6,10 +6,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/golangast/gollemer/internal/ai/analyze"
+	"github.com/golangast/gollemer/pkg/termui"
 )
 
 // Beginner-five commands (2026-10-20): /example, /tour (+ next),
@@ -470,75 +472,153 @@ func isHelpAllLine(line string) bool {
 	return false
 }
 
+// --- Help, rendered ---------------------------------------------------
+// The help catalogs used to be plain heredocs run through
+// decorateOutput — but the decorate pass only styles ALL-CAPS lines,
+// backticks, `make …` commands and file.go:NN refs, and the help
+// text contains NONE of those (its headings are sentence-case and
+// its phrases are bare or double-quoted), so the pass was the
+// identity on it and help printed with zero styling while every
+// surface around it (start screen, cast list, analyze panels) is
+// termui. The catalogs are now DATA — sections of sayable phrases
+// with their explanations — rendered through the same visual
+// language as the rest of the chat: ◆ gold section headers, the
+// sayable column in cyan, explanations in plain text. The wording
+// is unchanged from the heredocs; only the rendering moved.
+
+// helpEntry is one sayable phrase and what it does.
+type helpEntry struct{ say, note string }
+
+// helpSection is a titled group of entries.
+type helpSection struct {
+	title   string
+	entries []helpEntry
+}
+
+// helpSayField is the visible width of the sayable column — the
+// column the old hand-aligned heredocs used. A phrase longer than
+// the field simply overflows it (note after three spaces), exactly
+// as the one long line did before.
+const helpSayField = 26
+
+func renderHelpRow(e helpEntry) string {
+	if e.note == "" {
+		return "  " + cSay(e.say)
+	}
+	if visibleLen(e.say) > helpSayField {
+		return "  " + cSay(e.say) + "   " + quoteSay(e.note)
+	}
+	return "  " + cSay(termui.PadRight(e.say, helpSayField)) + "  " + quoteSay(e.note)
+}
+
+func renderHelpSections(sections []helpSection) string {
+	var b strings.Builder
+	for i, sec := range sections {
+		if i > 0 {
+			b.WriteString("\n")
+		}
+		b.WriteString(termui.SectionHeader(sec.title) + "\n")
+		for _, e := range sec.entries {
+			b.WriteString(renderHelpRow(e) + "\n")
+		}
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+var reQuotedSay = regexp.MustCompile(`"[^"\n]+"`)
+
+// quoteSay styles the double-quoted sayable spans inside a prose
+// line ("start", "teach me") the cyan of the sayable column. The
+// quotes themselves stay — they are how the original text marks a
+// phrase as sayable.
+func quoteSay(s string) string {
+	return reQuotedSay.ReplaceAllStringFunc(s, func(m string) string { return cSay(m) })
+}
+
+var helpSections = []helpSection{
+	{title: "I'M LOST", entries: []helpEntry{
+		{"start", `the guided walk (or "tour <github link>" to open a project)`},
+		{"what does this program do", "the plain-English story"},
+		{"what should I do now", "I'll name the next step from where you stand"},
+	}},
+	{title: "I WANT TO UNDERSTAND ONE THING", entries: []helpEntry{
+		{"what does Names do", "any function name"},
+		{"why does Names lock", "the reasons the code itself shows"},
+		{"compare Add and Total", "two functions, side by side"},
+	}},
+	{title: "SOMETHING'S BROKEN", entries: []helpEntry{
+		{"paste any Go error", "I'll translate it into plain words"},
+		{"where for <github issue link>", "where to edit for an issue"},
+	}},
+}
+
 // printHelp is the 'help' answer a beginner gets: three situations,
 // not a catalog. The full menu lives behind "help all".
 func printHelp() {
-	fmt.Println(decorateOutput(`
-New here? Say "start" and I'll drive — six short stops, you just say "next".
-Or say "teach me" — six tiny lessons that train YOU on what I can do, by trying each one.
+	fmt.Println(helpText())
+}
 
-Three situations cover most of it:
+func helpText() string {
+	var b strings.Builder
+	b.WriteString("\n" + termui.SectionHeader("HELP") + "\n")
+	b.WriteString(quoteSay(`New here? Say "start" and I'll drive — six short stops, you just say "next".`) + "\n")
+	b.WriteString(quoteSay(`Or say "teach me" — six tiny lessons that train YOU on what I can do, by trying each one.`) + "\n\n")
+	b.WriteString("Three situations cover most of it:\n\n")
+	b.WriteString(renderHelpSections(helpSections))
+	b.WriteString("\n\n" + quoteSay(`Two more worth knowing: "brains" (who works here, and their limits) and "any suggestions" (the Friend's notebook on how you work).`) + "\n")
+	b.WriteString(quoteSay(`The full catalog: say "help all".`))
+	return b.String()
+}
 
-I'm lost:
-  start                       the guided walk (or "tour <github link>" to open a project)
-  what does this program do   the plain-English story
-  what should I do now        I'll name the next step from where you stand
-
-I want to understand one thing:
-  what does Names do          any function name
-  why does Names lock         the reasons the code itself shows
-  compare Add and Total       two functions, side by side
-
-Something's broken:
-  paste any Go error          I'll translate it into plain words
-  where for <github issue link>   where to edit for an issue
-
-Two more worth knowing: "brains" (who works here, and their limits) and
-"any suggestions" (the Friend's notebook on how you work).
-The full catalog: say "help all".`))
+var helpAllSections = []helpSection{
+	{title: "LEARN A PROJECT", entries: []helpEntry{
+		{"tour <github link>", "walk it one stop at a time (then say: next)"},
+		{"give me a tour", "tour the project already open"},
+		{"what does this program do", "the plain-English summary"},
+		{"what are the main types", "its key words, one plain line each"},
+		{"what should I learn first", "its ideas, in the order to learn them"},
+		{"example Names", "see a function used for real (any name works)"},
+		{"run it", "watch the project run, narrated"},
+		{"teach me", "learn what I can do — six tiny lessons, you try each one"},
+		{"/speed", "long answers stream in readably instead of dumping (say it again for full speed)"},
+	}},
+	{title: "WHEN YOU'RE STUCK", entries: []helpEntry{
+		{"what should I do now", "I'll look at where you are and name the next step"},
+		{"any suggestions", "the Friend speaks — patterns it noticed in how you work"},
+		{"tell me more", "go one step deeper into whatever we just did"},
+		{"help", "this list"},
+	}},
+	{title: "ASK ABOUT CODE", entries: []helpEntry{
+		{"analyze <github link or folder>", ""},
+		{"what does Names do", ""},
+		{"why does Names lock", "the reasons the code itself shows"},
+		{"compare Add and Total", "two functions, side by side"},
+		{"where for <github issue link>", "where to edit for an issue"},
+	}},
+	{title: "THE TEAM BEHIND THE ANSWERS", entries: []helpEntry{
+		{"(another terminal) gollemer -watch <folder>", "the Watcher diffs your code as you save; the Friend reports what mattered"},
+		{"brains", "who does the work here, and their honest limits"},
+		{"how are your brains doing", "the scoreboard — who answered, who failed"},
+		{"why did you do that", "I'll name the brain and the recorded reason"},
+	}},
+	{title: "FIX AND WRITE", entries: []helpEntry{
+		{"paste any Go error", "I'll translate it into plain words"},
+		{"/fix undefined: foo", "(shortcut for the same idea)"},
+		{"write a function that reverses a string", ""},
+	}},
 }
 
 // printHelpAll is the full catalog, for after the training wheels.
 func printHelpAll() {
-	fmt.Println(decorateOutput(`
-Things you can say:
+	fmt.Println(helpAllText())
+}
 
-Learn a project:
-  tour <github link>          walk it one stop at a time (then say: next)
-  give me a tour              tour the project already open
-  what does this program do   the plain-English summary
-  what are the main types     its key words, one plain line each
-  what should I learn first   its ideas, in the order to learn them
-  example Names               see a function used for real (any name works)
-  run it                      watch the project run, narrated
-  teach me                    learn what I can do — six tiny lessons, you try each one
-  /speed                      long answers stream in readably instead of dumping (say it again for full speed)
-
-When you're stuck:
-  what should I do now        I'll look at where you are and name the next step
-  any suggestions             the Friend speaks — patterns it noticed in how you work
-  tell me more                go one step deeper into whatever we just did
-  help                        this list
-
-Ask about code:
-  analyze <github link or folder>
-  what does Names do
-  why does Names lock          the reasons the code itself shows
-  compare Add and Total        two functions, side by side
-  where for <github issue link>   where to edit for an issue
-
-The team behind the answers:
-  (another terminal) gollemer -watch <folder>   the Watcher diffs your code as you save; the Friend reports what mattered
-  brains                       who does the work here, and their honest limits
-  how are your brains doing    the scoreboard — who answered, who failed
-  why did you do that          I'll name the brain and the recorded reason
-
-Fix and write:
-  paste any Go error          I'll translate it into plain words
-  /fix undefined: foo         (shortcut for the same idea)
-  write a function that reverses a string
-
-Or just talk — ask me anything. Say 'exit' to leave.`))
+func helpAllText() string {
+	var b strings.Builder
+	b.WriteString("\n" + termui.SectionHeader("THINGS YOU CAN SAY") + "\n\n")
+	b.WriteString(renderHelpSections(helpAllSections))
+	b.WriteString("\n\nOr just talk — ask me anything. Say " + cSay("'exit'") + " to leave.")
+	return b.String()
 }
 
 func printTourStop() {
