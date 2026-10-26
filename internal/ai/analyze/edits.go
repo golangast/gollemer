@@ -40,6 +40,10 @@ const (
 	EditAddServer = "add_server"
 	EditDelegate  = "delegate"
 
+	// Concept-book edits (editconcept.go): the entry the chat's
+	// composer matched from the book, assembled by kind.
+	EditConcept = "concept"
+
 	// Signature changes (editsig.go): the target function is
 	// FuncName, resolved like add_case's.
 	EditRenameParam   = "rename_param"
@@ -118,6 +122,22 @@ type EditRequest struct {
 	SigType    string
 	SigUsing   string
 	SigNoUsing bool
+
+	// concept: the book entry to assemble (editconcept.go), the
+	// target file (File, shared with add_server), and the slots
+	// the sentence bound:
+	//
+	// ConceptName is the declaration's {name} (required for
+	// declarations); ConceptText is the statement's {text}
+	// saying slot ("" = the default, e.g. fmt.Println(""));
+	// ConceptFunc is the statement's target function ("" =
+	// main); ConceptLike is the type whose real method set
+	// fills a declaration's {methods} slot.
+	Concept     *ConceptEntry
+	ConceptName string
+	ConceptText string
+	ConceptFunc string
+	ConceptLike string
 }
 
 // EditFile is one file's before/after pair inside a plan.
@@ -193,6 +213,8 @@ func (p *Project) PlanEdit(req EditRequest) (*EditPlan, string) {
 		return p.planAddServer(req)
 	case EditDelegate:
 		return p.planDelegate(req)
+	case EditConcept:
+		return p.planConcept(req)
 	case EditRenameParam, EditReorderParams, EditAddParam:
 		return p.planSignature(req)
 	}

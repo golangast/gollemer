@@ -1228,6 +1228,19 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if tryDelegate(line, reader) {
 			continue
 		}
+		// Concept-book edits, claimed deterministically beside
+		// the other write-side parsers: "add a print line to
+		// jim/main.go" and "add an interface named Reader to
+		// store.go" name a concept from the book (data, not
+		// grammar — conceptbook.go), and the composer assembles
+		// it from the book row plus the project's own facts,
+		// behind the same gate as every write. It sits after the
+		// bespoke shapes (they keep their sentences) and before
+		// the boundary, so a known concept is served and an
+		// unknown one still gets the boundary's honest answer.
+		if tryConceptBook(line, reader) {
+			continue
+		}
 		// The write-sentence boundary, last before the intent
 		// layer: an imperative sentence asking to write code
 		// that no shape above could serve is answered here, in

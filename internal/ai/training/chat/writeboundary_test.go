@@ -137,21 +137,18 @@ func TestParseWriteBoundaryNonClaims(t *testing.T) {
 	}
 }
 
-// His two exact lines through the whole deterministic chain, in
-// his session state — jim/ created through the create feature,
-// the project analyzed first — ending at the boundary with the
-// composer's words, writing nothing.
+// His exact function line through the whole deterministic
+// chain, in his session state — jim/ created through the create
+// feature, the project analyzed first — ending at the boundary
+// with the composer's words, writing nothing. (His other line,
+// "add print line to jim/main.go", is no longer a boundary case:
+// the concept book serves it one claim earlier — its chain
+// coverage lives in conceptbook_test.go.)
 func TestWriteBoundaryLiveSessionLines(t *testing.T) {
 	cases := []struct {
 		line string
 		want []string
 	}{
-		{"add print line to jim/main.go", []string{
-			"I can't add a print line yet",
-			"concept book",
-			`"add a webserver to jim/main.go"`,
-			`"add a function in jim/main.go that calls <Name>"`,
-		}},
 		{"add a function to jim/main.go", []string{
 			"A function needs a source I can copy from",
 			`"add a function in jim/main.go that calls <something that exists>"`,
@@ -222,7 +219,7 @@ func TestWriteBoundaryNearMissAnswers(t *testing.T) {
 // its own shape through the chain — the boundary's words appear
 // in NONE of their answers, and each is handled before it.
 func TestWriteBoundaryOrderingBattery(t *testing.T) {
-	boundaryPhrases := []string{"needs a source I can copy from", "I can't add", "first in line for the concept book", "The piece's name here is webserver"}
+	boundaryPhrases := []string{"needs a source I can copy from", "I can't add", "loose statement isn't one of the pieces", "The piece's name here is webserver"}
 	check := func(t *testing.T, line, out string, handled bool) {
 		t.Helper()
 		if !handled {

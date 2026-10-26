@@ -175,7 +175,9 @@ func parseWriteBoundary(line string) (writeBoundaryReq, bool) {
 
 	// Answer kind, near-misses first. Function, field, and
 	// parameter are the shapes a sentence can almost spell;
-	// print is the approved concept-book boundary; server is
+	// print is the fallback for a print ask the concept book
+	// doesn't carry (the concept claim, one step earlier in
+	// the chain, serves the book's own print line); server is
 	// the webserver component misnamed. (Case is NOT here: the
 	// assembled parser already claims its under-specified forms
 	// — probe-verified, "add a case to Describe" parses as an
@@ -277,7 +279,10 @@ func (r writeBoundaryReq) answer() string {
 		f := r.exampleFile()
 		return fmt.Sprintf("The piece's name here is webserver: \"add a webserver to %s\" puts one in an existing file, or \"create a file %s with a webserver\" writes a new one", f, f)
 	case wbPrintLine:
-		return fmt.Sprintf("I can't add a print line yet — a loose statement isn't one of the pieces I can assemble today (it's first in line for the concept book). %s", r.closestAlternatives())
+		// The concept claim serves the book's print line before
+		// this net runs; a line lands here only when the book in
+		// play doesn't carry the entry (a hand-trimmed book).
+		return fmt.Sprintf("I can't add a print line yet — a loose statement isn't one of the pieces I can assemble today. %s", r.closestAlternatives())
 	default:
 		obj := r.object
 		if obj == "" {

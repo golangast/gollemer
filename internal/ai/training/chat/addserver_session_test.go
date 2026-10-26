@@ -58,6 +58,9 @@ func claimChain(line string, ask editAsk, profile *UserProfile) bool {
 	if runDelegate(line, ask) {
 		return true
 	}
+	if runConcept(line, ask) {
+		return true
+	}
 	if runWriteBoundary(line) {
 		return true
 	}
