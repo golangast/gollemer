@@ -13,7 +13,7 @@ package chat
 //
 // Grammar (exactly this):
 //
-//	add|put [a] webserver|web server to|in|into [the] [folder|file] <target>
+//	add|put [a|an|the] webserver|web server to|in|into [the] [folder|file] <target>
 //
 // The folder|file word is a designator — it names the KIND of
 // target, never part of its path (creations read those words the
@@ -74,7 +74,16 @@ func parseAddServer(line string) (string, bool) {
 		return "", false
 	}
 	i := 1
-	if low[i] == "a" || low[i] == "an" {
+	// The determiner before the component's name: a, an, or
+	// the. The slot's third live miss (2026-10-25, minutes
+	// after the designator fix shipped) was "the": "add the
+	// webserver to jim/main.go" fell through to the analyzer
+	// while its "a" twin worked, because this slot read only
+	// a/an. Widening it steals nothing — a line reaches the
+	// webserver check only when the word after the determiner
+	// IS the component's name, and no other claim owns an
+	// "add the webserver…" sentence.
+	if low[i] == "a" || low[i] == "an" || low[i] == "the" {
 		i++
 	}
 	switch {

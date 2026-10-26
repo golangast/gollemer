@@ -48,6 +48,14 @@ func TestParseAddServerForms(t *testing.T) {
 		"put a web server into jim/main.go":  "jim/main.go",
 		"add a web server in jim":            "jim",
 		"Add a webserver to jim/main.go.":    "jim/main.go",
+		// The "the" determiner before the component's name —
+		// his two lines from the 2026-10-25 20:10 screenshot,
+		// which fell through to the analyzer on the shipped
+		// stack while the designator fix worked beside them.
+		"add the webserver to jim/main.go":          "jim/main.go",
+		"add the webserver to the file jim/main.go": "jim/main.go",
+		"add the web server to jim/main.go":         "jim/main.go",
+		"put the webserver into the folder jim":     "jim",
 	}
 	for line, want := range claims {
 		got, ok := parseAddServer(line)
@@ -70,6 +78,12 @@ func TestParseAddServerForms(t *testing.T) {
 		"add a server to jim/main.go",           // not the component's name
 		"add a webserver for me",                // no to/in/into
 		"the webserver is down",                 // not an imperative
+		// The widened determiner slot must not swallow
+		// determiner-led sentences whose noun is not the
+		// component: the field form's shape, the clone
+		// form's shape.
+		"add the timeout field of type int to Config",
+		"add the function like Greet named GreetLoudly",
 	} {
 		if got, ok := parseAddServer(line); ok {
 			t.Errorf("parseAddServer(%q) claimed target %q — that sentence belongs to another feature", line, got)

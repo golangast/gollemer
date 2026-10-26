@@ -168,6 +168,13 @@ func TestAddServerLiveSessionAllHisLines(t *testing.T) {
 		"add webserver to folder jim",        // 2026-10-25, the folder-word form
 		"add a webserver to jim/",            // 2026-10-24, the trailing slash
 		"add a webserver to jim",             // the bare folder name
+		// 2026-10-25 20:10, on the shipped stack with the
+		// designator fix live: "the" BEFORE webserver — the
+		// determiner slot read only a/an, so both fell
+		// through to the analyzer beside their working
+		// designator twin.
+		"add the webserver to jim/main.go",
+		"add the webserver to the file jim/main.go",
 	}
 	for _, analyzed := range []bool{true, false} {
 		for _, line := range lines {
