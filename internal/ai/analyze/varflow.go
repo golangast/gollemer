@@ -332,8 +332,7 @@ type varCollector struct {
 	p         *Project
 	pkg       *Package
 	fn        *Func
-	varPkg    map[string]string
-	paramPkgs map[string]*Package
+	ctx       *resolveCtx
 	locals    map[string]*localVar
 	localType map[string]string
 }
@@ -361,12 +360,15 @@ func (p *Project) collectVarEvents(pkg *Package, fn *Func) {
 	if p.varLocals == nil {
 		p.varLocals = map[string][]*localVar{}
 	}
+	ctx := fn.ctx
+	if ctx == nil {
+		ctx = p.newResolveCtx(pkg, fn)
+	}
 	vc := &varCollector{
 		p:         p,
 		pkg:       pkg,
 		fn:        fn,
-		varPkg:    constructorVars(fn.decl.Body, pkg),
-		paramPkgs: paramPackages(fn, pkg),
+		ctx:       ctx,
 		locals:    map[string]*localVar{},
 		localType: map[string]string{},
 	}
@@ -715,7 +717,7 @@ func (vc *varCollector) callExpr(s *ast.CallExpr) {
 // calleeName renders the called function for hand-off sentences: the
 // project function's name when resolved, else the written callee.
 func (vc *varCollector) calleeName(s *ast.CallExpr) string {
-	if target := vc.p.resolveCall(vc.pkg, vc.varPkg, vc.paramPkgs, vc.fn, s); target != nil {
+	if target := vc.p.resolveCall(vc.pkg, vc.ctx, vc.fn, s); target != nil {
 		return target.Display()
 	}
 	if txt := exprText(vc.fn.fset, s.Fun); txt != "" {

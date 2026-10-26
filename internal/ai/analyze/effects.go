@@ -148,8 +148,10 @@ func (p *Project) analyzeEffects(pkg *Package, fn *Func) {
 	if fn.decl == nil || fn.decl.Body == nil {
 		return
 	}
-	varPkg := constructorVars(fn.decl.Body, pkg)
-	paramPkgs := paramPackages(fn, pkg)
+	ctx := fn.ctx
+	if ctx == nil {
+		ctx = p.newResolveCtx(pkg, fn)
+	}
 
 	// Parameter types ("config.Config") and names, receiver included.
 	paramTypes := map[string]string{}
@@ -292,7 +294,7 @@ func (p *Project) analyzeEffects(pkg *Package, fn *Func) {
 					args = append(args, id.Name)
 				}
 			}
-			target := p.resolveCall(pkg, varPkg, paramPkgs, fn, n)
+			target := p.resolveCall(pkg, ctx, fn, n)
 			tid := ""
 			if target != nil {
 				tid = target.ID
@@ -322,7 +324,7 @@ func (p *Project) analyzeEffects(pkg *Package, fn *Func) {
 	fn.ExtCalls = sortedKeys(extSet)
 	fn.Reads = sortedKeys(readSet)
 	fn.Writes = sortedKeys(writeSet)
-	p.collectGuards(pkg, fn, varPkg, paramPkgs, paramNames, aliasOf)
+	p.collectGuards(pkg, fn, ctx, paramNames, aliasOf)
 }
 
 // propagateEffects fills EffectsAll (transitive effect categories) by
@@ -384,14 +386,14 @@ func hasEffect(cats []string, want string) bool {
 // clause (if with no else whose body returns) also gates every
 // statement after it in the block: `if cfg.DryRun { return }` guards
 // the os.Remove below it.
-func (p *Project) collectGuards(pkg *Package, fn *Func, varPkg map[string]string, paramPkgs map[string]*Package, paramNames map[string]bool, aliasOf map[string]string) {
+func (p *Project) collectGuards(pkg *Package, fn *Func, ctx *resolveCtx, paramNames map[string]bool, aliasOf map[string]string) {
 	addCalls := func(node ast.Node, callSet, extSet map[string]bool) {
 		ast.Inspect(node, func(m ast.Node) bool {
 			call, ok := m.(*ast.CallExpr)
 			if !ok {
 				return true
 			}
-			if target := p.resolveCall(pkg, varPkg, paramPkgs, fn, call); target != nil {
+			if target := p.resolveCall(pkg, ctx, fn, call); target != nil {
 				callSet[target.ID] = true
 			} else if key := extCallKey(pkg, call); key != "" {
 				extSet[key] = true
@@ -409,7 +411,7 @@ func (p *Project) collectGuards(pkg *Package, fn *Func, varPkg map[string]string
 				}
 				continue
 			}
-			g := Guard{Line: p.lineOf(fn, ifStmt), FlagLike: flagLikeCond(ifStmt.Cond, paramNames, paramPkgs, aliasOf)}
+			g := Guard{Line: p.lineOf(fn, ifStmt), FlagLike: flagLikeCond(ifStmt.Cond, paramNames, ctx.paramPkgs, aliasOf)}
 			g.Cond = shortCond(ifStmt.Cond)
 			callSet, extSet := map[string]bool{}, map[string]bool{}
 			addCalls(ifStmt.Body, callSet, extSet)

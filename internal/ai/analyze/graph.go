@@ -7,11 +7,14 @@ import (
 )
 
 // BuildGraph resolves call edges between the project's functions and fills
-// in each Func's Callers list. Resolution is heuristic: same-package plain
-// calls by name, method calls by method name within the package, and
-// qualified pkg.Func() calls through the file's imports when the target
-// package is part of the project. Calls into external dependencies are
-// ignored — they don't help map the project's own structure.
+// in each Func's Callers list. Resolution is heuristic: selector calls
+// dispatch through the receiver types the index can prove (constructor
+// products, declared types, promoted method sets — methodset.go) with a
+// name-based fallback chain, plain calls resolve by name within the
+// package, and qualified pkg.Func() calls go through the file's imports
+// when the target package is part of the project. Calls into external
+// dependencies are ignored — they don't help map the project's own
+// structure.
 func (p *Project) BuildGraph() {
 	// importAlias maps a qualifier used in selectors (package name or
 	// explicit import alias) to the project package it refers to.
@@ -25,6 +28,9 @@ func (p *Project) BuildGraph() {
 		// Also honor explicit aliases: import foo "example.com/bar".
 		pkg.aliasCache = alias
 	}
+	// Constructor table, type index, and own-method lists for the
+	// sharper receiver resolution (methodset.go).
+	p.buildCallIndex()
 	// Variable data flow: the name index and the sites hidden in
 	// package-level initializers, now that alias caches and all
 	// declarations exist.
@@ -36,15 +42,15 @@ func (p *Project) BuildGraph() {
 			if fn.decl == nil || fn.decl.Body == nil {
 				continue
 			}
-			varPkg := constructorVars(fn.decl.Body, pkg)
-			paramPkgs := paramPackages(fn, pkg)
+			ctx := p.newResolveCtx(pkg, fn)
+			fn.ctx = ctx // shared with analyzeEffects below; dropped in finalize
 			loops := loopRanges(fn.decl.Body)
 			ast.Inspect(fn.decl.Body, func(n ast.Node) bool {
 				call, ok := n.(*ast.CallExpr)
 				if !ok {
 					return true
 				}
-				target := p.resolveCall(pkg, varPkg, paramPkgs, fn, call)
+				target := p.resolveCall(pkg, ctx, fn, call)
 				if target != nil {
 					fn.Calls = append(fn.Calls, target.ID)
 					if inLoopRange(call, loops) {
@@ -67,7 +73,9 @@ func (p *Project) BuildGraph() {
 	}
 	// Compiler-grade pass: resolve selector calls through real method
 	// sets before effects propagate, so refined edges carry effects.
-	p.refineTypes()
+	if !p.noRefine {
+		p.refineTypes()
+	}
 	p.propagateEffects()
 	p.buildFieldReaders()
 	p.buildFieldWriters()
@@ -82,31 +90,48 @@ func (p *Project) BuildGraph() {
 // it targets an external package or can't be resolved. Shared by the
 // call-graph pass and the effect/guard collection so both see the same
 // edges.
-func (p *Project) resolveCall(pkg *Package, varPkg map[string]string, paramPkgs map[string]*Package, fn *Func, call *ast.CallExpr) *Func {
+//
+// Selector calls first try the proven receiver paths from
+// methodset.go: when the index knows what x holds — a constructor's
+// product, a composite literal, a declared parameter/receiver/field
+// type — the call dispatches through that type's promoted method
+// set (or, for an interface, its sole constructor-built
+// implementer). Only when those prove nothing does the historical
+// name-based chain run: a same-package method named Foo; then the
+// constructor-package pattern (s := store.New(); s.Foo() resolves
+// Foo in store); then a parameter typed by a project package (fm
+// filemanager.FileManager lets fm.DeleteFile() resolve); then
+// pkg.Foo() through imports.
+func (p *Project) resolveCall(pkg *Package, ctx *resolveCtx, fn *Func, call *ast.CallExpr) *Func {
 	var target *Func
 	switch fun := call.Fun.(type) {
 	case *ast.Ident:
 		// Plain foo(): same-package function.
 		target = p.findFunc(pkg, "", fun.Name)
 	case *ast.SelectorExpr:
-		// x.Foo(): prefer a same-package method named Foo;
-		// then the constructor pattern (s := store.New();
-		// s.Foo() resolves Foo in store); then a parameter
-		// typed by a project package (fm filemanager.FileManager
-		// lets fm.DeleteFile() resolve); then pkg.Foo()
-		// through imports.
 		if id, ok := fun.X.(*ast.Ident); ok {
-			target = p.findMethod(pkg, fun.Sel.Name)
-			if target == nil {
-				if alias, ok := varPkg[id.Name]; ok {
-					if q, ok := pkg.aliasCache[alias]; ok {
+			conclusive := false
+			if t := ctx.typeOf(id.Name); t != nil {
+				target, conclusive = p.resolveOnType(t, fun.Sel.Name)
+			}
+			if !conclusive && target == nil {
+				target = p.findMethod(pkg, fun.Sel.Name)
+				if target == nil {
+					if alias, ok := ctx.varPkg[id.Name]; ok {
+						if q, ok := pkg.aliasCache[alias]; ok {
+							target = p.findMethod(q, fun.Sel.Name)
+						}
+					} else if q, ok := ctx.paramPkgs[id.Name]; ok {
 						target = p.findMethod(q, fun.Sel.Name)
+					} else if q, ok := pkg.aliasCache[id.Name]; ok {
+						target = p.findFunc(q, "", fun.Sel.Name)
 					}
-				} else if q, ok := paramPkgs[id.Name]; ok {
-					target = p.findMethod(q, fun.Sel.Name)
-				} else if q, ok := pkg.aliasCache[id.Name]; ok {
-					target = p.findFunc(q, "", fun.Sel.Name)
 				}
+			}
+		} else if sel, ok := fun.X.(*ast.SelectorExpr); ok {
+			// a.Field.Foo(): dispatch on the field's declared type.
+			if t := p.selectorType(pkg, ctx, sel); t != nil {
+				target, _ = p.resolveOnType(t, fun.Sel.Name)
 			}
 		}
 	}
@@ -114,38 +139,6 @@ func (p *Project) resolveCall(pkg *Package, varPkg map[string]string, paramPkgs 
 		return nil
 	}
 	return target
-}
-
-// constructorVars maps local variable names to import aliases for the
-// common constructor pattern: s := store.New(). This lets s.Save()
-// resolve to the Save method in the store package without type info.
-func constructorVars(body *ast.BlockStmt, pkg *Package) map[string]string {
-	out := map[string]string{}
-	ast.Inspect(body, func(n ast.Node) bool {
-		assign, ok := n.(*ast.AssignStmt)
-		if !ok || len(assign.Lhs) != 1 || len(assign.Rhs) != 1 {
-			return true
-		}
-		lhs, ok := assign.Lhs[0].(*ast.Ident)
-		if !ok {
-			return true
-		}
-		call, ok := assign.Rhs[0].(*ast.CallExpr)
-		if !ok {
-			return true
-		}
-		sel, ok := call.Fun.(*ast.SelectorExpr)
-		if !ok {
-			return true
-		}
-		if id, ok := sel.X.(*ast.Ident); ok {
-			if _, isAlias := pkg.aliasCache[id.Name]; isAlias {
-				out[lhs.Name] = id.Name
-			}
-		}
-		return true
-	})
-	return out
 }
 
 // importTarget returns the project package for an import path, or nil for
