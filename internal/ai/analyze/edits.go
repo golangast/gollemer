@@ -39,6 +39,12 @@ const (
 	EditRename    = "rename"
 	EditAddServer = "add_server"
 	EditDelegate  = "delegate"
+
+	// Signature changes (editsig.go): the target function is
+	// FuncName, resolved like add_case's.
+	EditRenameParam   = "rename_param"
+	EditReorderParams = "reorder_params"
+	EditAddParam      = "add_param"
 )
 
 // EditRequest is one parsed change request.
@@ -88,6 +94,30 @@ type EditRequest struct {
 	DelegateFile string
 	SourceName   string
 	WrapperName  string
+
+	// Signature changes (the target is FuncName):
+	//
+	// rename_param: SigOld is the parameter's current name,
+	// SigNew its new name.
+	//
+	// reorder_params: SigOld is parameter A; SigMove is "" for
+	// a swap of A and SigNew, or "first"/"last" for moving A, or
+	// "before"/"after" with SigNew as the anchor parameter.
+	//
+	// add_param: SigType is the new parameter's type as typed,
+	// SigName its name ("" = the context form, whose type is
+	// context.Context). SigUsing is the call-site argument,
+	// verbatim, for every site; "" with the context type means
+	// derive each site's own in-scope context. SigNoUsing marks
+	// a typed form typed without its "using <expression>"
+	// clause — a guidance refusal, not an edit.
+	SigOld     string
+	SigNew     string
+	SigMove    string
+	SigName    string
+	SigType    string
+	SigUsing   string
+	SigNoUsing bool
 }
 
 // EditFile is one file's before/after pair inside a plan.
@@ -163,6 +193,8 @@ func (p *Project) PlanEdit(req EditRequest) (*EditPlan, string) {
 		return p.planAddServer(req)
 	case EditDelegate:
 		return p.planDelegate(req)
+	case EditRenameParam, EditReorderParams, EditAddParam:
+		return p.planSignature(req)
 	}
 	return nil, "I don't know that kind of edit yet."
 }

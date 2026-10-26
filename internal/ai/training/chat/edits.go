@@ -28,6 +28,12 @@ package chat
 //	add a [new] function like <Func> named <NewName>
 //	add a <NewName> function like <Func>
 //	copy|clone <Func> as <NewName>
+//	rename the <old> parameter of <Func> to <new>
+//	rename <Func>'s <old> parameter to <new>
+//	swap the <a> and <b> parameters of <Func>
+//	move the <a> parameter of <Func> first|last|before <b>|after <b>
+//	add a context parameter [named <name>] to <Func>
+//	add a <Type> parameter named <name> to <Func> using <expression>
 
 import (
 	"context"
@@ -53,6 +59,18 @@ var (
 	reEditCaseB  = regexp.MustCompile(`(?i)^add (?:a |an )?(.+?) case (?:to|in) (.+)$`)
 	reEditRegA   = regexp.MustCompile(`(?i)^register (.+?) in (?:the )?([A-Za-z_]\w*)(?: table| map)?$`)
 	reEditRegB   = regexp.MustCompile(`(?i)^add (.+?) to (?:the )?([A-Za-z_]\w*) (?:table|map|list)$`)
+
+	// Signature changes. These contain "parameter" (or "swap"/
+	// "move"), which no form above matches, so they can't steal
+	// a field/case/register sentence — and they are tried first
+	// so a field sentence can never be misread as one either.
+	reSigRenameA = regexp.MustCompile(`(?i)^rename the ([A-Za-z_]\w*) parameter of ([A-Za-z_][\w.]*) to ([A-Za-z_]\w*)$`)
+	reSigRenameB = regexp.MustCompile(`(?i)^rename ([A-Za-z_][\w.]*)'s ([A-Za-z_]\w*) parameter to ([A-Za-z_]\w*)$`)
+	reSigSwap    = regexp.MustCompile(`(?i)^swap the ([A-Za-z_]\w*) and ([A-Za-z_]\w*) parameters? of ([A-Za-z_][\w.]*)$`)
+	reSigMove    = regexp.MustCompile(`(?i)^move the ([A-Za-z_]\w*) parameter of ([A-Za-z_][\w.]*) (first|last|before ([A-Za-z_]\w*)|after ([A-Za-z_]\w*))$`)
+	reSigAddCtx  = regexp.MustCompile(`(?i)^add a context parameter(?: named ([A-Za-z_]\w*))? to ([A-Za-z_][\w.]*)$`)
+	reSigAddUse  = regexp.MustCompile(`(?i)^add (?:a |an )?(.+?) parameter named ([A-Za-z_]\w*) to ([A-Za-z_][\w.]*) using (.+)$`)
+	reSigAddBare = regexp.MustCompile(`(?i)^add (?:a |an )?(.+?) parameter named ([A-Za-z_]\w*) to ([A-Za-z_][\w.]*)$`)
 )
 
 // parseAssembledEdit turns one chat line into an EditRequest. The
@@ -64,6 +82,41 @@ func parseAssembledEdit(line string) (analyze.EditRequest, bool) {
 	s = strings.TrimSuffix(s, ".")
 	s = strings.TrimSuffix(s, "?")
 	s = strings.TrimSpace(s)
+
+	// Signature changes first: their sentences are the only ones
+	// with "parameter", "swap", or a leading "move the …", and
+	// claiming them here keeps "add a context parameter to F"
+	// away from the register form's "add … to the … table" tail.
+	if m := reSigRenameA.FindStringSubmatch(s); m != nil {
+		return analyze.EditRequest{Kind: analyze.EditRenameParam, FuncName: m[2], SigOld: m[1], SigNew: m[3]}, true
+	}
+	if m := reSigRenameB.FindStringSubmatch(s); m != nil {
+		return analyze.EditRequest{Kind: analyze.EditRenameParam, FuncName: m[1], SigOld: m[2], SigNew: m[3]}, true
+	}
+	if m := reSigSwap.FindStringSubmatch(s); m != nil {
+		return analyze.EditRequest{Kind: analyze.EditReorderParams, FuncName: m[3], SigOld: m[1], SigNew: m[2]}, true
+	}
+	if m := reSigMove.FindStringSubmatch(s); m != nil {
+		req := analyze.EditRequest{Kind: analyze.EditReorderParams, FuncName: m[2], SigOld: m[1]}
+		switch {
+		case m[4] != "":
+			req.SigMove, req.SigNew = "before", m[4]
+		case m[5] != "":
+			req.SigMove, req.SigNew = "after", m[5]
+		default:
+			req.SigMove = m[3]
+		}
+		return req, true
+	}
+	if m := reSigAddCtx.FindStringSubmatch(s); m != nil {
+		return analyze.EditRequest{Kind: analyze.EditAddParam, FuncName: m[2], SigType: "context.Context", SigName: m[1]}, true
+	}
+	if m := reSigAddUse.FindStringSubmatch(s); m != nil {
+		return analyze.EditRequest{Kind: analyze.EditAddParam, FuncName: m[3], SigType: strings.TrimSpace(m[1]), SigName: m[2], SigUsing: strings.TrimSpace(m[4])}, true
+	}
+	if m := reSigAddBare.FindStringSubmatch(s); m != nil {
+		return analyze.EditRequest{Kind: analyze.EditAddParam, FuncName: m[3], SigType: strings.TrimSpace(m[1]), SigName: m[2], SigNoUsing: true}, true
+	}
 
 	// Functions first: "add a function like…" must never fall into
 	// the case/field forms below.
