@@ -1228,6 +1228,15 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if tryDelegate(line, reader) {
 			continue
 		}
+		// The write-sentence boundary, last before the intent
+		// layer: an imperative sentence asking to write code
+		// that no shape above could serve is answered here, in
+		// composer terms — never left for a brain to improvise
+		// at (2026-10-25: "add print line to jim/main.go" got
+		// social-brain word salad). See writeboundary.go.
+		if tryWriteBoundary(line) {
+			continue
+		}
 		// Intent layer: a confident trained classification of what
 		// the user wants, in their own words — no memorized commands.
 		if tryIntentDispatch(line, profile) {
