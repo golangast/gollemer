@@ -76,6 +76,11 @@ func prepareDomainTrainData(projectRoot, domain string) (*domainTrainData, error
 		// pairs; its data lives in a separate file derived from the
 		// quality-gated chat dataset.
 		datasetPath = RouterDatasetPath(projectRoot)
+	} else if domain == DeclDomain {
+		// The decl experiment trains on its own synthetic file (train
+		// pairs only — the pipeline's held-out matrix is separate and
+		// must never leak into training). No chat-dataset seeding.
+		datasetPath = DeclDatasetPath(projectRoot)
 	} else {
 		seeded, err := SeedChatDataset(projectRoot)
 		if err != nil {
@@ -98,17 +103,26 @@ func prepareDomainTrainData(projectRoot, domain string) (*domainTrainData, error
 		return nil, fmt.Errorf("need at least 10 base pairs in domain %q, have %d", domain, len(base))
 	}
 
-	// Deterministic 80/20 split so results are reproducible.
-	rng := rand.New(rand.NewSource(20260926))
-	order := rng.Perm(len(base))
-	nTrain := int(0.8 * float64(len(base)))
-	trainBase := make([]ChatPair, 0, nTrain)
-	heldBase := make([]ChatPair, 0, len(base)-nTrain)
-	for i, idx := range order {
-		if i < nTrain {
-			trainBase = append(trainBase, base[idx])
-		} else {
-			heldBase = append(heldBase, base[idx])
+	// Deterministic 80/20 split so results are reproducible. The decl
+	// domain is the exception: its file is train-only by construction
+	// (the pipeline holds out combinations and frames before writing
+	// it), so every pair trains and there are no in-trainer probes —
+	// the experiment's own eval scores the held-out matrix.
+	var trainBase, heldBase []ChatPair
+	if domain == DeclDomain {
+		trainBase = base
+	} else {
+		rng := rand.New(rand.NewSource(20260926))
+		order := rng.Perm(len(base))
+		nTrain := int(0.8 * float64(len(base)))
+		trainBase = make([]ChatPair, 0, nTrain)
+		heldBase = make([]ChatPair, 0, len(base)-nTrain)
+		for i, idx := range order {
+			if i < nTrain {
+				trainBase = append(trainBase, base[idx])
+			} else {
+				heldBase = append(heldBase, base[idx])
+			}
 		}
 	}
 
@@ -123,6 +137,14 @@ func prepareDomainTrainData(projectRoot, domain string) (*domainTrainData, error
 	syns := socialSynonyms
 	if domain == GocodeDomain {
 		syns = gocodeSynonyms
+	}
+	if domain == DeclDomain {
+		// No synonym augmentation: decl inputs are generated text
+		// (structured specs and frame phrasings) whose exact wording
+		// is the experiment's controlled variable — paraphrase noise
+		// would blur the frame split. An empty map makes augmentInputs
+		// return the base pairs unchanged.
+		syns = map[string][]string{}
 	}
 	trainPairs := augmentInputs(base, trainBase, syns)
 
@@ -245,7 +267,7 @@ func loadTrainingCheckpoint(tok *tokenizer.Tokenizer, curFP uint64, ckptPath, me
 // checkpoints (which store their dims) stay valid and retraining stays
 // comparable.
 func dimsForDomain(domain string) (embedDim, hiddenDim int) {
-	if domain == GocodeDomain || domain == GoDomain || domain == GoCliDomain || domain == SocialDomain || domain == MakefileDomain || domain == RouterDomain || domain == UnderstandingDomain {
+	if domain == GocodeDomain || domain == GoDomain || domain == GoCliDomain || domain == SocialDomain || domain == MakefileDomain || domain == RouterDomain || domain == UnderstandingDomain || domain == DeclDomain {
 		return 128, 256
 	}
 	return 64, 128
