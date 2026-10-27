@@ -137,20 +137,25 @@ func TestParseWriteBoundaryNonClaims(t *testing.T) {
 	}
 }
 
-// His exact function line through the whole deterministic
-// chain, in his session state — jim/ created through the create
-// feature, the project analyzed first — ending at the boundary
-// with the composer's words, writing nothing. (His other line,
-// "add print line to jim/main.go", is no longer a boundary case:
-// the concept book serves it one claim earlier — its chain
-// coverage lives in conceptbook_test.go.)
+// A boundary-owned function line through the whole
+// deterministic chain, in his session state — jim/ created
+// through the create feature, the project analyzed first —
+// ending at the boundary with the composer's words, writing
+// nothing. (His exact lines are no longer boundary cases: "add
+// print line to jim/main.go" is served by the concept book, and
+// "add a function to jim/main.go" gets the composer's nameless
+// guidance — one claim earlier each; their chain coverage lives
+// in conceptbook_test.go. The boundary keeps the function asks
+// the composer doesn't claim — insert|write verbs like this
+// one — and its answer names the same three working forms.)
 func TestWriteBoundaryLiveSessionLines(t *testing.T) {
 	cases := []struct {
 		line string
 		want []string
 	}{
-		{"add a function to jim/main.go", []string{
-			"A function needs a source I can copy from",
+		{"insert a function into jim/main.go", []string{
+			"A function needs a shape I can assemble",
+			`"add a function named <Name> to jim/main.go"`,
 			`"add a function in jim/main.go that calls <something that exists>"`,
 			`"copy <existing function> as <new name>"`,
 		}},
@@ -192,6 +197,8 @@ func TestWriteBoundaryNearMissAnswers(t *testing.T) {
 	}{
 		{"add a field to jim/main.go", `jim/main.go alone doesn't tell me which struct should carry it`},
 		{"add a field to jim/main.go", `"add a Timeout field of type int to Config"`},
+		{"insert a function into jim/main.go", "A function needs a shape I can assemble"},
+		{"insert a function into jim/main.go", `"add a function named <Name> to jim/main.go"`},
 		{"add a parameter to Fetch", `"add a context parameter to <Func>"`},
 		{"add a parameter to Fetch", `"add a <type> parameter named <name> to <Func> using <expression>"`},
 		{"add a server to jim/main.go", `The piece's name here is webserver: "add a webserver to jim/main.go"`},
@@ -219,7 +226,7 @@ func TestWriteBoundaryNearMissAnswers(t *testing.T) {
 // its own shape through the chain — the boundary's words appear
 // in NONE of their answers, and each is handled before it.
 func TestWriteBoundaryOrderingBattery(t *testing.T) {
-	boundaryPhrases := []string{"needs a source I can copy from", "I can't add", "loose statement isn't one of the pieces", "The piece's name here is webserver"}
+	boundaryPhrases := []string{"needs a shape I can assemble", "I can't add", "loose statement isn't one of the pieces", "The piece's name here is webserver"}
 	check := func(t *testing.T, line, out string, handled bool) {
 		t.Helper()
 		if !handled {

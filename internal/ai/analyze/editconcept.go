@@ -375,6 +375,17 @@ func (p *Project) planConceptDeclaration(req EditRequest, entry *ConceptEntry, r
 	// carries none (a hand-written row may not).
 	decl = indentConceptDecl(decl)
 
+	// A func-shaped row (the book's function entry) assembles
+	// an EMPTY scaffold: no parameters, no results, a TODO
+	// body. The plan says so plainly, and names the two shapes
+	// that produce a working function with a real signature —
+	// the same honesty pattern as the interface's
+	// never-invented-methods note, keyed on the rendered
+	// declaration's shape, not on the row's id.
+	if strings.HasPrefix(decl, "func ") {
+		notes = append(notes, fmt.Sprintf("This is an empty scaffold — %s has a name and a body to fill in, but no parameters, no results, and nothing that does work yet. For a function with a real signature from the start, say \"add a function in %s that calls <Something>\" (it wraps one that exists) or \"add a function like <Existing> named <New>\" (it copies one).", name, rel))
+	}
+
 	var specs []string
 	for _, path := range entry.Imports {
 		specs = append(specs, strconv.Quote(path))
@@ -405,13 +416,22 @@ func (p *Project) planConceptDeclaration(req EditRequest, entry *ConceptEntry, r
 	plan := &EditPlan{
 		Summary:    summary,
 		VerifyDesc: fmt.Sprintf("%s now declares the %s %s", filepath.Base(rel), canon, name),
-		Site:       fmt.Sprintf("%s:%d", p.LinkPath(rel), insertedLine(ef.After, "type "+name+" ")),
+		Site:       fmt.Sprintf("%s:%d", p.LinkPath(rel), insertedLine(ef.After, strings.SplitN(decl, "\n", 2)[0])),
 		Files:      []EditFile{ef},
 		Notes:      notes,
 		verify: func(after *Project) bool {
+			// A declaration row's product is a top-level name
+			// in the target file — a TYPE for the interface
+			// and struct rows, a plain FUNCTION for the
+			// function row. Either form verifies the plan.
 			for _, pk := range after.Packages {
 				for _, t := range pk.Types {
 					if t.Name == name && t.File == rel {
+						return true
+					}
+				}
+				for _, fn := range pk.Funcs {
+					if fn.Receiver == "" && fn.Name == name && fn.File == rel {
 						return true
 					}
 				}
@@ -675,19 +695,28 @@ func selfCheckConceptStatement(after []byte, funcName, firstLine string) string 
 }
 
 // selfCheckConceptDeclaration re-parses the assembled file and
-// confirms it now declares a type with the given name.
+// confirms it now declares the given name at top level — a type
+// or a plain function, whichever form the row's template builds
+// (the planner is generic by kind, and "declaration" covers
+// both).
 func selfCheckConceptDeclaration(after []byte, name string) string {
 	_, fileAST, err := parseGoSrc("concept.go", after)
 	if err != nil || fileAST == nil {
 		return "the assembled file doesn't parse"
 	}
 	for _, d := range fileAST.Decls {
-		gd, ok := d.(*ast.GenDecl)
-		if !ok || gd.Tok != token.TYPE {
-			continue
-		}
-		for _, spec := range gd.Specs {
-			if ts, ok := spec.(*ast.TypeSpec); ok && ts.Name.Name == name {
+		switch d := d.(type) {
+		case *ast.GenDecl:
+			if d.Tok != token.TYPE {
+				continue
+			}
+			for _, spec := range d.Specs {
+				if ts, ok := spec.(*ast.TypeSpec); ok && ts.Name.Name == name {
+					return ""
+				}
+			}
+		case *ast.FuncDecl:
+			if d.Recv == nil && d.Name.Name == name {
 				return ""
 			}
 		}

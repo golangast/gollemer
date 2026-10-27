@@ -64,6 +64,18 @@ const defaultConceptBook = `{
       "names": ["interface"],
       "kind": "declaration",
       "template": "type {name} interface {\n{methods}\n}"
+    },
+    {
+      "id": "struct",
+      "names": ["struct", "struct type"],
+      "kind": "declaration",
+      "template": "type {name} struct {\n\t// TODO: add fields — or say \"add a <Name> field of type <Type> to {name}\"\n}"
+    },
+    {
+      "id": "function",
+      "names": ["function", "func"],
+      "kind": "declaration",
+      "template": "func {name}() {\n\t// TODO: write the body\n}"
     }
   ]
 }`
@@ -293,6 +305,25 @@ func parseConceptFrom(line string, entries []analyze.ConceptEntry) (conceptReq, 
 			req.target = strings.Join(fields[j:], " ")
 		}
 	}
+
+	// Two bound slots can still make the line another shape's:
+	// a "like" the entry's template can't spend (it has no
+	// {methods} slot) would be silently dropped — and "add a
+	// function like Greet named GreetLoudly" is the CLONE's
+	// sentence, not an empty scaffold's. Likewise a "that" in
+	// the target tail is a behaviour clause, not a path: "add
+	// a function in jim/main.go that calls Load" is the
+	// DELEGATE's sentence, and its tail is not a file. Both
+	// refuse the claim; qualifiers are never silently dropped
+	// and behaviour clauses are never read as paths.
+	if req.like != "" && !strings.Contains(req.entry.Template, "{methods}") {
+		return conceptReq{}, false
+	}
+	for _, w := range strings.Fields(strings.ToLower(req.target)) {
+		if w == "that" {
+			return conceptReq{}, false
+		}
+	}
 	return req, true
 }
 
@@ -353,6 +384,19 @@ func runConcept(line string, ask editAsk) bool {
 	// name, and any concept with no target, are answered in
 	// composer terms — the sentence was this claim's.
 	if req.entry.Kind == analyze.ConceptDeclaration && req.name == "" {
+		if req.entry.ID == "function" {
+			// A nameless function ask is a near-miss of THREE
+			// shapes, not one: this claim's scaffold, the
+			// delegate, and the clone. The guidance names all
+			// three, with the user's own target filled in.
+			file := req.target
+			if file == "" {
+				file = "main.go"
+			}
+			fmt.Printf("%s Not adding that: a function needs a name — say \"add a function named <Name> to %s\" for an empty scaffold you fill in. If you want it doing real work from the start, say \"add a function in %s that calls <something that exists>\" or \"copy <existing function> as <new name>\".\n", tag, file, file)
+			recordBrain("composer", false, "concept refused: function unnamed")
+			return true
+		}
 		fmt.Printf("%s Not adding that: %s %s needs a name — say \"add a %s named <Name> to <file>\", like \"add a %s named Reader to main.go\".\n", tag, conceptArticle(canon), canon, canon, canon)
 		recordBrain("composer", false, "concept refused: declaration unnamed")
 		return true

@@ -32,7 +32,7 @@ func withConceptEntries(t *testing.T, entries []analyze.ConceptEntry) {
 func defaultBookEntries(t *testing.T) []analyze.ConceptEntry {
 	t.Helper()
 	entries, skipped := analyze.ParseConceptBook([]byte(defaultConceptBook))
-	if skipped != 0 || len(entries) != 2 {
+	if skipped != 0 || len(entries) != 4 {
 		t.Fatalf("default book = %d entries, %d skipped", len(entries), skipped)
 	}
 	return entries
@@ -83,6 +83,14 @@ func TestParseConceptClaims(t *testing.T) {
 		{"add the interface like Store named Reader to store.go", "interface", "Reader", "", "", "Store", "store.go"},
 		{"add an interface to jim/main.go", "interface", "", "", "", "", "jim/main.go"},
 		{"add an interface", "interface", "", "", "", "", ""},
+		{"add a struct named Config to store.go", "struct", "Config", "", "", "", "store.go"},
+		{"add the struct named Config to jim/main.go", "struct", "Config", "", "", "", "jim/main.go"},
+		{"put a struct type named Config in store.go", "struct", "Config", "", "", "", "store.go"},
+		{"add a struct to jim/main.go", "struct", "", "", "", "", "jim/main.go"},
+		{"add a function named Fetch to main.go", "function", "Fetch", "", "", "", "main.go"},
+		{"add a func named Fetch to main.go", "function", "Fetch", "", "", "", "main.go"},
+		{"add the function named Fetch to the file main.go", "function", "Fetch", "", "", "", "main.go"},
+		{"add a function to jim/main.go", "function", "", "", "", "", "jim/main.go"},
 	}
 	for _, c := range cases {
 		req, ok := parseConceptFrom(c.line, book)
@@ -101,7 +109,13 @@ func TestParseConceptClaims(t *testing.T) {
 
 // Non-claims: the bespoke shapes' sentences, questions, and
 // lines whose slot zone carries an unknown word (never silently
-// dropped) stay with their owners.
+// dropped) stay with their owners. Two pins here tightened when
+// "function" became a book entry: the delegate's line (its
+// behaviour-clause tail is not a path) and the clone's (its
+// "like" names a function to copy, and the function row's
+// template has no {methods} slot to spend it on) — the composer
+// refuses both at parse level, on top of the chain order that
+// already serves them first.
 func TestParseConceptNonClaims(t *testing.T) {
 	book := defaultBookEntries(t)
 	for _, line := range []string{
@@ -117,9 +131,8 @@ func TestParseConceptNonClaims(t *testing.T) {
 		"how do i add a print line to jim/main.go",  // a question
 		"add a getter for Timeout",                  // other brains'
 		"add a method to jim/main.go",               // unknown concept: the boundary's
-		"add a struct to jim/main.go",
-		"add a print line quickly to jim/main.go", // unknown slot word
-		"add a print line to",                     // (prep with nothing: not a claim at parse level? see below)
+		"add a print line quickly to jim/main.go",   // unknown slot word
+		"add a print line to",                       // (prep with nothing: not a claim at parse level? see below)
 	} {
 		if line == "add a print line to" {
 			// The target clause opens and names nothing: the
@@ -237,6 +250,7 @@ func TestConceptGuidanceThroughChain(t *testing.T) {
 	createJimThroughTheChain(t, profile)
 	for _, c := range []struct{ line, want string }{
 		{"add an interface to jim/main.go", "an interface needs a name"},
+		{"add a struct to jim/main.go", "a struct needs a name"},
 		{"add an interface named Reader", "doesn't name the file or folder"},
 		{"add a print line to", "doesn't name the file or folder"},
 	} {
@@ -289,6 +303,125 @@ func (s *Store) Save(name string, data []byte) error { return nil }
 	}
 	if !strings.Contains(out, "built the project and checked") {
 		t.Errorf("spine build/verify not reported:\n%s", out)
+	}
+}
+
+// A nameless function ask through the chain: the composer's
+// guidance names all THREE working forms — its own named
+// scaffold (with the user's file filled in), the delegate, and
+// the clone — and writes nothing.
+func TestConceptFunctionNamelessGuidanceNamesAllThreeForms(t *testing.T) {
+	root := liveSessionRoot(t)
+	withChatSession(t, root, true)
+	profile := &UserProfile{}
+	createJimThroughTheChain(t, profile)
+	line := "add a function to jim/main.go"
+	var handled bool
+	out := captureStdout(t, func() { handled = claimChain(line, yes, profile) })
+	if !handled {
+		t.Fatalf("%q fell through the claim chain:\n%s", line, out)
+	}
+	if !strings.Contains(out, "gollemer [composer]>") {
+		t.Errorf("%q was not answered by the composer:\n%s", line, out)
+	}
+	for _, want := range []string{
+		`"add a function named <Name> to jim/main.go"`,
+		`"add a function in jim/main.go that calls <something that exists>"`,
+		`"copy <existing function> as <new name>"`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("nameless-function guidance does not name %q:\n%s", want, out)
+		}
+	}
+	if got := readBack(t, root, "jim/main.go"); got != "package main\n" {
+		t.Errorf("guidance wrote to jim/main.go:\n%s", got)
+	}
+}
+
+// Function end to end in the live session: the scaffold lands
+// in jim/main.go, the plan's note owns the emptiness before the
+// gate, and the spine reports its build/verify. The print line
+// goes first — the beginner's own order — because it grows the
+// main a bare package-main file needs before ANY declaration
+// can join it (the spine's build is absolute: a package main
+// with no main function does not build, before the edit or
+// after it, for every shape — the interface included).
+func TestConceptFunctionScaffoldLiveSession(t *testing.T) {
+	root := liveSessionRoot(t)
+	withChatSession(t, root, true)
+	profile := &UserProfile{}
+	createJimThroughTheChain(t, profile)
+	var grown bool
+	captureStdout(t, func() { grown = claimChain("add print line to jim/main.go", yes, profile) })
+	if !grown {
+		t.Fatal("print line did not grow jim's main")
+	}
+	line := "add a function named Fetch to jim/main.go"
+	var handled bool
+	out := captureStdout(t, func() { handled = claimChain(line, yes, profile) })
+	if !handled {
+		t.Fatalf("%q fell through the claim chain:\n%s", line, out)
+	}
+	got := readBack(t, root, "jim/main.go")
+	for _, want := range []string{"func Fetch() {", "// TODO: write the body"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("jim/main.go missing %q:\n%s\noutput:\n%s", want, got, out)
+		}
+	}
+	if !strings.Contains(out, "This is an empty scaffold") {
+		t.Errorf("the plan did not own the scaffold's emptiness:\n%s", out)
+	}
+	if !strings.Contains(out, "built the project and checked") {
+		t.Errorf("spine build/verify not reported:\n%s", out)
+	}
+}
+
+// The beginner workflow the struct row exists for, in one
+// session: add the struct, then add a field to it with the
+// shipped field form — the second sentence reads the project
+// the first edit left behind. The print line goes first (the
+// beginner's own order, and the step that grows the main a
+// bare package-main file needs before any declaration can
+// join it — see TestConceptFunctionScaffoldLiveSession).
+func TestConceptStructThenFieldInOneSession(t *testing.T) {
+	root := liveSessionRoot(t)
+	withChatSession(t, root, true)
+	profile := &UserProfile{}
+	createJimThroughTheChain(t, profile)
+	var grown bool
+	captureStdout(t, func() { grown = claimChain("add print line to jim/main.go", yes, profile) })
+	if !grown {
+		t.Fatal("print line did not grow jim's main")
+	}
+
+	var handled bool
+	out := captureStdout(t, func() { handled = claimChain("add a struct named Config to jim/main.go", yes, profile) })
+	if !handled {
+		t.Fatalf("struct line fell through the claim chain:\n%s", out)
+	}
+	got := readBack(t, root, "jim/main.go")
+	for _, want := range []string{
+		"type Config struct {",
+		`// TODO: add fields — or say "add a <Name> field of type <Type> to Config"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("jim/main.go missing %q after the struct add:\n%s\noutput:\n%s", want, got, out)
+		}
+	}
+	if !strings.Contains(out, "built the project and checked") {
+		t.Errorf("struct add: spine build/verify not reported:\n%s", out)
+	}
+
+	out = captureStdout(t, func() { handled = claimChain("add a Timeout field of type int to Config", yes, profile) })
+	if !handled {
+		t.Fatalf("field line fell through the claim chain:\n%s", out)
+	}
+	got = readBack(t, root, "jim/main.go")
+	if !strings.Contains(got, "Timeout int") {
+		t.Errorf("the field did not land in the struct the same session added:\n%s\noutput:\n%s", got, out)
+	}
+	if !strings.Contains(out, "built the project and checked") {
+		t.Errorf("field add: spine build/verify not reported:\n%s", out)
 	}
 }
 

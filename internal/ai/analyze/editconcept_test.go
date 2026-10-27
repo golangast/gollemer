@@ -33,6 +33,28 @@ func testBook(t *testing.T) (printLine, iface ConceptEntry) {
 	return entries[0], entries[1]
 }
 
+// The two rows the 2026-10-26 build added to the shipped book,
+// verbatim — struct and function are declaration-kind entries
+// like the interface, and these fixtures carry the exact
+// templates data/concepts.json ships.
+const testBookNewKindsJSON = `{
+  "concepts": [
+    {"id": "struct", "names": ["struct", "struct type"], "kind": "declaration",
+     "template": "type {name} struct {\n\t// TODO: add fields — or say \"add a <Name> field of type <Type> to {name}\"\n}"},
+    {"id": "function", "names": ["function", "func"], "kind": "declaration",
+     "template": "func {name}() {\n\t// TODO: write the body\n}"}
+  ]
+}`
+
+func testBookNewKinds(t *testing.T) (strct, fn ConceptEntry) {
+	t.Helper()
+	entries, skipped := ParseConceptBook([]byte(testBookNewKindsJSON))
+	if skipped != 0 || len(entries) != 2 {
+		t.Fatalf("new-kinds book parsed to %d entries, %d skipped", len(entries), skipped)
+	}
+	return entries[0], entries[1]
+}
+
 // Loader discipline: every flavour of bad row is skipped and
 // counted; the good rows around them still load.
 func TestParseConceptBookSkipsMalformedRows(t *testing.T) {
@@ -351,6 +373,105 @@ func TestConceptInterfaceLikeMethodlessTypeRefuses(t *testing.T) {
 		Kind: EditConcept, File: "main.go", Concept: &iface,
 		ConceptName: "X", ConceptLike: "Lonely",
 	}, "has no methods")
+}
+
+// Struct, bare: the declaration lands at file end, its TODO
+// teaches the follow-up move in the shipped add-field grammar
+// with the struct's own name filled in, and the plan verifies.
+func TestConceptStructBareTODOAndVerifies(t *testing.T) {
+	dir, p := conceptFixture(t)
+	strct, _ := testBookNewKinds(t)
+	plan := conceptPlan(t, p, EditRequest{
+		Kind: EditConcept, File: "main.go", Concept: &strct, ConceptName: "Config",
+	})
+	after := string(plan.Files[0].After)
+	if !strings.Contains(after, "type Config struct {") {
+		t.Errorf("struct declaration missing:\n%s", after)
+	}
+	if !strings.Contains(after, `// TODO: add fields — or say "add a <Name> field of type <Type> to Config"`) {
+		t.Errorf("struct TODO does not teach the add-field sentence with its own name:\n%s", after)
+	}
+	applyPlan(t, dir, plan)
+	fresh, err := Analyze(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !plan.Verify(fresh) {
+		t.Error("struct plan does not verify")
+	}
+}
+
+// Function: an empty scaffold — the rendered declaration, the
+// TODO body, and a plan note that owns the emptiness and names
+// the delegate and clone forms — and the plan verifies against
+// the re-analyzed project (the verify is not type-only).
+func TestConceptFunctionScaffoldNotesAndVerifies(t *testing.T) {
+	dir, p := conceptFixture(t)
+	_, fn := testBookNewKinds(t)
+	plan := conceptPlan(t, p, EditRequest{
+		Kind: EditConcept, File: "main.go", Concept: &fn, ConceptName: "Fetch",
+	})
+	after := string(plan.Files[0].After)
+	for _, want := range []string{"func Fetch() {", "// TODO: write the body"} {
+		if !strings.Contains(after, want) {
+			t.Errorf("function scaffold missing %q:\n%s", want, after)
+		}
+	}
+	joined := strings.Join(plan.Notes, " ")
+	for _, want := range []string{
+		"This is an empty scaffold",
+		`"add a function in main.go that calls <Something>"`,
+		`"add a function like <Existing> named <New>"`,
+	} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("function plan notes do not say %q: %v", want, plan.Notes)
+		}
+	}
+	applyPlan(t, dir, plan)
+	fresh, err := Analyze(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !plan.Verify(fresh) {
+		t.Error("function plan does not verify")
+	}
+}
+
+// Name collisions refuse for the new entries too, across kinds:
+// the declaration planner's package check (pkgDeclares) covers
+// funcs, types, and vars, so a struct named like an existing
+// FUNCTION and a function named like an existing TYPE both
+// refuse at plan time — never as uncompilable code for the
+// build verdict to catch.
+func TestConceptStructNameTakenByFuncRefuses(t *testing.T) {
+	_, p := conceptFixture(t)
+	strct, _ := testBookNewKinds(t)
+	conceptRefusal(t, p, EditRequest{
+		Kind: EditConcept, File: "main.go", Concept: &strct, ConceptName: "Helper",
+	}, "already exists in package main")
+}
+
+func TestConceptFunctionNameTakenByFuncRefuses(t *testing.T) {
+	_, p := conceptFixture(t)
+	_, fn := testBookNewKinds(t)
+	conceptRefusal(t, p, EditRequest{
+		Kind: EditConcept, File: "main.go", Concept: &fn, ConceptName: "Helper",
+	}, "already exists in package main")
+}
+
+func TestConceptFunctionNameTakenByTypeRefuses(t *testing.T) {
+	_, p := conceptFixture(t)
+	_, fn := testBookNewKinds(t)
+	conceptRefusal(t, p, EditRequest{
+		Kind: EditConcept, File: "store/store.go", Concept: &fn, ConceptName: "Store",
+	}, "already exists in package store")
+}
+
+func TestConceptStructNamelessRefuses(t *testing.T) {
+	_, p := conceptFixture(t)
+	strct, _ := testBookNewKinds(t)
+	conceptRefusal(t, p, EditRequest{Kind: EditConcept, File: "main.go", Concept: &strct},
+		"needs a name")
 }
 
 // The planner is generic by KIND, proven at this level too: a

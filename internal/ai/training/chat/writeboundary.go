@@ -266,7 +266,13 @@ func (r writeBoundaryReq) closestAlternatives() string {
 func (r writeBoundaryReq) answer() string {
 	switch r.kind {
 	case wbFunction:
-		return fmt.Sprintf("A function needs a source I can copy from — I can't write one from nothing. The two that work: \"add a function in %s that calls <something that exists>\" (a new function wrapping a real one) or \"copy <existing function> as <new name>\" (a clone you then edit)", r.exampleFile())
+		// Three forms work, not two: the concept book's named
+		// scaffold (served one claim earlier for add|put lines;
+		// a line lands HERE only when the composer didn't claim
+		// it — insert|write verbs, an unparseable slot zone),
+		// the delegate, and the clone.
+		f := r.exampleFile()
+		return fmt.Sprintf("A function needs a shape I can assemble — I can't invent one from an idea alone. The forms that work: \"add a function named <Name> to %s\" (an empty scaffold you fill in), \"add a function in %s that calls <something that exists>\" (a new function wrapping a real one), or \"copy <existing function> as <new name>\" (a clone you then edit)", f, f)
 	case wbField:
 		head := "A field goes into a named struct, not straight into a file"
 		if r.fileTgt && r.hasTarget {

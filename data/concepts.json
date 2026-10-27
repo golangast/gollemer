@@ -21,6 +21,24 @@
                 "interface"
             ],
             "template": "type {name} interface {\n{methods}\n}"
+        },
+        {
+            "id": "struct",
+            "kind": "declaration",
+            "names": [
+                "struct",
+                "struct type"
+            ],
+            "template": "type {name} struct {\n\t// TODO: add fields \u2014 or say \"add a <Name> field of type <Type> to {name}\"\n}"
+        },
+        {
+            "id": "function",
+            "kind": "declaration",
+            "names": [
+                "function",
+                "func"
+            ],
+            "template": "func {name}() {\n\t// TODO: write the body\n}"
         }
     ],
     "source": "Gollemer's concept book \u2014 names of code mapped to their basic code. Rows are data, not grammar: add a row (id, names, kind, template) and the composer can assemble that concept in every phrasing its slots allow, with no new Go code. A malformed row is skipped; the rest of the book still loads."
