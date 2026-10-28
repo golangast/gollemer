@@ -210,9 +210,9 @@ func vocabFingerprint(v *vocab.Vocabulary) uint64 {
 	return h.Sum64()
 }
 
-// saveTrainingCheckpoint writes the best weights and the resume sidecar.
-// The production model file is NOT touched — it is only written when
-// training completes.
+// saveTrainingCheckpoint writes the model's current weights and the
+// resume sidecar. The production model file is NOT touched — it is only
+// written when training completes.
 func saveTrainingCheckpoint(model *seq2seq.Seq2Seq, meta ckptMeta, ckptPath, metaPath string) error {
 	if err := os.MkdirAll(filepath.Dir(ckptPath), 0o755); err != nil {
 		return err
@@ -255,6 +255,40 @@ func loadTrainingCheckpoint(tok *tokenizer.Tokenizer, curFP uint64, ckptPath, me
 		return nil, meta, fmt.Errorf("loading checkpoint weights: %w", err)
 	}
 	return model, meta, nil
+}
+
+// latestCkptPaths returns the "latest weights" checkpoint paths. Beside
+// the improvement-gated best checkpoint, the trainer banks the LIVE
+// weights on every completed epoch: best-only checkpointing plus
+// deterministic training is an infinite replay spin — every kill resumed
+// at the last improvement and re-ran the same non-improving epochs, and
+// the early-stopping counter (kept only in the sidecar of a checkpoint
+// that is by construction written when the counter is 0) never survived
+// a restart, so a converged run on a restart-prone box could never
+// terminate (the decl run, 2026-10-27: best at epoch 54, restarts every
+// ~17 epochs, 30 stagnant epochs needed).
+func latestCkptPaths(projectRoot, domain string) (latestPath, latestMetaPath string) {
+	modelPath := filepath.Join(projectRoot, "data", "models", "gob_models", "real_tiny_seq2seq_"+domain+".gob")
+	return modelPath + ".latest", modelPath + ".latest.json"
+}
+
+// copyWeightsInto copies src's parameter values into dst's parameter
+// tensors in place. dst keeps its own tensor pointers — optimizer
+// snapshots are keyed by tensor pointer, so a run resumed from the latest
+// checkpoint (whose baseline must remain the BEST weights) moves values
+// between models, never swaps instances after a snapshot exists.
+func copyWeightsInto(dst, src *seq2seq.Seq2Seq) error {
+	dp, sp := dst.Parameters(), src.Parameters()
+	if len(dp) != len(sp) {
+		return fmt.Errorf("copy weights: parameter count mismatch (%d vs %d)", len(dp), len(sp))
+	}
+	for i := range dp {
+		if len(dp[i].Data) != len(sp[i].Data) {
+			return fmt.Errorf("copy weights: parameter %d size mismatch (%d vs %d)", i, len(dp[i].Data), len(sp[i].Data))
+		}
+		copy(dp[i].Data, sp[i].Data)
+	}
+	return nil
 }
 
 // dimsForDomain returns (embeddingDim, hiddenDim) per domain. The gocode
@@ -464,6 +498,7 @@ func RunRealSeq2SeqTraining(projectRoot, domain string, resume bool) error {
 
 	curFP := vocabFingerprint(v)
 	ckptPath, metaPath := ckptPaths(projectRoot, domain)
+	latestPath, latestMetaPath := latestCkptPaths(projectRoot, domain)
 	modelPath := filepath.Join(projectRoot, "data", "models", "gob_models", "real_tiny_seq2seq_"+domain+".gob")
 
 	// Training state. A fresh run starts at epoch 1 from random weights;
@@ -478,20 +513,61 @@ func RunRealSeq2SeqTraining(projectRoot, domain string, resume bool) error {
 	lastCheckpointBest := float32(math.Inf(1))
 	lastCheckpointEpoch := 0
 	var model *seq2seq.Seq2Seq
+	// pendingLatest holds a governing latest-checkpoint model whose
+	// weights become the live training weights only AFTER bestParams is
+	// snapshotted from the best weights (below).
+	var pendingLatest *seq2seq.Seq2Seq
 
 	if resume {
-		if m, meta, err := loadTrainingCheckpoint(tok, curFP, ckptPath, metaPath); err != nil {
-			log.Printf("[REAL-SEQ2SEQ] -resume given but checkpoint unusable (%v); starting fresh from epoch 1", err)
-		} else {
-			model = m
-			startEpoch = meta.Epoch + 1
-			lr = meta.LR
-			best = float32(meta.Best)
-			lastCheckpointBest = float32(meta.LastCheckpointBest)
-			lastCheckpointEpoch = meta.Epoch
-			epochsNoImprove = meta.EpochsNoImprove
+		bm, bmeta, berr := loadTrainingCheckpoint(tok, curFP, ckptPath, metaPath)
+		lm, lmeta, lerr := loadTrainingCheckpoint(tok, curFP, latestPath, latestMetaPath)
+		switch {
+		case lerr == nil && (berr != nil || lmeta.Epoch > bmeta.Epoch):
+			// The latest checkpoint governs: it marks the furthest point
+			// the run actually reached, and its sidecar carries the live
+			// no-improvement counter — the best sidecar cannot, since the
+			// best checkpoint is only written on an improvement, when the
+			// counter is 0 by construction.
+			startEpoch = lmeta.Epoch + 1
+			lr = lmeta.LR
+			best = float32(lmeta.Best)
+			epochsNoImprove = lmeta.EpochsNoImprove
+			if berr == nil {
+				lastCheckpointBest = float32(bmeta.LastCheckpointBest)
+				lastCheckpointEpoch = bmeta.Epoch
+			} else {
+				lastCheckpointBest = float32(lmeta.LastCheckpointBest)
+			}
+			if berr == nil && !(lmeta.Best < lmeta.LastCheckpointBest) {
+				// The best checkpoint on disk holds the weights that
+				// achieved the running best, so it remains the source of
+				// truth for final model selection: model starts AS the
+				// best model so the bestParams snapshot below holds
+				// those weights; the latest weights are copied in only
+				// after that snapshot.
+				model = bm
+				pendingLatest = lm
+			} else {
+				// No best checkpoint yet, or the latest weights carry
+				// an improvement the spaced best-checkpoint gate never
+				// banked to it (sidecar Best < LastCheckpointBest): the
+				// latest weights are themselves the best baseline.
+				model = lm
+			}
+			log.Printf("[REAL-SEQ2SEQ] RESUMED from latest checkpoint: completed epoch=%d best=%.6f lr=%.6f no-improve=%d (continuing at epoch %d)",
+				lmeta.Epoch, lmeta.Best, lmeta.LR, lmeta.EpochsNoImprove, startEpoch)
+		case berr == nil:
+			model = bm
+			startEpoch = bmeta.Epoch + 1
+			lr = bmeta.LR
+			best = float32(bmeta.Best)
+			lastCheckpointBest = float32(bmeta.LastCheckpointBest)
+			lastCheckpointEpoch = bmeta.Epoch
+			epochsNoImprove = bmeta.EpochsNoImprove
 			log.Printf("[REAL-SEQ2SEQ] RESUMED from checkpoint: completed epoch=%d best=%.6f lr=%.6f (continuing at epoch %d)",
-				meta.Epoch, meta.Best, meta.LR, startEpoch)
+				bmeta.Epoch, bmeta.Best, bmeta.LR, startEpoch)
+		default:
+			log.Printf("[REAL-SEQ2SEQ] -resume given but checkpoint unusable (%v); starting fresh from epoch 1", berr)
 		}
 	}
 	if model == nil {
@@ -527,6 +603,17 @@ func RunRealSeq2SeqTraining(projectRoot, domain string, resume bool) error {
 	// first epoch always sets the baseline. Resume: snapshot of the
 	// checkpoint's best weights with its recorded best loss.
 	bestParams := adam.SnapshotParameters()
+	// Resume-from-latest: the snapshot above holds the BEST weights (the
+	// model was loaded as the best checkpoint); only now may the latest
+	// weights become the live training weights. The copy is by value into
+	// the model's own tensors — the snapshot is keyed by tensor pointer,
+	// so swapping model instances here would orphan the baseline.
+	if pendingLatest != nil {
+		if err := copyWeightsInto(model, pendingLatest); err != nil {
+			return err
+		}
+		pendingLatest = nil
+	}
 	rollbacks := 0
 
 	padID := v.PaddingTokenID
@@ -605,6 +692,26 @@ func RunRealSeq2SeqTraining(projectRoot, domain string, resume bool) error {
 			lastCheckpointEpoch = epoch
 			log.Printf("[REAL-SEQ2SEQ] checkpointed best model (loss=%.6f) to %s", best, ckptPath)
 		}
+		// Latest-checkpoint: bank the live weights on EVERY completed
+		// epoch, improving or not, with the live no-improvement counter
+		// in the sidecar. It is written after the best checkpoint, when
+		// an improving epoch's live weights and best weights are the
+		// same values, so a kill between the two writes still leaves a
+		// consistent pair (the best checkpoint then governs the resume).
+		// One model write per epoch is cheap against a multi-minute
+		// epoch, and it is what lets stagnation — and therefore early
+		// stopping — accumulate across kills.
+		latestMeta := ckptMeta{
+			Epoch:              epoch,
+			Best:               float64(best),
+			LastCheckpointBest: float64(lastCheckpointBest),
+			LR:                 lr,
+			EpochsNoImprove:    epochsNoImprove,
+			VocabFP:            curFP,
+		}
+		if err := saveTrainingCheckpoint(model, latestMeta, latestPath, latestMetaPath); err != nil {
+			return err
+		}
 		if epochsNoImprove >= 30 {
 			log.Printf("[REAL-SEQ2SEQ] early stopping: 30 epochs without improvement")
 			break
@@ -621,13 +728,13 @@ func RunRealSeq2SeqTraining(projectRoot, domain string, resume bool) error {
 	}
 	log.Printf("[REAL-SEQ2SEQ] saved best model (loss=%.6f) to %s", best, modelPath)
 
-	// Run completed: the checkpoint has served its purpose. Remove it so a
-	// later -resume starts fresh instead of picking up a stale checkpoint.
-	if err := os.Remove(ckptPath); err != nil && !os.IsNotExist(err) {
-		log.Printf("[REAL-SEQ2SEQ] warning: could not remove %s: %v", ckptPath, err)
-	}
-	if err := os.Remove(metaPath); err != nil && !os.IsNotExist(err) {
-		log.Printf("[REAL-SEQ2SEQ] warning: could not remove %s: %v", metaPath, err)
+	// Run completed: the checkpoints have served their purpose. Remove
+	// them so a later -resume starts fresh instead of picking up stale
+	// state.
+	for _, p := range []string{ckptPath, metaPath, latestPath, latestMetaPath} {
+		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
+			log.Printf("[REAL-SEQ2SEQ] warning: could not remove %s: %v", p, err)
+		}
 	}
 
 	// Held-out probe: every generation printed verbatim, good or bad.
