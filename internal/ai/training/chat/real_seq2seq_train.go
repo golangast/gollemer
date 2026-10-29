@@ -81,6 +81,12 @@ func prepareDomainTrainData(projectRoot, domain string) (*domainTrainData, error
 		// pairs only — the pipeline's held-out matrix is separate and
 		// must never leak into training). No chat-dataset seeding.
 		datasetPath = DeclDatasetPath(projectRoot)
+	} else if domain == SpecDomain {
+		// The spec probe trains on its own synthetic file, derived
+		// from the decl pipeline's train specs (phrasing -> spec
+		// pairs only). Same no-leak discipline as decl. No
+		// chat-dataset seeding.
+		datasetPath = SpecDatasetPath(projectRoot)
 	} else {
 		seeded, err := SeedChatDataset(projectRoot)
 		if err != nil {
@@ -109,7 +115,7 @@ func prepareDomainTrainData(projectRoot, domain string) (*domainTrainData, error
 	// it), so every pair trains and there are no in-trainer probes —
 	// the experiment's own eval scores the held-out matrix.
 	var trainBase, heldBase []ChatPair
-	if domain == DeclDomain {
+	if domain == DeclDomain || domain == SpecDomain {
 		trainBase = base
 	} else {
 		rng := rand.New(rand.NewSource(20260926))
@@ -138,7 +144,7 @@ func prepareDomainTrainData(projectRoot, domain string) (*domainTrainData, error
 	if domain == GocodeDomain {
 		syns = gocodeSynonyms
 	}
-	if domain == DeclDomain {
+	if domain == DeclDomain || domain == SpecDomain {
 		// No synonym augmentation: decl inputs are generated text
 		// (structured specs and frame phrasings) whose exact wording
 		// is the experiment's controlled variable — paraphrase noise
@@ -301,7 +307,7 @@ func copyWeightsInto(dst, src *seq2seq.Seq2Seq) error {
 // checkpoints (which store their dims) stay valid and retraining stays
 // comparable.
 func dimsForDomain(domain string) (embedDim, hiddenDim int) {
-	if domain == GocodeDomain || domain == GoDomain || domain == GoCliDomain || domain == SocialDomain || domain == MakefileDomain || domain == RouterDomain || domain == UnderstandingDomain || domain == DeclDomain {
+	if domain == GocodeDomain || domain == GoDomain || domain == GoCliDomain || domain == SocialDomain || domain == MakefileDomain || domain == RouterDomain || domain == UnderstandingDomain || domain == DeclDomain || domain == SpecDomain {
 		return 128, 256
 	}
 	return 64, 128
@@ -701,10 +707,23 @@ func RunRealSeq2SeqTraining(projectRoot, domain string, resume bool) error {
 		// One model write per epoch is cheap against a multi-minute
 		// epoch, and it is what lets stagnation — and therefore early
 		// stopping — accumulate across kills.
+		latestLCB := lastCheckpointBest
+		if math.IsInf(float64(latestLCB), 1) {
+			// Fresh run, before the first improvement-gated best bank:
+			// lastCheckpointBest is still +Inf, which the JSON sidecar
+			// cannot represent (a fresh run died at epoch 1 on exactly
+			// this, 2026-10-28 — resumed runs never saw it, their
+			// sidecars always carried a finite value). The running
+			// best is the honest finite value: with no best checkpoint
+			// on disk, resume makes the latest weights the baseline
+			// either way, and the best-bank gate still fires on the
+			// first genuine improvement at epoch >= 2.
+			latestLCB = best
+		}
 		latestMeta := ckptMeta{
 			Epoch:              epoch,
 			Best:               float64(best),
-			LastCheckpointBest: float64(lastCheckpointBest),
+			LastCheckpointBest: float64(latestLCB),
 			LR:                 lr,
 			EpochsNoImprove:    epochsNoImprove,
 			VocabFP:            curFP,
