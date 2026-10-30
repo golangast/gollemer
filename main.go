@@ -68,6 +68,15 @@ func main() {
 	}
 
 	if *trainRealSeq2SeqFlag {
+		if *domainFlag == chat.SpecCopyDomain {
+			// The copy/pointer probe has its own trainer: same data and
+			// protocol as the spec domain, pointer-generator model.
+			if err := chat.RunSpecCopyTraining(rootDir, *resumeFlag); err != nil {
+				fmt.Fprintf(os.Stderr, "speccopy training failed: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
 		if err := chat.RunRealSeq2SeqTraining(rootDir, *domainFlag, *resumeFlag); err != nil {
 			fmt.Fprintf(os.Stderr, "real training failed: %v\n", err)
 			os.Exit(1)

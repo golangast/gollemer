@@ -94,6 +94,11 @@ type Decoder struct {
 	// history. Nil disables it (all non-gocode domains): decoding is then
 	// exactly the pre-copy behavior, so old checkpoints stay valid.
 	Copy *CopyGate
+	// PtrGen is the pointer-generator head over the ENCODER's input
+	// positions (see ptrgen.go). Nil for every domain except the
+	// speccopy probe: training and prediction then use the baseline
+	// paths, so old checkpoints stay valid.
+	PtrGen *PointerGen
 }
 
 // MoE configuration for the decoder.
@@ -210,6 +215,9 @@ func (d *Decoder) Parameters() []*tensor.Tensor { // Changed here
 	params = append(params, d.Output.Parameters()...)
 	if d.Copy != nil {
 		params = append(params, d.Copy.Parameters()...)
+	}
+	if d.PtrGen != nil {
+		params = append(params, d.PtrGen.Parameters()...)
 	}
 	return params
 }

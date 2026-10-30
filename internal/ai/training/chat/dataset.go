@@ -127,6 +127,16 @@ func SpecDatasetPath(projectRoot string) string {
 	return filepath.Join(projectRoot, SpecDatasetRelPath)
 }
 
+// SpecCopyDomain is the copy/pointer re-seat probe (2026-10-29): the
+// spec probe's exact data, split, and scoring, but the model is a
+// pointer-generator — its output distribution is a learned mixture
+// of generation and copying from the input (see seq2seq.PointerGen).
+// It trains on the spec domain's pairs (SpecDomain's file and
+// vocabulary) and writes its own model file,
+// real_tiny_seq2seq_speccopy.gob, so the two probes' numbers compare
+// head-to-head with nothing else changed.
+const SpecCopyDomain = "speccopy"
+
 // makefileTerms marks the makefile-command domain: the word "makefile"
 // itself or one of the repo's known make target names. Checked before
 // goTerms on purpose: outputs like "run make train-real-seq2seq" contain
