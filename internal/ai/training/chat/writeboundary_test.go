@@ -317,3 +317,190 @@ func TestWriteBoundaryChainLeavesQuestionsAlone(t *testing.T) {
 		}
 	}
 }
+
+// The named-clause claims (2026-10-30): a name slot before a
+// "that …" clause makes the line a declaration being specified,
+// claimed even with no target — John's live line and its kin.
+// Each is a real fall-through: every earlier parser refuses it
+// (the concept grammar's slot zone can't spend the clause, the
+// delegate wants "that calls", and so on), so the boundary is
+// the only deterministic answer it can get.
+func TestParseWriteBoundaryNamedClauseClaims(t *testing.T) {
+	cases := []struct {
+		line    string
+		kind    writeBoundaryKind
+		name    string
+		returns bool
+	}{
+		{"add a function named jake that returns a string", wbFunction, "jake", true},
+		{"add a function name is jake that returns a string", wbFunction, "jake", true},
+		{"add a function named jake that sorts numbers", wbFunction, "jake", false},
+		{"add a struct named Config that holds settings", wbGeneric, "Config", false},
+		{"add an interface named Reader that reads bytes", wbGeneric, "Reader", false},
+		{"put a struct name is Config that holds settings", wbGeneric, "Config", false},
+	}
+	for _, c := range cases {
+		if _, ok := parseAssembledEdit(c.line); ok {
+			t.Errorf("parseAssembledEdit(%q) claimed — not a boundary fall-through", c.line)
+		}
+		if _, ok := parseRenameSentence(c.line); ok {
+			t.Errorf("parseRenameSentence(%q) claimed", c.line)
+		}
+		if _, _, ok := parseBuildGoal(c.line); ok {
+			t.Errorf("parseBuildGoal(%q) claimed", c.line)
+		}
+		if _, ok := parseCreate(c.line); ok {
+			t.Errorf("parseCreate(%q) claimed", c.line)
+		}
+		if _, ok := parseBoundary(c.line); ok {
+			t.Errorf("parseBoundary(%q) claimed", c.line)
+		}
+		if _, ok := parseAddServer(c.line); ok {
+			t.Errorf("parseAddServer(%q) claimed", c.line)
+		}
+		if _, _, _, ok := parseDelegate(c.line); ok {
+			t.Errorf("parseDelegate(%q) claimed", c.line)
+		}
+		if _, ok := parseConcept(c.line); ok {
+			t.Errorf("parseConcept(%q) claimed — the concept book owns it, not the boundary", c.line)
+		}
+		req, ok := parseWriteBoundary(c.line)
+		if !ok {
+			t.Errorf("parseWriteBoundary(%q) did not claim a named-clause line", c.line)
+			continue
+		}
+		if req.kind != c.kind {
+			t.Errorf("parseWriteBoundary(%q) kind = %q, want %q", c.line, req.kind, c.kind)
+		}
+		if req.declName != c.name {
+			t.Errorf("parseWriteBoundary(%q) declName = %q, want %q", c.line, req.declName, c.name)
+		}
+		if req.returnsClause != c.returns {
+			t.Errorf("parseWriteBoundary(%q) returnsClause = %v, want %v", c.line, req.returnsClause, c.returns)
+		}
+		if req.hasTarget || req.target != "" {
+			t.Errorf("parseWriteBoundary(%q) target = %q, %v — want none", c.line, req.target, req.hasTarget)
+		}
+	}
+}
+
+// The named-clause answers: the working scaffold sentence with
+// the user's own name filled in, and — for a returns clause —
+// the plain returns truth (not assembled yet; the scaffold
+// comes with no return; the body is the user's to fill in).
+func TestWriteBoundaryNamedClauseAnswers(t *testing.T) {
+	cases := []struct {
+		line    string
+		want    []string
+		notWant []string
+	}{
+		{"add a function named jake that returns a string", []string{
+			`"add a function named jake to main.go"`,
+			"return types aren't one of the pieces I can assemble",
+			"the scaffold comes with no return and the body is yours to fill in",
+		}, nil},
+		{"add a function named jake that sorts numbers", []string{
+			`"add a function named jake to main.go"`,
+			"isn't one of the pieces I can assemble",
+		}, []string{"return type"}},
+		{"add a struct named Config that holds settings", []string{
+			"I can't add a struct as asked",
+			`"add a struct named Config to main.go"`,
+		}, nil},
+		{"add an interface named Reader that reads bytes", []string{
+			`"add an interface named Reader to main.go"`,
+		}, nil},
+	}
+	for _, c := range cases {
+		var handled bool
+		out := captureStdout(t, func() { handled = runWriteBoundary(c.line) })
+		if !handled {
+			t.Errorf("runWriteBoundary(%q) not claimed", c.line)
+			continue
+		}
+		if !strings.Contains(out, "gollemer [composer]>") {
+			t.Errorf("runWriteBoundary(%q) not composer-tagged:\n%s", c.line, out)
+		}
+		for _, w := range c.want {
+			if !strings.Contains(out, w) {
+				t.Errorf("runWriteBoundary(%q) answer does not say %q:\n%s", c.line, w, out)
+			}
+		}
+		for _, w := range c.notWant {
+			if strings.Contains(out, w) {
+				t.Errorf("runWriteBoundary(%q) answer says %q — the clause was not a returns clause:\n%s", c.line, w, out)
+			}
+		}
+	}
+}
+
+// The calibration holds around the new claim: a that-clause
+// line WITHOUT a name slot is still generation's, a name inside
+// the clause doesn't count, and the create|write file guard is
+// unchanged (the name slot didn't widen the verbs).
+func TestParseWriteBoundaryNamedNonClaims(t *testing.T) {
+	for _, line := range []string{
+		"add a function that sorts numbers",                 // generation shape, no name slot
+		"add a function that returns a struct named Point",  // the name is the clause's own
+		"write a function named jake that returns a string", // write still needs a file target
+		"create a function named jake that returns a string",
+	} {
+		if req, ok := parseWriteBoundary(line); ok {
+			t.Errorf("parseWriteBoundary(%q) claimed as %+v — that line is not the boundary's", line, req)
+		}
+		if runWriteBoundary(line) {
+			t.Errorf("runWriteBoundary(%q) claimed a line past the calibration", line)
+		}
+	}
+}
+
+// John's exact live line through the whole deterministic chain:
+// the boundary answers it — composer tag, his own name in the
+// scaffold sentence, the returns note — and no brain ever sees
+// it (handled=true at the chain's last deterministic stop; the
+// salad it originally got, "salutations! …", is the marker of
+// the road not taken). The concept-served twin line, same name
+// WITH a file, still belongs to the concept book: gated "no",
+// none of the boundary's words in its answer.
+func TestWriteBoundaryNamedClauseLiveLine(t *testing.T) {
+	root := liveSessionRoot(t)
+	withChatSession(t, root, true)
+	profile := &UserProfile{}
+	createJimThroughTheChain(t, profile)
+
+	line := "add a function named jake that returns a string"
+	var handled bool
+	out := captureStdout(t, func() { handled = claimChain(line, yes, profile) })
+	if !handled {
+		t.Fatalf("%q fell through the whole claim chain:\n%s", line, out)
+	}
+	if !strings.Contains(out, "gollemer [composer]>") {
+		t.Errorf("%q was not answered by the composer:\n%s", line, out)
+	}
+	for _, w := range []string{
+		`"add a function named jake to main.go"`,
+		"return types aren't one of the pieces I can assemble",
+		"the body is yours to fill in",
+	} {
+		if !strings.Contains(out, w) {
+			t.Errorf("%q answer does not say %q:\n%s", line, w, out)
+		}
+	}
+	if strings.Contains(out, "salutations") {
+		t.Errorf("%q reached a brain — the salad it got live:\n%s", line, out)
+	}
+
+	served := "add a function named jake to jim/main.go"
+	out = captureStdout(t, func() { handled = claimChain(served, no, profile) })
+	if !handled {
+		t.Fatalf("%q fell through the whole claim chain:\n%s", served, out)
+	}
+	for _, p := range []string{"needs a shape I can assemble", "I can't add", "return types aren't"} {
+		if strings.Contains(out, p) {
+			t.Errorf("%q was answered by the boundary (%q) instead of the concept book:\n%s", served, p, out)
+		}
+	}
+	if got := readBack(t, root, "jim/main.go"); got != "package main\n" {
+		t.Errorf("gated-no concept line wrote to jim/main.go:\n%s", got)
+	}
+}

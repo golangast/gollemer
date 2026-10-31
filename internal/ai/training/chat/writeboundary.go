@@ -38,7 +38,15 @@ package chat
 //     "that …" behaviour clause and no file/path target, which
 //     is the generation family's shape ("write a function that
 //     reverses a string" is the gocode brain's line, pinned in
-//     intent_test.go and real_seq2seq_chat_test.go).
+//     intent_test.go and real_seq2seq_chat_test.go). One
+//     exception, from the 2026-10-30 live miss ("add a function
+//     named jake that returns a string" → social salad): a name
+//     slot — "named <Name>" or "name is <Name>", the concept
+//     grammar's own two spellings — BEFORE the clause makes the
+//     line a declaration being specified, not behaviour being
+//     requested, and the boundary claims it; a name inside the
+//     clause ("…that returns a struct named Point") is the
+//     clause's own business and still refuses.
 //
 // Questions never start with the bare verb ("how do i add…"
 // keeps its owner), and the object set deliberately omits the
@@ -73,9 +81,18 @@ const (
 type writeBoundaryReq struct {
 	kind      writeBoundaryKind
 	object    string // the object phrase as typed, e.g. "an interface"
+	objWord   string // the object word itself, lowered, e.g. "interface"
 	target    string // the target as typed, e.g. "jim/main.go"
 	fileTgt   bool   // target is (or ends in) a .go file
 	hasTarget bool
+
+	// Set only for a line claimed on its name slot (a "that …"
+	// clause, no file/path target): the declaration's name as
+	// typed, and whether the clause is a returns clause. Those
+	// lines' answers spell the working scaffold sentence with
+	// the user's own name instead of a placeholder.
+	declName      string
+	returnsClause bool
 }
 
 var writeVerbs = map[string]bool{
@@ -122,7 +139,9 @@ func parseWriteBoundary(line string) (writeBoundaryReq, bool) {
 
 	// Evidence: a .go file target, a path-like target, or a code
 	// object. A "that …" clause with no file/path target is a
-	// generation ask — the brains' line, not an edit's.
+	// generation ask — the brains' line, not an edit's — unless
+	// a name slot before the clause marks the line as a
+	// declaration being specified (see the header).
 	fileTgt, pathTgt, objAt := false, false, -1
 	for i, w := range low {
 		if strings.HasSuffix(w, ".go") {
@@ -135,10 +154,30 @@ func parseWriteBoundary(line string) (writeBoundaryReq, bool) {
 			objAt = i
 		}
 	}
-	hasThat := false
-	for _, w := range low[1:] {
-		if w == "that" {
-			hasThat = true
+	thatAt := -1
+	for i := 1; i < len(low); i++ {
+		if low[i] == "that" {
+			thatAt = i
+			break
+		}
+	}
+	hasThat := thatAt >= 0
+
+	// The name slot, in the concept grammar's two spellings,
+	// read only before the behaviour clause: the name token
+	// itself must sit in that region (a dangling "named" right
+	// before "that" names nothing).
+	declName, hasDeclName := "", false
+	limit := len(low)
+	if hasThat {
+		limit = thatAt
+	}
+	for i := 1; i < limit && !hasDeclName; i++ {
+		switch {
+		case low[i] == "named" && i+1 < limit:
+			declName, hasDeclName = fields[i+1], true
+		case low[i] == "name" && i+2 < limit && low[i+1] == "is":
+			declName, hasDeclName = fields[i+2], true
 		}
 	}
 	switch {
@@ -146,6 +185,10 @@ func parseWriteBoundary(line string) (writeBoundaryReq, bool) {
 		// A file was named: an edit ask whatever else it says.
 	case objAt >= 0 && !hasThat:
 		// A code object with a destination or standing alone.
+	case objAt >= 0 && hasDeclName:
+		// A declaration being specified: claimed even with the
+		// clause riding along. The clause stays unservable —
+		// the answer names what is.
 	default:
 		return writeBoundaryReq{}, false
 	}
@@ -162,6 +205,7 @@ func parseWriteBoundary(line string) (writeBoundaryReq, bool) {
 	// The object phrase as typed, with its article when it has
 	// one ("an interface"); for the print line, both words.
 	if objAt >= 0 {
+		req.objWord = low[objAt]
 		start := objAt
 		if objAt > 0 && (low[objAt-1] == "a" || low[objAt-1] == "an" || low[objAt-1] == "the") {
 			start = objAt - 1
@@ -205,6 +249,15 @@ func parseWriteBoundary(line string) (writeBoundaryReq, bool) {
 		req.kind = wbServer
 	default:
 		req.kind = wbGeneric
+	}
+
+	// A line claimed on its name slot alone carries the name
+	// into its answer. (A named line that claimed any other way
+	// — a file target, no clause — keeps the standing answers,
+	// placeholders and all.)
+	if hasThat && hasDeclName && !fileTgt && !pathTgt {
+		req.declName = declName
+		req.returnsClause = thatAt+1 < len(low) && low[thatAt+1] == "returns"
 	}
 	return req, true
 }
@@ -272,6 +325,9 @@ func (r writeBoundaryReq) answer() string {
 		// it — insert|write verbs, an unparseable slot zone),
 		// the delegate, and the clone.
 		f := r.exampleFile()
+		if r.declName != "" {
+			return r.namedFunctionAnswer(f)
+		}
 		return fmt.Sprintf("A function needs a shape I can assemble — I can't invent one from an idea alone. The forms that work: \"add a function named <Name> to %s\" (an empty scaffold you fill in), \"add a function in %s that calls <something that exists>\" (a new function wrapping a real one), or \"copy <existing function> as <new name>\" (a clone you then edit)", f, f)
 	case wbField:
 		head := "A field goes into a named struct, not straight into a file"
@@ -294,8 +350,29 @@ func (r writeBoundaryReq) answer() string {
 		if obj == "" {
 			obj = "that"
 		}
+		if r.declName != "" && (r.objWord == "struct" || r.objWord == "interface") {
+			// The book's named declaration rows: the working
+			// sentence is the scaffold with the user's own
+			// name — the clause is the only unservable part.
+			return fmt.Sprintf("I can't add %s as asked — the \"that …\" clause isn't one of the pieces I can assemble. The form that works: \"add %s named %s to %s\" (an empty scaffold you fill in). %s", obj, obj, r.declName, r.exampleFile(), r.closestAlternatives())
+		}
 		return fmt.Sprintf("I can't add %s yet — that's not one of the pieces I can assemble today. %s", obj, r.closestAlternatives())
 	}
+}
+
+// namedFunctionAnswer answers a function line claimed on its
+// name slot with a "that …" clause riding along: the clause is
+// not spendable, so the answer says so plainly — a returns
+// clause gets the returns truth (return types aren't assembled
+// yet; the scaffold comes with no return and the body is the
+// user's to fill in) — and spells the working forms with the
+// user's own name in the scaffold sentence.
+func (r writeBoundaryReq) namedFunctionAnswer(f string) string {
+	forms := fmt.Sprintf("The forms that work: \"add a function named %s to %s\" (an empty scaffold you fill in), \"add a function in %s that calls <something that exists>\" (a new function wrapping a real one), or \"copy <existing function> as <new name>\" (a clone you then edit)", r.declName, f, f)
+	if r.returnsClause {
+		return "I can't add a function with a return type yet — return types aren't one of the pieces I can assemble, so the scaffold comes with no return and the body is yours to fill in. " + forms
+	}
+	return "I can't add a function with that extra clause — the \"that …\" part isn't one of the pieces I can assemble; I can only place the function itself. " + forms
 }
 
 // tryWriteBoundary is the chat-loop entry: it claims unservable
