@@ -20,8 +20,9 @@ package chat
 // Grammar (slots may flex in the family's order):
 //
 //	add|put [a|an|the] <concept name from the book, longest
-//	  match> [named <Name>] [saying "<text>"] [like <Type>]
-//	  [in <Func>] to|in|into [the] [file|folder] <target>
+//	  match> [named <Name> | name is <Name>] [saying "<text>"]
+//	  [like <Type>] [in <Func>] to|in|into [the] [file|folder]
+//	  <target>
 //
 // "saying" may also be spelled "that says". The "in <Func>"
 // qualifier is read only when a separate target clause follows
@@ -140,7 +141,7 @@ func conceptNames(entries []analyze.ConceptEntry) []conceptName {
 // entry and every bound slot.
 type conceptReq struct {
 	entry   analyze.ConceptEntry
-	name    string // {name}: "named <Name>"
+	name    string // {name}: "named <Name>" or "name is <Name>"
 	text    string // {text}: the saying slot's string value
 	textSet bool
 	inFunc  string // statement target function: "in <Func>"
@@ -263,9 +264,9 @@ func parseConceptFrom(line string, entries []analyze.ConceptEntry) (conceptReq, 
 		slotEnd = tIdx
 	}
 
-	// The slot zone: named <Name> | like <Type> | in <Func>, in
-	// any order the family allows. Anything else refuses the
-	// claim.
+	// The slot zone: named <Name> | name is <Name> | like
+	// <Type> | in <Func>, in any order the family allows.
+	// Anything else refuses the claim.
 	for j := i; j < slotEnd; {
 		switch low[j] {
 		case "named":
@@ -274,6 +275,14 @@ func parseConceptFrom(line string, entries []analyze.ConceptEntry) (conceptReq, 
 			}
 			req.name = fields[j+1]
 			j += 2
+		case "name":
+			// "name is <Name>": the name slot spelled out,
+			// the same binding as "named", one word longer.
+			if j+2 >= slotEnd || low[j+1] != "is" {
+				return conceptReq{}, false
+			}
+			req.name = fields[j+2]
+			j += 3
 		case "like":
 			if j+1 >= slotEnd {
 				return conceptReq{}, false

@@ -90,6 +90,15 @@ func TestParseConceptClaims(t *testing.T) {
 		{"add a function named Fetch to main.go", "function", "Fetch", "", "", "", "main.go"},
 		{"add a func named Fetch to main.go", "function", "Fetch", "", "", "", "main.go"},
 		{"add the function named Fetch to the file main.go", "function", "Fetch", "", "", "", "main.go"},
+		{"add an interface name is Reader to store.go", "interface", "Reader", "", "", "", "store.go"},
+		{"add an interface name is Reader like Store to store.go", "interface", "Reader", "", "", "Store", "store.go"},
+		{"add the interface like Store name is Reader to store.go", "interface", "Reader", "", "", "Store", "store.go"},
+		{"add a struct name is Config to store.go", "struct", "Config", "", "", "", "store.go"},
+		{"add the struct name is Config to jim/main.go", "struct", "Config", "", "", "", "jim/main.go"},
+		{"put a struct type name is Config in store.go", "struct", "Config", "", "", "", "store.go"},
+		{"add struct name is jim to jim/main.go", "struct", "jim", "", "", "", "jim/main.go"},
+		{"add a function name is Fetch to main.go", "function", "Fetch", "", "", "", "main.go"},
+		{"add a func name is Fetch to main.go", "function", "Fetch", "", "", "", "main.go"},
 		{"add a function to jim/main.go", "function", "", "", "", "", "jim/main.go"},
 	}
 	for _, c := range cases {
@@ -132,6 +141,8 @@ func TestParseConceptNonClaims(t *testing.T) {
 		"add a getter for Timeout",                  // other brains'
 		"add a method to jim/main.go",               // unknown concept: the boundary's
 		"add a print line quickly to jim/main.go",   // unknown slot word
+		"add a struct name jim to store.go",         // "name" without its "is"
+		"add a struct name is to store.go",          // the slot opens, no name follows
 		"add a print line to",                       // (prep with nothing: not a claim at parse level? see below)
 	} {
 		if line == "add a print line to" {
@@ -422,6 +433,55 @@ func TestConceptStructThenFieldInOneSession(t *testing.T) {
 	}
 	if !strings.Contains(out, "built the project and checked") {
 		t.Errorf("field add: spine build/verify not reported:\n%s", out)
+	}
+}
+
+// The user's own sentence, verbatim from the live miss:
+// "add struct name is jim to jim/main.go" — no article, the
+// name slot spelled "name is", the name lowercase as typed.
+// The concept claim takes it (a grammar hit: the model
+// proposer's note never appears, the answer owns the concept
+// book), and the scaffold lands in jim/main.go as typed —
+// "jim" is a legal unexported type name, kept as-is. The
+// print line goes first, as in the struct session test: it
+// grows the main a bare package-main file needs before any
+// declaration can join it.
+func TestConceptNameIsStructLiveSession(t *testing.T) {
+	root := liveSessionRoot(t)
+	withChatSession(t, root, true)
+	profile := &UserProfile{}
+	createJimThroughTheChain(t, profile)
+	var grown bool
+	captureStdout(t, func() { grown = claimChain("add print line to jim/main.go", yes, profile) })
+	if !grown {
+		t.Fatal("print line did not grow jim's main")
+	}
+	line := "add struct name is jim to jim/main.go"
+	var handled bool
+	out := captureStdout(t, func() { handled = claimChain(line, yes, profile) })
+	if !handled {
+		t.Fatalf("%q fell through the claim chain:\n%s", line, out)
+	}
+	if strings.Contains(out, "I can't add") {
+		t.Errorf("the boundary answered a served concept:\n%s", out)
+	}
+	if strings.Contains(out, "proposed by my small trained model") {
+		t.Errorf("a grammar hit reached the model proposer:\n%s", out)
+	}
+	if !strings.Contains(out, "from the concept book") {
+		t.Errorf("answer does not own the concept book:\n%s", out)
+	}
+	got := readBack(t, root, "jim/main.go")
+	for _, want := range []string{
+		"type jim struct {",
+		`// TODO: add fields — or say "add a <Name> field of type <Type> to jim"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("jim/main.go missing %q:\n%s\noutput:\n%s", want, got, out)
+		}
+	}
+	if !strings.Contains(out, "built the project and checked") {
+		t.Errorf("spine build/verify not reported:\n%s", out)
 	}
 }
 
