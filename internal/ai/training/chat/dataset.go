@@ -137,6 +137,29 @@ func SpecDatasetPath(projectRoot string) string {
 // head-to-head with nothing else changed.
 const SpecCopyDomain = "speccopy"
 
+// PhrasingDomain is the phrasing layer (2026-10-30): a
+// pointer-generator that maps a beginner's messy sentence onto
+// the canonical sentence(s) the deterministic write family
+// already understands — recognition, never composition. Its
+// output is validated by the real parsers before anything
+// runs; each validated piece executes through its own claim
+// flow and gate. Data is synthetic (scripts/gen_phrasing_data)
+// and lives in its own file like the probes' — it never enters
+// the chat dataset.
+const PhrasingDomain = "phrasing"
+
+// PhrasingDatasetRelPath is the phrasing training data
+// location relative to the project root. The file holds TRAIN
+// pairs only; the held-out matrix lives beside it
+// (phrasing_heldout.jsonl) and never trains.
+const PhrasingDatasetRelPath = "data/training/phrasing_pairs.jsonl"
+
+// PhrasingDatasetPath resolves the phrasing training file
+// under the project root.
+func PhrasingDatasetPath(projectRoot string) string {
+	return filepath.Join(projectRoot, PhrasingDatasetRelPath)
+}
+
 // makefileTerms marks the makefile-command domain: the word "makefile"
 // itself or one of the repo's known make target names. Checked before
 // goTerms on purpose: outputs like "run make train-real-seq2seq" contain

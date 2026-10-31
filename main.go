@@ -77,6 +77,16 @@ func main() {
 			}
 			return
 		}
+		if *domainFlag == chat.PhrasingDomain {
+			// The phrasing layer has its own trainer too: same
+			// pointer-generator protocol, its own data (messy ->
+			// canonical) and slot masking.
+			if err := chat.RunPhrasingTraining(rootDir, *resumeFlag); err != nil {
+				fmt.Fprintf(os.Stderr, "phrasing training failed: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
 		if err := chat.RunRealSeq2SeqTraining(rootDir, *domainFlag, *resumeFlag); err != nil {
 			fmt.Fprintf(os.Stderr, "real training failed: %v\n", err)
 			os.Exit(1)
