@@ -44,6 +44,11 @@ const (
 	// composer matched from the book, assembled by kind.
 	EditConcept = "concept"
 
+	// Model-proposed declarations (editproposed.go): a fully
+	// rendered declaration the chat's speccopy proposer produced
+	// from the user's sentence, appended at file scope.
+	EditProposedDecl = "proposed_decl"
+
 	// Signature changes (editsig.go): the target function is
 	// FuncName, resolved like add_case's.
 	EditRenameParam   = "rename_param"
@@ -138,6 +143,21 @@ type EditRequest struct {
 	ConceptText string
 	ConceptFunc string
 	ConceptLike string
+
+	// proposed_decl: the declaration already rendered to Go
+	// text by the chat layer (the deterministic decl renderer
+	// over the model's parsed, case-restored spec), the name
+	// it declares, its kind ("struct", "interface", "func"),
+	// the receiver's base type for a method ("" for types and
+	// plain functions), and the import paths its type
+	// expressions reference, space-joined (a path never
+	// contains a space; the planner adds the missing ones the
+	// same way the concept planner does).
+	ProposedText     string
+	ProposedName     string
+	ProposedKind     string
+	ProposedReceiver string
+	ProposedImports  string
 }
 
 // EditFile is one file's before/after pair inside a plan.
@@ -215,6 +235,8 @@ func (p *Project) PlanEdit(req EditRequest) (*EditPlan, string) {
 		return p.planDelegate(req)
 	case EditConcept:
 		return p.planConcept(req)
+	case EditProposedDecl:
+		return p.planProposedDecl(req)
 	case EditRenameParam, EditReorderParams, EditAddParam:
 		return p.planSignature(req)
 	}

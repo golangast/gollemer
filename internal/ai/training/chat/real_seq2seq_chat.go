@@ -1241,6 +1241,23 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if tryConceptBook(line, reader) {
 			continue
 		}
+		// The speccopy proposer, claimed deterministically
+		// beside the other write-side parsers, after the
+		// concept book and before the boundary: a
+		// declaration-shaped ask the book's grammar missed
+		// (its slots carry words the grammar doesn't know —
+		// the members spelled out in prose) gets ONE proposal
+		// from the small trained model, and only when that
+		// proposal parses and restores into a real
+		// declaration. It then faces the same plan, gate,
+		// transaction, and build check as a book write, with
+		// a plan note owning that a model proposed it. The
+		// model file is local-only; without it this claim
+		// never fires and the boundary answers as before.
+		// See proposeddecl.go.
+		if tryProposedDecl(line, reader) {
+			continue
+		}
 		// The write-sentence boundary, last before the intent
 		// layer: an imperative sentence asking to write code
 		// that no shape above could serve is answered here, in
