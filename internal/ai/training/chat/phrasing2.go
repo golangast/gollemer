@@ -43,7 +43,11 @@ import (
 )
 
 // PhrasingRoute classifies and extracts one line into its
-// canonical piece(s). ok=false means no claim: segmentation
+// canonical piece(s). ok=false means no claim: the
+// named-clause guard declined the line (a fragment carrying
+// a name slot before an unspendable "that" clause is the
+// write boundary's line, never this layer's — see
+// namedClauseGuard in phrasing2_extract.go), segmentation
 // found more than two pieces, the classifier's confidence or
 // margin failed the intent layer's gate, a piece's extraction
 // could not bind every slot, or a rendered canonical failed

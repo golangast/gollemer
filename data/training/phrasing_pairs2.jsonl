@@ -26436,3 +26436,97 @@
 {"input":"please add a Trournur field of type float64 to Cirn and print \"a best wave now\" in main to main.go","output":"add a float64 field Trournur to Cirn ## add a print line saying \"a best wave now\" in main to main.go","domain":"phrasing","family":"compound:field+print","template":"train/glue:and+please-pre","slots":["Trournur","float64","Cirn","a best wave now","main","main.go"]}
 {"input":"please add a []string field Tev to Lourbaib and then make it print \"the cold lamp waits\" in main to main.go","output":"add a Tev field of type []string to Lourbaib ## add a print line saying \"the cold lamp waits\" in main to main.go","domain":"phrasing","family":"compound:field+print","template":"train/glue:and-then+please-pre","slots":["Tev","[]string","Lourbaib","the cold lamp waits","main","main.go"]}
 {"input":"add a float64 field Drouxent to Sheav and have it print \"a first lamp again\"","output":"add a Drouxent field of type float64 to Sheav ## add a print line saying \"a first lamp again\" in main to main.go","domain":"phrasing","family":"compound:field+print","template":"train/glue:have-it","slots":["Drouxent","float64","Sheav","a first lamp again","main","main.go"]}
+{"input":"add function named jake that returns a string to jim/main.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a function named jake that returns a string to jim/main.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a struct named Config that holds the settings to store.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add an interface name is Reader that reads bytes to store.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add an interface named Thep that returns an error to basant.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add interface named Zid that sorts the entries to app/main.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a function named Flon that returns the result to shop/main.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a func named Reader that sorts the entries to klaivig.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add struct named Crazis that holds its state to coupark.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a func name is Quub that never fails to zaib/tan.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a function named Hak that reads a file to lair.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a function named Folm that returns the result to zaib/tan.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a func name is Shintod that returns a value to shuf.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a struct named Queakearp that returns a Ndrof to skistaiv.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"put a func named Fest that has three fields to zaib/tan.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add interface name is Run that writes to a file to coupark.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a struct named Lav that takes an int to flairneax.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a function named Crezeab that returns an int to breaaix.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a struct named Quork that returns two values to lair.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add function named Seantok that reads a file to jim/main.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a function named Brew that has three fields to skistaiv.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a function named Falcon that takes a string to tea.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a struct named Pist that returns two values to thougurb.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add func named Plelmolm that returns an int to breaaix.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add interface named Ndrernax that holds its state to shuf.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add an interface name is Load that holds its state to shuf.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a func name is Merb that takes an int to util.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add an interface name is Store that returns a value to breaaix.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a func name is Kon that prints the results to criv/creath.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"put an interface named Wip that takes a string to bothaick.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a func named Klas that returns a string to basant.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add func name is Fest that returns the result to breaaix.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a function name is Prul that writes to a file to basant.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a function named Thomairb that validates the input to kif.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"put a func named Vuv that validates the input to shop/main.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add func named Tral that takes an int to app/main.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a function named Drindem that holds its state to jim/main.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a struct named Wuk that runs in the background to zaib/tan.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a function named Ndrof that takes a string to geaz/mum.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a struct name is Veark that returns a string to jim/main.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a func name is Dront that handles errors to main.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add an interface name is Zeag that takes an int to basant.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a function named Hanai that has three fields to thougurb.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"put a struct named Beas that takes no arguments to klaivig.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a function named Quik that holds its state to flairneax.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add an interface named Ndrend that validates the input to jim/main.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a func named Colmirb that takes a string to thougurb.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a struct named Fest that handles errors to util.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add interface named Server that reads a file to bothaick.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a func name is Gronut that reads a file to flairneax.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a function name is Sto that reads a file to basant.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a func name is Shalmourb that has three fields to statod.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add function named Wallet that logs every call to gront.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add an interface name is Rut that returns two values to shin/flaaind.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add function named Ndrend that never fails to fleamaif.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add an interface named Hanai that never fails to store.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add an interface named Plaroun that reads a file to dar/cack.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add function name is Shob that returns an error to roth/trenuz.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a func named Quork that takes a string to wast.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a struct named Wuk that holds the settings to criv/creath.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a struct named Zeag that has three fields to coupark.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a struct named Stoustoul that keeps a cache to skistaiv.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a func name is Sherpoux that writes to a file to shuf.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a struct named Caivov that takes no arguments to floundog.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a function named Candle that returns an error to floundog.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a func named Wip that logs every call to basant.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add an interface named Pearn that returns a float64 to app/main.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a func named Quousab that sorts the entries to breaaix.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a struct named Prem that runs in the background to shin/flaaind.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add interface named Terk that validates the input to klaivig.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a function named Troud that handles errors to floundog.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add an interface name is Ndrernax that returns nothing to klaivig.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a func named Seam that prints the results to shop/main.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a function named Drain that returns a float64 to breaaix.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a struct name is Jim that validates the input to coupark.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add an interface name is Mozav that returns a bool to main.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a func named Stackex that validates the input to tea.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a function name is Mbreazeck that returns an int to foutoun.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a struct name is Prakalm that returns two values to nel/vearm.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add function named Vuv that never fails to flairneax.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add struct name is Veag that returns a bool to flairneax.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a func named Sheav that returns two values to coupark.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"put a func name is Skermint that writes to a file to skistaiv.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a function named Graisug that takes an int to criv/creath.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add function named Neathub that runs in the background to klaivig.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"put a func name is Stop that takes no arguments to app/main.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add struct named Prouvik that takes a string to flairneax.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a func name is Tendul that keeps a cache to statod.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add function named Bagil that holds its state to shop/main.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"put an interface name is Teadouv that returns an error to basant.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add an interface named Dour that returns a float64 to fleamaif.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add an interface name is Voulmourn that uses a mutex to geaz/mum.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"add a function name is Cailaick that uses a mutex to breaaix.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}
+{"input":"put an interface named Flint that sorts the entries to rairm.go","output":"none","domain":"phrasing","family":"none","template":"train/none-namedclause"}

@@ -81,6 +81,54 @@ func TestPhrasingRouteRefusesNoneClass(t *testing.T) {
 	}
 }
 
+// The named-clause guard (2026-10-31): a fragment carrying
+// a name slot before an unspendable "that" clause is the
+// write boundary's line, and the route declines it before
+// classification — John's exact live line first (it was
+// routed to the string-functions concept on the word
+// "string", at 0.632 past the gate). The still-routes pins
+// are the judge's own items the guard must NOT touch: the
+// delegate's spendable "that calls" clause, and a compound
+// whose declaration piece merely precedes the glue's "that".
+func TestPhrasingRouteDeclinesNamedClauseLines(t *testing.T) {
+	withPhrasingModel(t)
+	for _, line := range []string{
+		"add function named jake that returns a string to jim/main.go", // John's exact live line
+		"add a function named jake that returns a string to jim/main.go",
+		"add a function name is jake that returns a string to jim/main.go",
+		"add a function named jake that sorts numbers to jim/main.go",
+		"add a struct named Config that holds settings to store.go",
+		"add an interface named Reader that reads bytes to store.go",
+		"put a struct name is Config that holds settings to store.go",
+	} {
+		if pieces, ok := PhrasingRoute(line); ok {
+			t.Errorf("PhrasingRoute(%q) claimed %q — a named line with an unspendable clause is the boundary's", line, pieces)
+		}
+		if runPhrasingLayer(line, yes) {
+			t.Errorf("runPhrasingLayer(%q) claimed a named-clause line", line)
+		}
+	}
+	stillRoutes := []struct {
+		line string
+		want []string
+	}{
+		{"kindly add a wrapper named Rowan in kilo.go that calls Whisk",
+			[]string{"add a function Rowan in kilo.go that calls Whisk"}},
+		{"place a struct named Roaster in vault.go and after that add instantiation of struct Roaster to handler Topaz",
+			[]string{"add a struct named Roaster to vault.go", "add instantiation of struct Roaster to handler Topaz"}},
+	}
+	for _, c := range stillRoutes {
+		got, ok := PhrasingRoute(c.line)
+		if !ok {
+			t.Errorf("PhrasingRoute(%q) not claimed — the guard must not touch this shape", c.line)
+			continue
+		}
+		if strings.Join(got, " ## ") != strings.Join(c.want, " ## ") {
+			t.Errorf("PhrasingRoute(%q) = %q, want %q", c.line, got, c.want)
+		}
+	}
+}
+
 // phrasingFixture: Jim lives in jim.go, Jake (and main) in
 // main.go — the shape John's compound needs: the instantiate
 // piece resolves project-wide, the print piece targets

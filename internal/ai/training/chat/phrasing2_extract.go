@@ -1024,6 +1024,58 @@ func routeFragment(f frag) (canon, family string, slots map[string]string, ok bo
 	return "", "", nil, false
 }
 
+// namedClauseGuard reports whether one fragment carries a
+// name slot — "named <Name>" or "name is <Name>", the concept
+// grammar's two spellings, read only BEFORE the first "that"
+// exactly as the write boundary reads them — with a "that"
+// clause riding behind it. Such a fragment is a specified
+// declaration with an unspendable clause (the 2026-10-31 live
+// miss: "add function named jake that returns a string to
+// jim/main.go" was routed to the string-functions concept on
+// the strength of the word "string"): a servable shape's
+// canonical carries no behaviour clause, so a named line with
+// one is never a messy version of a shape this layer serves —
+// it is the write boundary's line, and the route declines it
+// before classification, whatever the classifier thinks.
+//
+// Two reads keep the guard inside that rationale:
+//   - It is per-FRAGMENT, not per-line: a compound's glue
+//     ("… and after that …") contributes a "that" that is no
+//     clause at all, and a declaration piece's own name slot
+//     ("place a struct named Roaster in vault.go") precedes
+//     it without specifying anything unspendable in ITS
+//     fragment.
+//   - The delegate's clause is spendable: "that calls
+//     <Callee>" is the delegate family's own shape (its
+//     canonical carries the clause), so a name slot before
+//     THAT clause ("add a wrapper named Rowan in kilo.go
+//     that calls Whisk") is a messy version of a servable
+//     shape and routes on.
+func namedClauseGuard(f frag) bool {
+	thatAt := -1
+	for i := 0; i < len(f.low); i++ {
+		if f.low[i] == "that" {
+			thatAt = i
+			break
+		}
+	}
+	if thatAt < 0 {
+		return false
+	}
+	if thatAt+1 < len(f.low) && f.low[thatAt+1] == "calls" {
+		return false
+	}
+	for i := 0; i < thatAt; i++ {
+		switch {
+		case f.low[i] == "named" && i+1 < thatAt:
+			return true
+		case f.low[i] == "name" && i+2 < thatAt && f.low[i+1] == "is":
+			return true
+		}
+	}
+	return false
+}
+
 // phrasingRouteB is arm B's route: segment, classify, extract,
 // validate. See the file header.
 func phrasingRouteB(line string) (pieces []string, ok bool) {
@@ -1041,6 +1093,16 @@ func phrasingRouteB(line string) (pieces []string, ok bool) {
 			case "how", "what", "why", "when", "where", "who", "is", "are", "was", "were", "do", "does", "did":
 				return nil, false
 			}
+		}
+	}
+	// The named-clause guard (see namedClauseGuard): a named
+	// declaration carrying an unspendable clause is the write
+	// boundary's line, declined here before any classification
+	// — a compound falls whole, exactly as a failed validation
+	// would fell it.
+	for _, f := range frags {
+		if namedClauseGuard(f) {
+			return nil, false
 		}
 	}
 	if len(frags) == 1 {

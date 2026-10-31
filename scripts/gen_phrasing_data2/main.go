@@ -971,6 +971,80 @@ func noneInputs(r *rand.Rand, p pools, dialect string) []string {
 	return out
 }
 
+// namedClauseNoneLines builds the none class's named-clause
+// region (2026-10-31 patch): a write verb, a declaration
+// kind, a name slot ("named <Name>" / "name is <Name>"), an
+// unspendable "that …" clause, and a file target — "add
+// function named jake that returns a string to jim/main.go".
+// These lines are the write boundary's (its named-claim
+// answers them in composer terms), never a write shape's.
+// The corpus originally carried ZERO of them, and the shipped
+// classifier — never having seen the region — routed John's
+// live line to the string-functions concept on the strength
+// of the word "string" (0.632, past the gate). They are
+// labeled none so the classifier learns the region is not a
+// family's. The route's deterministic guard declines the
+// shape regardless of the classifier; this patch teaches the
+// model the same boundary, so its confidence stops
+// volunteering a family here at all. Names and files come
+// from the train pools (the fixed exemplars in the builder
+// carry the live line's one lowercase name), so the judge's
+// pools stay disjoint, as the leak checks verify.
+func namedClauseNoneLines(r *rand.Rand, p pools) []string {
+	kinds := []struct{ word, art string }{
+		{"function", "a"}, {"func", "a"}, {"struct", "a"}, {"interface", "an"},
+	}
+	clauses := []string{
+		"returns a string", "returns an int", "returns a bool",
+		"returns a float64", "returns an error", "returns two values",
+		"returns a value", "returns the result", "returns nothing",
+		"takes an int", "takes a string", "takes no arguments",
+		"handles errors", "prints the results", "reads a file",
+		"writes to a file", "sorts the entries", "holds the settings",
+		"holds its state", "has three fields", "uses a mutex",
+		"runs in the background", "never fails", "validates the input",
+		"logs every call", "keeps a cache",
+	}
+	out := []string{
+		// The live miss's own shapes, spelled with train-pool
+		// values (jim/main.go and store.go are train files).
+		// These four fixed lines are also the ONLY lowercase
+		// names in the region: measured against the judge, a
+		// random lowercase-name variant class taught the model
+		// that "named <lowercase>" leans none, which is
+		// instantiate's var tail ("add one X to Y named z") —
+		// a real family's slot. The live pattern stays
+		// represented, at four lines' weight.
+		"add function named jake that returns a string to jim/main.go",
+		"add a function named jake that returns a string to jim/main.go",
+		"add a struct named Config that holds the settings to store.go",
+		"add an interface name is Reader that reads bytes to store.go",
+	}
+	for i := 0; i < 90; i++ {
+		k := kinds[r.Intn(len(kinds))]
+		name := pickName(r, p.names)
+		clause := clauses[r.Intn(len(clauses))]
+		if clause == "returns a value" && r.Intn(2) == 0 {
+			clause = "returns a " + pickName(r, p.names, name)
+		}
+		art := k.art
+		if r.Intn(4) == 0 {
+			art = "" // no article: the live line's own form
+		}
+		slot := "named " + name
+		if r.Intn(3) == 0 {
+			slot = "name is " + name
+		}
+		verb := "add"
+		if r.Intn(6) == 0 {
+			verb = "put"
+		}
+		line := verb + " " + art + " " + k.word + " " + slot + " that " + clause + " to " + pick(r, p.files)
+		out = append(out, strings.Join(strings.Fields(line), " "))
+	}
+	return out
+}
+
 // ---------- compounds ----------
 //
 // Two asks glued into one breath. The canonical target joins
@@ -1397,6 +1471,26 @@ func main() {
 			}
 		}
 	}
+	// Named-clause none lines (2026-10-31 patch): the write
+	// boundary's region, labeled none — see
+	// namedClauseNoneLines. Emitted after every other family
+	// so the patch APPENDS to the corpus without disturbing a
+	// single existing row. BARE ONLY, deliberately unlike the
+	// rest of the none class: the trainer normalizes wrapped
+	// rows to the same fragment, so wrapper dressings would
+	// quadruple this one region's weight — and measured
+	// against the judge, the dressed version's bleed cost
+	// real families (instantiate's "named <var>" tails,
+	// delegate's "place … calling …", register's "place …
+	// into …" all lean on the same add/put/name features).
+	// The guard is the surgical instrument; this data only
+	// has to make the region familiar, at the lightest
+	// weight that does it.
+	for _, line := range namedClauseNoneLines(r, tp) {
+		addTrain(pair{Input: line, Output: "none", Domain: "phrasing", Family: "none", Template: "train/none-namedclause"})
+		addFrag(line, "none", "train/none-namedclause")
+	}
+
 	rep.TrainPairs = len(train)
 	rep.Fragments = len(fragments)
 

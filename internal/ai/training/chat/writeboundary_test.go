@@ -504,3 +504,156 @@ func TestWriteBoundaryNamedClauseLiveLine(t *testing.T) {
 		t.Errorf("gated-no concept line wrote to jim/main.go:\n%s", got)
 	}
 }
+
+// The name rides into the answer WITH a file target too
+// (2026-10-31): the same named-clause lines, aimed at a file,
+// claim with declName/returnsClause set and the declaration's
+// target kept — the a603738 claim originally carried the name
+// only when no target rode along, so the targeted form was
+// answered with the generic placeholder forms (and, live, the
+// phrasing layer misrouted it before the boundary saw it).
+func TestParseWriteBoundaryNamedClauseWithTargetClaims(t *testing.T) {
+	cases := []struct {
+		line    string
+		kind    writeBoundaryKind
+		name    string
+		returns bool
+		target  string
+	}{
+		{"add function named jake that returns a string to jim/main.go", wbFunction, "jake", true, "jim/main.go"},
+		{"add a function named jake that returns a string to jim/main.go", wbFunction, "jake", true, "jim/main.go"},
+		{"add a function name is jake that sorts numbers to store.go", wbFunction, "jake", false, "store.go"},
+		{"add a struct named Config that holds settings to store.go", wbGeneric, "Config", false, "store.go"},
+		{"put an interface named Reader that reads bytes to api/main.go", wbGeneric, "Reader", false, "api/main.go"},
+	}
+	for _, c := range cases {
+		if _, ok := parseAssembledEdit(c.line); ok {
+			t.Errorf("parseAssembledEdit(%q) claimed — not a boundary fall-through", c.line)
+		}
+		if _, ok := parseRenameSentence(c.line); ok {
+			t.Errorf("parseRenameSentence(%q) claimed", c.line)
+		}
+		if _, _, ok := parseBuildGoal(c.line); ok {
+			t.Errorf("parseBuildGoal(%q) claimed", c.line)
+		}
+		if _, ok := parseCreate(c.line); ok {
+			t.Errorf("parseCreate(%q) claimed", c.line)
+		}
+		if _, ok := parseBoundary(c.line); ok {
+			t.Errorf("parseBoundary(%q) claimed", c.line)
+		}
+		if _, ok := parseAddServer(c.line); ok {
+			t.Errorf("parseAddServer(%q) claimed", c.line)
+		}
+		if _, _, _, ok := parseDelegate(c.line); ok {
+			t.Errorf("parseDelegate(%q) claimed", c.line)
+		}
+		if _, ok := parseConcept(c.line); ok {
+			t.Errorf("parseConcept(%q) claimed — the concept book owns it, not the boundary", c.line)
+		}
+		req, ok := parseWriteBoundary(c.line)
+		if !ok {
+			t.Errorf("parseWriteBoundary(%q) did not claim a targeted named-clause line", c.line)
+			continue
+		}
+		if req.kind != c.kind {
+			t.Errorf("parseWriteBoundary(%q) kind = %q, want %q", c.line, req.kind, c.kind)
+		}
+		if req.declName != c.name {
+			t.Errorf("parseWriteBoundary(%q) declName = %q, want %q", c.line, req.declName, c.name)
+		}
+		if req.returnsClause != c.returns {
+			t.Errorf("parseWriteBoundary(%q) returnsClause = %v, want %v", c.line, req.returnsClause, c.returns)
+		}
+		if !req.hasTarget || req.target != c.target {
+			t.Errorf("parseWriteBoundary(%q) target = %q, %v — want %q", c.line, req.target, req.hasTarget, c.target)
+		}
+	}
+}
+
+// The targeted answers spell the scaffold sentence with the
+// user's own name AND their own target — the exact sentence
+// that works, in the file they named.
+func TestWriteBoundaryNamedClauseWithTargetAnswers(t *testing.T) {
+	cases := []struct {
+		line    string
+		want    []string
+		notWant []string
+	}{
+		{"add function named jake that returns a string to jim/main.go", []string{
+			`"add a function named jake to jim/main.go"`,
+			"return types aren't one of the pieces I can assemble",
+			"the scaffold comes with no return and the body is yours to fill in",
+		}, nil},
+		{"add a function named jake that sorts numbers to store.go", []string{
+			`"add a function named jake to store.go"`,
+			"isn't one of the pieces I can assemble",
+		}, []string{"return type"}},
+		{"add a struct named Config that holds settings to store.go", []string{
+			"I can't add a struct as asked",
+			`"add a struct named Config to store.go"`,
+		}, nil},
+	}
+	for _, c := range cases {
+		var handled bool
+		out := captureStdout(t, func() { handled = runWriteBoundary(c.line) })
+		if !handled {
+			t.Errorf("runWriteBoundary(%q) not claimed", c.line)
+			continue
+		}
+		if !strings.Contains(out, "gollemer [composer]>") {
+			t.Errorf("runWriteBoundary(%q) not composer-tagged:\n%s", c.line, out)
+		}
+		for _, w := range c.want {
+			if !strings.Contains(out, w) {
+				t.Errorf("runWriteBoundary(%q) answer does not say %q:\n%s", c.line, w, out)
+			}
+		}
+		for _, w := range c.notWant {
+			if strings.Contains(out, w) {
+				t.Errorf("runWriteBoundary(%q) answer says %q — the clause was not a returns clause:\n%s", c.line, w, out)
+			}
+		}
+	}
+}
+
+// John's second live line — the first one WITH the target he
+// typed — through the whole chain, in his session state, with
+// the real phrasing classifier loaded: the phrasing layer
+// must NOT read it as the string-functions concept (its live
+// answer), the boundary's returns answer is what the session
+// gives, and nothing is written to jim/main.go.
+func TestWriteBoundaryNamedClauseWithTargetLiveLine(t *testing.T) {
+	withPhrasingModel(t)
+	root := liveSessionRoot(t)
+	withChatSession(t, root, true)
+	profile := &UserProfile{}
+	createJimThroughTheChain(t, profile)
+
+	line := "add function named jake that returns a string to jim/main.go"
+	var handled bool
+	out := captureStdout(t, func() { handled = claimChain(line, yes, profile) })
+	if !handled {
+		t.Fatalf("%q fell through the whole claim chain:\n%s", line, out)
+	}
+	if !strings.Contains(out, "gollemer [composer]>") {
+		t.Errorf("%q was not answered by the composer:\n%s", line, out)
+	}
+	for _, w := range []string{
+		`"add a function named jake to jim/main.go"`,
+		"return types aren't one of the pieces I can assemble",
+		"the body is yours to fill in",
+	} {
+		if !strings.Contains(out, w) {
+			t.Errorf("%q answer does not say %q:\n%s", line, w, out)
+		}
+	}
+	for _, p := range []string{"phrasing layer", "string functions", "salutations"} {
+		if strings.Contains(out, p) {
+			t.Errorf("%q produced %q — the live misroute's marker:\n%s", line, p, out)
+		}
+	}
+	if got := readBack(t, root, "jim/main.go"); got != "package main\n" {
+		t.Errorf("the boundary's line wrote to jim/main.go:\n%s", got)
+	}
+}

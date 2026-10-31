@@ -26256,3 +26256,97 @@
 {"input":"add a Trournur field of type float64 to Cirn","family":"add-field","template":"train/frag-a"}
 {"input":"add a []string field Tev to Lourbaib","family":"add-field","template":"train/frag-a"}
 {"input":"add a float64 field Drouxent to Sheav","family":"add-field","template":"train/frag-a"}
+{"input":"add function named jake that returns a string to jim/main.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a function named jake that returns a string to jim/main.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a struct named Config that holds the settings to store.go","family":"none","template":"train/none-namedclause"}
+{"input":"add an interface name is Reader that reads bytes to store.go","family":"none","template":"train/none-namedclause"}
+{"input":"add an interface named Thep that returns an error to basant.go","family":"none","template":"train/none-namedclause"}
+{"input":"add interface named Zid that sorts the entries to app/main.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a function named Flon that returns the result to shop/main.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a func named Reader that sorts the entries to klaivig.go","family":"none","template":"train/none-namedclause"}
+{"input":"add struct named Crazis that holds its state to coupark.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a func name is Quub that never fails to zaib/tan.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a function named Hak that reads a file to lair.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a function named Folm that returns the result to zaib/tan.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a func name is Shintod that returns a value to shuf.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a struct named Queakearp that returns a Ndrof to skistaiv.go","family":"none","template":"train/none-namedclause"}
+{"input":"put a func named Fest that has three fields to zaib/tan.go","family":"none","template":"train/none-namedclause"}
+{"input":"add interface name is Run that writes to a file to coupark.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a struct named Lav that takes an int to flairneax.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a function named Crezeab that returns an int to breaaix.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a struct named Quork that returns two values to lair.go","family":"none","template":"train/none-namedclause"}
+{"input":"add function named Seantok that reads a file to jim/main.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a function named Brew that has three fields to skistaiv.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a function named Falcon that takes a string to tea.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a struct named Pist that returns two values to thougurb.go","family":"none","template":"train/none-namedclause"}
+{"input":"add func named Plelmolm that returns an int to breaaix.go","family":"none","template":"train/none-namedclause"}
+{"input":"add interface named Ndrernax that holds its state to shuf.go","family":"none","template":"train/none-namedclause"}
+{"input":"add an interface name is Load that holds its state to shuf.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a func name is Merb that takes an int to util.go","family":"none","template":"train/none-namedclause"}
+{"input":"add an interface name is Store that returns a value to breaaix.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a func name is Kon that prints the results to criv/creath.go","family":"none","template":"train/none-namedclause"}
+{"input":"put an interface named Wip that takes a string to bothaick.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a func named Klas that returns a string to basant.go","family":"none","template":"train/none-namedclause"}
+{"input":"add func name is Fest that returns the result to breaaix.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a function name is Prul that writes to a file to basant.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a function named Thomairb that validates the input to kif.go","family":"none","template":"train/none-namedclause"}
+{"input":"put a func named Vuv that validates the input to shop/main.go","family":"none","template":"train/none-namedclause"}
+{"input":"add func named Tral that takes an int to app/main.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a function named Drindem that holds its state to jim/main.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a struct named Wuk that runs in the background to zaib/tan.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a function named Ndrof that takes a string to geaz/mum.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a struct name is Veark that returns a string to jim/main.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a func name is Dront that handles errors to main.go","family":"none","template":"train/none-namedclause"}
+{"input":"add an interface name is Zeag that takes an int to basant.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a function named Hanai that has three fields to thougurb.go","family":"none","template":"train/none-namedclause"}
+{"input":"put a struct named Beas that takes no arguments to klaivig.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a function named Quik that holds its state to flairneax.go","family":"none","template":"train/none-namedclause"}
+{"input":"add an interface named Ndrend that validates the input to jim/main.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a func named Colmirb that takes a string to thougurb.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a struct named Fest that handles errors to util.go","family":"none","template":"train/none-namedclause"}
+{"input":"add interface named Server that reads a file to bothaick.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a func name is Gronut that reads a file to flairneax.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a function name is Sto that reads a file to basant.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a func name is Shalmourb that has three fields to statod.go","family":"none","template":"train/none-namedclause"}
+{"input":"add function named Wallet that logs every call to gront.go","family":"none","template":"train/none-namedclause"}
+{"input":"add an interface name is Rut that returns two values to shin/flaaind.go","family":"none","template":"train/none-namedclause"}
+{"input":"add function named Ndrend that never fails to fleamaif.go","family":"none","template":"train/none-namedclause"}
+{"input":"add an interface named Hanai that never fails to store.go","family":"none","template":"train/none-namedclause"}
+{"input":"add an interface named Plaroun that reads a file to dar/cack.go","family":"none","template":"train/none-namedclause"}
+{"input":"add function name is Shob that returns an error to roth/trenuz.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a func named Quork that takes a string to wast.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a struct named Wuk that holds the settings to criv/creath.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a struct named Zeag that has three fields to coupark.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a struct named Stoustoul that keeps a cache to skistaiv.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a func name is Sherpoux that writes to a file to shuf.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a struct named Caivov that takes no arguments to floundog.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a function named Candle that returns an error to floundog.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a func named Wip that logs every call to basant.go","family":"none","template":"train/none-namedclause"}
+{"input":"add an interface named Pearn that returns a float64 to app/main.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a func named Quousab that sorts the entries to breaaix.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a struct named Prem that runs in the background to shin/flaaind.go","family":"none","template":"train/none-namedclause"}
+{"input":"add interface named Terk that validates the input to klaivig.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a function named Troud that handles errors to floundog.go","family":"none","template":"train/none-namedclause"}
+{"input":"add an interface name is Ndrernax that returns nothing to klaivig.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a func named Seam that prints the results to shop/main.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a function named Drain that returns a float64 to breaaix.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a struct name is Jim that validates the input to coupark.go","family":"none","template":"train/none-namedclause"}
+{"input":"add an interface name is Mozav that returns a bool to main.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a func named Stackex that validates the input to tea.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a function name is Mbreazeck that returns an int to foutoun.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a struct name is Prakalm that returns two values to nel/vearm.go","family":"none","template":"train/none-namedclause"}
+{"input":"add function named Vuv that never fails to flairneax.go","family":"none","template":"train/none-namedclause"}
+{"input":"add struct name is Veag that returns a bool to flairneax.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a func named Sheav that returns two values to coupark.go","family":"none","template":"train/none-namedclause"}
+{"input":"put a func name is Skermint that writes to a file to skistaiv.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a function named Graisug that takes an int to criv/creath.go","family":"none","template":"train/none-namedclause"}
+{"input":"add function named Neathub that runs in the background to klaivig.go","family":"none","template":"train/none-namedclause"}
+{"input":"put a func name is Stop that takes no arguments to app/main.go","family":"none","template":"train/none-namedclause"}
+{"input":"add struct named Prouvik that takes a string to flairneax.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a func name is Tendul that keeps a cache to statod.go","family":"none","template":"train/none-namedclause"}
+{"input":"add function named Bagil that holds its state to shop/main.go","family":"none","template":"train/none-namedclause"}
+{"input":"put an interface name is Teadouv that returns an error to basant.go","family":"none","template":"train/none-namedclause"}
+{"input":"add an interface named Dour that returns a float64 to fleamaif.go","family":"none","template":"train/none-namedclause"}
+{"input":"add an interface name is Voulmourn that uses a mutex to geaz/mum.go","family":"none","template":"train/none-namedclause"}
+{"input":"add a function name is Cailaick that uses a mutex to breaaix.go","family":"none","template":"train/none-namedclause"}
+{"input":"put an interface named Flint that sorts the entries to rairm.go","family":"none","template":"train/none-namedclause"}

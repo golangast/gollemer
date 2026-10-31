@@ -1,9 +1,9 @@
 {
-  "examples": 26258,
+  "examples": 26352,
   "families": 68,
-  "carve_size": 2626,
-  "carve_accuracy": 99.92383853769992,
-  "carve_accuracy_gated": 99.92383853769992,
+  "carve_size": 2636,
+  "carve_accuracy": 99.96206373292868,
+  "carve_accuracy_gated": 99.96206373292868,
   "gate_accept_rate": 100,
   "per_family_examples": {
     "add-case": 750,
@@ -71,12 +71,11 @@
     "concept-xml": 214,
     "delegate": 841,
     "instantiate": 2952,
-    "none": 769,
+    "none": 863,
     "print": 3569,
     "register": 649
   },
   "top_confusions": [
-    "concept-channel-sync -\u003e concept-goroutine (1)",
-    "clone -\u003e print (1)"
+    "none -\u003e concept-mutex (1)"
   ]
 }

@@ -46,7 +46,11 @@ package chat
 //     line a declaration being specified, not behaviour being
 //     requested, and the boundary claims it; a name inside the
 //     clause ("…that returns a struct named Point") is the
-//     clause's own business and still refuses.
+//     clause's own business and still refuses. The name rides
+//     into the answer with a file target too (2026-10-31:
+//     the same line WITH "to jim/main.go" was claimed on its
+//     target and answered generically — and misrouted by the
+//     phrasing layer before it ever got here).
 //
 // Questions never start with the bare verb ("how do i add…"
 // keeps its owner), and the object set deliberately omits the
@@ -86,11 +90,13 @@ type writeBoundaryReq struct {
 	fileTgt   bool   // target is (or ends in) a .go file
 	hasTarget bool
 
-	// Set only for a line claimed on its name slot (a "that …"
-	// clause, no file/path target): the declaration's name as
-	// typed, and whether the clause is a returns clause. Those
-	// lines' answers spell the working scaffold sentence with
-	// the user's own name instead of a placeholder.
+	// Set only for a line claimed with a name slot and a
+	// "that …" clause — with or without a file/path target:
+	// the declaration's name as typed, and whether the clause
+	// is a returns clause. Those lines' answers spell the
+	// working scaffold sentence with the user's own name (and
+	// their own target, when they named one) instead of a
+	// placeholder.
 	declName      string
 	returnsClause bool
 }
@@ -251,11 +257,19 @@ func parseWriteBoundary(line string) (writeBoundaryReq, bool) {
 		req.kind = wbGeneric
 	}
 
-	// A line claimed on its name slot alone carries the name
-	// into its answer. (A named line that claimed any other way
-	// — a file target, no clause — keeps the standing answers,
-	// placeholders and all.)
-	if hasThat && hasDeclName && !fileTgt && !pathTgt {
+	// A line claimed with a name slot and a "that …" clause
+	// carries the name into its answer — whether the claim
+	// rode the name slot alone (no target) or a file/path
+	// target brought it here. (A named line with NO clause
+	// keeps the standing answers, placeholders and all.) The
+	// target case is the 2026-10-31 live miss's second half:
+	// "add function named jake that returns a string to
+	// jim/main.go" claimed on its target but answered with the
+	// generic placeholder forms while the phrasing layer —
+	// seated before this boundary — misrouted it entirely;
+	// the scaffold sentence now spells the user's own target
+	// through exampleFile, like every other targeted answer.
+	if hasThat && hasDeclName {
 		req.declName = declName
 		req.returnsClause = thatAt+1 < len(low) && low[thatAt+1] == "returns"
 	}
