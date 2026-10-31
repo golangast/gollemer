@@ -32,7 +32,7 @@ func withConceptEntries(t *testing.T, entries []analyze.ConceptEntry) {
 func defaultBookEntries(t *testing.T) []analyze.ConceptEntry {
 	t.Helper()
 	entries, skipped := analyze.ParseConceptBook([]byte(defaultConceptBook))
-	if skipped != 0 || len(entries) != 4 {
+	if skipped != 0 || len(entries) != 60 {
 		t.Fatalf("default book = %d entries, %d skipped", len(entries), skipped)
 	}
 	return entries

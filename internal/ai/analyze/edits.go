@@ -49,6 +49,11 @@ const (
 	// from the user's sentence, appended at file scope.
 	EditProposedDecl = "proposed_decl"
 
+	// Instantiation (editinstantiate.go): a statement making a
+	// value of an existing project type, inserted at the end of
+	// an existing project function.
+	EditInstantiate = "instantiate"
+
 	// Signature changes (editsig.go): the target function is
 	// FuncName, resolved like add_case's.
 	EditRenameParam   = "rename_param"
@@ -144,6 +149,16 @@ type EditRequest struct {
 	ConceptFunc string
 	ConceptLike string
 
+	// instantiate: the type as typed (bare "Jim" or qualified
+	// "store.Jim"), the function as typed that should hold the
+	// new statement, and the variable's name from the
+	// sentence's named|called slot ("" = derived from the type
+	// name). The planner resolves both names against the
+	// project index — resolution is the analyzer's job.
+	InstType string
+	InstFunc string
+	InstVar  string
+
 	// proposed_decl: the declaration already rendered to Go
 	// text by the chat layer (the deterministic decl renderer
 	// over the model's parsed, case-restored spec), the name
@@ -237,6 +252,8 @@ func (p *Project) PlanEdit(req EditRequest) (*EditPlan, string) {
 		return p.planConcept(req)
 	case EditProposedDecl:
 		return p.planProposedDecl(req)
+	case EditInstantiate:
+		return p.planInstantiate(req)
 	case EditRenameParam, EditReorderParams, EditAddParam:
 		return p.planSignature(req)
 	}

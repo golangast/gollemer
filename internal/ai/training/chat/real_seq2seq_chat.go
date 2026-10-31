@@ -1241,6 +1241,18 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if tryConceptBook(line, reader) {
 			continue
 		}
+		// Instantiation, claimed deterministically after the
+		// concept book and before the model proposer: "add
+		// instantiation of struct Jim to handler Jake" makes a
+		// value of an existing project type inside an existing
+		// project function, the literal assembled from the
+		// type's real definition. The instance-worded form
+		// claims even when a side can't be found (the planner
+		// answers honestly); the plain form claims only when
+		// the analyzer resolves both sides. See instantiate.go.
+		if tryInstantiate(line, reader) {
+			continue
+		}
 		// The speccopy proposer, claimed deterministically
 		// beside the other write-side parsers, after the
 		// concept book and before the boundary: a

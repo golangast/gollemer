@@ -15,6 +15,597 @@
             "template": "fmt.Println(\"{text}\")"
         },
         {
+            "id": "variable",
+            "kind": "statement",
+            "names": [
+                "variable",
+                "new variable",
+                "var"
+            ],
+            "template": "value := 0\n// TODO: rename value and pick the value — the line below just keeps the build green until you use it\n_ = value"
+        },
+        {
+            "id": "constant",
+            "kind": "statement",
+            "names": [
+                "constant",
+                "const"
+            ],
+            "template": "const limit = 10\n// TODO: rename limit and pick its value — a constant never changes while the program runs"
+        },
+        {
+            "id": "for-loop",
+            "kind": "statement",
+            "names": [
+                "for loop",
+                "loop",
+                "for"
+            ],
+            "template": "for i := 0; i < 3; i++ {\n\t// TODO: what the loop does is yours to write\n}"
+        },
+        {
+            "id": "range-loop",
+            "kind": "statement",
+            "names": [
+                "range loop",
+                "for range",
+                "range"
+            ],
+            "template": "items := []string{}\nfor index, value := range items {\n\t// TODO: each pass hands you the next index and value — use them here\n\t_ = index\n\t_ = value\n}"
+        },
+        {
+            "id": "if-else",
+            "kind": "statement",
+            "names": [
+                "if statement",
+                "if else",
+                "if"
+            ],
+            "template": "if true {\n\t// TODO: replace true with your condition, and write what happens when it holds\n} else {\n\t// TODO: what happens when the condition doesn't hold\n}"
+        },
+        {
+            "id": "switch",
+            "kind": "statement",
+            "names": [
+                "switch statement",
+                "switch"
+            ],
+            "template": "switch {\ncase true:\n\t// TODO: your case — replace true with the condition that picks this branch\ndefault:\n\t// TODO: what happens when no case matches\n}"
+        },
+        {
+            "id": "array",
+            "kind": "statement",
+            "names": [
+                "array"
+            ],
+            "template": "numbers := [3]int{1, 2, 3}\n// TODO: your own size and values — an array's size is fixed and part of its type\n_ = numbers"
+        },
+        {
+            "id": "slice",
+            "kind": "statement",
+            "names": [
+                "slice"
+            ],
+            "template": "names := []string{\"ann\", \"bo\"}\n// TODO: your own values — a slice grows and shrinks, unlike an array\n_ = names"
+        },
+        {
+            "id": "map",
+            "kind": "statement",
+            "names": [
+                "map",
+                "dictionary"
+            ],
+            "template": "ages := map[string]int{\"ann\": 3}\n// TODO: your own keys and values — a map looks a value up by its key\n_ = ages"
+        },
+        {
+            "id": "closure",
+            "kind": "statement",
+            "names": [
+                "anonymous function",
+                "closure",
+                "function value"
+            ],
+            "template": "greet := func() {\n\t// TODO: what the closure does — it can use the variables around it\n}\n_ = greet"
+        },
+        {
+            "id": "pointers",
+            "kind": "statement",
+            "names": [
+                "pointer",
+                "pointers"
+            ],
+            "template": "value := 42\npointer := &value\n// TODO: pointer holds value's address — *pointer reads and writes value itself\n_ = pointer"
+        },
+        {
+            "id": "strings-runes",
+            "kind": "statement",
+            "names": [
+                "string",
+                "strings and runes",
+                "rune"
+            ],
+            "template": "text := \"hello\"\n// TODO: a string is text; ranging over it walks its characters — its runes — one by one\n_ = text"
+        },
+        {
+            "id": "errors",
+            "imports": [
+                "errors"
+            ],
+            "kind": "statement",
+            "names": [
+                "error",
+                "new error",
+                "errors"
+            ],
+            "template": "err := errors.New(\"something went wrong\")\n// TODO: your own message — an error is a value you return or handle, not a crash\n_ = err"
+        },
+        {
+            "id": "goroutine",
+            "kind": "statement",
+            "names": [
+                "goroutine",
+                "go routine"
+            ],
+            "template": "go func() {\n\t// TODO: the work to run in the background — it starts now and runs alongside the rest\n}()"
+        },
+        {
+            "id": "channel",
+            "kind": "statement",
+            "names": [
+                "channel"
+            ],
+            "template": "messages := make(chan string)\n// TODO: one goroutine sends with messages <- \"hi\" and another receives with text := <-messages\n_ = messages"
+        },
+        {
+            "id": "buffered-channel",
+            "kind": "statement",
+            "names": [
+                "buffered channel"
+            ],
+            "template": "messages := make(chan string, 2)\n// TODO: the 2 is how many values can wait in the channel before a sender has to block\n_ = messages"
+        },
+        {
+            "id": "channel-sync",
+            "kind": "statement",
+            "names": [
+                "channel synchronization",
+                "channel sync",
+                "wait for a goroutine"
+            ],
+            "template": "done := make(chan bool, 1)\ngo func() {\n\t// TODO: the work to wait for goes here\n\tdone <- true\n}()\n<-done"
+        },
+        {
+            "id": "select",
+            "kind": "statement",
+            "names": [
+                "select statement",
+                "select",
+                "non-blocking channel"
+            ],
+            "template": "messages := make(chan string, 1)\nmessages <- \"ping\"\nselect {\ncase received := <-messages:\n\t_ = received\n\t// TODO: act on the message that arrived\ndefault:\n\t// TODO: what to do when no channel is ready — this branch never waits\n}"
+        },
+        {
+            "id": "timeout",
+            "imports": [
+                "time"
+            ],
+            "kind": "statement",
+            "names": [
+                "timeout"
+            ],
+            "template": "result := make(chan string, 1)\ngo func() {\n\t// TODO: the slow work goes here — send its answer on result when it's done\n\tresult <- \"done\"\n}()\nselect {\ncase answer := <-result:\n\t_ = answer\ncase <-time.After(2 * time.Second):\n\t// TODO: two seconds passed with no answer — decide what the wait means\n}"
+        },
+        {
+            "id": "close-channel",
+            "kind": "statement",
+            "names": [
+                "close channel",
+                "closing a channel",
+                "close a channel"
+            ],
+            "template": "jobs := make(chan int, 2)\njobs <- 1\nclose(jobs)\n// TODO: closing tells receivers no more values are coming — they can still take what's already in"
+        },
+        {
+            "id": "channel-range",
+            "kind": "statement",
+            "names": [
+                "channel range",
+                "range over a channel",
+                "range over channel",
+                "loop over a channel"
+            ],
+            "template": "queue := make(chan string, 2)\nqueue <- \"one\"\nqueue <- \"two\"\nclose(queue)\nfor item := range queue {\n\t_ = item\n\t// TODO: what to do with each value — the loop ends when the closed channel is drained\n}"
+        },
+        {
+            "id": "timer",
+            "imports": [
+                "time"
+            ],
+            "kind": "statement",
+            "names": [
+                "timer"
+            ],
+            "template": "timer := time.NewTimer(2 * time.Second)\n<-timer.C\n// TODO: the timer has fired — what happens now is yours to write"
+        },
+        {
+            "id": "ticker",
+            "imports": [
+                "time"
+            ],
+            "kind": "statement",
+            "names": [
+                "ticker"
+            ],
+            "template": "ticker := time.NewTicker(500 * time.Millisecond)\n// TODO: range over ticker.C to repeat something on every tick — and call ticker.Stop() when you're done\n_ = ticker"
+        },
+        {
+            "id": "waitgroup",
+            "imports": [
+                "sync"
+            ],
+            "kind": "statement",
+            "names": [
+                "wait group",
+                "waitgroup"
+            ],
+            "template": "var wg sync.WaitGroup\nwg.Add(1)\ngo func() {\n\tdefer wg.Done()\n\t// TODO: one piece of work the group waits for\n}()\nwg.Wait()"
+        },
+        {
+            "id": "atomic-counter",
+            "imports": [
+                "sync/atomic"
+            ],
+            "kind": "statement",
+            "names": [
+                "atomic counter",
+                "atomic"
+            ],
+            "template": "var count atomic.Uint64\ncount.Add(1)\n// TODO: Add and Load are safe to call from many goroutines at once — no lock needed\n_ = count.Load()"
+        },
+        {
+            "id": "mutex",
+            "imports": [
+                "sync"
+            ],
+            "kind": "statement",
+            "names": [
+                "mutex"
+            ],
+            "template": "var mu sync.Mutex\nmu.Lock()\n// TODO: the shared thing only one goroutine at a time may touch goes here\nmu.Unlock()"
+        },
+        {
+            "id": "sorting",
+            "imports": [
+                "sort"
+            ],
+            "kind": "statement",
+            "names": [
+                "sorting",
+                "sort"
+            ],
+            "template": "numbers := []int{3, 1, 2}\nsort.Ints(numbers)\n// TODO: your own slice — sort.Strings and sort.Float64s sort the same way"
+        },
+        {
+            "id": "sorting-by",
+            "imports": [
+                "sort"
+            ],
+            "kind": "statement",
+            "names": [
+                "custom sort",
+                "sort by function",
+                "sort by"
+            ],
+            "template": "names := []string{\"cy\", \"ann\", \"bo\"}\nsort.Slice(names, func(i, j int) bool {\n\treturn len(names[i]) < len(names[j])\n})\n// TODO: the function settles the order — this one sorts shortest first"
+        },
+        {
+            "id": "defer",
+            "imports": [
+                "fmt"
+            ],
+            "kind": "statement",
+            "names": [
+                "defer",
+                "deferred call"
+            ],
+            "template": "defer fmt.Println(\"TODO: a deferred call runs when the function around it returns — this one prints last\")"
+        },
+        {
+            "id": "recover",
+            "kind": "statement",
+            "names": [
+                "recover",
+                "panic recovery"
+            ],
+            "template": "defer func() {\n\tif recovered := recover(); recovered != nil {\n\t\t_ = recovered\n\t\t// TODO: a panic was stopped here — decide what to do about it\n\t}\n}()"
+        },
+        {
+            "id": "string-functions",
+            "imports": [
+                "strings"
+            ],
+            "kind": "statement",
+            "names": [
+                "string functions"
+            ],
+            "template": "text := \"hello\"\nshouted := strings.ToUpper(text)\n// TODO: the strings package holds Contains, Split, Join, Replace and friends\n_ = shouted"
+        },
+        {
+            "id": "string-format",
+            "imports": [
+                "fmt"
+            ],
+            "kind": "statement",
+            "names": [
+                "string formatting",
+                "format a string",
+                "sprintf"
+            ],
+            "template": "text := fmt.Sprintf(\"TODO: %s\", \"your words\")\n// TODO: %s stands for a string, %d for a number, %v for almost anything — the layout is yours\n_ = text"
+        },
+        {
+            "id": "text-template",
+            "imports": [
+                "text/template"
+            ],
+            "kind": "statement",
+            "names": [
+                "text template",
+                "text templates"
+            ],
+            "template": "tmpl := template.Must(template.New(\"greeting\").Parse(\"Hello, {{.}}!\"))\n// TODO: Execute writes the template out with your data standing where {{.}} is\n_ = tmpl"
+        },
+        {
+            "id": "regexp",
+            "imports": [
+                "regexp"
+            ],
+            "kind": "statement",
+            "names": [
+                "regular expression",
+                "regex",
+                "regexp"
+            ],
+            "template": "pattern := regexp.MustCompile(\"TODO: your pattern\")\n// TODO: pattern.MatchString(text) answers true or false; FindString picks the match out\n_ = pattern"
+        },
+        {
+            "id": "json",
+            "imports": [
+                "encoding/json"
+            ],
+            "kind": "statement",
+            "names": [
+                "json",
+                "marshal to json",
+                "json encoding"
+            ],
+            "template": "blob, err := json.Marshal(\"TODO: the value to turn into JSON\")\nif err == nil {\n\t_ = blob\n}"
+        },
+        {
+            "id": "xml",
+            "imports": [
+                "encoding/xml"
+            ],
+            "kind": "statement",
+            "names": [
+                "xml",
+                "marshal to xml"
+            ],
+            "template": "blob, err := xml.Marshal(\"TODO: the value to turn into XML\")\nif err == nil {\n\t_ = blob\n}"
+        },
+        {
+            "id": "time-now",
+            "imports": [
+                "time"
+            ],
+            "kind": "statement",
+            "names": [
+                "current time",
+                "time",
+                "now"
+            ],
+            "template": "now := time.Now()\n// TODO: now holds the current date and time — Format it, or measure how far apart two times are\n_ = now"
+        },
+        {
+            "id": "epoch",
+            "imports": [
+                "time"
+            ],
+            "kind": "statement",
+            "names": [
+                "epoch",
+                "unix time"
+            ],
+            "template": "seconds := time.Now().Unix()\n// TODO: seconds counts the time since January 1, 1970 — the epoch\n_ = seconds"
+        },
+        {
+            "id": "time-format",
+            "imports": [
+                "time"
+            ],
+            "kind": "statement",
+            "names": [
+                "time formatting",
+                "format a time"
+            ],
+            "template": "stamp := time.Now().Format(\"2006-01-02 15:04:05\")\n// TODO: the layout is written in Go's reference time — swap the pieces around, but keep the values; time.Parse reads it back\n_ = stamp"
+        },
+        {
+            "id": "random",
+            "imports": [
+                "math/rand"
+            ],
+            "kind": "statement",
+            "names": [
+                "random number",
+                "random numbers",
+                "random"
+            ],
+            "template": "roll := rand.Intn(100)\n// TODO: a random whole number from 0 up to (not including) 100 — pick your own range\n_ = roll"
+        },
+        {
+            "id": "number-parsing",
+            "imports": [
+                "strconv"
+            ],
+            "kind": "statement",
+            "names": [
+                "number parsing",
+                "parse numbers"
+            ],
+            "template": "number, err := strconv.ParseFloat(\"3.14\", 64)\nif err == nil {\n\t_ = number\n}\n// TODO: ParseInt, ParseFloat and Atoi turn text into numbers — err is set when the text isn't one"
+        },
+        {
+            "id": "url-parsing",
+            "imports": [
+                "net/url"
+            ],
+            "kind": "statement",
+            "names": [
+                "url parsing",
+                "parse a url"
+            ],
+            "template": "address, err := url.Parse(\"https://example.com/TODO\")\nif err == nil {\n\t_ = address\n}"
+        },
+        {
+            "id": "sha256",
+            "imports": [
+                "crypto/sha256"
+            ],
+            "kind": "statement",
+            "names": [
+                "sha256 hash",
+                "sha256",
+                "hash"
+            ],
+            "template": "sum := sha256.Sum256([]byte(\"TODO: the text to hash\"))\n// TODO: sum is the text's fingerprint — the same text always gives the same 32 bytes\n_ = sum"
+        },
+        {
+            "id": "base64",
+            "imports": [
+                "encoding/base64"
+            ],
+            "kind": "statement",
+            "names": [
+                "base64 encoding",
+                "base64"
+            ],
+            "template": "encoded := base64.StdEncoding.EncodeToString([]byte(\"TODO: your text\"))\n// TODO: base64 turns bytes into text that is safe to send almost anywhere\n_ = encoded"
+        },
+        {
+            "id": "read-file",
+            "imports": [
+                "os"
+            ],
+            "kind": "statement",
+            "names": [
+                "file reading",
+                "read file",
+                "reading a file"
+            ],
+            "template": "contents, err := os.ReadFile(\"TODO: the file's path\")\nif err == nil {\n\t_ = contents\n}"
+        },
+        {
+            "id": "write-file",
+            "imports": [
+                "os"
+            ],
+            "kind": "statement",
+            "names": [
+                "file writing",
+                "write file",
+                "writing a file"
+            ],
+            "template": "data := []byte(\"TODO: what the file should say\")\nif err := os.WriteFile(\"TODO: the file's path\", data, 0644); err != nil {\n\t// TODO: the write failed — decide what to do about it\n}"
+        },
+        {
+            "id": "file-paths",
+            "imports": [
+                "path/filepath"
+            ],
+            "kind": "statement",
+            "names": [
+                "file path",
+                "file paths",
+                "join paths"
+            ],
+            "template": "path := filepath.Join(\"TODO\", \"file.txt\")\n// TODO: Join builds a path with the right slashes for the computer it runs on\n_ = path"
+        },
+        {
+            "id": "directories",
+            "imports": [
+                "os"
+            ],
+            "kind": "statement",
+            "names": [
+                "list a directory",
+                "read a directory",
+                "list files"
+            ],
+            "template": "entries, err := os.ReadDir(\"TODO: the folder's path\")\nif err == nil {\n\t_ = entries\n}"
+        },
+        {
+            "id": "temp-file",
+            "imports": [
+                "os"
+            ],
+            "kind": "statement",
+            "names": [
+                "temporary file",
+                "temp file"
+            ],
+            "template": "file, err := os.CreateTemp(\"\", \"TODO-*\")\nif err == nil {\n\t_ = file\n}"
+        },
+        {
+            "id": "log-line",
+            "imports": [
+                "log"
+            ],
+            "kind": "statement",
+            "names": [
+                "log line",
+                "log message",
+                "logging"
+            ],
+            "template": "log.Println(\"TODO: the message to log\")"
+        },
+        {
+            "id": "http-client",
+            "imports": [
+                "net/http"
+            ],
+            "kind": "statement",
+            "names": [
+                "http client",
+                "http get"
+            ],
+            "template": "response, err := http.Get(\"https://example.com/TODO\")\nif err == nil {\n\t_ = response\n\t// TODO: read response.Body — and close it when you're done\n}"
+        },
+        {
+            "id": "context",
+            "imports": [
+                "context"
+            ],
+            "kind": "statement",
+            "names": [
+                "context"
+            ],
+            "template": "ctx := context.Background()\n// TODO: a context carries a deadline, or a cancellation, into the calls that accept one\n_ = ctx"
+        },
+        {
+            "id": "spawn-process",
+            "imports": [
+                "os/exec"
+            ],
+            "kind": "statement",
+            "names": [
+                "spawn a process",
+                "run a program",
+                "external command"
+            ],
+            "template": "output, err := exec.Command(\"TODO: the program to run\").Output()\nif err == nil {\n\t_ = output\n}"
+        },
+        {
             "id": "interface",
             "kind": "declaration",
             "names": [
@@ -29,7 +620,7 @@
                 "struct",
                 "struct type"
             ],
-            "template": "type {name} struct {\n\t// TODO: add fields \u2014 or say \"add a <Name> field of type <Type> to {name}\"\n}"
+            "template": "type {name} struct {\n\t// TODO: add fields — or say \"add a <Name> field of type <Type> to {name}\"\n}"
         },
         {
             "id": "function",
@@ -39,7 +630,35 @@
                 "func"
             ],
             "template": "func {name}() {\n\t// TODO: write the body\n}"
+        },
+        {
+            "id": "enum",
+            "kind": "declaration",
+            "names": [
+                "enum",
+                "enumeration"
+            ],
+            "template": "type {name} int\n\nconst (\n\t{name}First {name} = iota\n\t// TODO: the rest of {name}'s values, one per line — they count up on their own\n)"
+        },
+        {
+            "id": "embedding",
+            "kind": "declaration",
+            "names": [
+                "embedded struct",
+                "struct embedding",
+                "embedding"
+            ],
+            "template": "type {name} struct {\n\t// TODO: embed a type by writing its name alone on a line of its own here — its fields and methods become part of {name}\n}"
+        },
+        {
+            "id": "recursion",
+            "kind": "declaration",
+            "names": [
+                "recursive function",
+                "recursion"
+            ],
+            "template": "func {name}() {\n\t// TODO: the stopping case comes first — check it and return, or the calls never end\n\t{name}()\n\t// TODO: what each call does with the smaller problem\n}"
         }
     ],
-    "source": "Gollemer's concept book \u2014 names of code mapped to their basic code. Rows are data, not grammar: add a row (id, names, kind, template) and the composer can assemble that concept in every phrasing its slots allow, with no new Go code. A malformed row is skipped; the rest of the book still loads."
+    "source": "Gollemer's concept book — names of code mapped to their basic code. Rows are data, not grammar: add a row (id, names, kind, template) and the composer can assemble that concept in every phrasing its slots allow, with no new Go code. A malformed row is skipped; the rest of the book still loads."
 }
