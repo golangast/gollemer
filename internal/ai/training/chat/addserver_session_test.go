@@ -67,6 +67,9 @@ func claimChain(line string, ask editAsk, profile *UserProfile) bool {
 	if runProposedDecl(line, ask) {
 		return true
 	}
+	if runPhrasingLayer(line, ask) {
+		return true
+	}
 	if runWriteBoundary(line) {
 		return true
 	}

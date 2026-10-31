@@ -160,6 +160,25 @@ func PhrasingDatasetPath(projectRoot string) string {
 	return filepath.Join(projectRoot, PhrasingDatasetRelPath)
 }
 
+// Phrasing2Domain is phrasing attempt 2, arm A (2026-10-31):
+// the same pointer-generator lineage retrained on the v2 data
+// (scripts/gen_phrasing_data2 — ~5x denser, factor-crossed,
+// random-name pools) with indexed-UNK disambiguation and
+// checkpoint selection by validation. Its gob is a NEW file;
+// run 1's model and data are untouched.
+const Phrasing2Domain = "phrasing2"
+
+// Phrasing2DatasetRelPath is arm A's training data. The judge
+// (phrasing_heldout.jsonl) is shared with run 1 and is never
+// opened by the trainer.
+const Phrasing2DatasetRelPath = "data/training/phrasing_pairs2.jsonl"
+
+// Phrasing2DatasetPath resolves arm A's training file under
+// the project root.
+func Phrasing2DatasetPath(projectRoot string) string {
+	return filepath.Join(projectRoot, Phrasing2DatasetRelPath)
+}
+
 // makefileTerms marks the makefile-command domain: the word "makefile"
 // itself or one of the repo's known make target names. Checked before
 // goTerms on purpose: outputs like "run make train-real-seq2seq" contain

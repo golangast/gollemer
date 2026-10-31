@@ -87,6 +87,15 @@ func main() {
 			}
 			return
 		}
+		if *domainFlag == chat.Phrasing2Domain {
+			// Phrasing attempt 2, arm A: v2 data, indexed-UNK
+			// masking, checkpoint selection by validation.
+			if err := chat.RunPhrasing2Training(rootDir, *resumeFlag); err != nil {
+				fmt.Fprintf(os.Stderr, "phrasing2 training failed: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
 		if err := chat.RunRealSeq2SeqTraining(rootDir, *domainFlag, *resumeFlag); err != nil {
 			fmt.Fprintf(os.Stderr, "real training failed: %v\n", err)
 			os.Exit(1)

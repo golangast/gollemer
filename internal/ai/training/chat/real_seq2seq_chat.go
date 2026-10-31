@@ -1270,6 +1270,21 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if tryProposedDecl(line, reader) {
 			continue
 		}
+		// The phrasing layer, after every deterministic claim
+		// and the proposer, before the boundary: a messy
+		// sentence no grammar could read ("could you stick a
+		// for loop in main for me?", a compound breath) is
+		// mapped by classify+extract onto the canonical
+		// sentence(s) it means — validated through the real
+		// parsers — and each piece then runs through the
+		// deterministic claims above with its own plan and
+		// gate. It claims nothing it cannot validate, and its
+		// artifact (data/phrasing_model.json) is a small JSON
+		// file: absent, the boundary answers as before. See
+		// phrasing2_claim.go.
+		if tryPhrasingLayer(line, reader) {
+			continue
+		}
 		// The write-sentence boundary, last before the intent
 		// layer: an imperative sentence asking to write code
 		// that no shape above could serve is answered here, in
