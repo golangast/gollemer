@@ -581,6 +581,15 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		if tryBuildResources(line, profile) {
 			continue
 		}
+		// Package lookup, claimed beside resources: an explicit
+		// "which package …" question is answered from the stdlib
+		// catalog snapshot (data/stdpackages.json) — a library
+		// fact, never a classifier guess. The shape is tight and
+		// the match must be strong, so code questions and project
+		// questions keep their routes.
+		if tryPackageLookup(line) {
+			continue
+		}
 		// Intent layer: a confident trained classification of what
 		// the user wants, in their own words — no memorized commands.
 		if tryIntentDispatch(line, profile) {
@@ -814,6 +823,15 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		// classifier guess. Imperative build commands for this
 		// project are not shapes here — the composer keeps them.
 		if tryBuildResources(line, profile) {
+			continue
+		}
+		// Package lookup, claimed beside resources: an explicit
+		// "which package …" question is answered from the stdlib
+		// catalog snapshot (data/stdpackages.json) — a library
+		// fact, never a classifier guess. The shape is tight and
+		// the match must be strong, so code questions and project
+		// questions keep their routes.
+		if tryPackageLookup(line) {
 			continue
 		}
 		// Intent layer: a confident trained classification of what
@@ -1195,6 +1213,15 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// classifier guess. Imperative build commands for this
 		// project are not shapes here — the composer keeps them.
 		if tryBuildResources(line, profile) {
+			continue
+		}
+		// Package lookup, claimed beside resources: an explicit
+		// "which package …" question is answered from the stdlib
+		// catalog snapshot (data/stdpackages.json) — a library
+		// fact, never a classifier guess. The shape is tight and
+		// the match must be strong, so code questions and project
+		// questions keep their routes.
+		if tryPackageLookup(line) {
 			continue
 		}
 		// Simple creations, claimed deterministically beside the

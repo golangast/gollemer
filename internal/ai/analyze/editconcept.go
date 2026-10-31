@@ -375,14 +375,18 @@ func (p *Project) planConceptDeclaration(req EditRequest, entry *ConceptEntry, r
 	// carries none (a hand-written row may not).
 	decl = indentConceptDecl(decl)
 
-	// A func-shaped row (the book's function entry) assembles
-	// an EMPTY scaffold: no parameters, no results, a TODO
-	// body. The plan says so plainly, and names the two shapes
-	// that produce a working function with a real signature —
-	// the same honesty pattern as the interface's
+	// A func-shaped row whose signature is EMPTY (the book's
+	// function and recursion entries) assembles an EMPTY
+	// scaffold: no parameters, no results, a TODO body. The
+	// plan says so plainly, and names the two shapes that
+	// produce a working function with a real signature — the
+	// same honesty pattern as the interface's
 	// never-invented-methods note, keyed on the rendered
-	// declaration's shape, not on the row's id.
-	if strings.HasPrefix(decl, "func ") {
+	// declaration's shape, not on the row's id. Func rows WITH
+	// a signature (the web family's handlers and middleware)
+	// carry real parameters and bodies; the scaffold note would
+	// misdescribe them, so it keys on the empty signature.
+	if conceptScaffoldRe.MatchString(decl) {
 		notes = append(notes, fmt.Sprintf("This is an empty scaffold — %s has a name and a body to fill in, but no parameters, no results, and nothing that does work yet. For a function with a real signature from the start, say \"add a function in %s that calls <Something>\" (it wraps one that exists) or \"add a function like <Existing> named <New>\" (it copies one).", name, rel))
 	}
 
@@ -544,6 +548,11 @@ func (p *Project) conceptLikeMethods(like string) (lines []string, specs []strin
 }
 
 var conceptQualRe = regexp.MustCompile(`([A-Za-z_]\w*)\.`)
+
+// conceptScaffoldRe matches a rendered declaration that is a
+// parameterless function scaffold: "func Name() {" — the shape
+// whose plan note owns the emptiness.
+var conceptScaffoldRe = regexp.MustCompile(`^func [A-Za-z_]\w*\(\) \{`)
 
 // interfaceMethodLines renders an interface type's own declared
 // methods (and embedded interfaces) as declaration lines, from

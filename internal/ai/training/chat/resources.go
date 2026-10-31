@@ -427,6 +427,129 @@ func matchSeed(goal string) []advocatesEntry {
 	return out
 }
 
+// --- curated reference sources (built-in) ---
+
+// referenceEntry is one curated pointer into a canonical Go
+// text — Effective Go, section by section, and the Go Wiki's
+// Switch page — keyed to the topics a builder asks about.
+// Unlike the Advocates snapshot these are built in (they are
+// the language's own documentation, not John's curation), and
+// unlike the seed list they are SECTION links. Every anchor is
+// the section's real id, taken from the page's own source or a
+// verbatim link to it — never guessed: the resources build's
+// zero-invented-URLs rule applies to anchors too, so a topic
+// whose section id could not be verified that way links the
+// page itself and its label names the section to read.
+type referenceEntry struct {
+	source string   // the header the entry prints under
+	terms  []string // topic phrases; the first is the primary
+	label  string
+	url    string
+}
+
+const effectiveGoURL = "https://go.dev/doc/effective_go"
+
+var referenceSeed = []referenceEntry{
+	{"Effective Go", []string{"formatting", "gofmt", "format"}, "Formatting", effectiveGoURL + "#formatting"},
+	{"Effective Go", []string{"comments", "commentary", "doc comments"}, "Commentary", effectiveGoURL + "#commentary"},
+	{"Effective Go", []string{"names", "naming"}, "Names", effectiveGoURL + "#names"},
+	{"Effective Go", []string{"package names", "package naming"}, "Package names", effectiveGoURL + "#package-names"},
+	{"Effective Go", []string{"getters", "setters", "getter", "setter"}, "Getters", effectiveGoURL + "#Getters"},
+	{"Effective Go", []string{"interface names", "naming interfaces"}, "Interface names", effectiveGoURL + "#interface-names"},
+	{"Effective Go", []string{"mixedcaps", "camel case", "camelcase"}, "MixedCaps", effectiveGoURL + "#mixed-caps"},
+	{"Effective Go", []string{"semicolons", "semicolon"}, "Semicolons", effectiveGoURL + "#semicolons"},
+	{"Effective Go", []string{"if statements", "conditionals"}, "If", effectiveGoURL + "#if"},
+	{"Effective Go", []string{"for loops", "loops", "looping"}, "For", effectiveGoURL + "#for"},
+	{"Effective Go", []string{"switch statements", "switch"}, "Switch", effectiveGoURL + "#switch"},
+	{"Effective Go", []string{"type switch", "type switches"}, "Type switch", effectiveGoURL + "#type_switch"},
+	{"Effective Go", []string{"multiple return values", "multiple returns", "returning two values"}, "Multiple return values", effectiveGoURL + "#multiple-returns"},
+	{"Effective Go", []string{"named result parameters", "named return values", "named results"}, "Named result parameters", effectiveGoURL + "#named-results"},
+	{"Effective Go", []string{"defer", "deferred calls"}, "Defer", effectiveGoURL + "#defer"},
+	{"Effective Go", []string{"allocation", "allocating", "new"}, "Allocation with new", effectiveGoURL + "#allocation_new"},
+	{"Effective Go", []string{"blank identifier", "underscore"}, "The blank identifier", effectiveGoURL + "#blank"},
+	{"Effective Go", []string{"concurrency", "goroutines", "channels", "worker", "concurrent"}, "Concurrency", effectiveGoURL + "#concurrency"},
+	{"Effective Go", []string{"goroutines", "goroutine"}, "Goroutines", effectiveGoURL + "#goroutines"},
+	{"Effective Go", []string{"channels", "channel"}, "Channels", effectiveGoURL + "#channels"},
+	{"Effective Go", []string{"web server", "http server", "webserver"}, "A web server", effectiveGoURL},
+	{"Effective Go", []string{"arrays", "array"}, "Arrays", effectiveGoURL},
+	{"Effective Go", []string{"slices", "slice"}, "Slices", effectiveGoURL},
+	{"Effective Go", []string{"maps", "map"}, "Maps", effectiveGoURL},
+	{"Effective Go", []string{"printing", "printf", "print"}, "Printing", effectiveGoURL},
+	{"Effective Go", []string{"append", "appending"}, "append", effectiveGoURL},
+	{"Effective Go", []string{"initialization", "constants", "variables", "init function"}, "Initialization: constants, variables, the init function", effectiveGoURL},
+	{"Effective Go", []string{"methods", "method", "receivers", "pointer receivers", "value receivers"}, "Methods: pointers vs. values", effectiveGoURL},
+	{"Effective Go", []string{"interfaces", "interface", "type assertions"}, "Interfaces and other types", effectiveGoURL},
+	{"Effective Go", []string{"embedding", "embed", "embedded types"}, "Embedding", effectiveGoURL},
+	{"Effective Go", []string{"errors", "error handling"}, "Errors", effectiveGoURL},
+	{"Effective Go", []string{"panic", "recover"}, "panic and recover", effectiveGoURL},
+	{"the Go Wiki", []string{"switch", "switch statements"}, "Switch", "https://go.dev/wiki/Switch"},
+}
+
+// referenceMatchCap bounds the reference lines in one pack:
+// pointers, not a second pack.
+const referenceMatchCap = 3
+
+// matchReferences scores the curated sources against the goal:
+// an entry qualifies when two of its topic terms meet the
+// goal's expanded terms, or when its primary phrase appears
+// whole in the goal as typed. One stray shared word never
+// drags a section in.
+func matchReferences(goal string) []referenceEntry {
+	raw := termSet(goal)
+	expanded := expandGoalTerms(goal)
+	type scored struct {
+		e     referenceEntry
+		score int
+		idx   int
+	}
+	var hits []scored
+	for i, e := range referenceSeed {
+		terms := map[string]bool{}
+		for _, t := range e.terms {
+			for k := range termSet(t) {
+				terms[k] = true
+			}
+		}
+		score := intersect(expanded, terms)
+		primaryHit := false
+		if p := termSet(e.terms[0]); len(p) > 0 && intersect(raw, p) == len(p) {
+			primaryHit = true
+		}
+		if score >= 2 || primaryHit {
+			hits = append(hits, scored{e, score, i})
+		}
+	}
+	sort.SliceStable(hits, func(i, j int) bool {
+		if hits[i].score != hits[j].score {
+			return hits[i].score > hits[j].score
+		}
+		return hits[i].idx < hits[j].idx
+	})
+	if len(hits) > referenceMatchCap {
+		hits = hits[:referenceMatchCap]
+	}
+	// Group by source (referenceSeed order), best first within
+	// a source, so a pack never interleaves two sources'
+	// headers.
+	sort.SliceStable(hits, func(i, j int) bool {
+		return referenceSourceRank(hits[i].e.source) < referenceSourceRank(hits[j].e.source)
+	})
+	out := make([]referenceEntry, 0, len(hits))
+	for _, h := range hits {
+		out = append(out, h.e)
+	}
+	return out
+}
+
+func referenceSourceRank(source string) int {
+	for i, e := range referenceSeed {
+		if e.source == source {
+			return i
+		}
+	}
+	return len(referenceSeed)
+}
+
 // --- project example ---
 
 var httpServerCalls = map[string]bool{
@@ -627,6 +750,23 @@ func tryBuildResources(line string, profile *UserProfile) bool {
 		}
 	default:
 		b.WriteString("For the concepts themselves: /learn-path walks a project's ideas in order, each linked to gobyexample, and /glossary defines the Go terms.\n")
+	}
+
+	// Curated reference sections ride along where a pack (or an
+	// explicit resources ask) earned them: the goal's own words
+	// matched a section's topic, so the pointer is earned,
+	// never sprayed. Reference lines are not pack entries (no
+	// bullet), so the entry budget is untouched.
+	if refs := matchReferences(goal); len(refs) > 0 && (qualified || explicit) {
+		b.WriteString("\n")
+		lastSource := ""
+		for _, e := range refs {
+			if e.source != lastSource {
+				fmt.Fprintf(&b, "From %s:\n", e.source)
+				lastSource = e.source
+			}
+			fmt.Fprintf(&b, "%s — %s\n", e.label, e.url)
+		}
 	}
 
 	// Composer tie-in: only where a real composer capability

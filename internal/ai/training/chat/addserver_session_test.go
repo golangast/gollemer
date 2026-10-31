@@ -33,6 +33,8 @@ import (
 
 // claimChain runs one line through the unified loop's
 // deterministic claims, in order, with a scripted gate answer.
+// Package lookup sits directly after build resources, exactly
+// as in the loops.
 func claimChain(line string, ask editAsk, profile *UserProfile) bool {
 	if tryLearnCommand(line) {
 		return true
@@ -47,6 +49,9 @@ func claimChain(line string, ask editAsk, profile *UserProfile) bool {
 		return true
 	}
 	if tryBuildResources(line, profile) {
+		return true
+	}
+	if tryPackageLookup(line) {
 		return true
 	}
 	if runCreate(line, ask) {

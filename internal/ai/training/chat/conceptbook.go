@@ -711,6 +711,225 @@ const defaultConceptBook = `{
         "recursion"
       ],
       "template": "func {name}() {\n\t// TODO: the stopping case comes first — check it and return, or the calls never end\n\t{name}()\n\t// TODO: what each call does with the smaller problem\n}"
+    },
+    {
+      "id": "type-switch",
+      "kind": "statement",
+      "names": [
+        "type switch",
+        "switch on type",
+        "type assertion switch"
+      ],
+      "template": "var value any = \"TODO: the value whose type you want to check\"\nswitch value.(type) {\ncase string:\n\t// TODO: value holds a string — work with it here\ncase int:\n\t// TODO: value holds an int — work with it here\ndefault:\n\t// TODO: value holds something else\n}\n// TODO: write switch v := value.(type) instead, and each case sees v already holding that case's type"
+    },
+    {
+      "id": "routing",
+      "imports": [
+        "net/http"
+      ],
+      "kind": "statement",
+      "names": [
+        "routing",
+        "router",
+        "routes",
+        "http routing",
+        "serve mux"
+      ],
+      "template": "mux := http.NewServeMux()\nmux.HandleFunc(\"/hello/{name}\", func(w http.ResponseWriter, r *http.Request) {\n\t// TODO: write the response here — r.PathValue(\"name\") reads the {name} part of the URL\n})\n// TODO: hand mux to your server with http.ListenAndServe(\":8080\", mux) — patterns like /hello/{name} and \"GET /path\" are the go 1.22 mux's; an older go.mod matches paths literally"
+    },
+    {
+      "id": "html-template",
+      "imports": [
+        "html/template"
+      ],
+      "kind": "statement",
+      "names": [
+        "html template",
+        "html templates",
+        "web template",
+        "template"
+      ],
+      "template": "page := template.Must(template.ParseFiles(\"TODO: your template file.html\"))\n// TODO: inside a handler, write the page out with page.Execute(w, data) — data is what stands in for {{.}} in the template\n_ = page"
+    },
+    {
+      "id": "static-files",
+      "imports": [
+        "net/http"
+      ],
+      "kind": "statement",
+      "names": [
+        "static files",
+        "static file serving",
+        "serve static files",
+        "assets and files"
+      ],
+      "template": "fs := http.FileServer(http.Dir(\"static\"))\nhttp.Handle(\"/static/\", http.StripPrefix(\"/static/\", fs))\n// TODO: this serves the files in the static folder at /static/ once the server is running — rename the folder and the path to yours"
+    },
+    {
+      "id": "form-handler",
+      "imports": [
+        "net/http"
+      ],
+      "kind": "declaration",
+      "names": [
+        "form handler",
+        "html form",
+        "contact form",
+        "form"
+      ],
+      "template": "func {name}(w http.ResponseWriter, r *http.Request) {\n\tif r.Method != http.MethodPost {\n\t\t// TODO: show the form here — a browser asks for it with GET before it can send anything\n\t\treturn\n\t}\n\tdetails := struct {\n\t\tEmail string\n\t\tSubject string\n\t\tMessage string\n\t}{\n\t\tEmail: r.FormValue(\"email\"),\n\t\tSubject: r.FormValue(\"subject\"),\n\t\tMessage: r.FormValue(\"message\"),\n\t}\n\t// TODO: details holds the form's fields — rename them to your form's, and use them here\n\t_ = details\n}"
+    },
+    {
+      "id": "middleware",
+      "imports": [
+        "log",
+        "net/http"
+      ],
+      "kind": "declaration",
+      "names": [
+        "middleware",
+        "logging middleware",
+        "basic middleware"
+      ],
+      "template": "func {name}(next http.HandlerFunc) http.HandlerFunc {\n\treturn func(w http.ResponseWriter, r *http.Request) {\n\t\tlog.Println(r.URL.Path)\n\t\tnext(w, r)\n\t}\n}"
+    },
+    {
+      "id": "middleware-timing",
+      "imports": [
+        "log",
+        "net/http",
+        "time"
+      ],
+      "kind": "declaration",
+      "names": [
+        "timing middleware",
+        "middleware timing",
+        "advanced middleware"
+      ],
+      "template": "func {name}(next http.HandlerFunc) http.HandlerFunc {\n\treturn func(w http.ResponseWriter, r *http.Request) {\n\t\tstart := time.Now()\n\t\tdefer func() { log.Println(r.URL.Path, time.Since(start)) }()\n\t\tnext(w, r)\n\t}\n}"
+    },
+    {
+      "id": "middleware-chain",
+      "imports": [
+        "net/http"
+      ],
+      "kind": "declaration",
+      "names": [
+        "middleware chain",
+        "chain middleware",
+        "middleware chaining"
+      ],
+      "template": "func {name}(f http.HandlerFunc, middlewares ...func(http.HandlerFunc) http.HandlerFunc) http.HandlerFunc {\n\tfor _, m := range middlewares {\n\t\tf = m(f)\n\t}\n\treturn f\n}"
+    },
+    {
+      "id": "session-handler",
+      "imports": [
+        "net/http"
+      ],
+      "kind": "declaration",
+      "names": [
+        "session handler",
+        "session cookie",
+        "session",
+        "login session"
+      ],
+      "template": "func {name}(w http.ResponseWriter, r *http.Request) {\n\t// A session in plain net/http is a cookie: the browser stores it and sends it back on every request.\n\thttp.SetCookie(w, &http.Cookie{Name: \"session\", Value: \"TODO: your session id\", Path: \"/\"})\n\t// TODO: write the response here — on later requests, read the cookie back with r.Cookie(\"session\")\n}"
+    },
+    {
+      "id": "database",
+      "imports": [
+        "database/sql"
+      ],
+      "kind": "statement",
+      "names": [
+        "database",
+        "database connection",
+        "sql database",
+        "open database"
+      ],
+      "template": "db, err := sql.Open(\"TODO: driver name\", \"TODO: connection string\")\n// TODO: database/sql ships no driver — add yours as a blank import at the top of the file, like _ \"github.com/go-sql-driver/mysql\" for MySQL\nif err == nil {\n\terr = db.Ping()\n}\nif err == nil {\n\t// TODO: the number caps how many connections the pool may open at once — tune it for your database\n\tdb.SetMaxOpenConns(10)\n}\n// TODO: Open alone never connects — the Ping above is what proves the database answers. Keep db and pass it around: it is a connection pool, not a single connection"
+    },
+    {
+      "id": "database-query",
+      "imports": [
+        "database/sql"
+      ],
+      "kind": "statement",
+      "names": [
+        "database query",
+        "query rows",
+        "database rows",
+        "query the database"
+      ],
+      "template": "db, err := sql.Open(\"TODO: driver name\", \"TODO: connection string\")\n// TODO: database/sql ships no driver — add yours as a blank import at the top of the file, like _ \"github.com/go-sql-driver/mysql\" for MySQL\nrows, err := db.Query(\"TODO: your query — one ? for each value after it\")\nif err == nil {\n\tdefer rows.Close()\n\tfor rows.Next() {\n\t\tvar name string\n\t\t// TODO: Scan takes one variable per column your query returns — this row reads just the first, as text\n\t\tif err := rows.Scan(&name); err == nil {\n\t\t\t_ = name\n\t\t}\n\t}\n\t_ = rows.Err()\n}"
+    },
+    {
+      "id": "database-query-row",
+      "imports": [
+        "database/sql"
+      ],
+      "kind": "statement",
+      "names": [
+        "database query row",
+        "query one row",
+        "query a single row",
+        "single row query"
+      ],
+      "template": "db, err := sql.Open(\"TODO: driver name\", \"TODO: connection string\")\n// TODO: database/sql ships no driver — add yours as a blank import at the top of the file, like _ \"github.com/go-sql-driver/mysql\" for MySQL\nvar name string\nerr = db.QueryRow(\"TODO: your query — one ? for each value after it\", 1).Scan(&name)\nif err == nil {\n\t_ = name\n}\n// TODO: when no row matches, Scan sets err to sql.ErrNoRows — check for that before treating err as a failure"
+    },
+    {
+      "id": "database-exec",
+      "imports": [
+        "database/sql"
+      ],
+      "kind": "statement",
+      "names": [
+        "database exec",
+        "database insert",
+        "insert into database",
+        "execute statement"
+      ],
+      "template": "db, err := sql.Open(\"TODO: driver name\", \"TODO: connection string\")\n// TODO: database/sql ships no driver — add yours as a blank import at the top of the file, like _ \"github.com/go-sql-driver/mysql\" for MySQL\nresult, err := db.Exec(\"TODO: your insert, update or delete — one ? for each value after it\", \"TODO: a value\")\nif err == nil {\n\t// TODO: result.LastInsertId() gives the new row's id when the table auto-numbers its rows\n\t_ = result\n}\n// TODO: statements that change data go through Exec — never Query, which would hold a connection open waiting for rows that never come"
+    },
+    {
+      "id": "database-prepared",
+      "imports": [
+        "database/sql"
+      ],
+      "kind": "statement",
+      "names": [
+        "prepared statement",
+        "database prepared statement",
+        "prepare a statement"
+      ],
+      "template": "db, err := sql.Open(\"TODO: driver name\", \"TODO: connection string\")\n// TODO: database/sql ships no driver — add yours as a blank import at the top of the file, like _ \"github.com/go-sql-driver/mysql\" for MySQL\nstmt, err := db.Prepare(\"TODO: your statement — a ? where each value goes\")\nif err == nil {\n\tdefer stmt.Close()\n\t// TODO: run Exec once per set of values — preparing once is the point. Placeholders differ by database: ? here, $1, $2 in Postgres\n\tif _, err := stmt.Exec(\"TODO: one set of values\"); err == nil {\n\t}\n}"
+    },
+    {
+      "id": "database-transaction",
+      "imports": [
+        "database/sql"
+      ],
+      "kind": "statement",
+      "names": [
+        "database transaction",
+        "transaction",
+        "sql transaction"
+      ],
+      "template": "db, err := sql.Open(\"TODO: driver name\", \"TODO: connection string\")\n// TODO: database/sql ships no driver — add yours as a blank import at the top of the file, like _ \"github.com/go-sql-driver/mysql\" for MySQL\ntx, err := db.Begin()\nif err == nil {\n\t// TODO: run every statement on tx (tx.Exec, tx.Query) — not on db — so they all share the transaction's one connection, and Commit keeps them or Rollback undoes them\n\tif err := tx.Commit(); err != nil {\n\t\t_ = tx.Rollback()\n\t}\n}"
+    },
+    {
+      "id": "database-null",
+      "imports": [
+        "database/sql"
+      ],
+      "kind": "statement",
+      "names": [
+        "database null",
+        "nullable column",
+        "null value",
+        "sql null"
+      ],
+      "template": "db, err := sql.Open(\"TODO: driver name\", \"TODO: connection string\")\n// TODO: database/sql ships no driver — add yours as a blank import at the top of the file, like _ \"github.com/go-sql-driver/mysql\" for MySQL\nrows, err := db.Query(\"TODO: your query\")\nif err == nil {\n\tdefer rows.Close()\n\tfor rows.Next() {\n\t\tvar name sql.NullString\n\t\tif err := rows.Scan(&name); err == nil {\n\t\t\t// TODO: name.Valid tells you whether the column was NULL; name.String holds the text when it wasn't\n\t\t\t_ = name\n\t\t}\n\t}\n}"
     }
   ],
   "source": "Gollemer's concept book — names of code mapped to their basic code. Rows are data, not grammar: add a row (id, names, kind, template) and the composer can assemble that concept in every phrasing its slots allow, with no new Go code. A malformed row is skipped; the rest of the book still loads."
