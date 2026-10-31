@@ -82,6 +82,179 @@ func TestPtrGenCopyPathReproducesInputToken(t *testing.T) {
 	}
 }
 
+// ptrgenToySetup builds the small copy toy shared by the mechanism
+// tests: three trained names plus zephyr, which appears in inputs
+// only. Small dims keep the resume-continuity test fast.
+func ptrgenToySetup(t *testing.T) (model *Seq2Seq, inputs, targets [][]int, padID int) {
+	t.Helper()
+	v := vocab.NewVocabulary()
+	for _, w := range []string{"copy", "mention", "today", "please", "spec", "noted", "amber", "birch", "cobra", "zephyr"} {
+		v.AddToken(w)
+	}
+	tok, err := tokenizer.NewTokenizer(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	model, err = NewSeq2Seq(v.Size(), v.Size(), 16, 32, tok, v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	model.Decoder.MoE = nil
+	model.Decoder.PtrGen = NewPointerGen(32)
+
+	type pair struct{ in, out string }
+	var pairs []pair
+	for _, n := range []string{"amber", "birch", "cobra"} {
+		pairs = append(pairs,
+			pair{"copy " + n, "spec " + n},
+			pair{"copy " + n + " please", "spec " + n},
+			pair{"please copy " + n, "spec " + n},
+		)
+	}
+	pairs = append(pairs,
+		pair{"mention zephyr today", "spec noted"},
+		pair{"today mention zephyr", "spec noted"},
+		pair{"mention zephyr please", "spec noted"},
+	)
+	encode := func(s string, target bool) []int {
+		ids, err := tok.Encode(s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !target {
+			return ids
+		}
+		out := []int{v.BosID}
+		out = append(out, ids...)
+		return append(out, v.EosID)
+	}
+	maxIn, maxTg := 0, 0
+	for _, p := range pairs {
+		in := encode(NormalizeQuery(p.in), false)
+		tg := encode(strings.ToLower(p.out), true)
+		inputs = append(inputs, in)
+		targets = append(targets, tg)
+		if len(in) > maxIn {
+			maxIn = len(in)
+		}
+		if len(tg) > maxTg {
+			maxTg = len(tg)
+		}
+	}
+	pad := func(rows [][]int, n int) [][]int {
+		out := make([][]int, len(rows))
+		for i, r := range rows {
+			row := make([]int, n)
+			copy(row, r)
+			for k := len(r); k < n; k++ {
+				row[k] = v.PaddingTokenID
+			}
+			out[i] = row
+		}
+		return out
+	}
+	return model, pad(inputs, maxIn), pad(targets, maxTg), v.PaddingTokenID
+}
+
+func ptrgenTrainSteps(t *testing.T, m *Seq2Seq, adam *nn.Adam, inputs, targets [][]int, padID, steps int) []float32 {
+	t.Helper()
+	losses := make([]float32, 0, steps)
+	for s := 0; s < steps; s++ {
+		adam.ZeroGrad()
+		loss, err := TrainBatchPtrGen(m, inputs, targets, padID)
+		if err != nil {
+			t.Fatalf("train step: %v", err)
+		}
+		if math.IsNaN(float64(loss)) || math.IsInf(float64(loss), 0) {
+			t.Fatalf("train step: non-finite loss %v", loss)
+		}
+		losses = append(losses, loss)
+		adam.ClipGradients()
+		adam.Step()
+	}
+	return losses
+}
+
+// Resume continuity, the property the converged rerun is built on:
+// training that is snapshotted (weights + optimizer state),
+// "killed", and restored into FRESH model and optimizer instances
+// must continue on the uninterrupted trajectory — same losses, same
+// final weights — instead of the v1 pattern, where a fresh Adam
+// against mid-flight weights knocked the loss out of its band.
+func TestPtrGenResumeContinuityWithOptimizerState(t *testing.T) {
+	const preSteps, postSteps = 90, 25
+	model, inputs, targets, padID := ptrgenToySetup(t)
+	opt := nn.NewOptimizer(model.Parameters(), 0.01, 1.0)
+	adam, ok := opt.(*nn.Adam)
+	if !ok {
+		t.Fatal("optimizer is not *nn.Adam")
+	}
+	pre := ptrgenTrainSteps(t, model, adam, inputs, targets, padID, preSteps)
+	snapParams := adam.SnapshotParameters()
+	snapState := adam.SnapshotState()
+
+	// Uninterrupted reference.
+	refLosses := ptrgenTrainSteps(t, model, adam, inputs, targets, padID, postSteps)
+	refParams := adam.SnapshotParameters()
+
+	// Resumed with optimizer state: fresh instances, snapshot in.
+	resumed, _, _, _ := ptrgenToySetup(t)
+	ropt := nn.NewOptimizer(resumed.Parameters(), 0.01, 1.0)
+	radam, _ := ropt.(*nn.Adam)
+	rp := resumed.Parameters()
+	if len(rp) != len(snapParams) {
+		t.Fatalf("param count mismatch: %d vs %d", len(rp), len(snapParams))
+	}
+	// SnapshotParameters is keyed by the SOURCE model's tensors;
+	// copy by parameter order, the same discipline as resume.
+	srcParams := model.Parameters()
+	for i := range rp {
+		copy(rp[i].Data, snapParams[srcParams[i]])
+	}
+	if err := radam.RestoreState(snapState); err != nil {
+		t.Fatalf("RestoreState: %v", err)
+	}
+	gotLosses := ptrgenTrainSteps(t, resumed, radam, inputs, targets, padID, postSteps)
+	for s := range refLosses {
+		if math.Abs(float64(gotLosses[s]-refLosses[s])) > 1e-4 {
+			t.Fatalf("post-resume step %d loss %v, uninterrupted %v — restored run left the trajectory",
+				s, gotLosses[s], refLosses[s])
+		}
+	}
+	gotParams := radam.SnapshotParameters()
+	resumedParams := resumed.Parameters()
+	for i := range resumedParams {
+		want := refParams[srcParams[i]]
+		got := gotParams[resumedParams[i]]
+		for j := range want {
+			if math.Abs(float64(got[j]-want[j])) > 1e-4 {
+				t.Fatalf("param %d[%d]: resumed %v, uninterrupted %v", i, j, got[j], want[j])
+			}
+		}
+	}
+
+	// Control: resume with a FRESH Adam (v1 behavior). Its trajectory
+	// must visibly leave the band the restored run stayed in —
+	// otherwise the property above proves nothing.
+	fresh, _, _, _ := ptrgenToySetup(t)
+	fopt := nn.NewOptimizer(fresh.Parameters(), 0.01, 1.0)
+	fadam, _ := fopt.(*nn.Adam)
+	fp := fresh.Parameters()
+	for i := range fp {
+		copy(fp[i].Data, snapParams[srcParams[i]])
+	}
+	freshLosses := ptrgenTrainSteps(t, fresh, fadam, inputs, targets, padID, postSteps)
+	band := float64(pre[len(pre)-1]) * 1.5
+	refTail := float64(refLosses[len(refLosses)-1])
+	freshTail := float64(freshLosses[len(freshLosses)-1])
+	if refTail > band {
+		t.Fatalf("uninterrupted tail loss %v left the pre-kill band %v; toy setup invalid", refTail, band)
+	}
+	if math.Abs(freshTail-refTail) < 0.05*refTail && math.Abs(freshTail-refTail) < 0.02 {
+		t.Fatalf("fresh-Adam control tail loss %v ≈ uninterrupted %v — the control shows no resume penalty, so continuity proves nothing here", freshTail, refTail)
+	}
+}
+
 // The toy that decides whether the mechanism is real: a name that
 // appears in training INPUTS but never as a training TARGET must be
 // reproducible at the copy slot after training. A pure generator has
