@@ -40,6 +40,15 @@ const (
 	EditAddServer = "add_server"
 	EditDelegate  = "delegate"
 
+	// Cross-file use (edituses.go): a NEW function in a named
+	// file whose body is a first use of a function or type that
+	// already exists elsewhere in the project — the call (or
+	// the value) assembled from the referenced symbol's real
+	// signature/definition, starting values derived honestly,
+	// returns handled in the body. The delegate's passthrough
+	// wrapper is the neighboring shape, not this one.
+	EditUse = "use"
+
 	// Concept-book edits (editconcept.go): the entry the chat's
 	// composer matched from the book, assembled by kind.
 	EditConcept = "concept"
@@ -108,6 +117,20 @@ type EditRequest struct {
 	DelegateFile string
 	SourceName   string
 	WrapperName  string
+
+	// use: the existing .go file (project-relative slash path)
+	// the new function is added to, the referenced symbol as
+	// typed (bare name or pkg.Name — a function or a type), the
+	// file the sentence says the symbol lives in ("" = not
+	// stated; used to disambiguate, never to invent), the new
+	// function's name ("" = derived: "Use" + the symbol's
+	// name), and whether the sentence's "type" designator
+	// forces the symbol to resolve as a type.
+	UseFile     string
+	UseSymbol   string
+	UseFromFile string
+	UseName     string
+	UseType     bool
 
 	// Signature changes (the target is FuncName):
 	//
@@ -248,6 +271,8 @@ func (p *Project) PlanEdit(req EditRequest) (*EditPlan, string) {
 		return p.planAddServer(req)
 	case EditDelegate:
 		return p.planDelegate(req)
+	case EditUse:
+		return p.planUse(req)
 	case EditConcept:
 		return p.planConcept(req)
 	case EditProposedDecl:

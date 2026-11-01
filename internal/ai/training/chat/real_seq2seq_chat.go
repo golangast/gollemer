@@ -1255,6 +1255,20 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if tryDelegate(line, reader) {
 			continue
 		}
+		// Cross-file uses, claimed deterministically beside the
+		// delegates: "in web.go add a function that uses LoadUser
+		// from store.go" writes a NEW function whose body is a
+		// first use of an existing function or type — the call
+		// (or the value) assembled from the symbol's real
+		// signature/definition, with starting values derived
+		// honestly or the plan refused, and the results handled
+		// in the body. It sits after the delegate ("that calls"
+		// is the passthrough's trigger, "that uses" is this
+		// one's) and before the concept book, whose function
+		// row would meet the "that uses" tail unprepared.
+		if tryUses(line, reader) {
+			continue
+		}
 		// Concept-book edits, claimed deterministically beside
 		// the other write-side parsers: "add a print line to
 		// jim/main.go" and "add an interface named Reader to

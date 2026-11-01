@@ -118,67 +118,9 @@ func (p *Project) planDelegate(req EditRequest) (*EditPlan, string) {
 		return nil, fmt.Sprintf("I found %s in the index but couldn't re-read its declaration in %s.", src.Display(), p.LinkPath(src.File))
 	}
 
-	g := &delegateGen{
-		p:          p,
-		src:        src,
-		srcDecl:    srcDecl,
-		srcFset:    srcFset,
-		srcAST:     srcAST,
-		tgtAST:     tgtAST,
-		tgtFset:    tgtFset,
-		tgtPkg:     tgtPkg,
-		cross:      cross,
-		wrapper:    wrapper,
-		targetRel:  rel,
-		targetSrc:  srcBytes,
-		typeParams: map[string]bool{},
-		srcTop:     map[string]bool{},
-		srcImports: map[string]string{},
-		tgtImports: map[string]string{},
-	}
-	if cross {
-		g.srcPath = p.Module
-		if src.PkgDir != "" {
-			g.srcPath = p.Module + "/" + src.PkgDir
-		}
-		if g.srcPath == "" || strings.HasPrefix(g.srcPath, "/") {
-			return nil, "I couldn't work out the source package's import path (the project has no go.mod module line I can read), so I can't write the import honestly."
-		}
-	}
-	if srcPkg := p.pkgByDir(src.PkgDir); srcPkg != nil {
-		for _, fn := range srcPkg.Funcs {
-			if fn.Receiver == "" {
-				g.srcTop[fn.Name] = true
-			}
-		}
-		for _, t := range srcPkg.Types {
-			g.srcTop[t.Name] = true
-		}
-		for _, v := range srcPkg.Vars {
-			g.srcTop[v.Name] = true
-		}
-	}
-	if srcDecl.Type.TypeParams != nil {
-		for _, f := range srcDecl.Type.TypeParams.List {
-			for _, n := range f.Names {
-				g.typeParams[n.Name] = true
-			}
-		}
-	}
-	for _, is := range srcAST.Imports {
-		_, eff := importSpecOf(is)
-		path, _ := strconv.Unquote(is.Path.Value)
-		g.srcImports[eff] = path
-	}
-	for _, is := range tgtAST.Imports {
-		_, eff := importSpecOf(is)
-		path, _ := strconv.Unquote(is.Path.Value)
-		g.tgtImports[path] = eff
-	}
-	if cross {
-		if eff, ok := g.tgtImports[g.srcPath]; ok && (eff == "." || eff == "_") {
-			return nil, fmt.Sprintf("%s imports %s with a %s import, which gives the package no name I can call through — give that import its plain name first, then ask again.", p.LinkPath(rel), g.srcPath, map[string]string{".": "dot", "_": "blank"}[eff])
-		}
+	g, refusal := p.newDelegateGen(src, srcDecl, srcFset, srcAST, tgtAST, tgtFset, tgtPkg, cross, wrapper, rel, srcBytes)
+	if refusal != "" {
+		return nil, refusal
 	}
 
 	primary, alt, refusal := g.forms()
@@ -234,6 +176,80 @@ func (p *Project) planDelegate(req EditRequest) (*EditPlan, string) {
 			return verifyDelegateCall(after.Root, rel, wName, sName)
 		},
 	}, ""
+}
+
+// newDelegateGen builds the rendering context a cross-file
+// shape leans on — the delegate planner, and the use planner in
+// edituses.go whose bodies render the same source's types for
+// the same target file: the source package's top-level names,
+// both files' import situations, the source's type parameters,
+// and (across packages) the source's import path. name is the
+// new function's name (the gen's wrapper slot); targetSrc is
+// the target file's current bytes.
+func (p *Project) newDelegateGen(src *Func, srcDecl *ast.FuncDecl, srcFset *token.FileSet, srcAST *ast.File, tgtAST *ast.File, tgtFset *token.FileSet, tgtPkg *Package, cross bool, name, rel string, targetSrc []byte) (*delegateGen, string) {
+	g := &delegateGen{
+		p:          p,
+		src:        src,
+		srcDecl:    srcDecl,
+		srcFset:    srcFset,
+		srcAST:     srcAST,
+		tgtAST:     tgtAST,
+		tgtFset:    tgtFset,
+		tgtPkg:     tgtPkg,
+		cross:      cross,
+		wrapper:    name,
+		targetRel:  rel,
+		targetSrc:  targetSrc,
+		typeParams: map[string]bool{},
+		srcTop:     map[string]bool{},
+		srcImports: map[string]string{},
+		tgtImports: map[string]string{},
+	}
+	if cross {
+		g.srcPath = p.Module
+		if src.PkgDir != "" {
+			g.srcPath = p.Module + "/" + src.PkgDir
+		}
+		if g.srcPath == "" || strings.HasPrefix(g.srcPath, "/") {
+			return nil, "I couldn't work out the source package's import path (the project has no go.mod module line I can read), so I can't write the import honestly."
+		}
+	}
+	if srcPkg := p.pkgByDir(src.PkgDir); srcPkg != nil {
+		for _, fn := range srcPkg.Funcs {
+			if fn.Receiver == "" {
+				g.srcTop[fn.Name] = true
+			}
+		}
+		for _, t := range srcPkg.Types {
+			g.srcTop[t.Name] = true
+		}
+		for _, v := range srcPkg.Vars {
+			g.srcTop[v.Name] = true
+		}
+	}
+	if srcDecl != nil && srcDecl.Type != nil && srcDecl.Type.TypeParams != nil {
+		for _, f := range srcDecl.Type.TypeParams.List {
+			for _, n := range f.Names {
+				g.typeParams[n.Name] = true
+			}
+		}
+	}
+	for _, is := range srcAST.Imports {
+		_, eff := importSpecOf(is)
+		path, _ := strconv.Unquote(is.Path.Value)
+		g.srcImports[eff] = path
+	}
+	for _, is := range tgtAST.Imports {
+		_, eff := importSpecOf(is)
+		path, _ := strconv.Unquote(is.Path.Value)
+		g.tgtImports[path] = eff
+	}
+	if cross {
+		if eff, ok := g.tgtImports[g.srcPath]; ok && (eff == "." || eff == "_") {
+			return nil, fmt.Sprintf("%s imports %s with a %s import, which gives the package no name I can call through — give that import its plain name first, then ask again.", p.LinkPath(rel), g.srcPath, map[string]string{".": "dot", "_": "blank"}[eff])
+		}
+	}
+	return g, ""
 }
 
 // resolveDelegateSource settles the typed source reference to one
