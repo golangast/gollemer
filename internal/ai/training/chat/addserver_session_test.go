@@ -75,6 +75,9 @@ func claimChain(line string, ask editAsk, profile *UserProfile) bool {
 	if runConcept(line, ask) {
 		return true
 	}
+	if runGorqliteInstalled(line, ask) {
+		return true
+	}
 	if runInstantiate(line, ask) {
 		return true
 	}

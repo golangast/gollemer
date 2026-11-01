@@ -105,6 +105,16 @@ func TestConceptBookEveryStatementRowIntoClosureBody(t *testing.T) {
 			var profile *UserProfile
 			line := "add a " + entry.Names[0] + " to jim/main.go"
 			switch entry.ID {
+			case "gorqlite-query", "gorqlite-write":
+				// The gorqlite statements' habitat is the
+				// seeded closure project plus the offline
+				// dependency stub: the gate needs the
+				// requirement in go.mod and the build needs
+				// the import resolvable (database build,
+				// 2026-11-01).
+				var p *UserProfile
+				dir, p = closureSeedProjectGorqlite(t)
+				profile = p
 			case "routing":
 				// Alternate seed (see the comment above): the
 				// closure row lands a closure in main.

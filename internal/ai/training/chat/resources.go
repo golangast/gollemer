@@ -502,6 +502,15 @@ const (
 	listenServeTLSURL = pkgHTTPURL + "#Server.ListenAndServeTLS"
 )
 
+// sqlInterfaceURL is the Go Wiki's SQLInterface page — the
+// database/sql usage-patterns page, read in full at build
+// time (the database build, 2026-11-01). Per-section
+// anchors were not individually verified, so — by the same
+// rule that keeps unverified anchors page-level — every
+// SQLInterface entry links the page and its label names the
+// section to read.
+const sqlInterfaceURL = "https://go.dev/wiki/SQLInterface"
+
 var referenceSeed = []referenceEntry{
 	{"Effective Go", []string{"formatting", "gofmt", "format"}, "Formatting", effectiveGoURL + "#formatting"},
 	{"Effective Go", []string{"comments", "commentary", "doc comments"}, "Commentary", effectiveGoURL + "#commentary"},
@@ -609,6 +618,27 @@ var referenceSeed = []referenceEntry{
 	{"MDN Web Docs", []string{"cors", "cross-origin resource sharing", "cross origin requests"}, "Cross-Origin Resource Sharing (CORS)", mdnCORSURL},
 	{"Go standard library", []string{"tls", "https", "certificates", "listenandservetls"}, "net/http: Server.ListenAndServeTLS", listenServeTLSURL},
 	{"Go standard library", []string{"cross origin protection", "crossoriginprotection", "built-in csrf"}, "net/http: CrossOriginProtection (Go 1.25+)", crossOriginURL},
+	// The database build (2026-11-01): the Go Wiki's
+	// SQLInterface page, section by section — the reading
+	// behind the book's database family. What the page
+	// teaches as assemble-able shapes the concept book
+	// already owns as rows (the Context forms ride along
+	// here as reading); what it teaches as judgment — that
+	// sql.Open never connects, that a driver registers its
+	// name through a blank import, how NULL rides in a
+	// scan — seats here. Two sections yield no entry at
+	// all: implementing a driver (driver.Driver/Conn/Stmt/
+	// Tx is a whole multi-type package, not reading for a
+	// row) and the page's generic reflection table helper
+	// (generics — the book's named type-parameter wall);
+	// both exclusions are named in the build's coverage
+	// report, not rebuilt.
+	{"the Go Wiki", []string{"database", "databases", "database/sql", "sql database"}, "SQLInterface: how database/sql works", sqlInterfaceURL},
+	{"the Go Wiki", []string{"database driver", "drivers", "blank import", "driver registration"}, "SQLInterface: Database driver — a driver registers its name through a blank import", sqlInterfaceURL},
+	{"the Go Wiki", []string{"connecting to a database", "sql.open", "pingcontext", "open does not connect"}, "SQLInterface: Connecting to a database — sql.Open does not connect; PingContext proves it", sqlInterfaceURL},
+	{"the Go Wiki", []string{"executing queries", "querycontext", "execcontext", "prepared statements"}, "SQLInterface: Executing queries — the Context forms (ExecContext, QueryContext, QueryRowContext, PrepareContext)", sqlInterfaceURL},
+	{"the Go Wiki", []string{"transactions", "transaction", "begintx", "commit or rollback"}, "SQLInterface: Transactions — BeginTx, then Commit or Rollback", sqlInterfaceURL},
+	{"the Go Wiki", []string{"null values", "nullstring", "nullable columns", "sql null"}, "SQLInterface: Dealing with NULL — sql.NullString and the other Null types", sqlInterfaceURL},
 }
 
 // referenceMatchCap bounds the reference lines in one pack:

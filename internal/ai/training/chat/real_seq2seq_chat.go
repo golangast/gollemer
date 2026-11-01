@@ -1316,6 +1316,16 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if tryConceptBook(line, reader) {
 			continue
 		}
+		// The gorqlite gate's follow-up, claimed beside the
+		// concept book: while a gorqlite ask is held for its
+		// dependency, a tight "installed" / "done" line is
+		// the user answering the gate — go.mod is re-read
+		// and, when the module is there, the held ask's plan
+		// is re-offered behind its gate. The claim fires in
+		// no other session state. See gorqlitegate.go.
+		if tryGorqliteInstalled(line, reader) {
+			continue
+		}
 		// Instantiation, claimed deterministically after the
 		// concept book and before the model proposer: "add
 		// instantiation of struct Jim to handler Jake" makes a

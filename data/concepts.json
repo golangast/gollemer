@@ -884,6 +884,22 @@
             "template": "db, err := sql.Open(\"TODO: driver name\", \"TODO: connection string\")\n// TODO: database/sql ships no driver — add yours as a blank import at the top of the file, like _ \"github.com/go-sql-driver/mysql\" for MySQL\nrows, err := db.Query(\"TODO: your query\")\nif err == nil {\n\tdefer rows.Close()\n\tfor rows.Next() {\n\t\tvar name sql.NullString\n\t\tif err := rows.Scan(&name); err == nil {\n\t\t\t// TODO: name.Valid tells you whether the column was NULL; name.String holds the text when it wasn't\n\t\t\t_ = name\n\t\t}\n\t}\n}"
         },
         {
+            "folder": "database",
+            "id": "database-connect",
+            "imports": [
+                "context",
+                "database/sql"
+            ],
+            "kind": "declaration",
+            "names": [
+                "database connect",
+                "database connection function",
+                "db connect function"
+            ],
+            "note": "Returns a ready connection pool: the handle from sql.Open, proved live by a Ping before the pool settings are applied. It compiles exactly as written — but until you add your driver's blank import (no driver ships with Go), the Ping fails at run time with \"unknown driver\", because Open only records the driver name and the connection string; nothing has registered that name yet. Whoever calls this owns the handle: close it when the program is done with it.",
+            "template": "func {name}() (*sql.DB, error) {\n\t// TODO: no database driver ships with Go — add yours as a blank import at the top of this file, like _ \"github.com/go-sql-driver/mysql\" for MySQL, and put its registered name in the Open call below\n\tdb, err := sql.Open(\"TODO: driver name\", \"TODO: connection string\")\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\t// TODO: Open alone never connects — the Ping is what proves the database answers, and it is the call that fails with \"unknown driver\" until the blank import above is real\n\tif err := db.PingContext(context.Background()); err != nil {\n\t\treturn nil, err\n\t}\n\t// TODO: the number caps how many connections the pool may open at once — tune it for your database\n\tdb.SetMaxOpenConns(10)\n\treturn db, nil\n}"
+        },
+        {
             "id": "rqlite-connect",
             "imports": [
                 "net/http",
@@ -949,6 +965,51 @@
             ],
             "note": "This runs against a rqlite node (rqlited) that must already be running at that address — it compiles and checks without one, but at runtime nothing answers until a node is up.",
             "template": "rqliteAddr := \"http://localhost:4001\"\npayload, err := json.Marshal([]string{\"SELECT TODO: your query — for example SELECT * FROM your table\"})\nvar resp *http.Response\nif err == nil {\n\tresp, err = http.Post(rqliteAddr+\"/db/query\", \"application/json\", bytes.NewReader(payload))\n}\nif err == nil {\n\tdefer resp.Body.Close()\n\tvar answer struct {\n\t\tResults []struct {\n\t\t\tColumns []string\n\t\t\tValues  [][]any\n\t\t\tError   string\n\t\t}\n\t}\n\tif err := json.NewDecoder(resp.Body).Decode(&answer); err == nil {\n\t\t// TODO: answer.Results[0] is the result — Columns names its columns, Values carries one list per row (numbers arrive as float64). Check Results[0].Error first: rqlite can answer 200 and still report the query failed there. For a read that must never be stale, add ?level=strong to the /db/query address above\n\t\t_ = answer\n\t}\n}"
+        },
+        {
+            "folder": "database",
+            "id": "gorqlite-connect",
+            "imports": [
+                "github.com/rqlite/gorqlite"
+            ],
+            "kind": "declaration",
+            "names": [
+                "gorqlite connection",
+                "gorqlite connect",
+                "connect with gorqlite",
+                "gorqlite client"
+            ],
+            "note": "Opens a connection to an rqlite node through the gorqlite client and returns it — whoever calls this owns it and closes it when done. This family only plans when the project already requires github.com/rqlite/gorqlite (run go get github.com/rqlite/gorqlite first); the client speaks rqlite's HTTP API itself, so no database/sql driver is involved.",
+            "template": "func {name}() (*gorqlite.Connection, error) {\n\t// TODO: the node's address — put user:password@ before the host when the node asks for a login (like \"http://user:password@localhost:4001\"); add \"?level=strong\" at the end when reads must wait for the whole cluster to agree\n\tconn, err := gorqlite.Open(\"http://localhost:4001\")\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\t// TODO: unlike sql.Open, this Open talks to the node right away (it asks the cluster who leads), so an error returned here means the node did not answer\n\treturn conn, nil\n}"
+        },
+        {
+            "id": "gorqlite-query",
+            "imports": [
+                "github.com/rqlite/gorqlite"
+            ],
+            "kind": "statement",
+            "names": [
+                "gorqlite query",
+                "query with gorqlite",
+                "query gorqlite"
+            ],
+            "note": "Runs one SELECT against an rqlite node through the gorqlite client and holds the rows for the walk the TODO describes. This family only plans when the project already requires github.com/rqlite/gorqlite — run go get github.com/rqlite/gorqlite first.",
+            "template": "conn, err := gorqlite.Open(\"http://localhost:4001\")\nif err == nil {\n\t// TODO: your SELECT here — QueryOne runs it against the node and hands back the rows\n\trows, qerr := conn.QueryOne(\"SELECT TODO FROM TODO\")\n\tif qerr == nil {\n\t\t// TODO: walk the answer with rows.Next(), read each row with rows.Scan(...), check rows.Err when the walk ends — and close the connection when you are done with it\n\t\t_ = rows\n\t}\n}"
+        },
+        {
+            "id": "gorqlite-write",
+            "imports": [
+                "github.com/rqlite/gorqlite"
+            ],
+            "kind": "statement",
+            "names": [
+                "gorqlite write",
+                "write with gorqlite",
+                "gorqlite insert",
+                "insert with gorqlite"
+            ],
+            "note": "Writes one row into an rqlite node through the gorqlite client, the statement and its values kept apart so the values bind as data. This family only plans when the project already requires github.com/rqlite/gorqlite — run go get github.com/rqlite/gorqlite first.",
+            "template": "conn, err := gorqlite.Open(\"http://localhost:4001\")\nif err == nil {\n\t// TODO: your INSERT here — the values ride as arguments beside the ? marks, so the node binds them as data, never as SQL text\n\tresult, werr := conn.WriteOneParameterized(gorqlite.ParameterizedStatement{\n\t\tQuery:     \"INSERT INTO TODO (TODO) VALUES (?)\",\n\t\tArguments: []any{\"TODO: a value\"},\n\t})\n\tif werr == nil {\n\t\t// TODO: check result.Err for the statement's own error; result.LastInsertID and result.RowsAffected say what the write did. Close the connection when you are done with it\n\t\t_ = result\n\t}\n}"
         },
         {
             "id": "form-values",

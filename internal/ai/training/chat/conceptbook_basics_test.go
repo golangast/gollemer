@@ -167,6 +167,15 @@ func TestConceptBookEveryRowEndToEnd(t *testing.T) {
 		entry := entry
 		t.Run(entry.ID, func(t *testing.T) {
 			root := liveSessionRoot(t)
+			if gorqliteGated(entry) {
+				// The gorqlite rows (database build,
+				// 2026-11-01) plan only in a project that
+				// requires the client — the dependency gate
+				// — and the spine's build must resolve the
+				// import offline: the fixture carries the
+				// dependency as a local stub.
+				seedGorqliteStub(t, root)
+			}
 			withChatSession(t, root, true)
 			profile := &UserProfile{}
 			createJimThroughTheChain(t, profile)
