@@ -318,6 +318,20 @@ func (p *Project) planInstantiate(req EditRequest) (*EditPlan, string) {
 	notes = append(notes, fmt.Sprintf("The \"_ = %s\" line after the statement keeps the build green until %s uses %s — delete it once it does.", varName, fn.Name, varName))
 	firstLine := strings.TrimSpace(strings.SplitN(stmt, "\n", 2)[0])
 
+	// A line phrase rides the concept statement's own
+	// placement machinery: same anchoring, same refusals —
+	// the target function here was resolved from the project
+	// index rather than named by file, but once decl is in
+	// hand the question is identical.
+	var place *stmtPlacement
+	if req.PlaceLine > 0 {
+		pl, refusal := p.resolveStmtPlacement(rel, src, fset, fileAST, decl, "an instantiation of "+ty.Name, req)
+		if refusal != "" {
+			return nil, refusal
+		}
+		place = &pl
+	}
+
 	var edits []textEdit
 	edits = append(edits, conceptImportEdits(fileAST, fset, src, specs)...)
 	indent := "\t"
@@ -329,13 +343,37 @@ func (p *Project) planInstantiate(req EditRequest) (*EditPlan, string) {
 	}
 	lbraceLine := lineOfPos(fset, decl.Body.Lbrace)
 	rbraceLine := lineOfPos(fset, decl.Body.Rbrace)
-	if rbraceLine == lbraceLine {
+	switch {
+	case place != nil && place.atLbrace:
+		edits = append(edits, textEdit{
+			start: offOf(fset, decl.Body.Lbrace) + 1,
+			end:   offOf(fset, decl.Body.Lbrace) + 1,
+			text:  "\n" + indentConceptLines(stmt, indent) + "\n" + lineIndent(src, lineOfPos(fset, decl.Pos())),
+		})
+	case place != nil && place.atRbrace:
 		edits = append(edits, textEdit{
 			start: offOf(fset, decl.Body.Rbrace),
 			end:   offOf(fset, decl.Body.Rbrace),
 			text:  "\n" + indentConceptLines(stmt, indent) + "\n" + lineIndent(src, lineOfPos(fset, decl.Pos())),
 		})
-	} else {
+	case place != nil && place.idx < len(decl.Body.List):
+		atLine := lineOfPos(fset, decl.Body.List[place.idx].Pos())
+		ind := lineIndent(src, atLine)
+		if ind == "" {
+			ind = indent
+		}
+		edits = append(edits, textEdit{
+			start: lineStartOffset(src, atLine),
+			end:   lineStartOffset(src, atLine),
+			text:  indentConceptLines(stmt, ind) + "\n",
+		})
+	case rbraceLine == lbraceLine:
+		edits = append(edits, textEdit{
+			start: offOf(fset, decl.Body.Rbrace),
+			end:   offOf(fset, decl.Body.Rbrace),
+			text:  "\n" + indentConceptLines(stmt, indent) + "\n" + lineIndent(src, lineOfPos(fset, decl.Pos())),
+		})
+	default:
 		edits = append(edits, textEdit{
 			start: lineStartOffset(src, rbraceLine),
 			end:   lineStartOffset(src, rbraceLine),
@@ -346,9 +384,18 @@ func (p *Project) planInstantiate(req EditRequest) (*EditPlan, string) {
 	if bad := checkInstantiate(ef.After, fn, firstLine); bad != "" {
 		return nil, fmt.Sprintf("internal error in my assembler: %s — I haven't shown you a plan, because the code I generated failed my own checks. Nothing was written.", bad)
 	}
+	if place != nil {
+		if bad := checkInstantiateAt(ef.After, fn, firstLine, place.idx); bad != "" {
+			return nil, fmt.Sprintf("internal error in my assembler: %s — I haven't shown you a plan, because the code I generated failed my own checks. Nothing was written.", bad)
+		}
+	}
 
+	summary := fmt.Sprintf("Add %s at the end of %s in %s — an instantiation of %s, assembled from its definition in %s", firstLine, fn.Name, p.LinkPath(rel), ty.Name, p.LinkPath(ty.File))
+	if place != nil {
+		summary = fmt.Sprintf("Add %s in %s in %s, %s — an instantiation of %s, assembled from its definition in %s", firstLine, fn.Name, p.LinkPath(rel), place.quote, ty.Name, p.LinkPath(ty.File))
+	}
 	plan := &EditPlan{
-		Summary:    fmt.Sprintf("Add %s at the end of %s in %s — an instantiation of %s, assembled from its definition in %s", firstLine, fn.Name, p.LinkPath(rel), ty.Name, p.LinkPath(ty.File)),
+		Summary:    summary,
 		VerifyDesc: fmt.Sprintf("%s now creates a %s", fn.Name, ty.Name),
 		Site:       fmt.Sprintf("%s:%d", p.LinkPath(rel), insertedLine(ef.After, firstLine)),
 		Files:      []EditFile{ef},
@@ -358,7 +405,13 @@ func (p *Project) planInstantiate(req EditRequest) (*EditPlan, string) {
 			if refusal != "" || ast2 == nil {
 				return false
 			}
-			return checkInstantiateIn(fset2, ast2, fn, firstLine) == ""
+			if checkInstantiateIn(fset2, ast2, fn, firstLine) != "" {
+				return false
+			}
+			if place == nil {
+				return true
+			}
+			return checkInstantiateAtIn(fset2, ast2, fn, firstLine, place.idx) == ""
 		},
 	}
 	return plan, ""
@@ -543,6 +596,37 @@ func checkInstantiate(after []byte, fn *Func, firstLine string) string {
 		return "the assembled file doesn't parse"
 	}
 	return checkInstantiateIn(fset, fileAST, fn, firstLine)
+}
+
+// checkInstantiateAt is checkInstantiate with the position a
+// line placement resolved: the statement must sit at index
+// idx in the target function's body.
+func checkInstantiateAt(after []byte, fn *Func, firstLine string, idx int) string {
+	fset, fileAST, err := parseGoSrc("instantiate.go", after)
+	if err != nil || fileAST == nil {
+		return "the assembled file doesn't parse"
+	}
+	return checkInstantiateAtIn(fset, fileAST, fn, firstLine, idx)
+}
+
+func checkInstantiateAtIn(fset *token.FileSet, fileAST *ast.File, fn *Func, firstLine string, idx int) string {
+	for _, d := range fileAST.Decls {
+		fd, ok := d.(*ast.FuncDecl)
+		if !ok || fd.Name.Name != fn.Name || fd.Body == nil {
+			continue
+		}
+		if instantiateRecvBase(fd) != instantiateRecvBaseName(fn.Receiver) {
+			continue
+		}
+		if idx < 0 || idx >= len(fd.Body.List) {
+			return fmt.Sprintf("%s doesn't hold the statement at the placed position after assembly", fn.Name)
+		}
+		if strings.HasPrefix(stmtText(fset, fd.Body.List[idx]), strings.TrimSpace(firstLine)) {
+			return ""
+		}
+		return fmt.Sprintf("%s doesn't hold the statement at the placed position after assembly", fn.Name)
+	}
+	return fmt.Sprintf("the assembled file has no function named %s", fn.Name)
 }
 
 func checkInstantiateIn(fset *token.FileSet, fileAST *ast.File, fn *Func, firstLine string) string {

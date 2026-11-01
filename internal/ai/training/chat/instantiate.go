@@ -14,6 +14,7 @@ package chat
 //	add|put [a|an|the] [instance|instantiation [of]
 //	  [struct|interface|type]] <Type> in|to|into [the]
 //	  [handler|function] <Func> [named|called <var>]
+//	  [on|at|after|before line <N>]
 //
 // and the plain form without the instance wording ("add a
 // <Type> in <Func>"). The two forms claim differently, on
@@ -32,6 +33,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/golangast/gollemer/internal/ai/analyze"
@@ -43,6 +45,15 @@ type instantiateReq struct {
 	funcName string // the function as typed
 	varName  string // named|called slot; "" = derived
 	explicit bool   // instance/instantiation wording present
+
+	// The line phrase at the sentence's tail — "on line 5",
+	// "before line 3" — carried exactly as the concept
+	// grammar carries it (conceptReq): placeBad marks a
+	// started phrase whose number is missing or unusable.
+	placeLine   int
+	placeBefore bool
+	placeBad    bool
+	placeBadTok string
 }
 
 // parseInstantiate reads the word shape only — no project
@@ -129,7 +140,33 @@ func parseInstantiate(line string) (instantiateReq, bool) {
 		if (low[i] == "named" || low[i] == "called") && i+1 < len(fields) {
 			req.varName = fields[i+1]
 			i += 2
-		} else {
+		} else if !isPlacePrep(low[i]) {
+			return instantiateReq{}, false
+		}
+	}
+	// The line phrase, at the very tail: "<prep> line <N>".
+	// It claims (with placeBad) even when its number is
+	// broken — but only in the instance-worded form does the
+	// claim hold through to an answer; runInstantiate treats
+	// the plain form's broken phrase as not this shape's,
+	// exactly like the plain form's other near-misses.
+	if i < len(fields) {
+		if !isPlacePrep(low[i]) || i+1 >= len(fields) || low[i+1] != "line" {
+			return instantiateReq{}, false
+		}
+		req.placeBefore = low[i] == "before"
+		switch {
+		case i+2 >= len(fields):
+			req.placeBad, req.placeBadTok = true, ""
+			i = len(fields)
+		case i+3 == len(fields):
+			if n, ok := lineNumberToken(low[i+2]); ok {
+				req.placeLine = n
+			} else {
+				req.placeBad, req.placeBadTok = true, fields[i+2]
+			}
+			i = len(fields)
+		default:
 			return instantiateReq{}, false
 		}
 	}
@@ -179,6 +216,31 @@ func runInstantiate(line string, ask editAsk) bool {
 	if !ok {
 		return false
 	}
+	// A started line phrase with an unusable number: the
+	// instance-worded form claims it and refuses in
+	// placement terms (the concept grammar's ruling); the
+	// plain form never claimed near-misses, and a broken
+	// phrase is one.
+	if req.placeBad {
+		if !req.explicit {
+			return false
+		}
+		tag := cTag("gollemer [composer]>")
+		var why string
+		switch {
+		case req.placeBadTok == "":
+			why = "the sentence names a line but never gives its number — write it as digits, like \"on line 12\""
+		default:
+			if _, err := strconv.Atoi(req.placeBadTok); err == nil {
+				why = fmt.Sprintf("\"line %s\" doesn't pick a line — a file's lines count from 1, so the first line is line 1. Say \"on line 1\" or a higher number", req.placeBadTok)
+			} else {
+				why = fmt.Sprintf("\"line %s\" isn't a number I can aim at — write the line number as digits, like \"on line 12\"", req.placeBadTok)
+			}
+		}
+		fmt.Printf("%s Not adding that: %s.\n", tag, why)
+		recordBrain("composer", false, "instantiate refused: line phrase")
+		return true
+	}
 	tag := cTag("gollemer [composer]>")
 
 	rootRaw := creationRoot()
@@ -227,9 +289,11 @@ func runInstantiate(line string, ask editAsk) bool {
 		return false
 	}
 	return executeEditPlan(analyze.EditRequest{
-		Kind:     analyze.EditInstantiate,
-		InstType: req.typeName,
-		InstFunc: req.funcName,
-		InstVar:  req.varName,
+		Kind:        analyze.EditInstantiate,
+		InstType:    req.typeName,
+		InstFunc:    req.funcName,
+		InstVar:     req.varName,
+		PlaceLine:   req.placeLine,
+		PlaceBefore: req.placeBefore,
 	}, ask)
 }

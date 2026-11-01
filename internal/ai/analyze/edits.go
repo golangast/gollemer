@@ -187,6 +187,20 @@ type EditRequest struct {
 	ConceptFunc string
 	ConceptLike string
 
+	// Line placement (editconcept.go): the sentence's line
+	// phrase — "on line 12", "before line 8" — carried by the
+	// planners that insert code: concept statements (inside
+	// the named function's body), concept declarations
+	// (between the file's top-level declarations), and
+	// instantiation (the concept statement's sibling). The
+	// number counts the target file's lines as the user sees
+	// them BEFORE the edit, 1-based. PlaceLine == 0 means the
+	// sentence carried no line phrase and placement is the
+	// family's default (end of body / end of file). PlaceBefore
+	// is "before line N"; false is the on/at/after reading.
+	PlaceLine   int
+	PlaceBefore bool
+
 	// instantiate: the type as typed (bare "Jim" or qualified
 	// "store.Jim"), the function as typed that should hold the
 	// new statement, and the variable's name from the

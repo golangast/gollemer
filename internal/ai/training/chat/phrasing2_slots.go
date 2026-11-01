@@ -21,10 +21,33 @@ package chat
 // first, the concept book last — the claim chain's own order).
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/golangast/gollemer/internal/ai/analyze"
 )
+
+// placeSlotText is the slot-map form of a line placement:
+// the direction word the semantics turn on ("after" covers
+// the grammar's on/at/after prepositions) and the number, as
+// one string the extractor and the parsers agree on.
+func placeSlotText(line int, before bool) string {
+	if before {
+		return "before line " + strconv.Itoa(line)
+	}
+	return "after line " + strconv.Itoa(line)
+}
+
+// placePhrase renders a slot-form placement back into the
+// canonical sentence's tail: "on line 12" for the after
+// reading, "before line 12" for the before reading — the two
+// tails parseConcept reads.
+func placePhrase(place string) string {
+	if strings.HasPrefix(place, "before line ") {
+		return place
+	}
+	return "on line " + strings.TrimPrefix(place, "after line ")
+}
 
 // PhrasingPieceSlots is one canonical piece read by the real
 // parsers: its phrasing family and the slot values the parsers
@@ -46,9 +69,15 @@ func CanonicalSlots(sentence string) (PhrasingPieceSlots, bool) {
 		return PhrasingPieceSlots{Family: "none", Slots: map[string]string{}}, true
 	}
 	if req, ok := parseInstantiate(s); ok {
+		if req.placeBad {
+			return PhrasingPieceSlots{}, false
+		}
 		slots := map[string]string{"type": req.typeName, "func": req.funcName}
 		if req.varName != "" {
 			slots["var"] = req.varName
+		}
+		if req.placeLine > 0 {
+			slots["place"] = placeSlotText(req.placeLine, req.placeBefore)
 		}
 		return PhrasingPieceSlots{Family: "instantiate", Slots: slots}, true
 	}
@@ -112,6 +141,9 @@ func CanonicalSlots(sentence string) (PhrasingPieceSlots, bool) {
 		return PhrasingPieceSlots{Family: "serve-html", Slots: slots}, true
 	}
 	if req, ok := parseConcept(s); ok {
+		if req.placeBad {
+			return PhrasingPieceSlots{}, false
+		}
 		family := "concept-" + req.entry.ID
 		if req.entry.ID == "print-line" {
 			family = "print"
@@ -131,6 +163,9 @@ func CanonicalSlots(sentence string) (PhrasingPieceSlots, bool) {
 		}
 		if req.target != "" {
 			slots["target"] = req.target
+		}
+		if req.placeLine > 0 {
+			slots["place"] = placeSlotText(req.placeLine, req.placeBefore)
 		}
 		return PhrasingPieceSlots{Family: family, Slots: slots}, true
 	}

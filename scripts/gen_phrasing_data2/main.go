@@ -486,6 +486,10 @@ type pools struct {
 	// htmls carries the serve-html family's page names
 	// (2026-11-01): the recipe's file slot.
 	htmls []string
+	// lines carries the line-placement family's numbers
+	// (2026-11-01): the placement slot's value, carried as
+	// the digit string the sentence speaks.
+	lines []string
 }
 
 // tagKinds are the struct-tag kinds the tagged add-field
@@ -503,6 +507,21 @@ var tagValsTrain = []string{
 var tagValsHeldout = []string{
 	"last_login", "unit-price", "full_name", "order_id", "home_town",
 	"is_admin", "event_date", "sku", "nick-name", "page_size",
+}
+
+// The line numbers: train and held-out pools disjoint, as
+// with every other slot pool. A number is open-class slot
+// material — the classifier never sees it as a class, and
+// the extractor carries the digit token verbatim.
+var linesTrain = []string{
+	"2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13",
+	"14", "15", "16", "17", "18", "19", "20", "21", "22", "24", "25",
+	"26", "28", "30", "32", "35", "40",
+}
+
+var linesHeldout = []string{
+	"1", "23", "27", "29", "31", "33", "37", "41", "42", "45",
+	"48", "50", "55", "60",
 }
 
 // ---------- generated random pools (attempt 2) ----------
@@ -626,11 +645,12 @@ func trainPools() pools {
 		calleesTrain,
 		tagValsTrain,
 		htmlsTrain,
+		linesTrain,
 	}
 }
 
 func heldoutPools() pools {
-	return pools{namesHeldout, filesHeldout, fieldNamesHeldout, caseValsHeldout, keysHeldout, tablesHeldout, textsHeldout, calleesHeldout, tagValsHeldout, htmlsHeldout}
+	return pools{namesHeldout, filesHeldout, fieldNamesHeldout, caseValsHeldout, keysHeldout, tablesHeldout, textsHeldout, calleesHeldout, tagValsHeldout, htmlsHeldout, linesHeldout}
 }
 
 // conceptWord picks how the messy sentence names the concept:
@@ -804,6 +824,166 @@ func buildInstantiateAsk(r *rand.Rand, p pools, dialect string) ask {
 	if varName != "" {
 		slots = append(slots, varName)
 	}
+	return ask{family: "instantiate", canonical: canon, slots: slots, cores: cores}
+}
+
+// ---------- line placement (2026-11-01) ----------
+//
+// The line phrase as training material: "on line N" / "at
+// line N" / "after line N" / "before line N" riding the
+// statement families. The canonical slot records the
+// phrase's READING — "after line 12" for the on/at/after
+// prepositions (all three insert after the statement line 12
+// belongs to), "before line 12" for before — so the slot, not
+// the surface word, is what the extractor must produce, and
+// the canonical tail is the form chat's parsers read back
+// ("on line N" for the after reading). The builders are
+// dedicated: the base builders' slot geometry (scrambled
+// cores, file-only forms) is left to the base families, and
+// every placed ask names its function (a line is aimed
+// inside one — the planner's ruling — so the file-only form
+// is never generated placed).
+
+// placeReading is the canonical slot text for a surface
+// phrase: the direction the semantics turn on.
+func placeReading(prep, num string) string {
+	if prep == "before" {
+		return "before line " + num
+	}
+	return "after line " + num
+}
+
+// placeCanonTail renders the canonical sentence's placement
+// tail from the reading.
+func placeCanonTail(reading string) string {
+	if strings.HasPrefix(reading, "before") {
+		return " " + reading
+	}
+	return " on line " + strings.TrimPrefix(reading, "after line ")
+}
+
+// placePhrase draws one surface phrase for an ask: mostly
+// the plain "on line N", the other prepositions in rotation.
+func placePhrase(r *rand.Rand, p pools) (surface, reading string) {
+	num := pick(r, p.lines)
+	prep := pick(r, []string{"on", "on", "at", "after", "before"})
+	return prep + " line " + num, placeReading(prep, num)
+}
+
+func buildPlacedStmtAsk(r *rand.Rand, p pools, c concept, dialect string) ask {
+	file := pick(r, p.files)
+	inFunc := "main"
+	if r.Intn(4) > 0 {
+		inFunc = pickName(r, p.names)
+	}
+	surface, reading := placePhrase(r, p)
+	canon := canonStmt(c, inFunc, file) + placeCanonTail(reading)
+	word := conceptWord(r, c)
+	where := fmt.Sprintf("in %s to %s", inFunc, file)
+	var cores []func() string
+	if dialect == "train" {
+		cores = []func() string{
+			func() string { return fmt.Sprintf("add %s %s %s %s", article(word), word, where, surface) },
+			func() string { return fmt.Sprintf("add %s %s %s %s", article(word), word, surface, where) },
+			func() string {
+				return fmt.Sprintf("add %s %s in %s %s to %s", article(word), word, inFunc, surface, file)
+			},
+			func() string { return fmt.Sprintf("put %s %s %s %s", article(word), word, where, surface) },
+			func() string { return fmt.Sprintf("stick %s %s %s %s", article(word), word, surface, where) },
+		}
+	} else {
+		cores = []func() string{
+			func() string { return fmt.Sprintf("place %s %s %s %s", article(word), word, where, surface) },
+			func() string { return fmt.Sprintf("insert %s %s %s %s", article(word), word, surface, where) },
+			func() string { return fmt.Sprintf("add %s %s %s %s", article(word), word, where, surface) },
+			func() string {
+				return fmt.Sprintf("get %s %s in %s %s to %s", article(word), word, inFunc, surface, file)
+			},
+		}
+	}
+	return ask{family: "concept-" + c.id, canonical: canon,
+		slots: []string{inFunc, file, reading}, cores: cores}
+}
+
+func buildPlacedPrintAsk(r *rand.Rand, p pools, dialect string) ask {
+	text := pick(r, p.texts)
+	file := pick(r, p.files)
+	inFunc := "main"
+	if r.Intn(4) > 0 {
+		inFunc = pickName(r, p.names)
+	}
+	surface, reading := placePhrase(r, p)
+	canon := canonPrint(text, inFunc, file) + placeCanonTail(reading)
+	where := fmt.Sprintf("in %s to %s", inFunc, file)
+	var cores []func() string
+	if dialect == "train" {
+		cores = []func() string{
+			func() string { return fmt.Sprintf("add a print line saying \"%s\" %s %s", text, where, surface) },
+			func() string { return fmt.Sprintf("add a print line saying \"%s\" %s %s", text, surface, where) },
+			func() string { return fmt.Sprintf("print \"%s\" %s %s", text, where, surface) },
+			func() string { return fmt.Sprintf("put a print statement saying \"%s\" %s %s", text, surface, where) },
+			func() string {
+				return fmt.Sprintf("add a print line saying \"%s\" in %s %s to %s", text, inFunc, surface, file)
+			},
+		}
+	} else {
+		cores = []func() string{
+			func() string { return fmt.Sprintf("add a print line saying \"%s\" %s %s", text, where, surface) },
+			func() string { return fmt.Sprintf("have it print \"%s\" %s %s", text, surface, where) },
+			func() string { return fmt.Sprintf("insert a print of \"%s\" %s %s", text, where, surface) },
+			func() string {
+				return fmt.Sprintf("log \"%s\" in %s %s to %s", text, inFunc, surface, file)
+			},
+		}
+	}
+	return ask{family: "print", canonical: canon,
+		slots: []string{text, inFunc, file, reading}, cores: cores}
+}
+
+func buildPlacedInstantiateAsk(r *rand.Rand, p pools, dialect string) ask {
+	typ := pickName(r, p.names)
+	fn := pickName(r, p.names, typ)
+	varName := ""
+	if r.Intn(4) == 0 {
+		varName = strings.ToLower(typ) + "y"
+	}
+	surface, reading := placePhrase(r, p)
+	canon := canonInstantiate(typ, fn, varName) + placeCanonTail(reading)
+	var base []func() string
+	if dialect == "train" {
+		base = []func() string{
+			func() string { return fmt.Sprintf("add instantiation of struct %s to handler %s", typ, fn) },
+			func() string { return fmt.Sprintf("add an instance of %s in %s", typ, fn) },
+			func() string { return fmt.Sprintf("add a %s in %s", typ, fn) },
+			func() string { return fmt.Sprintf("put a new %s in %s", typ, fn) },
+		}
+	} else {
+		base = []func() string{
+			func() string { return fmt.Sprintf("add instantiation of struct %s to handler %s", typ, fn) },
+			func() string { return fmt.Sprintf("create an instance of %s inside %s", typ, fn) },
+			func() string { return fmt.Sprintf("place a %s in %s", typ, fn) },
+			func() string { return fmt.Sprintf("add one %s to %s", typ, fn) },
+		}
+	}
+	// The phrase rides the very tail — behind the var slot
+	// when there is one, exactly where parseInstantiate
+	// reads it.
+	cores := make([]func() string, 0, len(base))
+	for _, b := range base {
+		b := b
+		cores = append(cores, func() string {
+			s := b()
+			if varName != "" {
+				s += " named " + varName
+			}
+			return s + " " + surface
+		})
+	}
+	slots := []string{typ, fn}
+	if varName != "" {
+		slots = append(slots, varName)
+	}
+	slots = append(slots, reading)
 	return ask{family: "instantiate", canonical: canon, slots: slots, cores: cores}
 }
 
@@ -2764,6 +2944,282 @@ func runHeldoutBasics(outDir string, seed int64) {
 		rep.TrainInputOverlap, rep.JudgeInputOverlap, rep.SourcesOverlap, rep.CreatedOverlap, rep.RqliteOverlap, rep.BooksOverlap, rep.ServeHTMLOverlap, rep.SlotLeak)
 }
 
+// ---------- the line-placement held-out judge ----------
+//
+// -mode heldout-lines builds data/training/
+// phrasing_heldout_lines.jsonl: the judge for line
+// placement — the statement families carrying a line phrase,
+// in the same construction as the basics judge: held-out
+// core dialect, held-out wrappers, slot values from the
+// held-out pools only (line numbers from linesHeldout, which
+// never meet linesTrain), 8 single-unseen + 4 single-seen per
+// statement concept and 20 + 8 for print and instantiate.
+// Leak checks run against the train corpus and ALL SEVEN
+// prior judges (the basics judge included — this file is an
+// eighth judge, never a replacement). The slot-leak set
+// additionally covers the held-out numbers in their slot
+// form ("after line 23", "before line 23"): a train pair
+// carrying one would be a true leak. Run the train mode
+// first.
+
+type linesReport struct {
+	Seed               int64          `json:"seed"`
+	Items              int            `json:"items"`
+	ByFamilyCell       map[string]int `json:"by_family_cell"`
+	SkippedUnemittable int            `json:"skipped_unemittable"`
+	ConflictingInputs  int            `json:"conflicting_inputs_removed"`
+	DuplicateInputs    int            `json:"duplicate_inputs_skipped"`
+	TrainInputOverlap  int            `json:"train_input_overlap"`
+	JudgeInputOverlap  int            `json:"original_judge_input_overlap"`
+	SourcesOverlap     int            `json:"sources_judge_input_overlap"`
+	CreatedOverlap     int            `json:"created_judge_input_overlap"`
+	RqliteOverlap      int            `json:"rqlite_judge_input_overlap"`
+	BooksOverlap       int            `json:"books_judge_input_overlap"`
+	ServeHTMLOverlap   int            `json:"servehtml_judge_input_overlap"`
+	BasicsOverlap      int            `json:"basics_judge_input_overlap"`
+	SlotLeak           []string       `json:"slot_value_leak_beyond_fixtures"`
+}
+
+func runHeldoutLines(outDir string, seed int64) {
+	r := rand.New(rand.NewSource(seed + 29))
+	rep := &linesReport{Seed: seed, ByFamilyCell: map[string]int{}}
+	hp := heldoutPools()
+
+	seen := map[string]string{} // normalized input -> output
+	var items []heldItem
+	add := func(a ask, cell string, wrappers []wrapper) {
+		if !emittable(a.canonical) {
+			rep.SkippedUnemittable++
+			return
+		}
+		in, tmpl := dress(r, a, wrappers)
+		n := normInput(in)
+		if prev, dup := seen[n]; dup {
+			if prev != a.canonical {
+				rep.ConflictingInputs++
+				for i, q := range items {
+					if normInput(q.Input) == n {
+						items = append(items[:i], items[i+1:]...)
+						break
+					}
+				}
+				delete(seen, n)
+			} else {
+				rep.DuplicateInputs++
+			}
+			return
+		}
+		seen[n] = a.canonical
+		items = append(items, heldItem{
+			Input: in, Output: a.canonical, Family: a.family,
+			Cell: cell, Template: "heldout/" + tmpl,
+		})
+		rep.ByFamilyCell[a.family+"/"+cell]++
+	}
+
+	var families []struct {
+		name       string
+		build      func(dialect string) ask
+		unseenWant int
+		seenWant   int
+	}
+	for _, c := range statementConcepts {
+		c := c
+		families = append(families, struct {
+			name       string
+			build      func(dialect string) ask
+			unseenWant int
+			seenWant   int
+		}{"concept-" + c.id, func(dialect string) ask { return buildPlacedStmtAsk(r, hp, c, dialect) }, 8, 4})
+	}
+	families = append(families, struct {
+		name       string
+		build      func(dialect string) ask
+		unseenWant int
+		seenWant   int
+	}{"print", func(dialect string) ask { return buildPlacedPrintAsk(r, hp, dialect) }, 20, 8})
+	families = append(families, struct {
+		name       string
+		build      func(dialect string) ask
+		unseenWant int
+		seenWant   int
+	}{"instantiate", func(dialect string) ask { return buildPlacedInstantiateAsk(r, hp, dialect) }, 20, 8})
+	for _, fam := range families {
+		for got, attempts := 0, 0; got < fam.unseenWant && attempts < fam.unseenWant*75; attempts++ {
+			before := len(items)
+			add(fam.build("heldout"), "single-unseen", heldoutWrappers)
+			if len(items) > before {
+				got++
+			}
+		}
+		for got, attempts := 0, 0; got < fam.seenWant && attempts < fam.seenWant*60; attempts++ {
+			before := len(items)
+			add(fam.build("train"), "single-seen", trainWrappers)
+			if len(items) > before {
+				got++
+			}
+		}
+	}
+	rep.Items = len(items)
+
+	// Leak checks: against the train corpus (read back from
+	// the pairs file the train mode wrote) and all seven
+	// prior judges. Overlaps are dropped, counted, and
+	// reported — and any drop at all fails the run, because
+	// by construction (disjoint dialects, wrappers, pools,
+	// and numbers) there should be none.
+	readPairs := func(path string) (inputs map[string]bool, slots map[string]bool) {
+		inputs, slots = map[string]bool{}, map[string]bool{}
+		f, err := os.Open(path)
+		if err != nil {
+			fail(fmt.Errorf("heldout-lines mode reads %s (run the train mode first): %w", path, err))
+		}
+		defer f.Close()
+		sc := bufioScanner(f)
+		for sc.Scan() {
+			line := strings.TrimSpace(sc.Text())
+			if line == "" {
+				continue
+			}
+			var p pair
+			if err := json.Unmarshal([]byte(line), &p); err != nil {
+				fail(err)
+			}
+			inputs[normInput(p.Input)] = true
+			for _, s := range p.Slots {
+				slots[s] = true
+			}
+		}
+		return inputs, slots
+	}
+	readJudge := func(path string) map[string]bool {
+		inputs := map[string]bool{}
+		f, err := os.Open(path)
+		if err != nil {
+			fail(err)
+		}
+		defer f.Close()
+		sc := bufioScanner(f)
+		for sc.Scan() {
+			line := strings.TrimSpace(sc.Text())
+			if line == "" {
+				continue
+			}
+			var it heldItem
+			if err := json.Unmarshal([]byte(line), &it); err != nil {
+				fail(err)
+			}
+			inputs[normInput(it.Input)] = true
+		}
+		return inputs
+	}
+	trainInputs, trainSlots := readPairs(filepath.Join(outDir, "phrasing_pairs2.jsonl"))
+	judgeInputs := readJudge(filepath.Join(outDir, "phrasing_heldout.jsonl"))
+	sourcesInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_sources.jsonl"))
+	createdInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_created.jsonl"))
+	rqliteInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_rqlite.jsonl"))
+	booksInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_books.jsonl"))
+	serveHTMLInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_servehtml.jsonl"))
+	basicsInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_basics.jsonl"))
+	fixtures := map[string]bool{"main": true, "main.go": true, "index.html": true}
+	for _, t := range fieldTypes {
+		fixtures[t] = true
+	}
+	heldSlotVals := map[string]bool{}
+	for _, s := range append(append(append(append(append(append(append(append(append(
+		[]string{}, namesHeldout...), filesHeldout...), fieldNamesHeldout...),
+		caseValsHeldout...), keysHeldout...), tablesHeldout...), textsHeldout...), calleesHeldout...), htmlsHeldout...) {
+		heldSlotVals[s] = true
+	}
+	for _, s := range tagValsHeldout {
+		heldSlotVals[s] = true
+		for _, k := range tagKinds {
+			heldSlotVals[k+":\""+s+"\""] = true
+		}
+	}
+	for _, n := range linesHeldout {
+		heldSlotVals["after line "+n] = true
+		heldSlotVals["before line "+n] = true
+	}
+	leakSet := map[string]bool{}
+	for s := range heldSlotVals {
+		if trainSlots[s] && !fixtures[s] {
+			leakSet[s] = true
+		}
+	}
+	for s := range leakSet {
+		rep.SlotLeak = append(rep.SlotLeak, s)
+	}
+	sort.Strings(rep.SlotLeak)
+	kept := items[:0]
+	for _, it := range items {
+		n := normInput(it.Input)
+		drop := false
+		if trainInputs[n] {
+			rep.TrainInputOverlap++
+			drop = true
+		}
+		if judgeInputs[n] {
+			rep.JudgeInputOverlap++
+			drop = true
+		}
+		if sourcesInputs[n] {
+			rep.SourcesOverlap++
+			drop = true
+		}
+		if createdInputs[n] {
+			rep.CreatedOverlap++
+			drop = true
+		}
+		if rqliteInputs[n] {
+			rep.RqliteOverlap++
+			drop = true
+		}
+		if booksInputs[n] {
+			rep.BooksOverlap++
+			drop = true
+		}
+		if serveHTMLInputs[n] {
+			rep.ServeHTMLOverlap++
+			drop = true
+		}
+		if basicsInputs[n] {
+			rep.BasicsOverlap++
+			drop = true
+		}
+		if !drop {
+			kept = append(kept, it)
+		}
+	}
+	items = kept
+	rep.Items = len(items)
+	if rep.TrainInputOverlap > 0 || rep.JudgeInputOverlap > 0 ||
+		rep.SourcesOverlap > 0 || rep.CreatedOverlap > 0 ||
+		rep.RqliteOverlap > 0 || rep.BooksOverlap > 0 ||
+		rep.ServeHTMLOverlap > 0 || rep.BasicsOverlap > 0 || len(rep.SlotLeak) > 0 {
+		fail(fmt.Errorf("leak check failed: train-overlap=%d judge-overlap=%d sources-overlap=%d created-overlap=%d rqlite-overlap=%d books-overlap=%d servehtml-overlap=%d basics-overlap=%d slot=%v",
+			rep.TrainInputOverlap, rep.JudgeInputOverlap, rep.SourcesOverlap, rep.CreatedOverlap, rep.RqliteOverlap, rep.BooksOverlap, rep.ServeHTMLOverlap, rep.BasicsOverlap, rep.SlotLeak))
+	}
+
+	if err := writeJSONL(filepath.Join(outDir, "phrasing_heldout_lines.jsonl"), items); err != nil {
+		fail(err)
+	}
+	raw, err := json.MarshalIndent(rep, "", "  ")
+	if err != nil {
+		fail(err)
+	}
+	if err := os.WriteFile(filepath.Join(outDir, "phrasing_report_lines.json"), raw, 0o644); err != nil {
+		fail(err)
+	}
+	fmt.Printf("heldout-lines judge: %d items\n", rep.Items)
+	for _, k := range sortedKeys(rep.ByFamilyCell) {
+		fmt.Printf("  %-44s %d\n", k, rep.ByFamilyCell[k])
+	}
+	fmt.Printf("skipped unemittable=%d conflicting=%d duplicates=%d\n", rep.SkippedUnemittable, rep.ConflictingInputs, rep.DuplicateInputs)
+	fmt.Printf("leaks: train-overlap=%d judge-overlap=%d sources-overlap=%d created-overlap=%d rqlite-overlap=%d books-overlap=%d servehtml-overlap=%d basics-overlap=%d slot=%v\n",
+		rep.TrainInputOverlap, rep.JudgeInputOverlap, rep.SourcesOverlap, rep.CreatedOverlap, rep.RqliteOverlap, rep.BooksOverlap, rep.ServeHTMLOverlap, rep.BasicsOverlap, rep.SlotLeak)
+}
+
 // ---------- the serve-html held-out judge ----------
 //
 // -mode heldout-servehtml builds data/training/
@@ -3344,8 +3800,12 @@ func main() {
 	outDir := flag.String("out", "data/training", "output directory")
 	seed := flag.Int64("seed", 20261031, "generator seed")
 	judgePath := flag.String("judge", "data/training/phrasing_heldout.jsonl", "the fixed held-out judge, read for leak checks only")
-	mode := flag.String("mode", "train", "train | heldout-sources | heldout-created | heldout-rqlite | heldout-books | heldout-servehtml | heldout-basics")
+	mode := flag.String("mode", "train", "train | heldout-sources | heldout-created | heldout-rqlite | heldout-books | heldout-servehtml | heldout-basics | heldout-lines")
 	flag.Parse()
+	if *mode == "heldout-lines" {
+		runHeldoutLines(*outDir, *seed)
+		return
+	}
 	if *mode == "heldout-basics" {
 		runHeldoutBasics(*outDir, *seed)
 		return
@@ -3692,6 +4152,30 @@ func main() {
 		c := statementConcepts[r.Intn(len(statementConcepts))]
 		return buildStmtAsk(r, tp, c, "train"), buildServeHTMLAsk(r, tp, "train")
 	}, 250, "stmt+serve-html")
+
+	// Line placement (2026-11-01): the placed statement
+	// families, emitted LAST on the same append-only
+	// discipline — every row above keeps its exact bytes.
+	// Singles only: a placement names ONE piece's landing,
+	// and the compound machinery (shared distribution,
+	// created binding) has no slot to spend it on, so placed
+	// compounds are not generated; the deterministic grammar
+	// serves a placed single and the route declines a placed
+	// compound piece rather than dropping its qualifier.
+	// Density: a fraction of each family's base singles —
+	// enough for the classifier to learn that the phrase
+	// rides these families, never enough to lean the corpus
+	// toward placed forms.
+	for _, c := range statementConcepts {
+		c := c
+		b := func() ask { return buildPlacedStmtAsk(r, tp, c, "train") }
+		emit(b, 55)
+		emitTwins(b, 1)
+	}
+	emit(func() ask { return buildPlacedPrintAsk(r, tp, "train") }, 350)
+	emitTwins(func() ask { return buildPlacedPrintAsk(r, tp, "train") }, 3)
+	emit(func() ask { return buildPlacedInstantiateAsk(r, tp, "train") }, 350)
+	emitTwins(func() ask { return buildPlacedInstantiateAsk(r, tp, "train") }, 3)
 
 	rep.TrainPairs = len(train)
 	rep.Fragments = len(fragments)

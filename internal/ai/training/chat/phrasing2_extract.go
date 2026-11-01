@@ -135,15 +135,61 @@ func (f frag) markerValue(markers ...string) (string, int, bool) {
 // statement and print fragments share: the token between "in"
 // and the preposition that introduces the file. It is usually
 // capitalized — but the compound convention's function is
-// literally "main", so that name is accepted too.
+// literally "main", so that name is accepted too. A line
+// phrase may ride between the function and the target clause
+// ("in main on line 8 to x.go"); it is skipped over, never
+// read as part of either slot.
 func (f frag) inFuncSlot(fileIdx int) (string, bool) {
 	for i := 0; i+2 < len(f.toks); i++ {
-		if f.low[i] == "in" && (isCapTok(f.toks[i+1]) || f.low[i+1] == "main") &&
-			(f.low[i+2] == "to" || f.low[i+2] == "into") && i+3 == fileIdx {
+		if f.low[i] != "in" || !(isCapTok(f.toks[i+1]) || f.low[i+1] == "main") {
+			continue
+		}
+		j := i + 2
+		if j+2 < len(f.toks) && isPlacePrep(f.low[j]) && f.low[j+1] == "line" {
+			j += 3
+		}
+		if j+1 == fileIdx && (f.low[j] == "to" || f.low[j] == "into") {
 			return f.toks[i+1], true
 		}
 	}
 	return "", false
+}
+
+// fragLinePlace reads a fragment's line phrase — "<prep>
+// line <N>" — as a slot: "after line 12" for the on/at/after
+// prepositions, "before line 12" for before (the slot form
+// placeSlotText defines). started reports that a phrase
+// began (a preposition with "line" behind it) even when its
+// number is missing or unusable: a started phrase is a
+// qualifier no reader may silently drop, so extraction fails
+// for it rather than binding around it. Quoted spans (a print
+// line's saying) are protected — the words there are text,
+// never placement. Digits are carried, never classified: the
+// number token itself is the slot value, exactly like a name.
+func fragLinePlace(f frag) (place string, started bool) {
+	prot := protectedSpans(f)
+	for i := 0; i+1 < len(f.toks); i++ {
+		if prot[i] || prot[i+1] || !isPlacePrep(f.low[i]) || f.low[i+1] != "line" {
+			continue
+		}
+		if i+2 < len(f.toks) && !prot[i+2] {
+			if n, ok := lineNumberToken(f.low[i+2]); ok {
+				return placeSlotText(n, f.low[i] == "before"), true
+			}
+		}
+		return "", true
+	}
+	return "", false
+}
+
+// renderPlaced appends a bound placement to a canonical
+// sentence as its tail — the form parseConcept and
+// parseInstantiate read back into the same slot.
+func renderPlaced(canon, place string) string {
+	if place == "" {
+		return canon
+	}
+	return canon + " " + placePhrase(place)
 }
 
 // ---------- segmentation ----------
@@ -369,12 +415,12 @@ func renderPrint(text, fn, file string) string {
 	return s + " to " + file
 }
 
-func renderInstantiate(typ, fn, varName string) string {
+func renderInstantiate(typ, fn, varName, place string) string {
 	s := "add instantiation of struct " + typ + " to handler " + fn
 	if varName != "" {
 		s += " named " + varName
 	}
-	return s
+	return renderPlaced(s, place)
 }
 
 // ---------- per-family extraction ----------
@@ -384,6 +430,10 @@ func renderInstantiate(typ, fn, varName string) string {
 // when a required slot cannot be pointed at in the fragment.
 
 func extractConceptStmt(f frag, e analyze.ConceptEntry) (string, map[string]string, bool) {
+	place, started := fragLinePlace(f)
+	if started && place == "" {
+		return "", nil, false
+	}
 	file, fi, ok := f.fileSlot()
 	if !ok {
 		return "", nil, false
@@ -392,7 +442,10 @@ func extractConceptStmt(f frag, e analyze.ConceptEntry) (string, map[string]stri
 	if fn, ok := f.inFuncSlot(fi); ok {
 		slots["func"] = fn
 	}
-	return renderConceptStmt(e, slots["func"], file), slots, true
+	if place != "" {
+		slots["place"] = place
+	}
+	return renderPlaced(renderConceptStmt(e, slots["func"], file), place), slots, true
 }
 
 func extractConceptDecl(f frag, e analyze.ConceptEntry) (string, map[string]string, bool) {
@@ -469,6 +522,10 @@ func extractPrint(f frag) (string, map[string]string, bool) {
 		}
 		return "", nil, false
 	}
+	place, started := fragLinePlace(f)
+	if started && place == "" {
+		return "", nil, false
+	}
 	file, fi, ok := f.fileSlot()
 	if !ok {
 		return "", nil, false
@@ -477,12 +534,19 @@ func extractPrint(f frag) (string, map[string]string, bool) {
 	if fn, ok := f.inFuncSlot(fi); ok {
 		slots["func"] = fn
 	}
-	return renderPrint(text, slots["func"], file), slots, true
+	if place != "" {
+		slots["place"] = place
+	}
+	return renderPlaced(renderPrint(text, slots["func"], file), place), slots, true
 }
 
 func extractInstantiate(f frag) (string, map[string]string, bool) {
 	if _, _, hasFile := f.fileSlot(); hasFile {
 		return "", nil, false // an instantiate target is a bare function, never a file
+	}
+	place, started := fragLinePlace(f)
+	if started && place == "" {
+		return "", nil, false
 	}
 	// Marker evidence: two bare capitalized tokens alone do
 	// not make an instantiation ("copying Nomad as Tundra"
@@ -503,8 +567,14 @@ func extractInstantiate(f frag) (string, map[string]string, bool) {
 			"create": true, "instantiate": true, "insert": true, "get": true,
 		}
 		// The tail may carry the var marker ("... in Sift
-		// named tendy"); look past it.
+		// named tendy") and, behind it or alone, a line
+		// phrase ("... in Sift on line 5"); look past both.
 		end := len(f.toks)
+		if end >= 3 && isPlacePrep(f.low[end-3]) && f.low[end-2] == "line" {
+			if _, ok := lineNumberToken(f.low[end-1]); ok {
+				end -= 3
+			}
+		}
 		if end >= 3 && (f.low[end-2] == "named" || f.low[end-2] == "called") {
 			end -= 2
 		}
@@ -559,7 +629,10 @@ func extractInstantiate(f frag) (string, map[string]string, bool) {
 	if slots["type"] == "" || slots["func"] == "" {
 		return "", nil, false
 	}
-	return renderInstantiate(slots["type"], slots["func"], slots["var"]), slots, true
+	if place != "" {
+		slots["place"] = place
+	}
+	return renderInstantiate(slots["type"], slots["func"], slots["var"], place), slots, true
 }
 
 func extractDelegate(f frag) (string, map[string]string, bool) {
@@ -1054,6 +1127,12 @@ func createdFuncOf(family string, slots map[string]string) (name, file string, o
 // file with no function is the planner's main rule, a reading
 // to keep, not an omission to fill with the created name).
 func routeCreatedPiece(f frag, createdName, createdFile string) (string, bool) {
+	// The created-piece binding supplies the function and
+	// file only — it has no way to spend a line phrase, so a
+	// fragment carrying one is not its to claim.
+	if _, started := fragLinePlace(f); started {
+		return "", false
+	}
 	family, gated := phrasingClassifier(f.text())
 	p := f.placement()
 	if p.hasFile && p.fn != "" && !p.pronoun {
@@ -1300,6 +1379,31 @@ func sharedFileOf(a, b frag) (file string, lacking int, ok bool) {
 
 // extractForFamily runs the family's extractor on a fragment.
 func extractForFamily(f frag, family string) (string, map[string]string, bool) {
+	// A line phrase is a qualifier only the statement
+	// families can spend — the concept statements, print,
+	// and instantiate, whose canonicals carry it as a slot.
+	// Every other family's extractor would render a
+	// canonical WITHOUT the placement and quietly drop it,
+	// so a fragment carrying one is not theirs to claim:
+	// extraction fails here, before their geometry runs.
+	if _, started := fragLinePlace(f); started {
+		switch {
+		case family == "print" || family == "instantiate":
+		case strings.HasPrefix(family, "concept-"):
+			id := strings.TrimPrefix(family, "concept-")
+			kind := ""
+			for _, e := range conceptEntries() {
+				if e.ID == id {
+					kind = e.Kind
+				}
+			}
+			if kind != analyze.ConceptStatement {
+				return "", nil, false
+			}
+		default:
+			return "", nil, false
+		}
+	}
 	if strings.HasPrefix(family, "concept-") {
 		id := strings.TrimPrefix(family, "concept-")
 		for _, e := range conceptEntries() {
@@ -1667,7 +1771,12 @@ func phrasingRouteB(line string) (pieces []string, ok bool) {
 		// it print \"the results\""); a person typing the
 		// sentence leaves the quotes off (John's own compound
 		// does) — then the words after the print verb ARE the
-		// text.
+		// text. A line phrase on the tail is a qualifier this
+		// completion cannot spend (it binds only the function
+		// and the file), so such a tail is not completed here.
+		if _, started := fragLinePlace(frags[1]); started {
+			return nil, false
+		}
 		text, qok := frags[1].quotedText()
 		if !qok && len(frags[1].toks) >= 2 && frags[1].low[0] == "print" {
 			text, qok = strings.Join(frags[1].toks[1:], " "), true

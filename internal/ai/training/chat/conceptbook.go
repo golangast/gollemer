@@ -24,6 +24,17 @@ package chat
 //	  [like <Type>] [in <Func>] to|in|into [the] [file|folder]
 //	  <target>
 //
+// A line phrase — "on line N" | "at line N" | "after line N"
+// | "before line N", N a positive integer — may ride the slot
+// zone (before the target clause, in any position among the
+// other slots) or the tail behind the target. The concept
+// name is consumed before either is read, so the "print line"
+// in "add a print line on line 12 in main to jim/main.go" is
+// the concept and the phrase is the placement, never garbage.
+// A started phrase with a broken number (missing, zero,
+// spelled out) still claims: runConcept refuses it in
+// placement terms.
+//
 // "saying" may also be spelled "that says". The "in <Func>"
 // qualifier is read only when a separate target clause follows
 // it — a lone "in <word>" is the target, exactly as the
@@ -1311,6 +1322,42 @@ type conceptReq struct {
 	inFunc  string // statement target function: "in <Func>"
 	like    string // {methods} source type: "like <Type>"
 	target  string // the file/folder as typed; "" = unnamed
+
+	// The line phrase: "on line 12" / "before line 8",
+	// riding the slot zone or the tail behind the target.
+	// placeBad marks a STARTED phrase whose number is
+	// missing or unusable (placeBadTok is the token as
+	// typed, "" when the number never came): the sentence
+	// still claims, and runConcept refuses in placement
+	// terms rather than letting the line fall through.
+	placeLine   int
+	placeBefore bool
+	placeBad    bool
+	placeBadTok string
+}
+
+// placeBound reports whether a line phrase already rode this
+// sentence — a second one is never this grammar's.
+func (r conceptReq) placeBound() bool { return r.placeLine > 0 || r.placeBad }
+
+// isPlacePrep reports whether w opens a line phrase.
+func isPlacePrep(w string) bool {
+	switch w {
+	case "on", "at", "after", "before":
+		return true
+	}
+	return false
+}
+
+// lineNumberToken reads a line phrase's number: digits only,
+// counting from 1 — zero, a negative, or a word is not a
+// number a line can be aimed at.
+func lineNumberToken(tok string) (int, bool) {
+	n, err := strconv.Atoi(tok)
+	if err != nil || n < 1 {
+		return 0, false
+	}
+	return n, true
 }
 
 var reConceptSaying = regexp.MustCompile(`(?i)\b(?:saying|that says|says)\s+"((?:[^"\\]|\\.)*)"`)
@@ -1459,6 +1506,40 @@ func parseConceptFrom(line string, entries []analyze.ConceptEntry) (conceptReq, 
 			}
 			req.inFunc = fields[j+1]
 			j += 2
+		case "on", "at", "after", "before":
+			// A line phrase riding the slot zone: "on
+			// line 8 in main to …", "… in main before
+			// line 8 to …". The concept's own name is
+			// already consumed by here, so the "print
+			// line" in "add a print line on line 12"
+			// is never misread — the phrase starts at
+			// its preposition. A preposition NOT
+			// followed by "line" is no phrase at all
+			// and declines, exactly as before.
+			if req.placeBound() {
+				return conceptReq{}, false
+			}
+			if j+1 >= slotEnd || low[j+1] != "line" {
+				return conceptReq{}, false
+			}
+			req.placeBefore = low[j] == "before"
+			if j+2 < slotEnd {
+				if n, ok := lineNumberToken(low[j+2]); ok {
+					req.placeLine = n
+					j += 3
+					continue
+				}
+				req.placeBad, req.placeBadTok = true, fields[j+2]
+			} else {
+				req.placeBad, req.placeBadTok = true, ""
+			}
+			// A broken phrase ends the slot parse: the
+			// sentence still claims (runConcept refuses
+			// it in placement terms), and whatever words
+			// the bad number swallowed — the next slot's
+			// opener, say — are part of the refusal,
+			// never re-read as slots.
+			j = slotEnd
 		default:
 			return conceptReq{}, false
 		}
@@ -1483,10 +1564,36 @@ func parseConceptFrom(line string, entries []analyze.ConceptEntry) (conceptReq, 
 			j++
 		}
 		if j < len(fields) {
-			if len(fields[j:]) != 1 {
+			rest := fields[j:]
+			req.target = rest[0]
+			switch {
+			case len(rest) == 1:
+				// The plain target clause.
+			case len(rest) >= 3 && isPlacePrep(low[j+1]) && low[j+2] == "line":
+				// The line phrase rides behind the
+				// target: "to jim/main.go on line 12".
+				// A phrase that already rode the slot
+				// zone makes this a second one — never
+				// this grammar's.
+				if req.placeBound() {
+					return conceptReq{}, false
+				}
+				req.placeBefore = low[j+1] == "before"
+				switch {
+				case len(rest) == 3:
+					req.placeBad, req.placeBadTok = true, ""
+				case len(rest) == 4:
+					if n, ok := lineNumberToken(low[j+3]); ok {
+						req.placeLine = n
+					} else {
+						req.placeBad, req.placeBadTok = true, rest[3]
+					}
+				default:
+					return conceptReq{}, false
+				}
+			default:
 				return conceptReq{}, false
 			}
-			req.target = fields[j]
 		}
 	}
 
@@ -1564,6 +1671,28 @@ func runConcept(line string, ask editAsk) bool {
 	tag := cTag("gollemer [composer]>")
 	canon := req.entry.Canonical()
 
+	// A started line phrase with an unusable number refuses
+	// here, in placement terms, before any other guidance:
+	// the sentence WAS this claim's, and a refusal about the
+	// missing target or name would answer a question the
+	// user didn't ask.
+	if req.placeBad {
+		var why string
+		switch {
+		case req.placeBadTok == "":
+			why = "the sentence names a line but never gives its number — write it as digits, like \"on line 12\""
+		default:
+			if _, err := strconv.Atoi(req.placeBadTok); err == nil {
+				why = fmt.Sprintf("\"line %s\" doesn't pick a line — a file's lines count from 1, so the first line is line 1. Say \"on line 1\" or a higher number", req.placeBadTok)
+			} else {
+				why = fmt.Sprintf("\"line %s\" isn't a number I can aim at — write the line number as digits, like \"on line 12\"", req.placeBadTok)
+			}
+		}
+		fmt.Printf("%s Not adding that: %s.\n", tag, why)
+		recordBrain("composer", false, "concept refused: line phrase")
+		return true
+	}
+
 	// Guidance before any project work: a declaration with no
 	// name, and any concept with no target, are answered in
 	// composer terms — the sentence was this claim's.
@@ -1640,5 +1769,7 @@ func runConcept(line string, ask editAsk) bool {
 		ConceptText: req.text,
 		ConceptFunc: req.inFunc,
 		ConceptLike: req.like,
+		PlaceLine:   req.placeLine,
+		PlaceBefore: req.placeBefore,
 	}, ask)
 }

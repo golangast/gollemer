@@ -201,6 +201,348 @@ func missingImportSpecs(fileAST *ast.File, specs []string) []string {
 	return out
 }
 
+// --- line placement ----------------------------------------------------------
+//
+// A sentence may name the line its piece should land on or by
+// — "add a print line in main to jim/main.go on line 12", "add
+// a for loop before line 8 in main to jim/main.go" (the chat
+// grammar lives in the concept composer; EditRequest.PlaceLine
+// / PlaceBefore carry it here). The number counts the target
+// file's lines as the user sees them BEFORE the edit, 1-based,
+// and insertion happens only at whole-statement boundaries
+// inside the named function (for statements) or between
+// top-level declarations (for declarations): a statement is
+// never split, and a line inside a multi-line statement
+// anchors to that statement's end. The plan quotes the anchor
+// — the number AND the line's current text — so the user sees
+// where the piece lands before the gate, and landing is
+// verified structurally: the new statement/declaration must
+// sit at the resolved index in the re-parsed body/file, on top
+// of the usual presence checks and the spine's build verdict.
+
+// srcLines splits src into its lines as the user sees them:
+// line n (1-based) is lines[n-1], newline stripped. A trailing
+// newline ends the last line rather than starting a new one.
+func srcLines(src []byte) []string {
+	if len(src) == 0 {
+		return nil
+	}
+	lines := strings.Split(string(src), "\n")
+	if lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return lines
+}
+
+// declLineSpan returns the 1-based first and last lines a
+// top-level declaration occupies, as the user sees them: a
+// leading doc comment travels with its declaration (the AST
+// attaches it there), and the last line is the one holding
+// the declaration's final token.
+func declLineSpan(fset *token.FileSet, d ast.Decl) (int, int) {
+	start := lineOfPos(fset, d.Pos())
+	switch d := d.(type) {
+	case *ast.FuncDecl:
+		if d.Doc != nil {
+			start = lineOfPos(fset, d.Doc.Pos())
+		}
+	case *ast.GenDecl:
+		if d.Doc != nil {
+			start = lineOfPos(fset, d.Doc.Pos())
+		}
+	}
+	return start, lineOfPos(fset, d.End()-1)
+}
+
+// declDescribe names a top-level declaration in beginner
+// words for the placement refusals: "the struct Profile",
+// "the function helper", "a const block", "the import block".
+func declDescribe(d ast.Decl) string {
+	switch d := d.(type) {
+	case *ast.FuncDecl:
+		if d.Recv != nil && len(d.Recv.List) > 0 {
+			return fmt.Sprintf("the method %s", d.Name.Name)
+		}
+		return fmt.Sprintf("the function %s", d.Name.Name)
+	case *ast.GenDecl:
+		switch d.Tok {
+		case token.IMPORT:
+			return "the import block"
+		case token.CONST:
+			return "a const block"
+		case token.VAR:
+			return "a var block"
+		case token.TYPE:
+			for _, spec := range d.Specs {
+				if ts, ok := spec.(*ast.TypeSpec); ok {
+					switch ts.Type.(type) {
+					case *ast.StructType:
+						return fmt.Sprintf("the struct %s", ts.Name.Name)
+					case *ast.InterfaceType:
+						return fmt.Sprintf("the interface %s", ts.Name.Name)
+					}
+					return fmt.Sprintf("the type %s", ts.Name.Name)
+				}
+			}
+			return "a type declaration"
+		}
+	}
+	return "a declaration"
+}
+
+// placeQuote renders the anchor a plan quotes for a line
+// placement: the line number and the actual current text of
+// that line, so the user sees where the piece lands before
+// the gate. A blank line has no text to quote; it is named
+// as one instead.
+func placeQuote(lines []string, n int, before bool) string {
+	word := "after"
+	if before {
+		word = "before"
+	}
+	text := ""
+	if n >= 1 && n <= len(lines) {
+		text = strings.TrimSpace(lines[n-1])
+	}
+	if text == "" {
+		return fmt.Sprintf("%s line %d (a blank line)", word, n)
+	}
+	return fmt.Sprintf("%s line %d: `%s`", word, n, text)
+}
+
+// linePastEnd is the shared refusal for a line number beyond
+// the file's last line.
+func (p *Project) linePastEnd(rel string, n, count int) string {
+	return fmt.Sprintf("line %d is past the end of %s — the file has %d lines, so there's no line %d to aim at.", n, p.LinkPath(rel), count, n)
+}
+
+func capFirst(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+// articleOf picks a/an for a concept's canonical name — the
+// planner-side copy of the composer's rule.
+func articleOf(name string) string {
+	if name != "" && strings.ContainsRune("aeiou", rune(name[0])) {
+		return "an"
+	}
+	return "a"
+}
+
+// stmtPlacement is a resolved line placement inside one
+// function body: idx is the index in the body's CURRENT
+// statement list before which the new statement is inserted
+// (len(list) = the end of the body). atLbrace / atRbrace mark
+// the bodies whose edge statement shares a line with the
+// brace itself (a one-line body, statements crowded onto the
+// opening line, a closing brace on the last statement's
+// line): there is no line boundary to insert at there, so
+// the insertion rides the brace's own offset. quote is the
+// anchor text the plan shows.
+type stmtPlacement struct {
+	idx      int
+	atLbrace bool
+	atRbrace bool
+	quote    string
+}
+
+// resolveStmtPlacement validates req's line phrase against
+// the target file and resolves it to an insertion point in
+// target's body. piece names what is being placed, with its
+// article ("a print line", "an instantiation of Jim"). Every
+// refusal is in placement terms.
+func (p *Project) resolveStmtPlacement(rel string, src []byte, fset *token.FileSet, fileAST *ast.File, target *ast.FuncDecl, piece string, req EditRequest) (stmtPlacement, string) {
+	n := req.PlaceLine
+	lines := srcLines(src)
+	if n > len(lines) {
+		return stmtPlacement{}, p.linePastEnd(rel, n, len(lines))
+	}
+	tStart, tEnd := declLineSpan(fset, target)
+	contained := false
+	for _, d := range fileAST.Decls {
+		start, end := declLineSpan(fset, d)
+		if n < start || n > end {
+			continue
+		}
+		contained = true
+		if fd, ok := d.(*ast.FuncDecl); ok {
+			if fd != target {
+				return stmtPlacement{}, fmt.Sprintf("line %d is inside %s, which runs lines %d–%d — not %s, which runs lines %d–%d. %s lands in one function: name %s instead, or aim at a line inside %s.",
+					n, fd.Name.Name, start, end, target.Name.Name, tStart, tEnd, capFirst(piece), fd.Name.Name, target.Name.Name)
+			}
+		} else {
+			return stmtPlacement{}, fmt.Sprintf("line %d is inside %s (lines %d–%d) — that's not inside a function, and %s can only land inside a function body. %s runs lines %d–%d; aim at a line in there.",
+				n, declDescribe(d), start, end, piece, target.Name.Name, tStart, tEnd)
+		}
+	}
+	if !contained {
+		if n == lineOfPos(fset, fileAST.Name.Pos()) {
+			return stmtPlacement{}, fmt.Sprintf("line %d is the package clause — %s lands inside a function, and %s runs lines %d–%d. Aim at a line in there.",
+				n, piece, target.Name.Name, tStart, tEnd)
+		}
+		return stmtPlacement{}, fmt.Sprintf("line %d isn't inside any function — it sits between the file's declarations. %s runs lines %d–%d; aim at a line in there.",
+			n, target.Name.Name, tStart, tEnd)
+	}
+
+	quote := placeQuote(lines, n, req.PlaceBefore)
+	body := target.Body
+	list := body.List
+	lbraceLine := lineOfPos(fset, body.Lbrace)
+	rbraceLine := lineOfPos(fset, body.Rbrace)
+	if len(list) == 0 {
+		return stmtPlacement{idx: 0, atRbrace: lbraceLine == rbraceLine, quote: quote}, ""
+	}
+	starts := make([]int, len(list))
+	ends := make([]int, len(list))
+	for i, s := range list {
+		starts[i] = lineOfPos(fset, s.Pos())
+		ends[i] = lineOfPos(fset, s.End()-1)
+	}
+	var idx int
+	if req.PlaceBefore {
+		// Before the statement starting at line N; a line
+		// inside a statement anchors before that statement,
+		// and a line on no statement (blank/comment) anchors
+		// before the following one.
+		idx = len(list)
+		for i := range list {
+			if ends[i] >= n {
+				idx = i
+				break
+			}
+		}
+	} else {
+		// After the complete statement line N belongs to; a
+		// line on no statement anchors after the preceding
+		// one.
+		idx = len(list)
+		for i := range list {
+			if starts[i] > n {
+				idx = i
+				break
+			}
+			idx = i + 1
+		}
+	}
+	pl := stmtPlacement{idx: idx, quote: quote}
+	switch {
+	case idx < len(list) && starts[idx] <= lbraceLine:
+		pl.atLbrace = true
+	case idx == len(list) && rbraceLine <= ends[len(list)-1]:
+		pl.atRbrace = true
+	}
+	return pl, ""
+}
+
+// declPlacement is a resolved line placement at file scope:
+// the byte offset at which the new declaration's text is
+// inserted (len(src) when it lands at the end of the file)
+// and the index in the file's CURRENT declaration list the
+// new declaration will occupy.
+type declPlacement struct {
+	offset int
+	idx    int
+	quote  string
+}
+
+// resolveDeclPlacement validates req's line phrase at file
+// scope and resolves it to a landing between declarations:
+// a line where a declaration starts anchors before OR after
+// the whole declaration; a line where one ends anchors after
+// it; a line strictly inside a declaration's span refuses —
+// a declaration is never split. A line on no declaration
+// (blank/comment, between declarations) anchors to the
+// neighbouring declarations, the statement rule at file
+// scope. piece names what is being placed, with its article
+// ("a struct").
+func (p *Project) resolveDeclPlacement(rel string, src []byte, fset *token.FileSet, fileAST *ast.File, piece string, req EditRequest) (declPlacement, string) {
+	n := req.PlaceLine
+	lines := srcLines(src)
+	if n > len(lines) {
+		return declPlacement{}, p.linePastEnd(rel, n, len(lines))
+	}
+	quote := placeQuote(lines, n, req.PlaceBefore)
+	decls := fileAST.Decls
+	afterDecl := func(i int) declPlacement {
+		_, end := declLineSpan(fset, decls[i])
+		off := len(src)
+		if end < len(lines) {
+			off = lineStartOffset(src, end+1)
+		}
+		return declPlacement{offset: off, idx: i + 1, quote: quote}
+	}
+	beforeDecl := func(i int) declPlacement {
+		start, _ := declLineSpan(fset, decls[i])
+		return declPlacement{offset: lineStartOffset(src, start), idx: i, quote: quote}
+	}
+	insideRefusal := func(i int) string {
+		start, end := declLineSpan(fset, decls[i])
+		return fmt.Sprintf("line %d is inside %s (lines %d–%d) — %s lands between declarations, never inside one. Aim at line %d, where it starts, or line %d, where it ends.",
+			n, declDescribe(decls[i]), start, end, piece, start, end)
+	}
+	for i, d := range decls {
+		start, end := declLineSpan(fset, d)
+		switch {
+		case n == start:
+			if req.PlaceBefore {
+				return beforeDecl(i), ""
+			}
+			return afterDecl(i), ""
+		case n == end && end > start:
+			if !req.PlaceBefore {
+				return afterDecl(i), ""
+			}
+			return declPlacement{}, insideRefusal(i)
+		case n > start && n < end:
+			return declPlacement{}, insideRefusal(i)
+		}
+	}
+	if len(decls) == 0 {
+		return declPlacement{}, fmt.Sprintf("line %d can't anchor %s yet — %s has no declarations at all to place it against. Add it without a line number first.", n, piece, p.LinkPath(rel))
+	}
+	if n == lineOfPos(fset, fileAST.Name.Pos()) {
+		first, _ := declLineSpan(fset, decls[0])
+		return declPlacement{}, fmt.Sprintf("line %d is the package clause — %s lands between declarations, and the first declaration starts at line %d. Aim at the line where a declaration starts or ends.", n, piece, first)
+	}
+	// No declaration occupies the line: the preceding /
+	// following neighbours anchor it, exactly as a
+	// blank/comment line inside a function body does.
+	prev, next := -1, -1
+	for i, d := range decls {
+		start, end := declLineSpan(fset, d)
+		if end < n {
+			prev = i
+		}
+		if start > n && next < 0 {
+			next = i
+		}
+	}
+	if req.PlaceBefore {
+		if next >= 0 {
+			return beforeDecl(next), ""
+		}
+		return afterDecl(prev), ""
+	}
+	if prev >= 0 {
+		return afterDecl(prev), ""
+	}
+	return beforeDecl(next), ""
+}
+
+// stmtAtIndex reports whether the statement at index idx in
+// fd's body is the one whose first line matches firstLine —
+// the structural position check a line placement adds on top
+// of the presence checks.
+func stmtAtIndex(fset *token.FileSet, fd *ast.FuncDecl, idx int, firstLine string) bool {
+	if fd.Body == nil || idx < 0 || idx >= len(fd.Body.List) {
+		return false
+	}
+	return strings.HasPrefix(conceptStmtText(fset, fd.Body.List[idx]), stmtLineKey(firstLine))
+}
+
 // --- statement concepts ------------------------------------------------------
 
 // requestParamName returns the name of fd's *http.Request
@@ -297,6 +639,7 @@ func (p *Project) planConceptStatement(req EditRequest, entry *ConceptEntry, rel
 	var edits []textEdit
 	edits = append(edits, conceptImportEdits(fileAST, fset, src, specs)...)
 	var note string
+	var place *stmtPlacement
 	growMain := false
 	resolvedFunc := wantFunc
 	// A {request} template can only live in a handler: the
@@ -324,6 +667,12 @@ func (p *Project) planConceptStatement(req EditRequest, entry *ConceptEntry, rel
 			// No main to grow: a main could never receive the
 			// request this piece reads.
 			return nil, handlerRefusal()
+		case req.PlaceLine > 0:
+			// A line placement needs a function that exists:
+			// a main grown on the spot would land at the end
+			// of the file, and no line the user can see is
+			// inside it yet.
+			return nil, fmt.Sprintf("%s has no main yet — a new main would be created at the end of the file, so there's no line inside main for line %d to name. Add the %s without a line number first, then place the next one by line.", p.LinkPath(rel), req.PlaceLine, entry.Canonical())
 		default:
 			// No main yet in a program file: the statement gets
 			// a main to live in, appended whole (below, after
@@ -359,16 +708,55 @@ func (p *Project) planConceptStatement(req EditRequest, entry *ConceptEntry, rel
 				indent = "\t"
 			}
 		}
+		if req.PlaceLine > 0 {
+			pl, refusal := p.resolveStmtPlacement(rel, src, fset, fileAST, decl,
+				articleOf(entry.Canonical())+" "+entry.Canonical(), req)
+			if refusal != "" {
+				return nil, refusal
+			}
+			place = &pl
+		}
 		lbraceLine := lineOfPos(fset, decl.Body.Lbrace)
 		rbraceLine := lineOfPos(fset, decl.Body.Rbrace)
-		if rbraceLine == lbraceLine {
+		switch {
+		case place != nil && place.atLbrace:
+			// The anchor statement shares the opening line:
+			// the new statement rides the brace's own offset,
+			// opening the line up.
+			edits = append(edits, textEdit{
+				start: offOf(fset, decl.Body.Lbrace) + 1,
+				end:   offOf(fset, decl.Body.Lbrace) + 1,
+				text:  "\n" + indentConceptLines(stmt, indent) + "\n" + lineIndent(src, lineOfPos(fset, decl.Pos())),
+			})
+		case place != nil && place.atRbrace:
+			// The closing brace shares a line with code (a
+			// one-line body, or a crowded last line): the new
+			// statement rides the brace's own offset.
+			edits = append(edits, textEdit{
+				start: offOf(fset, decl.Body.Rbrace),
+				end:   offOf(fset, decl.Body.Rbrace),
+				text:  "\n" + indentConceptLines(stmt, indent) + "\n" + lineIndent(src, lineOfPos(fset, decl.Pos())),
+			})
+		case place != nil && place.idx < len(decl.Body.List):
+			// Before the anchor statement, at its line's start.
+			atLine := lineOfPos(fset, decl.Body.List[place.idx].Pos())
+			ind := lineIndent(src, atLine)
+			if ind == "" {
+				ind = indent
+			}
+			edits = append(edits, textEdit{
+				start: lineStartOffset(src, atLine),
+				end:   lineStartOffset(src, atLine),
+				text:  indentConceptLines(stmt, ind) + "\n",
+			})
+		case rbraceLine == lbraceLine:
 			// An empty one-line body "{}": open it up.
 			edits = append(edits, textEdit{
 				start: offOf(fset, decl.Body.Rbrace),
 				end:   offOf(fset, decl.Body.Rbrace),
 				text:  "\n" + indentConceptLines(stmt, indent) + "\n" + lineIndent(src, lineOfPos(fset, decl.Pos())),
 			})
-		} else {
+		default:
 			edits = append(edits, textEdit{
 				start: lineStartOffset(src, rbraceLine),
 				end:   lineStartOffset(src, rbraceLine),
@@ -395,16 +783,34 @@ func (p *Project) planConceptStatement(req EditRequest, entry *ConceptEntry, rel
 	if bad := selfCheckConceptStatement(ef.After, resolvedFunc, firstLine); bad != "" {
 		return nil, fmt.Sprintf("internal error in my assembler: %s — I haven't shown you a plan, because the code I generated failed my own checks. Nothing was written.", bad)
 	}
+	// A placed statement must additionally sit at the
+	// resolved index in the body — presence alone would let
+	// a mis-anchored insert pass.
+	if place != nil {
+		if bad := selfCheckConceptStatementAt(ef.After, resolvedFunc, firstLine, place.idx); bad != "" {
+			return nil, fmt.Sprintf("internal error in my assembler: %s — I haven't shown you a plan, because the code I generated failed my own checks. Nothing was written.", bad)
+		}
+	}
 
 	summary := fmt.Sprintf("Add a %s at the end of %s in %s, from the concept book: %s",
 		entry.Canonical(), resolvedFunc, p.LinkPath(rel), firstLine)
+	if place != nil {
+		summary = fmt.Sprintf("Add a %s in %s in %s, %s, from the concept book: %s",
+			entry.Canonical(), resolvedFunc, p.LinkPath(rel), place.quote, firstLine)
+	}
 	plan := &EditPlan{
 		Summary:    summary,
 		VerifyDesc: fmt.Sprintf("%s now has the %s in %s", filepath.Base(rel), entry.Canonical(), resolvedFunc),
 		Site:       fmt.Sprintf("%s:%d", p.LinkPath(rel), insertedLine(ef.After, firstLine)),
 		Files:      []EditFile{ef},
 		verify: func(after *Project) bool {
-			return verifyConceptStatement(after.Root, rel, resolvedFunc, firstLine)
+			if !verifyConceptStatement(after.Root, rel, resolvedFunc, firstLine) {
+				return false
+			}
+			if place == nil {
+				return true
+			}
+			return verifyConceptStatementAt(after.Root, rel, resolvedFunc, firstLine, place.idx)
 		},
 	}
 	if note != "" {
@@ -487,20 +893,51 @@ func (p *Project) planConceptDeclaration(req EditRequest, entry *ConceptEntry, r
 	specs = append(specs, methodSpecs...)
 	specs = missingImportSpecs(fileAST, specs)
 
-	// Imports first, the declaration appended after — the same
-	// coincident-offset hazard as the statement planner's
-	// grown main (a bare-clause file puts both at EOF).
-	base := applyTextEdits(src, conceptImportEdits(fileAST, fset, src, specs))
-	text := "\n" + decl + "\n"
-	if len(base) == 0 || base[len(base)-1] != '\n' {
-		text = "\n" + text
+	// A line placement resolves to a landing between
+	// declarations before anything is spliced.
+	var place *declPlacement
+	if req.PlaceLine > 0 {
+		pl, refusal := p.resolveDeclPlacement(rel, src, fset, fileAST, articleOf(canon)+" "+canon, req)
+		if refusal != "" {
+			return nil, refusal
+		}
+		place = &pl
 	}
-	after := append(append([]byte{}, base...), text...)
+
+	var after []byte
+	if place != nil && place.offset < len(src) {
+		// Between declarations: the import edits and the
+		// declaration's insertion compose over the original
+		// bytes in one splice.
+		edits := conceptImportEdits(fileAST, fset, src, specs)
+		edits = append(edits, textEdit{start: place.offset, end: place.offset, text: decl + "\n\n"})
+		after = applyTextEdits(src, edits)
+	} else {
+		// Imports first, the declaration appended after — the
+		// same coincident-offset hazard as the statement
+		// planner's grown main (a bare-clause file puts both
+		// at EOF). A placement that resolved to the end of
+		// the file lands here too: its anchor is the file's
+		// last declaration, so appending IS the placement.
+		base := applyTextEdits(src, conceptImportEdits(fileAST, fset, src, specs))
+		text := "\n" + decl + "\n"
+		if len(base) == 0 || base[len(base)-1] != '\n' {
+			text = "\n" + text
+		}
+		after = append(append([]byte{}, base...), text...)
+	}
 	ef := finishFile(rel, src, after)
 
 	// AST self-check: the file parses and now declares the name.
 	if bad := selfCheckConceptDeclaration(ef.After, name); bad != "" {
 		return nil, fmt.Sprintf("internal error in my assembler: %s — I haven't shown you a plan, because the code I generated failed my own checks. Nothing was written.", bad)
+	}
+	// A placed declaration must additionally sit at the
+	// resolved index in the file's declarations.
+	if place != nil {
+		if bad := selfCheckConceptDeclarationAt(ef.After, name, place.idx); bad != "" {
+			return nil, fmt.Sprintf("internal error in my assembler: %s — I haven't shown you a plan, because the code I generated failed my own checks. Nothing was written.", bad)
+		}
 	}
 
 	if entry.Note != "" {
@@ -510,6 +947,12 @@ func (p *Project) planConceptDeclaration(req EditRequest, entry *ConceptEntry, r
 	summary := fmt.Sprintf("Add the %s %s to %s, from the concept book.", canon, name, p.LinkPath(rel))
 	if strings.TrimSpace(req.ConceptLike) != "" && strings.Contains(entry.Template, "{methods}") {
 		summary = fmt.Sprintf("Add the %s %s to %s, with %s's method set copied from this project's own code.", canon, name, p.LinkPath(rel), req.ConceptLike)
+	}
+	if place != nil {
+		summary = fmt.Sprintf("Add the %s %s to %s, %s, from the concept book.", canon, name, p.LinkPath(rel), place.quote)
+		if strings.TrimSpace(req.ConceptLike) != "" && strings.Contains(entry.Template, "{methods}") {
+			summary = fmt.Sprintf("Add the %s %s to %s, %s, with %s's method set copied from this project's own code.", canon, name, p.LinkPath(rel), place.quote, req.ConceptLike)
+		}
 	}
 	plan := &EditPlan{
 		Summary:    summary,
@@ -863,6 +1306,75 @@ func selfCheckConceptDeclaration(after []byte, name string) string {
 		}
 	}
 	return fmt.Sprintf("the assembled file doesn't declare %s", name)
+}
+
+// selfCheckConceptStatementAt is selfCheckConceptStatement
+// with the position a line placement resolved: the rendered
+// statement must sit at index idx in the target function's
+// body, not merely somewhere inside it.
+func selfCheckConceptStatementAt(after []byte, funcName, firstLine string, idx int) string {
+	fset, fileAST, err := parseGoSrc("concept.go", after)
+	if err != nil || fileAST == nil {
+		return "the assembled file doesn't parse"
+	}
+	for _, d := range fileAST.Decls {
+		fd, ok := d.(*ast.FuncDecl)
+		if !ok || fd.Name.Name != funcName || fd.Body == nil {
+			continue
+		}
+		if !stmtAtIndex(fset, fd, idx, firstLine) {
+			return fmt.Sprintf("%s doesn't hold the statement at the placed position after assembly", funcName)
+		}
+		return ""
+	}
+	return fmt.Sprintf("the assembled file has no function named %s", funcName)
+}
+
+// selfCheckConceptDeclarationAt is selfCheckConceptDeclaration
+// with the position a line placement resolved: the new
+// declaration must sit at index idx in the file's top-level
+// declarations, not merely somewhere among them.
+func selfCheckConceptDeclarationAt(after []byte, name string, idx int) string {
+	_, fileAST, err := parseGoSrc("concept.go", after)
+	if err != nil || fileAST == nil {
+		return "the assembled file doesn't parse"
+	}
+	if idx < 0 || idx >= len(fileAST.Decls) {
+		return fmt.Sprintf("the assembled file's declarations don't hold %s at the placed position", name)
+	}
+	switch d := fileAST.Decls[idx].(type) {
+	case *ast.GenDecl:
+		if d.Tok == token.TYPE {
+			for _, spec := range d.Specs {
+				if ts, ok := spec.(*ast.TypeSpec); ok && ts.Name.Name == name {
+					return ""
+				}
+			}
+		}
+	case *ast.FuncDecl:
+		if d.Recv == nil && d.Name.Name == name {
+			return ""
+		}
+	}
+	return fmt.Sprintf("the assembled file's declarations don't hold %s at the placed position", name)
+}
+
+// verifyConceptStatementAt is the post-edit form of
+// selfCheckConceptStatementAt: the placed statement must sit
+// at the resolved index in the target function's body.
+func verifyConceptStatementAt(root, rel, funcName, firstLine string, idx int) bool {
+	_, fset, fileAST, refusal := (&Project{Root: root}).readProjectFile(rel)
+	if refusal != "" || fileAST == nil {
+		return false
+	}
+	for _, d := range fileAST.Decls {
+		fd, ok := d.(*ast.FuncDecl)
+		if !ok || fd.Name.Name != funcName || fd.Body == nil {
+			continue
+		}
+		return stmtAtIndex(fset, fd, idx, firstLine)
+	}
+	return false
 }
 
 // verifyConceptStatement re-reads the edited file and confirms
