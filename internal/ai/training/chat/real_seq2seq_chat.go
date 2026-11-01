@@ -590,6 +590,13 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		if tryPackageLookup(line) {
 			continue
 		}
+		// Running rqlite, claimed beside the lookup: a "how do
+		// I run rqlite" question gets the printed guidance —
+		// commands for the user's own terminal, from rqlite's
+		// documented quick start. The chat installs nothing.
+		if tryRqliteGuide(line) {
+			continue
+		}
 		// Intent layer: a confident trained classification of what
 		// the user wants, in their own words — no memorized commands.
 		if tryIntentDispatch(line, profile) {
@@ -832,6 +839,13 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		// the match must be strong, so code questions and project
 		// questions keep their routes.
 		if tryPackageLookup(line) {
+			continue
+		}
+		// Running rqlite, claimed beside the lookup: a "how do
+		// I run rqlite" question gets the printed guidance —
+		// commands for the user's own terminal, from rqlite's
+		// documented quick start. The chat installs nothing.
+		if tryRqliteGuide(line) {
 			continue
 		}
 		// Intent layer: a confident trained classification of what
@@ -1222,6 +1236,13 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// the match must be strong, so code questions and project
 		// questions keep their routes.
 		if tryPackageLookup(line) {
+			continue
+		}
+		// Running rqlite, claimed beside the lookup: a "how do
+		// I run rqlite" question gets the printed guidance —
+		// commands for the user's own terminal, from rqlite's
+		// documented quick start. The chat installs nothing.
+		if tryRqliteGuide(line) {
 			continue
 		}
 		// Simple creations, claimed deterministically beside the

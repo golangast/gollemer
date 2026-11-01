@@ -235,6 +235,27 @@ var statementConcepts = []concept{
 	{"database-transaction", "statement", "database transaction", []string{"transaction", "sql transaction"}},
 	{"database-null", "statement", "database null", []string{"nullable column", "null value", "sql null"}},
 	{"type-switch", "statement", "type switch", []string{"switch on type", "type assertion switch"}},
+	// The rqlite rows (2026-10-31): a second database family,
+	// spoken to over HTTP instead of through a driver.
+	// Synonyms mirror the book names, as everywhere. The
+	// insert-led names ARE trained here (database-exec's
+	// were withheld in the five-sources build): every rqlite
+	// phrasing carries the token "rqlite", a word no other
+	// family has. That alone did NOT keep the bare verb
+	// safe — measured on this build's first retrain, the
+	// classifier still leaned on "insert" hard enough to
+	// steal the held-out dialect's generic insert-led asks
+	// ("insert an http server into …") for rqlite-insert,
+	// 20 judge items across the three older judges. The
+	// other half of the safety lives in the route: a
+	// concept claim must NAME its concept (the
+	// naming-evidence guard in phrasing2_extract.go), so a
+	// family can only ever claim lines that say its name —
+	// with it, the thefts closed and the baselines held.
+	{"rqlite-connect", "statement", "rqlite connection", []string{"rqlite connect", "connect to rqlite", "rqlite client"}},
+	{"rqlite-create-table", "statement", "rqlite create table", []string{"rqlite table", "create table in rqlite", "rqlite create"}},
+	{"rqlite-insert", "statement", "rqlite insert", []string{"insert into rqlite", "rqlite insert row", "insert row into rqlite"}},
+	{"rqlite-query", "statement", "rqlite query", []string{"query rqlite", "rqlite select", "select from rqlite"}},
 }
 
 var declConcepts = []concept{
@@ -262,6 +283,13 @@ var sourcesConceptIDs = []string{
 	"session-handler", "database", "database-query",
 	"database-query-row", "database-prepared", "database-exec",
 	"database-transaction", "database-null", "type-switch",
+}
+
+// rqliteConceptIDs are the rqlite families (2026-10-31): the
+// ones the -mode heldout-rqlite judge is built for.
+var rqliteConceptIDs = []string{
+	"rqlite-connect", "rqlite-create-table", "rqlite-insert",
+	"rqlite-query",
 }
 
 func article(name string) string {
@@ -1792,6 +1820,221 @@ func runHeldoutSources(outDir string, seed int64) {
 		rep.TrainInputOverlap, rep.JudgeInputOverlap, rep.SlotLeak)
 }
 
+// ---------- the rqlite held-out judge ----------
+//
+// -mode heldout-rqlite builds data/training/
+// phrasing_heldout_rqlite.jsonl: the judge for the four
+// rqlite families, in the sources judge's construction —
+// single-unseen items speak the held-out core dialect and
+// wrappers, single-seen items (the control) speak the train
+// dialect, and BOTH draw slot values from the held-out pools
+// only. All three prior judges stay byte-identical; this
+// file is a fourth judge, never a replacement. Leak
+// discipline matches the sources judge's and extends it:
+// normalized-input overlap exactly 0 with the train corpus
+// AND with all three prior judges, held-out slot values
+// absent from the train slot values beyond the shared
+// grammar fixtures. Run the train mode first (the checks
+// read its pairs file).
+
+type rqliteReport struct {
+	Seed               int64          `json:"seed"`
+	Items              int            `json:"items"`
+	ByFamilyCell       map[string]int `json:"items_by_family_cell"`
+	SkippedUnemittable int            `json:"skipped_unemittable_targets"`
+	ConflictingInputs  int            `json:"conflicting_inputs_dropped"`
+	DuplicateInputs    int            `json:"duplicate_inputs_dropped"`
+	TrainInputOverlap  int            `json:"train_input_overlap"`
+	JudgeInputOverlap  int            `json:"original_judge_input_overlap"`
+	SourcesOverlap     int            `json:"sources_judge_input_overlap"`
+	CreatedOverlap     int            `json:"created_judge_input_overlap"`
+	SlotLeak           []string       `json:"slot_value_leak_beyond_fixtures"`
+}
+
+func runHeldoutRqlite(outDir string, seed int64) {
+	r := rand.New(rand.NewSource(seed + 13))
+	rep := &rqliteReport{Seed: seed, ByFamilyCell: map[string]int{}}
+	hp := heldoutPools()
+
+	seen := map[string]string{} // normalized input -> output
+	var items []heldItem
+	add := func(a ask, cell string, wrappers []wrapper) {
+		if !emittable(a.canonical) {
+			rep.SkippedUnemittable++
+			return
+		}
+		in, tmpl := dress(r, a, wrappers)
+		n := normInput(in)
+		if prev, dup := seen[n]; dup {
+			if prev != a.canonical {
+				rep.ConflictingInputs++
+				for i, q := range items {
+					if normInput(q.Input) == n {
+						items = append(items[:i], items[i+1:]...)
+						break
+					}
+				}
+				delete(seen, n)
+			} else {
+				rep.DuplicateInputs++
+			}
+			return
+		}
+		seen[n] = a.canonical
+		items = append(items, heldItem{
+			Input: in, Output: a.canonical, Family: a.family,
+			Cell: cell, Template: "heldout/" + tmpl,
+		})
+		rep.ByFamilyCell[a.family+"/"+cell]++
+	}
+
+	for _, id := range rqliteConceptIDs {
+		c := conceptByID(id)
+		if c.id == "" {
+			fail(fmt.Errorf("rqlite concept %q not in the book lists", id))
+		}
+		build := func(dialect string) ask {
+			return buildStmtAsk(r, hp, c, dialect)
+		}
+		for got, attempts := 0, 0; got < 20 && attempts < 600; attempts++ {
+			before := len(items)
+			add(build("heldout"), "single-unseen", heldoutWrappers)
+			if len(items) > before {
+				got++
+			}
+		}
+		for got, attempts := 0, 0; got < 8 && attempts < 240; attempts++ {
+			before := len(items)
+			add(build("train"), "single-seen", trainWrappers)
+			if len(items) > before {
+				got++
+			}
+		}
+	}
+	rep.Items = len(items)
+
+	// Leak checks: against the train corpus (read back from
+	// the pairs file the train mode wrote) and all three
+	// prior judges. Overlaps are dropped, counted, and
+	// reported — and any drop at all fails the run, because
+	// by construction (disjoint dialects, wrappers, and
+	// pools) there should be none.
+	readPairs := func(path string) (inputs map[string]bool, slots map[string]bool) {
+		inputs, slots = map[string]bool{}, map[string]bool{}
+		f, err := os.Open(path)
+		if err != nil {
+			fail(fmt.Errorf("heldout-rqlite mode reads %s (run the train mode first): %w", path, err))
+		}
+		defer f.Close()
+		sc := bufioScanner(f)
+		for sc.Scan() {
+			line := strings.TrimSpace(sc.Text())
+			if line == "" {
+				continue
+			}
+			var p pair
+			if err := json.Unmarshal([]byte(line), &p); err != nil {
+				fail(err)
+			}
+			inputs[normInput(p.Input)] = true
+			for _, s := range p.Slots {
+				slots[s] = true
+			}
+		}
+		return inputs, slots
+	}
+	readJudge := func(path string) map[string]bool {
+		inputs := map[string]bool{}
+		f, err := os.Open(path)
+		if err != nil {
+			fail(err)
+		}
+		defer f.Close()
+		sc := bufioScanner(f)
+		for sc.Scan() {
+			line := strings.TrimSpace(sc.Text())
+			if line == "" {
+				continue
+			}
+			var it heldItem
+			if err := json.Unmarshal([]byte(line), &it); err != nil {
+				fail(err)
+			}
+			inputs[normInput(it.Input)] = true
+		}
+		return inputs
+	}
+	trainInputs, trainSlots := readPairs(filepath.Join(outDir, "phrasing_pairs2.jsonl"))
+	judgeInputs := readJudge(filepath.Join(outDir, "phrasing_heldout.jsonl"))
+	sourcesInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_sources.jsonl"))
+	createdInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_created.jsonl"))
+	fixtures := map[string]bool{"main": true, "main.go": true}
+	for _, t := range fieldTypes {
+		fixtures[t] = true
+	}
+	leakSet := map[string]bool{}
+	for _, s := range append(append(append(append(append(append(append(append(
+		[]string{}, namesHeldout...), filesHeldout...), fieldNamesHeldout...),
+		caseValsHeldout...), keysHeldout...), tablesHeldout...), textsHeldout...), calleesHeldout...) {
+		if trainSlots[s] && !fixtures[s] {
+			leakSet[s] = true
+		}
+	}
+	for s := range leakSet {
+		rep.SlotLeak = append(rep.SlotLeak, s)
+	}
+	sort.Strings(rep.SlotLeak)
+	kept := items[:0]
+	for _, it := range items {
+		n := normInput(it.Input)
+		drop := false
+		if trainInputs[n] {
+			rep.TrainInputOverlap++
+			drop = true
+		}
+		if judgeInputs[n] {
+			rep.JudgeInputOverlap++
+			drop = true
+		}
+		if sourcesInputs[n] {
+			rep.SourcesOverlap++
+			drop = true
+		}
+		if createdInputs[n] {
+			rep.CreatedOverlap++
+			drop = true
+		}
+		if !drop {
+			kept = append(kept, it)
+		}
+	}
+	items = kept
+	rep.Items = len(items)
+	if rep.TrainInputOverlap > 0 || rep.JudgeInputOverlap > 0 ||
+		rep.SourcesOverlap > 0 || rep.CreatedOverlap > 0 || len(rep.SlotLeak) > 0 {
+		fail(fmt.Errorf("leak check failed: train-overlap=%d judge-overlap=%d sources-overlap=%d created-overlap=%d slot=%v",
+			rep.TrainInputOverlap, rep.JudgeInputOverlap, rep.SourcesOverlap, rep.CreatedOverlap, rep.SlotLeak))
+	}
+
+	if err := writeJSONL(filepath.Join(outDir, "phrasing_heldout_rqlite.jsonl"), items); err != nil {
+		fail(err)
+	}
+	raw, err := json.MarshalIndent(rep, "", "  ")
+	if err != nil {
+		fail(err)
+	}
+	if err := os.WriteFile(filepath.Join(outDir, "phrasing_report_rqlite.json"), raw, 0o644); err != nil {
+		fail(err)
+	}
+	fmt.Printf("heldout-rqlite judge: %d items\n", rep.Items)
+	for _, k := range sortedKeys(rep.ByFamilyCell) {
+		fmt.Printf("  %-44s %d\n", k, rep.ByFamilyCell[k])
+	}
+	fmt.Printf("skipped unemittable=%d conflicting=%d duplicates=%d\n", rep.SkippedUnemittable, rep.ConflictingInputs, rep.DuplicateInputs)
+	fmt.Printf("leaks: train-overlap=%d judge-overlap=%d sources-overlap=%d created-overlap=%d slot=%v\n",
+		rep.TrainInputOverlap, rep.JudgeInputOverlap, rep.SourcesOverlap, rep.CreatedOverlap, rep.SlotLeak)
+}
+
 // ---------- the created-target held-out judge ----------
 //
 // -mode heldout-created builds data/training/
@@ -2112,10 +2355,14 @@ func main() {
 	outDir := flag.String("out", "data/training", "output directory")
 	seed := flag.Int64("seed", 20261031, "generator seed")
 	judgePath := flag.String("judge", "data/training/phrasing_heldout.jsonl", "the fixed held-out judge, read for leak checks only")
-	mode := flag.String("mode", "train", "train | heldout-sources | heldout-created")
+	mode := flag.String("mode", "train", "train | heldout-sources | heldout-created | heldout-rqlite")
 	flag.Parse()
 	if *mode == "heldout-sources" {
 		runHeldoutSources(*outDir, *seed)
+		return
+	}
+	if *mode == "heldout-rqlite" {
+		runHeldoutRqlite(*outDir, *seed)
 		return
 	}
 	if *mode == "heldout-created" {

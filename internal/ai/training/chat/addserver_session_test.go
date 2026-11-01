@@ -54,6 +54,9 @@ func claimChain(line string, ask editAsk, profile *UserProfile) bool {
 	if tryPackageLookup(line) {
 		return true
 	}
+	if tryRqliteGuide(line) {
+		return true
+	}
 	if runCreate(line, ask) {
 		return true
 	}

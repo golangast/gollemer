@@ -982,9 +982,6 @@ func createdFuncOf(family string, slots map[string]string) (name, file string, o
 // to keep, not an omission to fill with the created name).
 func routeCreatedPiece(f frag, createdName, createdFile string) (string, bool) {
 	family, gated := phrasingClassifier(f.text())
-	if !gated || family == "" || family == "none" {
-		return "", false
-	}
 	p := f.placement()
 	if p.hasFile && p.fn != "" && !p.pronoun {
 		return "", false // fully placed: not an unbound shape
@@ -1003,7 +1000,7 @@ func routeCreatedPiece(f frag, createdName, createdFile string) (string, bool) {
 	if fn == "" || file == "" {
 		return "", false
 	}
-	if family == "print" {
+	if gated && family == "print" {
 		text, ok := f.quotedText()
 		if !ok {
 			return "", false
@@ -1015,22 +1012,51 @@ func routeCreatedPiece(f frag, createdName, createdFile string) (string, bool) {
 		}
 		return "", false
 	}
-	if strings.HasPrefix(family, "concept-") {
-		id := strings.TrimPrefix(family, "concept-")
+	// A confident non-concept family (add-case above all)
+	// is not this path's business: its bare-name target is
+	// its own, and the ordinary route owns the fragment.
+	if gated && family != "" && family != "none" && !strings.HasPrefix(family, "concept-") {
+		return "", false
+	}
+	// Concept pieces under the binding: the binding
+	// supplies a placement, never a concept — the piece's
+	// family must be NAMED in the fragment (the
+	// naming-evidence rule, see routeFragment). The gated
+	// family is the candidate when it is named. Every other
+	// classifier outcome — the gate unsure, a gated "none",
+	// or a gated concept the fragment never names (the
+	// insert-theft shape, "… plus insert a xml inside it"
+	// gated to rqlite-insert on the shared verb) — falls to
+	// the named-concept scan, and a unique validated
+	// rendering under the binding wins: the fallback's
+	// discipline, applied on the one path where an unbound
+	// placement leaves the binding as the only possible
+	// reader.
+	var candidates []string
+	if gated && strings.HasPrefix(family, "concept-") && conceptPhrasePresent(f, family) {
+		candidates = []string{family}
+	} else {
+		for _, fam := range allFamilies() {
+			if strings.HasPrefix(fam, "concept-") && conceptPhrasePresent(f, fam) {
+				candidates = append(candidates, fam)
+			}
+		}
+	}
+	bound, boundCount := "", 0
+	for _, fam := range candidates {
+		id := strings.TrimPrefix(fam, "concept-")
 		for _, e := range conceptEntries() {
-			if e.ID != id {
+			if e.ID != id || e.Kind != analyze.ConceptStatement {
 				continue
 			}
-			if e.Kind != analyze.ConceptStatement {
-				return "", false
-			}
 			slots := map[string]string{"func": fn, "target": file}
-			canon := renderConceptStmt(e, fn, file)
-			if validatePiece(canon, family, slots) {
-				return canon, true
+			if canon := renderConceptStmt(e, fn, file); validatePiece(canon, fam, slots) {
+				bound, boundCount = canon, boundCount+1
 			}
-			return "", false
 		}
+	}
+	if boundCount == 1 {
+		return bound, true
 	}
 	return "", false
 }
@@ -1307,7 +1333,10 @@ var phrasingTopFamily = func(line string) string {
 //     outright (the bare verb "log" otherwise pulls these to
 //     the log-line concept, whose grammar has no text).
 //  2. The classifier's gated family, when its extraction
-//     validates. A gated "none" is final: no fallback.
+//     validates. A gated "none" is final: no fallback. A
+//     gated CONCEPT family additionally needs naming
+//     evidence (its book phrase present in the fragment) —
+//     see the guard at the step itself.
 //  3. A fallback scan of every family's extractor — reached
 //     when the gated family's extraction failed, or the gate
 //     itself failed (held-out phrasings can leave the
@@ -1349,8 +1378,34 @@ func routeFragment(f frag) (canon, family string, slots map[string]string, ok bo
 		return "", "", nil, false
 	}
 	if gated && family != "" {
-		if canon, slots, eok := extractForFamily(f, family); eok && validatePiece(canon, family, slots) {
-			return canon, family, slots, true
+		// A gated CONCEPT claim must still name its concept —
+		// the naming evidence the fallback scan below has
+		// always required, applied to the gated step too. A
+		// concept's extraction binds only file/func/name
+		// slots, so a concept family whose name never appears
+		// in the fragment can "validate" a line that never
+		// asked for it, on the strength of one shared token:
+		// measured 2026-10-31, the rqlite-insert family's
+		// name word taught the classifier the verb "insert"
+		// so strongly that the held-out dialect's generic
+		// insert-led asks ("insert an http server into
+		// api/main.go", "insert a xml in Nomad …") routed to
+		// rqlite wholesale — 16 original-judge items, 3
+		// created-judge items, 1 sources item, all thefts of
+		// exactly this shape. Voiding the gated claim here
+		// lets the fallback decide on geometry plus naming
+		// evidence, the same terms it judges every other
+		// family by. (The five-sources build met the same
+		// mechanism in the training data and withheld the
+		// insert-bearing names; a concept whose EVERY name
+		// carries the generic verb — "rqlite insert" is the
+		// row's canonical name — cannot be fixed that way,
+		// so the rule lives in the route, where it binds
+		// every concept family alike.)
+		if !strings.HasPrefix(family, "concept-") || conceptPhrasePresent(f, family) {
+			if canon, slots, eok := extractForFamily(f, family); eok && validatePiece(canon, family, slots) {
+				return canon, family, slots, true
+			}
 		}
 	}
 	top := phrasingTopFamily(f.text())

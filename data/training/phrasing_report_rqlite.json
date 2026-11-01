@@ -1,0 +1,22 @@
+{
+  "seed": 20261031,
+  "items": 112,
+  "items_by_family_cell": {
+    "concept-rqlite-connect/single-seen": 8,
+    "concept-rqlite-connect/single-unseen": 20,
+    "concept-rqlite-create-table/single-seen": 8,
+    "concept-rqlite-create-table/single-unseen": 20,
+    "concept-rqlite-insert/single-seen": 8,
+    "concept-rqlite-insert/single-unseen": 20,
+    "concept-rqlite-query/single-seen": 8,
+    "concept-rqlite-query/single-unseen": 20
+  },
+  "skipped_unemittable_targets": 0,
+  "conflicting_inputs_dropped": 0,
+  "duplicate_inputs_dropped": 0,
+  "train_input_overlap": 0,
+  "original_judge_input_overlap": 0,
+  "sources_judge_input_overlap": 0,
+  "created_judge_input_overlap": 0,
+  "slot_value_leak_beyond_fixtures": null
+}

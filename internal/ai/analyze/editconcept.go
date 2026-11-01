@@ -30,7 +30,13 @@ package analyze
 //	  "kind":     "statement",                // or "declaration"
 //	  "template": "fmt.Println(\"{text}\")",  // the basic code,
 //	                                          // with slots
-//	  "imports":  ["fmt"]                     // optional
+//	  "imports":  ["fmt"],                    // optional
+//	  "note":     "…"                         // optional: a plan
+//	                                          // note the row's
+//	                                          // plans always
+//	                                          // carry (runtime
+//	                                          // honesty the code
+//	                                          // alone can't say)
 //	}
 //
 // Slots: {text} is the saying slot — it is substituted with the
@@ -68,6 +74,7 @@ type ConceptEntry struct {
 	Kind     string   `json:"kind"`
 	Template string   `json:"template"`
 	Imports  []string `json:"imports,omitempty"`
+	Note     string   `json:"note,omitempty"`
 }
 
 // Canonical is the concept's first (display) name.
@@ -323,6 +330,9 @@ func (p *Project) planConceptStatement(req EditRequest, entry *ConceptEntry, rel
 	if note != "" {
 		plan.Notes = append(plan.Notes, note)
 	}
+	if entry.Note != "" {
+		plan.Notes = append(plan.Notes, entry.Note)
+	}
 	return plan, ""
 }
 
@@ -411,6 +421,10 @@ func (p *Project) planConceptDeclaration(req EditRequest, entry *ConceptEntry, r
 	// AST self-check: the file parses and now declares the name.
 	if bad := selfCheckConceptDeclaration(ef.After, name); bad != "" {
 		return nil, fmt.Sprintf("internal error in my assembler: %s — I haven't shown you a plan, because the code I generated failed my own checks. Nothing was written.", bad)
+	}
+
+	if entry.Note != "" {
+		notes = append(notes, entry.Note)
 	}
 
 	summary := fmt.Sprintf("Add the %s %s to %s, from the concept book.", canon, name, p.LinkPath(rel))

@@ -930,6 +930,73 @@ const defaultConceptBook = `{
         "sql null"
       ],
       "template": "db, err := sql.Open(\"TODO: driver name\", \"TODO: connection string\")\n// TODO: database/sql ships no driver — add yours as a blank import at the top of the file, like _ \"github.com/go-sql-driver/mysql\" for MySQL\nrows, err := db.Query(\"TODO: your query\")\nif err == nil {\n\tdefer rows.Close()\n\tfor rows.Next() {\n\t\tvar name sql.NullString\n\t\tif err := rows.Scan(&name); err == nil {\n\t\t\t// TODO: name.Valid tells you whether the column was NULL; name.String holds the text when it wasn't\n\t\t\t_ = name\n\t\t}\n\t}\n}"
+    },
+    {
+      "id": "rqlite-connect",
+      "imports": [
+        "net/http",
+        "time"
+      ],
+      "kind": "statement",
+      "names": [
+        "rqlite connection",
+        "rqlite connect",
+        "connect to rqlite",
+        "rqlite client"
+      ],
+      "note": "This code needs a rqlite node (rqlited) already running at that address — it compiles and checks without one, but nothing answers at runtime until a node is up. The node owns the database file (it lives in the data folder rqlited was started with); your program never creates that file, only tables. Ask \"how do I run rqlite\" and I'll show the ways to start one.",
+      "template": "rqliteAddr := \"http://localhost:4001\"\n// TODO: this is the address of your rqlite node — change it if your node listens somewhere else. A node (the rqlited program) must already be running at that address before this code can do anything: your program only ever talks to the node over HTTP, and the node — never your program — owns the database file\nrqliteClient := &http.Client{Timeout: 10 * time.Second}\nresp, err := rqliteClient.Get(rqliteAddr + \"/status\")\nif err == nil {\n\tdefer resp.Body.Close()\n\t// TODO: a 200 means the node answered — the JSON it sends back describes the node and its cluster. Any other answer, or none at all, means the node is not up yet\n\t_ = resp.StatusCode\n}"
+    },
+    {
+      "id": "rqlite-create-table",
+      "imports": [
+        "bytes",
+        "encoding/json",
+        "net/http"
+      ],
+      "kind": "statement",
+      "names": [
+        "rqlite create table",
+        "rqlite table",
+        "create table in rqlite",
+        "rqlite create"
+      ],
+      "note": "This runs against a rqlite node (rqlited) that must already be running at that address — it compiles and checks without one, but at runtime nothing answers until a node is up. The table is created inside the node's own database file; your program never touches that file directly.",
+      "template": "rqliteAddr := \"http://localhost:4001\"\npayload, err := json.Marshal([]string{\"CREATE TABLE TODO: your table (id INTEGER NOT NULL PRIMARY KEY, name TEXT)\"})\nvar resp *http.Response\nif err == nil {\n\tresp, err = http.Post(rqliteAddr+\"/db/execute\", \"application/json\", bytes.NewReader(payload))\n}\nif err == nil {\n\tdefer resp.Body.Close()\n\t// TODO: an HTTP 200 does not by itself prove the table was made — the JSON answer can carry an \"error\" entry for the statement even on a 200, so read it before trusting the table exists\n\t_ = resp.StatusCode\n}"
+    },
+    {
+      "id": "rqlite-insert",
+      "imports": [
+        "bytes",
+        "encoding/json",
+        "net/http"
+      ],
+      "kind": "statement",
+      "names": [
+        "rqlite insert",
+        "insert into rqlite",
+        "rqlite insert row",
+        "insert row into rqlite"
+      ],
+      "note": "This runs against a rqlite node (rqlited) that must already be running at that address — it compiles and checks without one, but at runtime nothing answers until a node is up.",
+      "template": "rqliteAddr := \"http://localhost:4001\"\n// TODO: one ? in the statement for each value listed after it — rqlite receives the values apart from the SQL, so a value stays data and can never change what the statement does\npayload, err := json.Marshal([]any{[]any{\"INSERT INTO TODO: your table(name) VALUES(?)\", \"TODO: a value\"}})\nvar resp *http.Response\nif err == nil {\n\tresp, err = http.Post(rqliteAddr+\"/db/execute\", \"application/json\", bytes.NewReader(payload))\n}\nif err == nil {\n\tdefer resp.Body.Close()\n\t// TODO: the JSON answer carries last_insert_id and rows_affected for the insert — or an \"error\" entry if the statement failed, which can arrive even on an HTTP 200\n\t_ = resp.StatusCode\n}"
+    },
+    {
+      "id": "rqlite-query",
+      "imports": [
+        "bytes",
+        "encoding/json",
+        "net/http"
+      ],
+      "kind": "statement",
+      "names": [
+        "rqlite query",
+        "query rqlite",
+        "rqlite select",
+        "select from rqlite"
+      ],
+      "note": "This runs against a rqlite node (rqlited) that must already be running at that address — it compiles and checks without one, but at runtime nothing answers until a node is up.",
+      "template": "rqliteAddr := \"http://localhost:4001\"\npayload, err := json.Marshal([]string{\"SELECT TODO: your query — for example SELECT * FROM your table\"})\nvar resp *http.Response\nif err == nil {\n\tresp, err = http.Post(rqliteAddr+\"/db/query\", \"application/json\", bytes.NewReader(payload))\n}\nif err == nil {\n\tdefer resp.Body.Close()\n\tvar answer struct {\n\t\tResults []struct {\n\t\t\tColumns []string\n\t\t\tValues  [][]any\n\t\t\tError   string\n\t\t}\n\t}\n\tif err := json.NewDecoder(resp.Body).Decode(&answer); err == nil {\n\t\t// TODO: answer.Results[0] is the result — Columns names its columns, Values carries one list per row (numbers arrive as float64). Check Results[0].Error first: rqlite can answer 200 and still report the query failed there. For a read that must never be stale, add ?level=strong to the /db/query address above\n\t\t_ = answer\n\t}\n}"
     }
   ],
   "source": "Gollemer's concept book — names of code mapped to their basic code. Rows are data, not grammar: add a row (id, names, kind, template) and the composer can assemble that concept in every phrasing its slots allow, with no new Go code. A malformed row is skipped; the rest of the book still loads."

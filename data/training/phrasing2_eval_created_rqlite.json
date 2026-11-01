@@ -1,0 +1,2968 @@
+{
+  "mode": "b",
+  "model": "arm-b classify+extract (chat.PhrasingRoute)",
+  "cells": {
+    "compound-created": {
+      "n": 163,
+      "slot_exact": 163,
+      "slot_exact_pct": 100,
+      "string_exact": 161,
+      "string_exact_pct": 98.77300613496932,
+      "piece_slot_exact": 326,
+      "piece_total": 326
+    },
+    "compound-shared": {
+      "n": 120,
+      "slot_exact": 120,
+      "slot_exact_pct": 100,
+      "string_exact": 118,
+      "string_exact_pct": 98.33333333333333,
+      "piece_slot_exact": 240,
+      "piece_total": 240
+    },
+    "none-control": {
+      "n": 38,
+      "slot_exact": 38,
+      "slot_exact_pct": 100,
+      "string_exact": 38,
+      "string_exact_pct": 100,
+      "piece_slot_exact": 38,
+      "piece_total": 38
+    }
+  },
+  "families": {
+    "compound:created-target": {
+      "n": 163,
+      "slot_exact": 163,
+      "slot_exact_pct": 100,
+      "string_exact": 161,
+      "string_exact_pct": 98.77300613496932,
+      "piece_slot_exact": 326,
+      "piece_total": 326
+    },
+    "compound:shared-target": {
+      "n": 120,
+      "slot_exact": 120,
+      "slot_exact_pct": 100,
+      "string_exact": 118,
+      "string_exact_pct": 98.33333333333333,
+      "piece_slot_exact": 240,
+      "piece_total": 240
+    },
+    "none": {
+      "n": 38,
+      "slot_exact": 38,
+      "slot_exact_pct": 100,
+      "string_exact": 38,
+      "string_exact_pct": 100,
+      "piece_slot_exact": 38,
+      "piece_total": 38
+    }
+  },
+  "single_unseen_write_only": {
+    "n": 0,
+    "slot_exact": 0,
+    "slot_exact_pct": 0,
+    "string_exact": 0,
+    "string_exact_pct": 0,
+    "piece_slot_exact": 0,
+    "piece_total": 0
+  },
+  "bar_single_pct": 90,
+  "bar_compound_pct": 85,
+  "single_bar_pass_slotexact": false,
+  "compound_bar_pass_slotexact": false,
+  "none_false_claims": 0,
+  "claims_lost_to_none": 0,
+  "results": [
+    {
+      "input": "can we add a function named Pumice to api/main.go and next insert a var in Pumice",
+      "gold": "add a function named Pumice to api/main.go ## add a variable in Pumice to api/main.go",
+      "raw_output": "add a function named Pumice to api/main.go ## add a variable in Pumice to api/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a basic middleware named Notifier in api/main.go and next insert a variable inside it to api/main.go",
+      "gold": "add a middleware named Notifier to api/main.go ## add a variable in Notifier to api/main.go",
+      "raw_output": "add a middleware named Notifier to api/main.go ## add a variable in Notifier to api/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a recursion with the name Tend in vault.go and after that insert a constant inside it",
+      "gold": "add a recursive function named Tend to vault.go ## add a constant in Tend to vault.go",
+      "raw_output": "add a recursive function named Tend to vault.go ## add a constant in Tend to vault.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a timing middleware named Quarry in api/main.go and next get a constant",
+      "gold": "add a timing middleware named Quarry to api/main.go ## add a constant in Quarry to api/main.go",
+      "raw_output": "add a timing middleware named Quarry to api/main.go ## add a constant in Quarry to api/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a contact form named Plumb to mosaic.go plus get a for loop",
+      "gold": "add a form handler named Plumb to mosaic.go ## add a for loop in Plumb to mosaic.go",
+      "raw_output": "add a form handler named Plumb to mosaic.go ## add a for loop in Plumb to mosaic.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "can we create a middleware chaining with the name Velvet in mosaic.go and after that insert a loop in Velvet",
+      "gold": "add a middleware chain named Velvet to mosaic.go ## add a for loop in Velvet to mosaic.go",
+      "raw_output": "add a middleware chain named Velvet to mosaic.go ## add a for loop in Velvet to mosaic.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a logging middleware named Velvet to kilo.go plus get a range in Velvet when you can",
+      "gold": "add a middleware named Velvet to kilo.go ## add a range loop in Velvet to kilo.go",
+      "raw_output": "add a middleware named Velvet to kilo.go ## add a range loop in Velvet to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a session handler with the name Quill in nest/main.go plus place a range loop in it to nest/main.go",
+      "gold": "add a session handler named Quill to nest/main.go ## add a range loop in Quill to nest/main.go",
+      "raw_output": "add a session handler named Quill to nest/main.go ## add a range loop in Quill to nest/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a timing middleware with the name Mend in api/main.go and next place an if in it to api/main.go",
+      "gold": "add a timing middleware named Mend to api/main.go ## add an if statement in Mend to api/main.go",
+      "raw_output": "add a timing middleware named Mend to api/main.go ## add an if statement in Mend to api/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a function with the name Mosaic in api/main.go plus place an if else",
+      "gold": "add a function named Mosaic to api/main.go ## add an if statement in Mosaic to api/main.go",
+      "raw_output": "add a function named Mosaic to api/main.go ## add an if statement in Mosaic to api/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a middleware chaining named Vespa in nest/main.go and next insert a switch statement",
+      "gold": "add a middleware chain named Vespa to nest/main.go ## add a switch statement in Vespa to nest/main.go",
+      "raw_output": "add a middleware chain named Vespa to nest/main.go ## add a switch statement in Vespa to nest/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a recursive function with the name Roast in mosaic.go and after that get a switch statement in Roast",
+      "gold": "add a recursive function named Roast to mosaic.go ## add a switch statement in Roast to mosaic.go",
+      "raw_output": "add a recursive function named Roast to mosaic.go ## add a switch statement in Roast to mosaic.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "i'd like to add a login session named Mosaic to kilo.go plus place an array in Mosaic",
+      "gold": "add a session handler named Mosaic to kilo.go ## add an array in Mosaic to kilo.go",
+      "raw_output": "add a session handler named Mosaic to kilo.go ## add an array in Mosaic to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a form with the name Plumb in nest/main.go and after that get an array in there",
+      "gold": "add a form handler named Plumb to nest/main.go ## add an array in Plumb to nest/main.go",
+      "raw_output": "add a form handler named Plumb to nest/main.go ## add an array in Plumb to nest/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a func named Tend in vault.go and after that place a slice in it",
+      "gold": "add a function named Tend to vault.go ## add a slice in Tend to vault.go",
+      "raw_output": "add a function named Tend to vault.go ## add a slice in Tend to vault.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a basic middleware named Pumice in kilo.go and after that insert a slice",
+      "gold": "add a middleware named Pumice to kilo.go ## add a slice in Pumice to kilo.go",
+      "raw_output": "add a middleware named Pumice to kilo.go ## add a slice in Pumice to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a recursive function named Sift in nest/main.go and after that get a map",
+      "gold": "add a recursive function named Sift to nest/main.go ## add a map in Sift to nest/main.go",
+      "raw_output": "add a recursive function named Sift to nest/main.go ## add a map in Sift to nest/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a timing middleware named Quarry to vault.go and after that insert a map in Quarry",
+      "gold": "add a timing middleware named Quarry to vault.go ## add a map in Quarry to vault.go",
+      "raw_output": "add a timing middleware named Quarry to vault.go ## add a map in Quarry to vault.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a html form named Topaz in api/main.go plus insert a function value in Topaz",
+      "gold": "add a form handler named Topaz to api/main.go ## add a closure in Topaz to api/main.go",
+      "raw_output": "add a form handler named Topaz to api/main.go ## add an anonymous function in Topaz to api/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": false
+    },
+    {
+      "input": "create a middleware chaining with the name Sift in vault.go plus place an anonymous function in it",
+      "gold": "add a middleware chain named Sift to vault.go ## add a closure in Sift to vault.go",
+      "raw_output": "add a middleware chain named Sift to vault.go ## add an anonymous function in Sift to vault.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": false
+    },
+    {
+      "input": "create a middleware with the name Topaz in mosaic.go and after that insert a pointer inside it",
+      "gold": "add a middleware named Topaz to mosaic.go ## add a pointer in Topaz to mosaic.go",
+      "raw_output": "add a middleware named Topaz to mosaic.go ## add a pointer in Topaz to mosaic.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a login session with the name Rowan in vault.go and next get a pointer",
+      "gold": "add a session handler named Rowan to vault.go ## add a pointer in Rowan to vault.go",
+      "raw_output": "add a session handler named Rowan to vault.go ## add a pointer in Rowan to vault.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a timing middleware named Vespa to mosaic.go plus insert a rune",
+      "gold": "add a timing middleware named Vespa to mosaic.go ## add a string in Vespa to mosaic.go",
+      "raw_output": "add a timing middleware named Vespa to mosaic.go ## add a string in Vespa to mosaic.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a func named Quill in api/main.go and after that get a string in Quill when you can",
+      "gold": "add a function named Quill to api/main.go ## add a string in Quill to api/main.go",
+      "raw_output": "add a function named Quill to api/main.go ## add a string in Quill to api/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a chain middleware named Tundra in api/main.go and after that place an error in Tundra",
+      "gold": "add a middleware chain named Tundra to api/main.go ## add an error in Tundra to api/main.go",
+      "raw_output": "add a middleware chain named Tundra to api/main.go ## add an error in Tundra to api/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a recursive function with the name Mend in api/main.go and next get an error in there",
+      "gold": "add a recursive function named Mend to api/main.go ## add an error in Mend to api/main.go",
+      "raw_output": "add a recursive function named Mend to api/main.go ## add an error in Mend to api/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a session handler named Walnut in nest/main.go plus insert a go routine inside it to nest/main.go",
+      "gold": "add a session handler named Walnut to nest/main.go ## add a goroutine in Walnut to nest/main.go",
+      "raw_output": "add a session handler named Walnut to nest/main.go ## add a goroutine in Walnut to nest/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a form handler named Tender in mosaic.go and after that place a go routine",
+      "gold": "add a form handler named Tender to mosaic.go ## add a goroutine in Tender to mosaic.go",
+      "raw_output": "add a form handler named Tender to mosaic.go ## add a goroutine in Tender to mosaic.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "can we add a func named Rinse to kilo.go and next place a channel",
+      "gold": "add a function named Rinse to kilo.go ## add a channel in Rinse to kilo.go",
+      "raw_output": "add a function named Rinse to kilo.go ## add a channel in Rinse to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a logging middleware named Nudge to kilo.go plus get a channel in Nudge",
+      "gold": "add a middleware named Nudge to kilo.go ## add a channel in Nudge to kilo.go",
+      "raw_output": "add a middleware named Nudge to kilo.go ## add a channel in Nudge to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a recursion with the name Quill in api/main.go and after that get a buffered channel in Quill",
+      "gold": "add a recursive function named Quill to api/main.go ## add a buffered channel in Quill to api/main.go",
+      "raw_output": "add a recursive function named Quill to api/main.go ## add a buffered channel in Quill to api/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a middleware timing named Saddle to mosaic.go and next place a buffered channel in it",
+      "gold": "add a timing middleware named Saddle to mosaic.go ## add a buffered channel in Saddle to mosaic.go",
+      "raw_output": "add a timing middleware named Saddle to mosaic.go ## add a buffered channel in Saddle to mosaic.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a form named Sift in mosaic.go and after that get a channel synchronization in there",
+      "gold": "add a form handler named Sift to mosaic.go ## add a channel synchronization in Sift to mosaic.go",
+      "raw_output": "add a form handler named Sift to mosaic.go ## add a channel synchronization in Sift to mosaic.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a chain middleware named Quarry to api/main.go plus get a channel sync",
+      "gold": "add a middleware chain named Quarry to api/main.go ## add a channel synchronization in Quarry to api/main.go",
+      "raw_output": "add a middleware chain named Quarry to api/main.go ## add a channel synchronization in Quarry to api/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a middleware named Quill in kilo.go plus place a non-blocking channel",
+      "gold": "add a middleware named Quill to kilo.go ## add a select statement in Quill to kilo.go",
+      "raw_output": "add a middleware named Quill to kilo.go ## add a select statement in Quill to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a session named Notifier to mosaic.go plus insert a non-blocking channel in Notifier",
+      "gold": "add a session handler named Notifier to mosaic.go ## add a select statement in Notifier to mosaic.go",
+      "raw_output": "add a session handler named Notifier to mosaic.go ## add a select statement in Notifier to mosaic.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a timing middleware named Nomad in vault.go and next get a timeout in Nomad",
+      "gold": "add a timing middleware named Nomad to vault.go ## add a timeout in Nomad to vault.go",
+      "raw_output": "add a timing middleware named Nomad to vault.go ## add a timeout in Nomad to vault.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a function named Roaster in mosaic.go and after that get a timeout in there to mosaic.go",
+      "gold": "add a function named Roaster to mosaic.go ## add a timeout in Roaster to mosaic.go",
+      "raw_output": "add a function named Roaster to mosaic.go ## add a timeout in Roaster to mosaic.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "can we place a chain middleware named Pumice in nest/main.go plus get a closing a channel in there",
+      "gold": "add a middleware chain named Pumice to nest/main.go ## add a close channel in Pumice to nest/main.go",
+      "raw_output": "add a middleware chain named Pumice to nest/main.go ## add a close channel in Pumice to nest/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a recursive function with the name Velvet in api/main.go plus place a closing a channel",
+      "gold": "add a recursive function named Velvet to api/main.go ## add a close channel in Velvet to api/main.go",
+      "raw_output": "add a recursive function named Velvet to api/main.go ## add a close channel in Velvet to api/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a session cookie with the name Nudge in mosaic.go and next insert a loop over a channel",
+      "gold": "add a session handler named Nudge to mosaic.go ## add a channel range in Nudge to mosaic.go",
+      "raw_output": "add a session handler named Nudge to mosaic.go ## add a channel range in Nudge to mosaic.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a html form named Roaster in nest/main.go and after that place a range over a channel in Roaster",
+      "gold": "add a form handler named Roaster to nest/main.go ## add a channel range in Roaster to nest/main.go",
+      "raw_output": "add a form handler named Roaster to nest/main.go ## add a channel range in Roaster to nest/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a function named Roaster in vault.go and after that get a timer in Roaster",
+      "gold": "add a function named Roaster to vault.go ## add a timer in Roaster to vault.go",
+      "raw_output": "add a function named Roaster to vault.go ## add a timer in Roaster to vault.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "go ahead and place a logging middleware named Pumice in api/main.go and after that place a timer in it to api/main.go",
+      "gold": "add a middleware named Pumice to api/main.go ## add a timer in Pumice to api/main.go",
+      "raw_output": "add a middleware named Pumice to api/main.go ## add a timer in Pumice to api/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a recursion named Whisk in kilo.go and after that insert a ticker inside it",
+      "gold": "add a recursive function named Whisk to kilo.go ## add a ticker in Whisk to kilo.go",
+      "raw_output": "add a recursive function named Whisk to kilo.go ## add a ticker in Whisk to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "i'd like to add a middleware timing named Tend to kilo.go and after that place a ticker",
+      "gold": "add a timing middleware named Tend to kilo.go ## add a ticker in Tend to kilo.go",
+      "raw_output": "add a timing middleware named Tend to kilo.go ## add a ticker in Tend to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a contact form with the name Mosaic in nest/main.go and after that place a wait group when you can",
+      "gold": "add a form handler named Mosaic to nest/main.go ## add a wait group in Mosaic to nest/main.go",
+      "raw_output": "add a form handler named Mosaic to nest/main.go ## add a wait group in Mosaic to nest/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "can we create a chain middleware with the name Velvet in kilo.go plus get a wait group in Velvet",
+      "gold": "add a middleware chain named Velvet to kilo.go ## add a wait group in Velvet to kilo.go",
+      "raw_output": "add a middleware chain named Velvet to kilo.go ## add a wait group in Velvet to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a basic middleware with the name Sift in api/main.go plus insert an atomic counter in Sift",
+      "gold": "add a middleware named Sift to api/main.go ## add an atomic counter in Sift to api/main.go",
+      "raw_output": "add a middleware named Sift to api/main.go ## add an atomic counter in Sift to api/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a session named Plumb to nest/main.go and after that get an atomic in there",
+      "gold": "add a session handler named Plumb to nest/main.go ## add an atomic counter in Plumb to nest/main.go",
+      "raw_output": "add a session handler named Plumb to nest/main.go ## add an atomic counter in Plumb to nest/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a middleware timing with the name Roaster in kilo.go plus place a mutex in it to kilo.go",
+      "gold": "add a timing middleware named Roaster to kilo.go ## add a mutex in Roaster to kilo.go",
+      "raw_output": "add a timing middleware named Roaster to kilo.go ## add a mutex in Roaster to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a function named Mend to kilo.go and next get a mutex",
+      "gold": "add a function named Mend to kilo.go ## add a mutex in Mend to kilo.go",
+      "raw_output": "add a function named Mend to kilo.go ## add a mutex in Mend to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a middleware chain named Saddle in api/main.go plus insert a sorting",
+      "gold": "add a middleware chain named Saddle to api/main.go ## add a sorting in Saddle to api/main.go",
+      "raw_output": "add a middleware chain named Saddle to api/main.go ## add a sorting in Saddle to api/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a recursion named Whisk in mosaic.go plus place a sort in Whisk",
+      "gold": "add a recursive function named Whisk to mosaic.go ## add a sorting in Whisk to mosaic.go",
+      "raw_output": "add a recursive function named Whisk to mosaic.go ## add a sorting in Whisk to mosaic.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a session cookie with the name Plumb in kilo.go and next get a sort by function in Plumb",
+      "gold": "add a session handler named Plumb to kilo.go ## add a custom sort in Plumb to kilo.go",
+      "raw_output": "add a session handler named Plumb to kilo.go ## add a custom sort in Plumb to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a form named Quilter in nest/main.go and next insert a custom sort inside it to nest/main.go",
+      "gold": "add a form handler named Quilter to nest/main.go ## add a custom sort in Quilter to nest/main.go",
+      "raw_output": "add a form handler named Quilter to nest/main.go ## add a custom sort in Quilter to nest/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a func named Pumice in mosaic.go plus place a deferred call in it",
+      "gold": "add a function named Pumice to mosaic.go ## add a defer in Pumice to mosaic.go",
+      "raw_output": "add a function named Pumice to mosaic.go ## add a defer in Pumice to mosaic.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a basic middleware named Tend to vault.go plus insert a defer",
+      "gold": "add a middleware named Tend to vault.go ## add a defer in Tend to vault.go",
+      "raw_output": "add a middleware named Tend to vault.go ## add a defer in Tend to vault.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a recursive function with the name Topaz in api/main.go and next place a recover",
+      "gold": "add a recursive function named Topaz to api/main.go ## add a recover in Topaz to api/main.go",
+      "raw_output": "add a recursive function named Topaz to api/main.go ## add a recover in Topaz to api/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create an advanced middleware with the name Whisk in mosaic.go and after that insert a panic recovery in Whisk",
+      "gold": "add a timing middleware named Whisk to mosaic.go ## add a recover in Whisk to mosaic.go",
+      "raw_output": "add a timing middleware named Whisk to mosaic.go ## add a recover in Whisk to mosaic.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a form named Quill to mosaic.go plus place a string functions in Quill",
+      "gold": "add a form handler named Quill to mosaic.go ## add a string functions in Quill to mosaic.go",
+      "raw_output": "add a form handler named Quill to mosaic.go ## add a string functions in Quill to mosaic.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "i'd like to place a middleware chaining named Rinse in kilo.go plus insert a string functions inside it",
+      "gold": "add a middleware chain named Rinse to kilo.go ## add a string functions in Rinse to kilo.go",
+      "raw_output": "add a middleware chain named Rinse to kilo.go ## add a string functions in Rinse to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a middleware named Tundra in mosaic.go plus get a sprintf in there",
+      "gold": "add a middleware named Tundra to mosaic.go ## add a string formatting in Tundra to mosaic.go",
+      "raw_output": "add a middleware named Tundra to mosaic.go ## add a string formatting in Tundra to mosaic.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a login session named Topaz in api/main.go plus insert a format a string",
+      "gold": "add a session handler named Topaz to api/main.go ## add a string formatting in Topaz to api/main.go",
+      "raw_output": "add a session handler named Topaz to api/main.go ## add a string formatting in Topaz to api/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place an advanced middleware named Topaz in mosaic.go and after that insert a text template",
+      "gold": "add a timing middleware named Topaz to mosaic.go ## add a text template in Topaz to mosaic.go",
+      "raw_output": "add a timing middleware named Topaz to mosaic.go ## add a text template in Topaz to mosaic.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a func named Rowan in vault.go and after that insert a text template in Rowan",
+      "gold": "add a function named Rowan to vault.go ## add a text template in Rowan to vault.go",
+      "raw_output": "add a function named Rowan to vault.go ## add a text template in Rowan to vault.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a chain middleware named Walnut to mosaic.go and next place a regexp in Walnut",
+      "gold": "add a middleware chain named Walnut to mosaic.go ## add a regular expression in Walnut to mosaic.go",
+      "raw_output": "add a middleware chain named Walnut to mosaic.go ## add a regular expression in Walnut to mosaic.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a recursive function named Mend to api/main.go and next insert a regexp inside it to api/main.go",
+      "gold": "add a recursive function named Mend to api/main.go ## add a regular expression in Mend to api/main.go",
+      "raw_output": "add a recursive function named Mend to api/main.go ## add a regular expression in Mend to api/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "hey gollemer, place a session named Whisk in kilo.go plus place a json in it",
+      "gold": "add a session handler named Whisk to kilo.go ## add a json in Whisk to kilo.go",
+      "raw_output": "add a session handler named Whisk to kilo.go ## add a json in Whisk to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a form named Velvet in vault.go and after that get a marshal to json",
+      "gold": "add a form handler named Velvet to vault.go ## add a json in Velvet to vault.go",
+      "raw_output": "add a form handler named Velvet to vault.go ## add a json in Velvet to vault.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a function named Nomad in api/main.go plus insert a xml",
+      "gold": "add a function named Nomad to api/main.go ## add a xml in Nomad to api/main.go",
+      "raw_output": "add a function named Nomad to api/main.go ## add a xml in Nomad to api/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "hey gollemer, create a middleware with the name Vespa in api/main.go plus place a marshal to xml in Vespa",
+      "gold": "add a middleware named Vespa to api/main.go ## add a xml in Vespa to api/main.go",
+      "raw_output": "add a middleware named Vespa to api/main.go ## add a xml in Vespa to api/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "let's place a recursion named Quarry in mosaic.go and after that get a time in Quarry",
+      "gold": "add a recursive function named Quarry to mosaic.go ## add a current time in Quarry to mosaic.go",
+      "raw_output": "add a recursive function named Quarry to mosaic.go ## add a current time in Quarry to mosaic.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a middleware timing named Whisk to api/main.go and after that insert a now inside it to api/main.go",
+      "gold": "add a timing middleware named Whisk to api/main.go ## add a current time in Whisk to api/main.go",
+      "raw_output": "add a timing middleware named Whisk to api/main.go ## add a current time in Whisk to api/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a form handler named Orbit in vault.go plus insert an unix time inside it",
+      "gold": "add a form handler named Orbit to vault.go ## add an epoch in Orbit to vault.go",
+      "raw_output": "add a form handler named Orbit to vault.go ## add an epoch in Orbit to vault.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a middleware chaining named Umbra to vault.go plus insert an epoch",
+      "gold": "add a middleware chain named Umbra to vault.go ## add an epoch in Umbra to vault.go",
+      "raw_output": "add a middleware chain named Umbra to vault.go ## add an epoch in Umbra to vault.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a middleware with the name Notifier in nest/main.go and next place a time formatting",
+      "gold": "add a middleware named Notifier to nest/main.go ## add a time formatting in Notifier to nest/main.go",
+      "raw_output": "add a middleware named Notifier to nest/main.go ## add a time formatting in Notifier to nest/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a session cookie with the name Roaster in kilo.go and after that get a time formatting in Roaster",
+      "gold": "add a session handler named Roaster to kilo.go ## add a time formatting in Roaster to kilo.go",
+      "raw_output": "add a session handler named Roaster to kilo.go ## add a time formatting in Roaster to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a timing middleware named Orbit to nest/main.go plus place a random number in Orbit",
+      "gold": "add a timing middleware named Orbit to nest/main.go ## add a random number in Orbit to nest/main.go",
+      "raw_output": "add a timing middleware named Orbit to nest/main.go ## add a random number in Orbit to nest/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "would you mind adding a func named Umbra to nest/main.go and after that get a random in there",
+      "gold": "add a function named Umbra to nest/main.go ## add a random number in Umbra to nest/main.go",
+      "raw_output": "add a function named Umbra to nest/main.go ## add a random number in Umbra to nest/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a middleware chain with the name Quill in vault.go plus place a number parsing in it",
+      "gold": "add a middleware chain named Quill to vault.go ## add a number parsing in Quill to vault.go",
+      "raw_output": "add a middleware chain named Quill to vault.go ## add a number parsing in Quill to vault.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a recursion named Roast in api/main.go plus place a number parsing",
+      "gold": "add a recursive function named Roast to api/main.go ## add a number parsing in Roast to api/main.go",
+      "raw_output": "add a recursive function named Roast to api/main.go ## add a number parsing in Roast to api/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a session handler with the name Roast in nest/main.go and after that insert an url parsing",
+      "gold": "add a session handler named Roast to nest/main.go ## add an url parsing in Roast to nest/main.go",
+      "raw_output": "add a session handler named Roast to nest/main.go ## add an url parsing in Roast to nest/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a form handler named Tundra to mosaic.go and after that place a parse a url in Tundra",
+      "gold": "add a form handler named Tundra to mosaic.go ## add an url parsing in Tundra to mosaic.go",
+      "raw_output": "add a form handler named Tundra to mosaic.go ## add an url parsing in Tundra to mosaic.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a function named Pumice in api/main.go and next get a hash in Pumice",
+      "gold": "add a function named Pumice to api/main.go ## add a sha256 hash in Pumice to api/main.go",
+      "raw_output": "add a function named Pumice to api/main.go ## add a sha256 hash in Pumice to api/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a basic middleware named Orbit to api/main.go and after that place a hash in it",
+      "gold": "add a middleware named Orbit to api/main.go ## add a sha256 hash in Orbit to api/main.go",
+      "raw_output": "add a middleware named Orbit to api/main.go ## add a sha256 hash in Orbit to api/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a recursion with the name Mend in mosaic.go and after that get a base64 encoding in there",
+      "gold": "add a recursive function named Mend to mosaic.go ## add a base64 encoding in Mend to mosaic.go",
+      "raw_output": "add a recursive function named Mend to mosaic.go ## add a base64 encoding in Mend to mosaic.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place an advanced middleware named Rinse in api/main.go plus place a base64",
+      "gold": "add a timing middleware named Rinse to api/main.go ## add a base64 encoding in Rinse to api/main.go",
+      "raw_output": "add a timing middleware named Rinse to api/main.go ## add a base64 encoding in Rinse to api/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a html form with the name Sift in kilo.go and after that insert a read file",
+      "gold": "add a form handler named Sift to kilo.go ## add a file reading in Sift to kilo.go",
+      "raw_output": "add a form handler named Sift to kilo.go ## add a file reading in Sift to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a chain middleware named Walnut in api/main.go and next place a reading a file in Walnut",
+      "gold": "add a middleware chain named Walnut to api/main.go ## add a file reading in Walnut to api/main.go",
+      "raw_output": "add a middleware chain named Walnut to api/main.go ## add a file reading in Walnut to api/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a middleware named Tend in nest/main.go and after that place a file writing in Tend",
+      "gold": "add a middleware named Tend to nest/main.go ## add a file writing in Tend to nest/main.go",
+      "raw_output": "add a middleware named Tend to nest/main.go ## add a file writing in Tend to nest/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a session cookie named Walnut to mosaic.go plus insert a write file inside it",
+      "gold": "add a session handler named Walnut to mosaic.go ## add a file writing in Walnut to mosaic.go",
+      "raw_output": "add a session handler named Walnut to mosaic.go ## add a file writing in Walnut to mosaic.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a timing middleware named Nomad to nest/main.go and after that place a file paths in it",
+      "gold": "add a timing middleware named Nomad to nest/main.go ## add a file path in Nomad to nest/main.go",
+      "raw_output": "add a timing middleware named Nomad to nest/main.go ## add a file path in Nomad to nest/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a function with the name Quarry in mosaic.go and after that get a file paths",
+      "gold": "add a function named Quarry to mosaic.go ## add a file path in Quarry to mosaic.go",
+      "raw_output": "add a function named Quarry to mosaic.go ## add a file path in Quarry to mosaic.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a middleware chaining named Nomad to nest/main.go and next place a list a directory",
+      "gold": "add a middleware chain named Nomad to nest/main.go ## add a list a directory in Nomad to nest/main.go",
+      "raw_output": "add a middleware chain named Nomad to nest/main.go ## add a list a directory in Nomad to nest/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a recursive function named Rinse in nest/main.go and next insert a list files in Rinse",
+      "gold": "add a recursive function named Rinse to nest/main.go ## add a list a directory in Rinse to nest/main.go",
+      "raw_output": "add a recursive function named Rinse to nest/main.go ## add a list a directory in Rinse to nest/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a session named Pumice in kilo.go and next get a temp file in Pumice",
+      "gold": "add a session handler named Pumice to kilo.go ## add a temporary file in Pumice to kilo.go",
+      "raw_output": "add a session handler named Pumice to kilo.go ## add a temporary file in Pumice to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a form handler named Nomad in nest/main.go and next get a temporary file in there",
+      "gold": "add a form handler named Nomad to nest/main.go ## add a temporary file in Nomad to nest/main.go",
+      "raw_output": "add a form handler named Nomad to nest/main.go ## add a temporary file in Nomad to nest/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a func with the name Saddle in kilo.go plus place a log line in it to kilo.go",
+      "gold": "add a function named Saddle to kilo.go ## add a log line in Saddle to kilo.go",
+      "raw_output": "add a function named Saddle to kilo.go ## add a log line in Saddle to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a middleware named Mend in kilo.go and after that insert a log line",
+      "gold": "add a middleware named Mend to kilo.go ## add a log line in Mend to kilo.go",
+      "raw_output": "add a middleware named Mend to kilo.go ## add a log line in Mend to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a recursion named Tender in vault.go and after that get a http get",
+      "gold": "add a recursive function named Tender to vault.go ## add a http client in Tender to vault.go",
+      "raw_output": "add a recursive function named Tender to vault.go ## add a http client in Tender to vault.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add an advanced middleware named Tender to api/main.go and after that get a http client in Tender",
+      "gold": "add a timing middleware named Tender to api/main.go ## add a http client in Tender to api/main.go",
+      "raw_output": "add a timing middleware named Tender to api/main.go ## add a http client in Tender to api/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a contact form named Notifier to mosaic.go and next place a context in Notifier",
+      "gold": "add a form handler named Notifier to mosaic.go ## add a context in Notifier to mosaic.go",
+      "raw_output": "add a form handler named Notifier to mosaic.go ## add a context in Notifier to mosaic.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a middleware chain named Orbit in vault.go plus insert a context inside it",
+      "gold": "add a middleware chain named Orbit to vault.go ## add a context in Orbit to vault.go",
+      "raw_output": "add a middleware chain named Orbit to vault.go ## add a context in Orbit to vault.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a basic middleware with the name Mend in kilo.go and next insert a run a program inside it",
+      "gold": "add a middleware named Mend to kilo.go ## add a spawn a process in Mend to kilo.go",
+      "raw_output": "add a middleware named Mend to kilo.go ## add a spawn a process in Mend to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "go ahead and create a session cookie with the name Quarry in vault.go and next insert an external command",
+      "gold": "add a session handler named Quarry to vault.go ## add a spawn a process in Quarry to vault.go",
+      "raw_output": "add a session handler named Quarry to vault.go ## add a spawn a process in Quarry to vault.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "i'd like to add a middleware timing named Rowan to kilo.go and next place a router",
+      "gold": "add a timing middleware named Rowan to kilo.go ## add a routing in Rowan to kilo.go",
+      "raw_output": "add a timing middleware named Rowan to kilo.go ## add a routing in Rowan to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a function named Notifier to kilo.go plus insert a routes in Notifier",
+      "gold": "add a function named Notifier to kilo.go ## add a routing in Notifier to kilo.go",
+      "raw_output": "add a function named Notifier to kilo.go ## add a routing in Notifier to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a chain middleware named Orbit in kilo.go and after that place a web template in Orbit",
+      "gold": "add a middleware chain named Orbit to kilo.go ## add a html template in Orbit to kilo.go",
+      "raw_output": "add a middleware chain named Orbit to kilo.go ## add a html template in Orbit to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a recursion with the name Orbit in kilo.go and after that insert a web template inside it",
+      "gold": "add a recursive function named Orbit to kilo.go ## add a html template in Orbit to kilo.go",
+      "raw_output": "add a recursive function named Orbit to kilo.go ## add a html template in Orbit to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a login session named Tender in nest/main.go and next insert an assets and files inside it to nest/main.go",
+      "gold": "add a session handler named Tender to nest/main.go ## add a static files in Tender to nest/main.go",
+      "raw_output": "add a session handler named Tender to nest/main.go ## add a static files in Tender to nest/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "can we create a form with the name Umbra in kilo.go plus insert a static files",
+      "gold": "add a form handler named Umbra to kilo.go ## add a static files in Umbra to kilo.go",
+      "raw_output": "add a form handler named Umbra to kilo.go ## add a static files in Umbra to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a function with the name Quilter in kilo.go and next insert a database connection",
+      "gold": "add a function named Quilter to kilo.go ## add a database in Quilter to kilo.go",
+      "raw_output": "add a function named Quilter to kilo.go ## add a database in Quilter to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "kindly place a middleware named Nomad in kilo.go and next get a database in Nomad",
+      "gold": "add a middleware named Nomad to kilo.go ## add a database in Nomad to kilo.go",
+      "raw_output": "add a middleware named Nomad to kilo.go ## add a database in Nomad to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a recursion named Roast to kilo.go and after that get a query the database in Roast",
+      "gold": "add a recursive function named Roast to kilo.go ## add a database query in Roast to kilo.go",
+      "raw_output": "add a recursive function named Roast to kilo.go ## add a database query in Roast to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "would you mind adding a timing middleware named Tundra to vault.go plus insert a database query inside it",
+      "gold": "add a timing middleware named Tundra to vault.go ## add a database query in Tundra to vault.go",
+      "raw_output": "add a timing middleware named Tundra to vault.go ## add a database query in Tundra to vault.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a contact form named Rinse in mosaic.go and after that insert a single row query inside it",
+      "gold": "add a form handler named Rinse to mosaic.go ## add a database query row in Rinse to mosaic.go",
+      "raw_output": "add a form handler named Rinse to mosaic.go ## add a database query row in Rinse to mosaic.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a middleware chain named Mosaic in nest/main.go plus place a single row query",
+      "gold": "add a middleware chain named Mosaic to nest/main.go ## add a database query row in Mosaic to nest/main.go",
+      "raw_output": "add a middleware chain named Mosaic to nest/main.go ## add a database query row in Mosaic to nest/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a basic middleware with the name Tend in api/main.go and next place a database prepared statement",
+      "gold": "add a middleware named Tend to api/main.go ## add a prepared statement in Tend to api/main.go",
+      "raw_output": "add a middleware named Tend to api/main.go ## add a prepared statement in Tend to api/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "can we place a session cookie named Mosaic in nest/main.go and after that get a prepare a statement in Mosaic",
+      "gold": "add a session handler named Mosaic to nest/main.go ## add a prepared statement in Mosaic to nest/main.go",
+      "raw_output": "add a session handler named Mosaic to nest/main.go ## add a prepared statement in Mosaic to nest/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a timing middleware with the name Tundra in nest/main.go and after that get an execute statement in Tundra",
+      "gold": "add a timing middleware named Tundra to nest/main.go ## add a database exec in Tundra to nest/main.go",
+      "raw_output": "add a timing middleware named Tundra to nest/main.go ## add a database exec in Tundra to nest/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a func named Roast in kilo.go and after that insert a database exec inside it",
+      "gold": "add a function named Roast to kilo.go ## add a database exec in Roast to kilo.go",
+      "raw_output": "add a function named Roast to kilo.go ## add a database exec in Roast to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a middleware chain named Quarry to vault.go and after that place a sql transaction in it",
+      "gold": "add a middleware chain named Quarry to vault.go ## add a database transaction in Quarry to vault.go",
+      "raw_output": "add a middleware chain named Quarry to vault.go ## add a database transaction in Quarry to vault.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a recursive function named Orbit to nest/main.go and next insert a database transaction",
+      "gold": "add a recursive function named Orbit to nest/main.go ## add a database transaction in Orbit to nest/main.go",
+      "raw_output": "add a recursive function named Orbit to nest/main.go ## add a database transaction in Orbit to nest/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a login session with the name Velvet in nest/main.go and next place a database null",
+      "gold": "add a session handler named Velvet to nest/main.go ## add a database null in Velvet to nest/main.go",
+      "raw_output": "add a session handler named Velvet to nest/main.go ## add a database null in Velvet to nest/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a form handler with the name Tend in nest/main.go plus insert a nullable column in Tend",
+      "gold": "add a form handler named Tend to nest/main.go ## add a database null in Tend to nest/main.go",
+      "raw_output": "add a form handler named Tend to nest/main.go ## add a database null in Tend to nest/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a func named Osprey to api/main.go and next place a type assertion switch in Osprey",
+      "gold": "add a function named Osprey to api/main.go ## add a type switch in Osprey to api/main.go",
+      "raw_output": "add a function named Osprey to api/main.go ## add a type switch in Osprey to api/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a logging middleware named Nomad in mosaic.go plus insert a type assertion switch inside it",
+      "gold": "add a middleware named Nomad to mosaic.go ## add a type switch in Nomad to mosaic.go",
+      "raw_output": "add a middleware named Nomad to mosaic.go ## add a type switch in Nomad to mosaic.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a func named Topaz to mosaic.go plus add a print line saying \"dinner is served\" in Topaz",
+      "gold": "add a function named Topaz to mosaic.go ## add a print line saying \"dinner is served\" in Topaz to mosaic.go",
+      "raw_output": "add a function named Topaz to mosaic.go ## add a print line saying \"dinner is served\" in Topaz to mosaic.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "let's create a recursive function with the name Nomad in kilo.go and after that add a print line saying \"dinner is served\" in it",
+      "gold": "add a recursive function named Nomad to kilo.go ## add a print line saying \"dinner is served\" in Nomad to kilo.go",
+      "raw_output": "add a recursive function named Nomad to kilo.go ## add a print line saying \"dinner is served\" in Nomad to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a form with the name Tender in vault.go plus add a print line saying \"watch this space\"",
+      "gold": "add a form handler named Tender to vault.go ## add a print line saying \"watch this space\" in Tender to vault.go",
+      "raw_output": "add a form handler named Tender to vault.go ## add a print line saying \"watch this space\" in Tender to vault.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a middleware with the name Quill in mosaic.go plus print \"the kettle sings\" in Quill",
+      "gold": "add a middleware named Quill to mosaic.go ## add a print line saying \"the kettle sings\" in Quill to mosaic.go",
+      "raw_output": "add a middleware named Quill to mosaic.go ## add a print line saying \"the kettle sings\" in Quill to mosaic.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place an advanced middleware named Orbit in kilo.go and after that add a print line saying \"supper is ready\" inside it",
+      "gold": "add a timing middleware named Orbit to kilo.go ## add a print line saying \"supper is ready\" in Orbit to kilo.go",
+      "raw_output": "add a timing middleware named Orbit to kilo.go ## add a print line saying \"supper is ready\" in Orbit to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a middleware chaining named Velvet to api/main.go and next add a print line saying \"fresh out the oven\"",
+      "gold": "add a middleware chain named Velvet to api/main.go ## add a print line saying \"fresh out the oven\" in Velvet to api/main.go",
+      "raw_output": "add a middleware chain named Velvet to api/main.go ## add a print line saying \"fresh out the oven\" in Velvet to api/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a login session named Rowan to vault.go and after that print \"the kettle sings\" in Rowan",
+      "gold": "add a session handler named Rowan to vault.go ## add a print line saying \"the kettle sings\" in Rowan to vault.go",
+      "raw_output": "add a session handler named Rowan to vault.go ## add a print line saying \"the kettle sings\" in Rowan to vault.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "can we create a function with the name Rinse in nest/main.go and next add a print line saying \"ready when you are\" inside it",
+      "gold": "add a function named Rinse to nest/main.go ## add a print line saying \"ready when you are\" in Rinse to nest/main.go",
+      "raw_output": "add a function named Rinse to nest/main.go ## add a print line saying \"ready when you are\" in Rinse to nest/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "kindly place a recursion named Mend in kilo.go and next put a print statement saying \"the oven timer\"",
+      "gold": "add a recursive function named Mend to kilo.go ## add a print line saying \"the oven timer\" in Mend to kilo.go",
+      "raw_output": "add a recursive function named Mend to kilo.go ## add a print line saying \"the oven timer\" in Mend to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a contact form named Quill in mosaic.go and next add a print line saying \"watch this space\" in Quill",
+      "gold": "add a form handler named Quill to mosaic.go ## add a print line saying \"watch this space\" in Quill to mosaic.go",
+      "raw_output": "add a form handler named Quill to mosaic.go ## add a print line saying \"watch this space\" in Quill to mosaic.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a basic middleware with the name Rinse in mosaic.go and after that add a print line saying \"fresh out the oven\" inside it",
+      "gold": "add a middleware named Rinse to mosaic.go ## add a print line saying \"fresh out the oven\" in Rinse to mosaic.go",
+      "raw_output": "add a middleware named Rinse to mosaic.go ## add a print line saying \"fresh out the oven\" in Rinse to mosaic.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a timing middleware named Nomad to kilo.go and after that put a print statement saying \"watch this space\"",
+      "gold": "add a timing middleware named Nomad to kilo.go ## add a print line saying \"watch this space\" in Nomad to kilo.go",
+      "raw_output": "add a timing middleware named Nomad to kilo.go ## add a print line saying \"watch this space\" in Nomad to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a middleware chaining named Saddle to vault.go and next add a print line saying \"the oven timer\" in Saddle",
+      "gold": "add a middleware chain named Saddle to vault.go ## add a print line saying \"the oven timer\" in Saddle to vault.go",
+      "raw_output": "add a middleware chain named Saddle to vault.go ## add a print line saying \"the oven timer\" in Saddle to vault.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a session handler named Plumb to vault.go plus add a print line saying \"the kettle sings\" in it",
+      "gold": "add a session handler named Plumb to vault.go ## add a print line saying \"the kettle sings\" in Plumb to vault.go",
+      "raw_output": "add a session handler named Plumb to vault.go ## add a print line saying \"the kettle sings\" in Plumb to vault.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "i'd like to place a func named Orbit in nest/main.go and next get a switch statement in Orbit",
+      "gold": "add a function named Orbit to nest/main.go ## add a switch statement in Orbit to nest/main.go",
+      "raw_output": "add a function named Orbit to nest/main.go ## add a switch statement in Orbit to nest/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "kindly place a function named Quill in vault.go and after that place a loop in it",
+      "gold": "add a function named Quill to vault.go ## add a for loop in Quill to vault.go",
+      "raw_output": "add a function named Quill to vault.go ## add a for loop in Quill to vault.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a func with the name Vespa in kilo.go plus get a database rows",
+      "gold": "add a function named Vespa to kilo.go ## add a database query in Vespa to kilo.go",
+      "raw_output": "add a function named Vespa to kilo.go ## add a database query in Vespa to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a recursion named Orbit to nest/main.go and next get a loop in Orbit",
+      "gold": "add a recursive function named Orbit to nest/main.go ## add a for loop in Orbit to nest/main.go",
+      "raw_output": "add a recursive function named Orbit to nest/main.go ## add a for loop in Orbit to nest/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a recursive function with the name Notifier in vault.go and after that place a query the database in it to vault.go",
+      "gold": "add a recursive function named Notifier to vault.go ## add a database query in Notifier to vault.go",
+      "raw_output": "add a recursive function named Notifier to vault.go ## add a database query in Notifier to vault.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "i'd like to add a recursive function named Topaz to vault.go and next get a type assertion switch",
+      "gold": "add a recursive function named Topaz to vault.go ## add a type switch in Topaz to vault.go",
+      "raw_output": "add a recursive function named Topaz to vault.go ## add a type switch in Topaz to vault.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a html form named Mend to mosaic.go plus insert a query rows in Mend",
+      "gold": "add a form handler named Mend to mosaic.go ## add a database query in Mend to mosaic.go",
+      "raw_output": "add a form handler named Mend to mosaic.go ## add a database query in Mend to mosaic.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a form handler named Umbra in nest/main.go and after that insert a type switch inside it to nest/main.go",
+      "gold": "add a form handler named Umbra to nest/main.go ## add a type switch in Umbra to nest/main.go",
+      "raw_output": "add a form handler named Umbra to nest/main.go ## add a type switch in Umbra to nest/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a contact form named Tundra to mosaic.go and after that get a switch",
+      "gold": "add a form handler named Tundra to mosaic.go ## add a switch statement in Tundra to mosaic.go",
+      "raw_output": "add a form handler named Tundra to mosaic.go ## add a switch statement in Tundra to mosaic.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "kindly place a logging middleware named Nudge in kilo.go and next place a switch on type in Nudge",
+      "gold": "add a middleware named Nudge to kilo.go ## add a type switch in Nudge to kilo.go",
+      "raw_output": "add a middleware named Nudge to kilo.go ## add a type switch in Nudge to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a basic middleware with the name Pumice in kilo.go plus place a switch in it",
+      "gold": "add a middleware named Pumice to kilo.go ## add a switch statement in Pumice to kilo.go",
+      "raw_output": "add a middleware named Pumice to kilo.go ## add a switch statement in Pumice to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a middleware named Velvet in api/main.go plus insert a for loop",
+      "gold": "add a middleware named Velvet to api/main.go ## add a for loop in Velvet to api/main.go",
+      "raw_output": "add a middleware named Velvet to api/main.go ## add a for loop in Velvet to api/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place an advanced middleware named Topaz in api/main.go and after that insert a switch in Topaz",
+      "gold": "add a timing middleware named Topaz to api/main.go ## add a switch statement in Topaz to api/main.go",
+      "raw_output": "add a timing middleware named Topaz to api/main.go ## add a switch statement in Topaz to api/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add an advanced middleware named Whisk to mosaic.go and after that insert a loop inside it to mosaic.go",
+      "gold": "add a timing middleware named Whisk to mosaic.go ## add a for loop in Whisk to mosaic.go",
+      "raw_output": "add a timing middleware named Whisk to mosaic.go ## add a for loop in Whisk to mosaic.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place an advanced middleware named Quarry in vault.go and next insert a query the database",
+      "gold": "add a timing middleware named Quarry to vault.go ## add a database query in Quarry to vault.go",
+      "raw_output": "add a timing middleware named Quarry to vault.go ## add a database query in Quarry to vault.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "hey gollemer, place a middleware chain named Quilter in mosaic.go plus get a loop in Quilter",
+      "gold": "add a middleware chain named Quilter to mosaic.go ## add a for loop in Quilter to mosaic.go",
+      "raw_output": "add a middleware chain named Quilter to mosaic.go ## add a for loop in Quilter to mosaic.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a middleware chaining with the name Umbra in api/main.go and next insert a database query inside it",
+      "gold": "add a middleware chain named Umbra to api/main.go ## add a database query in Umbra to api/main.go",
+      "raw_output": "add a middleware chain named Umbra to api/main.go ## add a database query in Umbra to api/main.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a middleware chaining named Tender to vault.go and next place a type assertion switch",
+      "gold": "add a middleware chain named Tender to vault.go ## add a type switch in Tender to vault.go",
+      "raw_output": "add a middleware chain named Tender to vault.go ## add a type switch in Tender to vault.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a login session with the name Umbra in kilo.go plus place a query the database in Umbra",
+      "gold": "add a session handler named Umbra to kilo.go ## add a database query in Umbra to kilo.go",
+      "raw_output": "add a session handler named Umbra to kilo.go ## add a database query in Umbra to kilo.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a session cookie named Quill in vault.go and next get a type switch in there",
+      "gold": "add a session handler named Quill to vault.go ## add a type switch in Quill to vault.go",
+      "raw_output": "add a session handler named Quill to vault.go ## add a type switch in Quill to vault.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a session cookie with the name Roaster in vault.go and after that get a switch statement",
+      "gold": "add a session handler named Roaster to vault.go ## add a switch statement in Roaster to vault.go",
+      "raw_output": "add a session handler named Roaster to vault.go ## add a switch statement in Roaster to vault.go",
+      "family": "compound:created-target",
+      "cell": "compound-created",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a sql transaction in Plumb and after that insert a json in Plumb to nest/main.go",
+      "gold": "add a database transaction in Plumb to nest/main.go ## add a json in Plumb to nest/main.go",
+      "raw_output": "add a database transaction in Plumb to nest/main.go ## add a json in Plumb to nest/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a closing a channel in Rowan plus get a regexp in Pumice to mosaic.go",
+      "gold": "add a close channel in Rowan to mosaic.go ## add a regular expression in Pumice to mosaic.go",
+      "raw_output": "add a close channel in Rowan to mosaic.go ## add a regular expression in Pumice to mosaic.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "get a range loop in Topaz and next place a marshal to xml in Vespa to kilo.go",
+      "gold": "add a range loop in Topaz to kilo.go ## add a xml in Vespa to kilo.go",
+      "raw_output": "add a range loop in Topaz to kilo.go ## add a xml in Vespa to kilo.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a goroutine in Mend and after that place a http routing in Nomad to api/main.go",
+      "gold": "add a goroutine in Mend to api/main.go ## add a routing in Nomad to api/main.go",
+      "raw_output": "add a goroutine in Mend to api/main.go ## add a routing in Nomad to api/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a select in Tender and next insert a wait for a goroutine in Tender to mosaic.go",
+      "gold": "add a select statement in Tender to mosaic.go ## add a channel synchronization in Tender to mosaic.go",
+      "raw_output": "add a select statement in Tender to mosaic.go ## add a channel synchronization in Tender to mosaic.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "get a channel in Mosaic and after that place a switch in Nomad to kilo.go",
+      "gold": "add a channel in Mosaic to kilo.go ## add a switch statement in Nomad to kilo.go",
+      "raw_output": "add a channel in Mosaic to kilo.go ## add a switch statement in Nomad to kilo.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "go ahead and get an array in Rowan and after that insert a ticker in Quilter to vault.go",
+      "gold": "add an array in Rowan to vault.go ## add a ticker in Quilter to vault.go",
+      "raw_output": "add an array in Rowan to vault.go ## add a ticker in Quilter to vault.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "insert a channel in Sorrel and after that get a go routine in Notifier to kilo.go",
+      "gold": "add a channel in Sorrel to kilo.go ## add a goroutine in Notifier to kilo.go",
+      "raw_output": "add a channel in Sorrel to kilo.go ## add a goroutine in Notifier to kilo.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "get a database rows in Nudge and next add a single row query in Velvet to kilo.go",
+      "gold": "add a database query in Nudge to kilo.go ## add a database query row in Velvet to kilo.go",
+      "raw_output": "add a database query in Nudge to kilo.go ## add a database query row in Velvet to kilo.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "get a parse a url in Quarry plus insert a channel in Walnut to api/main.go",
+      "gold": "add an url parsing in Quarry to api/main.go ## add a channel in Walnut to api/main.go",
+      "raw_output": "add an url parsing in Quarry to api/main.go ## add a channel in Walnut to api/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "hey gollemer, get a temporary file in Sorrel plus insert an anonymous function in Tender to kilo.go",
+      "gold": "add a temporary file in Sorrel to kilo.go ## add a closure in Tender to kilo.go",
+      "raw_output": "add a temporary file in Sorrel to kilo.go ## add an anonymous function in Tender to kilo.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": false
+    },
+    {
+      "input": "get a recover in Tundra and next place a marshal to xml in Quarry to api/main.go",
+      "gold": "add a recover in Tundra to api/main.go ## add a xml in Quarry to api/main.go",
+      "raw_output": "add a recover in Tundra to api/main.go ## add a xml in Quarry to api/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "get a read file in Umbra and after that insert a transaction in Topaz to api/main.go",
+      "gold": "add a file reading in Umbra to api/main.go ## add a database transaction in Topaz to api/main.go",
+      "raw_output": "add a file reading in Umbra to api/main.go ## add a database transaction in Topaz to api/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "hey gollemer, get a format a time in Mend and next place a context in Walnut to nest/main.go",
+      "gold": "add a time formatting in Mend to nest/main.go ## add a context in Walnut to nest/main.go",
+      "raw_output": "add a time formatting in Mend to nest/main.go ## add a context in Walnut to nest/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a slice in Roast and next add a ticker in Notifier to kilo.go",
+      "gold": "add a slice in Roast to kilo.go ## add a ticker in Notifier to kilo.go",
+      "raw_output": "add a slice in Roast to kilo.go ## add a ticker in Notifier to kilo.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "get a sql null in Umbra and next add a parse a url in Rowan to vault.go",
+      "gold": "add a database null in Umbra to vault.go ## add an url parsing in Rowan to vault.go",
+      "raw_output": "add a database null in Umbra to vault.go ## add an url parsing in Rowan to vault.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a query a single row in Rowan and after that get an anonymous function in Velvet to nest/main.go",
+      "gold": "add a database query row in Rowan to nest/main.go ## add a closure in Velvet to nest/main.go",
+      "raw_output": "add a database query row in Rowan to nest/main.go ## add an anonymous function in Velvet to nest/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": false
+    },
+    {
+      "input": "place a closing a channel in Nomad and next add a http client in Plumb to mosaic.go",
+      "gold": "add a close channel in Nomad to mosaic.go ## add a http client in Plumb to mosaic.go",
+      "raw_output": "add a close channel in Nomad to mosaic.go ## add a http client in Plumb to mosaic.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "let's place a string in Tend and after that place a channel in Quarry to api/main.go",
+      "gold": "add a string in Tend to api/main.go ## add a channel in Quarry to api/main.go",
+      "raw_output": "add a string in Tend to api/main.go ## add a channel in Quarry to api/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "get a switch in Whisk and next place a query the database in Osprey to kilo.go",
+      "gold": "add a switch statement in Whisk to kilo.go ## add a database query in Osprey to kilo.go",
+      "raw_output": "add a switch statement in Whisk to kilo.go ## add a database query in Osprey to kilo.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a database exec in Walnut and next place a database prepared statement in Pumice to nest/main.go",
+      "gold": "add a database exec in Walnut to nest/main.go ## add a prepared statement in Pumice to nest/main.go",
+      "raw_output": "add a database exec in Walnut to nest/main.go ## add a prepared statement in Pumice to nest/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "insert a single row query in Roaster plus add a timeout in Tundra to api/main.go",
+      "gold": "add a database query row in Roaster to api/main.go ## add a timeout in Tundra to api/main.go",
+      "raw_output": "add a database query row in Roaster to api/main.go ## add a timeout in Tundra to api/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "get a http routing in Saddle and next insert a strings and runes in Quill to vault.go",
+      "gold": "add a routing in Saddle to vault.go ## add a string in Quill to vault.go",
+      "raw_output": "add a routing in Saddle to vault.go ## add a string in Quill to vault.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "get a read file in Rowan and after that insert a query one row in Plumb to vault.go",
+      "gold": "add a file reading in Rowan to vault.go ## add a database query row in Plumb to vault.go",
+      "raw_output": "add a file reading in Rowan to vault.go ## add a database query row in Plumb to vault.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a session cookie with the name Tender and after that add a dictionary in Orbit to kilo.go",
+      "gold": "add a session handler named Tender to kilo.go ## add a map in Orbit to kilo.go",
+      "raw_output": "add a session handler named Tender to kilo.go ## add a map in Orbit to kilo.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a form handler with the name Nomad and next insert a format a string in Nomad to vault.go",
+      "gold": "add a form handler named Nomad to vault.go ## add a string formatting in Nomad to vault.go",
+      "raw_output": "add a form handler named Nomad to vault.go ## add a string formatting in Nomad to vault.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a session named Whisk and next get a format a string in Sift to mosaic.go",
+      "gold": "add a session handler named Whisk to mosaic.go ## add a string formatting in Sift to mosaic.go",
+      "raw_output": "add a session handler named Whisk to mosaic.go ## add a string formatting in Sift to mosaic.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a middleware chain with the name Sorrel plus add a database exec in Velvet to api/main.go",
+      "gold": "add a middleware chain named Sorrel to api/main.go ## add a database exec in Velvet to api/main.go",
+      "raw_output": "add a middleware chain named Sorrel to api/main.go ## add a database exec in Velvet to api/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a struct with the name Vespa and after that insert a waitgroup in Pumice to nest/main.go",
+      "gold": "add a struct named Vespa to nest/main.go ## add a wait group in Pumice to nest/main.go",
+      "raw_output": "add a struct named Vespa to nest/main.go ## add a wait group in Pumice to nest/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a session handler named Tundra and after that insert a sorting in Orbit to api/main.go",
+      "gold": "add a session handler named Tundra to api/main.go ## add a sorting in Orbit to api/main.go",
+      "raw_output": "add a session handler named Tundra to api/main.go ## add a sorting in Orbit to api/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "can we create a session handler with the name Osprey and next add a deferred call in Nudge to vault.go",
+      "gold": "add a session handler named Osprey to vault.go ## add a defer in Nudge to vault.go",
+      "raw_output": "add a session handler named Osprey to vault.go ## add a defer in Nudge to vault.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a recursion named Quilter and next add a loop over a channel in Tender to mosaic.go",
+      "gold": "add a recursive function named Quilter to mosaic.go ## add a channel range in Tender to mosaic.go",
+      "raw_output": "add a recursive function named Quilter to mosaic.go ## add a channel range in Tender to mosaic.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a session cookie named Sorrel and after that insert a file path in Pumice to mosaic.go",
+      "gold": "add a session handler named Sorrel to mosaic.go ## add a file path in Pumice to mosaic.go",
+      "raw_output": "add a session handler named Sorrel to mosaic.go ## add a file path in Pumice to mosaic.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a struct type with the name Rowan and after that get a file paths in Roast to vault.go",
+      "gold": "add a struct named Rowan to vault.go ## add a file path in Roast to vault.go",
+      "raw_output": "add a struct named Rowan to vault.go ## add a file path in Roast to vault.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a recursive function named Tend plus place a file path in Notifier to mosaic.go",
+      "gold": "add a recursive function named Tend to mosaic.go ## add a file path in Notifier to mosaic.go",
+      "raw_output": "add a recursive function named Tend to mosaic.go ## add a file path in Notifier to mosaic.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a middleware chaining named Quill plus get a mutex in Nomad to nest/main.go",
+      "gold": "add a middleware chain named Quill to nest/main.go ## add a mutex in Nomad to nest/main.go",
+      "raw_output": "add a middleware chain named Quill to nest/main.go ## add a mutex in Nomad to nest/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a contact form named Sorrel and after that insert a database transaction in Walnut to mosaic.go",
+      "gold": "add a form handler named Sorrel to mosaic.go ## add a database transaction in Walnut to mosaic.go",
+      "raw_output": "add a form handler named Sorrel to mosaic.go ## add a database transaction in Walnut to mosaic.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "let's add an interface named Plumb and next get a read file in Whisk to kilo.go",
+      "gold": "add an interface named Plumb to kilo.go ## add a file reading in Whisk to kilo.go",
+      "raw_output": "add an interface named Plumb to kilo.go ## add a file reading in Whisk to kilo.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a contact form named Nudge plus add a json encoding in Pumice to api/main.go",
+      "gold": "add a form handler named Nudge to api/main.go ## add a json in Pumice to api/main.go",
+      "raw_output": "add a form handler named Nudge to api/main.go ## add a json in Pumice to api/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "can we place a struct embedding named Topaz and next place a channel in Tender to vault.go",
+      "gold": "add an embedded struct named Topaz to vault.go ## add a channel in Tender to vault.go",
+      "raw_output": "add an embedded struct named Topaz to vault.go ## add a channel in Tender to vault.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "go ahead and place a struct type named Whisk and after that get a switch statement in Rowan to api/main.go",
+      "gold": "add a struct named Whisk to api/main.go ## add a switch statement in Rowan to api/main.go",
+      "raw_output": "add a struct named Whisk to api/main.go ## add a switch statement in Rowan to api/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a chain middleware with the name Roast and after that add a html template in Notifier to nest/main.go",
+      "gold": "add a middleware chain named Roast to nest/main.go ## add a html template in Notifier to nest/main.go",
+      "raw_output": "add a middleware chain named Roast to nest/main.go ## add a html template in Notifier to nest/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a contact form named Walnut and next place a http get in Sorrel to nest/main.go",
+      "gold": "add a form handler named Walnut to nest/main.go ## add a http client in Sorrel to nest/main.go",
+      "raw_output": "add a form handler named Walnut to nest/main.go ## add a http client in Sorrel to nest/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a recursive function named Vespa plus add a list files in Pumice to vault.go",
+      "gold": "add a recursive function named Vespa to vault.go ## add a list a directory in Pumice to vault.go",
+      "raw_output": "add a recursive function named Vespa to vault.go ## add a list a directory in Pumice to vault.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a login session with the name Roast plus insert a timeout in Sift to api/main.go",
+      "gold": "add a session handler named Roast to api/main.go ## add a timeout in Sift to api/main.go",
+      "raw_output": "add a session handler named Roast to api/main.go ## add a timeout in Sift to api/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a func named Rinse and after that place a log message in Tundra to vault.go",
+      "gold": "add a function named Rinse to vault.go ## add a log line in Tundra to vault.go",
+      "raw_output": "add a function named Rinse to vault.go ## add a log line in Tundra to vault.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "go ahead and create a struct embedding with the name Whisk and after that get a list a directory in Osprey to kilo.go",
+      "gold": "add an embedded struct named Whisk to kilo.go ## add a list a directory in Osprey to kilo.go",
+      "raw_output": "add an embedded struct named Whisk to kilo.go ## add a list a directory in Osprey to kilo.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a func named Roast plus place an atomic counter in Rowan to vault.go",
+      "gold": "add a function named Roast to vault.go ## add an atomic counter in Rowan to vault.go",
+      "raw_output": "add a function named Roast to vault.go ## add an atomic counter in Rowan to vault.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "get a json encoding in Roast and next have it print \"mind the gap\" in Roast to vault.go",
+      "gold": "add a json in Roast to vault.go ## add a print line saying \"mind the gap\" in Roast to vault.go",
+      "raw_output": "add a json in Roast to vault.go ## add a print line saying \"mind the gap\" in Roast to vault.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a string functions in Quarry plus have it print \"mind the gap\" in Velvet to kilo.go",
+      "gold": "add a string functions in Quarry to kilo.go ## add a print line saying \"mind the gap\" in Velvet to kilo.go",
+      "raw_output": "add a string functions in Quarry to kilo.go ## add a print line saying \"mind the gap\" in Velvet to kilo.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a query a single row in Roast plus have it print \"the oven timer\" in Roast to vault.go",
+      "gold": "add a database query row in Roast to vault.go ## add a print line saying \"the oven timer\" in Roast to vault.go",
+      "raw_output": "add a database query row in Roast to vault.go ## add a print line saying \"the oven timer\" in Roast to vault.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "go ahead and insert a close channel in Whisk and next add a print line saying \"supper is ready\" in Quilter to kilo.go",
+      "gold": "add a close channel in Whisk to kilo.go ## add a print line saying \"supper is ready\" in Quilter to kilo.go",
+      "raw_output": "add a close channel in Whisk to kilo.go ## add a print line saying \"supper is ready\" in Quilter to kilo.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "get a pointers in Nudge and after that add a print line saying \"supper is ready\" in Nudge to vault.go",
+      "gold": "add a pointer in Nudge to vault.go ## add a print line saying \"supper is ready\" in Nudge to vault.go",
+      "raw_output": "add a pointer in Nudge to vault.go ## add a print line saying \"supper is ready\" in Nudge to vault.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a context in Mend and after that add a print line saying \"dinner is served\" in Whisk to nest/main.go",
+      "gold": "add a context in Mend to nest/main.go ## add a print line saying \"dinner is served\" in Whisk to nest/main.go",
+      "raw_output": "add a context in Mend to nest/main.go ## add a print line saying \"dinner is served\" in Whisk to nest/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a http get in Osprey and after that add a print line saying \"fresh out the oven\" in Osprey to mosaic.go",
+      "gold": "add a http client in Osprey to mosaic.go ## add a print line saying \"fresh out the oven\" in Osprey to mosaic.go",
+      "raw_output": "add a http client in Osprey to mosaic.go ## add a print line saying \"fresh out the oven\" in Osprey to mosaic.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a strings and runes in Nomad and next add a print line saying \"mind the gap\" in Pumice to vault.go",
+      "gold": "add a string in Nomad to vault.go ## add a print line saying \"mind the gap\" in Pumice to vault.go",
+      "raw_output": "add a string in Nomad to vault.go ## add a print line saying \"mind the gap\" in Pumice to vault.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "insert a loop over a channel in Rinse and next add a print line saying \"the kettle sings\" in Rinse to api/main.go",
+      "gold": "add a channel range in Rinse to api/main.go ## add a print line saying \"the kettle sings\" in Rinse to api/main.go",
+      "raw_output": "add a channel range in Rinse to api/main.go ## add a print line saying \"the kettle sings\" in Rinse to api/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "kindly place a ticker in Tundra plus have it print \"watch this space\" in Tundra to kilo.go",
+      "gold": "add a ticker in Tundra to kilo.go ## add a print line saying \"watch this space\" in Tundra to kilo.go",
+      "raw_output": "add a ticker in Tundra to kilo.go ## add a print line saying \"watch this space\" in Tundra to kilo.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "insert a temporary file in Mend plus have it print \"the kettle sings\" in Sift to nest/main.go",
+      "gold": "add a temporary file in Mend to nest/main.go ## add a print line saying \"the kettle sings\" in Sift to nest/main.go",
+      "raw_output": "add a temporary file in Mend to nest/main.go ## add a print line saying \"the kettle sings\" in Sift to nest/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "insert a dictionary in Velvet and next have it print \"fresh out the oven\" in Velvet to api/main.go",
+      "gold": "add a map in Velvet to api/main.go ## add a print line saying \"fresh out the oven\" in Velvet to api/main.go",
+      "raw_output": "add a map in Velvet to api/main.go ## add a print line saying \"fresh out the oven\" in Velvet to api/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a http client in Saddle and after that have it print \"mind the gap\" in Saddle to kilo.go",
+      "gold": "add a http client in Saddle to kilo.go ## add a print line saying \"mind the gap\" in Saddle to kilo.go",
+      "raw_output": "add a http client in Saddle to kilo.go ## add a print line saying \"mind the gap\" in Saddle to kilo.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "would you mind adding a channel in Saddle plus have it print \"mind the gap\" in Vespa to api/main.go",
+      "gold": "add a channel in Saddle to api/main.go ## add a print line saying \"mind the gap\" in Vespa to api/main.go",
+      "raw_output": "add a channel in Saddle to api/main.go ## add a print line saying \"mind the gap\" in Vespa to api/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a timeout in Tender plus have it print \"mind the gap\" in Tender to nest/main.go",
+      "gold": "add a timeout in Tender to nest/main.go ## add a print line saying \"mind the gap\" in Tender to nest/main.go",
+      "raw_output": "add a timeout in Tender to nest/main.go ## add a print line saying \"mind the gap\" in Tender to nest/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "get a var in Whisk and after that have it print \"the oven timer\" in Roaster to nest/main.go",
+      "gold": "add a variable in Whisk to nest/main.go ## add a print line saying \"the oven timer\" in Roaster to nest/main.go",
+      "raw_output": "add a variable in Whisk to nest/main.go ## add a print line saying \"the oven timer\" in Roaster to nest/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "get a reading a file in Mosaic and after that have it print \"the oven timer\" in Mosaic to nest/main.go",
+      "gold": "add a file reading in Mosaic to nest/main.go ## add a print line saying \"the oven timer\" in Mosaic to nest/main.go",
+      "raw_output": "add a file reading in Mosaic to nest/main.go ## add a print line saying \"the oven timer\" in Mosaic to nest/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place an error in Velvet and after that have it print \"mind the gap\" in Topaz to api/main.go when you can",
+      "gold": "add an error in Velvet to api/main.go ## add a print line saying \"mind the gap\" in Topaz to api/main.go",
+      "raw_output": "add an error in Velvet to api/main.go ## add a print line saying \"mind the gap\" in Topaz to api/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "can we add a defer in Umbra and after that have it print \"the kettle sings\" in Notifier to nest/main.go",
+      "gold": "add a defer in Umbra to nest/main.go ## add a print line saying \"the kettle sings\" in Notifier to nest/main.go",
+      "raw_output": "add a defer in Umbra to nest/main.go ## add a print line saying \"the kettle sings\" in Notifier to nest/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "let's add a text templates in Sorrel and next have it print \"the kettle sings\" in Sorrel to mosaic.go",
+      "gold": "add a text template in Sorrel to mosaic.go ## add a print line saying \"the kettle sings\" in Sorrel to mosaic.go",
+      "raw_output": "add a text template in Sorrel to mosaic.go ## add a print line saying \"the kettle sings\" in Sorrel to mosaic.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a xml in Mend and next have it print \"ready when you are\" in Mend to vault.go",
+      "gold": "add a xml in Mend to vault.go ## add a print line saying \"ready when you are\" in Mend to vault.go",
+      "raw_output": "add a xml in Mend to vault.go ## add a print line saying \"ready when you are\" in Mend to vault.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a select statement in Notifier and after that have it print \"supper is ready\" in Pumice to nest/main.go",
+      "gold": "add a select statement in Notifier to nest/main.go ## add a print line saying \"supper is ready\" in Pumice to nest/main.go",
+      "raw_output": "add a select statement in Notifier to nest/main.go ## add a print line saying \"supper is ready\" in Pumice to nest/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a recover in Whisk and next have it print \"supper is ready\" in Velvet to nest/main.go",
+      "gold": "add a recover in Whisk to nest/main.go ## add a print line saying \"supper is ready\" in Velvet to nest/main.go",
+      "raw_output": "add a recover in Whisk to nest/main.go ## add a print line saying \"supper is ready\" in Velvet to nest/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a html templates in Osprey plus add a print line saying \"watch this space\" in Roaster to mosaic.go",
+      "gold": "add a html template in Osprey to mosaic.go ## add a print line saying \"watch this space\" in Roaster to mosaic.go",
+      "raw_output": "add a html template in Osprey to mosaic.go ## add a print line saying \"watch this space\" in Roaster to mosaic.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "have it print \"supper is ready\" in Nomad and next get a var in Nomad to mosaic.go",
+      "gold": "add a print line saying \"supper is ready\" in Nomad to mosaic.go ## add a variable in Nomad to mosaic.go",
+      "raw_output": "add a print line saying \"supper is ready\" in Nomad to mosaic.go ## add a variable in Nomad to mosaic.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "have it print \"fresh out the oven\" in Nudge and after that insert a const in Nudge to vault.go",
+      "gold": "add a print line saying \"fresh out the oven\" in Nudge to vault.go ## add a constant in Nudge to vault.go",
+      "raw_output": "add a print line saying \"fresh out the oven\" in Nudge to vault.go ## add a constant in Nudge to vault.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "let's have it print \"supper is ready\" in Quill and next insert a null value in Quill to vault.go",
+      "gold": "add a print line saying \"supper is ready\" in Quill to vault.go ## add a database null in Quill to vault.go",
+      "raw_output": "add a print line saying \"supper is ready\" in Quill to vault.go ## add a database null in Quill to vault.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "have it print \"supper is ready\" in Quarry and next get a logging in Quarry to vault.go",
+      "gold": "add a print line saying \"supper is ready\" in Quarry to vault.go ## add a log line in Quarry to vault.go",
+      "raw_output": "add a print line saying \"supper is ready\" in Quarry to vault.go ## add a log line in Quarry to vault.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a print line saying \"dinner is served\" in Plumb and after that place a slice in Plumb to vault.go",
+      "gold": "add a print line saying \"dinner is served\" in Plumb to vault.go ## add a slice in Plumb to vault.go",
+      "raw_output": "add a print line saying \"dinner is served\" in Plumb to vault.go ## add a slice in Plumb to vault.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "let's have it print \"dinner is served\" in Sorrel plus insert an atomic in Sorrel to mosaic.go",
+      "gold": "add a print line saying \"dinner is served\" in Sorrel to mosaic.go ## add an atomic counter in Sorrel to mosaic.go",
+      "raw_output": "add a print line saying \"dinner is served\" in Sorrel to mosaic.go ## add an atomic counter in Sorrel to mosaic.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "i'd like to have it print \"mind the gap\" in Roast and after that get a list a directory in Roast to vault.go",
+      "gold": "add a print line saying \"mind the gap\" in Roast to vault.go ## add a list a directory in Roast to vault.go",
+      "raw_output": "add a print line saying \"mind the gap\" in Roast to vault.go ## add a list a directory in Roast to vault.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "kindly add a print line saying \"mind the gap\" in Saddle and after that add a logging in Saddle to kilo.go",
+      "gold": "add a print line saying \"mind the gap\" in Saddle to kilo.go ## add a log line in Saddle to kilo.go",
+      "raw_output": "add a print line saying \"mind the gap\" in Saddle to kilo.go ## add a log line in Saddle to kilo.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a print line saying \"mind the gap\" in Pumice and after that place a text template in Pumice to nest/main.go when you can",
+      "gold": "add a print line saying \"mind the gap\" in Pumice to nest/main.go ## add a text template in Pumice to nest/main.go",
+      "raw_output": "add a print line saying \"mind the gap\" in Pumice to nest/main.go ## add a text template in Pumice to nest/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "have it print \"fresh out the oven\" in Topaz plus get a transaction in Topaz to kilo.go",
+      "gold": "add a print line saying \"fresh out the oven\" in Topaz to kilo.go ## add a database transaction in Topaz to kilo.go",
+      "raw_output": "add a print line saying \"fresh out the oven\" in Topaz to kilo.go ## add a database transaction in Topaz to kilo.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a print line saying \"fresh out the oven\" in Umbra and next get a nullable column in Umbra to vault.go",
+      "gold": "add a print line saying \"fresh out the oven\" in Umbra to vault.go ## add a database null in Umbra to vault.go",
+      "raw_output": "add a print line saying \"fresh out the oven\" in Umbra to vault.go ## add a database null in Umbra to vault.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a print line saying \"supper is ready\" in Nudge and after that place a list files in Nudge to api/main.go",
+      "gold": "add a print line saying \"supper is ready\" in Nudge to api/main.go ## add a list a directory in Nudge to api/main.go",
+      "raw_output": "add a print line saying \"supper is ready\" in Nudge to api/main.go ## add a list a directory in Nudge to api/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "have it print \"the kettle sings\" in Sorrel and after that insert an epoch in Sorrel to vault.go",
+      "gold": "add a print line saying \"the kettle sings\" in Sorrel to vault.go ## add an epoch in Sorrel to vault.go",
+      "raw_output": "add a print line saying \"the kettle sings\" in Sorrel to vault.go ## add an epoch in Sorrel to vault.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "have it print \"supper is ready\" in Topaz plus get a for loop in Topaz to mosaic.go",
+      "gold": "add a print line saying \"supper is ready\" in Topaz to mosaic.go ## add a for loop in Topaz to mosaic.go",
+      "raw_output": "add a print line saying \"supper is ready\" in Topaz to mosaic.go ## add a for loop in Topaz to mosaic.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a print line saying \"fresh out the oven\" in Quill and after that insert a json encoding in Quill to nest/main.go",
+      "gold": "add a print line saying \"fresh out the oven\" in Quill to nest/main.go ## add a json in Quill to nest/main.go",
+      "raw_output": "add a print line saying \"fresh out the oven\" in Quill to nest/main.go ## add a json in Quill to nest/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "i'd like to add a print line saying \"watch this space\" in Rinse and next place a list files in Rinse to api/main.go",
+      "gold": "add a print line saying \"watch this space\" in Rinse to api/main.go ## add a list a directory in Rinse to api/main.go",
+      "raw_output": "add a print line saying \"watch this space\" in Rinse to api/main.go ## add a list a directory in Rinse to api/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a print line saying \"dinner is served\" in Roaster and after that add a xml in Roaster to vault.go when you can",
+      "gold": "add a print line saying \"dinner is served\" in Roaster to vault.go ## add a xml in Roaster to vault.go",
+      "raw_output": "add a print line saying \"dinner is served\" in Roaster to vault.go ## add a xml in Roaster to vault.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "have it print \"supper is ready\" in Nudge and next insert a strings and runes in Nudge to kilo.go",
+      "gold": "add a print line saying \"supper is ready\" in Nudge to kilo.go ## add a string in Nudge to kilo.go",
+      "raw_output": "add a print line saying \"supper is ready\" in Nudge to kilo.go ## add a string in Nudge to kilo.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "have it print \"fresh out the oven\" in Topaz plus insert an external command in Topaz to vault.go",
+      "gold": "add a print line saying \"fresh out the oven\" in Topaz to vault.go ## add a spawn a process in Topaz to vault.go",
+      "raw_output": "add a print line saying \"fresh out the oven\" in Topaz to vault.go ## add a spawn a process in Topaz to vault.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a print line saying \"ready when you are\" in Roast and next add a timer in Roast to nest/main.go",
+      "gold": "add a print line saying \"ready when you are\" in Roast to nest/main.go ## add a timer in Roast to nest/main.go",
+      "raw_output": "add a print line saying \"ready when you are\" in Roast to nest/main.go ## add a timer in Roast to nest/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a print line saying \"ready when you are\" in Saddle and next place a map in Saddle to vault.go",
+      "gold": "add a print line saying \"ready when you are\" in Saddle to vault.go ## add a map in Saddle to vault.go",
+      "raw_output": "add a print line saying \"ready when you are\" in Saddle to vault.go ## add a map in Saddle to vault.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "have it print \"mind the gap\" in Mend and next place a switch in Mend to vault.go",
+      "gold": "add a print line saying \"mind the gap\" in Mend to vault.go ## add a switch statement in Mend to vault.go",
+      "raw_output": "add a print line saying \"mind the gap\" in Mend to vault.go ## add a switch statement in Mend to vault.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "hey gollemer, add a print line saying \"the oven timer\" in Tundra and after that get an array in Tundra to kilo.go",
+      "gold": "add a print line saying \"the oven timer\" in Tundra to kilo.go ## add an array in Tundra to kilo.go",
+      "raw_output": "add a print line saying \"the oven timer\" in Tundra to kilo.go ## add an array in Tundra to kilo.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a print line saying \"watch this space\" in Roaster plus get a list files in Roaster to api/main.go",
+      "gold": "add a print line saying \"watch this space\" in Roaster to api/main.go ## add a list a directory in Roaster to api/main.go",
+      "raw_output": "add a print line saying \"watch this space\" in Roaster to api/main.go ## add a list a directory in Roaster to api/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a contact form named Walnut and after that place a database transaction in it to api/main.go",
+      "gold": "add a form handler named Walnut to api/main.go ## add a database transaction in Walnut to api/main.go",
+      "raw_output": "add a form handler named Walnut to api/main.go ## add a database transaction in Walnut to api/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add an advanced middleware named Notifier and after that place a time formatting in it to nest/main.go",
+      "gold": "add a timing middleware named Notifier to nest/main.go ## add a time formatting in Notifier to nest/main.go",
+      "raw_output": "add a timing middleware named Notifier to nest/main.go ## add a time formatting in Notifier to nest/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "can we add a middleware named Pumice plus get a wait group in there to mosaic.go",
+      "gold": "add a middleware named Pumice to mosaic.go ## add a wait group in Pumice to mosaic.go",
+      "raw_output": "add a middleware named Pumice to mosaic.go ## add a wait group in Pumice to mosaic.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "would you mind adding a session named Tend and next insert a timer inside it to vault.go",
+      "gold": "add a session handler named Tend to vault.go ## add a timer in Tend to vault.go",
+      "raw_output": "add a session handler named Tend to vault.go ## add a timer in Tend to vault.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a basic middleware named Roaster and next place a buffered channel in it to api/main.go",
+      "gold": "add a middleware named Roaster to api/main.go ## add a buffered channel in Roaster to api/main.go",
+      "raw_output": "add a middleware named Roaster to api/main.go ## add a buffered channel in Roaster to api/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create an advanced middleware with the name Mend and next insert a ticker inside it to vault.go",
+      "gold": "add a timing middleware named Mend to vault.go ## add a ticker in Mend to vault.go",
+      "raw_output": "add a timing middleware named Mend to vault.go ## add a ticker in Mend to vault.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "let's place a session handler named Rinse and next insert a temp file inside it to kilo.go",
+      "gold": "add a session handler named Rinse to kilo.go ## add a temporary file in Rinse to kilo.go",
+      "raw_output": "add a session handler named Rinse to kilo.go ## add a temporary file in Rinse to kilo.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a chain middleware named Walnut and after that place a json in it to nest/main.go",
+      "gold": "add a middleware chain named Walnut to nest/main.go ## add a json in Walnut to nest/main.go",
+      "raw_output": "add a middleware chain named Walnut to nest/main.go ## add a json in Walnut to nest/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a func named Quill plus get a loop in there to vault.go",
+      "gold": "add a function named Quill to vault.go ## add a for loop in Quill to vault.go",
+      "raw_output": "add a function named Quill to vault.go ## add a for loop in Quill to vault.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a contact form named Saddle and after that get a timeout in there to api/main.go",
+      "gold": "add a form handler named Saddle to api/main.go ## add a timeout in Saddle to api/main.go",
+      "raw_output": "add a form handler named Saddle to api/main.go ## add a timeout in Saddle to api/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "can we create a function with the name Plumb and next get a base64 encoding in there to kilo.go",
+      "gold": "add a function named Plumb to kilo.go ## add a base64 encoding in Plumb to kilo.go",
+      "raw_output": "add a function named Plumb to kilo.go ## add a base64 encoding in Plumb to kilo.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "can we create a function with the name Quarry and after that get a single row query in there to mosaic.go",
+      "gold": "add a function named Quarry to mosaic.go ## add a database query row in Quarry to mosaic.go",
+      "raw_output": "add a function named Quarry to mosaic.go ## add a database query row in Quarry to mosaic.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a middleware named Tend plus get a timeout in there to mosaic.go",
+      "gold": "add a middleware named Tend to mosaic.go ## add a timeout in Tend to mosaic.go",
+      "raw_output": "add a middleware named Tend to mosaic.go ## add a timeout in Tend to mosaic.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a middleware with the name Mend and next get an array in there to mosaic.go",
+      "gold": "add a middleware named Mend to mosaic.go ## add an array in Mend to mosaic.go",
+      "raw_output": "add a middleware named Mend to mosaic.go ## add an array in Mend to mosaic.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a function named Topaz plus place a select statement in it to nest/main.go",
+      "gold": "add a function named Topaz to nest/main.go ## add a select statement in Topaz to nest/main.go",
+      "raw_output": "add a function named Topaz to nest/main.go ## add a select statement in Topaz to nest/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "would you mind placing a recursive function named Notifier plus get a log message in there to vault.go",
+      "gold": "add a recursive function named Notifier to vault.go ## add a log line in Notifier to vault.go",
+      "raw_output": "add a recursive function named Notifier to vault.go ## add a log line in Notifier to vault.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a chain middleware with the name Quill and next get a base64 encoding in there to mosaic.go",
+      "gold": "add a middleware chain named Quill to mosaic.go ## add a base64 encoding in Quill to mosaic.go",
+      "raw_output": "add a middleware chain named Quill to mosaic.go ## add a base64 encoding in Quill to mosaic.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a contact form named Sift plus place an external command in it to vault.go",
+      "gold": "add a form handler named Sift to vault.go ## add a spawn a process in Sift to vault.go",
+      "raw_output": "add a form handler named Sift to vault.go ## add a spawn a process in Sift to vault.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a session with the name Vespa plus insert a xml inside it to nest/main.go",
+      "gold": "add a session handler named Vespa to nest/main.go ## add a xml in Vespa to nest/main.go",
+      "raw_output": "add a session handler named Vespa to nest/main.go ## add a xml in Vespa to nest/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a middleware chain with the name Quarry and next place a http get in it to nest/main.go",
+      "gold": "add a middleware chain named Quarry to nest/main.go ## add a http client in Quarry to nest/main.go",
+      "raw_output": "add a middleware chain named Quarry to nest/main.go ## add a http client in Quarry to nest/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "go ahead and place a form handler named Umbra and after that insert a var inside it to api/main.go",
+      "gold": "add a form handler named Umbra to api/main.go ## add a variable in Umbra to api/main.go",
+      "raw_output": "add a form handler named Umbra to api/main.go ## add a variable in Umbra to api/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a html form named Saddle plus get a range over a channel in there to kilo.go",
+      "gold": "add a form handler named Saddle to kilo.go ## add a channel range in Saddle to kilo.go",
+      "raw_output": "add a form handler named Saddle to kilo.go ## add a channel range in Saddle to kilo.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a contact form named Plumb and after that get a string functions in there to vault.go",
+      "gold": "add a form handler named Plumb to vault.go ## add a string functions in Plumb to vault.go",
+      "raw_output": "add a form handler named Plumb to vault.go ## add a string functions in Plumb to vault.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a timing middleware named Umbra plus insert a random inside it to nest/main.go when you can",
+      "gold": "add a timing middleware named Umbra to nest/main.go ## add a random number in Umbra to nest/main.go",
+      "raw_output": "add a timing middleware named Umbra to nest/main.go ## add a random number in Umbra to nest/main.go",
+      "family": "compound:shared-target",
+      "cell": "compound-shared",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "hey gollemer, place a var in it to placeholder.go",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a slice in it when you can",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a channel in it to placeholder.go when you can",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "go ahead and insert a timer inside it",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "go ahead and insert a deferred call inside it",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "kindly get a xml in there to placeholder.go",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "can we get a hash in there to placeholder.go",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a log message in it to placeholder.go when you can",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "can we get a database connection in there",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a type assertion switch in it to placeholder.go when you can",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a constant in Umbra to mosaic.go and after that insert a range loop inside it",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "insert an array in Rinse to api/main.go plus get a channel",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "get a rune to nest/main.go and after that get a mutex in there",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "insert a channel sync in Umbra to mosaic.go and next insert a now",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "get a timer in Sorrel to nest/main.go and next insert a list files inside it",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "i'd like to get a sorting to mosaic.go plus get a single row query",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "get a string formatting in Quilter to vault.go and after that insert a switch statement inside it to placeholder.go",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "insert a time in Rinse to kilo.go and after that place a wait for a goroutine",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "insert a parse a url to vault.go and after that get a sort by in there to placeholder.go",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "i'd like to insert a file path to mosaic.go plus get a format a time",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a struct named Roast to vault.go plus get a loop in there to vault.go when you can",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place an interface named Quill in mosaic.go and next insert a buffered channel",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place an enumeration named Whisk in kilo.go and after that get a defer in there",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create an embedding with the name Roaster in api/main.go and after that insert an url parsing",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a struct named Quarry in kilo.go plus place a web template in it to kilo.go",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place an interface named Umbra in vault.go and next place a range",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place an enum named Nudge in kilo.go and after that insert a channel synchronization inside it",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "create a struct embedding with the name Whisk in kilo.go and after that get a recover",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a struct named Tender to api/main.go plus place a sha256 in it",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "go ahead and add an interface named Plumb to nest/main.go plus insert a static files",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "can we place an enum named Vespa in nest/main.go and after that get an if else in there",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add an embedded struct named Mosaic to vault.go and after that place a non-blocking channel",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "kindly get a closing a channel in Nudge to api/main.go plus add a switch",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "insert a var in Tender to nest/main.go and after that insert a slice",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "insert a database transaction in Mosaic to vault.go plus place a for loop when you can",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "get a text templates in Quill to vault.go plus get a database query",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "i'd like to get a goroutine in Tundra to api/main.go and next add a switch",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "would you mind adding a const in Vespa to vault.go plus insert a slice",
+      "gold": "none",
+      "raw_output": "",
+      "family": "none",
+      "cell": "none-control",
+      "slot_exact": true,
+      "string_exact": true
+    }
+  ]
+}
