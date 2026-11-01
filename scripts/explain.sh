@@ -1,194 +1,260 @@
 #!/bin/bash
 # make explain — what Gollemer is and what to say to it.
+# This text tells the same story as README.md, condensed for the
+# terminal. Keep the two in step: same counts (135 pieces,
+# 17 brains), same examples, same limits.
 cat << 'EOF'
-Gollemer — a tiny LLM in pure Go, no external dependencies.
-Six brains, one chat: every message is routed to the right one.
-Just talk to it — `make chat` — and say what you want.
+Gollemer — a tiny language model in pure Go that helps you learn Go
+by talking to it. One chat: it reads the Go project you're in,
+explains it in plain English, answers Go questions, and makes small
+edits — only after showing you the exact change and getting your
+yes. No rented AI model, no account, no external calls: everything
+runs on your machine.
+
+WHY IT EXISTS
+-------------
+Most AI coding tools are enormous models on someone else's
+computers. Gollemer is the opposite: small enough to read, built
+for beginners, honest about its limits. It teaches instead of
+taking over — it explains your project, shows where a change
+belongs and why, and lets you say the words while it does the
+typing. Where a small model isn't good enough to trust,
+deterministic code (ordinary programming, no AI) does the job.
+
+START
+-----
+  make start     open the chat (needs a real terminal)
+  make chat      the same chat, started directly
+  make guide     the start-here guide, printed, no chat
+
+The chat works on the folder you started it in. New here? Say
+"teach me" — a two-minute guided tour on a tiny bundled example.
 
 WHAT TO SAY TO THE CHAT
 -----------------------
+Just talk in plain sentences. Every reply is tagged with the part
+that answered, like gollemer [go]>, so you know who is talking.
 
-The prompt edits like a shell: up/down recalls history (kept across
-sessions in ~/.gollemer_history), left/right moves the cursor, tab
-completes commands, make targets, file paths, and code symbols (tab
-twice lists the matches), Ctrl-C cancels the line, Ctrl-D exits.
+Talk and ask about Go:
 
-Understand a Go codebase (the goanalyze brain — it reads real code,
-no guessing, no hallucinations):
+  you> have you ever played soccer
+  gollemer [social]> only for fun with friends. i am better at
+      cheering than scoring.
+  you> what is a goroutine
+  gollemer [go]> A goroutine is a lightweight thread managed by
+      the Go runtime: go doWork(). ...
+
+Ask what a project does — it answers from your real code:
 
   you> analyze this project
-  gollemer [goanalyze]> Project: github.com/golangast/gollemer
-      40 packages, 300 Go files, ~45000 lines
-      Entry points: ...
-      IN PLAIN ENGLISH: ...
+      IN PLAIN ENGLISH: what the program is, in plain words
+      STORY: what happens when you run it
+      WHERE TO START: the entry point, the engine room, the types
+      ... then visuals: what calls what, biggest files, coupling
+  you> what does Add do / show me Add / walk me through Add
+  you> where for <github issue link>   where the fix belongs
+  (or just paste a Go compiler error — it translates it)
 
-      STORY: what happens when you run it, in plain words
-      Everything starts at main() in cmd/gollemer-classic/main.go.
-      main() calls runClassic(): it parses the flags and picks a command.
+Learn how to build something:
 
-      PIPELINE: what happens when you run it
-      main  (cmd/gollemer-classic/main.go:16)
-      └─▶ main.runClassic — parses flags, runs the command
-          ├─▶ main.parseFlags — ...
-          ...
+  you> i want to build a webserver
+      a pack of reading from the maintainer's own Advocates link
+      collection, plus the shelf of canonical Go texts
+  you> resources for databases
 
-      ... then the reading guide and the rest of the visuals:
-      package-size bars, coupling, most-called functions,
-      biggest files, dependency graph
+Create folders and files — shown first, gated, then verified:
 
-  you> analyze ~/path/to/project        (any folder on disk)
-  you> analyze github.com/owner/repo    (cloned once, cached)
+  you> create a folder jane
+  gollemer [composer]> Here's what I'll create — nothing is
+      written yet: ◆ CREATE folder jane/
+      Create it? [y/n] ... Done — created jane/. I checked.
+  you> create jane/main.go        a starter program file
+  you> create a file webtest/main.go with a webserver
+  you> serve an html file to webtest/main.go
+      creates the page and wires the server to serve it; ask
+      again and it says "already serves ... — nothing to add"
 
-Or clone a repo into a folder you name, and look at it right away:
+Add pieces from the book of 135 known Go shapes:
 
-  you> clone https://github.com/owner/repo in folder example
-  gollemer [goanalyze]> Cloned into `./example`. Here's what I see:
-      Project: github.com/owner/repo
-      ...summary, story, reading guide, visuals...
-  you> what does main do                (answered from the cloned code)
+  you> add a form handler named SignUp
+      no file named -> handlers/signup.go, its own package:
+      "placed, not wired" — registering it is a named next step
+  you> add a cors middleware named Cors to app/main.go
+      a named file always wins over the folder default
+  you> add a jwt token in main to app/main.go
+      the security pieces (JWT, CORS, IDOR check, CSRF, rate
+      limit, ...) explain themselves as they land
+  you> add a database connection function named Connect
+      database/connect.go: sql.Open + a Ping + pool settings.
+      The driver is a TODO on purpose — no driver ships with Go,
+      and which one is yours to choose; until you add its blank
+      import the Ping fails with "unknown driver", and the plan
+      says so up front.
 
-Then ask questions about the code — it answers from what it parsed:
+Pieces that need a library your project doesn't have are gated:
 
-  you> what does routeDomain do     signature, docs, callers, callees
-  you> what's in package chat       what the package is for, key pieces
-  you> show me routeDomain          the actual source code
-  you> where would I add a retry    one guided answer: START HERE (file:line),
-       helper                       PUT IT HERE (the pattern to imitate),
-                                    YOU ARE HERE (the call chain)
-  you> where for https://github.com/updatecli/updatecli/issues/10690
-       Paste a GitHub issue URL: it fetches the issue, analyzes the repo,
-       and points at the exact edit locations — the config struct to
-       extend, the shared code to wrap, the call chain it sits in.
-  you> https://github.com/pashkov256/deletor/pull/328
-       Paste a GitHub PR URL: it lists every file the PR changed, each
-       with a plain-words one-liner saying what that file is for.
+  you> add a gorqlite connection named Connect
+  gollemer [composer]> ... this project doesn't have it yet.
+      I don't fetch dependencies for you, so run this first:
+        go get github.com/rqlite/gorqlite
+      Once you've run it, tell me "installed" ...
+  you> installed
+      it re-checks go.mod, then re-offers the original plan
+      behind the same [y/n] gate. Say "installed" early and it
+      tells you plainly it isn't there yet, and keeps waiting.
 
-Go errors translate themselves — just paste one, no command needed:
+Put a piece on an exact line:
 
-  you> ./prog.go:12:5: undefined: foo
-  gollemer [go]> 🔍 UNDEFINED NAME
-      What it means: Go doesn't know the name "foo" here...
-      How to fix: Check the spelling first...
+  you> add a print line in main to app/main.go after line 9
+      the plan quotes line 9's actual text; pieces land only
+      between whole statements; a bad line number gets a refusal
+      that explains why — never a silent guess
 
-For the beginner's view of a function, the xray intelligence engine
-walks you through it — analogy, execution steps, safety badge:
+Run the project's commands:
 
-  you> walk me through routeDomain
-  gollemer [goanalyze]> BEGINNER WALK: chat.routeDomain
-      Think of it like this: A recipe card: named steps you can run...
-      1. Route domain — classifies the chat input...
-      2. ...
-      Safety: clean · low — 2 allocation sites
+  you> run make help
+  gollemer [makefile]> run make help
+  [run it here? 'make help'] [y/n]: y
+  [running: make help — Ctrl-C to interrupt] ... [done]
 
-Questions only fire on names really in the project, so
-"what does a goroutine do" still goes to the Go brain.
+  Only targets from the project's own Makefile can run, each
+  behind [y/n]. There is no shell. In a piped session the chat
+  won't run commands at all.
 
-Explain commands (the gocli + makefile brains):
+Test everything at once:
 
-  you> what does go build ./... do
-  you> build with the race detector
-  you> what does make chat do
-  you> run make eval              validated against the Makefile, then run
-  you> explain make eval          what it does + its recipe, then run
+  make handtest
+      drives the real chat through scripted sessions in a
+      throwaway project — folders, bare files, webserver +
+      serve-html, security, line placement, database + the
+      gorqlite gate, the statement pieces — checks the files,
+      builds the scratch project, prints a PASS/FAIL scoreboard
+      (45 passed, 0 failed on 2026-11-01).
 
-The gocli brain knows the full go toolchain (build, run, test, vet,
-fmt, mod, get, install, list, clean, doc, env, version, generate,
-fix, work, tool, bug, telemetry). The makefile brain knows every
-make command in this repo. Each prints the exact command and asks
-[run it here? ...] [y/n] — answer y and it runs right there in the
-terminal, no shell involved.
+WHERE ITS KNOWLEDGE COMES FROM
+------------------------------
+The chat makes no external calls. Good sources were read once and
+turned into data the program ships with — pieces for the book,
+pointers on the reading shelf:
 
-Write a small Go program in plain words (the /flow command):
+  Go by Example (gobyexample.com)      the book's first big
+      expansion: most topics became pieces; learn-path links
+  YourBasic (yourbasic.org)            basics became pieces;
+      its gotcha articles are shelf reading
+  Callicoder                           tutorial series; types &
+      operators on the shelf, topics mostly matched the book
+  A Tour of Go (go.dev/tour)           mapped topic by topic;
+      the rest are named exclusions (methods, generics)
+  Go Web Examples (gowebexamples.com)  the web pieces: routing,
+      templates, form and session handlers (stdlib versions)
+  go-database-sql.org                  the database pieces:
+      open, query, exec, prepared, transactions, NULLs
+  SQLInterface (go.dev/wiki)           shelf: how database/sql
+      really works — sql.Open doesn't connect; drivers register
+      by blank import. (Its Switch page: the type-switch piece.)
+  Effective Go (go.dev)                the style authority on
+      the shelf, section by section
+  Devhints (devhints.io/go)            one-page syntax sheet, on
+      the shelf; two missing pieces (while loop, conversions)
+  GoInterview (app.gointerview.dev)    interview reference, shelf
+  Programming Idioms                   a few hundred tiny tasks;
+      the statement-sized ones the book lacked became 19 pieces
+  rqlite docs (rqlite.io)              the rqlite pieces (plain
+      HTTP, no library), the gated gorqlite pieces, run guidance
+  OWASP Cheat Sheets + MDN             reading behind the
+      security pieces (JWT, CORS, IDOR, password storage)
+  Practical Go Lessons, How To Code in Go, Astaxie's Build Web
+  Applications with Golang             shelf reading, plus the
+      form-values piece and struct-tag support
+  The Advocates doc                    the maintainer's own
+      collected Go links — "i want to build X" answers from it
 
-  you> /flow count with a mutex
-  gollemer [flow]> [ YOUR PROMPT ]
-      "count with a mutex"
-                    │
-                    ▼
-      ┌────────────────────────────────────────────────┐
-      │            pkg/engine/pipeline.go              │
-      ├────────────────────────────────────────────────┤
-      │ 1. Synthesis    -> prompt becomes Go code       │
-      │ 2. Proving      -> 0 nil-panics, 0 leaks   ✓    │
-      │ 3. Auto-tuning  -> ...                         │
-      │ 4. Visuals      -> walkthrough + analogy        │
-      └─────────────────────────┬──────────────────────┘
-                                ▼
-      ┌────────────────────────────────────────────────┐
-      │              TERMINAL RENDERER                 │
-      │  • Production Go Code  • Beginner Analogy      │
-      │  • Step-by-Step Walk   • Safety Badge          │
-      └────────────────────────────────────────────────┘
+HOW IT WORKS, IN PLAIN WORDS
+----------------------------
+17 small specialists behind one prompt; a router sends each
+sentence to the right one, and a scoreboard remembers who
+answered (ask: "brains", or "how are your brains doing").
 
-      Here's your Go program:
-      ```go
-      ...
-      ```
-      💡 Think of it like ...
-      1. Main — calls worker.
-      ✅ Safety: verified — ...
-      ⚡ Speed: already lean — ...
+  Small trained brains recognize and converse: conversation, Go
+  concepts, Go commands, make commands. That is what small
+  models measurably do well.
+
+  Deterministic code — ordinary programming, no model — does
+  everything that must be exact: reading your project with Go's
+  own parser, and writing every edit. An edit is assembled from
+  the book of 135 pieces and your project's own shapes, shown
+  as a plan with a diff, applied only after your yes, and
+  checked by building the project. A failed build restores your
+  file byte for byte.
+
+  One narrow exception: words the book's grammar doesn't match
+  ("add a struct called Point with X as an int and Y as a
+  string") may get a PROPOSAL from a small model — labeled as a
+  proposal, behind the same gate and build check. On unseen
+  wordings it is exactly right about 44% of the time. That is
+  why it proposes, and never writes on its own.
+
+  In short: learned models recognize and converse; verified
+  code holds the pen.
+
+HONEST LIMITS
+-------------
+  Methods on your own types — refused by name: a method needs
+  your type's whole world in the sentence. (Reading is shelved.)
+  Generics — pieces needing type parameters are excluded: the
+  sentence can't carry the types.
+  Database drivers — never written; the TODO marks the spot and
+  you pick the driver.
+  Dependencies — never fetched; it prints the go get line and
+  waits for your "installed".
+  No shell — only gated make/go commands, from the project's
+  own Makefile allowlist.
+  Placed, not wired — a handler in handlers/ compiles, but
+  registering it with your server is a named next step.
+  Whole programs from thin air — it assembles known pieces; it
+  won't invent a large program from a vague sentence.
 
 COMMANDS
 --------
-  make start         the start-here guide with example prompts
-  make chat          talk to gollemer — one session, six brains
-  make debug-chat    same, with the thought process shown
-  make flow          one prompt through the pipeline, plain words:
-                     PROMPT="create a worker pool"
-  /flow <prompt>     (inside make chat) same, in plain words
-  make classic       the flag-driven pipeline CLI (ARGS="-help"):
-                     -flow, -impact, -style, -mock, ...
-  make sel           pick a command from a columnar fuzzy finder
+  make start         open the chat — the whole product
+  make chat          the same chat, started directly
+  make guide         the start-here guide
   make explain       this overview
-  make smarter       the one-command upgrade — more data, retrained
-                     brains, evals, and a report
+  make handtest      scripted end-to-end tests, PASS/FAIL out
+  make sel           pick a command from a fuzzy finder
+  make debug-chat    the chat with its thought process shown
   make eval          score every brain on its fixed eval suite
-  make train-social  retrain the social conversation brain
-  make train-go      retrain the Go concept brain
-  make train-gocode  retrain the Go code-generation brain
-  make train-gocli   retrain the Go CLI command brain
-  make train-makefile
-                     retrain the makefile command brain
-  make import        import new training pairs through the quality gate
-                     (FILE=path.jsonl) — bad pairs are quarantined
+  make smarter       the one-command upgrade: more data,
+                     retrained brains, evals, and a report
+  make train-social  retrain one brain (also: train-go,
+                     train-gocode, train-gocli, train-makefile)
+  make import        teach it Q&A pairs through the quality
+                     gate (FILE=pairs.jsonl) — bad pairs are
+                     quarantined, never trained on
+  make flow          one prompt through the beginner pipeline:
+                     PROMPT="create a worker pool"
+  make classic       the older flag-driven pipeline CLI
+                     (ARGS="-help")
+  make watch         watch a folder while you code (DIR=...)
   make help          list the commands
 
-Ask inside the chat and it will offer to run any of these for you:
+Ask inside the chat and it will offer to run these for you:
   you> list the commands
   gollemer [makefile]> run make help
   [run it here? 'make help'] [y/n]: y
 
-THE PKG/ ENGINE ROOM (the libraries behind the chat)
----------------------------------------------------
-  go test ./pkg/...   # eight packages: ast, analysis, memory,
-                      # runner, synthesis, engine, xray, beginner
+THE ENGINE ROOM (for the curious)
+---------------------------------
+  pkg/ holds the libraries behind the chat (ast, analysis,
+  memory, runner, synthesis, engine, xray, beginner):
+    go test ./pkg/...
+  internal/ai/analyze/ reads Go code with go/ast — summaries,
+  the story, where-to-change answers.
+  internal/ai/training/chat/ is the chat itself: the router,
+  the brains, the composer, the book (data/concepts.json).
 
-  # the classic CLI wires them into runnable commands:
-  go run ./cmd/gollemer-classic -impact -symbol "BuildGraph" -dir ./pkg/memory
-      # which files would need updating if you changed that symbol
-  go run ./cmd/gollemer-classic -style -dir ./pkg/memory
-      # infer the repo's coding conventions (error style, tags, docs)
-  go run ./cmd/gollemer-classic -mock
-      # full pipeline demo: graph → proving → MCTS → self-heal → auto-tune
-
-Where the pieces live:
-  internal/ai/analyze/                 goanalyze: reads Go code with go/ast
-    ascii.go                           terminal dependency-graph renderer
-    visuals.go                         package sizes, coupling, biggest files,
-                                       the combined visual report
-    report.go                          summaries, reading guide, where-to-change
-    qa.go                              answers "what does X do" about the code
-  internal/ai/training/chat/
-    goanalyze.go                       /analyze command, "show me a visual"
-    makeexplain.go                     "run make X" / "explain make X" in chat
-    flow.go                            /flow command (engine, in-process)
-  pkg/engine/reactive.go               the reactive pipeline (synthesis → prove
-                                       → tune → trace)
-  pkg/engine/render.go                 RenderBeginner: the plain-words output
-  pkg/beginner/assistant.go            plain-English code generation templates
-
-How it learns: new Q&A pairs pass a coherence quality gate, merge into
-data/training/chat_pairs.jsonl, and the brains retrain on old + new.
-Ask it "what is gollemer" or "what does make smarter do" in the chat.
+How it learns more: new Q&A pairs pass a coherence quality
+gate, merge into data/training/chat_pairs.jsonl, and the brains
+retrain on old + new (make smarter). Ask it "what is gollemer"
+or "how do i teach you new things" in the chat.
 EOF
