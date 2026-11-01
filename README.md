@@ -295,19 +295,80 @@ Only commands from the project's own Makefile can run this way, each
 behind that `[y/n]`. There is no shell: the chat can't be talked into
 running anything else.
 
+### Run your program
+
+`run the program <file>.go` runs *your* program — never a Makefile
+target that happens to sound similar. Behind the same run gate, the
+chat builds it first (a compile error is reported as one, with the
+compiler's own words — nothing is ever said to have run that didn't),
+then starts it. A file that shares its folder with other `.go` files
+runs as its whole package; a lone file runs as itself.
+
+A program that finishes is reported with its real exit state and its
+own output. A program still running after a few seconds — a server —
+stays running in the background while the chat gives you your prompt
+back:
+
+```
+you> run the program jake/main.go
+Run it? go run jake/main.go [auto-yes: your 'do all' directive]
+gollemer [runner]> [running: jake/main.go — its output is being kept]
+gollemer [runner]> jake/main.go is running in the background — serving at http://localhost:8080. Say "show visits" to read its log (handler visits included), or "stop the program" to stop it.
+gollemer [runner]> Opening http://localhost:8080 in your browser.
+you> show visits
+gollemer [runner]> Here's what jake/main.go has printed (2 lines):
+listening at http://localhost:8080 — press Ctrl+C to stop
+visit: GET /
+gollemer [runner]> Visits appear in this log when the program prints them — servers Gollemer creates print one line per visit.
+gollemer [runner]> It's still running.
+you> top
+gollemer [runner]> Programs this chat is running — only the ones it started, not everything on this computer:
+gollemer [runner]> jake/main.go — running for 1 second, serving at http://localhost:8080; 2 lines logged, 1 visit. Say "stop the program" to stop it.
+you> stop the program
+gollemer [runner]> Stopped jake/main.go — it's no longer running. Its log kept 2 lines; say "show the program log" to read them.
+```
+
+(From a real run on this tree, 2026-11-01: the folder and the
+webserver file were created by the asks in the sections above, the
+visit is a real HTTP fetch, and the browser really was opened at the
+address the program printed. If the browser can't be opened, the chat
+says so and prints the address on its own line instead.)
+
+The rules around it:
+
+- **One at a time.** Running a second program while one runs answers
+  with the first one's live status, not a second instance.
+- **Stop means the program.** `stop the program`, `stop it`,
+  `stop the server` — and bare `stop` while one runs — stop the
+  program and keep the chat open. With nothing running, those ask
+  plainly ("No program is running right now") and bare `stop` keeps
+  its old meaning: it ends the chat. Closing the chat (`/quit`, or
+  the input ending) stops any running program — nothing is orphaned.
+- **`top` shows what the chat itself is running**: the program, how
+  long for, its address if it's a server, and how much it has logged
+  (visits counted). A program that died is listed as exited, never
+  as live.
+- **Visits are the program's own words.** There is no proxy: handler
+  visits land in the log because the program prints them — servers
+  Gollemer creates print one `visit: GET /…` line per visit, and
+  `show visits` / `show the program log` says exactly that for
+  programs you wrote by hand.
+
 ### Test everything at once
 
 ```
 $ make handtest
 ...
-handtest scoreboard: 45 passed, 0 failed, 45 total
+handtest scoreboard: 57 passed, 0 failed, 57 total
 ```
 
 `make handtest` drives the real chat through scripted sessions in a
 throwaway project — folder creation, bare files, the webserver and
 serve-an-html-file recipes, the security pieces, line placement, the
-database pieces and the dependency gate, and the everyday statement
-pieces — then checks the files it should have written and builds the
+database pieces and the dependency gate, running your own programs
+(a quick one, a live server with a real visit in its log, stop, and
+top), and the everyday statement pieces — then checks the files it
+should have written and builds the
 whole scratch project. It's the same test a person would do by hand
 after every update, automated. (The scoreboard above is from a real
 run on 2026-11-01.)
@@ -407,7 +468,7 @@ guesses.
 
 ## A note on the numbers in this README
 
-135 pieces, 17 brains, 45 handtest cases — these are counts of what's
+135 pieces, 17 brains, 57 handtest cases — these are counts of what's
 actually in this checkout, and the model scores quoted are the
 measured ones, kept next to the features they describe. When a number
 changes, this file should change with it.

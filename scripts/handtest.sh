@@ -11,8 +11,11 @@
 # folder-default declarations (handlers/, middleware/,
 # security/, database/), the webserver + serve-an-html-file
 # recipe, the security rows in a program file, line-number
-# placement, the gorqlite dependency gate, and the basics +
-# cheatsheet statement rows.
+# placement, the gorqlite dependency gate, running your own
+# programs (quick ones, a live server with visits in its log,
+# and the pin that "run the program X" never becomes the
+# project's `make start`), and the basics + cheatsheet
+# statement rows.
 #
 # How it works:
 #   - Everything happens under handtest/ at the repo root,
@@ -93,6 +96,15 @@ module handtest
 
 go 1.21
 EOF
+
+# A Makefile with a start target, on purpose: the scratch
+# project's own `make start` must never be what "run the
+# program <file>.go" runs (John's 2026-11-01 screenshot: the
+# chat ran the HOST project's make start and narrated a
+# success that never happened). If this target ever executes
+# during the run, its marker lands in a transcript and the
+# run-vs-make case fails.
+printf 'start:\n\t@echo SCRATCH-MAKE-START-RAN\n' > "$SCRATCH/Makefile"
 
 # The program file: line numbers are load-bearing for the
 # placement case — line 9 is fmt.Println("one"), line 10 is
@@ -351,6 +363,110 @@ if grep -rqF --include='*.go' "gorqlite" "$SCRATCH/app" "$SCRATCH/handlers" "$SC
 else
 	ok gorqlite-nothing-written
 fi
+
+# --- sessions: run your own programs ---------------------------------------
+# quick/ is a lone-file program that prints one line and
+# exits; broken/ is a lone file that does not compile. Both
+# are single-file packages on purpose (the form rule: a lone
+# file runs as itself). They are removed before the final
+# build — broken/ would fail it by design.
+
+mkdir -p "$SCRATCH/quick" "$SCRATCH/broken"
+cat > "$SCRATCH/quick/main.go" <<'EOF'
+package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("hello from the quick program")
+}
+EOF
+cat > "$SCRATCH/broken/main.go" <<'EOF'
+package main
+
+func main() {
+	println(nopeUndefined())
+}
+EOF
+
+cat > "$SCRATCH/.inputs/runprog.txt" <<'EOF'
+top
+run the program quick/main.go
+y
+run the program broken/main.go
+y
+/quit
+EOF
+run_session runprog
+
+case_transcript_contains run-top-empty runprog "No programs are running right now"
+case_transcript_contains run-quick-program runprog "Run it? go run quick/main.go" "hello from the quick program" "It ran and finished (exit code 0)"
+case_transcript_lacks run-not-make-start runprog "SCRATCH-MAKE-START-RAN"
+case_transcript_contains run-compile-error runprog "It didn't run" "doesn't compile yet" "undefined: nopeUndefined"
+
+# --- session: a live server, run in the background ---------------------------
+# This session can't be a plain input file: the visit has to
+# happen BETWEEN chat lines, while the server runs. A FIFO
+# feeds the chat; the script answers the gate, waits for the
+# server to answer a real HTTP fetch, then asks for the log
+# (the visit must be in it) and stops the program.
+
+RUNFIFO="$SCRATCH/.inputs/runserver.fifo"
+mkfifo "$RUNFIFO"
+RSOUT="$SCRATCH/transcripts/runserver.txt"
+: > "$RSOUT"
+(cd "$SCRATCH" && env -u GOEXPERIMENT timeout "$SESSION_TIMEOUT" "$BIN" -real-chat -domain unified) \
+	< "$RUNFIFO" >> "$RSOUT" 2>&1 &
+RSCHAT=$!
+exec 7> "$RUNFIFO"
+printf 'run the program webtest/main.go\ny\n' >&7
+served=""
+for _ in $(seq 1 90); do
+	if curl --noproxy '*' -sf -o /dev/null "http://localhost:8080/"; then
+		served=1
+		break
+	fi
+	sleep 1
+done
+printf 'show visits\n' >&7
+sleep 1
+printf 'top\n' >&7
+sleep 1
+printf 'stop the program\n' >&7
+sleep 1
+printf 'top\n' >&7
+sleep 1
+printf '/quit\n' >&7
+exec 7>&-
+wait "$RSCHAT" 2>/dev/null || true
+{
+	printf '===== session: runserver =====\n'
+	cat "$RSOUT"
+	printf '\n'
+} >> "$SCRATCH/transcript.txt"
+
+if [ -n "$served" ]; then
+	ok run-server-visit-served
+else
+	bad run-server-visit-served "the webtest server never answered http://localhost:8080/"
+fi
+case_transcript_contains run-server-background runserver "is running in the background" "http://localhost:8080"
+if grep -qF "Opening http://localhost:8080 in your browser." "$RSOUT" || grep -qF "couldn't open your browser" "$RSOUT"; then
+	ok run-server-browser-step
+else
+	bad run-server-browser-step "neither the browser announcement nor its honest failure is in the runserver transcript"
+fi
+case_transcript_contains run-server-visit-logged runserver "visit: GET /"
+case_transcript_contains run-top-server runserver "Programs this chat is running" "webtest/main.go — running for" "1 visit"
+case_transcript_contains run-server-stopped runserver "Stopped webtest/main.go"
+case_transcript_contains run-top-after-stop runserver "It's no longer running."
+if curl --noproxy '*' -sf -o /dev/null --max-time 2 "http://localhost:8080/"; then
+	bad run-server-port-free "http://localhost:8080/ still answers after stop the program"
+else
+	ok run-server-port-free
+fi
+
+rm -rf -- "$SCRATCH/quick" "$SCRATCH/broken"
 
 # --- sessions: basics + cheatsheet statement rows -------------------------
 # One stub function per row group (see pieces.go): the rows'

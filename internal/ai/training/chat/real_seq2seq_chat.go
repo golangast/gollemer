@@ -1130,6 +1130,10 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 	// Interrupted-edit recovery already ran in RunRealChat,
 	// before this loop was dispatched.
 	for {
+		// A program this session started reports real changes
+		// on the prompt cycle — new output, or an exit nobody
+		// has surfaced yet — in at most one short line.
+		noteProgramActivity()
 		line, rerr := reader.ReadLine(cPrompt("you> "))
 		if rerr == io.EOF {
 			break
@@ -1141,7 +1145,11 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if line == "" {
 			continue
 		}
-		if line == "/quit" || line == "exit" || line == "quit" || line == "stop" {
+		// Bare "stop" quits the chat — except while a program
+		// is running, when it means the program (stopMeansQuit
+		// owns that fork; the run-program claim below takes
+		// the line in that case).
+		if line == "/quit" || line == "exit" || line == "quit" || stopMeansQuit(line) {
 			fmt.Println("[bye — see you next time]")
 			break
 		}
@@ -1196,6 +1204,19 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// reach the classifier or a brain. Other lines pass
 		// through untouched; the flow waits (the guide's rule).
 		if tryLearnCommand(line) {
+			continue
+		}
+		// Run one of the user's own programs, claimed
+		// deterministically ahead of the beginner five — and
+		// therefore ahead of the intent layer and the makefile
+		// brain's run path, which between them read "run the
+		// program jake/main.go" as "watch", ran the HOST
+		// project's `make start`, and narrated a success that
+		// never happened (John's screenshot, 2026-11-01). A
+		// .go-file run ask is this claim's alone; the claim
+		// also owns the stop and show-log lines while a
+		// program runs. See runprogram.go.
+		if tryRunProgram(line, reader, profile) {
 			continue
 		}
 		// Beginner five, claimed deterministically before routing —
@@ -1446,6 +1467,9 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 			printThoughtTrace(trace)
 		}
 	}
+	// A program this session started never outlives the chat:
+	// /quit and EOF both land here.
+	stopProgramAtChatEnd()
 	return nil
 }
 

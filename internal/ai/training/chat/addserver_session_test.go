@@ -34,9 +34,13 @@ import (
 // claimChain runs one line through the unified loop's
 // deterministic claims, in order, with a scripted gate answer.
 // Package lookup sits directly after build resources, exactly
-// as in the loops.
+// as in the loops. Run-the-program sits directly after learn,
+// ahead of the beginner five, exactly as in the unified loop.
 func claimChain(line string, ask editAsk, profile *UserProfile) bool {
 	if tryLearnCommand(line) {
+		return true
+	}
+	if runRunProgram(line, ask, profile) {
 		return true
 	}
 	if handleBeginnerCommand(line, profile) {

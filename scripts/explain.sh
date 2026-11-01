@@ -121,6 +121,30 @@ Run the project's commands:
   behind [y/n]. There is no shell. In a piped session the chat
   won't run commands at all.
 
+Run your program:
+
+  you> run the program jake/main.go
+  Run it? go run jake/main.go [auto-yes: your 'do all' directive]
+  gollemer [runner]> jake/main.go is running in the background — serving at http://localhost:8080. Say "show visits" to read its log (handler visits included), or "stop the program" to stop it.
+  gollemer [runner]> Opening http://localhost:8080 in your browser.
+  you> stop the program
+  gollemer [runner]> Stopped jake/main.go — it's no longer running.
+
+  "run the program <file>.go" runs YOUR program — never the
+  project's make start. It builds first (compile errors are
+  reported as compile errors, in the compiler's own words),
+  runs behind the same [y/n] gate, and a file with sibling
+  .go files runs as its whole package. A quick program is
+  reported with its real exit state and its own output; a
+  server stays running in the background while you keep
+  chatting, its output (visits included — servers Gollemer
+  creates print one line per visit) kept for "show visits" /
+  "show the program log". "top" lists what the chat itself is
+  running, honestly scoped. "stop the program" / "stop it" /
+  bare "stop" while one runs stop the program and keep the
+  chat open; closing the chat stops it too — no orphans. If
+  the browser can't open, the address is printed plainly.
+
 Test everything at once:
 
   make handtest
@@ -129,7 +153,7 @@ Test everything at once:
       serve-html, security, line placement, database + the
       gorqlite gate, the statement pieces — checks the files,
       builds the scratch project, prints a PASS/FAIL scoreboard
-      (45 passed, 0 failed on 2026-11-01).
+      (57 passed, 0 failed on 2026-11-01).
 
 HONEST LIMITS
 -------------

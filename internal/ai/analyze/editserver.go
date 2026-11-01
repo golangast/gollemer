@@ -25,10 +25,14 @@ import (
 // the two can never drift into two different servers.
 
 // WebServerMainBody is the statement block of the component's
-// main: register one handler, announce, serve. Tab-indented, one
-// statement group per line block, no trailing blank line — ready
-// to sit between a func main's braces.
+// main: register one handler, announce, serve. The handler logs
+// every visit (method + path) to the program's own output, so a
+// session that runs the program can show its visits from the
+// log it keeps. Tab-indented, one statement group per line
+// block, no trailing blank line — ready to sit between a func
+// main's braces.
 const WebServerMainBody = `	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Printf("visit: %s %s\n", r.Method, r.URL.Path)
 		fmt.Fprintln(w, "hello — your webserver is running")
 	})
 	fmt.Println("listening at http://localhost:8080 — press Ctrl+C to stop")
