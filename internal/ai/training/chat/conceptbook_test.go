@@ -246,7 +246,7 @@ func TestConceptDeclineWritesNothing(t *testing.T) {
 	if !strings.Contains(out, "Not applied") {
 		t.Errorf("decline not reported:\n%s", out)
 	}
-	if got := readBack(t, root, "jim/main.go"); got != "package main\n" {
+	if got := readBack(t, root, "jim/main.go"); got != createdMainStub {
 		t.Errorf("declined concept wrote to jim/main.go:\n%s", got)
 	}
 }
@@ -275,7 +275,7 @@ func TestConceptGuidanceThroughChain(t *testing.T) {
 			t.Errorf("%q guidance does not say %q:\n%s", c.line, c.want, out)
 		}
 	}
-	if got := readBack(t, root, "jim/main.go"); got != "package main\n" {
+	if got := readBack(t, root, "jim/main.go"); got != createdMainStub {
 		t.Errorf("guidance wrote to jim/main.go:\n%s", got)
 	}
 }
@@ -344,7 +344,7 @@ func TestConceptFunctionNamelessGuidanceNamesAllThreeForms(t *testing.T) {
 			t.Errorf("nameless-function guidance does not name %q:\n%s", want, out)
 		}
 	}
-	if got := readBack(t, root, "jim/main.go"); got != "package main\n" {
+	if got := readBack(t, root, "jim/main.go"); got != createdMainStub {
 		t.Errorf("guidance wrote to jim/main.go:\n%s", got)
 	}
 }
@@ -500,7 +500,7 @@ func TestConceptOrderingAgainstNeighbours(t *testing.T) {
 	if !handled || strings.Contains(out, "concept book") {
 		t.Errorf("webserver line stolen or unhandled:\n%s", out)
 	}
-	if got := readBack(t, root, "jim/main.go"); got != analyze.WebServerSource {
+	if got := readBack(t, root, "jim/main.go"); got != filledMainStub() {
 		t.Errorf("webserver line did not fill the component:\n%s", got)
 	}
 

@@ -11,12 +11,35 @@ package chat
 //	create|make [a] folder|directory [named|called] <name>
 //	create|make [a] file [named|called] [<file>]
 //	    [in folder <dir>] [with a <kind>]
+//	create|make [a] <path>.go [in folder <dir>]
 //
 // <kind> has exactly one member today: a webserver — a small
 // working net/http program from the fixed template below. A .go
-// file with no kind gets just its package clause (the sibling
-// package's name when the folder is an existing Go package, else
-// package main); any other file starts empty.
+// file with no kind gets the minimal honest file (below); any
+// other file starts empty.
+//
+// The third form is the bare-file fix (2026-11-01): the file
+// names itself, with no "file" word — "create jane/main.go",
+// "create main.go in folder jane". Before it, those lines fell
+// through every claim into the intent layer's "review a
+// function?" prompt or the add boundary's answer about a
+// different main.go. The path form claims only .go targets;
+// any other bare path keeps falling through to its owner.
+//
+// A bare .go creation (either grammar) follows one set of rules,
+// settled against the disk before the gate: the containing
+// folder must already exist (a missing one is refused with the
+// "create a folder …" line, never silently made — the starter
+// forms above keep their make-the-folder behavior); the package
+// clause is the folder's own package when it holds Go files
+// (two or more packages there is a refusal naming them), else
+// package main for a main.go, else the folder's own name for a
+// file in an empty folder; a main.go also gets an empty func
+// main with a TODO body, so what lands is a starting PROGRAM
+// the full build check can verify — not a bare clause the
+// linker could only ever reject. A folder that already has a
+// func main in that package refuses another main.go, naming
+// the file that holds it.
 //
 // Everything rides the one write gate every other write uses: the
 // exact plan — every path, and a file's full content — prints
@@ -49,11 +72,13 @@ package chat
 import (
 	"context"
 	"fmt"
+	"go/ast"
 	"go/parser"
 	"go/token"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -88,7 +113,7 @@ func parseCreate(line string) (createReq, bool) {
 	s = strings.TrimSuffix(s, "?")
 	s = strings.TrimSpace(s)
 	fields := strings.Fields(s)
-	if len(fields) < 3 {
+	if len(fields) < 2 {
 		return createReq{}, false
 	}
 	low := make([]string, len(fields))
@@ -182,8 +207,42 @@ func parseCreate(line string) (createReq, bool) {
 			}
 		}
 		return req, true
+	default:
+		// The bare-file form: the file names itself with no
+		// "file" word — "create jane/main.go", "create main.go
+		// in folder jane", optionally behind the article the
+		// other forms allow. Only a .go target claims; a
+		// qualifier tail ("with …") or a different tail word
+		// leaves the line to its owner, exactly as before.
+		if !strings.HasSuffix(low[i], ".go") {
+			return createReq{}, false
+		}
+		req := createReq{file: fields[i]}
+		i++
+		if i == len(fields) {
+			return req, true
+		}
+		if low[i] != "in" {
+			return createReq{}, false
+		}
+		i++
+		if i < len(fields) && low[i] == "the" {
+			i++
+		}
+		if i >= len(fields) || low[i] != "folder" {
+			return createReq{}, false
+		}
+		i++
+		start := i
+		for i < len(fields) && low[i] != "with" {
+			i++
+		}
+		if start == i || i != len(fields) {
+			return createReq{}, false
+		}
+		req.loc = strings.Join(fields[start:i], "/")
+		return req, true
 	}
-	return createReq{}, false
 }
 
 // --- parsing: the boundary family ---
@@ -518,22 +577,30 @@ func planCreate(req createReq, rootAbs string) (*createPlan, string) {
 		return nil, fmt.Sprintf("%s is already there — I never overwrite what's yours", rel)
 	}
 	plan := &createPlan{file: &createItem{abs: abs, rel: rel}}
+	isGo := strings.HasSuffix(strings.ToLower(req.file), ".go")
+	plan.isGo = isGo
 	dirAbs := filepath.Dir(abs)
 	if dirAbs != rootAbs {
 		// The location: an existing folder is fine, an existing
-		// file is a refusal, a missing one joins the plan.
+		// file is a refusal, a missing one joins the plan — with
+		// one exception. A BARE .go file (no starter kind) never
+		// makes its folder silently: the folder is a step of its
+		// own, so a missing one is refused with the line that
+		// makes it (the serve-html precedent). The starter forms
+		// and non-.go files keep the make-the-folder behavior.
 		if st, err := os.Stat(dirAbs); err == nil {
 			if !st.IsDir() {
 				locRel := filepath.ToSlash(mustRel(rootAbs, dirAbs))
 				return nil, fmt.Sprintf("%s is a file, not a folder — the new file can't go inside it", locRel)
 			}
+		} else if req.kind == "" && isGo {
+			locRel := filepath.ToSlash(mustRel(rootAbs, dirAbs))
+			return nil, fmt.Sprintf("there's no folder %s in this project — say \"create a folder %s\" first, then ask again", locRel, locRel)
 		} else {
 			plan.dirs = missingDirs(rootAbs, filepath.ToSlash(mustRel(rootAbs, dirAbs)))
 		}
 	}
 
-	isGo := strings.HasSuffix(strings.ToLower(req.file), ".go")
-	plan.isGo = isGo
 	switch {
 	case req.kind == "webserver":
 		// A webserver is a main package; dropping one into a
@@ -544,17 +611,119 @@ func planCreate(req createReq, rootAbs string) (*createPlan, string) {
 		plan.pkg = "main"
 		plan.content = []byte(webserverSource)
 	case isGo:
-		pkg := siblingPackage(dirAbs)
+		// The bare .go file: the minimal honest file, with its
+		// package settled from the disk. A folder already
+		// holding Go files lends its package — two or more
+		// packages there is a refusal naming them, since a new
+		// file has to join exactly one. An empty folder lends
+		// its own name, except at the project root or for a
+		// main.go, which is package main.
+		pkgs := folderPackages(dirAbs)
+		if len(pkgs) > 1 {
+			locRel := filepath.ToSlash(mustRel(rootAbs, dirAbs))
+			if locRel == "." {
+				locRel = "the project folder"
+			}
+			return nil, fmt.Sprintf("%s holds Go files from more than one package (%s) — a new file there has to join one package, and I can't tell which", locRel, strings.Join(pkgs, ", "))
+		}
+		pkg := ""
+		if len(pkgs) == 1 {
+			pkg = pkgs[0]
+		}
+		base := strings.ToLower(filepath.Base(req.file))
 		if pkg == "" {
-			pkg = "main"
+			switch {
+			case base == "main.go", dirAbs == rootAbs:
+				pkg = "main"
+			case token.IsIdentifier(filepath.Base(dirAbs)):
+				pkg = filepath.Base(dirAbs)
+			default:
+				pkg = "main"
+			}
 		}
 		plan.pkg = pkg
-		plan.bareClause = true
-		plan.content = []byte("package " + pkg + "\n")
+		if base == "main.go" {
+			// A main.go is a program, not a clause: it carries
+			// an empty func main with a TODO body (the book's
+			// scaffold voice), so the full build check — not
+			// the bare-clause parse — verifies it. A package
+			// that already has its main refuses a second one,
+			// naming the file that holds it.
+			if holder := existingMainFunc(rootAbs, dirAbs, pkg); holder != "" {
+				return nil, fmt.Sprintf("%s already defines func main — that folder already has its main program, so another main.go can't be added", holder)
+			}
+			plan.content = []byte("package " + pkg + "\n\nfunc main() {\n\t// TODO: write the body\n}\n")
+		} else {
+			plan.bareClause = true
+			plan.content = []byte("package " + pkg + "\n")
+		}
 	default:
 		plan.content = []byte{}
 	}
 	return plan, ""
+}
+
+// folderPackages lists the distinct package names a folder's Go
+// files declare, sorted. A test file's external test package
+// (foo_test in x_test.go) counts as its base package — the two
+// legally share a folder. Unreadable files are skipped: the
+// build check after creation is the backstop for a broken one.
+func folderPackages(dir string) []string {
+	entries, err := os.ReadDir(dir) // sorted by name: deterministic
+	if err != nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	var names []string
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".go") {
+			continue
+		}
+		pf, err := parser.ParseFile(token.NewFileSet(), filepath.Join(dir, e.Name()), nil, parser.PackageClauseOnly)
+		if err != nil || pf.Name == nil {
+			continue
+		}
+		name := pf.Name.Name
+		if strings.HasSuffix(e.Name(), "_test.go") {
+			name = strings.TrimSuffix(name, "_test")
+		}
+		if !seen[name] {
+			seen[name] = true
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	return names
+}
+
+// existingMainFunc returns the project-relative path of the file
+// in dir that already declares a receiver-less func main in
+// package pkg — "" when the package has no main yet.
+func existingMainFunc(rootAbs, dir, pkg string) string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".go") || strings.HasSuffix(e.Name(), "_test.go") {
+			continue
+		}
+		full := filepath.Join(dir, e.Name())
+		pf, err := parser.ParseFile(token.NewFileSet(), full, nil, parser.PackageClauseOnly)
+		if err != nil || pf.Name == nil || pf.Name.Name != pkg {
+			continue
+		}
+		full2, err := parser.ParseFile(token.NewFileSet(), full, nil, 0)
+		if err != nil {
+			continue
+		}
+		for _, d := range full2.Decls {
+			if fn, ok := d.(*ast.FuncDecl); ok && fn.Recv == nil && fn.Name.Name == "main" {
+				return filepath.ToSlash(mustRel(rootAbs, full))
+			}
+		}
+	}
+	return ""
 }
 
 func mustRel(base, target string) string {

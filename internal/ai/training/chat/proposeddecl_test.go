@@ -154,7 +154,7 @@ func TestProposedUnusableAnswerFallsToBoundary(t *testing.T) {
 		if !handled || !strings.Contains(out, "I can't add a struct yet") {
 			t.Errorf("raw %q: line did not land on the boundary:\n%s", raw, out)
 		}
-		if got := readBack(t, root, "jim/main.go"); got != "package main\n" {
+		if got := readBack(t, root, "jim/main.go"); got != createdMainStub {
 			t.Errorf("raw %q: a fall-through wrote to jim/main.go:\n%s", raw, got)
 		}
 	}

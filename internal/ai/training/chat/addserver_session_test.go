@@ -130,9 +130,22 @@ func liveSessionRoot(t *testing.T) string {
 	return dir
 }
 
+// filledMainStub is jim/main.go after the add-server shape
+// fills the created stub's empty main (the planner's state
+// (c)): the stub's own package clause, the component's
+// imports, and the component's body. The standalone component
+// file (analyze.WebServerSource) differs only by its doc
+// comment — that belongs to the whole-file state (a), not
+// the fill.
+func filledMainStub() string {
+	return "package main\n\nimport (\n\t\"fmt\"\n\t\"net/http\"\n)\n\nfunc main() {\n" + analyze.WebServerMainBody + "}\n"
+}
+
 // createJimThroughTheChain runs the user's own first two lines —
-// folder, then the bare-clause file — through the claim chain,
-// exactly as his session created them.
+// folder, then the minimal main.go — through the claim chain,
+// exactly as his session created them. (The file's content was
+// the bare clause until the bare-file fix; since then a bare
+// main.go creation writes the stub program, createdMainStub.)
 func createJimThroughTheChain(t *testing.T, profile *UserProfile) {
 	t.Helper()
 	for _, line := range []string{"create a folder named jim", "create file jim/main.go"} {
@@ -162,15 +175,15 @@ func requireNoAnalyzeOutput(t *testing.T, line, out string) {
 }
 
 // The user's third line, verbatim, in his session state: the
-// project analyzed first, jim and its bare-clause main.go
-// created through the chat itself moments before.
+// project analyzed first, jim and its main.go created through
+// the chat itself moments before.
 func TestAddServerLiveSessionFileLine(t *testing.T) {
 	root := liveSessionRoot(t)
 	withChatSession(t, root, true)
 	profile := &UserProfile{}
 	createJimThroughTheChain(t, profile)
-	if got := readBack(t, root, "jim/main.go"); got != "package main\n" {
-		t.Fatalf("the create feature's file is not the bare clause his session had: %q", got)
+	if got := readBack(t, root, "jim/main.go"); got != createdMainStub {
+		t.Fatalf("the create feature's file is not the stub program his session had: %q", got)
 	}
 	line := "add a webserver to jim/main.go"
 	var handled bool
@@ -182,7 +195,7 @@ func TestAddServerLiveSessionFileLine(t *testing.T) {
 	if !strings.Contains(out, "Here's the edit I assembled") {
 		t.Errorf("the composer did not own the answer:\n%s", out)
 	}
-	if got := readBack(t, root, "jim/main.go"); got != analyze.WebServerSource {
+	if got := readBack(t, root, "jim/main.go"); got != filledMainStub() {
 		t.Errorf("jim/main.go was not filled with the shared component:\n%s", got)
 	}
 	if !strings.Contains(out, "built the project and checked") {
@@ -221,7 +234,7 @@ func TestAddServerLiveSessionAllHisLines(t *testing.T) {
 				continue
 			}
 			requireNoAnalyzeOutput(t, line, out)
-			if got := readBack(t, root, "jim/main.go"); got != analyze.WebServerSource {
+			if got := readBack(t, root, "jim/main.go"); got != filledMainStub() {
 				t.Errorf("analyzed=%v: %q did not fill jim/main.go with the component:\n%s\noutput:\n%s", analyzed, line, got, out)
 			}
 		}
@@ -288,7 +301,7 @@ func TestAddServerChainGuardWording(t *testing.T) {
 			continue
 		}
 		requireNoAnalyzeOutput(t, line, out)
-		if got := readBack(t, root, "jim/main.go"); got != analyze.WebServerSource {
+		if got := readBack(t, root, "jim/main.go"); got != filledMainStub() {
 			t.Errorf("%q did not fill jim/main.go:\n%s\noutput:\n%s", line, got, out)
 		}
 	}

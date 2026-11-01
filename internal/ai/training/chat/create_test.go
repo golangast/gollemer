@@ -7,6 +7,12 @@ import (
 	"testing"
 )
 
+// createdMainStub is the exact content a bare main.go creation
+// writes since the bare-file fix: package main plus an empty
+// func main with a TODO body. Session suites that create
+// jim/main.go through the chain pin "unchanged" against it.
+const createdMainStub = "package main\n\nfunc main() {\n\t// TODO: write the body\n}\n"
+
 // withCreateRoot points the creation root at dir the way an open
 // project would: lastAnalyzeRoot set, no analyzed project object
 // (runCreate resolves the root from the globals, like the loop).
@@ -225,7 +231,9 @@ func TestCreateFileInNewFolderWebserver(t *testing.T) {
 }
 
 // A kindless .go file gets its package clause from the siblings in
-// an existing package folder, and package main in a bare root.
+// an existing package folder. A main.go gets the minimal program —
+// package main plus an empty func main with a TODO body — so the
+// full build check, not the bare-clause parse, verifies it.
 func TestCreateKindlessGoPackageClause(t *testing.T) {
 	root := t.TempDir()
 	withCreateRoot(t, root)
@@ -240,11 +248,12 @@ func TestCreateKindlessGoPackageClause(t *testing.T) {
 	root2 := t.TempDir()
 	withCreateRoot(t, root2)
 	out := captureStdout(t, func() { runCreate("create a file main.go", yes) })
-	if got := readBack(t, root2, "main.go"); got != "package main\n" {
-		t.Errorf("main.go = %q, want package main; output:\n%s", got, out)
+	want := createdMainStub
+	if got := readBack(t, root2, "main.go"); got != want {
+		t.Errorf("main.go = %q, want the minimal program %q; output:\n%s", got, want, out)
 	}
-	if !strings.Contains(out, "Done — created main.go") {
-		t.Errorf("bare main clause not accepted as a starting point:\n%s", out)
+	if !strings.Contains(out, "Done — created main.go") || !strings.Contains(out, "it builds") {
+		t.Errorf("main stub not build-verified as a program:\n%s", out)
 	}
 }
 

@@ -181,7 +181,7 @@ func TestWriteBoundaryLiveSessionLines(t *testing.T) {
 					t.Errorf("analyzed=%v: %q answer does not say %q:\n%s", analyzed, c.line, w, out)
 				}
 			}
-			if got := readBack(t, root, "jim/main.go"); got != "package main\n" {
+			if got := readBack(t, root, "jim/main.go"); got != createdMainStub {
 				t.Errorf("analyzed=%v: %q wrote to jim/main.go — a boundary answer never writes:\n%s", analyzed, c.line, got)
 			}
 		}
@@ -500,7 +500,7 @@ func TestWriteBoundaryNamedClauseLiveLine(t *testing.T) {
 			t.Errorf("%q was answered by the boundary (%q) instead of the concept book:\n%s", served, p, out)
 		}
 	}
-	if got := readBack(t, root, "jim/main.go"); got != "package main\n" {
+	if got := readBack(t, root, "jim/main.go"); got != createdMainStub {
 		t.Errorf("gated-no concept line wrote to jim/main.go:\n%s", got)
 	}
 }
@@ -653,7 +653,7 @@ func TestWriteBoundaryNamedClauseWithTargetLiveLine(t *testing.T) {
 			t.Errorf("%q produced %q — the live misroute's marker:\n%s", line, p, out)
 		}
 	}
-	if got := readBack(t, root, "jim/main.go"); got != "package main\n" {
+	if got := readBack(t, root, "jim/main.go"); got != createdMainStub {
 		t.Errorf("the boundary's line wrote to jim/main.go:\n%s", got)
 	}
 }
