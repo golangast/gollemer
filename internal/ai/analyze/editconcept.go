@@ -680,6 +680,30 @@ func conceptFirstOr(names []string, fallback string) string {
 	return fallback
 }
 
+// conceptStmtText renders a top-level statement for the
+// containment checks below. When the assembler inserts a
+// statement directly after a comment sitting at the end of the
+// target body — the routing row's trailing TODO line is the
+// shipped example — the parser attaches that comment to the
+// inserted statement as its Doc whenever the statement is
+// declaration-led (a var row, like the type switch), and the
+// printer then leads with the comment instead of the
+// statement's own first line, hiding it from the prefix test.
+// The comment belongs to the file, not to the statement:
+// render a declaration-led statement without its Doc. (Found
+// 2026-10-31: routing then type switch in one main was refused
+// even though the statement had landed, correctly placed.)
+func conceptStmtText(fset *token.FileSet, stmt ast.Stmt) string {
+	if ds, ok := stmt.(*ast.DeclStmt); ok {
+		if gd, ok := ds.Decl.(*ast.GenDecl); ok && gd.Doc != nil {
+			bare := *gd
+			bare.Doc = nil
+			return stmtText(fset, &ast.DeclStmt{Decl: &bare})
+		}
+	}
+	return stmtText(fset, stmt)
+}
+
 // selfCheckConceptStatement re-parses the assembled file and
 // confirms the target function now contains the rendered
 // statement's first line.
@@ -694,7 +718,7 @@ func selfCheckConceptStatement(after []byte, funcName, firstLine string) string 
 			continue
 		}
 		for _, stmt := range fd.Body.List {
-			if strings.HasPrefix(stmtText(fset, stmt), strings.TrimSpace(firstLine)) {
+			if strings.HasPrefix(conceptStmtText(fset, stmt), strings.TrimSpace(firstLine)) {
 				return ""
 			}
 		}
@@ -747,7 +771,7 @@ func verifyConceptStatement(root, rel, funcName, firstLine string) bool {
 			continue
 		}
 		for _, stmt := range fd.Body.List {
-			if strings.HasPrefix(stmtText(fset, stmt), strings.TrimSpace(firstLine)) {
+			if strings.HasPrefix(conceptStmtText(fset, stmt), strings.TrimSpace(firstLine)) {
 				return true
 			}
 		}
