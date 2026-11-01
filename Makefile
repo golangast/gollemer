@@ -10,6 +10,8 @@
 #   make explain    what the project is and what each command does
 #   make smarter    the one-command upgrade: expands training data, retrains the
 #                   social + go brains, runs the evals, prints a report
+#   make handtest   scripted end-to-end chat tests in a throwaway project:
+#                   known asks in, files checked, PASS/FAIL scoreboard out
 #   make eval       score every brain on its fixed eval suite
 #   make train-*    retrain one brain: social, go, gocode, gocli, makefile
 #   make import     import new training pairs through the quality gate (FILE=path.jsonl)
@@ -25,7 +27,7 @@ MAIN_CMD   = go run .
 DIR        ?= .
 
 .PHONY: start guide chat debug-chat classic flow sel explain smarter eval help import watch \
-        train-social train-go train-gocode train-gocli train-makefile
+        train-social train-go train-gocode train-gocli train-makefile handtest
 
 ## start: Talk to gollemer — opens the unified chat (terminal only)
 start:
@@ -73,6 +75,10 @@ explain:
 ## smarter: The one-command upgrade — more data, retrained brains, evals, report
 smarter:
 	bash scripts/smarter.sh
+
+## handtest: Scripted end-to-end chat tests — known asks into a throwaway project, PASS/FAIL scoreboard out
+handtest:
+	bash scripts/handtest.sh
 
 ## eval: Score every brain on its fixed eval suite
 eval:

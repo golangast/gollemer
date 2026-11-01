@@ -34,6 +34,9 @@ static/main.wasm
 data/db/*.db
 jim.db
 
+# Scripted hand-test scratch (make handtest; rebuilt every run)
+/handtest/
+
 # Logs and temp output
 out.log
 train_gpu_test.log
