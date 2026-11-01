@@ -206,6 +206,35 @@ var statementConcepts = []concept{
 	{"spawn-process", "statement", "spawn a process", []string{"run a program", "external command"}},
 	// print-line is deliberately NOT here: it is its own family
 	// (the saying slot), generated below.
+	//
+	// The five-sources rows (d6b4a62's book expansion: the
+	// gowebexamples web family, the go-database-sql family,
+	// the Switch wiki's type switch) — appended at the end so
+	// the families above keep their generation order. Their
+	// canonical is the book row's first name, as everywhere.
+	{"routing", "statement", "routing", []string{"router", "routes", "http routing", "serve mux"}},
+	{"html-template", "statement", "html template", []string{"web template", "template", "html templates"}},
+	{"static-files", "statement", "static files", []string{"static file serving", "serve static files", "assets and files"}},
+	{"database", "statement", "database", []string{"database connection", "sql database", "open database"}},
+	{"database-query", "statement", "database query", []string{"query rows", "database rows", "query the database"}},
+	{"database-query-row", "statement", "database query row", []string{"query one row", "query a single row", "single row query"}},
+	{"database-prepared", "statement", "prepared statement", []string{"database prepared statement", "prepare a statement"}},
+	// database-exec's book names also include "database
+	// insert" and "insert into database" — deliberately NOT
+	// trained on: "insert" is the held-out dialect's generic
+	// lead verb and appears in no other family's training
+	// fragments, so an insert-bearing exec word hands the
+	// token to this family alone and every insert-led ask
+	// (any family's) routes here. Measured on the first
+	// sources run: exec fragments carried "insert" in 49%,
+	// every other family 0%, and the new judge's misses were
+	// exactly the insert-led items. The names stay in the
+	// book (the fallback's phrase geometry knows them) and
+	// in the sources judge, which keeps testing them.
+	{"database-exec", "statement", "database exec", []string{"execute statement"}},
+	{"database-transaction", "statement", "database transaction", []string{"transaction", "sql transaction"}},
+	{"database-null", "statement", "database null", []string{"nullable column", "null value", "sql null"}},
+	{"type-switch", "statement", "type switch", []string{"switch on type", "type assertion switch"}},
 }
 
 var declConcepts = []concept{
@@ -215,6 +244,24 @@ var declConcepts = []concept{
 	{"enum", "declaration", "enum", []string{"enumeration"}},
 	{"embedding", "declaration", "embedded struct", []string{"struct embedding", "embedding"}},
 	{"recursion", "declaration", "recursive function", []string{"recursion"}},
+	// The five-sources declaration rows (gowebexamples'
+	// handler-shaped family), appended like the statement
+	// rows above.
+	{"form-handler", "declaration", "form handler", []string{"html form", "contact form", "form"}},
+	{"middleware", "declaration", "middleware", []string{"logging middleware", "basic middleware"}},
+	{"middleware-timing", "declaration", "timing middleware", []string{"middleware timing", "advanced middleware"}},
+	{"middleware-chain", "declaration", "middleware chain", []string{"chain middleware", "middleware chaining"}},
+	{"session-handler", "declaration", "session handler", []string{"session cookie", "session", "login session"}},
+}
+
+// sourcesConceptIDs are the five-sources families (d6b4a62):
+// the ones the -mode heldout-sources judge is built for.
+var sourcesConceptIDs = []string{
+	"routing", "html-template", "static-files", "form-handler",
+	"middleware", "middleware-timing", "middleware-chain",
+	"session-handler", "database", "database-query",
+	"database-query-row", "database-prepared", "database-exec",
+	"database-transaction", "database-null", "type-switch",
 }
 
 func article(name string) string {
@@ -1292,11 +1339,226 @@ type frag struct {
 	Template string `json:"template"`
 }
 
+// ---------- the five-sources held-out judge ----------
+//
+// -mode heldout-sources builds data/training/
+// phrasing_heldout_sources.jsonl: the judge for the 16
+// five-sources families, in the original judge's construction
+// — single-unseen items speak the held-out core dialect and
+// wrappers, single-seen items (the control) speak the train
+// dialect, and BOTH draw slot values from the held-out pools
+// only. The original judge stays byte-identical; this file is
+// a second judge, never a replacement. Leak discipline is
+// the same as the train mode's, checked against the train
+// corpus this generator's train mode wrote (run it first)
+// and against the original judge: normalized-input overlap
+// exactly 0 with both, held-out slot values absent from the
+// train slot values beyond the shared grammar fixtures.
+
+type sourcesReport struct {
+	Seed               int64          `json:"seed"`
+	Items              int            `json:"items"`
+	ByFamilyCell       map[string]int `json:"items_by_family_cell"`
+	SkippedUnemittable int            `json:"skipped_unemittable_targets"`
+	ConflictingInputs  int            `json:"conflicting_inputs_dropped"`
+	DuplicateInputs    int            `json:"duplicate_inputs_dropped"`
+	TrainInputOverlap  int            `json:"train_input_overlap"`
+	JudgeInputOverlap  int            `json:"original_judge_input_overlap"`
+	SlotLeak           []string       `json:"slot_value_leak_beyond_fixtures"`
+}
+
+func runHeldoutSources(outDir string, seed int64) {
+	r := rand.New(rand.NewSource(seed + 7))
+	rep := &sourcesReport{Seed: seed, ByFamilyCell: map[string]int{}}
+	hp := heldoutPools()
+
+	seen := map[string]string{} // normalized input -> output
+	var items []heldItem
+	add := func(a ask, cell string, wrappers []wrapper) {
+		if !emittable(a.canonical) {
+			rep.SkippedUnemittable++
+			return
+		}
+		in, tmpl := dress(r, a, wrappers)
+		n := normInput(in)
+		if prev, dup := seen[n]; dup {
+			if prev != a.canonical {
+				rep.ConflictingInputs++
+				for i, q := range items {
+					if normInput(q.Input) == n {
+						items = append(items[:i], items[i+1:]...)
+						break
+					}
+				}
+				delete(seen, n)
+			} else {
+				rep.DuplicateInputs++
+			}
+			return
+		}
+		seen[n] = a.canonical
+		items = append(items, heldItem{
+			Input: in, Output: a.canonical, Family: a.family,
+			Cell: cell, Template: "heldout/" + tmpl,
+		})
+		rep.ByFamilyCell[a.family+"/"+cell]++
+	}
+
+	for _, id := range sourcesConceptIDs {
+		c := conceptByID(id)
+		if c.id == "" {
+			fail(fmt.Errorf("sources concept %q not in the book lists", id))
+		}
+		build := func(dialect string) ask {
+			if c.kind == "declaration" {
+				return buildDeclAsk(r, hp, c, dialect)
+			}
+			return buildStmtAsk(r, hp, c, dialect)
+		}
+		for got, attempts := 0, 0; got < 20 && attempts < 600; attempts++ {
+			before := len(items)
+			add(build("heldout"), "single-unseen", heldoutWrappers)
+			if len(items) > before {
+				got++
+			}
+		}
+		for got, attempts := 0, 0; got < 8 && attempts < 240; attempts++ {
+			before := len(items)
+			add(build("train"), "single-seen", trainWrappers)
+			if len(items) > before {
+				got++
+			}
+		}
+	}
+	rep.Items = len(items)
+
+	// Leak checks: against the train corpus (read back from
+	// the pairs file the train mode wrote) and the original
+	// judge. Overlaps are dropped, counted, and reported —
+	// and any drop at all fails the run, because by
+	// construction (disjoint dialects, wrappers, and pools)
+	// there should be none.
+	readPairs := func(path string) (inputs map[string]bool, slots map[string]bool) {
+		inputs, slots = map[string]bool{}, map[string]bool{}
+		f, err := os.Open(path)
+		if err != nil {
+			fail(fmt.Errorf("heldout-sources mode reads %s (run the train mode first): %w", path, err))
+		}
+		defer f.Close()
+		sc := bufioScanner(f)
+		for sc.Scan() {
+			line := strings.TrimSpace(sc.Text())
+			if line == "" {
+				continue
+			}
+			var p pair
+			if err := json.Unmarshal([]byte(line), &p); err != nil {
+				fail(err)
+			}
+			inputs[normInput(p.Input)] = true
+			for _, s := range p.Slots {
+				slots[s] = true
+			}
+		}
+		return inputs, slots
+	}
+	trainInputs, trainSlots := readPairs(filepath.Join(outDir, "phrasing_pairs2.jsonl"))
+	judgeInputs := map[string]bool{}
+	{
+		f, err := os.Open(filepath.Join(outDir, "phrasing_heldout.jsonl"))
+		if err != nil {
+			fail(err)
+		}
+		defer f.Close()
+		sc := bufioScanner(f)
+		for sc.Scan() {
+			line := strings.TrimSpace(sc.Text())
+			if line == "" {
+				continue
+			}
+			var it heldItem
+			if err := json.Unmarshal([]byte(line), &it); err != nil {
+				fail(err)
+			}
+			judgeInputs[normInput(it.Input)] = true
+		}
+	}
+	fixtures := map[string]bool{"main": true, "main.go": true}
+	for _, t := range fieldTypes {
+		fixtures[t] = true
+	}
+	// The items' slot values ride in each ask's Slots; they
+	// were drawn from the held-out pools by construction, so
+	// re-derive the check from the pools themselves: every
+	// held-out pool value that appears in the train slot
+	// values (beyond fixtures) is a leak.
+	leakSet := map[string]bool{}
+	for _, s := range append(append(append(append(append(append(append(append(
+		[]string{}, namesHeldout...), filesHeldout...), fieldNamesHeldout...),
+		caseValsHeldout...), keysHeldout...), tablesHeldout...), textsHeldout...), calleesHeldout...) {
+		if trainSlots[s] && !fixtures[s] {
+			leakSet[s] = true
+		}
+	}
+	for s := range leakSet {
+		rep.SlotLeak = append(rep.SlotLeak, s)
+	}
+	sort.Strings(rep.SlotLeak)
+	kept := items[:0]
+	for _, it := range items {
+		n := normInput(it.Input)
+		drop := false
+		if trainInputs[n] {
+			rep.TrainInputOverlap++
+			drop = true
+		}
+		if judgeInputs[n] {
+			rep.JudgeInputOverlap++
+			drop = true
+		}
+		if !drop {
+			kept = append(kept, it)
+		}
+	}
+	items = kept
+	rep.Items = len(items)
+	if rep.TrainInputOverlap > 0 || rep.JudgeInputOverlap > 0 || len(rep.SlotLeak) > 0 {
+		fail(fmt.Errorf("leak check failed: train-overlap=%d judge-overlap=%d slot=%v",
+			rep.TrainInputOverlap, rep.JudgeInputOverlap, rep.SlotLeak))
+	}
+
+	if err := writeJSONL(filepath.Join(outDir, "phrasing_heldout_sources.jsonl"), items); err != nil {
+		fail(err)
+	}
+	raw, err := json.MarshalIndent(rep, "", "  ")
+	if err != nil {
+		fail(err)
+	}
+	if err := os.WriteFile(filepath.Join(outDir, "phrasing_report_sources.json"), raw, 0o644); err != nil {
+		fail(err)
+	}
+	fmt.Printf("heldout-sources judge: %d items\n", rep.Items)
+	for _, k := range sortedKeys(rep.ByFamilyCell) {
+		fmt.Printf("  %-44s %d\n", k, rep.ByFamilyCell[k])
+	}
+	fmt.Printf("skipped unemittable=%d conflicting=%d duplicates=%d\n", rep.SkippedUnemittable, rep.ConflictingInputs, rep.DuplicateInputs)
+	fmt.Printf("leaks: train-overlap=%d judge-overlap=%d slot=%v\n",
+		rep.TrainInputOverlap, rep.JudgeInputOverlap, rep.SlotLeak)
+}
+
 func main() {
 	outDir := flag.String("out", "data/training", "output directory")
 	seed := flag.Int64("seed", 20261031, "generator seed")
 	judgePath := flag.String("judge", "data/training/phrasing_heldout.jsonl", "the fixed held-out judge, read for leak checks only")
+	mode := flag.String("mode", "train", "train | heldout-sources")
 	flag.Parse()
+	if *mode == "heldout-sources" {
+		runHeldoutSources(*outDir, *seed)
+		return
+	}
+	if *mode != "train" {
+		fail(fmt.Errorf("unknown mode %q", *mode))
+	}
 	r := rand.New(rand.NewSource(*seed))
 	rep := &genReport{
 		Seed:          *seed,

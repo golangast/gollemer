@@ -241,6 +241,71 @@ func TestPhrasingJohnsCompoundEndToEnd(t *testing.T) {
 	}
 }
 
+// The five-sources families (the classifier retrain of
+// 2026-10-31): messy singles from the web family, the
+// database family, and the type switch route through the
+// layer and land end to end. Route pins first (the canonical
+// each messy line must read as), then three landings in a
+// scratch project — a declaration row with a name slot, a
+// statement row without one, and the type switch inside
+// main.
+func TestPhrasingSourcesFamiliesEndToEnd(t *testing.T) {
+	withPhrasingModel(t)
+	routeCases := []struct {
+		line string
+		want []string
+	}{
+		{"could you create a form handler called Signup in web.go",
+			[]string{"add a form handler named Signup to web.go"}},
+		{"please write a middleware called Logger in web.go",
+			[]string{"add a middleware named Logger to web.go"}},
+		{"hey gollemer, stick an html template in main to main.go",
+			[]string{"add a html template in main to main.go"}},
+		{"kindly place a database query in main to main.go",
+			[]string{"add a database query in main to main.go"}},
+		{"could you add a switch on type in main to main.go",
+			[]string{"add a type switch in main to main.go"}},
+	}
+	for _, c := range routeCases {
+		got, ok := PhrasingRoute(c.line)
+		if !ok {
+			t.Errorf("PhrasingRoute(%q) not claimed", c.line)
+			continue
+		}
+		if strings.Join(got, " ## ") != strings.Join(c.want, " ## ") {
+			t.Errorf("PhrasingRoute(%q) = %q, want %q", c.line, got, c.want)
+		}
+	}
+
+	dir := t.TempDir()
+	writeFile(t, dir, "go.mod", "module example.com/sources\n\ngo 1.21\n")
+	writeFile(t, dir, "main.go", "package main\n\nfunc main() {\n\tprintln(\"ok\")\n}\n")
+	writeFile(t, dir, "web.go", "package main\n")
+	withChatSession(t, dir, true)
+	profile := &UserProfile{}
+
+	land := func(line, file, marker string) {
+		t.Helper()
+		var handled bool
+		out := captureStdout(t, func() { handled = claimChain(line, yes, profile) })
+		if !handled {
+			t.Fatalf("%q fell through the chain:\n%s", line, out)
+		}
+		if !strings.Contains(out, "phrasing layer") {
+			t.Errorf("%q was not answered through the phrasing layer:\n%s", line, out)
+		}
+		if got := readBack(t, dir, file); !strings.Contains(got, marker) {
+			t.Errorf("%q did not land %q in %s:\n%s", line, marker, file, got)
+		}
+	}
+	land("could you create a form handler called Signup in web.go",
+		"web.go", "func Signup(w http.ResponseWriter, r *http.Request)")
+	land("kindly place a database query in main to main.go",
+		"main.go", `db.Query("TODO: your query`)
+	land("could you add a switch on type in main to main.go",
+		"main.go", "switch value.(type)")
+}
+
 // A declined gate on piece one stops the compound: piece two
 // is never offered, nothing lands, and the stop is said.
 func TestPhrasingCompoundDeclineStopsRest(t *testing.T) {
