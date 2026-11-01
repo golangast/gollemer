@@ -180,14 +180,18 @@ func TestConceptBookEveryRowEndToEnd(t *testing.T) {
 				}
 				line = "add a " + entry.Names[0] + " named Rowtest to jim/main.go"
 			}
-			if entry.ID == "form-values" {
-				// The one handler-shaped statement (the
-				// three-sources build): its template reads
-				// the request a handler receives, so it can
-				// only land inside one — never in a bare
-				// main. Seed jim with a main (a declaration
-				// needs one first) and a form handler, then
-				// aim the row at the handler.
+			if entry.ID == "form-values" || entry.ID == "idor-check" ||
+				entry.ID == "secure-cookie" || entry.ID == "body-limit" {
+				// The handler-shaped statements (form-values
+				// from the three-sources build; idor-check,
+				// secure-cookie and body-limit from the
+				// security sweep): their templates bind the
+				// request and/or the response a handler
+				// receives, so they can only land inside one
+				// — never in a bare main. Seed jim with a
+				// main (a declaration needs one first) and a
+				// form handler, then aim the row at the
+				// handler.
 				var grown bool
 				captureStdout(t, func() { grown = claimChain("add print line to jim/main.go", yes, profile) })
 				if !grown {
@@ -198,7 +202,7 @@ func TestConceptBookEveryRowEndToEnd(t *testing.T) {
 				if !seeded {
 					t.Fatalf("form handler seed fell through:\n%s", out)
 				}
-				line = "add a form values in Rowhandler to jim/main.go"
+				line = "add a " + entry.Names[0] + " in Rowhandler to jim/main.go"
 			}
 			var handled bool
 			out := captureStdout(t, func() { handled = claimChain(line, yes, profile) })

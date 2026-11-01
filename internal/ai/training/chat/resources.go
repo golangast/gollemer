@@ -483,6 +483,25 @@ const yourbasicURL = "https://yourbasic.org/golang/"
 // way the functions and constants articles were read.
 const callicoderTypesURL = "https://www.callicoder.com/golang-basic-types-operators-type-conversion/"
 
+// The security sweep's sources (2026-11-01), each address
+// read and verified at build time: the OWASP Cheat Sheet
+// Series for the JWT / IDOR / password-storage / HTTP
+// headers guidance, MDN for CORS, and pkg.go.dev's net/http
+// page for the two stdlib anchors (its index lists both
+// symbols — CrossOriginProtection and
+// Server.ListenAndServeTLS — so the anchors name real
+// sections of a verified page).
+const (
+	owaspJWTURL       = "https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_for_Java_Cheat_Sheet.html"
+	owaspIDORURL      = "https://cheatsheetseries.owasp.org/cheatsheets/Insecure_Direct_Object_Reference_Prevention_Cheat_Sheet.html"
+	owaspPasswordsURL = "https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html"
+	owaspHeadersURL   = "https://cheatsheetseries.owasp.org/cheatsheets/HTTP_Headers_Cheat_Sheet.html"
+	mdnCORSURL        = "https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS"
+	pkgHTTPURL        = "https://pkg.go.dev/net/http"
+	crossOriginURL    = pkgHTTPURL + "#CrossOriginProtection"
+	listenServeTLSURL = pkgHTTPURL + "#Server.ListenAndServeTLS"
+)
+
 var referenceSeed = []referenceEntry{
 	{"Effective Go", []string{"formatting", "gofmt", "format"}, "Formatting", effectiveGoURL + "#formatting"},
 	{"Effective Go", []string{"comments", "commentary", "doc comments"}, "Commentary", effectiveGoURL + "#commentary"},
@@ -572,6 +591,24 @@ var referenceSeed = []referenceEntry{
 	{"YourBasic", []string{"redeclaring variables", "redeclare variables", "variable shadowing"}, "Redeclaring variables", yourbasicURL},
 	{"YourBasic", []string{"initialization order", "execution order", "package initialization"}, "Package initialization and program execution order", yourbasicURL},
 	{"Callicoder", []string{"basic types", "data types", "operators and types"}, "Basic Types, Operators, and Type Conversion", callicoderTypesURL},
+	// The security sweep (2026-11-01): the reading behind
+	// the security rows. What the book can assemble became
+	// rows (CORS, the JWT pair, the ownership check, the
+	// nonce and CSRF middleware, security headers, the
+	// flagged cookie, server timeouts, the body limit, the
+	// rate limiter); what stays judgment — password storage
+	// above all, since bcrypt lives in x/crypto and the book
+	// writes stdlib only — seats here, with the duplicates
+	// (SQL injection is the parameterized database rows;
+	// XSS is html/template doing its escaping) named in the
+	// sweep's coverage report, not rebuilt.
+	{"OWASP Cheat Sheets", []string{"jwt", "json web token", "json web tokens"}, "JSON Web Token Cheat Sheet for Java", owaspJWTURL},
+	{"OWASP Cheat Sheets", []string{"idor", "insecure direct object reference", "object-level authorization"}, "Insecure Direct Object Reference Prevention Cheat Sheet", owaspIDORURL},
+	{"OWASP Cheat Sheets", []string{"password storage", "storing passwords", "hash passwords", "password hashing", "bcrypt"}, "Password Storage Cheat Sheet", owaspPasswordsURL},
+	{"OWASP Cheat Sheets", []string{"security headers", "http headers", "response headers"}, "HTTP Headers Cheat Sheet", owaspHeadersURL},
+	{"MDN Web Docs", []string{"cors", "cross-origin resource sharing", "cross origin requests"}, "Cross-Origin Resource Sharing (CORS)", mdnCORSURL},
+	{"Go standard library", []string{"tls", "https", "certificates", "listenandservetls"}, "net/http: Server.ListenAndServeTLS", listenServeTLSURL},
+	{"Go standard library", []string{"cross origin protection", "crossoriginprotection", "built-in csrf"}, "net/http: CrossOriginProtection (Go 1.25+)", crossOriginURL},
 }
 
 // referenceMatchCap bounds the reference lines in one pack:

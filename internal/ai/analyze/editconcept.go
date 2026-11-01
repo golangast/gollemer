@@ -52,6 +52,13 @@ package analyze
 // only land inside a handler — any other target is a refusal
 // naming the handlers the file does have. A request value is
 // never invented either.
+// {response} is the same slot's other half (the security
+// sweep, 2026-11-01): it binds from the target function's
+// REAL http.ResponseWriter parameter, so a template that
+// must write the answer — set a cookie, refuse a request —
+// can only land inside a handler too. The writer is bound
+// from the signature, never invented, exactly as the
+// request is.
 
 import (
 	"encoding/json"
@@ -576,6 +583,37 @@ func requestParamName(fset *token.FileSet, fileAST *ast.File, fd *ast.FuncDecl) 
 	return ""
 }
 
+// responseParamName returns the name of fd's
+// http.ResponseWriter parameter — the value a handler-shaped
+// statement template's {response} slot binds. The qualifier
+// rule matches requestParamName's; the writer type is an
+// interface, so it never carries a star. A nameless writer
+// can't be referenced from the body, so it doesn't count.
+func responseParamName(fset *token.FileSet, fileAST *ast.File, fd *ast.FuncDecl) string {
+	if fd.Type == nil || fd.Type.Params == nil {
+		return ""
+	}
+	qual := "http"
+	for _, imp := range fileAST.Imports {
+		if p, err := strconv.Unquote(imp.Path.Value); err == nil && p == "net/http" {
+			if imp.Name != nil && imp.Name.Name != "_" && imp.Name.Name != "." {
+				qual = imp.Name.Name
+			}
+			break
+		}
+	}
+	for _, field := range fd.Type.Params.List {
+		text := strings.Join(strings.Fields(exprText(fset, field.Type)), "")
+		if text != qual+".ResponseWriter" {
+			continue
+		}
+		if len(field.Names) > 0 {
+			return field.Names[0].Name
+		}
+	}
+	return ""
+}
+
 // handlerFuncNames lists the file's functions that receive an
 // http.Request — the honest shortlist a {request} refusal can
 // point at.
@@ -655,6 +693,19 @@ func (p *Project) planConceptStatement(req EditRequest, entry *ConceptEntry, rel
 		return fmt.Sprintf("the %s reads the values on the request a handler receives, so it belongs in a handler — the handlers in %s are: %s. Say \"add a %s in %s to %s\".",
 			entry.Canonical(), p.LinkPath(rel), conceptNameList(handlers), entry.Canonical(), handlers[0], p.LinkPath(rel))
 	}
+	// A {response} template can only live in a handler too:
+	// the refusal that says so, in the same shape, pointing
+	// at the same honest shortlist.
+	needsResponse := strings.Contains(entry.Template, "{response}")
+	handlerRefusalResponse := func() string {
+		handlers := handlerFuncNames(fset, fileAST)
+		if len(handlers) == 0 {
+			return fmt.Sprintf("the %s writes to the response a handler sends, and %s has no handler — a function taking an http.ResponseWriter — to put it in. Add a form handler first, then say \"add a %s in <Handler> to %s\".",
+				entry.Canonical(), p.LinkPath(rel), entry.Canonical(), p.LinkPath(rel))
+		}
+		return fmt.Sprintf("the %s writes to the response a handler sends, so it belongs in a handler — the handlers in %s are: %s. Say \"add a %s in %s to %s\".",
+			entry.Canonical(), p.LinkPath(rel), conceptNameList(handlers), entry.Canonical(), handlers[0], p.LinkPath(rel))
+	}
 	if decl == nil {
 		switch {
 		case explicit:
@@ -667,6 +718,10 @@ func (p *Project) planConceptStatement(req EditRequest, entry *ConceptEntry, rel
 			// No main to grow: a main could never receive the
 			// request this piece reads.
 			return nil, handlerRefusal()
+		case needsResponse:
+			// No main to grow: a main has no response to
+			// write to either.
+			return nil, handlerRefusalResponse()
 		case req.PlaceLine > 0:
 			// A line placement needs a function that exists:
 			// a main grown on the spot would land at the end
@@ -699,6 +754,19 @@ func (p *Project) planConceptStatement(req EditRequest, entry *ConceptEntry, rel
 				return nil, fmt.Sprintf("%s in %s doesn't receive an http.Request. %s", decl.Name.Name, p.LinkPath(rel), handlerRefusal())
 			}
 			stmt = strings.ReplaceAll(stmt, "{request}", param)
+			firstLine = strings.TrimSpace(strings.SplitN(stmt, "\n", 2)[0])
+		}
+		if needsResponse {
+			// Bind {response} the same way: the writer
+			// parameter's own name, from the same signature.
+			// No writer parameter, no landing: the answer
+			// this piece writes exists only on a handler's
+			// response.
+			param := responseParamName(fset, fileAST, decl)
+			if param == "" {
+				return nil, fmt.Sprintf("%s in %s doesn't receive an http.ResponseWriter. %s", decl.Name.Name, p.LinkPath(rel), handlerRefusalResponse())
+			}
+			stmt = strings.ReplaceAll(stmt, "{response}", param)
 			firstLine = strings.TrimSpace(strings.SplitN(stmt, "\n", 2)[0])
 		}
 		indent := "\t"

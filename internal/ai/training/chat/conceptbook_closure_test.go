@@ -83,12 +83,15 @@ func TestConceptStatementIntoClosureBody(t *testing.T) {
 // closure) and holds routing to the same landing+build bar
 // there.
 //
-// A second named exception: form-values, the one
+// A second named exception: form-values, the first
 // handler-shaped statement — its template reads the request
 // a handler receives, so it can never land in main at all.
 // Its subtest seeds a HANDLER holding a closure (and ending
 // in a comment) and holds the row to the same landing+build
-// bar in its own habitat.
+// bar in its own habitat. The security sweep's three
+// handler-shaped statements (idor-check, secure-cookie,
+// body-limit — templates binding the request and/or the
+// response) take the same exception and the same seed.
 func TestConceptBookEveryStatementRowIntoClosureBody(t *testing.T) {
 	withPhrasingModel(t)
 	book := defaultBookEntries(t)
@@ -108,14 +111,14 @@ func TestConceptBookEveryStatementRowIntoClosureBody(t *testing.T) {
 				var p *UserProfile
 				dir, p = closureSeedProjectAlt(t)
 				profile = p
-			case "form-values":
-				// The handler-shaped statement (see the
+			case "form-values", "idor-check", "secure-cookie", "body-limit":
+				// The handler-shaped statements (see the
 				// comment above): a handler holding a
-				// closure is its hostile environment.
+				// closure is their hostile environment.
 				var p *UserProfile
 				dir, p = closureSeedHandlerProject(t)
 				profile = p
-				line = "add a form values in ShowForm to jim/main.go"
+				line = "add a " + entry.Names[0] + " in ShowForm to jim/main.go"
 			default:
 				dir, profile = closureSeedProject(t)
 			}

@@ -316,6 +316,20 @@ var statementConcepts = []concept{
 	{"copy-slice", "statement", "slice copy", []string{"copy a slice", "copy slice", "copying a slice"}},
 	{"shuffle", "statement", "shuffle a slice", []string{"shuffle slice", "shuffle", "shuffled slice"}},
 	{"execution-time", "statement", "execution time", []string{"measure execution time", "measure time"}},
+	// The security sweep (2026-11-01): the statement half of
+	// the server/API/HTML security set. Synonyms mirror the
+	// book names, as everywhere. Name discipline follows the
+	// standing lessons: jwt-create trains "jwt" and its full
+	// names but no bare "token" (a word other asks use too
+	// loosely to hand to one family), and server-timeouts
+	// never trains the bare "timeout" (the channel-timeout
+	// row owns it; the qualified names are longer phrases,
+	// and longest match keeps them apart).
+	{"jwt-create", "statement", "jwt", []string{"json web token", "jwt token", "make a jwt"}},
+	{"idor-check", "statement", "idor check", []string{"ownership check", "idor", "check ownership"}},
+	{"secure-cookie", "statement", "secure cookie", []string{"cookie flags", "hardened cookie", "safe cookie"}},
+	{"server-timeouts", "statement", "server timeouts", []string{"http server timeouts", "server with timeouts", "hardened server"}},
+	{"body-limit", "statement", "body limit", []string{"request body limit", "limit body size", "body size limit"}},
 }
 
 var declConcepts = []concept{
@@ -333,6 +347,19 @@ var declConcepts = []concept{
 	{"middleware-timing", "declaration", "timing middleware", []string{"middleware timing", "advanced middleware"}},
 	{"middleware-chain", "declaration", "middleware chain", []string{"chain middleware", "middleware chaining"}},
 	{"session-handler", "declaration", "session handler", []string{"session cookie", "session", "login session"}},
+	// The security sweep (2026-11-01): the declaration half
+	// of the security set — the middleware-shaped rows.
+	// Synonyms mirror the book names, as everywhere. Every
+	// family's name carries its own qualifier (cors, jwt,
+	// nonce, csrf, headers, rate limit) so no family trains
+	// the bare word "middleware" — the logging middleware
+	// row owns that, and the naming guard does the rest.
+	{"cors", "declaration", "cors middleware", []string{"cors", "cross origin middleware", "cross-origin resource sharing"}},
+	{"jwt-verify", "declaration", "jwt middleware", []string{"jwt auth", "jwt verification", "jwt auth middleware"}},
+	{"csp-nonce", "declaration", "csp nonce middleware", []string{"nonce middleware", "csp nonce", "content security policy nonce"}},
+	{"csrf", "declaration", "csrf protection", []string{"csrf middleware", "csrf", "cross-site request forgery protection"}},
+	{"security-headers", "declaration", "security headers", []string{"security headers middleware", "http security headers", "secure headers"}},
+	{"rate-limit", "declaration", "rate limit middleware", []string{"rate limiter", "rate limiting", "throttle middleware"}},
 }
 
 // sourcesConceptIDs are the five-sources families (d6b4a62):
@@ -361,6 +388,18 @@ var basicsConceptIDs = []string{
 	"string-builder", "split-string", "trim-string",
 	"reverse-string", "delete-from-slice", "clear-slice",
 	"slice-search", "copy-slice", "shuffle", "execution-time",
+}
+
+// securityConceptIDs are the security-sweep families
+// (2026-11-01): the ones the -mode heldout-security judge
+// is built for. Statements and declarations alike — the
+// judge mode picks each family's builder by the concept's
+// kind, the way the books judge mixed its two shapes.
+var securityConceptIDs = []string{
+	"cors", "jwt-verify", "csp-nonce", "csrf",
+	"security-headers", "rate-limit", "jwt-create",
+	"idor-check", "secure-cookie", "server-timeouts",
+	"body-limit",
 }
 
 func article(name string) string {
@@ -2944,6 +2983,273 @@ func runHeldoutBasics(outDir string, seed int64) {
 		rep.TrainInputOverlap, rep.JudgeInputOverlap, rep.SourcesOverlap, rep.CreatedOverlap, rep.RqliteOverlap, rep.BooksOverlap, rep.ServeHTMLOverlap, rep.SlotLeak)
 }
 
+// ---------- the security-sweep held-out judge ----------
+//
+// -mode heldout-security builds data/training/
+// phrasing_heldout_security.jsonl: the judge for the
+// security sweep's eleven new families (six declarations,
+// five statements) — in the same construction as the
+// basics judge: held-out core dialect, held-out wrappers,
+// slot values from the held-out pools only, and 20
+// single-unseen + 8 single-seen per family. Each family's
+// builder follows its concept's kind, the way the books
+// judge mixed its shapes. Leak checks run against the
+// train corpus and ALL EIGHT prior judges (the lines judge
+// included — this file is a ninth judge, never a
+// replacement). Run the train mode first.
+
+type securityReport struct {
+	Seed               int64          `json:"seed"`
+	Items              int            `json:"items"`
+	ByFamilyCell       map[string]int `json:"by_family_cell"`
+	SkippedUnemittable int            `json:"skipped_unemittable"`
+	ConflictingInputs  int            `json:"conflicting_inputs_removed"`
+	DuplicateInputs    int            `json:"duplicate_inputs_skipped"`
+	TrainInputOverlap  int            `json:"train_input_overlap"`
+	JudgeInputOverlap  int            `json:"original_judge_input_overlap"`
+	SourcesOverlap     int            `json:"sources_judge_input_overlap"`
+	CreatedOverlap     int            `json:"created_judge_input_overlap"`
+	RqliteOverlap      int            `json:"rqlite_judge_input_overlap"`
+	BooksOverlap       int            `json:"books_judge_input_overlap"`
+	ServeHTMLOverlap   int            `json:"servehtml_judge_input_overlap"`
+	BasicsOverlap      int            `json:"basics_judge_input_overlap"`
+	LinesOverlap       int            `json:"lines_judge_input_overlap"`
+	SlotLeak           []string       `json:"slot_value_leak_beyond_fixtures"`
+}
+
+func runHeldoutSecurity(outDir string, seed int64) {
+	r := rand.New(rand.NewSource(seed + 31))
+	rep := &securityReport{Seed: seed, ByFamilyCell: map[string]int{}}
+	hp := heldoutPools()
+
+	seen := map[string]string{} // normalized input -> output
+	var items []heldItem
+	add := func(a ask, cell string, wrappers []wrapper) {
+		if !emittable(a.canonical) {
+			rep.SkippedUnemittable++
+			return
+		}
+		in, tmpl := dress(r, a, wrappers)
+		n := normInput(in)
+		if prev, dup := seen[n]; dup {
+			if prev != a.canonical {
+				rep.ConflictingInputs++
+				for i, q := range items {
+					if normInput(q.Input) == n {
+						items = append(items[:i], items[i+1:]...)
+						break
+					}
+				}
+				delete(seen, n)
+			} else {
+				rep.DuplicateInputs++
+			}
+			return
+		}
+		seen[n] = a.canonical
+		items = append(items, heldItem{
+			Input: in, Output: a.canonical, Family: a.family,
+			Cell: cell, Template: "heldout/" + tmpl,
+		})
+		rep.ByFamilyCell[a.family+"/"+cell]++
+	}
+
+	var families []struct {
+		name  string
+		build func(dialect string) ask
+	}
+	for _, id := range securityConceptIDs {
+		c := conceptByID(id)
+		if c.id == "" {
+			fail(fmt.Errorf("security concept %q not in the book lists", id))
+		}
+		build := func(dialect string) ask { return buildStmtAsk(r, hp, c, dialect) }
+		if c.kind == "declaration" {
+			build = func(dialect string) ask { return buildDeclAsk(r, hp, c, dialect) }
+		}
+		families = append(families, struct {
+			name  string
+			build func(dialect string) ask
+		}{"concept-" + id, build})
+	}
+	for _, fam := range families {
+		for got, attempts := 0, 0; got < 20 && attempts < 600; attempts++ {
+			before := len(items)
+			add(fam.build("heldout"), "single-unseen", heldoutWrappers)
+			if len(items) > before {
+				got++
+			}
+		}
+		for got, attempts := 0, 0; got < 8 && attempts < 240; attempts++ {
+			before := len(items)
+			add(fam.build("train"), "single-seen", trainWrappers)
+			if len(items) > before {
+				got++
+			}
+		}
+	}
+	rep.Items = len(items)
+
+	// Leak checks: against the train corpus (read back from
+	// the pairs file the train mode wrote) and all eight
+	// prior judges. Overlaps are dropped, counted, and
+	// reported — and any drop at all fails the run, because
+	// by construction (disjoint dialects, wrappers, and
+	// pools) there should be none.
+	readPairs := func(path string) (inputs map[string]bool, slots map[string]bool) {
+		inputs, slots = map[string]bool{}, map[string]bool{}
+		f, err := os.Open(path)
+		if err != nil {
+			fail(fmt.Errorf("heldout-security mode reads %s (run the train mode first): %w", path, err))
+		}
+		defer f.Close()
+		sc := bufioScanner(f)
+		for sc.Scan() {
+			line := strings.TrimSpace(sc.Text())
+			if line == "" {
+				continue
+			}
+			var p pair
+			if err := json.Unmarshal([]byte(line), &p); err != nil {
+				fail(err)
+			}
+			inputs[normInput(p.Input)] = true
+			for _, s := range p.Slots {
+				slots[s] = true
+			}
+		}
+		return inputs, slots
+	}
+	readJudge := func(path string) map[string]bool {
+		inputs := map[string]bool{}
+		f, err := os.Open(path)
+		if err != nil {
+			fail(err)
+		}
+		defer f.Close()
+		sc := bufioScanner(f)
+		for sc.Scan() {
+			line := strings.TrimSpace(sc.Text())
+			if line == "" {
+				continue
+			}
+			var it heldItem
+			if err := json.Unmarshal([]byte(line), &it); err != nil {
+				fail(err)
+			}
+			inputs[normInput(it.Input)] = true
+		}
+		return inputs
+	}
+	trainInputs, trainSlots := readPairs(filepath.Join(outDir, "phrasing_pairs2.jsonl"))
+	judgeInputs := readJudge(filepath.Join(outDir, "phrasing_heldout.jsonl"))
+	sourcesInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_sources.jsonl"))
+	createdInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_created.jsonl"))
+	rqliteInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_rqlite.jsonl"))
+	booksInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_books.jsonl"))
+	serveHTMLInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_servehtml.jsonl"))
+	basicsInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_basics.jsonl"))
+	linesInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_lines.jsonl"))
+	fixtures := map[string]bool{"main": true, "main.go": true, "index.html": true}
+	for _, t := range fieldTypes {
+		fixtures[t] = true
+	}
+	heldSlotVals := map[string]bool{}
+	for _, s := range append(append(append(append(append(append(append(append(append(
+		[]string{}, namesHeldout...), filesHeldout...), fieldNamesHeldout...),
+		caseValsHeldout...), keysHeldout...), tablesHeldout...), textsHeldout...), calleesHeldout...), htmlsHeldout...) {
+		heldSlotVals[s] = true
+	}
+	for _, s := range tagValsHeldout {
+		heldSlotVals[s] = true
+		for _, k := range tagKinds {
+			heldSlotVals[k+":\""+s+"\""] = true
+		}
+	}
+	leakSet := map[string]bool{}
+	for s := range heldSlotVals {
+		if trainSlots[s] && !fixtures[s] {
+			leakSet[s] = true
+		}
+	}
+	for s := range leakSet {
+		rep.SlotLeak = append(rep.SlotLeak, s)
+	}
+	sort.Strings(rep.SlotLeak)
+	kept := items[:0]
+	for _, it := range items {
+		n := normInput(it.Input)
+		drop := false
+		if trainInputs[n] {
+			rep.TrainInputOverlap++
+			drop = true
+		}
+		if judgeInputs[n] {
+			rep.JudgeInputOverlap++
+			drop = true
+		}
+		if sourcesInputs[n] {
+			rep.SourcesOverlap++
+			drop = true
+		}
+		if createdInputs[n] {
+			rep.CreatedOverlap++
+			drop = true
+		}
+		if rqliteInputs[n] {
+			rep.RqliteOverlap++
+			drop = true
+		}
+		if booksInputs[n] {
+			rep.BooksOverlap++
+			drop = true
+		}
+		if serveHTMLInputs[n] {
+			rep.ServeHTMLOverlap++
+			drop = true
+		}
+		if basicsInputs[n] {
+			rep.BasicsOverlap++
+			drop = true
+		}
+		if linesInputs[n] {
+			rep.LinesOverlap++
+			drop = true
+		}
+		if !drop {
+			kept = append(kept, it)
+		}
+	}
+	items = kept
+	rep.Items = len(items)
+	if rep.TrainInputOverlap > 0 || rep.JudgeInputOverlap > 0 ||
+		rep.SourcesOverlap > 0 || rep.CreatedOverlap > 0 ||
+		rep.RqliteOverlap > 0 || rep.BooksOverlap > 0 ||
+		rep.ServeHTMLOverlap > 0 || rep.BasicsOverlap > 0 ||
+		rep.LinesOverlap > 0 || len(rep.SlotLeak) > 0 {
+		fail(fmt.Errorf("leak check failed: train-overlap=%d judge-overlap=%d sources-overlap=%d created-overlap=%d rqlite-overlap=%d books-overlap=%d servehtml-overlap=%d basics-overlap=%d lines-overlap=%d slot=%v",
+			rep.TrainInputOverlap, rep.JudgeInputOverlap, rep.SourcesOverlap, rep.CreatedOverlap, rep.RqliteOverlap, rep.BooksOverlap, rep.ServeHTMLOverlap, rep.BasicsOverlap, rep.LinesOverlap, rep.SlotLeak))
+	}
+
+	if err := writeJSONL(filepath.Join(outDir, "phrasing_heldout_security.jsonl"), items); err != nil {
+		fail(err)
+	}
+	raw, err := json.MarshalIndent(rep, "", "  ")
+	if err != nil {
+		fail(err)
+	}
+	if err := os.WriteFile(filepath.Join(outDir, "phrasing_report_security.json"), raw, 0o644); err != nil {
+		fail(err)
+	}
+	fmt.Printf("heldout-security judge: %d items\n", rep.Items)
+	for _, k := range sortedKeys(rep.ByFamilyCell) {
+		fmt.Printf("  %-44s %d\n", k, rep.ByFamilyCell[k])
+	}
+	fmt.Printf("skipped unemittable=%d conflicting=%d duplicates=%d\n", rep.SkippedUnemittable, rep.ConflictingInputs, rep.DuplicateInputs)
+	fmt.Printf("leaks: train-overlap=%d judge-overlap=%d sources-overlap=%d created-overlap=%d rqlite-overlap=%d books-overlap=%d servehtml-overlap=%d basics-overlap=%d lines-overlap=%d slot=%v\n",
+		rep.TrainInputOverlap, rep.JudgeInputOverlap, rep.SourcesOverlap, rep.CreatedOverlap, rep.RqliteOverlap, rep.BooksOverlap, rep.ServeHTMLOverlap, rep.BasicsOverlap, rep.LinesOverlap, rep.SlotLeak)
+}
+
 // ---------- the line-placement held-out judge ----------
 //
 // -mode heldout-lines builds data/training/
@@ -3800,8 +4106,12 @@ func main() {
 	outDir := flag.String("out", "data/training", "output directory")
 	seed := flag.Int64("seed", 20261031, "generator seed")
 	judgePath := flag.String("judge", "data/training/phrasing_heldout.jsonl", "the fixed held-out judge, read for leak checks only")
-	mode := flag.String("mode", "train", "train | heldout-sources | heldout-created | heldout-rqlite | heldout-books | heldout-servehtml | heldout-basics | heldout-lines")
+	mode := flag.String("mode", "train", "train | heldout-sources | heldout-created | heldout-rqlite | heldout-books | heldout-servehtml | heldout-basics | heldout-lines | heldout-security")
 	flag.Parse()
+	if *mode == "heldout-security" {
+		runHeldoutSecurity(*outDir, *seed)
+		return
+	}
 	if *mode == "heldout-lines" {
 		runHeldoutLines(*outDir, *seed)
 		return

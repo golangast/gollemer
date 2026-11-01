@@ -1251,6 +1251,193 @@ const defaultConceptBook = `{
         "measure time"
       ],
       "template": "start := time.Now()\n// TODO: the code whose time you want to measure goes here\nelapsed := time.Since(start)\n// TODO: elapsed is how long it took — print it, or decide something with it\n_ = elapsed"
+    },
+    {
+      "id": "cors",
+      "imports": [
+        "net/http"
+      ],
+      "kind": "declaration",
+      "names": [
+        "cors middleware",
+        "cors",
+        "cross origin middleware",
+        "cross-origin resource sharing"
+      ],
+      "note": "CORS is not authentication: it loosens the browser's same-origin rule for the origins named — anyone can still call the API from a non-browser client. The origin in the template is a TODO only you can choose: a wildcard (*) together with cookies or tokens is the footgun; named origins are the safe shape.",
+      "template": "func {name}(next http.HandlerFunc) http.HandlerFunc {\n\treturn func(w http.ResponseWriter, r *http.Request) {\n\t\t// CORS lets a browser page served from ONE origin read answers from another. The answer below names the page's origin — TODO: replace it with the one origin your own page is served from\n\t\tw.Header().Set(\"Access-Control-Allow-Origin\", \"TODO: https://your-page.example\")\n\t\tw.Header().Set(\"Access-Control-Allow-Methods\", \"GET, POST, PUT, DELETE, OPTIONS\")\n\t\tw.Header().Set(\"Access-Control-Allow-Headers\", \"Content-Type, Authorization\")\n\t\t// Never answer \"*\" for the origin when requests carry cookies or tokens — a wildcard plus credentials is the combination browsers reject and attackers love; an origin must be named\n\t\tif r.Method == http.MethodOptions {\n\t\t\t// The browser's preflight question, asked before the real request: the headers above are the whole answer\n\t\t\tw.WriteHeader(http.StatusNoContent)\n\t\t\treturn\n\t\t}\n\t\tnext(w, r)\n\t}\n}"
+    },
+    {
+      "id": "jwt-verify",
+      "imports": [
+        "crypto/hmac",
+        "crypto/sha256",
+        "encoding/base64",
+        "encoding/json",
+        "net/http",
+        "os",
+        "strings",
+        "time"
+      ],
+      "kind": "declaration",
+      "names": [
+        "jwt middleware",
+        "jwt auth",
+        "jwt verification",
+        "jwt auth middleware"
+      ],
+      "note": "The token's claims are trusted only AFTER the signature and the expiry check out — before that they are text a stranger typed. Production systems usually take a maintained JWT library (an external dependency you add yourself); this hand-rolled HS256 check is the honest small-server shape, and it reads the secret from the environment, never from code.",
+      "template": "func {name}(next http.HandlerFunc) http.HandlerFunc {\n\treturn func(w http.ResponseWriter, r *http.Request) {\n\t\tsecret := os.Getenv(\"JWT_SECRET\")\n\t\t// TODO: JWT_SECRET is the environment variable your server reads its signing secret from — the same one the token was created with. This code never obeys the token's own \"alg\" header: it always checks with HMAC-SHA256, so a token asking for a weaker (or \"none\") check gets nothing\n\t\ttoken, found := strings.CutPrefix(r.Header.Get(\"Authorization\"), \"Bearer \")\n\t\tparts := strings.Split(token, \".\")\n\t\tverified := false\n\t\tvar claims map[string]any\n\t\tif found && len(parts) == 3 {\n\t\t\tunsigned := parts[0] + \".\" + parts[1]\n\t\t\tmac := hmac.New(sha256.New, []byte(secret))\n\t\t\tmac.Write([]byte(unsigned))\n\t\t\tsignature, sigErr := base64.RawURLEncoding.DecodeString(parts[2])\n\t\t\tif sigErr == nil && hmac.Equal(signature, mac.Sum(nil)) {\n\t\t\t\tpayload, payloadErr := base64.RawURLEncoding.DecodeString(parts[1])\n\t\t\t\tif payloadErr == nil && json.Unmarshal(payload, &claims) == nil {\n\t\t\t\t\tif exp, isNumber := claims[\"exp\"].(float64); isNumber && time.Now().Unix() < int64(exp) {\n\t\t\t\t\t\tverified = true\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t\tif !verified {\n\t\t\thttp.Error(w, \"unauthorized\", http.StatusUnauthorized)\n\t\t\treturn\n\t\t}\n\t\t// TODO: claims now holds claims you can trust — claims[\"sub\"] says who the token was issued to. Pass that on (a request context is the usual way) instead of believing anything the request itself claims about who sent it\n\t\t_ = claims\n\t\tnext(w, r)\n\t}\n}"
+    },
+    {
+      "id": "csp-nonce",
+      "imports": [
+        "context",
+        "crypto/rand",
+        "encoding/base64",
+        "net/http"
+      ],
+      "kind": "declaration",
+      "names": [
+        "csp nonce middleware",
+        "nonce middleware",
+        "csp nonce",
+        "content security policy nonce"
+      ],
+      "note": "The nonce is minted fresh from crypto/rand for every request and dies with it: a script copied from yesterday's page — or injected by an attacker — carries the wrong value and the browser refuses it. The policy also pins everything else to your own origin ('self').",
+      "template": "type {name}Key struct{}\n\n// {name} mints a fresh nonce — a one-time random value — for every request, sets the Content-Security-Policy header that demands it, and passes the value along for the page's own templates.\nfunc {name}(next http.HandlerFunc) http.HandlerFunc {\n\treturn func(w http.ResponseWriter, r *http.Request) {\n\t\traw := make([]byte, 16)\n\t\tif _, err := rand.Read(raw); err != nil {\n\t\t\t// No honest randomness, no honest nonce — refuse rather than send a page whose policy a stranger could guess\n\t\t\thttp.Error(w, \"internal error\", http.StatusInternalServerError)\n\t\t\treturn\n\t\t}\n\t\tnonce := base64.StdEncoding.EncodeToString(raw)\n\t\tw.Header().Set(\"Content-Security-Policy\", \"default-src 'self'; script-src 'self' 'nonce-\"+nonce+\"'; style-src 'self' 'nonce-\"+nonce+\"'\")\n\t\t// TODO: your templates read this request's nonce back with r.Context().Value({name}Key{}) and write it onto their own tags — <script nonce=\"...\"> — because a script WITHOUT this request's nonce is exactly what the browser now refuses to run\n\t\tnext(w, r.WithContext(context.WithValue(r.Context(), {name}Key{}, nonce)))\n\t}\n}"
+    },
+    {
+      "id": "csrf",
+      "imports": [
+        "crypto/rand",
+        "crypto/subtle",
+        "encoding/base64",
+        "net/http"
+      ],
+      "kind": "declaration",
+      "names": [
+        "csrf protection",
+        "csrf middleware",
+        "csrf",
+        "cross-site request forgery protection"
+      ],
+      "note": "Go 1.25's net/http has this built in — http.NewCrossOriginProtection checks where a request came from instead of comparing tokens — but it only compiles into projects whose go.mod says go 1.25 or newer. This row is the double-submit token shape every project can take; on go 1.25+, prefer the built-in.",
+      "template": "func {name}(next http.HandlerFunc) http.HandlerFunc {\n\treturn func(w http.ResponseWriter, r *http.Request) {\n\t\t// CSRF: a malicious page can make a signed-in browser SEND your server a request, but it can never READ your pages — so a state-changing request must hand back a random token only a page you served could know (the double-submit pattern)\n\t\tcookie, cookieErr := r.Cookie(\"csrf_token\")\n\t\ttoken := \"\"\n\t\tif cookieErr == nil {\n\t\t\ttoken = cookie.Value\n\t\t}\n\t\tif token == \"\" {\n\t\t\traw := make([]byte, 32)\n\t\t\tif _, err := rand.Read(raw); err != nil {\n\t\t\t\thttp.Error(w, \"internal error\", http.StatusInternalServerError)\n\t\t\t\treturn\n\t\t\t}\n\t\t\ttoken = base64.StdEncoding.EncodeToString(raw)\n\t\t\thttp.SetCookie(w, &http.Cookie{Name: \"csrf_token\", Value: token, Path: \"/\", HttpOnly: true, SameSite: http.SameSiteLaxMode})\n\t\t\t// A fresh token was just minted for the NEXT request — this one still has nothing proven, and the check below refuses it if it tries to change anything\n\t\t}\n\t\tif r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions {\n\t\t\tsent := r.Header.Get(\"X-CSRF-Token\")\n\t\t\tif sent == \"\" {\n\t\t\t\tsent = r.FormValue(\"csrf_token\")\n\t\t\t}\n\t\t\tif subtle.ConstantTimeCompare([]byte(sent), []byte(token)) != 1 {\n\t\t\t\thttp.Error(w, \"forbidden\", http.StatusForbidden)\n\t\t\t\treturn\n\t\t\t}\n\t\t\t// TODO: your forms send the token back — a hidden field named csrf_token holding the csrf_token cookie's value (read it in the handler that shows the form), or an X-CSRF-Token header from your scripts. The comparison is constant-time, so a wrong guess reveals nothing about how close it was\n\t\t}\n\t\tnext(w, r)\n\t}\n}"
+    },
+    {
+      "id": "security-headers",
+      "imports": [
+        "net/http"
+      ],
+      "kind": "declaration",
+      "names": [
+        "security headers",
+        "security headers middleware",
+        "http security headers",
+        "secure headers"
+      ],
+      "note": "Headers only speak to browsers, and only when set before the answer is written — wrap the OUTERMOST handler with this so every route gets them. HSTS stays a TODO in the template on purpose: it is HTTPS-only, and a browser that hears it remembers — sending it while you still test over plain http locks you out of your own site.",
+      "template": "func {name}(next http.HandlerFunc) http.HandlerFunc {\n\treturn func(w http.ResponseWriter, r *http.Request) {\n\t\t// These headers ask the browser to treat your pages carefully — they cost nothing and close whole families of tricks\n\t\tw.Header().Set(\"X-Content-Type-Options\", \"nosniff\")\n\t\tw.Header().Set(\"X-Frame-Options\", \"DENY\")\n\t\tw.Header().Set(\"Referrer-Policy\", \"strict-origin-when-cross-origin\")\n\t\tw.Header().Set(\"Content-Security-Policy\", \"default-src 'self'; frame-ancestors 'none'\")\n\t\t// TODO: over HTTPS, also set Strict-Transport-Security to max-age=63072000 so browsers refuse plain http for your site — never send it while plain http is still on purpose (local testing): a browser that hears it remembers\n\t\tnext(w, r)\n\t}\n}"
+    },
+    {
+      "id": "rate-limit",
+      "imports": [
+        "net",
+        "net/http",
+        "sync",
+        "time"
+      ],
+      "kind": "declaration",
+      "names": [
+        "rate limit middleware",
+        "rate limiter",
+        "rate limiting",
+        "throttle middleware"
+      ],
+      "note": "Visitors are counted by the address the request arrives from: behind a proxy or a shared office NAT, many people share one address and so share one count. A fixed window also means a burst straddling the boundary can briefly double the limit. A busy production API usually reaches for golang.org/x/time/rate (an external package); this is the honest small-server shape.",
+      "template": "// {name} counts requests per visitor inside a fixed window; past the limit the answer is 429 until the window turns over.\nvar {name}State = struct {\n\tsync.Mutex\n\twindowStart time.Time\n\tcounts      map[string]int\n}{windowStart: time.Now(), counts: map[string]int{}}\n\nfunc {name}(next http.HandlerFunc) http.HandlerFunc {\n\treturn func(w http.ResponseWriter, r *http.Request) {\n\t\tvisitor, _, splitErr := net.SplitHostPort(r.RemoteAddr)\n\t\tif splitErr != nil {\n\t\t\tvisitor = r.RemoteAddr\n\t\t}\n\t\t{name}State.Lock()\n\t\tif time.Since({name}State.windowStart) >= time.Minute {\n\t\t\t// TODO: your window — one minute here. A window turning over wipes every count at once\n\t\t\t{name}State.windowStart = time.Now()\n\t\t\t{name}State.counts = map[string]int{}\n\t\t}\n\t\t{name}State.counts[visitor]++\n\t\tcount := {name}State.counts[visitor]\n\t\t{name}State.Unlock()\n\t\tif count > 100 {\n\t\t\t// TODO: your limit — requests per window, per visitor\n\t\t\thttp.Error(w, \"too many requests\", http.StatusTooManyRequests)\n\t\t\treturn\n\t\t}\n\t\tnext(w, r)\n\t}\n}"
+    },
+    {
+      "id": "jwt-create",
+      "imports": [
+        "crypto/hmac",
+        "crypto/sha256",
+        "encoding/base64",
+        "encoding/json",
+        "os",
+        "time"
+      ],
+      "kind": "statement",
+      "names": [
+        "jwt",
+        "json web token",
+        "jwt token",
+        "make a jwt"
+      ],
+      "note": "Anyone can READ a JWT's claims — the signature proves they weren't changed, it does not hide them — so a token never carries a password or a secret. And the signing secret here comes from the JWT_SECRET environment variable: a secret written in code is a secret published with the code.",
+      "template": "secret := os.Getenv(\"JWT_SECRET\")\n// TODO: JWT_SECRET is the environment variable YOUR server reads its signing secret from — the secret itself never goes in code. A JWT is three base64url parts joined by dots (header, claims, signature); the signature below is HMAC-SHA256 over the first two\nclaims := map[string]any{\n\t\"sub\": \"TODO: who the token is for — usually the user's id\",\n\t\"exp\": time.Now().Add(time.Hour).Unix(),\n}\nclaimsJSON, claimsErr := json.Marshal(claims)\ntoken := \"\"\nif claimsErr == nil {\n\tunsigned := base64.RawURLEncoding.EncodeToString([]byte(\"{\\\"alg\\\":\\\"HS256\\\",\\\"typ\\\":\\\"JWT\\\"}\")) + \".\" + base64.RawURLEncoding.EncodeToString(claimsJSON)\n\tmac := hmac.New(sha256.New, []byte(secret))\n\tmac.Write([]byte(unsigned))\n\ttoken = unsigned + \".\" + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))\n}\n// TODO: token is the signed JWT — hand it to the client (in the login answer, say); it stays valid until its exp, an hour here, so keep lifetimes short\n_ = token"
+    },
+    {
+      "id": "idor-check",
+      "imports": [
+        "net/http"
+      ],
+      "kind": "statement",
+      "names": [
+        "idor check",
+        "ownership check",
+        "idor",
+        "check ownership"
+      ],
+      "note": "Run this check on EVERY way in — read, change, delete, download — not just the page that shows the record: an attacker aims at whichever door was left unchecked. Making ids unguessable (random instead of counting up) slows the guessing down, but this check is the actual lock.",
+      "template": "callerID := \"TODO: the signed-in user's id — from the session or the verified token, never from the URL, a form field, or anything else the caller typed\"\nrecordOwnerID := \"TODO: the id of the user who owns the record this request reached — read it off the record itself, after you load it\"\n// An id in the URL is not permission: whoever the record belongs to, prove the caller IS that person before the code below does anything with it\nif callerID == \"\" || callerID != recordOwnerID {\n\thttp.Error({response}, \"forbidden\", http.StatusForbidden)\n\treturn\n}"
+    },
+    {
+      "id": "secure-cookie",
+      "imports": [
+        "net/http"
+      ],
+      "kind": "statement",
+      "names": [
+        "secure cookie",
+        "cookie flags",
+        "hardened cookie",
+        "safe cookie"
+      ],
+      "note": "The session handler sets this same cookie with none of the flags set. These flags are the difference between a cookie that other sites and stray scripts can abuse and one they can't — and Secure is the one that bites in testing: over plain http on a non-localhost address the browser silently refuses the cookie, which looks exactly like the cookie code not working.",
+      "template": "cookie := &http.Cookie{\n\tName:  \"session\",\n\tValue: \"TODO: your session id\",\n\tPath:  \"/\",\n\t// Secure: the browser sends this cookie only over HTTPS. Browsers treat localhost as trustworthy even over http, but on any other plain-http address the cookie is silently refused\n\tSecure: true,\n\t// HttpOnly: page scripts cannot read this cookie — a buggy or injected script cannot steal what it cannot read\n\tHttpOnly: true,\n\t// SameSite Lax: the cookie stays home on cross-site requests, except top-level page visits — Strict would withhold it even then, which breaks following a link into your site while signed in\n\tSameSite: http.SameSiteLaxMode,\n}\nhttp.SetCookie({response}, cookie)"
+    },
+    {
+      "id": "server-timeouts",
+      "imports": [
+        "net/http",
+        "time"
+      ],
+      "kind": "statement",
+      "names": [
+        "server timeouts",
+        "http server timeouts",
+        "server with timeouts",
+        "hardened server"
+      ],
+      "note": "This builds the server value but starts nothing: the fields are the whole piece. The timeouts are also a promise about your own handlers — a handler slower than WriteTimeout is cut off mid-answer, so the numbers belong above your slowest honest page, not below it.",
+      "template": "server := &http.Server{\n\tAddr: \":8080\",\n\t// TODO: your address — and your Handler, if your routes live on a mux of your own; left unset, this serves everything registered on the default mux (http.Handle / http.HandleFunc)\n\tReadHeaderTimeout: 5 * time.Second,\n\tReadTimeout:       10 * time.Second,\n\tWriteTimeout:      10 * time.Second,\n\tIdleTimeout:       60 * time.Second,\n}\n// TODO: start it with server.ListenAndServe() where a plain http.ListenAndServe would go. A server with NO timeouts lets one slow client hold a connection open forever — the trick behind slow-loris stalls — and ReadHeaderTimeout is the field that closes it\n_ = server"
+    },
+    {
+      "id": "body-limit",
+      "imports": [
+        "net/http"
+      ],
+      "kind": "statement",
+      "names": [
+        "body limit",
+        "request body limit",
+        "limit body size",
+        "body size limit"
+      ],
+      "note": "A request that crosses the limit fails its READS — the handler hears it as an error from reading or ParseForm, and hears nothing at all if it never reads the body. The limit only guards a handler that actually consumes what was sent.",
+      "template": "limit := int64(1 << 20)\n{request}.Body = http.MaxBytesReader({response}, {request}.Body, limit)\n// TODO: one megabyte here — pick the biggest body this handler honestly needs. From here on, reading the body past the limit fails with an error instead of swallowing memory, so a giant upload cannot fill the server. This piece belongs BEFORE anything else reads the body — move it up if the reads come first"
     }
   ],
   "source": "Gollemer's concept book — names of code mapped to their basic code. Rows are data, not grammar: add a row (id, names, kind, template) and the composer can assemble that concept in every phrasing its slots allow, with no new Go code. A malformed row is skipped; the rest of the book still loads."
