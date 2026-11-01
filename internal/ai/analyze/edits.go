@@ -293,12 +293,27 @@ func (p *Project) PlanEdit(req EditRequest) (*EditPlan, string) {
 type textEdit struct {
 	start, end int
 	text       string
+	// isImport marks a pure insert produced by the import-edit
+	// helpers (insertImportSpecs, insertImportEdits). When
+	// several inserts share one offset, applyTextEdits composes
+	// the marked ones first: an import block stranded after a
+	// declaration is not a style issue, it is unparseable Go,
+	// so the order is a property of the edit kind — never of
+	// the order a planner happened to list its edits in.
+	isImport bool
 }
 
 // applyTextEdits splices edits (offsets into src) into a new byte
-// slice. Overlapping edits are a planner bug and drop the later one.
+// slice. Overlapping edits are a planner bug and drop the later
+// one. Inserts that share one offset — a package-clause-only
+// file anchors both its new import block and an appended
+// declaration at EOF — are composed into a single splice at
+// that offset first (see composeSameOffsetInserts), so no
+// planner has to merge them by hand to keep its imports ahead
+// of its declarations.
 func applyTextEdits(src []byte, edits []textEdit) []byte {
-	sort.Slice(edits, func(i, j int) bool { return edits[i].start > edits[j].start })
+	sort.SliceStable(edits, func(i, j int) bool { return edits[i].start > edits[j].start })
+	edits = composeSameOffsetInserts(edits)
 	out := append([]byte{}, src...)
 	lastStart := len(src) + 1
 	for _, e := range edits {
@@ -310,6 +325,43 @@ func applyTextEdits(src []byte, edits []textEdit) []byte {
 		next = append(next, out[e.end:]...)
 		out = next
 		lastStart = e.start
+	}
+	return out
+}
+
+// composeSameOffsetInserts merges each run of consecutive pure
+// inserts (start == end) that share one offset into a single
+// edit at that offset: import edits first, the rest in the
+// order they were passed. The input is sorted by start
+// descending with a stable sort, so a run is consecutive and
+// still carries its passed order. Span replacements are left
+// alone — two of those at one offset overlap, which the splice
+// loop already treats as a planner bug.
+func composeSameOffsetInserts(edits []textEdit) []textEdit {
+	out := make([]textEdit, 0, len(edits))
+	for i := 0; i < len(edits); {
+		e := edits[i]
+		if e.start != e.end {
+			out = append(out, e)
+			i++
+			continue
+		}
+		var imports, rest strings.Builder
+		j := i
+		for j < len(edits) && edits[j].start == e.start && edits[j].end == e.end {
+			if edits[j].isImport {
+				imports.WriteString(edits[j].text)
+			} else {
+				rest.WriteString(edits[j].text)
+			}
+			j++
+		}
+		if j == i+1 {
+			out = append(out, e)
+		} else {
+			out = append(out, textEdit{start: e.start, end: e.end, text: imports.String() + rest.String()})
+		}
+		i = j
 	}
 	return out
 }
@@ -937,7 +989,9 @@ func (p *Project) planImportEdits(fn *Func, fileAST *ast.File, fset *token.FileS
 // import specs like `"fmt"`) to a file's imports: into the
 // existing block before its closing paren, wrapped around a lone
 // import, or as a new block right after the package clause when
-// the file imports nothing yet.
+// the file imports nothing yet. The pure inserts are marked
+// isImport so applyTextEdits composes them ahead of any
+// declaration insert sharing their offset.
 func insertImportSpecs(fileAST *ast.File, fset *token.FileSet, src []byte, specs []string) []textEdit {
 	for _, d := range fileAST.Decls {
 		gd, ok := d.(*ast.GenDecl)
@@ -948,9 +1002,10 @@ func insertImportSpecs(fileAST *ast.File, fset *token.FileSet, src []byte, specs
 			// Insert before the closing paren's line.
 			rbraceLine := lineOfPos(fset, gd.Rparen)
 			return []textEdit{{
-				start: lineStartOffset(src, rbraceLine),
-				end:   lineStartOffset(src, rbraceLine),
-				text:  "\t" + strings.Join(specs, "\n\t") + "\n",
+				start:    lineStartOffset(src, rbraceLine),
+				end:      lineStartOffset(src, rbraceLine),
+				text:     "\t" + strings.Join(specs, "\n\t") + "\n",
+				isImport: true,
 			}}
 		}
 		// A lone import: wrap it into a block.
@@ -969,9 +1024,10 @@ func insertImportSpecs(fileAST *ast.File, fset *token.FileSet, src []byte, specs
 	pkgLine := lineOfPos(fset, fileAST.Name.Pos())
 	block := "\nimport (\n\t" + strings.Join(specs, "\n\t") + "\n)\n"
 	return []textEdit{{
-		start: lineStartOffset(src, pkgLine+1),
-		end:   lineStartOffset(src, pkgLine+1),
-		text:  block,
+		start:    lineStartOffset(src, pkgLine+1),
+		end:      lineStartOffset(src, pkgLine+1),
+		text:     block,
+		isImport: true,
 	}}
 }
 

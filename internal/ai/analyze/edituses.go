@@ -438,23 +438,11 @@ func (u *usesGen) formFile(alt bool) (*EditFile, string) {
 	if len(g.targetSrc) == 0 || g.targetSrc[len(g.targetSrc)-1] != '\n' {
 		appendText = "\n" + appendText
 	}
-	// A package-clause-only target puts the import block's
-	// anchor at EOF too — the same offset as this append — and
-	// applyTextEdits resolves same-offset inserts in an order
-	// that would strand the imports after the new function,
-	// which Go forbids. Merge them into one edit, imports
-	// first.
-	merged := false
-	for i, e := range edits {
-		if e.start == len(g.targetSrc) && e.end == e.start {
-			edits[i].text += appendText
-			merged = true
-			break
-		}
-	}
-	if !merged {
-		edits = append(edits, textEdit{start: len(g.targetSrc), end: len(g.targetSrc), text: appendText})
-	}
+	// A package-clause-only target anchors the import block at
+	// EOF too — the same offset as this append. No local merge
+	// is needed: applyTextEdits composes same-offset inserts
+	// imports-first (see composeSameOffsetInserts).
+	edits = append(edits, textEdit{start: len(g.targetSrc), end: len(g.targetSrc), text: appendText})
 	after := applyTextEdits(g.targetSrc, edits)
 	ef := finishDelegateFile(g.targetRel, g.targetSrc, after)
 	exp.addedImps = added

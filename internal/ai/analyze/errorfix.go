@@ -128,7 +128,8 @@ func removeLinesEdit(src []byte, firstLine, lastLine int) textEdit {
 // insertImportEdits writes the splice that adds ONE import spec to
 // a file, following the shapes planImportEdits uses: into the
 // paren block when there is one, wrapping a lone import into a
-// block, or a fresh block after the package clause.
+// block, or a fresh block after the package clause. The pure
+// inserts are marked isImport, like insertImportSpecs'.
 func insertImportEdits(fset *token.FileSet, fileAST *ast.File, src []byte, spec string) []textEdit {
 	for _, d := range fileAST.Decls {
 		gd, ok := d.(*ast.GenDecl)
@@ -138,9 +139,10 @@ func insertImportEdits(fset *token.FileSet, fileAST *ast.File, src []byte, spec 
 		if gd.Lparen.IsValid() {
 			rbraceLine := lineOfPos(fset, gd.Rparen)
 			return []textEdit{{
-				start: lineStartOffset(src, rbraceLine),
-				end:   lineStartOffset(src, rbraceLine),
-				text:  "\t" + spec + "\n",
+				start:    lineStartOffset(src, rbraceLine),
+				end:      lineStartOffset(src, rbraceLine),
+				text:     "\t" + spec + "\n",
+				isImport: true,
 			}}
 		}
 		declLine := lineOfPos(fset, gd.Pos())
@@ -156,9 +158,10 @@ func insertImportEdits(fset *token.FileSet, fileAST *ast.File, src []byte, spec 
 	}
 	pkgLine := lineOfPos(fset, fileAST.Name.Pos())
 	return []textEdit{{
-		start: lineStartOffset(src, pkgLine+1),
-		end:   lineStartOffset(src, pkgLine+1),
-		text:  "\nimport (\n\t" + spec + "\n)\n",
+		start:    lineStartOffset(src, pkgLine+1),
+		end:      lineStartOffset(src, pkgLine+1),
+		text:     "\nimport (\n\t" + spec + "\n)\n",
+		isImport: true,
 	}}
 }
 
