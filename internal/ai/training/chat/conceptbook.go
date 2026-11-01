@@ -1510,6 +1510,261 @@ const defaultConceptBook = `{
       ],
       "note": "A request that crosses the limit fails its READS — the handler hears it as an error from reading or ParseForm, and hears nothing at all if it never reads the body. The limit only guards a handler that actually consumes what was sent.",
       "template": "limit := int64(1 << 20)\n{request}.Body = http.MaxBytesReader({response}, {request}.Body, limit)\n// TODO: one megabyte here — pick the biggest body this handler honestly needs. From here on, reading the body past the limit fails with an error instead of swallowing memory, so a giant upload cannot fill the server. This piece belongs BEFORE anything else reads the body — move it up if the reads come first"
+    },
+    {
+      "id": "while-loop",
+      "kind": "statement",
+      "names": [
+        "while loop",
+        "while"
+      ],
+      "template": "count := 0\nfor count < 3 {\n\t// TODO: the work of each pass goes here — the loop runs while the condition holds, so something has to move it toward false, or it never ends\n\tcount++\n}"
+    },
+    {
+      "id": "infinite-loop",
+      "kind": "statement",
+      "names": [
+        "infinite loop",
+        "forever loop",
+        "endless loop"
+      ],
+      "template": "for {\n\t// TODO: a loop with no condition and no counter runs until something inside it stops it — a break, a return, or the program ending\n}"
+    },
+    {
+      "id": "type-conversion",
+      "kind": "statement",
+      "names": [
+        "type conversion",
+        "type cast",
+        "convert a type"
+      ],
+      "template": "whole := 2\ndecimal := float64(whole)\n// TODO: a conversion rewrites a value as another type — float64(whole) here; int(decimal) converts back, cutting the fraction away\n_ = decimal"
+    },
+    {
+      "id": "sleep",
+      "imports": [
+        "time"
+      ],
+      "kind": "statement",
+      "names": [
+        "sleep",
+        "pause execution",
+        "delay"
+      ],
+      "template": "time.Sleep(2 * time.Second)\n// TODO: the program waits right here for as long as you set — this goroutine does nothing else until the time has passed"
+    },
+    {
+      "id": "delete-from-map",
+      "kind": "statement",
+      "names": [
+        "delete from a map",
+        "remove from a map",
+        "delete a map entry",
+        "delete a key from a map"
+      ],
+      "template": "ages := map[string]int{\"ann\": 3, \"bo\": 4}\ndelete(ages, \"ann\")\n// TODO: your own map and key — deleting a key that isn't there is not an error, and the rest of the map is untouched"
+    },
+    {
+      "id": "clear-map",
+      "kind": "statement",
+      "names": [
+        "clear a map",
+        "empty a map",
+        "clear map"
+      ],
+      "template": "ages := map[string]int{\"ann\": 3}\nclear(ages)\n// TODO: your own map — clear takes every entry out, and the map itself stays, ready to be filled again"
+    },
+    {
+      "id": "map-keys",
+      "kind": "statement",
+      "names": [
+        "map keys",
+        "list of map keys",
+        "list the keys of a map",
+        "keys of a map"
+      ],
+      "template": "ages := map[string]int{\"ann\": 3, \"bo\": 4}\nkeys := make([]string, 0, len(ages))\nfor key := range ages {\n\tkeys = append(keys, key)\n}\n// TODO: your own map — keys now holds every key, in no promised order; range for the value instead of the key and you collect the values the same way\n_ = keys"
+    },
+    {
+      "id": "read-input",
+      "imports": [
+        "bufio",
+        "os"
+      ],
+      "kind": "statement",
+      "names": [
+        "read input",
+        "read from stdin",
+        "read a line from stdin",
+        "read from standard input",
+        "standard input"
+      ],
+      "template": "scanner := bufio.NewScanner(os.Stdin)\nif scanner.Scan() {\n\tline := scanner.Text()\n\t// TODO: line is what was typed — keep calling scanner.Scan() in a loop to read line after line, or read one value straight into a variable with fmt.Scan(&value)\n\t_ = line\n}"
+    },
+    {
+      "id": "swap-values",
+      "kind": "statement",
+      "names": [
+        "swap values",
+        "swap two variables",
+        "swap variables",
+        "swap"
+      ],
+      "template": "first := \"ann\"\nsecond := \"bo\"\nfirst, second = second, first\n// TODO: your own two variables — Go trades their values in one line, no temporary variable needed"
+    },
+    {
+      "id": "sum",
+      "kind": "statement",
+      "names": [
+        "sum of a slice",
+        "sum a slice",
+        "add up a slice",
+        "sum"
+      ],
+      "template": "numbers := []int{1, 2, 3}\ntotal := 0\nfor _, number := range numbers {\n\ttotal += number\n}\n// TODO: your own slice — total holds the sum when the loop ends\n_ = total"
+    },
+    {
+      "id": "join-strings",
+      "imports": [
+        "strings"
+      ],
+      "kind": "statement",
+      "names": [
+        "join strings",
+        "join a list of strings",
+        "join a slice of strings",
+        "join"
+      ],
+      "template": "words := []string{\"ann\", \"bo\", \"cy\"}\njoined := strings.Join(words, \", \")\n// TODO: your own slice and separator — Join glues the pieces into one string with the separator between them\n_ = joined"
+    },
+    {
+      "id": "repeat-string",
+      "imports": [
+        "strings"
+      ],
+      "kind": "statement",
+      "names": [
+        "repeat a string",
+        "repeat string",
+        "repeated string",
+        "string repeat"
+      ],
+      "template": "repeated := strings.Repeat(\"ha\", 3)\n// TODO: your own text and count — the result is the text written out that many times, end to end\n_ = repeated"
+    },
+    {
+      "id": "string-contains",
+      "imports": [
+        "strings"
+      ],
+      "kind": "statement",
+      "names": [
+        "string contains",
+        "check if a string contains",
+        "check a string contains",
+        "search a string"
+      ],
+      "template": "text := \"hello world\"\nfound := strings.Contains(text, \"world\")\n// TODO: your own text and the piece you hunt — strings.Index says where a piece sits, LastIndex finds the last one, HasPrefix and HasSuffix test the two ends, and Count says how many times a piece appears\n_ = found"
+    },
+    {
+      "id": "file-exists",
+      "imports": [
+        "os"
+      ],
+      "kind": "statement",
+      "names": [
+        "file exists",
+        "file exists check",
+        "check if a file exists"
+      ],
+      "template": "info, err := os.Stat(\"TODO: the path\")\nexists := err == nil\n// TODO: exists is true when the path is there — info then describes it (info.Size() is its size, info.IsDir() says folder), and when err is os.IsNotExist the path simply isn't there\n_ = exists\n_ = info"
+    },
+    {
+      "id": "delete-file",
+      "imports": [
+        "os"
+      ],
+      "kind": "statement",
+      "names": [
+        "delete a file",
+        "remove a file",
+        "delete file"
+      ],
+      "template": "if err := os.Remove(\"TODO: the file's path\"); err != nil {\n\t// TODO: the remove failed — the file may not be there, or the program may not be allowed; decide what to do about it\n}"
+    },
+    {
+      "id": "rename-file",
+      "imports": [
+        "os"
+      ],
+      "kind": "statement",
+      "names": [
+        "rename a file",
+        "move a file",
+        "rename file"
+      ],
+      "template": "if err := os.Rename(\"TODO: the file's path now\", \"TODO: the path it should get\"); err != nil {\n\t// TODO: the rename failed — decide what to do about it\n}"
+    },
+    {
+      "id": "hex-encoding",
+      "imports": [
+        "encoding/hex"
+      ],
+      "kind": "statement",
+      "names": [
+        "hex encoding",
+        "encode to hex",
+        "hex encode",
+        "hex"
+      ],
+      "template": "encoded := hex.EncodeToString([]byte(\"TODO: your text\"))\n// TODO: hex writes each byte as two characters, 0-9 and a-f — hex.DecodeString reads the text back into bytes\n_ = encoded"
+    },
+    {
+      "id": "insert-into-slice",
+      "kind": "statement",
+      "names": [
+        "insert into a slice",
+        "insert an element into a slice",
+        "insert in a slice",
+        "insert into slice"
+      ],
+      "template": "names := []string{\"ann\", \"cy\"}\nnames = append(names, \"\")\ncopy(names[2:], names[1:])\nnames[1] = \"bo\"\n// TODO: your own slice, position and value — the append makes room, the copy shifts everything after the position one place over, and the value drops into the gap"
+    },
+    {
+      "id": "remove-value-from-slice",
+      "kind": "statement",
+      "names": [
+        "remove a value from a slice",
+        "remove all occurrences from a slice",
+        "remove occurrences from a slice",
+        "remove values from a slice"
+      ],
+      "template": "names := []string{\"ann\", \"bo\", \"cy\", \"bo\"}\nkept := names[:0]\nfor _, name := range names {\n\tif name != \"bo\" {\n\t\tkept = append(kept, name)\n\t}\n}\nnames = kept\n// TODO: your own slice and the value that goes — every copy of it is dropped and the rest keep their order; kept shares the slice's backing array, so the tail beyond the new end still holds the old values"
+    },
+    {
+      "id": "reverse-slice",
+      "kind": "statement",
+      "names": [
+        "reverse a slice",
+        "reverse a list",
+        "reverse slice",
+        "slice reverse"
+      ],
+      "template": "names := []string{\"ann\", \"bo\", \"cy\"}\nfor i, j := 0, len(names)-1; i < j; i, j = i+1, j-1 {\n\tnames[i], names[j] = names[j], names[i]\n}\n// TODO: your own slice — the two ends walk toward the middle, trading places, until the whole slice reads backwards"
+    },
+    {
+      "id": "print-stderr",
+      "imports": [
+        "fmt",
+        "os"
+      ],
+      "kind": "statement",
+      "names": [
+        "print to stderr",
+        "write to stderr",
+        "print to standard error",
+        "standard error print"
+      ],
+      "template": "fmt.Fprintln(os.Stderr, \"TODO: the message\")\n// TODO: standard error is the stream set aside for problems — shells and tools can send it somewhere different from the program's normal output"
     }
   ],
   "source": "Gollemer's concept book — names of code mapped to their basic code. Rows are data, not grammar: add a row (id, names, kind, template) and the composer can assemble that concept in every phrasing its slots allow, with no new Go code. A malformed row is skipped; the rest of the book still loads."

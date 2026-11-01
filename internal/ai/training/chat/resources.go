@@ -511,6 +511,22 @@ const (
 // section to read.
 const sqlInterfaceURL = "https://go.dev/wiki/SQLInterface"
 
+// The cheatsheet sweep's sources (2026-11-01), each address
+// read and verified at build time: Devhints' one-page Go
+// syntax sheet, GoInterview.dev's interactive cheatsheet,
+// and programming-idioms.org's Go cheatsheet — a few
+// hundred little tasks, each with a community Go answer.
+// The three sheets themselves seat here as reading; what
+// they teach that the book can assemble became rows, and
+// the full per-topic mapping (rows / duplicates /
+// exclusions with their walls) is in the sweep's commit
+// message and its test file.
+const (
+	devhintsURL          = "https://devhints.io/go"
+	gointerviewURL       = "https://app.gointerview.dev/cheatsheet"
+	programmingIdiomsURL = "https://programming-idioms.org/cheatsheet/Go"
+)
+
 var referenceSeed = []referenceEntry{
 	{"Effective Go", []string{"formatting", "gofmt", "format"}, "Formatting", effectiveGoURL + "#formatting"},
 	{"Effective Go", []string{"comments", "commentary", "doc comments"}, "Commentary", effectiveGoURL + "#commentary"},
@@ -639,6 +655,26 @@ var referenceSeed = []referenceEntry{
 	{"the Go Wiki", []string{"executing queries", "querycontext", "execcontext", "prepared statements"}, "SQLInterface: Executing queries — the Context forms (ExecContext, QueryContext, QueryRowContext, PrepareContext)", sqlInterfaceURL},
 	{"the Go Wiki", []string{"transactions", "transaction", "begintx", "commit or rollback"}, "SQLInterface: Transactions — BeginTx, then Commit or Rollback", sqlInterfaceURL},
 	{"the Go Wiki", []string{"null values", "nullstring", "nullable columns", "sql null"}, "SQLInterface: Dealing with NULL — sql.NullString and the other Null types", sqlInterfaceURL},
+	// The cheatsheet sweep (2026-11-01): the three sheets
+	// themselves, as reading. Devhints is a syntax sheet —
+	// nearly every section duplicates a book row (the two
+	// that didn't, the while loop and type conversions,
+	// became rows), and its methods sections stand behind
+	// the receiver wall like every source's. GoInterview is
+	// interview-shaped: its sections duplicate the rows and
+	// the sync/context/io machinery a sentence can't carry
+	// stays reading. Programming Idioms is a few hundred
+	// tiny tasks: the statement-sized ones the book lacked
+	// became rows (the map and slice verbs, reading input,
+	// swapping, summing, the string toolbox's other half,
+	// the file verbs), the rest are duplicates of rows or
+	// exclusions with named walls — algorithms, whole
+	// programs, data-structure designs, expression
+	// fragments, and the signature machinery (parameters
+	// and results the slots can't carry).
+	{"Devhints", []string{"cheatsheet", "devhints", "cheat sheet", "quick reference", "syntax reference"}, "Go cheatsheet — the one-page syntax reference", devhintsURL},
+	{"GoInterview", []string{"gointerview", "interview", "interview cheatsheet", "interview questions"}, "Go Cheatsheet 2026 — interactive reference with code examples", gointerviewURL},
+	{"Programming Idioms", []string{"idioms", "programming idioms", "code idioms"}, "Programming Idioms — Go: small tasks, each answered in Go", programmingIdiomsURL},
 }
 
 // referenceMatchCap bounds the reference lines in one pack:

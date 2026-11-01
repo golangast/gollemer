@@ -341,6 +341,42 @@ var statementConcepts = []concept{
 	{"secure-cookie", "statement", "secure cookie", []string{"cookie flags", "hardened cookie", "safe cookie"}},
 	{"server-timeouts", "statement", "server timeouts", []string{"http server timeouts", "server with timeouts", "hardened server"}},
 	{"body-limit", "statement", "body limit", []string{"request body limit", "limit body size", "body size limit"}},
+	// The cheatsheet sweep (2026-11-01): twenty-one
+	// statement rows the three cheatsheets (Devhints,
+	// GoInterview, programming-idioms) taught the book —
+	// the loop siblings (while, infinite), type conversion,
+	// sleep, the map verbs (delete, clear, keys), reading
+	// standard input, swap, sum, the string toolbox's other
+	// half (join, repeat, contains), the file verbs
+	// (exists, delete, rename), hex, and the slice verbs
+	// (insert, remove-by-value, reverse) beside stderr
+	// printing. Synonyms mirror the book names, as
+	// everywhere. The insert-led family (insert-into-slice)
+	// keeps its object's name in every form, the database
+	// lesson: the naming guard lets a family claim only
+	// lines that say what they mean, and "a slice" is said
+	// in full in every synonym.
+	{"while-loop", "statement", "while loop", []string{"while"}},
+	{"infinite-loop", "statement", "infinite loop", []string{"forever loop", "endless loop"}},
+	{"type-conversion", "statement", "type conversion", []string{"type cast", "convert a type"}},
+	{"sleep", "statement", "sleep", []string{"pause execution", "delay"}},
+	{"delete-from-map", "statement", "delete from a map", []string{"remove from a map", "delete a map entry", "delete a key from a map"}},
+	{"clear-map", "statement", "clear a map", []string{"empty a map", "clear map"}},
+	{"map-keys", "statement", "map keys", []string{"list of map keys", "list the keys of a map", "keys of a map"}},
+	{"read-input", "statement", "read input", []string{"read from stdin", "read a line from stdin", "read from standard input", "standard input"}},
+	{"swap-values", "statement", "swap values", []string{"swap two variables", "swap variables", "swap"}},
+	{"sum", "statement", "sum of a slice", []string{"sum a slice", "add up a slice", "sum"}},
+	{"join-strings", "statement", "join strings", []string{"join a list of strings", "join a slice of strings", "join"}},
+	{"repeat-string", "statement", "repeat a string", []string{"repeat string", "repeated string", "string repeat"}},
+	{"string-contains", "statement", "string contains", []string{"check if a string contains", "check a string contains", "search a string"}},
+	{"file-exists", "statement", "file exists", []string{"file exists check", "check if a file exists"}},
+	{"delete-file", "statement", "delete a file", []string{"remove a file", "delete file"}},
+	{"rename-file", "statement", "rename a file", []string{"move a file", "rename file"}},
+	{"hex-encoding", "statement", "hex encoding", []string{"encode to hex", "hex encode", "hex"}},
+	{"insert-into-slice", "statement", "insert into a slice", []string{"insert an element into a slice", "insert in a slice", "insert into slice"}},
+	{"remove-value-from-slice", "statement", "remove a value from a slice", []string{"remove all occurrences from a slice", "remove occurrences from a slice", "remove values from a slice"}},
+	{"reverse-slice", "statement", "reverse a slice", []string{"reverse a list", "reverse slice", "slice reverse"}},
+	{"print-stderr", "statement", "print to stderr", []string{"write to stderr", "print to standard error", "standard error print"}},
 }
 
 var declConcepts = []concept{
@@ -431,6 +467,21 @@ var securityConceptIDs = []string{
 var databaseConceptIDs = []string{
 	"database-connect", "gorqlite-connect",
 	"gorqlite-query", "gorqlite-write",
+}
+
+// cheatsheetsConceptIDs are the cheatsheet sweep's families
+// (2026-11-01): the ones the -mode heldout-cheatsheets judge
+// is built for. All twenty-one are statements — the three
+// sheets' declaration-shaped topics were already the book's
+// (struct, interface, enum) or stand behind the receiver
+// wall (methods), so this sweep's rows are statements only.
+var cheatsheetsConceptIDs = []string{
+	"while-loop", "infinite-loop", "type-conversion", "sleep",
+	"delete-from-map", "clear-map", "map-keys", "read-input",
+	"swap-values", "sum", "join-strings", "repeat-string",
+	"string-contains", "file-exists", "delete-file",
+	"rename-file", "hex-encoding", "insert-into-slice",
+	"remove-value-from-slice", "reverse-slice", "print-stderr",
 }
 
 func article(name string) string {
@@ -4845,12 +4896,292 @@ func runHeldoutDatabase(outDir string, seed int64) {
 		rep.TrainInputOverlap, rep.JudgeInputOverlap, rep.SourcesOverlap, rep.CreatedOverlap, rep.RqliteOverlap, rep.BooksOverlap, rep.ServeHTMLOverlap, rep.BasicsOverlap, rep.LinesOverlap, rep.SecurityOverlap, rep.FoldersOverlap, rep.SlotLeak)
 }
 
+// ---------- the cheatsheets held-out judge ----------
+//
+// -mode heldout-cheatsheets builds data/training/
+// phrasing_heldout_cheatsheets.jsonl: the judge for the
+// cheatsheet sweep's twenty-one new families — all
+// statements (the loop siblings, the map/slice/file
+// verbs, the string toolbox's other half, swap, sum,
+// reading input, hex, sleeping, printing to stderr) — in
+// the same construction as the security judge: held-out
+// core dialect, held-out wrappers, slot values from the
+// held-out pools only, and 20 single-unseen + 8
+// single-seen per family. Leak checks run against the
+// train corpus and ALL ELEVEN prior judges; any overlap
+// fails the run. Run the train mode first.
+
+type cheatsheetsReport struct {
+	Seed               int64          `json:"seed"`
+	Items              int            `json:"items"`
+	ByFamilyCell       map[string]int `json:"by_family_cell"`
+	SkippedUnemittable int            `json:"skipped_unemittable"`
+	ConflictingInputs  int            `json:"conflicting_inputs_removed"`
+	DuplicateInputs    int            `json:"duplicate_inputs_skipped"`
+	TrainInputOverlap  int            `json:"train_input_overlap"`
+	JudgeInputOverlap  int            `json:"original_judge_input_overlap"`
+	SourcesOverlap     int            `json:"sources_judge_input_overlap"`
+	CreatedOverlap     int            `json:"created_judge_input_overlap"`
+	RqliteOverlap      int            `json:"rqlite_judge_input_overlap"`
+	BooksOverlap       int            `json:"books_judge_input_overlap"`
+	ServeHTMLOverlap   int            `json:"servehtml_judge_input_overlap"`
+	BasicsOverlap      int            `json:"basics_judge_input_overlap"`
+	LinesOverlap       int            `json:"lines_judge_input_overlap"`
+	SecurityOverlap    int            `json:"security_judge_input_overlap"`
+	FoldersOverlap     int            `json:"folders_judge_input_overlap"`
+	DatabaseOverlap    int            `json:"database_judge_input_overlap"`
+	SlotLeak           []string       `json:"slot_value_leak_beyond_fixtures"`
+}
+
+func runHeldoutCheatsheets(outDir string, seed int64) {
+	r := rand.New(rand.NewSource(seed + 43))
+	rep := &cheatsheetsReport{Seed: seed, ByFamilyCell: map[string]int{}}
+	hp := heldoutPools()
+
+	seen := map[string]string{} // normalized input -> output
+	var items []heldItem
+	add := func(a ask, cell string, wrappers []wrapper) {
+		if !emittable(a.canonical) {
+			rep.SkippedUnemittable++
+			return
+		}
+		in, tmpl := dress(r, a, wrappers)
+		n := normInput(in)
+		if prev, dup := seen[n]; dup {
+			if prev != a.canonical {
+				rep.ConflictingInputs++
+				for i, q := range items {
+					if normInput(q.Input) == n {
+						items = append(items[:i], items[i+1:]...)
+						break
+					}
+				}
+				delete(seen, n)
+			} else {
+				rep.DuplicateInputs++
+			}
+			return
+		}
+		seen[n] = a.canonical
+		items = append(items, heldItem{
+			Input: in, Output: a.canonical, Family: a.family,
+			Cell: cell, Template: "heldout/" + tmpl,
+		})
+		rep.ByFamilyCell[a.family+"/"+cell]++
+	}
+	fill := func(build func(dialect string) ask, unseenCell, seenCell string) {
+		for got, attempts := 0, 0; got < 20 && attempts < 600; attempts++ {
+			before := len(items)
+			add(build("heldout"), unseenCell, heldoutWrappers)
+			if len(items) > before {
+				got++
+			}
+		}
+		for got, attempts := 0, 0; got < 8 && attempts < 240; attempts++ {
+			before := len(items)
+			add(build("train"), seenCell, trainWrappers)
+			if len(items) > before {
+				got++
+			}
+		}
+	}
+
+	for _, id := range cheatsheetsConceptIDs {
+		c := conceptByID(id)
+		if c.id == "" {
+			fail(fmt.Errorf("cheatsheets concept %q not in the book lists", id))
+		}
+		build := func(dialect string) ask { return buildStmtAsk(r, hp, c, dialect) }
+		fill(build, "single-unseen", "single-seen")
+	}
+	rep.Items = len(items)
+
+	// Leak checks: against the train corpus (read back from
+	// the pairs file the train mode wrote) and all eleven
+	// prior judges. Overlaps are dropped, counted, and
+	// reported — and any drop at all fails the run, because
+	// by construction (disjoint dialects, wrappers, and
+	// pools) there should be none.
+	readPairs := func(path string) (inputs map[string]bool, slots map[string]bool) {
+		inputs, slots = map[string]bool{}, map[string]bool{}
+		f, err := os.Open(path)
+		if err != nil {
+			fail(fmt.Errorf("heldout-cheatsheets mode reads %s (run the train mode first): %w", path, err))
+		}
+		defer f.Close()
+		sc := bufioScanner(f)
+		for sc.Scan() {
+			line := strings.TrimSpace(sc.Text())
+			if line == "" {
+				continue
+			}
+			var p pair
+			if err := json.Unmarshal([]byte(line), &p); err != nil {
+				fail(err)
+			}
+			inputs[normInput(p.Input)] = true
+			for _, s := range p.Slots {
+				slots[s] = true
+			}
+		}
+		return inputs, slots
+	}
+	readJudge := func(path string) map[string]bool {
+		inputs := map[string]bool{}
+		f, err := os.Open(path)
+		if err != nil {
+			fail(err)
+		}
+		defer f.Close()
+		sc := bufioScanner(f)
+		for sc.Scan() {
+			line := strings.TrimSpace(sc.Text())
+			if line == "" {
+				continue
+			}
+			var it heldItem
+			if err := json.Unmarshal([]byte(line), &it); err != nil {
+				fail(err)
+			}
+			inputs[normInput(it.Input)] = true
+		}
+		return inputs
+	}
+	trainInputs, trainSlots := readPairs(filepath.Join(outDir, "phrasing_pairs2.jsonl"))
+	judgeInputs := readJudge(filepath.Join(outDir, "phrasing_heldout.jsonl"))
+	sourcesInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_sources.jsonl"))
+	createdInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_created.jsonl"))
+	rqliteInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_rqlite.jsonl"))
+	booksInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_books.jsonl"))
+	serveHTMLInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_servehtml.jsonl"))
+	basicsInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_basics.jsonl"))
+	linesInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_lines.jsonl"))
+	securityInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_security.jsonl"))
+	foldersInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_folders.jsonl"))
+	databaseInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_database.jsonl"))
+	fixtures := map[string]bool{"main": true, "main.go": true, "index.html": true}
+	for _, t := range fieldTypes {
+		fixtures[t] = true
+	}
+	heldSlotVals := map[string]bool{}
+	for _, s := range append(append(append(append(append(append(append(append(append(
+		[]string{}, namesHeldout...), filesHeldout...), fieldNamesHeldout...),
+		caseValsHeldout...), keysHeldout...), tablesHeldout...), textsHeldout...), calleesHeldout...), htmlsHeldout...) {
+		heldSlotVals[s] = true
+	}
+	for _, s := range tagValsHeldout {
+		heldSlotVals[s] = true
+		for _, k := range tagKinds {
+			heldSlotVals[k+":\""+s+"\""] = true
+		}
+	}
+	leakSet := map[string]bool{}
+	for s := range heldSlotVals {
+		if trainSlots[s] && !fixtures[s] {
+			leakSet[s] = true
+		}
+	}
+	for s := range leakSet {
+		rep.SlotLeak = append(rep.SlotLeak, s)
+	}
+	sort.Strings(rep.SlotLeak)
+	kept := items[:0]
+	for _, it := range items {
+		n := normInput(it.Input)
+		drop := false
+		if trainInputs[n] {
+			rep.TrainInputOverlap++
+			drop = true
+		}
+		if judgeInputs[n] {
+			rep.JudgeInputOverlap++
+			drop = true
+		}
+		if sourcesInputs[n] {
+			rep.SourcesOverlap++
+			drop = true
+		}
+		if createdInputs[n] {
+			rep.CreatedOverlap++
+			drop = true
+		}
+		if rqliteInputs[n] {
+			rep.RqliteOverlap++
+			drop = true
+		}
+		if booksInputs[n] {
+			rep.BooksOverlap++
+			drop = true
+		}
+		if serveHTMLInputs[n] {
+			rep.ServeHTMLOverlap++
+			drop = true
+		}
+		if basicsInputs[n] {
+			rep.BasicsOverlap++
+			drop = true
+		}
+		if linesInputs[n] {
+			rep.LinesOverlap++
+			drop = true
+		}
+		if securityInputs[n] {
+			rep.SecurityOverlap++
+			drop = true
+		}
+		if foldersInputs[n] {
+			rep.FoldersOverlap++
+			drop = true
+		}
+		if databaseInputs[n] {
+			rep.DatabaseOverlap++
+			drop = true
+		}
+		if !drop {
+			kept = append(kept, it)
+		}
+	}
+	items = kept
+	rep.Items = len(items)
+	if rep.TrainInputOverlap > 0 || rep.JudgeInputOverlap > 0 ||
+		rep.SourcesOverlap > 0 || rep.CreatedOverlap > 0 ||
+		rep.RqliteOverlap > 0 || rep.BooksOverlap > 0 ||
+		rep.ServeHTMLOverlap > 0 || rep.BasicsOverlap > 0 ||
+		rep.LinesOverlap > 0 || rep.SecurityOverlap > 0 ||
+		rep.FoldersOverlap > 0 || rep.DatabaseOverlap > 0 || len(rep.SlotLeak) > 0 {
+		fail(fmt.Errorf("leak check failed: train-overlap=%d judge-overlap=%d sources-overlap=%d created-overlap=%d rqlite-overlap=%d books-overlap=%d servehtml-overlap=%d basics-overlap=%d lines-overlap=%d security-overlap=%d folders-overlap=%d database-overlap=%d slot=%v",
+			rep.TrainInputOverlap, rep.JudgeInputOverlap, rep.SourcesOverlap, rep.CreatedOverlap, rep.RqliteOverlap, rep.BooksOverlap, rep.ServeHTMLOverlap, rep.BasicsOverlap, rep.LinesOverlap, rep.SecurityOverlap, rep.FoldersOverlap, rep.DatabaseOverlap, rep.SlotLeak))
+	}
+
+	if err := writeJSONL(filepath.Join(outDir, "phrasing_heldout_cheatsheets.jsonl"), items); err != nil {
+		fail(err)
+	}
+	raw, err := json.MarshalIndent(rep, "", "  ")
+	if err != nil {
+		fail(err)
+	}
+	if err := os.WriteFile(filepath.Join(outDir, "phrasing_report_cheatsheets.json"), raw, 0o644); err != nil {
+		fail(err)
+	}
+	fmt.Printf("heldout-cheatsheets judge: %d items\n", rep.Items)
+	for _, k := range sortedKeys(rep.ByFamilyCell) {
+		fmt.Printf("  %-44s %d\n", k, rep.ByFamilyCell[k])
+	}
+	fmt.Printf("skipped unemittable=%d conflicting=%d duplicates=%d\n", rep.SkippedUnemittable, rep.ConflictingInputs, rep.DuplicateInputs)
+	fmt.Printf("leaks: train-overlap=%d judge-overlap=%d sources-overlap=%d created-overlap=%d rqlite-overlap=%d books-overlap=%d servehtml-overlap=%d basics-overlap=%d lines-overlap=%d security-overlap=%d folders-overlap=%d database-overlap=%d slot=%v\n",
+		rep.TrainInputOverlap, rep.JudgeInputOverlap, rep.SourcesOverlap, rep.CreatedOverlap, rep.RqliteOverlap, rep.BooksOverlap, rep.ServeHTMLOverlap, rep.BasicsOverlap, rep.LinesOverlap, rep.SecurityOverlap, rep.FoldersOverlap, rep.DatabaseOverlap, rep.SlotLeak)
+}
+
 func main() {
 	outDir := flag.String("out", "data/training", "output directory")
 	seed := flag.Int64("seed", 20261031, "generator seed")
 	judgePath := flag.String("judge", "data/training/phrasing_heldout.jsonl", "the fixed held-out judge, read for leak checks only")
-	mode := flag.String("mode", "train", "train | heldout-sources | heldout-created | heldout-rqlite | heldout-books | heldout-servehtml | heldout-basics | heldout-lines | heldout-security | heldout-folders | heldout-database")
+	mode := flag.String("mode", "train", "train | heldout-sources | heldout-created | heldout-rqlite | heldout-books | heldout-servehtml | heldout-basics | heldout-lines | heldout-security | heldout-folders | heldout-database | heldout-cheatsheets")
 	flag.Parse()
+	if *mode == "heldout-cheatsheets" {
+		runHeldoutCheatsheets(*outDir, *seed)
+		return
+	}
 	if *mode == "heldout-database" {
 		runHeldoutDatabase(*outDir, *seed)
 		return
