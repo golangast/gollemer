@@ -51,7 +51,12 @@ import (
 // found more than two pieces, the classifier's confidence or
 // margin failed the intent layer's gate, a piece's extraction
 // could not bind every slot, or a rendered canonical failed
-// validation against the real parsers.
+// validation against the real parsers. One binding is the
+// route's own deterministic work, not extraction's: in a
+// created-target compound ("make a handler named Login in
+// web.go and add a switch in it") the second piece's unbound
+// placement is bound to the function the first piece created
+// before validation — see routeCreatedPiece.
 func PhrasingRoute(line string) (pieces []string, ok bool) {
 	return phrasingRouteB(line)
 }

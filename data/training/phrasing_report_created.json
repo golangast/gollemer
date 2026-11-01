@@ -1,0 +1,32 @@
+{
+  "seed": 20261031,
+  "items": 321,
+  "items_by_cell_form": {
+    "compound-created/decl:form-handler": 3,
+    "compound-created/decl:function": 3,
+    "compound-created/decl:middleware": 3,
+    "compound-created/decl:middleware-chain": 3,
+    "compound-created/decl:middleware-timing": 3,
+    "compound-created/decl:recursion": 3,
+    "compound-created/decl:session-handler": 3,
+    "compound-created/form:named": 48,
+    "compound-created/form:omitted": 46,
+    "compound-created/form:pronoun": 48,
+    "compound-shared/created-target": 24,
+    "compound-shared/decl+stmt": 24,
+    "compound-shared/print+stmt": 24,
+    "compound-shared/stmt+print": 24,
+    "compound-shared/stmt+stmt": 24,
+    "none-control/lone-pronoun": 10,
+    "none-control/shared-restraint": 6,
+    "none-control/stmt-first": 10,
+    "none-control/type-first": 12
+  },
+  "skipped_unemittable_targets": 0,
+  "conflicting_inputs_dropped": 0,
+  "duplicate_inputs_dropped": 0,
+  "train_input_overlap": 0,
+  "original_judge_input_overlap": 0,
+  "sources_judge_input_overlap": 0,
+  "slot_value_leak_beyond_fixtures": null
+}

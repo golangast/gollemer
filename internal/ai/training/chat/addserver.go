@@ -122,12 +122,16 @@ func parseAddServer(line string) (string, bool) {
 		// claim's, so it answers — it never falls through.
 		return "", consumed
 	}
-	if target := strings.TrimSpace(strings.Join(fields[i:], " ")); target != "" {
-		return target, true
+	// The target is ONE path token, as in the concept grammar:
+	// a longer tail is another ask glued behind this one ("add
+	// a webserver to jim/main.go and add a for loop …"), and
+	// joining it whole would let a compound be refused here as
+	// a single server ask naming a file nobody typed.
+	// Multi-piece lines are not this claim's.
+	if len(fields[i:]) != 1 {
+		return "", false
 	}
-	// Unreachable with real fields (tokens are never empty), but
-	// the claimed-with-no-target contract holds regardless.
-	return "", true
+	return fields[i], true
 }
 
 // serverTargetResolve turns a typed target into an absolute path

@@ -835,6 +835,245 @@ func buildRegisterAsk(r *rand.Rand, p pools, dialect string) ask {
 	return ask{family: "register", canonical: canon, slots: []string{key, table}, cores: cores}
 }
 
+// ---------- created-target compounds (2026-10-31) ----------
+//
+// A created-target compound's second piece lands inside the
+// function the first piece creates: "make a handler named
+// Login in web.go and add a switch in it". Piece 2's placement
+// is expressed one of three ways — the created name repeated
+// (createdFormNamed), a pronoun (createdFormPronoun: "in it",
+// "inside it", "in there", sometimes with the file riding
+// along), or silence (createdFormOmitted) — and every form
+// means the same canonical: canonStmt with the created name
+// and the FIRST piece's file. The piece-2 cores below are
+// what a glue split leaves of the second piece, so they are
+// also arm B's fragment examples: the classifier learns to
+// flag the shape, and the route's deterministic binding
+// (routeCreatedPiece) does the rest.
+
+const (
+	createdFormNamed = iota
+	createdFormPronoun
+	createdFormOmitted
+)
+
+// funcDeclIDs are the declaration rows whose book template
+// creates a function ("func {name}(...)") — the only first
+// pieces a statement can land inside. Struct, interface,
+// enum, and embedding create types; the held-out judge's
+// none-controls pair pronouns with exactly those.
+var funcDeclIDs = []string{
+	"function", "recursion", "form-handler", "middleware",
+	"middleware-timing", "middleware-chain", "session-handler",
+}
+
+var nonFuncDeclIDs = []string{"struct", "interface", "enum", "embedding"}
+
+// buildCreatedStmtAsk makes the second piece of a
+// created-target compound: a concept statement whose home is
+// the function createdName in file, expressed in the given
+// form. The ask's canonical always carries the bound slots.
+func buildCreatedStmtAsk(r *rand.Rand, p pools, c concept, dialect, createdName, file string, form int) ask {
+	canon := canonStmt(c, createdName, file)
+	word := conceptWord(r, c)
+	verbs := []string{"add", "put", "stick"}
+	if dialect == "heldout" {
+		verbs = []string{"place", "insert", "get"}
+	}
+	var cores []func() string
+	mk := func(s string) func() string { return func() string { return s } }
+	switch form {
+	case createdFormNamed:
+		for _, v := range verbs {
+			cores = append(cores, mk(fmt.Sprintf("%s %s %s in %s", v, article(word), word, createdName)))
+		}
+	case createdFormPronoun:
+		pronouns := []string{"in it", "inside it", "in there"}
+		for i, v := range verbs {
+			s := fmt.Sprintf("%s %s %s %s", v, article(word), word, pronouns[i%len(pronouns)])
+			if r.Intn(4) == 0 {
+				s += " to " + file // the pronoun binds the func; the file rides along
+			}
+			cores = append(cores, mk(s))
+		}
+	default: // createdFormOmitted
+		for _, v := range verbs {
+			cores = append(cores, mk(fmt.Sprintf("%s %s %s", v, article(word), word)))
+		}
+	}
+	return ask{family: "concept-" + c.id, canonical: canon, slots: []string{createdName, file}, cores: cores}
+}
+
+// buildCreatedPrintAsk is the print second piece of a
+// created-target compound, in the same three forms.
+func buildCreatedPrintAsk(r *rand.Rand, p pools, dialect, createdName, file string, form int) ask {
+	text := pick(r, p.texts)
+	canon := canonPrint(text, createdName, file)
+	mk := func(s string) func() string { return func() string { return s } }
+	var cores []func() string
+	switch form {
+	case createdFormNamed:
+		cores = []func() string{
+			mk(fmt.Sprintf("add a print line saying \"%s\" in %s", text, createdName)),
+			mk(fmt.Sprintf("print \"%s\" in %s", text, createdName)),
+		}
+	case createdFormPronoun:
+		cores = []func() string{
+			mk(fmt.Sprintf("add a print line saying \"%s\" in it", text)),
+			mk(fmt.Sprintf("add a print line saying \"%s\" inside it", text)),
+		}
+	default:
+		cores = []func() string{
+			mk(fmt.Sprintf("add a print line saying \"%s\"", text)),
+			mk(fmt.Sprintf("put a print statement saying \"%s\"", text)),
+		}
+	}
+	return ask{family: "print", canonical: canon, slots: []string{text, createdName, file}, cores: cores}
+}
+
+// buildCreatedPair builds one created-target compound: a
+// function-creating declaration, then a statement (or print)
+// piece aimed at the function it creates.
+func buildCreatedPair(r *rand.Rand, p pools, dialect string, printPiece bool) (ask, ask) {
+	dc := conceptByID(pick(r, funcDeclIDs))
+	a := buildDeclAsk(r, p, dc, dialect)
+	form := r.Intn(3)
+	if printPiece {
+		return a, buildCreatedPrintAsk(r, p, dialect, a.slots[0], a.slots[1], form)
+	}
+	sc := statementConcepts[r.Intn(len(statementConcepts))]
+	return a, buildCreatedStmtAsk(r, p, sc, dialect, a.slots[0], a.slots[1], form)
+}
+
+// ---------- shared-target compounds (2026-10-31) ----------
+//
+// A shared-target compound states its file once, at the very
+// end, for both pieces: "add a for loop in main and a print
+// line in main to jim/main.go". Piece one's core is its
+// ordinary core with the trailing file target CUT; piece
+// two's core is whole, carrying the compound's one file (the
+// pools are narrowed to a single file so both pieces' asks
+// agree on it). The canonical target is the ordinary compound
+// canonical — each piece with its file — because that is what
+// the route's deterministic distribution produces. The
+// created-target pairing appears here too, in the shape
+// where the trailing target rides on the pronoun piece:
+// "make a handler named Login and add a switch in it to
+// web.go" — distribution completes piece one, the created
+// binding completes piece two.
+
+// fileSlotOfAsk returns the ask's file slot (the one slot
+// that names a .go path), or "".
+func fileSlotOfAsk(a ask) string {
+	for _, s := range a.slots {
+		if strings.HasSuffix(s, ".go") {
+			return s
+		}
+	}
+	return ""
+}
+
+// stripTrailingTarget cuts a trailing " to|into|in <file>"
+// target clause off a rendered core, leaving the shared
+// shape's first piece. ok is false when the core's target is
+// not trailing (the scrambled cores) — those cores are not
+// this shape's.
+func stripTrailingTarget(core, file string) (string, bool) {
+	for _, prep := range []string{" to ", " into ", " in "} {
+		if strings.HasSuffix(core, prep+file) {
+			return strings.TrimSuffix(core, prep+file), true
+		}
+	}
+	return "", false
+}
+
+// renderSharedCompound renders a pair of asks (already built
+// over a single-file pool) in the shared-target shape.
+// bNeedsFile is the created-target form: piece two's core
+// must itself carry the trailing file (the pronoun piece's
+// ride-along form). ok is false when no core pairing fits —
+// the caller redraws the pair.
+func renderSharedCompound(r *rand.Rand, a, b ask, glues []struct {
+	id string
+	fn func(a, b string) string
+}, bNeedsFile bool) (input, output, template, coreA, coreB string, ok bool) {
+	file := fileSlotOfAsk(a)
+	if file == "" || fileSlotOfAsk(b) != file {
+		return "", "", "", "", "", false
+	}
+	var stripped string
+	for _, ci := range r.Perm(len(a.cores)) {
+		if s, ok2 := stripTrailingTarget(a.cores[ci](), file); ok2 {
+			stripped = s
+			break
+		}
+	}
+	if stripped == "" {
+		return "", "", "", "", "", false
+	}
+	coreA = stripped
+	for _, ci := range r.Perm(len(b.cores)) {
+		cb := b.cores[ci]()
+		if !strings.HasSuffix(cb, file) {
+			continue
+		}
+		if bNeedsFile && !strings.HasSuffix(cb, " to "+file) {
+			continue
+		}
+		coreB = cb
+		break
+	}
+	if coreB == "" {
+		return "", "", "", "", "", false
+	}
+	g := glues[r.Intn(len(glues))]
+	return g.fn(stripped, coreB), a.canonical + " ## " + b.canonical,
+		"glue:" + g.id, stripped, coreB, true
+}
+
+// sharedPairings are the compound pairings the shared-target
+// shape is generated across. Statement pieces in this shape
+// state their function (the distribution carries the file,
+// never a function), so builders redraw until the statement
+// ask carries one.
+func sharedStmtWithFunc(r *rand.Rand, p pools, dialect string) ask {
+	for tries := 0; tries < 40; tries++ {
+		a := buildStmtAsk(r, p, statementConcepts[r.Intn(len(statementConcepts))], dialect)
+		if len(a.slots) == 2 { // [inFunc, file]
+			return a
+		}
+	}
+	return buildStmtAsk(r, p, statementConcepts[0], dialect)
+}
+
+var sharedPairings = []struct {
+	id         string
+	bNeedsFile bool
+	build      func(r *rand.Rand, p pools, dialect string) (ask, ask)
+}{
+	{"stmt+stmt", false, func(r *rand.Rand, p pools, d string) (ask, ask) {
+		return sharedStmtWithFunc(r, p, d), sharedStmtWithFunc(r, p, d)
+	}},
+	{"decl+stmt", false, func(r *rand.Rand, p pools, d string) (ask, ask) {
+		return buildDeclAsk(r, p, declConcepts[r.Intn(len(declConcepts))], d), sharedStmtWithFunc(r, p, d)
+	}},
+	{"stmt+print", false, func(r *rand.Rand, p pools, d string) (ask, ask) {
+		a := sharedStmtWithFunc(r, p, d)
+		fn := a.slots[0]
+		if r.Intn(2) == 0 {
+			fn = pickName(r, p.names, fn)
+		}
+		return a, buildPrintAskFile(r, p, d, fn, fileSlotOfAsk(a))
+	}},
+	{"print+stmt", false, func(r *rand.Rand, p pools, d string) (ask, ask) {
+		b := sharedStmtWithFunc(r, p, d)
+		return buildPrintAskFile(r, p, d, b.slots[0], fileSlotOfAsk(b)), b
+	}},
+	{"created-target", true, func(r *rand.Rand, p pools, d string) (ask, ask) {
+		return buildCreatedPair(r, p, d, false)
+	}},
+}
+
 // ---------- wrappers ----------
 //
 // A wrapper dresses a core into a full sentence. Train and
@@ -1212,9 +1451,16 @@ func normInput(s string) string {
 // in fn inside main.go — the compound convention (a handler
 // piece's file is main.go unless a piece names another).
 func buildPrintAskShared(r *rand.Rand, p pools, dialect, fn string) ask {
+	return buildPrintAskFile(r, p, dialect, fn, "main.go")
+}
+
+// buildPrintAskFile is buildPrintAskShared with the file as a
+// parameter — the shared-target pairings need a print piece
+// whose file is the compound's one file, not always main.go.
+func buildPrintAskFile(r *rand.Rand, p pools, dialect, fn, file string) ask {
 	text := pick(r, p.texts)
-	canon := canonPrint(text, fn, "main.go")
-	where := fmt.Sprintf("in %s to main.go", fn)
+	canon := canonPrint(text, fn, file)
+	where := fmt.Sprintf("in %s to %s", fn, file)
 	var cores []func() string
 	if dialect == "train" {
 		cores = []func() string{
@@ -1228,7 +1474,7 @@ func buildPrintAskShared(r *rand.Rand, p pools, dialect, fn string) ask {
 			func() string { return fmt.Sprintf("have it print \"%s\" %s", text, where) },
 		}
 	}
-	return ask{family: "print", canonical: canon, slots: []string{text, fn, "main.go"}, cores: cores}
+	return ask{family: "print", canonical: canon, slots: []string{text, fn, file}, cores: cores}
 }
 
 // buildInstantiateAskTyped makes an instantiate ask for a
@@ -1546,14 +1792,334 @@ func runHeldoutSources(outDir string, seed int64) {
 		rep.TrainInputOverlap, rep.JudgeInputOverlap, rep.SlotLeak)
 }
 
+// ---------- the created-target held-out judge ----------
+//
+// -mode heldout-created builds data/training/
+// phrasing_heldout_created.jsonl: the judge for created-target
+// compounds, in the same construction as the other judges —
+// held-out core dialect, held-out wrappers and glues, slot
+// values from the held-out pools only, and the have-it glues
+// excluded (their print tail follows the older inheritance
+// convention, not this binding). Positive items (cell
+// compound-created) cross the seven function-creating
+// declarations with the statement families and the print
+// piece, in all three placement forms. The none-controls
+// (cell none-control, family none) are the shapes that must
+// NOT bind: a lone pronoun piece with no first piece at all,
+// a pronoun piece behind a statement (which creates nothing),
+// and pronoun/omitted pieces behind a TYPE declaration
+// (struct, interface, enum, embedding — a statement cannot
+// land inside a type). Both existing judges stay
+// byte-identical; leak discipline matches the sources judge's:
+// normalized-input overlap exactly 0 with the train corpus
+// and with BOTH prior judges, held-out slot values absent
+// from the train slot values beyond the shared fixtures. Run
+// the train mode first (the checks read its pairs file).
+
+type createdReport struct {
+	Seed                int64          `json:"seed"`
+	Items               int            `json:"items"`
+	ByCellForm          map[string]int `json:"items_by_cell_form"`
+	SkippedUnemittable  int            `json:"skipped_unemittable_targets"`
+	ConflictingInputs   int            `json:"conflicting_inputs_dropped"`
+	DuplicateInputs     int            `json:"duplicate_inputs_dropped"`
+	TrainInputOverlap   int            `json:"train_input_overlap"`
+	JudgeInputOverlap   int            `json:"original_judge_input_overlap"`
+	SourcesInputOverlap int            `json:"sources_judge_input_overlap"`
+	SlotLeak            []string       `json:"slot_value_leak_beyond_fixtures"`
+}
+
+func runHeldoutCreated(outDir string, seed int64) {
+	r := rand.New(rand.NewSource(seed + 13))
+	rep := &createdReport{Seed: seed, ByCellForm: map[string]int{}}
+	hp := heldoutPools()
+
+	// Held-out glues minus the have-it family (see the header).
+	var glues []struct {
+		id string
+		fn func(a, b string) string
+	}
+	for _, g := range heldoutGlues {
+		if g.id != "then-have-it" {
+			glues = append(glues, g)
+		}
+	}
+
+	seen := map[string]string{} // normalized input -> output
+	var items []heldItem
+	add := func(in, out, family, cell, tmpl, key string) {
+		if !emittable(out) {
+			rep.SkippedUnemittable++
+			return
+		}
+		n := normInput(in)
+		if prev, dup := seen[n]; dup {
+			if prev != out {
+				rep.ConflictingInputs++
+				for i, q := range items {
+					if normInput(q.Input) == n {
+						items = append(items[:i], items[i+1:]...)
+						break
+					}
+				}
+				delete(seen, n)
+			} else {
+				rep.DuplicateInputs++
+			}
+			return
+		}
+		seen[n] = out
+		items = append(items, heldItem{
+			Input: in, Output: out, Family: family,
+			Cell: cell, Template: "heldout-created/" + tmpl,
+		})
+		rep.ByCellForm[key]++
+	}
+	formName := []string{"named", "pronoun", "omitted"}
+	compound := func(a, b ask) (string, string) {
+		in, out, tmpl, _, _ := compoundAsk(r, a, b, glues)
+		if r.Intn(4) == 0 {
+			w := heldoutWrappers[r.Intn(len(heldoutWrappers))]
+			in = w.fn(in)
+			tmpl += "+" + w.id
+		}
+		return in, out + "|" + tmpl
+	}
+	// splitCompound undoes the template ride-along above.
+	splitCompound := func(s string) (out, tmpl string) {
+		i := strings.LastIndex(s, "|")
+		return s[:i], s[i+1:]
+	}
+
+	// Positives: every statement family twice (rotating
+	// declaration and form, so coverage crosses), the print
+	// piece across declarations and forms, and one explicit
+	// declaration x form block on workhorse statements.
+	for i, sc := range statementConcepts {
+		sc := sc
+		for k := 0; k < 2; k++ {
+			dc := conceptByID(funcDeclIDs[(i+3*k)%len(funcDeclIDs)])
+			a := buildDeclAsk(r, hp, dc, "heldout")
+			b := buildCreatedStmtAsk(r, hp, sc, "heldout", a.slots[0], a.slots[1], (i+k)%3)
+			in, packed := compound(a, b)
+			out, tmpl := splitCompound(packed)
+			add(in, out, "compound:created-target", "compound-created",
+				tmpl+"/form:"+formName[(i+k)%3]+"/stmt:"+sc.id,
+				"compound-created/form:"+formName[(i+k)%3])
+		}
+	}
+	for i := 0; i < 14; i++ {
+		dc := conceptByID(funcDeclIDs[i%len(funcDeclIDs)])
+		a := buildDeclAsk(r, hp, dc, "heldout")
+		b := buildCreatedPrintAsk(r, hp, "heldout", a.slots[0], a.slots[1], i%3)
+		in, packed := compound(a, b)
+		out, tmpl := splitCompound(packed)
+		add(in, out, "compound:created-target", "compound-created",
+			tmpl+"/form:"+formName[i%3]+"/stmt:print",
+			"compound-created/form:"+formName[i%3])
+	}
+	workhorse := []string{"switch", "for-loop", "database-query", "type-switch"}
+	for di, dID := range funcDeclIDs {
+		for form := 0; form < 3; form++ {
+			dc := conceptByID(dID)
+			a := buildDeclAsk(r, hp, dc, "heldout")
+			sc := conceptByID(workhorse[(di+form)%len(workhorse)])
+			b := buildCreatedStmtAsk(r, hp, sc, "heldout", a.slots[0], a.slots[1], form)
+			in, packed := compound(a, b)
+			out, tmpl := splitCompound(packed)
+			add(in, out, "compound:created-target", "compound-created",
+				tmpl+"/form:"+formName[form]+"/decl:"+dID,
+				"compound-created/decl:"+dID)
+		}
+	}
+
+	// Shared-target positives: the file stated once, at the
+	// end, for both pieces — its own cell, so the number is
+	// visible separately from the created cell. Same
+	// construction: single-file pools, held-out dialect and
+	// glues, every pairing the shape is trained across.
+	for _, sp := range sharedPairings {
+		for done, attempts := 0, 0; done < 24 && attempts < 24*40; attempts++ {
+			one := hp
+			one.files = []string{pick(r, hp.files)}
+			a, b := sp.build(r, one, "heldout")
+			in, out, tmpl, _, _, ok := renderSharedCompound(r, a, b, glues, sp.bNeedsFile)
+			if !ok {
+				continue
+			}
+			if r.Intn(4) == 0 {
+				w := heldoutWrappers[r.Intn(len(heldoutWrappers))]
+				in = w.fn(in)
+				tmpl += "+" + w.id
+			}
+			add(in, out, "compound:shared-target", "compound-shared",
+				tmpl+"/shared:"+sp.id, "compound-shared/"+sp.id)
+			done++
+		}
+	}
+
+	// None-controls: the shapes that must not bind.
+	// (1) A lone pronoun piece — no first piece exists.
+	for i := 0; i < 10; i++ {
+		sc := statementConcepts[(i*7)%len(statementConcepts)]
+		b := buildCreatedStmtAsk(r, hp, sc, "heldout", "Placeholder", "placeholder.go", createdFormPronoun)
+		in, tmpl := dress(r, b, heldoutWrappers)
+		add(in, "none", "none", "none-control", tmpl+"/lone-pronoun", "none-control/lone-pronoun")
+	}
+	// (2) A pronoun or omitted piece behind a STATEMENT first
+	// piece: a statement creates nothing to land in.
+	for i := 0; i < 10; i++ {
+		c1 := statementConcepts[(i*5+1)%len(statementConcepts)]
+		a := buildStmtAsk(r, hp, c1, "heldout")
+		sc := statementConcepts[(i*11+3)%len(statementConcepts)]
+		b := buildCreatedStmtAsk(r, hp, sc, "heldout", "Placeholder", "placeholder.go", i%2+1)
+		in, packed := compound(a, b)
+		_, tmpl := splitCompound(packed)
+		add(in, "none", "none", "none-control", tmpl+"/stmt-first", "none-control/stmt-first")
+	}
+	// (3) A pronoun or omitted piece behind a TYPE
+	// declaration: the type is created, but no statement lands
+	// inside a type.
+	for i := 0; i < 12; i++ {
+		dc := conceptByID(nonFuncDeclIDs[i%len(nonFuncDeclIDs)])
+		a := buildDeclAsk(r, hp, dc, "heldout")
+		sc := statementConcepts[(i*13+2)%len(statementConcepts)]
+		b := buildCreatedStmtAsk(r, hp, sc, "heldout", a.slots[0], a.slots[1], i%2+1)
+		in, packed := compound(a, b)
+		_, tmpl := splitCompound(packed)
+		add(in, "none", "none", "none-control", tmpl+"/type-first", "none-control/type-first")
+	}
+	// (4) The shared-target restraint: a full first piece and
+	// a second piece stating NO home at all. The file may
+	// distribute, a function may not — with no creator and no
+	// stated function, the bare piece has no home to take.
+	for i := 0; i < 6; i++ {
+		one := hp
+		one.files = []string{pick(r, hp.files)}
+		a := sharedStmtWithFunc(r, one, "heldout")
+		bare := []string{"add a switch", "insert a slice", "place a for loop", "get a database query"}[i%4]
+		b := ask{family: "none", canonical: "none", cores: []func() string{
+			func() string { return bare },
+		}}
+		in, packed := compound(a, b)
+		_, tmpl := splitCompound(packed)
+		add(in, "none", "none", "none-control", tmpl+"/shared-restraint", "none-control/shared-restraint")
+	}
+	rep.Items = len(items)
+
+	// Leak checks: against the train corpus and BOTH prior
+	// judges. Any overlap at all fails the run — by
+	// construction (disjoint dialects, wrappers, glues, and
+	// pools) there should be none.
+	readInputs := func(path string, pairs bool) (inputs map[string]bool, slots map[string]bool) {
+		inputs, slots = map[string]bool{}, map[string]bool{}
+		f, err := os.Open(path)
+		if err != nil {
+			fail(fmt.Errorf("heldout-created mode reads %s: %w", path, err))
+		}
+		defer f.Close()
+		sc := bufioScanner(f)
+		for sc.Scan() {
+			line := strings.TrimSpace(sc.Text())
+			if line == "" {
+				continue
+			}
+			if pairs {
+				var p pair
+				if err := json.Unmarshal([]byte(line), &p); err != nil {
+					fail(err)
+				}
+				inputs[normInput(p.Input)] = true
+				for _, s := range p.Slots {
+					slots[s] = true
+				}
+			} else {
+				var it heldItem
+				if err := json.Unmarshal([]byte(line), &it); err != nil {
+					fail(err)
+				}
+				inputs[normInput(it.Input)] = true
+			}
+		}
+		return inputs, slots
+	}
+	trainInputs, trainSlots := readInputs(filepath.Join(outDir, "phrasing_pairs2.jsonl"), true)
+	judgeInputs, _ := readInputs(filepath.Join(outDir, "phrasing_heldout.jsonl"), false)
+	sourcesInputs, _ := readInputs(filepath.Join(outDir, "phrasing_heldout_sources.jsonl"), false)
+	fixtures := map[string]bool{"main": true, "main.go": true}
+	for _, t := range fieldTypes {
+		fixtures[t] = true
+	}
+	leakSet := map[string]bool{}
+	for _, s := range append(append(append(append(append(append(append(append(
+		[]string{}, namesHeldout...), filesHeldout...), fieldNamesHeldout...),
+		caseValsHeldout...), keysHeldout...), tablesHeldout...), textsHeldout...), calleesHeldout...) {
+		if trainSlots[s] && !fixtures[s] {
+			leakSet[s] = true
+		}
+	}
+	for s := range leakSet {
+		rep.SlotLeak = append(rep.SlotLeak, s)
+	}
+	sort.Strings(rep.SlotLeak)
+	kept := items[:0]
+	for _, it := range items {
+		n := normInput(it.Input)
+		drop := false
+		if trainInputs[n] {
+			rep.TrainInputOverlap++
+			drop = true
+		}
+		if judgeInputs[n] {
+			rep.JudgeInputOverlap++
+			drop = true
+		}
+		if sourcesInputs[n] {
+			rep.SourcesInputOverlap++
+			drop = true
+		}
+		if !drop {
+			kept = append(kept, it)
+		}
+	}
+	items = kept
+	rep.Items = len(items)
+	if rep.TrainInputOverlap > 0 || rep.JudgeInputOverlap > 0 || rep.SourcesInputOverlap > 0 || len(rep.SlotLeak) > 0 {
+		fail(fmt.Errorf("leak check failed: train-overlap=%d judge-overlap=%d sources-overlap=%d slot=%v",
+			rep.TrainInputOverlap, rep.JudgeInputOverlap, rep.SourcesInputOverlap, rep.SlotLeak))
+	}
+
+	if err := writeJSONL(filepath.Join(outDir, "phrasing_heldout_created.jsonl"), items); err != nil {
+		fail(err)
+	}
+	raw, err := json.MarshalIndent(rep, "", "  ")
+	if err != nil {
+		fail(err)
+	}
+	if err := os.WriteFile(filepath.Join(outDir, "phrasing_report_created.json"), raw, 0o644); err != nil {
+		fail(err)
+	}
+	fmt.Printf("heldout-created judge: %d items\n", rep.Items)
+	for _, k := range sortedKeys(rep.ByCellForm) {
+		fmt.Printf("  %-52s %d\n", k, rep.ByCellForm[k])
+	}
+	fmt.Printf("skipped unemittable=%d conflicting=%d duplicates=%d\n", rep.SkippedUnemittable, rep.ConflictingInputs, rep.DuplicateInputs)
+	fmt.Printf("leaks: train-overlap=%d judge-overlap=%d sources-overlap=%d slot=%v\n",
+		rep.TrainInputOverlap, rep.JudgeInputOverlap, rep.SourcesInputOverlap, rep.SlotLeak)
+}
+
 func main() {
 	outDir := flag.String("out", "data/training", "output directory")
 	seed := flag.Int64("seed", 20261031, "generator seed")
 	judgePath := flag.String("judge", "data/training/phrasing_heldout.jsonl", "the fixed held-out judge, read for leak checks only")
-	mode := flag.String("mode", "train", "train | heldout-sources")
+	mode := flag.String("mode", "train", "train | heldout-sources | heldout-created")
 	flag.Parse()
 	if *mode == "heldout-sources" {
 		runHeldoutSources(*outDir, *seed)
+		return
+	}
+	if *mode == "heldout-created" {
+		runHeldoutCreated(*outDir, *seed)
 		return
 	}
 	if *mode != "train" {
@@ -1751,6 +2317,89 @@ func main() {
 	for _, line := range namedClauseNoneLines(r, tp) {
 		addTrain(pair{Input: line, Output: "none", Domain: "phrasing", Family: "none", Template: "train/none-namedclause"})
 		addFrag(line, "none", "train/none-namedclause")
+	}
+
+	// Created-target compounds (2026-10-31): emitted LAST, on
+	// the same append-only discipline as the named-clause
+	// patch — every row above keeps its exact bytes, and this
+	// block only adds. The glues exclude have-it on purpose:
+	// the have-it print tail is an older inheritance convention
+	// (the compound's handler-or-main rule, judged in the
+	// original judge with main/main.go golds), not the
+	// created-target binding, so no created pair is dressed in
+	// it. Fragments are the two piece cores a glue split would
+	// leave — piece 2's core, in its expressed (named /
+	// pronoun / omitted) form, is the classifier's evidence
+	// for the shape.
+	createdGlues := func() []struct {
+		id string
+		fn func(a, b string) string
+	} {
+		var out []struct {
+			id string
+			fn func(a, b string) string
+		}
+		for _, g := range trainGlues {
+			if g.id != "have-it" {
+				out = append(out, g)
+			}
+		}
+		return out
+	}()
+	emitCreated := func(printPiece bool, count int, fam string) {
+		for i := 0; i < count; i++ {
+			a, b := buildCreatedPair(r, tp, "train", printPiece)
+			in, out, tmpl, ca, cb := compoundAsk(r, a, b, createdGlues)
+			if r.Intn(4) == 0 {
+				w := trainWrappers[2+r.Intn(4)]
+				in = w.fn(in)
+				tmpl += "+" + w.id
+			}
+			addTrain(pair{Input: in, Output: out, Domain: "phrasing",
+				Family: "compound:" + fam, Template: "train/" + tmpl,
+				Slots: append(append([]string{}, a.slots...), b.slots...)})
+			addFrag(ca, a.family, "train/frag-a")
+			addFrag(cb, b.family, "train/frag-b")
+			if r.Intn(4) == 0 {
+				w := trainWrappers[r.Intn(len(trainWrappers))]
+				addFrag(w.fn(ca), a.family, "train/frag-a+"+w.id)
+			}
+		}
+	}
+	emitCreated(false, 700, "created-target")
+	emitCreated(true, 400, "created-print")
+
+	// Shared-target compounds (2026-10-31, second append):
+	// the file stated once, at the end, for both pieces. The
+	// pools narrow to one file per compound so the two asks
+	// agree on the target being shared; glues exclude have-it
+	// (its print tail follows the older inheritance rule, not
+	// this distribution). Fragments are the stripped first
+	// core and the whole second core — what a glue split
+	// leaves, and the classifier's evidence that a file-less
+	// first piece is still its family.
+	for _, sp := range sharedPairings {
+		sp := sp
+		for done, attempts := 0, 0; done < 120 && attempts < 120*30; attempts++ {
+			one := tp
+			one.files = []string{pick(r, tp.files)}
+			a, b := sp.build(r, one, "train")
+			in, out, tmpl, ca, cb, ok := renderSharedCompound(r, a, b, createdGlues, sp.bNeedsFile)
+			if !ok {
+				continue
+			}
+			if r.Intn(4) == 0 {
+				w := trainWrappers[2+r.Intn(4)]
+				in = w.fn(in)
+				tmpl += "+" + w.id
+			}
+			addTrain(pair{Input: in, Output: out, Domain: "phrasing",
+				Family: "compound:shared-" + sp.id, Template: "train/" + tmpl,
+				Slots: append(append([]string{}, a.slots...), b.slots...)})
+			addFrag(ca, a.family, "train/frag-a-shared")
+			addFrag(cb, b.family, "train/frag-b")
+			done++
+		}
 	}
 
 	rep.TrainPairs = len(train)

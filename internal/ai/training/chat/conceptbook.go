@@ -1155,7 +1155,15 @@ func parseConceptFrom(line string, entries []analyze.ConceptEntry) (conceptReq, 
 	}
 
 	// The target clause: article and designator are slots, never
-	// part of the path (the add-server rule).
+	// part of the path (the add-server rule). The target itself
+	// is ONE path token: a longer tail is not a path with spaces
+	// in it — it is another ask glued behind this one ("add a
+	// for loop in main to jim/main.go and add a print line in
+	// main to jim/main.go"), and joining the tail whole once let
+	// a compound be claimed here and refused by the resolver as
+	// a single ask naming a file nobody typed. Multi-piece
+	// lines belong to the phrasing layer; this grammar declines
+	// them, exactly as it declines a "that" clause in the tail.
 	if tIdx >= 0 {
 		j := tIdx + 1
 		if j < len(fields) && low[j] == "the" {
@@ -1165,7 +1173,10 @@ func parseConceptFrom(line string, entries []analyze.ConceptEntry) (conceptReq, 
 			j++
 		}
 		if j < len(fields) {
-			req.target = strings.Join(fields[j:], " ")
+			if len(fields[j:]) != 1 {
+				return conceptReq{}, false
+			}
+			req.target = fields[j]
 		}
 	}
 

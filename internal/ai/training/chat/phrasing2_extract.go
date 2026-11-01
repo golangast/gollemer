@@ -450,6 +450,23 @@ func extractConceptDecl(f frag, e analyze.ConceptEntry) (string, map[string]stri
 func extractPrint(f frag) (string, map[string]string, bool) {
 	text, ok := f.quotedText()
 	if !ok {
+		// The print family's other shape: a bare print line
+		// with no saying — the book's print-line row ("add a
+		// print line in main to jim/main.go"), whose canonical
+		// parses back as THIS family with no text slot. It
+		// counts only when the fragment actually NAMES the row
+		// (the scan's naming-evidence rule, applied here too):
+		// without that check, this family's extractor would
+		// "validate" any placed statement fragment a second
+		// time and fell compounds by ambiguity.
+		if !conceptPhrasePresent(f, "concept-print-line") {
+			return "", nil, false
+		}
+		for _, e := range conceptEntries() {
+			if e.ID == "print-line" {
+				return extractConceptStmt(f, e)
+			}
+		}
 		return "", nil, false
 	}
 	file, fi, ok := f.fileSlot()
@@ -848,6 +865,323 @@ func extractRegister(f frag) (string, map[string]string, bool) {
 		map[string]string{"key": key, "table": table}, true
 }
 
+// ---------- created-target compounds ----------
+//
+// A created-target compound is two asks in one breath where
+// the second piece lands inside the function the first piece
+// creates: "make a handler named Login in web.go and add a
+// switch in it". The second piece's placement can be expressed
+// three ways — the created name repeated, a pronoun ("in it",
+// "in there", "inside it"), or silence — and all three mean
+// the same two canonical pieces. The classifier learns to FLAG
+// the shape (the fragments train in the family's own label);
+// the binding itself is deterministic code, here, never the
+// classifier's guess:
+//
+//   - placement() reads a statement fragment's placement
+//     geometry and surfaces an unbound function slot AS unbound
+//     (a pronoun, or an absence) — extraction never invents a
+//     name to fill it;
+//   - createdFuncOf() names the function a routed first piece
+//     created, from that piece's OWN extracted slots;
+//   - routeCreatedPiece() binds the unbound slot to that name
+//     (and an unspoken file to the first piece's file), renders
+//     the canonical, and puts it through the same parser
+//     validation every other piece passes.
+//
+// A lone pronoun line ("add a switch in it") has no first
+// piece, so nothing binds: its extraction fails for want of a
+// file exactly as before, and the line falls through. A first
+// piece that creates a TYPE (struct, interface, enum) creates
+// nothing a statement can land in, so those compounds do not
+// bind either.
+
+// funcPlacement is how one fragment expresses where a
+// statement lands: its file, when it names one, and its
+// function — named, pronominal, or not expressed at all.
+type funcPlacement struct {
+	file    string
+	hasFile bool
+	fn      string // the named function, when one is expressed
+	pronoun bool   // "in it" / "in there" / "inside it"
+}
+
+// placement reads the fragment's placement geometry WITHOUT
+// binding anything: a pronoun target is surfaced as a pronoun
+// and an omitted one as an absence — never as an invented
+// name. Quoted spans (a print line's text) are protected: a
+// "in it" inside the saying is text, not placement.
+func (f frag) placement() funcPlacement {
+	var p funcPlacement
+	if file, _, ok := f.fileSlot(); ok {
+		p.file, p.hasFile = file, true
+	}
+	prot := protectedSpans(f)
+	for i := 0; i+1 < len(f.toks); i++ {
+		if prot[i] || prot[i+1] {
+			continue
+		}
+		switch f.low[i] {
+		case "in", "inside", "into":
+			switch {
+			case f.low[i+1] == "it" || f.low[i+1] == "there":
+				p.pronoun = true
+			case !strings.HasSuffix(f.low[i+1], ".go") &&
+				(isCapTok(f.toks[i+1]) || f.low[i+1] == "main"):
+				if p.fn == "" {
+					p.fn = f.toks[i+1]
+				}
+			}
+		}
+	}
+	return p
+}
+
+// createdFuncOf reports the function a routed first piece
+// creates, when it creates one a statement can land inside:
+// a concept declaration whose book template opens
+// "func {name}(" (the function row, the handler and
+// middleware family, recursion), or a delegate with a named
+// wrapper. The name and file are the piece's own extracted
+// slots — words the user typed, carried, never invented.
+func createdFuncOf(family string, slots map[string]string) (name, file string, ok bool) {
+	if family == "delegate" {
+		if w := slots["wrapper"]; w != "" {
+			return w, slots["file"], true
+		}
+		return "", "", false
+	}
+	if !strings.HasPrefix(family, "concept-") {
+		return "", "", false
+	}
+	id := strings.TrimPrefix(family, "concept-")
+	for _, e := range conceptEntries() {
+		if e.ID != id {
+			continue
+		}
+		if e.Kind == analyze.ConceptDeclaration &&
+			strings.HasPrefix(e.Template, "func {name}(") && slots["name"] != "" {
+			return slots["name"], slots["target"], true
+		}
+		return "", "", false
+	}
+	return "", "", false
+}
+
+// routeCreatedPiece is a created-target compound's second
+// half: classify the fragment (the classifier flags the
+// shape), read its placement, bind what the placement leaves
+// unbound to the function the first piece created, render the
+// canonical, and validate it through the real parsers — the
+// same gate every routed piece passes. Two placements are NOT
+// this path's business and decline: a fully placed fragment
+// (its own function AND file — the ordinary route owns it,
+// and if that route failed, it failed for another reason) and
+// a file-only fragment ("add a switch to main.go" — naming a
+// file with no function is the planner's main rule, a reading
+// to keep, not an omission to fill with the created name).
+func routeCreatedPiece(f frag, createdName, createdFile string) (string, bool) {
+	family, gated := phrasingClassifier(f.text())
+	if !gated || family == "" || family == "none" {
+		return "", false
+	}
+	p := f.placement()
+	if p.hasFile && p.fn != "" && !p.pronoun {
+		return "", false // fully placed: not an unbound shape
+	}
+	if p.hasFile && !p.pronoun && p.fn == "" {
+		return "", false // file-only: the planner's main rule
+	}
+	fn := p.fn
+	if p.pronoun || fn == "" {
+		fn = createdName
+	}
+	file := p.file
+	if !p.hasFile {
+		file = createdFile
+	}
+	if fn == "" || file == "" {
+		return "", false
+	}
+	if family == "print" {
+		text, ok := f.quotedText()
+		if !ok {
+			return "", false
+		}
+		slots := map[string]string{"text": text, "func": fn, "target": file}
+		canon := renderPrint(text, fn, file)
+		if validatePiece(canon, "print", slots) {
+			return canon, true
+		}
+		return "", false
+	}
+	if strings.HasPrefix(family, "concept-") {
+		id := strings.TrimPrefix(family, "concept-")
+		for _, e := range conceptEntries() {
+			if e.ID != id {
+				continue
+			}
+			if e.Kind != analyze.ConceptStatement {
+				return "", false
+			}
+			slots := map[string]string{"func": fn, "target": file}
+			canon := renderConceptStmt(e, fn, file)
+			if validatePiece(canon, family, slots) {
+				return canon, true
+			}
+			return "", false
+		}
+	}
+	return "", false
+}
+
+// ---------- shared-target compounds ----------
+//
+// A shared-target compound states its file once, at the very
+// end, for both pieces: "add a for loop in main and a print
+// line in main to jim/main.go". Segmentation leaves the file
+// inside the second fragment; the first fragment's extraction
+// then fails for want of a target and — before this rule —
+// the whole compound fell through. The distribution is
+// deterministic route work, the created-target binding's
+// sibling: when exactly ONE fragment of the two carries a
+// file, that file is the compound's shared target, and a
+// piece is routed with the target appended (" to <file>") —
+// the completed fragment goes through the same classify /
+// extract / validate pipeline as any fully placed piece, and
+// it is tried BEFORE the bare fragment: a file-less
+// fragment's geometry can be stolen by the bare-name families
+// (register reads "place a sql transaction in Plumb" as
+// registering the key "transaction" in a table "Plumb"), so
+// the bare reading is only ever the fallback. When both
+// fragments carry files (the same or conflicting ones)
+// nothing distributes: each piece keeps the target it
+// stated, exactly as before. And only the FILE distributes,
+// never a function — see routeSharedPiece for the restraint
+// that keeps a bare, home-less statement piece from being
+// read as "in main".
+
+// withSharedTarget returns the fragment with the shared file
+// appended as its target clause, under the given preposition.
+func withSharedTarget(f frag, prep, file string) frag {
+	toks := append(append([]string{}, f.toks...), prep, file)
+	return fragFromToks(toks)
+}
+
+// fileBearingFamily reports whether the family's canonical
+// takes a .go file target — the concept families, print,
+// delegate, add-server. The bare-name families (instantiate,
+// clone, add-case, register) name people and tables, never
+// files: appending the compound's file to one of their
+// fragments corrupts it ("place a Pumice in Notifier" plus
+// " to main.go" reads as a statement ask about a concept
+// named Pumice), so the distribution never completes them.
+func fileBearingFamily(family string) bool {
+	switch {
+	case family == "print" || family == "delegate" || family == "add-server":
+		return true
+	case strings.HasPrefix(family, "concept-"):
+		return true
+	}
+	return false
+}
+
+// routeSharedPiece retries one fragment with the compound's
+// shared file appended, and applies the distribution's one
+// restraint: what distributes is the FILE, never a function.
+// A piece whose own placement is complete but for the file —
+// it states its function ("in main", "in Jake"), or it is a
+// declaration or server piece, whose home is the file itself —
+// may take the shared file. A bare statement piece stating NO
+// home at all may not: its silence is the created-target
+// shape's to read (a creator binds it) or nobody's — reading
+// it as "in main" would be inventing a placement the user
+// never stated, and behind a TYPE declaration ("add an
+// interface named Box to main.go and add a switch") it would
+// silently land a statement in a main the user never
+// mentioned.
+func routeSharedPiece(f frag, file string) (string, string, map[string]string, bool) {
+	// The completion is offered on the classifier's own
+	// reading of the BARE fragment — that reading is the
+	// evidence of what kind of piece this is:
+	//   - a file-bearing family (a placed ask missing its
+	//     file): complete it, and any validated reading of
+	//     the completed fragment counts, subject to the
+	//     func restraint below;
+	//   - a bare-name family (instantiate, clone, add-case,
+	//     register): never — its target is a name, and the
+	//     completed fragment would be a corruption of it;
+	//   - "none", or the gate itself unsure: complete it,
+	//     but accept only a DECLARATION-shaped win (a concept
+	//     declaration, an add-server) — the stripped form of
+	//     a declaration is a complete ask except its target,
+	//     while a statement-shaped win here is the corruption
+	//     channel (a bare-name fragment misread through the
+	//     appended file as a concept statement).
+	bareFam, bareGated := phrasingClassifier(f.text())
+	if bareGated && bareFam != "none" && !fileBearingFamily(bareFam) {
+		return "", "", nil, false
+	}
+	declOnly := !bareGated || bareFam == "none" || !fileBearingFamily(bareFam)
+	accept := func(family string, slots map[string]string) bool {
+		if declOnly && family != "add-server" {
+			isDecl := false
+			if strings.HasPrefix(family, "concept-") {
+				id := strings.TrimPrefix(family, "concept-")
+				for _, e := range conceptEntries() {
+					if e.ID == id && e.Kind == analyze.ConceptDeclaration {
+						isDecl = true
+					}
+				}
+			}
+			if !isDecl {
+				return false
+			}
+		}
+		if strings.HasPrefix(family, "concept-") {
+			id := strings.TrimPrefix(family, "concept-")
+			for _, e := range conceptEntries() {
+				if e.ID == id && e.Kind == analyze.ConceptStatement && slots["func"] == "" {
+					return false
+				}
+			}
+		}
+		return true
+	}
+	// Two completions are tried: " to <file>" (the canonical
+	// target clause) and " in <file>" (the form a stripped
+	// declaration core was actually cut from — "create a
+	// function with the name Plumb" completes naturally with
+	// "in", and the hybrid "…name Plumb to kilo.go" is a
+	// surface no dialect speaks, which the classifier reads
+	// as none). The acceptance rules above police both: an
+	// "in" completion that would read the file as a statement's
+	// function dies on the func restraint.
+	for _, prep := range []string{"to", "in"} {
+		canon, family, slots, ok := routeFragment(withSharedTarget(f, prep, file))
+		if ok && accept(family, slots) {
+			return canon, family, slots, true
+		}
+	}
+	return "", "", nil, false
+}
+
+// sharedFileOf returns the compound's one file when exactly
+// one fragment carries it: the file and which fragment lacks
+// it. ok is false when both carry one or neither does.
+func sharedFileOf(a, b frag) (file string, lacking int, ok bool) {
+	_, _, aHas := a.fileSlot()
+	bFile, _, bHas := b.fileSlot()
+	switch {
+	case aHas && !bHas:
+		f, _, _ := a.fileSlot()
+		return f, 1, true
+	case bHas && !aHas:
+		return bFile, 0, true
+	}
+	return "", -1, false
+}
+
 // ---------- the route ----------
 
 // extractForFamily runs the family's extractor on a fragment.
@@ -931,13 +1265,21 @@ func conceptPhrasePresent(f frag, family string) bool {
 }
 
 // allFamilies lists every family the extractor knows — the
-// fallback scan's search space.
+// fallback scan's search space. The print-line row is NOT
+// listed as a concept family: CanonicalSlots reads its
+// canonical as the "print" family (its parsers' own ruling),
+// so a "concept-print-line" candidate could never validate —
+// the row is served under "print", whose extractor carries
+// its text-less shape (extractPrint).
 func allFamilies() []string {
 	out := []string{
 		"print", "instantiate", "delegate", "clone", "add-server",
 		"add-field", "add-case", "register",
 	}
 	for _, e := range conceptEntries() {
+		if e.ID == "print-line" {
+			continue
+		}
 		out = append(out, "concept-"+e.ID)
 	}
 	return out
@@ -978,8 +1320,25 @@ var phrasingTopFamily = func(line string) string {
 //     when the classifier's ungated top-1 is "none", and
 //     concept families additionally require naming evidence
 //     (conceptPhrasePresent). More than one validator is
-//     ambiguity: no claim.
+//     ambiguity: no claim — unless the classifier's top-1 is
+//     itself among the validators, in which case its reading
+//     breaks the tie (the gate failed on confidence, not on
+//     family, and geometry alone cannot choose).
 func routeFragment(f frag) (canon, family string, slots map[string]string, ok bool) {
+	// A pronominal placement ("in it", "inside it", "in
+	// there") is an UNBOUND placement: no ordinary extractor
+	// may claim the fragment by quietly dropping the pronoun
+	// and reading the rest (a concept statement's file-only
+	// form above all — "insert a variable inside it to
+	// vault.go" is not "add a variable to vault.go"). The one
+	// legitimate reader of a pronoun placement is the
+	// created-target binding (routeCreatedPiece), which runs
+	// before this function on a compound's second piece; any
+	// other fragment that reaches here with a pronoun still in
+	// its placement has nothing to bind to and does not claim.
+	if f.placement().pronoun {
+		return "", "", nil, false
+	}
 	if _, qok := f.quotedText(); qok {
 		if c, s, eok := extractPrint(f); eok && validatePiece(c, "print", s) {
 			return c, "print", s, true
@@ -994,12 +1353,16 @@ func routeFragment(f frag) (canon, family string, slots map[string]string, ok bo
 			return canon, family, slots, true
 		}
 	}
-	if top := phrasingTopFamily(f.text()); top == "none" || top == "" {
+	top := phrasingTopFamily(f.text())
+	if top == "none" || top == "" {
 		return "", "", nil, false
 	}
-	var found []string
-	var foundCanon string
-	var foundSlots map[string]string
+	type candidate struct {
+		canon string
+		slots map[string]string
+	}
+	found := map[string]candidate{}
+	var order []string
 	for _, fam := range allFamilies() {
 		if fam == family {
 			continue
@@ -1014,12 +1377,28 @@ func routeFragment(f frag) (canon, family string, slots map[string]string, ok bo
 			continue
 		}
 		if c, s, eok := extractForFamily(f, fam); eok && validatePiece(c, fam, s) {
-			found = append(found, fam)
-			foundCanon, foundSlots = c, s
+			found[fam] = candidate{c, s}
+			order = append(order, fam)
 		}
 	}
-	if len(found) == 1 {
-		return foundCanon, found[0], foundSlots, true
+	if len(order) == 1 {
+		c := found[order[0]]
+		return c.canon, order[0], c.slots, true
+	}
+	// More than one validator is ambiguity — with one
+	// exception: when the classifier's own ungated top-1 is
+	// among the validators, its reading breaks the tie. The
+	// gate rejected this fragment on confidence, not on
+	// family; geometry alone cannot choose between a delegate
+	// and a function-with-a-stray-capital ("place a function
+	// in vault.go calling Whisk" validates as both, the
+	// callee doing duty as a declaration name), but the
+	// classifier's strongest belief is exactly the evidence
+	// the rest of the route runs on.
+	if len(order) > 1 {
+		if c, isTop := found[top]; isTop {
+			return c.canon, top, c.slots, true
+		}
 	}
 	return "", "", nil, false
 }
@@ -1112,9 +1491,22 @@ func phrasingRouteB(line string) (pieces []string, ok bool) {
 		}
 		return []string{canon}, true
 	}
-	canonA, famA, slotsA, ok := routeFragment(frags[0])
+	// Shared-target distribution (see the section above):
+	// when the compound's only file rides in the second
+	// fragment, the first piece is routed COMPLETED first —
+	// the bare fragment is the fallback reading, never the
+	// first.
+	var canonA, famA string
+	var slotsA map[string]string
+	ok = false
+	if file, lacking, shared := sharedFileOf(frags[0], frags[1]); shared && lacking == 0 {
+		canonA, famA, slotsA, ok = routeSharedPiece(frags[0], file)
+	}
 	if !ok {
-		return nil, false
+		canonA, famA, slotsA, ok = routeFragment(frags[0])
+		if !ok {
+			return nil, false
+		}
 	}
 	// The have-it print tail carries only its text: its
 	// function and file are inherited — the first piece's
@@ -1149,7 +1541,35 @@ func phrasingRouteB(line string) (pieces []string, ok bool) {
 			}
 		}
 	}
-	canonB, _, _, ok := routeFragment(frags[1])
+	// Created-target binding gets first claim on an unbound
+	// second piece — before the ordinary route, whose bare-name
+	// families (register above all) can otherwise "validate" a
+	// file-less fragment by geometry accident ("put a for loop
+	// in Bake" reads as registering the key "loop" in a table
+	// "Bake"). When the first piece created a function and the
+	// second piece's placement is unbound — a pronoun, or no
+	// file named — the binding is tried first; if it declines
+	// (a family with its own bare-name target, like add-case),
+	// the ordinary route still owns the fragment.
+	if cName, cFile, creates := createdFuncOf(famA, slotsA); creates {
+		if p := frags[1].placement(); p.pronoun || !p.hasFile {
+			if bound, bok := routeCreatedPiece(frags[1], cName, cFile); bok {
+				return []string{canonA, bound}, true
+			}
+		}
+	}
+	// Shared-target distribution, the other direction: the
+	// compound's only file rode in the FIRST fragment and the
+	// second piece is the one missing its target — completed
+	// first, bare as the fallback, exactly as for piece one.
+	var canonB string
+	if file, lacking, shared := sharedFileOf(frags[0], frags[1]); shared && lacking == 1 {
+		canonB, _, _, ok = routeSharedPiece(frags[1], file)
+		if ok {
+			return []string{canonA, canonB}, true
+		}
+	}
+	canonB, _, _, ok = routeFragment(frags[1])
 	if !ok {
 		return nil, false
 	}
