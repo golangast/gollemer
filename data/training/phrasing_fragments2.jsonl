@@ -34803,3 +34803,1029 @@
 {"input":"add new recursive function named Gis","family":"concept-recursion","template":"train/frag-a-shared"}
 {"input":"add a now in it to main.go","family":"concept-time-now","template":"train/frag-b"}
 {"input":"add new middleware timing named Trouarm","family":"concept-middleware-timing","template":"train/frag-a-shared"}
+{"input":"plese build a server that serves an html file to dar/cack.go","family":"serve-html","template":"train/core3+typo-please"}
+{"input":"serve an html file to floundog.go please","family":"serve-html","template":"train/core0+please-post"}
+{"input":"just add a server that serves site.html","family":"serve-html","template":"train/core1+just"}
+{"input":"add a server that serves an html file to floundog.go","family":"serve-html","template":"train/core2+bare"}
+{"input":"i want to add a server that serves help.html to wailm/plern.go","family":"serve-html","template":"train/core1+i-want"}
+{"input":"i want to serve an html page","family":"serve-html","template":"train/core1+i-want"}
+{"input":"please add a server that serves help.html","family":"serve-html","template":"train/core1+please-pre"}
+{"input":"i want to add a server that serves welcome.html","family":"serve-html","template":"train/core1+i-want"}
+{"input":"please add a server that serves main.html to rairm.go","family":"serve-html","template":"train/core1+please-pre"}
+{"input":"serve home.html to dar/cack.go","family":"serve-html","template":"train/core0+bare"}
+{"input":"plese add a server that serves menu.html","family":"serve-html","template":"train/core1+typo-please"}
+{"input":"i want to serve info.html to util.go","family":"serve-html","template":"train/core0+i-want"}
+{"input":"plese add a server that serves site.html to criv/creath.go","family":"serve-html","template":"train/core1+typo-please"}
+{"input":"could you add a webserver that serves info.html to criv/creath.go for me","family":"serve-html","template":"train/core3+could-you"}
+{"input":"plese build a server that serves about.html to flairneax.go","family":"serve-html","template":"train/core2+typo-please"}
+{"input":"i want to build a server that serves index.html to lair.go","family":"serve-html","template":"train/core2+i-want"}
+{"input":"serve an html page","family":"serve-html","template":"train/core1+bare"}
+{"input":"could you add a webserver that serves page.html for me","family":"serve-html","template":"train/core3+could-you"}
+{"input":"quick, build a server that serves home.html to jim/main.go","family":"serve-html","template":"train/core2+quick"}
+{"input":"build a server that serves an html file.","family":"serve-html","template":"train/core3+bare-period"}
+{"input":"add a server that serves page.html.","family":"serve-html","template":"train/core1+bare-period"}
+{"input":"please add a server that serves help.html to floundog.go","family":"serve-html","template":"train/core1+please-pre"}
+{"input":"build a server that serves site.html to fleamaif.go please","family":"serve-html","template":"train/core2+please-post"}
+{"input":"serve an html page please","family":"serve-html","template":"train/core1+please-post"}
+{"input":"please serve home.html to klaivig.go","family":"serve-html","template":"train/core0+please-pre"}
+{"input":"serve main.html to tea.go please","family":"serve-html","template":"train/core0+please-post"}
+{"input":"add a server that serves home.html","family":"serve-html","template":"train/core1+bare"}
+{"input":"quick, add a webserver that serves about.html to brew.go","family":"serve-html","template":"train/core3+quick"}
+{"input":"please serve welcome.html to skistaiv.go","family":"serve-html","template":"train/core0+please-pre"}
+{"input":"just serve an html page","family":"serve-html","template":"train/core1+just"}
+{"input":"please serve an html page to breaaix.go","family":"serve-html","template":"train/core1+please-pre"}
+{"input":"can you add a webserver that serves main.html","family":"serve-html","template":"train/core3+can-you"}
+{"input":"hey, add a server that serves an html file","family":"serve-html","template":"train/core2+hey"}
+{"input":"i need you to serve an html file to jim/main.go","family":"serve-html","template":"train/core0+i-need"}
+{"input":"just serve info.html to lair.go","family":"serve-html","template":"train/core0+just"}
+{"input":"i need you to build a server that serves page.html","family":"serve-html","template":"train/core2+i-need"}
+{"input":"serve an html file","family":"serve-html","template":"train/core0+bare"}
+{"input":"quick, build a server that serves index.html to lair.go","family":"serve-html","template":"train/core2+quick"}
+{"input":"could you add a webserver that serves site.html for me","family":"serve-html","template":"train/core3+could-you"}
+{"input":"hey, serve hello.html","family":"serve-html","template":"train/core0+hey"}
+{"input":"please add a server that serves start.html","family":"serve-html","template":"train/core1+please-pre"}
+{"input":"hey, build a server that serves home.html","family":"serve-html","template":"train/core2+hey"}
+{"input":"quick, build a server that serves info.html to fleamaif.go","family":"serve-html","template":"train/core2+quick"}
+{"input":"could you add a server that serves an html file for me","family":"serve-html","template":"train/core2+could-you"}
+{"input":"just serve start.html","family":"serve-html","template":"train/core0+just"}
+{"input":"plese add a server that serves start.html to thougurb.go","family":"serve-html","template":"train/core1+typo-please"}
+{"input":"can you add a server that serves an html file","family":"serve-html","template":"train/core2+can-you"}
+{"input":"plese serve about.html","family":"serve-html","template":"train/core0+typo-please"}
+{"input":"i need you to add a webserver that serves about.html","family":"serve-html","template":"train/core3+i-need"}
+{"input":"i want to add a server that serves index.html","family":"serve-html","template":"train/core1+i-want"}
+{"input":"i need you to serve an html file","family":"serve-html","template":"train/core0+i-need"}
+{"input":"can you serve info.html","family":"serve-html","template":"train/core0+can-you"}
+{"input":"build a server that serves index.html to zaib/tan.go please","family":"serve-html","template":"train/core2+please-post"}
+{"input":"could you build a server that serves index.html for me","family":"serve-html","template":"train/core2+could-you"}
+{"input":"hey, build a server that serves menu.html","family":"serve-html","template":"train/core2+hey"}
+{"input":"just add a server that serves home.html","family":"serve-html","template":"train/core1+just"}
+{"input":"please build a server that serves an html file to shuf.go","family":"serve-html","template":"train/core3+please-pre"}
+{"input":"build a server that serves an html file to criv/creath.go please","family":"serve-html","template":"train/core3+please-post"}
+{"input":"hey, add a server that serves welcome.html to criv/creath.go","family":"serve-html","template":"train/core1+hey"}
+{"input":"i need you to add a server that serves start.html","family":"serve-html","template":"train/core1+i-need"}
+{"input":"quick, add a webserver that serves about.html","family":"serve-html","template":"train/core3+quick"}
+{"input":"plese add a webserver that serves help.html","family":"serve-html","template":"train/core3+typo-please"}
+{"input":"i need you to add a server that serves an html file to breaaix.go","family":"serve-html","template":"train/core2+i-need"}
+{"input":"i want to serve an html file to basant.go","family":"serve-html","template":"train/core0+i-want"}
+{"input":"i want to build a server that serves hello.html to shop/main.go","family":"serve-html","template":"train/core2+i-want"}
+{"input":"can you serve menu.html","family":"serve-html","template":"train/core0+can-you"}
+{"input":"add a webserver that serves index.html to rairm.go.","family":"serve-html","template":"train/core3+bare-period"}
+{"input":"just build a server that serves welcome.html to brew.go","family":"serve-html","template":"train/core2+just"}
+{"input":"plese add a server that serves welcome.html","family":"serve-html","template":"train/core1+typo-please"}
+{"input":"just add a webserver that serves menu.html to app/main.go","family":"serve-html","template":"train/core3+just"}
+{"input":"i need you to serve info.html","family":"serve-html","template":"train/core0+i-need"}
+{"input":"quick, serve info.html to roth/trenuz.go","family":"serve-html","template":"train/core0+quick"}
+{"input":"just serve an html file","family":"serve-html","template":"train/core0+just"}
+{"input":"plese add a webserver that serves about.html to util.go","family":"serve-html","template":"train/core3+typo-please"}
+{"input":"i want to serve an html file to tea.go","family":"serve-html","template":"train/core0+i-want"}
+{"input":"add a server that serves help.html please","family":"serve-html","template":"train/core1+please-post"}
+{"input":"serve info.html to rairm.go please","family":"serve-html","template":"train/core0+please-post"}
+{"input":"could you serve an html file for me","family":"serve-html","template":"train/core0+could-you"}
+{"input":"i need you to add a server that serves home.html","family":"serve-html","template":"train/core1+i-need"}
+{"input":"plese add a webserver that serves home.html","family":"serve-html","template":"train/core3+typo-please"}
+{"input":"hey, add a server that serves info.html","family":"serve-html","template":"train/core1+hey"}
+{"input":"just add a server that serves home.html to jim/main.go","family":"serve-html","template":"train/core1+just"}
+{"input":"serve index.html","family":"serve-html","template":"train/core0+bare"}
+{"input":"please add a webserver that serves welcome.html","family":"serve-html","template":"train/core3+please-pre"}
+{"input":"add a server that serves main.html.","family":"serve-html","template":"train/core1+bare-period"}
+{"input":"please serve main.html to app/main.go","family":"serve-html","template":"train/core0+please-pre"}
+{"input":"i need you to serve hello.html","family":"serve-html","template":"train/core0+i-need"}
+{"input":"add a webserver that serves about.html to lair.go.","family":"serve-html","template":"train/core3+bare-period"}
+{"input":"quick, serve an html page to thougurb.go","family":"serve-html","template":"train/core1+quick"}
+{"input":"add a webserver that serves info.html please","family":"serve-html","template":"train/core3+please-post"}
+{"input":"can you build a server that serves an html file","family":"serve-html","template":"train/core3+can-you"}
+{"input":"hey, add a webserver that serves index.html to gront.go","family":"serve-html","template":"train/core3+hey"}
+{"input":"please serve home.html","family":"serve-html","template":"train/core0+please-pre"}
+{"input":"just add a webserver that serves index.html","family":"serve-html","template":"train/core3+just"}
+{"input":"please add a server that serves hello.html to bothaick.go","family":"serve-html","template":"train/core1+please-pre"}
+{"input":"can you serve start.html","family":"serve-html","template":"train/core0+can-you"}
+{"input":"please build a server that serves an html file to shin/flaaind.go","family":"serve-html","template":"train/core3+please-pre"}
+{"input":"build a server that serves hello.html to rairm.go please","family":"serve-html","template":"train/core2+please-post"}
+{"input":"plese add a server that serves info.html to coupark.go","family":"serve-html","template":"train/core1+typo-please"}
+{"input":"i want to serve home.html to bothaick.go","family":"serve-html","template":"train/core0+i-want"}
+{"input":"hey, add a webserver that serves about.html","family":"serve-html","template":"train/core3+hey"}
+{"input":"i need you to add a webserver that serves info.html","family":"serve-html","template":"train/core3+i-need"}
+{"input":"add a server that serves welcome.html to gront.go.","family":"serve-html","template":"train/core1+bare-period"}
+{"input":"i want to add a server that serves an html file","family":"serve-html","template":"train/core2+i-want"}
+{"input":"please serve an html file to zaib/tan.go","family":"serve-html","template":"train/core0+please-pre"}
+{"input":"serve hello.html please","family":"serve-html","template":"train/core0+please-post"}
+{"input":"plese serve site.html to shin/flaaind.go","family":"serve-html","template":"train/core0+typo-please"}
+{"input":"just add a server that serves an html file to shuf.go","family":"serve-html","template":"train/core2+just"}
+{"input":"i want to add a server that serves start.html","family":"serve-html","template":"train/core1+i-want"}
+{"input":"hey, serve welcome.html to fleamaif.go","family":"serve-html","template":"train/core0+hey"}
+{"input":"quick, add a server that serves about.html","family":"serve-html","template":"train/core1+quick"}
+{"input":"could you add a server that serves info.html to geaz/mum.go for me","family":"serve-html","template":"train/core1+could-you"}
+{"input":"hey, add a server that serves site.html","family":"serve-html","template":"train/core1+hey"}
+{"input":"can you serve an html page to criv/creath.go","family":"serve-html","template":"train/core1+can-you"}
+{"input":"could you serve page.html to basant.go for me","family":"serve-html","template":"train/core0+could-you"}
+{"input":"could you serve page.html to geaz/mum.go for me","family":"serve-html","template":"train/core0+could-you"}
+{"input":"can you build a server that serves welcome.html to main.go","family":"serve-html","template":"train/core2+can-you"}
+{"input":"build a server that serves info.html to jim/main.go.","family":"serve-html","template":"train/core2+bare-period"}
+{"input":"i need you to add a server that serves help.html to zaib/tan.go","family":"serve-html","template":"train/core1+i-need"}
+{"input":"i need you to add a server that serves start.html to roth/trenuz.go","family":"serve-html","template":"train/core1+i-need"}
+{"input":"plese serve an html file to brew.go","family":"serve-html","template":"train/core0+typo-please"}
+{"input":"can you build a server that serves start.html to floundog.go","family":"serve-html","template":"train/core2+can-you"}
+{"input":"i need you to serve start.html to basant.go","family":"serve-html","template":"train/core0+i-need"}
+{"input":"i want to add a webserver that serves info.html to lair.go","family":"serve-html","template":"train/core3+i-want"}
+{"input":"serve home.html to shin/flaaind.go","family":"serve-html","template":"train/core0+bare"}
+{"input":"serve about.html to skistaiv.go","family":"serve-html","template":"train/core0+bare"}
+{"input":"just add a webserver that serves site.html to geaz/mum.go","family":"serve-html","template":"train/core3+just"}
+{"input":"plese build a server that serves an html file","family":"serve-html","template":"train/core3+typo-please"}
+{"input":"could you build a server that serves page.html to bothaick.go for me","family":"serve-html","template":"train/core2+could-you"}
+{"input":"i want to build a server that serves main.html to fleamaif.go","family":"serve-html","template":"train/core2+i-want"}
+{"input":"i want to add a server that serves an html file to kif.go","family":"serve-html","template":"train/core2+i-want"}
+{"input":"i want to serve start.html to floundog.go","family":"serve-html","template":"train/core0+i-want"}
+{"input":"i want to serve an html file","family":"serve-html","template":"train/core0+i-want"}
+{"input":"i want to serve an html page to brew.go","family":"serve-html","template":"train/core1+i-want"}
+{"input":"hey, serve an html page to zaib/tan.go","family":"serve-html","template":"train/core1+hey"}
+{"input":"quick, add a server that serves site.html to coupark.go","family":"serve-html","template":"train/core1+quick"}
+{"input":"could you build a server that serves help.html to brew.go for me","family":"serve-html","template":"train/core2+could-you"}
+{"input":"i want to add a server that serves main.html","family":"serve-html","template":"train/core1+i-want"}
+{"input":"serve menu.html to dar/cack.go","family":"serve-html","template":"train/core0+bare"}
+{"input":"plese build a server that serves page.html to fleamaif.go","family":"serve-html","template":"train/core2+typo-please"}
+{"input":"serve an html page.","family":"serve-html","template":"train/core1+bare-period"}
+{"input":"quick, build a server that serves hello.html","family":"serve-html","template":"train/core2+quick"}
+{"input":"quick, build a server that serves info.html to util.go","family":"serve-html","template":"train/core2+quick"}
+{"input":"add a server that serves home.html to lair.go","family":"serve-html","template":"train/core1+bare"}
+{"input":"add a server that serves info.html to main.go.","family":"serve-html","template":"train/core1+bare-period"}
+{"input":"hey, add a server that serves welcome.html to klaivig.go","family":"serve-html","template":"train/core1+hey"}
+{"input":"quick, build a server that serves welcome.html to breaaix.go","family":"serve-html","template":"train/core2+quick"}
+{"input":"hey, serve start.html to gront.go","family":"serve-html","template":"train/core0+hey"}
+{"input":"i want to build a server that serves an html file","family":"serve-html","template":"train/core3+i-want"}
+{"input":"add a server that serves index.html to nel/vearm.go.","family":"serve-html","template":"train/core1+bare-period"}
+{"input":"please add a webserver that serves help.html","family":"serve-html","template":"train/core3+please-pre"}
+{"input":"i want to serve an html file to shuf.go","family":"serve-html","template":"train/core0+i-want"}
+{"input":"could you build a server that serves menu.html to fleamaif.go for me","family":"serve-html","template":"train/core2+could-you"}
+{"input":"add a webserver that serves home.html to wast.go please","family":"serve-html","template":"train/core3+please-post"}
+{"input":"quick, serve page.html","family":"serve-html","template":"train/core0+quick"}
+{"input":"can you serve main.html","family":"serve-html","template":"train/core0+can-you"}
+{"input":"please serve main.html to main.go","family":"serve-html","template":"train/core0+please-pre"}
+{"input":"build a server that serves main.html please","family":"serve-html","template":"train/core2+please-post"}
+{"input":"add a webserver that serves welcome.html to skistaiv.go","family":"serve-html","template":"train/core3+bare"}
+{"input":"hey, build a server that serves index.html","family":"serve-html","template":"train/core2+hey"}
+{"input":"could you add a webserver that serves home.html to jim/main.go for me","family":"serve-html","template":"train/core3+could-you"}
+{"input":"could you add a server that serves home.html to thougurb.go for me","family":"serve-html","template":"train/core1+could-you"}
+{"input":"just add a server that serves menu.html","family":"serve-html","template":"train/core1+just"}
+{"input":"i want to serve about.html","family":"serve-html","template":"train/core0+i-want"}
+{"input":"add a server that serves an html file to jim/main.go please","family":"serve-html","template":"train/core2+please-post"}
+{"input":"serve site.html to wast.go.","family":"serve-html","template":"train/core0+bare-period"}
+{"input":"can you build a server that serves index.html to dar/cack.go","family":"serve-html","template":"train/core2+can-you"}
+{"input":"i need you to serve hello.html to geaz/mum.go","family":"serve-html","template":"train/core0+i-need"}
+{"input":"add a webserver that serves main.html to app/main.go","family":"serve-html","template":"train/core3+bare"}
+{"input":"quick, add a server that serves page.html","family":"serve-html","template":"train/core1+quick"}
+{"input":"i need you to add a server that serves an html file","family":"serve-html","template":"train/core2+i-need"}
+{"input":"plese add a server that serves an html file to tea.go","family":"serve-html","template":"train/core2+typo-please"}
+{"input":"i need you to build a server that serves an html file","family":"serve-html","template":"train/core3+i-need"}
+{"input":"please build a server that serves an html file","family":"serve-html","template":"train/core3+please-pre"}
+{"input":"i need you to build a server that serves home.html to gront.go","family":"serve-html","template":"train/core2+i-need"}
+{"input":"plese add a server that serves an html file to rairm.go","family":"serve-html","template":"train/core2+typo-please"}
+{"input":"please add a server that serves page.html to wast.go","family":"serve-html","template":"train/core1+please-pre"}
+{"input":"i want to add a webserver that serves start.html to basant.go","family":"serve-html","template":"train/core3+i-want"}
+{"input":"add a server that serves site.html to jim/main.go please","family":"serve-html","template":"train/core1+please-post"}
+{"input":"quick, serve site.html to foutoun.go","family":"serve-html","template":"train/core0+quick"}
+{"input":"add a server that serves start.html to jim/main.go","family":"serve-html","template":"train/core1+bare"}
+{"input":"just build a server that serves about.html","family":"serve-html","template":"train/core2+just"}
+{"input":"can you add a server that serves hello.html","family":"serve-html","template":"train/core1+can-you"}
+{"input":"can you serve an html file","family":"serve-html","template":"train/core0+can-you"}
+{"input":"i need you to build a server that serves help.html","family":"serve-html","template":"train/core2+i-need"}
+{"input":"hey, add a server that serves welcome.html to roth/trenuz.go","family":"serve-html","template":"train/core1+hey"}
+{"input":"hey, build a server that serves an html file to main.go","family":"serve-html","template":"train/core3+hey"}
+{"input":"build a server that serves an html file to shop/main.go please","family":"serve-html","template":"train/core3+please-post"}
+{"input":"can you serve an html file to fleamaif.go","family":"serve-html","template":"train/core0+can-you"}
+{"input":"plese build a server that serves an html file to gront.go","family":"serve-html","template":"train/core3+typo-please"}
+{"input":"please build a server that serves start.html","family":"serve-html","template":"train/core2+please-pre"}
+{"input":"hey, build a server that serves start.html","family":"serve-html","template":"train/core2+hey"}
+{"input":"i need you to add a server that serves an html file to thougurb.go","family":"serve-html","template":"train/core2+i-need"}
+{"input":"add a webserver that serves menu.html.","family":"serve-html","template":"train/core3+bare-period"}
+{"input":"plese build a server that serves hello.html","family":"serve-html","template":"train/core2+typo-please"}
+{"input":"add a server that serves page.html to brew.go.","family":"serve-html","template":"train/core1+bare-period"}
+{"input":"i need you to add a webserver that serves index.html","family":"serve-html","template":"train/core3+i-need"}
+{"input":"serve an html file to foutoun.go please","family":"serve-html","template":"train/core0+please-post"}
+{"input":"can you build a server that serves info.html","family":"serve-html","template":"train/core2+can-you"}
+{"input":"add a server that serves an html file to tea.go please","family":"serve-html","template":"train/core2+please-post"}
+{"input":"just add a webserver that serves hello.html to nel/vearm.go","family":"serve-html","template":"train/core3+just"}
+{"input":"i need you to build a server that serves index.html to geaz/mum.go","family":"serve-html","template":"train/core2+i-need"}
+{"input":"quick, add a server that serves help.html","family":"serve-html","template":"train/core1+quick"}
+{"input":"i want to add a webserver that serves main.html to jim/main.go","family":"serve-html","template":"train/core3+i-want"}
+{"input":"please serve site.html","family":"serve-html","template":"train/core0+please-pre"}
+{"input":"i want to add a server that serves main.html to nel/vearm.go","family":"serve-html","template":"train/core1+i-want"}
+{"input":"please serve menu.html to shin/flaaind.go","family":"serve-html","template":"train/core0+please-pre"}
+{"input":"can you add a server that serves index.html","family":"serve-html","template":"train/core1+can-you"}
+{"input":"just build a server that serves site.html","family":"serve-html","template":"train/core2+just"}
+{"input":"could you serve info.html to lair.go for me","family":"serve-html","template":"train/core0+could-you"}
+{"input":"hey, build a server that serves an html file","family":"serve-html","template":"train/core3+hey"}
+{"input":"could you serve an html file to lair.go for me","family":"serve-html","template":"train/core0+could-you"}
+{"input":"just serve menu.html","family":"serve-html","template":"train/core0+just"}
+{"input":"serve info.html to kif.go","family":"serve-html","template":"train/core0+bare"}
+{"input":"add a webserver that serves site.html to bothaick.go.","family":"serve-html","template":"train/core3+bare-period"}
+{"input":"can you add a webserver that serves info.html","family":"serve-html","template":"train/core3+can-you"}
+{"input":"serve an html page to geaz/mum.go.","family":"serve-html","template":"train/core1+bare-period"}
+{"input":"hey, add a webserver that serves page.html","family":"serve-html","template":"train/core3+hey"}
+{"input":"plese serve an html file","family":"serve-html","template":"train/core0+typo-please"}
+{"input":"add a webserver that serves about.html to bothaick.go","family":"serve-html","template":"train/core3+bare"}
+{"input":"build a server that serves start.html please","family":"serve-html","template":"train/core2+please-post"}
+{"input":"build a server that serves hello.html to brew.go.","family":"serve-html","template":"train/core2+bare-period"}
+{"input":"hey, add a webserver that serves page.html to statod.go","family":"serve-html","template":"train/core3+hey"}
+{"input":"i need you to add a server that serves page.html","family":"serve-html","template":"train/core1+i-need"}
+{"input":"please serve index.html","family":"serve-html","template":"train/core0+please-pre"}
+{"input":"please serve an html page to jim/main.go","family":"serve-html","template":"train/core1+please-pre"}
+{"input":"can you add a server that serves info.html","family":"serve-html","template":"train/core1+can-you"}
+{"input":"add a server that serves an html file to zaib/tan.go","family":"serve-html","template":"train/core2+bare"}
+{"input":"i need you to add a webserver that serves home.html to statod.go","family":"serve-html","template":"train/core3+i-need"}
+{"input":"could you build a server that serves welcome.html for me","family":"serve-html","template":"train/core2+could-you"}
+{"input":"plese build a server that serves home.html to gront.go","family":"serve-html","template":"train/core2+typo-please"}
+{"input":"hey, serve start.html to coupark.go","family":"serve-html","template":"train/core0+hey"}
+{"input":"hey, build a server that serves site.html to main.go","family":"serve-html","template":"train/core2+hey"}
+{"input":"build a server that serves start.html to store.go.","family":"serve-html","template":"train/core2+bare-period"}
+{"input":"serve an html file.","family":"serve-html","template":"train/core0+bare-period"}
+{"input":"i need you to add a server that serves home.html to geaz/mum.go","family":"serve-html","template":"train/core1+i-need"}
+{"input":"serve info.html.","family":"serve-html","template":"train/core0+bare-period"}
+{"input":"quick, build a server that serves info.html to tea.go","family":"serve-html","template":"train/core2+quick"}
+{"input":"quick, serve an html page","family":"serve-html","template":"train/core1+quick"}
+{"input":"build a server that serves an html file to fleamaif.go","family":"serve-html","template":"train/core3+bare"}
+{"input":"could you serve page.html to shin/flaaind.go for me","family":"serve-html","template":"train/core0+could-you"}
+{"input":"add a server that serves main.html to store.go.","family":"serve-html","template":"train/core1+bare-period"}
+{"input":"can you serve help.html to flairneax.go","family":"serve-html","template":"train/core0+can-you"}
+{"input":"serve an html page to geaz/mum.go","family":"serve-html","template":"train/core1+bare"}
+{"input":"plese serve help.html","family":"serve-html","template":"train/core0+typo-please"}
+{"input":"add a server that serves start.html to store.go.","family":"serve-html","template":"train/core1+bare-period"}
+{"input":"please serve info.html to shuf.go","family":"serve-html","template":"train/core0+please-pre"}
+{"input":"serve an html page to shuf.go please","family":"serve-html","template":"train/core1+please-post"}
+{"input":"can you add a server that serves site.html to breaaix.go","family":"serve-html","template":"train/core1+can-you"}
+{"input":"serve home.html to floundog.go.","family":"serve-html","template":"train/core0+bare-period"}
+{"input":"i need you to serve index.html","family":"serve-html","template":"train/core0+i-need"}
+{"input":"plese build a server that serves hello.html to shop/main.go","family":"serve-html","template":"train/core2+typo-please"}
+{"input":"build a server that serves an html file to flairneax.go.","family":"serve-html","template":"train/core3+bare-period"}
+{"input":"i need you to serve an html file to coupark.go","family":"serve-html","template":"train/core0+i-need"}
+{"input":"could you add a webserver that serves hello.html to wailm/plern.go for me","family":"serve-html","template":"train/core3+could-you"}
+{"input":"i want to build a server that serves menu.html to fleamaif.go","family":"serve-html","template":"train/core2+i-want"}
+{"input":"i want to serve start.html to wast.go","family":"serve-html","template":"train/core0+i-want"}
+{"input":"could you add a server that serves info.html for me","family":"serve-html","template":"train/core1+could-you"}
+{"input":"can you add a webserver that serves hello.html to criv/creath.go","family":"serve-html","template":"train/core3+can-you"}
+{"input":"build a server that serves an html file to zaib/tan.go.","family":"serve-html","template":"train/core3+bare-period"}
+{"input":"plese serve hello.html","family":"serve-html","template":"train/core0+typo-please"}
+{"input":"please add a webserver that serves site.html","family":"serve-html","template":"train/core3+please-pre"}
+{"input":"i need you to serve an html page","family":"serve-html","template":"train/core1+i-need"}
+{"input":"i need you to add a webserver that serves site.html","family":"serve-html","template":"train/core3+i-need"}
+{"input":"just serve menu.html to roth/trenuz.go","family":"serve-html","template":"train/core0+just"}
+{"input":"just build a server that serves an html file to main.go","family":"serve-html","template":"train/core3+just"}
+{"input":"can you add a server that serves home.html","family":"serve-html","template":"train/core1+can-you"}
+{"input":"add a webserver that serves welcome.html to shin/flaaind.go","family":"serve-html","template":"train/core3+bare"}
+{"input":"i want to serve main.html","family":"serve-html","template":"train/core0+i-want"}
+{"input":"please build a server that serves an html file to main.go","family":"serve-html","template":"train/core3+please-pre"}
+{"input":"i want to serve info.html to app/main.go","family":"serve-html","template":"train/core0+i-want"}
+{"input":"please serve an html file","family":"serve-html","template":"train/core0+please-pre"}
+{"input":"build a server that serves an html file to zaib/tan.go please","family":"serve-html","template":"train/core3+please-post"}
+{"input":"please add a server that serves an html file to wailm/plern.go","family":"serve-html","template":"train/core2+please-pre"}
+{"input":"serve home.html please","family":"serve-html","template":"train/core0+please-post"}
+{"input":"quick, serve start.html to brew.go","family":"serve-html","template":"train/core0+quick"}
+{"input":"please serve menu.html","family":"serve-html","template":"train/core0+please-pre"}
+{"input":"quick, add a server that serves an html file to roth/trenuz.go","family":"serve-html","template":"train/core2+quick"}
+{"input":"build a server that serves hello.html to fleamaif.go please","family":"serve-html","template":"train/core2+please-post"}
+{"input":"could you build a server that serves an html file to klaivig.go for me","family":"serve-html","template":"train/core3+could-you"}
+{"input":"can you serve an html page","family":"serve-html","template":"train/core1+can-you"}
+{"input":"quick, serve site.html to rairm.go","family":"serve-html","template":"train/core0+quick"}
+{"input":"quick, build a server that serves about.html to main.go","family":"serve-html","template":"train/core2+quick"}
+{"input":"add a server that serves welcome.html to bothaick.go please","family":"serve-html","template":"train/core1+please-post"}
+{"input":"add a server that serves info.html please","family":"serve-html","template":"train/core1+please-post"}
+{"input":"please serve about.html to criv/creath.go","family":"serve-html","template":"train/core0+please-pre"}
+{"input":"hey, build a server that serves site.html to shuf.go","family":"serve-html","template":"train/core2+hey"}
+{"input":"please build a server that serves menu.html","family":"serve-html","template":"train/core2+please-pre"}
+{"input":"hey, serve an html file to bothaick.go","family":"serve-html","template":"train/core0+hey"}
+{"input":"hey, build a server that serves help.html","family":"serve-html","template":"train/core2+hey"}
+{"input":"please serve an html file to thougurb.go","family":"serve-html","template":"train/core0+please-pre"}
+{"input":"i need you to serve site.html","family":"serve-html","template":"train/core0+i-need"}
+{"input":"build a server that serves an html file please","family":"serve-html","template":"train/core3+please-post"}
+{"input":"add a server that serves help.html to kif.go","family":"serve-html","template":"train/core1+bare"}
+{"input":"plese add a server that serves start.html","family":"serve-html","template":"train/core1+typo-please"}
+{"input":"please build a server that serves home.html","family":"serve-html","template":"train/core2+please-pre"}
+{"input":"serve an html file to wailm/plern.go please","family":"serve-html","template":"train/core0+please-post"}
+{"input":"i want to serve start.html","family":"serve-html","template":"train/core0+i-want"}
+{"input":"add a webserver that serves main.html to gront.go","family":"serve-html","template":"train/core3+bare"}
+{"input":"serve welcome.html.","family":"serve-html","template":"train/core0+bare-period"}
+{"input":"add a webserver that serves page.html.","family":"serve-html","template":"train/core3+bare-period"}
+{"input":"serve an html page to rairm.go","family":"serve-html","template":"train/core1+bare"}
+{"input":"i want to build a server that serves welcome.html to statod.go","family":"serve-html","template":"train/core2+i-want"}
+{"input":"just build a server that serves an html file to foutoun.go","family":"serve-html","template":"train/core3+just"}
+{"input":"i want to add a webserver that serves index.html to store.go","family":"serve-html","template":"train/core3+i-want"}
+{"input":"could you build a server that serves an html file to tea.go for me","family":"serve-html","template":"train/core3+could-you"}
+{"input":"add a webserver that serves about.html to fleamaif.go","family":"serve-html","template":"train/core3+bare"}
+{"input":"plese add a server that serves info.html","family":"serve-html","template":"train/core1+typo-please"}
+{"input":"add a webserver that serves home.html to nel/vearm.go","family":"serve-html","template":"train/core3+bare"}
+{"input":"i want to build a server that serves index.html to shin/flaaind.go","family":"serve-html","template":"train/core2+i-want"}
+{"input":"just add a server that serves an html file","family":"serve-html","template":"train/core2+just"}
+{"input":"plese build a server that serves site.html","family":"serve-html","template":"train/core2+typo-please"}
+{"input":"please build a server that serves an html file to fleamaif.go","family":"serve-html","template":"train/core3+please-pre"}
+{"input":"build a server that serves help.html","family":"serve-html","template":"train/core2+bare"}
+{"input":"plese add a webserver that serves page.html to util.go","family":"serve-html","template":"train/core3+typo-please"}
+{"input":"build a server that serves start.html.","family":"serve-html","template":"train/core2+bare-period"}
+{"input":"add a webserver that serves menu.html","family":"serve-html","template":"train/core3+bare"}
+{"input":"hey, serve info.html to coupark.go","family":"serve-html","template":"train/core0+hey"}
+{"input":"just build a server that serves an html file","family":"serve-html","template":"train/core3+just"}
+{"input":"just serve site.html","family":"serve-html","template":"train/core0+just"}
+{"input":"hey, build a server that serves main.html to flairneax.go","family":"serve-html","template":"train/core2+hey"}
+{"input":"add a server that serves index.html to shin/flaaind.go.","family":"serve-html","template":"train/core1+bare-period"}
+{"input":"i need you to build a server that serves hello.html to zaib/tan.go","family":"serve-html","template":"train/core2+i-need"}
+{"input":"quick, add a server that serves page.html to criv/creath.go","family":"serve-html","template":"train/core1+quick"}
+{"input":"add a webserver that serves help.html to klaivig.go.","family":"serve-html","template":"train/core3+bare-period"}
+{"input":"can you add a webserver that serves menu.html to floundog.go","family":"serve-html","template":"train/core3+can-you"}
+{"input":"hey, serve info.html to bothaick.go","family":"serve-html","template":"train/core0+hey"}
+{"input":"add a server that serves home.html to kif.go","family":"serve-html","template":"train/core1+bare"}
+{"input":"please add a server that serves home.html to brew.go","family":"serve-html","template":"train/core1+please-pre"}
+{"input":"add a webserver that serves index.html to klaivig.go please","family":"serve-html","template":"train/core3+please-post"}
+{"input":"please build a server that serves welcome.html","family":"serve-html","template":"train/core2+please-pre"}
+{"input":"i want to add a webserver that serves start.html to rairm.go","family":"serve-html","template":"train/core3+i-want"}
+{"input":"can you build a server that serves an html file to breaaix.go","family":"serve-html","template":"train/core3+can-you"}
+{"input":"quick, build a server that serves an html file","family":"serve-html","template":"train/core3+quick"}
+{"input":"please add a server that serves an html file","family":"serve-html","template":"train/core2+please-pre"}
+{"input":"could you add a webserver that serves info.html to lair.go for me","family":"serve-html","template":"train/core3+could-you"}
+{"input":"please serve an html page to main.go","family":"serve-html","template":"train/core1+please-pre"}
+{"input":"i need you to add a webserver that serves menu.html","family":"serve-html","template":"train/core3+i-need"}
+{"input":"quick, serve an html page to tea.go","family":"serve-html","template":"train/core1+quick"}
+{"input":"quick, add a server that serves an html file","family":"serve-html","template":"train/core2+quick"}
+{"input":"serve an html file to statod.go","family":"serve-html","template":"train/core0+bare"}
+{"input":"hey, add a server that serves about.html to basant.go","family":"serve-html","template":"train/core1+hey"}
+{"input":"please build a server that serves info.html","family":"serve-html","template":"train/core2+please-pre"}
+{"input":"add a webserver that serves help.html please","family":"serve-html","template":"train/core3+please-post"}
+{"input":"i want to build a server that serves home.html","family":"serve-html","template":"train/core2+i-want"}
+{"input":"i want to serve an html page to fleamaif.go","family":"serve-html","template":"train/core1+i-want"}
+{"input":"could you serve start.html to roth/trenuz.go for me","family":"serve-html","template":"train/core0+could-you"}
+{"input":"quick, build a server that serves about.html to brew.go","family":"serve-html","template":"train/core2+quick"}
+{"input":"please serve help.html to shin/flaaind.go","family":"serve-html","template":"train/core0+please-pre"}
+{"input":"quick, add a server that serves home.html","family":"serve-html","template":"train/core1+quick"}
+{"input":"i want to add a webserver that serves about.html to tea.go","family":"serve-html","template":"train/core3+i-want"}
+{"input":"quick, add a server that serves main.html","family":"serve-html","template":"train/core1+quick"}
+{"input":"just add a server that serves welcome.html","family":"serve-html","template":"train/core1+just"}
+{"input":"could you build a server that serves about.html to shop/main.go for me","family":"serve-html","template":"train/core2+could-you"}
+{"input":"can you add a webserver that serves start.html","family":"serve-html","template":"train/core3+can-you"}
+{"input":"i want to build a server that serves help.html to store.go","family":"serve-html","template":"train/core2+i-want"}
+{"input":"serve info.html to roth/trenuz.go","family":"serve-html","template":"train/core0+bare"}
+{"input":"quick, serve hello.html","family":"serve-html","template":"train/core0+quick"}
+{"input":"i need you to add a server that serves main.html","family":"serve-html","template":"train/core1+i-need"}
+{"input":"add a server that serves welcome.html.","family":"serve-html","template":"train/core1+bare-period"}
+{"input":"i need you to serve help.html to util.go","family":"serve-html","template":"train/core0+i-need"}
+{"input":"could you serve page.html to skistaiv.go for me","family":"serve-html","template":"train/core0+could-you"}
+{"input":"i want to serve hello.html","family":"serve-html","template":"train/core0+i-want"}
+{"input":"add a webserver that serves hello.html to fleamaif.go","family":"serve-html","template":"train/core3+bare"}
+{"input":"add a webserver that serves hello.html.","family":"serve-html","template":"train/core3+bare-period"}
+{"input":"add a webserver that serves index.html.","family":"serve-html","template":"train/core3+bare-period"}
+{"input":"i need you to add a webserver that serves page.html to util.go","family":"serve-html","template":"train/core3+i-need"}
+{"input":"could you add a server that serves index.html for me","family":"serve-html","template":"train/core1+could-you"}
+{"input":"just build a server that serves menu.html","family":"serve-html","template":"train/core2+just"}
+{"input":"build a server that serves home.html.","family":"serve-html","template":"train/core2+bare-period"}
+{"input":"i want to add a webserver that serves hello.html","family":"serve-html","template":"train/core3+i-want"}
+{"input":"plese build a server that serves an html file to breaaix.go","family":"serve-html","template":"train/core3+typo-please"}
+{"input":"add a server that serves info.html","family":"serve-html","template":"train/core1+bare"}
+{"input":"can you serve menu.html to zaib/tan.go","family":"serve-html","template":"train/core0+can-you"}
+{"input":"plese serve an html page","family":"serve-html","template":"train/core1+typo-please"}
+{"input":"add a server that serves main.html","family":"serve-html","template":"train/core1+bare"}
+{"input":"build a server that serves an html file to skistaiv.go","family":"serve-html","template":"train/core3+bare"}
+{"input":"i need you to add a server that serves an html file to app/main.go","family":"serve-html","template":"train/core2+i-need"}
+{"input":"add a server that serves hello.html to fleamaif.go please","family":"serve-html","template":"train/core1+please-post"}
+{"input":"build a server that serves hello.html to klaivig.go","family":"serve-html","template":"train/core2+bare"}
+{"input":"serve start.html to rairm.go.","family":"serve-html","template":"train/core0+bare-period"}
+{"input":"could you serve an html page to gront.go for me","family":"serve-html","template":"train/core1+could-you"}
+{"input":"please add a webserver that serves site.html to app/main.go","family":"serve-html","template":"train/core3+please-pre"}
+{"input":"could you build a server that serves info.html to bothaick.go for me","family":"serve-html","template":"train/core2+could-you"}
+{"input":"can you add a webserver that serves page.html to flairneax.go","family":"serve-html","template":"train/core3+can-you"}
+{"input":"can you add a server that serves an html file to shin/flaaind.go","family":"serve-html","template":"train/core2+can-you"}
+{"input":"quick, build a server that serves site.html","family":"serve-html","template":"train/core2+quick"}
+{"input":"serve help.html","family":"serve-html","template":"train/core0+bare"}
+{"input":"i want to serve index.html","family":"serve-html","template":"train/core0+i-want"}
+{"input":"plese serve home.html","family":"serve-html","template":"train/core0+typo-please"}
+{"input":"add a server that serves an html file to criv/creath.go","family":"serve-html","template":"train/core2+bare"}
+{"input":"serve hello.html to flairneax.go","family":"serve-html","template":"train/core0+bare"}
+{"input":"just add a webserver that serves site.html to fleamaif.go","family":"serve-html","template":"train/core3+just"}
+{"input":"just add a server that serves index.html","family":"serve-html","template":"train/core1+just"}
+{"input":"add a server that serves about.html to app/main.go.","family":"serve-html","template":"train/core1+bare-period"}
+{"input":"build a server that serves hello.html to criv/creath.go please","family":"serve-html","template":"train/core2+please-post"}
+{"input":"please add a webserver that serves main.html","family":"serve-html","template":"train/core3+please-pre"}
+{"input":"could you build a server that serves start.html for me","family":"serve-html","template":"train/core2+could-you"}
+{"input":"i want to add a server that serves info.html to tea.go","family":"serve-html","template":"train/core1+i-want"}
+{"input":"i want to add a server that serves an html file to thougurb.go","family":"serve-html","template":"train/core2+i-want"}
+{"input":"hey, build a server that serves info.html to kif.go","family":"serve-html","template":"train/core2+hey"}
+{"input":"i need you to add a server that serves help.html to roth/trenuz.go","family":"serve-html","template":"train/core1+i-need"}
+{"input":"build a server that serves welcome.html to jim/main.go.","family":"serve-html","template":"train/core2+bare-period"}
+{"input":"i want to add a webserver that serves welcome.html","family":"serve-html","template":"train/core3+i-want"}
+{"input":"i need you to add a webserver that serves help.html to gront.go","family":"serve-html","template":"train/core3+i-need"}
+{"input":"i want to add a webserver that serves welcome.html to fleamaif.go","family":"serve-html","template":"train/core3+i-want"}
+{"input":"add a webserver that serves site.html to basant.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a server that serves site.html to basant.go","family":"serve-html","template":"train/frag-a"}
+{"input":"build a server that serves page.html to thougurb.go","family":"serve-html","template":"train/frag-a"}
+{"input":"build a server that serves page.html","family":"serve-html","template":"train/frag-a"}
+{"input":"build a server that serves about.html","family":"serve-html","template":"train/frag-a"}
+{"input":"add a webserver that serves info.html to kif.go","family":"serve-html","template":"train/frag-a"}
+{"input":"build a server that serves site.html to store.go","family":"serve-html","template":"train/frag-a"}
+{"input":"serve home.html","family":"serve-html","template":"train/frag-a"}
+{"input":"add a server that serves an html file","family":"serve-html","template":"train/frag-a"}
+{"input":"add a server that serves start.html","family":"serve-html","template":"train/frag-a"}
+{"input":"serve hello.html","family":"serve-html","template":"train/frag-a"}
+{"input":"serve an html page to wailm/plern.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a webserver that serves help.html","family":"serve-html","template":"train/frag-a"}
+{"input":"print \"the cold lamp is here\" in main to main.go","family":"print","template":"train/frag-b"}
+{"input":"build a server that serves main.html to floundog.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a server that serves an html file to store.go","family":"serve-html","template":"train/frag-a"}
+{"input":"build a server that serves hello.html to shuf.go","family":"serve-html","template":"train/frag-a"}
+{"input":"just build a server that serves hello.html to shuf.go","family":"serve-html","template":"train/frag-a+just"}
+{"input":"add a webserver that serves home.html","family":"serve-html","template":"train/frag-a"}
+{"input":"serve an html page to statod.go","family":"serve-html","template":"train/frag-a"}
+{"input":"build a server that serves site.html to breaaix.go","family":"serve-html","template":"train/frag-a"}
+{"input":"build a server that serves an html file","family":"serve-html","template":"train/frag-a"}
+{"input":"serve help.html to lair.go","family":"serve-html","template":"train/frag-a"}
+{"input":"serve an html page to roth/trenuz.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a server that serves about.html","family":"serve-html","template":"train/frag-a"}
+{"input":"serve menu.html to wast.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a server that serves page.html","family":"serve-html","template":"train/frag-a"}
+{"input":"add a webserver that serves index.html","family":"serve-html","template":"train/frag-a"}
+{"input":"serve an html page to coupark.go","family":"serve-html","template":"train/frag-a"}
+{"input":"serve index.html to gront.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a server that serves site.html","family":"serve-html","template":"train/frag-a"}
+{"input":"add a server that serves menu.html to roth/trenuz.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a webserver that serves home.html to app/main.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a webserver that serves welcome.html to nel/vearm.go","family":"serve-html","template":"train/frag-a"}
+{"input":"make it print \"the last stone is done\" in main to main.go","family":"print","template":"train/frag-b"}
+{"input":"serve help.html to wailm/plern.go","family":"serve-html","template":"train/frag-a"}
+{"input":"build a server that serves hello.html","family":"serve-html","template":"train/frag-a"}
+{"input":"build a server that serves hello.html please","family":"serve-html","template":"train/frag-a+please-post"}
+{"input":"build a server that serves welcome.html","family":"serve-html","template":"train/frag-a"}
+{"input":"add a webserver that serves help.html to geaz/mum.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a webserver that serves start.html","family":"serve-html","template":"train/frag-a"}
+{"input":"add a webserver that serves info.html","family":"serve-html","template":"train/frag-a"}
+{"input":"plese add a webserver that serves info.html","family":"serve-html","template":"train/frag-a+typo-please"}
+{"input":"could you add a webserver that serves start.html for me","family":"serve-html","template":"train/frag-a+could-you"}
+{"input":"add a server that serves menu.html to foutoun.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a server that serves about.html to app/main.go","family":"serve-html","template":"train/frag-a"}
+{"input":"serve info.html","family":"serve-html","template":"train/frag-a"}
+{"input":"serve site.html to wailm/plern.go","family":"serve-html","template":"train/frag-a"}
+{"input":"serve help.html please","family":"serve-html","template":"train/frag-a+please-post"}
+{"input":"add a webserver that serves main.html to jim/main.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a webserver that serves home.html to fleamaif.go","family":"serve-html","template":"train/frag-a"}
+{"input":"build a server that serves main.html to zaib/tan.go","family":"serve-html","template":"train/frag-a"}
+{"input":"build a server that serves welcome.html to rairm.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a server that serves help.html","family":"serve-html","template":"train/frag-a"}
+{"input":"hey, add a webserver that serves index.html","family":"serve-html","template":"train/frag-a+hey"}
+{"input":"build a server that serves main.html","family":"serve-html","template":"train/frag-a"}
+{"input":"serve site.html to criv/creath.go","family":"serve-html","template":"train/frag-a"}
+{"input":"build a server that serves an html file to wast.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a server that serves index.html to floundog.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a server that serves an html file to main.go","family":"serve-html","template":"train/frag-a"}
+{"input":"serve an html page to breaaix.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a webserver that serves main.html to lair.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a server that serves welcome.html to tea.go","family":"serve-html","template":"train/frag-a"}
+{"input":"serve site.html","family":"serve-html","template":"train/frag-a"}
+{"input":"add a server that serves menu.html","family":"serve-html","template":"train/frag-a"}
+{"input":"add a webserver that serves main.html","family":"serve-html","template":"train/frag-a"}
+{"input":"build a server that serves info.html to floundog.go","family":"serve-html","template":"train/frag-a"}
+{"input":"build a server that serves info.html to main.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a server that serves help.html to rairm.go","family":"serve-html","template":"train/frag-a"}
+{"input":"build a server that serves menu.html","family":"serve-html","template":"train/frag-a"}
+{"input":"add a server that serves main.html to wailm/plern.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a server that serves index.html","family":"serve-html","template":"train/frag-a"}
+{"input":"please add a server that serves menu.html to foutoun.go","family":"serve-html","template":"train/frag-a+please-pre"}
+{"input":"build a server that serves index.html","family":"serve-html","template":"train/frag-a"}
+{"input":"serve welcome.html to foutoun.go","family":"serve-html","template":"train/frag-a"}
+{"input":"build a server that serves about.html to criv/creath.go","family":"serve-html","template":"train/frag-a"}
+{"input":"make it print \"my best name today\" in main to main.go","family":"print","template":"train/frag-b"}
+{"input":"serve page.html to bothaick.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a server that serves site.html to coupark.go","family":"serve-html","template":"train/frag-a"}
+{"input":"build a server that serves site.html","family":"serve-html","template":"train/frag-a"}
+{"input":"serve an html file to breaaix.go","family":"serve-html","template":"train/frag-a"}
+{"input":"build a server that serves info.html","family":"serve-html","template":"train/frag-a"}
+{"input":"add a server that serves hello.html to brew.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a server that serves home.html to shop/main.go","family":"serve-html","template":"train/frag-a"}
+{"input":"serve help.html to flairneax.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a server that serves info.html to rairm.go","family":"serve-html","template":"train/frag-a"}
+{"input":"serve an html page to wailm/plern.go.","family":"serve-html","template":"train/frag-a+bare-period"}
+{"input":"add a server that serves welcome.html","family":"serve-html","template":"train/frag-a"}
+{"input":"add a webserver that serves home.html to breaaix.go","family":"serve-html","template":"train/frag-a"}
+{"input":"just add a webserver that serves home.html to breaaix.go","family":"serve-html","template":"train/frag-a+just"}
+{"input":"add a server that serves hello.html","family":"serve-html","template":"train/frag-a"}
+{"input":"build a server that serves start.html to zaib/tan.go","family":"serve-html","template":"train/frag-a"}
+{"input":"serve an html file to flairneax.go","family":"serve-html","template":"train/frag-a"}
+{"input":"build a server that serves home.html","family":"serve-html","template":"train/frag-a"}
+{"input":"add a webserver that serves info.html to skistaiv.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a print line saying \"one cold bell waits\" in main to main.go","family":"print","template":"train/frag-b"}
+{"input":"add a webserver that serves welcome.html","family":"serve-html","template":"train/frag-a"}
+{"input":"add a server that serves main.html to thougurb.go","family":"serve-html","template":"train/frag-a"}
+{"input":"serve an html page to gront.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a server that serves help.html to skistaiv.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a webserver that serves about.html to criv/creath.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a server that serves menu.html to kif.go","family":"serve-html","template":"train/frag-a"}
+{"input":"serve site.html to tea.go","family":"serve-html","template":"train/frag-a"}
+{"input":"build a server that serves welcome.html to lair.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a server that serves about.html to roth/trenuz.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a print line saying \"the cold wave is open\" in main to main.go","family":"print","template":"train/frag-b"}
+{"input":"make it print \"a next lamp is done\" in main to main.go","family":"print","template":"train/frag-b"}
+{"input":"add a webserver that serves about.html","family":"serve-html","template":"train/frag-a"}
+{"input":"serve an html file to zaib/tan.go","family":"serve-html","template":"train/frag-a"}
+{"input":"i want to serve an html file to zaib/tan.go","family":"serve-html","template":"train/frag-a+i-want"}
+{"input":"just serve home.html","family":"serve-html","template":"train/frag-a+just"}
+{"input":"hey, serve info.html","family":"serve-html","template":"train/frag-a+hey"}
+{"input":"serve help.html to jim/main.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a print line saying \"one cold star is done\" in main to main.go","family":"print","template":"train/frag-b"}
+{"input":"hey, serve help.html to jim/main.go","family":"serve-html","template":"train/frag-a+hey"}
+{"input":"serve menu.html","family":"serve-html","template":"train/frag-a"}
+{"input":"serve menu.html to coupark.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a server that serves about.html to zaib/tan.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a webserver that serves menu.html to jim/main.go","family":"serve-html","template":"train/frag-a"}
+{"input":"build a server that serves help.html to wast.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a webserver that serves index.html to coupark.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a webserver that serves site.html to rairm.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a server that serves welcome.html to breaaix.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a webserver that serves site.html to brew.go","family":"serve-html","template":"train/frag-a"}
+{"input":"serve start.html","family":"serve-html","template":"train/frag-a"}
+{"input":"add a webserver that serves site.html to floundog.go","family":"serve-html","template":"train/frag-a"}
+{"input":"please add a webserver that serves site.html to floundog.go","family":"serve-html","template":"train/frag-a+please-pre"}
+{"input":"please serve start.html","family":"serve-html","template":"train/frag-a+please-pre"}
+{"input":"add a server that serves main.html please","family":"serve-html","template":"train/frag-a+please-post"}
+{"input":"add a server that serves menu.html to bothaick.go","family":"serve-html","template":"train/frag-a"}
+{"input":"please add a server that serves menu.html to bothaick.go","family":"serve-html","template":"train/frag-a+please-pre"}
+{"input":"build a server that serves start.html to fleamaif.go","family":"serve-html","template":"train/frag-a"}
+{"input":"serve an html page to foutoun.go","family":"serve-html","template":"train/frag-a"}
+{"input":"serve an html file to tea.go","family":"serve-html","template":"train/frag-a"}
+{"input":"serve an html file to skistaiv.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a webserver that serves help.html to skistaiv.go","family":"serve-html","template":"train/frag-a"}
+{"input":"serve an html file to coupark.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a print line saying \"a best list is open\" in main to main.go","family":"print","template":"train/frag-b"}
+{"input":"add a server that serves page.html to bothaick.go","family":"serve-html","template":"train/frag-a"}
+{"input":"plese add a server that serves an html file","family":"serve-html","template":"train/frag-a+typo-please"}
+{"input":"add a webserver that serves main.html to foutoun.go","family":"serve-html","template":"train/frag-a"}
+{"input":"serve about.html","family":"serve-html","template":"train/frag-a"}
+{"input":"add a server that serves an html file to breaaix.go","family":"serve-html","template":"train/frag-a"}
+{"input":"serve welcome.html","family":"serve-html","template":"train/frag-a"}
+{"input":"hey, serve welcome.html","family":"serve-html","template":"train/frag-a+hey"}
+{"input":"build a server that serves an html file to shuf.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a server that serves main.html to floundog.go","family":"serve-html","template":"train/frag-a"}
+{"input":"i want to add a server that serves main.html to floundog.go","family":"serve-html","template":"train/frag-a+i-want"}
+{"input":"add a webserver that serves welcome.html to kif.go","family":"serve-html","template":"train/frag-a"}
+{"input":"serve an html page to store.go","family":"serve-html","template":"train/frag-a"}
+{"input":"just serve an html page to store.go","family":"serve-html","template":"train/frag-a+just"}
+{"input":"build a server that serves about.html to nel/vearm.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a server that serves hello.html to gront.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a server that serves hello.html to statod.go","family":"serve-html","template":"train/frag-a"}
+{"input":"build a server that serves hello.html to floundog.go","family":"serve-html","template":"train/frag-a"}
+{"input":"build a server that serves an html file to klaivig.go","family":"serve-html","template":"train/frag-a"}
+{"input":"serve info.html to rairm.go","family":"serve-html","template":"train/frag-a"}
+{"input":"build a server that serves info.html to statod.go","family":"serve-html","template":"train/frag-a"}
+{"input":"just build a server that serves info.html to statod.go","family":"serve-html","template":"train/frag-a+just"}
+{"input":"serve about.html to kif.go","family":"serve-html","template":"train/frag-a"}
+{"input":"hey, serve an html page","family":"serve-html","template":"train/frag-a+hey"}
+{"input":"serve about.html to floundog.go","family":"serve-html","template":"train/frag-a"}
+{"input":"i need you to serve about.html to floundog.go","family":"serve-html","template":"train/frag-a+i-need"}
+{"input":"serve home.html to coupark.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a server that serves an html file.","family":"serve-html","template":"train/frag-a+bare-period"}
+{"input":"serve index.html to wast.go","family":"serve-html","template":"train/frag-a"}
+{"input":"hey, serve index.html to wast.go","family":"serve-html","template":"train/frag-a+hey"}
+{"input":"serve page.html","family":"serve-html","template":"train/frag-a"}
+{"input":"serve page.html please","family":"serve-html","template":"train/frag-a+please-post"}
+{"input":"add a webserver that serves site.html to klaivig.go","family":"serve-html","template":"train/frag-a"}
+{"input":"serve page.html to shop/main.go","family":"serve-html","template":"train/frag-a"}
+{"input":"build a server that serves an html file to geaz/mum.go","family":"serve-html","template":"train/frag-a"}
+{"input":"serve welcome.html to roth/trenuz.go","family":"serve-html","template":"train/frag-a"}
+{"input":"serve welcome.html to roth/trenuz.go.","family":"serve-html","template":"train/frag-a+bare-period"}
+{"input":"add a server that serves main.html to breaaix.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a webserver that serves hello.html","family":"serve-html","template":"train/frag-a"}
+{"input":"i need you to serve welcome.html","family":"serve-html","template":"train/frag-a+i-need"}
+{"input":"add a webserver that serves help.html to lair.go","family":"serve-html","template":"train/frag-a"}
+{"input":"build a server that serves site.html to thougurb.go","family":"serve-html","template":"train/frag-a"}
+{"input":"build a server that serves hello.html to dar/cack.go","family":"serve-html","template":"train/frag-a"}
+{"input":"serve main.html to basant.go","family":"serve-html","template":"train/frag-a"}
+{"input":"i need you to add a webserver that serves help.html","family":"serve-html","template":"train/frag-a+i-need"}
+{"input":"build a server that serves site.html to kif.go","family":"serve-html","template":"train/frag-a"}
+{"input":"build a server that serves an html file to kif.go","family":"serve-html","template":"train/frag-a"}
+{"input":"plese build a server that serves an html file to kif.go","family":"serve-html","template":"train/frag-a+typo-please"}
+{"input":"serve menu.html to foutoun.go","family":"serve-html","template":"train/frag-a"}
+{"input":"print \"the red window is done\" in main to main.go","family":"print","template":"train/frag-b"}
+{"input":"make it print \"a first road today\" in main to main.go","family":"print","template":"train/frag-b"}
+{"input":"add a server that serves about.html to flairneax.go","family":"serve-html","template":"train/frag-a"}
+{"input":"serve page.html to basant.go","family":"serve-html","template":"train/frag-a"}
+{"input":"serve help.html to store.go","family":"serve-html","template":"train/frag-a"}
+{"input":"quick, add a webserver that serves home.html","family":"serve-html","template":"train/frag-a+quick"}
+{"input":"serve an html file to lair.go","family":"serve-html","template":"train/frag-a"}
+{"input":"quick, serve an html file to lair.go","family":"serve-html","template":"train/frag-a+quick"}
+{"input":"build a server that serves welcome.html to store.go","family":"serve-html","template":"train/frag-a"}
+{"input":"build a server that serves site.html to geaz/mum.go","family":"serve-html","template":"train/frag-a"}
+{"input":"i want to add a server that serves menu.html","family":"serve-html","template":"train/frag-a+i-want"}
+{"input":"build a server that serves index.html to statod.go","family":"serve-html","template":"train/frag-a"}
+{"input":"please build a server that serves index.html to statod.go","family":"serve-html","template":"train/frag-a+please-pre"}
+{"input":"add a webserver that serves index.html to zaib/tan.go","family":"serve-html","template":"train/frag-a"}
+{"input":"quick, add a server that serves hello.html","family":"serve-html","template":"train/frag-a+quick"}
+{"input":"just serve help.html","family":"serve-html","template":"train/frag-a+just"}
+{"input":"build a server that serves menu.html to shuf.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add a webserver that serves main.html to roth/trenuz.go","family":"serve-html","template":"train/frag-a"}
+{"input":"add in Del to tea.go database rows","family":"concept-database-query","template":"train/frag-a"}
+{"input":"build a server that serves an html file to bothaick.go","family":"serve-html","template":"train/frag-b"}
+{"input":"plese add in Del to tea.go database rows","family":"concept-database-query","template":"train/frag-a+typo-please"}
+{"input":"stick a json in Server to brew.go","family":"concept-json","template":"train/frag-a"}
+{"input":"serve site.html to kif.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add a database connection into shop/main.go","family":"concept-database","template":"train/frag-a"}
+{"input":"just add a database connection into shop/main.go","family":"concept-database","template":"train/frag-a+just"}
+{"input":"add a regexp to shop/main.go","family":"concept-regexp","template":"train/frag-a"}
+{"input":"add a string functions in Shel into nel/vearm.go","family":"concept-string-functions","template":"train/frag-a"}
+{"input":"add a server that serves start.html to shin/flaaind.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add a range over a channel into coupark.go","family":"concept-channel-range","template":"train/frag-a"}
+{"input":"stick a buffered channel in Stend to app/main.go","family":"concept-buffered-channel","template":"train/frag-a"}
+{"input":"serve index.html to thougurb.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add to dar/cack.go pointers","family":"concept-pointers","template":"train/frag-a"}
+{"input":"serve an html page to wast.go","family":"serve-html","template":"train/frag-b"}
+{"input":"i need a range loop in Dour to flairneax.go","family":"concept-range-loop","template":"train/frag-a"}
+{"input":"add a server that serves start.html to store.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add an if else in Zeag to nel/vearm.go","family":"concept-if-else","template":"train/frag-a"}
+{"input":"add a server that serves index.html to skistaiv.go","family":"serve-html","template":"train/frag-b"}
+{"input":"plese add an if else in Zeag to nel/vearm.go","family":"concept-if-else","template":"train/frag-a+typo-please"}
+{"input":"stick a range over a channel to statod.go","family":"concept-channel-range","template":"train/frag-a"}
+{"input":"i need a channel to app/main.go","family":"concept-channel","template":"train/frag-a"}
+{"input":"add a server that serves an html file to shop/main.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add a sha256 in Ndral to lair.go","family":"concept-sha256","template":"train/frag-a"}
+{"input":"i want to add a sha256 in Ndral to lair.go","family":"concept-sha256","template":"train/frag-a+i-want"}
+{"input":"i need a write file to shin/flaaind.go","family":"concept-write-file","template":"train/frag-a"}
+{"input":"add a timeout into shin/flaaind.go","family":"concept-timeout","template":"train/frag-a"}
+{"input":"just add a timeout into shin/flaaind.go","family":"concept-timeout","template":"train/frag-a+just"}
+{"input":"put a string functions in Mbraib to lair.go","family":"concept-string-functions","template":"train/frag-a"}
+{"input":"put a database exec to rairm.go","family":"concept-database-exec","template":"train/frag-a"}
+{"input":"add a map in Dairp into jim/main.go","family":"concept-map","template":"train/frag-a"}
+{"input":"serve an html page to bothaick.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add an insert row into rqlite to coupark.go","family":"concept-rqlite-insert","template":"train/frag-a"}
+{"input":"add to roth/trenuz.go range","family":"concept-range-loop","template":"train/frag-a"}
+{"input":"put a router in Plisap to shin/flaaind.go","family":"concept-routing","template":"train/frag-a"}
+{"input":"serve an html page to shuf.go","family":"serve-html","template":"train/frag-b"}
+{"input":"can you put a router in Plisap to shin/flaaind.go","family":"concept-routing","template":"train/frag-a+can-you"}
+{"input":"add a form values in Shaik to geaz/mum.go","family":"concept-form-values","template":"train/frag-a"}
+{"input":"add a webserver that serves main.html to thougurb.go","family":"serve-html","template":"train/frag-b"}
+{"input":"i need a router in Stourmo to nel/vearm.go","family":"concept-routing","template":"train/frag-a"}
+{"input":"i need you to i need a router in Stourmo to nel/vearm.go","family":"concept-routing","template":"train/frag-a+i-need"}
+{"input":"add a channel range in Trund to tea.go","family":"concept-channel-range","template":"train/frag-a"}
+{"input":"add a webserver that serves info.html to store.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add a channel into criv/creath.go","family":"concept-channel","template":"train/frag-a"}
+{"input":"build a server that serves welcome.html to statod.go","family":"serve-html","template":"train/frag-b"}
+{"input":"i need an array to basant.go","family":"concept-array","template":"train/frag-a"}
+{"input":"i need a sha256 to zaib/tan.go","family":"concept-sha256","template":"train/frag-a"}
+{"input":"build a server that serves start.html","family":"serve-html","template":"train/frag-b"}
+{"input":"add in Stir to dar/cack.go marshal to xml","family":"concept-xml","template":"train/frag-a"}
+{"input":"add a webserver that serves index.html to klaivig.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add to bothaick.go function value","family":"concept-closure","template":"train/frag-a"}
+{"input":"stick an error to basant.go","family":"concept-errors","template":"train/frag-a"}
+{"input":"add a server that serves info.html to foutoun.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add a sql null to geaz/mum.go","family":"concept-database-null","template":"train/frag-a"}
+{"input":"i need a timer to main.go","family":"concept-timer","template":"train/frag-a"}
+{"input":"i need a deferred call to tea.go","family":"concept-defer","template":"train/frag-a"}
+{"input":"build a server that serves hello.html to coupark.go","family":"serve-html","template":"train/frag-b"}
+{"input":"i need a deferred call to tea.go please","family":"concept-defer","template":"train/frag-a+please-post"}
+{"input":"add a goroutine to util.go","family":"concept-goroutine","template":"train/frag-a"}
+{"input":"put a buffered channel to skistaiv.go","family":"concept-buffered-channel","template":"train/frag-a"}
+{"input":"stick a for range in Runt to tea.go","family":"concept-range-loop","template":"train/frag-a"}
+{"input":"add a server that serves index.html to wast.go","family":"serve-html","template":"train/frag-b"}
+{"input":"i want to stick a for range in Runt to tea.go","family":"concept-range-loop","template":"train/frag-a+i-want"}
+{"input":"stick a for range in Terk to dar/cack.go","family":"concept-range-loop","template":"train/frag-a"}
+{"input":"stick a timeout in Bridge to statod.go","family":"concept-timeout","template":"train/frag-a"}
+{"input":"add a server that serves welcome.html to wailm/plern.go","family":"serve-html","template":"train/frag-b"}
+{"input":"quick, stick a timeout in Bridge to statod.go","family":"concept-timeout","template":"train/frag-a+quick"}
+{"input":"add in Skuruk to brew.go router","family":"concept-routing","template":"train/frag-a"}
+{"input":"add a webserver that serves start.html to wast.go","family":"serve-html","template":"train/frag-b"}
+{"input":"stick a context to app/main.go","family":"concept-context","template":"train/frag-a"}
+{"input":"add an execute statement in Mbribest to zaib/tan.go","family":"concept-database-exec","template":"train/frag-a"}
+{"input":"serve help.html to geaz/mum.go","family":"serve-html","template":"train/frag-b"}
+{"input":"i need a html templates in Hear to basant.go","family":"concept-html-template","template":"train/frag-a"}
+{"input":"put a range loop in Makai to lair.go","family":"concept-range-loop","template":"train/frag-a"}
+{"input":"add a server that serves menu.html to skistaiv.go","family":"serve-html","template":"train/frag-b"}
+{"input":"put a variable to store.go","family":"concept-variable","template":"train/frag-a"}
+{"input":"can you put a variable to store.go","family":"concept-variable","template":"train/frag-a+can-you"}
+{"input":"i need a recover to wailm/plern.go","family":"concept-recover","template":"train/frag-a"}
+{"input":"serve index.html to tea.go","family":"serve-html","template":"train/frag-b"}
+{"input":"i need a const in Drornint to dar/cack.go","family":"concept-constant","template":"train/frag-a"}
+{"input":"add a http routing in Pleant into kif.go","family":"concept-routing","template":"train/frag-a"}
+{"input":"please add a http routing in Pleant into kif.go","family":"concept-routing","template":"train/frag-a+please-pre"}
+{"input":"put an insert row into rqlite in Mbraib to tea.go","family":"concept-rqlite-insert","template":"train/frag-a"}
+{"input":"i need a temp file to zaib/tan.go","family":"concept-temp-file","template":"train/frag-a"}
+{"input":"add a server that serves home.html to skistaiv.go","family":"serve-html","template":"train/frag-b"}
+{"input":"put a buffered channel in Feg to kif.go","family":"concept-buffered-channel","template":"train/frag-a"}
+{"input":"add a webserver that serves start.html to roth/trenuz.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add a database transaction in Brinurm to shuf.go","family":"concept-database-transaction","template":"train/frag-a"}
+{"input":"add a writing a file into basant.go","family":"concept-write-file","template":"train/frag-a"}
+{"input":"stick a string in Varm to bothaick.go","family":"concept-strings-runes","template":"train/frag-a"}
+{"input":"add a server that serves page.html to breaaix.go","family":"serve-html","template":"train/frag-b"}
+{"input":"put a channel in Print to lair.go","family":"concept-channel","template":"train/frag-a"}
+{"input":"i need you to put a channel in Print to lair.go","family":"concept-channel","template":"train/frag-a+i-need"}
+{"input":"stick a slice to breaaix.go.","family":"concept-slice","template":"train/frag-a+bare-period"}
+{"input":"add in Prouvik to statod.go base64","family":"concept-base64","template":"train/frag-a"}
+{"input":"put a timer to roth/trenuz.go","family":"concept-timer","template":"train/frag-a"}
+{"input":"build a server that serves start.html to geaz/mum.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add in Skith to shin/flaaind.go execute statement","family":"concept-database-exec","template":"train/frag-a"}
+{"input":"add a webserver that serves welcome.html to shuf.go","family":"serve-html","template":"train/frag-b"}
+{"input":"i want to add in Skith to shin/flaaind.go execute statement","family":"concept-database-exec","template":"train/frag-a+i-want"}
+{"input":"i need a constant to lair.go","family":"concept-constant","template":"train/frag-a"}
+{"input":"add in Server to nel/vearm.go channel range","family":"concept-channel-range","template":"train/frag-a"}
+{"input":"build a server that serves welcome.html to floundog.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add an external command into klaivig.go","family":"concept-spawn-process","template":"train/frag-a"}
+{"input":"build a server that serves start.html to skistaiv.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add in Trund to roth/trenuz.go atomic","family":"concept-atomic-counter","template":"train/frag-a"}
+{"input":"serve an html file to criv/creath.go","family":"serve-html","template":"train/frag-b"}
+{"input":"quick, add in Trund to roth/trenuz.go atomic","family":"concept-atomic-counter","template":"train/frag-a+quick"}
+{"input":"stick a single row query to shop/main.go","family":"concept-database-query-row","template":"train/frag-a"}
+{"input":"add a webserver that serves info.html to breaaix.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add a rqlite table to foutoun.go","family":"concept-rqlite-create-table","template":"train/frag-a"}
+{"input":"put a log line in Saithount to lair.go","family":"concept-log-line","template":"train/frag-a"}
+{"input":"build a server that serves an html file to rairm.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add a dictionary in Grest to breaaix.go","family":"concept-map","template":"train/frag-a"}
+{"input":"add a loop in Steep to bothaick.go","family":"concept-for-loop","template":"train/frag-a"}
+{"input":"add to fleamaif.go number parsing","family":"concept-number-parsing","template":"train/frag-a"}
+{"input":"put a var in Fipound to app/main.go","family":"concept-variable","template":"train/frag-a"}
+{"input":"stick a random number in Ndrouckis to bothaick.go","family":"concept-random","template":"train/frag-a"}
+{"input":"put a string formatting in Jim to criv/creath.go","family":"concept-string-format","template":"train/frag-a"}
+{"input":"add a server that serves hello.html to shin/flaaind.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add in Bagil to zaib/tan.go go routine","family":"concept-goroutine","template":"train/frag-a"}
+{"input":"stick a range in Run to geaz/mum.go","family":"concept-range-loop","template":"train/frag-a"}
+{"input":"add an anonymous function in Pleal into bothaick.go","family":"concept-closure","template":"train/frag-a"}
+{"input":"stick a dictionary to shop/main.go","family":"concept-map","template":"train/frag-a"}
+{"input":"add to geaz/mum.go temp file","family":"concept-temp-file","template":"train/frag-a"}
+{"input":"add a server that serves an html file to wailm/plern.go","family":"serve-html","template":"train/frag-b"}
+{"input":"could you add to geaz/mum.go temp file for me","family":"concept-temp-file","template":"train/frag-a+could-you"}
+{"input":"stick a for range to wast.go","family":"concept-range-loop","template":"train/frag-a"}
+{"input":"add a webserver that serves help.html to util.go","family":"serve-html","template":"train/frag-b"}
+{"input":"quick, stick a for range to wast.go","family":"concept-range-loop","template":"train/frag-a+quick"}
+{"input":"i need a base64 encoding to nel/vearm.go","family":"concept-base64","template":"train/frag-a"}
+{"input":"i need you to i need a base64 encoding to nel/vearm.go","family":"concept-base64","template":"train/frag-a+i-need"}
+{"input":"i need an open database to flairneax.go","family":"concept-database","template":"train/frag-a"}
+{"input":"add a sort by function in Stount to kif.go","family":"concept-sorting-by","template":"train/frag-a"}
+{"input":"serve main.html","family":"serve-html","template":"train/frag-b"}
+{"input":"could you add a sort by function in Stount to kif.go for me","family":"concept-sorting-by","template":"train/frag-a+could-you"}
+{"input":"i need a log line to store.go","family":"concept-log-line","template":"train/frag-a"}
+{"input":"add a temp file in Cooler into statod.go","family":"concept-temp-file","template":"train/frag-a"}
+{"input":"add a webserver that serves welcome.html to zaib/tan.go","family":"serve-html","template":"train/frag-b"}
+{"input":"put a sql database in Runt to shop/main.go","family":"concept-database","template":"train/frag-a"}
+{"input":"add a server that serves main.html to basant.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add a time in Trurp into shuf.go","family":"concept-time-now","template":"train/frag-a"}
+{"input":"add a xml in Groste to shin/flaaind.go","family":"concept-xml","template":"train/frag-a"}
+{"input":"put a var to foutoun.go","family":"concept-variable","template":"train/frag-a"}
+{"input":"add to store.go number parsing","family":"concept-number-parsing","template":"train/frag-a"}
+{"input":"add a server that serves page.html to util.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add a file paths into floundog.go","family":"concept-file-paths","template":"train/frag-a"}
+{"input":"add a nullable column in Wan into breaaix.go","family":"concept-database-null","template":"train/frag-a"}
+{"input":"i need a loop in Lateark to tea.go","family":"concept-for-loop","template":"train/frag-a"}
+{"input":"add a server that serves welcome.html to rairm.go","family":"serve-html","template":"train/frag-b"}
+{"input":"i need a select to roth/trenuz.go","family":"concept-select","template":"train/frag-a"}
+{"input":"add a webserver that serves site.html","family":"serve-html","template":"train/frag-b"}
+{"input":"i need a select to roth/trenuz.go.","family":"concept-select","template":"train/frag-a+bare-period"}
+{"input":"i need a mutex to nel/vearm.go","family":"concept-mutex","template":"train/frag-a"}
+{"input":"add a webserver that serves page.html","family":"serve-html","template":"train/frag-b"}
+{"input":"add in Kaif to rairm.go external command","family":"concept-spawn-process","template":"train/frag-a"}
+{"input":"add to kif.go sorting","family":"concept-sorting","template":"train/frag-a"}
+{"input":"add in Tral to lair.go switch","family":"concept-switch","template":"train/frag-a"}
+{"input":"serve an html page to jim/main.go","family":"serve-html","template":"train/frag-b"}
+{"input":"put a string formatting to tea.go","family":"concept-string-format","template":"train/frag-a"}
+{"input":"build a server that serves about.html to wailm/plern.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add a null value into lair.go","family":"concept-database-null","template":"train/frag-a"}
+{"input":"add a webserver that serves page.html to util.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add a sorting in Prasurm to thougurb.go","family":"concept-sorting","template":"train/frag-a"}
+{"input":"please add a sorting in Prasurm to thougurb.go","family":"concept-sorting","template":"train/frag-a+please-pre"}
+{"input":"stick an execute statement in Drer to lair.go","family":"concept-database-exec","template":"train/frag-a"}
+{"input":"please stick an execute statement in Drer to lair.go","family":"concept-database-exec","template":"train/frag-a+please-pre"}
+{"input":"add a number parsing in Load into flairneax.go","family":"concept-number-parsing","template":"train/frag-a"}
+{"input":"i need a database prepared statement to shuf.go","family":"concept-database-prepared","template":"train/frag-a"}
+{"input":"add a server that serves an html file to thougurb.go","family":"serve-html","template":"train/frag-b"}
+{"input":"just i need a database prepared statement to shuf.go","family":"concept-database-prepared","template":"train/frag-a+just"}
+{"input":"put a timer in Tendul to gront.go","family":"concept-timer","template":"train/frag-a"}
+{"input":"serve an html file to brew.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add to wast.go defer","family":"concept-defer","template":"train/frag-a"}
+{"input":"build a server that serves home.html to nel/vearm.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add a channel to roth/trenuz.go","family":"concept-channel","template":"train/frag-a"}
+{"input":"add a database query in Shob to thougurb.go","family":"concept-database-query","template":"train/frag-a"}
+{"input":"stick a template in Stadearn to coupark.go","family":"concept-html-template","template":"train/frag-a"}
+{"input":"can you stick a template in Stadearn to coupark.go","family":"concept-html-template","template":"train/frag-a+can-you"}
+{"input":"add an atomic counter in Teax into main.go","family":"concept-atomic-counter","template":"train/frag-a"}
+{"input":"add to lair.go non-blocking channel","family":"concept-select","template":"train/frag-a"}
+{"input":"add a pointers to flairneax.go","family":"concept-pointers","template":"train/frag-a"}
+{"input":"quick, add a pointers to flairneax.go","family":"concept-pointers","template":"train/frag-a+quick"}
+{"input":"add an epoch in Sherpoux to wast.go","family":"concept-epoch","template":"train/frag-a"}
+{"input":"add a webserver that serves about.html to lair.go","family":"serve-html","template":"train/frag-b"}
+{"input":"i want to add an epoch in Sherpoux to wast.go","family":"concept-epoch","template":"train/frag-a+i-want"}
+{"input":"i need an execute statement to skistaiv.go","family":"concept-database-exec","template":"train/frag-a"}
+{"input":"add to wast.go unix time","family":"concept-epoch","template":"train/frag-a"}
+{"input":"serve start.html to tea.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add a temp file into flairneax.go","family":"concept-temp-file","template":"train/frag-a"}
+{"input":"stick a go routine to shin/flaaind.go","family":"concept-goroutine","template":"train/frag-a"}
+{"input":"add a variable into wast.go","family":"concept-variable","template":"train/frag-a"}
+{"input":"build a server that serves info.html to lair.go","family":"serve-html","template":"train/frag-b"}
+{"input":"i want to add a variable into wast.go","family":"concept-variable","template":"train/frag-a+i-want"}
+{"input":"put a prepare a statement in Zeag to thougurb.go","family":"concept-database-prepared","template":"train/frag-a"}
+{"input":"put a serve mux in Gailmar to basant.go","family":"concept-routing","template":"train/frag-a"}
+{"input":"put a list a directory in Skarn to geaz/mum.go","family":"concept-directories","template":"train/frag-a"}
+{"input":"serve home.html to store.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add in Quik to breaaix.go rqlite select","family":"concept-rqlite-query","template":"train/frag-a"}
+{"input":"add a switch in Greet to flairneax.go","family":"concept-switch","template":"train/frag-a"}
+{"input":"put a json encoding to roth/trenuz.go","family":"concept-json","template":"train/frag-a"}
+{"input":"add a string functions to util.go","family":"concept-string-functions","template":"train/frag-a"}
+{"input":"serve start.html to floundog.go","family":"serve-html","template":"train/frag-b"}
+{"input":"i need a http client in Draist to shin/flaaind.go","family":"concept-http-client","template":"train/frag-a"}
+{"input":"build a server that serves an html file to flairneax.go","family":"serve-html","template":"train/frag-b"}
+{"input":"quick, i need a http client in Draist to shin/flaaind.go","family":"concept-http-client","template":"train/frag-a+quick"}
+{"input":"add in Hiturp to bothaick.go rqlite insert row","family":"concept-rqlite-insert","template":"train/frag-a"}
+{"input":"add in Feg to nel/vearm.go channel","family":"concept-channel","template":"train/frag-a"}
+{"input":"add a server that serves home.html to dar/cack.go","family":"serve-html","template":"train/frag-b"}
+{"input":"i need a channel in Mbrirk to floundog.go","family":"concept-channel","template":"train/frag-a"}
+{"input":"serve an html page to lair.go","family":"serve-html","template":"train/frag-b"}
+{"input":"quick, i need a channel in Mbrirk to floundog.go","family":"concept-channel","template":"train/frag-a+quick"}
+{"input":"add a database prepared statement in Thugen to app/main.go","family":"concept-database-prepared","template":"train/frag-a"}
+{"input":"build a server that serves page.html to breaaix.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add in Klolaiz to breaaix.go rqlite connect","family":"concept-rqlite-connect","template":"train/frag-a"}
+{"input":"add a server that serves an html file to jim/main.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add to brew.go mutex","family":"concept-mutex","template":"train/frag-a"}
+{"input":"quick, add to brew.go mutex","family":"concept-mutex","template":"train/frag-a+quick"}
+{"input":"put a text templates to main.go","family":"concept-text-template","template":"train/frag-a"}
+{"input":"add a select statement into bothaick.go","family":"concept-select","template":"train/frag-a"}
+{"input":"add a server that serves an html file to lair.go","family":"serve-html","template":"train/frag-b"}
+{"input":"i need a router to thougurb.go","family":"concept-routing","template":"train/frag-a"}
+{"input":"put a text template to roth/trenuz.go","family":"concept-text-template","template":"train/frag-a"}
+{"input":"build a server that serves main.html to jim/main.go","family":"serve-html","template":"train/frag-b"}
+{"input":"please put a text template to roth/trenuz.go","family":"concept-text-template","template":"train/frag-a+please-pre"}
+{"input":"stick a timer to nel/vearm.go","family":"concept-timer","template":"train/frag-a"}
+{"input":"i need a slice to shuf.go","family":"concept-slice","template":"train/frag-a"}
+{"input":"add to rairm.go channel range","family":"concept-channel-range","template":"train/frag-a"}
+{"input":"i need a transaction in Mbrourearn to shop/main.go","family":"concept-database-transaction","template":"train/frag-a"}
+{"input":"add a timeout into jim/main.go","family":"concept-timeout","template":"train/frag-a"}
+{"input":"stick a ticker in Lav to rairm.go","family":"concept-ticker","template":"train/frag-a"}
+{"input":"please stick a ticker in Lav to rairm.go","family":"concept-ticker","template":"train/frag-a+please-pre"}
+{"input":"put a slice in Goux to lair.go","family":"concept-slice","template":"train/frag-a"}
+{"input":"serve an html page to klaivig.go","family":"serve-html","template":"train/frag-b"}
+{"input":"please put a slice in Goux to lair.go","family":"concept-slice","template":"train/frag-a+please-pre"}
+{"input":"add a recover to klaivig.go","family":"concept-recover","template":"train/frag-a"}
+{"input":"build a server that serves hello.html to lair.go","family":"serve-html","template":"train/frag-b"}
+{"input":"i need a dictionary in Quik to zaib/tan.go","family":"concept-map","template":"train/frag-a"}
+{"input":"hey, i need a dictionary in Quik to zaib/tan.go","family":"concept-map","template":"train/frag-a+hey"}
+{"input":"add to dar/cack.go unix time","family":"concept-epoch","template":"train/frag-a"}
+{"input":"add a webserver that serves welcome.html to floundog.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add in Stount to wast.go array","family":"concept-array","template":"train/frag-a"}
+{"input":"put a rqlite query in Steat to shop/main.go","family":"concept-rqlite-query","template":"train/frag-a"}
+{"input":"i need you to put a rqlite query in Steat to shop/main.go","family":"concept-rqlite-query","template":"train/frag-a+i-need"}
+{"input":"add a mutex into fleamaif.go","family":"concept-mutex","template":"train/frag-a"}
+{"input":"serve an html file to util.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add a submitted form values into thougurb.go","family":"concept-form-values","template":"train/frag-a"}
+{"input":"add a var in Traiz to breaaix.go","family":"concept-variable","template":"train/frag-a"}
+{"input":"could you add a var in Traiz to breaaix.go for me","family":"concept-variable","template":"train/frag-a+could-you"}
+{"input":"add a form values in Virpip into thougurb.go","family":"concept-form-values","template":"train/frag-a"}
+{"input":"add a webserver that serves index.html to tea.go","family":"serve-html","template":"train/frag-b"}
+{"input":"i need a switch in Saip to thougurb.go","family":"concept-switch","template":"train/frag-a"}
+{"input":"add a webserver that serves hello.html to criv/creath.go","family":"serve-html","template":"train/frag-b"}
+{"input":"put a close channel to shop/main.go","family":"concept-close-channel","template":"train/frag-a"}
+{"input":"serve about.html to shop/main.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add to floundog.go closure","family":"concept-closure","template":"train/frag-a"}
+{"input":"add a webserver that serves menu.html to lair.go","family":"serve-html","template":"train/frag-b"}
+{"input":"stick a random in Steaen to roth/trenuz.go","family":"concept-random","template":"train/frag-a"}
+{"input":"add in Fepou to bothaick.go database query","family":"concept-database-query","template":"train/frag-a"}
+{"input":"serve home.html to gront.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add a string formatting in Teanum to util.go","family":"concept-string-format","template":"train/frag-a"}
+{"input":"add in Takaind to jim/main.go query one row","family":"concept-database-query-row","template":"train/frag-a"}
+{"input":"serve start.html to util.go","family":"serve-html","template":"train/frag-b"}
+{"input":"put a waitgroup to shop/main.go","family":"concept-waitgroup","template":"train/frag-a"}
+{"input":"i need an url parsing in Jim to dar/cack.go","family":"concept-url-parsing","template":"train/frag-a"}
+{"input":"add a ticker to statod.go","family":"concept-ticker","template":"train/frag-a"}
+{"input":"add a webserver that serves welcome.html to coupark.go","family":"serve-html","template":"train/frag-b"}
+{"input":"i need a goroutine to lair.go","family":"concept-goroutine","template":"train/frag-a"}
+{"input":"add a webserver that serves about.html to app/main.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add a marshal to xml in Plurn to nel/vearm.go","family":"concept-xml","template":"train/frag-a"}
+{"input":"could you add a marshal to xml in Plurn to nel/vearm.go for me","family":"concept-xml","template":"train/frag-a+could-you"}
+{"input":"add a marshal to json in Skarn to geaz/mum.go","family":"concept-json","template":"train/frag-a"}
+{"input":"put a mutex in Rorent to zaib/tan.go","family":"concept-mutex","template":"train/frag-a"}
+{"input":"serve main.html to geaz/mum.go","family":"serve-html","template":"train/frag-b"}
+{"input":"put a writing a file in Trurp to floundog.go","family":"concept-write-file","template":"train/frag-a"}
+{"input":"stick a transaction in Zairbip to floundog.go","family":"concept-database-transaction","template":"train/frag-a"}
+{"input":"stick a prepare a statement in Stop to app/main.go","family":"concept-database-prepared","template":"train/frag-a"}
+{"input":"build a server that serves site.html to rairm.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add in Virus to wast.go slice","family":"concept-slice","template":"train/frag-a"}
+{"input":"serve about.html to brew.go","family":"serve-html","template":"train/frag-b"}
+{"input":"stick a log message in Vou to floundog.go","family":"concept-log-line","template":"train/frag-a"}
+{"input":"build a server that serves hello.html to rairm.go","family":"serve-html","template":"train/frag-b"}
+{"input":"can you stick a log message in Vou to floundog.go","family":"concept-log-line","template":"train/frag-a+can-you"}
+{"input":"put an execute statement in Steep to kif.go","family":"concept-database-exec","template":"train/frag-a"}
+{"input":"add to lair.go anonymous function","family":"concept-closure","template":"train/frag-a"}
+{"input":"add a run a program in Ploudix to coupark.go","family":"concept-spawn-process","template":"train/frag-a"}
+{"input":"i need a switch in Ndrux to zaib/tan.go","family":"concept-switch","template":"train/frag-a"}
+{"input":"i need a string functions to gront.go","family":"concept-string-functions","template":"train/frag-a"}
+{"input":"add a server that serves info.html to flairneax.go","family":"serve-html","template":"train/frag-b"}
+{"input":"i need an array to fleamaif.go","family":"concept-array","template":"train/frag-a"}
+{"input":"i need you to i need an array to fleamaif.go","family":"concept-array","template":"train/frag-a+i-need"}
+{"input":"put an insert row into rqlite in Voupuk to breaaix.go","family":"concept-rqlite-insert","template":"train/frag-a"}
+{"input":"add a webserver that serves page.html to wast.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add a routing in Quint to app/main.go","family":"concept-routing","template":"train/frag-a"}
+{"input":"stick a writing a file to flairneax.go","family":"concept-write-file","template":"train/frag-a"}
+{"input":"build a server that serves menu.html to shop/main.go","family":"serve-html","template":"train/frag-b"}
+{"input":"i need a sprintf in Klolaiz to kif.go","family":"concept-string-format","template":"train/frag-a"}
+{"input":"serve help.html to nel/vearm.go","family":"serve-html","template":"train/frag-b"}
+{"input":"i need an external command to thougurb.go","family":"concept-spawn-process","template":"train/frag-a"}
+{"input":"add to roth/trenuz.go database prepared statement","family":"concept-database-prepared","template":"train/frag-a"}
+{"input":"add a server that serves page.html to wast.go","family":"serve-html","template":"train/frag-b"}
+{"input":"i want to add to roth/trenuz.go database prepared statement","family":"concept-database-prepared","template":"train/frag-a+i-want"}
+{"input":"add a channel into nel/vearm.go","family":"concept-channel","template":"train/frag-a"}
+{"input":"serve home.html to floundog.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add a slice in Kaip to brew.go","family":"concept-slice","template":"train/frag-a"}
+{"input":"put a regular expression in Stend to dar/cack.go","family":"concept-regexp","template":"train/frag-a"}
+{"input":"i need a regexp in Cruz to breaaix.go","family":"concept-regexp","template":"train/frag-a"}
+{"input":"add a const in Garden to lair.go","family":"concept-constant","template":"train/frag-a"}
+{"input":"add a select in Drer into dar/cack.go","family":"concept-select","template":"train/frag-a"}
+{"input":"could you add a select in Drer into dar/cack.go for me","family":"concept-select","template":"train/frag-a+could-you"}
+{"input":"add an unix time in Trathearm to zaib/tan.go","family":"concept-epoch","template":"train/frag-a"}
+{"input":"add a webserver that serves menu.html to brew.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add a parse form into tea.go","family":"concept-form-values","template":"train/frag-a"}
+{"input":"add a range to kif.go","family":"concept-range-loop","template":"train/frag-a"}
+{"input":"stick a buffered channel to gront.go","family":"concept-buffered-channel","template":"train/frag-a"}
+{"input":"put a non-blocking channel to geaz/mum.go","family":"concept-select","template":"train/frag-a"}
+{"input":"i need a select statement to thougurb.go","family":"concept-select","template":"train/frag-a"}
+{"input":"serve index.html to dar/cack.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add a loop over a channel in Troud into jim/main.go","family":"concept-channel-range","template":"train/frag-a"}
+{"input":"add a webserver that serves info.html to criv/creath.go","family":"serve-html","template":"train/frag-b"}
+{"input":"stick an if statement to flairneax.go","family":"concept-if-else","template":"train/frag-a"}
+{"input":"plese stick an if statement to flairneax.go","family":"concept-if-else","template":"train/frag-a+typo-please"}
+{"input":"stick an external command to foutoun.go","family":"concept-spawn-process","template":"train/frag-a"}
+{"input":"serve an html page to kif.go","family":"serve-html","template":"train/frag-b"}
+{"input":"stick a recover to zaib/tan.go","family":"concept-recover","template":"train/frag-a"}
+{"input":"i need a select statement to wailm/plern.go","family":"concept-select","template":"train/frag-a"}
+{"input":"add a nullable column in Prormoux into coupark.go","family":"concept-database-null","template":"train/frag-a"}
+{"input":"add to shin/flaaind.go log message","family":"concept-log-line","template":"train/frag-a"}
+{"input":"serve page.html to statod.go","family":"serve-html","template":"train/frag-b"}
+{"input":"put a loop to wailm/plern.go","family":"concept-for-loop","template":"train/frag-a"}
+{"input":"build a server that serves home.html to thougurb.go","family":"serve-html","template":"train/frag-b"}
+{"input":"put a parse a url in Hanai to wast.go","family":"concept-url-parsing","template":"train/frag-a"}
+{"input":"add a static file serving into breaaix.go","family":"concept-static-files","template":"train/frag-a"}
+{"input":"build a server that serves menu.html to dar/cack.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add a timeout to fleamaif.go","family":"concept-timeout","template":"train/frag-a"}
+{"input":"add a server that serves site.html to lair.go","family":"serve-html","template":"train/frag-b"}
+{"input":"stick a custom sort in Grest to main.go","family":"concept-sorting-by","template":"train/frag-a"}
+{"input":"can you stick a custom sort in Grest to main.go","family":"concept-sorting-by","template":"train/frag-a+can-you"}
+{"input":"stick a marshal to json in Prouvik to zaib/tan.go","family":"concept-json","template":"train/frag-a"}
+{"input":"add a server that serves menu.html to wailm/plern.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add a create table in rqlite to basant.go","family":"concept-rqlite-create-table","template":"train/frag-a"}
+{"input":"add a server that serves an html file to flairneax.go","family":"serve-html","template":"train/frag-b"}
+{"input":"i need you to add a create table in rqlite to basant.go","family":"concept-rqlite-create-table","template":"train/frag-a+i-need"}
+{"input":"add a query rqlite into roth/trenuz.go","family":"concept-rqlite-query","template":"train/frag-a"}
+{"input":"i need you to add a query rqlite into roth/trenuz.go","family":"concept-rqlite-query","template":"train/frag-a+i-need"}
+{"input":"add in Stadearn to tea.go array","family":"concept-array","template":"train/frag-a"}
+{"input":"serve help.html to coupark.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add a serve mux in Brorn into breaaix.go","family":"concept-routing","template":"train/frag-a"}
+{"input":"serve start.html to dar/cack.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add a database prepared statement in Flilmour into basant.go","family":"concept-database-prepared","template":"train/frag-a"}
+{"input":"i need a pointer in Lirpet to fleamaif.go","family":"concept-pointers","template":"train/frag-a"}
+{"input":"stick an if statement in Tuur to statod.go","family":"concept-if-else","template":"train/frag-a"}
+{"input":"put a database exec to tea.go","family":"concept-database-exec","template":"train/frag-a"}
+{"input":"add to lair.go rqlite connect","family":"concept-rqlite-connect","template":"train/frag-a"}
+{"input":"add a server that serves info.html to criv/creath.go","family":"serve-html","template":"train/frag-b"}
+{"input":"put a go routine in Weuth to jim/main.go","family":"concept-goroutine","template":"train/frag-a"}
+{"input":"build a server that serves info.html to wast.go","family":"serve-html","template":"train/frag-b"}
+{"input":"stick a form data to util.go","family":"concept-form-values","template":"train/frag-a"}
+{"input":"build a server that serves page.html to zaib/tan.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add a sql database in Boiler into statod.go","family":"concept-database","template":"train/frag-a"}
+{"input":"quick, add a sql database in Boiler into statod.go","family":"concept-database","template":"train/frag-a+quick"}
+{"input":"add a http routing in Hanai into jim/main.go","family":"concept-routing","template":"train/frag-a"}
+{"input":"build a server that serves welcome.html to coupark.go","family":"serve-html","template":"train/frag-b"}
+{"input":"stick a time formatting in Check to bothaick.go","family":"concept-time-format","template":"train/frag-a"}
+{"input":"add a server that serves start.html to tea.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add a wait for a goroutine to tea.go","family":"concept-channel-sync","template":"train/frag-a"}
+{"input":"add a server that serves an html file to shuf.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add a wait for a goroutine to tea.go.","family":"concept-channel-sync","template":"train/frag-a+bare-period"}
+{"input":"i need a rqlite client in Tuvis to wailm/plern.go","family":"concept-rqlite-connect","template":"train/frag-a"}
+{"input":"add a server that serves menu.html to criv/creath.go","family":"serve-html","template":"train/frag-b"}
+{"input":"put a type assertion switch to shuf.go","family":"concept-type-switch","template":"train/frag-a"}
+{"input":"add a loop over a channel in Mbrod to floundog.go","family":"concept-channel-range","template":"train/frag-a"}
+{"input":"build a server that serves page.html to gront.go","family":"serve-html","template":"train/frag-b"}
+{"input":"stick a form data to jim/main.go","family":"concept-form-values","template":"train/frag-a"}
+{"input":"add a webserver that serves index.html to fleamaif.go","family":"serve-html","template":"train/frag-b"}
+{"input":"i need a sort by function to wast.go","family":"concept-sorting-by","template":"train/frag-a"}
+{"input":"please i need a sort by function to wast.go","family":"concept-sorting-by","template":"train/frag-a+please-pre"}
+{"input":"i need a sort to brew.go","family":"concept-sorting","template":"train/frag-a"}
+{"input":"add a server that serves menu.html to flairneax.go","family":"serve-html","template":"train/frag-b"}
+{"input":"i want to i need a sort to brew.go","family":"concept-sorting","template":"train/frag-a+i-want"}
+{"input":"i need a sha256 hash to coupark.go","family":"concept-sha256","template":"train/frag-a"}
+{"input":"add a server that serves about.html to breaaix.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add a temp file into zaib/tan.go","family":"concept-temp-file","template":"train/frag-a"}
+{"input":"stick a html template in Saip to foutoun.go","family":"concept-html-template","template":"train/frag-a"}
+{"input":"can you stick a html template in Saip to foutoun.go","family":"concept-html-template","template":"train/frag-a+can-you"}
+{"input":"put a prepared statement to jim/main.go","family":"concept-database-prepared","template":"train/frag-a"}
+{"input":"add a webserver that serves start.html to jim/main.go","family":"serve-html","template":"train/frag-b"}
+{"input":"i want to put a prepared statement to jim/main.go","family":"concept-database-prepared","template":"train/frag-a+i-want"}
+{"input":"i need a dictionary in Trod to wailm/plern.go","family":"concept-map","template":"train/frag-a"}
+{"input":"stick a rqlite connect to criv/creath.go","family":"concept-rqlite-connect","template":"train/frag-a"}
+{"input":"add a server that serves info.html to tea.go","family":"serve-html","template":"train/frag-b"}
+{"input":"stick a range loop to brew.go","family":"concept-range-loop","template":"train/frag-a"}
+{"input":"i need a random numbers in Shuck to basant.go","family":"concept-random","template":"train/frag-a"}
+{"input":"add to floundog.go static file serving","family":"concept-static-files","template":"train/frag-a"}
+{"input":"build a server that serves page.html to kif.go","family":"serve-html","template":"train/frag-b"}
+{"input":"stick a non-blocking channel in Thai to dar/cack.go","family":"concept-select","template":"train/frag-a"}
+{"input":"build a server that serves site.html to dar/cack.go","family":"serve-html","template":"train/frag-b"}
+{"input":"i want to stick a non-blocking channel in Thai to dar/cack.go","family":"concept-select","template":"train/frag-a+i-want"}
+{"input":"add a buffered channel into shop/main.go","family":"concept-buffered-channel","template":"train/frag-a"}
+{"input":"i want to add a buffered channel into shop/main.go","family":"concept-buffered-channel","template":"train/frag-a+i-want"}
+{"input":"add in Mbraizod to bothaick.go range","family":"concept-range-loop","template":"train/frag-a"}
+{"input":"stick a wait for a goroutine to skistaiv.go","family":"concept-channel-sync","template":"train/frag-a"}
+{"input":"add a server that serves home.html to jim/main.go","family":"serve-html","template":"train/frag-b"}
+{"input":"add a query rows in Braib to dar/cack.go","family":"concept-database-query","template":"train/frag-a"}
+{"input":"i need a prepare a statement to statod.go","family":"concept-database-prepared","template":"train/frag-a"}
+{"input":"just i need a prepare a statement to statod.go","family":"concept-database-prepared","template":"train/frag-a+just"}
+{"input":"stick a closure to roth/trenuz.go","family":"concept-closure","template":"train/frag-a"}
+{"input":"serve an html file to wast.go","family":"serve-html","template":"train/frag-b"}
+{"input":"just stick a closure to roth/trenuz.go","family":"concept-closure","template":"train/frag-a+just"}
+{"input":"add a strings and runes in Florkulm into shop/main.go","family":"concept-strings-runes","template":"train/frag-a"}
+{"input":"stick a static files to breaaix.go","family":"concept-static-files","template":"train/frag-a"}
+{"input":"stick a file paths to tea.go","family":"concept-file-paths","template":"train/frag-a"}
+{"input":"serve hello.html to floundog.go","family":"serve-html","template":"train/frag-b"}
+{"input":"could you stick a file paths to tea.go for me","family":"concept-file-paths","template":"train/frag-a+could-you"}
+{"input":"stick a random number in Writer to floundog.go","family":"concept-random","template":"train/frag-a"}
+{"input":"add a time to statod.go","family":"concept-time-now","template":"train/frag-a"}

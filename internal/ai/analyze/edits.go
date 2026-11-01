@@ -41,6 +41,13 @@ const (
 	EditAddServer = "add_server"
 	EditDelegate  = "delegate"
 
+	// Serve an html file (editservehtml.go): the composite
+	// recipe — the page created when missing (never
+	// overwritten) plus the wiring that serves it via
+	// http.ServeFile, composing with a server the file already
+	// runs and never adding a second ListenAndServe.
+	EditServeHTML = "serve_html"
+
 	// Cross-file use (edituses.go): a NEW function in a named
 	// file whose body is a first use of a function or type that
 	// already exists elsewhere in the project — the call (or
@@ -111,6 +118,12 @@ type EditRequest struct {
 	// path) the webserver component goes into. The chat layer
 	// resolves folder targets to a file before planning.
 	File string
+
+	// serve_html: the page to serve (project-relative slash
+	// path, .html), resolved by the chat layer into the Go
+	// file's folder (File) or below it. The planner derives
+	// the ServeFile argument from the two paths.
+	ServeHTML string
 
 	// delegate: the existing .go file (project-relative slash
 	// path) the wrapper is added to, the source function as typed
@@ -271,6 +284,8 @@ func (p *Project) PlanEdit(req EditRequest) (*EditPlan, string) {
 		return p.planRename(req)
 	case EditAddServer:
 		return p.planAddServer(req)
+	case EditServeHTML:
+		return p.planServeHTML(req)
 	case EditDelegate:
 		return p.planDelegate(req)
 	case EditUse:

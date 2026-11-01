@@ -1,6 +1,6 @@
 {
   "seed": 20261031,
-  "train_pairs": 34263,
+  "train_pairs": 35169,
   "train_by_family": {
     "add-case": 798,
     "add-field": 1075,
@@ -15,11 +15,13 @@
     "compound:instantiate+print": 500,
     "compound:print+instantiate": 500,
     "compound:print+print": 500,
+    "compound:serve-html+print": 250,
     "compound:shared-created-target": 120,
     "compound:shared-decl+stmt": 120,
     "compound:shared-print+stmt": 120,
     "compound:shared-stmt+print": 120,
     "compound:shared-stmt+stmt": 120,
+    "compound:stmt+serve-html": 250,
     "compound:stmt+stmt": 500,
     "concept-array": 249,
     "concept-atomic-counter": 249,
@@ -105,12 +107,13 @@
     "instantiate": 1494,
     "none": 885,
     "print": 1252,
-    "register": 695
+    "register": 695,
+    "serve-html": 406
   },
-  "fragments": 34805,
+  "fragments": 35831,
   "skipped_unemittable_targets": 0,
   "conflicting_inputs_dropped": 0,
-  "duplicate_inputs_dropped": 706,
+  "duplicate_inputs_dropped": 750,
   "template_family_leak": 0,
   "slot_value_leak_beyond_fixtures": null,
   "train_heldout_input_overlap": 0,

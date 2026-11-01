@@ -143,6 +143,24 @@ var textsHeldout = []string{
 var calleesTrain = []string{"Load", "Fetch", "Brew", "Parse", "Save", "Store.Load", "Cache.Fetch"}
 var calleesHeldout = []string{"Whisk", "Roast", "Nest.Fetch", "Plumb"}
 
+// The serve-html family's page pool (2026-11-01): the .html
+// names are the family's file slot, train and held-out
+// disjoint like every other pool — except index.html, which
+// is in BOTH on purpose: it is the recipe's default page, a
+// shared grammar fixture like main.go, and the leak checks
+// exempt it by that name.
+var htmlsTrain = []string{
+	"index.html", "home.html", "page.html", "about.html", "main.html",
+	"hello.html", "welcome.html", "site.html", "start.html", "menu.html",
+	"info.html", "help.html",
+}
+
+var htmlsHeldout = []string{
+	"index.html", "landing.html", "shop.html", "gallery.html", "contact.html",
+	"blog.html", "news.html", "team.html", "pricing.html", "docs.html",
+	"faq.html", "events.html",
+}
+
 // ---------- concept book (mirrors data/concepts.json) ----------
 
 type concept struct {
@@ -380,6 +398,17 @@ func canonCloneLike(fn, newName string) string {
 
 func canonServer(file string) string { return fmt.Sprintf("add a webserver to %s", file) }
 
+// canonServeHTML renders the serve-a-page recipe's canonical:
+// the one sentence parseServeHTML (chat) reads back as the
+// serve-html family with the page (and the file, when the ask
+// names one) as slots.
+func canonServeHTML(html, file string) string {
+	if file != "" {
+		return fmt.Sprintf("add a server that serves %s to %s", html, file)
+	}
+	return fmt.Sprintf("add a server that serves %s", html)
+}
+
 func canonFieldA(strct, field, typ string) string {
 	return fmt.Sprintf("add a %s field of type %s to %s", field, typ, strct)
 }
@@ -411,6 +440,9 @@ type pools struct {
 	// grammar fixtures (tagKinds below, like fieldTypes) —
 	// the value is the slot that must never leak.
 	tagVals []string
+	// htmls carries the serve-html family's page names
+	// (2026-11-01): the recipe's file slot.
+	htmls []string
 }
 
 // tagKinds are the struct-tag kinds the tagged add-field
@@ -550,11 +582,12 @@ func trainPools() pools {
 		unionPools(textsTrain, genTexts),
 		calleesTrain,
 		tagValsTrain,
+		htmlsTrain,
 	}
 }
 
 func heldoutPools() pools {
-	return pools{namesHeldout, filesHeldout, fieldNamesHeldout, caseValsHeldout, keysHeldout, tablesHeldout, textsHeldout, calleesHeldout, tagValsHeldout}
+	return pools{namesHeldout, filesHeldout, fieldNamesHeldout, caseValsHeldout, keysHeldout, tablesHeldout, textsHeldout, calleesHeldout, tagValsHeldout, htmlsHeldout}
 }
 
 // conceptWord picks how the messy sentence names the concept:
@@ -816,6 +849,74 @@ func buildServerAsk(r *rand.Rand, p pools, dialect string) ask {
 		}
 	}
 	return ask{family: "add-server", canonical: canon, slots: []string{file}, cores: cores}
+}
+
+// buildServeHTMLAsk makes one serve-a-page ask: a page (drawn
+// from the html pool) and, half the time, the Go file it is
+// served from. A quarter of asks name no page at all — the
+// "serve an html file" form — and their canonical carries the
+// default page, index.html, exactly as the recipe resolves it.
+func buildServeHTMLAsk(r *rand.Rand, p pools, dialect string) ask {
+	bare := r.Intn(4) == 0
+	html := pick(r, p.htmls)
+	if bare {
+		html = "index.html"
+	}
+	file := ""
+	if r.Intn(2) == 0 {
+		file = pick(r, p.files)
+	}
+	canon := canonServeHTML(html, file)
+	toTarget := ""
+	if file != "" {
+		toTarget = " to " + file
+	}
+	var cores []func() string
+	if dialect == "train" {
+		if bare {
+			cores = []func() string{
+				func() string { return "serve an html file" + toTarget },
+				func() string { return "serve an html page" + toTarget },
+				func() string { return "add a server that serves an html file" + toTarget },
+				func() string { return "build a server that serves an html file" + toTarget },
+			}
+		} else {
+			cores = []func() string{
+				func() string { return fmt.Sprintf("serve %s%s", html, toTarget) },
+				func() string { return fmt.Sprintf("add a server that serves %s%s", html, toTarget) },
+				func() string { return fmt.Sprintf("build a server that serves %s%s", html, toTarget) },
+				func() string { return fmt.Sprintf("add a webserver that serves %s%s", html, toTarget) },
+			}
+		}
+	} else {
+		inTarget, intoTarget := "", ""
+		if file != "" {
+			inTarget = " in " + file
+			intoTarget = " into " + file
+		}
+		if bare {
+			cores = []func() string{
+				func() string { return "place a server serving an html file" + inTarget },
+				func() string { return "insert an http server that serves an html page" + intoTarget },
+				func() string { return "serve an html file" + toTarget },
+			}
+		} else {
+			cores = []func() string{
+				func() string { return fmt.Sprintf("place a server serving %s%s", html, inTarget) },
+				func() string { return fmt.Sprintf("insert an http server that serves %s%s", html, intoTarget) },
+				func() string { return fmt.Sprintf("get a server that serves %s%s", html, toTarget) },
+				func() string { return fmt.Sprintf("serve %s%s", html, toTarget) },
+			}
+		}
+	}
+	slots := []string{}
+	if !bare {
+		slots = append(slots, html)
+	}
+	if file != "" {
+		slots = append(slots, file)
+	}
+	return ask{family: "serve-html", canonical: canon, slots: slots, cores: cores}
 }
 
 func buildFieldAsk(r *rand.Rand, p pools, dialect string) ask {
@@ -1263,6 +1364,10 @@ func gerund(core string) string {
 		fields[0] = "copying"
 	case "have":
 		fields[0] = "having"
+	case "serve":
+		fields[0] = "serving"
+	case "build":
+		fields[0] = "building"
 	}
 	return strings.Join(fields, " ")
 }
@@ -2286,14 +2391,14 @@ func runHeldoutBooks(outDir string, seed int64) {
 	sourcesInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_sources.jsonl"))
 	createdInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_created.jsonl"))
 	rqliteInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_rqlite.jsonl"))
-	fixtures := map[string]bool{"main": true, "main.go": true}
+	fixtures := map[string]bool{"main": true, "main.go": true, "index.html": true}
 	for _, t := range fieldTypes {
 		fixtures[t] = true
 	}
 	heldSlotVals := map[string]bool{}
-	for _, s := range append(append(append(append(append(append(append(append(
+	for _, s := range append(append(append(append(append(append(append(append(append(
 		[]string{}, namesHeldout...), filesHeldout...), fieldNamesHeldout...),
-		caseValsHeldout...), keysHeldout...), tablesHeldout...), textsHeldout...), calleesHeldout...) {
+		caseValsHeldout...), keysHeldout...), tablesHeldout...), textsHeldout...), calleesHeldout...), htmlsHeldout...) {
 		heldSlotVals[s] = true
 	}
 	for _, s := range tagValsHeldout {
@@ -2366,6 +2471,266 @@ func runHeldoutBooks(outDir string, seed int64) {
 	fmt.Printf("skipped unemittable=%d conflicting=%d duplicates=%d\n", rep.SkippedUnemittable, rep.ConflictingInputs, rep.DuplicateInputs)
 	fmt.Printf("leaks: train-overlap=%d judge-overlap=%d sources-overlap=%d created-overlap=%d rqlite-overlap=%d slot=%v\n",
 		rep.TrainInputOverlap, rep.JudgeInputOverlap, rep.SourcesOverlap, rep.CreatedOverlap, rep.RqliteOverlap, rep.SlotLeak)
+}
+
+// ---------- the serve-html held-out judge ----------
+//
+// -mode heldout-servehtml builds data/training/
+// phrasing_heldout_servehtml.jsonl: the judge for the
+// serve-a-page recipe's family, in the same construction as
+// the rqlite and books judges — single-unseen items speak the
+// held-out core dialect and wrappers, single-seen items (the
+// control) speak the train dialect, and BOTH draw slot values
+// from the held-out pools only (pages from htmlsHeldout,
+// files from filesHeldout). All five prior judges stay
+// byte-identical; this file is a sixth judge, never a
+// replacement. Leak discipline matches the books judge's and
+// extends it: normalized-input overlap exactly 0 with the
+// train corpus AND with all five prior judges, held-out slot
+// values absent from the train slot values beyond the shared
+// grammar fixtures (index.html among them — the default page
+// both splits name by design). Run the train mode first (the
+// checks read its pairs file).
+//
+// One construction note: the recipe's fully-default form —
+// "serve an html file" with no page named and no file named —
+// carries NO slot at all, so the sentence is a constant of
+// the grammar, byte-identical in the train corpus and here.
+// A held-out item must hold something out; the judge draws
+// only asks carrying a named page or a file (the bare-page
+// form WITH a held-out file is judged, and the slot-free
+// constant is the deterministic parser's pinned case, tested
+// in the chat suite).
+
+type serveHTMLReport struct {
+	Seed               int64          `json:"seed"`
+	Items              int            `json:"items"`
+	ByFamilyCell       map[string]int `json:"by_family_cell"`
+	SkippedUnemittable int            `json:"skipped_unemittable"`
+	ConflictingInputs  int            `json:"conflicting_inputs_removed"`
+	DuplicateInputs    int            `json:"duplicate_inputs_skipped"`
+	TrainInputOverlap  int            `json:"train_input_overlap"`
+	JudgeInputOverlap  int            `json:"original_judge_input_overlap"`
+	SourcesOverlap     int            `json:"sources_judge_input_overlap"`
+	CreatedOverlap     int            `json:"created_judge_input_overlap"`
+	RqliteOverlap      int            `json:"rqlite_judge_input_overlap"`
+	BooksOverlap       int            `json:"books_judge_input_overlap"`
+	SlotLeak           []string       `json:"slot_value_leak_beyond_fixtures"`
+}
+
+func runHeldoutServeHTML(outDir string, seed int64) {
+	r := rand.New(rand.NewSource(seed + 19))
+	rep := &serveHTMLReport{Seed: seed, ByFamilyCell: map[string]int{}}
+	hp := heldoutPools()
+
+	seen := map[string]string{} // normalized input -> output
+	var items []heldItem
+	add := func(a ask, cell string, wrappers []wrapper) {
+		if !emittable(a.canonical) {
+			rep.SkippedUnemittable++
+			return
+		}
+		in, tmpl := dress(r, a, wrappers)
+		n := normInput(in)
+		if prev, dup := seen[n]; dup {
+			if prev != a.canonical {
+				rep.ConflictingInputs++
+				for i, q := range items {
+					if normInput(q.Input) == n {
+						items = append(items[:i], items[i+1:]...)
+						break
+					}
+				}
+				delete(seen, n)
+			} else {
+				rep.DuplicateInputs++
+			}
+			return
+		}
+		seen[n] = a.canonical
+		items = append(items, heldItem{
+			Input: in, Output: a.canonical, Family: a.family,
+			Cell: cell, Template: "heldout/" + tmpl,
+		})
+		rep.ByFamilyCell[a.family+"/"+cell]++
+	}
+
+	// Draws an ask carrying at least one slot (see the header
+	// note): a named page or a file. ok is false when the draw
+	// budget runs out first.
+	build := func(dialect string) (ask, bool) {
+		for tries := 0; tries < 40; tries++ {
+			if a := buildServeHTMLAsk(r, hp, dialect); len(a.slots) > 0 {
+				return a, true
+			}
+		}
+		return ask{}, false
+	}
+	for got, attempts := 0, 0; got < 20 && attempts < 600; attempts++ {
+		a, ok := build("heldout")
+		if !ok {
+			break
+		}
+		before := len(items)
+		add(a, "single-unseen", heldoutWrappers)
+		if len(items) > before {
+			got++
+		}
+	}
+	for got, attempts := 0, 0; got < 8 && attempts < 240; attempts++ {
+		a, ok := build("train")
+		if !ok {
+			break
+		}
+		before := len(items)
+		add(a, "single-seen", trainWrappers)
+		if len(items) > before {
+			got++
+		}
+	}
+	rep.Items = len(items)
+
+	// Leak checks: against the train corpus (read back from
+	// the pairs file the train mode wrote) and all five prior
+	// judges. Overlaps are dropped, counted, and reported —
+	// and any drop at all fails the run, because by
+	// construction (disjoint dialects, wrappers, and pools)
+	// there should be none.
+	readPairs := func(path string) (inputs map[string]bool, slots map[string]bool) {
+		inputs, slots = map[string]bool{}, map[string]bool{}
+		f, err := os.Open(path)
+		if err != nil {
+			fail(fmt.Errorf("heldout-servehtml mode reads %s (run the train mode first): %w", path, err))
+		}
+		defer f.Close()
+		sc := bufioScanner(f)
+		for sc.Scan() {
+			line := strings.TrimSpace(sc.Text())
+			if line == "" {
+				continue
+			}
+			var p pair
+			if err := json.Unmarshal([]byte(line), &p); err != nil {
+				fail(err)
+			}
+			inputs[normInput(p.Input)] = true
+			for _, s := range p.Slots {
+				slots[s] = true
+			}
+		}
+		return inputs, slots
+	}
+	readJudge := func(path string) map[string]bool {
+		inputs := map[string]bool{}
+		f, err := os.Open(path)
+		if err != nil {
+			fail(err)
+		}
+		defer f.Close()
+		sc := bufioScanner(f)
+		for sc.Scan() {
+			line := strings.TrimSpace(sc.Text())
+			if line == "" {
+				continue
+			}
+			var it heldItem
+			if err := json.Unmarshal([]byte(line), &it); err != nil {
+				fail(err)
+			}
+			inputs[normInput(it.Input)] = true
+		}
+		return inputs
+	}
+	trainInputs, trainSlots := readPairs(filepath.Join(outDir, "phrasing_pairs2.jsonl"))
+	judgeInputs := readJudge(filepath.Join(outDir, "phrasing_heldout.jsonl"))
+	sourcesInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_sources.jsonl"))
+	createdInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_created.jsonl"))
+	rqliteInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_rqlite.jsonl"))
+	booksInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_books.jsonl"))
+	fixtures := map[string]bool{"main": true, "main.go": true, "index.html": true}
+	for _, t := range fieldTypes {
+		fixtures[t] = true
+	}
+	heldSlotVals := map[string]bool{}
+	for _, s := range append(append(append(append(append(append(append(append(append(
+		[]string{}, namesHeldout...), filesHeldout...), fieldNamesHeldout...),
+		caseValsHeldout...), keysHeldout...), tablesHeldout...), textsHeldout...), calleesHeldout...), htmlsHeldout...) {
+		heldSlotVals[s] = true
+	}
+	for _, s := range tagValsHeldout {
+		heldSlotVals[s] = true
+		for _, k := range tagKinds {
+			heldSlotVals[k+":\""+s+"\""] = true
+		}
+	}
+	leakSet := map[string]bool{}
+	for s := range heldSlotVals {
+		if trainSlots[s] && !fixtures[s] {
+			leakSet[s] = true
+		}
+	}
+	for s := range leakSet {
+		rep.SlotLeak = append(rep.SlotLeak, s)
+	}
+	sort.Strings(rep.SlotLeak)
+	kept := items[:0]
+	for _, it := range items {
+		n := normInput(it.Input)
+		drop := false
+		if trainInputs[n] {
+			rep.TrainInputOverlap++
+			drop = true
+		}
+		if judgeInputs[n] {
+			rep.JudgeInputOverlap++
+			drop = true
+		}
+		if sourcesInputs[n] {
+			rep.SourcesOverlap++
+			drop = true
+		}
+		if createdInputs[n] {
+			rep.CreatedOverlap++
+			drop = true
+		}
+		if rqliteInputs[n] {
+			rep.RqliteOverlap++
+			drop = true
+		}
+		if booksInputs[n] {
+			rep.BooksOverlap++
+			drop = true
+		}
+		if !drop {
+			kept = append(kept, it)
+		}
+	}
+	items = kept
+	rep.Items = len(items)
+	if rep.TrainInputOverlap > 0 || rep.JudgeInputOverlap > 0 ||
+		rep.SourcesOverlap > 0 || rep.CreatedOverlap > 0 ||
+		rep.RqliteOverlap > 0 || rep.BooksOverlap > 0 || len(rep.SlotLeak) > 0 {
+		fail(fmt.Errorf("leak check failed: train-overlap=%d judge-overlap=%d sources-overlap=%d created-overlap=%d rqlite-overlap=%d books-overlap=%d slot=%v",
+			rep.TrainInputOverlap, rep.JudgeInputOverlap, rep.SourcesOverlap, rep.CreatedOverlap, rep.RqliteOverlap, rep.BooksOverlap, rep.SlotLeak))
+	}
+
+	if err := writeJSONL(filepath.Join(outDir, "phrasing_heldout_servehtml.jsonl"), items); err != nil {
+		fail(err)
+	}
+	raw, err := json.MarshalIndent(rep, "", "  ")
+	if err != nil {
+		fail(err)
+	}
+	if err := os.WriteFile(filepath.Join(outDir, "phrasing_report_servehtml.json"), raw, 0o644); err != nil {
+		fail(err)
+	}
+	fmt.Printf("heldout-servehtml judge: %d items\n", rep.Items)
+	for _, k := range sortedKeys(rep.ByFamilyCell) {
+		fmt.Printf("  %-44s %d\n", k, rep.ByFamilyCell[k])
+	}
+	fmt.Printf("skipped unemittable=%d conflicting=%d duplicates=%d\n", rep.SkippedUnemittable, rep.ConflictingInputs, rep.DuplicateInputs)
+	fmt.Printf("leaks: train-overlap=%d judge-overlap=%d sources-overlap=%d created-overlap=%d rqlite-overlap=%d books-overlap=%d slot=%v\n",
+		rep.TrainInputOverlap, rep.JudgeInputOverlap, rep.SourcesOverlap, rep.CreatedOverlap, rep.RqliteOverlap, rep.BooksOverlap, rep.SlotLeak)
 }
 
 // ---------- the created-target held-out judge ----------
@@ -2688,8 +3053,12 @@ func main() {
 	outDir := flag.String("out", "data/training", "output directory")
 	seed := flag.Int64("seed", 20261031, "generator seed")
 	judgePath := flag.String("judge", "data/training/phrasing_heldout.jsonl", "the fixed held-out judge, read for leak checks only")
-	mode := flag.String("mode", "train", "train | heldout-sources | heldout-created | heldout-rqlite | heldout-books")
+	mode := flag.String("mode", "train", "train | heldout-sources | heldout-created | heldout-rqlite | heldout-books | heldout-servehtml")
 	flag.Parse()
+	if *mode == "heldout-servehtml" {
+		runHeldoutServeHTML(*outDir, *seed)
+		return
+	}
 	if *mode == "heldout-sources" {
 		runHeldoutSources(*outDir, *seed)
 		return
@@ -2991,6 +3360,44 @@ func main() {
 		}
 	}
 
+	// Serve-html (2026-11-01): the recipe's family, emitted
+	// LAST on the same append-only discipline as the created
+	// and shared blocks — every row above keeps its exact
+	// bytes, and this block only adds. Singles at the parent
+	// shape's density (add-server: 450); compounds pair the
+	// recipe with a print piece and with a statement piece,
+	// 250 each, on the created block's glues (no have-it: its
+	// print tail follows the older inheritance rule).
+	emit(func() ask { return buildServeHTMLAsk(r, tp, "train") }, 450)
+	emitServeCompound := func(build func() (ask, ask), count int, fam string) {
+		for i := 0; i < count; i++ {
+			a, b := build()
+			in, out, tmpl, ca, cb := compoundAsk(r, a, b, createdGlues)
+			if r.Intn(4) == 0 {
+				w := trainWrappers[2+r.Intn(4)]
+				in = w.fn(in)
+				tmpl += "+" + w.id
+			}
+			addTrain(pair{Input: in, Output: out, Domain: "phrasing",
+				Family: "compound:" + fam, Template: "train/" + tmpl,
+				Slots: append(append([]string{}, a.slots...), b.slots...)})
+			addFrag(ca, a.family, "train/frag-a")
+			addFrag(cb, b.family, "train/frag-b")
+			if r.Intn(4) == 0 {
+				w := trainWrappers[r.Intn(len(trainWrappers))]
+				addFrag(w.fn(ca), a.family, "train/frag-a+"+w.id)
+			}
+		}
+	}
+	emitServeCompound(func() (ask, ask) {
+		a := buildServeHTMLAsk(r, tp, "train")
+		return a, buildPrintAskShared(r, tp, "train", "main")
+	}, 250, "serve-html+print")
+	emitServeCompound(func() (ask, ask) {
+		c := statementConcepts[r.Intn(len(statementConcepts))]
+		return buildStmtAsk(r, tp, c, "train"), buildServeHTMLAsk(r, tp, "train")
+	}, 250, "stmt+serve-html")
+
 	rep.TrainPairs = len(train)
 	rep.Fragments = len(fragments)
 
@@ -3039,17 +3446,18 @@ func main() {
 		}
 	}
 	// Slot pools: every held-out pool value (minus the grammar
-	// fixtures both splits share by design — main/main.go and
-	// the closed field-type vocabulary) must be absent from
-	// the train slot values.
-	fixtures := map[string]bool{"main": true, "main.go": true}
+	// fixtures both splits share by design — main/main.go,
+	// index.html (the recipe's default page), and the closed
+	// field-type vocabulary) must be absent from the train
+	// slot values.
+	fixtures := map[string]bool{"main": true, "main.go": true, "index.html": true}
 	for _, t := range fieldTypes {
 		fixtures[t] = true
 	}
 	heldSlotVals := map[string]bool{}
-	for _, s := range append(append(append(append(append(append(append(append(
+	for _, s := range append(append(append(append(append(append(append(append(append(
 		[]string{}, namesHeldout...), filesHeldout...), fieldNamesHeldout...),
-		caseValsHeldout...), keysHeldout...), tablesHeldout...), textsHeldout...), calleesHeldout...) {
+		caseValsHeldout...), keysHeldout...), tablesHeldout...), textsHeldout...), calleesHeldout...), htmlsHeldout...) {
 		heldSlotVals[s] = true
 	}
 	// The tagged-field family (three-sources build): its slot

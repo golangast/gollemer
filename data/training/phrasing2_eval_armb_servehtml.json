@@ -1,0 +1,304 @@
+{
+  "mode": "b",
+  "model": "arm-b classify+extract (chat.PhrasingRoute)",
+  "cells": {
+    "single-seen": {
+      "n": 8,
+      "slot_exact": 8,
+      "slot_exact_pct": 100,
+      "string_exact": 8,
+      "string_exact_pct": 100,
+      "piece_slot_exact": 8,
+      "piece_total": 8
+    },
+    "single-unseen": {
+      "n": 20,
+      "slot_exact": 20,
+      "slot_exact_pct": 100,
+      "string_exact": 20,
+      "string_exact_pct": 100,
+      "piece_slot_exact": 20,
+      "piece_total": 20
+    }
+  },
+  "families": {
+    "serve-html": {
+      "n": 28,
+      "slot_exact": 28,
+      "slot_exact_pct": 100,
+      "string_exact": 28,
+      "string_exact_pct": 100,
+      "piece_slot_exact": 28,
+      "piece_total": 28
+    }
+  },
+  "single_unseen_write_only": {
+    "n": 20,
+    "slot_exact": 20,
+    "slot_exact_pct": 100,
+    "string_exact": 20,
+    "string_exact_pct": 100,
+    "piece_slot_exact": 0,
+    "piece_total": 0
+  },
+  "bar_single_pct": 90,
+  "bar_compound_pct": 85,
+  "single_bar_pass_slotexact": true,
+  "compound_bar_pass_slotexact": false,
+  "none_false_claims": 0,
+  "claims_lost_to_none": 0,
+  "results": [
+    {
+      "input": "go ahead and place a server serving blog.html",
+      "gold": "add a server that serves blog.html",
+      "raw_output": "add a server that serves blog.html",
+      "family": "serve-html",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "can we get a server that serves events.html",
+      "gold": "add a server that serves events.html",
+      "raw_output": "add a server that serves events.html",
+      "family": "serve-html",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "get a server that serves team.html when you can",
+      "gold": "add a server that serves team.html",
+      "raw_output": "add a server that serves team.html",
+      "family": "serve-html",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "kindly get a server that serves landing.html",
+      "gold": "add a server that serves landing.html",
+      "raw_output": "add a server that serves landing.html",
+      "family": "serve-html",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "kindly place a server serving landing.html",
+      "gold": "add a server that serves landing.html",
+      "raw_output": "add a server that serves landing.html",
+      "family": "serve-html",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "insert an http server that serves docs.html into mosaic.go when you can",
+      "gold": "add a server that serves docs.html to mosaic.go",
+      "raw_output": "add a server that serves docs.html to mosaic.go",
+      "family": "serve-html",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "go ahead and place a server serving an html file in api/main.go",
+      "gold": "add a server that serves index.html to api/main.go",
+      "raw_output": "add a server that serves index.html to api/main.go",
+      "family": "serve-html",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "let's serve index.html to kilo.go",
+      "gold": "add a server that serves index.html to kilo.go",
+      "raw_output": "add a server that serves index.html to kilo.go",
+      "family": "serve-html",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a server serving docs.html in mosaic.go when you can",
+      "gold": "add a server that serves docs.html to mosaic.go",
+      "raw_output": "add a server that serves docs.html to mosaic.go",
+      "family": "serve-html",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "can we serve team.html to api/main.go",
+      "gold": "add a server that serves team.html to api/main.go",
+      "raw_output": "add a server that serves team.html to api/main.go",
+      "family": "serve-html",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "i'd like to serve news.html",
+      "gold": "add a server that serves news.html",
+      "raw_output": "add a server that serves news.html",
+      "family": "serve-html",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "would you mind placing a server serving team.html in mosaic.go",
+      "gold": "add a server that serves team.html to mosaic.go",
+      "raw_output": "add a server that serves team.html to mosaic.go",
+      "family": "serve-html",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "would you mind placing a server serving an html file in vault.go",
+      "gold": "add a server that serves index.html to vault.go",
+      "raw_output": "add a server that serves index.html to vault.go",
+      "family": "serve-html",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "insert an http server that serves an html page into nest/main.go when you can",
+      "gold": "add a server that serves index.html to nest/main.go",
+      "raw_output": "add a server that serves index.html to nest/main.go",
+      "family": "serve-html",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "let's get a server that serves docs.html",
+      "gold": "add a server that serves docs.html",
+      "raw_output": "add a server that serves docs.html",
+      "family": "serve-html",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "would you mind serving pricing.html",
+      "gold": "add a server that serves pricing.html",
+      "raw_output": "add a server that serves pricing.html",
+      "family": "serve-html",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "let's insert an http server that serves index.html into nest/main.go",
+      "gold": "add a server that serves index.html to nest/main.go",
+      "raw_output": "add a server that serves index.html to nest/main.go",
+      "family": "serve-html",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "i'd like to insert an http server that serves an html page into mosaic.go",
+      "gold": "add a server that serves index.html to mosaic.go",
+      "raw_output": "add a server that serves index.html to mosaic.go",
+      "family": "serve-html",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "kindly insert an http server that serves contact.html",
+      "gold": "add a server that serves contact.html",
+      "raw_output": "add a server that serves contact.html",
+      "family": "serve-html",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "hey gollemer, get a server that serves docs.html",
+      "gold": "add a server that serves docs.html",
+      "raw_output": "add a server that serves docs.html",
+      "family": "serve-html",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "could you add a webserver that serves faq.html to kilo.go for me",
+      "gold": "add a server that serves faq.html to kilo.go",
+      "raw_output": "add a server that serves faq.html to kilo.go",
+      "family": "serve-html",
+      "cell": "single-seen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "serve an html file to mosaic.go",
+      "gold": "add a server that serves index.html to mosaic.go",
+      "raw_output": "add a server that serves index.html to mosaic.go",
+      "family": "serve-html",
+      "cell": "single-seen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "i need you to serve faq.html",
+      "gold": "add a server that serves faq.html",
+      "raw_output": "add a server that serves faq.html",
+      "family": "serve-html",
+      "cell": "single-seen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "please add a server that serves team.html",
+      "gold": "add a server that serves team.html",
+      "raw_output": "add a server that serves team.html",
+      "family": "serve-html",
+      "cell": "single-seen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "hey, serve an html page to mosaic.go",
+      "gold": "add a server that serves index.html to mosaic.go",
+      "raw_output": "add a server that serves index.html to mosaic.go",
+      "family": "serve-html",
+      "cell": "single-seen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a server that serves pricing.html.",
+      "gold": "add a server that serves pricing.html",
+      "raw_output": "add a server that serves pricing.html",
+      "family": "serve-html",
+      "cell": "single-seen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "i want to build a server that serves an html file to mosaic.go",
+      "gold": "add a server that serves index.html to mosaic.go",
+      "raw_output": "add a server that serves index.html to mosaic.go",
+      "family": "serve-html",
+      "cell": "single-seen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "i need you to build a server that serves an html file to api/main.go",
+      "gold": "add a server that serves index.html to api/main.go",
+      "raw_output": "add a server that serves index.html to api/main.go",
+      "family": "serve-html",
+      "cell": "single-seen",
+      "slot_exact": true,
+      "string_exact": true
+    }
+  ]
+}

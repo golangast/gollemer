@@ -59,7 +59,7 @@ var phrasingGerunds = map[string]string{
 	"getting": "get", "creating": "create", "registering": "register",
 	"copying": "copy", "cloning": "clone", "having": "have",
 	"making": "make", "putting": "put", "sticking": "stick",
-	"wrapping": "wrap",
+	"wrapping": "wrap", "serving": "serve", "building": "build",
 }
 
 func newFrag(text string) frag {
@@ -663,6 +663,53 @@ func extractServer(f frag) (string, map[string]string, bool) {
 	return "", nil, false
 }
 
+// extractServeHTML reads a serve-a-page fragment: the recipe's
+// two slots are the page (an .html token, or the words "html
+// file"/"html page" for the default page) and, when present,
+// the .go file every file-bearing family reads the same way.
+// The serve evidence is required — a serve/server word must be
+// in the fragment — so the concept book's page-adjacent lines
+// ("add an html template…", "serve static files…", neither of
+// which carries a page this extractor can point at) are never
+// read as the recipe.
+func extractServeHTML(f frag) (string, map[string]string, bool) {
+	serve := false
+	for _, t := range f.low {
+		switch t {
+		case "serve", "serves", "serving", "server", "webserver":
+			serve = true
+		}
+	}
+	if !serve {
+		return "", nil, false
+	}
+	html := ""
+	for i, t := range f.low {
+		if strings.HasSuffix(t, ".html") {
+			html = f.toks[i]
+			break
+		}
+	}
+	if html == "" {
+		for i := 0; i+1 < len(f.low); i++ {
+			if f.low[i] == "html" && (f.low[i+1] == "file" || f.low[i+1] == "page") {
+				html = "index.html"
+				break
+			}
+		}
+	}
+	if html == "" {
+		return "", nil, false
+	}
+	slots := map[string]string{"html": html}
+	canon := "add a server that serves " + html
+	if file, _, ok := f.fileSlot(); ok {
+		slots["file"] = file
+		canon += " to " + file
+	}
+	return canon, slots, true
+}
+
 // fieldTypeSpan finds a field type in the token stream: the
 // closed type vocabulary the add-field family speaks, as
 // token sequences (VerbatimTokens splits [] and map brackets
@@ -1130,7 +1177,7 @@ func withSharedTarget(f frag, prep, file string) frag {
 // named Pumice), so the distribution never completes them.
 func fileBearingFamily(family string) bool {
 	switch {
-	case family == "print" || family == "delegate" || family == "add-server":
+	case family == "print" || family == "delegate" || family == "add-server" || family == "serve-html":
 		return true
 	case strings.HasPrefix(family, "concept-"):
 		return true
@@ -1161,8 +1208,26 @@ func routeSharedPiece(f frag, file string) (string, string, map[string]string, b
 	//     the completed fragment counts, subject to the
 	//     func restraint below;
 	//   - a bare-name family (instantiate, clone, add-case,
-	//     register): never — its target is a name, and the
-	//     completed fragment would be a corruption of it;
+	//     register, add-field): its target is a name, and the
+	//     completed fragment would ordinarily be a corruption
+	//     of it — so the completion is heard only under the
+	//     DECLARATION-shaped acceptance below. That is not a
+	//     weakening: a bare-name fragment cannot validate as
+	//     a concept declaration on its completed form unless
+	//     it genuinely names the concept and carries the
+	//     name (the naming evidence every concept win needs),
+	//     which is precisely a declaration the bare gate
+	//     misread. The gate reads the fragment segmentation
+	//     stripped of its file — the weakest evidence on the
+	//     table — and the 2026-11-01 serve-html retrain
+	//     showed it flipping on exactly such a fragment
+	//     ("create a session with the name Vespa" gated to
+	//     add-field-tag on the "with the name" shape) while
+	//     the completed fragment classified and validated
+	//     cleanly as its session-handler declaration. A flat
+	//     veto let the weakest reading silence the strongest;
+	//     the declaration-only acceptance is the restraint
+	//     that actually separates the two.
 	//   - "none", or the gate itself unsure: complete it,
 	//     but accept only a DECLARATION-shaped win (a concept
 	//     declaration, an add-server) — the stripped form of
@@ -1171,12 +1236,9 @@ func routeSharedPiece(f frag, file string) (string, string, map[string]string, b
 	//     channel (a bare-name fragment misread through the
 	//     appended file as a concept statement).
 	bareFam, bareGated := phrasingClassifier(f.text())
-	if bareGated && bareFam != "none" && !fileBearingFamily(bareFam) {
-		return "", "", nil, false
-	}
 	declOnly := !bareGated || bareFam == "none" || !fileBearingFamily(bareFam)
 	accept := func(family string, slots map[string]string) bool {
-		if declOnly && family != "add-server" {
+		if declOnly && family != "add-server" && family != "serve-html" {
 			isDecl := false
 			if strings.HasPrefix(family, "concept-") {
 				id := strings.TrimPrefix(family, "concept-")
@@ -1262,6 +1324,8 @@ func extractForFamily(f frag, family string) (string, map[string]string, bool) {
 		return extractClone(f)
 	case "add-server":
 		return extractServer(f)
+	case "serve-html":
+		return extractServeHTML(f)
 	case "add-field", "add-field-tag":
 		// One extractor for both: it renders the tagged
 		// canonical exactly when the line carries a tag
@@ -1330,7 +1394,7 @@ func conceptPhrasePresent(f frag, family string) bool {
 func allFamilies() []string {
 	out := []string{
 		"print", "instantiate", "delegate", "clone", "add-server",
-		"add-field", "add-field-tag", "add-case", "register",
+		"serve-html", "add-field", "add-field-tag", "add-case", "register",
 	}
 	for _, e := range conceptEntries() {
 		if e.ID == "print-line" {

@@ -63,6 +63,9 @@ func claimChain(line string, ask editAsk, profile *UserProfile) bool {
 	if runAddServer(line, ask) {
 		return true
 	}
+	if runServeHTML(line, ask) {
+		return true
+	}
 	if runDelegate(line, ask) {
 		return true
 	}

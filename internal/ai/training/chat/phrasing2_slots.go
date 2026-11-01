@@ -100,6 +100,17 @@ func CanonicalSlots(sentence string) (PhrasingPieceSlots, bool) {
 	if file, ok := parseAddServer(s); ok && file != "" {
 		return PhrasingPieceSlots{Family: "add-server", Slots: map[string]string{"file": file}}, true
 	}
+	if q, ok := parseServeHTML(s); ok && !q.targetMissing {
+		html := q.html
+		if html == "" {
+			html = "index.html"
+		}
+		slots := map[string]string{"html": html}
+		if q.target != "" {
+			slots["file"] = q.target
+		}
+		return PhrasingPieceSlots{Family: "serve-html", Slots: slots}, true
+	}
 	if req, ok := parseConcept(s); ok {
 		family := "concept-" + req.entry.ID
 		if req.entry.ID == "print-line" {

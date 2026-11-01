@@ -1266,6 +1266,19 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if tryAddWebServer(line, reader) {
 			continue
 		}
+		// Serve-an-html-file recipes, claimed deterministically
+		// beside add-a-webserver, whose precedent it follows:
+		// "serve index.html" / "build a server that serves
+		// page.html to main.go" is one ask for two artifacts —
+		// the page (created when missing, never overwritten)
+		// and the wiring that serves it via http.ServeFile,
+		// composing with a server the file already runs. Left
+		// to the classifier it was read as an analyze request
+		// or the static-files concept, neither of which serves
+		// the user's page. One plan, one gate, one transaction.
+		if tryServeHTML(line, reader) {
+			continue
+		}
 		// Cross-file delegates, claimed deterministically beside
 		// the other write-side parsers: "add a function in
 		// app/main.go that calls store.Load" writes code in one

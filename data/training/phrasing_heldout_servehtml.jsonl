@@ -1,0 +1,28 @@
+{"input":"go ahead and place a server serving blog.html","output":"add a server that serves blog.html","family":"serve-html","cell":"single-unseen","template":"heldout/core0+go-ahead"}
+{"input":"can we get a server that serves events.html","output":"add a server that serves events.html","family":"serve-html","cell":"single-unseen","template":"heldout/core2+can-we-get"}
+{"input":"get a server that serves team.html when you can","output":"add a server that serves team.html","family":"serve-html","cell":"single-unseen","template":"heldout/core2+when-you-can"}
+{"input":"kindly get a server that serves landing.html","output":"add a server that serves landing.html","family":"serve-html","cell":"single-unseen","template":"heldout/core2+kindly"}
+{"input":"kindly place a server serving landing.html","output":"add a server that serves landing.html","family":"serve-html","cell":"single-unseen","template":"heldout/core0+kindly"}
+{"input":"insert an http server that serves docs.html into mosaic.go when you can","output":"add a server that serves docs.html to mosaic.go","family":"serve-html","cell":"single-unseen","template":"heldout/core1+when-you-can"}
+{"input":"go ahead and place a server serving an html file in api/main.go","output":"add a server that serves index.html to api/main.go","family":"serve-html","cell":"single-unseen","template":"heldout/core0+go-ahead"}
+{"input":"let's serve index.html to kilo.go","output":"add a server that serves index.html to kilo.go","family":"serve-html","cell":"single-unseen","template":"heldout/core3+lets"}
+{"input":"place a server serving docs.html in mosaic.go when you can","output":"add a server that serves docs.html to mosaic.go","family":"serve-html","cell":"single-unseen","template":"heldout/core0+when-you-can"}
+{"input":"can we serve team.html to api/main.go","output":"add a server that serves team.html to api/main.go","family":"serve-html","cell":"single-unseen","template":"heldout/core3+can-we-get"}
+{"input":"i'd like to serve news.html","output":"add a server that serves news.html","family":"serve-html","cell":"single-unseen","template":"heldout/core3+id-like"}
+{"input":"would you mind placing a server serving team.html in mosaic.go","output":"add a server that serves team.html to mosaic.go","family":"serve-html","cell":"single-unseen","template":"heldout/core0+would-you-mind"}
+{"input":"would you mind placing a server serving an html file in vault.go","output":"add a server that serves index.html to vault.go","family":"serve-html","cell":"single-unseen","template":"heldout/core0+would-you-mind"}
+{"input":"insert an http server that serves an html page into nest/main.go when you can","output":"add a server that serves index.html to nest/main.go","family":"serve-html","cell":"single-unseen","template":"heldout/core1+when-you-can"}
+{"input":"let's get a server that serves docs.html","output":"add a server that serves docs.html","family":"serve-html","cell":"single-unseen","template":"heldout/core2+lets"}
+{"input":"would you mind serving pricing.html","output":"add a server that serves pricing.html","family":"serve-html","cell":"single-unseen","template":"heldout/core3+would-you-mind"}
+{"input":"let's insert an http server that serves index.html into nest/main.go","output":"add a server that serves index.html to nest/main.go","family":"serve-html","cell":"single-unseen","template":"heldout/core1+lets"}
+{"input":"i'd like to insert an http server that serves an html page into mosaic.go","output":"add a server that serves index.html to mosaic.go","family":"serve-html","cell":"single-unseen","template":"heldout/core1+id-like"}
+{"input":"kindly insert an http server that serves contact.html","output":"add a server that serves contact.html","family":"serve-html","cell":"single-unseen","template":"heldout/core1+kindly"}
+{"input":"hey gollemer, get a server that serves docs.html","output":"add a server that serves docs.html","family":"serve-html","cell":"single-unseen","template":"heldout/core2+hey-gollemer"}
+{"input":"could you add a webserver that serves faq.html to kilo.go for me","output":"add a server that serves faq.html to kilo.go","family":"serve-html","cell":"single-seen","template":"heldout/core3+could-you"}
+{"input":"serve an html file to mosaic.go","output":"add a server that serves index.html to mosaic.go","family":"serve-html","cell":"single-seen","template":"heldout/core0+bare"}
+{"input":"i need you to serve faq.html","output":"add a server that serves faq.html","family":"serve-html","cell":"single-seen","template":"heldout/core0+i-need"}
+{"input":"please add a server that serves team.html","output":"add a server that serves team.html","family":"serve-html","cell":"single-seen","template":"heldout/core1+please-pre"}
+{"input":"hey, serve an html page to mosaic.go","output":"add a server that serves index.html to mosaic.go","family":"serve-html","cell":"single-seen","template":"heldout/core1+hey"}
+{"input":"add a server that serves pricing.html.","output":"add a server that serves pricing.html","family":"serve-html","cell":"single-seen","template":"heldout/core1+bare-period"}
+{"input":"i want to build a server that serves an html file to mosaic.go","output":"add a server that serves index.html to mosaic.go","family":"serve-html","cell":"single-seen","template":"heldout/core3+i-want"}
+{"input":"i need you to build a server that serves an html file to api/main.go","output":"add a server that serves index.html to api/main.go","family":"serve-html","cell":"single-seen","template":"heldout/core3+i-need"}

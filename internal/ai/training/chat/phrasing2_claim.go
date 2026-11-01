@@ -109,6 +109,8 @@ func runWriteFamilyPiece(piece string, ask editAsk) bool {
 		return true
 	case runAddServer(piece, ask):
 		return true
+	case runServeHTML(piece, ask):
+		return true
 	case runDelegate(piece, ask):
 		return true
 	case runConcept(piece, ask):
