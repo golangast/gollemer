@@ -777,6 +777,7 @@ const defaultConceptBook = `{
       "template": "fs := http.FileServer(http.Dir(\"static\"))\nhttp.Handle(\"/static/\", http.StripPrefix(\"/static/\", fs))\n// TODO: this serves the files in the static folder at /static/ once the server is running — rename the folder and the path to yours"
     },
     {
+      "folder": "handlers",
       "id": "form-handler",
       "imports": [
         "net/http"
@@ -791,6 +792,7 @@ const defaultConceptBook = `{
       "template": "func {name}(w http.ResponseWriter, r *http.Request) {\n\tif r.Method != http.MethodPost {\n\t\t// TODO: show the form here — a browser asks for it with GET before it can send anything\n\t\treturn\n\t}\n\tdetails := struct {\n\t\tEmail string\n\t\tSubject string\n\t\tMessage string\n\t}{\n\t\tEmail: r.FormValue(\"email\"),\n\t\tSubject: r.FormValue(\"subject\"),\n\t\tMessage: r.FormValue(\"message\"),\n\t}\n\t// TODO: details holds the form's fields — rename them to your form's, and use them here\n\t_ = details\n}"
     },
     {
+      "folder": "middleware",
       "id": "middleware",
       "imports": [
         "log",
@@ -805,6 +807,7 @@ const defaultConceptBook = `{
       "template": "func {name}(next http.HandlerFunc) http.HandlerFunc {\n\treturn func(w http.ResponseWriter, r *http.Request) {\n\t\tlog.Println(r.URL.Path)\n\t\tnext(w, r)\n\t}\n}"
     },
     {
+      "folder": "middleware",
       "id": "middleware-timing",
       "imports": [
         "log",
@@ -820,6 +823,7 @@ const defaultConceptBook = `{
       "template": "func {name}(next http.HandlerFunc) http.HandlerFunc {\n\treturn func(w http.ResponseWriter, r *http.Request) {\n\t\tstart := time.Now()\n\t\tdefer func() { log.Println(r.URL.Path, time.Since(start)) }()\n\t\tnext(w, r)\n\t}\n}"
     },
     {
+      "folder": "middleware",
       "id": "middleware-chain",
       "imports": [
         "net/http"
@@ -833,6 +837,7 @@ const defaultConceptBook = `{
       "template": "func {name}(f http.HandlerFunc, middlewares ...func(http.HandlerFunc) http.HandlerFunc) http.HandlerFunc {\n\tfor _, m := range middlewares {\n\t\tf = m(f)\n\t}\n\treturn f\n}"
     },
     {
+      "folder": "handlers",
       "id": "session-handler",
       "imports": [
         "net/http"
@@ -1253,6 +1258,7 @@ const defaultConceptBook = `{
       "template": "start := time.Now()\n// TODO: the code whose time you want to measure goes here\nelapsed := time.Since(start)\n// TODO: elapsed is how long it took — print it, or decide something with it\n_ = elapsed"
     },
     {
+      "folder": "security",
       "id": "cors",
       "imports": [
         "net/http"
@@ -1268,6 +1274,7 @@ const defaultConceptBook = `{
       "template": "func {name}(next http.HandlerFunc) http.HandlerFunc {\n\treturn func(w http.ResponseWriter, r *http.Request) {\n\t\t// CORS lets a browser page served from ONE origin read answers from another. The answer below names the page's origin — TODO: replace it with the one origin your own page is served from\n\t\tw.Header().Set(\"Access-Control-Allow-Origin\", \"TODO: https://your-page.example\")\n\t\tw.Header().Set(\"Access-Control-Allow-Methods\", \"GET, POST, PUT, DELETE, OPTIONS\")\n\t\tw.Header().Set(\"Access-Control-Allow-Headers\", \"Content-Type, Authorization\")\n\t\t// Never answer \"*\" for the origin when requests carry cookies or tokens — a wildcard plus credentials is the combination browsers reject and attackers love; an origin must be named\n\t\tif r.Method == http.MethodOptions {\n\t\t\t// The browser's preflight question, asked before the real request: the headers above are the whole answer\n\t\t\tw.WriteHeader(http.StatusNoContent)\n\t\t\treturn\n\t\t}\n\t\tnext(w, r)\n\t}\n}"
     },
     {
+      "folder": "security",
       "id": "jwt-verify",
       "imports": [
         "crypto/hmac",
@@ -1290,6 +1297,7 @@ const defaultConceptBook = `{
       "template": "func {name}(next http.HandlerFunc) http.HandlerFunc {\n\treturn func(w http.ResponseWriter, r *http.Request) {\n\t\tsecret := os.Getenv(\"JWT_SECRET\")\n\t\t// TODO: JWT_SECRET is the environment variable your server reads its signing secret from — the same one the token was created with. This code never obeys the token's own \"alg\" header: it always checks with HMAC-SHA256, so a token asking for a weaker (or \"none\") check gets nothing\n\t\ttoken, found := strings.CutPrefix(r.Header.Get(\"Authorization\"), \"Bearer \")\n\t\tparts := strings.Split(token, \".\")\n\t\tverified := false\n\t\tvar claims map[string]any\n\t\tif found && len(parts) == 3 {\n\t\t\tunsigned := parts[0] + \".\" + parts[1]\n\t\t\tmac := hmac.New(sha256.New, []byte(secret))\n\t\t\tmac.Write([]byte(unsigned))\n\t\t\tsignature, sigErr := base64.RawURLEncoding.DecodeString(parts[2])\n\t\t\tif sigErr == nil && hmac.Equal(signature, mac.Sum(nil)) {\n\t\t\t\tpayload, payloadErr := base64.RawURLEncoding.DecodeString(parts[1])\n\t\t\t\tif payloadErr == nil && json.Unmarshal(payload, &claims) == nil {\n\t\t\t\t\tif exp, isNumber := claims[\"exp\"].(float64); isNumber && time.Now().Unix() < int64(exp) {\n\t\t\t\t\t\tverified = true\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t}\n\t\t}\n\t\tif !verified {\n\t\t\thttp.Error(w, \"unauthorized\", http.StatusUnauthorized)\n\t\t\treturn\n\t\t}\n\t\t// TODO: claims now holds claims you can trust — claims[\"sub\"] says who the token was issued to. Pass that on (a request context is the usual way) instead of believing anything the request itself claims about who sent it\n\t\t_ = claims\n\t\tnext(w, r)\n\t}\n}"
     },
     {
+      "folder": "security",
       "id": "csp-nonce",
       "imports": [
         "context",
@@ -1308,6 +1316,7 @@ const defaultConceptBook = `{
       "template": "type {name}Key struct{}\n\n// {name} mints a fresh nonce — a one-time random value — for every request, sets the Content-Security-Policy header that demands it, and passes the value along for the page's own templates.\nfunc {name}(next http.HandlerFunc) http.HandlerFunc {\n\treturn func(w http.ResponseWriter, r *http.Request) {\n\t\traw := make([]byte, 16)\n\t\tif _, err := rand.Read(raw); err != nil {\n\t\t\t// No honest randomness, no honest nonce — refuse rather than send a page whose policy a stranger could guess\n\t\t\thttp.Error(w, \"internal error\", http.StatusInternalServerError)\n\t\t\treturn\n\t\t}\n\t\tnonce := base64.StdEncoding.EncodeToString(raw)\n\t\tw.Header().Set(\"Content-Security-Policy\", \"default-src 'self'; script-src 'self' 'nonce-\"+nonce+\"'; style-src 'self' 'nonce-\"+nonce+\"'\")\n\t\t// TODO: your templates read this request's nonce back with r.Context().Value({name}Key{}) and write it onto their own tags — <script nonce=\"...\"> — because a script WITHOUT this request's nonce is exactly what the browser now refuses to run\n\t\tnext(w, r.WithContext(context.WithValue(r.Context(), {name}Key{}, nonce)))\n\t}\n}"
     },
     {
+      "folder": "security",
       "id": "csrf",
       "imports": [
         "crypto/rand",
@@ -1326,6 +1335,7 @@ const defaultConceptBook = `{
       "template": "func {name}(next http.HandlerFunc) http.HandlerFunc {\n\treturn func(w http.ResponseWriter, r *http.Request) {\n\t\t// CSRF: a malicious page can make a signed-in browser SEND your server a request, but it can never READ your pages — so a state-changing request must hand back a random token only a page you served could know (the double-submit pattern)\n\t\tcookie, cookieErr := r.Cookie(\"csrf_token\")\n\t\ttoken := \"\"\n\t\tif cookieErr == nil {\n\t\t\ttoken = cookie.Value\n\t\t}\n\t\tif token == \"\" {\n\t\t\traw := make([]byte, 32)\n\t\t\tif _, err := rand.Read(raw); err != nil {\n\t\t\t\thttp.Error(w, \"internal error\", http.StatusInternalServerError)\n\t\t\t\treturn\n\t\t\t}\n\t\t\ttoken = base64.StdEncoding.EncodeToString(raw)\n\t\t\thttp.SetCookie(w, &http.Cookie{Name: \"csrf_token\", Value: token, Path: \"/\", HttpOnly: true, SameSite: http.SameSiteLaxMode})\n\t\t\t// A fresh token was just minted for the NEXT request — this one still has nothing proven, and the check below refuses it if it tries to change anything\n\t\t}\n\t\tif r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions {\n\t\t\tsent := r.Header.Get(\"X-CSRF-Token\")\n\t\t\tif sent == \"\" {\n\t\t\t\tsent = r.FormValue(\"csrf_token\")\n\t\t\t}\n\t\t\tif subtle.ConstantTimeCompare([]byte(sent), []byte(token)) != 1 {\n\t\t\t\thttp.Error(w, \"forbidden\", http.StatusForbidden)\n\t\t\t\treturn\n\t\t\t}\n\t\t\t// TODO: your forms send the token back — a hidden field named csrf_token holding the csrf_token cookie's value (read it in the handler that shows the form), or an X-CSRF-Token header from your scripts. The comparison is constant-time, so a wrong guess reveals nothing about how close it was\n\t\t}\n\t\tnext(w, r)\n\t}\n}"
     },
     {
+      "folder": "security",
       "id": "security-headers",
       "imports": [
         "net/http"
@@ -1341,6 +1351,7 @@ const defaultConceptBook = `{
       "template": "func {name}(next http.HandlerFunc) http.HandlerFunc {\n\treturn func(w http.ResponseWriter, r *http.Request) {\n\t\t// These headers ask the browser to treat your pages carefully — they cost nothing and close whole families of tricks\n\t\tw.Header().Set(\"X-Content-Type-Options\", \"nosniff\")\n\t\tw.Header().Set(\"X-Frame-Options\", \"DENY\")\n\t\tw.Header().Set(\"Referrer-Policy\", \"strict-origin-when-cross-origin\")\n\t\tw.Header().Set(\"Content-Security-Policy\", \"default-src 'self'; frame-ancestors 'none'\")\n\t\t// TODO: over HTTPS, also set Strict-Transport-Security to max-age=63072000 so browsers refuse plain http for your site — never send it while plain http is still on purpose (local testing): a browser that hears it remembers\n\t\tnext(w, r)\n\t}\n}"
     },
     {
+      "folder": "security",
       "id": "rate-limit",
       "imports": [
         "net",
@@ -1897,11 +1908,28 @@ func runConcept(line string, ask editAsk) bool {
 			recordBrain("composer", false, "concept refused: function unnamed")
 			return true
 		}
+		if req.entry.Folder != "" {
+			// A folder-mapped row's unnamed ask gets the
+			// folder form of the guidance: the name is the
+			// only missing piece.
+			fmt.Printf("%s Not adding that: %s %s needs a name — say \"add a %s named <Name>\" and it lands in the %s folder as its own file.\n", tag, conceptArticle(canon), canon, canon, req.entry.Folder)
+			recordBrain("composer", false, "concept refused: declaration unnamed")
+			return true
+		}
 		fmt.Printf("%s Not adding that: %s %s needs a name — say \"add a %s named <Name> to <file>\", like \"add a %s named Reader to main.go\".\n", tag, conceptArticle(canon), canon, canon, canon)
 		recordBrain("composer", false, "concept refused: declaration unnamed")
 		return true
 	}
-	if req.target == "" {
+	// The folder default: a declaration whose book row carries
+	// a family folder, asked with NO file or folder named,
+	// lands in that folder as its own package — the planner
+	// creates <folder>/<name>.go. A named target always wins:
+	// this branch is reachable only when the sentence named
+	// nothing. Statement rows never take it (they land inside
+	// functions), and neither do declarations whose rows carry
+	// no folder.
+	folderDefault := req.target == "" && req.entry.Kind == analyze.ConceptDeclaration && req.entry.Folder != ""
+	if req.target == "" && !folderDefault {
 		fmt.Printf("%s Not adding that: the sentence doesn't name the file or folder — say it like \"add a %s to jim/main.go\" (a file) or \"add a %s to jim\" (its folder).\n", tag, canon, canon)
 		recordBrain("composer", false, "concept refused: no target named")
 		return true
@@ -1932,11 +1960,18 @@ func runConcept(line string, ask editAsk) bool {
 		recordBrain("composer", false, "concept refused: root missing")
 		return true
 	}
-	rel, refusal := resolveServerFile(rootAbs, req.target)
-	if refusal != "" {
-		fmt.Printf("%s Not adding that: %s.\n", tag, strings.TrimSuffix(refusal, "."))
-		recordBrain("composer", false, "concept refused: target")
-		return true
+	rel := ""
+	if !folderDefault {
+		// A folder-default ask has no target to resolve: the
+		// planner derives the file from the row's folder and
+		// the declaration's name.
+		var refusal string
+		rel, refusal = resolveServerFile(rootAbs, req.target)
+		if refusal != "" {
+			fmt.Printf("%s Not adding that: %s.\n", tag, strings.TrimSuffix(refusal, "."))
+			recordBrain("composer", false, "concept refused: target")
+			return true
+		}
 	}
 	if lastAnalyzeProject == nil || lastAnalyzeRoot != rootRaw {
 		if !analyzeQuiet(rootAbs) {
@@ -1948,15 +1983,20 @@ func runConcept(line string, ask editAsk) bool {
 		return true
 	}
 	entry := req.entry
+	folder := ""
+	if folderDefault {
+		folder = entry.Folder
+	}
 	return executeEditPlan(analyze.EditRequest{
-		Kind:        analyze.EditConcept,
-		File:        rel,
-		Concept:     &entry,
-		ConceptName: req.name,
-		ConceptText: req.text,
-		ConceptFunc: req.inFunc,
-		ConceptLike: req.like,
-		PlaceLine:   req.placeLine,
-		PlaceBefore: req.placeBefore,
+		Kind:          analyze.EditConcept,
+		File:          rel,
+		Concept:       &entry,
+		ConceptName:   req.name,
+		ConceptText:   req.text,
+		ConceptFunc:   req.inFunc,
+		ConceptLike:   req.like,
+		ConceptFolder: folder,
+		PlaceLine:     req.placeLine,
+		PlaceBefore:   req.placeBefore,
 	}, ask)
 }

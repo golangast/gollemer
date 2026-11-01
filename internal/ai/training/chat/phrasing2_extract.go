@@ -407,6 +407,20 @@ func renderConceptDecl(e analyze.ConceptEntry, name, like, file string) string {
 	return s + " to " + file
 }
 
+// renderConceptDeclNoFile renders the folder-default form of
+// a declaration canonical: no target at all. The canonical
+// carries no path — when the piece executes, the concept
+// route resolves the book row's folder deterministically and
+// the planner creates <folder>/<name>.go. The model never
+// invents a path because the form has no slot for one.
+func renderConceptDeclNoFile(e analyze.ConceptEntry, name, like string) string {
+	s := "add " + phrasingArticle(e.Canonical()) + " " + e.Canonical() + " named " + name
+	if like != "" {
+		s += " like " + like
+	}
+	return s
+}
+
 func renderPrint(text, fn, file string) string {
 	s := "add a print line saying \"" + text + "\""
 	if fn != "" {
@@ -449,11 +463,11 @@ func extractConceptStmt(f frag, e analyze.ConceptEntry) (string, map[string]stri
 }
 
 func extractConceptDecl(f frag, e analyze.ConceptEntry) (string, map[string]string, bool) {
-	file, _, ok := f.fileSlot()
-	if !ok {
-		return "", nil, false
+	file, _, hasFile := f.fileSlot()
+	slots := map[string]string{}
+	if hasFile {
+		slots["target"] = file
 	}
-	slots := map[string]string{"target": file}
 	if like, _, ok := f.markerValue("like"); ok {
 		slots["like"] = like
 	}
@@ -497,6 +511,17 @@ func extractConceptDecl(f frag, e analyze.ConceptEntry) (string, map[string]stri
 		return "", nil, false
 	}
 	slots["name"] = name
+	if !hasFile {
+		// The no-file form (the folder layout build): only a
+		// declaration whose book row carries a family folder
+		// may render a canonical without a target. Every
+		// other declaration keeps requiring the file it
+		// lands in, exactly as before.
+		if e.Kind != analyze.ConceptDeclaration || e.Folder == "" {
+			return "", nil, false
+		}
+		return renderConceptDeclNoFile(e, name, slots["like"]), slots, true
+	}
 	return renderConceptDecl(e, name, slots["like"], file), slots, true
 }
 
@@ -1083,6 +1108,30 @@ func (f frag) placement() funcPlacement {
 	return p
 }
 
+// folderAddressOf returns the deterministic address a
+// folder-default routed piece will create — <folder>/<name>.go
+// from the book row's folder and the piece's name slot — or ""
+// when the piece is not a targetless folder-mapped
+// declaration. The route computes it from the book, never
+// from the sentence: it is the address createdFuncOf binds a
+// compound's second piece to, and the address the shared-
+// target distribution must not steal for the first piece.
+func folderAddressOf(family string, slots map[string]string) string {
+	if !strings.HasPrefix(family, "concept-") || slots["target"] != "" || slots["name"] == "" {
+		return ""
+	}
+	id := strings.TrimPrefix(family, "concept-")
+	for _, e := range conceptEntries() {
+		if e.ID == id {
+			if e.Kind == analyze.ConceptDeclaration && e.Folder != "" {
+				return e.Folder + "/" + strings.ToLower(slots["name"]) + ".go"
+			}
+			return ""
+		}
+	}
+	return ""
+}
+
 // createdFuncOf reports the function a routed first piece
 // creates, when it creates one a statement can land inside:
 // a concept declaration whose book template opens
@@ -1107,7 +1156,16 @@ func createdFuncOf(family string, slots map[string]string) (name, file string, o
 		}
 		if e.Kind == analyze.ConceptDeclaration &&
 			strings.HasPrefix(e.Template, "func {name}(") && slots["name"] != "" {
-			return slots["name"], slots["target"], true
+			file := slots["target"]
+			if file == "" && e.Folder != "" {
+				// A folder-default first piece creates its
+				// function at the book's deterministic
+				// address — <folder>/<name>.go — so a
+				// compound's second piece can bind to it
+				// exactly as it binds to a named file.
+				file = e.Folder + "/" + strings.ToLower(slots["name"]) + ".go"
+			}
+			return slots["name"], file, true
 		}
 		return "", "", false
 	}
@@ -1748,12 +1806,28 @@ func phrasingRouteB(line string) (pieces []string, ok bool) {
 	// when the compound's only file rides in the second
 	// fragment, the first piece is routed COMPLETED first —
 	// the bare fragment is the fallback reading, never the
-	// first.
+	// first. One exception, the folder-created shape (the
+	// folder layout build): when the first fragment routes
+	// BARE as a folder-default declaration and the compound's
+	// one file is exactly that declaration's folder address
+	// (<folder>/<name>.go), the file is the created binding's
+	// — it rode in on the second piece, which names or
+	// pronouns the function the first piece creates.
+	// Completing the first piece with it would aim the
+	// declaration at a file that doesn't exist yet, where the
+	// folder reading creates it; so the bare route stands and
+	// the created binding below owns the second piece. A file
+	// that is NOT the folder address keeps the shared reading
+	// exactly as before.
 	var canonA, famA string
 	var slotsA map[string]string
 	ok = false
 	if file, lacking, shared := sharedFileOf(frags[0], frags[1]); shared && lacking == 0 {
-		canonA, famA, slotsA, ok = routeSharedPiece(frags[0], file)
+		if c0, f0, s0, ok0 := routeFragment(frags[0]); ok0 && folderAddressOf(f0, s0) == file {
+			canonA, famA, slotsA, ok = c0, f0, s0, true
+		} else {
+			canonA, famA, slotsA, ok = routeSharedPiece(frags[0], file)
+		}
 	}
 	if !ok {
 		canonA, famA, slotsA, ok = routeFragment(frags[0])

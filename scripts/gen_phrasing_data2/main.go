@@ -450,6 +450,18 @@ func canonDecl(c concept, name, file, like string) string {
 	return s + " to " + file
 }
 
+// canonDeclNoFile is the folder-default form of a declaration
+// canonical (the folder layout build, 2026-11-01): no target
+// clause at all. It must be accepted verbatim by the shipped
+// concept parser with an empty target — and it is, because
+// the deterministic grammar claims that exact shape and the
+// concept route resolves the book row's folder itself. The
+// canonical carries no path for the model to invent; the
+// folder is book data, resolved by the route, never learned.
+func canonDeclNoFile(c concept, name string) string {
+	return fmt.Sprintf("add %s %s named %s", article(c.canonical), c.canonical, name)
+}
+
 func canonPrint(text, inFunc, file string) string {
 	if inFunc != "" {
 		return fmt.Sprintf("add a print line saying \"%s\" in %s to %s", text, inFunc, file)
@@ -787,6 +799,88 @@ func buildDeclAsk(r *rand.Rand, p pools, c concept, dialect string) ask {
 		slots = []string{name, like, file}
 	}
 	return ask{family: "concept-" + c.id, canonical: canon, slots: slots, cores: cores}
+}
+
+// ---------- folder-default declarations (2026-11-01) ----------
+//
+// The folder layout build: declaration rows whose book entry
+// carries a folder (data/concepts.json's folder field) also
+// train a NO-FILE form — "add a cors middleware named Cors"
+// with no target anywhere in the sentence. folderOfConcept
+// mirrors the book's assignments; the ROUTE never reads this
+// map (it reads the book) — it exists so a created-target
+// compound's bound file can be computed here exactly as the
+// route computes it: <folder>/<name>.go, name lowercased.
+
+var folderOfConcept = map[string]string{
+	"form-handler": "handlers", "session-handler": "handlers",
+	"middleware": "middleware", "middleware-timing": "middleware",
+	"middleware-chain": "middleware",
+	"cors":             "security", "jwt-verify": "security", "csrf": "security",
+	"security-headers": "security", "csp-nonce": "security",
+	"rate-limit": "security",
+}
+
+var folderConceptIDs = []string{
+	"form-handler", "session-handler",
+	"middleware", "middleware-timing", "middleware-chain",
+	"cors", "jwt-verify", "csrf", "security-headers",
+	"csp-nonce", "rate-limit",
+}
+
+// folderFuncIDs are the folder families whose book template
+// opens "func {name}(" — the only ones a created-target
+// compound's second piece can land inside (the route's
+// createdFuncOf rule). csp-nonce leads with its context-key
+// type and rate-limit with its state var — their functions
+// come second in the file, so no statement binds into them.
+var folderFuncIDs = []string{
+	"form-handler", "session-handler",
+	"middleware", "middleware-timing", "middleware-chain",
+	"cors", "jwt-verify", "csrf", "security-headers",
+}
+
+// buildDeclNoFileAsk makes the no-file form of a declaration
+// ask: buildDeclAsk's cores minus the target clause, in both
+// dialects. The only slot is the name.
+func buildDeclNoFileAsk(r *rand.Rand, p pools, c concept, dialect string) ask {
+	name := pickName(r, p.names)
+	canon := canonDeclNoFile(c, name)
+	word := conceptWord(r, c)
+	var cores []func() string
+	if dialect == "train" {
+		cores = []func() string{
+			func() string { return fmt.Sprintf("add %s %s named %s", article(word), word, name) },
+			func() string { return fmt.Sprintf("add %s %s called %s", article(word), word, name) },
+			func() string { return fmt.Sprintf("make %s %s named %s", article(word), word, name) },
+			func() string { return fmt.Sprintf("add new %s named %s", word, name) },
+			func() string { return fmt.Sprintf("i want %s %s named %s", article(word), word, name) },
+		}
+	} else {
+		cores = []func() string{
+			func() string { return fmt.Sprintf("add %s %s named %s", article(word), word, name) },
+			func() string { return fmt.Sprintf("create %s %s with the name %s", article(word), word, name) },
+			func() string { return fmt.Sprintf("place %s %s named %s", article(word), word, name) },
+		}
+	}
+	return ask{family: "concept-" + c.id, canonical: canon, slots: []string{name}, cores: cores}
+}
+
+// buildCreatedFolderPair builds one created-target compound
+// whose first piece is a folder-default declaration: the
+// second piece binds to the function at the deterministic
+// address <folder>/<name>.go — the same address the route's
+// createdFuncOf computes from the book row.
+func buildCreatedFolderPair(r *rand.Rand, p pools, dialect string, printPiece bool) (ask, ask) {
+	dc := conceptByID(pick(r, folderFuncIDs))
+	a := buildDeclNoFileAsk(r, p, dc, dialect)
+	file := folderOfConcept[dc.id] + "/" + strings.ToLower(a.slots[0]) + ".go"
+	form := r.Intn(3)
+	if printPiece {
+		return a, buildCreatedPrintAsk(r, p, dialect, a.slots[0], file, form)
+	}
+	sc := statementConcepts[r.Intn(len(statementConcepts))]
+	return a, buildCreatedStmtAsk(r, p, sc, dialect, a.slots[0], file, form)
 }
 
 func buildPrintAsk(r *rand.Rand, p pools, dialect string) ask {
@@ -3250,6 +3344,335 @@ func runHeldoutSecurity(outDir string, seed int64) {
 		rep.TrainInputOverlap, rep.JudgeInputOverlap, rep.SourcesOverlap, rep.CreatedOverlap, rep.RqliteOverlap, rep.BooksOverlap, rep.ServeHTMLOverlap, rep.BasicsOverlap, rep.LinesOverlap, rep.SlotLeak)
 }
 
+// ---------- the folder-default held-out judge ----------
+//
+// -mode heldout-folders builds data/training/
+// phrasing_heldout_folders.jsonl: the judge for the folder
+// layout build — the NO-FILE form of the eleven folder-mapped
+// declaration families, in the same construction as the
+// security judge: held-out core dialect, held-out wrappers,
+// slot values (declaration names) from the held-out pools
+// only, 20 single-unseen + 8 single-seen per family. Plus
+// created-target compounds (cell compound-created) whose
+// first piece is a folder declaration of one of the nine
+// function-opening families: the second piece's gold binds
+// to <folder>/<name>.go, the address the route computes
+// from the book — 4 statement compounds and 2 print
+// compounds per family, held-out dialect and glues (have-it
+// excluded, as in the created judge). Leak checks run
+// against the train corpus and ALL NINE prior judges; any
+// overlap fails the run. Run the train mode first.
+
+type foldersReport struct {
+	Seed               int64          `json:"seed"`
+	Items              int            `json:"items"`
+	ByFamilyCell       map[string]int `json:"by_family_cell"`
+	SkippedUnemittable int            `json:"skipped_unemittable"`
+	ConflictingInputs  int            `json:"conflicting_inputs_removed"`
+	DuplicateInputs    int            `json:"duplicate_inputs_skipped"`
+	TrainInputOverlap  int            `json:"train_input_overlap"`
+	JudgeInputOverlap  int            `json:"original_judge_input_overlap"`
+	SourcesOverlap     int            `json:"sources_judge_input_overlap"`
+	CreatedOverlap     int            `json:"created_judge_input_overlap"`
+	RqliteOverlap      int            `json:"rqlite_judge_input_overlap"`
+	BooksOverlap       int            `json:"books_judge_input_overlap"`
+	ServeHTMLOverlap   int            `json:"servehtml_judge_input_overlap"`
+	BasicsOverlap      int            `json:"basics_judge_input_overlap"`
+	LinesOverlap       int            `json:"lines_judge_input_overlap"`
+	SecurityOverlap    int            `json:"security_judge_input_overlap"`
+	SlotLeak           []string       `json:"slot_value_leak_beyond_fixtures"`
+}
+
+func runHeldoutFolders(outDir string, seed int64) {
+	r := rand.New(rand.NewSource(seed + 37))
+	rep := &foldersReport{Seed: seed, ByFamilyCell: map[string]int{}}
+	hp := heldoutPools()
+
+	seen := map[string]string{} // normalized input -> output
+	var items []heldItem
+	add := func(a ask, cell string, wrappers []wrapper) {
+		if !emittable(a.canonical) {
+			rep.SkippedUnemittable++
+			return
+		}
+		in, tmpl := dress(r, a, wrappers)
+		n := normInput(in)
+		if prev, dup := seen[n]; dup {
+			if prev != a.canonical {
+				rep.ConflictingInputs++
+				for i, q := range items {
+					if normInput(q.Input) == n {
+						items = append(items[:i], items[i+1:]...)
+						break
+					}
+				}
+				delete(seen, n)
+			} else {
+				rep.DuplicateInputs++
+			}
+			return
+		}
+		seen[n] = a.canonical
+		items = append(items, heldItem{
+			Input: in, Output: a.canonical, Family: a.family,
+			Cell: cell, Template: "heldout/" + tmpl,
+		})
+		rep.ByFamilyCell[a.family+"/"+cell]++
+	}
+
+	for _, id := range folderConceptIDs {
+		c := conceptByID(id)
+		if c.id == "" {
+			fail(fmt.Errorf("folder concept %q not in the book lists", id))
+		}
+		build := func(dialect string) ask { return buildDeclNoFileAsk(r, hp, c, dialect) }
+		for got, attempts := 0, 0; got < 20 && attempts < 600; attempts++ {
+			before := len(items)
+			add(build("heldout"), "single-unseen", heldoutWrappers)
+			if len(items) > before {
+				got++
+			}
+		}
+		for got, attempts := 0, 0; got < 8 && attempts < 240; attempts++ {
+			before := len(items)
+			add(build("train"), "single-seen", trainWrappers)
+			if len(items) > before {
+				got++
+			}
+		}
+	}
+
+	// Created-target compounds on a folder first piece:
+	// held-out glues minus have-it (its print tail follows
+	// the older inheritance convention, not this binding).
+	var glues []struct {
+		id string
+		fn func(a, b string) string
+	}
+	for _, g := range heldoutGlues {
+		if g.id != "then-have-it" {
+			glues = append(glues, g)
+		}
+	}
+	addCompound := func(printPiece bool) {
+		dc := conceptByID(pick(r, folderFuncIDs))
+		a := buildDeclNoFileAsk(r, hp, dc, "heldout")
+		file := folderOfConcept[dc.id] + "/" + strings.ToLower(a.slots[0]) + ".go"
+		var b ask
+		if printPiece {
+			b = buildCreatedPrintAsk(r, hp, "heldout", a.slots[0], file, r.Intn(3))
+		} else {
+			sc := statementConcepts[r.Intn(len(statementConcepts))]
+			b = buildCreatedStmtAsk(r, hp, sc, "heldout", a.slots[0], file, r.Intn(3))
+		}
+		out := a.canonical + " ## " + b.canonical
+		if !emittable(out) {
+			rep.SkippedUnemittable++
+			return
+		}
+		in, _, tmpl, _, _ := compoundAsk(r, a, b, glues)
+		if r.Intn(4) == 0 {
+			w := heldoutWrappers[r.Intn(len(heldoutWrappers))]
+			in = w.fn(in)
+			tmpl += "+" + w.id
+		}
+		n := normInput(in)
+		if prev, dup := seen[n]; dup {
+			if prev != out {
+				rep.ConflictingInputs++
+				for i, q := range items {
+					if normInput(q.Input) == n {
+						items = append(items[:i], items[i+1:]...)
+						break
+					}
+				}
+				delete(seen, n)
+			} else {
+				rep.DuplicateInputs++
+			}
+			return
+		}
+		seen[n] = out
+		items = append(items, heldItem{
+			Input: in, Output: out, Family: "compound:folder-created",
+			Cell: "compound-created", Template: "heldout-folders/" + tmpl,
+		})
+		rep.ByFamilyCell[a.family+"/compound-created"]++
+	}
+	for i := 0; i < 36; i++ {
+		addCompound(false)
+	}
+	for i := 0; i < 18; i++ {
+		addCompound(true)
+	}
+	rep.Items = len(items)
+
+	// Leak checks: against the train corpus (read back from
+	// the pairs file the train mode wrote) and all nine
+	// prior judges. Overlaps are dropped, counted, and
+	// reported — and any drop at all fails the run, because
+	// by construction (disjoint dialects, wrappers, and
+	// pools) there should be none.
+	readPairs := func(path string) (inputs map[string]bool, slots map[string]bool) {
+		inputs, slots = map[string]bool{}, map[string]bool{}
+		f, err := os.Open(path)
+		if err != nil {
+			fail(fmt.Errorf("heldout-folders mode reads %s (run the train mode first): %w", path, err))
+		}
+		defer f.Close()
+		sc := bufioScanner(f)
+		for sc.Scan() {
+			line := strings.TrimSpace(sc.Text())
+			if line == "" {
+				continue
+			}
+			var p pair
+			if err := json.Unmarshal([]byte(line), &p); err != nil {
+				fail(err)
+			}
+			inputs[normInput(p.Input)] = true
+			for _, s := range p.Slots {
+				slots[s] = true
+			}
+		}
+		return inputs, slots
+	}
+	readJudge := func(path string) map[string]bool {
+		inputs := map[string]bool{}
+		f, err := os.Open(path)
+		if err != nil {
+			fail(err)
+		}
+		defer f.Close()
+		sc := bufioScanner(f)
+		for sc.Scan() {
+			line := strings.TrimSpace(sc.Text())
+			if line == "" {
+				continue
+			}
+			var it heldItem
+			if err := json.Unmarshal([]byte(line), &it); err != nil {
+				fail(err)
+			}
+			inputs[normInput(it.Input)] = true
+		}
+		return inputs
+	}
+	trainInputs, trainSlots := readPairs(filepath.Join(outDir, "phrasing_pairs2.jsonl"))
+	judgeInputs := readJudge(filepath.Join(outDir, "phrasing_heldout.jsonl"))
+	sourcesInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_sources.jsonl"))
+	createdInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_created.jsonl"))
+	rqliteInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_rqlite.jsonl"))
+	booksInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_books.jsonl"))
+	serveHTMLInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_servehtml.jsonl"))
+	basicsInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_basics.jsonl"))
+	linesInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_lines.jsonl"))
+	securityInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_security.jsonl"))
+	fixtures := map[string]bool{"main": true, "main.go": true, "index.html": true}
+	for _, t := range fieldTypes {
+		fixtures[t] = true
+	}
+	heldSlotVals := map[string]bool{}
+	for _, s := range append(append(append(append(append(append(append(append(append(
+		[]string{}, namesHeldout...), filesHeldout...), fieldNamesHeldout...),
+		caseValsHeldout...), keysHeldout...), tablesHeldout...), textsHeldout...), calleesHeldout...), htmlsHeldout...) {
+		heldSlotVals[s] = true
+	}
+	for _, s := range tagValsHeldout {
+		heldSlotVals[s] = true
+		for _, k := range tagKinds {
+			heldSlotVals[k+":\""+s+"\""] = true
+		}
+	}
+	leakSet := map[string]bool{}
+	for s := range heldSlotVals {
+		if trainSlots[s] && !fixtures[s] {
+			leakSet[s] = true
+		}
+	}
+	for s := range leakSet {
+		rep.SlotLeak = append(rep.SlotLeak, s)
+	}
+	sort.Strings(rep.SlotLeak)
+	kept := items[:0]
+	for _, it := range items {
+		n := normInput(it.Input)
+		drop := false
+		if trainInputs[n] {
+			rep.TrainInputOverlap++
+			drop = true
+		}
+		if judgeInputs[n] {
+			rep.JudgeInputOverlap++
+			drop = true
+		}
+		if sourcesInputs[n] {
+			rep.SourcesOverlap++
+			drop = true
+		}
+		if createdInputs[n] {
+			rep.CreatedOverlap++
+			drop = true
+		}
+		if rqliteInputs[n] {
+			rep.RqliteOverlap++
+			drop = true
+		}
+		if booksInputs[n] {
+			rep.BooksOverlap++
+			drop = true
+		}
+		if serveHTMLInputs[n] {
+			rep.ServeHTMLOverlap++
+			drop = true
+		}
+		if basicsInputs[n] {
+			rep.BasicsOverlap++
+			drop = true
+		}
+		if linesInputs[n] {
+			rep.LinesOverlap++
+			drop = true
+		}
+		if securityInputs[n] {
+			rep.SecurityOverlap++
+			drop = true
+		}
+		if !drop {
+			kept = append(kept, it)
+		}
+	}
+	items = kept
+	rep.Items = len(items)
+	if rep.TrainInputOverlap > 0 || rep.JudgeInputOverlap > 0 ||
+		rep.SourcesOverlap > 0 || rep.CreatedOverlap > 0 ||
+		rep.RqliteOverlap > 0 || rep.BooksOverlap > 0 ||
+		rep.ServeHTMLOverlap > 0 || rep.BasicsOverlap > 0 ||
+		rep.LinesOverlap > 0 || rep.SecurityOverlap > 0 ||
+		len(rep.SlotLeak) > 0 {
+		fail(fmt.Errorf("leak check failed: train-overlap=%d judge-overlap=%d sources-overlap=%d created-overlap=%d rqlite-overlap=%d books-overlap=%d servehtml-overlap=%d basics-overlap=%d lines-overlap=%d security-overlap=%d slot=%v",
+			rep.TrainInputOverlap, rep.JudgeInputOverlap, rep.SourcesOverlap, rep.CreatedOverlap, rep.RqliteOverlap, rep.BooksOverlap, rep.ServeHTMLOverlap, rep.BasicsOverlap, rep.LinesOverlap, rep.SecurityOverlap, rep.SlotLeak))
+	}
+
+	if err := writeJSONL(filepath.Join(outDir, "phrasing_heldout_folders.jsonl"), items); err != nil {
+		fail(err)
+	}
+	raw, err := json.MarshalIndent(rep, "", "  ")
+	if err != nil {
+		fail(err)
+	}
+	if err := os.WriteFile(filepath.Join(outDir, "phrasing_report_folders.json"), raw, 0o644); err != nil {
+		fail(err)
+	}
+	fmt.Printf("heldout-folders judge: %d items\n", rep.Items)
+	for _, k := range sortedKeys(rep.ByFamilyCell) {
+		fmt.Printf("  %-44s %d\n", k, rep.ByFamilyCell[k])
+	}
+	fmt.Printf("skipped unemittable=%d conflicting=%d duplicates=%d\n", rep.SkippedUnemittable, rep.ConflictingInputs, rep.DuplicateInputs)
+	fmt.Printf("leaks: train-overlap=%d judge-overlap=%d sources-overlap=%d created-overlap=%d rqlite-overlap=%d books-overlap=%d servehtml-overlap=%d basics-overlap=%d lines-overlap=%d security-overlap=%d slot=%v\n",
+		rep.TrainInputOverlap, rep.JudgeInputOverlap, rep.SourcesOverlap, rep.CreatedOverlap, rep.RqliteOverlap, rep.BooksOverlap, rep.ServeHTMLOverlap, rep.BasicsOverlap, rep.LinesOverlap, rep.SecurityOverlap, rep.SlotLeak)
+}
+
 // ---------- the line-placement held-out judge ----------
 //
 // -mode heldout-lines builds data/training/
@@ -4106,8 +4529,12 @@ func main() {
 	outDir := flag.String("out", "data/training", "output directory")
 	seed := flag.Int64("seed", 20261031, "generator seed")
 	judgePath := flag.String("judge", "data/training/phrasing_heldout.jsonl", "the fixed held-out judge, read for leak checks only")
-	mode := flag.String("mode", "train", "train | heldout-sources | heldout-created | heldout-rqlite | heldout-books | heldout-servehtml | heldout-basics | heldout-lines | heldout-security")
+	mode := flag.String("mode", "train", "train | heldout-sources | heldout-created | heldout-rqlite | heldout-books | heldout-servehtml | heldout-basics | heldout-lines | heldout-security | heldout-folders")
 	flag.Parse()
+	if *mode == "heldout-folders" {
+		runHeldoutFolders(*outDir, *seed)
+		return
+	}
 	if *mode == "heldout-security" {
 		runHeldoutSecurity(*outDir, *seed)
 		return
@@ -4486,6 +4913,46 @@ func main() {
 	emitTwins(func() ask { return buildPlacedPrintAsk(r, tp, "train") }, 3)
 	emit(func() ask { return buildPlacedInstantiateAsk(r, tp, "train") }, 350)
 	emitTwins(func() ask { return buildPlacedInstantiateAsk(r, tp, "train") }, 3)
+
+	// Folder defaults (2026-11-01): the no-file form of the
+	// eleven folder-mapped declaration families, emitted LAST
+	// on the same append-only discipline — every row above
+	// keeps its exact bytes. Singles at a working density per
+	// family; then created-target compounds whose first piece
+	// is a folder declaration, on the created block's glues —
+	// the second piece binds to <folder>/<name>.go, the
+	// route's own deterministic address.
+	for _, id := range folderConceptIDs {
+		c := conceptByID(id)
+		if c.id == "" {
+			fail(fmt.Errorf("folder concept %q not in the book lists", id))
+		}
+		b := func() ask { return buildDeclNoFileAsk(r, tp, c, "train") }
+		emit(b, 120)
+		emitTwins(b, 2)
+	}
+	emitFolderCreated := func(printPiece bool, count int, fam string) {
+		for i := 0; i < count; i++ {
+			a, b := buildCreatedFolderPair(r, tp, "train", printPiece)
+			in, out, tmpl, ca, cb := compoundAsk(r, a, b, createdGlues)
+			if r.Intn(4) == 0 {
+				w := trainWrappers[2+r.Intn(4)]
+				in = w.fn(in)
+				tmpl += "+" + w.id
+			}
+			addTrain(pair{Input: in, Output: out, Domain: "phrasing",
+				Family: "compound:" + fam, Template: "train/" + tmpl,
+				Slots: append(append([]string{}, a.slots...), b.slots...)})
+			addFrag(ca, a.family, "train/frag-a")
+			addFrag(cb, b.family, "train/frag-b")
+			if r.Intn(4) == 0 {
+				w := trainWrappers[r.Intn(len(trainWrappers))]
+				addFrag(w.fn(ca), a.family, "train/frag-a+"+w.id)
+			}
+		}
+	}
+	emitFolderCreated(false, 330, "folder-created")
+	emitFolderCreated(true, 220, "folder-print")
 
 	rep.TrainPairs = len(train)
 	rep.Fragments = len(fragments)

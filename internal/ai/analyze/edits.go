@@ -186,6 +186,14 @@ type EditRequest struct {
 	ConceptText string
 	ConceptFunc string
 	ConceptLike string
+	// ConceptFolder is the folder-default trigger: the book
+	// row's folder field, carried when the sentence named NO
+	// file or folder for a declaration ask. The planner then
+	// creates <folder>/<name>.go as the folder's own package
+	// instead of editing req.File (which stays empty). A
+	// request that names a file never sets it — the named
+	// target always wins.
+	ConceptFolder string
 
 	// Line placement (editconcept.go): the sentence's line
 	// phrase — "on line 12", "before line 8" — carried by the

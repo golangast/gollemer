@@ -103,6 +103,31 @@ type editTxEntry struct {
 	mode        os.FileMode
 	wroteBackup bool // this transaction wrote the backup (safe to remove on cleanup)
 	restored    bool // a rollback already put this entry back; its backup is gone
+	// madeDir is the topmost folder (absolute path) that did
+	// not exist when the transaction began, on a created
+	// file's path: writing the file creates it (and any
+	// folder between it and the file), so restoring the
+	// entry removes those folders again — deepest first, and
+	// os.Remove only ever takes an EMPTY folder, so anything
+	// since filled stays. "" when the whole path existed.
+	madeDir string
+}
+
+// topmostMissingDir returns the highest folder on dir's path
+// (dir itself included, root excluded) that does not exist —
+// the folder a write creating dir would bring into being at
+// the top of its MkdirAll chain. "" when dir's whole chain
+// exists.
+func topmostMissingDir(root, dir string) string {
+	missing := ""
+	for d := dir; d != root && len(d) > len(root); d = filepath.Dir(d) {
+		if _, err := os.Stat(d); err != nil {
+			missing = d
+			continue
+		}
+		break
+	}
+	return missing
 }
 
 // editTx is one plan application's write transaction.
@@ -197,6 +222,7 @@ func beginEditTx(root string, files []analyze.EditFile) (*editTx, error) {
 		fi, err := os.Stat(abs)
 		if os.IsNotExist(err) {
 			e.created = true
+			e.madeDir = topmostMissingDir(root, filepath.Dir(abs))
 		} else if err != nil {
 			return nil, fmt.Errorf("couldn't read %s to back it up: %v", f.Rel, err)
 		} else {
@@ -274,6 +300,17 @@ func (tx *editTx) write(f analyze.EditFile) error {
 		existing = true
 	}
 	abs := filepath.Join(tx.root, f.Rel)
+	if e := tx.entry(f.Rel); e != nil && e.created {
+		// A created file may live in a folder that doesn't
+		// exist yet — the folder-default concept plans create
+		// <folder>/<name>.go in a folder the plan itself
+		// brings into being. The folders are the
+		// transaction's to make (and, on rollback, to remove
+		// again: see the entry's madeDir).
+		if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+			return err
+		}
+	}
 	if err := os.WriteFile(abs, f.After, mode); err != nil {
 		return err
 	}
@@ -316,6 +353,17 @@ func (e *editTxEntry) restore() error {
 	if e.created {
 		if err := os.Remove(e.abs); err != nil && !os.IsNotExist(err) {
 			return err
+		}
+		if e.madeDir != "" {
+			// Take back the folders the write created,
+			// deepest first. os.Remove refuses a folder
+			// that isn't empty, so the climb stops at
+			// anything that has since gained content.
+			for d := filepath.Dir(e.abs); ; d = filepath.Dir(d) {
+				if err := os.Remove(d); err != nil || d == e.madeDir {
+					break
+				}
+			}
 		}
 		return nil
 	}
