@@ -354,12 +354,51 @@ The rules around it:
   `show visits` / `show the program log` says exactly that for
   programs you wrote by hand.
 
+### Basic terminal commands
+
+The beginner terminal words work too — `pwd`, `ls`, `cd`, `cat`,
+`echo`, `clear`, `date`, `whoami` — answered by the chat itself
+(tagged `gollemer [terminal]>`), each behind the same run gate, and
+each confined to the project folder: a path that climbs out of it is
+refused by name. There is still no shell underneath: each command is
+done natively, one at a time, so a line carrying a shell character
+(`;`, `&`, `|`, `>`, `<`, a backtick, or `$`) is refused, naming the
+character. Command words the chat won't run at all are answered with
+guidance instead of silence: `mkdir` points at "create a folder
+\<name\>", `rm` explains that Gollemer doesn't delete files, and
+`mv`, `cp`, `sudo`, `curl` and friends point at the basics above.
+
+`cd` moves the whole session, not just the answer: the chat re-reads
+the new folder as its project, so creations, edits, and runs follow
+you. Bare `cd` returns to the folder the chat started in, and
+`cd ..` stops at the project root with a note instead of climbing
+out of it.
+
+```text
+you> pwd
+Run it? pwd [auto-yes: your 'do all' directive]
+…/cap
+you> ls
+Run it? ls [auto-yes: your 'do all' directive]
+data
+go.mod
+jake/
+notes.txt
+you> cd jake
+Run it? cd jake [auto-yes: your 'do all' directive]
+gollemer [terminal]> Now working in jake/ — creations, edits, and runs happen here now. Say "cd" on its own to go back to cap/.
+you> rm notes.txt
+gollemer [terminal]> I don't run rm — Gollemer doesn't delete files from the chat. Deleting is permanent, and I only do things I can show you first and stand behind; if a file has to go, that's a job for your file manager or your own terminal.
+you> ls ../secret
+gollemer [terminal]> "../secret" climbs out of the project folder — these commands only work inside cap/.
+```
+
 ### Test everything at once
 
 ```
 $ make handtest
 ...
-handtest scoreboard: 57 passed, 0 failed, 57 total
+handtest scoreboard: 75 passed, 0 failed, 75 total
 ```
 
 `make handtest` drives the real chat through scripted sessions in a
@@ -367,8 +406,10 @@ throwaway project — folder creation, bare files, the webserver and
 serve-an-html-file recipes, the security pieces, line placement, the
 database pieces and the dependency gate, running your own programs
 (a quick one, a live server with a real visit in its log, stop, and
-top), and the everyday statement pieces — then checks the files it
-should have written and builds the
+top), the basic terminal commands (pwd, ls, cd, cat, echo, date,
+whoami — and their refusals: rm, a path escape, a shell character,
+cd .. at the top), and the everyday statement pieces — then checks
+the files it should have written and builds the
 whole scratch project. It's the same test a person would do by hand
 after every update, automated. (The scoreboard above is from a real
 run on 2026-11-01.)
@@ -468,7 +509,7 @@ guesses.
 
 ## A note on the numbers in this README
 
-135 pieces, 17 brains, 57 handtest cases — these are counts of what's
+135 pieces, 17 brains, 75 handtest cases — these are counts of what's
 actually in this checkout, and the model scores quoted are the
 measured ones, kept next to the features they describe. When a number
 changes, this file should change with it.

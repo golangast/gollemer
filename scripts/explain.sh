@@ -145,15 +145,41 @@ Run your program:
   chat open; closing the chat stops it too — no orphans. If
   the browser can't open, the address is printed plainly.
 
+Basic terminal commands:
+
+  you> pwd
+  Run it? pwd [auto-yes: your 'do all' directive]
+  …/cap
+  you> cd jake
+  gollemer [terminal]> Now working in jake/ — creations, edits,
+      and runs happen here now.
+  you> rm notes.txt
+  gollemer [terminal]> I don't run rm — Gollemer doesn't delete
+      files from the chat. …
+
+  pwd, ls, cd, cat, echo, clear, date, whoami — each done natively
+  by the chat (no shell, ever), each behind the same Run it? gate,
+  and each confined to the project folder: a path that climbs out
+  is refused by name, and a line carrying a shell character
+  (; & | > < ` $) is refused, naming the character. Words that
+  aren't run at all — rm, mv, cp, touch, rmdir, chmod, sudo,
+  curl, wget — get guidance instead: mkdir points at
+  "create a folder <name>", rm explains that Gollemer doesn't
+  delete files. cd re-roots the session — the analyzer follows,
+  so creations and edits move with you; bare cd returns to the
+  folder the chat started in, and cd .. stops at the project
+  root with a note.
+
 Test everything at once:
 
   make handtest
       drives the real chat through scripted sessions in a
       throwaway project — folders, bare files, webserver +
       serve-html, security, line placement, database + the
-      gorqlite gate, the statement pieces — checks the files,
-      builds the scratch project, prints a PASS/FAIL scoreboard
-      (57 passed, 0 failed on 2026-11-01).
+      gorqlite gate, program running, the basic terminal
+      commands with their refusals, the statement pieces —
+      checks the files, builds the scratch project, prints a
+      PASS/FAIL scoreboard (75 passed, 0 failed on 2026-11-01).
 
 HONEST LIMITS
 -------------

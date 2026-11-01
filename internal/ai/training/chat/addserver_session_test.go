@@ -35,12 +35,17 @@ import (
 // deterministic claims, in order, with a scripted gate answer.
 // Package lookup sits directly after build resources, exactly
 // as in the loops. Run-the-program sits directly after learn,
-// ahead of the beginner five, exactly as in the unified loop.
+// ahead of the beginner five, exactly as in the unified loop,
+// and the basic Linux commands sit directly after it (with a
+// non-terminal session, as in these tests).
 func claimChain(line string, ask editAsk, profile *UserProfile) bool {
 	if tryLearnCommand(line) {
 		return true
 	}
 	if runRunProgram(line, ask, profile) {
+		return true
+	}
+	if runLinuxCommand(line, ask, profile, false) {
 		return true
 	}
 	if handleBeginnerCommand(line, profile) {

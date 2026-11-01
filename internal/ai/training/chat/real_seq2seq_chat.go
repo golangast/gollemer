@@ -1219,6 +1219,18 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if tryRunProgram(line, reader, profile) {
 			continue
 		}
+		// Basic Linux commands, claimed deterministically
+		// beside run-the-program: a line whose first word is
+		// a terminal command word (pwd, ls, cd, cat, echo,
+		// clear, date, whoami — or a refusal word like rm)
+		// is answered by the terminal itself, behind the same
+		// run gate, confined to the project folder — never
+		// reinterpreted as a make target or small talk, and
+		// never through a shell. Every other sentence falls
+		// through untouched. See linuxcmds.go.
+		if tryLinuxCommand(line, reader, profile) {
+			continue
+		}
 		// Beginner five, claimed deterministically before routing —
 		// same as the single-domain loop. A sentence like "tour
 		// https://…" or "run it" must never be left for the router

@@ -14,7 +14,9 @@
 # placement, the gorqlite dependency gate, running your own
 # programs (quick ones, a live server with visits in its log,
 # and the pin that "run the program X" never becomes the
-# project's `make start`), and the basics + cheatsheet
+# project's `make start`), the basic Linux commands (pwd, ls,
+# cd, cat, echo, clear, date, whoami — gated, confined, with
+# their refusal shapes), and the basics + cheatsheet
 # statement rows.
 #
 # How it works:
@@ -467,6 +469,91 @@ else
 fi
 
 rm -rf -- "$SCRATCH/quick" "$SCRATCH/broken"
+
+# --- session: basic Linux commands -------------------------------------------
+# The terminal family: gated like every run, confined to the
+# scratch. pwd prints the scratch root (the physical path —
+# the chat resolves symlinks), ls/cat/echo/date/whoami do
+# their one job, cd moves the working folder and pwd follows
+# it, and the refusal shapes (rm, mkdir, a metachar line, a
+# path escape, cd .. at the top) answer without any y —
+# refusals are never gated, because nothing runs.
+
+cat > "$SCRATCH/.inputs/linux.txt" <<'EOF'
+pwd
+y
+ls
+y
+ls app
+y
+cat app/main.go
+y
+echo hello from handtest
+y
+date
+y
+whoami
+y
+clear
+y
+cd app
+y
+pwd
+y
+cd
+y
+cd ..
+rm app/main.go
+mkdir newfolder
+ls app; cat app/main.go
+ls ../outside
+/quit
+EOF
+run_session linux
+
+EXPECT_PWD="$(cd "$SCRATCH" && pwd -P)"
+if grep -qFx -- "$EXPECT_PWD" "$SCRATCH/transcripts/linux.txt"; then
+	ok linux-pwd-root
+else
+	bad linux-pwd-root "pwd did not print the scratch root $EXPECT_PWD"
+fi
+case_transcript_contains linux-ls-root linux "app/" "pieces.go" "go.mod"
+if grep -qFx -- "main.go" "$SCRATCH/transcripts/linux.txt"; then
+	ok linux-ls-folder
+else
+	bad linux-ls-folder "ls app did not list main.go on its own line"
+fi
+case_transcript_contains linux-cat-file linux 'fmt.Println("one")'
+if grep -qFx -- "hello from handtest" "$SCRATCH/transcripts/linux.txt"; then
+	ok linux-echo
+else
+	bad linux-echo "echo did not print its arguments"
+fi
+if grep -Eq -- '[A-Z][a-z]{2} [A-Z][a-z]{2} +[0-9]+ [0-9]{2}:[0-9]{2}:[0-9]{2}' "$SCRATCH/transcripts/linux.txt"; then
+	ok linux-date
+else
+	bad linux-date "date did not print a standard date line"
+fi
+if grep -qFx -- "$(whoami)" "$SCRATCH/transcripts/linux.txt"; then
+	ok linux-whoami
+else
+	bad linux-whoami "whoami did not print $(whoami)"
+fi
+case_transcript_contains linux-clear-gated linux "Run it? clear"
+case_transcript_contains linux-cd-announce linux "Now working in app/"
+if grep -qFx -- "$EXPECT_PWD/app" "$SCRATCH/transcripts/linux.txt"; then
+	ok linux-cd-pwd
+else
+	bad linux-cd-pwd "pwd after cd app did not print $EXPECT_PWD/app"
+fi
+case_transcript_contains linux-cd-home linux "back at the folder the chat started in"
+case_transcript_contains linux-cd-stop-at-root linux "cd .. stops here"
+case_transcript_contains linux-rm-refused linux "doesn't delete files"
+case_file_contains linux-rm-did-not-run app/main.go "package main"
+case_transcript_contains linux-mkdir-refused linux "create a folder <name>"
+case_dir_absent linux-mkdir-did-not-run newfolder
+case_transcript_contains linux-meta-refused linux "no shell behind it"
+case_transcript_contains linux-escape-refused linux "climbs out of the project folder"
 
 # --- sessions: basics + cheatsheet statement rows -------------------------
 # One stub function per row group (see pieces.go): the rows'
