@@ -1009,6 +1009,237 @@ const defaultConceptBook = `{
       ],
       "note": "This piece reads the values a form sent, so it belongs inside a handler — it parses and reads the request that handler receives.",
       "template": "if err := {request}.ParseForm(); err == nil {\n\t// TODO: {request}.Form now holds everything the form sent, by field name — read one field with {request}.FormValue(\"email\"), or walk them all like this\n\tfor key, values := range {request}.Form {\n\t\t_ = key\n\t\t_ = values\n\t}\n}"
+    },
+    {
+      "id": "append-slice",
+      "kind": "statement",
+      "names": [
+        "append to a slice",
+        "append to slice",
+        "slice append"
+      ],
+      "template": "names := []string{\"ann\", \"bo\"}\nnames = append(names, \"cy\")\n// TODO: your own slice and values — append returns the grown slice, so the result has to be assigned back"
+    },
+    {
+      "id": "map-lookup",
+      "kind": "statement",
+      "names": [
+        "map lookup",
+        "look up a key",
+        "find a key in a map",
+        "check a map key"
+      ],
+      "template": "ages := map[string]int{\"ann\": 3}\nage, ok := ages[\"ann\"]\n// TODO: your own map and key — ok is false when the key isn't there (and age is the zero value), so a missing key can't fool you\n_ = age\n_ = ok"
+    },
+    {
+      "id": "env-var",
+      "imports": [
+        "os"
+      ],
+      "kind": "statement",
+      "names": [
+        "environment variable",
+        "env var",
+        "read an environment variable",
+        "get an environment variable"
+      ],
+      "template": "value := os.Getenv(\"TODO: the variable's name\")\n// TODO: an unset variable reads as \"\" — use os.LookupEnv when you need to tell \"unset\" from \"set but empty\"\n_ = value"
+    },
+    {
+      "id": "working-directory",
+      "imports": [
+        "os"
+      ],
+      "kind": "statement",
+      "names": [
+        "current working directory",
+        "working directory",
+        "current directory",
+        "get the working directory"
+      ],
+      "template": "dir, err := os.Getwd()\nif err == nil {\n\t// TODO: dir is the folder the program was started from — relative paths are read from here\n\t_ = dir\n}"
+    },
+    {
+      "id": "read-lines",
+      "imports": [
+        "bufio",
+        "os"
+      ],
+      "kind": "statement",
+      "names": [
+        "read a file line by line",
+        "read lines from a file",
+        "read file line by line",
+        "line by line reading"
+      ],
+      "template": "file, err := os.Open(\"TODO: the file's path\")\nif err == nil {\n\tdefer file.Close()\n\tscanner := bufio.NewScanner(file)\n\tfor scanner.Scan() {\n\t\tline := scanner.Text()\n\t\t// TODO: one line of the file — do what the line is for here\n\t\t_ = line\n\t}\n}"
+    },
+    {
+      "id": "append-file",
+      "imports": [
+        "os"
+      ],
+      "kind": "statement",
+      "names": [
+        "append to a file",
+        "append text to a file",
+        "append to file",
+        "append a file"
+      ],
+      "template": "file, err := os.OpenFile(\"TODO: the file's path\", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)\nif err == nil {\n\tdefer file.Close()\n\tif _, err := file.WriteString(\"TODO: the text to add\\n\"); err != nil {\n\t\t// TODO: the append failed — decide what to do about it\n\t}\n}"
+    },
+    {
+      "id": "walk-directory",
+      "imports": [
+        "os",
+        "path/filepath"
+      ],
+      "kind": "statement",
+      "names": [
+        "walk a directory",
+        "walk directory",
+        "list files recursively",
+        "recursive file listing"
+      ],
+      "template": "err := filepath.Walk(\"TODO: the folder's path\", func(path string, info os.FileInfo, err error) error {\n\t// TODO: path is each file and folder under the start, one call each — do what each path is for here\n\t_ = path\n\t_ = info\n\treturn err\n})\n// TODO: err is the first problem the walk met, if any\n_ = err"
+    },
+    {
+      "id": "log-to-file",
+      "imports": [
+        "log",
+        "os"
+      ],
+      "kind": "statement",
+      "names": [
+        "log to a file",
+        "log to file",
+        "write log to a file",
+        "logging to a file"
+      ],
+      "template": "file, err := os.Create(\"TODO: the log file's path\")\nif err == nil {\n\tdefer file.Close()\n\tlog.SetOutput(file)\n\t// TODO: from here, log lines go to the file instead of the screen\n}"
+    },
+    {
+      "id": "string-builder",
+      "imports": [
+        "strings"
+      ],
+      "kind": "statement",
+      "names": [
+        "string builder",
+        "build a string",
+        "concatenate strings",
+        "string concatenation"
+      ],
+      "template": "var builder strings.Builder\nbuilder.WriteString(\"hello\")\nbuilder.WriteString(\", \")\nbuilder.WriteString(\"world\")\ntext := builder.String()\n// TODO: a builder grows a string piece by piece without copying it on every step — text is the finished string\n_ = text"
+    },
+    {
+      "id": "split-string",
+      "imports": [
+        "strings"
+      ],
+      "kind": "statement",
+      "names": [
+        "split a string",
+        "split string",
+        "string split",
+        "split text"
+      ],
+      "template": "parts := strings.Split(\"ann,bo,cy\", \",\")\n// TODO: your own text and separator — parts holds the pieces, in order\n_ = parts"
+    },
+    {
+      "id": "trim-string",
+      "imports": [
+        "strings"
+      ],
+      "kind": "statement",
+      "names": [
+        "trim whitespace",
+        "trim a string",
+        "trim string",
+        "trim spaces"
+      ],
+      "template": "trimmed := strings.TrimSpace(\"  hello  \")\n// TODO: your own text — TrimSpace cuts spaces (and tabs and newlines) off both ends\n_ = trimmed"
+    },
+    {
+      "id": "reverse-string",
+      "kind": "statement",
+      "names": [
+        "reverse a string",
+        "string reverse",
+        "reverse string",
+        "reversed string"
+      ],
+      "template": "text := \"hello\"\nrunes := []rune(text)\nfor i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {\n\trunes[i], runes[j] = runes[j], runes[i]\n}\nreversed := string(runes)\n// TODO: your own text — going through []rune keeps letters that take more than one byte in one piece\n_ = reversed"
+    },
+    {
+      "id": "delete-from-slice",
+      "kind": "statement",
+      "names": [
+        "delete from a slice",
+        "remove from a slice",
+        "delete an element from a slice",
+        "remove an element from a slice"
+      ],
+      "template": "names := []string{\"ann\", \"bo\", \"cy\"}\n// TODO: the element at index 1 goes — pick your own slice and index\nnames = append(names[:1], names[2:]...)"
+    },
+    {
+      "id": "clear-slice",
+      "kind": "statement",
+      "names": [
+        "clear a slice",
+        "empty a slice",
+        "clear slice"
+      ],
+      "template": "names := []string{\"ann\", \"bo\", \"cy\"}\nnames = names[:0]\n// TODO: your own slice — its length is now 0, but the backing array (and its capacity) is kept, so it can grow again without new allocation; assigning nil instead gives the memory back"
+    },
+    {
+      "id": "slice-search",
+      "kind": "statement",
+      "names": [
+        "slice search",
+        "find in a slice",
+        "search a slice",
+        "find an element in a slice"
+      ],
+      "template": "names := []string{\"ann\", \"bo\", \"cy\"}\nfound := -1\nfor i, name := range names {\n\tif name == \"bo\" {\n\t\tfound = i\n\t\tbreak\n\t}\n}\n// TODO: your own slice and the value you're hunting — found is its index, or -1 when it isn't there\n_ = found"
+    },
+    {
+      "id": "copy-slice",
+      "kind": "statement",
+      "names": [
+        "slice copy",
+        "copy a slice",
+        "copy slice",
+        "copying a slice"
+      ],
+      "template": "names := []string{\"ann\", \"bo\", \"cy\"}\ncopied := make([]string, len(names))\ncopy(copied, names)\n// TODO: copied is independent — changing it leaves names alone (a plain second := names would share the same backing array)\n_ = copied"
+    },
+    {
+      "id": "shuffle",
+      "imports": [
+        "math/rand"
+      ],
+      "kind": "statement",
+      "names": [
+        "shuffle a slice",
+        "shuffle slice",
+        "shuffle",
+        "shuffled slice"
+      ],
+      "template": "names := []string{\"ann\", \"bo\", \"cy\"}\nrand.Shuffle(len(names), func(i, j int) {\n\tnames[i], names[j] = names[j], names[i]\n})\n// TODO: your own slice — it is shuffled in place, into a random order"
+    },
+    {
+      "id": "execution-time",
+      "imports": [
+        "time"
+      ],
+      "kind": "statement",
+      "names": [
+        "execution time",
+        "measure execution time",
+        "measure time"
+      ],
+      "template": "start := time.Now()\n// TODO: the code whose time you want to measure goes here\nelapsed := time.Since(start)\n// TODO: elapsed is how long it took — print it, or decide something with it\n_ = elapsed"
     }
   ],
   "source": "Gollemer's concept book — names of code mapped to their basic code. Rows are data, not grammar: add a row (id, names, kind, template) and the composer can assemble that concept in every phrasing its slots allow, with no new Go code. A malformed row is skipped; the rest of the book still loads."

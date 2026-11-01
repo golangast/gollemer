@@ -468,6 +468,21 @@ const astaxie32URL = "https://astaxie.gitbooks.io/build-web-application-with-gol
 // the address John gave, read at build time.
 const practicalGo1URL = "https://www.practical-go-lessons.com/chap-1-programming-a-computer"
 
+// yourbasicURL is the YourBasic Go go-to guide's index —
+// the one verified address for the site (read at build
+// time for the basics sweep, 2026-11-01). Per-topic
+// addresses were not individually verified, so — by the
+// same rule that keeps unverified anchors page-level —
+// every YourBasic entry links the index and its label
+// names the article to read.
+const yourbasicURL = "https://yourbasic.org/golang/"
+
+// callicoderTypesURL is Callicoder's "Basic Types,
+// Operators, and Type Conversion" article — verified at
+// build time for the basics sweep (2026-11-01), the same
+// way the functions and constants articles were read.
+const callicoderTypesURL = "https://www.callicoder.com/golang-basic-types-operators-type-conversion/"
+
 var referenceSeed = []referenceEntry{
 	{"Effective Go", []string{"formatting", "gofmt", "format"}, "Formatting", effectiveGoURL + "#formatting"},
 	{"Effective Go", []string{"comments", "commentary", "doc comments"}, "Commentary", effectiveGoURL + "#commentary"},
@@ -528,6 +543,35 @@ var referenceSeed = []referenceEntry{
 	// "resources for …" asks stand on.
 	{"Practical Go Lessons", []string{"how a computer works", "computer", "hardware", "cpu"}, "Programming a Computer (Chapter 1)", practicalGo1URL},
 	{"Practical Go Lessons", []string{"compiled language", "interpreted", "compiler", "what is a program"}, "Programming a Computer (Chapter 1)", practicalGo1URL},
+	// The basics sweep (2026-11-01): YourBasic's go-to
+	// guide and Callicoder's tutorial series, learned the
+	// five-sources way. What the concept book can assemble
+	// became rows; what is reference-shaped — cheat sheets,
+	// gotchas, comparisons, the race/deadlock explainers —
+	// seats here as reading. YourBasic labels name the
+	// article; the link is the verified index (see
+	// yourbasicURL above).
+	{"YourBasic", []string{"go vs java", "java", "coming from java"}, "Go vs. Java: 15 main differences / Java to Go in-depth tutorial", yourbasicURL},
+	{"YourBasic", []string{"nil map", "assignment to entry in nil map", "nil maps"}, "Gotcha: Assignment to entry in nil map", yourbasicURL},
+	{"YourBasic", []string{"nil pointer dereference", "invalid memory address", "nil pointer"}, "Gotcha: Invalid memory address or nil pointer dereference", yourbasicURL},
+	{"YourBasic", []string{"multiple-value in single-value context", "single-value context"}, "Gotcha: Multiple-value in single-value context", yourbasicURL},
+	{"YourBasic", []string{"array won't change", "arrays are values", "array copy"}, "Gotcha: Array won't change (arrays are values)", yourbasicURL},
+	{"YourBasic", []string{"regexp cheat sheet", "regex syntax", "regular expression cheat sheet"}, "Regexp tutorial and cheat sheet", yourbasicURL},
+	{"YourBasic", []string{"string cheat sheet", "string handling", "string overview"}, "Go string handling overview [cheat sheet]", yourbasicURL},
+	{"YourBasic", []string{"printf formatting", "format verbs", "printf verbs"}, "fmt.Printf formatting tutorial and cheat sheet", yourbasicURL},
+	{"YourBasic", []string{"bitwise operators", "bit operators", "bit shifting"}, "Bitwise operators [cheat sheet]", yourbasicURL},
+	{"YourBasic", []string{"operators", "arithmetic operators", "comparison operators"}, "Operators: complete list", yourbasicURL},
+	{"YourBasic", []string{"project layout", "standard layout", "project structure"}, "Start a new Go project [standard layout]", yourbasicURL},
+	{"YourBasic", []string{"data races", "data race", "race conditions"}, "Data races explained", yourbasicURL},
+	{"YourBasic", []string{"race detector", "detect data races", "find data races"}, "How to detect data races", yourbasicURL},
+	{"YourBasic", []string{"deadlocks", "deadlock", "debug deadlocks"}, "How to debug deadlocks", yourbasicURL},
+	{"YourBasic", []string{"parallel computation", "efficient parallel", "parallelism"}, "3 rules for efficient parallel computation", yourbasicURL},
+	{"YourBasic", []string{"object-oriented programming", "oop", "inheritance", "classes"}, "Object-oriented programming without inheritance", yourbasicURL},
+	{"YourBasic", []string{"zero values", "zero value", "default zero values"}, "Default zero values for all Go types", yourbasicURL},
+	{"YourBasic", []string{"int vs int64", "int or int64", "which integer type"}, "Pick the right one: int vs. int64", yourbasicURL},
+	{"YourBasic", []string{"redeclaring variables", "redeclare variables", "variable shadowing"}, "Redeclaring variables", yourbasicURL},
+	{"YourBasic", []string{"initialization order", "execution order", "package initialization"}, "Package initialization and program execution order", yourbasicURL},
+	{"Callicoder", []string{"basic types", "data types", "operators and types"}, "Basic Types, Operators, and Type Conversion", callicoderTypesURL},
 }
 
 // referenceMatchCap bounds the reference lines in one pack:

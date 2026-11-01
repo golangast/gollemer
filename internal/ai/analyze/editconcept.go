@@ -798,6 +798,20 @@ func conceptStmtText(fset *token.FileSet, stmt ast.Stmt) string {
 	return stmtText(fset, stmt)
 }
 
+// stmtLineKey canonicalizes a statement's first line the
+// way stmtText canonicalizes the rendered side of the
+// containment checks below: whitespace runs collapse to
+// single spaces. Both sides go through the same
+// canonicalization, so a template whose first line carries
+// significant whitespace inside a string literal (the
+// trim-whitespace row's padded sample) is judged on its
+// tokens, exactly like every other row — the check still
+// requires the whole first line, token for token, at the
+// head of a statement in the target function.
+func stmtLineKey(firstLine string) string {
+	return strings.Join(strings.Fields(firstLine), " ")
+}
+
 // selfCheckConceptStatement re-parses the assembled file and
 // confirms the target function now contains the rendered
 // statement's first line.
@@ -812,7 +826,7 @@ func selfCheckConceptStatement(after []byte, funcName, firstLine string) string 
 			continue
 		}
 		for _, stmt := range fd.Body.List {
-			if strings.HasPrefix(conceptStmtText(fset, stmt), strings.TrimSpace(firstLine)) {
+			if strings.HasPrefix(conceptStmtText(fset, stmt), stmtLineKey(firstLine)) {
 				return ""
 			}
 		}
@@ -865,7 +879,7 @@ func verifyConceptStatement(root, rel, funcName, firstLine string) bool {
 			continue
 		}
 		for _, stmt := range fd.Body.List {
-			if strings.HasPrefix(conceptStmtText(fset, stmt), strings.TrimSpace(firstLine)) {
+			if strings.HasPrefix(conceptStmtText(fset, stmt), stmtLineKey(firstLine)) {
 				return true
 			}
 		}
