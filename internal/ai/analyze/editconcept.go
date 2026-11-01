@@ -46,6 +46,12 @@ package analyze
 // {methods} is a declaration's method block, filled from a real
 // type's method set when the sentence says "like <Type>", else
 // a TODO comment — methods are never invented.
+// {request} is a statement's handler slot: the planner binds
+// it from the target function's REAL *http.Request parameter
+// (whatever the user named it), so a template using it can
+// only land inside a handler — any other target is a refusal
+// naming the handlers the file does have. A request value is
+// never invented either.
 
 import (
 	"encoding/json"
@@ -197,6 +203,50 @@ func missingImportSpecs(fileAST *ast.File, specs []string) []string {
 
 // --- statement concepts ------------------------------------------------------
 
+// requestParamName returns the name of fd's *http.Request
+// parameter — the value a handler-shaped statement template's
+// {request} slot binds. The qualifier is the file's local
+// name for net/http (its import alias, else "http"). An
+// unnamed request parameter can't be referenced from the
+// body, so it doesn't count.
+func requestParamName(fset *token.FileSet, fileAST *ast.File, fd *ast.FuncDecl) string {
+	if fd.Type == nil || fd.Type.Params == nil {
+		return ""
+	}
+	qual := "http"
+	for _, imp := range fileAST.Imports {
+		if p, err := strconv.Unquote(imp.Path.Value); err == nil && p == "net/http" {
+			if imp.Name != nil && imp.Name.Name != "_" && imp.Name.Name != "." {
+				qual = imp.Name.Name
+			}
+			break
+		}
+	}
+	for _, field := range fd.Type.Params.List {
+		text := strings.Join(strings.Fields(exprText(fset, field.Type)), "")
+		if text != qual+".Request" && text != "*"+qual+".Request" {
+			continue
+		}
+		if len(field.Names) > 0 {
+			return field.Names[0].Name
+		}
+	}
+	return ""
+}
+
+// handlerFuncNames lists the file's functions that receive an
+// http.Request — the honest shortlist a {request} refusal can
+// point at.
+func handlerFuncNames(fset *token.FileSet, fileAST *ast.File) []string {
+	var out []string
+	for _, d := range fileAST.Decls {
+		if fd, ok := d.(*ast.FuncDecl); ok && requestParamName(fset, fileAST, fd) != "" {
+			out = append(out, fd.Name.Name)
+		}
+	}
+	return out
+}
+
 // planConceptStatement puts a rendered statement at the end of a
 // function body: the function the sentence named with "in
 // <Func>", else main. A program file with no main yet grows one
@@ -249,6 +299,19 @@ func (p *Project) planConceptStatement(req EditRequest, entry *ConceptEntry, rel
 	var note string
 	growMain := false
 	resolvedFunc := wantFunc
+	// A {request} template can only live in a handler: the
+	// refusal that says so, pointing at the handlers the file
+	// does have (or at the form handler that would start one).
+	needsRequest := strings.Contains(entry.Template, "{request}")
+	handlerRefusal := func() string {
+		handlers := handlerFuncNames(fset, fileAST)
+		if len(handlers) == 0 {
+			return fmt.Sprintf("the %s reads the values on the request a handler receives, and %s has no handler — a function taking an http.Request — to put it in. Add a form handler first, then say \"add a %s in <Handler> to %s\".",
+				entry.Canonical(), p.LinkPath(rel), entry.Canonical(), p.LinkPath(rel))
+		}
+		return fmt.Sprintf("the %s reads the values on the request a handler receives, so it belongs in a handler — the handlers in %s are: %s. Say \"add a %s in %s to %s\".",
+			entry.Canonical(), p.LinkPath(rel), conceptNameList(handlers), entry.Canonical(), handlers[0], p.LinkPath(rel))
+	}
 	if decl == nil {
 		switch {
 		case explicit:
@@ -257,6 +320,10 @@ func (p *Project) planConceptStatement(req EditRequest, entry *ConceptEntry, rel
 		case fileAST.Name.Name != "main":
 			return nil, fmt.Sprintf("%s is package %s, so it has no main to put the %s in — name a function, like \"add a %s in %s to %s\" (the functions there are: %s).",
 				p.LinkPath(rel), fileAST.Name.Name, entry.Canonical(), entry.Canonical(), conceptFirstOr(funcNames, "main"), p.LinkPath(rel), conceptNameList(funcNames))
+		case needsRequest:
+			// No main to grow: a main could never receive the
+			// request this piece reads.
+			return nil, handlerRefusal()
 		default:
 			// No main yet in a program file: the statement gets
 			// a main to live in, appended whole (below, after
@@ -272,6 +339,19 @@ func (p *Project) planConceptStatement(req EditRequest, entry *ConceptEntry, rel
 			return nil, fmt.Sprintf("%s in %s has no body — it's a declaration without code, so there's nowhere to put the %s.", decl.Name.Name, p.LinkPath(rel), entry.Canonical())
 		}
 		resolvedFunc = decl.Name.Name
+		if needsRequest {
+			// Bind {request} from the target function's real
+			// signature — the parameter's own name, whatever
+			// the user called it. No request parameter, no
+			// landing: the values this piece reads exist only
+			// on a handler's request.
+			param := requestParamName(fset, fileAST, decl)
+			if param == "" {
+				return nil, fmt.Sprintf("%s in %s doesn't receive an http.Request. %s", decl.Name.Name, p.LinkPath(rel), handlerRefusal())
+			}
+			stmt = strings.ReplaceAll(stmt, "{request}", param)
+			firstLine = strings.TrimSpace(strings.SplitN(stmt, "\n", 2)[0])
+		}
 		indent := "\t"
 		if len(decl.Body.List) > 0 {
 			indent = lineIndent(src, lineOfPos(fset, decl.Body.List[0].Pos()))

@@ -1,0 +1,19 @@
+{
+  "seed": 20261031,
+  "items": 56,
+  "by_family_cell": {
+    "add-field-tag/single-seen": 8,
+    "add-field-tag/single-unseen": 20,
+    "concept-form-values/single-seen": 8,
+    "concept-form-values/single-unseen": 20
+  },
+  "skipped_unemittable": 0,
+  "conflicting_inputs_removed": 0,
+  "duplicate_inputs_skipped": 0,
+  "train_input_overlap": 0,
+  "original_judge_input_overlap": 0,
+  "sources_judge_input_overlap": 0,
+  "created_judge_input_overlap": 0,
+  "rqlite_judge_input_overlap": 0,
+  "slot_value_leak_beyond_fixtures": null
+}

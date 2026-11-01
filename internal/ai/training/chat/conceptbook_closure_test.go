@@ -82,6 +82,13 @@ func TestConceptStatementIntoClosureBody(t *testing.T) {
 // the closure row instead (still a function body holding a
 // closure) and holds routing to the same landing+build bar
 // there.
+//
+// A second named exception: form-values, the one
+// handler-shaped statement — its template reads the request
+// a handler receives, so it can never land in main at all.
+// Its subtest seeds a HANDLER holding a closure (and ending
+// in a comment) and holds the row to the same landing+build
+// bar in its own habitat.
 func TestConceptBookEveryStatementRowIntoClosureBody(t *testing.T) {
 	withPhrasingModel(t)
 	book := defaultBookEntries(t)
@@ -93,16 +100,25 @@ func TestConceptBookEveryStatementRowIntoClosureBody(t *testing.T) {
 		t.Run(entry.ID, func(t *testing.T) {
 			var dir string
 			var profile *UserProfile
-			if entry.ID == "routing" {
+			line := "add a " + entry.Names[0] + " to jim/main.go"
+			switch entry.ID {
+			case "routing":
 				// Alternate seed (see the comment above): the
 				// closure row lands a closure in main.
 				var p *UserProfile
 				dir, p = closureSeedProjectAlt(t)
 				profile = p
-			} else {
+			case "form-values":
+				// The handler-shaped statement (see the
+				// comment above): a handler holding a
+				// closure is its hostile environment.
+				var p *UserProfile
+				dir, p = closureSeedHandlerProject(t)
+				profile = p
+				line = "add a form values in ShowForm to jim/main.go"
+			default:
 				dir, profile = closureSeedProject(t)
 			}
-			line := "add a " + entry.Names[0] + " to jim/main.go"
 			var handled bool
 			out := captureStdout(t, func() { handled = claimChain(line, yes, profile) })
 			if !handled {
@@ -121,6 +137,27 @@ func TestConceptBookEveryStatementRowIntoClosureBody(t *testing.T) {
 			}
 		})
 	}
+}
+
+// closureSeedHandlerProject seeds jim/main.go with a handler
+// whose body holds a closure and ends in a comment — the
+// hostile environment in the form-values row's own habitat,
+// used only by its matrix subtest (see above). The handler's
+// request parameter is named req, not r, on purpose: the
+// row's {request} slot must bind the real parameter name.
+func closureSeedHandlerProject(t *testing.T) (string, *UserProfile) {
+	t.Helper()
+	dir := t.TempDir()
+	writeFile(t, dir, "go.mod", "module example.com/closure\n\ngo 1.21\n")
+	writeFile(t, dir, "main.go", "package main\n\nfunc main() {\n\tprintln(\"root\")\n}\n")
+	jim := filepath.Join(dir, "jim")
+	if err := os.MkdirAll(jim, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, jim, "main.go", "package main\n\nimport \"net/http\"\n\nfunc main() {\n\tprintln(\"jim\")\n}\n\nfunc ShowForm(w http.ResponseWriter, req *http.Request) {\n\tgreet := func() {\n\t\t// TODO: what the closure does — it can use the variables around it\n\t}\n\t_ = greet\n\t// TODO: the form itself is shown here\n}\n")
+	withChatSession(t, dir, true)
+	profile := &UserProfile{}
+	return dir, profile
 }
 
 // closureSeedProjectAlt seeds jim/main.go's main with the

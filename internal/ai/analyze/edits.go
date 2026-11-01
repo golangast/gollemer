@@ -25,6 +25,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -86,6 +87,7 @@ type EditRequest struct {
 	FieldName  string
 	FieldType  string
 	AfterField string // optional anchor; "" = after the last field
+	FieldTag   string // optional struct tag content (json:"name"); "" = none
 
 	// register: a package-level table (map or basic-literal slice)
 	// and the new entry's key.
@@ -1016,9 +1018,33 @@ func verifyCaseExists(root, rel, fnName, expr string) bool {
 
 // --- add a struct field ----------------------------------------------------
 
+// structTagRe is the backstop for a tag the sentence supplied:
+// one key:"value" pair whose key is an identifier and whose
+// value carries no quote, backtick, backslash, or space — the
+// characters that could break out of the tag literal the
+// planner renders. The chat grammar assembles tags only in
+// this shape; anything else is refused here rather than
+// written into the user's struct.
+var structTagRe = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]*:"[A-Za-z0-9_,.\-=:+/]*"$`)
+
 func (p *Project) planAddField(req EditRequest) (*EditPlan, string) {
 	if strings.TrimSpace(req.FieldType) == "" {
 		return nil, fmt.Sprintf("A field needs a type before I can assemble it — say it like \"add a %s field of type int to %s\".", req.FieldName, req.StructName)
+	}
+	if strings.Contains(" "+strings.ToLower(req.FieldType)+" ", " tag ") {
+		// A tag phrase the grammar couldn't read (no value,
+		// a value with spaces) lands inside the type span of
+		// the plain form. A type can't hold a tag — refuse
+		// with the working shape rather than rendering the
+		// phrase as code.
+		return nil, fmt.Sprintf("I read %q as the field's type, and a type can't hold a tag — say the tag as its own phrase, like \"add a %s field of type string with a json tag name to %s\" (one kind word, one value word).", req.FieldType, req.FieldName, req.StructName)
+	}
+	if req.FieldTag != "" && !structTagRe.MatchString(req.FieldTag) {
+		return nil, fmt.Sprintf("That tag (%s) isn't one I can assemble — a tag I can write is one key and value, like \"with a json tag name\": letters, digits, and , . - = : in the value, no spaces or quotes.", req.FieldTag)
+	}
+	fieldLine := req.FieldName + " " + req.FieldType
+	if req.FieldTag != "" {
+		fieldLine += " `" + req.FieldTag + "`"
 	}
 	matches := p.findStructTypes(req.StructName)
 	if len(matches) == 0 {
@@ -1113,7 +1139,7 @@ func (p *Project) planAddField(req EditRequest) (*EditPlan, string) {
 		editsByFile[t.File] = append(editsByFile[t.File], textEdit{
 			start: lineStartOffset(src, endLine+1),
 			end:   lineStartOffset(src, endLine+1),
-			text:  indent + req.FieldName + " " + req.FieldType + "\n",
+			text:  indent + fieldLine + "\n",
 		})
 	} else {
 		// Empty struct: open the braces with one field inside.
@@ -1122,7 +1148,7 @@ func (p *Project) planAddField(req EditRequest) (*EditPlan, string) {
 		editsByFile[t.File] = append(editsByFile[t.File], textEdit{
 			start: lineStartOffset(src, lbraceLine+1),
 			end:   lineStartOffset(src, lbraceLine+1),
-			text:  indent + req.FieldName + " " + req.FieldType + "\n",
+			text:  indent + fieldLine + "\n",
 		})
 	}
 
@@ -1221,32 +1247,78 @@ func (p *Project) planAddField(req EditRequest) (*EditPlan, string) {
 	if literalFiles > 0 {
 		summary += fmt.Sprintf(" %d place(s) build %s positionally, so each gets a zero value (%s) in the new slot — those files are in the diff too.", literalFiles, t.Name, zero)
 	}
-	hasTag := false
-	for _, f := range fields {
-		if f.Tag != nil {
-			hasTag = true
+	if req.FieldTag != "" {
+		summary += " It carries the struct tag `" + req.FieldTag + "`."
+	} else {
+		hasTag := false
+		for _, f := range fields {
+			if f.Tag != nil {
+				hasTag = true
+			}
+		}
+		if hasTag {
+			summary += " Note: the other fields carry struct tags and I did not copy one — add a tag for " + req.FieldName + " if this type is marshaled."
 		}
 	}
-	if hasTag {
-		summary += " Note: the other fields carry struct tags and I did not copy one — add a tag for " + req.FieldName + " if this type is marshaled."
-	}
 	pkgName, typeName, fieldName := t.Pkg, t.Name, req.FieldName
+	fileRel, wantTag := t.File, req.FieldTag
+	verifyDesc := fmt.Sprintf("the %s struct now has a %s field", typeName, fieldName)
+	if wantTag != "" {
+		verifyDesc += " carrying the tag `" + wantTag + "`"
+	}
 	siteLine := t.Line
 	if len(files) > 0 {
 		siteLine = insertedLine(files[0].After, req.FieldName+" "+req.FieldType)
 	}
 	plan := &EditPlan{
 		Summary:    summary,
-		VerifyDesc: fmt.Sprintf("the %s struct now has a %s field", typeName, fieldName),
+		VerifyDesc: verifyDesc,
 		Site:       fmt.Sprintf("%s:%d", p.LinkPath(t.File), siteLine),
 		Files:      files,
 		verify: func(after *Project) bool {
+			found := false
 			for _, pk := range after.Packages {
 				for _, tt := range pk.Types {
 					if tt.Pkg == pkgName && tt.Name == typeName {
 						for _, f := range tt.Fields {
 							if f == fieldName {
-								return true
+								found = true
+							}
+						}
+					}
+				}
+			}
+			if !found {
+				return false
+			}
+			if wantTag == "" {
+				return true
+			}
+			// A tagged field verifies on its tag too: the
+			// field's presence alone wouldn't prove the tag
+			// the sentence asked for actually landed.
+			_, _, fa, refusal := after.readProjectFile(fileRel)
+			if refusal != "" || fa == nil {
+				return false
+			}
+			for _, d := range fa.Decls {
+				gd, ok := d.(*ast.GenDecl)
+				if !ok {
+					continue
+				}
+				for _, spec := range gd.Specs {
+					ts, ok := spec.(*ast.TypeSpec)
+					if !ok || ts.Name.Name != typeName {
+						continue
+					}
+					st, ok := ts.Type.(*ast.StructType)
+					if !ok {
+						continue
+					}
+					for _, f := range st.Fields.List {
+						for _, n := range f.Names {
+							if n.Name == fieldName {
+								return f.Tag != nil && f.Tag.Value == "`"+wantTag+"`"
 							}
 						}
 					}

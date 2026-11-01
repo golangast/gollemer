@@ -1,0 +1,565 @@
+{
+  "mode": "b",
+  "model": "arm-b classify+extract (chat.PhrasingRoute)",
+  "cells": {
+    "single-seen": {
+      "n": 16,
+      "slot_exact": 16,
+      "slot_exact_pct": 100,
+      "string_exact": 16,
+      "string_exact_pct": 100,
+      "piece_slot_exact": 16,
+      "piece_total": 16
+    },
+    "single-unseen": {
+      "n": 40,
+      "slot_exact": 40,
+      "slot_exact_pct": 100,
+      "string_exact": 40,
+      "string_exact_pct": 100,
+      "piece_slot_exact": 40,
+      "piece_total": 40
+    }
+  },
+  "families": {
+    "add-field-tag": {
+      "n": 28,
+      "slot_exact": 28,
+      "slot_exact_pct": 100,
+      "string_exact": 28,
+      "string_exact_pct": 100,
+      "piece_slot_exact": 28,
+      "piece_total": 28
+    },
+    "concept-form-values": {
+      "n": 28,
+      "slot_exact": 28,
+      "slot_exact_pct": 100,
+      "string_exact": 28,
+      "string_exact_pct": 100,
+      "piece_slot_exact": 28,
+      "piece_total": 28
+    }
+  },
+  "single_unseen_write_only": {
+    "n": 40,
+    "slot_exact": 40,
+    "slot_exact_pct": 100,
+    "string_exact": 40,
+    "string_exact_pct": 100,
+    "piece_slot_exact": 0,
+    "piece_total": 0
+  },
+  "bar_single_pct": 90,
+  "bar_compound_pct": 85,
+  "single_bar_pass_slotexact": true,
+  "compound_bar_pass_slotexact": false,
+  "none_false_claims": 0,
+  "claims_lost_to_none": 0,
+  "results": [
+    {
+      "input": "hey gollemer, add a submitted form values to api/main.go",
+      "gold": "add a form values to api/main.go",
+      "raw_output": "add a form values to api/main.go",
+      "family": "concept-form-values",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "can we insert a form data in Tender to mosaic.go",
+      "gold": "add a form values in Tender to mosaic.go",
+      "raw_output": "add a form values in Tender to mosaic.go",
+      "family": "concept-form-values",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "go ahead and place a form values in Velvet to kilo.go",
+      "gold": "add a form values in Velvet to kilo.go",
+      "raw_output": "add a form values in Velvet to kilo.go",
+      "family": "concept-form-values",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "can we insert a submitted form values in Rinse to nest/main.go",
+      "gold": "add a form values in Rinse to nest/main.go",
+      "raw_output": "add a form values in Rinse to nest/main.go",
+      "family": "concept-form-values",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "i'd like to get a form values to kilo.go",
+      "gold": "add a form values to kilo.go",
+      "raw_output": "add a form values to kilo.go",
+      "family": "concept-form-values",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a form values in Tender to vault.go when you can",
+      "gold": "add a form values in Tender to vault.go",
+      "raw_output": "add a form values in Tender to vault.go",
+      "family": "concept-form-values",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a parse form to nest/main.go when you can",
+      "gold": "add a form values to nest/main.go",
+      "raw_output": "add a form values to nest/main.go",
+      "family": "concept-form-values",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "go ahead and place a submitted form values to mosaic.go",
+      "gold": "add a form values to mosaic.go",
+      "raw_output": "add a form values to mosaic.go",
+      "family": "concept-form-values",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "go ahead and place a submitted form values in Sorrel to kilo.go",
+      "gold": "add a form values in Sorrel to kilo.go",
+      "raw_output": "add a form values in Sorrel to kilo.go",
+      "family": "concept-form-values",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "kindly add a submitted form values in Quill to mosaic.go",
+      "gold": "add a form values in Quill to mosaic.go",
+      "raw_output": "add a form values in Quill to mosaic.go",
+      "family": "concept-form-values",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "would you mind inserting a form values in Quilter to api/main.go",
+      "gold": "add a form values in Quilter to api/main.go",
+      "raw_output": "add a form values in Quilter to api/main.go",
+      "family": "concept-form-values",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "go ahead and place a form data in Sorrel to api/main.go",
+      "gold": "add a form values in Sorrel to api/main.go",
+      "raw_output": "add a form values in Sorrel to api/main.go",
+      "family": "concept-form-values",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "let's insert a submitted form values in Nomad to api/main.go",
+      "gold": "add a form values in Nomad to api/main.go",
+      "raw_output": "add a form values in Nomad to api/main.go",
+      "family": "concept-form-values",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "kindly add a form values to vault.go",
+      "gold": "add a form values to vault.go",
+      "raw_output": "add a form values to vault.go",
+      "family": "concept-form-values",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "can we place a form data in Tundra to api/main.go",
+      "gold": "add a form values in Tundra to api/main.go",
+      "raw_output": "add a form values in Tundra to api/main.go",
+      "family": "concept-form-values",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "would you mind placing a submitted form values in Rowan to api/main.go",
+      "gold": "add a form values in Rowan to api/main.go",
+      "raw_output": "add a form values in Rowan to api/main.go",
+      "family": "concept-form-values",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "get a form data to nest/main.go when you can",
+      "gold": "add a form values to nest/main.go",
+      "raw_output": "add a form values to nest/main.go",
+      "family": "concept-form-values",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "kindly get a parse form to api/main.go",
+      "gold": "add a form values to api/main.go",
+      "raw_output": "add a form values to api/main.go",
+      "family": "concept-form-values",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "would you mind placing a submitted form values in Osprey to kilo.go",
+      "gold": "add a form values in Osprey to kilo.go",
+      "raw_output": "add a form values in Osprey to kilo.go",
+      "family": "concept-form-values",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a form values in Saddle to api/main.go when you can",
+      "gold": "add a form values in Saddle to api/main.go",
+      "raw_output": "add a form values in Saddle to api/main.go",
+      "family": "concept-form-values",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a parse form into api/main.go please",
+      "gold": "add a form values to api/main.go",
+      "raw_output": "add a form values to api/main.go",
+      "family": "concept-form-values",
+      "cell": "single-seen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "quick, stick a form data to api/main.go",
+      "gold": "add a form values to api/main.go",
+      "raw_output": "add a form values to api/main.go",
+      "family": "concept-form-values",
+      "cell": "single-seen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "i need you to put a parse form in Plumb to api/main.go",
+      "gold": "add a form values in Plumb to api/main.go",
+      "raw_output": "add a form values in Plumb to api/main.go",
+      "family": "concept-form-values",
+      "cell": "single-seen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "quick, add a form values into kilo.go",
+      "gold": "add a form values to kilo.go",
+      "raw_output": "add a form values to kilo.go",
+      "family": "concept-form-values",
+      "cell": "single-seen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a submitted form values in Nomad into vault.go",
+      "gold": "add a form values in Nomad to vault.go",
+      "raw_output": "add a form values in Nomad to vault.go",
+      "family": "concept-form-values",
+      "cell": "single-seen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "i want to i need a submitted form values in Osprey to api/main.go",
+      "gold": "add a form values in Osprey to api/main.go",
+      "raw_output": "add a form values in Osprey to api/main.go",
+      "family": "concept-form-values",
+      "cell": "single-seen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "i need a form values in Tundra to nest/main.go.",
+      "gold": "add a form values in Tundra to nest/main.go",
+      "raw_output": "add a form values in Tundra to nest/main.go",
+      "family": "concept-form-values",
+      "cell": "single-seen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "please stick a form values to nest/main.go",
+      "gold": "add a form values to nest/main.go",
+      "raw_output": "add a form values to nest/main.go",
+      "family": "concept-form-values",
+      "cell": "single-seen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "kindly place a Crumb field of type bool with a form tag unit-price in Velvet",
+      "gold": "add a Crumb field of type bool with a form tag unit-price to Velvet",
+      "raw_output": "add a Crumb field of type bool with a form tag unit-price to Velvet",
+      "family": "add-field-tag",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "go ahead and add a Glaze field of type string with a db tag nick-name to Vespa",
+      "gold": "add a Glaze field of type string with a db tag nick-name to Vespa",
+      "raw_output": "add a Glaze field of type string with a db tag nick-name to Vespa",
+      "family": "add-field-tag",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "let's place a Volume field of type []int with a yaml tag is_admin in Mosaic",
+      "gold": "add a Volume field of type []int with a yaml tag is_admin to Mosaic",
+      "raw_output": "add a Volume field of type []int with a yaml tag is_admin to Mosaic",
+      "family": "add-field-tag",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "can we add a Flavor field of type string with a form tag is_admin to Topaz",
+      "gold": "add a Flavor field of type string with a form tag is_admin to Topaz",
+      "raw_output": "add a Flavor field of type string with a form tag is_admin to Topaz",
+      "family": "add-field-tag",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "would you mind placing a Batch field of type bool with a form tag order_id in Tend",
+      "gold": "add a Batch field of type bool with a form tag order_id to Tend",
+      "raw_output": "add a Batch field of type bool with a form tag order_id to Tend",
+      "family": "add-field-tag",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "place a Glaze field of type bool with a json tag is_admin in Tundra when you can",
+      "gold": "add a Glaze field of type bool with a json tag is_admin to Tundra",
+      "raw_output": "add a Glaze field of type bool with a json tag is_admin to Tundra",
+      "family": "add-field-tag",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "i'd like to place a Crumb field of type bool with a yaml tag order_id in Sorrel",
+      "gold": "add a Crumb field of type bool with a yaml tag order_id to Sorrel",
+      "raw_output": "add a Crumb field of type bool with a yaml tag order_id to Sorrel",
+      "family": "add-field-tag",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "hey gollemer, place a Glaze field of type int with a xml tag order_id in Tend",
+      "gold": "add a Glaze field of type int with a xml tag order_id to Tend",
+      "raw_output": "add a Glaze field of type int with a xml tag order_id to Tend",
+      "family": "add-field-tag",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "kindly add a Glaze field of type string with a yaml tag nick-name to Topaz",
+      "gold": "add a Glaze field of type string with a yaml tag nick-name to Topaz",
+      "raw_output": "add a Glaze field of type string with a yaml tag nick-name to Topaz",
+      "family": "add-field-tag",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "go ahead and add a Height field of type map[string]int with a xml tag unit-price to Nomad",
+      "gold": "add a Height field of type map[string]int with a xml tag unit-price to Nomad",
+      "raw_output": "add a Height field of type map[string]int with a xml tag unit-price to Nomad",
+      "family": "add-field-tag",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "let's add a Flavor field of type []string with a json tag full_name to Osprey",
+      "gold": "add a Flavor field of type []string with a json tag full_name to Osprey",
+      "raw_output": "add a Flavor field of type []string with a json tag full_name to Osprey",
+      "family": "add-field-tag",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "hey gollemer, place a Volume field of type bool with a json tag is_admin in Roast",
+      "gold": "add a Volume field of type bool with a json tag is_admin to Roast",
+      "raw_output": "add a Volume field of type bool with a json tag is_admin to Roast",
+      "family": "add-field-tag",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "can we add a Flavor field of type map[string]int with a db tag home_town to Tend",
+      "gold": "add a Flavor field of type map[string]int with a db tag home_town to Tend",
+      "raw_output": "add a Flavor field of type map[string]int with a db tag home_town to Tend",
+      "family": "add-field-tag",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "kindly place a Glaze field of type map[string]int with a json tag last_login in Nomad",
+      "gold": "add a Glaze field of type map[string]int with a json tag last_login to Nomad",
+      "raw_output": "add a Glaze field of type map[string]int with a json tag last_login to Nomad",
+      "family": "add-field-tag",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "let's add a Height field of type map[string]int with a xml tag sku to Saddle",
+      "gold": "add a Height field of type map[string]int with a xml tag sku to Saddle",
+      "raw_output": "add a Height field of type map[string]int with a xml tag sku to Saddle",
+      "family": "add-field-tag",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "hey gollemer, place a Batch field of type time.Duration with a xml tag full_name in Tender",
+      "gold": "add a Batch field of type time.Duration with a xml tag full_name to Tender",
+      "raw_output": "add a Batch field of type time.Duration with a xml tag full_name to Tender",
+      "family": "add-field-tag",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "let's add a Flavor field of type string with a db tag home_town to Walnut",
+      "gold": "add a Flavor field of type string with a db tag home_town to Walnut",
+      "raw_output": "add a Flavor field of type string with a db tag home_town to Walnut",
+      "family": "add-field-tag",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "can we place a Volume field of type time.Duration with a db tag nick-name in Saddle",
+      "gold": "add a Volume field of type time.Duration with a db tag nick-name to Saddle",
+      "raw_output": "add a Volume field of type time.Duration with a db tag nick-name to Saddle",
+      "family": "add-field-tag",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "can we place a Glaze field of type time.Duration with a yaml tag page_size in Velvet",
+      "gold": "add a Glaze field of type time.Duration with a yaml tag page_size to Velvet",
+      "raw_output": "add a Glaze field of type time.Duration with a yaml tag page_size to Velvet",
+      "family": "add-field-tag",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "can we place a Flavor field of type int with a db tag full_name in Nomad",
+      "gold": "add a Flavor field of type int with a db tag full_name to Nomad",
+      "raw_output": "add a Flavor field of type int with a db tag full_name to Nomad",
+      "family": "add-field-tag",
+      "cell": "single-unseen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "could you add a time.Duration field Crumb with a xml tag is_admin to Vespa for me",
+      "gold": "add a Crumb field of type time.Duration with a xml tag is_admin to Vespa",
+      "raw_output": "add a Crumb field of type time.Duration with a xml tag is_admin to Vespa",
+      "family": "add-field-tag",
+      "cell": "single-seen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "please add a Volume field of type map[string]int with a db tag unit-price to Nudge",
+      "gold": "add a Volume field of type map[string]int with a db tag unit-price to Nudge",
+      "raw_output": "add a Volume field of type map[string]int with a db tag unit-price to Nudge",
+      "family": "add-field-tag",
+      "cell": "single-seen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "i need you to add a bool field Height with a form tag home_town to Sift",
+      "gold": "add a Height field of type bool with a form tag home_town to Sift",
+      "raw_output": "add a Height field of type bool with a form tag home_town to Sift",
+      "family": "add-field-tag",
+      "cell": "single-seen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "could you add a Flavor field of type int with a json tag order_id to Tender for me",
+      "gold": "add a Flavor field of type int with a json tag order_id to Tender",
+      "raw_output": "add a Flavor field of type int with a json tag order_id to Tender",
+      "family": "add-field-tag",
+      "cell": "single-seen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "just give Rinse a Flavor field of type bool with a yaml tag sku",
+      "gold": "add a Flavor field of type bool with a yaml tag sku to Rinse",
+      "raw_output": "add a Flavor field of type bool with a yaml tag sku to Rinse",
+      "family": "add-field-tag",
+      "cell": "single-seen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "i need you to add a map[string]int field Glaze with a yaml tag home_town to Roaster",
+      "gold": "add a Glaze field of type map[string]int with a yaml tag home_town to Roaster",
+      "raw_output": "add a Glaze field of type map[string]int with a yaml tag home_town to Roaster",
+      "family": "add-field-tag",
+      "cell": "single-seen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "add a Glaze field of type []string with a form tag last_login to Notifier.",
+      "gold": "add a Glaze field of type []string with a form tag last_login to Notifier",
+      "raw_output": "add a Glaze field of type []string with a form tag last_login to Notifier",
+      "family": "add-field-tag",
+      "cell": "single-seen",
+      "slot_exact": true,
+      "string_exact": true
+    },
+    {
+      "input": "could you add a Crumb field of type time.Duration with a db tag order_id to Orbit for me",
+      "gold": "add a Crumb field of type time.Duration with a db tag order_id to Orbit",
+      "raw_output": "add a Crumb field of type time.Duration with a db tag order_id to Orbit",
+      "family": "add-field-tag",
+      "cell": "single-seen",
+      "slot_exact": true,
+      "string_exact": true
+    }
+  ]
+}

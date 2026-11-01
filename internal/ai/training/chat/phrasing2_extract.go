@@ -753,7 +753,33 @@ func extractField(f frag) (string, map[string]string, bool) {
 	if strct == "" || field == "" {
 		return "", nil, false
 	}
+	// The struct tag, when the fragment carries one: "with a
+	// <kind> tag <value>", riding either field form (after the
+	// type, or at the end behind the struct). A "tag" token
+	// whose neighbours don't assemble is never silently
+	// dropped — a fragment that asked for a tag this extractor
+	// can't read is not claimed here. (The rendered canonical
+	// still has to survive validatePiece against
+	// parseAssembledEdit, so a coincidental "tag" — a struct
+	// named Tag — can't invent one either.)
+	tagKind, tagValue, tagLit := "", "", ""
+	for i, t := range f.low {
+		if t != "tag" || i == 0 || i+1 >= len(f.toks) {
+			continue
+		}
+		v := strings.Trim(f.toks[i+1], `"`)
+		lit, ok := assembleStructTag(f.toks[i-1], v)
+		if !ok {
+			return "", nil, false
+		}
+		tagKind, tagValue, tagLit = f.toks[i-1], v, lit
+		break
+	}
 	slots := map[string]string{"field": field, "type": typ, "struct": strct}
+	if tagLit != "" {
+		slots["tag"] = tagLit
+		return "add a " + field + " field of type " + typ + " with a " + tagKind + " tag " + tagValue + " to " + strct, slots, true
+	}
 	return "add a " + field + " field of type " + typ + " to " + strct, slots, true
 }
 
@@ -1236,7 +1262,11 @@ func extractForFamily(f frag, family string) (string, map[string]string, bool) {
 		return extractClone(f)
 	case "add-server":
 		return extractServer(f)
-	case "add-field":
+	case "add-field", "add-field-tag":
+		// One extractor for both: it renders the tagged
+		// canonical exactly when the line carries a tag
+		// phrase, and validatePiece's family check keeps
+		// each family from claiming the other's lines.
 		return extractField(f)
 	case "add-case":
 		return extractCase(f)
@@ -1300,7 +1330,7 @@ func conceptPhrasePresent(f frag, family string) bool {
 func allFamilies() []string {
 	out := []string{
 		"print", "instantiate", "delegate", "clone", "add-server",
-		"add-field", "add-case", "register",
+		"add-field", "add-field-tag", "add-case", "register",
 	}
 	for _, e := range conceptEntries() {
 		if e.ID == "print-line" {

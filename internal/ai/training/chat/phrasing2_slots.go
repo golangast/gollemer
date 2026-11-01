@@ -68,7 +68,16 @@ func CanonicalSlots(sentence string) (PhrasingPieceSlots, bool) {
 			if req.AfterField != "" {
 				slots["after"] = req.AfterField
 			}
-			return PhrasingPieceSlots{Family: "add-field", Slots: slots}, true
+			// A tagged field is its own family (the
+			// three-sources build): the classifier learns
+			// the tag phrase as a separate claim, and the
+			// slot set carries the whole literal.
+			family := "add-field"
+			if req.FieldTag != "" {
+				slots["tag"] = req.FieldTag
+				family = "add-field-tag"
+			}
+			return PhrasingPieceSlots{Family: family, Slots: slots}, true
 		case analyze.EditAddCase:
 			slots := map[string]string{"func": req.FuncName, "case": req.CaseExpr}
 			if req.SwitchOn != "" {

@@ -23,6 +23,9 @@ package chat
 //	in <Func> also handle <value>
 //	add a <Field> field of type <T> to [the] <Struct> [struct] [after <Field>]
 //	add a <T> field <Field> to [the] <Struct>
+//	add a <Field> field of type <T> with a <kind> tag <value> to [the] <Struct>
+//	add a <Field> field of type <T> to [the] <Struct> with a <kind> tag <value>
+//	add a <T> field <Field> with a <kind> tag <value> to [the] <Struct>
 //	register <key> in [the] <Table> [table|map]
 //	add <key> to [the] <Table> table|map|list
 //	add a [new] function like <Func> named <NewName>
@@ -54,11 +57,24 @@ var (
 	reEditFuncB  = regexp.MustCompile(`(?i)^add (?:a |an )?([A-Za-z_]\w*) function like ([A-Za-z_][\w.]*)$`)
 	reEditFieldA = regexp.MustCompile(`(?i)^add (?:a |an )?([A-Za-z_]\w*) field(?: of type (.+?))? to (?:the )?([A-Za-z_][\w.]*)(?: struct)?(?: after ([A-Za-z_]\w*))?$`)
 	reEditFieldB = regexp.MustCompile(`(?i)^add (?:a |an )?(.+?) field ([A-Za-z_]\w*) to (?:the )?([A-Za-z_][\w.]*)(?: struct)?(?: after ([A-Za-z_]\w*))?$`)
-	reEditHandle = regexp.MustCompile(`(?i)^in (.+?)(?:,)? also handle (.+)$`)
-	reEditCaseA  = regexp.MustCompile(`(?i)^add (?:a |an )?case (?:for )?(.+?) (?:to|in) (.+)$`)
-	reEditCaseB  = regexp.MustCompile(`(?i)^add (?:a |an )?(.+?) case (?:to|in) (.+)$`)
-	reEditRegA   = regexp.MustCompile(`(?i)^register (.+?) in (?:the )?([A-Za-z_]\w*)(?: table| map)?$`)
-	reEditRegB   = regexp.MustCompile(`(?i)^add (.+?) to (?:the )?([A-Za-z_]\w*) (?:table|map|list)$`)
+	// Tagged fields (the How To Code in Go build, ch. 39): a
+	// tag belongs to a field, so the tag phrase rides the two
+	// field forms — after the type, or at the end of the
+	// sentence. Tried BEFORE the plain forms: the plain
+	// type-first pattern's type span would otherwise swallow
+	// "with a json tag name" as part of the type. Kind and
+	// value are single tight tokens (see assembleStructTag);
+	// a tag phrase outside that shape doesn't match here at
+	// all, and the planner refuses a " tag " that lands inside
+	// a type span instead of rendering it as code.
+	reEditFieldTagA    = regexp.MustCompile(`(?i)^add (?:a |an )?([A-Za-z_]\w*) field of type (.+?) with (?:a |an |the )?([A-Za-z][A-Za-z0-9_-]*) tag "?([A-Za-z0-9_,.\-=:+/]+)"? to (?:the )?([A-Za-z_][\w.]*)(?: struct)?(?: after ([A-Za-z_]\w*))?$`)
+	reEditFieldTagAEnd = regexp.MustCompile(`(?i)^add (?:a |an )?([A-Za-z_]\w*) field of type (.+?) to (?:the )?([A-Za-z_][\w.]*)(?: struct)? with (?:a |an |the )?([A-Za-z][A-Za-z0-9_-]*) tag "?([A-Za-z0-9_,.\-=:+/]+)"?$`)
+	reEditFieldTagB    = regexp.MustCompile(`(?i)^add (?:a |an )?(.+?) field ([A-Za-z_]\w*) with (?:a |an |the )?([A-Za-z][A-Za-z0-9_-]*) tag "?([A-Za-z0-9_,.\-=:+/]+)"? to (?:the )?([A-Za-z_][\w.]*)(?: struct)?(?: after ([A-Za-z_]\w*))?$`)
+	reEditHandle       = regexp.MustCompile(`(?i)^in (.+?)(?:,)? also handle (.+)$`)
+	reEditCaseA        = regexp.MustCompile(`(?i)^add (?:a |an )?case (?:for )?(.+?) (?:to|in) (.+)$`)
+	reEditCaseB        = regexp.MustCompile(`(?i)^add (?:a |an )?(.+?) case (?:to|in) (.+)$`)
+	reEditRegA         = regexp.MustCompile(`(?i)^register (.+?) in (?:the )?([A-Za-z_]\w*)(?: table| map)?$`)
+	reEditRegB         = regexp.MustCompile(`(?i)^add (.+?) to (?:the )?([A-Za-z_]\w*) (?:table|map|list)$`)
 
 	// Signature changes. These contain "parameter" (or "swap"/
 	// "move"), which no form above matches, so they can't steal
@@ -71,6 +87,28 @@ var (
 	reSigAddCtx  = regexp.MustCompile(`(?i)^add a context parameter(?: named ([A-Za-z_]\w*))? to ([A-Za-z_][\w.]*)$`)
 	reSigAddUse  = regexp.MustCompile(`(?i)^add (?:a |an )?(.+?) parameter named ([A-Za-z_]\w*) to ([A-Za-z_][\w.]*) using (.+)$`)
 	reSigAddBare = regexp.MustCompile(`(?i)^add (?:a |an )?(.+?) parameter named ([A-Za-z_]\w*) to ([A-Za-z_][\w.]*)$`)
+)
+
+// assembleStructTag builds a struct tag's literal content
+// (json:"name") from the sentence's kind and value words —
+// the shape chapter 39 of How To Code in Go teaches: a short
+// key, a colon, a quoted value, the whole tag later rendered
+// inside backticks. The value arrives already stripped of any
+// surrounding quotes by the caller's pattern. Kinds and
+// values outside the tight character sets are not
+// assemblable: a value with a space would need quoting the
+// sentence can't carry reliably, and a quote or backtick in
+// either word could break out of the rendered literal.
+func assembleStructTag(kind, value string) (string, bool) {
+	if !tagKindRe.MatchString(kind) || !tagValueRe.MatchString(value) {
+		return "", false
+	}
+	return kind + ":\"" + value + "\"", true
+}
+
+var (
+	tagKindRe  = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]*$`)
+	tagValueRe = regexp.MustCompile(`^[A-Za-z0-9_,.\-=:+/]+$`)
 )
 
 // parseAssembledEdit turns one chat line into an EditRequest. The
@@ -128,6 +166,29 @@ func parseAssembledEdit(line string) (analyze.EditRequest, bool) {
 	}
 	if m := reEditFuncB.FindStringSubmatch(s); m != nil {
 		return analyze.EditRequest{Kind: analyze.EditAddFunc, SiblingName: m[2], NewName: m[1]}, true
+	}
+	// Tagged fields before the plain forms (see the patterns):
+	// a matched tag phrase is consumed as a tag or the line is
+	// not claimed here at all — never silently dropped.
+	taggedField := func(field, typ, kind, value, strct, after string) (analyze.EditRequest, bool) {
+		tag, ok := assembleStructTag(kind, value)
+		if !ok {
+			return analyze.EditRequest{}, false
+		}
+		req := analyze.EditRequest{Kind: analyze.EditAddField, FieldName: field, FieldType: strings.TrimSpace(typ), StructName: strct, FieldTag: tag}
+		if after != "" {
+			req.AfterField = after
+		}
+		return req, true
+	}
+	if m := reEditFieldTagA.FindStringSubmatch(s); m != nil {
+		return taggedField(m[1], m[2], m[3], m[4], m[5], m[6])
+	}
+	if m := reEditFieldTagAEnd.FindStringSubmatch(s); m != nil {
+		return taggedField(m[1], m[2], m[4], m[5], m[3], "")
+	}
+	if m := reEditFieldTagB.FindStringSubmatch(s); m != nil {
+		return taggedField(m[2], m[1], m[3], m[4], m[5], m[6])
 	}
 	// Fields before cases: "field" never appears in a case request.
 	// The type-first form is tried first — in "add an int field

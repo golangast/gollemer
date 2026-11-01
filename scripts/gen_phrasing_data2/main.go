@@ -256,6 +256,16 @@ var statementConcepts = []concept{
 	{"rqlite-create-table", "statement", "rqlite create table", []string{"rqlite table", "create table in rqlite", "rqlite create"}},
 	{"rqlite-insert", "statement", "rqlite insert", []string{"insert into rqlite", "rqlite insert row", "insert row into rqlite"}},
 	{"rqlite-query", "statement", "rqlite query", []string{"query rqlite", "rqlite select", "select from rqlite"}},
+	// The three-sources build (2026-10-31): Astaxie §3.2's
+	// form parsing as a statement row, appended last like
+	// every family before it. Its canonical name carries
+	// "form", a word the form-handler declaration also owns
+	// — the same deliberate overlap as rqlite-insert's
+	// "insert", and safe for the same reason: the naming
+	// guard means the statement can only claim lines that
+	// say one of ITS names, and "form handler" asks say
+	// "handler", which is not one of them.
+	{"form-values", "statement", "form values", []string{"form data", "submitted form values", "parse form"}},
 }
 
 var declConcepts = []concept{
@@ -395,6 +405,29 @@ func canonRegisterB(key, table string) string {
 
 type pools struct {
 	names, files, fieldNames, caseVals, keys, tables, texts, callees []string
+	// tagVals carries the struct-tag VALUES of the tagged
+	// add-field family (the three-sources build): the part
+	// after the colon in `json:"name"`. Tag KINDS are shared
+	// grammar fixtures (tagKinds below, like fieldTypes) —
+	// the value is the slot that must never leak.
+	tagVals []string
+}
+
+// tagKinds are the struct-tag kinds the tagged add-field
+// grammar speaks — shared by both dialects, like fieldTypes:
+// a kind is grammar, not a slot value.
+var tagKinds = []string{"json", "xml", "yaml", "db", "form"}
+
+// The tag values: train and held-out pools disjoint, as with
+// every other slot pool.
+var tagValsTrain = []string{
+	"user_name", "created-at", "email", "display_name", "id",
+	"total_count", "first-name", "is_active", "zip_code", "item_id",
+}
+
+var tagValsHeldout = []string{
+	"last_login", "unit-price", "full_name", "order_id", "home_town",
+	"is_admin", "event_date", "sku", "nick-name", "page_size",
 }
 
 // ---------- generated random pools (attempt 2) ----------
@@ -516,11 +549,12 @@ func trainPools() pools {
 		unionPools(tablesTrain, genTables),
 		unionPools(textsTrain, genTexts),
 		calleesTrain,
+		tagValsTrain,
 	}
 }
 
 func heldoutPools() pools {
-	return pools{namesHeldout, filesHeldout, fieldNamesHeldout, caseValsHeldout, keysHeldout, tablesHeldout, textsHeldout, calleesHeldout}
+	return pools{namesHeldout, filesHeldout, fieldNamesHeldout, caseValsHeldout, keysHeldout, tablesHeldout, textsHeldout, calleesHeldout, tagValsHeldout}
 }
 
 // conceptWord picks how the messy sentence names the concept:
@@ -810,6 +844,70 @@ func buildFieldAsk(r *rand.Rand, p pools, dialect string) ask {
 		}
 	}
 	return ask{family: "add-field", canonical: canon, slots: []string{field, typ, strct}, cores: cores}
+}
+
+// canonFieldTag is the canonical tagged add-field sentence:
+// the form-A sentence carrying the tag phrase — exactly what
+// parseAssembledEdit reads back into the same request.
+func canonFieldTag(strct, field, typ, literal string) string {
+	kind, value, _ := strings.Cut(literal, ":")
+	value = strings.Trim(value, "\"")
+	return fmt.Sprintf("add a %s field of type %s with a %s tag %s to %s", field, typ, kind, value, strct)
+}
+
+// buildFieldTagAsk makes one tagged add-field ask (the
+// three-sources build: How To Code in Go ch. 39, struct tags,
+// as an extension of the add-field family, family name
+// add-field-tag). Every core carries EVERY slot — field,
+// type, struct, and the tag literal — and the tag rides in
+// the three positions the grammar speaks: after the type,
+// at the end of the sentence, and on the type-first form.
+// The held-out dialect's cores are its own (the place form
+// plus the after-type form), disjoint from train's wrappers
+// as everywhere else.
+func buildFieldTagAsk(r *rand.Rand, p pools, dialect string) ask {
+	strct := pickName(r, p.names)
+	field := pick(r, p.fieldNames)
+	typ := pick(r, fieldTypes)
+	kind := pick(r, tagKinds)
+	value := pick(r, p.tagVals)
+	literal := kind + ":\"" + value + "\""
+	canon := canonFieldTag(strct, field, typ, literal)
+	var cores []func() string
+	if dialect == "train" {
+		cores = []func() string{
+			func() string {
+				return fmt.Sprintf("add a %s field of type %s with a %s tag %s to %s", field, typ, kind, value, strct)
+			},
+			func() string {
+				return fmt.Sprintf("add a %s field of type %s to %s with a %s tag %s", field, typ, strct, kind, value)
+			},
+			func() string {
+				return fmt.Sprintf("add a %s field %s with a %s tag %s to %s", typ, field, kind, value, strct)
+			},
+			func() string {
+				return fmt.Sprintf("give %s a %s field of type %s with a %s tag %s", strct, field, typ, kind, value)
+			},
+		}
+	} else {
+		cores = []func() string{
+			func() string {
+				return fmt.Sprintf("add a %s field of type %s with a %s tag %s to %s", field, typ, kind, value, strct)
+			},
+			// The place form carries the type too — unlike
+			// the plain family's held-out place core, whose
+			// type-less shape makes its gold unextractable
+			// (a known, absorbed loss there). A tag item
+			// without a type would assert a slot nothing in
+			// the sentence carries, so this family's cores
+			// all carry every slot, as buildFieldAsk's own
+			// rule states.
+			func() string {
+				return fmt.Sprintf("place a %s field of type %s with a %s tag %s in %s", field, typ, kind, value, strct)
+			},
+		}
+	}
+	return ask{family: "add-field-tag", canonical: canon, slots: []string{field, typ, strct, literal}, cores: cores}
 }
 
 func buildCaseAsk(r *rand.Rand, p pools, dialect string) ask {
@@ -2035,6 +2133,241 @@ func runHeldoutRqlite(outDir string, seed int64) {
 		rep.TrainInputOverlap, rep.JudgeInputOverlap, rep.SourcesOverlap, rep.CreatedOverlap, rep.SlotLeak)
 }
 
+// ---------- the three-sources held-out judge ----------
+//
+// -mode heldout-books builds data/training/
+// phrasing_heldout_books.jsonl: the judge for the
+// three-sources build's two new phrasing families — the
+// form-values statement row (Astaxie §3.2) and the tagged
+// add-field family (How To Code in Go ch. 39) — in the same
+// construction as the rqlite judge: held-out core dialect,
+// held-out wrappers, slot values from the held-out pools
+// only (for tags: held-out tag values under the shared tag
+// kinds), and 20 single-unseen + 8 single-seen per family.
+// Leak checks run against the train corpus and ALL FOUR
+// prior judges; the slot leak set additionally covers every
+// kind×held-out-value tag literal, since the tag slot is the
+// whole literal. Run the train mode first.
+
+type booksReport struct {
+	Seed               int64          `json:"seed"`
+	Items              int            `json:"items"`
+	ByFamilyCell       map[string]int `json:"by_family_cell"`
+	SkippedUnemittable int            `json:"skipped_unemittable"`
+	ConflictingInputs  int            `json:"conflicting_inputs_removed"`
+	DuplicateInputs    int            `json:"duplicate_inputs_skipped"`
+	TrainInputOverlap  int            `json:"train_input_overlap"`
+	JudgeInputOverlap  int            `json:"original_judge_input_overlap"`
+	SourcesOverlap     int            `json:"sources_judge_input_overlap"`
+	CreatedOverlap     int            `json:"created_judge_input_overlap"`
+	RqliteOverlap      int            `json:"rqlite_judge_input_overlap"`
+	SlotLeak           []string       `json:"slot_value_leak_beyond_fixtures"`
+}
+
+func runHeldoutBooks(outDir string, seed int64) {
+	r := rand.New(rand.NewSource(seed + 17))
+	rep := &booksReport{Seed: seed, ByFamilyCell: map[string]int{}}
+	hp := heldoutPools()
+
+	seen := map[string]string{} // normalized input -> output
+	var items []heldItem
+	add := func(a ask, cell string, wrappers []wrapper) {
+		if !emittable(a.canonical) {
+			rep.SkippedUnemittable++
+			return
+		}
+		in, tmpl := dress(r, a, wrappers)
+		n := normInput(in)
+		if prev, dup := seen[n]; dup {
+			if prev != a.canonical {
+				rep.ConflictingInputs++
+				for i, q := range items {
+					if normInput(q.Input) == n {
+						items = append(items[:i], items[i+1:]...)
+						break
+					}
+				}
+				delete(seen, n)
+			} else {
+				rep.DuplicateInputs++
+			}
+			return
+		}
+		seen[n] = a.canonical
+		items = append(items, heldItem{
+			Input: in, Output: a.canonical, Family: a.family,
+			Cell: cell, Template: "heldout/" + tmpl,
+		})
+		rep.ByFamilyCell[a.family+"/"+cell]++
+	}
+
+	fv := conceptByID("form-values")
+	if fv.id == "" {
+		fail(fmt.Errorf("books concept %q not in the book lists", "form-values"))
+	}
+	families := []struct {
+		name  string
+		build func(dialect string) ask
+	}{
+		{"concept-form-values", func(dialect string) ask { return buildStmtAsk(r, hp, fv, dialect) }},
+		{"add-field-tag", func(dialect string) ask { return buildFieldTagAsk(r, hp, dialect) }},
+	}
+	for _, fam := range families {
+		for got, attempts := 0, 0; got < 20 && attempts < 600; attempts++ {
+			before := len(items)
+			add(fam.build("heldout"), "single-unseen", heldoutWrappers)
+			if len(items) > before {
+				got++
+			}
+		}
+		for got, attempts := 0, 0; got < 8 && attempts < 240; attempts++ {
+			before := len(items)
+			add(fam.build("train"), "single-seen", trainWrappers)
+			if len(items) > before {
+				got++
+			}
+		}
+	}
+	rep.Items = len(items)
+
+	// Leak checks: against the train corpus (read back from
+	// the pairs file the train mode wrote) and all four
+	// prior judges. Overlaps are dropped, counted, and
+	// reported — and any drop at all fails the run, because
+	// by construction (disjoint dialects, wrappers, and
+	// pools) there should be none.
+	readPairs := func(path string) (inputs map[string]bool, slots map[string]bool) {
+		inputs, slots = map[string]bool{}, map[string]bool{}
+		f, err := os.Open(path)
+		if err != nil {
+			fail(fmt.Errorf("heldout-books mode reads %s (run the train mode first): %w", path, err))
+		}
+		defer f.Close()
+		sc := bufioScanner(f)
+		for sc.Scan() {
+			line := strings.TrimSpace(sc.Text())
+			if line == "" {
+				continue
+			}
+			var p pair
+			if err := json.Unmarshal([]byte(line), &p); err != nil {
+				fail(err)
+			}
+			inputs[normInput(p.Input)] = true
+			for _, s := range p.Slots {
+				slots[s] = true
+			}
+		}
+		return inputs, slots
+	}
+	readJudge := func(path string) map[string]bool {
+		inputs := map[string]bool{}
+		f, err := os.Open(path)
+		if err != nil {
+			fail(err)
+		}
+		defer f.Close()
+		sc := bufioScanner(f)
+		for sc.Scan() {
+			line := strings.TrimSpace(sc.Text())
+			if line == "" {
+				continue
+			}
+			var it heldItem
+			if err := json.Unmarshal([]byte(line), &it); err != nil {
+				fail(err)
+			}
+			inputs[normInput(it.Input)] = true
+		}
+		return inputs
+	}
+	trainInputs, trainSlots := readPairs(filepath.Join(outDir, "phrasing_pairs2.jsonl"))
+	judgeInputs := readJudge(filepath.Join(outDir, "phrasing_heldout.jsonl"))
+	sourcesInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_sources.jsonl"))
+	createdInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_created.jsonl"))
+	rqliteInputs := readJudge(filepath.Join(outDir, "phrasing_heldout_rqlite.jsonl"))
+	fixtures := map[string]bool{"main": true, "main.go": true}
+	for _, t := range fieldTypes {
+		fixtures[t] = true
+	}
+	heldSlotVals := map[string]bool{}
+	for _, s := range append(append(append(append(append(append(append(append(
+		[]string{}, namesHeldout...), filesHeldout...), fieldNamesHeldout...),
+		caseValsHeldout...), keysHeldout...), tablesHeldout...), textsHeldout...), calleesHeldout...) {
+		heldSlotVals[s] = true
+	}
+	for _, s := range tagValsHeldout {
+		heldSlotVals[s] = true
+		for _, k := range tagKinds {
+			heldSlotVals[k+":\""+s+"\""] = true
+		}
+	}
+	leakSet := map[string]bool{}
+	for s := range heldSlotVals {
+		if trainSlots[s] && !fixtures[s] {
+			leakSet[s] = true
+		}
+	}
+	for s := range leakSet {
+		rep.SlotLeak = append(rep.SlotLeak, s)
+	}
+	sort.Strings(rep.SlotLeak)
+	kept := items[:0]
+	for _, it := range items {
+		n := normInput(it.Input)
+		drop := false
+		if trainInputs[n] {
+			rep.TrainInputOverlap++
+			drop = true
+		}
+		if judgeInputs[n] {
+			rep.JudgeInputOverlap++
+			drop = true
+		}
+		if sourcesInputs[n] {
+			rep.SourcesOverlap++
+			drop = true
+		}
+		if createdInputs[n] {
+			rep.CreatedOverlap++
+			drop = true
+		}
+		if rqliteInputs[n] {
+			rep.RqliteOverlap++
+			drop = true
+		}
+		if !drop {
+			kept = append(kept, it)
+		}
+	}
+	items = kept
+	rep.Items = len(items)
+	if rep.TrainInputOverlap > 0 || rep.JudgeInputOverlap > 0 ||
+		rep.SourcesOverlap > 0 || rep.CreatedOverlap > 0 ||
+		rep.RqliteOverlap > 0 || len(rep.SlotLeak) > 0 {
+		fail(fmt.Errorf("leak check failed: train-overlap=%d judge-overlap=%d sources-overlap=%d created-overlap=%d rqlite-overlap=%d slot=%v",
+			rep.TrainInputOverlap, rep.JudgeInputOverlap, rep.SourcesOverlap, rep.CreatedOverlap, rep.RqliteOverlap, rep.SlotLeak))
+	}
+
+	if err := writeJSONL(filepath.Join(outDir, "phrasing_heldout_books.jsonl"), items); err != nil {
+		fail(err)
+	}
+	raw, err := json.MarshalIndent(rep, "", "  ")
+	if err != nil {
+		fail(err)
+	}
+	if err := os.WriteFile(filepath.Join(outDir, "phrasing_report_books.json"), raw, 0o644); err != nil {
+		fail(err)
+	}
+	fmt.Printf("heldout-books judge: %d items\n", rep.Items)
+	for _, k := range sortedKeys(rep.ByFamilyCell) {
+		fmt.Printf("  %-44s %d\n", k, rep.ByFamilyCell[k])
+	}
+	fmt.Printf("skipped unemittable=%d conflicting=%d duplicates=%d\n", rep.SkippedUnemittable, rep.ConflictingInputs, rep.DuplicateInputs)
+	fmt.Printf("leaks: train-overlap=%d judge-overlap=%d sources-overlap=%d created-overlap=%d rqlite-overlap=%d slot=%v\n",
+		rep.TrainInputOverlap, rep.JudgeInputOverlap, rep.SourcesOverlap, rep.CreatedOverlap, rep.RqliteOverlap, rep.SlotLeak)
+}
+
 // ---------- the created-target held-out judge ----------
 //
 // -mode heldout-created builds data/training/
@@ -2355,7 +2688,7 @@ func main() {
 	outDir := flag.String("out", "data/training", "output directory")
 	seed := flag.Int64("seed", 20261031, "generator seed")
 	judgePath := flag.String("judge", "data/training/phrasing_heldout.jsonl", "the fixed held-out judge, read for leak checks only")
-	mode := flag.String("mode", "train", "train | heldout-sources | heldout-created | heldout-rqlite")
+	mode := flag.String("mode", "train", "train | heldout-sources | heldout-created | heldout-rqlite | heldout-books")
 	flag.Parse()
 	if *mode == "heldout-sources" {
 		runHeldoutSources(*outDir, *seed)
@@ -2363,6 +2696,10 @@ func main() {
 	}
 	if *mode == "heldout-rqlite" {
 		runHeldoutRqlite(*outDir, *seed)
+		return
+	}
+	if *mode == "heldout-books" {
+		runHeldoutBooks(*outDir, *seed)
 		return
 	}
 	if *mode == "heldout-created" {
@@ -2478,6 +2815,11 @@ func main() {
 	emit(func() ask { return buildServerAsk(r, tp, "train") }, 450)
 	emit(func() ask { return buildFieldAsk(r, tp, "train") }, 1000)
 	emitTwins(func() ask { return buildFieldAsk(r, tp, "train") }, 5)
+	// The tagged add-field family (three-sources build),
+	// emitted right after its parent family: struct tags are
+	// an add-field variant, at half the parent's density.
+	emit(func() ask { return buildFieldTagAsk(r, tp, "train") }, 500)
+	emitTwins(func() ask { return buildFieldTagAsk(r, tp, "train") }, 3)
 	emit(func() ask { return buildCaseAsk(r, tp, "train") }, 750)
 	emitTwins(func() ask { return buildCaseAsk(r, tp, "train") }, 3)
 	emit(func() ask { return buildRegisterAsk(r, tp, "train") }, 650)
@@ -2709,6 +3051,15 @@ func main() {
 		[]string{}, namesHeldout...), filesHeldout...), fieldNamesHeldout...),
 		caseValsHeldout...), keysHeldout...), tablesHeldout...), textsHeldout...), calleesHeldout...) {
 		heldSlotVals[s] = true
+	}
+	// The tagged-field family (three-sources build): its slot
+	// is the whole literal, so guard every kind×held-out-value
+	// literal as well as the bare values.
+	for _, s := range tagValsHeldout {
+		heldSlotVals[s] = true
+		for _, k := range tagKinds {
+			heldSlotVals[k+":\""+s+"\""] = true
+		}
 	}
 	leakSet := map[string]bool{}
 	for _, p := range train {

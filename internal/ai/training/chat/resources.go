@@ -449,6 +449,25 @@ type referenceEntry struct {
 
 const effectiveGoURL = "https://go.dev/doc/effective_go"
 
+// howToCodeURL is the DigitalOcean tutorial series "How To
+// Code in Go" — the book John handed over as a PDF (Bates,
+// LaNou & Raymond; the text of these tutorials). Entries
+// below link the series page and name the chapter in the
+// label: the series page is the verified address (checked at
+// build time), and per-chapter URLs were not individually
+// verified, so — by the same rule that keeps unverified
+// Effective Go anchors page-level — no chapter URL is
+// invented here.
+const howToCodeURL = "https://www.digitalocean.com/community/tutorial-series/how-to-code-in-go"
+
+// astaxie32URL is §3.2 of Astaxie's "Build Web Application
+// with Golang" — the address John gave, read at build time.
+const astaxie32URL = "https://astaxie.gitbooks.io/build-web-application-with-golang/content/en/03.2.html"
+
+// practicalGo1URL is chapter 1 of Practical Go Lessons —
+// the address John gave, read at build time.
+const practicalGo1URL = "https://www.practical-go-lessons.com/chap-1-programming-a-computer"
+
 var referenceSeed = []referenceEntry{
 	{"Effective Go", []string{"formatting", "gofmt", "format"}, "Formatting", effectiveGoURL + "#formatting"},
 	{"Effective Go", []string{"comments", "commentary", "doc comments"}, "Commentary", effectiveGoURL + "#commentary"},
@@ -483,6 +502,32 @@ var referenceSeed = []referenceEntry{
 	{"Effective Go", []string{"errors", "error handling"}, "Errors", effectiveGoURL},
 	{"Effective Go", []string{"panic", "recover"}, "panic and recover", effectiveGoURL},
 	{"the Go Wiki", []string{"switch", "switch statements"}, "Switch", "https://go.dev/wiki/Switch"},
+	// The three-sources build (2026-10-31): the DigitalOcean
+	// book's chapters the concept book doesn't already serve
+	// as rows — pointers to reading, seated beside Effective
+	// Go. Every entry links the verified series page; the
+	// label names the chapter.
+	{"How To Code in Go", []string{"struct tags", "struct tag", "tags"}, "How To Use Struct Tags in Go (Chapter 39)", howToCodeURL},
+	{"How To Code in Go", []string{"build tags", "build constraints"}, "Customizing Go Binaries with Build Tags (Chapter 34)", howToCodeURL},
+	{"How To Code in Go", []string{"ldflags", "version information", "version info"}, "Using ldflags to Set Version Information for Go Applications (Chapter 42)", howToCodeURL},
+	{"How To Code in Go", []string{"cross compiling", "different operating systems", "building for other platforms", "goos"}, "Building Go Applications for Different Operating Systems and Architectures (Chapter 41)", howToCodeURL},
+	{"How To Code in Go", []string{"writing packages", "write packages", "importing packages", "packages", "package visibility", "exported"}, "How To Write Packages in Go (Chapters 23–25)", howToCodeURL},
+	{"How To Code in Go", []string{"flag package", "command line flags", "flags"}, "How To Use the Flag Package in Go (Chapter 43)", howToCodeURL},
+	{"How To Code in Go", []string{"custom errors", "creating errors", "error types"}, "Creating Custom Errors in Go (Chapter 21)", howToCodeURL},
+	{"How To Code in Go", []string{"variadic functions", "variadic", "ellipsis"}, "How To Use Variadic Functions in Go (Chapter 31)", howToCodeURL},
+	{"How To Code in Go", []string{"pointers", "pointer"}, "Understanding Pointers in Go (Chapter 35)", howToCodeURL},
+	{"How To Code in Go", []string{"type conversions", "converting data types", "casting"}, "How To Convert Data Types in Go (Chapter 15)", howToCodeURL},
+	{"How To Code in Go", []string{"installing go", "getting started", "set up go"}, "How To Install Go and Set Up a Local Programming Environment (Chapters 4–6)", howToCodeURL},
+	// Astaxie §3.2: the simple-web-server chapter whose form
+	// parsing the form-values row teaches — the reading
+	// behind the row.
+	{"Astaxie's Build Web Application with Golang", []string{"form parsing", "parseform", "form values", "reading form values"}, "Build a Simple Web Server (§3.2)", astaxie32URL},
+	// Practical Go Lessons, chapter 1: no Go code at all —
+	// what a computer is, what a program is, compiled vs
+	// interpreted. Definitional ground a beginner's first
+	// "resources for …" asks stand on.
+	{"Practical Go Lessons", []string{"how a computer works", "computer", "hardware", "cpu"}, "Programming a Computer (Chapter 1)", practicalGo1URL},
+	{"Practical Go Lessons", []string{"compiled language", "interpreted", "compiler", "what is a program"}, "Programming a Computer (Chapter 1)", practicalGo1URL},
 }
 
 // referenceMatchCap bounds the reference lines in one pack:

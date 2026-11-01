@@ -997,6 +997,18 @@ const defaultConceptBook = `{
       ],
       "note": "This runs against a rqlite node (rqlited) that must already be running at that address — it compiles and checks without one, but at runtime nothing answers until a node is up.",
       "template": "rqliteAddr := \"http://localhost:4001\"\npayload, err := json.Marshal([]string{\"SELECT TODO: your query — for example SELECT * FROM your table\"})\nvar resp *http.Response\nif err == nil {\n\tresp, err = http.Post(rqliteAddr+\"/db/query\", \"application/json\", bytes.NewReader(payload))\n}\nif err == nil {\n\tdefer resp.Body.Close()\n\tvar answer struct {\n\t\tResults []struct {\n\t\t\tColumns []string\n\t\t\tValues  [][]any\n\t\t\tError   string\n\t\t}\n\t}\n\tif err := json.NewDecoder(resp.Body).Decode(&answer); err == nil {\n\t\t// TODO: answer.Results[0] is the result — Columns names its columns, Values carries one list per row (numbers arrive as float64). Check Results[0].Error first: rqlite can answer 200 and still report the query failed there. For a read that must never be stale, add ?level=strong to the /db/query address above\n\t\t_ = answer\n\t}\n}"
+    },
+    {
+      "id": "form-values",
+      "kind": "statement",
+      "names": [
+        "form values",
+        "form data",
+        "submitted form values",
+        "parse form"
+      ],
+      "note": "This piece reads the values a form sent, so it belongs inside a handler — it parses and reads the request that handler receives.",
+      "template": "if err := {request}.ParseForm(); err == nil {\n\t// TODO: {request}.Form now holds everything the form sent, by field name — read one field with {request}.FormValue(\"email\"), or walk them all like this\n\tfor key, values := range {request}.Form {\n\t\t_ = key\n\t\t_ = values\n\t}\n}"
     }
   ],
   "source": "Gollemer's concept book — names of code mapped to their basic code. Rows are data, not grammar: add a row (id, names, kind, template) and the composer can assemble that concept in every phrasing its slots allow, with no new Go code. A malformed row is skipped; the rest of the book still loads."
