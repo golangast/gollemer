@@ -277,6 +277,8 @@ y
 serve an html file to webtest/main.go
 y
 serve an html file to webtest/main.go
+serve home.html to webtest/main.go
+y
 /quit
 EOF
 run_session webserver
@@ -285,6 +287,8 @@ case_file_contains webserver-file webtest/main.go "ListenAndServe"
 case_file_contains serve-html webtest/main.go "http.ServeFile"
 case_file_contains serve-html-page webtest/index.html "TODO"
 case_transcript_contains serve-html-repeat webserver "already serves" "nothing to add"
+case_file_contains serve-html-named-page webtest/home.html "TODO"
+case_file_contains serve-html-rooted-path webtest/main.go 'http.ServeFile(w, r, "webtest/home.html")'
 
 # --- session: line placement (pristine program file) -----------------
 
@@ -556,6 +560,17 @@ printf 'show visits\n' >&7
 sleep 1
 printf 'top\n' >&7
 sleep 1
+# The serve-html contract, fetched: the page the recipe wired
+# into webtest must come back over HTTP from the program the
+# chat's runner started at the project root — a bare relative
+# ServeFile path 404s here, which is how the defect showed.
+# The fetch sits after the first 'top' on purpose: that check
+# counts the visits, and this fetch is one more.
+PAGEOUT="$SCRATCH/.inputs/pagefetch.out"
+pagecode=""
+if [ -n "$served" ]; then
+	pagecode="$(curl --noproxy '*' -s -o "$PAGEOUT" -w '%{http_code}' "http://localhost:8080/home.html")"
+fi
 printf 'stop the program\n' >&7
 sleep 1
 printf 'top\n' >&7
@@ -573,6 +588,11 @@ if [ -n "$served" ]; then
 	ok run-server-visit-served
 else
 	bad run-server-visit-served "the webtest server never answered http://localhost:8080/"
+fi
+if [ "$pagecode" = "200" ] && grep -qF "Your Go program is serving this file" "$PAGEOUT"; then
+	ok serve-html-page-fetched
+else
+	bad serve-html-page-fetched "GET /home.html through the chat's runner = '$pagecode' (want 200 and the starter page's words)"
 fi
 case_transcript_contains run-server-background runserver "is running in the background" "http://localhost:8080"
 if grep -qF "Opening http://localhost:8080 in your browser." "$RSOUT" || grep -qF "couldn't open your browser" "$RSOUT"; then

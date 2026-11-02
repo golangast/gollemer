@@ -36,12 +36,16 @@ package analyze
 // will not paper over).
 //
 // The page lives in the Go file's folder (or below it): the
-// chat layer resolves it there, this planner re-derives the
-// ServeFile argument from the two project-relative paths and
-// refuses anything that would need "..". That makes the
-// ServeFile path true from the program's working directory
-// when it is run from the Go file's folder — which the plan's
-// notes say out loud.
+// chat layer resolves it there, and this planner refuses
+// anything outside it. The ServeFile argument is the page's
+// PROJECT-ROOT-relative path — the path the chat itself uses
+// for the page — so the page is found when the program runs
+// from the project root, which is how the chat's own runner
+// runs it (and what the plan's notes say out loud). The route
+// is the page's path within the program's folder; only the
+// disk lookup is rooted. A program run by hand from inside
+// its own folder inverts the old behavior: the root-relative
+// path misses there — the project root is the contract.
 
 import (
 	"fmt"
@@ -78,13 +82,14 @@ func serveHTMLMainBody(route, servePath string) string {
 // serveHTMLSource is the whole program as a standalone file,
 // written when the target file is missing or a bare package
 // clause. goDir is the file's project-relative folder ("." for
-// the project root) — the comment names where to run it from,
-// because ServeFile finds the page relative to the working
-// directory.
+// the project root) — the comment names the run command,
+// because ServeFile finds the page at its root-relative path
+// from the working directory: the program runs from the
+// project root.
 func serveHTMLSource(route, servePath, goDir string) string {
-	runFrom := "the project root"
+	runCmd := "go run ."
 	if goDir != "." {
-		runFrom = "the " + goDir + " folder"
+		runCmd = "go run ./" + goDir
 	}
 	return `package main
 
@@ -93,8 +98,8 @@ import (
 	"net/http"
 )
 
-// Serves the page ` + servePath + `, which sits in the same folder
-// as this file. Run it from ` + runFrom + `: go run .
+// Serves the page ` + servePath + ` (its path from the project
+// root). Run it from the project root: ` + runCmd + `
 // Then open http://localhost:8080` + route + ` in a browser.
 func main() {
 ` + serveHTMLMainBody(route, servePath) + `}
@@ -122,11 +127,13 @@ func ServeHTMLStarterPage(htmlBase, goBase string) []byte {
 `)
 }
 
-// servePathOf derives the ServeFile argument (the page's path
-// relative to the Go file's folder) from the two
+// routePathOf derives the route the page answers at (the
+// page's path relative to the Go file's folder) from the two
 // project-relative paths. ok is false when the page is not in
-// the Go file's folder or below it.
-func servePathOf(goRel, htmlRel string) (string, bool) {
+// the Go file's folder or below it. The ServeFile argument is
+// NOT derived here: it is htmlRel itself, the page's
+// project-root-relative path.
+func routePathOf(goRel, htmlRel string) (string, bool) {
 	dir := filepath.ToSlash(filepath.Dir(goRel))
 	if dir == "." {
 		return htmlRel, true
@@ -154,11 +161,15 @@ func (p *Project) planServeHTML(req EditRequest) (*EditPlan, string) {
 	if why, blocked := p.fileBlocked(htmlRel); blocked {
 		return nil, fmt.Sprintf("I won't create %s — %s.", p.LinkPath(htmlRel), why)
 	}
-	servePath, ok := servePathOf(rel, htmlRel)
+	routePath, ok := routePathOf(rel, htmlRel)
 	if !ok {
-		return nil, fmt.Sprintf("the page %s has to live in the same folder as %s (or a folder inside it) for this recipe — the program finds it next to the Go file when it runs", p.LinkPath(htmlRel), p.LinkPath(rel))
+		return nil, fmt.Sprintf("the page %s has to live in the same folder as %s (or a folder inside it) for this recipe", p.LinkPath(htmlRel), p.LinkPath(rel))
 	}
-	route := "/" + servePath
+	// The ServeFile argument: the page's project-root-relative
+	// path, so the program finds the page when it runs from
+	// the project root — the chat runner's working directory.
+	servePath := htmlRel
+	route := "/" + routePath
 	goBase := filepath.Base(rel)
 	htmlBase := filepath.Base(htmlRel)
 
@@ -277,8 +288,8 @@ func (p *Project) planServeHTML(req EditRequest) (*EditPlan, string) {
 	var summary string
 	if mainDecl == nil {
 		// (b) No main yet: append one carrying the recipe.
-		text := "\n// Serves the page " + servePath + ", which sits in the same folder\n" +
-			"// as this file. It listens at http://localhost:8080.\n" +
+		text := "\n// Serves the page " + servePath + " (its path from the project\n" +
+			"// root — run the program from there). It listens at http://localhost:8080.\n" +
 			"func main() {\n" + serveHTMLMainBody(route, servePath) + "}\n"
 		if !strings.HasSuffix(string(src), "\n") {
 			text = "\n" + text
@@ -321,15 +332,16 @@ func newPageWords(htmlExists bool, htmlRel string) string {
 }
 
 // serveRunNote is the plan's beginner-honesty line: ServeFile
-// resolves the page from the program's working directory, so
-// where the program is run from decides whether the page is
-// found.
+// resolves the page from the program's working directory, and
+// the wired path is the page's path from the project root, so
+// the root is where the program has to run from — not the
+// program's own folder.
 func serveRunNote(goRel, servePath string) string {
 	dir := filepath.ToSlash(filepath.Dir(goRel))
 	if dir == "." {
 		return fmt.Sprintf("Run it from the project root (go run .) — the program looks for %s in the folder it is run from.", servePath)
 	}
-	return fmt.Sprintf("Run it from the %s folder (go run .) — the program looks for %s in the folder it is run from.", dir, servePath)
+	return fmt.Sprintf("Run it from the project root (go run ./%s) — the program looks for %s in the folder it is run from, so it has to start at the root, not in the %s folder.", dir, servePath, dir)
 }
 
 // composeInput bundles what planServeHTML hands its
@@ -637,12 +649,39 @@ func verifyServeHTMLPresent(root, rel, servePath string) bool {
 	if !callsListenAndServe(fileAST) {
 		return false
 	}
-	sp, ok := findServeFilePath(fileAST)
-	if !ok || sp != servePath {
+	if !hasServeFilePath(fileAST, servePath) {
 		return false
 	}
-	dir := filepath.Dir(rel)
-	htmlAbs := filepath.Join(root, dir, filepath.FromSlash(servePath))
+	// servePath is the page's project-root-relative path: it
+	// joins the root directly, not the Go file's folder.
+	htmlAbs := filepath.Join(root, filepath.FromSlash(servePath))
 	_, err := os.Stat(htmlAbs)
 	return err == nil
+}
+
+// hasServeFilePath reports whether any http.ServeFile call in
+// the file names exactly this path. A file serving several
+// pages carries one ServeFile call per page, so verification
+// must find THIS recipe's path among them — checking only the
+// first call (as a single-page reading would) fails every
+// second page composed into the same file.
+func hasServeFilePath(node ast.Node, want string) bool {
+	found := false
+	ast.Inspect(node, func(n ast.Node) bool {
+		if found {
+			return false
+		}
+		call, ok := n.(*ast.CallExpr)
+		if !ok || !isHTTPCall(call, "ServeFile") || len(call.Args) < 3 {
+			return true
+		}
+		if lit, ok := call.Args[2].(*ast.BasicLit); ok {
+			if v, err := strconv.Unquote(lit.Value); err == nil && v == want {
+				found = true
+				return false
+			}
+		}
+		return true
+	})
+	return found
 }

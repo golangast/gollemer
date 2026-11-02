@@ -85,11 +85,11 @@ func TestServeHTMLFolderTargetThroughChain(t *testing.T) {
 		t.Errorf("jim/index.html is not the starter page:\n%s", got)
 	}
 	goSrc := readBack(t, root, "jim/main.go")
-	if !strings.Contains(goSrc, `http.ServeFile(w, r, "index.html")`) {
-		t.Errorf("jim/main.go does not serve the page:\n%s", goSrc)
+	if !strings.Contains(goSrc, `http.ServeFile(w, r, "jim/index.html")`) {
+		t.Errorf("jim/main.go does not serve the page by its project-root path:\n%s", goSrc)
 	}
-	if !strings.Contains(out, "Run it from the jim folder") {
-		t.Errorf("the plan does not say to run it from jim:\n%s", out)
+	if !strings.Contains(out, "Run it from the project root") {
+		t.Errorf("the plan does not say to run it from the project root:\n%s", out)
 	}
 }
 

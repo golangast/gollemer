@@ -1,10 +1,14 @@
 package analyze
 
 import (
+	"io"
+	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // serveProject writes a small module and analyzes it.
@@ -314,8 +318,10 @@ func main() {
 	}
 }
 
-// A page in a subfolder of the Go file's folder: the ServeFile
-// argument is the path between them.
+// A page in a subfolder of the Go file's folder: the route is
+// the page's path within the program's folder, and the
+// ServeFile argument is the page's project-root-relative
+// path — the two are different strings on purpose.
 func TestPlanServeHTMLSubpathPage(t *testing.T) {
 	_, proj := serveProject(t, map[string]string{
 		"go.mod":      "module example.com/serve\\n\\ngo 1.21\\n",
@@ -326,13 +332,178 @@ func TestPlanServeHTMLSubpathPage(t *testing.T) {
 		t.Fatalf("refused: %s", refusal)
 	}
 	out := string(plan.Files[len(plan.Files)-1].After)
-	if !strings.Contains(out, `http.ServeFile(w, r, "pages/home.html")`) ||
+	if !strings.Contains(out, `http.ServeFile(w, r, "jim/pages/home.html")`) ||
 		!strings.Contains(out, `http.HandleFunc("/pages/home.html"`) {
 		t.Errorf("subpath page wired wrong:\n%s", out)
 	}
-	if !strings.Contains(strings.Join(plan.Notes, "\n"), "Run it from the jim folder") {
+	if !strings.Contains(strings.Join(plan.Notes, "\n"), "Run it from the project root") {
 		t.Errorf("run-from note wrong for a folder program:\n%s", strings.Join(plan.Notes, "\n"))
 	}
+}
+
+// runWiredProgram builds the wired project in dir and runs
+// the program the way the chat's own runner runs it: the
+// working directory is the PROJECT ROOT, never the program's
+// folder. The returned fetch GETs one route from the running
+// program. Presence-only assertions are how the bare-path
+// wiring survived review — this helper exists so the serve
+// tests assert what a browser would actually get.
+func runWiredProgram(t *testing.T, dir, pkg string) func(route string) (int, string) {
+	t.Helper()
+	bin := filepath.Join(dir, "servefetch-bin")
+	build := exec.Command("go", "build", "-o", bin, pkg)
+	build.Dir = dir
+	build.Env = append(os.Environ(), "GOEXPERIMENT=")
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("the wired project does not build: %v\n%s", err, out)
+	}
+	cmd := exec.Command(bin)
+	cmd.Dir = dir // the runner's working directory: the project root
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("the wired program does not start: %v", err)
+	}
+	t.Cleanup(func() {
+		cmd.Process.Kill()
+		cmd.Wait()
+	})
+	client := &http.Client{Timeout: 2 * time.Second}
+	return func(route string) (int, string) {
+		deadline := time.Now().Add(30 * time.Second)
+		for {
+			resp, err := client.Get("http://localhost:8080" + route)
+			if err == nil {
+				body, _ := io.ReadAll(resp.Body)
+				resp.Body.Close()
+				return resp.StatusCode, string(body)
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("the program never answered %s (last error: %v)", route, err)
+			}
+			time.Sleep(150 * time.Millisecond)
+		}
+	}
+}
+
+// A second page composed into a file already serving a first
+// page: the plan verifies against its own result (the verify
+// must find THIS page's ServeFile among the file's calls, not
+// just the first), and asking for it again is the
+// already-serves answer.
+func TestPlanServeHTMLSecondPageComposes(t *testing.T) {
+	dir, proj := serveProject(t, map[string]string{
+		"go.mod":      "module example.com/serve\n\ngo 1.21\n",
+		"api/main.go": WebServerSource,
+	})
+	plan, refusal := planServe(t, proj, "api/main.go", "api/index.html")
+	if refusal != "" {
+		t.Fatalf("first page refused: %s", refusal)
+	}
+	applyServePlan(t, dir, plan)
+
+	fresh, err := Analyze(dir)
+	if err != nil || fresh == nil {
+		t.Fatalf("project did not re-analyze: %v", err)
+	}
+	plan2, refusal := planServe(t, fresh, "api/main.go", "api/home.html")
+	if refusal != "" {
+		t.Fatalf("second page refused: %s", refusal)
+	}
+	applyServePlan(t, dir, plan2) // asserts plan2 verifies
+	out, err := os.ReadFile(filepath.Join(dir, "api", "main.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`http.ServeFile(w, r, "api/index.html")`, `http.ServeFile(w, r, "api/home.html")`} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("two-page file missing %q:\n%s", want, out)
+		}
+	}
+	if n := count(string(out), "http.ListenAndServe"); n != 1 {
+		t.Errorf("two-page file has %d ListenAndServe calls, want exactly 1", n)
+	}
+
+	fresh2, err := Analyze(dir)
+	if err != nil || fresh2 == nil {
+		t.Fatalf("project did not re-analyze: %v", err)
+	}
+	_, refusal = planServe(t, fresh2, "api/main.go", "api/home.html")
+	if !strings.Contains(refusal, "already serves") {
+		t.Errorf("re-ask of the second page = %q, want the already-serves answer", refusal)
+	}
+}
+
+// The fetched-page contract: a project wired by this recipe
+// serves its page over HTTP when the program runs from the
+// project root — for a created program in a subfolder, for a
+// composed server in a subfolder with the page already there,
+// and for a root program with an existing page.
+func TestServeHTMLPageFetchesFromProjectRoot(t *testing.T) {
+	// A program the recipe creates in a subfolder, the page
+	// created with it.
+	t.Run("created program in a subfolder", func(t *testing.T) {
+		dir, proj := serveProject(t, map[string]string{
+			"go.mod":         "module example.com/serve\n\ngo 1.21\n",
+			"store/store.go": "package store\n\nfunc Load() int { return 1 }\n",
+		})
+		plan, refusal := planServe(t, proj, "api/main.go", "api/home.html")
+		if refusal != "" {
+			t.Fatalf("refused: %s", refusal)
+		}
+		applyServePlan(t, dir, plan)
+		fetch := runWiredProgram(t, dir, "./api")
+		code, body := fetch("/home.html")
+		if code != 200 || !strings.Contains(body, "TODO: your page") {
+			t.Errorf("GET /home.html from the project root = %d, body:\n%s", code, body)
+		}
+	})
+
+	// The recipe composed onto a server already running in a
+	// subfolder; the page already exists, is not overwritten,
+	// and is what comes back over HTTP. The server's own root
+	// handler answers too.
+	t.Run("composed server in a subfolder, page already there", func(t *testing.T) {
+		dir, proj := serveProject(t, map[string]string{
+			"go.mod":        "module example.com/serve\n\ngo 1.21\n",
+			"api/main.go":   WebServerSource,
+			"api/home.html": "<html><body><h1>paces marker page</h1></body></html>\n",
+		})
+		plan, refusal := planServe(t, proj, "api/main.go", "api/home.html")
+		if refusal != "" {
+			t.Fatalf("refused: %s", refusal)
+		}
+		applyServePlan(t, dir, plan)
+		fetch := runWiredProgram(t, dir, "./api")
+		code, body := fetch("/home.html")
+		if code != 200 || !strings.Contains(body, "paces marker page") {
+			t.Errorf("GET /home.html from the project root = %d, body:\n%s", code, body)
+		}
+		if code, _ := fetch("/"); code != 200 {
+			t.Errorf("GET / from the project root = %d, want the existing handler's 200", code)
+		}
+	})
+
+	// A program at the project root, the page already there.
+	// (The page is home.html, not index.html: net/http's
+	// ServeFile redirects every /index.html request to ./ —
+	// stdlib behavior for any wiring, not this recipe's path
+	// contract — so an index page cannot be the fetch probe.)
+	t.Run("root program, page already there", func(t *testing.T) {
+		dir, proj := serveProject(t, map[string]string{
+			"go.mod":         "module example.com/serve\n\ngo 1.21\n",
+			"store/store.go": "package store\n\nfunc Load() int { return 1 }\n",
+			"home.html":      "<html><body><h1>root marker page</h1></body></html>\n",
+		})
+		plan, refusal := planServe(t, proj, "main.go", "home.html")
+		if refusal != "" {
+			t.Fatalf("refused: %s", refusal)
+		}
+		applyServePlan(t, dir, plan)
+		fetch := runWiredProgram(t, dir, ".")
+		code, body := fetch("/home.html")
+		if code != 200 || !strings.Contains(body, "root marker page") {
+			t.Errorf("GET /home.html from the project root = %d, body:\n%s", code, body)
+		}
+	})
 }
 
 // A page outside the Go file's folder is refused by the
