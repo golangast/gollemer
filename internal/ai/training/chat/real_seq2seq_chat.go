@@ -1336,6 +1336,19 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if tryUses(line, reader) {
 			continue
 		}
+		// The ambiguous-piece guidance's pre-book claim
+		// (ambiguouspiece.go): the bare ask "add a database
+		// to jake" is the concept book's own bare name for its
+		// inline statement row, and the book would silently
+		// place sql.Open in the folder's main when a database
+		// FILE may be what was meant. The guidance names both
+		// pieces and spells the two exact sentences, writing
+		// nothing. It fires only for the bare shape — no
+		// function context, no sibling-row words — so every
+		// explicit database form still belongs to the book.
+		if tryAmbiguousDatabase(line) {
+			continue
+		}
 		// Concept-book edits, claimed deterministically beside
 		// the other write-side parsers: "add a print line to
 		// jim/main.go" and "add an interface named Reader to
@@ -1401,6 +1414,19 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// file: absent, the boundary answers as before. See
 		// phrasing2_claim.go.
 		if tryPhrasingLayer(line, reader) {
+			continue
+		}
+		// Ambiguous-piece guidance, claimed deterministically
+		// directly before the write boundary — the seat these
+		// lines reach today: a bare kind word that names two
+		// book pieces ("add handler Jim") is not an unservable
+		// write, it's an underspecified one, so instead of the
+		// boundary's generic answer it gets the two real pieces
+		// named with the exact sentences that land them. It
+		// claims only its narrow add-led shapes; everything
+		// else passes to the boundary unchanged. See
+		// ambiguouspiece.go.
+		if tryAmbiguousPiece(line) {
 			continue
 		}
 		// The write-sentence boundary, last before the intent

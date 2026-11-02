@@ -132,6 +132,14 @@ func TestConceptBookEveryStatementRowIntoClosureBody(t *testing.T) {
 			default:
 				dir, profile = closureSeedProject(t)
 			}
+			if entry.ID == "database" {
+				// The bare sentence is the ambiguous-piece
+				// guidance's shape now (2026-11-01) — it
+				// answers and writes nothing — so the row
+				// is aimed with the explicit function
+				// context the guidance itself spells.
+				line = "add a database in main to jim/main.go"
+			}
 			var handled bool
 			out := captureStdout(t, func() { handled = claimChain(line, yes, profile) })
 			if !handled {

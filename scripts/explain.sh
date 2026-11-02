@@ -179,7 +179,7 @@ Test everything at once:
       gorqlite gate, program running, the basic terminal
       commands with their refusals, the statement pieces —
       checks the files, builds the scratch project, prints a
-      PASS/FAIL scoreboard (75 passed, 0 failed on 2026-11-01).
+      PASS/FAIL scoreboard (82 passed, 0 failed on 2026-11-01).
 
 HONEST LIMITS
 -------------

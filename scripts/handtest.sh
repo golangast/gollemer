@@ -9,7 +9,8 @@
 # composer builds a person would otherwise re-type by hand
 # after every pull: folder creation and bare files, the
 # folder-default declarations (handlers/, middleware/,
-# security/, database/), the webserver + serve-an-html-file
+# security/, database/), the ambiguous-piece guidance for
+# the bare handler and database asks, the webserver + serve-an-html-file
 # recipe, the security rows in a program file, line-number
 # placement, the gorqlite dependency gate, running your own
 # programs (quick ones, a live server with visits in its log,
@@ -320,6 +321,55 @@ run_session namedwins
 
 case_file_contains named-file-wins app/main.go "Access-Control-Allow-Origin"
 case_dir_absent named-file-wins-no-folder security
+
+# --- sessions: the ambiguous-piece guidance ---------------------------------
+# The bare asks get guidance, never a write: "add handler
+# Jim" names the two handler pieces and spells both exact
+# sentences (with the target carried into both when one is
+# given), and "add a database to jake" names the connection
+# function and the inline piece instead of silently landing
+# sql.Open in jake's main. These sessions run before
+# folderdefaults on purpose: the nothing-written checks need
+# handlers/ and database/ to not exist yet.
+
+cat > "$SCRATCH/.inputs/handlerguide.txt" <<'EOF'
+add handler Jim
+add a handler named Jim to app/main.go
+/quit
+EOF
+run_session handlerguide
+
+case_transcript_contains handler-guide-two-kinds handlerguide '"add a form handler named Jim"' '"add a session handler named Jim"' "handlers/"
+case_transcript_contains handler-guide-target-carried handlerguide '"add a form handler named Jim to app/main.go"' '"add a session handler named Jim to app/main.go"'
+case_transcript_lacks handler-guide-no-gate handlerguide "Apply this edit?"
+case_dir_absent handler-guide-nothing-written handlers
+
+cat > "$SCRATCH/.inputs/dbguide1.txt" <<'EOF'
+create a folder jake
+y
+create file jake/main.go
+y
+add a webserver to jake/main.go
+y
+/quit
+EOF
+run_session dbguide1
+
+cp "$SCRATCH/jake/main.go" "$SCRATCH/.inputs/jake-main-before.txt"
+
+cat > "$SCRATCH/.inputs/dbguide.txt" <<'EOF'
+add a database to jake
+/quit
+EOF
+run_session dbguide
+
+case_transcript_contains db-guide-two-forms dbguide '"add a database connection function named Connect to jake"' '"add a database in main to jake/main.go"'
+if cmp -s "$SCRATCH/.inputs/jake-main-before.txt" "$SCRATCH/jake/main.go"; then
+	ok db-guide-file-unchanged
+else
+	bad db-guide-file-unchanged "the guidance changed jake/main.go"
+fi
+case_dir_absent db-guide-no-folder database
 
 # --- session: folder-default declarations --------------------------------
 

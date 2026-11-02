@@ -213,6 +213,18 @@ func TestConceptBookEveryRowEndToEnd(t *testing.T) {
 				}
 				line = "add a " + entry.Names[0] + " in Rowhandler to jim/main.go"
 			}
+			if entry.ID == "database" {
+				// The bare sentence "add a database to
+				// jim/main.go" is the ambiguous-piece
+				// guidance's shape now (2026-11-01): the
+				// word could mean the connection-function
+				// file, so the bare ask answers with both
+				// exact sentences and writes nothing. The
+				// row is held to the same landing bar
+				// through the explicit sentence the
+				// guidance itself spells.
+				line = "add a database in main to jim/main.go"
+			}
 			var handled bool
 			out := captureStdout(t, func() { handled = claimChain(line, yes, profile) })
 			if !handled {
