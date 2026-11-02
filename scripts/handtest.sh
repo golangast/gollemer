@@ -9,7 +9,9 @@
 # composer builds a person would otherwise re-type by hand
 # after every pull: folder creation and bare files, the
 # folder-default declarations (handlers/, middleware/,
-# security/, database/), the ambiguous-piece guidance for
+# security/, database/), declarations creating a named file
+# that doesn't exist yet (and the missing-folder refusal),
+# the ambiguous-piece guidance for
 # the bare handler and database asks, the webserver + serve-an-html-file
 # recipe, the security rows in a program file, line-number
 # placement, the gorqlite dependency gate, running your own
@@ -415,6 +417,31 @@ if grep -qF "func main(" "$SCRATCH/jake/db.go"; then
 else
 	ok namedconn-no-fake-main
 fi
+
+# --- session: declarations create their named file -------------------------
+# A declaration that names a file creates it when the file
+# doesn't exist yet (its folder must): the struct lands in a
+# new app/profile.go and the database connection function in
+# a new app/store.go, both package main read from app/'s own
+# files. A missing FOLDER refuses with the real first step —
+# "create a folder nowhere" — and no gate.
+
+cat > "$SCRATCH/.inputs/declcreate.txt" <<'EOF'
+add a struct named Profile to nowhere/profile.go
+add a struct named Profile to app/profile.go
+y
+add a database connection function named Store to app/store.go
+y
+/quit
+EOF
+run_session declcreate
+
+case_transcript_contains declcreate-missing-folder declcreate "there's no folder nowhere in this project" 'say "create a folder nowhere" first'
+case_transcript_lacks declcreate-no-webserver-remedy declcreate "with a webserver"
+case_dir_absent declcreate-no-nowhere nowhere
+case_transcript_contains declcreate-plan-creates declcreate "Create app/profile.go"
+case_file_contains declcreate-struct app/profile.go "package main" "type Profile struct"
+case_file_contains declcreate-connect app/store.go "package main" "func Store() (*sql.DB, error)"
 
 # --- session: folder-default declarations --------------------------------
 

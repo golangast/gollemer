@@ -2375,9 +2375,19 @@ func runConcept(line string, ask editAsk) bool {
 	if !folderDefault {
 		// A folder-default ask has no target to resolve: the
 		// planner derives the file from the row's folder and
-		// the declaration's name.
+		// the declaration's name. A declaration resolves its
+		// target through the declaration resolver: a named
+		// file that doesn't exist yet, in a folder that does,
+		// is created by the plan (resolveConceptDeclTarget).
+		// Statements keep resolveServerFile exactly — a
+		// statement lives inside a function in a file that
+		// exists.
 		var refusal string
-		rel, refusal = resolveServerFile(rootAbs, req.target)
+		if req.entry.Kind == analyze.ConceptDeclaration {
+			rel, refusal = resolveConceptDeclTarget(rootAbs, req.target)
+		} else {
+			rel, refusal = resolveServerFile(rootAbs, req.target)
+		}
 		if refusal != "" {
 			fmt.Printf("%s Not adding that: %s.\n", tag, strings.TrimSuffix(refusal, "."))
 			recordBrain("composer", false, "concept refused: target")
@@ -2410,4 +2420,59 @@ func runConcept(line string, ask editAsk) bool {
 		PlaceLine:     req.placeLine,
 		PlaceBefore:   req.placeBefore,
 	}, ask)
+}
+
+// resolveConceptDeclTarget settles a concept DECLARATION's
+// named target. Declarations are the one claim whose target
+// file may be new: folder-default declarations create theirs
+// (handlers/signup.go, database/connect.go), and the
+// serve-html recipe creates its named program file — but a
+// declaration that NAMED its file was refused by
+// resolveServerFile with the webserver claim's remedy ("say
+// \"create a file api/profile.go with a webserver\""), which
+// is the wrong piece for a struct or a connect function and,
+// inside a package-main folder, would write a second func
+// main. The rules here:
+//
+//   - an existing file, a folder target, and every non-.go
+//     shape resolve exactly as resolveServerFile resolves
+//     them today (this function delegates);
+//   - a .go file that doesn't exist yet, in a folder that
+//     does, resolves to itself — the planner creates it as
+//     part of the plan (planConceptNamedFileCreate), under
+//     the bare-file create family's package rules;
+//   - a .go file whose FOLDER doesn't exist refuses with
+//     the create family's real first step — "create a folder
+//     <folder> first" — never the webserver remedy;
+//   - a file standing where the folder should be refuses in
+//     the create family's words too.
+func resolveConceptDeclTarget(rootAbs, target string) (rel, refusal string) {
+	disp := strings.TrimSuffix(target, "/")
+	if !strings.HasSuffix(strings.ToLower(disp), ".go") {
+		return resolveServerFile(rootAbs, target)
+	}
+	abs, rel2, refusal2 := serverTargetResolve(rootAbs, target)
+	if refusal2 != "" {
+		return "", refusal2
+	}
+	if st, err := os.Stat(abs); err == nil {
+		if st.IsDir() {
+			// A folder that happens to end in .go: the
+			// folder rules decide, as today.
+			return resolveServerFile(rootAbs, target)
+		}
+		return rel2, ""
+	}
+	// The file is new; its folder decides.
+	dirAbs := filepath.Dir(abs)
+	dst, derr := os.Stat(dirAbs)
+	if derr == nil && !dst.IsDir() {
+		locRel := filepath.ToSlash(mustRel(rootAbs, dirAbs))
+		return "", fmt.Sprintf("%s is a file, not a folder — the new file can't go inside it", locRel)
+	}
+	if derr != nil {
+		folder := filepath.ToSlash(mustRel(rootAbs, dirAbs))
+		return "", fmt.Sprintf("there's no folder %s in this project — say \"create a folder %s\" first, then ask again", folder, folder)
+	}
+	return rel2, ""
 }

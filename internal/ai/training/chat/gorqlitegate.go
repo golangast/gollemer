@@ -143,8 +143,39 @@ func gorqliteDepMissing(req conceptReq, rootAbs, line string) {
 	tag := cTag("gollemer [composer]>")
 	fmt.Printf("%s That %s needs the gorqlite client, and this project doesn't have it yet — the code would import %s, and nothing compiles against a dependency the project doesn't list. I don't fetch dependencies for you, so run this in the project first:\n", tag, piece, gorqliteModule)
 	fmt.Printf("%s   go get %s\n", tag, gorqliteModule)
+	if note := gorqliteNewFileNote(req, rootAbs); note != "" {
+		fmt.Printf("%s %s\n", tag, note)
+	}
 	fmt.Printf("%s Once you've run it, tell me \"installed\" and I'll bring that %s back as a plan for your okay.\n", tag, piece)
 	recordBrain("composer", false, "concept refused: gorqlite dependency missing (go get "+gorqliteModule+")")
+}
+
+// gorqliteNewFileNote makes the gate's promise explicit for
+// the one target shape whose plan creates something: a gated
+// DECLARATION aimed at a .go file that doesn't exist yet, in
+// a folder that does — when the re-offer lands, the plan
+// creates the file (the declaration-create path), so the
+// first answer says so. "" for every other shape: an
+// existing file, a folder or folder-default target (the
+// piece description already names the created path there),
+// a statement row (statements never create files), or a
+// folder that is itself missing — there the honest first
+// step is the folder, and the re-offer will name it.
+func gorqliteNewFileNote(req conceptReq, rootAbs string) string {
+	if req.entry.Kind != analyze.ConceptDeclaration || req.target == "" {
+		return ""
+	}
+	abs, rel, refusal := serverTargetResolve(rootAbs, req.target)
+	if refusal != "" || !strings.HasSuffix(strings.ToLower(rel), ".go") {
+		return ""
+	}
+	if _, err := os.Stat(abs); !os.IsNotExist(err) {
+		return ""
+	}
+	if st, err := os.Stat(filepath.Dir(abs)); err != nil || !st.IsDir() {
+		return ""
+	}
+	return fmt.Sprintf("%s doesn't exist yet — it will be created as part of the plan when it lands.", rel)
 }
 
 // gorqliteInstalledShape is the tight follow-up vocabulary:

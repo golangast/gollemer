@@ -190,6 +190,20 @@ func (p *Project) planConcept(req EditRequest) (*EditPlan, string) {
 	if why, blocked := p.fileBlocked(rel); blocked {
 		return nil, fmt.Sprintf("I won't edit %s — %s.", p.LinkPath(rel), why)
 	}
+	if entry.Kind == ConceptDeclaration {
+		if _, err := os.Stat(filepath.Join(p.Root, rel)); os.IsNotExist(err) {
+			// The named file doesn't exist yet: a declaration
+			// CREATES it (planConceptNamedFileCreate) — the
+			// same licence the folder default below and the
+			// serve-html recipe already hold. A named
+			// declaration was the odd one out: refused at the
+			// chat layer with the webserver claim's remedy.
+			// Statements never take this branch — a statement
+			// lives inside a function in a file that exists,
+			// and it keeps the read below and its refusal.
+			return p.planConceptNamedFileCreate(req, entry, rel)
+		}
+	}
 	src, fset, fileAST, refusal := p.readProjectFile(rel)
 	if refusal != "" {
 		return nil, refusal
@@ -1316,6 +1330,219 @@ func (p *Project) planConceptFolderCreate(req EditRequest, entry *ConceptEntry, 
 		Notes:      notes,
 		verify: func(after *Project) bool {
 			pkg := after.pkgByDir(folder)
+			if pkg == nil || pkg.Name != pkgName {
+				return false
+			}
+			for _, t := range pkg.Types {
+				if t.Name == name && t.File == rel {
+					return true
+				}
+			}
+			for _, fn := range pkg.Funcs {
+				if fn.Receiver == "" && fn.Name == name && fn.File == rel {
+					return true
+				}
+			}
+			return false
+		},
+	}
+	return plan, ""
+}
+
+// --- named-file creation --------------------------------------
+//
+// The declaration-create build (2026-11-01): a declaration ask
+// that NAMES its file — "add a struct named Profile to
+// api/profile.go" — creates that file when it doesn't exist
+// yet, as part of the same plan, gate, transaction and build
+// check. The folder must already exist (the chat layer refuses
+// a missing one with the create family's first step); inside
+// it, the package rules are the bare-file create family's: the
+// folder's one package lends its name, a mixed folder refuses
+// naming both, an empty folder lends its own name, and a file
+// named main.go is a program file (package main, and the empty
+// func main stub a new main.go carries — unless the package
+// already has its main, which refuses naming the holder). A
+// named file inside a package-main folder is NOT refused the
+// way the folder default refuses it: the user aimed at this
+// exact file, and a struct or function beside the program is
+// ordinary Go. Rollback is the transaction's: the created
+// file's record says it didn't exist, so restoring deletes it.
+
+// planConceptNamedFileCreate assembles the create plan for a
+// declaration whose named target file is new.
+func (p *Project) planConceptNamedFileCreate(req EditRequest, entry *ConceptEntry, rel string) (*EditPlan, string) {
+	canon := entry.Canonical()
+	name := strings.TrimSpace(req.ConceptName)
+	if name == "" {
+		return nil, fmt.Sprintf("%s %s needs a name before I can add it — say \"add a %s named <Name> to %s\".", articleOf(canon), canon, canon, rel)
+	}
+	if !token.IsIdentifier(name) {
+		return nil, fmt.Sprintf("%q isn't a name Go allows for a %s.", name, canon)
+	}
+	if req.PlaceLine > 0 {
+		return nil, fmt.Sprintf("a line number aims into a file that already exists — %s doesn't exist yet, so it has no lines to aim at. Drop the line number and the %s %s lands in %s as a new file.", p.LinkPath(rel), canon, name, p.LinkPath(rel))
+	}
+
+	folder := filepath.ToSlash(filepath.Dir(rel))
+	folderName := folder + " folder"
+	dirKey := folder
+	if folder == "." {
+		folderName = "project folder"
+		dirKey = ""
+	}
+	// The folder's real packages, read off its own files (the
+	// chat layer has already refused a missing folder; this is
+	// the planner's own guard for direct callers).
+	pkgs, folderExists := folderPackages(p.Root, folder)
+	if !folderExists {
+		return nil, fmt.Sprintf("there's no folder %s in this project — say \"create a folder %s\" first, then ask again", folder, folder)
+	}
+	pkgName := ""
+	switch {
+	case len(pkgs) > 1:
+		names := make([]string, 0, len(pkgs))
+		for n := range pkgs {
+			names = append(names, n)
+		}
+		sort.Strings(names)
+		var parts []string
+		for _, n := range names {
+			var files []string
+			for _, f := range pkgs[n] {
+				if folder == "." {
+					files = append(files, p.LinkPath(f))
+				} else {
+					files = append(files, p.LinkPath(folder+"/"+f))
+				}
+			}
+			parts = append(parts, fmt.Sprintf("package %s (%s)", n, strings.Join(files, ", ")))
+		}
+		return nil, fmt.Sprintf("the %s mixes %s — Go allows one package per folder, so I can't tell which package a new file there belongs to. Sort the folder out by hand, or name a file somewhere else for the %s.", folderName, strings.Join(parts, " and "), canon)
+	case len(pkgs) == 1:
+		for n := range pkgs {
+			pkgName = n
+		}
+	default:
+		// No Go files yet: the bare-file family's defaults —
+		// a main.go is package main, the project root is
+		// package main, and any other folder lends its own
+		// name (or main, when the name isn't one Go allows).
+		switch {
+		case filepath.Base(rel) == "main.go", folder == ".":
+			pkgName = "main"
+		case folderSegmentRe.MatchString(filepath.Base(folder)):
+			pkgName = filepath.Base(folder)
+		default:
+			pkgName = "main"
+		}
+	}
+
+	// A name collision anywhere in the target package refuses
+	// with the family's wording, package-aware.
+	if pkg := p.pkgByDir(dirKey); pkg != nil && p.pkgDeclares(pkg, name) {
+		return nil, fmt.Sprintf("%s already exists in package %s (%s) — pick a different name for the %s.", name, pkg.Name, p.LinkPath(rel), canon)
+	}
+
+	methods := ""
+	var notes []string
+	var methodSpecs []string
+	if strings.Contains(entry.Template, "{methods}") {
+		switch {
+		case strings.TrimSpace(req.ConceptLike) != "":
+			lines, specs, refusal := p.conceptLikeMethods(req.ConceptLike)
+			if refusal != "" {
+				return nil, refusal
+			}
+			methods = strings.Join(lines, "\n")
+			methodSpecs = specs
+			notes = append(notes, fmt.Sprintf("The methods are %s's real method set, copied from the index — signatures verbatim, bodies left for the types that will satisfy %s.", req.ConceptLike, name))
+		default:
+			methods = "\t// TODO: add the methods this " + canon + " needs"
+			notes = append(notes, fmt.Sprintf("The method block is a TODO — the methods are yours to add, and I never invent them. To copy a real type's methods instead, say \"add a %s named %s like <Type> to %s\".", canon, name, rel))
+		}
+	}
+
+	decl := renderConceptTemplate(entry, req, methods)
+	decl = indentConceptDecl(decl)
+	if conceptScaffoldRe.MatchString(decl) {
+		notes = append(notes, fmt.Sprintf("This is an empty scaffold — %s has a name and a body to fill in, but no parameters, no results, and nothing that does work yet.", name))
+	}
+
+	// A created file named main.go is a program file, and the
+	// bare-file family starts every new main.go with the
+	// empty func main stub — so the created file carries the
+	// stub BESIDE the declaration (never instead of it, and
+	// never when the declaration IS func main). A package
+	// that already has its main refuses, naming the file that
+	// holds it — the family's rule, in its words.
+	stubMain := ""
+	if filepath.Base(rel) == "main.go" && !(name == "main" && strings.HasPrefix(decl, "func main(")) {
+		if pkg := p.pkgByDir(dirKey); pkg != nil {
+			for _, fn := range pkg.Funcs {
+				if fn.Receiver == "" && fn.Name == "main" {
+					return nil, fmt.Sprintf("%s already defines func main — that folder already has its main program, so another main.go can't be added", p.LinkPath(fn.File))
+				}
+			}
+		}
+		stubMain = "func main() {\n\t// TODO: write the body\n}"
+		notes = append(notes, fmt.Sprintf("The file is named main.go, so it also carries the empty func main a new main.go starts with — the %s %s sits above it.", canon, name))
+	}
+
+	// The new file's whole content: package clause, imports,
+	// declaration — assembled through the family's one import
+	// inserter over a parsed skeleton, exactly as the folder
+	// default's create assembles its file.
+	base := "package " + pkgName + "\n\n" + decl + "\n"
+	if stubMain != "" {
+		base = "package " + pkgName + "\n\n" + decl + "\n\n" + stubMain + "\n"
+	}
+	_, skelAST, err := parseGoSrc(rel, []byte(base))
+	if err != nil || skelAST == nil {
+		return nil, fmt.Sprintf("internal error in my assembler: the %s %s doesn't parse as its own file — I haven't shown you a plan, because the code I generated failed my own checks. Nothing was written.", canon, name)
+	}
+	var specs []string
+	for _, path := range entry.Imports {
+		specs = append(specs, strconv.Quote(path))
+	}
+	specs = append(specs, methodSpecs...)
+	specs = missingImportSpecs(skelAST, specs)
+	after := []byte(base)
+	if len(specs) > 0 {
+		fset, ast2, err := parseGoSrc(rel, after)
+		if err != nil || ast2 == nil {
+			return nil, "internal error in my assembler: the assembled file doesn't parse — I haven't shown you a plan, because the code I generated failed my own checks. Nothing was written."
+		}
+		after = applyTextEdits(after, conceptImportEdits(ast2, fset, after, specs))
+	}
+	if f, err := format.Source(after); err == nil {
+		after = f
+	}
+
+	// AST self-check: the file parses and declares the name.
+	if bad := selfCheckConceptDeclaration(after, name); bad != "" {
+		return nil, fmt.Sprintf("internal error in my assembler: %s — I haven't shown you a plan, because the code I generated failed my own checks. Nothing was written.", bad)
+	}
+
+	if len(pkgs) == 1 && folder != "." && pkgName != folder {
+		notes = append(notes, fmt.Sprintf("The %s folder's files are package %s, so the new file carries that package name, not the folder's.", folder, pkgName))
+	}
+	if len(pkgs) == 0 && folder != "." && pkgName == filepath.Base(folder) {
+		notes = append(notes, fmt.Sprintf("The %s folder has no Go files yet, so the new file takes the folder's name as its package.", folder))
+	}
+	if entry.Note != "" {
+		notes = append(notes, entry.Note)
+	}
+
+	summary := fmt.Sprintf("Create %s — a new file in the %s (package %s) — with the %s %s, from the concept book.", p.LinkPath(rel), folderName, pkgName, canon, name)
+	plan := &EditPlan{
+		Summary:    summary,
+		VerifyDesc: fmt.Sprintf("%s now declares the %s %s in package %s", filepath.Base(rel), canon, name, pkgName),
+		Site:       fmt.Sprintf("%s:%d", p.LinkPath(rel), insertedLine(after, strings.SplitN(decl, "\n", 2)[0])),
+		Files:      []EditFile{{Rel: rel, Before: nil, After: after, Diff: unifiedDiff(rel, nil, after)}},
+		Notes:      notes,
+		verify: func(after *Project) bool {
+			pkg := after.pkgByDir(dirKey)
 			if pkg == nil || pkg.Name != pkgName {
 				return false
 			}
