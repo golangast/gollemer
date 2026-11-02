@@ -37,6 +37,9 @@ jim.db
 # Scripted hand-test scratch (make handtest; rebuilt every run)
 /handtest/
 
+# Paces workout scratch (make paces; rebuilt every run)
+/paces/
+
 # Logs and temp output
 out.log
 train_gpu_test.log

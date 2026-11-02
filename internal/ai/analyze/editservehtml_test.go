@@ -82,7 +82,9 @@ func TestPlanServeHTMLMissingFileCreatesBoth(t *testing.T) {
 		t.Errorf("page half is not the starter page:\n%s", plan.Files[0].After)
 	}
 	goSrc := string(plan.Files[1].After)
-	for _, want := range []string{`http.HandleFunc("/index.html"`, `http.ServeFile(w, r, "index.html")`, `http.ListenAndServe(":8080", nil)`} {
+	// An index page registers at its folder's address "/",
+	// never at its own name (see serveRouteOf).
+	for _, want := range []string{`http.HandleFunc("/", func`, `http.ServeFile(w, r, "index.html")`, `http.ListenAndServe(":8080", nil)`} {
 		if !strings.Contains(goSrc, want) {
 			t.Errorf("program missing %q:\n%s", want, goSrc)
 		}
@@ -175,13 +177,16 @@ func TestPlanServeHTMLLibraryRefuses(t *testing.T) {
 
 // The compose state: a file already serving on the default mux
 // gains ONE registration before its ListenAndServe — never a
-// second server.
+// second server. (The page here is home.html; an index page
+// into this same server is the conflict case below, because
+// the address an index page needs — "/" — is the webserver's
+// own.)
 func TestPlanServeHTMLComposesWithExistingServer(t *testing.T) {
 	dir, proj := serveProject(t, map[string]string{
 		"go.mod":  "module example.com/serve\\n\\ngo 1.21\\n",
 		"main.go": WebServerSource,
 	})
-	plan, refusal := planServe(t, proj, "main.go", "index.html")
+	plan, refusal := planServe(t, proj, "main.go", "home.html")
 	if refusal != "" {
 		t.Fatalf("refused: %s", refusal)
 	}
@@ -190,7 +195,7 @@ func TestPlanServeHTMLComposesWithExistingServer(t *testing.T) {
 	if n := count(out, "http.ListenAndServe"); n != 1 {
 		t.Errorf("composed file has %d ListenAndServe calls, want exactly 1:\n%s", n, out)
 	}
-	regAt := strings.Index(out, `http.HandleFunc("/index.html"`)
+	regAt := strings.Index(out, `http.HandleFunc("/home.html"`)
 	serveAt := strings.Index(out, "http.ListenAndServe")
 	if regAt < 0 || serveAt < 0 || regAt > serveAt {
 		t.Errorf("registration is not before the serve call:\n%s", out)
@@ -199,6 +204,24 @@ func TestPlanServeHTMLComposesWithExistingServer(t *testing.T) {
 		t.Errorf("the existing handler was disturbed:\n%s", out)
 	}
 	applyServePlan(t, dir, plan)
+}
+
+// An index page asked into a server whose "/" already
+// answers with the friendly line: the folder address the
+// page needs is taken by a different handler, so the recipe
+// refuses rather than registering an address the page can
+// never be served at (the old "/index.html" registration
+// redirected INTO that handler — the page was unviewable
+// either way).
+func TestPlanServeHTMLIndexIntoTakenRootConflicts(t *testing.T) {
+	_, proj := serveProject(t, map[string]string{
+		"go.mod":  "module example.com/serve\\n\\ngo 1.21\\n",
+		"main.go": WebServerSource,
+	})
+	_, refusal := planServe(t, proj, "main.go", "index.html")
+	if !strings.Contains(refusal, "already answers http://localhost:8080/ with a different handler") {
+		t.Errorf("index-into-taken-root refusal = %q", refusal)
+	}
 }
 
 // Compose when the registration must land inside a nested
@@ -231,7 +254,7 @@ func main() {
 	if count(out, "http.ListenAndServe") != 1 {
 		t.Errorf("second server emitted:\n%s", out)
 	}
-	if strings.Index(out, `http.HandleFunc("/index.html"`) > strings.Index(out, "http.ListenAndServe") {
+	if strings.Index(out, `http.HandleFunc("/", func`) > strings.Index(out, "http.ListenAndServe") {
 		t.Errorf("registration does not precede the serve call:\n%s", out)
 	}
 }
@@ -240,6 +263,8 @@ func main() {
 // different handler: a conflict. A custom mux: the by-hand
 // answer naming the mux.
 func TestPlanServeHTMLServingStates(t *testing.T) {
+	// The already-wired shape is the CURRENT one: an index
+	// page registered at its folder's address.
 	servingThis := `package main
 
 import (
@@ -248,7 +273,7 @@ import (
 )
 
 func main() {
-	http.HandleFunc("/index.html", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "index.html")
 	})
 	fmt.Println("listening")
@@ -312,7 +337,12 @@ func main() {
 		"go.mod":  "module example.com/serve\\n\\ngo 1.21\\n",
 		"main.go": mux,
 	})
-	_, refusal = planServe(t, proj4, "main.go", "index.html")
+	// A non-index page: the mux's own "/" registration is not
+	// this page's route, so the state is the custom-server
+	// one — the by-hand line written against the mux. (An
+	// index page into this file is the route-conflict state:
+	// the folder address it needs is answered, by the mux.)
+	_, refusal = planServe(t, proj4, "main.go", "home.html")
 	if !strings.Contains(refusal, "mux.HandleFunc") || !strings.Contains(refusal, "won't add a second ListenAndServe") {
 		t.Errorf("custom-mux refusal does not hand over the line:\n%s", refusal)
 	}
@@ -387,12 +417,16 @@ func runWiredProgram(t *testing.T, dir, pkg string) func(route string) (int, str
 // A second page composed into a file already serving a first
 // page: the plan verifies against its own result (the verify
 // must find THIS page's ServeFile among the file's calls, not
-// just the first), and asking for it again is the
-// already-serves answer.
+// just the first), and asking for either again is the
+// already-serves answer. The first page is the folder's
+// index — the recipe creates the whole program for it, so
+// its "/" is the page's own (composing an index page onto a
+// server that already owns "/" is the conflict state, pinned
+// above).
 func TestPlanServeHTMLSecondPageComposes(t *testing.T) {
 	dir, proj := serveProject(t, map[string]string{
-		"go.mod":      "module example.com/serve\n\ngo 1.21\n",
-		"api/main.go": WebServerSource,
+		"go.mod":         "module example.com/serve\n\ngo 1.21\n",
+		"store/store.go": "package store\n\nfunc Load() int { return 1 }\n",
 	})
 	plan, refusal := planServe(t, proj, "api/main.go", "api/index.html")
 	if refusal != "" {
@@ -429,6 +463,10 @@ func TestPlanServeHTMLSecondPageComposes(t *testing.T) {
 	_, refusal = planServe(t, fresh2, "api/main.go", "api/home.html")
 	if !strings.Contains(refusal, "already serves") {
 		t.Errorf("re-ask of the second page = %q, want the already-serves answer", refusal)
+	}
+	_, refusal = planServe(t, fresh2, "api/main.go", "api/index.html")
+	if !strings.Contains(refusal, "already serves") {
+		t.Errorf("re-ask of the index page = %q, want the already-serves answer", refusal)
 	}
 }
 
@@ -482,11 +520,40 @@ func TestServeHTMLPageFetchesFromProjectRoot(t *testing.T) {
 		}
 	})
 
+	// An index page, created with its program in a subfolder:
+	// it answers at its folder's address — and at its own
+	// name too, because the ServeFile redirect lands on the
+	// folder address, which now serves it. (At the page's
+	// own registration — the pre-fix wiring — both addresses
+	// 404'd: the redirect target had nothing behind it.)
+	t.Run("created program in a subfolder, index page", func(t *testing.T) {
+		dir, proj := serveProject(t, map[string]string{
+			"go.mod":         "module example.com/serve\n\ngo 1.21\n",
+			"store/store.go": "package store\n\nfunc Load() int { return 1 }\n",
+		})
+		plan, refusal := planServe(t, proj, "api/main.go", "api/index.html")
+		if refusal != "" {
+			t.Fatalf("refused: %s", refusal)
+		}
+		if !strings.Contains(strings.Join(plan.Notes, "\n"), "index page") {
+			t.Errorf("index plan's notes don't say why the address is the folder's:\n%s", strings.Join(plan.Notes, "\n"))
+		}
+		applyServePlan(t, dir, plan)
+		fetch := runWiredProgram(t, dir, "./api")
+		for _, route := range []string{"/", "/index.html"} {
+			code, body := fetch(route)
+			if code != 200 || !strings.Contains(body, "TODO: your page") {
+				t.Errorf("GET %s from the project root = %d, body:\n%s", route, code, body)
+			}
+		}
+	})
+
 	// A program at the project root, the page already there.
 	// (The page is home.html, not index.html: net/http's
 	// ServeFile redirects every /index.html request to ./ —
 	// stdlib behavior for any wiring, not this recipe's path
-	// contract — so an index page cannot be the fetch probe.)
+	// contract — so an index page is fetched at its folder
+	// address, as in the subtest above.)
 	t.Run("root program, page already there", func(t *testing.T) {
 		dir, proj := serveProject(t, map[string]string{
 			"go.mod":         "module example.com/serve\n\ngo 1.21\n",

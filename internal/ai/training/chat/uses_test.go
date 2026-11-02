@@ -55,6 +55,9 @@ func TestParseUsesForms(t *testing.T) {
 	}{
 		{"add a function in web.go that uses LoadUser from store.go", "web.go", "LoadUser", "store.go", "", false},
 		{"add a function Report in web.go that uses Fetch", "web.go", "Fetch", "", "Report", false},
+		{"add a function named Report in web.go that uses Fetch", "web.go", "Fetch", "", "Report", false},
+		{"add a function named Report in api/report.go that uses Validate from api/validate.go", "api/report.go", "Validate", "api/validate.go", "Report", false},
+		{"add a function named Report in web.go that uses the type Item from store.go", "web.go", "Item", "store.go", "Report", true},
 		{"in web.go add a function that uses LoadUser from store.go", "web.go", "LoadUser", "store.go", "", false},
 		{"in web.go, add a function named Report that uses the type Item from store.go", "web.go", "Item", "store.go", "Report", true},
 		{"add a function in web.go that uses the type Item", "web.go", "Item", "", "", true},
@@ -220,6 +223,129 @@ func main() { _ = store.Legacy() }
 	}
 	if n := countDelegateBackups(t, dir); n != 0 {
 		t.Errorf("%d backup files left after the retried use, want 0", n)
+	}
+}
+
+// The paces hybrid, end to end (2026-11-01 workout, defect
+// 3): "add a function named Report in api/report.go that
+// uses Validate from api/validate.go" carries BOTH the book's
+// name introducer and the uses tail. It used to fall between
+// the two grammars — the uses grammar wanted the bare name,
+// the book's function claim met the "that uses" clause
+// unprepared — and land on the write boundary's extra-clause
+// refusal, whose listed forms never mention the uses
+// sentence. Now the introducer routes to the same assembled
+// edit the bare-name form produces.
+func TestUseNamedHybridEndToEnd(t *testing.T) {
+	extra := map[string]string{
+		"api/main.go":     "package main\n\nfunc main() {}\n",
+		"api/validate.go": "package main\n\nfunc Validate() bool { return true }\n",
+		"api/report.go":   "package main\n",
+	}
+	hybrid := "add a function named Report in api/report.go that uses Validate from api/validate.go"
+
+	dir := usesChatFixture(t, extra)
+	withServerProject(t, dir)
+	out := captureStdout(t, func() {
+		if !runUses(hybrid, yes) {
+			t.Error("runUses didn't claim the named hybrid")
+		}
+	})
+	if !strings.Contains(out, "Here's the use I assembled from this project's own code") {
+		t.Fatalf("the hybrid didn't produce the assembled use plan:\n%s", out)
+	}
+	if strings.Contains(out, "extra clause") {
+		t.Errorf("the hybrid still met the boundary's extra-clause refusal:\n%s", out)
+	}
+	report := readBack(t, dir, "api/report.go")
+	for _, want := range []string{"func Report(", "Validate("} {
+		if !strings.Contains(report, want) {
+			t.Errorf("landed hybrid missing %q:\n%s", want, report)
+		}
+	}
+
+	// The same line through the whole claim chain: the uses
+	// claim takes it before the book or the boundary can.
+	dir2 := usesChatFixture(t, extra)
+	withServerProject(t, dir2)
+	out = captureStdout(t, func() {
+		if !claimChain(hybrid, yes, nil) {
+			t.Error("the chain didn't claim the named hybrid")
+		}
+	})
+	if !strings.Contains(out, "Here's the use I assembled") {
+		t.Errorf("chain-claimed hybrid didn't run the use flow:\n%s", out)
+	}
+	if !strings.Contains(readBack(t, dir2, "api/report.go"), "func Report(") {
+		t.Error("chain-claimed hybrid didn't land Report")
+	}
+}
+
+// The paces step-6 sequence in ONE session: the target file
+// is created by the chat itself, then the hybrid lands in
+// it. A chat-created file is baselined in the freshness
+// snapshot but is not in the index's file lists until the
+// next re-read — the planner resolves it by directory, and
+// the post-gate package lookup must agree, or the flow
+// answered "I lost track of api/report.go's package" after
+// the gate and wrote nothing (the workout's step-6 failure
+// once the hybrid could route at all).
+func TestUseNamedHybridIntoJustCreatedFile(t *testing.T) {
+	dir := usesChatFixture(t, map[string]string{
+		"api/main.go":     "package main\n\nfunc main() {}\n",
+		"api/validate.go": "package main\n\nfunc Validate() bool { return true }\n",
+	})
+	withChatSession(t, dir, true)
+	profile := &UserProfile{}
+	out := captureStdout(t, func() {
+		if !claimChain("create api/report.go", yes, profile) {
+			t.Error("the chain didn't claim the create")
+		}
+		if !claimChain("add a function named Report in api/report.go that uses Validate from api/validate.go", yes, profile) {
+			t.Error("the chain didn't claim the hybrid after the create")
+		}
+	})
+	if strings.Contains(out, "I lost track") {
+		t.Errorf("the use into a just-created file lost its package:\n%s", out)
+	}
+	report := readBack(t, dir, "api/report.go")
+	for _, want := range []string{"func Report(", "Validate("} {
+		if !strings.Contains(report, want) {
+			t.Errorf("just-created file missing %q after the hybrid:\n%s", want, report)
+		}
+	}
+}
+
+// The hybrid's honest refusals are the uses route's own: a
+// symbol that doesn't exist, and a target file that doesn't
+// exist (a use goes into a file that already exists — the
+// create is a separate, named step).
+func TestUseNamedHybridRefusals(t *testing.T) {
+	extra := map[string]string{
+		"api/main.go":     "package main\n\nfunc main() {}\n",
+		"api/validate.go": "package main\n\nfunc Validate() bool { return true }\n",
+		"api/report.go":   "package main\n",
+	}
+	dir := usesChatFixture(t, extra)
+	withServerProject(t, dir)
+	out := captureStdout(t, func() {
+		if !runUses("add a function named Report in api/report.go that uses Missing from api/validate.go", yes) {
+			t.Error("runUses didn't claim the missing-symbol hybrid")
+		}
+	})
+	if !strings.Contains(out, "Not doing that use:") || !strings.Contains(out, "can't find") {
+		t.Errorf("missing-symbol hybrid refusal is not the uses route's:\n%s", out)
+	}
+	out = captureStdout(t, func() {
+		if !runUses("add a function named Report in api/absent.go that uses Validate from api/validate.go", yes) {
+			t.Error("runUses didn't claim the missing-file hybrid")
+		}
+	})
+	if !strings.Contains(out, "there's no api/absent.go in this project") {
+		t.Errorf("missing-file hybrid refusal is not the uses route's:\n%s", out)
+	}
+	if strings.Contains(readBack(t, dir, "api/report.go"), "func Report(") {
+		t.Error("a refused hybrid wrote to report.go")
 	}
 }
 

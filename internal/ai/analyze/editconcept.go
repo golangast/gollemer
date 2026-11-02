@@ -1238,6 +1238,31 @@ func (p *Project) planConceptFolder(req EditRequest, entry *ConceptEntry, folder
 	return p.planConceptFolderCreate(req, entry, folder, rel, pkgName, folderExists)
 }
 
+// placedNotWiredWords picks the placed note's middle clause
+// (and its closing verb) in words true for THIS piece, read
+// off the row's own signature: a piece taking or returning
+// a handler is middleware — it gets wrapped into a chain; a
+// piece answering a request itself is a handler — it gets
+// registered with a server; anything else (a database
+// connection function, say) is simply not called yet. The
+// one-size sentence this replaces named handlers and
+// middleware inside every folder plan, database plans
+// included (the paces workout caught it).
+func placedNotWiredWords(entry *ConceptEntry) (clause, closer string) {
+	sig := entry.Template
+	if i := strings.Index(sig, "\n"); i >= 0 {
+		sig = sig[:i]
+	}
+	switch {
+	case strings.Contains(sig, "http.Handler"):
+		return "nothing wraps the middleware into a chain yet", "Wiring it in"
+	case strings.Contains(sig, "http.ResponseWriter"):
+		return "nothing registers the handler with a server yet", "Wiring it in"
+	default:
+		return "nothing calls it yet", "Calling it"
+	}
+}
+
 // planConceptFolderCreate assembles the new-file plan: package
 // clause, the row's imports, and the declaration rendered
 // exactly as the named-file planner renders it — the same
@@ -1313,7 +1338,8 @@ func (p *Project) planConceptFolderCreate(req EditRequest, entry *ConceptEntry, 
 	if pkgName != folder {
 		notes = append(notes, fmt.Sprintf("The %s folder's files are package %s, so the new file carries that package name, not the folder's.", folder, pkgName))
 	}
-	notes = append(notes, fmt.Sprintf("%s is placed in the %s folder as package %s — placed, not wired: nothing registers the handler with a server or wraps the middleware into a chain yet. Wiring it in is a next step, exactly as when a declaration lands in a named file.", name, folder, pkgName))
+	clause, closer := placedNotWiredWords(entry)
+	notes = append(notes, fmt.Sprintf("%s is placed in the %s folder as package %s — placed, not wired: %s. %s is a next step, exactly as when a declaration lands in a named file.", name, folder, pkgName, clause, closer))
 	if entry.Note != "" {
 		notes = append(notes, entry.Note)
 	}

@@ -46,12 +46,21 @@ package analyze
 // disk lookup is rooted. A program run by hand from inside
 // its own folder inverts the old behavior: the root-relative
 // path misses there — the project root is the contract.
+//
+// One page name bends the route rule: an index page answers
+// at its folder's address ("/" for a folder-root index,
+// "/docs/" for docs/index.html), never at its own name —
+// net/http's ServeFile redirects every request ending in
+// /index.html to the folder's address, so a registration at
+// the page's name would hand the browser a redirect to an
+// address nothing answers. See serveRouteOf.
 
 import (
 	"fmt"
 	"go/ast"
 	"go/token"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -144,6 +153,26 @@ func routePathOf(goRel, htmlRel string) (string, bool) {
 	return "", false
 }
 
+// serveRouteOf derives the route the page answers at from
+// its path within the program's folder. A non-index page
+// answers at its own path. An index page answers at its
+// folder's address: net/http's ServeFile answers a request
+// for …/index.html with a redirect to ./ — the folder's
+// address — for ANY wiring, so a handler registered at the
+// page's own name never serves the page; the browser lands
+// on the folder route, where a standalone program has
+// nothing (a mux 404) and a composed one has whatever else
+// lives there (verified live: old wiring GET /index.html →
+// 301 → 404, GET / → 404; directory wiring serves the page
+// at both addresses). The directory route is the address
+// that actually serves an index page.
+func serveRouteOf(routePath string) string {
+	if path.Base(routePath) == "index.html" {
+		return "/" + strings.TrimSuffix(routePath, "index.html")
+	}
+	return "/" + routePath
+}
+
 // planServeHTML assembles the recipe's plan. See the file
 // header for the state table.
 func (p *Project) planServeHTML(req EditRequest) (*EditPlan, string) {
@@ -169,7 +198,7 @@ func (p *Project) planServeHTML(req EditRequest) (*EditPlan, string) {
 	// path, so the program finds the page when it runs from
 	// the project root — the chat runner's working directory.
 	servePath := htmlRel
-	route := "/" + routePath
+	route := serveRouteOf(routePath)
 	goBase := filepath.Base(rel)
 	htmlBase := filepath.Base(htmlRel)
 
@@ -196,6 +225,12 @@ func (p *Project) planServeHTML(req EditRequest) (*EditPlan, string) {
 	}
 	runNote := serveRunNote(rel, servePath)
 	serveNote := fmt.Sprintf("After it runs, open http://localhost:8080%s — the handler reads %s from disk on every request, so edits to the page show on refresh.", route, servePath)
+	if htmlBase == "index.html" {
+		// The suggested address is the folder's, and the
+		// plan says why in one clause: the address at the
+		// page's own name only redirects there.
+		serveNote += fmt.Sprintf(" It is an index page, so it answers at its folder's address: a request for /%s is redirected to http://localhost:8080%s by the server — net/http sends every index.html request to the folder — so %s is the address that serves the page.", routePath, route, route)
+	}
 
 	// The Go file's state. A missing file is not an error
 	// here (planAddServer's chat layer refuses those; the

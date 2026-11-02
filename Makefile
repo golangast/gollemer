@@ -12,6 +12,8 @@
 #                   social + go brains, runs the evals, prints a report
 #   make handtest   scripted end-to-end chat tests in a throwaway project:
 #                   known asks in, files checked, PASS/FAIL scoreboard out
+#   make paces      the multi-file workout: one project built across
+#                   13 stages of real asks, disk + build checked per stage
 #   make eval       score every brain on its fixed eval suite
 #   make train-*    retrain one brain: social, go, gocode, gocli, makefile
 #   make import     import new training pairs through the quality gate (FILE=path.jsonl)
@@ -27,7 +29,7 @@ MAIN_CMD   = go run .
 DIR        ?= .
 
 .PHONY: start guide chat debug-chat classic flow sel explain smarter eval help import watch \
-        train-social train-go train-gocode train-gocli train-makefile handtest
+        train-social train-go train-gocode train-gocli train-makefile handtest paces
 
 ## start: Talk to gollemer — opens the unified chat (terminal only)
 start:
@@ -79,6 +81,10 @@ smarter:
 ## handtest: Scripted end-to-end chat tests — known asks into a throwaway project, PASS/FAIL scoreboard out
 handtest:
 	bash scripts/handtest.sh
+
+## paces: The multi-file workout — one project across 13 stages of real asks, disk + build checked per stage
+paces:
+	bash scripts/paces.sh
 
 ## eval: Score every brain on its fixed eval suite
 eval:

@@ -113,6 +113,64 @@ func TestFolderDefaultCreatesFileInNewFolder(t *testing.T) {
 	}
 }
 
+// The placed-not-wired note speaks in words true for the
+// piece being placed (the paces workout caught a database
+// plan promising that "nothing registers the handler with a
+// server or wraps the middleware into a chain yet"): a
+// handler plan keeps the handler sentence, a middleware plan
+// the chain sentence, and a database plan neither word.
+func TestFolderPlacedNoteMatchesThePiece(t *testing.T) {
+	_, p := folderFixture(t, nil)
+	cases := []struct {
+		entry  ConceptEntry
+		name   string
+		want   string
+		banned []string
+	}{
+		{
+			entry: ConceptEntry{
+				ID: "form-handler", Names: []string{"form handler"}, Kind: ConceptDeclaration, Folder: "handlers",
+				Template: "func {name}(w http.ResponseWriter, r *http.Request) {\n\t// TODO\n}", Imports: []string{"net/http"},
+			},
+			name: "Signup",
+			want: "nothing registers the handler with a server yet",
+		},
+		{
+			entry: ConceptEntry{
+				ID: "middleware", Names: []string{"middleware"}, Kind: ConceptDeclaration, Folder: "middleware",
+				Template: "func {name}(next http.HandlerFunc) http.HandlerFunc {\n\treturn next\n}", Imports: []string{"net/http"},
+			},
+			name: "Logger",
+			want: "nothing wraps the middleware into a chain yet",
+		},
+		{
+			entry: ConceptEntry{
+				ID: "database-connect", Names: []string{"database connect"}, Kind: ConceptDeclaration, Folder: "database",
+				Template: "func {name}() (*sql.DB, error) {\n\treturn nil, nil\n}", Imports: []string{"database/sql"},
+			},
+			name:   "Connect",
+			want:   "nothing calls it yet",
+			banned: []string{"handler", "middleware"},
+		},
+	}
+	for _, c := range cases {
+		entry := c.entry
+		plan, refusal := folderPlan(t, p, &entry, c.name)
+		if refusal != "" {
+			t.Fatalf("%s: folder plan refused: %s", c.entry.ID, refusal)
+		}
+		notes := strings.Join(plan.Notes, "\n")
+		if !strings.Contains(notes, c.want) {
+			t.Errorf("%s: notes lack %q:\n%s", c.entry.ID, c.want, notes)
+		}
+		for _, banned := range c.banned {
+			if strings.Contains(strings.ToLower(notes), banned) {
+				t.Errorf("%s: notes mention %q, words for a different kind of piece:\n%s", c.entry.ID, banned, notes)
+			}
+		}
+	}
+}
+
 func TestFolderDefaultVerifySeesTheNewPackage(t *testing.T) {
 	guard, _ := testFolderBook(t)
 	dir, p := folderFixture(t, nil)

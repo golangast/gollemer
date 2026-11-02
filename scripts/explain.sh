@@ -179,7 +179,20 @@ Test everything at once:
       gorqlite gate, program running, the basic terminal
       commands with their refusals, the statement pieces —
       checks the files, builds the scratch project, prints a
-      PASS/FAIL scoreboard (94 passed, 0 failed on 2026-11-01).
+      PASS/FAIL scoreboard (97 passed, 0 failed on 2026-11-01).
+
+  make paces
+      the longer workout: one project built across 13 stages
+      of real asks in sequence — webserver, handlers,
+      middleware + security, a named database connection, the
+      gorqlite gate with the install mid-conversation, a
+      struct used across files, a cross-file write, a page
+      served and fetched over HTTP, the terminal basics,
+      guidance, a cross-file rename, the rm refusal — disk
+      checked after every stage, every package built
+      (58 passed, 0 failed on 2026-11-01). It began as a
+      one-off workout that found three real defects; the
+      fixes landed and the workout stayed as a test.
 
 HONEST LIMITS
 -------------
@@ -205,6 +218,7 @@ COMMANDS
   make guide         the start-here guide
   make explain       this overview
   make handtest      scripted end-to-end tests, PASS/FAIL out
+  make paces         the 13-stage multi-file workout, PASS/FAIL out
   make sel           pick a command from a fuzzy finder
   make debug-chat    the chat with its thought process shown
   make eval          score every brain on its fixed eval suite

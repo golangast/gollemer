@@ -114,7 +114,13 @@ var pendingGorqlite *pendingDepAsk
 // the parsed ask: the row's canonical name, the declaration
 // name when there is one, and where it was headed — the
 // folder address for a no-file folder declaration, else the
-// function and file it named.
+// function and file it named. The rendering is an indefinite
+// noun phrase ("a gorqlite connection named Rq for
+// store/db.go"), and the gate's sentence frames are built
+// to hold exactly that shape — an appositive after "That
+// ask", the object of "the plan for …" — never a bare
+// "That <phrase>" subject, which reads as broken English
+// for every row shape (the paces workout caught it).
 func describeDepAsk(req conceptReq) string {
 	s := "a " + req.entry.Canonical()
 	if req.name != "" {
@@ -141,12 +147,12 @@ func gorqliteDepMissing(req conceptReq, rootAbs, line string) {
 	piece := describeDepAsk(req)
 	pendingGorqlite = &pendingDepAsk{line: line, piece: piece, root: rootAbs}
 	tag := cTag("gollemer [composer]>")
-	fmt.Printf("%s That %s needs the gorqlite client, and this project doesn't have it yet — the code would import %s, and nothing compiles against a dependency the project doesn't list. I don't fetch dependencies for you, so run this in the project first:\n", tag, piece, gorqliteModule)
+	fmt.Printf("%s That ask — %s — needs the gorqlite client, and this project doesn't have it yet — the code would import %s, and nothing compiles against a dependency the project doesn't list. I don't fetch dependencies for you, so run this in the project first:\n", tag, piece, gorqliteModule)
 	fmt.Printf("%s   go get %s\n", tag, gorqliteModule)
 	if note := gorqliteNewFileNote(req, rootAbs); note != "" {
 		fmt.Printf("%s %s\n", tag, note)
 	}
-	fmt.Printf("%s Once you've run it, tell me \"installed\" and I'll bring that %s back as a plan for your okay.\n", tag, piece)
+	fmt.Printf("%s Once you've run it, tell me \"installed\" and I'll offer %s again as a plan for your okay.\n", tag, piece)
 	recordBrain("composer", false, "concept refused: gorqlite dependency missing (go get "+gorqliteModule+")")
 }
 
@@ -218,12 +224,12 @@ func runGorqliteInstalled(line string, ask editAsk) bool {
 	}
 	tag := cTag("gollemer [composer]>")
 	if !goModRequires(p.root, gorqliteModule) {
-		fmt.Printf("%s I checked %s — %s isn't in its require list yet, so that %s still can't be planned. Run go get %s in the project, then tell me \"installed\" again; the ask stays held until then.\n", tag, filepath.Join(p.root, "go.mod"), gorqliteModule, p.piece, gorqliteModule)
+		fmt.Printf("%s I checked %s — %s isn't in its require list yet, so %s still can't be planned. Run go get %s in the project, then tell me \"installed\" again; the ask stays held until then.\n", tag, filepath.Join(p.root, "go.mod"), gorqliteModule, p.piece, gorqliteModule)
 		recordBrain("composer", false, "gorqlite follow-up: dependency still missing")
 		return true
 	}
 	pendingGorqlite = nil
-	fmt.Printf("%s %s is in go.mod now — here's that %s again:\n", tag, gorqliteModule, p.piece)
+	fmt.Printf("%s %s is in go.mod now — here's the plan for %s again:\n", tag, gorqliteModule, p.piece)
 	runConcept(p.line, ask)
 	return true
 }

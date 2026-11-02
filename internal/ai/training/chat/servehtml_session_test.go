@@ -51,7 +51,7 @@ func TestServeHTMLEmptyProject(t *testing.T) {
 		t.Errorf("the page is not the starter page:\n%s", got)
 	}
 	goSrc := readBack(t, root, "main.go")
-	for _, want := range []string{`http.HandleFunc("/index.html"`, `http.ServeFile(w, r, "index.html")`, `http.ListenAndServe(":8080", nil)`} {
+	for _, want := range []string{`http.HandleFunc("/", func`, `http.ServeFile(w, r, "index.html")`, `http.ListenAndServe(":8080", nil)`} {
 		if !strings.Contains(goSrc, want) {
 			t.Errorf("the program is missing %q:\n%s", want, goSrc)
 		}
@@ -160,7 +160,11 @@ func TestServeHTMLComposesWithRunningServer(t *testing.T) {
 
 // A server on a custom mux: claimed, refused with the reason
 // and the line to paste — and nothing written, not even the
-// page.
+// page. The index page into the SAME mux is a different,
+// also honest refusal: the address an index page needs is
+// the mux's own "/", so the by-hand line (mux.HandleFunc
+// at "/") would panic beside the existing registration —
+// the answer is the route conflict, not a line to paste.
 func TestServeHTMLCustomMuxRefusedWritesNothing(t *testing.T) {
 	root := serveProgramRoot(t)
 	muxSrc := `package main
@@ -183,7 +187,7 @@ func main() {
 	writeFile(t, root, "main.go", muxSrc)
 	withChatSession(t, root, true)
 	profile := &UserProfile{}
-	line := "serve index.html to main.go"
+	line := "serve home.html to main.go"
 	var handled bool
 	out := captureStdout(t, func() { handled = claimChain(line, yes, profile) })
 	if !handled {
@@ -192,11 +196,28 @@ func main() {
 	if !strings.Contains(out, "won't add a second ListenAndServe") {
 		t.Errorf("the refusal does not name the reason:\n%s", out)
 	}
+	if !strings.Contains(out, `mux.HandleFunc("/home.html"`) {
+		t.Errorf("the refusal does not hand over the mux line:\n%s", out)
+	}
 	if got := readBack(t, root, "main.go"); got != muxSrc {
 		t.Errorf("the refused ask changed main.go:\n%s", got)
 	}
-	if fileExists(t, root, "index.html") {
+	if fileExists(t, root, "home.html") {
 		t.Errorf("the refused ask created the page")
+	}
+
+	out = captureStdout(t, func() { handled = claimChain("serve index.html to main.go", yes, profile) })
+	if !handled {
+		t.Fatalf("the index ask fell through the claim chain:\n%s", out)
+	}
+	if !strings.Contains(out, "already answers http://localhost:8080/ with a different handler") {
+		t.Errorf("the index refusal is not the route conflict:\n%s", out)
+	}
+	if got := readBack(t, root, "main.go"); got != muxSrc {
+		t.Errorf("the refused index ask changed main.go:\n%s", got)
+	}
+	if fileExists(t, root, "index.html") {
+		t.Errorf("the refused index ask created the page")
 	}
 }
 

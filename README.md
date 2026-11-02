@@ -174,18 +174,23 @@ you> create a file webtest/main.go with a webserver
           }
 Create it? [y/n] gollemer [composer]> Done — created webtest/main.go. I compiled it to check — it builds.
 
-you> serve an html file to webtest/main.go
-gollemer [composer]> Serve webtest/index.html from the server already in webtest/main.go: one registration, just before its ListenAndServe, answers http://localhost:8080/index.html with the page. The page webtest/index.html is created fresh with a starter page (its body is a TODO).
+you> serve home.html to webtest/main.go
+gollemer [composer]> Serve webtest/home.html from the server already in webtest/main.go: one registration, just before its ListenAndServe, answers http://localhost:8080/home.html with the page. The page webtest/home.html is created fresh with a starter page (its body is a TODO).
 ...
-Apply this edit? [y/n] gollemer [composer]> Done — main.go serves index.html via http.ServeFile, at webtest/main.go:16. I built the project and checked that it's really there.
+Apply this edit? [y/n] gollemer [composer]> Done — main.go serves home.html via http.ServeFile, at webtest/main.go:16. I built the project and checked that it's really there.
 ```
 
 Ask twice and it tells you the truth instead of doing it again:
 
 ```
-you> serve an html file to webtest/main.go
-gollemer [composer]> Not doing that edit: webtest/main.go already serves webtest/index.html at http://localhost:8080/index.html — nothing to add.
+you> serve home.html to webtest/main.go
+gollemer [composer]> Not doing that edit: webtest/main.go already serves webtest/home.html at http://localhost:8080/home.html — nothing to add.
 ```
+
+(A page named `index.html` is wired at its folder's address —
+`http://localhost:8080/` for a page beside its program — because
+the server redirects every `index.html` request to that address
+anyway; the plan says so when it offers one.)
 
 ### Add pieces to your code
 
@@ -239,12 +244,12 @@ waits — it never downloads anything itself:
 
 ```
 you> add a gorqlite connection named Connect
-gollemer [composer]> That a gorqlite connection named Connect (it would be created as database/connect.go) needs the gorqlite client, and this project doesn't have it yet — the code would import github.com/rqlite/gorqlite, and nothing compiles against a dependency the project doesn't list. I don't fetch dependencies for you, so run this in the project first:
+gollemer [composer]> That ask — a gorqlite connection named Connect (it would be created as database/connect.go) — needs the gorqlite client, and this project doesn't have it yet — the code would import github.com/rqlite/gorqlite, and nothing compiles against a dependency the project doesn't list. I don't fetch dependencies for you, so run this in the project first:
 gollemer [composer]>   go get github.com/rqlite/gorqlite
-gollemer [composer]> Once you've run it, tell me "installed" and I'll bring that a gorqlite connection named Connect (it would be created as database/connect.go) back as a plan for your okay.
+gollemer [composer]> Once you've run it, tell me "installed" and I'll offer a gorqlite connection named Connect (it would be created as database/connect.go) again as a plan for your okay.
 
 you> installed
-gollemer [composer]> github.com/rqlite/gorqlite is in go.mod now — here's that a gorqlite connection named Connect (it would be created as database/connect.go) again:
+gollemer [composer]> github.com/rqlite/gorqlite is in go.mod now — here's the plan for a gorqlite connection named Connect (it would be created as database/connect.go) again:
 gollemer [composer]> Here's the edit I assembled from this project's own code:
 ...
 Apply this edit? [y/n] gollemer [composer]> Done — connect.go now declares the gorqlite connection Connect in package database, at database/connect.go:7. I built the project and checked that it's really there.
@@ -398,7 +403,7 @@ gollemer [terminal]> "../secret" climbs out of the project folder — these comm
 ```
 $ make handtest
 ...
-handtest scoreboard: 94 passed, 0 failed, 94 total
+handtest scoreboard: 97 passed, 0 failed, 97 total
 ```
 
 `make handtest` drives the real chat through scripted sessions in a
@@ -413,6 +418,25 @@ the files it should have written and builds the
 whole scratch project. It's the same test a person would do by hand
 after every update, automated. (The scoreboard above is from a real
 run on 2026-11-01.)
+
+```
+$ make paces
+...
+paces scoreboard: 58 passed, 0 failed, 58 total
+```
+
+`make paces` is the longer workout: one project built across 13
+stages of real asks in sequence — a webserver, handlers, middleware
+and security pieces, a named database connection, the dependency
+gate with the install happening mid-conversation, a struct in one
+file used from others (including a function written into a second
+file that calls a third file's function), an html page served and
+then fetched over HTTP from the running program, the terminal
+basics, the guidance answers, a cross-file rename, and the rm
+refusal — with the disk checked after every stage and every package
+built. It began as a one-off workout that scored 46 of 58 and found
+three real defects; the fixes landed, and the workout stayed as a
+test.
 
 ## How it works, in plain words
 
@@ -460,6 +484,7 @@ will offer to run them for you.
 | `make guide` | Print the start-here guide — what to do, what it can do, how to teach it more |
 | `make explain` | Print an overview like this README, from the command line |
 | `make handtest` | Run the scripted end-to-end test suite in a throwaway project; prints a PASS/FAIL scoreboard |
+| `make paces` | Run the 13-stage multi-file workout — one project built by real asks in sequence, disk + build checked per stage |
 | `make sel` | Pick any make command from a fuzzy-finder list instead of typing it |
 | `make debug-chat` | The chat with its thought process and routing shown — for the curious |
 | `make eval` | Score every brain on its fixed test sets |
@@ -509,7 +534,7 @@ guesses.
 
 ## A note on the numbers in this README
 
-135 pieces, 17 brains, 94 handtest cases — these are counts of what's
-actually in this checkout, and the model scores quoted are the
-measured ones, kept next to the features they describe. When a number
-changes, this file should change with it.
+135 pieces, 17 brains, 97 handtest cases, 58 paces checks — these are
+counts of what's actually in this checkout, and the model scores
+quoted are the measured ones, kept next to the features they
+describe. When a number changes, this file should change with it.

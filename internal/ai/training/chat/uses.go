@@ -31,7 +31,16 @@ import (
 )
 
 var (
-	reUsesNamedLong = regexp.MustCompile(`(?i)^add a function ([A-Za-z_]\w*) in (.+?) that uses (?:the )?(type )?([A-Za-z_][\w.]*)(?: from (.+))?$`)
+	// The non-lead named form carries the name bare
+	// ("add a function Report in …") or behind the book's
+	// introducer ("add a function named Report in …") —
+	// the hybrid. The named-connection rule taught the book
+	// that a name belongs to a declaration; this shape IS a
+	// declaration ask, so the "named" form routes here too
+	// instead of falling through to the boundary's
+	// extra-clause refusal, whose forms never mention the
+	// uses sentence that works.
+	reUsesNamedLong = regexp.MustCompile(`(?i)^add a function (?:named )?([A-Za-z_]\w*) in (.+?) that uses (?:the )?(type )?([A-Za-z_][\w.]*)(?: from (.+))?$`)
 	reUsesAnonLong  = regexp.MustCompile(`(?i)^add a function in (.+?) that uses (?:the )?(type )?([A-Za-z_][\w.]*)(?: from (.+))?$`)
 	reUsesLeadNamed = regexp.MustCompile(`(?i)^in (.+?),? add a function (?:named )?([A-Za-z_]\w*) that uses (?:the )?(type )?([A-Za-z_][\w.]*)(?: from (.+))?$`)
 	reUsesLeadAnon  = regexp.MustCompile(`(?i)^in (.+?),? add a function that uses (?:the )?(type )?([A-Za-z_][\w.]*)(?: from (.+))?$`)

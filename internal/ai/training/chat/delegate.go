@@ -331,12 +331,31 @@ func runDelegate(line string, ask editAsk) bool {
 }
 
 // delegateTargetPkg finds the analyzed package owning rel.
+// It resolves exactly the way the planners' pkgOfFile does —
+// exact file membership, then the directory fallback —
+// because the two lookups must never disagree about the
+// same file: a file this chat itself created earlier in the
+// session is baselined in the freshness snapshot but is not
+// in the index's file lists until the next re-read, so the
+// planner assembles its plan through the fallback while an
+// exact-match-only lookup here reported the package "lost"
+// and wrote nothing (the paces workout's step 6: a uses ask
+// into a just-created report.go, refused after its gate).
 func delegateTargetPkg(proj *analyze.Project, rel string) *analyze.Package {
 	for _, pkg := range proj.Packages {
 		for _, f := range pkg.Files {
 			if f == rel {
 				return pkg
 			}
+		}
+	}
+	dir := filepath.ToSlash(filepath.Dir(rel))
+	if dir == "." {
+		dir = ""
+	}
+	for _, pkg := range proj.Packages {
+		if pkg.Dir == dir {
+			return pkg
 		}
 	}
 	return nil

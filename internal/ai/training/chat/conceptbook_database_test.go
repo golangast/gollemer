@@ -316,6 +316,21 @@ func TestGorqliteGateAbsentThenInstalled(t *testing.T) {
 	if !strings.Contains(out, "go get github.com/rqlite/gorqlite") {
 		t.Errorf("gate guidance lacks the exact go get line:\n%s", out)
 	}
+	// The gate's frames hold the piece description (an
+	// indefinite noun phrase) grammatically — the paces
+	// workout caught "That a gorqlite connection … needs"
+	// and "here's that a gorqlite connection … again".
+	for _, want := range []string{
+		"That ask — a gorqlite query in main for jim/main.go — needs the gorqlite client",
+		"I'll offer a gorqlite query in main for jim/main.go again as a plan for your okay.",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("gate guidance lacks %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "That a gorqlite") {
+		t.Errorf("gate guidance still drops the description into a subject frame:\n%s", out)
+	}
 	if strings.Contains(out, "Here's the edit I assembled") {
 		t.Errorf("a plan was offered despite the missing dependency:\n%s", out)
 	}
@@ -337,6 +352,9 @@ func TestGorqliteGateAbsentThenInstalled(t *testing.T) {
 	if !strings.Contains(out, "isn't in its require list yet") {
 		t.Errorf("still-absent follow-up not answered plainly:\n%s", out)
 	}
+	if !strings.Contains(out, "so a gorqlite query in main for jim/main.go still can't be planned") {
+		t.Errorf("still-absent follow-up frames the piece ungrammatically:\n%s", out)
+	}
 	if pendingGorqlite == nil {
 		t.Error("the ask stopped being held after a still-absent follow-up")
 	}
@@ -352,6 +370,9 @@ func TestGorqliteGateAbsentThenInstalled(t *testing.T) {
 	}
 	if !strings.Contains(out, "Here's the edit I assembled") {
 		t.Errorf("the original plan was not re-offered:\n%s", out)
+	}
+	if !strings.Contains(out, "is in go.mod now — here's the plan for a gorqlite query in main for jim/main.go again:") {
+		t.Errorf("re-offer frames the piece ungrammatically:\n%s", out)
 	}
 	if pendingGorqlite != nil {
 		t.Error("the ask is still held after the re-offer")

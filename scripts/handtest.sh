@@ -274,21 +274,28 @@ create a folder webtest
 y
 create a file webtest/main.go with a webserver
 y
-serve an html file to webtest/main.go
-y
-serve an html file to webtest/main.go
 serve home.html to webtest/main.go
 y
+serve home.html to webtest/main.go
+serve an html file to webtest/main.go
 /quit
 EOF
 run_session webserver
 
 case_file_contains webserver-file webtest/main.go "ListenAndServe"
 case_file_contains serve-html webtest/main.go "http.ServeFile"
-case_file_contains serve-html-page webtest/index.html "TODO"
 case_transcript_contains serve-html-repeat webserver "already serves" "nothing to add"
 case_file_contains serve-html-named-page webtest/home.html "TODO"
 case_file_contains serve-html-rooted-path webtest/main.go 'http.ServeFile(w, r, "webtest/home.html")'
+# The bare "serve an html file" ask names the default index
+# page, and an index page can only be served at its folder's
+# address — which the webserver's own "/" handler already
+# owns. The honest answer is the route conflict, and no
+# index page is created (index serving itself — a standalone
+# program answering at "/" — is fetched over HTTP by the
+# analyze suite's serve tests).
+case_transcript_contains serve-html-index-conflict webserver "already answers http://localhost:8080/ with a different handler"
+case_dir_absent serve-html-index-not-created webtest/index.html
 
 # --- session: line placement (pristine program file) -----------------
 
@@ -486,6 +493,8 @@ run_session gorqlitegate
 case_transcript_contains gorqlite-gate-line gorqlitegate "go get github.com/rqlite/gorqlite"
 case_transcript_lacks gorqlite-no-plan gorqlitegate "Apply this edit?"
 case_transcript_contains gorqlite-installed-not-yet gorqlitegate "isn't in its require list yet"
+case_transcript_contains gorqlite-gate-grammar gorqlitegate "That ask — a gorqlite connection named Connect (it would be created as database/connect.go) — needs the gorqlite client"
+case_transcript_lacks gorqlite-gate-no-broken-frame gorqlitegate "That a gorqlite"
 if grep -rqF --include='*.go' "gorqlite" "$SCRATCH/app" "$SCRATCH/handlers" "$SCRATCH/middleware" "$SCRATCH/security" "$SCRATCH/database" "$SCRATCH/webtest" "$SCRATCH/jane" "$SCRATCH/pieces.go" 2>/dev/null; then
 	bad gorqlite-nothing-written "a scratch .go file mentions gorqlite"
 else

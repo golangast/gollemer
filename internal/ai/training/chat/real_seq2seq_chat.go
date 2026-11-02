@@ -1333,6 +1333,12 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// is the passthrough's trigger, "that uses" is this
 		// one's) and before the concept book, whose function
 		// row would meet the "that uses" tail unprepared.
+		// The named hybrid ("add a function named Report in
+		// api/report.go that uses Validate from …") routes
+		// here too: its name introducer made it fall between
+		// this grammar and the book's, out to the boundary's
+		// extra-clause refusal, until the grammar learned
+		// the introducer (uses.go).
 		if tryUses(line, reader) {
 			continue
 		}
