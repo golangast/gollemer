@@ -43,6 +43,15 @@ package chat
 // answers with the guidance naming the working sentence, in the
 // nameless-designator tradition. Unknown concept names are NOT
 // claimed here at all — they fall to the boundary.
+//
+// A name belongs to a declaration: a STATEMENT matched with a
+// name slot never drops the name. When the book carries the
+// statement's declaration sibling — a declaration named with
+// one of the statement's names plus " function", the way
+// "database connection function" stands beside the statement's
+// "database connection" — the ask resolves to that declaration
+// whole. With no sibling, the ask refuses with the guidance
+// spelling the same ask unnamed, inside a function.
 
 import (
 	"fmt"
@@ -1807,6 +1816,37 @@ type conceptName struct {
 	entry int // index into the loaded entries
 }
 
+// conceptDeclarationSibling finds the declaration a named
+// statement ask belongs to: the unique declaration entry
+// carrying, among its own names, one of the statement's names
+// with " function" appended — the book's own naming carries
+// the pairing ("database connection" the statement, "database
+// connection function" the declaration), so a future pair
+// named the same way resolves with no new code. Zero or
+// several candidates means no sibling: the ask must not
+// guess between declarations.
+func conceptDeclarationSibling(stmt analyze.ConceptEntry, entries []analyze.ConceptEntry) (analyze.ConceptEntry, bool) {
+	var found []analyze.ConceptEntry
+	seen := map[string]bool{}
+	for _, e := range entries {
+		if e.Kind != analyze.ConceptDeclaration || seen[e.ID] {
+			continue
+		}
+		for _, n := range e.Names {
+			for _, sn := range stmt.Names {
+				if n == sn+" function" {
+					found = append(found, e)
+					seen[e.ID] = true
+				}
+			}
+		}
+	}
+	if len(found) == 1 {
+		return found[0], true
+	}
+	return analyze.ConceptEntry{}, false
+}
+
 // conceptNames flattens the book's phrasings, longest first (so
 // "print line" beats its own prefix "print"), ties broken by
 // phrase for determinism.
@@ -2205,6 +2245,49 @@ func runConcept(line string, ask editAsk) bool {
 		fmt.Printf("%s Not adding that: %s.\n", tag, why)
 		recordBrain("composer", false, "concept refused: line phrase")
 		return true
+	}
+
+	// A name belongs to a declaration (named-connection
+	// build, 2026-11-01). A statement matched with a
+	// "named <Name>" slot has nowhere to put the name: the
+	// statement lands inside a function, unnamed by
+	// construction, and the name used to drop in silence —
+	// "add a database connection named Connet to jake/db.go"
+	// assembled the inline sql.Open snippet into a file with
+	// no main and fabricated one to hold it, when the file
+	// was exactly where a connection FUNCTION belonged.
+	// Two honest outcomes replace the drop:
+	//   - the book's declaration sibling takes the ask
+	//     whole (conceptDeclarationSibling): the entry is
+	//     rebound and the ask flows on through the
+	//     declaration's own plan, gate, transaction and
+	//     build check, exactly as its own sentences do;
+	//   - otherwise the ask refuses here, before any
+	//     project work: the piece is a statement inside a
+	//     function and takes no name, and the guidance
+	//     spells the same ask unnamed, placed in a
+	//     function — the user's function and target when
+	//     they gave them, the statement's defaults (main,
+	//     main.go) when they didn't.
+	if req.entry.Kind == analyze.ConceptStatement && req.name != "" {
+		if sibling, ok := conceptDeclarationSibling(req.entry, conceptEntries()); ok {
+			req.entry = sibling
+			canon = req.entry.Canonical()
+		} else {
+			fn := req.inFunc
+			if fn == "" {
+				fn = "main"
+			}
+			target := req.target
+			if target == "" {
+				target = "main.go"
+			}
+			fmt.Printf("%s Not adding that: %s %s is a statement — a piece of code that lives inside a function — so it doesn't take a name of its own, and %q would be lost. Say \"add %s %s in %s to %s\" and it lands inside %s, unnamed.\n",
+				tag, conceptArticle(canon), canon, req.name,
+				conceptArticle(canon), canon, fn, target, fn)
+			recordBrain("composer", false, "concept refused: statement named")
+			return true
+		}
 	}
 
 	// Guidance before any project work: a declaration with no

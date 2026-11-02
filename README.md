@@ -398,7 +398,7 @@ gollemer [terminal]> "../secret" climbs out of the project folder — these comm
 ```
 $ make handtest
 ...
-handtest scoreboard: 82 passed, 0 failed, 82 total
+handtest scoreboard: 85 passed, 0 failed, 85 total
 ```
 
 `make handtest` drives the real chat through scripted sessions in a
@@ -509,7 +509,7 @@ guesses.
 
 ## A note on the numbers in this README
 
-135 pieces, 17 brains, 82 handtest cases — these are counts of what's
+135 pieces, 17 brains, 85 handtest cases — these are counts of what's
 actually in this checkout, and the model scores quoted are the
 measured ones, kept next to the features they describe. When a number
 changes, this file should change with it.

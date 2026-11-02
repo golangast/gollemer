@@ -371,6 +371,51 @@ else
 fi
 case_dir_absent db-guide-no-folder database
 
+# --- session: a named connection resolves to the declaration ----------------
+# John's setup from his 2026-11-01 screenshot: jake/db.go
+# already holds a Connect function and no main, beside the
+# webserver main the dbguide session built. His line —
+# "add a database connection named Connet to jake/db.go" —
+# used to match the inline database statement, drop the
+# name, and fabricate a main to hold the snippet. A name
+# belongs to a declaration: the ask now plans the
+# connection FUNCTION for Connet in that file.
+cat > "$SCRATCH/jake/db.go" <<'EOF'
+package main
+
+import (
+	"context"
+	"database/sql"
+)
+
+func Connect() (*sql.DB, error) {
+	db, err := sql.Open("TODO: driver name", "TODO: connection string")
+	if err != nil {
+		return nil, err
+	}
+	if err := db.PingContext(context.Background()); err != nil {
+		return nil, err
+	}
+	db.SetMaxOpenConns(10)
+	return db, nil
+}
+EOF
+
+cat > "$SCRATCH/.inputs/namedconn.txt" <<'EOF'
+add a database connection named Connet to jake/db.go
+y
+/quit
+EOF
+run_session namedconn
+
+case_transcript_contains namedconn-plan namedconn "Add the database connect Connet to jake/db.go" "built the project and checked"
+case_file_contains namedconn-decl jake/db.go "func Connet() (*sql.DB, error)" "func Connect() (*sql.DB, error)"
+if grep -qF "func main(" "$SCRATCH/jake/db.go"; then
+	bad namedconn-no-fake-main "jake/db.go grew a fabricated main"
+else
+	ok namedconn-no-fake-main
+fi
+
 # --- session: folder-default declarations --------------------------------
 
 cat > "$SCRATCH/.inputs/folderdefaults.txt" <<'EOF'
