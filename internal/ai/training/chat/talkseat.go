@@ -153,6 +153,11 @@ type TalkContext struct {
 	WorkLive    bool
 	Turns       []Turn
 	Conv        *Conversation
+	Root        string
+	State       systemState
+	StateText   string
+	MemoryText  string
+	SessionText string
 }
 
 // talkFocusCap caps the working-file body fed to the seat.
@@ -167,6 +172,15 @@ const talkDigestCap = 3500
 // since the last read), then every derived piece.
 func buildTalkContext(line, domain string, conv *Conversation, socialRoute bool) TalkContext {
 	ctx := TalkContext{Line: line, Domain: domain, SocialRoute: socialRoute, Conv: conv}
+	// Capture the read-baseline change list BEFORE
+	// ensureTalkProject's silent re-read can move the
+	// baseline: state answers report what changed since the
+	// read the session had when this line arrived.
+	entryRoot := unifiedProjectRoot
+	if lastAnalyzeProject != nil && lastAnalyzeProject.Root != "" {
+		entryRoot = lastAnalyzeProject.Root
+	}
+	preChanged, preChangeNote := changedGoFilesSinceRead(entryRoot)
 	p := ensureTalkProject()
 	ctx.Project = p
 	if conv != nil {
@@ -183,6 +197,13 @@ func buildTalkContext(line, domain string, conv *Conversation, socialRoute bool)
 		ctx.WorkLive = true
 	}
 	if p == nil {
+		ctx.Root = canonicalMemoryRoot(entryRoot)
+		ctx.MemoryText = memoryContextText(ctx.Root)
+		ctx.SessionText = sessionSummaryText()
+		ctx.State = buildSystemState(ctx.Root)
+		ctx.State.Changed = preChanged
+		ctx.State.ChangeNote = preChangeNote
+		ctx.StateText = ctx.State.Text()
 		return ctx
 	}
 	ctx.Story = p.Overview()
@@ -219,6 +240,13 @@ func buildTalkContext(line, domain string, conv *Conversation, socialRoute bool)
 		detailed[slashDir(focus)] = true
 	}
 	ctx.Digest, ctx.Names = buildTalkDigest(p, detailed)
+	ctx.Root = canonicalMemoryRoot(p.Root)
+	ctx.MemoryText = memoryContextText(ctx.Root)
+	ctx.SessionText = sessionSummaryText()
+	ctx.State = buildSystemState(ctx.Root)
+	ctx.State.Changed = preChanged
+	ctx.State.ChangeNote = preChangeNote
+	ctx.StateText = ctx.State.Text()
 	return ctx
 }
 
@@ -381,6 +409,29 @@ func tryTalkSeat(line, domain string, conv *Conversation, socialRoute bool, show
 	return true
 }
 
+// tryTalkStateAnswer is the state arm's deterministic
+// claim in the unified loop, seated after recall and before
+// routing/intent: state questions are facts, and a model or
+// classifier must never get the chance to steal one (the
+// intent layer reads "branch" as "brains"). It shares the
+// exact arm the talk seat's responder runs first.
+func tryTalkStateAnswer(line string, conv *Conversation) bool {
+	if !isTalkStateLine(line) {
+		return false
+	}
+	ctx := buildTalkContext(line, "", conv, false)
+	out, ok := talkStateAnswer(ctx, line)
+	if !ok {
+		return false
+	}
+	fmt.Printf("%s %s\n", cTag(fmt.Sprintf("gollemer [%s]>", TalkDomain)), out)
+	if conv != nil {
+		conv.AddUser(line)
+		conv.AddReply(out, TalkDomain, false)
+	}
+	return true
+}
+
 // localTalkResponder is the v1 composed responder: project
 // facts from the index, "it" from the session context,
 // conversation from the local social model, general Go from
@@ -393,6 +444,13 @@ type localTalkResponder struct {
 // Respond runs the v1 composition in order. The first arm
 // that can answer honestly wins; no arm invents.
 func (r *localTalkResponder) Respond(ctx TalkContext, line string) (TalkResponse, bool) {
+	// 0. System-state facts: the clock, the OS/environment,
+	// the branch and read-baseline changes, and what this
+	// session has made are read from the freshly assembled
+	// state block — never routed through a model.
+	if out, ok := talkStateAnswer(ctx, line); ok {
+		return TalkResponse{Text: out, Factual: true}, true
+	}
 	// 1. Project-fact second pass: a broader, looser pass
 	// over the index than the deterministic Q&A that already
 	// declined this line — it auto-analyzed the project (in

@@ -92,7 +92,11 @@ var workCtx workContext
 
 // resetWorkContext forgets the work in progress. Called by
 // setCurrentProject when the session's project changes.
-func resetWorkContext() { workCtx = workContext{} }
+func resetWorkContext() {
+	workCtx = workContext{}
+	resetShortTermMemory()
+	resetMemoryRecall()
+}
 
 // workContextLive reports whether the tracked context
 // belongs to the project rooted at rootAbs.
@@ -113,6 +117,16 @@ func noteLandedFile(rootAbs, rel, how, piece, name string) {
 	workCtx.pieceName = name
 	workCtx.folder = slashDir(rel)
 	workCtx.pkg = folderPackageOf(rootAbs, workCtx.folder)
+	desc := piece
+	if name != "" {
+		desc += " " + name
+	}
+	if desc != "" {
+		desc += " in " + rel
+	} else {
+		desc = rel
+	}
+	noteSessionBuilt(rootAbs, desc)
 }
 
 // noteLandedFolder records a folder the chat just created:
@@ -123,6 +137,7 @@ func noteLandedFolder(rootAbs, rel string) {
 	workCtx.root = rootAbs
 	workCtx.folder = rel
 	workCtx.pkg = folderPackageOf(rootAbs, rel)
+	noteSessionBuilt(rootAbs, "folder "+rel)
 }
 
 // slashDir is the slash-relative folder of a slash-relative

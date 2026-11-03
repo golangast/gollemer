@@ -103,6 +103,20 @@ The talk seat only explains and discusses — when you ask it to
 say the exact sentence and the change goes through the same plan
 and yes-or-no gate as always.
 
+It also knows the state of the moment and remembers what you
+tell it to. Ask "what branch am I on?", "what files changed?",
+or "what have we made?" and the answer comes from the chat's own
+state — the clock, this machine, the branch in `.git/HEAD`, and
+the Go files that differ since its last read of the project
+(that last one is a read-baseline check, not a full git status).
+Say "remember: I prefer …" or "note: …" and it echoes back
+exactly what it stored; "what do you remember" shows it, and
+"forget this project", "forget my …", and "forget everything"
+remove exactly what their replies confirm. Memory lives in
+`~/.gollemer_memory.json`, outside every project. When a session
+ends it saves a short summary of what was built, and the next
+session in the same project opens with one "Last time here:" line.
+
 ### Ask what a project does
 
 ```

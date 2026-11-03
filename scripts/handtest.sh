@@ -949,6 +949,69 @@ case_transcript_contains talk-conversation-reply talkchat "gollemer"
 case_transcript_lacks talk-conversation-no-error talkchat "[error:"
 case_transcript_lacks talk-conversation-no-invention talkchat "Frobnicate"
 
+# --- session: memory + system state awareness ------------------------------
+# Two sessions sharing one isolated HOME (the store lives in
+# ~/.gollemer_memory.json — under the scratch home here, and
+# never inside the project). Session A captures a preference
+# explicitly, asks its branch, and lands a piece; its /quit
+# saves the session summary. Session B must open with the
+# one continuity line, recall the preference and the piece,
+# answer the changed-files question with its honest baseline
+# caveat, and forget exactly what the replies confirm. A
+# minimal .git/HEAD gives the branch arm a fixture branch.
+
+mkdir -p "$SCRATCH/.git" "$SCRATCH/.home"
+printf 'ref: refs/heads/handtest-memory\n' > "$SCRATCH/.git/HEAD"
+
+run_session_with_home() {
+	local name="$1"
+	local out="$SCRATCH/transcripts/$name.txt"
+	: > "$out"
+	(cd "$SCRATCH" && env -u GOEXPERIMENT HOME="$SCRATCH/.home" timeout "$SESSION_TIMEOUT" "$BIN" -real-chat -domain unified) \
+		< "$SCRATCH/.inputs/$name.txt" >> "$out" 2>&1
+	local rc=$?
+	{
+		printf '===== session: %s =====\n' "$name"
+		cat "$out"
+		printf '\n'
+	} >> "$SCRATCH/transcript.txt"
+	if [ "$rc" -eq 124 ]; then
+		bad "session-$name" "timed out after ${SESSION_TIMEOUT}s"
+	fi
+}
+
+cat > "$SCRATCH/.inputs/memory1.txt" <<'EOF'
+remember: I prefer tabs over spaces
+what branch am I on?
+create file memoryprobe.go
+y
+add a struct named MemoryProbe to memoryprobe.go
+y
+what have we made?
+what do you remember
+/quit
+EOF
+run_session_with_home memory1
+
+case_transcript_contains memory-capture-echo memory1 "I'll remember: I prefer tabs over spaces."
+case_transcript_contains memory-branch memory1 "You're on branch handtest-memory."
+case_transcript_contains memory-made memory1 "MemoryProbe" "memoryprobe.go"
+case_transcript_contains memory-recall-first memory1 "I prefer tabs over spaces" "For this project"
+case_file_contains memory-session-saved .home/.gollemer_memory.json "I prefer tabs over spaces" "MemoryProbe"
+
+cat > "$SCRATCH/.inputs/memory2.txt" <<'EOF'
+what do you remember
+what files changed?
+forget my tabs over spaces
+forget this project
+/quit
+EOF
+run_session_with_home memory2
+
+case_transcript_contains memory-continuity memory2 "Last time here:" "MemoryProbe"
+case_transcript_contains memory-changed-caveat memory2 "don't have a project-read baseline" "won't call that a git status"
+case_transcript_contains memory-forget memory2 'Forgotten: your preference "I prefer tabs over spaces"' "Forgotten: this project's notes and session summaries"
+
 # --- final build over the whole scratch project ---------------------------
 
 if (cd "$SCRATCH" && env -u GOEXPERIMENT timeout "$SESSION_TIMEOUT" go build ./...) > "$SCRATCH/transcripts/final-build.txt" 2>&1; then

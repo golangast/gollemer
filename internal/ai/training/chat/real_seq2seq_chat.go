@@ -1127,6 +1127,12 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 	showThoughts := debug
 	conv := NewConversation()
 	printStartScreen(projectRoot)
+	// Long-term memory recall for the project this session
+	// opened in: at most one continuity line, only when a
+	// previous stored session summary exists for it.
+	if line := beginMemorySession(projectRoot); line != "" {
+		fmt.Printf("%s %s\n", cTag(fmt.Sprintf("gollemer [%s]>", TalkDomain)), line)
+	}
 	// Interrupted-edit recovery already ran in RunRealChat,
 	// before this loop was dispatched.
 	for {
@@ -1136,6 +1142,9 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		noteProgramActivity()
 		line, rerr := reader.ReadLine(cPrompt("you> "))
 		if rerr == io.EOF {
+			if saved := finishMemorySession(); saved != "" {
+				fmt.Printf("%s %s\n", cTag(fmt.Sprintf("gollemer [%s]>", TalkDomain)), saved)
+			}
 			break
 		}
 		if rerr == errCancelled {
@@ -1150,6 +1159,9 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// owns that fork; the run-program claim below takes
 		// the line in that case).
 		if line == "/quit" || line == "exit" || line == "quit" || stopMeansQuit(line) {
+			if saved := finishMemorySession(); saved != "" {
+				fmt.Printf("%s %s\n", cTag(fmt.Sprintf("gollemer [%s]>", TalkDomain)), saved)
+			}
 			fmt.Println("[bye — see you next time]")
 			break
 		}
@@ -1196,6 +1208,14 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// (profile.go) as the single-domain loop.
 		if line == "/profile" {
 			printProfile(profile)
+			continue
+		}
+		// Long-term memory's explicit shapes, claimed
+		// deterministically ahead of every brain: a capture
+		// ("remember: …", "call me …"), the recall question
+		// ("what do you remember"), and the forget shapes.
+		// Nothing is ever captured from an ordinary line.
+		if tryMemoryCommand(line, conv) {
 			continue
 		}
 		// Learn mode, claimed deterministically ahead of the
@@ -1458,6 +1478,15 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// at (2026-10-25: "add print line to jim/main.go" got
 		// social-brain word salad). See writeboundary.go.
 		if tryWriteBoundary(line) {
+			continue
+		}
+		// System-state questions, claimed deterministically
+		// before the intent layer: the clock, the OS and
+		// environment, the branch, read-baseline changes, and
+		// what this session has made are facts from the state
+		// block, and a classifier must never steal one (it
+		// reads "branch" as "brains"). See memory_state.go.
+		if tryTalkStateAnswer(line, conv) {
 			continue
 		}
 		// Intent layer: a confident trained classification of what

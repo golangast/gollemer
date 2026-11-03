@@ -66,6 +66,10 @@ func setCurrentProject(root string, p *analyze.Project) {
 	if p != nil && workCtx.root != "" && !sameAnalyzedRoot(workCtx.root, p.Root) {
 		resetWorkContext()
 	}
+	if p != nil && lastAnalyzeProject != nil && !sameAnalyzedRoot(lastAnalyzeProject.Root, p.Root) {
+		resetShortTermMemory()
+		resetMemoryRecall()
+	}
 	lastAnalyzeRoot = root
 	lastAnalyzeProject = p
 	if p == nil {

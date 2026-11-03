@@ -146,6 +146,7 @@ func describeDepAsk(req conceptReq) string {
 func gorqliteDepMissing(req conceptReq, rootAbs, line string) {
 	piece := describeDepAsk(req)
 	pendingGorqlite = &pendingDepAsk{line: line, piece: piece, root: rootAbs}
+	noteSessionOpen(rootAbs, "install "+gorqliteModule+" for "+piece)
 	tag := cTag("gollemer [composer]>")
 	fmt.Printf("%s That ask — %s — needs the gorqlite client, and this project doesn't have it yet — the code would import %s, and nothing compiles against a dependency the project doesn't list. I don't fetch dependencies for you, so run this in the project first:\n", tag, piece, gorqliteModule)
 	fmt.Printf("%s   go get %s\n", tag, gorqliteModule)
@@ -229,6 +230,7 @@ func runGorqliteInstalled(line string, ask editAsk) bool {
 		return true
 	}
 	pendingGorqlite = nil
+	resolveSessionOpen(p.root, gorqliteModule)
 	fmt.Printf("%s %s is in go.mod now — here's the plan for %s again:\n", tag, gorqliteModule, p.piece)
 	runConcept(p.line, ask)
 	return true

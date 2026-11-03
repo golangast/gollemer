@@ -55,6 +55,15 @@ Talk and ask about Go:
   there is marked, never presented as fact. It explains and
   discusses only — ask it to DO something and it points you
   to the exact sentence; doing still goes through the gate.
+  It answers state questions from the chat itself (the time,
+  this machine, the branch in .git/HEAD, Go files changed
+  since its last read — a read-baseline check, not a full
+  git status) and remembers only what you explicitly tell
+  it: "remember: ..." and "note: ..." are echoed as stored,
+  "what do you remember" shows them, and the forget shapes
+  remove exactly what their replies confirm. Memory lives
+  in ~/.gollemer_memory.json, outside every project, and a
+  returning session opens with one "Last time here:" line.
 
 Ask what a project does — it answers from your real code:
 
