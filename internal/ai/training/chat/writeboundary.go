@@ -90,6 +90,16 @@ type writeBoundaryReq struct {
 	fileTgt   bool   // target is (or ends in) a .go file
 	hasTarget bool
 
+	// fileItself marks a claimed line whose object is the
+	// file itself: the token after the verb (and any article)
+	// is "file", and the line carries a file/path target.
+	// Such a line reached the boundary only because its tail
+	// kept the create grammar from claiming it (a trailing
+	// "please", a stray "to"); the generic answer for it
+	// leads its suggestions with the create sentence for
+	// that target — the file is made, not added to.
+	fileItself bool
+
 	// Set only for a line claimed with a name slot and a
 	// "that …" clause — with or without a file/path target:
 	// the declaration's name as typed, and whether the clause
@@ -207,6 +217,17 @@ func parseWriteBoundary(line string) (writeBoundaryReq, bool) {
 
 	req := writeBoundaryReq{fileTgt: fileTgt}
 	req.target, req.hasTarget = writeBoundaryTarget(fields, low)
+
+	// The file itself as the object: the token right after
+	// the verb and any article is "file", with a target
+	// riding along. ("file" is deliberately not a
+	// writeObjectWord — these lines claim on their target
+	// alone, and land in wbGeneric.)
+	objIdx := 1
+	if objIdx < len(low) && (low[objIdx] == "a" || low[objIdx] == "an" || low[objIdx] == "the") {
+		objIdx++
+	}
+	req.fileItself = objIdx < len(low) && low[objIdx] == "file" && req.hasTarget
 
 	// The object phrase as typed, with its article when it has
 	// one ("an interface"); for the print line, both words.
@@ -369,6 +390,12 @@ func (r writeBoundaryReq) answer() string {
 			// sentence is the scaffold with the user's own
 			// name — the clause is the only unservable part.
 			return fmt.Sprintf("I can't add %s as asked — the \"that …\" clause isn't one of the pieces I can assemble. The form that works: \"add %s named %s to %s\" (an empty scaffold you fill in). %s", obj, obj, r.declName, r.exampleFile(), r.closestAlternatives())
+		}
+		if r.fileItself {
+			// The ask was for the file itself: lead with the
+			// one sentence that makes it, then the standing
+			// alternatives for adding INTO that file.
+			return fmt.Sprintf("I can't add %s yet — that's not one of the pieces I can assemble today. To make the file itself, say \"create a file %s\". %s", obj, r.target, r.closestAlternatives())
 		}
 		return fmt.Sprintf("I can't add %s yet — that's not one of the pieces I can assemble today. %s", obj, r.closestAlternatives())
 	}

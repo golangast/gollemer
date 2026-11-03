@@ -2408,17 +2408,34 @@ func runConcept(line string, ask editAsk) bool {
 	if folderDefault {
 		folder = entry.Folder
 	}
+	// A statement that stays a statement carries its book
+	// sibling into the planner: if the target file declares
+	// no functions, the planner's missing-host refusal spells
+	// the sibling's declaration sentence — the one sentence
+	// that can land in such a file — instead of naming a
+	// function the file doesn't have. (When the named-ask
+	// branch above rebound the entry to the declaration
+	// itself, the entry is no longer a statement and this
+	// stays nil: the planner reads the field for statements
+	// only.)
+	var sibling *analyze.ConceptEntry
+	if entry.Kind == analyze.ConceptStatement {
+		if sib, ok := conceptDeclarationSibling(entry, conceptEntries()); ok {
+			sibling = &sib
+		}
+	}
 	return executeEditPlan(analyze.EditRequest{
-		Kind:          analyze.EditConcept,
-		File:          rel,
-		Concept:       &entry,
-		ConceptName:   req.name,
-		ConceptText:   req.text,
-		ConceptFunc:   req.inFunc,
-		ConceptLike:   req.like,
-		ConceptFolder: folder,
-		PlaceLine:     req.placeLine,
-		PlaceBefore:   req.placeBefore,
+		Kind:           analyze.EditConcept,
+		File:           rel,
+		Concept:        &entry,
+		ConceptName:    req.name,
+		ConceptText:    req.text,
+		ConceptFunc:    req.inFunc,
+		ConceptLike:    req.like,
+		ConceptFolder:  folder,
+		ConceptSibling: sibling,
+		PlaceLine:      req.placeLine,
+		PlaceBefore:    req.placeBefore,
 	}, ask)
 }
 

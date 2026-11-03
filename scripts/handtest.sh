@@ -7,7 +7,9 @@
 # through scripted sessions against a throwaway project and
 # prints a per-case PASS/FAIL scoreboard. It covers the
 # composer builds a person would otherwise re-type by hand
-# after every pull: folder creation and bare files, the
+# after every pull: folder creation and bare files (including
+# the "add the file" spelling and a statement aimed at a
+# function-less file), the
 # folder-default declarations (handlers/, middleware/,
 # security/, database/), declarations creating a named file
 # that doesn't exist yet (and the missing-folder refusal),
@@ -268,6 +270,34 @@ case_file_contains create-folder-jane jane/main.go "package main"
 case_file_contains bare-file-path jane/main.go "package main" "func main()"
 case_file_contains bare-file-in-folder jane/notes.go "package main"
 
+# --- session: "add the file" creates the file itself (D1) ------------
+# The add-verb spelling of a bare file: store/ already holds
+# a package-store file, and "add the file store/db.go" lands
+# db.go beside it with that package — behind the create plan
+# and its gate, not the write boundary's refusal. The repeat
+# ask meets the exists refusal and the file is byte-identical.
+
+cat > "$SCRATCH/.inputs/addfile.txt" <<'EOF'
+create a folder store
+y
+create a file store.go in folder store
+y
+add the file store/db.go
+y
+add the file store/db.go
+/quit
+EOF
+run_session addfile
+
+case_file_contains add-file-lands store/db.go "package store"
+case_transcript_contains add-file-already-there addfile "store/db.go is already there — I never overwrite what's yours"
+printf 'package store\n' > "$SCRATCH/.inputs/store-db-expected.txt"
+if cmp -s "$SCRATCH/.inputs/store-db-expected.txt" "$SCRATCH/store/db.go"; then
+	ok add-file-repeat-unchanged
+else
+	bad add-file-repeat-unchanged "store/db.go is not exactly the file the first ask created"
+fi
+
 # --- session: webserver + serve an html file ------------------------
 
 cat > "$SCRATCH/.inputs/webserver.txt" <<'EOF'
@@ -428,6 +458,34 @@ if grep -qF "func main(" "$SCRATCH/jake/db.go"; then
 	bad namedconn-no-fake-main "jake/db.go grew a fabricated main"
 else
 	ok namedconn-no-fake-main
+fi
+
+# --- session: a statement aimed at a function-less file (D2) ------------
+# ledger/ledger.go holds only its package clause — no
+# functions at all. "add database connection to
+# ledger/ledger.go" can't name a host function (there is
+# none to name), so the answer spells the one piece that
+# fits a file like this — the database connection function,
+# a function of its own — and the file stays byte-identical.
+
+mkdir -p "$SCRATCH/ledger"
+cat > "$SCRATCH/ledger/ledger.go" <<'EOF'
+package ledger
+EOF
+cp "$SCRATCH/ledger/ledger.go" "$SCRATCH/.inputs/ledger-before.txt"
+
+cat > "$SCRATCH/.inputs/nohost.txt" <<'EOF'
+add database connection to ledger/ledger.go
+/quit
+EOF
+run_session nohost
+
+case_transcript_contains nohost-guidance nohost "ledger/ledger.go declares no functions, so there's nowhere to put the database — that piece lives inside a function." 'The piece that fits a file like this is the database connection function, a function of its own: say "add a database connection function named Connect to ledger/ledger.go"'
+case_transcript_lacks nohost-no-gate nohost "Apply this edit?"
+if cmp -s "$SCRATCH/.inputs/ledger-before.txt" "$SCRATCH/ledger/ledger.go"; then
+	ok nohost-file-unchanged
+else
+	bad nohost-file-unchanged "the guidance changed ledger/ledger.go"
 fi
 
 # --- session: declarations create their named file -------------------------

@@ -8,10 +8,17 @@ package chat
 //
 // The v1 grammar is deliberately small:
 //
-//	create|make [a] folder|directory [named|called] <name>
-//	create|make [a] file [named|called] [<file>]
+//	create|make [a|the] folder|directory [named|called] <name>
+//	create|make [a|the] file [named|called] [<file>]
 //	    [in folder <dir>] [with a <kind>]
-//	create|make [a] <path>.go [in folder <dir>]
+//	create|make [a|the] <path>.go [in folder <dir>]
+//	add [a|the] file [named|called] [<file>] …
+//
+// The "add" form is the file case only, borrowed from the
+// concept book's verb for the one file-shaped shape among its
+// sentences ("add the file jake/database/db.go" — D1): under
+// "add", the folder case and the bare-path case refuse, so
+// every other add-line keeps falling through to the book.
 //
 // <kind> has exactly one member today: a webserver — a small
 // working net/http program from the fixed template below. A .go
@@ -120,11 +127,16 @@ func parseCreate(line string) (createReq, bool) {
 	for i, f := range fields {
 		low[i] = strings.ToLower(f)
 	}
-	if low[0] != "create" && low[0] != "make" {
+	// "add" is the concept book's verb; it is borrowed ONLY
+	// for the file case below (the folder and bare-path cases
+	// refuse under it), because "add the file <path>" names
+	// the file itself — a creation, not a book piece.
+	isAdd := low[0] == "add"
+	if !isAdd && low[0] != "create" && low[0] != "make" {
 		return createReq{}, false
 	}
 	i := 1
-	if low[i] == "a" || low[i] == "an" {
+	if low[i] == "a" || low[i] == "an" || low[i] == "the" {
 		i++
 	}
 	if i >= len(fields) {
@@ -132,6 +144,9 @@ func parseCreate(line string) (createReq, bool) {
 	}
 	switch low[i] {
 	case "folder", "directory":
+		if isAdd {
+			return createReq{}, false // folders are create|make only; "add" borrows the file case alone
+		}
 		i++
 		if i < len(fields) && (low[i] == "named" || low[i] == "called") {
 			i++
@@ -208,6 +223,9 @@ func parseCreate(line string) (createReq, bool) {
 		}
 		return req, true
 	default:
+		if isAdd {
+			return createReq{}, false // the bare-path form is create|make only; "add" borrows the file case alone
+		}
 		// The bare-file form: the file names itself with no
 		// "file" word — "create jane/main.go", "create main.go
 		// in folder jane", optionally behind the article the

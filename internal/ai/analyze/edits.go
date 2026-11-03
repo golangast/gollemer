@@ -210,6 +210,14 @@ type EditRequest struct {
 	ConceptText string
 	ConceptFunc string
 	ConceptLike string
+	// ConceptSibling is the statement's unique declaration
+	// sibling under the book's naming rule (a statement name
+	// plus " function" carried by exactly one declaration
+	// row), supplied by the chat layer — which owns the
+	// loaded book — so a missing-host refusal can spell the
+	// sibling's sentence for a target file that declares no
+	// functions. Nil when the statement has no sibling.
+	ConceptSibling *ConceptEntry
 	// ConceptFolder is the folder-default trigger: the book
 	// row's folder field, carried when the sentence named NO
 	// file or folder for a declaration ask. The planner then

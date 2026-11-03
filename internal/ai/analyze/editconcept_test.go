@@ -492,3 +492,180 @@ func TestConceptPlannerThirdConceptFromData(t *testing.T) {
 		t.Errorf("for-loop row did not assemble:\n%s", after)
 	}
 }
+
+// --- No-host guidance (index-aware routing fix, ITEM 1) --------------------
+
+// noHostFixture builds a small project from explicit files so
+// a test controls exactly which functions each file declares.
+// The returned project is rooted at the returned dir; tests
+// chdir into it so LinkPath renders the plain relative path.
+func noHostFixture(t *testing.T, files map[string]string) (string, *Project) {
+	t.Helper()
+	dir := t.TempDir()
+	for rel, src := range files {
+		full := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/nohost\n\ngo 1.21\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p, err := Analyze(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dir, p
+}
+
+func noHostRefusal(t *testing.T, p *Project, req EditRequest) string {
+	t.Helper()
+	plan, refusal := p.PlanEdit(req)
+	if plan != nil {
+		t.Fatalf("PlanEdit produced a plan, want refusal %q", refusal)
+	}
+	return refusal
+}
+
+// The shipped book's one statement/declaration pair, as
+// fixture rows carrying the real names and ID.
+func databasePair() (stmt, sibling ConceptEntry) {
+	stmt = ConceptEntry{ID: "database", Names: []string{"database", "database connection", "sql database", "open database"},
+		Kind: ConceptStatement, Template: "db := open()"}
+	sibling = ConceptEntry{ID: "database-connect", Names: []string{"database connect", "database connection function", "db connect function"},
+		Kind: ConceptDeclaration, Template: "func {name}() {}"}
+	return stmt, sibling
+}
+
+const wantSiblingGuidanceDB = `jake/database/database.go declares no functions, so there's nowhere to put the database — that piece lives inside a function. The piece that fits a file like this is the database connection function, a function of its own: say "add a database connection function named Connect to jake/database/database.go".`
+
+// A function-less non-main file, unnamed statement, with the
+// sibling supplied: the refusal spells the sibling's sentence
+// verbatim — never a function the file doesn't have.
+func TestConceptNoHostSiblingGuidanceUnnamed(t *testing.T) {
+	dir, p := noHostFixture(t, map[string]string{
+		"main.go":                   "package main\n\nfunc main() {}\n",
+		"jake/database/database.go": "package database\n",
+	})
+	t.Chdir(dir)
+	stmt, sibling := databasePair()
+	got := noHostRefusal(t, p, EditRequest{Kind: EditConcept, File: "jake/database/database.go", Concept: &stmt, ConceptSibling: &sibling})
+	if got != wantSiblingGuidanceDB {
+		t.Errorf("refusal =\n%q\nwant:\n%q", got, wantSiblingGuidanceDB)
+	}
+}
+
+// The explicit-name branch takes the same guidance when the
+// file declares no functions: "in Missing" names no real
+// host, and the old "has no function named" text is gone.
+func TestConceptNoHostSiblingGuidanceExplicit(t *testing.T) {
+	dir, p := noHostFixture(t, map[string]string{
+		"main.go":                   "package main\n\nfunc main() {}\n",
+		"jake/database/database.go": "package database\n",
+	})
+	t.Chdir(dir)
+	stmt, sibling := databasePair()
+	got := noHostRefusal(t, p, EditRequest{Kind: EditConcept, File: "jake/database/database.go", Concept: &stmt, ConceptFunc: "Missing", ConceptSibling: &sibling})
+	if got != wantSiblingGuidanceDB {
+		t.Errorf("refusal =\n%q\nwant:\n%q", got, wantSiblingGuidanceDB)
+	}
+}
+
+// No sibling: the two-step guidance — a function first (a
+// declaration, which lands in a function-less file), then the
+// statement inside it.
+func TestConceptNoHostTwoStepGuidance(t *testing.T) {
+	dir, p := noHostFixture(t, map[string]string{
+		"main.go":                   "package main\n\nfunc main() {}\n",
+		"jake/database/database.go": "package database\n",
+	})
+	t.Chdir(dir)
+	printLine, _ := testBook(t)
+	want := `jake/database/database.go declares no functions, so there's nowhere to put the print line — that piece lives inside a function. Give the file a function first: say "add a function named <Name> to jake/database/database.go", then say "add a print line in <Name> to jake/database/database.go" with your function's name in both places.`
+	got := noHostRefusal(t, p, EditRequest{Kind: EditConcept, File: "jake/database/database.go", Concept: &printLine})
+	if got != want {
+		t.Errorf("refusal =\n%q\nwant:\n%q", got, want)
+	}
+}
+
+// A sibling whose names don't pair with the statement's, or
+// whose ID yields no usable default name, falls back to the
+// two-step guidance — the sibling sentence is only spelled
+// when every part of it derives.
+func TestConceptNoHostSiblingDerivationFailureFallsBack(t *testing.T) {
+	dir, p := noHostFixture(t, map[string]string{
+		"main.go":                   "package main\n\nfunc main() {}\n",
+		"jake/database/database.go": "package database\n",
+	})
+	t.Chdir(dir)
+	stmt, _ := databasePair()
+	for _, sibling := range []ConceptEntry{
+		{ID: "database-connect", Names: []string{"unrelated function"}, Kind: ConceptDeclaration, Template: "func {name}() {}"},
+		{ID: "database-9lives", Names: []string{"database connection function"}, Kind: ConceptDeclaration, Template: "func {name}() {}"},
+		{ID: "database-", Names: []string{"database connection function"}, Kind: ConceptDeclaration, Template: "func {name}() {}"},
+	} {
+		sib := sibling
+		got := noHostRefusal(t, p, EditRequest{Kind: EditConcept, File: "jake/database/database.go", Concept: &stmt, ConceptSibling: &sib})
+		if !strings.Contains(got, "Give the file a function first:") {
+			t.Errorf("sibling %+v: refusal = %q, want the two-step guidance", sibling.ID, got)
+		}
+	}
+}
+
+// The derivations themselves, unit-pinned.
+func TestConceptSiblingDerivations(t *testing.T) {
+	stmt, sibling := databasePair()
+	if got, ok := conceptSiblingSayName(&stmt, &sibling); !ok || got != "database connection function" {
+		t.Errorf("sayName = %q, %v — want \"database connection function\", true", got, ok)
+	}
+	if got, ok := conceptSiblingDefaultName(&sibling); !ok || got != "Connect" {
+		t.Errorf("defaultName = %q, %v — want Connect, true", got, ok)
+	}
+	if _, ok := conceptSiblingSayName(nil, &sibling); ok {
+		t.Error("sayName with a nil statement derived anyway")
+	}
+	if _, ok := conceptSiblingDefaultName(nil); ok {
+		t.Error("defaultName with a nil sibling derived anyway")
+	}
+	if _, ok := conceptSiblingDefaultName(&ConceptEntry{ID: "connect"}); !ok {
+		t.Error("defaultName of a single-word ID should derive")
+	} else if got, _ := conceptSiblingDefaultName(&ConceptEntry{ID: "connect"}); got != "Connect" {
+		t.Errorf("defaultName(connect) = %q, want Connect", got)
+	}
+}
+
+// Functions present, explicit missing name — BYTE-IDENTICAL
+// to the pre-fix text (captured 2026-11-02 before the fix:
+// the refusal names the file's real first function).
+func TestConceptMissingFunctionFunctionsPresentUnchanged(t *testing.T) {
+	dir, p := noHostFixture(t, map[string]string{
+		"main.go": "package main\n\nfunc Helper() string {\n\treturn \"helping\"\n}\n",
+	})
+	t.Chdir(dir)
+	printLine, _ := testBook(t)
+	want := `main.go has no function named "Nope" to put the print line in — the functions there are: Helper. Name one of those, like "add a print line in Helper to main.go".`
+	got := noHostRefusal(t, p, EditRequest{Kind: EditConcept, File: "main.go", Concept: &printLine, ConceptFunc: "Nope"})
+	if got != want {
+		t.Errorf("refusal =\n%q\nwant (pre-fix, byte-identical):\n%q", got, want)
+	}
+}
+
+// Functions present in a non-main package, unnamed statement —
+// BYTE-IDENTICAL to the pre-fix text (captured 2026-11-02
+// before the fix: it names the file's real first function).
+func TestConceptNonMainFunctionsPresentUnchanged(t *testing.T) {
+	dir, p := noHostFixture(t, map[string]string{
+		"main.go":        "package main\n\nfunc main() {}\n",
+		"store/store.go": "package store\n\nfunc Load() {}\n\nfunc Save() {}\n",
+	})
+	t.Chdir(dir)
+	printLine, _ := testBook(t)
+	want := `store/store.go is package store, so it has no main to put the print line in — name a function, like "add a print line in Load to store/store.go" (the functions there are: Load, Save).`
+	got := noHostRefusal(t, p, EditRequest{Kind: EditConcept, File: "store/store.go", Concept: &printLine})
+	if got != want {
+		t.Errorf("refusal =\n%q\nwant (pre-fix, byte-identical):\n%q", got, want)
+	}
+}

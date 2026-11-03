@@ -753,9 +753,15 @@ func (p *Project) planConceptStatement(req EditRequest, entry *ConceptEntry, rel
 	if decl == nil {
 		switch {
 		case explicit:
+			if len(funcNames) == 0 {
+				return nil, p.conceptNoHostGuidance(entry, req.ConceptSibling, rel)
+			}
 			return nil, fmt.Sprintf("%s has no function named %q to put the %s in — the functions there are: %s. Name one of those, like \"add a %s in %s to %s\".",
 				p.LinkPath(rel), wantFunc, entry.Canonical(), conceptNameList(funcNames), entry.Canonical(), conceptFirstOr(funcNames, "main"), p.LinkPath(rel))
 		case fileAST.Name.Name != "main":
+			if len(funcNames) == 0 {
+				return nil, p.conceptNoHostGuidance(entry, req.ConceptSibling, rel)
+			}
 			return nil, fmt.Sprintf("%s is package %s, so it has no main to put the %s in — name a function, like \"add a %s in %s to %s\" (the functions there are: %s).",
 				p.LinkPath(rel), fileAST.Name.Name, entry.Canonical(), entry.Canonical(), conceptFirstOr(funcNames, "main"), p.LinkPath(rel), conceptNameList(funcNames))
 		case needsRequest:
@@ -1820,6 +1826,72 @@ func conceptFirstOr(names []string, fallback string) string {
 		return names[0]
 	}
 	return fallback
+}
+
+// conceptNoHostGuidance is the missing-host refusal for a
+// statement whose target file declares NO functions at all:
+// there is no function to name, so naming one — the old
+// refusal's move — spells a sentence that can never work in
+// that file. When the book pairs the statement with a
+// declaration sibling, the guidance spells the sibling's own
+// sentence instead: the sibling is a function of its own, so
+// it lands in a function-less file exactly as written. With
+// no usable sibling, the guidance is two honest steps: give
+// the file a function first (a declaration, which also lands
+// in a function-less file), then place the statement inside
+// it under the function's real name.
+func (p *Project) conceptNoHostGuidance(entry, sibling *ConceptEntry, rel string) string {
+	if sibling != nil {
+		if sayName, ok := conceptSiblingSayName(entry, sibling); ok {
+			if defaultName, ok := conceptSiblingDefaultName(sibling); ok {
+				return fmt.Sprintf("%s declares no functions, so there's nowhere to put the %s — that piece lives inside a function. The piece that fits a file like this is the %s, a function of its own: say \"add a %s named %s to %s\".",
+					p.LinkPath(rel), entry.Canonical(), sayName, sayName, defaultName, p.LinkPath(rel))
+			}
+		}
+	}
+	return fmt.Sprintf("%s declares no functions, so there's nowhere to put the %s — that piece lives inside a function. Give the file a function first: say \"add a function named <Name> to %s\", then say \"add a %s in <Name> to %s\" with your function's name in both places.",
+		p.LinkPath(rel), entry.Canonical(), p.LinkPath(rel), entry.Canonical(), p.LinkPath(rel))
+}
+
+// conceptSiblingSayName derives the name a sibling guidance
+// sentence is spelled with: the sibling's name n such that
+// n == sn+" function" for some sn among the statement's
+// names — the same pairing the book's sibling rule matched.
+// No such name means the sibling case cannot be spelled.
+func conceptSiblingSayName(stmt, sibling *ConceptEntry) (string, bool) {
+	if stmt == nil || sibling == nil {
+		return "", false
+	}
+	for _, n := range sibling.Names {
+		for _, sn := range stmt.Names {
+			if n == sn+" function" {
+				return n, true
+			}
+		}
+	}
+	return "", false
+}
+
+// conceptSiblingDefaultName derives the name a sibling
+// guidance sentence fills the sibling's name slot with: the
+// sibling entry ID's final hyphen-separated word with its
+// first letter upper-cased ("database-connect" → "Connect")
+// — the declaration's own short name, the name the product's
+// examples use for the row. An ID whose final word is empty
+// or doesn't start with a letter yields no usable name.
+func conceptSiblingDefaultName(sibling *ConceptEntry) (string, bool) {
+	if sibling == nil {
+		return "", false
+	}
+	parts := strings.Split(strings.TrimSpace(sibling.ID), "-")
+	word := parts[len(parts)-1]
+	if word == "" {
+		return "", false
+	}
+	if c := word[0]; !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z') {
+		return "", false
+	}
+	return strings.ToUpper(word[:1]) + word[1:], true
 }
 
 // conceptStmtText renders a top-level statement for the
