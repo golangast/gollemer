@@ -919,6 +919,36 @@ case_file_contains ctx-journey-dbfile jake/database/db.go "package database"
 case_dir_absent ctx-journey-no-root-database database.go
 case_dir_absent ctx-journey-no-root-db db.go
 
+# --- session: the talk seat -------------------------------------------------
+# The local talk seat (2026-11-03): lines no deterministic
+# claim owns get one composed, read-only answer under the
+# gollemer [talk]> tag — project facts from the index, honest
+# not-here answers for names the project doesn't have, and
+# plain conversation with no context at all. It never writes
+# and never gates, so these sessions carry no "y" lines.
+
+cat > "$SCRATCH/.inputs/talk.txt" <<'EOF'
+what does Login take?
+where is Frobnicate defined?
+/quit
+EOF
+run_session talk
+
+case_transcript_contains talk-fact-login talk "Login" "http.ResponseWriter"
+case_transcript_contains talk-marker talk "gollemer [talk]>"
+case_transcript_contains talk-trap-honest talk "Frobnicate" "don't see"
+
+cat > "$SCRATCH/.inputs/talkchat.txt" <<'EOF'
+hello
+how are you?
+/quit
+EOF
+run_session talkchat
+
+case_transcript_contains talk-conversation-reply talkchat "gollemer"
+case_transcript_lacks talk-conversation-no-error talkchat "[error:"
+case_transcript_lacks talk-conversation-no-invention talkchat "Frobnicate"
+
 # --- final build over the whole scratch project ---------------------------
 
 if (cd "$SCRATCH" && env -u GOEXPERIMENT timeout "$SESSION_TIMEOUT" go build ./...) > "$SCRATCH/transcripts/final-build.txt" 2>&1; then

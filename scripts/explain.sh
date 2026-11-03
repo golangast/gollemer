@@ -44,6 +44,18 @@ Talk and ask about Go:
   gollemer [go]> A goroutine is a lightweight thread managed by
       the Go runtime: go doWork(). ...
 
+  Questions and conversation no specialist brain owns land
+  with the talk seat, tagged gollemer [talk]>: it talks about
+  your project from the analyzer's index (what a function
+  takes, what's in a file, what the piece you just added
+  does — "what does it do?" names what "it" was read as) and
+  holds a conversation with the local social model. No keys,
+  no network; project names in a talk reply are checked
+  against your code before they print, and a name that isn't
+  there is marked, never presented as fact. It explains and
+  discusses only — ask it to DO something and it points you
+  to the exact sentence; doing still goes through the gate.
+
 Ask what a project does — it answers from your real code:
 
   you> analyze this project

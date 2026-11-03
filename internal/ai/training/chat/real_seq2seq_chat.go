@@ -1478,6 +1478,19 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if tryDeterministicAnswer(line, d, conv, reader, projectRoot) {
 			continue
 		}
+		// The talk seat, in the tail after every deterministic
+		// claim and tryDeterministicAnswer, before the routed
+		// model fallback: a read-only, local-only conversation
+		// route (project facts from the index, "it" from the
+		// session context, social talk from the local social
+		// model, claim-checked before it prints). It never
+		// writes or gates, it makes no network calls, and when
+		// its responder is unavailable or declines the line,
+		// the neural fallback below proceeds byte-identically.
+		// See talkseat.go.
+		if tryTalkSeat(line, d, conv, d == SocialDomain || models[d] == nil, showThoughts) {
+			continue
+		}
 		model := models[d]
 		tag := d
 		if model == nil {

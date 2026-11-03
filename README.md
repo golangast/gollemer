@@ -88,6 +88,21 @@ you> what is a goroutine
 gollemer [go]> A goroutine is a lightweight thread managed by the Go runtime: go doWork(). Thousands of goroutines cost little. They run concurrently with the caller — use channels or sync primitives to coordinate, never shared memory without synchronization.
 ```
 
+Questions and conversation that no specialist brain owns land with
+the talk seat, tagged `gollemer [talk]>`. It talks about *your*
+project from the same index the analyzer builds — what a function
+takes, what's in a file, what a piece you just added does ("what
+does it do?" works, and the answer names what "it" was read as) —
+and it holds a conversation with the local social model. It runs
+entirely on your machine: no keys, no network. Before a talk reply
+prints, any project name in it is checked against your code, and a
+name that isn't there is marked instead of presented as fact; ask
+about a function the project doesn't have and it says so plainly.
+The talk seat only explains and discusses — when you ask it to
+*do* something, doing still belongs to the deterministic side:
+say the exact sentence and the change goes through the same plan
+and yes-or-no gate as always.
+
 ### Ask what a project does
 
 ```
