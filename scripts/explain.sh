@@ -91,6 +91,18 @@ Add pieces from the book of 135 known Go shapes:
       import the Ping fails with "unknown driver", and the plan
       says so up front.
 
+Make a function in one file and call it from another, in one ask:
+
+  you> make a function named Validate in api/validate.go and add a function named Report in api/report.go that calls it
+      ONE plan, ONE [y/n]: the function lands in the first file
+      (created if its folder exists), the caller is assembled
+      from the declaration that same plan writes, and a build
+      failure restores BOTH files. "... and call it in
+      api/main.go" puts the call at the end of main instead;
+      no main to hold it -> a refusal spelling both working
+      forms, never an invented caller. The new function's body
+      stays the book's TODO scaffold — the plan says so.
+
 Pieces that need a library your project doesn't have are gated:
 
   you> add a gorqlite connection named Connect
@@ -177,20 +189,22 @@ Test everything at once:
       throwaway project — folders, bare files, webserver +
       serve-html, security, line placement, database + the
       gorqlite gate, program running, the basic terminal
-      commands with their refusals, the statement pieces —
+      commands with their refusals, the statement pieces,
+      the one-ask make-and-call —
       checks the files, builds the scratch project, prints a
-      PASS/FAIL scoreboard (97 passed, 0 failed on 2026-11-01).
+      PASS/FAIL scoreboard (102 passed, 0 failed on 2026-11-02).
 
   make paces
-      the longer workout: one project built across 13 stages
+      the longer workout: one project built across 14 stages
       of real asks in sequence — webserver, handlers,
       middleware + security, a named database connection, the
       gorqlite gate with the install mid-conversation, a
       struct used across files, a cross-file write, a page
       served and fetched over HTTP, the terminal basics,
-      guidance, a cross-file rename, the rm refusal — disk
-      checked after every stage, every package built
-      (58 passed, 0 failed on 2026-11-01). It began as a
+      guidance, a cross-file rename, the rm refusal, and the
+      one-ask make-and-call — disk checked after every stage,
+      every package built
+      (63 passed, 0 failed on 2026-11-02). It began as a
       one-off workout that found three real defects; the
       fixes landed and the workout stayed as a test.
 
@@ -218,7 +232,7 @@ COMMANDS
   make guide         the start-here guide
   make explain       this overview
   make handtest      scripted end-to-end tests, PASS/FAIL out
-  make paces         the 13-stage multi-file workout, PASS/FAIL out
+  make paces         the 14-stage multi-file workout, PASS/FAIL out
   make sel           pick a command from a fuzzy finder
   make debug-chat    the chat with its thought process shown
   make eval          score every brain on its fixed eval suite

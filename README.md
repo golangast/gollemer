@@ -222,6 +222,58 @@ Anyone can READ a JWT's claims — the signature proves they weren't changed, it
 Apply this edit? [y/n] gollemer [composer]> Done — main.go now has the jwt in main, at app/main.go:18. I built the project and checked that it's really there.
 ```
 
+### Make a function in one file and call it from another
+
+One sentence can do both halves — a brand-new function in one
+file, and the call to it in a second file — as a single plan
+behind a single `[y/n]`:
+
+```
+you> make a function named Validate in api/validate.go and add a function named Report in api/report.go that calls it
+gollemer [composer]> Here's the edit I assembled from this project's own code:
+
+Make Validate in api/validate.go and call it in api/report.go: Validate lands in api/validate.go, and the caller is a new function Report in api/report.go, whose body calls Validate.
+This is an empty scaffold — Validate has a name and a body to fill in, but no parameters, no results, and nothing that does work yet.
+The api folder's files are package main, so the new file carries that package name, not the folder's.
+The call passes Validate no arguments — the declaration this plan writes takes none.
+One plan covers both files: if either side fails to build, both files go back exactly as they were.
+
+--- a/api/validate.go
++++ b/api/validate.go
+@@ -0,0 +1,5 @@
++package main
++
++func Validate() {
++	// TODO: write the body
++}
+--- a/api/report.go
++++ b/api/report.go
+@@ -1 +1,7 @@
+ package main
++
++// Report calls Validate — assembled by gollemer from api/validate.go:3.
++// It starts the call with placeholder values and handles the results; the real work is yours to write.
++func Report() {
++	Validate()
++}
+Apply this edit? [y/n] gollemer [composer]> Done — Validate now exists in api/validate.go and is called from api/report.go, at api/report.go:5. I built the project and checked that it's really there.
+```
+
+The caller is assembled from the declaration the same plan is
+writing — so the two halves can never disagree. When the files
+live in different packages, the calling file imports the new
+function's package and qualifies the call, the same way a call
+to an existing function is written. The new function's body is
+the book's TODO scaffold, and the plan says so — filling it in
+is your next step.
+
+Shorter forms work too: `... and call it from main in
+api/main.go` puts the call inside an existing function you
+name, and `... and call it in api/main.go` puts it at the end
+of that file's `main`. If the file has no `main` to hold it,
+Gollemer refuses and spells out both working forms instead of
+inventing a caller name for you.
+
 ### Connect a database
 
 ```
@@ -403,7 +455,7 @@ gollemer [terminal]> "../secret" climbs out of the project folder — these comm
 ```
 $ make handtest
 ...
-handtest scoreboard: 97 passed, 0 failed, 97 total
+handtest scoreboard: 102 passed, 0 failed, 102 total
 ```
 
 `make handtest` drives the real chat through scripted sessions in a
@@ -413,28 +465,29 @@ database pieces and the dependency gate, running your own programs
 (a quick one, a live server with a real visit in its log, stop, and
 top), the basic terminal commands (pwd, ls, cd, cat, echo, date,
 whoami — and their refusals: rm, a path escape, a shell character,
-cd .. at the top), and the everyday statement pieces — then checks
-the files it should have written and builds the
-whole scratch project. It's the same test a person would do by hand
-after every update, automated. (The scoreboard above is from a real
-run on 2026-11-01.)
+cd .. at the top), the everyday statement pieces, and the one-ask
+make-and-call — then checks the files it should have written and
+builds the whole scratch project. It's the same test a person
+would do by hand after every update, automated. (The scoreboard
+above is from a real run on 2026-11-02.)
 
 ```
 $ make paces
 ...
-paces scoreboard: 58 passed, 0 failed, 58 total
+paces scoreboard: 63 passed, 0 failed, 63 total
 ```
 
-`make paces` is the longer workout: one project built across 13
+`make paces` is the longer workout: one project built across 14
 stages of real asks in sequence — a webserver, handlers, middleware
 and security pieces, a named database connection, the dependency
 gate with the install happening mid-conversation, a struct in one
 file used from others (including a function written into a second
 file that calls a third file's function), an html page served and
 then fetched over HTTP from the running program, the terminal
-basics, the guidance answers, a cross-file rename, and the rm
-refusal — with the disk checked after every stage and every package
-built. It began as a one-off workout that scored 46 of 58 and found
+basics, the guidance answers, a cross-file rename, the rm refusal,
+and a function made in one file and called from another in a
+single ask — with the disk checked after every stage and every
+package built. It began as a one-off workout that scored 46 of 58 and found
 three real defects; the fixes landed, and the workout stayed as a
 test.
 
@@ -484,7 +537,7 @@ will offer to run them for you.
 | `make guide` | Print the start-here guide — what to do, what it can do, how to teach it more |
 | `make explain` | Print an overview like this README, from the command line |
 | `make handtest` | Run the scripted end-to-end test suite in a throwaway project; prints a PASS/FAIL scoreboard |
-| `make paces` | Run the 13-stage multi-file workout — one project built by real asks in sequence, disk + build checked per stage |
+| `make paces` | Run the 14-stage multi-file workout — one project built by real asks in sequence, disk + build checked per stage |
 | `make sel` | Pick any make command from a fuzzy-finder list instead of typing it |
 | `make debug-chat` | The chat with its thought process and routing shown — for the curious |
 | `make eval` | Score every brain on its fixed test sets |
@@ -534,7 +587,7 @@ guesses.
 
 ## A note on the numbers in this README
 
-135 pieces, 17 brains, 97 handtest cases, 58 paces checks — these are
+135 pieces, 17 brains, 102 handtest cases, 63 paces checks — these are
 counts of what's actually in this checkout, and the model scores
 quoted are the measured ones, kept next to the features they
 describe. When a number changes, this file should change with it.

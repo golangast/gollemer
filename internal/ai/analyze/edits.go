@@ -61,6 +61,17 @@ const (
 	// composer matched from the book, assembled by kind.
 	EditConcept = "concept"
 
+	// Make-and-call (editmakecall.go): ONE ask, two files — a
+	// NEW plain function declared in one file (the concept
+	// book's function row, planned by the concept planner) and
+	// a call to it written into a second file in the same plan:
+	// a new caller function assembled from the planned
+	// declaration's own signature (the uses machinery, reading
+	// the declaration this plan writes rather than one already
+	// on disk), or the bare call inserted into an existing host
+	// function. One gate, one transaction, whole-project build.
+	EditMakeCall = "make_call"
+
 	// Model-proposed declarations (editproposed.go): a fully
 	// rendered declaration the chat's speccopy proposer produced
 	// from the user's sentence, appended at file scope.
@@ -146,6 +157,19 @@ type EditRequest struct {
 	UseFromFile string
 	UseName     string
 	UseType     bool
+
+	// make_call: the callee's name (its declaration is the
+	// concept request riding in Concept/ConceptName/File —
+	// File is the callee's file, resolved by the chat layer
+	// under the declaration rules), the caller's file
+	// (MakeCallTarget, an existing .go file resolved by the
+	// chat layer), the new caller function's name
+	// (MakeCallCaller, "" = no new function), and the existing
+	// host function the bare call lands in (MakeCallHost,
+	// "" = the target package's main, found by the planner).
+	MakeCallTarget string
+	MakeCallCaller string
+	MakeCallHost   string
 
 	// Signature changes (the target is FuncName):
 	//
@@ -312,6 +336,8 @@ func (p *Project) PlanEdit(req EditRequest) (*EditPlan, string) {
 		return p.planDelegate(req)
 	case EditUse:
 		return p.planUse(req)
+	case EditMakeCall:
+		return p.planMakeCall(req)
 	case EditConcept:
 		return p.planConcept(req)
 	case EditProposedDecl:

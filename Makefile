@@ -13,7 +13,7 @@
 #   make handtest   scripted end-to-end chat tests in a throwaway project:
 #                   known asks in, files checked, PASS/FAIL scoreboard out
 #   make paces      the multi-file workout: one project built across
-#                   13 stages of real asks, disk + build checked per stage
+#                   14 stages of real asks, disk + build checked per stage
 #   make eval       score every brain on its fixed eval suite
 #   make train-*    retrain one brain: social, go, gocode, gocli, makefile
 #   make import     import new training pairs through the quality gate (FILE=path.jsonl)
@@ -82,7 +82,7 @@ smarter:
 handtest:
 	bash scripts/handtest.sh
 
-## paces: The multi-file workout — one project across 13 stages of real asks, disk + build checked per stage
+## paces: The multi-file workout — one project across 14 stages of real asks, disk + build checked per stage
 paces:
 	bash scripts/paces.sh
 

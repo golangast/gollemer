@@ -1342,6 +1342,22 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if tryUses(line, reader) {
 			continue
 		}
+		// Make-and-call, claimed deterministically beside the
+		// uses: "make a function named Validate in
+		// api/validate.go and call it in api/main.go" is ONE
+		// ask for two files — a new function declared in the
+		// first and a call to it written into the second, in
+		// one plan behind one gate. Left unclaimed, the
+		// concept book would balk at the "and call it" tail
+		// and the compound machinery would split the ask into
+		// two gated halves whose second half can't assemble
+		// (the callee's signature is read from the declaration
+		// the same plan writes). It sits after the uses (its
+		// caller half is the uses machinery) and before the
+		// concept book. See makecall.go.
+		if tryMakeCall(line, reader) {
+			continue
+		}
 		// The ambiguous-piece guidance's pre-book claim
 		// (ambiguouspiece.go): the bare ask "add a database
 		// to jake" is the concept book's own bare name for its

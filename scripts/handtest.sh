@@ -19,8 +19,9 @@
 # and the pin that "run the program X" never becomes the
 # project's `make start`), the basic Linux commands (pwd, ls,
 # cd, cat, echo, clear, date, whoami — gated, confined, with
-# their refusal shapes), and the basics + cheatsheet
-# statement rows.
+# their refusal shapes), the basics + cheatsheet
+# statement rows, and the one-ask make-and-call (a new
+# function in one file, called from another, one gate).
 #
 # How it works:
 #   - Everything happens under handtest/ at the repo root,
@@ -796,6 +797,37 @@ case_file_contains row-insert-into-slice pieces.go 'names[1] = "bo"'
 case_file_contains row-remove-value-from-slice pieces.go "kept = append(kept, name)"
 case_file_contains row-reverse-slice pieces.go "names[i], names[j] = names[j], names[i]"
 case_file_contains row-print-stderr pieces.go "fmt.Fprintln(os.Stderr"
+
+# --- session: one ask, two files (make-and-call) -----------------------------
+# The one-ask recipe (2026-11-02): a new function declared in
+# one file and called from another, in ONE plan behind ONE
+# gate. The named-caller case creates the caller's file first
+# (the calling side goes into a file that exists — the uses
+# route's standing rule), then one line lands both halves;
+# the bare case hosts the call in app/main.go's main.
+
+cat > "$SCRATCH/.inputs/makecallnamed.txt" <<'EOF'
+create app/report.go
+y
+make a function named Validate in app/validate.go and add a function named Report in app/report.go that calls it
+y
+/quit
+EOF
+run_session makecallnamed
+
+case_transcript_contains makecall-named-plan makecallnamed "Make Validate in app/validate.go and call it in app/report.go" "One plan covers both files"
+case_file_contains makecall-named-callee app/validate.go "func Validate() {" "// TODO: write the body"
+case_file_contains makecall-named-caller app/report.go "func Report() {" "Validate()"
+
+cat > "$SCRATCH/.inputs/makecallbare.txt" <<'EOF'
+make a function named Greet in app/greet.go and call it in app/main.go
+y
+/quit
+EOF
+run_session makecallbare
+
+case_file_contains makecall-bare-callee app/greet.go "func Greet() {"
+case_file_contains makecall-bare-call app/main.go "Greet()"
 
 # --- final build over the whole scratch project ---------------------------
 

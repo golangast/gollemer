@@ -11,7 +11,8 @@
 # cross-file writes, a created-target compound, serving an html
 # page, running the program and watching its log, the terminal
 # basics, the ambiguous-piece guidance, a cross-file rename,
-# and the rm refusal. After every landing step it greps the
+# the rm refusal, and the one-ask make-and-call (a new function
+# in one file, called from another, in a single gated plan). After every landing step it greps the
 # disk for what the chat claimed, and builds every package in
 # the scratch project — a step that "succeeds" in chat but
 # leaves the tree unbuildable is recorded as a failure.
@@ -609,6 +610,32 @@ run_session s13
 
 told step13-rm-refused s13 "doesn't delete files"
 has step13-file-intact api/main.go "package main" "func main()"
+
+# ================================================================
+step "step 14: one ask, two files — make a function and call it"
+# ================================================================
+
+# The one-ask recipe (2026-11-02): a new function declared in
+# one file and called from another, in ONE plan behind ONE
+# gate. The named-caller form runs cross-package (the callee
+# in database/, the caller in api/'s package main, importing
+# and qualifying the callee's package); the bare form hosts
+# the call in api/main.go's main. One "y" per line — a second
+# gate per ask would mean the recipe split into two halves.
+cat > "$BASE/.inputs/s14.txt" <<'EOF'
+make a function named Ping in database/ping.go and add a function named PingCheck in api/report.go that calls it
+y
+make a function named Ready in api/ready.go and call it in api/main.go
+y
+/quit
+EOF
+run_session s14
+
+has step14-callee database/ping.go "func Ping() {"
+has step14-caller api/report.go "func PingCheck()" "database.Ping()"
+has step14-bare-callee api/ready.go "func Ready() {"
+has step14-bare-call api/main.go "Ready()"
+builds step14
 
 # --- scoreboard ---------------------------------------------------
 
