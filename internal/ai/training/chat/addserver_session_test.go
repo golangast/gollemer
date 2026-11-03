@@ -124,11 +124,14 @@ func claimChain(line string, ask editAsk, profile *UserProfile) bool {
 func withChatSession(t *testing.T, dir string, analyzed bool) {
 	t.Helper()
 	oldProj, oldRoot, oldURoot, oldSnap := lastAnalyzeProject, lastAnalyzeRoot, unifiedProjectRoot, lastAnalyzeSnapshot
+	oldCtx := workCtx
 	t.Cleanup(func() {
 		lastAnalyzeProject, lastAnalyzeRoot, unifiedProjectRoot, lastAnalyzeSnapshot = oldProj, oldRoot, oldURoot, oldSnap
+		workCtx = oldCtx
 		learnResetForTest()
 	})
 	learnResetForTest()
+	resetWorkContext()
 	unifiedProjectRoot = dir
 	if analyzed {
 		if !analyzeQuiet(dir) {

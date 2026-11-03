@@ -227,6 +227,7 @@ func gateRenamePlan(proj *analyze.Project, target analyze.RenameTarget, newName 
 	}
 	tx.commit()
 	setCurrentProject(root, fresh)
+	notePlanLanded(root, plan, "rename")
 	how := "built the project and checked"
 	if !built {
 		how = "re-read the project and checked (no go.mod at its root, so no build to run)"

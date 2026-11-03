@@ -57,6 +57,15 @@ var lastAnalyzeSnapshot *projectTreeSnapshot
 // string the caller has always stored in lastAnalyzeRoot; the
 // snapshot itself is taken against p.Root, the path Analyze read.
 func setCurrentProject(root string, p *analyze.Project) {
+	// A project switch ends the previous project's working
+	// context (sessionctx.go): the memory of what the chat
+	// was building belongs to the project it was building
+	// in. A re-read of the SAME project (the freshness
+	// guard, the edit spine's post-apply refresh) is not a
+	// switch and keeps the context.
+	if p != nil && workCtx.root != "" && !sameAnalyzedRoot(workCtx.root, p.Root) {
+		resetWorkContext()
+	}
 	lastAnalyzeRoot = root
 	lastAnalyzeProject = p
 	if p == nil {

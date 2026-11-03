@@ -375,6 +375,7 @@ func executeEditPlan(req analyze.EditRequest, ask editAsk) bool {
 	}
 	tx.commit()
 	setCurrentProject(root, fresh)
+	noteSpineLanded(req, plan, root)
 	how := "built the project and checked"
 	if !built {
 		how = "re-read the project and checked (no go.mod at its root, so no build to run)"

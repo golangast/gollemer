@@ -263,6 +263,16 @@ func parseCreate(line string) (createReq, bool) {
 	}
 }
 
+// createLineIsAdd reports whether the line's verb is the
+// borrowed "add" — the follow-up spelling of the file case
+// (parseCreate's isAdd, re-read here so runCreate can tell
+// the forms apart without widening createReq: the parse
+// tests pin that struct exactly).
+func createLineIsAdd(line string) bool {
+	fields := strings.Fields(strings.ToLower(line))
+	return len(fields) > 0 && fields[0] == "add"
+}
+
 // --- parsing: the boundary family ---
 
 // boundaryReq is a disk action Gollemer will not perform, parsed
@@ -910,6 +920,21 @@ func runCreate(line string, ask editAsk) bool {
 		recordBrain("composer", false, "create refused: stale project unreadable")
 		return true
 	}
+	// The working-context reading (sessionctx.go): the
+	// add-verb form with a bare file name — no folder
+	// asked, none in the name — is read in the folder the
+	// session is working in, and the reading is printed
+	// before the plan so it can be seen and corrected.
+	// The add form only: it is the follow-up spelling,
+	// while create|make bare names keep the create
+	// family's shipped root anchoring (the bare-file
+	// package rules pin it). No context, no reading.
+	if !req.dir && req.loc == "" && createLineIsAdd(line) {
+		if folder, note := resolveCreateFolder(req.file, rootAbs); note != "" {
+			fmt.Printf("%s %s\n", tag, note)
+			req.loc = folder
+		}
+	}
 	plan, refusal := planCreate(req, rootAbs)
 	if refusal != "" {
 		fmt.Printf("%s Not creating that: %s.\n", tag, strings.TrimSuffix(refusal, "."))
@@ -961,6 +986,7 @@ func runCreate(line string, ask editAsk) bool {
 			return true
 		}
 		fmt.Printf("%s Done — created %s/. I checked — it's there.\n", tag, d.rel)
+		noteLandedFolder(rootAbs, d.rel)
 		recordBrain("composer", true, "create applied: folder "+d.rel)
 		return true
 	}
@@ -1007,6 +1033,7 @@ func runCreate(line string, ask editAsk) bool {
 	}
 	created = append(created, plan.file.rel)
 	fmt.Printf("%s Done — created %s. %s\n", tag, strings.Join(created, " and "), how)
+	noteLandedFile(rootAbs, plan.file.rel, "created", "file", "")
 	note := "create applied: file " + plan.file.rel
 	if req.kind != "" {
 		note += " (" + req.kind + ")"

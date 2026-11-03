@@ -2218,11 +2218,35 @@ func tryConceptBook(line string, r *LineReader) bool {
 // to the shared edit spine (or to composer's guidance when the
 // sentence is missing a piece no plan can supply).
 func runConcept(line string, ask editAsk) bool {
+	tag := cTag("gollemer [composer]>")
+
+	// The pronoun reading comes before the parse: two of
+	// its tails ("to that file", "to the same file") are
+	// not the concept grammar's at all — the parse declines
+	// them — so the rewrite is the only way they can ever
+	// reach it. The root is settled here only to gate the
+	// session-context readings (sessionctx.go); the flow
+	// below re-settles it with its own refusals, unchanged.
+	// No context, no reading: the line keeps today's shape.
+	ctxAbs := ""
+	if rootRaw0 := creationRoot(); rootRaw0 != "" {
+		if abs0, ok0 := claimRootAbs(rootRaw0); ok0 {
+			ctxAbs = abs0
+		}
+	}
+	if ctxAbs != "" {
+		if rewritten, note := resolvePronounTail(line, ctxAbs); note != "" {
+			if _, ok2 := parseConcept(rewritten); ok2 {
+				fmt.Printf("%s %s\n", tag, note)
+				line = rewritten
+			}
+		}
+	}
+
 	req, ok := parseConcept(line)
 	if !ok {
 		return false
 	}
-	tag := cTag("gollemer [composer]>")
 	canon := req.entry.Canonical()
 
 	// A started line phrase with an unusable number refuses
@@ -2245,6 +2269,23 @@ func runConcept(line string, ask editAsk) bool {
 		fmt.Printf("%s Not adding that: %s.\n", tag, why)
 		recordBrain("composer", false, "concept refused: line phrase")
 		return true
+	}
+
+	// The bare-name reading (sessionctx.go), settled before
+	// anything below reads the target: a bare file name is
+	// resolved against the work in progress, the reading
+	// printed as it is taken, so every plan or refusal
+	// below names the file actually meant, and why. Two
+	// files fitting is guidance, never a guess.
+	if ctxAbs != "" {
+		if resolved, note, guidance := resolveContextTarget(req.target, line, ctxAbs); guidance != "" {
+			fmt.Printf("%s %s\n", tag, guidance)
+			recordBrain("composer", false, "concept refused: ambiguous target (session context)")
+			return true
+		} else if resolved != "" {
+			fmt.Printf("%s %s\n", tag, note)
+			req.target = resolved
+		}
 	}
 
 	// A name belongs to a declaration (named-connection

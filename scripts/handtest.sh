@@ -22,8 +22,11 @@
 # project's `make start`), the basic Linux commands (pwd, ls,
 # cd, cat, echo, clear, date, whoami — gated, confined, with
 # their refusal shapes), the basics + cheatsheet
-# statement rows, and the one-ask make-and-call (a new
-# function in one file, called from another, one gate).
+# statement rows, the one-ask make-and-call (a new
+# function in one file, called from another, one gate), and
+# the session working context (John's database-package
+# journey: bare follow-ups resolved against the work in
+# progress, each reading printed with its full path).
 #
 # How it works:
 #   - Everything happens under handtest/ at the repo root,
@@ -886,6 +889,35 @@ run_session makecallbare
 
 case_file_contains makecall-bare-callee app/greet.go "func Greet() {"
 case_file_contains makecall-bare-call app/main.go "Greet()"
+
+# --- session: the working context (John's database journey) ------------------
+# The session-context build (2026-11-02): four lines building
+# one database package, the last two aimed by bare name only.
+# The chat carries the work — the file it just created, the
+# folder it is working in — and prints each reading with the
+# full path, so the connection lands in jake/database/ and
+# never at the project root, where a bare name points in a
+# cold session.
+
+cat > "$SCRATCH/.inputs/sessionctx.txt" <<'EOF'
+create file jake/database/database.db
+y
+create file jake/database/database.go
+y
+add a database connection function named Connect to database.go
+y
+add the file db.go
+y
+/quit
+EOF
+run_session sessionctx
+
+case_transcript_contains ctx-journey-note sessionctx 'Reading "database.go" as jake/database/database.go — the file you just created.'
+case_file_contains ctx-journey-connect jake/database/database.go "func Connect() (*sql.DB, error)"
+case_transcript_contains ctx-journey-folder-note sessionctx 'Reading "db.go" as jake/database/db.go — the folder you'\''re working in.'
+case_file_contains ctx-journey-dbfile jake/database/db.go "package database"
+case_dir_absent ctx-journey-no-root-database database.go
+case_dir_absent ctx-journey-no-root-db db.go
 
 # --- final build over the whole scratch project ---------------------------
 

@@ -307,6 +307,7 @@ func runDelegate(line string, ask editAsk) bool {
 	}
 	setCurrentProject(rootAbs, fresh)
 	tx.commit()
+	notePlanLanded(rootAbs, plan, "function that calls another")
 
 	how := "built the " + tgtPkg.Name + " package and checked"
 	if !hasMod {
