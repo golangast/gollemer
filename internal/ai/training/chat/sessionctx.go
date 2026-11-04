@@ -209,10 +209,15 @@ func noteSpineLanded(req analyze.EditRequest, plan *analyze.EditPlan, root strin
 		}
 	}
 	piece := string(req.Kind)
+	name := req.ConceptName
 	if req.Kind == analyze.EditConcept && req.Concept != nil {
 		piece = req.Concept.Canonical()
 	}
-	noteLandedFile(root, rel, how, piece, req.ConceptName)
+	if req.Kind == analyze.EditTaughtDecl {
+		piece = req.TaughtKindPhrase
+		name = req.TaughtName
+	}
+	noteLandedFile(root, rel, how, piece, name)
 }
 
 // notePlanLanded records a landed plan from one of the

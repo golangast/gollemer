@@ -106,6 +106,9 @@ func claimChain(line string, ask editAsk, profile *UserProfile) bool {
 	if runInstantiate(line, ask) {
 		return true
 	}
+	if runTaughtKinds(line, ask) {
+		return true
+	}
 	if runProposedDecl(line, ask) {
 		return true
 	}

@@ -132,6 +132,27 @@ Add pieces from the book of 135 known Go shapes:
       import the Ping fails with "unknown driver", and the plan
       says so up front.
 
+Teach it a piece of your own, from one example in your project:
+
+  you> learn this as a signup form from Jake in jim/main.go
+      the chat reads Jake's declaration and keeps its shape as
+      a kind of yours. The summary says what varies — the name,
+      everywhere the piece names itself (its declaration, its
+      calls to itself, references to its own type), and where
+      it lands — and what stays fixed: everything else, exactly
+      as in Jake, with the imports it leans on travelling too.
+  you> add a signup form named Signup to site/site.go
+      the same plan, [y/n], transaction and build check as a
+      book piece, marked "From your example Jake in jim/main.go,
+      taught <date>"; a build failure restores everything.
+  you> what have I taught you  /  forget the signup form
+      taught kinds are yours: kept in ~/.gollemer_taught.json,
+      never inside a project, working in all of them. A kind
+      may not take a book kind's name — yours sit beside the
+      book, never over it. Functions and types only: no
+      methods, no pasted snippets, and nothing is learned from
+      ordinary conversation — only the teach sentences teach.
+
 Make a function in one file and call it from another, in one ask:
 
   you> make a function named Validate in api/validate.go and add a function named Report in api/report.go that calls it

@@ -1195,6 +1195,56 @@ case_transcript_contains memory-continuity memory2 "Last time here:" "MemoryProb
 case_transcript_contains memory-changed-caveat memory2 "don't have a project-read baseline" "won't call that a git status"
 case_transcript_contains memory-forget memory2 'Forgotten: your preference "I prefer tabs over spaces"' "Forgotten: this project's notes and session summaries"
 
+# --- sessions: the teach seat ----------------------------------------------
+# The chat learns a piece kind from ONE example in the project
+# and keeps it as the user's own data: the store lives in the
+# same isolated HOME as the memory store
+# (~/.gollemer_taught.json), never in the project. Session A
+# lands a form handler named Jake with the book's own line,
+# teaches it as a "signup form", and assembles one in another
+# folder under a new name — the plan carries the example's
+# provenance. Session B (same HOME, fresh chat) still knows
+# the kind — taught pieces are the user's, across sessions —
+# lists it, forgets it, and then meets the honest
+# unknown-kind answer for the same ask.
+
+cat > "$SCRATCH/.inputs/teach1.txt" <<'EOF'
+create a folder teachjim
+y
+create a file teachjim/main.go
+y
+add a form handler named Jake to teachjim/main.go
+y
+learn this as a signup form from Jake in teachjim/main.go
+create a folder teachsite
+y
+create a file teachsite/site.go
+y
+add a signup form named Signup to teachsite/site.go
+y
+what have I taught you
+/quit
+EOF
+run_session_with_home teach1
+
+case_transcript_contains teach-learned teach1 "Here's what I learned from Jake in teachjim/main.go" 'The kind: "signup form"' "the code stays exactly as in Jake"
+case_file_contains teach-store-kept .home/.gollemer_taught.json '"signup form"' '"Jake"' 'teachjim/main.go'
+case_dir_absent teach-store-not-in-project .gollemer_taught.json
+case_file_contains teach-use-landed teachsite/site.go "func Signup(" 'r.FormValue("email")'
+case_transcript_contains teach-use-provenance teach1 "From your example Jake in teachjim/main.go, taught"
+case_transcript_contains teach-listed teach1 '"signup form" — from your example Jake (function) in teachjim/main.go'
+
+cat > "$SCRATCH/.inputs/teach2.txt" <<'EOF'
+what have I taught you
+forget the signup form
+add a signup form named Signup to teachsite/site.go
+/quit
+EOF
+run_session_with_home teach2
+
+case_transcript_contains teach-forgotten teach2 'Forgotten: your "signup form" — from your example Jake in teachjim/main.go'
+case_transcript_contains teach-after-forget teach2 "the concept book has no piece by that name"
+
 # --- final build over the whole scratch project ---------------------------
 
 if (cd "$SCRATCH" && env -u GOEXPERIMENT timeout "$SESSION_TIMEOUT" go build ./...) > "$SCRATCH/transcripts/final-build.txt" 2>&1; then

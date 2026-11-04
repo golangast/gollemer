@@ -310,6 +310,50 @@ Anyone can READ a JWT's claims — the signature proves they weren't changed, it
 Apply this edit? [y/n] gollemer [composer]> Done — main.go now has the jwt in main, at app/main.go:18. I built the project and checked that it's really there.
 ```
 
+### Teach it a piece of your own
+
+The book's pieces are the ones that ship with Gollemer. Yours can
+join them: show the chat one declaration in your own project, give
+its kind a name, and the chat keeps the shape — as your data, in
+your home folder (`~/.gollemer_taught.json`, never inside a
+project), working in every project you open:
+
+```
+you> learn this as a signup form from Jake in teachjim/main.go
+gollemer [composer]> Here's what I learned from Jake in teachjim/main.go:
+  The kind: "signup form" — from here on, "add a signup form named <Name> to <file>" assembles one.
+  The example: the function Jake, at teachjim/main.go:11.
+  What varies: the name — Jake becomes the new name everywhere the piece names itself, in its declaration and in its calls to itself — and where it lands.
+  What stays fixed: everything else — the code stays exactly as in Jake, and the imports it leans on (net/http) travel with it.
+
+you> add a signup form named Signup to teachsite/site.go
+gollemer [composer]> Add the signup form Signup to teachsite/site.go — the piece you taught me, renamed from its example.
+From your example Jake in teachjim/main.go, taught Nov 4, 2026.
+...
+Apply this edit? [y/n] gollemer [composer]> Done — site.go now declares the signup form Signup, at teachsite/site.go:7. I built the project and checked that it's really there.
+```
+
+What varies is the name — the declaration's own name and every
+place the piece names itself (a constructor that returns it, a
+recursive call, a field of its own type) — and where it lands.
+Everything else stays exactly as the example has it: same fields,
+same words, same code. The imports the example leans on travel
+with it and are added to the target file if it lacks them. The
+landing goes through the same plan, `[y/n]`, transaction and
+build check as a book piece — if the new home can't build it, the
+edit is restored whole and the compiler's words are the answer.
+
+Ask `what have I taught you` for the list, `forget the signup
+form` to remove one, `forget what I taught you` to remove them
+all. Nothing is learned from ordinary conversation — only the
+teach sentences teach. A taught kind can never take a book
+kind's name: your pieces sit beside the book, never over it.
+Version one teaches from Go functions and types only: a method
+can't be taught (it belongs to its receiver's type), and there
+is no pasting a snippet in — the example has to be a declaration
+in the project, so the chat reads its real shape instead of
+guessing one.
+
 ### Make a function in one file and call it from another
 
 One sentence can do both halves — a brand-new function in one
@@ -676,7 +720,7 @@ guesses.
 
 ## A note on the numbers in this README
 
-135 pieces, 17 brains, 155 handtest cases, 70 paces checks — these are
+135 pieces, 17 brains, 163 handtest cases, 70 paces checks — these are
 counts of what's actually in this checkout, and the model scores
 quoted are the measured ones, kept next to the features they
 describe. When a number changes, this file should change with it.

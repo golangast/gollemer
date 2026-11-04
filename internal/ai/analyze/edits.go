@@ -96,6 +96,15 @@ const (
 	// from the user's sentence, appended at file scope.
 	EditProposedDecl = "proposed_decl"
 
+	// Taught declarations (edittaught.go): a declaration the
+	// user taught the chat from an example in their own project
+	// (the teach seat) — the example's source with its name
+	// slots already renamed by the chat layer to the new name,
+	// appended at file scope or created as a new file, the way
+	// a concept-book declaration lands. The template is the
+	// user's own data, carried verbatim.
+	EditTaughtDecl = "taught_decl"
+
 	// Instantiation (editinstantiate.go): a statement making a
 	// value of an existing project type, inserted at the end of
 	// an existing project function.
@@ -307,6 +316,24 @@ type EditRequest struct {
 	ProposedKind     string
 	ProposedReceiver string
 	ProposedImports  string
+
+	// taught_decl: the taught template's source, already
+	// renamed by the chat layer to TaughtName (the new
+	// declaration's name); TaughtDeclKind is "function" or
+	// "type" (a taught declaration is never a method);
+	// TaughtKindPhrase is the user's kind phrase ("sidebar
+	// page"), used in the plan's words; TaughtImports is the
+	// space-joined full import specs the example declaration
+	// leans on (full specs, `db "database/sql"` form allowed);
+	// TaughtNote is the plan's provenance line, rendered by
+	// the chat layer from the store ("From your example Jake
+	// in jim/main.go, taught Nov 3, 2026.").
+	TaughtText       string
+	TaughtName       string
+	TaughtDeclKind   string
+	TaughtKindPhrase string
+	TaughtImports    string
+	TaughtNote       string
 }
 
 // EditFile is one file's before/after pair inside a plan.
@@ -396,6 +423,8 @@ func (p *Project) PlanEdit(req EditRequest) (*EditPlan, string) {
 		return p.planConcept(req)
 	case EditProposedDecl:
 		return p.planProposedDecl(req)
+	case EditTaughtDecl:
+		return p.planTaughtDecl(req)
 	case EditInstantiate:
 		return p.planInstantiate(req)
 	case EditRenameParam, EditReorderParams, EditAddParam:

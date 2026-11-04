@@ -1452,6 +1452,22 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if tryInstantiate(line, reader) {
 			continue
 		}
+		// The teach seat, claimed deterministically after the
+		// concept book and before the model proposer: pieces
+		// the user taught the chat from examples in his own
+		// project, stored as his data outside every project
+		// (~/.gollemer_taught.json). "learn a signup form from
+		// Jake in jim/main.go" teaches one, "add a signup form
+		// named Signup to site/main.go" assembles it through
+		// the same spine as a book write, and "what have I
+		// taught you" / "forget the signup form" manage the
+		// store. Taught kinds are deterministic data, so they
+		// sit with the deterministic writers; a kind may never
+		// shadow the book, which keeps its sentences by sitting
+		// earlier. See taughtkinds.go.
+		if tryTaughtKinds(line, reader) {
+			continue
+		}
 		// The speccopy proposer, claimed deterministically
 		// beside the other write-side parsers, after the
 		// concept book and before the boundary: a
