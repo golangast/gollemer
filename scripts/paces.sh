@@ -14,7 +14,10 @@
 # the rm refusal, the one-ask make-and-call (a new function
 # in one file, called from another, in a single gated plan),
 # and the handler wiring (two placed handlers registered with
-# the webserver — one in its own file, one across packages). After every landing step it greps the
+# the webserver — one in its own file, one across packages),
+# and a homepage that takes over the webserver's starter
+# reply (the page family: page + handler + registration in
+# one ask). After every landing step it greps the
 # disk for what the chat claimed, and builds every package in
 # the scratch project — a step that "succeeds" in chat but
 # leaves the tree unbuildable is recorded as a failure.
@@ -662,6 +665,30 @@ run_session s15
 has step15-session-wired api/main.go 'http.HandleFunc("/session", Session)'
 has step15-signup-wired api/main.go 'http.HandleFunc("/signup", handlers.Signup)' '"paces/handlers"'
 builds step15
+
+# ================================================================
+step "step 16: a homepage takes over the webserver's starter reply"
+# ================================================================
+
+# The page family (2026-11-04): one ask for a whole page — the
+# starter page file, the handler that serves it, and its
+# registration — in a single gated plan. A homepage's route
+# is "/", which the webserver component's own starter handler
+# has answered since step 1 with its friendly line; that
+# starter exists to be replaced, and the plan replaces just
+# that line (every other registration — /session, /signup —
+# is untouched).
+cat > "$BASE/.inputs/s16.txt" <<'EOF'
+create a homepage in api
+y
+/quit
+EOF
+run_session s16
+
+has step16-homepage-page api/index.html "TODO: your homepage heading"
+has step16-homepage-wired api/main.go "func Home(" 'http.HandleFunc("/", Home)'
+hasnt step16-starter-gone api/main.go "hello — your webserver is running"
+builds step16
 
 # --- scoreboard ---------------------------------------------------
 

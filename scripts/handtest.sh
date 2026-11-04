@@ -19,7 +19,11 @@
 # Go files), the webserver + serve-an-html-file
 # recipe, the handler-wiring recipe (a placed handler
 # registered with the webserver — named, bare, and the two
-# already-registered answers), the security rows in a program file, line-number
+# already-registered answers), the page family (six named
+# page kinds as page+handler pairs in one program — the
+# homepage taking over the webserver's starter reply — plus
+# the no-server follow-up journey and the never-overwrite
+# refusal), the security rows in a program file, line-number
 # placement, the gorqlite dependency gate, running your own
 # programs (quick ones, a live server with visits in its log,
 # and the pin that "run the program X" never becomes the
@@ -372,6 +376,100 @@ case_between wire-jake-before-serve jim/main.go 'func main() {' 'http.HandleFunc
 case_transcript_contains wire-duplicate-answer wire "Jake is already registered at /jake" "nothing to add"
 case_transcript_contains wire-other-path-refusal wire "already registered at /jake" "/signup" "won't register it at /signup as well"
 case_file_contains wire-bare-pete jim/main.go 'http.HandleFunc("/pete", Pete)'
+
+# --- sessions: the page family ---------------------------------------
+# A named page kind is a matched pair in ONE gated plan: the
+# starter page, the handler that serves it, and the route
+# registration composed onto the program's webserver. The
+# homepage takes over the webserver component's own starter
+# reply at "/" (that line is replaced, nothing else in the
+# server changes); the contact page's form asks for exactly
+# the fields its handler reads. The repeat about ask meets
+# the never-overwrite refusal — an existing page is never
+# rewritten.
+
+# --- session: a page with no server — the follow-up journey ----------
+# The lonely program has no webserver: the about page and its
+# handler still land, the plan names the finishing sentence,
+# and feeding that sentence back (after adding the webserver
+# it points at) registers the handler. Placement first,
+# wiring as its own gated step. The handler is named Solo
+# because the scratch holds several programs by now, and two
+# of them can each have an About of their own — the wiring
+# sentence resolves a name, so this journey gives it a name
+# only one program has.
+# ORDER MATTERS: this journey runs BEFORE the site journey
+# below. The wiring claim reads route conflicts project-wide
+# (its shipped rule: one path, one handler, per project), so
+# /about must still be unregistered anywhere when Solo wires
+# up. The site journey then proves the page family's own
+# composition is per-program: site composes its own About at
+# /about right after, in its own binary, without a murmur.
+
+cat > "$SCRATCH/.inputs/pagesnoserver.txt" <<'EOF'
+create a folder lonely
+y
+create a file lonely/main.go
+y
+create an about page named Solo in lonely
+y
+add a webserver to lonely/main.go
+y
+connect the Solo handler to the webserver at /about
+y
+/quit
+EOF
+run_session pagesnoserver
+
+case_file_contains pages-noserver-page lonely/about.html "About us"
+case_transcript_contains pages-noserver-followup pagesnoserver 'connect the Solo handler to the webserver at /about'
+case_file_contains pages-noserver-wired lonely/main.go 'http.HandleFunc("/about", Solo)'
+
+cat > "$SCRATCH/.inputs/pages.txt" <<'EOF'
+create a folder site
+y
+create a file site/main.go with a webserver
+y
+create a homepage in site
+y
+create an about page in site
+y
+create a contact page in site
+y
+/quit
+EOF
+run_session pages
+
+cat > "$SCRATCH/.inputs/pages2.txt" <<'EOF'
+create an item list page in site
+y
+create a details page in site
+y
+create a form page in site
+y
+create an about page in site
+/quit
+EOF
+run_session pages2
+
+case_file_contains pages-home-page site/index.html "TODO: your homepage heading"
+case_file_contains pages-home-wired site/main.go "func Home(" 'http.HandleFunc("/", Home)'
+if grep -qF "hello — your webserver is running" "$SCRATCH/site/main.go"; then
+	bad pages-starter-replaced "the webserver's starter line is still in site/main.go"
+else
+	ok pages-starter-replaced
+fi
+case_between pages-about-before-serve site/main.go "func main() {" 'http.HandleFunc("/about", About)' "http.ListenAndServe"
+case_file_contains pages-contact-page site/contact.html 'name="email"' 'name="subject"' 'name="message"' 'action="/contact"'
+case_file_contains pages-contact-handler site/main.go "func Contact(" 'r.FormValue("email")' 'http.ServeFile(w, r, "site/contact.html")'
+case_file_contains pages-list-page site/items.html "TODO: an item"
+case_file_contains pages-list-wired site/main.go "func Items(" 'http.HandleFunc("/items", Items)'
+case_file_contains pages-details-page site/details.html "TODO: the item's name"
+case_file_contains pages-details-wired site/main.go "func Details(" 'http.HandleFunc("/details", Details)'
+case_file_contains pages-form-page site/form.html 'name="email"' 'action="/form"'
+case_file_contains pages-form-handler site/main.go "func Form(" 'http.HandleFunc("/form", Form)'
+case_transcript_contains pages-repeat-refused pages2 "about.html is already there — I never overwrite what's yours"
+
 
 # --- session: line placement (pristine program file) -----------------
 

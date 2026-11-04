@@ -82,6 +82,9 @@ func claimChain(line string, ask editAsk, profile *UserProfile) bool {
 	if runWireHandler(line, ask) {
 		return true
 	}
+	if runPageFamily(line, ask) {
+		return true
+	}
 	if runDelegate(line, ask) {
 		return true
 	}

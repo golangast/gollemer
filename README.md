@@ -261,6 +261,45 @@ its own. Ask twice and it tells you the truth — already registered,
 nothing to add — and a path another handler already owns is refused
 with that handler named.
 
+### Pages in one ask
+
+Some pages come in kinds, and a kind can be had whole — the page
+file, the handler that serves it, and its registration, in one
+plan. There are six: a **homepage**, an **about page**, a **contact
+page**, an **item list page**, a **details page**, and a **form
+page**. (Ask to `create a handler with a form` and you get the form
+kind from the other side: the handler, plus the page with its
+form.)
+
+```
+you> create a homepage in webtest
+gollemer [composer]> Add the homepage: webtest/index.html (a starter page), its handler Home in webtest/main.go, and the starter registration at / gives way to http.HandleFunc("/", Home), so Home answers http://localhost:8080/.
+The webserver's own starter handler at / — the one that answers "hello — your webserver is running" — is replaced by the registration above; nothing else in the server changes.
+...
+Apply this edit? [y/n] gollemer [composer]> Done — Home serves index.html at /, at webtest/main.go:20. I built the project and checked that it's really there.
+
+you> create a contact page in webtest
+gollemer [composer]> Add the contact page: webtest/contact.html (a starter page), its handler Contact in webtest/main.go, and one registration — http.HandleFunc("/contact", Contact) — added in webtest/main.go just before it serves, so Contact answers http://localhost:8080/contact.
+The form in webtest/contact.html asks for exactly the fields Contact reads — email, subject and message — so the page and the handler can't drift apart.
+...
+Apply this edit? [y/n] gollemer [composer]> Done — Contact serves contact.html at /contact, at webtest/main.go:25. I built the project and checked that it's really there.
+```
+
+Each kind answers at its own address — the homepage at `/`, about
+at `/about`, contact at `/contact`, the item list at `/items`,
+details at `/details`, the form at `/form` — and the handler takes
+the kind's name (Home, About, Contact, Items, Details, Form) unless
+you give one: `create a form page named Signup`. The page lands
+beside the handler's file, and a page file that already exists is
+never overwritten — the ask refuses and names it.
+
+If the program has no webserver yet, the page and handler still
+land, and the plan names the finishing sentence — `connect the Home
+handler to the webserver` — for when one exists. The starter pages
+carry TODOs where your own words and data go: the item list opens
+with placeholder items, the details page with placeholder fields.
+Gollemer doesn't invent your content.
+
 The security pieces explain themselves as they land:
 
 ```
@@ -637,7 +676,7 @@ guesses.
 
 ## A note on the numbers in this README
 
-135 pieces, 17 brains, 139 handtest cases, 66 paces checks — these are
+135 pieces, 17 brains, 155 handtest cases, 70 paces checks — these are
 counts of what's actually in this checkout, and the model scores
 quoted are the measured ones, kept next to the features they
 describe. When a number changes, this file should change with it.

@@ -58,6 +58,15 @@ const (
 	// custom server) is a refusal with the facts.
 	EditWireHandler = "wire_handler"
 
+	// Page family (editpage.go): a named page kind as a matched
+	// page+handler pair — an .html page created with starter
+	// content (never overwritten), the handler that serves it
+	// (for form kinds, the concept book's form-handler piece
+	// adapted so its GET branch serves the page), and the route
+	// registration when a composable server exists in the
+	// handler's package.
+	EditPage = "page"
+
 	// Cross-file use (edituses.go): a NEW function in a named
 	// file whose body is a first use of a function or type that
 	// already exists elsewhere in the project — the call (or
@@ -154,6 +163,20 @@ type EditRequest struct {
 	// the serving file itself, so File stays empty.
 	WireName  string
 	WireRoute string
+
+	// page: the page kind ("form"|"home"|"about"|"contact"|
+	// "list"|"details"), the page file (PageHTML,
+	// project-relative slash path, .html), the handler's name
+	// (PageName, already defaulted by the chat layer), and the
+	// route (PageRoute, already derived by the chat layer).
+	// File (shared, above) is the handler's host .go file
+	// (project-relative; may not exist yet — the plan creates
+	// it). Concept (shared, below) carries the book's
+	// form-handler entry for form/contact kinds, nil otherwise.
+	PageKind  string
+	PageHTML  string
+	PageName  string
+	PageRoute string
 
 	// delegate: the existing .go file (project-relative slash
 	// path) the wrapper is added to, the source function as typed
@@ -361,6 +384,8 @@ func (p *Project) PlanEdit(req EditRequest) (*EditPlan, string) {
 		return p.planServeHTML(req)
 	case EditWireHandler:
 		return p.planWireHandler(req)
+	case EditPage:
+		return p.planPage(req)
 	case EditDelegate:
 		return p.planDelegate(req)
 	case EditUse:

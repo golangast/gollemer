@@ -99,6 +99,20 @@ Create folders and files — shown first, gated, then verified:
       http.HandleFunc("/signup", handlers.Signup) — just before
       the serve call; ask again and it says "already
       registered ... — nothing to add"
+  you> create a homepage
+      a whole page in one ask: the starter page (index.html),
+      its handler, and its registration at / — the webserver's
+      starter reply gives way to it. The same shape for an
+      about page (/about), a contact page (/contact, with the
+      form built in), an item list page (/items), a details
+      page (/details), a form page (/form) — and "create a
+      handler with a form" asks for the form kind from the
+      handler side. A form in a page asks for exactly the
+      fields its handler reads, so the two can't drift apart.
+      With no webserver yet, the page and handler still land,
+      and the plan names the connect sentence that finishes
+      the wiring. A page that already exists is never
+      overwritten.
 
 Add pieces from the book of 135 known Go shapes:
 
@@ -214,7 +228,8 @@ Test everything at once:
   make handtest
       drives the real chat through scripted sessions in a
       throwaway project — folders, bare files, webserver +
-      serve-html, security, line placement, database + the
+      serve-html, the page kinds, security, line placement,
+      database + the
       gorqlite gate, program running, the basic terminal
       commands with their refusals, the statement pieces,
       the one-ask make-and-call —

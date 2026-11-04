@@ -1346,6 +1346,18 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if tryWireHandler(line, reader) {
 			continue
 		}
+		// Page-family recipes, claimed deterministically beside
+		// serve-an-html-file and wire-a-handler, in the server
+		// family: "create a homepage" is a composite creation —
+		// the page, its handler, and (when a composable server
+		// exists) its registration, in one gated plan. The kind
+		// words anchor the grammar, so the book's form-handler
+		// sentences ("add a form handler named Jake…"),
+		// serve-html's lines, and the creations keep their
+		// claims.
+		if tryPageFamily(line, reader) {
+			continue
+		}
 		// Cross-file delegates, claimed deterministically beside
 		// the other write-side parsers: "add a function in
 		// app/main.go that calls store.Load" writes code in one
