@@ -1,0 +1,511 @@
+{
+ "note": "Held-out eval carved from the EXPANDED distribution before training. Prompts must be deduped against the final training corpus (normalized input match) before use; any collision is dropped and recorded. Singles: fresh process per prompt. Sequences: one session, judged on the final reply's context use. want_any = strong mechanical signal (mirrors the multiturn eval's keyword-from-context convention); final verdicts are judged coherence/on-topic by the coordinator. Final set after collision dedupe: 29 singles, 12 sequences.",
+ "sequences": [
+  {
+   "id": "q01",
+   "topic": "pets-context",
+   "turns": [
+    "i got a puppy last week",
+    "her name is daisy"
+   ],
+   "want_any": [
+    "daisy",
+    "puppy",
+    "dog",
+    "name"
+   ]
+  },
+  {
+   "id": "q02",
+   "topic": "weather-context",
+   "turns": [
+    "i love rainy days",
+    "what do you like about them"
+   ],
+   "want_any": [
+    "rain",
+    "cozy",
+    "sound",
+    "calm",
+    "peaceful"
+   ]
+  },
+  {
+   "id": "q03",
+   "topic": "sad-context",
+   "turns": [
+    "i had a rough day at work",
+    "i just feel like crying"
+   ],
+   "want_any": [
+    "sorry",
+    "here for you",
+    "talk",
+    "cry",
+    "better"
+   ]
+  },
+  {
+   "id": "q04",
+   "topic": "joke-chain",
+   "turns": [
+    "tell me a joke",
+    "ha, another one please"
+   ],
+   "want_any": [
+    "?",
+    "!"
+   ],
+   "want_joke_shaped": true
+  },
+  {
+   "id": "q05",
+   "topic": "food-context",
+   "turns": [
+    "i love spicy food",
+    "do you like it too"
+   ],
+   "want_any": [
+    "spicy",
+    "food",
+    "love",
+    "like",
+    "hot"
+   ]
+  },
+  {
+   "id": "q06",
+   "topic": "music-context",
+   "turns": [
+    "i've been listening to jazz all day",
+    "what do you think of it"
+   ],
+   "want_any": [
+    "jazz",
+    "music",
+    "smooth",
+    "sound",
+    "love"
+   ]
+  },
+  {
+   "id": "q07",
+   "topic": "travel-context",
+   "turns": [
+    "we're going to the mountains next month",
+    "i hope the weather holds"
+   ],
+   "want_any": [
+    "mountain",
+    "trip",
+    "weather",
+    "hope",
+    "beautiful"
+   ]
+  },
+  {
+   "id": "q08",
+   "topic": "coding-context",
+   "turns": [
+    "i'm learning to program",
+    "it's harder than i expected"
+   ],
+   "want_any": [
+    "keep",
+    "practice",
+    "hard",
+    "easier",
+    "proud",
+    "step"
+   ]
+  },
+  {
+   "id": "q09",
+   "topic": "name-context",
+   "turns": [
+    "my name is sam",
+    "what's your name"
+   ],
+   "want_any": [
+    "gollemer"
+   ]
+  },
+  {
+   "id": "q10",
+   "topic": "book-context",
+   "turns": [
+    "i just finished a mystery novel",
+    "the ending surprised me"
+   ],
+   "want_any": [
+    "book",
+    "ending",
+    "story",
+    "surprise",
+    "twist"
+   ]
+  },
+  {
+   "id": "q11",
+   "topic": "tired-context",
+   "turns": [
+    "i barely slept last night",
+    "and i have a long day ahead"
+   ],
+   "want_any": [
+    "rest",
+    "sleep",
+    "coffee",
+    "tough",
+    "care"
+   ]
+  },
+  {
+   "id": "q12",
+   "topic": "happy-context",
+   "turns": [
+    "i passed my driving test",
+    "i can't stop smiling"
+   ],
+   "want_any": [
+    "congratulations",
+    "great",
+    "happy",
+    "proud",
+    "smile"
+   ]
+  }
+ ],
+ "singles": [
+  {
+   "id": "s01",
+   "prompt": "i've been feeling pretty low lately",
+   "topic": "feelings",
+   "want_any": [
+    "sorry",
+    "sad",
+    "here for you",
+    "talk",
+    "listen",
+    "better"
+   ]
+  },
+  {
+   "id": "s02",
+   "prompt": "today has me grinning",
+   "topic": "feelings",
+   "want_any": [
+    "great",
+    "wonderful",
+    "happy",
+    "glad",
+    "love",
+    "smile"
+   ]
+  },
+  {
+   "id": "s03",
+   "prompt": "i am worn out completely",
+   "topic": "feelings",
+   "want_any": [
+    "rest",
+    "tired",
+    "sleep",
+    "relax",
+    "break"
+   ]
+  },
+  {
+   "id": "s04",
+   "prompt": "feeling butterflies about tomorrow",
+   "topic": "feelings",
+   "want_any": [
+    "nervous",
+    "excited",
+    "luck",
+    "well",
+    "hope"
+   ]
+  },
+  {
+   "id": "s05",
+   "prompt": "i miss how things were",
+   "topic": "feelings",
+   "want_any": [
+    "miss",
+    "sorry",
+    "memories",
+    "understand",
+    "hard"
+   ]
+  },
+  {
+   "id": "s06",
+   "prompt": "so proud of my sister",
+   "topic": "feelings",
+   "want_any": [
+    "proud",
+    "great",
+    "wonderful",
+    "congratulations",
+    "happy"
+   ]
+  },
+  {
+   "id": "s07",
+   "prompt": "morning, how's everything",
+   "topic": "greetings",
+   "want_any": [
+    "morning"
+   ]
+  },
+  {
+   "id": "s08",
+   "prompt": "hey there, long time no see",
+   "topic": "greetings",
+   "want_any": [
+    "good",
+    "great",
+    "nice",
+    "while",
+    "been"
+   ]
+  },
+  {
+   "id": "s09",
+   "prompt": "evening! how'd the day treat you",
+   "topic": "greetings",
+   "want_any": [
+    "evening"
+   ]
+  },
+  {
+   "id": "s10",
+   "prompt": "i should get going soon",
+   "topic": "greetings",
+   "want_any": [
+    "bye",
+    "soon",
+    "later",
+    "care",
+    "talking"
+   ]
+  },
+  {
+   "id": "s11",
+   "prompt": "remind me of your name",
+   "topic": "identity",
+   "want_any": [
+    "gollemer"
+   ]
+  },
+  {
+   "id": "s14",
+   "prompt": "what should i call you",
+   "topic": "identity",
+   "want_any": [
+    "gollemer"
+   ]
+  },
+  {
+   "id": "s15",
+   "prompt": "do you ever sleep",
+   "topic": "identity",
+   "want_any": [
+    "not",
+    "no",
+    "always",
+    "here"
+   ]
+  },
+  {
+   "id": "s16",
+   "prompt": "got anything funny for me",
+   "topic": "jokes",
+   "want_any": [
+    "?",
+    "!"
+   ],
+   "want_joke_shaped": true
+  },
+  {
+   "id": "s19",
+   "prompt": "say something silly",
+   "topic": "jokes",
+   "want_any": [
+    "?",
+    "!"
+   ],
+   "want_joke_shaped": true
+  },
+  {
+   "id": "s20",
+   "prompt": "i burned dinner again",
+   "topic": "food",
+   "want_any": [
+    "sorry",
+    "happen",
+    "next",
+    "try",
+    "order",
+    "cook"
+   ]
+  },
+  {
+   "id": "s21",
+   "prompt": "coffee or tea for you",
+   "topic": "food",
+   "want_any": [
+    "coffee",
+    "tea",
+    "both",
+    "love",
+    "like"
+   ]
+  },
+  {
+   "id": "s22",
+   "prompt": "i crave something sweet",
+   "topic": "food",
+   "want_any": [
+    "sweet",
+    "chocolate",
+    "cake",
+    "dessert",
+    "cookie"
+   ]
+  },
+  {
+   "id": "s23",
+   "prompt": "looks like rain again",
+   "topic": "weather",
+   "want_any": [
+    "rain",
+    "cozy",
+    "umbrella",
+    "wet",
+    "inside"
+   ]
+  },
+  {
+   "id": "s24",
+   "prompt": "it's freezing out there",
+   "topic": "weather",
+   "want_any": [
+    "cold",
+    "warm",
+    "freezing",
+    "bundle",
+    "cozy"
+   ]
+  },
+  {
+   "id": "s25",
+   "prompt": "finally some sunshine",
+   "topic": "weather",
+   "want_any": [
+    "sun",
+    "nice",
+    "great",
+    "beautiful",
+    "warm"
+   ]
+  },
+  {
+   "id": "s26",
+   "prompt": "work drained me today",
+   "topic": "work",
+   "want_any": [
+    "rest",
+    "tough",
+    "sorry",
+    "long",
+    "relax"
+   ]
+  },
+  {
+   "id": "s27",
+   "prompt": "big exam tomorrow and i'm nervous",
+   "topic": "work",
+   "want_any": [
+    "luck",
+    "well",
+    "got this",
+    "breathe",
+    "ready"
+   ]
+  },
+  {
+   "id": "s29",
+   "prompt": "i started learning guitar",
+   "topic": "hobbies",
+   "want_any": [
+    "guitar",
+    "music",
+    "fun",
+    "great",
+    "practice"
+   ]
+  },
+  {
+   "id": "s30",
+   "prompt": "watched a great film last night",
+   "topic": "hobbies",
+   "want_any": [
+    "film",
+    "movie",
+    "glad",
+    "great",
+    "what"
+   ]
+  },
+  {
+   "id": "s32",
+   "prompt": "my cat keeps sitting on my keyboard",
+   "topic": "family-pets",
+   "want_any": [
+    "cat",
+    "funny",
+    "cute",
+    "keyboard",
+    "attention"
+   ]
+  },
+  {
+   "id": "s33",
+   "prompt": "called my mom today",
+   "topic": "family-pets",
+   "want_any": [
+    "nice",
+    "good",
+    "mom",
+    "glad",
+    "chat"
+   ]
+  },
+  {
+   "id": "s35",
+   "prompt": "i need a bit of cheering up",
+   "topic": "thanks-help",
+   "want_any": [
+    "sorry",
+    "here",
+    "better",
+    "talk",
+    "smile"
+   ]
+  },
+  {
+   "id": "s36",
+   "prompt": "my program finally ran without errors",
+   "topic": "coding-talk",
+   "want_any": [
+    "great",
+    "congratulations",
+    "well done",
+    "proud",
+    "nice"
+   ]
+  }
+ ]
+}

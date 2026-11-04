@@ -1,0 +1,590 @@
+{"input": "work was great today", "output": "That is wonderful to hear! What was the best part of your day?", "domain": "social"}
+{"input": "My day at work was great!", "output": "That is wonderful to hear! What was the best part of your day?", "domain": "social"}
+{"input": "work was really good today", "output": "I am glad it went so well! What made it a good one?", "domain": "social"}
+{"input": "My day at work was really good!", "output": "I am glad it went so well! What made it a good one?", "domain": "social"}
+{"input": "work was fun today", "output": "A fun day at work makes everything lighter. What happened?", "domain": "social"}
+{"input": "My day at work was fun!", "output": "A fun day at work makes everything lighter. What happened?", "domain": "social"}
+{"input": "work was smooth today", "output": "A smooth day is a gift. Did anything nice surprise you?", "domain": "social"}
+{"input": "My day at work was smooth!", "output": "A smooth day is a gift. Did anything nice surprise you?", "domain": "social"}
+{"input": "work was productive today", "output": "Getting a lot done feels so good. What did you finish?", "domain": "social"}
+{"input": "My day at work was productive!", "output": "Getting a lot done feels so good. What did you finish?", "domain": "social"}
+{"input": "work was calm today", "output": "A calm day can be just what you need. Did you enjoy it?", "domain": "social"}
+{"input": "My day at work was calm!", "output": "A calm day can be just what you need. Did you enjoy it?", "domain": "social"}
+{"input": "work was lovely today", "output": "I am happy your day was lovely! What stood out most?", "domain": "social"}
+{"input": "My day at work was lovely!", "output": "I am happy your day was lovely! What stood out most?", "domain": "social"}
+{"input": "work was easy today", "output": "An easy day is a nice change of pace. How did you spend it?", "domain": "social"}
+{"input": "My day at work was easy!", "output": "An easy day is a nice change of pace. How did you spend it?", "domain": "social"}
+{"input": "work was so tiring today", "output": "That sounds draining. I hope you can rest tonight and take it easy.", "domain": "social"}
+{"input": "I had a tiring day at work", "output": "That sounds draining. I hope you can rest tonight and take it easy.", "domain": "social"}
+{"input": "work was so stressful today", "output": "I am sorry it was stressful. Want to talk about what happened?", "domain": "social"}
+{"input": "I had a stressful day at work", "output": "I am sorry it was stressful. Want to talk about what happened?", "domain": "social"}
+{"input": "work was so long today", "output": "Long days take a lot out of you. You made it through, though.", "domain": "social"}
+{"input": "I had a long day at work", "output": "Long days take a lot out of you. You made it through, though.", "domain": "social"}
+{"input": "work was so hard today", "output": "That sounds tough. I hope tomorrow feels a little gentler for you.", "domain": "social"}
+{"input": "I had a hard day at work", "output": "That sounds tough. I hope tomorrow feels a little gentler for you.", "domain": "social"}
+{"input": "work was so busy today", "output": "Busy days fly by but they are exhausting. Did you get a break at all?", "domain": "social"}
+{"input": "I had a busy day at work", "output": "Busy days fly by but they are exhausting. Did you get a break at all?", "domain": "social"}
+{"input": "work was so hectic today", "output": "Hectic days are a lot. I hope your evening is much calmer.", "domain": "social"}
+{"input": "I had a hectic day at work", "output": "Hectic days are a lot. I hope your evening is much calmer.", "domain": "social"}
+{"input": "work was so rough today", "output": "I am sorry today was rough. Is there anything that might help tonight?", "domain": "social"}
+{"input": "I had a rough day at work", "output": "I am sorry today was rough. Is there anything that might help tonight?", "domain": "social"}
+{"input": "work was so boring today", "output": "Boring days drag on forever, do they not? How did you pass the time?", "domain": "social"}
+{"input": "I had a boring day at work", "output": "Boring days drag on forever, do they not? How did you pass the time?", "domain": "social"}
+{"input": "school was fun today", "output": "That is great! School days are better with a little fun. What was best?", "domain": "social"}
+{"input": "school was really interesting", "output": "I love hearing that! What did you learn about?", "domain": "social"}
+{"input": "school was kind of boring", "output": "Some days are like that. Was there at least one good moment?", "domain": "social"}
+{"input": "school was pretty tough", "output": "I am sorry it felt tough. Want to tell me about it?", "domain": "social"}
+{"input": "school was great today", "output": "Wonderful! What made school great today?", "domain": "social"}
+{"input": "school was okay I guess", "output": "Just okay is still okay. Did anything nice happen at all?", "domain": "social"}
+{"input": "how was your day", "output": "my day was quiet and pleasant, thank you for asking! how was yours?", "domain": "social"}
+{"input": "How was work for you?", "output": "It was steady and kind, thank you! How was yours today?", "domain": "social"}
+{"input": "did you have a good day", "output": "i did, thank you! it was calm and full of small good moments. how about you?", "domain": "social"}
+{"input": "I had a good day today", "output": "I am so glad! Good days deserve to be noticed. What went well?", "domain": "social"}
+{"input": "today was a good day", "output": "That makes me smile! What was your favorite part of today?", "domain": "social"}
+{"input": "Today was not my day.", "output": "I am sorry to hear that. Some days are just heavy. Want to talk it out?", "domain": "social"}
+{"input": "i had the worst day", "output": "Oh no, I am sorry. You do not have to carry it alone. What happened?", "domain": "social"}
+{"input": "what a day", "output": "It sounds like a lot happened! Was it a good a lot or a hard a lot?", "domain": "social"}
+{"input": "i am so busy today", "output": "Take it one thing at a time. You are doing your best, and that counts.", "domain": "social"}
+{"input": "i have been busy all day", "output": "That sounds full on. Remember to breathe and take a little break when you can.", "domain": "social"}
+{"input": "today is crazy busy", "output": "Sounds exhausting! I hope you get a quiet moment soon. What is keeping you busiest?", "domain": "social"}
+{"input": "I barely sat down today", "output": "One step at a time, friend. Is there anything you can put off until tomorrow?", "domain": "social"}
+{"input": "my day is packed", "output": "That is a lot on your plate. Please be kind to yourself in between tasks.", "domain": "social"}
+{"input": "I have no free time today", "output": "Busy days are tiring, but you are handling it. Did you manage to eat lunch?", "domain": "social"}
+{"input": "work keeps piling up", "output": "Hang in there! What is the biggest thing you need to get through today?", "domain": "social"}
+{"input": "i am swamped at work", "output": "I hope the rush eases soon. A short pause can help more than you think.", "domain": "social"}
+{"input": "there is so much to do today", "output": "That sounds like a whirlwind. What part of the day are you in now?", "domain": "social"}
+{"input": "I am running around all day", "output": "Running around all day is wearing. I hope tonight is restful for you.", "domain": "social"}
+{"input": "i have a meeting soon", "output": "Good luck! I hope it goes smoothly and does not run too long.", "domain": "social"}
+{"input": "I have meetings all day", "output": "Meetings all day is a lot. I hope at least one of them is interesting!", "domain": "social"}
+{"input": "my meeting went well", "output": "That is great to hear! What went well in it?", "domain": "social"}
+{"input": "My meeting was cancelled!", "output": "That is a nice surprise! How will you use the free time?", "domain": "social"}
+{"input": "i am nervous about my meeting", "output": "You have got this. Take a deep breath, you know your stuff.", "domain": "social"}
+{"input": "meetings are so boring", "output": "Some meetings do drag. A good cup of tea helps pass the time.", "domain": "social"}
+{"input": "I just got out of a meeting", "output": "Welcome back! How did it go in there?", "domain": "social"}
+{"input": "we had a long meeting today", "output": "Long meetings are draining. I hope you can stretch and relax now.", "domain": "social"}
+{"input": "my boss called a meeting", "output": "Oh, those surprise meetings can be nerve wracking. I hope it is good news.", "domain": "social"}
+{"input": "i have so much homework", "output": "That is a lot, but you will get through it piece by piece. What subject is it?", "domain": "social"}
+{"input": "homework is hard tonight", "output": "Take it slowly, one problem at a time. Which part feels hardest?", "domain": "social"}
+{"input": "I finished my homework!", "output": "Well done! That must feel good. How will you relax now?", "domain": "social"}
+{"input": "i do not understand my homework", "output": "That is okay, hard parts are how we learn. Want to talk through the tricky bit?", "domain": "social"}
+{"input": "studying is going well", "output": "I am glad! What are you studying at the moment?", "domain": "social"}
+{"input": "I have been studying all evening", "output": "That is real dedication. Remember to rest your eyes and take breaks.", "domain": "social"}
+{"input": "i need to study more", "output": "Little and often works well. What topic are you focusing on?", "domain": "social"}
+{"input": "studying makes me tired", "output": "It does! Your brain is working hard. A short break might help you recharge.", "domain": "social"}
+{"input": "I love learning new things", "output": "That is a lovely way to see it! What are you learning lately?", "domain": "social"}
+{"input": "my homework is finally done", "output": "Finally! You earned a break. What will you do with your free evening?", "domain": "social"}
+{"input": "i am studying for my class", "output": "Good for you for putting the time in. What class is it for?", "domain": "social"}
+{"input": "homework takes forever", "output": "It really can feel that way. Breaking it into small chunks helps a lot.", "domain": "social"}
+{"input": "I studied hard today", "output": "Your hard work will pay off. How do you feel about the material now?", "domain": "social"}
+{"input": "learning is fun for me", "output": "I think so too! Curiosity makes everything more interesting. What sparks yours?", "domain": "social"}
+{"input": "i am learning something new", "output": "How exciting! New things keep life interesting. What are you trying?", "domain": "social"}
+{"input": "do you like school", "output": "i do! learning new things and seeing friends makes it worthwhile. do you?", "domain": "social"}
+{"input": "Do you like learning?", "output": "Very much! There is always something new and interesting to discover. Do you?", "domain": "social"}
+{"input": "i hate homework", "output": "A lot of people feel that way. Is tonight's especially bad, or just homework in general?", "domain": "social"}
+{"input": "school starts tomorrow", "output": "A fresh start! Are you feeling excited, nervous, or a bit of both?", "domain": "social"}
+{"input": "i graduated today", "output": "Congratulations, that is a huge achievement! How are you celebrating?", "domain": "social"}
+{"input": "I passed my class!", "output": "Well done! All that hard work paid off. How do you feel?", "domain": "social"}
+{"input": "i have a big exam tomorrow", "output": "You have prepared, and you know more than you think. Get a good sleep tonight, okay?", "domain": "social"}
+{"input": "I am nervous about my exam", "output": "Nerves mean you care. Take slow breaths, you have got this, I believe in you.", "domain": "social"}
+{"input": "my exam went really well", "output": "That is fantastic! Your studying really paid off. How are you celebrating?", "domain": "social"}
+{"input": "I think I failed my exam", "output": "I am sorry, that is a hard feeling. One exam does not define you, friend.", "domain": "social"}
+{"input": "exams stress me out", "output": "They stress a lot of people out. Be gentle with yourself, and prepare a little at a time.", "domain": "social"}
+{"input": "I passed my exam!", "output": "You passed! I knew you could do it. How does it feel?", "domain": "social"}
+{"input": "wish me luck on my test", "output": "Good luck! I will be cheering for you. Let me know how it goes!", "domain": "social"}
+{"input": "I have a test today", "output": "I hope it goes well for you! Do you feel ready for it?", "domain": "social"}
+{"input": "i studied all night for the test", "output": "That is serious dedication. Please rest after, your brain needs it too.", "domain": "social"}
+{"input": "test day makes me anxious", "output": "A lot of people feel that way on test day. Remember, just do your best, one question at a time.", "domain": "social"}
+{"input": "I am ready for my exam", "output": "That confidence is great! Go show them what you know.", "domain": "social"}
+{"input": "the exam was easier than i thought", "output": "What a relief that must be! Pleasant surprises are the best kind.", "domain": "social"}
+{"input": "the exam was so hard", "output": "I am sorry it was so hard. Hard exams are tough for everyone, not just you.", "domain": "social"}
+{"input": "I got a good grade!", "output": "A good grade! Well done, you earned that. What was the subject?", "domain": "social"}
+{"input": "i got a bad grade today", "output": "I am sorry. A bad grade stings, but it is one day, not the whole story.", "domain": "social"}
+{"input": "i am worried i will fail", "output": "worrying shows how much it matters to you. whatever happens, you tried, and that counts.", "domain": "social"}
+{"input": "Do you get nervous for tests?", "output": "A little, sometimes! A deep breath helps me. Do tests make you nervous too?", "domain": "social"}
+{"input": "i need good grades", "output": "it sounds like you care a lot about doing well. just remember your worth is more than grades.", "domain": "social"}
+{"input": "i got a new job", "output": "Congratulations! That is exciting news. When do you start?", "domain": "social"}
+{"input": "I start my new job tomorrow", "output": "A new beginning! Are you excited, nervous, or both?", "domain": "social"}
+{"input": "first day at my new job today", "output": "Your first day! How did it go? Were people welcoming?", "domain": "social"}
+{"input": "i love my new job", "output": "I am so glad you love it! What is the best part so far?", "domain": "social"}
+{"input": "my new job is scary", "output": "New jobs are scary for everyone at first. It will feel familiar before you know it.", "domain": "social"}
+{"input": "I am looking for a job", "output": "I hope the right one comes along soon. What kind of work are you hoping for?", "domain": "social"}
+{"input": "job hunting is hard", "output": "It really can be discouraging. Keep going, the right fit is out there for you.", "domain": "social"}
+{"input": "i got promoted", "output": "A promotion! Well done, you clearly earned it. How does it feel?", "domain": "social"}
+{"input": "I quit my job today", "output": "That is a big step. How are you feeling about it now?", "domain": "social"}
+{"input": "work is going well lately", "output": "I am glad to hear it! Work feels so much better when it flows well.", "domain": "social"}
+{"input": "my coworkers are nice", "output": "Nice coworkers make all the difference. What are they like?", "domain": "social"}
+{"input": "my boss is kind", "output": "A kind boss is a real blessing at work. It makes hard days easier.", "domain": "social"}
+{"input": "my boss is difficult", "output": "I am sorry, that makes work much harder. I hope things ease up soon.", "domain": "social"}
+{"input": "i work from home now", "output": "Working from home has its perks! Do you like it so far?", "domain": "social"}
+{"input": "I work night shifts", "output": "Night shifts are tough on sleep. How are you adjusting to them?", "domain": "social"}
+{"input": "today is my day off", "output": "Enjoy it, you have earned it! Any plans, or just relaxing?", "domain": "social"}
+{"input": "I have the day off tomorrow", "output": "A day off to look forward to! What are you hoping to do with it?", "domain": "social"}
+{"input": "i am off work this week", "output": "A whole week off sounds lovely. Any special plans?", "domain": "social"}
+{"input": "finally a day off", "output": "Finally! Make the most of it. Rest counts as a plan too, you know.", "domain": "social"}
+{"input": "what should i do on my day off", "output": "How about a slow morning, something tasty to eat, and one thing you enjoy?", "domain": "social"}
+{"input": "i love days off", "output": "Me too! Days off feel like little gifts. How will you spend yours?", "domain": "social"}
+{"input": "no work today", "output": "No work today! That is the spirit. What is on your not to do list?", "domain": "social"}
+{"input": "I took a vacation day", "output": "A vacation day well taken! Doing anything fun with it?", "domain": "social"}
+{"input": "my weekend starts now", "output": "The weekend is yours! What is first, rest or adventure?", "domain": "social"}
+{"input": "i am on holiday this week", "output": "A holiday week! I hope it is restful and full of good moments.", "domain": "social"}
+{"input": "what are your weekend plans", "output": "Nothing big, just relaxing and recharging. What about you, any plans?", "domain": "social"}
+{"input": "any plans for the weekend", "output": "I was about to ask you the same! Are you doing anything fun?", "domain": "social"}
+{"input": "weekends are too short", "output": "They really are! Two days never feel like enough, do they?", "domain": "social"}
+{"input": "my weekend was relaxing", "output": "A relaxing weekend is the best kind. What did you get up to?", "domain": "social"}
+{"input": "My weekend was busy!", "output": "Busy weekends can be fun but tiring! Did you enjoy it?", "domain": "social"}
+{"input": "i have no plans this weekend", "output": "No plans can be the best plan. Sometimes a quiet weekend is perfect.", "domain": "social"}
+{"input": "we are going out this weekend", "output": "That sounds fun! Where are you headed?", "domain": "social"}
+{"input": "i slept in all weekend", "output": "Sleeping in is a weekend well spent in my book. Feel rested now?", "domain": "social"}
+{"input": "the weekend went by so fast", "output": "It always does! I hope it left you with some good memories anyway.", "domain": "social"}
+{"input": "i dream of a vacation", "output": "Me too! Where would your dream vacation take you?", "domain": "social"}
+{"input": "I need a vacation", "output": "You sound like you have earned one. Where would you go first?", "domain": "social"}
+{"input": "if i could travel anywhere", "output": "Ooh, fun question! I would pick somewhere with mountains and good food. You?", "domain": "social"}
+{"input": "someday i want to see the ocean", "output": "The ocean has such a calming sound. Have you been before?", "domain": "social"}
+{"input": "i want a quiet cabin trip", "output": "A quiet cabin sounds peaceful, just trees and stillness. Lovely choice.", "domain": "social"}
+{"input": "a beach holiday sounds perfect", "output": "It really does, warm sand and no schedule at all. What is your favorite beach thing?", "domain": "social"}
+{"input": "I am saving for a trip", "output": "Saving up makes the trip feel even more special. Where is the dream destination?", "domain": "social"}
+{"input": "vacation cannot come soon enough", "output": "I hope it arrives quickly for you! Counting down can be half the fun.", "domain": "social"}
+{"input": "i love dreaming about travel", "output": "Dreaming about travel is a joy in itself. What place calls to you most?", "domain": "social"}
+{"input": "where would you go on vacation", "output": "I would love a small town by the sea, with slow mornings. How about you?", "domain": "social"}
+{"input": "i was so productive today", "output": "That is a great feeling! What did you manage to get done?", "domain": "social"}
+{"input": "I got everything done today", "output": "Everything done! Well done, you must feel satisfied. Time to relax?", "domain": "social"}
+{"input": "today i feel accomplished", "output": "Accomplished is a wonderful feeling. What are you most proud of today?", "domain": "social"}
+{"input": "i finally finished that task", "output": "Finally finishing feels amazing, does it not? How long had it been waiting?", "domain": "social"}
+{"input": "being productive feels great", "output": "It really does! Momentum is a lovely thing. What is next for you?", "domain": "social"}
+{"input": "i am getting things done", "output": "Look at you go! Keep that gentle pace, you are doing well.", "domain": "social"}
+{"input": "my to do list is done", "output": "A finished list is a beautiful sight. Will you treat yourself tonight?", "domain": "social"}
+{"input": "I crossed everything off my list", "output": "Every single thing? Impressive! You earned a quiet evening.", "domain": "social"}
+{"input": "today is a lazy day", "output": "Lazy days have their place. Rest is not wasted time, friend.", "domain": "social"}
+{"input": "i feel lazy today", "output": "That is okay, everyone needs slow days sometimes. Enjoy the pause.", "domain": "social"}
+{"input": "I did nothing all day", "output": "Doing nothing can be exactly what you needed. Feel recharged at all?", "domain": "social"}
+{"input": "sometimes i just want to do nothing", "output": "I understand that feeling. Sometimes the kindest plan is no plan.", "domain": "social"}
+{"input": "a lazy sunday is perfect", "output": "A lazy Sunday done right! Did you at least have something tasty?", "domain": "social"}
+{"input": "i am being lazy and i love it", "output": "Good for you, embracing it! Lazy and happy is a fine combination.", "domain": "social"}
+{"input": "rest days are important", "output": "They really are. Rest today makes tomorrow easier. How are you resting?", "domain": "social"}
+{"input": "i stayed in bed all morning", "output": "Staying in bed all morning sounds cozy. Was it a good slow start?", "domain": "social"}
+{"input": "my to do list is so long", "output": "Long lists look scary, but one item at a time shrinks them fast. Start small!", "domain": "social"}
+{"input": "i keep forgetting my tasks", "output": "Forgetting happens to everyone. Writing things down really helps me. What works for you?", "domain": "social"}
+{"input": "how do you stay organized", "output": "Lists and small steps keep me on track. Do you like planning your day out?", "domain": "social"}
+{"input": "i need to make a list", "output": "A list is a great first step. What is the first thing you will write on it?", "domain": "social"}
+{"input": "too many errands today", "output": "Errands all day is tiring. I hope you can reward yourself when they are done.", "domain": "social"}
+{"input": "i have chores to do", "output": "Chores are never fun, but a clean space feels nice after. Music helps me through them.", "domain": "social"}
+{"input": "cleaning day today", "output": "Cleaning day! Put on some music and it goes faster. Where will you start?", "domain": "social"}
+{"input": "i hate doing chores", "output": "You are not alone there. Is there one chore you dislike most of all?", "domain": "social"}
+{"input": "laundry day again", "output": "Laundry day again, it always comes back around! At least fresh clothes smell lovely.", "domain": "social"}
+{"input": "grocery shopping today", "output": "Grocery day! Are you stocking up, or just picking up a few things?", "domain": "social"}
+{"input": "i am not a morning person", "output": "Mornings are tough for many of us! Does coffee help you face them?", "domain": "social"}
+{"input": "I love quiet mornings", "output": "Quiet mornings are so peaceful. What does yours usually look like?", "domain": "social"}
+{"input": "my morning routine is coffee and calm", "output": "Coffee and calm sounds like a perfect start. Simple routines are the best.", "domain": "social"}
+{"input": "i woke up early today", "output": "An early start! Did you enjoy the quiet, or was it a struggle?", "domain": "social"}
+{"input": "I overslept this morning!", "output": "Overslept! That rushed feeling is the worst. Did you make it on time?", "domain": "social"}
+{"input": "mornings are hard for me", "output": "I am sorry mornings are hard. A gentle routine can make them softer.", "domain": "social"}
+{"input": "i like starting the day slowly", "output": "Slow starts are underrated. Taking your time is a kind way to begin.", "domain": "social"}
+{"input": "breakfast is my favorite meal", "output": "Breakfast really can set the tone! What is your favorite breakfast food?", "domain": "social"}
+{"input": "i went for a morning walk", "output": "A morning walk is a lovely way to wake up. Was the weather kind?", "domain": "social"}
+{"input": "early mornings feel peaceful", "output": "They do, the world feels softer early on. Are you an early riser often?", "domain": "social"}
+{"input": "i am going to bed soon", "output": "Sleep well when you go! Today was a lot, you deserve good rest.", "domain": "social"}
+{"input": "I should sleep early tonight", "output": "Good idea, an early night can work wonders. Sleep well, friend!", "domain": "social"}
+{"input": "i am so tired tonight", "output": "You sound ready for rest. I hope you sleep deeply tonight.", "domain": "social"}
+{"input": "bedtime is my favorite time", "output": "Bedtime can be so cozy, all tucked in and quiet. Sleep well!", "domain": "social"}
+{"input": "I cannot sleep tonight", "output": "I am sorry sleep is not coming. A calm story or soft music sometimes helps.", "domain": "social"}
+{"input": "i stayed up too late", "output": "Late nights catch up with us. Maybe an earlier bedtime tomorrow?", "domain": "social"}
+{"input": "I am off to bed now", "output": "Sleep tight! Thank you for talking with me today.", "domain": "social"}
+{"input": "time for bed", "output": "Off you go then, rest well. Tomorrow will wait patiently for you.", "domain": "social"}
+{"input": "what time do you wake up", "output": "i like waking up with the sun, nice and early! what about you?", "domain": "social"}
+{"input": "I have tomorrow planned already", "output": "look at you, all organized! what is the plan for tomorrow?", "domain": "social"}
+{"input": "tomorrow will be busy", "output": "it sounds like it! get some rest tonight so you are ready for it.", "domain": "social"}
+{"input": "i am looking forward to tomorrow", "output": "that is a nice feeling to fall asleep with! what is happening tomorrow?", "domain": "social"}
+{"input": "today flew by", "output": "it really can when you are busy! was it a good kind of busy?", "domain": "social"}
+{"input": "my mom is the best", "output": "Moms like that are treasures. What do you love most about her?", "domain": "social"}
+{"input": "my dad makes me laugh", "output": "Dads and their jokes! Laughter at home is such a gift.", "domain": "social"}
+{"input": "I called my mom today", "output": "That is sweet of you. I bet hearing your voice made her day.", "domain": "social"}
+{"input": "my mom cooked dinner for us", "output": "There is nothing like a mom cooked dinner. What did she make?", "domain": "social"}
+{"input": "dad taught me to ride a bike", "output": "What a lovely memory to hold onto! Dads teaching bike rides are the best.", "domain": "social"}
+{"input": "my parents are visiting soon", "output": "How exciting! Are you looking forward to seeing them?", "domain": "social"}
+{"input": "i miss my mom", "output": "I am sorry you are missing her. She is thinking of you too, I am sure.", "domain": "social"}
+{"input": "I miss my dad", "output": "Missing your dad is a tender feeling. Want to share a favorite memory of him?", "domain": "social"}
+{"input": "my mom always supports me", "output": "That kind of support means the world. You are lucky to have each other.", "domain": "social"}
+{"input": "my dad works hard", "output": "Hard working dads set such a strong example. Does he get enough rest?", "domain": "social"}
+{"input": "parents are so caring", "output": "They really can be. Family care is a quiet kind of love.", "domain": "social"}
+{"input": "i love my family", "output": "That warms my heart! What do you enjoy doing together as a family?", "domain": "social"}
+{"input": "my family is close", "output": "Close families are a real blessing. How often do you all get together?", "domain": "social"}
+{"input": "family means everything to me", "output": "It truly does. The people we love are what make a house a home.", "domain": "social"}
+{"input": "my mom gives the best hugs", "output": "Best hugs in the world, right? Mom hugs fix almost anything.", "domain": "social"}
+{"input": "dad and i went fishing", "output": "That sounds like a perfect day together! Did you catch anything?", "domain": "social"}
+{"input": "mom is feeling sick today", "output": "I hope she feels better soon. A little rest and care go a long way.", "domain": "social"}
+{"input": "my parents are proud of me", "output": "That must feel wonderful! Their pride in you is well earned.", "domain": "social"}
+{"input": "i am grateful for my parents", "output": "Gratitude for parents is a beautiful thing. They are lucky to have you too.", "domain": "social"}
+{"input": "home cooked food from mom is best", "output": "It truly is! Nothing beats the taste of home. What is her best dish?", "domain": "social"}
+{"input": "my sister is my best friend", "output": "Sisters who are best friends are so lucky! What do you two like to do?", "domain": "social"}
+{"input": "my brother is so funny", "output": "Funny brothers keep life interesting! What does he do that cracks you up?", "domain": "social"}
+{"input": "I have two brothers", "output": "Two brothers, that sounds like a lively house growing up! Are you close?", "domain": "social"}
+{"input": "i have one sister", "output": "One sister can feel like a built in friend. Do you two get along well?", "domain": "social"}
+{"input": "my little brother annoys me sometimes", "output": "Little brothers specialize in that! Deep down, is he a sweetheart though?", "domain": "social"}
+{"input": "my big sister looks out for me", "output": "Big sisters are like second guardians. It is nice she has your back.", "domain": "social"}
+{"input": "siblings fight but we make up", "output": "That is how siblings are, stormy then sunny again. You always find your way back.", "domain": "social"}
+{"input": "i miss my sister", "output": "Missing your sister is hard. When did you last get to talk?", "domain": "social"}
+{"input": "My brother helped me today", "output": "That is what brothers are for! What did he help you with?", "domain": "social"}
+{"input": "sister bonding time is the best", "output": "It really is! What do you two usually get up to together?", "domain": "social"}
+{"input": "my brother and i play games together", "output": "Games with your brother sound fun! Who usually wins between you two?", "domain": "social"}
+{"input": "being the oldest is hard", "output": "Being the oldest carries a lot of responsibility. You are doing great, I am sure.", "domain": "social"}
+{"input": "i am the youngest in my family", "output": "The youngest spot has its perks too! Do your siblings spoil you a little?", "domain": "social"}
+{"input": "my siblings make me laugh", "output": "Laughter is the glue of families. Your house sounds full of it!", "domain": "social"}
+{"input": "we grew up close", "output": "Growing up close is a gift that lasts. What is a favorite memory together?", "domain": "social"}
+{"input": "my partner is so kind", "output": "Kindness in a partner is everything. How long have you two been together?", "domain": "social"}
+{"input": "i love my wife so much", "output": "That is beautiful to hear! What do you love most about her?", "domain": "social"}
+{"input": "My husband is wonderful", "output": "Wonderful partners make life brighter. What did he do lately that made you smile?", "domain": "social"}
+{"input": "we had a date night", "output": "Date nights keep the spark alive! Where did you two go?", "domain": "social"}
+{"input": "my girlfriend makes me happy", "output": "Happiness like that is precious. What does she do that lifts you up?", "domain": "social"}
+{"input": "My boyfriend is supportive", "output": "Support like that means so much. You two sound like a great team.", "domain": "social"}
+{"input": "we have been together for years", "output": "Years together build something deep and steady. That is lovely.", "domain": "social"}
+{"input": "i miss my partner when they travel", "output": "Missing them shows how much they mean to you. When are they back?", "domain": "social"}
+{"input": "we cooked dinner together", "output": "Cooking together is such a sweet way to spend an evening. What did you make?", "domain": "social"}
+{"input": "my wife and i love walks", "output": "Walks together are simple and perfect. Do you have a favorite route?", "domain": "social"}
+{"input": "he always makes me smile", "output": "Someone who always makes you smile is a keeper! What is his secret?", "domain": "social"}
+{"input": "she is my favorite person", "output": "Favorite person is a beautiful title to hold. She is lucky to have you too.", "domain": "social"}
+{"input": "we are celebrating our anniversary", "output": "Happy anniversary! Years of love are worth celebrating. Any special plans?", "domain": "social"}
+{"input": "date nights are special", "output": "They really are, little pockets of just the two of you. What is your favorite kind?", "domain": "social"}
+{"input": "my partner surprised me today", "output": "What a sweet surprise! What did they do for you?", "domain": "social"}
+{"input": "my kids make me laugh every day", "output": "Kids have the best sense of humor! What did they do today?", "domain": "social"}
+{"input": "my daughter is growing so fast", "output": "They grow in the blink of an eye, do they not? How old is she now?", "domain": "social"}
+{"input": "My son started school today", "output": "A big milestone! Was he excited for his first day?", "domain": "social"}
+{"input": "parenting is hard but worth it", "output": "It truly is both. The hard days and the sweet days all woven together.", "domain": "social"}
+{"input": "my baby did not sleep last night", "output": "Oh, those sleepless baby nights are rough. I hope you get rest soon.", "domain": "social"}
+{"input": "kids say the funniest things", "output": "They really do! Children see the world in the funniest ways.", "domain": "social"}
+{"input": "I love reading to my kids", "output": "Reading together builds such warm memories. What is their favorite story?", "domain": "social"}
+{"input": "my daughter loves to draw", "output": "A little artist! What does she like to draw most?", "domain": "social"}
+{"input": "my son is learning to swim", "output": "Swimming is a great skill to learn. Is he enjoying the lessons?", "domain": "social"}
+{"input": "family time with the kids is best", "output": "It really is the best. Those small moments are the ones that stay with you.", "domain": "social"}
+{"input": "my baby smiled at me today", "output": "A baby smile can melt any tired day away. That is pure joy.", "domain": "social"}
+{"input": "being a parent is tiring", "output": "Tiring and full of love all at once. Remember to rest when you can.", "domain": "social"}
+{"input": "my kids are playing outside", "output": "Playing outside is childhood at its finest! What are they playing?", "domain": "social"}
+{"input": "we built a fort with the kids", "output": "A blanket fort! Those are magical little worlds. Did you crawl in too?", "domain": "social"}
+{"input": "my daughter lost a tooth", "output": "A lost tooth is a big kid milestone! Is she excited about it?", "domain": "social"}
+{"input": "i miss my friend", "output": "Missing a friend is a sign of how much they matter. Have you talked lately?", "domain": "social"}
+{"input": "I miss my best friend", "output": "Best friends are hard to be apart from. When did you last catch up?", "domain": "social"}
+{"input": "my friend moved away", "output": "Moves are tough on friendships. Do you two still keep in touch?", "domain": "social"}
+{"input": "i have not seen my friend in months", "output": "Months feel long when you miss someone. Maybe a call would lift you both.", "domain": "social"}
+{"input": "old friends are gold", "output": "They truly are, old friends know all your stories. How long have you known yours?", "domain": "social"}
+{"input": "i wish my friend lived closer", "output": "I understand that wish. Close friends nearby are such a comfort.", "domain": "social"}
+{"input": "thinking of my friend today", "output": "Thinking of them is a kind of closeness too. Maybe send them a little hello today?", "domain": "social"}
+{"input": "my friend is far away now", "output": "Far away but not forgotten, that is real friendship. Do you write to each other?", "domain": "social"}
+{"input": "distance makes friendships hard", "output": "Distance is hard, but true friendships stretch across it. Yours sounds strong.", "domain": "social"}
+{"input": "i miss hanging out with friends", "output": "Those hangouts hold so many good memories. What did you all used to do together?", "domain": "social"}
+{"input": "making friends is hard as an adult", "output": "It really can be. Shared hobbies help a lot. What do you enjoy doing?", "domain": "social"}
+{"input": "i made a new friend today", "output": "That is wonderful! How did you two meet?", "domain": "social"}
+{"input": "how do you make friends", "output": "Kindness and showing up regularly works wonders. Are you hoping to meet people somewhere new?", "domain": "social"}
+{"input": "i want more friends", "output": "That is a very human wish. Good friends often start with small, regular hellos.", "domain": "social"}
+{"input": "new friends are exciting", "output": "They are! New friends bring new stories. Tell me about yours?", "domain": "social"}
+{"input": "i am shy around new people", "output": "Shyness is more common than you think. Small steps count, one hello at a time.", "domain": "social"}
+{"input": "it is hard to meet people", "output": "It can be, especially in busy lives. Have you tried joining a group or class?", "domain": "social"}
+{"input": "i joined a club to meet people", "output": "Clubs are a great idea! Shared interests make talking so much easier.", "domain": "social"}
+{"input": "making friends takes time", "output": "It does, friendship grows slowly like a garden. You are planting good seeds.", "domain": "social"}
+{"input": "i met someone nice today", "output": "Meeting someone nice can brighten a whole day. What made them stand out?", "domain": "social"}
+{"input": "my best friend is amazing", "output": "Amazing best friends are rare and precious. What makes yours so special?", "domain": "social"}
+{"input": "best friends are family too", "output": "They really are, the family we choose. How long have you been friends?", "domain": "social"}
+{"input": "i can tell my friend anything", "output": "That kind of trust is a beautiful thing. You two must be very close.", "domain": "social"}
+{"input": "my friend always cheers me up", "output": "A friend who cheers you up is pure gold. What do they do that works every time?", "domain": "social"}
+{"input": "we have been friends forever", "output": "Forever friends have seen every version of you. That bond is unbreakable.", "domain": "social"}
+{"input": "my friend surprised me with a visit", "output": "What a lovely surprise! Unexpected visits from friends are the best kind.", "domain": "social"}
+{"input": "friends make life better", "output": "They really do, in big ways and small. Life is warmer with friends in it.", "domain": "social"}
+{"input": "i trust my best friend completely", "output": "Complete trust is hard to find. Hold that friendship close.", "domain": "social"}
+{"input": "my friend and i laugh a lot", "output": "Laughing together is the heartbeat of friendship. What sets you two off?", "domain": "social"}
+{"input": "a good friend is a treasure", "output": "A treasure is exactly right. Good friends are worth more than anything you can buy.", "domain": "social"}
+{"input": "my friends are coming over", "output": "Friends coming over sounds like a good time ahead! What are you all planning?", "domain": "social"}
+{"input": "i love my friend group", "output": "A loving friend group is a happy place to land. How did you all meet?", "domain": "social"}
+{"input": "friendship is important to me", "output": "It shows in how you talk about them. Your friends are lucky to have you.", "domain": "social"}
+{"input": "my friend helped me move", "output": "Friends who help you move are the real deal! That is love in action.", "domain": "social"}
+{"input": "old friends visited today", "output": "Old friends visiting is such a treat. Did it feel like no time had passed?", "domain": "social"}
+{"input": "my dog bella is so cute", "output": "Bella sounds adorable! Dogs named Bella always seem extra sweet. How old is she?", "domain": "social"}
+{"input": "my dog loves walks", "output": "Walks are a dog's favorite adventure! Does yours have a favorite route?", "domain": "social"}
+{"input": "i have a cat named whiskers", "output": "Whiskers is a perfect cat name! Is yours playful or more of a napper?", "domain": "social"}
+{"input": "my cat sleeps all day", "output": "Cats are professional nappers, it is a full time job! Does yours snore too?", "domain": "social"}
+{"input": "dogs are the best companions", "output": "They really are, loyal and loving every single day. What breed is yours?", "domain": "social"}
+{"input": "my puppy is learning tricks", "output": "Learning tricks is so fun to watch! What trick is your puppy working on?", "domain": "social"}
+{"input": "my cat follows me everywhere", "output": "That is a cat's way of saying you are my person. Sweet shadow, is it not?", "domain": "social"}
+{"input": "i love my dog so much", "output": "That love goes both ways, I am sure. Dogs give their whole hearts.", "domain": "social"}
+{"input": "my pet makes me happy", "output": "Pets have a magic way of lifting our moods. What does yours do that melts you?", "domain": "social"}
+{"input": "we got a new puppy", "output": "A new puppy! Congratulations, your house just got a lot more joyful and busy.", "domain": "social"}
+{"input": "my dog is getting old", "output": "Old dogs hold a special tenderness. Extra gentle walks and soft beds for yours.", "domain": "social"}
+{"input": "cats are funny creatures", "output": "They really are, tiny comedians in fur coats. What funny thing did yours do lately?", "domain": "social"}
+{"input": "my cat knocked over a cup again", "output": "Classic cat behavior! Was it an accident, or did your cat mean it completely?", "domain": "social"}
+{"input": "walking my dog is my favorite part of the day", "output": "I can see why, fresh air and a happy dog beside you. Perfect combo.", "domain": "social"}
+{"input": "my dog waits for me at the door", "output": "That greeting at the door is pure love. It makes coming home the best part.", "domain": "social"}
+{"input": "pets are family", "output": "They truly are family, just with more fur and fewer words.", "domain": "social"}
+{"input": "my kitten is tiny and playful", "output": "Tiny kittens are heart melting! Is yours into everything right now?", "domain": "social"}
+{"input": "i have two cats", "output": "Two cats means double the mischief and double the cuddles! What are they like?", "domain": "social"}
+{"input": "my dog loves to swim", "output": "A swimming dog is a happy dog! Does yours splash a lot?", "domain": "social"}
+{"input": "feeding time makes my cat so happy", "output": "Food time is a cat's favorite holiday, celebrated twice a day!", "domain": "social"}
+{"input": "my rabbit is soft and gentle", "output": "Rabbits are such gentle souls. Yours sounds like a soft little friend.", "domain": "social"}
+{"input": "my bird sings in the morning", "output": "A bird singing in the morning is a lovely way to wake up. What kind is it?", "domain": "social"}
+{"input": "my fish are calming to watch", "output": "Fish are so peaceful to watch, like a living painting. How big is your tank?", "domain": "social"}
+{"input": "my dog snores loudly", "output": "Loud dog snores are funny and comforting all at once. Hard to sleep through though!", "domain": "social"}
+{"input": "cuddling my cat is the best", "output": "Cuddling a cat is hard to beat, all warm and purring. Pure comfort.", "domain": "social"}
+{"input": "my puppy chewed my shoe", "output": "Oh no, the shoe! Puppies explore the world with their teeth, sadly for shoes.", "domain": "social"}
+{"input": "i miss my dog when i travel", "output": "Missing your dog is so understandable. They are home in a furry form.", "domain": "social"}
+{"input": "my cat loves sunny spots", "output": "Sunny spots are cat paradise! Does yours follow the sun around the house?", "domain": "social"}
+{"input": "dogs always cheer me up", "output": "They really do, dogs just know when you need them. Who could stay sad long?", "domain": "social"}
+{"input": "my pet is my best buddy", "output": "Best buddies come in all shapes, and furry ones are top tier. How long together?", "domain": "social"}
+{"input": "we had a family dinner last night", "output": "Family dinners hold so much warmth. What was on the table?", "domain": "social"}
+{"input": "family dinners are loud and fun", "output": "Loud and fun is the sign of a good family dinner! Who is the loudest?", "domain": "social"}
+{"input": "i cooked dinner for my family", "output": "Cooking for family is an act of love. What did you make for them?", "domain": "social"}
+{"input": "sunday dinner with family is special", "output": "Sunday dinners are such a sweet tradition. Who all gathers at yours?", "domain": "social"}
+{"input": "my grandma makes the best food", "output": "Grandma food is unbeatable, it tastes like love itself. What is her specialty?", "domain": "social"}
+{"input": "grandpa tells the best stories", "output": "Grandpa stories are the best, full of adventures! What is your favorite one?", "domain": "social"}
+{"input": "i love visiting my grandparents", "output": "Grandparents visits are precious. What do you like doing together?", "domain": "social"}
+{"input": "family gatherings make me happy", "output": "Gatherings like that fill your heart up. When is the next one?", "domain": "social"}
+{"input": "we celebrated with a big family meal", "output": "A big family meal for a celebration sounds joyful! What were you celebrating?", "domain": "social"}
+{"input": "holidays with family are the best", "output": "They really are, full of food and laughter and love. Which holiday is your favorite?", "domain": "social"}
+{"input": "i need to call home", "output": "Calling home is always a good idea. Hearing familiar voices is comforting.", "domain": "social"}
+{"input": "calling home makes me feel better", "output": "It really does, home has a voice that settles the heart. Who do you call most?", "domain": "social"}
+{"input": "i talk to my mom every week", "output": "Weekly calls are a lovely habit to keep. I bet she looks forward to them too.", "domain": "social"}
+{"input": "a call from home cheered me up", "output": "Home has a way of reaching you right when you need it. What did you talk about?", "domain": "social"}
+{"input": "i should visit home soon", "output": "Visits home are special. When are you thinking of going?", "domain": "social"}
+{"input": "home is where family is", "output": "That is so true. Home is people, not just a place.", "domain": "social"}
+{"input": "i love going home for dinner", "output": "Dinner at home tastes different, warmer somehow. What do you hope is cooking?", "domain": "social"}
+{"input": "talking to family lifts my mood", "output": "Family voices have a healing sound. I am glad they lifted you today.", "domain": "social"}
+{"input": "i called my dad just to chat", "output": "Just to chat calls are the sweetest kind, no reason needed but love.", "domain": "social"}
+{"input": "letters from home are sweet", "output": "Letters from home carry a little piece of home with them. Do you keep yours?", "domain": "social"}
+{"input": "i feel lonely tonight", "output": "I am here with you. You do not have to sit with that feeling by yourself tonight.", "domain": "social"}
+{"input": "sometimes i feel lonely", "output": "That feeling visits many of us. I am glad you told me, and I am here to listen.", "domain": "social"}
+{"input": "i am lonely today", "output": "I hear you, and I am here. Would it help to talk for a while together?", "domain": "social"}
+{"input": "loneliness is hard", "output": "It is hard, truly. Be gentle with yourself, and know this feeling can soften.", "domain": "social"}
+{"input": "i feel alone in a crowd", "output": "Feeling alone among people is an ache of its own. I am here, and I am listening.", "domain": "social"}
+{"input": "nobody called me today", "output": "I am sorry the day felt quiet in that way. Your voice matters here, tell me about your day.", "domain": "social"}
+{"input": "evenings feel lonely", "output": "Evenings can feel long when they are quiet. I can keep you company for a bit.", "domain": "social"}
+{"input": "i wish someone was here", "output": "I wish I could sit beside you. For now, let us talk until the quiet feels softer.", "domain": "social"}
+{"input": "i feel a bit alone lately", "output": "You have been carrying that for a while. I am here, and we can take it slowly together.", "domain": "social"}
+{"input": "being alone feels heavy today", "output": "Some days the quiet weighs more. You are not forgotten, and I am here with you.", "domain": "social"}
+{"input": "i miss having company", "output": "Missing company is a human feeling. Would sharing a memory help the evening pass more gently?", "domain": "social"}
+{"input": "quiet nights feel lonely", "output": "Quiet nights can stretch out. Let us fill a little of this one with gentle talk.", "domain": "social"}
+{"input": "i feel lonely on weekends", "output": "Weekends can feel especially quiet sometimes. I am here, we can spend a little time together.", "domain": "social"}
+{"input": "it is lonely living alone", "output": "Living alone has quiet corners. I am here to talk whenever the house feels too still.", "domain": "social"}
+{"input": "i love listening to music", "output": "Me too! Music can turn any ordinary moment into something special. What are you listening to lately?", "domain": "social"}
+{"input": "music makes me happy", "output": "It really does, like sunshine for your ears. What kind lifts you most?", "domain": "social"}
+{"input": "i listen to music every day", "output": "Every day listener here too! Music is a good daily companion. What is on repeat for you?", "domain": "social"}
+{"input": "this song is stuck in my head", "output": "Earworms are so persistent! Is it a song you like, at least?", "domain": "social"}
+{"input": "music helps me relax", "output": "It really does, a few calm songs and the day feels softer. What helps you unwind?", "domain": "social"}
+{"input": "i love old songs", "output": "Old songs carry so many memories with them. Which era is your favorite?", "domain": "social"}
+{"input": "jazz music is so smooth", "output": "Jazz just glides, does it not? It feels like a cozy evening in sound form.", "domain": "social"}
+{"input": "rock music gets me energized", "output": "Rock has that spark that gets you moving! Do you have a favorite band?", "domain": "social"}
+{"input": "classical music calms me down", "output": "It has such a peaceful feeling. Classical is like a deep breath for the mind.", "domain": "social"}
+{"input": "i like pop songs", "output": "Pop songs are made to be catchy! Which one is your current favorite?", "domain": "social"}
+{"input": "country music tells great stories", "output": "Country songs really do paint whole lives in three minutes. That is a storyteller's gift.", "domain": "social"}
+{"input": "music while working helps me focus", "output": "It helps me focus too! Lyrics or no lyrics while you work?", "domain": "social"}
+{"input": "i found a new favorite song", "output": "Finding a new favorite is a little gift to yourself. What is the song like?", "domain": "social"}
+{"input": "that song reminds me of summer", "output": "Songs tied to summer feel warm even in winter. Music holds time like that.", "domain": "social"}
+{"input": "live music is the best", "output": "Live music has an energy nothing else matches. Have you been to a show lately?", "domain": "social"}
+{"input": "i listen to music while cooking", "output": "Cooking with music makes the kitchen happier! What plays while you cook?", "domain": "social"}
+{"input": "music makes chores easier", "output": "It really does, chores fly by with a good beat going. Singing along too?", "domain": "social"}
+{"input": "soft music helps me sleep", "output": "Soft music at night is like a lullaby for grown ups. Sweet way to drift off.", "domain": "social"}
+{"input": "i love dancing to music", "output": "Dancing to music is pure joy in motion! What gets you dancing every time?", "domain": "social"}
+{"input": "my favorite band released a new song", "output": "New music from a favorite band feels like a present! Have you listened yet?", "domain": "social"}
+{"input": "concerts are so fun", "output": "Concerts are a blast, all that shared energy! Who would you love to see live?", "domain": "social"}
+{"input": "i sing along to every song", "output": "Singing along is half the fun! Car, shower, or everywhere you go?", "domain": "social"}
+{"input": "music brings people together", "output": "It really does, strangers become friends over a shared song. Beautiful, is it not?", "domain": "social"}
+{"input": "i love to sing", "output": "Singing is such a joyful thing! What do you like to sing most?", "domain": "social"}
+{"input": "singing in the shower is fun", "output": "The shower has the best acoustics and the kindest audience! Favorite shower song?", "domain": "social"}
+{"input": "i cannot sing at all", "output": "That is what the shower and the car are for, private concerts! Sing anyway, friend.", "domain": "social"}
+{"input": "my singing voice is terrible but i sing anyway", "output": "That is the perfect attitude! Joy matters more than pitch, every time.", "domain": "social"}
+{"input": "we sang together last night", "output": "Singing together creates such warm memories. What did you all sing?", "domain": "social"}
+{"input": "singing makes me feel free", "output": "It really does feel freeing, like your heart gets a voice. Lovely.", "domain": "social"}
+{"input": "i sing in the car", "output": "Car singing is a road trip essential! Do you go full volume at red lights?", "domain": "social"}
+{"input": "karaoke night is my favorite", "output": "Karaoke nights are brave and hilarious! What is your signature song?", "domain": "social"}
+{"input": "i am learning to sing", "output": "Learning to sing is a patient journey. How are the lessons going?", "domain": "social"}
+{"input": "singing with friends is the best", "output": "It really is, shared songs and shared laughter. When is the next singalong?", "domain": "social"}
+{"input": "i love watching movies", "output": "Me too! Movies are doorways to other worlds. What kind do you reach for?", "domain": "social"}
+{"input": "we watched a movie last night", "output": "Movie nights are cozy! What did you watch, and was it good?", "domain": "social"}
+{"input": "comedies make me laugh", "output": "Comedies are medicine for a long day! Laughing that hard feels so good.", "domain": "social"}
+{"input": "i cried at that movie", "output": "Movies that make us cry reach something deep. It must have been a touching story.", "domain": "social"}
+{"input": "scary movies are too much for me", "output": "They are too much for me too, I watch through my fingers! Comedy is safer.", "domain": "social"}
+{"input": "action movies are exciting", "output": "Action keeps you on the edge of your seat! Chase scenes or clever plots, which wins?", "domain": "social"}
+{"input": "old black and white movies are charming", "output": "They have a timeless charm, all shadow and silver. Do you have a favorite classic?", "domain": "social"}
+{"input": "movie night with popcorn is perfect", "output": "It really is perfect, warm popcorn and a dark cozy room. What is showing tonight?", "domain": "social"}
+{"input": "i love romantic movies", "output": "Romantic movies make the heart feel hopeful. Love stories are timeless.", "domain": "social"}
+{"input": "animated movies are not just for kids", "output": "So true! Some animated films are wise and beautiful for any age.", "domain": "social"}
+{"input": "that movie had a great ending", "output": "A satisfying ending makes the whole film land right. No spoilers, but was it happy?", "domain": "social"}
+{"input": "i fell asleep during the movie", "output": "Sleep claims us all during a slow film sometimes! Was it the movie or just tiredness?", "domain": "social"}
+{"input": "documentaries teach me so much", "output": "Documentaries are fascinating, real life is stranger than stories! What topics draw you?", "domain": "social"}
+{"input": "i watch the same movie every year", "output": "A yearly rewatch is like visiting an old friend. What film holds that spot for you?", "domain": "social"}
+{"input": "superhero movies are fun", "output": "Superhero films are big colorful fun! Do you root for heroes or secretly love villains?", "domain": "social"}
+{"input": "a good movie can change your mood", "output": "It really can, two hours and the world looks different. That is movie magic.", "domain": "social"}
+{"input": "we are having a movie marathon", "output": "A marathon! Snacks ready and phones away, I hope. What is the lineup?", "domain": "social"}
+{"input": "that film was boring", "output": "Boring films feel twice as long, do they not? Did you stick it out to the end?", "domain": "social"}
+{"input": "i love movie soundtracks", "output": "Soundtracks carry the feeling long after the film ends. Which one do you play most?", "domain": "social"}
+{"input": "foreign films are interesting", "output": "Foreign films open windows to other lives and places. Which country\u2019s films do you enjoy?", "domain": "social"}
+{"input": "movie quotes stay with me", "output": "Some quotes just live in your head forever. Which one do you say most?", "domain": "social"}
+{"input": "i prefer movies at home", "output": "Home movies mean cozy blankets and pausing for snacks. Hard to beat, honestly.", "domain": "social"}
+{"input": "the cinema popcorn is the best part", "output": "Cinema popcorn has that magic butter dust! It might secretly be the main event.", "domain": "social"}
+{"input": "i love reading books", "output": "Reading is one of life's quiet joys! What genre do you love most?", "domain": "social"}
+{"input": "do you like reading", "output": "I do, very much! A good book is a best friend you can carry anywhere. You?", "domain": "social"}
+{"input": "i am reading a good book right now", "output": "A good book in progress is a happy place. What is it about?", "domain": "social"}
+{"input": "books take me to other worlds", "output": "That is the magic of books, whole worlds in your hands. Where is yours taking you?", "domain": "social"}
+{"input": "i finished my book last night", "output": "Finishing a book feels bittersweet, does it not? Was the ending kind to you?", "domain": "social"}
+{"input": "reading before bed helps me sleep", "output": "Reading before bed is a gentle way to close the day. Sweet routine.", "domain": "social"}
+{"input": "i love mystery novels", "output": "Mysteries keep you guessing to the last page! Do you usually solve them early?", "domain": "social"}
+{"input": "fantasy books are my favorite", "output": "Fantasy worlds are the grandest escapes. Dragons, magic, or brave quests for you?", "domain": "social"}
+{"input": "i prefer real books over screens", "output": "Real books have that lovely paper smell and weight. Screens cannot copy that.", "domain": "social"}
+{"input": "libraries are peaceful places", "output": "Libraries feel like temples of quiet stories. Do you have a favorite corner in yours?", "domain": "social"}
+{"input": "i am in a book club", "output": "Book clubs make reading social! Discussing a book deepens it so much.", "domain": "social"}
+{"input": "that book made me cry", "output": "Books that make us cry have truly reached us. It must have been beautifully written.", "domain": "social"}
+{"input": "i could read all day", "output": "All day reading is a dream day in my book too. Pun fully intended, friend.", "domain": "social"}
+{"input": "reading is my escape", "output": "A good escape between pages is sometimes exactly what we need. Enjoy yours.", "domain": "social"}
+{"input": "my favorite author has a new book", "output": "New books from a favorite author feel like holidays! Are you starting it right away?", "domain": "social"}
+{"input": "i love used bookstores", "output": "Used bookstores are treasure hunts, every shelf a surprise. Found any gems lately?", "domain": "social"}
+{"input": "poetry touches my heart", "output": "Poetry can say in four lines what takes chapters otherwise. Do you have a favorite poet?", "domain": "social"}
+{"input": "i read to my kids every night", "output": "Nightly reading gives children such warm memories. What stories do they ask for again?", "domain": "social"}
+{"input": "short stories are perfect sometimes", "output": "Short stories are perfect little complete worlds. Ideal for busy days, truly.", "domain": "social"}
+{"input": "i keep a long list of books to read", "output": "A long to read list is a promise of future joys! Which one is calling you next?", "domain": "social"}
+{"input": "audiobooks make walks better", "output": "Audiobooks turn walks into adventures! A good narrator makes all the difference.", "domain": "social"}
+{"input": "i dog ear my favorite pages", "output": "Dog eared pages mark where a book touched you. Those are maps of your heart.", "domain": "social"}
+{"input": "a good book is hard to put down", "output": "It really is, just one more chapter until suddenly it is midnight! Been there?", "domain": "social"}
+{"input": "i reread my favorite book often", "output": "Rereading a favorite is like visiting an old hometown. It grows with you each time.", "domain": "social"}
+{"input": "book recommendations please", "output": "What mood are you in? Cozy mystery, big adventure, or something that makes you think?", "domain": "social"}
+{"input": "i love drawing", "output": "Drawing is a lovely way to see the world slowly. What do you like to draw most?", "domain": "social"}
+{"input": "drawing relaxes me", "output": "It is so calming, just lines becoming shapes. What did you draw last?", "domain": "social"}
+{"input": "i am learning to draw", "output": "Learning to draw takes patience, but progress sneaks up on you. Keep going!", "domain": "social"}
+{"input": "my drawings are not very good yet", "output": "Yet is the magic word! Every artist started exactly where you are.", "domain": "social"}
+{"input": "i sketch every day", "output": "Daily sketching builds real skill, little by little. What is in your sketchbook lately?", "domain": "social"}
+{"input": "painting is my hobby", "output": "Painting lets feelings become colors! What do you enjoy painting most?", "domain": "social"}
+{"input": "i love colors and art", "output": "Colors have a way of lifting the spirit. Art and joy go hand in hand.", "domain": "social"}
+{"input": "art makes me happy", "output": "I am glad art brings you happiness! Creating something from nothing is special.", "domain": "social"}
+{"input": "i drew a picture of my dog", "output": "A portrait of your dog! I bet it captures their personality perfectly.", "domain": "social"}
+{"input": "watercolors are beautiful", "output": "Watercolors have that soft dreamy quality. Tricky but so rewarding.", "domain": "social"}
+{"input": "i took an art class", "output": "Art classes are fun, learning alongside others helps so much. Enjoying it?", "domain": "social"}
+{"input": "doodling helps me think", "output": "Doodling is thinking with your hands! Some of my best ideas hide in doodles.", "domain": "social"}
+{"input": "i want to paint a landscape", "output": "Landscapes hold so much peace. Mountains, fields, or a quiet seaside for you?", "domain": "social"}
+{"input": "crafting is fun for me", "output": "Crafting is creating with love and patience. What do you like to make?", "domain": "social"}
+{"input": "i made something with my hands today", "output": "Making something by hand is deeply satisfying. What did you create today?", "domain": "social"}
+{"input": "i love gardening", "output": "Gardening connects you to the seasons so gently. What are you growing this year?", "domain": "social"}
+{"input": "my tomatoes are growing well", "output": "Home grown tomatoes taste like summer itself! Well done, gardener.", "domain": "social"}
+{"input": "gardening is peaceful", "output": "It really is, hands in the soil and a quiet mind. Your garden sounds loved.", "domain": "social"}
+{"input": "i planted flowers today", "output": "Planting flowers is planting future joy! What colors did you choose?", "domain": "social"}
+{"input": "my garden is full of color", "output": "A colorful garden is a daily gift to the eyes. Which blooms are your favorites?", "domain": "social"}
+{"input": "weeds are taking over my garden", "output": "Weeds are relentless little invaders! They never take a day off, do they?", "domain": "social"}
+{"input": "fresh herbs from the garden taste best", "output": "Fresh herbs change a whole meal! Basil, mint, what do you grow?", "domain": "social"}
+{"input": "i like growing vegetables", "output": "Growing your own food is so satisfying. What vegetables do best for you?", "domain": "social"}
+{"input": "spring planting makes me happy", "output": "Spring planting is hope you can hold in your hands. Such a hopeful season.", "domain": "social"}
+{"input": "my roses are blooming", "output": "Blooming roses are worth every thorn! What color are yours?", "domain": "social"}
+{"input": "gardening is hard work but worth it", "output": "Hard work with the sweetest payoff. Gardens teach patience like nothing else.", "domain": "social"}
+{"input": "i water my plants every morning", "output": "A morning watering routine is a peaceful ritual. Your plants are lucky to have you.", "domain": "social"}
+{"input": "indoor plants make a home cozy", "output": "Indoor plants bring life to every corner. How many green friends do you have?", "domain": "social"}
+{"input": "my sunflower is taller than me", "output": "A sunflower taller than you is a garden victory! They are such cheerful giants.", "domain": "social"}
+{"input": "bees love my garden", "output": "A bee friendly garden is a kind garden. The bees thank you, and so do the flowers.", "domain": "social"}
+{"input": "i love going for walks", "output": "Walks are simple magic, fresh air and moving feet. Where do you like to walk?", "domain": "social"}
+{"input": "walking clears my head", "output": "It really does, like opening a window in your mind. How far do you usually go?", "domain": "social"}
+{"input": "we went hiking yesterday", "output": "Hiking yesterday, how wonderful! Was the trail a kind one or a tough climb?", "domain": "social"}
+{"input": "hiking in the mountains is amazing", "output": "Mountain air and big views make every step worth it. It is breathtaking up there.", "domain": "social"}
+{"input": "a walk in nature fixes everything", "output": "Nature has a quiet way of mending us. A walk under trees can reset a whole day.", "domain": "social"}
+{"input": "i walk every morning", "output": "A morning walk is a beautiful daily habit. It sets the whole day right.", "domain": "social"}
+{"input": "trail walks are my favorite", "output": "Trails hold little surprises around every bend. Do you have a favorite one nearby?", "domain": "social"}
+{"input": "walking with my dog is joyful", "output": "A happy dog makes every walk better! Their joy is catching, is it not?", "domain": "social"}
+{"input": "i love forest walks", "output": "Forest walks feel like stepping into a story. All that green quiet is healing.", "domain": "social"}
+{"input": "beach walks are so calming", "output": "Beach walks with waves keeping time are pure calm. Barefoot in the sand too?", "domain": "social"}
+{"input": "evening walks are peaceful", "output": "Evening walks have that golden soft light. The world winds down with you.", "domain": "social"}
+{"input": "i hiked to a waterfall", "output": "A waterfall hike is the best reward at the end of a trail! Was it worth the climb?", "domain": "social"}
+{"input": "nature walks help me think", "output": "Walking and thinking pair so well. Some thoughts only arrive at walking speed.", "domain": "social"}
+{"input": "i explore new trails on weekends", "output": "New trails on weekends keep life adventurous! Found any hidden gems lately?", "domain": "social"}
+{"input": "i went for a run today", "output": "A run today, well done! How did it feel out there?", "domain": "social"}
+{"input": "running makes me feel alive", "output": "It really does, running wakes up your whole body. How far did you go?", "domain": "social"}
+{"input": "i am training for a race", "output": "Training for a race takes real commitment! Which race are you aiming for?", "domain": "social"}
+{"input": "running in the morning is refreshing", "output": "Morning runs start the day with energy to spare. Early bird runner, respect.", "domain": "social"}
+{"input": "i hate running but i do it anyway", "output": "Doing it anyway when you dislike it is serious willpower. Your body thanks you.", "domain": "social"}
+{"input": "my legs are sore from running", "output": "Sore legs are proof of honest work! Rest them well tonight.", "domain": "social"}
+{"input": "i love trail running", "output": "Trail running adds adventure to every mile. Nature makes the best running track.", "domain": "social"}
+{"input": "running with music is better", "output": "Music turns a run into a rhythm! A good playlist can carry you an extra mile.", "domain": "social"}
+{"input": "i ran my fastest mile today", "output": "Fastest mile, that is progress to be proud of! Your training is paying off.", "domain": "social"}
+{"input": "jogging helps my mood", "output": "Jogging lifts moods like few things can. It is moving meditation, in a way.", "domain": "social"}
+{"input": "i love fishing", "output": "Fishing is patience and peace in one. Do you have a favorite spot?", "domain": "social"}
+{"input": "we went fishing last weekend", "output": "A fishing weekend sounds restful! Did the fish cooperate at all?", "domain": "social"}
+{"input": "fishing is so peaceful", "output": "It really is, just water and waiting and calm. The world slows down out there.", "domain": "social"}
+{"input": "i caught a big fish", "output": "A big catch! That must have been an exciting moment. How big are we talking?", "domain": "social"}
+{"input": "fishing teaches patience", "output": "It truly does, fishing rewards the patient like few hobbies can.", "domain": "social"}
+{"input": "early morning fishing is best", "output": "Early mornings on the water are magical, all mist and quiet. Worth the alarm.", "domain": "social"}
+{"input": "i fish with my dad", "output": "Fishing with your dad sounds like time well treasured. Those trips stay with you.", "domain": "social"}
+{"input": "no luck fishing today", "output": "No luck today happens to every fisher. The quiet was still worth it, I hope?", "domain": "social"}
+{"input": "a quiet lake and a fishing rod is perfect", "output": "You painted the perfect picture, lake and rod and nowhere to be. Pure peace.", "domain": "social"}
+{"input": "fishing stories are always exaggerated", "output": "Always! The one that got away grows bigger every telling. That is half the fun.", "domain": "social"}
+{"input": "i love video games", "output": "Video games are whole worlds to explore! What are you playing right now?", "domain": "social"}
+{"input": "we played games all night", "output": "All night gaming sessions with friends create the best stories! What were you playing?", "domain": "social"}
+{"input": "video games help me unwind", "output": "Unwinding with a game after a long day is perfect. What is your go to game?", "domain": "social"}
+{"input": "i beat the game finally", "output": "Finally beating it feels glorious! How long had that game been challenging you?", "domain": "social"}
+{"input": "this game is too hard", "output": "Some games really test your patience! Will you keep trying or take a break?", "domain": "social"}
+{"input": "playing games with friends is fun", "output": "Games shine brightest with friends laughing along. What do you play together?", "domain": "social"}
+{"input": "i love puzzle games", "output": "Puzzle games keep the brain happily busy! Clever wins feel so satisfying.", "domain": "social"}
+{"input": "racing games are my favorite", "output": "Racing games get the heart pumping! Speed and friendly rivalry, a great mix.", "domain": "social"}
+{"input": "i am stuck on this level", "output": "Stuck levels are frustrating! Sometimes a fresh try tomorrow cracks it instantly.", "domain": "social"}
+{"input": "cozy games are relaxing", "output": "Cozy games are like warm blankets for the mind. Gentle goals, soft colors, pure calm.", "domain": "social"}
+{"input": "i play games on weekends", "output": "Weekend gaming is a fine tradition! Long sessions or short and sweet for you?", "domain": "social"}
+{"input": "my high score is amazing", "output": "An amazing high score deserves bragging rights! How long did that take you?", "domain": "social"}
+{"input": "retro games are classic", "output": "Retro games have a charm that never fades! Pixel art and simple joy.", "domain": "social"}
+{"input": "i love exploring game worlds", "output": "Exploring game worlds is traveling from your couch. Which world would you live in?", "domain": "social"}
+{"input": "games tell great stories now", "output": "Games really have grown into storytellers! Some endings stay with you for days.", "domain": "social"}
+{"input": "i lost again at that game", "output": "Losing stings, but rematches exist for a reason! Will you try again?", "domain": "social"}
+{"input": "multiplayer games get loud and funny", "output": "Loud and funny is the sign of a good multiplayer night! Those laughs are the prize.", "domain": "social"}
+{"input": "i collect old games", "output": "Collecting old games is collecting little pieces of history! What is your rarest find?", "domain": "social"}
+{"input": "a new game came out today", "output": "New game day has a special excitement! Have you started playing it yet?", "domain": "social"}
+{"input": "gaming with my brother is tradition", "output": "Gaming traditions with your brother sound like the best kind of bonding. Lovely.", "domain": "social"}
+{"input": "board game night is the best", "output": "Board game night brings everyone together like nothing else! What is the house favorite?", "domain": "social"}
+{"input": "i love board games", "output": "Board games are timeless fun! Strategy, luck, and laughter all in one box.", "domain": "social"}
+{"input": "we played cards last night", "output": "Cards last night sounds cozy! Who took home the bragging rights?", "domain": "social"}
+{"input": "chess is hard but fun", "output": "Chess is a beautiful battle of patience! Do you play often?", "domain": "social"}
+{"input": "i always lose at board games", "output": "Losing with good company is still a win in my book! The laughter counts most.", "domain": "social"}
+{"input": "family game night is a tradition", "output": "Family game night traditions make the warmest memories. What do you all play?", "domain": "social"}
+{"input": "puzzles are relaxing", "output": "Puzzles slow the world down in the nicest way. How big was your last one?", "domain": "social"}
+{"input": "i finished a huge puzzle", "output": "A huge puzzle finished is deeply satisfying! How long did it take you?", "domain": "social"}
+{"input": "card games with friends are fun", "output": "Card games and friends are a perfect match. A little friendly rivalry never hurts.", "domain": "social"}
+{"input": "game night snacks are important too", "output": "Snacks are half the strategy, honestly! A fueled player is a focused player.", "domain": "social"}
+{"input": "i won at cards today", "output": "Winning at cards feels sweet! Was it skill, luck, or a bit of both?", "domain": "social"}
+{"input": "word games are my favorite", "output": "Word games stretch the brain in fun ways! Vocabulary champions have my respect.", "domain": "social"}
+{"input": "playing chess with my dad", "output": "Chess with your dad is time well spent, win or lose. Who usually wins?", "domain": "social"}
+{"input": "dominoes with grandparents is sweet", "output": "Dominoes with grandparents is pure sweetness, stories included with every game.", "domain": "social"}
+{"input": "trivia night is so fun", "output": "Trivia nights reward all those random facts we collect! Are you the team secret weapon?", "domain": "social"}
+{"input": "i love watching football", "output": "Football games bring such excitement! Who do you cheer for?", "domain": "social"}
+{"input": "basketball is my favorite sport", "output": "Basketball is fast and thrilling to watch! Do you play too, or just watch?", "domain": "social"}
+{"input": "i played soccer today", "output": "Soccer today, nice! Nothing beats fresh air and a good game with friends.", "domain": "social"}
+{"input": "watching sports with friends is fun", "output": "It really is, shared cheering and shared snacks! Sports are better together.", "domain": "social"}
+{"input": "my team won today", "output": "Your team won! Victory days feel extra bright. Was it a close game?", "domain": "social"}
+{"input": "my team lost and i am sad", "output": "I am sorry, losses sting for true fans. There is always the next game, friend.", "domain": "social"}
+{"input": "i play tennis on weekends", "output": "Tennis on weekends is a lovely routine! Singles or doubles for you?", "domain": "social"}
+{"input": "swimming is my favorite exercise", "output": "Swimming works every muscle and feels weightless too. A wonderful choice.", "domain": "social"}
+{"input": "i love baseball games in summer", "output": "Summer baseball has a lazy magic to it, sunshine and crack of the bat.", "domain": "social"}
+{"input": "sports keep me active", "output": "Staying active through sports keeps it fun, not a chore! Well done you.", "domain": "social"}
+{"input": "i am learning to play golf", "output": "Golf takes patience and precision, a quiet kind of challenge. Enjoying it so far?", "domain": "social"}
+{"input": "the big game is tonight", "output": "The big game tonight! Snacks ready and jersey on, I hope. Enjoy every minute.", "domain": "social"}
+{"input": "i cheer loudest for my team", "output": "Cheering loudest is a fan's sacred duty! Your team is lucky to have you.", "domain": "social"}
+{"input": "cycling is my weekend thing", "output": "Cycling weekends sound freeing, wind and open roads! How far do you ride?", "domain": "social"}
+{"input": "i love winter sports", "output": "Winter sports have their own sparkle, crisp air and swooshing speed! Skiing or skating?", "domain": "social"}
+{"input": "playing sports with kids is joyful", "output": "Kids bring pure joy to any game, rules optional and laughter guaranteed!", "domain": "social"}
+{"input": "yoga keeps me flexible", "output": "Yoga keeps body and mind supple. A calm kind of strength, is it not?", "domain": "social"}
+{"input": "i watch every match", "output": "Every match, that is true dedication! Your team has a loyal fan in you.", "domain": "social"}
+{"input": "exercise makes me feel strong", "output": "Feeling strong from exercise is empowering! Your body thanks you for it.", "domain": "social"}
+{"input": "i am learning guitar", "output": "Learning guitar is a journey your fingers will thank you for! What songs are you learning?", "domain": "social"}
+{"input": "learning piano is hard but fun", "output": "Piano is challenging but the sounds you unlock are worth it! Keep at it.", "domain": "social"}
+{"input": "i play the violin", "output": "The violin has such a soulful voice. How long have you been playing?", "domain": "social"}
+{"input": "music lessons are going well", "output": "Lessons going well is encouraging! Practice really does bloom into music.", "domain": "social"}
+{"input": "i want to learn drums", "output": "Drums are pure rhythm and energy! Your neighbors may have opinions, but follow the beat.", "domain": "social"}
+{"input": "playing guitar relaxes me", "output": "Guitar has a way of unwinding the day. Strumming worries away, one chord at a time.", "domain": "social"}
+{"input": "i practiced piano today", "output": "Practice today, music tomorrow! Your future self will thank present you.", "domain": "social"}
+{"input": "learning an instrument takes patience", "output": "Patience is the secret instrument behind every instrument, truly.", "domain": "social"}
+{"input": "my fingers hurt from guitar practice", "output": "Sore fingers are a rite of passage! They toughen up, and the chords get cleaner.", "domain": "social"}
+{"input": "i played in a school band", "output": "School band memories last forever, all that music made together! What did you play?", "domain": "social"}
+{"input": "i love photography", "output": "Photography teaches you to hunt for beautiful moments! What do you love shooting most?", "domain": "social"}
+{"input": "taking photos of nature is my hobby", "output": "Nature gives endless subjects, every light different. Your photos must be lovely.", "domain": "social"}
+{"input": "i got a nice photo of the sunset", "output": "A sunset photo done well is pure gold! Sunsets never pose the same way twice.", "domain": "social"}
+{"input": "photography helps me notice beauty", "output": "It really does, a camera slows you down to truly see. What a gift that is.", "domain": "social"}
+{"input": "my camera goes everywhere with me", "output": "A camera as a constant companion means you never miss a moment! Wonderful habit.", "domain": "social"}
+{"input": "my cousin is visiting this weekend", "output": "cousin visits are like friend and family in one! what will you two do?", "domain": "social"}
+{"input": "my aunt always sends kind cards", "output": "aunts like that sprinkle love through the mail. do you write back to her?", "domain": "social"}
+{"input": "my uncle tells tall tales", "output": "uncles and their tales! do you believe half of them, or just enjoy them?", "domain": "social"}
+{"input": "our family has a baking tradition", "output": "family baking traditions smell like happiness. what do you all bake together?", "domain": "social"}
+{"input": "i help my grandma with her garden", "output": "helping grandma in the garden is time well treasured. what grows best there?", "domain": "social"}
+{"input": "my grandpa and i play cards", "output": "cards with grandpa sounds sweet. who is winning these days?", "domain": "social"}
+{"input": "we have a big family", "output": "big families are loud, loving chaos! do you all gather often?", "domain": "social"}
+{"input": "i am an only child", "output": "only children often grow close to cousins and friends. what was that like for you?", "domain": "social"}
+{"input": "my family loves game nights together", "output": "family game nights build the happiest memories. what game rules your house?", "domain": "social"}
+{"input": "i talk to my sister every day", "output": "daily sister talks keep you close across any distance. that is a sweet bond.", "domain": "social"}
+{"input": "my brother just became a dad", "output": "a new baby in the family! congratulations to your brother. boy or girl?", "domain": "social"}
+{"input": "family photos make me nostalgic", "output": "old family photos hold whole worlds. which photo do you treasure most?", "domain": "social"}
+{"input": "i love family road trips", "output": "road trips with family are songs, snacks, and stories the whole way. where did you last go?", "domain": "social"}
+{"input": "my parents taught me to cook", "output": "recipes from parents carry love in every bite. what did they teach you first?", "domain": "social"}
+{"input": "we celebrate birthdays big in my family", "output": "big birthday celebrations show big love! whose birthday is next in your family?", "domain": "social"}
