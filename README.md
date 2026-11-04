@@ -231,7 +231,7 @@ folder where they belong, as their own little package:
 ```
 you> add a form handler named SignUp
 gollemer [composer]> Create the handlers folder and handlers/signup.go in it (package handlers) with the form handler SignUp, from the concept book.
-SignUp is placed in the handlers folder as package handlers — placed, not wired: nothing registers the handler with a server yet. Wiring it in is a next step.
+SignUp is placed in the handlers folder as package handlers — placed, not wired: nothing registers the handler with a server yet. To register it, say "connect the SignUp handler to the webserver" and I'll add the one registration line to your server, behind the same gate.
 ...
 Apply this edit? [y/n] gollemer [composer]> Done — signup.go now declares the form handler SignUp in package handlers, at handlers/signup.go:7. I built the project and checked that it's really there.
 ```
@@ -240,6 +240,26 @@ Handlers go to `handlers/`, middleware to `middleware/`, security
 pieces to `security/`, database pieces to `database/`. Name a file —
 `add a cors middleware named Cors to app/main.go` — and the piece goes
 exactly there instead.
+
+A placed handler answers nothing until the server knows about it.
+Connecting it is one more sentence — one registration line, added
+just before the serve call in whichever file runs the server:
+
+```
+you> connect the SignUp handler to the webserver
+gollemer [composer]> Wire SignUp into the webserver in webtest/main.go: one line — http.HandleFunc("/signup", handlers.SignUp) — added in main just before it serves, so http://localhost:8080/signup is answered by SignUp (declared at handlers/signup.go:7).
+...
+Apply this edit? [y/n] gollemer [composer]> Done — main.go registers SignUp at /signup, at webtest/main.go:17. I built the project and checked that it's really there.
+```
+
+The handler answers at `/` + its name, or at the path you name
+(`connect the Jake handler to the webserver at /contact`). A handler
+in the server's own file wires by its bare name; one in another
+package is imported and qualified, as above. If exactly one handler
+is unconnected, `connect the handler to the webserver` finds it on
+its own. Ask twice and it tells you the truth — already registered,
+nothing to add — and a path another handler already owns is refused
+with that handler named.
 
 The security pieces explain themselves as they land:
 
@@ -604,9 +624,10 @@ guesses.
   validated, each behind a `[y/n]`. It cannot be talked into a shell
   command, and in a piped (non-terminal) session it won't run commands
   at all.
-- **Placed, not wired.** A handler added to `handlers/` is a complete,
-  compiling piece — but registering it with your server is a next
-  step the plan names, not something it silently does to your `main`.
+- **Placed, not auto-wired.** A handler added to `handlers/` is a
+  complete, compiling piece — registering it with your server is a
+  separate step you ask for (`connect the SignUp handler to the
+  webserver`), never something it silently does to your `main`.
 - **Whole programs from thin air.** It assembles known pieces and
   shapes from your own project. It won't invent a large program from
   a vague sentence — and on the one occasion a model gets to propose
@@ -616,7 +637,7 @@ guesses.
 
 ## A note on the numbers in this README
 
-135 pieces, 17 brains, 102 handtest cases, 63 paces checks — these are
+135 pieces, 17 brains, 133 handtest cases, 66 paces checks — these are
 counts of what's actually in this checkout, and the model scores
 quoted are the measured ones, kept next to the features they
 describe. When a number changes, this file should change with it.

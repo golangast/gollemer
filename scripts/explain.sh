@@ -94,12 +94,18 @@ Create folders and files — shown first, gated, then verified:
   you> serve an html file to webtest/main.go
       creates the page and wires the server to serve it; ask
       again and it says "already serves ... — nothing to add"
+  you> connect the SignUp handler to the webserver
+      registers a handler the book placed: one gated line —
+      http.HandleFunc("/signup", handlers.Signup) — just before
+      the serve call; ask again and it says "already
+      registered ... — nothing to add"
 
 Add pieces from the book of 135 known Go shapes:
 
   you> add a form handler named SignUp
       no file named -> handlers/signup.go, its own package:
-      "placed, not wired" — registering it is a named next step
+      "placed, not wired" — the connect sentence above is how
+      you register it with your server
   you> add a cors middleware named Cors to app/main.go
       a named file always wins over the folder default
   you> add a jwt token in main to app/main.go
@@ -241,8 +247,9 @@ HONEST LIMITS
   waits for your "installed".
   No shell — only gated make/go commands, from the project's
   own Makefile allowlist.
-  Placed, not wired — a handler in handlers/ compiles, but
-  registering it with your server is a named next step.
+  Placed, not auto-wired — a handler in handlers/ compiles,
+  and registering it is its own gated ask ("connect the
+  <Name> handler to the webserver"), never a silent extra.
   Whole programs from thin air — it assembles known pieces; it
   won't invent a large program from a vague sentence.
 

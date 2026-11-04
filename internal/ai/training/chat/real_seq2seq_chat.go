@@ -1332,6 +1332,20 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if tryServeHTML(line, reader) {
 			continue
 		}
+		// Wire-a-handler recipes, claimed deterministically
+		// beside serve-an-html-file, in the server family:
+		// "connect the Jake handler to the webserver" registers
+		// a handler the book placed — one HandleFunc line
+		// before the serve call, behind the same gate. Left to
+		// the classifier it was read as small talk and answered
+		// with a project description while nothing was wired
+		// (John's live dead end, 2026-11-03). The grammar
+		// requires a handler reference AND a server word, so
+		// the database family's connect lines keep their
+		// claims.
+		if tryWireHandler(line, reader) {
+			continue
+		}
 		// Cross-file delegates, claimed deterministically beside
 		// the other write-side parsers: "add a function in
 		// app/main.go that calls store.Load" writes code in one

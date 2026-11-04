@@ -15,7 +15,9 @@
 # that doesn't exist yet (and the missing-folder refusal),
 # the ambiguous-piece guidance for
 # the bare handler and database asks, the webserver + serve-an-html-file
-# recipe, the security rows in a program file, line-number
+# recipe, the handler-wiring recipe (a placed handler
+# registered with the webserver — named, bare, and the two
+# already-registered answers), the security rows in a program file, line-number
 # placement, the gorqlite dependency gate, running your own
 # programs (quick ones, a live server with visits in its log,
 # and the pin that "run the program X" never becomes the
@@ -330,6 +332,44 @@ case_file_contains serve-html-rooted-path webtest/main.go 'http.ServeFile(w, r, 
 # analyze suite's serve tests).
 case_transcript_contains serve-html-index-conflict webserver "already answers http://localhost:8080/ with a different handler"
 case_dir_absent serve-html-index-not-created webtest/index.html
+
+# --- session: wire a handler to the webserver -----------------------
+# John's 2026-11-03 journey, end to end: the form handler
+# Jake lands in jim/main.go (which already runs a webserver),
+# and the sentence that used to fall through every claim —
+# "connect the handler to the webserver" — registers it. The
+# named form lands Jake first; the repeats pin the honest
+# answers (already registered at the asked path; already
+# registered at ANOTHER path when asked at /signup); then a
+# second handler lands and the BARE form resolves to it —
+# the fixture's Login is not a candidate, living as it does
+# in app/, a program of its own that jim's server cannot
+# reach into.
+
+cat > "$SCRATCH/.inputs/wire.txt" <<'EOF'
+create a folder jim
+y
+create a file jim/main.go with a webserver
+y
+add a form handler named Jake to jim/main.go
+y
+connect the Jake handler to the webserver
+y
+connect the Jake handler to the webserver
+connect the Jake handler to the webserver at /signup
+add a form handler named Pete to jim/main.go
+y
+connect the handler to the webserver
+y
+/quit
+EOF
+run_session wire
+
+case_file_contains wire-jake-registered jim/main.go 'http.HandleFunc("/jake", Jake)'
+case_between wire-jake-before-serve jim/main.go 'func main() {' 'http.HandleFunc("/jake", Jake)' 'http.ListenAndServe'
+case_transcript_contains wire-duplicate-answer wire "Jake is already registered at /jake" "nothing to add"
+case_transcript_contains wire-other-path-refusal wire "already registered at /jake" "/signup" "won't register it at /signup as well"
+case_file_contains wire-bare-pete jim/main.go 'http.HandleFunc("/pete", Pete)'
 
 # --- session: line placement (pristine program file) -----------------
 

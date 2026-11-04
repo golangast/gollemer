@@ -48,6 +48,16 @@ const (
 	// runs and never adding a second ListenAndServe.
 	EditServeHTML = "serve_html"
 
+	// Wire a handler (editwire.go): register an existing
+	// handler function with the project's existing webserver —
+	// one HandleFunc line inserted just before the serve call
+	// in the function that serves, on the default mux or the
+	// file's own *http.ServeMux. Nothing is created and no
+	// second server is ever added; every state that cannot be
+	// wired honestly (no handler, no server, a taken path, a
+	// custom server) is a refusal with the facts.
+	EditWireHandler = "wire_handler"
+
 	// Cross-file use (edituses.go): a NEW function in a named
 	// file whose body is a first use of a function or type that
 	// already exists elsewhere in the project — the call (or
@@ -135,6 +145,15 @@ type EditRequest struct {
 	// file's folder (File) or below it. The planner derives
 	// the ServeFile argument from the two paths.
 	ServeHTML string
+
+	// wire_handler: the handler's name as typed ("" = the
+	// sentence named none — the planner resolves the project's
+	// one unregistered handler, or refuses naming the
+	// candidates), and the route as typed ("" = the default:
+	// "/" + the handler's lowercased name). The planner finds
+	// the serving file itself, so File stays empty.
+	WireName  string
+	WireRoute string
 
 	// delegate: the existing .go file (project-relative slash
 	// path) the wrapper is added to, the source function as typed
@@ -340,6 +359,8 @@ func (p *Project) PlanEdit(req EditRequest) (*EditPlan, string) {
 		return p.planAddServer(req)
 	case EditServeHTML:
 		return p.planServeHTML(req)
+	case EditWireHandler:
+		return p.planWireHandler(req)
 	case EditDelegate:
 		return p.planDelegate(req)
 	case EditUse:

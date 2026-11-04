@@ -1253,19 +1253,24 @@ func (p *Project) planConceptFolder(req EditRequest, entry *ConceptEntry, folder
 // connection function, say) is simply not called yet. The
 // one-size sentence this replaces named handlers and
 // middleware inside every folder plan, database plans
-// included (the paces workout caught it).
-func placedNotWiredWords(entry *ConceptEntry) (clause, closer string) {
+// included (the paces workout caught it). The third return
+// marks the handler branch: since the wiring recipe shipped
+// (editwire.go), a handler's note names the exact sentence
+// that registers it instead of leaving wiring as an unnamed
+// "next step" — the note must never promise less than the
+// chat can do, either.
+func placedNotWiredWords(entry *ConceptEntry) (clause, closer string, handler bool) {
 	sig := entry.Template
 	if i := strings.Index(sig, "\n"); i >= 0 {
 		sig = sig[:i]
 	}
 	switch {
 	case strings.Contains(sig, "http.Handler"):
-		return "nothing wraps the middleware into a chain yet", "Wiring it in"
+		return "nothing wraps the middleware into a chain yet", "Wiring it in", false
 	case strings.Contains(sig, "http.ResponseWriter"):
-		return "nothing registers the handler with a server yet", "Wiring it in"
+		return "nothing registers the handler with a server yet", "Wiring it in", true
 	default:
-		return "nothing calls it yet", "Calling it"
+		return "nothing calls it yet", "Calling it", false
 	}
 }
 
@@ -1344,8 +1349,15 @@ func (p *Project) planConceptFolderCreate(req EditRequest, entry *ConceptEntry, 
 	if pkgName != folder {
 		notes = append(notes, fmt.Sprintf("The %s folder's files are package %s, so the new file carries that package name, not the folder's.", folder, pkgName))
 	}
-	clause, closer := placedNotWiredWords(entry)
-	notes = append(notes, fmt.Sprintf("%s is placed in the %s folder as package %s — placed, not wired: %s. %s is a next step, exactly as when a declaration lands in a named file.", name, folder, pkgName, clause, closer))
+	clause, closer, isHandler := placedNotWiredWords(entry)
+	if isHandler {
+		// A handler's next step has a name now: the wiring
+		// sentence. The note points at it instead of calling
+		// wiring an unnamed step the plan can't take.
+		notes = append(notes, fmt.Sprintf("%s is placed in the %s folder as package %s — placed, not wired: %s. To register it, say \"connect the %s handler to the webserver\" and I'll add the one registration line to your server, behind the same gate.", name, folder, pkgName, clause, name))
+	} else {
+		notes = append(notes, fmt.Sprintf("%s is placed in the %s folder as package %s — placed, not wired: %s. %s is a next step, exactly as when a declaration lands in a named file.", name, folder, pkgName, clause, closer))
+	}
 	if entry.Note != "" {
 		notes = append(notes, entry.Note)
 	}

@@ -11,8 +11,10 @@
 # cross-file writes, a created-target compound, serving an html
 # page, running the program and watching its log, the terminal
 # basics, the ambiguous-piece guidance, a cross-file rename,
-# the rm refusal, and the one-ask make-and-call (a new function
-# in one file, called from another, in a single gated plan). After every landing step it greps the
+# the rm refusal, the one-ask make-and-call (a new function
+# in one file, called from another, in a single gated plan),
+# and the handler wiring (two placed handlers registered with
+# the webserver — one in its own file, one across packages). After every landing step it greps the
 # disk for what the chat claimed, and builds every package in
 # the scratch project — a step that "succeeds" in chat but
 # leaves the tree unbuildable is recorded as a failure.
@@ -636,6 +638,30 @@ has step14-caller api/report.go "func PingCheck()" "database.Ping()"
 has step14-bare-callee api/ready.go "func Ready() {"
 has step14-bare-call api/main.go "Ready()"
 builds step14
+
+# ================================================================
+step "step 15: wire the handlers into the webserver"
+# ================================================================
+
+# The wiring recipe (2026-11-03): handlers placed earlier in
+# the journey — Session in api/main.go itself (step 2), Signup
+# over in the handlers package (step 2 again) — get registered
+# with api's webserver, one gated line each. Session wires by
+# its bare name in its own file; Signup crosses packages, so
+# api/main.go gains the paces/handlers import and the
+# qualified registration.
+cat > "$BASE/.inputs/s15.txt" <<'EOF'
+connect the Session handler to the webserver
+y
+connect the Signup handler to the webserver
+y
+/quit
+EOF
+run_session s15
+
+has step15-session-wired api/main.go 'http.HandleFunc("/session", Session)'
+has step15-signup-wired api/main.go 'http.HandleFunc("/signup", handlers.Signup)' '"paces/handlers"'
+builds step15
 
 # --- scoreboard ---------------------------------------------------
 
