@@ -157,9 +157,13 @@ func TestDeclCreateMissingFolderRefusal(t *testing.T) {
 	}
 }
 
-// Statements keep today's answer byte-for-byte: the
-// resolveServerFile refusal, webserver remedy and all —
-// creating files is a declaration's licence only.
+// Statements keep refusing — creating files is a
+// declaration's licence only — but since the
+// folder-guidance fix (2026-11-03) the refusal is rendered
+// in the statement family's own words: the spelled
+// creation step, then the same ask again. (It used to serve
+// the webserver claim's remedy verbatim; that wording now
+// belongs to webserver asks only.)
 func TestDeclCreateStatementPinMissingFile(t *testing.T) {
 	root := declCreateRoot(t)
 	withChatSession(t, root, true)
@@ -171,9 +175,12 @@ func TestDeclCreateStatementPinMissingFile(t *testing.T) {
 	if !handled {
 		t.Fatalf("statement to a missing file fell through the chain:\n%s", out)
 	}
-	want := "Not adding that: there's no api/new.go in this project — if you meant a brand-new server file, say \"create a file api/new.go with a webserver\" and I'll write the whole thing."
+	want := "Not adding that: there's no api/new.go in this project — a print line lives inside a function in a file that exists. Say \"create a file api/new.go\" first, then \"add a print line in main to api/new.go\" and it lands."
 	if !strings.Contains(out, want) {
 		t.Errorf("statement refusal changed shape, want it to contain %q:\n%s", want, out)
+	}
+	if strings.Contains(out, "webserver") {
+		t.Errorf("the webserver remedy leaked into a statement answer:\n%s", out)
 	}
 	if _, err := os.Stat(filepath.Join(root, "api", "new.go")); !os.IsNotExist(err) {
 		t.Errorf("the statement refusal created the file anyway")

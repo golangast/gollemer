@@ -14,7 +14,9 @@
 # security/, database/), declarations creating a named file
 # that doesn't exist yet (and the missing-folder refusal),
 # the ambiguous-piece guidance for
-# the bare handler and database asks, the webserver + serve-an-html-file
+# the bare handler and database asks (including John's jim/db journey: the
+# guidance's own sentences followed to their landings in a folder with no
+# Go files), the webserver + serve-an-html-file
 # recipe, the handler-wiring recipe (a placed handler
 # registered with the webserver — named, bare, and the two
 # already-registered answers), the security rows in a program file, line-number
@@ -555,6 +557,49 @@ case_dir_absent declcreate-no-nowhere nowhere
 case_transcript_contains declcreate-plan-creates declcreate "Create app/profile.go"
 case_file_contains declcreate-struct app/profile.go "package main" "type Profile struct"
 case_file_contains declcreate-connect app/store.go "package main" "func Store() (*sql.DB, error)"
+
+# --- sessions: the database folder guidance (John's jim/db journey) --------
+# John's live state (2026-11-03): jim/db holds only an empty
+# database.db — no Go file at all. The bare ask's guidance
+# suggests two sentences; in this state BOTH used to die in
+# the webserver claim's refusals ("has no main program to
+# add a server to… create a file jim/db/main.go with a
+# webserver"). The declaration sentence now lands Connect as
+# jim/db/connect.go (package db), and the statement sentence
+# answers with its own two-step — create the file, ask
+# again — which the second session follows to its landing.
+
+mkdir -p "$SCRATCH/jim/db"
+: > "$SCRATCH/jim/db/database.db"
+
+cat > "$SCRATCH/.inputs/dbfolder1.txt" <<'EOF'
+add database to jim/db
+add a database connection function named Connect to jim/db
+y
+/quit
+EOF
+run_session dbfolder1
+
+case_transcript_contains dbfolder-guide dbfolder1 '"add a database connection function named Connect to jim/db"' '"add a database in main to jim/db/main.go"'
+case_transcript_lacks dbfolder-no-server-words dbfolder1 "with a webserver"
+case_file_contains dbfolder-connect-lands jim/db/connect.go "package db" "func Connect() (*sql.DB, error)"
+
+mkdir -p "$SCRATCH/jim/db2"
+: > "$SCRATCH/jim/db2/database.db"
+
+cat > "$SCRATCH/.inputs/dbfolder2.txt" <<'EOF'
+add a database in main to jim/db2/main.go
+create a file jim/db2/main.go
+y
+add a database in main to jim/db2/main.go
+y
+/quit
+EOF
+run_session dbfolder2
+
+case_transcript_contains dbfolder2-two-step dbfolder2 "there's no jim/db2/main.go in this project — a database lives inside a function in a file that exists" 'Say "create a file jim/db2/main.go" first'
+case_transcript_lacks dbfolder2-no-server-words dbfolder2 "with a webserver"
+case_file_contains dbfolder2-lands jim/db2/main.go "sql.Open"
 
 # --- session: folder-default declarations --------------------------------
 

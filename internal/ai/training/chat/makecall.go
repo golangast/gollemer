@@ -137,7 +137,7 @@ func runMakeCall(line string, ask editAsk) bool {
 	// rules (resolveConceptDeclTarget): its file may be new
 	// when its folder exists; a missing folder refuses with
 	// the create family's first step.
-	calleeRel, refusal := resolveConceptDeclTarget(rootAbs, typedCallee)
+	calleeRel, refusal := resolveConceptDeclTarget(rootAbs, typedCallee, name, entry.Canonical())
 	if refusal != "" {
 		fmt.Printf("%s Not doing that: %s.\n", tag, strings.TrimSuffix(refusal, "."))
 		recordBrain("composer", false, "make-call refused: callee target")

@@ -637,7 +637,7 @@ guesses.
 
 ## A note on the numbers in this README
 
-135 pieces, 17 brains, 133 handtest cases, 66 paces checks — these are
+135 pieces, 17 brains, 139 handtest cases, 66 paces checks — these are
 counts of what's actually in this checkout, and the model scores
 quoted are the measured ones, kept next to the features they
 describe. When a number changes, this file should change with it.

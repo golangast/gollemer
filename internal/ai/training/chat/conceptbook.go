@@ -55,6 +55,8 @@ package chat
 
 import (
 	"fmt"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -2419,15 +2421,22 @@ func runConcept(line string, ask editAsk) bool {
 		// the declaration's name. A declaration resolves its
 		// target through the declaration resolver: a named
 		// file that doesn't exist yet, in a folder that does,
-		// is created by the plan (resolveConceptDeclTarget).
-		// Statements keep resolveServerFile exactly — a
-		// statement lives inside a function in a file that
-		// exists.
+		// is created by the plan, and a folder with no
+		// main-package file to join takes the declaration's
+		// own file in that folder (resolveConceptDeclTarget).
+		// A statement resolves through the statement resolver:
+		// the same settle rules, but every refusal in the
+		// statement family's own words — a statement lives
+		// inside a function in a file that exists, and when
+		// the file isn't there the answer spells the steps
+		// that create it (resolveConceptStatementTarget).
+		// Neither resolver borrows the webserver claim's
+		// remedies: those belong to "add a webserver" asks.
 		var refusal string
 		if req.entry.Kind == analyze.ConceptDeclaration {
-			rel, refusal = resolveConceptDeclTarget(rootAbs, req.target)
+			rel, refusal = resolveConceptDeclTarget(rootAbs, req.target, req.name, canon)
 		} else {
-			rel, refusal = resolveServerFile(rootAbs, req.target)
+			rel, refusal = resolveConceptStatementTarget(rootAbs, req, line)
 		}
 		if refusal != "" {
 			fmt.Printf("%s Not adding that: %s.\n", tag, strings.TrimSuffix(refusal, "."))
@@ -2480,6 +2489,83 @@ func runConcept(line string, ask editAsk) bool {
 	}, ask)
 }
 
+// targetMiss describes how a typed edit target failed to
+// settle to the one existing file an edit could land in.
+// The SETTLE rules are shared by every claim that aims a
+// piece at a file or folder (the webserver claim's
+// resolveServerFile is the original statement of them), but
+// the WORDS of a refusal belong to the claim that was asked:
+// a database ask must never be answered with the webserver
+// claim's remedies. settleConceptTarget therefore reports
+// the failure as data, and each claim renders its own.
+type targetMiss struct {
+	kind  string   // "missing", "nohost", "multi", "notgo", or "fence"
+	disp  string   // the target as typed, trailing slash trimmed
+	text  string   // fence refusals, fully rendered (kind == "fence")
+	cands []string // kind == "multi": the folder's package-main files
+}
+
+// settleConceptTarget settles a typed target under the
+// shared rules — containment first (serverTargetResolve's
+// fence), then: an existing file settles to itself; a folder
+// settles to its main.go, else its single package-main file;
+// anything else comes back as a targetMiss for the caller to
+// render in its own words. abs is the target's absolute path
+// (meaningful whenever the fence let the target through).
+func settleConceptTarget(rootAbs, target string) (rel, abs string, miss *targetMiss) {
+	disp := strings.TrimSuffix(target, "/")
+	abs, rel, refusal := serverTargetResolve(rootAbs, target)
+	if refusal != "" {
+		return "", abs, &targetMiss{kind: "fence", disp: disp, text: refusal}
+	}
+	st, err := os.Stat(abs)
+	if err != nil {
+		return "", abs, &targetMiss{kind: "missing", disp: disp}
+	}
+	if st.IsDir() {
+		if fi, err := os.Stat(filepath.Join(abs, "main.go")); err == nil && !fi.IsDir() {
+			return rel + "/main.go", abs, nil
+		}
+		cands := packageMainFiles(abs)
+		switch len(cands) {
+		case 1:
+			return rel + "/" + cands[0], abs, nil
+		case 0:
+			return "", abs, &targetMiss{kind: "nohost", disp: disp}
+		default:
+			return "", abs, &targetMiss{kind: "multi", disp: disp, cands: cands}
+		}
+	}
+	if !strings.HasSuffix(strings.ToLower(target), ".go") {
+		return "", abs, &targetMiss{kind: "notgo", disp: disp}
+	}
+	return rel, abs, nil
+}
+
+// dirPackageNames lists the distinct package names a
+// folder's own Go files declare, in sorted order.
+func dirPackageNames(dir string) []string {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		pf, err := parser.ParseFile(token.NewFileSet(), filepath.Join(dir, name), nil, parser.PackageClauseOnly)
+		if err == nil && pf.Name != nil && !seen[pf.Name.Name] {
+			seen[pf.Name.Name] = true
+			out = append(out, pf.Name.Name)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
 // resolveConceptDeclTarget settles a concept DECLARATION's
 // named target. Declarations are the one claim whose target
 // file may be new: folder-default declarations create theirs
@@ -2492,9 +2578,7 @@ func runConcept(line string, ask editAsk) bool {
 // inside a package-main folder, would write a second func
 // main. The rules here:
 //
-//   - an existing file, a folder target, and every non-.go
-//     shape resolve exactly as resolveServerFile resolves
-//     them today (this function delegates);
+//   - an existing .go file resolves to itself;
 //   - a .go file that doesn't exist yet, in a folder that
 //     does, resolves to itself — the planner creates it as
 //     part of the plan (planConceptNamedFileCreate), under
@@ -2503,34 +2587,210 @@ func runConcept(line string, ask editAsk) bool {
 //     the create family's real first step — "create a folder
 //     <folder> first" — never the webserver remedy;
 //   - a file standing where the folder should be refuses in
-//     the create family's words too.
-func resolveConceptDeclTarget(rootAbs, target string) (rel, refusal string) {
+//     the create family's words too;
+//   - a folder target resolves under declFolderTarget: its
+//     main.go, else its single package-main file, else —
+//     the folder-guidance fix (2026-11-03) — the
+//     declaration's OWN file in that folder, created by the
+//     same plan, where the webserver resolver used to refuse
+//     a database ask in server words;
+//   - a missing folder refuses with the create family's
+//     first step, and an existing non-.go file refuses in
+//     declaration words.
+func resolveConceptDeclTarget(rootAbs, target, name, canon string) (rel, refusal string) {
 	disp := strings.TrimSuffix(target, "/")
-	if !strings.HasSuffix(strings.ToLower(disp), ".go") {
-		return resolveServerFile(rootAbs, target)
+	abs, relT, fence := serverTargetResolve(rootAbs, target)
+	if fence != "" {
+		return "", fence
 	}
-	abs, rel2, refusal2 := serverTargetResolve(rootAbs, target)
-	if refusal2 != "" {
-		return "", refusal2
-	}
-	if st, err := os.Stat(abs); err == nil {
-		if st.IsDir() {
-			// A folder that happens to end in .go: the
-			// folder rules decide, as today.
-			return resolveServerFile(rootAbs, target)
+	st, statErr := os.Stat(abs)
+	if statErr == nil && !st.IsDir() {
+		// An existing file: the declaration goes into it
+		// when it is a Go file, and refuses in declaration
+		// words when it isn't.
+		if strings.HasSuffix(strings.ToLower(disp), ".go") {
+			return relT, ""
 		}
-		return rel2, ""
+		return "", fmt.Sprintf("%s isn't a Go file — %s %s goes into a .go file", disp, conceptArticle(canon), canon)
 	}
-	// The file is new; its folder decides.
-	dirAbs := filepath.Dir(abs)
-	dst, derr := os.Stat(dirAbs)
-	if derr == nil && !dst.IsDir() {
-		locRel := filepath.ToSlash(mustRel(rootAbs, dirAbs))
-		return "", fmt.Sprintf("%s is a file, not a folder — the new file can't go inside it", locRel)
+	if statErr == nil {
+		// An existing folder (including one named *.go):
+		// the folder rules decide.
+		return declFolderTarget(abs, relT, disp, name, canon)
 	}
-	if derr != nil {
-		folder := filepath.ToSlash(mustRel(rootAbs, dirAbs))
-		return "", fmt.Sprintf("there's no folder %s in this project — say \"create a folder %s\" first, then ask again", folder, folder)
+	// The target doesn't exist.
+	if strings.HasSuffix(strings.ToLower(disp), ".go") {
+		// A named file that doesn't exist yet; its folder
+		// decides.
+		dirAbs := filepath.Dir(abs)
+		dst, derr := os.Stat(dirAbs)
+		if derr == nil && !dst.IsDir() {
+			locRel := filepath.ToSlash(mustRel(rootAbs, dirAbs))
+			return "", fmt.Sprintf("%s is a file, not a folder — the new file can't go inside it", locRel)
+		}
+		if derr != nil {
+			folder := filepath.ToSlash(mustRel(rootAbs, dirAbs))
+			return "", fmt.Sprintf("there's no folder %s in this project — say \"create a folder %s\" first, then ask again", folder, folder)
+		}
+		return relT, ""
 	}
-	return rel2, ""
+	if strings.Contains(filepath.Base(disp), ".") {
+		// File-shaped but not a Go file, and not there:
+		// name what the ask needs instead of guessing.
+		return "", fmt.Sprintf("there's no %s in this project — name a .go file, or a folder that's there", disp)
+	}
+	return "", fmt.Sprintf("there's no folder %s in this project — say \"create a folder %s\" first, then ask again", disp, disp)
+}
+
+// declFolderTarget settles a declaration ask whose target
+// is an existing folder: its main.go when it has one, else
+// its single package-main file — the cells that have always
+// worked, unchanged. A folder with NO package-main file
+// (empty of Go files, or holding only library files) has no
+// host for the declaration to join, so the declaration
+// takes its own file in the folder, named for the
+// declaration itself (<folder>/<name>.go, package settled
+// by the planner's named-file create under the folder's own
+// rules) — exactly where the explicit-file form of the same
+// ask lands. Several package-main files is a genuine
+// choice, refused in declaration words.
+func declFolderTarget(abs, rel, disp, name, canon string) (string, string) {
+	if fi, err := os.Stat(filepath.Join(abs, "main.go")); err == nil && !fi.IsDir() {
+		return rel + "/main.go", ""
+	}
+	cands := packageMainFiles(abs)
+	switch len(cands) {
+	case 1:
+		return rel + "/" + cands[0], ""
+	case 0:
+		if name == "" {
+			// Unreachable through runConcept — an unnamed
+			// declaration is refused before resolution —
+			// but a direct caller gets words, not a file
+			// named ".go".
+			return "", fmt.Sprintf("%s/ has no Go file for the %s to join, and the ask names no declaration to create one for — name the file itself, like \"%s/<name>.go\"", disp, canon, disp)
+		}
+		return rel + "/" + strings.ToLower(name) + ".go", ""
+	default:
+		return "", fmt.Sprintf("%s/ has more than one main-package file (%s) — say which one, like \"add %s %s named %s to %s/%s\"", disp, strings.Join(cands, ", "), conceptArticle(canon), canon, name, disp, cands[0])
+	}
+}
+
+// resolveConceptStatementTarget settles a concept
+// STATEMENT's named target. The settle rules are the shared
+// ones (settleConceptTarget); every refusal is rendered in
+// the statement family's own words, because a statement's
+// working moves have nothing to do with webservers: the
+// piece lives inside a function in a file that exists, and
+// when the file (or its folder) isn't there yet, the answer
+// spells the exact steps that create it — create the file,
+// then the same ask again — instead of the webserver claim's
+// remedy. Statements never create files themselves: that
+// licence stays a declaration's.
+func resolveConceptStatementTarget(rootAbs string, req conceptReq, line string) (rel, refusal string) {
+	rel, abs, miss := settleConceptTarget(rootAbs, req.target)
+	if miss == nil {
+		return rel, ""
+	}
+	canon := req.entry.Canonical()
+	disp := miss.disp
+	switch miss.kind {
+	case "fence":
+		return "", miss.text
+	case "notgo":
+		return "", fmt.Sprintf("%s isn't a Go file — %s %s goes into a .go file, inside a function", disp, conceptArticle(canon), canon)
+	case "multi":
+		if ask := stmtAskFor(req, disp+"/"+miss.cands[0]); ask != "" {
+			return "", fmt.Sprintf("%s/ has more than one main-package file (%s) — say which one, like \"%s\"", disp, strings.Join(miss.cands, ", "), ask)
+		}
+		return "", fmt.Sprintf("%s/ has more than one main-package file (%s) — say which one by naming the file in the ask, like \"to %s/%s\"", disp, strings.Join(miss.cands, ", "), disp, miss.cands[0])
+	case "missing":
+		return "", stmtMissingRefusal(rootAbs, abs, req, line)
+	case "nohost":
+		return "", stmtNoHostRefusal(abs, req, line)
+	}
+	return "", miss.text
+}
+
+// stmtAskFor renders the statement ask aimed at fileRel,
+// rebuilt from the request's own slots — or "" when the ask
+// carries a slot the rebuild can't reproduce (a name, a
+// saying, a methods source, a line placement), in which
+// case callers fall back to plainer words.
+func stmtAskFor(req conceptReq, fileRel string) string {
+	if req.name != "" || req.textSet || req.like != "" || req.placeBound() {
+		return ""
+	}
+	canon := req.entry.Canonical()
+	s := fmt.Sprintf("add %s %s", conceptArticle(canon), canon)
+	if req.inFunc != "" {
+		s += " in " + req.inFunc
+	}
+	return s + " to " + fileRel
+}
+
+// stmtSteps renders a refusal's step list: each step quoted,
+// joined the way the product spells a sequence.
+func stmtSteps(steps []string) string {
+	quoted := make([]string, len(steps))
+	for i, s := range steps {
+		quoted[i] = fmt.Sprintf("%q", s)
+	}
+	return strings.Join(quoted, ", then ")
+}
+
+// stmtMissingRefusal answers a statement whose named target
+// doesn't exist: the file is the missing piece, so the
+// answer spells the creation steps (the folder first when
+// it's missing too, the file, and the host function when
+// the ask names one a created stub won't have) and then the
+// user's own sentence again — every step a sentence the
+// chat honours, and the last one lands.
+func stmtMissingRefusal(rootAbs, abs string, req conceptReq, line string) string {
+	canon := req.entry.Canonical()
+	disp := strings.TrimSuffix(req.target, "/")
+	fileRel := disp
+	var steps []string
+	if !strings.HasSuffix(strings.ToLower(disp), ".go") {
+		// A folder-shaped target that isn't there: the
+		// folder, then its program file.
+		steps = append(steps, "create a folder "+disp)
+		fileRel = disp + "/main.go"
+	} else if _, err := os.Stat(filepath.Dir(abs)); err != nil {
+		folder := filepath.ToSlash(mustRel(rootAbs, filepath.Dir(abs)))
+		steps = append(steps, "create a folder "+folder)
+	}
+	steps = append(steps, "create a file "+fileRel)
+	if fn := req.inFunc; fn != "" && !strings.EqualFold(fn, "main") {
+		steps = append(steps, fmt.Sprintf("add a function named %s to %s", fn, fileRel))
+	}
+	return fmt.Sprintf("there's no %s in this project — %s %s lives inside a function in a file that exists. Say %s first, then %q and it lands",
+		disp, conceptArticle(canon), canon, stmtSteps(steps), strings.TrimSpace(line))
+}
+
+// stmtNoHostRefusal answers a statement aimed at a folder
+// with no package-main file to hold it. An empty folder
+// takes the same creation steps as a missing file (its
+// main.go, then the ask again). A folder whose Go files are
+// a library package can't grow a program file beside them
+// without mixing packages, so the answer says that plainly
+// and points the ask at a program file — no step it spells
+// is a dead end.
+func stmtNoHostRefusal(abs string, req conceptReq, line string) string {
+	canon := req.entry.Canonical()
+	disp := strings.TrimSuffix(req.target, "/")
+	if !folderHasGoFiles(abs) {
+		steps := []string{"create a file " + disp + "/main.go"}
+		if fn := req.inFunc; fn != "" && !strings.EqualFold(fn, "main") {
+			steps = append(steps, fmt.Sprintf("add a function named %s to %s/main.go", fn, disp))
+		}
+		return fmt.Sprintf("%s/ has no main program to put the %s in — the working move is %s, then %q and it lands",
+			disp, canon, stmtSteps(steps), strings.TrimSpace(line))
+	}
+	if pkgs := dirPackageNames(abs); len(pkgs) == 1 {
+		return fmt.Sprintf("%s/ has no main program to put the %s in — its Go files are package %s, and %s %s lives inside a function in a program (package main) file. Point the ask at a program file instead",
+			disp, canon, pkgs[0], conceptArticle(canon), canon)
+	}
+	return fmt.Sprintf("%s/ has no main program to put the %s in — %s %s lives inside a function in a program (package main) file. Point the ask at a program file instead",
+		disp, canon, conceptArticle(canon), canon)
 }

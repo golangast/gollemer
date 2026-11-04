@@ -161,7 +161,7 @@ func TestSessionCtxPronounNoContext(t *testing.T) {
 	if !handled {
 		t.Fatalf("\"to it\" fell through without context:\n%s", out)
 	}
-	if !strings.Contains(out, "there's no it in this project") {
+	if !strings.Contains(out, "there's no folder it in this project") {
 		t.Errorf("\"to it\" without context lost today's refusal:\n%s", out)
 	}
 	if strings.Contains(out, "Reading ") {

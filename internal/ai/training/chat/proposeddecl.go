@@ -291,7 +291,7 @@ func runProposedDecl(line string, ask editAsk) bool {
 		recordBrain("composer", false, "proposed refused: root missing")
 		return true
 	}
-	rel, refusal := resolveServerFile(rootAbs, pa.target)
+	rel, refusal := resolveProposedTarget(rootAbs, pa.target)
 	if refusal != "" {
 		fmt.Printf("%s Not adding that: %s.\n", tag, strings.TrimSuffix(refusal, "."))
 		recordBrain("composer", false, "proposed refused: target")
@@ -320,6 +320,36 @@ func runProposedDecl(line string, ask editAsk) bool {
 		ProposedReceiver: receiver,
 		ProposedImports:  strings.Join(proposedImports(restored), " "),
 	}, ask)
+}
+
+// resolveProposedTarget settles the proposer's named target
+// under the shared settle rules (settleConceptTarget), with
+// the refusals rendered in the proposer's own words: a
+// model-proposed declaration appends to a file that already
+// exists, so a target that can't settle to one is refused
+// with that fact — never with the webserver claim's remedies,
+// which belong to "add a webserver" asks. (Before the
+// folder-guidance fix this claim delegated to
+// resolveServerFile and served those remedies verbatim.)
+func resolveProposedTarget(rootAbs, target string) (string, string) {
+	rel, _, miss := settleConceptTarget(rootAbs, target)
+	if miss == nil {
+		return rel, ""
+	}
+	disp := miss.disp
+	switch miss.kind {
+	case "fence":
+		return "", miss.text
+	case "missing":
+		return "", fmt.Sprintf("there's no %s in this project — a model-proposed declaration goes into a file that already exists, so create the file first or name one that's there", disp)
+	case "nohost":
+		return "", fmt.Sprintf("%s/ has no main-package file for the proposal to land in — name the file itself", disp)
+	case "multi":
+		return "", fmt.Sprintf("%s/ has more than one main-package file (%s) — name the file itself, like \"%s/%s\"", disp, strings.Join(miss.cands, ", "), disp, miss.cands[0])
+	case "notgo":
+		return "", fmt.Sprintf("%s isn't a Go file — a declaration goes into a .go file", disp)
+	}
+	return "", miss.text
 }
 
 // proposedImports lists the import paths a restored spec's
