@@ -83,48 +83,70 @@ func TestParseAmbiguousPieceNonClaims(t *testing.T) {
 		if req, ok := parseAmbiguousPiece(line); ok {
 			t.Errorf("parseAmbiguousPiece(%q) claimed as %+v — that line is not this claim's", line, req)
 		}
-		if runAmbiguousPiece(line) {
+		if runAmbiguousPiece(line, yes) {
 			t.Errorf("runAmbiguousPiece(%q) claimed a line that isn't its", line)
 		}
 	}
 }
 
 // The answers, verbatim where the report needs them: the
-// screenshot line and the with-target variant.
+// screenshot line and the with-target variant. Since the
+// clarifying-questions build (2026-11-05) the guidance is
+// asked as a question: the same pieces, differences, and
+// exact sentences, in a numbered list the user can answer
+// with a word or a number.
 func TestAmbiguousPieceAnswers(t *testing.T) {
+	defer clearPendingQuestion()
 	out := captureStdout(t, func() {
-		if !runAmbiguousPiece("add handler Jim") {
+		if !runAmbiguousPiece("add handler Jim", yes) {
 			t.Error("runAmbiguousPiece did not claim the screenshot line")
 		}
 	})
-	want := `"handler" names two different pieces here, and I can't tell which one you mean: a form handler (reads a submitted form) or a session handler (works with the user's session). Say "add a form handler named Jim" or "add a session handler named Jim" — with no file named, the piece is created in a handlers/ folder.`
-	if !strings.Contains(out, want) {
-		t.Errorf("screenshot-line answer:\n got %q\nwant it to contain %q", out, want)
+	for _, want := range []string{
+		`"handler" names two different pieces here, and I can't tell which one you mean — which one?`,
+		`1. form handler (reads a submitted form — say "add a form handler named Jim")`,
+		`2. session handler (works with the user's session — say "add a session handler named Jim")`,
+		`with no file named, the piece is created in a handlers/ folder`,
+		`Answer "form" or "session", or the number, or the full sentence — or say anything else and we'll move on.`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("screenshot-line answer:\n got %q\nwant it to contain %q", out, want)
+		}
 	}
+	if !hasPendingQuestion() {
+		t.Error("the screenshot line set no pending question")
+	}
+	clearPendingQuestion()
 
 	out = captureStdout(t, func() {
-		if !runAmbiguousPiece("add a handler named Jim to main.go") {
+		if !runAmbiguousPiece("add a handler named Jim to main.go", yes) {
 			t.Error("runAmbiguousPiece did not claim the with-target line")
 		}
 	})
-	want = `"handler" names two different pieces here, and I can't tell which one you mean: a form handler (reads a submitted form) or a session handler (works with the user's session). Say "add a form handler named Jim to main.go" or "add a session handler named Jim to main.go".`
-	if !strings.Contains(out, want) {
-		t.Errorf("with-target answer:\n got %q\nwant it to contain %q", out, want)
+	for _, want := range []string{
+		`1. form handler (reads a submitted form — say "add a form handler named Jim to main.go")`,
+		`2. session handler (works with the user's session — say "add a session handler named Jim to main.go")`,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("with-target answer:\n got %q\nwant it to contain %q", out, want)
+		}
 	}
 	if strings.Contains(out, "handlers/ folder") {
 		t.Errorf("with-target answer mentions the folder default it isn't using:\n%s", out)
 	}
+	clearPendingQuestion()
 
 	// The nameless form shows the slot honestly, in both
 	// suggested sentences.
 	out = captureStdout(t, func() {
-		if !runAmbiguousPiece("add a handler") {
+		if !runAmbiguousPiece("add a handler", yes) {
 			t.Error("runAmbiguousPiece did not claim the nameless line")
 		}
 	})
-	if !strings.Contains(out, `"add a form handler named <Name>" or "add a session handler named <Name>"`) {
+	if !strings.Contains(out, `"add a form handler named <Name>"`) || !strings.Contains(out, `"add a session handler named <Name>"`) {
 		t.Errorf("nameless answer does not show the <Name> slot in both lines:\n%s", out)
 	}
+	clearPendingQuestion()
 }
 
 // The mechanism is rendered from the book: rename a row's

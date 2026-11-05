@@ -214,6 +214,35 @@ func serveHTMLSpecAt(fields, low []string, i int) (html string, next int, ok boo
 	return "", i, false
 }
 
+// serveTargetMulti reports a serve-html folder target as
+// a several-host choice, under exactly the conditions
+// resolveServeGoFile refuses as ambiguous: an existing
+// folder with no main.go and two or more package-main
+// files. Nil for every other target.
+func serveTargetMulti(rootAbs, target string) *targetMulti {
+	disp := strings.TrimSuffix(target, "/")
+	abs, rel, refusal := serverTargetResolve(rootAbs, target)
+	if refusal != "" {
+		return nil
+	}
+	st, err := os.Stat(abs)
+	if err != nil || !st.IsDir() {
+		return nil
+	}
+	if fi, err := os.Stat(filepath.Join(abs, "main.go")); err == nil && !fi.IsDir() {
+		return nil
+	}
+	cands := packageMainFiles(abs)
+	if len(cands) < 2 {
+		return nil
+	}
+	m := &targetMulti{disp: disp}
+	for _, c := range cands {
+		m.cands = append(m.cands, rel+"/"+c)
+	}
+	return m
+}
+
 // serveTargets is the resolved recipe: the Go file (created by
 // the plan when goExists is false) and the page, both
 // project-relative slash paths.
@@ -383,10 +412,23 @@ func runServeHTML(line string, ask editAsk) bool {
 	if q.targetMissing {
 		// The grammar matched and started a target clause but
 		// named nothing ("serve index.html to the file"):
-		// claimed, and answered in serve terms — this sentence
-		// must never reach the intent layer.
-		fmt.Printf("%s Not serving that yet: the sentence starts naming the Go file but doesn't finish — say it like \"serve index.html to main.go\" (a file) or \"serve index.html to jim\" (its folder), or leave the target off and I'll use the project's main file.\n", tag)
-		recordBrain("composer", false, "serve-html refused: target unnamed")
+		// claimed, and asked in serve terms (clarify.go) —
+		// the answer, one bare file or folder, completes the
+		// ask as its canonical sentence. This sentence must
+		// never reach the intent layer.
+		htmlName := q.html
+		if htmlName == "" {
+			htmlName = "index.html"
+		}
+		printClarifyIntro(tag, "Not serving that yet: the sentence starts naming the Go file but doesn't finish — which file should the wiring go in?")
+		printClarifyFooter("Answer with a file or folder — \"main.go\", or \"jim\"")
+		setPendingQuestion(&pendingQuestion{
+			kind: clarifyTarget,
+			completeText: func(text string, ask2 editAsk) bool {
+				return runServeHTML("serve "+htmlName+" to "+text, ask2)
+			},
+		})
+		recordBrain("composer", false, "serve-html question: target unnamed")
 		return true
 	}
 	rootRaw := creationRoot()
@@ -409,6 +451,31 @@ func runServeHTML(line string, ask editAsk) bool {
 		fmt.Printf("%s The folder I'd edit in (%s) isn't there — start me inside your project and ask again.\n", tag, rootRaw)
 		recordBrain("composer", false, "serve-html refused: root missing")
 		return true
+	}
+	// A folder target with several main-package files is a
+	// choice, not a fact: ask which one (clarify.go) instead
+	// of only refusing. Every other target outcome keeps
+	// the resolver's own words below.
+	if q.target != "" {
+		if multi := serveTargetMulti(rootAbs, q.target); multi != nil {
+			htmlName := q.html
+			if htmlName == "" {
+				htmlName = "index.html"
+			}
+			cands := make([]clarifyCandidate, len(multi.cands))
+			for i, c := range multi.cands {
+				cands[i] = clarifyCandidate{Label: c, Words: []string{filepath.Base(c)}}
+			}
+			askPickQuestion(tag,
+				fmt.Sprintf("%s/ has more than one main-package file — which one should the wiring go in?", multi.disp),
+				"Answer with the path or the number",
+				cands,
+				func(idx int, ask2 editAsk) bool {
+					return runServeHTML("serve "+htmlName+" to "+multi.cands[idx], ask2)
+				})
+			recordBrain("composer", false, "serve-html question: folder has several main files")
+			return true
+		}
 	}
 	t, refusal := resolveServeTargets(rootAbs, q)
 	if refusal != "" {

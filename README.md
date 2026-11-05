@@ -261,6 +261,40 @@ its own. Ask twice and it tells you the truth — already registered,
 nothing to add — and a path another handler already owns is refused
 with that handler named.
 
+### When something's missing, it asks
+
+If an ask is one piece of information short — which handler, which
+file, what name — Gollemer doesn't stop at a paragraph of guidance
+for you to decode and retype. It asks one short question, and your
+next line completes the original ask, through the same plan and
+the same `[y/n]` gate as if you'd typed it in full:
+
+```
+you> connect the handler to the webserver
+gollemer [composer]> More than one handler isn't registered yet — which one should I wire in? Nothing's been written.
+  1. Jake (webtest/main.go:5)
+  2. Pete (webtest/main.go:6)
+Answer with the name or the number — or say anything else and we'll move on.
+you> Jake
+gollemer [composer]> Wire Jake into the webserver in webtest/main.go: one line — http.HandleFunc("/jake", Jake) — added in main just before it serves, so http://localhost:8080/jake is answered by Jake (declared at webtest/main.go:5).
+...
+Apply this edit? [y/n] gollemer [composer]> Done — main.go registers Jake at /jake, at webtest/main.go:9. I built the project and checked that it's really there.
+```
+
+The same shape everywhere a choice or a missing piece is all
+that's wrong: `add a database` asks whether you mean the
+connection function or the inline piece, and the one word
+`connection` (or `inline`) is a complete answer; a piece with no
+file named asks which file — and offers the file you're working
+on as a numbered suggestion; a declaration with no name asks what
+to call it. Answer with a name, a number, a path, or the
+distinguishing word — or just say something else entirely: the
+question is forgotten and your line is handled as itself, exactly
+as if no question had been asked. Facts are never questions,
+though: a path another handler owns, a page that already exists, a
+handler name already taken — those still refuse outright, question
+or no question.
+
 ### Pages in one ask
 
 Some pages come in kinds, and a kind can be had whole — the page
@@ -720,7 +754,7 @@ guesses.
 
 ## A note on the numbers in this README
 
-135 pieces, 17 brains, 163 handtest cases, 70 paces checks — these are
+135 pieces, 17 brains, 174 handtest cases, 74 paces checks — these are
 counts of what's actually in this checkout, and the model scores
 quoted are the measured ones, kept next to the features they
 describe. When a number changes, this file should change with it.

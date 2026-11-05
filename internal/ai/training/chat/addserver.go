@@ -258,6 +258,35 @@ func resolveServerFile(rootAbs, target string) (rel, refusal string) {
 	return rel, ""
 }
 
+// serverTargetMulti reports an add-webserver folder
+// target as a several-host choice, under exactly the
+// conditions resolveServerFile refuses as "multi": an
+// existing folder with no main.go and two or more
+// package-main files. Nil for every other target.
+func serverTargetMulti(rootAbs, target string) *targetMulti {
+	disp := strings.TrimSuffix(target, "/")
+	abs, rel, refusal := serverTargetResolve(rootAbs, target)
+	if refusal != "" {
+		return nil
+	}
+	st, err := os.Stat(abs)
+	if err != nil || !st.IsDir() {
+		return nil
+	}
+	if fi, err := os.Stat(filepath.Join(abs, "main.go")); err == nil && !fi.IsDir() {
+		return nil
+	}
+	cands := packageMainFiles(abs)
+	if len(cands) < 2 {
+		return nil
+	}
+	m := &targetMulti{disp: disp}
+	for _, c := range cands {
+		m.cands = append(m.cands, rel+"/"+c)
+	}
+	return m
+}
+
 // tryAddWebServer is the chat-loop entry: it claims
 // add-a-webserver sentences and runs the flow on the chat's line
 // reader.
@@ -278,12 +307,21 @@ func runAddServer(line string, ask editAsk) bool {
 	tag := cTag("gollemer [composer]>")
 	if target == "" {
 		// The grammar matched but named nothing ("add a
-		// webserver to folder"): claimed, and answered in
-		// webserver terms — this sentence must never reach the
-		// intent layer, where a path-less line earns a full
-		// analyze report.
-		fmt.Printf("%s Not adding that: the sentence doesn't name the file or folder — say it like \"add a webserver to jim/main.go\" (a file) or \"add a webserver to jim\" (its folder).\n", tag)
-		recordBrain("composer", false, "add-server refused: no target named")
+		// webserver to folder"): claimed, and asked in
+		// webserver terms (clarify.go) — the answer, one
+		// bare file or folder, completes the ask as its
+		// canonical sentence. This sentence must never reach
+		// the intent layer, where a path-less line earns a
+		// full analyze report.
+		printClarifyIntro(tag, "Not adding that yet: the sentence doesn't name the file or folder — where should the webserver go?")
+		printClarifyFooter("Answer with a file or folder — \"jim/main.go\", or \"jim\"")
+		setPendingQuestion(&pendingQuestion{
+			kind: clarifyTarget,
+			completeText: func(text string, ask2 editAsk) bool {
+				return runAddServer("add a webserver to "+text, ask2)
+			},
+		})
+		recordBrain("composer", false, "add-server question: no target named")
 		return true
 	}
 	rootRaw := creationRoot()
@@ -305,6 +343,30 @@ func runAddServer(line string, ask editAsk) bool {
 	if st, serr := os.Stat(rootAbs); serr != nil || !st.IsDir() {
 		fmt.Printf("%s The folder I'd edit in (%s) isn't there — start me inside your project and ask again.\n", tag, rootRaw)
 		recordBrain("composer", false, "add-server refused: root missing")
+		return true
+	}
+	// A folder with several main-package files is a choice,
+	// not a fact: ask which one (clarify.go) instead of only
+	// refusing. The resolver below keeps every other target
+	// outcome, in its own words.
+	if multi := serverTargetMulti(rootAbs, target); multi != nil {
+		cands := make([]clarifyCandidate, len(multi.cands))
+		for i, c := range multi.cands {
+			cands[i] = clarifyCandidate{Label: c, Words: []string{filepath.Base(c)}}
+		}
+		askPickQuestion(tag,
+			fmt.Sprintf("%s/ has more than one main-package file — which one should the webserver go in?", multi.disp),
+			"Answer with the path or the number",
+			cands,
+			func(idx int, ask2 editAsk) bool {
+				if spliced, ok := spliceTypedTarget(line, target, multi.cands[idx]); ok {
+					return runAddServer(spliced, ask2)
+				}
+				_, refusal := resolveServerFile(rootAbs, target)
+				fmt.Printf("%s Not adding that: %s.\n", tag, strings.TrimSuffix(refusal, "."))
+				return true
+			})
+		recordBrain("composer", false, "add-server question: folder has several main files")
 		return true
 	}
 	rel, refusal := resolveServerFile(rootAbs, target)

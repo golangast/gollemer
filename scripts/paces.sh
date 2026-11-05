@@ -17,7 +17,9 @@
 # the webserver — one in its own file, one across packages),
 # and a homepage that takes over the webserver's starter
 # reply (the page family: page + handler + registration in
-# one ask). After every landing step it greps the
+# one ask), and a clarifying question answered in one word
+# (the bare wiring ask with two handlers waiting asks which
+# one, and the name completes it). After every landing step it greps the
 # disk for what the chat claimed, and builds every package in
 # the scratch project — a step that "succeeds" in chat but
 # leaves the tree unbuildable is recorded as a failure.
@@ -689,6 +691,39 @@ has step16-homepage-page api/index.html "TODO: your homepage heading"
 has step16-homepage-wired api/main.go "func Home(" 'http.HandleFunc("/", Home)'
 hasnt step16-starter-gone api/main.go "hello — your webserver is running"
 builds step16
+
+# ================================================================
+step "step 17: a clarifying question, answered in one word"
+# ================================================================
+
+# Clarifying questions (2026-11-05): an ask missing one
+# piece of information no longer ends in guidance prose —
+# the chat asks ONE question and the next line completes
+# the original ask. Two fresh handlers land; the bare
+# wiring ask can't choose between them (Welcome, from an
+# earlier step, is also still waiting), so it asks; the
+# one-word answer "Alpha" completes it behind the usual
+# gate. Asked again, it asks again — Beta and Welcome are
+# both still unregistered — and "Beta" completes that one.
+cat > "$BASE/.inputs/s17.txt" <<'EOF'
+add a form handler named Alpha to api/main.go
+y
+add a form handler named Beta to api/main.go
+y
+connect the handler to the webserver
+Alpha
+y
+connect the handler to the webserver
+Beta
+y
+/quit
+EOF
+run_session s17
+
+told step17-question s17 "More than one handler isn't registered yet" "1. Alpha" "2. Beta" "Answer with the name or the number"
+has step17-alpha-wired api/main.go 'http.HandleFunc("/alpha", Alpha)'
+has step17-beta-wired api/main.go 'http.HandleFunc("/beta", Beta)'
+builds step17
 
 # --- scoreboard ---------------------------------------------------
 

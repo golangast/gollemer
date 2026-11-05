@@ -282,6 +282,39 @@ func runWireHandler(line string, ask editAsk) bool {
 		recordBrain("composer", false, "wire-handler refused: stale project unreadable")
 		return true
 	}
+	// The bare ask with several registerable handlers is a
+	// question now, not a dead end (clarify.go): the planner
+	// would refuse naming each with its sentence, so instead
+	// the chat asks which one — by name or by number — and
+	// the answer completes the original ask through the
+	// spine. Every other bare state (none, one, unreachable)
+	// keeps the planner's own answers below, untouched: they
+	// state facts, and facts don't become questions.
+	if q.name == "" {
+		if wcands := lastAnalyzeProject.BareWireCandidates(); len(wcands) >= 2 {
+			cands := make([]clarifyCandidate, len(wcands))
+			for i, c := range wcands {
+				cands[i] = clarifyCandidate{
+					Label: c.Name,
+					Desc:  fmt.Sprintf("%s:%d", c.File, c.Line),
+				}
+			}
+			route := q.route
+			askPickQuestion(tag,
+				"More than one handler isn't registered yet — which one should I wire in? Nothing's been written.",
+				"Answer with the name or the number",
+				cands,
+				func(idx int, ask2 editAsk) bool {
+					line := "connect the " + wcands[idx].Name + " handler to the webserver"
+					if route != "" {
+						line += " at " + route
+					}
+					return runWireHandler(line, ask2)
+				})
+			recordBrain("composer", false, "wire-handler question: which handler")
+			return true
+		}
+	}
 	return executeEditPlan(analyze.EditRequest{
 		Kind:      analyze.EditWireHandler,
 		WireName:  q.name,

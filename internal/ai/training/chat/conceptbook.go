@@ -2290,11 +2290,42 @@ func runConcept(line string, ask editAsk) bool {
 	// resolved against the work in progress, the reading
 	// printed as it is taken, so every plan or refusal
 	// below names the file actually meant, and why. Two
-	// files fitting is guidance, never a guess.
+	// files fitting is a clarifying question (clarify.go),
+	// never a guess: the answer — a path or a number —
+	// completes this same ask with the full path spliced
+	// into its tail.
 	if ctxAbs != "" {
-		if resolved, note, guidance := resolveContextTarget(req.target, line, ctxAbs); guidance != "" {
-			fmt.Printf("%s %s\n", tag, guidance)
-			recordBrain("composer", false, "concept refused: ambiguous target (session context)")
+		if resolved, note, amb := resolveContextTarget(req.target, line, ctxAbs); len(amb) > 0 {
+			ccands := make([]clarifyCandidate, len(amb))
+			for i, c := range amb {
+				ccands[i] = clarifyCandidate{Label: c.path, Desc: c.reason}
+			}
+			origLine, typed := line, req.target
+			askPickQuestion(tag,
+				fmt.Sprintf("%q names more than one file here, and I won't guess which one you mean — which one?", typed),
+				"Answer with the path or the number",
+				ccands,
+				func(idx int, ask2 editAsk) bool {
+					// The root candidate's path IS the typed
+					// name: splicing it in unchanged would ask
+					// the same question forever, so it is
+					// spelled "./"-first — the same file, read
+					// root-relative, which the context reading
+					// by its own rule leaves alone (a path with
+					// a slash in it is not a bare name).
+					repl := amb[idx].path
+					if repl == typed {
+						repl = "./" + repl
+					} else {
+						fmt.Printf("%s Reading %q as %s — %s.\n", tag, typed, amb[idx].path, amb[idx].reason)
+					}
+					completed, ok := spliceTypedTarget(origLine, typed, repl)
+					if !ok {
+						return false
+					}
+					return runConcept(completed, ask2)
+				})
+			recordBrain("composer", false, "concept question: ambiguous target (session context)")
 			return true
 		} else if resolved != "" {
 			fmt.Printf("%s %s\n", tag, note)
@@ -2363,11 +2394,24 @@ func runConcept(line string, ask editAsk) bool {
 			return true
 		}
 		if req.entry.Folder != "" {
-			// A folder-mapped row's unnamed ask gets the
-			// folder form of the guidance: the name is the
-			// only missing piece.
-			fmt.Printf("%s Not adding that: %s %s needs a name — say \"add a %s named <Name>\" and it lands in the %s folder as its own file.\n", tag, conceptArticle(canon), canon, canon, req.entry.Folder)
-			recordBrain("composer", false, "concept refused: declaration unnamed")
+			// A folder-mapped row's unnamed ask: the name is
+			// the only missing piece, so it is a clarifying
+			// question (clarify.go) — the answer completes
+			// the ask as the folder-form sentence the
+			// guidance used to spell.
+			askDeclarationName(tag, req,
+				fmt.Sprintf("Not adding that yet: %s %s needs a name — what should I call it? It'll land in the %s folder as its own file.", conceptArticle(canon), canon, req.entry.Folder))
+			recordBrain("composer", false, "concept question: declaration unnamed")
+			return true
+		}
+		if req.target != "" {
+			// The plain unnamed ask with its target named:
+			// likewise a name question. (With the target ALSO
+			// missing, two slots are empty — one question
+			// can't fill both, and the guidance below stands.)
+			askDeclarationName(tag, req,
+				fmt.Sprintf("Not adding that yet: %s %s needs a name — what should I call it?", conceptArticle(canon), canon))
+			recordBrain("composer", false, "concept question: declaration unnamed")
 			return true
 		}
 		fmt.Printf("%s Not adding that: %s %s needs a name — say \"add a %s named <Name> to <file>\", like \"add a %s named Reader to main.go\".\n", tag, conceptArticle(canon), canon, canon, canon)
@@ -2384,8 +2428,36 @@ func runConcept(line string, ask editAsk) bool {
 	// no folder.
 	folderDefault := req.target == "" && req.entry.Kind == analyze.ConceptDeclaration && req.entry.Folder != ""
 	if req.target == "" && !folderDefault {
-		fmt.Printf("%s Not adding that: the sentence doesn't name the file or folder — say it like \"add a %s to jim/main.go\" (a file) or \"add a %s to jim\" (its folder).\n", tag, canon, canon)
-		recordBrain("composer", false, "concept refused: no target named")
+		// No target named, and the session context couldn't
+		// settle one: a clarifying question (clarify.go).
+		// The tracked file, when the context holds one, is
+		// offered as a numbered suggestion; any bare file or
+		// folder answer completes the ask with the target
+		// spliced into its tail. If the completed line
+		// somehow doesn't parse as this claim's, the answer
+		// falls back to the guidance this seat used to give.
+		guidance := fmt.Sprintf("the sentence doesn't name the file or folder — say it like \"add a %s to jim/main.go\" (a file) or \"add a %s to jim\" (its folder).", canon, canon)
+		origLine := line
+		completeTarget := func(text string, ask2 editAsk) bool {
+			completed := origLine + " to " + text
+			if _, ok := parseConcept(completed); !ok {
+				fmt.Printf("%s Not adding that: %s\n", tag, guidance)
+				return true
+			}
+			return runConcept(completed, ask2)
+		}
+		printClarifyIntro(tag, fmt.Sprintf("Not adding that yet: the sentence doesn't name the file or folder — which file should the %s go in?", canon))
+		q := &pendingQuestion{kind: clarifyTarget, completeText: completeTarget}
+		if ctxAbs != "" && workContextLive(ctxAbs) && workCtx.lastFile != "" {
+			last := workCtx.lastFile
+			reason := workCtx.lastFileReason()
+			q.cands = []clarifyCandidate{{Label: last, Desc: reason}}
+			q.complete = func(idx int, ask2 editAsk) bool { return completeTarget(last, ask2) }
+			printClarifyCandidates(q.cands)
+		}
+		printClarifyFooter("Answer with a file or folder — \"jim/main.go\", or \"jim\"")
+		setPendingQuestion(q)
+		recordBrain("composer", false, "concept question: no target named")
 		return true
 	}
 
@@ -2445,10 +2517,23 @@ func runConcept(line string, ask editAsk) bool {
 		// Neither resolver borrows the webserver claim's
 		// remedies: those belong to "add a webserver" asks.
 		var refusal string
+		var multi *targetMulti
 		if req.entry.Kind == analyze.ConceptDeclaration {
-			rel, refusal = resolveConceptDeclTarget(rootAbs, req.target, req.name, canon)
+			multi = declTargetMulti(rootAbs, req.target)
+			if multi == nil {
+				rel, refusal = resolveConceptDeclTarget(rootAbs, req.target, req.name, canon)
+			}
 		} else {
-			rel, refusal = resolveConceptStatementTarget(rootAbs, req, line)
+			rel, refusal, multi = resolveConceptStatementTarget(rootAbs, req, line)
+		}
+		if multi != nil {
+			// A folder with several main-package files is a
+			// choice, not a fact: ask it (clarify.go), with
+			// the refusal as the fallback for an ask whose
+			// completed form can't be rebuilt.
+			askTargetMulti(tag, req, line, multi, refusal)
+			recordBrain("composer", false, "concept question: folder has several main files")
+			return true
 		}
 		if refusal != "" {
 			fmt.Printf("%s Not adding that: %s.\n", tag, strings.TrimSuffix(refusal, "."))
@@ -2499,6 +2584,96 @@ func runConcept(line string, ask editAsk) bool {
 		PlaceLine:      req.placeLine,
 		PlaceBefore:    req.placeBefore,
 	}, ask)
+}
+
+// askDeclarationName asks the clarifying question for an
+// unnamed declaration ask and holds it: the answer — one
+// identifier — completes the ask as its canonical named
+// sentence (the folder form when the row carries a folder
+// and no target was named, the targeted form otherwise),
+// re-run through runConcept so every fact is re-checked.
+func askDeclarationName(tag string, req conceptReq, intro string) {
+	canon := req.entry.Canonical()
+	printClarifyIntro(tag, intro)
+	printClarifyFooter("Answer with one name")
+	target := req.target
+	setPendingQuestion(&pendingQuestion{
+		kind: clarifyName,
+		completeText: func(text string, ask2 editAsk) bool {
+			completed := fmt.Sprintf("add %s %s named %s", conceptArticle(canon), canon, text)
+			if target != "" {
+				completed += " to " + target
+			}
+			return runConcept(completed, ask2)
+		},
+	})
+}
+
+// declTargetMulti reports a declaration ask's folder
+// target as a several-host choice, under exactly the
+// conditions declFolderTarget refuses as "multi": an
+// existing folder with no main.go and two or more
+// package-main files. Nil for every other target — the
+// declaration resolver keeps those, in its own words.
+func declTargetMulti(rootAbs, target string) *targetMulti {
+	disp := strings.TrimSuffix(target, "/")
+	abs, rel, fence := serverTargetResolve(rootAbs, target)
+	if fence != "" {
+		return nil
+	}
+	st, err := os.Stat(abs)
+	if err != nil || !st.IsDir() {
+		return nil
+	}
+	if fi, err := os.Stat(filepath.Join(abs, "main.go")); err == nil && !fi.IsDir() {
+		return nil
+	}
+	cands := packageMainFiles(abs)
+	if len(cands) < 2 {
+		return nil
+	}
+	m := &targetMulti{disp: disp}
+	for _, c := range cands {
+		m.cands = append(m.cands, rel+"/"+c)
+	}
+	return m
+}
+
+// askTargetMulti asks the several-host question for a
+// concept ask and holds it: the answer — a path, a base
+// name, or a number — completes the ask aimed at the
+// chosen file (rebuilt from the request's own slots for a
+// statement, the typed target spliced for a declaration),
+// re-run through runConcept so every fact is re-checked.
+// An ask neither rebuild can reproduce falls back to the
+// resolver's own refusal text.
+func askTargetMulti(tag string, req conceptReq, line string, multi *targetMulti, refusal string) {
+	canon := req.entry.Canonical()
+	cands := make([]clarifyCandidate, len(multi.cands))
+	for i, c := range multi.cands {
+		cands[i] = clarifyCandidate{Label: c, Words: []string{filepath.Base(c)}}
+	}
+	askPickQuestion(tag,
+		fmt.Sprintf("%s/ has more than one main-package file — which one should the %s go in?", multi.disp, canon),
+		"Answer with the path or the number",
+		cands,
+		func(idx int, ask2 editAsk) bool {
+			chosen := multi.cands[idx]
+			completed := ""
+			if req.entry.Kind == analyze.ConceptStatement {
+				completed = stmtAskFor(req, chosen)
+			}
+			if completed == "" {
+				if spliced, ok := spliceTypedTarget(line, req.target, chosen); ok {
+					completed = spliced
+				}
+			}
+			if completed == "" {
+				fmt.Printf("%s Not adding that: %s.\n", tag, strings.TrimSuffix(refusal, "."))
+				return true
+			}
+			return runConcept(completed, ask2)
+		})
 }
 
 // targetMiss describes how a typed edit target failed to
@@ -2688,6 +2863,19 @@ func declFolderTarget(abs, rel, disp, name, canon string) (string, string) {
 	}
 }
 
+// targetMulti is a folder target's several-host outcome:
+// the folder as typed and the full slash-relative paths of
+// the package-main files the ask could land in. It is a
+// genuine choice — missing information, not a fact — so
+// runConcept asks it as a clarifying question (clarify.go)
+// instead of only refusing; the refusal text rides along
+// as the fallback for an ask whose completed form can't be
+// rebuilt.
+type targetMulti struct {
+	disp  string
+	cands []string
+}
+
 // resolveConceptStatementTarget settles a concept
 // STATEMENT's named target. The settle rules are the shared
 // ones (settleConceptTarget); every refusal is rendered in
@@ -2699,29 +2887,33 @@ func declFolderTarget(abs, rel, disp, name, canon string) (string, string) {
 // then the same ask again — instead of the webserver claim's
 // remedy. Statements never create files themselves: that
 // licence stays a declaration's.
-func resolveConceptStatementTarget(rootAbs string, req conceptReq, line string) (rel, refusal string) {
+func resolveConceptStatementTarget(rootAbs string, req conceptReq, line string) (rel, refusal string, multi *targetMulti) {
 	rel, abs, miss := settleConceptTarget(rootAbs, req.target)
 	if miss == nil {
-		return rel, ""
+		return rel, "", nil
 	}
 	canon := req.entry.Canonical()
 	disp := miss.disp
 	switch miss.kind {
 	case "fence":
-		return "", miss.text
+		return "", miss.text, nil
 	case "notgo":
-		return "", fmt.Sprintf("%s isn't a Go file — %s %s goes into a .go file, inside a function", disp, conceptArticle(canon), canon)
+		return "", fmt.Sprintf("%s isn't a Go file — %s %s goes into a .go file, inside a function", disp, conceptArticle(canon), canon), nil
 	case "multi":
-		if ask := stmtAskFor(req, disp+"/"+miss.cands[0]); ask != "" {
-			return "", fmt.Sprintf("%s/ has more than one main-package file (%s) — say which one, like \"%s\"", disp, strings.Join(miss.cands, ", "), ask)
+		m := &targetMulti{disp: disp}
+		for _, c := range miss.cands {
+			m.cands = append(m.cands, disp+"/"+c)
 		}
-		return "", fmt.Sprintf("%s/ has more than one main-package file (%s) — say which one by naming the file in the ask, like \"to %s/%s\"", disp, strings.Join(miss.cands, ", "), disp, miss.cands[0])
+		if ask := stmtAskFor(req, disp+"/"+miss.cands[0]); ask != "" {
+			return "", fmt.Sprintf("%s/ has more than one main-package file (%s) — say which one, like \"%s\"", disp, strings.Join(miss.cands, ", "), ask), m
+		}
+		return "", fmt.Sprintf("%s/ has more than one main-package file (%s) — say which one by naming the file in the ask, like \"to %s/%s\"", disp, strings.Join(miss.cands, ", "), disp, miss.cands[0]), m
 	case "missing":
-		return "", stmtMissingRefusal(rootAbs, abs, req, line)
+		return "", stmtMissingRefusal(rootAbs, abs, req, line), nil
 	case "nohost":
-		return "", stmtNoHostRefusal(abs, req, line)
+		return "", stmtNoHostRefusal(abs, req, line), nil
 	}
-	return "", miss.text
+	return "", miss.text, nil
 }
 
 // stmtAskFor renders the statement ask aimed at fileRel,

@@ -107,6 +107,17 @@ type pageRequest struct {
 // info returns the request kind's table row.
 func (q pageRequest) info() pageKindInfo { return pageKindTable[q.kind] }
 
+// pageTargetPrep spells a completed page ask's target
+// clause the way the family's examples do: "to" a file,
+// "in" a folder. (The grammar reads both for either; this
+// only keeps a rebuilt sentence idiomatic.)
+func pageTargetPrep(target string) string {
+	if strings.HasSuffix(strings.ToLower(target), ".go") {
+		return "to"
+	}
+	return "in"
+}
+
 // handlerName is the name the plan will use: the typed name,
 // else the kind's default.
 func (q pageRequest) handlerName() string {
@@ -406,18 +417,47 @@ func runPageFamily(line string, ask editAsk) bool {
 	if q.targetMissing {
 		// The grammar matched and started a target clause but
 		// named nothing ("create a homepage in"): claimed, and
-		// answered in page terms — this sentence must never
-		// reach the intent layer.
-		fmt.Printf("%s Not making that page yet: the sentence starts naming the file or folder but doesn't finish — say it like \"%s in jim\" (a folder) or \"%s to jim/main.go\" (a file), or leave the target off and I'll use the project's main file.\n", tag, info.canonical, info.canonical)
-		recordBrain("composer", false, "page refused: target unnamed")
+		// asked in page terms (clarify.go) — the answer, one
+		// bare file or folder, completes the ask as its
+		// canonical sentence. This sentence must never reach
+		// the intent layer.
+		printClarifyIntro(tag, "Not making that page yet: the sentence starts naming the file or folder but doesn't finish — where should it go?")
+		printClarifyFooter("Answer with a file or folder — \"jim/main.go\", or \"jim\"")
+		name := q.name
+		setPendingQuestion(&pendingQuestion{
+			kind: clarifyTarget,
+			completeText: func(text string, ask2 editAsk) bool {
+				completed := info.canonical
+				if name != "" {
+					completed += " named " + name
+				}
+				completed += " " + pageTargetPrep(text) + " " + text
+				return runPageFamily(completed, ask2)
+			},
+		})
+		recordBrain("composer", false, "page question: target unnamed")
 		return true
 	}
 	if q.nameMissing {
 		// The grammar matched and started a "named" clause but
 		// gave no name ("create a form page named"): claimed,
-		// and answered in page terms.
-		fmt.Printf("%s Not making that page yet: the sentence starts naming the handler with \"named\" but doesn't give the name — say it like \"%s named Signup\", or leave \"named\" off and I'll use the default name.\n", tag, info.canonical)
-		recordBrain("composer", false, "page refused: name unnamed")
+		// and asked in page terms (clarify.go) — the answer,
+		// one identifier, completes the ask with the name in
+		// its slot (and its target, when one was named first).
+		printClarifyIntro(tag, fmt.Sprintf("Not making that page yet: the sentence starts naming the handler with \"named\" but doesn't give the name — what should I call it? Or leave the name off entirely and I'll use %s.", info.defaultName))
+		printClarifyFooter("Answer with one name")
+		target := q.target
+		setPendingQuestion(&pendingQuestion{
+			kind: clarifyName,
+			completeText: func(text string, ask2 editAsk) bool {
+				completed := info.canonical + " named " + text
+				if target != "" {
+					completed += " " + pageTargetPrep(target) + " " + target
+				}
+				return runPageFamily(completed, ask2)
+			},
+		})
+		recordBrain("composer", false, "page question: name unnamed")
 		return true
 	}
 	rootRaw := creationRoot()
@@ -440,6 +480,33 @@ func runPageFamily(line string, ask editAsk) bool {
 		fmt.Printf("%s The folder I'd edit in (%s) isn't there — start me inside your project and ask again.\n", tag, rootRaw)
 		recordBrain("composer", false, "page refused: root missing")
 		return true
+	}
+	// A folder target with several main-package files is a
+	// choice, not a fact: ask which one (clarify.go, the
+	// serve-html helper — the conditions are the shared
+	// resolver's) instead of only refusing.
+	if q.target != "" {
+		if multi := serveTargetMulti(rootAbs, q.target); multi != nil {
+			cands := make([]clarifyCandidate, len(multi.cands))
+			for i, c := range multi.cands {
+				cands[i] = clarifyCandidate{Label: c, Words: []string{filepath.Base(c)}}
+			}
+			name := q.name
+			askPickQuestion(tag,
+				fmt.Sprintf("%s/ has more than one main-package file — which one should the %s go in?", multi.disp, info.display),
+				"Answer with the path or the number",
+				cands,
+				func(idx int, ask2 editAsk) bool {
+					completed := info.canonical
+					if name != "" {
+						completed += " named " + name
+					}
+					completed += " to " + multi.cands[idx]
+					return runPageFamily(completed, ask2)
+				})
+			recordBrain("composer", false, "page question: folder has several main files")
+			return true
+		}
 	}
 	t, refusal := resolvePageTargets(rootAbs, q)
 	if refusal != "" {

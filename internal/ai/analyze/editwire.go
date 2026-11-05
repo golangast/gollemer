@@ -756,6 +756,64 @@ func (p *Project) planWireHandler(req EditRequest) (*EditPlan, string) {
 	}, ""
 }
 
+// WireCandidate is one handler a bare wiring ask could
+// mean: an unregistered handler some server in the project
+// can actually register, with where it is declared.
+type WireCandidate struct {
+	Name string
+	File string // project-relative, slash form (LinkPath form)
+	Line int
+}
+
+// BareWireCandidates returns the candidates for the bare
+// "the handler" when there are several — the same set
+// resolveBareHandler names in its refusal — or nil when the
+// count is anything else (zero registerable, exactly one,
+// no handlers, no server): those states have their own
+// answers and are not a choice. The chat layer uses it to
+// ask which handler instead of only naming them; the
+// planner's refusal remains the backstop, computed from
+// the same helper so the two can never disagree.
+func (p *Project) BareWireCandidates() []WireCandidate {
+	w := p.wireScan()
+	if len(w.handlers) == 0 || len(w.sites) == 0 {
+		return nil
+	}
+	cands, _ := w.bareCandidates()
+	if len(cands) < 2 {
+		return nil
+	}
+	out := make([]WireCandidate, len(cands))
+	for i, h := range cands {
+		out[i] = WireCandidate{Name: h.name, File: p.LinkPath(h.file), Line: h.line}
+	}
+	return out
+}
+
+// bareCandidates is the bare ask's candidate set: the
+// unregistered handlers at least one serving site can
+// register.
+func (w *wireWorld) bareCandidates() (candidates, unreachable []*wireHandlerInfo) {
+	for _, h := range w.handlers {
+		if w.registrationOf(h) != nil {
+			continue
+		}
+		reachable := false
+		for _, s := range w.sites {
+			if canRegister(s, h) {
+				reachable = true
+				break
+			}
+		}
+		if reachable {
+			candidates = append(candidates, h)
+		} else {
+			unreachable = append(unreachable, h)
+		}
+	}
+	return candidates, unreachable
+}
+
 // resolveBareHandler settles the bare "the handler": the
 // project's one unregistered handler that some server can
 // actually register. Every other count is an answer naming
@@ -777,24 +835,7 @@ func (p *Project) resolveBareHandler(w *wireWorld) (*wireHandlerInfo, string) {
 		}
 		return nil, p.wireNoServerRefusal(nil)
 	}
-	var candidates, unreachable []*wireHandlerInfo
-	for _, h := range w.handlers {
-		if w.registrationOf(h) != nil {
-			continue
-		}
-		reachable := false
-		for _, s := range w.sites {
-			if canRegister(s, h) {
-				reachable = true
-				break
-			}
-		}
-		if reachable {
-			candidates = append(candidates, h)
-		} else {
-			unreachable = append(unreachable, h)
-		}
-	}
+	candidates, unreachable := w.bareCandidates()
 	switch {
 	case len(candidates) == 1:
 		return candidates[0], ""

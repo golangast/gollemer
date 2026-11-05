@@ -38,11 +38,16 @@ import (
 // ahead of the beginner five, exactly as in the unified loop,
 // and the basic Linux commands sit directly after it (with a
 // non-terminal session, as in these tests). Ambiguous-piece
+// The clarifying-answer claim heads the chain, exactly as
+// in the unified loop (clarify.go). Ambiguous-piece
 // guidance has two seats, exactly as in the unified loop:
 // the bare-database claim directly before the concept book
 // (it preempts the book's bare statement name), and the
 // remaining kinds directly before the write boundary.
 func claimChain(line string, ask editAsk, profile *UserProfile) bool {
+	if runClarifyAnswer(line, ask) {
+		return true
+	}
 	if tryLearnCommand(line) {
 		return true
 	}
@@ -94,7 +99,7 @@ func claimChain(line string, ask editAsk, profile *UserProfile) bool {
 	if runMakeCall(line, ask) {
 		return true
 	}
-	if runAmbiguousDatabase(line) {
+	if runAmbiguousDatabase(line, ask) {
 		return true
 	}
 	if runConcept(line, ask) {
@@ -115,7 +120,7 @@ func claimChain(line string, ask editAsk, profile *UserProfile) bool {
 	if runPhrasingLayer(line, ask) {
 		return true
 	}
-	if runAmbiguousPiece(line) {
+	if runAmbiguousPiece(line, ask) {
 		return true
 	}
 	if runWriteBoundary(line) {

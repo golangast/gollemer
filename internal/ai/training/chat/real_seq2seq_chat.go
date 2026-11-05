@@ -1218,6 +1218,31 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if tryMemoryCommand(line, conv) {
 			continue
 		}
+		// Clarifying answers, claimed ahead of every content
+		// claim (clarify.go): while a seat's question is
+		// pending — "which handler?", "which file?", "what
+		// name?" — the line is first tried as its answer, and
+		// an answer completes the held ask through its own
+		// claim and its normal [y/n] gate. The seat is first
+		// so that a line which is NOT an answer clears the
+		// question before ANY claim can act on it — no stale
+		// question can complete an old ask after the user has
+		// plainly moved on — and so nothing can improvise on
+		// a bare name, path, or number first. It cannot steal
+		// another flow's answer: an answer must be one bare
+		// candidate word, number, path, or identifier, so a
+		// full valid ask (learn mode's starts, the gorqlite
+		// hold's sentences, any edit) never parses as one,
+		// and the state-answering flows are never pending at
+		// the same time anyway — their setting lines pass
+		// through here first and clear any question. The
+		// slash and memory commands above are session
+		// commands, not asks; they leave a question standing,
+		// as they would a spoken one. With no question
+		// pending this claims nothing and prints nothing.
+		if tryClarifyAnswer(line, reader) {
+			continue
+		}
 		// Learn mode, claimed deterministically ahead of the
 		// beginner five: its start shapes, its "next", and —
 		// while a check question waits — its answers must never
@@ -1414,7 +1439,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// nothing. It fires only for the bare shape — no
 		// function context, no sibling-row words — so every
 		// explicit database form still belongs to the book.
-		if tryAmbiguousDatabase(line) {
+		if tryAmbiguousDatabase(line, reader) {
 			continue
 		}
 		// Concept-book edits, claimed deterministically beside
@@ -1510,7 +1535,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// claims only its narrow add-led shapes; everything
 		// else passes to the boundary unchanged. See
 		// ambiguouspiece.go.
-		if tryAmbiguousPiece(line) {
+		if tryAmbiguousPiece(line, reader) {
 			continue
 		}
 		// The write-sentence boundary, last before the intent

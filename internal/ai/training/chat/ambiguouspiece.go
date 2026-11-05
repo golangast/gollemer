@@ -94,6 +94,11 @@ type ambiguousRowRef struct {
 	// that row lands with no file named (its folder field
 	// and the name its sentence used).
 	noteLabel string
+	// answers, when set, are the distinguishing words that
+	// pick this row when the seat asks its clarifying
+	// question ("connection", "inline"). Empty: derived
+	// from the row's say-name (see ambPieceRow.answerWords).
+	answers []string
 }
 
 // ambiguousKind is one bare kind word, the book rows it is
@@ -138,8 +143,8 @@ var ambiguousKinds = []ambiguousKind{
 		{id: "session-handler", gloss: "works with the user's session", form: ambLineNamed},
 	}},
 	{word: "database", beforeBook: true, funcGuard: true, nameDefault: "Connect", funcName: "main", rows: []ambiguousRowRef{
-		{id: "database-connect", gloss: "a connection pool you open once and keep", form: ambLineNamed, say: "database connection function", noteLabel: "the connection function"},
-		{id: "database", gloss: "sql.Open and a Ping inside one function", form: ambLineInline, label: "the inline database piece"},
+		{id: "database-connect", gloss: "a connection pool you open once and keep", form: ambLineNamed, say: "database connection function", noteLabel: "the connection function", answers: []string{"connection"}},
+		{id: "database", gloss: "sql.Open and a Ping inside one function", form: ambLineInline, label: "the inline database piece", answers: []string{"inline", "statement"}},
 	}},
 }
 
@@ -463,42 +468,135 @@ func (r ambPieceReq) answer() string {
 	return out + "."
 }
 
+// answerWords are the distinguishing words that pick this
+// row as a clarifying answer: the table's explicit words
+// when it carries them, else the say-name's own words minus
+// the kind word and the shared "handler" — "form" and
+// "session" fall out of the handler rows' names that way.
+func (row ambPieceRow) answerWords(kindWord string) []string {
+	if len(row.ref.answers) > 0 {
+		return row.ref.answers
+	}
+	var out []string
+	for _, w := range strings.Fields(row.sayName()) {
+		lw := strings.ToLower(w)
+		if lw == kindWord || lw == "handler" {
+			continue
+		}
+		out = append(out, lw)
+	}
+	return out
+}
+
+// clarifyCandidates renders the seat's rows as a
+// clarifying question's numbered choices: each piece named
+// with its one-phrase difference and the exact sentence
+// that lands it (the guidance's own content, kept whole),
+// and the words that pick it by answer.
+func (r ambPieceReq) clarifyCandidates() []clarifyCandidate {
+	cands := make([]clarifyCandidate, 0, len(r.rows))
+	for _, row := range r.rows {
+		label := row.ref.label
+		if label == "" {
+			label = conceptArticle(row.sayName()) + " " + row.sayName()
+		}
+		label = strings.TrimPrefix(label, "the ")
+		label = strings.TrimPrefix(label, "a ")
+		label = strings.TrimPrefix(label, "an ")
+		cands = append(cands, clarifyCandidate{
+			Label: label,
+			Desc:  fmt.Sprintf("%s — say %q", row.ref.gloss, r.lineFor(row)),
+			Words: row.answerWords(r.kind.word),
+		})
+	}
+	return cands
+}
+
+// clarifyIntro is the question's opening line: the
+// ambiguity named plainly, as the guidance names it, then
+// the question itself.
+func (r ambPieceReq) clarifyIntro() string {
+	count := strconv.Itoa(len(r.rows))
+	if len(r.rows) == 2 {
+		count = "two"
+	}
+	return fmt.Sprintf("%q names %s different pieces here, and I can't tell which one you mean — which one?", r.word, count)
+}
+
+// clarifyHow renders the answer words for the question's
+// footer: "form" or "session", and the standing exits.
+func (r ambPieceReq) clarifyHow() string {
+	words := make([]string, 0, len(r.rows))
+	for _, row := range r.rows {
+		if ws := row.answerWords(r.kind.word); len(ws) > 0 {
+			words = append(words, fmt.Sprintf("%q", ws[0]))
+		}
+	}
+	return fmt.Sprintf("Answer %s, or the number, or the full sentence", strings.Join(words, " or "))
+}
+
 // tryAmbiguousPiece is the chat-loop entry for the chain-end
 // claim (handler): it answers bare-kind-word adds the book
-// never claimed with the disambiguation.
-func tryAmbiguousPiece(line string) bool {
-	return runAmbiguousPiece(line)
+// never claimed with the disambiguation question.
+func tryAmbiguousPiece(line string, r *LineReader) bool {
+	return runAmbiguousPiece(line, func(prompt string) (string, error) {
+		return r.ReadLine(prompt)
+	})
 }
 
 // runAmbiguousPiece answers one line when the chain-end
-// claim takes it. It never asks anything and never touches
-// a file.
-func runAmbiguousPiece(line string) bool {
-	return runAmbiguous(line, parseAmbiguousPiece)
+// claim takes it: the disambiguation, asked as a question
+// (clarify.go) — the user's one-word answer runs the chosen
+// piece's exact sentence through the concept book, and the
+// full sentence still works as it always did.
+func runAmbiguousPiece(line string, ask editAsk) bool {
+	return runAmbiguous(line, parseAmbiguousPiece, ask)
 }
 
 // tryAmbiguousDatabase is the chat-loop entry for the
 // pre-book claim (database): it answers the bare-database
-// ask with the disambiguation before the concept book can
-// claim the word for its statement row.
-func tryAmbiguousDatabase(line string) bool {
-	return runAmbiguousDatabase(line)
+// ask with the disambiguation question before the concept
+// book can claim the word for its statement row.
+func tryAmbiguousDatabase(line string, r *LineReader) bool {
+	return runAmbiguousDatabase(line, func(prompt string) (string, error) {
+		return r.ReadLine(prompt)
+	})
 }
 
 // runAmbiguousDatabase answers one line when the pre-book
-// claim takes it. It never asks anything and never touches
-// a file.
-func runAmbiguousDatabase(line string) bool {
-	return runAmbiguous(line, parseAmbiguousDatabase)
+// claim takes it, as a question like its chain-end sibling.
+func runAmbiguousDatabase(line string, ask editAsk) bool {
+	return runAmbiguous(line, parseAmbiguousDatabase, ask)
 }
 
-// runAmbiguous is the shared runner for both seats.
-func runAmbiguous(line string, parse func(string) (ambPieceReq, bool)) bool {
+// runAmbiguous is the shared runner for both seats: the
+// guidance became a question (2026-11-05) — same pieces,
+// same differences, same exact sentences, but the user can
+// now answer with the distinguishing word or the number
+// instead of retyping a sentence, and the chosen sentence
+// runs through the book's own claim behind its gate. The
+// sentences stay on the screen in the candidate list, so
+// nothing the guidance taught is lost.
+func runAmbiguous(line string, parse func(string) (ambPieceReq, bool), ask editAsk) bool {
 	req, ok := parse(line)
 	if !ok {
 		return false
 	}
-	fmt.Printf("%s %s.\n", cTag("gollemer [composer]>"), strings.TrimSuffix(req.answer(), "."))
-	recordBrain("composer", true, "ambiguous-piece guidance: "+req.kind.word+" (not performed)")
+	tag := cTag("gollemer [composer]>")
+	printClarifyIntro(tag, req.clarifyIntro())
+	cands := req.clarifyCandidates()
+	printClarifyCandidates(cands)
+	if note := req.noTargetNote(); note != "" {
+		fmt.Printf(" — %s.\n", note)
+	}
+	printClarifyFooter(req.clarifyHow())
+	setPendingQuestion(&pendingQuestion{
+		kind:  clarifyPick,
+		cands: cands,
+		complete: func(idx int, ask2 editAsk) bool {
+			return runConcept(req.lineFor(req.rows[idx]), ask2)
+		},
+	})
+	recordBrain("composer", true, "ambiguous-piece question: "+req.kind.word+" (not performed)")
 	return true
 }

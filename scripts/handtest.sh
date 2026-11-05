@@ -34,7 +34,10 @@
 # function in one file, called from another, one gate), and
 # the session working context (John's database-package
 # journey: bare follow-ups resolved against the work in
-# progress, each reading printed with its full path).
+# progress, each reading printed with its full path), and
+# the clarifying questions (an ask missing one piece of
+# information asks once; a name, number, or word answer
+# completes the original ask).
 #
 # How it works:
 #   - Everything happens under handtest/ at the repo root,
@@ -215,6 +218,15 @@ case_file_contains() { # <case> <path-under-scratch> <fragment>…
 	ok "$id"
 }
 
+case_file_lacks() { # <case> <path-under-scratch> <fragment>
+	local id="$1" rel="$2" f="$3"
+	if [ -f "$SCRATCH/$rel" ] && grep -qF -- "$f" "$SCRATCH/$rel"; then
+		bad "$id" "unexpected '$f' in handtest/$rel"
+		return
+	fi
+	ok "$id"
+}
+
 case_transcript_contains() { # <case> <session> <fragment>…
 	local id="$1" sess="$2"
 	shift 2
@@ -376,6 +388,51 @@ case_between wire-jake-before-serve jim/main.go 'func main() {' 'http.HandleFunc
 case_transcript_contains wire-duplicate-answer wire "Jake is already registered at /jake" "nothing to add"
 case_transcript_contains wire-other-path-refusal wire "already registered at /jake" "/signup" "won't register it at /signup as well"
 case_file_contains wire-bare-pete jim/main.go 'http.HandleFunc("/pete", Pete)'
+
+# --- session: clarifying questions (2026-11-05) ----------------------
+# An ask missing one piece of information asks ONE question
+# instead of ending in guidance prose; the next line — a
+# name, a number, a distinguishing word — completes the
+# ORIGINAL ask behind the usual gate. Two handlers wait
+# unregistered, so the bare wiring ask asks which one; the
+# number "1" completes it for Zeke. A database ask is then
+# interrupted by a full different ask (which lands, and the
+# question is gone — no completion happens behind it), and
+# finally answered by the one word "connection"; an unnamed
+# struct is completed by its one-word name answer.
+
+cat > "$SCRATCH/.inputs/clarify.txt" <<'EOF'
+create a folder quest
+y
+create a file quest/main.go with a webserver
+y
+add a form handler named Zeke to quest/main.go
+y
+add a form handler named Yara to quest/main.go
+y
+connect the handler to the webserver
+1
+y
+add a database to quest/main.go
+add a struct named Profile to quest/main.go
+y
+add a database to quest/main.go
+connection
+y
+add a struct to quest/main.go
+Widget
+y
+/quit
+EOF
+run_session clarify
+
+case_transcript_contains clarify-wire-question clarify "More than one handler isn't registered yet" "1. Zeke" "2. Yara" "Answer with the name or the number"
+case_file_contains clarify-number-answer quest/main.go 'http.HandleFunc("/zeke", Zeke)'
+case_file_lacks clarify-question-wrote-nothing quest/main.go 'http.HandleFunc("/yara", Yara)'
+case_transcript_contains clarify-database-question clarify '"database" names two different pieces here' 'Answer "connection" or "inline"'
+case_file_contains clarify-fallthrough-landed quest/main.go "type Profile struct"
+case_file_contains clarify-word-answer quest/main.go "func Connect() (*sql.DB, error)"
+case_file_contains clarify-name-answer quest/main.go "type Widget struct"
 
 # --- session: the phrasing-gap widenings (2026-11-05) ---------------
 # The beginner's own spellings of asks the features already

@@ -99,6 +99,16 @@ Create folders and files — shown first, gated, then verified:
       http.HandleFunc("/signup", handlers.Signup) — just before
       the serve call; ask again and it says "already
       registered ... — nothing to add"
+  you> connect the handler to the webserver
+      with two handlers waiting, it asks which one — a list,
+      with file and line — and the one-word answer (the name,
+      or the number) completes the ask behind the same gate.
+      The same whenever an ask is one piece short: "add a
+      database" asks connection-or-inline and takes the one
+      word; a missing file or name is asked for, not spelled
+      out for retyping. Say anything else and the question is
+      forgotten — your line is handled as itself. Facts (a
+      taken path, an existing page) still refuse outright.
   you> create a homepage
       a whole page in one ask: the starter page (index.html),
       its handler, and its registration at / — the webserver's

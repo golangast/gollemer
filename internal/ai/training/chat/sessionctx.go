@@ -53,8 +53,8 @@ package chat
 //     never ambiguous) — create|make bare names keep the
 //     create family's shipped root anchoring;
 //   - when a DIFFERENT file of the same name also exists at
-//     the project root, two files fit and the answer is
-//     guidance naming both — never a coin flip;
+//     the project root, two files fit and the answer is a
+//     clarifying question naming both — never a coin flip;
 //   - when nothing in the context fits, nothing here engages
 //     at all and the line keeps today's behavior, byte for
 //     byte (a cold session's bare name still resolves
@@ -94,6 +94,7 @@ var workCtx workContext
 // setCurrentProject when the session's project changes.
 func resetWorkContext() {
 	workCtx = workContext{}
+	clearPendingQuestion()
 	resetShortTermMemory()
 	resetMemoryRecall()
 }
@@ -254,25 +255,24 @@ type ctxCandidate struct {
 //   - resolved != "": the target read as resolved, with the
 //     note line that says so (the caller prints it before
 //     its plan or refusal);
-//   - guidance != "": two files fit and neither may be
-//     picked — the caller answers with this and writes
-//     nothing;
-//   - both "": the context offers nothing for this target
-//     and the ask keeps today's behavior untouched.
+//   - cands != nil: two files fit and neither may be
+//     picked — the caller asks which (clarify.go) and
+//     writes nothing until the user answers;
+//   - both empty: the context offers nothing for this
+//     target and the ask keeps today's behavior untouched.
 //
 // A file of the same name at the project root never WINS
 // silently — root-relative is what the bare name already
 // means today — but when a context file also fits, the root
-// namesake is a second fit and the answer is guidance.
-func resolveContextTarget(typed, line string, rootAbs string) (resolved, note, guidance string) {
+// namesake is a second fit and the answer is a question.
+func resolveContextTarget(typed, line string, rootAbs string) (resolved, note string, cands []ctxCandidate) {
 	if typed == "" || strings.Contains(typed, "/") ||
 		!strings.HasSuffix(strings.ToLower(typed), ".go") {
-		return "", "", ""
+		return "", "", nil
 	}
 	if !workContextLive(rootAbs) {
-		return "", "", ""
+		return "", "", nil
 	}
-	var cands []ctxCandidate
 	seen := map[string]bool{}
 	add := func(path, reason string) {
 		if path == "" || seen[path] {
@@ -291,7 +291,7 @@ func resolveContextTarget(typed, line string, rootAbs string) (resolved, note, g
 		add(workCtx.folder+"/"+typed, "a file in the folder you're working in")
 	}
 	if len(cands) == 0 {
-		return "", "", ""
+		return "", "", nil
 	}
 	// The root namesake: a second fit, never a silent winner.
 	rootFit := false
@@ -303,27 +303,27 @@ func resolveContextTarget(typed, line string, rootAbs string) (resolved, note, g
 		if rootFit {
 			all = append(all, ctxCandidate{path: typed, reason: "a file at the project root"})
 		}
-		return "", "", ambiguousTargetGuidance(typed, line, all)
+		return "", "", all
 	}
 	c := cands[0]
-	return c.path, fmt.Sprintf("Reading %q as %s — %s.", typed, c.path, c.reason), ""
+	return c.path, fmt.Sprintf("Reading %q as %s — %s.", typed, c.path, c.reason), nil
 }
 
-// ambiguousTargetGuidance renders the two-fits answer in the
-// ambiguous-piece voice: both files named with the reason
-// each fits, no guess, and the ask spelled once with the
-// full path so the working sentence is on the screen.
-func ambiguousTargetGuidance(typed, line string, cands []ctxCandidate) string {
-	parts := make([]string, len(cands))
-	for i, c := range cands {
-		parts[i] = fmt.Sprintf("%s (%s)", c.path, c.reason)
+// spliceTypedTarget rewrites the ask's typed target (its
+// last occurrence in the line) to a full resolved path —
+// the rewrite a clarifying answer completes the ask with:
+// "add a print line in main to db.go" answered with the
+// tracked file becomes the same line with jim/db.go in the
+// tail, which the concept grammar then reads exactly as it
+// reads the spelled-out line. False when the typed target
+// doesn't appear in the line at all (the caller then keeps
+// its standing answer rather than inventing a rewrite).
+func spliceTypedTarget(line, typed, replacement string) (string, bool) {
+	idx := strings.LastIndex(line, typed)
+	if idx < 0 {
+		return "", false
 	}
-	example := line
-	if idx := strings.LastIndex(line, typed); idx >= 0 {
-		example = line[:idx] + cands[0].path + line[idx+len(typed):]
-	}
-	return fmt.Sprintf("Not adding that: %q names more than one file here — %s — and I won't guess which one you mean. Say the line again with the full path, like %q.",
-		typed, strings.Join(parts, ", or "), example)
+	return line[:idx] + replacement + line[idx+len(typed):], true
 }
 
 // rePronounTail matches the three pronoun tails at the very

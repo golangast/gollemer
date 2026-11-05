@@ -183,9 +183,11 @@ func TestSessionCtxPronounNoContext(t *testing.T) {
 
 // Two files fit: the bare name matches the tracked file
 // AND a namesake stands at the project root. The answer
-// is guidance naming both, with the ask spelled once in
-// full — nothing is planned, gated, or written.
+// is a clarifying question naming both (clarify.go): the
+// user picks by path or number and the ask completes —
+// nothing is planned, gated, or written by the ask itself.
 func TestSessionCtxAmbiguousBareName(t *testing.T) {
+	defer clearPendingQuestion()
 	root := seedCtxProject(t)
 	writeFile(t, root, "database.go", "package main\n")
 	withChatSession(t, root, true)
@@ -209,11 +211,14 @@ func TestSessionCtxAmbiguousBareName(t *testing.T) {
 		"jake/database/database.go (the file you just created)",
 		"database.go (a file at the project root)",
 		"I won't guess which one you mean",
-		`"add a database connection function named Connect to jake/database/database.go"`,
+		"Answer with the path or the number",
 	} {
 		if !strings.Contains(out, want) {
-			t.Errorf("guidance missing %q:\n%s", want, out)
+			t.Errorf("question missing %q:\n%s", want, out)
 		}
+	}
+	if !hasPendingQuestion() {
+		t.Errorf("the ambiguous line set no pending question:\n%s", out)
 	}
 	if strings.Contains(out, "Apply this edit?") {
 		t.Errorf("the ambiguous line reached a gate:\n%s", out)
@@ -221,6 +226,7 @@ func TestSessionCtxAmbiguousBareName(t *testing.T) {
 	if readBack(t, root, "database.go") != beforeRoot || readBack(t, root, "jake/database/database.go") != beforeWork {
 		t.Errorf("the ambiguous line wrote something")
 	}
+	clearPendingQuestion()
 }
 
 // A cold session's bare name keeps today's root-relative
@@ -474,16 +480,16 @@ func TestSessionCtxReadersUnit(t *testing.T) {
 	defer resetWorkContext()
 
 	// A path-shaped target never reads.
-	if r, n, g := resolveContextTarget("jake/database/database.go", "x", abs); r != "" || n != "" || g != "" {
-		t.Errorf("path target read: %q %q %q", r, n, g)
+	if r, n, g := resolveContextTarget("jake/database/database.go", "x", abs); r != "" || n != "" || len(g) != 0 {
+		t.Errorf("path target read: %q %q %v", r, n, g)
 	}
 	// A folder target never reads (files only).
-	if r, n, g := resolveContextTarget("jake", "x", abs); r != "" || n != "" || g != "" {
-		t.Errorf("folder target read: %q %q %q", r, n, g)
+	if r, n, g := resolveContextTarget("jake", "x", abs); r != "" || n != "" || len(g) != 0 {
+		t.Errorf("folder target read: %q %q %v", r, n, g)
 	}
 	// A name nothing in the context fits does not read.
-	if r, n, g := resolveContextTarget("missing.go", "x", abs); r != "" || n != "" || g != "" {
-		t.Errorf("unfitting name read: %q %q %q", r, n, g)
+	if r, n, g := resolveContextTarget("missing.go", "x", abs); r != "" || n != "" || len(g) != 0 {
+		t.Errorf("unfitting name read: %q %q %v", r, n, g)
 	}
 	// The pronoun rewrite leaves non-tail lines alone.
 	for _, line := range []string{

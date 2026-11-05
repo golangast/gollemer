@@ -121,12 +121,13 @@ func TestParsePageFamilyPartialClaims(t *testing.T) {
 	}
 }
 
-// The partial answers through the chain: claimed, spelled in
-// page terms with the kind's own canonical sentence, nothing
-// written.
+// The partial answers through the chain: claimed, asked in
+// page terms (a clarifying question since 2026-11-05 —
+// clarify.go), a pending question held, nothing written.
 func TestPageFamilyPartialsThroughChain(t *testing.T) {
 	root := pageSiteRoot(t)
 	withChatSession(t, root, true)
+	defer clearPendingQuestion()
 	profile := &UserProfile{}
 	before := readBack(t, root, "main.go")
 
@@ -135,16 +136,26 @@ func TestPageFamilyPartialsThroughChain(t *testing.T) {
 	if !handled {
 		t.Fatalf("target-missing page line fell through:\n%s", out)
 	}
-	if !strings.Contains(out, `"create a homepage in jim"`) || !strings.Contains(out, `"create a homepage to jim/main.go"`) {
-		t.Errorf("target-missing answer does not spell both shapes:\n%s", out)
+	if !strings.Contains(out, "the sentence starts naming the file or folder but doesn't finish — where should it go?") ||
+		!strings.Contains(out, "Answer with a file or folder") {
+		t.Errorf("target-missing answer is not the target question:\n%s", out)
 	}
+	if !hasPendingQuestion() {
+		t.Errorf("the target-missing line set no pending question:\n%s", out)
+	}
+	clearPendingQuestion()
 	out = captureStdout(t, func() { handled = claimChain("create a form page named", yes, profile) })
 	if !handled {
 		t.Fatalf("name-missing page line fell through:\n%s", out)
 	}
-	if !strings.Contains(out, `"create a form page named Signup"`) {
-		t.Errorf("name-missing answer does not spell the named shape:\n%s", out)
+	if !strings.Contains(out, "doesn't give the name — what should I call it?") ||
+		!strings.Contains(out, "Answer with one name") {
+		t.Errorf("name-missing answer is not the name question:\n%s", out)
 	}
+	if !hasPendingQuestion() {
+		t.Errorf("the name-missing line set no pending question:\n%s", out)
+	}
+	clearPendingQuestion()
 	if got := readBack(t, root, "main.go"); got != before {
 		t.Errorf("a partial answer changed main.go")
 	}
