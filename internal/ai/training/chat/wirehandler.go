@@ -16,9 +16,23 @@ package chat
 //
 // Grammar (exactly this):
 //
-//	connect|wire|register|attach|hook up [the|a|an] <handler ref>
-//	    to|with [the|a|an] webserver|web server|server [at <path>]
+//	connect|wire|register|attach|link|plug [up] [the|a|an] <handler ref> [up]
+//	    to|with|into [the|a|an] webserver|web server|server [at <path>]
+//	hook up [the|a|an] <handler ref> … | hook [the|a|an] <handler ref> up …
 //	handler ref: handler | handler <Name> | <Name> | <Name> handler
+//
+// ("hook" is a phrasal verb here — it claims only with its
+// "up", in front of the reference or split behind it; a bare
+// "hook the handler to…" is a pinned non-claim.)
+//
+// The verb family (link, plug), the "into" preposition, and
+// the split phrasal ("wire Jake up to the webserver", "hook
+// Jake up…") were widened 2026-11-05: the phrasal verb's
+// particle rides behind the handler's name as naturally as
+// in front of it, and the grammar read it only in front.
+// "point" was probed and deliberately NOT added — "at" is
+// this grammar's route slot, so "point Jake at the webserver"
+// cannot be read without breaking "…at /path".
 //
 // The claim requires BOTH a handler reference and a server
 // word, so it can never steal the neighbours' sentences: the
@@ -103,18 +117,15 @@ func parseWireHandler(line string) (wireHandlerRequest, bool) {
 	}
 	i := 0
 	switch low[0] {
-	case "connect", "wire", "register", "attach":
+	case "connect", "wire", "register", "attach", "link", "plug", "hook":
 		i = 1
-	case "hook":
-		if len(fields) < 2 || low[1] != "up" {
-			return wireHandlerRequest{}, false
-		}
-		i = 2
 	default:
 		return wireHandlerRequest{}, false
 	}
 	// "wire up the handler…" — the phrasal particle.
+	upSeen := false
 	if i < len(fields) && low[i] == "up" {
+		upSeen = true
 		i++
 	}
 	if i < len(fields) && (low[i] == "the" || low[i] == "a" || low[i] == "an") {
@@ -139,6 +150,22 @@ func parseWireHandler(line string) (wireHandlerRequest, bool) {
 	default:
 		return wireHandlerRequest{}, false
 	}
+	// The phrasal "up" can also ride behind the handler
+	// reference: "wire Jake up to the webserver", "hook Jake
+	// up to the webserver". (A handler can't be named "Up" —
+	// the word is grammar furniture, in wireNameStopwords.)
+	if i < len(fields) && low[i] == "up" {
+		upSeen = true
+		i++
+	}
+	// "hook" is this grammar's phrasal verb: it claims only
+	// WITH its particle — in front ("hook up Jake…") or split
+	// behind the reference ("hook Jake up…"). A bare "hook
+	// the handler to…" was pinned a non-claim when the family
+	// shipped and stays one.
+	if low[0] == "hook" && !upSeen {
+		return wireHandlerRequest{}, false
+	}
 	// The line named the handler and stopped ("connect the
 	// handler", "wire Jake"): claimed, answered in wiring
 	// terms — a sentence about wiring a handler must never
@@ -147,7 +174,7 @@ func parseWireHandler(line string) (wireHandlerRequest, bool) {
 		req.partial = true
 		return req, true
 	}
-	if low[i] != "to" && low[i] != "with" {
+	if low[i] != "to" && low[i] != "with" && low[i] != "into" {
 		return wireHandlerRequest{}, false
 	}
 	i++

@@ -65,6 +65,11 @@ func TestParseCreateForms(t *testing.T) {
 		{"create a file named main.go", createReq{file: "main.go"}},
 		{"create a file notes.txt", createReq{file: "notes.txt"}},
 		{"create a file srv.go with a web server", createReq{file: "srv.go", kind: "webserver"}},
+		// The adjective "new" in the slot (2026-11-05
+		// widening): it describes the result, never names it.
+		{"make a new file notes.txt", createReq{file: "notes.txt"}},
+		{"create a new folder stuff", createReq{dir: true, name: "stuff"}},
+		{"create a new file main.go", createReq{file: "main.go"}},
 	}
 	for _, c := range cases {
 		got, ok := parseCreate(c.line)
@@ -118,6 +123,10 @@ func TestParseBoundaryForms(t *testing.T) {
 		{"remove the folder oldstuff", "delete", "rm -rf oldstuff"},
 		{"move the file a.go to folder jim", "move", "mv a.go jim"},
 		{"move file a.go to b.go", "move", "mv a.go b.go"},
+		// Copy joined the boundary's verbs 2026-11-05 — the
+		// one disk verb the family didn't answer.
+		{"copy the file main.go to app.go", "copy", "cp main.go app.go"},
+		{"copy the folder jim to james", "copy", "cp -r jim james"},
 		{"rename the file old.go to new.go", "rename", "mv old.go new.go"},
 		{"rename the folder jim to james", "rename", "mv jim james"},
 		{"install golang.org/x/tools/cmd/goimports", "install", "go install golang.org/x/tools/cmd/goimports@latest"},
@@ -140,6 +149,7 @@ func TestParseBoundaryForms(t *testing.T) {
 func TestParseBoundaryNonClaims(t *testing.T) {
 	for _, line := range []string{
 		"rename Foo to Bar", // the rename feature's line
+		"copy Greet as GreetLoudly", // the assembled edits' line — no file word, no path
 		"delete my account",
 		"how do i delete a file",
 		"remove the plum case from Describe",

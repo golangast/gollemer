@@ -52,6 +52,9 @@ func TestParseDelegateForms(t *testing.T) {
 		{"wrap Load in app/main.go", "app/main.go", "Load", ""},
 		{"add a function in the app/main.go that calls Load.", "app/main.go", "Load", ""},
 		{"Add a function in lib/other.go that calls Local", "lib/other.go", "Local", ""},
+		// create|make joined the lead verbs 2026-11-05.
+		{"create a function in app/main.go that calls Load", "app/main.go", "Load", ""},
+		{"make a function LoadItem in app/main.go that calls store.Load", "app/main.go", "store.Load", "LoadItem"},
 	}
 	for _, c := range claims {
 		file, source, wrapper, ok := parseDelegate(c.line)

@@ -72,6 +72,11 @@ func parseInstantiate(line string) (instantiateReq, bool) {
 	for i, f := range fields {
 		low[i] = strings.ToLower(f)
 	}
+	// Add|put only — deliberately: "create" is the creations
+	// family's verb, and this family's calibration table pins
+	// "create a Jim in Jake" a non-claim for exactly that
+	// reason. The 2026-11-05 phrasing-gap audit probed
+	// widening and left the pin standing.
 	if low[0] != "add" && low[0] != "put" {
 		return instantiateReq{}, false
 	}

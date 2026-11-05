@@ -52,6 +52,34 @@ func assertNoMemoryStoreInTree(t *testing.T, root string) {
 	}
 }
 
+// The capture shapes' widened spellings (2026-11-05): a
+// leading "please" on the remember family, and "note that
+// <fact>" as the colon note's spoken form. Parse-level: the
+// shapes are anchored whole-line regexes, so a parse accept
+// is the claim firing.
+func TestMemoryCaptureWidenedShapes(t *testing.T) {
+	for _, tc := range []struct{ line, scope, text string }{
+		{"please remember: use tabs", "project", "use tabs"},
+		{"please remember that the api lives in jim", "project", "the api lives in jim"},
+		{"note that the api lives in jim", "project", "the api lives in jim"},
+		{"please note: the api lives in jim", "project", "the api lives in jim"},
+		{"please call me Jay", "preference", "call me Jay"},
+	} {
+		scope, text, ok := parseMemoryCapture(tc.line)
+		if !ok || scope != tc.scope || text != tc.text {
+			t.Errorf("parseMemoryCapture(%q) = %q, %q, %v — want %q, %q, true", tc.line, scope, text, ok, tc.scope, tc.text)
+		}
+	}
+	// The date question's today forms reach the time arm.
+	fixed := time.Date(2026, time.November, 5, 9, 30, 0, 0, time.FixedZone("CST", -6*60*60))
+	for _, line := range []string{"what's today's date", "what's the date today", "what is today's day"} {
+		ans, ok := talkStateAnswer(TalkContext{State: systemState{Now: fixed}}, line)
+		if !ok || !strings.Contains(ans, "November 5, 2026") {
+			t.Errorf("talkStateAnswer(%q) = %q, %v", line, ans, ok)
+		}
+	}
+}
+
 func TestMemoryCaptureEchoOrdinaryLineAndRecall(t *testing.T) {
 	home := isolateMemoryStore(t)
 	root := talkFixtureProject(t)

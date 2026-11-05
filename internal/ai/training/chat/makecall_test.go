@@ -54,6 +54,10 @@ func TestParseMakeCallForms(t *testing.T) {
 		{"add a function named Check in lib/checks.go and call it from Serve in web/web.go", "Check", "lib/checks.go", "web/web.go", "", "Serve"},
 		{"create a function named Validate in api/validate.go and add a function named Report in api/report.go that calls it", "Validate", "api/validate.go", "api/report.go", "Report", ""},
 		{"put a function named Validate in api/validate.go and make a function Report in api/report.go that calls it", "Validate", "api/validate.go", "api/report.go", "Report", ""},
+		// "then" joins the halves as "and" does (2026-11-05).
+		{"make a function named Foo in jim/a.go then call it in jim/b.go", "Foo", "jim/a.go", "jim/b.go", "", ""},
+		{"add a function named Foo in jim/a.go then call it from main in jim/b.go", "Foo", "jim/a.go", "jim/b.go", "", "main"},
+		{"make a function named Foo in jim/a.go then add a function named Bar in jim/b.go that calls it", "Foo", "jim/a.go", "jim/b.go", "Bar", ""},
 	}
 	for _, c := range claims {
 		name, callee, target, caller, host, ok := parseMakeCall(c.line)

@@ -29,6 +29,10 @@ func TestParsePageFamilyClaims(t *testing.T) {
 		// home.
 		{"create a homepage", "home", "", ""},
 		{"add a home page", "home", "", ""},
+		// "put" joined the verbs 2026-11-05 — the family's
+		// fifth spelling of the ask.
+		{"put a homepage in jim", "home", "", "jim"},
+		{"put a form page named Signup to jim/main.go", "form", "Signup", "jim/main.go"},
 		{"create a homepage named Landing in jim", "home", "Landing", "jim"},
 		{"make a home page in jim named Landing", "home", "Landing", "jim"},
 		// about.

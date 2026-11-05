@@ -67,6 +67,7 @@ func TestParseAmbiguousPieceNonClaims(t *testing.T) {
 		"how do i add a handler",                  // never verb-led
 		"can you add a handler named Jim",         // never verb-led
 		"put handler Jim",                         // only the add shapes are this fix's
+		"put a handler in jim/main.go",            // … the targeted spelling, too (probed 2026-11-05, pin kept)
 		"insert a handler named Jim",
 		"add handlers Jim",                                   // the plural is not the kind word
 		"add handler for the login page",                     // "for" is not a name

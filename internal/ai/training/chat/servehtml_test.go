@@ -55,6 +55,21 @@ func TestParseServeHTMLClaims(t *testing.T) {
 		{"make a server to serve index.html", "index.html", ""},
 		{"get a web server that serves index.html to main.go", "index.html", "main.go"},
 		{"create a server that serves index.html", "index.html", ""},
+		// The serve word's synonym family (2026-11-05
+		// widening): the beginner's verbs for what a server
+		// does with a page.
+		{"build a server that returns a HTML file", "", ""},
+		{"build a server that returns index.html", "index.html", ""},
+		{"build a server that returns index.html to jim/main.go", "index.html", "jim/main.go"},
+		{"make a server that sends index.html", "index.html", ""},
+		{"create a webserver that shows index.html", "index.html", ""},
+		{"add a server that displays index.html", "index.html", ""},
+		{"get a server that gives index.html", "index.html", ""},
+		{"build a server that hosts index.html", "index.html", ""},
+		{"build a server that serves up index.html", "index.html", ""},
+		{"serve up index.html", "index.html", ""},
+		{"serve up index.html to jim/main.go", "index.html", "jim/main.go"},
+		{"make a server to return index.html", "index.html", ""},
 	}
 	for _, tc := range claims {
 		got, ok := parseServeHTML(tc.line)
@@ -102,6 +117,13 @@ func TestParseServeHTMLNonClaims(t *testing.T) {
 		"add a webserver to main.go",
 		"add a web server to jim",
 		"add a server to main.go",
+		// The widened serve words still need a page after
+		// them: the neighbours' shapes die at the page spec,
+		// and a statement about a server is nobody's edit.
+		"add a server that returns static files to main.go",
+		"build a server that returns static files",
+		"the server returns an html file",
+		"my server sends the homepage",
 		// The creations' sentences.
 		"create a file jim/main.go with a webserver",
 		"create a folder named jim",

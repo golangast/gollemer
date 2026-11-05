@@ -18,7 +18,11 @@ package chat
 //
 // Grammar (exactly this):
 //
-//	create|add|make|build [a|an|the] <kind phrase> [tail]
+//	create|add|make|build|put [a|an|the] <kind phrase> [tail]
+//
+// ("put" joined the verb family 2026-11-05 — "put a homepage
+// in jim" is the same ask in the family's own fifth verb, the
+// one add-a-webserver and serve-an-html-file already read.)
 //	kind phrase:
 //	  form:    handler with a form | handler named <Name> with a form | form page
 //	  home:    homepage | home page
@@ -134,7 +138,7 @@ func parsePageFamily(line string) (pageRequest, bool) {
 	}
 	i := 0
 	switch low[0] {
-	case "create", "add", "make", "build":
+	case "create", "add", "make", "build", "put":
 		i = 1
 	default:
 		return pageRequest{}, false

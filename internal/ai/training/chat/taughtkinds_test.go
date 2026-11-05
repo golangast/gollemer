@@ -158,6 +158,19 @@ func TestParseTaughtUse(t *testing.T) {
 	if !ok || u.kind != "signup form" || u.named || u.target != "site/site.go" {
 		t.Errorf("nameless form: got %+v ok=%v", u, ok)
 	}
+	// The 2026-11-05 widening: put|build verbs, and "called"
+	// as the name slot's second spelling — the kind must not
+	// swallow the name.
+	for _, line := range []string{
+		"put a signup form named Signup to site/site.go",
+		"build a signup form named Signup to site/site.go",
+		"add a signup form called Signup to site/site.go",
+	} {
+		u, ok = parseTaughtUse(line)
+		if !ok || u.kind != "signup form" || u.name != "Signup" || u.target != "site/site.go" || !u.named {
+			t.Errorf("%q: got %+v ok=%v, want kind/name/target read", line, u, ok)
+		}
+	}
 	for _, line := range []string{
 		"add",
 		"hello there",
@@ -361,6 +374,26 @@ func TestUseLandsRenamedWithProvenance(t *testing.T) {
 	if !strings.HasPrefix(got, "package site\n") || !strings.Contains(got, "func SignupTwo(") {
 		t.Errorf("created file wrong:\n%s", got)
 	}
+
+	// The widened spellings (2026-11-05) land the TAUGHT
+	// piece — provenance on the plan, the example's own body
+	// in the file — and never the book's form handler, which
+	// is what the phrasing layer used to answer these lines
+	// with when the taught grammar declined them.
+	for _, tc := range []struct{ line, file, fn string }{
+		{"put a signup form named SignupThree to site/forms3.go", "site/forms3.go", "SignupThree"},
+		{"add a signup form called SignupFour to site/forms4.go", "site/forms4.go", "SignupFour"},
+	} {
+		handled, out = taughtRun(t, tc.line)
+		if !handled || !strings.Contains(out, "From your example Jake in jim/main.go, taught") {
+			t.Errorf("%q: handled=%v, plan lacks taught provenance:\n%s", tc.line, handled, out)
+			continue
+		}
+		got = readBack(t, dir, tc.file)
+		if !strings.Contains(got, "func "+tc.fn+"(") || !strings.Contains(got, "thanks, %s") {
+			t.Errorf("%q: landed file is not the taught template:\n%s", tc.line, got)
+		}
+	}
 }
 
 func TestUseRecursiveRenamesCalls(t *testing.T) {
@@ -431,6 +464,13 @@ func TestManageListForgetAndAftermath(t *testing.T) {
 	if !handled || !strings.Contains(out, `"signup form" — from your example Jake (function) in jim/main.go`) ||
 		!strings.Contains(out, `"linked node" — from your example Node (type) in store/store.go`) {
 		t.Errorf("list: handled=%v\n%s", handled, out)
+	}
+	// The list question's other two spellings (2026-11-05).
+	for _, line := range []string{"what did you learn from me", "show me what i taught you"} {
+		handled, out = taughtRun(t, line)
+		if !handled || !strings.Contains(out, `"signup form"`) {
+			t.Errorf("%q: handled=%v\n%s", line, handled, out)
+		}
 	}
 	// Forget a kind that was never taught: the answer lists
 	// what there is and forgets nothing.

@@ -27,7 +27,12 @@ func TestWriteBoundaryGuidanceLinesFallThroughEveryShape(t *testing.T) {
 		"add a function in jim/main.go",
 		"add a field to jim/main.go",
 		"add a parameter to Fetch",
-		"add a server to jim/main.go",
+		// "add a server to jim/main.go" stood in this list
+		// until 2026-11-05: no shape claimed it, so the
+		// boundary answered it. The add-webserver grammar's
+		// bare-noun widening claims it now — it was the
+		// beginner's spelling of that ask all along — and
+		// addserver's own tables pin what happens to it.
 		"add print line to jim/main.go",
 		"add an interface to jim/main.go",
 		"add a method to jim/main.go",

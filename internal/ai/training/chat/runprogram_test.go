@@ -107,6 +107,13 @@ func TestParseProgramLine(t *testing.T) {
 		{"run program jake/main.go", shapeRunProgram, "jake/main.go"},
 		{"run ./jake/main.go", shapeRunProgram, "./jake/main.go"},
 		{"run the program jake/main.go.", shapeRunProgram, "jake/main.go"},
+		// start|launch read as the run verb (2026-11-05) —
+		// same rest shapes, so a build ask still declines.
+		{"start the program in jake/main.go", shapeRunProgram, "jake/main.go"},
+		{"start jake/main.go", shapeRunProgram, "jake/main.go"},
+		{"launch jake/main.go", shapeRunProgram, "jake/main.go"},
+		{"start a webserver in jake/main.go", shapeNone, ""},
+		{"kill the program", shapeNone, ""},
 		{"run the program notes.txt", shapeRunProgram, "notes.txt"},
 		{"run make eval", shapeNone, ""},
 		{"run make start", shapeNone, ""},

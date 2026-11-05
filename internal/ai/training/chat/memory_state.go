@@ -641,7 +641,7 @@ func changedGoFilesSinceRead(root string) ([]string, string) {
 // ----- deterministic state answers -----
 
 var (
-	memoryTimeRe    = regexp.MustCompile(`(?i)^\s*(what(?:'s| is) the (current )?(time|date|day)|what time is it|what day is it|current time|current date)\s*[?.!]*\s*$`)
+	memoryTimeRe    = regexp.MustCompile(`(?i)^\s*(what(?:'s| is) the (current )?(time|date|day)( today)?|what time is it|what day is it|what(?:'s| is) today'?s (date|day)|current time|current date)\s*[?.!]*\s*$`)
 	memoryOSRe      = regexp.MustCompile(`(?i)^\s*(what (operating system|os|system|environment) (am i|are we) (on|in)|what os is this|where are we working|what project are we in|what folder are we in)\s*[?.!]*\s*$`)
 	memoryBranchRe  = regexp.MustCompile(`(?i)^\s*(what branch (am i|are we) on|which branch is this|what(?:'s| is) the (git )?branch)\s*[?.!]*\s*$`)
 	memoryChangedRe = regexp.MustCompile(`(?i)^\s*(what(?:'s| is) (my |the )?(git status|status)|what changed|what files changed|is the (tree|working tree) dirty|are there any changes)\s*[?.!]*\s*$`)
@@ -744,11 +744,12 @@ func isPreferenceText(s string) bool {
 }
 
 var (
-	rememberColonRe  = regexp.MustCompile(`(?i)^\s*remember\s*:\s*(.+?)\s*$`)
-	rememberThatRe   = regexp.MustCompile(`(?i)^\s*remember that\s+(.+?)\s*$`)
-	rememberPlainRe  = regexp.MustCompile(`(?i)^\s*remember\s+(.+?)\s*$`)
-	projectNoteRe    = regexp.MustCompile(`(?i)^\s*(?:note(?: for this project)?|remember (?:a note )?for this project)\s*:\s*(.+?)\s*$`)
-	callMeRe         = regexp.MustCompile(`(?i)^\s*call me\s+(.+?)\s*$`)
+	rememberColonRe  = regexp.MustCompile(`(?i)^\s*(?:please\s+)?remember\s*:\s*(.+?)\s*$`)
+	rememberThatRe   = regexp.MustCompile(`(?i)^\s*(?:please\s+)?remember that\s+(.+?)\s*$`)
+	rememberPlainRe  = regexp.MustCompile(`(?i)^\s*(?:please\s+)?remember\s+(.+?)\s*$`)
+	projectNoteRe    = regexp.MustCompile(`(?i)^\s*(?:please\s+)?(?:note(?: for this project)?|remember (?:a note )?for this project)\s*:\s*(.+?)\s*$`)
+	noteThatRe       = regexp.MustCompile(`(?i)^\s*(?:please\s+)?note that\s+(.+?)\s*$`)
+	callMeRe         = regexp.MustCompile(`(?i)^\s*(?:please\s+)?call me\s+(.+?)\s*$`)
 	memoryRecallRe   = regexp.MustCompile(`(?i)^\s*(what do you remember(?: about (me|this project))?|show me what you remember|what have you remembered)\s*[?.!]*\s*$`)
 	forgetAllRe      = regexp.MustCompile(`(?i)^\s*forget everything\s*[!.]*\s*$`)
 	forgetProjectRe  = regexp.MustCompile(`(?i)^\s*forget this project\s*[!.]*\s*$`)
@@ -757,6 +758,12 @@ var (
 
 func parseMemoryCapture(line string) (scope, text string, ok bool) {
 	if m := projectNoteRe.FindStringSubmatch(line); m != nil {
+		return "project", cleanMemoryText(m[1]), true
+	}
+	// "note that <fact>" — the colon note's spoken form
+	// (widened 2026-11-05; stored as the project's note,
+	// same as the colon shape).
+	if m := noteThatRe.FindStringSubmatch(line); m != nil {
 		return "project", cleanMemoryText(m[1]), true
 	}
 	if m := callMeRe.FindStringSubmatch(line); m != nil {

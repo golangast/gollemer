@@ -377,6 +377,34 @@ case_transcript_contains wire-duplicate-answer wire "Jake is already registered 
 case_transcript_contains wire-other-path-refusal wire "already registered at /jake" "/signup" "won't register it at /signup as well"
 case_file_contains wire-bare-pete jim/main.go 'http.HandleFunc("/pete", Pete)'
 
+# --- session: the phrasing-gap widenings (2026-11-05) ---------------
+# The beginner's own spellings of asks the features already
+# owned: "new" in the creation slot, a server that RETURNS a
+# page (John's live miss — the serve grammar knew only
+# serves/serving/to serve), the split phrasal "wire Gus up",
+# and the boundary answering copy like its sibling verbs.
+
+cat > "$SCRATCH/.inputs/gaps.txt" <<'EOF'
+create a new folder gaptest
+y
+create a new file in folder gaptest with a webserver
+y
+build a server that returns home.html to gaptest/main.go
+y
+add a form handler named Gus to gaptest/main.go
+y
+wire Gus up to the webserver
+y
+copy the file gaptest/home.html to gaptest/welcome.html
+/quit
+EOF
+run_session gaps
+
+case_file_contains gaps-returns-serves gaptest/main.go "http.ServeFile"
+case_file_contains gaps-returns-page gaptest/home.html "TODO"
+case_file_contains gaps-wire-split-phrasal gaptest/main.go 'http.HandleFunc("/gus", Gus)'
+case_transcript_contains gaps-copy-boundary gaps "I can't copy files or folders on disk." "cp gaptest/home.html gaptest/welcome.html"
+
 # --- sessions: the page family ---------------------------------------
 # A named page kind is a matched pair in ONE gated plan: the
 # starter page, the handler that serves it, and the route

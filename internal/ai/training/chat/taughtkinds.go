@@ -361,19 +361,25 @@ type taughtUseAsk struct {
 
 // parseTaughtUse reads the use shapes:
 //
-//	add|create|make [a|an|the] <kind> named <Name> [to|in|into [the] [file|folder] <target>]
-//	add|create|make [a|an|the] <kind> [to|in|into ... <target>]   (no name: guidance when the kind is taught)
+//	add|create|make|put|build [a|an|the] <kind> named|called <Name> [to|in|into [the] [file|folder] <target>]
+//	add|create|make|put|build [a|an|the] <kind> [to|in|into ... <target>]   (no name: guidance when the kind is taught)
 //
 // The kind is whatever runs between the article and the
 // "named" slot (or the target tail); whether it names a
 // taught kind is the caller's question, not the parser's.
+//
+// (put|build joined the verbs and "called" the name slot
+// 2026-11-05: both are the neighbouring claims' own words —
+// the creations read "named|called" the same way — and a use
+// sentence spelled with either parsed as an unknown kind
+// before, the name swallowed into the kind phrase.)
 func parseTaughtUse(line string) (taughtUseAsk, bool) {
 	fields, low := splitSentence(line)
 	if len(fields) < 3 {
 		return taughtUseAsk{}, false
 	}
 	switch low[0] {
-	case "add", "create", "make":
+	case "add", "create", "make", "put", "build":
 	default:
 		return taughtUseAsk{}, false
 	}
@@ -381,10 +387,12 @@ func parseTaughtUse(line string) (taughtUseAsk, bool) {
 	if i < len(low) && (low[i] == "a" || low[i] == "an" || low[i] == "the") {
 		i++
 	}
-	// The "named" slot, if the sentence carries one.
+	// The name slot, if the sentence carries one: "named
+	// <Name>", or "called <Name>" — the creations' second
+	// spelling of the same introducer.
 	namedAt := -1
 	for j := i; j < len(low); j++ {
-		if low[j] == "named" {
+		if low[j] == "named" || low[j] == "called" {
 			namedAt = j
 			break
 		}
@@ -1078,7 +1086,7 @@ func unknownKindAnswerable(kind string) bool {
 // store's forgets are "forget the <kind>" and the two all
 // forms.
 var (
-	taughtListRe      = regexp.MustCompile(`(?i)^\s*(what have i taught you|what did i teach you|what i taught you|what have you learned from me|list what (i've|i have) taught you|show what (i've|i have) taught you)\s*[?.!]*\s*$`)
+	taughtListRe      = regexp.MustCompile(`(?i)^\s*(what have i taught you|what did i teach you|what i taught you|what have you learned from me|what did you learn from me|list what (i've|i have) taught you|show what (i've|i have) taught you|show me what (i've |i have |i )?taught you)\s*[?.!]*\s*$`)
 	taughtForgetAllRe = regexp.MustCompile(`(?i)^\s*forget (what i taught you|everything i taught you|all i taught you|everything you learned from me)\s*[!.]*\s*$`)
 	taughtForgetRe    = regexp.MustCompile(`(?i)^\s*forget the\s+(.+?)(?:\s+i taught you)?\s*[!.]*\s*$`)
 )

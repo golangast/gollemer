@@ -139,6 +139,14 @@ func parseCreate(line string) (createReq, bool) {
 	if low[i] == "a" || low[i] == "an" || low[i] == "the" {
 		i++
 	}
+	// The adjective "new" can ride in front of the thing
+	// being made ("create a new file …", "make a new folder
+	// …"): it describes the result, never names it, so it is
+	// a slot word exactly like the article. (Widened
+	// 2026-11-05 — both spellings parsed nowhere before.)
+	if i < len(fields) && low[i] == "new" {
+		i++
+	}
 	if i >= len(fields) {
 		return createReq{}, false
 	}
@@ -290,9 +298,9 @@ var boundaryFillers = map[string]bool{
 	"file": true, "folder": true, "directory": true,
 }
 
-// parseBoundary claims imperative delete/remove, move, disk
-// rename, install, and download lines — to answer them, never to
-// run them. Disk-shaped only: without a file/folder/directory word
+// parseBoundary claims imperative delete/remove, move, copy,
+// disk rename, install, and download lines — to answer them,
+// never to run them. Disk-shaped only: without a file/folder/directory word
 // or a path-like target the line is not claimed, so "rename Foo to
 // Bar" keeps its owner and questions ("how do i delete a file")
 // keep theirs — a question never starts with the bare verb.
@@ -377,6 +385,51 @@ func parseBoundary(line string) (boundaryReq, bool) {
 			dest = "<new home>"
 		}
 		return boundaryReq{verb: "move", cmd: "mv " + target + " " + dest, near: nearCreate}, true
+	case "copy":
+		// The move case's shape with the copy command: the
+		// boundary answers every disk verb a beginner reaches
+		// for, and copy was the one missing (widened
+		// 2026-11-05). The claim stays disk-shaped — the
+		// assembled edits' "copy <Func> as <NewName>" carries
+		// no file/folder word and no path, so it never lands
+		// here.
+		toAt := -1
+		for j := 1; j < len(fields); j++ {
+			if low[j] == "to" {
+				toAt = j
+				break
+			}
+		}
+		target := rest(1)
+		folderCopy := false
+		if toAt > 1 {
+			head := fields[1:toAt]
+			k := 0
+			for k < len(head) && boundaryFillers[strings.ToLower(head[k])] {
+				if strings.ToLower(head[k]) == "folder" || strings.ToLower(head[k]) == "directory" {
+					folderCopy = true
+				}
+				k++
+			}
+			target = strings.Join(head[k:], " ")
+		}
+		if target == "" || (!hasTypeWord && !pathLike(strings.Fields(target)[0])) {
+			return boundaryReq{}, false
+		}
+		dest := ""
+		if toAt >= 0 {
+			dest = rest(toAt + 1)
+		}
+		if dest == "" {
+			dest = "<new home>"
+		}
+		// Unlike mv, cp needs -r for a folder — the answer
+		// shows the command that would actually work.
+		cmd := "cp " + target + " " + dest
+		if folderCopy {
+			cmd = "cp -r " + target + " " + dest
+		}
+		return boundaryReq{verb: "copy", cmd: cmd, near: nearCreate}, true
 	case "rename":
 		toAt := -1
 		for j := 1; j < len(fields); j++ {
@@ -443,6 +496,8 @@ func (b boundaryReq) answer() string {
 		s.WriteString("I can't delete files or folders — deleting is yours alone.")
 	case "move":
 		s.WriteString("I can't move files or folders around on disk.")
+	case "copy":
+		s.WriteString("I can't copy files or folders on disk.")
 	case "rename":
 		s.WriteString("I can't rename files on disk — the renaming I do is Go names inside your code.")
 	case "install":

@@ -27,6 +27,10 @@ package chat
 //	  and add|create|make a function [named] <Caller> in
 //	    <B>.go that calls it
 //
+// ("then" joins the halves exactly as "and" does since the
+// 2026-11-05 widening — "make a function … then call it in …"
+// is the same two-file ask in the other conjunction.)
+//
 // A same-file ask (A and B the same path) is NOT claimed:
 // the ordinary one-file shapes keep it.
 
@@ -42,9 +46,9 @@ import (
 )
 
 var (
-	reMakeCallNamed = regexp.MustCompile(`(?i)^(?:make|add|create|put) a function (?:named )?([A-Za-z_]\w*) in (.+?\.go) and (?:add|create|make) a function (?:named )?([A-Za-z_]\w*) in (.+?\.go) that calls it$`)
-	reMakeCallFrom  = regexp.MustCompile(`(?i)^(?:make|add|create|put) a function (?:named )?([A-Za-z_]\w*) in (.+?\.go) and call it from ([A-Za-z_]\w*) in (.+?\.go)$`)
-	reMakeCallBare  = regexp.MustCompile(`(?i)^(?:make|add|create|put) a function (?:named )?([A-Za-z_]\w*) in (.+?\.go) and call it in (.+?\.go)$`)
+	reMakeCallNamed = regexp.MustCompile(`(?i)^(?:make|add|create|put) a function (?:named )?([A-Za-z_]\w*) in (.+?\.go) (?:and|then) (?:add|create|make) a function (?:named )?([A-Za-z_]\w*) in (.+?\.go) that calls it$`)
+	reMakeCallFrom  = regexp.MustCompile(`(?i)^(?:make|add|create|put) a function (?:named )?([A-Za-z_]\w*) in (.+?\.go) (?:and|then) call it from ([A-Za-z_]\w*) in (.+?\.go)$`)
+	reMakeCallBare  = regexp.MustCompile(`(?i)^(?:make|add|create|put) a function (?:named )?([A-Za-z_]\w*) in (.+?\.go) (?:and|then) call it in (.+?\.go)$`)
 )
 
 // parseMakeCall reads one chat line as a make-and-call

@@ -254,6 +254,14 @@ func parseAmbiguousSeat(line string, entries []analyze.ConceptEntry, beforeBook 
 	for i, f := range fields {
 		low[i] = strings.ToLower(strings.Trim(f, ",;:\"'()"))
 	}
+	// Add only — deliberately: this seat was built as the fix
+	// for the "add handler Jim" screenshot lines, and its
+	// calibration table pins the other verbs out ("put
+	// handler Jim" is a named non-claim there). The 2026-11-05
+	// phrasing-gap audit probed widening the seats to put and
+	// left the pin standing: the seat answers the add shapes,
+	// and a "put a handler…" line stays the honest fallthrough
+	// rather than guidance wearing a verb it wasn't built for.
 	if low[0] != "add" {
 		return ambPieceReq{}, false
 	}

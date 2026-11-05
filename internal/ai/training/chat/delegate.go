@@ -42,8 +42,8 @@ import (
 )
 
 var (
-	reDelegateNamed = regexp.MustCompile(`(?i)^add a function ([A-Za-z_]\w*) in (.+?) that calls ([A-Za-z_][\w.]*)$`)
-	reDelegateAnon  = regexp.MustCompile(`(?i)^add a function in (.+?) that calls ([A-Za-z_][\w.]*)$`)
+	reDelegateNamed = regexp.MustCompile(`(?i)^(?:add|create|make) a function ([A-Za-z_]\w*) in (.+?) that calls ([A-Za-z_][\w.]*)$`)
+	reDelegateAnon  = regexp.MustCompile(`(?i)^(?:add|create|make) a function in (.+?) that calls ([A-Za-z_][\w.]*)$`)
 	reDelegateWrap  = regexp.MustCompile(`(?i)^wrap ([A-Za-z_][\w.]*) in (.+)$`)
 )
 

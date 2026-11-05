@@ -18,7 +18,11 @@ package chat
 //     "run the program in <path>.go" spelling John's second
 //     screenshot used) claim the line; a missing file or a
 //     non-.go path refuses by name, and "run make <target>"
-//     is never this claim's shape.
+//     is never this claim's shape. "start" and "launch" read
+//     as the same verb (widened 2026-11-05) — the rest shapes
+//     are unchanged, so "start a webserver in…" still
+//     declines: this family runs programs, it does not build
+//     them.
 //   - The program is built first (`go build`, argv only, no
 //     shell ever), so compiler errors surface verbatim as a
 //     compile failure and are never narrated as a run. A file
@@ -110,7 +114,7 @@ func parseProgramLine(line string) (programShape, string) {
 		return shapeTop, ""
 	}
 	switch fold(fields[0]) {
-	case "run":
+	case "run", "start", "launch":
 		rest := fields[1:]
 		if len(rest) == 1 {
 			if _, p := pathy(rest[0]); p {

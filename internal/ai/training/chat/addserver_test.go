@@ -56,6 +56,14 @@ func TestParseAddServerForms(t *testing.T) {
 		"add the webserver to the file jim/main.go": "jim/main.go",
 		"add the web server to jim/main.go":         "jim/main.go",
 		"put the webserver into the folder jim":     "jim",
+		// The 2026-11-05 widening: make/create/build verbs,
+		// and the bare noun "server" — the beginner's
+		// spellings of this same ask.
+		"make a webserver in jim/main.go":   "jim/main.go",
+		"create a webserver in jim/main.go": "jim/main.go",
+		"build a web server to jim/main.go": "jim/main.go",
+		"add a server to jim/main.go":       "jim/main.go",
+		"make a server in jim":              "jim",
 	}
 	for line, want := range claims {
 		got, ok := parseAddServer(line)
@@ -75,8 +83,12 @@ func TestParseAddServerForms(t *testing.T) {
 		"add a case for plum to Describe",       // an assembled edit
 		"add a webserver",                       // no target
 		"add a webserver to",                    // no target
-		"add a server to jim/main.go",           // not the component's name
 		"add a webserver for me",                // no to/in/into
+		// The widened verbs still need the preposition right
+		// after the noun: serve-an-html-file's composite
+		// shape dies here, as it did before.
+		"build a server that serves index.html to jim/main.go",
+		"make a server that returns index.html",
 		"the webserver is down",                 // not an imperative
 		// The widened determiner slot must not swallow
 		// determiner-led sentences whose noun is not the

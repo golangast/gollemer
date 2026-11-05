@@ -12,11 +12,22 @@ package chat
 //
 // Grammar (exactly this):
 //
-//	serve [a|an|the] <page>.html [target]
+//	serve [up] [a|an|the] <page>.html [target]
 //	serve [a|an|the] html file|page [target]
 //	add|put|build|make|create|get [a|an|the] server|webserver|web server|http server
-//	    [that] serves|serving|serve <page>.html|html file|page [target]
+//	    [that] [to] <serve word> [up] <page>.html|html file|page [target]
+//	serve word: serve|serves|serving|returns|gives|sends|shows|displays|hosts
 //	target: to|in|into [the] [folder|file] <one token>
+//
+// The serve word's synonym family (returns/gives/…/hosts, and
+// "serves up") was widened 2026-11-05: "build a server that
+// returns a HTML file" is the way a beginner says this ask,
+// and the capability sat unreachable behind the one verb the
+// grammar happened to know. The widening is slot-shaped only:
+// the line still needs the server word before it and a page
+// after it, so the neighbours' sentences ("add a server that
+// returns static files…") still die at the page spec, exactly
+// as they died at the serve word before.
 //
 // The page defaults to index.html when the ask names no file
 // ("serve an html file"). The target is optional: without one,
@@ -75,6 +86,11 @@ func parseServeHTML(line string) (serveHTMLRequest, bool) {
 	switch low[0] {
 	case "serve":
 		i = 1
+		// "serve up <page>": the phrasal particle rides
+		// behind the lead verb.
+		if i < len(fields) && low[i] == "up" {
+			i++
+		}
 	case "add", "put", "build", "make", "create", "get":
 		i = 1
 		if i < len(fields) && (low[i] == "a" || low[i] == "an" || low[i] == "the") {
@@ -91,18 +107,16 @@ func parseServeHTML(line string) (serveHTMLRequest, bool) {
 		default:
 			return serveHTMLRequest{}, false
 		}
-		// The serve word: that serves / serving / to serve.
+		// The serve word: that serves / serving / to serve,
+		// and its synonym family (see serveWordAt).
 		if i < len(fields) && low[i] == "that" {
 			i++
 		}
-		switch {
-		case i < len(fields) && (low[i] == "serves" || low[i] == "serving" || low[i] == "serve"):
-			i++
-		case i+1 < len(fields) && low[i] == "to" && low[i+1] == "serve":
-			i += 2
-		default:
+		ni, ok := serveWordAt(low, i)
+		if !ok {
 			return serveHTMLRequest{}, false
 		}
+		i = ni
 	default:
 		return serveHTMLRequest{}, false
 	}
@@ -148,6 +162,36 @@ func parseServeHTML(line string) (serveHTMLRequest, bool) {
 	}
 	req.target = fields[i]
 	return req, true
+}
+
+// serveWordAt reads the serve word at position i: one of the
+// family's verbs (serve itself, or the ordinary words for
+// what a server does with a page — returns, gives, sends,
+// shows, displays, hosts, in third person after "that" and
+// in base form behind "to": "a server to return the page"),
+// optionally followed by the phrasal "up" ("serves up"). It
+// returns where the next word stands. The family is verbs
+// only: a word outside it ("the server runs…") is not this
+// recipe's sentence.
+func serveWordAt(low []string, i int) (int, bool) {
+	if i+1 < len(low) && low[i] == "to" {
+		i++
+	}
+	if i >= len(low) {
+		return i, false
+	}
+	switch low[i] {
+	case "serve", "serves", "serving",
+		"returns", "return", "gives", "give", "sends", "send",
+		"shows", "show", "displays", "display", "hosts", "host":
+		i++
+	default:
+		return i, false
+	}
+	if i < len(low) && low[i] == "up" {
+		i++
+	}
+	return i, true
 }
 
 // serveHTMLSpecAt reads the page spec at position i: an .html

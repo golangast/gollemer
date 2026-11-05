@@ -32,6 +32,18 @@ func TestParseWireHandlerClaims(t *testing.T) {
 		{"connect the jake handler to the webserver", "jake", "", false},
 		{"connect the Jake handler to the webserver at /contact", "Jake", "/contact", false},
 		{"connect the handler to the webserver at /", "", "/", false},
+		// The 2026-11-05 widening: link/plug verbs, the
+		// "into" preposition, and the split phrasal — the
+		// particle behind the handler's name.
+		{"wire Jake up to the webserver", "Jake", "", false},
+		{"hook Jake up to the webserver", "Jake", "", false},
+		{"connect the handler up to the webserver", "", "", false},
+		{"link the Jake handler to the webserver", "Jake", "", false},
+		{"link Jake to the server", "Jake", "", false},
+		{"plug Jake into the webserver", "Jake", "", false},
+		{"connect Jake into the webserver", "Jake", "", false},
+		{"wire Jake into the webserver at /jake", "Jake", "/jake", false},
+		{"wire Jake up", "Jake", "", true},
 		// Started, then stopped: claimed, answered in wiring terms.
 		{"connect the handler", "", "", true},
 		{"connect the Jake handler", "Jake", "", true},
@@ -65,6 +77,17 @@ func TestParseWireHandlerNonClaims(t *testing.T) {
 		"serve an html file",
 		"connect to the database",
 		"connect the webserver to the handler", // direction is fixed: handler into server
+		// "point" was probed and deliberately not widened
+		// (2026-11-05): "at" is this grammar's route slot,
+		// so the metaphor can't be read without breaking
+		// "…at /path".
+		"point Jake at the webserver",
+		"link to the database",
+		// Bare "hook" without its particle, in the named
+		// form too: the phrasal verb claims with "up" or
+		// not at all (the unnamed form is pinned below in
+		// the family's original non-claims).
+		"hook Jake to the webserver",
 		"connect the handler to the database",  // no server word
 		"connect the handler to the webserver please",
 		"connect the handler to the webserver at",

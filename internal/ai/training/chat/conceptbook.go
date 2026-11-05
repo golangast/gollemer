@@ -1957,7 +1957,19 @@ func parseConceptFrom(line string, entries []analyze.ConceptEntry) (conceptReq, 
 	for i, f := range fields {
 		low[i] = strings.ToLower(f)
 	}
-	if low[0] != "add" && low[0] != "put" {
+	// The verb family: add|put are the book's own; create|make
+	// joined 2026-11-05 — they are the same ask in the words
+	// the neighbouring claims already read (make-and-call,
+	// taught kinds), and without them a book sentence spelled
+	// with either verb reached the book only when the phrasing
+	// model happened to map it, family by family. The name
+	// match below is still the claim's gate, so no line is
+	// taken from a later claim unless it names a book piece —
+	// and the claims seated earlier (creations, pages,
+	// make-and-call, delegate) keep theirs first.
+	switch low[0] {
+	case "add", "put", "create", "make":
+	default:
 		return conceptReq{}, false
 	}
 	i := 1

@@ -21,6 +21,12 @@ func TestParseConceptClaimsBasics(t *testing.T) {
 	cases := []struct{ line, id string }{
 		{"add a variable to jim/main.go", "variable"},
 		{"add a new variable to jim/main.go", "variable"},
+		// create|make joined the book's verbs 2026-11-05 —
+		// the same rows in the neighbouring claims' words.
+		{"create a function named Foo to jim/main.go", "function"},
+		{"make a struct named Foo to jim/main.go", "struct"},
+		{"create a for loop in main to jim/main.go", "for-loop"},
+		{"make a variable to jim/main.go", "variable"},
 		{"add a constant to jim/main.go", "constant"},
 		{"put a const to jim/main.go", "constant"},
 		{"add a for loop to jim/main.go", "for-loop"},

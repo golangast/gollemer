@@ -13,7 +13,21 @@ package chat
 //
 // Grammar (exactly this):
 //
-//	add|put [a|an|the] webserver|web server to|in|into [the] [folder|file] <target>
+//	add|put|make|create|build [a|an|the] webserver|web server|server
+//	    to|in|into [the] [folder|file] <target>
+//
+// The verb family (make/create/build beside add/put) and the
+// bare noun "server" were widened 2026-11-05: "make a
+// webserver in <file>" and "add a server to <file>" are the
+// beginner's spellings of this ask, and both parsed nowhere —
+// the noun because this grammar insisted on the compound
+// word, the verbs because the slot stopped at add|put. The
+// widenings steal nothing: a line reaches the noun only
+// behind one of the family's verbs, the preposition must
+// follow the noun immediately (so serve-an-html-file's "build
+// a server that serves…" still dies here, at the preposition),
+// and the creations keep their own sentences — "create a file
+// … with a webserver" names a file before any server word.
 //
 // The folder|file word is a designator — it names the KIND of
 // target, never part of its path (creations read those words the
@@ -70,7 +84,9 @@ func parseAddServer(line string) (string, bool) {
 	for i, f := range fields {
 		low[i] = strings.ToLower(f)
 	}
-	if low[0] != "add" && low[0] != "put" {
+	switch low[0] {
+	case "add", "put", "make", "create", "build":
+	default:
 		return "", false
 	}
 	i := 1
@@ -87,7 +103,7 @@ func parseAddServer(line string) (string, bool) {
 		i++
 	}
 	switch {
-	case low[i] == "webserver":
+	case low[i] == "webserver" || low[i] == "server":
 		i++
 	case low[i] == "web" && i+1 < len(fields) && low[i+1] == "server":
 		i += 2
