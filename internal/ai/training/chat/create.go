@@ -1040,7 +1040,7 @@ func runCreate(line string, ask editAsk) bool {
 			recordBrain("composer", false, "create failed: folder verify")
 			return true
 		}
-		fmt.Printf("%s Done — created %s/. I checked — it's there.\n", tag, d.rel)
+		fmt.Printf("%s Done — created %s/.\n", tag, d.rel)
 		noteLandedFolder(rootAbs, d.rel)
 		recordBrain("composer", true, "create applied: folder "+d.rel)
 		return true
@@ -1087,7 +1087,7 @@ func runCreate(line string, ask editAsk) bool {
 		created = append(created, d.rel+"/")
 	}
 	created = append(created, plan.file.rel)
-	fmt.Printf("%s Done — created %s. %s\n", tag, strings.Join(created, " and "), how)
+	fmt.Printf("%s %s\n", tag, renderCreateConfirmation(req.kind, created, plan.file.rel, how))
 	noteLandedFile(rootAbs, plan.file.rel, "created", "file", "")
 	noteCreateLanded(plan.file.rel, req.kind)
 	note := "create applied: file " + plan.file.rel

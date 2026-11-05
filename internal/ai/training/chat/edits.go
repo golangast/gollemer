@@ -315,6 +315,16 @@ func executeEditPlan(req analyze.EditRequest, ask editAsk) bool {
 		recordBrain("composer", false, "edit refused: "+req.Kind)
 		return true
 	}
+	// The wiring confirmation (confirm.go) diffs the
+	// registrations this plan adds against the ones the
+	// project already had. The wiring scan reads the disk
+	// live, so the "before" list must be snapshotted now,
+	// before anything is written — afterwards it could only
+	// ever read the edited state back.
+	var beforeRegs []analyze.WireRegistration
+	if req.Kind == analyze.EditWireHandler {
+		beforeRegs = proj.WireRegistrations()
+	}
 	fmt.Printf("%s Here's the edit I assembled from this project's own code:\n\n%s\n", tag, plan.Summary)
 	for _, n := range plan.Notes {
 		fmt.Printf("%s\n", n)
@@ -376,11 +386,18 @@ func executeEditPlan(req analyze.EditRequest, ask editAsk) bool {
 	tx.commit()
 	setCurrentProject(root, fresh)
 	noteSpineLanded(req, plan, root)
-	how := "built the project and checked"
-	if !built {
-		how = "re-read the project and checked (no go.mod at its root, so no build to run)"
-	}
-	fmt.Printf("%s Done — %s, at %s. I %s that it's really there.\n", tag, plan.VerifyDesc, plan.Site, how)
+	// The landing line is a partner's confirmation, rendered
+	// from this transaction's own record (confirm.go) — the
+	// request's slots, the executed plan, and the project as
+	// just re-analyzed — never from the sentence that asked.
+	fmt.Printf("%s %s\n", tag, renderLandingConfirmation(landingFacts{
+		req:       req,
+		plan:      plan,
+		beforeReg: beforeRegs,
+		fresh:     fresh,
+		built:     built,
+		wireName:  req.WireName,
+	}))
 	recordBrain("composer", true, "edit applied: "+req.Kind)
 	return true
 }

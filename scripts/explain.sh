@@ -88,7 +88,7 @@ Create folders and files — shown first, gated, then verified:
   you> create a folder jane
   gollemer [composer]> Here's what I'll create — nothing is
       written yet: ◆ CREATE folder jane/
-      Create it? [y/n] ... Done — created jane/. I checked.
+      Create it? [y/n] ... Done — created jane/.
   you> create jane/main.go        a starter program file
   you> create a file webtest/main.go with a webserver
   you> serve an html file to webtest/main.go
@@ -125,6 +125,19 @@ Create folders and files — shown first, gated, then verified:
       are the variations; names you've taught work inside
       them too. Every repeat is rebuilt as the full sentence
       and goes through the same plan, gate, and build check.
+  you> add a form handler named Petra to partner/main.go
+      when a piece lands, the answer says what landed and
+      where, from the transaction's own record — "Done — The
+      form handler Petra is in partner/main.go. I built the
+      project and checked that it's really there. It isn't
+      wired to the server yet — "connect the Petra handler
+      to the webserver" will do it." — and it names that
+      next line only when the machinery has verified the
+      line will land; a server it can't wire into earns no
+      promised line. A wiring answers with its route:
+      "Done — Petra is in partner/main.go, registered at
+      /petra. I built the project and checked that it's
+      really there."
   you> create a homepage
       a whole page in one ask: the starter page (index.html),
       its handler, and its registration at / — the webserver's

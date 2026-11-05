@@ -42,7 +42,10 @@
 # the reading printed, kept per project in an isolated
 # HOME), and the richer follow-ups (the last piece repeats
 # from "another one" / "the same but for X", its name asked
-# when the follow-up gives none).
+# when the follow-up gives none), and the partner-style
+# confirmations (a landing answers with what landed and
+# where, plus the one verified next line where the landing
+# owns one — a handler's wiring, a starter's run line).
 #
 # How it works:
 #   - Everything happens under handtest/ at the repo root,
@@ -1423,6 +1426,32 @@ case_file_contains followup-named-landed sequel/main.go "type ThirdProbe struct"
 case_transcript_contains followup-repeat-reading followup 'I read that as: "add a print line in main to sequel/main.go".'
 case_transcript_contains followup-other-reading followup 'Reading "the other file" as sequel/main.go — the other file from this session'"'"'s work.'
 case_file_lacks followup-other-not-wrong sequel/other.go "fmt.Println"
+
+# --- session: partner-style confirmations (2026-11-05) -----------------------
+# A multi-landing session that reads like a conversation:
+# the webserver creation names the line that starts it; the
+# handler landing names the exact wire follow-up (verified
+# against the wiring planner before it is promised); typing
+# that line lands the wiring, and its confirmation names
+# the route. Names are this session's own (Petra, the
+# partner/ folder) — the scratch project is shared and the
+# wiring checks read it project-wide.
+
+cat > "$SCRATCH/.inputs/partner.txt" <<'EOF'
+create a file partner/main.go with a webserver
+y
+add a form handler named Petra to partner/main.go
+y
+connect the Petra handler to the webserver
+y
+/quit
+EOF
+run_session partner
+
+case_transcript_contains partner-create-confirm partner 'Done — created partner/ and partner/main.go. It'"'"'s the webserver starter and it builds — "run the program partner/main.go" will start it.'
+case_transcript_contains partner-handler-confirm partner 'Done — The form handler Petra is in partner/main.go. I built the project and checked that it'"'"'s really there. It isn'"'"'t wired to the server yet — "connect the Petra handler to the webserver" will do it.'
+case_transcript_contains partner-wire-confirm partner 'Done — Petra is in partner/main.go, registered at /petra. I built the project and checked that it'"'"'s really there.'
+case_file_contains partner-wire-landed partner/main.go 'http.HandleFunc("/petra", Petra)'
 
 # --- final build over the whole scratch project ---------------------------
 

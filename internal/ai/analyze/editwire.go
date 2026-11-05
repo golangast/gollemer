@@ -790,6 +790,91 @@ func (p *Project) BareWireCandidates() []WireCandidate {
 	return out
 }
 
+// WireRegistration is one registration (a HandleFunc /
+// Handle-style call) found in the project's code, in plain
+// facts: the handler it points at, the route, and the file
+// holding the call.
+type WireRegistration struct {
+	Name       string // the handler function's name; "" when the registration's argument is not a plain project function reference
+	Route      string
+	File       string // the file holding the registration (project-relative, slash form)
+	HandlerDir string // the referenced handler's package dir ("" = not a plain project function)
+}
+
+// WireRegistrations returns every registration in the
+// project, in scan order. The chat layer diffs the lists
+// from before and after an edit to name the registration
+// the edit added — from the project's own code, never from
+// the sentence that asked for it.
+func (p *Project) WireRegistrations() []WireRegistration {
+	if p == nil {
+		return nil
+	}
+	w := p.wireScan()
+	out := make([]WireRegistration, 0, len(w.regs))
+	for _, r := range w.regs {
+		out = append(out, WireRegistration{
+			Name:       r.handlerName,
+			Route:      r.route,
+			File:       r.file,
+			HandlerDir: r.handlerDir,
+		})
+	}
+	return out
+}
+
+// HandlerFacts is the wiring picture of one handler-shaped
+// function, read from the project's own code: whether the
+// name is a handler at all, where it is declared, and where
+// it is registered when it is.
+type HandlerFacts struct {
+	IsHandler  bool
+	File       string // the handler's own file (project-relative, slash form)
+	Registered bool
+	Route      string // the route it answers at, when Registered
+	RegFile    string // the file holding the registration, when Registered
+}
+
+// HandlerFacts reports the wiring facts for the handler
+// with the given name. dir, when non-empty, is the
+// slash-relative folder the handler must live in (""
+// for the project root) — it chooses between same-named
+// handlers in different packages. A name held by several
+// handlers with no dir to choose between them is
+// ambiguous and reports no facts at all: a caller must
+// never state wiring facts from a guess.
+func (p *Project) HandlerFacts(name, dir string) HandlerFacts {
+	var out HandlerFacts
+	if p == nil || name == "" {
+		return out
+	}
+	w := p.wireScan()
+	var h *wireHandlerInfo
+	for _, cand := range w.handlers {
+		if cand.name != name {
+			continue
+		}
+		if dir != "" && cand.pkgDir != dir {
+			continue
+		}
+		if h != nil {
+			return HandlerFacts{} // two handlers, one name: no facts
+		}
+		h = cand
+	}
+	if h == nil {
+		return out
+	}
+	out.IsHandler = true
+	out.File = h.file
+	if reg := w.registrationOf(h); reg != nil {
+		out.Registered = true
+		out.Route = reg.route
+		out.RegFile = reg.file
+	}
+	return out
+}
+
 // bareCandidates is the bare ask's candidate set: the
 // unregistered handlers at least one serving site can
 // register.

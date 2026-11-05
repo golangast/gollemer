@@ -309,11 +309,19 @@ func runDelegate(line string, ask editAsk) bool {
 	tx.commit()
 	notePlanLanded(rootAbs, plan, "function that calls another")
 
-	how := "built the " + tgtPkg.Name + " package and checked"
-	if !hasMod {
-		how = "re-read the project and checked (no go.mod at its root, so no build to run)"
-	}
-	fmt.Printf("%s Done — %s, at %s. I %s that it's really there.\n", tag, plan.VerifyDesc, plan.Site, how)
+	// The landing line is the shared partner confirmation
+	// (confirm.go), rendered from this transaction's record.
+	fmt.Printf("%s %s\n", tag, renderLandingConfirmation(landingFacts{
+		req: analyze.EditRequest{
+			Kind:         analyze.EditDelegate,
+			DelegateFile: rel,
+			SourceName:   sourceName,
+			WrapperName:  wrapperName,
+		},
+		plan:  plan,
+		fresh: fresh,
+		built: hasMod,
+	}))
 	if retried {
 		fmt.Printf("Heads up: the plain form didn't build, so what's in your file is the retry the plan named: %s.\n", plan.AltDesc)
 	}

@@ -175,7 +175,7 @@ func TestWireHandlerJohnsJourneyThroughChain(t *testing.T) {
 	if !strings.Contains(out, "built the project and checked") {
 		t.Errorf("spine build/verify not reported:\n%s", out)
 	}
-	if !strings.Contains(out, "registers Jake at /jake") {
+	if !strings.Contains(out, "Jake is in ") || !strings.Contains(out, "registered at /jake") {
 		t.Errorf("done line does not name the wiring:\n%s", out)
 	}
 	// Ask again (still the bare sentence): the plain

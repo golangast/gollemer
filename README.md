@@ -173,7 +173,7 @@ gollemer [composer]> Here's what I'll create — nothing is written yet:
 
 ◆ CREATE
   folder  jane/
-Create it? [y/n] gollemer [composer]> Done — created jane/. I checked — it's there.
+Create it? [y/n] gollemer [composer]> Done — created jane/.
 
 you> create jane/main.go
 gollemer [composer]> Here's what I'll create — nothing is written yet:
@@ -201,12 +201,12 @@ you> create a file webtest/main.go with a webserver
           func main() {
           ...
           }
-Create it? [y/n] gollemer [composer]> Done — created webtest/main.go. I compiled it to check — it builds.
+Create it? [y/n] gollemer [composer]> Done — created webtest/main.go. It's the webserver starter and it builds — "run the program webtest/main.go" will start it.
 
 you> serve home.html to webtest/main.go
 gollemer [composer]> Serve webtest/home.html from the server already in webtest/main.go: one registration, just before its ListenAndServe, answers http://localhost:8080/home.html with the page. The page webtest/home.html is created fresh with a starter page (its body is a TODO).
 ...
-Apply this edit? [y/n] gollemer [composer]> Done — main.go serves home.html via http.ServeFile, at webtest/main.go:16. I built the project and checked that it's really there.
+Apply this edit? [y/n] gollemer [composer]> Done — webtest/main.go now serves webtest/home.html. I built the project and checked that it's really there.
 ```
 
 Ask twice and it tells you the truth instead of doing it again:
@@ -233,7 +233,7 @@ you> add a form handler named SignUp
 gollemer [composer]> Create the handlers folder and handlers/signup.go in it (package handlers) with the form handler SignUp, from the concept book.
 SignUp is placed in the handlers folder as package handlers — placed, not wired: nothing registers the handler with a server yet. To register it, say "connect the SignUp handler to the webserver" and I'll add the one registration line to your server, behind the same gate.
 ...
-Apply this edit? [y/n] gollemer [composer]> Done — signup.go now declares the form handler SignUp in package handlers, at handlers/signup.go:7. I built the project and checked that it's really there.
+Apply this edit? [y/n] gollemer [composer]> Done — The form handler SignUp is in handlers/signup.go. I built the project and checked that it's really there. It isn't wired to the server yet — "connect the SignUp handler to the webserver" will do it.
 ```
 
 Handlers go to `handlers/`, middleware to `middleware/`, security
@@ -249,7 +249,7 @@ just before the serve call in whichever file runs the server:
 you> connect the SignUp handler to the webserver
 gollemer [composer]> Wire SignUp into the webserver in webtest/main.go: one line — http.HandleFunc("/signup", handlers.SignUp) — added in main just before it serves, so http://localhost:8080/signup is answered by SignUp (declared at handlers/signup.go:7).
 ...
-Apply this edit? [y/n] gollemer [composer]> Done — main.go registers SignUp at /signup, at webtest/main.go:17. I built the project and checked that it's really there.
+Apply this edit? [y/n] gollemer [composer]> Done — SignUp is in handlers/signup.go, registered at /signup. I built the project and checked that it's really there.
 ```
 
 The handler answers at `/` + its name, or at the path you name
@@ -278,7 +278,7 @@ Answer with the name or the number — or say anything else and we'll move on.
 you> Jake
 gollemer [composer]> Wire Jake into the webserver in webtest/main.go: one line — http.HandleFunc("/jake", Jake) — added in main just before it serves, so http://localhost:8080/jake is answered by Jake (declared at webtest/main.go:5).
 ...
-Apply this edit? [y/n] gollemer [composer]> Done — main.go registers Jake at /jake, at webtest/main.go:9. I built the project and checked that it's really there.
+Apply this edit? [y/n] gollemer [composer]> Done — Jake is in webtest/main.go, registered at /jake. I built the project and checked that it's really there.
 ```
 
 The same shape everywhere a choice or a missing piece is all
@@ -327,7 +327,7 @@ gollemer [go]> Learned your name for it:
 you> add a form handler named Vex to the server file
 gollemer [go]> Reading "the server file" as vocabjim/main.go — your name for it.
 ... the same plan, gate, and build check, then:
-gollemer [go]> Done — main.go now declares the form handler Vex, at vocabjim/main.go:21. ...
+gollemer [go]> Done — The form handler Vex is in vocabjim/main.go. I built the project and checked that it's really there. It isn't wired to the server yet — "connect the Vex handler to the webserver" will do it.
 
 you> another one
 gollemer [go]> Another struct — what should I call it? Answer with one name — or say anything else and we'll move on.
@@ -335,6 +335,45 @@ you> SequelProbe
 gollemer [go]> I read that as: "add a struct named SequelProbe to sequel/main.go".
 ... the same plan, gate, and build check, and the second struct lands.
 ```
+
+### When something lands, it says what landed
+
+`Done` still means what it always meant — the plan was applied,
+the project builds, and the change was verified in the code. What
+changed is how the landing is reported: not as a build log
+("main.go now declares the form handler…, at main.go:19. I built
+the project and checked…"), but the way a partner would confirm
+it — what landed, and where, in plain words. The line is written
+from the transaction's own record — the plan that actually ran
+and the project as re-read after it — never from the sentence
+you typed:
+
+```
+you> create a file partner/main.go with a webserver
+...
+Create it? [y/n] gollemer [composer]> Done — created partner/ and partner/main.go. It's the webserver starter and it builds — "run the program partner/main.go" will start it.
+
+you> add a form handler named Petra to partner/main.go
+...
+Apply this edit? [y/n] gollemer [composer]> Done — The form handler Petra is in partner/main.go. I built the project and checked that it's really there. It isn't wired to the server yet — "connect the Petra handler to the webserver" will do it.
+
+you> connect the Petra handler to the webserver
+...
+Apply this edit? [y/n] gollemer [composer]> Done — Petra is in partner/main.go, registered at /petra. I built the project and checked that it's really there.
+```
+
+When a landing has a natural next step, the confirmation names
+the exact line that does it — a handler's wiring, a starter's
+run line, the webserver a handler is still missing. It only
+names a step the machinery has itself verified will land: the
+wiring plan is checked against your project first, so a handler
+whose server is a custom one gets no promised line at all,
+rather than a line that would refuse. And when there is no
+honest next step, the one sentence stands alone — nothing is
+invented to fill the space. Refusals, `n` answers at the gate,
+and edits that fail their build check answer exactly as they
+always did; a confirmation is earned by a landing, never
+printed instead of one.
 
 ### Pages in one ask
 
@@ -351,13 +390,13 @@ you> create a homepage in webtest
 gollemer [composer]> Add the homepage: webtest/index.html (a starter page), its handler Home in webtest/main.go, and the starter registration at / gives way to http.HandleFunc("/", Home), so Home answers http://localhost:8080/.
 The webserver's own starter handler at / — the one that answers "hello — your webserver is running" — is replaced by the registration above; nothing else in the server changes.
 ...
-Apply this edit? [y/n] gollemer [composer]> Done — Home serves index.html at /, at webtest/main.go:20. I built the project and checked that it's really there.
+Apply this edit? [y/n] gollemer [composer]> Done — The homepage is in webtest/index.html — Home answers at /. I built the project and checked that it's really there.
 
 you> create a contact page in webtest
 gollemer [composer]> Add the contact page: webtest/contact.html (a starter page), its handler Contact in webtest/main.go, and one registration — http.HandleFunc("/contact", Contact) — added in webtest/main.go just before it serves, so Contact answers http://localhost:8080/contact.
 The form in webtest/contact.html asks for exactly the fields Contact reads — email, subject and message — so the page and the handler can't drift apart.
 ...
-Apply this edit? [y/n] gollemer [composer]> Done — Contact serves contact.html at /contact, at webtest/main.go:25. I built the project and checked that it's really there.
+Apply this edit? [y/n] gollemer [composer]> Done — The contact page is in webtest/contact.html — Contact answers at /contact. I built the project and checked that it's really there.
 ```
 
 Each kind answers at its own address — the homepage at `/`, about
@@ -382,7 +421,7 @@ you> add a jwt token in main to app/main.go
 gollemer [composer]> Add a jwt at the end of main in app/main.go, from the concept book: secret := os.Getenv("JWT_SECRET")
 Anyone can READ a JWT's claims — the signature proves they weren't changed, it does not hide them — so a token never carries a password or a secret. And the signing secret here comes from the JWT_SECRET environment variable: a secret written in code is a secret published with the code.
 ...
-Apply this edit? [y/n] gollemer [composer]> Done — main.go now has the jwt in main, at app/main.go:18. I built the project and checked that it's really there.
+Apply this edit? [y/n] gollemer [composer]> Done — main.go now has the jwt in main. I built the project and checked that it's really there.
 ```
 
 ### Teach it a piece of your own
@@ -405,7 +444,7 @@ you> add a signup form named Signup to teachsite/site.go
 gollemer [composer]> Add the signup form Signup to teachsite/site.go — the piece you taught me, renamed from its example.
 From your example Jake in teachjim/main.go, taught Nov 4, 2026.
 ...
-Apply this edit? [y/n] gollemer [composer]> Done — site.go now declares the signup form Signup, at teachsite/site.go:7. I built the project and checked that it's really there.
+Apply this edit? [y/n] gollemer [composer]> Done — The signup form Signup is in teachsite/site.go. I built the project and checked that it's really there.
 ```
 
 What varies is the name — the declaration's own name and every
@@ -463,7 +502,7 @@ One plan covers both files: if either side fails to build, both files go back ex
 +func Report() {
 +	Validate()
 +}
-Apply this edit? [y/n] gollemer [composer]> Done — Validate now exists in api/validate.go and is called from api/report.go, at api/report.go:5. I built the project and checked that it's really there.
+Apply this edit? [y/n] gollemer [composer]> Done — Validate now exists in api/validate.go and is called from api/report.go. I built the project and checked that it's really there.
 ```
 
 The caller is assembled from the declaration the same plan is
@@ -511,7 +550,7 @@ you> installed
 gollemer [composer]> github.com/rqlite/gorqlite is in go.mod now — here's the plan for a gorqlite connection named Connect (it would be created as database/connect.go) again:
 gollemer [composer]> Here's the edit I assembled from this project's own code:
 ...
-Apply this edit? [y/n] gollemer [composer]> Done — connect.go now declares the gorqlite connection Connect in package database, at database/connect.go:7. I built the project and checked that it's really there.
+Apply this edit? [y/n] gollemer [composer]> Done — The gorqlite connection Connect is in database/connect.go. I built the project and checked that it's really there.
 ```
 
 Say "installed" before it's true and it checks, tells you plainly
@@ -533,7 +572,7 @@ gollemer [composer]> Add a print line in main in app/main.go, after line 9: `fmt
  	fmt.Println("two")
  }
 
-Apply this edit? [y/n] gollemer [composer]> Done — main.go now has the print line in main, at app/main.go:10. I built the project and checked that it's really there.
+Apply this edit? [y/n] gollemer [composer]> Done — main.go now has the print line in main. I built the project and checked that it's really there.
 ```
 
 The plan quotes the line it's aiming at, pieces only ever land
@@ -797,7 +836,7 @@ guesses.
 
 ## A note on the numbers in this README
 
-135 pieces, 17 brains, 191 handtest cases, 83 paces checks — these are
+135 pieces, 17 brains, 195 handtest cases, 83 paces checks — these are
 counts of what's actually in this checkout, and the model scores
 quoted are the measured ones, kept next to the features they
 describe. When a number changes, this file should change with it.
