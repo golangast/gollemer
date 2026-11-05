@@ -153,12 +153,19 @@ func TestDBFolderDeclMissingFolderThenLands(t *testing.T) {
 	}
 }
 
-// Several package-main files is a genuine choice, refused
-// in declaration words — the example sentence is the ask's
-// own shape, not the webserver claim's.
-func TestDBFolderDeclMultiMainRefusal(t *testing.T) {
+// Several package-main files is a genuine choice, not a
+// fact: since the clarifying-questions build (e81f57b) the
+// ask asks which file (clarify.go) instead of refusing —
+// the refusal survives only as the fallback for an ask
+// whose completed form can't be rebuilt. The question
+// alone lands nothing; the answer (a number here)
+// completes the original ask through the normal gate,
+// and the declaration lands in the chosen file. One file
+// carries main() so the answered landing passes the build
+// check, like the host cells above.
+func TestDBFolderDeclMultiMainQuestion(t *testing.T) {
 	root := dbFolderRoot(t, map[string]string{
-		"jim/db/a.go": "package main\n\nfunc A() {}\n",
+		"jim/db/a.go": "package main\n\nfunc main() {}\n",
 		"jim/db/b.go": "package main\n\nfunc B() {}\n",
 	})
 	withChatSession(t, root, true)
@@ -168,15 +175,48 @@ func TestDBFolderDeclMultiMainRefusal(t *testing.T) {
 	if !handled {
 		t.Fatalf("multi-main declaration fell through:\n%s", out)
 	}
-	want := "Not adding that: jim/db/ has more than one main-package file (a.go, b.go) — say which one, like \"add a database connect named Connect to jim/db/a.go\"."
-	if !strings.Contains(out, want) {
-		t.Errorf("multi-main refusal = the answer below, want it to contain %q:\n%s", want, out)
+	for _, want := range []string{
+		"jim/db/ has more than one main-package file — which one should the database connect go in?",
+		"1. jim/db/a.go",
+		"2. jim/db/b.go",
+		"Answer with the path or the number",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("multi-main question missing %q:\n%s", want, out)
+		}
 	}
 	if strings.Contains(out, "webserver") {
-		t.Errorf("the webserver claim's example leaked into the refusal:\n%s", out)
+		t.Errorf("the webserver claim's example leaked into the question:\n%s", out)
+	}
+	if !hasPendingQuestion() {
+		t.Error("no clarifying question is being held after the ask")
 	}
 	if _, err := os.Stat(filepath.Join(root, "jim", "db", "connect.go")); !os.IsNotExist(err) {
-		t.Errorf("the refusal created connect.go anyway")
+		t.Errorf("the question alone created connect.go")
+	}
+	if got := readBack(t, root, "jim/db/b.go"); strings.Contains(got, "Connect") {
+		t.Errorf("the question alone landed Connect in b.go:\n%s", got)
+	}
+
+	out = captureStdout(t, func() { handled = claimChain("2", yes, profile) })
+	if !handled {
+		t.Fatalf("the number answer fell through:\n%s", out)
+	}
+	if hasPendingQuestion() {
+		t.Error("the question is still held after the answer")
+	}
+	if !strings.Contains(out, "built the project and checked") {
+		t.Errorf("spine build/verify not reported on the completion:\n%s", out)
+	}
+	got := readBack(t, root, "jim/db/b.go")
+	if !strings.Contains(got, "func Connect() (*sql.DB, error)") {
+		t.Errorf("the answer did not land Connect in jim/db/b.go:\n%s", got)
+	}
+	if got := readBack(t, root, "jim/db/a.go"); strings.Contains(got, "Connect") {
+		t.Errorf("Connect landed in the unchosen file too:\n%s", got)
+	}
+	if _, err := os.Stat(filepath.Join(root, "jim", "db", "connect.go")); !os.IsNotExist(err) {
+		t.Errorf("the completion created connect.go anyway")
 	}
 }
 
