@@ -48,6 +48,13 @@ func claimChain(line string, ask editAsk, profile *UserProfile) bool {
 	if runClarifyAnswer(line, ask) {
 		return true
 	}
+	if runVocab(line, ask) {
+		return true
+	}
+	line = rewriteSpokenTargets(line)
+	if runFollowUp(line, ask) {
+		return true
+	}
 	if tryLearnCommand(line) {
 		return true
 	}

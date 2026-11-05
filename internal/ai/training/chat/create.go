@@ -1089,6 +1089,7 @@ func runCreate(line string, ask editAsk) bool {
 	created = append(created, plan.file.rel)
 	fmt.Printf("%s Done — created %s. %s\n", tag, strings.Join(created, " and "), how)
 	noteLandedFile(rootAbs, plan.file.rel, "created", "file", "")
+	noteCreateLanded(plan.file.rel, req.kind)
 	note := "create applied: file " + plan.file.rel
 	if req.kind != "" {
 		note += " (" + req.kind + ")"

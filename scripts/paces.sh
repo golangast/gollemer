@@ -19,7 +19,12 @@
 # reply (the page family: page + handler + registration in
 # one ask), and a clarifying question answered in one word
 # (the bare wiring ask with two handlers waiting asks which
-# one, and the name completes it). After every landing step it greps the
+# one, and the name completes it), a follow-up that repeats
+# the last piece (its name asked the same way), and a taught
+# name for a file used across two chats (its sessions run
+# with HOME isolated under the scratch, so the vocabulary
+# store it writes is the scratch's, never the developer's).
+# After every landing step it greps the
 # disk for what the chat claimed, and builds every package in
 # the scratch project — a step that "succeeds" in chat but
 # leaves the tree unbuildable is recorded as a failure.
@@ -724,6 +729,80 @@ told step17-question s17 "More than one handler isn't registered yet" "1. Alpha"
 has step17-alpha-wired api/main.go 'http.HandleFunc("/alpha", Alpha)'
 has step17-beta-wired api/main.go 'http.HandleFunc("/beta", Beta)'
 builds step17
+
+# ================================================================
+step "step 18: a follow-up repeats the last piece"
+# ================================================================
+
+# Richer follow-ups (2026-11-05): the last landed piece
+# repeats from the session's own shorthand. A struct lands;
+# a bare "another one" asks the new struct's name through
+# the clarifying machinery and the one-word answer completes
+# the repeat through the book's own claim; a named follow-up
+# then lands a third directly. Session state only — this
+# step touches no store.
+cat > "$BASE/.inputs/s18.txt" <<'EOF'
+add a struct named PaceProbe to api/main.go
+y
+another one
+PaceProbeTwo
+y
+another one named PaceProbeThree in api/main.go
+y
+/quit
+EOF
+run_session s18
+
+told step18-question s18 "Another struct — what should I call it?" "Answer with one name"
+has step18-second api/main.go "type PaceProbeTwo struct"
+has step18-third api/main.go "type PaceProbeThree struct"
+builds step18
+
+# ================================================================
+step "step 19: his own name for a file, taught once"
+# ================================================================
+
+# Personal vocabulary (2026-11-05): a name for a file is
+# taught once and then works in any sentence that names the
+# file, the reading printed. The store is HOME-scoped, and
+# paces must never write the developer's real one — so these
+# two sessions run with HOME isolated under the scratch,
+# handtest-style. Session A teaches the name and uses it;
+# session B (fresh chat, same isolated HOME) still knows it,
+# uses it again, and forgets it.
+run_session_home() {
+	local name="$1"
+	local out="$TRANSCRIPTS/$name.txt"
+	: > "$out"
+	(cd "$PROJ" && env -u GOEXPERIMENT HOME="$BASE/.home" timeout "$SESSION_TIMEOUT" "$BIN" -real-chat -domain unified) \
+		< "$BASE/.inputs/$name.txt" >> "$out" 2>&1
+	local rc=$?
+	if [ "$rc" -eq 124 ]; then
+		bad "session-$name" "timed out after ${SESSION_TIMEOUT}s (hang)"
+	fi
+}
+
+cat > "$BASE/.inputs/s19a.txt" <<'EOF'
+call api/main.go the api file
+add a print line in main to the api file
+y
+/quit
+EOF
+run_session_home s19a
+
+cat > "$BASE/.inputs/s19b.txt" <<'EOF'
+add a print line in main to the api file
+y
+forget the api file
+/quit
+EOF
+run_session_home s19b
+
+told step19-reading s19a 'Reading "the api file" as api/main.go — your name for it.'
+has step19-landed api/main.go "fmt.Println"
+told step19-persists s19b 'Reading "the api file" as api/main.go — your name for it.'
+told step19-forgotten s19b 'Forgotten: "the api file" — your name for api/main.go in this project.'
+builds step19
 
 # --- scoreboard ---------------------------------------------------
 

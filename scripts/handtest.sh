@@ -37,7 +37,12 @@
 # progress, each reading printed with its full path), and
 # the clarifying questions (an ask missing one piece of
 # information asks once; a name, number, or word answer
-# completes the original ask).
+# completes the original ask), the personal vocabulary (his
+# own names for his files, taught once and read back with
+# the reading printed, kept per project in an isolated
+# HOME), and the richer follow-ups (the last piece repeats
+# from "another one" / "the same but for X", its name asked
+# when the follow-up gives none).
 #
 # How it works:
 #   - Everything happens under handtest/ at the repo root,
@@ -1329,6 +1334,95 @@ run_session_with_home teach2
 
 case_transcript_contains teach-forgotten teach2 'Forgotten: your "signup form" — from your example Jake in teachjim/main.go'
 case_transcript_contains teach-after-forget teach2 "the concept book has no piece by that name"
+
+# --- sessions: personal vocabulary (2026-11-05) ---------------------------
+# The user's own names for his files, taught explicitly and
+# kept in the same isolated HOME as the other stores
+# (~/.gollemer_vocab.json), keyed by project. Session A
+# creates a server file, names "this" (the file that just
+# landed), lands a handler through the name (the reading
+# prints before the plan), names the folder too, and lists
+# both names. Session B (same HOME, fresh chat) still knows
+# the file's name — names are the user's, across sessions —
+# uses it, then forgets it, while the folder's name stays.
+
+cat > "$SCRATCH/.inputs/vocab1.txt" <<'EOF'
+create a folder vocabjim
+y
+create a file vocabjim/main.go with a webserver
+y
+call this the server file
+add a form handler named Vex to the server file
+y
+call vocabjim the server folder
+what do you call things
+/quit
+EOF
+run_session_with_home vocab1
+
+case_transcript_contains vocab-teach-echo vocab1 "Learned your name for it:" '"the server file" — vocabjim/main.go in this project.'
+case_transcript_contains vocab-use-reading vocab1 'Reading "the server file" as vocabjim/main.go — your name for it.'
+case_file_contains vocab-use-landed vocabjim/main.go "func Vex("
+case_file_contains vocab-store-kept .home/.gollemer_vocab.json '"server file"' '"vocabjim/main.go"' '"server folder"'
+case_dir_absent vocab-store-not-in-project .gollemer_vocab.json
+case_transcript_contains vocab-listed vocab1 '"the server folder" — vocabjim/ (a folder)'
+
+cat > "$SCRATCH/.inputs/vocab2.txt" <<'EOF'
+add a print line in main to the server file
+y
+forget the server file
+/quit
+EOF
+run_session_with_home vocab2
+
+case_transcript_contains vocab-persists vocab2 'Reading "the server file" as vocabjim/main.go — your name for it.'
+case_file_contains vocab-persist-use-landed vocabjim/main.go "fmt.Println"
+case_transcript_contains vocab-forgotten vocab2 'Forgotten: "the server file" — your name for vocabjim/main.go in this project.'
+case_file_lacks vocab-store-file-forgotten .home/.gollemer_vocab.json '"server file"'
+case_file_contains vocab-store-folder-kept .home/.gollemer_vocab.json '"server folder"'
+
+# --- session: richer follow-ups (2026-11-05) --------------------------------
+# The last landed piece repeats from a follow-up: a bare
+# "another one" asks the new piece's name through the
+# clarifying machinery and the one-word answer completes the
+# repeat; a named follow-up lands directly; a statement
+# repeats with its shape carried; and "the other file"
+# resolves to the session's second file, the reading printed.
+# Session state only — nothing here touches a store, so a
+# plain session carries it.
+
+cat > "$SCRATCH/.inputs/followup.txt" <<'EOF'
+create a folder sequel
+y
+create a file sequel/main.go with a webserver
+y
+add a struct named VocabProbe to sequel/main.go
+y
+another one
+SequelProbe
+y
+another one named ThirdProbe in sequel/main.go
+y
+add a print line in main to sequel/main.go
+y
+another one
+y
+create a file sequel/other.go
+y
+add a struct named OtherProbe to sequel/other.go
+y
+add a print line to the other file
+y
+/quit
+EOF
+run_session followup
+
+case_transcript_contains followup-question followup "Another struct — what should I call it?" "Answer with one name"
+case_file_contains followup-answer-landed sequel/main.go "type SequelProbe struct"
+case_file_contains followup-named-landed sequel/main.go "type ThirdProbe struct"
+case_transcript_contains followup-repeat-reading followup 'I read that as: "add a print line in main to sequel/main.go".'
+case_transcript_contains followup-other-reading followup 'Reading "the other file" as sequel/main.go — the other file from this session'"'"'s work.'
+case_file_lacks followup-other-not-wrong sequel/other.go "fmt.Println"
 
 # --- final build over the whole scratch project ---------------------------
 

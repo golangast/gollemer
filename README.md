@@ -295,6 +295,47 @@ though: a path another handler owns, a page that already exists, a
 handler name already taken — those still refuse outright, question
 or no question.
 
+### Your names for things, and follow-ups
+
+Paths are yours to name. Teach the chat a name once — "call
+jim/main.go the api file", or "call this the api file" for the
+file you just landed — and from then on the name works anywhere
+a sentence names that file or folder. The reading is printed,
+never silent: the chat says which path it understood before it
+shows a plan. Your names are kept in `~/.gollemer_vocab.json`,
+keyed by project, so a name taught in one project means nothing
+in another — and they're a different file from your taught
+pieces and your remembered facts on purpose, so forgetting one
+kind of thing can never erase another. A real file with the
+same name always wins over a taught name. "What do you call
+things" lists them; "forget the api file" removes one.
+
+And once a piece has landed, the session remembers it well
+enough to repeat it: "another one" lands the same piece
+again — asking for its name first, the same way a bare ask
+does — "another one named X in <file>" and "the same but for
+<file>" say the variations out loud, and "the other file"
+means the other file this session has been working in. Every
+repeat is rebuilt as the full sentence and goes through the
+same plan, gate, and build check; with nothing landed yet, a
+follow-up line is just a line, exactly as before.
+
+```
+you> call this the server file
+gollemer [go]> Learned your name for it:
+  "the server file" — vocabjim/main.go in this project.
+you> add a form handler named Vex to the server file
+gollemer [go]> Reading "the server file" as vocabjim/main.go — your name for it.
+... the same plan, gate, and build check, then:
+gollemer [go]> Done — main.go now declares the form handler Vex, at vocabjim/main.go:21. ...
+
+you> another one
+gollemer [go]> Another struct — what should I call it? Answer with one name — or say anything else and we'll move on.
+you> SequelProbe
+gollemer [go]> I read that as: "add a struct named SequelProbe to sequel/main.go".
+... the same plan, gate, and build check, and the second struct lands.
+```
+
 ### Pages in one ask
 
 Some pages come in kinds, and a kind can be had whole — the page
@@ -640,10 +681,10 @@ above is from a real run on 2026-11-02.)
 ```
 $ make paces
 ...
-paces scoreboard: 63 passed, 0 failed, 63 total
+paces scoreboard: 83 passed, 0 failed, 83 total
 ```
 
-`make paces` is the longer workout: one project built across 14
+`make paces` is the longer workout: one project built across 19
 stages of real asks in sequence — a webserver, handlers, middleware
 and security pieces, a named database connection, the dependency
 gate with the install happening mid-conversation, a struct in one
@@ -651,8 +692,10 @@ file used from others (including a function written into a second
 file that calls a third file's function), an html page served and
 then fetched over HTTP from the running program, the terminal
 basics, the guidance answers, a cross-file rename, the rm refusal,
-and a function made in one file and called from another in a
-single ask — with the disk checked after every stage and every
+a function made in one file and called from another in a
+single ask, a clarifying question answered in one word, a
+follow-up that repeats the last piece, and a taught name for a
+file used across two chats — with the disk checked after every stage and every
 package built. It began as a one-off workout that scored 46 of 58 and found
 three real defects; the fixes landed, and the workout stayed as a
 test.
@@ -754,7 +797,7 @@ guesses.
 
 ## A note on the numbers in this README
 
-135 pieces, 17 brains, 174 handtest cases, 74 paces checks — these are
+135 pieces, 17 brains, 191 handtest cases, 83 paces checks — these are
 counts of what's actually in this checkout, and the model scores
 quoted are the measured ones, kept next to the features they
 describe. When a number changes, this file should change with it.

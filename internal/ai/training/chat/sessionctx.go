@@ -29,7 +29,13 @@ package chat
 //   - the last file the chat created or successfully edited;
 //   - the last piece landed there: a plain-words kind (the
 //     book's canonical name for a concept piece) and its
-//     name when it has one.
+//     name when it has one;
+//   - the file the landing before that touched, which of a
+//     file or a folder landed most recently, and — for the
+//     families whose sentences rebuild exactly — the last
+//     piece in rebuildable form: the richer follow-ups'
+//     state (followup.go), and the vocabulary's "this"
+//     (vocab.go).
 //
 // Notes land ONLY on success: at the shared edit spine's
 // commit, at runCreate's two Done points, and at the rename /
@@ -86,6 +92,69 @@ type workContext struct {
 	lastHow   string // "created" | "edited": how lastFile got there
 	piece     string // plain-words kind of the last piece landed
 	pieceName string // the last piece's name, when it has one ("Connect")
+
+	// The richer follow-ups' state (followup.go, 2026-11-05):
+	// the file the landing BEFORE lastFile touched (the
+	// session's second file — "the other file" has a referent
+	// only when exactly these two are in play), which of a
+	// file or a folder landed most recently ("this" in the
+	// vocabulary's teach sentences, vocab.go), and the last
+	// piece's rebuildable snapshot when its family has one.
+	prevFile string // slash-relative; "" = no second file in play
+	prevHow  string // "created" | "edited": how prevFile got there
+	lastKind string // "file" | "folder": what landed most recently
+	landed   *landedPiece
+}
+
+// landedPiece is the last landed piece in rebuildable form:
+// everything a follow-up ("another one", "the same but for
+// X") needs to reconstruct the piece's own canonical
+// sentence and re-run its own claim, so the repeat faces
+// every fact check, gate, transaction and build
+// verification the original did. Only the families whose
+// sentences rebuild exactly carry a snapshot — the concept
+// book, taught kinds, the webserver, serve-html, wiring,
+// the page family, and plain file creations. Everything
+// else (the assembled edits, delegates, uses, renames,
+// make-and-call's two-file compound, instantiations,
+// model-proposed declarations) leaves landed nil: the
+// follow-up claim then answers honestly that this piece
+// has no sentence it can rebuild, and never fabricates one.
+type landedPiece struct {
+	family string // "concept" | "taught" | "server" | "serve" | "wire" | "page" | "create"
+	file   string // the piece's primary file, slash-relative ("" for wire)
+
+	// concept: the book entry's ID (the entry itself is
+	// re-read from the loaded book at rebuild time), the
+	// declaration's name ("" = the piece takes none), and
+	// the statement slots that are part of the piece's
+	// shape. The line-phrase placement is deliberately NOT
+	// carried: a repeat lands where a fresh ask would put
+	// it, not on the original's line.
+	conceptID string
+	name      string
+	text      string // the {text} saying slot, as planned ("" = the row's default)
+	inFunc    string // the statement's host function slot
+	like      string // the {methods} source type slot
+
+	// taught: the kind phrase (the name rides in name).
+	kindPhrase string
+
+	// serve: the page the recipe serves (slash-relative).
+	html string
+
+	// wire: the handler's name rides in name; the route is
+	// deliberately NOT carried — it was the first handler's
+	// address, not the piece's shape, so a repeat wires at
+	// the new handler's own default route.
+
+	// page: the page kind and its handler's name (in name).
+	pageKind string
+
+	// create: the created file's folder and the starter the
+	// creation carried ("" = a plain empty file).
+	folder     string
+	createKind string
 }
 
 var workCtx workContext
@@ -111,9 +180,14 @@ func workContextLive(rootAbs string) bool {
 // from the folder's own Go files.
 func noteLandedFile(rootAbs, rel, how, piece, name string) {
 	rel = filepath.ToSlash(rel)
+	if workCtx.lastFile != "" && workCtx.lastFile != rel {
+		workCtx.prevFile = workCtx.lastFile
+		workCtx.prevHow = workCtx.lastHow
+	}
 	workCtx.root = rootAbs
 	workCtx.lastFile = rel
 	workCtx.lastHow = how
+	workCtx.lastKind = "file"
 	workCtx.piece = piece
 	workCtx.pieceName = name
 	workCtx.folder = slashDir(rel)
@@ -137,6 +211,7 @@ func noteLandedFolder(rootAbs, rel string) {
 	rel = filepath.ToSlash(rel)
 	workCtx.root = rootAbs
 	workCtx.folder = rel
+	workCtx.lastKind = "folder"
 	workCtx.pkg = folderPackageOf(rootAbs, rel)
 	noteSessionBuilt(rootAbs, "folder "+rel)
 }
@@ -219,6 +294,76 @@ func noteSpineLanded(req analyze.EditRequest, plan *analyze.EditPlan, root strin
 		name = req.TaughtName
 	}
 	noteLandedFile(root, rel, how, piece, name)
+	noteSpineSnapshot(req, rel)
+}
+
+// noteSpineSnapshot records the landed piece in rebuildable
+// form for the follow-ups (followup.go): the families whose
+// canonical sentences rebuild exactly from the request the
+// spine just carried. Every other kind clears the snapshot —
+// the follow-up claim answers those honestly rather than
+// inventing a sentence. Make-and-call is one of the cleared
+// kinds (rebuilding only its concept half would drop the
+// call), but its SECOND file is noted as the session's other
+// file: the two files of that one landing are exactly the
+// pair "the other file" speaks of.
+func noteSpineSnapshot(req analyze.EditRequest, rel string) {
+	workCtx.landed = nil
+	switch req.Kind {
+	case analyze.EditConcept:
+		if req.Concept == nil {
+			return
+		}
+		workCtx.landed = &landedPiece{
+			family:    "concept",
+			file:      rel,
+			conceptID: req.Concept.ID,
+			name:      req.ConceptName,
+			text:      req.ConceptText,
+			inFunc:    req.ConceptFunc,
+			like:      req.ConceptLike,
+		}
+	case analyze.EditTaughtDecl:
+		workCtx.landed = &landedPiece{
+			family:     "taught",
+			file:       rel,
+			kindPhrase: req.TaughtKindPhrase,
+			name:       req.TaughtName,
+		}
+	case analyze.EditAddServer:
+		workCtx.landed = &landedPiece{family: "server", file: rel}
+	case analyze.EditServeHTML:
+		workCtx.landed = &landedPiece{family: "serve", file: rel, html: req.ServeHTML}
+	case analyze.EditWireHandler:
+		workCtx.landed = &landedPiece{family: "wire", name: req.WireName}
+	case analyze.EditPage:
+		workCtx.landed = &landedPiece{
+			family:   "page",
+			file:     rel,
+			pageKind: req.PageKind,
+			name:     req.PageName,
+		}
+	case analyze.EditMakeCall:
+		if req.MakeCallTarget != "" && req.MakeCallTarget != rel {
+			workCtx.prevFile = filepath.ToSlash(req.MakeCallTarget)
+			workCtx.prevHow = "edited"
+		}
+	}
+}
+
+// noteCreateLanded records a plain file creation (the create
+// family's own Done point, beside its noteLandedFile call) in
+// rebuildable form: the follow-up's new instance is another
+// creation of the same kind — a plain file, or the webserver
+// starter when the creation carried one.
+func noteCreateLanded(rel, kind string) {
+	rel = filepath.ToSlash(rel)
+	workCtx.landed = &landedPiece{
+		family:     "create",
+		file:       rel,
+		folder:     slashDir(rel),
+		createKind: kind,
+	}
 }
 
 // notePlanLanded records a landed plan from one of the
@@ -230,6 +375,30 @@ func notePlanLanded(root string, plan *analyze.EditPlan, piece string) {
 		return
 	}
 	noteLandedFile(root, plan.Files[0].Rel, "edited", piece, "")
+	// These flows (rename, delegate, uses, error fix) carry
+	// no rebuildable snapshot: a follow-up after one answers
+	// honestly rather than guessing a sentence.
+	workCtx.landed = nil
+}
+
+// otherFileCandidate returns the session's other file: the
+// file the landing before the last one touched, when the
+// session holds exactly two distinct files and both are
+// still on disk. "the other file" (followup.go, vocab.go)
+// has a referent only in that state — one file in play, or
+// a file gone from disk, and the phrase resolves to
+// nothing, never to a guess.
+func otherFileCandidate() (string, bool) {
+	if workCtx.root == "" || workCtx.prevFile == "" || workCtx.prevFile == workCtx.lastFile {
+		return "", false
+	}
+	for _, rel := range []string{workCtx.lastFile, workCtx.prevFile} {
+		st, err := os.Stat(filepath.Join(workCtx.root, filepath.FromSlash(rel)))
+		if err != nil || st.IsDir() {
+			return "", false
+		}
+	}
+	return workCtx.prevFile, true
 }
 
 // lastFileReason is the why of a reading that resolved to

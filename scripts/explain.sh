@@ -109,6 +109,22 @@ Create folders and files — shown first, gated, then verified:
       out for retyping. Say anything else and the question is
       forgotten — your line is handled as itself. Facts (a
       taken path, an existing page) still refuse outright.
+  you> call jim/main.go the api file
+      your own name for a file or folder, taught once and
+      kept per project in ~/.gollemer_vocab.json. From then
+      on the name works anywhere a sentence names that path,
+      and the reading prints before the plan — never silent.
+      A real file with the same name always wins. "What do
+      you call things" lists them; "forget the api file"
+      removes one.
+  you> another one
+      repeats the piece that just landed — asking for its
+      name first when the follow-up gives none. "Another one
+      named X in <file>", "the same but for <file>", and
+      "the other file" (the session's other working file)
+      are the variations; names you've taught work inside
+      them too. Every repeat is rebuilt as the full sentence
+      and goes through the same plan, gate, and build check.
   you> create a homepage
       a whole page in one ask: the starter page (index.html),
       its handler, and its registration at / — the webserver's

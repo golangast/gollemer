@@ -1243,6 +1243,41 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if tryClarifyAnswer(line, reader) {
 			continue
 		}
+		// Personal vocabulary, claimed deterministically
+		// beside the clarifying answers (vocab.go): "call
+		// jim/main.go the api file" teaches one of the user's
+		// own names for a file or folder, and "what do you
+		// call things" / "forget the api file" manage the
+		// store (~/.gollemer_vocab.json, his data, per
+		// project). The teach claim sits ahead of the
+		// spoken-target pass below because a teach line ends
+		// in the very name it teaches. Memory's "call me …"
+		// sits above (tryMemoryCommand) and keeps its shape.
+		if tryVocab(line, reader) {
+			continue
+		}
+		// The spoken-target pass (vocab.go): when a write
+		// line's target tail is one of the user's taught
+		// names, or "the other file", the tail is rewritten
+		// to the real path and the reading printed, so every
+		// claim below reads the line exactly as if the path
+		// had been typed. Anything else leaves the line
+		// untouched and prints nothing. Follow-up lines are
+		// skipped — the follow-up claim just below resolves
+		// its own target slot, so a context-free follow-up
+		// keeps today's behavior to the byte.
+		line = rewriteSpokenTargets(line)
+		// Richer follow-ups, claimed deterministically beside
+		// the vocabulary (followup.go): "another one",
+		// "another one named X in Y", "the same but for X"
+		// repeat the session's last landed piece by
+		// rebuilding its own canonical sentence and running
+		// it through its own claim — same plan, gate,
+		// transaction and build check. With no session
+		// context they claim nothing and print nothing.
+		if tryFollowUp(line, reader) {
+			continue
+		}
 		// Learn mode, claimed deterministically ahead of the
 		// beginner five: its start shapes, its "next", and —
 		// while a check question waits — its answers must never
