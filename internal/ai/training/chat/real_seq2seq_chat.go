@@ -151,6 +151,19 @@ func loadRealModel(projectRoot, domain string) (*seq2seq.Seq2Seq, error) {
 	if model.Decoder == nil || model.Decoder.MoE == nil {
 		return nil, fmt.Errorf("refusing to chat: model was trained without the MoE decoder; retrain with -train-real-seq2seq")
 	}
+	// Decode policy: the social model answers conversation, and the
+	// 2026-11-05 decode-upgrades probe judged beam search (width 4,
+	// cumulative log-probability) better than greedy for it — held-out
+	// want-hits 9/41 vs 8/41, 3 judged wins to 1 loss, deterministic.
+	// Beam was judged on the social model only, so it is switched on
+	// here, by domain, at the one loader every chat social instance
+	// passes through (real-chat, unified chat, and the talk seat's own
+	// handle all load through loadRealModel). Every other domain keeps
+	// the greedy loop; training builds its model without this loader
+	// and is untouched.
+	if domain == SocialDomain {
+		model.BeamWidth = 4
+	}
 	return model, nil
 }
 

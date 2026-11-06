@@ -4,7 +4,9 @@ import (
 	"encoding/gob"
 	"fmt"
 	"log"
+	"math"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/golangast/gollemer/internal/ai/neural/nn"
@@ -230,6 +232,16 @@ type Seq2Seq struct {
 	OutputVocab *vocab.Vocabulary    // Vocabulary for the output descriptions
 	HiddenDim   int
 	ExactMap    map[string]string
+	// BeamWidth > 1 makes PredictWithTrace decode by beam search
+	// (cumulative log-probability, no length normalization) instead of
+	// greedy argmax. Zero keeps the historical greedy loop. Only the
+	// chat's social model opts in — beam width 4 was judged on the
+	// social model alone (decode-upgrades probe, 2026-11-05: held-out
+	// want-hits 9/41 vs greedy's 8/41, 3 judged wins to 1 loss, fully
+	// deterministic); every other domain, and training/eval, keeps
+	// greedy. Not serialized: a freshly loaded model stays greedy
+	// until a caller opts in.
+	BeamWidth int
 }
 
 // NewSeq2Seq creates a new Seq2Seq model.
@@ -440,6 +452,15 @@ func (m *Seq2Seq) PredictWithTrace(query string, maxLen int) (string, *ThoughtTr
 		trace.ExpertUsage = make([]float32, m.Decoder.MoE.NumExperts)
 	}
 
+	// Beam decoding, for callers that opted in via BeamWidth (the
+	// chat's social model): keep the BeamWidth most probable partial
+	// replies alive and return the best-scoring finished one, instead
+	// of committing to the argmax token at every step. The thought
+	// trace then honestly describes the winning beam's token path.
+	if m.BeamWidth > 1 {
+		return m.predictBeam(decoderHidden, decoderCell, maxLen, trace)
+	}
+
 	// Anti-degeneration: tiny models love to loop ("go go go", "the the the").
 	// Forbid immediate token repeats and repeated bigrams during greedy
 	// decoding — standard practice, costs nothing.
@@ -539,6 +560,224 @@ func (m *Seq2Seq) PredictWithTrace(query string, maxLen int) (string, *ThoughtTr
 	decodedDescription := m.OutputVocab.Decode(outputTokens)
 
 	return decodedDescription, trace, nil
+}
+
+// ---------------------------------------------------------------------------
+// Beam search decoding (PredictWithTrace when BeamWidth > 1).
+//
+// Score = cumulative log-probability (log-softmax of the banned logits),
+// summed per step; NO length normalization. The greedy loop's hard bans
+// apply per beam, relative to that beam's own history: its previous token
+// and any bigram it has already produced are forbidden. Each live beam
+// expands its top-BeamWidth tokens; the pool is trimmed to BeamWidth by
+// score each step. A beam that emits EOS is finished and stops expanding
+// but stays in the pool, competing by score. The winner is the
+// highest-score finished beam, or the highest-score live beam if none
+// finished by maxLen. Decoder state (LSTM hidden/cell, plus copy-gate
+// history when the decoder carries one) is cloned per beam. The search
+// is fully deterministic: same model, same input, same reply.
+// ---------------------------------------------------------------------------
+
+type beamState struct {
+	tokens     []int
+	hidden     *tensor.Tensor
+	cell       *tensor.Tensor
+	histStates [][][]float32
+	histTokens [][]int
+	score      float64
+	steps      []ThoughtStep
+	finished   bool
+}
+
+func cloneTensor(t *tensor.Tensor) *tensor.Tensor {
+	if t == nil {
+		return nil
+	}
+	c := *t
+	c.Data = append([]float32(nil), t.Data...)
+	c.Shape = append([]int(nil), t.Shape...)
+	c.Grad = nil
+	c.Mask = nil
+	c.Creator = nil
+	c.Operation = nil
+	return &c
+}
+
+func cloneHistStates(h [][][]float32) [][][]float32 {
+	out := make([][][]float32, len(h))
+	for i := range h {
+		out[i] = make([][]float32, len(h[i]))
+		for j := range h[i] {
+			out[i][j] = append([]float32(nil), h[i][j]...)
+		}
+	}
+	return out
+}
+
+func cloneHistTokens(h [][]int) [][]int {
+	out := make([][]int, len(h))
+	for i := range h {
+		out[i] = append([]int(nil), h[i]...)
+	}
+	return out
+}
+
+func (m *Seq2Seq) predictBeam(encoderHidden, encoderCell *tensor.Tensor, maxLen int, trace *ThoughtTrace) (string, *ThoughtTrace, error) {
+	width := m.BeamWidth
+	useCopy := m.Decoder.Copy != nil
+	beams := []*beamState{{
+		hidden:     cloneTensor(encoderHidden),
+		cell:       cloneTensor(encoderCell),
+		histStates: [][][]float32{{}},
+		histTokens: [][]int{{}},
+	}}
+
+	for t := 0; t < maxLen; t++ {
+		allFinished := true
+		for _, b := range beams {
+			if !b.finished {
+				allFinished = false
+				break
+			}
+		}
+		if allFinished {
+			break
+		}
+		var pool []*beamState
+		for _, b := range beams {
+			if b.finished {
+				pool = append(pool, b)
+				continue
+			}
+			lastTok := m.OutputVocab.BosID
+			if len(b.tokens) > 0 {
+				lastTok = b.tokens[len(b.tokens)-1]
+			}
+			decoderInput := tensor.NewTensor([]int{1, 1}, []float32{float32(lastTok)}, true)
+			prediction, hidden, cell, err := m.Decoder.ForwardCopy(decoderInput, b.hidden, b.cell, b.histStates, b.histTokens)
+			if err != nil {
+				return "", nil, fmt.Errorf("beam prediction decoder forward failed at step %d: %w", t, err)
+			}
+			// MoE routing for this expansion (LastRouting reflects
+			// THIS forward call, read before the next beam's).
+			var expIdx []int
+			var expGates []float32
+			if m.Decoder.MoE != nil {
+				idx, gates := m.Decoder.MoE.LastRouting()
+				k := m.Decoder.MoE.TopK
+				if len(idx) >= k {
+					expIdx = append([]int(nil), idx[:k]...)
+					expGates = append([]float32(nil), gates[:k]...)
+				}
+			}
+			logits := prediction.Data
+			vocabSize := prediction.Shape[1]
+			// Hard bans, relative to this beam's own history.
+			if len(b.tokens) > 0 {
+				seen := map[[2]int]bool{}
+				for i := 0; i+1 < len(b.tokens); i++ {
+					seen[[2]int{b.tokens[i], b.tokens[i+1]}] = true
+				}
+				prev := b.tokens[len(b.tokens)-1]
+				if prev >= 0 && prev < vocabSize {
+					logits[prev] = -1e30
+				}
+				for c := 0; c < vocabSize; c++ {
+					if seen[[2]int{prev, c}] {
+						logits[c] = -1e30
+					}
+				}
+			}
+			candidates := topKCandidates(logits, 3, m.OutputVocab)
+			// Log-softmax normalizer.
+			maxL := float64(logits[0])
+			for _, v := range logits {
+				if float64(v) > maxL {
+					maxL = float64(v)
+				}
+			}
+			sum := 0.0
+			for _, v := range logits {
+				sum += math.Exp(float64(v) - maxL)
+			}
+			logNorm := maxL + math.Log(sum)
+			// This beam's top-width next tokens.
+			order := make([]int, vocabSize)
+			for i := range order {
+				order[i] = i
+			}
+			sort.Slice(order, func(a, bb int) bool { return logits[order[a]] > logits[order[bb]] })
+			n := width
+			if n > vocabSize {
+				n = vocabSize
+			}
+			for _, tk := range order[:n] {
+				child := &beamState{
+					tokens:     append(append([]int(nil), b.tokens...), tk),
+					hidden:     cloneTensor(hidden),
+					cell:       cloneTensor(cell),
+					histStates: cloneHistStates(b.histStates),
+					histTokens: cloneHistTokens(b.histTokens),
+					score:      b.score + (float64(logits[tk]) - logNorm),
+					finished:   tk == m.OutputVocab.EosID,
+				}
+				step := ThoughtStep{
+					Token:      m.OutputVocab.GetWord(tk),
+					TokenID:    tk,
+					Candidates: candidates,
+					Experts:    expIdx,
+					Gates:      expGates,
+				}
+				child.steps = append(append([]ThoughtStep(nil), b.steps...), step)
+				// Copy-mechanism history, mirroring the greedy loop:
+				// record (state, token) for every non-final token.
+				if useCopy && !child.finished {
+					hs := append([]float32(nil), hidden.Data...)
+					child.histStates[0] = append(child.histStates[0], hs)
+					child.histTokens[0] = append(child.histTokens[0], tk)
+				}
+				pool = append(pool, child)
+			}
+		}
+		sort.SliceStable(pool, func(a, bb int) bool { return pool[a].score > pool[bb].score })
+		if len(pool) > width {
+			pool = pool[:width]
+		}
+		beams = pool
+	}
+
+	// Winner: highest-score finished beam; if none finished, best live.
+	var winner *beamState
+	for _, b := range beams {
+		if b.finished && (winner == nil || b.score > winner.score) {
+			winner = b
+		}
+	}
+	if winner == nil {
+		for _, b := range beams {
+			if winner == nil || b.score > winner.score {
+				winner = b
+			}
+		}
+	}
+	// The trace is the winning beam's path — the tokens the reply
+	// actually consists of, with the routing each one used.
+	trace.Steps = winner.steps
+	if m.Decoder.MoE != nil {
+		for _, st := range winner.steps {
+			for _, e := range st.Experts {
+				if e >= 0 && e < len(trace.ExpertUsage) {
+					trace.ExpertUsage[e]++
+				}
+			}
+		}
+		if denom := float32(len(trace.Steps) * m.Decoder.MoE.TopK); denom > 0 {
+			for i := range trace.ExpertUsage {
+				trace.ExpertUsage[i] /= denom
+			}
+		}
+	}
+	return m.OutputVocab.Decode(winner.tokens), trace, nil
 }
 
 // topKCandidates returns the text of the k highest-logit tokens.
