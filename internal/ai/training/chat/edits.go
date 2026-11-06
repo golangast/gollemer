@@ -386,6 +386,7 @@ func executeEditPlan(req analyze.EditRequest, ask editAsk) bool {
 	tx.commit()
 	setCurrentProject(root, fresh)
 	noteSpineLanded(req, plan, root)
+	recordSpineReceipt(req, plan, root, built, beforeRegs, fresh)
 	// The landing line is a partner's confirmation, rendered
 	// from this transaction's own record (confirm.go) — the
 	// request's slots, the executed plan, and the project as

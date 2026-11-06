@@ -163,6 +163,7 @@ var workCtx workContext
 // setCurrentProject when the session's project changes.
 func resetWorkContext() {
 	workCtx = workContext{}
+	receiptResumePending = receiptResumeState{}
 	clearPendingQuestion()
 	resetShortTermMemory()
 	resetMemoryRecall()
@@ -297,24 +298,21 @@ func noteSpineLanded(req analyze.EditRequest, plan *analyze.EditPlan, root strin
 	noteSpineSnapshot(req, rel)
 }
 
-// noteSpineSnapshot records the landed piece in rebuildable
+// landedSnapshotFor builds a landed piece in rebuildable
 // form for the follow-ups (followup.go): the families whose
 // canonical sentences rebuild exactly from the request the
-// spine just carried. Every other kind clears the snapshot —
-// the follow-up claim answers those honestly rather than
-// inventing a sentence. Make-and-call is one of the cleared
-// kinds (rebuilding only its concept half would drop the
-// call), but its SECOND file is noted as the session's other
-// file: the two files of that one landing are exactly the
-// pair "the other file" speaks of.
-func noteSpineSnapshot(req analyze.EditRequest, rel string) {
-	workCtx.landed = nil
+// spine just carried. Every other kind returns nil — the
+// follow-up claim answers those honestly rather than
+// inventing a sentence. The receipts store (receipts.go)
+// serializes this same snapshot, so an in-session follow-up
+// and a cross-session one rebuild from the same facts.
+func landedSnapshotFor(req analyze.EditRequest, rel string) *landedPiece {
 	switch req.Kind {
 	case analyze.EditConcept:
 		if req.Concept == nil {
-			return
+			return nil
 		}
-		workCtx.landed = &landedPiece{
+		return &landedPiece{
 			family:    "concept",
 			file:      rel,
 			conceptID: req.Concept.ID,
@@ -324,30 +322,40 @@ func noteSpineSnapshot(req analyze.EditRequest, rel string) {
 			like:      req.ConceptLike,
 		}
 	case analyze.EditTaughtDecl:
-		workCtx.landed = &landedPiece{
+		return &landedPiece{
 			family:     "taught",
 			file:       rel,
 			kindPhrase: req.TaughtKindPhrase,
 			name:       req.TaughtName,
 		}
 	case analyze.EditAddServer:
-		workCtx.landed = &landedPiece{family: "server", file: rel}
+		return &landedPiece{family: "server", file: rel}
 	case analyze.EditServeHTML:
-		workCtx.landed = &landedPiece{family: "serve", file: rel, html: req.ServeHTML}
+		return &landedPiece{family: "serve", file: rel, html: req.ServeHTML}
 	case analyze.EditWireHandler:
-		workCtx.landed = &landedPiece{family: "wire", name: req.WireName}
+		return &landedPiece{family: "wire", name: req.WireName}
 	case analyze.EditPage:
-		workCtx.landed = &landedPiece{
+		return &landedPiece{
 			family:   "page",
 			file:     rel,
 			pageKind: req.PageKind,
 			name:     req.PageName,
 		}
-	case analyze.EditMakeCall:
-		if req.MakeCallTarget != "" && req.MakeCallTarget != rel {
-			workCtx.prevFile = filepath.ToSlash(req.MakeCallTarget)
-			workCtx.prevHow = "edited"
-		}
+	}
+	return nil
+}
+
+// noteSpineSnapshot records the landed piece in rebuildable
+// form for the follow-ups. Make-and-call carries no
+// snapshot (rebuilding only its concept half would drop the
+// call), but its SECOND file is noted as the session's other
+// file: the two files of that one landing are exactly the
+// pair "the other file" speaks of.
+func noteSpineSnapshot(req analyze.EditRequest, rel string) {
+	workCtx.landed = landedSnapshotFor(req, rel)
+	if req.Kind == analyze.EditMakeCall && req.MakeCallTarget != "" && req.MakeCallTarget != rel {
+		workCtx.prevFile = filepath.ToSlash(req.MakeCallTarget)
+		workCtx.prevHow = "edited"
 	}
 }
 

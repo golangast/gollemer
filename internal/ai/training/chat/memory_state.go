@@ -335,19 +335,42 @@ func latestLongTermSummary(p *longTermProjectMemory) (longTermSessionSummary, bo
 
 // beginMemorySession loads this project's slice and returns
 // the one continuity line for a previous session, once per
-// root in this process. No previous summary, no line.
+// root in this process: the stored prose summary when one
+// exists, extended with the receipt-resume disclosure when
+// this session restored its work context from the landing
+// receipts (receipts.go) — what was picked back up, named,
+// and what was dropped because the disk no longer holds
+// it. Neither, no line.
 func beginMemorySession(root string) string {
 	root = canonicalMemoryRoot(root)
+	if root == "" {
+		return ""
+	}
+	// The continuity line is printed at chat startup, which
+	// can precede the first project read that would restore
+	// the work context — restore here too (context only,
+	// never an effect) so the resume disclosure is part of
+	// the line it belongs to. A live context is untouched.
+	if !workContextLive(root) {
+		restoreWorkContextFromReceipts(root)
+	}
 	_, p := loadMemorySlice(root)
-	if root == "" || memoryRecall.announced[root] {
-		return ""
+	summary := ""
+	if !memoryRecall.announced[root] {
+		if s, ok := latestLongTermSummary(p); ok {
+			memoryRecall.announced[root] = true
+			summary = "Last time here: " + s.Text
+		}
 	}
-	s, ok := latestLongTermSummary(p)
-	if !ok {
-		return ""
+	resume := receiptResumeLine(root)
+	switch {
+	case summary != "" && resume != "":
+		return summary + " " + resume
+	case resume != "":
+		return "Last time here: " + resume
+	default:
+		return summary
 	}
-	memoryRecall.announced[root] = true
-	return "Last time here: " + s.Text
 }
 
 func memoryContextText(root string) string {
@@ -648,18 +671,38 @@ var (
 	memoryDoneRe    = regexp.MustCompile(`(?i)^\s*(what have we (made|built|done)|what did we (just )?(make|build|do)|what have we done so far)\s*[?.!]*\s*$`)
 	memoryOpenRe    = regexp.MustCompile(`(?i)^\s*(what(?:'s| is) (still )?open|what threads are open|what is left open)\s*[?.!]*\s*$`)
 	memoryDecidedRe = regexp.MustCompile(`(?i)^\s*(what have we decided|what did we decide)\s*[?.!]*\s*$`)
+
+	// The build-history shapes (receipts.go): the receipts
+	// query and its forget. Anchored whole-line, like every
+	// state shape — a line merely mentioning built work in
+	// passing is conversation, not this claim.
+	receiptQueryRe  = regexp.MustCompile(`(?i)^\s*(what have you (built|made|changed)( here| in this project)?|what did you (build|make|change)( here| in this project)?|show me (the )?build history|what(?:'s| is) (the|my) build history)\s*[?.!]*\s*$`)
+	receiptForgetRe = regexp.MustCompile(`(?i)^\s*forget the build history\s*[!.]*\s*$`)
 )
 
 func isTalkStateLine(line string) bool {
 	return memoryTimeRe.MatchString(line) || memoryOSRe.MatchString(line) ||
 		memoryBranchRe.MatchString(line) || memoryChangedRe.MatchString(line) ||
 		memoryDoneRe.MatchString(line) || memoryOpenRe.MatchString(line) ||
-		memoryDecidedRe.MatchString(line)
+		memoryDecidedRe.MatchString(line) ||
+		receiptQueryRe.MatchString(line) || receiptForgetRe.MatchString(line)
 }
 
 func talkStateAnswer(ctx TalkContext, line string) (string, bool) {
 	s := ctx.State
+	receiptRoot := s.Root
+	if receiptRoot == "" {
+		receiptRoot = memoryCurrentRoot()
+	}
 	switch {
+	case receiptForgetRe.MatchString(line):
+		return forgetLandingReceiptsText(receiptRoot), true
+	case receiptQueryRe.MatchString(line):
+		text, err := renderLandingReceipts(receiptRoot)
+		if err != nil {
+			return "I couldn't read the build-history store (" + receiptStorePath() + "): " + err.Error(), true
+		}
+		return text, true
 	case memoryTimeRe.MatchString(line):
 		lower := strings.ToLower(line)
 		if strings.Contains(lower, "date") || strings.Contains(lower, "day") {

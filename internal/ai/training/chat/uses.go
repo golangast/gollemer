@@ -306,6 +306,7 @@ func runUses(line string, ask editAsk) bool {
 	setCurrentProject(rootAbs, fresh)
 	tx.commit()
 	notePlanLanded(rootAbs, plan, "function that uses a symbol")
+	recordPlanReceipt(rootAbs, plan, analyze.EditUse, newName, "function that uses a symbol", hasMod)
 
 	how := "built the " + tgtPkg.Name + " package and checked"
 	if !hasMod {

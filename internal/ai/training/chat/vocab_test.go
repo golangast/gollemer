@@ -252,9 +252,22 @@ func TestVocabTeachThisAndFolder(t *testing.T) {
 	if got := readBack(t, root, "web/webprobe.go"); !strings.Contains(got, "type WebProbe struct") {
 		t.Errorf("the struct did not land in the named folder:\n%s", got)
 	}
-	// A cold "this" refuses in words (fresh session state).
+	// A restarted session's "this" reads as the last landed
+	// file: the landing receipts resume the work context
+	// across the restart (receipts.go), so the referent is
+	// the restored one, disclosed in the continuity line.
 	withChatSession(t, root, true)
 	out = vocabRun(t, "call this the api file")
+	if !strings.Contains(out, `"the api file" — web/webprobe.go in this project.`) {
+		t.Errorf("resumed 'this' did not read as the restored file:\n%s", out)
+	}
+	// A cold "this" — fresh session state AND no build
+	// history to resume from — refuses in words.
+	if _, err := clearLandingReceipts(root); err != nil {
+		t.Fatal(err)
+	}
+	withChatSession(t, root, true)
+	out = vocabRun(t, "call this the cold file")
 	if !strings.Contains(out, `I don't have a "this" in this session yet`) {
 		t.Errorf("cold 'this' was not refused in words:\n%s", out)
 	}

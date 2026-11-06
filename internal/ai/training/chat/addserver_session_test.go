@@ -118,6 +118,9 @@ func claimChain(line string, ask editAsk, profile *UserProfile) bool {
 	if runInstantiate(line, ask) {
 		return true
 	}
+	if tryReceiptForget(line) {
+		return true
+	}
 	if runTaughtKinds(line, ask) {
 		return true
 	}

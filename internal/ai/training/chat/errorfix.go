@@ -270,6 +270,7 @@ func runErrorFix(line string, ask editAsk) bool {
 		tx.commit()
 		setCurrentProject(root, fresh)
 		notePlanLanded(root, plan, "error fix")
+		recordPlanReceipt(root, plan, req.Class, req.Name, "error fix", true)
 		if bok {
 			fmt.Printf("%s Fixed — %s. The project builds clean now.\n", tag, plan.VerifyDesc)
 		} else {
@@ -290,6 +291,7 @@ func runErrorFix(line string, ask editAsk) bool {
 	tx.commit()
 	setCurrentProject(root, fresh)
 	notePlanLanded(root, plan, "error fix")
+	recordPlanReceipt(root, plan, req.Class, req.Name, "error fix", false)
 	fmt.Printf("%s Fixed — %s (no go.mod at the project root, so there was no build to check against).\n", tag, plan.VerifyDesc)
 	recordBrain("composer", true, "error fix applied: "+req.Class)
 	return true

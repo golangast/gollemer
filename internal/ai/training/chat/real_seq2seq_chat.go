@@ -1543,6 +1543,17 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if tryInstantiate(line, reader) {
 			continue
 		}
+		// The build-history forget, claimed deterministically
+		// directly ahead of the teach seat: "forget the build
+		// history" is the landing receipts' own management
+		// line (receipts.go), and the teach seat's generic
+		// "forget the <kind>" grammar would otherwise claim
+		// it as a kind phrase and answer for the wrong store.
+		// The shape is that one exact line; every other
+		// "forget the …" keeps falling to the teach seat.
+		if tryReceiptForget(line) {
+			continue
+		}
 		// The teach seat, claimed deterministically after the
 		// concept book and before the model proposer: pieces
 		// the user taught the chat from examples in his own

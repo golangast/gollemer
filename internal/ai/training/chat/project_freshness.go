@@ -80,6 +80,14 @@ func setCurrentProject(root string, p *analyze.Project) {
 		lastAnalyzeRoot = p.Root
 	}
 	lastAnalyzeSnapshot = snapshotProjectTree(p)
+	// Cross-session resume (receipts.go): a session that
+	// holds no live work context for this project picks the
+	// work back up from its landing receipts — context only,
+	// never an effect replay, and a same-project re-read
+	// with the context already live leaves it untouched.
+	if !workContextLive(p.Root) {
+		restoreWorkContextFromReceipts(p.Root)
+	}
 }
 
 // snapshotProjectTree stats every .go file the analyzer included

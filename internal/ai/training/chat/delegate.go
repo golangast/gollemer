@@ -308,6 +308,7 @@ func runDelegate(line string, ask editAsk) bool {
 	setCurrentProject(rootAbs, fresh)
 	tx.commit()
 	notePlanLanded(rootAbs, plan, "function that calls another")
+	recordPlanReceipt(rootAbs, plan, analyze.EditDelegate, wrapperName, "function that calls another", hasMod)
 
 	// The landing line is the shared partner confirmation
 	// (confirm.go), rendered from this transaction's record.

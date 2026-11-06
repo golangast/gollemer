@@ -1042,6 +1042,7 @@ func runCreate(line string, ask editAsk) bool {
 		}
 		fmt.Printf("%s Done — created %s/.\n", tag, d.rel)
 		noteLandedFolder(rootAbs, d.rel)
+		recordCreateFolderReceipt(rootAbs, d)
 		recordBrain("composer", true, "create applied: folder "+d.rel)
 		return true
 	}
@@ -1090,6 +1091,7 @@ func runCreate(line string, ask editAsk) bool {
 	fmt.Printf("%s %s\n", tag, renderCreateConfirmation(req.kind, created, plan.file.rel, how))
 	noteLandedFile(rootAbs, plan.file.rel, "created", "file", "")
 	noteCreateLanded(plan.file.rel, req.kind)
+	recordCreateFileReceipt(rootAbs, plan, req)
 	note := "create applied: file " + plan.file.rel
 	if req.kind != "" {
 		note += " (" + req.kind + ")"
