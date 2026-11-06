@@ -486,7 +486,11 @@ func tryIntentDispatchInner(line string, profile *UserProfile) bool {
 	}
 	intent, conf, ok := m.ClassifyIntent(line)
 	if !ok {
-		if offerClarification(m, line) {
+		// No clarification offer for a question the knowledge
+		// base already answers strongly (see the veto in
+		// dispatchIntent): being asked "did you mean…?" about an
+		// exactly-answerable question is the same theft, slower.
+		if _, strong := strongGoKnowledgeAnswer(line); !strong && offerClarification(m, line) {
 			return true
 		}
 		// The layer passed on this line: record the near miss so
@@ -513,6 +517,28 @@ func tryIntentDispatchInner(line string, profile *UserProfile) bool {
 // out of tryIntentDispatch so a confirmed guess routes through the
 // exact same cases as a confident one.
 func dispatchIntent(intent, line string, profile *UserProfile) bool {
+	// Veto: a concept question the curated knowledge base answers
+	// strongly is brain-owned by this layer's own design — it must
+	// fall through to the deterministic seat that owns it, never be
+	// dispatched as a beginner intent, however confident the
+	// classifier is or whether the user just confirmed the guess.
+	// Measured 2026-11-05 against the shipped classifier: "tell me
+	// simply, what is a waitgroup?" classifies as what_now at
+	// confidence 1.000 and was dispatched to the what-now guidance,
+	// stealing a question the knowledge base answers exactly, in a
+	// seat the router never gets a say in. The veto sits here, at
+	// dispatch, rather than ahead of classification, on purpose:
+	// the classifier still reads the line, and the caller still
+	// records the outcome (fell-through, with the real verdict and
+	// confidence) — only the answering changes. The audited claim
+	// (strongGoKnowledgeAnswer, goknowledge.go) is deliberately
+	// narrow — concept-question shape, the bare subject fully
+	// explained by the winning entry — so social lines, vague
+	// questions, and every genuine beginner intent dispatch
+	// exactly as before.
+	if _, ok := strongGoKnowledgeAnswer(line); ok {
+		return false
+	}
 	switch intent {
 	case "tour", "glossary", "learn_path", "example", "watch":
 		if canon := canonicalFor(intent, line); canon != "" {

@@ -365,9 +365,21 @@ func stem(w string) string {
 // least two distinct keyword hits. Single common words ("maps" in
 // "i like maps") never fire on their own.
 func LookupGoKnowledge(query string) (string, bool) {
+	entry, ok := lookupGoKnowledgeEntry(query)
+	if !ok {
+		return "", false
+	}
+	return entry.body, true
+}
+
+// lookupGoKnowledgeEntry is LookupGoKnowledge's matching engine. It
+// returns the winning entry itself so the ahead-of-the-gate claim
+// below can audit which entry matched before trusting the match on a
+// line the router did not send to the Go domain.
+func lookupGoKnowledgeEntry(query string) (goKnowledgeEntry, bool) {
 	toks := knowledgeTokens(query)
 	if len(toks) == 0 {
-		return "", false
+		return goKnowledgeEntry{}, false
 	}
 	tokSet := map[string]bool{}
 	for _, t := range toks {
@@ -432,8 +444,117 @@ func LookupGoKnowledge(query string) (string, bool) {
 		ranked = append(ranked, scored{i, true, score})
 	}
 	if len(ranked) == 0 {
-		return "", false
+		return goKnowledgeEntry{}, false
 	}
 	sort.Slice(ranked, func(a, b int) bool { return ranked[a].score > ranked[b].score })
-	return goKnowledge[ranked[0].idx].body, true
+	return goKnowledge[ranked[0].idx], true
+}
+
+// conceptQuestionRe finds the nucleus of a concept question inside a
+// line, behind whatever conversational wrapper it arrived in:
+// "explain it to me simply: what is a channel?", "tell me simply,
+// what is a waitgroup?", "in plain words, what is a mutex?". The
+// capture is the asked-about subject, up to the first sentence break
+// — a trailing ", simply" or ", in simple terms" is wrapper, not
+// subject.
+var conceptQuestionRe = regexp.MustCompile(`(?i)\bwhat (?:is|are|was|were|'s) (?:a |an |the )?([^,;:?.!]+)`)
+
+// conceptQuestionSubject extracts the subject a concept question
+// asks about, cleaned of the wrapper's trailing filler ("channels
+// for" -> "channels", "context package in simple terms" -> "context
+// package"). Lines that are not concept questions — statements,
+// plans, greetings, however Go-flavored their vocabulary — yield
+// false: they belong to whoever owns them, not to the knowledge base.
+func conceptQuestionSubject(line string) (string, bool) {
+	m := conceptQuestionRe.FindStringSubmatch(line)
+	if m == nil {
+		return "", false
+	}
+	subject := strings.TrimSpace(m[1])
+	filler := []string{
+		" in simple terms", " in plain words", " in plain english",
+		" used for", " in go", " simply", " for", " used",
+	}
+	for {
+		trimmed := subject
+		for _, f := range filler {
+			trimmed = strings.TrimSuffix(trimmed, f)
+		}
+		if trimmed == subject {
+			break
+		}
+		subject = trimmed
+	}
+	subject = strings.Trim(subject, " \t\"'")
+	if subject == "" {
+		return "", false
+	}
+	return subject, true
+}
+
+// goKnowledgeExplainsSubject audits a knowledge-base win for the
+// ahead-of-the-gate claim: every content word of the subject must be
+// explained by the winning entry — appear, stemmed, among the words
+// of its title or its keywords (dotted keywords like "sync.mutex"
+// split into their words). This is what separates "what is the
+// context package?" (context + package: the entry's own title) from
+// "what is the point of all this waiting?" (the pointers entry wins
+// the raw lookup on "point" ⊂ "pointer", but neither "point" nor
+// "waiting" is a word of that entry, so the claim declines and the
+// line stays social).
+func goKnowledgeExplainsSubject(e goKnowledgeEntry, subject string) bool {
+	explained := map[string]bool{}
+	add := func(text string) {
+		for _, tok := range knowledgeTokens(text) {
+			for _, part := range strings.Split(tok, ".") {
+				if part != "" {
+					explained[stem(part)] = true
+				}
+			}
+		}
+	}
+	add(e.title)
+	for _, kw := range e.keywords {
+		add(kw)
+	}
+	for _, tok := range knowledgeTokens(subject) {
+		if !explained[stem(tok)] {
+			return false
+		}
+	}
+	return true
+}
+
+// strongGoKnowledgeAnswer is the knowledge base's claim ahead of the
+// routing gate, used by tryDeterministicAnswer for lines the router
+// did NOT send to the Go domain. The raw LookupGoKnowledge gate is
+// calibrated for lines already routed to Go — a concept prior the
+// router used to supply — and it is demonstrably not strong enough
+// to consult on arbitrary lines: measured 2026-11-05, it fires on
+// "i changed the channel" (TV), on the single word "wait" ("wait"
+// is a substring of the keyword "waitgroup"), on "let me go get the
+// groceries" (the "go get" phrase), on "what is going on?" (the
+// "what is go" phrase is a prefix of "going"), and on dozens more
+// purely social lines. So the claim demands the base's strongest
+// tier in two parts, both about the line itself: it must be a
+// concept question (conceptQuestionSubject), and the entry that
+// answers its bare subject must explain every content word of that
+// subject (goKnowledgeExplainsSubject). Social statements never
+// meet the first condition; social questions about non-Go subjects
+// ("what is love?", "what is going on?") fail the lookup or the
+// audit. What survives is exactly the flipped family: a Go concept
+// asked about in conversational wrapping.
+func strongGoKnowledgeAnswer(line string) (string, bool) {
+	subject, ok := conceptQuestionSubject(line)
+	if !ok {
+		return "", false
+	}
+	entry, ok := lookupGoKnowledgeEntry(subject)
+	if !ok {
+		return "", false
+	}
+	if !goKnowledgeExplainsSubject(entry, subject) {
+		return "", false
+	}
+	return entry.body, true
 }

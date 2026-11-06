@@ -1091,6 +1091,24 @@ func tryDeterministicAnswer(line, d string, conv *Conversation, r *LineReader, p
 			return true
 		}
 	}
+	// The same knowledge base claims AHEAD of the route for every
+	// other domain — but only its strongest tier (a concept question
+	// whose subject the base answers with every subject word
+	// explained; see strongGoKnowledgeAnswer in goknowledge.go). The
+	// 2026-11-05 router retrain flipped conversationally-wrapped
+	// concept questions ("explain it to me simply: what is a
+	// channel?") to social, where the seat above never ran and the
+	// talk seat's social arm answered with model salad; the old
+	// router sent those lines here. The router, this seat's raw
+	// lookup, and the coverage test are all untouched — this claim
+	// restores the pre-regression answers for the wrapped family,
+	// and purely social lines, which are not concept questions the
+	// base can explain, fall through exactly as before.
+	if kb, ok := strongGoKnowledgeAnswer(line); ok {
+		fmt.Printf("%s %s\n", cTag(fmt.Sprintf("gollemer [%s]>", GoDomain)), kb)
+		conv.AddReply(kb, GoDomain, false)
+		return true
+	}
 	// Codebase-reading requests run the AST analyzer: exact structural
 	// answers, no neural model involved.
 	if d == GoAnalyzeDomain {

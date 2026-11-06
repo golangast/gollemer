@@ -489,9 +489,16 @@ func (r *localTalkResponder) Respond(ctx TalkContext, line string) (TalkResponse
 	// covers. (The error translator and the beginner five sit
 	// ahead of this seat in the chain and already claimed
 	// everything they own; the knowledge base is the
-	// deterministic explainer still reachable from the tail —
-	// tryDeterministicAnswer only consults it for go-routed
-	// lines, so this pass is broader in routing, not in data.)
+	// deterministic explainer still reachable from the tail.
+	// tryDeterministicAnswer consults it for go-routed lines and,
+	// since the 2026-11-05 seat change, claims its strongest tier
+	// ahead of the route for concept questions in any domain —
+	// this pass remains the broader net for whatever reaches the
+	// tail: non-question shapes and subjects the audited claim
+	// declined.) Arm order is unchanged: the social arm above
+	// still speaks first for social-routed lines that reach this
+	// seat, which is exactly why the audited claim had to live in
+	// tryDeterministicAnswer rather than here.
 	if out, ok := LookupGoKnowledge(line); ok {
 		return TalkResponse{Text: out, Factual: true}, true
 	}
