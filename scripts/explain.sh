@@ -35,6 +35,12 @@ WHAT TO SAY TO THE CHAT
 Just talk in plain sentences. Every reply is tagged with the part
 that answered, like gollemer [go]>, so you know who is talking.
 
+Not sure what's on the menu? Ask "what can you do" in chat and it
+lists what it can actually do — build, change, ask, remember, run —
+each line with a real sentence that does it. The list is rendered
+from the chat's own machinery and tested against it, so it never
+promises a piece that isn't there.
+
 Talk and ask about Go:
 
   you> have you ever played soccer

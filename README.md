@@ -75,6 +75,12 @@ You talk in plain sentences. Every reply is tagged with the part of
 Gollemer that answered, like `gollemer [go]>`, so you always know who
 is talking.
 
+Not sure what's on the menu? Ask `what can you do` in chat and it
+lists what it can actually do — build, change, ask, remember, run —
+each line with a real sentence that does it. The list is rendered
+from the chat's own machinery and tested against it, so it never
+promises a piece that isn't there.
+
 *The exchanges below are real — captured from the chat on this code,
 on 2026-11-01. Long diffs are trimmed with `...`.*
 

@@ -1342,6 +1342,27 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if tryLinuxCommand(line, reader, profile) {
 			continue
 		}
+		// The capability seat, claimed deterministically
+		// directly ahead of the beginner five: a general
+		// "what can you do?" is answered from the chat's own
+		// catalog (capability.go) — what it can build,
+		// change, answer, remember, and run, each line with a
+		// sentence that really does it, drift-tested against
+		// the claims themselves. It owns whole-line general
+		// questions only; a line with a task in it declines
+		// and keeps its own claim below. Three of its shapes
+		// ("help", "what can you do", "what do you do") are
+		// also the beginner help's, and get this fuller
+		// answer here in the unified chat; the beginner
+		// surfaces themselves ("start", "teach me",
+		// "help all", the tour) keep their claims in the
+		// beginner five just below, the single-domain loops
+		// keep the beginner help's answer untouched, and the
+		// catalog's closing line points at "help all" so
+		// nothing the help offered is lost.
+		if tryCapabilityAnswer(line, conv) {
+			continue
+		}
 		// Beginner five, claimed deterministically before routing —
 		// same as the single-domain loop. A sentence like "tour
 		// https://…" or "run it" must never be left for the router
