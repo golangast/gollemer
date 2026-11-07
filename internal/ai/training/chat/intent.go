@@ -517,6 +517,20 @@ func tryIntentDispatchInner(line string, profile *UserProfile) bool {
 // out of tryIntentDispatch so a confirmed guess routes through the
 // exact same cases as a confident one.
 func dispatchIntent(intent, line string, profile *UserProfile) bool {
+	// Veto: a transcript-recall question ("what did I just
+	// say", "what did you just say") is owned by the
+	// conversation's deterministic recall, seated directly
+	// behind this layer in the loop. Measured 2026-11-07:
+	// the classifier reads it as what_now and dispatched the
+	// beginner guidance, so the exact-quote recall behind it
+	// never ran — both deterministic cells of the multiturn
+	// harness failed on a line a deterministic arm owns.
+	// Same placement rule as the knowledge veto below: at
+	// dispatch, not ahead of classification, so the outcome
+	// log still records the real verdict as fell-through.
+	if isTranscriptRecallLine(line) {
+		return false
+	}
 	// Veto: a concept question the curated knowledge base answers
 	// strongly is brain-owned by this layer's own design — it must
 	// fall through to the deterministic seat that owns it, never be

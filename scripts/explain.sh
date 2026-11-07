@@ -61,7 +61,14 @@ Talk and ask about Go:
   git status) and remembers only what you explicitly tell
   it: "remember: ..." and "note: ..." are echoed as stored,
   "what do you remember" shows them, and the forget shapes
-  remove exactly what their replies confirm. Memory lives
+  remove exactly what their replies confirm. Facts about you
+  are the one thing it also picks up in passing: say "my dog
+  is Bella", "I live in Omaha", or "my favorite color is
+  forest green" in ordinary conversation and it stores the
+  fact — saying so in one short line under its reply, never
+  silently — and answers "what's my dog's name?" or "where
+  do I live?" from the store exactly, or says plainly that
+  you haven't told it yet rather than guessing. Memory lives
   in ~/.gollemer_memory.json, outside every project, and a
   returning session opens with one "Last time here:" line.
 

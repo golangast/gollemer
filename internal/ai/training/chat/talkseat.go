@@ -451,6 +451,18 @@ func (r *localTalkResponder) Respond(ctx TalkContext, line string) (TalkResponse
 	if out, ok := talkStateAnswer(ctx, line); ok {
 		return TalkResponse{Text: out, Factual: true}, true
 	}
+	// 0.5. Personal facts: what the user has told the chat
+	// about themselves (their dog's name, where they live,
+	// their favorite color) is answered from the long-term
+	// fact store (factmemory.go) — the stored value exactly,
+	// or the honest not-told-me — never from the social arm
+	// below, which would invent a name. The unified loop
+	// seats the same claim ahead of the intent layer
+	// (tryFactRecallAnswer); this arm is the seat's own copy
+	// for lines that reach it by other paths.
+	if out, ok := factRecallAnswer(line); ok {
+		return TalkResponse{Text: out, Factual: true}, true
+	}
 	// 1. Project-fact second pass: a broader, looser pass
 	// over the index than the deterministic Q&A that already
 	// declined this line — it auto-analyzed the project (in

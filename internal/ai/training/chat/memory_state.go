@@ -24,11 +24,15 @@ package chat
 //     this build ships the seam and the JSON backend rather
 //     than a half-connected database.
 //
-// Long-term captures are explicit only. A line must use one
-// of the remembered shapes below; ordinary conversation is
-// never mined for preferences. Every successful capture is
-// echoed. Stored session summaries are data for recall only:
-// nothing in this file feeds training.
+// Long-term captures of preferences and notes are explicit
+// only. A line must use one of the remembered shapes below;
+// ordinary conversation is never mined for preferences.
+// (Facts about the user are the one deliberate exception,
+// and they live in their own seat: factmemory.go captures
+// fact-shaped statements only, with the same echo rule.)
+// Every successful capture is echoed. Stored session
+// summaries are data for recall only: nothing in this file
+// feeds training.
 
 import (
 	"encoding/json"
@@ -62,16 +66,27 @@ type longTermProjectMemory struct {
 type longTermMemoryData struct {
 	Version     int                               `json:"version"`
 	Preferences []string                          `json:"preferences,omitempty"`
+	Facts       map[string]longTermFact           `json:"facts,omitempty"`
 	Projects    map[string]*longTermProjectMemory `json:"projects,omitempty"`
 }
 
 func emptyLongTermMemoryData() longTermMemoryData {
-	return longTermMemoryData{Version: 1, Projects: map[string]*longTermProjectMemory{}}
+	return longTermMemoryData{Version: 1, Facts: map[string]longTermFact{}, Projects: map[string]*longTermProjectMemory{}}
 }
 
 func normalizeLongTermMemoryData(d longTermMemoryData) longTermMemoryData {
 	if d.Version == 0 {
 		d.Version = 1
+	}
+	// Facts arrived after version 1 shipped (the fact-memory
+	// seat, factmemory.go). The field is purely additive — a
+	// store written before it has no "facts" key and loads
+	// as an empty set here; a store written with it is read
+	// by an older build as an unknown field and ignored — so
+	// the version stays 1 and this normalization is the whole
+	// migration.
+	if d.Facts == nil {
+		d.Facts = map[string]longTermFact{}
 	}
 	if d.Projects == nil {
 		d.Projects = map[string]*longTermProjectMemory{}
@@ -851,6 +866,15 @@ func renderMemoryRecall(root string) (string, error) {
 			b.WriteString("\n- " + pref)
 		}
 	}
+	b.WriteString("\nFacts about you:")
+	if len(d.Facts) == 0 {
+		b.WriteString("\n- none stored")
+	} else {
+		for _, key := range sortedFactKeys(d.Facts) {
+			f := d.Facts[key]
+			fmt.Fprintf(&b, "\n- %s: %s", f.Label, f.Value)
+		}
+	}
 	fmt.Fprintf(&b, "\nFor this project (%s):", root)
 	if p == nil || (len(p.Notes) == 0 && len(p.Summaries) == 0) {
 		b.WriteString("\n- no notes or past session summaries stored")
@@ -926,7 +950,7 @@ func tryMemoryCommand(line string, conv *Conversation) bool {
 			return memoryReply(line, conv, "I couldn't update my memory store: "+err.Error())
 		}
 		resetMemoryRecall()
-		return memoryReply(line, conv, "Forgotten: everything I had stored — all preferences, all project notes, and all session summaries. Nothing else was touched.")
+		return memoryReply(line, conv, "Forgotten: everything I had stored — all preferences, all facts about you, all project notes, and all session summaries. Nothing else was touched.")
 	}
 	if forgetProjectRe.MatchString(line) {
 		d, err := loadLongTermMemory()
@@ -937,9 +961,25 @@ func tryMemoryCommand(line string, conv *Conversation) bool {
 		if err := saveLongTermMemory(d); err != nil {
 			return memoryReply(line, conv, "I couldn't update my memory store: "+err.Error())
 		}
-		return memoryReply(line, conv, fmt.Sprintf("Forgotten: this project's notes and session summaries (%s). Your preferences and other projects were not touched.", root))
+		return memoryReply(line, conv, fmt.Sprintf("Forgotten: this project's notes and session summaries (%s). Your preferences, your facts, and other projects were not touched.", root))
 	}
 	if m := forgetPrefixedRe.FindStringSubmatch(line); m != nil {
+		// Facts first (factmemory.go shares this forget
+		// machinery): "forget my dog's name" names a fact,
+		// and the fact's own matching — unambiguous or
+		// listed-and-unchanged — runs before preferences
+		// are consulted. A query no fact matches falls
+		// through to the preference path untouched.
+		removedFact, factCandidates, ferr := forgetLongTermFact(m[1])
+		if ferr != nil {
+			return memoryReply(line, conv, "I couldn't update my memory store: "+ferr.Error())
+		}
+		if removedFact != nil {
+			return memoryReply(line, conv, fmt.Sprintf("Forgotten: %s (was %s). Nothing else was touched.", removedFact.Label, removedFact.Value))
+		}
+		if len(factCandidates) > 1 {
+			return memoryReply(line, conv, "That matches more than one stored fact — "+strings.Join(factCandidates, "; ")+". Nothing was forgotten; say which one you mean.")
+		}
 		removed, candidates, err := forgetLongTermPreference(m[1])
 		if err != nil {
 			return memoryReply(line, conv, "I couldn't update my memory store: "+err.Error())
@@ -952,6 +992,9 @@ func tryMemoryCommand(line string, conv *Conversation) bool {
 		}
 		if len(candidates) > 1 {
 			return memoryReply(line, conv, "That matches more than one stored preference — "+strings.Join(candidates, "; ")+". Nothing was forgotten; say which one you mean.")
+		}
+		if d, lerr := loadLongTermMemory(); lerr == nil && len(d.Facts) > 0 {
+			return memoryReply(line, conv, "I don't have a stored fact or preference matching that. Nothing was forgotten.")
 		}
 		return memoryReply(line, conv, "I don't have a stored preference matching that. Nothing was forgotten.")
 	}

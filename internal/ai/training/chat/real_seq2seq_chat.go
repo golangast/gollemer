@@ -1633,6 +1633,19 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if tryTalkStateAnswer(line, conv) {
 			continue
 		}
+		// Personal-fact questions, claimed deterministically
+		// beside the state answers and ahead of the intent
+		// layer: "what's my dog's name", "where do I live",
+		// "what's my favorite color" are answered from the
+		// long-term fact store (factmemory.go) — the stored
+		// value exactly, or the honest not-told-me — and
+		// never left for a classifier or a model to invent
+		// an answer to. The same arm runs inside the talk
+		// seat's responder for lines that reach it by other
+		// paths.
+		if tryFactRecallAnswer(line, conv) {
+			continue
+		}
 		// Intent layer: a confident trained classification of what
 		// the user wants, in their own words — no memorized commands.
 		if tryIntentDispatch(line, profile) {
@@ -1647,8 +1660,20 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 			continue
 		}
 		conv.AddUser(line)
+		// Fact-capture hook (factmemory.go): a statement that
+		// declares a fact about the user ("my dog is Bella",
+		// "I live in Omaha") stores it in the long-term store
+		// here, at the conversational tail — but the hook
+		// does NOT consume the line. Routing, the talk seat,
+		// and the model below answer it exactly as before;
+		// the hook's one disclosure line prints after the
+		// reply, in whichever branch produced it. A line the
+		// fact grammar cannot read stores nothing and the
+		// note stays empty.
+		factNote := captureFactStatement(line)
 		d := routeDomain(line)
 		if tryDeterministicAnswer(line, d, conv, reader, projectRoot) {
+			printFactNote(factNote)
 			continue
 		}
 		// The talk seat, in the tail after every deterministic
@@ -1662,6 +1687,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// the neural fallback below proceeds byte-identically.
 		// See talkseat.go.
 		if tryTalkSeat(line, d, conv, d == SocialDomain || models[d] == nil, showThoughts) {
+			printFactNote(factNote)
 			continue
 		}
 		model := models[d]
@@ -1696,6 +1722,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		}
 		fmt.Printf("%s %s\n", cTag(fmt.Sprintf("gollemer [%s]>", tag)), reply)
 		conv.AddReply(reply, effD, false)
+		printFactNote(factNote)
 		// A gocli reply is an exact toolchain command. Offer to run it
 		// directly (working directory shown, no shell); only bare
 		// go/gofmt invocations are ever offered, never model chatter.

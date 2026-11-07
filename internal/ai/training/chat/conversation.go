@@ -157,6 +157,16 @@ func (c *Conversation) Recall(input string) (string, bool) {
 	return "", false
 }
 
+// isTranscriptRecallLine reports whether the line is one of
+// the anchored transcript-recall shapes Recall owns. The
+// intent layer's dispatch veto (intent.go) uses it: the
+// classifier reads "what did I just say" as a beginner
+// intent, and the deterministic recall behind the layer
+// must still get its line.
+func isTranscriptRecallLine(input string) bool {
+	return recallYouSaid.MatchString(input) || recallISaid.MatchString(input) || recallCommand.MatchString(input)
+}
+
 // Recall questions are anchored full matches so ordinary chat that merely
 // contains the words ("repeat that video", "what did you say your name
 // was") never triggers them.

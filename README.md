@@ -112,7 +112,14 @@ the Go files that differ since its last read of the project
 Say "remember: I prefer …" or "note: …" and it echoes back
 exactly what it stored; "what do you remember" shows it, and
 "forget this project", "forget my …", and "forget everything"
-remove exactly what their replies confirm. Memory lives in
+remove exactly what their replies confirm. Facts about you are
+the one thing it also picks up in passing: mention "my dog is
+Bella", "I live in Omaha", or "my favorite color is forest
+green" in ordinary conversation and it stores the fact — saying
+so in one short line under its reply, never silently — and
+later answers "what's my dog's name?" or "where do I live?"
+from the store, exactly, or says plainly that you haven't told
+it yet rather than guessing. Memory lives in
 `~/.gollemer_memory.json`, outside every project. When a session
 ends it saves a short summary of what was built, and the next
 session in the same project opens with one "Last time here:" line.
