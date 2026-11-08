@@ -94,6 +94,10 @@ you> what is a goroutine
 gollemer [go]> A goroutine is a lightweight thread managed by the Go runtime: go doWork(). Thousands of goroutines cost little. They run concurrently with the caller — use channels or sync primitives to coordinate, never shared memory without synchronization.
 ```
 
+Its built-in book answers over 250 Go topics — concepts, recipes,
+and the pitfalls that bite — and how-to questions ("how do I serve
+static files") get the same plain-words treatment.
+
 Questions and conversation that no specialist brain owns land with
 the talk seat, tagged `gollemer [talk]>`. It talks about *your*
 project from the same index the analyzer builds — what a function

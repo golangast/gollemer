@@ -137,7 +137,7 @@ func TrainIntentModel(pairs []IntentPair) *IntentModel {
 	rng := rand.New(rand.NewSource(42))
 	const epochs = 30
 	for ep := 0; ep < epochs; ep++ {
-		lr := float32(0.6 * (1 - float64(ep)/epochs) + 0.05)
+		lr := float32(0.6*(1-float64(ep)/epochs) + 0.05)
 		rng.Shuffle(len(exs), func(a, b int) { exs[a], exs[b] = exs[b], exs[a] })
 		for _, e := range exs {
 			// forward
@@ -512,6 +512,32 @@ func tryIntentDispatchInner(line string, profile *UserProfile) bool {
 	return handled
 }
 
+// beginnerGuidanceIntent reports whether an intent is one of
+// the beginner-directions family — asks for orientation inside
+// the app (a tour, the next step, more about the last thing),
+// as opposed to asks about the user's code or about Go itself.
+func beginnerGuidanceIntent(intent string) bool {
+	switch intent {
+	case "what_now", "tour", "glossary", "learn_path", "example",
+		"watch", "start_guide", "tell_more":
+		return true
+	}
+	return false
+}
+
+// howToQuestionShape reports whether the line is phrased as a
+// how-to question ("how do I …", "how can I …", "how to …") —
+// the shape the knowledge book's recipe entries answer.
+func howToQuestionShape(line string) bool {
+	low := strings.ToLower(strings.TrimSpace(line))
+	for _, p := range []string{"how do i ", "how do you ", "how can i ", "how should i ", "how to "} {
+		if strings.HasPrefix(low, p) {
+			return true
+		}
+	}
+	return false
+}
+
 // dispatchIntent runs one confidently-classified intent — and, via
 // the clarification fallback, one the user just confirmed. Split
 // out of tryIntentDispatch so a confirmed guess routes through the
@@ -552,6 +578,25 @@ func dispatchIntent(intent, line string, profile *UserProfile) bool {
 	// exactly as before.
 	if _, ok := strongGoKnowledgeAnswer(line); ok {
 		return false
+	}
+	// Veto (how-to): the concept veto above covers what-is
+	// shapes only, but the book answers how-to questions too —
+	// and a how-to line the classifier reads as a beginner
+	// intent was dispatched to the guidance without the book
+	// ever being consulted. Measured 2026-11-07, after the
+	// cookbook expansion taught the book its how-tos: "how do
+	// I serve static files" classifies as what_now and was
+	// dispatched to the what-now guidance ("Nothing's open
+	// yet…") even though the book answers it exactly. Scoped
+	// three ways so genuine directions asks dispatch exactly
+	// as before: only the beginner-guidance intents below,
+	// only lines in how-to shape, and only when the book
+	// actually answers the line (a directions ask like "how
+	// do I get started" has no book answer and dispatches on).
+	if beginnerGuidanceIntent(intent) && howToQuestionShape(line) {
+		if _, ok := LookupGoKnowledge(line); ok {
+			return false
+		}
 	}
 	switch intent {
 	case "tour", "glossary", "learn_path", "example", "watch":

@@ -50,6 +50,11 @@ Talk and ask about Go:
   gollemer [go]> A goroutine is a lightweight thread managed by
       the Go runtime: go doWork(). ...
 
+  Its built-in book answers over 250 Go topics — concepts,
+  recipes, and the pitfalls that bite — and how-to questions
+  ("how do I serve static files") get the same plain-words
+  treatment.
+
   Questions and conversation no specialist brain owns land
   with the talk seat, tagged gollemer [talk]>: it talks about
   your project from the analyzer's index (what a function

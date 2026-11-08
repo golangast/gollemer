@@ -25,7 +25,9 @@ type goKnowledgeEntry struct {
 
 // goKnowledge is the curated reference. Keep bodies short, correct, and
 // beginner-friendly; keep keywords distinctive (prefer terms like
-// "goroutine" over "function").
+// "goroutine" over "function"). The cookbook expansion
+// (goknowledge_cookbook.go) appends its entries to this list in its
+// init(), so this slice is the whole book by the time anything reads it.
 var goKnowledge = []goKnowledgeEntry{
 	{
 		title:    "the Go language",
@@ -39,8 +41,8 @@ var goKnowledge = []goKnowledgeEntry{
 	},
 	{
 		title:    "functions and multiple return values",
-		keywords: []string{"function", "functions", "func", "return values", "multiple return", "parameters", "arguments"},
-		body:     "Functions are declared with func name(params) returnType. Go functions can return multiple values, and by convention the last one is an error: result, err := doThing(). Callers check err before using result.",
+		keywords: []string{"function", "functions", "func", "return values", "multiple return", "parameters", "arguments", "named return values"},
+		body:     "Functions are declared with func name(params) returnType. Go functions can return multiple values, and by convention the last one is an error: result, err := doThing(). Callers check err before using result. Named return values act as variables declared at the top of the function: a deferred closure can change them before the caller sees the result, and bare returns suit only short functions.",
 	},
 	{
 		title:    "if for switch control flow",
@@ -49,18 +51,18 @@ var goKnowledge = []goKnowledgeEntry{
 	},
 	{
 		title:    "slices",
-		keywords: []string{"slice", "slices", "append", "make slice", "slice vs array"},
+		keywords: []string{"slice", "slices", "append", "make slice", "slice vs array", "a slice"},
 		body:     "Slices are dynamically-sized views over arrays: s := []int{1, 2, 3}. Use append(s, 4) to grow one — append may reallocate, so always keep its return value: s = append(s, 4). make([]int, len, cap) preallocates; len is the length, cap the capacity.",
 	},
 	{
 		title:    "arrays",
-		keywords: []string{"array", "arrays", "fixed size"},
+		keywords: []string{"array", "arrays", "fixed size", "an array"},
 		body:     "Arrays have a fixed size baked into their type: var a [4]int. They're values, so assigning or passing one copies all elements. In practice you almost always want slices instead.",
 	},
 	{
 		title:    "maps",
-		keywords: []string{"map", "maps", "dictionary", "hashmap", "hash map", "key value"},
-		body:     "Maps are Go's hash tables: m := map[string]int{\"a\": 1}. Reading a missing key returns the zero value, so use the two-value form to test presence: v, ok := m[\"a\"]. Writing to a nil map panics — initialize with make or a literal first.",
+		keywords: []string{"map", "maps", "dictionary", "hashmap", "hash map", "key value", "a map", "maps in go"},
+		body:     "Maps are Go's hash tables: m := map[string]int{\"a\": 1}. Reading a missing key returns the zero value, so use the two-value form to test presence: v, ok := m[\"a\"]. Writing to a nil map panics — initialize with make or a literal first. Delete with delete(m, key); ranging visits keys in a deliberately random order. Maps are not safe for concurrent use: guard a shared map with a mutex, or use sync.Map.",
 	},
 	{
 		title:    "structs",
@@ -69,8 +71,8 @@ var goKnowledge = []goKnowledgeEntry{
 	},
 	{
 		title:    "pointers",
-		keywords: []string{"pointer", "pointers", "&", "dereference", "*", "address"},
-		body:     "A pointer holds the address of a value: p := &x. Dereference with *p to read or write through it. Pointers let functions modify their arguments and avoid copying large structs. Go has no pointer arithmetic.",
+		keywords: []string{"pointer", "pointers", "&", "dereference", "*", "address", "a pointer"},
+		body:     "A pointer holds the address of a value: p := &x. Dereference with *p to read or write through it. Pointers let functions modify their arguments and avoid copying large structs. Go has no pointer arithmetic. Since Go 1.26, new(expression) returns a pointer to any expression's value, removing the temporary-variable workaround for optional pointer fields.",
 	},
 	{
 		title:    "methods and receivers",
@@ -79,7 +81,7 @@ var goKnowledge = []goKnowledgeEntry{
 	},
 	{
 		title:    "interfaces",
-		keywords: []string{"interface", "interfaces", "implement", "polymorphism", "satisfies"},
+		keywords: []string{"interface", "interfaces", "implement", "polymorphism", "satisfies", "an interface"},
 		body:     "Interfaces declare method sets: type Writer interface { Write([]byte) (int, error) }. Types implement them implicitly — no implements keyword. This keeps coupling loose: depend on small interfaces, not concrete types. The empty interface any accepts any value.",
 	},
 	{
@@ -89,8 +91,8 @@ var goKnowledge = []goKnowledgeEntry{
 	},
 	{
 		title:    "generics",
-		keywords: []string{"generics", "generic", "type parameter", "type parameters", "[T any]", "constraints"},
-		body:     "Since Go 1.18, functions and types take type parameters: func Min[T constraints.Ordered](a, b T) T. any matches any type; comparable matches types supporting ==. Generics shine for containers and algorithms, but plain interfaces are often simpler.",
+		keywords: []string{"generics", "generic", "type parameter", "type parameters", "[T any]", "constraints", "comparable", "ordered", "generic data structures", "constrain", "parameter"},
+		body:     "Since Go 1.18, functions and types take type parameters: func Min[T cmp.Ordered](a, b T) T. Constraints come from the standard cmp package: cmp.Ordered covers types supporting < and >, comparable matches types supporting ==, and any matches everything. Type aliases can carry type parameters too, since Go 1.24. Generics shine for containers and algorithms, but plain interfaces are often simpler.",
 	},
 	{
 		title:    "packages and imports",
@@ -104,13 +106,13 @@ var goKnowledge = []goKnowledgeEntry{
 	},
 	{
 		title:    "constants and iota",
-		keywords: []string{"constant", "constants", "const", "iota", "enum"},
+		keywords: []string{"constant", "constants", "const", "iota", "enum", "what is iota"},
 		body:     "Constants are declared with const and can't change. iota generates sequences in const blocks: const ( Sunday = iota; Monday; Tuesday ) gives 0, 1, 2. It's Go's idiom for enumerations.",
 	},
 	{
 		title:    "strings and runes",
-		keywords: []string{"string", "strings", "rune", "runes", "unicode", "characters", "concatenation"},
-		body:     "Strings are immutable sequences of bytes, usually UTF-8. Indexing gives bytes, not characters — use for _, r := range s to iterate runes (Unicode code points). Convert with []rune(s) when you need character counts: len(s) counts bytes.",
+		keywords: []string{"string", "strings", "rune", "runes", "unicode", "characters", "concatenation", "unicode string"},
+		body:     "Strings are immutable sequences of bytes, usually UTF-8. Indexing gives bytes, not characters — use for _, r := range s to iterate runes (Unicode code points). Convert with []rune(s) when you need character counts: len(s) counts bytes. Watch out: strings that look identical can be built from different code points and compare unequal. The standard library has no normalizer, but golang.org/x/text/unicode/norm puts them in one canonical form (NFC).",
 	},
 	{
 		title:    "goroutines",
@@ -120,7 +122,7 @@ var goKnowledge = []goKnowledgeEntry{
 	{
 		title:    "channels",
 		keywords: []string{"channel", "channels", "chan", "buffered", "unbuffered", "send", "receive"},
-		body:     "Channels move values between goroutines: ch := make(chan int). ch <- v sends, v := <-ch receives. Unbuffered channels block until both sides are ready (a rendezvous); buffered channels (make(chan int, 10)) block only when full or empty. Close with close(ch); range over a channel drains it until closed.",
+		body:     "Channels move values between goroutines: ch := make(chan int). ch <- v sends, v := <-ch receives. Unbuffered channels block until both sides are ready (a rendezvous); buffered channels (make(chan int, 10)) block only when full or empty. Only the sender should close a channel: close(ch). Receivers spot the end with the two-value form v, ok := <-ch, or by ranging over the channel until it drains.",
 	},
 	{
 		title:    "select",
@@ -134,18 +136,18 @@ var goKnowledge = []goKnowledgeEntry{
 	},
 	{
 		title:    "sync.WaitGroup",
-		keywords: []string{"waitgroup", "wait group", "wait for goroutines", "wg.add", "wg.done"},
-		body:     "sync.WaitGroup waits for goroutines to finish: wg.Add(1) before each go call, defer wg.Done() inside it, wg.Wait() to block until all are done. Add before launching, never copy a WaitGroup after use.",
+		keywords: []string{"waitgroup", "wait group", "wait for goroutines", "wg.add", "wg.done", "a wait group", "group", "waits"},
+		body:     "sync.WaitGroup waits for goroutines to finish: wg.Add(1) before each go call, defer wg.Done() inside it, wg.Wait() to block until all are done. Add before launching, never copy a WaitGroup after use. Since Go 1.25, wg.Go(f) launches a tracked goroutine and does the Add and Done bookkeeping itself, removing mismatched-counter and forgotten-Done bugs.",
 	},
 	{
 		title:    "sync.Once",
 		keywords: []string{"once", "sync.once", "singleton", "initialize once"},
-		body:     "sync.Once runs a function exactly once, even across goroutines: once.Do(setup). It's the idiom for lazy singleton initialization without races.",
+		body:     "sync.Once runs a function exactly once, even across goroutines: once.Do(setup). It's the idiom for lazy singleton initialization without races. Since Go 1.21, sync.OnceValue, sync.OnceValues, and sync.OnceFunc do the same job with the value built in: they cache a computed value, a value-plus-error pair, or a run-once function, so you don't need a separate variable and getter holding the result.",
 	},
 	{
 		title:    "context package",
-		keywords: []string{"context", "context.Context", "cancellation", "cancel", "timeout", "deadline", "WithTimeout"},
-		body:     "context.Context carries cancellation, deadlines, and request values: ctx, cancel := context.WithTimeout(parent, 5*time.Second). Pass ctx as the first parameter and check ctx.Done() in long work. Always call cancel to release resources. Never store contexts in structs.",
+		keywords: []string{"context", "context.Context", "cancellation", "cancel", "timeout", "deadline", "WithTimeout", "context chain"},
+		body:     "context.Context carries cancellation, deadlines, and request values: ctx, cancel := context.WithTimeout(parent, 5*time.Second). Pass ctx as the first parameter and check ctx.Done() in long work. Contexts form a chain: cancelling a parent cancels every child derived from it, so one cancel unwinds a whole tree of work. WithValue keys should be an unexported type of your own, and values are only for request-scoped data, never optional parameters. Always call cancel; never store contexts in structs.",
 	},
 	{
 		title:    "worker pools",
@@ -155,7 +157,7 @@ var goKnowledge = []goKnowledgeEntry{
 	{
 		title:    "fan-in fan-out pipelines",
 		keywords: []string{"fan-in", "fanin", "pipeline", "pipelines", "stages"},
-		body:     "Pipelines chain stages with channels: each stage reads from its input channel and writes to its output. Fan-out spreads work across many goroutines; fan-in merges multiple channels into one (often with a select loop or WaitGroup). Close outputs when inputs are drained.",
+		body:     "Pipelines chain stages with channels: each stage reads from its input channel and writes to its output. Fan-out spreads work across many goroutines; fan-in merges multiple channels into one (often with a select loop or WaitGroup). Close outputs when inputs are drained. Give every stage a context and select on ctx.Done() while sending, so when a consumer stops early the whole pipeline unwinds instead of leaking goroutines blocked on send.",
 	},
 	{
 		title:    "goroutine leaks",
@@ -179,13 +181,13 @@ var goKnowledge = []goKnowledgeEntry{
 	},
 	{
 		title:    "fmt package",
-		keywords: []string{"fmt", "Println", "Printf", "format verbs", "printing", "Sprintf"},
-		body:     "fmt prints: Println adds spaces and a newline, Printf formats with verbs (%v value, %d integer, %s string, %q quoted, %T type), Sprintf returns the string instead of printing. Check fmt docs for the full verb list.",
+		keywords: []string{"fmt", "Println", "Printf", "format verbs", "printing", "Sprintf", "format a string", "formatting", "format"},
+		body:     "fmt prints: Println adds spaces and a newline, Printf formats with verbs (%v value, %d integer, %s string, %q quoted, %T type), Sprintf returns the string instead of printing. Verbs take width and precision: %.2f prints two decimal places, and a number before the dot pads a value to a fixed width. Check fmt docs for the full verb list.",
 	},
 	{
 		title:    "strings and strconv",
-		keywords: []string{"strings package", "strconv", "string manipulation", "split", "join", "contains", "Atoi", "Itoa", "parse int"},
-		body:     "strings has Contains, HasPrefix, Split, Join, Replace, TrimSpace, and more. strconv converts: n, err := strconv.Atoi(\"42\"), s := strconv.Itoa(42), plus ParseBool/ParseFloat/FormatFloat. Build strings efficiently with strings.Builder.",
+		keywords: []string{"strings package", "strconv", "string manipulation", "split", "join", "contains", "Atoi", "Itoa", "parse int", "string to int", "convert a string", "split and join", "trim whitespace", "trim", "whitespace", "string to an int"},
+		body:     "strings has Contains, HasPrefix, Split, Join, Replace, and a Trim family: TrimSpace trims whitespace, Trim cuts a chosen set of characters, TrimPrefix and TrimSuffix remove one exact end. SplitN caps the pieces; Fields splits on runs of whitespace. strconv converts: Atoi and Itoa for plain integers, ParseInt and FormatInt when you need a base and bit size, plus ParseBool and ParseFloat. Build strings efficiently with strings.Builder.",
 	},
 	{
 		title:    "os package",
@@ -195,37 +197,37 @@ var goKnowledge = []goKnowledgeEntry{
 	{
 		title:    "reading and writing files",
 		keywords: []string{"read file", "write file", "ReadFile", "WriteFile", "os.Open", "file i/o", "files"},
-		body:     "os.ReadFile(name) reads a whole file into memory; os.WriteFile(name, data, 0644) writes it. For big files or streams, use os.Open with bufio.Scanner line by line, and always check errors and Close what you Open (defer f.Close()).",
+		body:     "os.ReadFile(name) reads a whole file into memory; os.WriteFile(name, data, 0644) writes it. For big files or streams, use os.Open with bufio.Scanner line by line, and always check errors and Close what you Open (defer f.Close()). To append instead of overwriting, open with os.OpenFile and the flags os.O_APPEND, os.O_CREATE, and os.O_WRONLY.",
 	},
 	{
 		title:    "net/http servers",
 		keywords: []string{"http server", "net/http", "web server", "http.HandleFunc", "ListenAndServe", "handler", "rest api"},
-		body:     "net/http serves web traffic with no dependencies: http.HandleFunc(\"/\", handler) registers a route, http.ListenAndServe(\":8080\", nil) starts the server. Handlers get a ResponseWriter and *Request. For clients, http.Get or http.Post do the fetching.",
+		body:     "net/http serves web traffic with no dependencies: http.HandleFunc(\"/\", handler) registers a route, http.ListenAndServe(\":8080\", nil) starts the server. Handlers get a ResponseWriter and *Request, and answer failures with http.Error(w, message, statusCode). A REST endpoint speaks JSON: set Content-Type to application/json and reply with json.NewEncoder(w).Encode(v), guarding shared state with a mutex because handlers run concurrently. Clients use http.Get or http.Post, and must check resp.StatusCode themselves: a 404 or 500 returns a nil error.",
 	},
 	{
 		title:    "encoding/json",
-		keywords: []string{"json", "encoding/json", "marshal", "unmarshal", "json tags", "decode json", "encode json"},
-		body:     "encoding/json converts between Go values and JSON: json.Marshal(v) encodes, json.Unmarshal(data, &v) decodes. Struct tags control field names: `json:\"name\"`. Unknown fields are ignored on decode; use json.Decoder for streams.",
+		keywords: []string{"json", "encoding/json", "marshal", "unmarshal", "json tags", "decode json", "encode json", "parse json", "what is json", "json.Marshal", "json.Unmarshal"},
+		body:     "encoding/json converts between Go values and JSON: json.Marshal(v) encodes, json.Unmarshal(data, &v) decodes. Struct tags control field names: `json:\"name\"`, and the omitempty option drops zero-value fields when encoding. When the shape is unknown, decode into a map[string]any instead of a struct (numbers arrive as float64). For files and other streams, json.NewEncoder(w) and json.NewDecoder(r) convert incrementally, without loading everything into memory first.",
 	},
 	{
 		title:    "time package",
-		keywords: []string{"time", "sleep", "duration", "ticker", "parse time", "time.After", "time format"},
-		body:     "time handles clocks and durations: time.Sleep(2 * time.Second) pauses, time.Now() stamps, t.Add(d) shifts. time.After(d) returns a channel that fires once; time.NewTicker(d) repeats. Parse with the reference layout: time.Parse(\"2006-01-02\", s) — yes, that odd date is the template.",
+		keywords: []string{"time", "sleep", "duration", "ticker", "parse time", "time.After", "time format", "format time", "time string"},
+		body:     "time handles clocks and durations: time.Sleep(2 * time.Second) pauses, time.Now() stamps, t.Add(d) shifts. time.After(d) returns a channel that fires once; time.NewTicker(d) repeats. Parse and format with the reference layout: time.Parse(\"2006-01-02\", s) — yes, that odd date is the template. Ready-made layouts live in constants like time.RFC3339, and time.ParseInLocation parses wall time in a loaded location instead of defaulting to UTC.",
 	},
 	{
 		title:    "sort package",
 		keywords: []string{"sort", "sorting", "sort.Slice", "order"},
-		body:     "sort.Slice(s, func(i, j int) bool { return s[i] < s[j] }) sorts with a custom less function; sort.Ints and sort.Strings cover the basics. Since Go 1.21, the slices package offers a generic slices.Sort(s).",
+		body:     "sort.Slice(s, func(i, j int) bool { return s[i] < s[j] }) sorts with a custom less function; sort.Ints and sort.Strings cover the basics. Since Go 1.21, the slices package offers a generic slices.Sort(s). slices.SortFunc takes a comparator like cmp.Compare, which returns negative, zero, or positive; slices.SortStableFunc keeps equal items in order, and slices.BinarySearch finds a value in already-sorted data.",
 	},
 	{
 		title:    "regexp",
 		keywords: []string{"regexp", "regular expression", "regex", "pattern matching", "MatchString"},
-		body:     "regexp compiles patterns: re := regexp.MustCompile(`\\d+`), re.MatchString(s) tests, re.FindAllString(s, -1) extracts. MustCompile panics on bad patterns — fine for constants, but use Compile and check the error for user-supplied patterns.",
+		body:     "regexp compiles patterns: re := regexp.MustCompile(`\\d+`), re.MatchString(s) tests, re.FindAllString(s, -1) extracts. MustCompile panics on bad patterns — fine for constants, but use Compile and check the error for user-supplied patterns. FindStringSubmatch extracts capture groups, and ReplaceAllString rewrites every match.",
 	},
 	{
 		title:    "path and filepath",
 		keywords: []string{"filepath", "path/filepath", "join paths", "file path", "directory"},
-		body:     "path/filepath handles OS-correct paths: filepath.Join(\"a\", \"b\") inserts the right separator, filepath.Ext gives the extension, filepath.WalkDir traverses trees. Use path (not filepath) only for slash-separated paths like URLs.",
+		body:     "path/filepath handles OS-correct paths: filepath.Join(\"a\", \"b\") inserts the right separator, filepath.Ext gives the extension, filepath.WalkDir traverses trees. filepath.Clean normalizes a path and filepath.Abs makes one absolute; prefer WalkDir over the older filepath.Walk, which stats every entry. Use path (not filepath) only for slash-separated paths like URLs.",
 	},
 	{
 		title:    "log package",
@@ -245,22 +247,22 @@ var goKnowledge = []goKnowledgeEntry{
 	{
 		title:    "go vet",
 		keywords: []string{"go vet", "vet", "static analysis", "lint"},
-		body:     "go vet statically scans for suspicious code: wrong Printf verbs, unreachable code, bad struct tags, copying locks. Run it before committing — CI should too. It's not a formatter (that's gofmt) and not a full linter, but it catches real bugs.",
+		body:     "go vet statically scans for suspicious code: wrong Printf verbs, unreachable code, bad struct tags, copying locks. Run it before committing — CI should too. It's not a formatter (that's gofmt) and not a full linter, but it catches real bugs. Since Go 1.27, go test also runs vet's stdversion analyzer, which flags standard-library APIs newer than the go version your module declares.",
 	},
 	{
 		title:    "gofmt",
-		keywords: []string{"gofmt", "formatting", "format code", "go fmt"},
-		body:     "gofmt enforces Go's standard formatting: tabs, aligned braces, sorted imports. gofmt -l lists files needing formatting; gofmt -w rewrites them in place. Never hand-format — run gofmt and move on.",
+		keywords: []string{"gofmt", "format code", "go fmt", "format", "format all", "what is go fmt"},
+		body:     "gofmt enforces Go's standard formatting: tabs, aligned braces, sorted imports. gofmt -l lists files needing formatting; gofmt -w rewrites them in place. Never hand-format — run gofmt and move on. go fmt ./... is the package-level form: it formats whole packages at once instead of naming files one by one, which is the form scripts and CI use.",
 	},
 	{
 		title:    "go modules",
 		keywords: []string{"go.mod", "go mod", "modules", "dependencies", "go get", "go.sum", "module"},
-		body:     "Go modules track dependencies: go mod init example.com/m creates go.mod; go get pkg@version adds or upgrades; go mod tidy adds missing and drops unused requirements. go.sum pins exact hashes so builds are reproducible.",
+		body:     "Modules track dependencies: go mod init example.com/m creates go.mod; go get pkg@version adds or upgrades; go mod tidy cleans requirements; go.sum pins hashes for reproducible builds. Since Go 1.24, go.mod can pin developer tools with the tool directive (replacing the tools.go trick), and GOPROXY controls where modules are fetched from. List upgrades with go list -m -u all. Since Go 1.26, go mod init writes the previous release, go 1.25.0, as a compatibility baseline; raise it with go get go@version.",
 	},
 	{
 		title:    "godoc",
-		keywords: []string{"godoc", "documentation", "doc comments", "go doc"},
-		body:     "Documentation comes from comments: a comment starting with the name (// Add sums...) becomes the doc. go doc pkg.Symbol prints it in the terminal; pkg.go.dev hosts it online. Write doc comments on every exported name.",
+		keywords: []string{"godoc", "documentation", "doc comments", "go doc", "what is go doc", "go doc for", "view documentation"},
+		body:     "Documentation comes from comments: a comment starting with the name (// Add sums...) becomes the doc. go doc pkg.Symbol prints it in the terminal; pkg.go.dev hosts it online. Write doc comments on every exported name. In Go 1.26, plain go doc replaces the old go tool doc invocation. New in Go 1.27: go doc pkg@version shows a package at a specific module version, and the -ex flag includes examples in the output.",
 	},
 	{
 		title:    "nil map write panic",
@@ -274,7 +276,7 @@ var goKnowledge = []goKnowledgeEntry{
 	},
 	{
 		title:    "loop variable capture",
-		keywords: []string{"loop variable", "closure", "goroutine loop", "capture", "range variable"},
+		keywords: []string{"loop variable", "goroutine loop", "capture", "range variable", "loop closure"},
 		body:     "Before Go 1.22, loop variables were reused across iterations, so closures and goroutines launched in a loop all saw the last value — the classic fix was shadowing (x := x) inside the loop. Go 1.22+ gives each iteration fresh variables, but you'll still meet the old pattern in legacy code.",
 	},
 	{
@@ -295,7 +297,7 @@ var goKnowledge = []goKnowledgeEntry{
 	{
 		title:    "defer",
 		keywords: []string{"defer", "deferred", "cleanup", "LIFO"},
-		body:     "defer schedules a call to run when the function returns: defer f.Close(). Deferred calls run LIFO (last in, first out) and see the final values of named return variables — which is how recover-based patterns work. Use it for cleanup, not for hot-loop performance.",
+		body:     "defer schedules a call to run when the function returns: defer f.Close(). Deferred calls run LIFO (last in, first out) and see the final values of named return variables — which is how recover-based patterns work. Use it for cleanup, not for hot-loop performance. One subtlety: a deferred call's arguments are evaluated when the defer statement runs, not later when the call executes at return.",
 	},
 	{
 		title:    "blank identifier",
@@ -304,7 +306,7 @@ var goKnowledge = []goKnowledgeEntry{
 	},
 	{
 		title:    "embedding",
-		keywords: []string{"embedding", "embed", "composition", "inheritance", "promoted methods"},
+		keywords: []string{"embedding", "embed", "composition", "inheritance", "promoted methods", "type embedding", "type"},
 		body:     "Go composes instead of inheriting: embedding a struct or interface promotes its fields and methods to the outer type. type Server struct { http.Server } gets all of http.Server's methods. It's composition with syntactic sugar, not a class hierarchy.",
 	},
 }

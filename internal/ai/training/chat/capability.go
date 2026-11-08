@@ -142,6 +142,7 @@ var capabilityCatalog = []capabilityGroup{
 	}},
 	{title: "ASK — answers from your project and my notes, never invented", entries: []capabilityEntry{
 		{"Tell you what a Go word means, or what a make target does", "what is a goroutine"},
+		{"Explain how to do a common Go task", "how do I serve static files"},
 		{"Show you what I've built or changed in this project, from the receipts", "what have you built here"},
 		{"Answer from the clock and the project state — the time, the branch, what changed", "what time is it"},
 		{"Translate a pasted Go error into plain words, and offer the fix when I can work it out", "./main.go:10:2: undefined: Foo"},
