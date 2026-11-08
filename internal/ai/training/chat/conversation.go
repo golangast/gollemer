@@ -14,6 +14,13 @@ type Turn struct {
 	Text    string // raw text as typed/printed (not lowercased)
 	Domain  string // routing domain of a gollemer turn, "" for user turns
 	Recall  bool   // true when this turn only quoted the transcript
+	// Claimed marks a gollemer turn the history hook recorded for a
+	// deterministic seat that claimed the exchange (historyhook.go):
+	// the seat printed its answer but never recorded it, so the hook
+	// wrote this compact entry from the seat's own output. Claimed
+	// exchanges count as context for SocialInput composition, like
+	// social exchanges do.
+	Claimed bool
 }
 
 // Conversation is gollemer's session memory: a rolling transcript of the
@@ -22,6 +29,11 @@ type Turn struct {
 type Conversation struct {
 	turns    []Turn
 	maxTurns int
+	// records counts every turn ever added (monotonic; the trim
+	// does not move it). The history hook diffs it around a claim
+	// to learn what the claim recorded itself, so a claimed
+	// exchange lands exactly once.
+	records int
 }
 
 // NewConversation starts an empty session transcript.
@@ -29,9 +41,13 @@ func NewConversation() *Conversation {
 	return &Conversation{maxTurns: 30}
 }
 
+// recordCount reports how many turns have ever been added.
+func (c *Conversation) recordCount() int { return c.records }
+
 // AddUser records a user message.
 func (c *Conversation) AddUser(text string) {
 	c.turns = append(c.turns, Turn{Speaker: "you", Text: text})
+	c.records++
 	c.trim()
 }
 
@@ -39,6 +55,34 @@ func (c *Conversation) AddUser(text string) {
 // quoted the transcript (answers to recall questions).
 func (c *Conversation) AddReply(text, domain string, recall bool) {
 	c.turns = append(c.turns, Turn{Speaker: "gollemer", Text: text, Domain: domain, Recall: recall})
+	c.records++
+	c.trim()
+}
+
+// AddClaimedReply records the history hook's entry for a claimed
+// exchange: a gollemer turn whose text is the compact rendering of
+// what the claiming seat printed (see historyhook.go). The user's
+// line is recorded separately (AddUser) just before it.
+func (c *Conversation) AddClaimedReply(text string) {
+	c.turns = append(c.turns, Turn{Speaker: "gollemer", Text: text, Domain: ClaimedDomain, Claimed: true})
+	c.records++
+	c.trim()
+}
+
+// AddUserBeforeLastReply inserts a user turn immediately before the
+// final turn when that turn is a gollemer reply — completing an
+// exchange whose reply was recorded without its user line. With no
+// trailing gollemer turn it appends, like AddUser.
+func (c *Conversation) AddUserBeforeLastReply(text string) {
+	t := Turn{Speaker: "you", Text: text}
+	if n := len(c.turns); n > 0 && c.turns[n-1].Speaker == "gollemer" {
+		c.turns = append(c.turns, Turn{})
+		copy(c.turns[n:], c.turns[n-1:])
+		c.turns[n-1] = t
+	} else {
+		c.turns = append(c.turns, t)
+	}
+	c.records++
 	c.trim()
 }
 
@@ -98,8 +142,10 @@ func (c *Conversation) lastCommand() string {
 
 // lastExchange returns the previous user message and the gollemer reply
 // that followed it, for history-conditioned generation. Both must exist;
-// the caller decides which domains may contribute context.
-func (c *Conversation) lastExchange() (user, reply string, replyDomain string, ok bool) {
+// the caller decides which domains may contribute context. claimed
+// reports whether the reply turn is a history-hook entry for a
+// deterministic claim (see historyhook.go).
+func (c *Conversation) lastExchange() (user, reply string, replyDomain string, claimed bool, ok bool) {
 	ri := -1
 	for i := len(c.turns) - 1; i >= 0; i-- {
 		if c.turns[i].Speaker == "gollemer" && !c.turns[i].Recall {
@@ -108,14 +154,14 @@ func (c *Conversation) lastExchange() (user, reply string, replyDomain string, o
 		}
 	}
 	if ri <= 0 {
-		return "", "", "", false
+		return "", "", "", false, false
 	}
 	for i := ri - 1; i >= 0; i-- {
 		if c.turns[i].Speaker == "you" {
-			return c.turns[i].Text, c.turns[ri].Text, c.turns[ri].Domain, true
+			return c.turns[i].Text, c.turns[ri].Text, c.turns[ri].Domain, c.turns[ri].Claimed, true
 		}
 	}
-	return "", "", "", false
+	return "", "", "", false, false
 }
 
 // SocialInput builds the encoder input for a conversational turn. When the
@@ -124,9 +170,17 @@ func (c *Conversation) lastExchange() (user, reply string, replyDomain string, o
 // stands alone. The social model is trained on exactly this format —
 // "before you said ... . before i said ... . now you say ..." — so the
 // markers are ordinary vocabulary, not special tokens.
+//
+// A previous exchange a deterministic seat claimed contributes context
+// the same way, through its hook-recorded entry: the thread the model
+// inherits is unbroken even when the last turn never reached a model.
+// Self-recorded deterministic replies (fact, state, capability —
+// TalkDomain, recorded by their own seats in full) do NOT compose:
+// facts stay out of the model's input by design, and the capability
+// catalog is far beyond the composed format's length.
 func (c *Conversation) SocialInput(current string) string {
-	user, reply, domain, ok := c.lastExchange()
-	if !ok || domain != SocialDomain {
+	user, reply, domain, claimed, ok := c.lastExchange()
+	if !ok || (domain != SocialDomain && !claimed) {
 		return current
 	}
 	return fmt.Sprintf("before you said %s . before i said %s . now you say %s",
