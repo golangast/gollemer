@@ -5,6 +5,11 @@ package chat
 //
 //	add <n> columns and <m> rows to the body in <folder>
 //	add columns and rows to the body in <folder>
+//	add the grid <n> columns and <m> rows to the body in <folder>
+//
+// The third shape is the counted grid's own word standing
+// in front of the counts (or the bare pair) — the same
+// section, named the way the grid taught it.
 //
 // The section — a counted grid of boxes, the counted grid's
 // own discipline: digits or words, 1–6 of each, counts
@@ -71,6 +76,9 @@ func parseScaffoldSection(line string) (scaffoldSectionAsk, bool) {
 	i := 1
 	if low[i] == "a" || low[i] == "an" || low[i] == "the" {
 		i++ // the article slot — optional, never required
+	}
+	if i < len(low) && low[i] == "grid" {
+		i++ // the grid word can stand in front of the counts
 	}
 	var out scaffoldSectionAsk
 	switch {
@@ -157,6 +165,16 @@ func tryScaffoldSection(line string, r *LineReader) bool {
 	})
 }
 
+// isScaffoldBody reports whether file content is a
+// templated page's body: it calls the shared header and
+// the shared footer — the recognition every body routing
+// in this package shares, so a file is routed by what it
+// IS, never by its name.
+func isScaffoldBody(b []byte) bool {
+	s := string(b)
+	return strings.Contains(s, "{{template \"header\"") && strings.Contains(s, "{{template \"footer\"")
+}
+
 // scaffoldBodies lists a folder's scaffold body files —
 // the templates folder's pages other than the shared
 // header and footer, each recognised by its own header and
@@ -177,7 +195,7 @@ func scaffoldBodies(rootAbs, folderRel string) []string {
 		if err != nil {
 			continue
 		}
-		if strings.Contains(string(b), "{{template \"header\"") && strings.Contains(string(b), "{{template \"footer\"") {
+		if isScaffoldBody(b) {
 			out = append(out, path.Join(folderRel, "templates", name))
 		}
 	}

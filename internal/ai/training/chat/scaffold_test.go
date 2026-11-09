@@ -153,6 +153,13 @@ func TestParseScaffoldSection(t *testing.T) {
 		{"add columns and rows to the body in jim", 2, 2, false, "", "jim"},
 		{"add 2 columns and 3 rows to the body of home in jim", 2, 3, true, "home", "jim"},
 		{"add 2 columns and 3 rows to the body of the home page in jim", 2, 3, true, "home", "jim"},
+		// The counted grid's own word in front of the
+		// counts (or the bare pair): the same section.
+		{"add the grid 2 columns and 3 rows to the body in jim", 2, 3, true, "", "jim"},
+		{"add a grid 2 columns and 3 rows to the body in jim", 2, 3, true, "", "jim"},
+		{"add the grid two columns and three rows to the body of home in jim", 2, 3, true, "home", "jim"},
+		{"add the grid 3 columns to the body in jim", 3, 2, true, "", "jim"},
+		{"add the grid columns and rows to the body in jim", 2, 2, false, "", "jim"},
 	}
 	for _, c := range claims {
 		q, ok := parseScaffoldSection(c.line)
@@ -170,6 +177,11 @@ func TestParseScaffoldSection(t *testing.T) {
 		"add a grid template with 2 columns and 3 rows to jim/temp/index.html",
 		"add 2 columns and 3 rows to the page in jim",
 		"add a templated page called home in jim",
+		// The grid word alone names no counts, and the
+		// seam line's direct file target is the webpage
+		// grammar's routing, not this one's.
+		"add the grid to the body in jim",
+		"add the grid 2 columns 3 rows to jim/templates/home.html",
 	} {
 		if q, ok := parseScaffoldSection(line); ok {
 			t.Errorf("parseScaffoldSection(%q) claimed %+v — not its sentence", line, q)
@@ -224,6 +236,28 @@ func TestScaffoldSectionLands(t *testing.T) {
 		if n := strings.Count(headerBefore, probe); n != 1 {
 			t.Errorf("header holds %q %d times, want exactly 1", probe, n)
 		}
+	}
+}
+
+// The grid-word form lands the same section in the same
+// body: John's composition of the counted grid's word
+// with this piece's sentence.
+func TestScaffoldSectionGridWordLands(t *testing.T) {
+	root := staticAssetsFixture(t, staticAssetsFiles(map[string]string{
+		"jim/main.go": staticJimMain,
+	}))
+	profile := &UserProfile{}
+	captureStdout(t, func() {
+		claimChain("add a templated page called home in jim", yes, profile)
+	})
+	out := captureStdout(t, func() {
+		claimChain("add the grid 2 columns and 3 rows to the body in jim", yes, profile)
+	})
+	if !strings.Contains(out, "Done — The home page's body in jim/templates/home.html now has a section of 2 columns and 3 rows.") {
+		t.Errorf("the grid-word section did not land:\n%s", out)
+	}
+	if n := strings.Count(readBack(t, root, "jim/templates/home.html"), "TODO: box"); n != 6 {
+		t.Errorf("body holds %d section boxes, want 6", n)
 	}
 }
 

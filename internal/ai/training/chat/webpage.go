@@ -53,6 +53,15 @@ package chat
 //	add a grid template with 2 columns [and 3 rows] to …
 //	add template 2 columns 3 rows to …
 //	add a 2 by 3 grid template to …
+//	add the grid 2 columns 3 rows to …
+//
+// The last form names the grid as the object itself, the
+// counts directly behind it — John's composition of the
+// two counted shapes ("add the grid 2 columns 3 rows to
+// jim/templates/home.html"). Aimed at a templated page's
+// body file, the counts land as a section in that body
+// instead (see the flow): the target decides which of the
+// two counted pieces the sentence is.
 //
 // Numbers are digits or words, singular or plural. The
 // counts clause trails the object, led by "with" or bare;
@@ -271,6 +280,22 @@ func parseWebpage(line string) (webpageRequest, bool) {
 	if byForm && req.template != "grid" {
 		return webpageRequest{}, false
 	}
+	// The grid as its own object ("add the grid 2 columns
+	// 3 rows to …"): the name is followed directly by the
+	// counts clause — no object word stands between them.
+	// The "use" wording never takes this form (its rule
+	// below stands: "use" belongs to the template wording).
+	objectless := false
+	if !useVerb && !byForm && req.template == "grid" {
+		if cols, rows, rowsSet, cn := parseGridCounts(low, i); cn > 0 {
+			req.gridCounted, req.gridCols, req.gridRows = true, cols, rows
+			if !rowsSet {
+				req.gridRows = 2
+			}
+			objectless = true
+			i += cn
+		}
+	}
 	// "add the with assets template…": the assets words can
 	// stand in front of a "template" object, not only trail
 	// the object as they do for "webpage".
@@ -284,6 +309,9 @@ func parseWebpage(line string) (webpageRequest, bool) {
 	// switch.
 	templateWord := false
 	switch {
+	case objectless:
+		// The grid named itself the object; no object
+		// word follows its counts.
 	case i < len(fields) && low[i] == "webpage":
 		i++
 	case i+1 < len(fields) && low[i] == "web" && low[i+1] == "page":
@@ -373,6 +401,14 @@ func parseWebpage(line string) (webpageRequest, bool) {
 		// only: with a .go target the line is the concept
 		// book's html/template sentence — a Go statement
 		// going into a function — and keeps that claim.
+		return webpageRequest{}, false
+	}
+	if objectless && !strings.HasSuffix(strings.ToLower(req.file), ".html") {
+		// The grid-object form seats like the template
+		// wording it composes with: counted-grid sentences
+		// claim for .html targets only — the bare pair's
+		// main.go decline ("add template 2 columns to
+		// main.go") is this form's too.
 		return webpageRequest{}, false
 	}
 	return req, true
@@ -498,8 +534,16 @@ func runWebpage(line string, ask editAsk) bool {
 	// Facts before questions: a file that already has a page
 	// in it refuses outright, and that is checkable now — the
 	// template question is never asked for an ask that
-	// cannot land.
+	// cannot land. One exception, by what the file IS: a
+	// counted grid aimed at a templated page's body file
+	// (its header and footer calls give it away) is a body
+	// section ask in grid words — the counts land as a
+	// section through the body section's own planner, and
+	// the body is never replaced by a whole page.
 	if b, err := os.ReadFile(abs); err == nil && len(bytes.TrimSpace(b)) > 0 {
+		if q.gridCounted && isScaffoldBody(b) {
+			return runScaffoldSectionPlan(tag, rootRaw, rootAbs, path.Dir(path.Dir(rel)), rel, q.gridCols, q.gridRows, ask)
+		}
 		fmt.Printf("%s Not making that webpage: %s already has a page in it — I never overwrite what's yours. If you want a fresh template page there instead, empty the file yourself (or remove it) and ask again.\n", tag, rel)
 		recordBrain("composer", false, "webpage refused: file not empty")
 		return true

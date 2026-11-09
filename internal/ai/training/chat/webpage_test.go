@@ -375,8 +375,17 @@ func TestParseWebpageCountedGridClaims(t *testing.T) {
 		{"add a grid template with 1 column to jim/temp/index.html", 1, 2, "jim/temp/index.html", false},
 		{"use the grid template with 2 columns and 3 rows for jim/temp/index.html", 2, 3, "jim/temp/index.html", false},
 		{"add template 2 columns 3 rows", 2, 3, "", true},
+		// The grid as its own object: the counts directly
+		// behind the name, no object word between.
+		{"add the grid 2 columns 3 rows to jim/temp/index.html", 2, 3, "jim/temp/index.html", false}, // John's seam line, verbatim
+		{"add a grid 2 columns 3 rows to jim/temp/index.html", 2, 3, "jim/temp/index.html", false},
+		{"add grid 2 columns 3 rows to jim/temp/index.html", 2, 3, "jim/temp/index.html", false},
+		{"add the grid two columns and three rows to jim/temp/index.html", 2, 3, "jim/temp/index.html", false},
+		{"add the grid 3 columns to jim/temp/index.html", 3, 2, "jim/temp/index.html", false}, // rows default
+		{"add the grid 2 columns 3 rows", 2, 3, "", true},
 		// Out of range: still this piece's sentence.
 		{"add a grid template with 7 columns to jim/temp/index.html", 7, 2, "jim/temp/index.html", false},
+		{"add the grid 7 columns to jim/temp/index.html", 7, 2, "jim/temp/index.html", false},
 		{"add template 0 columns 3 rows to jim/temp/index.html", 0, 3, "jim/temp/index.html", false},
 		{"add template 2 columns 9 rows to jim/temp/index.html", 2, 9, "jim/temp/index.html", false},
 		{"add a grid template with seven columns to jim/temp/index.html", 7, 2, "jim/temp/index.html", false},
@@ -417,6 +426,16 @@ func TestParseWebpageCountedGridNonClaims(t *testing.T) {
 		"add a 2 by 3 rows template to jim/temp/index.html",
 		"add a grid template with 3 rows to jim/temp/index.html",
 		"add a grid template 2 columns 3 rows with 2 columns to jim/temp/index.html",
+		// The grid-object form keeps the family's seating:
+		// no counts behind the name names nothing, a rows-
+		// only clause has no columns, a second clause is a
+		// second sentence, the "use" wording never takes
+		// it, and a .go target stays the book's.
+		"add the grid to jim/temp/index.html",
+		"add the grid 3 rows to jim/temp/index.html",
+		"add the grid 2 columns 3 rows with 2 columns to jim/temp/index.html",
+		"use the grid 2 columns 3 rows for jim/temp/index.html",
+		"add the grid 2 columns 3 rows to main.go",
 	} {
 		if got, ok := parseWebpage(line); ok {
 			t.Errorf("parseWebpage(%q) claimed %+v — not its sentence", line, got)
@@ -515,6 +534,77 @@ func TestWebpageCountedGridFileQuestion(t *testing.T) {
 	captureStdout(t, func() { claimChain("jim/temp/index.html", yes, profile) })
 	if got := readBack(t, root, "jim/temp/index.html"); got != analyze.WebpageGridContent(2, 3, "index") {
 		t.Errorf("the answered ask did not land the counted grid:\n%s", got)
+	}
+}
+
+// The seam, end to end: one sentence, three targets, and
+// the target decides what the counts mean. Aimed at a
+// templated page's body file, John's grid-object line
+// lands a section in that body (the body section's own
+// confirmation, header styles once, footer untouched);
+// aimed at an empty plain page it is the whole counted
+// grid; aimed at a page with words in it, it is the
+// never-overwrite refusal and the file is byte-identical.
+func TestWebpageCountedGridRoutesByTarget(t *testing.T) {
+	profile := &UserProfile{}
+
+	// A scaffold body target: a section, not a page.
+	root := staticAssetsFixture(t, staticAssetsFiles(map[string]string{
+		"jim/main.go": staticJimMain,
+	}))
+	captureStdout(t, func() {
+		claimChain("add a templated page called home in jim", yes, profile)
+	})
+	footerBefore := readBack(t, root, "jim/templates/footer.html")
+	out := captureStdout(t, func() {
+		claimChain("add the grid 2 columns 3 rows to jim/templates/home.html", yes, profile)
+	})
+	if !strings.Contains(out, "Done — The home page's body in jim/templates/home.html now has a section of 2 columns and 3 rows.") {
+		t.Errorf("the seam line did not land as a body section:\n%s", out)
+	}
+	body := readBack(t, root, "jim/templates/home.html")
+	if n := strings.Count(body, "TODO: box"); n != 6 {
+		t.Errorf("the routed section holds %d boxes, want 6", n)
+	}
+	for _, call := range []string{"{{template \"header\" .}}", "{{template \"footer\" .}}"} {
+		if !strings.Contains(body, call) {
+			t.Errorf("the body lost its %s call — it was replaced, not grown:\n%s", call, body)
+		}
+	}
+	if got := readBack(t, root, "jim/templates/footer.html"); got != footerBefore {
+		t.Error("the footer file changed — the section belongs to the body only")
+	}
+	header := readBack(t, root, "jim/templates/header.html")
+	for _, probe := range []string{"/* Columns-and-rows sections in the body", ".body-grid-2 { grid-template-columns: repeat(2, 1fr); }"} {
+		if n := strings.Count(header, probe); n != 1 {
+			t.Errorf("header holds %q %d times, want exactly 1", probe, n)
+		}
+	}
+
+	// An empty plain page: the whole counted grid.
+	root = staticAssetsFixture(t, staticAssetsFiles(map[string]string{
+		"jim/temp/index.html": "",
+	}))
+	captureStdout(t, func() {
+		claimChain("add the grid 2 columns 3 rows to jim/temp/index.html", yes, profile)
+	})
+	if got := readBack(t, root, "jim/temp/index.html"); got != analyze.WebpageGridContent(2, 3, "index") {
+		t.Errorf("the seam line on an empty page did not land the counted grid:\n%s", got)
+	}
+
+	// A page with words in it: refused, byte-identical.
+	mine := "<html><body>mine</body></html>\n"
+	root = staticAssetsFixture(t, staticAssetsFiles(map[string]string{
+		"jim/temp/index.html": mine,
+	}))
+	out = captureStdout(t, func() {
+		claimChain("add the grid 2 columns 3 rows to jim/temp/index.html", yes, profile)
+	})
+	if !strings.Contains(out, "already has a page in it") || !strings.Contains(out, "never overwrite") {
+		t.Errorf("the seam line on a written page was not refused:\n%s", out)
+	}
+	if got := readBack(t, root, "jim/temp/index.html"); got != mine {
+		t.Errorf("the written page changed:\n%s", got)
 	}
 }
 

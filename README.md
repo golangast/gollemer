@@ -442,8 +442,9 @@ to load a style sheet, a script, and a picture from `/static/`),
 or a layout: **two columns** (a sidebar beside the main area),
 **three columns** (a sidebar on each side), **grid** (cards in a
 grid that narrows with the screen — or counted exactly:
-`add template 2 columns 3 rows to jim/temp/index.html` makes a
-grid of precisely 2 columns by 3 rows of boxes, 1 to 6 of
+`add template 2 columns 3 rows to jim/temp/index.html`, or
+`add the grid 2 columns 3 rows to jim/temp/index.html`, makes
+a grid of precisely 2 columns by 3 rows of boxes, 1 to 6 of
 each), or **rows** (full-width bands
 in different shades) — or **material** (Google's Material Design
 look, hand-written plain CSS in the page itself, no framework).
@@ -480,10 +481,16 @@ the handler that renders it (`HomePage` in `jim/homepage.go`).
 No route is wired: the handler waits for the connect sentence
 like any other. Run the server from the project root — that's
 where the handler's template paths point. Then grow the body:
-`add 2 columns and 3 rows to the body in jim` puts a counted
+`add 2 columns and 3 rows to the body in jim` — or, in the
+grid's own words, `add the grid 2 columns 3 rows to the body
+in jim` — puts a counted
 section of boxes into the body file alone (its styles join the
 header's, once), and asking again adds another section below
-the first. With no counts it makes 2 columns and 2 rows.
+the first. With no counts it makes 2 columns and 2 rows. The
+counted grid aimed at the body file itself —
+`add the grid 2 columns 3 rows to jim/templates/home.html` —
+lands the same way: the sentence is one, and the file it
+names decides which thing it is.
 
 A page's style sheets, scripts, and pictures are files too, and
 the server can serve the whole folder they live in: `serve static

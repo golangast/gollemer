@@ -180,8 +180,9 @@ Create folders and files — shown first, gated, then verified:
       to jim/temp/index.html", "add a two column template
       to jim/temp/index.html". The grid counts its boxes
       when you name them: "add template 2 columns 3 rows
-      to jim/temp/index.html" — 1 to 6 of each, and the
-      plan states the counts it will use.
+      to jim/temp/index.html", or "add the grid 2 columns
+      3 rows to jim/temp/index.html" — 1 to 6 of each, and
+      the plan states the counts it will use.
   you> add a card to jim/temp/index.html
       one Material component at a time into a page that
       exists — button, tonal button, outlined button, text
@@ -200,9 +201,12 @@ Create folders and files — shown first, gated, then verified:
       plus the HomePage handler that renders it. No route
       is wired; the handler waits for the connect sentence.
       Its body grows by section: "add 2 columns and 3 rows
-      to the body in jim" — 1 to 6 of each, the counts
-      stated in the plan; no counts means 2 by 2, and a
-      second ask adds another section below the first.
+      to the body in jim", or "add the grid 2 columns and
+      3 rows to the body in jim" — 1 to 6 of each, the
+      counts stated in the plan; no counts means 2 by 2,
+      and a second ask adds another section below the
+      first. The counted grid aimed at the body file
+      itself lands as a section there too.
   you> serve static files
       wires the webpage's folder — or one you name:
       "serve static files from jim/temp", "serve the
