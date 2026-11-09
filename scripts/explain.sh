@@ -175,7 +175,11 @@ Create folders and files — shown first, gated, then verified:
       pick — basic, responsive, with assets, two columns,
       three columns, grid, rows, or material: created when
       the file is new, filled when it sits there empty, and
-      never overwriting a page that already has words in it.
+      never overwriting a page that already has words in it;
+      and one Material component at a time into a page that
+      exists — a button, a card, a text field — with the
+      styles it needs carried in exactly once ("add a card
+      to the page", "what components can I add").
   you> serve static files
       wires the webpage's folder — or one you name — into
       your server at /static/, so its style sheets, scripts,

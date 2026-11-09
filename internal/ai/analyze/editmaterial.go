@@ -159,6 +159,118 @@ const materialFieldSnippet = "<div class=\"field\">\n" +
 
 const materialSwitchSnippet = "<label class=\"switch-row\"><input class=\"switch\" type=\"checkbox\"> TODO: what this switch turns on</label>\n"
 
+// The component registry: every component the component
+// piece (editcomponent.go) can add to a page by sentence —
+// exactly the material template's starter set. The chat
+// grammar matches against these forms, the discovery answer
+// ("what components can I add") is generated from these
+// rows, and the planner reads the CSS chunk and snippet
+// from here, so the list, the grammar, and the assembly
+// can never drift apart.
+type MaterialComponent struct {
+	ID       string   // the registry key ("tonal-button")
+	Words    string   // the canonical sentence form ("tonal button")
+	Aliases  []string // other sentence forms ("top bar" for the app bar)
+	Note     string   // the discovery answer's parenthetical, if any
+	CSS      string   // the component's style chunk (marker comment included)
+	CSSProbe string   // a substring present exactly when the chunk is carried
+}
+
+var MaterialComponents = []MaterialComponent{
+	{ID: "button", Words: "button", Note: "(the filled one)", CSS: materialCSSButtons, CSSProbe: ".btn {"},
+	{ID: "tonal-button", Words: "tonal button", CSS: materialCSSButtons, CSSProbe: ".btn-tonal {"},
+	{ID: "outlined-button", Words: "outlined button", CSS: materialCSSButtons, CSSProbe: ".btn-outlined {"},
+	{ID: "text-button", Words: "text button", CSS: materialCSSButtons, CSSProbe: ".btn-text {"},
+	{ID: "card", Words: "card", CSS: materialCSSCard, CSSProbe: ".card {"},
+	{ID: "app-bar", Words: "app bar", Aliases: []string{"top bar"}, Note: "(or \"top bar\")", CSS: materialCSSAppBar, CSSProbe: ".app-bar {"},
+	{ID: "fab", Words: "floating button", Aliases: []string{"fab"}, Note: "(or \"fab\")", CSS: materialCSSFab, CSSProbe: ".fab {"},
+	{ID: "chip", Words: "chip", CSS: materialCSSChips, CSSProbe: ".chip {"},
+	{ID: "text-field", Words: "text field", CSS: materialCSSField, CSSProbe: ".field label {"},
+	{ID: "switch", Words: "switch", CSS: materialCSSSwitch, CSSProbe: ".switch {"},
+}
+
+// MaterialComponentByID reads the registry by key.
+func MaterialComponentByID(id string) (MaterialComponent, bool) {
+	for _, c := range MaterialComponents {
+		if c.ID == id {
+			return c, true
+		}
+	}
+	return MaterialComponent{}, false
+}
+
+// MaterialComponentByForm reads the registry by a sentence
+// form — the canonical words or any alias.
+func MaterialComponentByForm(form string) (MaterialComponent, bool) {
+	for _, c := range MaterialComponents {
+		if form == c.Words {
+			return c, true
+		}
+		for _, a := range c.Aliases {
+			if form == a {
+				return c, true
+			}
+		}
+	}
+	return MaterialComponent{}, false
+}
+
+// MaterialComponentWords is the canonical sentence form of
+// a component id ("tonal button"), for the confirmation
+// line and the planner's words.
+func MaterialComponentWords(id string) string {
+	if c, ok := MaterialComponentByID(id); ok {
+		return c.Words
+	}
+	return id
+}
+
+// MaterialComponentForms lists every sentence form in the
+// registry, canonical words first, for refusal and
+// discovery prose built from the same data.
+func MaterialComponentForms() []string {
+	out := []string{}
+	for _, c := range MaterialComponents {
+		out = append(out, c.Words)
+		out = append(out, c.Aliases...)
+	}
+	return out
+}
+
+// MaterialCSSVariables is the color-role block a page
+// needs before any component's chunk means anything.
+func MaterialCSSVariables() string { return materialCSSVariables }
+
+// MaterialComponentSnippet is the component's markup — the
+// same strings the material template's demo sections are
+// built from. title is the page's own title, read for the
+// app bar ("" = the skeleton's TODO placeholder).
+func MaterialComponentSnippet(id, title string) (string, bool) {
+	switch id {
+	case "button":
+		return materialButtonSnippet, true
+	case "tonal-button":
+		return materialTonalButtonSnippet, true
+	case "outlined-button":
+		return materialOutlinedButtonSnippet, true
+	case "text-button":
+		return materialTextButtonSnippet, true
+	case "card":
+		return materialCardSnippet, true
+	case "app-bar":
+		return materialAppBarSnippet(title), true
+	case "fab":
+		return materialFabSnippet, true
+	case "chip":
+		return materialChipSnippet, true
+	case "text-field":
+		return materialFieldSnippet, true
+	case "switch":
+		return materialSwitchSnippet, true
+	}
+	return "", false
+}
+
 // materialBody assembles the material template's page: the
 // app bar, an intro in the skeleton voice, and one labeled
 // section per component, so a beginner sees what each part

@@ -150,6 +150,10 @@ func capabilityExampleGates(t *testing.T) map[string]func(string) bool {
 			q, ok := parseWebpage(s)
 			return ok && !q.fileMissing && q.file == "jim/temp/index.html"
 		}),
+		"add a card to jim/temp/index.html": parse(func(s string) bool {
+			q, ok := parseComponent(s)
+			return ok && q.component == "card" && q.file == "jim/temp/index.html"
+		}),
 		"serve static files": parse(func(s string) bool {
 			_, ok := parseServeStatic(s)
 			return ok

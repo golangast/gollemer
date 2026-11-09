@@ -450,6 +450,14 @@ which template when you don't name one. The file is
 created when new, filled when it sits there empty — and a page
 that already has words in it is never overwritten.
 
+Once a page exists, you can add one Material component at a
+time — the same parts the material template shows off:
+`add a button to jim/temp/index.html`, `add a text field to
+jim/temp/index.html`, or `add a card to the page` ("the page"
+is the webpage you last made or filled in this chat). The
+component's styles come with it the first time and never
+twice. Ask `what components can I add` for the whole set.
+
 A page's style sheets, scripts, and pictures are files too, and
 the server can serve the whole folder they live in: `serve static
 files` registers that folder at `/static/` on your existing

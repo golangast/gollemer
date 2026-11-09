@@ -73,6 +73,13 @@ const (
 	// custom servers refused with the line handed over).
 	EditServeStatic = "serve_static"
 
+	// Component (editcomponent.go): one Material component
+	// from the registry in editmaterial.go, inserted just
+	// before an existing .html page's </body>, with the
+	// Material styles it needs carried into the page exactly
+	// once. No Go file is touched.
+	EditComponent = "component"
+
 	// Page family (editpage.go): a named page kind as a matched
 	// page+handler pair — an .html page created with starter
 	// content (never overwritten), the handler that serves it
@@ -181,9 +188,16 @@ type EditRequest struct {
 
 	// webpage: the page file (File, shared with add_server —
 	// project-relative slash path, .html) and the template
-	// ("basic" | "responsive" | "assets"), both resolved by
-	// the chat layer.
+	// ("basic" | "responsive" | "assets" | "two-columns" |
+	// "three-columns" | "grid" | "rows" | "material"), both
+	// resolved by the chat layer.
 	WebpageTemplate string
+
+	// component: the page file (File, as above) and the
+	// component's registry id ("button", "card",
+	// "text-field", …; editmaterial.go), resolved by the
+	// chat layer.
+	Component string
 
 	// serve_static: the folder whose files the server serves
 	// at /static/ (project-relative slash path; "." = the
@@ -441,6 +455,8 @@ func (p *Project) PlanEdit(req EditRequest) (*EditPlan, string) {
 		return p.planWebpage(req)
 	case EditServeStatic:
 		return p.planServeStatic(req)
+	case EditComponent:
+		return p.planComponent(req)
 	case EditPage:
 		return p.planPage(req)
 	case EditDelegate:

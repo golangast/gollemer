@@ -1494,6 +1494,22 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if tryServeStatic(line, reader) {
 			continue
 		}
+		// The component piece (component.go): one Material
+		// component into an existing page — "add a button to
+		// jim/temp/index.html", "add a card to the page" —
+		// and its discovery question ("what components can
+		// I add", answered from the same registry the grammar
+		// reads). Seated after the webpage claim so "add a
+		// webpage" and the template wordings are already
+		// claimed before a name is read as a component; a .go
+		// target never matches the shape, so the book keeps
+		// those lines untouched.
+		if tryComponentList(line) {
+			continue
+		}
+		if tryComponent(line, reader) {
+			continue
+		}
 		// Cross-file delegates, claimed deterministically beside
 		// the other write-side parsers: "add a function in
 		// app/main.go that calls store.Load" writes code in one

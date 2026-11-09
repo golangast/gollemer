@@ -87,6 +87,8 @@ func renderLandingConfirmation(f landingFacts) string {
 		s1 = fmt.Sprintf("The %s is in %s", analyze.WebpageTemplateWords(f.req.WebpageTemplate), f.fresh.LinkPath(rel))
 	case analyze.EditServeStatic:
 		s1 = fmt.Sprintf("The server in %s now serves the %s folder's files at /static/", f.fresh.LinkPath(rel), f.req.StaticFolder)
+	case analyze.EditComponent:
+		s1 = fmt.Sprintf("The %s is in %s", analyze.MaterialComponentWords(f.req.Component), f.fresh.LinkPath(rel))
 	case analyze.EditAddServer:
 		s1 = confirmAddServer(f, rel)
 	case analyze.EditConcept:
