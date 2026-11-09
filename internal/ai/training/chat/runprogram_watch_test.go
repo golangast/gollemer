@@ -123,6 +123,8 @@ func withWatchSession(t *testing.T) *watchNotes {
 	notes := &watchNotes{}
 	oldAnnounce := watchAnnounce
 	watchAnnounce = notes.add
+	oldPending := pendingWatchFolders
+	pendingWatchFolders = nil
 	t.Cleanup(func() {
 		w := sessionWatcher
 		endWatching()
@@ -134,6 +136,7 @@ func withWatchSession(t *testing.T) *watchNotes {
 			}
 		}
 		sessionWatcher = nil
+		pendingWatchFolders = oldPending
 		watchPollInterval, watchQuietPeriod = oldPoll, oldQuiet
 		watchAnnounce = oldAnnounce
 	})
@@ -670,10 +673,13 @@ func TestWatchFolderStopRemovesOnlyIt(t *testing.T) {
 	}
 }
 
-// The folder refusals, honestly: nothing to attach to
-// without a program, a folder that isn't there, a file
-// named as a folder, a path out of the project, and a
-// stop-watching-folder aimed at the program's own folder.
+// The folder refusals, honestly: a declaration with no
+// program is noted as pending rather than refused (the
+// declaration itself is the refusal-free part — the
+// invalid folders below still refuse by name), a folder
+// that isn't there, a file named as a folder, a path out
+// of the project, and a stop-watching-folder aimed at the
+// program's own folder.
 func TestWatchFolderRefusals(t *testing.T) {
 	dir := runFixtureRoot(t)
 	writeFile(t, dir, "srv/main.go", watchSrvV1)
@@ -682,15 +688,19 @@ func TestWatchFolderRefusals(t *testing.T) {
 	withWatchSession(t)
 	profile := &UserProfile{}
 
-	// No program yet.
+	// No program yet: the declaration pends, and stopping
+	// it again takes the note back off the list.
 	var handled bool
 	out := captureStdout(t, func() { handled = claimChain("watch folder assets", yes, profile) })
 	if !handled || !strings.Contains(out, "No program is running") {
-		t.Errorf("watch folder with no program was not refused:\n%s", out)
+		t.Errorf("watch folder with no program was not answered:\n%s", out)
 	}
 	out = captureStdout(t, func() { handled = claimChain("stop watching folder assets", yes, profile) })
-	if !handled || !strings.Contains(out, "I'm not watching any program") {
-		t.Errorf("stop watching folder with nothing watched:\n%s", out)
+	if !handled || !strings.Contains(out, "only noted") {
+		t.Errorf("stop watching a pending folder:\n%s", out)
+	}
+	if len(pendingWatchFolders) != 0 {
+		t.Errorf("pending folders = %v, want none after the removal", pendingWatchFolderNames())
 	}
 
 	captureStdout(t, func() { handled = claimChain("watch srv/main.go", yes, profile) })
@@ -764,5 +774,225 @@ func main() {
 	}
 	if sessionWatcher != nil {
 		t.Error("the watcher outlived the program it watched")
+	}
+}
+
+// John's ordering (2026-11-09, live on the pushed build):
+// in a fresh session he named two folders BEFORE running
+// anything and got the no-program refusal twice. Declaring
+// is intent, in order — valid folders are noted as
+// pending, duplicates and folders inside a noted one are
+// already-noted answers, invalid ones still refuse by
+// name at declare time, and top shows the waiting list.
+func TestWatchFolderPendingDeclare(t *testing.T) {
+	dir := runFixtureRoot(t)
+	writeFile(t, dir, "srv/main.go", watchSrvV1)
+	writeFile(t, dir, "srv/templates/index.html", "<html></html>\n")
+	writeFile(t, dir, "assets/app.js", "console.log(1)\n")
+	writeFile(t, dir, "assets/deep/x.txt", "x\n")
+	withRunSession(t, dir)
+	withWatchSession(t)
+	profile := &UserProfile{}
+
+	var handled bool
+	out := captureStdout(t, func() { handled = claimChain("watch folder assets", yes, profile) })
+	if !handled || !strings.Contains(out, "noted") || !strings.Contains(out, "watch <file>") {
+		t.Errorf("declare with no program was not noted as pending:\n%s", out)
+	}
+	out = captureStdout(t, func() { handled = claimChain("watch folder srv/templates", yes, profile) })
+	if !handled || !strings.Contains(out, "noted") {
+		t.Errorf("second declare was not noted:\n%s", out)
+	}
+	if got := pendingWatchFolderNames(); len(got) != 2 || got[0] != "assets" || got[1] != "srv/templates" {
+		t.Fatalf("pending folders = %v, want [assets srv/templates]", got)
+	}
+
+	out = captureStdout(t, func() { handled = claimChain("watch folder assets", yes, profile) })
+	if !handled || !strings.Contains(out, "already noted") {
+		t.Errorf("duplicate declare was not already-noted:\n%s", out)
+	}
+	out = captureStdout(t, func() { handled = claimChain("watch folder assets/deep", yes, profile) })
+	if !handled || !strings.Contains(out, "already noted") {
+		t.Errorf("declare inside a noted folder was not already-noted:\n%s", out)
+	}
+	if len(pendingWatchFolders) != 2 {
+		t.Errorf("pending folders changed on already-noted answers: %v", pendingWatchFolderNames())
+	}
+
+	for _, tc := range []struct{ line, want string }{
+		{"watch folder jim/temp", "no folder by that name"}, // John's words; absent in this fixture
+		{"watch folder nope", "no folder by that name"},
+		{"watch folder assets/app.js", "is a file, not a folder"},
+		{"watch folder ../outside", "outside this project"},
+	} {
+		out = captureStdout(t, func() { handled = claimChain(tc.line, yes, profile) })
+		if !handled || !strings.Contains(out, tc.want) {
+			t.Errorf("%q was not refused by name (%q):\n%s", tc.line, tc.want, out)
+		}
+	}
+	if len(pendingWatchFolders) != 2 {
+		t.Errorf("a refusal pended a folder: %v", pendingWatchFolderNames())
+	}
+
+	out = captureStdout(t, func() { handled = claimChain("top", yes, profile) })
+	if !handled || !strings.Contains(out, "Watch folders waiting for a program: assets, srv/templates") {
+		t.Errorf("top does not show the waiting folders:\n%s", out)
+	}
+}
+
+// Watch start answers the pending list: a folder outside
+// the program's subtree attaches (and an edit there
+// restarts, named in full), while one inside the
+// program's own folder drops with a spoken note — John's
+// jim/temp case. The pending list ends empty.
+func TestWatchFolderPendingAttachAtWatchStart(t *testing.T) {
+	dir := runFixtureRoot(t)
+	writeFile(t, dir, "srv/main.go", watchSrvV1)
+	writeFile(t, dir, "srv/templates/index.html", "<html></html>\n")
+	writeFile(t, dir, "assets/page.html", "<html><body>one</body></html>\n")
+	withRunSession(t, dir)
+	notes := withWatchSession(t)
+	profile := &UserProfile{}
+
+	var handled bool
+	for _, line := range []string{"watch folder assets", "watch folder srv/templates"} {
+		out := captureStdout(t, func() { handled = claimChain(line, yes, profile) })
+		if !handled || !strings.Contains(out, "noted") {
+			t.Fatalf("%q was not noted as pending:\n%s", line, out)
+		}
+	}
+
+	out := captureStdout(t, func() { handled = claimChain("watch srv/main.go", yes, profile) })
+	if !handled || !programRunning() {
+		t.Fatalf("watch did not start the program:\n%s", out)
+	}
+	if !strings.Contains(out, "srv/templates") || !strings.Contains(out, "already covers it") {
+		t.Errorf("the inside-the-base pending folder did not drop with a note:\n%s", out)
+	}
+	if !strings.Contains(out, "including the folder assets") {
+		t.Errorf("the watch start did not name the attached folder:\n%s", out)
+	}
+	if len(pendingWatchFolders) != 0 {
+		t.Errorf("pending folders survived the watch start: %v", pendingWatchFolderNames())
+	}
+	if got := watchedExtraFolderNames("srv/main.go"); len(got) != 1 || got[0] != "assets" {
+		t.Fatalf("extra roots = %v, want just [assets]", got)
+	}
+	out = captureStdout(t, func() { handled = claimChain("top", yes, profile) })
+	if !handled || !strings.Contains(out, "watching for changes (also assets)") || strings.Contains(out, "waiting for a program") {
+		t.Errorf("top after attach wrong:\n%s", out)
+	}
+	getBody(t, "version one")
+
+	settleWatch()
+	writeFile(t, dir, "assets/page.html", "<html><body>two</body></html>\n")
+	note := notes.waitFor(t, "restarted")
+	if strings.TrimSpace(note) != "[srv/main.go restarted — assets/page.html changed]" {
+		t.Errorf("restart note = %q, want the attached folder's file named project-relatively", note)
+	}
+
+	out = captureStdout(t, func() { handled = claimChain("stop the program", yes, profile) })
+	if !handled || programRunning() {
+		t.Errorf("cleanup stop failed:\n%s", out)
+	}
+}
+
+// "stop watching folder" removes a PENDING folder: the
+// answer says it was only noted, and a later watch start
+// does not attach it — while its noted neighbour still
+// attaches.
+func TestWatchFolderPendingStopRemoves(t *testing.T) {
+	dir := runFixtureRoot(t)
+	writeFile(t, dir, "srv/main.go", watchSrvV1)
+	writeFile(t, dir, "assets/page.html", "<html></html>\n")
+	writeFile(t, dir, "assets2/page.html", "<html></html>\n")
+	withRunSession(t, dir)
+	withWatchSession(t)
+	profile := &UserProfile{}
+
+	var handled bool
+	for _, line := range []string{"watch folder assets", "watch folder assets2"} {
+		captureStdout(t, func() { handled = claimChain(line, yes, profile) })
+		if !handled {
+			t.Fatalf("%q was not claimed", line)
+		}
+	}
+	out := captureStdout(t, func() { handled = claimChain("stop watching folder assets", yes, profile) })
+	if !handled || !strings.Contains(out, "Stopped watching the folder assets") || !strings.Contains(out, "only noted") {
+		t.Errorf("stopping a pending folder:\n%s", out)
+	}
+	if got := pendingWatchFolderNames(); len(got) != 1 || got[0] != "assets2" {
+		t.Fatalf("pending folders = %v, want just [assets2]", got)
+	}
+	out = captureStdout(t, func() { handled = claimChain("stop watching folder assets", yes, profile) })
+	if !handled || !strings.Contains(out, "not one of the folders waiting") {
+		t.Errorf("stopping an unnoted folder was not answered with the waiting list:\n%s", out)
+	}
+
+	out = captureStdout(t, func() { handled = claimChain("watch srv/main.go", yes, profile) })
+	if !handled || !programRunning() {
+		t.Fatalf("watch did not start the program:\n%s", out)
+	}
+	if strings.Contains(out, "including the folder assets,") || strings.Contains(out, "including the folder assets.") {
+		t.Errorf("the removed folder attached anyway:\n%s", out)
+	}
+	if got := watchedExtraFolderNames("srv/main.go"); len(got) != 1 || got[0] != "assets2" {
+		t.Errorf("extra roots = %v, want just [assets2]", got)
+	}
+
+	out = captureStdout(t, func() { handled = claimChain("stop the program", yes, profile) })
+	if !handled || programRunning() {
+		t.Errorf("cleanup stop failed:\n%s", out)
+	}
+}
+
+// A plain run does not consume pending folders — they
+// wait for a WATCH start, show as waiting on top while
+// the program runs unwatched, survive the program's
+// stop, and bare "stop watching" clears them with a
+// spoken line.
+func TestWatchFolderPendingSurvivesPlainRun(t *testing.T) {
+	dir := runFixtureRoot(t)
+	writeFile(t, dir, "srv/main.go", watchSrvV1)
+	writeFile(t, dir, "assets/page.html", "<html></html>\n")
+	withRunSession(t, dir)
+	withWatchSession(t)
+	profile := &UserProfile{}
+
+	var handled bool
+	captureStdout(t, func() { handled = claimChain("watch folder assets", yes, profile) })
+	if !handled || len(pendingWatchFolders) != 1 {
+		t.Fatal("the declaration did not pend")
+	}
+
+	out := captureStdout(t, func() { handled = claimChain("run the program srv/main.go", yes, profile) })
+	if !handled || !programRunning() {
+		t.Fatalf("plain run did not start:\n%s", out)
+	}
+	if programWatching("srv/main.go") {
+		t.Fatal("a plain run must not turn watching on")
+	}
+	if len(pendingWatchFolders) != 1 {
+		t.Errorf("a plain run consumed the pending folders: %v", pendingWatchFolderNames())
+	}
+	out = captureStdout(t, func() { handled = claimChain("top", yes, profile) })
+	if !handled || !strings.Contains(out, "Watch folders waiting for a program: assets") {
+		t.Errorf("top does not show the folder still waiting under a running program:\n%s", out)
+	}
+
+	out = captureStdout(t, func() { handled = claimChain("stop the program", yes, profile) })
+	if !handled || programRunning() {
+		t.Errorf("stop failed:\n%s", out)
+	}
+	if len(pendingWatchFolders) != 1 {
+		t.Errorf("stopping the program dropped folders that never attached: %v", pendingWatchFolderNames())
+	}
+
+	out = captureStdout(t, func() { handled = claimChain("stop watching", yes, profile) })
+	if !handled || !strings.Contains(out, "cleared the folders that were waiting for a program: assets") {
+		t.Errorf("bare stop watching did not clear the pending folders:\n%s", out)
+	}
+	if len(pendingWatchFolders) != 0 {
+		t.Errorf("pending folders survived the clear: %v", pendingWatchFolderNames())
 	}
 }

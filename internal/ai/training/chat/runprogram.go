@@ -1279,6 +1279,28 @@ func (w *programWatcher) removeExtra(abs string) bool {
 // there is only ever one program, so there is at most one.
 var sessionWatcher *programWatcher
 
+// pendingWatchFolders holds the folders named by "watch
+// folder <path>" while no program was running: validated
+// watch roots waiting for a watch to start. Declaring a
+// folder is intent declared in order, and the chat holds
+// it rather than refusing (John, 2026-11-09, named two
+// folders in a fresh session before running anything and
+// got the no-program refusal twice). At watch start each
+// pending root faces the rules a live add faces — see
+// drainPendingWatchFolders. In memory only, like
+// sessionWatcher; never persisted.
+var pendingWatchFolders []watchRoot
+
+// pendingWatchFolderNames returns the pending folders as
+// named, in the order they were declared — top's list.
+func pendingWatchFolderNames() []string {
+	names := make([]string, 0, len(pendingWatchFolders))
+	for _, e := range pendingWatchFolders {
+		names = append(names, e.rel)
+	}
+	return names
+}
+
 func (w *programWatcher) isStopped() bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -1339,18 +1361,30 @@ func startWatching(tag string, p *programRun) {
 // startWatchingRoots is startWatching with named folders
 // already in the watch set ("watch folder <path>" asked
 // while the program ran unwatched: watching turns on with
-// the folder included, and the sentence says so).
+// the folder included, and the sentence says so). Every
+// watch start also answers the folders declared while no
+// program was running: drainPendingWatchFolders folds
+// them into the set before the watcher is built.
 func startWatchingRoots(tag string, p *programRun, extras []watchRoot) {
+	base := programFolderAbs(p)
 	if programWatching(p.rel) {
+		// Pending folders can only be declared while no
+		// program is live, so this set is empty in practice;
+		// drain it anyway rather than lose a declaration.
+		for _, root := range drainPendingWatchFolders(tag, p, base, sessionWatcher.extraFolders()) {
+			sessionWatcher.addExtra(root)
+			fmt.Printf("%s Now watching the folder %s too — changes there will restart %s as well.\n", tag, root.rel, p.rel)
+		}
 		fmt.Printf("%s I'm already watching %s — I'll restart it when its files change.\n", tag, p.rel)
 		recordBrain("runner", true, "program already watching: "+p.rel)
 		return
 	}
 	endWatching() // a leftover watcher (a replaced program) ends first
+	extras = drainPendingWatchFolders(tag, p, base, extras)
 	w := &programWatcher{
 		rel:     p.rel,
 		rootAbs: p.rootAbs,
-		dir:     programFolderAbs(p),
+		dir:     base,
 		stop:    make(chan struct{}),
 		done:    make(chan struct{}),
 		extras:  extras,
@@ -1409,10 +1443,19 @@ func watchProgramClaim(target string, ask editAsk, profile *UserProfile) {
 
 // stopWatchingClaim answers "stop watching [<path>.go]":
 // the watching ends; the program itself keeps running.
+// Bare "stop watching" with nothing watched but folders
+// waiting clears the pending list, and says so.
 func stopWatchingClaim(target string) {
 	tag := cTag("gollemer [runner]>")
 	w := sessionWatcher
 	if w == nil || w.isStopped() {
+		if target == "" && len(pendingWatchFolders) > 0 {
+			names := pendingWatchFolderNames()
+			pendingWatchFolders = nil
+			fmt.Printf("%s Stopped — nothing was being watched yet, and I've cleared the folders that were waiting for a program: %s.\n", tag, strings.Join(names, ", "))
+			recordBrain("runner", true, "stop watching cleared pending folders")
+			return
+		}
 		fmt.Printf("%s I'm not watching any program right now.\n", tag)
 		recordBrain("runner", true, "stop watching asked with nothing watched")
 		return
@@ -1457,11 +1500,63 @@ func watchWithin(dir, path string) bool {
 	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
+// drainPendingWatchFolders folds the folders declared
+// while no program was running into a watch that is
+// starting for p. Each pending root faces the rules a
+// live "watch folder" faces: inside the program's own
+// folder it is already covered, so it drops with a spoken
+// note; inside a root already in the set it drops the
+// same way; equal to a root already in the set is the
+// same folder arriving by two sentences and goes quietly.
+// The rest are returned as extras to attach. The pending
+// list always ends empty: the watch start spends the
+// declarations, and a later stop never re-pends them.
+func drainPendingWatchFolders(tag string, p *programRun, base string, extras []watchRoot) []watchRoot {
+	if len(pendingWatchFolders) == 0 {
+		return extras
+	}
+	pending := pendingWatchFolders
+	pendingWatchFolders = nil
+	for _, root := range pending {
+		dupe := false
+		for _, e := range extras {
+			if e.abs == root.abs {
+				dupe = true
+				break
+			}
+		}
+		if dupe {
+			continue
+		}
+		if watchWithin(base, root.abs) {
+			fmt.Printf("%s The folder %s is inside %s's own folder, so watching the program already covers it — I didn't add it separately.\n", tag, root.rel, p.rel)
+			recordBrain("runner", true, "pending watch folder covered by the program folder: "+root.rel)
+			continue
+		}
+		covered := ""
+		for _, e := range extras {
+			if watchWithin(e.abs, root.abs) {
+				covered = e.rel
+				break
+			}
+		}
+		if covered != "" {
+			fmt.Printf("%s The folder %s is inside %s, which is already part of this watch — I didn't add it separately.\n", tag, root.rel, covered)
+			recordBrain("runner", true, "pending watch folder covered by another root: "+root.rel)
+			continue
+		}
+		extras = append(extras, root)
+	}
+	return extras
+}
+
 // watchFolderClaim answers "watch folder <path>": the
 // folder becomes an extra watch root for the session's
 // program. Folder watching restarts that program, so with
-// no program running there is nothing to attach to — the
-// refusal says what to do first. A running but unwatched
+// no program running there is nothing to attach it to
+// yet — the declaration is validated and noted as pending
+// instead (pendWatchFolder), and attaches when a watch
+// starts. A running but unwatched
 // program gets watching turned on with the folder
 // included; a watched one just gains the folder. A folder
 // the watch already covers — the program's own folder, or
@@ -1472,8 +1567,7 @@ func watchFolderClaim(target string) {
 	rel := normalizeFolderPath(target)
 	p := sessionProgram
 	if p == nil || p.hasExited() {
-		fmt.Printf("%s No program is running — folder watching restarts the session's program when files change, so there's nothing to attach it to yet. Say \"watch <file>\" or \"run the program <file>\" first, then \"watch folder %s\".\n", tag, rel)
-		recordBrain("runner", false, "watch folder refused: no program running: "+rel)
+		pendWatchFolder(tag, rel)
 		return
 	}
 	abs, refusal := runProgramResolve(p.rootAbs, rel)
@@ -1529,15 +1623,115 @@ func watchFolderClaim(target string) {
 	startWatchingRoots(tag, p, []watchRoot{root})
 }
 
+// pendWatchFolder answers "watch folder <path>" declared
+// while no program is running. The folder is validated at
+// declare time — a folder that doesn't exist, isn't a
+// folder, or lives outside the project refuses by name
+// exactly as a live declaration would, and nothing pends —
+// and a valid folder is noted as pending: it attaches
+// when a watch starts (drainPendingWatchFolders).
+// Declarations accumulate; a duplicate, or a folder inside
+// one already noted, is an already-noted answer with no
+// state change.
+func pendWatchFolder(tag, rel string) {
+	rootAbs, ok := runProgramRoot(tag)
+	if !ok {
+		return // runProgramRoot already answered
+	}
+	abs, refusal := runProgramResolve(rootAbs, rel)
+	if refusal != "" {
+		fmt.Printf("%s %s\n", tag, refusal)
+		recordBrain("runner", false, "watch folder refused: "+refusal)
+		return
+	}
+	st, err := os.Stat(abs)
+	if err != nil {
+		fmt.Printf("%s I can't watch %s — there's no folder by that name in this project.\n", tag, rel)
+		recordBrain("runner", false, "watch folder refused: missing folder: "+rel)
+		return
+	}
+	if !st.IsDir() {
+		fmt.Printf("%s %s is a file, not a folder — name a folder, like \"watch folder jim/temp\".\n", tag, rel)
+		recordBrain("runner", false, "watch folder refused: not a folder: "+rel)
+		return
+	}
+	for _, e := range pendingWatchFolders {
+		if watchWithin(e.abs, abs) {
+			if abs == e.abs {
+				fmt.Printf("%s I've already noted the folder %s — it will be watched as soon as a program is being watched.\n", tag, rel)
+			} else {
+				fmt.Printf("%s I've already noted %s — %s is inside it, so it comes along when watching starts.\n", tag, e.rel, rel)
+			}
+			recordBrain("runner", true, "watch folder already noted pending: "+rel)
+			return
+		}
+	}
+	root := watchRoot{abs: abs, rel: rel, name: rel}
+	if rel == "." {
+		root.name = "" // its files' scan paths already are project-relative
+	}
+	pendingWatchFolders = append(pendingWatchFolders, root)
+	fmt.Printf("%s No program is running yet — noted. I'll watch the folder %s as soon as a program is being watched; say \"watch <file>\" to start one.\n", tag, rel)
+	recordBrain("runner", true, "watch folder noted pending: "+rel)
+}
+
+// watchRelWithin is watchWithin for project-relative
+// slash paths: "." — the project root — contains every
+// path in the project.
+func watchRelWithin(dir, path string) bool {
+	if dir == "." || dir == "" {
+		return true
+	}
+	return path == dir || strings.HasPrefix(path, dir+"/")
+}
+
+// stopPendingWatchFolder answers "stop watching folder
+// <path>" when nothing is being watched but folders are
+// waiting: a noted folder comes off the list (its answer
+// says it was only noted, never polled), a folder inside
+// a noted one gets the same one-folder guidance the live
+// claim gives, and anything else is answered with the
+// waiting list itself. It reports whether the pending
+// list answered the line.
+func stopPendingWatchFolder(tag, target string) bool {
+	if len(pendingWatchFolders) == 0 {
+		return false
+	}
+	rel := normalizeFolderPath(target)
+	for i, e := range pendingWatchFolders {
+		if e.rel == rel {
+			pendingWatchFolders = append(pendingWatchFolders[:i], pendingWatchFolders[i+1:]...)
+			fmt.Printf("%s Stopped watching the folder %s — it was only noted for when a program gets watched, so nothing was polling it yet.\n", tag, rel)
+			recordBrain("runner", true, "pending watch folder removed: "+rel)
+			return true
+		}
+	}
+	for _, e := range pendingWatchFolders {
+		if watchRelWithin(e.rel, rel) {
+			fmt.Printf("%s %s is inside the folder %s, which I've noted as one folder — say \"stop watching folder %s\" to take it off the list.\n", tag, rel, e.rel, e.rel)
+			recordBrain("runner", true, "stop watching folder named inside a pending folder: "+rel)
+			return true
+		}
+	}
+	fmt.Printf("%s I'm not watching the folder %s — it's not one of the folders waiting for a program (%s).\n", tag, rel, strings.Join(pendingWatchFolderNames(), ", "))
+	recordBrain("runner", true, "stop watching folder asked for an unnoted folder: "+rel)
+	return true
+}
+
 // stopWatchingFolderClaim answers "stop watching folder
 // <path>": just that root stops being polled; the program
 // and the rest of the watch carry on. Naming the program's
 // own folder explains it comes with the program's watch —
-// removing it means "stop watching" altogether.
+// removing it means "stop watching" altogether. With
+// nothing watched but folders waiting, the pending list
+// answers instead (stopPendingWatchFolder).
 func stopWatchingFolderClaim(target string) {
 	tag := cTag("gollemer [runner]>")
 	w := sessionWatcher
 	if w == nil || w.isStopped() {
+		if stopPendingWatchFolder(tag, target) {
+			return
+		}
 		fmt.Printf("%s I'm not watching any program right now.\n", tag)
 		recordBrain("runner", true, "stop watching folder asked with nothing watched")
 		return
@@ -1907,6 +2101,7 @@ func showProgramTop() {
 	p := sessionProgram
 	if p == nil {
 		fmt.Printf("%s No programs are running right now — say 'run the program <file>' to start one.\n", tag)
+		printPendingWatchFolders(tag)
 		recordBrain("runner", true, "top asked with nothing running")
 		return
 	}
@@ -1934,6 +2129,7 @@ func showProgramTop() {
 		}
 		fmt.Printf("%s %s; %d lines logged, %s. Say \"stop the program\" to stop it.\n",
 			tag, entry, total, pluralCount(int64(visits), "visit"))
+		printPendingWatchFolders(tag)
 		recordBrain("runner", true, "top listed a running program: "+p.rel)
 		return
 	}
@@ -1944,7 +2140,19 @@ func showProgramTop() {
 	fmt.Printf("%s %s — %s %s ago; it ran for %s and printed %d lines (%s). It's no longer running.\n",
 		tag, p.rel, status, plainDuration(time.Since(exitedAt)),
 		plainDuration(exitedAt.Sub(p.startedAt)), total, pluralCount(int64(visits), "visit"))
+	printPendingWatchFolders(tag)
 	recordBrain("runner", true, "top listed an exited program: "+p.rel)
+}
+
+// printPendingWatchFolders renders top's waiting line:
+// the folders declared before any program ran, held for
+// the next watch start — shown distinctly from a live
+// watch's folders, because nothing is polling them yet.
+func printPendingWatchFolders(tag string) {
+	if len(pendingWatchFolders) == 0 {
+		return
+	}
+	fmt.Printf("%s Watch folders waiting for a program: %s.\n", tag, strings.Join(pendingWatchFolderNames(), ", "))
 }
 
 // noteProgramActivity rides the unified loop's prompt cycle:
