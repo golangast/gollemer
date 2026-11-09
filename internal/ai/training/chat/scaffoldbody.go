@@ -175,6 +175,26 @@ func isScaffoldBody(b []byte) bool {
 	return strings.Contains(s, "{{template \"header\"") && strings.Contains(s, "{{template \"footer\"")
 }
 
+// scaffoldPartKind reads file content as a templated
+// page's part: "header" or "footer" when the file holds
+// that shared definition, "body" when it calls both
+// shared pieces (isScaffoldBody) — "" when it is none of
+// them. Content is the recognition, as everywhere in this
+// family: a webpage ask is answered by what its target
+// file IS, never by the file's name alone.
+func scaffoldPartKind(b []byte) string {
+	s := string(b)
+	switch {
+	case strings.Contains(s, "{{define \"header\"}}"):
+		return "header"
+	case strings.Contains(s, "{{define \"footer\"}}"):
+		return "footer"
+	case isScaffoldBody(b):
+		return "body"
+	}
+	return ""
+}
+
 // scaffoldBodies lists a folder's scaffold body files —
 // the templates folder's pages other than the shared
 // header and footer, each recognised by its own header and

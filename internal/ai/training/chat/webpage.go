@@ -94,6 +94,21 @@ package chat
 // EMPTY .html is filled; an existing .html with anything in
 // it is never overwritten — a plain refusal with the way
 // back. A target that isn't .html refuses by name here.
+//
+// One refusal is an explanation instead (John, later
+// still): "add the material template to
+// jim/templates/home.html" aimed a whole template at a
+// templated page's BODY file, three times in a row, and
+// the generic refusal sent him in a circle — a template
+// can never land in one part of a page, and the page's
+// design already lives in its header. So a non-empty
+// target is read before it is refused: a scaffold part
+// (scaffoldPartKind — a body by its header and footer
+// calls, a header or footer by its definition) gets the
+// templated-page answer — what the file is, where the
+// design lives, and the section sentence verified to land
+// on the body — while a plain filled page keeps the
+// refusal, byte-identical.
 
 import (
 	"bytes"
@@ -544,6 +559,15 @@ func runWebpage(line string, ask editAsk) bool {
 		if q.gridCounted && isScaffoldBody(b) {
 			return runScaffoldSectionPlan(tag, rootRaw, rootAbs, path.Dir(path.Dir(rel)), rel, q.gridCols, q.gridRows, ask)
 		}
+		if part := scaffoldPartKind(b); part != "" {
+			// A whole template aimed at one part of a
+			// templated page: the explanation, not the
+			// refusal — the refusal's way back (empty the
+			// file) would destroy the page to no purpose.
+			printScaffoldPartAnswer(tag, rootAbs, part, rel)
+			recordBrain("composer", false, "webpage guidance: template ask on scaffold "+part)
+			return true
+		}
 		fmt.Printf("%s Not making that webpage: %s already has a page in it — I never overwrite what's yours. If you want a fresh template page there instead, empty the file yourself (or remove it) and ask again.\n", tag, rel)
 		recordBrain("composer", false, "webpage refused: file not empty")
 		return true
@@ -569,4 +593,52 @@ func runWebpage(line string, ask editAsk) bool {
 		WebpageGridCols: q.gridCols,
 		WebpageGridRows: q.gridRows,
 	}, ask)
+}
+
+// printScaffoldPartAnswer answers a webpage-template ask
+// whose target is one part of a templated page. A template
+// is a whole page, so it can never land in a part — the
+// answer says what the file is, where the page's design
+// lives (the header, whose styles already cover the whole
+// page), and what goes in the body instead. One shape for
+// every template kind: the reading of the file, not the
+// template named, decides the answer. Nothing is written.
+func printScaffoldPartAnswer(tag, rootAbs, part, rel string) {
+	dir := path.Dir(rel)
+	folder := path.Dir(dir)
+	where := "in " + folder
+	if folder == "." {
+		where = "at the top of this project"
+	}
+	header := path.Join(dir, "header.html")
+	switch part {
+	case "body":
+		page := strings.TrimSuffix(path.Base(rel), ".html")
+		fmt.Printf("%s Not making that webpage: %s is the body of the %s templated page %s — one of the page's three files, not a page on its own. The page's design, its Material styles, lives in the header file, %s, and it already covers the whole page, so there's no template to add to the body. What the body takes is sections: \"add the grid 2 columns 3 rows to %s\" adds a section of boxes to it.\n", tag, rel, page, where, header, rel)
+	case "header":
+		fmt.Printf("%s Not making that webpage: %s is the shared header of the templated pages %s — the file that holds the page's design, its Material styles, for every page that calls it. A template is a whole page, so there's nothing for one to add here. %s\n", tag, rel, where, scaffoldBodyGuidance(rootAbs, folder))
+	case "footer":
+		fmt.Printf("%s Not making that webpage: %s is the shared footer of the templated pages %s — the closing piece at the foot of every page that calls it. The page's design, its Material styles, lives in the header file, %s, not in the footer. %s\n", tag, rel, where, header, scaffoldBodyGuidance(rootAbs, folder))
+	}
+}
+
+// scaffoldBodyGuidance names where a templated page's
+// sections go: the folder's body file, with the counted
+// section sentence spelled against it — the one sentence
+// this answer names, walked through the real dispatch in
+// webpage_test.go and asserted to land there (the
+// capability seat's drift rule: an answer may never
+// promise a line that doesn't work — the component
+// sentence, which the component planner refuses on a body
+// fragment for want of a </body>, is deliberately NOT
+// named). With no body to point at, it names the place
+// without promising a sentence.
+func scaffoldBodyGuidance(rootAbs, folder string) string {
+	bodies := scaffoldBodies(rootAbs, folder)
+	if len(bodies) == 0 {
+		return "Sections go in a page's own body file instead — the file in the same templates folder that calls the header at its top and the footer at its foot."
+	}
+	body := bodies[0]
+	page := strings.TrimSuffix(path.Base(body), ".html")
+	return fmt.Sprintf("Sections go in a page's body instead: \"add the grid 2 columns 3 rows to %s\" adds a section of boxes to the %s page's body.", body, page)
 }

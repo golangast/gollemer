@@ -206,7 +206,13 @@ Create folders and files — shown first, gated, then verified:
       counts stated in the plan; no counts means 2 by 2,
       and a second ask adds another section below the
       first. The counted grid aimed at the body file
-      itself lands as a section there too.
+      itself lands as a section there too. A whole
+      template asked for on one of the three files —
+      "add the material template to
+      jim/templates/home.html" — is answered with the
+      page explained instead of a flat refusal: the
+      design lives in the header and already covers
+      the page, and sections are what the body takes.
   you> serve static files
       wires the webpage's folder — or one you name:
       "serve static files from jim/temp", "serve the

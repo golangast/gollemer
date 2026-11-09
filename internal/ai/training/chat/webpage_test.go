@@ -608,6 +608,172 @@ func TestWebpageCountedGridRoutesByTarget(t *testing.T) {
 	}
 }
 
+// A template ask aimed at one part of a templated page:
+// the templated-page explanation, not the overwrite
+// refusal — and nothing on disk moves. John's line is the
+// lead pin: he asked it three times live (2026-11-09) and
+// the generic refusal taught him nothing, because a
+// template can never land in one part of a page and the
+// page's design already lives in its header.
+func TestWebpageTemplateAskOnScaffoldPartExplains(t *testing.T) {
+	profile := &UserProfile{}
+	root := staticAssetsFixture(t, staticAssetsFiles(map[string]string{
+		"jim/main.go": staticJimMain,
+	}))
+	captureStdout(t, func() {
+		claimChain("add a templated page called home in jim", yes, profile)
+	})
+	scaffoldFiles := []string{"jim/templates/header.html", "jim/templates/footer.html", "jim/templates/home.html", "jim/homepage.go"}
+	before := map[string]string{}
+	for _, rel := range scaffoldFiles {
+		before[rel] = readBack(t, root, rel)
+	}
+
+	// John's line verbatim, on the body.
+	out := captureStdout(t, func() {
+		claimChain("add the material template to jim/templates/home.html", yes, profile)
+	})
+	for _, want := range []string{
+		"jim/templates/home.html is the body of the home templated page in jim",
+		"its Material styles, lives in the header file, jim/templates/header.html",
+		"already covers the whole page",
+		"\"add the grid 2 columns 3 rows to jim/templates/home.html\"",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the body explanation is missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "never overwrite") {
+		t.Errorf("the body got the overwrite refusal instead of the explanation:\n%s", out)
+	}
+	if hasPendingQuestion() {
+		t.Error("an explained ask set a pending question")
+	}
+
+	// Every template kind gets the same answer shape on
+	// the body — the file, not the template named, decides.
+	for _, line := range []string{
+		"add a basic webpage to jim/templates/home.html",
+		"add a responsive template to jim/templates/home.html",
+		"add a webpage with assets to jim/templates/home.html",
+	} {
+		out = captureStdout(t, func() { claimChain(line, yes, profile) })
+		if !strings.Contains(out, "is the body of the home templated page") || strings.Contains(out, "never overwrite") {
+			t.Errorf("%q did not get the body explanation:\n%s", line, out)
+		}
+	}
+
+	// The header: the explanation names the design's home
+	// (the header itself) and points at the body.
+	out = captureStdout(t, func() {
+		claimChain("add the basic template to jim/templates/header.html", yes, profile)
+	})
+	for _, want := range []string{
+		"jim/templates/header.html is the shared header of the templated pages in jim",
+		"\"add the grid 2 columns 3 rows to jim/templates/home.html\"",
+		"the home page's body",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the header explanation is missing %q:\n%s", want, out)
+		}
+	}
+
+	// The footer: the design lives in the header, and
+	// sections point at the body the same way.
+	out = captureStdout(t, func() {
+		claimChain("add the basic template to jim/templates/footer.html", yes, profile)
+	})
+	for _, want := range []string{
+		"jim/templates/footer.html is the shared footer of the templated pages in jim",
+		"its Material styles, lives in the header file, jim/templates/header.html",
+		"\"add the grid 2 columns 3 rows to jim/templates/home.html\"",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the footer explanation is missing %q:\n%s", want, out)
+		}
+	}
+
+	// Nothing moved: every scaffold file byte-identical.
+	for _, rel := range scaffoldFiles {
+		if got := readBack(t, root, rel); got != before[rel] {
+			t.Errorf("%s changed under an explanation:\n%s", rel, got)
+		}
+	}
+}
+
+// The drift guard for the explanation above: the one
+// sentence it names for a body is walked through the real
+// dispatch on a fixture scaffold and must land as a
+// section — an answer may never promise a line that
+// doesn't work (the capability seat's rule). The component
+// sentence is deliberately NOT named by the explanation:
+// the component planner refuses a body fragment (it has
+// no </body> to sit inside), and the second half of this
+// pin keeps that refusal on record so the explanation is
+// never "fixed" into promising it.
+func TestWebpageScaffoldGuidanceLineLands(t *testing.T) {
+	profile := &UserProfile{}
+	root := staticAssetsFixture(t, staticAssetsFiles(map[string]string{
+		"jim/main.go": staticJimMain,
+	}))
+	captureStdout(t, func() {
+		claimChain("add a templated page called home in jim", yes, profile)
+	})
+	out := captureStdout(t, func() {
+		claimChain("add the grid 2 columns 3 rows to jim/templates/home.html", yes, profile)
+	})
+	if !strings.Contains(out, "Done — The home page's body in jim/templates/home.html now has a section of 2 columns and 3 rows.") {
+		t.Errorf("the named guidance line did not land as a section:\n%s", out)
+	}
+	if n := strings.Count(readBack(t, root, "jim/templates/home.html"), "TODO: box"); n != 6 {
+		t.Errorf("the landed section holds %d boxes, want 6", n)
+	}
+	// The component sentence on the same body: claimed,
+	// and refused by its own planner — it does not land,
+	// so the explanation must never name it.
+	out = captureStdout(t, func() {
+		claimChain("add a card to jim/templates/home.html", yes, profile)
+	})
+	if !strings.Contains(out, "no </body> in jim/templates/home.html") {
+		t.Errorf("the component line on a body fragment answered unexpectedly:\n%s", out)
+	}
+	if n := strings.Count(readBack(t, root, "jim/templates/home.html"), "TODO: box"); n != 6 {
+		t.Errorf("the component line changed the body: %d boxes, want the 6 from the section", n)
+	}
+}
+
+// The seam's other side, pinned byte-identical: a template
+// ask on a filled PLAIN page keeps the standing refusal
+// exactly, and the same ask on an empty page lands the
+// template as it always did.
+func TestWebpageTemplateAskOnPlainPageUnchanged(t *testing.T) {
+	mine := "<html><body>mine</body></html>\n"
+	root := staticAssetsFixture(t, staticAssetsFiles(map[string]string{
+		"jim/temp/index.html": mine,
+	}))
+	profile := &UserProfile{}
+	out := captureStdout(t, func() {
+		claimChain("add the material template to jim/temp/index.html", yes, profile)
+	})
+	want := "Not making that webpage: jim/temp/index.html already has a page in it — I never overwrite what's yours. If you want a fresh template page there instead, empty the file yourself (or remove it) and ask again."
+	if !strings.Contains(out, want) {
+		t.Errorf("the plain-page refusal changed:\n%s", out)
+	}
+	if got := readBack(t, root, "jim/temp/index.html"); got != mine {
+		t.Errorf("the written page changed:\n%s", got)
+	}
+
+	root = staticAssetsFixture(t, staticAssetsFiles(map[string]string{
+		"jim/temp/index.html": "",
+	}))
+	out = captureStdout(t, func() {
+		claimChain("add the material template to jim/temp/index.html", yes, profile)
+	})
+	if got := readBack(t, root, "jim/temp/index.html"); got != analyze.WebpageContent("material", "index") {
+		t.Errorf("the material template did not land on the empty page:\n%s", got)
+	}
+}
+
 // No file named: the question asks in webpage terms, and a
 // bare path answer completes the ask (with the template the
 // original sentence named riding along).
