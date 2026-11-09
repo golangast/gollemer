@@ -23,6 +23,15 @@ package chat
 //     are unchanged, so "start a webserver in…" still
 //     declines: this family runs programs, it does not build
 //     them.
+//   - Politeness is not a different ask (2026-11-09, John's
+//     screenshot): "can you run jim/main.go" IS "run
+//     jim/main.go" — but with "can" as the first token the
+//     run shape missed, the line fell to the intent layer,
+//     and the 2026-11-01 make-start failure walked back in
+//     through the side door. The parser strips a closed set
+//     of softeners — leading "can you" / "could you" /
+//     "please" and a trailing "please" — before its shapes
+//     apply, across the run, stop, log, and top shapes.
 //   - The program is built first (`go build`, argv only, no
 //     shell ever), so compiler errors surface verbatim as a
 //     compile failure and are never narrated as a run. A file
@@ -90,6 +99,8 @@ const (
 // has a dot or a slash but no .go ending) still classifies as
 // shapeRunProgram so the claim can refuse it by name; a token
 // with neither ("run make …", "run it") never classifies.
+// Politeness wrappers come off before the shapes apply
+// (stripProgramSofteners) — the ask inside them is the ask.
 func parseProgramLine(line string) (programShape, string) {
 	fields := strings.Fields(strings.TrimSpace(line))
 	if len(fields) == 0 {
@@ -97,6 +108,10 @@ func parseProgramLine(line string) (programShape, string) {
 	}
 	fold := func(s string) string {
 		return strings.ToLower(strings.TrimRight(s, ".!?"))
+	}
+	fields = stripProgramSofteners(fields, fold)
+	if len(fields) == 0 {
+		return shapeNone, ""
 	}
 	// pathy reports (isGo, looksLikePath) for a token.
 	pathy := func(tok string) (bool, bool) {
@@ -168,6 +183,36 @@ func parseProgramLine(line string) (programShape, string) {
 		}
 	}
 	return shapeNone, ""
+}
+
+// stripProgramSofteners removes the closed set of politeness
+// wrappers this claim tolerates around its shapes: a leading
+// "can you", "could you", or "please", and a trailing
+// "please" — the same wrappers the phrasing layer strips
+// (phrasingWrapperPrefixes / phrasingWrapperSuffixes),
+// applied here so the program shapes see the bare ask.
+// Stacked softeners ("can you please run …") come off one at
+// a time; anything outside the closed set ("will you run …")
+// is left exactly as typed, and the shapes stay as tight as
+// they were — stripping can only reveal a shape that was
+// already there, never invent one.
+func stripProgramSofteners(fields []string, fold func(string) string) []string {
+	for len(fields) > 0 && fold(fields[len(fields)-1]) == "please" {
+		fields = fields[:len(fields)-1]
+	}
+	for len(fields) > 0 {
+		switch {
+		case len(fields) >= 2 && fold(fields[0]) == "can" && fold(fields[1]) == "you":
+			fields = fields[2:]
+		case len(fields) >= 2 && fold(fields[0]) == "could" && fold(fields[1]) == "you":
+			fields = fields[2:]
+		case fold(fields[0]) == "please":
+			fields = fields[1:]
+		default:
+			return fields
+		}
+	}
+	return fields
 }
 
 // ---------------------------------------------------------------------
