@@ -85,8 +85,8 @@ func TestPlanWebpageRefusals(t *testing.T) {
 		want string
 	}{
 		{"not html", EditRequest{Kind: EditWebpage, File: "jim/temp/page.txt", WebpageTemplate: "basic"}, ".html file name"},
-		{"no template", EditRequest{Kind: EditWebpage, File: "jim/temp/index.html"}, "templates: basic, responsive, or with assets"},
-		{"unknown template", EditRequest{Kind: EditWebpage, File: "jim/temp/index.html", WebpageTemplate: "fancy"}, "templates: basic, responsive, or with assets"},
+		{"no template", EditRequest{Kind: EditWebpage, File: "jim/temp/index.html"}, "templates: basic, responsive, with assets, two columns, three columns, grid, or rows"},
+		{"unknown template", EditRequest{Kind: EditWebpage, File: "jim/temp/index.html", WebpageTemplate: "fancy"}, "templates: basic, responsive, with assets, two columns, three columns, grid, or rows"},
 		{"missing folder", EditRequest{Kind: EditWebpage, File: "nowhere/index.html", WebpageTemplate: "basic"}, "create a folder nowhere"},
 	} {
 		plan, refusal := proj.PlanEdit(tc.req)
@@ -119,6 +119,46 @@ func TestWebpageContentTemplates(t *testing.T) {
 	for _, want := range []string{`href="/static/style.css"`, `src="/static/image.png"`, `src="/static/script.js"`} {
 		if !strings.Contains(assets, want) {
 			t.Errorf("assets page missing %q:\n%s", want, assets)
+		}
+	}
+}
+
+// The layout templates, in the page's own bytes and at the
+// planner: each carries its structure in the style block,
+// collapses the way its blurb says, and plans clean.
+func TestWebpageLayoutTemplates(t *testing.T) {
+	layouts := []struct {
+		id    string
+		wants []string
+	}{
+		{"two-columns", []string{`<meta name="viewport"`, ".columns { display: flex;", ".columns main { flex: 2; }", "@media (max-width: 40em)", "flex-direction: column", "<aside>", "<footer>"}},
+		{"three-columns", []string{`<meta name="viewport"`, ".columns { display: flex;", ".columns main { flex: 2; }", "@media (max-width: 40em)", "flex-direction: column", "left sidebar", "right sidebar"}},
+		{"grid", []string{`<meta name="viewport"`, "display: grid", "repeat(3, 1fr)", "repeat(2, 1fr)", "grid-template-columns: 1fr", `class="card"`}},
+		{"rows", []string{`<meta name="viewport"`, "band band-top", "band band-content", "band band-bottom", "#dce9f7", "#b9cfe8"}},
+	}
+	_, proj := webpageProject(t, nil)
+	for _, tc := range layouts {
+		page := WebpageContent(tc.id, "index")
+		for _, want := range []string{"<title>index</title>", "<h1>index</h1>", "TODO:"} {
+			if !strings.Contains(page, want) {
+				t.Errorf("%s page missing %q:\n%s", tc.id, want, page)
+			}
+		}
+		for _, want := range tc.wants {
+			if !strings.Contains(page, want) {
+				t.Errorf("%s page missing %q:\n%s", tc.id, want, page)
+			}
+		}
+		plan, refusal := proj.PlanEdit(EditRequest{Kind: EditWebpage, File: "jim/temp/index.html", WebpageTemplate: tc.id})
+		if refusal != "" || plan == nil {
+			t.Errorf("%s: plan refused: %q", tc.id, refusal)
+			continue
+		}
+		if got, want := string(plan.Files[0].After), page; got != want {
+			t.Errorf("%s: planned content is not the template's page", tc.id)
+		}
+		if !strings.Contains(plan.Summary, WebpageTemplateWords(tc.id)) {
+			t.Errorf("%s: summary does not name the template: %q", tc.id, plan.Summary)
 		}
 	}
 }

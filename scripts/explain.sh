@@ -172,9 +172,10 @@ Create folders and files — shown first, gated, then verified:
       overwritten.
   you> add a webpage to jim/temp/index.html
       a plain webpage in a named file, from a template you
-      pick — basic, responsive, or with assets: created when
-      the file is new, filled when it sits there empty, and
-      never overwriting a page that already has words in it.
+      pick — basic, responsive, with assets, two columns,
+      three columns, grid, or rows: created when the file is
+      new, filled when it sits there empty, and never
+      overwriting a page that already has words in it.
   you> serve static files
       wires the webpage's folder — or one you name — into
       your server at /static/, so its style sheets, scripts,

@@ -29,6 +29,34 @@ func TestParseWebpageClaims(t *testing.T) {
 		{"add a responsive webpage", "responsive", "", true},
 		{"add a webpage to", "", "", true},
 		{"add a webpage to the file", "", "", true},
+		// The template wording (John, later on 2026-11-09):
+		// the same asks with "template" as the object.
+		{"add the template to jim/temp/index.html", "", "jim/temp/index.html", false}, // John's line, verbatim
+		{"add a template to jim/temp/index.html", "", "jim/temp/index.html", false},
+		{"add the basic template to jim/temp/index.html", "basic", "jim/temp/index.html", false},
+		{"add a simple template to index.html", "basic", "index.html", false},
+		{"add the responsive template to jim/temp/index.html", "responsive", "jim/temp/index.html", false},
+		{"add a template with assets to jim/temp/index.html", "assets", "jim/temp/index.html", false},
+		{"add the with assets template to jim/temp/index.html", "assets", "jim/temp/index.html", false},
+		{"use the template for jim/temp/index.html", "", "jim/temp/index.html", false},
+		{"use the basic template for jim/temp/index.html", "basic", "jim/temp/index.html", false},
+		{"add the template", "", "", true},
+		{"add the basic template", "basic", "", true},
+		// The layout templates, in the template wording
+		// and the webpage wording alike — spaced,
+		// hyphenated, singular and plural column forms.
+		{"add a two column template to jim/temp/index.html", "two-columns", "jim/temp/index.html", false},
+		{"add a two-column template to jim/temp/index.html", "two-columns", "jim/temp/index.html", false},
+		{"add a two-columns template to jim/temp/index.html", "two-columns", "jim/temp/index.html", false},
+		{"add a three columns template to jim/temp/index.html", "three-columns", "jim/temp/index.html", false},
+		{"add a three-column template to jim/temp/index.html", "three-columns", "jim/temp/index.html", false},
+		{"add a grid template to jim/temp/index.html", "grid", "jim/temp/index.html", false},
+		{"add a rows template to jim/temp/index.html", "rows", "jim/temp/index.html", false},
+		{"use the grid template for jim/temp/index.html", "grid", "jim/temp/index.html", false},
+		{"add a two column webpage to jim/temp/index.html", "two-columns", "jim/temp/index.html", false},
+		{"add a three columns webpage to jim/temp/index.html", "three-columns", "jim/temp/index.html", false},
+		{"add a grid webpage to jim/temp/index.html", "grid", "jim/temp/index.html", false},
+		{"add a rows webpage to jim/temp/index.html", "rows", "jim/temp/index.html", false},
 	}
 	for _, tc := range claims {
 		got, ok := parseWebpage(tc.line)
@@ -45,7 +73,7 @@ func TestParseWebpageClaims(t *testing.T) {
 // The canonical sentences a clarifying answer completes
 // into parse back with exactly their slots.
 func TestWebpageCanonicalRoundTrip(t *testing.T) {
-	for _, template := range []string{"", "basic", "responsive", "assets"} {
+	for _, template := range []string{"", "basic", "responsive", "assets", "two-columns", "three-columns", "grid", "rows"} {
 		line := webpageCanonical(template, "jim/temp/index.html")
 		got, ok := parseWebpage(line)
 		if !ok || got.template != template || got.file != "jim/temp/index.html" || got.fileMissing {
@@ -79,6 +107,18 @@ func TestParseWebpageNonClaims(t *testing.T) {
 		"add a webpage to jim/temp/index.html and serve it",
 		// Two templates in one sentence mean nothing single.
 		"add a responsive webpage with assets to jim/temp/index.html",
+		// The template wording with a .go target is the
+		// concept book's html/template sentence — a Go
+		// statement for a function — never this piece's,
+		// however the template is named.
+		"add the template to main.go",
+		"add a template to jim/main.go",
+		"add the basic template to main.go",
+		"add a two column template to main.go",
+		"use the template for main.go",
+		"add an html template to main.go",
+		// "use" owns only the template wording.
+		"use a webpage for jim/temp/index.html",
 	} {
 		if got, ok := parseWebpage(line); ok {
 			t.Errorf("parseWebpage(%q) claimed %+v — not its sentence", line, got)
@@ -100,6 +140,14 @@ func TestParseWebpageNonClaims(t *testing.T) {
 	// piece's sentence either.
 	if q, ok := parsePageFamily("add a webpage to jim/temp/index.html"); ok {
 		t.Errorf("parsePageFamily claimed the webpage line: %+v", q)
+	}
+	// The other side of the .go boundary: the concept book
+	// still owns its html/template sentence (its canonical
+	// example), exactly as before this grammar grew the
+	// template wording.
+	ps, ok := CanonicalSlots("add an html template to main.go")
+	if !ok || ps.Family != "concept-html-template" {
+		t.Errorf("CanonicalSlots(book's html template line) = %+v, %v — want family concept-html-template", ps, ok)
 	}
 }
 
@@ -198,6 +246,66 @@ func TestWebpageRefusals(t *testing.T) {
 	out = captureStdout(t, func() { claimChain("add a webpage to nowhere/index.html", yes, profile) })
 	if !strings.Contains(out, "create a folder nowhere") {
 		t.Errorf("missing-folder refusal wrong:\n%s", out)
+	}
+}
+
+// John's second live line, verbatim, end to end: the
+// template wording claims the ask for the .html file he
+// just made, the question lists all seven templates, and
+// the number answer lands the picked layout.
+func TestWebpageTemplateWordingJohnsLine(t *testing.T) {
+	root := staticAssetsFixture(t, staticAssetsFiles(nil))
+	profile := &UserProfile{}
+	captureStdout(t, func() {
+		claimChain("create a folder jim/temp", yes, profile)
+		claimChain("create a file jim/temp/index.html", yes, profile)
+	})
+	out := captureStdout(t, func() {
+		claimChain("add the template to jim/temp/index.html", yes, profile)
+	})
+	for _, want := range []string{"which template should it be?", "1. basic", "2. responsive", "3. with assets", "4. two columns", "5. three columns", "6. grid", "7. rows"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("template question missing %q:\n%s", want, out)
+		}
+	}
+	if !hasPendingQuestion() {
+		t.Fatal("the unnamed template set no pending question")
+	}
+	out = captureStdout(t, func() {
+		claimChain("4", yes, profile)
+	})
+	if hasPendingQuestion() {
+		t.Error("the completed ask left a question pending")
+	}
+	if got := readBack(t, root, "jim/temp/index.html"); got != analyze.WebpageContent("two-columns", "index") {
+		t.Errorf("the picked layout did not land:\n%s", got)
+	}
+	if !strings.Contains(out, "Done — The two-column webpage is in jim/temp/index.html.") {
+		t.Errorf("landing confirmation missing:\n%s", out)
+	}
+}
+
+// A named layout in the template wording asks NO question
+// and lands directly.
+func TestWebpageNamedLayoutAsksNoQuestion(t *testing.T) {
+	root := staticAssetsFixture(t, staticAssetsFiles(map[string]string{
+		"jim/temp/keep.css": "body {}\n",
+	}))
+	profile := &UserProfile{}
+	out := captureStdout(t, func() {
+		claimChain("add a two column template to jim/temp/index.html", yes, profile)
+	})
+	if hasPendingQuestion() {
+		t.Error("a named layout set a pending question")
+	}
+	if strings.Contains(out, "which template") {
+		t.Errorf("a named layout still asked:\n%s", out)
+	}
+	if got := readBack(t, root, "jim/temp/index.html"); got != analyze.WebpageContent("two-columns", "index") {
+		t.Errorf("the named layout did not land:\n%s", got)
+	}
+	if !strings.Contains(out, "Done — The two-column webpage is in jim/temp/index.html.") {
+		t.Errorf("landing confirmation missing:\n%s", out)
 	}
 }
 

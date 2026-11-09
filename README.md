@@ -437,9 +437,14 @@ Not every page is one of the six kinds. `add a webpage to
 jim/temp/index.html` puts a plain webpage into a named file, from
 a template you pick — **basic** (a title, a heading, a paragraph),
 **responsive** (the same, plus a viewport line and a little CSS
-so the page fits a phone's screen too), or **with assets** (wired
-to load a style sheet, a script, and a picture from `/static/`).
-It asks which template when you don't name one. The file is
+so the page fits a phone's screen too), **with assets** (wired
+to load a style sheet, a script, and a picture from `/static/`),
+or a layout: **two columns** (a sidebar beside the main area),
+**three columns** (a sidebar on each side), **grid** (cards in a
+grid that narrows with the screen), or **rows** (full-width bands
+in different shades). You can name it the template way too —
+`add a two column template to jim/temp/index.html`. It asks
+which template when you don't name one. The file is
 created when new, filled when it sits there empty — and a page
 that already has words in it is never overwritten.
 

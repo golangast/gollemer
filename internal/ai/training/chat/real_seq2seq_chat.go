@@ -1477,7 +1477,10 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// overwriting a page with words in it. The page
 		// family's kind sentences are claimed just above and
 		// never reach here; this grammar's object is the bare
-		// word "webpage", nothing else.
+		// word "webpage" — or the word "template" in the same
+		// shapes, which claims for .html targets only, so a
+		// .go target with template wording keeps the concept
+		// book's html/template claim below.
 		if tryWebpage(line, reader) {
 			continue
 		}

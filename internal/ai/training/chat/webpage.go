@@ -14,9 +14,34 @@ package chat
 // Grammar (exactly this):
 //
 //	add|create|make|build|put [a|an|the] [new]
-//	    [basic|simple|responsive] webpage|web page
+//	    [basic|simple|responsive|two column(s)|
+//	     three column(s)|grid|rows] webpage|web page
 //	    [with assets]
 //	    [to|in|into|at [the] [file|folder] <file.html>]
+//
+// The same ask in the word the templates themselves use.
+// Later the same day John typed "add the template to
+// jim/temp/index.html" and — this piece not yet shipped —
+// the concept book's html/template piece took the line and
+// refused it: an html template is a Go statement, and his
+// file is not a Go file. He meant one of these page
+// templates, so the template wording is this grammar too:
+//
+//	add|create|make|build|put [a|an|the] [new]
+//	    [basic|simple|responsive|two column(s)|
+//	     three column(s)|grid|rows|with assets] template
+//	    [with assets]
+//	    [to|in|into|at [the] [file|folder] <file.html>]
+//	use [a|an|the] [basic|simple|responsive|two column(s)|
+//	     three column(s)|grid|rows|with assets] template
+//	    [for|to|in|into|at [the] [file|folder] <file.html>]
+//
+// The seating rule for the template wording: it claims
+// only for an .html target — or for no target yet, when
+// the flow asks which file, exactly as the webpage wording
+// does. A .go target is never claimed here: "add the
+// template to main.go" stays the concept book's
+// html/template sentence, untouched.
 //
 // The template slot: "basic" (also "simple"), "responsive",
 // or the trailing "with assets" — the three templates in
@@ -57,6 +82,42 @@ type webpageRequest struct {
 	fileMissing bool   // no file named — claimed, the flow asks which file
 }
 
+// matchWebpageTemplateName reads a template name at low[i]:
+// the single words basic/simple/responsive/grid/rows, and
+// the column names in their spaced and hyphenated, singular
+// and plural forms ("two column", "two-columns", …). It
+// returns the template id and the words consumed — 0 when
+// no name stands there. The assets template is not matched
+// here: its words ("with assets") ride in their own slots.
+func matchWebpageTemplateName(low []string, i int) (string, int) {
+	if i >= len(low) {
+		return "", 0
+	}
+	switch low[i] {
+	case "basic", "simple":
+		return "basic", 1
+	case "responsive":
+		return "responsive", 1
+	case "grid":
+		return "grid", 1
+	case "rows":
+		return "rows", 1
+	case "two-column", "two-columns":
+		return "two-columns", 1
+	case "three-column", "three-columns":
+		return "three-columns", 1
+	}
+	if i+1 < len(low) && (low[i+1] == "column" || low[i+1] == "columns") {
+		switch low[i] {
+		case "two":
+			return "two-columns", 2
+		case "three":
+			return "three-columns", 2
+		}
+	}
+	return "", 0
+}
+
 // parseWebpage reads one chat line as a webpage ask. The
 // second return is false for anything outside the grammar —
 // including the page family's kind sentences (see the file
@@ -74,8 +135,9 @@ func parseWebpage(line string) (webpageRequest, bool) {
 	for i, f := range fields {
 		low[i] = strings.ToLower(f)
 	}
+	useVerb := low[0] == "use"
 	switch low[0] {
-	case "add", "create", "make", "build", "put":
+	case "add", "create", "make", "build", "put", "use":
 	default:
 		return webpageRequest{}, false
 	}
@@ -86,29 +148,42 @@ func parseWebpage(line string) (webpageRequest, bool) {
 	if i < len(fields) && low[i] == "new" {
 		i++
 	}
-	// The template adjective rides in front of the object
-	// ("a responsive webpage"); the assets template is the
-	// trailing clause below.
+	// The template name rides in front of the object ("a
+	// responsive webpage", "a two column template"); the
+	// assets template's words are the clauses around it.
 	req := webpageRequest{}
-	if i < len(fields) {
-		switch low[i] {
-		case "basic", "simple":
-			req.template = "basic"
-			i++
-		case "responsive":
-			req.template = "responsive"
-			i++
-		}
+	if name, n := matchWebpageTemplateName(low, i); n > 0 {
+		req.template = name
+		i += n
 	}
-	// The object: "webpage", or "web page". A kind word in
-	// front of "page" (home, form, about…) is the page
-	// family's sentence and never reaches this switch.
+	// "add the with assets template…": the assets words can
+	// stand in front of a "template" object, not only trail
+	// the object as they do for "webpage".
+	if req.template == "" && i+2 < len(fields) && low[i] == "with" && low[i+1] == "assets" && low[i+2] == "template" {
+		req.template = "assets"
+		i += 2
+	}
+	// The object: "webpage", "web page", or "template". A
+	// kind word in front of "page" (home, form, about…) is
+	// the page family's sentence and never reaches this
+	// switch.
+	templateWord := false
 	switch {
 	case i < len(fields) && low[i] == "webpage":
 		i++
 	case i+1 < len(fields) && low[i] == "web" && low[i+1] == "page":
 		i += 2
+	case i < len(fields) && low[i] == "template":
+		templateWord = true
+		i++
 	default:
+		return webpageRequest{}, false
+	}
+	if useVerb && !templateWord {
+		// "use" is this grammar's verb only for the
+		// template wording ("use the grid template for
+		// index.html") — "use a webpage" is not a
+		// sentence this piece owns.
 		return webpageRequest{}, false
 	}
 	if i+1 < len(fields) && low[i] == "with" && low[i+1] == "assets" {
@@ -129,8 +204,9 @@ func parseWebpage(line string) (webpageRequest, bool) {
 		return req, true
 	}
 	// The target clause: one preposition, the designator
-	// slots the neighbours read, then ONE token.
-	if low[i] != "to" && low[i] != "in" && low[i] != "into" && low[i] != "at" {
+	// slots the neighbours read, then ONE token. The "use"
+	// wording takes "for" as its preposition.
+	if low[i] != "to" && low[i] != "in" && low[i] != "into" && low[i] != "at" && !(useVerb && low[i] == "for") {
 		return webpageRequest{}, false
 	}
 	i++
@@ -150,6 +226,13 @@ func parseWebpage(line string) (webpageRequest, bool) {
 		return webpageRequest{}, false
 	}
 	req.file = fields[i]
+	if templateWord && !strings.HasSuffix(strings.ToLower(req.file), ".html") {
+		// The template wording claims for .html targets
+		// only: with a .go target the line is the concept
+		// book's html/template sentence — a Go statement
+		// going into a function — and keeps that claim.
+		return webpageRequest{}, false
+	}
 	return req, true
 }
 
@@ -169,19 +252,23 @@ func webpageCanonical(template, file string) string {
 }
 
 // webpageTemplateCandidates is the clarify.go choice for an
-// unnamed template: the three templates, in the words the
+// unnamed template: the seven templates, in the words the
 // plan and the page itself use.
 func webpageTemplateCandidates() []clarifyCandidate {
 	return []clarifyCandidate{
 		{Label: "basic", Desc: "a title, a heading, and a paragraph — the smallest complete page", Words: []string{"basic", "simple"}},
 		{Label: "responsive", Desc: "fits phones and wide screens too — a viewport line and a little CSS", Words: []string{"responsive"}},
 		{Label: "with assets", Desc: "also links a style sheet, a script, and a picture from the /static/ folder", Words: []string{"assets"}},
+		{Label: "two columns", Desc: "a sidebar beside the main area, under a header", Words: []string{"two columns", "two column", "two-column", "two-columns"}},
+		{Label: "three columns", Desc: "a sidebar on each side of the main area, under a header", Words: []string{"three columns", "three column", "three-column", "three-columns"}},
+		{Label: "grid", Desc: "a heading and a grid of cards — three across on a wide screen, fewer on a small one", Words: []string{"grid"}},
+		{Label: "rows", Desc: "full-width bands stacked down the page in different shades", Words: []string{"rows"}},
 	}
 }
 
 // webpageTemplateIDs maps a clarify candidate index back to
 // the template id, in candidate order.
-var webpageTemplateIDs = []string{"basic", "responsive", "assets"}
+var webpageTemplateIDs = []string{"basic", "responsive", "assets", "two-columns", "three-columns", "grid", "rows"}
 
 // tryWebpage is the chat-loop entry: it claims webpage
 // sentences and runs the flow on the chat's line reader.
