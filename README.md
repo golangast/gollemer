@@ -719,9 +719,10 @@ restarts the program the same way, named by its full path
 `watch folder jim/temp`, said while `jim/main.go` is watched,
 answers that it's already watching — `jim/temp` sits inside `jim/`,
 which the watch already covers — and naming the same folder twice is
-the same answer. Folder watching belongs to the chat's program: with
-no program running, the chat asks you to run or watch the program
-first. `stop watching folder jim/temp` removes just that folder;
+the same answer. Folder watching belongs to the chat's program, but
+naming a folder before any program runs is fine: the chat notes it,
+`top` shows it among the folders waiting for a program, and it
+attaches when watching starts. `stop watching folder jim/temp` removes just that folder;
 `stop watching jim/main.go` (or bare `stop watching`) ends the
 watching and leaves the program running, and `top` lists the extra
 folders next to the program.

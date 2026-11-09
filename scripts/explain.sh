@@ -317,8 +317,8 @@ Watch your program:
   for the same program — a folder outside the program's own,
   like an assets folder; one already inside a watched folder
   (jim/temp sits inside jim/) answers "already watching".
-  With no program running there is nothing to attach a folder
-  to, and the chat says to run or watch the program first.
+  Naming a folder before any program runs is fine too: the
+  chat notes it and attaches it when watching starts.
   "stop watching folder jim/temp" removes just that folder;
   "stop watching jim/main.go" ends the watching and leaves
   the program running. "top" lists the extra folders too.
