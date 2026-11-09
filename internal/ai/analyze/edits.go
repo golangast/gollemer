@@ -193,6 +193,15 @@ type EditRequest struct {
 	// resolved by the chat layer.
 	WebpageTemplate string
 
+	// webpage, counted grid: the grid template with exact
+	// counts ("add template 2 columns 3 rows to …"). Both
+	// zero = the plain flowing grid. WebpageGridRows may be
+	// zero with WebpageGridCols set (the sentence named
+	// columns only) — the planner defaults the rows to 2,
+	// the same default the chat layer states.
+	WebpageGridCols int
+	WebpageGridRows int
+
 	// component: the page file (File, as above) and the
 	// component's registry id ("button", "card",
 	// "text-field", …; editmaterial.go), resolved by the

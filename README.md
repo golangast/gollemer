@@ -441,7 +441,10 @@ so the page fits a phone's screen too), **with assets** (wired
 to load a style sheet, a script, and a picture from `/static/`),
 or a layout: **two columns** (a sidebar beside the main area),
 **three columns** (a sidebar on each side), **grid** (cards in a
-grid that narrows with the screen), or **rows** (full-width bands
+grid that narrows with the screen — or counted exactly:
+`add template 2 columns 3 rows to jim/temp/index.html` makes a
+grid of precisely 2 columns by 3 rows of boxes, 1 to 6 of
+each), or **rows** (full-width bands
 in different shades) — or **material** (Google's Material Design
 look, hand-written plain CSS in the page itself, no framework).
 You can ask in the template's own words too —

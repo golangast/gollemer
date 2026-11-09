@@ -178,7 +178,10 @@ Create folders and files — shown first, gated, then verified:
       never overwriting a page that already has words in it.
       The template's own words work too: "add the template
       to jim/temp/index.html", "add a two column template
-      to jim/temp/index.html".
+      to jim/temp/index.html". The grid counts its boxes
+      when you name them: "add template 2 columns 3 rows
+      to jim/temp/index.html" — 1 to 6 of each, and the
+      plan states the counts it will use.
   you> add a card to jim/temp/index.html
       one Material component at a time into a page that
       exists — button, tonal button, outlined button, text
