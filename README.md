@@ -500,6 +500,36 @@ own, the design lives in the header and already covers
 the whole page, and sections and components are what the
 body takes.
 
+A page can also be a program: `add a wasm app in jim`
+creates a browser app in that folder — Go compiled to
+WebAssembly, building its page in the browser through
+syscall/js. The app is its own module: `jim/go.mod` pins
+**Go 1.27** (the project around it keeps its own Go
+version, and the app's files stay out of its build),
+because the app's vector unit uses Go 1.27's portable
+**simd** package — the one that works on wasm targets.
+The folder gains `jim/main.go` (the app: it sets the
+garbage collector's GOGC knob low in code —
+`runtime/debug.SetGCPercent(50)` — since a browser page
+has no environment to pass flags through, then builds a
+welcome heading and the vector demo's result into the
+page), `jim/vector.go` (the simd unit), `jim/index.html`
+(the host page, carrying the Material styles, with the
+build in its opening comment:
+`GOEXPERIMENT=simd GOOS=js GOARCH=wasm go build -o main.wasm .`,
+run in the folder — a first build fetches the Go 1.27
+toolchain by itself), and `jim/wasm_exec.js`, copied from
+this machine's Go 1.27 install when one is found; when
+none is, the plan says so in the open and names the one
+file to copy by hand. Once `main.wasm` is built, any
+static file server can serve the folder. Components join
+the app as Go code, not HTML: `add a card to jim` (or
+`add a card to jim/main.go`) puts the card's builder in
+`jim/components.go` and mounts it on the page, its styles
+joining the host page exactly once — the same Material
+set, one of each per app, rendering and mounting only:
+this set has no click handlers yet.
+
 A page's style sheets, scripts, and pictures are files too, and
 the server can serve the whole folder they live in: `serve static
 files` registers that folder at `/static/` on your existing

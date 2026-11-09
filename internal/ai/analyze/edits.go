@@ -100,6 +100,21 @@ const (
 	// are otherwise untouched.
 	EditScaffoldSection = "scaffold_section"
 
+	// Wasm app (editwasm.go): a browser app in one folder —
+	// Go compiled to WebAssembly. The plan creates the app's
+	// own module (a nested go.mod pinning Go 1.27, so the
+	// host project keeps its own Go version and the app's
+	// files stay out of the host build), its main.go (the
+	// page built through syscall/js, the garbage collector's
+	// GOGC knob set low in code), a small simd vector unit,
+	// the host page that loads the built .wasm, and the
+	// wasm_exec.js copied from this machine's Go 1.27
+	// install when one is found. Components asked into the
+	// app ride the component kind with WasmFolder set: they
+	// land as Go DOM builders, not HTML (editwasm.go's
+	// planComponentWasm).
+	EditWasmApp = "wasm_app"
+
 	// Page family (editpage.go): a named page kind as a matched
 	// page+handler pair — an .html page created with starter
 	// content (never overwritten), the handler that serves it
@@ -227,6 +242,14 @@ type EditRequest struct {
 	// "text-field", …; editmaterial.go), resolved by the
 	// chat layer.
 	Component string
+
+	// wasm_app, and component in wasm mode: the wasm app's
+	// folder (project-relative slash path), resolved by the
+	// chat layer. For the component kind, a non-empty
+	// WasmFolder routes the ask to the app in that folder
+	// (File stays empty — the app's files are derived from
+	// the folder); empty means the page modes above.
+	WasmFolder string
 
 	// templated_page: the project folder the scaffold
 	// belongs to (SiteFolder, project-relative slash path;
@@ -507,6 +530,8 @@ func (p *Project) PlanEdit(req EditRequest) (*EditPlan, string) {
 		return p.planTemplatedPage(req)
 	case EditScaffoldSection:
 		return p.planScaffoldSection(req)
+	case EditWasmApp:
+		return p.planWasmApp(req)
 	case EditPage:
 		return p.planPage(req)
 	case EditDelegate:

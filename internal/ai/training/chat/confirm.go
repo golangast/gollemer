@@ -89,7 +89,14 @@ func renderLandingConfirmation(f landingFacts) string {
 	case analyze.EditServeStatic:
 		s1 = fmt.Sprintf("The server in %s now serves the %s folder's files at /static/", f.fresh.LinkPath(rel), f.req.StaticFolder)
 	case analyze.EditComponent:
-		s1 = fmt.Sprintf("The %s is in %s", analyze.MaterialComponentWords(f.req.Component), f.fresh.LinkPath(rel))
+		if f.req.WasmFolder != "" {
+			s1 = fmt.Sprintf("The %s is in the wasm app in %s", analyze.MaterialComponentWords(f.req.Component), f.fresh.LinkPath(f.req.WasmFolder))
+		} else {
+			s1 = fmt.Sprintf("The %s is in %s", analyze.MaterialComponentWords(f.req.Component), f.fresh.LinkPath(rel))
+		}
+	case analyze.EditWasmApp:
+		s1 = fmt.Sprintf("The wasm app is in %s", f.fresh.LinkPath(f.req.WasmFolder))
+		s2 = fmt.Sprintf("It builds with Go %s — in %s, run: %s (a first build fetches that toolchain by itself) — and once main.wasm is built, any static server can serve the folder.", analyze.WasmAppGoVersion, f.req.WasmFolder, analyze.WasmBuildCommand)
 	case analyze.EditTemplatedPage:
 		s1, s2 = confirmTemplatedPage(f)
 	case analyze.EditScaffoldSection:

@@ -220,6 +220,25 @@ Create folders and files — shown first, gated, then verified:
       design lives in the header and already covers
       the page, and sections and components are what
       the body takes.
+  you> add a wasm app in jim
+      a browser app in one folder — Go compiled to
+      WebAssembly, building its page in the browser.
+      The app is its own module, pinning Go 1.27 (the
+      project around it keeps its own Go version):
+      jim/go.mod, jim/main.go (the app — the GOGC knob
+      set low in code, since a browser page takes no
+      flags), jim/vector.go (a simd unit on Go 1.27's
+      portable simd package, adding rows of numbers a
+      vector at a time), jim/index.html (the host
+      page, Material styles, the build in its comment:
+      GOEXPERIMENT=simd GOOS=js GOARCH=wasm go build
+      -o main.wasm ., run in the folder), and
+      jim/wasm_exec.js, copied from this machine's
+      Go 1.27 install when one is found. Components
+      join the app as Go builders, not HTML:
+      "add a card to jim" — styles joining the host
+      page once, rendering and mounting only, no
+      click handlers yet.
   you> serve static files
       wires the webpage's folder — or one you name:
       "serve static files from jim/temp", "serve the

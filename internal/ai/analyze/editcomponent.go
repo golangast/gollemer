@@ -45,11 +45,17 @@ import (
 )
 
 func (p *Project) planComponent(req EditRequest) (*EditPlan, string) {
-	rel := filepath.ToSlash(strings.TrimSpace(req.File))
 	comp, ok := MaterialComponentByID(req.Component)
 	if !ok {
 		return nil, "that edit needs one of the material components: " + componentFormsText() + "."
 	}
+	if req.WasmFolder != "" {
+		// The wasm mode (editwasm.go): the target is an app,
+		// not a page — the component lands as a Go DOM
+		// builder in the app's own files.
+		return p.planComponentWasm(req, comp)
+	}
+	rel := filepath.ToSlash(strings.TrimSpace(req.File))
 	if rel == "" || !strings.HasSuffix(strings.ToLower(rel), ".html") {
 		return nil, "that edit adds a component to a .html page — " + rel + " isn't one."
 	}

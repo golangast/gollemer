@@ -1495,6 +1495,17 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if tryTemplatedPage(line, reader) {
 			continue
 		}
+		// The wasm app skeleton (wasm.go): a browser app in
+		// one folder — its own module pinning Go 1.27, its
+		// main.go building the page through syscall/js, a
+		// simd vector unit, and the host page that loads it:
+		// "add a wasm app in jim". Seated beside the
+		// templated page claim: its object is the two words
+		// "wasm app", which no neighbouring grammar takes,
+		// and its target is a folder, never a file.
+		if tryWasmApp(line, reader) {
+			continue
+		}
 		// Columns and rows into a templated page's body
 		// (scaffoldbody.go): "add 2 columns and 3 rows to
 		// the body in jim" — a counted section in the
