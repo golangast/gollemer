@@ -1498,7 +1498,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// shapes, which claims for .html targets only, so a
 		// .go target with template wording keeps the concept
 		// book's html/template claim below.
-		if tryWebpage(line, reader) {
+		if hook.run(func() bool { return tryWebpage(line, reader) }) {
 			continue
 		}
 		// The templated page scaffold (scaffold.go): a page
@@ -1509,7 +1509,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// claim: its object is the two words "templated page",
 		// which the webpage grammar never takes, and its
 		// target is a folder, never an .html file.
-		if tryTemplatedPage(line, reader) {
+		if hook.run(func() bool { return tryTemplatedPage(line, reader) }) {
 			continue
 		}
 		// The wasm app skeleton (wasm.go): a browser app in
@@ -1520,7 +1520,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// templated page claim: its object is the two words
 		// "wasm app", which no neighbouring grammar takes,
 		// and its target is a folder, never a file.
-		if tryWasmApp(line, reader) {
+		if hook.run(func() bool { return tryWasmApp(line, reader) }) {
 			continue
 		}
 		// Columns and rows into a templated page's body
@@ -1532,7 +1532,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// webpage's counted-grid sentences (which name
 		// their template and file) never match it, and it
 		// never matches theirs.
-		if tryScaffoldSection(line, reader) {
+		if hook.run(func() bool { return tryScaffoldSection(line, reader) }) {
 			continue
 		}
 		// Serve static files, claimed deterministically beside
@@ -1542,7 +1542,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// targeted lines ("serve static files to main.go")
 		// carry a file target this grammar never takes, so
 		// they fall past here to the book, untouched.
-		if tryServeStatic(line, reader) {
+		if hook.run(func() bool { return tryServeStatic(line, reader) }) {
 			continue
 		}
 		// The component piece (component.go): one Material
@@ -1555,10 +1555,10 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// claimed before a name is read as a component; a .go
 		// target never matches the shape, so the book keeps
 		// those lines untouched.
-		if tryComponentList(line) {
+		if hook.run(func() bool { return tryComponentList(line) }) {
 			continue
 		}
-		if tryComponent(line, reader) {
+		if hook.run(func() bool { return tryComponent(line, reader) }) {
 			continue
 		}
 		// Cross-file delegates, claimed deterministically beside
