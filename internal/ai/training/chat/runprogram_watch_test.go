@@ -487,6 +487,244 @@ func TestWatchRefusals(t *testing.T) {
 	}
 }
 
+// The folder grammar, at parse: "watch folder <path>" and
+// its "the folder" spelling, the stop-watching-folder
+// shapes, the softeners — and the declines.
+func TestParseProgramWatchFolderShapes(t *testing.T) {
+	cases := []struct {
+		line   string
+		shape  programShape
+		target string
+	}{
+		{"watch folder jim/temp", shapeWatchFolder, "jim/temp"},
+		{"watch the folder jim/temp", shapeWatchFolder, "jim/temp"},
+		{"watch folder assets", shapeWatchFolder, "assets"},
+		{"can you watch folder jim/temp", shapeWatchFolder, "jim/temp"},
+		{"watch folder jim/temp please", shapeWatchFolder, "jim/temp"},
+		{"stop watching folder jim/temp", shapeStopWatchingFolder, "jim/temp"},
+		{"stop watching the folder jim/temp", shapeStopWatchingFolder, "jim/temp"},
+		{"can you stop watching folder assets", shapeStopWatchingFolder, "assets"},
+		// Declines: the shapes stay tight.
+		{"watch folder", shapeNone, ""},
+		{"watch the folder", shapeNone, ""},
+		{"watch folders jim/temp", shapeNone, ""},
+		{"stop watching folder", shapeNone, ""},
+		{"stop watching folders jim/temp", shapeNone, ""},
+	}
+	for _, tc := range cases {
+		shape, target := parseProgramLine(tc.line)
+		if shape != tc.shape || target != tc.target {
+			t.Errorf("parseProgramLine(%q) = (%v, %q), want (%v, %q)", tc.line, shape, target, tc.shape, tc.target)
+		}
+	}
+}
+
+// A folder outside the program's subtree: "watch folder"
+// on a running-but-unwatched program turns watching on
+// with the folder included, top lists it, and an html edit
+// — then a js edit — under it restarts the program, each
+// note naming the file project-relatively.
+func TestWatchFolderOutsideSubtreeRestarts(t *testing.T) {
+	dir := runFixtureRoot(t)
+	writeFile(t, dir, "srv/main.go", watchSrvV1)
+	writeFile(t, dir, "assets/page.html", "<html><body>one</body></html>\n")
+	writeFile(t, dir, "assets/app.js", "console.log(1)\n")
+	withRunSession(t, dir)
+	notes := withWatchSession(t)
+	profile := &UserProfile{}
+
+	var handled bool
+	out := captureStdout(t, func() { handled = claimChain("run the program srv/main.go", yes, profile) })
+	if !handled || !programRunning() {
+		t.Fatalf("plain run did not start:\n%s", out)
+	}
+	getBody(t, "version one")
+
+	out = captureStdout(t, func() { handled = claimChain("watch folder assets", yes, profile) })
+	if !handled || !strings.Contains(out, "Watching srv/main.go") || !strings.Contains(out, "assets") {
+		t.Errorf("watch folder did not turn watching on with the folder:\n%s", out)
+	}
+	if !programWatching("srv/main.go") {
+		t.Fatal("watch folder should leave the session watching srv/main.go")
+	}
+	out = captureStdout(t, func() { handled = claimChain("top", yes, profile) })
+	if !handled || !strings.Contains(out, "watching for changes (also assets)") {
+		t.Errorf("top does not list the folder:\n%s", out)
+	}
+
+	settleWatch()
+	writeFile(t, dir, "assets/page.html", "<html><body>two</body></html>\n")
+	note := notes.waitFor(t, "restarted")
+	if strings.TrimSpace(note) != "[srv/main.go restarted — assets/page.html changed]" {
+		t.Errorf("restart note = %q, want the file named project-relatively", note)
+	}
+	getBody(t, "version one") // same code, new process
+
+	settleWatch()
+	writeFile(t, dir, "assets/app.js", "console.log(2)\n")
+	note = notes.waitFor(t, "assets/app.js changed")
+	if strings.TrimSpace(note) != "[srv/main.go restarted — assets/app.js changed]" {
+		t.Errorf("restart note = %q, want the js file named project-relatively", note)
+	}
+
+	out = captureStdout(t, func() { handled = claimChain("stop the program", yes, profile) })
+	if !handled || programRunning() {
+		t.Errorf("cleanup stop failed:\n%s", out)
+	}
+	if programWatching("srv/main.go") {
+		t.Error("stopping the program must end its watching, folders included")
+	}
+}
+
+// Naming the program's own folder, or a folder inside a
+// watched root, is a plain already-watching answer and no
+// state change: the extra set stays empty.
+func TestWatchFolderAlreadyCovered(t *testing.T) {
+	dir := runFixtureRoot(t)
+	writeFile(t, dir, "srv/main.go", watchSrvV1)
+	writeFile(t, dir, "srv/templates/index.html", "<html></html>\n")
+	writeFile(t, dir, "assets/app.js", "console.log(1)\n")
+	withRunSession(t, dir)
+	withWatchSession(t)
+	profile := &UserProfile{}
+
+	var handled bool
+	out := captureStdout(t, func() { handled = claimChain("watch srv/main.go", yes, profile) })
+	if !handled || !programRunning() {
+		t.Fatalf("watch did not start the program:\n%s", out)
+	}
+	for _, line := range []string{"watch folder srv", "watch folder srv/templates"} {
+		out = captureStdout(t, func() { handled = claimChain(line, yes, profile) })
+		if !handled || !strings.Contains(out, "already watching") {
+			t.Errorf("%q was not the already-watching answer:\n%s", line, out)
+		}
+		if got := watchedExtraFolderNames("srv/main.go"); len(got) != 0 {
+			t.Errorf("%q added extra roots %v, want none", line, got)
+		}
+	}
+
+	// Added once, answered as already there the second time.
+	out = captureStdout(t, func() { handled = claimChain("watch folder assets", yes, profile) })
+	if !handled || !strings.Contains(out, "Now watching the folder assets too") {
+		t.Errorf("adding the folder failed:\n%s", out)
+	}
+	out = captureStdout(t, func() { handled = claimChain("watch folder assets", yes, profile) })
+	if !handled || !strings.Contains(out, "already watching") {
+		t.Errorf("naming the same folder twice was not already-watching:\n%s", out)
+	}
+	if got := watchedExtraFolderNames("srv/main.go"); len(got) != 1 || got[0] != "assets" {
+		t.Errorf("extra roots = %v, want just [assets]", got)
+	}
+
+	out = captureStdout(t, func() { handled = claimChain("stop the program", yes, profile) })
+	if !handled || programRunning() {
+		t.Errorf("cleanup stop failed:\n%s", out)
+	}
+}
+
+// "stop watching folder" removes just that root: later
+// edits there restart nothing, while edits in the
+// program's own folder still do.
+func TestWatchFolderStopRemovesOnlyIt(t *testing.T) {
+	dir := runFixtureRoot(t)
+	writeFile(t, dir, "srv/main.go", watchSrvV1)
+	writeFile(t, dir, "assets/page.html", "<html><body>one</body></html>\n")
+	withRunSession(t, dir)
+	notes := withWatchSession(t)
+	profile := &UserProfile{}
+
+	var handled bool
+	out := captureStdout(t, func() { handled = claimChain("watch srv/main.go", yes, profile) })
+	if !handled || !programRunning() {
+		t.Fatalf("watch did not start the program:\n%s", out)
+	}
+	getBody(t, "version one")
+	out = captureStdout(t, func() { handled = claimChain("watch folder assets", yes, profile) })
+	if !handled || !strings.Contains(out, "Now watching the folder assets too") {
+		t.Fatalf("adding the folder failed:\n%s", out)
+	}
+	out = captureStdout(t, func() { handled = claimChain("stop watching folder assets", yes, profile) })
+	if !handled || !strings.Contains(out, "Stopped watching the folder assets") {
+		t.Errorf("stop watching folder answer wrong:\n%s", out)
+	}
+	if !programWatching("srv/main.go") {
+		t.Error("removing a folder must leave the program watched")
+	}
+
+	settleWatch()
+	writeFile(t, dir, "assets/page.html", "<html><body>two</body></html>\n")
+	time.Sleep(800 * time.Millisecond)
+	if c := notes.count("restarted"); c != 0 {
+		t.Errorf("an edit in the removed folder restarted the program; notes: %v", notes.all())
+	}
+	getBody(t, "version one")
+
+	// The base root is still watched.
+	writeFile(t, dir, "srv/main.go", watchSrvV2)
+	notes.waitFor(t, "restarted")
+	getBody(t, "version two")
+
+	out = captureStdout(t, func() { handled = claimChain("stop the program", yes, profile) })
+	if !handled || programRunning() {
+		t.Errorf("cleanup stop failed:\n%s", out)
+	}
+}
+
+// The folder refusals, honestly: nothing to attach to
+// without a program, a folder that isn't there, a file
+// named as a folder, a path out of the project, and a
+// stop-watching-folder aimed at the program's own folder.
+func TestWatchFolderRefusals(t *testing.T) {
+	dir := runFixtureRoot(t)
+	writeFile(t, dir, "srv/main.go", watchSrvV1)
+	writeFile(t, dir, "assets/app.js", "console.log(1)\n")
+	withRunSession(t, dir)
+	withWatchSession(t)
+	profile := &UserProfile{}
+
+	// No program yet.
+	var handled bool
+	out := captureStdout(t, func() { handled = claimChain("watch folder assets", yes, profile) })
+	if !handled || !strings.Contains(out, "No program is running") {
+		t.Errorf("watch folder with no program was not refused:\n%s", out)
+	}
+	out = captureStdout(t, func() { handled = claimChain("stop watching folder assets", yes, profile) })
+	if !handled || !strings.Contains(out, "I'm not watching any program") {
+		t.Errorf("stop watching folder with nothing watched:\n%s", out)
+	}
+
+	captureStdout(t, func() { handled = claimChain("watch srv/main.go", yes, profile) })
+	if !handled || !programRunning() {
+		t.Fatal("watch did not start the program")
+	}
+
+	out = captureStdout(t, func() { handled = claimChain("watch folder nope", yes, profile) })
+	if !handled || !strings.Contains(out, "no folder by that name") {
+		t.Errorf("watch of a missing folder was not refused by name:\n%s", out)
+	}
+	out = captureStdout(t, func() { handled = claimChain("watch folder srv/main.go", yes, profile) })
+	if !handled || !strings.Contains(out, "is a file, not a folder") {
+		t.Errorf("watch of a file as a folder was not refused by name:\n%s", out)
+	}
+	out = captureStdout(t, func() { handled = claimChain("watch folder ../outside", yes, profile) })
+	if !handled || !strings.Contains(out, "outside this project") {
+		t.Errorf("watch of a folder outside the project was not refused:\n%s", out)
+	}
+	out = captureStdout(t, func() { handled = claimChain("stop watching folder srv", yes, profile) })
+	if !handled || !strings.Contains(out, "comes with watching the program") {
+		t.Errorf("stop watching the program's own folder was not explained:\n%s", out)
+	}
+	out = captureStdout(t, func() { handled = claimChain("stop watching folder assets", yes, profile) })
+	if !handled || !strings.Contains(out, "I'm not watching the folder assets") {
+		t.Errorf("stop watching an unwatched folder was not answered honestly:\n%s", out)
+	}
+
+	out = captureStdout(t, func() { handled = claimChain("stop the program", yes, profile) })
+	if !handled || programRunning() {
+		t.Errorf("cleanup stop failed:\n%s", out)
+	}
+}
+
 // A watched program that ends on its own: the watcher
 // notes it once and the watching pauses — the session's
 // watcher is gone afterwards. (The fixture outlives the

@@ -62,6 +62,15 @@ package chat
 //     running. "stop watching" ends the watching only;
 //     stopping the program ends both. The synonym shape is
 //     "restart <path>.go when files change".
+//   - "watch folder <path>" (2026-11-09, John's follow-up:
+//     "have it watch folders like the template folder for
+//     html or js updates") names an extra folder — a
+//     template or assets folder outside the program's own —
+//     whose changes restart the program the same way,
+//     announced with the file's project-relative path.
+//     "stop watching folder <path>" removes just that
+//     folder. Folder watching attaches to the session's
+//     program; with none running, it refuses by name.
 //   - "stop the program" (and friends) kills it. Bare "stop"
 //     stops the program while one runs and keeps its old
 //     chat-quitting meaning when none does — the loop's quit
@@ -104,6 +113,8 @@ const (
 	shapeTop
 	shapeWatchProgram
 	shapeStopWatching
+	shapeWatchFolder
+	shapeStopWatchingFolder
 )
 
 // parseProgramLine classifies one chat line for this claim.
@@ -192,6 +203,17 @@ func parseProgramLine(line string) (programShape, string) {
 				return shapeWatchProgram, strings.TrimRight(rest[3], ".!?")
 			}
 		}
+		// "watch folder <path>" / "watch the folder <path>":
+		// an extra folder for the session program's watcher.
+		// The word "folder" is the shape — the token after
+		// it is the path, no pathiness test (a folder can be
+		// a bare name, "assets").
+		if len(rest) == 2 && fold(rest[0]) == "folder" {
+			return shapeWatchFolder, strings.TrimRight(rest[1], ".!?")
+		}
+		if len(rest) == 3 && fold(rest[0]) == "the" && fold(rest[1]) == "folder" {
+			return shapeWatchFolder, strings.TrimRight(rest[2], ".!?")
+		}
 	case "restart":
 		// The watch synonym: "restart <path>.go when files
 		// change" — the whole tail is the shape. A bare
@@ -230,6 +252,14 @@ func parseProgramLine(line string) (programShape, string) {
 				if g, _ := pathy(wrest[2]); g {
 					return shapeStopWatching, strings.TrimRight(wrest[2], ".!?")
 				}
+			}
+			// "stop watching folder <path>" / "stop watching
+			// the folder <path>": remove one named folder.
+			if len(wrest) == 2 && fold(wrest[0]) == "folder" {
+				return shapeStopWatchingFolder, strings.TrimRight(wrest[1], ".!?")
+			}
+			if len(wrest) == 3 && fold(wrest[0]) == "the" && fold(wrest[1]) == "folder" {
+				return shapeStopWatchingFolder, strings.TrimRight(wrest[2], ".!?")
 			}
 			return shapeNone, ""
 		}
@@ -481,6 +511,12 @@ func runRunProgram(line string, ask editAsk, profile *UserProfile) bool {
 		return true
 	case shapeStopWatching:
 		stopWatchingClaim(target)
+		return true
+	case shapeWatchFolder:
+		watchFolderClaim(target)
+		return true
+	case shapeStopWatchingFolder:
+		stopWatchingFolderClaim(target)
 		return true
 	}
 	return false
@@ -1166,12 +1202,27 @@ var watchAnnounce = func(format string, args ...any) {
 	fmt.Printf(format, args...)
 }
 
+// watchRoot is one folder the watcher polls: the program's
+// own folder (always there while watching) or a folder the
+// user named with "watch folder <path>". rel is the folder
+// as named, project-relative ("" for the program's folder);
+// name is the prefix a change under this root is announced
+// by — "" for the program's folder, whose files are named
+// folder-relative as they always have been, and the
+// folder's project-relative path for a named folder, so
+// its files are named in full ("assets/app.js changed").
+type watchRoot struct {
+	abs  string
+	rel  string
+	name string
+}
+
 // programWatcher is one watched program's polling loop:
-// which program, the folder subtree it reads, and its stop
-// signal. Pure polling (mtime+size) — no fsnotify, no new
-// dependency. All watch state lives here and in
-// sessionWatcher: in memory only, gone when the session
-// ends, never persisted.
+// which program, the folder subtrees it reads (its own
+// folder plus any named extras), and its stop signal. Pure
+// polling (mtime+size) — no fsnotify, no new dependency.
+// All watch state lives here and in sessionWatcher: in
+// memory only, gone when the session ends, never persisted.
 type programWatcher struct {
 	rel     string
 	rootAbs string
@@ -1181,6 +1232,47 @@ type programWatcher struct {
 
 	mu      sync.Mutex
 	stopped bool
+	extras  []watchRoot
+}
+
+// roots returns every folder this watcher polls: the
+// program's own folder first, then the named extras in the
+// order they were added.
+func (w *programWatcher) roots() []watchRoot {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	out := make([]watchRoot, 0, len(w.extras)+1)
+	out = append(out, watchRoot{abs: w.dir})
+	return append(out, w.extras...)
+}
+
+// extraFolders returns the named folders, without the
+// program's own.
+func (w *programWatcher) extraFolders() []watchRoot {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return append([]watchRoot(nil), w.extras...)
+}
+
+// addExtra starts polling one more named folder.
+func (w *programWatcher) addExtra(r watchRoot) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.extras = append(w.extras, r)
+}
+
+// removeExtra stops polling the named folder at abs. It
+// reports whether that folder was an extra.
+func (w *programWatcher) removeExtra(abs string) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for i, e := range w.extras {
+		if e.abs == abs {
+			w.extras = append(w.extras[:i], w.extras[i+1:]...)
+			return true
+		}
+	}
+	return false
 }
 
 // sessionWatcher is the session's one watcher, if any —
@@ -1216,26 +1308,64 @@ func programWatching(rel string) bool {
 	return w != nil && w.rel == rel && !w.isStopped()
 }
 
+// watchedExtraFolderNames returns the named folders the
+// watcher on rel is also polling, as named — the top
+// claim's "(also …)" list.
+func watchedExtraFolderNames(rel string) []string {
+	w := sessionWatcher
+	if w == nil || w.rel != rel || w.isStopped() {
+		return nil
+	}
+	extras := w.extraFolders()
+	names := make([]string, 0, len(extras))
+	for _, e := range extras {
+		names = append(names, e.rel)
+	}
+	return names
+}
+
+// programFolderAbs is the abs path of the folder the
+// program's file lives in — the watcher's base root.
+func programFolderAbs(p *programRun) string {
+	return filepath.Join(p.rootAbs, filepath.FromSlash(filepath.Dir(filepath.FromSlash(p.rel))))
+}
+
 // startWatching turns watching on for the session's live
 // program and says so.
 func startWatching(tag string, p *programRun) {
+	startWatchingRoots(tag, p, nil)
+}
+
+// startWatchingRoots is startWatching with named folders
+// already in the watch set ("watch folder <path>" asked
+// while the program ran unwatched: watching turns on with
+// the folder included, and the sentence says so).
+func startWatchingRoots(tag string, p *programRun, extras []watchRoot) {
 	if programWatching(p.rel) {
 		fmt.Printf("%s I'm already watching %s — I'll restart it when its files change.\n", tag, p.rel)
 		recordBrain("runner", true, "program already watching: "+p.rel)
 		return
 	}
 	endWatching() // a leftover watcher (a replaced program) ends first
-	dir := filepath.Join(p.rootAbs, filepath.FromSlash(filepath.Dir(filepath.FromSlash(p.rel))))
 	w := &programWatcher{
 		rel:     p.rel,
 		rootAbs: p.rootAbs,
-		dir:     dir,
+		dir:     programFolderAbs(p),
 		stop:    make(chan struct{}),
 		done:    make(chan struct{}),
+		extras:  extras,
 	}
 	sessionWatcher = w
 	go w.loop()
-	fmt.Printf("%s Watching %s — I'll restart it when its files change. Say \"stop watching %s\" to turn watching off.\n", tag, p.rel, p.rel)
+	if len(extras) == 0 {
+		fmt.Printf("%s Watching %s — I'll restart it when its files change. Say \"stop watching %s\" to turn watching off.\n", tag, p.rel, p.rel)
+	} else {
+		names := make([]string, 0, len(extras))
+		for _, e := range extras {
+			names = append(names, e.rel)
+		}
+		fmt.Printf("%s Watching %s — I'll restart it when its files change, including the folder %s. Say \"stop watching %s\" to turn watching off.\n", tag, p.rel, strings.Join(names, ", "), p.rel)
+	}
 	recordBrain("runner", true, "program watching started: "+p.rel)
 }
 
@@ -1303,6 +1433,150 @@ func stopWatchingClaim(target string) {
 		fmt.Printf("%s Stopped watching %s.\n", tag, rel)
 	}
 	recordBrain("runner", true, "program watching stopped: "+rel)
+}
+
+// normalizeFolderPath renders a named folder the way the
+// project names it: slash form, no "./" head, no trailing
+// slash; the project root itself is ".".
+func normalizeFolderPath(target string) string {
+	rel := filepath.ToSlash(strings.TrimSpace(strings.TrimPrefix(target, "./")))
+	rel = strings.TrimSuffix(rel, "/")
+	if rel == "" {
+		return "."
+	}
+	return rel
+}
+
+// watchWithin reports whether path is dir itself or lives
+// under it. Both are clean abs paths.
+func watchWithin(dir, path string) bool {
+	if dir == path {
+		return true
+	}
+	rel, err := filepath.Rel(dir, path)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// watchFolderClaim answers "watch folder <path>": the
+// folder becomes an extra watch root for the session's
+// program. Folder watching restarts that program, so with
+// no program running there is nothing to attach to — the
+// refusal says what to do first. A running but unwatched
+// program gets watching turned on with the folder
+// included; a watched one just gains the folder. A folder
+// the watch already covers — the program's own folder, or
+// anything inside a watched root — is a plain
+// already-watching answer, never a duplicate root.
+func watchFolderClaim(target string) {
+	tag := cTag("gollemer [runner]>")
+	rel := normalizeFolderPath(target)
+	p := sessionProgram
+	if p == nil || p.hasExited() {
+		fmt.Printf("%s No program is running — folder watching restarts the session's program when files change, so there's nothing to attach it to yet. Say \"watch <file>\" or \"run the program <file>\" first, then \"watch folder %s\".\n", tag, rel)
+		recordBrain("runner", false, "watch folder refused: no program running: "+rel)
+		return
+	}
+	abs, refusal := runProgramResolve(p.rootAbs, rel)
+	if refusal != "" {
+		fmt.Printf("%s %s\n", tag, refusal)
+		recordBrain("runner", false, "watch folder refused: "+refusal)
+		return
+	}
+	st, err := os.Stat(abs)
+	if err != nil {
+		fmt.Printf("%s I can't watch %s — there's no folder by that name in this project.\n", tag, rel)
+		recordBrain("runner", false, "watch folder refused: missing folder: "+rel)
+		return
+	}
+	if !st.IsDir() {
+		fmt.Printf("%s %s is a file, not a folder — name a folder, like \"watch folder jim/temp\".\n", tag, rel)
+		recordBrain("runner", false, "watch folder refused: not a folder: "+rel)
+		return
+	}
+	base := programFolderAbs(p)
+	if watchWithin(base, abs) {
+		if abs == base {
+			fmt.Printf("%s I'm already watching %s — that's the folder %s lives in, and watching the program watches that whole folder.\n", tag, rel, p.rel)
+		} else {
+			fmt.Printf("%s I'm already watching %s — it's inside %s, the folder %s lives in, and I watch that whole folder.\n", tag, rel, filepath.ToSlash(filepath.Dir(filepath.FromSlash(p.rel))), p.rel)
+		}
+		recordBrain("runner", true, "watch folder already covered by the program folder: "+rel)
+		return
+	}
+	if w := sessionWatcher; w != nil && w.rel == p.rel && !w.isStopped() {
+		for _, e := range w.extraFolders() {
+			if watchWithin(e.abs, abs) {
+				if abs == e.abs {
+					fmt.Printf("%s I'm already watching the folder %s.\n", tag, rel)
+				} else {
+					fmt.Printf("%s I'm already watching %s — it's inside the folder %s, which I'm already watching.\n", tag, rel, e.rel)
+				}
+				recordBrain("runner", true, "watch folder already covered: "+rel)
+				return
+			}
+		}
+	}
+	root := watchRoot{abs: abs, rel: rel, name: rel}
+	if rel == "." {
+		root.name = "" // its files' scan paths already are project-relative
+	}
+	if programWatching(p.rel) {
+		sessionWatcher.addExtra(root)
+		fmt.Printf("%s Now watching the folder %s too — changes there will restart %s as well.\n", tag, rel, p.rel)
+		recordBrain("runner", true, "watch folder added: "+rel)
+		return
+	}
+	startWatchingRoots(tag, p, []watchRoot{root})
+}
+
+// stopWatchingFolderClaim answers "stop watching folder
+// <path>": just that root stops being polled; the program
+// and the rest of the watch carry on. Naming the program's
+// own folder explains it comes with the program's watch —
+// removing it means "stop watching" altogether.
+func stopWatchingFolderClaim(target string) {
+	tag := cTag("gollemer [runner]>")
+	w := sessionWatcher
+	if w == nil || w.isStopped() {
+		fmt.Printf("%s I'm not watching any program right now.\n", tag)
+		recordBrain("runner", true, "stop watching folder asked with nothing watched")
+		return
+	}
+	rel := normalizeFolderPath(target)
+	abs := filepath.Join(w.rootAbs, filepath.FromSlash(rel))
+	if !watchWithin(w.rootAbs, abs) {
+		fmt.Printf("%s %s is outside this project — the folders I watch all live inside it.\n", tag, rel)
+		recordBrain("runner", true, "stop watching folder refused: outside the project: "+rel)
+		return
+	}
+	if watchWithin(w.dir, abs) {
+		fmt.Printf("%s %s is %s's own folder — it comes with watching the program. Say \"stop watching %s\" to stop watching altogether.\n", tag, rel, w.rel, w.rel)
+		recordBrain("runner", true, "stop watching folder named the program folder: "+rel)
+		return
+	}
+	for _, e := range w.extraFolders() {
+		if e.abs == abs {
+			w.removeExtra(abs)
+			fmt.Printf("%s Stopped watching the folder %s — I'm still watching %s, and it still restarts when its own files change.\n", tag, rel, w.rel)
+			recordBrain("runner", true, "watch folder removed: "+rel)
+			return
+		}
+		if watchWithin(e.abs, abs) {
+			fmt.Printf("%s %s is inside the folder %s, which I'm watching as one folder — say \"stop watching folder %s\" to stop watching that folder.\n", tag, rel, e.rel, e.rel)
+			recordBrain("runner", true, "stop watching folder named a subfolder: "+rel)
+			return
+		}
+	}
+	if extras := w.extraFolders(); len(extras) > 0 {
+		names := make([]string, 0, len(extras))
+		for _, e := range extras {
+			names = append(names, e.rel)
+		}
+		fmt.Printf("%s I'm not watching the folder %s — the extra folders I'm watching are %s.\n", tag, rel, strings.Join(names, ", "))
+	} else {
+		fmt.Printf("%s I'm not watching the folder %s — %s's own folder is the only folder I'm watching.\n", tag, rel, w.rel)
+	}
+	recordBrain("runner", true, "stop watching folder asked for an unwatched folder: "+rel)
 }
 
 // watchMark is one file's change mark: size and mtime are
@@ -1397,14 +1671,14 @@ func firstWatchChange(a, b map[string]watchMark) string {
 	return ""
 }
 
-// loop is the watcher's one goroutine: poll the subtree,
-// coalesce a burst of changes through a quiet period, and
-// restart once it settles. It ends when watching is
-// stopped, when the session's program stops being this
-// one, or when the program ends on its own — that last is
-// noted here, once, and watching pauses with it (the
-// goroutine returns; nothing restarts until the program is
-// run and watched again).
+// loop is the watcher's one goroutine: poll the watched
+// roots, coalesce a burst of changes through a quiet
+// period, and restart once it settles. It ends when
+// watching is stopped, when the session's program stops
+// being this one, or when the program ends on its own —
+// that last is noted here, once, and watching pauses with
+// it (the goroutine returns; nothing restarts until the
+// program is run and watched again).
 func (w *programWatcher) loop() {
 	defer close(w.done)
 	defer func() {
@@ -1418,7 +1692,42 @@ func (w *programWatcher) loop() {
 		}
 		return ""
 	}
-	snap := scanWatchTree(w.dir, binOf())
+	// snaps holds one baseline per watched root, keyed by
+	// the root's abs path, re-read from the watcher on
+	// every scan: a folder named mid-watch starts its own
+	// baseline instead of reading its whole tree as one
+	// big change, and a removed folder simply drops out.
+	// scan returns the first change's announcement name —
+	// folder-relative under the program's folder,
+	// project-relative under a named one.
+	snaps := map[string]map[string]watchMark{}
+	scan := func(binPath string) string {
+		live := map[string]bool{}
+		found := ""
+		for _, r := range w.roots() {
+			live[r.abs] = true
+			cur := scanWatchTree(r.abs, binPath)
+			prev, ok := snaps[r.abs]
+			snaps[r.abs] = cur
+			if !ok || found != "" {
+				continue
+			}
+			if ch := firstWatchChange(prev, cur); ch != "" {
+				if r.name == "" {
+					found = ch
+				} else {
+					found = r.name + "/" + ch
+				}
+			}
+		}
+		for abs := range snaps {
+			if !live[abs] {
+				delete(snaps, abs)
+			}
+		}
+		return found
+	}
+	scan(binOf()) // baselines: the trees as they stand before any edit counts
 	var firstChanged string
 	var lastChange time.Time
 	ticker := time.NewTicker(watchPollInterval)
@@ -1440,20 +1749,19 @@ func (w *programWatcher) loop() {
 			w.noteSelfExit(p)
 			return
 		}
-		cur := scanWatchTree(w.dir, p.binPath)
-		if changed := firstWatchChange(snap, cur); changed != "" {
+		if changed := scan(p.binPath); changed != "" {
 			if firstChanged == "" {
 				firstChanged = changed
 			}
 			lastChange = time.Now()
-			snap = cur
 			continue
 		}
 		if firstChanged != "" && time.Since(lastChange) >= watchQuietPeriod {
 			changed := firstChanged
 			firstChanged = ""
 			w.restart(changed)
-			snap = scanWatchTree(w.dir, binOf())
+			snaps = map[string]map[string]watchMark{}
+			scan(binOf())
 		}
 	}
 }
@@ -1620,6 +1928,9 @@ func showProgramTop() {
 		}
 		if programWatching(p.rel) {
 			entry += ", watching for changes"
+			if names := watchedExtraFolderNames(p.rel); len(names) > 0 {
+				entry += " (also " + strings.Join(names, ", ") + ")"
+			}
 		}
 		fmt.Printf("%s %s; %d lines logged, %s. Say \"stop the program\" to stop it.\n",
 			tag, entry, total, pluralCount(int64(visits), "visit"))
