@@ -50,20 +50,14 @@ it, it prints one line telling you so.) `make chat` opens the same
 chat. `make guide` prints a short start-here guide without opening
 anything.
 
-The first screen looks like this:
+There is no splash screen — the chat opens with one short line:
 
 ```
-╭─ GOLLEMER ────────────────────────────────────────────────────────╮
-│   ( o o )   a small Go companion — reads your code,               │
-│    \___/    explains it in plain English                          │
-│                                                                   │
-│   ▸ start — a six-stop guided tour of this project                │
-│   ▸ ask in plain words — "what does this program do"              │
-│   ✦ new here? say "teach me" — two minutes, learn by doing        │
-│                                                                   │
-│   [ your-project ]  [ 17 brains ready ]                           │
-╰───────────────────────────────────────────────────────────────────╯
+17 brains ready. Say "start" for the tour, or "what can you do" for everything I can do.
 ```
+
+(If you ever want the old full-screen welcome back, launch with
+`GOLLEMER_BANNER=full` in the environment.)
 
 The chat works on the folder you started it in. Open it inside any Go
 project and it will read *that* project. Brand new? Say `teach me` and
@@ -431,6 +425,125 @@ carry TODOs where your own words and data go: the item list opens
 with placeholder items, the details page with placeholder fields.
 Gollemer doesn't invent your content.
 
+### A plain webpage, and serving its files
+
+Not every page is one of the six kinds. `add a webpage to
+jim/temp/index.html` puts a plain webpage into a named file, from
+a template you pick — **basic** (a title, a heading, a paragraph),
+**responsive** (the same, plus a viewport line and a little CSS
+so the page fits a phone's screen too), **with assets** (wired
+to load a style sheet, a script, and a picture from `/static/`),
+or a layout: **two columns** (a sidebar beside the main area),
+**three columns** (a sidebar on each side), **grid** (cards in a
+grid that narrows with the screen — or counted exactly:
+`add template 2 columns 3 rows to jim/temp/index.html`, or
+`add the grid 2 columns 3 rows to jim/temp/index.html`, makes
+a grid of precisely 2 columns by 3 rows of boxes, 1 to 6 of
+each), or **rows** (full-width bands
+in different shades) — or **material** (Google's Material Design
+look, hand-written plain CSS in the page itself, no framework).
+You can ask in the template's own words too —
+`add a two column template to jim/temp/index.html`, or
+`add the template to jim/temp/index.html` when you'd rather
+answer the question it asks in return. It asks which template
+whenever you don't name one. The file is
+created when new, filled when it sits there empty — and a page
+that already has words in it is never overwritten.
+
+Once a page exists, you can add one Material component at a
+time — the same parts the material template shows off: a
+**button** (the filled one), a **tonal button**, an
+**outlined button**, a **text button**, a **card**, an **app
+bar** (or top bar), a **navigation bar** (or nav bar, navbar),
+a **floating button** (or fab), a
+**chip**, a **text field**, a **switch**, and a **footer**. Say it like
+`add a button to jim/temp/index.html`, `add a text field to
+jim/temp/index.html`, or `add a card to the page` ("the page"
+is the webpage you last made or filled in this chat). The
+component's styles come with it the first time and never
+twice. Ask `what components can I add` for the whole set.
+
+A page can also be built the way real sites are: a header and
+a footer written once, and each page's own body between them.
+`add a templated page called home in jim` creates
+`jim/templates/header.html` (the head, the Material styles, and
+the responsive navigation bar), `jim/templates/footer.html`
+(the footer bar), and `jim/templates/home.html` (the body,
+which calls the header at its top and the footer at its foot),
+joined when the page is served by Go's html/template — plus
+the handler that renders it (`HomePage` in `jim/homepage.go`).
+No route is wired: the handler waits for the connect sentence
+like any other. Run the server from the project root — that's
+where the handler's template paths point. Then grow the body:
+`add 2 columns and 3 rows to the body in jim` — or, in the
+grid's own words, `add the grid 2 columns 3 rows to the body
+in jim` — puts a counted
+section of boxes into the body file alone (its styles join the
+header's, once), and asking again adds another section below
+the first. With no counts it makes 2 columns and 2 rows. The
+counted grid aimed at the body file itself —
+`add the grid 2 columns 3 rows to jim/templates/home.html` —
+lands the same way: the sentence is one, and the file it
+names decides which thing it is. A component grows the body
+too: `add a card to jim/templates/home.html` puts the card
+into the body above its footer call, its styles joining the
+header's the same way — one of each component per body, and
+asking for the same one again answers that it's already
+there. The navigation bar and the footer need no adding:
+every templated page already has them, from the header and
+footer files. Ask for a whole template
+on one of the three files instead —
+`add the material template to jim/templates/home.html` —
+and the chat explains the page rather than refusing
+flatly: the body is one part of a page, not a page on its
+own, the design lives in the header and already covers
+the whole page, and sections and components are what the
+body takes.
+
+A page can also be a program: `add a wasm app in jim`
+creates a browser app in that folder — Go compiled to
+WebAssembly, building its page in the browser through
+syscall/js. The app is its own module: `jim/go.mod` pins
+**Go 1.27** (the project around it keeps its own Go
+version, and the app's files stay out of its build),
+because the app's vector unit uses Go 1.27's portable
+**simd** package — the one that works on wasm targets.
+The folder gains `jim/main.go` (the app: it sets the
+garbage collector's GOGC knob low in code —
+`runtime/debug.SetGCPercent(50)` — since a browser page
+has no environment to pass flags through, then builds a
+welcome heading and the vector demo's result into the
+page), `jim/vector.go` (the simd unit), `jim/index.html`
+(the host page, carrying the Material styles, with the
+build in its opening comment:
+`GOEXPERIMENT=simd GOOS=js GOARCH=wasm go build -o main.wasm .`,
+run in the folder — a first build fetches the Go 1.27
+toolchain by itself), and `jim/wasm_exec.js`, copied from
+this machine's Go 1.27 install when one is found; when
+none is, the plan says so in the open and names the one
+file to copy by hand. Once `main.wasm` is built, any
+static file server can serve the folder. Components join
+the app as Go code, not HTML: `add a card to jim` (or
+`add a card to jim/main.go`) puts the card's builder in
+`jim/components.go` and mounts it on the page, its styles
+joining the host page exactly once — the same Material
+set, one of each per app, rendering and mounting only:
+this set has no click handlers yet.
+
+A page's style sheets, scripts, and pictures are files too, and
+the server can serve the whole folder they live in: `serve static
+files` registers that folder at `/static/` on your existing
+server, so the folder's `style.css` answers at
+`http://localhost:8080/static/style.css`. Name the folder in
+the sentence when you have one in mind — `serve static files
+from jim/temp`, or `serve the jim/temp folder`; with no folder
+named, it finds the folder itself — the webpage's folder, or
+the one folder in the project holding web files — and asks
+when there's more than one it could mean. You can say it as an
+update too: `update the server to serve images, js, css`. One
+mechanism covers images, js, and css alike — the file server
+picks each file's content type from its extension.
+
 The security pieces explain themselves as they land:
 
 ```
@@ -653,6 +766,32 @@ webserver file were created by the asks in the sections above, the
 visit is a real HTTP fetch, and the browser really was opened at the
 address the program printed. If the browser can't be opened, the chat
 says so and prints the address on its own line instead.)
+
+Or watch it while you work: `watch jim/main.go` starts the program
+just like `run jim/main.go`, then keeps an eye on its folder — when a
+file changes and the changes settle, the chat rebuilds and restarts
+it, and says so in a bracketed note:
+`[jim/main.go restarted — main.go changed]`. The same ask in other
+words is `restart jim/main.go when files change`. Any file counts —
+Go, html, js, css. A change that doesn't compile restarts nothing:
+the note says the build failed, and the version that's running
+stays up.
+
+The watch covers the program's own folder and everything under it.
+A folder elsewhere in the project joins by name: `watch folder
+<path>` adds it as another watched folder, and a change there
+restarts the program the same way, named by its full path
+(`[jim/main.go restarted — assets/app.js changed]`). So
+`watch folder jim/temp`, said while `jim/main.go` is watched,
+answers that it's already watching — `jim/temp` sits inside `jim/`,
+which the watch already covers — and naming the same folder twice is
+the same answer. Folder watching belongs to the chat's program, but
+naming a folder before any program runs is fine: the chat notes it,
+`top` shows it among the folders waiting for a program, and it
+attaches when watching starts. `stop watching folder jim/temp` removes just that folder;
+`stop watching jim/main.go` (or bare `stop watching`) ends the
+watching and leaves the program running, and `top` lists the extra
+folders next to the program.
 
 The rules around it:
 

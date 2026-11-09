@@ -2,6 +2,7 @@ package chat
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -9,16 +10,19 @@ import (
 	"github.com/golangast/gollemer/pkg/termui"
 )
 
-// startscreen.go — the unified chat's whole launch face since the
-// 2026-10-24 readability pass: ONE termui panel, printed instantly,
-// then a short capability block that types itself out beneath it
-// through the normal pacing. The name in the border, a three-line
-// gopher, one line of what this is, three starter lines, a status-
-// chip row — and, when the local stores have something TRUE to add
-// for this project, his own starters and one continuity line.
-// Everything else the old startup used to dump — the phrase catalog,
-// the teach-me pitch, profile trivia — lives behind "help" or a
-// single line here. Print less.
+// startscreen.go — the unified chat's launch face. Since
+// 2026-11-09 the DEFAULT startup is one compact line (John: the
+// full screen "takes up the screen and takes a while") — see
+// compactStartText. The full face below — ONE termui panel,
+// printed instantly, then a short capability block that types
+// itself out beneath it through the normal pacing; the name in
+// the border, a three-line gopher, one line of what this is,
+// three starter lines, a status-chip row, and, when the local
+// stores have something TRUE to add for this project, his own
+// starters and one continuity line — still renders behind the
+// opt-in GOLLEMER_BANNER=full. Everything else the old startup
+// used to dump — the phrase catalog, the teach-me pitch, profile
+// trivia — lives behind "help" or a single line there. Print less.
 
 // capabilityLines is what Gollemer can do, one short line per
 // family, in beginner words — derived from the README's "What
@@ -281,9 +285,10 @@ func startScreenParts(projectRoot string) (panel, capabilities string) {
 		capabilityText()
 }
 
-// startScreenText renders the whole launch face as one string
-// (pure, so tests can pin its shape; plain mode carries all of it,
-// in order, with no delays).
+// startScreenText renders the whole FULL launch face as one
+// string (pure, so tests can pin its shape; plain mode carries
+// all of it, in order, with no delays). It is the opt-in face
+// since 2026-11-09 — see printStartScreen.
 func startScreenText(projectRoot string) string {
 	panel, caps := startScreenParts(projectRoot)
 	if caps == "" {
@@ -292,11 +297,34 @@ func startScreenText(projectRoot string) string {
 	return panel + "\n" + caps
 }
 
-// printStartScreen shows the launch face once: the panel lands in
-// one write, then the capability block types itself out beneath
-// it through the chat's pacing (printPaced — instant and complete
-// when piped or pacing is off).
+// fullStartScreen reports whether the full launch face was opted
+// into for this launch: GOLLEMER_BANNER=full. Anything else —
+// unset included — is the compact default.
+func fullStartScreen() bool {
+	return os.Getenv("GOLLEMER_BANNER") == "full"
+}
+
+// compactStartText is the default launch line since 2026-11-09:
+// the ready notice and the two doors into everything else —
+// "start" for the tour, "what can you do" for the capability
+// list. One line, no panel, no capability block, printed whole:
+// nothing in the default startup is paced or delayed.
+func compactStartText() string {
+	return fmt.Sprintf("%d brains ready. Say \"start\" for the tour, or \"what can you do\" for everything I can do.",
+		len(brainRegistry))
+}
+
+// printStartScreen shows the launch face once. By default that
+// is the compact line, in one unpaced write. With
+// GOLLEMER_BANNER=full it is the old full face: the panel lands
+// in one write, then the capability block types itself out
+// beneath it through the chat's pacing (printPaced — instant and
+// complete when piped or pacing is off).
 func printStartScreen(projectRoot string) {
+	if !fullStartScreen() {
+		fmt.Println(compactStartText())
+		return
+	}
 	panel, caps := startScreenParts(projectRoot)
 	fmt.Println(panel)
 	if caps != "" {

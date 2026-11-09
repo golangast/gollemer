@@ -97,6 +97,27 @@ func claimChain(line string, ask editAsk, profile *UserProfile) bool {
 	if runPageFamily(line, ask) {
 		return true
 	}
+	if runWebpage(line, ask) {
+		return true
+	}
+	if runTemplatedPage(line, ask) {
+		return true
+	}
+	if runWasmApp(line, ask) {
+		return true
+	}
+	if runScaffoldSection(line, ask) {
+		return true
+	}
+	if runServeStatic(line, ask) {
+		return true
+	}
+	if tryComponentList(line) {
+		return true
+	}
+	if runComponent(line, ask) {
+		return true
+	}
 	if runDelegate(line, ask) {
 		return true
 	}
@@ -144,7 +165,9 @@ func claimChain(line string, ask editAsk, profile *UserProfile) bool {
 // (his learn-path render) BEFORE jim existed, so the analyzed
 // index predates the file the edit targets. analyzed=false is
 // the cold session: no project analyzed, creations resolve
-// against the folder the chat started in.
+// against the folder the chat started in. The component
+// claims sit directly after serve-static, exactly as in the
+// unified loop.
 func withChatSession(t *testing.T, dir string, analyzed bool) {
 	t.Helper()
 	oldProj, oldRoot, oldURoot, oldSnap := lastAnalyzeProject, lastAnalyzeRoot, unifiedProjectRoot, lastAnalyzeSnapshot

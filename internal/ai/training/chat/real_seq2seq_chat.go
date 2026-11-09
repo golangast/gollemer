@@ -1470,6 +1470,80 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if tryPageFamily(line, reader) {
 			continue
 		}
+		// The webpage piece, claimed deterministically beside
+		// the page family: a plain webpage from a picked
+		// template into one named .html file — created, or
+		// filled when the file sits there empty, never
+		// overwriting a page with words in it. The page
+		// family's kind sentences are claimed just above and
+		// never reach here; this grammar's object is the bare
+		// word "webpage" — or the word "template" in the same
+		// shapes, which claims for .html targets only, so a
+		// .go target with template wording keeps the concept
+		// book's html/template claim below.
+		if tryWebpage(line, reader) {
+			continue
+		}
+		// The templated page scaffold (scaffold.go): a page
+		// as separate header, footer, and body files under a
+		// folder's templates folder, joined by html/template,
+		// with the handler that renders it — "add a templated
+		// page called home in jim". Seated beside the webpage
+		// claim: its object is the two words "templated page",
+		// which the webpage grammar never takes, and its
+		// target is a folder, never an .html file.
+		if tryTemplatedPage(line, reader) {
+			continue
+		}
+		// The wasm app skeleton (wasm.go): a browser app in
+		// one folder — its own module pinning Go 1.27, its
+		// main.go building the page through syscall/js, a
+		// simd vector unit, and the host page that loads it:
+		// "add a wasm app in jim". Seated beside the
+		// templated page claim: its object is the two words
+		// "wasm app", which no neighbouring grammar takes,
+		// and its target is a folder, never a file.
+		if tryWasmApp(line, reader) {
+			continue
+		}
+		// Columns and rows into a templated page's body
+		// (scaffoldbody.go): "add 2 columns and 3 rows to
+		// the body in jim" — a counted section in the
+		// scaffold's body file, its styles joining the
+		// header's. Seated with the scaffold claim: its
+		// counts come before any object word, so the
+		// webpage's counted-grid sentences (which name
+		// their template and file) never match it, and it
+		// never matches theirs.
+		if tryScaffoldSection(line, reader) {
+			continue
+		}
+		// Serve static files, claimed deterministically beside
+		// serve-html: one file-server registration at /static/
+		// on the project's existing server, through the wiring
+		// machinery's conflict rules. The concept book's
+		// targeted lines ("serve static files to main.go")
+		// carry a file target this grammar never takes, so
+		// they fall past here to the book, untouched.
+		if tryServeStatic(line, reader) {
+			continue
+		}
+		// The component piece (component.go): one Material
+		// component into an existing page — "add a button to
+		// jim/temp/index.html", "add a card to the page" —
+		// and its discovery question ("what components can
+		// I add", answered from the same registry the grammar
+		// reads). Seated after the webpage claim so "add a
+		// webpage" and the template wordings are already
+		// claimed before a name is read as a component; a .go
+		// target never matches the shape, so the book keeps
+		// those lines untouched.
+		if tryComponentList(line) {
+			continue
+		}
+		if tryComponent(line, reader) {
+			continue
+		}
 		// Cross-file delegates, claimed deterministically beside
 		// the other write-side parsers: "add a function in
 		// app/main.go that calls store.Load" writes code in one

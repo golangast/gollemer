@@ -113,6 +113,53 @@ func TestParseProgramLine(t *testing.T) {
 		{"start jake/main.go", shapeRunProgram, "jake/main.go"},
 		{"launch jake/main.go", shapeRunProgram, "jake/main.go"},
 		{"start a webserver in jake/main.go", shapeNone, ""},
+		// Politeness wrappers (2026-11-09): the closed set
+		// comes off and the bare shape applies — John's exact
+		// line first. The set is closed: "will you" is not in
+		// it, and a wrapped build ask still declines.
+		{"can you run jim/main.go", shapeRunProgram, "jim/main.go"},
+		{"can you run the program jim/main.go", shapeRunProgram, "jim/main.go"},
+		{"can you run the program in jim/main.go", shapeRunProgram, "jim/main.go"},
+		{"could you run jim/main.go", shapeRunProgram, "jim/main.go"},
+		{"please run jim/main.go", shapeRunProgram, "jim/main.go"},
+		{"run jim/main.go please", shapeRunProgram, "jim/main.go"},
+		{"can you run jim/main.go please", shapeRunProgram, "jim/main.go"},
+		{"can you please run jim/main.go", shapeRunProgram, "jim/main.go"},
+		{"can you start jim/main.go", shapeRunProgram, "jim/main.go"},
+		{"can you launch the program in jim/main.go", shapeRunProgram, "jim/main.go"},
+		{"can you stop the program", shapeStopProgram, ""},
+		{"could you stop it", shapeStopProgram, ""},
+		{"can you stop jim/main.go", shapeStopProgram, "jim/main.go"},
+		{"please stop", shapeStopBare, ""},
+		{"can you show the program log", shapeShowLog, ""},
+		{"can you show visits", shapeShowLog, ""},
+		{"show the program log please", shapeShowLog, ""},
+		{"can you show running programs", shapeTop, ""},
+		{"can you run make start", shapeNone, ""},
+		{"can you run make eval", shapeNone, ""},
+		{"can you start a webserver in jim", shapeNone, ""},
+		{"can you start a webserver in jim/main.go", shapeNone, ""},
+		{"can you run it", shapeNone, ""},
+		{"can you run the program", shapeNone, ""},
+		// The server shapes (2026-11-09): the target is a
+		// folder to resolve at claim time, or a .go file —
+		// no pathiness test at parse, resolution is the gate.
+		{"run the server jim", shapeRunServer, "jim"},
+		{"run server jim", shapeRunServer, "jim"},
+		{"start the server jim", shapeRunServer, "jim"},
+		{"launch the server jim", shapeRunServer, "jim"},
+		{"run the server in jim", shapeRunServer, "jim"},
+		{"run server in jim", shapeRunServer, "jim"},
+		{"run the server jim/main.go", shapeRunServer, "jim/main.go"},
+		{"run the server jim/", shapeRunServer, "jim/"},
+		{"can you run the server jim", shapeRunServer, "jim"},
+		{"can you start the server jim", shapeRunServer, "jim"},
+		{"run the server", shapeNone, ""},
+		{"run server", shapeNone, ""},
+		{"can you kill the program", shapeNone, ""},
+		{"will you run jim/main.go", shapeNone, ""},
+		{"can you", shapeNone, ""},
+		{"please", shapeNone, ""},
 		{"kill the program", shapeNone, ""},
 		{"run the program notes.txt", shapeRunProgram, "notes.txt"},
 		{"run make eval", shapeNone, ""},
@@ -170,6 +217,103 @@ func TestRunProgramNotMakeStart(t *testing.T) {
 	}
 	if sessionProgram == nil || !sessionProgram.hasExited() {
 		t.Error("the quick program should have run and finished inside the window")
+	}
+}
+
+// The 2026-11-09 screenshot pin, end to end: John's layout —
+// a jim/ folder holding a web server (two files, so the
+// package is the program), the HOST project's own Makefile
+// with a start target — and his exact line, "can you run
+// jim/main.go". The prefixed ask must claim; the gate must
+// name jim's package; jim's server must be the thing that
+// runs, with its URL read from its own output; "top" must
+// list it; "stop the program" must stop it — and the invented
+// narration from the make-start path must appear nowhere in
+// the whole exchange.
+func TestRunProgramCanYouPrefixRunsJim(t *testing.T) {
+	dir := runFixtureRoot(t)
+	writeFile(t, dir, "Makefile", "start:\n\t@echo MAKE START OPENED THE CHAT INSTEAD\n")
+	writeFile(t, dir, "jim/main.go", `package main
+
+import (
+	"fmt"
+	"net/http"
+)
+
+func main() {
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Printf("visit: %s %s\n", r.Method, r.URL.Path)
+		fmt.Fprintln(w, greeting())
+	})
+	fmt.Println("listening at http://localhost:8080 — jim's own server")
+	if err := http.ListenAndServe(":8080", nil); err != nil {
+		fmt.Println("the server stopped:", err)
+	}
+}
+`)
+	writeFile(t, dir, "jim/help.go", "package main\n\nfunc greeting() string {\n\treturn \"hello from jim\"\n}\n")
+	opened := withRunSession(t, dir)
+	profile := &UserProfile{}
+
+	var prompt string
+	recYes := func(p string) (string, error) { prompt = p; return "y", nil }
+
+	var handled bool
+	out := captureStdout(t, func() { handled = claimChain("can you run jim/main.go", recYes, profile) })
+	if !handled {
+		t.Fatalf("John's prefixed run ask was not claimed:\n%s", out)
+	}
+	if !strings.Contains(prompt, "go run ./jim") {
+		t.Errorf("gate prompt = %q, want it to name jim's package (go run ./jim)", prompt)
+	}
+	for _, want := range []string{"is running in the background", "http://localhost:8080"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("server start report missing %q:\n%s", want, out)
+		}
+	}
+	if len(*opened) != 1 || (*opened)[0] != "http://localhost:8080" {
+		t.Errorf("browser opened %v, want [http://localhost:8080]", *opened)
+	}
+	if !programRunning() {
+		t.Fatal("jim's server should be running in the background")
+	}
+	transcript := out
+
+	// A real visit proves jim's program — not the host's
+	// Makefile — is what answered.
+	resp, err := http.Get("http://localhost:8080/")
+	if err != nil {
+		t.Fatalf("visit to jim's server failed: %v", err)
+	}
+	body := make([]byte, 128)
+	n, _ := resp.Body.Read(body)
+	resp.Body.Close()
+	if !strings.Contains(string(body[:n]), "hello from jim") {
+		t.Errorf("visit body = %q, want jim's own answer", string(body[:n]))
+	}
+	waitForLog(t, "visit: GET /")
+
+	out = captureStdout(t, func() { handled = claimChain("top", yes, profile) })
+	if !handled || !strings.Contains(out, "jim/main.go — running") {
+		t.Errorf("top does not list jim's program as running:\n%s", out)
+	}
+	transcript += out
+
+	out = captureStdout(t, func() { handled = claimChain("stop the program", yes, profile) })
+	if !handled || !strings.Contains(out, "Stopped jim/main.go") || programRunning() {
+		t.Errorf("\"stop the program\" did not stop jim's server:\n%s", out)
+	}
+	transcript += out
+	if !portFree("8080") {
+		t.Error("port 8080 still bound after stop")
+	}
+
+	// The invented narration and the host's make-start output
+	// must appear nowhere in the whole exchange.
+	for _, banned := range []string{"It ran fine", "the program talking", "MAKE START OPENED", "make start"} {
+		if strings.Contains(transcript, banned) {
+			t.Errorf("transcript contains %q — the make-start failure shape:\n%s", banned, transcript)
+		}
 	}
 }
 
