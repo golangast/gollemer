@@ -50,20 +50,14 @@ it, it prints one line telling you so.) `make chat` opens the same
 chat. `make guide` prints a short start-here guide without opening
 anything.
 
-The first screen looks like this:
+There is no splash screen — the chat opens with one short line:
 
 ```
-╭─ GOLLEMER ────────────────────────────────────────────────────────╮
-│   ( o o )   a small Go companion — reads your code,               │
-│    \___/    explains it in plain English                          │
-│                                                                   │
-│   ▸ start — a six-stop guided tour of this project                │
-│   ▸ ask in plain words — "what does this program do"              │
-│   ✦ new here? say "teach me" — two minutes, learn by doing        │
-│                                                                   │
-│   [ your-project ]  [ 17 brains ready ]                           │
-╰───────────────────────────────────────────────────────────────────╯
+17 brains ready. Say "start" for the tour, or "what can you do" for everything I can do.
 ```
+
+(If you ever want the old full-screen welcome back, launch with
+`GOLLEMER_BANNER=full` in the environment.)
 
 The chat works on the folder you started it in. Open it inside any Go
 project and it will read *that* project. Brand new? Say `teach me` and
