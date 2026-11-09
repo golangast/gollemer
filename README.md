@@ -484,13 +484,21 @@ the first. With no counts it makes 2 columns and 2 rows. The
 counted grid aimed at the body file itself —
 `add the grid 2 columns 3 rows to jim/templates/home.html` —
 lands the same way: the sentence is one, and the file it
-names decides which thing it is. Ask for a whole template
+names decides which thing it is. A component grows the body
+too: `add a card to jim/templates/home.html` puts the card
+into the body above its footer call, its styles joining the
+header's the same way — one of each component per body, and
+asking for the same one again answers that it's already
+there. The navigation bar and the footer need no adding:
+every templated page already has them, from the header and
+footer files. Ask for a whole template
 on one of the three files instead —
 `add the material template to jim/templates/home.html` —
 and the chat explains the page rather than refusing
 flatly: the body is one part of a page, not a page on its
 own, the design lives in the header and already covers
-the whole page, and sections are what the body takes.
+the whole page, and sections and components are what the
+body takes.
 
 A page's style sheets, scripts, and pictures are files too, and
 the server can serve the whole folder they live in: `serve static

@@ -1,6 +1,9 @@
 package chat
 
 import (
+	"bytes"
+	"html/template"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -354,6 +357,175 @@ func TestComponentNavigationBarAndFooterLand(t *testing.T) {
 	}
 	if strings.Contains(page, "<script") {
 		t.Error("the navigation bar brought JavaScript into the page")
+	}
+}
+
+// John's ask after the template seam: a component named
+// at a templated page's BODY file. The body is a fragment
+// — no </body> of its own — so the card lands above its
+// footer call, its styles joining the shared header
+// exactly once; the header and footer calls stay intact
+// and in order, the footer file never moves, and the
+// composed page still parses and renders whole.
+func TestComponentCardLandsInScaffoldBody(t *testing.T) {
+	root := staticAssetsFixture(t, staticAssetsFiles(map[string]string{
+		"jim/main.go": staticJimMain,
+	}))
+	profile := &UserProfile{}
+	captureStdout(t, func() {
+		claimChain("add a templated page called home in jim", yes, profile)
+	})
+	footerBefore := readBack(t, root, "jim/templates/footer.html")
+	out := captureStdout(t, func() {
+		claimChain("add a card to jim/templates/home.html", yes, profile)
+	})
+	if !strings.Contains(out, "Done — The card is in jim/templates/home.html.") {
+		t.Errorf("card landing confirmation missing:\n%s", out)
+	}
+	if !strings.Contains(out, "I built the project and checked that it's really there.") {
+		t.Errorf("the confirmation's verification sentence is missing:\n%s", out)
+	}
+	body := readBack(t, root, "jim/templates/home.html")
+	headAt := strings.Index(body, "{{template \"header\"")
+	cardAt := strings.Index(body, `class="card-title"`)
+	footAt := strings.Index(body, "{{template \"footer\"")
+	if headAt < 0 || cardAt < 0 || footAt < 0 || !(headAt < cardAt && cardAt < footAt) {
+		t.Errorf("the card did not land between the body's header and footer calls:\n%s", body)
+	}
+	header := readBack(t, root, "jim/templates/header.html")
+	if n := strings.Count(header, "/* gollemer-material: card */"); n != 1 {
+		t.Errorf("the header holds the card styles %d times, want exactly 1", n)
+	}
+	if n := strings.Count(header, "--primary: #6750A4"); n != 1 {
+		t.Errorf("the header's variables were duplicated: %d copies", n)
+	}
+	if got := readBack(t, root, "jim/templates/footer.html"); got != footerBefore {
+		t.Error("the footer file changed — the component belongs to the body and the header only")
+	}
+	// The composed page still works: the three files parse
+	// together and the render carries the nav, the card,
+	// and the footer bar.
+	page, err := template.ParseFiles(
+		filepath.Join(root, "jim/templates/home.html"),
+		filepath.Join(root, "jim/templates/header.html"),
+		filepath.Join(root, "jim/templates/footer.html"))
+	if err != nil {
+		t.Fatalf("the composed page no longer parses: %v", err)
+	}
+	var buf bytes.Buffer
+	if err := page.ExecuteTemplate(&buf, "home.html", nil); err != nil {
+		t.Fatalf("the composed page no longer renders: %v", err)
+	}
+	for _, want := range []string{`class="site-nav"`, `class="card-title"`, `class="site-footer"`} {
+		if !strings.Contains(buf.String(), want) {
+			t.Errorf("the rendered page is missing %q", want)
+		}
+	}
+}
+
+// The fragment mode's discipline through the chain: a
+// second component accumulates on the same body; the same
+// component again is the already-present answer and moves
+// nothing; and the navigation bar and the footer — already
+// on every templated page from the shared files — answer
+// that instead of landing a second copy in the body.
+func TestComponentScaffoldBodyAccumulatesAndRefuses(t *testing.T) {
+	root := staticAssetsFixture(t, staticAssetsFiles(map[string]string{
+		"jim/main.go": staticJimMain,
+	}))
+	profile := &UserProfile{}
+	captureStdout(t, func() {
+		claimChain("add a templated page called home in jim", yes, profile)
+		claimChain("add a card to jim/templates/home.html", yes, profile)
+	})
+	out := captureStdout(t, func() {
+		claimChain("add a button to jim/templates/home.html", yes, profile)
+	})
+	if !strings.Contains(out, "Done — The button is in jim/templates/home.html.") {
+		t.Errorf("button landing confirmation missing:\n%s", out)
+	}
+	body := readBack(t, root, "jim/templates/home.html")
+	cardAt, btnAt := strings.Index(body, `class="card-title"`), strings.Index(body, `class="btn btn-filled"`)
+	if cardAt < 0 || btnAt < 0 || cardAt > btnAt {
+		t.Errorf("the button did not accumulate below the card:\n%s", body)
+	}
+	header := readBack(t, root, "jim/templates/header.html")
+	if strings.Count(header, "/* gollemer-material: card */") != 1 || strings.Count(header, "/* gollemer-material: buttons */") != 1 {
+		t.Error("the header's chunks were not carried exactly once each")
+	}
+	bodyBefore, headerBefore := body, header
+	footerBefore := readBack(t, root, "jim/templates/footer.html")
+
+	// The same component again: already present, no Done,
+	// nothing written.
+	out = captureStdout(t, func() {
+		claimChain("add a card to jim/templates/home.html", yes, profile)
+	})
+	if !strings.Contains(out, "already has a card") || !strings.Contains(out, "nothing to add") {
+		t.Errorf("the repeated card did not get the already-present answer:\n%s", out)
+	}
+	if strings.Contains(out, "Done —") {
+		t.Errorf("the repeated card claimed a landing:\n%s", out)
+	}
+	// The navigation bar and the footer are already on the
+	// page, from the header and footer files the body calls.
+	out = captureStdout(t, func() {
+		claimChain("add a navigation bar to jim/templates/home.html", yes, profile)
+	})
+	if !strings.Contains(out, "already has its navigation bar") || !strings.Contains(out, "jim/templates/header.html") {
+		t.Errorf("the navigation bar on a body did not answer already-there:\n%s", out)
+	}
+	out = captureStdout(t, func() {
+		claimChain("add a footer to jim/templates/home.html", yes, profile)
+	})
+	if !strings.Contains(out, "already has its footer") || !strings.Contains(out, "jim/templates/footer.html") {
+		t.Errorf("the footer on a body did not answer already-there:\n%s", out)
+	}
+	if got := readBack(t, root, "jim/templates/home.html"); got != bodyBefore {
+		t.Error("a refusal changed the body")
+	}
+	if got := readBack(t, root, "jim/templates/header.html"); got != headerBefore {
+		t.Error("a refusal changed the header")
+	}
+	if got := readBack(t, root, "jim/templates/footer.html"); got != footerBefore {
+		t.Error("a refusal changed the footer")
+	}
+	if strings.Contains(bodyBefore, "<footer class=\"site-footer\">") {
+		t.Error("the footer snippet was inserted into the body")
+	}
+}
+
+// A component aimed at the shared header or footer file
+// itself: no landing there — the answer names the page's
+// body and the sentence that lands in it, and the shared
+// files stay byte-identical.
+func TestComponentScaffoldPartTargetsGuide(t *testing.T) {
+	root := staticAssetsFixture(t, staticAssetsFiles(map[string]string{
+		"jim/main.go": staticJimMain,
+	}))
+	profile := &UserProfile{}
+	captureStdout(t, func() {
+		claimChain("add a templated page called home in jim", yes, profile)
+	})
+	before := map[string]string{}
+	for _, rel := range []string{"jim/templates/header.html", "jim/templates/footer.html", "jim/templates/home.html"} {
+		before[rel] = readBack(t, root, rel)
+	}
+	for _, target := range []string{"jim/templates/header.html", "jim/templates/footer.html"} {
+		out := captureStdout(t, func() {
+			claimChain("add a card to "+target, yes, profile)
+		})
+		if !strings.Contains(out, "is the shared") || !strings.Contains(out, "\"add a card to jim/templates/home.html\"") {
+			t.Errorf("the card aimed at %s did not get the body guidance:\n%s", target, out)
+		}
+		if strings.Contains(out, "Done —") {
+			t.Errorf("the card aimed at %s claimed a landing:\n%s", target, out)
+		}
+	}
+	for rel, want := range before {
+		if got := readBack(t, root, rel); got != want {
+			t.Errorf("%s changed under the guidance", rel)
+		}
 	}
 }
 

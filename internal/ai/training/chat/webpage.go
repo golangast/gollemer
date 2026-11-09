@@ -106,9 +106,9 @@ package chat
 // (scaffoldPartKind — a body by its header and footer
 // calls, a header or footer by its definition) gets the
 // templated-page answer — what the file is, where the
-// design lives, and the section sentence verified to land
-// on the body — while a plain filled page keeps the
-// refusal, byte-identical.
+// design lives, and the sentences (a section, a component)
+// verified to land on the body — while a plain filled page
+// keeps the refusal, byte-identical.
 
 import (
 	"bytes"
@@ -600,9 +600,10 @@ func runWebpage(line string, ask editAsk) bool {
 // is a whole page, so it can never land in a part — the
 // answer says what the file is, where the page's design
 // lives (the header, whose styles already cover the whole
-// page), and what goes in the body instead. One shape for
-// every template kind: the reading of the file, not the
-// template named, decides the answer. Nothing is written.
+// page), and what goes in the body instead: a section or a
+// component. One shape for every template kind: the
+// reading of the file, not the template named, decides the
+// answer. Nothing is written.
 func printScaffoldPartAnswer(tag, rootAbs, part, rel string) {
 	dir := path.Dir(rel)
 	folder := path.Dir(dir)
@@ -614,7 +615,7 @@ func printScaffoldPartAnswer(tag, rootAbs, part, rel string) {
 	switch part {
 	case "body":
 		page := strings.TrimSuffix(path.Base(rel), ".html")
-		fmt.Printf("%s Not making that webpage: %s is the body of the %s templated page %s — one of the page's three files, not a page on its own. The page's design, its Material styles, lives in the header file, %s, and it already covers the whole page, so there's no template to add to the body. What the body takes is sections: \"add the grid 2 columns 3 rows to %s\" adds a section of boxes to it.\n", tag, rel, page, where, header, rel)
+		fmt.Printf("%s Not making that webpage: %s is the body of the %s templated page %s — one of the page's three files, not a page on its own. The page's design, its Material styles, lives in the header file, %s, and it already covers the whole page, so there's no template to add to the body. What the body takes is sections and components: \"add the grid 2 columns 3 rows to %s\" adds a section of boxes to it, and \"add a card to %s\" adds a card.\n", tag, rel, page, where, header, rel, rel)
 	case "header":
 		fmt.Printf("%s Not making that webpage: %s is the shared header of the templated pages %s — the file that holds the page's design, its Material styles, for every page that calls it. A template is a whole page, so there's nothing for one to add here. %s\n", tag, rel, where, scaffoldBodyGuidance(rootAbs, folder))
 	case "footer":
@@ -623,22 +624,22 @@ func printScaffoldPartAnswer(tag, rootAbs, part, rel string) {
 }
 
 // scaffoldBodyGuidance names where a templated page's
-// sections go: the folder's body file, with the counted
-// section sentence spelled against it — the one sentence
-// this answer names, walked through the real dispatch in
+// growth goes: the folder's body file, with the counted
+// section sentence and a component sentence spelled
+// against it — both walked through the real dispatch in
 // webpage_test.go and asserted to land there (the
 // capability seat's drift rule: an answer may never
 // promise a line that doesn't work — the component
-// sentence, which the component planner refuses on a body
-// fragment for want of a </body>, is deliberately NOT
-// named). With no body to point at, it names the place
+// sentence names the body because the component piece's
+// fragment mode lands it there, above the body's footer
+// call). With no body to point at, it names the place
 // without promising a sentence.
 func scaffoldBodyGuidance(rootAbs, folder string) string {
 	bodies := scaffoldBodies(rootAbs, folder)
 	if len(bodies) == 0 {
-		return "Sections go in a page's own body file instead — the file in the same templates folder that calls the header at its top and the footer at its foot."
+		return "Sections and components go in a page's own body file instead — the file in the same templates folder that calls the header at its top and the footer at its foot."
 	}
 	body := bodies[0]
 	page := strings.TrimSuffix(path.Base(body), ".html")
-	return fmt.Sprintf("Sections go in a page's body instead: \"add the grid 2 columns 3 rows to %s\" adds a section of boxes to the %s page's body.", body, page)
+	return fmt.Sprintf("Sections and components go in a page's body instead: \"add the grid 2 columns 3 rows to %s\" adds a section of boxes to the %s page's body, and \"add a card to %s\" adds a card to it.", body, page, body)
 }

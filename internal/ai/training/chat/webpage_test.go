@@ -637,7 +637,9 @@ func TestWebpageTemplateAskOnScaffoldPartExplains(t *testing.T) {
 		"jim/templates/home.html is the body of the home templated page in jim",
 		"its Material styles, lives in the header file, jim/templates/header.html",
 		"already covers the whole page",
+		"What the body takes is sections and components",
 		"\"add the grid 2 columns 3 rows to jim/templates/home.html\"",
+		"\"add a card to jim/templates/home.html\"",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("the body explanation is missing %q:\n%s", want, out)
@@ -671,6 +673,7 @@ func TestWebpageTemplateAskOnScaffoldPartExplains(t *testing.T) {
 	for _, want := range []string{
 		"jim/templates/header.html is the shared header of the templated pages in jim",
 		"\"add the grid 2 columns 3 rows to jim/templates/home.html\"",
+		"\"add a card to jim/templates/home.html\"",
 		"the home page's body",
 	} {
 		if !strings.Contains(out, want) {
@@ -687,6 +690,7 @@ func TestWebpageTemplateAskOnScaffoldPartExplains(t *testing.T) {
 		"jim/templates/footer.html is the shared footer of the templated pages in jim",
 		"its Material styles, lives in the header file, jim/templates/header.html",
 		"\"add the grid 2 columns 3 rows to jim/templates/home.html\"",
+		"\"add a card to jim/templates/home.html\"",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("the footer explanation is missing %q:\n%s", want, out)
@@ -701,16 +705,16 @@ func TestWebpageTemplateAskOnScaffoldPartExplains(t *testing.T) {
 	}
 }
 
-// The drift guard for the explanation above: the one
-// sentence it names for a body is walked through the real
-// dispatch on a fixture scaffold and must land as a
-// section — an answer may never promise a line that
-// doesn't work (the capability seat's rule). The component
-// sentence is deliberately NOT named by the explanation:
-// the component planner refuses a body fragment (it has
-// no </body> to sit inside), and the second half of this
-// pin keeps that refusal on record so the explanation is
-// never "fixed" into promising it.
+// The drift guard for the explanation above: both
+// sentences it names for a body are walked through the
+// real dispatch on a fixture scaffold and must land — an
+// answer may never promise a line that doesn't work (the
+// capability seat's rule). The section lands as a section;
+// the component lands as a component (the fragment mode:
+// above the body's footer call, its styles in the header
+// exactly once, the footer file untouched) — the second
+// half is what licenses the explanation to name the card
+// sentence at all.
 func TestWebpageScaffoldGuidanceLineLands(t *testing.T) {
 	profile := &UserProfile{}
 	root := staticAssetsFixture(t, staticAssetsFiles(map[string]string{
@@ -719,6 +723,7 @@ func TestWebpageScaffoldGuidanceLineLands(t *testing.T) {
 	captureStdout(t, func() {
 		claimChain("add a templated page called home in jim", yes, profile)
 	})
+	footerBefore := readBack(t, root, "jim/templates/footer.html")
 	out := captureStdout(t, func() {
 		claimChain("add the grid 2 columns 3 rows to jim/templates/home.html", yes, profile)
 	})
@@ -728,17 +733,28 @@ func TestWebpageScaffoldGuidanceLineLands(t *testing.T) {
 	if n := strings.Count(readBack(t, root, "jim/templates/home.html"), "TODO: box"); n != 6 {
 		t.Errorf("the landed section holds %d boxes, want 6", n)
 	}
-	// The component sentence on the same body: claimed,
-	// and refused by its own planner — it does not land,
-	// so the explanation must never name it.
+	// The component sentence on the same body: it lands in
+	// the fragment mode, below the section it follows.
 	out = captureStdout(t, func() {
 		claimChain("add a card to jim/templates/home.html", yes, profile)
 	})
-	if !strings.Contains(out, "no </body> in jim/templates/home.html") {
-		t.Errorf("the component line on a body fragment answered unexpectedly:\n%s", out)
+	if !strings.Contains(out, "Done — The card is in jim/templates/home.html.") {
+		t.Errorf("the named component line did not land in the body:\n%s", out)
 	}
-	if n := strings.Count(readBack(t, root, "jim/templates/home.html"), "TODO: box"); n != 6 {
-		t.Errorf("the component line changed the body: %d boxes, want the 6 from the section", n)
+	body := readBack(t, root, "jim/templates/home.html")
+	if n := strings.Count(body, "TODO: box"); n != 6 {
+		t.Errorf("the component line disturbed the section: %d boxes, want the 6 from the section", n)
+	}
+	cardAt, footAt := strings.Index(body, `class="card-title"`), strings.Index(body, "{{template \"footer\"")
+	if cardAt < 0 || footAt < 0 || cardAt > footAt {
+		t.Errorf("the card did not land above the footer call:\n%s", body)
+	}
+	header := readBack(t, root, "jim/templates/header.html")
+	if n := strings.Count(header, "/* gollemer-material: card */"); n != 1 {
+		t.Errorf("the header holds the card styles %d times, want exactly 1", n)
+	}
+	if got := readBack(t, root, "jim/templates/footer.html"); got != footerBefore {
+		t.Error("the footer file changed — the component belongs to the body and the header only")
 	}
 }
 

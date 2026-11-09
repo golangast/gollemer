@@ -132,6 +132,103 @@ func TestPlanComponentNavigationBarAndFooter(t *testing.T) {
 	}
 }
 
+// The fragment mode, at the planner: a component aimed at
+// a templated page's body file lands above the body's
+// footer call, its styles joining the shared header
+// exactly once — the footer file is not in the plan at
+// all. A second component accumulates; the same one again
+// is the already-present refusal; the navigation bar and
+// the footer answer that the page already has them; and
+// the shared header and footer as targets get the guidance
+// pointing at the body.
+func TestPlanComponentInScaffoldBody(t *testing.T) {
+	scaffold := map[string]string{
+		"jim/templates/header.html": templatedPageHeaderContent(),
+		"jim/templates/footer.html": templatedPageFooterContent(),
+		"jim/templates/home.html":   templatedPageBodyContent("home"),
+	}
+	proj := componentProject(t, scaffold)
+	plan, refusal := proj.PlanEdit(EditRequest{Kind: EditComponent, File: "jim/templates/home.html", Component: "card"})
+	if refusal != "" || plan == nil {
+		t.Fatalf("card into a scaffold body refused: %q", refusal)
+	}
+	if len(plan.Files) != 2 || plan.Files[0].Rel != "jim/templates/header.html" || plan.Files[1].Rel != "jim/templates/home.html" {
+		t.Fatalf("the fragment plan touches %+v, want the header then the body", plan.Files)
+	}
+	header, body := string(plan.Files[0].After), string(plan.Files[1].After)
+	snippet, _ := MaterialComponentSnippet("card", "")
+	cardAt, footAt := strings.Index(body, snippet), strings.Index(body, "{{template \"footer\"")
+	if cardAt < 0 || footAt < 0 || cardAt > footAt {
+		t.Errorf("the card did not land above the footer call:\n%s", body)
+	}
+	for _, call := range []string{"{{template \"header\" .}}", "{{template \"footer\" .}}"} {
+		if !strings.Contains(body, call) {
+			t.Errorf("the body lost its %s call", call)
+		}
+	}
+	if n := strings.Count(header, "/* gollemer-material: card */"); n != 1 {
+		t.Errorf("the header holds the card styles %d times, want exactly 1", n)
+	}
+	if n := strings.Count(header, "--primary: #6750A4"); n != 1 {
+		t.Errorf("the header's variables were duplicated: %d copies", n)
+	}
+
+	// From the landed state: a button accumulates in the
+	// body and its chunk joins the header; the card chunk
+	// is not carried again.
+	landed := map[string]string{
+		"jim/templates/header.html": header,
+		"jim/templates/footer.html": templatedPageFooterContent(),
+		"jim/templates/home.html":   body,
+	}
+	proj = componentProject(t, landed)
+	plan, refusal = proj.PlanEdit(EditRequest{Kind: EditComponent, File: "jim/templates/home.html", Component: "button"})
+	if refusal != "" || plan == nil {
+		t.Fatalf("button into the grown body refused: %q", refusal)
+	}
+	if len(plan.Files) != 2 {
+		t.Fatalf("the button plan touches %d files, want the header and the body", len(plan.Files))
+	}
+	header2, body2 := string(plan.Files[0].After), string(plan.Files[1].After)
+	if strings.Count(header2, "/* gollemer-material: buttons */") != 1 || strings.Count(header2, "/* gollemer-material: card */") != 1 {
+		t.Error("the header's chunks were not carried exactly once each")
+	}
+	btnAt, cardAt2 := strings.Index(body2, `class="btn btn-filled"`), strings.Index(body2, snippet)
+	if btnAt < 0 || cardAt2 < 0 || cardAt2 > btnAt {
+		t.Errorf("the button did not accumulate below the card:\n%s", body2)
+	}
+
+	// The same component again: the already-present
+	// refusal, and no plan.
+	proj = componentProject(t, map[string]string{
+		"jim/templates/header.html": header2,
+		"jim/templates/footer.html": templatedPageFooterContent(),
+		"jim/templates/home.html":   body2,
+	})
+	plan, refusal = proj.PlanEdit(EditRequest{Kind: EditComponent, File: "jim/templates/home.html", Component: "card"})
+	if plan != nil || !strings.Contains(refusal, "already has a card") || !strings.Contains(refusal, "nothing to add") {
+		t.Errorf("the repeated card: plan=%v refusal=%q, want the already-present refusal", plan != nil, refusal)
+	}
+	// The navigation bar and the footer are already on the
+	// page, in the shared files the body calls.
+	plan, refusal = proj.PlanEdit(EditRequest{Kind: EditComponent, File: "jim/templates/home.html", Component: "navigation-bar"})
+	if plan != nil || !strings.Contains(refusal, "already has its navigation bar") || !strings.Contains(refusal, "jim/templates/header.html") {
+		t.Errorf("the navigation bar on a body: plan=%v refusal=%q", plan != nil, refusal)
+	}
+	plan, refusal = proj.PlanEdit(EditRequest{Kind: EditComponent, File: "jim/templates/home.html", Component: "footer"})
+	if plan != nil || !strings.Contains(refusal, "already has its footer") || !strings.Contains(refusal, "jim/templates/footer.html") {
+		t.Errorf("the footer on a body: plan=%v refusal=%q", plan != nil, refusal)
+	}
+	// The shared pieces as targets: guidance naming the
+	// body sentence, never a landing.
+	for _, target := range []string{"jim/templates/header.html", "jim/templates/footer.html"} {
+		plan, refusal = proj.PlanEdit(EditRequest{Kind: EditComponent, File: target, Component: "card"})
+		if plan != nil || !strings.Contains(refusal, "\"add a card to jim/templates/home.html\"") {
+			t.Errorf("the card aimed at %s: plan=%v refusal=%q, want guidance naming the body sentence", target, plan != nil, refusal)
+		}
+	}
+}
+
 // The refusals: unknown component (answering with what
 // exists, from the registry), a non-.html target, a missing
 // file and an empty file (both two-step guidance at the

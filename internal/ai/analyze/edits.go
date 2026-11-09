@@ -77,7 +77,10 @@ const (
 	// from the registry in editmaterial.go, inserted just
 	// before an existing .html page's </body>, with the
 	// Material styles it needs carried into the page exactly
-	// once. No Go file is touched.
+	// once. In a templated page's body file (a fragment with
+	// no </body> of its own) the snippet lands above the
+	// body's footer call instead, its styles joining the
+	// shared header. No Go file is touched.
 	EditComponent = "component"
 
 	// Templated page scaffold (edittemplatepage.go): a page
