@@ -32,6 +32,17 @@ package chat
 //     of softeners — leading "can you" / "could you" /
 //     "please" and a trailing "please" — before its shapes
 //     apply, across the run, stop, log, and top shapes.
+//   - "run the server <name>" (2026-11-09, John's second
+//     screenshot of the day) names the program by its folder
+//     instead of its file: "run the server jim" ran the HOST
+//     repo's `make start` through the intent layer, because
+//     no run shape took it. The server shapes take a folder
+//     (or a .go file, which is just "run <file>"): the folder
+//     is resolved at claim time, and only when its top level
+//     holds exactly ONE runnable program (checkRunnableProgram
+//     is the judge) does the claim fire, on that file. Zero
+//     candidates or several — the claim declines and the line
+//     falls through untouched; it never invents a pick.
 //   - The program is built first (`go build`, argv only, no
 //     shell ever), so compiler errors surface verbatim as a
 //     compile failure and are never narrated as a run. A file
@@ -115,6 +126,7 @@ const (
 	shapeStopWatching
 	shapeWatchFolder
 	shapeStopWatchingFolder
+	shapeRunServer // "run the server <target>": a folder to resolve, or a .go file
 )
 
 // parseProgramLine classifies one chat line for this claim.
@@ -174,6 +186,27 @@ func parseProgramLine(line string) (programShape, string) {
 			if _, p := pathy(rest[3]); p {
 				return shapeRunProgram, strings.TrimRight(rest[3], ".!?")
 			}
+		}
+		// The server shapes: "run the server <target>", "run
+		// server <target>", and the "in" spellings. The word
+		// "server" is the shape — the target needs no pathiness
+		// test (a folder can be a bare name, "jim"), because
+		// resolution at claim time is the gate: it fires only
+		// for a .go file or a folder holding exactly one
+		// runnable program, and declines the line otherwise.
+		// "start a webserver in …" is untouched: "webserver"
+		// is one token, not this shape.
+		if len(rest) == 2 && fold(rest[0]) == "server" {
+			return shapeRunServer, strings.TrimRight(rest[1], ".!?")
+		}
+		if len(rest) == 3 && fold(rest[0]) == "the" && fold(rest[1]) == "server" {
+			return shapeRunServer, strings.TrimRight(rest[2], ".!?")
+		}
+		if len(rest) == 3 && fold(rest[0]) == "server" && fold(rest[1]) == "in" {
+			return shapeRunServer, strings.TrimRight(rest[2], ".!?")
+		}
+		if len(rest) == 4 && fold(rest[0]) == "the" && fold(rest[1]) == "server" && fold(rest[2]) == "in" {
+			return shapeRunServer, strings.TrimRight(rest[3], ".!?")
 		}
 	case "watch":
 		// The run shapes with "watch" as the verb: watch a
@@ -506,6 +539,10 @@ func runRunProgram(line string, ask editAsk, profile *UserProfile) bool {
 	case shapeRunProgram:
 		runProgramClaim(target, ask, profile)
 		return true
+	case shapeRunServer:
+		// Resolution is part of the claim: an unresolvable
+		// target declines, and the line falls through.
+		return runServerClaim(target, ask, profile)
 	case shapeWatchProgram:
 		watchProgramClaim(target, ask, profile)
 		return true
@@ -604,6 +641,101 @@ func runProgramClaim(target string, ask editAsk, profile *UserProfile) {
 		return
 	}
 	startProgram(tag, rel, rootAbs, binPath, src)
+}
+
+// runServerClaim carries a "run the server <target>" line.
+// A .go target is "run <file>" wearing the word server, and
+// goes through the run claim unchanged. Any other target is
+// a folder to resolve: the claim fires only when the folder
+// holds exactly one runnable program at its top level, and
+// runs THAT file through the run claim (gate, build, and
+// narration all shared). Otherwise it declines — returns
+// false with nothing printed — and the line falls through
+// to the rest of the chain exactly as typed.
+func runServerClaim(target string, ask editAsk, profile *UserProfile) bool {
+	if strings.HasSuffix(strings.ToLower(strings.TrimSpace(target)), ".go") {
+		runProgramClaim(target, ask, profile)
+		return true
+	}
+	file, ok := resolveServerFolder(target)
+	if !ok {
+		return false
+	}
+	runProgramClaim(file, ask, profile)
+	return true
+}
+
+// resolveServerFolder finds the one runnable program at a
+// named folder's top level. checkRunnableProgram is the
+// judge of runnability, exactly as for a named file — this
+// is a scan for candidates, not a second reader. Zero
+// candidates, or several (two files each carrying a func
+// main), resolves to nothing: picking between programs is
+// the user's call, never this claim's invention.
+func resolveServerFolder(target string) (string, bool) {
+	rootAbs, ok := programRootQuiet()
+	if !ok {
+		return "", false
+	}
+	rel := filepath.ToSlash(strings.TrimSpace(strings.TrimPrefix(target, "./")))
+	rel = strings.TrimSuffix(rel, "/")
+	if rel == "" {
+		rel = "."
+	}
+	abs, refusal := runProgramResolve(rootAbs, rel)
+	if refusal != "" {
+		return "", false
+	}
+	st, err := os.Stat(abs)
+	if err != nil || !st.IsDir() {
+		return "", false
+	}
+	entries, err := os.ReadDir(abs)
+	if err != nil {
+		return "", false
+	}
+	var found []string
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		src, err := os.ReadFile(filepath.Join(abs, name))
+		if err != nil {
+			continue
+		}
+		cand := name
+		if rel != "." {
+			cand = rel + "/" + name
+		}
+		if checkRunnableProgram(cand, src) == "" {
+			found = append(found, cand)
+		}
+	}
+	if len(found) != 1 {
+		return "", false
+	}
+	return found[0], true
+}
+
+// programRootQuiet is runProgramRoot without the narration:
+// the same root rule, for callers (server-folder resolution)
+// whose failure means "not this claim", not a refusal to
+// print.
+func programRootQuiet() (string, bool) {
+	rootRaw := creationRoot()
+	if rootRaw == "" {
+		return "", false
+	}
+	rootAbs, err := filepath.EvalSymlinks(rootRaw)
+	if err != nil {
+		abs, aerr := filepath.Abs(rootRaw)
+		if aerr != nil {
+			return "", false
+		}
+		rootAbs = abs
+	}
+	return rootAbs, true
 }
 
 // runProgramRoot resolves the folder programs run in: the

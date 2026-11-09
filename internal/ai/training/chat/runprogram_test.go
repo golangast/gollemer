@@ -141,6 +141,21 @@ func TestParseProgramLine(t *testing.T) {
 		{"can you start a webserver in jim/main.go", shapeNone, ""},
 		{"can you run it", shapeNone, ""},
 		{"can you run the program", shapeNone, ""},
+		// The server shapes (2026-11-09): the target is a
+		// folder to resolve at claim time, or a .go file —
+		// no pathiness test at parse, resolution is the gate.
+		{"run the server jim", shapeRunServer, "jim"},
+		{"run server jim", shapeRunServer, "jim"},
+		{"start the server jim", shapeRunServer, "jim"},
+		{"launch the server jim", shapeRunServer, "jim"},
+		{"run the server in jim", shapeRunServer, "jim"},
+		{"run server in jim", shapeRunServer, "jim"},
+		{"run the server jim/main.go", shapeRunServer, "jim/main.go"},
+		{"run the server jim/", shapeRunServer, "jim/"},
+		{"can you run the server jim", shapeRunServer, "jim"},
+		{"can you start the server jim", shapeRunServer, "jim"},
+		{"run the server", shapeNone, ""},
+		{"run server", shapeNone, ""},
 		{"can you kill the program", shapeNone, ""},
 		{"will you run jim/main.go", shapeNone, ""},
 		{"can you", shapeNone, ""},
