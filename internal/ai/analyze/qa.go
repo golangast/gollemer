@@ -71,6 +71,21 @@ func IsCodebaseQuestion(line string) bool {
 		qWhatChanges.MatchString(line)
 }
 
+// IsDataflowQuestion reports whether line has the shape of a
+// dataflow question — one the varflow index answers ("where does
+// X get its data", "where does X change", "what changes X",
+// "where is X set", "who sets X") — independent of any particular
+// project. The chat's intent layer gates its dataflow dispatch on
+// it: a trained label by itself must never earn a varflow report,
+// because the name scan behind that dispatch matches any token
+// the analyzed project tracks, and ordinary words ("need") are
+// routine variable names in real code.
+func IsDataflowQuestion(line string) bool {
+	return qDataFrom.MatchString(line) || qDataChange.MatchString(line) ||
+		qWhatChanges.MatchString(line) || qWhereSet.MatchString(line) ||
+		qWhoSets.MatchString(line)
+}
+
 // Answer answers a natural-language question about the project. It
 // returns ok=false when the question doesn't reference anything in the
 // project, so callers can fall through to normal routing.
