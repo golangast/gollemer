@@ -301,6 +301,28 @@ Run your program:
   chat open; closing the chat stops it too — no orphans. If
   the browser can't open, the address is printed plainly.
 
+Watch your program:
+
+  you> watch jim/main.go
+  gollemer [runner]> Watching jim/main.go — I'll restart it when its files change. Say "stop watching jim/main.go" to turn watching off.
+  [jim/main.go restarted — main.go changed]
+
+  "watch <file>.go" starts the program like "run jim/main.go"
+  does (or finds it already running) and restarts it when a
+  file in its folder changes — any file: Go, html, js, css.
+  "restart jim/main.go when files change" is the same ask.
+  A change that doesn't compile restarts nothing: the note
+  says the build failed and the version that's running stays
+  up. "watch folder jim/temp" names another folder to watch
+  for the same program — a folder outside the program's own,
+  like an assets folder; one already inside a watched folder
+  (jim/temp sits inside jim/) answers "already watching".
+  With no program running there is nothing to attach a folder
+  to, and the chat says to run or watch the program first.
+  "stop watching folder jim/temp" removes just that folder;
+  "stop watching jim/main.go" ends the watching and leaves
+  the program running. "top" lists the extra folders too.
+
 Basic terminal commands:
 
   you> pwd

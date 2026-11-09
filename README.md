@@ -701,6 +701,31 @@ visit is a real HTTP fetch, and the browser really was opened at the
 address the program printed. If the browser can't be opened, the chat
 says so and prints the address on its own line instead.)
 
+Or watch it while you work: `watch jim/main.go` starts the program
+just like `run jim/main.go`, then keeps an eye on its folder — when a
+file changes and the changes settle, the chat rebuilds and restarts
+it, and says so in a bracketed note:
+`[jim/main.go restarted — main.go changed]`. The same ask in other
+words is `restart jim/main.go when files change`. Any file counts —
+Go, html, js, css. A change that doesn't compile restarts nothing:
+the note says the build failed, and the version that's running
+stays up.
+
+The watch covers the program's own folder and everything under it.
+A folder elsewhere in the project joins by name: `watch folder
+<path>` adds it as another watched folder, and a change there
+restarts the program the same way, named by its full path
+(`[jim/main.go restarted — assets/app.js changed]`). So
+`watch folder jim/temp`, said while `jim/main.go` is watched,
+answers that it's already watching — `jim/temp` sits inside `jim/`,
+which the watch already covers — and naming the same folder twice is
+the same answer. Folder watching belongs to the chat's program: with
+no program running, the chat asks you to run or watch the program
+first. `stop watching folder jim/temp` removes just that folder;
+`stop watching jim/main.go` (or bare `stop watching`) ends the
+watching and leaves the program running, and `top` lists the extra
+folders next to the program.
+
 The rules around it:
 
 - **One at a time.** Running a second program while one runs answers
