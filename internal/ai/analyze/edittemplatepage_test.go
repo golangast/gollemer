@@ -119,6 +119,128 @@ func TestPlanTemplatedPageRefusals(t *testing.T) {
 	}
 }
 
+// A counted section lands in the body file only: above
+// the footer call, with exactly cols*rows boxes; its
+// styles join the header's style block once; the footer
+// file is byte-identical. A second section appends below
+// the first with no new CSS; a new column count adds only
+// its own rule, once.
+func TestPlanScaffoldSection(t *testing.T) {
+	dir, p := serveProject(t, scaffoldFixtureFiles())
+	plan, refusal := p.PlanEdit(EditRequest{Kind: EditTemplatedPage, SiteFolder: "jim", SiteName: "home"})
+	if refusal != "" || plan == nil {
+		t.Fatalf("scaffold plan = %v, refusal = %q", plan, refusal)
+	}
+	applyServePlan(t, dir, plan)
+	read := func(rel string) string {
+		b, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(rel)))
+		if err != nil {
+			t.Fatalf("read %s: %v", rel, err)
+		}
+		return string(b)
+	}
+	footerBefore := read("jim/templates/footer.html")
+	fresh := func() *Project {
+		p2, err := Analyze(dir)
+		if err != nil || p2 == nil {
+			t.Fatalf("re-analyze: %v", err)
+		}
+		return p2
+	}
+	add := func(cols, rows int) string {
+		plan, refusal := fresh().PlanEdit(EditRequest{
+			Kind: EditScaffoldSection, SiteFolder: "jim",
+			SiteBody: "jim/templates/home.html", SiteCols: cols, SiteRows: rows,
+		})
+		if refusal != "" || plan == nil {
+			t.Fatalf("section plan %dx%d = %v, refusal = %q", cols, rows, plan, refusal)
+		}
+		applyServePlan(t, dir, plan)
+		return plan.Summary
+	}
+	summary := add(2, 3)
+	if !strings.Contains(summary, "2 columns and 3 rows (6 boxes)") {
+		t.Errorf("plan doesn't state the counts:\n%s", summary)
+	}
+	body := read("jim/templates/home.html")
+	if n := strings.Count(body, "TODO: box"); n != 6 {
+		t.Errorf("body holds %d section boxes, want 6:\n%s", n, body)
+	}
+	if si, fi := strings.Index(body, "body-grid body-grid-2"), strings.Index(body, "{{template \"footer\""); si < 0 || fi < 0 || si > fi {
+		t.Errorf("the section is not above the footer call:\n%s", body)
+	}
+	headerAfterFirst := read("jim/templates/header.html")
+	for _, probe := range []string{"/* Columns-and-rows sections in the body", ".body-grid-2 { grid-template-columns: repeat(2, 1fr); }"} {
+		if n := strings.Count(headerAfterFirst, probe); n != 1 {
+			t.Errorf("header holds %q %d times, want exactly 1", probe, n)
+		}
+	}
+	if got := read("jim/templates/footer.html"); got != footerBefore {
+		t.Error("the footer file changed — a body section never touches it")
+	}
+	add(2, 3)
+	body = read("jim/templates/home.html")
+	if n := strings.Count(body, "class=\"body-grid "); n != 2 {
+		t.Errorf("after a second ask the body holds %d sections, want 2", n)
+	}
+	if got := read("jim/templates/header.html"); got != headerAfterFirst {
+		t.Error("the second section changed the header — its styles were already there")
+	}
+	add(3, 1)
+	header := read("jim/templates/header.html")
+	if n := strings.Count(header, ".body-grid-3 { grid-template-columns: repeat(3, 1fr); }"); n != 1 {
+		t.Errorf("header holds the 3-column rule %d times, want 1", n)
+	}
+	if n := strings.Count(header, "/* Columns-and-rows sections in the body"); n != 1 {
+		t.Errorf("header holds the base section styles %d times, want 1", n)
+	}
+}
+
+// The section's refusals: no scaffold in the folder is the
+// two-step, out-of-range counts refuse naming the range,
+// and a body that doesn't call the footer isn't a body the
+// piece recognises.
+func TestPlanScaffoldSectionRefusals(t *testing.T) {
+	_, p := serveProject(t, scaffoldFixtureFiles())
+	_, refusal := p.PlanEdit(EditRequest{
+		Kind: EditScaffoldSection, SiteFolder: "jim",
+		SiteBody: "jim/templates/home.html", SiteCols: 2, SiteRows: 2,
+	})
+	if !strings.Contains(refusal, "no templated page in jim yet") {
+		t.Errorf("no-scaffold refusal isn't the two-step: %q", refusal)
+	}
+	_, refusal = p.PlanEdit(EditRequest{
+		Kind: EditScaffoldSection, SiteFolder: "jim",
+		SiteBody: "jim/templates/home.html", SiteCols: 7, SiteRows: 2,
+	})
+	if !strings.Contains(refusal, "1 to 6 columns and 1 to 6 rows") {
+		t.Errorf("range refusal missing: %q", refusal)
+	}
+	dir, p := serveProject(t, scaffoldFixtureFiles())
+	plan, r := p.PlanEdit(EditRequest{Kind: EditTemplatedPage, SiteFolder: "jim", SiteName: "home"})
+	if r != "" {
+		t.Fatal(r)
+	}
+	applyServePlan(t, dir, plan)
+	bodyPath := filepath.Join(dir, "jim", "templates", "home.html")
+	b, _ := os.ReadFile(bodyPath)
+	broken := strings.Replace(string(b), "{{template \"footer\" .}}", "", 1)
+	if err := os.WriteFile(bodyPath, []byte(broken), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p2, err := Analyze(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, refusal = p2.PlanEdit(EditRequest{
+		Kind: EditScaffoldSection, SiteFolder: "jim",
+		SiteBody: "jim/templates/home.html", SiteCols: 2, SiteRows: 2,
+	})
+	if !strings.Contains(refusal, "doesn't call the shared footer") {
+		t.Errorf("footer-less body refusal missing: %q", refusal)
+	}
+}
+
 func withFile(files map[string]string, rel, content string) map[string]string {
 	out := map[string]string{}
 	for k, v := range files {

@@ -2,6 +2,7 @@ package chat
 
 import (
 	"fmt"
+	"path"
 	"strings"
 
 	"github.com/golangast/gollemer/internal/ai/analyze"
@@ -91,6 +92,10 @@ func renderLandingConfirmation(f landingFacts) string {
 		s1 = fmt.Sprintf("The %s is in %s", analyze.MaterialComponentWords(f.req.Component), f.fresh.LinkPath(rel))
 	case analyze.EditTemplatedPage:
 		s1, s2 = confirmTemplatedPage(f)
+	case analyze.EditScaffoldSection:
+		s1 = fmt.Sprintf("The %s page's body in %s now has a section of %s",
+			strings.TrimSuffix(path.Base(f.req.SiteBody), ".html"), f.fresh.LinkPath(f.req.SiteBody),
+			analyze.ScaffoldSectionWords(f.req.SiteCols, f.req.SiteRows))
 	case analyze.EditAddServer:
 		s1 = confirmAddServer(f, rel)
 	case analyze.EditConcept:

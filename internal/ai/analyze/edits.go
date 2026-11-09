@@ -89,6 +89,14 @@ const (
 	// wired.
 	EditTemplatedPage = "templated_page"
 
+	// Scaffold section (edittemplatepage.go): a counted
+	// columns-and-rows section inserted into a templated
+	// page's BODY file, just before its footer call, with
+	// the section's styles joining the shared header's
+	// style block exactly once. The header and footer files
+	// are otherwise untouched.
+	EditScaffoldSection = "scaffold_section"
+
 	// Page family (editpage.go): a named page kind as a matched
 	// page+handler pair — an .html page created with starter
 	// content (never overwritten), the handler that serves it
@@ -224,6 +232,15 @@ type EditRequest struct {
 	// HomePage handler), both resolved by the chat layer.
 	SiteFolder string
 	SiteName   string
+
+	// scaffold_section: the body file the section lands in
+	// (SiteBody, project-relative — the chat layer resolves
+	// "the body" to the folder's one scaffold body, asking
+	// when there are several), and the section's counts
+	// (SiteCols, SiteRows, each 1–6).
+	SiteBody string
+	SiteCols int
+	SiteRows int
 
 	// serve_static: the folder whose files the server serves
 	// at /static/ (project-relative slash path; "." = the
@@ -485,6 +502,8 @@ func (p *Project) PlanEdit(req EditRequest) (*EditPlan, string) {
 		return p.planComponent(req)
 	case EditTemplatedPage:
 		return p.planTemplatedPage(req)
+	case EditScaffoldSection:
+		return p.planScaffoldSection(req)
 	case EditPage:
 		return p.planPage(req)
 	case EditDelegate:

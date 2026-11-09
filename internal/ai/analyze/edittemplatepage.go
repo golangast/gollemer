@@ -172,6 +172,140 @@ func templatedPageHandlerContent(pkgName, folder, name string) string {
 	return b.String()
 }
 
+// ScaffoldSectionWords renders a section's counts the way
+// sentences and plans name them: "2 columns and 3 rows".
+func ScaffoldSectionWords(cols, rows int) string {
+	return countPhrase(cols, "column", "columns") + " and " + countPhrase(rows, "row", "rows")
+}
+
+// scaffoldSectionContent is one columns-and-rows section
+// for a body file: a grid of exactly cols*rows boxes, in
+// the counted grid's card style, under a comment that says
+// what it is and where its styles live.
+func scaffoldSectionContent(cols, rows int) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "<!-- A columns-and-rows section: %s across by %s down, %s. Its styles live in the header, with this page's other styles. -->\n",
+		countPhrase(cols, "column", "columns"), countPhrase(rows, "row", "rows"), countPhrase(cols*rows, "box", "boxes"))
+	fmt.Fprintf(&b, "<div class=\"body-grid body-grid-%d\">\n", cols)
+	for n := 1; n <= cols*rows; n++ {
+		fmt.Fprintf(&b, "<div class=\"card\">\n<p>TODO: box %d's words — one box per thing this section shows off.</p>\n</div>\n", n)
+	}
+	b.WriteString("</div>\n")
+	return b.String()
+}
+
+// scaffoldSectionBaseCSS is the styles every body section
+// shares — the grid flow, the gaps, the card look — carried
+// into the header's style block once, under its marker.
+const scaffoldSectionBaseCSS = "/* Columns-and-rows sections in the body: the grid and its cards. */\n" +
+	".body-grid { display: grid; gap: 1em; margin: 1em 0; }\n" +
+	".body-grid .card { border: 1px solid var(--outline); border-radius: 0.75em; padding: 1em; }\n"
+
+const scaffoldSectionBaseProbe = "/* Columns-and-rows sections in the body"
+
+// scaffoldSectionColsCSS is one column count's rule, also
+// carried once per count: how many boxes sit across, and
+// the narrow-screen collapse to one.
+func scaffoldSectionColsCSS(cols int) string {
+	s := fmt.Sprintf("/* A body section %s across. */\n.body-grid-%d { grid-template-columns: repeat(%d, 1fr); }\n",
+		countPhrase(cols, "column", "columns"), cols, cols)
+	if cols > 1 {
+		s += fmt.Sprintf("@media (max-width: 32em) { .body-grid-%d { grid-template-columns: 1fr; } }\n", cols)
+	}
+	return s
+}
+
+func scaffoldSectionColsProbe(cols int) string {
+	// The full rule, not just the selector: the narrow
+	// screen's media query repeats the selector with a
+	// different body, and only the rule itself proves the
+	// count's styles are in.
+	return fmt.Sprintf(".body-grid-%d { grid-template-columns: repeat(%d, 1fr); }", cols, cols)
+}
+
+// planScaffoldSection inserts one counted section into a
+// scaffold body file, just before its footer call — below
+// everything the body already holds, so sections
+// accumulate in ask order — and carries the section's
+// styles into the shared header's style block, each chunk
+// once, the way component styles are carried. The footer
+// file is never touched, and the header is only touched
+// when a style chunk is genuinely missing.
+func (p *Project) planScaffoldSection(req EditRequest) (*EditPlan, string) {
+	folder := path.Clean(filepath.ToSlash(strings.TrimSpace(req.SiteFolder)))
+	cols, rows := req.SiteCols, req.SiteRows
+	if cols < 1 || cols > 6 || rows < 1 || rows > 6 {
+		return nil, fmt.Sprintf("a columns-and-rows section can have 1 to 6 columns and 1 to 6 rows — %s is outside that. Ask again with numbers in that range.", ScaffoldSectionWords(cols, rows))
+	}
+	headerRel, _, _, _ := TemplatedPageFiles(folder, "x")
+	bodyRel := path.Clean(filepath.ToSlash(strings.TrimSpace(req.SiteBody)))
+	if bodyRel == headerRel || bodyRel == path.Join(folder, "templates", "footer.html") ||
+		!strings.HasPrefix(bodyRel, path.Join(folder, "templates")+"/") || !strings.HasSuffix(bodyRel, ".html") {
+		return nil, "that edit needs the templated page's body file — a page file in the folder's templates folder, not the shared header or footer."
+	}
+	headerBefore, herr := os.ReadFile(filepath.Join(p.Root, filepath.FromSlash(headerRel)))
+	if herr != nil {
+		return nil, fmt.Sprintf("there's no templated page in %s yet — the header that every body section's styles join isn't there. Say \"add a templated page called <name> in %s\" first, then ask again.", folder, folder)
+	}
+	bodyBefore, berr := os.ReadFile(filepath.Join(p.Root, filepath.FromSlash(bodyRel)))
+	if berr != nil {
+		return nil, fmt.Sprintf("%s isn't there — the body the section belongs in is missing. Say \"add a templated page called <name> in %s\" first, then ask again.", p.LinkPath(bodyRel), folder)
+	}
+	header := string(headerBefore)
+	body := string(bodyBefore)
+	footerCall := strings.Index(body, "{{template \"footer\"")
+	if footerCall < 0 {
+		return nil, fmt.Sprintf("%s doesn't call the shared footer at its foot, so it isn't a templated page's body I recognise — the section has nowhere honest to land.", p.LinkPath(bodyRel))
+	}
+	styleEnd := strings.Index(header, "</style>")
+	if styleEnd < 0 {
+		return nil, fmt.Sprintf("%s has no style block for the section's styles to join — it isn't the scaffold's header I recognise.", p.LinkPath(headerRel))
+	}
+	var css strings.Builder
+	if !strings.Contains(header, scaffoldSectionBaseProbe) {
+		css.WriteString(scaffoldSectionBaseCSS)
+	}
+	if !strings.Contains(header, scaffoldSectionColsProbe(cols)) {
+		css.WriteString(scaffoldSectionColsCSS(cols))
+	}
+	section := scaffoldSectionContent(cols, rows)
+	newBody := body[:footerCall] + section + body[footerCall:]
+	pageName := strings.TrimSuffix(path.Base(bodyRel), ".html")
+	files := []EditFile{}
+	if css.Len() > 0 {
+		files = append(files, finishFile(headerRel, headerBefore, []byte(header[:styleEnd]+css.String()+header[styleEnd:])))
+	}
+	files = append(files, finishFile(bodyRel, bodyBefore, []byte(newBody)))
+	beforeSections := strings.Count(body, "class=\"body-grid ")
+	summary := fmt.Sprintf("Add a section of %s (%s) to the %s page's body in %s, below what the body already holds and above its footer call%s.",
+		ScaffoldSectionWords(cols, rows), countPhrase(cols*rows, "box", "boxes"), pageName, p.LinkPath(bodyRel),
+		map[bool]string{true: ", with the section's styles joining the header's style block in " + p.LinkPath(headerRel), false: " — its styles are already in the header"}[css.Len() > 0])
+	return &EditPlan{
+		Summary:    summary,
+		VerifyDesc: fmt.Sprintf("the %s page's body in %s now has a section of %s", pageName, p.LinkPath(bodyRel), ScaffoldSectionWords(cols, rows)),
+		Site:       p.LinkPath(bodyRel),
+		Files:      files,
+		Notes: []string{
+			"The section lands in the body file only — the shared footer is untouched, and the header changes only if a style it needs is missing.",
+		},
+		verify: func(after *Project) bool {
+			b, err := os.ReadFile(filepath.Join(after.Root, filepath.FromSlash(bodyRel)))
+			if err != nil || string(b) != newBody {
+				return false
+			}
+			if strings.Count(string(b), "class=\"body-grid ") != beforeSections+1 {
+				return false
+			}
+			h, err := os.ReadFile(filepath.Join(after.Root, filepath.FromSlash(headerRel)))
+			if err != nil {
+				return false
+			}
+			return strings.Contains(string(h), scaffoldSectionBaseProbe) &&
+				strings.Contains(string(h), scaffoldSectionColsProbe(cols))
+		},
+	}, ""
+}
+
 // planTemplatedPage assembles the scaffold: four new files,
 // each refused if it already exists. The folder must exist
 // (a two-step, like the neighbours), its Go files must

@@ -103,6 +103,9 @@ func claimChain(line string, ask editAsk, profile *UserProfile) bool {
 	if runTemplatedPage(line, ask) {
 		return true
 	}
+	if runScaffoldSection(line, ask) {
+		return true
+	}
 	if runServeStatic(line, ask) {
 		return true
 	}

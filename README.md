@@ -479,7 +479,11 @@ joined when the page is served by Go's html/template — plus
 the handler that renders it (`HomePage` in `jim/homepage.go`).
 No route is wired: the handler waits for the connect sentence
 like any other. Run the server from the project root — that's
-where the handler's template paths point.
+where the handler's template paths point. Then grow the body:
+`add 2 columns and 3 rows to the body in jim` puts a counted
+section of boxes into the body file alone (its styles join the
+header's, once), and asking again adds another section below
+the first. With no counts it makes 2 columns and 2 rows.
 
 A page's style sheets, scripts, and pictures are files too, and
 the server can serve the whole folder they live in: `serve static

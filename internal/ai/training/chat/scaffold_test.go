@@ -135,6 +135,168 @@ func TestTemplatedPageFolderAsked(t *testing.T) {
 	}
 }
 
+// The body-section grammar, at parse: digits and words,
+// columns-only (rows settle at 2), the bare shape (counts
+// unset — the parser's 2x2 default rides in the ask), and
+// the named-page form. The webpage's counted grid and other
+// neighbours decline.
+func TestParseScaffoldSection(t *testing.T) {
+	claims := []struct {
+		line         string
+		cols, rows   int
+		counted      bool
+		page, folder string
+	}{
+		{"add 2 columns and 3 rows to the body in jim", 2, 3, true, "", "jim"},
+		{"add two columns and three rows to the body in jim", 2, 3, true, "", "jim"},
+		{"add 3 columns to the body in jim", 3, 2, true, "", "jim"},
+		{"add columns and rows to the body in jim", 2, 2, false, "", "jim"},
+		{"add 2 columns and 3 rows to the body of home in jim", 2, 3, true, "home", "jim"},
+		{"add 2 columns and 3 rows to the body of the home page in jim", 2, 3, true, "home", "jim"},
+	}
+	for _, c := range claims {
+		q, ok := parseScaffoldSection(c.line)
+		if !ok || q.cols != c.cols || q.rows != c.rows || q.counted != c.counted || q.page != c.page || q.folder != c.folder {
+			t.Errorf("parseScaffoldSection(%q) = %+v, %v; want cols=%d rows=%d counted=%v page=%q folder=%q",
+				c.line, q, ok, c.cols, c.rows, c.counted, c.page, c.folder)
+		}
+		if rt, ok := parseScaffoldSection(q.canonical()); !ok || rt.cols != q.cols || rt.rows != q.rows || rt.page != q.page || rt.folder != q.folder {
+			t.Errorf("canonical %q does not round-trip: %+v, %v", q.canonical(), rt, ok)
+		}
+	}
+	for _, line := range []string{
+		"add template 2 columns 3 rows to jim/temp/index.html",
+		"add 2 columns and 3 rows to jim/temp/index.html",
+		"add a grid template with 2 columns and 3 rows to jim/temp/index.html",
+		"add 2 columns and 3 rows to the page in jim",
+		"add a templated page called home in jim",
+	} {
+		if q, ok := parseScaffoldSection(line); ok {
+			t.Errorf("parseScaffoldSection(%q) claimed %+v — not its sentence", line, q)
+		}
+	}
+}
+
+// John's shape lands the section in the body file only:
+// the confirmation states the counts, the footer is
+// byte-identical, the header's styles land once — and a
+// second ask appends a second section below the first.
+func TestScaffoldSectionLands(t *testing.T) {
+	root := staticAssetsFixture(t, staticAssetsFiles(map[string]string{
+		"jim/main.go": staticJimMain,
+	}))
+	profile := &UserProfile{}
+	captureStdout(t, func() {
+		claimChain("add a templated page called home in jim", yes, profile)
+	})
+	footerBefore := readBack(t, root, "jim/templates/footer.html")
+	out := captureStdout(t, func() {
+		claimChain("add 2 columns and 3 rows to the body in jim", yes, profile)
+	})
+	for _, want := range []string{
+		"section of 2 columns and 3 rows (6 boxes)",
+		"Done — The home page's body in jim/templates/home.html now has a section of 2 columns and 3 rows.",
+		"I built the project and checked that it's really there.",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("section landing missing %q:\n%s", want, out)
+		}
+	}
+	body := readBack(t, root, "jim/templates/home.html")
+	if n := strings.Count(body, "TODO: box"); n != 6 {
+		t.Errorf("body holds %d section boxes, want 6", n)
+	}
+	if got := readBack(t, root, "jim/templates/footer.html"); got != footerBefore {
+		t.Error("the footer file changed — the section belongs to the body only")
+	}
+	headerBefore := readBack(t, root, "jim/templates/header.html")
+	captureStdout(t, func() {
+		claimChain("add 2 columns and 3 rows to the body in jim", yes, profile)
+	})
+	body = readBack(t, root, "jim/templates/home.html")
+	if n := strings.Count(body, "class=\"body-grid "); n != 2 {
+		t.Errorf("after a second ask the body holds %d sections, want 2", n)
+	}
+	if got := readBack(t, root, "jim/templates/header.html"); got != headerBefore {
+		t.Error("the second section rewrote the header — its styles land once")
+	}
+	for _, probe := range []string{"/* Columns-and-rows sections in the body", ".body-grid-2 { grid-template-columns: repeat(2, 1fr); }"} {
+		if n := strings.Count(headerBefore, probe); n != 1 {
+			t.Errorf("header holds %q %d times, want exactly 1", probe, n)
+		}
+	}
+}
+
+// The settled defaults, pinned: no counts at all lands
+// 2 columns and 2 rows, stated in the confirmation;
+// columns alone lands rows of 2.
+func TestScaffoldSectionDefaults(t *testing.T) {
+	root := staticAssetsFixture(t, staticAssetsFiles(map[string]string{
+		"jim/main.go": staticJimMain,
+	}))
+	profile := &UserProfile{}
+	captureStdout(t, func() {
+		claimChain("add a templated page called home in jim", yes, profile)
+	})
+	out := captureStdout(t, func() {
+		claimChain("add columns and rows to the body in jim", yes, profile)
+	})
+	if !strings.Contains(out, "now has a section of 2 columns and 2 rows.") {
+		t.Errorf("the bare ask didn't land the stated 2x2 default:\n%s", out)
+	}
+	if n := strings.Count(readBack(t, root, "jim/templates/home.html"), "TODO: box"); n != 4 {
+		t.Errorf("the 2x2 section holds %d boxes, want 4", n)
+	}
+	out = captureStdout(t, func() {
+		claimChain("add 3 columns to the body in jim", yes, profile)
+	})
+	if !strings.Contains(out, "now has a section of 3 columns and 2 rows.") {
+		t.Errorf("columns alone didn't settle rows at 2:\n%s", out)
+	}
+}
+
+// The section's refusals and question: out-of-range counts
+// refuse like the counted grid; no scaffold in the folder
+// is the two-step; several bodies and no name asks which
+// page — and the pick lands in that page's body only.
+func TestScaffoldSectionRefusalsAndPick(t *testing.T) {
+	profile := &UserProfile{}
+	root := staticAssetsFixture(t, staticAssetsFiles(map[string]string{
+		"jim/main.go": staticJimMain,
+	}))
+	out := captureStdout(t, func() {
+		claimChain("add 2 columns and 3 rows to the body in jim", yes, profile)
+	})
+	if !strings.Contains(out, "there's no templated page in jim yet") || !strings.Contains(out, "add a templated page called <name> in jim") {
+		t.Errorf("no-scaffold answer isn't the two-step:\n%s", out)
+	}
+	out = captureStdout(t, func() {
+		claimChain("add 9 columns and 3 rows to the body in jim", yes, profile)
+	})
+	if !strings.Contains(out, "1 to 6 columns and 1 to 6 rows") || !strings.Contains(out, "9 columns") {
+		t.Errorf("out-of-range refusal missing:\n%s", out)
+	}
+	captureStdout(t, func() {
+		claimChain("add a templated page called home in jim", yes, profile)
+	})
+	writeFile(t, root, "jim/templates/about.html", readBack(t, root, "jim/templates/home.html"))
+	out = captureStdout(t, func() {
+		claimChain("add 2 columns and 2 rows to the body in jim", yes, profile)
+	})
+	if !strings.Contains(out, "more than one templated page") || !hasPendingQuestion() {
+		t.Fatalf("the two-body ask was not claimed with a question:\n%s", out)
+	}
+	out = captureStdout(t, func() {
+		claimChain("about", yes, profile)
+	})
+	if !strings.Contains(out, "The about page's body in jim/templates/about.html now has a section of 2 columns and 2 rows.") {
+		t.Errorf("the pick didn't land in the about body:\n%s", out)
+	}
+	if strings.Contains(readBack(t, root, "jim/templates/home.html"), "body-grid") {
+		t.Error("the section also landed in the home body — the pick names one page")
+	}
+}
+
 // The chat-level refusals: a missing folder is a two-step,
 // an existing header refuses naming it, and a bad name
 // refuses in the planner's words — nothing written in any

@@ -1495,6 +1495,18 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if tryTemplatedPage(line, reader) {
 			continue
 		}
+		// Columns and rows into a templated page's body
+		// (scaffoldbody.go): "add 2 columns and 3 rows to
+		// the body in jim" — a counted section in the
+		// scaffold's body file, its styles joining the
+		// header's. Seated with the scaffold claim: its
+		// counts come before any object word, so the
+		// webpage's counted-grid sentences (which name
+		// their template and file) never match it, and it
+		// never matches theirs.
+		if tryScaffoldSection(line, reader) {
+			continue
+		}
 		// Serve static files, claimed deterministically beside
 		// serve-html: one file-server registration at /static/
 		// on the project's existing server, through the wiring

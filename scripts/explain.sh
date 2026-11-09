@@ -199,6 +199,10 @@ Create folders and files — shown first, gated, then verified:
       jim/templates/home.html (the body between them) —
       plus the HomePage handler that renders it. No route
       is wired; the handler waits for the connect sentence.
+      Its body grows by section: "add 2 columns and 3 rows
+      to the body in jim" — 1 to 6 of each, the counts
+      stated in the plan; no counts means 2 by 2, and a
+      second ask adds another section below the first.
   you> serve static files
       wires the webpage's folder — or one you name:
       "serve static files from jim/temp", "serve the
