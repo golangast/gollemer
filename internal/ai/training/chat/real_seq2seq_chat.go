@@ -1470,6 +1470,27 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if tryPageFamily(line, reader) {
 			continue
 		}
+		// The webpage piece, claimed deterministically beside
+		// the page family: a plain webpage from a picked
+		// template into one named .html file — created, or
+		// filled when the file sits there empty, never
+		// overwriting a page with words in it. The page
+		// family's kind sentences are claimed just above and
+		// never reach here; this grammar's object is the bare
+		// word "webpage", nothing else.
+		if tryWebpage(line, reader) {
+			continue
+		}
+		// Serve static files, claimed deterministically beside
+		// serve-html: one file-server registration at /static/
+		// on the project's existing server, through the wiring
+		// machinery's conflict rules. The concept book's
+		// targeted lines ("serve static files to main.go")
+		// carry a file target this grammar never takes, so
+		// they fall past here to the book, untouched.
+		if tryServeStatic(line, reader) {
+			continue
+		}
 		// Cross-file delegates, claimed deterministically beside
 		// the other write-side parsers: "add a function in
 		// app/main.go that calls store.Load" writes code in one

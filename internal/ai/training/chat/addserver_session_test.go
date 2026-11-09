@@ -97,6 +97,12 @@ func claimChain(line string, ask editAsk, profile *UserProfile) bool {
 	if runPageFamily(line, ask) {
 		return true
 	}
+	if runWebpage(line, ask) {
+		return true
+	}
+	if runServeStatic(line, ask) {
+		return true
+	}
 	if runDelegate(line, ask) {
 		return true
 	}

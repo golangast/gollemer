@@ -58,6 +58,21 @@ const (
 	// custom server) is a refusal with the facts.
 	EditWireHandler = "wire_handler"
 
+	// Webpage (editwebpage.go): one plain webpage from a named
+	// template, written into one .html file — created when
+	// missing, filled when it exists but is empty, never
+	// overwriting a page that already has content. No Go file
+	// is touched: the page is the whole edit.
+	EditWebpage = "webpage"
+
+	// Serve static files (editservestatic.go): one file-server
+	// registration on the project's existing webserver — route
+	// /static/ answered by http.FileServer over one project
+	// folder, inserted before the serve statement under the
+	// wiring machinery's rules (conflicts read project-wide,
+	// custom servers refused with the line handed over).
+	EditServeStatic = "serve_static"
+
 	// Page family (editpage.go): a named page kind as a matched
 	// page+handler pair — an .html page created with starter
 	// content (never overwritten), the handler that serves it
@@ -163,6 +178,17 @@ type EditRequest struct {
 	// file's folder (File) or below it. The planner derives
 	// the ServeFile argument from the two paths.
 	ServeHTML string
+
+	// webpage: the page file (File, shared with add_server —
+	// project-relative slash path, .html) and the template
+	// ("basic" | "responsive" | "assets"), both resolved by
+	// the chat layer.
+	WebpageTemplate string
+
+	// serve_static: the folder whose files the server serves
+	// at /static/ (project-relative slash path; "." = the
+	// project root), resolved by the chat layer.
+	StaticFolder string
 
 	// wire_handler: the handler's name as typed ("" = the
 	// sentence named none — the planner resolves the project's
@@ -411,6 +437,10 @@ func (p *Project) PlanEdit(req EditRequest) (*EditPlan, string) {
 		return p.planServeHTML(req)
 	case EditWireHandler:
 		return p.planWireHandler(req)
+	case EditWebpage:
+		return p.planWebpage(req)
+	case EditServeStatic:
+		return p.planServeStatic(req)
 	case EditPage:
 		return p.planPage(req)
 	case EditDelegate:

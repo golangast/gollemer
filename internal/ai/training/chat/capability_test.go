@@ -146,6 +146,14 @@ func capabilityExampleGates(t *testing.T) map[string]func(string) bool {
 			_, ok := parseServeHTML(s)
 			return ok
 		}),
+		"add a webpage to jim/temp/index.html": parse(func(s string) bool {
+			q, ok := parseWebpage(s)
+			return ok && !q.fileMissing && q.file == "jim/temp/index.html"
+		}),
+		"serve static files": parse(func(s string) bool {
+			_, ok := parseServeStatic(s)
+			return ok
+		}),
 		"add a form handler named Jake to main.go": parse(func(s string) bool {
 			req, ok := parseConcept(s)
 			return ok && req.entry.ID == "form-handler"

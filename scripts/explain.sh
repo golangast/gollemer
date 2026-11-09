@@ -170,6 +170,16 @@ Create folders and files — shown first, gated, then verified:
       and the plan names the connect sentence that finishes
       the wiring. A page that already exists is never
       overwritten.
+  you> add a webpage to jim/temp/index.html
+      a plain webpage in a named file, from a template you
+      pick — basic, responsive, or with assets: created when
+      the file is new, filled when it sits there empty, and
+      never overwriting a page that already has words in it.
+  you> serve static files
+      wires the webpage's folder — or one you name — into
+      your server at /static/, so its style sheets, scripts,
+      and images are served too; one file server covers them
+      all, each file's type picked from its ending.
 
 Add pieces from the book of 135 known Go shapes:
 

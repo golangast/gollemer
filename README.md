@@ -431,6 +431,26 @@ carry TODOs where your own words and data go: the item list opens
 with placeholder items, the details page with placeholder fields.
 Gollemer doesn't invent your content.
 
+### A plain webpage, and serving its files
+
+Not every page is one of the six kinds. `add a webpage to
+jim/temp/index.html` puts a plain webpage into a named file, from
+a template you pick — **basic** (a title, a heading, a paragraph),
+**responsive** (the same, plus a viewport line and a little CSS
+so the page fits a phone's screen too), or **with assets** (wired
+to load a style sheet, a script, and a picture from `/static/`).
+It asks which template when you don't name one. The file is
+created when new, filled when it sits there empty — and a page
+that already has words in it is never overwritten.
+
+A page's style sheets, scripts, and pictures are files too, and
+the server can serve the whole folder they live in: `serve static
+files` registers that folder at `/static/` on your existing
+server, so the folder's `style.css` answers at
+`http://localhost:8080/static/style.css`. One mechanism covers
+images, js, and css alike — the file server picks each file's
+content type from its extension.
+
 The security pieces explain themselves as they land:
 
 ```
