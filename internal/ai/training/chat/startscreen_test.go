@@ -3,6 +3,7 @@ package chat
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -378,12 +379,76 @@ func sha256Sum(b []byte) []byte {
 
 // (stdout capture reuses captureStdout from makeexplain_test.go.)
 
+// The default launch line since 2026-11-09: ONE line — the
+// ready notice with the live brain count, and the two doors in
+// ("start" for the tour, "what can you do" for the capability
+// list). No panel, no capability block: those live behind the
+// GOLLEMER_BANNER=full opt-in now.
+func TestCompactStartLine(t *testing.T) {
+	out := compactStartText()
+	want := fmt.Sprintf("%d brains ready. Say \"start\" for the tour, or \"what can you do\" for everything I can do.",
+		len(brainRegistry))
+	if out != want {
+		t.Errorf("compact start line drifted:\ngot:  %q\nwant: %q", out, want)
+	}
+	if strings.Contains(out, "\n") {
+		t.Errorf("compact start must be one line:\n%q", out)
+	}
+	for _, banned := range []string{"GOLLEMER", "│", "╭", "╯"} {
+		if strings.Contains(out, banned) {
+			t.Errorf("compact start carries panel dressing %q:\n%q", banned, out)
+		}
+	}
+	for _, line := range capabilityLines {
+		if strings.Contains(out, line) {
+			t.Errorf("compact start carries a capability line:\n%q", out)
+		}
+	}
+	// The opt-in gate: only the exact value "full" restores the
+	// full face.
+	if fullStartScreen() {
+		t.Error("full face must not be the default")
+	}
+}
+
 func TestStartScreenPrintOrderAndPacing(t *testing.T) {
 	home := startFixtureHome(t)
 	root := filepath.Join(home, "proj")
 	oldC, oldOn, oldInter, oldSleep := colorEnabled, paceOn, paceInteractive, paceSleep
 	defer func() { colorEnabled, paceOn, paceInteractive, paceSleep = oldC, oldOn, oldInter, oldSleep }()
 	colorEnabled = false
+	pauses := 0
+	paceSleep = func(time.Duration) { pauses++ }
+
+	// DEFAULT (GOLLEMER_BANNER anything but "full"): the compact
+	// line only, in one unpaced write — identical bytes in every
+	// mode, and NO pauses even on a terminal with pacing on.
+	// Startup never types itself out.
+	t.Setenv("GOLLEMER_BANNER", "")
+	compactWant := compactStartText() + "\n"
+	paceOn, paceInteractive = true, false
+	if got := captureStdout(t, func() { printStartScreen(root) }); got != compactWant {
+		t.Errorf("compact print (piped) differs:\ngot:\n%s\nwant:\n%s", got, compactWant)
+	}
+	paceInteractive = true
+	if got := captureStdout(t, func() { printStartScreen(root) }); got != compactWant {
+		t.Errorf("compact print (terminal) differs:\ngot:\n%s\nwant:\n%s", got, compactWant)
+	}
+	if pauses != 0 {
+		t.Errorf("compact startup paused %d times — startup must not pace", pauses)
+	}
+	paceOn = false
+	if got := captureStdout(t, func() { printStartScreen(root) }); got != compactWant {
+		t.Errorf("compact print (pace off) differs:\ngot:\n%s\nwant:\n%s", got, compactWant)
+	}
+	if pauses != 0 {
+		t.Errorf("compact startup paused with pacing off: %d", pauses)
+	}
+
+	// OPT-IN (GOLLEMER_BANNER=full): the old full face — the
+	// composed screen text, complete and in order in every mode;
+	// the capability block paces on a terminal only.
+	t.Setenv("GOLLEMER_BANNER", "full")
 	want := startScreenText(root) + "\n"
 
 	// Piped (non-interactive): everything at once, complete, in
@@ -395,8 +460,7 @@ func TestStartScreenPrintOrderAndPacing(t *testing.T) {
 
 	// Terminal: the capability block paces (pauses counted, not
 	// slept), and the bytes are still complete and in order.
-	pauses := 0
-	paceSleep = func(time.Duration) { pauses++ }
+	pauses = 0
 	paceInteractive = true
 	if got := captureStdout(t, func() { printStartScreen(root) }); got != want {
 		t.Errorf("paced print differs from composed screen:\ngot:\n%s\nwant:\n%s", got, want)
