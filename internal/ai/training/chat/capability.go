@@ -139,6 +139,7 @@ var capabilityCatalog = []capabilityGroup{
 		{"Rename a function, a type, a variable, or a field everywhere it appears", "rename the function Foo to Bar"},
 		{"Write a function in one file that calls code from another", "add a function in app/main.go that calls store.Load"},
 		{"Make a value of one of your structs inside a function", "add instantiation of struct Jim to handler Jake"},
+		{"Give a goroutine a result — it sends the value back over a channel", "have the goroutine return a string"},
 	}},
 	{title: "ASK — answers from your project and my notes, never invented", entries: []capabilityEntry{
 		{"Tell you what a Go word means, or what a make target does", "what is a goroutine"},

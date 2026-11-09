@@ -1516,6 +1516,22 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if tryMakeCall(line, reader) {
 			continue
 		}
+		// "have the goroutine return a string" — the
+		// goroutine-result piece. A goroutine cannot return
+		// a value, so the ask owns the channel idiom: a
+		// channel before the go statement, a send inside
+		// it, the receive right after. Seated with the
+		// deterministic write-side families, ahead of the
+		// phrasing layer: John's live failure 2026-11-09
+		// ("can you update the goroutine to return a string
+		// in jim/main.go") was stolen by that layer into
+		// "add a string to jim/main.go" — a stray string
+		// statement where a goroutine edit was asked for.
+		// This grammar claims those sentences first, and
+		// its parse declines everything else it is handed.
+		if tryGoroutineResult(line, reader) {
+			continue
+		}
 		// The ambiguous-piece guidance's pre-book claim
 		// (ambiguouspiece.go): the bare ask "add a database
 		// to jake" is the concept book's own bare name for its

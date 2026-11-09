@@ -183,7 +183,11 @@ func capabilityExampleGates(t *testing.T) map[string]func(string) bool {
 			_, ok := parseInstantiate(s)
 			return ok
 		}),
-		"what is a goroutine":      parse(func(s string) bool { _, ok := LookupGoKnowledge(s); return ok }),
+		"have the goroutine return a string": parse(func(s string) bool {
+			_, ok := parseGoroutineResult(s)
+			return ok
+		}),
+		"what is a goroutine": parse(func(s string) bool { _, ok := LookupGoKnowledge(s); return ok }),
 		"how do I serve static files": parse(func(s string) bool {
 			e, ok := lookupGoKnowledgeEntry(s)
 			return ok && e.title == "serving static files"

@@ -115,6 +115,15 @@ const (
 	EditRenameParam   = "rename_param"
 	EditReorderParams = "reorder_params"
 	EditAddParam      = "add_param"
+
+	// Goroutine result (editgoroutine.go): give an existing
+	// anonymous goroutine — a go func() { ... }() written out
+	// in a function — a way to hand a value back: a channel
+	// declared before the go statement, a send at the end of
+	// the goroutine's body, and the receive right after it.
+	// A goroutine cannot return a value in Go; the channel
+	// is the language's own answer, assembled here.
+	EditGoroutineResult = "goroutine_result"
 )
 
 // EditRequest is one parsed change request.
@@ -317,6 +326,18 @@ type EditRequest struct {
 	ProposedReceiver string
 	ProposedImports  string
 
+	// goroutine_result: the result type the sentence named
+	// (GoroutineType — one of the closed set in
+	// editgoroutine.go: string, int, bool, float64) and,
+	// when the sentence pinned one of several goroutines,
+	// its 1-based position among the go statements in the
+	// resolved scope — the named function (FuncName, shared
+	// above), or the whole file (File, shared above) when
+	// no function was named. GoroutineOrdinal == 0 means
+	// the sentence named no position.
+	GoroutineType    string
+	GoroutineOrdinal int
+
 	// taught_decl: the taught template's source, already
 	// renamed by the chat layer to TaughtName (the new
 	// declaration's name); TaughtDeclKind is "function" or
@@ -429,6 +450,8 @@ func (p *Project) PlanEdit(req EditRequest) (*EditPlan, string) {
 		return p.planInstantiate(req)
 	case EditRenameParam, EditReorderParams, EditAddParam:
 		return p.planSignature(req)
+	case EditGoroutineResult:
+		return p.planGoroutineResult(req)
 	}
 	return nil, "I don't know that kind of edit yet."
 }

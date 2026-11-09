@@ -278,6 +278,13 @@ its own. Ask twice and it tells you the truth — already registered,
 nothing to add — and a path another handler already owns is refused
 with that handler named.
 
+A goroutine can't hand a value back by returning — a `go` statement
+throws results away — so `have the goroutine return a string` wires
+Go's own answer instead: a channel declared just before the
+goroutine, a send at the end of its body (the type's zero value for
+now, under a TODO marking where the real result goes), and the
+receive right after it, where the function waits for the value.
+
 ### When something's missing, it asks
 
 If an ask is one piece of information short — which handler, which
