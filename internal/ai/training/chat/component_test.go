@@ -29,12 +29,19 @@ func TestParseComponentClaims(t *testing.T) {
 		{"add an app bar to jim/temp/index.html", "app-bar", "jim/temp/index.html", false},
 		{"add a top bar to jim/temp/index.html", "app-bar", "jim/temp/index.html", false},
 		{"add a material app bar to jim/temp/index.html", "app-bar", "jim/temp/index.html", false},
+		{"add a navigation bar to jim/temp/index.html", "navigation-bar", "jim/temp/index.html", false},
+		{"add a nav bar to jim/temp/index.html", "navigation-bar", "jim/temp/index.html", false},
+		{"add a navbar to jim/temp/index.html", "navigation-bar", "jim/temp/index.html", false},
+		{"add a material navigation bar to jim/temp/index.html", "navigation-bar", "jim/temp/index.html", false},
+		{"add a footer to jim/temp/index.html", "footer", "jim/temp/index.html", false},
 		{"add a floating button to jim/temp/index.html", "fab", "jim/temp/index.html", false},
 		{"add a fab to jim/temp/index.html", "fab", "jim/temp/index.html", false},
 		{"add a chip to jim/temp/index.html", "chip", "jim/temp/index.html", false},
 		{"add a text field to jim/temp/index.html", "text-field", "jim/temp/index.html", false},
 		{"add a switch to jim/temp/index.html", "switch", "jim/temp/index.html", false},
 		{"add a card to the page", "card", "", true},
+		{"add a navigation bar to the page", "navigation-bar", "", true},
+		{"add a footer to the page", "footer", "", true},
 		{"add a switch to the page", "switch", "", true},
 		{"add a button to the page", "button", "", true},
 		// The dropped article (John live, 2026-11-09: "add
@@ -275,8 +282,8 @@ func TestComponentThePageWithoutContext(t *testing.T) {
 func TestComponentRefusalsThroughChain(t *testing.T) {
 	profile := &UserProfile{}
 	root := staticAssetsFixture(t, staticAssetsFiles(map[string]string{
-		"jim/temp/index.html": analyze.WebpageContent("basic", "index"),
-		"jim/temp/empty.html": "",
+		"jim/temp/index.html":  analyze.WebpageContent("basic", "index"),
+		"jim/temp/empty.html":  "",
 		"jim/temp/nobody.html": "<html>\n<head></head>\n<p>hi</p>\n</html>\n",
 	}))
 	out := captureStdout(t, func() {
@@ -310,6 +317,43 @@ func TestComponentRefusalsThroughChain(t *testing.T) {
 	})
 	if !strings.Contains(out, "no </body>") {
 		t.Errorf("no-body guidance missing:\n%s", out)
+	}
+}
+
+// The navigation bar and footer through the chain: both
+// wordings land, the nav's responsive toggle is in the
+// page, and the shared styles are carried once.
+func TestComponentNavigationBarAndFooterLand(t *testing.T) {
+	root := staticAssetsFixture(t, staticAssetsFiles(map[string]string{
+		"jim/temp/index.html": analyze.WebpageContent("basic", "index"),
+	}))
+	profile := &UserProfile{}
+	out := captureStdout(t, func() {
+		claimChain("add a navigation bar to jim/temp/index.html", yes, profile)
+		claimChain("add a footer to the page", yes, profile)
+	})
+	if !strings.Contains(out, "Done — The navigation bar is in jim/temp/index.html.") {
+		t.Errorf("navigation bar confirmation missing:\n%s", out)
+	}
+	if !strings.Contains(out, "Done — The footer is in jim/temp/index.html.") {
+		t.Errorf("footer confirmation missing:\n%s", out)
+	}
+	page := readBack(t, root, "jim/temp/index.html")
+	for _, want := range []string{
+		analyze.MaterialNavigationBarSnippet,
+		analyze.MaterialFooterSnippet,
+		".site-nav-toggle:checked ~ .site-nav-links",
+		"@media (max-width: 40em)",
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("page is missing %q", want)
+		}
+	}
+	if strings.Count(page, "--primary: #6750A4") != 1 || strings.Count(page, ".site-nav {") != 1 || strings.Count(page, ".site-footer {") != 1 {
+		t.Error("the navigation bar and footer styles were not carried exactly once")
+	}
+	if strings.Contains(page, "<script") {
+		t.Error("the navigation bar brought JavaScript into the page")
 	}
 }
 

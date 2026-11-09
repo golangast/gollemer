@@ -185,8 +185,9 @@ Create folders and files — shown first, gated, then verified:
   you> add a card to jim/temp/index.html
       one Material component at a time into a page that
       exists — button, tonal button, outlined button, text
-      button, card, app bar (or top bar), floating button
-      (or fab), chip, text field, switch — its styles
+      button, card, app bar (or top bar), navigation bar
+      (or nav bar, navbar), floating button
+      (or fab), chip, text field, switch, footer — its styles
       carried in exactly once, never twice. "to the page"
       is the webpage you last made or filled here; "what
       components can I add" lists the whole set.

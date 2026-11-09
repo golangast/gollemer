@@ -93,16 +93,55 @@ func TestPlanComponentStylesCarriedOnce(t *testing.T) {
 	}
 }
 
+// The navigation bar and footer: their snippets and style
+// chunks land together, the nav keeps its pure-CSS toggle
+// and breakpoint in the page, and a second footer carries
+// no styles again.
+func TestPlanComponentNavigationBarAndFooter(t *testing.T) {
+	basic := WebpageContent("basic", "index")
+	after, refusal := planOnContent(t, basic, "navigation-bar")
+	if refusal != "" {
+		t.Fatalf("navigation bar into a basic page refused: %q", refusal)
+	}
+	for _, want := range []string{
+		MaterialNavigationBarSnippet,
+		`class="site-nav-toggle"`, `type="checkbox"`,
+		".site-nav-toggle:checked ~ .site-nav-links",
+		"@media (max-width: 40em)",
+	} {
+		if !strings.Contains(after, want) {
+			t.Errorf("page after the navigation bar is missing %q", want)
+		}
+	}
+	if strings.Contains(after, "<script") {
+		t.Error("the navigation bar brought JavaScript into the page")
+	}
+	after, refusal = planOnContent(t, after, "footer")
+	if refusal != "" {
+		t.Fatalf("footer after navigation bar refused: %q", refusal)
+	}
+	if !strings.Contains(after, MaterialFooterSnippet) || !strings.Contains(after, ".site-footer {") {
+		t.Error("the footer snippet and styles did not land")
+	}
+	after2, refusal := planOnContent(t, after, "footer")
+	if refusal != "" {
+		t.Fatalf("second footer refused: %q", refusal)
+	}
+	if strings.Count(after2, ".site-footer {") != 1 || strings.Count(after2, `class="site-footer"`) != 2 {
+		t.Error("the second footer did not add only its snippet")
+	}
+}
+
 // The refusals: unknown component (answering with what
 // exists, from the registry), a non-.html target, a missing
 // file and an empty file (both two-step guidance at the
 // webpage piece), and a page with no </body>.
 func TestPlanComponentRefusals(t *testing.T) {
 	rows := []struct {
-		name string
+		name  string
 		files map[string]string
-		req  EditRequest
-		want string
+		req   EditRequest
+		want  string
 	}{
 		{"unknown component", map[string]string{"jim/temp/index.html": WebpageContent("basic", "index")},
 			EditRequest{Kind: EditComponent, File: "jim/temp/index.html", Component: "carousel"}, "material components: button, tonal button"},
@@ -128,8 +167,8 @@ func TestPlanComponentRefusals(t *testing.T) {
 // and by every sentence form, carries CSS and a snippet,
 // and its probe is present in its own chunk.
 func TestMaterialRegistryCoherence(t *testing.T) {
-	if len(MaterialComponents) != 10 {
-		t.Fatalf("registry holds %d components, want the starter set of 10", len(MaterialComponents))
+	if len(MaterialComponents) != 12 {
+		t.Fatalf("registry holds %d components, want the starter set of 12", len(MaterialComponents))
 	}
 	for _, c := range MaterialComponents {
 		if _, ok := MaterialComponentByID(c.ID); !ok {

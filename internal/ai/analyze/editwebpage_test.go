@@ -238,7 +238,9 @@ func TestWebpageMaterialTemplate(t *testing.T) {
 		"@media (prefers-color-scheme: dark)", "--primary: #D0BCFF", "--surface: #141218", "--on-surface: #E6E0E9",
 		`class="app-bar"`, "btn btn-filled", "btn-tonal", "btn-outlined", "btn-text",
 		`class="card"`, `class="fab"`, `class="chip chip-selected"`, `class="field"`, `class="switch"`,
-		">Buttons<", ">Card<", ">Chips<", ">Text field<", ">Switch<",
+		`class="site-nav"`, `class="site-nav-toggle"`, `type="checkbox"`, ".site-nav-toggle:checked ~ .site-nav-links",
+		`class="site-footer"`,
+		">Buttons<", ">Card<", ">Chips<", ">Text field<", ">Switch<", ">Navigation bar<", ">Footer<",
 	} {
 		if !strings.Contains(page, want) {
 			t.Errorf("material page missing %q", want)

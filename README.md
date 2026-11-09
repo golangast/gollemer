@@ -459,8 +459,9 @@ Once a page exists, you can add one Material component at a
 time — the same parts the material template shows off: a
 **button** (the filled one), a **tonal button**, an
 **outlined button**, a **text button**, a **card**, an **app
-bar** (or top bar), a **floating button** (or fab), a
-**chip**, a **text field**, and a **switch**. Say it like
+bar** (or top bar), a **navigation bar** (or nav bar, navbar),
+a **floating button** (or fab), a
+**chip**, a **text field**, a **switch**, and a **footer**. Say it like
 `add a button to jim/temp/index.html`, `add a text field to
 jim/temp/index.html`, or `add a card to the page` ("the page"
 is the webpage you last made or filled in this chat). The

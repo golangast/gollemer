@@ -13,7 +13,8 @@ package chat
 // <component> is a form from the registry in
 // analyze.MaterialComponents (button — the filled one — tonal
 // button, outlined button, text button, card, app bar / top
-// bar, floating button / fab, chip, text field, switch): the
+// bar, navigation bar / nav bar / navbar, floating button /
+// fab, chip, text field, switch, footer): the
 // grammar, the discovery answer, and the planner all read
 // that one registry, so they cannot drift apart. "the page"
 // resolves through the session context to the last webpage

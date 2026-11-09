@@ -80,6 +80,31 @@ const materialCSSAppBar = `/* gollemer-material: app bar */
 .app-bar-title { font-size: 22px; line-height: 28px; }
 `
 
+const materialCSSNavigationBar = `/* gollemer-material: navigation bar */
+.site-nav { background: var(--surface-container); color: var(--on-surface); margin: 0 -1em 1em; padding: 0.75em 1em; }
+.site-nav-inner { display: flex; align-items: center; gap: 0.75em; }
+.site-nav-brand { color: var(--on-surface); font-size: 22px; line-height: 28px; margin-right: auto; text-decoration: none; }
+.site-nav-toggle { height: 1px; opacity: 0; position: absolute; width: 1px; }
+.site-nav-menu-button { border: 1px solid var(--outline); border-radius: 999px; color: var(--primary); cursor: pointer; display: none; font-size: 14px; font-weight: 500; line-height: 20px; padding: 0.5em 1em; }
+.site-nav-links { display: flex; gap: 0.25em; list-style: none; margin: 0; padding: 0; }
+.site-nav-links a { border-radius: 999px; color: var(--primary); display: block; font-size: 14px; font-weight: 500; line-height: 20px; padding: 0.6em 0.9em; text-decoration: none; }
+.site-nav-links a:hover { background: var(--primary-container); color: var(--on-primary-container); }
+@media (max-width: 40em) {
+  .site-nav-inner { flex-wrap: wrap; }
+  .site-nav-menu-button { display: inline-block; }
+  .site-nav-links { display: none; flex-direction: column; width: 100%; }
+  .site-nav-toggle:checked ~ .site-nav-links { display: flex; }
+}
+`
+
+const materialCSSFooter = `/* gollemer-material: footer */
+.site-footer { background: var(--surface-container); color: var(--on-surface); margin: 2em -1em -5em; padding: 1.25em 1em; }
+.site-footer p { margin: 0 0 0.75em; }
+.site-footer-links { display: flex; flex-wrap: wrap; gap: 0.25em; list-style: none; margin: 0; padding: 0; }
+.site-footer-links a { border-radius: 999px; color: var(--primary); display: block; font-size: 14px; font-weight: 500; line-height: 20px; padding: 0.5em 0.8em; text-decoration: none; }
+.site-footer-links a:hover { background: var(--primary-container); color: var(--on-primary-container); }
+`
+
 const materialCSSButtons = `/* gollemer-material: buttons */
 .btn { font-size: 14px; font-weight: 500; letter-spacing: 0.1px; border: none; border-radius: 999px; padding: 0.65em 1.6em; cursor: pointer; }
 .btn-filled { background: var(--primary); color: var(--on-primary); }
@@ -120,8 +145,8 @@ const materialCSSSwitch = `/* gollemer-material: switch */
 // embeds: variables, base, then every component chunk.
 func materialCSSAll() string {
 	return materialCSSVariables + materialCSSBase +
-		materialCSSAppBar + materialCSSButtons + materialCSSCard +
-		materialCSSFab + materialCSSChips + materialCSSField + materialCSSSwitch
+		materialCSSAppBar + materialCSSNavigationBar + materialCSSButtons + materialCSSCard +
+		materialCSSFab + materialCSSChips + materialCSSField + materialCSSSwitch + materialCSSFooter
 }
 
 // The components' markup, one snippet each — the same
@@ -134,6 +159,38 @@ func materialAppBarSnippet(title string) string {
 	}
 	return "<header class=\"app-bar\"><span class=\"app-bar-title\">" + title + "</span></header>\n"
 }
+
+// MaterialNavigationBarSnippet is the responsive Material
+// navigation bar. It is a single source for both the
+// component piece and the templated page scaffold: on a
+// narrow screen the checkbox is the menu's on/off switch,
+// so the collapse needs no JavaScript. The label is the
+// visible menu button; checking it makes the CSS above
+// reveal the link list.
+const MaterialNavigationBarSnippet = "<!-- The menu checkbox is the small-screen menu switch: tapping Menu checks it, and the navigation bar styles then show the links. No JavaScript is involved. -->\n" +
+	"<nav class=\"site-nav\" aria-label=\"Main\">\n" +
+	"<div class=\"site-nav-inner\">\n" +
+	"<a class=\"site-nav-brand\" href=\"#\">TODO: your site's name</a>\n" +
+	"<input class=\"site-nav-toggle\" id=\"site-nav-toggle\" type=\"checkbox\">\n" +
+	"<label class=\"site-nav-menu-button\" for=\"site-nav-toggle\">☰ Menu</label>\n" +
+	"<ul class=\"site-nav-links\">\n" +
+	"<li><a href=\"#\">Home</a></li>\n" +
+	"<li><a href=\"#\">About</a></li>\n" +
+	"<li><a href=\"#\">Contact</a></li>\n" +
+	"</ul>\n" +
+	"</div>\n" +
+	"</nav>\n"
+
+// MaterialFooterSnippet is the Material footer bar, shared
+// by the component piece and the templated page scaffold.
+const MaterialFooterSnippet = "<footer class=\"site-footer\">\n" +
+	"<p>TODO: your footer's line — the small print that belongs at the bottom of every page.</p>\n" +
+	"<ul class=\"site-footer-links\">\n" +
+	"<li><a href=\"#\">Home</a></li>\n" +
+	"<li><a href=\"#\">About</a></li>\n" +
+	"<li><a href=\"#\">Contact</a></li>\n" +
+	"</ul>\n" +
+	"</footer>\n"
 
 const materialButtonSnippet = "<button class=\"btn btn-filled\" type=\"button\">TODO: the button's words</button>\n"
 
@@ -183,10 +240,12 @@ var MaterialComponents = []MaterialComponent{
 	{ID: "text-button", Words: "text button", CSS: materialCSSButtons, CSSProbe: ".btn-text {"},
 	{ID: "card", Words: "card", CSS: materialCSSCard, CSSProbe: ".card {"},
 	{ID: "app-bar", Words: "app bar", Aliases: []string{"top bar"}, Note: "(or \"top bar\")", CSS: materialCSSAppBar, CSSProbe: ".app-bar {"},
+	{ID: "navigation-bar", Words: "navigation bar", Aliases: []string{"nav bar", "navbar"}, Note: "(or \"nav bar\", \"navbar\")", CSS: materialCSSNavigationBar, CSSProbe: ".site-nav {"},
 	{ID: "fab", Words: "floating button", Aliases: []string{"fab"}, Note: "(or \"fab\")", CSS: materialCSSFab, CSSProbe: ".fab {"},
 	{ID: "chip", Words: "chip", CSS: materialCSSChips, CSSProbe: ".chip {"},
 	{ID: "text-field", Words: "text field", CSS: materialCSSField, CSSProbe: ".field label {"},
 	{ID: "switch", Words: "switch", CSS: materialCSSSwitch, CSSProbe: ".switch {"},
+	{ID: "footer", Words: "footer", CSS: materialCSSFooter, CSSProbe: ".site-footer {"},
 }
 
 // MaterialComponentByID reads the registry by key.
@@ -241,6 +300,18 @@ func MaterialComponentForms() []string {
 // needs before any component's chunk means anything.
 func MaterialCSSVariables() string { return materialCSSVariables }
 
+// MaterialCSSBase is the page frame and type scale that
+// sits between the color variables and component chunks.
+func MaterialCSSBase() string { return materialCSSBase }
+
+// MaterialNavigationBarCSS is the navigation bar's chunk,
+// shared by the scaffold's header template.
+func MaterialNavigationBarCSS() string { return materialCSSNavigationBar }
+
+// MaterialFooterCSS is the footer's chunk, shared by the
+// scaffold's header template.
+func MaterialFooterCSS() string { return materialCSSFooter }
+
 // MaterialComponentSnippet is the component's markup — the
 // same strings the material template's demo sections are
 // built from. title is the page's own title, read for the
@@ -259,6 +330,10 @@ func MaterialComponentSnippet(id, title string) (string, bool) {
 		return materialCardSnippet, true
 	case "app-bar":
 		return materialAppBarSnippet(title), true
+	case "navigation-bar":
+		return MaterialNavigationBarSnippet, true
+	case "footer":
+		return MaterialFooterSnippet, true
 	case "fab":
 		return materialFabSnippet, true
 	case "chip":
@@ -290,6 +365,10 @@ func materialBody(title string) string {
 	b.WriteString(materialFieldSnippet)
 	b.WriteString("<h2 class=\"section-title\">Switch</h2>\n")
 	b.WriteString("<p>" + materialSwitchSnippet + "</p>\n")
+	b.WriteString("<h2 class=\"section-title\">Navigation bar</h2>\n")
+	b.WriteString(MaterialNavigationBarSnippet)
+	b.WriteString("<h2 class=\"section-title\">Footer</h2>\n")
+	b.WriteString(MaterialFooterSnippet)
 	b.WriteString(materialFabSnippet)
 	return b.String()
 }
