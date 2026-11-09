@@ -307,6 +307,7 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 			}
 			if out, ok := handleGoAnalyze("analyze " + arg); ok {
 				fmt.Printf("%s %s\n", cTag(fmt.Sprintf("gollemer [%s]>", GoAnalyzeDomain)), out)
+				conv.AddUser(line)
 				conv.AddReply(out, GoAnalyzeDomain, false)
 			}
 			continue
@@ -355,6 +356,7 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		// /contribute <task>: beginner-friendly contribution flow.
 		if out, ok := handleContribute(line, unifiedProjectRoot); ok {
 			fmt.Printf("%s %s\n", cTag("gollemer [contribute]>"), out)
+			conv.AddUser(line)
 			conv.AddReply(out, "contribute", false)
 			continue
 		}
@@ -362,6 +364,7 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		if strings.HasPrefix(line, "where for ") {
 			if out, ok := tryIssueWhere(line); ok {
 				fmt.Printf("%s %s\n", cTag(fmt.Sprintf("gollemer [%s]>", GoAnalyzeDomain)), out)
+				conv.AddUser(line)
 				conv.AddReply(out, GoAnalyzeDomain, false)
 				// Offer to open the file in VSCode at the exact line.
 				if f := analyze.LastWhereFile; f != "" {
@@ -506,6 +509,7 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		// routes to clone+analyze.
 		if out, ok := tryNaturalAnalyze(line); ok {
 			fmt.Printf("%s %s\n", cTag(fmt.Sprintf("gollemer [%s]>", GoAnalyzeDomain)), out)
+			conv.AddUser(line)
 			conv.AddReply(out, GoAnalyzeDomain, false)
 			continue
 		}
@@ -564,10 +568,15 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 			fmt.Printf("%s\n", reviewFunc(fname, lastAnalyzeProject))
 			continue
 		}
+		// The history hook wraps the deterministic claims in
+		// this loop (both chain sequences below): a claimed turn
+		// lands in the session transcript exactly once, so later
+		// turns inherit the whole thread (historyhook.go).
+		hook := newClaimHook(conv, &line)
 		// Beginner five: /example, /tour (+ next), /glossary, /watch,
 		// /learn-path — learn a project by examples, order, and
 		// watching it run, not by definitions.
-		if handleBeginnerCommand(line, profile) {
+		if hook.run(func() bool { return handleBeginnerCommand(line, profile) }) {
 			continue
 		}
 		// Edits by assembly, claimed deterministically like the
@@ -575,14 +584,14 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		// files is never left for the classifier or a model — the
 		// Composer plans it from sibling code, shows the diff, and
 		// writes only behind the [y/n] gate.
-		if tryAssembledEdit(line, reader) {
+		if hook.run(func() bool { return tryAssembledEdit(line, reader) }) {
 			continue
 		}
 		// Rename everywhere, claimed deterministically beside the
 		// assembled edits for the same reason: the rename is worked
 		// out from the project's type information, shown as a diff,
 		// and written only behind the [y/n] gate.
-		if tryRenameEdit(line, reader) {
+		if hook.run(func() bool { return tryRenameEdit(line, reader) }) {
 			continue
 		}
 		// Build-goal resources, claimed deterministically beside
@@ -591,7 +600,7 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		// its resource pack from the Advocates snapshot, never a
 		// classifier guess. Imperative build commands for this
 		// project are not shapes here — the composer keeps them.
-		if tryBuildResources(line, profile) {
+		if hook.run(func() bool { return tryBuildResources(line, profile) }) {
 			continue
 		}
 		// Package lookup, claimed beside resources: an explicit
@@ -600,19 +609,19 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		// fact, never a classifier guess. The shape is tight and
 		// the match must be strong, so code questions and project
 		// questions keep their routes.
-		if tryPackageLookup(line) {
+		if hook.run(func() bool { return tryPackageLookup(line) }) {
 			continue
 		}
 		// Running rqlite, claimed beside the lookup: a "how do
 		// I run rqlite" question gets the printed guidance —
 		// commands for the user's own terminal, from rqlite's
 		// documented quick start. The chat installs nothing.
-		if tryRqliteGuide(line) {
+		if hook.run(func() bool { return tryRqliteGuide(line) }) {
 			continue
 		}
 		// Intent layer: a confident trained classification of what
 		// the user wants, in their own words — no memorized commands.
-		if tryIntentDispatch(line, profile) {
+		if hook.run(func() bool { return tryIntentDispatch(line, profile) }) {
 			continue
 		}
 		// /profile: show what the system has learned about you.
@@ -806,6 +815,7 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		// auto-tuning, and the visual trace, rendered in plain words.
 		if out, ok := handleFlowCommand(line); ok {
 			fmt.Printf("%s %s\n", cTag(fmt.Sprintf("gollemer [%s]>", FlowDomain)), out)
+			conv.AddUser(line)
 			conv.AddReply(out, FlowDomain, false)
 			continue
 		}
@@ -818,7 +828,7 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		// same as the single-domain loop. A sentence like "tour
 		// https://…" or "run it" must never be left for the router
 		// to guess at (it read "tour …" as a social greeting).
-		if handleBeginnerCommand(line, profile) {
+		if hook.run(func() bool { return handleBeginnerCommand(line, profile) }) {
 			continue
 		}
 		// Edits by assembly, claimed deterministically like the
@@ -826,14 +836,14 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		// files is never left for the classifier or a model — the
 		// Composer plans it from sibling code, shows the diff, and
 		// writes only behind the [y/n] gate.
-		if tryAssembledEdit(line, reader) {
+		if hook.run(func() bool { return tryAssembledEdit(line, reader) }) {
 			continue
 		}
 		// Rename everywhere, claimed deterministically beside the
 		// assembled edits for the same reason: the rename is worked
 		// out from the project's type information, shown as a diff,
 		// and written only behind the [y/n] gate.
-		if tryRenameEdit(line, reader) {
+		if hook.run(func() bool { return tryRenameEdit(line, reader) }) {
 			continue
 		}
 		// Build-goal resources, claimed deterministically beside
@@ -842,7 +852,7 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		// its resource pack from the Advocates snapshot, never a
 		// classifier guess. Imperative build commands for this
 		// project are not shapes here — the composer keeps them.
-		if tryBuildResources(line, profile) {
+		if hook.run(func() bool { return tryBuildResources(line, profile) }) {
 			continue
 		}
 		// Package lookup, claimed beside resources: an explicit
@@ -851,19 +861,19 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		// fact, never a classifier guess. The shape is tight and
 		// the match must be strong, so code questions and project
 		// questions keep their routes.
-		if tryPackageLookup(line) {
+		if hook.run(func() bool { return tryPackageLookup(line) }) {
 			continue
 		}
 		// Running rqlite, claimed beside the lookup: a "how do
 		// I run rqlite" question gets the printed guidance —
 		// commands for the user's own terminal, from rqlite's
 		// documented quick start. The chat installs nothing.
-		if tryRqliteGuide(line) {
+		if hook.run(func() bool { return tryRqliteGuide(line) }) {
 			continue
 		}
 		// Intent layer: a confident trained classification of what
 		// the user wants, in their own words — no memorized commands.
-		if tryIntentDispatch(line, profile) {
+		if hook.run(func() bool { return tryIntentDispatch(line, profile) }) {
 			continue
 		}
 		// Recall questions are answered from the session transcript,
@@ -1215,6 +1225,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 			}
 			if out, ok := handleGoAnalyze("analyze " + arg); ok {
 				fmt.Printf("%s %s\n", cTag(fmt.Sprintf("gollemer [%s]>", GoAnalyzeDomain)), out)
+				conv.AddUser(line)
 				conv.AddReply(out, GoAnalyzeDomain, false)
 			}
 			continue
@@ -1224,6 +1235,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// auto-tuning, and the visual trace, rendered in plain words.
 		if out, ok := handleFlowCommand(line); ok {
 			fmt.Printf("%s %s\n", cTag(fmt.Sprintf("gollemer [%s]>", FlowDomain)), out)
+			conv.AddUser(line)
 			conv.AddReply(out, FlowDomain, false)
 			continue
 		}
@@ -1241,12 +1253,17 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 			printProfile(profile)
 			continue
 		}
+		// The history hook wraps every deterministic claim
+		// below: a claimed turn lands in the session transcript
+		// exactly once, so later turns inherit the whole thread
+		// (historyhook.go).
+		hook := newClaimHook(conv, &line)
 		// Long-term memory's explicit shapes, claimed
 		// deterministically ahead of every brain: a capture
 		// ("remember: …", "call me …"), the recall question
 		// ("what do you remember"), and the forget shapes.
 		// Nothing is ever captured from an ordinary line.
-		if tryMemoryCommand(line, conv) {
+		if hook.run(func() bool { return tryMemoryCommand(line, conv) }) {
 			continue
 		}
 		// Clarifying answers, claimed ahead of every content
@@ -1271,7 +1288,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// commands, not asks; they leave a question standing,
 		// as they would a spoken one. With no question
 		// pending this claims nothing and prints nothing.
-		if tryClarifyAnswer(line, reader) {
+		if hook.run(func() bool { return tryClarifyAnswer(line, reader) }) {
 			continue
 		}
 		// Personal vocabulary, claimed deterministically
@@ -1284,7 +1301,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// spoken-target pass below because a teach line ends
 		// in the very name it teaches. Memory's "call me …"
 		// sits above (tryMemoryCommand) and keeps its shape.
-		if tryVocab(line, reader) {
+		if hook.run(func() bool { return tryVocab(line, reader) }) {
 			continue
 		}
 		// The spoken-target pass (vocab.go): when a write
@@ -1306,7 +1323,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// it through its own claim — same plan, gate,
 		// transaction and build check. With no session
 		// context they claim nothing and print nothing.
-		if tryFollowUp(line, reader) {
+		if hook.run(func() bool { return tryFollowUp(line, reader) }) {
 			continue
 		}
 		// Learn mode, claimed deterministically ahead of the
@@ -1314,7 +1331,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// while a check question waits — its answers must never
 		// reach the classifier or a brain. Other lines pass
 		// through untouched; the flow waits (the guide's rule).
-		if tryLearnCommand(line) {
+		if hook.run(func() bool { return tryLearnCommand(line) }) {
 			continue
 		}
 		// Run one of the user's own programs, claimed
@@ -1327,7 +1344,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// .go-file run ask is this claim's alone; the claim
 		// also owns the stop and show-log lines while a
 		// program runs. See runprogram.go.
-		if tryRunProgram(line, reader, profile) {
+		if hook.run(func() bool { return tryRunProgram(line, reader, profile) }) {
 			continue
 		}
 		// Basic Linux commands, claimed deterministically
@@ -1339,7 +1356,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// reinterpreted as a make target or small talk, and
 		// never through a shell. Every other sentence falls
 		// through untouched. See linuxcmds.go.
-		if tryLinuxCommand(line, reader, profile) {
+		if hook.run(func() bool { return tryLinuxCommand(line, reader, profile) }) {
 			continue
 		}
 		// The capability seat, claimed deterministically
@@ -1360,14 +1377,14 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// keep the beginner help's answer untouched, and the
 		// catalog's closing line points at "help all" so
 		// nothing the help offered is lost.
-		if tryCapabilityAnswer(line, conv) {
+		if hook.run(func() bool { return tryCapabilityAnswer(line, conv) }) {
 			continue
 		}
 		// Beginner five, claimed deterministically before routing —
 		// same as the single-domain loop. A sentence like "tour
 		// https://…" or "run it" must never be left for the router
 		// to guess at (it read "tour …" as a social greeting).
-		if handleBeginnerCommand(line, profile) {
+		if hook.run(func() bool { return handleBeginnerCommand(line, profile) }) {
 			continue
 		}
 		// Edits by assembly, claimed deterministically like the
@@ -1375,14 +1392,14 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// files is never left for the classifier or a model — the
 		// Composer plans it from sibling code, shows the diff, and
 		// writes only behind the [y/n] gate.
-		if tryAssembledEdit(line, reader) {
+		if hook.run(func() bool { return tryAssembledEdit(line, reader) }) {
 			continue
 		}
 		// Rename everywhere, claimed deterministically beside the
 		// assembled edits for the same reason: the rename is worked
 		// out from the project's type information, shown as a diff,
 		// and written only behind the [y/n] gate.
-		if tryRenameEdit(line, reader) {
+		if hook.run(func() bool { return tryRenameEdit(line, reader) }) {
 			continue
 		}
 		// Build-goal resources, claimed deterministically beside
@@ -1391,7 +1408,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// its resource pack from the Advocates snapshot, never a
 		// classifier guess. Imperative build commands for this
 		// project are not shapes here — the composer keeps them.
-		if tryBuildResources(line, profile) {
+		if hook.run(func() bool { return tryBuildResources(line, profile) }) {
 			continue
 		}
 		// Package lookup, claimed beside resources: an explicit
@@ -1400,14 +1417,14 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// fact, never a classifier guess. The shape is tight and
 		// the match must be strong, so code questions and project
 		// questions keep their routes.
-		if tryPackageLookup(line) {
+		if hook.run(func() bool { return tryPackageLookup(line) }) {
 			continue
 		}
 		// Running rqlite, claimed beside the lookup: a "how do
 		// I run rqlite" question gets the printed guidance —
 		// commands for the user's own terminal, from rqlite's
 		// documented quick start. The chat installs nothing.
-		if tryRqliteGuide(line) {
+		if hook.run(func() bool { return tryRqliteGuide(line) }) {
 			continue
 		}
 		// Simple creations, claimed deterministically beside the
@@ -1418,7 +1435,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// is claimed only to answer honestly. A creation sentence
 		// must never reach the classifier — it read "create a
 		// folder jim" as a social greeting.
-		if tryCreate(line, reader) {
+		if hook.run(func() bool { return tryCreate(line, reader) }) {
 			continue
 		}
 		// Add-a-webserver edits, claimed deterministically beside
@@ -1428,7 +1445,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// request and answered with a dead end ("jim/main.go is
 		// not a directory") or a full report. The composer plans
 		// it, shows the diff, and writes only behind the gate.
-		if tryAddWebServer(line, reader) {
+		if hook.run(func() bool { return tryAddWebServer(line, reader) }) {
 			continue
 		}
 		// Serve-an-html-file recipes, claimed deterministically
@@ -1441,7 +1458,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// to the classifier it was read as an analyze request
 		// or the static-files concept, neither of which serves
 		// the user's page. One plan, one gate, one transaction.
-		if tryServeHTML(line, reader) {
+		if hook.run(func() bool { return tryServeHTML(line, reader) }) {
 			continue
 		}
 		// Wire-a-handler recipes, claimed deterministically
@@ -1455,7 +1472,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// requires a handler reference AND a server word, so
 		// the database family's connect lines keep their
 		// claims.
-		if tryWireHandler(line, reader) {
+		if hook.run(func() bool { return tryWireHandler(line, reader) }) {
 			continue
 		}
 		// Page-family recipes, claimed deterministically beside
@@ -1467,7 +1484,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// sentences ("add a form handler named Jake…"),
 		// serve-html's lines, and the creations keep their
 		// claims.
-		if tryPageFamily(line, reader) {
+		if hook.run(func() bool { return tryPageFamily(line, reader) }) {
 			continue
 		}
 		// The webpage piece, claimed deterministically beside
@@ -1551,7 +1568,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// analyzer — plan, gate, disk backup, baseline-relative
 		// verdict on the one affected package, and at most one
 		// retry in the plan's named alternate form.
-		if tryDelegate(line, reader) {
+		if hook.run(func() bool { return tryDelegate(line, reader) }) {
 			continue
 		}
 		// Cross-file uses, claimed deterministically beside the
@@ -1571,7 +1588,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// this grammar and the book's, out to the boundary's
 		// extra-clause refusal, until the grammar learned
 		// the introducer (uses.go).
-		if tryUses(line, reader) {
+		if hook.run(func() bool { return tryUses(line, reader) }) {
 			continue
 		}
 		// Make-and-call, claimed deterministically beside the
@@ -1587,7 +1604,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// the same plan writes). It sits after the uses (its
 		// caller half is the uses machinery) and before the
 		// concept book. See makecall.go.
-		if tryMakeCall(line, reader) {
+		if hook.run(func() bool { return tryMakeCall(line, reader) }) {
 			continue
 		}
 		// The ambiguous-piece guidance's pre-book claim
@@ -1600,7 +1617,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// nothing. It fires only for the bare shape — no
 		// function context, no sibling-row words — so every
 		// explicit database form still belongs to the book.
-		if tryAmbiguousDatabase(line, reader) {
+		if hook.run(func() bool { return tryAmbiguousDatabase(line, reader) }) {
 			continue
 		}
 		// Concept-book edits, claimed deterministically beside
@@ -1613,7 +1630,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// bespoke shapes (they keep their sentences) and before
 		// the boundary, so a known concept is served and an
 		// unknown one still gets the boundary's honest answer.
-		if tryConceptBook(line, reader) {
+		if hook.run(func() bool { return tryConceptBook(line, reader) }) {
 			continue
 		}
 		// The gorqlite gate's follow-up, claimed beside the
@@ -1623,7 +1640,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// and, when the module is there, the held ask's plan
 		// is re-offered behind its gate. The claim fires in
 		// no other session state. See gorqlitegate.go.
-		if tryGorqliteInstalled(line, reader) {
+		if hook.run(func() bool { return tryGorqliteInstalled(line, reader) }) {
 			continue
 		}
 		// Instantiation, claimed deterministically after the
@@ -1635,7 +1652,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// claims even when a side can't be found (the planner
 		// answers honestly); the plain form claims only when
 		// the analyzer resolves both sides. See instantiate.go.
-		if tryInstantiate(line, reader) {
+		if hook.run(func() bool { return tryInstantiate(line, reader) }) {
 			continue
 		}
 		// The build-history forget, claimed deterministically
@@ -1646,7 +1663,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// it as a kind phrase and answer for the wrong store.
 		// The shape is that one exact line; every other
 		// "forget the …" keeps falling to the teach seat.
-		if tryReceiptForget(line) {
+		if hook.run(func() bool { return tryReceiptForget(line) }) {
 			continue
 		}
 		// The teach seat, claimed deterministically after the
@@ -1662,7 +1679,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// sit with the deterministic writers; a kind may never
 		// shadow the book, which keeps its sentences by sitting
 		// earlier. See taughtkinds.go.
-		if tryTaughtKinds(line, reader) {
+		if hook.run(func() bool { return tryTaughtKinds(line, reader) }) {
 			continue
 		}
 		// The speccopy proposer, claimed deterministically
@@ -1679,7 +1696,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// model file is local-only; without it this claim
 		// never fires and the boundary answers as before.
 		// See proposeddecl.go.
-		if tryProposedDecl(line, reader) {
+		if hook.run(func() bool { return tryProposedDecl(line, reader) }) {
 			continue
 		}
 		// The phrasing layer, after every deterministic claim
@@ -1694,7 +1711,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// artifact (data/phrasing_model.json) is a small JSON
 		// file: absent, the boundary answers as before. See
 		// phrasing2_claim.go.
-		if tryPhrasingLayer(line, reader) {
+		if hook.run(func() bool { return tryPhrasingLayer(line, reader) }) {
 			continue
 		}
 		// Ambiguous-piece guidance, claimed deterministically
@@ -1707,7 +1724,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// claims only its narrow add-led shapes; everything
 		// else passes to the boundary unchanged. See
 		// ambiguouspiece.go.
-		if tryAmbiguousPiece(line, reader) {
+		if hook.run(func() bool { return tryAmbiguousPiece(line, reader) }) {
 			continue
 		}
 		// The write-sentence boundary, last before the intent
@@ -1716,7 +1733,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// composer terms — never left for a brain to improvise
 		// at (2026-10-25: "add print line to jim/main.go" got
 		// social-brain word salad). See writeboundary.go.
-		if tryWriteBoundary(line) {
+		if hook.run(func() bool { return tryWriteBoundary(line) }) {
 			continue
 		}
 		// System-state questions, claimed deterministically
@@ -1725,7 +1742,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// what this session has made are facts from the state
 		// block, and a classifier must never steal one (it
 		// reads "branch" as "brains"). See memory_state.go.
-		if tryTalkStateAnswer(line, conv) {
+		if hook.run(func() bool { return tryTalkStateAnswer(line, conv) }) {
 			continue
 		}
 		// Personal-fact questions, claimed deterministically
@@ -1738,12 +1755,12 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// an answer to. The same arm runs inside the talk
 		// seat's responder for lines that reach it by other
 		// paths.
-		if tryFactRecallAnswer(line, conv) {
+		if hook.run(func() bool { return tryFactRecallAnswer(line, conv) }) {
 			continue
 		}
 		// Intent layer: a confident trained classification of what
 		// the user wants, in their own words — no memorized commands.
-		if tryIntentDispatch(line, profile) {
+		if hook.run(func() bool { return tryIntentDispatch(line, profile) }) {
 			continue
 		}
 		// Recall questions are answered from the session transcript,
