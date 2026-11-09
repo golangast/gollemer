@@ -15,7 +15,8 @@ package chat
 //
 //	add|create|make|build|put [a|an|the] [new]
 //	    [basic|simple|responsive|two column(s)|
-//	     three column(s)|grid|rows] webpage|web page
+//	     three column(s)|grid|rows|material]
+//	    webpage|web page
 //	    [with assets]
 //	    [to|in|into|at [the] [file|folder] <file.html>]
 //
@@ -29,11 +30,13 @@ package chat
 //
 //	add|create|make|build|put [a|an|the] [new]
 //	    [basic|simple|responsive|two column(s)|
-//	     three column(s)|grid|rows|with assets] template
+//	     three column(s)|grid|rows|material|
+//	     with assets] template
 //	    [with assets]
 //	    [to|in|into|at [the] [file|folder] <file.html>]
 //	use [a|an|the] [basic|simple|responsive|two column(s)|
-//	     three column(s)|grid|rows|with assets] template
+//	     three column(s)|grid|rows|material|
+//	     with assets] template
 //	    [for|to|in|into|at [the] [file|folder] <file.html>]
 //
 // The seating rule for the template wording: it claims
@@ -102,6 +105,8 @@ func matchWebpageTemplateName(low []string, i int) (string, int) {
 		return "grid", 1
 	case "rows":
 		return "rows", 1
+	case "material":
+		return "material", 1
 	case "two-column", "two-columns":
 		return "two-columns", 1
 	case "three-column", "three-columns":
@@ -252,7 +257,7 @@ func webpageCanonical(template, file string) string {
 }
 
 // webpageTemplateCandidates is the clarify.go choice for an
-// unnamed template: the seven templates, in the words the
+// unnamed template: the eight templates, in the words the
 // plan and the page itself use.
 func webpageTemplateCandidates() []clarifyCandidate {
 	return []clarifyCandidate{
@@ -263,12 +268,13 @@ func webpageTemplateCandidates() []clarifyCandidate {
 		{Label: "three columns", Desc: "a sidebar on each side of the main area, under a header", Words: []string{"three columns", "three column", "three-column", "three-columns"}},
 		{Label: "grid", Desc: "a heading and a grid of cards — three across on a wide screen, fewer on a small one", Words: []string{"grid"}},
 		{Label: "rows", Desc: "full-width bands stacked down the page in different shades", Words: []string{"rows"}},
+		{Label: "material", Desc: "Google's Material Design look, plain CSS, no framework", Words: []string{"material"}},
 	}
 }
 
 // webpageTemplateIDs maps a clarify candidate index back to
 // the template id, in candidate order.
-var webpageTemplateIDs = []string{"basic", "responsive", "assets", "two-columns", "three-columns", "grid", "rows"}
+var webpageTemplateIDs = []string{"basic", "responsive", "assets", "two-columns", "three-columns", "grid", "rows", "material"}
 
 // tryWebpage is the chat-loop entry: it claims webpage
 // sentences and runs the flow on the chat's line reader.

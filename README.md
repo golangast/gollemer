@@ -442,7 +442,9 @@ to load a style sheet, a script, and a picture from `/static/`),
 or a layout: **two columns** (a sidebar beside the main area),
 **three columns** (a sidebar on each side), **grid** (cards in a
 grid that narrows with the screen), or **rows** (full-width bands
-in different shades). You can name it the template way too —
+in different shades) — or **material** (Google's Material Design
+look, hand-written plain CSS in the page itself, no framework).
+You can name it the template way too —
 `add a two column template to jim/temp/index.html`. It asks
 which template when you don't name one. The file is
 created when new, filled when it sits there empty — and a page

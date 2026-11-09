@@ -127,7 +127,7 @@ var capabilityCatalog = []capabilityGroup{
 	{title: "BUILD — new pieces for your project", entries: []capabilityEntry{
 		{"Add a server to a file", "add a server in main.go"},
 		{"Serve one of your HTML pages from it", "serve index.html in main.go"},
-		{"Put a webpage into an HTML file, from a template you pick (basic, responsive, with assets, two columns, three columns, grid, or rows)", "add a webpage to jim/temp/index.html"},
+		{"Put a webpage into an HTML file, from a template you pick (basic, responsive, with assets, two columns, three columns, grid, rows, or material)", "add a webpage to jim/temp/index.html"},
 		{"Serve a folder's pages, styles, scripts, and images from your server at /static/", "serve static files"},
 		{"Add a form handler", "add a form handler named Jake to main.go"},
 		{"Add a struct, a function, an interface, or another basic piece by name", "add a struct named Profile to main.go"},

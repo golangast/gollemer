@@ -85,8 +85,8 @@ func TestPlanWebpageRefusals(t *testing.T) {
 		want string
 	}{
 		{"not html", EditRequest{Kind: EditWebpage, File: "jim/temp/page.txt", WebpageTemplate: "basic"}, ".html file name"},
-		{"no template", EditRequest{Kind: EditWebpage, File: "jim/temp/index.html"}, "templates: basic, responsive, with assets, two columns, three columns, grid, or rows"},
-		{"unknown template", EditRequest{Kind: EditWebpage, File: "jim/temp/index.html", WebpageTemplate: "fancy"}, "templates: basic, responsive, with assets, two columns, three columns, grid, or rows"},
+		{"no template", EditRequest{Kind: EditWebpage, File: "jim/temp/index.html"}, "templates: basic, responsive, with assets, two columns, three columns, grid, rows, or material"},
+		{"unknown template", EditRequest{Kind: EditWebpage, File: "jim/temp/index.html", WebpageTemplate: "fancy"}, "templates: basic, responsive, with assets, two columns, three columns, grid, rows, or material"},
 		{"missing folder", EditRequest{Kind: EditWebpage, File: "nowhere/index.html", WebpageTemplate: "basic"}, "create a folder nowhere"},
 	} {
 		plan, refusal := proj.PlanEdit(tc.req)
@@ -120,6 +120,46 @@ func TestWebpageContentTemplates(t *testing.T) {
 		if !strings.Contains(assets, want) {
 			t.Errorf("assets page missing %q:\n%s", want, assets)
 		}
+	}
+}
+
+// The material template: Material Design 3 from scratch in
+// the page's own bytes — the baseline color roles as
+// variables, the dark scheme flipping them, every starter
+// component present, the marker written, and not one line
+// of JavaScript or anything loaded from elsewhere.
+func TestWebpageMaterialTemplate(t *testing.T) {
+	page := WebpageContent("material", "index")
+	for _, want := range []string{
+		"<title>index</title>", "gollemer-material",
+		"--primary: #6750A4", "--on-primary: #FFFFFF",
+		"--primary-container: #EADDFF", "--on-primary-container: #21005D",
+		"--secondary: #625B71", "--surface: #FEF7FF", "--on-surface: #1D1B20",
+		"--surface-variant: #E7E0EC", "--outline: #79747E", "--surface-container: #F3EDF7",
+		"@media (prefers-color-scheme: dark)", "--primary: #D0BCFF", "--surface: #141218", "--on-surface: #E6E0E9",
+		`class="app-bar"`, "btn btn-filled", "btn-tonal", "btn-outlined", "btn-text",
+		`class="card"`, `class="fab"`, `class="chip chip-selected"`, `class="field"`, `class="switch"`,
+		">Buttons<", ">Card<", ">Chips<", ">Text field<", ">Switch<",
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("material page missing %q", want)
+		}
+	}
+	for _, never := range []string{"<script", "http://", "https://", "@import", "url("} {
+		if strings.Contains(page, never) {
+			t.Errorf("material page carries %q — the look is hand-written in the page, nothing loaded, no JavaScript:\n%s", never, page)
+		}
+	}
+	_, proj := webpageProject(t, nil)
+	plan, refusal := proj.PlanEdit(EditRequest{Kind: EditWebpage, File: "jim/temp/index.html", WebpageTemplate: "material"})
+	if refusal != "" || plan == nil {
+		t.Fatalf("material plan refused: %q", refusal)
+	}
+	if got := string(plan.Files[0].After); got != page {
+		t.Errorf("planned content is not the material page")
+	}
+	if !strings.Contains(plan.Summary, "material webpage") {
+		t.Errorf("summary does not name the template: %q", plan.Summary)
 	}
 }
 

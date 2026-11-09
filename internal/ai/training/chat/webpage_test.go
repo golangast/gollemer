@@ -57,6 +57,10 @@ func TestParseWebpageClaims(t *testing.T) {
 		{"add a three columns webpage to jim/temp/index.html", "three-columns", "jim/temp/index.html", false},
 		{"add a grid webpage to jim/temp/index.html", "grid", "jim/temp/index.html", false},
 		{"add a rows webpage to jim/temp/index.html", "rows", "jim/temp/index.html", false},
+		// Material, in both wordings.
+		{"add a material template to jim/temp/index.html", "material", "jim/temp/index.html", false},
+		{"add a material webpage to jim/temp/index.html", "material", "jim/temp/index.html", false},
+		{"use the material template for jim/temp/index.html", "material", "jim/temp/index.html", false},
 	}
 	for _, tc := range claims {
 		got, ok := parseWebpage(tc.line)
@@ -73,7 +77,7 @@ func TestParseWebpageClaims(t *testing.T) {
 // The canonical sentences a clarifying answer completes
 // into parse back with exactly their slots.
 func TestWebpageCanonicalRoundTrip(t *testing.T) {
-	for _, template := range []string{"", "basic", "responsive", "assets", "two-columns", "three-columns", "grid", "rows"} {
+	for _, template := range []string{"", "basic", "responsive", "assets", "two-columns", "three-columns", "grid", "rows", "material"} {
 		line := webpageCanonical(template, "jim/temp/index.html")
 		got, ok := parseWebpage(line)
 		if !ok || got.template != template || got.file != "jim/temp/index.html" || got.fileMissing {
@@ -115,6 +119,7 @@ func TestParseWebpageNonClaims(t *testing.T) {
 		"add a template to jim/main.go",
 		"add the basic template to main.go",
 		"add a two column template to main.go",
+		"add a material template to main.go",
 		"use the template for main.go",
 		"add an html template to main.go",
 		// "use" owns only the template wording.
@@ -263,7 +268,7 @@ func TestWebpageTemplateWordingJohnsLine(t *testing.T) {
 	out := captureStdout(t, func() {
 		claimChain("add the template to jim/temp/index.html", yes, profile)
 	})
-	for _, want := range []string{"which template should it be?", "1. basic", "2. responsive", "3. with assets", "4. two columns", "5. three columns", "6. grid", "7. rows"} {
+	for _, want := range []string{"which template should it be?", "1. basic", "2. responsive", "3. with assets", "4. two columns", "5. three columns", "6. grid", "7. rows", "8. material"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("template question missing %q:\n%s", want, out)
 		}
@@ -305,6 +310,28 @@ func TestWebpageNamedLayoutAsksNoQuestion(t *testing.T) {
 		t.Errorf("the named layout did not land:\n%s", got)
 	}
 	if !strings.Contains(out, "Done — The two-column webpage is in jim/temp/index.html.") {
+		t.Errorf("landing confirmation missing:\n%s", out)
+	}
+}
+
+// The material template, named in the template wording:
+// no question, and the page that lands is the from-scratch
+// Material page.
+func TestWebpageMaterialTemplateLands(t *testing.T) {
+	root := staticAssetsFixture(t, staticAssetsFiles(map[string]string{
+		"jim/temp/keep.css": "body {}\n",
+	}))
+	profile := &UserProfile{}
+	out := captureStdout(t, func() {
+		claimChain("add a material template to jim/temp/index.html", yes, profile)
+	})
+	if hasPendingQuestion() {
+		t.Error("a named template set a pending question")
+	}
+	if got := readBack(t, root, "jim/temp/index.html"); got != analyze.WebpageContent("material", "index") {
+		t.Errorf("the material page did not land:\n%s", got)
+	}
+	if !strings.Contains(out, "Done — The material webpage is in jim/temp/index.html.") {
 		t.Errorf("landing confirmation missing:\n%s", out)
 	}
 }

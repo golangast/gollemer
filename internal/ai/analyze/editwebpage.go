@@ -24,7 +24,9 @@ package analyze
 // their structure in an embedded style block; the column and
 // grid layouts collapse to fewer — finally one — stacked
 // columns on a narrow screen, and the rows are full-width
-// bands by construction.
+// bands by construction. The material template is a
+// Material Design 3 look written from scratch in plain CSS
+// (editmaterial.go), where the component chunks live.
 
 import (
 	"bytes"
@@ -52,6 +54,8 @@ func WebpageTemplateWords(template string) string {
 		return "grid webpage"
 	case "rows":
 		return "rows webpage"
+	case "material":
+		return "material webpage"
 	default:
 		return "basic webpage"
 	}
@@ -73,6 +77,8 @@ func webpageTemplateBlurb(template string) string {
 		return "a heading and a grid of cards — three across on a wide screen, two on a middling one, one on a phone — each card waiting for your words"
 	case "rows":
 		return "full-width bands stacked down the page — a top band, a content band, and a bottom band — each in a different shade, so the page's parts are easy to see"
+	case "material":
+		return "Google's Material Design 3 look, written by hand in plain CSS in the page itself — the Material colors as variables, an app bar, buttons, a card, chips, a text field, and a switch; no framework, no library, nothing loaded from the web, and a dark scheme that follows the reader's own setting"
 	default:
 		return "a title, a heading, and a paragraph — the smallest complete page"
 	}
@@ -241,6 +247,21 @@ func WebpageContent(template, title string) string {
 			"</footer>\n" +
 			"</body>\n" +
 			"</html>\n"
+	case "material":
+		return "<!DOCTYPE html>\n" +
+			"<html lang=\"en\">\n" +
+			"<head>\n" +
+			"<meta charset=\"utf-8\">\n" +
+			"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n" +
+			"<title>" + title + "</title>\n" +
+			"<style>\n" +
+			materialCSSAll() +
+			"</style>\n" +
+			"</head>\n" +
+			"<body>\n" +
+			materialBody(title) +
+			"</body>\n" +
+			"</html>\n"
 	default: // basic
 		return "<!DOCTYPE html>\n" +
 			"<html lang=\"en\">\n" +
@@ -268,8 +289,9 @@ func (p *Project) planWebpage(req EditRequest) (*EditPlan, string) {
 		return nil, "that edit needs the webpage's .html file name."
 	}
 	if template != "basic" && template != "responsive" && template != "assets" &&
-		template != "two-columns" && template != "three-columns" && template != "grid" && template != "rows" {
-		return nil, "that edit needs one of the webpage templates: basic, responsive, with assets, two columns, three columns, grid, or rows."
+		template != "two-columns" && template != "three-columns" && template != "grid" && template != "rows" &&
+		template != "material" {
+		return nil, "that edit needs one of the webpage templates: basic, responsive, with assets, two columns, three columns, grid, rows, or material."
 	}
 	if why, blocked := p.fileBlocked(rel); blocked {
 		return nil, fmt.Sprintf("I won't write %s — %s.", p.LinkPath(rel), why)
