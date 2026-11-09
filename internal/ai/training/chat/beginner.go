@@ -715,12 +715,38 @@ func runWatchIt(profile *UserProfile) {
 	if len(lines) > maxLines {
 		fmt.Printf("[… %d more lines not shown]\n", len(lines)-maxLines)
 	}
-	// Narrate.
+	// Narrate — from what was observed, nothing more.
+	fmt.Println(watchItNarration(err, timedOut, isTest, lines))
+}
+
+// watchItNarration is the one frame "watch it work" puts
+// around a finished command's output, built ONLY from what
+// the runner observed: the command's exit state and its own
+// printed lines. The old frame claimed "It ran fine. What
+// you see above is the program talking" for any exit-0
+// command — including a `make start` whose own output said
+// it needs a real terminal and started nothing (John's
+// screenshot, 2026-11-09). This runner runs a command to
+// completion; it never watches a program run, so no frame
+// here may say one did. The sentences are:
+//
+//   - timed out: the command was still going at the cap and
+//     was stopped — the one "ran" this runner can truthfully
+//     report, because the process was alive the whole time.
+//   - failed: the exit status, in the open. No success words.
+//   - tests: `go test` exit 0 IS the tests passing — its own
+//     verdict, counted from its "ok" lines.
+//   - exit 0 whose output says it needed a terminal: the
+//     frame repeats that and says nothing was started —
+//     never a word against the command's own evidence.
+//   - exit 0 otherwise: the lines above are the command's
+//     own output; the frame claims nothing beyond the exit.
+func watchItNarration(err error, timedOut, isTest bool, lines []string) string {
 	switch {
 	case timedOut:
-		fmt.Println("\nIt ran for a full minute without finishing, so I stopped it. Programs that do that are usually servers or tools waiting for input — that's normal for them, not an error.")
+		return "\nIt ran for a full minute without finishing, so I stopped it. Programs that do that are usually servers or tools waiting for input — that's normal for them, not an error."
 	case err != nil:
-		fmt.Printf("\nIt stopped with an error (%v). The last lines above are the program's own words — paste one into /fix <error> and I'll explain it.\n", err)
+		return fmt.Sprintf("\nIt failed — the command ended with an error (%v). The lines above are the command's own output — paste one into /fix <error> and I'll explain it.", err)
 	case isTest:
 		passed := 0
 		for _, l := range lines {
@@ -728,14 +754,30 @@ func runWatchIt(profile *UserProfile) {
 				passed++
 			}
 		}
-		fmt.Printf("\nIt works: %d package(s) of tests passed, none failed. Those tests are the project's safety net — /example shows them in action.\n", passed)
+		return fmt.Sprintf("\nIt works: %d package(s) of tests passed, none failed. Those tests are the project's safety net — /example shows them in action.", passed)
+	case outputNeedsTerminal(lines):
+		return "\nThe command's own output says it needs a real terminal, so it started nothing here. The lines above are all that happened."
+	case len(lines) == 0:
+		return "\nThe command finished with no error and printed nothing."
 	default:
-		if len(lines) == 0 {
-			fmt.Println("\nIt ran fine and printed nothing — some programs do their work quietly (files, network, a database) instead of talking to the screen.")
-		} else {
-			fmt.Println("\nIt ran fine. What you see above is the program talking: that's its real output, not a description of it.")
+		return "\nThe command finished with no error. The lines above are its own output, exactly as it printed them."
+	}
+}
+
+// outputNeedsTerminal reports whether a command's own output
+// says it could not start for want of a terminal. The
+// evidence is the output's own words — a line naming a
+// terminal together with needing or requiring one ("make
+// start opens the chat and needs a real terminal") — and
+// nothing is inferred beyond them.
+func outputNeedsTerminal(lines []string) bool {
+	for _, l := range lines {
+		s := strings.ToLower(l)
+		if strings.Contains(s, "terminal") && (strings.Contains(s, "need") || strings.Contains(s, "requir")) {
+			return true
 		}
 	}
+	return false
 }
 
 // unknownCommandHint turns the old dead-end "Unknown command" into a
