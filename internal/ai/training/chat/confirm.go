@@ -2,6 +2,7 @@ package chat
 
 import (
 	"fmt"
+	"path"
 	"strings"
 
 	"github.com/golangast/gollemer/internal/ai/analyze"
@@ -83,6 +84,18 @@ func renderLandingConfirmation(f landingFacts) string {
 		s1, s2 = confirmPage(f, rel)
 	case analyze.EditServeHTML:
 		s1 = confirmServeHTML(f, rel)
+	case analyze.EditWebpage:
+		s1 = fmt.Sprintf("The %s is in %s", analyze.WebpageTemplateWords(f.req.WebpageTemplate), f.fresh.LinkPath(rel))
+	case analyze.EditServeStatic:
+		s1 = fmt.Sprintf("The server in %s now serves the %s folder's files at /static/", f.fresh.LinkPath(rel), f.req.StaticFolder)
+	case analyze.EditComponent:
+		s1 = fmt.Sprintf("The %s is in %s", analyze.MaterialComponentWords(f.req.Component), f.fresh.LinkPath(rel))
+	case analyze.EditTemplatedPage:
+		s1, s2 = confirmTemplatedPage(f)
+	case analyze.EditScaffoldSection:
+		s1 = fmt.Sprintf("The %s page's body in %s now has a section of %s",
+			strings.TrimSuffix(path.Base(f.req.SiteBody), ".html"), f.fresh.LinkPath(f.req.SiteBody),
+			analyze.ScaffoldSectionWords(f.req.SiteCols, f.req.SiteRows))
 	case analyze.EditAddServer:
 		s1 = confirmAddServer(f, rel)
 	case analyze.EditConcept:
@@ -289,6 +302,19 @@ func confirmDelegate(f landingFacts, rel string) (string, string) {
 	}
 	s1 := fmt.Sprintf("%s is in %s — it calls %s", f.req.WrapperName, f.fresh.LinkPath(rel), f.req.SourceName)
 	return s1, handlerNextStep(f.fresh, f.req.WrapperName, rel)
+}
+
+// confirmTemplatedPage renders the scaffold landing: the
+// page's body, the shared header and footer it is joined
+// to, and the handler that renders it — then the wiring
+// step, but only when the wiring planner verifies it
+// would land (handlerNextStep's own rule).
+func confirmTemplatedPage(f landingFacts) (string, string) {
+	header, footer, body, handler := analyze.TemplatedPageFiles(f.req.SiteFolder, f.req.SiteName)
+	name := analyze.TemplatedPageHandlerName(f.req.SiteName)
+	s1 := fmt.Sprintf("The %s templated page is ready: its body is in %s, the shared header in %s, the shared footer in %s, and its handler %s in %s",
+		f.req.SiteName, f.fresh.LinkPath(body), f.fresh.LinkPath(header), f.fresh.LinkPath(footer), name, f.fresh.LinkPath(handler))
+	return s1, handlerNextStep(f.fresh, name, handler)
 }
 
 // handlerNextStep names the follow-up line for a handler

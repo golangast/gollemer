@@ -58,6 +58,45 @@ const (
 	// custom server) is a refusal with the facts.
 	EditWireHandler = "wire_handler"
 
+	// Webpage (editwebpage.go): one plain webpage from a named
+	// template, written into one .html file — created when
+	// missing, filled when it exists but is empty, never
+	// overwriting a page that already has content. No Go file
+	// is touched: the page is the whole edit.
+	EditWebpage = "webpage"
+
+	// Serve static files (editservestatic.go): one file-server
+	// registration on the project's existing webserver — route
+	// /static/ answered by http.FileServer over one project
+	// folder, inserted before the serve statement under the
+	// wiring machinery's rules (conflicts read project-wide,
+	// custom servers refused with the line handed over).
+	EditServeStatic = "serve_static"
+
+	// Component (editcomponent.go): one Material component
+	// from the registry in editmaterial.go, inserted just
+	// before an existing .html page's </body>, with the
+	// Material styles it needs carried into the page exactly
+	// once. No Go file is touched.
+	EditComponent = "component"
+
+	// Templated page scaffold (edittemplatepage.go): a page
+	// split across three files in the named folder's
+	// templates folder — a shared header and footer plus
+	// this page's body — joined at serve time by
+	// html/template, with the handler that renders it in a
+	// new Go file in the folder's package. No route is
+	// wired.
+	EditTemplatedPage = "templated_page"
+
+	// Scaffold section (edittemplatepage.go): a counted
+	// columns-and-rows section inserted into a templated
+	// page's BODY file, just before its footer call, with
+	// the section's styles joining the shared header's
+	// style block exactly once. The header and footer files
+	// are otherwise untouched.
+	EditScaffoldSection = "scaffold_section"
+
 	// Page family (editpage.go): a named page kind as a matched
 	// page+handler pair — an .html page created with starter
 	// content (never overwritten), the handler that serves it
@@ -163,6 +202,50 @@ type EditRequest struct {
 	// file's folder (File) or below it. The planner derives
 	// the ServeFile argument from the two paths.
 	ServeHTML string
+
+	// webpage: the page file (File, shared with add_server —
+	// project-relative slash path, .html) and the template
+	// ("basic" | "responsive" | "assets" | "two-columns" |
+	// "three-columns" | "grid" | "rows" | "material"), both
+	// resolved by the chat layer.
+	WebpageTemplate string
+
+	// webpage, counted grid: the grid template with exact
+	// counts ("add template 2 columns 3 rows to …"). Both
+	// zero = the plain flowing grid. WebpageGridRows may be
+	// zero with WebpageGridCols set (the sentence named
+	// columns only) — the planner defaults the rows to 2,
+	// the same default the chat layer states.
+	WebpageGridCols int
+	WebpageGridRows int
+
+	// component: the page file (File, as above) and the
+	// component's registry id ("button", "card",
+	// "text-field", …; editmaterial.go), resolved by the
+	// chat layer.
+	Component string
+
+	// templated_page: the project folder the scaffold
+	// belongs to (SiteFolder, project-relative slash path;
+	// "." = the project root) and the page's name as typed
+	// (SiteName — "home" makes templates/home.html and the
+	// HomePage handler), both resolved by the chat layer.
+	SiteFolder string
+	SiteName   string
+
+	// scaffold_section: the body file the section lands in
+	// (SiteBody, project-relative — the chat layer resolves
+	// "the body" to the folder's one scaffold body, asking
+	// when there are several), and the section's counts
+	// (SiteCols, SiteRows, each 1–6).
+	SiteBody string
+	SiteCols int
+	SiteRows int
+
+	// serve_static: the folder whose files the server serves
+	// at /static/ (project-relative slash path; "." = the
+	// project root), resolved by the chat layer.
+	StaticFolder string
 
 	// wire_handler: the handler's name as typed ("" = the
 	// sentence named none — the planner resolves the project's
@@ -411,6 +494,16 @@ func (p *Project) PlanEdit(req EditRequest) (*EditPlan, string) {
 		return p.planServeHTML(req)
 	case EditWireHandler:
 		return p.planWireHandler(req)
+	case EditWebpage:
+		return p.planWebpage(req)
+	case EditServeStatic:
+		return p.planServeStatic(req)
+	case EditComponent:
+		return p.planComponent(req)
+	case EditTemplatedPage:
+		return p.planTemplatedPage(req)
+	case EditScaffoldSection:
+		return p.planScaffoldSection(req)
 	case EditPage:
 		return p.planPage(req)
 	case EditDelegate:

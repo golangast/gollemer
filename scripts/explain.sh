@@ -170,6 +170,47 @@ Create folders and files — shown first, gated, then verified:
       and the plan names the connect sentence that finishes
       the wiring. A page that already exists is never
       overwritten.
+  you> add a webpage to jim/temp/index.html
+      a plain webpage in a named file, from a template you
+      pick — basic, responsive, with assets, two columns,
+      three columns, grid, rows, or material: created when
+      the file is new, filled when it sits there empty, and
+      never overwriting a page that already has words in it.
+      The template's own words work too: "add the template
+      to jim/temp/index.html", "add a two column template
+      to jim/temp/index.html". The grid counts its boxes
+      when you name them: "add template 2 columns 3 rows
+      to jim/temp/index.html" — 1 to 6 of each, and the
+      plan states the counts it will use.
+  you> add a card to jim/temp/index.html
+      one Material component at a time into a page that
+      exists — button, tonal button, outlined button, text
+      button, card, app bar (or top bar), navigation bar
+      (or nav bar, navbar), floating button
+      (or fab), chip, text field, switch, footer — its styles
+      carried in exactly once, never twice. "to the page"
+      is the webpage you last made or filled here; "what
+      components can I add" lists the whole set.
+  you> add a templated page called home in jim
+      a page in separate files, joined by Go templates:
+      jim/templates/header.html (the head, the Material
+      styles, and the responsive navigation bar),
+      jim/templates/footer.html (the footer bar), and
+      jim/templates/home.html (the body between them) —
+      plus the HomePage handler that renders it. No route
+      is wired; the handler waits for the connect sentence.
+      Its body grows by section: "add 2 columns and 3 rows
+      to the body in jim" — 1 to 6 of each, the counts
+      stated in the plan; no counts means 2 by 2, and a
+      second ask adds another section below the first.
+  you> serve static files
+      wires the webpage's folder — or one you name:
+      "serve static files from jim/temp", "serve the
+      jim/temp folder", "update the server to serve
+      images, js, css" — into your server at /static/, so
+      its style sheets, scripts, and images are served too;
+      one file server covers them all, each file's type
+      picked from its ending.
 
 Add pieces from the book of 135 known Go shapes:
 
@@ -275,6 +316,28 @@ Run your program:
   bare "stop" while one runs stop the program and keep the
   chat open; closing the chat stops it too — no orphans. If
   the browser can't open, the address is printed plainly.
+
+Watch your program:
+
+  you> watch jim/main.go
+  gollemer [runner]> Watching jim/main.go — I'll restart it when its files change. Say "stop watching jim/main.go" to turn watching off.
+  [jim/main.go restarted — main.go changed]
+
+  "watch <file>.go" starts the program like "run jim/main.go"
+  does (or finds it already running) and restarts it when a
+  file in its folder changes — any file: Go, html, js, css.
+  "restart jim/main.go when files change" is the same ask.
+  A change that doesn't compile restarts nothing: the note
+  says the build failed and the version that's running stays
+  up. "watch folder jim/temp" names another folder to watch
+  for the same program — a folder outside the program's own,
+  like an assets folder; one already inside a watched folder
+  (jim/temp sits inside jim/) answers "already watching".
+  Naming a folder before any program runs is fine too: the
+  chat notes it and attaches it when watching starts.
+  "stop watching folder jim/temp" removes just that folder;
+  "stop watching jim/main.go" ends the watching and leaves
+  the program running. "top" lists the extra folders too.
 
 Basic terminal commands:
 
