@@ -37,9 +37,22 @@ func TestParseComponentClaims(t *testing.T) {
 		{"add a card to the page", "card", "", true},
 		{"add a switch to the page", "switch", "", true},
 		{"add a button to the page", "button", "", true},
+		// The dropped article (John live, 2026-11-09: "add
+		// card to jim/temp/index.html" was declined to the
+		// can't-assemble answer while "add a card…" landed):
+		// the same sentences with no a/an/the claim with the
+		// same slots.
+		{"add card to jim/temp/index.html", "card", "jim/temp/index.html", false},
+		{"add button to the page", "button", "", true},
+		{"add switch to the page", "switch", "", true},
+		{"add text field to jim/temp/index.html", "text-field", "jim/temp/index.html", false},
+		{"add app bar to jim/temp/index.html", "app-bar", "jim/temp/index.html", false},
+		{"add material button to jim/temp/index.html", "button", "jim/temp/index.html", false},
+		{"add tonal button to jim/temp/index.html", "tonal-button", "jim/temp/index.html", false},
 		// An unknown name matches the shape with no
 		// component — the flow answers with what exists.
 		{"add a carousel to jim/temp/index.html", "", "jim/temp/index.html", false},
+		{"add carousel to jim/temp/index.html", "", "jim/temp/index.html", false},
 	}
 	for _, tc := range rows {
 		got, ok := parseComponent(tc.line)
@@ -59,8 +72,10 @@ func TestParseComponentClaims(t *testing.T) {
 func TestParseComponentDeclines(t *testing.T) {
 	for _, line := range []string{
 		"add a button to main.go",
+		"add card to main.go", // the dropped article opens no .go door either
 		"add a card to notes.txt",
 		"add a button",
+		"add card",
 		"add a server in jim",
 		"what components can i add",
 		"what components are there",
@@ -89,7 +104,14 @@ func TestComponentDiscoveryAnswer(t *testing.T) {
 			t.Errorf("discovery answer lost %s's note %q", c.Words, c.Note)
 		}
 	}
-	for _, line := range []string{"what components can I add", "what components are there"} {
+	for _, line := range []string{
+		"what components can I add", "what components are there",
+		// The singular (John live, 2026-11-09: the symbol
+		// explainer answered it by looking "add" up as a
+		// function name) and the page forms.
+		"what component can I add", "what component can you add",
+		"what can I add to the page", "what can I add to my page",
+	} {
 		out := captureStdout(t, func() {
 			if !tryComponentList(line) {
 				t.Errorf("%q did not claim the discovery answer", line)
@@ -97,6 +119,21 @@ func TestComponentDiscoveryAnswer(t *testing.T) {
 		})
 		if !strings.Contains(out, "text field") || !strings.Contains(out, "switch") {
 			t.Errorf("discovery answer for %q is incomplete:\n%s", line, out)
+		}
+	}
+}
+
+// The discovery claim leaves symbol questions to the
+// symbol explainer: they were never in the closed set, and
+// the singular/page additions did not widen it toward them.
+func TestComponentDiscoveryLeavesSymbolQuestions(t *testing.T) {
+	for _, line := range []string{
+		"what does Add do",
+		"what does chat.routeDomain do",
+		"what component is a button",
+	} {
+		if tryComponentList(line) {
+			t.Errorf("tryComponentList(%q) claimed a line that is not its", line)
 		}
 	}
 }
@@ -147,6 +184,34 @@ func TestComponentButtonLandsAndThePageResolves(t *testing.T) {
 	}
 	if strings.Count(page, "--primary: #6750A4") != 1 || strings.Count(page, ".btn {") != 1 {
 		t.Error("the second button carried the styles again")
+	}
+}
+
+// John's two live lines from 2026-11-09, end to end: the
+// dropped-article add lands the card in the named page,
+// and the singular discovery line answers with the list —
+// the two answers he did not get.
+func TestComponentJohnsDroppedArticleAndSingularLines(t *testing.T) {
+	root := staticAssetsFixture(t, staticAssetsFiles(map[string]string{
+		"jim/temp/index.html": analyze.WebpageContent("basic", "index"),
+	}))
+	profile := &UserProfile{}
+	out := captureStdout(t, func() {
+		claimChain("add card to jim/temp/index.html", yes, profile)
+	})
+	if !strings.Contains(out, "Done — The card is in jim/temp/index.html.") {
+		t.Errorf("dropped-article landing confirmation missing:\n%s", out)
+	}
+	if page := readBack(t, root, "jim/temp/index.html"); !strings.Contains(page, `class="card"`) {
+		t.Errorf("the card did not land:\n%s", page)
+	}
+	out = captureStdout(t, func() {
+		if !claimChain("what component can i add", yes, profile) {
+			t.Error("the chain declined the singular discovery line")
+		}
+	})
+	if !strings.Contains(out, "The components you can add to a page") || !strings.Contains(out, "text field") {
+		t.Errorf("singular discovery answer incomplete:\n%s", out)
 	}
 }
 

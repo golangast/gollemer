@@ -61,6 +61,16 @@ func TestParseWebpageClaims(t *testing.T) {
 		{"add a material template to jim/temp/index.html", "material", "jim/temp/index.html", false},
 		{"add a material webpage to jim/temp/index.html", "material", "jim/temp/index.html", false},
 		{"use the material template for jim/temp/index.html", "material", "jim/temp/index.html", false},
+		// The dropped article — the same ruling the
+		// component piece got live (2026-11-09): this parse
+		// already read the article as optional, and these
+		// rows pin that it stays so, in every wording.
+		{"add webpage to jim/temp/index.html", "", "jim/temp/index.html", false},
+		{"add responsive webpage to jim/temp/index.html", "responsive", "jim/temp/index.html", false},
+		{"add template to jim/temp/index.html", "", "jim/temp/index.html", false},
+		{"add two column template to jim/temp/index.html", "two-columns", "jim/temp/index.html", false},
+		{"add material template to jim/temp/index.html", "material", "jim/temp/index.html", false},
+		{"add grid webpage to index.html", "grid", "index.html", false},
 	}
 	for _, tc := range claims {
 		got, ok := parseWebpage(tc.line)
@@ -117,11 +127,13 @@ func TestParseWebpageNonClaims(t *testing.T) {
 		// however the template is named.
 		"add the template to main.go",
 		"add a template to jim/main.go",
+		"add template to main.go", // dropped article opens no .go door either
 		"add the basic template to main.go",
 		"add a two column template to main.go",
 		"add a material template to main.go",
 		"use the template for main.go",
 		"add an html template to main.go",
+		"add html template to main.go",
 		// "use" owns only the template wording.
 		"use a webpage for jim/temp/index.html",
 	} {

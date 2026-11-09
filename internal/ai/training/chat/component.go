@@ -30,6 +30,13 @@ package chat
 // shape at all — the sentence declines untouched, and the
 // book's pieces keep their targets exactly as before.
 //
+// The article is optional in the code as in the grammar
+// above: John typed "add card to jim/temp/index.html" live
+// (2026-11-09) and a parse that REQUIRED the article
+// declined the line to the boundary's can't-assemble
+// answer, where "add a card…" landed. Beginners drop
+// articles; the shape never needed one.
+//
 // Assembly is the planner's (analyze.planComponent): the
 // snippet lands just before </body>, and the Material
 // styles travel with it exactly once — the variables and
@@ -66,7 +73,7 @@ func parseComponent(line string) (componentAsk, bool) {
 	s = strings.TrimSuffix(s, "?")
 	s = strings.TrimSpace(s)
 	fields := strings.Fields(s)
-	if len(fields) < 5 {
+	if len(fields) < 4 {
 		return componentAsk{}, false
 	}
 	low := make([]string, len(fields))
@@ -79,11 +86,8 @@ func parseComponent(line string) (componentAsk, bool) {
 		return componentAsk{}, false
 	}
 	i := 1
-	switch low[i] {
-	case "a", "an", "the":
-		i++
-	default:
-		return componentAsk{}, false
+	if low[i] == "a" || low[i] == "an" || low[i] == "the" {
+		i++ // the article slot — optional, never required
 	}
 	if i < len(fields) && low[i] == "material" {
 		i++ // the material adjective: "add a material button"
@@ -139,7 +143,15 @@ func componentListText() string {
 // tryComponentList claims the discovery shapes: "what
 // components can I add", "what components are there", and
 // their close spellings — a closed set, answered from the
-// registry.
+// registry. The singular and the page forms are in the set
+// because John typed "what component can i add" live
+// (2026-11-09) and the line fell past the plural-only set
+// to the intent layer, whose symbol route looked "add" up
+// as a function name and answered with a pick list of Add
+// functions. The claim's seat in both loops is ahead of
+// that dispatch, so membership in this set is the whole
+// protection — the symbol questions ("what does Add do")
+// are not in it and keep their route untouched.
 func tryComponentList(line string) bool {
 	norm := strings.Join(strings.Fields(strings.ToLower(line)), " ")
 	norm = strings.TrimSuffix(strings.TrimSuffix(norm, "?"), ".")
@@ -147,6 +159,8 @@ func tryComponentList(line string) bool {
 	case "what components can i add", "what components are there",
 		"what components can you add", "what components do you have",
 		"what material components can i add", "what material components are there",
+		"what component can i add", "what component can you add",
+		"what can i add to the page", "what can i add to my page",
 		"list components", "list the components":
 		fmt.Printf("%s %s\n", cTag("gollemer [composer]>"), componentListText())
 		return true
