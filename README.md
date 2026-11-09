@@ -468,6 +468,19 @@ is the webpage you last made or filled in this chat). The
 component's styles come with it the first time and never
 twice. Ask `what components can I add` for the whole set.
 
+A page can also be built the way real sites are: a header and
+a footer written once, and each page's own body between them.
+`add a templated page called home in jim` creates
+`jim/templates/header.html` (the head, the Material styles, and
+the responsive navigation bar), `jim/templates/footer.html`
+(the footer bar), and `jim/templates/home.html` (the body,
+which calls the header at its top and the footer at its foot),
+joined when the page is served by Go's html/template — plus
+the handler that renders it (`HomePage` in `jim/homepage.go`).
+No route is wired: the handler waits for the connect sentence
+like any other. Run the server from the project root — that's
+where the handler's template paths point.
+
 A page's style sheets, scripts, and pictures are files too, and
 the server can serve the whole folder they live in: `serve static
 files` registers that folder at `/static/` on your existing

@@ -1484,6 +1484,17 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if tryWebpage(line, reader) {
 			continue
 		}
+		// The templated page scaffold (scaffold.go): a page
+		// as separate header, footer, and body files under a
+		// folder's templates folder, joined by html/template,
+		// with the handler that renders it — "add a templated
+		// page called home in jim". Seated beside the webpage
+		// claim: its object is the two words "templated page",
+		// which the webpage grammar never takes, and its
+		// target is a folder, never an .html file.
+		if tryTemplatedPage(line, reader) {
+			continue
+		}
 		// Serve static files, claimed deterministically beside
 		// serve-html: one file-server registration at /static/
 		// on the project's existing server, through the wiring

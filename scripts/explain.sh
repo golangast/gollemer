@@ -191,6 +191,14 @@ Create folders and files — shown first, gated, then verified:
       carried in exactly once, never twice. "to the page"
       is the webpage you last made or filled here; "what
       components can I add" lists the whole set.
+  you> add a templated page called home in jim
+      a page in separate files, joined by Go templates:
+      jim/templates/header.html (the head, the Material
+      styles, and the responsive navigation bar),
+      jim/templates/footer.html (the footer bar), and
+      jim/templates/home.html (the body between them) —
+      plus the HomePage handler that renders it. No route
+      is wired; the handler waits for the connect sentence.
   you> serve static files
       wires the webpage's folder — or one you name:
       "serve static files from jim/temp", "serve the

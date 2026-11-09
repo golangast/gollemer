@@ -80,6 +80,15 @@ const (
 	// once. No Go file is touched.
 	EditComponent = "component"
 
+	// Templated page scaffold (edittemplatepage.go): a page
+	// split across three files in the named folder's
+	// templates folder — a shared header and footer plus
+	// this page's body — joined at serve time by
+	// html/template, with the handler that renders it in a
+	// new Go file in the folder's package. No route is
+	// wired.
+	EditTemplatedPage = "templated_page"
+
 	// Page family (editpage.go): a named page kind as a matched
 	// page+handler pair — an .html page created with starter
 	// content (never overwritten), the handler that serves it
@@ -207,6 +216,14 @@ type EditRequest struct {
 	// "text-field", …; editmaterial.go), resolved by the
 	// chat layer.
 	Component string
+
+	// templated_page: the project folder the scaffold
+	// belongs to (SiteFolder, project-relative slash path;
+	// "." = the project root) and the page's name as typed
+	// (SiteName — "home" makes templates/home.html and the
+	// HomePage handler), both resolved by the chat layer.
+	SiteFolder string
+	SiteName   string
 
 	// serve_static: the folder whose files the server serves
 	// at /static/ (project-relative slash path; "." = the
@@ -466,6 +483,8 @@ func (p *Project) PlanEdit(req EditRequest) (*EditPlan, string) {
 		return p.planServeStatic(req)
 	case EditComponent:
 		return p.planComponent(req)
+	case EditTemplatedPage:
+		return p.planTemplatedPage(req)
 	case EditPage:
 		return p.planPage(req)
 	case EditDelegate:
