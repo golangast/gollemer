@@ -175,16 +175,26 @@ Create folders and files — shown first, gated, then verified:
       pick — basic, responsive, with assets, two columns,
       three columns, grid, rows, or material: created when
       the file is new, filled when it sits there empty, and
-      never overwriting a page that already has words in it;
-      and one Material component at a time into a page that
-      exists — a button, a card, a text field — with the
-      styles it needs carried in exactly once ("add a card
-      to the page", "what components can I add").
+      never overwriting a page that already has words in it.
+      The template's own words work too: "add the template
+      to jim/temp/index.html", "add a two column template
+      to jim/temp/index.html".
+  you> add a card to jim/temp/index.html
+      one Material component at a time into a page that
+      exists — button, tonal button, outlined button, text
+      button, card, app bar (or top bar), floating button
+      (or fab), chip, text field, switch — its styles
+      carried in exactly once, never twice. "to the page"
+      is the webpage you last made or filled here; "what
+      components can I add" lists the whole set.
   you> serve static files
-      wires the webpage's folder — or one you name — into
-      your server at /static/, so its style sheets, scripts,
-      and images are served too; one file server covers them
-      all, each file's type picked from its ending.
+      wires the webpage's folder — or one you name:
+      "serve static files from jim/temp", "serve the
+      jim/temp folder", "update the server to serve
+      images, js, css" — into your server at /static/, so
+      its style sheets, scripts, and images are served too;
+      one file server covers them all, each file's type
+      picked from its ending.
 
 Add pieces from the book of 135 known Go shapes:
 

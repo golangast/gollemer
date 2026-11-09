@@ -444,14 +444,20 @@ or a layout: **two columns** (a sidebar beside the main area),
 grid that narrows with the screen), or **rows** (full-width bands
 in different shades) — or **material** (Google's Material Design
 look, hand-written plain CSS in the page itself, no framework).
-You can name it the template way too —
-`add a two column template to jim/temp/index.html`. It asks
-which template when you don't name one. The file is
+You can ask in the template's own words too —
+`add a two column template to jim/temp/index.html`, or
+`add the template to jim/temp/index.html` when you'd rather
+answer the question it asks in return. It asks which template
+whenever you don't name one. The file is
 created when new, filled when it sits there empty — and a page
 that already has words in it is never overwritten.
 
 Once a page exists, you can add one Material component at a
-time — the same parts the material template shows off:
+time — the same parts the material template shows off: a
+**button** (the filled one), a **tonal button**, an
+**outlined button**, a **text button**, a **card**, an **app
+bar** (or top bar), a **floating button** (or fab), a
+**chip**, a **text field**, and a **switch**. Say it like
 `add a button to jim/temp/index.html`, `add a text field to
 jim/temp/index.html`, or `add a card to the page` ("the page"
 is the webpage you last made or filled in this chat). The
@@ -462,9 +468,15 @@ A page's style sheets, scripts, and pictures are files too, and
 the server can serve the whole folder they live in: `serve static
 files` registers that folder at `/static/` on your existing
 server, so the folder's `style.css` answers at
-`http://localhost:8080/static/style.css`. One mechanism covers
-images, js, and css alike — the file server picks each file's
-content type from its extension.
+`http://localhost:8080/static/style.css`. Name the folder in
+the sentence when you have one in mind — `serve static files
+from jim/temp`, or `serve the jim/temp folder`; with no folder
+named, it finds the folder itself — the webpage's folder, or
+the one folder in the project holding web files — and asks
+when there's more than one it could mean. You can say it as an
+update too: `update the server to serve images, js, css`. One
+mechanism covers images, js, and css alike — the file server
+picks each file's content type from its extension.
 
 The security pieces explain themselves as they land:
 
