@@ -46,6 +46,25 @@ package chat
 // template to main.go" stays the concept book's
 // html/template sentence, untouched.
 //
+// The grid takes exact counts (John, later still: "add
+// template 2 columns 3 rows to jim/temp/index.html" — a
+// grid of exactly that many boxes):
+//
+//	add a grid template with 2 columns [and 3 rows] to …
+//	add template 2 columns 3 rows to …
+//	add a 2 by 3 grid template to …
+//
+// Numbers are digits or words, singular or plural. The
+// counts clause trails the object, led by "with" or bare;
+// the bare pair after a "template" object names the grid
+// itself, so no grid word is needed there — but a lone
+// column count names nothing ("add template 2 columns
+// to …" keeps declining: the two-columns layout owns its
+// wording, in front of the object). Columns only → the
+// rows default to 2, and the plan states both counts.
+// The range is 1 to 6 of each; outside it the ask claims
+// and the flow refuses in this piece's own words.
+//
 // The template slot: "basic" (also "simple"), "responsive",
 // or the trailing "with assets" — the three templates in
 // analyze.WebpageContent. No template named → ONE
@@ -73,6 +92,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/golangast/gollemer/internal/ai/analyze"
@@ -83,6 +103,79 @@ type webpageRequest struct {
 	template    string // "basic" | "responsive" | "assets"; "" = unnamed (the flow asks)
 	file        string // the page file as typed; "" when fileMissing
 	fileMissing bool   // no file named — claimed, the flow asks which file
+
+	// The counted grid's counts, when the sentence named
+	// them (template is "grid" then). gridRows is already
+	// defaulted at parse: a columns-only clause means 2.
+	gridCounted bool
+	gridCols    int
+	gridRows    int
+}
+
+// smallNumberWords are the count words the grid counts
+// read. They run past the 1–6 range on purpose: an
+// out-of-range ask in words ("seven columns") still parses
+// as a count, so the flow can refuse it by name instead of
+// the line falling through as some other sentence.
+var smallNumberWords = map[string]int{
+	"zero": 0, "one": 1, "two": 2, "three": 3, "four": 4,
+	"five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9,
+	"ten": 10, "eleven": 11, "twelve": 12,
+}
+
+// parseCountWord reads one count token: a word from
+// smallNumberWords, or a run of digits.
+func parseCountWord(tok string) (int, bool) {
+	if n, ok := smallNumberWords[tok]; ok {
+		return n, true
+	}
+	if n, err := strconv.Atoi(tok); err == nil && n >= 0 {
+		return n, true
+	}
+	return 0, false
+}
+
+// countAndNoun reads "<count> column(s)" or "<count>
+// row(s)" at low[i] — the noun in either number, whatever
+// the count. It returns the count and the words consumed,
+// 0 when that pair does not stand there.
+func countAndNoun(low []string, i int, noun string) (int, int) {
+	if i+1 >= len(low) {
+		return 0, 0
+	}
+	v, ok := parseCountWord(low[i])
+	if !ok || (low[i+1] != noun && low[i+1] != noun+"s") {
+		return 0, 0
+	}
+	return v, 2
+}
+
+// parseGridCounts reads a grid counts clause at low[i]:
+// "[with] <n> column(s) [and] [<m> row(s)]". The columns
+// are required; the rows may be absent (rowsSet false —
+// the caller defaults them). It returns the counts and the
+// words consumed, 0 when no clause stands there — a clause
+// that starts and breaks (a count with no noun, a dangling
+// "and" before the target) is no clause, and consumes
+// nothing.
+func parseGridCounts(low []string, i int) (cols, rows int, rowsSet bool, n int) {
+	j := i
+	if j < len(low) && low[j] == "with" {
+		j++
+	}
+	c, w := countAndNoun(low, j, "column")
+	if w == 0 {
+		return 0, 0, false, 0
+	}
+	cols, j = c, j+w
+	k := j
+	if k < len(low) && low[k] == "and" {
+		k++
+	}
+	if r, w2 := countAndNoun(low, k, "row"); w2 > 0 {
+		rows, rowsSet, j = r, true, k+w2
+	}
+	return cols, rows, rowsSet, j - i
 }
 
 // matchWebpageTemplateName reads a template name at low[i]:
@@ -153,13 +246,30 @@ func parseWebpage(line string) (webpageRequest, bool) {
 	if i < len(fields) && low[i] == "new" {
 		i++
 	}
+	// The counted grid's "2 by 3" rides in front of the
+	// grid name ("add a 2 by 3 grid template to …"): the
+	// pair, then the name it sizes. A pair in front of any
+	// other name — or no name — is not this grammar's.
+	req := webpageRequest{}
+	byForm := false
+	if i+2 < len(low) && low[i+1] == "by" {
+		if c, ok1 := parseCountWord(low[i]); ok1 {
+			if r, ok2 := parseCountWord(low[i+2]); ok2 {
+				req.gridCounted, req.gridCols, req.gridRows = true, c, r
+				byForm = true
+				i += 3
+			}
+		}
+	}
 	// The template name rides in front of the object ("a
 	// responsive webpage", "a two column template"); the
 	// assets template's words are the clauses around it.
-	req := webpageRequest{}
 	if name, n := matchWebpageTemplateName(low, i); n > 0 {
 		req.template = name
 		i += n
+	}
+	if byForm && req.template != "grid" {
+		return webpageRequest{}, false
 	}
 	// "add the with assets template…": the assets words can
 	// stand in front of a "template" object, not only trail
@@ -199,6 +309,33 @@ func parseWebpage(line string) (webpageRequest, bool) {
 		}
 		req.template = "assets"
 		i += 2
+	}
+	// The grid counts clause trails the object: led by
+	// "with" on a grid ask ("add a grid template with 2
+	// columns and 3 rows to …"), or — John's live form —
+	// the bare pair after a "template" object, where the
+	// pair itself names the grid ("add template 2 columns
+	// 3 rows to …"). A clause anywhere else means nothing
+	// single here: counts on another template, a lone
+	// column count with no grid named, a second clause
+	// after the "by" form — all decline.
+	if cols, rows, rowsSet, cn := parseGridCounts(low, i); cn > 0 {
+		switch {
+		case req.gridCounted:
+			return webpageRequest{}, false
+		case req.template == "grid":
+			req.gridCounted, req.gridCols, req.gridRows = true, cols, rows
+			if !rowsSet {
+				req.gridRows = 2
+			}
+			i += cn
+		case req.template == "" && templateWord && rowsSet:
+			req.template = "grid"
+			req.gridCounted, req.gridCols, req.gridRows = true, cols, rows
+			i += cn
+		default:
+			return webpageRequest{}, false
+		}
 	}
 	if i == len(fields) {
 		// No target clause at all: claimed — the flow asks
@@ -256,6 +393,13 @@ func webpageCanonical(template, file string) string {
 	}
 }
 
+// webpageCanonicalCounted renders a counted grid ask's
+// canonical sentence — the with-form, which parses back
+// with exactly these counts (pinned in webpage_test.go).
+func webpageCanonicalCounted(cols, rows int, file string) string {
+	return fmt.Sprintf("add a grid template with %d columns and %d rows to %s", cols, rows, file)
+}
+
 // webpageTemplateCandidates is the clarify.go choice for an
 // unnamed template: the eight templates, in the words the
 // plan and the page itself use.
@@ -293,17 +437,37 @@ func runWebpage(line string, ask editAsk) bool {
 		return false
 	}
 	tag := cTag("gollemer [composer]>")
+	if q.gridCounted && (q.gridCols < 1 || q.gridCols > 6 || q.gridRows < 1 || q.gridRows > 6) {
+		// The sentence names an impossible grid: refuse in
+		// this piece's words, naming what is out of range —
+		// never a silent clamp, and before any question.
+		var out []string
+		if q.gridCols < 1 || q.gridCols > 6 {
+			out = append(out, fmt.Sprintf("%d columns", q.gridCols))
+		}
+		if q.gridRows < 1 || q.gridRows > 6 {
+			out = append(out, fmt.Sprintf("%d rows", q.gridRows))
+		}
+		fmt.Printf("%s Not making that webpage: a counted grid can have 1 to 6 columns and 1 to 6 rows — %s is outside that. Ask again with numbers in that range.\n", tag, strings.Join(out, " and "))
+		recordBrain("composer", false, "webpage refused: grid counts out of range")
+		return true
+	}
 	if q.fileMissing {
 		// Claimed and asked in webpage terms (clarify.go):
 		// the answer, one bare .html path, completes the ask
 		// as its canonical sentence — with the template the
-		// sentence named, when it named one.
+		// sentence named, when it named one, and a counted
+		// grid's counts riding along.
 		template := q.template
+		gridCounted, gridCols, gridRows := q.gridCounted, q.gridCols, q.gridRows
 		printClarifyIntro(tag, "Not making that webpage yet: the sentence doesn't name the file — which file should the webpage go in?")
 		printClarifyFooter("Answer with the .html file — \"index.html\" or \"jim/temp/index.html\"")
 		setPendingQuestion(&pendingQuestion{
 			kind: clarifyTarget,
 			completeText: func(text string, ask2 editAsk) bool {
+				if gridCounted {
+					return runWebpage(webpageCanonicalCounted(gridCols, gridRows, text), ask2)
+				}
 				return runWebpage(webpageCanonical(template, text), ask2)
 			},
 		})
@@ -358,5 +522,7 @@ func runWebpage(line string, ask editAsk) bool {
 		Kind:            analyze.EditWebpage,
 		File:            rel,
 		WebpageTemplate: q.template,
+		WebpageGridCols: q.gridCols,
+		WebpageGridRows: q.gridRows,
 	}, ask)
 }

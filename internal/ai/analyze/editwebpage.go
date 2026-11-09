@@ -27,6 +27,11 @@ package analyze
 // bands by construction. The material template is a
 // Material Design 3 look written from scratch in plain CSS
 // (editmaterial.go), where the component chunks live.
+//
+// The grid also takes exact counts — "2 columns and 3
+// rows" — and then the page is a grid of exactly that many
+// boxes (WebpageGridContent), still collapsing on a narrow
+// screen. The plain grid, no counts named, is unchanged.
 
 import (
 	"bytes"
@@ -59,6 +64,71 @@ func WebpageTemplateWords(template string) string {
 	default:
 		return "basic webpage"
 	}
+}
+
+// countPhrase renders a count with its noun, singular at
+// one: "1 column", "2 columns", "3 rows", "6 boxes".
+func countPhrase(n int, one, many string) string {
+	if n == 1 {
+		return "1 " + one
+	}
+	return fmt.Sprintf("%d %s", n, many)
+}
+
+// WebpageGridWords renders a counted grid the way sentences
+// and plans name it: "grid webpage with 2 columns and
+// 3 rows".
+func WebpageGridWords(cols, rows int) string {
+	return fmt.Sprintf("grid webpage with %s and %s", countPhrase(cols, "column", "columns"), countPhrase(rows, "row", "rows"))
+}
+
+// webpageGridBlurb is what a counted grid holds, in plain
+// words for the plan summary — the counts and the box total
+// stated, so the plan the user confirms is the grid they
+// asked for.
+func webpageGridBlurb(cols, rows int) string {
+	return fmt.Sprintf("a heading and a grid of %s — %s across by %s down — each box waiting for your words; on a narrow screen the boxes stack into fewer columns, down to one",
+		countPhrase(cols*rows, "box", "boxes"), countPhrase(cols, "column", "columns"), countPhrase(rows, "row", "rows"))
+}
+
+// WebpageGridContent renders the counted grid: the grid
+// template's skeleton with exactly cols columns and
+// cols*rows placeholder boxes, numbered in the plain grid's
+// card style. The responsive collapse stays — fewer columns
+// on a middling screen (when there are more than two to
+// give up), one on a phone (when there is more than one).
+func WebpageGridContent(cols, rows int, title string) string {
+	var b strings.Builder
+	b.WriteString("<!DOCTYPE html>\n" +
+		"<html lang=\"en\">\n" +
+		"<head>\n" +
+		"<meta charset=\"utf-8\">\n" +
+		"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n" +
+		"<title>" + title + "</title>\n" +
+		"<style>\n" +
+		"body { font-family: sans-serif; line-height: 1.5; margin: 0 auto; max-width: 64em; padding: 1em; }\n")
+	fmt.Fprintf(&b, ".grid { display: grid; grid-template-columns: repeat(%d, 1fr); gap: 1em; }\n", cols)
+	b.WriteString(".card { border: 1px solid #ccc; padding: 1em; }\n")
+	if cols > 2 {
+		b.WriteString("@media (max-width: 50em) { .grid { grid-template-columns: repeat(2, 1fr); } }\n")
+	}
+	if cols > 1 {
+		b.WriteString("@media (max-width: 32em) { .grid { grid-template-columns: 1fr; } }\n")
+	}
+	b.WriteString("</style>\n" +
+		"</head>\n" +
+		"<body>\n" +
+		"<h1>" + title + "</h1>\n")
+	fmt.Fprintf(&b, "<p>TODO: a line about what these boxes show — this grid holds exactly %s by %s, %s in all, and on a narrow screen the boxes stack into fewer columns, down to one.</p>\n",
+		countPhrase(cols, "column", "columns"), countPhrase(rows, "row", "rows"), countPhrase(cols*rows, "box", "boxes"))
+	b.WriteString("<div class=\"grid\">\n")
+	for n := 1; n <= cols*rows; n++ {
+		fmt.Fprintf(&b, "<div class=\"card\">\n<p>TODO: card %d's words — one card per thing the page shows off.</p>\n</div>\n", n)
+	}
+	b.WriteString("</div>\n" +
+		"</body>\n" +
+		"</html>\n")
+	return b.String()
 }
 
 // webpageTemplateBlurb is what a template holds, in plain
@@ -293,6 +363,27 @@ func (p *Project) planWebpage(req EditRequest) (*EditPlan, string) {
 		template != "material" {
 		return nil, "that edit needs one of the webpage templates: basic, responsive, with assets, two columns, three columns, grid, rows, or material."
 	}
+	// The counted grid's counts, planner-checked like every
+	// other rule here: they belong to the grid alone, the
+	// columns must be named, unnamed rows default to 2, and
+	// the range is 1 to 6 of each — outside it refuses,
+	// never clamps.
+	cols, rows := req.WebpageGridCols, req.WebpageGridRows
+	counted := cols != 0 || rows != 0
+	if counted {
+		if template != "grid" {
+			return nil, "the column and row counts belong to the grid template — ask for a grid webpage with counts, or drop the counts."
+		}
+		if cols == 0 {
+			return nil, "a counted grid names its columns — say how many columns, like \"2 columns and 3 rows\"."
+		}
+		if rows == 0 {
+			rows = 2
+		}
+		if cols < 1 || cols > 6 || rows < 1 || rows > 6 {
+			return nil, fmt.Sprintf("a counted grid can have 1 to 6 columns and 1 to 6 rows — %s and %s is outside that. Ask again with numbers in that range.", countPhrase(cols, "column", "columns"), countPhrase(rows, "row", "rows"))
+		}
+	}
 	if why, blocked := p.fileBlocked(rel); blocked {
 		return nil, fmt.Sprintf("I won't write %s — %s.", p.LinkPath(rel), why)
 	}
@@ -318,13 +409,19 @@ func (p *Project) planWebpage(req EditRequest) (*EditPlan, string) {
 		title = base[:len(base)-len(".html")]
 	}
 	content := WebpageContent(template, title)
-	ef := finishFile(rel, before, []byte(content))
 	words := WebpageTemplateWords(template)
+	blurb := webpageTemplateBlurb(template)
+	if counted {
+		content = WebpageGridContent(cols, rows, title)
+		words = WebpageGridWords(cols, rows)
+		blurb = webpageGridBlurb(cols, rows)
+	}
+	ef := finishFile(rel, before, []byte(content))
 	summary := fmt.Sprintf("Create %s with the %s: %s. The words are marked TODO — make them yours, save, and the page is ready to serve.",
-		p.LinkPath(rel), words, webpageTemplateBlurb(template))
+		p.LinkPath(rel), words, blurb)
 	if exists {
 		summary = fmt.Sprintf("Put the %s into %s — the file is there but empty, so nothing of yours is overwritten: %s. The words are marked TODO — make them yours, save, and the page is ready to serve.",
-			words, p.LinkPath(rel), webpageTemplateBlurb(template))
+			words, p.LinkPath(rel), blurb)
 	}
 	return &EditPlan{
 		Summary:    summary,

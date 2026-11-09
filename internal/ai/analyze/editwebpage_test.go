@@ -123,6 +123,105 @@ func TestWebpageContentTemplates(t *testing.T) {
 	}
 }
 
+// The counted grid, in the page's own bytes: exactly the
+// named columns in the CSS, exactly cols*rows numbered
+// boxes, and the responsive collapse the plain grid has.
+// The plain grid itself is untouched — still the flowing
+// three-across skeleton with its six unnumbered cards.
+func TestWebpageGridContentCounted(t *testing.T) {
+	page := WebpageGridContent(2, 3, "index")
+	for _, want := range []string{"<title>index</title>", "display: grid", "grid-template-columns: repeat(2, 1fr)",
+		"card 1's words", "card 6's words", "2 columns by 3 rows, 6 boxes in all",
+		"@media (max-width: 32em)", "grid-template-columns: 1fr"} {
+		if !strings.Contains(page, want) {
+			t.Errorf("2x3 grid page missing %q:\n%s", want, page)
+		}
+	}
+	if got := strings.Count(page, `<div class="card">`); got != 6 {
+		t.Errorf("2x3 grid holds %d boxes, want exactly 6:\n%s", got, page)
+	}
+	if strings.Contains(page, "card 7's words") {
+		t.Errorf("2x3 grid numbers a seventh box:\n%s", page)
+	}
+	// Three across keeps the middling-screen step down to
+	// two; one column has nothing to collapse.
+	wide := WebpageGridContent(3, 2, "index")
+	if !strings.Contains(wide, "grid-template-columns: repeat(3, 1fr)") ||
+		!strings.Contains(wide, "@media (max-width: 50em) { .grid { grid-template-columns: repeat(2, 1fr); } }") {
+		t.Errorf("3x2 grid lost its columns or its collapse:\n%s", wide)
+	}
+	if got := strings.Count(wide, `<div class="card">`); got != 6 {
+		t.Errorf("3x2 grid holds %d boxes, want exactly 6", got)
+	}
+	one := WebpageGridContent(1, 1, "index")
+	if got := strings.Count(one, `<div class="card">`); got != 1 {
+		t.Errorf("1x1 grid holds %d boxes, want exactly 1", got)
+	}
+	if strings.Contains(one, "@media") {
+		t.Errorf("1x1 grid carries a collapse it cannot use:\n%s", one)
+	}
+	plain := WebpageContent("grid", "index")
+	if got := strings.Count(plain, `<div class="card">`); got != 6 {
+		t.Errorf("plain grid holds %d cards, want its standing 6", got)
+	}
+	if strings.Contains(plain, "card 1's words") {
+		t.Errorf("plain grid grew the counted grid's numbered cards:\n%s", plain)
+	}
+}
+
+// The counted grid at the planner: the plan's content is
+// the counted body, the summary states the counts and the
+// box total, unnamed rows default to 2 — and the counts
+// are range-checked here like everywhere (refuse, never
+// clamp), belong to the grid alone, and need their columns.
+func TestPlanWebpageCountedGrid(t *testing.T) {
+	dir, proj := webpageProject(t, nil)
+	plan, refusal := proj.PlanEdit(EditRequest{Kind: EditWebpage, File: "jim/temp/index.html", WebpageTemplate: "grid", WebpageGridCols: 2, WebpageGridRows: 3})
+	if refusal != "" || plan == nil {
+		t.Fatalf("counted grid plan refused: %q", refusal)
+	}
+	if got, want := string(plan.Files[0].After), WebpageGridContent(2, 3, "index"); got != want {
+		t.Errorf("planned content is not the counted grid:\n got: %q\nwant: %q", got, want)
+	}
+	for _, want := range []string{"grid webpage with 2 columns and 3 rows", "6 boxes"} {
+		if !strings.Contains(plan.Summary, want) {
+			t.Errorf("summary does not state %q: %q", want, plan.Summary)
+		}
+	}
+	applyServePlan(t, dir, plan)
+
+	// Columns only: the rows default to 2, in the content
+	// and in the summary alike. (A fresh project — the one
+	// above now holds the landed page.)
+	_, proj = webpageProject(t, nil)
+	plan, refusal = proj.PlanEdit(EditRequest{Kind: EditWebpage, File: "jim/temp/index.html", WebpageTemplate: "grid", WebpageGridCols: 3})
+	if refusal != "" || plan == nil {
+		t.Fatalf("columns-only plan refused: %q", refusal)
+	}
+	if got, want := string(plan.Files[0].After), WebpageGridContent(3, 2, "index"); got != want {
+		t.Errorf("columns-only content is not the 3x2 grid")
+	}
+	if !strings.Contains(plan.Summary, "grid webpage with 3 columns and 2 rows") {
+		t.Errorf("columns-only summary does not state the defaulted rows: %q", plan.Summary)
+	}
+
+	for _, tc := range []struct {
+		name string
+		req  EditRequest
+		want string
+	}{
+		{"too many columns", EditRequest{Kind: EditWebpage, File: "jim/temp/index.html", WebpageTemplate: "grid", WebpageGridCols: 7, WebpageGridRows: 2}, "1 to 6 columns and 1 to 6 rows"},
+		{"too many rows", EditRequest{Kind: EditWebpage, File: "jim/temp/index.html", WebpageTemplate: "grid", WebpageGridCols: 2, WebpageGridRows: 9}, "1 to 6 columns and 1 to 6 rows"},
+		{"rows without columns", EditRequest{Kind: EditWebpage, File: "jim/temp/index.html", WebpageTemplate: "grid", WebpageGridRows: 3}, "names its columns"},
+		{"counts on another template", EditRequest{Kind: EditWebpage, File: "jim/temp/index.html", WebpageTemplate: "basic", WebpageGridCols: 2, WebpageGridRows: 3}, "belong to the grid template"},
+	} {
+		plan, refusal := proj.PlanEdit(tc.req)
+		if plan != nil || !strings.Contains(refusal, tc.want) {
+			t.Errorf("%s: plan=%v refusal=%q — want a refusal containing %q", tc.name, plan != nil, refusal, tc.want)
+		}
+	}
+}
+
 // The material template: Material Design 3 from scratch in
 // the page's own bytes — the baseline color roles as
 // variables, the dark scheme flipping them, every starter
