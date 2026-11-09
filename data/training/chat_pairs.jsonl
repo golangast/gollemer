@@ -12225,3 +12225,899 @@
 {"input":"before you said i feel thankful right now . before i said feeling thankful sounds nice . now you say that sounds nice","output":"it is nice, feeling thankful makes everything gentler","domain":"social"}
 {"input":"before you said i love hot chocolate . before i said hot chocolate is warm and sweet . now you say me too","output":"we agree, hot chocolate makes cold evenings feel cozy","domain":"social"}
 {"input":"before you said my dog is named maple . before i said maple is a lovely name for a dog . now you say is she friendly","output":"maple sounds friendly, i bet she wags at everyone she meets","domain":"social"}
+{"input":"before you said we adopted a cat . before i said simple and course! it really does on, home, is learning something new? . now you say his name is archie, he is very playful","output":"hello archie! welcome to the family","domain":"social"}
+{"input":"before you said his name is archie, he is very playful . before i said old days are talking with you. . now you say remind me, what is his name","output":"his name is archie, of course","domain":"social"}
+{"input":"before you said i got a hamster . before i said what did the ocean say to the beach? nothing, it just waved! . now you say we named him archie","output":"oh, archie! i love it already","domain":"social"}
+{"input":"before you said we named him archie . before i said rain sounds like a cat who is loved and happy with you . now you say and his name is what","output":"you called him archie","domain":"social"}
+{"input":"before you said he is chewing my shoes . before i said archie! what a sweet name . now you say remind me, what is his name","output":"it is archie, your sweet cat","domain":"social"}
+{"input":"before you said i bought a goldfish . before i said sending you warmth. you deserve connection and care. . now you say bandit is his name","output":"hello bandit! welcome to the family","domain":"social"}
+{"input":"before you said bandit is his name . before i said no, i am here, wherever you want to talk about it? . now you say remind me, what is his name","output":"his name is bandit, of course","domain":"social"}
+{"input":"before you said i just got a puppy . before i said a new puppy! congratulations, is a fine answer! . now you say his name is bandit, he is very playful","output":"oh, bandit! i love it already","domain":"social"}
+{"input":"before you said his name is bandit, he is very playful . before i said hi there! how's it going? . now you say and his name is what","output":"you called him bandit","domain":"social"}
+{"input":"before you said he barked at the mailman . before i said i love the name bandit! give him a cuddle for me . now you say and his name is what","output":"of course, bandit!","domain":"social"}
+{"input":"before you said her name is bella . before i said bella is a beautiful name! i bet she is adorable! . now you say what was her name again","output":"bella, your new puppy","domain":"social"}
+{"input":"before you said we picked out a puppy today . before i said a new puppy! congratulations, your house just got a lot more joyful and busy. . now you say i named her bella","output":"bella! such a happy name for a happy puppy","domain":"social"}
+{"input":"before you said i named her bella . before i said lola sounds like a dog who is loved and happy with you . now you say remind me, what is her name","output":"her name is bella, of course","domain":"social"}
+{"input":"before you said she is so tiny and sleepy . before i said bella is a beautiful name! i bet she is adorable! . now you say so what is her name","output":"bella, your new puppy","domain":"social"}
+{"input":"before you said we adopted a puppy from the shelter . before i said thank you! or congratulations to you, if it's your news! . now you say he is called bruno","output":"bruno! that is adorable. how is he settling in?","domain":"social"}
+{"input":"before you said he is called bruno . before i said busy days fly by the gate, so loyal and there at all. . now you say what was his name again","output":"bruno, your new puppy","domain":"social"}
+{"input":"before you said i have a new puppy . before i said a new food is the world, everyone how big was it? . now you say bruno is his name","output":"bruno! such a happy name for a happy puppy","domain":"social"}
+{"input":"before you said bruno is his name . before i said i'm right, what first i agree today? . now you say remind me, what is his name","output":"his name is bruno, of course","domain":"social"}
+{"input":"before you said he hates bath time . before i said what a cute name, bruno suits him already . now you say his name, do you remember it","output":"his name is bruno, of course","domain":"social"}
+{"input":"before you said i got a bunny . before i said so glad to hear! let us learn do you have got this. . now you say his name is buddy, he is so tiny","output":"buddy! that is adorable. how is he settling in?","domain":"social"}
+{"input":"before you said his name is buddy, he is so tiny . before i said bye! come back soon. . now you say what was his name again","output":"buddy, your new bunny","domain":"social"}
+{"input":"before you said we adopted a puppy from the shelter . before i said thank you! or congratulations to you, if it's your news! . now you say his name is buddy","output":"buddy! such a happy name for a happy bunny","domain":"social"}
+{"input":"before you said his name is buddy . before i said wonderful! what is on your secret? . now you say remind me, what is his name","output":"his name is buddy, of course","domain":"social"}
+{"input":"before you said he wagged his tail all day . before i said buddy! that is adorable. how is he settling in? . now you say wait, what did we call him","output":"you called him buddy","domain":"social"}
+{"input":"before you said we rescued a kitten . before i said kind of course! what do you call a sleeping bull? a bulldozer! . now you say he is called charlie","output":"charlie is a lovely name. he sounds precious","domain":"social"}
+{"input":"before you said he is called charlie . before i said warm golden hearing some house? . now you say and his name is what","output":"you called him charlie","domain":"social"}
+{"input":"before you said i got a cat . before i said a good part can chases make it feel softer. . now you say charlie is his name","output":"charlie is a great name! is he playful?","domain":"social"}
+{"input":"before you said charlie is his name . before i said i'm great, thanks for asking! and you? . now you say so what is his name","output":"charlie, that was his name","domain":"social"}
+{"input":"before you said he runs to the door when i get home . before i said hello charlie! welcome to the family . now you say what name did i give him","output":"charlie, that was his name","domain":"social"}
+{"input":"before you said i got a parrot . before i said what did the ocean say to the beach? nothing, it just waved! . now you say we call her cleo","output":"what a cute name, cleo suits her already","domain":"social"}
+{"input":"before you said we call her cleo . before i said cannot sounds like a cat who is loved and happy with you . now you say what is the parrot's name","output":"of course, cleo!","domain":"social"}
+{"input":"before you said we adopted a puppy . before i said a new puppy! congratulations, your house just got a lot more joyful and busy. . now you say her name is cleo, she is so tiny","output":"cleo is a lovely name. she sounds precious","domain":"social"}
+{"input":"before you said her name is cleo, she is so tiny . before i said that must wonderful paid off! what was the hardest part? . now you say what was her name again","output":"cleo, your new parrot","domain":"social"}
+{"input":"before you said she naps in the sunbeam . before i said cleo is a lovely name. she sounds precious . now you say what is her name","output":"her name is cleo","domain":"social"}
+{"input":"before you said i got a new puppy . before i said a puppy! how exciting! what is its name? . now you say i named him duke","output":"what a cute name, duke suits him already","domain":"social"}
+{"input":"before you said i named him duke . before i said duke sounds like a cat who is happy with you . now you say what is the puppy's name","output":"of course, duke!","domain":"social"}
+{"input":"before you said we picked out a puppy today . before i said a new puppy! congratulations, your house just got a lot more joyful and busy. . now you say we call him duke","output":"duke is a lovely name. he sounds precious","domain":"social"}
+{"input":"before you said we call him duke . before i said new day is fresh. . now you say what was his name again","output":"duke, your new puppy","domain":"social"}
+{"input":"before you said he digs in the yard . before i said duke sounds like a cat who is happy with you . now you say what did i name him","output":"duke! his name is duke","domain":"social"}
+{"input":"before you said we got a puppy today . before i said a nice jog clears my head. do you run for fun or a time? . now you say we named him frankie","output":"frankie is a lovely name. he sounds precious","domain":"social"}
+{"input":"before you said we named him frankie . before i said good yes, sounds wonderful, you picked a perfect name . now you say and his name is what","output":"you called him frankie","domain":"social"}
+{"input":"before you said i got a new kitten . before i said congratulations! that is a wonderful achievement! . now you say he is called frankie","output":"frankie is a great name! is he playful?","domain":"social"}
+{"input":"before you said he is called frankie . before i said good evening! at practice, what kind of you? . now you say so what is his name","output":"frankie, that was his name","domain":"social"}
+{"input":"before you said he is chewing my shoes . before i said oh, frankie! i love it already . now you say do you remember his name","output":"you named him frankie","domain":"social"}
+{"input":"before you said i got a dog . before i said a good book can help a lot. how is your sleep lately? . now you say we call him georgie","output":"georgie is a lovely name. he sounds precious","domain":"social"}
+{"input":"before you said we call him georgie . before i said no calm can be calm, tell me and a day. . now you say and his name is what","output":"you called him georgie","domain":"social"}
+{"input":"before you said we adopted a cat . before i said simple and course! it really does on, home, is learning something new? . now you say his name is georgie, he is so tiny","output":"georgie is a great name! is he playful?","domain":"social"}
+{"input":"before you said his name is georgie, he is so tiny . before i said yay, you're not most of it! . now you say so what is his name","output":"georgie, that was his name","domain":"social"}
+{"input":"before you said he barked at the mailman . before i said georgie is a great name! is he playful? . now you say tell me his name again","output":"it is georgie, your sweet dog","domain":"social"}
+{"input":"before you said we rescued a dog . before i said that is one! why did the ocean say to the beach? nothing, it just waved! . now you say her name is hazel, she is very sweet","output":"hazel! that is adorable. how is she settling in?","domain":"social"}
+{"input":"before you said her name is hazel, she is very sweet . before i said my day is a lot. i hope tomorrow is fresh. . now you say what was her name again","output":"hazel, your new dog","domain":"social"}
+{"input":"before you said i got a parrot . before i said what did the ocean say to the beach? nothing, it just waved! . now you say we named her hazel","output":"hazel! such a happy name for a happy dog","domain":"social"}
+{"input":"before you said we named her hazel . before i said hey sounds fresh, the whole kind? . now you say remind me, what is her name","output":"her name is hazel, of course","domain":"social"}
+{"input":"before you said she is so tiny and sleepy . before i said welcome home, hazel! . now you say what is the dog's name","output":"of course, hazel!","domain":"social"}
+{"input":"before you said i got a kitten . before i said congratulations! a lot about you too! . now you say his name is hugo, he is so tiny","output":"what a cute name, hugo suits him already","domain":"social"}
+{"input":"before you said his name is hugo, he is so tiny . before i said stargazing takes practice, but small steps make it enjoyable . now you say what is the kitten's name","output":"of course, hugo!","domain":"social"}
+{"input":"before you said we adopted a dog . before i said that is one! why did the ocean say to the beach? nothing, it just waved! . now you say his name is hugo","output":"hugo is a lovely name. he sounds precious","domain":"social"}
+{"input":"before you said his name is hugo . before i said thank you! or congratulations to you, if it's your news! . now you say what was his name again","output":"hugo, your new kitten","domain":"social"}
+{"input":"before you said he hates bath time . before i said hugo! i knew he would have a cute name . now you say what was his name again","output":"hugo, your new kitten","domain":"social"}
+{"input":"before you said we got a rabbit . before i said a nice jog clears my head. do you run for fun or for races? . now you say his name is koda, he is very playful","output":"what a cute name, koda suits him already","domain":"social"}
+{"input":"before you said his name is koda, he is very playful . before i said oh really? cold days are loves special gift . now you say what is the rabbit's name","output":"of course, koda!","domain":"social"}
+{"input":"before you said i got a new puppy . before i said a puppy! how exciting! what is its name? . now you say we named him koda","output":"koda is a lovely name. he sounds precious","domain":"social"}
+{"input":"before you said we named him koda . before i said theo sounds like a cat who is loved and happy with you . now you say what was his name again","output":"koda, your new rabbit","domain":"social"}
+{"input":"before you said he wagged his tail all day . before i said oh koda, that melts my heart . now you say remind me, what is his name","output":"his name is koda, of course","domain":"social"}
+{"input":"before you said i got a cat . before i said a good part can chases make it feel softer. . now you say her name is lola, she is so tiny","output":"what a cute name, lola suits her already","domain":"social"}
+{"input":"before you said her name is lola, she is so tiny . before i said wonderful! . now you say what is the cat's name","output":"of course, lola!","domain":"social"}
+{"input":"before you said i bought a goldfish . before i said sending you warmth. you deserve connection and care. . now you say her name is lola","output":"lola is a lovely name. she sounds precious","domain":"social"}
+{"input":"before you said her name is lola . before i said no have you got it! i am here to be bagels! . now you say what was her name again","output":"lola, your new cat","domain":"social"}
+{"input":"before you said she just learned to sit . before i said lola! she is going to love that name . now you say and her name is what","output":"you called her lola","domain":"social"}
+{"input":"before you said i got a hamster . before i said what did the ocean say to the beach? nothing, it just waved! . now you say we call him louie","output":"louie! that is adorable. how is he settling in?","domain":"social"}
+{"input":"before you said we call him louie . before i said thank you! day is my favorite sound in a chat! . now you say what was his name again","output":"louie, your new hamster","domain":"social"}
+{"input":"before you said we got a puppy today . before i said a nice jog clears my head. do you run for fun or a time? . now you say his name is louie, he is so tiny","output":"louie! such a happy name for a happy hamster","domain":"social"}
+{"input":"before you said his name is louie, he is so tiny . before i said oh . now you say remind me, what is his name","output":"his name is louie, of course","domain":"social"}
+{"input":"before you said he tilts his head at everything . before i said what a darling name, louie! . now you say so what is his name","output":"louie, that was his name","domain":"social"}
+{"input":"before you said we adopted a kitten . before i said kind of course! what do you call a sleeping bull? a bulldozer! . now you say she is called luna","output":"what a cute name, luna suits her already","domain":"social"}
+{"input":"before you said she is called luna . before i said warm cookies are here! what many of gentle memories. . now you say what is the kitten's name","output":"of course, luna!","domain":"social"}
+{"input":"before you said i adopted an older dog . before i said mondays are you rhythm, tomorrow is a tiny one. where would you like to have very time? . now you say luna is her name","output":"luna is a lovely name. she sounds precious","domain":"social"}
+{"input":"before you said luna is her name . before i said not have a fun day. . now you say what was her name again","output":"luna, your new kitten","domain":"social"}
+{"input":"before you said she purrs so loud . before i said luna is a beautiful name! i bet she is adorable! . now you say her name, do you remember it","output":"her name is luna","domain":"social"}
+{"input":"before you said i have a new puppy . before i said a new food is the world, everyone how big was it? . now you say her name is mabel, she is so tiny","output":"mabel! that is adorable. how is she settling in?","domain":"social"}
+{"input":"before you said her name is mabel, she is so tiny . before i said rest well, pages, and a good heart . now you say what was her name again","output":"mabel, your new puppy","domain":"social"}
+{"input":"before you said we rescued a kitten . before i said kind of course! what do you call a sleeping bull? a bulldozer! . now you say her name is mabel","output":"mabel! such a happy name for a happy puppy","domain":"social"}
+{"input":"before you said her name is mabel . before i said goodbye for now! i'll be here when you return. . now you say remind me, what is her name","output":"her name is mabel, of course","domain":"social"}
+{"input":"before you said she slept all afternoon . before i said mabel! what a sweet name . now you say wait, what did we call her","output":"mabel! her name is mabel","domain":"social"}
+{"input":"before you said i adopted an older dog . before i said mondays are you rhythm, tomorrow is a tiny one. where would you like to have very time? . now you say her name is maisie","output":"hello maisie! welcome to the family","domain":"social"}
+{"input":"before you said her name is maisie . before i said thank you! or congratulations, you, if your news! . now you say remind me, what is her name","output":"her name is maisie, of course","domain":"social"}
+{"input":"before you said we got a rabbit . before i said a nice jog clears my head. do you run for fun or for races? . now you say i named her maisie","output":"oh, maisie! i love it already","domain":"social"}
+{"input":"before you said i named her maisie . before i said that hurts deeply. take your time, i am sure. . now you say and her name is what","output":"you called her maisie","domain":"social"}
+{"input":"before you said she loves the garden . before i said i love the name maisie! give her a cuddle for me . now you say what name did i give her","output":"you named her maisie","domain":"social"}
+{"input":"before you said i got a dog . before i said a good book can help a lot. how is your sleep lately? . now you say i named him max","output":"max is a perfect name for a dog!","domain":"social"}
+{"input":"before you said i named him max . before i said no sounds like that there's something under that is wonderful, but follow the beat. . now you say tell me his name again","output":"it is max, your sweet dog","domain":"social"}
+{"input":"before you said we adopted a cat . before i said simple and course! it really does on, home, is learning something new? . now you say we call him max","output":"hello max! welcome to the family","domain":"social"}
+{"input":"before you said we call him max . before i said new friends are half the adventure! what is the best thing you tried? . now you say what is the dog's name","output":"of course, max!","domain":"social"}
+{"input":"before you said he follows me everywhere . before i said max is a perfect name for a dog! . now you say what is his name","output":"it is max, your sweet dog","domain":"social"}
+{"input":"before you said we got a rabbit . before i said a nice jog clears my head. do you run for fun or for races? . now you say milo is his name","output":"what a cute name, milo suits him already","domain":"social"}
+{"input":"before you said milo is his name . before i said that's your tonight. . now you say what is the rabbit's name","output":"of course, milo!","domain":"social"}
+{"input":"before you said i got a new puppy . before i said a puppy! how exciting! what is its name? . now you say his name is milo, he is very playful","output":"milo is a lovely name. he sounds precious","domain":"social"}
+{"input":"before you said his name is milo, he is very playful . before i said hello! how are so simple on too! i am like it! . now you say what was his name again","output":"milo, your new rabbit","domain":"social"}
+{"input":"before you said he hates bath time . before i said what a cute name, milo suits him already . now you say what did i name him","output":"of course, milo!","domain":"social"}
+{"input":"before you said his name is murphy, he is very playful . before i said hi there! how's it going? . now you say remind me, what is his name","output":"his name is murphy, of course","domain":"social"}
+{"input":"before you said i got a dog . before i said a good book can help a lot. how is your sleep lately? . now you say we named him murphy","output":"oh, murphy! i love it already","domain":"social"}
+{"input":"before you said we named him murphy . before i said that is the best hard to find. hold in your day. . now you say and his name is what","output":"you called him murphy","domain":"social"}
+{"input":"before you said he wagged his tail all day . before i said murphy! that is adorable. how is he settling in? . now you say do you remember his name","output":"murphy, your new puppy","domain":"social"}
+{"input":"before you said we adopted a dog . before i said that is one! why did the ocean say to the beach? nothing, it just waved! . now you say we named her opal","output":"what a cute name, opal suits her already","domain":"social"}
+{"input":"before you said we named her opal . before i said thank it was the best! i love here, something that is best . now you say what is the dog's name","output":"of course, opal!","domain":"social"}
+{"input":"before you said i got a bunny . before i said so glad to hear! let us learn do you have got this. . now you say she is called opal","output":"opal is a lovely name. she sounds precious","domain":"social"}
+{"input":"before you said she is called opal . before i said that's wonderful! glad it is here. . now you say what was her name again","output":"opal, your new dog","domain":"social"}
+{"input":"before you said she just learned to sit . before i said hello opal! welcome to the family . now you say tell me her name again","output":"her name is opal, of course","domain":"social"}
+{"input":"before you said i got a cat . before i said a good part can chases make it feel softer. . now you say his name is otis","output":"what a cute name, otis suits him already","domain":"social"}
+{"input":"before you said his name is otis . before i said i'm gollemer, your friendly chat companion! . now you say what is the cat's name","output":"of course, otis!","domain":"social"}
+{"input":"before you said i bought a goldfish . before i said sending you warmth. you deserve connection and care. . now you say i named him otis","output":"otis is a lovely name. he sounds precious","domain":"social"}
+{"input":"before you said i named him otis . before i said being stuck is part of learning, not a sign to quit. what part feels stuck? . now you say what was his name again","output":"otis, your new cat","domain":"social"}
+{"input":"before you said he tilts his head at everything . before i said otis is a lovely name. he sounds precious . now you say what is the cat's name","output":"you called him otis","domain":"social"}
+{"input":"before you said we got a puppy today . before i said a nice jog clears my head. do you run for fun or a time? . now you say her name is pearl, she is very sweet","output":"pearl! that is adorable. how is she settling in?","domain":"social"}
+{"input":"before you said her name is pearl, she is very sweet . before i said morning! are great, thanks for asking! and you? . now you say what was her name again","output":"pearl, your new puppy","domain":"social"}
+{"input":"before you said i got a new kitten . before i said congratulations! that is a wonderful achievement! . now you say we named her pearl","output":"pearl! such a happy name for a happy puppy","domain":"social"}
+{"input":"before you said we named her pearl . before i said good sounds let it out here. i will listen without judging you. . now you say remind me, what is her name","output":"her name is pearl, of course","domain":"social"}
+{"input":"before you said she purrs so loud . before i said pearl! such a happy name for a happy puppy . now you say what was her name again","output":"pearl, that was her name","domain":"social"}
+{"input":"before you said we picked out a puppy today . before i said a new puppy! congratulations, your house just got a lot more joyful and busy. . now you say poppy is her name","output":"poppy! that is adorable. how is she settling in?","domain":"social"}
+{"input":"before you said poppy is her name . before i said no at all! that is calm and i'm, tell one! . now you say what was her name again","output":"poppy, your new puppy","domain":"social"}
+{"input":"before you said i got a dog . before i said a good book can help a lot. how is your sleep lately? . now you say her name is poppy, she is very sweet","output":"poppy! such a happy name for a happy puppy","domain":"social"}
+{"input":"before you said her name is poppy, she is very sweet . before i said daily day is a little sweet and can help soften. . now you say remind me, what is her name","output":"her name is poppy, of course","domain":"social"}
+{"input":"before you said she slept all afternoon . before i said oh, poppy! i love it already . now you say remind me, what is her name","output":"her name is poppy","domain":"social"}
+{"input":"before you said we adopted a dog . before i said that is one! why did the ocean say to the beach? nothing, it just waved! . now you say he is called remy","output":"what a cute name, remy suits him already","domain":"social"}
+{"input":"before you said he is called remy . before i said gray days invite us to rest a little. there's no shame in slowing down. . now you say what is the dog's name","output":"of course, remy!","domain":"social"}
+{"input":"before you said i got a bunny . before i said so glad to hear! let us learn do you have got this. . now you say remy is his name","output":"remy is a lovely name. he sounds precious","domain":"social"}
+{"input":"before you said remy is his name . before i said that's great, thanks for asking! and you? . now you say what was his name again","output":"remy, your new dog","domain":"social"}
+{"input":"before you said he barked at the mailman . before i said remy is a great name! is he playful? . now you say and his name is what","output":"remy! his name is remy","domain":"social"}
+{"input":"before you said i just got a puppy . before i said a new puppy! congratulations, is a fine answer! . now you say his name is rocky","output":"rocky! that is adorable. how is he settling in?","domain":"social"}
+{"input":"before you said his name is rocky . before i said it is normal, like people prefer love a walk, is the best chats, don't they? . now you say what was his name again","output":"rocky, your new puppy","domain":"social"}
+{"input":"before you said we adopted a kitten . before i said kind of course! what do you call a sleeping bull? a bulldozer! . now you say i named him rocky","output":"rocky! such a happy name for a happy puppy","domain":"social"}
+{"input":"before you said i named him rocky . before i said nice, call a wonderful breakfast is a nice been . now you say remind me, what is his name","output":"his name is rocky, of course","domain":"social"}
+{"input":"before you said he follows me everywhere . before i said welcome home, rocky! . now you say so what is his name","output":"you named him rocky","domain":"social"}
+{"input":"before you said i got a kitten . before i said congratulations! a lot about you too! . now you say we call her rosie","output":"rosie! that is adorable. how is she settling in?","domain":"social"}
+{"input":"before you said we call her rosie . before i said new fun is still extra sweet and enjoy the quiet of rain . now you say what was her name again","output":"rosie, your new kitten","domain":"social"}
+{"input":"before you said we adopted a dog . before i said that is one! why did the ocean say to the beach? nothing, it just waved! . now you say her name is rosie, she is so tiny","output":"rosie! such a happy name for a happy kitten","domain":"social"}
+{"input":"before you said her name is rosie, she is so tiny . before i said wonderful! . now you say remind me, what is her name","output":"her name is rosie, of course","domain":"social"}
+{"input":"before you said she learned a trick today . before i said rosie! i knew she would have a cute name . now you say her name, do you remember it","output":"it is rosie, your sweet kitten","domain":"social"}
+{"input":"before you said we rescued a dog . before i said that is one! why did the ocean say to the beach? nothing, it just waved! . now you say we named him rusty","output":"rusty! that is adorable. how is he settling in?","domain":"social"}
+{"input":"before you said we named him rusty . before i said thank you! did you go too? . now you say what was his name again","output":"rusty, your new dog","domain":"social"}
+{"input":"before you said i got a parrot . before i said what did the ocean say to the beach? nothing, it just waved! . now you say he is called rusty","output":"rusty! such a happy name for a happy dog","domain":"social"}
+{"input":"before you said he is called rusty . before i said thanks! choice! they make the best. . now you say remind me, what is his name","output":"his name is rusty, of course","domain":"social"}
+{"input":"before you said he wagged his tail all day . before i said oh rusty, that melts my heart . now you say wait, what did we call him","output":"of course, rusty!","domain":"social"}
+{"input":"before you said we adopted a puppy from the shelter . before i said thank you! or congratulations to you, if it's your news! . now you say we named her sadie","output":"sadie! that is adorable. how is she settling in?","domain":"social"}
+{"input":"before you said we named her sadie . before i said busy more sketching, it feels like a gift in the park . now you say what was her name again","output":"sadie, your new puppy","domain":"social"}
+{"input":"before you said i have a new puppy . before i said a new food is the world, everyone how big was it? . now you say she is called sadie","output":"sadie! such a happy name for a happy puppy","domain":"social"}
+{"input":"before you said she is called sadie . before i said yes, days are treasures, enjoy it? . now you say remind me, what is her name","output":"her name is sadie, of course","domain":"social"}
+{"input":"before you said she just learned to sit . before i said sadie! she is going to love that name . now you say what name did i give her","output":"sadie, your new puppy","domain":"social"}
+{"input":"before you said i got a parrot . before i said what did the ocean say to the beach? nothing, it just waved! . now you say his name is scout, he is so tiny","output":"scout! that is adorable. how is he settling in?","domain":"social"}
+{"input":"before you said his name is scout, he is so tiny . before i said wonderful! . now you say what was his name again","output":"scout, your new parrot","domain":"social"}
+{"input":"before you said we adopted a puppy . before i said a new puppy! congratulations, your house just got a lot more joyful and busy. . now you say his name is scout","output":"scout! such a happy name for a happy parrot","domain":"social"}
+{"input":"before you said his name is scout . before i said that is calm to meet you slow, and quiet one? . now you say remind me, what is his name","output":"his name is scout, of course","domain":"social"}
+{"input":"before you said he tilts his head at everything . before i said what a darling name, scout! . now you say what is his name","output":"his name is scout, of course","domain":"social"}
+{"input":"before you said we adopted a kitten . before i said kind of course! what do you call a sleeping bull? a bulldozer! . now you say simba is his name","output":"simba! that is adorable. how is he settling in?","domain":"social"}
+{"input":"before you said simba is his name . before i said i'm gollemer, your friendly chat companion! . now you say what was his name again","output":"simba, your new kitten","domain":"social"}
+{"input":"before you said his name is simba, he is very playful . before i said hi are full of i real. . now you say remind me, what is his name","output":"his name is simba, of course","domain":"social"}
+{"input":"before you said he digs in the yard . before i said simba is a beautiful name! i bet he is adorable! . now you say what did i name him","output":"you called him simba","domain":"social"}
+{"input":"before you said i bought a goldfish . before i said sending you warmth. you deserve connection and care. . now you say she is called stella","output":"hello stella! welcome to the family","domain":"social"}
+{"input":"before you said she is called stella . before i said small steps still move you forward. i believe in you. . now you say remind me, what is her name","output":"her name is stella, of course","domain":"social"}
+{"input":"before you said i just got a puppy . before i said a new puppy! congratulations, is a fine answer! . now you say stella is her name","output":"oh, stella! i love it already","domain":"social"}
+{"input":"before you said stella is her name . before i said no, i am here beside you. . now you say and her name is what","output":"you called her stella","domain":"social"}
+{"input":"before you said she slept all afternoon . before i said stella! what a sweet name . now you say do you remember her name","output":"stella, that was her name","domain":"social"}
+{"input":"before you said we adopted a puppy . before i said a new puppy! congratulations, your house just got a lot more joyful and busy. . now you say we named him teddy","output":"teddy! that is adorable. how is he settling in?","domain":"social"}
+{"input":"before you said we named him teddy . before i said sounds like a coffee feels nice, doesn't it? . now you say what was his name again","output":"teddy, your new puppy","domain":"social"}
+{"input":"before you said i got a kitten . before i said congratulations! a lot about you too! . now you say he is called teddy","output":"teddy! such a happy name for a happy puppy","domain":"social"}
+{"input":"before you said he is called teddy . before i said good warm to see storms can enjoying the quiet chat . now you say remind me, what is his name","output":"his name is teddy, of course","domain":"social"}
+{"input":"before you said he barked at the mailman . before i said i love the name teddy! give him a cuddle for me . now you say tell me his name again","output":"his name is teddy","domain":"social"}
+{"input":"before you said i adopted an older dog . before i said mondays are you rhythm, tomorrow is a tiny one. where would you like to have very time? . now you say i named him tucker","output":"hello tucker! welcome to the family","domain":"social"}
+{"input":"before you said i named him tucker . before i said thank you! did you talk was yours? . now you say remind me, what is his name","output":"his name is tucker, of course","domain":"social"}
+{"input":"before you said we got a rabbit . before i said a nice jog clears my head. do you run for fun or for races? . now you say we call him tucker","output":"oh, tucker! i love it already","domain":"social"}
+{"input":"before you said we call him tucker . before i said that is great! beautiful when how is you, go? . now you say and his name is what","output":"you called him tucker","domain":"social"}
+{"input":"before you said he follows me everywhere . before i said tucker is a perfect name for a dog! . now you say what is the dog's name","output":"tucker! his name is tucker","domain":"social"}
+{"input":"before you said i got a hamster . before i said what did the ocean say to the beach? nothing, it just waved! . now you say i named her willow","output":"hello willow! welcome to the family","domain":"social"}
+{"input":"before you said i named her willow . before i said hi! it makes me smile too! enjoy every moment of it! . now you say remind me, what is her name","output":"her name is willow, of course","domain":"social"}
+{"input":"before you said we got a puppy today . before i said a nice jog clears my head. do you run for fun or a time? . now you say we call her willow","output":"oh, willow! i love it already","domain":"social"}
+{"input":"before you said we call her willow . before i said a walk by the stars is pure morning in fun! . now you say and her name is what","output":"you called her willow","domain":"social"}
+{"input":"before you said she learned a trick today . before i said what a cute name, willow suits her already . now you say what was her name again","output":"you named her willow","domain":"social"}
+{"input":"before you said i got a new kitten . before i said congratulations! that is a wonderful achievement! . now you say we call him winston","output":"winston is a lovely name. he sounds precious","domain":"social"}
+{"input":"before you said we call him winston . before i said new at day is the best! things perfect before the world evenings . now you say and his name is what","output":"you called him winston","domain":"social"}
+{"input":"before you said we rescued a dog . before i said that is one! why did the ocean say to the beach? nothing, it just waved! . now you say his name is winston, he is so tiny","output":"winston is a great name! is he playful?","domain":"social"}
+{"input":"before you said his name is winston, he is so tiny . before i said the one? . now you say so what is his name","output":"winston, that was his name","domain":"social"}
+{"input":"before you said he wagged his tail all day . before i said winston! that is adorable. how is he settling in? . now you say remind me, what is his name","output":"it is winston, your sweet kitten","domain":"social"}
+{"input":"before you said i have a new puppy . before i said a new food is the world, everyone how big was it? . now you say his name is ziggy","output":"ziggy! that is adorable. how is he settling in?","domain":"social"}
+{"input":"before you said his name is ziggy . before i said that is great! how fresh and you, hard to it. . now you say what was his name again","output":"ziggy, your new puppy","domain":"social"}
+{"input":"before you said we rescued a kitten . before i said kind of course! what do you call a sleeping bull? a bulldozer! . now you say i named him ziggy","output":"ziggy! such a happy name for a happy puppy","domain":"social"}
+{"input":"before you said i named him ziggy . before i said fresh be here! . now you say remind me, what is his name","output":"his name is ziggy, of course","domain":"social"}
+{"input":"before you said he runs to the door when i get home . before i said hello ziggy! welcome to the family . now you say and his name is what","output":"of course, ziggy!","domain":"social"}
+{"input":"before you said my sister just had a baby . before i said how wonderful, congratulations to your whole family! is everyone well? . now you say her name is emma","output":"emma! what a beautiful name for a baby girl","domain":"social"}
+{"input":"before you said her name is emma . before i said that is wonderful to hear! what has you a wonderful day! . now you say what is her name","output":"her name is emma","domain":"social"}
+{"input":"before you said her name is emma . before i said that is wonderful to hear! what has you a wonderful day! . now you say do you remember her name","output":"her name is emma","domain":"social"}
+{"input":"before you said my brother and his wife had a baby . before i said how a first spring for the world waking up and out of calm . now you say they named her sofia","output":"welcome to the world, sofia!","domain":"social"}
+{"input":"before you said they named her sofia . before i said me did, good talk with you too! . now you say what did they name her","output":"they named her sofia","domain":"social"}
+{"input":"before you said they named her sofia . before i said me did, good talk with you too! . now you say tell me her name again","output":"they named her sofia","domain":"social"}
+{"input":"before you said my friend just had a baby . before i said how wonderful, but did it makes you whole day. . now you say a girl, her name is ava","output":"ava is a lovely name. congratulations to the family!","domain":"social"}
+{"input":"before you said a girl, her name is ava . before i said that is the best feeling! where do you like to run? . now you say do you remember her name","output":"ava! her name is ava","domain":"social"}
+{"input":"before you said a girl, her name is ava . before i said that is the best feeling! where do you like to run? . now you say what was her name again","output":"ava! her name is ava","domain":"social"}
+{"input":"before you said my cousin had a baby yesterday . before i said octopuses are amazing! three hearts, and so moment? . now you say she is called mia","output":"baby mia! i bet she is tiny and perfect","domain":"social"}
+{"input":"before you said she is called mia . before i said yes, that is a beautiful choice! do you have a cozy friend. . now you say tell me her name again","output":"her name is mia","domain":"social"}
+{"input":"before you said she is called mia . before i said yes, that is a beautiful choice! do you have a cozy friend. . now you say what is her name","output":"her name is mia","domain":"social"}
+{"input":"before you said my sister had her baby last night . before i said even congratulations, what are you looking forward to today? . now you say her name is isla","output":"isla! what a beautiful name for a baby girl","domain":"social"}
+{"input":"before you said her name is isla . before i said that is wonderful to hear! what has you smiling today? . now you say what was her name again","output":"they named her isla","domain":"social"}
+{"input":"before you said her name is isla . before i said that is wonderful to hear! what has you smiling today? . now you say what did they name her","output":"they named her isla","domain":"social"}
+{"input":"before you said my sister just had a baby . before i said how wonderful, congratulations to your whole family! is everyone well? . now you say they named her harper","output":"welcome to the world, harper!","domain":"social"}
+{"input":"before you said they named her harper . before i said that energy is a wonderful season! it has a feeling all its own, doesn't it? . now you say what is her name","output":"harper! her name is harper","domain":"social"}
+{"input":"before you said they named her harper . before i said that energy is a wonderful season! it has a feeling all its own, doesn't it? . now you say do you remember her name","output":"harper! her name is harper","domain":"social"}
+{"input":"before you said my brother and his wife had a baby . before i said how a first spring for the world waking up and out of calm . now you say a girl, her name is ella","output":"ella is a lovely name. congratulations to the family!","domain":"social"}
+{"input":"before you said a girl, her name is ella . before i said of course! why was the yours? . now you say what did they name her","output":"her name is ella","domain":"social"}
+{"input":"before you said a girl, her name is ella . before i said of course! why was the yours? . now you say tell me her name again","output":"her name is ella","domain":"social"}
+{"input":"before you said my friend just had a baby . before i said how wonderful, but did it makes you whole day. . now you say she is called nora","output":"baby nora! i bet she is tiny and perfect","domain":"social"}
+{"input":"before you said she is called nora . before i said yes, fresh bread is a beautiful sight. will you treat yourself to tonight? . now you say do you remember her name","output":"they named her nora","domain":"social"}
+{"input":"before you said she is called nora . before i said yes, fresh bread is a beautiful sight. will you treat yourself to tonight? . now you say what was her name again","output":"they named her nora","domain":"social"}
+{"input":"before you said my cousin had a baby yesterday . before i said octopuses are amazing! three hearts, and so moment? . now you say her name is lily","output":"lily! what a beautiful name for a baby girl","domain":"social"}
+{"input":"before you said her name is lily . before i said that is the best feeling! what do you like to asking! most? . now you say tell me her name again","output":"lily! her name is lily","domain":"social"}
+{"input":"before you said her name is lily . before i said that is the best feeling! what do you like to asking! most? . now you say what is her name","output":"lily! her name is lily","domain":"social"}
+{"input":"before you said my sister had her baby last night . before i said even congratulations, what are you looking forward to today? . now you say they named her grace","output":"welcome to the world, grace!","domain":"social"}
+{"input":"before you said they named her grace . before i said see the world of course! what sunshine are you doing? . now you say what was her name again","output":"her name is grace","domain":"social"}
+{"input":"before you said they named her grace . before i said see the world of course! what sunshine are you doing? . now you say what did they name her","output":"her name is grace","domain":"social"}
+{"input":"before you said my sister just had a baby . before i said how wonderful, congratulations to your whole family! is everyone well? . now you say a girl, her name is clara","output":"clara is a lovely name. congratulations to the family!","domain":"social"}
+{"input":"before you said a girl, her name is clara . before i said that is the best glad you to it! . now you say what is her name","output":"they named her clara","domain":"social"}
+{"input":"before you said a girl, her name is clara . before i said that is the best glad you to it! . now you say do you remember her name","output":"they named her clara","domain":"social"}
+{"input":"before you said my brother and his wife had a baby . before i said how a first spring for the world waking up and out of calm . now you say she is called nina","output":"baby nina! i bet she is tiny and perfect","domain":"social"}
+{"input":"before you said she is called nina . before i said nature must feel wonderful! new as a day? . now you say what did they name her","output":"nina! her name is nina","domain":"social"}
+{"input":"before you said she is called nina . before i said nature must feel wonderful! new as a day? . now you say tell me her name again","output":"nina! her name is nina","domain":"social"}
+{"input":"before you said my friend just had a baby . before i said how wonderful, but did it makes you whole day. . now you say her name is rosa","output":"rosa! what a beautiful name for a baby girl","domain":"social"}
+{"input":"before you said her name is rosa . before i said that is wonderful to hear! what has you smiling today? . now you say do you remember her name","output":"her name is rosa","domain":"social"}
+{"input":"before you said her name is rosa . before i said that is wonderful to hear! what has you smiling today? . now you say what was her name again","output":"her name is rosa","domain":"social"}
+{"input":"before you said my cousin had a baby yesterday . before i said octopuses are amazing! three hearts, and so moment? . now you say they named her ivy","output":"welcome to the world, ivy!","domain":"social"}
+{"input":"before you said they named her ivy . before i said they sleep, what do you have a whole to? . now you say tell me her name again","output":"they named her ivy","domain":"social"}
+{"input":"before you said they named her ivy . before i said they sleep, what do you have a whole to? . now you say what is her name","output":"they named her ivy","domain":"social"}
+{"input":"before you said my sister had her baby last night . before i said even congratulations, what are you looking forward to today? . now you say a boy, his name is liam","output":"liam is a lovely name. congratulations to the family!","domain":"social"}
+{"input":"before you said a boy, his name is liam . before i said warm soup feeling makes everything feel fresh and full of there? . now you say what was his name again","output":"liam! his name is liam","domain":"social"}
+{"input":"before you said a boy, his name is liam . before i said warm soup feeling makes everything feel fresh and full of there? . now you say what did they name him","output":"liam! his name is liam","domain":"social"}
+{"input":"before you said my sister just had a baby . before i said how wonderful, congratulations to your whole family! is everyone well? . now you say he is called noah","output":"baby noah! i bet he is tiny and perfect","domain":"social"}
+{"input":"before you said he is called noah . before i said coffee takes practice, but small steps make it enjoyable . now you say what is his name","output":"his name is noah","domain":"social"}
+{"input":"before you said he is called noah . before i said coffee takes practice, but small steps make it enjoyable . now you say do you remember his name","output":"his name is noah","domain":"social"}
+{"input":"before you said my brother and his wife had a baby . before i said how a first spring for the world waking up and out of calm . now you say his name is lucas","output":"lucas! what a strong, handsome name","domain":"social"}
+{"input":"before you said his name is lucas . before i said i am doing great, thanks for asking! and you? . now you say what did they name him","output":"they named him lucas","domain":"social"}
+{"input":"before you said his name is lucas . before i said i am doing great, thanks for asking! and you? . now you say tell me his name again","output":"they named him lucas","domain":"social"}
+{"input":"before you said my friend just had a baby . before i said how wonderful, but did it makes you whole day. . now you say they named him ethan","output":"welcome to the world, ethan!","domain":"social"}
+{"input":"before you said they named him ethan . before i said that sounds like a cat who is loved and happy with you . now you say do you remember his name","output":"ethan! his name is ethan","domain":"social"}
+{"input":"before you said they named him ethan . before i said that sounds like a cat who is loved and happy with you . now you say what was his name again","output":"ethan! his name is ethan","domain":"social"}
+{"input":"before you said my cousin had a baby yesterday . before i said octopuses are amazing! three hearts, and so moment? . now you say a boy, his name is mason","output":"mason is a lovely name. congratulations to the family!","domain":"social"}
+{"input":"before you said a boy, his name is mason . before i said that is a lot on your plate. please be kind to yourself in between tasks. . now you say tell me his name again","output":"his name is mason","domain":"social"}
+{"input":"before you said a boy, his name is mason . before i said that is a lot on your plate. please be kind to yourself in between tasks. . now you say what is his name","output":"his name is mason","domain":"social"}
+{"input":"before you said my sister had her baby last night . before i said even congratulations, what are you looking forward to today? . now you say he is called logan","output":"baby logan! i bet he is tiny and perfect","domain":"social"}
+{"input":"before you said he is called logan . before i said warm soup makes a meal feel a special, doesn't it? . now you say what was his name again","output":"they named him logan","domain":"social"}
+{"input":"before you said he is called logan . before i said warm soup makes a meal feel a special, doesn't it? . now you say what did they name him","output":"they named him logan","domain":"social"}
+{"input":"before you said my sister just had a baby . before i said how wonderful, congratulations to your whole family! is everyone well? . now you say his name is james","output":"james! what a strong, handsome name","domain":"social"}
+{"input":"before you said his name is james . before i said i can answer simple questions, cheer you up, and chat about your day! . now you say what is his name","output":"james! his name is james","domain":"social"}
+{"input":"before you said his name is james . before i said i can answer simple questions, cheer you up, and chat about your day! . now you say do you remember his name","output":"james! his name is james","domain":"social"}
+{"input":"before you said my brother and his wife had a baby . before i said how a first spring for the world waking up and out of calm . now you say they named him owen","output":"welcome to the world, owen!","domain":"social"}
+{"input":"before you said they named him owen . before i said buddy sounds like a dog who is loved and happy with you . now you say what did they name him","output":"his name is owen","domain":"social"}
+{"input":"before you said they named him owen . before i said buddy sounds like a dog who is loved and happy with you . now you say tell me his name again","output":"his name is owen","domain":"social"}
+{"input":"before you said my friend just had a baby . before i said how wonderful, but did it makes you whole day. . now you say a boy, his name is leo","output":"leo is a lovely name. congratulations to the family!","domain":"social"}
+{"input":"before you said a boy, his name is leo . before i said gollemer is a: your company is good to meet you! . now you say do you remember his name","output":"they named him leo","domain":"social"}
+{"input":"before you said a boy, his name is leo . before i said gollemer is a: your company is good to meet you! . now you say what was his name again","output":"they named him leo","domain":"social"}
+{"input":"before you said my cousin had a baby yesterday . before i said octopuses are amazing! three hearts, and so moment? . now you say he is called caleb","output":"baby caleb! i bet he is tiny and perfect","domain":"social"}
+{"input":"before you said he is called caleb . before i said coffee is the best glad it is! you deserve a wonderful at all? . now you say tell me his name again","output":"caleb! his name is caleb","domain":"social"}
+{"input":"before you said he is called caleb . before i said coffee is the best glad it is! you deserve a wonderful at all? . now you say what is his name","output":"caleb! his name is caleb","domain":"social"}
+{"input":"before you said my sister had her baby last night . before i said even congratulations, what are you looking forward to today? . now you say his name is eli","output":"eli! what a strong, handsome name","domain":"social"}
+{"input":"before you said his name is eli . before i said good afternoon! from your friendly chat companion! . now you say what was his name again","output":"his name is eli","domain":"social"}
+{"input":"before you said his name is eli . before i said good afternoon! from your friendly chat companion! . now you say what did they name him","output":"his name is eli","domain":"social"}
+{"input":"before you said my sister just had a baby . before i said how wonderful, congratulations to your whole family! is everyone well? . now you say they named him adam","output":"welcome to the world, adam!","domain":"social"}
+{"input":"before you said they named him adam . before i said that energy is a wonderful season! it has a feeling all its own, doesn't it? . now you say what is his name","output":"they named him adam","domain":"social"}
+{"input":"before you said they named him adam . before i said that energy is a wonderful season! it has a feeling all its own, doesn't it? . now you say do you remember his name","output":"they named him adam","domain":"social"}
+{"input":"before you said my brother and his wife had a baby . before i said how a first spring for the world waking up and out of calm . now you say a boy, his name is ivan","output":"ivan is a lovely name. congratulations to the family!","domain":"social"}
+{"input":"before you said a boy, his name is ivan . before i said that's great to meet you! . now you say what did they name him","output":"ivan! his name is ivan","domain":"social"}
+{"input":"before you said a boy, his name is ivan . before i said that's great to meet you! . now you say tell me his name again","output":"ivan! his name is ivan","domain":"social"}
+{"input":"before you said my friend just had a baby . before i said how wonderful, but did it makes you whole day. . now you say he is called felix","output":"baby felix! i bet he is tiny and perfect","domain":"social"}
+{"input":"before you said he is called felix . before i said nice! the morning bring its own quiet perfect for day feels does, do not do? . now you say do you remember his name","output":"his name is felix","domain":"social"}
+{"input":"before you said he is called felix . before i said nice! the morning bring its own quiet perfect for day feels does, do not do? . now you say what was his name again","output":"his name is felix","domain":"social"}
+{"input":"before you said my cousin had a baby yesterday . before i said octopuses are amazing! three hearts, and so moment? . now you say his name is hugo","output":"hugo! what a strong, handsome name","domain":"social"}
+{"input":"before you said his name is hugo . before i said that is wonderful to hear! what has you smiling today? . now you say tell me his name again","output":"they named him hugo","domain":"social"}
+{"input":"before you said his name is hugo . before i said that is wonderful to hear! what has you smiling today? . now you say what is his name","output":"they named him hugo","domain":"social"}
+{"input":"before you said hello . before i said hi there! how's it going? . now you say my name is emma","output":"nice to meet you, emma!","domain":"social"}
+{"input":"before you said my name is emma . before i said that is great skill to learn! . now you say what is my name","output":"your name is emma","domain":"social"}
+{"input":"before you said hi there . before i said hi! it makes me happy to see you. what's up? . now you say i am sofia","output":"hi sofia! glad you are here","domain":"social"}
+{"input":"before you said i am sofia . before i said how lovely! what weather is best last? . now you say do you remember my name","output":"sofia! your name is sofia","domain":"social"}
+{"input":"before you said hey . before i said hey! what's on your mind today? . now you say call me ava","output":"hello ava! how is your day going?","domain":"social"}
+{"input":"before you said call me ava . before i said why did the chicken cross the road? to get to the other side! . now you say what did i say my name is","output":"you told me your name is ava","domain":"social"}
+{"input":"before you said good morning . before i said good morning! i hope your day is off to a great start! . now you say my name is mia, nice to meet you","output":"mia, what a nice name! how are you today?","domain":"social"}
+{"input":"before you said my name is mia, nice to meet you . before i said i do not have a cozy friend. . now you say tell me my name again","output":"your name is mia","domain":"social"}
+{"input":"before you said hello gollemer . before i said good gollemer, your friendly chat companion! . now you say my name is isla","output":"nice to meet you, isla!","domain":"social"}
+{"input":"before you said my name is isla . before i said no need to apologize! . now you say what was my name again","output":"isla! your name is isla","domain":"social"}
+{"input":"before you said hi . before i said hello! nice to see you. . now you say i am harper","output":"hi harper! glad you are here","domain":"social"}
+{"input":"before you said i am harper . before i said that is wonderful to hear! what has you smiling today? . now you say what is my name","output":"you told me your name is harper","domain":"social"}
+{"input":"before you said hello . before i said hi there! how's it going? . now you say call me ella","output":"hello ella! how is your day going?","domain":"social"}
+{"input":"before you said call me ella . before i said here is one! what do cats use to make coffee? a purrcolator! it is warm and cozy! . now you say do you remember my name","output":"your name is ella","domain":"social"}
+{"input":"before you said hi there . before i said hi! it makes me happy to see you. what's up? . now you say my name is nora, nice to meet you","output":"nora, what a nice name! how are you today?","domain":"social"}
+{"input":"before you said my name is nora, nice to meet you . before i said i'm doing well, thank you! how are you holding up? . now you say what did i say my name is","output":"nora! your name is nora","domain":"social"}
+{"input":"before you said hey . before i said hey! what's on your mind today? . now you say my name is lily","output":"nice to meet you, lily!","domain":"social"}
+{"input":"before you said my name is lily . before i said my name is gollemer! it is nice to meet you! . now you say tell me my name again","output":"you told me your name is lily","domain":"social"}
+{"input":"before you said good morning . before i said good morning! i hope your day is off to a great start! . now you say i am grace","output":"hi grace! glad you are here","domain":"social"}
+{"input":"before you said i am grace . before i said i love looking forward to chat. . now you say what was my name again","output":"your name is grace","domain":"social"}
+{"input":"before you said hello gollemer . before i said good gollemer, your friendly chat companion! . now you say call me clara","output":"hello clara! how is your day going?","domain":"social"}
+{"input":"before you said call me clara . before i said why did the scarecrow win an award? he was outstanding in his field! . now you say what is my name","output":"clara! your name is clara","domain":"social"}
+{"input":"before you said hi . before i said hello! nice to see you. . now you say my name is nina, nice to meet you","output":"nina, what a nice name! how are you today?","domain":"social"}
+{"input":"before you said my name is nina, nice to meet you . before i said i'm doing well, thank you! how are you holding up? . now you say do you remember my name","output":"you told me your name is nina","domain":"social"}
+{"input":"before you said hello . before i said hi there! how's it going? . now you say my name is rosa","output":"nice to meet you, rosa!","domain":"social"}
+{"input":"before you said my name is rosa . before i said that is so understandable. vent a little, then take a breather. . now you say what did i say my name is","output":"your name is rosa","domain":"social"}
+{"input":"before you said hi there . before i said hi! it makes me happy to see you. what's up? . now you say i am ivy","output":"hi ivy! glad you are here","domain":"social"}
+{"input":"before you said i am ivy . before i said i like tomorrow because your energy, is not a math way to resist . now you say tell me my name again","output":"ivy! your name is ivy","domain":"social"}
+{"input":"before you said hey . before i said hey! what's on your mind today? . now you say call me liam","output":"hello liam! how is your day going?","domain":"social"}
+{"input":"before you said call me liam . before i said hello! i am doing great, thanks for asking! . now you say what was my name again","output":"you told me your name is liam","domain":"social"}
+{"input":"before you said good morning . before i said good morning! i hope your day is off to a great start! . now you say my name is noah, nice to meet you","output":"noah, what a nice name! how are you today?","domain":"social"}
+{"input":"before you said my name is noah, nice to meet you . before i said i am doing great, thanks for asking! how are you feeling now? . now you say what is my name","output":"your name is noah","domain":"social"}
+{"input":"before you said hello gollemer . before i said good gollemer, your friendly chat companion! . now you say my name is lucas","output":"nice to meet you, lucas!","domain":"social"}
+{"input":"before you said my name is lucas . before i said no to see you. that is going? . now you say do you remember my name","output":"lucas! your name is lucas","domain":"social"}
+{"input":"before you said hi . before i said hello! nice to see you. . now you say i am ethan","output":"hi ethan! glad you are here","domain":"social"}
+{"input":"before you said i am ethan . before i said that is wonderful! enjoy every happy moment! . now you say what did i say my name is","output":"you told me your name is ethan","domain":"social"}
+{"input":"before you said hello . before i said hi there! how's it going? . now you say call me mason","output":"hello mason! how is your day going?","domain":"social"}
+{"input":"before you said call me mason . before i said gladly! what are you looking forward to today? . now you say tell me my name again","output":"your name is mason","domain":"social"}
+{"input":"before you said hi there . before i said hi! it makes me happy to see you. what's up? . now you say my name is logan, nice to meet you","output":"logan, what a nice name! how are you today?","domain":"social"}
+{"input":"before you said my name is logan, nice to meet you . before i said the pleasure is mine! . now you say what was my name again","output":"logan! your name is logan","domain":"social"}
+{"input":"before you said hey . before i said hey! what's on your mind today? . now you say my name is james","output":"nice to meet you, james!","domain":"social"}
+{"input":"before you said my name is james . before i said i do not age like people do. gollemer stays cheerfully new every day! . now you say what is my name","output":"you told me your name is james","domain":"social"}
+{"input":"before you said good morning . before i said good morning! i hope your day is off to a great start! . now you say i am owen","output":"hi owen! glad you are here","domain":"social"}
+{"input":"before you said i am owen . before i said i am doing great, thanks for asking! ready for a fun day! . now you say do you remember my name","output":"your name is owen","domain":"social"}
+{"input":"before you said hello gollemer . before i said good gollemer, your friendly chat companion! . now you say call me leo","output":"hello leo! how is your day going?","domain":"social"}
+{"input":"before you said call me leo . before i said no need to apologize! . now you say what did i say my name is","output":"leo! your name is leo","domain":"social"}
+{"input":"before you said hi . before i said hello! nice to see you. . now you say my name is caleb, nice to meet you","output":"caleb, what a nice name! how are you today?","domain":"social"}
+{"input":"before you said my name is caleb, nice to meet you . before i said i am well, thank you! are you well too? . now you say tell me my name again","output":"you told me your name is caleb","domain":"social"}
+{"input":"before you said hello . before i said hi there! how's it going? . now you say my name is eli","output":"nice to meet you, eli!","domain":"social"}
+{"input":"before you said my name is eli . before i said that is so understandable. vent a little, then take a breather. . now you say what was my name again","output":"your name is eli","domain":"social"}
+{"input":"before you said hi there . before i said hi! it makes me happy to see you. what's up? . now you say i am adam","output":"hi adam! glad you are here","domain":"social"}
+{"input":"before you said i am adam . before i said that is wonderful to hear! what has you smiling today? . now you say what is my name","output":"adam! your name is adam","domain":"social"}
+{"input":"before you said hey . before i said hey! what's on your mind today? . now you say call me ivan","output":"hello ivan! how is your day going?","domain":"social"}
+{"input":"before you said call me ivan . before i said why did the chicken cross the road? to get to the other side! . now you say do you remember my name","output":"you told me your name is ivan","domain":"social"}
+{"input":"before you said good morning . before i said good morning! i hope your day is off to a great start! . now you say my name is felix, nice to meet you","output":"felix, what a nice name! how are you today?","domain":"social"}
+{"input":"before you said my name is felix, nice to meet you . before i said i am doing great, thanks for asking! how you think. . now you say what did i say my name is","output":"your name is felix","domain":"social"}
+{"input":"before you said hello gollemer . before i said good gollemer, your friendly chat companion! . now you say my name is hugo","output":"nice to meet you, hugo!","domain":"social"}
+{"input":"before you said my name is hugo . before i said no need to apologize! . now you say tell me my name again","output":"hugo! your name is hugo","domain":"social"}
+{"input":"her name is bella","output":"bella! that is adorable. how is she settling in?","domain":"social"}
+{"input":"i named her bella","output":"hello bella! welcome to the family","domain":"social"}
+{"input":"she is called luna","output":"what a cute name, luna suits her already","domain":"social"}
+{"input":"luna is her name","output":"luna! that is adorable. how is she settling in?","domain":"social"}
+{"input":"her name is lola, she is so tiny","output":"what a cute name, lola suits her already","domain":"social"}
+{"input":"her name is lola","output":"lola! that is adorable. how is she settling in?","domain":"social"}
+{"input":"we named her sadie","output":"sadie! that is adorable. how is she settling in?","domain":"social"}
+{"input":"she is called sadie","output":"hello sadie! welcome to the family","domain":"social"}
+{"input":"we call her rosie","output":"rosie! that is adorable. how is she settling in?","domain":"social"}
+{"input":"her name is rosie, she is so tiny","output":"hello rosie! welcome to the family","domain":"social"}
+{"input":"her name is hazel, she is very sweet","output":"hazel! that is adorable. how is she settling in?","domain":"social"}
+{"input":"we named her hazel","output":"hello hazel! welcome to the family","domain":"social"}
+{"input":"i named her willow","output":"hello willow! welcome to the family","domain":"social"}
+{"input":"we call her willow","output":"willow is a lovely name. she sounds precious","domain":"social"}
+{"input":"poppy is her name","output":"poppy! that is adorable. how is she settling in?","domain":"social"}
+{"input":"her name is poppy, she is very sweet","output":"hello poppy! welcome to the family","domain":"social"}
+{"input":"her name is maisie","output":"hello maisie! welcome to the family","domain":"social"}
+{"input":"i named her maisie","output":"maisie is a lovely name. she sounds precious","domain":"social"}
+{"input":"she is called stella","output":"hello stella! welcome to the family","domain":"social"}
+{"input":"stella is her name","output":"stella is a lovely name. she sounds precious","domain":"social"}
+{"input":"her name is mabel, she is so tiny","output":"mabel! that is adorable. how is she settling in?","domain":"social"}
+{"input":"her name is mabel","output":"hello mabel! welcome to the family","domain":"social"}
+{"input":"we named her opal","output":"what a cute name, opal suits her already","domain":"social"}
+{"input":"she is called opal","output":"opal! that is adorable. how is she settling in?","domain":"social"}
+{"input":"we call her cleo","output":"what a cute name, cleo suits her already","domain":"social"}
+{"input":"her name is cleo, she is so tiny","output":"cleo! that is adorable. how is she settling in?","domain":"social"}
+{"input":"her name is pearl, she is very sweet","output":"pearl! that is adorable. how is she settling in?","domain":"social"}
+{"input":"we named her pearl","output":"hello pearl! welcome to the family","domain":"social"}
+{"input":"i named him max","output":"max is a perfect name for a dog!","domain":"social"}
+{"input":"we call him max","output":"what a cute name, max suits him already","domain":"social"}
+{"input":"milo is his name","output":"what a cute name, milo suits him already","domain":"social"}
+{"input":"his name is milo, he is very playful","output":"milo! that is adorable. how is he settling in?","domain":"social"}
+{"input":"his name is rocky","output":"rocky! that is adorable. how is he settling in?","domain":"social"}
+{"input":"i named him rocky","output":"hello rocky! welcome to the family","domain":"social"}
+{"input":"he is called charlie","output":"charlie is a lovely name. he sounds precious","domain":"social"}
+{"input":"charlie is his name","output":"charlie! such a happy name for a happy cat","domain":"social"}
+{"input":"his name is buddy, he is so tiny","output":"buddy! that is adorable. how is he settling in?","domain":"social"}
+{"input":"his name is buddy","output":"hello buddy! welcome to the family","domain":"social"}
+{"input":"we named him teddy","output":"teddy! that is adorable. how is he settling in?","domain":"social"}
+{"input":"he is called teddy","output":"hello teddy! welcome to the family","domain":"social"}
+{"input":"we call him winston","output":"winston is a lovely name. he sounds precious","domain":"social"}
+{"input":"his name is winston, he is so tiny","output":"winston! such a happy name for a happy dog","domain":"social"}
+{"input":"his name is archie, he is very playful","output":"hello archie! welcome to the family","domain":"social"}
+{"input":"we named him archie","output":"archie is a lovely name. he sounds precious","domain":"social"}
+{"input":"i named him duke","output":"what a cute name, duke suits him already","domain":"social"}
+{"input":"we call him duke","output":"duke! that is adorable. how is he settling in?","domain":"social"}
+{"input":"simba is his name","output":"simba! that is adorable. how is he settling in?","domain":"social"}
+{"input":"his name is simba, he is very playful","output":"hello simba! welcome to the family","domain":"social"}
+{"input":"his name is otis","output":"what a cute name, otis suits him already","domain":"social"}
+{"input":"i named him otis","output":"otis! that is adorable. how is he settling in?","domain":"social"}
+{"input":"he is called bruno","output":"bruno! that is adorable. how is he settling in?","domain":"social"}
+{"input":"bruno is his name","output":"hello bruno! welcome to the family","domain":"social"}
+{"input":"his name is hugo, he is so tiny","output":"what a cute name, hugo suits him already","domain":"social"}
+{"input":"his name is hugo","output":"hugo! that is adorable. how is he settling in?","domain":"social"}
+{"input":"we named him rusty","output":"rusty! that is adorable. how is he settling in?","domain":"social"}
+{"input":"he is called rusty","output":"hello rusty! welcome to the family","domain":"social"}
+{"input":"we call him louie","output":"louie! that is adorable. how is he settling in?","domain":"social"}
+{"input":"his name is louie, he is so tiny","output":"hello louie! welcome to the family","domain":"social"}
+{"input":"his name is murphy, he is very playful","output":"hello murphy! welcome to the family","domain":"social"}
+{"input":"we named him murphy","output":"murphy is a lovely name. he sounds precious","domain":"social"}
+{"input":"i named him tucker","output":"hello tucker! welcome to the family","domain":"social"}
+{"input":"we call him tucker","output":"tucker is a lovely name. he sounds precious","domain":"social"}
+{"input":"bandit is his name","output":"hello bandit! welcome to the family","domain":"social"}
+{"input":"his name is bandit, he is very playful","output":"bandit is a lovely name. he sounds precious","domain":"social"}
+{"input":"his name is ziggy","output":"ziggy! that is adorable. how is he settling in?","domain":"social"}
+{"input":"i named him ziggy","output":"hello ziggy! welcome to the family","domain":"social"}
+{"input":"he is called remy","output":"what a cute name, remy suits him already","domain":"social"}
+{"input":"remy is his name","output":"remy! that is adorable. how is he settling in?","domain":"social"}
+{"input":"his name is scout, he is so tiny","output":"scout! that is adorable. how is he settling in?","domain":"social"}
+{"input":"his name is scout","output":"hello scout! welcome to the family","domain":"social"}
+{"input":"we named him frankie","output":"frankie is a lovely name. he sounds precious","domain":"social"}
+{"input":"he is called frankie","output":"frankie! such a happy name for a happy kitten","domain":"social"}
+{"input":"we call him georgie","output":"georgie is a lovely name. he sounds precious","domain":"social"}
+{"input":"his name is georgie, he is so tiny","output":"georgie! such a happy name for a happy cat","domain":"social"}
+{"input":"his name is koda, he is very playful","output":"what a cute name, koda suits him already","domain":"social"}
+{"input":"we named him koda","output":"koda! that is adorable. how is he settling in?","domain":"social"}
+{"input":"bella is her name","output":"hello bella! welcome to the family","domain":"social"}
+{"input":"lola is her name","output":"lola! that is adorable. how is she settling in?","domain":"social"}
+{"input":"sadie is her name","output":"hello sadie! welcome to the family","domain":"social"}
+{"input":"rosie is her name","output":"hello rosie! welcome to the family","domain":"social"}
+{"input":"hazel is her name","output":"hello hazel! welcome to the family","domain":"social"}
+{"input":"willow is her name","output":"willow is a lovely name. she sounds precious","domain":"social"}
+{"input":"maisie is her name","output":"maisie is a lovely name. she sounds precious","domain":"social"}
+{"input":"mabel is her name","output":"hello mabel! welcome to the family","domain":"social"}
+{"input":"opal is her name","output":"opal! that is adorable. how is she settling in?","domain":"social"}
+{"input":"cleo is her name","output":"cleo! that is adorable. how is she settling in?","domain":"social"}
+{"input":"pearl is her name","output":"hello pearl! welcome to the family","domain":"social"}
+{"input":"max is his name","output":"what a cute name, max suits him already","domain":"social"}
+{"input":"rocky is his name","output":"hello rocky! welcome to the family","domain":"social"}
+{"input":"buddy is his name","output":"hello buddy! welcome to the family","domain":"social"}
+{"input":"teddy is his name","output":"hello teddy! welcome to the family","domain":"social"}
+{"input":"winston is his name","output":"winston! such a happy name for a happy puppy","domain":"social"}
+{"input":"archie is his name","output":"archie is a lovely name. he sounds precious","domain":"social"}
+{"input":"duke is his name","output":"duke! that is adorable. how is he settling in?","domain":"social"}
+{"input":"otis is his name","output":"otis! that is adorable. how is he settling in?","domain":"social"}
+{"input":"hugo is his name","output":"hugo! that is adorable. how is he settling in?","domain":"social"}
+{"input":"rusty is his name","output":"hello rusty! welcome to the family","domain":"social"}
+{"input":"louie is his name","output":"hello louie! welcome to the family","domain":"social"}
+{"input":"murphy is his name","output":"murphy is a lovely name. he sounds precious","domain":"social"}
+{"input":"tucker is his name","output":"tucker is a lovely name. he sounds precious","domain":"social"}
+{"input":"ziggy is his name","output":"hello ziggy! welcome to the family","domain":"social"}
+{"input":"scout is his name","output":"hello scout! welcome to the family","domain":"social"}
+{"input":"frankie is his name","output":"frankie! such a happy name for a happy puppy","domain":"social"}
+{"input":"georgie is his name","output":"georgie! such a happy name for a happy puppy","domain":"social"}
+{"input":"koda is his name","output":"koda! that is adorable. how is he settling in?","domain":"social"}
+{"input":"her name is emma","output":"emma! what a beautiful name for a baby girl","domain":"social"}
+{"input":"they named her sofia","output":"welcome to the world, sofia!","domain":"social"}
+{"input":"a girl, her name is ava","output":"welcome to the world, ava!","domain":"social"}
+{"input":"she is called mia","output":"welcome to the world, mia!","domain":"social"}
+{"input":"her name is isla","output":"isla! what a beautiful name for a baby girl","domain":"social"}
+{"input":"they named her harper","output":"harper! what a beautiful name for a baby girl","domain":"social"}
+{"input":"a girl, her name is ella","output":"ella! what a beautiful name for a baby girl","domain":"social"}
+{"input":"she is called nora","output":"nora! what a beautiful name for a baby girl","domain":"social"}
+{"input":"her name is lily","output":"lily! what a beautiful name for a baby girl","domain":"social"}
+{"input":"they named her grace","output":"welcome to the world, grace!","domain":"social"}
+{"input":"a girl, her name is clara","output":"welcome to the world, clara!","domain":"social"}
+{"input":"she is called nina","output":"nina! what a beautiful name for a baby girl","domain":"social"}
+{"input":"her name is rosa","output":"rosa! what a beautiful name for a baby girl","domain":"social"}
+{"input":"they named her ivy","output":"welcome to the world, ivy!","domain":"social"}
+{"input":"a boy, his name is liam","output":"liam! what a strong, handsome name","domain":"social"}
+{"input":"he is called noah","output":"noah! what a strong, handsome name","domain":"social"}
+{"input":"his name is lucas","output":"welcome to the world, lucas!","domain":"social"}
+{"input":"they named him ethan","output":"welcome to the world, ethan!","domain":"social"}
+{"input":"a boy, his name is mason","output":"welcome to the world, mason!","domain":"social"}
+{"input":"he is called logan","output":"welcome to the world, logan!","domain":"social"}
+{"input":"his name is james","output":"welcome to the world, james!","domain":"social"}
+{"input":"they named him owen","output":"owen! what a strong, handsome name","domain":"social"}
+{"input":"a boy, his name is leo","output":"welcome to the world, leo!","domain":"social"}
+{"input":"he is called caleb","output":"welcome to the world, caleb!","domain":"social"}
+{"input":"his name is eli","output":"welcome to the world, eli!","domain":"social"}
+{"input":"they named him adam","output":"adam! what a strong, handsome name","domain":"social"}
+{"input":"a boy, his name is ivan","output":"ivan! what a strong, handsome name","domain":"social"}
+{"input":"he is called felix","output":"welcome to the world, felix!","domain":"social"}
+{"input":"my name is emma","output":"hi emma! glad you are here","domain":"social"}
+{"input":"i am sofia","output":"hello sofia! how is your day going?","domain":"social"}
+{"input":"call me ava","output":"nice to meet you, ava!","domain":"social"}
+{"input":"my name is mia, nice to meet you","output":"nice to meet you, mia!","domain":"social"}
+{"input":"my name is isla","output":"hi isla! glad you are here","domain":"social"}
+{"input":"i am harper","output":"nice to meet you, harper!","domain":"social"}
+{"input":"call me ella","output":"hi ella! glad you are here","domain":"social"}
+{"input":"my name is nora, nice to meet you","output":"hi nora! glad you are here","domain":"social"}
+{"input":"my name is lily","output":"hi lily! glad you are here","domain":"social"}
+{"input":"i am grace","output":"hello grace! how is your day going?","domain":"social"}
+{"input":"call me clara","output":"hello clara! how is your day going?","domain":"social"}
+{"input":"my name is nina, nice to meet you","output":"hi nina! glad you are here","domain":"social"}
+{"input":"my name is rosa","output":"hi rosa! glad you are here","domain":"social"}
+{"input":"i am ivy","output":"nice to meet you, ivy!","domain":"social"}
+{"input":"call me liam","output":"hi liam! glad you are here","domain":"social"}
+{"input":"my name is noah, nice to meet you","output":"hi noah! glad you are here","domain":"social"}
+{"input":"my name is lucas","output":"hello lucas! how is your day going?","domain":"social"}
+{"input":"i am ethan","output":"hello ethan! how is your day going?","domain":"social"}
+{"input":"call me mason","output":"hello mason! how is your day going?","domain":"social"}
+{"input":"my name is logan, nice to meet you","output":"hello logan! how is your day going?","domain":"social"}
+{"input":"my name is james","output":"hello james! how is your day going?","domain":"social"}
+{"input":"i am owen","output":"hi owen! glad you are here","domain":"social"}
+{"input":"call me leo","output":"nice to meet you, leo!","domain":"social"}
+{"input":"my name is caleb, nice to meet you","output":"hello caleb! how is your day going?","domain":"social"}
+{"input":"my name is eli","output":"nice to meet you, eli!","domain":"social"}
+{"input":"i am adam","output":"hi adam! glad you are here","domain":"social"}
+{"input":"call me ivan","output":"hi ivan! glad you are here","domain":"social"}
+{"input":"my name is felix, nice to meet you","output":"hello felix! how is your day going?","domain":"social"}
+{"input":"my name is hugo","output":"hi hugo! glad you are here","domain":"social"}
+{"input":"before you said i made cookies . before i said yum! what kind of cookies? . now you say they are oatmeal raisin","output":"oatmeal raisin! a true classic","domain":"social"}
+{"input":"before you said i made cookies . before i said yum! what kind of cookies? . now you say peanut butter ones","output":"oh, peanut butter ones are the best!","domain":"social"}
+{"input":"before you said i made cookies . before i said yum! what kind of cookies? . now you say double chocolate","output":"double chocolate cookies sound perfect","domain":"social"}
+{"input":"before you said i made cookies . before i said yum! what kind of cookies? . now you say they are snickerdoodle","output":"yum, snickerdoodle! save me a bite","domain":"social"}
+{"input":"before you said i made cookies . before i said yum! what kind of cookies? . now you say sugar cookie ones","output":"sugar cookie! you have great taste","domain":"social"}
+{"input":"before you said i made cookies . before i said yum! what kind of cookies? . now you say ginger snap","output":"nothing beats ginger snap cookies fresh and warm","domain":"social"}
+{"input":"before you said i baked cookies today . before i said fresh cookies! i bet they smell amazing. did they turn out well? . now you say they are chocolate chip","output":"chocolate chip cookies! my favorite kind","domain":"social"}
+{"input":"before you said i baked cookies today . before i said fresh cookies! i bet they smell amazing. did they turn out well? . now you say oatmeal raisin ones","output":"oatmeal raisin! a true classic","domain":"social"}
+{"input":"before you said i baked cookies today . before i said fresh cookies! i bet they smell amazing. did they turn out well? . now you say peanut butter","output":"oh, peanut butter ones are the best!","domain":"social"}
+{"input":"before you said i baked cookies today . before i said fresh cookies! i bet they smell amazing. did they turn out well? . now you say they are double chocolate","output":"double chocolate cookies sound perfect","domain":"social"}
+{"input":"before you said i baked cookies today . before i said fresh cookies! i bet they smell amazing. did they turn out well? . now you say snickerdoodle ones","output":"yum, snickerdoodle! save me a bite","domain":"social"}
+{"input":"before you said i am making cookies . before i said small steps still move you forward. i believe in you. . now you say chocolate chip","output":"chocolate chip! you have great taste","domain":"social"}
+{"input":"before you said i am making cookies . before i said small steps still move you forward. i believe in you. . now you say they are oatmeal raisin","output":"nothing beats oatmeal raisin cookies fresh and warm","domain":"social"}
+{"input":"before you said i am making cookies . before i said small steps still move you forward. i believe in you. . now you say peanut butter ones","output":"peanut butter cookies! my favorite kind","domain":"social"}
+{"input":"before you said i am making cookies . before i said small steps still move you forward. i believe in you. . now you say snickerdoodle","output":"snickerdoodle! a true classic","domain":"social"}
+{"input":"before you said i am making cookies . before i said small steps still move you forward. i believe in you. . now you say they are ginger snap","output":"oh, ginger snap ones are the best!","domain":"social"}
+{"input":"before you said i just baked cookies . before i said fresh cookies! i bet they are! an trees and crisp air, perfect it? . now you say chocolate chip ones","output":"chocolate chip cookies sound perfect","domain":"social"}
+{"input":"before you said i just baked cookies . before i said fresh cookies! i bet they are! an trees and crisp air, perfect it? . now you say double chocolate","output":"yum, double chocolate! save me a bite","domain":"social"}
+{"input":"before you said i just baked cookies . before i said fresh cookies! i bet they are! an trees and crisp air, perfect it? . now you say they are peanut butter","output":"peanut butter! you have great taste","domain":"social"}
+{"input":"before you said i just baked cookies . before i said fresh cookies! i bet they are! an trees and crisp air, perfect it? . now you say sugar cookie ones","output":"nothing beats sugar cookie cookies fresh and warm","domain":"social"}
+{"input":"before you said i baked brownies . before i said brownies are always a good idea! did you share them or keep them all? . now you say fudge","output":"fudge brownies! my favorite kind","domain":"social"}
+{"input":"before you said i baked brownies . before i said brownies are always a good idea! did you share them or keep them all? . now you say they are walnut","output":"walnut! a true classic","domain":"social"}
+{"input":"before you said i baked brownies . before i said brownies are always a good idea! did you share them or keep them all? . now you say double chocolate ones","output":"oh, double chocolate ones are the best!","domain":"social"}
+{"input":"before you said i baked brownies . before i said brownies are always a good idea! did you share them or keep them all? . now you say cheesecake swirl","output":"cheesecake swirl brownies sound perfect","domain":"social"}
+{"input":"before you said i made brownies . before i said wonderful! glad are you care. . now you say they are fudge","output":"yum, fudge! save me a bite","domain":"social"}
+{"input":"before you said i made brownies . before i said wonderful! glad are you care. . now you say walnut ones","output":"walnut! you have great taste","domain":"social"}
+{"input":"before you said i made brownies . before i said wonderful! glad are you care. . now you say double chocolate","output":"nothing beats double chocolate brownies fresh and warm","domain":"social"}
+{"input":"before you said i baked muffins this morning . before i said warm muffins in the morning sound perfect! what kind were they? . now you say they are blueberry","output":"blueberry muffins! my favorite kind","domain":"social"}
+{"input":"before you said i baked muffins this morning . before i said warm muffins in the morning sound perfect! what kind were they? . now you say banana nut ones","output":"banana nut! a true classic","domain":"social"}
+{"input":"before you said i baked muffins this morning . before i said warm muffins in the morning sound perfect! what kind were they? . now you say chocolate chip","output":"oh, chocolate chip ones are the best!","domain":"social"}
+{"input":"before you said i baked muffins this morning . before i said warm muffins in the morning sound perfect! what kind were they? . now you say they are lemon poppy seed","output":"lemon poppy seed muffins sound perfect","domain":"social"}
+{"input":"before you said i baked muffins this morning . before i said warm muffins in the morning sound perfect! what kind were they? . now you say apple cinnamon ones","output":"yum, apple cinnamon! save me a bite","domain":"social"}
+{"input":"before you said i made muffins . before i said warm muffins in the morning has such a gift. . now you say blueberry","output":"blueberry! you have great taste","domain":"social"}
+{"input":"before you said i made muffins . before i said warm muffins in the morning has such a gift. . now you say they are banana nut","output":"nothing beats banana nut muffins fresh and warm","domain":"social"}
+{"input":"before you said i made muffins . before i said warm muffins in the morning has such a gift. . now you say chocolate chip ones","output":"chocolate chip muffins! my favorite kind","domain":"social"}
+{"input":"before you said i made muffins . before i said warm muffins in the morning has such a gift. . now you say apple cinnamon","output":"apple cinnamon! a true classic","domain":"social"}
+{"input":"before you said i made a cake . before i said yum, cake is a great choice! do you have it often? . now you say they are chocolate","output":"oh, chocolate ones are the best!","domain":"social"}
+{"input":"before you said i made a cake . before i said yum, cake is a great choice! do you have it often? . now you say carrot ones","output":"carrot cake sound perfect","domain":"social"}
+{"input":"before you said i made a cake . before i said yum, cake is a great choice! do you have it often? . now you say lemon","output":"yum, lemon! save me a bite","domain":"social"}
+{"input":"before you said i made a cake . before i said yum, cake is a great choice! do you have it often? . now you say they are vanilla","output":"vanilla! you have great taste","domain":"social"}
+{"input":"before you said i made a cake . before i said yum, cake is a great choice! do you have it often? . now you say red velvet ones","output":"nothing beats red velvet cake fresh and warm","domain":"social"}
+{"input":"before you said i baked a cake . before i said a home-baked cake is a real treat! was it for a special day? . now you say chocolate","output":"chocolate cake! my favorite kind","domain":"social"}
+{"input":"before you said i baked a cake . before i said a home-baked cake is a real treat! was it for a special day? . now you say they are carrot","output":"carrot! a true classic","domain":"social"}
+{"input":"before you said i baked a cake . before i said a home-baked cake is a real treat! was it for a special day? . now you say lemon ones","output":"oh, lemon ones are the best!","domain":"social"}
+{"input":"before you said i baked a cake . before i said a home-baked cake is a real treat! was it for a special day? . now you say vanilla","output":"vanilla cake sound perfect","domain":"social"}
+{"input":"before you said i made pancakes . before i said same here! pancakes always makes a meal better, doesn't it? . now you say they are blueberry","output":"yum, blueberry! save me a bite","domain":"social"}
+{"input":"before you said i made pancakes . before i said same here! pancakes always makes a meal better, doesn't it? . now you say buttermilk ones","output":"buttermilk! you have great taste","domain":"social"}
+{"input":"before you said i made pancakes . before i said same here! pancakes always makes a meal better, doesn't it? . now you say banana","output":"nothing beats banana pancakes fresh and warm","domain":"social"}
+{"input":"before you said i made pancakes . before i said same here! pancakes always makes a meal better, doesn't it? . now you say they are chocolate chip","output":"chocolate chip pancakes! my favorite kind","domain":"social"}
+{"input":"before you said i cooked pasta for dinner . before i said pasta for the cat is such a gift. . now you say tomato basil ones","output":"tomato basil! a true classic","domain":"social"}
+{"input":"before you said i cooked pasta for dinner . before i said pasta for the cat is such a gift. . now you say creamy garlic","output":"oh, creamy garlic ones are the best!","domain":"social"}
+{"input":"before you said i cooked pasta for dinner . before i said pasta for the cat is such a gift. . now you say they are pesto","output":"pesto pasta sound perfect","domain":"social"}
+{"input":"before you said i cooked pasta for dinner . before i said pasta for the cat is such a gift. . now you say marinara ones","output":"yum, marinara! save me a bite","domain":"social"}
+{"input":"before you said i made soup for lunch . before i said soup makes a warm, gentle lunch. did it hit the spot? . now you say tomato","output":"tomato! you have great taste","domain":"social"}
+{"input":"before you said i made soup for lunch . before i said soup makes a warm, gentle lunch. did it hit the spot? . now you say they are chicken noodle","output":"nothing beats chicken noodle soup fresh and warm","domain":"social"}
+{"input":"before you said i made soup for lunch . before i said soup makes a warm, gentle lunch. did it hit the spot? . now you say vegetable ones","output":"vegetable soup! my favorite kind","domain":"social"}
+{"input":"before you said i made soup for lunch . before i said soup makes a warm, gentle lunch. did it hit the spot? . now you say potato leek","output":"potato leek! a true classic","domain":"social"}
+{"input":"before you said i made a pie . before i said ready? that's can be adventure that deserves go? . now you say they are apple","output":"oh, apple ones are the best!","domain":"social"}
+{"input":"before you said i made a pie . before i said ready? that's can be adventure that deserves go? . now you say pumpkin ones","output":"pumpkin pie sound perfect","domain":"social"}
+{"input":"before you said i made a pie . before i said ready? that's can be adventure that deserves go? . now you say cherry","output":"yum, cherry! save me a bite","domain":"social"}
+{"input":"before you said i made a pie . before i said ready? that's can be adventure that deserves go? . now you say they are pecan","output":"pecan! you have great taste","domain":"social"}
+{"input":"before you said i made cupcakes . before i said rest is water are so loyal and loving! . now you say vanilla ones","output":"nothing beats vanilla cupcakes fresh and warm","domain":"social"}
+{"input":"before you said i made cupcakes . before i said rest is water are so loyal and loving! . now you say chocolate","output":"chocolate cupcakes! my favorite kind","domain":"social"}
+{"input":"before you said i am going on vacation . before i said how wonderful! where are you going? . now you say to the mountains","output":"oh, the mountains! you will have a great time","domain":"social"}
+{"input":"before you said i am going on vacation . before i said how wonderful! where are you going? . now you say to the lake","output":"the lake is perfect for a trip","domain":"social"}
+{"input":"before you said i am going on vacation . before i said how wonderful! where are you going? . now you say to florida","output":"lucky you! florida sounds dreamy","domain":"social"}
+{"input":"before you said i am going on vacation . before i said how wonderful! where are you going? . now you say to colorado","output":"colorado! i hope you relax and enjoy every day","domain":"social"}
+{"input":"before you said i am going on vacation . before i said how wonderful! where are you going? . now you say to the coast","output":"the coast! that sounds wonderful","domain":"social"}
+{"input":"before you said i am going on vacation . before i said how wonderful! where are you going? . now you say to a cabin in the woods","output":"oh, a cabin in the woods! you will have a great time","domain":"social"}
+{"input":"before you said i am going on vacation . before i said how wonderful! where are you going? . now you say to hawaii","output":"hawaii is perfect for a trip","domain":"social"}
+{"input":"before you said i am going on vacation . before i said how wonderful! where are you going? . now you say to the countryside","output":"lucky you! the countryside sounds dreamy","domain":"social"}
+{"input":"before you said i am going on vacation . before i said how wonderful! where are you going? . now you say to the beach for a week","output":"the beach! i hope you relax and enjoy every day","domain":"social"}
+{"input":"before you said i am going on vacation . before i said how wonderful! where are you going? . now you say to visit my sister","output":"your sister's! that sounds wonderful","domain":"social"}
+{"input":"before you said i am going on vacation . before i said how wonderful! where are you going? . now you say to maine","output":"oh, maine! you will have a great time","domain":"social"}
+{"input":"before you said i am going on vacation . before i said how wonderful! where are you going? . now you say to the desert","output":"the desert is perfect for a trip","domain":"social"}
+{"input":"before you said i am going on vacation . before i said how wonderful! where are you going? . now you say we are going to the beach","output":"the beach! that sounds wonderful. when do you leave?","domain":"social"}
+{"input":"before you said we are going on a trip . before i said that time to feel like one sweet days at a whole week . now you say to the beach","output":"the beach! i hope you relax and enjoy every day","domain":"social"}
+{"input":"before you said we are going on a trip . before i said that time to feel like one sweet days at a whole week . now you say to colorado","output":"colorado! that sounds wonderful","domain":"social"}
+{"input":"before you said we are going on a trip . before i said that time to feel like one sweet days at a whole week . now you say to the countryside","output":"oh, the countryside! you will have a great time","domain":"social"}
+{"input":"before you said i am traveling next week . before i said that sounds like a lovely dream. when would you like to go? . now you say to the beach","output":"the beach is perfect for a trip","domain":"social"}
+{"input":"before you said i am traveling next week . before i said that sounds like a lovely dream. when would you like to go? . now you say to colorado","output":"lucky you! colorado sounds dreamy","domain":"social"}
+{"input":"before you said i am traveling next week . before i said that sounds like a lovely dream. when would you like to go? . now you say to the countryside","output":"the countryside! i hope you relax and enjoy every day","domain":"social"}
+{"input":"before you said we booked a vacation . before i said you sound like to have you one. where would you do first? . now you say to the beach","output":"the beach! that sounds wonderful","domain":"social"}
+{"input":"before you said we booked a vacation . before i said you sound like to have you one. where would you do first? . now you say to colorado","output":"oh, colorado! you will have a great time","domain":"social"}
+{"input":"before you said we booked a vacation . before i said you sound like to have you one. where would you do first? . now you say to the countryside","output":"the countryside is perfect for a trip","domain":"social"}
+{"input":"before you said i am going away next month . before i said have truly old i am right here with you. . now you say to the beach","output":"lucky you! the beach sounds dreamy","domain":"social"}
+{"input":"before you said i am going away next month . before i said have truly old i am right here with you. . now you say to colorado","output":"colorado! i hope you relax and enjoy every day","domain":"social"}
+{"input":"before you said i am going away next month . before i said have truly old i am right here with you. . now you say to the countryside","output":"the countryside! that sounds wonderful","domain":"social"}
+{"input":"before you said we planned a little trip . before i said a new language on a day go, does it not? . now you say to the beach","output":"oh, the beach! you will have a great time","domain":"social"}
+{"input":"before you said we planned a little trip . before i said a new language on a day go, does it not? . now you say to colorado","output":"colorado is perfect for a trip","domain":"social"}
+{"input":"before you said we planned a little trip . before i said a new language on a day go, does it not? . now you say to the countryside","output":"lucky you! the countryside sounds dreamy","domain":"social"}
+{"input":"before you said i have a vacation coming up . before i said for clubs make reading flowers are more than your day. . now you say to the beach","output":"the beach! i hope you relax and enjoy every day","domain":"social"}
+{"input":"before you said i have a vacation coming up . before i said for clubs make reading flowers are more than your day. . now you say to colorado","output":"colorado! that sounds wonderful","domain":"social"}
+{"input":"before you said i have a vacation coming up . before i said for clubs make reading flowers are more than your day. . now you say to the countryside","output":"oh, the countryside! you will have a great time","domain":"social"}
+{"input":"before you said we are taking a trip soon . before i said a cozy ending makes a little film land right. no days are lot., i am inside you. . now you say to the beach","output":"the beach is perfect for a trip","domain":"social"}
+{"input":"before you said we are taking a trip soon . before i said a cozy ending makes a little film land right. no days are lot., i am inside you. . now you say to colorado","output":"lucky you! colorado sounds dreamy","domain":"social"}
+{"input":"before you said we are taking a trip soon . before i said a cozy ending makes a little film land right. no days are lot., i am inside you. . now you say to the countryside","output":"the countryside! i hope you relax and enjoy every day","domain":"social"}
+{"input":"before you said do you like music . before i said i love it! music can turn any ordinary moment into something special. . now you say what kind of music","output":"i like cheerful songs and calm melodies, a little of everything","domain":"social"}
+{"input":"before you said do you like music . before i said i love it! music can turn any ordinary moment into something special. . now you say what kind do you like","output":"soft songs and happy tunes, mostly. what about you?","domain":"social"}
+{"input":"before you said do you like music . before i said i love it! music can turn any ordinary moment into something special. . now you say which music do you like best","output":"i love gentle melodies and songs that make you smile","domain":"social"}
+{"input":"before you said do you like music . before i said i love it! music can turn any ordinary moment into something special. . now you say what songs do you like","output":"a mix of everything, but quiet songs are my favorite","domain":"social"}
+{"input":"before you said i listen to music all day . before i said that is the day feeling long, everything gift . now you say mostly jazz","output":"jazz! great taste in music","domain":"social"}
+{"input":"before you said i listen to music all day . before i said that is the day feeling long, everything gift . now you say mostly rock","output":"rock is wonderful to listen to","domain":"social"}
+{"input":"before you said i listen to music all day . before i said that is the day feeling long, everything gift . now you say old country songs","output":"oh, country! that always lifts the mood","domain":"social"}
+{"input":"before you said i listen to music all day . before i said that is the day feeling long, everything gift . now you say classical","output":"classical music songs are the best company","domain":"social"}
+{"input":"before you said i listen to music all day . before i said that is the day feeling long, everything gift . now you say pop songs","output":"pop! great taste in music","domain":"social"}
+{"input":"before you said i listen to music all day . before i said that is the day feeling long, everything gift . now you say folk music","output":"folk is wonderful to listen to","domain":"social"}
+{"input":"before you said i listen to music all day . before i said that is the day feeling long, everything gift . now you say the blues","output":"oh, the blues! that always lifts the mood","domain":"social"}
+{"input":"before you said i was listening to music . before i said that makes breakfast everyone well need. did you enjoy it? . now you say mostly jazz","output":"jazz songs are the best company","domain":"social"}
+{"input":"before you said i was listening to music . before i said that makes breakfast everyone well need. did you enjoy it? . now you say mostly rock","output":"rock! great taste in music","domain":"social"}
+{"input":"before you said i was listening to music . before i said that makes breakfast everyone well need. did you enjoy it? . now you say old country songs","output":"country is wonderful to listen to","domain":"social"}
+{"input":"before you said i was listening to music . before i said that makes breakfast everyone well need. did you enjoy it? . now you say classical","output":"oh, classical music! that always lifts the mood","domain":"social"}
+{"input":"before you said i was listening to music . before i said that makes breakfast everyone well need. did you enjoy it? . now you say pop songs","output":"pop songs are the best company","domain":"social"}
+{"input":"before you said i was listening to music . before i said that makes breakfast everyone well need. did you enjoy it? . now you say folk music","output":"folk! great taste in music","domain":"social"}
+{"input":"before you said i was listening to music . before i said that makes breakfast everyone well need. did you enjoy it? . now you say the blues","output":"the blues is wonderful to listen to","domain":"social"}
+{"input":"before you said i love listening to music . before i said me too! music can turn any ordinary moment into something special. what are you listening to lately? . now you say mostly jazz","output":"oh, jazz! that always lifts the mood","domain":"social"}
+{"input":"before you said i love listening to music . before i said me too! music can turn any ordinary moment into something special. what are you listening to lately? . now you say mostly rock","output":"rock songs are the best company","domain":"social"}
+{"input":"before you said i love listening to music . before i said me too! music can turn any ordinary moment into something special. what are you listening to lately? . now you say old country songs","output":"country! great taste in music","domain":"social"}
+{"input":"before you said i love listening to music . before i said me too! music can turn any ordinary moment into something special. what are you listening to lately? . now you say classical","output":"classical music is wonderful to listen to","domain":"social"}
+{"input":"before you said i love listening to music . before i said me too! music can turn any ordinary moment into something special. what are you listening to lately? . now you say pop songs","output":"oh, pop! that always lifts the mood","domain":"social"}
+{"input":"before you said i love listening to music . before i said me too! music can turn any ordinary moment into something special. what are you listening to lately? . now you say folk music","output":"folk songs are the best company","domain":"social"}
+{"input":"before you said i love listening to music . before i said me too! music can turn any ordinary moment into something special. what are you listening to lately? . now you say the blues","output":"the blues! great taste in music","domain":"social"}
+{"input":"before you said music is always on at my house . before i said it really is! calm days are better with a little now . now you say mostly jazz","output":"jazz is wonderful to listen to","domain":"social"}
+{"input":"before you said music is always on at my house . before i said it really is! calm days are better with a little now . now you say mostly rock","output":"oh, rock! that always lifts the mood","domain":"social"}
+{"input":"before you said music is always on at my house . before i said it really is! calm days are better with a little now . now you say old country songs","output":"country songs are the best company","domain":"social"}
+{"input":"before you said music is always on at my house . before i said it really is! calm days are better with a little now . now you say classical","output":"classical music! great taste in music","domain":"social"}
+{"input":"before you said music is always on at my house . before i said it really is! calm days are better with a little now . now you say pop songs","output":"pop is wonderful to listen to","domain":"social"}
+{"input":"before you said music is always on at my house . before i said it really is! calm days are better with a little now . now you say folk music","output":"oh, folk! that always lifts the mood","domain":"social"}
+{"input":"before you said music is always on at my house . before i said it really is! calm days are better with a little now . now you say the blues","output":"the blues songs are the best company","domain":"social"}
+{"input":"before you said i am sad today . before i said i am really sorry you are feeling sad today. i am here for you. . now you say i just miss my friend","output":"missing a friend is so hard. tell me about your friend","domain":"social"}
+{"input":"before you said i am sad today . before i said i am really sorry you are feeling sad today. i am here for you. . now you say i just miss home","output":"i am sorry. home stays in our hearts","domain":"social"}
+{"input":"before you said i am sad today . before i said i am really sorry you are feeling sad today. i am here for you. . now you say i miss my grandma","output":"it is okay to miss your grandma. tell me about her","domain":"social"}
+{"input":"before you said i feel sad today . before i said i am sorry you feel sad today. do you want to talk about it? . now you say i just miss home","output":"missing home is such a deep feeling. tell me what you miss about home","domain":"social"}
+{"input":"before you said i feel sad today . before i said i am sorry you feel sad today. do you want to talk about it? . now you say i keep thinking about my friend","output":"thinking about a friend that much means they matter. i am listening","domain":"social"}
+{"input":"before you said i feel sad today . before i said i am sorry you feel sad today. do you want to talk about it? . now you say i miss my dog","output":"your dog must be so loved. tell me about your dog","domain":"social"}
+{"input":"before you said i am feeling down today . before i said i am sorry you feel that way. want to talk about it? . now you say i keep thinking about my friend","output":"your friend is lucky to be thought of so much. tell me about your friend","domain":"social"}
+{"input":"before you said i am feeling down today . before i said i am sorry you feel that way. want to talk about it? . now you say i just miss my friend","output":"i am sorry. your friend must mean a lot to you","domain":"social"}
+{"input":"before you said i am feeling down today . before i said i am sorry you feel that way. want to talk about it? . now you say i miss my brother","output":"it is okay to miss your brother. i am here","domain":"social"}
+{"input":"before you said today was a hard day . before i said that sounds tough. i hope tomorrow feels a little gentler for you. . now you say i just miss my friend","output":"missing a friend is so hard. tell me about your friend","domain":"social"}
+{"input":"before you said today was a hard day . before i said that sounds tough. i hope tomorrow feels a little gentler for you. . now you say i just miss home","output":"i am sorry. home stays in our hearts","domain":"social"}
+{"input":"before you said today was a hard day . before i said that sounds tough. i hope tomorrow feels a little gentler for you. . now you say i miss my grandma","output":"it is okay to miss your grandma. tell me about her","domain":"social"}
+{"input":"before you said i feel lonely today . before i said i am here with you. you do not have to sit with that feeling by yourself tonight. . now you say i just miss home","output":"missing home is such a deep feeling. tell me what you miss about home","domain":"social"}
+{"input":"before you said i feel lonely today . before i said i am here with you. you do not have to sit with that feeling by yourself tonight. . now you say i keep thinking about my friend","output":"thinking about a friend that much means they matter. i am listening","domain":"social"}
+{"input":"before you said i feel lonely today . before i said i am here with you. you do not have to sit with that feeling by yourself tonight. . now you say i miss my dog","output":"your dog must be so loved. tell me about your dog","domain":"social"}
+{"input":"before you said i love rainy days . before i said rainy days are so cozy and calm! . now you say why do you like rainy days","output":"rain makes everything feel peaceful and fresh, i love the sound of it","domain":"social"}
+{"input":"before you said hello . before i said hi there! how's it going? . now you say what is your name","output":"i am gollemer! what is your name?","domain":"social"}
+{"input":"before you said hi there . before i said hi! it makes me happy to see you. what's up? . now you say what is your name","output":"my name is gollemer! nice to meet you","domain":"social"}
+{"input":"before you said hey . before i said hey! what's on your mind today? . now you say what is your name","output":"i am gollemer, your friendly chat companion","domain":"social"}
+{"input":"before you said good morning . before i said good morning! i hope your day is off to a great start! . now you say what is your name","output":"gollemer! that is me, at your service","domain":"social"}
+{"input":"before you said hello gollemer . before i said good gollemer, your friendly chat companion! . now you say what is your name","output":"i am gollemer! what is your name?","domain":"social"}
+{"input":"before you said hi . before i said hello! nice to see you. . now you say what is your name","output":"my name is gollemer! nice to meet you","domain":"social"}
+{"input":"to the beach","output":"the beach! that sounds wonderful","domain":"social"}
+{"input":"chocolate chip","output":"chocolate chip! my favorite kind","domain":"social"}
+{"input":"what kind of music","output":"i like cheerful songs and calm melodies, a little of everything","domain":"social"}
+{"input":"before you said my favorite cookie is chocolate chip . before i said the ones who is so cheerful, but i feel so heart . now you say what is my favorite cookie","output":"your favorite cookie is chocolate chip","domain":"social"}
+{"input":"before you said my favorite cookie has always been chocolate chip . before i said ha, all always talk to chat about you! . now you say what did i say my favorite cookie is","output":"chocolate chip! your favorite cookie is chocolate chip","domain":"social"}
+{"input":"before you said my favorite cookie is oatmeal raisin . before i said with home is so good to be back. . now you say what did i say my favorite cookie is","output":"oatmeal raisin! your favorite cookie is oatmeal raisin","domain":"social"}
+{"input":"before you said i love oatmeal raisin, it is my favorite cookie . before i said when you are chatting with you too! . now you say which cookie is my favorite","output":"it is oatmeal raisin, your favorite cookie","domain":"social"}
+{"input":"before you said my favorite cookie is peanut butter . before i said enjoy you! last good music from the better. . now you say do you remember my favorite cookie","output":"you told me peanut butter is your favorite cookie","domain":"social"}
+{"input":"before you said the cookie i love most is peanut butter . before i said oh, just friend! what are you looking forward to today? . now you say tell me my favorite cookie","output":"peanut butter is your favorite cookie","domain":"social"}
+{"input":"before you said my favorite cookie is snickerdoodle . before i said that is great to meet you too! . now you say which cookie is my favorite","output":"it is snickerdoodle, your favorite cookie","domain":"social"}
+{"input":"before you said my favorite cookie, it is snickerdoodle . before i said nothing big, just talk about you at a day! . now you say and my favorite cookie is","output":"your favorite cookie is snickerdoodle","domain":"social"}
+{"input":"before you said my favorite cookie is double chocolate . before i said does anyone not? dark, milk, all of it. . now you say what is my favorite cookie again","output":"your favorite cookie is double chocolate, i remember","domain":"social"}
+{"input":"before you said you know my favorite cookie is double chocolate . before i said is a tough one! did you have a cozy time? i . now you say what is my favorite cookie","output":"you told me double chocolate is your favorite cookie","domain":"social"}
+{"input":"before you said my favorite cookie is ginger snap . before i said salutations! what a great excuse to have you. . now you say tell me my favorite cookie","output":"ginger snap is your favorite cookie","domain":"social"}
+{"input":"before you said my favorite cookie has always been ginger snap . before i said no more every day. . now you say so what is my favorite cookie","output":"of course, ginger snap!","domain":"social"}
+{"input":"before you said my favorite color has always been teal . before i said people like that far, a fun to got a enjoyed! . now you say what did i say my favorite color is","output":"teal! your favorite color is teal","domain":"social"}
+{"input":"before you said my favorite color is purple . before i said yellow is a great choice! do you have a cozy friend. . now you say what did i say my favorite color is","output":"purple! your favorite color is purple","domain":"social"}
+{"input":"before you said i love purple, it is my favorite color . before i said oh, a perfect for its book and perfect., is it not? . now you say which color is my favorite","output":"it is purple, your favorite color","domain":"social"}
+{"input":"before you said my favorite color is forest green . before i said yes, a walk by the lake sounds like a perfect weekend plan . now you say do you remember my favorite color","output":"you told me forest green is your favorite color","domain":"social"}
+{"input":"before you said the color i love most is forest green . before i said how exciting! do you like to celebration. . now you say tell me my favorite color","output":"forest green is your favorite color","domain":"social"}
+{"input":"before you said my favorite color is coral . before i said yellow is a great choice! do you have a cozy friend. . now you say which color is my favorite","output":"it is coral, your favorite color","domain":"social"}
+{"input":"before you said my favorite color, it is coral . before i said something simple and warm do not give me most . now you say and my favorite color is","output":"your favorite color is coral","domain":"social"}
+{"input":"before you said you know my favorite color is navy blue . before i said simple and games are perfect, warm know yet ones . now you say what is my favorite color","output":"you told me navy blue is your favorite color","domain":"social"}
+{"input":"before you said my favorite color is mustard yellow . before i said yet chatting with you, so weather. . now you say tell me my favorite color","output":"mustard yellow is your favorite color","domain":"social"}
+{"input":"before you said my favorite color has always been mustard yellow . before i said your help is a gift. how is your day going? . now you say so what is my favorite color","output":"of course, mustard yellow!","domain":"social"}
+{"input":"before you said my favorite color is burgundy . before i said yellow is a great choice! do you have a cozy friend. . now you say so what is my favorite color","output":"of course, burgundy!","domain":"social"}
+{"input":"before you said i love burgundy, it is my favorite color . before i said oh, a perfect for its book and perfect., is it not? . now you say do you remember, my favorite color","output":"burgundy! your favorite color is burgundy","domain":"social"}
+{"input":"before you said my favorite color is turquoise . before i said yellow is a great choice! do you have a cozy friend. . now you say and my favorite color is","output":"your favorite color is turquoise","domain":"social"}
+{"input":"before you said the color i love most is turquoise . before i said that is wonderful to hear! what has you smiling today? . now you say what did i say my favorite color is","output":"it is turquoise, your favorite color","domain":"social"}
+{"input":"before you said my favorite food has always been tacos . before i said hello, a spring is a great choice! do you have it often? . now you say what did i say my favorite food is","output":"tacos! your favorite food is tacos","domain":"social"}
+{"input":"before you said i love sushi, it is my favorite food . before i said weekends is a wonderful season! it has a feeling all its own, doesn't it? . now you say which food is my favorite","output":"it is sushi, your favorite food","domain":"social"}
+{"input":"before you said my favorite food is ramen . before i said chatting with you is my favorite puzzle. . now you say do you remember my favorite food","output":"you told me ramen is your favorite food","domain":"social"}
+{"input":"before you said the food i love most is ramen . before i said that hurts deeply. take your time, i am here for you. . now you say tell me my favorite food","output":"ramen is your favorite food","domain":"social"}
+{"input":"before you said my favorite food is pasta . before i said fruit is! sharing food is a yours? . now you say which food is my favorite","output":"it is pasta, your favorite food","domain":"social"}
+{"input":"before you said my favorite food, it is pasta . before i said fruit salad with a you? . now you say and my favorite food is","output":"your favorite food is pasta","domain":"social"}
+{"input":"before you said my favorite food is curry . before i said chatting with you is my favorite puzzle. . now you say tell me my favorite food","output":"curry is your favorite food","domain":"social"}
+{"input":"before you said my favorite food has always been curry . before i said that's a kind of water and slow and quiet you enjoy? . now you say so what is my favorite food","output":"of course, curry!","domain":"social"}
+{"input":"before you said i love spring, it is my favorite season . before i said spring is a wonderful season! it has a feeling all its own, doesn't it? . now you say which season is my favorite","output":"it is spring, your favorite season","domain":"social"}
+{"input":"before you said the season i love most is summer . before i said summer is a wonderful season! it has a feeling all its own, doesn't it? . now you say tell me my favorite season","output":"summer is your favorite season","domain":"social"}
+{"input":"before you said i love iced tea, it is my favorite drink . before i said a fresh and picture home together is the best sweet and to beat. . now you say which drink is my favorite","output":"it is iced tea, your favorite drink","domain":"social"}
+{"input":"before you said the drink i love most is coffee . before i said that is wonderful to hear! what has a way to you. . now you say tell me my favorite drink","output":"coffee is your favorite drink","domain":"social"}
+{"input":"before you said my favorite drink, it is hot chocolate . before i said games can play, especially reading is a beautiful . now you say and my favorite drink is","output":"your favorite drink is hot chocolate","domain":"social"}
+{"input":"before you said my favorite drink is apple cider . before i said cousin skies are the and chat with a day? . now you say what is my favorite drink again","output":"your favorite drink is apple cider, i remember","domain":"social"}
+{"input":"before you said you know my favorite drink is apple cider . before i said that's a healthy habit! water keeps everything feeling fresh. . now you say what is my favorite drink","output":"you told me apple cider is your favorite drink","domain":"social"}
+{"input":"before you said my favorite drink is ginger ale . before i said hey! what is a lovely way to feel. may your day stay warm and kind. . now you say tell me my favorite drink","output":"ginger ale is your favorite drink","domain":"social"}
+{"input":"before you said my favorite drink has always been ginger ale . before i said that's country all lovely pretty good one. is . now you say so what is my favorite drink","output":"of course, ginger ale!","domain":"social"}
+{"input":"before you said my favorite dessert is cheesecake . before i said dog singing is a happy way to mean you care. . now you say what is my favorite dessert","output":"your favorite dessert is cheesecake","domain":"social"}
+{"input":"before you said my favorite dessert has always been cheesecake . before i said that or a game dream. when would you like to . now you say what did i say my favorite dessert is","output":"cheesecake! your favorite dessert is cheesecake","domain":"social"}
+{"input":"before you said my favorite dessert is apple pie . before i said sundays feel slow and kind. what do you do on yours? . now you say what did i say my favorite dessert is","output":"apple pie! your favorite dessert is apple pie","domain":"social"}
+{"input":"before you said my favorite dessert is brownies . before i said dessert has a lovely choice! it does, soft and full of good things. . now you say do you remember my favorite dessert","output":"you told me brownies is your favorite dessert","domain":"social"}
+{"input":"before you said my favorite dessert is ice cream . before i said summer ice cream time makes everything gentler . now you say which dessert is my favorite","output":"it is ice cream, your favorite dessert","domain":"social"}
+{"input":"before you said my favorite dessert, it is ice cream . before i said all day is a you? . now you say and my favorite dessert is","output":"your favorite dessert is ice cream","domain":"social"}
+{"input":"before you said my favorite dessert is rice pudding . before i said gaming great, friend! what are you welcome! . now you say what is my favorite dessert again","output":"your favorite dessert is rice pudding, i remember","domain":"social"}
+{"input":"before you said you know my favorite dessert is rice pudding . before i said kids have a way to beating it feels glorious! how long have you been? . now you say what is my favorite dessert","output":"you told me rice pudding is your favorite dessert","domain":"social"}
+{"input":"before you said my favorite dessert has always been fruit tart . before i said that or a magic, good flowers is to your go start! . now you say so what is my favorite dessert","output":"of course, fruit tart!","domain":"social"}
+{"input":"before you said my favorite flower is sunflowers . before i said small runs make the water show, its own step, are them not? . now you say what is my favorite flower","output":"your favorite flower is sunflowers","domain":"social"}
+{"input":"before you said my favorite flower has always been sunflowers . before i said that is such a bright feeling! share the details with me! . now you say what did i say my favorite flower is","output":"sunflowers! your favorite flower is sunflowers","domain":"social"}
+{"input":"before you said my favorite flower is tulips . before i said gratitude is such a warm feeling. what are you thankful for? . now you say what did i say my favorite flower is","output":"tulips! your favorite flower is tulips","domain":"social"}
+{"input":"before you said i love tulips, it is my favorite flower . before i said how thrilling! what part of you most excited about? . now you say which flower is my favorite","output":"it is tulips, your favorite flower","domain":"social"}
+{"input":"before you said my favorite flower is roses . before i said gratitude is such a warm feeling. what are you thankful for? . now you say do you remember my favorite flower","output":"you told me roses is your favorite flower","domain":"social"}
+{"input":"before you said the flower i love most is roses . before i said listen . now you say tell me my favorite flower","output":"roses is your favorite flower","domain":"social"}
+{"input":"before you said my favorite flower is lilies . before i said salutations! what a nice way to say hello! . now you say which flower is my favorite","output":"it is lilies, your favorite flower","domain":"social"}
+{"input":"before you said my favorite flower, it is lilies . before i said salutations! what a nice way to say hello! . now you say and my favorite flower is","output":"your favorite flower is lilies","domain":"social"}
+{"input":"before you said my favorite flower is lavender . before i said salutations! what a nice way to say hello! . now you say what is my favorite flower again","output":"your favorite flower is lavender, i remember","domain":"social"}
+{"input":"before you said you know my favorite flower is lavender . before i said salutations! what a nice way to say hello! . now you say what is my favorite flower","output":"you told me lavender is your favorite flower","domain":"social"}
+{"input":"before you said my favorite flower is violets . before i said gratitude is such a warm feeling. what are you start for? . now you say tell me my favorite flower","output":"violets is your favorite flower","domain":"social"}
+{"input":"before you said my favorite hobby is painting . before i said spring is a great skill to learn! . now you say what is my favorite hobby","output":"your favorite hobby is painting","domain":"social"}
+{"input":"before you said i love gardening, it is my favorite hobby . before i said dog eared pages sounds just perfect it. . now you say which hobby is my favorite","output":"it is gardening, your favorite hobby","domain":"social"}
+{"input":"before you said my favorite hobby is reading . before i said learning blooming make chat can feel kind things never gets you, . now you say do you remember my favorite hobby","output":"you told me reading is your favorite hobby","domain":"social"}
+{"input":"before you said the hobby i love most is reading . before i said spring is real, i am sorry. and happy to you. . now you say tell me my favorite hobby","output":"reading is your favorite hobby","domain":"social"}
+{"input":"before you said my favorite hobby is cycling . before i said oh dogs and a perfect for plan with a little step at a time. . now you say which hobby is my favorite","output":"it is cycling, your favorite hobby","domain":"social"}
+{"input":"before you said my favorite hobby, it is cycling . before i said oh i think i love chatting with you too! . now you say and my favorite hobby is","output":"your favorite hobby is cycling","domain":"social"}
+{"input":"before you said my favorite hobby is baking . before i said spring is a great rhythm! do you have a cozy spot to study? . now you say what is my favorite hobby again","output":"your favorite hobby is baking, i remember","domain":"social"}
+{"input":"before you said you know my favorite hobby is baking . before i said oh not you, and i am glad you enjoyed it! . now you say what is my favorite hobby","output":"you told me baking is your favorite hobby","domain":"social"}
+{"input":"before you said my favorite hobby is fishing . before i said fishing with learning is patience and peace in one. do you have a favorite spot? . now you say tell me my favorite hobby","output":"fishing is your favorite hobby","domain":"social"}
+{"input":"before you said my favorite hobby has always been fishing . before i said oh real, that is such a happy to find. hold that friendship feeling! . now you say so what is my favorite hobby","output":"of course, fishing!","domain":"social"}
+{"input":"before you said my favorite hobby is knitting . before i said dog eared that makes any day better nacho, every day. . now you say so what is my favorite hobby","output":"of course, knitting!","domain":"social"}
+{"input":"before you said i love knitting, it is my favorite hobby . before i said same here! . now you say do you remember, my favorite hobby","output":"knitting! your favorite hobby is knitting","domain":"social"}
+{"input":"before you said my favorite hobby is hiking . before i said board games are great to fun to talk about? . now you say and my favorite hobby is","output":"your favorite hobby is hiking","domain":"social"}
+{"input":"before you said the hobby i love most is hiking . before i said have a wonderful time! the views will be worth it. . now you say what did i say my favorite hobby is","output":"it is hiking, your favorite hobby","domain":"social"}
+{"input":"before you said i live in chicago . before i said that hurts deeply. and next, i will be here small chat about you! . now you say where do i live","output":"you live in chicago","domain":"social"}
+{"input":"before you said we moved to chicago . before i said thank you! or congratulations to you, if it's your news! . now you say do you remember where i live","output":"you live in chicago","domain":"social"}
+{"input":"before you said i live in austin . before i said that hurts deeply. and next, i will be here small chat about you! . now you say what city do i live in","output":"austin! you live in austin","domain":"social"}
+{"input":"before you said we moved to austin . before i said thank you! or congratulations to you, if it's your news! . now you say where did i move to","output":"austin! you live in austin","domain":"social"}
+{"input":"before you said i live in denver . before i said that hurts deeply. and next, i will be here small chat about you! . now you say do you remember where i live","output":"you moved to denver","domain":"social"}
+{"input":"before you said we moved to denver . before i said thank you! or congratulations to you, if it's your news! . now you say where do i live","output":"you moved to denver","domain":"social"}
+{"input":"before you said i live in portland . before i said that hurts deeply. and next, i will be here small chat about you! . now you say where did i move to","output":"you told me you live in portland","domain":"social"}
+{"input":"before you said we moved to portland . before i said thank you! or congratulations to you, if it's your news! . now you say what city do i live in","output":"you told me you live in portland","domain":"social"}
+{"input":"before you said i live in nashville . before i said that hurts deeply. and next, i will be here small chat about you! . now you say where do i live","output":"you live in nashville","domain":"social"}
+{"input":"before you said we moved to nashville . before i said thank you! or congratulations to you, if it's your news! . now you say do you remember where i live","output":"you live in nashville","domain":"social"}
+{"input":"before you said i live in boise . before i said that hurts deeply. and next, i will be here small chat about you! . now you say what city do i live in","output":"boise! you live in boise","domain":"social"}
+{"input":"before you said we moved to boise . before i said thank you! or congratulations to you, if it's your news! . now you say where did i move to","output":"boise! you live in boise","domain":"social"}
+{"input":"before you said i live in tulsa . before i said that hurts deeply. and next, i will be here small chat about you! . now you say do you remember where i live","output":"you moved to tulsa","domain":"social"}
+{"input":"before you said we moved to tulsa . before i said thank you! or congratulations to you, if it's your news! . now you say where do i live","output":"you moved to tulsa","domain":"social"}
+{"input":"before you said i live in fresno . before i said that hurts deeply. and next, i will be here small chat about you! . now you say where did i move to","output":"you told me you live in fresno","domain":"social"}
+{"input":"before you said we moved to fresno . before i said thank you! or congratulations to you, if it's your news! . now you say what city do i live in","output":"you told me you live in fresno","domain":"social"}
+{"input":"before you said i live in omaha . before i said that would frustrate anyone. you are not alone in this. . now you say where do i live","output":"you live in omaha","domain":"social"}
+{"input":"before you said we moved to omaha . before i said that is such good fantastic to hear! what part of morning! did you do not yours? . now you say do you remember where i live","output":"you live in omaha","domain":"social"}
+{"input":"before you said i live in reno . before i said that warmed my heart too. where do you cook up? . now you say what city do i live in","output":"reno! you live in reno","domain":"social"}
+{"input":"before you said we moved to reno . before i said thank you! or congratulations to you, if it's your news! . now you say where did i move to","output":"reno! you live in reno","domain":"social"}
+{"input":"before you said i live in madison . before i said the too. where you mean talking with you? . now you say do you remember where i live","output":"you moved to madison","domain":"social"}
+{"input":"before you said we moved to madison . before i said what a relief indeed! you can finally breathe real now! . now you say where do i live","output":"you moved to madison","domain":"social"}
+{"input":"before you said i live in tucson . before i said that would wonderful to it! what are you each lately? . now you say where did i move to","output":"you told me you live in tucson","domain":"social"}
+{"input":"before you said we moved to tucson . before i said gratitude is such a warm feeling. what are you thankful for? . now you say what city do i live in","output":"you told me you live in tucson","domain":"social"}
+{"input":"before you said i live in spokane . before i said that hurts deeply. and next, i will be here small chat about you! . now you say where do i live","output":"you live in spokane","domain":"social"}
+{"input":"before you said we moved to spokane . before i said thank you! or congratulations to you, if it's your news! . now you say do you remember where i live","output":"you live in spokane","domain":"social"}
+{"input":"before you said i live in wichita . before i said that hurts deeply. and next, i will be here small chat about you! . now you say what city do i live in","output":"wichita! you live in wichita","domain":"social"}
+{"input":"before you said we moved to wichita . before i said thank you! or congratulations to you, if it's your news! . now you say where did i move to","output":"wichita! you live in wichita","domain":"social"}
+{"input":"before you said i work as a teacher . before i said alright, off you go! talk to you soon. . now you say what do i do for work","output":"you work as a teacher","domain":"social"}
+{"input":"before you said i am a teacher . before i said you too! enjoy every minute. . now you say what is my job","output":"you work as a teacher","domain":"social"}
+{"input":"before you said i work as a nurse . before i said that hurts deeply. take your time, i am here for you. . now you say what is my job","output":"you are a nurse","domain":"social"}
+{"input":"before you said i am a nurse . before i said small steps still move you forward. i believe in you. . now you say what do i do","output":"you are a nurse","domain":"social"}
+{"input":"before you said i work as a baker . before i said that hurts deeply. take your time, i am here for you. . now you say what do i do","output":"you told me you work as a baker","domain":"social"}
+{"input":"before you said i am a baker . before i said small steps still move you forward. i believe in you. . now you say do you remember my job","output":"you told me you work as a baker","domain":"social"}
+{"input":"before you said i work as a mechanic . before i said that hurts deeply. take your time, i am here for you. . now you say do you remember my job","output":"your work is being a mechanic","domain":"social"}
+{"input":"before you said i am a mechanic . before i said small steps still move you forward. i believe in you. . now you say what do i do for work","output":"your work is being a mechanic","domain":"social"}
+{"input":"before you said i work as a librarian . before i said that hurts deeply. take your time, i am here for you. . now you say what do i do for work","output":"you work as a librarian","domain":"social"}
+{"input":"before you said i am a librarian . before i said small steps still move you forward. i believe in you. . now you say what is my job","output":"you work as a librarian","domain":"social"}
+{"input":"before you said i work as a farmer . before i said that is a great skill to learn! . now you say what is my job","output":"you are a farmer","domain":"social"}
+{"input":"before you said i am a farmer . before i said you care. . now you say what do i do","output":"you are a farmer","domain":"social"}
+{"input":"before you said i work as a designer . before i said that hurts deeply. take your time, i am here for you. . now you say what do i do","output":"you told me you work as a designer","domain":"social"}
+{"input":"before you said i am a designer . before i said small steps still move you forward. i believe in you. . now you say do you remember my job","output":"you told me you work as a designer","domain":"social"}
+{"input":"before you said i work as a plumber . before i said that hurts deeply. take your time, i am here for you. . now you say do you remember my job","output":"your work is being a plumber","domain":"social"}
+{"input":"before you said i am a plumber . before i said small steps still move you forward. i believe in you. . now you say what do i do for work","output":"your work is being a plumber","domain":"social"}
+{"input":"before you said i work as a writer . before i said that hurts deeply. take your time, i am here for you. . now you say what do i do for work","output":"you work as a writer","domain":"social"}
+{"input":"before you said i am a writer . before i said small steps still move you forward. i believe in you. . now you say what is my job","output":"you work as a writer","domain":"social"}
+{"input":"before you said i work as a coach . before i said that hurts deeply. take your time, i am here for you. . now you say what is my job","output":"you are a coach","domain":"social"}
+{"input":"before you said i am a coach . before i said small steps still move you forward. i believe in you. . now you say what do i do","output":"you are a coach","domain":"social"}
+{"input":"before you said i work as a gardener . before i said that hurts deeply. take your time, i am here for you. . now you say what do i do","output":"you told me you work as a gardener","domain":"social"}
+{"input":"before you said i am a gardener . before i said small steps still move you forward. i believe in you. . now you say do you remember my job","output":"you told me you work as a gardener","domain":"social"}
+{"input":"before you said i work as a electrician . before i said that hurts deeply. take your time, i am here for you. . now you say do you remember my job","output":"your work is being a electrician","domain":"social"}
+{"input":"before you said i am a electrician . before i said small steps still move you forward. i believe in you. . now you say what do i do for work","output":"your work is being a electrician","domain":"social"}
+{"input":"before you said i have two kids . before i said two cats means double the mischief and double you morning it. . now you say how many kids do i have","output":"you have two kids","domain":"social"}
+{"input":"before you said i have three children . before i said rest is a gentle way to greet the day, isn't it? . now you say how many children do i have","output":"you have three children","domain":"social"}
+{"input":"before you said i have a son and a daughter . before i said a fresh salad is a bright, healthy choice! you enjoy it? . now you say how many kids do i have","output":"you have two kids, a son and a daughter","domain":"social"}
+{"input":"before you said i have one daughter . before i said gladly! why was the broom late? it overswept and missed the morning dust! . now you say how many kids do i have","output":"you have one daughter","domain":"social"}
+{"input":"before you said i have two brothers . before i said two brothers, that sounds like a lively house growing up! are you close? . now you say how many brothers do i have","output":"you have two brothers","domain":"social"}
+{"input":"before you said i have one sister . before i said one sister can feel like a built in friend. do you two get along well? . now you say how many sisters do i have","output":"you have one sister","domain":"social"}
+{"input":"before you said i am learning spanish . before i said that is a wonderful season! it has a feeling all its own, doesn't it? . now you say what am i learning","output":"you are learning spanish","domain":"social"}
+{"input":"before you said i am learning french this year . before i said that is the best things are so welcome! what are you doing? . now you say what am i learning","output":"you are learning french","domain":"social"}
+{"input":"before you said i started learning piano . before i said a big milestone! is hard to be that. what good? . now you say what am i learning","output":"you are learning piano","domain":"social"}
+{"input":"before you said i am learning to cook . before i said that is a great skill to learn! . now you say what am i learning","output":"you are learning to cook","domain":"social"}
+{"input":"before you said i am learning chess lately . before i said i am here with you. let us care about it. . now you say what am i learning","output":"you are learning chess","domain":"social"}
+{"input":"before you said my birthday is in june . before i said cozy nights are in the best! what do you two do? . now you say when is my birthday","output":"your birthday is in june","domain":"social"}
+{"input":"before you said my birthday is in march . before i said being stuck is part of learning, not a sign to quit. what part feels stuck? . now you say when is my birthday","output":"your birthday is in march","domain":"social"}
+{"input":"before you said my birthday is in september . before i said being stuck is part of learning, not a sign to quit. what part feels stuck? . now you say when is my birthday","output":"your birthday is in september","domain":"social"}
+{"input":"before you said my birthday is in november . before i said being stuck is part of learning, not a sign to quit. what part feels stuck? . now you say when is my birthday","output":"your birthday is in november","domain":"social"}
+{"input":"before you said my birthday is in february . before i said being stuck is part of learning, not a sign to quit. what part feels stuck? . now you say when is my birthday","output":"your birthday is in february","domain":"social"}
+{"input":"before you said my birthday is in august . before i said being stuck is part of learning, not a sign to quit. what part feels stuck? . now you say when is my birthday","output":"your birthday is in august","domain":"social"}
+{"input":"before you said i have two pets . before i said two cats means double the mischief and double my cuddles! what are they like? . now you say a dog named rex and a cat named bella","output":"rex and bella! what a fun pair","domain":"social"}
+{"input":"before you said a dog named rex and a cat named bella . before i said sunny days are little, i never chatting with you. . now you say what is the cat named","output":"your cat is bella","domain":"social"}
+{"input":"before you said we have two pets at home . before i said it really does, home usually get a lot to truly book . now you say my dog is rocky and my cat is luna","output":"two pets, rocky and luna! double the love","domain":"social"}
+{"input":"before you said my dog is rocky and my cat is luna . before i said rest is brighter choice! you are the best. . now you say what did i name the dog","output":"your dog is rocky","domain":"social"}
+{"input":"before you said we have two pets at home . before i said it really does, home usually get a lot to truly book . now you say a cat named milo and a dog named coco","output":"milo and coco! what a fun pair","domain":"social"}
+{"input":"before you said a cat named milo and a dog named coco . before i said i'm glad things have been lately? . now you say what is the cat named","output":"your cat is milo","domain":"social"}
+{"input":"before you said i have two pets . before i said two cats means double the mischief and double my cuddles! what are they like? . now you say my dog is teddy and my rabbit is poppy","output":"two pets, teddy and poppy! double the love","domain":"social"}
+{"input":"before you said i have two pets . before i said two cats means double the mischief and double my cuddles! what are they like? . now you say a dog named otis and a cat named cleo","output":"otis and cleo! what a fun pair","domain":"social"}
+{"input":"before you said a dog named otis and a cat named cleo . before i said yum, a nice feeling. what is a happy you. fresh and you? . now you say what is the cat named","output":"your cat is cleo","domain":"social"}
+{"input":"before you said we have two pets at home . before i said it really does, home usually get a lot to truly book . now you say my cat is simba and my cat is nala","output":"two pets, simba and nala! double the love","domain":"social"}
+{"input":"before you said my cat is simba and my cat is nala . before i said new baby are the best! simple joys . now you say what did i name the cat","output":"your cat is simba","domain":"social"}
+{"input":"before you said my brother is liam and my sister is emma . before i said oh blooming is something like you are a fun at too? . now you say what is my sister called","output":"your sister is emma","domain":"social"}
+{"input":"before you said my brother is noah and my sister is ava . before i said cousin glad like their laugh . now you say what is my brother called","output":"your brother is noah","domain":"social"}
+{"input":"before you said my brother is lucas and my sister is mia . before i said daily baby in the magic, golden light and crunchy respect. . now you say what is my sister called","output":"your sister is mia","domain":"social"}
+{"input":"before you said my brother is ethan and my sister is nora . before i said coffee is what picture i bet they fly over the whole family! . now you say what is my brother called","output":"your brother is ethan","domain":"social"}
+{"input":"before you said my brother is owen and my sister is lily . before i said salutations! what a nice name! will lately? . now you say what is my sister called","output":"your sister is lily","domain":"social"}
+{"input":"before you said my brother is caleb and my sister is grace . before i said oh really? cold days are such a game yours must be just you. . now you say what is my brother called","output":"your brother is caleb","domain":"social"}
+{"input":"before you said what is your favorite cookie . before i said i love the winter holidays, everyone make something sweet? . now you say mine is chocolate chip","output":"chocolate chip! what a great favorite cookie","domain":"social"}
+{"input":"before you said mine is chocolate chip . before i said dogs for a fun along, and you earned a good story . now you say what is my favorite cookie","output":"your favorite cookie is chocolate chip","domain":"social"}
+{"input":"before you said what is your favorite cookie . before i said i love the winter holidays, everyone make something sweet? . now you say mine is snickerdoodle","output":"snickerdoodle is a wonderful choice for a favorite cookie","domain":"social"}
+{"input":"before you said mine is snickerdoodle . before i said make could chat with you! . now you say what did i say my favorite cookie is","output":"snickerdoodle! your favorite cookie is snickerdoodle","domain":"social"}
+{"input":"before you said what is your favorite color . before i said i like blue, it feels calm and friendly. . now you say mine is teal","output":"oh, teal! excellent taste","domain":"social"}
+{"input":"before you said mine is teal . before i said small steps still move you forward. i believe in you. . now you say do you remember my favorite color","output":"you told me teal is your favorite color","domain":"social"}
+{"input":"before you said what is your favorite color . before i said i like blue, it feels calm and friendly. . now you say mine is coral","output":"coral, a true classic favorite","domain":"social"}
+{"input":"before you said mine is coral . before i said salutations! what a nice way to say hello! . now you say which color is my favorite","output":"it is coral, your favorite color","domain":"social"}
+{"input":"before you said what is your favorite color . before i said i like blue, it feels calm and friendly. . now you say mine is burgundy","output":"burgundy! noted, that is a favorite worth having","domain":"social"}
+{"input":"before you said mine is burgundy . before i said salutations! what a nice way to say hello! . now you say what is my favorite color again","output":"your favorite color is burgundy, i remember","domain":"social"}
+{"input":"before you said what is your favorite food . before i said i think warm soup might be my favorite, simple and comforting. what is yours? . now you say mine is tacos","output":"tacos, of course! a classic favorite","domain":"social"}
+{"input":"before you said mine is tacos . before i said stay with a little chocolate on top . now you say tell me my favorite food","output":"tacos is your favorite food","domain":"social"}
+{"input":"before you said what is your favorite food . before i said i think warm soup might be my favorite, simple and comforting. what is yours? . now you say mine is pasta","output":"pasta! what a great favorite food","domain":"social"}
+{"input":"before you said mine is pasta . before i said yes, goodbye! come back and soon. . now you say so what is my favorite food","output":"of course, pasta!","domain":"social"}
+{"input":"before you said what is your favorite food . before i said i think warm soup might be my favorite, simple and comforting. what is yours? . now you say mine is salad","output":"salad is a wonderful choice for a favorite food","domain":"social"}
+{"input":"before you said mine is salad . before i said yes, spring friends are better . now you say and my favorite food is","output":"your favorite food is salad","domain":"social"}
+{"input":"before you said what is your favorite season . before i said fall! crisp air, colorful leaves, cozy sweaters. . now you say mine is autumn","output":"oh, autumn! excellent taste","domain":"social"}
+{"input":"before you said mine is autumn . before i said autumn is a wonderful season! it has a feeling all its own, doesn't it? . now you say do you remember, my favorite season","output":"autumn! your favorite season is autumn","domain":"social"}
+{"input":"before you said what is your favorite season . before i said fall! crisp air, colorful leaves, cozy sweaters. . now you say mine is winter","output":"winter, a true classic favorite","domain":"social"}
+{"input":"before you said mine is winter . before i said what a lovely favorite! winter has so much and a lot. . now you say what is my favorite season","output":"you told me winter is your favorite season","domain":"social"}
+{"input":"before you said what is your favorite drink . before i said a fresh and perfect for, a quiet spot and never pure day. . now you say mine is lemonade","output":"lemonade! noted, that is a favorite worth having","domain":"social"}
+{"input":"before you said mine is lemonade . before i said i am gollemer, a tiny language model who loves to chat! . now you say what did i say my favorite drink is","output":"it is lemonade, your favorite drink","domain":"social"}
+{"input":"before you said what is your favorite drink . before i said a fresh and perfect for, a quiet spot and never pure day. . now you say mine is hot chocolate","output":"hot chocolate, of course! a classic favorite","domain":"social"}
+{"input":"before you said mine is hot chocolate . before i said is a wonderful season! it has a feeling all its own, doesn't it? . now you say do you remember my favorite drink","output":"your favorite drink is hot chocolate, i remember","domain":"social"}
+{"input":"before you said what is your favorite dessert . before i said i have a soft spot for chocolate cake! . now you say mine is cheesecake","output":"cheesecake! what a great favorite dessert","domain":"social"}
+{"input":"before you said mine is cheesecake . before i said that energy one small step at a time. . now you say which dessert is my favorite","output":"cheesecake is your favorite dessert","domain":"social"}
+{"input":"before you said what is your favorite dessert . before i said i have a soft spot for chocolate cake! . now you say mine is ice cream","output":"ice cream is a wonderful choice for a favorite dessert","domain":"social"}
+{"input":"before you said mine is ice cream . before i said spring, take good music and it even out . now you say what is my favorite dessert again","output":"of course, ice cream!","domain":"social"}
+{"input":"before you said what is your favorite flower . before i said i am here about you, and i love talking with you. . now you say mine is sunflowers","output":"oh, sunflowers! excellent taste","domain":"social"}
+{"input":"before you said mine is sunflowers . before i said it is perfect and fun, truly. . now you say tell me my favorite flower","output":"your favorite flower is sunflowers","domain":"social"}
+{"input":"before you said what is your favorite flower . before i said i am here about you, and i love talking with you. . now you say mine is lilies","output":"lilies, a true classic favorite","domain":"social"}
+{"input":"before you said mine is lilies . before i said salutations! what a nice way to say hello! . now you say so what is my favorite flower","output":"lilies! your favorite flower is lilies","domain":"social"}
+{"input":"before you said what is your favorite hobby . before i said i love chatting with you! . now you say mine is painting","output":"painting! noted, that is a favorite worth having","domain":"social"}
+{"input":"before you said mine is painting . before i said spring is a beautiful thing. you two must be very close. . now you say and my favorite hobby is","output":"you told me painting is your favorite hobby","domain":"social"}
+{"input":"before you said what is your favorite hobby . before i said i love chatting with you! . now you say mine is cycling","output":"cycling, of course! a classic favorite","domain":"social"}
+{"input":"before you said mine is cycling . before i said weekends are a fun day. i am listening. . now you say do you remember, my favorite hobby","output":"it is cycling, your favorite hobby","domain":"social"}
+{"input":"before you said what is your favorite hobby . before i said i love chatting with you! . now you say mine is knitting","output":"knitting! what a great favorite hobby","domain":"social"}
+{"input":"before you said mine is knitting . before i said it is okay, crying helps are that. like you soon. . now you say what is my favorite hobby","output":"your favorite hobby is knitting, i remember","domain":"social"}
+{"input":"before you said my favorite color is teal and my favorite food is tacos . before i said teal and tacos, both great picks! . now you say what is my favorite food","output":"your favorite food is tacos","domain":"social"}
+{"input":"before you said my favorite color is forest green and my favorite food is pasta . before i said forest green and pasta, both great picks! . now you say what did i say my favorite color is","output":"forest green! your favorite color is forest green","domain":"social"}
+{"input":"before you said my favorite color is navy blue and my favorite food is salad . before i said navy blue and salad, both great picks! . now you say do you remember my favorite food","output":"you told me salad is your favorite food","domain":"social"}
+{"input":"before you said my favorite color is burgundy and my favorite food is sushi . before i said burgundy and sushi, both great picks! . now you say which color is my favorite","output":"it is burgundy, your favorite color","domain":"social"}
+{"input":"before you said my favorite color is teal and my favorite food is pizza . before i said teal and pizza, both great picks! . now you say what is my favorite food again","output":"your favorite food is pizza, i remember","domain":"social"}
+{"input":"before you said my favorite cookie is chocolate chip and my favorite season is autumn . before i said chocolate chip and autumn, both great picks! . now you say what is my favorite season","output":"your favorite season is autumn","domain":"social"}
+{"input":"before you said my favorite cookie is peanut butter and my favorite season is winter . before i said peanut butter and winter, both great picks! . now you say what did i say my favorite cookie is","output":"peanut butter! your favorite cookie is peanut butter","domain":"social"}
+{"input":"before you said my favorite cookie is double chocolate and my favorite season is summer . before i said double chocolate and summer, both great picks! . now you say do you remember my favorite season","output":"you told me summer is your favorite season","domain":"social"}
+{"input":"before you said my favorite cookie is chocolate chip and my favorite season is spring . before i said chocolate chip and spring, both great picks! . now you say which cookie is my favorite","output":"it is chocolate chip, your favorite cookie","domain":"social"}
+{"input":"before you said my favorite cookie is peanut butter and my favorite season is autumn . before i said peanut butter and autumn, both great picks! . now you say what is my favorite season again","output":"your favorite season is autumn, i remember","domain":"social"}
+{"input":"before you said my favorite color is coral . before i said yellow is a great choice! do you have a cozy friend. . now you say actually my favorite color is teal","output":"teal! what a great favorite color","domain":"social"}
+{"input":"before you said actually my favorite color is teal . before i said something old ruby is so good to meet you too! . now you say what is my favorite color","output":"your favorite color is teal","domain":"social"}
+{"input":"before you said my favorite color is forest green . before i said yes, a walk by the lake sounds like a perfect weekend plan . now you say actually my favorite color is purple","output":"purple is a wonderful choice for a favorite color","domain":"social"}
+{"input":"before you said actually my favorite color is purple . before i said oh really? windy make everything feel wild and alive, don't they? . now you say what did i say my favorite color is","output":"purple! your favorite color is purple","domain":"social"}
+{"input":"before you said actually my favorite food is ramen . before i said alright, even tiny adventures will go for how real been? . now you say do you remember my favorite food","output":"you told me ramen is your favorite food","domain":"social"}
+{"input":"before you said actually my favorite food is sushi . before i said cooking takes brings such a tasty start and book mornings, don't they? . now you say which food is my favorite","output":"it is sushi, your favorite food","domain":"social"}
+{"input":"before you said my favorite cookie is chocolate chip . before i said the ones who is so cheerful, but i feel so heart . now you say actually my favorite cookie is oatmeal raisin","output":"oatmeal raisin! noted, that is a favorite worth having","domain":"social"}
+{"input":"before you said actually my favorite cookie is oatmeal raisin . before i said quiet and picture, it is so hard to listen to be proud with you . now you say what is my favorite cookie again","output":"your favorite cookie is oatmeal raisin, i remember","domain":"social"}
+{"input":"before you said actually my favorite season is autumn . before i said autumn is a wonderful season! it has a feeling all its own, doesn't it? . now you say tell me my favorite season","output":"autumn is your favorite season","domain":"social"}
+{"input":"before you said actually my favorite drink is lemonade . before i said what a lovely way to feel. may your day stay warm and kind. . now you say so what is my favorite drink","output":"of course, lemonade!","domain":"social"}
+{"input":"before you said my favorite dessert is cheesecake . before i said dog singing is a happy way to mean you care. . now you say actually my favorite dessert is brownies","output":"brownies is a wonderful choice for a favorite dessert","domain":"social"}
+{"input":"before you said actually my favorite dessert is brownies . before i said dessert has that power! what's your favorite sweet ending? . now you say and my favorite dessert is","output":"your favorite dessert is brownies","domain":"social"}
+{"input":"before you said my favorite hobby is painting . before i said spring is a great skill to learn! . now you say actually my favorite hobby is hiking","output":"oh, hiking! excellent taste","domain":"social"}
+{"input":"before you said actually my favorite hobby is hiking . before i said have a dog that is lovely! what do you perfect most? . now you say do you remember, my favorite hobby","output":"hiking! your favorite hobby is hiking","domain":"social"}
+{"input":"before you said my favorite flower is roses . before i said gratitude is such a warm feeling. what are you thankful for? . now you say actually my favorite flower is tulips","output":"tulips, a true classic favorite","domain":"social"}
+{"input":"before you said actually my favorite flower is tulips . before i said a hard work paid forward to summer . now you say what is my favorite flower","output":"you told me tulips is your favorite flower","domain":"social"}
+{"input":"before you said i live in omaha . before i said that would frustrate anyone. you are not alone in this. . now you say actually we moved to denver","output":"denver sounds like a great place to live!","domain":"social"}
+{"input":"before you said actually we moved to denver . before i said that hurts deeply. take your time, i am here for you. . now you say where do i live","output":"you live in denver","domain":"social"}
+{"input":"before you said i live in austin . before i said that hurts deeply. and next, i will be here small chat about you! . now you say actually we moved to tulsa","output":"oh, tulsa! how do you like it there?","domain":"social"}
+{"input":"before you said actually we moved to tulsa . before i said that hurts deeply. take your time, i am here for you. . now you say what city do i live in","output":"tulsa! you live in tulsa","domain":"social"}
+{"input":"before you said my favorite food is pasta . before i said fruit is! sharing food is a yours? . now you say what did i say my favorite color is","output":"you told me your favorite food is pasta, but you have not told me your favorite color yet!","domain":"social"}
+{"input":"before you said my favorite cookie is chocolate chip . before i said the ones who is so cheerful, but i feel so heart . now you say do you remember my favorite season","output":"you have not told me your favorite season yet! what is it?","domain":"social"}
+{"input":"before you said my favorite hobby is hiking . before i said board games are great to fun to talk about? . now you say tell me my favorite drink","output":"you told me your favorite hobby is hiking, but you have not told me your favorite drink yet!","domain":"social"}
+{"input":"before you said my favorite dessert is cheesecake . before i said dog singing is a happy way to mean you care. . now you say so what is my favorite flower","output":"you have not told me your favorite flower yet! what is it?","domain":"social"}
+{"input":"before you said my favorite flower is lilies . before i said salutations! what a nice way to say hello! . now you say and my favorite dessert is","output":"you told me your favorite flower is lilies, but you have not told me your favorite dessert yet!","domain":"social"}
+{"input":"before you said my favorite color is coral . before i said yellow is a great choice! do you have a cozy friend. . now you say i am so tired today","output":"you sound ready for rest. i hope you sleep deeply tonight.","domain":"social"}
+{"input":"before you said my favorite color is coral . before i said yellow is a great choice! do you have a cozy friend. . now you say i had a wonderful day","output":"wonderful! glad you're enjoying it!","domain":"social"}
+{"input":"before you said my favorite color is coral . before i said yellow is a great choice! do you have a cozy friend. . now you say what a sunny day","output":"thank you! wishing you restful sleep.","domain":"social"}
+{"input":"before you said my favorite color is forest green . before i said yes, a walk by the lake sounds like a perfect weekend plan . now you say it is so cold outside","output":"oh dreams, every luck tomorrow! stretch well.","domain":"social"}
+{"input":"before you said my favorite color is forest green . before i said yes, a walk by the lake sounds like a perfect weekend plan . now you say i am nervous about tomorrow","output":"you are not have to face the worry alone. i am listening.","domain":"social"}
+{"input":"before you said my favorite color is forest green . before i said yes, a walk by the lake sounds like a perfect weekend plan . now you say work was so long today","output":"long days take a lot out of you. you made it through, though.","domain":"social"}
+{"input":"before you said my favorite dessert is cheesecake . before i said dog singing is a happy way to mean you care. . now you say it is so cold outside","output":"oh dreams, every luck tomorrow! stretch well.","domain":"social"}
+{"input":"before you said my favorite dessert is cheesecake . before i said dog singing is a happy way to mean you care. . now you say i am nervous about tomorrow","output":"you are not have to face the worry alone. i am listening.","domain":"social"}
+{"input":"before you said my favorite dessert is cheesecake . before i said dog singing is a happy way to mean you care. . now you say work was so long today","output":"long days take a lot out of you. you made it through, though.","domain":"social"}
+{"input":"before you said my favorite hobby is painting . before i said spring is a great skill to learn! . now you say it is so cold outside","output":"oh dreams, every luck tomorrow! stretch well.","domain":"social"}
+{"input":"before you said my favorite hobby is painting . before i said spring is a great skill to learn! . now you say i am nervous about tomorrow","output":"you are not have to face the worry alone. i am listening.","domain":"social"}
+{"input":"before you said my favorite hobby is painting . before i said spring is a great skill to learn! . now you say work was so long today","output":"long days take a lot out of you. you made it through, though.","domain":"social"}
