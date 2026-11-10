@@ -1590,6 +1590,22 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if hook.run(func() bool { return tryServeStatic(line, reader) }) {
 			continue
 		}
+		// Serve the wasm app (chat/servewasm.go): one
+		// sentence composing the route and the run — the
+		// /static/ registration for the app's folder
+		// (creating the house server when the project has
+		// none) by the serve-static machinery, then the
+		// server run by the run claim. It sits directly
+		// after serve-static: its parse claims nothing
+		// outside "serve … wasm …", and the neighbours it
+		// must never take — "serve static files …", "run
+		// the server …" — are settled by the wasm word it
+		// requires; the build sentence it points back to
+		// sits above with the wasm family, its own verb
+		// keeping them apart.
+		if hook.run(func() bool { return tryServeWasmApp(line, reader, profile) }) {
+			continue
+		}
 		// The component piece (component.go): one Material
 		// component into an existing page — "add a button to
 		// jim/temp/index.html", "add a card to the page" —

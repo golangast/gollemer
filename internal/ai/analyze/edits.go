@@ -73,6 +73,19 @@ const (
 	// custom servers refused with the line handed over).
 	EditServeStatic = "serve_static"
 
+	// Serve a wasm app (editservewasm.go): the missing-server
+	// half of the chat's "serve the wasm app in <folder>"
+	// composition. When the project has NO webserver at all,
+	// this plan creates the house server in server/main.go —
+	// the WebServerSource component — already carrying the
+	// /static/ file-server registration over the app's folder
+	// (req.WasmFolder), so one gated plan leaves a program
+	// that serves the app. When a server exists the chat
+	// routes the ask to EditServeStatic instead and this
+	// planner refuses; the running is the run claim's, never
+	// the planner's.
+	EditServeWasmApp = "serve_wasm_app"
+
 	// Component (editcomponent.go): one Material component
 	// from the registry in editmaterial.go, inserted just
 	// before an existing .html page's </body>, with the
@@ -282,7 +295,9 @@ type EditRequest struct {
 	// chat layer. For the component kind, a non-empty
 	// WasmFolder routes the ask to the app in that folder
 	// (File stays empty — the app's files are derived from
-	// the folder); empty means the page modes above.
+	// the folder); empty means the page modes above. The
+	// serve_wasm_app kind reads it as the app folder the new
+	// server's /static/ registration serves.
 	WasmFolder string
 
 	// wasm_event: the event's source component and the
@@ -589,6 +604,8 @@ func (p *Project) PlanEdit(req EditRequest) (*EditPlan, string) {
 		return p.planWebpage(req)
 	case EditServeStatic:
 		return p.planServeStatic(req)
+	case EditServeWasmApp:
+		return p.planServeWasmApp(req)
 	case EditComponent:
 		return p.planComponent(req)
 	case EditTemplatedPage:

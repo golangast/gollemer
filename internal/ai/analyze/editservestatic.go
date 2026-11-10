@@ -73,19 +73,8 @@ func (p *Project) planServeStatic(req EditRequest) (*EditPlan, string) {
 
 	// Conflicts at the route, read across the whole project:
 	// a path answers for one thing, never two.
-	for _, r := range w.regs {
-		if r.route != StaticRoute {
-			continue
-		}
-		if strings.Contains(r.target, "FileServer") {
-			if m := staticDirArgRe.FindStringSubmatch(r.target); m != nil {
-				if m[1] == folder {
-					return nil, fmt.Sprintf("the server in %s already serves the %s folder at /static/ (%s:%d) — nothing to add.", p.LinkPath(r.file), folder, p.LinkPath(r.file), r.line)
-				}
-				return nil, fmt.Sprintf("/static/ already serves a different folder — %s:%d points it at the folder %q. I won't point one path at two folders; if the %s folder should be the served one instead, change that line by hand and ask again.", p.LinkPath(r.file), r.line, m[1], folder)
-			}
-		}
-		return nil, fmt.Sprintf("/static/ is already taken — %s:%d registers it for %s. I won't point one path at two things, so the %s folder stays unserved until that path is free.", p.LinkPath(r.file), r.line, r.target, folder)
+	if _, _, refusal := p.staticRouteState(w, folder); refusal != "" {
+		return nil, refusal
 	}
 
 	// The site: a composable server (the default mux or the
@@ -159,6 +148,68 @@ func (p *Project) planServeStatic(req EditRequest) (*EditPlan, string) {
 	}, ""
 }
 
+// staticRouteState reads the /static/ route's state for one
+// folder off a wiring scan — the conflict scan planServeStatic
+// refuses by, factored so composite flows (the serve-the-wasm-
+// app plan and the chat's probe below) read the same facts and
+// speak with the same words. served reports the route is
+// already a file server over exactly this folder, registered
+// in file; refusal is the words for every state that is not
+// "the route is free": the already-serving nothing-to-add
+// sentence, the different-folder conflict, or the taken route
+// (all three are planServeStatic's historic refusals,
+// byte-identical). refusal is "" only when no /static/
+// registration exists at all.
+func (p *Project) staticRouteState(w *wireWorld, folder string) (served bool, file string, refusal string) {
+	for _, r := range w.regs {
+		if r.route != StaticRoute {
+			continue
+		}
+		if strings.Contains(r.target, "FileServer") {
+			if m := staticDirArgRe.FindStringSubmatch(r.target); m != nil {
+				if m[1] == folder {
+					return true, r.file, fmt.Sprintf("the server in %s already serves the %s folder at /static/ (%s:%d) — nothing to add.", p.LinkPath(r.file), folder, p.LinkPath(r.file), r.line)
+				}
+				return false, "", fmt.Sprintf("/static/ already serves a different folder — %s:%d points it at the folder %q. I won't point one path at two folders; if the %s folder should be the served one instead, change that line by hand and ask again.", p.LinkPath(r.file), r.line, m[1], folder)
+			}
+		}
+		return false, "", fmt.Sprintf("/static/ is already taken — %s:%d registers it for %s. I won't point one path at two things, so the %s folder stays unserved until that path is free.", p.LinkPath(r.file), r.line, r.target, folder)
+	}
+	return false, "", ""
+}
+
+// StaticRouteFacts is the /static/ route's state for one
+// folder, exported for the chat's composite serve-the-wasm-app
+// flow: that sentence must know where the route stands BEFORE
+// it plans (create a server, add the route, or neither) and
+// whether the registration is really there AFTER it lands.
+// The facts come from the one wiring scan; the words, when
+// there are words, are the serve-static planner's own.
+type StaticRouteFacts struct {
+	HasServer bool   // some function in the project calls ListenAndServe
+	Served    bool   // /static/ is a file server over the folder
+	File      string // the file holding that registration, when Served
+	Conflict  string // "" when the route is free or already serves the folder; otherwise the serve-static refusal for the route as it stands
+}
+
+// StaticRouteFacts reports the facts for folder (a
+// project-relative slash path).
+func (p *Project) StaticRouteFacts(folder string) StaticRouteFacts {
+	if p == nil {
+		return StaticRouteFacts{}
+	}
+	w := p.wireScan()
+	facts := StaticRouteFacts{HasServer: len(w.sites) > 0}
+	served, file, refusal := p.staticRouteState(w, folder)
+	if served {
+		facts.Served = true
+		facts.File = file
+		return facts
+	}
+	facts.Conflict = refusal
+	return facts
+}
+
 // staticRegLine renders the registration for one site: the
 // receiver is the site's mux variable on a mux site, else
 // the file's own name for the net/http package; StripPrefix,
@@ -172,6 +223,14 @@ func staticRegLine(site *wireSite, folder string) string {
 	if site.kind == siteMux {
 		recv = site.muxVar
 	}
+	return staticRegLineFor(recv, httpQual, folder)
+}
+
+// staticRegLineFor renders the registration line itself, from
+// the receiver and the net/http qualifier — the form a plan
+// assembling a brand-new default-mux server (editservewasm.go)
+// needs, where there is no site to read them from.
+func staticRegLineFor(recv, httpQual, folder string) string {
 	q := strconv.Quote(StaticRoute)
 	return fmt.Sprintf("%s.Handle(%s, %s.StripPrefix(%s, %s.FileServer(%s.Dir(%s))))",
 		recv, q, httpQual, q, httpQual, httpQual, strconv.Quote(folder))

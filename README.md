@@ -575,6 +575,23 @@ ask above; the chat tells the two apart by what the
 folder already holds, and only ever compiles an app that
 is really there.
 
+And serving the app is one sentence: `serve the wasm app
+in jim` gets the built app onto your Go server and running.
+The folder must hold an app, and the app must be built —
+with no `main.wasm` in it the chat names the build sentence
+above and stops, rather than serving a page whose program
+isn't there. The `/static/` registration is the serve-static
+piece's own edit when the project already has a server; when
+it has none, one plan creates the house server in
+`server/main.go` with the registration already in it. A
+`/static/` route held by a different folder is the family's
+conflict, in its own words, and nothing is written. Then the
+server runs, and the last line gives the app's address —
+`http://localhost:8080/static/` when the port is the house
+one, always read from the serving file's own serve
+statement, never assumed. No folder named serves the last
+app the conversation worked on, with the reading printed.
+
 A page's style sheets, scripts, and pictures are files too, and
 the server can serve the whole folder they live in: `serve static
 files` registers that folder at `/static/` on your existing

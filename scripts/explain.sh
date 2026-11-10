@@ -271,6 +271,19 @@ Create folders and files — shown first, gated, then verified:
       same words are the creation ask above — the
       chat tells the two apart by what the folder
       already holds.
+  you> serve the wasm app in jim
+      gets the built app onto your Go server and
+      running, in one sentence: the /static/
+      registration lands on your existing server, or
+      one plan creates the house server in
+      server/main.go with the registration in it
+      when the project has none — then the server
+      runs, and the last line gives the app's
+      address, its port read from the serve
+      statement itself. An app that isn't built
+      stops the sentence with the build step named;
+      no folder named serves the last app you
+      worked on.
   you> serve static files
       wires the webpage's folder — or one you name:
       "serve static files from jim/temp", "serve the

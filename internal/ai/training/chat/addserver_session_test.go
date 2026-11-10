@@ -121,6 +121,9 @@ func claimChain(line string, ask editAsk, profile *UserProfile) bool {
 	if runServeStatic(line, ask) {
 		return true
 	}
+	if runServeWasmApp(line, ask, profile) {
+		return true
+	}
 	if tryComponentList(line) {
 		return true
 	}
