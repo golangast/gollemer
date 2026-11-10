@@ -55,7 +55,12 @@ package chat
 // below, analyze.planComponentWasm). The routing is by
 // content — the folder's main.go must carry the js && wasm
 // build tag — and until that read says the folder holds an
-// app, the sentence is not this piece's at all.
+// app, the sentence is not this piece's at all. In the app
+// mode alone, the sentence can name its component —
+// "add a button called save to jim" — a distinct instance
+// with its own builder and its name as its element id,
+// the identity the events piece (wasmevent.go) points at;
+// the page modes take no name, exactly as before.
 
 import (
 	"fmt"
@@ -223,24 +228,32 @@ func tryComponent(line string, r *LineReader) bool {
 
 // componentWasmAsk is one parsed component sentence aimed
 // at a wasm app: the registry id ("" when the name is not
-// a component), the name as typed, and the target as typed
-// — a folder, or the app's main.go inside one.
+// a component), the name as typed, the "called <name>"
+// name the sentence gave the component ("" when none —
+// the events piece's prerequisite: a named component is a
+// distinct instance an event can point at), and the target
+// as typed — a folder, or the app's main.go inside one.
 type componentWasmAsk struct {
 	component string
 	name      string
+	called    string
 	target    string
 	goFile    bool
 }
 
 // parseComponentWasmTarget reads the component shape with
 // an app target — a folder ("add a card to jim") or the
-// folder's main.go ("add a card to jim/main.go"). The page
-// targets are the standard parse's and never match here,
-// and any other .go target declines with them: the two
-// parses are disjoint, so every sentence keeps exactly the
-// claim it has today, and a folder or main.go target joins
-// this piece only when the folder truly holds a wasm app
-// (runComponentWasm reads the file before claiming).
+// folder's main.go ("add a card to jim/main.go") — with
+// the app mode's one extra slot: "called <name>" after the
+// component's words ("add a button called save to jim")
+// names the instance, for the events piece to point at.
+// The page targets are the standard parse's and never
+// match here, and any other .go target declines with them:
+// the two parses are disjoint, so every sentence keeps
+// exactly the claim it has today, and a folder or main.go
+// target joins this piece only when the folder truly
+// holds a wasm app (runComponentWasm reads the file
+// before claiming).
 func parseComponentWasmTarget(line string) (componentWasmAsk, bool) {
 	s := strings.TrimSpace(line)
 	s = strings.TrimSuffix(s, ".")
@@ -270,14 +283,34 @@ func parseComponentWasmTarget(line string) (componentWasmAsk, bool) {
 	for j < len(fields) && low[j] != "to" && low[j] != "in" && low[j] != "into" && low[j] != "at" {
 		j++
 	}
-	if j >= len(fields) || j == i || j-i > 3 {
+	if j >= len(fields) || j == i {
+		return componentWasmAsk{}, false
+	}
+	// The optional "called <name>": the kind's words, then
+	// "called", then exactly one name word — a name in any
+	// other shape (none after "called", several, or a word
+	// that can't be one) is not this sentence.
+	seg := low[i:j]
+	called := ""
+	for k, w := range seg {
+		if w != "called" {
+			continue
+		}
+		if k == 0 || k != len(seg)-2 || !wasmComponentNameToken(seg[k+1]) {
+			return componentWasmAsk{}, false
+		}
+		called = seg[k+1]
+		seg = seg[:k]
+		break
+	}
+	if len(seg) == 0 || len(seg) > 3 {
 		return componentWasmAsk{}, false
 	}
 	rest := low[j+1:]
 	if len(rest) != 1 {
 		return componentWasmAsk{}, false
 	}
-	out := componentWasmAsk{name: strings.Join(low[i:j], " "), target: fields[j+1]}
+	out := componentWasmAsk{name: strings.Join(seg, " "), called: called, target: fields[j+1]}
 	switch tok := rest[0]; {
 	case strings.HasSuffix(tok, ".html"):
 		return componentWasmAsk{}, false // a page target: the standard parse's
@@ -333,9 +366,10 @@ func runComponentWasm(q componentWasmAsk, ask editAsk) bool {
 		return true
 	}
 	return executeEditPlan(analyze.EditRequest{
-		Kind:       analyze.EditComponent,
-		Component:  q.component,
-		WasmFolder: folderRel,
+		Kind:          analyze.EditComponent,
+		Component:     q.component,
+		ComponentName: q.called,
+		WasmFolder:    folderRel,
 	}, ask)
 }
 

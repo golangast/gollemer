@@ -115,6 +115,21 @@ const (
 	// planComponentWasm).
 	EditWasmApp = "wasm_app"
 
+	// Wasm event (editwasmevent.go): one event on a component
+	// already mounted in a wasm app — a source component, its
+	// event (a click, or a change), and what happens (another
+	// component shown, hidden, or toggled, or a button's or
+	// card's words set). The plan writes the handler into the
+	// app's events.go as a js.FuncOf callback, registers it
+	// after the mounts in main.go, stamps the id attributes
+	// the handler looks its components up by, and keeps every
+	// callback in the file's package-level list so the
+	// garbage collector can never take one. The request's
+	// component references are as typed (a registry kind plus
+	// an optional "called" name); the planner resolves them
+	// against the components the app actually has mounted.
+	EditWasmEvent = "wasm_event"
+
 	// Page family (editpage.go): a named page kind as a matched
 	// page+handler pair — an .html page created with starter
 	// content (never overwritten), the handler that serves it
@@ -243,6 +258,16 @@ type EditRequest struct {
 	// chat layer.
 	Component string
 
+	// component in wasm mode: the "called <name>" name the
+	// sentence gave the component ("add a button called
+	// save to jim"), "" when it gave none. A named component
+	// is a distinct instance of its kind — its own builder,
+	// its name as its element id — where an unnamed one is
+	// the kind's one unnamed instance, with a positional id
+	// ("button-1"). Only the wasm mode reads this; the page
+	// modes never see it (their grammar takes no name).
+	ComponentName string
+
 	// wasm_app, and component in wasm mode: the wasm app's
 	// folder (project-relative slash path), resolved by the
 	// chat layer. For the component kind, a non-empty
@@ -250,6 +275,25 @@ type EditRequest struct {
 	// (File stays empty — the app's files are derived from
 	// the folder); empty means the page modes above.
 	WasmFolder string
+
+	// wasm_event: the event's source component and the
+	// action's target component, each as typed — a registry
+	// kind (EventSourceKind / EventTargetKind; "" when the
+	// sentence named the component by name alone) and the
+	// "called" name (EventSourceName / EventTargetName; ""
+	// when the sentence gave none). EventName is the event
+	// ("click" | "change"), EventAction what happens
+	// ("show" | "hide" | "toggle" | "setwords"), and
+	// EventWords the setwords text, as typed ("" for the
+	// other actions). The planner resolves both references
+	// against the app's mounted components.
+	EventSourceKind string
+	EventSourceName string
+	EventName       string
+	EventAction     string
+	EventTargetKind string
+	EventTargetName string
+	EventWords      string
 
 	// templated_page: the project folder the scaffold
 	// belongs to (SiteFolder, project-relative slash path;
@@ -532,6 +576,8 @@ func (p *Project) PlanEdit(req EditRequest) (*EditPlan, string) {
 		return p.planScaffoldSection(req)
 	case EditWasmApp:
 		return p.planWasmApp(req)
+	case EditWasmEvent:
+		return p.planWasmEvent(req)
 	case EditPage:
 		return p.planPage(req)
 	case EditDelegate:

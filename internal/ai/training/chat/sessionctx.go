@@ -104,6 +104,13 @@ type workContext struct {
 	prevHow  string // "created" | "edited": how prevFile got there
 	lastKind string // "file" | "folder": what landed most recently
 	landed   *landedPiece
+
+	// The wasm events piece's context (wasmevent.go): the
+	// folder of the last wasm app this session created or
+	// added a component or an event to — the app an event
+	// sentence with no folder named resolves to, with the
+	// reading printed. "" = no app touched here.
+	wasmFolder string
 }
 
 // landedPiece is the last landed piece in rebuildable form:
@@ -295,6 +302,13 @@ func noteSpineLanded(req analyze.EditRequest, plan *analyze.EditPlan, root strin
 		name = req.TaughtName
 	}
 	noteLandedFile(root, rel, how, piece, name)
+	// The wasm family's landings move the session's wasm
+	// app with them: the app created, a component into it,
+	// or an event into it — the folder an event sentence
+	// with no folder of its own resolves to.
+	if req.WasmFolder != "" && (req.Kind == analyze.EditWasmApp || req.Kind == analyze.EditComponent || req.Kind == analyze.EditWasmEvent) {
+		workCtx.wasmFolder = req.WasmFolder
+	}
 	noteSpineSnapshot(req, rel)
 }
 

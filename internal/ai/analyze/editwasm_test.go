@@ -278,19 +278,30 @@ func TestPlanComponentWasmRefusals(t *testing.T) {
 // Every registry component has a builder, and each builder
 // carries its HTML twin's classes — the two forms of a
 // component cannot drift apart in what they look like.
+// Each builder also stamps its instance's element id on
+// its root (the id an event handler finds it by), under
+// the plain builder name or a named instance's.
 func TestWasmBuildersCoverTheRegistry(t *testing.T) {
 	for _, c := range MaterialComponents {
-		builder, ok := wasmComponentBuilder(c.ID)
+		fn := wasmBuilderName(c.ID)
+		elemID := c.ID + "-1"
+		builder, ok := wasmComponentBuilder(c.ID, fn, elemID)
 		if !ok {
 			t.Errorf("component %s has no wasm builder", c.ID)
 			continue
 		}
-		fn := wasmBuilderName(c.ID)
 		if !strings.Contains(builder, "func "+fn+"(doc js.Value) js.Value") {
 			t.Errorf("builder for %s does not declare %s", c.ID, fn)
 		}
+		if !strings.Contains(builder, `Set("id", "`+elemID+`")`) {
+			t.Errorf("builder for %s does not stamp its element id:\n%s", c.ID, builder)
+		}
 		if strings.Contains(builder, "FuncOf") || strings.Contains(builder, "addEventListener") {
-			t.Errorf("builder for %s carries an event hook — v1 renders only", c.ID)
+			t.Errorf("builder for %s carries an event hook — the events live in events.go", c.ID)
+		}
+		named, ok := wasmComponentBuilder(c.ID, wasmNamedBuilderName("save", c.ID), "save")
+		if !ok || !strings.Contains(named, "func "+wasmNamedBuilderName("save", c.ID)+"(") || !strings.Contains(named, `Set("id", "save")`) {
+			t.Errorf("named builder for %s is wrong:\n%s", c.ID, named)
 		}
 	}
 }

@@ -237,8 +237,25 @@ Create folders and files — shown first, gated, then verified:
       Go 1.27 install when one is found. Components
       join the app as Go builders, not HTML:
       "add a card to jim" — styles joining the host
-      page once, rendering and mounting only, no
-      click handlers yet.
+      page once. In an app a component can carry a
+      name — "add a button called save to jim" — a
+      second button beside the unnamed one, each with
+      its own builder and its name as its id.
+  you> when the button is clicked, show the card in jim
+      an event for the app: a Go handler in
+      jim/events.go that answers in the browser,
+      registered once the components are mounted and
+      kept alive for the page's whole life. Buttons
+      and cards answer to clicks ("is clicked", "is
+      pressed"); a switch or a text field answers to
+      being changed ("is flipped", "changes"). What
+      can happen: show, hide, or toggle another
+      component, or set a button's or a card's words —
+      "when the save button is clicked, set the
+      card's words to 'Saved'". With several of a
+      kind and no name, the chat asks which one.
+      Plain pages take no events: they stay
+      script-free.
   you> serve static files
       wires the webpage's folder — or one you name:
       "serve static files from jim/temp", "serve the

@@ -527,8 +527,32 @@ the app as Go code, not HTML: `add a card to jim` (or
 `add a card to jim/main.go`) puts the card's builder in
 `jim/components.go` and mounts it on the page, its styles
 joining the host page exactly once — the same Material
-set, one of each per app, rendering and mounting only:
-this set has no click handlers yet.
+set, one of each kind per app. In an app, a component can
+also carry a name — `add a button called save to jim` —
+a second, third button beside the unnamed one, each with
+its own builder; every component's root element carries
+an id: its name when it has one, else its place among its
+kind (`button-1`, `card-1`).
+
+And the app can answer: an event is one sentence —
+`when the save button is clicked, set the card's words to
+'Saved'` (or `... in jim`), `when the switch is flipped,
+toggle the card`. It lands as a Go handler in
+`jim/events.go`: a `js.FuncOf` callback registered on the
+component once the page is mounted, kept in the file's
+list for the page's whole life — a callback Go lets go of
+is garbage-collected and silently stops answering, so
+none of them are let go. Buttons and cards answer to
+clicks; a switch or a text field answers to being
+changed. What can happen is show, hide, or toggle another
+component, or set a button's or a card's words (theirs
+are the components whose words are the whole of what they
+say). With several of a kind mounted and no name in the
+sentence, the chat asks which one — it never guesses.
+Naming a folder works like the other app sentences: no
+folder named means the last app this conversation worked
+on. Plain pages stay script-free: events belong to wasm
+apps alone.
 
 A page's style sheets, scripts, and pictures are files too, and
 the server can serve the whole folder they live in: `serve static

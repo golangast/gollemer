@@ -1561,6 +1561,18 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if hook.run(func() bool { return tryComponent(line, reader) }) {
 			continue
 		}
+		// The wasm events piece (wasmevent.go): one event on
+		// a component in a wasm app — "when the button is
+		// clicked, show the card in jim", "when the switch
+		// is flipped, toggle the card". Seated directly after
+		// the component claim it extends: its sentences open
+		// with "when" and require the whole event shape
+		// (source, event phrase, comma, action), a shape no
+		// neighbouring grammar takes, so the component adds
+		// and everything else keep their claims untouched.
+		if hook.run(func() bool { return tryWasmEvent(line, reader) }) {
+			continue
+		}
 		// Cross-file delegates, claimed deterministically beside
 		// the other write-side parsers: "add a function in
 		// app/main.go that calls store.Load" writes code in one

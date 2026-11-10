@@ -20,15 +20,21 @@ package analyze
 // so the app sets the flag itself, first thing, with the
 // comment naming what it is.
 //
-// Components render and mount only — no event handlers, no
-// js.FuncOf anywhere. A switch in a wasm app is a switch
-// that sits there; nothing in this piece promises a click.
+// Components render and mount from this piece; what they
+// DO — the click and change handlers — is the events
+// piece's business (editwasmevent.go): a builder carries
+// an id attribute precisely so a handler can find its
+// component again, and a component the user names ("add a
+// button called save") is a distinct instance of its kind,
+// its own builder under its own name, where an unnamed
+// component is the kind's one unnamed instance.
 
 import (
 	"fmt"
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strconv"
@@ -445,8 +451,10 @@ import "syscall/js"
 // a function that makes the same elements, with the same
 // classes and the same starter words, as its twin in a
 // plain page. main.go mounts them in the order they were
-// asked for. They render and sit there — this set has no
-// click handlers: nothing here listens for anything.
+// asked for. Each root element carries an id — the name
+// it was given ("add a button called save"), or its place
+// among its kind (button-1) — because the app's events
+// (events.go) find their components by id.
 
 // el makes one element: its tag, its class when it has
 // one, and its text when it has some.
@@ -463,12 +471,85 @@ func el(doc js.Value, tag, class, text string) js.Value {
 
 `
 
-// wasmComponentBuilder renders one component's builder:
-// the same structure and TODO words as the component's
-// HTML snippet (MaterialComponentSnippet), built element
-// by element. The registry has no builder for an id it
-// doesn't know — the second return value says so.
-func wasmComponentBuilder(id string) (string, bool) {
+// wasmBuilderRootVar names the variable each builder
+// keeps its root element in — the variable the id stamp
+// (wasmComponentBuilder) writes through, and the variable
+// the events piece's backfill looks for in a builder this
+// piece wrote before ids existed. One table, read by both.
+var wasmBuilderRootVar = map[string]string{
+	"button":          "b",
+	"tonal-button":    "b",
+	"outlined-button": "b",
+	"text-button":     "b",
+	"card":            "card",
+	"app-bar":         "bar",
+	"navigation-bar":  "nav",
+	"fab":             "b",
+	"chip":            "c",
+	"text-field":      "field",
+	"switch":          "row",
+	"footer":          "foot",
+}
+
+// wasmComponentBuilder renders one component instance's
+// builder: the kind's template (wasmComponentBuilderTemplate)
+// declared under fnName (the kind's own builder name, or
+// a named instance's), with the instance's element id
+// stamped on its root element — the id an event handler
+// looks the component up by. The registry has no builder
+// for an id it doesn't know — the second return value
+// says so.
+func wasmComponentBuilder(id, fnName, elemID string) (string, bool) {
+	body, ok := wasmComponentBuilderTemplate(id)
+	if !ok {
+		return "", false
+	}
+	if plain := wasmBuilderName(id); fnName != plain {
+		body = strings.Replace(body, "func "+plain+"(", "func "+fnName+"(", 1)
+	}
+	return stampWasmBuilderID(body, id, elemID), true
+}
+
+// stampWasmBuilderID writes one builder's element id onto
+// its root element: a Set("id", …) line directly under the
+// line that creates the root (the builder's first
+// ":= el(doc, …)" line, whose variable the root-var table
+// names). The stamp is the ROOT's line specifically — a
+// builder can carry other ids inside it (the navigation
+// bar's menu checkbox has one), and those are not it. A
+// builder that already carries the root stamp, or whose
+// root line is not found, is returned unchanged — the
+// callers that must know (the events planner) check for
+// the stamp themselves before relying on it.
+func stampWasmBuilderID(body, kindID, elemID string) string {
+	rootVar := wasmBuilderRootVar[kindID]
+	if rootVar == "" {
+		return body
+	}
+	if strings.Contains(body, rootVar+`.Set("id", `) {
+		return body
+	}
+	lines := strings.SplitAfter(body, "\n")
+	for i, ln := range lines {
+		if !strings.Contains(ln, ":= el(doc,") {
+			continue
+		}
+		stamp := "\t" + rootVar + ".Set(\"id\", " + strconv.Quote(elemID) + ")\n"
+		out := append([]string{}, lines[:i+1]...)
+		out = append(out, stamp)
+		out = append(out, lines[i+1:]...)
+		return strings.Join(out, "")
+	}
+	return body
+}
+
+// wasmComponentBuilderTemplate renders one component
+// kind's builder under the kind's own builder name: the
+// same structure and TODO words as the component's HTML
+// snippet (MaterialComponentSnippet), built element by
+// element. wasmComponentBuilder renames and stamps it per
+// instance.
+func wasmComponentBuilderTemplate(id string) (string, bool) {
 	switch id {
 	case "button":
 		return `// The filled button.
@@ -572,7 +653,8 @@ func fabComponent(doc js.Value) js.Value {
 	case "chip":
 		return `// A chip: one small labeled pill.
 func chipComponent(doc js.Value) js.Value {
-	return el(doc, "span", "chip", "TODO: the chip's words")
+	c := el(doc, "span", "chip", "TODO: the chip's words")
+	return c
 }
 `, true
 	case "text-field":
@@ -589,8 +671,7 @@ func textFieldComponent(doc js.Value) js.Value {
 `, true
 	case "switch":
 		return `// A switch: the sliding on/off control, in its
-// labeled row. It renders switched off; this set has no
-// handlers, so nothing answers when it's flipped.
+// labeled row. It renders switched off.
 func switchComponent(doc js.Value) js.Value {
 	row := el(doc, "label", "switch-row", "")
 	input := el(doc, "input", "switch", "")
@@ -622,6 +703,167 @@ func footerComponent(doc js.Value) js.Value {
 	return "", false
 }
 
+// wasmNamedBuilderName is a named instance's builder
+// function name: "save" + the button kind builds
+// saveButtonComponent. The name rides in front, the kind
+// behind it, so the builder name alone says which
+// component it builds and what it is called.
+func wasmNamedBuilderName(name, kindID string) string {
+	kind := strings.TrimSuffix(wasmBuilderName(kindID), "Component")
+	if kind != "" {
+		kind = strings.ToUpper(kind[:1]) + kind[1:]
+	}
+	return name + kind + "Component"
+}
+
+// wasmBuilderKind reads a builder function name back: the
+// kind it builds, and — for a named instance's builder —
+// the name prefix in front of the kind ("save" in
+// saveButtonComponent). A plain builder (buttonComponent)
+// reports an empty prefix. The longest kind wins, so
+// saveTextButtonComponent is a text button called save,
+// never a button. A name the builder grammar can't have
+// produced reports "".
+func wasmBuilderKind(fn string) (kindID, namePrefix string) {
+	for _, c := range MaterialComponents {
+		if fn == wasmBuilderName(c.ID) {
+			return c.ID, ""
+		}
+	}
+	best, bestKind := "", ""
+	for _, c := range MaterialComponents {
+		kind := strings.TrimSuffix(wasmBuilderName(c.ID), "Component")
+		suffix := strings.ToUpper(kind[:1]) + kind[1:] + "Component"
+		if strings.HasSuffix(fn, suffix) && len(fn) > len(suffix) && len(suffix) > len(best) {
+			best, bestKind = suffix, c.ID
+		}
+	}
+	if bestKind == "" {
+		return "", ""
+	}
+	return bestKind, fn[:len(fn)-len(best)]
+}
+
+// WasmComponentInstance is one component mounted in a wasm
+// app, read back from the app's own files: its registry
+// kind, the name it was given ("" = unnamed), the element
+// id its root carries (the name, or its place among its
+// kind — "button-1"), and the builder that makes it.
+type WasmComponentInstance struct {
+	Kind    string
+	Name    string
+	ID      string
+	Builder string
+}
+
+// wasmMountRe reads one mount line in main.go's
+// mountComponents — the order mounts appear in the file
+// is the order they were asked for.
+var wasmMountRe = regexp.MustCompile(`app\.Call\("appendChild", (\w+)\(doc\)\)`)
+
+// wasmComponentInstances reads the components an app has
+// mounted, in mount order, from its main.go (the mount
+// lines between the markers) and its components.go (each
+// builder's id stamp). A builder with no stamp — one
+// written before builders carried ids — reports the
+// positional id its place among its kind assigns it, the
+// same id the events planner stamps onto it when an event
+// first reaches for it, so the two readings can never
+// disagree.
+func wasmComponentInstances(mainContent, compContent string) []WasmComponentInstance {
+	begin := strings.Index(mainContent, "// gollemer:components-begin")
+	end := strings.Index(mainContent, "// gollemer:components-end")
+	if begin < 0 || end < 0 || end < begin {
+		return nil
+	}
+	var out []WasmComponentInstance
+	counts := map[string]int{}
+	for _, m := range wasmMountRe.FindAllStringSubmatch(mainContent[begin:end], -1) {
+		fn := m[1]
+		kind, prefix := wasmBuilderKind(fn)
+		if kind == "" {
+			continue
+		}
+		counts[kind]++
+		inst := WasmComponentInstance{Kind: kind, Builder: fn}
+		id, stamped := wasmBuilderStamp(compContent, fn)
+		if stamped {
+			inst.ID = id
+		} else {
+			inst.ID = kind + "-" + strconv.Itoa(counts[kind])
+		}
+		if prefix != "" {
+			// A named instance's name IS its id (the stamp
+			// says so); without a stamp the builder's own
+			// prefix is the only record of it.
+			inst.Name = prefix
+			if stamped {
+				inst.Name = id
+			}
+		}
+		out = append(out, inst)
+	}
+	return out
+}
+
+// wasmBuilderStamp reads one builder's id stamp out of
+// components.go content: the root variable's Set("id", "…")
+// line inside that builder's body — the root's line
+// specifically, since a builder can carry other ids
+// inside it (the navigation bar's menu checkbox has one).
+func wasmBuilderStamp(compContent, fn string) (string, bool) {
+	kind, _ := wasmBuilderKind(fn)
+	rootVar := wasmBuilderRootVar[kind]
+	if rootVar == "" {
+		return "", false
+	}
+	i := strings.Index(compContent, "func "+fn+"(")
+	if i < 0 {
+		return "", false
+	}
+	body := compContent[i:]
+	if j := strings.Index(body, "\n}\n"); j >= 0 {
+		body = body[:j]
+	}
+	probe := rootVar + `.Set("id", "`
+	k := strings.Index(body, probe)
+	if k < 0 {
+		return "", false
+	}
+	rest := body[k+len(probe):]
+	q := strings.Index(rest, `"`)
+	if q < 0 {
+		return "", false
+	}
+	return rest[:q], true
+}
+
+// wasmKindCount counts the mounted instances of one kind.
+func wasmKindCount(instances []WasmComponentInstance, kindID string) int {
+	n := 0
+	for _, in := range instances {
+		if in.Kind == kindID {
+			n++
+		}
+	}
+	return n
+}
+
+// WasmAppComponents reads the components the wasm app in
+// folder has mounted, in the order they were asked for —
+// the chat layer's and the events planner's one reading of
+// the app's contents, from the app's own files.
+func (p *Project) WasmAppComponents(folder string) []WasmComponentInstance {
+	folder = path.Clean(filepath.ToSlash(strings.TrimSpace(folder)))
+	_, mainRel, _, _, _ := wasmAppFiles(folder)
+	mainBefore, err := os.ReadFile(filepath.Join(p.Root, filepath.FromSlash(mainRel)))
+	if err != nil {
+		return nil
+	}
+	compBefore, _ := os.ReadFile(filepath.Join(p.Root, filepath.FromSlash(wasmComponentsRel(folder))))
+	return wasmComponentInstances(string(mainBefore), string(compBefore))
+}
+
 // planComponentWasm is the component piece's wasm mode:
 // the target is an app in a folder, not a page, so the
 // component lands as code — its builder joins the app's
@@ -630,7 +872,12 @@ func footerComponent(doc js.Value) js.Value {
 // ask order, and the styles it needs join the host page's
 // style block exactly once, the variables first when their
 // marker is missing, the component's chunk whole or not at
-// all.
+// all. A component the sentence names ("add a button
+// called save") is a distinct instance of its kind — its
+// own builder, its name as its element id — where an
+// unnamed ask adds the kind's one unnamed instance (a
+// second unnamed ask is the already-there answer) with a
+// positional id: its place among its kind.
 func (p *Project) planComponentWasm(req EditRequest, comp MaterialComponent) (*EditPlan, string) {
 	folder := path.Clean(filepath.ToSlash(strings.TrimSpace(req.WasmFolder)))
 	_, mainRel, _, indexRel, _ := wasmAppFiles(folder)
@@ -658,15 +905,56 @@ func (p *Project) planComponentWasm(req EditRequest, comp MaterialComponent) (*E
 			return nil, fmt.Sprintf("I won't write %s — %s.", p.LinkPath(rel), why)
 		}
 	}
-	builder, ok := wasmComponentBuilder(comp.ID)
-	if !ok {
-		return nil, "that edit needs one of the material components: " + componentFormsText() + "."
-	}
-	fn := wasmBuilderName(comp.ID)
 	compBefore, _ := os.ReadFile(filepath.Join(p.Root, filepath.FromSlash(compRel)))
 	compContent := string(compBefore)
-	if strings.Contains(compContent, "func "+fn+"(") || strings.Contains(main, fn+"(doc)") {
-		return nil, fmt.Sprintf("the wasm app in %s already has a %s in it — nothing to add.", folder, comp.Words)
+	instances := wasmComponentInstances(main, compContent)
+	// The instance this ask adds: a named one is distinct
+	// (its own builder, its name as its id) — a name
+	// belongs to one component in the app, so a taken name
+	// is the already-there answer, for this kind or any
+	// other. An unnamed one is the kind's one unnamed
+	// instance: present already is the already-there
+	// answer it has always been, and its id is its place
+	// among its kind.
+	name := strings.TrimSpace(req.ComponentName)
+	var fn, elemID string
+	if name != "" {
+		for _, in := range instances {
+			if in.Name != name && in.ID == name {
+				// An unnamed instance whose positional id
+				// spells the name: an event reference would
+				// find that one first, so the name is taken
+				// even though nobody gave it.
+				return nil, fmt.Sprintf("the wasm app in %s already has a %s whose id is %s — an event would find that one by this name, so it can't be given to another component. Pick another name.", folder, MaterialComponentWords(in.Kind), name)
+			}
+		}
+		for _, in := range instances {
+			if in.Name != name {
+				continue
+			}
+			if in.Kind == comp.ID {
+				return nil, fmt.Sprintf("the wasm app in %s already has a %s called %s — nothing to add.", folder, comp.Words, name)
+			}
+			return nil, fmt.Sprintf("the wasm app in %s already has a component called %s — its %s — and a name belongs to one component. Pick another name, or add the %s without one.", folder, name, MaterialComponentWords(in.Kind), comp.Words)
+		}
+		fn = wasmNamedBuilderName(name, comp.ID)
+		if clashKind, _ := wasmBuilderKind(fn); clashKind != "" && clashKind != comp.ID {
+			return nil, fmt.Sprintf("a %s called %s would be built by %s — the %s's own builder name — so the two could never be told apart in the app's code. Pick another name.", comp.Words, name, fn, MaterialComponentWords(clashKind))
+		}
+		if strings.Contains(compContent, "func "+fn+"(") {
+			return nil, fmt.Sprintf("%s already declares %s — the builder name a %s called %s would take — so nothing was written. Rename that function, or pick another name.", p.LinkPath(compRel), fn, comp.Words, name)
+		}
+		elemID = name
+	} else {
+		fn = wasmBuilderName(comp.ID)
+		if strings.Contains(compContent, "func "+fn+"(") || strings.Contains(main, fn+"(doc)") {
+			return nil, fmt.Sprintf("the wasm app in %s already has a %s in it — nothing to add.", folder, comp.Words)
+		}
+		elemID = comp.ID + "-" + strconv.Itoa(wasmKindCount(instances, comp.ID)+1)
+	}
+	builder, ok := wasmComponentBuilder(comp.ID, fn, elemID)
+	if !ok {
+		return nil, "that edit needs one of the material components: " + componentFormsText() + "."
 	}
 	// The styles this host page still needs: the variables
 	// when the marker is absent, then the component's chunk
@@ -701,8 +989,12 @@ func (p *Project) planComponentWasm(req EditRequest, comp MaterialComponent) (*E
 	if needCSS != "" {
 		files = append(files, finishFile(indexRel, indexBefore, []byte(newIndex)))
 	}
-	summary := fmt.Sprintf("Put a %s in the wasm app in %s: %s joins %s and is mounted on the page in %s", comp.Words, folder, fn, p.LinkPath(compRel), p.LinkPath(mainRel))
-	verifyDesc := fmt.Sprintf("the wasm app in %s now has a %s mounted on its page", folder, comp.Words)
+	what := comp.Words
+	if name != "" {
+		what += " called " + name
+	}
+	summary := fmt.Sprintf("Put a %s in the wasm app in %s: %s joins %s and is mounted on the page in %s", what, folder, fn, p.LinkPath(compRel), p.LinkPath(mainRel))
+	verifyDesc := fmt.Sprintf("the wasm app in %s now has a %s mounted on its page", folder, what)
 	if needCSS != "" {
 		summary += ", with the Material styles it needs joining the host page's style block in " + p.LinkPath(indexRel)
 		verifyDesc += ", and the styles it needs are in the host page"
@@ -715,7 +1007,7 @@ func (p *Project) planComponentWasm(req EditRequest, comp MaterialComponent) (*E
 		Site:       p.LinkPath(mainRel),
 		Files:      files,
 		Notes: []string{
-			"The " + comp.Words + " renders when the app is built and the page loads — it is a Go builder in the app, not HTML in the page, and this set mounts components without click handlers.",
+			"The " + comp.Words + " renders when the app is built and the page loads — it is a Go builder in the app, not HTML in the page. Its element carries the id \"" + elemID + "\", the name an event finds it by: \"when the button is clicked, show the card\" is how one is added.",
 		},
 		verify: func(after *Project) bool {
 			b, err := os.ReadFile(filepath.Join(after.Root, filepath.FromSlash(compRel)))

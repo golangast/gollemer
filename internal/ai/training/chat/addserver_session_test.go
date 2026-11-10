@@ -118,6 +118,9 @@ func claimChain(line string, ask editAsk, profile *UserProfile) bool {
 	if runComponent(line, ask) {
 		return true
 	}
+	if runWasmEvent(line, ask) {
+		return true
+	}
 	if runDelegate(line, ask) {
 		return true
 	}

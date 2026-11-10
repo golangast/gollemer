@@ -90,10 +90,16 @@ func renderLandingConfirmation(f landingFacts) string {
 		s1 = fmt.Sprintf("The server in %s now serves the %s folder's files at /static/", f.fresh.LinkPath(rel), f.req.StaticFolder)
 	case analyze.EditComponent:
 		if f.req.WasmFolder != "" {
-			s1 = fmt.Sprintf("The %s is in the wasm app in %s", analyze.MaterialComponentWords(f.req.Component), f.fresh.LinkPath(f.req.WasmFolder))
+			if f.req.ComponentName != "" {
+				s1 = fmt.Sprintf("The %s called %s is in the wasm app in %s", analyze.MaterialComponentWords(f.req.Component), f.req.ComponentName, f.fresh.LinkPath(f.req.WasmFolder))
+			} else {
+				s1 = fmt.Sprintf("The %s is in the wasm app in %s", analyze.MaterialComponentWords(f.req.Component), f.fresh.LinkPath(f.req.WasmFolder))
+			}
 		} else {
 			s1 = fmt.Sprintf("The %s is in %s", analyze.MaterialComponentWords(f.req.Component), f.fresh.LinkPath(rel))
 		}
+	case analyze.EditWasmEvent:
+		s1 = confirmWasmEvent(f)
 	case analyze.EditWasmApp:
 		s1 = fmt.Sprintf("The wasm app is in %s", f.fresh.LinkPath(f.req.WasmFolder))
 		s2 = fmt.Sprintf("It builds with Go %s — in %s, run: %s (a first build fetches that toolchain by itself) — and once main.wasm is built, any static server can serve the folder.", analyze.WasmAppGoVersion, f.req.WasmFolder, analyze.WasmBuildCommand)
@@ -177,6 +183,25 @@ func planFileCreated(plan *analyze.EditPlan, rel string) bool {
 		}
 	}
 	return false
+}
+
+// confirmWasmEvent renders the wasm event landing: the
+// event itself, in the sentence that asked for it — with
+// the references resolved against the freshly re-analyzed
+// app first, so a component the sentence named by name
+// alone is spoken of by its kind as well ("the save
+// button"), the way the planner's own rendering speaks.
+func confirmWasmEvent(f landingFacts) string {
+	req := f.req
+	if insts := f.fresh.WasmAppComponents(req.WasmFolder); len(insts) > 0 {
+		if src, _ := analyze.ResolveWasmComponentRef(insts, req.EventSourceKind, req.EventSourceName); src.Builder != "" {
+			req.EventSourceKind = src.Kind
+		}
+		if tgt, _ := analyze.ResolveWasmComponentRef(insts, req.EventTargetKind, req.EventTargetName); tgt.Builder != "" {
+			req.EventTargetKind = tgt.Kind
+		}
+	}
+	return fmt.Sprintf("The event is in the wasm app in %s: %s", f.fresh.LinkPath(req.WasmFolder), analyze.WasmEventSentence(req))
 }
 
 // confirmWire renders the wiring landing: the handler, its
