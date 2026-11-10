@@ -374,6 +374,8 @@ func spineReceiptName(req analyze.EditRequest) string {
 		return req.ConceptName
 	case analyze.EditTaughtDecl:
 		return req.TaughtName
+	case analyze.EditTaughtComponent:
+		return req.ComponentName
 	case analyze.EditProposedDecl:
 		return req.ProposedName
 	case analyze.EditWireHandler:
@@ -409,6 +411,9 @@ func spineReceiptPiece(req analyze.EditRequest) string {
 		return req.Concept.Canonical()
 	}
 	if req.Kind == analyze.EditTaughtDecl {
+		return req.TaughtKindPhrase
+	}
+	if req.Kind == analyze.EditTaughtComponent {
 		return req.TaughtKindPhrase
 	}
 	return string(req.Kind)

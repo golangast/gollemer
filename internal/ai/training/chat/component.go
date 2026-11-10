@@ -189,6 +189,16 @@ func tryComponentList(line string) bool {
 		"what can i add to the page", "what can i add to my page",
 		"list components", "list the components":
 		fmt.Printf("%s %s\n", cTag("gollemer [composer]>"), componentListText())
+		// His own taught components list in their own
+		// group, after the registry's — only when this
+		// project has any, so the registry answer is
+		// byte-identical everywhere else.
+		if taught := taughtComponentsCurrent(); len(taught) > 0 {
+			fmt.Printf("Yours, taught in this project:\n")
+			for _, c := range taught {
+				fmt.Printf("  your %s (taught) — \"add a %s to <app folder>\"\n", c.Kind, c.Kind)
+			}
+		}
 		return true
 	}
 	return false
@@ -543,6 +553,22 @@ func runComponentPartWasm(q componentPartAsk, ask editAsk) bool {
 // page to the shared edit spine. It returns true when the
 // line belonged to this claim at all.
 func runComponent(line string, ask editAsk) bool {
+	// A taught component's sentences first, part then app:
+	// they belong to this claim only when the phrase names
+	// a component taught in this project AND the folder
+	// holds a wasm app — until both readings say yes the
+	// run side claims nothing and prints nothing, exactly
+	// the registry modes' discipline, so every sentence
+	// keeps the fate it has always had. They sit ahead of
+	// the registry parses because a taught phrase is any
+	// length, where the registry parses cap their segment
+	// at three words and would decline (or misread) his.
+	if pq, ok := parseTaughtComponentPart(line); ok && runTaughtComponentPart(pq, ask) {
+		return true
+	}
+	if wq, ok := parseTaughtComponentWasm(line); ok && runTaughtComponentWasm(wq, ask) {
+		return true
+	}
 	// A part target first ("add a chip to the header in
 	// jim"): it belongs to the wasm mode when the folder
 	// holds an app with that part, and to no one here when

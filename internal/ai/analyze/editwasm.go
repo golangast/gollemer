@@ -472,6 +472,141 @@ func wasmHomeRel(folder string) string {
 	return path.Join(folder, "home.go")
 }
 
+// The taught-component slots and marker. A component the
+// user taught the chat (the teach seat's component side,
+// edittaughtcomponent.go) lands as a builder cut from his
+// own example: its source is a template with two slots —
+// TaughtNameSlot where the builder names itself,
+// TaughtIDSlot as the string in its root's id stamp. The
+// landed builder carries a marker comment as its first
+// line, so the app's own files say what the builder is —
+// its kind phrase and the variable its root is kept in —
+// and every reader of the app (the instance readings
+// below, the events planner's stamp lookups) reads taught
+// builders from that marker rather than guessing from the
+// builder's name, which is a name like any other.
+const (
+	TaughtNameSlot = "{{name}}"
+	TaughtIDSlot   = "{{id}}"
+)
+
+// taughtComponentMark is one taught builder's marker
+// facts: the kind phrase it was taught under and the
+// variable its root element is kept in.
+type taughtComponentMark struct {
+	Kind    string // the taught kind phrase ("price tag")
+	RootVar string // the root element's variable ("tag")
+}
+
+// taughtComponentMarkRe reads one marker line:
+// // gollemer:taught-component kind="price tag" root=tag
+var taughtComponentMarkRe = regexp.MustCompile(`^// gollemer:taught-component kind="([^"]+)" root=([A-Za-z_][A-Za-z0-9_]*)\s*$`)
+
+// taughtComponentMarkerLine renders the marker line a
+// taught builder lands under.
+func taughtComponentMarkerLine(kindPhrase, rootVar string) string {
+	return "// gollemer:taught-component kind=" + strconv.Quote(kindPhrase) + " root=" + rootVar
+}
+
+// taughtComponentMarkers reads a components file's taught
+// markers, bound to the builder each belongs to: a marker
+// line belongs to the next function declared after it.
+// Registry builders carry no marker and never appear here.
+func taughtComponentMarkers(content string) map[string]taughtComponentMark {
+	out := map[string]taughtComponentMark{}
+	var pending *taughtComponentMark
+	for _, ln := range strings.Split(content, "\n") {
+		if m := taughtComponentMarkRe.FindStringSubmatch(strings.TrimRight(ln, "\r")); m != nil {
+			pending = &taughtComponentMark{Kind: m[1], RootVar: m[2]}
+			continue
+		}
+		if pending != nil && strings.HasPrefix(ln, "func ") {
+			rest := ln[len("func "):]
+			if i := strings.Index(rest, "("); i > 0 {
+				out[rest[:i]] = *pending
+			}
+			pending = nil
+		}
+	}
+	return out
+}
+
+// wasmTaughtKindCamel renders a taught kind phrase as a
+// Go name part: "price tag" becomes PriceTag — the kind's
+// share of its builders' names.
+func wasmTaughtKindCamel(phrase string) string {
+	var b strings.Builder
+	for _, w := range strings.Fields(phrase) {
+		if w == "" {
+			continue
+		}
+		b.WriteString(strings.ToUpper(w[:1]) + w[1:])
+	}
+	return b.String()
+}
+
+// wasmTaughtBuilderName is a taught kind's own builder
+// name — the kind's camel form with a small first letter:
+// "price tag" builds priceTagComponent, the registry
+// builders' own shape.
+func wasmTaughtBuilderName(phrase string) string {
+	camel := wasmTaughtKindCamel(phrase)
+	if camel == "" {
+		return ""
+	}
+	return strings.ToLower(camel[:1]) + camel[1:] + "Component"
+}
+
+// wasmTaughtNamedBuilderName is a named taught instance's
+// builder name: the name in front, the kind behind it —
+// "total" + "price tag" builds totalPriceTagComponent,
+// wasmNamedBuilderName's shape for a taught kind.
+func wasmTaughtNamedBuilderName(name, phrase string) string {
+	return name + wasmTaughtKindCamel(phrase) + "Component"
+}
+
+// wasmTaughtKindSlug renders a taught kind phrase as an
+// element-id part: "price tag" becomes "price-tag" — the
+// base of an unnamed instance's positional id
+// ("price-tag-1"), the registry ids' own shape.
+func wasmTaughtKindSlug(phrase string) string {
+	return strings.Join(strings.Fields(phrase), "-")
+}
+
+// taughtInstanceFor reads one mounted builder as a taught
+// component instance, when the components content carries
+// its marker: its kind is the taught phrase, its id and
+// name read exactly as a registry instance's do (the
+// stamp first, the positional id — the kind's slug and
+// its place among its kind — without one). counts is the
+// caller's per-kind tally, shared with the registry
+// reading so places among a kind never repeat.
+func taughtInstanceFor(fn, compContent string, counts map[string]int) (WasmComponentInstance, bool) {
+	mark, ok := taughtComponentMarkers(compContent)[fn]
+	if !ok {
+		return WasmComponentInstance{}, false
+	}
+	counts[mark.Kind]++
+	inst := WasmComponentInstance{Kind: mark.Kind, Builder: fn, Taught: true}
+	prefix := ""
+	if plain := wasmTaughtBuilderName(mark.Kind); fn != plain {
+		suffix := wasmTaughtKindCamel(mark.Kind) + "Component"
+		if strings.HasSuffix(fn, suffix) && len(fn) > len(suffix) {
+			prefix = fn[:len(fn)-len(suffix)]
+		}
+	}
+	if id, stamped := wasmBuilderStamp(compContent, fn); stamped {
+		inst.ID = id
+		if prefix != "" {
+			inst.Name = id
+		}
+	} else {
+		inst.ID = wasmTaughtKindSlug(mark.Kind) + "-" + strconv.Itoa(counts[mark.Kind])
+		inst.Name = prefix
+	}
+	return inst, true
+}
+
 // wasmBuilderName is a component's builder function name:
 // "card" builds cardComponent, "tonal-button" builds
 // tonalButtonComponent.
@@ -813,6 +948,12 @@ type WasmComponentInstance struct {
 	Builder string
 	Part    string
 	Root    bool
+	// Taught marks a component the user taught the chat
+	// (its builder carries the taught marker): its Kind is
+	// the taught phrase, not a registry id — the events
+	// planner's closed sets read this flag, since a taught
+	// kind is in none of their tables.
+	Taught bool
 }
 
 // wasmMountRe reads one mount line in main.go's
@@ -839,6 +980,14 @@ func wasmComponentInstances(mainContent, compContent string) []WasmComponentInst
 	counts := map[string]int{}
 	for _, m := range wasmMountRe.FindAllStringSubmatch(mainContent[begin:end], -1) {
 		fn := m[1]
+		// A taught builder is read from its marker first:
+		// its name is a name like any other and could read
+		// as a registry builder's — the marker is the
+		// app's own record of what it is.
+		if inst, ok := taughtInstanceFor(fn, compContent, counts); ok {
+			out = append(out, inst)
+			continue
+		}
 		kind, prefix := wasmBuilderKind(fn)
 		if kind == "" {
 			continue
@@ -870,9 +1019,16 @@ func wasmComponentInstances(mainContent, compContent string) []WasmComponentInst
 // line inside that builder's body — the root's line
 // specifically, since a builder can carry other ids
 // inside it (the navigation bar's menu checkbox has one).
+// A taught builder's root variable comes from its marker,
+// not the registry's table.
 func wasmBuilderStamp(compContent, fn string) (string, bool) {
-	kind, _ := wasmBuilderKind(fn)
-	rootVar := wasmBuilderRootVar[kind]
+	rootVar := ""
+	if mark, ok := taughtComponentMarkers(compContent)[fn]; ok {
+		rootVar = mark.RootVar
+	} else {
+		kind, _ := wasmBuilderKind(fn)
+		rootVar = wasmBuilderRootVar[kind]
+	}
 	if rootVar == "" {
 		return "", false
 	}

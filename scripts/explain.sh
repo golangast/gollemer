@@ -212,6 +212,10 @@ below tell their stories:
       builder ("add a card to jim/main.go" works too)
   add a button called save to jim — a component with a
       name; the name is its id
+  learn this component as a price tag from PriceTag in
+      proto/components.go — teach it a component of your
+      own, from one builder in your project; from then on
+      it adds like any other component, in this project
   when the save button is clicked, set the card's words to
       'Saved' — an event: clicks and changes answered in
       the browser; show, hide, toggle, or set words
@@ -273,7 +277,9 @@ below tell their stories:
       (or fab), chip, text field, switch, footer — its styles
       carried in exactly once, never twice. "to the page"
       is the webpage you last made or filled here; "what
-      components can I add" lists the whole set.
+      components can I add" lists the whole set — and
+      components you've taught it yourself, in this
+      project, in their own group, marked as yours.
   you> add a templated page called home in jim
       a page in separate files, joined by Go templates:
       jim/templates/header.html (the head, the Material
@@ -479,6 +485,38 @@ Teach it a piece of your own, from one example in your project:
       book, never over it. Functions and types only: no
       methods, no pasted snippets, and nothing is learned from
       ordinary conversation — only the teach sentences teach.
+
+Teach it a component of your own, from one builder in your
+project:
+
+  you> learn this component as a price tag from PriceTag in proto/components.go
+      the chat reads PriceTag's builder — a function in the
+      registry builders' own shape, func <Name>(doc
+      js.Value) js.Value, its elements made with the app's
+      el helper (el(doc, tag, class, text)) and its root
+      stamped with its id the registry way,
+      tag.Set("id", "..."), under the line that creates it —
+      and keeps it as a component kind of yours, in the
+      same store. A builder without the stamp is refused,
+      with exactly that said: the app's mounts and events
+      find the component by that id.
+  you> add a price tag to jim  /  add a price tag called total to jim
+      the builder lands in the app like a built-in — its
+      own builder per instance, stamped with the
+      instance's id (its name, or its place among its
+      kind) — in the body, or in a part ("... to the
+      header in jim"). Its classes come with it, but no
+      styles travel with a taught component in this first
+      version, and the teach summary says so plainly.
+  you> when the price tag is clicked, show the card in jim
+      a taught component answers a click and can be shown,
+      hidden, or toggled, like a built-in; setting its
+      words is not offered — its words are its own.
+      Components you've taught list under "what components
+      can I add" in their own group, marked (taught); a
+      taught component belongs to the project it was
+      taught in, may never take a built-in component's
+      name, and "forget the price tag" removes it.
 
 Make a function in one file and call it from another, in one ask:
 

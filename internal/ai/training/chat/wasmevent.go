@@ -284,6 +284,21 @@ func runWasmEvent(line string, ask editAsk) bool {
 // component's name filled in.
 func runWasmEventAsk(q wasmEventAsk, ask editAsk) bool {
 	tag := cTag("gollemer [composer]>")
+	// A reference the registry parse couldn't read settles
+	// against this project's taught components before the
+	// no-such-component answers: the whole phrase as a
+	// kind, then a name in front of a kind. A phrase that
+	// is neither keeps the registry's answer untouched.
+	for _, ref := range []*wasmEventRef{&q.source, &q.target} {
+		if ref.unknown == "" {
+			continue
+		}
+		if phrase, ok := taughtComponentRefKind(ref.unknown); ok {
+			ref.kind, ref.unknown = phrase, ""
+		} else if name, phrase, ok := taughtComponentRefNamed(ref.unknown); ok {
+			ref.name, ref.kind, ref.unknown = name, phrase, ""
+		}
+	}
 	if unknown := q.source.unknown; unknown != "" {
 		fmt.Printf("%s There's no component called %q in the set an event can use — the components are: %s.\n", tag, unknown, strings.Join(analyze.MaterialComponentForms(), ", "))
 		recordBrain("composer", false, "wasm event refused: unknown source component")
@@ -355,6 +370,10 @@ func runWasmEventAsk(q wasmEventAsk, ask editAsk) bool {
 	// and the answer re-enters here with the name filled
 	// in, every fact re-read from the app as it stands.
 	instances := lastAnalyzeProject.WasmAppComponents(folderRel)
+	// The one-word taught kind's settle, against the app
+	// as it stands (settleTaughtEventRef says the rule).
+	q.source = settleTaughtEventRef(q.source, instances)
+	q.target = settleTaughtEventRef(q.target, instances)
 	if _, cands := analyze.ResolveWasmComponentRef(instances, q.source.kind, q.source.name); len(cands) > 0 {
 		return askWasmEventPick(tag, q, cands, true, ask)
 	}

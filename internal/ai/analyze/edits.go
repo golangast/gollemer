@@ -239,6 +239,17 @@ const (
 	// user's own data, carried verbatim.
 	EditTaughtDecl = "taught_decl"
 
+	// Taught components (edittaughtcomponent.go): a wasm
+	// component the user taught the chat from a builder
+	// example in their own project (the teach seat's
+	// component side) — the builder's source carried as a
+	// template whose two slots (its function name, its root
+	// element's id) this planner stamps per instance, landed
+	// in a wasm app's body or part exactly the way a registry
+	// component lands. The template is the user's own data,
+	// carried verbatim.
+	EditTaughtComponent = "taught_component"
+
 	// Instantiation (editinstantiate.go): a statement making a
 	// value of an existing project type, inserted at the end of
 	// an existing project function.
@@ -625,6 +636,25 @@ type EditRequest struct {
 	TaughtKindPhrase string
 	TaughtImports    string
 	TaughtNote       string
+
+	// taught_component: the taught builder's source, carried
+	// verbatim from the user's example with its two slots
+	// unfilled — TaughtNameSlot where the builder names
+	// itself, TaughtIDSlot as the string in its root's id
+	// stamp — which the planner stamps per instance (the
+	// derived builder name, the instance's element id).
+	// TaughtComponentRootVar is the variable the example
+	// keeps its root element in (the stamp writes through
+	// it, and the landed builder's marker line carries it).
+	// TaughtComponentStyled says the example's builder gives
+	// its elements classes — the plan's honesty note: no
+	// styles travel with a taught component in this version.
+	// The kind's phrase rides TaughtKindPhrase, the target
+	// the shared component slots (WasmFolder, ComponentName,
+	// ComponentPart), and the provenance line TaughtNote.
+	TaughtComponentTemplate string
+	TaughtComponentRootVar  string
+	TaughtComponentStyled   bool
 }
 
 // EditFile is one file's before/after pair inside a plan.
@@ -740,6 +770,8 @@ func (p *Project) PlanEdit(req EditRequest) (*EditPlan, string) {
 		return p.planProposedDecl(req)
 	case EditTaughtDecl:
 		return p.planTaughtDecl(req)
+	case EditTaughtComponent:
+		return p.planTaughtComponent(req)
 	case EditInstantiate:
 		return p.planInstantiate(req)
 	case EditRenameParam, EditReorderParams, EditAddParam:

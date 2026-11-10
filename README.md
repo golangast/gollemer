@@ -489,6 +489,10 @@ And the wasm chain — a page that is a program:
   card to jim/main.go`)
 - `add a button called save to jim` — a component with a
   name; the name is its id
+- `learn this component as a price tag from PriceTag in
+  proto/components.go` — teach it a component of your own,
+  from one builder in your project; from then on it adds
+  like any other component, in this project
 - `when the save button is clicked, set the card's words to
   'Saved'` — an event: clicks and changes answered in the
   browser; show, hide, toggle, or set words
@@ -548,7 +552,9 @@ a **floating button** (or fab), a
 jim/temp/index.html`, or `add a card to the page` ("the page"
 is the webpage you last made or filled in this chat). The
 component's styles come with it the first time and never
-twice. Ask `what components can I add` for the whole set.
+twice. Ask `what components can I add` for the whole set —
+and components you've taught it yourself, in this project,
+list there too, in their own group, marked as yours.
 
 A page can also be built the way real sites are: a header and
 a footer written once, and each page's own body between them.
@@ -622,7 +628,12 @@ also carry a name — `add a button called save to jim` —
 a second, third button beside the unnamed one, each with
 its own builder; every component's root element carries
 an id: its name when it has one, else its place among its
-kind (`button-1`, `card-1`).
+kind (`button-1`, `card-1`). A component can also be one
+of yours — teach the chat from one builder in your
+project (`learn this component as a price tag from
+PriceTag in proto/components.go`) and it adds like a
+built-in, in the project you taught it in; the teach
+section below tells that story whole.
 
 And the app can answer: an event is one sentence —
 `when the save button is clicked, set the card's words to
@@ -955,6 +966,72 @@ can't be taught (it belongs to its receiver's type), and there
 is no pasting a snippet in — the example has to be a declaration
 in the project, so the chat reads its real shape instead of
 guessing one.
+
+#### Teach it a component of your own
+
+A wasm component can be taught the same way, from one DOM
+builder in your project — a function in the registry
+builders' own shape: `func PriceTag(doc js.Value) js.Value`,
+building its elements with the app's `el` helper in the
+helper's own shape (`el(doc, tag, class, text)`) and
+stamping its root element's id the registry way,
+`tag.Set("id", "...")`, under the line that creates it.
+That stamp is the contract's load-bearing line — the app's
+mounts and events find the component by its id — so a
+builder without it is refused, with exactly that said:
+
+```
+you> learn this component as a price tag from PriceTag in proto/components.go
+gollemer [composer]> Here's what I learned from PriceTag in proto/components.go:
+  The kind: "price tag" — from here on, "add a price tag to <app folder>" adds one to a wasm app here, and "add a price tag called <name> to <app folder>" adds a named one.
+  The example: the builder PriceTag, at proto/components.go:19.
+  What varies: the builder's name — each copy is stamped with its own — and the root element's id: a named price tag carries its name as its id, an unnamed one its place among its kind ("price-tag-1"). And where it lands: the app's body, or its header or footer.
+  What stays fixed: everything else — the builder's code stays exactly as in PriceTag.
+  Styles: PriceTag gives its elements classes, and the classes come with it — but no styles travel with a taught component in this first version, so it shows styled only where the page's styles already cover those classes.
+  Saved as yours: it lives in ~/.gollemer_taught.json, and it belongs to this project — the one PriceTag was taught in. Say "forget the price tag" to remove it.
+
+you> add a price tag to jim
+gollemer [composer]> Here's the edit I assembled from this project's own code:
+
+Put a price tag in the wasm app in jim: priceTagComponent joins jim/components.go and is mounted on the page in jim/main.go
+From your example PriceTag in proto/components.go, taught Nov 10, 2026.
+The price tag renders when the app is built and the page loads — it is a Go builder in the app, not HTML in the page. Its element carries the id "price-tag-1", the name an event finds it by: "when the button is clicked, show the price tag" is how one is added.
+...
+Apply this edit? [y/n] gollemer [composer]> Done — The price tag is in the wasm app in jim. I built the project and checked that it's really there.
+
+you> when the price tag is clicked, show the card in jim
+gollemer [composer]> Here's the edit I assembled from this project's own code:
+
+Give the wasm app in jim an event: when the price tag is clicked, show the card. The handler onPriceTag1ClickShowCard1 joins jim/events.go, registered after the components mount in jim/main.go.
+...
+Apply this edit? [y/n] gollemer [composer]> Done — The event is in the wasm app in jim: when the price tag is clicked, show the card. I built the project and checked that it's really there.
+```
+
+(From a real run of the chat in a scratch project,
+2026-11-10 — taught, added, and wired in one sitting, and
+the app then built for the browser with the taught
+builders in it.)
+
+From there it behaves like a built-in: `add a price tag
+called total to jim` gives it a name (the name is its id),
+`add a price tag to the header in jim` puts it in a part,
+and events can start from it — it answers a click, like a
+button or a card — and can show, hide, or toggle it. Two
+honest limits: setting its words is not offered (its words
+are its own, and the sentence gets the same refusal any
+kind outside the button-and-card set gets), and no styles
+travel with it in this first version — its classes come
+with it, and the page shows it styled only where its own
+styles already cover those classes. A taught component
+belongs to the project it was taught in, since its builder
+leans on that project's helpers, and it can never take a
+built-in component's name: the registry wins its own
+names, refused plainly at teach time. The builder has to
+lean only on `syscall/js` and the app's own helpers — it
+travels into the project's apps on its own. `what
+components can I add` lists yours in their own group,
+marked `(taught)`, and `forget the price tag` removes it,
+like any taught kind.
 
 ### Make a function in one file and call it from another
 

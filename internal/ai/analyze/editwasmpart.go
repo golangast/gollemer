@@ -273,6 +273,13 @@ func wasmPartInstances(partContent, partCompContent, part string) []WasmComponen
 	}
 	for _, m := range wasmPartMountRe.FindAllStringSubmatch(partContent[begin:end], -1) {
 		fn := m[1]
+		// A taught builder is read from its marker first,
+		// as in the body's reading (wasmComponentInstances).
+		if inst, ok := taughtInstanceFor(fn, partCompContent, counts); ok {
+			inst.Part = part
+			out = append(out, inst)
+			continue
+		}
 		kind, prefix := wasmBuilderKind(fn)
 		if kind == "" {
 			continue

@@ -82,6 +82,10 @@ type taughtKind struct {
 type taughtKindData struct {
 	Version int          `json:"version"`
 	Kinds   []taughtKind `json:"kinds,omitempty"`
+	// Components are the kinds taught as wasm components
+	// (taughtcomponents.go): the same seat, another cut of
+	// example — a DOM builder rather than a declaration.
+	Components []taughtComponent `json:"components,omitempty"`
 }
 
 func emptyTaughtKindData() taughtKindData { return taughtKindData{Version: 1} }
@@ -92,6 +96,9 @@ func normalizeTaughtKindData(d taughtKindData) taughtKindData {
 	}
 	if d.Kinds == nil {
 		d.Kinds = []taughtKind{}
+	}
+	if d.Components == nil {
+		d.Components = []taughtComponent{}
 	}
 	return d
 }
@@ -707,6 +714,14 @@ func runTaughtKinds(line string, ask editAsk) bool {
 	if handled := runTaughtManage(line); handled {
 		return true
 	}
+	// A component ask is tried before the declaration ask:
+	// its "component" word sits where the declaration
+	// grammar reads a kind phrase, so the declaration
+	// parser would claim the sentence for the wrong seat.
+	if ta, ok := parseTeachComponentAsk(line); ok {
+		runTeachComponent(ta)
+		return true
+	}
 	if ta, ok := parseTeachAsk(line); ok {
 		runTeach(ta)
 		return true
@@ -789,6 +804,13 @@ func runTeach(ta teachAsk) {
 	if old := data.findTaughtKind(kind); old != nil {
 		fmt.Printf("%s Not learning that: you've already taught me a %q — %s If you want to teach me a different one under this name, forget that one first: say \"forget the %s\".\n", tag, kind, old.provenance(), kind)
 		recordBrain("composer", false, "taught refused: kind already taught")
+		return
+	}
+	// One phrase can't be both a piece and a component: a
+	// later "add a <kind>" would have two seats claiming it.
+	if old := data.findAnyTaughtComponent(kind); old != nil {
+		fmt.Printf("%s Not learning that: you've already taught me a component called %q — %s A name is one piece or one component, never both. If you want to teach me a piece under this name, forget the component first: say \"forget the %s\".\n", tag, kind, old.provenance(), kind)
+		recordBrain("composer", false, "taught refused: kind is a taught component")
 		return
 	}
 
@@ -1002,6 +1024,16 @@ func runTaughtUse(line string, u taughtUseAsk, ask editAsk) bool {
 	}
 	entry := data.findTaughtKind(u.kind)
 	if entry == nil {
+		// A kind taught as a COMPONENT in this project is
+		// answered with the component's own guidance: it is
+		// known, just not a declaration — the decl guidance
+		// below would mislead ("teach me" for a kind he
+		// already taught).
+		if comp := taughtComponentHere(u.kind); comp != nil {
+			fmt.Printf("%s %q is a component you taught me, not a piece I assemble into a file — add it to a wasm app instead: say \"add a %s to <app folder>\", or \"add a %s called <name> to <app folder>\" for a named one.\n", tag, u.kind, u.kind, u.kind)
+			recordBrain("composer", false, "taught use refused: kind is a taught component")
+			return true
+		}
 		// A complete use shape naming a kind nobody taught
 		// (and no family owns) gets the honest answer here —
 		// the alternative is the boundary's generic one, and
@@ -1115,16 +1147,31 @@ func listTaughtKinds() {
 		recordBrain("composer", false, "taught list refused: store unreadable")
 		return
 	}
-	if len(data.Kinds) == 0 {
+	if len(data.Kinds) == 0 && len(data.Components) == 0 {
 		fmt.Printf("%s You haven't taught me any pieces yet. Teach me one from a declaration in your project — say \"learn a sidebar page from Jake in jim/main.go\" — and I'll keep its shape as yours, in every project.\n", tag)
 		recordBrain("composer", true, "taught listed: none")
 		return
 	}
-	fmt.Printf("%s What you've taught me:\n", tag)
-	for _, k := range data.Kinds {
-		fmt.Printf("  %q — from your example %s (%s) in %s, taught %s.\n", k.Kind, k.Example, k.DeclKind, k.File, taughtDate(k.TaughtAt))
+	if len(data.Kinds) > 0 {
+		fmt.Printf("%s What you've taught me:\n", tag)
+		for _, k := range data.Kinds {
+			fmt.Printf("  %q — from your example %s (%s) in %s, taught %s.\n", k.Kind, k.Example, k.DeclKind, k.File, taughtDate(k.TaughtAt))
+		}
+		fmt.Printf("  Use one by its kind — \"add a <kind> named <Name> to <file>\" — or remove one with \"forget the <kind>\".\n")
 	}
-	fmt.Printf("  Use one by its kind — \"add a <kind> named <Name> to <file>\" — or remove one with \"forget the <kind>\".\n")
+	// Taught components list in their own group, with the
+	// project each belongs to: a component is taught in one
+	// project and adds to its wasm apps.
+	if len(data.Components) > 0 {
+		if len(data.Kinds) == 0 {
+			fmt.Printf("%s What you've taught me:\n", tag)
+		}
+		fmt.Printf("  Components:\n")
+		for _, c := range data.Components {
+			fmt.Printf("  %q (component) — from your example %s in %s, taught in the %s project, %s.\n", c.Kind, c.Example, c.File, filepath.Base(c.Root), taughtDate(c.TaughtAt))
+		}
+		fmt.Printf("  Add one to a wasm app in its project — \"add a <kind> to <app folder>\" — or remove one with \"forget the <kind>\".\n")
+	}
 	recordBrain("composer", true, "taught listed")
 }
 
@@ -1150,13 +1197,42 @@ func forgetTaughtKind(kind string) {
 			return
 		}
 	}
-	if len(data.Kinds) == 0 {
+	// Components forget by the same shape, after the pieces:
+	// one phrase is one seat, and the pieces' precedence is
+	// the seat's established order. A phrase taught as a
+	// component in more than one project leaves all of them.
+	var gone []taughtComponent
+	var kept []taughtComponent
+	for _, c := range data.Components {
+		if c.Kind == kind {
+			gone = append(gone, c)
+		} else {
+			kept = append(kept, c)
+		}
+	}
+	if len(gone) > 0 {
+		data.Components = kept
+		if err := saveTaughtKinds(data); err != nil {
+			fmt.Printf("%s I couldn't update your taught-pieces store (%s): %v — nothing was forgotten.\n", tag, taughtStorePath(), err)
+			recordBrain("composer", false, "taught forget refused: store unwritable")
+			return
+		}
+		for _, c := range gone {
+			fmt.Printf("%s Forgotten: your %q component — from your example %s in %s. I won't add it to an app again.\n", tag, c.Kind, c.Example, c.File)
+		}
+		recordBrain("composer", true, "taught forgotten: "+kind)
+		return
+	}
+	names := make([]string, 0, len(data.Kinds)+len(data.Components))
+	for _, k := range data.Kinds {
+		names = append(names, fmt.Sprintf("%q", k.Kind))
+	}
+	for _, c := range data.Components {
+		names = append(names, fmt.Sprintf("%q", c.Kind))
+	}
+	if len(names) == 0 {
 		fmt.Printf("%s You haven't taught me a %q — you haven't taught me anything yet, so there's nothing to forget.\n", tag, kind)
 	} else {
-		names := make([]string, 0, len(data.Kinds))
-		for _, k := range data.Kinds {
-			names = append(names, fmt.Sprintf("%q", k.Kind))
-		}
 		fmt.Printf("%s You haven't taught me a %q — the pieces you have taught me are %s. Nothing was forgotten.\n", tag, kind, strings.Join(names, " and "))
 	}
 	recordBrain("composer", true, "taught forget: no such kind")
@@ -1170,17 +1246,21 @@ func forgetAllTaughtKinds() {
 		recordBrain("composer", false, "taught forget refused: store unreadable")
 		return
 	}
-	if len(data.Kinds) == 0 {
+	if len(data.Kinds) == 0 && len(data.Components) == 0 {
 		fmt.Printf("%s You haven't taught me anything yet — nothing to forget.\n", tag)
 		recordBrain("composer", true, "taught forget: none")
 		return
 	}
-	parts := make([]string, 0, len(data.Kinds))
+	parts := make([]string, 0, len(data.Kinds)+len(data.Components))
 	for _, k := range data.Kinds {
 		parts = append(parts, fmt.Sprintf("%q (from %s in %s)", k.Kind, k.Example, k.File))
 	}
-	n := len(data.Kinds)
+	for _, c := range data.Components {
+		parts = append(parts, fmt.Sprintf("%q (component, from %s in %s)", c.Kind, c.Example, c.File))
+	}
+	n := len(data.Kinds) + len(data.Components)
 	data.Kinds = []taughtKind{}
+	data.Components = []taughtComponent{}
 	if err := saveTaughtKinds(data); err != nil {
 		fmt.Printf("%s I couldn't update your taught-pieces store (%s): %v — nothing was forgotten.\n", tag, taughtStorePath(), err)
 		recordBrain("composer", false, "taught forget refused: store unwritable")

@@ -306,7 +306,7 @@ func noteSpineLanded(req analyze.EditRequest, plan *analyze.EditPlan, root strin
 	// app with them: the app created, a component into it,
 	// or an event into it — the folder an event sentence
 	// with no folder of its own resolves to.
-	if req.WasmFolder != "" && (req.Kind == analyze.EditWasmApp || req.Kind == analyze.EditComponent || req.Kind == analyze.EditWasmEvent || req.Kind == analyze.EditWasmPart) {
+	if req.WasmFolder != "" && (req.Kind == analyze.EditWasmApp || req.Kind == analyze.EditComponent || req.Kind == analyze.EditTaughtComponent || req.Kind == analyze.EditWasmEvent || req.Kind == analyze.EditWasmPart) {
 		workCtx.wasmFolder = req.WasmFolder
 	}
 	noteSpineSnapshot(req, rel)

@@ -108,6 +108,21 @@ func renderLandingConfirmation(f landingFacts) string {
 		} else {
 			s1 = fmt.Sprintf("The %s is in %s", analyze.MaterialComponentWords(f.req.Component), f.fresh.LinkPath(rel))
 		}
+	case analyze.EditTaughtComponent:
+		// A taught component confirms in the registry
+		// component's own words, with the user's phrase in
+		// the kind's place.
+		if f.req.ComponentPart != "" {
+			if f.req.ComponentName != "" {
+				s1 = fmt.Sprintf("The %s called %s is in the %s of the wasm app in %s", f.req.TaughtKindPhrase, f.req.ComponentName, f.req.ComponentPart, f.fresh.LinkPath(f.req.WasmFolder))
+			} else {
+				s1 = fmt.Sprintf("The %s is in the %s of the wasm app in %s", f.req.TaughtKindPhrase, f.req.ComponentPart, f.fresh.LinkPath(f.req.WasmFolder))
+			}
+		} else if f.req.ComponentName != "" {
+			s1 = fmt.Sprintf("The %s called %s is in the wasm app in %s", f.req.TaughtKindPhrase, f.req.ComponentName, f.fresh.LinkPath(f.req.WasmFolder))
+		} else {
+			s1 = fmt.Sprintf("The %s is in the wasm app in %s", f.req.TaughtKindPhrase, f.fresh.LinkPath(f.req.WasmFolder))
+		}
 	case analyze.EditWasmEvent:
 		s1 = confirmWasmEvent(f)
 	case analyze.EditWasmPart:

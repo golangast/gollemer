@@ -357,6 +357,13 @@ func stampExistingWasmBuilder(compContent, fn, kindID, elemID string) (string, b
 		return compContent, false
 	}
 	rootVar := wasmBuilderRootVar[kindID]
+	if rootVar == "" {
+		// A taught builder's root variable is its marker's,
+		// not the registry table's.
+		if mark, ok := taughtComponentMarkers(compContent)[fn]; ok {
+			rootVar = mark.RootVar
+		}
+	}
 	for i := startLine; i <= endLine; i++ {
 		ln := lines[i]
 		if strings.Contains(ln, rootVar+`.Set("id", `) {
@@ -454,7 +461,14 @@ func (p *Project) planWasmEvent(req EditRequest) (*EditPlan, string) {
 	// whose words are its whole content.
 	switch req.EventName {
 	case "click":
-		if !wasmClickKinds[src.Kind] {
+		// A taught component answers a click by its whole
+		// contract — it has a root element with an id — so
+		// it stands with the click kinds though its phrase
+		// is in no table. Changing is not its event, and
+		// setting its words is refused below like every
+		// kind outside the set-words set: its words are
+		// its own.
+		if !wasmClickKinds[src.Kind] && !src.Taught {
 			if wasmChangeKinds[src.Kind] {
 				return nil, fmt.Sprintf("a %s has no click to answer — it answers to being changed instead: \"when %s, …\" is its event. Clicks belong to buttons and cards.", MaterialComponentWords(src.Kind), WasmComponentRefWords(src.Kind, src.Name)+" "+wasmEventVerbWords(EditRequest{EventName: "change", EventSourceKind: src.Kind}))
 			}
