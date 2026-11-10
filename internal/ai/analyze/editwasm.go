@@ -748,12 +748,20 @@ func wasmBuilderKind(fn string) (kindID, namePrefix string) {
 // app, read back from the app's own files: its registry
 // kind, the name it was given ("" = unnamed), the element
 // id its root carries (the name, or its place among its
-// kind — "button-1"), and the builder that makes it.
+// kind — "button-1"), and the builder that makes it. Part
+// names the app part it lives in ("" = the app's body —
+// main.go's own components block; "header" / "footer" =
+// that part's package, editwasmpart.go), and Root marks a
+// part's own root component (the header part's app bar,
+// the footer part's footer), whose builder lives in the
+// part's own file rather than its components file.
 type WasmComponentInstance struct {
 	Kind    string
 	Name    string
 	ID      string
 	Builder string
+	Part    string
+	Root    bool
 }
 
 // wasmMountRe reads one mount line in main.go's
@@ -850,9 +858,13 @@ func wasmKindCount(instances []WasmComponentInstance, kindID string) int {
 }
 
 // WasmAppComponents reads the components the wasm app in
-// folder has mounted, in the order they were asked for —
-// the chat layer's and the events planner's one reading of
-// the app's contents, from the app's own files.
+// folder has mounted, in the order they appear on the
+// page — the header part's components, then the body's,
+// then the footer part's (editwasmpart.go) — the chat
+// layer's and the events planner's one reading of the
+// app's contents, from the app's own files. Body + parts
+// are one app for reference resolution: an event names a
+// component wherever in the app it lives.
 func (p *Project) WasmAppComponents(folder string) []WasmComponentInstance {
 	folder = path.Clean(filepath.ToSlash(strings.TrimSpace(folder)))
 	_, mainRel, _, _, _ := wasmAppFiles(folder)
@@ -861,7 +873,7 @@ func (p *Project) WasmAppComponents(folder string) []WasmComponentInstance {
 		return nil
 	}
 	compBefore, _ := os.ReadFile(filepath.Join(p.Root, filepath.FromSlash(wasmComponentsRel(folder))))
-	return wasmComponentInstances(string(mainBefore), string(compBefore))
+	return p.wasmAppAllInstances(folder, string(mainBefore), string(compBefore))
 }
 
 // planComponentWasm is the component piece's wasm mode:
@@ -879,6 +891,12 @@ func (p *Project) WasmAppComponents(folder string) []WasmComponentInstance {
 // second unnamed ask is the already-there answer) with a
 // positional id: its place among its kind.
 func (p *Project) planComponentWasm(req EditRequest, comp MaterialComponent) (*EditPlan, string) {
+	if req.ComponentPart != "" {
+		// A part target ("add a chip to the footer in
+		// jim") lands inside the part's own package —
+		// planComponentWasmPart (editwasmpart.go).
+		return p.planComponentWasmPart(req, comp)
+	}
 	folder := path.Clean(filepath.ToSlash(strings.TrimSpace(req.WasmFolder)))
 	_, mainRel, _, indexRel, _ := wasmAppFiles(folder)
 	compRel := wasmComponentsRel(folder)
@@ -907,7 +925,14 @@ func (p *Project) planComponentWasm(req EditRequest, comp MaterialComponent) (*E
 	}
 	compBefore, _ := os.ReadFile(filepath.Join(p.Root, filepath.FromSlash(compRel)))
 	compContent := string(compBefore)
-	instances := wasmComponentInstances(main, compContent)
+	// The app as a whole, parts included: a component's
+	// name belongs to one component in the APP (an event
+	// finds it by name, wherever it lives), and a new
+	// unnamed instance's positional id counts its kind
+	// across the whole app, so two parts can never stamp
+	// the same id onto two different elements. For an app
+	// with no parts the two readings are the same list.
+	allInstances := p.wasmAppAllInstances(folder, main, compContent)
 	// The instance this ask adds: a named one is distinct
 	// (its own builder, its name as its id) — a name
 	// belongs to one component in the app, so a taken name
@@ -919,7 +944,7 @@ func (p *Project) planComponentWasm(req EditRequest, comp MaterialComponent) (*E
 	name := strings.TrimSpace(req.ComponentName)
 	var fn, elemID string
 	if name != "" {
-		for _, in := range instances {
+		for _, in := range allInstances {
 			if in.Name != name && in.ID == name {
 				// An unnamed instance whose positional id
 				// spells the name: an event reference would
@@ -928,7 +953,7 @@ func (p *Project) planComponentWasm(req EditRequest, comp MaterialComponent) (*E
 				return nil, fmt.Sprintf("the wasm app in %s already has a %s whose id is %s — an event would find that one by this name, so it can't be given to another component. Pick another name.", folder, MaterialComponentWords(in.Kind), name)
 			}
 		}
-		for _, in := range instances {
+		for _, in := range allInstances {
 			if in.Name != name {
 				continue
 			}
@@ -950,7 +975,7 @@ func (p *Project) planComponentWasm(req EditRequest, comp MaterialComponent) (*E
 		if strings.Contains(compContent, "func "+fn+"(") || strings.Contains(main, fn+"(doc)") {
 			return nil, fmt.Sprintf("the wasm app in %s already has a %s in it — nothing to add.", folder, comp.Words)
 		}
-		elemID = comp.ID + "-" + strconv.Itoa(wasmKindCount(instances, comp.ID)+1)
+		elemID = comp.ID + "-" + strconv.Itoa(wasmKindCount(allInstances, comp.ID)+1)
 	}
 	builder, ok := wasmComponentBuilder(comp.ID, fn, elemID)
 	if !ok {

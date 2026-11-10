@@ -174,7 +174,14 @@ type State struct {
 func applyPlan(t *testing.T, dir string, plan *EditPlan) {
 	t.Helper()
 	for _, f := range plan.Files {
-		if err := os.WriteFile(filepath.Join(dir, f.Rel), f.After, 0o644); err != nil {
+		abs := filepath.Join(dir, f.Rel)
+		// The spine's writeAll makes a new file's folder
+		// first (a part's package folder, a scaffold's
+		// templates folder) — the helper mirrors it.
+		if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(abs, f.After, 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}

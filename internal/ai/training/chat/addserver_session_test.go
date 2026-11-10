@@ -47,6 +47,9 @@ import (
 // wasm build claim sits directly before the wasm-app
 // claim, exactly as in the unified loop — resolution-
 // gated, firing only on a folder already holding an app.
+// The wasm parts and explain claims sit directly after
+// serve-wasm, before the component claims, exactly as in
+// the unified loop.
 func claimChain(line string, ask editAsk, profile *UserProfile) bool {
 	if runClarifyAnswer(line, ask) {
 		return true
@@ -122,6 +125,12 @@ func claimChain(line string, ask editAsk, profile *UserProfile) bool {
 		return true
 	}
 	if runServeWasmApp(line, ask, profile) {
+		return true
+	}
+	if runWasmPart(line, ask) {
+		return true
+	}
+	if runExplainWasmApp(line, ask) {
 		return true
 	}
 	if tryComponentList(line) {

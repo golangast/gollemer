@@ -247,6 +247,10 @@ func buildWasmAppClaim(tag, rootAbs, folderRel string, ask editAsk, profile *Use
 	fmt.Printf("%s Built — the wasm app in %s compiled: %s/main.wasm %s, %s bytes. Serve the folder and open its page to run it — \"serve static files\" points this project's server at a folder.\n",
 		tag, folderRel, folderRel, fresh, groupThousands(st.Size()))
 	recordBrain("runner", true, "wasm app built: "+folderRel)
+	// The first successful build of this app in this
+	// project carries the folder tour (wasmexplain.go),
+	// once per app; later builds don't repeat it.
+	maybeExplainWasmAppFirstRun(tag, rootAbs, folderRel)
 }
 
 // execWasmBuild runs the shared build command in the app

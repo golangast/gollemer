@@ -61,6 +61,15 @@ package chat
 // with its own builder and its name as its element id,
 // the identity the events piece (wasmevent.go) points at;
 // the page modes take no name, exactly as before.
+//
+// A target can also be a PART of a wasm app (the parts
+// piece, wasmpart.go): "add a navigation bar to the
+// header in jim", "add a chip to the footer of the wasm
+// app in jim" — the component lands inside the part's own
+// package (parseComponentPartTarget /
+// runComponentPartWasm below, analyze.planComponentWasmPart),
+// gated on the same content read, so a folder that holds
+// no app keeps the line's existing fate untouched.
 
 import (
 	"fmt"
@@ -373,10 +382,175 @@ func runComponentWasm(q componentWasmAsk, ask editAsk) bool {
 	}, ask)
 }
 
+// componentPartAsk is one parsed component sentence
+// aimed at a part of a wasm app: the registry id (""
+// when the name is not a component), the name as typed,
+// the "called <name>" name ("" when none), the part
+// ("header" | "footer"), and the app's folder as typed.
+type componentPartAsk struct {
+	component string
+	name      string
+	called    string
+	part      string
+	folder    string
+}
+
+// parseComponentPartTarget reads the component shape
+// with a part target —
+//
+//	add [a|an|the] [material] <component> [called <name>]
+//	    to the header|footer in <folder>
+//	add … to the header|footer of the wasm app in <folder>
+//
+// The shape is disjoint from the page and app parses: it
+// requires the words "to the header" or "to the footer"
+// after the component's own words, and a folder — never
+// a file — after them, so every sentence keeps exactly
+// the claim it has today. Whether the sentence FIRES is
+// the resolver's call (runComponentPartWasm reads the
+// folder's main before claiming), the wasm mode's rule.
+func parseComponentPartTarget(line string) (componentPartAsk, bool) {
+	s := strings.TrimSpace(line)
+	s = strings.TrimSuffix(s, ".")
+	s = strings.TrimSuffix(s, "?")
+	s = strings.TrimSpace(s)
+	fields := strings.Fields(s)
+	if len(fields) < 7 {
+		return componentPartAsk{}, false
+	}
+	low := make([]string, len(fields))
+	for i, f := range fields {
+		low[i] = strings.ToLower(f)
+	}
+	switch low[0] {
+	case "add", "create", "make", "build", "put":
+	default:
+		return componentPartAsk{}, false
+	}
+	i := 1
+	if low[i] == "a" || low[i] == "an" || low[i] == "the" {
+		i++
+	}
+	if i < len(fields) && low[i] == "material" {
+		i++
+	}
+	j := i
+	for j < len(fields) && low[j] != "to" {
+		j++
+	}
+	if j >= len(fields) || j == i {
+		return componentPartAsk{}, false
+	}
+	seg := low[i:j]
+	called := ""
+	for k, w := range seg {
+		if w != "called" {
+			continue
+		}
+		if k == 0 || k != len(seg)-2 || !wasmComponentNameToken(seg[k+1]) {
+			return componentPartAsk{}, false
+		}
+		called = seg[k+1]
+		seg = seg[:k]
+		break
+	}
+	if len(seg) == 0 || len(seg) > 3 {
+		return componentPartAsk{}, false
+	}
+	rest := low[j+1:]
+	if len(rest) < 4 || rest[0] != "the" || (rest[1] != "header" && rest[1] != "footer") {
+		return componentPartAsk{}, false
+	}
+	out := componentPartAsk{name: strings.Join(seg, " "), called: called, part: rest[1]}
+	rest = rest[2:]
+	if len(rest) >= 3 && rest[0] == "of" && rest[1] == "the" && rest[2] == "wasm" {
+		if len(rest) < 4 || rest[3] != "app" {
+			return componentPartAsk{}, false
+		}
+		rest = rest[4:]
+	}
+	if len(rest) < 2 || (rest[0] != "in" && rest[0] != "into" && rest[0] != "at") {
+		return componentPartAsk{}, false
+	}
+	rest = rest[1:]
+	if len(rest) > 0 && rest[0] == "the" {
+		rest = rest[1:]
+	}
+	if len(rest) > 0 && (rest[0] == "folder" || rest[0] == "directory") {
+		rest = rest[1:]
+	}
+	if len(rest) != 1 {
+		return componentPartAsk{}, false
+	}
+	tok := rest[0]
+	if strings.HasSuffix(tok, ".html") || strings.HasSuffix(tok, ".go") {
+		return componentPartAsk{}, false // a file target: not this shape
+	}
+	out.folder = fields[len(fields)-1]
+	if comp, ok := analyze.MaterialComponentByForm(out.name); ok {
+		out.component = comp.ID
+	}
+	return out, true
+}
+
+// runComponentPartWasm routes a part-target component
+// sentence to the part of the app in that folder — but
+// only when the folder truly holds a wasm app (its
+// main.go carries the js && wasm build tag). Until that
+// read says yes it claims nothing and prints nothing, so
+// a folder that is not a wasm app keeps the fate the
+// sentence has always had further down the chain — the
+// page modes included.
+func runComponentPartWasm(q componentPartAsk, ask editAsk) bool {
+	rootRaw := creationRoot()
+	if rootRaw == "" {
+		return false
+	}
+	rootAbs, err := filepath.EvalSymlinks(rootRaw)
+	if err != nil {
+		abs, aerr := filepath.Abs(rootRaw)
+		if aerr != nil {
+			return false
+		}
+		rootAbs = abs
+	}
+	_, rel, refusal := fenceResolve(rootAbs, q.folder)
+	if refusal != "" {
+		return false
+	}
+	if !wasmAppFolderOf(rootAbs, rel) {
+		return false
+	}
+	tag := cTag("gollemer [composer]>")
+	if q.component == "" {
+		fmt.Printf("%s There's no component called %q in the set I can add.\n%s\n", tag, q.name, componentListText())
+		recordBrain("composer", false, "component refused: unknown component")
+		return true
+	}
+	if !settleStaticAssetsProject(tag, rootRaw, rootAbs, "component") {
+		return true
+	}
+	return executeEditPlan(analyze.EditRequest{
+		Kind:          analyze.EditComponent,
+		Component:     q.component,
+		ComponentName: q.called,
+		WasmFolder:    rel,
+		ComponentPart: q.part,
+	}, ask)
+}
+
 // runComponent carries one line from sentence to resolved
 // page to the shared edit spine. It returns true when the
 // line belonged to this claim at all.
 func runComponent(line string, ask editAsk) bool {
+	// A part target first ("add a chip to the header in
+	// jim"): it belongs to the wasm mode when the folder
+	// holds an app with that part, and to no one here when
+	// it doesn't — the shape's "to the header/footer"
+	// words are ones no page sentence carries.
+	if pq, ok := parseComponentPartTarget(line); ok && runComponentPartWasm(pq, ask) {
+		return true
+	}
 	// A folder or main.go target first: it belongs to the
 	// wasm mode when the folder holds an app, and to no one
 	// here when it doesn't (runComponentWasm decides by

@@ -592,6 +592,37 @@ one, always read from the serving file's own serve
 statement, never assumed. No folder named serves the last
 app the conversation worked on, with the reading printed.
 
+The app can also grow the way a page does — a header and
+a footer, each its own package inside the app:
+`add a header and footer to the wasm app in jim` creates
+`jim/header/header.go` (package header — its `Header(doc)`
+builder over the app bar) and `jim/footer/footer.go`
+(package footer, `Footer(doc)` over the footer bar), and
+main.go imports both by the app's own module path and
+mounts the header above the app's components and the
+footer below them. One part at a time works too ("add a
+header to the wasm app in jim"). If the body already
+mounts an app bar or a footer component, it MOVES into
+its part — builder, words, and id unchanged, rendering
+once, from the part — never duplicated. A part grows on
+its own: `add a navigation bar to the header in jim`
+puts the component inside the part, its builder in
+`jim/header/components.go`, mounted between the part's
+own markers. Events reach a part's components by the
+same ids as the body's: body and parts are one app.
+
+And the app explains itself: `explain the wasm app in
+jim` walks the folder in plain words — the module and
+its Go 1.27 pin, the program, the vector unit, the
+components and events by name, the header and footer
+parts when it has them, the host page, and whether
+`main.wasm` is built or isn't — then how to build it,
+how to serve it, and what happens when the page opens.
+The same tour follows the first successful build or
+serve of an app on its own, once per app (it remembers,
+per project, in `~/.gollemer_wasm_explained.json`); after
+that it answers when asked, and only then.
+
 A page's style sheets, scripts, and pictures are files too, and
 the server can serve the whole folder they live in: `serve static
 files` registers that folder at `/static/` on your existing

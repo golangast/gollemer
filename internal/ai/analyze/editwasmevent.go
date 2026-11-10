@@ -411,8 +411,13 @@ func (p *Project) planWasmEvent(req EditRequest) (*EditPlan, string) {
 	}
 	compBefore, _ := os.ReadFile(filepath.Join(p.Root, filepath.FromSlash(compRel)))
 	compContent := string(compBefore)
-	instances := wasmComponentInstances(main, compContent)
-	for _, rel := range []string{mainRel, compRel, eventsRel} {
+	// Body + parts are one app for reference resolution:
+	// an event names a component wherever in the app it
+	// lives — the body's block, or inside a part.
+	instances := p.wasmAppAllInstances(folder, main, compContent)
+	for _, rel := range []string{mainRel, compRel, eventsRel,
+		wasmPartFileRel(folder, "header"), wasmPartComponentsRel(folder, "header"),
+		wasmPartFileRel(folder, "footer"), wasmPartComponentsRel(folder, "footer")} {
 		if why, blocked := p.fileBlocked(rel); blocked {
 			return nil, fmt.Sprintf("I won't write %s — %s.", p.LinkPath(rel), why)
 		}
@@ -510,32 +515,68 @@ func (p *Project) planWasmEvent(req EditRequest) (*EditPlan, string) {
 	newEvents = strings.TrimRight(newEvents, "\n") + "\n\n" + handler
 
 	// main.go gains the register call right after the
-	// mounts, the first time an event lands.
+	// mounts, the first time an event lands. "After the
+	// mounts" means after ALL of them: a footer part
+	// mounts immediately after the body components
+	// (editwasmpart.go), and a handler registered before
+	// the footer mounted would find no footer on the
+	// page — so the call lands after that line too when
+	// it's there.
 	newMain := main
 	mainTouched := false
 	if !strings.Contains(main, "registerEvents(doc)") {
 		i := strings.Index(main, "mountComponents(doc, app)")
 		lineEnd := strings.Index(main[i:], "\n") + i
-		newMain = main[:lineEnd+1] + "\tregisterEvents(doc)\n" + main[lineEnd+1:]
+		insertAt := lineEnd + 1
+		const footerMount = "\tapp.Call(\"appendChild\", footer.Footer(doc))\n"
+		if strings.HasPrefix(main[insertAt:], footerMount) {
+			insertAt += len(footerMount)
+		}
+		newMain = main[:insertAt] + "\tregisterEvents(doc)\n" + main[insertAt:]
 		mainTouched = true
 	}
 
 	// The id backfill: the two components this event
-	// joins, when their builders predate id stamps.
-	newComp := compContent
-	compTouched := false
+	// joins, when their builders predate id stamps. A
+	// builder lives in the file its instance came from —
+	// the body's components.go, a part's components.go,
+	// or the part's own file for its root — so the stamp
+	// lands in that file, per file.
+	builderFile := func(inst WasmComponentInstance) string {
+		if inst.Part == "" {
+			return compRel
+		}
+		if inst.Root {
+			return wasmPartFileRel(folder, inst.Part)
+		}
+		return wasmPartComponentsRel(folder, inst.Part)
+	}
+	stampBefore := map[string][]byte{compRel: compBefore}
+	stampAfter := map[string]string{compRel: compContent}
+	loadStampFile := func(rel string) string {
+		if s, ok := stampAfter[rel]; ok {
+			return s
+		}
+		b, _ := os.ReadFile(filepath.Join(p.Root, filepath.FromSlash(rel)))
+		stampBefore[rel] = b
+		stampAfter[rel] = string(b)
+		return string(b)
+	}
 	var backfilled []WasmComponentInstance
+	backfillFiles := map[string]bool{}
 	for _, inst := range []WasmComponentInstance{src, tgt} {
-		if _, stamped := wasmBuilderStamp(newComp, inst.Builder); stamped {
+		rel := builderFile(inst)
+		content := loadStampFile(rel)
+		if _, stamped := wasmBuilderStamp(content, inst.Builder); stamped {
 			continue
 		}
-		updated, ok := stampExistingWasmBuilder(newComp, inst.Builder, inst.Kind, inst.ID)
+		updated, ok := stampExistingWasmBuilder(content, inst.Builder, inst.Kind, inst.ID)
 		if !ok {
-			return nil, fmt.Sprintf("the builder for %s in %s isn't shaped the way the wasm piece writes it — its root element has no line an id can be stamped on — so the event would have no way to find it. Nothing was written.", WasmComponentRefWords(inst.Kind, inst.Name), p.LinkPath(compRel))
+			return nil, fmt.Sprintf("the builder for %s in %s isn't shaped the way the wasm piece writes it — its root element has no line an id can be stamped on — so the event would have no way to find it. Nothing was written.", WasmComponentRefWords(inst.Kind, inst.Name), p.LinkPath(rel))
 		}
-		if updated != newComp {
-			newComp = updated
-			compTouched = true
+		if updated != content {
+			stampAfter[rel] = updated
+			backfillFiles[rel] = true
 			backfilled = append(backfilled, inst)
 		}
 	}
@@ -544,8 +585,8 @@ func (p *Project) planWasmEvent(req EditRequest) (*EditPlan, string) {
 	if mainTouched {
 		files = append(files, finishFile(mainRel, mainBefore, []byte(newMain)))
 	}
-	if compTouched {
-		files = append(files, finishFile(compRel, compBefore, []byte(newComp)))
+	for rel := range backfillFiles {
+		files = append(files, finishFile(rel, stampBefore[rel], []byte(stampAfter[rel])))
 	}
 	notes := []string{}
 	if len(eventsBefore) == 0 {
@@ -556,7 +597,7 @@ func (p *Project) planWasmEvent(req EditRequest) (*EditPlan, string) {
 		for _, inst := range backfilled {
 			parts = append(parts, fmt.Sprintf("%s (id %q)", WasmComponentRefWords(inst.Kind, inst.Name), inst.ID))
 		}
-		notes = append(notes, "The event finds its components by id, and "+strings.Join(parts, " and ")+" had no id yet — their builders in "+p.LinkPath(compRel)+" carry one now.")
+		notes = append(notes, "The event finds its components by id, and "+strings.Join(parts, " and ")+" had no id yet — their builders carry one now.")
 	}
 	notes = append(notes, "Rebuild the app in "+folder+" ("+WasmBuildCommand+") and the event does its work in the browser.")
 	summary := fmt.Sprintf("Give the wasm app in %s an event: %s. The handler %s joins %s, registered after the components mount in %s.", folder, sentence, handlerName, p.LinkPath(eventsRel), p.LinkPath(mainRel))
@@ -575,9 +616,9 @@ func (p *Project) planWasmEvent(req EditRequest) (*EditPlan, string) {
 			if err != nil || string(m) != newMain {
 				return false
 			}
-			if compTouched {
-				c, err := os.ReadFile(filepath.Join(after.Root, filepath.FromSlash(compRel)))
-				if err != nil || string(c) != newComp {
+			for rel := range backfillFiles {
+				c, err := os.ReadFile(filepath.Join(after.Root, filepath.FromSlash(rel)))
+				if err != nil || string(c) != stampAfter[rel] {
 					return false
 				}
 			}

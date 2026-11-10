@@ -128,6 +128,17 @@ const (
 	// planComponentWasm).
 	EditWasmApp = "wasm_app"
 
+	// Wasm part (editwasmpart.go): a header and/or a footer
+	// for a wasm app, each as its own package inside the app
+	// (<app>/header/header.go, <app>/footer/footer.go) —
+	// main.go imports the part packages and mounts them
+	// around the body components. A body-mounted app bar or
+	// footer component MOVES into its part rather than being
+	// duplicated. Components asked into a part ride the
+	// component kind with ComponentPart set (editwasmpart.go's
+	// planComponentWasmPart).
+	EditWasmPart = "wasm_part"
+
 	// Wasm event (editwasmevent.go): one event on a component
 	// already mounted in a wasm app — a source component, its
 	// event (a click, or a change), and what happens (another
@@ -289,6 +300,19 @@ type EditRequest struct {
 	// ("button-1"). Only the wasm mode reads this; the page
 	// modes never see it (their grammar takes no name).
 	ComponentName string
+
+	// component in wasm mode: the app part the component
+	// lands in — "header" or "footer" (editwasmpart.go), ""
+	// for the app's body, the only target the component
+	// piece had before the parts. Only read with WasmFolder
+	// set; the page modes never see it.
+	ComponentPart string
+
+	// wasm_part: which parts the sentence asks for — the
+	// header, the footer, or both (the combined sentence is
+	// one plan). At least one is set.
+	WasmPartHeader bool
+	WasmPartFooter bool
 
 	// wasm_app, and component in wasm mode: the wasm app's
 	// folder (project-relative slash path), resolved by the
@@ -614,6 +638,8 @@ func (p *Project) PlanEdit(req EditRequest) (*EditPlan, string) {
 		return p.planScaffoldSection(req)
 	case EditWasmApp:
 		return p.planWasmApp(req)
+	case EditWasmPart:
+		return p.planWasmPart(req)
 	case EditWasmEvent:
 		return p.planWasmEvent(req)
 	case EditPage:

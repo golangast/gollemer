@@ -292,6 +292,12 @@ func runServeWasmApp(line string, ask editAsk, profile *UserProfile) bool {
 		fmt.Printf("%s The wasm app in %s is served at /static/ on the server in %s.\n", tag, folderRel, serveFile)
 	}
 	recordBrain("runner", true, "wasm app served: "+folderRel+" via "+serveFile)
+	// The first successful serve of this app in this
+	// project carries the folder tour (wasmexplain.go),
+	// once per app — the build's first run and the
+	// serve's share the one memory, so a built-then-
+	// served app is toured exactly once, at the build.
+	maybeExplainWasmAppFirstRun(tag, rootAbs, folderRel)
 	return true
 }
 

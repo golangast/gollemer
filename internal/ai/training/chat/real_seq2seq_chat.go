@@ -1606,6 +1606,29 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if hook.run(func() bool { return tryServeWasmApp(line, reader, profile) }) {
 			continue
 		}
+		// The wasm parts (wasmpart.go): the app's header
+		// and footer as packages inside it — "add a header
+		// and footer to the wasm app in jim". Seated with
+		// the wasm family, directly before the component
+		// claim: its object words are "header" and
+		// "footer", which the component parse would
+		// otherwise read as an unknown component name over
+		// an app folder. The claim is resolution-gated —
+		// it fires only over a folder already holding an
+		// app — so any other folder keeps the line's
+		// existing fate byte-identical.
+		if hook.run(func() bool { return tryWasmPart(line, reader) }) {
+			continue
+		}
+		// Explain the wasm app (wasmexplain.go): a plain-
+		// words walk of the app's folder, built only from
+		// what's in it — "explain the wasm app in jim".
+		// Seated with the wasm family: its shape ("explain
+		// … wasm app") is its own, and the folder rules
+		// are the serve claim's three ways.
+		if hook.run(func() bool { return tryExplainWasmApp(line, reader) }) {
+			continue
+		}
 		// The component piece (component.go): one Material
 		// component into an existing page — "add a button to
 		// jim/temp/index.html", "add a card to the page" —

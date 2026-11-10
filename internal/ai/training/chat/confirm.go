@@ -91,7 +91,13 @@ func renderLandingConfirmation(f landingFacts) string {
 	case analyze.EditServeWasmApp:
 		s1 = fmt.Sprintf("The server in %s now serves the wasm app in %s at /static/", f.fresh.LinkPath(rel), f.req.WasmFolder)
 	case analyze.EditComponent:
-		if f.req.WasmFolder != "" {
+		if f.req.WasmFolder != "" && f.req.ComponentPart != "" {
+			if f.req.ComponentName != "" {
+				s1 = fmt.Sprintf("The %s called %s is in the %s of the wasm app in %s", analyze.MaterialComponentWords(f.req.Component), f.req.ComponentName, f.req.ComponentPart, f.fresh.LinkPath(f.req.WasmFolder))
+			} else {
+				s1 = fmt.Sprintf("The %s is in the %s of the wasm app in %s", analyze.MaterialComponentWords(f.req.Component), f.req.ComponentPart, f.fresh.LinkPath(f.req.WasmFolder))
+			}
+		} else if f.req.WasmFolder != "" {
 			if f.req.ComponentName != "" {
 				s1 = fmt.Sprintf("The %s called %s is in the wasm app in %s", analyze.MaterialComponentWords(f.req.Component), f.req.ComponentName, f.fresh.LinkPath(f.req.WasmFolder))
 			} else {
@@ -102,6 +108,15 @@ func renderLandingConfirmation(f landingFacts) string {
 		}
 	case analyze.EditWasmEvent:
 		s1 = confirmWasmEvent(f)
+	case analyze.EditWasmPart:
+		switch {
+		case f.req.WasmPartHeader && f.req.WasmPartFooter:
+			s1 = fmt.Sprintf("The header and the footer are in the wasm app in %s — the header mounts above the app's components and the footer below them", f.fresh.LinkPath(f.req.WasmFolder))
+		case f.req.WasmPartHeader:
+			s1 = fmt.Sprintf("The header is in the wasm app in %s — it mounts above the app's components", f.fresh.LinkPath(f.req.WasmFolder))
+		default:
+			s1 = fmt.Sprintf("The footer is in the wasm app in %s — it mounts below the app's components", f.fresh.LinkPath(f.req.WasmFolder))
+		}
 	case analyze.EditWasmApp:
 		s1 = fmt.Sprintf("The wasm app is in %s", f.fresh.LinkPath(f.req.WasmFolder))
 		s2 = fmt.Sprintf("It builds with Go %s — in %s, run: %s (a first build fetches that toolchain by itself) — and once main.wasm is built, any static server can serve the folder.", analyze.WasmAppGoVersion, f.req.WasmFolder, analyze.WasmBuildCommand)

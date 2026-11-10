@@ -284,6 +284,31 @@ Create folders and files — shown first, gated, then verified:
       stops the sentence with the build step named;
       no folder named serves the last app you
       worked on.
+  you> add a header and footer to the wasm app in jim
+      gives the app a header and a footer, each its
+      own package inside the app
+      (jim/header/header.go, jim/footer/footer.go):
+      main.go mounts the header above the app's
+      components and the footer below them. One part
+      at a time works too. A body app bar or footer
+      component moves into its part — builder, words,
+      and id unchanged — instead of being duplicated.
+      Components join a part the same way: "add a
+      navigation bar to the header in jim" puts one
+      inside the header's own package, and events
+      reach a part's components by the same ids as
+      the body's.
+  you> explain the wasm app in jim
+      walks the app's folder in plain words, file by
+      file — the module and its pin, the program,
+      the vector unit, the components and events by
+      name, the header and footer parts when it has
+      them, the host page, and whether main.wasm is
+      built — then how to build it, how to serve it,
+      and what happens when the page opens. The same
+      tour follows the first build or serve of an
+      app by itself, once per app; after that it
+      answers when asked, and only then.
   you> serve static files
       wires the webpage's folder — or one you name:
       "serve static files from jim/temp", "serve the
