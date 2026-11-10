@@ -1632,7 +1632,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// statement where a goroutine edit was asked for.
 		// This grammar claims those sentences first, and
 		// its parse declines everything else it is handed.
-		if tryGoroutineResult(line, reader) {
+		if hook.run(func() bool { return tryGoroutineResult(line, reader) }) {
 			continue
 		}
 		// The ambiguous-piece guidance's pre-book claim
