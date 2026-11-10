@@ -489,7 +489,7 @@ func (r *localTalkResponder) Respond(ctx TalkContext, line string) (TalkResponse
 	if ctx.SocialRoute && r.social != nil {
 		in := strings.ToLower(strings.TrimSpace(line))
 		if ctx.Conv != nil {
-			in = ctx.Conv.SocialInput(in)
+			in = ctx.Conv.SocialInputSituated(in, ctx.State.Now, situationFactTopics())
 		}
 		if ans, trace, err := r.social.PredictWithTrace(in, 40); err == nil {
 			if reply := tidyDecode(ans); reply != "" {

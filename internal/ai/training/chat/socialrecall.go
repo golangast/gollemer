@@ -53,6 +53,11 @@ func loadRecallPairs(projectRoot, domain string) map[string]string {
 		if strings.HasPrefix(strings.ToLower(p.Input), "before you said ") {
 			continue
 		}
+		// Situated multi-turn inputs (situation.go) are
+		// model-input format too, not raw messages.
+		if strings.HasPrefix(strings.ToLower(p.Input), "[ situation") {
+			continue
+		}
 		key := normalizeRecallInput(p.Input)
 		if key == "" {
 			continue

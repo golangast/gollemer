@@ -939,7 +939,7 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 			// Chat replies get chat post-processing only — tidyGoCode must
 			// never touch them.
 			if socialModel != nil {
-				answer, trace, err := socialModel.PredictWithTrace(conv.SocialInput(strings.ToLower(line)), 40)
+				answer, trace, err := socialModel.PredictWithTrace(conv.SocialInputSituated(strings.ToLower(line), time.Now(), situationFactTopics()), 40)
 				if err != nil {
 					fmt.Printf("gollemer> [error: %v]\n", err)
 					continue
@@ -959,7 +959,7 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		// Lowercased to match training; the model is case-insensitive by construction.
 		modelInput := strings.ToLower(line)
 		if domain == SocialDomain {
-			modelInput = conv.SocialInput(modelInput)
+			modelInput = conv.SocialInputSituated(modelInput, time.Now(), situationFactTopics())
 		}
 		// GoAnalyze domain has no neural model — analyzer commands were handled above.
 		// If we get here, the input wasn't a recognized command.
@@ -1874,7 +1874,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		}
 		modelInput := strings.ToLower(line)
 		if effD == SocialDomain {
-			modelInput = conv.SocialInput(modelInput)
+			modelInput = conv.SocialInputSituated(modelInput, time.Now(), situationFactTopics())
 		}
 		answer, trace, err := model.PredictWithTrace(modelInput, 40)
 		if err != nil {
