@@ -117,6 +117,10 @@ Create folders and files — shown first, gated, then verified:
       http.HandleFunc("/signup", handlers.Signup) — just before
       the serve call; ask again and it says "already
       registered ... — nothing to add"
+  you> have the goroutine return a string
+      a goroutine can't return a value, so this wires the
+      channel instead: declared before the go statement, a
+      send at the end of its body, the receive right after
   you> connect the handler to the webserver
       with two handlers waiting, it asks which one — a list,
       with file and line — and the one-word answer (the name,
