@@ -218,8 +218,13 @@ below tell their stories:
   add a navigation bar to the header in jim — a component
       inside a part (also "... to the header of the wasm
       app in jim")
+  add a home page to the wasm app in jim — the app's
+      welcome as a home page file of its own (new apps
+      are born with one; this gives one to an older app,
+      moving the welcome out of main.go)
   explain the wasm app in jim — the app walked file by
-      file in plain words
+      file in plain words, closing with the sentences it
+      answers
   add a full stack app called notes in jim with fields
       title, pages number and done yes-no — a form in the
       app, REST handlers at /api/notes, and the notes
@@ -296,14 +301,20 @@ below tell their stories:
       project around it keeps its own Go version):
       jim/go.mod, jim/main.go (the app — the GOGC knob
       set low in code, since a browser page takes no
-      flags), jim/vector.go (a simd unit on Go 1.27's
+      flags), jim/home.go (the home page — the welcome
+      heading and the vector demo, in a file of their
+      own, the first thing main mounts),
+      jim/vector.go (a simd unit on Go 1.27's
       portable simd package, adding rows of numbers a
       vector at a time), jim/index.html (the host
       page, Material styles, the build in its comment:
       GOEXPERIMENT=simd GOOS=js GOARCH=wasm go build
       -o main.wasm ., run in the folder), and
       jim/wasm_exec.js, copied from this machine's
-      Go 1.27 install when one is found. Components
+      Go 1.27 install when one is found. Creating the
+      app ends with the commands readout — the
+      sentences the app answers, for its folder.
+      Components
       join the app as Go builders, not HTML:
       "add a card to jim" — styles joining the host
       page once. In an app a component can carry a
@@ -353,27 +364,47 @@ below tell their stories:
       gives the app a header and a footer, each its
       own package inside the app
       (jim/header/header.go, jim/footer/footer.go):
-      main.go mounts the header above the app's
-      components and the footer below them. One part
-      at a time works too. A body app bar or footer
-      component moves into its part — builder, words,
-      and id unchanged — instead of being duplicated.
-      Components join a part the same way: "add a
-      navigation bar to the header in jim" puts one
-      inside the header's own package, and events
-      reach a part's components by the same ids as
-      the body's.
+      main.go mounts the header above the home page
+      and the footer below the app's components. One
+      part at a time works too. A body app bar or
+      footer component moves into its part —
+      builder, words, and id unchanged — instead of
+      being duplicated. Components join a part the
+      same way: "add a navigation bar to the header
+      in jim" puts one inside the header's own
+      package, and events reach a part's components
+      by the same ids as the body's.
+  you> add a home page to the wasm app in jim
+      gives an older app — one made before the home
+      page was a file of its own — its jim/home.go:
+      the welcome moves out of main.go whole, and
+      main mounts it where the inline block stood,
+      so the page renders exactly as it did and
+      nothing renders twice. A welcome edited past
+      the standard block refuses plainly. New apps
+      are born with the file; this is the sentence
+      that brings an older one up to date.
   you> explain the wasm app in jim
       walks the app's folder in plain words, file by
       file — the module and its pin, the program,
-      the vector unit, the components and events by
-      name, the header and footer parts when it has
-      them, the host page, and whether main.wasm is
-      built — then how to build it, how to serve it,
-      and what happens when the page opens. The same
-      tour follows the first build or serve of an
-      app by itself, once per app; after that it
-      answers when asked, and only then.
+      the home page, the vector unit, the components
+      and events by name, the header and footer parts
+      when it has them, the host page, and whether
+      main.wasm is built — then how to build it, how
+      to serve it, and what happens when the page
+      opens. It closes with the commands readout: the
+      sentences this app answers, from its state —
+      the parts sentence only while it has neither
+      part, the into-the-header sentence only once a
+      header is there, the home-page sentence only
+      while it has no home.go — plus one worked
+      example, a button, a card, and the
+      when-sentence connecting them. The same
+      readout prints right after a creation's
+      confirmation. The tour follows the first build
+      or serve of an app by itself, once per app;
+      after that it answers when asked, and only
+      then.
   you> add a full stack app called notes in jim with fields title, pages number and done yes-no
       grows one named thing through every layer in
       one plan: jim gains the notes form (one input

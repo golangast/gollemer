@@ -23,9 +23,11 @@ func plantWasmExec(t *testing.T, modcache, version, sentinel string) {
 	}
 }
 
-// The skeleton's plan shape: five new files in the folder —
+// The skeleton's plan shape: six new files in the folder —
 // the app's own module pinning Go 1.27, the main with the
-// GOGC line and the mount markers, the simd unit, the host
+// GOGC line and the mount markers, the home page (the
+// welcome as a file of its own, mounted by main where the
+// inline block used to stand), the simd unit, the host
 // page — and the wasm_exec.js copied from the highest Go
 // 1.27 in the module cache (planted here, so the bytes are
 // pinned exactly).
@@ -60,10 +62,22 @@ func TestPlanWasmAppShape(t *testing.T) {
 		"//go:build js && wasm", `"syscall/js"`, `"runtime/debug"`,
 		"debug.SetGCPercent(50)", "GOGC setting, turned down",
 		"// gollemer:components-begin", "// gollemer:components-end",
-		"AddVectors(", "select {}",
+		"Home(doc, app)", "select {}",
 	} {
 		if !strings.Contains(main, want) {
 			t.Errorf("main.go is missing %q", want)
+		}
+	}
+	if strings.Contains(main, "AddVectors(") || strings.Contains(main, `"fmt"`) {
+		t.Errorf("main.go still builds the welcome inline — it belongs in home.go now:\n%s", main)
+	}
+	home := byRel["jim/home.go"]
+	for _, want := range []string{
+		"//go:build js && wasm", "func Home(doc, app js.Value)",
+		"TODO: your app's name", "AddVectors(", "The vector demo added the two rows of numbers",
+	} {
+		if !strings.Contains(home, want) {
+			t.Errorf("home.go is missing %q", want)
 		}
 	}
 	vector := byRel["jim/vector.go"]

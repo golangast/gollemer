@@ -434,6 +434,16 @@ func executeEditPlanChecked(req analyze.EditRequest, ask editAsk, extra editExtr
 		built:     built,
 		wireName:  req.WireName,
 	}))
+	// A wasm app's creation carries the commands readout
+	// (wasmexplain.go): the sentences the new app answers,
+	// printed at the beginner's moment of need, right
+	// after the confirmation. The readout is the
+	// explanation's own closing section — one generator,
+	// two triggers — so what creation promises is exactly
+	// what "explain the wasm app" will say.
+	if req.Kind == analyze.EditWasmApp {
+		fmt.Printf("%s %s\n", tag, wasmAppCommandsReadout(root, req.WasmFolder))
+	}
 	recordBrain("composer", true, "edit applied: "+req.Kind)
 	return true
 }

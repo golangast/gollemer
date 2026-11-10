@@ -49,7 +49,8 @@ import (
 // gated, firing only on a folder already holding an app.
 // The wasm parts and explain claims sit directly after
 // serve-wasm, before the component claims, exactly as in
-// the unified loop. The full-stack claim sits directly
+// the unified loop — and the wasm home claim directly
+// after the parts claim. The full-stack claim sits directly
 // after the wasm events claim, exactly as in the unified
 // loop.
 func claimChain(line string, ask editAsk, profile *UserProfile) bool {
@@ -130,6 +131,9 @@ func claimChain(line string, ask editAsk, profile *UserProfile) bool {
 		return true
 	}
 	if runWasmPart(line, ask) {
+		return true
+	}
+	if runWasmHome(line, ask) {
 		return true
 	}
 	if runExplainWasmApp(line, ask) {

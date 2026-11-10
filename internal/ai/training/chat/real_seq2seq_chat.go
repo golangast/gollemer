@@ -1620,6 +1620,23 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if hook.run(func() bool { return tryWasmPart(line, reader) }) {
 			continue
 		}
+		// The wasm home page (wasmhome.go): the app's
+		// welcome as a file of its own — "add a home page
+		// to the wasm app in jim" moves the standard
+		// inline welcome block out of main.go into
+		// home.go and mounts Home where it stood. Seated
+		// directly after the parts claim it completes:
+		// its shape requires the words "home page to the
+		// wasm app", which the page family (seated far
+		// above, and first in line for "home page")
+		// cannot take — its target tail reads one folder
+		// token, never "the wasm app" — and the claim is
+		// resolution-gated on a folder already holding an
+		// app, so "add a home page to jim" and every other
+		// line keep their fate byte-identical.
+		if hook.run(func() bool { return tryWasmHome(line, reader) }) {
+			continue
+		}
 		// Explain the wasm app (wasmexplain.go): a plain-
 		// words walk of the app's folder, built only from
 		// what's in it — "explain the wasm app in jim".

@@ -15,6 +15,13 @@ package chat
 // and main.wasm is reported built or not built, as it
 // stands. Nothing is remembered or guessed.
 //
+// The walk closes with the commands readout — the
+// sentences this app answers, for its folder, composed
+// from the same state (wasmAppCommandsReadout) — and a
+// creation prints that same readout right after its
+// landing confirmation, so a beginner meets the
+// sentences at the moment the app first exists.
+//
 // The once-per-app memory is a sibling store in the
 // receipts store's family (~/.gollemer_wasm_explained.json,
 // the same 0600/atomic discipline), keyed by project +
@@ -105,18 +112,24 @@ func wasmAppExplanation(rootAbs, folderRel string) string {
 		}
 		fmt.Fprintf(&b, "\n  %s/go.mod — the app's own module: it makes the folder a module of its own, apart from the project's build, and pins %s — the portable simd package the vector unit uses exists for wasm only there.", folderRel, pinWords)
 	}
+	_, homePresent := read("home.go")
 	if main, ok := read("main.go"); ok {
 		line := "\n  " + folderRel + "/main.go — the program: "
 		var does []string
 		if strings.Contains(main, "SetGCPercent") {
 			does = append(does, "it sets the garbage collector's GOGC knob low in code (a browser page has no environment to pass the flag through)")
 		}
-		if strings.Contains(main, "AddVectors(") {
+		if !homePresent && strings.Contains(main, "AddVectors(") {
+			// An app made before the home page was a file
+			// of its own still builds its welcome inline.
 			does = append(does, "builds the welcome heading and the vector demo's sums into the page")
 		}
 		mounts := []string{}
 		if strings.Contains(main, "header.Header(doc)") {
 			mounts = append(mounts, "the header")
+		}
+		if strings.Contains(main, "Home(doc, app)") {
+			mounts = append(mounts, "the home page")
 		}
 		mounts = append(mounts, "the app's components")
 		if strings.Contains(main, "footer.Footer(doc)") {
@@ -127,8 +140,15 @@ func wasmAppExplanation(rootAbs, folderRel string) string {
 		line += strings.Join(does, "; ") + "."
 		b.WriteString(line)
 	}
+	if homePresent {
+		fmt.Fprintf(&b, "\n  %s/home.go — the home page: the welcome heading and the vector demo's sums, in a file of their own — main mounts it first, before the components, so the welcome leads the page. Edit the heading here to make the page yours.", folderRel)
+	}
 	if _, ok := read("vector.go"); ok {
-		fmt.Fprintf(&b, "\n  %s/vector.go — the vector unit: it adds two rows of numbers a vector at a time with the portable simd package, and main prints the sums on the page as the proof it ran.", folderRel)
+		prints := "main prints the sums on the page"
+		if homePresent {
+			prints = "the home page prints the sums on the page"
+		}
+		fmt.Fprintf(&b, "\n  %s/vector.go — the vector unit: it adds two rows of numbers a vector at a time with the portable simd package, and %s as the proof it ran.", folderRel, prints)
 	}
 	if _, ok := read("components.go"); ok {
 		if body := byPart[""]; len(body) > 0 {
@@ -222,6 +242,61 @@ func wasmAppExplanation(rootAbs, folderRel string) string {
 		fmt.Fprintf(&b, "\nTo serve it: \"serve the wasm app in %s\" gives the app a dedicated Go webserver in a server folder at the project root (server/main.go) — its own folder, its one job — or adds the app's route to the one already there, and runs it: the app is handed to the browser under /static/, at http://localhost:8080/static/ with the house port, and the serve sentence reads your server's real port from its own serve statement.", folderRel)
 	}
 	b.WriteString("\nWhen the page opens: the browser loads wasm_exec.js, fetches main.wasm, and starts the Go program, which builds the page in the browser — and the events answer as you click and change things.")
+	b.WriteString("\n" + wasmAppCommandsReadout(rootAbs, folderRel))
+	return b.String()
+}
+
+// wasmAppCommandsReadout renders the commands readout
+// (John 2026-11-10): the sentences this app answers, for
+// its folder — the explanation's closing section, and
+// the block app creation prints right after its landing
+// confirmation, at the beginner's moment of need. One
+// generator serves both, so the two can never drift.
+//
+// The list is composed from the app's actual state, like
+// the walk it closes: the parts sentence appears only
+// when the app has neither part (the ask still has both
+// to land), the into-the-header sentence only when the
+// header part is really there, and the home-page
+// sentence only when the app has no home.go yet. The
+// rest are every wasm app's sentences. The list closes
+// with a worked example — three sentences that together
+// make a button do something — because a list names the
+// moves but an example shows them connected (John
+// 2026-11-10: "I have no clue how to make new components
+// or how to connect them"). The example's sentences are
+// valid for every wasm app — components are the app's
+// birthright, no state of parts or home changes that —
+// so it prints in every state.
+func wasmAppCommandsReadout(rootAbs, folderRel string) string {
+	appAbs := filepath.Join(rootAbs, filepath.FromSlash(folderRel))
+	present := func(rel string) bool {
+		st, err := os.Stat(filepath.Join(appAbs, filepath.FromSlash(rel)))
+		return err == nil && !st.IsDir()
+	}
+	hasHeader := present("header/header.go")
+	hasFooter := present("footer/footer.go")
+	hasHome := present("home.go")
+	var b strings.Builder
+	b.WriteString("What you can say for this app:")
+	line := func(s string) { b.WriteString("\n  " + s) }
+	line(fmt.Sprintf("add a card to %s — a card on the page, a Go builder the program mounts.", folderRel))
+	line(fmt.Sprintf("add a button called save to %s — a button with a name of its own, so an event can find it.", folderRel))
+	line("when the save button is clicked, show the card — an event: what happens when the button is clicked.")
+	if !hasHeader && !hasFooter {
+		line(fmt.Sprintf("add a header and footer to the wasm app in %s — the app's header and footer, each its own package inside the app.", folderRel))
+	}
+	if hasHeader {
+		line(fmt.Sprintf("add a navigation bar to the header in %s — a component inside the header part.", folderRel))
+	}
+	if !hasHome {
+		line(fmt.Sprintf("add a home page to the wasm app in %s — the app's welcome as a home page file of its own.", folderRel))
+	}
+	line(fmt.Sprintf("build the wasm app in %s — compile the app to main.wasm.", folderRel))
+	line(fmt.Sprintf("serve the wasm app in %s — run the Go webserver that hands the app to the browser, and print its address.", folderRel))
+	line(fmt.Sprintf("add a full stack app called notes in %s with fields title and body — a form and a list in the app, with the REST handlers and the database table behind them.", folderRel))
+	line(fmt.Sprintf("explain the wasm app in %s — this walk, any time you ask.", folderRel))
+	fmt.Fprintf(&b, "\nFor example, making a button do something takes three sentences: \"add a button called save to %s\" makes the button, \"add a card to %s\" makes the card it acts on, and \"when the save button is clicked, set the card's words to 'Saved'\" connects them — the button is made, the card is made, and the when-sentence is the wire between them.", folderRel, folderRel)
 	return b.String()
 }
 

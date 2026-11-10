@@ -73,7 +73,8 @@ func TestExplainWasmAppOnDemand(t *testing.T) {
 		"jim/go.mod — the app's own module",
 		"pins Go 1.27",
 		"jim/main.go — the program:",
-		"mounts the header, then the app's components, then the footer",
+		"mounts the header, then the home page, then the app's components, then the footer",
+		"jim/home.go — the home page: the welcome heading and the vector demo's sums",
 		"jim/vector.go — the vector unit",
 		"jim/components.go — the app's own components",
 		"a card, a button called save",
@@ -88,6 +89,10 @@ func TestExplainWasmAppOnDemand(t *testing.T) {
 		"\"serve the wasm app in jim\"",
 		"http://localhost:8080/static/",
 		"When the page opens:",
+		"What you can say for this app:",
+		"add a navigation bar to the header in jim",
+		"when the save button is clicked, set the card's words to 'Saved'",
+		"the when-sentence is the wire between them",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("the explanation is missing %q:\n%s", want, out)
@@ -123,7 +128,7 @@ func TestExplainWasmAppDrift(t *testing.T) {
 			t.Errorf("the bare app's explanation claims %q:\n%s", absent, text)
 		}
 	}
-	if !strings.Contains(text, "mounts the app's components") {
+	if !strings.Contains(text, "mounts the home page, then the app's components") {
 		t.Errorf("the bare app's main line is wrong:\n%s", text)
 	}
 	// A removed file's line disappears.

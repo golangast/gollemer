@@ -139,6 +139,17 @@ const (
 	// planComponentWasmPart).
 	EditWasmPart = "wasm_part"
 
+	// Wasm home (editwasmhome.go): the app's home page as
+	// a file of its own (<app>/home.go, the Home builder —
+	// the welcome heading and the vector demo), for an app
+	// made before the skeleton grew one: the plan moves
+	// the standard inline welcome block out of main.go
+	// into home.go and mounts Home where the block stood,
+	// so the page renders exactly as it did. A home.go
+	// already there is never overwritten; a welcome edited
+	// past recognition refuses plainly.
+	EditWasmHome = "wasm_home"
+
 	// Wasm event (editwasmevent.go): one event on a component
 	// already mounted in a wasm app — a source component, its
 	// event (a click, or a change), and what happens (another
@@ -680,6 +691,8 @@ func (p *Project) PlanEdit(req EditRequest) (*EditPlan, string) {
 		return p.planWasmApp(req)
 	case EditWasmPart:
 		return p.planWasmPart(req)
+	case EditWasmHome:
+		return p.planWasmHome(req)
 	case EditWasmEvent:
 		return p.planWasmEvent(req)
 	case EditFullStack:

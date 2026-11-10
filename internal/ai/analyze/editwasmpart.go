@@ -887,11 +887,13 @@ func (p *Project) planComponentWasmPart(req EditRequest, comp MaterialComponent)
 // plain quoted paths, one per line; anything else refuses
 // rather than rewriting by guess), the header's mount
 // line lands immediately before the mountComponents
-// call, and the footer's immediately after it — which is
-// also before any registerEvents call the events piece
-// put there, so events keep finding every component
-// mounted. A main.go already mounting a part takes no
-// second mount line.
+// call — or before the home page's mount line, when the
+// main carries one, so the page order stays header, home
+// page, components — and the footer's immediately after
+// the mountComponents call, which is also before any
+// registerEvents call the events piece put there, so
+// events keep finding every component mounted. A main.go
+// already mounting a part takes no second mount line.
 func wasmMainWithPartMounts(main string, imports []string, mountHeader, mountFooter bool) (string, string) {
 	out := main
 	if len(imports) > 0 {
@@ -946,7 +948,22 @@ func wasmMainWithPartMounts(main string, imports []string, mountHeader, mountFoo
 	lineStart := strings.LastIndex(out[:i], "\n") + 1
 	lineEnd := strings.Index(out[i:], "\n") + i + 1
 	if mountHeader && !strings.Contains(out, "header.Header(doc)") {
-		out = out[:lineStart] + "\tapp.Call(\"appendChild\", header.Header(doc))\n" + out[lineStart:]
+		// The header mounts above the home page when the
+		// main carries one: the home mount chunk (its
+		// comment and its line) sits between the #app
+		// lookup and the components, and the header
+		// belongs above the whole chunk.
+		insertAt := lineStart
+		if h := strings.Index(out, "Home(doc, app)"); h >= 0 {
+			anchor := h
+			if c := strings.Index(out, "// The home page (home.go):"); c >= 0 && c < h {
+				anchor = c
+			}
+			if as := strings.LastIndex(out[:anchor], "\n") + 1; as < lineStart {
+				insertAt = as
+			}
+		}
+		out = out[:insertAt] + "\tapp.Call(\"appendChild\", header.Header(doc))\n" + out[insertAt:]
 		lineEnd += len("\tapp.Call(\"appendChild\", header.Header(doc))\n")
 	}
 	if mountFooter && !strings.Contains(out, "footer.Footer(doc)") {

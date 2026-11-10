@@ -69,9 +69,18 @@ func wasmAppGoMod(folder string) string {
 	return "module " + path.Base(folder) + "\n\ngo " + WasmAppGoVersion + "\n"
 }
 
+// wasmHomeMountChunk is main.go's home span: the comment
+// and the Home mount line, exactly as the skeleton writes
+// them between the #app lookup and the components mount —
+// and exactly what the home piece (editwasmhome.go) writes
+// into an older app's main in the lifted inline block's
+// place, so a moved app's main is byte-for-byte a fresh
+// app's main.
+const wasmHomeMountChunk = "\t// The home page (home.go): the welcome heading and\n\t// the vector demo — the first thing on the page, in\n\t// a file of its own so the welcome is a piece of its\n\t// own to edit.\n\tHome(doc, app)\n"
+
 // wasmAppMain is the app itself: it sets the collector's
-// knob, builds the welcome heading and the vector demo's
-// result into the page's #app element, mounts whatever
+// knob, mounts the home page (home.go — the welcome
+// heading and the vector demo), mounts whatever
 // components the chat has added (between the markers the
 // component piece writes into), and then blocks forever —
 // a wasm program whose main returns is finished, and the
@@ -92,7 +101,6 @@ func wasmAppMain() string {
 package main
 
 import (
-	"fmt"
 	"runtime/debug"
 	"syscall/js"
 )
@@ -110,22 +118,7 @@ func main() {
 	doc := js.Global().Get("document")
 	app := doc.Call("getElementById", "app")
 
-	heading := doc.Call("createElement", "h1")
-	heading.Set("className", "headline")
-	heading.Set("textContent", "TODO: your app's name")
-	app.Call("appendChild", heading)
-
-	// The vector demo (vector.go): two rows of numbers the
-	// simd unit added, printed on the page as the proof it
-	// ran.
-	sums := AddVectors(
-		[]float32{1, 2, 3, 4, 5, 6, 7, 8},
-		[]float32{10, 20, 30, 40, 50, 60, 70, 80},
-	)
-	demo := doc.Call("createElement", "p")
-	demo.Set("textContent", fmt.Sprintf("The vector demo added the two rows of numbers: %v", sums))
-	app.Call("appendChild", demo)
-
+` + wasmHomeMountChunk + `
 	mountComponents(doc, app)
 
 	// A wasm program whose main returns is finished, and
@@ -142,6 +135,52 @@ func main() {
 func mountComponents(doc, app js.Value) {
 	// gollemer:components-begin
 	// gollemer:components-end
+}
+`
+}
+
+// wasmAppHome is the app's home page: the welcome heading
+// and the vector demo's result, in a file of their own —
+// the first thing main mounts, before the components. The
+// welcome is a piece of its own (a beginner edits the
+// heading here, not inside the program that mounts
+// everything), the same reason the header and footer are
+// parts: main.go stays the small thing that mounts the
+// pieces in page order. Apps made before the skeleton
+// grew this file carry the same content inline in main;
+// the home piece (editwasmhome.go) moves it here.
+func wasmAppHome() string {
+	return `//go:build js && wasm
+
+package main
+
+import (
+	"fmt"
+	"syscall/js"
+)
+
+// Home builds the app's home page — the first thing on
+// the page: the welcome heading, and under it the vector
+// demo's sums, as the proof the app's simd unit ran. It
+// lives in its own file so the welcome is a piece of its
+// own to read and edit; main.go mounts it before the
+// app's components.
+func Home(doc, app js.Value) {
+	heading := doc.Call("createElement", "h1")
+	heading.Set("className", "headline")
+	heading.Set("textContent", "TODO: your app's name")
+	app.Call("appendChild", heading)
+
+	// The vector demo (vector.go): two rows of numbers
+	// the simd unit added, printed on the page as the
+	// proof it ran.
+	sums := AddVectors(
+		[]float32{1, 2, 3, 4, 5, 6, 7, 8},
+		[]float32{10, 20, 30, 40, 50, 60, 70, 80},
+	)
+	demo := doc.Call("createElement", "p")
+	demo.Set("textContent", fmt.Sprintf("The vector demo added the two rows of numbers: %v", sums))
+	app.Call("appendChild", demo)
 }
 `
 }
@@ -330,9 +369,9 @@ func wasmAppMainContent(content string) bool {
 }
 
 // planWasmApp assembles the skeleton: the app's module,
-// main, vector unit, and host page as new files — each
-// refused if it already exists, because a file that is
-// there is the user's — plus the wasm_exec.js copied from
+// main, home page, vector unit, and host page as new
+// files — each refused if it already exists, because a
+// file that is there is the user's — plus the wasm_exec.js copied from
 // this machine's Go 1.27 install when one is found (a
 // wasm_exec.js already in the folder is left exactly as it
 // is). When no 1.27 install is found, the plan still lands
@@ -349,12 +388,14 @@ func (p *Project) planWasmApp(req EditRequest) (*EditPlan, string) {
 		return nil, fmt.Sprintf("there's no folder %s in this project for the app to live in — say \"create a folder %s\" first, then ask again.", folder, folder)
 	}
 	goModRel, mainRel, vectorRel, indexRel, execRel := wasmAppFiles(folder)
+	homeRel := wasmHomeRel(folder)
 	contents := []struct {
 		rel  string
 		body string
 	}{
 		{goModRel, wasmAppGoMod(folder)},
 		{mainRel, wasmAppMain()},
+		{homeRel, wasmAppHome()},
 		{vectorRel, wasmAppVector()},
 		{indexRel, wasmAppIndex()},
 	}
@@ -373,6 +414,7 @@ func (p *Project) planWasmApp(req EditRequest) (*EditPlan, string) {
 	notes := []string{
 		"The app is its own module: " + p.LinkPath(goModRel) + " pins Go " + WasmAppGoVersion + ", so the project around it keeps its own Go version, and the app's files stay out of the project's build.",
 		"The app sets the garbage collector's GOGC knob low in code — runtime/debug.SetGCPercent(50) in " + p.LinkPath(mainRel) + " — because a browser page has no environment to pass the flag through.",
+		"The welcome is the app's home page, in " + p.LinkPath(homeRel) + ": the heading and the vector demo in a file of their own, which " + p.LinkPath(mainRel) + " mounts first, before the components — edit the heading there to make the page yours.",
 		"Build it in " + folder + ": " + WasmBuildCommand + " — a first build fetches the Go 1.27 toolchain by itself. Then any static file server can serve the folder (\"serve static files\" points this project's server at a folder).",
 	}
 	execNote := ""
@@ -386,8 +428,8 @@ func (p *Project) planWasmApp(req EditRequest) (*EditPlan, string) {
 		execNote = "wasm_exec.js is NOT in this plan: no Go 1.27 install was found on this machine to copy it from. Copy lib/wasm/wasm_exec.js from any Go 1.27 install into " + folder + " — the page can't start the app without it."
 	}
 	notes = append(notes, execNote)
-	summary := fmt.Sprintf("Create the wasm app in %s: %s (its own module, pinned to Go %s), %s (the app — it builds the page in the browser through syscall/js), %s (a small simd unit that adds rows of numbers a vector at a time), and %s (the host page, with the Material styles, that loads the built app).",
-		folder, p.LinkPath(goModRel), WasmAppGoVersion, p.LinkPath(mainRel), p.LinkPath(vectorRel), p.LinkPath(indexRel))
+	summary := fmt.Sprintf("Create the wasm app in %s: %s (its own module, pinned to Go %s), %s (the app — it builds the page in the browser through syscall/js), %s (the home page — the welcome heading and the vector demo, in a file of their own), %s (a small simd unit that adds rows of numbers a vector at a time), and %s (the host page, with the Material styles, that loads the built app).",
+		folder, p.LinkPath(goModRel), WasmAppGoVersion, p.LinkPath(mainRel), p.LinkPath(homeRel), p.LinkPath(vectorRel), p.LinkPath(indexRel))
 	return &EditPlan{
 		Summary:    summary,
 		VerifyDesc: fmt.Sprintf("the wasm app is in %s", folder),
@@ -401,17 +443,21 @@ func (p *Project) planWasmApp(req EditRequest) (*EditPlan, string) {
 					return false
 				}
 			}
+			mainSeen, homeSeen := false, false
 			for _, pkg := range after.Packages {
 				if pkg.Dir != folder {
 					continue
 				}
 				for _, fn := range pkg.Funcs {
 					if fn.Receiver == "" && fn.Name == "main" {
-						return true
+						mainSeen = true
+					}
+					if fn.Receiver == "" && fn.Name == "Home" {
+						homeSeen = true
 					}
 				}
 			}
-			return false
+			return mainSeen && homeSeen
 		},
 	}, ""
 }
@@ -419,6 +465,11 @@ func (p *Project) planWasmApp(req EditRequest) (*EditPlan, string) {
 // wasmComponentsRel names the app's components file.
 func wasmComponentsRel(folder string) string {
 	return path.Join(folder, "components.go")
+}
+
+// wasmHomeRel names the app's home page file.
+func wasmHomeRel(folder string) string {
+	return path.Join(folder, "home.go")
 }
 
 // wasmBuilderName is a component's builder function name:

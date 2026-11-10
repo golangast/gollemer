@@ -494,8 +494,13 @@ And the wasm chain — a page that is a program:
 - `add a navigation bar to the header in jim` — a component
   inside a part (also `add a navigation bar to the header of
   the wasm app in jim`)
+- `add a home page to the wasm app in jim` — the app's
+  welcome as a home page file of its own (new apps are born
+  with one; this gives one to an older app, moving the
+  welcome out of main.go)
 - `explain the wasm app in jim` — the app walked file by
-  file in plain words
+  file in plain words, closing with the sentences it
+  answers
 - `add a full stack app called notes in jim with fields
   title, pages number and done yes-no` — a form in the app,
   REST handlers at `/api/notes`, and the `notes` table in
@@ -585,9 +590,12 @@ because the app's vector unit uses Go 1.27's portable
 The folder gains `jim/main.go` (the app: it sets the
 garbage collector's GOGC knob low in code —
 `runtime/debug.SetGCPercent(50)` — since a browser page
-has no environment to pass flags through, then builds a
-welcome heading and the vector demo's result into the
-page), `jim/vector.go` (the simd unit), `jim/index.html`
+has no environment to pass flags through, then mounts
+the app's home page), `jim/home.go` (the home page: the
+welcome heading and the vector demo's result, in a file
+of their own — the first thing main mounts, so the
+welcome is a piece of its own to edit), `jim/vector.go`
+(the simd unit), `jim/index.html`
 (the host page, carrying the Material styles, with the
 build in its opening comment:
 `GOEXPERIMENT=simd GOOS=js GOARCH=wasm go build -o main.wasm .`,
@@ -687,8 +695,10 @@ gollemer [runner]> Stopped server/main.go — it's no longer running. Its log ke
 ```
 
 (From a real run of the chat in a scratch project,
-2026-11-10 — the same sitting produced the explain and
-full-stack examples below.)
+2026-11-10 — the same sitting produced the full-stack
+example below; the explain example was re-captured the
+same day, after the home page and the commands readout
+landed, from a run of the same recipe.)
 
 The app can also grow the way a page does — a header and
 a footer, each its own package inside the app:
@@ -697,8 +707,8 @@ a footer, each its own package inside the app:
 builder over the app bar) and `jim/footer/footer.go`
 (package footer, `Footer(doc)` over the footer bar), and
 main.go imports both by the app's own module path and
-mounts the header above the app's components and the
-footer below them. One part at a time works too ("add a
+mounts the header above the home page and the footer
+below the app's components. One part at a time works too ("add a
 header to the wasm app in jim"). If the body already
 mounts an app bar or a footer component, it MOVES into
 its part — builder, words, and id unchanged, rendering
@@ -709,16 +719,38 @@ puts the component inside the part, its builder in
 own markers. Events reach a part's components by the
 same ids as the body's: body and parts are one app.
 
+An older app — one made before the home page was a
+file of its own — gets one from `add a home page to the
+wasm app in jim`: the welcome moves out of main.go into
+`jim/home.go`, whole, and main mounts it where the
+inline block stood, so the page renders exactly as it
+did and nothing renders twice; a welcome edited past
+the standard block refuses plainly rather than being
+rewritten by guess.
+
 And the app explains itself: `explain the wasm app in
 jim` walks the folder in plain words — the module and
-its Go 1.27 pin, the program, the vector unit, the
-components and events by name, the header and footer
-parts when it has them, the host page, the webserver in
-`server/` when it serves the app (the two folders named
-as what they are: the app runs in the browser, the
-server hands it over), and whether `main.wasm` is built
-or isn't — then how to build it, how to serve it, and
-what happens when the page opens.
+its Go 1.27 pin, the program, the home page, the vector
+unit, the components and events by name, the header and
+footer parts when it has them, the host page, the
+webserver in `server/` when it serves the app (the two
+folders named as what they are: the app runs in the
+browser, the server hands it over), and whether
+`main.wasm` is built or isn't — then how to build it,
+how to serve it, and what happens when the page opens.
+Then it closes with the commands readout — the
+sentences this app answers, for its folder (`add a card
+to jim`, `build the wasm app in jim`, and the rest),
+composed from the app's state: the parts sentence only
+while it has neither part, the into-the-header sentence
+only once a header is really there, the home-page
+sentence only while it has no `home.go` — and one
+worked example at the end, a button, a card, and the
+when-sentence that connects them, because a list names
+the moves but an example shows them connected. A
+creation prints the same readout right after its
+confirmation, so the sentences are there at the moment
+the app first exists.
 The same tour follows the first successful build or
 serve of an app on its own, once per app (it remembers,
 per project, in `~/.gollemer_wasm_explained.json`); after
@@ -728,13 +760,24 @@ that it answers when asked, and only then.
 you> explain the wasm app in jim
 gollemer [composer]> The wasm app in jim, file by file:
   jim/go.mod — the app's own module: it makes the folder a module of its own, apart from the project's build, and pins Go 1.27 — the portable simd package the vector unit uses exists for wasm only there.
-  jim/main.go — the program: it sets the garbage collector's GOGC knob low in code (a browser page has no environment to pass the flag through); builds the welcome heading and the vector demo's sums into the page; mounts the app's components; then stays running — a wasm program whose main returns is finished, and the browser takes its page down with it.
+  jim/main.go — the program: it sets the garbage collector's GOGC knob low in code (a browser page has no environment to pass the flag through); mounts the home page, then the app's components; then stays running — a wasm program whose main returns is finished, and the browser takes its page down with it.
+  jim/home.go — the home page: the welcome heading and the vector demo's sums, in a file of their own — main mounts it first, before the components, so the welcome leads the page. Edit the heading here to make the page yours.
   ...
-  jim/main.wasm — the built app, 2,733,212 bytes: the file the browser fetches and runs. It is a build product, remade by every build.
+  jim/main.wasm — the built app, 2,731,693 bytes: the file the browser fetches and runs. It is a build product, remade by every build.
   server/main.go — the Go webserver, in its own folder at the project root: it hands the app's files to the browser at /static/ — the host page, the glue, and main.wasm. It is an ordinary Go program; the app itself runs in the browser, not in it.
 To build it: "build the wasm app in jim" runs the host page's own build command in jim (GOEXPERIMENT=simd GOOS=js GOARCH=wasm go build -o main.wasm .) — a first build fetches the Go 1.27 toolchain by itself.
 To serve it: two folders, two jobs — jim is the program that runs in the browser; the server folder is the Go program that hands it over. "serve the wasm app in jim" runs the server in server/, and the app answers at http://localhost:8080/static/.
 When the page opens: the browser loads wasm_exec.js, fetches main.wasm, and starts the Go program, which builds the page in the browser — and the events answer as you click and change things.
+What you can say for this app:
+  add a card to jim — a card on the page, a Go builder the program mounts.
+  add a button called save to jim — a button with a name of its own, so an event can find it.
+  when the save button is clicked, show the card — an event: what happens when the button is clicked.
+  add a header and footer to the wasm app in jim — the app's header and footer, each its own package inside the app.
+  build the wasm app in jim — compile the app to main.wasm.
+  serve the wasm app in jim — run the Go webserver that hands the app to the browser, and print its address.
+  add a full stack app called notes in jim with fields title and body — a form and a list in the app, with the REST handlers and the database table behind them.
+  explain the wasm app in jim — this walk, any time you ask.
+For example, making a button do something takes three sentences: "add a button called save to jim" makes the button, "add a card to jim" makes the card it acts on, and "when the save button is clicked, set the card's words to 'Saved'" connects them — the button is made, the card is made, and the when-sentence is the wire between them.
 ```
 
 And one sentence grows a whole working stack through
