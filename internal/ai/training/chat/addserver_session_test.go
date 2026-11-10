@@ -43,7 +43,10 @@ import (
 // guidance has two seats, exactly as in the unified loop:
 // the bare-database claim directly before the concept book
 // (it preempts the book's bare statement name), and the
-// remaining kinds directly before the write boundary.
+// remaining kinds directly before the write boundary. The
+// wasm build claim sits directly before the wasm-app
+// claim, exactly as in the unified loop — resolution-
+// gated, firing only on a folder already holding an app.
 func claimChain(line string, ask editAsk, profile *UserProfile) bool {
 	if runClarifyAnswer(line, ask) {
 		return true
@@ -104,6 +107,9 @@ func claimChain(line string, ask editAsk, profile *UserProfile) bool {
 		return true
 	}
 	if runTemplatedPage(line, ask) {
+		return true
+	}
+	if runBuildWasmApp(line, ask, profile) {
 		return true
 	}
 	if runWasmApp(line, ask) {

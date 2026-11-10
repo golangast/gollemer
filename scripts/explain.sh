@@ -260,6 +260,17 @@ Create folders and files — shown first, gated, then verified:
       kind and no name, the chat asks which one.
       Plain pages take no events: they stay
       script-free.
+  you> build the wasm app in jim
+      compiles the app where it sits: the host page's
+      build command, run in the folder behind the
+      usual yes — the compiler's own words when it
+      fails, the new main.wasm and its size when it
+      lands. No folder named builds the last app you
+      worked on, and building again after an edit is
+      ordinary. With no app in the folder yet, the
+      same words are the creation ask above — the
+      chat tells the two apart by what the folder
+      already holds.
   you> serve static files
       wires the webpage's folder — or one you name:
       "serve static files from jim/temp", "serve the

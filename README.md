@@ -561,6 +561,20 @@ folder named means the last app this conversation worked
 on. Plain pages stay script-free: events belong to wasm
 apps alone.
 
+And building the app is a sentence: `build the wasm app
+in jim` runs the host page's build in the app's folder —
+the exact command from its comment, behind the usual
+yes — and answers with the compiler's own words when it
+fails, or the new `main.wasm` and its size when it lands.
+No folder named builds the last app the conversation
+worked on, and building again after an edit is ordinary:
+the sentence never refuses because `main.wasm` is
+already there. One word does two duties — with no app in
+the folder yet, "build a wasm app in jim" is the creation
+ask above; the chat tells the two apart by what the
+folder already holds, and only ever compiles an app that
+is really there.
+
 A page's style sheets, scripts, and pictures are files too, and
 the server can serve the whole folder they live in: `serve static
 files` registers that folder at `/static/` on your existing

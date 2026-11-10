@@ -1542,6 +1542,21 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if hook.run(func() bool { return tryTemplatedPage(line, reader) }) {
 			continue
 		}
+		// Build the wasm app (wasmbuild.go): "build the
+		// wasm app in jim" runs the documented build in the
+		// app's folder, gated, the compiler's own words on
+		// failure. Seated directly before the wasm app
+		// claim because "build" is also that claim's verb —
+		// the same line is a creation sentence there — so
+		// resolution is the disambiguator, the run claim's
+		// server rule: this claim fires only when the named
+		// (or session's last-touched) folder already holds
+		// a wasm app, and declines untouched everywhere
+		// else, leaving the creation claim's behaviour on
+		// the line byte-identical.
+		if hook.run(func() bool { return tryBuildWasmApp(line, reader, profile) }) {
+			continue
+		}
 		// The wasm app skeleton (wasm.go): a browser app in
 		// one folder — its own module pinning Go 1.27, its
 		// main.go building the page through syscall/js, a
