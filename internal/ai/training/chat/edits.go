@@ -295,6 +295,19 @@ func runAssembledEdit(line string, ask editAsk) bool {
 	return executeEditPlan(req, ask)
 }
 
+// editExtraCheck is one more build-shaped check a
+// composition can ask the spine to run inside the
+// transaction — after the project's own build, before the
+// re-analyze and verify: it returns what was checked, in
+// plain words for the failure line, the checker's own
+// output, and whether it passed. A failure rolls the
+// whole landing back, exactly like a build failure. The
+// full-stack piece checks the wasm app's compile this
+// way: the app is its own module, so the root build can't
+// see into it, and a stack whose form doesn't compile
+// must not land.
+type editExtraCheck func() (what, out string, ok bool)
+
 // executeEditPlan runs the one write spine for an assembled edit
 // request whose project is already the current one (the caller
 // acquired it — runAssembledEdit via ensureProject, the webserver
@@ -304,6 +317,12 @@ func runAssembledEdit(line string, ask editAsk) bool {
 // applying, the original bytes go back and the reply says exactly
 // that. On no: nothing was ever written.
 func executeEditPlan(req analyze.EditRequest, ask editAsk) bool {
+	return executeEditPlanChecked(req, ask, nil)
+}
+
+// executeEditPlanChecked is executeEditPlan with an
+// optional extra in-transaction check (editExtraCheck).
+func executeEditPlanChecked(req analyze.EditRequest, ask editAsk, extra editExtraCheck) bool {
 	tag := cTag("gollemer [composer]>")
 	proj := lastAnalyzeProject
 	plan, refusal := proj.PlanEdit(req)
@@ -374,6 +393,22 @@ func executeEditPlan(req analyze.EditRequest, ask editAsk) bool {
 			return true
 		}
 		built = true
+	}
+	// The composition's own extra check, when it asked for
+	// one, inside the same transaction: a failure here is a
+	// build failure for the landing as a whole, and the
+	// original bytes go back the same way.
+	if extra != nil {
+		what, out, ok := extra()
+		if !ok {
+			unrestored := tx.rollback()
+			fmt.Printf("%s That edit doesn't build — %s — so I restored your files from the on-disk backups — %s.\n", tag, what, rollbackOutcome(unrestored, proj.LinkPath))
+			if strings.TrimSpace(out) != "" {
+				fmt.Printf("The build said: %s\n", strings.TrimSpace(out))
+			}
+			recordBrain("composer", false, "edit rolled back: extra check failed: "+req.Kind)
+			return true
+		}
 	}
 	// Re-analyze and verify the intended structure now exists.
 	fresh, aerr := analyze.Analyze(root)

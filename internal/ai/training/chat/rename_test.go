@@ -3,6 +3,7 @@ package chat
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -30,7 +31,7 @@ func TestParseRenameSentenceForms(t *testing.T) {
 			t.Errorf("parseRenameSentence(%q) not claimed", c.line)
 			continue
 		}
-		if got != c.want {
+		if !reflect.DeepEqual(got, c.want) {
 			t.Errorf("parseRenameSentence(%q) = %+v, want %+v", c.line, got, c.want)
 		}
 	}

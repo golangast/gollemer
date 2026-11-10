@@ -309,6 +309,25 @@ Create folders and files — shown first, gated, then verified:
       tour follows the first build or serve of an
       app by itself, once per app; after that it
       answers when asked, and only then.
+  you> add a full stack app called notes in jim with fields title, pages number and done yes-no
+      grows one named thing through every layer in
+      one plan: jim gains the notes form (one input
+      per field — text, number, or a yes-no checkbox
+      by the kind word after its name) over the list
+      of saved rows, and the server gains server/
+      notes.go — a table also called notes and the
+      REST handlers at /api/notes (list, read one,
+      create, update, delete; JSON in the fields' own
+      names) — wired into the server in server/ with
+      one setup line. The database is rqlite: the
+      rows live in a running node's own file and
+      survive the server restarting, and the node
+      has to be running for the data to answer
+      (rqlited -node-id=1 data/). The folder must
+      already hold a wasm app. One thing per ask,
+      three field kinds, no login, and the form's
+      one check is an empty text field, refused in
+      the page before anything is sent.
   you> serve static files
       wires the webpage's folder — or one you name:
       "serve static files from jim/temp", "serve the

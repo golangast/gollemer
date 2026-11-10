@@ -49,7 +49,9 @@ import (
 // gated, firing only on a folder already holding an app.
 // The wasm parts and explain claims sit directly after
 // serve-wasm, before the component claims, exactly as in
-// the unified loop.
+// the unified loop. The full-stack claim sits directly
+// after the wasm events claim, exactly as in the unified
+// loop.
 func claimChain(line string, ask editAsk, profile *UserProfile) bool {
 	if runClarifyAnswer(line, ask) {
 		return true
@@ -140,6 +142,9 @@ func claimChain(line string, ask editAsk, profile *UserProfile) bool {
 		return true
 	}
 	if runWasmEvent(line, ask) {
+		return true
+	}
+	if runFullStack(line, ask) {
 		return true
 	}
 	if runDelegate(line, ask) {

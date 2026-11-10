@@ -154,6 +154,20 @@ const (
 	// against the components the app actually has mounted.
 	EditWasmEvent = "wasm_event"
 
+	// Full stack (editfullstack.go): one named thing grown
+	// through every layer in one plan — a table in the
+	// project's rqlite database and the REST handlers that
+	// read and write it (a new file beside the serving
+	// program, its setup called from that program's main), a
+	// form and a list in the wasm app that talk to those
+	// handlers, and the /static/ registration that serves
+	// the app from the same server when it isn't there yet.
+	// The request carries the thing and its fields (as
+	// parsed by the chat layer), the app's folder in
+	// WasmFolder, and the serving file the composition
+	// resolved in StackServerFile.
+	EditFullStack = "full_stack"
+
 	// Page family (editpage.go): a named page kind as a matched
 	// page+handler pair — an .html page created with starter
 	// content (never overwritten), the handler that serves it
@@ -342,6 +356,19 @@ type EditRequest struct {
 	EventTargetKind string
 	EventTargetName string
 	EventWords      string
+
+	// full_stack: the thing the sentence names ("notes" —
+	// used exactly as given for the route segment
+	// /api/<thing>, the table, and the generated names), its
+	// fields in sentence order, and the serving file the
+	// chat's composition resolved as the backend's home:
+	// the program whose package the handlers join and whose
+	// main gains the setup call ("" = no serving program in
+	// either home yet — the plan creates the server in
+	// server/, the serve-the-wasm-app arrangement).
+	StackThing      string
+	StackFields     []StackField
+	StackServerFile string
 
 	// templated_page: the project folder the scaffold
 	// belongs to (SiteFolder, project-relative slash path;
@@ -655,6 +682,8 @@ func (p *Project) PlanEdit(req EditRequest) (*EditPlan, string) {
 		return p.planWasmPart(req)
 	case EditWasmEvent:
 		return p.planWasmEvent(req)
+	case EditFullStack:
+		return p.planFullStack(req)
 	case EditPage:
 		return p.planPage(req)
 	case EditDelegate:

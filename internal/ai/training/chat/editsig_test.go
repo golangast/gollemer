@@ -3,6 +3,7 @@ package chat
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -50,7 +51,7 @@ func TestParseSignatureForms(t *testing.T) {
 			t.Errorf("parseAssembledEdit(%q) not claimed", c.line)
 			continue
 		}
-		if got != c.want {
+		if !reflect.DeepEqual(got, c.want) {
 			t.Errorf("parseAssembledEdit(%q) = %+v, want %+v", c.line, got, c.want)
 		}
 	}

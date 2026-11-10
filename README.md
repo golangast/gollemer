@@ -641,6 +641,40 @@ serve of an app on its own, once per app (it remembers,
 per project, in `~/.gollemer_wasm_explained.json`); after
 that it answers when asked, and only then.
 
+And one sentence grows a whole working stack through
+every layer at once: `add a full stack app called notes
+in jim with fields title, pages number and done yes-no`.
+The app in `jim` gains a form (one labeled input per
+field — a text box, a number box, a checkbox, by the
+kind word after the field's name; no kind word means
+text) over a list of the saved rows, each with its own
+delete button, and the project's server gains the other
+half: a `notes` table and the REST handlers at
+`/api/notes` — list, read one, create (201), update,
+delete — answering JSON in the fields' own names. The
+name is used exactly as given, for the address and the
+table both. The plan shows the route, the table, and
+every file before the gate, and the landing checks both
+builds — the project's and the wasm app's own compile —
+before it counts as landed. Asking for the same thing
+again is already-there; a different thing (`called
+tasks`) grows beside it with files of its own. The
+folder must already hold a wasm app — the form lives in
+it — so an app-less folder names the two steps instead.
+The database is rqlite, the engine the chat's own
+database pieces already speak: the rows live in a
+running node's SQLite file (the generated code talks to
+it over its HTTP API, its connection in its own file,
+never inlined into `main()`), so they survive the server
+stopping and starting — and the node has to be running
+for the data to answer: start one with
+`rqlited -node-id=1 data/` (ask `how do I run rqlite`
+and the chat walks through it). v1 limits, in the open:
+one thing per ask, the three field kinds, no login or
+accounts of any kind, and the form's checks are the
+simple kind — an empty text field is refused in the
+page, before anything is sent.
+
 A page's style sheets, scripts, and pictures are files too, and
 the server can serve the whole folder they live in: `serve static
 files` registers that folder at `/static/` on your existing

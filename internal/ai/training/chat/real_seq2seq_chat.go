@@ -1657,6 +1657,22 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if hook.run(func() bool { return tryWasmEvent(line, reader) }) {
 			continue
 		}
+		// The full-stack piece (fullstack.go): one named
+		// thing grown through every layer — "add a full
+		// stack app called notes in jim with fields title,
+		// pages number and done yes-no" — the rqlite table
+		// and the /api/ REST handlers on the Go backend,
+		// and the form and list in the wasm app, in one
+		// plan behind one gate. Seated directly after the
+		// wasm events claim it completes: its shape ("full
+		// stack app called …") is its own — the wasm app
+		// claim wants the word "wasm" where this one wants
+		// "full stack", and the component claim's registry
+		// has no "full" in it — so no neighbour's line is
+		// taken, and its parse declines everything else.
+		if hook.run(func() bool { return tryFullStack(line, reader) }) {
+			continue
+		}
 		// Cross-file delegates, claimed deterministically beside
 		// the other write-side parsers: "add a function in
 		// app/main.go that calls store.Load" writes code in one

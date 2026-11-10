@@ -117,6 +117,8 @@ func renderLandingConfirmation(f landingFacts) string {
 		default:
 			s1 = fmt.Sprintf("The footer is in the wasm app in %s — it mounts below the app's components", f.fresh.LinkPath(f.req.WasmFolder))
 		}
+	case analyze.EditFullStack:
+		s1 = fmt.Sprintf("The %s stack is grown: the /api/%s handlers and the %s table's setup are in %s, and the %s form and its list are in the wasm app in %s", f.req.StackThing, f.req.StackThing, f.req.StackThing, f.fresh.LinkPath(rel), f.req.StackThing, f.fresh.LinkPath(f.req.WasmFolder))
 	case analyze.EditWasmApp:
 		s1 = fmt.Sprintf("The wasm app is in %s", f.fresh.LinkPath(f.req.WasmFolder))
 		s2 = fmt.Sprintf("It builds with Go %s — in %s, run: %s (a first build fetches that toolchain by itself) — and once main.wasm is built, any static server can serve the folder.", analyze.WasmAppGoVersion, f.req.WasmFolder, analyze.WasmBuildCommand)

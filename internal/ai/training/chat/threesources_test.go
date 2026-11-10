@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -56,7 +57,7 @@ func TestParseAssembledEditStructTags(t *testing.T) {
 			t.Errorf("parseAssembledEdit(%q) not claimed, want %+v", c.line, c.want)
 			continue
 		}
-		if got != c.want {
+		if !reflect.DeepEqual(got, c.want) {
 			t.Errorf("parseAssembledEdit(%q) =\n  %+v\nwant\n  %+v", c.line, got, c.want)
 		}
 	}
