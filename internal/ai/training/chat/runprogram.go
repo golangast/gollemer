@@ -636,6 +636,11 @@ func runProgramClaim(target string, ask editAsk, profile *UserProfile) {
 	}
 	binPath, buildOut, buildErr := buildProgram(rootAbs, buildArg)
 	if buildErr != nil {
+		if modDir, nested := nestedModuleBuild(rootAbs, rel, buildOut); nested {
+			fmt.Printf("%s %s\n", tag, programNestedModuleText(rel, modDir, buildOut))
+			recordBrain("runner", false, "program build failed: nested module: "+rel)
+			return
+		}
 		fmt.Printf("%s %s\n", tag, programBuildFailText(rel, buildOut))
 		recordBrain("runner", false, "program build failed: "+rel)
 		return
@@ -1041,6 +1046,15 @@ func listenURLFromSource(src []byte) string {
 func programBuildFailText(rel, out string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "It didn't run — %s doesn't compile yet. The compiler's own words:\n", rel)
+	writeCappedCompilerOutput(&b, out)
+	b.WriteString("Fix those, then say \"run the program " + rel + "\" again.")
+	return strings.TrimRight(b.String(), "\n")
+}
+
+// writeCappedCompilerOutput writes the compiler's own words
+// into b, verbatim up to the readable cap every build-failure
+// narration shares.
+func writeCappedCompilerOutput(b *strings.Builder, out string) {
 	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
 	if strings.TrimSpace(out) == "" {
 		lines = nil
@@ -1054,9 +1068,51 @@ func programBuildFailText(rel, out string) string {
 		b.WriteString(l + "\n")
 	}
 	if len(lines) > maxLines {
-		fmt.Fprintf(&b, "[… %d more lines not shown]\n", len(lines)-maxLines)
+		fmt.Fprintf(b, "[… %d more lines not shown]\n", len(lines)-maxLines)
 	}
-	b.WriteString("Fix those, then say \"run the program " + rel + "\" again.")
+}
+
+// nestedModuleBuild reports whether a failed build hit the
+// nested-module wall — and if so, which folder's go.mod is
+// the wall. The wall is a fact about the project, not about
+// the code: the target lives inside a folder that carries
+// its own go.mod, so it belongs to that module, and this
+// project's build cannot reach it — the compiler says so
+// itself ("main module … does not contain package …"). Two
+// witnesses are required: the compiler's words AND a go.mod
+// really present in an ancestor folder of the target (the
+// project's own root go.mod doesn't count — every program
+// here lives under it). A lone .go file never hits the wall
+// (it builds as command-line-arguments even inside a nested
+// folder); the package form — two or more files — is what
+// runs into it.
+func nestedModuleBuild(rootAbs, rel, out string) (string, bool) {
+	if !strings.Contains(out, "does not contain package") {
+		return "", false
+	}
+	for dir := filepath.Dir(filepath.FromSlash(rel)); dir != "." && dir != string(filepath.Separator); dir = filepath.Dir(dir) {
+		if _, err := os.Stat(filepath.Join(rootAbs, dir, "go.mod")); err == nil {
+			return filepath.ToSlash(dir), true
+		}
+	}
+	return "", false
+}
+
+// programNestedModuleText is the nested-module failure
+// report (John's live failure, 2026-11-10: "run the server
+// jim" where jim is a wasm app — its own module). The
+// ordinary failure text ends "Fix those, then say 'run the
+// program …' again" — wrong here in a way that strands the
+// user: nothing they can fix makes this project's build
+// reach inside another module, and the same ask would fail
+// the same way forever. This text names the wall and the way
+// in instead, over the same capped compiler output, and
+// sends them nowhere back to this ask.
+func programNestedModuleText(rel, modDir, out string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "I didn't run %s — and it can't be run from here: %s is its own Go module (the go.mod at %s/go.mod), walled off from this project, so this project's build can't reach the program inside it. A program in its own module runs from inside its folder — start the chat in %s, or run it there yourself: cd %s && go run .\nThe compiler's own words:\n",
+		rel, modDir, modDir, modDir, filepath.ToSlash(filepath.Dir(filepath.FromSlash(rel))))
+	writeCappedCompilerOutput(&b, out)
 	return strings.TrimRight(b.String(), "\n")
 }
 
