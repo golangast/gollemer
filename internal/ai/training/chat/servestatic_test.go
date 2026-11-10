@@ -190,7 +190,12 @@ func TestServeStaticSessionDefaultFolder(t *testing.T) {
 	if !strings.Contains(out, "already serves the jim/temp folder at /static/") {
 		t.Errorf("second ask was not the already-serving answer:\n%s", out)
 	}
-	if n := strings.Count(readBack(t, root, "jim/main.go"), `"/static/"`); n != 1 {
+	// Count registrations, not "/static/" occurrences: the
+	// one correct registration line carries the needle twice
+	// (the Handle pattern and the StripPrefix argument), so
+	// counting the bare string reports 2 for a single
+	// registration — the count below counts the line itself.
+	if n := strings.Count(readBack(t, root, "jim/main.go"), staticRegLineForJimTemp); n != 1 {
 		t.Errorf("the route was registered %d times, want exactly 1", n)
 	}
 }
