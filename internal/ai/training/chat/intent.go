@@ -320,6 +320,26 @@ var dataNameRes = []*regexp.Regexp{
 	regexp.MustCompile(`(?i)who (?:changes|writes to) (?:the )?(.+?)\s*\??$`),
 }
 
+// dataflowShape reports whether a line is actually shaped like
+// a dataflow question — one of the chat's own name shapes
+// (dataNameRes) or one of the analyze package's dataflow shapes
+// (analyze.IsDataflowQuestion). It is the gate on the dataflow_q
+// dispatch below: the intent label says what the classifier
+// guessed, but the shape says what the user actually asked, and
+// only a shaped line may be answered from the varflow index. A
+// statement that merely MENTIONS a word the project tracks has
+// no shape — the token scan in slotVarName would happily match
+// that word, which is exactly the theft this gate exists to
+// stop (see the dataflow_q case).
+func dataflowShape(line string) bool {
+	for _, re := range dataNameRes {
+		if re.MatchString(line) {
+			return true
+		}
+	}
+	return analyze.IsDataflowQuestion(line)
+}
+
 // slotVarName pulls the variable/field name out of a dataflow
 // question: a token the analyzed project actually tracks (bare or
 // dotted) wins; else the name captured by the question shapes.
@@ -630,6 +650,22 @@ func dispatchIntent(intent, line string, profile *UserProfile) bool {
 	case "summarize":
 		return handleBeginnerCommand("/summarize", profile)
 	case "dataflow_q":
+		// Shape gate (2026-11-09): the classifier's label alone
+		// never earns this answer. slotVarName's project-token
+		// scan matches ANY word the analyzed project tracks, and
+		// plain words are routine variable names — measured
+		// live, "i need resources for a database" was classified
+		// dataflow_q and answered with a varflow report about
+		// the local variable `need`: a confident report about
+		// an entity the user never asked about. Without a
+		// dataflow question shape (dataflowShape), the case
+		// declines and the line falls through to normal routing
+		// exactly as if the layer had passed on it. Real
+		// dataflow questions carry a shape by construction, so
+		// their answers are byte-identical to before.
+		if !dataflowShape(line) {
+			return false
+		}
 		if !ensureProject() {
 			return true
 		}

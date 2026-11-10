@@ -33,8 +33,8 @@ import (
 
 // claimChain runs one line through the unified loop's
 // deterministic claims, in order, with a scripted gate answer.
-// Package lookup sits directly after build resources, exactly
-// as in the loops. Run-the-program sits directly after learn,
+// Book resources sit directly after build resources and
+// package lookup directly after them, exactly as in the loops. Run-the-program sits directly after learn,
 // ahead of the beginner five, exactly as in the unified loop,
 // and the basic Linux commands sit directly after it (with a
 // non-terminal session, as in these tests). Ambiguous-piece
@@ -74,6 +74,9 @@ func claimChain(line string, ask editAsk, profile *UserProfile) bool {
 		return true
 	}
 	if tryBuildResources(line, profile) {
+		return true
+	}
+	if tryBookResources(line) {
 		return true
 	}
 	if tryPackageLookup(line) {

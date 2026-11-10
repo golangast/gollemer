@@ -603,6 +603,16 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		if hook.run(func() bool { return tryBuildResources(line, profile) }) {
 			continue
 		}
+		// Book resources, claimed directly beside the build-goal
+		// resources: the need/want/any lead-in shapes ("i need
+		// resources for a database") the Advocates claim's
+		// line-initial patterns can't see, answered from the Go
+		// knowledge book (bookresources.go) — deterministically,
+		// ahead of the intent layer, which read that exact line
+		// as a dataflow question and answered for a variable.
+		if tryBookResources(line) {
+			continue
+		}
 		// Package lookup, claimed beside resources: an explicit
 		// "which package …" question is answered from the stdlib
 		// catalog snapshot (data/stdpackages.json) — a library
@@ -853,6 +863,16 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		// classifier guess. Imperative build commands for this
 		// project are not shapes here — the composer keeps them.
 		if hook.run(func() bool { return tryBuildResources(line, profile) }) {
+			continue
+		}
+		// Book resources, claimed directly beside the build-goal
+		// resources: the need/want/any lead-in shapes ("i need
+		// resources for a database") the Advocates claim's
+		// line-initial patterns can't see, answered from the Go
+		// knowledge book (bookresources.go) — deterministically,
+		// ahead of the intent layer, which read that exact line
+		// as a dataflow question and answered for a variable.
+		if tryBookResources(line) {
 			continue
 		}
 		// Package lookup, claimed beside resources: an explicit
@@ -1409,6 +1429,16 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// classifier guess. Imperative build commands for this
 		// project are not shapes here — the composer keeps them.
 		if hook.run(func() bool { return tryBuildResources(line, profile) }) {
+			continue
+		}
+		// Book resources, claimed directly beside the build-goal
+		// resources: the need/want/any lead-in shapes ("i need
+		// resources for a database") the Advocates claim's
+		// line-initial patterns can't see, answered from the Go
+		// knowledge book (bookresources.go) — deterministically,
+		// ahead of the intent layer, which read that exact line
+		// as a dataflow question and answered for a variable.
+		if tryBookResources(line) {
 			continue
 		}
 		// Package lookup, claimed beside resources: an explicit
