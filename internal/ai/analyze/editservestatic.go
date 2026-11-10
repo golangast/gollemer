@@ -72,9 +72,16 @@ func (p *Project) planServeStatic(req EditRequest) (*EditPlan, string) {
 	}
 
 	// Conflicts at the route, read across the whole project:
-	// a path answers for one thing, never two.
-	if _, _, refusal := p.staticRouteState(w, folder); refusal != "" {
-		return nil, refusal
+	// a path answers for one thing, never two. The one
+	// exception is the serve-the-wasm-app composition's
+	// targeted request (StaticSiteFile): the sentence has
+	// already named a registration serving this folder from
+	// another program and chosen its own server instead, so
+	// that one state proceeds; every other refusal stands.
+	if served, servedFile, refusal := p.staticRouteState(w, folder); refusal != "" {
+		if !(req.StaticSiteFile != "" && served && servedFile != req.StaticSiteFile) {
+			return nil, refusal
+		}
 	}
 
 	// The site: a composable server (the default mux or the
@@ -84,6 +91,26 @@ func (p *Project) planServeStatic(req EditRequest) (*EditPlan, string) {
 		if s.kind != siteCustom {
 			composable = append(composable, s)
 		}
+	}
+	if req.StaticSiteFile != "" {
+		// The composition named its server: only that file's
+		// site may take the line, never another program.
+		var targeted []*wireSite
+		for _, s := range composable {
+			if s.file == req.StaticSiteFile {
+				targeted = append(targeted, s)
+			}
+		}
+		if len(targeted) == 0 {
+			for _, s := range w.sites {
+				if s.file == req.StaticSiteFile && s.kind == siteCustom {
+					return nil, fmt.Sprintf("%s already runs a server in its own way — %s — so a registration on the default mux would never be reached, and I won't add a second server. To serve the %s folder there, add this line where the server is set up, before it starts serving:\n\n%s",
+						p.LinkPath(s.file), s.how, folder, regLineFor(s))
+				}
+			}
+			return nil, fmt.Sprintf("there's no webserver in %s to add the %s folder's /static/ registration to — the file the sentence named holds no server this plan can see.", p.LinkPath(req.StaticSiteFile), folder)
+		}
+		composable = targeted
 	}
 	if len(composable) == 0 {
 		s := w.sites[0]

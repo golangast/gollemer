@@ -365,6 +365,19 @@ type EditRequest struct {
 	// project root), resolved by the chat layer.
 	StaticFolder string
 
+	// serve_static, set ONLY by the serve-the-wasm-app
+	// composition: the one server file (project-relative
+	// slash path) the registration must land in — the
+	// project's server/ server or its root-level program,
+	// the two homes that sentence serves from. Empty (every
+	// other caller) keeps the planner's own site choice and
+	// its project-wide route answers exactly as they are.
+	// When set, a /static/ registration already serving the
+	// folder from a DIFFERENT file does not refuse the plan:
+	// the composition has already named that registration
+	// to the user and chosen this file instead.
+	StaticSiteFile string
+
 	// wire_handler: the handler's name as typed ("" = the
 	// sentence named none — the planner resolves the project's
 	// one unregistered handler, or refuses naming the

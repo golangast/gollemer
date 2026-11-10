@@ -196,12 +196,20 @@ func TestServeWasmAppAsksForFolder(t *testing.T) {
 	}
 }
 
-// An existing server takes the serve-static edit, then runs:
-// the registration lands in the server's file, the partner
-// confirmation speaks, and the final line gives the app's
-// address from the serve statement's own port. The repeat
-// sentence finds the route already serving and goes straight
-// to the run.
+// An existing server in an unrelated folder (jim/main.go,
+// a program of its own) is NOT adopted by the sentence —
+// it is never spliced into and never run. Since John's
+// serving-shape rule (2026-11-10: the app in its own
+// folder, a dedicated Go webserver in server/, two folders
+// with one job each, no routes spliced into unrelated
+// programs), the sentence makes the server/ arrangement
+// instead: server/main.go is created carrying the route,
+// that server runs, and the unrelated program's file is
+// byte-unchanged. The repeat sentence finds the route
+// serving from server/ and goes straight to the run. (The
+// first version of this piece spliced into the existing
+// server wherever it lived; this test's earlier form
+// pinned exactly that, and the rule retired it.)
 func TestServeWasmAppExistingServer(t *testing.T) {
 	if !portFree("8080") {
 		t.Skip("port 8080 is in use; the existing-server serve proof needs it")
@@ -227,11 +235,18 @@ func TestServeWasmAppExistingServer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(src), `http.FileServer(http.Dir("app"))`) {
-		t.Errorf("the registration did not land in the server's file:\n%s", src)
+	if string(src) != staticJimMain {
+		t.Errorf("the unrelated server's file was edited — the sentence must leave it alone:\n%s", src)
 	}
-	if !strings.Contains(out, "now serves the app folder's files at /static/") {
-		t.Errorf("the serve-static confirmation is missing:\n%s", out)
+	srv, err := os.ReadFile(filepath.Join(dir, "server", "main.go"))
+	if err != nil {
+		t.Fatalf("the dedicated server was not created: %v", err)
+	}
+	if !strings.Contains(string(srv), `http.FileServer(http.Dir("app"))`) {
+		t.Errorf("the registration did not land in the created server:\n%s", srv)
+	}
+	if !strings.Contains(out, "The server in server/main.go now serves the wasm app in app at /static/") {
+		t.Errorf("the created-server confirmation is missing:\n%s", out)
 	}
 	if !strings.Contains(out, "The wasm app in app is served by your Go server — open http://localhost:8080/static/ in your browser to run it.") {
 		t.Errorf("the final address line is missing:\n%s", out)

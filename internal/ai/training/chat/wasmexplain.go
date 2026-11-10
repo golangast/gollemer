@@ -196,8 +196,31 @@ func wasmAppExplanation(rootAbs, folderRel string) string {
 	} else {
 		fmt.Fprintf(&b, "\n  The app isn't built yet — there's no main.wasm in %s, so a served page would have no program to start. The build below makes it.", folderRel)
 	}
+	// The other folder of the serving arrangement: the
+	// dedicated webserver in server/ at the project root,
+	// named only when its file is really there AND really
+	// serves this app (its /static/ registration names this
+	// folder) — the walk never invents a server.
+	servedByServerFolder := false
+	serverPort := ""
+	if srv, err := os.ReadFile(filepath.Join(rootAbs, analyze.ServeWasmServerFolder, "main.go")); err == nil {
+		if strings.Contains(string(srv), `"`+analyze.StaticRoute+`"`) &&
+			strings.Contains(string(srv), "Dir("+"\""+folderRel+"\")") {
+			servedByServerFolder = true
+			serverPort = serveStatementPort(rootAbs, analyze.ServeWasmServerFolder+"/main.go")
+			fmt.Fprintf(&b, "\n  %s/main.go — the Go webserver, in its own folder at the project root: it hands the app's files to the browser at /static/ — the host page, the glue, and main.wasm. It is an ordinary Go program; the app itself runs in the browser, not in it.", analyze.ServeWasmServerFolder)
+		}
+	}
 	fmt.Fprintf(&b, "\nTo build it: \"build the wasm app in %s\" runs the host page's own build command in %s (%s) — a first build fetches the Go 1.27 toolchain by itself.", folderRel, folderRel, analyze.WasmBuildCommand)
-	fmt.Fprintf(&b, "\nTo serve it: \"serve the wasm app in %s\" puts it on your Go server under /static/ — with the house port the address is http://localhost:8080/static/, and the serve sentence reads your server's real port from its own serve statement.", folderRel)
+	if servedByServerFolder {
+		address := "under /static/ on that server"
+		if serverPort != "" {
+			address = "at http://localhost:" + serverPort + "/static/"
+		}
+		fmt.Fprintf(&b, "\nTo serve it: two folders, two jobs — %s is the program that runs in the browser; the server folder is the Go program that hands it over. \"serve the wasm app in %s\" runs the server in server/, and the app answers %s.", folderRel, folderRel, address)
+	} else {
+		fmt.Fprintf(&b, "\nTo serve it: \"serve the wasm app in %s\" gives the app a dedicated Go webserver in a server folder at the project root (server/main.go) — its own folder, its one job — or adds the app's route to the one already there, and runs it: the app is handed to the browser under /static/, at http://localhost:8080/static/ with the house port, and the serve sentence reads your server's real port from its own serve statement.", folderRel)
+	}
 	b.WriteString("\nWhen the page opens: the browser loads wasm_exec.js, fetches main.wasm, and starts the Go program, which builds the page in the browser — and the events answer as you click and change things.")
 	return b.String()
 }

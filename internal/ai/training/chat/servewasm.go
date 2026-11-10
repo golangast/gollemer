@@ -36,21 +36,36 @@ package chat
 //     unbuilt app would hand the user a page whose program
 //     isn't there. (Auto-building is a v2 question; v1 says
 //     the step out loud.)
-//  4. The route: read through analyze.StaticRouteFacts. A
-//     /static/ route held by anything else is the
-//     serve-static planner's conflict, in its own words, and
-//     nothing is written. A route already serving THIS
-//     folder is already-there — the edit is skipped and the
-//     flow goes straight to the run. Otherwise the edit
-//     lands through the one spine (plan → gate → transaction
-//     → build-check → partner confirmation): on the project's
-//     existing server it is the serve-static edit itself;
-//     with no server anywhere it is the serve-wasm plan —
+//  4. The route: read through analyze.ServeWasmRouteFacts —
+//     this sentence's own probe. Only the project's own
+//     module counts: a registration or a server inside a
+//     nested module (a folder with its own go.mod) is that
+//     module's code, which this project can neither build
+//     nor run, so it is invisible here — the first version
+//     read the project-wide scan and ran a nested module's
+//     server file straight into its module wall (John's
+//     screenshot, 2026-11-10). And the sentence serves from
+//     exactly two homes, the arrangement that stays easy to
+//     explain: the dedicated webserver in server/ at the
+//     project root, or a program at the root itself. A
+//     module-visible /static/ held for a different folder is
+//     the serve-static planner's conflict, in its own words,
+//     and nothing is written. A route already serving THIS
+//     folder from one of the two homes is already-there —
+//     the edit is skipped and the flow goes straight to the
+//     run. A route serving this folder from some OTHER
+//     program deeper in the tree is named plainly before the
+//     gate and left untouched: the sentence serves from its
+//     own arrangement instead. Otherwise the edit lands
+//     through the one spine (plan → gate → transaction →
+//     build-check → partner confirmation): the serve-static
+//     edit targeted at the server/ server (or the root
+//     program) when one is there, else the serve-wasm plan —
 //     the house server created in server/main.go, the route
 //     already in it. After the spine, the facts are re-read:
-//     the route serves this folder, or the spine already
-//     said why not and the flow stops — the run only ever
-//     follows a registration that is really there.
+//     the route serves this folder from a home, or the spine
+//     already said why not and the flow stops — the run only
+//     ever follows a registration that is really there.
 //  5. The run: the serving file's program, through the run
 //     claim's own machinery (runProgramClaim — its gate, its
 //     build, its startup window, its stop shapes) — never a
@@ -232,21 +247,46 @@ func runServeWasmApp(line string, ask editAsk, profile *UserProfile) bool {
 		return true
 	}
 
-	// The route's state, before anything is planned.
-	facts := lastAnalyzeProject.StaticRouteFacts(folderRel)
+	// The route's state, before anything is planned — read
+	// the serve sentence's own way (ServeWasmRouteFacts):
+	// only this project's own module counts (a registration
+	// inside a nested module's folder is another module's
+	// code, invisible here), and the sentence serves from
+	// exactly two homes: the dedicated server in server/,
+	// or a program at the project root.
+	facts := lastAnalyzeProject.ServeWasmRouteFacts(folderRel)
 	if facts.Conflict != "" {
 		fmt.Printf("%s Not serving the wasm app in %s: %s\n", tag, folderRel, facts.Conflict)
 		recordBrain("runner", false, "wasm serve refused: /static/ taken")
 		return true
 	}
-	if !facts.Served {
-		// The edit, through the one spine: the serve-static
-		// registration on an existing server, or the
-		// create-a-server plan when the project has none.
-		if facts.HasServer {
+	serveFile := facts.ServedFile
+	if serveFile == "" {
+		// Find-or-make the arrangement, through the one
+		// spine: extend the server in server/ (or the
+		// root-level program) when one is there; create the
+		// server in server/ when neither home has one.
+		extendFile := facts.ServerFile
+		if extendFile == "" {
+			extendFile = facts.RootFile
+		}
+		if facts.OtherFile != "" {
+			// Another program deeper in the tree also
+			// registers /static/ for this app. It is named
+			// plainly, before the gate, and left alone: this
+			// sentence serves the app from its own
+			// arrangement instead.
+			from := "server/"
+			if extendFile != "" {
+				from = extendFile
+			}
+			fmt.Printf("%s %s also registers /static/ for %s in its own program; this sentence serves it from %s instead.\n", tag, facts.OtherFile, folderRel, from)
+		}
+		if extendFile != "" {
 			executeEditPlan(analyze.EditRequest{
-				Kind:         analyze.EditServeStatic,
-				StaticFolder: folderRel,
+				Kind:           analyze.EditServeStatic,
+				StaticFolder:   folderRel,
+				StaticSiteFile: extendFile,
 			}, ask)
 		} else {
 			executeEditPlan(analyze.EditRequest{
@@ -255,16 +295,17 @@ func runServeWasmApp(line string, ask editAsk, profile *UserProfile) bool {
 			}, ask)
 		}
 		// Re-read the facts: the run only follows a
-		// registration that is really there. A refusal, a
-		// gate-out, or a rollback has already been narrated
-		// by the spine; this flow just stops.
-		facts = lastAnalyzeProject.StaticRouteFacts(folderRel)
-		if !facts.Served {
+		// registration that is really there, in one of the
+		// two homes. A refusal, a gate-out, or a rollback
+		// has already been narrated by the spine; this flow
+		// just stops.
+		facts = lastAnalyzeProject.ServeWasmRouteFacts(folderRel)
+		serveFile = facts.ServedFile
+		if serveFile == "" {
 			recordBrain("runner", false, "wasm serve stopped: route not in place")
 			return true
 		}
 	}
-	serveFile := facts.File
 
 	// The run — the run claim's own machinery, gate, build,
 	// and startup narration included.

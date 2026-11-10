@@ -222,3 +222,46 @@ func TestWasmExplainedStoreFailureSilent(t *testing.T) {
 	}
 }
 
+// The two-folder picture (John's serving shape): when a
+// server for the app really exists in server/ — its file
+// there AND its /static/ registration naming this folder —
+// the walk gives server/main.go its line and closes with
+// the arrangement in plain words. Without it, the walk
+// invents no server: no webserver line, and the how-to
+// names the server the serve sentence would create.
+func TestExplainWasmAppServerFolder(t *testing.T) {
+	dir := staticAssetsFixture(t, staticAssetsFiles(nil))
+	profile := &UserProfile{}
+	captureStdout(t, func() {
+		claimChain("create a folder jim", yes, profile)
+		claimChain("add a wasm app in jim", yes, profile)
+	})
+	writeFile(t, dir, "jim/main.wasm", "fake wasm bytes")
+
+	unserved := wasmAppExplanation(dir, "jim")
+	if strings.Contains(unserved, "— the Go webserver") ||
+		strings.Contains(unserved, "two folders, two jobs") {
+		t.Errorf("the unserved walk invented a server:\n%s", unserved)
+	}
+	if !strings.Contains(unserved, "gives the app a dedicated Go webserver in a server folder") {
+		t.Errorf("the unserved walk lost its how-to-serve:\n%s", unserved)
+	}
+
+	writeFile(t, dir, "server/main.go", "package main\n\nimport \"net/http\"\n\nfunc main() {\n\thttp.Handle(\"/static/\", http.StripPrefix(\"/static/\", http.FileServer(http.Dir(\"jim\"))))\n\thttp.ListenAndServe(\":8080\", nil)\n}\n")
+	served := wasmAppExplanation(dir, "jim")
+	for _, want := range []string{
+		"server/main.go — the Go webserver, in its own folder at the project root",
+		"hands the app's files to the browser at /static/",
+		"two folders, two jobs — jim is the program that runs in the browser; the server folder is the Go program that hands it over",
+		"the app answers at http://localhost:8080/static/",
+	} {
+		if !strings.Contains(served, want) {
+			t.Errorf("the served walk is missing %q:\n%s", want, served)
+		}
+	}
+	// The on-demand sentence carries the same line.
+	out := captureStdout(t, func() { claimChain("explain the wasm app in jim", yes, profile) })
+	if !strings.Contains(out, "server/main.go — the Go webserver") {
+		t.Errorf("the on-demand explanation lost the server line:\n%s", out)
+	}
+}

@@ -580,17 +580,32 @@ in jim` gets the built app onto your Go server and running.
 The folder must hold an app, and the app must be built —
 with no `main.wasm` in it the chat names the build sentence
 above and stops, rather than serving a page whose program
-isn't there. The `/static/` registration is the serve-static
-piece's own edit when the project already has a server; when
-it has none, one plan creates the house server in
-`server/main.go` with the registration already in it. A
-`/static/` route held by a different folder is the family's
-conflict, in its own words, and nothing is written. Then the
-server runs, and the last line gives the app's address —
-`http://localhost:8080/static/` when the port is the house
-one, always read from the serving file's own serve
-statement, never assumed. No folder named serves the last
-app the conversation worked on, with the reading printed.
+isn't there. The serving arrangement is the
+one that's easy to explain: the app in its own folder, its
+webserver a dedicated Go program in a `server/` folder at
+the project root (the project's own root-level program is
+the other home). If that server already serves the app,
+the sentence just runs it; if it is there without the
+route, one plan adds the `/static/` registration to it —
+never to an unrelated program elsewhere in the tree. When
+neither home has a server, one plan creates the house
+server in `server/main.go` with the registration already
+in it. Two registrations elsewhere never count as
+serving: one inside a nested module (a folder with its
+own `go.mod` under the root belongs to that module — this
+project can neither build nor run it, so the sentence
+reads the project as if it weren't there), and one
+serving the app from another program deeper in the tree —
+that one is named out loud before anything is written and
+left untouched, while the app is served from `server/`
+instead. A `/static/` route held by a different folder is
+the family's conflict, in its own words, and nothing is
+written. Then the server runs, and the last line gives
+the app's address — `http://localhost:8080/static/` when
+the port is the house one, always read from the serving
+file's own serve statement, never assumed. No folder
+named serves the last app the conversation worked on,
+with the reading printed.
 
 The app can also grow the way a page does — a header and
 a footer, each its own package inside the app:
@@ -615,9 +630,12 @@ And the app explains itself: `explain the wasm app in
 jim` walks the folder in plain words — the module and
 its Go 1.27 pin, the program, the vector unit, the
 components and events by name, the header and footer
-parts when it has them, the host page, and whether
-`main.wasm` is built or isn't — then how to build it,
-how to serve it, and what happens when the page opens.
+parts when it has them, the host page, the webserver in
+`server/` when it serves the app (the two folders named
+as what they are: the app runs in the browser, the
+server hands it over), and whether `main.wasm` is built
+or isn't — then how to build it, how to serve it, and
+what happens when the page opens.
 The same tour follows the first successful build or
 serve of an app on its own, once per app (it remembers,
 per project, in `~/.gollemer_wasm_explained.json`); after

@@ -75,7 +75,9 @@ func TestPlanServeWasmAppRefusals(t *testing.T) {
 		wantSub string
 	}{
 		{"folder missing", nil, "nope", "there's no folder nope in this project"},
-		{"server exists", map[string]string{"web/main.go": serverMain}, "jim", "already has a webserver"},
+		{"dead server file beside a deep server", map[string]string{"server/main.go": "package main\n\nfunc main() {}\n", "webrun/main.go": serverMain}, "jim", "won't overwrite"},
+		{"server exists at the root", map[string]string{"main.go": serverMain}, "jim", "already has a webserver"},
+		{"server exists in the server folder", map[string]string{"server/srv.go": "package main\n\nimport \"net/http\"\n\nfunc main() {\n\thttp.ListenAndServe(\":8080\", nil)\n}\n"}, "jim", "already has a webserver"},
 		{"route on another folder", map[string]string{"lib/routes.go": regOther}, "jim", "/static/ already serves a different folder"},
 		{"route already serves the app", map[string]string{"lib/routes.go": regJim}, "jim", "already serves the jim folder at /static/"},
 		{"dead server file is never overwritten", map[string]string{"server/main.go": "package main\n\nfunc main() {}\n"}, "jim", "won't overwrite"},
