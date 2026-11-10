@@ -160,6 +160,71 @@ Create folders and files — shown first, gated, then verified:
       "Done — Petra is in partner/main.go, registered at
       /petra. I built the project and checked that it's
       really there."
+Web and wasm, at a glance — one sentence each; the entries
+below tell their stories:
+
+  add a webpage to jim/temp/index.html — a plain webpage in
+      a named file, from a template you pick (basic,
+      responsive, with assets, two columns, three columns,
+      grid, rows, material)
+  add a two column template to jim/temp/index.html — the
+      webpage ask in the template's own words; "add the
+      template to ..." lets it ask which one
+  add template 2 columns 3 rows to jim/temp/index.html — a
+      grid counted exactly, 1 to 6 of each (also "add the
+      grid 2 columns 3 rows to ...")
+  create a homepage in webtest — a page kind whole: the
+      page, its handler, its registration (about, contact,
+      item list, details, and form pages too)
+  add a templated page called home in jim — a page as
+      header, footer, and body files joined by Go
+      templates, plus the handler that renders it
+  add 2 columns and 3 rows to the body in jim — a counted
+      section into a templated page's body (also "add the
+      grid 2 columns 3 rows to the body in jim")
+  add a card to jim/temp/index.html — one Material
+      component into a page; "add a card to the page" means
+      the webpage you last made
+  what components can I add — the whole component set,
+      listed
+  serve static files — your server serves a folder's files
+      at /static/; name the folder ("serve static files
+      from jim/temp", "serve the jim/temp folder") or
+      reword it ("update the server to serve images, js,
+      css", "let the server serve images")
+  run the server jim — build and run the server a folder
+      holds, named by its folder instead of its file
+  watch jim/main.go — run a program and restart it
+      whenever its files change
+  watch folder jim/temp — add a folder to a running watch
+  add a wasm app in jim — a browser app in its own folder:
+      Go compiled to WebAssembly, its own module pinning
+      Go 1.27
+  add a card to jim — a component into the app, as a Go
+      builder ("add a card to jim/main.go" works too)
+  add a button called save to jim — a component with a
+      name; the name is its id
+  when the save button is clicked, set the card's words to
+      'Saved' — an event: clicks and changes answered in
+      the browser; show, hide, toggle, or set words
+  build the wasm app in jim — compile the app where it
+      sits
+  serve the wasm app in jim — the app served by a Go
+      webserver in server/ and running, its address
+      printed
+  add a header and footer to the wasm app in jim — a
+      header and a footer, each its own package inside
+      the app; one at a time works too
+  add a navigation bar to the header in jim — a component
+      inside a part (also "... to the header of the wasm
+      app in jim")
+  explain the wasm app in jim — the app walked file by
+      file in plain words
+  add a full stack app called notes in jim with fields
+      title, pages number and done yes-no — a form in the
+      app, REST handlers at /api/notes, and the notes
+      table in the project's rqlite database
+
   you> create a homepage
       a whole page in one ask: the starter page (index.html),
       its handler, and its registration at / — the webserver's

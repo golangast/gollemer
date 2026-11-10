@@ -434,6 +434,73 @@ Gollemer doesn't invent your content.
 
 ### A plain webpage, and serving its files
 
+The web and wasm commands, at a glance — one sentence each,
+said to the chat; the prose below tells each one's story:
+
+- `add a webpage to jim/temp/index.html` — a plain webpage in
+  a named file, from a template you pick: basic, responsive,
+  with assets, two columns, three columns, grid, rows, or
+  material
+- `add a two column template to jim/temp/index.html` — the
+  webpage ask in the template's own words; `add the template
+  to jim/temp/index.html` lets it ask which one
+- `add template 2 columns 3 rows to jim/temp/index.html` — a
+  grid counted exactly, 1 to 6 of each (also `add the grid 2
+  columns 3 rows to jim/temp/index.html`)
+- `create a homepage in webtest` — a page kind whole, from
+  the section above: the page, its handler, its registration
+  (about, contact, item list, details, and form pages too)
+- `add a templated page called home in jim` — a page as
+  header, footer, and body files joined by Go templates,
+  plus the handler that renders it
+- `add 2 columns and 3 rows to the body in jim` — a counted
+  section into a templated page's body (also said as `add
+  the grid 2 columns 3 rows to the body in jim`)
+- `add a card to jim/temp/index.html` — one Material
+  component into a page; `add a card to the page` means the
+  webpage you last made
+- `what components can I add` — the whole component set,
+  listed
+- `serve static files` — your server serves a folder's files
+  at `/static/`; name the folder (`serve static files from
+  jim/temp`, `serve the jim/temp folder`) or reword it
+  (`update the server to serve images, js, css`, `let the
+  server serve images`)
+- `run the server jim` — build and run the server a folder
+  holds, named by its folder instead of its file
+- `watch jim/main.go` — run a program and restart it
+  whenever its files change
+- `watch folder jim/temp` — add a folder to a running watch
+
+And the wasm chain — a page that is a program:
+
+- `add a wasm app in jim` — a browser app in its own folder:
+  Go compiled to WebAssembly, its own module pinning Go 1.27
+- `add a card to jim` — a component into the app, as a Go
+  builder (the app's main.go works as the target too: `add a
+  card to jim/main.go`)
+- `add a button called save to jim` — a component with a
+  name; the name is its id
+- `when the save button is clicked, set the card's words to
+  'Saved'` — an event: clicks and changes answered in the
+  browser; show, hide, toggle, or set words
+- `build the wasm app in jim` — compile the app where it
+  sits
+- `serve the wasm app in jim` — the app served by a Go
+  webserver in `server/` and running, its address printed
+- `add a header and footer to the wasm app in jim` — a
+  header and a footer, each its own package inside the app;
+  one at a time works too
+- `add a navigation bar to the header in jim` — a component
+  inside a part (also `add a navigation bar to the header of
+  the wasm app in jim`)
+- `explain the wasm app in jim` — the app walked file by
+  file in plain words
+- `add a full stack app called notes in jim with fields
+  title, pages number and done yes-no` — a form in the app,
+  REST handlers at `/api/notes`, and the `notes` table in
+  the project's rqlite database
+
 Not every page is one of the six kinds. `add a webpage to
 jim/temp/index.html` puts a plain webpage into a named file, from
 a template you pick — **basic** (a title, a heading, a paragraph),
@@ -607,6 +674,22 @@ file's own serve statement, never assumed. No folder
 named serves the last app the conversation worked on,
 with the reading printed.
 
+```
+you> serve the wasm app in jim
+gollemer [composer]> Create the project's webserver in server/main.go — the tiny server that listens at http://localhost:8080 — carrying one extra line, http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("jim")))), so the wasm app in jim is served at http://localhost:8080/static/. This project has no server yet; this is the one that serves the app.
+...
+Apply this edit? [y/n] gollemer [composer]> Done — The server in server/main.go now serves the wasm app in jim at /static/. I checked by re-reading the project — there's no go.mod at its root, so no build to run.
+Run it? go run server/main.go [auto-yes: your 'do all' directive]
+gollemer [runner]> server/main.go is running in the background — serving at http://localhost:8080. Say "show visits" to read its log (handler visits included), or "stop the program" to stop it.
+gollemer [runner]> The wasm app in jim is served by your Go server — open http://localhost:8080/static/ in your browser to run it.
+you> stop the program
+gollemer [runner]> Stopped server/main.go — it's no longer running. Its log kept 1 lines; say "show the program log" to read them.
+```
+
+(From a real run of the chat in a scratch project,
+2026-11-10 — the same sitting produced the explain and
+full-stack examples below.)
+
 The app can also grow the way a page does — a header and
 a footer, each its own package inside the app:
 `add a header and footer to the wasm app in jim` creates
@@ -641,6 +724,19 @@ serve of an app on its own, once per app (it remembers,
 per project, in `~/.gollemer_wasm_explained.json`); after
 that it answers when asked, and only then.
 
+```
+you> explain the wasm app in jim
+gollemer [composer]> The wasm app in jim, file by file:
+  jim/go.mod — the app's own module: it makes the folder a module of its own, apart from the project's build, and pins Go 1.27 — the portable simd package the vector unit uses exists for wasm only there.
+  jim/main.go — the program: it sets the garbage collector's GOGC knob low in code (a browser page has no environment to pass the flag through); builds the welcome heading and the vector demo's sums into the page; mounts the app's components; then stays running — a wasm program whose main returns is finished, and the browser takes its page down with it.
+  ...
+  jim/main.wasm — the built app, 2,733,212 bytes: the file the browser fetches and runs. It is a build product, remade by every build.
+  server/main.go — the Go webserver, in its own folder at the project root: it hands the app's files to the browser at /static/ — the host page, the glue, and main.wasm. It is an ordinary Go program; the app itself runs in the browser, not in it.
+To build it: "build the wasm app in jim" runs the host page's own build command in jim (GOEXPERIMENT=simd GOOS=js GOARCH=wasm go build -o main.wasm .) — a first build fetches the Go 1.27 toolchain by itself.
+To serve it: two folders, two jobs — jim is the program that runs in the browser; the server folder is the Go program that hands it over. "serve the wasm app in jim" runs the server in server/, and the app answers at http://localhost:8080/static/.
+When the page opens: the browser loads wasm_exec.js, fetches main.wasm, and starts the Go program, which builds the page in the browser — and the events answer as you click and change things.
+```
+
 And one sentence grows a whole working stack through
 every layer at once: `add a full stack app called notes
 in jim with fields title, pages number and done yes-no`.
@@ -674,6 +770,17 @@ one thing per ask, the three field kinds, no login or
 accounts of any kind, and the form's checks are the
 simple kind — an empty text field is refused in the
 page, before anything is sent.
+
+```
+you> add a full stack app called notes in jim with fields title, pages number and done yes-no
+gollemer [composer]> Grow the whole notes stack in one plan. The backend: server/main.go gains server/notes.go — a connection to the project's rqlite database, the notes table (id plus title (text), pages (number), done (yesno)) created when the server starts, and the REST handlers at /api/notes — list, read one, create, update, delete, JSON in and out — registered by one new line in server/main.go, setupNotes(). The app's side: jim/notes.go joins the app — the notes form (one input per field and a save button) and the list under it — mounted in jim/main.go with the app's other components, sending and reading through those same /api/notes addresses. The server serves the app's page from the same program, so the form's requests stay on the one origin. …
+…
+Apply this edit? [y/n] gollemer [composer]> Done — The notes stack is grown: the /api/notes handlers and the notes table's setup are in server/notes.go, and the notes form and its list are in the wasm app in jim. I checked by re-reading the project — there's no go.mod at its root, so no build to run.
+```
+
+(That run had a real rqlite node up — the one the plan
+names — started with `rqlited -node-id=1 data/` before
+the ask.)
 
 A page's style sheets, scripts, and pictures are files too, and
 the server can serve the whole folder they live in: `serve static
@@ -911,6 +1018,15 @@ webserver file were created by the asks in the sections above, the
 visit is a real HTTP fetch, and the browser really was opened at the
 address the program printed. If the browser can't be opened, the chat
 says so and prints the address on its own line instead.)
+
+A server can be named by its folder instead of its file:
+`run the server jim` resolves the folder when you say it
+and runs the one runnable program at its top level, the
+same way as above. A .go file works as the target too —
+`run the server server/main.go` is `run server/main.go` in
+other words. A folder holding no runnable program, or
+several, is never guessed at: the sentence declines and
+the line falls through untouched.
 
 Or watch it while you work: `watch jim/main.go` starts the program
 just like `run jim/main.go`, then keeps an eye on its folder — when a
