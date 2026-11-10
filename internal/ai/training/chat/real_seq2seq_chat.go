@@ -610,7 +610,7 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		// knowledge book (bookresources.go) — deterministically,
 		// ahead of the intent layer, which read that exact line
 		// as a dataflow question and answered for a variable.
-		if tryBookResources(line) {
+		if hook.run(func() bool { return tryBookResources(line) }) {
 			continue
 		}
 		// Package lookup, claimed beside resources: an explicit
@@ -872,7 +872,7 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 		// knowledge book (bookresources.go) — deterministically,
 		// ahead of the intent layer, which read that exact line
 		// as a dataflow question and answered for a variable.
-		if tryBookResources(line) {
+		if hook.run(func() bool { return tryBookResources(line) }) {
 			continue
 		}
 		// Package lookup, claimed beside resources: an explicit
@@ -1438,7 +1438,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// knowledge book (bookresources.go) — deterministically,
 		// ahead of the intent layer, which read that exact line
 		// as a dataflow question and answered for a variable.
-		if tryBookResources(line) {
+		if hook.run(func() bool { return tryBookResources(line) }) {
 			continue
 		}
 		// Package lookup, claimed beside resources: an explicit
