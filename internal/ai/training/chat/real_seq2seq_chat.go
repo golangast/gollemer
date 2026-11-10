@@ -1590,6 +1590,19 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if hook.run(func() bool { return tryServeStatic(line, reader) }) {
 			continue
 		}
+		// Serve a file (chat/servefile.go): one handler
+		// answering one route with one existing file,
+		// through http.ServeFile — "add a handler that
+		// serves a file in jim". Seated directly after
+		// serve-static, whose discipline it mirrors: its
+		// grammar requires the handler word and a file
+		// spec, so serve-static's folder lines and the
+		// book's targeted lines ("serve static files to
+		// main.go") pass it by untouched; serve-html's
+		// shapes sit above it, settled there first.
+		if hook.run(func() bool { return tryServeFile(line, reader) }) {
+			continue
+		}
 		// Serve the wasm app (chat/servewasm.go): one
 		// sentence composing the route and the run — the
 		// /static/ registration for the app's folder
@@ -1901,6 +1914,18 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// seat's responder for lines that reach it by other
 		// paths.
 		if hook.run(func() bool { return tryFactRecallAnswer(line, conv) }) {
+			continue
+		}
+		// The phrasing verdict (phrasingverdict.go): every
+		// deterministic claim above has declined — the write
+		// boundary among them, seated with the composer chain —
+		// and the intent layer below is the first analysis
+		// brain. A line the recognizer judges a command
+		// (question-free, imperative-led, gated to a write
+		// family) is answered by the boundary here, so an
+		// unserved command never reaches an analysis brain;
+		// anything else declines and proceeds untouched.
+		if hook.run(func() bool { return tryPhrasingVerdict(line) }) {
 			continue
 		}
 		// Intent layer: a confident trained classification of what

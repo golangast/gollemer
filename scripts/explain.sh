@@ -192,6 +192,14 @@ below tell their stories:
       from jim/temp", "serve the jim/temp folder") or
       reword it ("update the server to serve images, js,
       css", "let the server serve images")
+  add a handler that serves logo.png in jim — one handler
+      answering one route with one file you already have,
+      through http.ServeFile; name the file in the sentence
+      or let it be the folder's one servable file (several
+      candidates ask which one); the handler's name comes
+      from the file's (LogoHandler) unless you give one
+      with "named", and the route is the file's own path
+      unless you name one with "at /..."
   run the server jim — build and run the server a folder
       holds, named by its folder instead of its file
   watch jim/main.go — run a program and restart it

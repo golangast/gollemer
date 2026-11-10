@@ -52,6 +52,27 @@ package chat
 //     target and answered generically — and misrouted by the
 //     phrasing layer before it ever got here).
 //
+// The destination arm (2026-11-10): an add|put|insert line
+// naming something and landing it in ONE bare destination
+// word claims too, even when the thing is no code object and
+// the destination carries no slash. "add templates in jim"
+// reached the Uses brain ("How Add is really used") and "add
+// header and footer templates to jim" the Comparer on
+// 2026-11-10, live — both plainly unservable add asks. The
+// arm's discipline: no "that …" clause (a behaviour clause
+// keeps the line a generation ask), a destination of exactly
+// one token, and an object zone that is a plain noun phrase
+// — any pronoun or preposition inside it empties it, which
+// is what keeps the header's own example unclaimed: "add it
+// to the list of things to do" does have a one-word
+// destination ("do", after its last "to"), but its zone is
+// "it to the list of things", a pronoun and a prepositional
+// chain, not a thing being added (writeBoundaryObjectZone);
+// and the zone's head word is not one of the kinds the
+// intent layer owns — comment, test, getter — the same
+// exclusions the object set below keeps, so "add a comment
+// to Describe" passes this arm by as it passes the set.
+//
 // Questions never start with the bare verb ("how do i add…"
 // keeps its owner), and the object set deliberately omits the
 // words other layers own without a file target: getter/test/
@@ -113,6 +134,17 @@ type writeBoundaryReq struct {
 
 var writeVerbs = map[string]bool{
 	"add": true, "put": true, "insert": true, "create": true, "write": true,
+}
+
+// writeBoundaryOwnedHeads are the zone head words the
+// destination arm never claims: the kinds other layers own
+// without a file target — comment, test, and getter sentences
+// belong to the intent layer and /contribute, the same
+// exclusions writeObjectWords keeps (see the file header).
+var writeBoundaryOwnedHeads = map[string]bool{
+	"comment": true, "comments": true,
+	"test": true, "tests": true,
+	"getter": true, "getters": true, "setter": true, "setters": true,
 }
 
 // writeObjectWords are the code objects whose naming makes an
@@ -196,9 +228,34 @@ func parseWriteBoundary(line string) (writeBoundaryReq, bool) {
 			declName, hasDeclName = fields[i+2], true
 		}
 	}
+	// The destination arm (see the header): computed here so
+	// the evidence switch stays the one place claims are made.
+	// The zone's head word keeps the object set's own
+	// exclusions: comment, test, and getter sentences belong
+	// to the intent layer and /contribute (the header's
+	// standing note), so "add a comment to Describe" passes
+	// this arm by exactly as it passes the object set.
+	destObject := ""
+	destClaim := false
+	if (low[0] == "add" || low[0] == "put" || low[0] == "insert") && !hasThat {
+		if tgt, ok2 := writeBoundaryTarget(fields, low); ok2 && len(strings.Fields(tgt)) == 1 {
+			destObject = writeBoundaryObjectZone(fields, low)
+			destClaim = destObject != ""
+			if destClaim {
+				head := strings.ToLower(strings.Fields(destObject)[0])
+				if writeBoundaryOwnedHeads[head] {
+					destClaim = false
+				}
+			}
+		}
+	}
+
 	switch {
 	case fileTgt || pathTgt:
 		// A file was named: an edit ask whatever else it says.
+	case destClaim:
+		// An unservable add ask aimed at a bare destination:
+		// claimed here, never at an analysis brain.
 	case objAt >= 0 && !hasThat:
 		// A code object with a destination or standing alone.
 	case objAt >= 0 && hasDeclName:
@@ -217,6 +274,17 @@ func parseWriteBoundary(line string) (writeBoundaryReq, bool) {
 
 	req := writeBoundaryReq{fileTgt: fileTgt}
 	req.target, req.hasTarget = writeBoundaryTarget(fields, low)
+
+	// A line claimed BY the destination arm names its object
+	// back in the generic answer: the zone as typed
+	// ("templates", "header and footer templates"). A line
+	// that claimed on file evidence keeps its standing
+	// phrasing — the file-itself lines ("add a file to
+	// x.go") reach the dest test too, and their answer's
+	// object stays the generic "that" they have always used.
+	if destClaim && objAt < 0 && !fileTgt && !pathTgt {
+		req.object = destObject
+	}
 
 	// The file itself as the object: the token right after
 	// the verb and any article is "file", with a target
@@ -328,6 +396,47 @@ func writeBoundaryTarget(fields, low []string) (string, bool) {
 	return strings.Join(rest[j:], " "), true
 }
 
+// writeBoundaryObjectZone returns the object zone of an
+// imperative line, as typed: the words between the verb (and
+// one article after it) and the LAST destination preposition
+// (to|in|into) — or the line's end when there is none — with a
+// leading article trimmed. The zone must be a plain noun
+// phrase: any pronoun or preposition standing inside it
+// empties it. That is what keeps the header's own example
+// unclaimed — "add it to the list of things to do" has the
+// one-word destination "do" (the words after its last "to"),
+// but its zone, "it to the list of things", is a pronoun and
+// a prepositional chain, not a thing being added. Shared by
+// the boundary's destination arm and the phrasing verdict's
+// fallback answer (phrasingverdict.go), which names the zone
+// back in the same voice.
+func writeBoundaryObjectZone(fields, low []string) string {
+	at := -1
+	for i := 1; i < len(low); i++ {
+		if low[i] == "to" || low[i] == "in" || low[i] == "into" {
+			at = i
+		}
+	}
+	end := len(fields)
+	if at >= 0 {
+		end = at
+	}
+	start := 1
+	if start < end && (low[start] == "a" || low[start] == "an" || low[start] == "the") {
+		start++
+	}
+	if start >= end {
+		return ""
+	}
+	for i := start; i < end; i++ {
+		switch low[i] {
+		case "it", "this", "that", "them", "to", "in", "into", "on", "for", "with", "from", "at", "of", "by":
+			return ""
+		}
+	}
+	return strings.Join(fields[start:end], " ")
+}
+
 // exampleFile is the target the guidance sentences are spelled
 // with: the user's own when they named a file, else the family's
 // standing example.
@@ -429,7 +538,40 @@ func runWriteBoundary(line string) bool {
 	if !ok {
 		return false
 	}
+	return answerWriteBoundary(req, "write-boundary answer: "+string(req.kind)+" (not performed)")
+}
+
+// runWriteBoundaryVerdict answers a line the phrasing
+// recognizer judged a command (phrasingverdict.go) with the
+// boundary's generic answer: an add-family ask no shape can
+// serve, named back from its object zone — the same words the
+// boundary itself would give the line, reached by the
+// recognizer's verdict instead of the boundary's own shape
+// test, and recorded as such.
+func runWriteBoundaryVerdict(line string) bool {
+	s := strings.TrimSpace(line)
+	s = strings.TrimSuffix(s, ".")
+	s = strings.TrimSuffix(s, "?")
+	s = strings.TrimSpace(s)
+	fields := strings.Fields(s)
+	if len(fields) == 0 {
+		return false
+	}
+	low := make([]string, len(fields))
+	for i, f := range fields {
+		low[i] = strings.ToLower(strings.Trim(f, ",;:\"'()"))
+	}
+	req := writeBoundaryReq{kind: wbGeneric}
+	req.target, req.hasTarget = writeBoundaryTarget(fields, low)
+	req.fileTgt = req.hasTarget && strings.HasSuffix(strings.ToLower(req.target), ".go")
+	req.object = writeBoundaryObjectZone(fields, low)
+	return answerWriteBoundary(req, "write-boundary answer: phrasing-verdict command (not performed)")
+}
+
+// answerWriteBoundary prints one boundary answer and records
+// it — the one tail both boundary routes share.
+func answerWriteBoundary(req writeBoundaryReq, note string) bool {
 	fmt.Printf("%s %s.\n", cTag("gollemer [composer]>"), strings.TrimSuffix(req.answer(), "."))
-	recordBrain("composer", true, "write-boundary answer: "+string(req.kind)+" (not performed)")
+	recordBrain("composer", true, note)
 	return true
 }

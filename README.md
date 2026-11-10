@@ -466,6 +466,14 @@ said to the chat; the prose below tells each one's story:
   jim/temp`, `serve the jim/temp folder`) or reword it
   (`update the server to serve images, js, css`, `let the
   server serve images`)
+- `add a handler that serves logo.png in jim` — one handler
+  answering one route with one file you already have, through
+  `http.ServeFile`; name the file in the sentence, or let it
+  be the folder's one servable file (several candidates ask
+  which one); the handler's name comes from the file's
+  (`LogoHandler`) unless you give one with `named`, and the
+  route is the file's own path — `/logo.png` — unless you
+  name one with `at /…`
 - `run the server jim` — build and run the server a folder
   holds, named by its folder instead of its file
 - `watch jim/main.go` — run a program and restart it
@@ -838,6 +846,61 @@ when there's more than one it could mean. You can say it as an
 update too: `update the server to serve images, js, css`. One
 mechanism covers images, js, and css alike — the file server
 picks each file's content type from its extension.
+
+One file on its own has its own sentence: `add a handler that
+serves logo.png in jim` writes a handler that answers with
+that one file through `http.ServeFile` — which picks the
+content type from the file's extension itself, so the one
+shape serves a picture as an image, a stylesheet as a
+stylesheet, a data file as data. Name the file in the
+sentence, or say `serves a file` and let the folder decide:
+the folder's one servable file is the file, several
+candidates ask which one (never a guess), and a file that
+isn't there is never invented — the piece writes handlers,
+not files. The handler's name comes from the file's name
+(`logo.png` → `LogoHandler`) unless you give one — `add a
+handler named jim that returns a file in jim/main.go`. The
+route is the file's own path in its folder (`/logo.png`; an
+`index.html` answers at its folder's address), or the one
+you name with `at /…`. When the folder's program already
+serves, the registration is composed onto it under the
+wiring family's rules — a route taken by another handler is
+a refusal naming both, and asking again once it serves is a
+nothing-to-add answer; when nothing can take the
+registration yet, the handler lands and the plan's last note
+spells the one wiring sentence that finishes it:
+
+```
+you> add a handler that serves a file in jim
+gollemer [composer]> More than one file in jim could be served — which one should the handler serve? Nothing's been written.
+  1. index.html
+  2. logo.png
+Answer with the number or the file name — or say anything else and we'll move on.
+you> logo.png
+gollemer [composer]> Here's the edit I assembled from this project's own code:
+
+Add a handler that serves jim/logo.png: LogoHandler in jim/main.go, and one registration — http.HandleFunc("/logo.png", LogoHandler) — added in jim/main.go just before it serves, so http://localhost:8080/logo.png is answered with the logo.png file. The file itself isn't changed.
+http.ServeFile picks the answer's content type from the file's extension — a .png goes as an image, a .css as a stylesheet, a .json as data — so this one handler serves logo.png as what it is. The file itself isn't changed.
+Run it from the project root (go run ./jim) — the program looks for jim/logo.png in the folder it is run from, so it has to start at the root, not in the jim folder.
+Your existing server is untouched apart from the one registration above — no second ListenAndServe is added.
+
+--- a/jim/main.go
++++ b/jim/main.go
+@@ -3,5 +3,12 @@
+ import "net/http"
+
+ func main() {
++	http.HandleFunc("/logo.png", LogoHandler)
+ 	http.ListenAndServe(":8080", nil)
+ }
++
++// LogoHandler serves the logo.png file: it is read from disk on
++// every request, so a new copy of the file shows on refresh.
++func LogoHandler(w http.ResponseWriter, r *http.Request) {
++	http.ServeFile(w, r, "jim/logo.png")
++}
+Apply this edit? [y/n] gollemer [composer]> Done — The handler LogoHandler is in jim/main.go — it serves jim/logo.png at /logo.png. I built the project and checked that it's really there.
+```
 
 The security pieces explain themselves as they land:
 

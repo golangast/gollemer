@@ -127,6 +127,9 @@ func claimChain(line string, ask editAsk, profile *UserProfile) bool {
 	if runServeStatic(line, ask) {
 		return true
 	}
+	if runServeFile(line, ask) {
+		return true
+	}
 	if runServeWasmApp(line, ask, profile) {
 		return true
 	}
@@ -191,6 +194,13 @@ func claimChain(line string, ask editAsk, profile *UserProfile) bool {
 		return true
 	}
 	if runWriteBoundary(line) {
+		return true
+	}
+	// The phrasing verdict closes the chain, exactly where
+	// the loop seats it: after every deterministic claim,
+	// the boundary included, before the intent layer (which
+	// this harness does not model).
+	if runPhrasingVerdict(line) {
 		return true
 	}
 	return false

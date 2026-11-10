@@ -73,6 +73,19 @@ const (
 	// custom servers refused with the line handed over).
 	EditServeStatic = "serve_static"
 
+	// Serve a file (editservefile.go): one named handler
+	// answering one route with http.ServeFile over a file
+	// that already exists in the project — any file, not
+	// just a page. The handler lands in the target file
+	// (created when missing, in its folder's package), and
+	// the registration composes onto the host package's
+	// server under the wiring machinery's rules when one
+	// site can take it; with nowhere to register, the plan
+	// lands the handler and its note spells the wiring
+	// sentence that finishes it. The served file itself is
+	// never created or changed.
+	EditServeFile = "serve_file"
+
 	// Serve a wasm app (editservewasm.go): the missing-server
 	// half of the chat's "serve the wasm app in <folder>"
 	// composition. When the project has NO webserver at all,
@@ -416,6 +429,20 @@ type EditRequest struct {
 	// to the user and chosen this file instead.
 	StaticSiteFile string
 
+	// serve_file: the file the handler serves (ServeFile,
+	// project-relative slash path — the file must already
+	// exist; the plan never creates it), the handler's name
+	// (ServeFileName — the chat layer derives it from the
+	// file's name when the sentence named none), and the
+	// route as typed (ServeFileRoute, "" = derived from the
+	// two paths by the planner, the serve-html rule). File
+	// (shared, above) is the host .go file the handler
+	// lands in (project-relative; may not exist yet — the
+	// plan creates it in its folder's package).
+	ServeFile      string
+	ServeFileName  string
+	ServeFileRoute string
+
 	// wire_handler: the handler's name as typed ("" = the
 	// sentence named none — the planner resolves the project's
 	// one unregistered handler, or refuses naming the
@@ -679,6 +706,8 @@ func (p *Project) PlanEdit(req EditRequest) (*EditPlan, string) {
 		return p.planWebpage(req)
 	case EditServeStatic:
 		return p.planServeStatic(req)
+	case EditServeFile:
+		return p.planServeFile(req)
 	case EditServeWasmApp:
 		return p.planServeWasmApp(req)
 	case EditComponent:

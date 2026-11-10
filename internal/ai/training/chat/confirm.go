@@ -84,6 +84,8 @@ func renderLandingConfirmation(f landingFacts) string {
 		s1, s2 = confirmPage(f, rel)
 	case analyze.EditServeHTML:
 		s1 = confirmServeHTML(f, rel)
+	case analyze.EditServeFile:
+		s1, s2 = confirmServeFile(f, rel)
 	case analyze.EditWebpage:
 		s1 = fmt.Sprintf("The %s is in %s", analyze.WebpageTemplateWords(f.req.WebpageTemplate), f.fresh.LinkPath(rel))
 	case analyze.EditServeStatic:
@@ -312,6 +314,22 @@ func confirmServeHTML(f landingFacts, rel string) string {
 		return fmt.Sprintf("%s is a new server program, serving %s", f.fresh.LinkPath(rel), page)
 	}
 	return fmt.Sprintf("%s now serves %s", f.fresh.LinkPath(rel), page)
+}
+
+// confirmServeFile renders the serve-a-file landing: the
+// handler, where it landed, and the file it serves — with
+// the route it answers at when the plan composed the
+// registration. An unregistered handler names its next step
+// the same way a page handler does.
+func confirmServeFile(f landingFacts, rel string) (string, string) {
+	name := f.req.ServeFileName
+	file := f.fresh.LinkPath(f.req.ServeFile)
+	hf := f.fresh.HandlerFacts(name, slashDir(rel))
+	if hf.Registered {
+		return fmt.Sprintf("The handler %s is in %s — it serves %s at %s", name, f.fresh.LinkPath(rel), file, hf.Route), ""
+	}
+	s1 := fmt.Sprintf("The handler %s is in %s — it serves %s", name, f.fresh.LinkPath(rel), file)
+	return s1, handlerNextStep(f.fresh, name, rel)
 }
 
 // confirmAddServer renders the webserver landing: a file
