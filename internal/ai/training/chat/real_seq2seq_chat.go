@@ -210,6 +210,11 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 			return err
 		}
 	}
+	if domain == SocialDomain {
+		// The typo normalizer (normalize.go) judges words
+		// against the social model's own vocabulary.
+		armTypoNormalizer(model)
+	}
 
 	// Explicit mode separation for code sessions: chatter prompts are routed
 	// to the social model (or a clean redirect when its checkpoint is
@@ -224,6 +229,7 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 			log.Printf("[REAL-CHAT] no social checkpoint (%v); chatter gets a clean redirect", serr)
 			socialModel = nil
 		}
+		armTypoNormalizer(socialModel)
 	}
 
 	if model != nil {
@@ -1175,6 +1181,9 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		sp.Stop("")
 		return fmt.Errorf("unified chat requires at least the social checkpoint")
 	}
+	// The typo normalizer (normalize.go) judges words
+	// against the social model's own vocabulary.
+	armTypoNormalizer(socialModel)
 	sp.Stop("Ready.")
 	// Social recall: exact training-pair matches answer deterministically.
 	initSocialRecall(projectRoot)

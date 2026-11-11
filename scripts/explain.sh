@@ -82,6 +82,20 @@ Talk and ask about Go:
   you haven't told it yet rather than guessing. Memory lives
   in ~/.gollemer_memory.json, outside every project, and a
   returning session opens with one "Last time here:" line.
+  Conversation has one more kindness: mistype a word the
+  social brain has never seen — "gonig" for "going" — and the
+  chat quietly hears the word you meant before the model
+  reads your line. It steps in only when exactly one word
+  the brain knows sits a small edit distance away (one wrong
+  letter for a word of four to six letters, two for a longer
+  word) and no other word is that close; a tie, or no close
+  word at all, and your line goes in exactly as typed. Names
+  that are yours are never corrected — the facts you mention
+  in passing (your dog's name, your city, your favorites)
+  and the names declared in your code are protected — and a
+  line with more than two suspect words passes through
+  untouched: that isn't a typo any more, it's a different
+  sentence. The fix is silent; the reply never mentions it.
 
 Ask what a project does — it answers from your real code:
 

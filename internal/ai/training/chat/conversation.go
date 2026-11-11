@@ -179,6 +179,11 @@ func (c *Conversation) lastExchange() (user, reply string, replyDomain string, c
 // facts stay out of the model's input by design, and the capability
 // catalog is far beyond the composed format's length.
 func (c *Conversation) SocialInput(current string) string {
+	// The typo normalizer (normalize.go) repairs the user's
+	// current words before they are composed — the only
+	// place a line is reshaped on its way to the social
+	// model, and only ever toward a word the model knows.
+	current = normalizeSocialCurrent(current)
 	user, reply, domain, claimed, ok := c.lastExchange()
 	if !ok || (domain != SocialDomain && !claimed) {
 		return current

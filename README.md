@@ -128,6 +128,21 @@ it yet rather than guessing. Memory lives in
 ends it saves a short summary of what was built, and the next
 session in the same project opens with one "Last time here:" line.
 
+Conversation has one more kindness: if you mistype a word the
+social brain has never seen — `gonig` for `going` — the chat
+quietly hears the word you meant before the model reads your
+line. It steps in only when the evidence is unambiguous:
+exactly one word the brain knows sits a small edit distance
+away (one wrong letter for a word of four to six letters, two
+for a longer word) and no other word is that close; a tie, or
+no close word at all, and your line goes in exactly as typed.
+Names that are yours are never corrected — the facts you
+mention in passing (your dog's name, your city, your
+favorites) and the names declared in your code are protected
+— and a line with more than two suspect words passes through
+untouched: that isn't a typo any more, it's a different
+sentence. The fix is silent; the reply never mentions it.
+
 ### Ask what a project does
 
 ```

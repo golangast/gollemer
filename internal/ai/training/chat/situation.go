@@ -203,6 +203,11 @@ func (c *Conversation) exchangeCount() int {
 // The line is built from the conversation's own transcript
 // depth, the caller's clock, and the caller's fact topics.
 func (c *Conversation) SocialInputSituated(current string, now time.Time, topics []string) string {
+	// The typo normalizer (normalize.go) sees the user's
+	// words first — including on this bare path, which
+	// returns current without composing. The situation line
+	// built below is system text and is never normalized.
+	current = normalizeSocialCurrent(current)
 	_, _, domain, claimed, ok := c.lastExchange()
 	if !ok || (domain != SocialDomain && !claimed) {
 		return current
