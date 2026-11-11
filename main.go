@@ -18,6 +18,8 @@ func main() {
 	importPairsFlag := flag.String("import-pairs", "", "Import new training pairs from a JSONL file through the quality gate")
 	domainFlag := flag.String("domain", "social", "Training/chat domain (social, go, ...)")
 	resumeFlag := flag.Bool("resume", false, "Resume -train-real-seq2seq from the last checkpoint instead of starting at epoch 0")
+	augmentMutationsFlag := flag.Bool("augment-mutations", false, "Social only: add one mutated sibling (typo / function-word drop / word swap) per training input, target unchanged")
+	mutationBlocklistFlag := flag.String("mutation-blocklist", "", "JSONL whose inputs mutation siblings must never reproduce (the frozen robustness eval); required with -augment-mutations")
 	reclassifyFlag := flag.Bool("reclassify-domains", false, "Re-tag all dataset pairs with the current domain classifier")
 	genUnderstandingFlag := flag.Bool("gen-understanding", false, "Generate structure->language training pairs from Go source")
 	uexplainProbeFlag := flag.String("uexplain-probe", "", "Feed facts text to the understanding model and print its raw output")
@@ -96,7 +98,10 @@ func main() {
 			}
 			return
 		}
-		if err := chat.RunRealSeq2SeqTraining(rootDir, *domainFlag, *resumeFlag); err != nil {
+		if err := chat.RunRealSeq2SeqTrainingOpts(rootDir, *domainFlag, *resumeFlag, chat.RealTrainOptions{
+			AugmentMutations:  *augmentMutationsFlag,
+			MutationBlocklist: *mutationBlocklistFlag,
+		}); err != nil {
 			fmt.Fprintf(os.Stderr, "real training failed: %v\n", err)
 			os.Exit(1)
 		}

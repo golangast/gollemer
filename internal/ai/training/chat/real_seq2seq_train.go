@@ -64,12 +64,47 @@ type domainTrainData struct {
 	tok        *tokenizer.Tokenizer
 }
 
+// RealTrainOptions carries opt-in training variations. The zero value
+// is exactly today's training: every variation is off unless a flag
+// asks for it, and data prepared with zero options is byte-identical
+// to data prepared before the options existed (pinned by test).
+type RealTrainOptions struct {
+	// AugmentMutations adds one mutated sibling per social train-base
+	// input (typo / function-word-drop / adjacent-swap, mirroring the
+	// frozen robustness mutator), target unchanged. Social only.
+	AugmentMutations bool
+	// MutationBlocklist is a JSONL file whose inputs (normalized) a
+	// mutation sibling must never reproduce — the frozen robustness
+	// eval, so a sibling can never teach an eval phrasing. Required
+	// when AugmentMutations is on: prepare fails closed without it.
+	MutationBlocklist string
+}
+
 // prepareDomainTrainData loads the chat dataset, selects one domain, runs
 // the deterministic 80/20 train/held-out split with synonym augmentation,
 // and builds the training vocabulary + tokenizer. Extracted from
 // RunRealSeq2SeqTraining so checkpoint-resume can verify a checkpoint's
 // vocabulary matches today's data before resuming from it.
 func prepareDomainTrainData(projectRoot, domain string) (*domainTrainData, error) {
+	return prepareDomainTrainDataOpts(projectRoot, domain, RealTrainOptions{})
+}
+
+func prepareDomainTrainDataOpts(projectRoot, domain string, opts RealTrainOptions) (*domainTrainData, error) {
+	// Mutation augmentation is validated up front so a mislaunched run
+	// fails before it loads anything: it is social-only (its classes
+	// are natural-language manglings) and it never runs without the
+	// frozen-eval blocklist that keeps siblings off eval phrasings.
+	var mutationBlocklist map[string]bool
+	if opts.AugmentMutations {
+		if domain != SocialDomain {
+			return nil, fmt.Errorf("mutation augmentation is social-only, not domain %q", domain)
+		}
+		bl, err := loadMutationBlocklist(opts.MutationBlocklist)
+		if err != nil {
+			return nil, err
+		}
+		mutationBlocklist = bl
+	}
 	datasetPath := ChatDatasetPath(projectRoot)
 	if domain == RouterDomain {
 		// The router trains on (message, domain-label) pairs, not chat
@@ -153,6 +188,18 @@ func prepareDomainTrainData(projectRoot, domain string) (*domainTrainData, error
 		syns = map[string][]string{}
 	}
 	trainPairs := augmentInputs(base, trainBase, syns)
+
+	// Mutation augmentation (opt-in, social only, validated above):
+	// one mutated sibling per train-base input, target unchanged, so
+	// the model practices reading mangled wordings. Siblings that
+	// reproduce a frozen eval input are dropped by the blocklist.
+	if opts.AugmentMutations {
+		var stats mutationStats
+		rng := rand.New(rand.NewSource(mutationSeed))
+		trainPairs, stats = mutationAugment(base, trainBase, trainPairs, mutationBlocklist, rng)
+		log.Printf("[REAL-SEQ2SEQ] mutation augmentation: %d siblings added, %d dropped (eval blocklist), %d dropped (label collision), %d inputs unmutable",
+			stats.Added, stats.DroppedBlocklist, stats.DroppedCollision, stats.Unchanged)
+	}
 
 	// Held-out probes: paraphrases of held-out inputs the model never sees.
 	var probes []heldProbe
@@ -478,7 +525,14 @@ type encodedPair struct {
 // RunRealSeq2SeqTraining trains the genuine social seq2seq model.
 // Only pairs tagged with domain are used — stages stay separate by design.
 func RunRealSeq2SeqTraining(projectRoot, domain string, resume bool) error {
-	dd, err := prepareDomainTrainData(projectRoot, domain)
+	return RunRealSeq2SeqTrainingOpts(projectRoot, domain, resume, RealTrainOptions{})
+}
+
+// RunRealSeq2SeqTrainingOpts is RunRealSeq2SeqTraining with opt-in
+// training variations (see RealTrainOptions). Zero options reproduce
+// the plain run exactly.
+func RunRealSeq2SeqTrainingOpts(projectRoot, domain string, resume bool, opts RealTrainOptions) error {
+	dd, err := prepareDomainTrainDataOpts(projectRoot, domain, opts)
 	if err != nil {
 		return err
 	}
