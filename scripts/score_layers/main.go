@@ -1,28 +1,39 @@
 // score_layers scores a layers-pilot model under the registered
-// judging protocol (DESIGN §6): model-only, raw prompts, greedy,
-// fresh session per item unless a mode says otherwise.
+// judging protocol (DESIGN §6 as amended by §12): model-only, raw
+// prompts, greedy, fresh session per item unless a mode says
+// otherwise.
 //
 //	go run ./scripts/score_layers -model <layers.gob> [-eval <robustness_v1.jsonl>]
 //	    [-weakspot] [-heldout <social_bigdata_heldout_20261103.json>]
-//	    [-off char,class,...] [-shuffle-concept] [-thread]
+//	    [-holdout <holdout_test.jsonl> [-holdout-seen <holdout_seen.jsonl>]]
+//	    [-off char,class,frame,...] [-shuffle-top] [-no-repair] [-frame top|slots] [-thread]
 //
 // Modes:
-//   -eval      frozen robustness Section S exactly (the
-//              score_social_seat protocol: non-empty reply with
-//              >= need want words, word-boundary, case-insensitive)
-//   -weakspot  the 10 targeted cases from social_targeted_eval.py
-//              (need/forbid lists, joke shape, code-marker veto),
-//              model-only adaptation disclosed in DESIGN §6
-//   -heldout   the 41-item held-out set under the NCM model-only
-//              protocol (sequences joined by a single space), plus
-//              the name-bearing singles diagnostic and — with
-//              -thread — the threaded multiturn run of the 12
-//              sequences (memory facts accumulate, turn threaded)
 //
-// -off forces trained layers off at inference; -shuffle-concept
-// applies the registered permutation to predicted concept codes.
-// Both are diagnostics on a trained model, never ablation verdicts
-// (DESIGN §6).
+//	-eval      frozen robustness Section S exactly (the
+//	           score_social_seat protocol: non-empty reply with
+//	           >= need want words, word-boundary, case-insensitive)
+//	-weakspot  the 10 targeted cases from social_targeted_eval.py
+//	           (need/forbid lists, joke shape, code-marker veto),
+//	           model-only adaptation disclosed in DESIGN §6
+//	-heldout   the 41-item held-out set under the NCM model-only
+//	           protocol (sequences joined by a single space), plus
+//	           the name-bearing singles diagnostic and — with
+//	           -thread — the threaded multiturn run of the 12
+//	           sequences (memory facts accumulate, turn threaded)
+//	-holdout   the combination holdout (DESIGN §12): corpus pairs
+//	           in held-out (top x topic x tone) cells, judged by
+//	           the held-out protocol's rule (non-empty reply
+//	           containing >= 1 of the reference reply's content
+//	           words, word-boundary, case-insensitive); the
+//	           -holdout-seen file (pairs in kept cells) is scored
+//	           the same way for the non-collapse bar
+//
+// -off forces trained layers off at inference; -shuffle-top
+// applies the registered permutation to the predicted top code;
+// -no-repair disables the frame's re-correction loop; -frame
+// drops one frame half at inference. All are diagnostics on a
+// trained model, never ablation verdicts (DESIGN §6/§12).
 package main
 
 import (
@@ -65,15 +76,19 @@ func main() {
 	heldoutPath := flag.String("heldout", "", "social_bigdata_heldout_20261103.json")
 	corpusPath := flag.String("corpus", "data/training/chat_pairs.jsonl", "corpus for the name-bearing diagnostic's reply-token frequencies")
 	offFlag := flag.String("off", "", "comma-separated layers forced off at inference (diagnostic)")
-	shuffle := flag.Bool("shuffle-concept", false, "permute predicted concept codes (diagnostic)")
+	shuffle := flag.Bool("shuffle-top", false, "permute the predicted top code (diagnostic)")
+	noRepair := flag.Bool("no-repair", false, "disable the frame re-correction loop (the loop's own ablation)")
+	frameMode := flag.String("frame", "", "drop one frame half at inference: top|slots (diagnostic)")
+	holdoutPath := flag.String("holdout", "", "combination-holdout test file (holdout_test.jsonl)")
+	holdoutSeenPath := flag.String("holdout-seen", "", "combination-holdout seen-cell sample (holdout_seen.jsonl)")
 	thread := flag.Bool("thread", false, "with -heldout: also run the 12 sequences threaded turn-by-turn")
 	flag.Parse()
 	if *modelPath == "" {
 		fmt.Fprintln(os.Stderr, "score_layers: -model is required")
 		os.Exit(2)
 	}
-	if *evalPath == "" && !*weakspot && *heldoutPath == "" {
-		fmt.Fprintln(os.Stderr, "score_layers: one of -eval, -weakspot, -heldout is required")
+	if *evalPath == "" && !*weakspot && *heldoutPath == "" && *holdoutPath == "" {
+		fmt.Fprintln(os.Stderr, "score_layers: one of -eval, -weakspot, -heldout, -holdout is required")
 		os.Exit(2)
 	}
 	model, err := loadModel(*modelPath)
@@ -87,9 +102,19 @@ func main() {
 			disable[name] = true
 		}
 	}
-	opts := seq2seq.LayersPredictOptions{MaxLen: 60, Disable: disable, ShuffleConcept: *shuffle}
-	fmt.Printf("model: %s\ntrained layers: %v\ndisabled at inference: %v shuffle-concept: %v\n---\n",
-		*modelPath, model.TrainedLayers(), keysOf(disable), *shuffle)
+	opts := seq2seq.LayersPredictOptions{MaxLen: 60, Disable: disable, ShuffleTop: *shuffle, NoRepair: *noRepair}
+	switch *frameMode {
+	case "":
+	case "top":
+		opts.FrameSlotsOff = true // keep the top, drop the slots
+	case "slots":
+		opts.FrameTopOff = true // keep the slots, drop the top
+	default:
+		fmt.Fprintf(os.Stderr, "score_layers: -frame must be top|slots, got %q\n", *frameMode)
+		os.Exit(2)
+	}
+	fmt.Printf("model: %s\ntrained layers: %v\ndisabled at inference: %v shuffle-top: %v no-repair: %v frame-mode: %q\n---\n",
+		*modelPath, model.TrainedLayers(), keysOf(disable), *shuffle, *noRepair, *frameMode)
 
 	if *evalPath != "" {
 		if err := scoreEval(model, *evalPath, opts); err != nil {
@@ -102,6 +127,12 @@ func main() {
 	}
 	if *heldoutPath != "" {
 		if err := scoreHeldout(model, *heldoutPath, *corpusPath, opts, *thread); err != nil {
+			fmt.Fprintf(os.Stderr, "score_layers: %v\n", err)
+			os.Exit(1)
+		}
+	}
+	if *holdoutPath != "" {
+		if err := scoreHoldout(model, *holdoutPath, *holdoutSeenPath, opts); err != nil {
 			fmt.Fprintf(os.Stderr, "score_layers: %v\n", err)
 			os.Exit(1)
 		}
@@ -160,10 +191,17 @@ func scoreEval(m *seq2seq.LayersModel, path string, opts seq2seq.LayersPredictOp
 		}
 		totals[key] = t
 	}
+	repaired, residual := 0, 0
 	for _, it := range items {
 		pred, err := predict(m, it.Input, &chat.LayersSession{}, opts)
 		if err != nil {
 			return fmt.Errorf("predict %s: %w", it.ID, err)
+		}
+		if len(pred.Repairs) > 0 {
+			repaired++
+		}
+		if pred.Residual {
+			residual++
 		}
 		reply := pred.Text
 		need := it.Need
@@ -190,6 +228,7 @@ func scoreEval(m *seq2seq.LayersModel, path string, opts seq2seq.LayersPredictOp
 		t := totals[key]
 		fmt.Printf("%s: %d/%d\n", key, t[0], t[1])
 	}
+	fmt.Printf("frame repairs fired on %d/%d items; %d frames still inconsistent after the bound\n", repaired, len(items), residual)
 	return nil
 }
 
@@ -281,8 +320,8 @@ func scoreWeakspot(m *seq2seq.LayersModel, opts seq2seq.LayersPredictOptions) {
 // ---- Held-out 41 ----
 
 type heldout struct {
-	Note      string `json:"note"`
-	Singles   []struct {
+	Note    string `json:"note"`
+	Singles []struct {
 		ID      string   `json:"id"`
 		Prompt  string   `json:"prompt"`
 		Topic   string   `json:"topic"`
@@ -439,6 +478,112 @@ func scoreHeldout(m *seq2seq.LayersModel, path, corpusPath string, opts seq2seq.
 			fmt.Printf("%s %s (threaded) turns=%v -> final %q\n", map[bool]string{true: "PASS", false: "FAIL"}[ok], q.ID, q.Turns, last.Text)
 		}
 		fmt.Printf("held-out threaded sequences: %d/%d  name cell (pets-context): %v\n", tPassed, len(ho.Sequences), nameOK)
+	}
+	return nil
+}
+
+// ---- Combination holdout (DESIGN §12) ----
+
+type holdoutItem struct {
+	Input  string   `json:"input"`
+	Output string   `json:"output"`
+	Top    int      `json:"top"`
+	Topic  int      `json:"topic"`
+	Tone   int      `json:"tone"`
+	Want   []string `json:"want"`
+}
+
+func loadHoldoutItems(path string) ([]holdoutItem, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	var items []holdoutItem
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 1024*1024), 1024*1024)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" {
+			continue
+		}
+		var it holdoutItem
+		if err := json.Unmarshal([]byte(line), &it); err != nil {
+			return nil, fmt.Errorf("bad holdout line: %w", err)
+		}
+		items = append(items, it)
+	}
+	return items, sc.Err()
+}
+
+// scoreHoldoutSet scores one holdout file with the registered
+// rule and prints per-cell subtotals plus the set total. Returns
+// (passed, total).
+func scoreHoldoutSet(m *seq2seq.LayersModel, label, path string, opts seq2seq.LayersPredictOptions) (int, int, error) {
+	items, err := loadHoldoutItems(path)
+	if err != nil {
+		return 0, 0, err
+	}
+	cells := map[string][2]int{}
+	cellKey := func(it holdoutItem) string {
+		return fmt.Sprintf("top=%d topic=%d tone=%d", it.Top, it.Topic, it.Tone)
+	}
+	passed := 0
+	for _, it := range items {
+		pred, err := predict(m, it.Input, &chat.LayersSession{}, opts)
+		if err != nil {
+			return 0, 0, fmt.Errorf("predict %q: %w", it.Input, err)
+		}
+		reply := pred.Text
+		ok := false
+		if strings.TrimSpace(reply) != "" {
+			for _, w := range it.Want {
+				if regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(w) + `\b`).MatchString(reply) {
+					ok = true
+					break
+				}
+			}
+		}
+		if ok {
+			passed++
+		}
+		c := cells[cellKey(it)]
+		c[1]++
+		if ok {
+			c[0]++
+		}
+		cells[cellKey(it)] = c
+		fmt.Printf("%s [%s] %q -> %q\n", map[bool]string{true: "PASS", false: "FAIL"}[ok], cellKey(it), it.Input, reply)
+	}
+	var keys []string
+	for k := range cells {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		c := cells[k]
+		fmt.Printf("%s cell %s: %d/%d\n", label, k, c[0], c[1])
+	}
+	fmt.Printf("%s total: %d/%d\n", label, passed, len(items))
+	return passed, len(items), nil
+}
+
+func scoreHoldout(m *seq2seq.LayersModel, testPath, seenPath string, opts seq2seq.LayersPredictOptions) error {
+	fmt.Println("--- combination holdout: held-out cells")
+	hp, ht, err := scoreHoldoutSet(m, "holdout", testPath, opts)
+	if err != nil {
+		return err
+	}
+	if seenPath != "" {
+		fmt.Println("--- combination holdout: seen cells")
+		sp, st, err := scoreHoldoutSet(m, "seen", seenPath, opts)
+		if err != nil {
+			return err
+		}
+		if ht > 0 && st > 0 {
+			fmt.Printf("holdout summary: held-out cells %.1f%% (%d/%d), seen cells %.1f%% (%d/%d)\n",
+				100*float64(hp)/float64(ht), hp, ht, 100*float64(sp)/float64(st), sp, st)
+		}
 	}
 	return nil
 }

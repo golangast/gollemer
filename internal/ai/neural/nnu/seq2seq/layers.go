@@ -6,20 +6,33 @@ package seq2seq
 // reply must pass through. The design, bars, and ablation schedule
 // are pre-registered in ~/workspace/layers-pilot-scratch/DESIGN.md.
 //
+// AMENDMENT (2026-11-12, DESIGN §12): the original flat CONCEPT
+// layer (3 segment gist codes) plus the standalone INTENT and TONE
+// layers are replaced by John's hybrid FRAME: one coarse TOP CODE
+// for the reply's gist, a SLOTTED FRAME under it (ACT and TONE
+// slots — the intent/tone derivations absorbed as the frame's
+// slots — and a TOPIC slot carried from the input by construction),
+// and a deterministic RE-CORRECTION LOOP at inference that checks
+// the filled frame for consistency and re-picks offending slots.
+// The frame is the organizing structure; char, class, copy, turn,
+// and memory are otherwise unchanged, except TURN now consumes the
+// previous reply's TOP CODE instead of the old segment codes.
+//
 // LayersModel wraps the production Seq2Seq untouched: with every
 // layer off it is not constructed at all (the layers trainer is a
 // separate entry point), and the production trainer/chat paths
 // never see this type. All layer parameters are trained jointly
 // with the word model by TrainBatchLayers (train_layers.go).
 //
-// Layer inventory (DESIGN §3):
+// Layer inventory (DESIGN §3 as amended by §12):
 //   char    — mean char-trigram embedding added to token embeddings
 //   class   — word-class embedding added to token embeddings
-//   intent  — head on the encoder state + seed conditioning
-//   tone    — head on the encoder state + seed conditioning
-//   concept — reply gist codes (3 segments), head + decoder prefix
+//   frame   — top code (prefix) + act/tone slots (seed), with the
+//             repair loop at inference; variants frame-top (top
+//             code only) and frame-slots (slots only) are training
+//             arms selected through the same layer list
 //   copy    — the house PointerGen over encoder input positions
-//   turn    — previous reply's concept codes, seed conditioning
+//   turn    — previous reply's top code, seed conditioning
 //   memory  — session facts as encoder-input prefix tokens
 //             (trainer-side input construction; no parameters here)
 
@@ -37,63 +50,73 @@ import (
 
 // LayersConfig selects the active layers and fixes the derivation
 // constants. It is stored in the layers gob so a loaded model
-// knows exactly which layers it was trained with.
+// knows exactly which layers it was trained with. All fields are
+// scalars: the trainer compares configs with != on resume.
 type LayersConfig struct {
-	Char    bool
-	Class   bool
-	Intent  bool
-	Tone    bool
-	Concept bool
-	Copy    bool
-	Turn    bool
-	Memory  bool
+	Char   bool
+	Class  bool
+	Frame  bool
+	Copy   bool
+	Turn   bool
+	Memory bool
 
-	NumClasses   int // word-class count (class 0 = specials)
-	NumIntent    int // intent classes (0 = other)
-	NumTone      int // tone classes (0 = neutral)
-	NumConcepts  int // gist clusters; code 0 = EMPTY segment
-	ConceptLen   int // concept codes per reply (segments)
-	CharBuckets  int // char-trigram hash buckets
-	CharDim      int // char embedding width (= encoder embedding dim)
-	EmbedDim     int
-	HiddenDim    int
-	IntentWeight float32 // aux loss weights (DESIGN §3)
-	ToneWeight   float32
-	ConceptWt    float32
+	// Frame variants (training arms): FrameTopOnly trains the top
+	// code with no act/tone slots; FrameSlotsOnly trains the slots
+	// with no top code (their heads then read the encoder state
+	// alone). Both false = the full hybrid frame.
+	FrameTopOnly   bool
+	FrameSlotsOnly bool
+
+	NumClasses  int // word-class count (class 0 = specials)
+	NumAct      int // act slot values (intent derivation classes)
+	NumTone     int // tone slot values
+	NumTopCodes int // top-code clusters (DESIGN §12)
+	CharBuckets int // char-trigram hash buckets
+	CharDim     int // char embedding width (= encoder embedding dim)
+	EmbedDim    int
+	HiddenDim   int
+	TopWeight   float32 // aux loss weights (§12: top heaviest,
+	ActWeight   float32 // slots at the house intent/tone weight)
+	ToneWeight  float32
 }
 
-// DefaultLayersConfig returns the registered constants (DESIGN §3).
-// The On switches are set by the caller.
+// DefaultLayersConfig returns the registered constants (DESIGN §3
+// as amended by §12).
 func DefaultLayersConfig() LayersConfig {
 	return LayersConfig{
-		NumClasses:   48,
-		NumIntent:    7,
-		NumTone:      4,
-		NumConcepts:  32,
-		ConceptLen:   3,
-		CharBuckets:  1024,
-		CharDim:      128, // = EmbedDim: char vectors add into token embeddings
-		EmbedDim:     128,
-		HiddenDim:    256,
-		IntentWeight: 0.2,
-		ToneWeight:   0.2,
-		ConceptWt:    0.5,
+		NumClasses:  48,
+		NumAct:      7,
+		NumTone:     4,
+		NumTopCodes: 16,
+		CharBuckets: 1024,
+		CharDim:     128, // = EmbedDim: char vectors add into token embeddings
+		EmbedDim:    128,
+		HiddenDim:   256,
+		TopWeight:   0.5,
+		ActWeight:   0.2,
+		ToneWeight:  0.2,
 	}
 }
 
+// HasTop reports whether this configuration trains the frame's
+// top code (full frame or the top-only arm).
+func (c LayersConfig) HasTop() bool { return c.Frame && !c.FrameSlotsOnly }
+
+// HasSlots reports whether this configuration trains the frame's
+// act/tone slots (full frame or the slots-only arm).
+func (c LayersConfig) HasSlots() bool { return c.Frame && !c.FrameTopOnly }
+
 // On returns the layer switch by name ("char", "class", ...).
+// "intent", "tone", and "concept" are pre-amendment names and are
+// gone: the frame absorbed them (DESIGN §12).
 func (c LayersConfig) On(name string) bool {
 	switch name {
 	case "char":
 		return c.Char
 	case "class":
 		return c.Class
-	case "intent":
-		return c.Intent
-	case "tone":
-		return c.Tone
-	case "concept":
-		return c.Concept
+	case "frame":
+		return c.Frame
 	case "copy":
 		return c.Copy
 	case "turn":
@@ -104,19 +127,20 @@ func (c LayersConfig) On(name string) bool {
 	return false
 }
 
-// Set switches one layer by name; unknown names are an error.
+// Set switches one layer by name; unknown names are an error. The
+// frame variants are selected with "frame-top" / "frame-slots".
 func (c *LayersConfig) Set(name string, on bool) error {
 	switch name {
 	case "char":
 		c.Char = on
 	case "class":
 		c.Class = on
-	case "intent":
-		c.Intent = on
-	case "tone":
-		c.Tone = on
-	case "concept":
-		c.Concept = on
+	case "frame":
+		c.Frame = on
+	case "frame-top":
+		c.Frame, c.FrameTopOnly = on, on
+	case "frame-slots":
+		c.Frame, c.FrameSlotsOnly = on, on
 	case "copy":
 		c.Copy = on
 	case "turn":
@@ -129,9 +153,54 @@ func (c *LayersConfig) Set(name string, on bool) error {
 	return nil
 }
 
+// ToneLexicon is the derived tone vocabulary (DESIGN §3.4). It
+// travels inside the layers gob: the repair loop's tone check
+// re-reads the input's tone with it at inference, so the scorer
+// needs it without side files.
+type ToneLexicon struct {
+	Bright  []string `json:"bright"`
+	Low     []string `json:"low"`
+	Worried []string `json:"worried"`
+}
+
+// ToneOf applies the registered tone rule to a word sequence: any
+// worried hit labels worried, else any bright hit labels bright,
+// else any low hit labels low; no hit is neutral (0). Class ids:
+// 0 neutral, 1 bright, 2 low, 3 worried. This is the single
+// implementation of the rule — the chat derivations label training
+// pairs with it and the repair loop re-reads inputs with it.
+func (l ToneLexicon) ToneOf(words []string) int {
+	bright, low := false, false
+	in := func(list []string, w string) bool {
+		for _, x := range list {
+			if x == w {
+				return true
+			}
+		}
+		return false
+	}
+	for _, w := range words {
+		switch {
+		case in(l.Worried, w):
+			return 3
+		case in(l.Bright, w):
+			bright = true
+		case in(l.Low, w):
+			low = true
+		}
+	}
+	if bright {
+		return 1
+	}
+	if low {
+		return 2
+	}
+	return 0
+}
+
 // LayersModel is the production Seq2Seq plus the layer parameters.
 // Fields are exported for gob. Parameters that belong to a layer
-// are nil when that layer is off.
+// are nil when that layer (or frame part) is off.
 type LayersModel struct {
 	Base   *Seq2Seq
 	Config LayersConfig
@@ -141,79 +210,103 @@ type LayersModel struct {
 	// class: word-class table + the derived class per token id
 	ClassTable *nn.Embedding
 	ClassOf    []int
-	// intent / tone: seed embeddings + prediction heads
-	IntentEmb  *nn.Embedding
-	IntentHead *nn.Linear
-	ToneEmb    *nn.Embedding
-	ToneHead   *nn.Linear
-	// concept: code embeddings (NumConcepts+1 rows; row 0 = EMPTY),
-	// prediction head, and the derivation centroids (kept so the
-	// turn layer can name a generated reply's codes at inference)
-	ConceptEmb       *nn.Embedding
-	ConceptHead      *nn.Linear
-	ConceptCentroids [][]float32
-	// turn: seed-side table indexed by the concept codes (the
-	// prefix table is EmbedDim wide for decoder inputs; the seed
-	// slot is HiddenDim wide, so the turn layer reads the codes
-	// through its own table — DESIGN §11) plus the learned
-	// no-previous-turn vector
+	// frame — top code: prefix table (EmbedDim wide, fed as one
+	// decoder input step), seed-side table (HiddenDim wide, added
+	// to the encoder state before the act/tone heads so slot
+	// prediction is conditioned on the top code), prediction head,
+	// and the derivation centroids (kept so any reply's top code
+	// can be named at inference: turn threading + round-trip check)
+	TopEmb       *nn.Embedding
+	TopSeedEmb   *nn.Embedding
+	TopHead      *nn.Linear
+	TopCentroids [][]float32
+	// frame — slots: act/tone seed embeddings + prediction heads,
+	// the act-family table the repair loop checks against
+	// (ActFamily[top][act], derived from training frames), and the
+	// tone lexicon the tone check re-reads with
+	ActEmb    *nn.Embedding
+	ActHead   *nn.Linear
+	ToneEmb   *nn.Embedding
+	ToneHead  *nn.Linear
+	ActFamily [][]bool
+	ToneLex   ToneLexicon
+	// turn: seed-side table indexed by the previous reply's top
+	// code plus the learned no-previous-turn vector
 	TurnEmb  *nn.Embedding
 	NoneTurn *tensor.Tensor
 }
 
+// LayersDerivations carries the corpus derivations a layers model
+// needs at construction (produced by the chat package, DESIGN §4).
+type LayersDerivations struct {
+	ClassOf      []int       // per token id (len = vocab size)
+	TopCentroids [][]float32 // NumTopCodes x vocab size
+	ActFamily    [][]bool    // NumTopCodes x NumAct
+	ToneLex      ToneLexicon
+}
+
 // NewLayersModel builds the layer parameters around a production
-// Seq2Seq. classOf and centroids come from the corpus derivations
-// (chat package) and are required when class/concept are on.
-func NewLayersModel(base *Seq2Seq, cfg LayersConfig, classOf []int, centroids [][]float32) (*LayersModel, error) {
+// Seq2Seq. The derivation fields are required exactly when the
+// layers that consume them are on.
+func NewLayersModel(base *Seq2Seq, cfg LayersConfig, d LayersDerivations) (*LayersModel, error) {
 	if cfg.CharDim != cfg.EmbedDim {
 		// The char vector adds into token embeddings, so its width
 		// is not a free choice.
 		cfg.CharDim = cfg.EmbedDim
+	}
+	if cfg.FrameTopOnly && cfg.FrameSlotsOnly {
+		return nil, fmt.Errorf("layers: frame cannot be both top-only and slots-only")
 	}
 	m := &LayersModel{Base: base, Config: cfg}
 	if cfg.Char {
 		m.CharTable = nn.NewEmbedding(cfg.CharBuckets, cfg.CharDim)
 	}
 	if cfg.Class {
-		if len(classOf) != base.OutputVocab.Size() {
-			return nil, fmt.Errorf("layers: class map has %d entries, vocab has %d", len(classOf), base.OutputVocab.Size())
+		if len(d.ClassOf) != base.OutputVocab.Size() {
+			return nil, fmt.Errorf("layers: class map has %d entries, vocab has %d", len(d.ClassOf), base.OutputVocab.Size())
 		}
 		m.ClassTable = nn.NewEmbedding(cfg.NumClasses, cfg.EmbedDim)
-		m.ClassOf = classOf
+		m.ClassOf = d.ClassOf
 	}
-	if cfg.Intent {
-		m.IntentEmb = nn.NewEmbedding(cfg.NumIntent, cfg.HiddenDim)
-		head, err := nn.NewLinear(cfg.HiddenDim, cfg.NumIntent)
+	if cfg.HasTop() {
+		if len(d.TopCentroids) != cfg.NumTopCodes {
+			return nil, fmt.Errorf("layers: %d top centroids, want %d", len(d.TopCentroids), cfg.NumTopCodes)
+		}
+		m.TopEmb = nn.NewEmbedding(cfg.NumTopCodes, cfg.EmbedDim)
+		m.TopSeedEmb = nn.NewEmbedding(cfg.NumTopCodes, cfg.HiddenDim)
+		head, err := nn.NewLinear(cfg.HiddenDim, cfg.NumTopCodes)
 		if err != nil {
 			return nil, err
 		}
-		m.IntentHead = head
+		m.TopHead = head
+		m.TopCentroids = d.TopCentroids
 	}
-	if cfg.Tone {
+	if cfg.HasSlots() {
+		m.ActEmb = nn.NewEmbedding(cfg.NumAct, cfg.HiddenDim)
+		actHead, err := nn.NewLinear(cfg.HiddenDim, cfg.NumAct)
+		if err != nil {
+			return nil, err
+		}
+		m.ActHead = actHead
 		m.ToneEmb = nn.NewEmbedding(cfg.NumTone, cfg.HiddenDim)
-		head, err := nn.NewLinear(cfg.HiddenDim, cfg.NumTone)
+		toneHead, err := nn.NewLinear(cfg.HiddenDim, cfg.NumTone)
 		if err != nil {
 			return nil, err
 		}
-		m.ToneHead = head
-	}
-	if cfg.Concept {
-		if len(centroids) != cfg.NumConcepts {
-			return nil, fmt.Errorf("layers: %d concept centroids, want %d", len(centroids), cfg.NumConcepts)
+		m.ToneHead = toneHead
+		m.ToneLex = d.ToneLex
+		if cfg.HasTop() {
+			if len(d.ActFamily) != cfg.NumTopCodes {
+				return nil, fmt.Errorf("layers: act family has %d rows, want %d top codes", len(d.ActFamily), cfg.NumTopCodes)
+			}
+			m.ActFamily = d.ActFamily
 		}
-		m.ConceptEmb = nn.NewEmbedding(cfg.NumConcepts+1, cfg.EmbedDim)
-		head, err := nn.NewLinear(cfg.HiddenDim, cfg.ConceptLen*(cfg.NumConcepts+1))
-		if err != nil {
-			return nil, err
-		}
-		m.ConceptHead = head
-		m.ConceptCentroids = centroids
 	}
 	if cfg.Turn {
-		if !cfg.Concept {
-			return nil, fmt.Errorf("layers: turn requires concept")
+		if !cfg.HasTop() {
+			return nil, fmt.Errorf("layers: turn requires the frame's top code")
 		}
-		m.TurnEmb = nn.NewEmbedding(cfg.NumConcepts+1, cfg.HiddenDim)
+		m.TurnEmb = nn.NewEmbedding(cfg.NumTopCodes, cfg.HiddenDim)
 		data := make([]float32, cfg.HiddenDim)
 		for i := range data {
 			data[i] = (randFloat32()*2 - 1) * 0.1
@@ -250,14 +343,17 @@ func (m *LayersModel) manualParams() []*tensor.Tensor {
 	if m.ClassTable != nil {
 		out = append(out, m.ClassTable.Weight)
 	}
-	if m.IntentEmb != nil {
-		out = append(out, m.IntentEmb.Weight)
+	if m.TopEmb != nil {
+		out = append(out, m.TopEmb.Weight)
+	}
+	if m.TopSeedEmb != nil {
+		out = append(out, m.TopSeedEmb.Weight)
+	}
+	if m.ActEmb != nil {
+		out = append(out, m.ActEmb.Weight)
 	}
 	if m.ToneEmb != nil {
 		out = append(out, m.ToneEmb.Weight)
-	}
-	if m.ConceptEmb != nil {
-		out = append(out, m.ConceptEmb.Weight)
 	}
 	if m.TurnEmb != nil {
 		out = append(out, m.TurnEmb.Weight)
@@ -283,14 +379,14 @@ func (m *LayersModel) ensureManualGrads() {
 // hand-scattered tables'.
 func (m *LayersModel) Parameters() []*tensor.Tensor {
 	params := m.Base.Parameters()
-	if m.IntentHead != nil {
-		params = append(params, m.IntentHead.Parameters()...)
+	if m.TopHead != nil {
+		params = append(params, m.TopHead.Parameters()...)
+	}
+	if m.ActHead != nil {
+		params = append(params, m.ActHead.Parameters()...)
 	}
 	if m.ToneHead != nil {
 		params = append(params, m.ToneHead.Parameters()...)
-	}
-	if m.ConceptHead != nil {
-		params = append(params, m.ConceptHead.Parameters()...)
 	}
 	params = append(params, m.manualParams()...)
 	return params
@@ -371,107 +467,76 @@ func (m *LayersModel) classOf(id int) int {
 	return m.ClassOf[id]
 }
 
-// DeriveReplyCodes names a token sequence's concept codes with the
-// derivation centroids (DESIGN §3.5): the sequence is split into
-// ConceptLen contiguous segments; each segment's L2-normalized
-// bag-of-words is assigned its nearest centroid (cosine); an empty
-// segment is code 0 (EMPTY). Used at inference for the turn layer
-// and in training-data preparation for gold codes.
-func (m *LayersModel) DeriveReplyCodes(tokenIDs []int) [3]int {
-	return DeriveCodesWithCentroids(tokenIDs, m.ConceptCentroids, m.Config.ConceptLen)
+// DeriveReplyTop names a token sequence's TOP CODE with the
+// derivation centroids (DESIGN §12): the sequence's L2-normalized
+// bag-of-words is assigned its nearest centroid (cosine). The
+// second result is false for an empty (or all-out-of-range)
+// sequence, which has no top code. Used for teacher frames (chat
+// derivations), turn threading, and the round-trip check.
+func (m *LayersModel) DeriveReplyTop(tokenIDs []int) (int, bool) {
+	return DeriveTopWithCentroids(tokenIDs, m.TopCentroids)
 }
 
-// DeriveCodesWithCentroids is the shared segment-coding function
-// (the chat derivations call it too, before a model exists).
-func DeriveCodesWithCentroids(tokenIDs []int, centroids [][]float32, conceptLen int) [3]int {
-	var codes [3]int
-	if len(centroids) == 0 {
-		return codes
+// DeriveTopWithCentroids is the shared top-coding function (the
+// chat derivations call it too, before a model exists).
+func DeriveTopWithCentroids(tokenIDs []int, centroids [][]float32) (int, bool) {
+	if len(centroids) == 0 || len(tokenIDs) == 0 {
+		return 0, false
 	}
 	vocabSize := len(centroids[0])
-	segs := SplitSegments(tokenIDs, conceptLen)
-	for s := 0; s < conceptLen && s < 3; s++ {
-		seg := segs[s]
-		if len(seg) == 0 {
-			codes[s] = 0
+	vec := make([]float64, vocabSize)
+	var used int
+	for _, id := range tokenIDs {
+		if id >= 0 && id < vocabSize {
+			vec[id]++
+			used++
+		}
+	}
+	if used == 0 {
+		return 0, false
+	}
+	var norm float64
+	for _, x := range vec {
+		norm += x * x
+	}
+	norm = math.Sqrt(norm)
+	best, bestSim := 0, math.Inf(-1)
+	for ci, cen := range centroids {
+		var dot, cn float64
+		for i, cv := range cen {
+			dot += vec[i] * float64(cv)
+			cn += float64(cv) * float64(cv)
+		}
+		if cn == 0 {
 			continue
 		}
-		vec := make([]float64, vocabSize)
-		for _, id := range seg {
-			if id >= 0 && id < vocabSize {
-				vec[id]++
-			}
+		if sim := dot / (norm * math.Sqrt(cn)); sim > bestSim {
+			bestSim, best = sim, ci
 		}
-		var norm float64
-		for _, x := range vec {
-			norm += x * x
-		}
-		norm = math.Sqrt(norm)
-		if norm == 0 {
-			codes[s] = 0
-			continue
-		}
-		best, bestSim := 0, math.Inf(-1)
-		for ci, cen := range centroids {
-			var dot, cn float64
-			for i, cv := range cen {
-				dot += vec[i] * float64(cv)
-				cn += float64(cv) * float64(cv)
-			}
-			sim := dot / (norm * math.Sqrt(cn))
-			if sim > bestSim {
-				bestSim, best = sim, ci
-			}
-		}
-		codes[s] = best + 1 // codes are 1-based; 0 = EMPTY
 	}
-	return codes
-}
-
-// SplitSegments splits ids into n contiguous segments as evenly as
-// possible (earlier segments take the remainder).
-func SplitSegments(ids []int, n int) [][]int {
-	segs := make([][]int, n)
-	if n <= 0 {
-		return segs
-	}
-	base := len(ids) / n
-	rem := len(ids) % n
-	pos := 0
-	for s := 0; s < n; s++ {
-		sz := base
-		if s < rem {
-			sz++
-		}
-		if pos+sz > len(ids) {
-			sz = len(ids) - pos
-		}
-		if sz < 0 {
-			sz = 0
-		}
-		segs[s] = ids[pos : pos+sz]
-		pos += sz
-	}
-	return segs
+	return best, true
 }
 
 // serializableLayers is the gob form of a LayersModel: the base
 // model in its own serializable shape plus the layer state.
 type serializableLayers struct {
-	Base             *SerializableSeq2Seq
-	Config           LayersConfig
-	CharTable        *nn.Embedding
-	ClassTable       *nn.Embedding
-	ClassOf          []int
-	IntentEmb        *nn.Embedding
-	IntentHead       *nn.Linear
-	ToneEmb          *nn.Embedding
-	ToneHead         *nn.Linear
-	ConceptEmb       *nn.Embedding
-	ConceptHead      *nn.Linear
-	ConceptCentroids [][]float32
-	TurnEmb          *nn.Embedding
-	NoneTurn         *tensor.Tensor
+	Base         *SerializableSeq2Seq
+	Config       LayersConfig
+	CharTable    *nn.Embedding
+	ClassTable   *nn.Embedding
+	ClassOf      []int
+	TopEmb       *nn.Embedding
+	TopSeedEmb   *nn.Embedding
+	TopHead      *nn.Linear
+	TopCentroids [][]float32
+	ActEmb       *nn.Embedding
+	ActHead      *nn.Linear
+	ToneEmb      *nn.Embedding
+	ToneHead     *nn.Linear
+	ActFamily    [][]bool
+	ToneLex      ToneLexicon
+	TurnEmb      *nn.Embedding
+	NoneTurn     *tensor.Tensor
 }
 
 // Save writes the layers model to filePath (gob). The production
@@ -490,19 +555,22 @@ func (m *LayersModel) Save(filePath string) error {
 			HiddenDim:   m.Base.HiddenDim,
 			ExactMap:    m.Base.ExactMap,
 		},
-		Config:           m.Config,
-		CharTable:        m.CharTable,
-		ClassTable:       m.ClassTable,
-		ClassOf:          m.ClassOf,
-		IntentEmb:        m.IntentEmb,
-		IntentHead:       m.IntentHead,
-		ToneEmb:          m.ToneEmb,
-		ToneHead:         m.ToneHead,
-		ConceptEmb:       m.ConceptEmb,
-		ConceptHead:      m.ConceptHead,
-		ConceptCentroids: m.ConceptCentroids,
-		TurnEmb:          m.TurnEmb,
-		NoneTurn:         m.NoneTurn,
+		Config:       m.Config,
+		CharTable:    m.CharTable,
+		ClassTable:   m.ClassTable,
+		ClassOf:      m.ClassOf,
+		TopEmb:       m.TopEmb,
+		TopSeedEmb:   m.TopSeedEmb,
+		TopHead:      m.TopHead,
+		TopCentroids: m.TopCentroids,
+		ActEmb:       m.ActEmb,
+		ActHead:      m.ActHead,
+		ToneEmb:      m.ToneEmb,
+		ToneHead:     m.ToneHead,
+		ActFamily:    m.ActFamily,
+		ToneLex:      m.ToneLex,
+		TurnEmb:      m.TurnEmb,
+		NoneTurn:     m.NoneTurn,
 	}
 	if err := gob.NewEncoder(file).Encode(s); err != nil {
 		return fmt.Errorf("layers save encode: %w", err)
@@ -530,32 +598,51 @@ func LoadLayers(filePath string, tok *tokenizer.Tokenizer) (*LayersModel, error)
 		ExactMap:    s.Base.ExactMap,
 	}
 	m := &LayersModel{
-		Base:             base,
-		Config:           s.Config,
-		CharTable:        s.CharTable,
-		ClassTable:       s.ClassTable,
-		ClassOf:          s.ClassOf,
-		IntentEmb:        s.IntentEmb,
-		IntentHead:       s.IntentHead,
-		ToneEmb:          s.ToneEmb,
-		ToneHead:         s.ToneHead,
-		ConceptEmb:       s.ConceptEmb,
-		ConceptHead:      s.ConceptHead,
-		ConceptCentroids: s.ConceptCentroids,
-		TurnEmb:          s.TurnEmb,
-		NoneTurn:         s.NoneTurn,
+		Base:         base,
+		Config:       s.Config,
+		CharTable:    s.CharTable,
+		ClassTable:   s.ClassTable,
+		ClassOf:      s.ClassOf,
+		TopEmb:       s.TopEmb,
+		TopSeedEmb:   s.TopSeedEmb,
+		TopHead:      s.TopHead,
+		TopCentroids: s.TopCentroids,
+		ActEmb:       s.ActEmb,
+		ActHead:      s.ActHead,
+		ToneEmb:      s.ToneEmb,
+		ToneHead:     s.ToneHead,
+		ActFamily:    s.ActFamily,
+		ToneLex:      s.ToneLex,
+		TurnEmb:      s.TurnEmb,
+		NoneTurn:     s.NoneTurn,
 	}
 	m.ensureManualGrads()
 	return m, nil
 }
 
 // TrainedLayers returns the names of the layers this model was
-// trained with, in shelf order (for scorer reporting).
+// trained with, in shelf order (for scorer reporting). A frame
+// variant is named as it was selected ("frame-top"/"frame-slots").
 func (m *LayersModel) TrainedLayers() []string {
 	var out []string
-	for _, name := range []string{"char", "class", "intent", "tone", "concept", "copy", "turn", "memory"} {
-		if m.Config.On(name) {
-			out = append(out, name)
+	for _, name := range []string{"char", "class", "frame", "frame-top", "frame-slots", "copy", "turn", "memory"} {
+		switch name {
+		case "frame":
+			if m.Config.Frame && !m.Config.FrameTopOnly && !m.Config.FrameSlotsOnly {
+				out = append(out, name)
+			}
+		case "frame-top":
+			if m.Config.FrameTopOnly {
+				out = append(out, name)
+			}
+		case "frame-slots":
+			if m.Config.FrameSlotsOnly {
+				out = append(out, name)
+			}
+		default:
+			if m.Config.On(name) {
+				out = append(out, name)
+			}
 		}
 	}
 	return out

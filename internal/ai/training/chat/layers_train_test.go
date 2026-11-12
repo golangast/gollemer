@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/golangast/gollemer/internal/ai/neural/nn"
@@ -35,7 +36,7 @@ func layersTestRoot(t *testing.T) string {
 
 func allLayersCfg() seq2seq.LayersConfig {
 	cfg := seq2seq.DefaultLayersConfig()
-	for _, name := range []string{"char", "class", "intent", "tone", "concept", "copy", "turn", "memory"} {
+	for _, name := range []string{"char", "class", "frame", "copy", "turn", "memory"} {
 		if err := cfg.Set(name, true); err != nil {
 			panic(err)
 		}
@@ -69,11 +70,24 @@ func TestLayersDerivationsDeterministicAndPure(t *testing.T) {
 	if !reflect.DeepEqual(d1.ClassOf, d2.ClassOf) {
 		t.Fatal("word classes differ across identical derivations")
 	}
-	if !reflect.DeepEqual(d1.Centroids, d2.Centroids) {
-		t.Fatal("concept centroids differ across identical derivations")
+	if !reflect.DeepEqual(d1.TopCentroids, d2.TopCentroids) {
+		t.Fatal("top centroids differ across identical derivations")
 	}
-	if d1.IntentDist != d2.IntentDist || d1.ToneDist != d2.ToneDist || d1.FactPairs != d2.FactPairs {
+	if !reflect.DeepEqual(d1.ActFamily, d2.ActFamily) {
+		t.Fatal("act family tables differ across identical derivations")
+	}
+	if d1.ActDist != d2.ActDist || d1.ToneDist != d2.ToneDist || d1.FactPairs != d2.FactPairs {
 		t.Fatal("label/fact derivations differ across runs")
+	}
+	if len(d1.TopCensus) != cfg.NumTopCodes {
+		t.Fatalf("top census has %d entries, want %d", len(d1.TopCensus), cfg.NumTopCodes)
+	}
+	total := 0
+	for _, n := range d1.TopCensus {
+		total += n
+	}
+	if total != len(pairs) {
+		t.Fatalf("top census covers %d pairs, want %d (every pair gets a teacher frame)", total, len(pairs))
 	}
 	if len(d1.ClassOf) != dd.v.Size() {
 		t.Fatalf("class map has %d entries, vocab %d", len(d1.ClassOf), dd.v.Size())
@@ -106,7 +120,7 @@ func smallLayersModel(t *testing.T) (*seq2seq.LayersModel, *domainTrainData, []C
 	if err != nil {
 		t.Fatalf("new base: %v", err)
 	}
-	m, err := seq2seq.NewLayersModel(base, cfg, d.ClassOf, d.Centroids)
+	m, err := seq2seq.NewLayersModel(base, cfg, d.modelDerivations())
 	if err != nil {
 		t.Fatalf("new layers model: %v", err)
 	}
@@ -157,12 +171,13 @@ func TestLayersGradflowAllLayers(t *testing.T) {
 	}
 	nonzero("char table", m.CharTable.Weight)
 	nonzero("class table", m.ClassTable.Weight)
-	nonzero("intent emb", m.IntentEmb.Weight)
-	nonzero("intent head", m.IntentHead.Weights, m.IntentHead.Biases)
+	nonzero("top emb (prefix)", m.TopEmb.Weight)
+	nonzero("top emb (seed)", m.TopSeedEmb.Weight)
+	nonzero("top head", m.TopHead.Weights, m.TopHead.Biases)
+	nonzero("act emb", m.ActEmb.Weight)
+	nonzero("act head", m.ActHead.Weights, m.ActHead.Biases)
 	nonzero("tone emb", m.ToneEmb.Weight)
 	nonzero("tone head", m.ToneHead.Weights, m.ToneHead.Biases)
-	nonzero("concept emb", m.ConceptEmb.Weight)
-	nonzero("concept head", m.ConceptHead.Weights, m.ConceptHead.Biases)
 	// TurnEmb rows only receive gradient when a previous turn
 	// exists; the single-turn corpus never has one (DESIGN §3.7),
 	// so the pin is that its grad tensor exists and is wired in —
@@ -205,17 +220,214 @@ func TestLayersGobRoundtripAndSwitches(t *testing.T) {
 		}
 		// Every inference switch executes without error.
 		for _, dis := range []map[string]bool{
-			{"char": true}, {"class": true}, {"intent": true}, {"tone": true},
-			{"concept": true}, {"copy": true}, {"turn": true}, {"memory": true},
-			{"char": true, "class": true, "intent": true, "tone": true, "concept": true, "copy": true, "turn": true, "memory": true},
+			{"char": true}, {"class": true}, {"frame": true},
+			{"copy": true}, {"turn": true}, {"memory": true},
+			{"char": true, "class": true, "frame": true, "copy": true, "turn": true, "memory": true},
 		} {
 			if _, err := PredictLayersText(loaded, in, sess, seq2seq.LayersPredictOptions{MaxLen: 20, Disable: dis}); err != nil {
 				t.Fatalf("predict with disable %v: %v", dis, err)
 			}
 		}
-		if _, err := PredictLayersText(loaded, in, sess, seq2seq.LayersPredictOptions{MaxLen: 20, ShuffleConcept: true}); err != nil {
-			t.Fatalf("predict shuffled: %v", err)
+		for _, o := range []seq2seq.LayersPredictOptions{
+			{MaxLen: 20, ShuffleTop: true},
+			{MaxLen: 20, NoRepair: true},
+			{MaxLen: 20, FrameTopOff: true},
+			{MaxLen: 20, FrameSlotsOff: true},
+			{MaxLen: 20, ShuffleTop: true, NoRepair: true},
+		} {
+			if _, err := PredictLayersText(loaded, in, sess, o); err != nil {
+				t.Fatalf("predict with options %+v: %v", o, err)
+			}
 		}
+	}
+}
+
+// ---- the re-correction loop (DESIGN §12) ----
+
+// peaked returns a probability vector with p on idx and the
+// remaining mass spread evenly.
+func peaked(idx, n int, p float32) []float32 {
+	out := make([]float32, n)
+	rest := (1 - p) / float32(n-1)
+	for i := range out {
+		out[i] = rest
+	}
+	out[idx] = p
+	return out
+}
+
+// A tone slot that contradicts the lexicon re-read of the input
+// is re-picked to the lexicon read (check (b)); with the loop off
+// the corrupted slot stands.
+func TestFrameRepairFixesCorruptedTone(t *testing.T) {
+	m, _, _ := smallLayersModel(t)
+	in := "i am feeling down"
+	words := tokenizeLower(seq2seq.NormalizeQuery(in))
+	lexTone := m.ToneLex.ToneOf(words)
+	if lexTone != ToneLow {
+		t.Fatalf("premise broken: lexicon read of %q = %d, want low (%d)", in, lexTone, ToneLow)
+	}
+	nat, err := PredictLayersText(m, in, &LayersSession{}, seq2seq.LayersPredictOptions{MaxLen: 20, NoRepair: true})
+	if err != nil {
+		t.Fatalf("natural predict: %v", err)
+	}
+	act := nat.Act
+	if !m.ActFamily[nat.Top][act] {
+		for a := 0; a < m.Config.NumAct; a++ {
+			if m.ActFamily[nat.Top][a] {
+				act = a
+				break
+			}
+		}
+	}
+	ff := &seq2seq.ForcedFrame{
+		Top: nat.Top, Act: act, Tone: ToneBright, // corrupted: bright against a low read
+		TopProbs:  peaked(nat.Top, m.Config.NumTopCodes, 0.9),
+		ActProbs:  peaked(act, m.Config.NumAct, 0.9),
+		ToneProbs: peaked(ToneBright, m.Config.NumTone, 0.9),
+	}
+	nr, err := PredictLayersText(m, in, &LayersSession{}, seq2seq.LayersPredictOptions{MaxLen: 20, NoRepair: true, ForceFrame: ff})
+	if err != nil {
+		t.Fatalf("no-repair predict: %v", err)
+	}
+	if nr.Tone != ToneBright || len(nr.Repairs) != 0 {
+		t.Fatalf("no-repair run should keep the corrupted tone: tone=%d repairs=%v", nr.Tone, nr.Repairs)
+	}
+	got, err := PredictLayersText(m, in, &LayersSession{}, seq2seq.LayersPredictOptions{MaxLen: 20, ForceFrame: ff})
+	if err != nil {
+		t.Fatalf("repair predict: %v", err)
+	}
+	if got.Tone != ToneLow {
+		t.Fatalf("tone not repaired to the lexicon read: got %d, repairs=%v", got.Tone, got.Repairs)
+	}
+	if len(got.Repairs) == 0 || !strings.Contains(got.Repairs[0], "tone check") {
+		t.Fatalf("first repair should be the tone check, got %v", got.Repairs)
+	}
+}
+
+// An act slot outside the top code's family is re-picked to the
+// head's best in-family act (check (a)); the repair log's first
+// entry is that repair.
+func TestFrameRepairFixesCorruptedAct(t *testing.T) {
+	m, _, _ := smallLayersModel(t)
+	in := "hello there"
+	words := tokenizeLower(seq2seq.NormalizeQuery(in))
+	lexTone := m.ToneLex.ToneOf(words)
+	nat, err := PredictLayersText(m, in, &LayersSession{}, seq2seq.LayersPredictOptions{MaxLen: 20, NoRepair: true})
+	if err != nil {
+		t.Fatalf("natural predict: %v", err)
+	}
+	// Find a top code with a non-trivial family and corrupt the act.
+	top, badAct, goodAct := -1, -1, -1
+	for cand := 0; cand < m.Config.NumTopCodes; cand++ {
+		bad, good := -1, -1
+		for a := 0; a < m.Config.NumAct; a++ {
+			if m.ActFamily[cand][a] {
+				if good < 0 {
+					good = a
+				}
+			} else if bad < 0 {
+				bad = a
+			}
+		}
+		if bad >= 0 && good >= 0 {
+			top, badAct, goodAct = cand, bad, good
+			break
+		}
+	}
+	if top < 0 {
+		t.Fatal("no top code has both an in-family and an out-of-family act; cannot corrupt")
+	}
+	actProbs := make([]float32, m.Config.NumAct)
+	for i := range actProbs {
+		actProbs[i] = 0.05
+	}
+	actProbs[badAct] = 0.34  // corrupted act: highest prob, but
+	actProbs[goodAct] = 0.33 // lower confidence than the top
+	ff := &seq2seq.ForcedFrame{
+		Top: top, Act: badAct, Tone: lexTone, // tone = the lexicon read, so check (b) passes
+		TopProbs:  peaked(top, m.Config.NumTopCodes, 0.9),
+		ActProbs:  actProbs,
+		ToneProbs: peaked(lexTone, m.Config.NumTone, 0.9),
+	}
+	nr, err := PredictLayersText(m, in, &LayersSession{}, seq2seq.LayersPredictOptions{MaxLen: 20, NoRepair: true, ForceFrame: ff})
+	if err != nil {
+		t.Fatalf("no-repair predict: %v", err)
+	}
+	if nr.Act != badAct {
+		t.Fatalf("no-repair run should keep the corrupted act: got %d want %d", nr.Act, badAct)
+	}
+	got, err := PredictLayersText(m, in, &LayersSession{}, seq2seq.LayersPredictOptions{MaxLen: 20, ForceFrame: ff})
+	if err != nil {
+		t.Fatalf("repair predict: %v", err)
+	}
+	if len(got.Repairs) == 0 || !strings.Contains(got.Repairs[0], "act-family check") {
+		t.Fatalf("first repair should be the act-family repair, got %v", got.Repairs)
+	}
+	if !strings.Contains(got.Repairs[0], "best in family") {
+		t.Fatalf("act repair should land in the family, got %q", got.Repairs[0])
+	}
+	_ = nat
+}
+
+// A frame that already passes every check (found by search over
+// forced frames) must produce byte-identical output with the
+// loop on: repair fires nothing.
+func TestFrameRepairLeavesCoherentFrameAlone(t *testing.T) {
+	m, dd, _ := smallLayersModel(t)
+	inputs := []string{"hello", "how are you", "good morning", "thank you", "what is your name"}
+	found := false
+	for _, in := range inputs {
+		words := tokenizeLower(seq2seq.NormalizeQuery(in))
+		lexTone := m.ToneLex.ToneOf(words)
+		for top := 0; top < m.Config.NumTopCodes && !found; top++ {
+			act := -1
+			for a := 0; a < m.Config.NumAct; a++ {
+				if m.ActFamily[top][a] {
+					act = a
+					break
+				}
+			}
+			if act < 0 {
+				continue
+			}
+			ff := &seq2seq.ForcedFrame{Top: top, Act: act, Tone: lexTone}
+			opts := seq2seq.LayersPredictOptions{MaxLen: 20, NoRepair: true, ForceFrame: ff}
+			base, err := PredictLayersText(m, in, &LayersSession{}, opts)
+			if err != nil {
+				t.Fatalf("search predict: %v", err)
+			}
+			// Coherence: the round-trip must agree — rendered top
+			// matches (or is underivable) and the rendered tone
+			// does not contradict.
+			if rt, ok := m.DeriveReplyTop(base.TokenIDs); ok && rt != top {
+				continue
+			}
+			repWords := make([]string, len(base.TokenIDs))
+			for i, id := range base.TokenIDs {
+				repWords[i] = dd.v.GetWord(id)
+			}
+			if lt := m.ToneLex.ToneOf(repWords); lt > 0 && lt != lexTone {
+				continue
+			}
+			got, err := PredictLayersText(m, in, &LayersSession{}, seq2seq.LayersPredictOptions{MaxLen: 20, ForceFrame: ff})
+			if err != nil {
+				t.Fatalf("repair predict: %v", err)
+			}
+			if len(got.Repairs) != 0 {
+				t.Fatalf("coherent frame (top=%d act=%d tone=%d on %q) drew repairs: %v", top, act, lexTone, in, got.Repairs)
+			}
+			if got.Residual {
+				t.Fatalf("coherent frame marked residual")
+			}
+			if got.Text != base.Text {
+				t.Fatalf("repair-on changed a coherent frame's reply: %q vs %q", got.Text, base.Text)
+			}
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("no coherent forced frame found across the probe inputs — the loop can never be quiet")
 	}
 }
 

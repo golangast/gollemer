@@ -22,9 +22,10 @@ func main() {
 	augmentMutationsFlag := flag.Bool("augment-mutations", false, "Social only: add one mutated sibling (typo / function-word drop / word swap) per training input, target unchanged")
 	mutationBlocklistFlag := flag.String("mutation-blocklist", "", "JSONL whose inputs mutation siblings must never reproduce (the frozen robustness eval); required with -augment-mutations")
 	trainLayersFlag := flag.Bool("train-layers", false, "Layers pilot: train the social seq2seq with generic layers on (see -layers); separate model file, production trainer untouched")
-	layersFlag := flag.String("layers", "", "Comma-separated layers for -train-layers: char,class,intent,tone,concept,copy,turn,memory")
+	layersFlag := flag.String("layers", "", "Comma-separated layers for -train-layers: char,class,frame,frame-top,frame-slots,copy,turn,memory")
 	layersEpochsFlag := flag.Int("layers-epochs", 0, "Epoch cap for -train-layers (0 = the production 200)")
 	layersMaxPairsFlag := flag.Int("layers-max-pairs", 0, "Seeded subsample of prepared pairs for -train-layers (0 = all; smoke/screening)")
+	buildHoldoutFlag := flag.String("build-combination-holdout", "", "Layers pilot: build the combination-holdout artifacts (DESIGN §12) into this directory and exit")
 	reclassifyFlag := flag.Bool("reclassify-domains", false, "Re-tag all dataset pairs with the current domain classifier")
 	genUnderstandingFlag := flag.Bool("gen-understanding", false, "Generate structure->language training pairs from Go source")
 	uexplainProbeFlag := flag.String("uexplain-probe", "", "Feed facts text to the understanding model and print its raw output")
@@ -32,7 +33,7 @@ func main() {
 	outFileFlag := flag.String("out", "data/training/understanding_pairs.jsonl", "Output file for -gen-understanding")
 	flag.Parse()
 
-	if !*trainRealSeq2SeqFlag && !*trainLayersFlag && !*realChatFlag && *importPairsFlag == "" && !*reclassifyFlag && !*genUnderstandingFlag && *uexplainProbeFlag == "" && *watchFlag == "" {
+	if !*trainRealSeq2SeqFlag && !*trainLayersFlag && !*realChatFlag && *importPairsFlag == "" && !*reclassifyFlag && !*genUnderstandingFlag && *uexplainProbeFlag == "" && *watchFlag == "" && *buildHoldoutFlag == "" {
 		fmt.Fprintf(os.Stderr, "Usage: gollemer -train-real-seq2seq | gollemer -real-chat | gollemer -import-pairs=file.jsonl | gollemer -reclassify-domains | gollemer -gen-understanding\n")
 		os.Exit(1)
 	}
@@ -49,6 +50,15 @@ func main() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error getting working directory: %v\n", err)
 		os.Exit(1)
+	}
+
+	if *buildHoldoutFlag != "" {
+		if err := chat.BuildCombinationHoldout(rootDir, *buildHoldoutFlag); err != nil {
+			fmt.Fprintf(os.Stderr, "combination holdout build failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("combination holdout artifacts written to %s\n", *buildHoldoutFlag)
+		return
 	}
 
 	if *trainLayersFlag {

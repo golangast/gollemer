@@ -8,15 +8,21 @@ package seq2seq
 //	  the LSTM consumes the combined tensor; after LSTM.Backward
 //	  its .Grad is handed to the base embedding's Backward AND
 //	  scattered by hand into the class/char tables.
-//	seed conditioning (intent/tone/turn): the decoder seed is a
-//	  values tensor; GetPrevHiddenGrad's output is scattered into
-//	  the seed embeddings and copied on as the encoder-final grad.
-//	auxiliary heads (intent/tone/concept): value-space CE; each
-//	  head's Backward runs on its own clone of the encoder-final
-//	  state so the three gradient contributions sum by hand.
-//	concept prefix: the decoder input's first steps are concept
-//	  embedding rows; their slice of the input grad is scattered
-//	  into the concept table.
+//	frame heads (DESIGN §12): the TOP head reads the encoder
+//	  final state; the ACT/TONE slot heads read the encoder
+//	  final state PLUS the gold top code's seed-side row, so
+//	  slot prediction is conditioned on the top code. Each
+//	  head's Backward runs on its own clone; the act/tone
+//	  input grad is added to the encoder-final grad AND
+//	  scattered into the top seed table (a sum's gradient
+//	  reaches both summands whole).
+//	seed conditioning (act/tone/turn): the decoder seed is a
+//	  values tensor; GetPrevHiddenGrad's output is scattered
+//	  into the seed embeddings and copied on as the encoder-
+//	  final grad.
+//	frame prefix: the decoder input's first step is the gold
+//	  top code's prefix row; its slice of the input grad is
+//	  scattered into the top prefix table.
 //	copy: the mixture NLL replaces the word CE (TrainBatchPtrGen
 //	  precedent), its three gradient streams joined at moeOut,
 //	  the decoder embeddings, and the encoder output.
@@ -40,17 +46,16 @@ type LayersBatch struct {
 	InputSurfaces [][]string // aligned with InputIDs; "" on padding
 	TargetIDs     [][]int    // [BOS, reply..., EOS, pad...]
 	TargetSurfs   [][]string // aligned with TargetIDs (decoder-fed positions)
-	IntentLabels  []int      // valid when intent on
-	ToneLabels    []int      // valid when tone on
-	ConceptCodes  [][3]int   // gold reply codes, valid when concept on
-	PrevCodes     [][3]int   // previous reply's codes, valid when turn on
-	HasPrev       []bool
+	TopCodes      []int      // gold reply top code per row (frame-top on)
+	ActLabels     []int      // gold act slot (frame slots on)
+	ToneLabels    []int      // gold tone slot (frame slots on)
+	PrevTop       []int      // previous reply's top code, -1 = none (turn on)
 	PadID         int
 }
 
 // TrainBatchLayers runs one forward/backward over the batch and
 // returns the total loss (word CE or copy mixture NLL, plus the
-// MoE aux and the weighted auxiliary head losses). The caller owns
+// MoE aux and the weighted frame head losses). The caller owns
 // the optimizer (ZeroGrad before, Step after), exactly as with
 // TrainBatch.
 func (m *LayersModel) TrainBatchLayers(batch LayersBatch) (float32, error) {
@@ -67,8 +72,8 @@ func (m *LayersModel) TrainBatchLayers(batch LayersBatch) (float32, error) {
 	}
 	steps := decLen - 1
 	prefix := 0
-	if cfg.Concept {
-		prefix = cfg.ConceptLen
+	if cfg.HasTop() {
+		prefix = 1
 	}
 	totalSteps := prefix + steps
 	vocabSize := base.OutputVocab.Size()
@@ -100,38 +105,43 @@ func (m *LayersModel) TrainBatchLayers(batch LayersBatch) (float32, error) {
 		return 0, fmt.Errorf("layers encoder final reshape: %w", err)
 	}
 
-	// ---- Auxiliary heads on the encoder final state (values CE).
-	var intentLoss, toneLoss, conceptLoss float32
-	var dIntent, dTone, dConcept []float32 // dLogits per head, for backward
-	if cfg.Intent {
-		intentLoss, dIntent = m.headCE(m.IntentHead, encFinalH.Data, batch.IntentLabels, B)
+	// ---- Frame heads (values CE). The top head reads the encoder
+	// final state; the slot heads read it plus the gold top row
+	// (top-conditioned slot prediction, DESIGN §12). In the
+	// slots-only arm there is no top: the slot heads read the
+	// encoder state alone.
+	var topLoss, actLoss, toneLoss float32
+	var dTop, dAct, dTone []float32 // dLogits per head, for backward
+	slotInput := encFinalH.Data     // what the slot heads saw (for backward)
+	if cfg.HasTop() {
+		topLoss, dTop = m.headCE(m.TopHead, encFinalH.Data, batch.TopCodes, B)
 	}
-	if cfg.Tone {
-		toneLoss, dTone = m.headCE(m.ToneHead, encFinalH.Data, batch.ToneLabels, B)
-	}
-	if cfg.Concept {
-		conceptLoss, dConcept = m.conceptHeadCE(encFinalH.Data, batch.ConceptCodes, B)
+	if cfg.HasSlots() {
+		if cfg.HasTop() {
+			combined := make([]float32, B*hidden)
+			copy(combined, encFinalH.Data)
+			for b := 0; b < B; b++ {
+				m.addEmbRow(combined[b*hidden:], m.TopSeedEmb, batch.TopCodes[b])
+			}
+			slotInput = combined
+		}
+		actLoss, dAct = m.headCE(m.ActHead, slotInput, batch.ActLabels, B)
+		toneLoss, dTone = m.headCE(m.ToneHead, slotInput, batch.ToneLabels, B)
 	}
 
 	// ---- Decoder seed: encoder final + gold conditioning rows.
 	seedData := make([]float32, B*hidden)
 	copy(seedData, encFinalH.Data)
-	if cfg.Intent {
+	if cfg.HasSlots() {
 		for b := 0; b < B; b++ {
-			m.addEmbRow(seedData[b*hidden:], m.IntentEmb, batch.IntentLabels[b])
-		}
-	}
-	if cfg.Tone {
-		for b := 0; b < B; b++ {
+			m.addEmbRow(seedData[b*hidden:], m.ActEmb, batch.ActLabels[b])
 			m.addEmbRow(seedData[b*hidden:], m.ToneEmb, batch.ToneLabels[b])
 		}
 	}
 	if cfg.Turn {
 		for b := 0; b < B; b++ {
-			if batch.HasPrev[b] {
-				for s := 0; s < cfg.ConceptLen; s++ {
-					m.addEmbRowScaled(seedData[b*hidden:], m.TurnEmb, batch.PrevCodes[b][s], 1.0/float32(cfg.ConceptLen))
-				}
+			if batch.PrevTop[b] >= 0 {
+				m.addEmbRow(seedData[b*hidden:], m.TurnEmb, batch.PrevTop[b])
 			} else {
 				row := seedData[b*hidden:]
 				for k := 0; k < hidden; k++ {
@@ -147,7 +157,7 @@ func (m *LayersModel) TrainBatchLayers(batch LayersBatch) (float32, error) {
 	// is tracked; here it is a fresh values tensor.
 	seedH := tensor.NewTensor([]int{B, hidden}, seedData, true)
 
-	// ---- Decoder inputs: [concept prefix steps] ++ [word steps].
+	// ---- Decoder inputs: [top prefix step] ++ [word steps].
 	decInputIDs := make([][]int, B)
 	for b := range batch.TargetIDs {
 		decInputIDs[b] = batch.TargetIDs[b][:steps]
@@ -160,11 +170,9 @@ func (m *LayersModel) TrainBatchLayers(batch LayersBatch) (float32, error) {
 	decCombData := make([]float32, B*totalSteps*embDim)
 	for b := 0; b < B; b++ {
 		dst := decCombData[b*totalSteps*embDim:]
-		if cfg.Concept {
-			for s := 0; s < prefix; s++ {
-				off := batch.ConceptCodes[b][s] * embDim
-				copy(dst[s*embDim:(s+1)*embDim], m.ConceptEmb.Weight.Data[off:off+embDim])
-			}
+		if cfg.HasTop() {
+			off := batch.TopCodes[b] * embDim
+			copy(dst[:embDim], m.TopEmb.Weight.Data[off:off+embDim])
 		}
 		copy(dst[prefix*embDim:], wordComb[b*steps*embDim:(b+1)*steps*embDim])
 	}
@@ -186,7 +194,7 @@ func (m *LayersModel) TrainBatchLayers(batch LayersBatch) (float32, error) {
 	// full step axis with prefix positions ignored.
 	var wordLoss float32
 	var dLogits *tensor.Tensor
-	var dMoeCopy []float32   // [B*totalSteps*hidden], word positions only
+	var dMoeCopy []float32 // [B*totalSteps*hidden], word positions only
 	var dEncCopy []float32 // [B*encLen*hidden]
 	if cfg.Copy {
 		pg := base.Decoder.PtrGen
@@ -270,7 +278,7 @@ func (m *LayersModel) TrainBatchLayers(batch LayersBatch) (float32, error) {
 		}
 	}
 	loss := wordLoss + moeAuxCoeff*moeAux +
-		cfg.IntentWeight*intentLoss + cfg.ToneWeight*toneLoss + cfg.ConceptWt*conceptLoss
+		cfg.TopWeight*topLoss + cfg.ActWeight*actLoss + cfg.ToneWeight*toneLoss
 
 	// ---- Backward: output -> MoE -> decoder LSTM.
 	if err := base.Decoder.Output.Backward(dLogits); err != nil {
@@ -301,15 +309,13 @@ func (m *LayersModel) TrainBatchLayers(batch LayersBatch) (float32, error) {
 		return 0, fmt.Errorf("layers: decoder input grad missing")
 	}
 
-	// Decoder input grad: prefix slice -> concept table; word slice
-	// -> decoder embedding + class/char scatters.
+	// Decoder input grad: prefix slice -> top prefix table; word
+	// slice -> decoder embedding + class/char scatters.
 	wordGradData := make([]float32, B*steps*embDim)
 	for b := 0; b < B; b++ {
 		src := decComb.Grad.Data[b*totalSteps*embDim:]
-		if cfg.Concept {
-			for s := 0; s < prefix; s++ {
-				m.scatterEmb(m.ConceptEmb, batch.ConceptCodes[b][s], src[s*embDim:(s+1)*embDim], 1)
-			}
+		if cfg.HasTop() {
+			m.scatterEmb(m.TopEmb, batch.TopCodes[b], src[:embDim], 1)
 		}
 		copy(wordGradData[b*steps*embDim:], src[prefix*embDim:(prefix+steps)*embDim])
 	}
@@ -325,17 +331,13 @@ func (m *LayersModel) TrainBatchLayers(batch LayersBatch) (float32, error) {
 	copy(dEncFinal, dSeed.Data)
 	for b := 0; b < B; b++ {
 		row := dSeed.Data[b*hidden : (b+1)*hidden]
-		if cfg.Intent {
-			m.scatterEmb(m.IntentEmb, batch.IntentLabels[b], row, 1)
-		}
-		if cfg.Tone {
+		if cfg.HasSlots() {
+			m.scatterEmb(m.ActEmb, batch.ActLabels[b], row, 1)
 			m.scatterEmb(m.ToneEmb, batch.ToneLabels[b], row, 1)
 		}
 		if cfg.Turn {
-			if batch.HasPrev[b] {
-				for s := 0; s < cfg.ConceptLen; s++ {
-					m.scatterEmb(m.TurnEmb, batch.PrevCodes[b][s], row, 1.0/float32(cfg.ConceptLen))
-				}
+			if batch.PrevTop[b] >= 0 {
+				m.scatterEmb(m.TurnEmb, batch.PrevTop[b], row, 1)
 			} else {
 				for k := 0; k < hidden; k++ {
 					m.NoneTurn.Grad.Data[k] += row[k]
@@ -343,20 +345,29 @@ func (m *LayersModel) TrainBatchLayers(batch LayersBatch) (float32, error) {
 			}
 		}
 	}
-	// Head grads join at the encoder final state.
-	if cfg.Intent {
-		if err := m.headBackward(m.IntentHead, encFinalH.Data, dIntent, B, dEncFinal); err != nil {
+	// Head grads join at the encoder final state. The slot heads'
+	// input grad ALSO scatters into the top seed table (their
+	// input was encFinal + gold top row).
+	if cfg.HasTop() {
+		if err := m.headBackward(m.TopHead, encFinalH.Data, dTop, B, dEncFinal); err != nil {
 			return 0, err
 		}
 	}
-	if cfg.Tone {
-		if err := m.headBackward(m.ToneHead, encFinalH.Data, dTone, B, dEncFinal); err != nil {
+	if cfg.HasSlots() {
+		dSlot := make([]float32, B*hidden)
+		if err := m.headBackward(m.ActHead, slotInput, dAct, B, dSlot); err != nil {
 			return 0, err
 		}
-	}
-	if cfg.Concept {
-		if err := m.conceptHeadBackward(encFinalH.Data, dConcept, B, dEncFinal); err != nil {
+		if err := m.headBackward(m.ToneHead, slotInput, dTone, B, dSlot); err != nil {
 			return 0, err
+		}
+		for i := range dEncFinal {
+			dEncFinal[i] += dSlot[i]
+		}
+		if cfg.HasTop() {
+			for b := 0; b < B; b++ {
+				m.scatterEmb(m.TopSeedEmb, batch.TopCodes[b], dSlot[b*hidden:(b+1)*hidden], 1)
+			}
 		}
 	}
 
@@ -529,54 +540,6 @@ func (m *LayersModel) headCE(head *nn.Linear, x []float32, labels []int, B int) 
 	return float32(sum / float64(B)), dLogits
 }
 
-// conceptHeadCE is headCE over the concept head's ConceptLen
-// positions: mean CE over B*ConceptLen code predictions.
-func (m *LayersModel) conceptHeadCE(x []float32, codes [][3]int, B int) (float32, []float32) {
-	cfg := m.Config
-	hidden := cfg.HiddenDim
-	per := cfg.NumConcepts + 1
-	out := cfg.ConceptLen * per
-	dLogits := make([]float32, B*out)
-	var sum float64
-	n := float64(B * cfg.ConceptLen)
-	for b := 0; b < B; b++ {
-		row := x[b*hidden : (b+1)*hidden]
-		logits := linearRow(m.ConceptHead, row)
-		for s := 0; s < cfg.ConceptLen; s++ {
-			seg := logits[s*per : (s+1)*per]
-			mx := float32(math.Inf(-1))
-			for _, v := range seg {
-				if v > mx {
-					mx = v
-				}
-			}
-			var denom float64
-			probs := make([]float32, per)
-			for o := 0; o < per; o++ {
-				probs[o] = float32(math.Exp(float64(seg[o] - mx)))
-				denom += float64(probs[o])
-			}
-			for o := 0; o < per; o++ {
-				probs[o] /= float32(denom)
-			}
-			y := codes[b][s]
-			p := probs[y]
-			if p < 1e-9 {
-				p = 1e-9
-			}
-			sum += -math.Log(float64(p))
-			for o := 0; o < per; o++ {
-				g := probs[o]
-				if o == y {
-					g--
-				}
-				dLogits[b*out+s*per+o] = g / float32(n)
-			}
-		}
-	}
-	return float32(sum / n), dLogits
-}
-
 // headBackward runs a head's own Backward on a fresh clone of x and
 // adds the resulting input grad into dX ([B*hidden]).
 func (m *LayersModel) headBackward(head *nn.Linear, x []float32, dLogits []float32, B int, dX []float32) error {
@@ -594,30 +557,6 @@ func (m *LayersModel) headBackward(head *nn.Linear, x []float32, dLogits []float
 	}
 	if clone.Grad == nil {
 		return fmt.Errorf("layers: head input grad missing")
-	}
-	for i := range dX {
-		dX[i] += clone.Grad.Data[i]
-	}
-	return nil
-}
-
-// conceptHeadBackward is headBackward for the concept head.
-func (m *LayersModel) conceptHeadBackward(x []float32, dLogits []float32, B int, dX []float32) error {
-	cfg := m.Config
-	hidden := cfg.HiddenDim
-	out := cfg.ConceptLen * (cfg.NumConcepts + 1)
-	cloneData := make([]float32, B*hidden)
-	copy(cloneData, x)
-	clone := tensor.NewTensor([]int{B, hidden}, cloneData, true)
-	if _, err := m.ConceptHead.Forward(clone); err != nil {
-		return fmt.Errorf("layers concept head backward forward: %w", err)
-	}
-	dT := tensor.NewTensor([]int{B, out}, dLogits, false)
-	if err := m.ConceptHead.Backward(dT); err != nil {
-		return fmt.Errorf("layers concept head backward: %w", err)
-	}
-	if clone.Grad == nil {
-		return fmt.Errorf("layers: concept head input grad missing")
 	}
 	for i := range dX {
 		dX[i] += clone.Grad.Data[i]

@@ -8,12 +8,19 @@ package chat
 //	word classes — distributional clustering (context vectors over
 //	  the top-300 context tokens, seeded cosine k-means, k=47
 //	  learned classes + class 0 for specials)
-//	concept centroids — seeded cosine k-means over reply-segment
-//	  bag-of-words vectors (32 gist clusters)
-//	intent labels — ordered weak rules over the raw input
-//	tone labels + lexicon — feelings vocabulary seeded from the
-//	  house synonym table's affect words + stated seed lists,
-//	  filtered to the training vocabulary
+//	frame (DESIGN §12, replacing the segment concept codes and
+//	  the standalone intent/tone layers) —
+//	  top centroids: seeded cosine k-means over WHOLE-reply
+//	    bag-of-words vectors (one coarse gist code per reply)
+//	  teacher frames per pair: top code from the gold reply, act
+//	    slot from the ordered intent rules over the raw input,
+//	    tone slot from the tone lexicon rule
+//	  act-family table: which acts co-occur with each top code
+//	    in the teacher frames (the repair loop's check (a))
+//	tone lexicon — feelings vocabulary seeded from the house
+//	  synonym table's affect words + stated seed lists, filtered
+//	  to the training vocabulary; travels in the model (the
+//	  repair loop's check (b) re-reads with it)
 //	memory facts — the fact seat's own capture shapes
 //	  (parseFactCapture) mined from each pair's own input
 //
@@ -46,30 +53,26 @@ const layersKMeansIters = 25
 // layersDerivations bundles everything derived from the training
 // pairs for one layers run.
 type layersDerivations struct {
-	ClassOf    []int       // per token id (len = vocab size)
-	Centroids  [][]float32 // concept centroids (NumConcepts x vocab size)
-	ToneLex    toneLexicon
-	IntentDist [7]int
-	ToneDist   [4]int
-	FactPairs  int // train pairs whose own input states a fact
-	ClusterSizes []int
-	ClassSizes   []int
+	ClassOf      []int               // per token id (len = vocab size)
+	TopCentroids [][]float32         // top-code centroids (NumTopCodes x vocab size)
+	TopCensus    []int               // train pairs per top code (teacher frames)
+	ActFamily    [][]bool            // ActFamily[top][act] (repair check (a))
+	ToneLex      seq2seq.ToneLexicon // derived tone vocabulary (DESIGN §3.4)
+	ActDist      [7]int              // teacher-frame act distribution
+	ToneDist     [4]int              // teacher-frame tone distribution
+	FactPairs    int                 // train pairs whose own input states a fact
+	ClassSizes   []int               // word-class sizes
 }
 
-// toneLexicon is the derived tone vocabulary (DESIGN §3.4).
-type toneLexicon struct {
-	Bright  []string `json:"bright"`
-	Low     []string `json:"low"`
-	Worried []string `json:"worried"`
-	bright  map[string]bool
-	low     map[string]bool
-	worried map[string]bool
-}
-
-func (l *toneLexicon) index() {
-	l.bright = wordSet(l.Bright)
-	l.low = wordSet(l.Low)
-	l.worried = wordSet(l.Worried)
+// modelDerivations packages the derivations in the seq2seq
+// package's construction shape.
+func (d *layersDerivations) modelDerivations() seq2seq.LayersDerivations {
+	return seq2seq.LayersDerivations{
+		ClassOf:      d.ClassOf,
+		TopCentroids: d.TopCentroids,
+		ActFamily:    d.ActFamily,
+		ToneLex:      d.ToneLex,
+	}
 }
 
 func wordSet(ws []string) map[string]bool {
@@ -112,30 +115,52 @@ func deriveLayers(pairs []ChatPair, v *vocab.Vocabulary, tok interface {
 		d.ClassOf = classOf
 		d.ClassSizes = sizes
 	}
-	if cfg.Concept {
+	d.ToneLex = deriveToneLexicon(v)
+	if cfg.HasTop() {
 		var replies [][]int
 		for _, r := range distinctReplies {
 			replies = append(replies, r)
 		}
 		sort.Slice(replies, func(a, b int) bool { return intsKey(replies[a]) < intsKey(replies[b]) })
-		centroids, sizes, err := deriveConceptCentroids(replies, v.Size(), cfg)
+		centroids, err := deriveTopCentroids(replies, v.Size(), cfg)
 		if err != nil {
 			return nil, err
 		}
-		d.Centroids = centroids
-		d.ClusterSizes = sizes
+		d.TopCentroids = centroids
 	}
-	d.ToneLex = deriveToneLexicon(v)
-	d.ToneLex.index()
-	if cfg.Intent || cfg.Tone {
-		for _, p := range pairs {
+	if cfg.Frame {
+		// Teacher frames over every training pair: top from the
+		// gold reply (when the arm has a top), act/tone from the
+		// input. The census and the act-family table come from
+		// the same pass.
+		counts := make([][]int, cfg.NumTopCodes)
+		for t := range counts {
+			counts[t] = make([]int, cfg.NumAct)
+		}
+		d.TopCensus = make([]int, cfg.NumTopCodes)
+		for i, p := range pairs {
 			words := tokenizeLower(seq2seq.NormalizeQuery(p.Input))
-			if cfg.Intent {
-				d.IntentDist[intentLabelFor(words)]++
+			act := intentLabelFor(words)
+			tone := d.ToneLex.ToneOf(words)
+			if cfg.HasSlots() {
+				d.ActDist[act]++
+				d.ToneDist[tone]++
 			}
-			if cfg.Tone {
-				d.ToneDist[toneLabelFor(words, &d.ToneLex)]++
+			if cfg.HasTop() {
+				reply := encs[i].outIDs
+				if len(reply) >= 2 {
+					reply = reply[1 : len(reply)-1]
+				}
+				if top, ok := seq2seq.DeriveTopWithCentroids(reply, d.TopCentroids); ok {
+					d.TopCensus[top]++
+					if cfg.HasSlots() {
+						counts[top][act]++
+					}
+				}
 			}
+		}
+		if cfg.HasTop() && cfg.HasSlots() {
+			d.ActFamily = actFamilyFromCounts(counts)
 		}
 	}
 	if cfg.Memory {
@@ -146,6 +171,42 @@ func deriveLayers(pairs []ChatPair, v *vocab.Vocabulary, tok interface {
 		}
 	}
 	return d, nil
+}
+
+// actFamilyFromCounts builds the repair loop's family table from
+// teacher-frame (top, act) co-occurrence counts. Registered rule:
+// an act belongs to a top code's family when it co-occurs at
+// least twice (a single co-occurrence can be a weak-label
+// accident); a code whose acts all fall below the threshold
+// falls back to its count>=1 acts; a code with no teacher pairs
+// at all is unconstrained (every act allowed), since no check
+// can be grounded in data that does not exist.
+func actFamilyFromCounts(counts [][]int) [][]bool {
+	fam := make([][]bool, len(counts))
+	for t, row := range counts {
+		fam[t] = make([]bool, len(row))
+		any := false
+		for a, c := range row {
+			if c >= 2 {
+				fam[t][a] = true
+				any = true
+			}
+		}
+		if !any {
+			for a, c := range row {
+				if c >= 1 {
+					fam[t][a] = true
+					any = true
+				}
+			}
+		}
+		if !any {
+			for a := range row {
+				fam[t][a] = true
+			}
+		}
+	}
+	return fam
 }
 
 // encPair is the minimal encoding shape the derivations consume.
@@ -310,56 +371,59 @@ func isSpecial(v *vocab.Vocabulary, id int) bool {
 	return id == v.PaddingTokenID || id == v.UnkID || id == v.BosID || id == v.EosID
 }
 
-// ---- concept centroids (DESIGN §3.5) ----
+// ---- top-code centroids (DESIGN §12) ----
 
-// deriveConceptCentroids clusters reply-segment bag-of-words
-// vectors into cfg.NumConcepts gist centroids. Segment vectors
-// are sparse (a segment holds a handful of distinct tokens), so
-// the clustering runs on sparse vectors against dense centroids.
-func deriveConceptCentroids(replies [][]int, vocabSize int, cfg seq2seq.LayersConfig) ([][]float32, []int, error) {
+// bowSparse builds the L2-normalized bag-of-words sparse vector
+// of a token sequence.
+func bowSparse(ids []int, vocabSize int) (sparseVec, bool) {
+	counts := map[int]float64{}
+	for _, id := range ids {
+		if id >= 0 && id < vocabSize {
+			counts[id]++
+		}
+	}
+	if len(counts) == 0 {
+		return sparseVec{}, false
+	}
+	var norm float64
+	for _, c := range counts {
+		norm += c * c
+	}
+	norm = math.Sqrt(norm)
+	keys := make([]int, 0, len(counts))
+	for id := range counts {
+		keys = append(keys, id)
+	}
+	sort.Ints(keys)
+	sv := sparseVec{}
+	for _, id := range keys {
+		sv.idx = append(sv.idx, id)
+		sv.val = append(sv.val, counts[id]/norm)
+	}
+	return sv, true
+}
+
+// deriveTopCentroids clusters WHOLE-reply bag-of-words vectors
+// into cfg.NumTopCodes top-code centroids (the hybrid's coarse
+// gist level, DESIGN §12). Reply vectors are sparse, so the
+// clustering runs on sparse vectors against dense centroids.
+func deriveTopCentroids(replies [][]int, vocabSize int, cfg seq2seq.LayersConfig) ([][]float32, error) {
 	var vecs []sparseVec
 	for _, r := range replies {
-		for _, seg := range seq2seq.SplitSegments(r, cfg.ConceptLen) {
-			if len(seg) == 0 {
-				continue
-			}
-			counts := map[int]float64{}
-			for _, id := range seg {
-				if id >= 0 && id < vocabSize {
-					counts[id]++
-				}
-			}
-			sv := sparseVec{}
-			var norm float64
-			for _, c := range counts {
-				norm += c * c
-			}
-			norm = math.Sqrt(norm)
-			if norm == 0 {
-				continue
-			}
-			ids := make([]int, 0, len(counts))
-			for id := range counts {
-				ids = append(ids, id)
-			}
-			sort.Ints(ids)
-			for _, id := range ids {
-				sv.idx = append(sv.idx, id)
-				sv.val = append(sv.val, counts[id]/norm)
-			}
+		if sv, ok := bowSparse(r, vocabSize); ok {
 			vecs = append(vecs, sv)
 		}
 	}
 	if len(vecs) == 0 {
-		return nil, nil, fmt.Errorf("layers: no reply segments to cluster")
+		return nil, fmt.Errorf("layers: no replies to cluster")
 	}
-	k := cfg.NumConcepts
+	k := cfg.NumTopCodes
 	if len(vecs) < k {
 		k = len(vecs)
 	}
-	centroids, sizes := kmeansSparse(vecs, k, vocabSize)
-	out := make([][]float32, cfg.NumConcepts)
-	for c := 0; c < cfg.NumConcepts; c++ {
+	centroids, _ := kmeansSparse(vecs, k, vocabSize)
+	out := make([][]float32, cfg.NumTopCodes)
+	for c := 0; c < cfg.NumTopCodes; c++ {
 		row := make([]float32, vocabSize)
 		if c < len(centroids) {
 			for i, x := range centroids[c] {
@@ -368,9 +432,7 @@ func deriveConceptCentroids(replies [][]int, vocabSize int, cfg seq2seq.LayersCo
 		}
 		out[c] = row
 	}
-	fullSizes := make([]int, cfg.NumConcepts)
-	copy(fullSizes, sizes)
-	return out, fullSizes, nil
+	return out, nil
 }
 
 // sparseVec is a sparse float64 vector (sorted indices).
@@ -685,7 +747,7 @@ const (
 // (The shipped socialSynonyms table is a flat word->synonyms map
 // with no category field; its affect entries seed the bright/low
 // lists. DESIGN §11 records this reading.)
-func deriveToneLexicon(v *vocab.Vocabulary) toneLexicon {
+func deriveToneLexicon(v *vocab.Vocabulary) seq2seq.ToneLexicon {
 	brightSeeds := []string{"happy", "glad", "pleased", "great", "fantastic", "wonderful", "awesome", "amazing", "good", "nice", "lovely", "cool", "love", "excited", "fun", "joy"}
 	lowSeeds := []string{"sad", "unhappy", "down", "tired", "sick", "hurt", "bored", "lonely", "cry", "bad", "terrible", "awful"}
 	worriedSeeds := []string{"worried", "anxious", "nervous", "scared", "afraid", "stress", "stressed", "butterflies"}
@@ -711,35 +773,11 @@ func deriveToneLexicon(v *vocab.Vocabulary) toneLexicon {
 		sort.Strings(out)
 		return out
 	}
-	return toneLexicon{
+	return seq2seq.ToneLexicon{
 		Bright:  expand(brightSeeds),
 		Low:     expand(lowSeeds),
 		Worried: expand(worriedSeeds),
 	}
-}
-
-// toneLabelFor applies the registered set precedence over the
-// whole line: any worried hit labels worried, else any bright hit
-// labels bright, else any low hit labels low; no hit is neutral.
-func toneLabelFor(words []string, lex *toneLexicon) int {
-	bright, low := false, false
-	for _, w := range words {
-		switch {
-		case lex.worried[w]:
-			return ToneWorried
-		case lex.bright[w]:
-			bright = true
-		case lex.low[w]:
-			low = true
-		}
-	}
-	if bright {
-		return ToneBright
-	}
-	if low {
-		return ToneLow
-	}
-	return ToneNeutral
 }
 
 // ---- memory facts (DESIGN §3.8) ----
@@ -793,15 +831,16 @@ type layersClassesArtifact struct {
 }
 
 type layersMetaArtifact struct {
-	Version      int         `json:"version"`
-	Seed         int         `json:"seed"`
-	Layers       []string    `json:"layers"`
-	ToneLexicon  toneLexicon `json:"tone_lexicon"`
-	IntentDist   [7]int      `json:"intent_distribution"`
-	ToneDist     [4]int      `json:"tone_distribution"`
-	ConceptSizes []int       `json:"concept_cluster_sizes"`
-	ClassSizes   []int       `json:"class_sizes"`
-	FactPairs    int         `json:"fact_bearing_train_pairs"`
+	Version     int                 `json:"version"`
+	Seed        int                 `json:"seed"`
+	Layers      []string            `json:"layers"`
+	ToneLexicon seq2seq.ToneLexicon `json:"tone_lexicon"`
+	ActDist     [7]int              `json:"act_distribution"`
+	ToneDist    [4]int              `json:"tone_distribution"`
+	TopCensus   []int               `json:"top_code_census_pairs"`
+	ActFamily   [][]bool            `json:"act_family"`
+	ClassSizes  []int               `json:"class_sizes"`
+	FactPairs   int                 `json:"fact_bearing_train_pairs"`
 }
 
 // writeLayersArtifacts writes <model>.classes.json and
@@ -823,22 +862,19 @@ func writeLayersArtifacts(modelPath string, d *layersDerivations, v *vocab.Vocab
 			return err
 		}
 	}
-	var layers []string
-	for _, name := range []string{"char", "class", "intent", "tone", "concept", "copy", "turn", "memory"} {
-		if cfg.On(name) {
-			layers = append(layers, name)
-		}
-	}
+	probe := &seq2seq.LayersModel{Config: cfg}
+	layers := probe.TrainedLayers()
 	meta := layersMetaArtifact{
-		Version:      1,
-		Seed:         layersSeed,
-		Layers:       layers,
-		ToneLexicon:  d.ToneLex,
-		IntentDist:   d.IntentDist,
-		ToneDist:     d.ToneDist,
-		ConceptSizes: d.ClusterSizes,
-		ClassSizes:   d.ClassSizes,
-		FactPairs:    d.FactPairs,
+		Version:     2,
+		Seed:        layersSeed,
+		Layers:      layers,
+		ToneLexicon: d.ToneLex,
+		ActDist:     d.ActDist,
+		ToneDist:    d.ToneDist,
+		TopCensus:   d.TopCensus,
+		ActFamily:   d.ActFamily,
+		ClassSizes:  d.ClassSizes,
+		FactPairs:   d.FactPairs,
 	}
 	data, err := json.MarshalIndent(meta, "", "  ")
 	if err != nil {

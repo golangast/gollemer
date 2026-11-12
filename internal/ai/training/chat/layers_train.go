@@ -57,8 +57,8 @@ func RunLayersTraining(projectRoot string, opts LayersTrainOptions) error {
 			return err
 		}
 	}
-	if cfg.Turn && !cfg.Concept {
-		return fmt.Errorf("layers: turn requires concept")
+	if cfg.Turn && !cfg.HasTop() {
+		return fmt.Errorf("layers: turn requires the frame's top code")
 	}
 	epochs := opts.Epochs
 	if epochs <= 0 {
@@ -99,8 +99,8 @@ func RunLayersTraining(projectRoot string, opts LayersTrainOptions) error {
 	if err := writeLayersArtifacts(modelPath, deriv, v, cfg); err != nil {
 		return err
 	}
-	log.Printf("[LAYERS] derivations ready: fact-bearing pairs=%d intent=%v tone=%v",
-		deriv.FactPairs, deriv.IntentDist, deriv.ToneDist)
+	log.Printf("[LAYERS] derivations ready: fact-bearing pairs=%d act=%v tone=%v top-census=%v",
+		deriv.FactPairs, deriv.ActDist, deriv.ToneDist, deriv.TopCensus)
 
 	// Encode everything (with the memory prefix and gold labels).
 	encoded := make([]layersEncodedPair, 0, len(trainPairs))
@@ -185,7 +185,7 @@ func RunLayersTraining(projectRoot string, opts LayersTrainOptions) error {
 		if err != nil {
 			return err
 		}
-		model, err = seq2seq.NewLayersModel(base, cfg, deriv.ClassOf, deriv.Centroids)
+		model, err = seq2seq.NewLayersModel(base, cfg, deriv.modelDerivations())
 		if err != nil {
 			return err
 		}
@@ -324,15 +324,15 @@ type layersEncodedPair struct {
 	inputSurfs  []string
 	target      []int
 	targetSurfs []string
-	intent      int
-	tone        int
-	codes       [3]int
+	top         int // teacher frame: gold reply's top code (-1 when the arm has no top)
+	act         int // teacher frame: act slot
+	tone        int // teacher frame: tone slot
 }
 
 // encodeLayersPair encodes one pair for the layers trainer. The
 // memory prefix (facts from the pair's OWN input) leads the input;
-// labels come from the current line's words; concept codes from
-// the reply's segments.
+// the teacher frame comes from the gold pair: top code from the
+// reply, act/tone slots from the input line's words.
 func encodeLayersPair(p ChatPair, v *vocab.Vocabulary, tok *tokenizer.Tokenizer, cfg seq2seq.LayersConfig, d *layersDerivations) (layersEncodedPair, bool) {
 	words := tokenizeLower(seq2seq.NormalizeQuery(p.Input))
 	ids := encodeInput(tok, p.Input)
@@ -369,15 +369,18 @@ func encodeLayersPair(p ChatPair, v *vocab.Vocabulary, tok *tokenizer.Tokenizer,
 	for i, id := range tg {
 		ep.targetSurfs[i] = v.GetWord(id)
 	}
-	if cfg.Intent {
-		ep.intent = intentLabelFor(words)
+	ep.top = -1
+	if cfg.HasSlots() {
+		ep.act = intentLabelFor(words)
+		ep.tone = d.ToneLex.ToneOf(words)
 	}
-	if cfg.Tone {
-		ep.tone = toneLabelFor(words, &d.ToneLex)
-	}
-	if cfg.Concept {
+	if cfg.HasTop() {
 		reply := tg[1 : len(tg)-1]
-		ep.codes = seq2seq.DeriveCodesWithCentroids(reply, d.Centroids, cfg.ConceptLen)
+		top, ok := seq2seq.DeriveTopWithCentroids(reply, d.TopCentroids)
+		if !ok {
+			return layersEncodedPair{}, false // no derivable top code (empty reply)
+		}
+		ep.top = top
 	}
 	return ep, true
 }
@@ -423,11 +426,10 @@ func makeLayersBatches(enc []layersEncodedPair, size, padID int) []seq2seq.Layer
 			b.InputSurfaces = append(b.InputSurfaces, inS)
 			b.TargetIDs = append(b.TargetIDs, tg)
 			b.TargetSurfs = append(b.TargetSurfs, tgS)
-			b.IntentLabels = append(b.IntentLabels, p.intent)
+			b.TopCodes = append(b.TopCodes, p.top)
+			b.ActLabels = append(b.ActLabels, p.act)
 			b.ToneLabels = append(b.ToneLabels, p.tone)
-			b.ConceptCodes = append(b.ConceptCodes, p.codes)
-			b.PrevCodes = append(b.PrevCodes, [3]int{})
-			b.HasPrev = append(b.HasPrev, false) // single-turn corpus (DESIGN §3.7)
+			b.PrevTop = append(b.PrevTop, -1) // single-turn corpus: no previous turn (DESIGN §3.7 as amended)
 		}
 		out = append(out, b)
 	}

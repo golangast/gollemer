@@ -2,35 +2,73 @@ package seq2seq
 
 // Layers pilot: greedy inference for LayersModel, mirroring the
 // production PredictWithTrace walk (same anti-degeneration bans)
-// with the layers' inference halves: heads predict intent/tone,
-// the concept head's codes are fed as the decoder prefix (gold in
-// training, predicted here), the seed gains the intent/tone/turn
-// rows, and copy steps mix the pointer distribution in. The
-// scorer's switches (DESIGN §6) ride on LayersPredictOptions:
-// Disable forces trained layers off at inference; ShuffleConcept
-// applies the registered fixed permutation to the predicted codes.
-// These are diagnostics on a trained model, never ablation verdicts.
+// with the layers' inference halves. The FRAME (DESIGN §12) is
+// predicted first — top code from the encoder state, act/tone
+// slots from the state plus the top code's seed row — then
+// CHECKED by the deterministic re-correction loop and repaired
+// (bounded re-picks of the lowest-confidence offending slot)
+// before the decoder renders under it: top code as the one-step
+// prefix, slots in the seed, copy mixing per step. The scorer's
+// switches ride on LayersPredictOptions: Disable forces trained
+// layers off at inference; NoRepair disables the loop (the loop's
+// own ablation); ShuffleTop permutes the predicted top code (the
+// registered decoration diagnostic); FrameTopOff/FrameSlotsOff
+// drop one frame half at inference. Switches are diagnostics on a
+// trained model, never ablation verdicts — ablation arms are
+// separate training runs.
 
 import (
+	"fmt"
+	"math"
+
 	"github.com/golangast/gollemer/internal/ai/neural/tensor"
 )
 
+// MaxRepairPicks bounds the re-correction loop (DESIGN §12): at
+// most this many slot re-picks across the pre-render checks and
+// the round-trip check; a frame still inconsistent after the
+// bound is used as-is and reported (Residual).
+const MaxRepairPicks = 3
+
 // LayersPredictOptions carries the per-call layer state.
 type LayersPredictOptions struct {
-	Disable        map[string]bool // layers forced off at inference
-	ShuffleConcept bool            // apply c -> c%32+1 (codes >= 1)
-	PrevReplyIDs   []int           // previous reply tokens (turn layer); nil = no previous turn
-	MaxLen         int             // 0 = 60 (the house scorers' cap)
+	Disable       map[string]bool // layers forced off at inference
+	NoRepair      bool            // disable the re-correction loop
+	ShuffleTop    bool            // permute the predicted top code c -> (c+1) mod K; the shuffled top is held fixed under repair
+	FrameTopOff   bool            // diagnostic: drop the top code at inference (slots behave as the slots-only arm)
+	FrameSlotsOff bool            // diagnostic: drop the act/tone slots at inference (top-only behavior)
+	ForceFrame    *ForcedFrame    // tests/diagnostics: use this frame instead of predicting one
+	PrevReplyIDs  []int           // previous reply tokens (turn layer); nil = no previous turn
+	MaxLen        int             // 0 = 60 (the house scorers' cap)
+}
+
+// ForcedFrame pins a frame for a prediction call. Probs may be
+// supplied so the repair loop re-picks with realistic confidences;
+// nil probs are treated as uniform.
+type ForcedFrame struct {
+	Top, Act, Tone                int
+	TopProbs, ActProbs, ToneProbs []float32
+}
+
+// FrameState is a filled frame plus the head confidences the
+// repair loop compares when choosing the offending slot.
+type FrameState struct {
+	Top, Act, Tone                int // -1 when the part is absent
+	TopConf, ActConf, ToneConf    float32
+	topProbs, actProbs, toneProbs []float32
 }
 
 // LayersPrediction is one layers-model reply plus its diagnostics.
 type LayersPrediction struct {
-	Text         string
-	TokenIDs     []int
-	ConceptCodes [3]int // codes actually fed to the decoder prefix
-	ReplyCodes   [3]int // codes derived from the generated reply (turn threading)
-	Intent       int    // predicted intent label (-1 when the layer is off/untrained)
-	Tone         int    // predicted tone label (-1 likewise)
+	Text       string
+	TokenIDs   []int
+	Top        int      // top code actually fed to the decoder (-1 when none)
+	Act        int      // act slot actually fed (-1 when none)
+	Tone       int      // tone slot actually fed (-1 when none)
+	ReplyTop   int      // top code derived from the rendered reply (-1 when none)
+	TopicWords []string // the frame's topic slot: the input's content words, carried by construction
+	Repairs    []string // re-correction log (empty when the loop fired nothing)
+	Residual   bool     // frame still inconsistent after the repair bound
 }
 
 // layerOn reports whether a layer is both trained into the model
@@ -42,19 +80,31 @@ func (m *LayersModel) layerOn(name string, opts LayersPredictOptions) bool {
 	return m.Config.On(name)
 }
 
+// frameParts reports which frame halves are live for this call:
+// the top code and the act/tone slots, honoring the model's
+// trained variant and the inference diagnostics.
+func (m *LayersModel) frameParts(opts LayersPredictOptions) (top, slots bool) {
+	if !m.layerOn("frame", opts) {
+		return false, false
+	}
+	top = m.Config.HasTop() && !opts.FrameTopOff
+	slots = m.Config.HasSlots() && !opts.FrameSlotsOff
+	return top, slots
+}
+
 // PredictLayers generates one reply for the given input ids and
-// their surface forms (aligned; surfaces drive the char layer).
+// their surface forms (aligned; surfaces drive the char layer,
+// the frame's topic slot, and the tone check's lexicon re-read).
 func (m *LayersModel) PredictLayers(inputIDs []int, surfaces []string, opts LayersPredictOptions) (LayersPrediction, error) {
 	cfg := m.Config
 	base := m.Base
-	vocab := base.OutputVocab
 	hidden := cfg.HiddenDim
 	embDim := cfg.EmbedDim
 	maxLen := opts.MaxLen
 	if maxLen <= 0 {
 		maxLen = 60
 	}
-	out := LayersPrediction{Intent: -1, Tone: -1}
+	out := LayersPrediction{Top: -1, Act: -1, Tone: -1, ReplyTop: -1}
 	if len(inputIDs) == 0 {
 		return out, nil
 	}
@@ -77,44 +127,427 @@ func (m *LayersModel) PredictLayers(inputIDs []int, surfaces []string, opts Laye
 	encFinal := make([]float32, hidden)
 	copy(encFinal, encOut.Data[(T-1)*hidden:T*hidden])
 
-	// ---- Heads predict the conditioning labels.
-	if m.layerOn("intent", opts) {
-		out.Intent = argmaxF(linearRow(m.IntentHead, encFinal))
-	}
-	if m.layerOn("tone", opts) {
-		out.Tone = argmaxF(linearRow(m.ToneHead, encFinal))
-	}
-	var codes [3]int
-	if m.layerOn("concept", opts) {
-		logits := linearRow(m.ConceptHead, encFinal)
-		per := cfg.NumConcepts + 1
-		for s := 0; s < cfg.ConceptLen; s++ {
-			codes[s] = argmaxF(logits[s*per : (s+1)*per])
+	// ---- Frame: predict, check, repair (DESIGN §12).
+	hasTop, hasSlots := m.frameParts(opts)
+	frame := FrameState{Top: -1, Act: -1, Tone: -1}
+	topFixed := false
+	if hasTop || hasSlots {
+		frame = m.predictFrame(encFinal, hasTop, hasSlots, opts)
+		if opts.ShuffleTop && frame.Top >= 0 {
+			frame.Top = (frame.Top + 1) % cfg.NumTopCodes
+			frame.TopConf = frame.topProbs[frame.Top]
+			topFixed = true // the sabotage is the measurement; repair works around it, never undoes it
+			if hasSlots {
+				// Slots were predicted under the true top; re-read
+				// them under the shuffled one, as the decoder's
+				// conditioning will see it.
+				m.refillSlots(&frame, encFinal)
+			}
 		}
-		if opts.ShuffleConcept {
-			for s := 0; s < cfg.ConceptLen; s++ {
-				if codes[s] >= 1 {
-					codes[s] = codes[s]%cfg.NumConcepts + 1
+	}
+	out.TopicWords = ContentWordsOf(surfaces)
+	var settled *rendered
+	if (hasTop || hasSlots) && !opts.NoRepair {
+		repairs, residual, last, rerr := m.repairFrame(&frame, encFinal, surfaces, hasTop, hasSlots, topFixed,
+			func(fr FrameState) (rendered, error) {
+				ids, text, rerr := m.renderReply(encOut, encCell, encFinal, fr, inputIDs, opts, maxLen)
+				if rerr != nil {
+					return rendered{}, rerr
+				}
+				return rendered{ids: ids, text: text}, nil
+			})
+		if rerr != nil {
+			return out, rerr
+		}
+		out.Repairs = repairs
+		out.Residual = residual
+		settled = last
+	}
+
+	// ---- Final render under the settled frame (reusing the
+	// repair loop's own render when the frame settled under it:
+	// decoding is deterministic, so the two are the same bytes).
+	var ids []int
+	var text string
+	if settled != nil {
+		ids, text = settled.ids, settled.text
+	} else {
+		var rerr error
+		ids, text, rerr = m.renderReply(encOut, encCell, encFinal, frame, inputIDs, opts, maxLen)
+		if rerr != nil {
+			return out, rerr
+		}
+	}
+	out.TokenIDs, out.Text = ids, text
+	out.Top, out.Act, out.Tone = frame.Top, frame.Act, frame.Tone
+	if rt, ok := m.DeriveReplyTop(ids); ok {
+		out.ReplyTop = rt
+	}
+	return out, nil
+}
+
+// rendered is one exploratory render inside the repair loop.
+type rendered struct {
+	ids  []int
+	text string
+}
+
+// predictFrame fills a frame from the heads: top code from the
+// encoder state, slots from the state plus the top code's seed
+// row (the same conditioning as training). ForceFrame overrides.
+func (m *LayersModel) predictFrame(encFinal []float32, hasTop, hasSlots bool, opts LayersPredictOptions) FrameState {
+	fr := FrameState{Top: -1, Act: -1, Tone: -1}
+	if hasTop {
+		fr.topProbs = softmaxF(linearRow(m.TopHead, encFinal))
+		fr.Top = argmaxF(fr.topProbs)
+		fr.TopConf = fr.topProbs[fr.Top]
+	}
+	if hasSlots {
+		m.refillSlots(&fr, encFinal)
+	}
+	if opts.ForceFrame != nil {
+		ff := opts.ForceFrame
+		if hasTop && ff.Top >= 0 {
+			fr.Top = ff.Top
+			if ff.TopProbs != nil {
+				fr.topProbs = ff.TopProbs
+				fr.TopConf = ff.TopProbs[ff.Top]
+			}
+		}
+		if hasSlots {
+			if ff.Act >= 0 {
+				fr.Act = ff.Act
+				if ff.ActProbs != nil {
+					fr.actProbs = ff.ActProbs
+					fr.ActConf = ff.ActProbs[ff.Act]
+				}
+			}
+			if ff.Tone >= 0 {
+				fr.Tone = ff.Tone
+				if ff.ToneProbs != nil {
+					fr.toneProbs = ff.ToneProbs
+					fr.ToneConf = ff.ToneProbs[ff.Tone]
 				}
 			}
 		}
 	}
-	out.ConceptCodes = codes
+	return fr
+}
 
-	// ---- Seed.
+// refillSlots (re)predicts the act/tone slots under the frame's
+// current top code.
+func (m *LayersModel) refillSlots(fr *FrameState, encFinal []float32) {
+	hidden := m.Config.HiddenDim
+	input := encFinal
+	if fr.Top >= 0 && m.TopSeedEmb != nil {
+		combined := make([]float32, hidden)
+		copy(combined, encFinal)
+		m.addEmbRow(combined, m.TopSeedEmb, fr.Top)
+		input = combined
+	}
+	fr.actProbs = softmaxF(linearRow(m.ActHead, input))
+	fr.Act = argmaxF(fr.actProbs)
+	fr.ActConf = fr.actProbs[fr.Act]
+	fr.toneProbs = softmaxF(linearRow(m.ToneHead, input))
+	fr.Tone = argmaxF(fr.toneProbs)
+	fr.ToneConf = fr.toneProbs[fr.Tone]
+}
+
+// frameContext carries the repair loop's fixed inputs.
+type frameContext struct {
+	surfaces  []string
+	hasTop    bool
+	hasSlots  bool
+	topFixed  bool
+	lexTone   int // tone re-read from the input surfaces (-1 = check not applicable)
+	triedTop  map[int]bool
+	triedAct  map[int]bool
+	triedTone map[int]bool
+}
+
+// repairFrame runs the re-correction loop (DESIGN §12): the
+// pre-render checks, then render + round-trip, re-picking the
+// lowest-confidence offending slot (others held fixed) at most
+// MaxRepairPicks times. Returns the repair log, whether the
+// frame is still inconsistent at the bound, and the render made
+// under the settled frame when one exists (nil when the bound
+// was hit on a pre-render check — the caller then renders with
+// the best frame it has). The frame is updated in place.
+func (m *LayersModel) repairFrame(fr *FrameState, encFinal []float32, surfaces []string, hasTop, hasSlots, topFixed bool, render func(FrameState) (rendered, error)) ([]string, bool, *rendered, error) {
+	ctx := &frameContext{
+		surfaces:  surfaces,
+		hasTop:    hasTop,
+		hasSlots:  hasSlots,
+		topFixed:  topFixed,
+		lexTone:   -1,
+		triedTop:  map[int]bool{},
+		triedAct:  map[int]bool{},
+		triedTone: map[int]bool{},
+	}
+	if hasSlots {
+		ctx.lexTone = m.ToneLex.ToneOf(surfaces)
+	}
+	if fr.Top >= 0 {
+		ctx.triedTop[fr.Top] = true
+	}
+	if fr.Act >= 0 {
+		ctx.triedAct[fr.Act] = true
+	}
+	if fr.Tone >= 0 {
+		ctx.triedTone[fr.Tone] = true
+	}
+	var log []string
+	picks := 0
+	var lastRender *rendered
+	for {
+		// Pre-render checks (a) act-family, (b) tone-vs-lexicon.
+		if offender, why, failed := m.preRenderOffender(fr, ctx); failed {
+			if picks >= MaxRepairPicks {
+				return log, true, nil, nil
+			}
+			note, ok := m.repick(fr, encFinal, ctx, offender)
+			if !ok {
+				return log, true, nil, nil
+			}
+			picks++
+			lastRender = nil
+			log = append(log, fmt.Sprintf("%s: %s", why, note))
+			continue
+		}
+		if lastRender == nil {
+			r, err := render(*fr)
+			if err != nil {
+				return log, false, nil, err
+			}
+			lastRender = &r
+		}
+		// Round-trip check (d): the rendered reply's own frame.
+		if offender, why, failed := m.roundTripOffender(fr, *lastRender); failed {
+			if ctx.topFixed && offender == "top" {
+				return log, true, lastRender, nil // the shuffled top is the measurement; its mismatch is the datum
+			}
+			if picks >= MaxRepairPicks {
+				return log, true, lastRender, nil
+			}
+			note, ok := m.repick(fr, encFinal, ctx, offender)
+			if !ok {
+				return log, true, lastRender, nil
+			}
+			picks++
+			lastRender = nil
+			log = append(log, fmt.Sprintf("%s: %s", why, note))
+			continue
+		}
+		return log, false, lastRender, nil
+	}
+}
+
+// preRenderOffender evaluates checks (a) and (b) and names the
+// offending slot ("act", "tone", or "top" — (a) can indict either
+// side of the pair; the confidence comparison happens in repick).
+func (m *LayersModel) preRenderOffender(fr *FrameState, ctx *frameContext) (offender, why string, failed bool) {
+	// (b) tone vs the lexicon re-read: the lexicon vetoes only on
+	// positive evidence (a non-neutral read); a neutral read
+	// abstains and the head's tone stands.
+	if ctx.hasSlots && ctx.lexTone > 0 && fr.Tone >= 0 && fr.Tone != ctx.lexTone {
+		return "tone", fmt.Sprintf("tone check: slot=%d lexicon=%d", fr.Tone, ctx.lexTone), true
+	}
+	// (a) the act must belong to the top code's family.
+	if ctx.hasTop && ctx.hasSlots && fr.Top >= 0 && fr.Act >= 0 && m.ActFamily != nil {
+		if !m.ActFamily[fr.Top][fr.Act] {
+			return "act|top", fmt.Sprintf("act-family check: act=%d not in family of top=%d", fr.Act, fr.Top), true
+		}
+	}
+	return "", "", false
+}
+
+// roundTripOffender evaluates check (d): the frame re-derived
+// from the rendered reply must agree with the intended frame —
+// top code by the centroids, tone by the lexicon over the reply's
+// words (same positive-evidence rule as (b)).
+func (m *LayersModel) roundTripOffender(fr *FrameState, r rendered) (offender, why string, failed bool) {
+	if fr.Top >= 0 {
+		if rt, ok := m.DeriveReplyTop(r.ids); ok && rt != fr.Top {
+			return "top", fmt.Sprintf("round-trip: rendered top=%d intended=%d", rt, fr.Top), true
+		}
+	}
+	if fr.Tone >= 0 {
+		words := make([]string, len(r.ids))
+		for i, id := range r.ids {
+			words[i] = m.Base.OutputVocab.GetWord(id)
+		}
+		if lt := m.ToneLex.ToneOf(words); lt > 0 && lt != fr.Tone {
+			return "tone", fmt.Sprintf("round-trip: rendered tone=%d intended=%d", lt, fr.Tone), true
+		}
+	}
+	return "", "", false
+}
+
+// repick replaces the offending slot with the head's best untried
+// value that satisfies the checks it can be judged against, the
+// other slots held fixed. For the act-family pair it re-picks the
+// lower-confidence side. Returns a log note and success.
+func (m *LayersModel) repick(fr *FrameState, encFinal []float32, ctx *frameContext, offender string) (string, bool) {
+	switch offender {
+	case "tone":
+		// The only tone that passes check (b) is the lexicon read;
+		// for a round-trip tone failure the constraint is the
+		// head's next-best tone that still passes (b). The
+		// lexicon value is NOT subject to the tried set: a top
+		// re-pick refills the slots and can clobber a tone this
+		// loop already repaired, and re-applying the read against
+		// the new frame is a fresh pick (still bounded by
+		// MaxRepairPicks), not a repeat of a failed one.
+		if ctx.lexTone > 0 {
+			if fr.Tone == ctx.lexTone {
+				return "", false
+			}
+			old := fr.Tone
+			fr.Tone = ctx.lexTone
+			fr.ToneConf = probOf(fr.toneProbs, fr.Tone)
+			ctx.triedTone[fr.Tone] = true
+			return fmt.Sprintf("tone %d->%d (lexicon read)", old, fr.Tone), true
+		}
+		v, ok := pickBest(fr.toneProbs, ctx.triedTone, nil)
+		if !ok {
+			return "", false
+		}
+		old := fr.Tone
+		fr.Tone = v
+		fr.ToneConf = probOf(fr.toneProbs, v)
+		ctx.triedTone[v] = true
+		return fmt.Sprintf("tone %d->%d (next best)", old, v), true
+	case "act|top":
+		// Re-pick the lower-confidence side of the pair.
+		if fr.ActConf <= fr.TopConf || ctx.topFixed {
+			v, ok := pickBest(fr.actProbs, ctx.triedAct, func(a int) bool {
+				return m.ActFamily[fr.Top][a]
+			})
+			if !ok {
+				return "", false
+			}
+			old := fr.Act
+			fr.Act = v
+			fr.ActConf = probOf(fr.actProbs, v)
+			ctx.triedAct[v] = true
+			return fmt.Sprintf("act %d->%d (best in family of top=%d)", old, v, fr.Top), true
+		}
+		v, ok := pickBest(fr.topProbs, ctx.triedTop, func(t int) bool {
+			return m.ActFamily[t][fr.Act]
+		})
+		if !ok {
+			return "", false
+		}
+		old := fr.Top
+		fr.Top = v
+		fr.TopConf = probOf(fr.topProbs, v)
+		ctx.triedTop[v] = true
+		m.refillSlots(fr, encFinal)
+		ctx.triedAct[fr.Act] = true
+		ctx.triedTone[fr.Tone] = true
+		return fmt.Sprintf("top %d->%d (best whose family holds act)", old, v), true
+	case "top":
+		if ctx.topFixed {
+			return "", false
+		}
+		v, ok := pickBest(fr.topProbs, ctx.triedTop, nil)
+		if !ok {
+			return "", false
+		}
+		old := fr.Top
+		fr.Top = v
+		fr.TopConf = probOf(fr.topProbs, v)
+		ctx.triedTop[v] = true
+		if ctx.hasSlots {
+			m.refillSlots(fr, encFinal)
+			ctx.triedAct[fr.Act] = true
+			ctx.triedTone[fr.Tone] = true
+		}
+		return fmt.Sprintf("top %d->%d (next best)", old, v), true
+	case "act":
+		v, ok := pickBest(fr.actProbs, ctx.triedAct, nil)
+		if !ok {
+			return "", false
+		}
+		old := fr.Act
+		fr.Act = v
+		fr.ActConf = probOf(fr.actProbs, v)
+		ctx.triedAct[v] = true
+		return fmt.Sprintf("act %d->%d (next best)", old, v), true
+	}
+	return "", false
+}
+
+// pickBest returns the highest-probability value not yet tried
+// and (when allowed is non-nil) passing allowed.
+func pickBest(probs []float32, tried map[int]bool, allowed func(int) bool) (int, bool) {
+	best, bestP := -1, float32(-1)
+	for v, p := range probs {
+		if tried[v] || (allowed != nil && !allowed(v)) {
+			continue
+		}
+		if p > bestP {
+			best, bestP = v, p
+		}
+	}
+	return best, best >= 0
+}
+
+func probOf(probs []float32, v int) float32 {
+	if v >= 0 && v < len(probs) {
+		return probs[v]
+	}
+	return 0
+}
+
+func softmaxF(logits []float32) []float32 {
+	out := make([]float32, len(logits))
+	mx := float32(-1e30)
+	for _, v := range logits {
+		if v > mx {
+			mx = v
+		}
+	}
+	var sum float32
+	for i, v := range logits {
+		out[i] = float32(math.Exp(float64(v - mx)))
+		sum += out[i]
+	}
+	if sum > 0 {
+		for i := range out {
+			out[i] /= sum
+		}
+	}
+	return out
+}
+
+// renderReply runs the greedy word loop under a settled frame:
+// seed = encoder final + slot rows + turn row; the top code's
+// prefix step first; copy mixing per step when the layer is on.
+func (m *LayersModel) renderReply(encOut, encCell *tensor.Tensor, encFinal []float32, frame FrameState, inputIDs []int, opts LayersPredictOptions, maxLen int) ([]int, string, error) {
+	cfg := m.Config
+	base := m.Base
+	vocab := base.OutputVocab
+	hidden := cfg.HiddenDim
+	embDim := cfg.EmbedDim
+	T := len(inputIDs)
+
 	seed := make([]float32, hidden)
 	copy(seed, encFinal)
-	if out.Intent >= 0 {
-		m.addEmbRow(seed, m.IntentEmb, out.Intent)
+	if frame.Act >= 0 && m.ActEmb != nil {
+		m.addEmbRow(seed, m.ActEmb, frame.Act)
 	}
-	if out.Tone >= 0 {
-		m.addEmbRow(seed, m.ToneEmb, out.Tone)
+	if frame.Tone >= 0 && m.ToneEmb != nil {
+		m.addEmbRow(seed, m.ToneEmb, frame.Tone)
 	}
 	if m.layerOn("turn", opts) {
 		if opts.PrevReplyIDs != nil {
-			prev := m.DeriveReplyCodes(opts.PrevReplyIDs)
-			for s := 0; s < cfg.ConceptLen; s++ {
-				m.addEmbRowScaled(seed, m.TurnEmb, prev[s], 1.0/float32(cfg.ConceptLen))
+			if prevTop, ok := m.DeriveReplyTop(opts.PrevReplyIDs); ok {
+				m.addEmbRow(seed, m.TurnEmb, prevTop)
+			} else {
+				for k := 0; k < hidden; k++ {
+					seed[k] += m.NoneTurn.Data[k]
+				}
 			}
 		} else {
 			for k := 0; k < hidden; k++ {
@@ -122,23 +555,19 @@ func (m *LayersModel) PredictLayers(inputIDs []int, surfaces []string, opts Laye
 			}
 		}
 	}
-	// Per-step LSTM state is [1, hidden] (the shape the decoder's
-	// own ForwardCopy path carries); encCell from the 3D encoder
-	// pass already has exactly that shape at batch 1.
 	h := tensor.NewTensor([]int{1, hidden}, seed, false)
 	c := encCell
 
-	// ---- Decoder: concept prefix steps first (outputs discarded).
-	if m.layerOn("concept", opts) {
-		for s := 0; s < cfg.ConceptLen; s++ {
-			off := codes[s] * embDim
-			emb := append([]float32{}, m.ConceptEmb.Weight.Data[off:off+embDim]...)
-			_, _, nh, nc, err := m.decStep(emb, h, c)
-			if err != nil {
-				return out, err
-			}
-			h, c = nh, nc
+	// Top-code prefix step (output discarded, as in training the
+	// prefix position's label is ignored).
+	if frame.Top >= 0 && m.TopEmb != nil {
+		off := frame.Top * embDim
+		emb := append([]float32{}, m.TopEmb.Weight.Data[off:off+embDim]...)
+		_, _, nh, nc, err := m.decStep(emb, h, c)
+		if err != nil {
+			return nil, "", err
 		}
+		h, c = nh, nc
 	}
 
 	// Encoder states for the copy layer.
@@ -154,26 +583,26 @@ func (m *LayersModel) PredictLayers(inputIDs []int, surfaces []string, opts Laye
 		}
 	}
 
-	// ---- Greedy word loop with the production bans.
 	prevID := -1
 	usedBigrams := map[[2]int]bool{}
 	fedID := vocab.BosID
 	fedSurface := ""
+	var tokenIDs []int
 	for step := 0; step < maxLen; step++ {
 		emb := m.wordStepEmbedding(fedID, fedSurface)
 		logits, moeRow, nh, nc, err := m.decStep(emb, h, c)
 		if err != nil {
-			return out, err
+			return nil, "", err
 		}
 		h, c = nh, nc
 		var nextID int
 		if m.layerOn("copy", opts) {
 			probs, _ := base.Decoder.PtrGen.ptrGenStep(moeRow, encStates, inputIDs, validLen, logits)
-			nextID = argmaxBannedProbs(probs, prevID, usedBigrams, out.TokenIDs)
+			nextID = argmaxBannedProbs(probs, prevID, usedBigrams, tokenIDs)
 		} else {
-			nextID = argmaxBannedLogits(logits, prevID, usedBigrams, out.TokenIDs, step)
+			nextID = argmaxBannedLogits(logits, prevID, usedBigrams, tokenIDs, step)
 		}
-		if (nextID == vocab.EosID && len(out.TokenIDs) > 0) || nextID == vocab.PaddingTokenID {
+		if (nextID == vocab.EosID && len(tokenIDs) > 0) || nextID == vocab.PaddingTokenID {
 			break
 		}
 		if nextID == vocab.UnkID {
@@ -185,7 +614,7 @@ func (m *LayersModel) PredictLayers(inputIDs []int, surfaces []string, opts Laye
 			}
 			break
 		}
-		out.TokenIDs = append(out.TokenIDs, nextID)
+		tokenIDs = append(tokenIDs, nextID)
 		if prevID >= 0 {
 			usedBigrams[[2]int{prevID, nextID}] = true
 		}
@@ -193,11 +622,7 @@ func (m *LayersModel) PredictLayers(inputIDs []int, surfaces []string, opts Laye
 		fedID = nextID
 		fedSurface = vocab.GetWord(nextID)
 	}
-	out.Text = vocab.Decode(out.TokenIDs)
-	if cfg.Concept {
-		out.ReplyCodes = m.DeriveReplyCodes(out.TokenIDs)
-	}
-	return out, nil
+	return tokenIDs, vocab.Decode(tokenIDs), nil
 }
 
 // decStep runs one decoder step on a prepared embedding vector:
