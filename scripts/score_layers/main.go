@@ -77,6 +77,8 @@ func main() {
 	corpusPath := flag.String("corpus", "data/training/chat_pairs.jsonl", "corpus for the name-bearing diagnostic's reply-token frequencies")
 	offFlag := flag.String("off", "", "comma-separated layers forced off at inference (diagnostic)")
 	shuffle := flag.Bool("shuffle-top", false, "permute the predicted top code (diagnostic)")
+	shuffleDist := flag.Bool("shuffle-top-dist", false, "rotate the soft top-code distribution by one code (diagnostic; soft-frame models)")
+	forceArgmax := flag.Bool("force-argmax", false, "collapse the soft top-code distribution to its argmax at inference (diagnostic; soft-frame models)")
 	noRepair := flag.Bool("no-repair", false, "disable the frame re-correction loop (the loop's own ablation)")
 	frameMode := flag.String("frame", "", "drop one frame half at inference: top|slots (diagnostic)")
 	holdoutPath := flag.String("holdout", "", "combination-holdout test file (holdout_test.jsonl)")
@@ -102,7 +104,8 @@ func main() {
 			disable[name] = true
 		}
 	}
-	opts := seq2seq.LayersPredictOptions{MaxLen: 60, Disable: disable, ShuffleTop: *shuffle, NoRepair: *noRepair}
+	opts := seq2seq.LayersPredictOptions{MaxLen: 60, Disable: disable, ShuffleTop: *shuffle, NoRepair: *noRepair,
+		ShuffleTopDist: *shuffleDist, ForceArgmax: *forceArgmax}
 	switch *frameMode {
 	case "":
 	case "top":
@@ -113,8 +116,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "score_layers: -frame must be top|slots, got %q\n", *frameMode)
 		os.Exit(2)
 	}
-	fmt.Printf("model: %s\ntrained layers: %v\ndisabled at inference: %v shuffle-top: %v no-repair: %v frame-mode: %q\n---\n",
-		*modelPath, model.TrainedLayers(), keysOf(disable), *shuffle, *noRepair, *frameMode)
+	fmt.Printf("model: %s\ntrained layers: %v\ndisabled at inference: %v shuffle-top: %v no-repair: %v frame-mode: %q shuffle-top-dist: %v force-argmax: %v\n---\n",
+		*modelPath, model.TrainedLayers(), keysOf(disable), *shuffle, *noRepair, *frameMode, *shuffleDist, *forceArgmax)
 
 	if *evalPath != "" {
 		if err := scoreEval(model, *evalPath, opts); err != nil {

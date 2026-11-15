@@ -67,6 +67,16 @@ type LayersConfig struct {
 	FrameTopOnly   bool
 	FrameSlotsOnly bool
 
+	// FrameSoft is the concept-v2 variant (CONCEPT_V2_DESIGN §3):
+	// the top code conditions the decoder as the head's
+	// softmax-weighted BLEND of code embeddings — the prefix step
+	// and the slot heads' top conditioning both read the
+	// distribution, never an argmax row — and the word/slot
+	// losses backpropagate through the blend into the head.
+	// Requires the top code; with it off, every frame path is
+	// the v1 argmax behavior, byte-identical.
+	FrameSoft bool
+
 	NumClasses  int // word-class count (class 0 = specials)
 	NumAct      int // act slot values (intent derivation classes)
 	NumTone     int // tone slot values
@@ -128,7 +138,8 @@ func (c LayersConfig) On(name string) bool {
 }
 
 // Set switches one layer by name; unknown names are an error. The
-// frame variants are selected with "frame-top" / "frame-slots".
+// frame variants are selected with "frame-top" / "frame-slots";
+// the concept-v2 soft frame with "frame-soft".
 func (c *LayersConfig) Set(name string, on bool) error {
 	switch name {
 	case "char":
@@ -141,6 +152,8 @@ func (c *LayersConfig) Set(name string, on bool) error {
 		c.Frame, c.FrameTopOnly = on, on
 	case "frame-slots":
 		c.Frame, c.FrameSlotsOnly = on, on
+	case "frame-soft":
+		c.Frame, c.FrameSoft = on, on
 	case "copy":
 		c.Copy = on
 	case "turn":
@@ -256,6 +269,9 @@ func NewLayersModel(base *Seq2Seq, cfg LayersConfig, d LayersDerivations) (*Laye
 	}
 	if cfg.FrameTopOnly && cfg.FrameSlotsOnly {
 		return nil, fmt.Errorf("layers: frame cannot be both top-only and slots-only")
+	}
+	if cfg.FrameSoft && !cfg.HasTop() {
+		return nil, fmt.Errorf("layers: frame-soft requires the top code (it cannot combine with frame-slots)")
 	}
 	m := &LayersModel{Base: base, Config: cfg}
 	if cfg.Char {
@@ -622,13 +638,18 @@ func LoadLayers(filePath string, tok *tokenizer.Tokenizer) (*LayersModel, error)
 
 // TrainedLayers returns the names of the layers this model was
 // trained with, in shelf order (for scorer reporting). A frame
-// variant is named as it was selected ("frame-top"/"frame-slots").
+// variant is named as it was selected ("frame-top"/"frame-slots";
+// a soft full frame reports "frame-soft").
 func (m *LayersModel) TrainedLayers() []string {
 	var out []string
-	for _, name := range []string{"char", "class", "frame", "frame-top", "frame-slots", "copy", "turn", "memory"} {
+	for _, name := range []string{"char", "class", "frame", "frame-soft", "frame-top", "frame-slots", "copy", "turn", "memory"} {
 		switch name {
 		case "frame":
-			if m.Config.Frame && !m.Config.FrameTopOnly && !m.Config.FrameSlotsOnly {
+			if m.Config.Frame && !m.Config.FrameSoft && !m.Config.FrameTopOnly && !m.Config.FrameSlotsOnly {
+				out = append(out, name)
+			}
+		case "frame-soft":
+			if m.Config.FrameSoft && !m.Config.FrameTopOnly && !m.Config.FrameSlotsOnly {
 				out = append(out, name)
 			}
 		case "frame-top":

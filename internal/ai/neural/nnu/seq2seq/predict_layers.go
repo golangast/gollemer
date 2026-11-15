@@ -8,7 +8,12 @@ package seq2seq
 // CHECKED by the deterministic re-correction loop and repaired
 // (bounded re-picks of the lowest-confidence offending slot)
 // before the decoder renders under it: top code as the one-step
-// prefix, slots in the seed, copy mixing per step. The scorer's
+// prefix, slots in the seed, copy mixing per step. On a model
+// trained with the soft frame (concept v2), the prefix and the
+// slot conditioning consume the head's DISTRIBUTION as a blend
+// of code rows; the nominal frame (argmax + slots) is still
+// what the checks judge, and a repair re-pick of the top
+// collapses the distribution to the re-picked code. The scorer's
 // switches ride on LayersPredictOptions: Disable forces trained
 // layers off at inference; NoRepair disables the loop (the loop's
 // own ablation); ShuffleTop permutes the predicted top code (the
@@ -40,6 +45,12 @@ type LayersPredictOptions struct {
 	ForceFrame    *ForcedFrame    // tests/diagnostics: use this frame instead of predicting one
 	PrevReplyIDs  []int           // previous reply tokens (turn layer); nil = no previous turn
 	MaxLen        int             // 0 = 60 (the house scorers' cap)
+
+	// Soft-frame diagnostics (concept v2; meaningful only on a
+	// model trained with frame-soft — on a hard model both are
+	// no-ops, as there is no distribution to reshape).
+	ShuffleTopDist bool // rotate the effective top distribution by one code (mass of k moves to k+1); held fixed under repair
+	ForceArgmax    bool // collapse the effective distribution to one-hot at its argmax (the commitment ablation)
 }
 
 // ForcedFrame pins a frame for a prediction call. Probs may be
@@ -56,6 +67,14 @@ type FrameState struct {
 	Top, Act, Tone                int // -1 when the part is absent
 	TopConf, ActConf, ToneConf    float32
 	topProbs, actProbs, toneProbs []float32
+	// topDist is the EFFECTIVE top distribution the decoder
+	// consumes (soft-frame models only; nil on hard models,
+	// where the decoder reads Top's row directly). It starts as
+	// the head's distribution; a repair re-pick of the top
+	// collapses it to one-hot at the re-picked code — the
+	// deterministic checker may commit where the head may not
+	// (CONCEPT_V2_DESIGN §3).
+	topDist []float32
 }
 
 // LayersPrediction is one layers-model reply plus its diagnostics.
@@ -63,6 +82,7 @@ type LayersPrediction struct {
 	Text       string
 	TokenIDs   []int
 	Top        int      // top code actually fed to the decoder (-1 when none)
+	TopDist    []float32 // effective top distribution fed to the decoder (soft-frame models only; nil otherwise)
 	Act        int      // act slot actually fed (-1 when none)
 	Tone       int      // tone slot actually fed (-1 when none)
 	ReplyTop   int      // top code derived from the rendered reply (-1 when none)
@@ -137,10 +157,32 @@ func (m *LayersModel) PredictLayers(inputIDs []int, surfaces []string, opts Laye
 			frame.Top = (frame.Top + 1) % cfg.NumTopCodes
 			frame.TopConf = frame.topProbs[frame.Top]
 			topFixed = true // the sabotage is the measurement; repair works around it, never undoes it
+			// On a soft model the decoder reads the distribution,
+			// not the nominal code: the sabotage must reach it, so
+			// the distribution collapses to the shuffled code.
+			frame.commitDist()
 			if hasSlots {
 				// Slots were predicted under the true top; re-read
 				// them under the shuffled one, as the decoder's
 				// conditioning will see it.
+				m.refillSlots(&frame, encFinal)
+			}
+		}
+		if opts.ForceArgmax {
+			// The commitment ablation (concept v2): the same
+			// weights, the distribution collapsed to its argmax
+			// before any repair — v1's conditioning, exactly.
+			frame.commitDist()
+		}
+		if opts.ShuffleTopDist && frame.topDist != nil {
+			// The decoration diagnostic for the soft code: rotate
+			// the whole distribution by one code and hold it
+			// fixed under repair, as ShuffleTop holds its code.
+			frame.topDist = rotateTopDist(frame.topDist)
+			frame.Top = argmaxF(frame.topDist)
+			frame.TopConf = frame.topDist[frame.Top]
+			topFixed = true
+			if hasSlots {
 				m.refillSlots(&frame, encFinal)
 			}
 		}
@@ -180,6 +222,9 @@ func (m *LayersModel) PredictLayers(inputIDs []int, surfaces []string, opts Laye
 	}
 	out.TokenIDs, out.Text = ids, text
 	out.Top, out.Act, out.Tone = frame.Top, frame.Act, frame.Tone
+	if frame.topDist != nil {
+		out.TopDist = append([]float32{}, frame.topDist...)
+	}
 	if rt, ok := m.DeriveReplyTop(ids); ok {
 		out.ReplyTop = rt
 	}
@@ -192,6 +237,31 @@ type rendered struct {
 	text string
 }
 
+// commitDist collapses the frame's effective distribution to
+// one-hot at its current Top (no-op on hard models, whose
+// topDist is nil). Used where a hard commitment is the point:
+// a repair re-pick (the checker's decision), the ShuffleTop
+// sabotage reaching the decoder, and the ForceArgmax ablation.
+func (fr *FrameState) commitDist() {
+	if fr.topDist == nil || fr.Top < 0 {
+		return
+	}
+	d := make([]float32, len(fr.topDist))
+	d[fr.Top] = 1
+	fr.topDist = d
+}
+
+// rotateTopDist rotates a distribution by one code: the mass of
+// code k moves to code (k+1) mod K — the distributional analogue
+// of the ShuffleTop permutation c -> (c+1) mod K.
+func rotateTopDist(p []float32) []float32 {
+	out := make([]float32, len(p))
+	for k, v := range p {
+		out[(k+1)%len(p)] = v
+	}
+	return out
+}
+
 // predictFrame fills a frame from the heads: top code from the
 // encoder state, slots from the state plus the top code's seed
 // row (the same conditioning as training). ForceFrame overrides.
@@ -201,6 +271,11 @@ func (m *LayersModel) predictFrame(encFinal []float32, hasTop, hasSlots bool, op
 		fr.topProbs = softmaxF(linearRow(m.TopHead, encFinal))
 		fr.Top = argmaxF(fr.topProbs)
 		fr.TopConf = fr.topProbs[fr.Top]
+		if m.Config.FrameSoft {
+			// The decoder will consume the distribution itself;
+			// the nominal Top above is for checks and reporting.
+			fr.topDist = append([]float32{}, fr.topProbs...)
+		}
 	}
 	if hasSlots {
 		m.refillSlots(&fr, encFinal)
@@ -212,6 +287,16 @@ func (m *LayersModel) predictFrame(encFinal []float32, hasTop, hasSlots bool, op
 			if ff.TopProbs != nil {
 				fr.topProbs = ff.TopProbs
 				fr.TopConf = ff.TopProbs[ff.Top]
+			}
+			if fr.topDist != nil {
+				// A forced frame on a soft model: the forced
+				// distribution when one was supplied, else the
+				// forced code as a commitment.
+				if ff.TopProbs != nil {
+					fr.topDist = append([]float32{}, ff.TopProbs...)
+				} else {
+					fr.commitDist()
+				}
 			}
 		}
 		if hasSlots {
@@ -235,11 +320,22 @@ func (m *LayersModel) predictFrame(encFinal []float32, hasTop, hasSlots bool, op
 }
 
 // refillSlots (re)predicts the act/tone slots under the frame's
-// current top code.
+// current top code. On a soft model the conditioning row is the
+// blended seed row of the frame's current effective
+// distribution — the same form the slot heads trained under.
 func (m *LayersModel) refillSlots(fr *FrameState, encFinal []float32) {
 	hidden := m.Config.HiddenDim
 	input := encFinal
-	if fr.Top >= 0 && m.TopSeedEmb != nil {
+	if fr.topDist != nil && m.TopSeedEmb != nil {
+		combined := make([]float32, hidden)
+		copy(combined, encFinal)
+		for k, p := range fr.topDist {
+			if p != 0 {
+				m.addEmbRowScaled(combined, m.TopSeedEmb, k, p)
+			}
+		}
+		input = combined
+	} else if fr.Top >= 0 && m.TopSeedEmb != nil {
 		combined := make([]float32, hidden)
 		copy(combined, encFinal)
 		m.addEmbRow(combined, m.TopSeedEmb, fr.Top)
@@ -442,6 +538,7 @@ func (m *LayersModel) repick(fr *FrameState, encFinal []float32, ctx *frameConte
 		fr.Top = v
 		fr.TopConf = probOf(fr.topProbs, v)
 		ctx.triedTop[v] = true
+		fr.commitDist() // the checker's re-pick is a commitment (soft models)
 		m.refillSlots(fr, encFinal)
 		ctx.triedAct[fr.Act] = true
 		ctx.triedTone[fr.Tone] = true
@@ -458,6 +555,7 @@ func (m *LayersModel) repick(fr *FrameState, encFinal []float32, ctx *frameConte
 		fr.Top = v
 		fr.TopConf = probOf(fr.topProbs, v)
 		ctx.triedTop[v] = true
+		fr.commitDist() // the checker's re-pick is a commitment (soft models)
 		if ctx.hasSlots {
 			m.refillSlots(fr, encFinal)
 			ctx.triedAct[fr.Act] = true
@@ -559,10 +657,22 @@ func (m *LayersModel) renderReply(encOut, encCell *tensor.Tensor, encFinal []flo
 	c := encCell
 
 	// Top-code prefix step (output discarded, as in training the
-	// prefix position's label is ignored).
+	// prefix position's label is ignored). On a soft model the
+	// step consumes the blended prefix row of the frame's
+	// effective distribution; on a hard model, the code's row.
 	if frame.Top >= 0 && m.TopEmb != nil {
-		off := frame.Top * embDim
-		emb := append([]float32{}, m.TopEmb.Weight.Data[off:off+embDim]...)
+		var emb []float32
+		if frame.topDist != nil {
+			emb = make([]float32, embDim)
+			for k, p := range frame.topDist {
+				if p != 0 {
+					m.addEmbRowScaled(emb, m.TopEmb, k, p)
+				}
+			}
+		} else {
+			off := frame.Top * embDim
+			emb = append([]float32{}, m.TopEmb.Weight.Data[off:off+embDim]...)
+		}
 		_, _, nh, nc, err := m.decStep(emb, h, c)
 		if err != nil {
 			return nil, "", err

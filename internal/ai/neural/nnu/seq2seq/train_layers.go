@@ -23,6 +23,13 @@ package seq2seq
 //	frame prefix: the decoder input's first step is the gold
 //	  top code's prefix row; its slice of the input grad is
 //	  scattered into the top prefix table.
+//	soft frame (concept v2): the prefix step and the slot
+//	  heads' conditioning consume the top head's DISTRIBUTION
+//	  instead — blended rows in the forward pass; in backward,
+//	  each blend's gradient scatters into the code tables
+//	  weighted by p, and the softmax-Jacobian terms join the
+//	  top head's logit gradient (blendLogitGrad), so the
+//	  distribution is trained by the downstream losses too.
 //	copy: the mixture NLL replaces the word CE (TrainBatchPtrGen
 //	  precedent), its three gradient streams joined at moeOut,
 //	  the decoder embeddings, and the encoder output.
@@ -110,18 +117,58 @@ func (m *LayersModel) TrainBatchLayers(batch LayersBatch) (float32, error) {
 	// (top-conditioned slot prediction, DESIGN §12). In the
 	// slots-only arm there is no top: the slot heads read the
 	// encoder state alone.
+	//
+	// SOFT FRAME (concept v2, CONCEPT_V2_DESIGN §3): the slot
+	// heads instead read the encoder state plus the BLENDED
+	// seed-side row under the top head's own distribution, and
+	// the decoder prefix below consumes the blended prefix row.
+	// topProbs/topBlend/seedBlend are per-row; dzTop accumulates
+	// the blend paths' softmax-Jacobian gradient into the top
+	// head's logits during backward.
+	soft := cfg.FrameSoft && cfg.HasTop()
 	var topLoss, actLoss, toneLoss float32
 	var dTop, dAct, dTone []float32 // dLogits per head, for backward
+	var topProbs [][]float32        // [B][NumTopCodes], soft only
+	var topBlend [][]float32        // [B][embDim] prefix blends, soft only
+	var seedBlend [][]float32       // [B][hidden] seed-side blends, soft only
+	var dzTop []float32             // [B*NumTopCodes], soft only
 	slotInput := encFinalH.Data     // what the slot heads saw (for backward)
 	if cfg.HasTop() {
 		topLoss, dTop = m.headCE(m.TopHead, encFinalH.Data, batch.TopCodes, B)
+	}
+	if soft {
+		K := cfg.NumTopCodes
+		topProbs = make([][]float32, B)
+		topBlend = make([][]float32, B)
+		seedBlend = make([][]float32, B)
+		dzTop = make([]float32, B*K)
+		for b := 0; b < B; b++ {
+			topProbs[b] = softmaxF(linearRow(m.TopHead, encFinalH.Data[b*hidden:(b+1)*hidden]))
+			topBlend[b] = make([]float32, embDim)
+			seedBlend[b] = make([]float32, hidden)
+			for k := 0; k < K; k++ {
+				p := topProbs[b][k]
+				if p == 0 {
+					continue
+				}
+				m.addEmbRowScaled(topBlend[b], m.TopEmb, k, p)
+				m.addEmbRowScaled(seedBlend[b], m.TopSeedEmb, k, p)
+			}
+		}
 	}
 	if cfg.HasSlots() {
 		if cfg.HasTop() {
 			combined := make([]float32, B*hidden)
 			copy(combined, encFinalH.Data)
 			for b := 0; b < B; b++ {
-				m.addEmbRow(combined[b*hidden:], m.TopSeedEmb, batch.TopCodes[b])
+				if soft {
+					row := combined[b*hidden : (b+1)*hidden]
+					for k := 0; k < hidden; k++ {
+						row[k] += seedBlend[b][k]
+					}
+				} else {
+					m.addEmbRow(combined[b*hidden:], m.TopSeedEmb, batch.TopCodes[b])
+				}
 			}
 			slotInput = combined
 		}
@@ -171,8 +218,12 @@ func (m *LayersModel) TrainBatchLayers(batch LayersBatch) (float32, error) {
 	for b := 0; b < B; b++ {
 		dst := decCombData[b*totalSteps*embDim:]
 		if cfg.HasTop() {
-			off := batch.TopCodes[b] * embDim
-			copy(dst[:embDim], m.TopEmb.Weight.Data[off:off+embDim])
+			if soft {
+				copy(dst[:embDim], topBlend[b])
+			} else {
+				off := batch.TopCodes[b] * embDim
+				copy(dst[:embDim], m.TopEmb.Weight.Data[off:off+embDim])
+			}
 		}
 		copy(dst[prefix*embDim:], wordComb[b*steps*embDim:(b+1)*steps*embDim])
 	}
@@ -315,7 +366,18 @@ func (m *LayersModel) TrainBatchLayers(batch LayersBatch) (float32, error) {
 	for b := 0; b < B; b++ {
 		src := decComb.Grad.Data[b*totalSteps*embDim:]
 		if cfg.HasTop() {
-			m.scatterEmb(m.TopEmb, batch.TopCodes[b], src[:embDim], 1)
+			if soft {
+				// The prefix position consumed the blend: its
+				// gradient scatters into every code row weighted
+				// by p, and the Jacobian term joins dzTop.
+				g := src[:embDim]
+				for k := 0; k < cfg.NumTopCodes; k++ {
+					m.scatterEmb(m.TopEmb, k, g, topProbs[b][k])
+				}
+				blendLogitGrad(dzTop[b*cfg.NumTopCodes:(b+1)*cfg.NumTopCodes], topProbs[b], m.TopEmb, topBlend[b], g)
+			} else {
+				m.scatterEmb(m.TopEmb, batch.TopCodes[b], src[:embDim], 1)
+			}
 		}
 		copy(wordGradData[b*steps*embDim:], src[prefix*embDim:(prefix+steps)*embDim])
 	}
@@ -348,25 +410,61 @@ func (m *LayersModel) TrainBatchLayers(batch LayersBatch) (float32, error) {
 	// Head grads join at the encoder final state. The slot heads'
 	// input grad ALSO scatters into the top seed table (their
 	// input was encFinal + gold top row).
-	if cfg.HasTop() {
+	//
+	// SOFT FRAME: the slot backwards run FIRST — their input grad
+	// is the seed blend's upstream gradient — the blend paths'
+	// Jacobian terms (the prefix path's was accumulated above)
+	// join the top head's logit gradient, and the top head's
+	// backward runs on the sum, so the distribution is trained
+	// by the renderer's losses and not only by its CE.
+	if soft {
+		if cfg.HasSlots() {
+			dSlot := make([]float32, B*hidden)
+			if err := m.headBackward(m.ActHead, slotInput, dAct, B, dSlot); err != nil {
+				return 0, err
+			}
+			if err := m.headBackward(m.ToneHead, slotInput, dTone, B, dSlot); err != nil {
+				return 0, err
+			}
+			for i := range dEncFinal {
+				dEncFinal[i] += dSlot[i]
+			}
+			K := cfg.NumTopCodes
+			for b := 0; b < B; b++ {
+				g := dSlot[b*hidden : (b+1)*hidden]
+				for k := 0; k < K; k++ {
+					m.scatterEmb(m.TopSeedEmb, k, g, topProbs[b][k])
+				}
+				blendLogitGrad(dzTop[b*K:(b+1)*K], topProbs[b], m.TopSeedEmb, seedBlend[b], g)
+			}
+		}
+		for i := range dTop {
+			dTop[i] += dzTop[i]
+		}
 		if err := m.headBackward(m.TopHead, encFinalH.Data, dTop, B, dEncFinal); err != nil {
 			return 0, err
 		}
-	}
-	if cfg.HasSlots() {
-		dSlot := make([]float32, B*hidden)
-		if err := m.headBackward(m.ActHead, slotInput, dAct, B, dSlot); err != nil {
-			return 0, err
-		}
-		if err := m.headBackward(m.ToneHead, slotInput, dTone, B, dSlot); err != nil {
-			return 0, err
-		}
-		for i := range dEncFinal {
-			dEncFinal[i] += dSlot[i]
-		}
+	} else {
 		if cfg.HasTop() {
-			for b := 0; b < B; b++ {
-				m.scatterEmb(m.TopSeedEmb, batch.TopCodes[b], dSlot[b*hidden:(b+1)*hidden], 1)
+			if err := m.headBackward(m.TopHead, encFinalH.Data, dTop, B, dEncFinal); err != nil {
+				return 0, err
+			}
+		}
+		if cfg.HasSlots() {
+			dSlot := make([]float32, B*hidden)
+			if err := m.headBackward(m.ActHead, slotInput, dAct, B, dSlot); err != nil {
+				return 0, err
+			}
+			if err := m.headBackward(m.ToneHead, slotInput, dTone, B, dSlot); err != nil {
+				return 0, err
+			}
+			for i := range dEncFinal {
+				dEncFinal[i] += dSlot[i]
+			}
+			if cfg.HasTop() {
+				for b := 0; b < B; b++ {
+					m.scatterEmb(m.TopSeedEmb, batch.TopCodes[b], dSlot[b*hidden:(b+1)*hidden], 1)
+				}
 			}
 		}
 	}
@@ -494,6 +592,31 @@ func (m *LayersModel) scatterEmb(emb *nn.Embedding, idx int, row []float32, scal
 	off := idx * dim
 	for k := 0; k < dim; k++ {
 		emb.Weight.Grad.Data[off+k] += scale * row[k]
+	}
+}
+
+// blendLogitGrad accumulates one batch row's softmax-weighted-sum
+// Jacobian term into dz (the row's slice of the top head's logit
+// gradient): for blend = Σ_k p_k·e_k with p = softmax(z) and
+// upstream gradient g = dL/dblend, dL/dz_j += p_j·(g·e_j − g·blend).
+// This is the term that lets the losses downstream of a blend
+// train the distribution that produced it (concept v2, F3).
+func blendLogitGrad(dz []float32, probs []float32, emb *nn.Embedding, blend, g []float32) {
+	dim := emb.Weight.Shape[1]
+	var gBlend float32
+	for i := 0; i < dim; i++ {
+		gBlend += g[i] * blend[i]
+	}
+	for j, p := range probs {
+		if p == 0 {
+			continue
+		}
+		off := j * dim
+		var ge float32
+		for i := 0; i < dim; i++ {
+			ge += g[i] * emb.Weight.Data[off+i]
+		}
+		dz[j] += p * (ge - gBlend)
 	}
 }
 

@@ -22,7 +22,7 @@ func main() {
 	augmentMutationsFlag := flag.Bool("augment-mutations", false, "Social only: add one mutated sibling (typo / function-word drop / word swap) per training input, target unchanged")
 	mutationBlocklistFlag := flag.String("mutation-blocklist", "", "JSONL whose inputs mutation siblings must never reproduce (the frozen robustness eval); required with -augment-mutations")
 	trainLayersFlag := flag.Bool("train-layers", false, "Layers pilot: train the social seq2seq with generic layers on (see -layers); separate model file, production trainer untouched")
-	layersFlag := flag.String("layers", "", "Comma-separated layers for -train-layers: char,class,frame,frame-top,frame-slots,copy,turn,memory")
+	layersFlag := flag.String("layers", "", "Comma-separated layers for -train-layers: char,class,frame,frame-top,frame-slots,frame-soft,copy,turn,memory")
 	layersEpochsFlag := flag.Int("layers-epochs", 0, "Epoch cap for -train-layers (0 = the production 200)")
 	layersMaxPairsFlag := flag.Int("layers-max-pairs", 0, "Seeded subsample of prepared pairs for -train-layers (0 = all; smoke/screening)")
 	buildHoldoutFlag := flag.String("build-combination-holdout", "", "Layers pilot: build the combination-holdout artifacts (DESIGN §12) into this directory and exit")
