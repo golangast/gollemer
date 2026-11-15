@@ -210,10 +210,21 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 			return err
 		}
 	}
+	// Layers adoption (layers_seat.go): when the adopted
+	// layers gob is present it serves this loop's social
+	// generation — the social loop's own turns below, and
+	// the gocode loop's chatter branch through socialModel's
+	// seat beside it.
+	var layersBrain *layersSocialBrain
 	if domain == SocialDomain {
 		// The typo normalizer (normalize.go) judges words
-		// against the social model's own vocabulary.
+		// against the social model's own vocabulary — the
+		// serving brain's, when the layers model is present.
 		armTypoNormalizer(model)
+		layersBrain = loadLayersSocialBrain(projectRoot)
+		if layersBrain != nil {
+			armTypoNormalizer(layersBrain.model.Base)
+		}
 	}
 
 	// Explicit mode separation for code sessions: chatter prompts are routed
@@ -230,6 +241,10 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 			socialModel = nil
 		}
 		armTypoNormalizer(socialModel)
+		layersBrain = loadLayersSocialBrain(projectRoot)
+		if layersBrain != nil {
+			armTypoNormalizer(layersBrain.model.Base)
+		}
 	}
 
 	if model != nil {
@@ -944,8 +959,18 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 			// code requests ("hey, write a function...") on the code model.
 			// Chat replies get chat post-processing only — tidyGoCode must
 			// never touch them.
-			if socialModel != nil {
-				answer, trace, err := socialModel.PredictWithTrace(conv.SocialInputSituated(strings.ToLower(line), time.Now(), situationFactTopics()), 40)
+			if socialModel != nil || layersBrain != nil {
+				var answer string
+				var trace *seq2seq.ThoughtTrace
+				var err error
+				socialInput := conv.SocialInputSituated(strings.ToLower(line), time.Now(), situationFactTopics())
+				if layersBrain != nil {
+					// The adopted layers model serves
+					// chatter (layers_seat.go).
+					answer, err = layersBrain.predict(socialInput)
+				} else {
+					answer, trace, err = socialModel.PredictWithTrace(socialInput, 40)
+				}
 				if err != nil {
 					fmt.Printf("gollemer> [error: %v]\n", err)
 					continue
@@ -973,7 +998,17 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 			fmt.Println(unknownCommandHint(line))
 			continue
 		}
-		answer, trace, err := model.PredictWithTrace(modelInput, 40)
+		var answer string
+		var trace *seq2seq.ThoughtTrace
+		var err error
+		if domain == SocialDomain && layersBrain != nil {
+			// The adopted layers model serves the social
+			// loop (layers_seat.go): the judging scorer's
+			// own prediction entry and options.
+			answer, err = layersBrain.predict(modelInput)
+		} else {
+			answer, trace, err = model.PredictWithTrace(modelInput, 40)
+		}
 		if err != nil {
 			fmt.Printf("gollemer> [error: %v]\n", err)
 			continue
@@ -1181,9 +1216,19 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		sp.Stop("")
 		return fmt.Errorf("unified chat requires at least the social checkpoint")
 	}
+	// Layers adoption (layers_seat.go): when the adopted
+	// layers gob is present it serves the social seat — the
+	// routed fallback below and, through its own lazy load,
+	// the talk seat's social arm. The production model stays
+	// loaded for every other domain.
+	layersBrain := loadLayersSocialBrain(projectRoot)
 	// The typo normalizer (normalize.go) judges words
-	// against the social model's own vocabulary.
+	// against the social model's own vocabulary — the
+	// serving brain's, when the layers model is present.
 	armTypoNormalizer(socialModel)
+	if layersBrain != nil {
+		armTypoNormalizer(layersBrain.model.Base)
+	}
 	sp.Stop("Ready.")
 	// Social recall: exact training-pair matches answer deterministically.
 	initSocialRecall(projectRoot)
@@ -1997,7 +2042,20 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if effD == SocialDomain {
 			modelInput = conv.SocialInputSituated(modelInput, time.Now(), situationFactTopics())
 		}
-		answer, trace, err := model.PredictWithTrace(modelInput, 40)
+		var answer string
+		var trace *seq2seq.ThoughtTrace
+		var err error
+		if effD == SocialDomain && layersBrain != nil {
+			// The adopted layers model serves the social
+			// seat (layers_seat.go): the judging scorer's
+			// own prediction entry and options. A layers
+			// prediction carries no thought trace, so the
+			// /thoughts display below prints nothing for
+			// these replies.
+			answer, err = layersBrain.predict(modelInput)
+		} else {
+			answer, trace, err = model.PredictWithTrace(modelInput, 40)
+		}
 		if err != nil {
 			fmt.Printf("%s %s\n", cTag(fmt.Sprintf("gollemer [%s]>", tag)), cErr(fmt.Sprintf("[error: %v]", err)))
 			continue

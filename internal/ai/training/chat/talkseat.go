@@ -108,7 +108,11 @@ func loadTalkResponder() {
 		if err != nil {
 			continue
 		}
-		talkResponderVar = &localTalkResponder{social: model}
+		// Layers adoption (layers_seat.go): when the adopted
+		// layers gob sits beside the production one under the
+		// same base, the seat's social arm is served by it.
+		// Absent, the responder is exactly today's.
+		talkResponderVar = &localTalkResponder{social: model, layers: loadLayersSocialBrain(base)}
 		return
 	}
 }
@@ -439,6 +443,11 @@ func tryTalkStateAnswer(line string, conv *Conversation) bool {
 // else. It holds the seat's own lazy-loaded social handle.
 type localTalkResponder struct {
 	social *seq2seq.Seq2Seq
+	// layers, when non-nil, serves the social arm instead of
+	// social (the adopted layers model, layers_seat.go). The
+	// production handle stays loaded: an error or an empty
+	// reply from the layers model falls through to it.
+	layers *layersSocialBrain
 }
 
 // Respond runs the v1 composition in order. The first arm
@@ -490,6 +499,20 @@ func (r *localTalkResponder) Respond(ctx TalkContext, line string) (TalkResponse
 		in := strings.ToLower(strings.TrimSpace(line))
 		if ctx.Conv != nil {
 			in = ctx.Conv.SocialInputSituated(in, ctx.State.Now, situationFactTopics())
+		}
+		// The adopted layers model, when the loader found
+		// one, serves the arm (layers_seat.go): same
+		// conditioning and post-processing, the judging
+		// scorer's prediction entry, claim-checked by the
+		// seat exactly as a production reply is. It carries
+		// no thought trace. An error or an empty reply
+		// falls through to the production handle below.
+		if r.layers != nil {
+			if ans, err := r.layers.predict(in); err == nil {
+				if reply := tidyDecode(ans); reply != "" {
+					return TalkResponse{Text: reply, Factual: false}, true
+				}
+			}
 		}
 		if ans, trace, err := r.social.PredictWithTrace(in, 40); err == nil {
 			if reply := tidyDecode(ans); reply != "" {
