@@ -558,6 +558,196 @@ func howToQuestionShape(line string) bool {
 	return false
 }
 
+// --- session-thread gates -------------------------------------------------
+//
+// The two session-thread intents (what_now, tell_more) answer from
+// the conversation's own state, not from the line's topic — so a
+// confident classifier verdict alone is not evidence the user is
+// asking about the session. Measured 2026-11-15 against the shipped
+// classifier: "i am nervous about beekeeping" classifies as
+// tell_more at 0.994 and was dispatched to handleTellMore, which
+// found nothing to continue and fell through to the what-now
+// guidance; "what is today" and "what is go" classify as what_now
+// at 0.995 / 1.000 and got the same guidance. In each case the
+// talk/social seat never saw a line that was plainly not a session
+// ask. The gates below are the deterministic evidence the verdict
+// must agree with before the what_now / tell_more cases in
+// dispatchIntent honor it — the same placement rule as the
+// dataflow_q shape gate: at dispatch, so the caller still records
+// the real verdict (as fell-through) when a gate declines.
+//
+// The shapes are grounded in the intents' own families, not
+// invented: beginner.go's exact-sentence table (the canonical
+// "tell me more" / "what now" / "im stuck" lines) and the intent
+// training family in data/training/intent_{pairs,heldout}.jsonl.
+// The family is mutation-augmented, so stem tokens match with one
+// Damerau edit of slack (shapeTokenMatches) — a gate that could
+// not read "hwat" or "conffused" would decline genuine lines the
+// classifier reads fine. Pinned by TestSessionThreadGateFamilyRecall:
+// the shapes accept every line of both families and none of the
+// measured stolen lines.
+
+// shapeTokens normalizes a line for the session-thread shape
+// gates: lowercase word tokens, contractions folded ("what's" to
+// "whats", "i'm" to "im"), and the token pair "i am" collapsed to
+// "im" — the intent families write the first person both ways and
+// the gates must read them the same.
+func shapeTokens(line string) []string {
+	low := strings.ToLower(line)
+	low = strings.ReplaceAll(low, "\u2019", "'")
+	low = strings.ReplaceAll(low, "what's", "whats")
+	low = strings.ReplaceAll(low, "i'm", "im")
+	fields := strings.FieldsFunc(low, func(r rune) bool {
+		return !(r >= 'a' && r <= 'z')
+	})
+	out := make([]string, 0, len(fields))
+	for i := 0; i < len(fields); i++ {
+		if fields[i] == "i" && i+1 < len(fields) && fields[i+1] == "am" {
+			out = append(out, "im")
+			i++
+			continue
+		}
+		out = append(out, fields[i])
+	}
+	return out
+}
+
+// shapeTokenMatches reports whether a stem token matches a line
+// token: exact, or one Damerau edit apart when both tokens are at
+// least three letters. Short tokens ("i", "to", "do", "im", "me")
+// match exactly only — one edit from "do" is half the dictionary.
+func shapeTokenMatches(stem, tok string) bool {
+	if stem == tok {
+		return true
+	}
+	if len(stem) < 3 || len(tok) < 3 {
+		return false
+	}
+	d := len(stem) - len(tok)
+	if d < 0 {
+		d = -d
+	}
+	if d > 1 {
+		return false
+	}
+	return damerauLevenshtein(stem, tok) <= 1
+}
+
+// shapeHasStem reports whether the stem's tokens appear as a
+// contiguous run in toks, each matching per shapeTokenMatches.
+func shapeHasStem(toks []string, stem ...string) bool {
+	for i := 0; i+len(stem) <= len(toks); i++ {
+		ok := true
+		for k, s := range stem {
+			if !shapeTokenMatches(s, toks[i+k]) {
+				ok = false
+				break
+			}
+		}
+		if ok {
+			return true
+		}
+	}
+	return false
+}
+
+// shapeHasWord reports whether any token in toks matches word.
+func shapeHasWord(toks []string, word string) bool {
+	for _, t := range toks {
+		if shapeTokenMatches(word, t) {
+			return true
+		}
+	}
+	return false
+}
+
+// whatNowStems are the what_now family's session markers: the
+// stems of data/training's what_now pairs (398 pairs + held-out),
+// which are also the shapes of beginner.go's exact what-now table.
+var whatNowStems = [][]string{
+	{"what", "next"}, {"whats", "next"},
+	{"what", "to", "do"}, {"what", "should", "i", "do"}, {"what", "do", "i", "do"},
+	{"what", "do", "i"}, {"how", "do", "i"},
+	{"im", "stuck"}, {"im", "lost"},
+	{"where", "do", "i", "go"}, {"what", "to", "type"}, {"guide", "me"},
+}
+
+// whatNowShape reports whether the line carries a session marker
+// from the what_now family — the deterministic evidence that the
+// user is asking what to do next, as opposed to asking about a
+// topic ("what is today", "what is go" carry none).
+func whatNowShape(line string) bool {
+	toks := shapeTokens(line)
+	// The "what now" pair keeps "now" exact: the family's "now"
+	// is never mutated, and a fuzzy "now" would swallow the
+	// social greeting "what's new" (one edit from "now").
+	for i := 0; i+1 < len(toks); i++ {
+		if shapeTokenMatches("what", toks[i]) && toks[i+1] == "now" {
+			return true
+		}
+	}
+	for _, stem := range whatNowStems {
+		if shapeHasStem(toks, stem...) {
+			return true
+		}
+	}
+	if shapeHasWord(toks, "confused") || shapeHasWord(toks, "directions") {
+		return true
+	}
+	// "whats the next step", "next steps", "tell me the next
+	// thing to do": a next-word together with a step/thing-word.
+	if shapeHasWord(toks, "next") &&
+		(shapeHasWord(toks, "step") || shapeHasWord(toks, "steps") || shapeHasWord(toks, "thing")) {
+		return true
+	}
+	// The family's bare "help me" is a directions ask; a longer
+	// line ("help me write a sort") is a build ask, so the stem
+	// counts only on a short line.
+	if len(toks) <= 5 && shapeHasStem(toks, "help", "me") {
+		return true
+	}
+	return false
+}
+
+// tellMoreStems are the tell_more family's continuation phrases
+// beyond its single-word markers (more / continue / listening /
+// deeper / details / elaborate, matched as words below).
+var tellMoreStems = [][]string{
+	{"go", "on"}, {"keep", "going"}, {"what", "else"}, {"and", "then"},
+	{"expand", "on"}, {"then", "what"}, {"keep", "talking"}, {"what", "happened", "next"},
+}
+
+// tellMoreShape reports whether the line carries a more-family
+// marker — the shapes beginner.go's exact tell-more table and
+// the intent family itself use ("tell me more", "go on", "what
+// else", "im listening", "dig deeper", …).
+func tellMoreShape(line string) bool {
+	toks := shapeTokens(line)
+	for _, w := range []string{"more", "continue", "listening", "deeper", "details", "elaborate"} {
+		if shapeHasWord(toks, w) {
+			return true
+		}
+	}
+	for _, stem := range tellMoreStems {
+		if shapeHasStem(toks, stem...) {
+			return true
+		}
+	}
+	return false
+}
+
+// hasContinuableContext reports whether the session holds
+// anything handleTellMore could actually continue — the same
+// state it consults: a tour in progress (tourStops) or a
+// recorded last action (lastActionKind). With neither, a
+// tell_more dispatch can only fall through to the what-now
+// guidance, which is exactly the theft the gate exists to stop:
+// on a fresh session, "tell me more" is definitionally
+// impossible, whatever the classifier heard.
+func hasContinuableContext() bool {
+	return tourStops != nil || lastActionKind != ""
+}
+
 // dispatchIntent runs one confidently-classified intent — and, via
 // the clarification fallback, one the user just confirmed. Split
 // out of tryIntentDispatch so a confirmed guess routes through the
@@ -644,8 +834,29 @@ func dispatchIntent(intent, line string, profile *UserProfile) bool {
 	case "start_guide":
 		return handleBeginnerCommand("/start", profile)
 	case "tell_more":
+		// Session gate (2026-11-15, see the gate block above):
+		// a tell_more verdict is honored only with a
+		// more-family marker in the line AND a continuable
+		// context in the session. The measured theft —
+		// "i am nervous about beekeeping" at 0.994 — has
+		// neither; a genuine "tell me more" after an answer
+		// has both. Without either, the case declines and
+		// the line falls through to normal routing exactly
+		// as if the layer had passed on it.
+		if !tellMoreShape(line) || !hasContinuableContext() {
+			return false
+		}
 		return handleBeginnerCommand("/tell-more", profile)
 	case "what_now":
+		// Session gate (2026-11-15, see the gate block above):
+		// a what_now verdict is honored only when the line
+		// carries a session marker from the intent's own
+		// family. The measured thefts — "what is today" at
+		// 0.995, "what is go" at 1.000 — carry none; "im
+		// stuck" and "what should i do now" carry theirs.
+		if !whatNowShape(line) {
+			return false
+		}
 		return handleBeginnerCommand("/what-now", profile)
 	case "summarize":
 		return handleBeginnerCommand("/summarize", profile)
