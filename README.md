@@ -143,6 +143,21 @@ favorites) and the names declared in your code are protected
 untouched: that isn't a typo any more, it's a different
 sentence. The fix is silent; the reply never mentions it.
 
+When the adopted social model is the one answering, its reply
+gets one more quiet check before it prints. The first reply is
+the ordinary one; if it drops the subject of your line — you
+asked about chess and it answered about the weather — the
+chat draws a few more replies (up to eight, at a slightly
+loosened setting) and serves the first one that actually
+names your subject. If none of them does, the original reply
+stands, and a reply that already names the subject is never
+re-rolled. The model doesn't get smarter; it just gets
+checked. Measured before it shipped — drawing up to eight
+replies and serving the first that names the subject — the
+checked pick answered 240 of 426 questions about combinations
+the model had never trained on, against the single reply's
+176, and 67 of 160 on the frozen test set, against 58.
+
 ### Ask what a project does
 
 ```

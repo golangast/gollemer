@@ -508,7 +508,7 @@ func (r *localTalkResponder) Respond(ctx TalkContext, line string) (TalkResponse
 		// no thought trace. An error or an empty reply
 		// falls through to the production handle below.
 		if r.layers != nil {
-			if ans, err := r.layers.predict(in); err == nil {
+			if ans, err := r.layers.predict(in, line); err == nil {
 				if reply := tidyDecode(ans); reply != "" {
 					return TalkResponse{Text: reply, Factual: false}, true
 				}

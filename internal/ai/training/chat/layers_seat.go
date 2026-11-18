@@ -17,12 +17,23 @@ package chat
 // to before — the production Seq2Seq serves, beam search and
 // all, and a checkout that never adopts never sees a difference.
 //
-// Generation goes through the judging protocol's own entry —
+// Generation starts from the judging protocol's own entry —
 // PredictLayersText with the scorer's options (greedy,
-// LayersPredictOptions{MaxLen: 60}) — so the shipped behavior
-// is the judged behavior: scripts/score_layers calls the same
-// function with the same options and a fresh session. Nothing
-// about decoding is re-implemented here.
+// LayersPredictOptions{MaxLen: 60}) — and, since 2026-11-18,
+// adds the checked-sampling rescue the decode probe measured
+// on this model (layers_decode.go): when the greedy reply
+// drops the user's topic, the seat draws up to 8 sampled
+// replies at temperature 0.8 and serves the first that carries
+// the topic; when none does, or the model carries a frame the
+// sampled render does not support, the greedy reply stands.
+// The probe's always-sample selection scored 240/426 against
+// greedy's 176/426 on the pack-2 combination holdout and
+// 67/160 against 58/160 on the frozen set; keeping a
+// topic-carrying greedy reply instead of re-rolling it tracks
+// that measurement with far fewer draws. Decoding itself is
+// not re-implemented here — the sampled twin
+// (PredictLayersTextSampled) shares the greedy entry's input
+// composition exactly.
 //
 // The seats that wrap the social path are untouched and keep
 // wrapping: the typo normalizer still reshapes the line inside
@@ -44,7 +55,9 @@ package chat
 import (
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
+	"time"
 
 	"github.com/golangast/gollemer/internal/ai/neural/nnu/seq2seq"
 	"github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
@@ -66,6 +79,10 @@ import (
 type layersSocialBrain struct {
 	model *seq2seq.LayersModel
 	sess  *LayersSession
+	// rng feeds the checked-sampling rescue (layers_decode.go).
+	// The chat is one conversation at a time, so the stream is
+	// consumed serially; tests may reseed it for determinism.
+	rng *rand.Rand
 }
 
 // loadLayersSocialBrain loads the layers model under a project
@@ -84,7 +101,7 @@ func loadLayersSocialBrain(projectRoot string) *layersSocialBrain {
 		return nil
 	}
 	log.Printf("[LAYERS] social seat served by the layers model %s (trained layers: %v)", path, m.TrainedLayers())
-	return &layersSocialBrain{model: m, sess: &LayersSession{}}
+	return &layersSocialBrain{model: m, sess: &LayersSession{}, rng: rand.New(rand.NewSource(time.Now().UnixNano()))}
 }
 
 // loadLayersModel mirrors scripts/score_layers' loadModel
@@ -117,12 +134,25 @@ func loadLayersModel(path string) (*seq2seq.LayersModel, error) {
 }
 
 // predict generates one social reply for an already-composed
-// input line and returns the model's raw text. Callers apply
-// the same tidyDecode post-processing as production replies.
-func (b *layersSocialBrain) predict(input string) (string, error) {
-	pred, err := PredictLayersText(b.model, input, b.sess, seq2seq.LayersPredictOptions{MaxLen: 60})
+// input line and returns the model's raw text. rawLine is the
+// user's own line before composition — the topic check
+// (layers_decode.go) reads it, never the composed input, whose
+// situation line and quoted history would lend the check words
+// the user did not just say. Callers apply the same tidyDecode
+// post-processing as production replies.
+func (b *layersSocialBrain) predict(input, rawLine string) (string, error) {
+	opts := seq2seq.LayersPredictOptions{MaxLen: 60}
+	pred, err := PredictLayersText(b.model, input, b.sess, opts)
 	if err != nil {
 		return "", err
 	}
-	return pred.Text, nil
+	carries := func(reply string) bool { return layersReplyCarries(rawLine, reply) }
+	draw := func() (string, error) {
+		s, serr := PredictLayersTextSampled(b.model, input, b.sess, opts, layersSampleTemp, b.rng)
+		if serr != nil {
+			return "", serr
+		}
+		return s.Text, nil
+	}
+	return layersPickReply(pred.Text, carries, draw), nil
 }

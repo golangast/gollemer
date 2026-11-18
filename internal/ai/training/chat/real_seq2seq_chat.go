@@ -967,7 +967,7 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 				if layersBrain != nil {
 					// The adopted layers model serves
 					// chatter (layers_seat.go).
-					answer, err = layersBrain.predict(socialInput)
+					answer, err = layersBrain.predict(socialInput, line)
 				} else {
 					answer, trace, err = socialModel.PredictWithTrace(socialInput, 40)
 				}
@@ -1005,7 +1005,7 @@ func RunRealChat(projectRoot, domain string, debug bool) error {
 			// The adopted layers model serves the social
 			// loop (layers_seat.go): the judging scorer's
 			// own prediction entry and options.
-			answer, err = layersBrain.predict(modelInput)
+			answer, err = layersBrain.predict(modelInput, line)
 		} else {
 			answer, trace, err = model.PredictWithTrace(modelInput, 40)
 		}
@@ -2052,7 +2052,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 			// prediction carries no thought trace, so the
 			// /thoughts display below prints nothing for
 			// these replies.
-			answer, err = layersBrain.predict(modelInput)
+			answer, err = layersBrain.predict(modelInput, line)
 		} else {
 			answer, trace, err = model.PredictWithTrace(modelInput, 40)
 		}

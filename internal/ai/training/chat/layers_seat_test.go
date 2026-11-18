@@ -3,10 +3,13 @@ package chat
 // Layers adoption (layers_seat.go) tests: the absence path is
 // proven unconditionally (no gob under the root -> no brain,
 // and a corrupt gob -> no brain, no panic). The presence path's
-// plumbing proof — the chat's loader and predict entry produce
-// byte-identical replies to scripts/score_layers on the same
-// gob — is env-gated, because it needs a real layers gob and a
-// captured scorer run:
+// plumbing proof — the chat's loader and predict entry agree
+// with scripts/score_layers on the same gob, byte for byte
+// except where the checked-sampling rescue (layers_decode.go,
+// seated 2026-11-18) deliberately replaces a topic-dropping
+// greedy reply with a topic-carrying sampled one — is
+// env-gated, because it needs a real layers gob and a captured
+// scorer run:
 //
 //	LAYERS_XCHECK_MODEL=<layers .gob> \
 //	LAYERS_XCHECK_SCORER=<score_layers -eval output file> \
@@ -23,6 +26,7 @@ package chat
 import (
 	"bufio"
 	"encoding/json"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -176,21 +180,33 @@ func TestLayersSeatCrossCheckScorer(t *testing.T) {
 		t.Fatalf("throwaway model should be copy-only, trained layers: %v", layers)
 	}
 
-	mismatches := 0
+	// The seat's rng is reseeded so the rescue's draws are
+	// deterministic across runs of this check.
+	brain.rng = rand.New(rand.NewSource(20261118))
+	mismatches, rescued := 0, 0
 	for _, it := range items {
-		got, err := brain.predict(it.input)
+		got, err := brain.predict(it.input, it.input)
 		if err != nil {
 			t.Fatalf("predict %q: %v", it.input, err)
 		}
-		if got != it.reply {
-			mismatches++
-			if mismatches <= 5 {
-				t.Errorf("input %q: chat seat %q != scorer %q", it.input, got, it.reply)
-			}
+		if got == it.reply {
+			continue
+		}
+		// The one sanctioned divergence: the scorer's greedy
+		// reply dropped the input's topic and the seat's
+		// checked sampling replaced it with a reply that
+		// carries it. Anything else is a wiring break.
+		if !layersReplyCarries(it.input, it.reply) && layersReplyCarries(it.input, got) {
+			rescued++
+			continue
+		}
+		mismatches++
+		if mismatches <= 5 {
+			t.Errorf("input %q: chat seat %q != scorer %q (and not a topic rescue)", it.input, got, it.reply)
 		}
 	}
-	t.Logf("cross-check: %d items compared, %d mismatches", len(items), mismatches)
+	t.Logf("cross-check: %d items compared, %d rescued by checked sampling, %d mismatches", len(items), rescued, mismatches)
 	if mismatches > 0 {
-		t.Fatalf("%d/%d replies differ between the chat seat and score_layers", mismatches, len(items))
+		t.Fatalf("%d/%d replies differ between the chat seat and score_layers outside the topic rescue", mismatches, len(items))
 	}
 }
