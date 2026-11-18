@@ -679,7 +679,17 @@ func changedGoFilesSinceRead(root string) ([]string, string) {
 // ----- deterministic state answers -----
 
 var (
-	memoryTimeRe    = regexp.MustCompile(`(?i)^\s*(what(?:'s| is) the (current )?(time|date|day)( today)?|what time is it|what day is it|what(?:'s| is) today'?s (date|day)|current time|current date)\s*[?.!]*\s*$`)
+	// The clock shapes, widened 2026-11-18: the apostrophe-less
+	// "whats", trailing "now"/"today" on the time forms, "what is
+	// today", "what date is it", "what day is today", and the
+	// "tell me / do you have the time" forms — the wordings that
+	// used to leak past this seat to the intent layer ("what is
+	// today" read as what_now) or the social model ("whats the
+	// time"). Still anchored whole-line like every state shape:
+	// a line with any other content ("what time does the server
+	// start", "what's the time in london") declines — the seat
+	// answers only the local clock it can read honestly.
+	memoryTimeRe    = regexp.MustCompile(`(?i)^\s*(what(?:'s| is|s) the (current )?(time|date|day)( today| now)?|what time is it( right)?( now| today)?|what day is it( today)?|what date is it|what day is today|what(?:'s| is|s) today|what(?:'s| is|s) today'?s (date|day)|current (time|date)|tell me the time|do you (know|have) the time)\s*[?.!]*\s*$`)
 	memoryOSRe      = regexp.MustCompile(`(?i)^\s*(what (operating system|os|system|environment) (am i|are we) (on|in)|what os is this|where are we working|what project are we in|what folder are we in)\s*[?.!]*\s*$`)
 	memoryBranchRe  = regexp.MustCompile(`(?i)^\s*(what branch (am i|are we) on|which branch is this|what(?:'s| is) the (git )?branch)\s*[?.!]*\s*$`)
 	memoryChangedRe = regexp.MustCompile(`(?i)^\s*(what(?:'s| is) (my |the )?(git status|status)|what changed|what files changed|is the (tree|working tree) dirty|are there any changes)\s*[?.!]*\s*$`)
@@ -720,7 +730,13 @@ func talkStateAnswer(ctx TalkContext, line string) (string, bool) {
 		return text, true
 	case memoryTimeRe.MatchString(line):
 		lower := strings.ToLower(line)
-		if strings.Contains(lower, "date") || strings.Contains(lower, "day") {
+		// The split is by what the line ASKS for, not by stray
+		// substrings: "what time is it today" asks for the time
+		// (the old date/day substring test sent it to the
+		// date-only answer because "today" contains "day"). The
+		// time format carries the date too, so a time ask loses
+		// nothing; a line with no time ask gets the date alone.
+		if !strings.Contains(lower, "time") {
 			return "It's " + s.Now.Format("Monday, January 2, 2006") + ".", true
 		}
 		return "It's " + s.Now.Format("3:04:05 PM MST on Monday, January 2, 2006") + ".", true

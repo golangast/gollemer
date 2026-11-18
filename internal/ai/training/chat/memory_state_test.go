@@ -80,6 +80,53 @@ func TestMemoryCaptureWidenedShapes(t *testing.T) {
 	}
 }
 
+// The clock shapes' widened spellings (2026-11-18): the
+// wordings that used to leak past the state seat — the
+// apostrophe-less "whats", trailing "now"/"today", "what is
+// today", the tell-me/do-you forms — reach the time arm, each
+// in the branch its own words ask for; lines with any other
+// content still decline whole.
+func TestTalkStateTimeWidenedForms(t *testing.T) {
+	fixed := time.Date(2026, time.November, 5, 9, 30, 0, 0, time.FixedZone("CST", -6*60*60))
+	for _, line := range []string{
+		"whats the time", "what is the time now", "what's the time today",
+		"what time is it now", "what time is it right now", "what time is it today",
+		"tell me the time", "do you have the time", "do you know the time",
+		"current time", "what time is it",
+	} {
+		ans, ok := talkStateAnswer(TalkContext{State: systemState{Now: fixed}}, line)
+		if !ok || !strings.Contains(ans, "9:30:00 AM") {
+			t.Errorf("talkStateAnswer(%q) = %q, %v — want the time answer", line, ans, ok)
+		}
+	}
+	for _, line := range []string{
+		"what is today", "what's today", "whats today", "what day is it today",
+		"what date is it", "what day is today", "whats the date",
+		"what's today's date", "current date", "what day is it",
+	} {
+		ans, ok := talkStateAnswer(TalkContext{State: systemState{Now: fixed}}, line)
+		if !ok || !strings.Contains(ans, "Thursday, November 5, 2026") || strings.Contains(ans, "9:30") {
+			t.Errorf("talkStateAnswer(%q) = %q, %v — want the date-only answer", line, ans, ok)
+		}
+	}
+	for _, line := range []string{
+		"what time does the server start",
+		"what is the time complexity of this sort",
+		"what day did i create this file",
+		"what time should i set the meeting for",
+		"is it time to run the tests",
+		"what's the time in london",
+		"what time zone are we in",
+	} {
+		if ans, ok := talkStateAnswer(TalkContext{State: systemState{Now: fixed}}, line); ok {
+			t.Errorf("talkStateAnswer(%q) = %q, true — want decline", line, ans)
+		}
+		if isTalkStateLine(line) {
+			t.Errorf("isTalkStateLine(%q) = true — want false", line)
+		}
+	}
+}
+
 func TestMemoryCaptureEchoOrdinaryLineAndRecall(t *testing.T) {
 	home := isolateMemoryStore(t)
 	root := talkFixtureProject(t)
