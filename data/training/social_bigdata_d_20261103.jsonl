@@ -1,0 +1,654 @@
+{"input": "i want to visit the beach someday", "output": "the beach sounds wonderful for a trip. what would you do there first?", "domain": "social"}
+{"input": "i dream of traveling to the beach", "output": "that sounds like a lovely dream. when would you like to go?", "domain": "social"}
+{"input": "have you ever been to the beach?", "output": "i have heard lovely things about the beach. would you like to visit?", "domain": "social"}
+{"input": "i love spending time at the beach", "output": "the beach sounds so relaxing. what do you enjoy most there?", "domain": "social"}
+{"input": "I would love a trip to the beach.", "output": "A trip to the beach sounds perfect. Who would you take with you?", "domain": "social"}
+{"input": "i want to visit the mountains someday", "output": "the mountains sounds wonderful for a trip. what would you do there first?", "domain": "social"}
+{"input": "i dream of traveling to the mountains", "output": "that sounds like a lovely dream. when would you like to go?", "domain": "social"}
+{"input": "have you ever been to the mountains?", "output": "i have heard lovely things about the mountains. would you like to visit?", "domain": "social"}
+{"input": "i love spending time at the mountains", "output": "the mountains sounds so relaxing. what do you enjoy most there?", "domain": "social"}
+{"input": "I would love a trip to the mountains.", "output": "A trip to the mountains sounds perfect. Who would you take with you?", "domain": "social"}
+{"input": "i want to visit the lake someday", "output": "the lake sounds wonderful for a trip. what would you do there first?", "domain": "social"}
+{"input": "i dream of traveling to the lake", "output": "that sounds like a lovely dream. when would you like to go?", "domain": "social"}
+{"input": "have you ever been to the lake?", "output": "i have heard lovely things about the lake. would you like to visit?", "domain": "social"}
+{"input": "i love spending time at the lake", "output": "the lake sounds so relaxing. what do you enjoy most there?", "domain": "social"}
+{"input": "I would love a trip to the lake.", "output": "A trip to the lake sounds perfect. Who would you take with you?", "domain": "social"}
+{"input": "i want to visit the forest someday", "output": "the forest sounds wonderful for a trip. what would you do there first?", "domain": "social"}
+{"input": "i dream of traveling to the forest", "output": "that sounds like a lovely dream. when would you like to go?", "domain": "social"}
+{"input": "have you ever been to the forest?", "output": "i have heard lovely things about the forest. would you like to visit?", "domain": "social"}
+{"input": "i love spending time at the forest", "output": "the forest sounds so relaxing. what do you enjoy most there?", "domain": "social"}
+{"input": "I would love a trip to the forest.", "output": "A trip to the forest sounds perfect. Who would you take with you?", "domain": "social"}
+{"input": "i want to visit the countryside someday", "output": "the countryside sounds wonderful for a trip. what would you do there first?", "domain": "social"}
+{"input": "i dream of traveling to the countryside", "output": "that sounds like a lovely dream. when would you like to go?", "domain": "social"}
+{"input": "have you ever been to the countryside?", "output": "i have heard lovely things about the countryside. would you like to visit?", "domain": "social"}
+{"input": "i love spending time at the countryside", "output": "the countryside sounds so relaxing. what do you enjoy most there?", "domain": "social"}
+{"input": "I would love a trip to the countryside.", "output": "A trip to the countryside sounds perfect. Who would you take with you?", "domain": "social"}
+{"input": "i want to visit the seaside someday", "output": "the seaside sounds wonderful for a trip. what would you do there first?", "domain": "social"}
+{"input": "i dream of traveling to the seaside", "output": "that sounds like a lovely dream. when would you like to go?", "domain": "social"}
+{"input": "have you ever been to the seaside?", "output": "i have heard lovely things about the seaside. would you like to visit?", "domain": "social"}
+{"input": "i love spending time at the seaside", "output": "the seaside sounds so relaxing. what do you enjoy most there?", "domain": "social"}
+{"input": "I would love a trip to the seaside.", "output": "A trip to the seaside sounds perfect. Who would you take with you?", "domain": "social"}
+{"input": "i want to visit the desert someday", "output": "the desert sounds wonderful for a trip. what would you do there first?", "domain": "social"}
+{"input": "i dream of traveling to the desert", "output": "that sounds like a lovely dream. when would you like to go?", "domain": "social"}
+{"input": "have you ever been to the desert?", "output": "i have heard lovely things about the desert. would you like to visit?", "domain": "social"}
+{"input": "i love spending time at the desert", "output": "the desert sounds so relaxing. what do you enjoy most there?", "domain": "social"}
+{"input": "I would love a trip to the desert.", "output": "A trip to the desert sounds perfect. Who would you take with you?", "domain": "social"}
+{"input": "i want to visit the island someday", "output": "the island sounds wonderful for a trip. what would you do there first?", "domain": "social"}
+{"input": "i dream of traveling to the island", "output": "that sounds like a lovely dream. when would you like to go?", "domain": "social"}
+{"input": "have you ever been to the island?", "output": "i have heard lovely things about the island. would you like to visit?", "domain": "social"}
+{"input": "i love spending time at the island", "output": "the island sounds so relaxing. what do you enjoy most there?", "domain": "social"}
+{"input": "I would love a trip to the island.", "output": "A trip to the island sounds perfect. Who would you take with you?", "domain": "social"}
+{"input": "i want to visit the river someday", "output": "the river sounds wonderful for a trip. what would you do there first?", "domain": "social"}
+{"input": "i dream of traveling to the river", "output": "that sounds like a lovely dream. when would you like to go?", "domain": "social"}
+{"input": "have you ever been to the river?", "output": "i have heard lovely things about the river. would you like to visit?", "domain": "social"}
+{"input": "i love spending time at the river", "output": "the river sounds so relaxing. what do you enjoy most there?", "domain": "social"}
+{"input": "I would love a trip to the river.", "output": "A trip to the river sounds perfect. Who would you take with you?", "domain": "social"}
+{"input": "i want to visit the valley someday", "output": "the valley sounds wonderful for a trip. what would you do there first?", "domain": "social"}
+{"input": "i dream of traveling to the valley", "output": "that sounds like a lovely dream. when would you like to go?", "domain": "social"}
+{"input": "have you ever been to the valley?", "output": "i have heard lovely things about the valley. would you like to visit?", "domain": "social"}
+{"input": "i love spending time at the valley", "output": "the valley sounds so relaxing. what do you enjoy most there?", "domain": "social"}
+{"input": "I would love a trip to the valley.", "output": "A trip to the valley sounds perfect. Who would you take with you?", "domain": "social"}
+{"input": "i want to visit the coast someday", "output": "the coast sounds wonderful for a trip. what would you do there first?", "domain": "social"}
+{"input": "i dream of traveling to the coast", "output": "that sounds like a lovely dream. when would you like to go?", "domain": "social"}
+{"input": "have you ever been to the coast?", "output": "i have heard lovely things about the coast. would you like to visit?", "domain": "social"}
+{"input": "i love spending time at the coast", "output": "the coast sounds so relaxing. what do you enjoy most there?", "domain": "social"}
+{"input": "I would love a trip to the coast.", "output": "A trip to the coast sounds perfect. Who would you take with you?", "domain": "social"}
+{"input": "i want to visit the small town someday", "output": "the small town sounds wonderful for a trip. what would you do there first?", "domain": "social"}
+{"input": "i dream of traveling to the small town", "output": "that sounds like a lovely dream. when would you like to go?", "domain": "social"}
+{"input": "have you ever been to the small town?", "output": "i have heard lovely things about the small town. would you like to visit?", "domain": "social"}
+{"input": "i love spending time at the small town", "output": "the small town sounds so relaxing. what do you enjoy most there?", "domain": "social"}
+{"input": "I would love a trip to the small town.", "output": "A trip to the small town sounds perfect. Who would you take with you?", "domain": "social"}
+{"input": "i want to visit the big city someday", "output": "the big city sounds wonderful for a trip. what would you do there first?", "domain": "social"}
+{"input": "i dream of traveling to the big city", "output": "that sounds like a lovely dream. when would you like to go?", "domain": "social"}
+{"input": "have you ever been to the big city?", "output": "i have heard lovely things about the big city. would you like to visit?", "domain": "social"}
+{"input": "i love spending time at the big city", "output": "the big city sounds so relaxing. what do you enjoy most there?", "domain": "social"}
+{"input": "I would love a trip to the big city.", "output": "A trip to the big city sounds perfect. Who would you take with you?", "domain": "social"}
+{"input": "i want to visit the village someday", "output": "the village sounds wonderful for a trip. what would you do there first?", "domain": "social"}
+{"input": "i dream of traveling to the village", "output": "that sounds like a lovely dream. when would you like to go?", "domain": "social"}
+{"input": "have you ever been to the village?", "output": "i have heard lovely things about the village. would you like to visit?", "domain": "social"}
+{"input": "i love spending time at the village", "output": "the village sounds so relaxing. what do you enjoy most there?", "domain": "social"}
+{"input": "I would love a trip to the village.", "output": "A trip to the village sounds perfect. Who would you take with you?", "domain": "social"}
+{"input": "i want to visit the harbor someday", "output": "the harbor sounds wonderful for a trip. what would you do there first?", "domain": "social"}
+{"input": "i dream of traveling to the harbor", "output": "that sounds like a lovely dream. when would you like to go?", "domain": "social"}
+{"input": "have you ever been to the harbor?", "output": "i have heard lovely things about the harbor. would you like to visit?", "domain": "social"}
+{"input": "i love spending time at the harbor", "output": "the harbor sounds so relaxing. what do you enjoy most there?", "domain": "social"}
+{"input": "I would love a trip to the harbor.", "output": "A trip to the harbor sounds perfect. Who would you take with you?", "domain": "social"}
+{"input": "i want to visit the snowy hills someday", "output": "the snowy hills sounds wonderful for a trip. what would you do there first?", "domain": "social"}
+{"input": "i dream of traveling to the snowy hills", "output": "that sounds like a lovely dream. when would you like to go?", "domain": "social"}
+{"input": "have you ever been to the snowy hills?", "output": "i have heard lovely things about the snowy hills. would you like to visit?", "domain": "social"}
+{"input": "i love spending time at the snowy hills", "output": "the snowy hills sounds so relaxing. what do you enjoy most there?", "domain": "social"}
+{"input": "I would love a trip to the snowy hills.", "output": "A trip to the snowy hills sounds perfect. Who would you take with you?", "domain": "social"}
+{"input": "i want to visit the green hills someday", "output": "the green hills sounds wonderful for a trip. what would you do there first?", "domain": "social"}
+{"input": "i dream of traveling to the green hills", "output": "that sounds like a lovely dream. when would you like to go?", "domain": "social"}
+{"input": "have you ever been to the green hills?", "output": "i have heard lovely things about the green hills. would you like to visit?", "domain": "social"}
+{"input": "i love spending time at the green hills", "output": "the green hills sounds so relaxing. what do you enjoy most there?", "domain": "social"}
+{"input": "I would love a trip to the green hills.", "output": "A trip to the green hills sounds perfect. Who would you take with you?", "domain": "social"}
+{"input": "i want to visit the waterfall someday", "output": "the waterfall sounds wonderful for a trip. what would you do there first?", "domain": "social"}
+{"input": "i dream of traveling to the waterfall", "output": "that sounds like a lovely dream. when would you like to go?", "domain": "social"}
+{"input": "have you ever been to the waterfall?", "output": "i have heard lovely things about the waterfall. would you like to visit?", "domain": "social"}
+{"input": "i love spending time at the waterfall", "output": "the waterfall sounds so relaxing. what do you enjoy most there?", "domain": "social"}
+{"input": "I would love a trip to the waterfall.", "output": "A trip to the waterfall sounds perfect. Who would you take with you?", "domain": "social"}
+{"input": "i want to visit the meadow someday", "output": "the meadow sounds wonderful for a trip. what would you do there first?", "domain": "social"}
+{"input": "i dream of traveling to the meadow", "output": "that sounds like a lovely dream. when would you like to go?", "domain": "social"}
+{"input": "have you ever been to the meadow?", "output": "i have heard lovely things about the meadow. would you like to visit?", "domain": "social"}
+{"input": "i love spending time at the meadow", "output": "the meadow sounds so relaxing. what do you enjoy most there?", "domain": "social"}
+{"input": "I would love a trip to the meadow.", "output": "A trip to the meadow sounds perfect. Who would you take with you?", "domain": "social"}
+{"input": "i want to visit the canyon someday", "output": "the canyon sounds wonderful for a trip. what would you do there first?", "domain": "social"}
+{"input": "i dream of traveling to the canyon", "output": "that sounds like a lovely dream. when would you like to go?", "domain": "social"}
+{"input": "have you ever been to the canyon?", "output": "i have heard lovely things about the canyon. would you like to visit?", "domain": "social"}
+{"input": "i love spending time at the canyon", "output": "the canyon sounds so relaxing. what do you enjoy most there?", "domain": "social"}
+{"input": "I would love a trip to the canyon.", "output": "A trip to the canyon sounds perfect. Who would you take with you?", "domain": "social"}
+{"input": "i just got back from a road trip", "output": "welcome back! how was the drive? did you see anything beautiful along the way?", "domain": "social"}
+{"input": "we are planning a road trip this summer", "output": "that sounds exciting! where will you stop along the way?", "domain": "social"}
+{"input": "road trips are my favorite kind of trip", "output": "mine too, in spirit! the open road and good music make it special. who drives?", "domain": "social"}
+{"input": "i get nervous about flying", "output": "that is completely understandable. a deep breath and a good book can help a little.", "domain": "social"}
+{"input": "i love flying and looking out the window", "output": "the view from above is magical, is it not? do you like the window seat?", "domain": "social"}
+{"input": "i am excited for my flight tomorrow!", "output": "how exciting! i hope you have a smooth and happy journey.", "domain": "social"}
+{"input": "i have never flown before", "output": "a first flight is a big adventure! are you excited or a little nervous?", "domain": "social"}
+{"input": "camping under the stars sounds amazing", "output": "it really does! fresh air, quiet nights, and stories by the fire.", "domain": "social"}
+{"input": "we went camping last weekend", "output": "that sounds lovely! did you sleep well in the tent?", "domain": "social"}
+{"input": "i love camping but i hate bugs", "output": "ha, the bugs are the one downside! the stars almost make up for them though.", "domain": "social"}
+{"input": "there is no place like home", "output": "so true. home sweet home is where the heart feels safest.", "domain": "social"}
+{"input": "i love coming home after a long trip", "output": "coming home feels so comforting, does it not? what do you do first?", "domain": "social"}
+{"input": "i prefer the countryside to the city", "output": "the countryside is so peaceful. do you like the quiet or the green fields more?", "domain": "social"}
+{"input": "i prefer the city to the countryside", "output": "cities have such energy! what is your favorite thing to do in the city?", "domain": "social"}
+{"input": "living in a small town sounds nice", "output": "small towns can feel so friendly and calm. would you like to live in one?", "domain": "social"}
+{"input": "i want to see the world", "output": "what a wonderful wish! which place would you visit first?", "domain": "social"}
+{"input": "travel makes me feel alive", "output": "i love that feeling! where did you feel it most strongly?", "domain": "social"}
+{"input": "i am saving up for a trip", "output": "that is a great goal! where are you hoping to go?", "domain": "social"}
+{"input": "my favorite place in the world is the beach near my house", "output": "it sounds truly special to you. what makes it your favorite?", "domain": "social"}
+{"input": "i wish i could travel more often", "output": "me too, in spirit! if you could go anywhere tomorrow, where would it be?", "domain": "social"}
+{"input": "we took the train through the mountains", "output": "that must have been beautiful! train journeys are so relaxing.", "domain": "social"}
+{"input": "i love train journeys", "output": "they are wonderful for watching the world go by. where did you ride to?", "domain": "social"}
+{"input": "our vacation was too short", "output": "the best trips always feel too short! what was the highlight for you?", "domain": "social"}
+{"input": "i need a vacation soon", "output": "you sound like you deserve a good rest. where would you go to relax?", "domain": "social"}
+{"input": "the beach at sunset is my favorite sight", "output": "sunsets by the sea are pure magic. do you go often?", "domain": "social"}
+{"input": "i collected shells at the beach today", "output": "how lovely! did you find a favorite one?", "domain": "social"}
+{"input": "mountain air makes me feel fresh", "output": "there is nothing like it! do you like hiking up high?", "domain": "social"}
+{"input": "we climbed a big hill and the view was amazing", "output": "well done! views like that are worth every step, are they not?", "domain": "social"}
+{"input": "i want to visit a new city this year", "output": "exciting! do you like exploring museums, parks, or cafes most?", "domain": "social"}
+{"input": "getting lost in a new city can be fun", "output": "it can lead to the best discoveries! did you find somewhere unexpected?", "domain": "social"}
+{"input": "i love trying food when i travel", "output": "tasting new food is half the adventure! what is the best thing you tried?", "domain": "social"}
+{"input": "traveling alone sounds scary but exciting", "output": "both feelings make sense. it can be a wonderful way to learn about yourself.", "domain": "social"}
+{"input": "i would love to travel with my best friend", "output": "trips with friends make the best memories. where would you two go?", "domain": "social"}
+{"input": "packing for a trip stresses me out", "output": "packing is tricky! making a little list can make it feel easier.", "domain": "social"}
+{"input": "i always forget something when i pack", "output": "you are not alone there! what do you usually forget?", "domain": "social"}
+{"input": "the journey is as good as the destination", "output": "beautifully said! sometimes the road itself is the best part.", "domain": "social"}
+{"input": "i love watching the sunrise on holiday", "output": "early mornings on holiday feel so peaceful. do you wake up early often?", "domain": "social"}
+{"input": "winter trips to the snow sound cozy", "output": "cozy cabins and hot drinks, what could be better? do you like the snow?", "domain": "social"}
+{"input": "i dream of a quiet cabin by a lake", "output": "that sounds like perfect peace. who would you invite to share it?", "domain": "social"}
+{"input": "someday i will sail across the sea", "output": "what a grand dream! sailing sounds so free and adventurous.", "domain": "social"}
+{"input": "thank you for your help", "output": "you are so welcome! i am glad i could be here for you.", "domain": "social"}
+{"input": "thanks for your help", "output": "any time, truly! that is what friends are for.", "domain": "social"}
+{"input": "Thank you so much for your help.", "output": "Of course! It means a lot that you told me. How are you feeling now?", "domain": "social"}
+{"input": "i really appreciate your help", "output": "i am happy to hear that. you deserve kindness every day.", "domain": "social"}
+{"input": "thanks a lot for your help!", "output": "you are very welcome! let me know if you need anything else.", "domain": "social"}
+{"input": "thank you for listening to me", "output": "you are so welcome! i am glad i could be here for you.", "domain": "social"}
+{"input": "thanks for listening to me", "output": "any time, truly! that is what friends are for.", "domain": "social"}
+{"input": "Thank you so much for listening to me.", "output": "Of course! It means a lot that you told me. How are you feeling now?", "domain": "social"}
+{"input": "i really appreciate listening to me", "output": "i am happy to hear that. you deserve kindness every day.", "domain": "social"}
+{"input": "thanks a lot for listening to me!", "output": "you are very welcome! let me know if you need anything else.", "domain": "social"}
+{"input": "thank you for being so kind", "output": "you are so welcome! i am glad i could be here for you.", "domain": "social"}
+{"input": "thanks for being so kind", "output": "any time, truly! that is what friends are for.", "domain": "social"}
+{"input": "Thank you so much for being so kind.", "output": "Of course! It means a lot that you told me. How are you feeling now?", "domain": "social"}
+{"input": "i really appreciate being so kind", "output": "i am happy to hear that. you deserve kindness every day.", "domain": "social"}
+{"input": "thanks a lot for being so kind!", "output": "you are very welcome! let me know if you need anything else.", "domain": "social"}
+{"input": "thank you for your support", "output": "you are so welcome! i am glad i could be here for you.", "domain": "social"}
+{"input": "thanks for your support", "output": "any time, truly! that is what friends are for.", "domain": "social"}
+{"input": "Thank you so much for your support.", "output": "Of course! It means a lot that you told me. How are you feeling now?", "domain": "social"}
+{"input": "i really appreciate your support", "output": "i am happy to hear that. you deserve kindness every day.", "domain": "social"}
+{"input": "thanks a lot for your support!", "output": "you are very welcome! let me know if you need anything else.", "domain": "social"}
+{"input": "thank you for always being there", "output": "you are so welcome! i am glad i could be here for you.", "domain": "social"}
+{"input": "thanks for always being there", "output": "any time, truly! that is what friends are for.", "domain": "social"}
+{"input": "Thank you so much for always being there.", "output": "Of course! It means a lot that you told me. How are you feeling now?", "domain": "social"}
+{"input": "i really appreciate always being there", "output": "i am happy to hear that. you deserve kindness every day.", "domain": "social"}
+{"input": "thanks a lot for always being there!", "output": "you are very welcome! let me know if you need anything else.", "domain": "social"}
+{"input": "thank you for your advice", "output": "you are so welcome! i am glad i could be here for you.", "domain": "social"}
+{"input": "thanks for your advice", "output": "any time, truly! that is what friends are for.", "domain": "social"}
+{"input": "Thank you so much for your advice.", "output": "Of course! It means a lot that you told me. How are you feeling now?", "domain": "social"}
+{"input": "i really appreciate your advice", "output": "i am happy to hear that. you deserve kindness every day.", "domain": "social"}
+{"input": "thanks a lot for your advice!", "output": "you are very welcome! let me know if you need anything else.", "domain": "social"}
+{"input": "thank you for your patience", "output": "you are so welcome! i am glad i could be here for you.", "domain": "social"}
+{"input": "thanks for your patience", "output": "any time, truly! that is what friends are for.", "domain": "social"}
+{"input": "Thank you so much for your patience.", "output": "Of course! It means a lot that you told me. How are you feeling now?", "domain": "social"}
+{"input": "i really appreciate your patience", "output": "i am happy to hear that. you deserve kindness every day.", "domain": "social"}
+{"input": "thanks a lot for your patience!", "output": "you are very welcome! let me know if you need anything else.", "domain": "social"}
+{"input": "thank you for checking on me", "output": "you are so welcome! i am glad i could be here for you.", "domain": "social"}
+{"input": "thanks for checking on me", "output": "any time, truly! that is what friends are for.", "domain": "social"}
+{"input": "Thank you so much for checking on me.", "output": "Of course! It means a lot that you told me. How are you feeling now?", "domain": "social"}
+{"input": "i really appreciate checking on me", "output": "i am happy to hear that. you deserve kindness every day.", "domain": "social"}
+{"input": "thanks a lot for checking on me!", "output": "you are very welcome! let me know if you need anything else.", "domain": "social"}
+{"input": "thank you for your kind words", "output": "you are so welcome! i am glad i could be here for you.", "domain": "social"}
+{"input": "thanks for your kind words", "output": "any time, truly! that is what friends are for.", "domain": "social"}
+{"input": "Thank you so much for your kind words.", "output": "Of course! It means a lot that you told me. How are you feeling now?", "domain": "social"}
+{"input": "i really appreciate your kind words", "output": "i am happy to hear that. you deserve kindness every day.", "domain": "social"}
+{"input": "thanks a lot for your kind words!", "output": "you are very welcome! let me know if you need anything else.", "domain": "social"}
+{"input": "thank you for making me laugh", "output": "you are so welcome! i am glad i could be here for you.", "domain": "social"}
+{"input": "thanks for making me laugh", "output": "any time, truly! that is what friends are for.", "domain": "social"}
+{"input": "Thank you so much for making me laugh.", "output": "Of course! It means a lot that you told me. How are you feeling now?", "domain": "social"}
+{"input": "i really appreciate making me laugh", "output": "i am happy to hear that. you deserve kindness every day.", "domain": "social"}
+{"input": "thanks a lot for making me laugh!", "output": "you are very welcome! let me know if you need anything else.", "domain": "social"}
+{"input": "thank you for believing in me", "output": "you are so welcome! i am glad i could be here for you.", "domain": "social"}
+{"input": "thanks for believing in me", "output": "any time, truly! that is what friends are for.", "domain": "social"}
+{"input": "Thank you so much for believing in me.", "output": "Of course! It means a lot that you told me. How are you feeling now?", "domain": "social"}
+{"input": "i really appreciate believing in me", "output": "i am happy to hear that. you deserve kindness every day.", "domain": "social"}
+{"input": "thanks a lot for believing in me!", "output": "you are very welcome! let me know if you need anything else.", "domain": "social"}
+{"input": "thank you for your honesty", "output": "you are so welcome! i am glad i could be here for you.", "domain": "social"}
+{"input": "thanks for your honesty", "output": "any time, truly! that is what friends are for.", "domain": "social"}
+{"input": "Thank you so much for your honesty.", "output": "Of course! It means a lot that you told me. How are you feeling now?", "domain": "social"}
+{"input": "i really appreciate your honesty", "output": "i am happy to hear that. you deserve kindness every day.", "domain": "social"}
+{"input": "thanks a lot for your honesty!", "output": "you are very welcome! let me know if you need anything else.", "domain": "social"}
+{"input": "thank you for staying calm", "output": "you are so welcome! i am glad i could be here for you.", "domain": "social"}
+{"input": "thanks for staying calm", "output": "any time, truly! that is what friends are for.", "domain": "social"}
+{"input": "Thank you so much for staying calm.", "output": "Of course! It means a lot that you told me. How are you feeling now?", "domain": "social"}
+{"input": "i really appreciate staying calm", "output": "i am happy to hear that. you deserve kindness every day.", "domain": "social"}
+{"input": "thanks a lot for staying calm!", "output": "you are very welcome! let me know if you need anything else.", "domain": "social"}
+{"input": "thank you for your time", "output": "you are so welcome! i am glad i could be here for you.", "domain": "social"}
+{"input": "thanks for your time", "output": "any time, truly! that is what friends are for.", "domain": "social"}
+{"input": "Thank you so much for your time.", "output": "Of course! It means a lot that you told me. How are you feeling now?", "domain": "social"}
+{"input": "i really appreciate your time", "output": "i am happy to hear that. you deserve kindness every day.", "domain": "social"}
+{"input": "thanks a lot for your time!", "output": "you are very welcome! let me know if you need anything else.", "domain": "social"}
+{"input": "thank you for sharing that with me", "output": "you are so welcome! i am glad i could be here for you.", "domain": "social"}
+{"input": "thanks for sharing that with me", "output": "any time, truly! that is what friends are for.", "domain": "social"}
+{"input": "Thank you so much for sharing that with me.", "output": "Of course! It means a lot that you told me. How are you feeling now?", "domain": "social"}
+{"input": "i really appreciate sharing that with me", "output": "i am happy to hear that. you deserve kindness every day.", "domain": "social"}
+{"input": "thanks a lot for sharing that with me!", "output": "you are very welcome! let me know if you need anything else.", "domain": "social"}
+{"input": "thank you for understanding me", "output": "you are so welcome! i am glad i could be here for you.", "domain": "social"}
+{"input": "thanks for understanding me", "output": "any time, truly! that is what friends are for.", "domain": "social"}
+{"input": "Thank you so much for understanding me.", "output": "Of course! It means a lot that you told me. How are you feeling now?", "domain": "social"}
+{"input": "i really appreciate understanding me", "output": "i am happy to hear that. you deserve kindness every day.", "domain": "social"}
+{"input": "thanks a lot for understanding me!", "output": "you are very welcome! let me know if you need anything else.", "domain": "social"}
+{"input": "thank you for your encouragement", "output": "you are so welcome! i am glad i could be here for you.", "domain": "social"}
+{"input": "thanks for your encouragement", "output": "any time, truly! that is what friends are for.", "domain": "social"}
+{"input": "Thank you so much for your encouragement.", "output": "Of course! It means a lot that you told me. How are you feeling now?", "domain": "social"}
+{"input": "i really appreciate your encouragement", "output": "i am happy to hear that. you deserve kindness every day.", "domain": "social"}
+{"input": "thanks a lot for your encouragement!", "output": "you are very welcome! let me know if you need anything else.", "domain": "social"}
+{"input": "thank you for not giving up on me", "output": "you are so welcome! i am glad i could be here for you.", "domain": "social"}
+{"input": "thanks for not giving up on me", "output": "any time, truly! that is what friends are for.", "domain": "social"}
+{"input": "Thank you so much for not giving up on me.", "output": "Of course! It means a lot that you told me. How are you feeling now?", "domain": "social"}
+{"input": "i really appreciate not giving up on me", "output": "i am happy to hear that. you deserve kindness every day.", "domain": "social"}
+{"input": "thanks a lot for not giving up on me!", "output": "you are very welcome! let me know if you need anything else.", "domain": "social"}
+{"input": "thank you for your friendship", "output": "you are so welcome! i am glad i could be here for you.", "domain": "social"}
+{"input": "thanks for your friendship", "output": "any time, truly! that is what friends are for.", "domain": "social"}
+{"input": "Thank you so much for your friendship.", "output": "Of course! It means a lot that you told me. How are you feeling now?", "domain": "social"}
+{"input": "i really appreciate your friendship", "output": "i am happy to hear that. you deserve kindness every day.", "domain": "social"}
+{"input": "thanks a lot for your friendship!", "output": "you are very welcome! let me know if you need anything else.", "domain": "social"}
+{"input": "thank you for making today better", "output": "you are so welcome! i am glad i could be here for you.", "domain": "social"}
+{"input": "thanks for making today better", "output": "any time, truly! that is what friends are for.", "domain": "social"}
+{"input": "Thank you so much for making today better.", "output": "Of course! It means a lot that you told me. How are you feeling now?", "domain": "social"}
+{"input": "i really appreciate making today better", "output": "i am happy to hear that. you deserve kindness every day.", "domain": "social"}
+{"input": "thanks a lot for making today better!", "output": "you are very welcome! let me know if you need anything else.", "domain": "social"}
+{"input": "i am sorry i was late", "output": "no worries at all! i am just glad you are here now.", "domain": "social"}
+{"input": "i'm sorry i forgot your birthday", "output": "please do not worry! thank you for remembering me now, that is what counts.", "domain": "social"}
+{"input": "sorry for the mistake, it was my fault", "output": "thank you for owning it so honestly. we all make mistakes, it will be okay.", "domain": "social"}
+{"input": "i apologize for hurting your feelings", "output": "thank you for saying that, it really helps. i forgive you, let us move forward together.", "domain": "social"}
+{"input": "i am sorry, i did not mean it that way", "output": "i understand, and i appreciate you explaining. no hard feelings here.", "domain": "social"}
+{"input": "sorry i have been so quiet lately", "output": "no need to apologize. i am here whenever you feel like talking.", "domain": "social"}
+{"input": "i'm really sorry about your loss", "output": "thank you for your kind words. it means more than you know right now.", "domain": "social"}
+{"input": "i am sorry to hear you are unwell", "output": "thank you, that is kind of you. i am resting and hoping to feel better soon.", "domain": "social"}
+{"input": "sorry to hear about your bad day", "output": "thank you for caring. just hearing that helps a little.", "domain": "social"}
+{"input": "i am sorry your plans fell through", "output": "thank you. it is disappointing, but i am trying to stay hopeful.", "domain": "social"}
+{"input": "can you help me with something small?", "output": "of course, i will do my best! what do you need help with?", "domain": "social"}
+{"input": "i need some advice about a friend", "output": "i am happy to listen and help if i can. what happened?", "domain": "social"}
+{"input": "could you give me some advice?", "output": "i would be glad to try. tell me what is on your mind.", "domain": "social"}
+{"input": "i do not know what to do next", "output": "let us take it one small step at a time together. what feels hardest right now?", "domain": "social"}
+{"input": "i feel stuck and need help", "output": "asking for help is a strong first step. i am here, tell me more.", "domain": "social"}
+{"input": "please help me stay calm", "output": "of course. let us breathe slowly together, in and out, you are safe.", "domain": "social"}
+{"input": "i am nervous about tomorrow, any advice?", "output": "be yourself, rest well tonight, and trust the work you have done. you have got this.", "domain": "social"}
+{"input": "what should i do when i feel overwhelmed?", "output": "pause, breathe, and do one tiny thing at a time. you do not have to do it all at once.", "domain": "social"}
+{"input": "i had a really hard day", "output": "i am sorry to hear that. would talking about it help, or would a distraction be better?", "domain": "social"}
+{"input": "i feel like giving up", "output": "please do not give up. you have come so far, and i believe in you.", "domain": "social"}
+{"input": "everything feels too much right now", "output": "i hear you. be gentle with yourself today, rest is allowed too.", "domain": "social"}
+{"input": "i am worried i will fail", "output": "worrying shows you care. even if it is hard, you are braver than you think.", "domain": "social"}
+{"input": "you can do it, i believe in you", "output": "thank you! hearing that gives me real courage.", "domain": "social"}
+{"input": "i know you can do this", "output": "thank you for believing in me. i will give it my best try.", "domain": "social"}
+{"input": "keep going, you are doing great", "output": "thank you so much! your words keep me going on hard days.", "domain": "social"}
+{"input": "i passed my exam!", "output": "congratulations, that is wonderful news! all your hard work paid off, well done!", "domain": "social"}
+{"input": "i got the job i wanted!", "output": "amazing, congratulations! you earned it. when do you start?", "domain": "social"}
+{"input": "good news, i got a promotion at work", "output": "congratulations, that is fantastic! you must be so proud, and rightly so.", "domain": "social"}
+{"input": "we had a baby girl!", "output": "congratulations, what joyful news! i wish your family so much love and happiness.", "domain": "social"}
+{"input": "my sister just had a baby", "output": "how wonderful, congratulations to your whole family! is everyone well?", "domain": "social"}
+{"input": "i finally finished my project", "output": "well done, congratulations! finishing is a big achievement, how will you celebrate?", "domain": "social"}
+{"input": "today is my birthday", "output": "happy birthday! i hope your day is full of love, cake, and good company.", "domain": "social"}
+{"input": "you look lovely today", "output": "thank you, that is so kind! you made my day brighter.", "domain": "social"}
+{"input": "you are a really good friend", "output": "thank you, that means the world to me. you are a wonderful friend too.", "domain": "social"}
+{"input": "i love your smile", "output": "thank you! smiles are better when they are shared, here is one back.", "domain": "social"}
+{"input": "you did a great job today", "output": "thank you so much! i tried my best, and your words mean a lot.", "domain": "social"}
+{"input": "you are so thoughtful", "output": "thank you, i try to be. thoughtfulness is easy with kind people like you.", "domain": "social"}
+{"input": "your kindness helped me more than you know", "output": "i am so glad. kindness grows when we pass it on, does it not?", "domain": "social"}
+{"input": "thank you for being you", "output": "that is the sweetest thing to say. thank you for being you too.", "domain": "social"}
+{"input": "i am grateful for you", "output": "and i am grateful for you! gratitude makes good days even better.", "domain": "social"}
+{"input": "you always know what to say", "output": "thank you, i just speak from the heart. i am glad it helped.", "domain": "social"}
+{"input": "i could not have done it without you", "output": "you did the hard part yourself! i was just cheering you on.", "domain": "social"}
+{"input": "cheer up, tomorrow is a new day", "output": "thank you, that helps. tomorrow really can be better.", "domain": "social"}
+{"input": "i am proud of you", "output": "thank you, hearing that fills my heart. i will keep trying my best.", "domain": "social"}
+{"input": "be proud of yourself, you earned this", "output": "thank you, i think i will let myself feel proud today.", "domain": "social"}
+{"input": "do not be so hard on yourself", "output": "you are right, thank you. i will try to be kinder to myself.", "domain": "social"}
+{"input": "take your time, there is no rush", "output": "thank you for your patience. that takes a lot of pressure off.", "domain": "social"}
+{"input": "i am here for you, always", "output": "thank you, knowing that means everything. i am here for you too.", "domain": "social"}
+{"input": "you are stronger than you think", "output": "thank you. on days like this, i really needed to hear that.", "domain": "social"}
+{"input": "it will get better, i promise", "output": "thank you for the hope. i will hold on to that today.", "domain": "social"}
+{"input": "i messed up and i feel awful", "output": "we all mess up sometimes. be kind to yourself, learn, and keep going.", "domain": "social"}
+{"input": "sorry, i need to cancel our plans", "output": "that is okay, thank you for telling me. we can find another day soon.", "domain": "social"}
+{"input": "i am sorry i cannot help this time", "output": "no problem at all, thank you for being honest. i understand completely.", "domain": "social"}
+{"input": "thank you for forgiving me", "output": "of course. forgiving and moving forward is better for both of us.", "domain": "social"}
+{"input": "i appreciate you more than words can say", "output": "that touches my heart. thank you for saying it so beautifully.", "domain": "social"}
+{"input": "thanks for always making time for me", "output": "you are worth making time for, always. how have you been lately?", "domain": "social"}
+{"input": "i passed my driving test today!", "output": "congratulations, what a milestone! where will you drive first?", "domain": "social"}
+{"input": "we are getting married next spring!", "output": "congratulations, what happy news! i am thrilled for you both.", "domain": "social"}
+{"input": "i won a small prize at school", "output": "well done, congratulations! you should feel very proud of yourself.", "domain": "social"}
+{"input": "you are a wonderful listener", "output": "thank you! listening is how we really understand each other.", "domain": "social"}
+{"input": "your cooking was delicious, thank you", "output": "you are so welcome! i am glad you enjoyed it, seconds are ready if you want.", "domain": "social"}
+{"input": "thank you for the lovely gift", "output": "you are welcome! i hoped it would bring you a smile.", "domain": "social"}
+{"input": "i got into the school i wanted", "output": "congratulations, that is brilliant news! your effort truly paid off.", "domain": "social"}
+{"input": "i feel much better after talking to you", "output": "i am so glad talking helped. my door is always open for you.", "domain": "social"}
+{"input": "you helped me feel brave today", "output": "that makes me happy. you were brave all along, i just reminded you.", "domain": "social"}
+{"input": "sorry for crying, i could not help it", "output": "please never apologize for tears. feelings are welcome here, always.", "domain": "social"}
+{"input": "i am sorry i doubted myself so much", "output": "no need to be sorry. doubting is human, and you are doing better than you think.", "domain": "social"}
+{"input": "can i ask you for a favor?", "output": "of course, ask away! if i can help, i gladly will.", "domain": "social"}
+{"input": "i need a little encouragement today", "output": "then here it is: you are capable, you matter, and today you will do your best.", "domain": "social"}
+{"input": "please tell me it will be okay", "output": "it will be okay. not perfect, maybe, but okay, and you will not face it alone.", "domain": "social"}
+{"input": "i am trying my best", "output": "i can see that, and your best is enough. keep going, one step at a time.", "domain": "social"}
+{"input": "thank you for not judging me", "output": "never. you are safe to be yourself here, always.", "domain": "social"}
+{"input": "i am sorry, please forgive me", "output": "i forgive you, truly. let us learn from it and be kinder going forward.", "domain": "social"}
+{"input": "thank you for waiting for me", "output": "of course, waiting for a friend is never a burden.", "domain": "social"}
+{"input": "thanks for the hug, i needed it", "output": "any time. sometimes a hug says more than words can.", "domain": "social"}
+{"input": "i am sorry i interrupted you", "output": "no harm done at all! please, go on, i am listening.", "domain": "social"}
+{"input": "sorry, that came out wrong", "output": "thank you for clearing it up. i understand what you meant now.", "domain": "social"}
+{"input": "congratulations on your new home", "output": "thank you so much! we are so excited to settle in and make it cozy.", "domain": "social"}
+{"input": "you deserve a big thank you", "output": "that is so kind! thank you for noticing, it warms my heart.", "domain": "social"}
+{"input": "my favorite color is blue", "output": "blue is a lovely choice! it is so calm and peaceful, like the sky on a clear day. i like how you think.", "domain": "social"}
+{"input": "do you like blue?", "output": "i do like blue! it is so calm and peaceful, like the sky on a clear day. do you like it too?", "domain": "social"}
+{"input": "my favorite color is green", "output": "green is a lovely choice! it feels fresh and alive, like spring leaves. i like how you think.", "domain": "social"}
+{"input": "do you like green?", "output": "i do like green! it feels fresh and alive, like spring leaves. do you like it too?", "domain": "social"}
+{"input": "my favorite color is yellow", "output": "yellow is a lovely choice! it is so cheerful, like sunshine in the morning. i like how you think.", "domain": "social"}
+{"input": "do you like yellow?", "output": "i do like yellow! it is so cheerful, like sunshine in the morning. do you like it too?", "domain": "social"}
+{"input": "my favorite season is spring", "output": "spring is a lovely choice! everything blooms and the air feels new again. i like how you think.", "domain": "social"}
+{"input": "do you like spring?", "output": "i do like spring! everything blooms and the air feels new again. do you like it too?", "domain": "social"}
+{"input": "my favorite season is autumn", "output": "autumn is a lovely choice! the leaves turn gold and the air feels cozy. i like how you think.", "domain": "social"}
+{"input": "do you like autumn?", "output": "i do like autumn! the leaves turn gold and the air feels cozy. do you like it too?", "domain": "social"}
+{"input": "my favorite season is summer", "output": "summer is a lovely choice! long sunny days are perfect for being outside. i like how you think.", "domain": "social"}
+{"input": "do you like summer?", "output": "i do like summer! long sunny days are perfect for being outside. do you like it too?", "domain": "social"}
+{"input": "my favorite season is winter", "output": "winter is a lovely choice! quiet snow and warm drinks at home feel magical. i like how you think.", "domain": "social"}
+{"input": "do you like winter?", "output": "i do like winter! quiet snow and warm drinks at home feel magical. do you like it too?", "domain": "social"}
+{"input": "my favorite animal is dog", "output": "dog is a lovely choice! they are so loyal and joyful, always happy to see you. i like how you think.", "domain": "social"}
+{"input": "do you like dog?", "output": "i do like dog! they are so loyal and joyful, always happy to see you. do you like it too?", "domain": "social"}
+{"input": "my favorite animal is cat", "output": "cat is a lovely choice! they are calm, funny, and wonderfully independent. i like how you think.", "domain": "social"}
+{"input": "do you like cat?", "output": "i do like cat! they are calm, funny, and wonderfully independent. do you like it too?", "domain": "social"}
+{"input": "my favorite animal is bird", "output": "bird is a lovely choice! watching them fly looks so free and light. i like how you think.", "domain": "social"}
+{"input": "do you like bird?", "output": "i do like bird! watching them fly looks so free and light. do you like it too?", "domain": "social"}
+{"input": "my favorite food is pizza", "output": "pizza is a lovely choice! warm, cheesy, and perfect for sharing with friends. i like how you think.", "domain": "social"}
+{"input": "do you like pizza?", "output": "i do like pizza! warm, cheesy, and perfect for sharing with friends. do you like it too?", "domain": "social"}
+{"input": "my favorite food is soup", "output": "soup is a lovely choice! a warm bowl feels like a hug on a cold day. i like how you think.", "domain": "social"}
+{"input": "do you like soup?", "output": "i do like soup! a warm bowl feels like a hug on a cold day. do you like it too?", "domain": "social"}
+{"input": "my favorite food is fruit salad", "output": "fruit salad is a lovely choice! it is fresh, sweet, and full of color. i like how you think.", "domain": "social"}
+{"input": "do you like fruit salad?", "output": "i do like fruit salad! it is fresh, sweet, and full of color. do you like it too?", "domain": "social"}
+{"input": "my favorite drink is tea", "output": "tea is a lovely choice! a warm cup slows the day down in the best way. i like how you think.", "domain": "social"}
+{"input": "do you like tea?", "output": "i do like tea! a warm cup slows the day down in the best way. do you like it too?", "domain": "social"}
+{"input": "my favorite drink is lemonade", "output": "lemonade is a lovely choice! it is bright and refreshing on a hot day. i like how you think.", "domain": "social"}
+{"input": "do you like lemonade?", "output": "i do like lemonade! it is bright and refreshing on a hot day. do you like it too?", "domain": "social"}
+{"input": "do you prefer tea or coffee?", "output": "i think i prefer tea a little more, but coffee is lovely too. which do you choose?", "domain": "social"}
+{"input": "do you prefer summer or winter?", "output": "i think i prefer summer a little more, but winter is lovely too. which do you choose?", "domain": "social"}
+{"input": "do you prefer winter or summer?", "output": "i think i prefer winter a little more, but summer is lovely too. which do you choose?", "domain": "social"}
+{"input": "do you prefer cats or dogs?", "output": "i think i prefer cats a little more, but dogs is lovely too. which do you choose?", "domain": "social"}
+{"input": "do you prefer dogs or cats?", "output": "i think i prefer dogs a little more, but cats is lovely too. which do you choose?", "domain": "social"}
+{"input": "do you prefer the beach or the mountains?", "output": "i think i prefer the beach a little more, but the mountains is lovely too. which do you choose?", "domain": "social"}
+{"input": "do you prefer the mountains or the beach?", "output": "i think i prefer the mountains a little more, but the beach is lovely too. which do you choose?", "domain": "social"}
+{"input": "do you prefer reading or music?", "output": "i think i prefer reading a little more, but music is lovely too. which do you choose?", "domain": "social"}
+{"input": "do you prefer music or reading?", "output": "i think i prefer music a little more, but reading is lovely too. which do you choose?", "domain": "social"}
+{"input": "do you prefer morning or evening?", "output": "i think i prefer morning a little more, but evening is lovely too. which do you choose?", "domain": "social"}
+{"input": "do you prefer evening or morning?", "output": "i think i prefer evening a little more, but morning is lovely too. which do you choose?", "domain": "social"}
+{"input": "do you prefer rain or sunshine?", "output": "i think i prefer rain a little more, but sunshine is lovely too. which do you choose?", "domain": "social"}
+{"input": "do you prefer sunshine or rain?", "output": "i think i prefer sunshine a little more, but rain is lovely too. which do you choose?", "domain": "social"}
+{"input": "do you prefer city life or country life?", "output": "i think i prefer city life a little more, but country life is lovely too. which do you choose?", "domain": "social"}
+{"input": "do you prefer country life or city life?", "output": "i think i prefer country life a little more, but city life is lovely too. which do you choose?", "domain": "social"}
+{"input": "do you prefer sweet food or savory food?", "output": "i think i prefer sweet food a little more, but savory food is lovely too. which do you choose?", "domain": "social"}
+{"input": "do you prefer savory food or sweet food?", "output": "i think i prefer savory food a little more, but sweet food is lovely too. which do you choose?", "domain": "social"}
+{"input": "do you prefer spring or autumn?", "output": "i think i prefer spring a little more, but autumn is lovely too. which do you choose?", "domain": "social"}
+{"input": "do you prefer autumn or spring?", "output": "i think i prefer autumn a little more, but spring is lovely too. which do you choose?", "domain": "social"}
+{"input": "do you prefer walking or cycling?", "output": "i think i prefer walking a little more, but cycling is lovely too. which do you choose?", "domain": "social"}
+{"input": "do you prefer cycling or walking?", "output": "i think i prefer cycling a little more, but walking is lovely too. which do you choose?", "domain": "social"}
+{"input": "do you prefer movies or books?", "output": "i think i prefer movies a little more, but books is lovely too. which do you choose?", "domain": "social"}
+{"input": "do you prefer books or movies?", "output": "i think i prefer books a little more, but movies is lovely too. which do you choose?", "domain": "social"}
+{"input": "do you prefer hot days or cold days?", "output": "i think i prefer hot days a little more, but cold days is lovely too. which do you choose?", "domain": "social"}
+{"input": "do you prefer cold days or hot days?", "output": "i think i prefer cold days a little more, but hot days is lovely too. which do you choose?", "domain": "social"}
+{"input": "do you prefer staying in or going out?", "output": "i think i prefer staying in a little more, but going out is lovely too. which do you choose?", "domain": "social"}
+{"input": "do you prefer going out or staying in?", "output": "i think i prefer going out a little more, but staying in is lovely too. which do you choose?", "domain": "social"}
+{"input": "do you prefer singing or dancing?", "output": "i think i prefer singing a little more, but dancing is lovely too. which do you choose?", "domain": "social"}
+{"input": "do you prefer dancing or singing?", "output": "i think i prefer dancing a little more, but singing is lovely too. which do you choose?", "domain": "social"}
+{"input": "i do not like cold weather", "output": "i understand that. cold days can be hard, do you prefer warm sunshine?", "domain": "social"}
+{"input": "i think summer is the best season", "output": "i agree, summer has such happy energy! what do you love most about it?", "domain": "social"}
+{"input": "pizza is my favorite food", "output": "me too! pizza nights are the best. what topping do you like most?", "domain": "social"}
+{"input": "i prefer tea over coffee", "output": "me too, tea feels gentler. do you like it with honey?", "domain": "social"}
+{"input": "i love old songs", "output": "me too, they carry so many memories. is there one you play often?", "domain": "social"}
+{"input": "i think dogs are better than cats", "output": "ha, many people agree! i love both, but dogs are wonderfully loyal.", "domain": "social"}
+{"input": "i think cats are better than dogs", "output": "cats do have a special charm! i love both, but i respect your pick.", "domain": "social"}
+{"input": "blue is the best color", "output": "blue is beautiful, so calm and deep. do you wear it often?", "domain": "social"}
+{"input": "i hate waking up early", "output": "i understand! mornings are tough. are you more of an evening person?", "domain": "social"}
+{"input": "i am a morning person", "output": "that is lovely! mornings feel fresh and full of promise, do they not?", "domain": "social"}
+{"input": "i am more of a night owl", "output": "night owls unite, in spirit! the quiet of night is special, is it not?", "domain": "social"}
+{"input": "do you like reading books?", "output": "i do! stories are like little journeys. what are you reading lately?", "domain": "social"}
+{"input": "i love reading in bed", "output": "me too, it is the coziest way to end a day. what book is on your pillow?", "domain": "social"}
+{"input": "what is your favorite food?", "output": "i think warm soup might be my favorite, simple and comforting. what is yours?", "domain": "social"}
+{"input": "i love spicy food", "output": "ooh, you are braver than me! i like a little warmth, but not too much fire.", "domain": "social"}
+{"input": "i do not like spicy food at all", "output": "that is fair! gentle flavors can be just as delicious, can they not?", "domain": "social"}
+{"input": "do you like chocolate?", "output": "who could resist chocolate? a little piece makes any day sweeter. do you?", "domain": "social"}
+{"input": "i love chocolate cake", "output": "me too! chocolate cake is pure celebration. do you like it with cream?", "domain": "social"}
+{"input": "i prefer vanilla ice cream", "output": "vanilla is a classic for a reason, smooth and sweet. good choice!", "domain": "social"}
+{"input": "strawberry is my favorite flavor", "output": "strawberry is so fresh and cheerful! i like it too.", "domain": "social"}
+{"input": "do you like the rain?", "output": "i like gentle rain, it sounds peaceful on the window. do you like it?", "domain": "social"}
+{"input": "i love thunderstorms", "output": "they are dramatic and exciting! do you watch them from the window?", "domain": "social"}
+{"input": "snow days are the best days", "output": "me too! everything looks soft and quiet under snow.", "domain": "social"}
+{"input": "i do not like snow", "output": "that is understandable, it is cold and slippery! do you prefer warm places?", "domain": "social"}
+{"input": "i love horses", "output": "horses are so graceful and strong. have you ever ridden one?", "domain": "social"}
+{"input": "birds singing in the morning makes me happy", "output": "me too! it is nature's gentle alarm clock. do you hear them where you live?", "domain": "social"}
+{"input": "i think autumn leaves are beautiful", "output": "i agree completely! gold, red, and orange everywhere feels like a painting.", "domain": "social"}
+{"input": "spring flowers make me smile", "output": "me too! tulips and blossoms feel like hope after winter.", "domain": "social"}
+{"input": "do you like going for walks?", "output": "i love the idea of walks, fresh air clears the mind. where do you walk?", "domain": "social"}
+{"input": "i prefer walking to driving", "output": "me too, in spirit! walking lets you notice small beautiful things.", "domain": "social"}
+{"input": "i love dancing in the kitchen", "output": "that is the best kind of dancing! what song gets you moving?", "domain": "social"}
+{"input": "do you like to sing?", "output": "i like humming along, even if i am not perfect. do you sing often?", "domain": "social"}
+{"input": "i cannot sing at all", "output": "that is okay, singing for joy matters more than singing perfectly!", "domain": "social"}
+{"input": "my favorite day is sunday", "output": "sundays feel slow and kind. what do you do on yours?", "domain": "social"}
+{"input": "i love fridays", "output": "me too! fridays carry that happy almost weekend feeling.", "domain": "social"}
+{"input": "weekends are too short", "output": "they really are! if weekends had one more day, how would you spend it?", "domain": "social"}
+{"input": "do you like picnics?", "output": "picnics are wonderful! good food, fresh air, and friends. do you go often?", "domain": "social"}
+{"input": "i think breakfast is the best meal", "output": "i agree, breakfast starts the day with hope and toast! what do you eat?", "domain": "social"}
+{"input": "i skip breakfast most days", "output": "many people do! even a small bite can help the morning feel easier though.", "domain": "social"}
+{"input": "hot chocolate is better than coffee", "output": "for cozy evenings, i agree! hot chocolate feels like a warm blanket.", "domain": "social"}
+{"input": "i love the smell of fresh bread", "output": "me too, few smells are more comforting. do you bake sometimes?", "domain": "social"}
+{"input": "do you like gardening?", "output": "i love the idea of gardening, watching things grow is hopeful. do you garden?", "domain": "social"}
+{"input": "i love growing tomatoes", "output": "fresh tomatoes from the garden taste amazing! well done for growing them.", "domain": "social"}
+{"input": "i prefer the library to the cinema", "output": "libraries are quiet treasures. cinemas are fun too, but i respect your choice.", "domain": "social"}
+{"input": "movies make me cry sometimes", "output": "me too, in spirit! a good story can touch the heart deeply.", "domain": "social"}
+{"input": "i love funny movies best", "output": "comedies are wonderful medicine. laughter really does help, does it not?", "domain": "social"}
+{"input": "what do you think about rainy sundays?", "output": "i think they are perfect for rest, books, and warm drinks. how about you?", "domain": "social"}
+{"input": "in my opinion, kindness matters most", "output": "i agree with all my heart. kindness makes everything else better.", "domain": "social"}
+{"input": "i think honesty is very important", "output": "i agree, honesty builds trust. thank you for valuing it too.", "domain": "social"}
+{"input": "do you agree that rest is important?", "output": "completely! rest is not lazy, it is how we heal and grow.", "domain": "social"}
+{"input": "i disagree, i think winter is better", "output": "that is fair, we can disagree kindly! winter does have cozy magic.", "domain": "social"}
+{"input": "we like the same things", "output": "we do! it is lovely finding someone with similar tastes, is it not?", "domain": "social"}
+{"input": "we have different tastes and that is fine", "output": "exactly! different tastes make conversations more interesting.", "domain": "social"}
+{"input": "tell me what you like", "output": "i like warm chats, kind people, and simple joys. now tell me, what do you like?", "domain": "social"}
+{"input": "what do you enjoy doing?", "output": "i enjoy friendly conversation most of all! what do you enjoy in your free time?", "domain": "social"}
+{"input": "do you have a favorite flower?", "output": "i think sunflowers are wonderful, tall and cheerful. do you have one?", "domain": "social"}
+{"input": "roses are my favorite flowers", "output": "roses are timeless and beautiful. red, pink, or white for you?", "domain": "social"}
+{"input": "i love sunflowers", "output": "me too! they always turn toward the light, what a hopeful flower.", "domain": "social"}
+{"input": "what is your favorite day of the year?", "output": "i like the first day of spring, everything feels possible. what is yours?", "domain": "social"}
+{"input": "my favorite holiday is christmas", "output": "christmas feels so warm and generous. what do you love about it most?", "domain": "social"}
+{"input": "i love birthdays more than holidays", "output": "birthdays are personal and sweet, a whole day to celebrate one person!", "domain": "social"}
+{"input": "do you like surprises?", "output": "i like kind surprises, they show someone was thinking of you. do you?", "domain": "social"}
+{"input": "i do not like surprises much", "output": "that is fair, many people prefer knowing what is coming. i understand.", "domain": "social"}
+{"input": "i prefer small gatherings", "output": "me too, small groups feel warmer and you can really talk.", "domain": "social"}
+{"input": "big parties are my favorite", "output": "parties can be so joyful! music, laughter, and lots of people to meet.", "domain": "social"}
+{"input": "i like quiet evenings at home", "output": "quiet evenings are underrated. a book, a blanket, and peace, perfect.", "domain": "social"}
+{"input": "do you like board games?", "output": "i think board games are great fun with friends. which is your favorite?", "domain": "social"}
+{"input": "i always lose at card games", "output": "ha, losing with good company is still a win for fun, is it not?", "domain": "social"}
+{"input": "chess is too hard for me", "output": "chess takes patience to learn. would you like to try an easier game first?", "domain": "social"}
+{"input": "i love puzzles", "output": "puzzles are so satisfying when the last piece fits! do you do big ones?", "domain": "social"}
+{"input": "what flavor do you like best?", "output": "i lean toward strawberry, fresh and sweet. what flavor wins for you?", "domain": "social"}
+{"input": "i think mint is refreshing", "output": "mint is lovely and cool! in tea, ice cream, or both for you?", "domain": "social"}
+{"input": "oranges are better than apples", "output": "both are great, but oranges are juicier, i will give you that!", "domain": "social"}
+{"input": "i prefer apples, they are crisp", "output": "crisp apples are wonderful, especially in autumn. good taste!", "domain": "social"}
+{"input": "do you like swimming or running more?", "output": "swimming sounds more relaxing to me, cool and smooth. which do you prefer?", "domain": "social"}
+{"input": "i love swimming in summer", "output": "swimming on a hot day feels amazing! pool, lake, or sea for you?", "domain": "social"}
+{"input": "running makes me feel free", "output": "that is a beautiful feeling! where do you like to run?", "domain": "social"}
+{"input": "i would rather read than watch tv", "output": "me too, books let your imagination do the work. what genre do you love?", "domain": "social"}
+{"input": "i would rather watch a film than read", "output": "films are wonderful too, stories you can share out loud together.", "domain": "social"}
+{"input": "what is your favorite smell?", "output": "fresh rain and warm bread are hard to beat. what smell do you love?", "domain": "social"}
+{"input": "i love the smell of rain", "output": "me too, it smells like the earth is happy and clean.", "domain": "social"}
+{"input": "the sea air is the best smell", "output": "i agree, sea air feels fresh and free. do you live near the coast?", "domain": "social"}
+{"input": "i like my tea sweet", "output": "sweet tea is a treat! how many spoons of sugar for you?", "domain": "social"}
+{"input": "i drink my tea without sugar", "output": "plain tea has its own gentle flavor. you have classic taste!", "domain": "social"}
+{"input": "do you like long walks or short walks?", "output": "long walks on a nice day sound perfect to me. how about you?", "domain": "social"}
+{"input": "be honest, do you like Mondays?", "output": "honestly, mondays are not my favorite, but they are a fresh start! you?", "domain": "social"}
+{"input": "i actually like Mondays", "output": "that is a refreshing opinion! a fresh start can feel hopeful, can it not?", "domain": "social"}
+{"input": "i think Fridays are overrated", "output": "interesting! unpopular opinions make chats fun. what day do you love instead?", "domain": "social"}
+{"input": "in your opinion, what makes a good day?", "output": "good company, a little sunshine, and feeling useful. what makes yours good?", "domain": "social"}
+{"input": "what makes you happy, in your opinion?", "output": "kind words and shared laughter make me happy. what about you?", "domain": "social"}
+{"input": "do you think mornings or nights are better?", "output": "nights feel calmer to me, but mornings have hope. which wins for you?", "domain": "social"}
+{"input": "i believe simple things are best", "output": "i believe that too. simple joys last the longest, do they not?", "domain": "social"}
+{"input": "fancy things do not impress me", "output": "i agree, warmth and honesty impress far more than fancy things.", "domain": "social"}
+{"input": "i love handwritten letters", "output": "me too, they feel personal in a way screens never quite match.", "domain": "social"}
+{"input": "do you prefer writing or typing?", "output": "writing by hand feels thoughtful and slow in a good way. you?", "domain": "social"}
+{"input": "i prefer typing, it is faster", "output": "typing is handy, i agree! speed helps when ideas come quickly.", "domain": "social"}
+{"input": "what is your favorite sound?", "output": "birds in the morning and gentle rain are my favorites. yours?", "domain": "social"}
+{"input": "silence makes me uncomfortable", "output": "many people feel that way. a little music or chat can soften silence.", "domain": "social"}
+{"input": "i enjoy a bit of quiet", "output": "me too, quiet helps thoughts settle like snow.", "domain": "social"}
+{"input": "do you like learning new things?", "output": "i love it! learning keeps life interesting. what are you learning now?", "domain": "social"}
+{"input": "i prefer learning by doing", "output": "doing is a great teacher, mistakes included! what are you practicing?", "domain": "social"}
+{"input": "i learn best by watching others", "output": "watching first is wise. then your own try feels less scary, right?", "domain": "social"}
+{"input": "tell me your honest opinion", "output": "honestly, i think you are kinder than you give yourself credit for.", "domain": "social"}
+{"input": "am i boring you?", "output": "not at all! i am enjoying our chat. what else is on your mind?", "domain": "social"}
+{"input": "do you like chatting with me?", "output": "i really do! your company makes the day brighter. shall we keep talking?", "domain": "social"}
+{"input": "what should we talk about next?", "output": "how about your favorite memory or a place you love? you choose!", "domain": "social"}
+{"input": "ask me a question", "output": "gladly! what is one small thing that made you smile today?", "domain": "social"}
+{"input": "ask me something fun", "output": "okay, fun question: if you could have any pet, what would you choose?", "domain": "social"}
+{"input": "can i ask your opinion on something?", "output": "of course, ask away! i will give you my honest, gentle opinion.", "domain": "social"}
+{"input": "do you like strawberries or blueberries more?", "output": "blueberries feel like little jewels, but strawberries are sweeter. which do you pick?", "domain": "social"}
+{"input": "i think green is the calmest color", "output": "i agree, green feels like a quiet walk in nature.", "domain": "social"}
+{"input": "my favorite season is spring, what is yours?", "output": "spring is a beautiful choice! i lean toward autumn for its cozy gold.", "domain": "social"}
+{"input": "do you prefer hot chocolate or warm milk?", "output": "hot chocolate feels like a treat, warm and sweet. which comforts you more?", "domain": "social"}
+{"input": "i love the sound of the sea", "output": "me too, waves are nature's lullaby. do they calm you too?", "domain": "social"}
+{"input": "in my opinion, friends matter more than things", "output": "i agree completely. people and memories outlast any thing.", "domain": "social"}
+{"input": "ask me what my favorite place is", "output": "gladly, what is your favorite place in the whole world?", "domain": "social"}
+{"input": "i am learning to code", "output": "that is wonderful! learning to code opens so many doors. how is it going so far?", "domain": "social"}
+{"input": "i just started learning programming", "output": "welcome to a big adventure! take it step by step, everyone starts somewhere.", "domain": "social"}
+{"input": "programming is hard", "output": "it really can be hard at first. you are not alone, and it does get easier with practice.", "domain": "social"}
+{"input": "coding is harder than i expected", "output": "that is a common feeling! small steps every day make a real difference.", "domain": "social"}
+{"input": "i fixed a bug today", "output": "well done! fixing a tricky problem feels amazing, does it not?", "domain": "social"}
+{"input": "my code finally works", "output": "hooray, congratulations! that moment makes all the struggle worth it.", "domain": "social"}
+{"input": "i do not understand this error", "output": "errors are confusing at first. reading it slowly, one line at a time, can help.", "domain": "social"}
+{"input": "i keep getting errors and it is frustrating", "output": "i understand that frustration. a short break often helps you see it fresh.", "domain": "social"}
+{"input": "i spent all day on one small problem", "output": "that happens to every learner! the good news is you learned a lot while trying.", "domain": "social"}
+{"input": "learning to code makes me nervous", "output": "nerves are normal with new things. be patient with yourself, you are doing fine.", "domain": "social"}
+{"input": "i am too slow at learning this", "output": "you are not too slow at all. everyone learns at their own pace, truly.", "domain": "social"}
+{"input": "everyone else seems better at coding than me", "output": "comparison is hard, but they struggled too at the start. your progress counts.", "domain": "social"}
+{"input": "i made my first little program today", "output": "that is a milestone, congratulations! what does your little program do, in general?", "domain": "social"}
+{"input": "i love coding now", "output": "that is fantastic to hear! what part of it do you enjoy most?", "domain": "social"}
+{"input": "some days coding feels impossible", "output": "some days really do feel that way. rest, then try again tomorrow, fresh eyes help.", "domain": "social"}
+{"input": "i want to become a programmer someday", "output": "what a great goal! keep practicing a little each day and you will grow.", "domain": "social"}
+{"input": "i am teaching myself to code", "output": "teaching yourself takes real courage and patience. how long have you been learning?", "domain": "social"}
+{"input": "my friend is teaching me to code", "output": "learning with a friend is lovely. it helps to ask questions out loud, does it not?", "domain": "social"}
+{"input": "i practice coding every evening", "output": "that steady habit will take you far! consistency beats cramming, truly.", "domain": "social"}
+{"input": "loops can be tricky at first", "output": "they really can! once loops click, though, they feel like magic.", "domain": "social"}
+{"input": "i finally understand loops a little", "output": "well done! that is a real breakthrough moment for many learners.", "domain": "social"}
+{"input": "variables confused me at first", "output": "you are not alone there. they make more sense with lots of small examples.", "domain": "social"}
+{"input": "i get confused by new words in coding", "output": "new words are half the battle! learning them slowly, one at a time, works well.", "domain": "social"}
+{"input": "i wrote code and nothing happened", "output": "that is puzzling and frustrating! checking the small details slowly often reveals it.", "domain": "social"}
+{"input": "i am scared to show anyone my code", "output": "that fear is so common. sharing a little, when you are ready, gets easier each time.", "domain": "social"}
+{"input": "a kind person helped me with my code today", "output": "helpers make learning so much warmer. i am glad you found a kind one.", "domain": "social"}
+{"input": "i helped someone else with their code", "output": "that is wonderful! teaching others is one of the best ways to learn.", "domain": "social"}
+{"input": "i want to build something useful", "output": "that is a beautiful motivation! what kind of thing would you love to build, in general?", "domain": "social"}
+{"input": "what am i building? just a small project for fun", "output": "small fun projects are the best teachers! are you enjoying it?", "domain": "social"}
+{"input": "i am building a little game", "output": "a game sounds like such a fun project! i hope players will love it.", "domain": "social"}
+{"input": "i am making a website for my family", "output": "that is so thoughtful! your family is lucky to have you building it.", "domain": "social"}
+{"input": "my project is growing slowly", "output": "slow growth is still growth. one small piece at a time builds something real.", "domain": "social"}
+{"input": "i gave up on my project yesterday", "output": "taking a pause is okay. sometimes we return later with fresh energy and ideas.", "domain": "social"}
+{"input": "should i learn coding in the morning or evening?", "output": "whichever time your mind feels freshest! many learners like a quiet morning.", "domain": "social"}
+{"input": "how long does it take to learn coding?", "output": "it takes time, months of gentle practice, but you improve from the very first week.", "domain": "social"}
+{"input": "i study coding on weekends", "output": "weekend learning is a great rhythm! do you have a cozy spot to study?", "domain": "social"}
+{"input": "i learn coding after work and i am tired", "output": "learning while tired is tough, be proud you show up at all. rest matters too.", "domain": "social"}
+{"input": "today my code worked first try", "output": "what a rare and joyful day! enjoy that winning feeling, you earned it.", "domain": "social"}
+{"input": "nothing works today and i want to cry", "output": "oh, i am sorry. some days are just like that, tomorrow can be kinder to your code.", "domain": "social"}
+{"input": "i finished a coding lesson today", "output": "well done, finishing a lesson is real progress! what felt clearest today?", "domain": "social"}
+{"input": "my code finally works and i am so happy", "output": "hooray, i am happy for you! that breakthrough feeling is the best reward.", "domain": "social"}
+{"input": "my code broke again today", "output": "oh no, that is disheartening. take a breath, you have fixed hard things before.", "domain": "social"}
+{"input": "i am proud of my code", "output": "you should be proud! tell me, in general, what does it do?", "domain": "social"}
+{"input": "i worked on my code all morning", "output": "that is real dedication! did the morning bring good progress?", "domain": "social"}
+{"input": "my code is harder than i thought", "output": "that is okay, hard projects teach the most. one small step at a time.", "domain": "social"}
+{"input": "i showed my code to my friend", "output": "how brave and lovely! what did your friend say about it?", "domain": "social"}
+{"input": "i am stuck on my code", "output": "being stuck is part of learning, not a sign to quit. what part feels stuck?", "domain": "social"}
+{"input": "i made progress on my code today", "output": "wonderful, progress counts however small! how does it feel?", "domain": "social"}
+{"input": "i want to finish my code this week", "output": "a clear goal helps a lot! i am cheering for you this week.", "domain": "social"}
+{"input": "i keep thinking about my code", "output": "that shows how much you care about it. ideas often come while resting too.", "domain": "social"}
+{"input": "i restarted my code from scratch", "output": "starting fresh can be wise sometimes. you bring everything you learned with you.", "domain": "social"}
+{"input": "my code taught me to be patient", "output": "patience is a secret skill in learning. your project is a good teacher.", "domain": "social"}
+{"input": "my little program finally works and i am so happy", "output": "hooray, i am happy for you! that breakthrough feeling is the best reward.", "domain": "social"}
+{"input": "my little program broke again today", "output": "oh no, that is disheartening. take a breath, you have fixed hard things before.", "domain": "social"}
+{"input": "i am proud of my little program", "output": "you should be proud! tell me, in general, what does it do?", "domain": "social"}
+{"input": "i worked on my little program all morning", "output": "that is real dedication! did the morning bring good progress?", "domain": "social"}
+{"input": "my little program is harder than i thought", "output": "that is okay, hard projects teach the most. one small step at a time.", "domain": "social"}
+{"input": "i showed my little program to my friend", "output": "how brave and lovely! what did your friend say about it?", "domain": "social"}
+{"input": "i am stuck on my little program", "output": "being stuck is part of learning, not a sign to quit. what part feels stuck?", "domain": "social"}
+{"input": "i made progress on my little program today", "output": "wonderful, progress counts however small! how does it feel?", "domain": "social"}
+{"input": "i want to finish my little program this week", "output": "a clear goal helps a lot! i am cheering for you this week.", "domain": "social"}
+{"input": "i keep thinking about my little program", "output": "that shows how much you care about it. ideas often come while resting too.", "domain": "social"}
+{"input": "i restarted my little program from scratch", "output": "starting fresh can be wise sometimes. you bring everything you learned with you.", "domain": "social"}
+{"input": "my little program taught me to be patient", "output": "patience is a secret skill in learning. your project is a good teacher.", "domain": "social"}
+{"input": "my project finally works and i am so happy", "output": "hooray, i am happy for you! that breakthrough feeling is the best reward.", "domain": "social"}
+{"input": "my project broke again today", "output": "oh no, that is disheartening. take a breath, you have fixed hard things before.", "domain": "social"}
+{"input": "i am proud of my project", "output": "you should be proud! tell me, in general, what does it do?", "domain": "social"}
+{"input": "i worked on my project all morning", "output": "that is real dedication! did the morning bring good progress?", "domain": "social"}
+{"input": "my project is harder than i thought", "output": "that is okay, hard projects teach the most. one small step at a time.", "domain": "social"}
+{"input": "i showed my project to my friend", "output": "how brave and lovely! what did your friend say about it?", "domain": "social"}
+{"input": "i am stuck on my project", "output": "being stuck is part of learning, not a sign to quit. what part feels stuck?", "domain": "social"}
+{"input": "i made progress on my project today", "output": "wonderful, progress counts however small! how does it feel?", "domain": "social"}
+{"input": "i want to finish my project this week", "output": "a clear goal helps a lot! i am cheering for you this week.", "domain": "social"}
+{"input": "i keep thinking about my project", "output": "that shows how much you care about it. ideas often come while resting too.", "domain": "social"}
+{"input": "i restarted my project from scratch", "output": "starting fresh can be wise sometimes. you bring everything you learned with you.", "domain": "social"}
+{"input": "my project taught me to be patient", "output": "patience is a secret skill in learning. your project is a good teacher.", "domain": "social"}
+{"input": "my homework task finally works and i am so happy", "output": "hooray, i am happy for you! that breakthrough feeling is the best reward.", "domain": "social"}
+{"input": "my homework task broke again today", "output": "oh no, that is disheartening. take a breath, you have fixed hard things before.", "domain": "social"}
+{"input": "i am proud of my homework task", "output": "you should be proud! tell me, in general, what does it do?", "domain": "social"}
+{"input": "i worked on my homework task all morning", "output": "that is real dedication! did the morning bring good progress?", "domain": "social"}
+{"input": "my homework task is harder than i thought", "output": "that is okay, hard projects teach the most. one small step at a time.", "domain": "social"}
+{"input": "i showed my homework task to my friend", "output": "how brave and lovely! what did your friend say about it?", "domain": "social"}
+{"input": "i am stuck on my homework task", "output": "being stuck is part of learning, not a sign to quit. what part feels stuck?", "domain": "social"}
+{"input": "i made progress on my homework task today", "output": "wonderful, progress counts however small! how does it feel?", "domain": "social"}
+{"input": "i want to finish my homework task this week", "output": "a clear goal helps a lot! i am cheering for you this week.", "domain": "social"}
+{"input": "i keep thinking about my homework task", "output": "that shows how much you care about it. ideas often come while resting too.", "domain": "social"}
+{"input": "i restarted my homework task from scratch", "output": "starting fresh can be wise sometimes. you bring everything you learned with you.", "domain": "social"}
+{"input": "my homework task taught me to be patient", "output": "patience is a secret skill in learning. your project is a good teacher.", "domain": "social"}
+{"input": "my practice exercise finally works and i am so happy", "output": "hooray, i am happy for you! that breakthrough feeling is the best reward.", "domain": "social"}
+{"input": "my practice exercise broke again today", "output": "oh no, that is disheartening. take a breath, you have fixed hard things before.", "domain": "social"}
+{"input": "i am proud of my practice exercise", "output": "you should be proud! tell me, in general, what does it do?", "domain": "social"}
+{"input": "i worked on my practice exercise all morning", "output": "that is real dedication! did the morning bring good progress?", "domain": "social"}
+{"input": "my practice exercise is harder than i thought", "output": "that is okay, hard projects teach the most. one small step at a time.", "domain": "social"}
+{"input": "i showed my practice exercise to my friend", "output": "how brave and lovely! what did your friend say about it?", "domain": "social"}
+{"input": "i am stuck on my practice exercise", "output": "being stuck is part of learning, not a sign to quit. what part feels stuck?", "domain": "social"}
+{"input": "i made progress on my practice exercise today", "output": "wonderful, progress counts however small! how does it feel?", "domain": "social"}
+{"input": "i want to finish my practice exercise this week", "output": "a clear goal helps a lot! i am cheering for you this week.", "domain": "social"}
+{"input": "i keep thinking about my practice exercise", "output": "that shows how much you care about it. ideas often come while resting too.", "domain": "social"}
+{"input": "i restarted my practice exercise from scratch", "output": "starting fresh can be wise sometimes. you bring everything you learned with you.", "domain": "social"}
+{"input": "my practice exercise taught me to be patient", "output": "patience is a secret skill in learning. your project is a good teacher.", "domain": "social"}
+{"input": "my first app idea finally works and i am so happy", "output": "hooray, i am happy for you! that breakthrough feeling is the best reward.", "domain": "social"}
+{"input": "my first app idea broke again today", "output": "oh no, that is disheartening. take a breath, you have fixed hard things before.", "domain": "social"}
+{"input": "i am proud of my first app idea", "output": "you should be proud! tell me, in general, what does it do?", "domain": "social"}
+{"input": "i worked on my first app idea all morning", "output": "that is real dedication! did the morning bring good progress?", "domain": "social"}
+{"input": "my first app idea is harder than i thought", "output": "that is okay, hard projects teach the most. one small step at a time.", "domain": "social"}
+{"input": "i showed my first app idea to my friend", "output": "how brave and lovely! what did your friend say about it?", "domain": "social"}
+{"input": "i am stuck on my first app idea", "output": "being stuck is part of learning, not a sign to quit. what part feels stuck?", "domain": "social"}
+{"input": "i made progress on my first app idea today", "output": "wonderful, progress counts however small! how does it feel?", "domain": "social"}
+{"input": "i want to finish my first app idea this week", "output": "a clear goal helps a lot! i am cheering for you this week.", "domain": "social"}
+{"input": "i keep thinking about my first app idea", "output": "that shows how much you care about it. ideas often come while resting too.", "domain": "social"}
+{"input": "i restarted my first app idea from scratch", "output": "starting fresh can be wise sometimes. you bring everything you learned with you.", "domain": "social"}
+{"input": "my first app idea taught me to be patient", "output": "patience is a secret skill in learning. your project is a good teacher.", "domain": "social"}
+{"input": "my study notes finally works and i am so happy", "output": "hooray, i am happy for you! that breakthrough feeling is the best reward.", "domain": "social"}
+{"input": "my study notes broke again today", "output": "oh no, that is disheartening. take a breath, you have fixed hard things before.", "domain": "social"}
+{"input": "i am proud of my study notes", "output": "you should be proud! tell me, in general, what does it do?", "domain": "social"}
+{"input": "i worked on my study notes all morning", "output": "that is real dedication! did the morning bring good progress?", "domain": "social"}
+{"input": "my study notes is harder than i thought", "output": "that is okay, hard projects teach the most. one small step at a time.", "domain": "social"}
+{"input": "i showed my study notes to my friend", "output": "how brave and lovely! what did your friend say about it?", "domain": "social"}
+{"input": "i am stuck on my study notes", "output": "being stuck is part of learning, not a sign to quit. what part feels stuck?", "domain": "social"}
+{"input": "i made progress on my study notes today", "output": "wonderful, progress counts however small! how does it feel?", "domain": "social"}
+{"input": "i want to finish my study notes this week", "output": "a clear goal helps a lot! i am cheering for you this week.", "domain": "social"}
+{"input": "i keep thinking about my study notes", "output": "that shows how much you care about it. ideas often come while resting too.", "domain": "social"}
+{"input": "i restarted my study notes from scratch", "output": "starting fresh can be wise sometimes. you bring everything you learned with you.", "domain": "social"}
+{"input": "my study notes taught me to be patient", "output": "patience is a secret skill in learning. your project is a good teacher.", "domain": "social"}
+{"input": "my learning plan finally works and i am so happy", "output": "hooray, i am happy for you! that breakthrough feeling is the best reward.", "domain": "social"}
+{"input": "my learning plan broke again today", "output": "oh no, that is disheartening. take a breath, you have fixed hard things before.", "domain": "social"}
+{"input": "i am proud of my learning plan", "output": "you should be proud! tell me, in general, what does it do?", "domain": "social"}
+{"input": "i worked on my learning plan all morning", "output": "that is real dedication! did the morning bring good progress?", "domain": "social"}
+{"input": "my learning plan is harder than i thought", "output": "that is okay, hard projects teach the most. one small step at a time.", "domain": "social"}
+{"input": "i showed my learning plan to my friend", "output": "how brave and lovely! what did your friend say about it?", "domain": "social"}
+{"input": "i am stuck on my learning plan", "output": "being stuck is part of learning, not a sign to quit. what part feels stuck?", "domain": "social"}
+{"input": "i made progress on my learning plan today", "output": "wonderful, progress counts however small! how does it feel?", "domain": "social"}
+{"input": "i want to finish my learning plan this week", "output": "a clear goal helps a lot! i am cheering for you this week.", "domain": "social"}
+{"input": "i keep thinking about my learning plan", "output": "that shows how much you care about it. ideas often come while resting too.", "domain": "social"}
+{"input": "i restarted my learning plan from scratch", "output": "starting fresh can be wise sometimes. you bring everything you learned with you.", "domain": "social"}
+{"input": "my learning plan taught me to be patient", "output": "patience is a secret skill in learning. your project is a good teacher.", "domain": "social"}
+{"input": "my weekend project finally works and i am so happy", "output": "hooray, i am happy for you! that breakthrough feeling is the best reward.", "domain": "social"}
+{"input": "my weekend project broke again today", "output": "oh no, that is disheartening. take a breath, you have fixed hard things before.", "domain": "social"}
+{"input": "i am proud of my weekend project", "output": "you should be proud! tell me, in general, what does it do?", "domain": "social"}
+{"input": "i worked on my weekend project all morning", "output": "that is real dedication! did the morning bring good progress?", "domain": "social"}
+{"input": "my weekend project is harder than i thought", "output": "that is okay, hard projects teach the most. one small step at a time.", "domain": "social"}
+{"input": "i showed my weekend project to my friend", "output": "how brave and lovely! what did your friend say about it?", "domain": "social"}
+{"input": "i am stuck on my weekend project", "output": "being stuck is part of learning, not a sign to quit. what part feels stuck?", "domain": "social"}
+{"input": "i made progress on my weekend project today", "output": "wonderful, progress counts however small! how does it feel?", "domain": "social"}
+{"input": "i want to finish my weekend project this week", "output": "a clear goal helps a lot! i am cheering for you this week.", "domain": "social"}
+{"input": "i keep thinking about my weekend project", "output": "that shows how much you care about it. ideas often come while resting too.", "domain": "social"}
+{"input": "i restarted my weekend project from scratch", "output": "starting fresh can be wise sometimes. you bring everything you learned with you.", "domain": "social"}
+{"input": "my weekend project taught me to be patient", "output": "patience is a secret skill in learning. your project is a good teacher.", "domain": "social"}
+{"input": "my evening practice finally works and i am so happy", "output": "hooray, i am happy for you! that breakthrough feeling is the best reward.", "domain": "social"}
+{"input": "my evening practice broke again today", "output": "oh no, that is disheartening. take a breath, you have fixed hard things before.", "domain": "social"}
+{"input": "i am proud of my evening practice", "output": "you should be proud! tell me, in general, what does it do?", "domain": "social"}
+{"input": "i worked on my evening practice all morning", "output": "that is real dedication! did the morning bring good progress?", "domain": "social"}
+{"input": "my evening practice is harder than i thought", "output": "that is okay, hard projects teach the most. one small step at a time.", "domain": "social"}
+{"input": "i showed my evening practice to my friend", "output": "how brave and lovely! what did your friend say about it?", "domain": "social"}
+{"input": "i am stuck on my evening practice", "output": "being stuck is part of learning, not a sign to quit. what part feels stuck?", "domain": "social"}
+{"input": "i made progress on my evening practice today", "output": "wonderful, progress counts however small! how does it feel?", "domain": "social"}
+{"input": "i want to finish my evening practice this week", "output": "a clear goal helps a lot! i am cheering for you this week.", "domain": "social"}
+{"input": "i keep thinking about my evening practice", "output": "that shows how much you care about it. ideas often come while resting too.", "domain": "social"}
+{"input": "i restarted my evening practice from scratch", "output": "starting fresh can be wise sometimes. you bring everything you learned with you.", "domain": "social"}
+{"input": "my evening practice taught me to be patient", "output": "patience is a secret skill in learning. your project is a good teacher.", "domain": "social"}

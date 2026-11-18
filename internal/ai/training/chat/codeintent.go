@@ -2,6 +2,9 @@ package chat
 
 import (
 	"path/filepath"
+	"sort"
+
+	"github.com/golangast/gollemer/internal/ai/neural/nnu/vocab"
 )
 
 // CodeIntentDomain is the code-understanding domain: input is Go code plus
@@ -54,4 +57,50 @@ const CopyExpDatasetRelPath = "data/training/copyexp_pairs.jsonl"
 // CopyExpDatasetPath is the copy-experiment training data location.
 func CopyExpDatasetPath(projectRoot string) string {
 	return filepath.Join(projectRoot, CopyExpDatasetRelPath)
+}
+
+// buildCappedVocab builds a frequency-capped vocabulary for the codeintent
+// domain: the long tail of rare identifiers explodes the output layer
+// (256x17k) and dominates training time, so only the top-N tokens by
+// frequency are kept. The ordering is fully deterministic — frequency
+// descending, ties broken by token string ascending — because the training
+// vocabulary is hashed into the checkpoint fingerprint that -resume uses to
+// validate a checkpoint. (An earlier version sorted by frequency alone over
+// randomized map iteration order, so every process built a different vocab
+// and -resume always refused the checkpoint.) It lived in
+// real_seq2seq_train.go on the main line; the merge kept the
+// composer-pieces trainer, so it moved here with the codeintent domain's
+// other definitions.
+func buildCappedVocab(trainPairs []ChatPair, cap int) *vocab.Vocabulary {
+	v := vocab.NewVocabulary()
+	freq := map[string]int{}
+	for _, p := range trainPairs {
+		for _, t := range tokenizeLower(p.Input) {
+			freq[t]++
+		}
+		for _, t := range tokenizeLower(p.Output) {
+			freq[t]++
+		}
+	}
+	type kv struct {
+		tok string
+		n   int
+	}
+	sorted := make([]kv, 0, len(freq))
+	for t, n := range freq {
+		sorted = append(sorted, kv{t, n})
+	}
+	sort.Slice(sorted, func(i, j int) bool {
+		if sorted[i].n != sorted[j].n {
+			return sorted[i].n > sorted[j].n
+		}
+		return sorted[i].tok < sorted[j].tok
+	})
+	for i, kv := range sorted {
+		if i >= cap {
+			break
+		}
+		v.AddToken(kv.tok)
+	}
+	return v
 }

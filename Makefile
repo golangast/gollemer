@@ -1,6 +1,7 @@
-# Gollemer — one chat, six brains.
+# Gollemer — one chat, 17 brains.
 #
-#   make start      the start-here guide: what to do, what it can do, how to expand it
+#   make start      open the chat (terminal only; the guide lives at make guide)
+#   make guide      the start-here guide: what to do, what it can do, how to expand it
 #   make chat       talk to gollemer (unified chat: social, go, code, makefile, gocli, goanalyze)
 #   make debug-chat chat with the thought process and debug prints shown
 #   make classic    the full flag-driven pipeline CLI (local only)
@@ -9,6 +10,10 @@
 #   make explain    what the project is and what each command does
 #   make smarter    the one-command upgrade: expands training data, retrains the
 #                   social + go brains, runs the evals, prints a report
+#   make handtest   scripted end-to-end chat tests in a throwaway project:
+#                   known asks in, files checked, PASS/FAIL scoreboard out
+#   make paces      the multi-file workout: one project built across
+#                   14 stages of real asks, disk + build checked per stage
 #   make eval       score every brain on its fixed eval suite
 #   make train-*    retrain one brain: social, go, gocode, gocli, makefile
 #   make import     import new training pairs through the quality gate (FILE=path.jsonl)
@@ -20,18 +25,27 @@ export CGO_ENABLED=1
 MEM_LIMIT  = 2500MiB
 GOGC       = 100
 GOMAXPROCS = 8
-MAIN_CMD   = go run main.go
+MAIN_CMD   = go run .
+DIR        ?= .
 
-.PHONY: start chat debug-chat classic flow sel explain smarter eval help import \
-        train-social train-go train-gocode train-gocli train-makefile train-transformer
+.PHONY: start guide chat debug-chat classic flow sel explain smarter eval help import watch \
+        train-social train-go train-gocode train-gocli train-makefile train-transformer handtest paces
 
-## start: The start-here guide — what to do, what it can do, how to expand it
+## start: Talk to gollemer — opens the unified chat (terminal only)
 start:
 	bash scripts/start.sh
 
-## chat: Talk to gollemer — one session, five brains, routed per message
+## guide: The start-here guide — what to do, what it can do, how to expand it
+guide:
+	bash scripts/start.sh guide
+
+## chat: Talk to gollemer — one session, 17 brains, routed per message
 chat:
 	$(MAIN_CMD) -real-chat -domain unified
+
+# Watch a folder while you code: make watch DIR=~/myproject
+watch:
+	$(MAIN_CMD) -watch $(DIR)
 
 ## debug-chat: Chat with the thought process and debug prints shown
 debug-chat:
@@ -63,6 +77,14 @@ explain:
 ## smarter: The one-command upgrade — more data, retrained brains, evals, report
 smarter:
 	bash scripts/smarter.sh
+
+## handtest: Scripted end-to-end chat tests — known asks into a throwaway project, PASS/FAIL scoreboard out
+handtest:
+	bash scripts/handtest.sh
+
+## paces: The multi-file workout — one project across 14 stages of real asks, disk + build checked per stage
+paces:
+	bash scripts/paces.sh
 
 ## eval: Score every brain on its fixed eval suite
 eval:

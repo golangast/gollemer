@@ -79,36 +79,30 @@ func (ln *LayerNorm) Forward(input *Tensor) (*Tensor, error) {
 	ln.mean = mean
 	ln.variance = variance
 
-	// Normalize, Scale and Shift - fused single-pass AVX2 kernel
-	// (replaces 4 separate passes: AddScalar, DivScalar, MulVectors, AddVectors)
+	// Normalize, Scale and Shift in one pass
 	output := NewTensor(input.Shape, make([]float32, len(input.Data)), input.RequiresGrad)
 	normalized := NewTensor(input.Shape, make([]float32, len(input.Data)), input.RequiresGrad)
 
 	for i := range batchSize {
 		start := i * ln.NormalizedShape
-		rstd := 1.0 / float32(math.Sqrt(float64(variance.Data[i]+ln.Eps)))
+		std := float32(math.Sqrt(float64(variance.Data[i] + ln.Eps)))
 		m := mean.Data[i]
 
 		inData := input.Data[start : start+ln.NormalizedShape]
 		normData := normalized.Data[start : start+ln.NormalizedShape]
 		outData := output.Data[start : start+ln.NormalizedShape]
 
-		// Fused: norm = (in-mean)*rstd; out = norm*gamma + beta (single AVX2 pass)
-		VecLayerNormFused(outData, normData, inData, ln.Gamma.Data, ln.Beta.Data, m, rstd)
+		// (x - m) / std
+		AddScalar(inData, -m, normData)
+		DivScalar(normData, std, normData)
+
+		// y = gamma * norm + beta
+		MulVectors(ln.Gamma.Data, normData, outData)
+		AddVectors(outData, ln.Beta.Data, outData)
 	}
 	ln.normalized = normalized
 
-	output.Creator = ln
-
 	return output, nil
-}
-
-// Inputs returns the input tensors for autograd graph traversal.
-func (ln *LayerNorm) Inputs() []*Tensor {
-	if ln.input == nil {
-		return []*Tensor{}
-	}
-	return []*Tensor{ln.input}
 }
 
 // Backward performs the backward pass of LayerNorm

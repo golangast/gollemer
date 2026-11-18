@@ -1,0 +1,78 @@
+GOLLEMER — START HERE
+==================
+
+What this is:
+  A tiny LLM written in pure Go (no external dependencies).
+  One chat, 17 brains: small trained models for talk, Go, code,
+  commands and makefiles, plus a deterministic cast that reads
+  code, makes the edits, and remembers. Each message is routed
+  to the right brain.
+
+Where to start:
+  1. make start — talk to it. That is the whole product: one
+     chat. (This guide is make guide, there when you want it.)
+     Try one from each classic brain:
+       "have you ever played soccer"         social: conversation
+       "what is a goroutine"                 go: Go concepts
+       "write a function that sums a slice"  gocode: writes Go code
+       "what command formats my code"        gocli: go/gofmt commands
+       "how do i chat with gollemer"         makefile: make commands
+       "analyze this project"                goanalyze: reads a Go codebase
+     Then two from the wider cast, same chat:
+       "learn https://github.com/golangast/gollemer"  learn a project
+       "i want to build a webserver"                  resources to build one
+  2. make sel — browse every command in a columnar fuzzy finder.
+  3. make explain — the full project overview and command reference.
+  4. make debug-chat — same as make chat, but shows the model's thought
+     process and debug prints (which experts fired, routing, etc.).
+
+What it can do:
+  social    chats, answers questions, remembers the session
+            (/history to see it, /forget to wipe it)
+  go        explains Go: goroutines, slices, errors, modules, gotchas
+  gocode    writes Go code from your description — never chats
+  gocli     turns plain English into exact go/gofmt commands,
+            and asks [y/n] before running one
+  makefile  maps "how do i ..." to the right Makefile command
+  goanalyze reads a Go project (local path or github.com URL) with go/ast
+            and maps it: entry points, most-called functions, package
+            dependencies, a reading order, where the data flows, and
+            "where for <github issue link>" — where an edit belongs.
+            Deterministic — no neural model, so it can't hallucinate
+            structure.
+  composer  writes code with you, never behind your back: edits
+            assembled from the project's own shapes,
+            "add a webserver to main.go", renames, fixes for pasted
+            Go errors, and new folders and starter files. Every
+            write is planned, shown, and gated behind [y/n]; each
+            is build-checked after, and a failure restores the
+            original bytes.
+  teacher   "learn <github link>" — or just "learn" in a project —
+            teaches it in one paced flow: the story, the map, a
+            walkthrough, the concepts it uses, then check questions
+            drawn from the code itself.
+  friend    remembers how you work between sessions: the chat opens
+            with personal starting lines and what changed while you
+            were away, and your learn-session misses are kept for
+            later.
+  watcher   gollemer -watch <folder> (make watch DIR=...) diffs
+            your code as you save and notes what mattered.
+
+How to expand it (teach it new things):
+  1. Write Q&A pairs as JSONL, one per line:
+       {"input": "how do i reverse a string", "output": "use a rune slice and swap ...", "domain": "go"}
+     Domains: social, go, gocode, gocli, makefile.
+  2. make import FILE=pairs.jsonl
+     Every pair passes a quality gate: coherent ones are admitted,
+     bad ones are quarantined and never trained on.
+  3. Retrain a brain:
+       make train-social | make train-go | make train-gocode |
+       make train-gocli | make train-makefile
+     Or run the whole upgrade at once:
+       make smarter — more data, retrained brains, evals, and a report.
+  4. make eval — score every brain on its fixed eval suite
+     to confirm the new knowledge stuck.
+
+  Data lives in data/training/chat_pairs.jsonl.
+  Checkpoints live in data/models/gob_models/ (backed up before retrains).
+  Ask the chat itself: "how do i teach you new things".

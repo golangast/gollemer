@@ -198,6 +198,18 @@ func transformerCrossEntropy(logits *tensor.Tensor, labels [][]int, padID, vocab
 	return float32(totalLoss / float64(valid)), dLogits, nil
 }
 
+// maxTargetTokens bounds the output length per domain. Chat domains give
+// short answers; the codeintent domain explains code and needs room.
+// (It lived in real_seq2seq_train.go on the main line; the merge kept
+// the composer-pieces trainer, so the helper moved here with its only
+// remaining caller.)
+func maxTargetTokens(domain string) int {
+	if IsCodeIntentFamily(domain) {
+		return 200
+	}
+	return 60
+}
+
 // RunTransformerTraining trains a Transformer on the given domain.
 // This is v1: simplified training loop, no MoE, no copy mechanism.
 func RunTransformerTraining(projectRoot, domain string, resume bool) error {

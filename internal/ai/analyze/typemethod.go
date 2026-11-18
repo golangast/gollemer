@@ -8,6 +8,18 @@ import (
 	"strings"
 )
 
+// LastWhereFile is the file the last GuideIssue pointed to (for /open).
+// LastWhereLine is the line number within that file.
+// LastWhereStruct and LastWhereMethod are for auto-generating the method.
+// LastWhereFields are the struct's field names.
+// LastWhereSiblings are the signatures of the struct's existing methods.
+var LastWhereFile string
+var LastWhereLine int
+var LastWhereStruct string
+var LastWhereMethod string
+var LastWhereFields []string
+var LastWhereSiblings []string
+
 // typeMethodPlan answers issues that ask for a new method on a named
 // type: "Implement Info method on dataframe". The issue's nouns resolve
 // against the index — the type is the target, its existing methods are
@@ -70,9 +82,12 @@ func (p *Project) buildTypeMethodPlan(c IssueConcepts) *typeMethodPlan {
 // targetType resolves the issue's nouns to a struct type: the type the
 // new method belongs to. Candidates rank by method count — the type the
 // issue is about is usually the one with the rich API.
+// Falls back to field matching, then to method-name matching:
+// if the issue mentions "Names()" and a struct has a Names method,
+// that's the target.
 func (p *Project) targetType(c IssueConcepts) *Type {
 	words := map[string]bool{}
-	for _, w := range strings.FieldsFunc(strings.ToLower(c.Title),
+	for _, w := range strings.FieldsFunc(strings.ToLower(c.Title+" "+c.Body),
 		func(r rune) bool { return r < 'a' || r > 'z' }) {
 		words[w] = true
 		words[stem(w)] = true
@@ -80,11 +95,97 @@ func (p *Project) targetType(c IssueConcepts) *Type {
 	var best *Type
 	bestN := -1
 	for _, pkg := range p.Packages {
+		// Skip example and test packages — the real type lives in the library.
+		if strings.Contains(strings.ToLower(pkg.Dir), "example") {
+			continue
+		}
 		for _, t := range pkg.Types {
 			if t.Kind != "struct" {
 				continue
 			}
 			if !words[strings.ToLower(t.Name)] {
+				continue
+			}
+			if n := len(p.typeMethods(t)); n > bestN {
+				best, bestN = t, n
+			}
+		}
+	}
+	if best != nil {
+		return best
+	}
+	// Fallback 1: find a struct with fields matching the issue's nouns.
+	// "service and parameter dependencies" -> struct with services/parameters fields.
+	for _, pkg := range p.Packages {
+		if strings.Contains(strings.ToLower(pkg.Dir), "example") {
+			continue
+		}
+		for _, t := range pkg.Types {
+			if t.Kind != "struct" {
+				continue
+			}
+			hits := 0
+			for _, f := range t.Fields {
+				fl := strings.ToLower(f)
+				if words[fl] || words[stem(fl)] {
+					hits++
+				}
+				// Plural/singular: "services" field matches "service" word.
+				if strings.HasSuffix(fl, "s") && words[strings.TrimSuffix(fl, "s")] {
+					hits++
+				}
+			}
+			if hits >= 1 && hits > bestN {
+				best, bestN = t, hits
+			}
+		}
+	}
+	if best != nil {
+		return best
+	}
+	// Fallback 2: find a struct with a method named in the issue.
+	// "Names() lists..." -> struct with a Names method.
+	for _, pkg := range p.Packages {
+		if strings.Contains(strings.ToLower(pkg.Dir), "example") {
+			continue
+		}
+		for _, t := range pkg.Types {
+			if t.Kind != "struct" {
+				continue
+			}
+			for _, m := range p.typeMethods(t) {
+				if words[strings.ToLower(m.Name)] {
+					// Prefer the type with the most methods (rich API).
+					if n := len(p.typeMethods(t)); n > bestN {
+						best, bestN = t, n
+					}
+					break
+				}
+			}
+		}
+	}
+	if best != nil {
+		return best
+	}
+	// Fallback 3: the struct with the most methods in the main packages.
+	// For "expose" issues, this is usually the core type (e.g., Container).
+	for _, pkg := range p.Packages {
+		if strings.Contains(strings.ToLower(pkg.Dir), "example") {
+			continue
+		}
+		// Skip test-only packages.
+		isTestPkg := true
+		for _, fn := range pkg.Funcs {
+			if !fn.IsTest {
+				isTestPkg = false
+				break
+			}
+		}
+		if isTestPkg {
+			continue
+		}
+		for _, t := range pkg.Types {
+			if t.Kind != "struct" {
 				continue
 			}
 			if n := len(p.typeMethods(t)); n > bestN {
@@ -112,7 +213,8 @@ func (p *Project) typeMethods(t *Type) []*Func {
 }
 
 // methodName extracts the new method's name: "Implement Info method"
-// -> "Info". Generic verbs ("Add method", "new method") don't count.
+// -> "Info". "Expose the resolution graph" -> "Graph" (expose = add a getter).
+// Generic verbs ("Add method", "new method") don't count.
 func methodName(c IssueConcepts) string {
 	for _, m := range methodRe.FindAllStringSubmatch(c.Title, -1) {
 		n := m[1]
@@ -120,6 +222,14 @@ func methodName(c IssueConcepts) string {
 			continue
 		}
 		return strings.ToUpper(n[:1]) + n[1:]
+	}
+	// "Expose X" means add a getter for X.
+	exposeRe := regexp.MustCompile(`(?i)\bexpose\s+(?:the\s+)?([A-Za-z][A-Za-z0-9]*)`)
+	if m := exposeRe.FindStringSubmatch(c.Title); m != nil {
+		n := m[1]
+		if !planStopwords[strings.ToLower(n)] {
+			return strings.ToUpper(n[:1]) + n[1:]
+		}
 	}
 	return ""
 }
@@ -203,6 +313,16 @@ func optionUser(pkg *Package, optName string) *Func {
 
 func (p *Project) writeTypeMethodPlan(c IssueConcepts, tp *typeMethodPlan) string {
 	var b strings.Builder
+	// Remember the file, line, struct, and method for /open and auto-generate.
+	LastWhereFile = p.LinkPath(tp.typ.File)
+	LastWhereLine = tp.typ.Line
+	LastWhereStruct = tp.typ.Name
+	LastWhereMethod = tp.methodName
+	LastWhereFields = tp.typ.Fields
+	LastWhereSiblings = nil
+	for _, m := range tp.siblings {
+		LastWhereSiblings = append(LastWhereSiblings, m.Sig)
+	}
 	repo := filepath.Base(p.Root)
 	pkgDir := ""
 	if tp.pkg != nil {
@@ -248,6 +368,9 @@ func (p *Project) writeTypeMethodPlan(c IssueConcepts, tp *typeMethodPlan) strin
 		b.WriteString(fmt.Sprintf("  4. The issue asks for options: add `type %sOption struct`,\n", tp.methodName))
 		b.WriteString(fmt.Sprintf("     copying %s (%s:%d).\n", ot.Name, p.LinkPath(ot.File), ot.Line))
 	}
+	b.WriteString("\n  Next — generate the method:\n")
+	b.WriteString(fmt.Sprintf("    /add-getter %s %s <Type>\n", tp.typ.Name, tp.methodName))
+	b.WriteString("  (Replace <Type> with the return type, e.g. map[string][]string)\n")
 	return b.String()
 }
 

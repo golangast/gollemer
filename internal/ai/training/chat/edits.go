@@ -1,0 +1,461 @@
+package chat
+
+// Edits by assembly: the chat face of the Composer's write side.
+// A plain change request — "add a backoff case to Parse", "add a
+// Timeout field to Config", "register thanks in Greetings", "add a
+// function like Greet named GreetLoudly" — is parsed HERE,
+// deterministically, in the same spirit as the beginner five: a
+// sentence that would write to the user's files is never left for
+// the intent classifier or a neural model to guess at.
+//
+// The analyzer plans the edit from a real sibling pattern
+// (analyze.PlanEdit); this layer shows the exact unified diff and
+// asks [y/n] — the one and only write gate. On yes: apply, go
+// build, re-analyze, verify the intended structure exists. On any
+// failure after applying, the original bytes go back and the reply
+// says exactly that. On no: nothing was ever written.
+//
+// Accepted forms (trailing "." or "?" optional):
+//
+//	add a <value> case to <Func> [function]
+//	add a case for <value> to <Func>
+//	add <value> case to the switch on <subject> in <Func>
+//	in <Func> also handle <value>
+//	add a <Field> field of type <T> to [the] <Struct> [struct] [after <Field>]
+//	add a <T> field <Field> to [the] <Struct>
+//	add a <Field> field of type <T> with a <kind> tag <value> to [the] <Struct>
+//	add a <Field> field of type <T> to [the] <Struct> with a <kind> tag <value>
+//	add a <T> field <Field> with a <kind> tag <value> to [the] <Struct>
+//	register <key> in [the] <Table> [table|map]
+//	add <key> to [the] <Table> table|map|list
+//	add a [new] function like <Func> named <NewName>
+//	add a <NewName> function like <Func>
+//	copy|clone <Func> as <NewName>
+//	rename the <old> parameter of <Func> to <new>
+//	rename <Func>'s <old> parameter to <new>
+//	swap the <a> and <b> parameters of <Func>
+//	move the <a> parameter of <Func> first|last|before <b>|after <b>
+//	add a context parameter [named <name>] to <Func>
+//	add a <Type> parameter named <name> to <Func> using <expression>
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"time"
+
+	"github.com/golangast/gollemer/internal/ai/analyze"
+)
+
+var (
+	reEditFuncA  = regexp.MustCompile(`(?i)^add a (?:new )?function like ([A-Za-z_][\w.]*) named ([A-Za-z_]\w*)$`)
+	reEditFuncC  = regexp.MustCompile(`(?i)^(?:copy|clone) ([A-Za-z_][\w.]*) as ([A-Za-z_]\w*)$`)
+	reEditFuncB  = regexp.MustCompile(`(?i)^add (?:a |an )?([A-Za-z_]\w*) function like ([A-Za-z_][\w.]*)$`)
+	reEditFieldA = regexp.MustCompile(`(?i)^add (?:a |an )?([A-Za-z_]\w*) field(?: of type (.+?))? to (?:the )?([A-Za-z_][\w.]*)(?: struct)?(?: after ([A-Za-z_]\w*))?$`)
+	reEditFieldB = regexp.MustCompile(`(?i)^add (?:a |an )?(.+?) field ([A-Za-z_]\w*) to (?:the )?([A-Za-z_][\w.]*)(?: struct)?(?: after ([A-Za-z_]\w*))?$`)
+	// Tagged fields (the How To Code in Go build, ch. 39): a
+	// tag belongs to a field, so the tag phrase rides the two
+	// field forms — after the type, or at the end of the
+	// sentence. Tried BEFORE the plain forms: the plain
+	// type-first pattern's type span would otherwise swallow
+	// "with a json tag name" as part of the type. Kind and
+	// value are single tight tokens (see assembleStructTag);
+	// a tag phrase outside that shape doesn't match here at
+	// all, and the planner refuses a " tag " that lands inside
+	// a type span instead of rendering it as code.
+	reEditFieldTagA    = regexp.MustCompile(`(?i)^add (?:a |an )?([A-Za-z_]\w*) field of type (.+?) with (?:a |an |the )?([A-Za-z][A-Za-z0-9_-]*) tag "?([A-Za-z0-9_,.\-=:+/]+)"? to (?:the )?([A-Za-z_][\w.]*)(?: struct)?(?: after ([A-Za-z_]\w*))?$`)
+	reEditFieldTagAEnd = regexp.MustCompile(`(?i)^add (?:a |an )?([A-Za-z_]\w*) field of type (.+?) to (?:the )?([A-Za-z_][\w.]*)(?: struct)? with (?:a |an |the )?([A-Za-z][A-Za-z0-9_-]*) tag "?([A-Za-z0-9_,.\-=:+/]+)"?$`)
+	reEditFieldTagB    = regexp.MustCompile(`(?i)^add (?:a |an )?(.+?) field ([A-Za-z_]\w*) with (?:a |an |the )?([A-Za-z][A-Za-z0-9_-]*) tag "?([A-Za-z0-9_,.\-=:+/]+)"? to (?:the )?([A-Za-z_][\w.]*)(?: struct)?(?: after ([A-Za-z_]\w*))?$`)
+	reEditHandle       = regexp.MustCompile(`(?i)^in (.+?)(?:,)? also handle (.+)$`)
+	reEditCaseA        = regexp.MustCompile(`(?i)^add (?:a |an )?case (?:for )?(.+?) (?:to|in) (.+)$`)
+	reEditCaseB        = regexp.MustCompile(`(?i)^add (?:a |an )?(.+?) case (?:to|in) (.+)$`)
+	reEditRegA         = regexp.MustCompile(`(?i)^register (.+?) in (?:the )?([A-Za-z_]\w*)(?: table| map)?$`)
+	reEditRegB         = regexp.MustCompile(`(?i)^add (.+?) to (?:the )?([A-Za-z_]\w*) (?:table|map|list)$`)
+
+	// Signature changes. These contain "parameter" (or "swap"/
+	// "move"), which no form above matches, so they can't steal
+	// a field/case/register sentence — and they are tried first
+	// so a field sentence can never be misread as one either.
+	reSigRenameA = regexp.MustCompile(`(?i)^rename the ([A-Za-z_]\w*) parameter of ([A-Za-z_][\w.]*) to ([A-Za-z_]\w*)$`)
+	reSigRenameB = regexp.MustCompile(`(?i)^rename ([A-Za-z_][\w.]*)'s ([A-Za-z_]\w*) parameter to ([A-Za-z_]\w*)$`)
+	reSigSwap    = regexp.MustCompile(`(?i)^swap the ([A-Za-z_]\w*) and ([A-Za-z_]\w*) parameters? of ([A-Za-z_][\w.]*)$`)
+	reSigMove    = regexp.MustCompile(`(?i)^move the ([A-Za-z_]\w*) parameter of ([A-Za-z_][\w.]*) (first|last|before ([A-Za-z_]\w*)|after ([A-Za-z_]\w*))$`)
+	reSigAddCtx  = regexp.MustCompile(`(?i)^add a context parameter(?: named ([A-Za-z_]\w*))? to ([A-Za-z_][\w.]*)$`)
+	reSigAddUse  = regexp.MustCompile(`(?i)^add (?:a |an )?(.+?) parameter named ([A-Za-z_]\w*) to ([A-Za-z_][\w.]*) using (.+)$`)
+	reSigAddBare = regexp.MustCompile(`(?i)^add (?:a |an )?(.+?) parameter named ([A-Za-z_]\w*) to ([A-Za-z_][\w.]*)$`)
+)
+
+// assembleStructTag builds a struct tag's literal content
+// (json:"name") from the sentence's kind and value words —
+// the shape chapter 39 of How To Code in Go teaches: a short
+// key, a colon, a quoted value, the whole tag later rendered
+// inside backticks. The value arrives already stripped of any
+// surrounding quotes by the caller's pattern. Kinds and
+// values outside the tight character sets are not
+// assemblable: a value with a space would need quoting the
+// sentence can't carry reliably, and a quote or backtick in
+// either word could break out of the rendered literal.
+func assembleStructTag(kind, value string) (string, bool) {
+	if !tagKindRe.MatchString(kind) || !tagValueRe.MatchString(value) {
+		return "", false
+	}
+	return kind + ":\"" + value + "\"", true
+}
+
+var (
+	tagKindRe  = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]*$`)
+	tagValueRe = regexp.MustCompile(`^[A-Za-z0-9_,.\-=:+/]+$`)
+)
+
+// parseAssembledEdit turns one chat line into an EditRequest. The
+// second return is false for anything that is not an edit request —
+// including add-sentences the composer cannot assemble ("add a
+// getter…", "add a retry helper…"), which belong to other brains.
+func parseAssembledEdit(line string) (analyze.EditRequest, bool) {
+	s := strings.TrimSpace(line)
+	s = strings.TrimSuffix(s, ".")
+	s = strings.TrimSuffix(s, "?")
+	s = strings.TrimSpace(s)
+
+	// Signature changes first: their sentences are the only ones
+	// with "parameter", "swap", or a leading "move the …", and
+	// claiming them here keeps "add a context parameter to F"
+	// away from the register form's "add … to the … table" tail.
+	if m := reSigRenameA.FindStringSubmatch(s); m != nil {
+		return analyze.EditRequest{Kind: analyze.EditRenameParam, FuncName: m[2], SigOld: m[1], SigNew: m[3]}, true
+	}
+	if m := reSigRenameB.FindStringSubmatch(s); m != nil {
+		return analyze.EditRequest{Kind: analyze.EditRenameParam, FuncName: m[1], SigOld: m[2], SigNew: m[3]}, true
+	}
+	if m := reSigSwap.FindStringSubmatch(s); m != nil {
+		return analyze.EditRequest{Kind: analyze.EditReorderParams, FuncName: m[3], SigOld: m[1], SigNew: m[2]}, true
+	}
+	if m := reSigMove.FindStringSubmatch(s); m != nil {
+		req := analyze.EditRequest{Kind: analyze.EditReorderParams, FuncName: m[2], SigOld: m[1]}
+		switch {
+		case m[4] != "":
+			req.SigMove, req.SigNew = "before", m[4]
+		case m[5] != "":
+			req.SigMove, req.SigNew = "after", m[5]
+		default:
+			req.SigMove = m[3]
+		}
+		return req, true
+	}
+	if m := reSigAddCtx.FindStringSubmatch(s); m != nil {
+		return analyze.EditRequest{Kind: analyze.EditAddParam, FuncName: m[2], SigType: "context.Context", SigName: m[1]}, true
+	}
+	if m := reSigAddUse.FindStringSubmatch(s); m != nil {
+		return analyze.EditRequest{Kind: analyze.EditAddParam, FuncName: m[3], SigType: strings.TrimSpace(m[1]), SigName: m[2], SigUsing: strings.TrimSpace(m[4])}, true
+	}
+	if m := reSigAddBare.FindStringSubmatch(s); m != nil {
+		return analyze.EditRequest{Kind: analyze.EditAddParam, FuncName: m[3], SigType: strings.TrimSpace(m[1]), SigName: m[2], SigNoUsing: true}, true
+	}
+
+	// Functions first: "add a function like…" must never fall into
+	// the case/field forms below.
+	if m := reEditFuncA.FindStringSubmatch(s); m != nil {
+		return analyze.EditRequest{Kind: analyze.EditAddFunc, SiblingName: m[1], NewName: m[2]}, true
+	}
+	if m := reEditFuncC.FindStringSubmatch(s); m != nil {
+		return analyze.EditRequest{Kind: analyze.EditAddFunc, SiblingName: m[1], NewName: m[2]}, true
+	}
+	if m := reEditFuncB.FindStringSubmatch(s); m != nil {
+		return analyze.EditRequest{Kind: analyze.EditAddFunc, SiblingName: m[2], NewName: m[1]}, true
+	}
+	// Tagged fields before the plain forms (see the patterns):
+	// a matched tag phrase is consumed as a tag or the line is
+	// not claimed here at all — never silently dropped.
+	taggedField := func(field, typ, kind, value, strct, after string) (analyze.EditRequest, bool) {
+		tag, ok := assembleStructTag(kind, value)
+		if !ok {
+			return analyze.EditRequest{}, false
+		}
+		req := analyze.EditRequest{Kind: analyze.EditAddField, FieldName: field, FieldType: strings.TrimSpace(typ), StructName: strct, FieldTag: tag}
+		if after != "" {
+			req.AfterField = after
+		}
+		return req, true
+	}
+	if m := reEditFieldTagA.FindStringSubmatch(s); m != nil {
+		return taggedField(m[1], m[2], m[3], m[4], m[5], m[6])
+	}
+	if m := reEditFieldTagAEnd.FindStringSubmatch(s); m != nil {
+		return taggedField(m[1], m[2], m[4], m[5], m[3], "")
+	}
+	if m := reEditFieldTagB.FindStringSubmatch(s); m != nil {
+		return taggedField(m[2], m[1], m[3], m[4], m[5], m[6])
+	}
+	// Fields before cases: "field" never appears in a case request.
+	// The type-first form is tried first — in "add an int field
+	// Timeout…", the name-first pattern would otherwise read "int"
+	// as the name and "Timeout" as the type. The name-first form's
+	// own type must be spelled "of type …", which the type-first
+	// pattern cannot match, so the two never collide.
+	if m := reEditFieldB.FindStringSubmatch(s); m != nil {
+		req := analyze.EditRequest{Kind: analyze.EditAddField, FieldType: strings.TrimSpace(m[1]), FieldName: m[2], StructName: m[3]}
+		if m[4] != "" {
+			req.AfterField = m[4]
+		}
+		return req, true
+	}
+	if m := reEditFieldA.FindStringSubmatch(s); m != nil {
+		req := analyze.EditRequest{Kind: analyze.EditAddField, FieldName: m[1], FieldType: strings.TrimSpace(m[2]), StructName: m[3]}
+		if m[4] != "" {
+			req.AfterField = m[4]
+		}
+		return req, true
+	}
+	// "in <Func> also handle <value>".
+	if m := reEditHandle.FindStringSubmatch(s); m != nil {
+		fn, switchOn := parseCaseTarget(m[1])
+		return analyze.EditRequest{Kind: analyze.EditAddCase, FuncName: fn, SwitchOn: switchOn, CaseExpr: strings.TrimSpace(m[2])}, true
+	}
+	if m := reEditCaseA.FindStringSubmatch(s); m != nil {
+		fn, switchOn := parseCaseTarget(m[2])
+		return analyze.EditRequest{Kind: analyze.EditAddCase, FuncName: fn, SwitchOn: switchOn, CaseExpr: strings.TrimSpace(m[1])}, true
+	}
+	if m := reEditCaseB.FindStringSubmatch(s); m != nil {
+		fn, switchOn := parseCaseTarget(m[2])
+		return analyze.EditRequest{Kind: analyze.EditAddCase, FuncName: fn, SwitchOn: switchOn, CaseExpr: strings.TrimSpace(m[1])}, true
+	}
+	if m := reEditRegA.FindStringSubmatch(s); m != nil {
+		return analyze.EditRequest{Kind: analyze.EditRegister, TableName: m[2], Key: unquoteKey(m[1])}, true
+	}
+	if m := reEditRegB.FindStringSubmatch(s); m != nil {
+		return analyze.EditRequest{Kind: analyze.EditRegister, TableName: m[2], Key: unquoteKey(m[1])}, true
+	}
+	return analyze.EditRequest{}, false
+}
+
+var reSwitchTarget = regexp.MustCompile(`(?i)^(?:the )?switch on (.+?) in (.+)$`)
+
+// parseCaseTarget reads the target half of a case request:
+// "<Func>", "<Func> function", or "the switch on <subject> in
+// <Func>". Returns the function name and, when given, the switch
+// subject to select among several switches.
+func parseCaseTarget(s string) (fn, switchOn string) {
+	s = strings.TrimSpace(s)
+	if m := reSwitchTarget.FindStringSubmatch(s); m != nil {
+		return cleanFuncName(m[2]), strings.TrimSpace(m[1])
+	}
+	return cleanFuncName(s), ""
+}
+
+func cleanFuncName(s string) string {
+	s = strings.TrimSpace(s)
+	s = strings.TrimSuffix(s, " function")
+	s = strings.TrimPrefix(s, "the ")
+	return strings.TrimSpace(s)
+}
+
+// unquoteKey strips one pair of surrounding quotes from a typed key.
+func unquoteKey(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) >= 2 {
+		if (s[0] == '"' && s[len(s)-1] == '"') || (s[0] == '\'' && s[len(s)-1] == '\'') {
+			return s[1 : len(s)-1]
+		}
+	}
+	return s
+}
+
+// tryAssembledEdit is the chat-loop entry: it claims edit-request
+// sentences and runs the whole gate flow on the chat's line reader.
+func tryAssembledEdit(line string, r *LineReader) bool {
+	return runAssembledEdit(line, func(prompt string) (string, error) {
+		return r.ReadLine(prompt)
+	})
+}
+
+// editAsk is the [y/n] prompt source — a function so tests can
+// script the answer without a terminal.
+type editAsk func(prompt string) (string, error)
+
+// runAssembledEdit carries one edit request from sentence to
+// verified change (or an honest refusal / a clean "not applied").
+// It returns true when the line was an edit request, claimed or not.
+func runAssembledEdit(line string, ask editAsk) bool {
+	req, ok := parseAssembledEdit(line)
+	if !ok {
+		return false
+	}
+	tag := cTag("gollemer [composer]>")
+	hadProject := lastAnalyzeProject != nil
+	if !ensureFreshProject() {
+		if !hadProject {
+			fmt.Printf("%s I need a project to edit — analyze one first (or start me inside one).\n", tag)
+		}
+		return true
+	}
+	return executeEditPlan(req, ask)
+}
+
+// editExtraCheck is one more build-shaped check a
+// composition can ask the spine to run inside the
+// transaction — after the project's own build, before the
+// re-analyze and verify: it returns what was checked, in
+// plain words for the failure line, the checker's own
+// output, and whether it passed. A failure rolls the
+// whole landing back, exactly like a build failure. The
+// full-stack piece checks the wasm app's compile this
+// way: the app is its own module, so the root build can't
+// see into it, and a stack whose form doesn't compile
+// must not land.
+type editExtraCheck func() (what, out string, ok bool)
+
+// executeEditPlan runs the one write spine for an assembled edit
+// request whose project is already the current one (the caller
+// acquired it — runAssembledEdit via ensureProject, the webserver
+// flow via its own root rule): plan from the project's own code,
+// show the diff, ask [y/n]. On yes: apply, go build, re-analyze,
+// verify the intended structure exists. On any failure after
+// applying, the original bytes go back and the reply says exactly
+// that. On no: nothing was ever written.
+func executeEditPlan(req analyze.EditRequest, ask editAsk) bool {
+	return executeEditPlanChecked(req, ask, nil)
+}
+
+// executeEditPlanChecked is executeEditPlan with an
+// optional extra in-transaction check (editExtraCheck).
+func executeEditPlanChecked(req analyze.EditRequest, ask editAsk, extra editExtraCheck) bool {
+	tag := cTag("gollemer [composer]>")
+	proj := lastAnalyzeProject
+	plan, refusal := proj.PlanEdit(req)
+	if refusal != "" || plan == nil {
+		if refusal == "" {
+			refusal = "I couldn't assemble that edit from this project's own code."
+		}
+		fmt.Printf("%s Not doing that edit: %s\n", tag, refusal)
+		recordBrain("composer", false, "edit refused: "+req.Kind)
+		return true
+	}
+	// The wiring confirmation (confirm.go) diffs the
+	// registrations this plan adds against the ones the
+	// project already had. The wiring scan reads the disk
+	// live, so the "before" list must be snapshotted now,
+	// before anything is written — afterwards it could only
+	// ever read the edited state back.
+	var beforeRegs []analyze.WireRegistration
+	if req.Kind == analyze.EditWireHandler {
+		beforeRegs = proj.WireRegistrations()
+	}
+	fmt.Printf("%s Here's the edit I assembled from this project's own code:\n\n%s\n", tag, plan.Summary)
+	for _, n := range plan.Notes {
+		fmt.Printf("%s\n", n)
+	}
+	fmt.Printf("\n%s\n", plan.Diff())
+	ans, err := ask("Apply this edit? [y/n] ")
+	if err != nil || (strings.ToLower(strings.TrimSpace(ans)) != "y" && strings.ToLower(strings.TrimSpace(ans)) != "yes") {
+		fmt.Printf("%s Not applied — every file is exactly as it was.\n", tag)
+		recordBrain("composer", true, "edit declined at the gate: "+req.Kind)
+		return true
+	}
+
+	root := proj.Root
+	if root == "" {
+		root = lastAnalyzeRoot
+	}
+	// The write transaction: every touched file's original bytes
+	// and mode go to an on-disk backup before anything is
+	// written, so even a crash mid-apply leaves a recoverable
+	// original (edittx.go).
+	tx, berr := beginEditTx(root, plan.Files)
+	if berr != nil {
+		fmt.Printf("%s Not doing that edit: %s\n", tag, berr)
+		recordBrain("composer", false, "edit refused: backup")
+		return true
+	}
+	// Apply. Any write failure rolls the whole set back from
+	// the on-disk backups.
+	_, werr, wrel := tx.writeAll(plan.Files)
+	if werr != nil {
+		unrestored := tx.rollback()
+		fmt.Printf("%s I couldn't write %s (%v) — so I restored your files from the on-disk backups — %s.\n", tag, proj.LinkPath(wrel), werr, rollbackOutcome(unrestored, proj.LinkPath))
+		recordBrain("composer", false, "edit write failed; restored")
+		return true
+	}
+	// Build, when the project has a go.mod at its root to build
+	// against. No go.mod (a loose folder): the structural verify
+	// below is the check, and the report says so.
+	built := false
+	if _, serr := os.Stat(filepath.Join(root, "go.mod")); serr == nil {
+		out, bok := buildProject(root)
+		if !bok {
+			unrestored := tx.rollback()
+			fmt.Printf("%s That edit doesn't build, so I restored your files from the on-disk backups — %s.\n", tag, rollbackOutcome(unrestored, proj.LinkPath))
+			fmt.Printf("The build said: %s\nIn plain words: %s\n", strings.TrimSpace(out), explainBuildError(out))
+			recordBrain("composer", false, "edit rolled back: build failed")
+			return true
+		}
+		built = true
+	}
+	// The composition's own extra check, when it asked for
+	// one, inside the same transaction: a failure here is a
+	// build failure for the landing as a whole, and the
+	// original bytes go back the same way.
+	if extra != nil {
+		what, out, ok := extra()
+		if !ok {
+			unrestored := tx.rollback()
+			fmt.Printf("%s That edit doesn't build — %s — so I restored your files from the on-disk backups — %s.\n", tag, what, rollbackOutcome(unrestored, proj.LinkPath))
+			if strings.TrimSpace(out) != "" {
+				fmt.Printf("The build said: %s\n", strings.TrimSpace(out))
+			}
+			recordBrain("composer", false, "edit rolled back: extra check failed: "+req.Kind)
+			return true
+		}
+	}
+	// Re-analyze and verify the intended structure now exists.
+	fresh, aerr := analyze.Analyze(root)
+	if aerr != nil || fresh == nil || !plan.Verify(fresh) {
+		unrestored := tx.rollback()
+		fmt.Printf("%s I applied the edit but couldn't verify the change is really there, so I restored your files from the on-disk backups — %s.\n", tag, rollbackOutcome(unrestored, proj.LinkPath))
+		recordBrain("composer", false, "edit rolled back: verify failed")
+		return true
+	}
+	tx.commit()
+	setCurrentProject(root, fresh)
+	noteSpineLanded(req, plan, root)
+	recordSpineReceipt(req, plan, root, built, beforeRegs, fresh)
+	// The landing line is a partner's confirmation, rendered
+	// from this transaction's own record (confirm.go) — the
+	// request's slots, the executed plan, and the project as
+	// just re-analyzed — never from the sentence that asked.
+	fmt.Printf("%s %s\n", tag, renderLandingConfirmation(landingFacts{
+		req:       req,
+		plan:      plan,
+		beforeReg: beforeRegs,
+		fresh:     fresh,
+		built:     built,
+		wireName:  req.WireName,
+	}))
+	// A wasm app's creation carries the commands readout
+	// (wasmexplain.go): the sentences the new app answers,
+	// printed at the beginner's moment of need, right
+	// after the confirmation. The readout is the
+	// explanation's own closing section — one generator,
+	// two triggers — so what creation promises is exactly
+	// what "explain the wasm app" will say.
+	if req.Kind == analyze.EditWasmApp {
+		fmt.Printf("%s %s\n", tag, wasmAppCommandsReadout(root, req.WasmFolder))
+	}
+	recordBrain("composer", true, "edit applied: "+req.Kind)
+	return true
+}
+
+// buildProject runs `go build ./...` at root — the spine's one
+// build check, shared by the assembled edits, renames, and error
+// fixes. It returns the combined output and whether it passed.
+func buildProject(root string) (string, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "go", "build", "./...")
+	cmd.Dir = root
+	out, err := cmd.CombinedOutput()
+	return string(out), err == nil
+}

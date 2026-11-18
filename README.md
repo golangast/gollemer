@@ -50,20 +50,14 @@ it, it prints one line telling you so.) `make chat` opens the same
 chat. `make guide` prints a short start-here guide without opening
 anything.
 
-The first screen looks like this:
+There is no splash screen — the chat opens with one short line:
 
 ```
-╭─ GOLLEMER ────────────────────────────────────────────────────────╮
-│   ( o o )   a small Go companion — reads your code,               │
-│    \___/    explains it in plain English                          │
-│                                                                   │
-│   ▸ start — a six-stop guided tour of this project                │
-│   ▸ ask in plain words — "what does this program do"              │
-│   ✦ new here? say "teach me" — two minutes, learn by doing        │
-│                                                                   │
-│   [ your-project ]  [ 17 brains ready ]                           │
-╰───────────────────────────────────────────────────────────────────╯
+17 brains ready. Say "start" for the tour, or "what can you do" for everything I can do.
 ```
+
+(If you ever want the old full-screen welcome back, launch with
+`GOLLEMER_BANNER=full` in the environment.)
 
 The chat works on the folder you started it in. Open it inside any Go
 project and it will read *that* project. Brand new? Say `teach me` and
@@ -74,6 +68,12 @@ it walks you through the basics on a tiny bundled example.
 You talk in plain sentences. Every reply is tagged with the part of
 Gollemer that answered, like `gollemer [go]>`, so you always know who
 is talking.
+
+Not sure what's on the menu? Ask `what can you do` in chat and it
+lists what it can actually do — build, change, ask, remember, run —
+each line with a real sentence that does it. The list is rendered
+from the chat's own machinery and tested against it, so it never
+promises a piece that isn't there.
 
 *The exchanges below are real — captured from the chat on this code,
 on 2026-11-01. Long diffs are trimmed with `...`.*
@@ -87,6 +87,76 @@ gollemer [social]> only for fun with friends. i am better at cheering than scori
 you> what is a goroutine
 gollemer [go]> A goroutine is a lightweight thread managed by the Go runtime: go doWork(). Thousands of goroutines cost little. They run concurrently with the caller — use channels or sync primitives to coordinate, never shared memory without synchronization.
 ```
+
+Its built-in book answers over 250 Go topics — concepts, recipes,
+and the pitfalls that bite — and how-to questions ("how do I serve
+static files") get the same plain-words treatment.
+
+Questions and conversation that no specialist brain owns land with
+the talk seat, tagged `gollemer [talk]>`. It talks about *your*
+project from the same index the analyzer builds — what a function
+takes, what's in a file, what a piece you just added does ("what
+does it do?" works, and the answer names what "it" was read as) —
+and it holds a conversation with the local social model. It runs
+entirely on your machine: no keys, no network. Before a talk reply
+prints, any project name in it is checked against your code, and a
+name that isn't there is marked instead of presented as fact; ask
+about a function the project doesn't have and it says so plainly.
+The talk seat only explains and discusses — when you ask it to
+*do* something, doing still belongs to the deterministic side:
+say the exact sentence and the change goes through the same plan
+and yes-or-no gate as always.
+
+It also knows the state of the moment and remembers what you
+tell it to. Ask "what branch am I on?", "what files changed?",
+or "what have we made?" and the answer comes from the chat's own
+state — the clock, this machine, the branch in `.git/HEAD`, and
+the Go files that differ since its last read of the project
+(that last one is a read-baseline check, not a full git status).
+Say "remember: I prefer …" or "note: …" and it echoes back
+exactly what it stored; "what do you remember" shows it, and
+"forget this project", "forget my …", and "forget everything"
+remove exactly what their replies confirm. Facts about you are
+the one thing it also picks up in passing: mention "my dog is
+Bella", "I live in Omaha", or "my favorite color is forest
+green" in ordinary conversation and it stores the fact — saying
+so in one short line under its reply, never silently — and
+later answers "what's my dog's name?" or "where do I live?"
+from the store, exactly, or says plainly that you haven't told
+it yet rather than guessing. Memory lives in
+`~/.gollemer_memory.json`, outside every project. When a session
+ends it saves a short summary of what was built, and the next
+session in the same project opens with one "Last time here:" line.
+
+Conversation has one more kindness: if you mistype a word the
+social brain has never seen — `gonig` for `going` — the chat
+quietly hears the word you meant before the model reads your
+line. It steps in only when the evidence is unambiguous:
+exactly one word the brain knows sits a small edit distance
+away (one wrong letter for a word of four to six letters, two
+for a longer word) and no other word is that close; a tie, or
+no close word at all, and your line goes in exactly as typed.
+Names that are yours are never corrected — the facts you
+mention in passing (your dog's name, your city, your
+favorites) and the names declared in your code are protected
+— and a line with more than two suspect words passes through
+untouched: that isn't a typo any more, it's a different
+sentence. The fix is silent; the reply never mentions it.
+
+When the adopted social model is the one answering, its reply
+gets one more quiet check before it prints. The first reply is
+the ordinary one; if it drops the subject of your line — you
+asked about chess and it answered about the weather — the
+chat draws a few more replies (up to eight, at a slightly
+loosened setting) and serves the first one that actually
+names your subject. If none of them does, the original reply
+stands, and a reply that already names the subject is never
+re-rolled. The model doesn't get smarter; it just gets
+checked. Measured before it shipped — drawing up to eight
+replies and serving the first that names the subject — the
+checked pick answered 240 of 426 questions about combinations
+the model had never trained on, against the single reply's
+176, and 67 of 160 on the frozen test set, against 58.
 
 ### Ask what a project does
 
@@ -144,7 +214,7 @@ gollemer [composer]> Here's what I'll create — nothing is written yet:
 
 ◆ CREATE
   folder  jane/
-Create it? [y/n] gollemer [composer]> Done — created jane/. I checked — it's there.
+Create it? [y/n] gollemer [composer]> Done — created jane/.
 
 you> create jane/main.go
 gollemer [composer]> Here's what I'll create — nothing is written yet:
@@ -172,20 +242,25 @@ you> create a file webtest/main.go with a webserver
           func main() {
           ...
           }
-Create it? [y/n] gollemer [composer]> Done — created webtest/main.go. I compiled it to check — it builds.
+Create it? [y/n] gollemer [composer]> Done — created webtest/main.go. It's the webserver starter and it builds — "run the program webtest/main.go" will start it.
 
-you> serve an html file to webtest/main.go
-gollemer [composer]> Serve webtest/index.html from the server already in webtest/main.go: one registration, just before its ListenAndServe, answers http://localhost:8080/index.html with the page. The page webtest/index.html is created fresh with a starter page (its body is a TODO).
+you> serve home.html to webtest/main.go
+gollemer [composer]> Serve webtest/home.html from the server already in webtest/main.go: one registration, just before its ListenAndServe, answers http://localhost:8080/home.html with the page. The page webtest/home.html is created fresh with a starter page (its body is a TODO).
 ...
-Apply this edit? [y/n] gollemer [composer]> Done — main.go serves index.html via http.ServeFile, at webtest/main.go:16. I built the project and checked that it's really there.
+Apply this edit? [y/n] gollemer [composer]> Done — webtest/main.go now serves webtest/home.html. I built the project and checked that it's really there.
 ```
 
 Ask twice and it tells you the truth instead of doing it again:
 
 ```
-you> serve an html file to webtest/main.go
-gollemer [composer]> Not doing that edit: webtest/main.go already serves webtest/index.html at http://localhost:8080/index.html — nothing to add.
+you> serve home.html to webtest/main.go
+gollemer [composer]> Not doing that edit: webtest/main.go already serves webtest/home.html at http://localhost:8080/home.html — nothing to add.
 ```
+
+(A page named `index.html` is wired at its folder's address —
+`http://localhost:8080/` for a page beside its program — because
+the server redirects every `index.html` request to that address
+anyway; the plan says so when it offers one.)
 
 ### Add pieces to your code
 
@@ -197,15 +272,676 @@ folder where they belong, as their own little package:
 ```
 you> add a form handler named SignUp
 gollemer [composer]> Create the handlers folder and handlers/signup.go in it (package handlers) with the form handler SignUp, from the concept book.
-SignUp is placed in the handlers folder as package handlers — placed, not wired: nothing registers the handler with a server yet. Wiring it in is a next step.
+SignUp is placed in the handlers folder as package handlers — placed, not wired: nothing registers the handler with a server yet. To register it, say "connect the SignUp handler to the webserver" and I'll add the one registration line to your server, behind the same gate.
 ...
-Apply this edit? [y/n] gollemer [composer]> Done — signup.go now declares the form handler SignUp in package handlers, at handlers/signup.go:7. I built the project and checked that it's really there.
+Apply this edit? [y/n] gollemer [composer]> Done — The form handler SignUp is in handlers/signup.go. I built the project and checked that it's really there. It isn't wired to the server yet — "connect the SignUp handler to the webserver" will do it.
 ```
 
 Handlers go to `handlers/`, middleware to `middleware/`, security
 pieces to `security/`, database pieces to `database/`. Name a file —
 `add a cors middleware named Cors to app/main.go` — and the piece goes
 exactly there instead.
+
+A placed handler answers nothing until the server knows about it.
+Connecting it is one more sentence — one registration line, added
+just before the serve call in whichever file runs the server:
+
+```
+you> connect the SignUp handler to the webserver
+gollemer [composer]> Wire SignUp into the webserver in webtest/main.go: one line — http.HandleFunc("/signup", handlers.SignUp) — added in main just before it serves, so http://localhost:8080/signup is answered by SignUp (declared at handlers/signup.go:7).
+...
+Apply this edit? [y/n] gollemer [composer]> Done — SignUp is in handlers/signup.go, registered at /signup. I built the project and checked that it's really there.
+```
+
+The handler answers at `/` + its name, or at the path you name
+(`connect the Jake handler to the webserver at /contact`). A handler
+in the server's own file wires by its bare name; one in another
+package is imported and qualified, as above. If exactly one handler
+is unconnected, `connect the handler to the webserver` finds it on
+its own. Ask twice and it tells you the truth — already registered,
+nothing to add — and a path another handler already owns is refused
+with that handler named.
+
+A goroutine can't hand a value back by returning — a `go` statement
+throws results away — so `have the goroutine return a string` wires
+Go's own answer instead: a channel declared just before the
+goroutine, a send at the end of its body (the type's zero value for
+now, under a TODO marking where the real result goes), and the
+receive right after it, where the function waits for the value.
+
+### When something's missing, it asks
+
+If an ask is one piece of information short — which handler, which
+file, what name — Gollemer doesn't stop at a paragraph of guidance
+for you to decode and retype. It asks one short question, and your
+next line completes the original ask, through the same plan and
+the same `[y/n]` gate as if you'd typed it in full:
+
+```
+you> connect the handler to the webserver
+gollemer [composer]> More than one handler isn't registered yet — which one should I wire in? Nothing's been written.
+  1. Jake (webtest/main.go:5)
+  2. Pete (webtest/main.go:6)
+Answer with the name or the number — or say anything else and we'll move on.
+you> Jake
+gollemer [composer]> Wire Jake into the webserver in webtest/main.go: one line — http.HandleFunc("/jake", Jake) — added in main just before it serves, so http://localhost:8080/jake is answered by Jake (declared at webtest/main.go:5).
+...
+Apply this edit? [y/n] gollemer [composer]> Done — Jake is in webtest/main.go, registered at /jake. I built the project and checked that it's really there.
+```
+
+The same shape everywhere a choice or a missing piece is all
+that's wrong: `add a database` asks whether you mean the
+connection function or the inline piece, and the one word
+`connection` (or `inline`) is a complete answer; a piece with no
+file named asks which file — and offers the file you're working
+on as a numbered suggestion; a declaration with no name asks what
+to call it. Answer with a name, a number, a path, or the
+distinguishing word — or just say something else entirely: the
+question is forgotten and your line is handled as itself, exactly
+as if no question had been asked. Facts are never questions,
+though: a path another handler owns, a page that already exists, a
+handler name already taken — those still refuse outright, question
+or no question.
+
+### Your names for things, and follow-ups
+
+Paths are yours to name. Teach the chat a name once — "call
+jim/main.go the api file", or "call this the api file" for the
+file you just landed — and from then on the name works anywhere
+a sentence names that file or folder. The reading is printed,
+never silent: the chat says which path it understood before it
+shows a plan. Your names are kept in `~/.gollemer_vocab.json`,
+keyed by project, so a name taught in one project means nothing
+in another — and they're a different file from your taught
+pieces and your remembered facts on purpose, so forgetting one
+kind of thing can never erase another. A real file with the
+same name always wins over a taught name. "What do you call
+things" lists them; "forget the api file" removes one.
+
+And once a piece has landed, the session remembers it well
+enough to repeat it: "another one" lands the same piece
+again — asking for its name first, the same way a bare ask
+does — "another one named X in <file>" and "the same but for
+<file>" say the variations out loud, and "the other file"
+means the other file this session has been working in. Every
+repeat is rebuilt as the full sentence and goes through the
+same plan, gate, and build check; with nothing landed yet, a
+follow-up line is just a line, exactly as before.
+
+```
+you> call this the server file
+gollemer [go]> Learned your name for it:
+  "the server file" — vocabjim/main.go in this project.
+you> add a form handler named Vex to the server file
+gollemer [go]> Reading "the server file" as vocabjim/main.go — your name for it.
+... the same plan, gate, and build check, then:
+gollemer [go]> Done — The form handler Vex is in vocabjim/main.go. I built the project and checked that it's really there. It isn't wired to the server yet — "connect the Vex handler to the webserver" will do it.
+
+you> another one
+gollemer [go]> Another struct — what should I call it? Answer with one name — or say anything else and we'll move on.
+you> SequelProbe
+gollemer [go]> I read that as: "add a struct named SequelProbe to sequel/main.go".
+... the same plan, gate, and build check, and the second struct lands.
+```
+
+### When something lands, it says what landed
+
+`Done` still means what it always meant — the plan was applied,
+the project builds, and the change was verified in the code. What
+changed is how the landing is reported: not as a build log
+("main.go now declares the form handler…, at main.go:19. I built
+the project and checked…"), but the way a partner would confirm
+it — what landed, and where, in plain words. The line is written
+from the transaction's own record — the plan that actually ran
+and the project as re-read after it — never from the sentence
+you typed:
+
+```
+you> create a file partner/main.go with a webserver
+...
+Create it? [y/n] gollemer [composer]> Done — created partner/ and partner/main.go. It's the webserver starter and it builds — "run the program partner/main.go" will start it.
+
+you> add a form handler named Petra to partner/main.go
+...
+Apply this edit? [y/n] gollemer [composer]> Done — The form handler Petra is in partner/main.go. I built the project and checked that it's really there. It isn't wired to the server yet — "connect the Petra handler to the webserver" will do it.
+
+you> connect the Petra handler to the webserver
+...
+Apply this edit? [y/n] gollemer [composer]> Done — Petra is in partner/main.go, registered at /petra. I built the project and checked that it's really there.
+```
+
+When a landing has a natural next step, the confirmation names
+the exact line that does it — a handler's wiring, a starter's
+run line, the webserver a handler is still missing. It only
+names a step the machinery has itself verified will land: the
+wiring plan is checked against your project first, so a handler
+whose server is a custom one gets no promised line at all,
+rather than a line that would refuse. And when there is no
+honest next step, the one sentence stands alone — nothing is
+invented to fill the space. Refusals, `n` answers at the gate,
+and edits that fail their build check answer exactly as they
+always did; a confirmation is earned by a landing, never
+printed instead of one.
+
+### Pages in one ask
+
+Some pages come in kinds, and a kind can be had whole — the page
+file, the handler that serves it, and its registration, in one
+plan. There are six: a **homepage**, an **about page**, a **contact
+page**, an **item list page**, a **details page**, and a **form
+page**. (Ask to `create a handler with a form` and you get the form
+kind from the other side: the handler, plus the page with its
+form.)
+
+```
+you> create a homepage in webtest
+gollemer [composer]> Add the homepage: webtest/index.html (a starter page), its handler Home in webtest/main.go, and the starter registration at / gives way to http.HandleFunc("/", Home), so Home answers http://localhost:8080/.
+The webserver's own starter handler at / — the one that answers "hello — your webserver is running" — is replaced by the registration above; nothing else in the server changes.
+...
+Apply this edit? [y/n] gollemer [composer]> Done — The homepage is in webtest/index.html — Home answers at /. I built the project and checked that it's really there.
+
+you> create a contact page in webtest
+gollemer [composer]> Add the contact page: webtest/contact.html (a starter page), its handler Contact in webtest/main.go, and one registration — http.HandleFunc("/contact", Contact) — added in webtest/main.go just before it serves, so Contact answers http://localhost:8080/contact.
+The form in webtest/contact.html asks for exactly the fields Contact reads — email, subject and message — so the page and the handler can't drift apart.
+...
+Apply this edit? [y/n] gollemer [composer]> Done — The contact page is in webtest/contact.html — Contact answers at /contact. I built the project and checked that it's really there.
+```
+
+Each kind answers at its own address — the homepage at `/`, about
+at `/about`, contact at `/contact`, the item list at `/items`,
+details at `/details`, the form at `/form` — and the handler takes
+the kind's name (Home, About, Contact, Items, Details, Form) unless
+you give one: `create a form page named Signup`. The page lands
+beside the handler's file, and a page file that already exists is
+never overwritten — the ask refuses and names it.
+
+If the program has no webserver yet, the page and handler still
+land, and the plan names the finishing sentence — `connect the Home
+handler to the webserver` — for when one exists. The starter pages
+carry TODOs where your own words and data go: the item list opens
+with placeholder items, the details page with placeholder fields.
+Gollemer doesn't invent your content.
+
+### A plain webpage, and serving its files
+
+The web and wasm commands, at a glance — one sentence each,
+said to the chat; the prose below tells each one's story:
+
+- `add a webpage to jim/temp/index.html` — a plain webpage in
+  a named file, from a template you pick: basic, responsive,
+  with assets, two columns, three columns, grid, rows, or
+  material
+- `add a two column template to jim/temp/index.html` — the
+  webpage ask in the template's own words; `add the template
+  to jim/temp/index.html` lets it ask which one
+- `add template 2 columns 3 rows to jim/temp/index.html` — a
+  grid counted exactly, 1 to 6 of each (also `add the grid 2
+  columns 3 rows to jim/temp/index.html`)
+- `create a homepage in webtest` — a page kind whole, from
+  the section above: the page, its handler, its registration
+  (about, contact, item list, details, and form pages too)
+- `add a templated page called home in jim` — a page as
+  header, footer, and body files joined by Go templates,
+  plus the handler that renders it
+- `add 2 columns and 3 rows to the body in jim` — a counted
+  section into a templated page's body (also said as `add
+  the grid 2 columns 3 rows to the body in jim`)
+- `add a card to jim/temp/index.html` — one Material
+  component into a page; `add a card to the page` means the
+  webpage you last made
+- `what components can I add` — the whole component set,
+  listed
+- `serve static files` — your server serves a folder's files
+  at `/static/`; name the folder (`serve static files from
+  jim/temp`, `serve the jim/temp folder`) or reword it
+  (`update the server to serve images, js, css`, `let the
+  server serve images`)
+- `add a handler that serves logo.png in jim` — one handler
+  answering one route with one file you already have, through
+  `http.ServeFile`; name the file in the sentence, or let it
+  be the folder's one servable file (several candidates ask
+  which one); the handler's name comes from the file's
+  (`LogoHandler`) unless you give one with `named`, and the
+  route is the file's own path — `/logo.png` — unless you
+  name one with `at /…`
+- `run the server jim` — build and run the server a folder
+  holds, named by its folder instead of its file
+- `watch jim/main.go` — run a program and restart it
+  whenever its files change
+- `watch folder jim/temp` — add a folder to a running watch
+
+And the wasm chain — a page that is a program:
+
+- `add a wasm app in jim` — a browser app in its own folder:
+  Go compiled to WebAssembly, its own module pinning Go 1.27
+- `add a card to jim` — a component into the app, as a Go
+  builder (the app's main.go works as the target too: `add a
+  card to jim/main.go`)
+- `add a button called save to jim` — a component with a
+  name; the name is its id
+- `learn this component as a price tag from PriceTag in
+  proto/components.go` — teach it a component of your own,
+  from one builder in your project; from then on it adds
+  like any other component, in this project
+- `when the save button is clicked, set the card's words to
+  'Saved'` — an event: clicks and changes answered in the
+  browser; show, hide, toggle, or set words
+- `build the wasm app in jim` — compile the app where it
+  sits
+- `serve the wasm app in jim` — the app served by a Go
+  webserver in `server/` and running, its address printed
+- `add a header and footer to the wasm app in jim` — a
+  header and a footer, each its own package inside the app;
+  one at a time works too
+- `add a navigation bar to the header in jim` — a component
+  inside a part (also `add a navigation bar to the header of
+  the wasm app in jim`)
+- `add a home page to the wasm app in jim` — the app's
+  welcome as a home page file of its own (new apps are born
+  with one; this gives one to an older app, moving the
+  welcome out of main.go)
+- `explain the wasm app in jim` — the app walked file by
+  file in plain words, closing with the sentences it
+  answers
+- `add a full stack app called notes in jim with fields
+  title, pages number and done yes-no` — a form in the app,
+  REST handlers at `/api/notes`, and the `notes` table in
+  the project's rqlite database
+
+Not every page is one of the six kinds. `add a webpage to
+jim/temp/index.html` puts a plain webpage into a named file, from
+a template you pick — **basic** (a title, a heading, a paragraph),
+**responsive** (the same, plus a viewport line and a little CSS
+so the page fits a phone's screen too), **with assets** (wired
+to load a style sheet, a script, and a picture from `/static/`),
+or a layout: **two columns** (a sidebar beside the main area),
+**three columns** (a sidebar on each side), **grid** (cards in a
+grid that narrows with the screen — or counted exactly:
+`add template 2 columns 3 rows to jim/temp/index.html`, or
+`add the grid 2 columns 3 rows to jim/temp/index.html`, makes
+a grid of precisely 2 columns by 3 rows of boxes, 1 to 6 of
+each), or **rows** (full-width bands
+in different shades) — or **material** (Google's Material Design
+look, hand-written plain CSS in the page itself, no framework).
+You can ask in the template's own words too —
+`add a two column template to jim/temp/index.html`, or
+`add the template to jim/temp/index.html` when you'd rather
+answer the question it asks in return. It asks which template
+whenever you don't name one. The file is
+created when new, filled when it sits there empty — and a page
+that already has words in it is never overwritten.
+
+Once a page exists, you can add one Material component at a
+time — the same parts the material template shows off: a
+**button** (the filled one), a **tonal button**, an
+**outlined button**, a **text button**, a **card**, an **app
+bar** (or top bar), a **navigation bar** (or nav bar, navbar),
+a **floating button** (or fab), a
+**chip**, a **text field**, a **switch**, and a **footer**. Say it like
+`add a button to jim/temp/index.html`, `add a text field to
+jim/temp/index.html`, or `add a card to the page` ("the page"
+is the webpage you last made or filled in this chat). The
+component's styles come with it the first time and never
+twice. Ask `what components can I add` for the whole set —
+and components you've taught it yourself, in this project,
+list there too, in their own group, marked as yours.
+
+A page can also be built the way real sites are: a header and
+a footer written once, and each page's own body between them.
+`add a templated page called home in jim` creates
+`jim/templates/header.html` (the head, the Material styles, and
+the responsive navigation bar), `jim/templates/footer.html`
+(the footer bar), and `jim/templates/home.html` (the body,
+which calls the header at its top and the footer at its foot),
+joined when the page is served by Go's html/template — plus
+the handler that renders it (`HomePage` in `jim/homepage.go`).
+No route is wired: the handler waits for the connect sentence
+like any other. Run the server from the project root — that's
+where the handler's template paths point. Then grow the body:
+`add 2 columns and 3 rows to the body in jim` — or, in the
+grid's own words, `add the grid 2 columns 3 rows to the body
+in jim` — puts a counted
+section of boxes into the body file alone (its styles join the
+header's, once), and asking again adds another section below
+the first. With no counts it makes 2 columns and 2 rows. The
+counted grid aimed at the body file itself —
+`add the grid 2 columns 3 rows to jim/templates/home.html` —
+lands the same way: the sentence is one, and the file it
+names decides which thing it is. A component grows the body
+too: `add a card to jim/templates/home.html` puts the card
+into the body above its footer call, its styles joining the
+header's the same way — one of each component per body, and
+asking for the same one again answers that it's already
+there. The navigation bar and the footer need no adding:
+every templated page already has them, from the header and
+footer files. Ask for a whole template
+on one of the three files instead —
+`add the material template to jim/templates/home.html` —
+and the chat explains the page rather than refusing
+flatly: the body is one part of a page, not a page on its
+own, the design lives in the header and already covers
+the whole page, and sections and components are what the
+body takes.
+
+A page can also be a program: `add a wasm app in jim`
+creates a browser app in that folder — Go compiled to
+WebAssembly, building its page in the browser through
+syscall/js. The app is its own module: `jim/go.mod` pins
+**Go 1.27** (the project around it keeps its own Go
+version, and the app's files stay out of its build),
+because the app's vector unit uses Go 1.27's portable
+**simd** package — the one that works on wasm targets.
+The folder gains `jim/main.go` (the app: it sets the
+garbage collector's GOGC knob low in code —
+`runtime/debug.SetGCPercent(50)` — since a browser page
+has no environment to pass flags through, then mounts
+the app's home page), `jim/home.go` (the home page: the
+welcome heading and the vector demo's result, in a file
+of their own — the first thing main mounts, so the
+welcome is a piece of its own to edit), `jim/vector.go`
+(the simd unit), `jim/index.html`
+(the host page, carrying the Material styles, with the
+build in its opening comment:
+`GOEXPERIMENT=simd GOOS=js GOARCH=wasm go build -o main.wasm .`,
+run in the folder — a first build fetches the Go 1.27
+toolchain by itself), and `jim/wasm_exec.js`, copied from
+this machine's Go 1.27 install when one is found; when
+none is, the plan says so in the open and names the one
+file to copy by hand. Once `main.wasm` is built, any
+static file server can serve the folder. Components join
+the app as Go code, not HTML: `add a card to jim` (or
+`add a card to jim/main.go`) puts the card's builder in
+`jim/components.go` and mounts it on the page, its styles
+joining the host page exactly once — the same Material
+set, one of each kind per app. In an app, a component can
+also carry a name — `add a button called save to jim` —
+a second, third button beside the unnamed one, each with
+its own builder; every component's root element carries
+an id: its name when it has one, else its place among its
+kind (`button-1`, `card-1`). A component can also be one
+of yours — teach the chat from one builder in your
+project (`learn this component as a price tag from
+PriceTag in proto/components.go`) and it adds like a
+built-in, in the project you taught it in; the teach
+section below tells that story whole.
+
+And the app can answer: an event is one sentence —
+`when the save button is clicked, set the card's words to
+'Saved'` (or `... in jim`), `when the switch is flipped,
+toggle the card`. It lands as a Go handler in
+`jim/events.go`: a `js.FuncOf` callback registered on the
+component once the page is mounted, kept in the file's
+list for the page's whole life — a callback Go lets go of
+is garbage-collected and silently stops answering, so
+none of them are let go. Buttons and cards answer to
+clicks; a switch or a text field answers to being
+changed. What can happen is show, hide, or toggle another
+component, or set a button's or a card's words (theirs
+are the components whose words are the whole of what they
+say). With several of a kind mounted and no name in the
+sentence, the chat asks which one — it never guesses.
+Naming a folder works like the other app sentences: no
+folder named means the last app this conversation worked
+on. Plain pages stay script-free: events belong to wasm
+apps alone.
+
+And building the app is a sentence: `build the wasm app
+in jim` runs the host page's build in the app's folder —
+the exact command from its comment, behind the usual
+yes — and answers with the compiler's own words when it
+fails, or the new `main.wasm` and its size when it lands.
+No folder named builds the last app the conversation
+worked on, and building again after an edit is ordinary:
+the sentence never refuses because `main.wasm` is
+already there. One word does two duties — with no app in
+the folder yet, "build a wasm app in jim" is the creation
+ask above; the chat tells the two apart by what the
+folder already holds, and only ever compiles an app that
+is really there.
+
+And serving the app is one sentence: `serve the wasm app
+in jim` gets the built app onto your Go server and running.
+The folder must hold an app, and the app must be built —
+with no `main.wasm` in it the chat names the build sentence
+above and stops, rather than serving a page whose program
+isn't there. The serving arrangement is the
+one that's easy to explain: the app in its own folder, its
+webserver a dedicated Go program in a `server/` folder at
+the project root (the project's own root-level program is
+the other home). If that server already serves the app,
+the sentence just runs it; if it is there without the
+route, one plan adds the `/static/` registration to it —
+never to an unrelated program elsewhere in the tree. When
+neither home has a server, one plan creates the house
+server in `server/main.go` with the registration already
+in it. Two registrations elsewhere never count as
+serving: one inside a nested module (a folder with its
+own `go.mod` under the root belongs to that module — this
+project can neither build nor run it, so the sentence
+reads the project as if it weren't there), and one
+serving the app from another program deeper in the tree —
+that one is named out loud before anything is written and
+left untouched, while the app is served from `server/`
+instead. A `/static/` route held by a different folder is
+the family's conflict, in its own words, and nothing is
+written. Then the server runs, and the last line gives
+the app's address — `http://localhost:8080/static/` when
+the port is the house one, always read from the serving
+file's own serve statement, never assumed. No folder
+named serves the last app the conversation worked on,
+with the reading printed.
+
+```
+you> serve the wasm app in jim
+gollemer [composer]> Create the project's webserver in server/main.go — the tiny server that listens at http://localhost:8080 — carrying one extra line, http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("jim")))), so the wasm app in jim is served at http://localhost:8080/static/. This project has no server yet; this is the one that serves the app.
+...
+Apply this edit? [y/n] gollemer [composer]> Done — The server in server/main.go now serves the wasm app in jim at /static/. I checked by re-reading the project — there's no go.mod at its root, so no build to run.
+Run it? go run server/main.go [auto-yes: your 'do all' directive]
+gollemer [runner]> server/main.go is running in the background — serving at http://localhost:8080. Say "show visits" to read its log (handler visits included), or "stop the program" to stop it.
+gollemer [runner]> The wasm app in jim is served by your Go server — open http://localhost:8080/static/ in your browser to run it.
+you> stop the program
+gollemer [runner]> Stopped server/main.go — it's no longer running. Its log kept 1 lines; say "show the program log" to read them.
+```
+
+(From a real run of the chat in a scratch project,
+2026-11-10 — the same sitting produced the full-stack
+example below; the explain example was re-captured the
+same day, after the home page and the commands readout
+landed, from a run of the same recipe.)
+
+The app can also grow the way a page does — a header and
+a footer, each its own package inside the app:
+`add a header and footer to the wasm app in jim` creates
+`jim/header/header.go` (package header — its `Header(doc)`
+builder over the app bar) and `jim/footer/footer.go`
+(package footer, `Footer(doc)` over the footer bar), and
+main.go imports both by the app's own module path and
+mounts the header above the home page and the footer
+below the app's components. One part at a time works too ("add a
+header to the wasm app in jim"). If the body already
+mounts an app bar or a footer component, it MOVES into
+its part — builder, words, and id unchanged, rendering
+once, from the part — never duplicated. A part grows on
+its own: `add a navigation bar to the header in jim`
+puts the component inside the part, its builder in
+`jim/header/components.go`, mounted between the part's
+own markers. Events reach a part's components by the
+same ids as the body's: body and parts are one app.
+
+An older app — one made before the home page was a
+file of its own — gets one from `add a home page to the
+wasm app in jim`: the welcome moves out of main.go into
+`jim/home.go`, whole, and main mounts it where the
+inline block stood, so the page renders exactly as it
+did and nothing renders twice; a welcome edited past
+the standard block refuses plainly rather than being
+rewritten by guess.
+
+And the app explains itself: `explain the wasm app in
+jim` walks the folder in plain words — the module and
+its Go 1.27 pin, the program, the home page, the vector
+unit, the components and events by name, the header and
+footer parts when it has them, the host page, the
+webserver in `server/` when it serves the app (the two
+folders named as what they are: the app runs in the
+browser, the server hands it over), and whether
+`main.wasm` is built or isn't — then how to build it,
+how to serve it, and what happens when the page opens.
+Then it closes with the commands readout — the
+sentences this app answers, for its folder (`add a card
+to jim`, `build the wasm app in jim`, and the rest),
+composed from the app's state: the parts sentence only
+while it has neither part, the into-the-header sentence
+only once a header is really there, the home-page
+sentence only while it has no `home.go` — and one
+worked example at the end, a button, a card, and the
+when-sentence that connects them, because a list names
+the moves but an example shows them connected. A
+creation prints the same readout right after its
+confirmation, so the sentences are there at the moment
+the app first exists.
+The same tour follows the first successful build or
+serve of an app on its own, once per app (it remembers,
+per project, in `~/.gollemer_wasm_explained.json`); after
+that it answers when asked, and only then.
+
+```
+you> explain the wasm app in jim
+gollemer [composer]> The wasm app in jim, file by file:
+  jim/go.mod — the app's own module: it makes the folder a module of its own, apart from the project's build, and pins Go 1.27 — the portable simd package the vector unit uses exists for wasm only there.
+  jim/main.go — the program: it sets the garbage collector's GOGC knob low in code (a browser page has no environment to pass the flag through); mounts the home page, then the app's components; then stays running — a wasm program whose main returns is finished, and the browser takes its page down with it.
+  jim/home.go — the home page: the welcome heading and the vector demo's sums, in a file of their own — main mounts it first, before the components, so the welcome leads the page. Edit the heading here to make the page yours.
+  ...
+  jim/main.wasm — the built app, 2,731,693 bytes: the file the browser fetches and runs. It is a build product, remade by every build.
+  server/main.go — the Go webserver, in its own folder at the project root: it hands the app's files to the browser at /static/ — the host page, the glue, and main.wasm. It is an ordinary Go program; the app itself runs in the browser, not in it.
+To build it: "build the wasm app in jim" runs the host page's own build command in jim (GOEXPERIMENT=simd GOOS=js GOARCH=wasm go build -o main.wasm .) — a first build fetches the Go 1.27 toolchain by itself.
+To serve it: two folders, two jobs — jim is the program that runs in the browser; the server folder is the Go program that hands it over. "serve the wasm app in jim" runs the server in server/, and the app answers at http://localhost:8080/static/.
+When the page opens: the browser loads wasm_exec.js, fetches main.wasm, and starts the Go program, which builds the page in the browser — and the events answer as you click and change things.
+What you can say for this app:
+  add a card to jim — a card on the page, a Go builder the program mounts.
+  add a button called save to jim — a button with a name of its own, so an event can find it.
+  when the save button is clicked, show the card — an event: what happens when the button is clicked.
+  add a header and footer to the wasm app in jim — the app's header and footer, each its own package inside the app.
+  build the wasm app in jim — compile the app to main.wasm.
+  serve the wasm app in jim — run the Go webserver that hands the app to the browser, and print its address.
+  add a full stack app called notes in jim with fields title and body — a form and a list in the app, with the REST handlers and the database table behind them.
+  explain the wasm app in jim — this walk, any time you ask.
+For example, making a button do something takes three sentences: "add a button called save to jim" makes the button, "add a card to jim" makes the card it acts on, and "when the save button is clicked, set the card's words to 'Saved'" connects them — the button is made, the card is made, and the when-sentence is the wire between them.
+```
+
+And one sentence grows a whole working stack through
+every layer at once: `add a full stack app called notes
+in jim with fields title, pages number and done yes-no`.
+The app in `jim` gains a form (one labeled input per
+field — a text box, a number box, a checkbox, by the
+kind word after the field's name; no kind word means
+text) over a list of the saved rows, each with its own
+delete button, and the project's server gains the other
+half: a `notes` table and the REST handlers at
+`/api/notes` — list, read one, create (201), update,
+delete — answering JSON in the fields' own names. The
+name is used exactly as given, for the address and the
+table both. The plan shows the route, the table, and
+every file before the gate, and the landing checks both
+builds — the project's and the wasm app's own compile —
+before it counts as landed. Asking for the same thing
+again is already-there; a different thing (`called
+tasks`) grows beside it with files of its own. The
+folder must already hold a wasm app — the form lives in
+it — so an app-less folder names the two steps instead.
+The database is rqlite, the engine the chat's own
+database pieces already speak: the rows live in a
+running node's SQLite file (the generated code talks to
+it over its HTTP API, its connection in its own file,
+never inlined into `main()`), so they survive the server
+stopping and starting — and the node has to be running
+for the data to answer: start one with
+`rqlited -node-id=1 data/` (ask `how do I run rqlite`
+and the chat walks through it). v1 limits, in the open:
+one thing per ask, the three field kinds, no login or
+accounts of any kind, and the form's checks are the
+simple kind — an empty text field is refused in the
+page, before anything is sent.
+
+```
+you> add a full stack app called notes in jim with fields title, pages number and done yes-no
+gollemer [composer]> Grow the whole notes stack in one plan. The backend: server/main.go gains server/notes.go — a connection to the project's rqlite database, the notes table (id plus title (text), pages (number), done (yesno)) created when the server starts, and the REST handlers at /api/notes — list, read one, create, update, delete, JSON in and out — registered by one new line in server/main.go, setupNotes(). The app's side: jim/notes.go joins the app — the notes form (one input per field and a save button) and the list under it — mounted in jim/main.go with the app's other components, sending and reading through those same /api/notes addresses. The server serves the app's page from the same program, so the form's requests stay on the one origin. …
+…
+Apply this edit? [y/n] gollemer [composer]> Done — The notes stack is grown: the /api/notes handlers and the notes table's setup are in server/notes.go, and the notes form and its list are in the wasm app in jim. I checked by re-reading the project — there's no go.mod at its root, so no build to run.
+```
+
+(That run had a real rqlite node up — the one the plan
+names — started with `rqlited -node-id=1 data/` before
+the ask.)
+
+A page's style sheets, scripts, and pictures are files too, and
+the server can serve the whole folder they live in: `serve static
+files` registers that folder at `/static/` on your existing
+server, so the folder's `style.css` answers at
+`http://localhost:8080/static/style.css`. Name the folder in
+the sentence when you have one in mind — `serve static files
+from jim/temp`, or `serve the jim/temp folder`; with no folder
+named, it finds the folder itself — the webpage's folder, or
+the one folder in the project holding web files — and asks
+when there's more than one it could mean. You can say it as an
+update too: `update the server to serve images, js, css`. One
+mechanism covers images, js, and css alike — the file server
+picks each file's content type from its extension.
+
+One file on its own has its own sentence: `add a handler that
+serves logo.png in jim` writes a handler that answers with
+that one file through `http.ServeFile` — which picks the
+content type from the file's extension itself, so the one
+shape serves a picture as an image, a stylesheet as a
+stylesheet, a data file as data. Name the file in the
+sentence, or say `serves a file` and let the folder decide:
+the folder's one servable file is the file, several
+candidates ask which one (never a guess), and a file that
+isn't there is never invented — the piece writes handlers,
+not files. The handler's name comes from the file's name
+(`logo.png` → `LogoHandler`) unless you give one — `add a
+handler named jim that returns a file in jim/main.go`. The
+route is the file's own path in its folder (`/logo.png`; an
+`index.html` answers at its folder's address), or the one
+you name with `at /…`. When the folder's program already
+serves, the registration is composed onto it under the
+wiring family's rules — a route taken by another handler is
+a refusal naming both, and asking again once it serves is a
+nothing-to-add answer; when nothing can take the
+registration yet, the handler lands and the plan's last note
+spells the one wiring sentence that finishes it:
+
+```
+you> add a handler that serves a file in jim
+gollemer [composer]> More than one file in jim could be served — which one should the handler serve? Nothing's been written.
+  1. index.html
+  2. logo.png
+Answer with the number or the file name — or say anything else and we'll move on.
+you> logo.png
+gollemer [composer]> Here's the edit I assembled from this project's own code:
+
+Add a handler that serves jim/logo.png: LogoHandler in jim/main.go, and one registration — http.HandleFunc("/logo.png", LogoHandler) — added in jim/main.go just before it serves, so http://localhost:8080/logo.png is answered with the logo.png file. The file itself isn't changed.
+http.ServeFile picks the answer's content type from the file's extension — a .png goes as an image, a .css as a stylesheet, a .json as data — so this one handler serves logo.png as what it is. The file itself isn't changed.
+Run it from the project root (go run ./jim) — the program looks for jim/logo.png in the folder it is run from, so it has to start at the root, not in the jim folder.
+Your existing server is untouched apart from the one registration above — no second ListenAndServe is added.
+
+--- a/jim/main.go
++++ b/jim/main.go
+@@ -3,5 +3,12 @@
+ import "net/http"
+
+ func main() {
++	http.HandleFunc("/logo.png", LogoHandler)
+ 	http.ListenAndServe(":8080", nil)
+ }
++
++// LogoHandler serves the logo.png file: it is read from disk on
++// every request, so a new copy of the file shows on refresh.
++func LogoHandler(w http.ResponseWriter, r *http.Request) {
++	http.ServeFile(w, r, "jim/logo.png")
++}
+Apply this edit? [y/n] gollemer [composer]> Done — The handler LogoHandler is in jim/main.go — it serves jim/logo.png at /logo.png. I built the project and checked that it's really there.
+```
 
 The security pieces explain themselves as they land:
 
@@ -214,8 +950,170 @@ you> add a jwt token in main to app/main.go
 gollemer [composer]> Add a jwt at the end of main in app/main.go, from the concept book: secret := os.Getenv("JWT_SECRET")
 Anyone can READ a JWT's claims — the signature proves they weren't changed, it does not hide them — so a token never carries a password or a secret. And the signing secret here comes from the JWT_SECRET environment variable: a secret written in code is a secret published with the code.
 ...
-Apply this edit? [y/n] gollemer [composer]> Done — main.go now has the jwt in main, at app/main.go:18. I built the project and checked that it's really there.
+Apply this edit? [y/n] gollemer [composer]> Done — main.go now has the jwt in main. I built the project and checked that it's really there.
 ```
+
+### Teach it a piece of your own
+
+The book's pieces are the ones that ship with Gollemer. Yours can
+join them: show the chat one declaration in your own project, give
+its kind a name, and the chat keeps the shape — as your data, in
+your home folder (`~/.gollemer_taught.json`, never inside a
+project), working in every project you open:
+
+```
+you> learn this as a signup form from Jake in teachjim/main.go
+gollemer [composer]> Here's what I learned from Jake in teachjim/main.go:
+  The kind: "signup form" — from here on, "add a signup form named <Name> to <file>" assembles one.
+  The example: the function Jake, at teachjim/main.go:11.
+  What varies: the name — Jake becomes the new name everywhere the piece names itself, in its declaration and in its calls to itself — and where it lands.
+  What stays fixed: everything else — the code stays exactly as in Jake, and the imports it leans on (net/http) travel with it.
+
+you> add a signup form named Signup to teachsite/site.go
+gollemer [composer]> Add the signup form Signup to teachsite/site.go — the piece you taught me, renamed from its example.
+From your example Jake in teachjim/main.go, taught Nov 4, 2026.
+...
+Apply this edit? [y/n] gollemer [composer]> Done — The signup form Signup is in teachsite/site.go. I built the project and checked that it's really there.
+```
+
+What varies is the name — the declaration's own name and every
+place the piece names itself (a constructor that returns it, a
+recursive call, a field of its own type) — and where it lands.
+Everything else stays exactly as the example has it: same fields,
+same words, same code. The imports the example leans on travel
+with it and are added to the target file if it lacks them. The
+landing goes through the same plan, `[y/n]`, transaction and
+build check as a book piece — if the new home can't build it, the
+edit is restored whole and the compiler's words are the answer.
+
+Ask `what have I taught you` for the list, `forget the signup
+form` to remove one, `forget what I taught you` to remove them
+all. Nothing is learned from ordinary conversation — only the
+teach sentences teach. A taught kind can never take a book
+kind's name: your pieces sit beside the book, never over it.
+Version one teaches from Go functions and types only: a method
+can't be taught (it belongs to its receiver's type), and there
+is no pasting a snippet in — the example has to be a declaration
+in the project, so the chat reads its real shape instead of
+guessing one.
+
+#### Teach it a component of your own
+
+A wasm component can be taught the same way, from one DOM
+builder in your project — a function in the registry
+builders' own shape: `func PriceTag(doc js.Value) js.Value`,
+building its elements with the app's `el` helper in the
+helper's own shape (`el(doc, tag, class, text)`) and
+stamping its root element's id the registry way,
+`tag.Set("id", "...")`, under the line that creates it.
+That stamp is the contract's load-bearing line — the app's
+mounts and events find the component by its id — so a
+builder without it is refused, with exactly that said:
+
+```
+you> learn this component as a price tag from PriceTag in proto/components.go
+gollemer [composer]> Here's what I learned from PriceTag in proto/components.go:
+  The kind: "price tag" — from here on, "add a price tag to <app folder>" adds one to a wasm app here, and "add a price tag called <name> to <app folder>" adds a named one.
+  The example: the builder PriceTag, at proto/components.go:19.
+  What varies: the builder's name — each copy is stamped with its own — and the root element's id: a named price tag carries its name as its id, an unnamed one its place among its kind ("price-tag-1"). And where it lands: the app's body, or its header or footer.
+  What stays fixed: everything else — the builder's code stays exactly as in PriceTag.
+  Styles: PriceTag gives its elements classes, and the classes come with it — but no styles travel with a taught component in this first version, so it shows styled only where the page's styles already cover those classes.
+  Saved as yours: it lives in ~/.gollemer_taught.json, and it belongs to this project — the one PriceTag was taught in. Say "forget the price tag" to remove it.
+
+you> add a price tag to jim
+gollemer [composer]> Here's the edit I assembled from this project's own code:
+
+Put a price tag in the wasm app in jim: priceTagComponent joins jim/components.go and is mounted on the page in jim/main.go
+From your example PriceTag in proto/components.go, taught Nov 10, 2026.
+The price tag renders when the app is built and the page loads — it is a Go builder in the app, not HTML in the page. Its element carries the id "price-tag-1", the name an event finds it by: "when the button is clicked, show the price tag" is how one is added.
+...
+Apply this edit? [y/n] gollemer [composer]> Done — The price tag is in the wasm app in jim. I built the project and checked that it's really there.
+
+you> when the price tag is clicked, show the card in jim
+gollemer [composer]> Here's the edit I assembled from this project's own code:
+
+Give the wasm app in jim an event: when the price tag is clicked, show the card. The handler onPriceTag1ClickShowCard1 joins jim/events.go, registered after the components mount in jim/main.go.
+...
+Apply this edit? [y/n] gollemer [composer]> Done — The event is in the wasm app in jim: when the price tag is clicked, show the card. I built the project and checked that it's really there.
+```
+
+(From a real run of the chat in a scratch project,
+2026-11-10 — taught, added, and wired in one sitting, and
+the app then built for the browser with the taught
+builders in it.)
+
+From there it behaves like a built-in: `add a price tag
+called total to jim` gives it a name (the name is its id),
+`add a price tag to the header in jim` puts it in a part,
+and events can start from it — it answers a click, like a
+button or a card — and can show, hide, or toggle it. Two
+honest limits: setting its words is not offered (its words
+are its own, and the sentence gets the same refusal any
+kind outside the button-and-card set gets), and no styles
+travel with it in this first version — its classes come
+with it, and the page shows it styled only where its own
+styles already cover those classes. A taught component
+belongs to the project it was taught in, since its builder
+leans on that project's helpers, and it can never take a
+built-in component's name: the registry wins its own
+names, refused plainly at teach time. The builder has to
+lean only on `syscall/js` and the app's own helpers — it
+travels into the project's apps on its own. `what
+components can I add` lists yours in their own group,
+marked `(taught)`, and `forget the price tag` removes it,
+like any taught kind.
+
+### Make a function in one file and call it from another
+
+One sentence can do both halves — a brand-new function in one
+file, and the call to it in a second file — as a single plan
+behind a single `[y/n]`:
+
+```
+you> make a function named Validate in api/validate.go and add a function named Report in api/report.go that calls it
+gollemer [composer]> Here's the edit I assembled from this project's own code:
+
+Make Validate in api/validate.go and call it in api/report.go: Validate lands in api/validate.go, and the caller is a new function Report in api/report.go, whose body calls Validate.
+This is an empty scaffold — Validate has a name and a body to fill in, but no parameters, no results, and nothing that does work yet.
+The api folder's files are package main, so the new file carries that package name, not the folder's.
+The call passes Validate no arguments — the declaration this plan writes takes none.
+One plan covers both files: if either side fails to build, both files go back exactly as they were.
+
+--- a/api/validate.go
++++ b/api/validate.go
+@@ -0,0 +1,5 @@
++package main
++
++func Validate() {
++	// TODO: write the body
++}
+--- a/api/report.go
++++ b/api/report.go
+@@ -1 +1,7 @@
+ package main
++
++// Report calls Validate — assembled by gollemer from api/validate.go:3.
++// It starts the call with placeholder values and handles the results; the real work is yours to write.
++func Report() {
++	Validate()
++}
+Apply this edit? [y/n] gollemer [composer]> Done — Validate now exists in api/validate.go and is called from api/report.go. I built the project and checked that it's really there.
+```
+
+The caller is assembled from the declaration the same plan is
+writing — so the two halves can never disagree. When the files
+live in different packages, the calling file imports the new
+function's package and qualifies the call, the same way a call
+to an existing function is written. The new function's body is
+the book's TODO scaffold, and the plan says so — filling it in
+is your next step.
+
+Shorter forms work too: `... and call it from main in
+api/main.go` puts the call inside an existing function you
+name, and `... and call it in api/main.go` puts it at the end
+of that file's `main`. If the file has no `main` to hold it,
+Gollemer refuses and spells out both working forms instead of
+inventing a caller name for you.
 
 ### Connect a database
 
@@ -239,15 +1137,15 @@ waits — it never downloads anything itself:
 
 ```
 you> add a gorqlite connection named Connect
-gollemer [composer]> That a gorqlite connection named Connect (it would be created as database/connect.go) needs the gorqlite client, and this project doesn't have it yet — the code would import github.com/rqlite/gorqlite, and nothing compiles against a dependency the project doesn't list. I don't fetch dependencies for you, so run this in the project first:
+gollemer [composer]> That ask — a gorqlite connection named Connect (it would be created as database/connect.go) — needs the gorqlite client, and this project doesn't have it yet — the code would import github.com/rqlite/gorqlite, and nothing compiles against a dependency the project doesn't list. I don't fetch dependencies for you, so run this in the project first:
 gollemer [composer]>   go get github.com/rqlite/gorqlite
-gollemer [composer]> Once you've run it, tell me "installed" and I'll bring that a gorqlite connection named Connect (it would be created as database/connect.go) back as a plan for your okay.
+gollemer [composer]> Once you've run it, tell me "installed" and I'll offer a gorqlite connection named Connect (it would be created as database/connect.go) again as a plan for your okay.
 
 you> installed
-gollemer [composer]> github.com/rqlite/gorqlite is in go.mod now — here's that a gorqlite connection named Connect (it would be created as database/connect.go) again:
+gollemer [composer]> github.com/rqlite/gorqlite is in go.mod now — here's the plan for a gorqlite connection named Connect (it would be created as database/connect.go) again:
 gollemer [composer]> Here's the edit I assembled from this project's own code:
 ...
-Apply this edit? [y/n] gollemer [composer]> Done — connect.go now declares the gorqlite connection Connect in package database, at database/connect.go:7. I built the project and checked that it's really there.
+Apply this edit? [y/n] gollemer [composer]> Done — The gorqlite connection Connect is in database/connect.go. I built the project and checked that it's really there.
 ```
 
 Say "installed" before it's true and it checks, tells you plainly
@@ -269,7 +1167,7 @@ gollemer [composer]> Add a print line in main in app/main.go, after line 9: `fmt
  	fmt.Println("two")
  }
 
-Apply this edit? [y/n] gollemer [composer]> Done — main.go now has the print line in main, at app/main.go:10. I built the project and checked that it's really there.
+Apply this edit? [y/n] gollemer [composer]> Done — main.go now has the print line in main. I built the project and checked that it's really there.
 ```
 
 The plan quotes the line it's aiming at, pieces only ever land
@@ -295,22 +1193,181 @@ Only commands from the project's own Makefile can run this way, each
 behind that `[y/n]`. There is no shell: the chat can't be talked into
 running anything else.
 
+### Run your program
+
+`run the program <file>.go` runs *your* program — never a Makefile
+target that happens to sound similar. Behind the same run gate, the
+chat builds it first (a compile error is reported as one, with the
+compiler's own words — nothing is ever said to have run that didn't),
+then starts it. A file that shares its folder with other `.go` files
+runs as its whole package; a lone file runs as itself.
+
+A program that finishes is reported with its real exit state and its
+own output. A program still running after a few seconds — a server —
+stays running in the background while the chat gives you your prompt
+back:
+
+```
+you> run the program jake/main.go
+Run it? go run jake/main.go [auto-yes: your 'do all' directive]
+gollemer [runner]> [running: jake/main.go — its output is being kept]
+gollemer [runner]> jake/main.go is running in the background — serving at http://localhost:8080. Say "show visits" to read its log (handler visits included), or "stop the program" to stop it.
+gollemer [runner]> Opening http://localhost:8080 in your browser.
+you> show visits
+gollemer [runner]> Here's what jake/main.go has printed (2 lines):
+listening at http://localhost:8080 — press Ctrl+C to stop
+visit: GET /
+gollemer [runner]> Visits appear in this log when the program prints them — servers Gollemer creates print one line per visit.
+gollemer [runner]> It's still running.
+you> top
+gollemer [runner]> Programs this chat is running — only the ones it started, not everything on this computer:
+gollemer [runner]> jake/main.go — running for 1 second, serving at http://localhost:8080; 2 lines logged, 1 visit. Say "stop the program" to stop it.
+you> stop the program
+gollemer [runner]> Stopped jake/main.go — it's no longer running. Its log kept 2 lines; say "show the program log" to read them.
+```
+
+(From a real run on this tree, 2026-11-01: the folder and the
+webserver file were created by the asks in the sections above, the
+visit is a real HTTP fetch, and the browser really was opened at the
+address the program printed. If the browser can't be opened, the chat
+says so and prints the address on its own line instead.)
+
+A server can be named by its folder instead of its file:
+`run the server jim` resolves the folder when you say it
+and runs the one runnable program at its top level, the
+same way as above. A .go file works as the target too —
+`run the server server/main.go` is `run server/main.go` in
+other words. A folder holding no runnable program, or
+several, is never guessed at: the sentence declines and
+the line falls through untouched.
+
+Or watch it while you work: `watch jim/main.go` starts the program
+just like `run jim/main.go`, then keeps an eye on its folder — when a
+file changes and the changes settle, the chat rebuilds and restarts
+it, and says so in a bracketed note:
+`[jim/main.go restarted — main.go changed]`. The same ask in other
+words is `restart jim/main.go when files change`. Any file counts —
+Go, html, js, css. A change that doesn't compile restarts nothing:
+the note says the build failed, and the version that's running
+stays up.
+
+The watch covers the program's own folder and everything under it.
+A folder elsewhere in the project joins by name: `watch folder
+<path>` adds it as another watched folder, and a change there
+restarts the program the same way, named by its full path
+(`[jim/main.go restarted — assets/app.js changed]`). So
+`watch folder jim/temp`, said while `jim/main.go` is watched,
+answers that it's already watching — `jim/temp` sits inside `jim/`,
+which the watch already covers — and naming the same folder twice is
+the same answer. Folder watching belongs to the chat's program, but
+naming a folder before any program runs is fine: the chat notes it,
+`top` shows it among the folders waiting for a program, and it
+attaches when watching starts. `stop watching folder jim/temp` removes just that folder;
+`stop watching jim/main.go` (or bare `stop watching`) ends the
+watching and leaves the program running, and `top` lists the extra
+folders next to the program.
+
+The rules around it:
+
+- **One at a time.** Running a second program while one runs answers
+  with the first one's live status, not a second instance.
+- **Stop means the program.** `stop the program`, `stop it`,
+  `stop the server` — and bare `stop` while one runs — stop the
+  program and keep the chat open. With nothing running, those ask
+  plainly ("No program is running right now") and bare `stop` keeps
+  its old meaning: it ends the chat. Closing the chat (`/quit`, or
+  the input ending) stops any running program — nothing is orphaned.
+- **`top` shows what the chat itself is running**: the program, how
+  long for, its address if it's a server, and how much it has logged
+  (visits counted). A program that died is listed as exited, never
+  as live.
+- **Visits are the program's own words.** There is no proxy: handler
+  visits land in the log because the program prints them — servers
+  Gollemer creates print one `visit: GET /…` line per visit, and
+  `show visits` / `show the program log` says exactly that for
+  programs you wrote by hand.
+
+### Basic terminal commands
+
+The beginner terminal words work too — `pwd`, `ls`, `cd`, `cat`,
+`echo`, `clear`, `date`, `whoami` — answered by the chat itself
+(tagged `gollemer [terminal]>`), each behind the same run gate, and
+each confined to the project folder: a path that climbs out of it is
+refused by name. There is still no shell underneath: each command is
+done natively, one at a time, so a line carrying a shell character
+(`;`, `&`, `|`, `>`, `<`, a backtick, or `$`) is refused, naming the
+character. Command words the chat won't run at all are answered with
+guidance instead of silence: `mkdir` points at "create a folder
+\<name\>", `rm` explains that Gollemer doesn't delete files, and
+`mv`, `cp`, `sudo`, `curl` and friends point at the basics above.
+
+`cd` moves the whole session, not just the answer: the chat re-reads
+the new folder as its project, so creations, edits, and runs follow
+you. Bare `cd` returns to the folder the chat started in, and
+`cd ..` stops at the project root with a note instead of climbing
+out of it.
+
+```text
+you> pwd
+Run it? pwd [auto-yes: your 'do all' directive]
+…/cap
+you> ls
+Run it? ls [auto-yes: your 'do all' directive]
+data
+go.mod
+jake/
+notes.txt
+you> cd jake
+Run it? cd jake [auto-yes: your 'do all' directive]
+gollemer [terminal]> Now working in jake/ — creations, edits, and runs happen here now. Say "cd" on its own to go back to cap/.
+you> rm notes.txt
+gollemer [terminal]> I don't run rm — Gollemer doesn't delete files from the chat. Deleting is permanent, and I only do things I can show you first and stand behind; if a file has to go, that's a job for your file manager or your own terminal.
+you> ls ../secret
+gollemer [terminal]> "../secret" climbs out of the project folder — these commands only work inside cap/.
+```
+
 ### Test everything at once
 
 ```
 $ make handtest
 ...
-handtest scoreboard: 45 passed, 0 failed, 45 total
+handtest scoreboard: 102 passed, 0 failed, 102 total
 ```
 
 `make handtest` drives the real chat through scripted sessions in a
 throwaway project — folder creation, bare files, the webserver and
 serve-an-html-file recipes, the security pieces, line placement, the
-database pieces and the dependency gate, and the everyday statement
-pieces — then checks the files it should have written and builds the
-whole scratch project. It's the same test a person would do by hand
-after every update, automated. (The scoreboard above is from a real
-run on 2026-11-01.)
+database pieces and the dependency gate, running your own programs
+(a quick one, a live server with a real visit in its log, stop, and
+top), the basic terminal commands (pwd, ls, cd, cat, echo, date,
+whoami — and their refusals: rm, a path escape, a shell character,
+cd .. at the top), the everyday statement pieces, and the one-ask
+make-and-call — then checks the files it should have written and
+builds the whole scratch project. It's the same test a person
+would do by hand after every update, automated. (The scoreboard
+above is from a real run on 2026-11-02.)
+
+```
+$ make paces
+...
+paces scoreboard: 83 passed, 0 failed, 83 total
+```
+
+`make paces` is the longer workout: one project built across 19
+stages of real asks in sequence — a webserver, handlers, middleware
+and security pieces, a named database connection, the dependency
+gate with the install happening mid-conversation, a struct in one
+file used from others (including a function written into a second
+file that calls a third file's function), an html page served and
+then fetched over HTTP from the running program, the terminal
+basics, the guidance answers, a cross-file rename, the rm refusal,
+a function made in one file and called from another in a
+single ask, a clarifying question answered in one word, a
+follow-up that repeats the last piece, and a taught name for a
+file used across two chats — with the disk checked after every stage and every
+package built. It began as a one-off workout that scored 46 of 58 and found
+three real defects; the fixes landed, and the workout stayed as a
+test.
 
 ## How it works, in plain words
 
@@ -358,6 +1415,7 @@ will offer to run them for you.
 | `make guide` | Print the start-here guide — what to do, what it can do, how to teach it more |
 | `make explain` | Print an overview like this README, from the command line |
 | `make handtest` | Run the scripted end-to-end test suite in a throwaway project; prints a PASS/FAIL scoreboard |
+| `make paces` | Run the 14-stage multi-file workout — one project built by real asks in sequence, disk + build checked per stage |
 | `make sel` | Pick any make command from a fuzzy-finder list instead of typing it |
 | `make debug-chat` | The chat with its thought process and routing shown — for the curious |
 | `make eval` | Score every brain on its fixed test sets |
@@ -395,9 +1453,10 @@ guesses.
   validated, each behind a `[y/n]`. It cannot be talked into a shell
   command, and in a piped (non-terminal) session it won't run commands
   at all.
-- **Placed, not wired.** A handler added to `handlers/` is a complete,
-  compiling piece — but registering it with your server is a next
-  step the plan names, not something it silently does to your `main`.
+- **Placed, not auto-wired.** A handler added to `handlers/` is a
+  complete, compiling piece — registering it with your server is a
+  separate step you ask for (`connect the SignUp handler to the
+  webserver`), never something it silently does to your `main`.
 - **Whole programs from thin air.** It assembles known pieces and
   shapes from your own project. It won't invent a large program from
   a vague sentence — and on the one occasion a model gets to propose
@@ -407,7 +1466,7 @@ guesses.
 
 ## A note on the numbers in this README
 
-135 pieces, 17 brains, 45 handtest cases — these are counts of what's
-actually in this checkout, and the model scores quoted are the
-measured ones, kept next to the features they describe. When a number
-changes, this file should change with it.
+135 pieces, 17 brains, 195 handtest cases, 83 paces checks — these are
+counts of what's actually in this checkout, and the model scores
+quoted are the measured ones, kept next to the features they
+describe. When a number changes, this file should change with it.

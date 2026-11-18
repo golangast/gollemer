@@ -6,20 +6,15 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/golangast/gollemer/pkg/termui"
 )
 
-// This file renders the terminal visuals: several ASCII charts that show
-// a codebase's shape at a glance. VisualReport bundles them into the one
-// report the chat prints for "analyze <repo>" and "show me a visual".
-
-// bars scales v against max into a width-wide block bar.
-func bars(v, max, width int) string {
-	if max <= 0 || v <= 0 {
-		return ""
-	}
-	n := 1 + (width-1)*v/max
-	return strings.Repeat("█", n)
-}
+// This file renders the terminal visuals: several charts that show
+// a codebase's shape at a glance, rendered through pkg/termui (the
+// home-grown UI library: section headers, tracked bars, tables).
+// VisualReport bundles them into the one report the chat prints
+// for "analyze <repo>" and "show me a visual".
 
 // pkgLabel renders "" (the root dir) as ".".
 func pkgLabel(dir string) string {
@@ -32,6 +27,12 @@ func pkgLabel(dir string) string {
 // PackageSizes draws lines-of-code per package as a horizontal bar chart,
 // biggest first. Big bars are where the code — and the complexity — lives.
 func (p *Project) PackageSizes() string {
+	return p.packageSizes(0) + "\n"
+}
+
+// packageSizes renders the sizes panel; width > 0 pins the panel
+// width (and shrinks the bars) for side-by-side Row layouts.
+func (p *Project) packageSizes(width int) string {
 	pkgs := append([]*Package(nil), p.Packages...)
 	sort.Slice(pkgs, func(i, j int) bool {
 		if pkgs[i].Lines != pkgs[j].Lines {
@@ -39,18 +40,19 @@ func (p *Project) PackageSizes() string {
 		}
 		return pkgs[i].Dir < pkgs[j].Dir
 	})
-	max := 0
+	items := make([]termui.BarItem, 0, len(pkgs))
 	for _, pkg := range pkgs {
-		if pkg.Lines > max {
-			max = pkg.Lines
-		}
+		items = append(items, termui.BarItem{Label: pkgLabel(pkg.Dir), Value: pkg.Lines})
 	}
-	var b strings.Builder
-	b.WriteString("PACKAGE SIZES (lines of code)\n")
-	for _, pkg := range pkgs {
-		fmt.Fprintf(&b, "  %-28s %s %d\n", pkgLabel(pkg.Dir), bars(pkg.Lines, max, 30), pkg.Lines)
+	barW := 30
+	if width > 0 {
+		barW = 14
 	}
-	return b.String()
+	chart := termui.BarChart(items, barW, termui.Fg("yellow"), "")
+	if width > 0 {
+		return termui.PanelW("PACKAGE SIZES (lines of code)", chart, termui.Fg("yellow"), width)
+	}
+	return termui.Panel("PACKAGE SIZES (lines of code)", chart, termui.Fg("yellow"))
 }
 
 // Coupling draws fan-out (project packages this one imports) and fan-in
@@ -58,6 +60,12 @@ func (p *Project) PackageSizes() string {
 // High fan-in = a hub everybody depends on; high fan-out = a package
 // that knows a lot about the rest of the project.
 func (p *Project) Coupling() string {
+	return p.coupling(0) + "\n"
+}
+
+// coupling renders the coupling panel; width > 0 pins the panel
+// width (and shrinks the bars) for side-by-side Row layouts.
+func (p *Project) coupling(width int) string {
 	fanIn := map[string]int{}
 	for _, pkg := range p.Packages {
 		for _, dep := range pkg.Internal {
@@ -81,17 +89,36 @@ func (p *Project) Coupling() string {
 			maxIn = fanIn[pkg.Dir]
 		}
 	}
-	var b strings.Builder
-	b.WriteString("COUPLING (who depends on whom)\n")
-	b.WriteString("  out = packages it imports · in = packages importing it\n")
-	for _, pkg := range pkgs {
-		fmt.Fprintf(&b, "  %-28s out %-16s in %s %d\n",
-			pkgLabel(pkg.Dir),
-			bars(len(pkg.Internal), maxOut, 12),
-			bars(fanIn[pkg.Dir], maxIn, 12),
-			fanIn[pkg.Dir])
+	barW := 12
+	var inner strings.Builder
+	if width > 0 {
+		barW = 5
+		fmt.Fprintf(&inner, "%s imports   %s importing it\n",
+			termui.Badge("out "+termui.Arrow, termui.Info),
+			termui.Badge(termui.ArrowBack+" in", termui.Good))
+	} else {
+		fmt.Fprintf(&inner, "%s packages it imports   %s packages importing it\n",
+			termui.Badge("out "+termui.Arrow, termui.Info),
+			termui.Badge(termui.ArrowBack+" in", termui.Good))
 	}
-	return b.String()
+	rows := make([][]string, 0, len(pkgs))
+	for _, pkg := range pkgs {
+		rows = append(rows, []string{
+			pkgLabel(pkg.Dir),
+			"out " + termui.HBar(len(pkg.Internal), maxOut, barW, termui.Info),
+			"in " + termui.HBar(fanIn[pkg.Dir], maxIn, barW, termui.Good),
+			fmt.Sprintf("%d", fanIn[pkg.Dir]),
+		})
+	}
+	headers := []string{"package", "out", "in", "imported by"}
+	if width > 0 {
+		headers = []string{"package", "out", "in", "by"}
+	}
+	inner.WriteString(termui.Table(headers, rows))
+	if width > 0 {
+		return termui.PanelW("COUPLING (who depends on whom)", inner.String(), termui.Info, width)
+	}
+	return termui.Panel("COUPLING (who depends on whom)", inner.String(), termui.Info)
 }
 
 // BiggestFiles draws the n largest Go files as a bar chart. Big files
@@ -115,18 +142,22 @@ func (p *Project) BiggestFiles(n int) string {
 	if len(files) > n {
 		files = files[:n]
 	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "BIGGEST FILES (top %d)\n", len(files))
 	max := 0
 	for _, f := range files {
 		if f.lines > max {
 			max = f.lines
 		}
 	}
-	for _, f := range files {
-		fmt.Fprintf(&b, "  %-40s %s %d\n", p.LinkPath(f.rel), bars(f.lines, max, 24), f.lines)
+	var inner strings.Builder
+	for i, f := range files {
+		fmt.Fprintf(&inner, "%s %s %s %s\n",
+			termui.Muted.Apply(fmt.Sprintf("%d.", i+1)),
+			termui.PadRight(termui.StylePath(p.LinkPath(f.rel)), 40),
+			termui.HBar(f.lines, max, 24, termui.Violet),
+			termui.Strong("").Apply(fmt.Sprintf("%d", f.lines)))
 	}
-	return b.String()
+	return termui.Panel(fmt.Sprintf("BIGGEST FILES (top %d)", len(files)),
+		inner.String(), termui.Violet) + "\n"
 }
 
 func countLines(data []byte) int {
@@ -152,13 +183,20 @@ func (p *Project) VisualReport() string {
 		name = filepathBase(p.Root)
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "VISUALS: %s\n%s\n\n", name, strings.Repeat("=", 46))
+	fmt.Fprintf(&b, "%s\n%s\n\n", termui.SectionHeader("VISUALS: "+name), termui.Rule(46))
 	b.WriteString(p.Pipeline())
 	b.WriteString("\n")
-	b.WriteString(p.PackageSizes())
-	b.WriteString("\n")
-	b.WriteString(p.Coupling())
-	b.WriteString("\n")
+	if termui.TerminalWidth() >= 116 {
+		// Wide terminal: the dashboard layout — sizes and coupling
+		// as side-by-side multibox panels.
+		b.WriteString(termui.Row(p.packageSizes(57), p.coupling(57)))
+		b.WriteString("\n\n")
+	} else {
+		b.WriteString(p.PackageSizes())
+		b.WriteString("\n")
+		b.WriteString(p.Coupling())
+		b.WriteString("\n")
+	}
 	b.WriteString(p.EngineRoom(8))
 	b.WriteString("\n")
 	b.WriteString(p.BiggestFiles(8))

@@ -1,0 +1,2387 @@
+package chat
+
+// Run-the-program (2026-11-01, John's screenshot): "run the
+// program jake/main.go" must run THAT program. Before this
+// claim existed, the sentence fell to the intent layer, which
+// read it as "watch"; runWatchIt then picked the HOST project's
+// own Makefile, found its "start" target, ran `make start`
+// (which printed "make start opens the chat and needs a real
+// terminal"), and — because that command exited 0 — narrated
+// "It ran fine. What you see above is the program talking."
+// The user's program never ran and the narration was invented.
+//
+// This claim is the deterministic fix, seated ahead of the
+// beginner five (and therefore ahead of the intent layer, the
+// makefile brain, and its allowlist run path):
+//
+//   - "run the program <path>.go" / "run <path>.go" (and the
+//     "run the program in <path>.go" spelling John's second
+//     screenshot used) claim the line; a missing file or a
+//     non-.go path refuses by name, and "run make <target>"
+//     is never this claim's shape. "start" and "launch" read
+//     as the same verb (widened 2026-11-05) — the rest shapes
+//     are unchanged, so "start a webserver in…" still
+//     declines: this family runs programs, it does not build
+//     them.
+//   - Politeness is not a different ask (2026-11-09, John's
+//     screenshot): "can you run jim/main.go" IS "run
+//     jim/main.go" — but with "can" as the first token the
+//     run shape missed, the line fell to the intent layer,
+//     and the 2026-11-01 make-start failure walked back in
+//     through the side door. The parser strips a closed set
+//     of softeners — leading "can you" / "could you" /
+//     "please" and a trailing "please" — before its shapes
+//     apply, across the run, stop, log, and top shapes.
+//   - "run the server <name>" (2026-11-09, John's second
+//     screenshot of the day) names the program by its folder
+//     instead of its file: "run the server jim" ran the HOST
+//     repo's `make start` through the intent layer, because
+//     no run shape took it. The server shapes take a folder
+//     (or a .go file, which is just "run <file>"): the folder
+//     is resolved at claim time, and only when its top level
+//     holds exactly ONE runnable program (checkRunnableProgram
+//     is the judge) does the claim fire, on that file. Zero
+//     candidates or several — the claim declines and the line
+//     falls through untouched; it never invents a pick.
+//   - The program is built first (`go build`, argv only, no
+//     shell ever), so compiler errors surface verbatim as a
+//     compile failure and are never narrated as a run. A file
+//     whose package has sibling .go files builds as a package
+//     (go run ./jake is the shape the gate shows); a lone file
+//     builds as itself.
+//   - The built program runs as a session-owned background
+//     process. One that exits inside the startup window is
+//     reported from its real exit state, with its own output.
+//     One still running is reported as running — with its URL
+//     when its own output (or a probe of the address its code
+//     listens on) confirms a server — and the chat's prompt
+//     comes back while the program keeps running.
+//   - Output is captured line by line into a per-program log.
+//     "show the program log" / "show visits" prints it;
+//     handler visits are in it when the program prints them
+//     (servers Gollemer creates print one line per visit).
+//     There is no proxy and no interception.
+//   - "top" / "what's running" lists what this chat itself
+//     started — path, how long, its URL, lines and visits —
+//     with exited programs listed as exited, never as live.
+//   - "watch <path>.go" (2026-11-09, John's ask) runs the
+//     program — or finds it already running — and watches
+//     its folder's subtree: when a file changes and the
+//     changes settle, the program is rebuilt and restarted
+//     once, announced in the bracket-note style. A failed
+//     build restarts nothing: the old process keeps
+//     running. "stop watching" ends the watching only;
+//     stopping the program ends both. The synonym shape is
+//     "restart <path>.go when files change".
+//   - "watch folder <path>" (2026-11-09, John's follow-up:
+//     "have it watch folders like the template folder for
+//     html or js updates") names an extra folder — a
+//     template or assets folder outside the program's own —
+//     whose changes restart the program the same way,
+//     announced with the file's project-relative path.
+//     "stop watching folder <path>" removes just that
+//     folder. Folder watching attaches to the session's
+//     program; with none running, it refuses by name.
+//   - "stop the program" (and friends) kills it. Bare "stop"
+//     stops the program while one runs and keeps its old
+//     chat-quitting meaning when none does — the loop's quit
+//     check consults stopMeansQuit for exactly that fork.
+//     /quit and EOF kill any running program on the way out.
+//
+// Every status sentence is rendered from the process's real
+// state by the helpers below — never from what the command
+// was supposed to do.
+
+import (
+	"context"
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"io/fs"
+	"net"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+)
+
+// ---------------------------------------------------------------------
+// Parsing: the claim's shapes, kept tight on purpose.
+
+type programShape int
+
+const (
+	shapeNone programShape = iota
+	shapeRunProgram
+	shapeStopProgram
+	shapeStopBare // bare "stop": this claim's only while a program runs
+	shapeShowLog
+	shapeTop
+	shapeWatchProgram
+	shapeStopWatching
+	shapeWatchFolder
+	shapeStopWatchingFolder
+	shapeRunServer // "run the server <target>": a folder to resolve, or a .go file
+)
+
+// parseProgramLine classifies one chat line for this claim.
+// target is the path as typed ("" when the shape carries no
+// path). A run shape whose token merely looks like a path (it
+// has a dot or a slash but no .go ending) still classifies as
+// shapeRunProgram so the claim can refuse it by name; a token
+// with neither ("run make …", "run it") never classifies.
+// Politeness wrappers come off before the shapes apply
+// (stripProgramSofteners) — the ask inside them is the ask.
+func parseProgramLine(line string) (programShape, string) {
+	fields := strings.Fields(strings.TrimSpace(line))
+	if len(fields) == 0 {
+		return shapeNone, ""
+	}
+	fold := func(s string) string {
+		return strings.ToLower(strings.TrimRight(s, ".!?"))
+	}
+	fields = stripProgramSofteners(fields, fold)
+	if len(fields) == 0 {
+		return shapeNone, ""
+	}
+	// pathy reports (isGo, looksLikePath) for a token.
+	pathy := func(tok string) (bool, bool) {
+		t := fold(tok)
+		if strings.HasSuffix(t, ".go") {
+			return true, true
+		}
+		return false, strings.ContainsAny(t, "./")
+	}
+	// The top shapes are whole-line: "top" asks what this chat
+	// itself is running (never an OS process table).
+	joinedAll := strings.ToLower(strings.TrimRight(strings.Join(fields, " "), ".!?"))
+	switch joinedAll {
+	case "top", "/top", "what's running", "show running programs":
+		return shapeTop, ""
+	}
+	switch fold(fields[0]) {
+	case "run", "start", "launch":
+		rest := fields[1:]
+		if len(rest) == 1 {
+			if _, p := pathy(rest[0]); p {
+				return shapeRunProgram, strings.TrimRight(rest[0], ".!?")
+			}
+		}
+		if len(rest) == 2 && fold(rest[0]) == "program" {
+			if _, p := pathy(rest[1]); p {
+				return shapeRunProgram, strings.TrimRight(rest[1], ".!?")
+			}
+		}
+		if len(rest) == 3 && fold(rest[0]) == "the" && fold(rest[1]) == "program" {
+			if _, p := pathy(rest[2]); p {
+				return shapeRunProgram, strings.TrimRight(rest[2], ".!?")
+			}
+		}
+		if len(rest) == 4 && fold(rest[0]) == "the" && fold(rest[1]) == "program" && fold(rest[2]) == "in" {
+			if _, p := pathy(rest[3]); p {
+				return shapeRunProgram, strings.TrimRight(rest[3], ".!?")
+			}
+		}
+		// The server shapes: "run the server <target>", "run
+		// server <target>", and the "in" spellings. The word
+		// "server" is the shape — the target needs no pathiness
+		// test (a folder can be a bare name, "jim"), because
+		// resolution at claim time is the gate: it fires only
+		// for a .go file or a folder holding exactly one
+		// runnable program, and declines the line otherwise.
+		// "start a webserver in …" is untouched: "webserver"
+		// is one token, not this shape.
+		if len(rest) == 2 && fold(rest[0]) == "server" {
+			return shapeRunServer, strings.TrimRight(rest[1], ".!?")
+		}
+		if len(rest) == 3 && fold(rest[0]) == "the" && fold(rest[1]) == "server" {
+			return shapeRunServer, strings.TrimRight(rest[2], ".!?")
+		}
+		if len(rest) == 3 && fold(rest[0]) == "server" && fold(rest[1]) == "in" {
+			return shapeRunServer, strings.TrimRight(rest[2], ".!?")
+		}
+		if len(rest) == 4 && fold(rest[0]) == "the" && fold(rest[1]) == "server" && fold(rest[2]) == "in" {
+			return shapeRunServer, strings.TrimRight(rest[3], ".!?")
+		}
+	case "watch":
+		// The run shapes with "watch" as the verb: watch a
+		// program this chat runs, restarting it when its
+		// files change (the watch section below). A token
+		// that merely looks like a path still classifies, so
+		// the claim can refuse it by name; "watch it" and
+		// friends never classify, exactly as with run.
+		rest := fields[1:]
+		if len(rest) == 1 {
+			if _, p := pathy(rest[0]); p {
+				return shapeWatchProgram, strings.TrimRight(rest[0], ".!?")
+			}
+		}
+		if len(rest) == 2 && fold(rest[0]) == "program" {
+			if _, p := pathy(rest[1]); p {
+				return shapeWatchProgram, strings.TrimRight(rest[1], ".!?")
+			}
+		}
+		if len(rest) == 3 && fold(rest[0]) == "the" && fold(rest[1]) == "program" {
+			if _, p := pathy(rest[2]); p {
+				return shapeWatchProgram, strings.TrimRight(rest[2], ".!?")
+			}
+		}
+		if len(rest) == 4 && fold(rest[0]) == "the" && fold(rest[1]) == "program" && fold(rest[2]) == "in" {
+			if _, p := pathy(rest[3]); p {
+				return shapeWatchProgram, strings.TrimRight(rest[3], ".!?")
+			}
+		}
+		// "watch folder <path>" / "watch the folder <path>":
+		// an extra folder for the session program's watcher.
+		// The word "folder" is the shape — the token after
+		// it is the path, no pathiness test (a folder can be
+		// a bare name, "assets").
+		if len(rest) == 2 && fold(rest[0]) == "folder" {
+			return shapeWatchFolder, strings.TrimRight(rest[1], ".!?")
+		}
+		if len(rest) == 3 && fold(rest[0]) == "the" && fold(rest[1]) == "folder" {
+			return shapeWatchFolder, strings.TrimRight(rest[2], ".!?")
+		}
+	case "restart":
+		// The watch synonym: "restart <path>.go when files
+		// change" — the whole tail is the shape. A bare
+		// "restart <path>.go" is not claimed: this piece has
+		// no restart-it-once sentence, only the watching.
+		rest := fields[1:]
+		if len(rest) >= 2 && fold(rest[0]) == "the" && fold(rest[1]) == "program" {
+			rest = rest[2:]
+		} else if len(rest) >= 1 && fold(rest[0]) == "program" {
+			rest = rest[1:]
+		}
+		if len(rest) == 4 && fold(rest[1]) == "when" && fold(rest[2]) == "files" && fold(rest[3]) == "change" {
+			if _, p := pathy(rest[0]); p {
+				return shapeWatchProgram, strings.TrimRight(rest[0], ".!?")
+			}
+		}
+	case "stop":
+		rest := fields[1:]
+		if len(rest) == 0 {
+			return shapeStopBare, ""
+		}
+		if fold(rest[0]) == "watching" {
+			// "stop watching [the program] <path>.go", and
+			// bare "stop watching" — the session's watched
+			// program, unnamed.
+			wrest := rest[1:]
+			if len(wrest) == 0 {
+				return shapeStopWatching, ""
+			}
+			if len(wrest) == 1 {
+				if g, _ := pathy(wrest[0]); g {
+					return shapeStopWatching, strings.TrimRight(wrest[0], ".!?")
+				}
+			}
+			if len(wrest) == 3 && fold(wrest[0]) == "the" && fold(wrest[1]) == "program" {
+				if g, _ := pathy(wrest[2]); g {
+					return shapeStopWatching, strings.TrimRight(wrest[2], ".!?")
+				}
+			}
+			// "stop watching folder <path>" / "stop watching
+			// the folder <path>": remove one named folder.
+			if len(wrest) == 2 && fold(wrest[0]) == "folder" {
+				return shapeStopWatchingFolder, strings.TrimRight(wrest[1], ".!?")
+			}
+			if len(wrest) == 3 && fold(wrest[0]) == "the" && fold(wrest[1]) == "folder" {
+				return shapeStopWatchingFolder, strings.TrimRight(wrest[2], ".!?")
+			}
+			return shapeNone, ""
+		}
+		joined := strings.ToLower(strings.Join(fields, " "))
+		joined = strings.TrimRight(joined, ".!?")
+		switch joined {
+		case "stop it", "stop the program", "stop the server":
+			return shapeStopProgram, ""
+		}
+		if len(rest) == 1 {
+			if g, _ := pathy(rest[0]); g {
+				return shapeStopProgram, strings.TrimRight(rest[0], ".!?")
+			}
+		}
+		if len(rest) == 3 && fold(rest[0]) == "the" && fold(rest[1]) == "program" {
+			if g, _ := pathy(rest[2]); g {
+				return shapeStopProgram, strings.TrimRight(rest[2], ".!?")
+			}
+		}
+	case "show":
+		joined := strings.ToLower(strings.Join(fields, " "))
+		joined = strings.TrimRight(joined, ".!?")
+		switch joined {
+		case "show the program log", "show program log", "show the log",
+			"show visits", "show the visits",
+			"show me the program log", "show me the log", "show me visits":
+			return shapeShowLog, ""
+		}
+	}
+	return shapeNone, ""
+}
+
+// stripProgramSofteners removes the closed set of politeness
+// wrappers this claim tolerates around its shapes: a leading
+// "can you", "could you", or "please", and a trailing
+// "please" — the same wrappers the phrasing layer strips
+// (phrasingWrapperPrefixes / phrasingWrapperSuffixes),
+// applied here so the program shapes see the bare ask.
+// Stacked softeners ("can you please run …") come off one at
+// a time; anything outside the closed set ("will you run …")
+// is left exactly as typed, and the shapes stay as tight as
+// they were — stripping can only reveal a shape that was
+// already there, never invent one.
+func stripProgramSofteners(fields []string, fold func(string) string) []string {
+	for len(fields) > 0 && fold(fields[len(fields)-1]) == "please" {
+		fields = fields[:len(fields)-1]
+	}
+	for len(fields) > 0 {
+		switch {
+		case len(fields) >= 2 && fold(fields[0]) == "can" && fold(fields[1]) == "you":
+			fields = fields[2:]
+		case len(fields) >= 2 && fold(fields[0]) == "could" && fold(fields[1]) == "you":
+			fields = fields[2:]
+		case fold(fields[0]) == "please":
+			fields = fields[1:]
+		default:
+			return fields
+		}
+	}
+	return fields
+}
+
+// ---------------------------------------------------------------------
+// Session state: the one program this chat session is running.
+
+const programLogCap = 400
+
+// programLog is the running program's captured output, line by
+// line: the last programLogCap lines are kept for display,
+// total counts every line ever seen, and notified is the total
+// the prompt-cycle notice has already reported.
+type programLog struct {
+	mu       sync.Mutex
+	lines    []string
+	total    int
+	notified int
+}
+
+func (l *programLog) add(line string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.total++
+	l.lines = append(l.lines, line)
+	if extra := len(l.lines) - programLogCap; extra > 0 {
+		l.lines = append([]string(nil), l.lines[extra:]...)
+	}
+}
+
+func (l *programLog) snapshot() (lines []string, total int) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return append([]string(nil), l.lines...), l.total
+}
+
+// lineWriter adapts the program's stdout/stderr to the log:
+// bytes are split into lines as they arrive; a trailing
+// partial line is held until its newline or flush.
+type lineWriter struct {
+	mu  sync.Mutex
+	buf []byte
+	log *programLog
+}
+
+func (w *lineWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.buf = append(w.buf, p...)
+	for {
+		i := indexByte(w.buf, '\n')
+		if i < 0 {
+			break
+		}
+		w.log.add(strings.TrimRight(string(w.buf[:i]), "\r"))
+		w.buf = w.buf[i+1:]
+	}
+	return len(p), nil
+}
+
+func (w *lineWriter) flush() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if len(w.buf) > 0 {
+		w.log.add(string(w.buf))
+		w.buf = nil
+	}
+}
+
+func indexByte(b []byte, c byte) int {
+	for i, x := range b {
+		if x == c {
+			return i
+		}
+	}
+	return -1
+}
+
+// programRun is one started program: the process, its log,
+// and the facts the chat is allowed to narrate — all of them
+// observed, none assumed.
+type programRun struct {
+	rel     string // the file as named, slash form
+	rootAbs string // the project root the program runs in (the watcher's rebuilds need it)
+	binPath string
+	cmd     *exec.Cmd
+	log     *programLog
+	done    chan struct{}
+
+	startedAt time.Time
+
+	mu       sync.Mutex
+	url      string // confirmed serving URL; "" until one is
+	exited   bool
+	exitErr  error
+	exitedAt time.Time
+	exitTold bool // the exit has been surfaced to the user
+}
+
+func (p *programRun) hasExited() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.exited
+}
+
+func (p *programRun) exitError() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.exitErr
+}
+
+func (p *programRun) confirmedURL() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.url
+}
+
+func (p *programRun) setURL(u string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.url = u
+}
+
+// sessionProgram is the session's one program (running or
+// most recently run), like pendingGorqlite is the session's
+// one held dependency ask. In memory only; never on disk.
+var sessionProgram *programRun
+
+// programRunning reports whether the session's program is
+// alive right now — the fact the bare-"stop" fork turns on.
+func programRunning() bool {
+	p := sessionProgram
+	return p != nil && !p.hasExited()
+}
+
+// stopMeansQuit reports whether this line ends the chat. Bare
+// "stop" is one of the chat's quit words — except while a
+// program runs, when it plainly means the program (John,
+// 2026-11-01: "have it stop the program if you tell it to
+// stop it"). The unified loop's quit check calls this so the
+// fork lives in exactly one place.
+func stopMeansQuit(line string) bool {
+	if line != "stop" {
+		return false
+	}
+	return !programRunning()
+}
+
+// ---------------------------------------------------------------------
+// The claim.
+
+// tryRunProgram is the chat-loop entry, seated ahead of the
+// beginner five.
+func tryRunProgram(line string, r *LineReader, profile *UserProfile) bool {
+	return runRunProgram(line, func(prompt string) (string, error) {
+		return r.ReadLine(prompt)
+	}, profile)
+}
+
+// runRunProgram carries one line for this claim. It returns
+// false for every line outside the claim's shapes, so the
+// rest of the chain sees them untouched.
+func runRunProgram(line string, ask editAsk, profile *UserProfile) bool {
+	shape, target := parseProgramLine(line)
+	switch shape {
+	case shapeNone:
+		return false
+	case shapeShowLog:
+		if sessionProgram == nil {
+			return false
+		}
+		showProgramLog()
+		return true
+	case shapeTop:
+		showProgramTop()
+		return true
+	case shapeStopBare:
+		if !programRunning() {
+			return false // the loop's quit check owns bare "stop" then
+		}
+		stopSessionProgram()
+		return true
+	case shapeStopProgram:
+		stopProgramClaim(target)
+		return true
+	case shapeRunProgram:
+		runProgramClaim(target, ask, profile)
+		return true
+	case shapeRunServer:
+		// Resolution is part of the claim: an unresolvable
+		// target declines, and the line falls through.
+		return runServerClaim(target, ask, profile)
+	case shapeWatchProgram:
+		watchProgramClaim(target, ask, profile)
+		return true
+	case shapeStopWatching:
+		stopWatchingClaim(target)
+		return true
+	case shapeWatchFolder:
+		watchFolderClaim(target)
+		return true
+	case shapeStopWatchingFolder:
+		stopWatchingFolderClaim(target)
+		return true
+	}
+	return false
+}
+
+// runProgramGate is the established [y/n] run gate: the
+// profile's 'do all' directive auto-yeses with the same
+// announcement confirmAction prints; otherwise the answer is
+// read through the session's one ask source.
+func runProgramGate(ask editAsk, profile *UserProfile, prompt string) bool {
+	if profile != nil && profile.ShouldAutoBuild() {
+		fmt.Printf("%s [auto-yes: your 'do all' directive]\n", prompt)
+		return true
+	}
+	ans, err := ask(prompt + " [y/n] ")
+	if err != nil {
+		return false
+	}
+	a := strings.ToLower(strings.TrimSpace(ans))
+	return a == "y" || a == "yes"
+}
+
+// runProgramClaim validates the ask, gates it, builds, and
+// starts the program. Every early exit answers honestly and
+// by name; nothing here claims a run that did not happen.
+func runProgramClaim(target string, ask editAsk, profile *UserProfile) {
+	tag := cTag("gollemer [runner]>")
+	rel := filepath.ToSlash(strings.TrimSpace(strings.TrimPrefix(target, "./")))
+	if !strings.HasSuffix(strings.ToLower(rel), ".go") {
+		fmt.Printf("%s %s isn't a Go file — I run programs from .go files. Name one, like \"run the program jake/main.go\".\n", tag, target)
+		recordBrain("runner", false, "program run refused: not a .go file: "+target)
+		return
+	}
+	// One program at a time: a live one answers for itself.
+	if live := sessionProgram; live != nil && !live.hasExited() {
+		if live.rel == rel {
+			fmt.Printf("%s %s\n", tag, programStatusText(live))
+			recordBrain("runner", true, "program already running: "+rel)
+			return
+		}
+		fmt.Printf("%s One at a time: %s is still running. Say \"stop the program\" first, then run %s.\n", tag, live.rel, rel)
+		recordBrain("runner", false, "program run refused: "+live.rel+" still running")
+		return
+	}
+	rootAbs, ok := runProgramRoot(tag)
+	if !ok {
+		return
+	}
+	abs, refusal := runProgramResolve(rootAbs, rel)
+	if refusal != "" {
+		fmt.Printf("%s %s\n", tag, refusal)
+		recordBrain("runner", false, "program run refused: "+refusal)
+		return
+	}
+	if st, err := os.Stat(abs); err != nil || st.IsDir() {
+		fmt.Printf("%s I can't run %s — there's no such file in this project.\n", tag, rel)
+		recordBrain("runner", false, "program run refused: missing file: "+rel)
+		return
+	}
+	src, err := os.ReadFile(abs)
+	if err != nil {
+		fmt.Printf("%s I couldn't read %s: %v.\n", tag, rel, err)
+		recordBrain("runner", false, "program run refused: unreadable: "+rel)
+		return
+	}
+	if refusal := checkRunnableProgram(rel, src); refusal != "" {
+		fmt.Printf("%s %s\n", tag, refusal)
+		recordBrain("runner", false, "program run refused: "+refusal)
+		return
+	}
+	buildArg, cmdText, formNote := programForm(rootAbs, rel)
+	prompt := "Run it? " + cmdText
+	if formNote != "" {
+		prompt += " (" + formNote + ")"
+	}
+	if !runProgramGate(ask, profile, prompt) {
+		fmt.Printf("%s OK — not run.\n", tag)
+		recordBrain("runner", true, "program run declined: "+rel)
+		return
+	}
+	binPath, buildOut, buildErr := buildProgram(rootAbs, buildArg)
+	if buildErr != nil {
+		if modDir, nested := nestedModuleBuild(rootAbs, rel, buildOut); nested {
+			fmt.Printf("%s %s\n", tag, programNestedModuleText(rel, modDir, buildOut))
+			recordBrain("runner", false, "program build failed: nested module: "+rel)
+			return
+		}
+		fmt.Printf("%s %s\n", tag, programBuildFailText(rel, buildOut))
+		recordBrain("runner", false, "program build failed: "+rel)
+		return
+	}
+	startProgram(tag, rel, rootAbs, binPath, src)
+}
+
+// runServerClaim carries a "run the server <target>" line.
+// A .go target is "run <file>" wearing the word server, and
+// goes through the run claim unchanged. Any other target is
+// a folder to resolve: the claim fires only when the folder
+// holds exactly one runnable program at its top level, and
+// runs THAT file through the run claim (gate, build, and
+// narration all shared). Otherwise it declines — returns
+// false with nothing printed — and the line falls through
+// to the rest of the chain exactly as typed.
+func runServerClaim(target string, ask editAsk, profile *UserProfile) bool {
+	if strings.HasSuffix(strings.ToLower(strings.TrimSpace(target)), ".go") {
+		runProgramClaim(target, ask, profile)
+		return true
+	}
+	file, ok := resolveServerFolder(target)
+	if !ok {
+		return false
+	}
+	runProgramClaim(file, ask, profile)
+	return true
+}
+
+// resolveServerFolder finds the one runnable program at a
+// named folder's top level. checkRunnableProgram is the
+// judge of runnability, exactly as for a named file — this
+// is a scan for candidates, not a second reader. Zero
+// candidates, or several (two files each carrying a func
+// main), resolves to nothing: picking between programs is
+// the user's call, never this claim's invention.
+func resolveServerFolder(target string) (string, bool) {
+	rootAbs, ok := programRootQuiet()
+	if !ok {
+		return "", false
+	}
+	rel := filepath.ToSlash(strings.TrimSpace(strings.TrimPrefix(target, "./")))
+	rel = strings.TrimSuffix(rel, "/")
+	if rel == "" {
+		rel = "."
+	}
+	abs, refusal := runProgramResolve(rootAbs, rel)
+	if refusal != "" {
+		return "", false
+	}
+	st, err := os.Stat(abs)
+	if err != nil || !st.IsDir() {
+		return "", false
+	}
+	entries, err := os.ReadDir(abs)
+	if err != nil {
+		return "", false
+	}
+	var found []string
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		src, err := os.ReadFile(filepath.Join(abs, name))
+		if err != nil {
+			continue
+		}
+		cand := name
+		if rel != "." {
+			cand = rel + "/" + name
+		}
+		if checkRunnableProgram(cand, src) == "" {
+			found = append(found, cand)
+		}
+	}
+	if len(found) != 1 {
+		return "", false
+	}
+	return found[0], true
+}
+
+// programRootQuiet is runProgramRoot without the narration:
+// the same root rule, for callers (server-folder resolution)
+// whose failure means "not this claim", not a refusal to
+// print.
+func programRootQuiet() (string, bool) {
+	rootRaw := creationRoot()
+	if rootRaw == "" {
+		return "", false
+	}
+	rootAbs, err := filepath.EvalSymlinks(rootRaw)
+	if err != nil {
+		abs, aerr := filepath.Abs(rootRaw)
+		if aerr != nil {
+			return "", false
+		}
+		rootAbs = abs
+	}
+	return rootAbs, true
+}
+
+// runProgramRoot resolves the folder programs run in: the
+// open project's root, else the folder the chat started in —
+// the same rule creations land by (creationRoot), with the
+// same symlink resolution runCreate performs.
+func runProgramRoot(tag string) (string, bool) {
+	rootRaw := creationRoot()
+	if rootRaw == "" {
+		fmt.Printf("%s I don't have a project folder to run in — start me inside your project and ask again.\n", tag)
+		recordBrain("runner", false, "program run refused: no root")
+		return "", false
+	}
+	rootAbs, err := filepath.EvalSymlinks(rootRaw)
+	if err != nil {
+		if abs, aerr := filepath.Abs(rootRaw); aerr == nil {
+			rootAbs = abs
+		} else {
+			fmt.Printf("%s I couldn't find the folder I'd run in (%s).\n", tag, rootRaw)
+			recordBrain("runner", false, "program run refused: root unreadable")
+			return "", false
+		}
+	}
+	return rootAbs, true
+}
+
+// runProgramResolve joins rel onto the root and refuses any
+// path that climbs out of the project.
+func runProgramResolve(rootAbs, rel string) (string, string) {
+	abs := filepath.Join(rootAbs, filepath.FromSlash(rel))
+	back, err := filepath.Rel(rootAbs, abs)
+	if err != nil || back == ".." || strings.HasPrefix(back, ".."+string(filepath.Separator)) {
+		return "", fmt.Sprintf("%s is outside this project — I only run programs that live in it.", rel)
+	}
+	return abs, ""
+}
+
+// checkRunnableProgram reads the file as Go and refuses, by
+// name, anything that is not a runnable program: a library
+// package, or a main package with no func main.
+func checkRunnableProgram(rel string, src []byte) string {
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, rel, src, parser.SkipObjectResolution)
+	if err != nil {
+		return fmt.Sprintf("I couldn't read %s as Go code: %v.", rel, err)
+	}
+	if f.Name.Name != "main" {
+		return fmt.Sprintf("%s is package %s — a program I can run is a package main file with a func main.", rel, f.Name.Name)
+	}
+	for _, d := range f.Decls {
+		if fd, ok := d.(*ast.FuncDecl); ok && fd.Recv == nil && fd.Name.Name == "main" {
+			return ""
+		}
+	}
+	return fmt.Sprintf("%s has no func main — there's no program to run in it.", rel)
+}
+
+// programForm decides file form vs package form. A file that
+// shares its directory with other non-test .go files is part
+// of a multi-file package, and running the file alone would
+// drop its siblings' code — so the package runs whole
+// (go build ./jake). A lone file builds as itself. The gate's
+// command text is the `go run` shape a person would type for
+// the same choice.
+func programForm(rootAbs, rel string) (buildArg, cmdText, formNote string) {
+	slashDir := filepath.ToSlash(filepath.Dir(filepath.FromSlash(rel)))
+	count := 0
+	if entries, err := os.ReadDir(filepath.Join(rootAbs, filepath.FromSlash(slashDir))); err == nil {
+		for _, e := range entries {
+			name := e.Name()
+			if !e.IsDir() && strings.HasSuffix(name, ".go") && !strings.HasSuffix(name, "_test.go") {
+				count++
+			}
+		}
+	}
+	if count > 1 {
+		arg := "."
+		if slashDir != "." {
+			arg = "./" + slashDir
+		}
+		return arg, "go run " + arg,
+			fmt.Sprintf("the whole package — %s has sibling files, and the program is all of them together", rel)
+	}
+	return rel, "go run " + rel, ""
+}
+
+// buildProgram compiles the target into a throwaway binary.
+// Building first is what keeps the phases honest: a compile
+// failure is reported as one, with the compiler's own output,
+// and no process ever starts. The binary is removed when the
+// run ends (the watcher goroutine owns that).
+func buildProgram(rootAbs, buildArg string) (string, string, error) {
+	f, err := os.CreateTemp("", "gollemer-run-*")
+	if err != nil {
+		return "", "", err
+	}
+	binPath := f.Name()
+	f.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "go", "build", "-o", binPath, filepath.FromSlash(buildArg))
+	cmd.Dir = rootAbs
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		os.Remove(binPath)
+		return "", string(out), err
+	}
+	return binPath, "", nil
+}
+
+// ---------------------------------------------------------------------
+// Lifecycle: start, watch, report, stop.
+
+// startupWindow is how long the claim waits at start for the
+// program to declare itself: exit (a quick program — report
+// its real result) or print a serving URL that answers a
+// probe (a server — report it running and open the browser).
+const startupWindow = 3 * time.Second
+
+// launchProgram starts the built binary as the session's
+// program and returns it, its exit watcher already running.
+// It narrates nothing: startProgram adds the startup
+// window's narration for a user-asked run, and the file
+// watcher swaps processes through here on a restart, where
+// the restart note is the narration.
+func launchProgram(rel, rootAbs, binPath string) (*programRun, error) {
+	p := &programRun{
+		rel:       rel,
+		rootAbs:   rootAbs,
+		binPath:   binPath,
+		log:       &programLog{},
+		done:      make(chan struct{}),
+		startedAt: time.Now(),
+	}
+	lw := &lineWriter{log: p.log}
+	cmd := exec.Command(binPath)
+	cmd.Dir = rootAbs
+	cmd.Stdout = lw
+	cmd.Stderr = lw
+	if err := cmd.Start(); err != nil {
+		os.Remove(binPath)
+		return nil, err
+	}
+	p.cmd = cmd
+	sessionProgram = p
+	go func() {
+		err := cmd.Wait()
+		lw.flush()
+		p.mu.Lock()
+		p.exited = true
+		p.exitErr = err
+		p.exitedAt = time.Now()
+		p.mu.Unlock()
+		os.Remove(binPath)
+		close(p.done)
+	}()
+	return p, nil
+}
+
+// startProgram launches the built binary as the session's
+// program and narrates what actually happens inside the
+// startup window.
+func startProgram(tag, rel, rootAbs, binPath string, src []byte) {
+	p, err := launchProgram(rel, rootAbs, binPath)
+	if err != nil {
+		fmt.Printf("%s I couldn't start %s: %v.\n", tag, rel, err)
+		recordBrain("runner", false, "program start failed: "+rel)
+		return
+	}
+	fmt.Printf("%s [running: %s — its output is being kept]\n", tag, rel)
+
+	deadline := time.Now().Add(startupWindow)
+	announced := false
+	for {
+		if p.hasExited() {
+			reportProgramExit(p)
+			return
+		}
+		if p.confirmedURL() == "" {
+			if u := logPrintedURL(p); u != "" {
+				if confirmServing(p, u, deadline) {
+					p.setURL(u)
+					announceRunning(p)
+					announceBrowser(p)
+					announced = true
+				}
+			}
+		}
+		if announced || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if announced {
+		return
+	}
+	if p.hasExited() {
+		reportProgramExit(p)
+		return
+	}
+	// Still running at the window's end. A server that prints
+	// nothing can still be confirmed: probe the address its
+	// own code listens on.
+	if p.confirmedURL() == "" {
+		if u := listenURLFromSource(src); u != "" && probeServing(u) {
+			p.setURL(u)
+			announceRunning(p)
+			announceBrowser(p)
+			return
+		}
+	}
+	announceRunning(p)
+}
+
+// logPrintedURL returns the first URL the program itself has
+// printed so far, or "".
+func logPrintedURL(p *programRun) string {
+	lines, _ := p.log.snapshot()
+	for _, ln := range lines {
+		if u := urlFromLine(ln); u != "" {
+			return u
+		}
+	}
+	return ""
+}
+
+var programURLRe = regexp.MustCompile(`https?://[^\s"',;]+`)
+
+// urlFromLine extracts a serving URL from one output line.
+func urlFromLine(line string) string {
+	m := programURLRe.FindString(line)
+	return strings.TrimRight(m, ".)")
+}
+
+// confirmServing probes the printed URL until it answers or
+// the startup window closes. A process that dies mid-probe
+// (the classic port-already-in-use exit right after its
+// "listening" line) never confirms — its exit report tells
+// the real story instead.
+func confirmServing(p *programRun, url string, deadline time.Time) bool {
+	for {
+		if p.hasExited() {
+			return false
+		}
+		if probeServing(url) {
+			return !p.hasExited()
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(150 * time.Millisecond)
+	}
+}
+
+// probeServing reports whether something accepts a TCP
+// connection at the URL's address. 0.0.0.0 is dialed as
+// 127.0.0.1.
+func probeServing(url string) bool {
+	hostport := strings.TrimPrefix(strings.TrimPrefix(url, "http://"), "https://")
+	if i := strings.Index(hostport, "/"); i >= 0 {
+		hostport = hostport[:i]
+	}
+	if strings.HasPrefix(hostport, "0.0.0.0") {
+		hostport = "127.0.0.1" + strings.TrimPrefix(hostport, "0.0.0.0")
+	}
+	if !strings.Contains(hostport, ":") {
+		hostport += ":80"
+	}
+	conn, err := net.DialTimeout("tcp", hostport, 400*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	conn.Close()
+	return true
+}
+
+var listenAddrRe = regexp.MustCompile(`ListenAndServe\(\s*"([^"]+)"`)
+
+// listenURLFromSource reads the address a ListenAndServe call
+// in the source listens on and renders it as a localhost URL.
+// "" when the source names no literal address.
+func listenURLFromSource(src []byte) string {
+	m := listenAddrRe.FindSubmatch(src)
+	if m == nil {
+		return ""
+	}
+	addr := string(m[1])
+	if strings.HasPrefix(addr, ":") {
+		return "http://localhost" + addr
+	}
+	if !strings.Contains(addr, "://") {
+		return "http://" + addr
+	}
+	return addr
+}
+
+// ---------------------------------------------------------------------
+// Narration: every sentence rendered from observed state.
+
+// programBuildFailText is the compile-failure report: the
+// compiler's own output, verbatim up to a readable cap. The
+// word "ran" appears nowhere in it — nothing ran.
+func programBuildFailText(rel, out string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "It didn't run — %s doesn't compile yet. The compiler's own words:\n", rel)
+	writeCappedCompilerOutput(&b, out)
+	b.WriteString("Fix those, then say \"run the program " + rel + "\" again.")
+	return strings.TrimRight(b.String(), "\n")
+}
+
+// writeCappedCompilerOutput writes the compiler's own words
+// into b, verbatim up to the readable cap every build-failure
+// narration shares.
+func writeCappedCompilerOutput(b *strings.Builder, out string) {
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	if strings.TrimSpace(out) == "" {
+		lines = nil
+	}
+	const maxLines = 40
+	shown := lines
+	if len(shown) > maxLines {
+		shown = shown[:maxLines]
+	}
+	for _, l := range shown {
+		b.WriteString(l + "\n")
+	}
+	if len(lines) > maxLines {
+		fmt.Fprintf(b, "[… %d more lines not shown]\n", len(lines)-maxLines)
+	}
+}
+
+// nestedModuleBuild reports whether a failed build hit the
+// nested-module wall — and if so, which folder's go.mod is
+// the wall. The wall is a fact about the project, not about
+// the code: the target lives inside a folder that carries
+// its own go.mod, so it belongs to that module, and this
+// project's build cannot reach it — the compiler says so
+// itself ("main module … does not contain package …"). Two
+// witnesses are required: the compiler's words AND a go.mod
+// really present in an ancestor folder of the target (the
+// project's own root go.mod doesn't count — every program
+// here lives under it). A lone .go file never hits the wall
+// (it builds as command-line-arguments even inside a nested
+// folder); the package form — two or more files — is what
+// runs into it.
+func nestedModuleBuild(rootAbs, rel, out string) (string, bool) {
+	if !strings.Contains(out, "does not contain package") {
+		return "", false
+	}
+	for dir := filepath.Dir(filepath.FromSlash(rel)); dir != "." && dir != string(filepath.Separator); dir = filepath.Dir(dir) {
+		if _, err := os.Stat(filepath.Join(rootAbs, dir, "go.mod")); err == nil {
+			return filepath.ToSlash(dir), true
+		}
+	}
+	return "", false
+}
+
+// programNestedModuleText is the nested-module failure
+// report (John's live failure, 2026-11-10: "run the server
+// jim" where jim is a wasm app — its own module). The
+// ordinary failure text ends "Fix those, then say 'run the
+// program …' again" — wrong here in a way that strands the
+// user: nothing they can fix makes this project's build
+// reach inside another module, and the same ask would fail
+// the same way forever. This text names the wall and the way
+// in instead, over the same capped compiler output, and
+// sends them nowhere back to this ask.
+func programNestedModuleText(rel, modDir, out string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "I didn't run %s — and it can't be run from here: %s is its own Go module (the go.mod at %s/go.mod), walled off from this project, so this project's build can't reach the program inside it. A program in its own module runs from inside its folder — start the chat in %s, or run it there yourself: cd %s && go run .\nThe compiler's own words:\n",
+		rel, modDir, modDir, modDir, filepath.ToSlash(filepath.Dir(filepath.FromSlash(rel))))
+	writeCappedCompilerOutput(&b, out)
+	return strings.TrimRight(b.String(), "\n")
+}
+
+// outputShowsBindFailure reports whether the program's own
+// words say its listen failed because the address was taken.
+// It matters because a server whose bind fails usually
+// prints the error and returns from main — exit code 0 — so
+// the exit state alone would read as a clean finish for a
+// program that never served anything. The narration checks
+// the words too; both are observed state.
+func outputShowsBindFailure(lines []string) bool {
+	for _, l := range lines {
+		if strings.Contains(l, "address already in use") {
+			return true
+		}
+	}
+	return false
+}
+
+// reportProgramExit narrates a program that ended inside the
+// startup window: its own output first, then a status line
+// built from its real exit state.
+func reportProgramExit(p *programRun) {
+	tag := cTag("gollemer [runner]>")
+	lines, _ := p.log.snapshot()
+	printProgramLines(lines)
+	err := p.exitError()
+	p.mu.Lock()
+	p.exitTold = true
+	p.mu.Unlock()
+	ok := err == nil
+	switch {
+	case err == nil && outputShowsBindFailure(lines):
+		fmt.Printf("%s It stopped right away — the address it wanted was already in use, so it never got to serve. Its own words are above.\n", tag)
+		ok = false
+	case err == nil && len(lines) == 0:
+		fmt.Printf("%s It ran and finished (exit code 0), and printed nothing.\n", tag)
+	case err == nil:
+		fmt.Printf("%s It ran and finished (exit code 0). The lines above are %s's own output.\n", tag, p.rel)
+	case len(lines) == 0:
+		fmt.Printf("%s It stopped with an error (%v) and printed nothing.\n", tag, err)
+	default:
+		fmt.Printf("%s It stopped with an error (%v). The lines above are its own output — paste one back and I'll explain it.\n", tag, err)
+	}
+	if ok {
+		recordBrain("runner", true, "program ran and finished: "+p.rel)
+	} else {
+		recordBrain("runner", false, "program stopped with an error: "+p.rel)
+	}
+}
+
+// printProgramLines prints captured output the way the watch
+// narration does: raw, capped, with the hidden count named.
+func printProgramLines(lines []string) {
+	const maxLines = 40
+	shown := lines
+	if len(shown) > maxLines {
+		shown = shown[:maxLines]
+	}
+	for _, l := range shown {
+		fmt.Println(l)
+	}
+	if len(lines) > maxLines {
+		fmt.Printf("[… %d more lines not shown]\n", len(lines)-maxLines)
+	}
+}
+
+// announceRunning narrates a program that is still alive at
+// the end of its startup window.
+func announceRunning(p *programRun) {
+	tag := cTag("gollemer [runner]>")
+	if u := p.confirmedURL(); u != "" {
+		fmt.Printf("%s %s is running in the background — serving at %s. Say \"show visits\" to read its log (handler visits included), or \"stop the program\" to stop it.\n", tag, p.rel, u)
+		recordBrain("runner", true, "program running as a server: "+p.rel)
+		return
+	}
+	if u := logPrintedURL(p); u != "" {
+		fmt.Printf("%s %s is running in the background. It printed %s, but I couldn't reach that address yet — say \"show the program log\" to watch its output, or \"stop the program\" to stop it.\n", tag, p.rel, u)
+		recordBrain("runner", true, "program running, address unconfirmed: "+p.rel)
+		return
+	}
+	fmt.Printf("%s %s is running in the background. Say \"show the program log\" to read what it prints, or \"stop the program\" to stop it.\n", tag, p.rel)
+	recordBrain("runner", true, "program running in the background: "+p.rel)
+}
+
+// programStatusText is the live answer to running a program
+// that is already running: its state and URL, observed.
+func programStatusText(p *programRun) string {
+	_, total := p.log.snapshot()
+	if u := p.confirmedURL(); u != "" {
+		return fmt.Sprintf("%s is already running — serving at %s, with %d lines in its log so far. Say \"show visits\" to read them, or \"stop the program\" to stop it.", p.rel, u, total)
+	}
+	return fmt.Sprintf("%s is already running — %d lines in its log so far. Say \"show the program log\" to read them, or \"stop the program\" to stop it.", p.rel, total)
+}
+
+// announceBrowser performs the browser step for a confirmed
+// server: announce and open, or say plainly that the open
+// failed and give the address. Part of the run the user
+// already approved — no second gate.
+func announceBrowser(p *programRun) {
+	tag := cTag("gollemer [runner]>")
+	u := p.confirmedURL()
+	if u == "" {
+		return
+	}
+	if err := openBrowserURL(u); err != nil {
+		fmt.Printf("%s I couldn't open your browser (%v) — the address is %s.\n", tag, err, u)
+		return
+	}
+	fmt.Printf("%s Opening %s in your browser.\n", tag, u)
+}
+
+// openBrowserURL is the platform browser opener (see the
+// runprogram_open_*.go files); a variable so tests can stand
+// in for it and no test ever opens a real browser.
+var openBrowserURL = platformOpenBrowser
+
+// ---------------------------------------------------------------------
+// The log and stop claims.
+
+// showProgramLog prints the session program's captured
+// output and its current state. Visits are here when the
+// program prints them — the answer says so plainly, because
+// for a hand-written program that is the whole contract.
+func showProgramLog() {
+	tag := cTag("gollemer [runner]>")
+	p := sessionProgram
+	if p == nil {
+		return
+	}
+	lines, total := p.log.snapshot()
+	p.log.mu.Lock()
+	p.log.notified = total
+	p.log.mu.Unlock()
+	if total == 0 {
+		fmt.Printf("%s %s hasn't printed anything yet.\n", tag, p.rel)
+	} else {
+		fmt.Printf("%s Here's what %s has printed (%d lines):\n", tag, p.rel, total)
+		const maxShown = 50
+		shown := lines
+		if len(shown) > maxShown {
+			fmt.Printf("[… showing the last %d of %d lines]\n", maxShown, total)
+			shown = shown[len(shown)-maxShown:]
+		}
+		for _, l := range shown {
+			fmt.Println(l)
+		}
+	}
+	fmt.Printf("%s Visits appear in this log when the program prints them — servers Gollemer creates print one line per visit.\n", tag)
+	if p.hasExited() {
+		p.mu.Lock()
+		p.exitTold = true
+		err := p.exitErr
+		p.mu.Unlock()
+		if err == nil && outputShowsBindFailure(lines) {
+			fmt.Printf("%s It stopped right away — the address it wanted was already in use, so it never got to serve.\n", tag)
+		} else if err == nil {
+			fmt.Printf("%s It has finished (exit code 0) — it's no longer running.\n", tag)
+		} else {
+			fmt.Printf("%s It has stopped (%v) — it's no longer running.\n", tag, err)
+		}
+		return
+	}
+	fmt.Printf("%s It's still running.\n", tag)
+}
+
+// stopProgramClaim answers an explicit stop shape ("stop the
+// program", "stop it", "stop <file>.go"): with nothing
+// running it says so; with a different program running it
+// names the right one; otherwise it stops the program.
+func stopProgramClaim(target string) {
+	tag := cTag("gollemer [runner]>")
+	p := sessionProgram
+	if p == nil {
+		fmt.Printf("%s No program is running right now — there's no program to stop.\n", tag)
+		recordBrain("runner", true, "stop asked with nothing running")
+		return
+	}
+	if target != "" {
+		want := filepath.ToSlash(strings.TrimPrefix(target, "./"))
+		if want != p.rel {
+			if p.hasExited() {
+				fmt.Printf("%s %s isn't running — it already stopped on its own.\n", tag, want)
+			} else {
+				fmt.Printf("%s %s isn't the program that's running — %s is. Say \"stop the program\" to stop it.\n", tag, want, p.rel)
+			}
+			recordBrain("runner", true, "stop asked for a different program")
+			return
+		}
+	}
+	if p.hasExited() {
+		if err := p.exitError(); err == nil {
+			fmt.Printf("%s %s already finished on its own (exit code 0) — nothing to stop.\n", tag, p.rel)
+		} else {
+			fmt.Printf("%s %s already stopped on its own (%v) — nothing to stop.\n", tag, p.rel, err)
+		}
+		p.mu.Lock()
+		p.exitTold = true
+		p.mu.Unlock()
+		recordBrain("runner", true, "stop asked after the program ended: "+p.rel)
+		return
+	}
+	stopSessionProgram()
+}
+
+// stopSessionProgram kills the session's running program and
+// says so. The log stays readable afterwards.
+func stopSessionProgram() {
+	tag := cTag("gollemer [runner]>")
+	endWatching() // stopping the program ends its watching too
+	p := sessionProgram
+	if p == nil || p.hasExited() {
+		return
+	}
+	_ = p.cmd.Process.Kill()
+	select {
+	case <-p.done:
+	case <-time.After(3 * time.Second):
+	}
+	// A watcher caught mid-restart may have swapped a fresh
+	// process in while this one died; a stop means stop.
+	if q := sessionProgram; q != nil && q != p && !q.hasExited() {
+		_ = q.cmd.Process.Kill()
+		select {
+		case <-q.done:
+		case <-time.After(3 * time.Second):
+		}
+	}
+	p.mu.Lock()
+	p.exitTold = true
+	p.mu.Unlock()
+	_, total := p.log.snapshot()
+	fmt.Printf("%s Stopped %s — it's no longer running. Its log kept %d lines; say \"show the program log\" to read them.\n", tag, p.rel, total)
+	recordBrain("runner", true, "program stopped: "+p.rel)
+}
+
+// stopProgramAtChatEnd is the loop's exit hook (/quit and EOF
+// both land here): a program the session started never
+// outlives the chat.
+func stopProgramAtChatEnd() {
+	endWatching()
+	if !programRunning() {
+		return
+	}
+	p := sessionProgram
+	_ = p.cmd.Process.Kill()
+	select {
+	case <-p.done:
+	case <-time.After(3 * time.Second):
+	}
+	fmt.Printf("[stopped %s — the chat is closing]\n", p.rel)
+}
+
+// ---------------------------------------------------------------------
+// Watch mode: restart the program when its files change.
+
+// watchPollInterval is how often the watcher re-reads the
+// program folder's subtree; watchQuietPeriod is how long
+// the tree must then sit unchanged before the restart
+// fires, so a burst of edits (one chat edit lands several
+// files) restarts the program once, not once per file.
+// Variables so tests can shrink them.
+var (
+	watchPollInterval = 500 * time.Millisecond
+	watchQuietPeriod  = 1 * time.Second
+)
+
+// watchAnnounce prints the watcher's out-of-band notes —
+// restarts, failed rebuilds, a program ending on its own —
+// in the bracket style the prompt-cycle notes use. A
+// variable so tests can record the notes instead of racing
+// the real stdout: the same stubbing pattern as
+// openBrowserURL.
+var watchAnnounce = func(format string, args ...any) {
+	fmt.Printf(format, args...)
+}
+
+// watchRoot is one folder the watcher polls: the program's
+// own folder (always there while watching) or a folder the
+// user named with "watch folder <path>". rel is the folder
+// as named, project-relative ("" for the program's folder);
+// name is the prefix a change under this root is announced
+// by — "" for the program's folder, whose files are named
+// folder-relative as they always have been, and the
+// folder's project-relative path for a named folder, so
+// its files are named in full ("assets/app.js changed").
+type watchRoot struct {
+	abs  string
+	rel  string
+	name string
+}
+
+// programWatcher is one watched program's polling loop:
+// which program, the folder subtrees it reads (its own
+// folder plus any named extras), and its stop signal. Pure
+// polling (mtime+size) — no fsnotify, no new dependency.
+// All watch state lives here and in sessionWatcher: in
+// memory only, gone when the session ends, never persisted.
+type programWatcher struct {
+	rel     string
+	rootAbs string
+	dir     string // abs path of the program file's folder
+	stop    chan struct{}
+	done    chan struct{}
+
+	mu      sync.Mutex
+	stopped bool
+	extras  []watchRoot
+}
+
+// roots returns every folder this watcher polls: the
+// program's own folder first, then the named extras in the
+// order they were added.
+func (w *programWatcher) roots() []watchRoot {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	out := make([]watchRoot, 0, len(w.extras)+1)
+	out = append(out, watchRoot{abs: w.dir})
+	return append(out, w.extras...)
+}
+
+// extraFolders returns the named folders, without the
+// program's own.
+func (w *programWatcher) extraFolders() []watchRoot {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return append([]watchRoot(nil), w.extras...)
+}
+
+// addExtra starts polling one more named folder.
+func (w *programWatcher) addExtra(r watchRoot) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.extras = append(w.extras, r)
+}
+
+// removeExtra stops polling the named folder at abs. It
+// reports whether that folder was an extra.
+func (w *programWatcher) removeExtra(abs string) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for i, e := range w.extras {
+		if e.abs == abs {
+			w.extras = append(w.extras[:i], w.extras[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
+// sessionWatcher is the session's one watcher, if any —
+// there is only ever one program, so there is at most one.
+var sessionWatcher *programWatcher
+
+// pendingWatchFolders holds the folders named by "watch
+// folder <path>" while no program was running: validated
+// watch roots waiting for a watch to start. Declaring a
+// folder is intent declared in order, and the chat holds
+// it rather than refusing (John, 2026-11-09, named two
+// folders in a fresh session before running anything and
+// got the no-program refusal twice). At watch start each
+// pending root faces the rules a live add faces — see
+// drainPendingWatchFolders. In memory only, like
+// sessionWatcher; never persisted.
+var pendingWatchFolders []watchRoot
+
+// pendingWatchFolderNames returns the pending folders as
+// named, in the order they were declared — top's list.
+func pendingWatchFolderNames() []string {
+	names := make([]string, 0, len(pendingWatchFolders))
+	for _, e := range pendingWatchFolders {
+		names = append(names, e.rel)
+	}
+	return names
+}
+
+func (w *programWatcher) isStopped() bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.stopped
+}
+
+// endWatching stops the session's watcher, if any. It only
+// signals: the loop notices on its next tick, and a loop
+// caught mid-rebuild checks the flag again before swapping
+// processes, so a stopped watch never resurrects a program.
+func endWatching() {
+	w := sessionWatcher
+	if w == nil {
+		return
+	}
+	sessionWatcher = nil
+	w.mu.Lock()
+	w.stopped = true
+	w.mu.Unlock()
+	close(w.stop)
+}
+
+// programWatching reports whether rel is the session's
+// watched program right now — the top claim's fact.
+func programWatching(rel string) bool {
+	w := sessionWatcher
+	return w != nil && w.rel == rel && !w.isStopped()
+}
+
+// watchedExtraFolderNames returns the named folders the
+// watcher on rel is also polling, as named — the top
+// claim's "(also …)" list.
+func watchedExtraFolderNames(rel string) []string {
+	w := sessionWatcher
+	if w == nil || w.rel != rel || w.isStopped() {
+		return nil
+	}
+	extras := w.extraFolders()
+	names := make([]string, 0, len(extras))
+	for _, e := range extras {
+		names = append(names, e.rel)
+	}
+	return names
+}
+
+// programFolderAbs is the abs path of the folder the
+// program's file lives in — the watcher's base root.
+func programFolderAbs(p *programRun) string {
+	return filepath.Join(p.rootAbs, filepath.FromSlash(filepath.Dir(filepath.FromSlash(p.rel))))
+}
+
+// startWatching turns watching on for the session's live
+// program and says so.
+func startWatching(tag string, p *programRun) {
+	startWatchingRoots(tag, p, nil)
+}
+
+// startWatchingRoots is startWatching with named folders
+// already in the watch set ("watch folder <path>" asked
+// while the program ran unwatched: watching turns on with
+// the folder included, and the sentence says so). Every
+// watch start also answers the folders declared while no
+// program was running: drainPendingWatchFolders folds
+// them into the set before the watcher is built.
+func startWatchingRoots(tag string, p *programRun, extras []watchRoot) {
+	base := programFolderAbs(p)
+	if programWatching(p.rel) {
+		// Pending folders can only be declared while no
+		// program is live, so this set is empty in practice;
+		// drain it anyway rather than lose a declaration.
+		for _, root := range drainPendingWatchFolders(tag, p, base, sessionWatcher.extraFolders()) {
+			sessionWatcher.addExtra(root)
+			fmt.Printf("%s Now watching the folder %s too — changes there will restart %s as well.\n", tag, root.rel, p.rel)
+		}
+		fmt.Printf("%s I'm already watching %s — I'll restart it when its files change.\n", tag, p.rel)
+		recordBrain("runner", true, "program already watching: "+p.rel)
+		return
+	}
+	endWatching() // a leftover watcher (a replaced program) ends first
+	extras = drainPendingWatchFolders(tag, p, base, extras)
+	w := &programWatcher{
+		rel:     p.rel,
+		rootAbs: p.rootAbs,
+		dir:     base,
+		stop:    make(chan struct{}),
+		done:    make(chan struct{}),
+		extras:  extras,
+	}
+	sessionWatcher = w
+	go w.loop()
+	if len(extras) == 0 {
+		fmt.Printf("%s Watching %s — I'll restart it when its files change. Say \"stop watching %s\" to turn watching off.\n", tag, p.rel, p.rel)
+	} else {
+		names := make([]string, 0, len(extras))
+		for _, e := range extras {
+			names = append(names, e.rel)
+		}
+		fmt.Printf("%s Watching %s — I'll restart it when its files change, including the folder %s. Say \"stop watching %s\" to turn watching off.\n", tag, p.rel, strings.Join(names, ", "), p.rel)
+	}
+	recordBrain("runner", true, "program watching started: "+p.rel)
+}
+
+// watchProgramClaim answers "watch <path>.go" and its
+// synonym "restart <path>.go when files change". A program
+// already running gets watching turned on; one that isn't
+// goes through the run claim itself — same validation, same
+// gate, same build — and is watched from there. The only
+// program that can be watched is the one this chat runs:
+// there is no registry but the session's.
+func watchProgramClaim(target string, ask editAsk, profile *UserProfile) {
+	tag := cTag("gollemer [runner]>")
+	rel := filepath.ToSlash(strings.TrimSpace(strings.TrimPrefix(target, "./")))
+	if !strings.HasSuffix(strings.ToLower(rel), ".go") {
+		fmt.Printf("%s %s isn't a Go file — I watch programs from .go files. Name one, like \"watch jim/main.go\".\n", tag, target)
+		recordBrain("runner", false, "program watch refused: not a .go file: "+target)
+		return
+	}
+	if live := sessionProgram; live != nil && !live.hasExited() {
+		if live.rel == rel {
+			startWatching(tag, live)
+			return
+		}
+		fmt.Printf("%s One at a time: %s is still running, and I can only watch the program I'm running. Say \"stop the program\" first, then watch %s.\n", tag, live.rel, rel)
+		recordBrain("runner", false, "program watch refused: "+live.rel+" still running")
+		return
+	}
+	before := sessionProgram
+	runProgramClaim(target, ask, profile)
+	p := sessionProgram
+	if p == nil || p == before || p.rel != rel {
+		return // the run claim already answered — a refusal or a declined gate
+	}
+	if p.hasExited() {
+		fmt.Printf("%s Not watching %s — it already finished, so there's nothing to restart.\n", tag, rel)
+		recordBrain("runner", true, "program watch moot: program finished: "+rel)
+		return
+	}
+	startWatching(tag, p)
+}
+
+// stopWatchingClaim answers "stop watching [<path>.go]":
+// the watching ends; the program itself keeps running.
+// Bare "stop watching" with nothing watched but folders
+// waiting clears the pending list, and says so.
+func stopWatchingClaim(target string) {
+	tag := cTag("gollemer [runner]>")
+	w := sessionWatcher
+	if w == nil || w.isStopped() {
+		if target == "" && len(pendingWatchFolders) > 0 {
+			names := pendingWatchFolderNames()
+			pendingWatchFolders = nil
+			fmt.Printf("%s Stopped — nothing was being watched yet, and I've cleared the folders that were waiting for a program: %s.\n", tag, strings.Join(names, ", "))
+			recordBrain("runner", true, "stop watching cleared pending folders")
+			return
+		}
+		fmt.Printf("%s I'm not watching any program right now.\n", tag)
+		recordBrain("runner", true, "stop watching asked with nothing watched")
+		return
+	}
+	if target != "" {
+		want := filepath.ToSlash(strings.TrimPrefix(target, "./"))
+		if want != w.rel {
+			fmt.Printf("%s %s isn't the program I'm watching — %s is. Say \"stop watching %s\" to stop watching it.\n", tag, want, w.rel, w.rel)
+			recordBrain("runner", true, "stop watching asked for a different program")
+			return
+		}
+	}
+	rel := w.rel
+	endWatching()
+	if p := sessionProgram; p != nil && p.rel == rel && !p.hasExited() {
+		fmt.Printf("%s Stopped watching %s — the program itself is still running.\n", tag, rel)
+	} else {
+		fmt.Printf("%s Stopped watching %s.\n", tag, rel)
+	}
+	recordBrain("runner", true, "program watching stopped: "+rel)
+}
+
+// normalizeFolderPath renders a named folder the way the
+// project names it: slash form, no "./" head, no trailing
+// slash; the project root itself is ".".
+func normalizeFolderPath(target string) string {
+	rel := filepath.ToSlash(strings.TrimSpace(strings.TrimPrefix(target, "./")))
+	rel = strings.TrimSuffix(rel, "/")
+	if rel == "" {
+		return "."
+	}
+	return rel
+}
+
+// watchWithin reports whether path is dir itself or lives
+// under it. Both are clean abs paths.
+func watchWithin(dir, path string) bool {
+	if dir == path {
+		return true
+	}
+	rel, err := filepath.Rel(dir, path)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// drainPendingWatchFolders folds the folders declared
+// while no program was running into a watch that is
+// starting for p. Each pending root faces the rules a
+// live "watch folder" faces: inside the program's own
+// folder it is already covered, so it drops with a spoken
+// note; inside a root already in the set it drops the
+// same way; equal to a root already in the set is the
+// same folder arriving by two sentences and goes quietly.
+// The rest are returned as extras to attach. The pending
+// list always ends empty: the watch start spends the
+// declarations, and a later stop never re-pends them.
+func drainPendingWatchFolders(tag string, p *programRun, base string, extras []watchRoot) []watchRoot {
+	if len(pendingWatchFolders) == 0 {
+		return extras
+	}
+	pending := pendingWatchFolders
+	pendingWatchFolders = nil
+	for _, root := range pending {
+		dupe := false
+		for _, e := range extras {
+			if e.abs == root.abs {
+				dupe = true
+				break
+			}
+		}
+		if dupe {
+			continue
+		}
+		if watchWithin(base, root.abs) {
+			fmt.Printf("%s The folder %s is inside %s's own folder, so watching the program already covers it — I didn't add it separately.\n", tag, root.rel, p.rel)
+			recordBrain("runner", true, "pending watch folder covered by the program folder: "+root.rel)
+			continue
+		}
+		covered := ""
+		for _, e := range extras {
+			if watchWithin(e.abs, root.abs) {
+				covered = e.rel
+				break
+			}
+		}
+		if covered != "" {
+			fmt.Printf("%s The folder %s is inside %s, which is already part of this watch — I didn't add it separately.\n", tag, root.rel, covered)
+			recordBrain("runner", true, "pending watch folder covered by another root: "+root.rel)
+			continue
+		}
+		extras = append(extras, root)
+	}
+	return extras
+}
+
+// watchFolderClaim answers "watch folder <path>": the
+// folder becomes an extra watch root for the session's
+// program. Folder watching restarts that program, so with
+// no program running there is nothing to attach it to
+// yet — the declaration is validated and noted as pending
+// instead (pendWatchFolder), and attaches when a watch
+// starts. A running but unwatched
+// program gets watching turned on with the folder
+// included; a watched one just gains the folder. A folder
+// the watch already covers — the program's own folder, or
+// anything inside a watched root — is a plain
+// already-watching answer, never a duplicate root.
+func watchFolderClaim(target string) {
+	tag := cTag("gollemer [runner]>")
+	rel := normalizeFolderPath(target)
+	p := sessionProgram
+	if p == nil || p.hasExited() {
+		pendWatchFolder(tag, rel)
+		return
+	}
+	abs, refusal := runProgramResolve(p.rootAbs, rel)
+	if refusal != "" {
+		fmt.Printf("%s %s\n", tag, refusal)
+		recordBrain("runner", false, "watch folder refused: "+refusal)
+		return
+	}
+	st, err := os.Stat(abs)
+	if err != nil {
+		fmt.Printf("%s I can't watch %s — there's no folder by that name in this project.\n", tag, rel)
+		recordBrain("runner", false, "watch folder refused: missing folder: "+rel)
+		return
+	}
+	if !st.IsDir() {
+		fmt.Printf("%s %s is a file, not a folder — name a folder, like \"watch folder jim/temp\".\n", tag, rel)
+		recordBrain("runner", false, "watch folder refused: not a folder: "+rel)
+		return
+	}
+	base := programFolderAbs(p)
+	if watchWithin(base, abs) {
+		if abs == base {
+			fmt.Printf("%s I'm already watching %s — that's the folder %s lives in, and watching the program watches that whole folder.\n", tag, rel, p.rel)
+		} else {
+			fmt.Printf("%s I'm already watching %s — it's inside %s, the folder %s lives in, and I watch that whole folder.\n", tag, rel, filepath.ToSlash(filepath.Dir(filepath.FromSlash(p.rel))), p.rel)
+		}
+		recordBrain("runner", true, "watch folder already covered by the program folder: "+rel)
+		return
+	}
+	if w := sessionWatcher; w != nil && w.rel == p.rel && !w.isStopped() {
+		for _, e := range w.extraFolders() {
+			if watchWithin(e.abs, abs) {
+				if abs == e.abs {
+					fmt.Printf("%s I'm already watching the folder %s.\n", tag, rel)
+				} else {
+					fmt.Printf("%s I'm already watching %s — it's inside the folder %s, which I'm already watching.\n", tag, rel, e.rel)
+				}
+				recordBrain("runner", true, "watch folder already covered: "+rel)
+				return
+			}
+		}
+	}
+	root := watchRoot{abs: abs, rel: rel, name: rel}
+	if rel == "." {
+		root.name = "" // its files' scan paths already are project-relative
+	}
+	if programWatching(p.rel) {
+		sessionWatcher.addExtra(root)
+		fmt.Printf("%s Now watching the folder %s too — changes there will restart %s as well.\n", tag, rel, p.rel)
+		recordBrain("runner", true, "watch folder added: "+rel)
+		return
+	}
+	startWatchingRoots(tag, p, []watchRoot{root})
+}
+
+// pendWatchFolder answers "watch folder <path>" declared
+// while no program is running. The folder is validated at
+// declare time — a folder that doesn't exist, isn't a
+// folder, or lives outside the project refuses by name
+// exactly as a live declaration would, and nothing pends —
+// and a valid folder is noted as pending: it attaches
+// when a watch starts (drainPendingWatchFolders).
+// Declarations accumulate; a duplicate, or a folder inside
+// one already noted, is an already-noted answer with no
+// state change.
+func pendWatchFolder(tag, rel string) {
+	rootAbs, ok := runProgramRoot(tag)
+	if !ok {
+		return // runProgramRoot already answered
+	}
+	abs, refusal := runProgramResolve(rootAbs, rel)
+	if refusal != "" {
+		fmt.Printf("%s %s\n", tag, refusal)
+		recordBrain("runner", false, "watch folder refused: "+refusal)
+		return
+	}
+	st, err := os.Stat(abs)
+	if err != nil {
+		fmt.Printf("%s I can't watch %s — there's no folder by that name in this project.\n", tag, rel)
+		recordBrain("runner", false, "watch folder refused: missing folder: "+rel)
+		return
+	}
+	if !st.IsDir() {
+		fmt.Printf("%s %s is a file, not a folder — name a folder, like \"watch folder jim/temp\".\n", tag, rel)
+		recordBrain("runner", false, "watch folder refused: not a folder: "+rel)
+		return
+	}
+	for _, e := range pendingWatchFolders {
+		if watchWithin(e.abs, abs) {
+			if abs == e.abs {
+				fmt.Printf("%s I've already noted the folder %s — it will be watched as soon as a program is being watched.\n", tag, rel)
+			} else {
+				fmt.Printf("%s I've already noted %s — %s is inside it, so it comes along when watching starts.\n", tag, e.rel, rel)
+			}
+			recordBrain("runner", true, "watch folder already noted pending: "+rel)
+			return
+		}
+	}
+	root := watchRoot{abs: abs, rel: rel, name: rel}
+	if rel == "." {
+		root.name = "" // its files' scan paths already are project-relative
+	}
+	pendingWatchFolders = append(pendingWatchFolders, root)
+	fmt.Printf("%s No program is running yet — noted. I'll watch the folder %s as soon as a program is being watched; say \"watch <file>\" to start one.\n", tag, rel)
+	recordBrain("runner", true, "watch folder noted pending: "+rel)
+}
+
+// watchRelWithin is watchWithin for project-relative
+// slash paths: "." — the project root — contains every
+// path in the project.
+func watchRelWithin(dir, path string) bool {
+	if dir == "." || dir == "" {
+		return true
+	}
+	return path == dir || strings.HasPrefix(path, dir+"/")
+}
+
+// stopPendingWatchFolder answers "stop watching folder
+// <path>" when nothing is being watched but folders are
+// waiting: a noted folder comes off the list (its answer
+// says it was only noted, never polled), a folder inside
+// a noted one gets the same one-folder guidance the live
+// claim gives, and anything else is answered with the
+// waiting list itself. It reports whether the pending
+// list answered the line.
+func stopPendingWatchFolder(tag, target string) bool {
+	if len(pendingWatchFolders) == 0 {
+		return false
+	}
+	rel := normalizeFolderPath(target)
+	for i, e := range pendingWatchFolders {
+		if e.rel == rel {
+			pendingWatchFolders = append(pendingWatchFolders[:i], pendingWatchFolders[i+1:]...)
+			fmt.Printf("%s Stopped watching the folder %s — it was only noted for when a program gets watched, so nothing was polling it yet.\n", tag, rel)
+			recordBrain("runner", true, "pending watch folder removed: "+rel)
+			return true
+		}
+	}
+	for _, e := range pendingWatchFolders {
+		if watchRelWithin(e.rel, rel) {
+			fmt.Printf("%s %s is inside the folder %s, which I've noted as one folder — say \"stop watching folder %s\" to take it off the list.\n", tag, rel, e.rel, e.rel)
+			recordBrain("runner", true, "stop watching folder named inside a pending folder: "+rel)
+			return true
+		}
+	}
+	fmt.Printf("%s I'm not watching the folder %s — it's not one of the folders waiting for a program (%s).\n", tag, rel, strings.Join(pendingWatchFolderNames(), ", "))
+	recordBrain("runner", true, "stop watching folder asked for an unnoted folder: "+rel)
+	return true
+}
+
+// stopWatchingFolderClaim answers "stop watching folder
+// <path>": just that root stops being polled; the program
+// and the rest of the watch carry on. Naming the program's
+// own folder explains it comes with the program's watch —
+// removing it means "stop watching" altogether. With
+// nothing watched but folders waiting, the pending list
+// answers instead (stopPendingWatchFolder).
+func stopWatchingFolderClaim(target string) {
+	tag := cTag("gollemer [runner]>")
+	w := sessionWatcher
+	if w == nil || w.isStopped() {
+		if stopPendingWatchFolder(tag, target) {
+			return
+		}
+		fmt.Printf("%s I'm not watching any program right now.\n", tag)
+		recordBrain("runner", true, "stop watching folder asked with nothing watched")
+		return
+	}
+	rel := normalizeFolderPath(target)
+	abs := filepath.Join(w.rootAbs, filepath.FromSlash(rel))
+	if !watchWithin(w.rootAbs, abs) {
+		fmt.Printf("%s %s is outside this project — the folders I watch all live inside it.\n", tag, rel)
+		recordBrain("runner", true, "stop watching folder refused: outside the project: "+rel)
+		return
+	}
+	if watchWithin(w.dir, abs) {
+		fmt.Printf("%s %s is %s's own folder — it comes with watching the program. Say \"stop watching %s\" to stop watching altogether.\n", tag, rel, w.rel, w.rel)
+		recordBrain("runner", true, "stop watching folder named the program folder: "+rel)
+		return
+	}
+	for _, e := range w.extraFolders() {
+		if e.abs == abs {
+			w.removeExtra(abs)
+			fmt.Printf("%s Stopped watching the folder %s — I'm still watching %s, and it still restarts when its own files change.\n", tag, rel, w.rel)
+			recordBrain("runner", true, "watch folder removed: "+rel)
+			return
+		}
+		if watchWithin(e.abs, abs) {
+			fmt.Printf("%s %s is inside the folder %s, which I'm watching as one folder — say \"stop watching folder %s\" to stop watching that folder.\n", tag, rel, e.rel, e.rel)
+			recordBrain("runner", true, "stop watching folder named a subfolder: "+rel)
+			return
+		}
+	}
+	if extras := w.extraFolders(); len(extras) > 0 {
+		names := make([]string, 0, len(extras))
+		for _, e := range extras {
+			names = append(names, e.rel)
+		}
+		fmt.Printf("%s I'm not watching the folder %s — the extra folders I'm watching are %s.\n", tag, rel, strings.Join(names, ", "))
+	} else {
+		fmt.Printf("%s I'm not watching the folder %s — %s's own folder is the only folder I'm watching.\n", tag, rel, w.rel)
+	}
+	recordBrain("runner", true, "stop watching folder asked for an unwatched folder: "+rel)
+}
+
+// watchMark is one file's change mark: size and mtime are
+// what polling can see cheaply, and together they catch
+// the edits a person — or the chat — makes.
+type watchMark struct {
+	size  int64
+	mtime int64 // UnixNano
+}
+
+// scanWatchTree reads the watched subtree into a mark map
+// keyed by slash path relative to the folder. The chat's
+// own machinery stays invisible: .git, the edit
+// transaction's manifest and backups, editor temp files,
+// and the built binary itself (buildProgram puts it in the
+// temp dir, but the check costs nothing) never read as
+// changes.
+func scanWatchTree(dir, binPath string) map[string]watchMark {
+	out := map[string]watchMark{}
+	_ = filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if d.Name() == ".git" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if watchSkipsFile(d.Name()) || p == binPath {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return nil
+		}
+		rel, err := filepath.Rel(dir, p)
+		if err != nil {
+			return nil
+		}
+		out[filepath.ToSlash(rel)] = watchMark{size: info.Size(), mtime: info.ModTime().UnixNano()}
+		return nil
+	})
+	return out
+}
+
+// watchSkipsFile reports whether a file name is machinery,
+// not content: the transaction manifest and its backups
+// (edittx.go), and the temp files editors leave beside the
+// file being edited.
+func watchSkipsFile(name string) bool {
+	switch {
+	case name == ".gollemer-transaction.json":
+		return true
+	case strings.Contains(name, ".gollemer-backup"):
+		return true
+	case strings.HasSuffix(name, "~"), strings.HasSuffix(name, ".tmp"),
+		strings.HasSuffix(name, ".swp"), strings.HasSuffix(name, ".swo"):
+		return true
+	case strings.HasPrefix(name, ".#"):
+		return true
+	case strings.HasPrefix(name, "#") && strings.HasSuffix(name, "#"):
+		return true
+	}
+	return false
+}
+
+// firstWatchChange returns the first path (sorted, so the
+// restart note names a stable file) whose mark differs
+// between two scans — added, removed, or changed — or ""
+// when the trees read the same.
+func firstWatchChange(a, b map[string]watchMark) string {
+	keys := make([]string, 0, len(a)+len(b))
+	seen := map[string]bool{}
+	for k := range a {
+		seen[k] = true
+		keys = append(keys, k)
+	}
+	for k := range b {
+		if !seen[k] {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		ma, inA := a[k]
+		mb, inB := b[k]
+		if !inA || !inB || ma != mb {
+			return k
+		}
+	}
+	return ""
+}
+
+// loop is the watcher's one goroutine: poll the watched
+// roots, coalesce a burst of changes through a quiet
+// period, and restart once it settles. It ends when
+// watching is stopped, when the session's program stops
+// being this one, or when the program ends on its own —
+// that last is noted here, once, and watching pauses with
+// it (the goroutine returns; nothing restarts until the
+// program is run and watched again).
+func (w *programWatcher) loop() {
+	defer close(w.done)
+	defer func() {
+		if sessionWatcher == w {
+			sessionWatcher = nil
+		}
+	}()
+	binOf := func() string {
+		if p := sessionProgram; p != nil {
+			return p.binPath
+		}
+		return ""
+	}
+	// snaps holds one baseline per watched root, keyed by
+	// the root's abs path, re-read from the watcher on
+	// every scan: a folder named mid-watch starts its own
+	// baseline instead of reading its whole tree as one
+	// big change, and a removed folder simply drops out.
+	// scan returns the first change's announcement name —
+	// folder-relative under the program's folder,
+	// project-relative under a named one.
+	snaps := map[string]map[string]watchMark{}
+	scan := func(binPath string) string {
+		live := map[string]bool{}
+		found := ""
+		for _, r := range w.roots() {
+			live[r.abs] = true
+			cur := scanWatchTree(r.abs, binPath)
+			prev, ok := snaps[r.abs]
+			snaps[r.abs] = cur
+			if !ok || found != "" {
+				continue
+			}
+			if ch := firstWatchChange(prev, cur); ch != "" {
+				if r.name == "" {
+					found = ch
+				} else {
+					found = r.name + "/" + ch
+				}
+			}
+		}
+		for abs := range snaps {
+			if !live[abs] {
+				delete(snaps, abs)
+			}
+		}
+		return found
+	}
+	scan(binOf()) // baselines: the trees as they stand before any edit counts
+	var firstChanged string
+	var lastChange time.Time
+	ticker := time.NewTicker(watchPollInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-w.stop:
+			return
+		case <-ticker.C:
+		}
+		if w.isStopped() {
+			return
+		}
+		p := sessionProgram
+		if p == nil || p.rel != w.rel {
+			return // stopped or replaced somewhere else
+		}
+		if p.hasExited() {
+			w.noteSelfExit(p)
+			return
+		}
+		if changed := scan(p.binPath); changed != "" {
+			if firstChanged == "" {
+				firstChanged = changed
+			}
+			lastChange = time.Now()
+			continue
+		}
+		if firstChanged != "" && time.Since(lastChange) >= watchQuietPeriod {
+			changed := firstChanged
+			firstChanged = ""
+			w.restart(changed)
+			snaps = map[string]map[string]watchMark{}
+			scan(binOf())
+		}
+	}
+}
+
+// noteSelfExit surfaces a watched program's own ending
+// once, in place of the prompt-cycle note (exitTold is the
+// shared flag both read), and the watching pauses with it.
+func (w *programWatcher) noteSelfExit(p *programRun) {
+	p.mu.Lock()
+	told := p.exitTold
+	err := p.exitErr
+	if !told {
+		p.exitTold = true
+	}
+	p.mu.Unlock()
+	if told {
+		return
+	}
+	if err == nil {
+		watchAnnounce("[%s finished on its own — watching is paused]\n", w.rel)
+	} else {
+		watchAnnounce("[%s stopped on its own (%v) — watching is paused]\n", w.rel, err)
+	}
+}
+
+// restart rebuilds the watched program and swaps the new
+// process in for the old. The build comes first: a build
+// that fails restarts nothing — the old process keeps
+// running, the failure is announced briefly, and watching
+// continues. Only a built binary earns the swap.
+func (w *programWatcher) restart(firstChanged string) {
+	p := sessionProgram
+	if p == nil || p.rel != w.rel || p.hasExited() {
+		return
+	}
+	buildArg, _, _ := programForm(w.rootAbs, w.rel)
+	binPath, buildOut, buildErr := buildProgram(w.rootAbs, buildArg)
+	if buildErr != nil {
+		watchAnnounce("[%s didn't restart — the build failed, so the version that's running stayed up]\n%s", w.rel, briefBuildOutput(buildOut))
+		return
+	}
+	if w.isStopped() {
+		os.Remove(binPath)
+		return
+	}
+	old := p
+	oldURL := old.confirmedURL()
+	old.mu.Lock()
+	old.exitTold = true // the restart note is this ending's narration
+	old.mu.Unlock()
+	_ = old.cmd.Process.Kill()
+	select {
+	case <-old.done:
+	case <-time.After(3 * time.Second):
+	}
+	np, err := launchProgram(w.rel, w.rootAbs, binPath)
+	if err != nil {
+		watchAnnounce("[%s didn't restart — I couldn't start the new version: %v]\n", w.rel, err)
+		return
+	}
+	if w.isStopped() {
+		_ = np.cmd.Process.Kill()
+		return
+	}
+	if oldURL != "" {
+		// Carry the confirmed address over when the new
+		// process answers at it, so top and the log keep
+		// naming the real URL.
+		deadline := time.Now().Add(2 * time.Second)
+		for time.Now().Before(deadline) {
+			if np.hasExited() {
+				break
+			}
+			if probeServing(oldURL) {
+				np.setURL(oldURL)
+				break
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+	watchAnnounce("[%s restarted — %s changed]\n", w.rel, firstChanged)
+}
+
+// briefBuildOutput trims compiler output for the watch
+// note: the first few lines carry the error. The full
+// output is one "run" away — a note is not a report.
+func briefBuildOutput(out string) string {
+	if strings.TrimSpace(out) == "" {
+		return ""
+	}
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	const maxLines = 6
+	if len(lines) > maxLines {
+		lines = lines[:maxLines]
+	}
+	return strings.Join(lines, "\n") + "\n"
+}
+
+// ---------------------------------------------------------------------
+// The top claim: what THIS chat is running.
+
+// pluralCount renders "1 second" / "5 seconds" style counts.
+func pluralCount(n int64, unit string) string {
+	if n == 1 {
+		return "1 " + unit
+	}
+	return fmt.Sprintf("%d %ss", n, unit)
+}
+
+// plainDuration renders a duration the way a person says it:
+// "5 seconds", "1 minute 20 seconds", "2 hours 3 minutes".
+func plainDuration(d time.Duration) string {
+	s := int64(d.Seconds())
+	if s < 0 {
+		s = 0
+	}
+	switch {
+	case s < 60:
+		return pluralCount(s, "second")
+	case s < 3600:
+		m, r := s/60, s%60
+		if r == 0 {
+			return pluralCount(m, "minute")
+		}
+		return pluralCount(m, "minute") + " " + pluralCount(r, "second")
+	default:
+		h, m := s/3600, (s%3600)/60
+		if m == 0 {
+			return pluralCount(h, "hour")
+		}
+		return pluralCount(h, "hour") + " " + pluralCount(m, "minute")
+	}
+}
+
+// showProgramTop answers "top" / "what's running": the
+// programs this chat session itself started — honestly
+// scoped in the header, because it is NOT an OS process
+// table. State is reaped at render time: a program that died
+// since it was last mentioned is listed as exited, with
+// when, never as live.
+func showProgramTop() {
+	tag := cTag("gollemer [runner]>")
+	p := sessionProgram
+	if p == nil {
+		fmt.Printf("%s No programs are running right now — say 'run the program <file>' to start one.\n", tag)
+		printPendingWatchFolders(tag)
+		recordBrain("runner", true, "top asked with nothing running")
+		return
+	}
+	lines, total := p.log.snapshot()
+	visits := 0
+	for _, l := range lines {
+		if strings.HasPrefix(l, "visit:") {
+			visits++
+		}
+	}
+	p.mu.Lock()
+	exited, exitErr, exitedAt := p.exited, p.exitErr, p.exitedAt
+	p.mu.Unlock()
+	fmt.Printf("%s Programs this chat is running — only the ones it started, not everything on this computer:\n", tag)
+	if !exited {
+		entry := fmt.Sprintf("%s — running for %s", p.rel, plainDuration(time.Since(p.startedAt)))
+		if u := p.confirmedURL(); u != "" {
+			entry += ", serving at " + u
+		}
+		if programWatching(p.rel) {
+			entry += ", watching for changes"
+			if names := watchedExtraFolderNames(p.rel); len(names) > 0 {
+				entry += " (also " + strings.Join(names, ", ") + ")"
+			}
+		}
+		fmt.Printf("%s %s; %d lines logged, %s. Say \"stop the program\" to stop it.\n",
+			tag, entry, total, pluralCount(int64(visits), "visit"))
+		printPendingWatchFolders(tag)
+		recordBrain("runner", true, "top listed a running program: "+p.rel)
+		return
+	}
+	status := "finished (exit code 0)"
+	if exitErr != nil {
+		status = fmt.Sprintf("stopped (%v)", exitErr)
+	}
+	fmt.Printf("%s %s — %s %s ago; it ran for %s and printed %d lines (%s). It's no longer running.\n",
+		tag, p.rel, status, plainDuration(time.Since(exitedAt)),
+		plainDuration(exitedAt.Sub(p.startedAt)), total, pluralCount(int64(visits), "visit"))
+	printPendingWatchFolders(tag)
+	recordBrain("runner", true, "top listed an exited program: "+p.rel)
+}
+
+// printPendingWatchFolders renders top's waiting line:
+// the folders declared before any program ran, held for
+// the next watch start — shown distinctly from a live
+// watch's folders, because nothing is polling them yet.
+func printPendingWatchFolders(tag string) {
+	if len(pendingWatchFolders) == 0 {
+		return
+	}
+	fmt.Printf("%s Watch folders waiting for a program: %s.\n", tag, strings.Join(pendingWatchFolderNames(), ", "))
+}
+
+// noteProgramActivity rides the unified loop's prompt cycle:
+// at most one short line, only when something actually
+// changed — new output lines the user hasn't been told
+// about, or an exit not yet surfaced. It never speaks twice
+// about the same fact.
+func noteProgramActivity() {
+	p := sessionProgram
+	if p == nil {
+		return
+	}
+	_, total := p.log.snapshot()
+	if p.hasExited() {
+		p.mu.Lock()
+		told := p.exitTold
+		err := p.exitErr
+		if !told {
+			p.exitTold = true
+		}
+		p.mu.Unlock()
+		if told {
+			return
+		}
+		p.log.mu.Lock()
+		p.log.notified = total
+		p.log.mu.Unlock()
+		if err == nil {
+			fmt.Printf("[%s finished (exit code 0) — say \"show the program log\" to read its output]\n", p.rel)
+		} else {
+			fmt.Printf("[%s stopped (%v) — say \"show the program log\" to read its output]\n", p.rel, err)
+		}
+		return
+	}
+	p.log.mu.Lock()
+	fresh := total - p.log.notified
+	if fresh > 0 {
+		p.log.notified = total
+	}
+	p.log.mu.Unlock()
+	if fresh > 0 {
+		fmt.Printf("[%s printed %d new lines — say \"show the program log\" to read them]\n", p.rel, fresh)
+	}
+}

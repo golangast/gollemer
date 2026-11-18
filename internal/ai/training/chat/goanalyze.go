@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/golangast/gollemer/internal/ai/analyze"
+	"github.com/golangast/gollemer/pkg/termui"
 )
 
 // unifiedProjectRoot is the repo directory the chat was started in
@@ -46,23 +47,19 @@ func tryCodebaseQuestion(line string) (string, bool) {
 		if err != nil {
 			return "", false
 		}
-		fmt.Println("[reading the codebase — parsing Go files...]")
+		sp := termui.Spin("Reading this project…")
 		p, err := analyze.Analyze(root)
+		sp.Stop("")
 		if err != nil {
 			return "", false
 		}
-		lastAnalyzeRoot = root
-		lastAnalyzeProject = p
+		setCurrentProject(root, p)
 	}
-	// Neural explanation over analyzer facts: the v3 codeintent model
-	// writes the prose, the analyzer guarantees every fact. Falls back
-	// to the deterministic template when the model is unavailable.
-	if name, ok := analyze.IsExplainQuestion(line); ok {
-		if out, ok := explainWithCodeIntent(lastAnalyzeProject, name, line, unifiedProjectRoot); ok {
-			return out, true
-		}
-	}
-	return lastAnalyzeProject.Answer(line)
+	out, cands, ok := lastAnalyzeProject.AnswerCands(line)
+	// A pick-list answer arms the numeric reply path; any other
+	// answer disarms an older list. See symbolpick.go.
+	setFuncPick(cands)
+	return out, ok
 }
 
 var (
@@ -104,19 +101,46 @@ func handleGoAnalyze(line string) (out string, ok bool) {
 	if err != nil {
 		return fmt.Sprintf("I couldn't read that codebase: %v", err), true
 	}
-	fmt.Println("[reading the codebase — parsing Go files...]")
+	sp := termui.Spin("Reading this project…")
 	p, err := analyze.Analyze(root)
+	sp.Stop("")
 	if err != nil {
 		return fmt.Sprintf("I couldn't analyze %s: %v", root, err), true
 	}
-	lastAnalyzeRoot = root
-	lastAnalyzeProject = p
+	setCurrentProject(root, p)
 	var b strings.Builder
 	if isWhere {
 		b.WriteString(p.WhereToChangeText(task))
 		return b.String(), true
 	}
 	b.WriteString(renderAnalyzeReport(p))
+	return b.String(), true
+}
+
+// handleRepoGuide answers "where do I begin with this repo": the
+// repo is resolved and analyzed exactly like handleGoAnalyze (a
+// GitHub URL goes through the codebase-maps clone cache, and the
+// repo becomes the current project), but the answer is the reading
+// guide — the analyzer's ordered where-to-start path — under the
+// project summary, not the full report. Everything printed comes
+// from the analyzer's real output for this repo.
+func handleRepoGuide(url string) (string, bool) {
+	root, err := resolveAnalyzeRoot(url)
+	if err != nil {
+		return fmt.Sprintf("I couldn't read that codebase: %v", err), true
+	}
+	sp := termui.Spin("Reading this project…")
+	p, err := analyze.Analyze(root)
+	sp.Stop("")
+	if err != nil {
+		return fmt.Sprintf("I couldn't analyze %s: %v", root, err), true
+	}
+	setCurrentProject(root, p)
+	var b strings.Builder
+	fmt.Fprintf(&b, "Here's where to begin with %s:\n\n", url)
+	b.WriteString(p.Summary())
+	b.WriteString("\n")
+	b.WriteString(p.ReadingGuide())
 	return b.String(), true
 }
 

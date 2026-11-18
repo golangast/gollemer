@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/golangast/gollemer/pkg/termui"
 )
 
 // This file answers the beginner's hardest question: "what happens when
@@ -13,10 +15,10 @@ import (
 // the same flow as a short paragraph.
 
 const (
-	maxPipelineDepth   = 4  // levels below main
-	maxPipelineKids    = 5  // callees shown per function
-	maxPipelineNodes   = 40 // total nodes before truncation
-	maxPipelineDocLen  = 64 // doc snippet per node
+	maxPipelineDepth  = 4  // levels below main
+	maxPipelineKids   = 5  // callees shown per function
+	maxPipelineNodes  = 40 // total nodes before truncation
+	maxPipelineDocLen = 64 // doc snippet per node
 )
 
 // Pipeline draws the call flow starting at every func main. Cycles are
@@ -25,15 +27,16 @@ const (
 // call-graph roots: exported functions nothing calls — the API surface.
 func (p *Project) Pipeline() string {
 	var b strings.Builder
-	b.WriteString("PIPELINE: what happens when you run it\n")
-	b.WriteString("Follow the arrows — each step calls the next.\n\n")
+	b.WriteString(termui.SubHeader("PIPELINE: what happens when you run it") + "\n")
+	b.WriteString(termui.Muted.Apply("Follow the arrows — each step calls the next.") + "\n\n")
 	mains := p.EntryPoints()
 	if len(mains) == 0 {
 		b.WriteString("No func main: this is a library, not a runnable program.\n")
 		b.WriteString("Its story starts at the functions nothing else calls:\n")
 		roots := p.callRoots(3)
 		for _, fn := range roots {
-			fmt.Fprintf(&b, "  %s — %s\n", fn.Display(), shortDoc(fn, maxPipelineDocLen))
+			fmt.Fprintf(&b, "  %s%s\n", termui.Bright.Apply(fn.Display()),
+				termui.Muted.Apply(" — "+shortDoc(fn, maxPipelineDocLen)))
 		}
 		if len(roots) == 0 {
 			b.WriteString("  (no clear entry functions found)\n")
@@ -45,9 +48,10 @@ func (p *Project) Pipeline() string {
 		if i > 0 {
 			b.WriteString("\n")
 		}
-		fmt.Fprintf(&b, "%s  (%s:%d)\n", m.Name, p.LinkPath(m.File), m.Line)
+		fmt.Fprintf(&b, "%s  %s\n", termui.Bright.Apply(m.Name),
+			termui.StyleFileLine(p.LinkPath(m.File), m.Line))
 		if d := shortDoc(m, maxPipelineDocLen); d != "" {
-			fmt.Fprintf(&b, "  %s\n", d)
+			fmt.Fprintf(&b, "  %s\n", termui.Muted.Apply(d))
 		}
 		pw.walk(&b, m, []string{m.ID}, 1, "")
 		if pw.truncated {
@@ -60,45 +64,45 @@ func (p *Project) Pipeline() string {
 // Story renders the first two levels of the pipeline as a plain-words
 // paragraph: the beginner's "what does this program do" answer.
 func (p *Project) Story() string {
-	var b strings.Builder
-	b.WriteString("STORY: what happens when you run it, in plain words\n\n")
+	var body strings.Builder
 	mains := p.EntryPoints()
 	if len(mains) == 0 {
-		b.WriteString("This is a library — there's no main program to run. ")
+		body.WriteString("This is a library — there's no main program to run. ")
 		roots := p.callRoots(3)
 		if len(roots) > 0 {
 			names := make([]string, 0, len(roots))
 			for _, fn := range roots {
 				names = append(names, fn.Display()+"()")
 			}
-			fmt.Fprintf(&b, "Other code starts from %s.\n", joinWords(names))
+			fmt.Fprintf(&body, "Other code starts from %s.\n", joinWords(names))
 		}
-		return b.String()
-	}
-	m := mains[0]
-	fmt.Fprintf(&b, "Everything starts at main() in %s.\n", p.LinkPath(m.File))
-	kids := p.topCallees(m, 4)
-	if len(kids) == 0 {
-		b.WriteString("main() does its work directly, without calling other project functions.\n")
-		return b.String()
-	}
-	for _, k := range kids {
-		if d := shortDoc(k, 90); d != "" {
-			fmt.Fprintf(&b, "main() calls %s(): %s\n", k.Name, d)
+	} else {
+		m := mains[0]
+		fmt.Fprintf(&body, "Everything starts at main() in %s.\n", p.LinkPath(m.File))
+		kids := p.topCallees(m, 4)
+		if len(kids) == 0 {
+			body.WriteString("main() does its work directly, without calling other project functions.\n")
 		} else {
-			fmt.Fprintf(&b, "main() calls %s().\n", k.Name)
+			for _, k := range kids {
+				if d := shortDoc(k, 90); d != "" {
+					fmt.Fprintf(&body, "main() calls %s(): %s\n", k.Name, d)
+				} else {
+					fmt.Fprintf(&body, "main() calls %s().\n", k.Name)
+				}
+			}
+			// One level deeper through the most important first call.
+			grandkids := p.topCallees(kids[0], 3)
+			if len(grandkids) > 0 {
+				names := make([]string, 0, len(grandkids))
+				for _, g := range grandkids {
+					names = append(names, g.Name+"()")
+				}
+				fmt.Fprintf(&body, "From there, %s() calls %s.\n", kids[0].Name, joinWords(names))
+			}
 		}
 	}
-	// One level deeper through the most important first call.
-	grandkids := p.topCallees(kids[0], 3)
-	if len(grandkids) > 0 {
-		names := make([]string, 0, len(grandkids))
-		for _, g := range grandkids {
-			names = append(names, g.Name+"()")
-		}
-		fmt.Fprintf(&b, "From there, %s() calls %s.\n", kids[0].Name, joinWords(names))
-	}
-	return b.String()
+	return termui.SubHeader("STORY: what happens when you run it, in plain words") + "\n" +
+		termui.Prose(body.String()) + "\n"
 }
 
 // pipelineWalker holds the traversal budget shared across entry points.
@@ -134,15 +138,18 @@ func (w *pipelineWalker) walk(b *strings.Builder, fn *Func, path []string, depth
 			return
 		}
 		w.nodes++
+		branch = termui.Muted.Apply(branch)
 		if contains(path, k.ID) {
-			fmt.Fprintf(b, "%s%s%s ↺ (already shown above)\n", prefix, branch, k.Display())
+			fmt.Fprintf(b, "%s%s%s\n", termui.Muted.Apply(prefix), branch,
+				termui.Bright.Apply(k.Display())+termui.Muted.Apply(" ↺ (already shown above)"))
 			continue
 		}
 		doc := shortDoc(k, maxPipelineDocLen)
 		if doc != "" {
-			fmt.Fprintf(b, "%s%s%s — %s\n", prefix, branch, k.Display(), doc)
+			fmt.Fprintf(b, "%s%s%s%s\n", termui.Muted.Apply(prefix), branch,
+				termui.Bright.Apply(k.Display()), termui.Muted.Apply(" — "+doc))
 		} else {
-			fmt.Fprintf(b, "%s%s%s\n", prefix, branch, k.Display())
+			fmt.Fprintf(b, "%s%s%s\n", termui.Muted.Apply(prefix), branch, termui.Bright.Apply(k.Display()))
 		}
 		w.walk(b, k, append(path, k.ID), depth+1, childPrefix)
 	}

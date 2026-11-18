@@ -1,0 +1,1469 @@
+{
+  "source": "Standard library package index — https://pkg.go.dev/std (snapshot; refresh with: go run ./scripts/import_stdpackages)",
+  "packages": [
+    {
+      "path": "archive/tar",
+      "synopsis": "Package tar implements access to tar archives."
+    },
+    {
+      "path": "archive/zip",
+      "synopsis": "Package zip provides support for reading and writing ZIP archives."
+    },
+    {
+      "path": "bufio",
+      "synopsis": "Package bufio implements buffered I/O. It wraps an io.Reader or io.Writer object, creating another object (Reader or Writer) that also implements the interface but provides buffering and some help for textual I/O."
+    },
+    {
+      "path": "builtin",
+      "synopsis": "Package builtin provides documentation for Go's predeclared identifiers."
+    },
+    {
+      "path": "bytes",
+      "synopsis": "Package bytes implements functions for the manipulation of byte slices."
+    },
+    {
+      "path": "cmp",
+      "synopsis": "Package cmp provides types and functions related to comparing ordered values."
+    },
+    {
+      "path": "compress/bzip2",
+      "synopsis": "Package bzip2 implements bzip2 decompression."
+    },
+    {
+      "path": "compress/flate",
+      "synopsis": "Package flate implements the DEFLATE compressed data format, described in RFC 1951."
+    },
+    {
+      "path": "compress/gzip",
+      "synopsis": "Package gzip implements reading and writing of gzip format compressed files, as specified in RFC 1952."
+    },
+    {
+      "path": "compress/lzw",
+      "synopsis": "Package lzw implements the Lempel-Ziv-Welch compressed data format, described in T. A. Welch, “A Technique for High-Performance Data Compression”, Computer, 17(6) (June 1984), pp 8-19."
+    },
+    {
+      "path": "compress/zlib",
+      "synopsis": "Package zlib implements reading and writing of zlib format compressed data, as specified in RFC 1950."
+    },
+    {
+      "path": "container/heap",
+      "synopsis": "Package heap provides heap operations for any type that implements heap.Interface."
+    },
+    {
+      "path": "container/list",
+      "synopsis": "Package list implements a doubly linked list."
+    },
+    {
+      "path": "container/ring",
+      "synopsis": "Package ring implements operations on circular lists."
+    },
+    {
+      "path": "context",
+      "synopsis": "Package context defines the Context type, which carries deadlines, cancellation signals, and other request-scoped values across API boundaries and between processes."
+    },
+    {
+      "path": "crypto",
+      "synopsis": "Package crypto collects common cryptographic constants."
+    },
+    {
+      "path": "crypto/aes",
+      "synopsis": "Package aes implements AES encryption (formerly Rijndael), as defined in U.S. Federal Information Processing Standards Publication 197."
+    },
+    {
+      "path": "crypto/cipher",
+      "synopsis": "Package cipher implements standard block cipher modes that can be wrapped around low-level block cipher implementations."
+    },
+    {
+      "path": "crypto/des",
+      "synopsis": "Package des implements the Data Encryption Standard (DES) and the Triple Data Encryption Algorithm (TDEA) as defined in U.S. Federal Information Processing Standards Publication 46-3."
+    },
+    {
+      "path": "crypto/dsa",
+      "synopsis": "Package dsa implements the Digital Signature Algorithm, as defined in FIPS 186-3."
+    },
+    {
+      "path": "crypto/ecdh",
+      "synopsis": "Package ecdh implements Elliptic Curve Diffie-Hellman over NIST curves and Curve25519."
+    },
+    {
+      "path": "crypto/ecdsa",
+      "synopsis": "Package ecdsa implements the Elliptic Curve Digital Signature Algorithm, as defined in [FIPS 186-5]."
+    },
+    {
+      "path": "crypto/ed25519",
+      "synopsis": "Package ed25519 implements the Ed25519 signature algorithm."
+    },
+    {
+      "path": "crypto/elliptic",
+      "synopsis": "Package elliptic implements the standard NIST P-224, P-256, P-384, and P-521 elliptic curves over prime fields."
+    },
+    {
+      "path": "crypto/fips140",
+      "synopsis": "Package fips140 provides information about the FIPS 140-3 Go Cryptographic Module and FIPS 140-3 mode."
+    },
+    {
+      "path": "crypto/hkdf",
+      "synopsis": "Package hkdf implements the HMAC-based Extract-and-Expand Key Derivation Function (HKDF) as defined in RFC 5869."
+    },
+    {
+      "path": "crypto/hmac",
+      "synopsis": "Package hmac implements the Keyed-Hash Message Authentication Code (HMAC) as defined in U.S. Federal Information Processing Standards Publication 198."
+    },
+    {
+      "path": "crypto/hpke",
+      "synopsis": "Package hpke implements Hybrid Public Key Encryption (HPKE) as defined in [RFC 9180]."
+    },
+    {
+      "path": "crypto/internal/boring",
+      "synopsis": "Package boring provides access to BoringCrypto implementation functions."
+    },
+    {
+      "path": "crypto/internal/boring/bbig",
+      "synopsis": ""
+    },
+    {
+      "path": "crypto/internal/boring/bcache",
+      "synopsis": "Package bcache implements a GC-friendly cache (see Cache) for BoringCrypto."
+    },
+    {
+      "path": "crypto/internal/boring/sig",
+      "synopsis": "Package sig holds “code signatures” that can be called and will result in certain code sequences being linked into the final binary."
+    },
+    {
+      "path": "crypto/internal/constanttime",
+      "synopsis": ""
+    },
+    {
+      "path": "crypto/internal/cryptotest",
+      "synopsis": ""
+    },
+    {
+      "path": "crypto/internal/cryptotest/wycheproof",
+      "synopsis": "Package wycheproof provides helper utilities for writing tests that rely on Wycheproof test vector schemas and JSON vector data."
+    },
+    {
+      "path": "crypto/internal/cryptotest/x509limbo",
+      "synopsis": ""
+    },
+    {
+      "path": "crypto/internal/entropy",
+      "synopsis": "Package entropy provides the passive entropy source for the FIPS 140-3 module."
+    },
+    {
+      "path": "crypto/internal/entropy/v1.0.0",
+      "synopsis": "Package entropy implements a CPU jitter-based SP 800-90B entropy source."
+    },
+    {
+      "path": "crypto/internal/fips140",
+      "synopsis": ""
+    },
+    {
+      "path": "crypto/internal/fips140/aes",
+      "synopsis": ""
+    },
+    {
+      "path": "crypto/internal/fips140/aes/gcm",
+      "synopsis": ""
+    },
+    {
+      "path": "crypto/internal/fips140/alias",
+      "synopsis": "Package alias implements memory aliasing tests."
+    },
+    {
+      "path": "crypto/internal/fips140/bigmod",
+      "synopsis": ""
+    },
+    {
+      "path": "crypto/internal/fips140/check",
+      "synopsis": "Package check implements the FIPS 140 load-time code+data verification."
+    },
+    {
+      "path": "crypto/internal/fips140/check/checktest",
+      "synopsis": "Package checktest defines some code and data for use in the crypto/internal/fips140/check test."
+    },
+    {
+      "path": "crypto/internal/fips140/drbg",
+      "synopsis": "Package drbg provides cryptographically secure random bytes usable by FIPS code."
+    },
+    {
+      "path": "crypto/internal/fips140/ecdh",
+      "synopsis": ""
+    },
+    {
+      "path": "crypto/internal/fips140/ecdsa",
+      "synopsis": ""
+    },
+    {
+      "path": "crypto/internal/fips140/ed25519",
+      "synopsis": ""
+    },
+    {
+      "path": "crypto/internal/fips140/edwards25519",
+      "synopsis": "Package edwards25519 implements group logic for the twisted Edwards curve"
+    },
+    {
+      "path": "crypto/internal/fips140/edwards25519/field",
+      "synopsis": "Package field implements fast arithmetic modulo 2^255-19."
+    },
+    {
+      "path": "crypto/internal/fips140/hkdf",
+      "synopsis": ""
+    },
+    {
+      "path": "crypto/internal/fips140/hmac",
+      "synopsis": "Package hmac implements HMAC according to [FIPS 198-1]."
+    },
+    {
+      "path": "crypto/internal/fips140/mldsa",
+      "synopsis": ""
+    },
+    {
+      "path": "crypto/internal/fips140/mlkem",
+      "synopsis": "Package mlkem implements the quantum-resistant key encapsulation method ML-KEM (formerly known as Kyber), as specified in [NIST FIPS 203]."
+    },
+    {
+      "path": "crypto/internal/fips140/nistec",
+      "synopsis": "Package nistec implements the elliptic curves from NIST SP 800-186."
+    },
+    {
+      "path": "crypto/internal/fips140/nistec/fiat",
+      "synopsis": ""
+    },
+    {
+      "path": "crypto/internal/fips140/pbkdf2",
+      "synopsis": ""
+    },
+    {
+      "path": "crypto/internal/fips140/rsa",
+      "synopsis": ""
+    },
+    {
+      "path": "crypto/internal/fips140/sha256",
+      "synopsis": "Package sha256 implements the SHA-224 and SHA-256 hash algorithms as defined in FIPS 180-4."
+    },
+    {
+      "path": "crypto/internal/fips140/sha3",
+      "synopsis": "Package sha3 implements the SHA-3 fixed-output-length hash functions and the SHAKE variable-output-length functions defined by [FIPS 202], as well as the cSHAKE extendable-output-length functions defined by [SP 800-185]."
+    },
+    {
+      "path": "crypto/internal/fips140/sha512",
+      "synopsis": "Package sha512 implements the SHA-384, SHA-512, SHA-512/224, and SHA-512/256 hash algorithms as defined in FIPS 180-4."
+    },
+    {
+      "path": "crypto/internal/fips140/ssh",
+      "synopsis": "Package ssh implements the SSH KDF as specified in RFC 4253, Section 7.2 and allowed by SP 800-135 Revision 1."
+    },
+    {
+      "path": "crypto/internal/fips140/subtle",
+      "synopsis": ""
+    },
+    {
+      "path": "crypto/internal/fips140/tls12",
+      "synopsis": ""
+    },
+    {
+      "path": "crypto/internal/fips140/tls13",
+      "synopsis": "Package tls13 implements the TLS 1.3 Key Schedule as specified in RFC 8446, Section 7.1 and allowed by FIPS 140-3 IG 2.4.B Resolution 7."
+    },
+    {
+      "path": "crypto/internal/fips140cache",
+      "synopsis": "Package fips140cache provides a weak map that associates the lifetime of values with the lifetime of keys."
+    },
+    {
+      "path": "crypto/internal/fips140deps",
+      "synopsis": "Package fipsdeps contains wrapper packages for internal APIs that are exposed to the FIPS module."
+    },
+    {
+      "path": "crypto/internal/fips140deps/byteorder",
+      "synopsis": ""
+    },
+    {
+      "path": "crypto/internal/fips140deps/cpu",
+      "synopsis": ""
+    },
+    {
+      "path": "crypto/internal/fips140deps/godebug",
+      "synopsis": ""
+    },
+    {
+      "path": "crypto/internal/fips140deps/time",
+      "synopsis": ""
+    },
+    {
+      "path": "crypto/internal/fips140hash",
+      "synopsis": ""
+    },
+    {
+      "path": "crypto/internal/fips140only",
+      "synopsis": ""
+    },
+    {
+      "path": "crypto/internal/impl",
+      "synopsis": "Package impl is a registry of alternative implementations of cryptographic primitives, to allow selecting them for testing."
+    },
+    {
+      "path": "crypto/internal/rand",
+      "synopsis": ""
+    },
+    {
+      "path": "crypto/internal/randutil",
+      "synopsis": "Package randutil contains internal randomness utilities for various crypto packages."
+    },
+    {
+      "path": "crypto/internal/sysrand",
+      "synopsis": "Package rand provides cryptographically secure random bytes from the operating system."
+    },
+    {
+      "path": "crypto/internal/sysrand/internal/seccomp",
+      "synopsis": ""
+    },
+    {
+      "path": "crypto/md5",
+      "synopsis": "Package md5 implements the MD5 hash algorithm as defined in RFC 1321."
+    },
+    {
+      "path": "crypto/mldsa",
+      "synopsis": "Package mldsa implements the post-quantum ML-DSA signature scheme specified in [FIPS 204]."
+    },
+    {
+      "path": "crypto/mlkem",
+      "synopsis": "Package mlkem implements the quantum-resistant key encapsulation method ML-KEM (formerly known as Kyber), as specified in [NIST FIPS 203]."
+    },
+    {
+      "path": "crypto/mlkem/mlkemtest",
+      "synopsis": "Package mlkemtest provides testing functions for the ML-KEM algorithm."
+    },
+    {
+      "path": "crypto/pbkdf2",
+      "synopsis": "Package pbkdf2 implements the key derivation function PBKDF2 as defined in RFC 8018 (PKCS #5 v2.1)."
+    },
+    {
+      "path": "crypto/rand",
+      "synopsis": "Package rand implements a cryptographically secure random number generator."
+    },
+    {
+      "path": "crypto/rc4",
+      "synopsis": "Package rc4 implements RC4 encryption, as defined in Bruce Schneier's Applied Cryptography."
+    },
+    {
+      "path": "crypto/rsa",
+      "synopsis": "Package rsa implements RSA encryption as specified in PKCS #1 and RFC 8017."
+    },
+    {
+      "path": "crypto/sha1",
+      "synopsis": "Package sha1 implements the SHA-1 hash algorithm as defined in RFC 3174."
+    },
+    {
+      "path": "crypto/sha256",
+      "synopsis": "Package sha256 implements the SHA224 and SHA256 hash algorithms as defined in FIPS 180-4."
+    },
+    {
+      "path": "crypto/sha3",
+      "synopsis": "Package sha3 implements the SHA-3 hash algorithms and the SHAKE extendable output functions defined in FIPS 202."
+    },
+    {
+      "path": "crypto/sha512",
+      "synopsis": "Package sha512 implements the SHA-384, SHA-512, SHA-512/224, and SHA-512/256 hash algorithms as defined in FIPS 180-4."
+    },
+    {
+      "path": "crypto/subtle",
+      "synopsis": "Package subtle implements functions that are often useful in cryptographic code but require careful thought to use correctly."
+    },
+    {
+      "path": "crypto/tls",
+      "synopsis": "Package tls partially implements TLS 1.2, as specified in RFC 5246, and TLS 1.3, as specified in RFC 8446."
+    },
+    {
+      "path": "crypto/tls/internal/fips140tls",
+      "synopsis": "Package fips140tls controls whether crypto/tls requires FIPS-approved settings."
+    },
+    {
+      "path": "crypto/x509",
+      "synopsis": "Package x509 implements a subset of the X.509 standard."
+    },
+    {
+      "path": "crypto/x509/internal/macos",
+      "synopsis": "Package macos provides cgo-less wrappers for Core Foundation and Security.framework, similarly to how package syscall provides access to libSystem.dylib."
+    },
+    {
+      "path": "crypto/x509/pkix",
+      "synopsis": "Package pkix contains shared, low level structures used for ASN.1 parsing and serialization of X.509 certificates, CRL and OCSP."
+    },
+    {
+      "path": "database/sql",
+      "synopsis": "Package sql provides a generic interface around SQL (or SQL-like) databases."
+    },
+    {
+      "path": "database/sql/driver",
+      "synopsis": "Package driver defines interfaces to be implemented by database drivers as used by package sql."
+    },
+    {
+      "path": "database/sql/internal",
+      "synopsis": "Package internal contains internal symbols shared between database/sql and database/sql/driver."
+    },
+    {
+      "path": "debug/buildinfo",
+      "synopsis": "Package buildinfo provides access to information embedded in a Go binary about how it was built."
+    },
+    {
+      "path": "debug/dwarf",
+      "synopsis": "Package dwarf provides access to DWARF debugging information loaded from executable files, as defined in the DWARF 2.0 Standard at http://dwarfstd.org/doc/dwarf-2.0.0.pdf."
+    },
+    {
+      "path": "debug/elf",
+      "synopsis": "Package elf implements access to ELF object files."
+    },
+    {
+      "path": "debug/gosym",
+      "synopsis": "Package gosym implements access to the Go symbol and line number tables embedded in Go binaries generated by the gc compilers."
+    },
+    {
+      "path": "debug/macho",
+      "synopsis": "Package macho implements access to Mach-O object files."
+    },
+    {
+      "path": "debug/pe",
+      "synopsis": "Package pe implements access to PE (Microsoft Windows Portable Executable) files."
+    },
+    {
+      "path": "debug/plan9obj",
+      "synopsis": "Package plan9obj implements access to Plan 9 a.out object files."
+    },
+    {
+      "path": "embed",
+      "synopsis": "Package embed provides access to files embedded in the running Go program."
+    },
+    {
+      "path": "encoding",
+      "synopsis": "Package encoding defines interfaces shared by other packages that convert data to and from byte-level and textual representations."
+    },
+    {
+      "path": "encoding/ascii85",
+      "synopsis": "Package ascii85 implements the ascii85 data encoding as used in the btoa tool and Adobe's PostScript and PDF document formats."
+    },
+    {
+      "path": "encoding/asn1",
+      "synopsis": "Package asn1 implements parsing of DER-encoded ASN.1 data structures, as defined in ITU-T Rec X.690."
+    },
+    {
+      "path": "encoding/base32",
+      "synopsis": "Package base32 implements base32 encoding as specified by RFC 4648."
+    },
+    {
+      "path": "encoding/base64",
+      "synopsis": "Package base64 implements base64 encoding as specified by RFC 4648."
+    },
+    {
+      "path": "encoding/binary",
+      "synopsis": "Package binary implements simple translation between numbers and byte sequences and encoding and decoding of varints."
+    },
+    {
+      "path": "encoding/csv",
+      "synopsis": "Package csv reads and writes comma-separated values (CSV) files."
+    },
+    {
+      "path": "encoding/gob",
+      "synopsis": "Package gob manages streams of gobs - binary values exchanged between an Encoder (transmitter) and a Decoder (receiver)."
+    },
+    {
+      "path": "encoding/hex",
+      "synopsis": "Package hex implements hexadecimal encoding and decoding."
+    },
+    {
+      "path": "encoding/json",
+      "synopsis": "Package json implements encoding and decoding of JSON as defined in RFC 7159."
+    },
+    {
+      "path": "encoding/json/internal",
+      "synopsis": ""
+    },
+    {
+      "path": "encoding/json/internal/jsonflags",
+      "synopsis": "jsonflags implements all the optional boolean flags."
+    },
+    {
+      "path": "encoding/json/internal/jsonopts",
+      "synopsis": ""
+    },
+    {
+      "path": "encoding/json/internal/jsontest",
+      "synopsis": "Package jsontest contains functionality to assist in testing JSON."
+    },
+    {
+      "path": "encoding/json/internal/jsonwire",
+      "synopsis": "Package jsonwire implements stateless functionality for handling JSON text."
+    },
+    {
+      "path": "encoding/json/jsontext",
+      "synopsis": "Package jsontext implements syntactic processing of JSON as specified in RFC 4627, RFC 7159, RFC 7493, RFC 8259, and RFC 8785."
+    },
+    {
+      "path": "encoding/json/v2",
+      "synopsis": "Package json implements semantic processing of JSON as specified in RFC 8259."
+    },
+    {
+      "path": "encoding/pem",
+      "synopsis": "Package pem implements the PEM data encoding, which originated in Privacy Enhanced Mail."
+    },
+    {
+      "path": "encoding/xml",
+      "synopsis": "Package xml implements a simple XML 1.0 parser that understands XML name spaces."
+    },
+    {
+      "path": "errors",
+      "synopsis": "Package errors implements functions to manipulate errors."
+    },
+    {
+      "path": "expvar",
+      "synopsis": "Package expvar provides a standardized interface to public variables, such as operation counters in servers."
+    },
+    {
+      "path": "flag",
+      "synopsis": "Package flag implements command-line flag parsing."
+    },
+    {
+      "path": "fmt",
+      "synopsis": "Package fmt implements formatted I/O with functions analogous to C's printf and scanf."
+    },
+    {
+      "path": "go/ast",
+      "synopsis": "Package ast declares the types used to represent syntax trees for Go packages."
+    },
+    {
+      "path": "go/build",
+      "synopsis": "Package build gathers information about Go packages."
+    },
+    {
+      "path": "go/build/constraint",
+      "synopsis": "Package constraint implements parsing and evaluation of build constraint lines."
+    },
+    {
+      "path": "go/constant",
+      "synopsis": "Package constant implements Values representing untyped Go constants and their corresponding operations."
+    },
+    {
+      "path": "go/doc",
+      "synopsis": "Package doc extracts source code documentation from a Go AST."
+    },
+    {
+      "path": "go/doc/comment",
+      "synopsis": "Package comment implements parsing and reformatting of Go doc comments, (documentation comments), which are comments that immediately precede a top-level declaration of a package, const, func, type, or var."
+    },
+    {
+      "path": "go/format",
+      "synopsis": "Package format implements standard formatting of Go source."
+    },
+    {
+      "path": "go/importer",
+      "synopsis": "Package importer provides access to export data importers."
+    },
+    {
+      "path": "go/internal/gccgoimporter",
+      "synopsis": "Package gccgoimporter implements Import for gccgo-generated object files."
+    },
+    {
+      "path": "go/internal/gcimporter",
+      "synopsis": "Package gcimporter implements Import for gc-generated object files."
+    },
+    {
+      "path": "go/internal/srcimporter",
+      "synopsis": "Package srcimporter implements importing directly from source files rather than installed packages."
+    },
+    {
+      "path": "go/parser",
+      "synopsis": "Package parser implements a parser for Go source files."
+    },
+    {
+      "path": "go/printer",
+      "synopsis": "Package printer implements printing of AST nodes."
+    },
+    {
+      "path": "go/scanner",
+      "synopsis": "Package scanner implements a scanner for Go source text."
+    },
+    {
+      "path": "go/token",
+      "synopsis": "Package token defines constants representing the lexical tokens of the Go programming language and basic operations on tokens (printing, predicates)."
+    },
+    {
+      "path": "go/types",
+      "synopsis": "Package types declares the data types and implements the algorithms for type-checking of Go packages."
+    },
+    {
+      "path": "go/version",
+      "synopsis": "Package version provides operations on [Go versions] in [Go toolchain name syntax]: strings like \"go1.20\", \"go1.21.0\", \"go1.22rc2\", and \"go1.23.4-custom\"."
+    },
+    {
+      "path": "hash",
+      "synopsis": "Package hash provides interfaces for hash functions."
+    },
+    {
+      "path": "hash/adler32",
+      "synopsis": "Package adler32 implements the Adler-32 checksum."
+    },
+    {
+      "path": "hash/crc32",
+      "synopsis": "Package crc32 implements the 32-bit cyclic redundancy check, or CRC-32, checksum."
+    },
+    {
+      "path": "hash/crc64",
+      "synopsis": "Package crc64 implements the 64-bit cyclic redundancy check, or CRC-64, checksum."
+    },
+    {
+      "path": "hash/fnv",
+      "synopsis": "Package fnv implements FNV-1 and FNV-1a, non-cryptographic hash functions created by Glenn Fowler, Landon Curt Noll, and Phong Vo."
+    },
+    {
+      "path": "hash/maphash",
+      "synopsis": "Package maphash provides hash functions on byte sequences and comparable values."
+    },
+    {
+      "path": "html",
+      "synopsis": "Package html provides functions for escaping and unescaping HTML text."
+    },
+    {
+      "path": "html/template",
+      "synopsis": "Package template (html/template) implements data-driven templates for generating HTML output safe against code injection."
+    },
+    {
+      "path": "image",
+      "synopsis": "Package image implements a basic 2-D image library."
+    },
+    {
+      "path": "image/color",
+      "synopsis": "Package color implements a basic color library."
+    },
+    {
+      "path": "image/color/palette",
+      "synopsis": "Package palette provides standard color palettes."
+    },
+    {
+      "path": "image/draw",
+      "synopsis": "Package draw provides image composition functions."
+    },
+    {
+      "path": "image/gif",
+      "synopsis": "Package gif implements a GIF image decoder and encoder."
+    },
+    {
+      "path": "image/internal/imageutil",
+      "synopsis": "Package imageutil contains code shared by image-related packages."
+    },
+    {
+      "path": "image/jpeg",
+      "synopsis": "Package jpeg implements a JPEG image decoder and encoder."
+    },
+    {
+      "path": "image/png",
+      "synopsis": "Package png implements a PNG image decoder and encoder."
+    },
+    {
+      "path": "index/suffixarray",
+      "synopsis": "Package suffixarray implements substring search in logarithmic time using an in-memory suffix array."
+    },
+    {
+      "path": "internal/abi",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/asan",
+      "synopsis": "Package asan contains helper functions for manually instrumenting code for the address sanitizer."
+    },
+    {
+      "path": "internal/bisect",
+      "synopsis": "Package bisect can be used by compilers and other programs to serve as a target for the bisect debugging tool."
+    },
+    {
+      "path": "internal/buildcfg",
+      "synopsis": "Package buildcfg provides access to the build configuration described by the current environment."
+    },
+    {
+      "path": "internal/bytealg",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/byteorder",
+      "synopsis": "Package byteorder provides functions for decoding and encoding little and big endian integer types from/to byte slices."
+    },
+    {
+      "path": "internal/cfg",
+      "synopsis": "Package cfg holds configuration shared by the Go command and internal/testenv."
+    },
+    {
+      "path": "internal/cgrouptest",
+      "synopsis": "Package cgrouptest provides best-effort helpers for running tests inside a cgroup."
+    },
+    {
+      "path": "internal/chacha8rand",
+      "synopsis": "Package chacha8rand implements a pseudorandom generator based on ChaCha8."
+    },
+    {
+      "path": "internal/coverage",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/coverage/calloc",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/coverage/cfile",
+      "synopsis": "Package cfile implements management of coverage files."
+    },
+    {
+      "path": "internal/coverage/cformat",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/coverage/cmerge",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/coverage/decodecounter",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/coverage/decodemeta",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/coverage/encodecounter",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/coverage/encodemeta",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/coverage/pods",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/coverage/rtcov",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/coverage/slicereader",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/coverage/slicewriter",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/coverage/stringtab",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/coverage/uleb128",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/cpu",
+      "synopsis": "Package cpu implements processor feature detection used by the Go standard library."
+    },
+    {
+      "path": "internal/dag",
+      "synopsis": "Package dag implements a language for expressing directed acyclic graphs."
+    },
+    {
+      "path": "internal/diff",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/exportdata",
+      "synopsis": "Package exportdata implements common utilities for finding and reading gc-generated object files."
+    },
+    {
+      "path": "internal/filepathlite",
+      "synopsis": "Package filepathlite implements a subset of path/filepath, only using packages which may be imported by \"os\"."
+    },
+    {
+      "path": "internal/fmtsort",
+      "synopsis": "Package fmtsort provides a general stable ordering mechanism for maps, on behalf of the fmt and text/template packages."
+    },
+    {
+      "path": "internal/fuzz",
+      "synopsis": "Package fuzz provides common fuzzing functionality for tests built with \"go test\" and for programs that use fuzzing functionality in the testing package."
+    },
+    {
+      "path": "internal/gate",
+      "synopsis": "Package gate contains an alternative condition variable."
+    },
+    {
+      "path": "internal/goarch",
+      "synopsis": "package goarch contains GOARCH-specific constants."
+    },
+    {
+      "path": "internal/godebug",
+      "synopsis": "Package godebug makes the settings in the $GODEBUG environment variable available to other packages."
+    },
+    {
+      "path": "internal/godebugs",
+      "synopsis": "Package godebugs provides a table of known GODEBUG settings, for use by a variety of other packages, including internal/godebug, runtime, runtime/metrics, and cmd/go/internal/load."
+    },
+    {
+      "path": "internal/goexperiment",
+      "synopsis": "Package goexperiment implements support for toolchain experiments."
+    },
+    {
+      "path": "internal/goos",
+      "synopsis": "package goos contains GOOS-specific constants."
+    },
+    {
+      "path": "internal/goroot",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/gover",
+      "synopsis": "Package gover implements support for Go toolchain versions like 1.21.0 and 1.21rc1."
+    },
+    {
+      "path": "internal/goversion",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/lazyregexp",
+      "synopsis": "Package lazyregexp is a thin wrapper over regexp, allowing the use of global regexp variables without forcing them to be compiled at init."
+    },
+    {
+      "path": "internal/lazytemplate",
+      "synopsis": "Package lazytemplate is a thin wrapper over text/template, allowing the use of global template variables without forcing them to be parsed at init."
+    },
+    {
+      "path": "internal/msan",
+      "synopsis": "Package msan contains helper functions for manually instrumenting code for the memory sanitizer."
+    },
+    {
+      "path": "internal/nettest",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/nettrace",
+      "synopsis": "Package nettrace contains internal hooks for tracing activity in the net package."
+    },
+    {
+      "path": "internal/obscuretestdata",
+      "synopsis": "Package obscuretestdata contains functionality used by tests to more easily work with testdata that must be obscured primarily due to golang.org/issue/34986."
+    },
+    {
+      "path": "internal/oserror",
+      "synopsis": "Package oserror defines errors values used in the os package."
+    },
+    {
+      "path": "internal/pkgbits",
+      "synopsis": "Package pkgbits implements low-level coding abstractions for Unified IR's (UIR) binary export data format."
+    },
+    {
+      "path": "internal/platform",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/poll",
+      "synopsis": "Package poll supports non-blocking I/O on file descriptors with polling."
+    },
+    {
+      "path": "internal/profile",
+      "synopsis": "Package profile represents a pprof profile as a directed graph."
+    },
+    {
+      "path": "internal/profilerecord",
+      "synopsis": "Package profilerecord holds internal types used to represent profiling records with deep stack traces."
+    },
+    {
+      "path": "internal/race",
+      "synopsis": "Package race contains helper functions for manually instrumenting code for the race detector."
+    },
+    {
+      "path": "internal/reflectlite",
+      "synopsis": "Package reflectlite implements lightweight version of reflect, not using any package except for \"runtime\", \"unsafe\", and \"internal/abi\""
+    },
+    {
+      "path": "internal/routebsd",
+      "synopsis": "Package routebsd supports reading interface addresses on BSD systems."
+    },
+    {
+      "path": "internal/runtime/atomic",
+      "synopsis": "Package atomic provides atomic operations, independent of sync/atomic, to the runtime."
+    },
+    {
+      "path": "internal/runtime/cgobench",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/runtime/cgroup",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/runtime/exithook",
+      "synopsis": "Package exithook provides limited support for on-exit cleanup."
+    },
+    {
+      "path": "internal/runtime/gc",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/runtime/gc/internal/gen",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/runtime/gc/scan",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/runtime/maps",
+      "synopsis": "Package maps implements Go's builtin map type."
+    },
+    {
+      "path": "internal/runtime/math",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/runtime/pprof/label",
+      "synopsis": "Package label provides common declarations used by both the runtime and runtime/pprof packages."
+    },
+    {
+      "path": "internal/runtime/startlinetest",
+      "synopsis": "Package startlinetest contains helpers for runtime_test.TestStartLineAsm."
+    },
+    {
+      "path": "internal/runtime/sys",
+      "synopsis": "package sys contains system- and configuration- and architecture-specific constants used by the runtime."
+    },
+    {
+      "path": "internal/runtime/syscall/linux",
+      "synopsis": "Package linux provides the syscall primitives required for the runtime."
+    },
+    {
+      "path": "internal/runtime/syscall/windows",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/saferio",
+      "synopsis": "Package saferio provides I/O functions that avoid allocating large amounts of memory unnecessarily."
+    },
+    {
+      "path": "internal/singleflight",
+      "synopsis": "Package singleflight provides a duplicate function call suppression mechanism."
+    },
+    {
+      "path": "internal/strconv",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/stringslite",
+      "synopsis": "Package stringslite implements a subset of strings, only using packages that may be imported by \"os\"."
+    },
+    {
+      "path": "internal/sync",
+      "synopsis": "Package sync provides basic synchronization primitives such as mutual exclusion locks to internal packages (including ones that depend on sync)."
+    },
+    {
+      "path": "internal/synctest",
+      "synopsis": "Package synctest provides support for testing concurrent code."
+    },
+    {
+      "path": "internal/syscall/execenv",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/syscall/unix",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/syscall/windows",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/syscall/windows/registry",
+      "synopsis": "Package registry provides access to the Windows registry."
+    },
+    {
+      "path": "internal/syscall/windows/sysdll",
+      "synopsis": "Package sysdll is an internal leaf package that records and reports which Windows DLL names are used by Go itself."
+    },
+    {
+      "path": "internal/sysinfo",
+      "synopsis": "Package sysinfo implements high level hardware information gathering that can be used for debugging or information purposes."
+    },
+    {
+      "path": "internal/syslist",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/testenv",
+      "synopsis": "Package testenv provides information about what functionality is available in different testing environments run by the Go team."
+    },
+    {
+      "path": "internal/testhash",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/testlog",
+      "synopsis": "Package testlog provides a back-channel communication path between tests and package os, so that cmd/go can see which environment variables and files a test consults."
+    },
+    {
+      "path": "internal/testpty",
+      "synopsis": "Package testpty is a simple pseudo-terminal package for Unix systems, implemented by calling C functions via cgo."
+    },
+    {
+      "path": "internal/trace",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/trace/internal/testgen",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/trace/internal/tracev1",
+      "synopsis": "Package tracev1 implements a parser for Go execution traces from versions 1.11–1.21."
+    },
+    {
+      "path": "internal/trace/raw",
+      "synopsis": "Package raw provides an interface to interpret and emit Go execution traces."
+    },
+    {
+      "path": "internal/trace/testtrace",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/trace/tracev2",
+      "synopsis": "Package tracev2 contains definitions for the v2 execution trace wire format."
+    },
+    {
+      "path": "internal/trace/traceviewer",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/trace/traceviewer/format",
+      "synopsis": "Package traceviewer provides definitions of the JSON data structures used by the Chrome trace viewer."
+    },
+    {
+      "path": "internal/trace/version",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/txtar",
+      "synopsis": "Package txtar implements a trivial text-based file archive format."
+    },
+    {
+      "path": "internal/types/errors",
+      "synopsis": ""
+    },
+    {
+      "path": "internal/unsafeheader",
+      "synopsis": "Package unsafeheader contains header declarations for the Go runtime's slice and string implementations."
+    },
+    {
+      "path": "internal/xcoff",
+      "synopsis": "Package xcoff implements access to XCOFF (Extended Common Object File Format) files."
+    },
+    {
+      "path": "internal/zstd",
+      "synopsis": "Package zstd provides a decompressor for zstd streams, described in RFC 8878."
+    },
+    {
+      "path": "io",
+      "synopsis": "Package io provides basic interfaces to I/O primitives."
+    },
+    {
+      "path": "io/fs",
+      "synopsis": "Package fs defines basic interfaces to a file system."
+    },
+    {
+      "path": "io/ioutil",
+      "synopsis": "Package ioutil implements some I/O utility functions."
+    },
+    {
+      "path": "iter",
+      "synopsis": "Package iter provides basic definitions and operations related to iterators over sequences."
+    },
+    {
+      "path": "log",
+      "synopsis": "Package log implements a simple logging package."
+    },
+    {
+      "path": "log/internal",
+      "synopsis": "Package internal contains definitions used by both log and log/slog."
+    },
+    {
+      "path": "log/slog",
+      "synopsis": "Package slog provides structured logging, in which log records include a message, a severity level, and various other attributes expressed as key-value pairs."
+    },
+    {
+      "path": "log/slog/internal",
+      "synopsis": ""
+    },
+    {
+      "path": "log/slog/internal/benchmarks",
+      "synopsis": "Package benchmarks contains benchmarks for slog."
+    },
+    {
+      "path": "log/slog/internal/buffer",
+      "synopsis": "Package buffer provides a pool-allocated byte buffer."
+    },
+    {
+      "path": "log/syslog",
+      "synopsis": "Package syslog provides a simple interface to the system log service."
+    },
+    {
+      "path": "maps",
+      "synopsis": "Package maps defines various functions useful with maps of any type."
+    },
+    {
+      "path": "math",
+      "synopsis": "Package math provides basic constants and mathematical functions."
+    },
+    {
+      "path": "math/big",
+      "synopsis": "Package big implements arbitrary-precision arithmetic (big numbers)."
+    },
+    {
+      "path": "math/big/internal/asmgen",
+      "synopsis": "Asmgen generates math/big assembly."
+    },
+    {
+      "path": "math/bits",
+      "synopsis": "Package bits implements bit counting and manipulation functions for the predeclared unsigned integer types."
+    },
+    {
+      "path": "math/cmplx",
+      "synopsis": "Package cmplx provides basic constants and mathematical functions for complex numbers."
+    },
+    {
+      "path": "math/rand",
+      "synopsis": "Package rand implements pseudo-random number generators suitable for tasks such as simulation, but it should not be used for security-sensitive work."
+    },
+    {
+      "path": "math/rand/v2",
+      "synopsis": "Package rand implements pseudo-random number generators suitable for tasks such as simulation, but it should not be used for security-sensitive work."
+    },
+    {
+      "path": "mime",
+      "synopsis": "Package mime implements parts of the MIME spec."
+    },
+    {
+      "path": "mime/multipart",
+      "synopsis": "Package multipart implements MIME multipart parsing, as defined in RFC 2046."
+    },
+    {
+      "path": "mime/quotedprintable",
+      "synopsis": "Package quotedprintable implements quoted-printable encoding as specified by RFC 2045."
+    },
+    {
+      "path": "net",
+      "synopsis": "Package net provides a portable interface for network I/O, including TCP/IP, UDP, domain name resolution, and Unix domain sockets."
+    },
+    {
+      "path": "net/http",
+      "synopsis": "Package http provides HTTP client and server implementations."
+    },
+    {
+      "path": "net/http/cgi",
+      "synopsis": "Package cgi implements CGI (Common Gateway Interface) as specified in RFC 3875."
+    },
+    {
+      "path": "net/http/cookiejar",
+      "synopsis": "Package cookiejar implements an in-memory [RFC 6265]-compliant http.CookieJar."
+    },
+    {
+      "path": "net/http/fcgi",
+      "synopsis": "Package fcgi implements the FastCGI protocol."
+    },
+    {
+      "path": "net/http/httptest",
+      "synopsis": "Package httptest provides utilities for HTTP testing."
+    },
+    {
+      "path": "net/http/httptrace",
+      "synopsis": "Package httptrace provides mechanisms to trace the events within HTTP client requests."
+    },
+    {
+      "path": "net/http/httputil",
+      "synopsis": "Package httputil provides HTTP utility functions, complementing the more common ones in the net/http package."
+    },
+    {
+      "path": "net/http/internal",
+      "synopsis": "Package internal contains HTTP internals shared by net/http and net/http/httputil."
+    },
+    {
+      "path": "net/http/internal/ascii",
+      "synopsis": ""
+    },
+    {
+      "path": "net/http/internal/http2",
+      "synopsis": "Package http2 implements the HTTP/2 protocol."
+    },
+    {
+      "path": "net/http/internal/httpcommon",
+      "synopsis": ""
+    },
+    {
+      "path": "net/http/internal/httpsfv",
+      "synopsis": ""
+    },
+    {
+      "path": "net/http/internal/testcert",
+      "synopsis": "Package testcert contains a test-only localhost certificate."
+    },
+    {
+      "path": "net/http/pprof",
+      "synopsis": "Package pprof serves via its HTTP server runtime profiling data in the format expected by the pprof visualization tool."
+    },
+    {
+      "path": "net/internal/cgotest",
+      "synopsis": ""
+    },
+    {
+      "path": "net/internal/socktest",
+      "synopsis": "Package socktest provides utilities for socket testing."
+    },
+    {
+      "path": "net/mail",
+      "synopsis": "Package mail implements parsing of mail messages."
+    },
+    {
+      "path": "net/netip",
+      "synopsis": "Package netip defines an IP address type that's a small value type."
+    },
+    {
+      "path": "net/rpc",
+      "synopsis": "Package rpc provides access to the exported methods of an object across a network or other I/O connection."
+    },
+    {
+      "path": "net/rpc/jsonrpc",
+      "synopsis": "Package jsonrpc implements a JSON-RPC 1.0 ClientCodec and ServerCodec for the rpc package."
+    },
+    {
+      "path": "net/smtp",
+      "synopsis": "Package smtp implements the Simple Mail Transfer Protocol as defined in RFC 5321."
+    },
+    {
+      "path": "net/textproto",
+      "synopsis": "Package textproto implements generic support for text-based request/response protocols in the style of HTTP, NNTP, and SMTP."
+    },
+    {
+      "path": "net/url",
+      "synopsis": "Package url parses URLs and implements query escaping."
+    },
+    {
+      "path": "os",
+      "synopsis": "Package os provides a platform-independent interface to operating system functionality."
+    },
+    {
+      "path": "os/exec",
+      "synopsis": "Package exec runs external commands."
+    },
+    {
+      "path": "os/exec/internal/fdtest",
+      "synopsis": "Package fdtest provides test helpers for working with file descriptors across exec."
+    },
+    {
+      "path": "os/signal",
+      "synopsis": "Package signal implements access to incoming signals."
+    },
+    {
+      "path": "os/user",
+      "synopsis": "Package user allows user account lookups by name or id."
+    },
+    {
+      "path": "path",
+      "synopsis": "Package path implements utility routines for manipulating slash-separated paths."
+    },
+    {
+      "path": "path/filepath",
+      "synopsis": "Package filepath implements utility routines for manipulating filename paths in a way compatible with the target operating system-defined file paths."
+    },
+    {
+      "path": "plugin",
+      "synopsis": "Package plugin implements loading and symbol resolution of Go plugins."
+    },
+    {
+      "path": "reflect",
+      "synopsis": "Package reflect implements run-time reflection, allowing a program to manipulate objects with arbitrary types."
+    },
+    {
+      "path": "reflect/internal/example1",
+      "synopsis": ""
+    },
+    {
+      "path": "reflect/internal/example2",
+      "synopsis": ""
+    },
+    {
+      "path": "regexp",
+      "synopsis": "Package regexp implements regular expression search."
+    },
+    {
+      "path": "regexp/syntax",
+      "synopsis": "Package syntax parses regular expressions into parse trees and compiles parse trees into programs."
+    },
+    {
+      "path": "runtime",
+      "synopsis": "Package runtime contains operations that interact with Go's runtime system, such as functions to control goroutines."
+    },
+    {
+      "path": "runtime/cgo",
+      "synopsis": "Package cgo contains runtime support for code generated by the cgo tool."
+    },
+    {
+      "path": "runtime/coverage",
+      "synopsis": "Package coverage contains APIs for writing coverage profile data at runtime from long-running and/or server programs that do not terminate via os.Exit."
+    },
+    {
+      "path": "runtime/debug",
+      "synopsis": "Package debug contains facilities for programs to debug themselves while they are running."
+    },
+    {
+      "path": "runtime/metrics",
+      "synopsis": "Package metrics provides a stable interface to access implementation-defined metrics exported by the Go runtime."
+    },
+    {
+      "path": "runtime/pprof",
+      "synopsis": "Package pprof writes runtime profiling data in the format expected by the pprof visualization tool."
+    },
+    {
+      "path": "runtime/race",
+      "synopsis": "Package race implements data race detection logic."
+    },
+    {
+      "path": "runtime/race/internal/amd64v1",
+      "synopsis": ""
+    },
+    {
+      "path": "runtime/secret",
+      "synopsis": "Package secret contains helper functions for zeroing out memory that is otherwise invisible to a user program in the service of forward secrecy."
+    },
+    {
+      "path": "runtime/trace",
+      "synopsis": "Package trace contains facilities for programs to generate traces for the Go execution tracer."
+    },
+    {
+      "path": "simd",
+      "synopsis": "Package simd implements portable and vector-size-agnostic SIMD types, and functions and methods for working with these types."
+    },
+    {
+      "path": "simd/archsimd",
+      "synopsis": "Package archsimd provides access to architecture-specific SIMD operations."
+    },
+    {
+      "path": "slices",
+      "synopsis": "Package slices defines various functions useful with slices of any type."
+    },
+    {
+      "path": "sort",
+      "synopsis": "Package sort provides primitives for sorting slices and user-defined collections."
+    },
+    {
+      "path": "strconv",
+      "synopsis": "Package strconv implements conversions to and from string representations of basic data types."
+    },
+    {
+      "path": "strings",
+      "synopsis": "Package strings implements simple functions to manipulate UTF-8 encoded strings."
+    },
+    {
+      "path": "structs",
+      "synopsis": "Package structs defines marker types that can be used as struct fields to modify the properties of a struct."
+    },
+    {
+      "path": "sync",
+      "synopsis": "Package sync provides basic synchronization primitives such as mutual exclusion locks."
+    },
+    {
+      "path": "sync/atomic",
+      "synopsis": "Package atomic provides low-level atomic memory primitives useful for implementing synchronization algorithms."
+    },
+    {
+      "path": "syscall",
+      "synopsis": "Package syscall contains an interface to the low-level operating system primitives."
+    },
+    {
+      "path": "syscall/js",
+      "synopsis": "Package js gives access to the WebAssembly host environment when using the js/wasm architecture."
+    },
+    {
+      "path": "testing",
+      "synopsis": "Package testing provides support for automated testing of Go packages."
+    },
+    {
+      "path": "testing/cryptotest",
+      "synopsis": "Package cryptotest provides deterministic random source testing."
+    },
+    {
+      "path": "testing/fstest",
+      "synopsis": "Package fstest implements support for testing implementations and users of file systems."
+    },
+    {
+      "path": "testing/internal/testdeps",
+      "synopsis": "Package testdeps provides access to dependencies needed by test execution."
+    },
+    {
+      "path": "testing/iotest",
+      "synopsis": "Package iotest implements Readers and Writers useful mainly for testing."
+    },
+    {
+      "path": "testing/quick",
+      "synopsis": "Package quick implements utility functions to help with black box testing."
+    },
+    {
+      "path": "testing/slogtest",
+      "synopsis": "Package slogtest implements support for testing implementations of log/slog.Handler."
+    },
+    {
+      "path": "testing/synctest",
+      "synopsis": "Package synctest provides support for testing concurrent code."
+    },
+    {
+      "path": "text/scanner",
+      "synopsis": "Package scanner provides a scanner and tokenizer for UTF-8-encoded text."
+    },
+    {
+      "path": "text/tabwriter",
+      "synopsis": "Package tabwriter implements a write filter (tabwriter.Writer) that translates tabbed columns in input into properly aligned text."
+    },
+    {
+      "path": "text/template",
+      "synopsis": "Package template implements data-driven templates for generating textual output."
+    },
+    {
+      "path": "text/template/parse",
+      "synopsis": "Package parse builds parse trees for templates as defined by text/template and html/template."
+    },
+    {
+      "path": "time",
+      "synopsis": "Package time provides functionality for measuring and displaying time."
+    },
+    {
+      "path": "time/tzdata",
+      "synopsis": "Package tzdata provides an embedded copy of the timezone database."
+    },
+    {
+      "path": "unicode",
+      "synopsis": "Package unicode provides data and functions to test some properties of Unicode code points."
+    },
+    {
+      "path": "unicode/utf16",
+      "synopsis": "Package utf16 implements encoding and decoding of UTF-16 sequences."
+    },
+    {
+      "path": "unicode/utf8",
+      "synopsis": "Package utf8 implements functions and constants to support text encoded in UTF-8."
+    },
+    {
+      "path": "unique",
+      "synopsis": "The unique package provides facilities for canonicalizing (\"interning\") comparable values."
+    },
+    {
+      "path": "unsafe",
+      "synopsis": "Package unsafe contains operations that step around the type safety of Go programs."
+    },
+    {
+      "path": "uuid",
+      "synopsis": "Package uuid provides support for generating and manipulating UUIDs."
+    },
+    {
+      "path": "weak",
+      "synopsis": "Package weak provides ways to safely reference memory weakly, that is, without preventing its reclamation."
+    }
+  ]
+}

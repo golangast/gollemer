@@ -111,8 +111,9 @@ func (o *Adam) ClipGradients() {
 	totalNorm := float32(0.0)
 	for _, p := range o.parameters {
 		if p.Grad != nil {
-			// SIMD-accelerated sum of squares via dot product
-			totalNorm += DotProduct(p.Grad.Data, p.Grad.Data)
+			for _, g := range p.Grad.Data {
+				totalNorm += g * g
+			}
 		}
 	}
 	totalNorm = float32(math.Sqrt(float64(totalNorm)))
@@ -274,6 +275,63 @@ func (o *Adam) LoadState(path string) error {
 	return nil
 }
 
+// SnapshotState captures the full Adam state (step counter + m/v
+// moments, indexed by parameter order) as plain data. Together with a
+// parameter snapshot it makes a restart lossless: RestoreState on a
+// fresh Adam over identical parameters reproduces the exact next
+// update the original optimizer would have taken. Parameters whose
+// moments were never allocated (lazy init) snapshot as zeros.
+func (o *Adam) SnapshotState() *OptimizerState {
+	st := &OptimizerState{
+		T:     o.t,
+		MData: make([][]float32, len(o.parameters)),
+		VData: make([][]float32, len(o.parameters)),
+	}
+	for i, p := range o.parameters {
+		m := make([]float32, len(p.Data))
+		v := make([]float32, len(p.Data))
+		if mt, ok := o.m[p]; ok {
+			copy(m, mt.Data)
+		}
+		if vt, ok := o.v[p]; ok {
+			copy(v, vt.Data)
+		}
+		st.MData[i] = m
+		st.VData[i] = v
+	}
+	return st
+}
+
+// RestoreState loads a SnapshotState into this optimizer. It refuses
+// (returns an error, leaving the optimizer untouched) when the state
+// does not match this optimizer's parameter list in count or shape,
+// so a mismatched state can never silently corrupt a resumed run.
+func (o *Adam) RestoreState(st *OptimizerState) error {
+	if st == nil {
+		return fmt.Errorf("optimizer RestoreState: nil state")
+	}
+	if len(st.MData) != len(o.parameters) || len(st.VData) != len(o.parameters) {
+		return fmt.Errorf("optimizer RestoreState: state covers %d/%d params, optimizer has %d",
+			len(st.MData), len(st.VData), len(o.parameters))
+	}
+	for i, p := range o.parameters {
+		if len(st.MData[i]) != len(p.Data) || len(st.VData[i]) != len(p.Data) {
+			return fmt.Errorf("optimizer RestoreState: param %d shape mismatch (%d/%d vs %d)",
+				i, len(st.MData[i]), len(st.VData[i]), len(p.Data))
+		}
+	}
+	o.t = st.T
+	for i, p := range o.parameters {
+		m := make([]float32, len(p.Data))
+		copy(m, st.MData[i])
+		o.m[p] = NewTensor(p.Shape, m, false)
+		v := make([]float32, len(p.Data))
+		copy(v, st.VData[i])
+		o.v[p] = NewTensor(p.Shape, v, false)
+	}
+	return nil
+}
+
 // Step performs a single optimization step, now with Timid-Aware LR boosting.
 func (o *Adam) Step() {
 	o.t++
@@ -361,15 +419,30 @@ func (o *Adam) Step() {
 	wg.Wait()
 }
 
-// ZeroGrad resets the gradients of all parameters.
-// Sequential clear() compiles to efficient memclr; the old channel+goroutine
-// version added 5-15µs of scheduler overhead per call for no benefit.
+// ZeroGrad resets the gradients of all parameters in parallel.
 func (o *Adam) ZeroGrad() {
-	for _, p := range o.parameters {
-		if p.Grad != nil {
-			clear(p.Grad.Data)
-		}
+	var wg sync.WaitGroup
+	numWorkers := runtime.NumCPU()
+	if numWorkers > 16 {
+		numWorkers = 16
 	}
+
+	workCh := make(chan *Tensor, len(o.parameters))
+	for _, p := range o.parameters {
+		workCh <- p
+	}
+	close(workCh)
+
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for p := range workCh {
+				p.ZeroGrad()
+			}
+		}()
+	}
+	wg.Wait()
 }
 
 func (o *Adam) SetLearningRate(lr float32) {

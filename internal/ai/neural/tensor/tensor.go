@@ -580,7 +580,7 @@ func (t *Tensor) MatMul(other *Tensor) (*Tensor, error) {
 		resultData := make([]float32, resultRows*resultCols)
 
 		// 🚀 Use Native SIMD for optimized CPU MatMul (Exceeds Gonum pure-Go)
-		matMulDispatch(t.Data, other.Data, resultData, rowsA, colsB, colsA)
+		MatMulRaw(t.Data, other.Data, resultData, rowsA, colsB, colsA)
 
 		resultTensor := NewTensor([]int{resultRows, resultCols}, resultData, t.RequiresGrad || other.RequiresGrad)
 		if resultTensor.RequiresGrad {
@@ -631,7 +631,7 @@ func (t *Tensor) MatMul(other *Tensor) (*Tensor, error) {
 			}
 
 			// 🚀 Use Native SIMD for optimized CPU MatMul per slice
-			matMulDispatch(t.Data[tOffset:tOffset+rowsA*colsA], other.Data[otherOffset:otherOffset+colsA*colsB], resultData[resultOffset:resultOffset+resultRows*resultCols], rowsA, colsB, colsA)
+			MatMulRaw(t.Data[tOffset:tOffset+rowsA*colsA], other.Data[otherOffset:otherOffset+colsA*colsB], resultData[resultOffset:resultOffset+resultRows*resultCols], rowsA, colsB, colsA)
 		}
 
 		resultTensor := NewTensor(resultShape, resultData, t.RequiresGrad || other.RequiresGrad)
@@ -654,19 +654,22 @@ func (t *Tensor) MatMul(other *Tensor) (*Tensor, error) {
 
 		resultShape := []int{batchSize, rowsA, colsB}
 		resultData := make([]float32, batchSize*rowsA*colsB)
-		// debug disabled: fmt.Fprintf(os.Stderr, "💎 MatMul CPU (3D): %v x %v\n", t.Shape, other.Shape)
+		fmt.Fprintf(os.Stderr, "💎 MatMul CPU (3D): %v x %v\n", t.Shape, other.Shape)
 
-		// 🚀 Use MatMulRaw which parallelizes efficiently via AVX2 SAXPY.
-		// Do NOT spawn per-batch goroutines here: MatMulRaw already parallelizes
-		// across CPU cores, and nesting (batch-goroutines × worker-goroutines)
-		// causes excessive contention (e.g. 32 batches × 6 cores = 192 goroutines).
+		// 🚀 Use Parallel Pure-Go Gonum across all CPU cores
+		var wg sync.WaitGroup
 		for b := 0; b < batchSize; b++ {
-			tOffset := b * rowsA * colsA
-			otherOffset := b * colsA * colsB
-			resultOffset := b * rowsA * colsB
+			wg.Add(1)
+			go func(b int) {
+				defer wg.Done()
+				tOffset := b * rowsA * colsA
+				otherOffset := b * colsA * colsB
+				resultOffset := b * rowsA * colsB
 
-			matMulDispatch(t.Data[tOffset:tOffset+rowsA*colsA], other.Data[otherOffset:otherOffset+colsA*colsB], resultData[resultOffset:resultOffset+rowsA*colsB], rowsA, colsB, colsA)
+				MatMulRaw(t.Data[tOffset:tOffset+rowsA*colsA], other.Data[otherOffset:otherOffset+colsA*colsB], resultData[resultOffset:resultOffset+rowsA*colsB], rowsA, colsB, colsA)
+			}(b)
 		}
+		wg.Wait()
 
 		resultTensor := NewTensor(resultShape, resultData, t.RequiresGrad || other.RequiresGrad)
 		if resultTensor.RequiresGrad {
@@ -709,7 +712,7 @@ func (t *Tensor) MatMul(other *Tensor) (*Tensor, error) {
 
 		resultShape := []int{batchSize, rowsA, colsB}
 		resultData := make([]float32, batchSize*rowsA*colsB)
-		// debug disabled: fmt.Fprintf(os.Stderr, "💎 MatMul CPU (3D x 2D): %v x %v\n", t.Shape, other.Shape)
+		fmt.Fprintf(os.Stderr, "💎 MatMul CPU (3D x 2D): %v x %v\n", t.Shape, other.Shape)
 
 		// otherT, err := other.Transpose(0, 1) // Not needed for MatMulRaw
 		// if err != nil {
@@ -726,7 +729,7 @@ func (t *Tensor) MatMul(other *Tensor) (*Tensor, error) {
 			for b := 0; b < batchSize; b++ {
 				tOffset := b * rowsA * colsA
 				resultOffset := b * rowsA * colsB
-				matMulDispatch(t.Data[tOffset:tOffset+rowsA*colsA], other.Data, resultData[resultOffset:resultOffset+rowsA*colsB], rowsA, colsB, colsA)
+				MatMulRaw(t.Data[tOffset:tOffset+rowsA*colsA], other.Data, resultData[resultOffset:resultOffset+rowsA*colsB], rowsA, colsB, colsA)
 			}
 		} else {
 			var wg sync.WaitGroup
@@ -743,7 +746,7 @@ func (t *Tensor) MatMul(other *Tensor) (*Tensor, error) {
 					for b := start; b < end; b++ {
 						tOffset := b * rowsA * colsA
 						resultOffset := b * rowsA * colsB
-						matMulDispatch(t.Data[tOffset:tOffset+rowsA*colsA], other.Data, resultData[resultOffset:resultOffset+rowsA*colsB], rowsA, colsB, colsA)
+						MatMulRaw(t.Data[tOffset:tOffset+rowsA*colsA], other.Data, resultData[resultOffset:resultOffset+rowsA*colsB], rowsA, colsB, colsA)
 					}
 				}(startSlice, endSlice)
 			}
@@ -771,7 +774,7 @@ func (op *MatMulOperation) Inputs() []*Tensor {
 }
 
 func (op *MatMulOperation) Backward(grad *Tensor) error {
-	// debug disabled: fmt.Fprintf(os.Stderr, "💎 MatMul Backward: grad %v, A %v, B %v\n", grad.Shape, op.A.Shape, op.B.Shape)
+	fmt.Fprintf(os.Stderr, "💎 MatMul Backward: grad %v, A %v, B %v\n", grad.Shape, op.A.Shape, op.B.Shape)
 	// Handle 2D case
 	if len(op.A.Shape) == 2 {
 		// dL/dA = grad * B^T

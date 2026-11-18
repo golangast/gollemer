@@ -1,0 +1,2435 @@
+{
+  "source": "Advocates — John's Go learning links (Google Doc snapshot)",
+  "topics": [
+    {
+      "name": "Quick Notes",
+      "entries": [
+        {
+          "label": "Google’s links",
+          "url": "https://blog.golang.org/go.dev"
+        },
+        {
+          "label": "If you are needing to ssh into a pi — Winscp",
+          "url": "https://winscp.net/eng/index.php"
+        },
+        {
+          "label": "If you are needing to ssh into a pi — Putty",
+          "url": "https://www.chiark.greenend.org.uk/~sgtatham/putty/"
+        },
+        {
+          "label": "Really nice courses on sale together.",
+          "url": "https://stacksocial.com/sales/the-complete-google-go-developer-master-class-bundle"
+        },
+        {
+          "label": "Cheat Sheets",
+          "url": "https://cheatography.com/explore/search/?q=golang"
+        },
+        {
+          "label": "Best of go",
+          "url": "https://bestofgo.dev/?t=24h"
+        },
+        {
+          "label": "Jobs, resumes, ect — https://golangjob.xyz/",
+          "url": "https://golangjob.xyz/developer"
+        },
+        {
+          "label": "Jobs, resumes, ect",
+          "url": "https://github.com/shomali11/go-interview?fbclid=IwAR2UjBDhYq4xO5rzA2-rBY844S2U29MURWuausZ4rTM7NOzbSZPnP8TEuCg"
+        },
+        {
+          "label": "Jobs, resumes, ect",
+          "url": "https://golangproject.com"
+        },
+        {
+          "label": "Jobs, resumes, ect",
+          "url": "https://golang.cafe"
+        },
+        {
+          "label": "Jobs, resumes, ect",
+          "url": "https://github.com/vbd/Fieldnotes/blob/main/golang.md#roadmaps-jobs-career"
+        },
+        {
+          "label": "New easy to read generics",
+          "url": "https://rakyll.org/generics-proposal/"
+        },
+        {
+          "label": "New easy to read generics",
+          "url": "https://github.com/ardanlabs/gotraining/tree/master/topics/go/generics"
+        },
+        {
+          "label": "New easy to read generics",
+          "url": "https://gotipplay.golang.org/p/CNfHwlI4Dbq"
+        },
+        {
+          "label": "New easy to read generics",
+          "url": "https://gotipplay.golang.org/p/2w2y1KEjXVE"
+        },
+        {
+          "label": "Workshops",
+          "url": "https://github.com/amit-davidson/awesome-golang-workshops"
+        },
+        {
+          "label": "How to structure a go app",
+          "url": "https://github.com/golang-standards/project-layout"
+        },
+        {
+          "label": "Go tooling recipe",
+          "url": "https://github.com/nikolaydubina/go-recipes"
+        },
+        {
+          "label": "Why go?",
+          "url": "https://insights.stackoverflow.com/survey/2021"
+        },
+        {
+          "label": "Why go?",
+          "url": "https://github.com/golang/go"
+        },
+        {
+          "label": "Why go?",
+          "url": "https://www.jetbrains.com/lp/devecosystem-2021/#Do-you-plan-to-adopt--migrate-to-other-languages-in-the-next--months-If-so-to-which-ones"
+        },
+        {
+          "label": "Why go?",
+          "url": "https://stacktrends.dev/technologies/programming-languages/golang/"
+        },
+        {
+          "label": "Why go?",
+          "url": "https://madnight.github.io/githut/#/pull_requests/2022/3"
+        },
+        {
+          "label": "Roadmaps",
+          "url": "https://stream-wiki.notion.site/Stream-Go-10-Week-Backend-Eng-Onboarding-625363c8c3684753b7f2b7d829bcd67a#1dcc5f01027d4731be1c3ada162ae981"
+        },
+        {
+          "label": "Roadmaps",
+          "url": "https://roadmap.sh/"
+        },
+        {
+          "label": "Roadmaps",
+          "url": "https://learntocloud.guide/"
+        },
+        {
+          "label": "Roadmaps",
+          "url": "https://eblog.fly.dev/index.html#backend-from-the-beginning-a-complete-guide-to-backend-development-in-go"
+        }
+      ]
+    },
+    {
+      "name": "Go Advocates",
+      "entries": [
+        {
+          "label": "Bill Kennedy — Blog",
+          "url": "https://www.goinggo.net"
+        },
+        {
+          "label": "Bill Kennedy — Blog 2",
+          "url": "https://github.com/ardanlabs/gotraining/tree/master/reading"
+        },
+        {
+          "label": "Dave Chaney — Beginner",
+          "url": "https://dave.cheney.net/resources-for-new-go-programmers"
+        },
+        {
+          "label": "Ross Cox — Blog",
+          "url": "https://research.swtch.com"
+        },
+        {
+          "label": "Rob Pike",
+          "url": "http://web.archive.org/web/20160305024536/http://go.googlecode.com/hg-history/release-branch.r60/doc/GoCourseDay1.pdf"
+        },
+        {
+          "label": "Rob Pike",
+          "url": "http://web.archive.org/web/20160305081012/http://go.googlecode.com/hg-history/release-branch.r60/doc/GoCourseDay2.pdf"
+        },
+        {
+          "label": "Rob Pike",
+          "url": "http://web.archive.org/web/20160305075151/http://go.googlecode.com/hg-history/release-branch.r60/doc/GoCourseDay3.pdf"
+        },
+        {
+          "label": "Rob Pike — Errors",
+          "url": "https://commandcenter.blogspot.com/2017/12/error-handling-in-upspin.html?m=1"
+        },
+        {
+          "label": "Todd Mcleod — Class1",
+          "url": "https://www.udemy.com/course/golang-tutorial/?couponCode=188EB28D578A45E758B8"
+        },
+        {
+          "label": "Todd Mcleod — Class3",
+          "url": "https://www.udemy.com/course/oauth-authentication/?couponCode=528DD886FCA6CE900AAB"
+        },
+        {
+          "label": "Bill Kennedy — Class1",
+          "url": "http://www.informit.com/store/ultimate-go-programming-livelessons-9780134757483"
+        },
+        {
+          "label": "Bill Kennedy — Class2",
+          "url": "http://www.informit.com/store/ultimate-go-programming-livelessons-video-training-9780135261668"
+        },
+        {
+          "label": "Dave Chaney — Errors",
+          "url": "https://www.youtube.com/watch?v=lsBF58Q-DnY"
+        },
+        {
+          "label": "Ross Cox — Channel",
+          "url": "https://www.youtube.com/user/rscgolang"
+        },
+        {
+          "label": "Rob Pike — Why Go",
+          "url": "https://www.youtube.com/watch?v=cQ7STILAS0M"
+        },
+        {
+          "label": "Todd Mcleod — Channel",
+          "url": "https://www.youtube.com/user/toddmcleod"
+        },
+        {
+          "label": "Bill Kennedy — Git",
+          "url": "https://github.com/ardanlabs/gotraining"
+        },
+        {
+          "label": "Dave Chaney — Git",
+          "url": "https://github.com/davecheney"
+        },
+        {
+          "label": "Ross Cox — Git",
+          "url": "https://github.com/rsc"
+        },
+        {
+          "label": "Rob Pike — Git",
+          "url": "https://github.com/robpike"
+        },
+        {
+          "label": "Todd Mcleod — Git",
+          "url": "https://github.com/GoesToEleven?tab=repositories"
+        },
+        {
+          "label": "Bill Kennedy — Search",
+          "url": "https://www.youtube.com/results?search_query=Bill+Kennedy+Golang"
+        },
+        {
+          "label": "Dave Chaney — Search",
+          "url": "https://www.youtube.com/results?search_query=Dave+Chaney+go"
+        },
+        {
+          "label": "Ross Cox — Search",
+          "url": "https://www.youtube.com/results?search_query=Ross+Cox+golang"
+        },
+        {
+          "label": "Rob Pike — Search",
+          "url": "https://www.youtube.com/results?search_query=Rob+Pike+Golang"
+        },
+        {
+          "label": "Todd Mcleod — Search",
+          "url": "https://www.youtube.com/results?search_query=Todd+Mcleod+Golang"
+        }
+      ]
+    },
+    {
+      "name": "Go Advocates2",
+      "entries": [
+        {
+          "label": "Robert Griesemer — Blog",
+          "url": "https://blog.golang.org/"
+        },
+        {
+          "label": "Brad Fitzpatrick",
+          "url": "http://bradfitz.com"
+        },
+        {
+          "label": "Robert Griesemer — Git",
+          "url": "https://github.com/griesemer"
+        },
+        {
+          "label": "Ken Thompson — Git",
+          "url": "https://github.com/ken"
+        },
+        {
+          "label": "Robert Griesemer — Search",
+          "url": "https://www.youtube.com/results?search_query=Robert+Griesemer"
+        },
+        {
+          "label": "Ken Thompson — Search",
+          "url": "https://www.youtube.com/results?search_query=Ken+Thompson"
+        }
+      ]
+    },
+    {
+      "name": "Official Resources",
+      "entries": [
+        {
+          "label": "Wiki",
+          "url": "https://github.com/golang/go/wiki"
+        },
+        {
+          "label": "Gophercon",
+          "url": "https://blog.gopheracademy.com"
+        },
+        {
+          "label": "Concurrency — golangprograms",
+          "url": "https://www.golangprograms.com/goroutines.html"
+        },
+        {
+          "label": "Best practices — Peter Bourgon",
+          "url": "https://peter.bourgon.org/go-best-practices-2016/"
+        },
+        {
+          "label": "Best Resources — Interfaces",
+          "url": "https://www.class-central.com/course/coursera-functions-methods-and-interfaces-in-go-12050"
+        },
+        {
+          "label": "Wiki — Concurrency",
+          "url": "https://github.com/golang/go/wiki/LearnConcurrency"
+        },
+        {
+          "label": "Gophercon — Errors",
+          "url": "https://www.youtube.com/watch?v=lsBF58Q-DnY"
+        },
+        {
+          "label": "Concurrency — Channel",
+          "url": "https://www.youtube.com/user/rscgolang"
+        },
+        {
+          "label": "Best practices — Standard",
+          "url": "https://github.com/golang-standards/project-layout/blob/master/README.md"
+        },
+        {
+          "label": "Best Resources — boilerplate",
+          "url": "https://github.com/sharkySharks/go-github-app-boilerplate/blob/master/README.md"
+        }
+      ]
+    },
+    {
+      "name": "The Best Biggest Resources Shortened",
+      "entries": [
+        {
+          "label": "interactive — Tour",
+          "url": "https://tour.golang.org/welcome/1"
+        },
+        {
+          "label": "Whats right — Effective Go",
+          "url": "https://golang.org/doc/effective_go"
+        },
+        {
+          "label": "Best references — Go by Example",
+          "url": "https://gowebexamples.com"
+        },
+        {
+          "label": "Design pattern",
+          "url": "https://github.com/tmrts/go-patterns/blob/master/README.md"
+        },
+        {
+          "label": "Architecture",
+          "url": "https://github.com/ardanlabs/service/blob/master/README.md"
+        },
+        {
+          "label": "interactive — Concurrency",
+          "url": "https://github.com/golang/go/wiki/LearnConcurrency"
+        },
+        {
+          "label": "Whats right — Errors",
+          "url": "https://www.youtube.com/watch?v=lsBF58Q-DnY"
+        },
+        {
+          "label": "Best references — Todd Mcloed Git",
+          "url": "https://github.com/GoesToEleven?tab=repositories"
+        },
+        {
+          "label": "Design pattern — Standard",
+          "url": "https://github.com/golang-standards/project-layout/blob/master/README.md"
+        },
+        {
+          "label": "Architecture — boilerplate",
+          "url": "https://github.com/sharkySharks/go-github-app-boilerplate/blob/master/README.md"
+        },
+        {
+          "label": "Best references — Todd Youtube",
+          "url": "https://www.youtube.com/user/toddmcleod"
+        },
+        {
+          "label": "Best references — Book",
+          "url": "https://astaxie.gitbooks.io/build-web-application-with-golang/content/en/03.2.html"
+        }
+      ]
+    },
+    {
+      "name": "Advocates Links",
+      "entries": [
+        {
+          "label": "Dave Chaney/Russ Cox/Gophercon",
+          "url": "https://dave.cheney.net/resources-for-new-go-programmers"
+        },
+        {
+          "label": "Dave Chaney/Russ Cox/Gophercon",
+          "url": "https://dave.cheney.net/practical-go/presentations/qcon-china.html"
+        },
+        {
+          "label": "Rob Pikes archived classes",
+          "url": "http://web.archive.org/web/20160305024536/http://go.googlecode.com/hg-history/release-branch.r60/doc/GoCourseDay1.pdf"
+        },
+        {
+          "label": "Rob Pikes archived classes",
+          "url": "http://web.archive.org/web/20160305081012/http://go.googlecode.com/hg-history/release-branch.r60/doc/GoCourseDay2.pdf"
+        },
+        {
+          "label": "Rob Pikes archived classes",
+          "url": "http://web.archive.org/web/20160305075151/http://go.googlecode.com/hg-history/release-branch.r60/doc/GoCourseDay3.pdf"
+        },
+        {
+          "label": "Todd mcleod",
+          "url": "https://github.com/GoesToEleven?tab=repositories"
+        },
+        {
+          "label": "Todd mcleod",
+          "url": "https://www.greatercommons.com"
+        },
+        {
+          "label": "Todd mcleod",
+          "url": "https://www.youtube.com/user/toddmcleod"
+        },
+        {
+          "label": "Todd mcleod",
+          "url": "https://www.udemy.com/course/oauth-authentication/?couponCode=528DD886FCA6CE900AAB"
+        },
+        {
+          "label": "William Kennedy",
+          "url": "https://www.goinggo.net"
+        },
+        {
+          "label": "William Kennedy",
+          "url": "http://www.informit.com/store/ultimate-go-programming-livelessons-9780134757483"
+        },
+        {
+          "label": "William Kennedy",
+          "url": "https://github.com/ardanlabs/gotraining/blob/master/reading/README.md"
+        },
+        {
+          "label": "Wiki",
+          "url": "https://github.com/golang/go/wiki/Learn"
+        },
+        {
+          "label": "Concurrency",
+          "url": "https://github.com/golang/go/wiki/LearnConcurrency"
+        },
+        {
+          "label": "Concurrency",
+          "url": "https://www.golangprograms.com/goroutines.html"
+        },
+        {
+          "label": "Concurrency",
+          "url": "https://antonz.org/go-concurrency/goroutines/#go-routine"
+        },
+        {
+          "label": "Best practices",
+          "url": "https://peter.bourgon.org/go-best-practices-2016/"
+        },
+        {
+          "label": "Best practices",
+          "url": "https://github.com/golang-standards/project-layout/blob/master/README.md"
+        },
+        {
+          "label": "Good resource for programming and go",
+          "url": "https://boyter.org/posts/how-to-start-go-project-2023/"
+        },
+        {
+          "label": "Good resource for programming and go",
+          "url": "https://www.class-central.com/course/coursera-functions-methods-and-interfaces-in-go-12050"
+        },
+        {
+          "label": "Good resource for programming and go",
+          "url": "https://github.com/sharkySharks/go-github-app-boilerplate/blob/master/README.md"
+        },
+        {
+          "label": "Design patterns",
+          "url": "https://github.com/tmrts/go-patterns/blob/master/README.md"
+        },
+        {
+          "label": "Architecture",
+          "url": "https://github.com/ardanlabs/service/blob/master/README.md"
+        }
+      ]
+    },
+    {
+      "name": "The Best Biggest Resources",
+      "entries": [
+        {
+          "label": "If you are completely new to Go",
+          "url": "https://quii.gitbook.io/learn-go-with-tests/"
+        },
+        {
+          "label": "Best for interactive",
+          "url": "https://tour.golang.org/welcome/1"
+        },
+        {
+          "label": "Best for directions on what’s right — https://golang.org/doc/effective_go.html",
+          "url": "https://golang.org/doc/effective_go.html#Getters"
+        },
+        {
+          "label": "Best references — https://gowebexamples.com",
+          "url": "https://gowebexamples.com/"
+        },
+        {
+          "label": "Best references",
+          "url": "https://github.com/GoesToEleven?tab=repositories"
+        },
+        {
+          "label": "Best references",
+          "url": "https://www.youtube.com/user/toddmcleod"
+        },
+        {
+          "label": "Best references",
+          "url": "https://astaxie.gitbooks.io/build-web-application-with-golang/content/en/03.2.html"
+        },
+        {
+          "label": "Best references",
+          "url": "https://www.digitalocean.com/community/books/how-to-code-in-go-ebook.amp?__twitter_impression=true"
+        },
+        {
+          "label": "Best references",
+          "url": "https://www.practical-go-lessons.com/chap-16-interfaces"
+        },
+        {
+          "label": "All go books",
+          "url": "https://github.com/dariubs/GoBooks"
+        },
+        {
+          "label": "All go books",
+          "url": "https://github.com/EbookFoundation/free-programming-books/blob/main/books/free-programming-books-langs.md#go"
+        },
+        {
+          "label": "Good site on many resources",
+          "url": "http://go-lang.cat-v.org/doc/"
+        }
+      ]
+    },
+    {
+      "name": "Beginner",
+      "entries": [
+        {
+          "label": "Example problems",
+          "url": "https://tour.golang.org/welcome/1"
+        },
+        {
+          "label": "Cliff notes of docs",
+          "url": "https://golang.org/doc/effective_go.html"
+        },
+        {
+          "label": "Go examples — https://gowebexamples.com",
+          "url": "https://gowebexamples.com/"
+        },
+        {
+          "label": "Go examples",
+          "url": "https://learn-anything.xyz/1601"
+        },
+        {
+          "label": "Go examples",
+          "url": "https://github.com/smileisak/go-training/blob/master/README.md"
+        },
+        {
+          "label": "Go by examples",
+          "url": "https://gobyexample.com"
+        },
+        {
+          "label": "Tutorials",
+          "url": "https://golangbot.com/golang-tutorial-part-1-introduction-and-installation/"
+        },
+        {
+          "label": "Tutorials",
+          "url": "https://astaxie.gitbooks.io/build-web-application-with-golang/content/en/"
+        },
+        {
+          "label": "Tutorials",
+          "url": "https://hackr.io/tutorials/learn-golang"
+        },
+        {
+          "label": "Tutorials",
+          "url": "http://yourbasic.org/golang/"
+        },
+        {
+          "label": "Tutorials — https://www.getrevue.co/profile/golang/issues/autocomplete-with-go-a-github-user-search-app-sound-recording-more-133570",
+          "url": "https://www.getrevue.co/profile/golang/issues/autocomplete-with-go-a-github-user-search-app-sound-recording-more-133570?utm_campaign=Issue\u0026utm_content=view_in_browser\u0026utm_medium=email\u0026utm_source=Master+the+World+of+Golang"
+        },
+        {
+          "label": "Tutorials",
+          "url": "https://www.callicoder.com/categories/golang/"
+        },
+        {
+          "label": "Tutorials",
+          "url": "https://developpaper.com/detailed-description-of-the-creation-of-the-restful-json-api-in-the-go-language/"
+        },
+        {
+          "label": "Tutorials",
+          "url": "https://golangresources.com/"
+        },
+        {
+          "label": "Video learner — https://www.udemy.com/go -programming-language/learn/v4/",
+          "url": "https://www.udemy.com/go-programming-language/learn/v4/"
+        },
+        {
+          "label": "Video learner",
+          "url": "http://www.informit.com/store/ultimate-go-programming-livelessons-9780134757483"
+        },
+        {
+          "label": "Importing local files and setting up gi",
+          "url": "https://docs.google.com/document/d/1EN7UOZnC3BHe0-FHSvGk6MXjTY7aTCYRcMbvZ7s_Z1Y/edit?usp=sharing"
+        },
+        {
+          "label": "Importing local files and setting up gi",
+          "url": "https://docs.google.com/document/d/1QjZG5CJOTHeogHr5qjuAnKr15v2wvpkNzFQk9uN90Pg/edit?usp=sharing"
+        },
+        {
+          "label": "Importing local files and setting up gi",
+          "url": "https://gitlab.com/zendrulat123/go-learning-links/blob/master/README.md"
+        },
+        {
+          "label": "Blogs",
+          "url": "https://golangbot.com"
+        },
+        {
+          "label": "Blogs",
+          "url": "https://blog.learngoprogramming.com"
+        },
+        {
+          "label": "Blogs",
+          "url": "https://golangweekly.com/issues"
+        },
+        {
+          "label": "Blogs",
+          "url": "https://blog.meetupfeed.com/go-talk-recordings-meetups-conferences-q4-2017/"
+        },
+        {
+          "label": "Blogs",
+          "url": "https://www.ribice.ba"
+        },
+        {
+          "label": "Blogs",
+          "url": "https://go101.org"
+        },
+        {
+          "label": "Blogs",
+          "url": "https://appliedgo.net/generics/"
+        },
+        {
+          "label": "Blogs",
+          "url": "https://courseism.com/best-11-beginner-golang-courses-training-tutorial-and-certificate"
+        },
+        {
+          "label": "Blogs",
+          "url": "https://www.golangprograms.com/go-language/interface.html"
+        },
+        {
+          "label": "Blogs",
+          "url": "https://ieftimov.com/"
+        },
+        {
+          "label": "Contribute to open source for beginners.",
+          "url": "http://www.firsttimersonly.com"
+        },
+        {
+          "label": "Contribute to open source for beginners.",
+          "url": "http://up-for-grabs.net/#/"
+        },
+        {
+          "label": "Contribute to open source for beginners.",
+          "url": "https://github.com/MunGell/awesome-for-beginners/blob/master/README.md"
+        },
+        {
+          "label": "Contribute to open source for beginners.",
+          "url": "https://github.com/corylanou/oss-helpwanted"
+        },
+        {
+          "label": "Contribute to open source for beginners.",
+          "url": "https://dev.to/lemonfish/open-source-101-my-first-pr-to-hertz-2dak"
+        },
+        {
+          "label": "Good go",
+          "url": "https://medium.com/myntra-engineering/my-journey-with-golang-web-services-4d922a8c9897"
+        },
+        {
+          "label": "Help docs",
+          "url": "https://documentation.help/Golang/FAQ.html"
+        },
+        {
+          "label": "Trivia/history",
+          "url": "https://github.com/golang/go/wiki/CodeReviewComments"
+        },
+        {
+          "label": "Trivia/history",
+          "url": "https://www.reddit.com/r/golang/comments/46bd5h/ama_we_are_the_go_contributors_ask_us_anything/?utm_source=reddit-android"
+        },
+        {
+          "label": "Trivia/history",
+          "url": "https://spf13.com/presentation/the-legacy-of-go/"
+        },
+        {
+          "label": "Coming from nodejs",
+          "url": "https://github.com/miguelmota/golang-for-nodejs-developers/blob/master/README.md#files"
+        },
+        {
+          "label": "Coming from python",
+          "url": "https://golang-for-python-programmers.readthedocs.io/en/latest/"
+        },
+        {
+          "label": "Uml Creator of your code",
+          "url": "http://www.plantuml.com/plantuml/uml/VK_BIi0m4BpdA_ReW_OBF1GF5Gz2JzwtwROiR1B99agf_NTZAIMAE8UGcSnCc4uJnfIT68-Ez0qjmH9OyOCqE8BDG84LL8K-X6z-ee6PIIPWdoxj7eOy2jl-U1b3aChkrY7oEoRgixU9Wx-vXIhvHEaL9TDFzMKz6tzbzkCiVrESqLBnFL_txP_MtUn6KsI_QFkOMIQASDSqzUQsx3GrhxiVFlymT-IdxEGB"
+        },
+        {
+          "label": "tricks",
+          "url": "https://github.com/golang/go/wiki/SliceTricks"
+        },
+        {
+          "label": "How to build a microservice",
+          "url": "https://learning-cloud-native-go.github.io/docs/"
+        },
+        {
+          "label": "How to build a microservice",
+          "url": "https://github.com/learning-cloud-native-go/myapp"
+        }
+      ]
+    },
+    {
+      "name": "Daily reading",
+      "entries": [
+        {
+          "label": "Blogs/tutorials/duplicates",
+          "url": "https://github.com/golang/go/wiki/Blogs"
+        },
+        {
+          "label": "Blogs/tutorials/duplicates",
+          "url": "https://www.ardanlabs.com/blog/"
+        },
+        {
+          "label": "Blogs/tutorials/duplicates",
+          "url": "https://golangweekly.com/issues"
+        },
+        {
+          "label": "Blogs/tutorials/duplicates",
+          "url": "https://blog.gopheracademy.com"
+        },
+        {
+          "label": "Blogs/tutorials/duplicates",
+          "url": "https://golangnews.com"
+        },
+        {
+          "label": "Blogs/tutorials/duplicates",
+          "url": "https://forum.golangbridge.org"
+        },
+        {
+          "label": "Blogs/tutorials/duplicates",
+          "url": "https://www.reddit.com/r/golang/"
+        },
+        {
+          "label": "Blogs/tutorials/duplicates",
+          "url": "https://github.com/golang/go/wiki/ResearchPapers"
+        },
+        {
+          "label": "Blogs/tutorials/duplicates",
+          "url": "https://jgoodall.me/2015/11/17/golang-resources.html"
+        },
+        {
+          "label": "Blogs/tutorials/duplicates",
+          "url": "https://github.com/astaxie"
+        },
+        {
+          "label": "Blogs/tutorials/duplicates",
+          "url": "https://github.com/thewhitetulip/web-dev-golang-anti-textbook/blob/master/README.md"
+        },
+        {
+          "label": "Blogs/tutorials/duplicates",
+          "url": "https://github.com/PandaWhoCodes/awesome-go-in-education"
+        },
+        {
+          "label": "Most popular packages",
+          "url": "https://bestofgo.dev/?t=24h"
+        }
+      ]
+    },
+    {
+      "name": "Go Templates",
+      "entries": [
+        {
+          "label": "Multiple variables",
+          "url": "https://play.golang.org/p/1ZtJ_bspDzu"
+        },
+        {
+          "label": "File watcher/hot reload",
+          "url": "https://github.com/slayer/autorestart/blob/master/autorestart.go"
+        }
+      ]
+    },
+    {
+      "name": "Bytes",
+      "entries": [
+        {
+          "label": "byte",
+          "url": "https://www.joelonsoftware.com/2003/10/08/the-absolute-minimum-every-software-developer-absolutely-positively-must-know-about-unicode-and-character-sets-no-excuses/"
+        },
+        {
+          "label": "slices",
+          "url": "https://blog.golang.org/slices"
+        },
+        {
+          "label": "General strings",
+          "url": "https://medium.com/go-walkthrough/go-walkthrough-bytes-strings-packages-499be9f4b5bd"
+        },
+        {
+          "label": "When to use []byte or string",
+          "url": "http://joshua.poehls.me/2014/04/go-101-string-or-byte-slice/"
+        },
+        {
+          "label": "Structs",
+          "url": "https://itnext.io/structures-structs-in-go-golang-9ba6d9fad61b"
+        },
+        {
+          "label": "sync.pool",
+          "url": "http://www.akshaydeo.com/blog/2017/12/23/How-did-I-improve-latency-by-700-percent-using-syncPool/"
+        },
+        {
+          "label": "func() as a param",
+          "url": "https://newfivefour.com/golang-closures-anonymous-functions.html"
+        },
+        {
+          "label": "func() as a param",
+          "url": "https://play.golang.org/p/BSpz69Ia4DU"
+        },
+        {
+          "label": "Compiler and adding syntax",
+          "url": "https://eli.thegreenplace.net/2019/go-compiler-internals-adding-a-new-statement-to-go-part-1/"
+        },
+        {
+          "label": "Checking for spaces in a string",
+          "url": "https://www.dotnetperls.com/unicode-isspace-go"
+        }
+      ]
+    },
+    {
+      "name": "Array Methods",
+      "entries": [
+        {
+          "label": "Sort",
+          "url": "https://play.golang.org/p/RoWTTBw9vnj"
+        },
+        {
+          "label": "Add/Push",
+          "url": "https://play.golang.org/p/Lm2_KTBNsMa"
+        },
+        {
+          "label": "Filter",
+          "url": "https://play.golang.org/p/X2J_bKRzEsU"
+        },
+        {
+          "label": "POP/Remove",
+          "url": "https://play.golang.org/p/D_XplpQT212"
+        },
+        {
+          "label": "Sort string the long way",
+          "url": "https://play.golang.org/p/XbLuSqU9Sx5"
+        }
+      ]
+    },
+    {
+      "name": "Checking values",
+      "entries": [
+        {
+          "label": "Printing them",
+          "url": "https://play.golang.org/p/vEMvsxJg0mc"
+        },
+        {
+          "label": "Spew Dump",
+          "url": "https://github.com/davecgh/go-spew"
+        },
+        {
+          "label": "Error context",
+          "url": "https://github.com/pkg/errors/blob/master/README.md"
+        },
+        {
+          "label": "sanitize",
+          "url": "https://astaxie.gitbooks.io/build-web-application-with-golang/content/en/04.2.html"
+        }
+      ]
+    },
+    {
+      "name": "http package",
+      "entries": [
+        {
+          "label": "Http package go wiki — https://golang.org/doc/articles/wiki/#tmp",
+          "url": "https://golang.org/doc/articles/wiki/#tmp_"
+        },
+        {
+          "label": "Logging http",
+          "url": "https://blog.questionable.services/article/http-handler-error-handling-revisited/"
+        }
+      ]
+    },
+    {
+      "name": "General",
+      "entries": [
+        {
+          "label": "Channels",
+          "url": "https://link.medium.com/WpfOPDPb4V"
+        },
+        {
+          "label": "Channels",
+          "url": "https://medium.com/@trevor4e/learning-gos-concurrency-through-illustrations-8c4aff603b3"
+        },
+        {
+          "label": "Install",
+          "url": "https://www.digitalocean.com/community/tutorials/how-to-install-go-1-6-on-ubuntu-16-04"
+        },
+        {
+          "label": "Install — ://www.hostingadvice.com/how-to/install-golang-on-ubuntu/",
+          "url": "http://www.hostingadvice.com/how-to/install-golang-on-ubuntu/"
+        },
+        {
+          "label": "Install",
+          "url": "https://youtu.be/XCsL89YtqCs"
+        },
+        {
+          "label": "Install",
+          "url": "https://www.youtube.com/watch?v=5qI8z_lB5Lw"
+        },
+        {
+          "label": "Doc on generics",
+          "url": "https://docs.google.com/document/d/1vrAy9gMpMoS3uaVphB32uVXX4pi-HnNjkMEgyAHX4N4/mobilebasic"
+        },
+        {
+          "label": "General learning",
+          "url": "https://sites.google.com/site/gopatterns/"
+        },
+        {
+          "label": "General learning",
+          "url": "http://yourbasic.org/golang/inheritance-object-oriented/"
+        },
+        {
+          "label": "General learning",
+          "url": "https://forum.golangbridge.org"
+        },
+        {
+          "label": "General learning",
+          "url": "http://programming.guide/go/index.html"
+        },
+        {
+          "label": "General learning",
+          "url": "https://gotools.org"
+        },
+        {
+          "label": "Interfaces",
+          "url": "https://medium.com/golangspec/interfaces-in-go-part-iii-61f5e7c52fb5"
+        },
+        {
+          "label": "Interfaces",
+          "url": "https://research.swtch.com/interfaces"
+        },
+        {
+          "label": "Interfaces",
+          "url": "https://www.golang-book.com/books/intro/9"
+        },
+        {
+          "label": "Interfaces",
+          "url": "https://www.youtube.com/watch?v=83J256zByHA"
+        },
+        {
+          "label": "Interfaces",
+          "url": "https://github.com/golang/go/wiki/CodeReviewComments#interfaces"
+        },
+        {
+          "label": "Interfaces",
+          "url": "https://play.golang.org/p/pv7o3G32I1"
+        },
+        {
+          "label": "Interfaces",
+          "url": "https://itnext.io/interfaces-in-golang-f1aea1ba31cb"
+        },
+        {
+          "label": "Interfaces",
+          "url": "https://www.powerslacker.cc/interfaces-are-useless/"
+        },
+        {
+          "label": "Interfaces",
+          "url": "https://github.com/teh-cmc/go-internals/blob/master/chapter2_interfaces/README.md#overview-of-the-datastructures"
+        },
+        {
+          "label": "Database",
+          "url": "https://www.vividcortex.com/resources/the-ultimate-guide-to-building-database-driven-apps-with-go"
+        },
+        {
+          "label": "Database",
+          "url": "http://www.alexedwards.net/blog/organising-database-access"
+        },
+        {
+          "label": "Database",
+          "url": "http://go-database-sql.org/index.html"
+        },
+        {
+          "label": "Database",
+          "url": "https://github.com/golang/go/wiki/SQLInterface"
+        },
+        {
+          "label": "Database",
+          "url": "https://github.com/samonzeweb/godb/blob/master/README.md"
+        },
+        {
+          "label": "Database",
+          "url": "https://stackoverflow.com/questions/30867337/golang-order-by-issue-with-mysql/30867686#30867686"
+        },
+        {
+          "label": "Database",
+          "url": "https://github.com/Masterminds/squirrel"
+        },
+        {
+          "label": "Restful api",
+          "url": "http://thenewstack.io/make-a-restful-json-api-go/"
+        },
+        {
+          "label": "Restful api",
+          "url": "https://stevenwhite.com/building-a-rest-service-with-golang-2/"
+        },
+        {
+          "label": "Restful api",
+          "url": "http://blog.narenarya.in/build-rest-api-go-mysql.html"
+        },
+        {
+          "label": "Restful api",
+          "url": "https://hackernoon.com/build-restful-api-in-go-and-mongodb-5e7f2ec4be94"
+        },
+        {
+          "label": "Restful api",
+          "url": "http://blog.questionable.services/article/custom-handlers-avoiding-globals/"
+        },
+        {
+          "label": "Restful api",
+          "url": "https://medium.com/statuscode/how-i-write-go-http-services-after-seven-years-37c208122831"
+        },
+        {
+          "label": "Restful api",
+          "url": "https://dev.to/geosoft1/versioning-your-api-in-go-1g4h?utm_campaign=Golang%20Ninjas%20Newsletter\u0026utm_medium=email\u0026utm_source=Revue%20newsletter"
+        },
+        {
+          "label": "Restful api",
+          "url": "https://www.alexedwards.net/blog/how-to-properly-parse-a-json-request-body"
+        },
+        {
+          "label": "GRPC A way to mix languages.",
+          "url": "https://www.safaribooksonline.com/videos/complete-introduction-to/9781789349344"
+        },
+        {
+          "label": "GRPC A way to mix languages.",
+          "url": "https://www.udemy.com/grpc-golang/"
+        },
+        {
+          "label": "GRPC A way to mix languages.",
+          "url": "https://github.com/grpc-ecosystem/awesome-grpc/blob/master/readme.md"
+        },
+        {
+          "label": "GRPC A way to mix languages.",
+          "url": "https://docs.google.com/document/d/1jrJHsCzokZCBPhutxjN0h7cxaYDVLSoQVS1G4V8Eggg/edit?usp=sharing"
+        },
+        {
+          "label": "TCP connections",
+          "url": "https://ipfs.io/ipfs/QmfYeDhGH9bZzihBUDEQbCbTc5k5FZKURMUoUvfmc27BwL/socket/controlling_tcp_connections.html"
+        },
+        {
+          "label": "Websockets",
+          "url": "https://tutorialedge.net/projects/chat-system-in-go-and-react/part-4-handling-multiple-clients/"
+        },
+        {
+          "label": "Websockets",
+          "url": "https://yalantis.com/blog/how-to-build-websockets-in-go/"
+        },
+        {
+          "label": "Libs",
+          "url": "https://github.com/avelino/awesome-go"
+        },
+        {
+          "label": "Go gotchas",
+          "url": "http://devs.cloudimmunity.com/gotchas-and-common-mistakes-in-go-golang/"
+        },
+        {
+          "label": "Go gotchas",
+          "url": "https://twitter.com/davecheney/status/604837853344989184%3Flang%3Den\u0026ved=2ahUKEwiW6tCVmvvYAhWG6oMKHYzJBlMQjjgwBHoECAUQAQ\u0026usg=AOvVaw0zNs3pPbfn6pcKEQ2vPLbV"
+        },
+        {
+          "label": "Go gotchas",
+          "url": "https://go-traps.appspot.com/#slice-traversal"
+        },
+        {
+          "label": "Organization",
+          "url": "https://peter.bourgon.org/go-best-practices-2016/#repository-structure"
+        },
+        {
+          "label": "Organization",
+          "url": "https://github.com/golang-standards/project-layout"
+        },
+        {
+          "label": "Organization",
+          "url": "https://medium.com/@benbjohnson/standard-package-layout-7cdbc8391fc1"
+        },
+        {
+          "label": "Organization",
+          "url": "https://link.medium.com/YnRPhtp700"
+        },
+        {
+          "label": "Imports",
+          "url": "https://medium.com/golangspec/import-declarations-in-go-8de0fd3ae8ff"
+        },
+        {
+          "label": "Slices/Data structures",
+          "url": "https://blog.golang.org/slices"
+        },
+        {
+          "label": "Slices/Data structures",
+          "url": "https://blog.golang.org/go-slices-usage-and-internals"
+        },
+        {
+          "label": "Slices/Data structures",
+          "url": "https://research.swtch.com/godata"
+        },
+        {
+          "label": "Slices/Data structures",
+          "url": "https://www.ardanlabs.com/blog/2013/08/understanding-slices-in-go-programming.html"
+        },
+        {
+          "label": "Slices/Data structures",
+          "url": "https://nanxiao.gitbooks.io/golang-101-hacks/content/posts/the-internals-of-slice.html"
+        },
+        {
+          "label": "Go GUIs",
+          "url": "https://github.com/tomarus/go-gui-libs/wiki"
+        },
+        {
+          "label": "Folder structure",
+          "url": "https://rakyll.org/style-packages/"
+        },
+        {
+          "label": "Folder structure",
+          "url": "https://medium.com/@benbjohnson/standard-package-layout-7cdbc8391fc1#.ds38va3pp"
+        },
+        {
+          "label": "Folder structure",
+          "url": "https://www.goinggo.net/2017/02/design-philosophy-on-packaging.html"
+        },
+        {
+          "label": "Folder structure",
+          "url": "https://talks.bjk.fyi/bketelsen/talks?p=gcru18-best#/1"
+        },
+        {
+          "label": "Concurrency",
+          "url": "https://medium.com/@matryer/very-basic-concurrency-for-beginners-in-go-663e63c6ba07"
+        },
+        {
+          "label": "Concurrency",
+          "url": "https://yourbasic.org/golang/concurrent-programming/"
+        },
+        {
+          "label": "Concurrency",
+          "url": "https://youtu.be/LvgVSSpwND8"
+        },
+        {
+          "label": "context",
+          "url": "https://www.jtolio.com/2017/01/writing-advanced-web-applications-with-go/"
+        },
+        {
+          "label": "context",
+          "url": "http://p.agnihotry.com/post/understanding_the_context_package_in_golang/"
+        },
+        {
+          "label": "Docker",
+          "url": "https://youtu.be/UtNeLfXaBJM"
+        },
+        {
+          "label": "Code review",
+          "url": "https://github.com/golang/go/wiki/CodeReviewComments"
+        },
+        {
+          "label": "Auth2",
+          "url": "https://subscription.packtpub.com/book/web_development/9781787286740/1/ch01lvl1sec13/implementing-basic-authentication-on-a-simple-http-server"
+        },
+        {
+          "label": "Auth2",
+          "url": "https://hackernoon.com/build-your-own-oauth2-server-in-go-7d0f660732c3"
+        },
+        {
+          "label": "Auth2",
+          "url": "https://drstearns.github.io/tutorials/gomiddleware/"
+        },
+        {
+          "label": "Hashing",
+          "url": "https://medium.com/@jcox250/password-hash-salt-using-golang-b041dc94cb72"
+        },
+        {
+          "label": "Files",
+          "url": "https://www.devdungeon.com/content/working-files-go"
+        },
+        {
+          "label": "A.I.",
+          "url": "https://www.gonum.org/"
+        },
+        {
+          "label": "A.I.",
+          "url": "https://www.elementai.com/news/2018/making-a-neural-network-from-scratch-using-go"
+        },
+        {
+          "label": "A.I.",
+          "url": "https://www.youtube.com/watch?v=ihP7lQivA6M"
+        },
+        {
+          "label": "A.I.",
+          "url": "https://github.com/gopherdata/resources/tree/master/tooling"
+        },
+        {
+          "label": "A.I.",
+          "url": "https://pkg.go.dev/github.com/google/generative-ai-go#section-readme"
+        },
+        {
+          "label": "Observing another process",
+          "url": "https://blog.kowalczyk.info/article/wOYk/advanced-command-execution-in-go-with-osexec.html"
+        }
+      ]
+    },
+    {
+      "name": "Database/Post/Get/GraphQL",
+      "entries": [
+        {
+          "label": "Database",
+          "url": "https://gitlab.com/zendrulat123/golang-post/-/blob/master/README.md"
+        },
+        {
+          "label": "Database",
+          "url": "https://www.vividcortex.com/resources/the-ultimate-guide-to-building-database-driven-apps-with-go"
+        },
+        {
+          "label": "Database",
+          "url": "http://www.alexedwards.net/blog/organising-database-access"
+        },
+        {
+          "label": "Database",
+          "url": "http://go-database-sql.org/index.html"
+        },
+        {
+          "label": "Database",
+          "url": "https://github.com/golang/go/wiki/SQLInterface"
+        },
+        {
+          "label": "Database — https://github.com/samonz",
+          "url": "https://github.com/samonzeweb/godb/blob/master/README.md"
+        },
+        {
+          "label": "Nice GraphQLtutorail GraphQL/Dgraph -",
+          "url": "https://tutorialedge.net/golang/go-graphql-beginners-tutorial/"
+        },
+        {
+          "label": "Nice GraphQLtutorail GraphQL/Dgraph - — GitHub - dgraph-io/travel: Starter Kit For Building Graph Database Go and Browser Apps Using Dgraph",
+          "url": "https://github.com/dgraph-io/travel"
+        },
+        {
+          "label": "Nice GraphQLtutorail GraphQL/Dgraph -",
+          "url": "https://support.insomnia.rest/article/176-graphql-queries"
+        },
+        {
+          "label": "Nice GraphQLtutorail GraphQL/Dgraph - — KrakenD - Open source API Gateway",
+          "url": "https://www.krakend.io/"
+        },
+        {
+          "label": "Nice GraphQLtutorail GraphQL/Dgraph - — Skaffold",
+          "url": "https://skaffold.dev/"
+        }
+      ]
+    },
+    {
+      "name": "Beginner building",
+      "entries": [
+        {
+          "label": "Middleware/logcolors/context",
+          "url": "https://www.reddit.com/r/golang/comments/7p35s4/how_do_i_get_the_response_status_for_my_middleware/"
+        },
+        {
+          "label": "Middleware/logcolors/context",
+          "url": "https://github.com/logrusorgru/aurora"
+        },
+        {
+          "label": "Middleware/logcolors/context",
+          "url": "https://gocodecloud.com/blog/2016/11/15/simple-golang-http-request-context-example/"
+        },
+        {
+          "label": "Middleware/logcolors/context",
+          "url": "https://gitlab.com/zendrulat123/prettymiddleware/wikis/home"
+        },
+        {
+          "label": "Really good form data from golang",
+          "url": "https://dinosaurscode.xyz/go/2016/06/19/golang-mysql-authentication/"
+        },
+        {
+          "label": "Templates and routes",
+          "url": "https://github.com/GoesToEleven/golang-web-dev/blob/master/021_third-party-serveMux/01_julienschimdt/main.go"
+        },
+        {
+          "label": "Templates and routes",
+          "url": "https://blog.gopheracademy.com/advent-2017/using-go-templates/"
+        },
+        {
+          "label": "Connecting Jqeury/other asset files with Mux router",
+          "url": "https://stackoverflow.com/questions/15834278/serving-static-content-with-a-root-url-with-the-gorilla-toolkit"
+        },
+        {
+          "label": "CORS (preflight error with jqeury)",
+          "url": "https://stackoverflow.com/questions/39507065/enable-cors-in-golang"
+        },
+        {
+          "label": "Ajax requests with jqeury",
+          "url": "https://blog.garstasio.com/you-dont-need-jquery/ajax/"
+        },
+        {
+          "label": "Design",
+          "url": "https://dave.cheney.net/2016/08/20/solid-go-design"
+        },
+        {
+          "label": "Go books",
+          "url": "https://github.com/golang/go/wiki/Books"
+        },
+        {
+          "label": "Go books",
+          "url": "https://www.programming-books.io/essential/go/"
+        },
+        {
+          "label": "Go books",
+          "url": "https://github.com/dgryski/go-perfbook/blob/master/README.md"
+        },
+        {
+          "label": "Go books",
+          "url": "https://astaxie.gitbooks.io/build-web-application-with-golang/en/preface.html"
+        },
+        {
+          "label": "Go books",
+          "url": "https://openstax.org/"
+        },
+        {
+          "label": "Go books",
+          "url": "https://bookboon.com/en/search?query=Go"
+        },
+        {
+          "label": "cookies",
+          "url": "https://www.calhoun.io/securing-cookies-in-go/"
+        },
+        {
+          "label": "cookies",
+          "url": "https://austingwalters.com/building-a-web-server-in-go-web-cookies/"
+        },
+        {
+          "label": "Curl commands to go",
+          "url": "https://mholt.github.io/curl-to-go/"
+        },
+        {
+          "label": "Curl commands to go",
+          "url": "https://curlbuilder.com/"
+        },
+        {
+          "label": "Docker",
+          "url": "https://link.medium.com/X1xQhMFnfU"
+        },
+        {
+          "label": "Docker",
+          "url": "https://www.cloudsavvyit.com/10623/how-to-install-docker-and-docker-compose-on-linux/"
+        },
+        {
+          "label": "Load balancer",
+          "url": "https://kasvith.github.io/posts/lets-create-a-simple-lb-go/"
+        }
+      ]
+    },
+    {
+      "name": "Framework Examples",
+      "entries": [
+        {
+          "label": "Mux",
+          "url": "https://github.com/somehuman22/userapi"
+        },
+        {
+          "label": "Echo",
+          "url": "https://echo.labstack.com/"
+        }
+      ]
+    },
+    {
+      "name": "Testing Go code",
+      "entries": [
+        {
+          "label": "General testing",
+          "url": "https://quii.gitbook.io/learn-go-with-tests/go-fundamentals/hello-world"
+        },
+        {
+          "label": "General testing",
+          "url": "https://blog.jetbrains.com/go/2022/11/22/comprehensive-guide-to-testing-in-go/"
+        },
+        {
+          "label": "General testing",
+          "url": "https://medium.com/@matryer/5-simple-tips-and-tricks-for-writing-unit-tests-in-golang-619653f90742"
+        },
+        {
+          "label": "General testing — ://blog.alexellis.io/golang-writing-unit-tests/",
+          "url": "https://blog.alexellis.io/golang-writing-unit-tests/"
+        },
+        {
+          "label": "General testing",
+          "url": "https://medium.com/@povilasve/go-advanced-tips-tricks-a872503ac859"
+        },
+        {
+          "label": "General testing",
+          "url": "https://dev.to/quii/learn-go-by-writing-tests--m63"
+        },
+        {
+          "label": "General testing",
+          "url": "https://medium.com/@pierreprinetti/a-pattern-for-go-tests-3468b51535"
+        },
+        {
+          "label": "General testing",
+          "url": "https://quii.gitbook.io/learn-go-with-tests/"
+        },
+        {
+          "label": "Interface Testing",
+          "url": "https://syslog.ravelin.com/what-is-an-interface-ee67b3cc9e97"
+        },
+        {
+          "label": "Profiling",
+          "url": "https://jvns.ca/blog/2017/09/24/profiling-go-with-pprof/"
+        }
+      ]
+    },
+    {
+      "name": "Reader Type",
+      "entries": [
+        {
+          "label": "io.Reader",
+          "url": "https://medium.com/@matryer/golang-advent-calendar-day-seventeen-io-reader-in-depth-6f744bb4320b"
+        },
+        {
+          "label": "example",
+          "url": "https://tour.golang.org/methods/21"
+        }
+      ]
+    },
+    {
+      "name": "Context/logging",
+      "entries": [
+        {
+          "label": "context",
+          "url": "https://stackoverflow.com/questions/40379960/golang-context-withvalue-how-to-add-several-key-value-pairs"
+        },
+        {
+          "label": "context",
+          "url": "https://play.golang.org/p/JtDAj7aVIH"
+        },
+        {
+          "label": "example",
+          "url": "https://play.golang.org/p/xrK0j2W3Ecs"
+        }
+      ]
+    },
+    {
+      "name": "Interfaces 2",
+      "entries": [
+        {
+          "label": "Russ’s explanation",
+          "url": "https://research.swtch.com/interfaces"
+        },
+        {
+          "label": "Understanding Interfaces",
+          "url": "http://jordanorelli.com/post/32665860244/how-to-use-interfaces-in-go"
+        },
+        {
+          "label": "Basic usage",
+          "url": "https://codeburst.io/understanding-solid-principles-interface-segregation-principle-b2d57026cf6c"
+        },
+        {
+          "label": "Best practices",
+          "url": "https://blog.learngoprogramming.com/golang-funcs-params-named-result-values-types-pass-by-value-67f4374d9c0a"
+        },
+        {
+          "label": "Open interface",
+          "url": "http://changelog.ca/log/2015/01/30/golang"
+        },
+        {
+          "label": "Using open interface for api",
+          "url": "https://blog.gopheracademy.com/advent-2016/advanced-encoding-decoding/"
+        },
+        {
+          "label": "Using open interface for api",
+          "url": "http://polyglot.ninja/golang-json/"
+        }
+      ]
+    },
+    {
+      "name": "Why’s",
+      "entries": [
+        {
+          "label": "Why inheritance questions",
+          "url": "https://golang.org/doc/faq#inheritance"
+        }
+      ]
+    },
+    {
+      "name": "Others lists",
+      "entries": [
+        {
+          "label": "Compilation",
+          "url": "https://github.com/enocom/gopher-reading-list/blob/master/README.md"
+        },
+        {
+          "label": "Others lists",
+          "url": "https://docs.google.com/document/d/156uFdnUr5Wll7MnsGoShncluGBSip9SzNF7mz9sqU3E/edit?usp=drivesdk"
+        },
+        {
+          "label": "Others lists",
+          "url": "https://github.com/hoanhan101/ultimate-go"
+        }
+      ]
+    },
+    {
+      "name": "Syntax",
+      "entries": [
+        {
+          "label": "Am8 cheat sheet",
+          "url": "https://github.com/a8m/go-lang-cheat-sheet"
+        },
+        {
+          "label": "Conversions",
+          "url": "http://yourbasic.org/golang/conversions/"
+        },
+        {
+          "label": "[]string to string",
+          "url": "https://golang.org/pkg/strings/#Join"
+        },
+        {
+          "label": "concatenation",
+          "url": "https://www.calhoun.io/6-tips-for-using-strings-in-go/"
+        }
+      ]
+    },
+    {
+      "name": "Go Wasm",
+      "entries": [
+        {
+          "label": "Run new wasi",
+          "url": "https://go.dev/dl/#go1.21rc2"
+        },
+        {
+          "label": "Run new wasi",
+          "url": "https://www.golinuxcloud.com/uninstall-golang/"
+        },
+        {
+          "label": "Run new wasi",
+          "url": "https://docs.wasmtime.dev/cli-install.html"
+        },
+        {
+          "label": "Run new wasi",
+          "url": "https://atamel.dev/posts/2023/06-26_compile_rust_go_wasm_wasi/"
+        },
+        {
+          "label": "Link I used to make it work",
+          "url": "https://cesarwilliam.medium.com/how-to-run-golang-1-15-code-in-a-browser-using-webassembly-e755bc733e8d"
+        },
+        {
+          "label": "Link I used to make it work",
+          "url": "https://www.aaron-powell.com/posts/2019-02-06-golang-wasm-3-interacting-with-js-from-go/"
+        },
+        {
+          "label": "Link I used to make it work",
+          "url": "https://ian-says.com/articles/golang-in-the-browser-with-web-assembly/"
+        },
+        {
+          "label": "My Working example",
+          "url": "https://gitlab.com/zendrulat123/wasm"
+        },
+        {
+          "label": "links",
+          "url": "https://github.com/golang/go/wiki/WebAssembly"
+        }
+      ]
+    },
+    {
+      "name": "My Own",
+      "entries": [
+        {
+          "label": "Mysite",
+          "url": "https://github.com/golangast/go_sapper"
+        },
+        {
+          "label": "Slices/Arrays - with structs",
+          "url": "https://play.golang.org/p/DhT__tgtd6"
+        },
+        {
+          "label": "Interface magic",
+          "url": "https://play.golang.org/p/IA09xBX7dYF"
+        },
+        {
+          "label": "Embedding magic",
+          "url": "https://play.golang.org/p/7UZUogIW_n-"
+        },
+        {
+          "label": "Magic of map of maps of interfaces",
+          "url": "https://play.golang.org/p/r9zyVquuvko"
+        },
+        {
+          "label": "The Reader Interface for Go",
+          "url": "https://medium.com/@snippet22/reader-types-2ba61290a5cf"
+        },
+        {
+          "label": "Go Errors",
+          "url": "https://medium.com/@snippet22/errors-in-go-1ebfa1c1b883"
+        },
+        {
+          "label": "Adding value if unique to slice",
+          "url": "https://play.golang.org/p/QES5-We64D6"
+        },
+        {
+          "label": "Messing with go wasm slowly",
+          "url": "https://play.golang.org/p/d_UziITZdoj"
+        },
+        {
+          "label": "Restful simple example",
+          "url": "https://gitlab.com/zendrulat123/goes"
+        },
+        {
+          "label": "Start of my server logger",
+          "url": "https://gitlab.com/zendrulat123/prettylogserver/blob/master/showServer.go"
+        },
+        {
+          "label": "Pretty Middleware Logger",
+          "url": "https://gitlab.com/zendrulat123/prettymiddleware/wikis/home"
+        },
+        {
+          "label": "Context Logger",
+          "url": "https://gitlab.com/zendrulat123/gow/-/blob/master/Server/Server.go"
+        },
+        {
+          "label": "filter",
+          "url": "https://play.golang.org/p/pT-fCosqB6Y"
+        },
+        {
+          "label": "Using reflect to separate out the fields and types",
+          "url": "https://go.dev/play/p/zuSRmXdvBTx"
+        },
+        {
+          "label": "Parse a string command into a struct",
+          "url": "https://go.dev/play/p/SgAoxI3Jx14"
+        },
+        {
+          "label": "Split a file from directory string",
+          "url": "https://go.dev/play/p/pF9778GK4uH"
+        }
+      ]
+    },
+    {
+      "name": "Example projects",
+      "entries": [
+        {
+          "label": "1.",
+          "url": "https://github.com/josephspurrier/gowebapp"
+        }
+      ]
+    },
+    {
+      "name": "Updating Go on linux",
+      "entries": [
+        {
+          "label": "1.",
+          "url": "https://github.com/udhos/update-golang"
+        }
+      ]
+    },
+    {
+      "name": "Content Headers",
+      "entries": [
+        {
+          "label": "Allows images/css/assets to come through the templating",
+          "url": "https://www.informit.com/articles/article.aspx?p=2861456\u0026seqNum=5"
+        }
+      ]
+    },
+    {
+      "name": "Resources on scaffolding restful api from url",
+      "entries": [
+        {
+          "label": "developer.mozilla.org/en-US/docs/Learn/HTML/Forms/Sending_and_retrieving_form_data",
+          "url": "https://developer.mozilla.org/en-US/docs/Learn/HTML/Forms/Sending_and_retrieving_form_data"
+        },
+        {
+          "label": "app.quicktype.io/",
+          "url": "https://app.quicktype.io/"
+        },
+        {
+          "label": "davidwalsh.name/curl-post-file",
+          "url": "https://davidwalsh.name/curl-post-file"
+        },
+        {
+          "label": "curlbuilder.com/",
+          "url": "https://curlbuilder.com/"
+        },
+        {
+          "label": "youripaddress/get?link=www.google.com\u0026meta=search",
+          "url": "http://youripaddress/get?link=www.google.com\u0026meta=search"
+        },
+        {
+          "label": "Restful resource",
+          "url": "https://www.programming-books.io/essential/go/handling-http-method-accessing-query-strings-request-body-2f90f3ba9eab401699dbb119feab6665"
+        },
+        {
+          "label": "Sending request jqeury/ajax without refresh",
+          "url": "https://code.tutsplus.com/tutorials/submit-a-form-without-page-refresh-using-jquery--net-59"
+        },
+        {
+          "label": "Things to remember",
+          "url": "https://jqueryui.com/autocomplete/"
+        },
+        {
+          "label": "Jqeury json parsing",
+          "url": "https://www.digitalocean.com/community/tutorials/how-to-work-with-json-in-javascript"
+        }
+      ]
+    },
+    {
+      "name": "Mocking XML",
+      "entries": [
+        {
+          "label": "Mocking xml",
+          "url": "http://www.json-gen.com/"
+        },
+        {
+          "label": "Mocking xml",
+          "url": "https://onlinerandomtools.com/generate-random-xml?\u0026depth=1\u0026max-elements=10\u0026always-max-elements=true"
+        },
+        {
+          "label": "Mocking xml",
+          "url": "https://www.programming-books.io/essential/go/xml-6744c6d0d620448dbe66e224f64b6f8b"
+        },
+        {
+          "label": "Mocking xml",
+          "url": "https://tutorialedge.net/golang/consuming-restful-api-with-go/"
+        },
+        {
+          "label": "Mocking xml",
+          "url": "https://eli.thegreenplace.net/2019/go-json-cookbook/"
+        },
+        {
+          "label": "Mocking xml",
+          "url": "https://larry-price.com/blog/2015/12/04/xml-parsing-in-go/"
+        },
+        {
+          "label": "Mocking xml",
+          "url": "https://play.golang.org/p/hvlcsPAbUmL"
+        }
+      ]
+    },
+    {
+      "name": "Docker",
+      "entries": [
+        {
+          "label": "Docker",
+          "url": "https://docs.google.com/document/d/1lqpv7zRxL1DPmlP2KmcsZd9O1JwgfzRzpK3ZBu9Th2U/edit?usp=sharing"
+        },
+        {
+          "label": "Docker",
+          "url": "https://www.youtube.com/watch?v=UtNeLfXaBJM"
+        },
+        {
+          "label": "Docker compose",
+          "url": "https://www.educative.io/blog/docker-compose-tutorial"
+        }
+      ]
+    },
+    {
+      "name": "Containers",
+      "entries": [
+        {
+          "label": "Resources for understanding Containers",
+          "url": "https://docs.google.com/document/d/1ZSplcWI9GI7ZgBanBynh68x4oGCASPYJGF7AksYq8m8/edit?usp=sharing"
+        },
+        {
+          "label": "Resources for understanding Containers",
+          "url": "https://www.infoq.com/articles/build-a-container-golang/"
+        }
+      ]
+    },
+    {
+      "name": "AST Package",
+      "entries": [
+        {
+          "label": "Ast/writing tools",
+          "url": "https://arslan.io/2017/09/14/the-ultimate-guide-to-writing-a-go-tool/"
+        }
+      ]
+    },
+    {
+      "name": "Interview",
+      "entries": [
+        {
+          "label": "Interview",
+          "url": "https://stackoverflow.com/questions/49771806/how-to-learn-internals-of-of-the-go-programming-lanauge-for-noob/49772651#49772651"
+        },
+        {
+          "label": "Interview",
+          "url": "https://github.com/nas5w/interview-resources"
+        },
+        {
+          "label": "Interview",
+          "url": "https://app.gointerview.dev/cheatsheet"
+        },
+        {
+          "label": "www.reddit.com/r/golang/comments/e937qu/how_to_become_a_senior_go_dev/fagg89k?utm_medium=android_app\u0026utm_source=share",
+          "url": "https://www.reddit.com/r/golang/comments/e937qu/how_to_become_a_senior_go_dev/fagg89k?utm_medium=android_app\u0026utm_source=share"
+        },
+        {
+          "label": "More interview resources",
+          "url": "https://github.com/hoanhan101/algo/blob/master/README.md"
+        },
+        {
+          "label": "More interview resources",
+          "url": "https://github.com/TutorialEdge/Go/blob/master/README.md"
+        },
+        {
+          "label": "More interview resources",
+          "url": "https://dev.to/olanetsoft/12-github-repositories-to-help-you-ace-your-job-interview-2a08"
+        },
+        {
+          "label": "More interview resources",
+          "url": "https://github.com/mxssl/sre-interview-prep-guide"
+        }
+      ]
+    },
+    {
+      "name": "Go jobs",
+      "entries": [
+        {
+          "label": "Job resources for Go — https://",
+          "url": "https://t.co/3ikG0vvAoV?amp=1"
+        },
+        {
+          "label": "Job resources for Go — https://",
+          "url": "https://t.co/hTXqmelYoJ?amp=1"
+        }
+      ]
+    },
+    {
+      "name": "Reading/Writing Files",
+      "entries": [
+        {
+          "label": "Using VIper",
+          "url": "https://towardsdatascience.com/use-environment-variable-in-your-next-golang-project-39e17c3aaa66"
+        },
+        {
+          "label": "Replace a word in a file",
+          "url": "https://www.socketloop.com/tutorials/golang-read-a-text-file-and-replace-certain-words"
+        },
+        {
+          "label": "Replace a word in a file",
+          "url": "https://play.golang.org/p/ZRaYp8I3SUO"
+        },
+        {
+          "label": "Cheat sheet",
+          "url": "https://cheatography.com/cizixs/cheat-sheets/go-files/"
+        }
+      ]
+    },
+    {
+      "name": "Cobra CLI framework",
+      "entries": [
+        {
+          "label": "Main page",
+          "url": "https://github.com/spf13/cobra"
+        },
+        {
+          "label": "Great resource on learning cobra",
+          "url": "https://www.youtube.com/watch?v=WvWPGVKLvR4"
+        },
+        {
+          "label": "To get the cobra cli commands (idk why no one tells you this)",
+          "url": "https://github.com/spf13/cobra/issues/270"
+        }
+      ]
+    },
+    {
+      "name": "Non Go links",
+      "entries": [
+        {
+          "label": "Front-end",
+          "url": "https://github.com/h5bp/Front-end-Developer-Interview-Questions"
+        },
+        {
+          "label": "Front-end",
+          "url": "https://github.com/yangshun/front-end-interview-handbook"
+        },
+        {
+          "label": "Front-end",
+          "url": "https://frontendmasters.com/books/front-end-handbook/2018/2018.html"
+        },
+        {
+          "label": "Front-end",
+          "url": "https://github.com/getify/You-Dont-Know-JS/blob/master/README.md"
+        },
+        {
+          "label": "Front-end",
+          "url": "https://wesbos.com/"
+        },
+        {
+          "label": "Front-end",
+          "url": "https://www.youtube.com/user/TechGuyWeb"
+        },
+        {
+          "label": "Front-end",
+          "url": "https://frontendmasters.com/books/front-end-handbook/2019/#3"
+        },
+        {
+          "label": "Front-end",
+          "url": "https://codepen.io/oliviale/post/css-guides"
+        },
+        {
+          "label": "Front-end",
+          "url": "https://github.com/jwasham/coding-interview-university/blob/master/README.md"
+        },
+        {
+          "label": "Position",
+          "url": "https://css-tricks.com/absolute-relative-fixed-positioining-how-do-they-differ/"
+        },
+        {
+          "label": "Margins",
+          "url": "https://www.sitepoint.com/collapsing-margins/"
+        },
+        {
+          "label": "Javascript quick playground for testing quickly",
+          "url": "https://stephengrider.github.io/JSPlaygrounds/"
+        },
+        {
+          "label": "Removing characters with javascript for api",
+          "url": "https://jsfiddle.net/7tuL3cac/1/"
+        },
+        {
+          "label": "Design tips",
+          "url": "https://medium.com/daily-now/most-popular-development-posts-of-the-week-11-apr-2018-12f7f2e1c4a"
+        },
+        {
+          "label": "Design tips",
+          "url": "https://www.youtube.com/playlist?list=PLmZLFWEwl1DQBMjKSI5sqFuGCxZSJC3f4"
+        },
+        {
+          "label": "Web assembly",
+          "url": "https://hacks.mozilla.org/2017/02/creating-and-working-with-webassembly-modules/"
+        },
+        {
+          "label": "Web assembly",
+          "url": "https://github.com/golang/go/wiki/WebAssembly"
+        },
+        {
+          "label": "Git reference",
+          "url": "https://learngitbranching.js.org"
+        },
+        {
+          "label": "Web resources",
+          "url": "https://www.reddit.com/r/FreelanceProgramming/comments/8r3a1p/comprehensive_list_of_all_kinds_of_resources_for/?utm_source=reddit-android"
+        },
+        {
+          "label": "Web resources",
+          "url": "https://github.com/leonardomso/33-js-concepts/blob/master/README.md"
+        },
+        {
+          "label": "Web resources",
+          "url": "https://link.medium.com/OIwMUPilbR"
+        },
+        {
+          "label": "Js",
+          "url": "https://flaviocopes.com/javascript/"
+        },
+        {
+          "label": "Js",
+          "url": "https://javascript.info"
+        },
+        {
+          "label": "Js",
+          "url": "http://www.javascriptkit.com"
+        },
+        {
+          "label": "Responsive squares just css",
+          "url": "https://codepen.io/anon/pen/djKBgq"
+        },
+        {
+          "label": "gitlab",
+          "url": "https://gist.github.com/juemura/899241d73cf719de7f540fc68071bd7d"
+        },
+        {
+          "label": "Math",
+          "url": "http://www.math.ucla.edu/~tao/QED/QED.html"
+        },
+        {
+          "label": "Acme editor",
+          "url": "https://github.com/evbogdanov/acme"
+        },
+        {
+          "label": "Acme editor",
+          "url": "https://github.com/as/a"
+        },
+        {
+          "label": "General coding",
+          "url": "https://github.com/DovAmir/awesome-design-patterns/blob/master/README.md"
+        },
+        {
+          "label": "General coding",
+          "url": "https://github.com/sindresorhus/awesome/blob/master/readme.md"
+        },
+        {
+          "label": "General coding",
+          "url": "https://www.reddit.com/r/learnprogramming/comments/2a9ygh/1000_beginner_programming_projects_xpost/"
+        },
+        {
+          "label": "General coding",
+          "url": "https://www.cameronmacleod.com/blog/cs-degree-structure"
+        },
+        {
+          "label": "Computer science",
+          "url": "https://www.extension.harvard.edu/open-learning-initiative/intensive-introduction-computer-science"
+        },
+        {
+          "label": "Computer science",
+          "url": "https://teachyourselfcs.com/"
+        },
+        {
+          "label": "Computer science",
+          "url": "https://www.anysolo.com/books-and-videos-for-a-beginner-programmer/"
+        },
+        {
+          "label": "Computer science",
+          "url": "https://www.nand2tetris.org/"
+        },
+        {
+          "label": "Computer science",
+          "url": "https://www.freecodecamp.org/news/free-courses-top-cs-universities/"
+        },
+        {
+          "label": "Cheat sheets",
+          "url": "https://link.medium.com/8lXSDySLTT"
+        },
+        {
+          "label": "Cheat sheets",
+          "url": "https://www.codeinwp.com/blog/wordpress-cheat-sheets-web-development-design/?amp"
+        },
+        {
+          "label": "Cheat sheets",
+          "url": "https://envato.com/blog/cheatsheets-web-designers/"
+        },
+        {
+          "label": "Cheat sheets",
+          "url": "http://overapi.com"
+        },
+        {
+          "label": "Cheat sheets",
+          "url": "https://gto76.github.io/python-cheatsheet/"
+        },
+        {
+          "label": "Cheat sheets",
+          "url": "https://devhints.io/"
+        },
+        {
+          "label": "CSP's",
+          "url": "https://en.m.wikipedia.org/wiki/Constraint_satisfaction_problem"
+        },
+        {
+          "label": "CSP's",
+          "url": "https://github.com/gnboorse/centipede"
+        },
+        {
+          "label": "CSP's",
+          "url": "https://en.m.wikipedia.org/wiki/Quicksort"
+        },
+        {
+          "label": "Algorithms",
+          "url": "https://ocw.mit.edu/courses/electrical-engineering-and-computer-science/6-006-introduction-to-algorithms-fall-2011/lecture-videos/"
+        },
+        {
+          "label": "Algorithms",
+          "url": "https://github.com/x899/algorithms?files=1"
+        },
+        {
+          "label": "Coding problems",
+          "url": "https://github.com/shomali11/go-interview/blob/master/strings/addbinaries/README.md"
+        }
+      ]
+    },
+    {
+      "name": "SvelteJS",
+      "entries": [
+        {
+          "label": "To try it",
+          "url": "https://svelte.dev/repl"
+        },
+        {
+          "label": "Nice 7 hour video training",
+          "url": "https://www.youtube.com/watch?v=ujbE0mzX-CU"
+        },
+        {
+          "label": "scrimba",
+          "url": "https://scrimba.com/course/glearnsvelte"
+        },
+        {
+          "label": "How to mix go and sveltejs",
+          "url": "https://docs.google.com/document/d/12oCEuxB6bklnEQhpuIcgt2NekFi0xaHguvGO8Ridxf4/edit?usp=sharing"
+        },
+        {
+          "label": "examples",
+          "url": "https://svelte.dev/repl/a5ea8007e01a41d2b7f1bb3071d6418b?version=3.22.2"
+        },
+        {
+          "label": "examples",
+          "url": "https://svelte.dev/repl/312e40192391486fa457663693196672?version=3.22.2"
+        },
+        {
+          "label": "examples",
+          "url": "https://docs.google.com/document/d/1W-3u7ZTwr3r0ZuUlVUCOAidvWMAzJumH1YkvwcAK7Yk/edit?usp=sharing"
+        }
+      ]
+    },
+    {
+      "name": "Flutter",
+      "entries": [
+        {
+          "label": "Basic tutorial",
+          "url": "https://www.udemy.com/course/flutter-bootcamp-with-dart/"
+        },
+        {
+          "label": "Flutter stuff I learned",
+          "url": "https://docs.google.com/document/d/1AxYUb3pGMcK6mjWHcxuPcIiH30HlsQwOAcdUsf0ulJY/edit?usp=sharing"
+        },
+        {
+          "label": "Flutter stuff I learned",
+          "url": "https://docs.google.com/document/d/1w0mS32EtizYVd5O0BgjpWauYw2ubasYmPW7anYA6Bfc/edit?usp=sharing"
+        }
+      ]
+    },
+    {
+      "name": "VUEJS",
+      "entries": [
+        {
+          "label": "Basic tutorial",
+          "url": "https://scrimba.com/g/glearnvue"
+        },
+        {
+          "label": "Basic tutorial",
+          "url": "https://learning.oreilly.com/search/?query=vuejs"
+        },
+        {
+          "label": "Learning example todo list",
+          "url": "http://jsfiddle.net/zendrulat/eywraw8t/525401/"
+        }
+      ]
+    },
+    {
+      "name": "Frontend",
+      "entries": [
+        {
+          "label": "Google tool",
+          "url": "http://google.github.io/tracing-framework/index.html"
+        },
+        {
+          "label": "Image loading",
+          "url": "https://archive.barrelny.com/blog/taking-control-of-imageloading/"
+        },
+        {
+          "label": "shadows",
+          "url": "http://indamix.github.io/real-shadow/#/box/"
+        },
+        {
+          "label": "UI ideas",
+          "url": "https://goodui.org/"
+        },
+        {
+          "label": "styles",
+          "url": "https://flatuicolors.com/"
+        },
+        {
+          "label": "styles",
+          "url": "https://tympanus.net/codrops/2013/06/13/creative-button-styles/"
+        },
+        {
+          "label": "styles",
+          "url": "https://getmdl.io/index.html"
+        },
+        {
+          "label": "fonts",
+          "url": "https://www.slant.co/topics/67/~best-programming-fonts"
+        },
+        {
+          "label": "Front end resources",
+          "url": "https://uptodate.frontendrescue.org/"
+        },
+        {
+          "label": "Front end resources",
+          "url": "https://gist.github.com/ericelliott/d576f72441fc1b27dace"
+        },
+        {
+          "label": "Front end resources",
+          "url": "https://calltoidea.com/"
+        },
+        {
+          "label": "Front end resources",
+          "url": "http://jakiestfu.github.io/Medium.js/docs/"
+        },
+        {
+          "label": "Front end resources",
+          "url": "https://webdevresources.info/"
+        },
+        {
+          "label": "Front end resources",
+          "url": "https://github.com/vlipatdev/frontend-resources/blob/master/README.md"
+        },
+        {
+          "label": "Js learning",
+          "url": "https://colintoh.com/blog/5-array-methods-that-you-should-use-today"
+        },
+        {
+          "label": "Js learning",
+          "url": "http://jstherightway.org/"
+        },
+        {
+          "label": "Js learning",
+          "url": "https://addyosmani.com/resources/essentialjsdesignpatterns/book/#constructorpatternjavascript"
+        },
+        {
+          "label": "React material",
+          "url": "https://v0.material-ui.com/#/"
+        },
+        {
+          "label": "Lazy load",
+          "url": "https://github.com/aFarkas/lazysizes"
+        },
+        {
+          "label": "ux",
+          "url": "http://uxchecklist.github.io/"
+        },
+        {
+          "label": "ux",
+          "url": "https://abookapart.com/products/designing-for-emotion"
+        },
+        {
+          "label": "Css integration",
+          "url": "https://github.com/postcss/autoprefixer"
+        },
+        {
+          "label": "Mobile friendly",
+          "url": "https://search.google.com/test/mobile-friendly"
+        },
+        {
+          "label": "Text editor — https://summernote.org",
+          "url": "https://summernote.org/"
+        },
+        {
+          "label": "Css purify",
+          "url": "https://github.com/purifycss/purifycss"
+        },
+        {
+          "label": "wireframe",
+          "url": "https://wireframe.cc/"
+        },
+        {
+          "label": "wireframe",
+          "url": "http://paletton.com/#uid=1000u0kllllaFw0g0qFqFg0w0aF"
+        },
+        {
+          "label": "wireframe — https://app.uxpin.com",
+          "url": "https://app.uxpin.com/"
+        },
+        {
+          "label": "wireframe",
+          "url": "http://colllor.com/skyblue"
+        },
+        {
+          "label": "mockups",
+          "url": "https://www.jotform.com/blog/mixing-multiple-fonts/"
+        },
+        {
+          "label": "mockups",
+          "url": "https://960.gs/"
+        },
+        {
+          "label": "mockups",
+          "url": "https://vimeo.com/17091814"
+        },
+        {
+          "label": "Flex guide",
+          "url": "https://css-tricks.com/snippets/css/a-guide-to-flexbox/"
+        },
+        {
+          "label": "angular 8",
+          "url": "https://www.udemy.com/the-complete-guide-to-angular-2/"
+        },
+        {
+          "label": "angular 8",
+          "url": "https://docs.google.com/document/d/1gCvZBcNZrQ80L8SaJpsFkNjTpCCbaNN5-IKTNaURxDg/edit?usp=sharing"
+        },
+        {
+          "label": "angular 8",
+          "url": "https://cli.angular.io/"
+        },
+        {
+          "label": "angular 8",
+          "url": "https://material.angular.io/"
+        },
+        {
+          "label": "angular 8",
+          "url": "https://material.io/design/components/app-bars-top.html#anatomy"
+        },
+        {
+          "label": "Promises in Javascript",
+          "url": "https://www.geeksforgeeks.org/javascript-promise-resolve-method/"
+        },
+        {
+          "label": "Sveltejs returning api result",
+          "url": "https://svelte.dev/repl/312e40192391486fa457663693196672?version=3.22.2"
+        },
+        {
+          "label": "Flex Box",
+          "url": "https://gridbyexample.com/"
+        },
+        {
+          "label": "Flex Box",
+          "url": "https://labs.jensimmons.com/"
+        },
+        {
+          "label": "Flex Box",
+          "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_Grid_Layout"
+        },
+        {
+          "label": "Flex Box",
+          "url": "https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_Grid_Layout/Relationship_of_Grid_Layout"
+        },
+        {
+          "label": "Cs information",
+          "url": "https://teachyourselfcs.com/"
+        }
+      ]
+    },
+    {
+      "name": "Currently What I use when deving",
+      "entries": [
+        {
+          "label": "Editor — VScode",
+          "url": "https://code.visualstudio.com/"
+        },
+        {
+          "label": "Sometimes good resource for sales",
+          "url": "https://stacksocial.com/"
+        },
+        {
+          "label": "How I setup what I use.",
+          "url": "https://youtu.be/o8csuBEhjzM"
+        }
+      ]
+    },
+    {
+      "name": "Currently What I am working on",
+      "entries": [
+        {
+          "label": "Older resources im using",
+          "url": "https://gitlab.com/zendrulat123/learnserver/-/blob/master/main.go"
+        },
+        {
+          "label": "Resources hoping to implement after I get basics done.",
+          "url": "https://www.dudley.codes/posts/2020.05.19-golang-structure-web-servers/"
+        }
+      ]
+    },
+    {
+      "name": "Go issues and what I do",
+      "entries": [
+        {
+          "label": "https://docs.google.com/document/d/1kFgS9nBbtk73IyQhJOBQb-eY771Yy-WZc2Kf-3vDiqs/edit?usp=sharing",
+          "url": "https://docs.google.com/document/d/1kFgS9nBbtk73IyQhJOBQb-eY771Yy-WZc2Kf-3vDiqs/edit?usp=sharing"
+        }
+      ]
+    },
+    {
+      "name": "Arguments against python",
+      "entries": [
+        {
+          "label": "https://docs.google.com/document/u/0/d/1dpKjHGzzmpGe2-34x6fb3fhtEBW25OCwL9UvVEOwrPc/mobilebasic",
+          "url": "https://docs.google.com/document/u/0/d/1dpKjHGzzmpGe2-34x6fb3fhtEBW25OCwL9UvVEOwrPc/mobilebasic"
+        }
+      ]
+    },
+    {
+      "name": "Crypto security package crypto/ecdh",
+      "entries": [
+        {
+          "label": "Background https://words.filippo.io/dispatches/go1-20/ example https://go.dev/play/p/VPy9PW1R-qG",
+          "url": "https://words.filippo.io/dispatches/go1-20/"
+        },
+        {
+          "label": "Background https://words.filippo.io/dispatches/go1-20/ example https://go.dev/play/p/VPy9PW1R-qG",
+          "url": "https://go.dev/play/p/VPy9PW1R-qG"
+        }
+      ]
+    },
+    {
+      "name": "JWT security",
+      "entries": [
+        {
+          "label": "https://qvault.io/2020/02/20/how-to-build-jwts-in-go-golang/",
+          "url": "https://qvault.io/2020/02/20/how-to-build-jwts-in-go-golang/"
+        }
+      ]
+    },
+    {
+      "name": "Compiling static assets into your binary",
+      "entries": [
+        {
+          "label": "https://vimeo.com/219863271 https://github.com/gofiber/fiber/issues/375",
+          "url": "https://vimeo.com/219863271"
+        },
+        {
+          "label": "https://vimeo.com/219863271 https://github.com/gofiber/fiber/issues/375",
+          "url": "https://github.com/gofiber/fiber/issues/375"
+        }
+      ]
+    },
+    {
+      "name": "Gobuffalo",
+      "entries": [
+        {
+          "label": "I use it to generate resources quickly https://gobuffalo.io/en/docs/resources#generating-resources https://www.youtube.com/watch?v=HOSDxHMiHLk\u0026list=PLFP7SbLMoK_Y5Gj8WzUuDLQFXT6uYanTe",
+          "url": "https://gobuffalo.io/en/docs/resources#generating-resources"
+        },
+        {
+          "label": "I use it to generate resources quickly https://gobuffalo.io/en/docs/resources#generating-resources https://www.youtube.com/watch?v=HOSDxHMiHLk\u0026list=PLFP7SbLMoK_Y5Gj8WzUuDLQFXT6uYanTe",
+          "url": "https://www.youtube.com/watch?v=HOSDxHMiHLk\u0026list=PLFP7SbLMoK_Y5Gj8WzUuDLQFXT6uYanTe"
+        },
+        {
+          "label": "This is what I use to setup gobuffalo on my linux distro mint.",
+          "url": "https://docs.google.com/document/d/1UXgh__H4aeKyGdMSwj1kOnvmvaYUhbJnNSUthdiUZ9k/edit?usp=sharing"
+        }
+      ]
+    },
+    {
+      "name": "My environment",
+      "entries": [
+        {
+          "label": "OS",
+          "url": "https://ubuntu.com/"
+        },
+        {
+          "label": "Editor",
+          "url": "https://code.visualstudio.com/"
+        },
+        {
+          "label": "Acme editor",
+          "url": "https://www.reddit.com/r/linux4noobs/comments/nkdvdg/acme_text_editor/"
+        },
+        {
+          "label": "Acme editor",
+          "url": "https://askubuntu.com/questions/388943/peazip-error-while-loading-shared-libraries-libx11-so-6"
+        }
+      ]
+    },
+    {
+      "name": "My generate code",
+      "entries": [
+        {
+          "label": "Generate a struct",
+          "url": "https://go.dev/play/p/v8XPMlW0kzb"
+        }
+      ]
+    }
+  ]
+}

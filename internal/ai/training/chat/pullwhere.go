@@ -56,8 +56,7 @@ func tryPullWhere(line string) (string, bool) {
 	if err != nil {
 		return fmt.Sprintf("Couldn't analyze %s/%s: %s", owner, repo, err), true
 	}
-	lastAnalyzeRoot = dir
-	lastAnalyzeProject = p
+	setCurrentProject(dir, p)
 	return renderPull(p, num, pr, files), true
 }
 

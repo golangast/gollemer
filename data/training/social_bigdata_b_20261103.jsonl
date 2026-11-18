@@ -1,0 +1,555 @@
+{"input": "Good morning friend", "output": "good morning to you too! are you ready for the day?", "domain": "social"}
+{"input": "morning friend", "output": "morning, friend! what are you looking forward to today?", "domain": "social"}
+{"input": "good morning there", "output": "good morning! i hope today treats you kindly. how are you?", "domain": "social"}
+{"input": "Good morning everyone", "output": "morning! a fresh start feels nice, doesn't it?", "domain": "social"}
+{"input": "morning everyone", "output": "good morning! did you have sweet dreams last night?", "domain": "social"}
+{"input": "good morning to you!", "output": "good morning! i hope you slept well. how are you today?", "domain": "social"}
+{"input": "a very good morning", "output": "morning! it is good to see you. did you sleep well?", "domain": "social"}
+{"input": "morning to you", "output": "good morning to you too! are you ready for the day?", "domain": "social"}
+{"input": "good morning, nice to see you!", "output": "morning, friend! what are you looking forward to today?", "domain": "social"}
+{"input": "Good morning, how are you", "output": "good morning! i hope today treats you kindly. how are you?", "domain": "social"}
+{"input": "morning, how did you sleep", "output": "morning! a fresh start feels nice, doesn't it?", "domain": "social"}
+{"input": "good morning, did you sleep well!", "output": "good morning! did you have sweet dreams last night?", "domain": "social"}
+{"input": "Morning, ready for the day", "output": "good morning! i hope you slept well. how are you today?", "domain": "social"}
+{"input": "good morning, it's a new day", "output": "morning! it is good to see you. did you sleep well?", "domain": "social"}
+{"input": "good morning, hope you slept well", "output": "good morning to you too! are you ready for the day?", "domain": "social"}
+{"input": "Morning, good to see you", "output": "morning, friend! what are you looking forward to today?", "domain": "social"}
+{"input": "hey, good morning", "output": "good morning! i hope today treats you kindly. how are you?", "domain": "social"}
+{"input": "hello, good morning!", "output": "morning! a fresh start feels nice, doesn't it?", "domain": "social"}
+{"input": "hi, good morning", "output": "good morning! did you have sweet dreams last night?", "domain": "social"}
+{"input": "good morning, sunshine", "output": "good morning! i hope you slept well. how are you today?", "domain": "social"}
+{"input": "morning, sunshine!", "output": "morning! it is good to see you. did you sleep well?", "domain": "social"}
+{"input": "Good morning, how was your night", "output": "good morning to you too! are you ready for the day?", "domain": "social"}
+{"input": "good morning, friend, how are you", "output": "morning, friend! what are you looking forward to today?", "domain": "social"}
+{"input": "rise and shine, good morning!", "output": "good morning! i hope today treats you kindly. how are you?", "domain": "social"}
+{"input": "Good morning, beautiful day ahead", "output": "morning! a fresh start feels nice, doesn't it?", "domain": "social"}
+{"input": "morning, hope your day starts well", "output": "good morning! did you have sweet dreams last night?", "domain": "social"}
+{"input": "good morning, sleepyhead", "output": "good morning! i hope you slept well. how are you today?", "domain": "social"}
+{"input": "Morning, did you dream well", "output": "morning! it is good to see you. did you sleep well?", "domain": "social"}
+{"input": "good morning, ready to start the day", "output": "good morning to you too! are you ready for the day?", "domain": "social"}
+{"input": "hello and good morning!", "output": "morning, friend! what are you looking forward to today?", "domain": "social"}
+{"input": "hi there, good morning", "output": "good morning! i hope today treats you kindly. how are you?", "domain": "social"}
+{"input": "good morning, glad you're here", "output": "morning! a fresh start feels nice, doesn't it?", "domain": "social"}
+{"input": "morning, glad to see you!", "output": "good morning! did you have sweet dreams last night?", "domain": "social"}
+{"input": "Good afternoon friend", "output": "good afternoon to you too! having a good day?", "domain": "social"}
+{"input": "afternoon friend", "output": "afternoon, friend! what have you been up to today?", "domain": "social"}
+{"input": "good afternoon there", "output": "good afternoon! hope the rest of your day goes well.", "domain": "social"}
+{"input": "Good afternoon everyone", "output": "good afternoon! how is your day going so far?", "domain": "social"}
+{"input": "good afternoon to you", "output": "afternoon! i hope your day has been kind to you.", "domain": "social"}
+{"input": "hey, good afternoon!", "output": "good afternoon to you too! having a good day?", "domain": "social"}
+{"input": "hello, good afternoon", "output": "afternoon, friend! what have you been up to today?", "domain": "social"}
+{"input": "hi, good afternoon", "output": "good afternoon! hope the rest of your day goes well.", "domain": "social"}
+{"input": "good afternoon, how is your day!", "output": "good afternoon! how is your day going so far?", "domain": "social"}
+{"input": "Good afternoon, nice to see you", "output": "afternoon! i hope your day has been kind to you.", "domain": "social"}
+{"input": "afternoon, how's your day going", "output": "good afternoon to you too! having a good day?", "domain": "social"}
+{"input": "good afternoon, hope your day is going well!", "output": "afternoon, friend! what have you been up to today?", "domain": "social"}
+{"input": "A very good afternoon to you", "output": "good afternoon! hope the rest of your day goes well.", "domain": "social"}
+{"input": "Good evening friend", "output": "good evening to you too! are you relaxing tonight?", "domain": "social"}
+{"input": "evening friend", "output": "evening, friend! what are you up to tonight?", "domain": "social"}
+{"input": "good evening there", "output": "good evening! hope you have a cozy evening ahead.", "domain": "social"}
+{"input": "Good evening everyone", "output": "evening! winding down for the day feels nice, right?", "domain": "social"}
+{"input": "good evening to you", "output": "good evening! how was your day today?", "domain": "social"}
+{"input": "hey, good evening!", "output": "evening! i hope your day went well. how are you?", "domain": "social"}
+{"input": "hello, good evening", "output": "good evening to you too! are you relaxing tonight?", "domain": "social"}
+{"input": "hi, good evening", "output": "evening, friend! what are you up to tonight?", "domain": "social"}
+{"input": "good evening, how was your day!", "output": "good evening! hope you have a cozy evening ahead.", "domain": "social"}
+{"input": "Good evening, nice to see you", "output": "evening! winding down for the day feels nice, right?", "domain": "social"}
+{"input": "evening, how was your day", "output": "good evening! how was your day today?", "domain": "social"}
+{"input": "good evening, how are you tonight!", "output": "evening! i hope your day went well. how are you?", "domain": "social"}
+{"input": "Evening, hope you had a good day", "output": "good evening to you too! are you relaxing tonight?", "domain": "social"}
+{"input": "a very good evening to you", "output": "evening, friend! what are you up to tonight?", "domain": "social"}
+{"input": "good evening, relaxing tonight", "output": "good evening! hope you have a cozy evening ahead.", "domain": "social"}
+{"input": "Evening, good to see you", "output": "evening! winding down for the day feels nice, right?", "domain": "social"}
+{"input": "good evening, friend, how was today", "output": "good evening! how was your day today?", "domain": "social"}
+{"input": "hello and good evening!", "output": "evening! i hope your day went well. how are you?", "domain": "social"}
+{"input": "hi there, good evening", "output": "good evening to you too! are you relaxing tonight?", "domain": "social"}
+{"input": "evening, winding down now", "output": "evening, friend! what are you up to tonight?", "domain": "social"}
+{"input": "good evening, glad you're here!", "output": "good evening! hope you have a cozy evening ahead.", "domain": "social"}
+{"input": "Evening, how's your night going", "output": "evening! winding down for the day feels nice, right?", "domain": "social"}
+{"input": "good evening, hope your evening is peaceful", "output": "good evening! how was your day today?", "domain": "social"}
+{"input": "hey there", "output": "hello, friend! what is new with you today?", "domain": "social"}
+{"input": "hi there", "output": "hi! it makes me happy to see you. what's up?", "domain": "social"}
+{"input": "hello there!", "output": "hey there! how have you been lately?", "domain": "social"}
+{"input": "yo", "output": "hello hello! what are we chatting about today?", "domain": "social"}
+{"input": "Hiya.", "output": "hi! good to see you. how's everything going?", "domain": "social"}
+{"input": "howdy", "output": "hello! it is so good to see you. how are you?", "domain": "social"}
+{"input": "hey friend", "output": "hi there! how are you doing today?", "domain": "social"}
+{"input": "Hello friend", "output": "hey! glad you're here. how is your day going?", "domain": "social"}
+{"input": "Hi friend.", "output": "hello, friend! what is new with you today?", "domain": "social"}
+{"input": "hey buddy", "output": "hi! it makes me happy to see you. what's up?", "domain": "social"}
+{"input": "hello buddy!", "output": "hey there! how have you been lately?", "domain": "social"}
+{"input": "Hey everyone", "output": "hello hello! what are we chatting about today?", "domain": "social"}
+{"input": "hello everyone", "output": "hi! good to see you. how's everything going?", "domain": "social"}
+{"input": "hi everyone", "output": "hello! it is so good to see you. how are you?", "domain": "social"}
+{"input": "hey you", "output": "hey! glad you're here. how is your day going?", "domain": "social"}
+{"input": "Hello you.", "output": "hello, friend! what is new with you today?", "domain": "social"}
+{"input": "hi, good to see you", "output": "hi! it makes me happy to see you. what's up?", "domain": "social"}
+{"input": "hello, good to see you", "output": "hey there! how have you been lately?", "domain": "social"}
+{"input": "Hey, good to see you", "output": "hello hello! what are we chatting about today?", "domain": "social"}
+{"input": "Hi, it's me.", "output": "hi! good to see you. how's everything going?", "domain": "social"}
+{"input": "hello, it's me again", "output": "hello! it is so good to see you. how are you?", "domain": "social"}
+{"input": "hey, i'm here!", "output": "hi there! how are you doing today?", "domain": "social"}
+{"input": "Hi hi", "output": "hey! glad you're here. how is your day going?", "domain": "social"}
+{"input": "hello hello", "output": "hello, friend! what is new with you today?", "domain": "social"}
+{"input": "hey hey", "output": "hi! it makes me happy to see you. what's up?", "domain": "social"}
+{"input": "hi, how's it going over there!", "output": "hey there! how have you been lately?", "domain": "social"}
+{"input": "hello, stranger", "output": "hello hello! what are we chatting about today?", "domain": "social"}
+{"input": "Hey, stranger.", "output": "hi! good to see you. how's everything going?", "domain": "social"}
+{"input": "hi, long time no talk", "output": "hello! it is so good to see you. how are you?", "domain": "social"}
+{"input": "hello, my friend", "output": "hi there! how are you doing today?", "domain": "social"}
+{"input": "Hey, my friend", "output": "hey! glad you're here. how is your day going?", "domain": "social"}
+{"input": "Hi there, friend.", "output": "hello, friend! what is new with you today?", "domain": "social"}
+{"input": "hello there, friend", "output": "hi! it makes me happy to see you. what's up?", "domain": "social"}
+{"input": "hey there, friend!", "output": "hey there! how have you been lately?", "domain": "social"}
+{"input": "Hi, glad to be here", "output": "hello hello! what are we chatting about today?", "domain": "social"}
+{"input": "hello, glad to see you", "output": "hi! good to see you. how's everything going?", "domain": "social"}
+{"input": "how are you doing", "output": "i'm doing really well! how are you doing?", "domain": "social"}
+{"input": "how are you doing today", "output": "pretty good today, thank you! how about you?", "domain": "social"}
+{"input": "how's it going", "output": "it's going well, thanks! how's it going with you?", "domain": "social"}
+{"input": "how is it going", "output": "going great, thank you! how are things on your end?", "domain": "social"}
+{"input": "what's up", "output": "not much, just happy to chat! what's up with you?", "domain": "social"}
+{"input": "how was your day", "output": "my day was nice, thank you! how was yours?", "domain": "social"}
+{"input": "how has your day been", "output": "it's been a good day so far! how has yours been?", "domain": "social"}
+{"input": "how do you feel today", "output": "i feel cheerful today, thanks! how do you feel?", "domain": "social"}
+{"input": "how do you feel", "output": "i feel well, thank you for asking! and you?", "domain": "social"}
+{"input": "are you doing okay", "output": "i am, thank you! are you doing okay too?", "domain": "social"}
+{"input": "are you okay", "output": "i'm okay, thanks for checking! how about you?", "domain": "social"}
+{"input": "how are things", "output": "things are good here! how are things with you?", "domain": "social"}
+{"input": "how's life", "output": "life is treating me well! how's life treating you?", "domain": "social"}
+{"input": "how have you been", "output": "i've been well, thanks! how have you been?", "domain": "social"}
+{"input": "how have you been lately", "output": "pretty good lately! how about you, how have you been?", "domain": "social"}
+{"input": "did you sleep well", "output": "i did, thank you! did you sleep well too?", "domain": "social"}
+{"input": "how did you sleep", "output": "i slept soundly, thanks! how did you sleep?", "domain": "social"}
+{"input": "are you tired", "output": "not too tired, thanks! are you feeling tired?", "domain": "social"}
+{"input": "are you having a good day", "output": "i am, thank you! are you having a good day too?", "domain": "social"}
+{"input": "how was your morning", "output": "it was a calm, nice morning! how was yours?", "domain": "social"}
+{"input": "how was your evening", "output": "it was a quiet, pleasant evening! how was yours?", "domain": "social"}
+{"input": "how was your night", "output": "my night was restful, thanks! how was yours?", "domain": "social"}
+{"input": "how's your day going", "output": "it's going nicely, thank you! how's yours going?", "domain": "social"}
+{"input": "how is your day going", "output": "really well so far! what about your day?", "domain": "social"}
+{"input": "how are you feeling", "output": "i'm feeling happy today! how are you feeling?", "domain": "social"}
+{"input": "how are you feeling today", "output": "i feel upbeat today, thanks! how about you?", "domain": "social"}
+{"input": "you doing okay", "output": "i'm doing okay, thank you! how are you holding up?", "domain": "social"}
+{"input": "how are you holding up", "output": "i'm holding up well, thanks! how about you?", "domain": "social"}
+{"input": "everything okay with you", "output": "everything's okay here, thanks! how about with you?", "domain": "social"}
+{"input": "is everything alright", "output": "everything is alright, thank you! is everything alright with you?", "domain": "social"}
+{"input": "how do you do", "output": "i do very well, thank you! how do you do?", "domain": "social"}
+{"input": "what's new", "output": "not much new here! what's new with you?", "domain": "social"}
+{"input": "what is new with you", "output": "same old happy things here! tell me what's new with you?", "domain": "social"}
+{"input": "how's everything", "output": "everything's going well, thanks! how's everything with you?", "domain": "social"}
+{"input": "how is everything going", "output": "everything is going smoothly! how is everything with you?", "domain": "social"}
+{"input": "are you well", "output": "i am well, thank you! are you well too?", "domain": "social"}
+{"input": "hope you're doing well", "output": "i am, thank you so much! i hope you're doing well too.", "domain": "social"}
+{"input": "i hope you are well", "output": "that's kind of you, i am well! how are you?", "domain": "social"}
+{"input": "how was your weekend", "output": "it was relaxing, thank you! how was your weekend?", "domain": "social"}
+{"input": "did you have a good day", "output": "i did, thank you! did you have a good day too?", "domain": "social"}
+{"input": "are you happy today", "output": "i am feeling happy today! are you happy today too?", "domain": "social"}
+{"input": "how's your mood today", "output": "my mood is bright today! how's your mood?", "domain": "social"}
+{"input": "what's going on", "output": "not too much, just enjoying the chat! what's going on with you?", "domain": "social"}
+{"input": "how have things been", "output": "things have been good, thanks! how have things been for you?", "domain": "social"}
+{"input": "are you feeling alright", "output": "i'm feeling alright, thank you! are you feeling alright?", "domain": "social"}
+{"input": "it's nice to meet you", "output": "the pleasure is mine! i hope we talk often.", "domain": "social"}
+{"input": "it is nice to meet you", "output": "thank you, it's wonderful to meet you as well!", "domain": "social"}
+{"input": "pleased to meet you", "output": "i'm pleased to meet you too! how are you today?", "domain": "social"}
+{"input": "glad to meet you", "output": "i'm glad to meet you too! what brings you here today?", "domain": "social"}
+{"input": "i'm new here", "output": "welcome! i'm so glad you came. how are you settling in?", "domain": "social"}
+{"input": "i am new here", "output": "welcome aboard! it's great to have you here.", "domain": "social"}
+{"input": "it's been a while", "output": "it has! i'm so happy you're back. what have you been up to?", "domain": "social"}
+{"input": "it has been a long time", "output": "far too long! tell me, how have you been?", "domain": "social"}
+{"input": "did you miss me", "output": "of course i did! it's not the same without you here.", "domain": "social"}
+{"input": "welcome back", "output": "thank you, it feels great to be back! how have you been?", "domain": "social"}
+{"input": "where have you been", "output": "oh, just here waiting for you! where have you been?", "domain": "social"}
+{"input": "good to see you again", "output": "it's good to see you again too! how have you been?", "domain": "social"}
+{"input": "nice to see you again", "output": "so nice to see you again! what's new with you?", "domain": "social"}
+{"input": "we meet again", "output": "we do, and i'm glad! how have you been since last time?", "domain": "social"}
+{"input": "it's good to be back", "output": "we're happy to have you back! how does it feel?", "domain": "social"}
+{"input": "bye bye", "output": "goodbye for now! i'll be here when you return.", "domain": "social"}
+{"input": "goodbye for now", "output": "bye! it was lovely talking with you.", "domain": "social"}
+{"input": "bye friend", "output": "goodbye! take care, and come back soon!", "domain": "social"}
+{"input": "goodbye friend", "output": "bye! it was lovely talking with you.", "domain": "social"}
+{"input": "see you soon", "output": "see you later! take care until then.", "domain": "social"}
+{"input": "see you tomorrow!", "output": "see you soon! i'll be looking forward to it.", "domain": "social"}
+{"input": "see you around", "output": "until next time! stay well, friend.", "domain": "social"}
+{"input": "catch you later", "output": "see you later! take care until then.", "domain": "social"}
+{"input": "talk to you later", "output": "until next time! stay well, friend.", "domain": "social"}
+{"input": "talk to you soon", "output": "see you later! take care until then.", "domain": "social"}
+{"input": "see you next time", "output": "until next time! stay well, friend.", "domain": "social"}
+{"input": "gotta go", "output": "okay, take care! come back and chat soon.", "domain": "social"}
+{"input": "i gotta go", "output": "alright, off you go! talk to you soon.", "domain": "social"}
+{"input": "I have to go", "output": "no problem, we'll talk again soon. take care!", "domain": "social"}
+{"input": "i need to go", "output": "okay, take care! come back and chat soon.", "domain": "social"}
+{"input": "i should get going", "output": "alright, off you go! talk to you soon.", "domain": "social"}
+{"input": "i have to go now", "output": "no problem, we'll talk again soon. take care!", "domain": "social"}
+{"input": "time to go", "output": "okay, take care! come back and chat soon.", "domain": "social"}
+{"input": "i'm heading out!", "output": "alright, off you go! talk to you soon.", "domain": "social"}
+{"input": "i am heading out", "output": "no problem, we'll talk again soon. take care!", "domain": "social"}
+{"input": "goodnight", "output": "good night! rest well, and see you tomorrow.", "domain": "social"}
+{"input": "good night friend", "output": "sleep tight! good night, friend.", "domain": "social"}
+{"input": "night night", "output": "good night! sleep well and dream sweetly.", "domain": "social"}
+{"input": "have a great day", "output": "thank you, take care too! hope your day goes wonderfully.", "domain": "social"}
+{"input": "have a good night", "output": "good night! rest well, and see you tomorrow.", "domain": "social"}
+{"input": "do you like pasta", "output": "yes, i love pasta! how do you like yours?", "domain": "social"}
+{"input": "do you like sushi", "output": "i really do! there is something so comforting about sushi.", "domain": "social"}
+{"input": "do you like burgers", "output": "i do! burgers is always a good idea. do you like it too?", "domain": "social"}
+{"input": "do you like salad", "output": "yes, i love salad! how do you like yours?", "domain": "social"}
+{"input": "do you like pancakes", "output": "i really do! there is something so comforting about pancakes.", "domain": "social"}
+{"input": "do you like waffles", "output": "i do! waffles is always a good idea. do you like it too?", "domain": "social"}
+{"input": "do you like cake", "output": "i really do! there is something so comforting about cake.", "domain": "social"}
+{"input": "do you like cookies", "output": "i do! cookies is always a good idea. do you like it too?", "domain": "social"}
+{"input": "do you like cheese", "output": "yes, i love cheese! how do you like yours?", "domain": "social"}
+{"input": "do you like bread", "output": "absolutely! bread never lets me down. is it a favorite of yours?", "domain": "social"}
+{"input": "do you like rice", "output": "i really do! there is something so comforting about rice.", "domain": "social"}
+{"input": "do you like chicken", "output": "i do! chicken is always a good idea. do you like it too?", "domain": "social"}
+{"input": "do you like noodles", "output": "yes, i love noodles! how do you like yours?", "domain": "social"}
+{"input": "do you like curry", "output": "absolutely! curry never lets me down. is it a favorite of yours?", "domain": "social"}
+{"input": "do you like sandwiches", "output": "i really do! there is something so comforting about sandwiches.", "domain": "social"}
+{"input": "i love pasta", "output": "same here! pasta always makes a meal better, doesn't it?", "domain": "social"}
+{"input": "i love tacos", "output": "yum, tacos is a great choice! do you have it often?", "domain": "social"}
+{"input": "i love sushi", "output": "me too! sushi is hard to beat. what do you love most about it?", "domain": "social"}
+{"input": "i love burgers", "output": "same here! burgers always makes a meal better, doesn't it?", "domain": "social"}
+{"input": "i love salad", "output": "yum, salad is a great choice! do you have it often?", "domain": "social"}
+{"input": "i love soup", "output": "me too! soup is hard to beat. what do you love most about it?", "domain": "social"}
+{"input": "i love pancakes", "output": "same here! pancakes always makes a meal better, doesn't it?", "domain": "social"}
+{"input": "i love waffles", "output": "yum, waffles is a great choice! do you have it often?", "domain": "social"}
+{"input": "i love chocolate", "output": "me too! chocolate is hard to beat. what do you love most about it?", "domain": "social"}
+{"input": "i love ice cream", "output": "same here! ice cream always makes a meal better, doesn't it?", "domain": "social"}
+{"input": "i love cake", "output": "yum, cake is a great choice! do you have it often?", "domain": "social"}
+{"input": "i love cookies", "output": "me too! cookies is hard to beat. what do you love most about it?", "domain": "social"}
+{"input": "i love cheese", "output": "same here! cheese always makes a meal better, doesn't it?", "domain": "social"}
+{"input": "i love bread", "output": "yum, bread is a great choice! do you have it often?", "domain": "social"}
+{"input": "do you like cooking", "output": "i do! cooking feels creative and relaxing. do you enjoy it?", "domain": "social"}
+{"input": "i love cooking", "output": "that's wonderful! cooking for yourself is such a kind habit. what do you make most?", "domain": "social"}
+{"input": "i like cooking at home", "output": "home cooking has a special warmth to it. what's your go-to meal?", "domain": "social"}
+{"input": "do you cook at home", "output": "whenever i can! home meals just taste better. do you cook much?", "domain": "social"}
+{"input": "i cooked dinner today", "output": "nice! there is something satisfying about a home-cooked dinner. what did you make?", "domain": "social"}
+{"input": "cooking is fun", "output": "it really is! it's like a little experiment every time. do you cook often?", "domain": "social"}
+{"input": "i'm learning to cook", "output": "that's a great skill to grow! be patient with yourself, it gets easier.", "domain": "social"}
+{"input": "i made soup today", "output": "fresh soup sounds so comforting! was it tasty?", "domain": "social"}
+{"input": "cooking takes too long", "output": "it can feel that way on busy days. simple meals still count, though!", "domain": "social"}
+{"input": "i don't like cooking", "output": "that's fair, not everyone does! do you have a favorite easy meal instead?", "domain": "social"}
+{"input": "i burned my toast", "output": "oh no, that happens to everyone! the next slice will be better.", "domain": "social"}
+{"input": "dinner is almost ready", "output": "exciting! the best part of cooking is almost here. what are you having?", "domain": "social"}
+{"input": "i enjoy trying new recipes", "output": "that's the spirit! new recipes keep cooking fun. tried anything good lately?", "domain": "social"}
+{"input": "do you have a favorite recipe", "output": "i love a simple home recipe shared with care. do you have one you treasure?", "domain": "social"}
+{"input": "cooking for friends is nice", "output": "it really is! sharing food is such a warm way to show you care.", "domain": "social"}
+{"input": "i cooked for my family", "output": "that's so thoughtful! family meals make the best memories, don't they?", "domain": "social"}
+{"input": "what should i cook tonight", "output": "something simple and comforting sounds perfect. what are you in the mood for?", "domain": "social"}
+{"input": "i need an easy dinner idea", "output": "a warm soup or a simple pasta always works. does that sound good?", "domain": "social"}
+{"input": "home cooked food is the best", "output": "i agree! it tastes like comfort and care in every bite.", "domain": "social"}
+{"input": "i made breakfast this morning", "output": "a home-made breakfast is a lovely start to the morning! what did you have?", "domain": "social"}
+{"input": "cooking makes the house smell great", "output": "it really does! a good smell makes a home feel cozy.", "domain": "social"}
+{"input": "i like cooking with music on", "output": "that makes it twice as fun! music turns cooking into a little party.", "domain": "social"}
+{"input": "my kitchen is a mess", "output": "a messy kitchen means good food happened! it'll clean up in no time.", "domain": "social"}
+{"input": "i forgot to buy groceries", "output": "that can happen to anyone! maybe there's something simple in the cupboard?", "domain": "social"}
+{"input": "fresh ingredients make a difference", "output": "they really do! fresh food just tastes brighter and better.", "domain": "social"}
+{"input": "i enjoy a slow cooked meal", "output": "slow meals are worth the wait, aren't they? so rich and comforting.", "domain": "social"}
+{"input": "do you cook every day", "output": "not every day, but often! do you cook most days?", "domain": "social"}
+{"input": "cooking together sounds fun", "output": "it does! cooking with someone turns a chore into a good time.", "domain": "social"}
+{"input": "i want to cook better", "output": "practice is the secret ingredient! one meal at a time, you'll get there.", "domain": "social"}
+{"input": "do you like baking", "output": "i love baking! the smell of something sweet in the oven is the best. do you bake?", "domain": "social"}
+{"input": "i love baking", "output": "baking is such a cozy hobby! what do you enjoy baking most?", "domain": "social"}
+{"input": "i baked cookies today", "output": "fresh cookies! i bet they smell amazing. did they turn out well?", "domain": "social"}
+{"input": "baking is relaxing", "output": "it really is. measuring, mixing, and waiting for something sweet to rise.", "domain": "social"}
+{"input": "i want to learn baking", "output": "you should! start with something simple and sweet, and enjoy the process.", "domain": "social"}
+{"input": "fresh bread smells amazing", "output": "nothing beats that smell! warm bread makes a house feel like home.", "domain": "social"}
+{"input": "i baked a cake", "output": "a home-baked cake is a real treat! was it for a special day?", "domain": "social"}
+{"input": "my cake turned out great", "output": "that's wonderful! all that care paid off. was it delicious?", "domain": "social"}
+{"input": "i love the smell of baking", "output": "me too! it's warm and sweet and full of good memories.", "domain": "social"}
+{"input": "baking takes patience", "output": "it does, but the waiting makes the first bite even better, doesn't it?", "domain": "social"}
+{"input": "i made muffins this morning", "output": "warm muffins in the morning sound perfect! what kind were they?", "domain": "social"}
+{"input": "i baked brownies", "output": "brownies are always a good idea! did you share them or keep them all?", "domain": "social"}
+{"input": "homemade pie is the best", "output": "it really is! a homemade pie tastes like love and patience.", "domain": "social"}
+{"input": "i like baking on weekends", "output": "weekend baking is a lovely ritual. it makes the whole house happy.", "domain": "social"}
+{"input": "my cookies were a hit", "output": "that's great to hear! a good cookie can brighten anyone's day.", "domain": "social"}
+{"input": "baking bread at home is fun", "output": "it is! kneading dough can be so calming, and the result is delicious.", "domain": "social"}
+{"input": "i burned the cookies a little", "output": "a little extra crisp never hurt! bakers learn from every batch.", "domain": "social"}
+{"input": "sweet treats make me happy", "output": "they have a way of doing that! a small treat can lift the whole day.", "domain": "social"}
+{"input": "i love warm cookies", "output": "warm cookies fresh from the oven are pure comfort, aren't they?", "domain": "social"}
+{"input": "dessert is my favorite part", "output": "you're not alone! dessert is the happy ending every meal deserves.", "domain": "social"}
+{"input": "do you like coffee", "output": "i do! a warm cup of coffee can make a morning feel complete. how do you take yours?", "domain": "social"}
+{"input": "i love coffee", "output": "coffee lovers unite! there's something special about that first sip, isn't there?", "domain": "social"}
+{"input": "i need coffee", "output": "sounds like a coffee kind of moment! a warm cup will fix you right up.", "domain": "social"}
+{"input": "coffee smells so good", "output": "it really does! that smell alone can wake up a whole room.", "domain": "social"}
+{"input": "do you like tea", "output": "i do! tea is so calming. do you have a favorite kind?", "domain": "social"}
+{"input": "i love tea", "output": "tea is such a gentle pleasure! do you drink it in the morning or evening?", "domain": "social"}
+{"input": "a cup of tea sounds nice", "output": "it really does. a warm cup of tea makes everything feel slower and softer.", "domain": "social"}
+{"input": "i drink tea every evening", "output": "that's a lovely ritual! evenings and tea go so well together.", "domain": "social"}
+{"input": "hot chocolate is comforting", "output": "it really is! hot chocolate is like a warm hug in a mug.", "domain": "social"}
+{"input": "do you prefer coffee or tea", "output": "that's a tough one! both have their moments. which do you prefer?", "domain": "social"}
+{"input": "i prefer tea over coffee", "output": "tea has such a calm charm! i can see why it's your pick.", "domain": "social"}
+{"input": "i prefer coffee over tea", "output": "coffee does have that bold, cheerful kick! a fine choice.", "domain": "social"}
+{"input": "i'm making some coffee", "output": "nice! the whole place will smell wonderful in a minute.", "domain": "social"}
+{"input": "tea makes me feel calm", "output": "tea has that gentle magic, doesn't it? a slow sip can settle the day.", "domain": "social"}
+{"input": "i had coffee with breakfast", "output": "coffee and breakfast are a classic pair! did you enjoy it?", "domain": "social"}
+{"input": "a warm drink sounds good", "output": "it really does right now. coffee, tea, or something sweet?", "domain": "social"}
+{"input": "i like lemonade on warm days", "output": "lemonade is so refreshing! sweet, tart, and perfect for a warm day.", "domain": "social"}
+{"input": "fresh juice is delicious", "output": "it is! fresh juice tastes bright and full of sunshine.", "domain": "social"}
+{"input": "i drink a lot of water", "output": "that's a healthy habit! water keeps everything feeling fresh.", "domain": "social"}
+{"input": "smoothies are tasty", "output": "they are! fruity, cool, and full of good things. what's your favorite blend?", "domain": "social"}
+{"input": "i love iced tea", "output": "iced tea is so refreshing! especially on a slow, warm afternoon.", "domain": "social"}
+{"input": "coffee in the morning is essential", "output": "morning coffee truly is essential for many people! the day doesn't start without it.", "domain": "social"}
+{"input": "herbal tea before bed is nice", "output": "that's a soothing way to end the day. does it help you sleep?", "domain": "social"}
+{"input": "i enjoy a good cup of cocoa", "output": "cocoa is pure comfort! perfect for a quiet, cozy moment.", "domain": "social"}
+{"input": "warm milk before bed sounds cozy", "output": "it does sound cozy! a gentle way to wind down for the night.", "domain": "social"}
+{"input": "i had pancakes for breakfast", "output": "pancakes are a happy breakfast! did you have them with syrup?", "domain": "social"}
+{"input": "breakfast is my favorite meal", "output": "breakfast fans are wise! a good morning meal sets the whole day right.", "domain": "social"}
+{"input": "i skipped breakfast today", "output": "oh no, mornings are better with a little fuel! maybe a snack will help?", "domain": "social"}
+{"input": "i love a big breakfast", "output": "a big breakfast is a celebration! eggs, toast, and all the good things.", "domain": "social"}
+{"input": "what's for lunch", "output": "something tasty, i hope! what are you craving today?", "domain": "social"}
+{"input": "i had a sandwich for lunch", "output": "a good sandwich never disappoints! simple and satisfying, right?", "domain": "social"}
+{"input": "lunch break is the best", "output": "it really is! a pause and a good meal make the afternoon easier.", "domain": "social"}
+{"input": "i'm hungry for lunch", "output": "lunch will taste even better then! what are you hoping for?", "domain": "social"}
+{"input": "what's for dinner", "output": "the best question of the day! what sounds good to you tonight?", "domain": "social"}
+{"input": "i had pasta for dinner", "output": "pasta for dinner is always a win! was it delicious?", "domain": "social"}
+{"input": "dinner with family is special", "output": "it really is. good food and family together make an ordinary day shine.", "domain": "social"}
+{"input": "i love dinner time", "output": "dinner time is the reward at the end of the day! what's cooking?", "domain": "social"}
+{"input": "i had soup for lunch", "output": "soup makes a warm, gentle lunch. did it hit the spot?", "domain": "social"}
+{"input": "eggs for breakfast are great", "output": "they are! eggs are simple, filling, and always satisfying.", "domain": "social"}
+{"input": "i had oatmeal this morning", "output": "oatmeal is such a warm, steady start to the morning! do you add fruit to yours?", "domain": "social"}
+{"input": "toast and jam is simple and good", "output": "simple pleasures are the best! toast and jam is a sweet little breakfast.", "domain": "social"}
+{"input": "i enjoy a quiet breakfast", "output": "a quiet breakfast is a gentle way to greet the day, isn't it?", "domain": "social"}
+{"input": "leftover pizza for breakfast is fun", "output": "ha, a classic move! cold pizza has its own special charm.", "domain": "social"}
+{"input": "a home cooked dinner beats everything", "output": "i agree! nothing quite matches a dinner made with care at home.", "domain": "social"}
+{"input": "i had a salad for lunch", "output": "a fresh salad is a bright, healthy choice! did you enjoy it?", "domain": "social"}
+{"input": "soup for dinner sounds cozy", "output": "it really does! soup and a quiet evening go hand in hand.", "domain": "social"}
+{"input": "i'm cooking dinner tonight", "output": "wonderful! cooking dinner is a kind way to end the day. what's on the menu?", "domain": "social"}
+{"input": "breakfast for dinner is fun", "output": "it really is! pancakes at night feel like a small celebration.", "domain": "social"}
+{"input": "i had fruit with my breakfast", "output": "fruit makes breakfast taste fresh and bright! a lovely choice.", "domain": "social"}
+{"input": "dinner smells wonderful", "output": "that smell is the best invitation! i hope it tastes as good as it smells.", "domain": "social"}
+{"input": "i love trying new lunch spots", "output": "that's a tasty adventure! finding a new favorite place is so fun.", "domain": "social"}
+{"input": "a warm lunch makes the day better", "output": "it truly does! warm food has a way of lifting your spirits.", "domain": "social"}
+{"input": "i packed my lunch today", "output": "well done! a home-packed lunch is both smart and satisfying.", "domain": "social"}
+{"input": "weekend brunch is the best", "output": "brunch is the weekend's gift to us all! slow, tasty, and unhurried.", "domain": "social"}
+{"input": "do you like eating out", "output": "sometimes! a nice meal out feels like a treat. do you have a favorite place?", "domain": "social"}
+{"input": "i love trying new restaurants", "output": "that's a delicious adventure! new places always have surprises on the menu.", "domain": "social"}
+{"input": "we went out for dinner", "output": "how lovely! eating out with good company is a real treat. was it tasty?", "domain": "social"}
+{"input": "the restaurant was crowded", "output": "busy places usually mean good food! was it worth the wait?", "domain": "social"}
+{"input": "i have a favorite restaurant", "output": "a favorite restaurant is like a trusted friend. what makes it special?", "domain": "social"}
+{"input": "eating out is a nice treat", "output": "it really is! someone else cooking feels like a small holiday.", "domain": "social"}
+{"input": "the food there was amazing", "output": "that's the best kind of meal out! what did you have?", "domain": "social"}
+{"input": "i like cozy little cafes", "output": "cozy cafes are the best! good food, warm light, and no rush at all.", "domain": "social"}
+{"input": "a cafe sounds nice right now", "output": "it really does. a warm drink and a quiet corner sound perfect.", "domain": "social"}
+{"input": "do you order takeout often", "output": "now and then! takeout is a cozy night in waiting to happen. do you?", "domain": "social"}
+{"input": "takeout night is my favorite", "output": "takeout night is pure relaxation! no cooking, no dishes, just good food.", "domain": "social"}
+{"input": "we ordered pizza last night", "output": "pizza night never fails! did everyone get their favorite topping?", "domain": "social"}
+{"input": "i enjoy street food", "output": "street food is such a tasty adventure! every bite feels full of life.", "domain": "social"}
+{"input": "a fancy dinner sounds fun", "output": "it does! dressing up and eating somewhere special feels like a celebration.", "domain": "social"}
+{"input": "the dessert menu looked amazing", "output": "dessert menus are dangerous in the best way! did you pick something sweet?", "domain": "social"}
+{"input": "i like restaurants with music", "output": "music makes a meal feel alive, doesn't it? it sets such a warm mood.", "domain": "social"}
+{"input": "good service makes a meal better", "output": "it truly does! kind service turns a good meal into a great memory.", "domain": "social"}
+{"input": "i found a new place to eat", "output": "how exciting! finding a new favorite spot is a small joy. how was it?", "domain": "social"}
+{"input": "eating with friends is the best", "output": "it really is! food tastes better when it's shared with friends.", "domain": "social"}
+{"input": "a picnic sounds lovely", "output": "a picnic is food plus sunshine! simple sandwiches taste amazing outside.", "domain": "social"}
+{"input": "i love snacking on popcorn", "output": "a perfect little treat! popcorn always hits the spot, doesn't it?", "domain": "social"}
+{"input": "i love snacking on pretzels", "output": "pretzels is such a happy snack! do you have it often?", "domain": "social"}
+{"input": "i love snacking on apple slices", "output": "yum, apple slices makes any break better. is it your favorite?", "domain": "social"}
+{"input": "i love snacking on trail mix", "output": "a perfect little treat! trail mix always hits the spot, doesn't it?", "domain": "social"}
+{"input": "i love snacking on crackers and cheese", "output": "crackers and cheese is such a happy snack! do you have it often?", "domain": "social"}
+{"input": "i love snacking on a granola bar", "output": "yum, a granola bar makes any break better. is it your favorite?", "domain": "social"}
+{"input": "i love snacking on yogurt", "output": "a perfect little treat! yogurt always hits the spot, doesn't it?", "domain": "social"}
+{"input": "i love snacking on a handful of nuts", "output": "a handful of nuts is such a happy snack! do you have it often?", "domain": "social"}
+{"input": "i'm craving something sweet", "output": "a sweet craving is hard to ignore! a little chocolate or fruit might help.", "domain": "social"}
+{"input": "i want a snack", "output": "snack time is a happy time! sweet or salty today?", "domain": "social"}
+{"input": "popcorn and a movie is perfect", "output": "a perfect pairing! movies were made for popcorn, weren't they?", "domain": "social"}
+{"input": "ice cream is the best dessert", "output": "many would agree! ice cream turns any day into a small celebration.", "domain": "social"}
+{"input": "chocolate makes everything better", "output": "it really does have that magic! a little chocolate lifts the whole mood.", "domain": "social"}
+{"input": "pizza is my comfort food", "output": "pizza is comfort in every slice! warm, cheesy, and always there for you.", "domain": "social"}
+{"input": "pasta is so comforting", "output": "it truly is. a warm bowl of pasta feels like a hug from the inside.", "domain": "social"}
+{"input": "dessert makes me happy", "output": "dessert has that power! what's your favorite sweet ending?", "domain": "social"}
+{"input": "i love a slice of pie", "output": "pie is such a classic comfort! what kind is your favorite?", "domain": "social"}
+{"input": "cookies and milk are classic", "output": "a timeless pair! some comforts never go out of style.", "domain": "social"}
+{"input": "a sweet snack sounds good", "output": "it does! a small sweet treat can turn a moment around.", "domain": "social"}
+{"input": "salty snacks are my weakness", "output": "salty snacks are sneaky like that! crunchy and hard to stop, right?", "domain": "social"}
+{"input": "i had ice cream today", "output": "lucky you! ice cream days are good days. what flavor did you pick?", "domain": "social"}
+{"input": "fresh fruit is a great snack", "output": "it really is! sweet, juicy, and good for you too.", "domain": "social"}
+{"input": "i enjoy a midnight snack", "output": "midnight snacks have a special mischievous charm, don't they?", "domain": "social"}
+{"input": "cake makes any day special", "output": "it really does! cake is basically happiness you can slice.", "domain": "social"}
+{"input": "i could eat pizza every day", "output": "you're in good company! pizza loyalty runs deep with many of us.", "domain": "social"}
+{"input": "i'm hungry", "output": "a hungry tummy needs attention! what sounds good to eat right now?", "domain": "social"}
+{"input": "i'm so hungry", "output": "oh no, that calls for a good meal soon! what are you craving?", "domain": "social"}
+{"input": "i'm thirsty", "output": "a cool drink will help! water, juice, or something fizzy?", "domain": "social"}
+{"input": "i am thirsty", "output": "time for a drink then! something cold and refreshing sounds perfect.", "domain": "social"}
+{"input": "i want to try new foods", "output": "that's adventurous! trying new foods is like traveling with your taste buds.", "domain": "social"}
+{"input": "trying new food is scary but fun", "output": "that's a brave and tasty mix! the fun usually wins, doesn't it?", "domain": "social"}
+{"input": "comfort food is the best", "output": "it really is. comfort food feels like a warm blanket for the heart.", "domain": "social"}
+{"input": "mac and cheese is my comfort food", "output": "a classic choice! creamy, warm, and impossible not to love.", "domain": "social"}
+{"input": "spicy food is exciting", "output": "it is! a little heat wakes up the whole meal. do you like it hot?", "domain": "social"}
+{"input": "i don't like spicy food", "output": "that's okay, mild food has its own gentle charms! everyone has their taste.", "domain": "social"}
+{"input": "sharing food is nice", "output": "sharing food is one of the warmest things we do, isn't it?", "domain": "social"}
+{"input": "i ate too much", "output": "that happens when food is good! a little rest will set you right.", "domain": "social"}
+{"input": "that meal was delicious", "output": "i'm so glad! a delicious meal can make the whole day feel better.", "domain": "social"}
+{"input": "i love a good home cooked meal", "output": "there's nothing quite like it! home cooking carries love in every bite.", "domain": "social"}
+{"input": "do you like rainy weather", "output": "i do! rainy days have a cozy rhythm, don't they?", "domain": "social"}
+{"input": "it's rainy today", "output": "oh really? rainy days have a cozy rhythm, don't they?", "domain": "social"}
+{"input": "i love sunny days", "output": "me too! sunny days lift everyone's mood, don't they?", "domain": "social"}
+{"input": "do you like sunny weather", "output": "yes, in its own way! sunny days lift everyone's mood, don't they?", "domain": "social"}
+{"input": "it's sunny today", "output": "oh really? sunny days lift everyone's mood, don't they?", "domain": "social"}
+{"input": "i love snowy days", "output": "me too! snowy days feel so quiet and magical, don't they?", "domain": "social"}
+{"input": "do you like snowy weather", "output": "i do! snowy days feel so quiet and magical, don't they?", "domain": "social"}
+{"input": "it's snowy today", "output": "oh really? snowy days feel so quiet and magical, don't they?", "domain": "social"}
+{"input": "i love windy days", "output": "me too! windy days make everything feel wild and alive, don't they?", "domain": "social"}
+{"input": "do you like windy weather", "output": "yes, in its own way! windy days make everything feel wild and alive, don't they?", "domain": "social"}
+{"input": "it's windy today", "output": "oh really? windy days make everything feel wild and alive, don't they?", "domain": "social"}
+{"input": "i love cloudy days", "output": "me too! cloudy days can feel calm and gentle, can't they?", "domain": "social"}
+{"input": "do you like cloudy weather", "output": "i do! cloudy days can feel calm and gentle, can't they?", "domain": "social"}
+{"input": "it's cloudy today", "output": "oh really? cloudy days can feel calm and gentle, can't they?", "domain": "social"}
+{"input": "i love stormy days", "output": "me too! stormy weather is dramatic, isn't it? best watched from somewhere cozy.", "domain": "social"}
+{"input": "do you like stormy weather", "output": "yes, in its own way! stormy weather is dramatic, isn't it? best watched from somewhere cozy.", "domain": "social"}
+{"input": "it's stormy today", "output": "oh really? stormy weather is dramatic, isn't it? best watched from somewhere cozy.", "domain": "social"}
+{"input": "i love foggy days", "output": "me too! foggy days feel mysterious and soft, don't they?", "domain": "social"}
+{"input": "do you like foggy weather", "output": "i do! foggy days feel mysterious and soft, don't they?", "domain": "social"}
+{"input": "it's foggy today", "output": "oh really? foggy days feel mysterious and soft, don't they?", "domain": "social"}
+{"input": "i love warm days", "output": "me too! warm days are made for being outside, aren't they?", "domain": "social"}
+{"input": "do you like warm weather", "output": "yes, in its own way! warm days are made for being outside, aren't they?", "domain": "social"}
+{"input": "it is warm today", "output": "oh really? warm days are made for being outside, aren't they?", "domain": "social"}
+{"input": "i love cool days", "output": "me too! cool days feel fresh and easy, don't they?", "domain": "social"}
+{"input": "do you like cool weather", "output": "i do! cool days feel fresh and easy, don't they?", "domain": "social"}
+{"input": "it is cool today", "output": "oh really? cool days feel fresh and easy, don't they?", "domain": "social"}
+{"input": "i love cold days", "output": "me too! cold days make warm blankets feel extra special, don't they?", "domain": "social"}
+{"input": "do you like cold weather", "output": "yes, in its own way! cold days make warm blankets feel extra special, don't they?", "domain": "social"}
+{"input": "it is cold today", "output": "oh really? cold days make warm blankets feel extra special, don't they?", "domain": "social"}
+{"input": "i love the rain", "output": "rain has such a soothing sound! do you like listening to it?", "domain": "social"}
+{"input": "rain makes me sleepy", "output": "rainy sounds are nature's lullaby! perfect for a cozy nap.", "domain": "social"}
+{"input": "i got caught in the rain", "output": "oh no! i hope you dried off somewhere warm and cozy.", "domain": "social"}
+{"input": "the rain finally stopped", "output": "that fresh after-rain feeling is lovely, isn't it? the air smells so clean.", "domain": "social"}
+{"input": "sunshine makes me happy", "output": "sunshine has that effect on everyone! it brightens more than the sky.", "domain": "social"}
+{"input": "the sun is shining today", "output": "wonderful! a sunny day is an invitation to smile, isn't it?", "domain": "social"}
+{"input": "i miss the sunshine", "output": "i understand! gray days make you appreciate the sun even more.", "domain": "social"}
+{"input": "snow makes everything quiet", "output": "it really does! snow wraps the world in a soft, peaceful blanket.", "domain": "social"}
+{"input": "i love watching snow fall", "output": "falling snow is so peaceful to watch. it never gets old, does it?", "domain": "social"}
+{"input": "snow days are the best", "output": "snow days feel like a surprise holiday! cozy inside or playing outside?", "domain": "social"}
+{"input": "the wind is strong today", "output": "hold on to your hat kind of day! windy days feel so alive.", "domain": "social"}
+{"input": "i like a gentle breeze", "output": "a soft breeze is one of the nicest feelings. it makes a day feel fresh.", "domain": "social"}
+{"input": "it's too hot today", "output": "hot days call for shade and something cold to drink! stay cool, friend.", "domain": "social"}
+{"input": "it's too cold today", "output": "brr, cold days need layers and warm drinks! hope you stay cozy.", "domain": "social"}
+{"input": "i love cold weather", "output": "cold weather has its charm! crisp air and cozy evenings, right?", "domain": "social"}
+{"input": "hot weather makes me tired", "output": "heat can really drain your energy! rest and cold drinks help a lot.", "domain": "social"}
+{"input": "the weather is nice today", "output": "lovely! nice weather makes even ordinary plans feel special.", "domain": "social"}
+{"input": "what a beautiful day", "output": "it sounds wonderful! beautiful days are meant to be enjoyed slowly.", "domain": "social"}
+{"input": "the weather keeps changing", "output": "it keeps us guessing, doesn't it? never a dull day with the weather.", "domain": "social"}
+{"input": "i hope it rains soon", "output": "rain can feel like a gift after dry days! everything smells fresh after.", "domain": "social"}
+{"input": "i hope it snows this year", "output": "a snowy day would be magical! there's something special about the first snow.", "domain": "social"}
+{"input": "cloudy days make me calm", "output": "clouds can feel like a soft blanket over the day. peaceful, isn't it?", "domain": "social"}
+{"input": "i don't like storms", "output": "storms can feel a little scary. it's nicer to be safe and cozy inside.", "domain": "social"}
+{"input": "thunder is so loud", "output": "it really booms, doesn't it? storms sure know how to get attention.", "domain": "social"}
+{"input": "lightning is amazing to watch", "output": "it is spectacular! nature putting on a light show, from a safe distance.", "domain": "social"}
+{"input": "a rainbow would be lovely", "output": "rainbows feel like a little promise after the rain, don't they?", "domain": "social"}
+{"input": "i saw a rainbow today", "output": "how lucky! rainbows never fail to make people stop and smile.", "domain": "social"}
+{"input": "the air feels fresh after rain", "output": "that clean, earthy smell is one of the best smells in the world.", "domain": "social"}
+{"input": "humid days are uncomfortable", "output": "they really are! sticky air makes everyone slow down a little.", "domain": "social"}
+{"input": "a clear sky is so pretty", "output": "clear skies feel wide open and hopeful, don't they? perfect for a walk.", "domain": "social"}
+{"input": "i love watching clouds", "output": "cloud watching is a gentle joy! every shape tells a little story.", "domain": "social"}
+{"input": "the sky looks stormy", "output": "dark skies have a dramatic beauty. hope you stay warm and dry!", "domain": "social"}
+{"input": "it feels like spring outside", "output": "that fresh, hopeful feeling is wonderful! everything waking up again.", "domain": "social"}
+{"input": "it feels like fall today", "output": "crisp air and cozy feelings! autumn days have a special golden mood.", "domain": "social"}
+{"input": "winter is coming", "output": "time for warm layers and hot drinks! winter has its own quiet beauty.", "domain": "social"}
+{"input": "i'm ready for warmer days", "output": "warmer days are worth looking forward to! sunshine makes everything easier.", "domain": "social"}
+{"input": "the first snow is magical", "output": "it really is! the world looks brand new under that first white blanket.", "domain": "social"}
+{"input": "i love the sound of rain at night", "output": "rain at night is the coziest sound. it makes sleep feel extra deep.", "domain": "social"}
+{"input": "a sunny morning is the best start", "output": "it really is! sunshine in the morning fills the whole day with energy.", "domain": "social"}
+{"input": "gray days make me slow", "output": "gray days invite us to rest a little. there's no shame in slowing down.", "domain": "social"}
+{"input": "i love spring", "output": "what a lovely favorite! spring has so much charm. what do you love about it?", "domain": "social"}
+{"input": "spring is my favorite season", "output": "spring is a wonderful season! it has a feeling all its own, doesn't it?", "domain": "social"}
+{"input": "i love summer", "output": "summer is a wonderful season! it has a feeling all its own, doesn't it?", "domain": "social"}
+{"input": "summer is my favorite season", "output": "great choice! summer brings such special days. is it your favorite?", "domain": "social"}
+{"input": "i love fall", "output": "great choice! fall brings such special days. is it your favorite?", "domain": "social"}
+{"input": "fall is my favorite season", "output": "what a lovely favorite! fall has so much charm. what do you love about it?", "domain": "social"}
+{"input": "i love winter", "output": "what a lovely favorite! winter has so much charm. what do you love about it?", "domain": "social"}
+{"input": "winter is my favorite season", "output": "winter is a wonderful season! it has a feeling all its own, doesn't it?", "domain": "social"}
+{"input": "i love autumn", "output": "autumn is a wonderful season! it has a feeling all its own, doesn't it?", "domain": "social"}
+{"input": "autumn is my favorite season", "output": "great choice! autumn brings such special days. is it your favorite?", "domain": "social"}
+{"input": "do you like autumn", "output": "i do! autumn always feels special. is it a favorite of yours?", "domain": "social"}
+{"input": "spring is so hopeful", "output": "it really is! everything blooming makes the world feel new again.", "domain": "social"}
+{"input": "summer days are the best", "output": "long sunny days and warm evenings! summer knows how to be joyful.", "domain": "social"}
+{"input": "fall colors are beautiful", "output": "they really are! the trees put on such a warm, golden show.", "domain": "social"}
+{"input": "autumn leaves are pretty", "output": "so pretty! crunchy leaves and golden light make autumn magical.", "domain": "social"}
+{"input": "winter nights are cozy", "output": "they are! warm lights, soft blankets, and nowhere to rush.", "domain": "social"}
+{"input": "i love spring flowers", "output": "spring flowers are little bursts of happiness! they make everyone smile.", "domain": "social"}
+{"input": "summer evenings are lovely", "output": "warm evenings with a gentle breeze are pure peace, aren't they?", "domain": "social"}
+{"input": "the leaves are falling", "output": "autumn is showing off! falling leaves make everything feel golden.", "domain": "social"}
+{"input": "spring rain smells fresh", "output": "it does! spring rain smells like new beginnings.", "domain": "social"}
+{"input": "i prefer summer over winter", "output": "summer warmth wins many hearts! long days make everything feel possible.", "domain": "social"}
+{"input": "i prefer winter over summer", "output": "winter has a quiet magic, doesn't it? cozy days are hard to beat.", "domain": "social"}
+{"input": "every season has something good", "output": "that's a lovely way to see it! each season brings its own gift.", "domain": "social"}
+{"input": "the seasons keep changing", "output": "they do, and each change brings something fresh to enjoy, doesn't it?", "domain": "social"}
+{"input": "fall is perfect for walks", "output": "it really is! cool air, pretty leaves, and a cozy sweater.", "domain": "social"}
+{"input": "spring cleaning feels good", "output": "a fresh start for the home! everything feels lighter afterward, doesn't it?", "domain": "social"}
+{"input": "summer is for ice cream", "output": "truly! ice cream and summer were made for each other.", "domain": "social"}
+{"input": "winter is for hot drinks", "output": "exactly! hot drinks taste twice as good when it's cold outside.", "domain": "social"}
+{"input": "i love the first day of spring", "output": "that first spring day feels like the world waking up smiling.", "domain": "social"}
+{"input": "long summer days are great", "output": "they are! extra daylight feels like a gift of extra life.", "domain": "social"}
+{"input": "short winter days are tough", "output": "they can be! warm lights and cozy plans help brighten them.", "domain": "social"}
+{"input": "i can't wait for the weekend", "output": "weekends are worth looking forward to! any fun plans?", "domain": "social"}
+{"input": "the weekend is almost here", "output": "so close! that almost-weekend feeling is a happy one, isn't it?", "domain": "social"}
+{"input": "weekends go by too fast", "output": "they really do! good days always seem to hurry, don't they?", "domain": "social"}
+{"input": "i love weekends", "output": "weekends are little holidays every week! how do you like spending yours?", "domain": "social"}
+{"input": "what are your weekend plans", "output": "something restful and fun, i hope! what are your plans?", "domain": "social"}
+{"input": "i had a great weekend", "output": "that's wonderful to hear! restful weekends make the whole week better.", "domain": "social"}
+{"input": "my weekend was relaxing", "output": "a relaxing weekend is the best kind! you must feel refreshed.", "domain": "social"}
+{"input": "tomorrow is a new day", "output": "it really is! tomorrow always brings a fresh chance and new hope.", "domain": "social"}
+{"input": "i'm looking forward to tomorrow", "output": "that's a lovely feeling! i hope tomorrow is kind to you.", "domain": "social"}
+{"input": "what does tomorrow bring", "output": "hopefully good things! what are you hoping for tomorrow?", "domain": "social"}
+{"input": "today went by so fast", "output": "it really can fly! good days and busy days both rush past, don't they?", "domain": "social"}
+{"input": "today feels long", "output": "some days do stretch on! a little rest can help the hours soften.", "domain": "social"}
+{"input": "time flies when you're having fun", "output": "it truly does! fun makes the clock disappear, doesn't it?", "domain": "social"}
+{"input": "time moves so slowly today", "output": "slow days happen! a good chat can help pass the time pleasantly.", "domain": "social"}
+{"input": "i wish the day was longer", "output": "more hours for good things would be nice! what would you do with them?", "domain": "social"}
+{"input": "the day is almost over", "output": "days slip by quickly! i hope yours had some good moments in it.", "domain": "social"}
+{"input": "a new week is starting", "output": "a fresh week feels like a clean page! what are you hoping for?", "domain": "social"}
+{"input": "mondays are hard", "output": "mondays ask a lot of us! a slow start and a good breakfast can help.", "domain": "social"}
+{"input": "fridays feel great", "output": "friday energy is the best! the weekend is right around the corner.", "domain": "social"}
+{"input": "i love lazy sundays", "output": "lazy sundays are a treasure! slow mornings and no rush at all.", "domain": "social"}
+{"input": "saturdays are for fun", "output": "they are! saturdays carry a special, free feeling, don't they?", "domain": "social"}
+{"input": "the week went by quickly", "output": "it does that! busy weeks vanish in a blink, don't they?", "domain": "social"}
+{"input": "i need a day off", "output": "everyone does sometimes! rest is important, not a reward you must earn.", "domain": "social"}
+{"input": "a quiet day sounds perfect", "output": "it really does. quiet days let the mind breathe again.", "domain": "social"}
+{"input": "busy days are tiring", "output": "they are! i hope you get a calm evening to recharge tonight.", "domain": "social"}
+{"input": "i had a busy day", "output": "busy days take a lot out of you! i hope you can rest now.", "domain": "social"}
+{"input": "my day was peaceful", "output": "a peaceful day is a gift! i'm glad it was gentle with you.", "domain": "social"}
+{"input": "i hope tomorrow is sunny", "output": "a sunny tomorrow would be lovely! fingers crossed for you.", "domain": "social"}
+{"input": "let's enjoy today", "output": "yes, let's! today has its own small gifts if we look for them.", "domain": "social"}
+{"input": "today is a good day", "output": "i'm so glad! good days deserve to be noticed and enjoyed.", "domain": "social"}
+{"input": "what day is it", "output": "i lose track too sometimes! the days all blend together, don't they?", "domain": "social"}
+{"input": "what day is it today", "output": "days have a way of sneaking up on us! i lose track myself.", "domain": "social"}
+{"input": "i forgot what day it is", "output": "you're not alone! busy weeks make the days blur together.", "domain": "social"}
+{"input": "the days all feel the same", "output": "they can blur together sometimes! a small new routine can help them stand apart.", "domain": "social"}
+{"input": "is it the weekend yet", "output": "almost, hang in there! the weekend will feel even better for the wait.", "domain": "social"}
+{"input": "time goes so fast", "output": "it really does! especially when the day is full of good things.", "domain": "social"}
+{"input": "i lost track of time", "output": "that happens when you're absorbed in something! was it something fun?", "domain": "social"}
+{"input": "the morning went by quickly", "output": "mornings can vanish in a blink! i hope it was a good one.", "domain": "social"}
+{"input": "the afternoon is dragging", "output": "some afternoons stretch forever! a stretch and a drink might help.", "domain": "social"}
+{"input": "evenings are my favorite time", "output": "evenings have a special calm! the day softens and slows down.", "domain": "social"}
+{"input": "i love quiet mornings", "output": "quiet mornings are a gentle gift. they make the day feel softer.", "domain": "social"}
+{"input": "the night feels peaceful", "output": "nights can feel so still and kind. perfect for resting the mind.", "domain": "social"}
+{"input": "i stayed up too late", "output": "late nights catch up with us! i hope you can rest well tonight.", "domain": "social"}
+{"input": "i woke up early today", "output": "early mornings have a special quiet! did you enjoy the head start?", "domain": "social"}
+{"input": "i slept in today", "output": "sleeping in is a small luxury! you must feel nice and rested.", "domain": "social"}
+{"input": "the day just started", "output": "a brand new day, full of chances! what are you hoping to do?", "domain": "social"}
+{"input": "it's getting late", "output": "the day is winding down! time to slow down and get cozy soon.", "domain": "social"}
+{"input": "another day another chance", "output": "that's the spirit! every day offers a fresh start, doesn't it?", "domain": "social"}
+{"input": "today feels like a fresh start", "output": "fresh starts feel wonderful! i hope the day treats you kindly.", "domain": "social"}
+{"input": "are you a morning person", "output": "i lean toward cheerful mornings! are you a morning person yourself?", "domain": "social"}
+{"input": "i am a morning person", "output": "morning people get the best quiet hours! do you enjoy early starts?", "domain": "social"}
+{"input": "i'm a morning person", "output": "that's a lovely trait! mornings feel full of promise, don't they?", "domain": "social"}
+{"input": "i'm not a morning person", "output": "that's completely fair! mornings can be rough. coffee helps, right?", "domain": "social"}
+{"input": "i am not a morning person", "output": "no shame in that! not everyone is a morning person, and some of us bloom later.", "domain": "social"}
+{"input": "are you a night owl", "output": "i do enjoy a peaceful night! are you a night owl too?", "domain": "social"}
+{"input": "i'm a night owl", "output": "night owls unite! the quiet hours have their own magic, don't they?", "domain": "social"}
+{"input": "i am a night owl", "output": "nights can feel so creative and calm! when do you finally sleep?", "domain": "social"}
+{"input": "i love staying up late", "output": "late nights feel free and quiet! just don't forget to rest well too.", "domain": "social"}
+{"input": "i go to bed early", "output": "early nights are a healthy habit! you must wake up feeling fresh.", "domain": "social"}
+{"input": "early mornings are peaceful", "output": "they really are! an early morning feels soft and quiet before the world wakes.", "domain": "social"}
+{"input": "i hate waking up early", "output": "early alarms are no fun! a slow, gentle start can help a little.", "domain": "social"}
+{"input": "waking up early is hard", "output": "it really is! the blanket always feels extra cozy in the morning.", "domain": "social"}
+{"input": "i feel awake at night", "output": "nights wake some of us up! the quiet must spark your energy.", "domain": "social"}
+{"input": "mornings are my favorite", "output": "mornings hold such fresh hope! a fine favorite to have.", "domain": "social"}
+{"input": "nights are my favorite", "output": "nights are calm and full of stars! a peaceful favorite, for sure.", "domain": "social"}
+{"input": "i need my morning coffee to wake up", "output": "coffee is the morning hero for many! does it do the trick?", "domain": "social"}
+{"input": "the early bird gets the worm", "output": "so they say! early risers do get a peaceful head start.", "domain": "social"}
+{"input": "i enjoy a slow morning", "output": "slow mornings are a luxury! no rush, just ease into the day.", "domain": "social"}
+{"input": "i rushed all morning", "output": "rushed mornings are exhausting! i hope the rest of your day slows down.", "domain": "social"}
+{"input": "a calm evening is the best", "output": "it really is! calm evenings wash the whole day away gently.", "domain": "social"}
+{"input": "i love watching the sunset", "output": "sunsets are nature's way of saying well done today, aren't they?", "domain": "social"}
+{"input": "sunrises are beautiful", "output": "they are! a sunrise feels like the world saying good morning with color.", "domain": "social"}
+{"input": "i feel sleepy in the afternoon", "output": "afternoon sleepiness visits us all! a short rest can work wonders.", "domain": "social"}
+{"input": "bedtime is my favorite time", "output": "there's something sweet about ending the day cozy and calm, isn't there?", "domain": "social"}

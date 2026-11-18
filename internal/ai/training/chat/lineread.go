@@ -241,7 +241,7 @@ func (r *LineReader) drawRaw(prompt string, buf []rune, pos int, prevRows int) i
 	if width < 10 {
 		width = 80
 	}
-	promptCells := len([]rune(prompt))
+	promptCells := visibleLen(prompt)
 	rows := (promptCells+len(buf))/width + 1
 
 	var sb strings.Builder

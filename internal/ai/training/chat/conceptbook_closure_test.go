@@ -1,0 +1,208 @@
+package chat
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// closureSeedProject builds the hostile fixture: a scratch
+// project whose jim/main.go main has already taken the routing
+// row, so its body holds a mux.HandleFunc closure and ends
+// with the routing template's trailing TODO comment — the
+// environment the type-switch bug needed.
+func closureSeedProject(t *testing.T) (string, *UserProfile) {
+	t.Helper()
+	dir := t.TempDir()
+	writeFile(t, dir, "go.mod", "module example.com/closure\n\ngo 1.21\n")
+	writeFile(t, dir, "main.go", "package main\n\nfunc main() {\n\tprintln(\"root\")\n}\n")
+	jim := filepath.Join(dir, "jim")
+	if err := os.MkdirAll(jim, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, jim, "main.go", "package main\n\nfunc main() {\n\tprintln(\"ok\")\n}\n")
+	withChatSession(t, dir, true)
+	profile := &UserProfile{}
+	var h bool
+	out := captureStdout(t, func() { h = claimChain("add routing in main to jim/main.go", yes, profile) })
+	if !h {
+		t.Fatalf("seed: routing line fell through the chain:\n%s", out)
+	}
+	if got := readBack(t, dir, "jim/main.go"); !strings.Contains(got, "mux.HandleFunc") {
+		t.Fatalf("seed: routing did not land its closure in jim/main.go:\n%s", got)
+	}
+	return dir, profile
+}
+
+// Regression pin for the type-switch inserter bug (found
+// 2026-10-31 by the main chat's live verification): a concept
+// STATEMENT added to a function whose body already contains a
+// closure was refused by the assembler's own containment check
+// ("main doesn't contain the statement after assembly") even
+// though the same statement lands fine in a fresh function.
+// The routing row is the natural seed: its template puts a
+// mux.HandleFunc closure inside main.
+func TestConceptStatementIntoClosureBody(t *testing.T) {
+	withPhrasingModel(t)
+	dir, profile := closureSeedProject(t)
+
+	var h2 bool
+	out2 := captureStdout(t, func() { h2 = claimChain("add a type switch in main to jim/main.go", yes, profile) })
+	if !h2 {
+		t.Fatalf("type switch line fell through the chain:\n%s", out2)
+	}
+	if strings.Contains(out2, "internal error in my assembler") {
+		t.Fatalf("type switch was refused by the assembler's self-check:\n%s", out2)
+	}
+	got := readBack(t, dir, "jim/main.go")
+	if !strings.Contains(got, "switch value.(type)") {
+		t.Fatalf("type switch did not land in jim/main.go:\n%s", got)
+	}
+	tsAt := strings.Index(got, "switch value.(type)")
+	muxAt := strings.Index(got, "mux.HandleFunc")
+	if tsAt < muxAt {
+		t.Fatalf("type switch landed before the routing code, want it at the end of main:\n%s", got)
+	}
+}
+
+// The class proof for the same bug: EVERY statement row in the
+// shipped book, one per fresh project seeded with the routing
+// landing (a closure in main, the body ending in the routing
+// template's trailing comment), must land and pass the spine's
+// build verification — the same bar the every-row walk sets in
+// a bare main, now in the hostile environment. The walk
+// iterates the book itself, so a statement row added tomorrow
+// is held to this too.
+//
+// One named exception: the routing row itself cannot be added
+// to a routing-seeded main — its template declares `mux :=`
+// and the seed already declares it, so the build honestly
+// rejects the duplicate. Its subtest seeds the closure with
+// the closure row instead (still a function body holding a
+// closure) and holds routing to the same landing+build bar
+// there.
+//
+// A second named exception: form-values, the first
+// handler-shaped statement — its template reads the request
+// a handler receives, so it can never land in main at all.
+// Its subtest seeds a HANDLER holding a closure (and ending
+// in a comment) and holds the row to the same landing+build
+// bar in its own habitat. The security sweep's three
+// handler-shaped statements (idor-check, secure-cookie,
+// body-limit — templates binding the request and/or the
+// response) take the same exception and the same seed.
+func TestConceptBookEveryStatementRowIntoClosureBody(t *testing.T) {
+	withPhrasingModel(t)
+	book := defaultBookEntries(t)
+	for _, entry := range book {
+		entry := entry
+		if entry.Kind != "statement" {
+			continue
+		}
+		t.Run(entry.ID, func(t *testing.T) {
+			var dir string
+			var profile *UserProfile
+			line := "add a " + entry.Names[0] + " to jim/main.go"
+			switch entry.ID {
+			case "gorqlite-query", "gorqlite-write":
+				// The gorqlite statements' habitat is the
+				// seeded closure project plus the offline
+				// dependency stub: the gate needs the
+				// requirement in go.mod and the build needs
+				// the import resolvable (database build,
+				// 2026-11-01).
+				var p *UserProfile
+				dir, p = closureSeedProjectGorqlite(t)
+				profile = p
+			case "routing":
+				// Alternate seed (see the comment above): the
+				// closure row lands a closure in main.
+				var p *UserProfile
+				dir, p = closureSeedProjectAlt(t)
+				profile = p
+			case "form-values", "idor-check", "secure-cookie", "body-limit":
+				// The handler-shaped statements (see the
+				// comment above): a handler holding a
+				// closure is their hostile environment.
+				var p *UserProfile
+				dir, p = closureSeedHandlerProject(t)
+				profile = p
+				line = "add a " + entry.Names[0] + " in ShowForm to jim/main.go"
+			default:
+				dir, profile = closureSeedProject(t)
+			}
+			if entry.ID == "database" {
+				// The bare sentence is the ambiguous-piece
+				// guidance's shape now (2026-11-01) — it
+				// answers and writes nothing — so the row
+				// is aimed with the explicit function
+				// context the guidance itself spells.
+				line = "add a database in main to jim/main.go"
+			}
+			var handled bool
+			out := captureStdout(t, func() { handled = claimChain(line, yes, profile) })
+			if !handled {
+				t.Fatalf("%q fell through the claim chain:\n%s", line, out)
+			}
+			if strings.Contains(out, "internal error in my assembler") {
+				t.Fatalf("row %s refused by the assembler's self-check:\n%s", entry.ID, out)
+			}
+			if !strings.Contains(out, "built the project and checked") {
+				t.Fatalf("row %s: spine build/verify not reported for %q:\n%s", entry.ID, line, out)
+			}
+			got := readBack(t, dir, "jim/main.go")
+			marker := conceptRowMarker(entry.Template)
+			if marker == "" || !strings.Contains(got, marker) {
+				t.Errorf("row %s: jim/main.go does not contain %q after %q:\n%s", entry.ID, marker, line, got)
+			}
+		})
+	}
+}
+
+// closureSeedHandlerProject seeds jim/main.go with a handler
+// whose body holds a closure and ends in a comment — the
+// hostile environment in the form-values row's own habitat,
+// used only by its matrix subtest (see above). The handler's
+// request parameter is named req, not r, on purpose: the
+// row's {request} slot must bind the real parameter name.
+func closureSeedHandlerProject(t *testing.T) (string, *UserProfile) {
+	t.Helper()
+	dir := t.TempDir()
+	writeFile(t, dir, "go.mod", "module example.com/closure\n\ngo 1.21\n")
+	writeFile(t, dir, "main.go", "package main\n\nfunc main() {\n\tprintln(\"root\")\n}\n")
+	jim := filepath.Join(dir, "jim")
+	if err := os.MkdirAll(jim, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, jim, "main.go", "package main\n\nimport \"net/http\"\n\nfunc main() {\n\tprintln(\"jim\")\n}\n\nfunc ShowForm(w http.ResponseWriter, req *http.Request) {\n\tgreet := func() {\n\t\t// TODO: what the closure does — it can use the variables around it\n\t}\n\t_ = greet\n\t// TODO: the form itself is shown here\n}\n")
+	withChatSession(t, dir, true)
+	profile := &UserProfile{}
+	return dir, profile
+}
+
+// closureSeedProjectAlt seeds jim/main.go's main with the
+// closure row instead of routing — used only by the routing
+// row's matrix subtest (see above).
+func closureSeedProjectAlt(t *testing.T) (string, *UserProfile) {
+	t.Helper()
+	dir := t.TempDir()
+	writeFile(t, dir, "go.mod", "module example.com/closure\n\ngo 1.21\n")
+	writeFile(t, dir, "main.go", "package main\n\nfunc main() {\n\tprintln(\"root\")\n}\n")
+	jim := filepath.Join(dir, "jim")
+	if err := os.MkdirAll(jim, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, jim, "main.go", "package main\n\nfunc main() {\n\tprintln(\"ok\")\n}\n")
+	withChatSession(t, dir, true)
+	profile := &UserProfile{}
+	var h bool
+	out := captureStdout(t, func() { h = claimChain("add a closure in main to jim/main.go", yes, profile) })
+	if !h {
+		t.Fatalf("alt seed: closure line fell through the chain:\n%s", out)
+	}
+	if got := readBack(t, dir, "jim/main.go"); !strings.Contains(got, "func(") {
+		t.Fatalf("alt seed: closure did not land in jim/main.go:\n%s", got)
+	}
+	return dir, profile
+}

@@ -48,7 +48,7 @@ var mechanismTable = []string{
 	"terminal", "binding",
 }
 
-var addWords = []string{"feature", "request", "add", "support", "would like", "proposal", "new"}
+var addWords = []string{"feature", "request", "add", "support", "would like", "proposal", "new", "expose"}
 var fixWords = []string{"bug", "fix", "broken", "fails", "failed", "error", "panic", "wrong", "incorrect"}
 
 // ExtractIssueConcepts reads a GitHub issue (title + body) and pulls out
@@ -159,6 +159,8 @@ func ExtractIssueConcepts(text string) IssueConcepts {
 		}
 		if fixes > adds {
 			c.Action = "fix"
+		} else if adds > 0 {
+			c.Action = "add"
 		}
 	}
 	return c

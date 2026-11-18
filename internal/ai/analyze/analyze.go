@@ -51,6 +51,37 @@ type Project struct {
 	// PatternLib is the cross-project pattern library, loaded lazily.
 	// It helps recognize patterns in unseen code.
 	PatternLib *PatternLibrary
+
+	// Variable data flow (varflow.go): generated files skipped by the
+	// flow index, and the site-level event/local indexes the dataflow
+	// questions answer from.
+	genFiles  map[string]bool
+	varEvents map[string][]varEvent
+	varLocals map[string][]*localVar
+	varSwept  bool
+	vidx      *varIndex
+
+	// noRefine skips the compiler-grade pass in BuildGraph, leaving the
+	// heuristic graph exactly as the heuristics built it. Set only by
+	// analyzeDir for the graph-measurement tests; production analysis
+	// always refines when it can.
+	noRefine bool
+
+	// Call-resolution indexes (methodset.go), built at the top of
+	// BuildGraph while declarations are still available: every named
+	// type by (dir, name), each type's own methods with receiver
+	// pointer-ness, the constructor table (New/New<Type> function ID
+	// -> struct it builds), and memoized promoted method sets.
+	typeByKey  map[typeKey]*Type
+	ownMethods map[typeKey][]ownMethod
+	ctorTable  map[string]*Type
+	ctorBuilds map[*Type]bool
+	setMemo    map[setKey]map[string]setHit
+	setBusy    map[setKey]bool
+}
+
+type typeKey struct {
+	dir, name string
 }
 
 // Package is one directory of Go source.
@@ -64,6 +95,7 @@ type Package struct {
 	Internal []string // imports that resolve to another project package
 	Funcs    []*Func
 	Types    []*Type
+	Vars     []*Var // package-level var/const declarations (varflow.go)
 	HasMain  bool
 	Tests    int // number of _test.go files
 
@@ -110,6 +142,7 @@ type Func struct {
 	decl *ast.FuncDecl  // kept during scan for call extraction, then dropped
 	fset *token.FileSet // shared with the scan; lets effects read positions
 	pkg  *Package
+	ctx  *resolveCtx // per-function call-resolution context (methodset.go), BuildGraph only
 }
 
 // Type is one named type declaration.
@@ -122,13 +155,38 @@ type Type struct {
 	Doc       string
 	Methods   []string // method names declared on it
 	Fields    []string // struct field names
-	ImplCount int      // interfaces only: heuristic implementer count
+	// FieldTypes/FieldLines give each struct field its declared type
+	// text and declaration line (fields live in the type's own file).
+	// Filled for struct types only; used by the dataflow answers.
+	FieldTypes map[string]string
+	FieldLines map[string]int
+	// Embeds lists the type's embedded fields (a struct's embedded
+	// types; an interface's embedded interfaces), in declaration
+	// order. Name is the embedded type's base name; TypeText is the
+	// declared text ("store.Base", "*Base", "Base[T]"). Filled for
+	// struct and interface types; drives method promotion in the
+	// heuristic call graph (methodset.go).
+	Embeds    []EmbedField
+	ImplCount int // interfaces only: heuristic implementer count
 	File      string
 	Line      int
 }
 
+// EmbedField is one embedded field of a struct or interface type.
+type EmbedField struct {
+	Name     string // embedded type's base name ("Base")
+	TypeText string // declared type text ("store.Base", "*Base")
+	Ptr      bool   // pointer embedding (*Base)
+}
+
 // Analyze reads the Go project rooted at dir and returns its structural map.
 func Analyze(dir string) (*Project, error) {
+	return analyzeDir(dir, false)
+}
+
+// analyzeDir is Analyze with the refinement switch exposed for tests:
+// noRefine leaves the call graph purely heuristic (see Project.noRefine).
+func analyzeDir(dir string, noRefine bool) (*Project, error) {
 	if strings.TrimSpace(dir) == "" {
 		return nil, fmt.Errorf("analyze: empty directory")
 	}
@@ -148,6 +206,7 @@ func Analyze(dir string) (*Project, error) {
 		byID:     map[string]*Func{},
 		byMethod: map[string][]*Func{},
 		byPkgDir: map[string]*Package{},
+		noRefine: noRefine,
 	}
 	p.Module = findModule(abs)
 	fset := token.NewFileSet()
@@ -233,6 +292,13 @@ func (p *Project) addFile(rel string, src *ast.File, fset *token.FileSet) {
 	}
 	pkg := p.pkgFor(dir, src.Name.Name)
 	pkg.Files = append(pkg.Files, rel)
+	generated := isGeneratedFile(src)
+	if generated {
+		if p.genFiles == nil {
+			p.genFiles = map[string]bool{}
+		}
+		p.genFiles[rel] = true
+	}
 	// Keep the most descriptive package doc: authors usually document
 	// the package in one file and leave the rest bare.
 	if d := docText(src.Doc); d != "" && len(d) > len(pkg.Doc) {
@@ -304,6 +370,16 @@ func (p *Project) addFile(rel string, src *ast.File, fset *token.FileSet) {
 			}
 		case *ast.GenDecl:
 			for _, spec := range d.Specs {
+				if vs, ok := spec.(*ast.ValueSpec); ok {
+					// Package-level variables and constants feed the
+					// dataflow index (varflow.go). Generated files are
+					// skipped: nobody asks where machine-written data
+					// comes from, and it would swamp the real sites.
+					if (d.Tok == token.VAR || d.Tok == token.CONST) && !generated {
+						p.addVarDecl(pkg, dir, rel, d.Tok == token.CONST, vs, fset)
+					}
+					continue
+				}
 				ts, ok := spec.(*ast.TypeSpec)
 				if !ok {
 					continue
@@ -322,9 +398,30 @@ func (p *Project) addFile(rel string, src *ast.File, fset *token.FileSet) {
 				case *ast.StructType:
 					t.Kind = "struct"
 					t.Fields = fieldNames(st.Fields)
+					t.FieldTypes = map[string]string{}
+					t.FieldLines = map[string]int{}
+					for _, f := range st.Fields.List {
+						ft := exprText(fset, f.Type)
+						for _, n := range f.Names {
+							t.FieldTypes[n.Name] = ft
+							t.FieldLines[n.Name] = fset.Position(n.Pos()).Line
+						}
+						if len(f.Names) == 0 {
+							if emb, ok := embedField(fset, f.Type); ok {
+								t.Embeds = append(t.Embeds, emb)
+							}
+						}
+					}
 				case *ast.InterfaceType:
 					t.Kind = "interface"
 					t.Methods = fieldNames(st.Methods)
+					for _, f := range st.Methods.List {
+						if len(f.Names) == 0 {
+							if emb, ok := embedField(fset, f.Type); ok {
+								t.Embeds = append(t.Embeds, emb)
+							}
+						}
+					}
 				}
 				pkg.Types = append(pkg.Types, t)
 			}
@@ -342,6 +439,7 @@ func (p *Project) finalize() {
 		sort.Slice(pkg.Types, func(i, j int) bool { return pkg.Types[i].Name < pkg.Types[j].Name })
 		for _, fn := range pkg.Funcs {
 			fn.decl = nil
+			fn.ctx = nil
 		}
 	}
 }
@@ -393,6 +491,18 @@ func exprName(e ast.Expr) string {
 		return t.Sel.Name
 	}
 	return ""
+}
+
+// embedField renders one embedded field's type expression: the base
+// name, the full declared text, and whether the embedding is by
+// pointer. Generic instantiations (Base[T], *Base[T]) unwrap to Base.
+func embedField(fset *token.FileSet, e ast.Expr) (EmbedField, bool) {
+	name := exprName(e)
+	if name == "" {
+		return EmbedField{}, false
+	}
+	_, ptr := e.(*ast.StarExpr)
+	return EmbedField{Name: name, TypeText: exprText(fset, e), Ptr: ptr}, true
 }
 
 // fieldNames collects declared field/method names from a field list.
