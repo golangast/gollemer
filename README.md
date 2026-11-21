@@ -158,6 +158,19 @@ checked pick answered 240 of 426 questions about combinations
 the model had never trained on, against the single reply's
 176, and 67 of 160 on the frozen test set, against 58.
 
+The social brain itself was retrained in November 2026 on a
+larger corpus — 26,792 conversation pairs, including a family
+of lines that name two topics at once. Measured on the fixed
+tests before it was adopted: 60 of 160 on the frozen set, 503
+of 576 on its own pack's held-out combinations, 326 of 426 on
+the previous pack's, and on two-topic lines it named both
+topics in 124 of 144 replies, where the plain model without
+the copy mechanism managed 22 of 144. Its one weak test was a
+set of lone held-out lines — 12 of 41, against 22 for the
+model it replaced — and it was adopted with that known. The
+model file is in the repo at
+`data/models/gob_models/real_tiny_seq2seq_layers_social.gob`.
+
 ### Ask what a project does
 
 ```

@@ -1,0 +1,72 @@
+{
+  "version": 2,
+  "seed": 20261112,
+  "layers": [
+    "copy"
+  ],
+  "tone_lexicon": {
+    "bright": [
+      "adore",
+      "amazing",
+      "awesome",
+      "cool",
+      "excited",
+      "fantastic",
+      "fine",
+      "fun",
+      "glad",
+      "good",
+      "great",
+      "happy",
+      "joy",
+      "love",
+      "lovely",
+      "neat",
+      "nice",
+      "pleased",
+      "wonderful"
+    ],
+    "low": [
+      "awful",
+      "bad",
+      "bored",
+      "cry",
+      "down",
+      "hurt",
+      "lonely",
+      "sad",
+      "sick",
+      "terrible",
+      "tired",
+      "unhappy"
+    ],
+    "worried": [
+      "anxious",
+      "butterflies",
+      "nervous",
+      "scared",
+      "stress",
+      "stressed",
+      "worried"
+    ]
+  },
+  "act_distribution": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "tone_distribution": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "top_code_census_pairs": null,
+  "act_family": null,
+  "class_sizes": null,
+  "fact_bearing_train_pairs": 0
+}
