@@ -1819,6 +1819,25 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if hook.run(func() bool { return tryGoroutineResult(line, reader) }) {
 			continue
 		}
+		// Function-edit sentences about an existing project
+		// function (funcedit.go): "remove the function named
+		// jake", "have the function jake return a string".
+		// Seated directly beside the goroutine-result piece,
+		// whose sibling shapes these are, ahead of the
+		// phrasing layer and the intent layer: John's live
+		// failure 2026-11-21 — the remove line fell to the
+		// talk brain and got a social greeting, the return
+		// line reached the [go] brain and got a lecture on
+		// string comparison. Neither operation has a landing
+		// in the composer, so the claim answers in the
+		// composer's voice — an honest decline naming the
+		// resolved function and its file. The claim is
+		// resolution-gated: a name that resolves nowhere in
+		// the project index declines silently, so no other
+		// line's fate changes.
+		if hook.run(func() bool { return tryFuncEdit(line, reader) }) {
+			continue
+		}
 		// The ambiguous-piece guidance's pre-book claim
 		// (ambiguouspiece.go): the bare ask "add a database
 		// to jake" is the concept book's own bare name for its

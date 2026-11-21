@@ -166,6 +166,9 @@ func claimChain(line string, ask editAsk, profile *UserProfile) bool {
 	if runGoroutineResult(line, ask) {
 		return true
 	}
+	if runFuncEdit(line, ask) {
+		return true
+	}
 	if runAmbiguousDatabase(line, ask) {
 		return true
 	}
