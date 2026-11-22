@@ -178,8 +178,11 @@ func TestMemoryCrossSessionRoundTripAndProjectIsolation(t *testing.T) {
 		t.Fatalf("the piece did not land:\n%s", out)
 	}
 	saved := finishMemorySession()
-	if !strings.Contains(saved, "I'll remember this session:") || !strings.Contains(saved, "Profile") {
-		t.Fatalf("session finish did not echo a summary naming the piece: %q", saved)
+	// The exit echo is one short line; the summary is stored
+	// in full (session B's recall below is the proof it kept
+	// the piece) but never read out whole.
+	if saved != "I'll remember this session." {
+		t.Fatalf("session finish echo = %q, want the one short line", saved)
 	}
 
 	// Session B: fresh in-process context, same project and

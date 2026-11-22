@@ -480,8 +480,12 @@ func sessionSummaryHasContent() bool {
 }
 
 // finishMemorySession stores the rolling summary for the
-// project it belongs to and returns the non-silent echo to
-// print on the way out. An empty session writes no summary.
+// project it belongs to and returns the echo to print on
+// the way out: one short line. The summary itself is
+// stored in full — it answers "what do you remember" next
+// time — but it is never read out whole, at exit any more
+// than at startup. An empty session writes no summary and
+// echoes nothing.
 func finishMemorySession() string {
 	if !sessionSummaryHasContent() {
 		return ""
@@ -502,7 +506,7 @@ func finishMemorySession() string {
 		return ""
 	}
 	resetShortTermMemory()
-	return "I'll remember this session: " + text + "."
+	return "I'll remember this session."
 }
 
 // ----- system state -----
