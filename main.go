@@ -36,17 +36,25 @@ func main() {
 	outFileFlag := flag.String("out", "data/training/understanding_pairs.jsonl", "Output file for -gen-understanding")
 	flag.Parse()
 
-	if !*trainRealSeq2SeqFlag && !*trainTransformerFlag && !*pretrainTransformerFlag && *testTransformerFlag == "" && !*trainLayersFlag && !*realChatFlag && *importPairsFlag == "" && !*reclassifyFlag && !*genUnderstandingFlag && *uexplainProbeFlag == "" && *watchFlag == "" && *buildHoldoutFlag == "" {
-		fmt.Fprintf(os.Stderr, "Usage: gollemer -train-real-seq2seq | gollemer -real-chat | gollemer -import-pairs=file.jsonl | gollemer -reclassify-domains | gollemer -gen-understanding\n")
-		os.Exit(1)
-	}
+	// A mode is chosen when any one of the mode flags is set.
+	modeChosen := *trainRealSeq2SeqFlag || *trainTransformerFlag ||
+		*pretrainTransformerFlag || *testTransformerFlag != "" ||
+		*trainLayersFlag || *realChatFlag || *importPairsFlag != "" ||
+		*reclassifyFlag || *genUnderstandingFlag || *uexplainProbeFlag != "" ||
+		*watchFlag != "" || *buildHoldoutFlag != ""
 
-	if *genUnderstandingFlag {
+	// The one mode that needs no project root goes first; with no
+	// mode at all, the usage line is the whole answer.
+	switch {
+	case *genUnderstandingFlag:
 		if err := runGenUnderstanding(*srcDirFlag, *outFileFlag); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 		return
+	case !modeChosen:
+		fmt.Fprintf(os.Stderr, "Usage: gollemer -train-real-seq2seq | gollemer -real-chat | gollemer -import-pairs=file.jsonl | gollemer -reclassify-domains | gollemer -gen-understanding\n")
+		os.Exit(1)
 	}
 
 	rootDir, err := os.Getwd()
@@ -55,16 +63,19 @@ func main() {
 		os.Exit(1)
 	}
 
-	if *buildHoldoutFlag != "" {
+	// The one-shot project modes. The case order is the priority
+	// order: when several mode flags are named together, the first
+	// matching case is the one that runs.
+	switch {
+	case *buildHoldoutFlag != "":
 		if err := chat.BuildCombinationHoldout(rootDir, *buildHoldoutFlag); err != nil {
 			fmt.Fprintf(os.Stderr, "combination holdout build failed: %v\n", err)
 			os.Exit(1)
 		}
 		fmt.Printf("combination holdout artifacts written to %s\n", *buildHoldoutFlag)
 		return
-	}
 
-	if *trainLayersFlag {
+	case *trainLayersFlag:
 		var layers []string
 		for _, name := range strings.Split(*layersFlag, ",") {
 			if name = strings.TrimSpace(name); name != "" {
@@ -81,17 +92,15 @@ func main() {
 			os.Exit(1)
 		}
 		return
-	}
 
-	if *uexplainProbeFlag != "" {
+	case *uexplainProbeFlag != "":
 		if err := chat.RunUexplainProbe(rootDir, *uexplainProbeFlag); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 		return
-	}
 
-	if *watchFlag != "" {
+	case *watchFlag != "":
 		chat.RunWatch(*watchFlag)
 		return
 	}
@@ -106,17 +115,21 @@ func main() {
 		log.Println()
 	}
 
-	if *trainRealSeq2SeqFlag {
-		if *domainFlag == chat.SpecCopyDomain {
+	// The training and chat modes, in the same priority order.
+	switch {
+	case *trainRealSeq2SeqFlag:
+		// The domain picks which trainer runs: three domains have
+		// a trainer of their own, everything else takes the
+		// production one.
+		switch *domainFlag {
+		case chat.SpecCopyDomain:
 			// The copy/pointer probe has its own trainer: same data and
 			// protocol as the spec domain, pointer-generator model.
 			if err := chat.RunSpecCopyTraining(rootDir, *resumeFlag); err != nil {
 				fmt.Fprintf(os.Stderr, "speccopy training failed: %v\n", err)
 				os.Exit(1)
 			}
-			return
-		}
-		if *domainFlag == chat.PhrasingDomain {
+		case chat.PhrasingDomain:
 			// The phrasing layer has its own trainer too: same
 			// pointer-generator protocol, its own data (messy ->
 			// canonical) and slot masking.
@@ -124,62 +137,60 @@ func main() {
 				fmt.Fprintf(os.Stderr, "phrasing training failed: %v\n", err)
 				os.Exit(1)
 			}
-			return
-		}
-		if *domainFlag == chat.Phrasing2Domain {
+		case chat.Phrasing2Domain:
 			// Phrasing attempt 2, arm A: v2 data, indexed-UNK
 			// masking, checkpoint selection by validation.
 			if err := chat.RunPhrasing2Training(rootDir, *resumeFlag); err != nil {
 				fmt.Fprintf(os.Stderr, "phrasing2 training failed: %v\n", err)
 				os.Exit(1)
 			}
-			return
-		}
-		if err := chat.RunRealSeq2SeqTrainingOpts(rootDir, *domainFlag, *resumeFlag, chat.RealTrainOptions{
-			AugmentMutations:  *augmentMutationsFlag,
-			MutationBlocklist: *mutationBlocklistFlag,
-		}); err != nil {
-			fmt.Fprintf(os.Stderr, "real training failed: %v\n", err)
-			os.Exit(1)
+		default:
+			if err := chat.RunRealSeq2SeqTrainingOpts(rootDir, *domainFlag, *resumeFlag, chat.RealTrainOptions{
+				AugmentMutations:  *augmentMutationsFlag,
+				MutationBlocklist: *mutationBlocklistFlag,
+			}); err != nil {
+				fmt.Fprintf(os.Stderr, "real training failed: %v\n", err)
+				os.Exit(1)
+			}
 		}
 		return
-	}
-	if *trainTransformerFlag {
+
+	case *trainTransformerFlag:
 		if err := chat.RunTransformerTraining(rootDir, *domainFlag, *resumeFlag); err != nil {
 			fmt.Fprintf(os.Stderr, "transformer training failed: %v\n", err)
 			os.Exit(1)
 		}
 		return
-	}
-	if *pretrainTransformerFlag {
+
+	case *pretrainTransformerFlag:
 		if err := chat.RunTransformerPretraining(rootDir, *resumeFlag); err != nil {
 			fmt.Fprintf(os.Stderr, "transformer pretraining failed: %v\n", err)
 			os.Exit(1)
 		}
 		return
-	}
-	if *testTransformerFlag != "" {
+
+	case *testTransformerFlag != "":
 		if err := chat.RunTransformerTest(rootDir, *domainFlag, *testTransformerFlag); err != nil {
 			fmt.Fprintf(os.Stderr, "transformer test failed: %v\n", err)
 			os.Exit(1)
 		}
 		return
-	}
-	if *realChatFlag {
+
+	case *realChatFlag:
 		if err := chat.RunRealChat(rootDir, *domainFlag, *debugChatFlag); err != nil {
 			fmt.Fprintf(os.Stderr, "real chat failed: %v\n", err)
 			os.Exit(1)
 		}
 		return
-	}
-	if *importPairsFlag != "" {
+
+	case *importPairsFlag != "":
 		if err := chat.RunImportChatPairs(rootDir, *importPairsFlag); err != nil {
 			fmt.Fprintf(os.Stderr, "import failed: %v\n", err)
 			os.Exit(1)
 		}
 		return
-	}
-	if *reclassifyFlag {
+
+	case *reclassifyFlag:
 		if err := chat.RunReclassifyDomains(rootDir); err != nil {
 			fmt.Fprintf(os.Stderr, "reclassify failed: %v\n", err)
 			os.Exit(1)
