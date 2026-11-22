@@ -1229,7 +1229,7 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 	if layersBrain != nil {
 		armTypoNormalizer(layersBrain.model.Base)
 	}
-	sp.Stop("Ready.")
+	sp.Stop("")
 	// Social recall: exact training-pair matches answer deterministically.
 	initSocialRecall(projectRoot)
 	initMakefileRecall(projectRoot)

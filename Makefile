@@ -41,7 +41,7 @@ guide:
 
 ## chat: Talk to gollemer — one session, 17 brains, routed per message
 chat:
-	$(MAIN_CMD) -real-chat -domain unified
+	@$(MAIN_CMD) -real-chat -domain unified
 
 # Watch a folder while you code: make watch DIR=~/myproject
 watch:
@@ -49,7 +49,7 @@ watch:
 
 ## debug-chat: Chat with the thought process and debug prints shown
 debug-chat:
-	$(MAIN_CMD) -real-chat -domain unified -debug-chat
+	@$(MAIN_CMD) -real-chat -domain unified -debug-chat
 
 ## classic: The full flag-driven pipeline CLI (pass ARGS, e.g. ARGS="-help")
 classic:
