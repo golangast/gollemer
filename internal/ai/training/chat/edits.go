@@ -448,14 +448,41 @@ func executeEditPlanChecked(req analyze.EditRequest, ask editAsk, extra editExtr
 	return true
 }
 
-// buildProject runs `go build ./...` at root — the spine's one
+// buildProject builds every package at root — the spine's one
 // build check, shared by the assembled edits, renames, and error
 // fixes. It returns the combined output and whether it passed.
+//
+// Each package is built on its own with its output discarded:
+// a bare `go build ./...` writes a real executable when the
+// project is a single main package, which both litters the
+// project with a stray binary and fails outright when a folder
+// shares the package's name (a folder jake/ holding package
+// main: `build output "jake" already exists and is a
+// directory`) — the exact layout a beginner's first project
+// most often has.
 func buildProject(root string) (string, bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "go", "build", "./...")
-	cmd.Dir = root
-	out, err := cmd.CombinedOutput()
-	return string(out), err == nil
+	list := exec.CommandContext(ctx, "go", "list", "./...")
+	list.Dir = root
+	listOut, err := list.Output()
+	if err != nil {
+		// The listing itself failed (no go.mod, a broken
+		// package): surface a plain build attempt's output
+		// instead, so the caller still sees the tool's own
+		// words for what is wrong.
+		cmd := exec.CommandContext(ctx, "go", "build", "./...")
+		cmd.Dir = root
+		out, berr := cmd.CombinedOutput()
+		return string(out), berr == nil
+	}
+	for _, pkg := range strings.Fields(string(listOut)) {
+		cmd := exec.CommandContext(ctx, "go", "build", "-o", os.DevNull, pkg)
+		cmd.Dir = root
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return string(out), false
+		}
+	}
+	return "", true
 }
