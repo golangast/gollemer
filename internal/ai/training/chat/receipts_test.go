@@ -326,10 +326,11 @@ func TestReceiptResumeAcrossSessions(t *testing.T) {
 	resetShortTermMemory()
 	line := beginMemorySession(root)
 	withChatSession(t, root, true)
-	for _, want := range []string{"Resumed from the build receipts", "Settings", "api/two.go", "api/one.go before it"} {
-		if !strings.Contains(line, want) {
-			t.Errorf("continuity line missing %q:\n%s", want, line)
-		}
+	// The restore is disclosed as ONE welcome line naming
+	// the working folder — never the inventory. The context
+	// assertions below are the restore's real proof.
+	if line != "Welcome back. Last time here we were working in api/ — say \"what have you built here\" if you want the list." {
+		t.Errorf("continuity line = %q, want the one-line welcome naming api/", line)
 	}
 	if workCtx.lastFile != "api/two.go" || workCtx.lastHow != "edited" || workCtx.prevFile != "api/one.go" ||
 		workCtx.folder != "api" || workCtx.pkg != "api" || workCtx.piece != "struct" || workCtx.pieceName != "Settings" {
@@ -405,13 +406,19 @@ func TestReceiptResumeStaleReferent(t *testing.T) {
 		t.Errorf("the other file resolved with only one live file in play")
 	}
 	line := beginMemorySession(root)
-	if !strings.Contains(line, "dropped api/two.go") {
-		t.Errorf("the drop was not disclosed:\n%s", line)
+	// The drop itself is silent now: the file leaves the
+	// restored context (asserted above) without being
+	// enumerated in the spoken line.
+	if strings.Contains(line, "api/two.go") || strings.Contains(line, "dropped") {
+		t.Errorf("the drop was narrated at startup:\n%s", line)
+	}
+	if line != "Welcome back. Last time here we were working in api/ — say \"what have you built here\" if you want the list." {
+		t.Errorf("continuity line = %q, want the one-line welcome naming api/", line)
 	}
 
 	// Every file gone: no file referent restores — only the
 	// folder receipt's context (the folder itself still
-	// exists) — and the drops are still the disclosure.
+	// exists) — and the spoken line stays the one welcome.
 	if err := os.Remove(filepath.Join(root, "api", "one.go")); err != nil {
 		t.Fatal(err)
 	}
@@ -421,8 +428,39 @@ func TestReceiptResumeStaleReferent(t *testing.T) {
 	if workCtx.lastFile != "" || workCtx.prevFile != "" || workCtx.landed != nil {
 		t.Errorf("a ghost context restored: %+v", workCtx)
 	}
-	if !strings.Contains(receiptResumePending.text, "dropped api/one.go, api/two.go") {
-		t.Errorf("all-stale disclosure = %q", receiptResumePending.text)
+	if receiptResumePending.text != "Welcome back. Last time here we were working in api/ — say \"what have you built here\" if you want the list." {
+		t.Errorf("all-stale spoken line = %q", receiptResumePending.text)
+	}
+}
+
+// Everything gone — folder included: nothing restores, and
+// the spoken line is the fresh-start welcome, with no file
+// ever named in it.
+func TestReceiptResumeAllGoneStartsFresh(t *testing.T) {
+	isolateReceiptStore(t)
+	root := seedCtxProject(t)
+	withChatSession(t, root, true)
+	t.Chdir(root)
+	profile := &UserProfile{}
+	for _, line := range []string{
+		"create a folder api",
+		"create file api/one.go",
+	} {
+		if handled, out := ctxRun(t, line, yes, profile); !handled {
+			t.Fatalf("setup line %q fell through:\n%s", line, out)
+		}
+	}
+	if err := os.RemoveAll(filepath.Join(root, "api")); err != nil {
+		t.Fatal(err)
+	}
+	resetWorkContext()
+	resetShortTermMemory()
+	line := beginMemorySession(root)
+	if line != "Welcome back. The pieces from last time aren't in the project anymore, so we're starting fresh here." {
+		t.Errorf("continuity line = %q, want the fresh-start welcome", line)
+	}
+	if workCtx.lastFile != "" || workCtx.lastKind != "" {
+		t.Errorf("a ghost context restored: %+v", workCtx)
 	}
 }
 

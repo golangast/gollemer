@@ -187,8 +187,14 @@ func TestMemoryCrossSessionRoundTripAndProjectIsolation(t *testing.T) {
 	resetWorkContext()
 	withChatSession(t, root, true)
 	line := beginMemorySession(root)
-	if !strings.HasPrefix(line, "Last time here: ") || !strings.Contains(line, "Profile") {
-		t.Fatalf("continuity line = %q, want the stored summary naming Profile", line)
+	// Startup speech is the one-line welcome now: the stored
+	// summary is loaded (and answers "what do you remember",
+	// asserted below) but never read out whole at startup.
+	if line != "Welcome back. Last time here we were working in this project — say \"what have you built here\" if you want the list." {
+		t.Fatalf("continuity line = %q, want the one-line welcome", line)
+	}
+	if strings.Contains(line, "Profile") {
+		t.Fatalf("continuity line read the stored summary out loud: %q", line)
 	}
 	handled, out = memoryAsk(t, NewConversation(), "what do you remember")
 	if !handled || !strings.Contains(out, "I prefer small functions") || !strings.Contains(out, "Profile") {

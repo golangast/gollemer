@@ -549,10 +549,10 @@ func recordCreateFolderReceipt(root string, item createItem) {
 
 // ----- resume ----------------------------------------------------------------
 
-// receiptResumeState is the pending continuity disclosure
-// for a context restored from receipts: what was restored,
-// held until beginMemorySession speaks it, once per root
-// per process (receiptResumeAnnounced).
+// receiptResumeState is the pending one-line welcome for
+// a context restored from receipts, held until
+// beginMemorySession speaks it, once per root per process
+// (receiptResumeAnnounced).
 type receiptResumeState struct {
 	root string
 	text string
@@ -658,12 +658,14 @@ func restoreWorkContextFromReceipts(rootAbs string) {
 	}
 	if restored.lastFile == "" && restored.lastKind == "" {
 		// Everything the receipts named is gone: restore
-		// nothing, but still disclose the drop.
+		// nothing. The spoken line says only that we're
+		// starting fresh — the dropped files are bookkeeping,
+		// not conversation, so they are never enumerated
+		// at startup.
 		if len(stale) > 0 {
 			receiptResumePending = receiptResumeState{
 				root: root,
-				text: "I found build receipts here, but dropped " + strings.Join(stale, ", ") +
-					" from the restored context — " + stalePronoun(len(stale)) + " not in the project anymore, and I won't resolve against what's gone.",
+				text: "Welcome back. The pieces from last time aren't in the project anymore, so we're starting fresh here.",
 			}
 		}
 		return
@@ -674,46 +676,22 @@ func restoreWorkContextFromReceipts(rootAbs string) {
 	for _, desc := range builtDescs {
 		noteSessionBuilt(root, desc)
 	}
-	receiptResumePending = receiptResumeState{root: root, text: receiptResumeText(restored, stale)}
+	receiptResumePending = receiptResumeState{root: root, text: receiptResumeText(restored)}
 }
 
-func stalePronoun(n int) string {
-	if n == 1 {
-		return "it's"
+// receiptResumeText renders the ONE spoken line for a
+// restored context. The restore itself is unchanged — the
+// full context (last file, previous file, the landed
+// snapshot) is picked back up silently, and the full
+// inventory stays where it belongs: behind "what have you
+// built here". Startup speech is a welcome and a pointer,
+// never the ledger, and files dropped because the disk no
+// longer holds them are never enumerated out loud.
+func receiptResumeText(c workContext) string {
+	if c.folder != "" && c.folder != "." {
+		return fmt.Sprintf("Welcome back. Last time here we were working in %s/ — say \"what have you built here\" if you want the list.", c.folder)
 	}
-	return "they're"
-}
-
-// receiptResumeText renders the disclosure for a restored
-// context: what the session picked back up, and what it
-// dropped because the disk no longer holds it.
-func receiptResumeText(c workContext, stale []string) string {
-	var main string
-	switch {
-	case c.lastKind == "folder" && c.lastFile != "":
-		main = fmt.Sprintf("the working folder is %s, and the last piece was %s in %s", c.folder, receiptPieceDesc(c.piece, c.pieceName), c.lastFile)
-	case c.lastKind == "folder":
-		main = fmt.Sprintf("the working folder is %s", c.folder)
-	case c.piece != "":
-		main = fmt.Sprintf("the last piece was %s in %s (%s)", receiptPieceDesc(c.piece, c.pieceName), c.lastFile, c.lastHow)
-	default:
-		main = fmt.Sprintf("the last file worked on was %s (%s)", c.lastFile, c.lastHow)
-	}
-	if c.prevFile != "" && c.lastKind == "file" {
-		main += fmt.Sprintf(", with %s before it", c.prevFile)
-	}
-	text := "Resumed from the build receipts: " + main + "."
-	if len(stale) > 0 {
-		text += fmt.Sprintf(" I dropped %s from that context — %s not in the project anymore.", strings.Join(stale, ", "), stalePronoun(len(stale)))
-	}
-	return text
-}
-
-func receiptPieceDesc(piece, name string) string {
-	if name == "" {
-		return "the " + piece
-	}
-	return "the " + piece + " " + name
+	return "Welcome back. Last time here we were working in this project — say \"what have you built here\" if you want the list."
 }
 
 // receiptResumeLine speaks the pending restore disclosure,

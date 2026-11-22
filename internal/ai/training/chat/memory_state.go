@@ -350,12 +350,16 @@ func latestLongTermSummary(p *longTermProjectMemory) (longTermSessionSummary, bo
 
 // beginMemorySession loads this project's slice and returns
 // the one continuity line for a previous session, once per
-// root in this process: the stored prose summary when one
-// exists, extended with the receipt-resume disclosure when
-// this session restored its work context from the landing
-// receipts (receipts.go) — what was picked back up, named,
-// and what was dropped because the disk no longer holds
-// it. Neither, no line.
+// root in this process. The loading is the point — the
+// stored summary and the receipt-restored work context
+// (receipts.go) both come back in full, silently. What is
+// SPOKEN is one short welcome line with a pointer to the
+// question that holds the details: the receipt line when
+// the receipts restored a context, else a plain welcome
+// when only a stored summary exists. Neither, no line.
+// The full summary and the full build inventory are never
+// read out at startup; they answer on demand ("what do
+// you remember", "what have you built here").
 func beginMemorySession(root string) string {
 	root = canonicalMemoryRoot(root)
 	if root == "" {
@@ -364,28 +368,29 @@ func beginMemorySession(root string) string {
 	// The continuity line is printed at chat startup, which
 	// can precede the first project read that would restore
 	// the work context — restore here too (context only,
-	// never an effect) so the resume disclosure is part of
-	// the line it belongs to. A live context is untouched.
+	// never an effect) so the resume line is part of the
+	// line it belongs to. A live context is untouched.
 	if !workContextLive(root) {
 		restoreWorkContextFromReceipts(root)
 	}
 	_, p := loadMemorySlice(root)
-	summary := ""
+	hasSummary := false
 	if !memoryRecall.announced[root] {
-		if s, ok := latestLongTermSummary(p); ok {
-			memoryRecall.announced[root] = true
-			summary = "Last time here: " + s.Text
+		if _, ok := latestLongTermSummary(p); ok {
+			hasSummary = true
 		}
 	}
-	resume := receiptResumeLine(root)
-	switch {
-	case summary != "" && resume != "":
-		return summary + " " + resume
-	case resume != "":
-		return "Last time here: " + resume
-	default:
-		return summary
+	if resume := receiptResumeLine(root); resume != "" {
+		if hasSummary {
+			memoryRecall.announced[root] = true
+		}
+		return resume
 	}
+	if hasSummary {
+		memoryRecall.announced[root] = true
+		return "Welcome back. Last time here we were working in this project — say \"what do you remember\" if you want the details."
+	}
+	return ""
 }
 
 func memoryContextText(root string) string {
