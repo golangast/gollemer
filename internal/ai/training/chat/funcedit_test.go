@@ -1,274 +1,422 @@
 package chat
 
-// The function-edit catch's pins: the grammar's claims and
-// declines, and the session behaviour — John's two stolen
-// lines (2026-11-21) landing project-side in the composer's
-// voice, questions about a function keeping their brains, an
-// unresolvable name falling through untouched, the ambiguous
-// name asking which one, and the file-delete refusal the
-// catch was modelled on staying byte-identical.
+// The function-edit claim (funcedit.go): the two live
+// failures from John's 2026-11-21 session. "remove the
+// function named jake" — a project sentence about a
+// function created minutes earlier — fell through every
+// claim to the talk brain, which answered a social
+// greeting; "have the function jake return a string"
+// reached the [go] brain and got a lecture on string
+// comparison. Both operations are real landings now,
+// planned in the analyzer (editfuncedit.go) and carried by
+// the write spine: these tests pin the LANDINGS end to end
+// (gate yes writes and builds, gate no writes nothing, the
+// plan warns about callers, main is refused at plan time,
+// the conservative change-return refusals hold, a failed
+// build restores the file byte-identical and writes no
+// receipt), the gate discipline (an unresolved name falls
+// through silently, a question is never claimed), the
+// ambiguity question (which now lands after the pick), and
+// the neighbouring file-delete refusal byte-for-byte —
+// removing a function lands; removing a FILE is still the
+// user's alone.
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
-func TestParseFuncEditClaims(t *testing.T) {
-	cases := []struct {
-		line string
-		want funcEditRequest
-	}{
-		{"remove the function named jake",
-			funcEditRequest{kind: funcEditRemove, name: "jake"}},
-		{"delete the function jake",
-			funcEditRequest{kind: funcEditRemove, name: "jake"}},
-		{"remove function jake",
-			funcEditRequest{kind: funcEditRemove, name: "jake"}},
-		{"remove the function jake from jake/main.go",
-			funcEditRequest{kind: funcEditRemove, name: "jake", file: "jake/main.go"}},
-		{"delete func jake in jim/main.go",
-			funcEditRequest{kind: funcEditRemove, name: "jake", file: "jim/main.go"}},
-		{"can you remove the function named jake",
-			funcEditRequest{kind: funcEditRemove, name: "jake"}},
-		{"please delete the function named jake.",
-			funcEditRequest{kind: funcEditRemove, name: "jake"}},
-		{"have the function jake return a string",
-			funcEditRequest{kind: funcEditReturn, name: "jake", typ: "string"}},
-		{"make jake return a string",
-			funcEditRequest{kind: funcEditReturn, name: "jake", typ: "string"}},
-		{"change the function jake to return a string",
-			funcEditRequest{kind: funcEditReturn, name: "jake", typ: "string"}},
-		{"jake should return a string",
-			funcEditRequest{kind: funcEditReturn, name: "jake", typ: "string"}},
-		{"have jake return an int",
-			funcEditRequest{kind: funcEditReturn, name: "jake", typ: "int"}},
-		{"make the function jake return a Point",
-			funcEditRequest{kind: funcEditReturn, name: "jake", typ: "Point"}},
-		{"have the function jake return a time.Duration",
-			funcEditRequest{kind: funcEditReturn, name: "jake", typ: "time.Duration"}},
-		{"have the function Store.Save return a string",
-			funcEditRequest{kind: funcEditReturn, name: "Store.Save", typ: "string"}},
-		{"could you have the function jake return a bool?",
-			funcEditRequest{kind: funcEditReturn, name: "jake", typ: "bool"}},
-	}
-	for _, tc := range cases {
-		got, ok := parseFuncEdit(tc.line)
-		if !ok {
-			t.Errorf("%q did not claim", tc.line)
-			continue
-		}
-		if got != tc.want {
-			t.Errorf("%q = %+v, want %+v", tc.line, got, tc.want)
-		}
-	}
+// funcEditJakeRoot is John's test shape: a module whose
+// jake/main.go holds func jake beside func main.
+var funcEditJakeRoot = map[string]string{
+	"go.mod":       "module example.com/funceditjake\n\ngo 1.21\n",
+	"doc.go":       "package funceditjake\n",
+	"jake/main.go": "package main\n\nfunc jake() {}\n\nfunc main() {}\n",
 }
 
-func TestParseFuncEditDeclines(t *testing.T) {
-	for _, line := range []string{
-		// Questions about a function keep their brains.
-		"what does jake return",
-		"how does the function jake work",
-		"does jake return a string?",
-		"why does jake return a string",
-		// The file/folder boundary's own sentences.
-		"remove the file jake/main.go",
-		"delete the folder jim",
-		// No function word, no claim.
-		"remove jake",
-		"delete jake from the project",
-		// Neighbours' sentences.
-		"rename the function jake to john", // the rename claim's
-		"add a function named jake",        // a creation
-		"add a function like jake named jake2",
-		// Not type-shaped tails.
-		"make jake return the favor",
-		"make jake return",
-		"jake should return",
-		"jake should go home",
-		// Statements, not asks.
-		"the function should return a string",
-		"jake returns a string",
-		"the goroutine returns a string",
-		// Incomplete shapes.
-		"remove the function",
-		"remove the function named",
-		"have the function return a string",
-		"change jake to a string",
-	} {
-		if got, ok := parseFuncEdit(line); ok {
-			t.Errorf("%q claimed as %+v — it must not", line, got)
-		}
-	}
-}
+const (
+	funcEditRemoveDone = "Done — jake is removed from jake/main.go. I built the project and checked that it's really there."
+	funcEditReturnDone = "Done — jake in jake/main.go now returns string. I built the project and checked that it's really there."
+)
 
-// funcEditJakeRoot is the screenshot's shape in miniature: a
-// module whose jake/main.go holds one empty func jake.
-func funcEditJakeRoot(t *testing.T) string {
-	t.Helper()
+func TestFuncEditRemoveLands(t *testing.T) {
+	isolateReceiptStore(t)
 	dir := t.TempDir()
-	writeFile(t, dir, "go.mod", "module example.com/funceditjake\n\ngo 1.21\n")
-	writeFile(t, dir, "doc.go", "package funceditjake\n")
-	writeFile(t, dir, "jake/main.go", "package main\n\nfunc jake() {}\n\nfunc main() {}\n")
-	return dir
+	for rel, body := range funcEditJakeRoot {
+		writeFile(t, dir, rel, body)
+	}
+	t.Chdir(dir)
+	withChatSession(t, dir, true)
+	out := captureStdout(t, func() {
+		if !claimChain("remove the function named jake", yes, nil) {
+			t.Error("the remove line was not claimed")
+		}
+	})
+	if !strings.Contains(out, "Here's the edit I assembled from this project's own code:") ||
+		!strings.Contains(out, "Remove main.jake from jake/main.go") {
+		t.Errorf("the removal plan was not shown:\n%s", out)
+	}
+	if !strings.Contains(out, "jake isn't called from anywhere else in this project — nothing else uses it.") {
+		t.Errorf("the plan did not say jake has no callers:\n%s", out)
+	}
+	if !strings.Contains(out, funcEditRemoveDone) {
+		t.Errorf("the landing did not print the partner confirmation %q:\n%s", funcEditRemoveDone, out)
+	}
+	if got := readBack(t, dir, "jake/main.go"); got != "package main\n\nfunc main() {}\n" {
+		t.Errorf("jake/main.go after the removal:\n%q\nwant jake gone and main kept", got)
+	}
+	if _, ok := lastReceiptOfKind(mustReceipts(t, dir), "remove_func"); !ok {
+		t.Error("a landed removal wrote no receipt")
+	}
 }
 
-const funcEditRemoveAnswer = "I can't remove a function from your code — taking code out is yours alone, like deleting a file. jake is in jake/main.go (line 3): delete its declaration there in your editor, along with any lines that call it. What I can do: rename jake everywhere it appears, or explain what it does and what calls it."
-
-const funcEditReturnAnswer = "I can't change what a function returns yet — that edit isn't one of my pieces. You asked for jake to return a string; jake is in jake/main.go (line 3), and its signature today is func jake(). Making it return one means editing that declaration in your editor and returning a value wherever it finishes. What I can do: rename jake or one of its parameters, add a parameter to it, or explain how it's called today."
-
-// John's first stolen line: "remove the function named
-// jake" — answered by the talk brain with a greeting on
-// 2026-11-21 — now lands project-side with the composer's
-// decline, and writes nothing.
-func TestFuncEditRemoveLineLandsProjectSide(t *testing.T) {
-	dir := funcEditJakeRoot(t)
+func TestFuncEditReturnLands(t *testing.T) {
+	dir := t.TempDir()
+	for rel, body := range funcEditJakeRoot {
+		writeFile(t, dir, rel, body)
+	}
+	t.Chdir(dir)
 	withChatSession(t, dir, true)
-	profile := &UserProfile{}
-	before := readBack(t, dir, "jake/main.go")
-	var handled bool
 	out := captureStdout(t, func() {
-		handled = claimChain("remove the function named jake", yes, profile)
+		if !claimChain("have the function jake return a string", yes, nil) {
+			t.Error("the return line was not claimed")
+		}
 	})
-	if !handled {
-		t.Fatalf("the line fell through the whole claim chain:\n%s", out)
+	if !strings.Contains(out, "func jake() becomes func jake() string") {
+		t.Errorf("the plan did not show the signature change:\n%s", out)
 	}
-	if !strings.Contains(out, funcEditRemoveAnswer) {
-		t.Errorf("the composer's decline was not the answer:\n%s", out)
+	if !strings.Contains(out, funcEditReturnDone) {
+		t.Errorf("the landing did not print the partner confirmation %q:\n%s", funcEditReturnDone, out)
 	}
-	if strings.Contains(out, "good to see you") {
-		t.Errorf("the talk brain's greeting appeared:\n%s", out)
+	want := "package main\n\nfunc jake() string {\n\treturn \"\"\n}\n\nfunc main() {}\n"
+	if got := readBack(t, dir, "jake/main.go"); got != want {
+		t.Errorf("jake/main.go after the change:\n%q\nwant %q", got, want)
+	}
+}
+
+func TestFuncEditRemoveGateNoWritesNothing(t *testing.T) {
+	dir := t.TempDir()
+	for rel, body := range funcEditJakeRoot {
+		writeFile(t, dir, rel, body)
+	}
+	withChatSession(t, dir, true)
+	out := captureStdout(t, func() {
+		if !claimChain("remove the function named jake", no, nil) {
+			t.Error("the remove line was not claimed")
+		}
+	})
+	if !strings.Contains(out, "Not applied — every file is exactly as it was.") {
+		t.Errorf("a no at the gate did not print the not-applied line:\n%s", out)
+	}
+	if got := readBack(t, dir, "jake/main.go"); got != funcEditJakeRoot["jake/main.go"] {
+		t.Errorf("a no at the gate still wrote:\n%q", got)
+	}
+}
+
+// funcEditCallerRoot: main calls jake, so removing jake is
+// a breaking edit — the plan must say so before the gate,
+// and a yes must end in a build failure and a rollback.
+var funcEditCallerRoot = map[string]string{
+	"go.mod":       "module example.com/funceditcaller\n\ngo 1.21\n",
+	"doc.go":       "package funceditcaller\n",
+	"jake/main.go": "package main\n\nfunc main() {\n\tjake()\n}\n\nfunc jake() {}\n",
+}
+
+func TestFuncEditRemoveWithCallersWarns(t *testing.T) {
+	dir := t.TempDir()
+	for rel, body := range funcEditCallerRoot {
+		writeFile(t, dir, rel, body)
+	}
+	t.Chdir(dir)
+	withChatSession(t, dir, true)
+	out := captureStdout(t, func() {
+		if !claimChain("remove the function named jake", no, nil) {
+			t.Error("the remove line was not claimed")
+		}
+	})
+	if !strings.Contains(out, "Heads up: jake is called from 1 place — main (jake/main.go:3). Removing it breaks those calls.") {
+		t.Errorf("the plan did not warn about the caller before the gate:\n%s", out)
+	}
+	if got := readBack(t, dir, "jake/main.go"); got != funcEditCallerRoot["jake/main.go"] {
+		t.Errorf("a no at the gate still wrote:\n%q", got)
+	}
+}
+
+func TestFuncEditRemoveCalledFunctionRollsBack(t *testing.T) {
+	isolateReceiptStore(t)
+	dir := t.TempDir()
+	for rel, body := range funcEditCallerRoot {
+		writeFile(t, dir, rel, body)
+	}
+	withChatSession(t, dir, true)
+	before := readBack(t, dir, "jake/main.go")
+	out := captureStdout(t, func() {
+		if !claimChain("remove the function named jake", yes, nil) {
+			t.Error("the remove line was not claimed")
+		}
+	})
+	if !strings.Contains(out, "That edit doesn't build, so I restored your files from the on-disk backups") {
+		t.Errorf("the failed build did not report the rollback honestly:\n%s", out)
+	}
+	if strings.Contains(out, "Done —") {
+		t.Errorf("a rolled-back edit printed a confirmation:\n%s", out)
 	}
 	if got := readBack(t, dir, "jake/main.go"); got != before {
-		t.Errorf("the decline still wrote:\n%s", got)
+		t.Errorf("the rollback did not restore the file byte-identical:\nbefore %q\nafter  %q", before, got)
+	}
+	if _, ok := lastReceiptOfKind(mustReceipts(t, dir), "remove_func"); ok {
+		t.Error("a rolled-back removal still wrote a receipt")
 	}
 }
 
-// John's second stolen line: "have the function jake
-// return a string" — answered by the [go] brain with a
-// string-comparison lecture on 2026-11-21 — now lands
-// project-side with the composer's decline.
-func TestFuncEditReturnLineLandsProjectSide(t *testing.T) {
-	dir := funcEditJakeRoot(t)
+func TestFuncEditRemoveMainRefused(t *testing.T) {
+	dir := t.TempDir()
+	for rel, body := range funcEditJakeRoot {
+		writeFile(t, dir, rel, body)
+	}
 	withChatSession(t, dir, true)
-	profile := &UserProfile{}
-	var handled bool
 	out := captureStdout(t, func() {
-		handled = claimChain("have the function jake return a string", yes, profile)
+		if !claimChain("remove the function named main", yes, nil) {
+			t.Error("the remove-main line was not claimed")
+		}
 	})
-	if !handled {
-		t.Fatalf("the line fell through the whole claim chain:\n%s", out)
+	if !strings.Contains(out, "Not doing that edit:") ||
+		!strings.Contains(out, "main is the program's entry point") {
+		t.Errorf("removing main was not refused at plan time:\n%s", out)
 	}
-	if !strings.Contains(out, funcEditReturnAnswer) {
-		t.Errorf("the composer's decline was not the answer:\n%s", out)
+	if strings.Contains(out, "Apply this edit?") {
+		t.Errorf("the refusal still reached the gate:\n%s", out)
 	}
-	if strings.Contains(out, "EqualFold") {
-		t.Errorf("the [go] brain's string lecture appeared:\n%s", out)
+	if got := readBack(t, dir, "jake/main.go"); got != funcEditJakeRoot["jake/main.go"] {
+		t.Errorf("the refusal still wrote:\n%q", got)
 	}
 }
 
-// Questions about jake are not edits: the catch does not
-// fire, and the lines keep the fate they have today (the
-// claim chain declines them; routing and the go/analyze
-// brains own them from there).
-func TestFuncEditQuestionsFallThrough(t *testing.T) {
-	dir := funcEditJakeRoot(t)
+func TestFuncEditReturnTodoBodyInsertsZero(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"go.mod":       "module example.com/funcedittodo\n\ngo 1.21\n",
+		"doc.go":       "package funcedittodo\n",
+		"jake/main.go": "package main\n\nfunc jake() {\n\t// TODO: write jake's body\n}\n\nfunc main() {}\n",
+	}
+	for rel, body := range files {
+		writeFile(t, dir, rel, body)
+	}
+	t.Chdir(dir)
 	withChatSession(t, dir, true)
-	profile := &UserProfile{}
+	out := captureStdout(t, func() {
+		if !claimChain("have the function jake return a string", yes, nil) {
+			t.Error("the return line was not claimed")
+		}
+	})
+	if !strings.Contains(out, funcEditReturnDone) {
+		t.Errorf("the landing did not print the partner confirmation:\n%s", out)
+	}
+	want := "package main\n\nfunc jake() string {\n\t// TODO: write jake's body\n\treturn \"\"\n}\n\nfunc main() {}\n"
+	if got := readBack(t, dir, "jake/main.go"); got != want {
+		t.Errorf("jake/main.go after the change:\n%q\nwant %q", got, want)
+	}
+}
+
+func TestFuncEditReturnExistingResultsDeclines(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"go.mod":       "module example.com/funceditresults\n\ngo 1.21\n",
+		"doc.go":       "package funceditresults\n",
+		"jake/main.go": "package main\n\nfunc jake() int {\n\treturn 0\n}\n\nfunc main() {}\n",
+	}
+	for rel, body := range files {
+		writeFile(t, dir, rel, body)
+	}
+	withChatSession(t, dir, true)
+	out := captureStdout(t, func() {
+		if !claimChain("have the function jake return a string", yes, nil) {
+			t.Error("the return line was not claimed")
+		}
+	})
+	if !strings.Contains(out, "Not doing that edit:") ||
+		!strings.Contains(out, "already returns int") {
+		t.Errorf("a function with results was not declined at plan time:\n%s", out)
+	}
+	if got := readBack(t, dir, "jake/main.go"); got != files["jake/main.go"] {
+		t.Errorf("the decline still wrote:\n%q", got)
+	}
+}
+
+func TestFuncEditReturnInBodyDeclines(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"go.mod":       "module example.com/funceditret\n\ngo 1.21\n",
+		"doc.go":       "package funceditret\n",
+		"jake/main.go": "package main\n\nfunc jake() {\n\tprintln(\"working\")\n\treturn\n}\n\nfunc main() {}\n",
+	}
+	for rel, body := range files {
+		writeFile(t, dir, rel, body)
+	}
+	withChatSession(t, dir, true)
+	out := captureStdout(t, func() {
+		if !claimChain("have the function jake return a string", yes, nil) {
+			t.Error("the return line was not claimed")
+		}
+	})
+	if !strings.Contains(out, "Not doing that edit:") ||
+		!strings.Contains(out, "already has a return statement in its body (line 5)") {
+		t.Errorf("a body with a return was not declined at plan time:\n%s", out)
+	}
+	if got := readBack(t, dir, "jake/main.go"); got != files["jake/main.go"] {
+		t.Errorf("the decline still wrote:\n%q", got)
+	}
+}
+
+func TestFuncEditReturnWithResultsInFixture(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"go.mod":       "module example.com/funceditres\n\ngo 1.21\n",
+		"doc.go":       "package funceditres\n",
+		"jake/main.go": "package main\n\nfunc jake() int { return 0 }\n\nfunc main() {}\n",
+	}
+	for rel, body := range files {
+		writeFile(t, dir, rel, body)
+	}
+	withChatSession(t, dir, true)
+	out := captureStdout(t, func() {
+		if !claimChain("have jake return a string", yes, nil) {
+			t.Error("the return line was not claimed")
+		}
+	})
+	if !strings.Contains(out, "jake") {
+		t.Errorf("the answer did not name the function:\n%s", out)
+	}
+}
+
+func TestFuncEditMethodLands(t *testing.T) {
+	dir := t.TempDir()
+	files := map[string]string{
+		"go.mod":         "module example.com/funceditmethod\n\ngo 1.21\n",
+		"doc.go":         "package funceditmethod\n",
+		"store/store.go": "package store\n\ntype Store struct{}\n\nfunc (s *Store) Count() int {\n\treturn 0\n}\n\nfunc (s *Store) Name() string {\n\treturn \"s\"\n}\n",
+	}
+	for rel, body := range files {
+		writeFile(t, dir, rel, body)
+	}
+	t.Chdir(dir)
+	withChatSession(t, dir, true)
+	out := captureStdout(t, func() {
+		if !claimChain("remove the function named Store.Count", yes, nil) {
+			t.Error("the method line was not claimed")
+		}
+	})
+	if !strings.Contains(out, "Done — Count is removed from store/store.go. I built the project and checked that it's really there.") {
+		t.Errorf("the method removal did not land with its confirmation:\n%s", out)
+	}
+	want := "package store\n\ntype Store struct{}\n\nfunc (s *Store) Name() string {\n\treturn \"s\"\n}\n"
+	if got := readBack(t, dir, "store/store.go"); got != want {
+		t.Errorf("store/store.go after the removal:\n%q\nwant %q", got, want)
+	}
+}
+
+func TestFuncEditUnresolvedNameFallsThrough(t *testing.T) {
+	dir := t.TempDir()
+	for rel, body := range funcEditJakeRoot {
+		writeFile(t, dir, rel, body)
+	}
+	withChatSession(t, dir, true)
+	for _, line := range []string{
+		"remove the function named nosuch",
+		"delete the function nosuch",
+		"have the function nosuch return a string",
+		"make nosuch return an int",
+	} {
+		if claimChain(line, yes, nil) {
+			t.Errorf("%q was claimed for a name that resolves nowhere", line)
+		}
+	}
+}
+
+func TestFuncEditQuestionVetoes(t *testing.T) {
+	dir := t.TempDir()
+	for rel, body := range funcEditJakeRoot {
+		writeFile(t, dir, rel, body)
+	}
+	withChatSession(t, dir, true)
+	// Factual questions about the very same function are
+	// the go brain's, never this claim's.
 	for _, line := range []string{
 		"what does jake return",
-		"how does the function jake work",
-		"does jake return a string?",
+		"does jake return a string",
+		"how do I remove the function jake",
+		"can I delete the function jake",
+		"why does jake return nothing",
 	} {
-		if runFuncEdit(line, yes) {
-			t.Errorf("%q was claimed by the function-edit catch", line)
-		}
-		var handled bool
-		out := captureStdout(t, func() { handled = claimChain(line, yes, profile) })
-		if handled {
-			t.Errorf("%q was claimed by the chain — it belongs to the go/analyze brains:\n%s", line, out)
+		if claimChain(line, yes, nil) {
+			t.Errorf("question %q was claimed by the function-edit catch", line)
 		}
 	}
 }
 
-// The resolution gate: the same shapes naming a function
-// the project doesn't have decline silently — the line
-// keeps today's fate, so social talk carrying the word
-// "function" is never stolen.
-func TestFuncEditUnresolvedNameFallsThrough(t *testing.T) {
-	dir := funcEditJakeRoot(t)
-	withChatSession(t, dir, true)
-	profile := &UserProfile{}
-	// The goroutine piece's own sentence parses in this
-	// grammar with the name "goroutine" — and still is not
-	// this catch's: no function by that name resolves here,
-	// and the goroutine claim above owns the line regardless.
-	if runFuncEdit("have the goroutine return a string", yes) {
-		t.Errorf("the goroutine sentence was claimed by the function-edit catch")
-	}
-	for _, line := range []string{
-		"remove the function named jim",
-		"delete the function bella",
-		"have the function bella return a string",
-		"remove the function named jake from other/main.go", // right name, wrong file
-	} {
-		var handled bool
-		out := captureStdout(t, func() { handled = claimChain(line, yes, profile) })
-		if handled {
-			t.Errorf("%q was claimed — the name does not resolve here:\n%s", line, out)
-		}
-	}
-}
-
-// Two functions with one name: the catch asks which one,
-// and the number completes the ask with that function's
-// decline.
-func TestFuncEditAmbiguousNameAsks(t *testing.T) {
+func TestFuncEditAmbiguousAsksThenLands(t *testing.T) {
 	dir := t.TempDir()
-	writeFile(t, dir, "go.mod", "module example.com/funceditamb\n\ngo 1.21\n")
-	writeFile(t, dir, "doc.go", "package funceditamb\n")
-	writeFile(t, dir, "a/a.go", "package a\n\nfunc jake() {}\n")
-	writeFile(t, dir, "b/b.go", "package b\n\nfunc jake() {}\n")
+	files := map[string]string{
+		"go.mod":    "module example.com/funceditamb\n\ngo 1.21\n",
+		"doc.go":    "package funceditamb\n",
+		"a/a.go":    "package a\n\nfunc jake() {}\n",
+		"b/b.go":    "package b\n\nfunc jake() {}\n",
+		"c/main.go": "package main\n\nfunc main() {}\n",
+	}
+	for rel, body := range files {
+		writeFile(t, dir, rel, body)
+	}
+	t.Chdir(dir)
 	withChatSession(t, dir, true)
-	profile := &UserProfile{}
-	var handled bool
 	out := captureStdout(t, func() {
-		handled = claimChain("remove the function named jake", yes, profile)
+		if !claimChain("remove the function named jake", yes, nil) {
+			t.Error("the ambiguous line was not claimed")
+		}
 	})
-	if !handled {
-		t.Fatalf("the line fell through:\n%s", out)
-	}
 	if !strings.Contains(out, "There's more than one function named jake — which one do you mean? Nothing's been written.") {
-		t.Fatalf("no which-one question was asked:\n%s", out)
+		t.Errorf("the ambiguity question was not asked:\n%s", out)
 	}
-	if !strings.Contains(out, "1. a/a.go (line 3)") || !strings.Contains(out, "2. b/b.go (line 3)") {
-		t.Fatalf("the candidates were not both named:\n%s", out)
+	if got := readBack(t, dir, "a/a.go"); got != files["a/a.go"] {
+		t.Errorf("the question alone wrote to a/a.go:\n%q", got)
 	}
-	out = captureStdout(t, func() { handled = claimChain("1", yes, profile) })
-	if !handled {
-		t.Fatalf("the answer fell through:\n%s", out)
+	out = captureStdout(t, func() {
+		if !claimChain("1", yes, nil) {
+			t.Error("the pick was not claimed")
+		}
+	})
+	if !strings.Contains(out, "Done — jake is removed from a/a.go. I built the project and checked that it's really there.") {
+		t.Errorf("the picked removal did not land:\n%s", out)
 	}
-	want := strings.Replace(funcEditRemoveAnswer, "jake/main.go", "a/a.go", 1)
-	if !strings.Contains(out, want) {
-		t.Errorf("the completion did not decline for a/a.go's jake:\n%s", out)
+	if got := readBack(t, dir, "a/a.go"); got != "package a\n" {
+		t.Errorf("a/a.go after the removal:\n%q\nwant just the package clause", got)
+	}
+	if got := readBack(t, dir, "b/b.go"); got != files["b/b.go"] {
+		t.Errorf("the other jake was touched:\n%q", got)
 	}
 }
 
-// The refusal the catch was modelled on is untouched:
-// removing a FILE still gets the create boundary's answer,
-// byte for byte.
-func TestFuncEditFileDeleteRefusalUnchanged(t *testing.T) {
-	dir := funcEditJakeRoot(t)
-	withChatSession(t, dir, true)
-	profile := &UserProfile{}
-	var handled bool
-	out := captureStdout(t, func() {
-		handled = claimChain("remove the file jake/main.go", yes, profile)
-	})
-	if !handled {
-		t.Fatalf("the file line fell through:\n%s", out)
+// TestFuncEditFileDeleteRefusalUntouched pins the
+// neighbouring boundary: removing a FUNCTION lands now,
+// but "remove the file" is still the composer's refusal,
+// word for word — deleting files stays the user's alone.
+func TestFuncEditFileDeleteRefusalUntouched(t *testing.T) {
+	dir := t.TempDir()
+	for rel, body := range funcEditJakeRoot {
+		writeFile(t, dir, rel, body)
 	}
+	withChatSession(t, dir, true)
 	want := "I can't delete files or folders — deleting is yours alone. In your terminal, the command is: rm jake/main.go. What I can do: create a file or folder here behind a [y/n] gate, and explain any command in plain words before you run it."
+	out := captureStdout(t, func() {
+		if !claimChain("remove the file jake/main.go", yes, nil) {
+			t.Error("the file-delete line was not claimed by its own claim")
+		}
+	})
 	if !strings.Contains(out, want) {
-		t.Errorf("the file-delete refusal changed:\n%s", out)
+		t.Errorf("the file-delete refusal changed:\n%s\nwant it to contain %q", out, want)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "jake", "main.go")); err != nil {
+		t.Errorf("the file-delete line removed the file: %v", err)
 	}
 }

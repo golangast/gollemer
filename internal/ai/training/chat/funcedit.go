@@ -15,15 +15,19 @@ package chat
 // sentence with a social greeting ("good to see you. how's
 // the house going?"), and "have the function jake return a
 // string" reached the intent layer, whose [go] brain answered
-// an edit ask with a lecture on string comparison. Neither
-// operation has a landing in the composer — there is no
-// remove-function piece and no change-the-return-type piece
-// (the signature machinery covers parameters only) — so this
-// claim answers both in the composer's own voice: an honest
-// decline that names the resolved function and its file, in
-// the file-delete refusal's style (create.go's boundary:
-// limit first, the fact of where the thing lives, then the
-// nearest real help). Nothing here writes, plans, or gates.
+// an edit ask with a lecture on string comparison.
+//
+// Both operations are real landings now, planned in the
+// analyzer (editfuncedit.go) and carried by the one write
+// spine (edits.go): this claim resolves the sentence's
+// function, pins the plan to it, and hands the spine an
+// EditRequest — gate, build, rollback, confirmation and
+// receipt are the spine's, exactly as the neighbours'. The
+// planners' own plan-time refusals (removing main, a
+// function that already returns, a body that already
+// returns) print through the spine in the composer's voice.
+// What this file owns is only the sentence: the grammar,
+// the resolution gate, and the ambiguity question.
 //
 // The grammar is resolution-gated, which is what makes the
 // seat safe: a shape claims only when the named function
@@ -64,8 +68,8 @@ import (
 	"github.com/golangast/gollemer/internal/ai/analyze"
 )
 
-// funcEditKind names which unserved operation a claimed
-// line asked for.
+// funcEditKind names which operation a claimed line
+// asked for.
 type funcEditKind string
 
 const (
@@ -290,8 +294,7 @@ func runFuncEdit(line string, ask editAsk) bool {
 	case len(cands) == 0:
 		return false
 	case len(cands) == 1:
-		printFuncEditDecline(cTag("gollemer [composer]>"), req, cands[0])
-		return true
+		return landFuncEdit(req, cands[0], ask)
 	default:
 		tag := cTag("gollemer [composer]>")
 		cc := make([]clarifyCandidate, len(cands))
@@ -307,12 +310,49 @@ func runFuncEdit(line string, ask editAsk) bool {
 			"Answer with the number or the file name",
 			cc,
 			func(idx int, ask2 editAsk) bool {
-				printFuncEditDecline(tag, req, cands[idx])
-				return true
+				return landFuncEdit(req, cands[idx], ask2)
 			})
 		recordBrain("composer", false, "func-edit question: which function")
 		return true
 	}
+}
+
+// landFuncEdit hands one resolved function-edit ask to the
+// write spine as an EditRequest pinned to the function this
+// claim resolved (its name in planner form, and its file),
+// so the plan the gate shows is for exactly that function —
+// never a second, wider resolution. The spine owns
+// everything from there: the plan's own refusals, the
+// [y/n] gate, the write, the build, the rollback, the
+// confirmation, and the receipt.
+func landFuncEdit(req funcEditRequest, fn *analyze.Func, ask editAsk) bool {
+	ereq := analyze.EditRequest{
+		FuncName: funcEditPlannerName(fn),
+		FuncFile: fn.File,
+	}
+	switch req.kind {
+	case funcEditRemove:
+		ereq.Kind = analyze.EditRemoveFunc
+	case funcEditReturn:
+		ereq.Kind = analyze.EditChangeReturn
+		ereq.ReturnType = req.typ
+	}
+	return executeEditPlan(ereq, ask)
+}
+
+// funcEditPlannerName renders a resolved function the way
+// the analyzer's resolution matches it: the bare name for a
+// plain function, Receiver.Name for a method — the same
+// form funcEditNameMatches accepts from a sentence.
+func funcEditPlannerName(fn *analyze.Func) string {
+	if fn.Receiver == "" {
+		return fn.Name
+	}
+	recv := strings.TrimPrefix(fn.Receiver, "*")
+	if i := strings.LastIndex(recv, "."); i >= 0 {
+		recv = recv[i+1:]
+	}
+	return recv + "." + fn.Name
 }
 
 // resolveFuncEditCandidates loads (or refreshes) the
@@ -392,31 +432,4 @@ func funcEditFolderWord(file string) string {
 		return file[:i]
 	}
 	return strings.TrimSuffix(file, ".go")
-}
-
-// printFuncEditDecline renders the composer's honest answer
-// for one resolved function: the limit first, the fact of
-// where the function lives (and, for a return ask, its
-// signature today), then the nearest real help — the
-// file-delete refusal's shape.
-func printFuncEditDecline(tag string, req funcEditRequest, fn *analyze.Func) {
-	kindWord := "function"
-	if fn.Receiver != "" {
-		kindWord = "method"
-	}
-	where := fmt.Sprintf("%s is in %s (line %d)", fn.Name, fn.File, fn.Line)
-	switch req.kind {
-	case funcEditRemove:
-		fmt.Printf("%s I can't remove a %s from your code — taking code out is yours alone, like deleting a file. %s: delete its declaration there in your editor, along with any lines that call it. What I can do: rename %s everywhere it appears, or explain what it does and what calls it.\n",
-			tag, kindWord, where, fn.Name)
-		recordBrain("composer", false, "func-edit refused: remove")
-	case funcEditReturn:
-		sig := ""
-		if fn.Sig != "" {
-			sig = fmt.Sprintf(", and its signature today is %s", fn.Sig)
-		}
-		fmt.Printf("%s I can't change what a %s returns yet — that edit isn't one of my pieces. You asked for %s to return a %s; %s%s. Making it return one means editing that declaration in your editor and returning a value wherever it finishes. What I can do: rename %s or one of its parameters, add a parameter to it, or explain how it's called today.\n",
-			tag, kindWord, fn.Name, req.typ, where, sig, fn.Name)
-		recordBrain("composer", false, "func-edit refused: return type")
-	}
 }

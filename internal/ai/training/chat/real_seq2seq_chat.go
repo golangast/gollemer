@@ -1828,10 +1828,11 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		// failure 2026-11-21 — the remove line fell to the
 		// talk brain and got a social greeting, the return
 		// line reached the [go] brain and got a lecture on
-		// string comparison. Neither operation has a landing
-		// in the composer, so the claim answers in the
-		// composer's voice — an honest decline naming the
-		// resolved function and its file. The claim is
+		// string comparison. Both operations land through
+		// the write spine now (the analyzer plans them in
+		// editfuncedit.go); the claim owns the sentence and
+		// the resolution, the spine owns the gate, the
+		// build, and the rollback. The claim is
 		// resolution-gated: a name that resolves nowhere in
 		// the project index declines silently, so no other
 		// line's fate changes.

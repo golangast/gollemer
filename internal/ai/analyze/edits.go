@@ -269,6 +269,28 @@ const (
 	// A goroutine cannot return a value in Go; the channel
 	// is the language's own answer, assembled here.
 	EditGoroutineResult = "goroutine_result"
+
+	// Function edits (editfuncedit.go): operations on one
+	// existing function, resolved in the index and pinned by
+	// the chat layer to the file it resolved (FuncFile).
+	//
+	// Remove func: the whole declaration — doc comment,
+	// signature and body — comes out of its file. Callers
+	// are counted from the index and named in the plan's
+	// notes before the gate; the build after applying is
+	// the backstop, and a failed build rolls the file back.
+	// Removing main is a plan-time refusal: a program with
+	// no main has no entry point.
+	EditRemoveFunc = "remove_func"
+
+	// Change return: give a function that returns NOTHING
+	// a result type — func jake() becomes func jake()
+	// string — with a zero-value return added to the body
+	// so it builds. A function that already returns
+	// something, or whose body already returns, is a
+	// plan-time refusal: both are beyond what this edit
+	// can prove safe.
+	EditChangeReturn = "change_return"
 )
 
 // EditRequest is one parsed change request.
@@ -536,6 +558,19 @@ type EditRequest struct {
 	SigUsing   string
 	SigNoUsing bool
 
+	// remove_func / change_return: the target is FuncName
+	// (shared with add_case, resolved the same way), pinned
+	// to FuncFile — the project-relative file the chat layer
+	// resolved the name in — when the sentence's resolution
+	// already settled which of several same-named functions
+	// is meant ("" = resolve by name alone, with the
+	// planner's own ambiguity refusal as the guard).
+	// change_return also carries ReturnType, the result
+	// type exactly as typed ("string", "*Point",
+	// "time.Duration").
+	FuncFile   string
+	ReturnType string
+
 	// concept: the book entry to assemble (editconcept.go), the
 	// target file (File, shared with add_server), and the slots
 	// the sentence bound:
@@ -778,6 +813,10 @@ func (p *Project) PlanEdit(req EditRequest) (*EditPlan, string) {
 		return p.planSignature(req)
 	case EditGoroutineResult:
 		return p.planGoroutineResult(req)
+	case EditRemoveFunc:
+		return p.planRemoveFunc(req)
+	case EditChangeReturn:
+		return p.planChangeReturn(req)
 	}
 	return nil, "I don't know that kind of edit yet."
 }
