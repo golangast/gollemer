@@ -161,6 +161,7 @@ var capabilityCatalog = []capabilityGroup{
 	{title: "RUN — your code, run here, only with your yes", entries: []capabilityEntry{
 		{"Run your program and show you what it printed", "run the program in main.go"},
 		{"Run one of this project's make targets", "run make test"},
+		{"Run the project's tests and explain any failures in plain words", "run the tests"},
 	}},
 }
 

@@ -250,6 +250,10 @@ func capabilityExampleGates(t *testing.T) map[string]func(string) bool {
 			shape, _ := parseProgramLine(s)
 			return shape == shapeRunProgram
 		}),
+		"run the tests": parse(func(s string) bool {
+			_, ok := parseRunTests(s)
+			return ok
+		}),
 		"run make test": parse(func(s string) bool {
 			oldAllow := makeTargetsAllowlist
 			makeTargetsAllowlist = map[string]bool{"test": true}

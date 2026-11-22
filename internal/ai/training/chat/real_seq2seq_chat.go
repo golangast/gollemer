@@ -1433,6 +1433,16 @@ func runUnifiedChat(projectRoot string, debug bool) error {
 		if hook.run(func() bool { return tryLinuxCommand(line, reader, profile) }) {
 			continue
 		}
+		// Run the project's tests, claimed deterministically
+		// beside run-the-program, whose gate, root rule, and
+		// [runner] voice it shares: "run the tests" (or "in
+		// <folder>") runs `go test` — argv only, bounded —
+		// and the report is parsed from the real output into
+		// plain words. Questions about tests are not shapes
+		// here and fall through untouched. See runtests.go.
+		if hook.run(func() bool { return tryRunTests(line, reader, profile) }) {
+			continue
+		}
 		// The capability seat, claimed deterministically
 		// directly ahead of the beginner five: a general
 		// "what can you do?" is answered from the chat's own
